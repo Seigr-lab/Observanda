@@ -18,7 +18,7 @@ const post=new Set([
  '/api/laboratory/read/query','/api/laboratory/read/selected','/api/research/drafts/list','/api/modules/drafts/list'
 ]);
 export const workspaceSnapshotRequest=(method,route)=>{
- if(method==='GET')return get.has(route)||/^\/api\/fonts\/[a-f0-9-]{36}$/.test(route)||/^\/(?:appearance-preview|preview)\/[a-f0-9]{64}\/.+/.test(route)||/^\/api\/appearance-preview\/[a-f0-9]{64}\/pages$/.test(route);
+ if(method==='GET')return get.has(route)||/^\/api\/fonts\/custom-[a-f0-9]{64}$/.test(route)||/^\/(?:appearance-preview|preview)\/[a-f0-9]{64}\/.+/.test(route)||/^\/api\/appearance-preview\/[a-f0-9]{64}\/pages$/.test(route);
  if(method!=='POST')return false;const command=recordStarterRequest(route)??recordDraftRequest(route)??reviewRequest(route);return post.has(route)||route==='/api/research/views/list'||Boolean(command&&!command.write);
 };
 export class WorkspaceReadAdmission{

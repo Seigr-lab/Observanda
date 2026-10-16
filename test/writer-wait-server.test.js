@@ -3,7 +3,7 @@ import {recordRevisions} from '../src/research.js';
 import {emptyWebsiteSelection} from '../src/web/website-selection.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,rm} from 'node:fs/promises';
+import {mkdtemp,rm,readFile} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {setTimeout as delay} from 'node:timers/promises';
@@ -15,6 +15,9 @@ import {clearVault} from '../src/encryption.js';
 import {RecordWriting} from '../src/record-writing.js';
 import {ResearchCatalogue} from '../src/research-catalogue.js';
 import {Workspace} from '../src/storage.js';
+import {WorkspaceFonts} from '../src/workspace-fonts.js';
+import {WorkspaceRenames} from '../src/workspace-rename.js';
+import {AppError} from '../src/errors.js';
 
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-writer-wait-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore});
@@ -24,7 +27,7 @@ async function fixture(t){
  const call=(route,data,signal)=>fetch(app.origin+route,{signal:signal??AbortSignal.timeout(30000),method:data===undefined?'GET':'POST',headers:{Origin:app.origin,Cookie:cookie,'Content-Type':'application/json','X-Observanda-Workspace':storage.contextId,'X-Observanda-Wait':'1'},...(data===undefined?{}:{body:JSON.stringify(data)})});
  const writing=new RecordWriting(f.workspace),command=await writing.read({workspaceId:book.id,recordId:book.entries[0].id,sectionId:null});
  const save=body=>({workspaceId:book.id,recordId:book.entries[0].id,sectionId:null,expectedRevision:command.revision,value:{body}});
- return {...f,directory,book,app,call,writing,save,cleanup};
+ return {...f,directory,book,app,call,writing,save,cleanup,storage,cookie};
 }
 async function until(check){const deadline=Date.now()+10000;while(!await check()){if(Date.now()>deadline)throw Error('Condition did not complete');await delay(50);}}
 test('admitted writes wait for the occupied database, keep reads usable and recheck revisions',async t=>{
@@ -96,4 +99,41 @@ test('website discovery and preview remain reads during copying and create no qu
   assert.equal((await f.workspace.outline()).etag,before.etag);
   const activity=await(await f.call('/api/activity')).json();assert.equal(activity.busy,true);assert.equal(activity.operations.length,1);assert.equal(activity.operations[0].kind,'/api/storage/copy');
  }finally{clearTimeout(timeout);controller.abort();release();ResearchCatalogue.prototype.verifyRecordHistory=verify;if(copying)await copying;}
+});
+
+test('custom font bytes remain readable during a read-permitted workspace copy',async t=>{
+ const f=await fixture(t),original=await readFile(new URL('../src/fonts/dm-sans.ttf',import.meta.url)),font=await new WorkspaceFonts(f.workspace).import(original),destination=path.join(f.directory,'copy');
+ const asset=(context=f.storage.contextId,cookie=f.cookie)=>fetch(f.app.origin+'/api/fonts/'+font.id+'?workspace='+encodeURIComponent(context),{headers:{Cookie:cookie},signal:AbortSignal.timeout(10000)});
+ const verify=ResearchCatalogue.prototype.verifyRecordHistory;let release,entered;
+ const gate=new Promise(resolve=>release=resolve),ready=new Promise(resolve=>entered=resolve);
+ ResearchCatalogue.prototype.verifyRecordHistory=async function(...args){entered();await gate;return verify.apply(this,args);};
+ let copying;
+ try{
+  copying=f.call('/api/storage/copy',{path:destination,confirmed:true});await ready;
+  const response=await asset();assert.equal(response.status,200,response.status===200?undefined:await response.text());
+  assert.deepEqual(Buffer.from(await response.arrayBuffer()),original);
+  assert.equal((await asset('stale-context')).status,409);
+  assert.equal((await asset(f.storage.contextId,'observanda=unrelated-session')).status,401);
+  const activity=await(await f.call('/api/activity')).json();assert.equal(activity.busy,true);assert.equal(activity.operations.length,1);assert.equal(activity.operations[0].kind,'/api/storage/copy');
+  release();const copied=await copying;assert.equal(copied.status,200,await copied.clone().text());
+  assert.equal((await asset()).status,409);
+ }finally{release();ResearchCatalogue.prototype.verifyRecordHistory=verify;if(copying)await copying;}
+});
+
+test('custom font reads remain fenced during an exclusive rename and after workspace lock',async t=>{
+ const f=await fixture(t),original=await readFile(new URL('../src/fonts/dm-sans.ttf',import.meta.url)),font=await new WorkspaceFonts(f.workspace).import(original);
+ const asset=()=>fetch(f.app.origin+'/api/fonts/'+font.id+'?workspace='+encodeURIComponent(f.storage.contextId),{headers:{Cookie:f.cookie},signal:AbortSignal.timeout(10000)});
+ const begin=WorkspaceRenames.prototype.begin;let release,entered;
+ const gate=new Promise(resolve=>release=resolve),ready=new Promise(resolve=>entered=resolve);
+ // Hold after HTTP admission closes readers, before changing any folder.
+ WorkspaceRenames.prototype.begin=async function(workspace,...args){if(workspace.root!==f.workspace.root)return begin.call(this,workspace,...args);entered();await gate;throw new AppError('INVALID');};
+ let renaming;
+ try{
+  renaming=f.call('/api/storage/rename',{name:'Renamed workspace',etag:(await f.workspace.outline()).etag});await ready;
+  const denied=await asset();assert.equal(denied.status,423);assert.equal((await denied.json()).code,'LOCKED');
+  release();assert.equal((await renaming).status,422);
+  const reopened=await asset();assert.equal(reopened.status,200);assert.deepEqual(Buffer.from(await reopened.arrayBuffer()),original);
+  assert.equal((await f.call('/api/access/lock',{})).status,200);
+  const locked=await asset();assert.equal(locked.status,401);assert.equal((await locked.json()).code,'ACCESS_LOCKED');
+ }finally{release();WorkspaceRenames.prototype.begin=begin;if(renaming)await renaming;}
 });
