@@ -1,7 +1,15 @@
 import {task,editorTab,openPageSettings} from './composer-helper.js';
 import {navigate,preferences,editWorkspace} from './preferences-helper.js';
 import {TestDeviceStore as DeviceStore} from '../device-fixture.js';
-import {readAccess,verifyAccess} from '../../src/access.js';
+import {readAccess,verifyAccess,createWorkspaceAccess,takeCreatedVault} from '../../src/access.js';
+import {initializeLocation} from '../../src/locations.js';
+import {clearVault} from '../../src/encryption.js';
+import {WorkspaceDatabases} from '../../src/workspace-databases.js';
+import {installDatabaseProvider} from '../../src/workspace-database-context.js';
+import {ProjectRegistry} from '../../src/project-registry.js';
+import {ProjectStorage} from '../../src/project-storage.js';
+import {LabBookRegistry} from '../../src/lab-book-registry.js';
+import {LabBookStorage} from '../../src/lab-book-storage.js';
 import { test, expect } from '@playwright/test';
 import { mediaFixtures } from '../media-fixtures.js';
 import { mediaCapabilities } from '../../src/media.js';
@@ -10,7 +18,7 @@ import {defaultEditionRecord} from '../../src/web/publication-selection.js';
 import {recordRevision} from '../../src/research.js';
 import {upgradeNotebook} from '../../src/model.js';
 import { buildPublication } from '../../src/publication.js';
-import { mkdtemp, readFile, mkdir } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {testServer as startServer} from '../device-fixture.js';
@@ -18,24 +26,50 @@ import { Workspace } from '../../src/storage.js';
 import { startingAppearance } from '../../src/web/themes.js';
 import { sampleNotebook } from '../../src/sample.js';
 
-let app, root, deviceStore;
+let app, root, parent, deviceStore, databaseOwner, detachDatabase, workspaceVault;
+const serverOptions=()=>({root,port:0,headless:true,deviceStore,preferencesFile:path.join(parent,'preferences.json')});
+async function independentDatabases(){
+  await app.close();
+  databaseOwner=new WorkspaceDatabases({directory:path.join(parent,'runtime'),ownerId:crypto.randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}});
+  detachDatabase=installDatabaseProvider(databaseOwner);
+  app=await startServer(serverOptions());
+}
+async function encryptedSample(book=sampleNotebook()){
+  await app.close();
+  const access=await createWorkspaceAccess('','',deviceStore);workspaceVault=takeCreatedVault(access);
+  await initializeLocation(root,book,access,workspaceVault);app=await startServer(serverOptions());
+}
+async function createdWorkspace(name){root=path.join(parent,name);workspaceVault=await verifyAccess(await readAccess(root),'','',{deviceStore});}
+async function includeLabBook(page,projectName,bookName){
+  const sources=page.locator('[data-publication-sources]');
+  await sources.locator('section.website-record').filter({has:page.getByText(projectName,{exact:true})}).getByRole('button',{name:'Lab books',exact:true}).click();
+  await sources.locator('section.website-record').filter({hasText:bookName}).getByRole('button',{name:'Choose content',exact:true}).click();
+  await sources.getByLabel('Include all records in this lab book',{exact:true}).check();
+  await expect(sources.locator('[data-source-record]')).toBeChecked();
+}
 async function saveChanges(page){const save=page.locator('.section-save [data-action=save]');if(await save.isEnabled())await save.click();await expect(page.locator('#save-status')).toHaveText('Saved');}
-test.beforeEach(async () => { root = await mkdtemp(path.join(os.tmpdir(), 'observanda-browser-')); deviceStore=new DeviceStore({file:root+'.device-key'}); app = await startServer({ root, port: 0,deviceStore }); });
-test.afterEach(async () => { await app.close(); });
+test.beforeEach(async () => { parent=await mkdtemp(path.join(os.tmpdir(),'observanda-browser-'));root=path.join(parent,'A closer look');deviceStore=new DeviceStore({file:path.join(parent,'device.key')});app=await startServer(serverOptions()); });
+test.afterEach(async () => {
+  try{await app.close();}finally{try{await databaseOwner?.close();}finally{detachDatabase?.();databaseOwner=detachDatabase=null;clearVault(workspaceVault);workspaceVault=null;}}
+  expect(path.dirname(parent)).toBe(path.resolve(os.tmpdir()));expect(path.basename(parent)).toMatch(/^observanda-browser-/);
+  await rm(parent,{recursive:true,force:true,maxRetries:10,retryDelay:100});
+});
 
 test('create, edit, persist, customize, review, and download an independent notebook', async ({ page }) => {
+  test.setTimeout(120000);page.setDefaultTimeout(15000);await independentDatabases();
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await page.goto(app.url);
   await page.getByLabel('Workspace name').fill('Garden experiments');
   await page.getByText('Add a description',{exact:false}).click();await page.getByLabel('Workspace description').fill('Questions from the windowsill.');
   await page.getByRole('button',{name:'Continue',exact:true}).click();await page.getByRole('button',{name:'Continue',exact:true}).click();await page.getByLabel('Use this device',{exact:false}).check();
   await page.getByRole('button', { name: 'Create workspace' }).click();
+  await expect(page.locator('.workspace-name')).toHaveText('Garden experiments',{timeout:60000});await createdWorkspace('Garden experiments');
   await navigate(page,'Projects');
-  await page.locator('main').getByRole('button',{name:'New project',exact:true}).click();await page.getByLabel('Name',{exact:true}).fill('Garden project');await page.getByRole('button',{name:'Save project',exact:true}).click();
+  await page.locator('main').getByRole('button',{name:'New project',exact:true}).click();await page.getByLabel('Name',{exact:true}).fill('Garden project');await page.getByRole('button',{name:'Create project',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Garden project',exact:true,level:1})).toBeVisible({timeout:60000});
   await page.locator('main').getByRole('button',{name:'New lab book',exact:true}).click();
   await page.getByRole('dialog').getByLabel('Lab book name',{exact:true}).fill('Garden observations');
   await page.getByRole('dialog').getByRole('button',{name:'Save lab book',exact:true}).click();
-  await page.getByRole('button',{name:'Open lab book',exact:true}).click();
   await page.getByRole('button', { name: 'New record', exact: true }).click();
   await page.getByRole('button', { name: 'Create observation', exact: true }).click();
   await page.getByLabel('Record title').fill('First green leaves');
@@ -49,19 +83,32 @@ test('create, edit, persist, customize, review, and download an independent note
   await page.getByLabel('Value 2', { exact: true }).fill('8');
   await page.locator('.section-save [data-action=save]').click();
   await expect(page.locator('#save-status')).toHaveText('Saved');
-  await page.reload();
-  await navigate(page,'All records');
-  await page.getByRole('button', { name: 'First green leaves' }).click();
-  await expect(page.getByLabel('Summary / context').locator('p')).toHaveText(['Two leaves opened today.','The soil was still damp.']);
+  await page.reload();await expect(page.locator('.record-reader')).toContainText('Two leaves opened today.');
+  await navigate(page,'Dashboard');await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();
+  let releasePolicy,policyArrived;const policyGate=new Promise(resolve=>{releasePolicy=resolve;}),oldOwnerLoading=new Promise(resolve=>{policyArrived=resolve;});
+  const ownedPolicy='**/api/projects/*/lab-books/*/media-policy';
+  await page.route(ownedPolicy,async route=>{const response=await route.fetch();policyArrived();await policyGate;await route.fulfill({response}).catch(()=>{});},{times:1});
+  try{
+    await page.goBack();await oldOwnerLoading;
+    await navigate(page,'Dashboard');await navigate(page,'All records');
+    await expect(page.getByRole('heading',{name:'All records',exact:true})).toBeVisible();
+  }finally{releasePolicy();await page.unroute(ownedPolicy);}
+  await expect(page).toHaveURL(/#\/records$/);
+  await expect(page.getByRole('heading',{name:'Observanda could not finish opening',exact:true})).toHaveCount(0);
+  await page.getByRole('link', { name: 'First green leaves',exact:true }).click();
+  await expect(page.locator('.record-reader')).toContainText('Two leaves opened today.');
+  await expect(page.locator('.record-reader')).toContainText('The soil was still damp.');
   await navigate(page,'Website editor');
-  await editorTab(page,'Content');await page.getByRole('button', { name: 'Include all entries', exact: true }).click();
-  await saveChanges(page);
+  await editorTab(page,'Content');await includeLabBook(page,'Garden project','Garden observations');
   await saveChanges(page);
   await preferences(page,'Appearance');
   await page.getByRole('button', { name: /Studio/ }).click();
+  await page.getByLabel('Preview content',{exact:true}).selectOption('website');
+  await page.getByLabel('Preview page',{exact:true}).selectOption({label:'First green leaves'});
   await expect(page.frameLocator('#design-preview').getByRole('heading', { name: 'First green leaves' })).toBeVisible();
   await saveChanges(page);
-  await navigate(page,'Website editor');await page.getByRole('button', { name: 'Preview & export' }).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
+  await navigate(page,'Website editor');await expect(page.getByRole('heading',{name:'Choose a research page',exact:true})).toBeVisible();await page.getByRole('button', { name: 'Preview & export' }).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
+  await page.getByLabel('Preview page',{exact:true}).selectOption({label:'First green leaves'});
   await expect(page.frameLocator('iframe[title="Publication preview"]').getByRole('heading', { name: 'First green leaves' })).toBeVisible();
   await page.getByLabel('I have reviewed').check();
   const downloadEvent = page.waitForEvent('download');
@@ -79,6 +126,7 @@ test('private-path detection blocks review and keeps the original note editable'
   await page.goto(app.url);
   await navigate(page,'All records');
   await page.getByRole('button', { name: 'Watching a seed unfold' }).click();
+  await page.getByRole('button',{name:'Edit record',exact:true}).click();
   await page.getByLabel('Summary / context').fill('/home/imaginary-person/private-log');
   await saveChanges(page);
   await navigate(page,'Website editor');await page.getByRole('button', { name: 'Preview & export' }).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
@@ -93,6 +141,7 @@ test('edits made while a save is in flight are kept, then saved on the next requ
   await page.goto(app.url);
   await navigate(page,'All records');
   await page.getByRole('button', { name: 'Watching a seed unfold' }).click();
+  await page.getByRole('button',{name:'Edit record',exact:true}).click();
   let release; const waiting = new Promise(resolve => { release = resolve; });
   await page.route('**/api/research/records/save', async route => { await waiting; await route.continue(); });
   await page.getByLabel('Summary / context').fill('First draft');
@@ -110,23 +159,23 @@ test('edits made while a save is in flight are kept, then saved on the next requ
   await page.reload();
   await navigate(page,'All records');
   await page.getByRole('button', { name: 'Watching a seed unfold' }).click();
-  await expect(page.getByLabel('Summary / context')).toHaveText('Newer draft while saving');
+  await expect(page.locator('.record-reader')).toContainText('Newer draft while saving');
 });
 
 test('desktop and mobile layouts remain usable with real sample content', async ({ page }) => {
   await new Workspace(root).create(sampleNotebook());
   await page.goto(app.url);
   await expect(page.getByRole('heading', { name: 'Dashboard', exact:true })).toBeVisible();
-  await mkdir('.local/screenshots', { recursive: true });
-  await page.screenshot({ path: '.local/screenshots/notebook-desktop.png', fullPage: true });
+  await page.screenshot({ path:test.info().outputPath('notebook-desktop.png'), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
 
   await navigate(page,'All records');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
   await page.getByRole('button', { name: 'Watching a seed unfold' }).click();
-  await expect(page.getByLabel('Summary / context')).toBeVisible();
+  await expect(page.locator('.record-reader h1')).toHaveText('Watching a seed unfold');
+  await page.getByRole('button',{name:'Edit record',exact:true}).click();await expect(page.getByLabel('Summary / context')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
-  await page.screenshot({ path: '.local/screenshots/notebook-mobile.png', fullPage: true });
+  await page.screenshot({ path:test.info().outputPath('notebook-mobile.png'), fullPage: true });
 });
 
 
@@ -149,7 +198,6 @@ test('exported themes work as standalone sites at root and nested paths with Jav
     page.on('request', request => requests.push(request.url()));
     page.on('requestfailed', request => failures.push(request.url()));
     page.on('response', response => { if (response.status() >= 400) failures.push(response.url()); });
-    await mkdir('.local/screenshots', { recursive: true });
     for (const theme of ['research', 'studio']) {
       book.appearance = startingAppearance(theme); files = buildPublication(book,{edition}).files;
       for (const base of ['/', '/lab/field-notes/']) {
@@ -163,7 +211,7 @@ test('exported themes work as standalone sites at root and nested paths with Jav
         await expect(page.getByRole('table')).toBeVisible();
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
       }
-      await page.screenshot({ path: `.local/screenshots/${theme}-site.png`, fullPage: true });
+      await page.screenshot({ path:test.info().outputPath(`${theme}-site.png`), fullPage: true });
       await page.setViewportSize({ width: 390, height: 844 });
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
       await page.setViewportSize({ width: 1440, height: 1000 });
@@ -181,13 +229,13 @@ test('exported themes work as standalone sites at root and nested paths with Jav
 
 
 test('a new entry defaults to the author local calendar date', async ({ browser }) => {
-  await new Workspace(root).create(sampleNotebook());
+  const sample=sampleNotebook();await new Workspace(root).create(sample);
   const context = await browser.newContext({ timezoneId: 'America/Los_Angeles' });
   try {
     const page = await context.newPage();
     await page.clock.setFixedTime(new Date('2026-09-26T01:00:00Z'));
     await page.goto(app.url);
-    await navigate(page,'All records');
+    await page.goto(new URL('#/notebooks/'+sample.notebooks[0].id,app.url).href);
     await page.getByRole('button', { name: 'New record', exact: true }).click();
     await page.getByRole('button', { name: 'Create observation', exact: true }).click();
     await expect(page.getByLabel('Record date',{exact:true})).toHaveValue('2026-09-25');
@@ -196,27 +244,28 @@ test('a new entry defaults to the author local calendar date', async ({ browser 
 
 
 test('build two projects with structured research, playable media, custom pages, branding, fonts, and navigation', async ({ page }) => {
-  test.setTimeout(60000);
+  test.setTimeout(120000);page.setDefaultTimeout(15000);
+  await independentDatabases();
   test.skip(!(await mediaCapabilities()).available, 'FFmpeg and ffprobe are required for media tests.');
-  const fixtures = await mediaFixtures(await mkdtemp(path.join(os.tmpdir(), 'observanda-browser-fixtures-')));
+  const fixtures = await mediaFixtures(await mkdtemp(path.join(parent, 'media-fixtures-')));
   const errors = []; page.on('pageerror', error => errors.push(error.message));
-  await new Workspace(root).create(sampleNotebook());
+  await encryptedSample();
   await page.goto(app.url);
   await navigate(page,'Projects');
   await page.locator('main').getByRole('button', { name: 'New project', exact: true }).click();
   await page.getByRole('dialog').getByLabel('Name', { exact: true }).fill('Acoustic studies');
   await page.getByRole('dialog').getByLabel('Description').fill('Measurements and listening experiments.');
-  await page.getByRole('button', { name: 'Save project', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Acoustic studies', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Create project', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Acoustic studies', exact: true,level:1 })).toBeVisible({timeout:60000});
   await page.locator('main').getByRole('button', { name: 'New lab book', exact: true }).click();
   await page.getByRole('dialog').getByLabel('Lab book name', { exact: true }).fill('Room acoustics');
   await page.getByRole('button', { name: 'Save lab book', exact: true }).click();
-  await page.getByRole('button',{name:'Open lab book',exact:true}).click();
   await page.getByRole('button', { name: 'New record', exact: true }).click();
   await page.getByRole('button', { name: 'Create experiment', exact: true }).click();
   await page.getByLabel('Record title').fill('Comparing two room positions');
   await page.getByLabel('Summary / context').fill('A controlled listening experiment.');
   await page.getByLabel('Question and objectives content', { exact: true }).fill('Does the recording position change the observed decay?');
+  await page.getByRole('button',{name:'Next sections',exact:true}).click();
   await page.getByLabel('Method content', { exact: true }).fill('Use the same source and repeat both positions.');
   await page.getByLabel('Progress', { exact: true }).selectOption('in progress');
   for (const [index, kind] of ['image', 'audio', 'video'].entries()) {
@@ -235,9 +284,9 @@ test('build two projects with structured research, playable media, custom pages,
   await page.getByLabel('Include in website', { exact: false }).first().check();
   await page.locator('.section-save [data-action=save]').click();
   await expect(page.locator('#save-status')).toHaveText('Saved');
-  await page.screenshot({ path: '.local/screenshots/research-editor.png', fullPage: true });
+  await page.screenshot({ path:test.info().outputPath('research-editor.png'), fullPage: true });
   await navigate(page,'Website editor');await editorTab(page,'Content');
-  await page.locator('.publication-project').filter({ hasText: 'Acoustic studies' }).getByRole('button', { name: 'Include all entries' }).click();
+  await includeLabBook(page,'Acoustic studies','Room acoustics');
   await saveChanges(page);await preferences(page,'Appearance');await page.getByRole('button',{name:'Logos & branding',exact:true}).click();
   await page.getByLabel('Add logo',{exact:true}).setInputFiles(fixtures.image.file);
   await expect(page.getByLabel('Logo 1 alternative text')).toBeVisible({timeout:20000});
@@ -254,10 +303,10 @@ test('build two projects with structured research, playable media, custom pages,
   await page.getByLabel('Menu label 2', { exact: true }).fill('Field studies');
   await page.getByRole('button', { name: 'Move menu item 3 up', exact: true }).click();
   await page.evaluate(() => scrollTo(0, 0));
-  await page.screenshot({ path: '.local/screenshots/website-settings.png', fullPage: true });
+  await page.screenshot({ path:test.info().outputPath('website-settings.png'), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
-  await page.screenshot({ path: '.local/screenshots/website-mobile.png', fullPage: true });
+  await page.screenshot({ path:test.info().outputPath('website-mobile.png'), fullPage: true });
   await page.setViewportSize({ width: 1440, height: 1000 });
   await saveChanges(page);
   await preferences(page,'Appearance');
@@ -284,7 +333,7 @@ test('build two projects with structured research, playable media, custom pages,
   await reader.goto(frame.url()); await reader.evaluate(() => document.fonts.ready);
   await reader.locator('video').evaluate(el => { el.currentTime = 0.1; });
   await expect.poll(() => reader.locator('video').evaluate(el => el.readyState)).toBeGreaterThanOrEqual(2);
-  await reader.screenshot({ path: '.local/screenshots/published-research-record.png', fullPage: true });
+  await reader.screenshot({ path:test.info().outputPath('published-research-record.png'), fullPage: true });
   await reader.close();
   await page.getByLabel('I have reviewed').check();
   const downloading = page.waitForEvent('download');
@@ -292,9 +341,15 @@ test('build two projects with structured research, playable media, custom pages,
   const zip = await readFile(await (await downloading).path());
   for (const text of ['Acoustic studies', 'Room acoustics', 'A place for scientific and artistic investigation.', 'fonts/space-grotesk.ttf', 'fonts/source-serif.ttf', '.mp4', '.wav', '.png']) expect(zip.toString()).toContain(text);
   expect(zip.toString()).not.toContain('PRIVATE_MEDIA_SOURCE'); expect(zip.toString()).not.toContain(root);
-  const saved = await new Workspace(root).read();
-  expect(saved.book.projects).toHaveLength(2);
-  expect(saved.book.entries.find(e => e.title === 'Comparing two room positions').attachments).toHaveLength(3);
+  const workspace=new Workspace(root,workspaceVault),saved=await workspace.read(),registered=(await new ProjectRegistry(workspace,saved.book.id).read()).value.projects;
+  expect(saved.book.projects.length+registered.length).toBe(2);
+  const owned=registered.find(project=>project.summary.title==='Acoustic studies'),projectKey=await verifyAccess(await readAccess(owned.root),'','',{deviceStore});
+  try{
+    const project=new ProjectStorage(owned.root,owned.projectId,projectKey),books=new LabBookRegistry(project),room=(await books.list()).items.find(book=>book.directory==='Room acoustics');
+    const bookKey=await verifyAccess(await readAccess(room.root),'','',{deviceStore});
+    try{expect((await new LabBookStorage(room.root,room.labBookId,bookKey).read()).book.entries.find(e=>e.title==='Comparing two room positions').attachments).toHaveLength(3);}finally{clearVault(bookKey);}
+    expect((await project.read()).book.entries).toHaveLength(0);expect(saved.book.entries.some(e=>e.title==='Comparing two room positions')).toBe(false);
+  }finally{clearVault(projectKey);}
   expect(errors).toEqual([]);
 });
 
@@ -331,7 +386,7 @@ test('laboratory sample-to-review workflow prints a revision and requires amendm
   await page.getByRole('button',{name:'Record review',exact:true}).click();
   await page.getByRole('button',{name:/^Analyses /}).click();
   await expect(page.getByRole('cell',{name:'Approved',exact:true})).toBeVisible();
-  await page.screenshot({path:'.local/screenshots/laboratory-results.png',fullPage:true});
+  await page.screenshot({path:test.info().outputPath('laboratory-results.png'),fullPage:true});
   await page.getByRole('button',{name:'A-2026-01',exact:true}).click();
   await expect(page.getByLabel('Result value',{exact:true})).toHaveCount(0);
   const popup=context.waitForEvent('page');
@@ -340,7 +395,7 @@ test('laboratory sample-to-review workflow prints a revision and requires amendm
   await expect(sheet.getByRole('heading',{name:'Result sheet',exact:true})).toBeVisible();
   await expect(sheet.getByRole('cell',{name:'0.34',exact:true})).toBeVisible();
   await sheet.emulateMedia({media:'print'});
-  await sheet.screenshot({path:'.local/screenshots/result-sheet.png',fullPage:true});
+  await sheet.screenshot({path:test.info().outputPath('result-sheet.png'),fullPage:true});
   const oldSheet=sheet.url();await sheet.close();
   await page.getByRole('button',{name:'Amend result',exact:true}).click();
   await page.getByLabel('Reason for amendment').fill('Correct a transcription.');
@@ -351,6 +406,7 @@ test('laboratory sample-to-review workflow prints a revision and requires amendm
   expect(await retained.text()).toContain('<td>0.34</td>');
   await page.getByLabel('Result value',{exact:true}).fill('0.35');
   await page.getByRole('button',{name:'Save result',exact:true}).click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();await expect(page.getByRole('cell',{name:'0.35 AU',exact:true})).toBeVisible();
   await navigate(page,'Website editor');await page.getByRole('button',{name:'Preview & export',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
   await expect(page.frameLocator('iframe[title="Publication preview"]').locator('body')).not.toContainText('SYNTHETIC_PRIVATE_REFERENCE');
   expect(errors).toEqual([]);
@@ -358,7 +414,7 @@ test('laboratory sample-to-review workflow prints a revision and requires amendm
 
 test('logos at workspace, project, notebook, page and record scopes survive save and appear in the correct static pages', async ({ page }) => {
   test.setTimeout(60000);
-  const fixtures=await mediaFixtures(await mkdtemp(path.join(os.tmpdir(),'observanda-branding-')));
+  const fixtures=await mediaFixtures(await mkdtemp(path.join(parent,'branding-')));
   const book=sampleNotebook(), custom={id:crypto.randomUUID(),title:'About the laboratory',body:'Independent work.',share:true};
   book.pages.push(custom);await new Workspace(root).create(book);
   await page.goto(app.url);
@@ -379,7 +435,7 @@ test('logos at workspace, project, notebook, page and record scopes survive save
   await page.getByLabel('Logo 2 alternative text').fill('Partner emblem');
   await page.getByRole('button',{name:'Save branding',exact:true}).click();
   await expect(page.locator('#save-status')).toHaveText('Saved');
-  await page.screenshot({path:'.local/screenshots/scoped-branding.png',fullPage:true});
+  await page.screenshot({path:test.info().outputPath('scoped-branding.png'),fullPage:true});
   await navigate(page,'Website editor');await page.getByRole('button',{name:'Preview & export',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
   const frame=page.frameLocator('iframe[title="Publication preview"]');
   await expect(frame.getByRole('img',{name:'Workspace emblem',exact:true})).toBeVisible();
@@ -406,7 +462,7 @@ test('publishing destination persists privately and review identifies the config
   await expect(page.locator('#destination-status')).toHaveText('Destination saved on this device.');
   await page.reload();await preferences(page,'Integrations');
   await expect(page.getByLabel('SSH hostname',{exact:true})).toHaveValue('hosting.example');
-  await page.screenshot({path:'.local/screenshots/publishing-settings.png',fullPage:true});
+  await page.screenshot({path:test.info().outputPath('publishing-settings.png'),fullPage:true});
   await navigate(page,'Publishing');await page.getByRole('button',{name:'Review website',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
   await expect(page.locator('main')).toContainText('Destination: hosting.example / /srv/observanda/current');
   await page.getByRole('button',{name:'Publish to SSH hosting',exact:true}).click();
@@ -417,10 +473,16 @@ test('publishing destination persists privately and review identifies the config
 
 test('themes style the whole workspace and can be saved, renamed, updated, reapplied and deleted', async ({ page }) => {
   const errors = []; page.on('pageerror', error => errors.push(error.message));
-  page.on('console', message => { if (message.type() === 'error'&&!/^Blocked script execution in .*\/preview\/.*because the document's frame is sandboxed/.test(message.text())) errors.push(message.text()); });
+  page.on('console',message=>{
+    if(message.type()!=='error')return;
+    const blocked=message.text().match(/^Blocked script execution in '([^']+)' because the document's frame is sandboxed and the 'allow-scripts' permission is not set\.$/);
+    // Reader scripts stay disabled in previews, including their temporary blank frame; the parent wires controls.
+    if(blocked&&(blocked[1]==='about:blank'||blocked[1].startsWith(app.origin+'/appearance-preview/')||blocked[1].startsWith(app.origin+'/preview/')))return;
+    errors.push(message.text());
+  });
   await new Workspace(root).create(sampleNotebook());
   await page.goto(app.url);
-  await preferences(page,'Appearance');
+  await preferences(page,'Appearance');await expect(page.locator('#design-preview')).toHaveAttribute('sandbox','allow-same-origin');
   await page.getByRole('button', { name:/^Studio/ }).click();
   await expect(page.locator('.sidebar')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
   await expect(page.locator('.nav-button.active')).toHaveCSS('color', 'rgb(33, 110, 105)');
@@ -455,19 +517,19 @@ test('themes style the whole workspace and can be saved, renamed, updated, reapp
   await expect(page.locator('#save-status')).toHaveText('Saved');
   await page.getByRole('button', {name:'Phone',exact:true}).click();
   await expect(page.locator('#design-preview')).toHaveCSS('width', '390px');
-  await mkdir('.local/screenshots', {recursive:true});
   await page.evaluate(() => window.scrollTo(0,0));
-  await page.screenshot({path:'.local/screenshots/appearance-studio.png'});
+  await page.screenshot({path:test.info().outputPath('appearance-studio.png')});
   await page.setViewportSize({width:390,height:844});
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
   await page.getByRole('button', {name:'Save as new theme'}).click();
   await expect(page.getByRole('dialog')).toHaveCSS('background-color','rgb(255, 255, 255)');
   await page.getByRole('button', {name:'Cancel',exact:true}).click();
-  await page.screenshot({path:'.local/screenshots/appearance-mobile.png',fullPage:true});
+  await page.screenshot({path:test.info().outputPath('appearance-mobile.png'),fullPage:true});
   page.once('dialog', dialog => dialog.accept());
   await page.getByRole('button', {name:'Delete',exact:true}).click();
   await expect(page.locator('#saved-theme')).toHaveCount(0);
   await expect(page.getByLabel('Accent', {exact:true})).toHaveValue('#334e82');
+  await expect(page.locator('#save-status')).toHaveText('Saved');
   await page.reload();
   await expect(page.getByRole('heading',{name:'Appearance',exact:true})).toBeVisible();
   await expect(page.locator('#saved-theme')).toHaveCount(0);
@@ -477,7 +539,7 @@ test('themes style the whole workspace and can be saved, renamed, updated, reapp
 
 test('themes are chosen in Appearance after setup without changing workspace identity or adding starter records',async({page})=>{
  await page.goto(app.url);await page.getByLabel('Workspace name').fill('A new perspective');await page.getByText('Add a description',{exact:false}).click();await page.getByLabel('Workspace description').fill('Research across disciplines.');
- await page.getByRole('button',{name:'Continue',exact:true}).click();await page.getByRole('button',{name:'Continue',exact:true}).click();await page.getByLabel('Use this device',{exact:false}).check();await page.getByRole('button',{name:'Create workspace',exact:true}).click();
+ await page.getByRole('button',{name:'Continue',exact:true}).click();await page.getByRole('button',{name:'Continue',exact:true}).click();await page.getByLabel('Use this device',{exact:false}).check();await page.getByRole('button',{name:'Create workspace',exact:true}).click();await expect(page.locator('.workspace-name')).toHaveText('A new perspective');await createdWorkspace('A new perspective');
  await preferences(page,'Appearance');await page.getByRole('button',{name:/^Studio/}).click();await expect(page.locator('.section-save [data-action=save]')).toBeEnabled();await saveChanges(page);await page.reload();
  await expect(page.getByLabel('Accent',{exact:true})).toHaveValue('#216e69');const saved=(await new Workspace(root,await verifyAccess(await readAccess(root),'','',{deviceStore})).read()).book;expect(saved.title).toBe('A new perspective');expect(saved.description).toBe('Research across disciplines.');expect(saved.projects).toHaveLength(0);expect(saved.notebooks).toHaveLength(0);
 });
@@ -502,8 +564,7 @@ test('empty websites have a complete isolated design gallery with selectable pag
     await frame.locator(kind).evaluate(el=>el.pause());
   }
   expect(await frame.locator('img').evaluateAll(images=>images.every(el=>el.complete&&el.naturalWidth>0))).toBeTruthy();
-  await mkdir('.local/screenshots',{recursive:true});
-  await page.screenshot({path:'.local/screenshots/design-gallery-desktop.png'});
+  await page.screenshot({path:test.info().outputPath('design-gallery-desktop.png')});
   const record='entries/00000000-0000-4000-8000-000000000010.html';
   await page.getByLabel('Preview page',{exact:true}).selectOption(record);
   await expect(frame.locator('.specimen-index')).toHaveCount(0);
@@ -523,44 +584,45 @@ test('empty websites have a complete isolated design gallery with selectable pag
   await expect(frame.locator('.specimen-banner')).toBeVisible();
   await frame.locator('body').evaluate(()=>document.fonts.ready);
   await page.waitForTimeout(200);
-  await page.screenshot({path:'.local/screenshots/design-gallery-mobile.png'});
+  await page.screenshot({path:test.info().outputPath('design-gallery-mobile.png')});
   expect((await new Workspace(root).read()).etag).toBe(before.etag);
   expect(errors).toEqual([]);
 });
 
 test('workspace correction preserves research and gives projects, lab books and records stable navigation', async ({ page }) => {
+  test.setTimeout(90000);await independentDatabases();
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   const book=sampleNotebook(), project=book.projects[0], notebook=book.notebooks[0];
   book.title='Test lab book 1'; project.title='First investigations'; notebook.title='Observations';
   const second={id:crypto.randomUUID(),title:'Test lab book 2',description:'Independent second project.',share:true,logoId:null};
   book.projects.push(second); book.notebooks.push({id:crypto.randomUUID(),projectId:second.id,title:'Notes'});
-  await new Workspace(root).create(book); await page.goto(app.url);
+  root=path.join(parent,book.title);await encryptedSample(book);const original=(await new Workspace(root,workspaceVault).read()).book;await page.goto(app.url);
   await expect(page.locator('.workspace-name')).toHaveText('Test lab book 1');
   await editWorkspace(page);
   await page.getByLabel('Workspace introduction',{exact:true}).fill('A new introduction.');
   await page.getByRole('button',{name:'Save workspace',exact:true}).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await expect(page.locator('[data-workspace-status]')).toHaveText('Saved');
-  expect((await new Workspace(root).read()).book.description).toBe('A new introduction.');
-  await editWorkspace(page);await page.getByText('Workspace reference and organization',{exact:true}).click();await page.getByRole('button',{name:'Move workspace details to a project',exact:true}).click();
-  await page.getByLabel('New workspace name',{exact:true}).fill('Research collective');
+  expect((await new Workspace(root,workspaceVault).read()).book.description).toBe('A new introduction.');
+  await editWorkspace(page);await page.getByText('Workspace reference and organization',{exact:true}).click();await page.getByRole('button',{name:'Copy workspace details to a project',exact:true}).click();
   await page.getByLabel('Destination project',{exact:true}).selectOption(project.id);
   await page.getByRole('button',{name:'Review changes',exact:true}).click();
   await expect(page.getByRole('dialog')).toContainText('Rename First investigations to');
-  expect((await new Workspace(root).read()).book.title).toBe('Test lab book 1');
+  expect((await new Workspace(root,workspaceVault).read()).book.title).toBe('Test lab book 1');
   await page.getByRole('button',{name:'Apply hierarchy changes',exact:true}).click();
-  await expect(page.locator('.workspace-name')).toHaveText('Research collective');
-  const saved=(await new Workspace(root).read()).book;
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  await editWorkspace(page);await page.getByLabel('Workspace name',{exact:true}).fill('Research collective');await page.getByRole('button',{name:'Save workspace',exact:true}).click();
+  await expect(page.locator('.workspace-name')).toHaveText('Research collective',{timeout:60000});root=path.join(parent,'Research collective');
+  const saved=(await new Workspace(root,workspaceVault).read()).book;
   expect(saved.projects.find(p=>p.id===project.id).title).toBe('Test lab book 1');
   expect(saved.projects.find(p=>p.id===second.id)).toEqual(second);
-  expect(saved.entries).toEqual(book.entries);
-  expect(saved.notebooks).toEqual(book.notebooks);
-  await mkdir('.local/screenshots',{recursive:true});
-  await page.screenshot({path:'.local/screenshots/workspace-hierarchy.png'});
-  await page.locator('main').getByRole('button',{name:'Test lab book 1',exact:true}).click();
+  expect(saved.entries).toEqual(original.entries);
+  expect(saved.notebooks).toEqual(original.notebooks);
+  await page.screenshot({path:test.info().outputPath('workspace-hierarchy.png')});
+  await navigate(page,'Projects');await page.locator('main').getByRole('button',{name:'Test lab book 1',exact:true}).click();
   await expect(page).toHaveURL(new RegExp('#/projects/'+project.id+'$'));
   await expect(page.getByRole('heading',{name:'Test lab book 1',exact:true})).toBeVisible();
-  await page.screenshot({path:'.local/screenshots/project-overview.png'});
+  await page.screenshot({path:test.info().outputPath('project-overview.png')});
   await page.locator('.notebook-grid').getByRole('button',{name:'Observations',exact:true}).click();
   await expect(page).toHaveURL(new RegExp('#/notebooks/'+notebook.id+'$'));
   await page.getByRole('button',{name:'Lab book settings',exact:true}).click();
@@ -568,7 +630,7 @@ test('workspace correction preserves research and gives projects, lab books and 
   await page.locator('#dialog').getByLabel('Project',{exact:true}).selectOption(second.id);
   await page.getByRole('button',{name:'Save lab book',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Field journal',exact:true})).toBeVisible();
-  const moved=(await new Workspace(root).read()).book;
+  const moved=(await new Workspace(root,workspaceVault).read()).book;
   expect(moved.notebooks.find(n=>n.id===notebook.id).projectId).toBe(second.id);
   expect(moved.entries.filter(e=>e.notebookId===notebook.id).every(e=>!e.share)).toBeTruthy();
   expect(moved.entries.map(e=>e.id)).toEqual(book.entries.map(e=>e.id));
@@ -580,11 +642,11 @@ test('workspace correction preserves research and gives projects, lab books and 
   await page.goBack(); await expect(page.getByRole('heading',{name:'Field journal',exact:true})).toBeVisible();
   await expect(page.getByLabel('Search records',{exact:true})).toHaveValue('seed');
   await expect(page.getByLabel('Filter by record type',{exact:true})).toHaveValue('observation');
-  await page.goForward(); await expect(page.getByLabel('Record title')).toHaveValue('Watching a seed unfold');
-  await page.reload(); await expect(page.getByLabel('Record title')).toHaveValue('Watching a seed unfold');
+  await page.goForward(); await expect(page.locator('.record-reader h1')).toHaveText('Watching a seed unfold');
+  await page.reload(); await expect(page.locator('.record-reader h1')).toHaveText('Watching a seed unfold');
   await page.getByRole('button',{name:'Back to records',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Field journal',exact:true})).toBeVisible();
-  await page.screenshot({path:'.local/screenshots/notebook-navigation.png'});
+  await page.screenshot({path:test.info().outputPath('notebook-navigation.png')});
   await page.setViewportSize({width:390,height:844});
 
   await page.getByRole('button',{name:'Menu',exact:true}).click();await expect(page.getByRole('navigation',{name:'Publishing',exact:true})).toBeVisible();
@@ -597,23 +659,21 @@ test('workspace correction preserves research and gives projects, lab books and 
 test('setup chooses a storage folder and optional credentials, then enforces lock and unlock',async({page})=>{
   await app.close();app=await startServer({root,port:0,headless:true});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
-  const destination=path.join(root,'chosen workspace'),password='synthetic browser password';
+  const destination=path.join(parent,'Research archive'),password='synthetic browser password';
   await page.goto(app.url);await page.getByLabel('Workspace name').fill('Research archive');
   await page.getByRole('button',{name:'Continue',exact:true}).click();await page.getByRole('button',{name:'Continue',exact:true}).click();
   await page.getByRole('button',{name:'Browse server folders',exact:true}).click();
-  await page.getByText('Go to a path or network share',{exact:true}).click();await page.getByLabel('Folder or mounted share').fill(root);await page.getByRole('button',{name:'Go to folder',exact:true}).click();
+  await page.getByText('Go to a path or network share',{exact:true}).click();await page.getByLabel('Folder or mounted share').fill(parent);await page.getByRole('button',{name:'Go to folder',exact:true}).click();
   await page.getByRole('button',{name:'Use this folder',exact:true}).click();
-  await expect(page.getByLabel('Workspace folder',{exact:true})).toHaveValue(root);
-  await page.getByLabel('Workspace folder',{exact:true}).fill(destination);
+  await expect(page.getByLabel('Create in',{exact:true})).toHaveValue(parent);
   await page.getByRole('button',{name:'Check folder',exact:true}).click();await expect(page.locator('.storage-check-result')).toContainText('Ready for a new workspace');
   await page.getByLabel('Use a password',{exact:false}).check();await page.getByLabel('Password',{exact:true}).fill(password);
   await page.getByLabel('Confirm password',{exact:true}).fill('different password');
   await page.getByRole('button',{name:'Create workspace',exact:true}).click();await expect(page.locator('.setup-error')).toContainText('do not match');
-  await page.getByLabel('Confirm password',{exact:true}).fill(password);
-  await mkdir('.local/screenshots',{recursive:true});await page.screenshot({path:test.info().outputPath('setup-storage.png'),fullPage:true});
+  await page.getByLabel('Confirm password',{exact:true}).fill(password);await page.screenshot({path:test.info().outputPath('setup-storage.png'),fullPage:true});
   await page.getByRole('button',{name:'Create workspace',exact:true}).click();await expect(page.locator('.workspace-name')).toHaveText('Research archive');
   await preferences(page,'Storage & access');
-  await expect(page.locator('main')).toContainText(destination);await expect(page.locator('.storage-map')).toContainText('Original media');
+  await expect(page.locator('main')).toContainText(destination);await page.getByText('Files and locations',{exact:true}).click();await expect(page.locator('.storage-map')).toContainText('Original media');
   await page.screenshot({path:test.info().outputPath('storage-settings.png'),fullPage:true});
   const saved=await new Workspace(destination,await verifyAccess(await readAccess(destination),'',password)).read();expect(saved.book.projects).toHaveLength(0);expect(saved.book.notebooks).toHaveLength(0);
   expect(JSON.stringify(saved.book)).not.toContain(password);expect(JSON.stringify(saved.book)).not.toContain(destination);
@@ -631,16 +691,16 @@ test('setup chooses a storage folder and optional credentials, then enforces loc
 
 test('storage settings copy a reviewed workspace, remember it and open existing workspaces without altering the original',async({page})=>{
   await new Workspace(root).create(sampleNotebook());const before=await new Workspace(root).read();
-  const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-browser-copy-')),destination=path.join(parent,'relocated'),preferencesFile=path.join(parent,'settings','preferences.json');
+  const destination=path.join(parent,'relocated'),preferencesFile=path.join(parent,'copy-preferences.json');
   await app.close();app=await startServer({root,port:0,preferencesFile,headless:true});await page.goto(app.url);
   await preferences(page,'Storage & access');
   await page.getByRole('button',{name:'Copy workspace to another folder',exact:true}).click();
   await page.getByLabel('Workspace folder',{exact:true}).fill(destination);
   await expect(page.getByRole('dialog')).toContainText('The original stays in its current folder');
   await page.getByRole('button',{name:'Copy and use this folder',exact:true}).click();
-  await expect(page.locator('.workspace-name')).toHaveText('A closer look');
+  await expect(page.locator('.workspace-name')).toHaveText('relocated');
   await expect(page.getByRole('dialog')).not.toBeVisible();
-  expect((await new Workspace(root).read()).etag).toBe(before.etag);expect((await new Workspace(destination).read()).etag).toBe(before.etag);
+  expect((await new Workspace(root).read()).etag).toBe(before.etag);const copied=(await new Workspace(destination).read()).book;expect(copied).toEqual({...before.book,title:'relocated',revision:before.book.revision+1,updatedAt:copied.updatedAt});expect(Date.parse(copied.updatedAt)).toBeGreaterThanOrEqual(Date.parse(before.book.updatedAt));
   expect(JSON.parse(await readFile(preferencesFile,'utf8')).workspace).toBe(destination);
   await preferences(page,'Storage & access');await expect(page.locator('main')).toContainText(destination);
   await page.getByRole('button',{name:'Open another workspace',exact:true}).click();
