@@ -55,3 +55,26 @@ test('incoming references retain separate owners and expose bounded partial stat
  response=valid;assert.equal((await client.incoming({target,types:['calculation']})).items.length,2);
  for(const bad of [{...valid,items:[valid.items[0],valid.items[0]]},{...valid,partial:false},{...valid,unavailableTotal:0},{...valid,unavailable:Array(26).fill(valid.unavailable[0]),unavailableTotal:26},{...valid,target:{...target,workspaceId:id()}}]){response=bad;await assert.rejects(client.incoming({target,types:['calculation']}),/MODULE_REFERENCE_RESPONSE/);}
 });
+
+for(const [name,change] of [
+ ['owner',state=>state.projectOwner={projectId:id(),labBookId:null}],
+ ['editor',state=>state.modulePath='task/'+id()],
+ ['navigation',state=>state.page='entries'],
+ ['workspace session',state=>state.storage.contextId=id()],
+ ['cancellation',(_state,client)=>client.cancel()]
+])test('late locked-source failure cannot prompt after '+name+' changes',async()=>{
+ const state=setup(),target=reference();let reject,prompts=0,seen,calls=0;
+ const held=new Promise((_resolve,no)=>reject=no),client=moduleReferenceClient({state,api:()=>{calls++;return held;},access:async run=>{try{return await run();}catch(error){seen=error;if(error.code==='ACCESS_LOCKED')prompts++;throw error;}}});
+ const pending=client.resolve(target,{unlock:true}),rejected=assert.rejects(pending,{name:'AbortError'});change(state,client);reject({code:'ACCESS_LOCKED',projectId:id(),message:'Old target locked'});await rejected;assert.equal(prompts,0);assert.equal(seen.name,'AbortError');assert.equal(calls,1);
+});
+
+test('current explicit source access can unlock and retry the exact reference once',async()=>{
+ const state=setup(),target=reference(),before=structuredClone(state),targetOwner=owner(target),failure={code:'ACCESS_LOCKED',projectId:targetOwner.projectId,labBookId:targetOwner.labBookId};let prompts=0;const calls=[];
+ const client=moduleReferenceClient({state,api:async(route,body,options)=>{calls.push({route,body,options});if(calls.length===1)throw failure;return {workspaceId:state.book.id,...summary(target),owner:targetOwner,type:target.type,id:target.id};},access:async run=>{try{return await run();}catch(error){assert.equal(error,failure);prompts++;return run();}}});
+ const result=await client.resolve(target,{unlock:true});assert.deepEqual(result.reference,target);assert.equal(prompts,1);assert.equal(calls.length,2);assert.deepEqual(calls[0].body,calls[1].body);assert.equal(calls[0].options.signal,calls[1].options.signal);assert.equal(calls[0].options.adopt,false);assert.deepEqual(state,before);
+});
+
+test('current passive reads preserve access errors without requesting an unlock',async()=>{
+ const state=setup(),target=reference(),failure={code:'ACCESS_LOCKED',projectId:id()};let prompts=0;
+ const client=moduleReferenceClient({state,api:async()=>{throw failure;},access:async run=>{prompts++;return run();}});await assert.rejects(client.resolve(target),error=>error===failure);assert.equal(prompts,0);
+});

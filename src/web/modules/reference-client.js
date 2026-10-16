@@ -23,7 +23,7 @@ export function moduleReferenceClient({state,api,access=operation=>operation(),i
   const key=stamp,version=epoch,workspaceId=state.book.id,controller=new AbortController();requests.add(controller);
   const combined=signal?AbortSignal.any([signal,controller.signal]):controller.signal;
   const valid=()=>!combined.aborted&&version===epoch&&key===context()&&available();
-  const run=()=>{if(!valid())throw aborted();return api('/api/modules/references/'+endpoint,{...body,workspaceId},{adopt:false,signal:combined});};
+  const run=async()=>{if(!valid())throw aborted();try{const result=await api('/api/modules/references/'+endpoint,{...body,workspaceId},{adopt:false,signal:combined});if(!valid())throw aborted();return result;}catch(error){if(!valid())throw aborted();throw error;}};
   try{const result=await (unlock?access(run):run());if(!valid())throw aborted();if(result?.workspaceId!==workspaceId)invalid();return result;}
   finally{requests.delete(controller);}
  }
