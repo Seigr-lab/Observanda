@@ -2,6 +2,7 @@ import {validModuleRevision} from './revision.js';
 import {decimal} from './quantities.js';
 import {inventoryScope} from './inventory-model.js';
 import {moduleItemPages} from './item-pages.js';
+import {connectedReferencePages} from '../module-connected-references.js';
 import {moduleForEntity,enabledModule} from '../feature-modules.js';
 import {t} from '../i18n/index.js';
 const tr=key=>t('inventoryData',key),token=v=>v===null||typeof v==='string'&&v.length>0&&v.length<=8192;
@@ -11,8 +12,17 @@ export function inventoryClient(c,{card,stock,bom}){
  const {api,state}=c.services;let signature=null,generation=0,controller=null,values=new Map(),loading=false,error=null;
  const pages=new Map(),active=()=>state.page==='module'&&state.moduleId==='resources';
  let connectedId=null;
- const connections=moduleItemPages({api,workspaceId:state.book.id,esc:c.esc,prefix:'inventory-links',draw:()=>{const node=document.querySelector('[data-inventory-links]');if(node&&active())node.innerHTML=connectionView();}});
- function connectionView(){return connections.view(item=>{const module=moduleForEntity({type:item.type,data:{}},[]);return `<article class="module-item"><h3>${c.esc(item.title)}</h3><button class="button" type="button" data-action="module-open" data-module-id="${c.esc(module?.id??'')}" data-module-path="${c.esc(item.openType+'/'+item.openId)}" ${module&&enabledModule(state.dashboardSettings,module.id)?'':'disabled'}>${c.esc(t('moduleCurrent','open',{name:item.type}))}</button></article>`;});}
+ const connectedActive=()=>active()&&c.current?.type==='resource'&&c.current.expectedRevision!==null&&c.section==='connections'&&!state.access?.locked&&!state.storageUnavailable;
+ const connectedIdentity=()=>JSON.stringify([state.modulePath,c.current?.id,c.section]);
+ const connectedKey=()=>JSON.stringify([state.storage?.contextId,state.book.id,state.projectOwner,connectedIdentity()]);
+ const aggregate=state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion===21;
+ const drawConnections=()=>{const node=document.querySelector('[data-inventory-links]');if(node&&connectedActive())node.innerHTML=connectionView();};
+ const connections=aggregate?connectedReferencePages({state,api,esc:c.esc,prefix:'inventory-links',action:'module-command',active:connectedActive,identity:connectedIdentity,draw:drawConnections}):moduleItemPages({api,workspaceId:state.book.id,esc:c.esc,prefix:'inventory-links',draw:drawConnections});
+ function connectionView(){return c.button(t('moduleConnected','refresh'),'inventory-links-refresh',!connectedActive()||connections.busy?'disabled':'')+connections.view(item=>{
+  const module=moduleForEntity({type:item.type,data:{}},[]),enabled=module&&enabledModule(state.dashboardSettings,module.id),owner=item.owner&&[item.owner.projectTitle,item.owner.notebookTitle].filter(Boolean).join(' / ');
+  const target=item.reference?'data-action="module-reference-open" data-reference-workspace="'+c.esc(item.reference.workspaceId)+'" data-reference-type="'+c.esc(item.reference.type)+'" data-reference-id="'+c.esc(item.reference.id)+'"':'data-action="module-open" data-module-id="'+c.esc(module?.id??'')+'" data-module-path="'+c.esc(item.openType+'/'+item.openId)+'"';
+  return '<article class="module-item"><h3>'+c.esc(item.title)+'</h3>'+(owner?'<small>'+c.esc(owner)+'</small>':'')+'<button class="button" type="button" '+target+' '+(enabled?'':'disabled')+'>'+c.esc(t('moduleCurrent','open',{name:item.type}))+'</button></article>';
+ });}
  const ids=()=>c.current?(c.current.type==='resource'&&c.current.expectedRevision!==null?[c.current.id]:c.current.type==='bom'?[...new Set(c.current.data.lines.map(l=>l.resourceId).filter(Boolean))]:[]):(c.itemsPage?.items??[]).filter(i=>i.type==='resource').map(i=>i.id);
  async function fetchStock(selected,signal){
   const result=new Map();let revision=null;
@@ -63,11 +73,13 @@ export function inventoryClient(c,{card,stock,bom}){
    const key=JSON.stringify([state.storage?.contextId,c.scopeId,c.recursive,c.current?.id,ids(),c.snapshot.revisions??c.snapshot.revision,c.current?null:c.itemsPage?.revision]);
    if(signature!==key){signature=key;clearPages();void load();}
    if(c.current?.type==='resource'&&c.current.expectedRevision!==null&&c.section==='stock'&&!c.operation)for(const kind of ['movements','reservations'])if(!pages.has(kind))void ledger(kind);
-   if(c.current?.type==='resource'&&c.section==='connections'&&connectedId!==c.current.id){connectedId=c.current.id;void connections.load({reference:{workspaceId:state.book.id,type:'resource',id:connectedId}});}
+   if(!connectedActive()){if(connectedId!==null){connections.clear();connectedId=null;}}
+   else if(connectedId!==connectedKey()){connections.clear();connectedId=connectedKey();void connections.load({reference:{workspaceId:state.book.id,type:'resource',id:c.current.id}});}
    paint();
   },
   invalidate(){signature=null;clearPages();connections.clear();connectedId=null;},stop,
   async action(name,node){
+   if(name.startsWith('inventory-links-')&&!connectedActive())return true;
    if(await connections.action(name))return true;
    if(name==='inventory-retry'){await load();return true;}
    if(name!=='inventory-ledger')return false;
