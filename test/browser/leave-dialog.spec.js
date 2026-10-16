@@ -35,12 +35,12 @@ async function prepareFixture(page){
  await page.goto('http://dialog.test/');
  await page.evaluate(async()=>{
   const {unsavedChanges}=await import('/unsaved-changes.js');
-  window.dirty=true;window.busy=false;window.navigations=[];window.messages=[];window.preparations=[];window.writes=0;
+  window.dirty=false;window.busy=false;window.navigations=[];window.messages=[];window.preparations=[];window.writes=0;
   window.guard=unsavedChanges({esc:v=>v,defaultScope:'navigation',prepare:scope=>new Promise((resolve,reject)=>preparations.push({scope,resolve,reject})),changes:()=>({labels:dirty?['Draft']:[],forms:[],canSave:true}),save:()=>{writes++;},discard:()=>{writes++;},busy:()=>busy,notify:message=>messages.push(message)});
  });
 }
 
-test('navigation waits for a durable draft checkpoint without applying the draft or opening a decision',async({page})=>{
+test('navigation prepares an already durable draft without applying it or opening a decision',async({page})=>{
  await prepareFixture(page);
  await page.evaluate(()=>{window.pending=guard.run(()=>navigations.push('next'));});
  expect(await page.evaluate(()=>({scopes:preparations.map(v=>v.scope),immediate:guard.canLeaveImmediately(),navigations}))).toEqual({scopes:['navigation'],immediate:false,navigations:[]});
@@ -53,7 +53,7 @@ test('navigation waits for a durable draft checkpoint without applying the draft
 
 test('failed checkpoint keeps the current draft and reports its actual error',async({page})=>{
  await prepareFixture(page);
- await page.evaluate(()=>{window.pending=guard.run(()=>navigations.push('next')).catch(error=>({error:error.message}));preparations[0].reject(Error('Checkpoint unavailable'));});
+ await page.evaluate(()=>{window.pending=guard.run(()=>navigations.push('next')).catch(error=>({error:error.message}));dirty=true;preparations[0].reject(Error('Checkpoint unavailable'));});
  expect(await page.evaluate(()=>pending)).toEqual({error:'Checkpoint unavailable'});
  expect(await page.evaluate(()=>({navigations,writes,dirty,immediate:guard.canLeaveImmediately()}))).toEqual({navigations:[],writes:0,dirty:true,immediate:false});
  await expect(page.locator('#leave-dialog')).not.toBeVisible();
@@ -72,7 +72,7 @@ test('preparation cannot bypass a newly busy operation or an unapplied action',a
  await prepareFixture(page);
  await page.evaluate(()=>{window.first=guard.run(()=>navigations.push('next'));busy=true;preparations[0].resolve();});
  expect(await page.evaluate(()=>first)).toBe(false);expect(await page.evaluate(()=>navigations)).toEqual([]);
- await page.evaluate(()=>{busy=false;window.second=guard.run(()=>navigations.push('next'),{scope:'all'});preparations[1].resolve();});
+ await page.evaluate(()=>{busy=false;window.second=guard.run(()=>navigations.push('next'),{scope:'all'});dirty=true;preparations[1].resolve();});
  const dialog=page.locator('#leave-dialog');await expect(dialog).toBeVisible();
  expect(await page.evaluate(()=>preparations[1].scope)).toBe('all');
  await dialog.locator('[data-choice="stay"]').click();expect(await page.evaluate(()=>second)).toBe(false);

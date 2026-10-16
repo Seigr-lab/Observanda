@@ -6,16 +6,18 @@ export function unsavedChanges({esc,changes,save,discard,busy,notify,prepare,def
     if(active)return false;
     const request=++generation;
     if(busy()){notify('Wait for the current operation to finish before leaving.',true);return false;}
-    // A durable draft checkpoint may make navigation safe without applying the
-    // draft. Reassess the guard only after that preparation has completed.
-    if(prepare){
+    // A draft without a durable checkpoint needs an immediate decision. Its
+    // queued write must not hide Stay or Discard behind preparation. Already
+    // retained drafts may prepare a return token without applying their edits.
+    let pending=changes(scope);
+    if(prepare&&!pending.labels.length){
       preparing=request;
       try{await prepare(scope);}catch(error){if(request!==generation)return false;throw error;}
       finally{if(preparing===request)preparing=null;}
       if(request!==generation)return false;
       if(busy()){notify('Wait for the current operation to finish before leaving.',true);return false;}
     }
-    const pending=changes(scope);
+    pending=changes(scope);
     if(!pending.labels.length){await next();return true;}
     active=true;
     const decision=await new Promise(resolve=>{
