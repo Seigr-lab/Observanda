@@ -1,11 +1,12 @@
+import {hasProjectDirectory} from './project-directory-capability.js';
 import {localizedText} from './i18n/index.js';
 const text=localizedText('projectCreation');
 // Recovery belongs in the project directory. The service owns the durable
 // request; navigation and window lifetime do not own a second creation.
 export function projectCreationRecoveryUI({state,api,esc,field,showDialog,refreshDirectory}){
- let context=null,generation=0,loading=false,loaded=false,items=[],next=null,error='',command=null,submitting=new Set(),wasVisible=false;
- const visible=()=>state.page==='projects'&&!state.access?.locked&&!state.storageUnavailable&&!state.newWorkspace;
- function sync(){if(context!==state.storage?.contextId){context=state.storage?.contextId;generation++;loading=loaded=false;items=[];next=null;error='';command=null;submitting=new Set();wasVisible=false;}}
+ let context=null,storageKind=null,generation=0,loading=false,loaded=false,items=[],next=null,error='',command=null,submitting=new Set(),wasVisible=false;
+ const visible=()=>hasProjectDirectory(state)&&state.page==='projects'&&!state.access?.locked&&!state.storageUnavailable&&!state.newWorkspace;
+ function sync(){if(context!==state.storage?.contextId||storageKind!==state.storage?.researchStorage){context=state.storage?.contextId;storageKind=state.storage?.researchStorage;generation++;loading=loaded=false;items=[];next=null;error='';command=null;submitting=new Set();wasVisible=false;}}
  const host=()=>visible()?document.querySelector('[data-project-creation-recovery]'):null;
  function paint(){
   const node=host();if(!node)return;node.hidden=!items.length&&!error;
@@ -13,7 +14,7 @@ export function projectCreationRecoveryUI({state,api,esc,field,showDialog,refres
   if(node.dataset.content!==content){node.dataset.content=content;node.innerHTML=content;}
  }
  async function load(more=false){
-  sync();if(loading)return;loading=true;const token=generation;
+  sync();if(!hasProjectDirectory(state)||loading)return;loading=true;const token=generation;
   try{const result=await api('/api/projects/create/pending',{after:more?next:null,limit:20},{adopt:false});if(token!==generation||context!==state.storage?.contextId)return;const finished=items.some(item=>item.running&&!result.items.some(value=>value.id===item.id));items=more?[...items,...result.items]:result.items;next=result.next;loaded=true;error='';if(finished)await refreshDirectory();}
   catch(e){if(token===generation)error=e.message??text('failed');}
   finally{if(token===generation){loading=false;paint();}}

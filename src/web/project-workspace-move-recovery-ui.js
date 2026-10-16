@@ -1,11 +1,12 @@
+import {hasProjectDirectory} from './project-directory-capability.js';
 import {localizedText} from './i18n/index.js';
 import {projectWorkspaceTargetUI} from './project-workspace-target-ui.js';
 const text=localizedText('projectStorage');
 export function projectWorkspaceMoveRecoveryUI({state,api,esc,field,accessProject,refreshDirectory}){
- let context,items=[],next=null,loading=false,loaded=false,visibleBefore=false,error='',notice=null;
- const visible=()=>state.page==='projects'&&!state.access?.locked&&!state.storageUnavailable;
+ let context,storageKind,items=[],next=null,loading=false,loaded=false,visibleBefore=false,error='',notice=null;
+ const visible=()=>hasProjectDirectory(state)&&state.page==='projects'&&!state.access?.locked&&!state.storageUnavailable;
  const host=()=>visible()?document.querySelector('[data-project-workspace-moves]'):null;
- function sync(){if(context!==state.storage?.contextId){context=state.storage?.contextId;items=[];next=null;loading=loaded=visibleBefore=false;error='';notice=null;}}
+ function sync(){if(context!==state.storage?.contextId||storageKind!==state.storage?.researchStorage){context=state.storage?.contextId;storageKind=state.storage?.researchStorage;items=[];next=null;loading=loaded=visibleBefore=false;error='';notice=null;}}
  const targets=projectWorkspaceTargetUI({state,api,esc,field,current:entry=>items.includes(entry),changed:paint,ready:()=>{}});
  function paint(){
   const node=host();if(!node)return;node.hidden=!items.length&&!error&&!notice;
@@ -14,7 +15,7 @@ export function projectWorkspaceMoveRecoveryUI({state,api,esc,field,accessProjec
   if(node.dataset.content!==content){node.dataset.content=content;node.innerHTML=content;}
  }
  async function load(more=false){
-  sync();if(loading)return;loading=true;const selected=context;
+  sync();if(!hasProjectDirectory(state)||loading)return;loading=true;const selected=context;
   try{const result=await api('/api/projects/move/pending',{after:more?next:null,limit:20},{adopt:false});if(selected!==state.storage?.contextId)return;
    const previous=new Map(items.map(entry=>[entry.id,entry])),rows=result.items.map(item=>Object.assign(previous.get(item.id)??{context:selected,target:null,targetPath:item.path,targetTitle:item.targetTitle},item));items=more?[...items,...rows]:rows;next=result.next;loaded=true;error='';
    const finished=[...previous.values()].find(entry=>entry.running&&!items.includes(entry));if(finished){notice={path:finished.path,title:finished.targetTitle};await refreshDirectory();}

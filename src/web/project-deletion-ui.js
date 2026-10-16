@@ -1,18 +1,19 @@
+import {hasProjectDirectory} from './project-directory-capability.js';
 import {localizedText} from './i18n/index.js';
 const text=localizedText('projectDeletion');
 // The Projects route owns deletion and restart recovery. Navigation never owns
 // the operation; the service's encrypted receipt survives the window.
 export function projectDeletionUI({state,api,accessProject=operation=>operation(),esc,field,showDialog,enterProject,render,refreshDirectory}){
- let context,generation=0,items=[],next=null,error='',notice='',command=null,loading=false,loaded=false,wasVisible=false;let pending=new Map();
- const visible=()=>state.page==='projects'&&!state.access?.locked&&!state.storageUnavailable;
- function sync(){if(context!==state.storage?.contextId){context=state.storage?.contextId;generation++;items=[];next=null;error=notice='';command=null;loading=loaded=wasVisible=false;pending=new Map();}}
+ let context,storageKind,generation=0,items=[],next=null,error='',notice='',command=null,loading=false,loaded=false,wasVisible=false;let pending=new Map();
+ const visible=()=>hasProjectDirectory(state)&&state.page==='projects'&&!state.access?.locked&&!state.storageUnavailable;
+ function sync(){if(context!==state.storage?.contextId||storageKind!==state.storage?.researchStorage){context=state.storage?.contextId;storageKind=state.storage?.researchStorage;generation++;items=[];next=null;error=notice='';command=null;loading=loaded=wasVisible=false;pending=new Map();}}
  const current=token=>token===generation&&context===state.storage?.contextId;
  function paint(){const node=document.querySelector('[data-project-deletion]');if(!node)return;const all=new Map(items.map(item=>[item.id,item]));for(const [id,item] of pending)all.set(id,item);
   node.hidden=!all.size&&!error&&!notice&&!next;
   const content=(notice?'<p role="status">'+esc(notice)+'</p>':'')+(error?'<p role="alert">'+esc(error)+'</p><button class="button" data-action="project-deletion-refresh">'+esc(text('retry'))+'</button>':'')+[...all.values()].map(item=>'<article class="panel" data-deletion="'+item.id+'"><h2>'+esc(text('pending'))+'</h2><p class="storage-path">'+esc(item.source)+'</p>'+(item.running||pending.has(item.id)?'<p role="status">'+esc(text('working'))+'</p>':'<button class="button" data-action="project-deletion-resume" data-id="'+item.id+'">'+esc(text('resume'))+'</button>')+'</article>').join('')+(next?'<button class="button" data-action="project-deletion-more">'+esc(text('more'))+'</button>':'');
   if(node.dataset.content!==content){node.dataset.content=content;node.innerHTML=content;}
  }
- async function load(more=false){sync();if(loading)return;loading=true;const token=generation;
+ async function load(more=false){sync();if(!hasProjectDirectory(state)||loading)return;loading=true;const token=generation;
   try{const result=await api('/api/projects/delete/pending',{after:more?next:null,limit:20},{adopt:false});if(!current(token))return;const finished=!more&&items.some(item=>item.running&&!result.items.some(value=>value.id===item.id));if(finished){notice=text('completed');await refreshDirectory();if(!current(token))return;}items=more?[...items,...result.items]:result.items;next=result.next;loaded=true;}
   catch(e){if(current(token))error=e.message??text('failed');}finally{if(current(token)){loading=false;paint();}}
  }

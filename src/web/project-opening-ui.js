@@ -1,11 +1,12 @@
+import {hasProjectDirectory} from './project-directory-capability.js';
 import {localizedText} from './i18n/index.js';
 const text=localizedText('projectOpening');
 // Folder selection, independent-owner credentials and restart recovery stay in
 // the Projects section. Secrets are held only for the current import attempt.
 export function projectOpeningUI({state,api,esc,field,refreshDirectory,enterProject,render}){
- let context=null,generation=0,visible=false,loading=false,items=[],next=null,prompt=null,pending=false,error='',complete=false;
+ let context=null,storageKind=null,generation=0,visible=false,loading=false,items=[],next=null,prompt=null,pending=false,error='',complete=false;
  const current=token=>token===generation&&context===state.storage?.contextId;
- function sync(){if(context!==state.storage?.contextId){context=state.storage?.contextId;generation++;visible=false;loading=false;items=[];next=null;prompt=null;pending=false;error='';complete=false;}}
+ function sync(){if(context!==state.storage?.contextId||storageKind!==state.storage?.researchStorage){context=state.storage?.contextId;storageKind=state.storage?.researchStorage;generation++;visible=false;loading=false;items=[];next=null;prompt=null;pending=false;error='';complete=false;}}
  function paint(){
   sync();const host=document.querySelector('[data-project-opening]');if(!host)return;
   const alert=host.querySelector('[role=alert]');alert.textContent=error;alert.hidden=!error;host.querySelector('[data-import-complete]').hidden=!complete;host.querySelector('[data-import-complete]').textContent=text(complete==='cancelled'?'importCancelled':'imported');
@@ -21,7 +22,7 @@ export function projectOpeningUI({state,api,esc,field,refreshDirectory,enterProj
   host.querySelector('[data-opening-more]').hidden=!next;
  }
  async function load(more=false){
-  if(loading)return;loading=true;const token=generation;
+  if(!hasProjectDirectory(state)||loading)return;loading=true;const token=generation;
   try{const result=await api('/api/projects/open/pending',{after:more?next:null,limit:20},{adopt:false});if(!current(token))return;const finished=!more&&items.some(item=>!result.items.some(other=>other.id===item.id));items=more?[...items,...result.items]:result.items;next=result.next;if(finished)await refreshDirectory();}
   catch(e){if(current(token)&&e.name!=='AbortError')error=e.message??text('failed');}
   finally{if(current(token)){loading=false;paint();}}
@@ -41,7 +42,7 @@ export function projectOpeningUI({state,api,esc,field,refreshDirectory,enterProj
  return {
   view:()=>'<section data-project-opening><p role="alert" hidden></p><p data-import-complete role="status" hidden>'+esc(text('imported'))+'</p><div data-opening-form></div><div data-opening-pending></div><button class="button" data-opening-more data-action="project-opening-more" hidden>'+esc(text('more'))+'</button></section>',
   button:()=>'<button class="button" data-action="project-open-folder">'+esc(text('open'))+'</button>',
-  bind(){sync();const shown=state.page==='projects',entered=shown&&!visible;visible=shown;paint();if(entered)void load();},
+  bind(){sync();const shown=hasProjectDirectory(state)&&state.page==='projects',entered=shown&&!visible;visible=shown;paint();if(entered)void load();},
   async action(node){sync();const action=node.dataset.action;if(action!=='project-open-folder'&&!action?.startsWith('project-opening-'))return false;
    if(action==='project-opening-dismiss'){prompt=null;error='';}
    else if(action==='project-opening-more'){await load(true);return true;}
