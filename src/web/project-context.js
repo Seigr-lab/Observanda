@@ -22,6 +22,7 @@ export function projectContexts({state,api,adopt,access=operation=>operation(),a
  let generation=0,pending=null,rootBook=null,context=state.storage?.contextId;
  const sync=()=>{if(context!==state.storage?.contextId){generation++;pending=null;context=state.storage?.contextId;rootBook=null;state.projectOwner=null;state.ownerOperation=null;}};
  function reset(){generation++;pending=null;context=state.storage?.contextId;rootBook=null;state.projectOwner=null;state.ownerOperation=null;}
+ function cancelPending(){sync();if(pending){generation++;pending=null;}}
  async function enter(projectId,labBookId=null){
   sync();if(labBookId!==null&&(!researchId(labBookId)||!researchId(projectId)))throw new TypeError('Invalid lab-book owner');if(projectId!==null&&!researchId(projectId))throw new TypeError('Invalid project owner');
   if(pending?.projectId===projectId&&pending.labBookId===labBookId)return pending.task;
@@ -38,7 +39,7 @@ export function projectContexts({state,api,adopt,access=operation=>operation(),a
   state.projectOwner=projectId?{projectId,...(labBookId?{labBookId}:{}),namespaceId:result.book.id}:null;
   if(!projectId)rootBook=null;
   adopt(result);
-  try{await afterEnter(result);}catch(error){
+  try{await afterEnter(result,{current:()=>request===generation&&captured===state.storage?.contextId});}catch(error){
    if(request!==generation||captured!==state.storage?.contextId)throw {name:'AbortError'};
    throw error;
   }
@@ -47,7 +48,7 @@ export function projectContexts({state,api,adopt,access=operation=>operation(),a
   })();
   return activation.task;
  }
- return {enter,reset,pending(){sync();return pending!==null;},root(){sync();return rootBook??state.book;},navigation(){sync();if(!rootBook||!state.projectOwner)return state.book;const id=state.projectOwner.projectId;return {...rootBook,projects:[...rootBook.projects.filter(p=>p.id!==id),...state.book.projects],notebooks:[...rootBook.notebooks.filter(n=>n.projectId!==id),...state.book.notebooks]};},async restore(hash){const owner=projectRoute(hash);await enter(owner.projectId,owner.labBookId??null);},
+ return {enter,reset,cancelPending,pending(){sync();return pending!==null;},root(){sync();return rootBook??state.book;},navigation(){sync();if(!rootBook||!state.projectOwner)return state.book;const id=state.projectOwner.projectId;return {...rootBook,projects:[...rootBook.projects.filter(p=>p.id!==id),...state.book.projects],notebooks:[...rootBook.notebooks.filter(n=>n.projectId!==id),...state.book.notebooks]};},async restore(hash){const owner=projectRoute(hash);await enter(owner.projectId,owner.labBookId??null);},
   async beforeAction(node){
    const name=node.dataset.action;
    if(['open-project','project-records','edit-project','edit-project-template'].includes(name)){

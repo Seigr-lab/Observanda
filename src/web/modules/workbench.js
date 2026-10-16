@@ -1,4 +1,5 @@
 import {moduleReferencesUI} from './references-ui.js';
+import {moduleReferenceLinks} from './reference-links.js';
 import {t} from '../i18n/index.js';
 import {researchKindLabel} from '../research-reference.js';
 import {projectUsesTool} from '../project-tools.js';
@@ -19,9 +20,10 @@ const currentText=(key,values)=>t('moduleCurrent',key,values);
 export async function moduleEditor(services,definition){
  const {state,api,esc,field,option,render,notify}=services;
  let snapshot=definition.paged?{workspaceId:state.book.id,revision:0,entities:[],partial:true}:(await api('/api/modules/data')).data,disposed=false,busy=false,error=null,query='',filter='',section='details',operation=null,pending=null;
- let initialized=false,openController=null,openGeneration=0,failedId=null,searchTimer=null;
+ let initialized=false,openController=null,openGeneration=0,returnGeneration=0,recoveryAction=null,failedId=null,searchTimer=null;
  const identity=()=>JSON.stringify([state.storage?.contextId,state.book?.id,state.moduleId,state.modulePath]);
- function cancelReads(){clearTimeout(searchTimer);itemPages?.cancel();if(openController){openGeneration++;openController.abort();openController=null;busy=false;}}
+ function cancelRecovery(){if(recoveryAction){recoveryAction=null;busy=false;}}
+ function cancelReads(){cancelRecovery();clearTimeout(searchTimer);itemPages?.cancel();if(openController){openGeneration++;openController.abort();openController=null;busy=false;}}
  let scopeId=null,recursive=true,listQueryKey=null;
  const route=path=>definition.scoped?scopePath(scopeId,path):path;
  const conflicts=new Map();
@@ -46,11 +48,12 @@ export async function moduleEditor(services,definition){
  if(itemPages)await loadItems();
  const historyPages=moduleHistoryUI({api,esc,draw:()=>{if(!disposed)render();},current:()=>drafts.get(currentId)});
  let recoveryReady=false;
- const recovery=await moduleRecovery({api,workspaceId:state.book.id,moduleId:definition.id,onStatus:()=>{status();if(recoveryReady&&!disposed&&!busy&&!currentId&&drafts.size&&recovery.canPark())void releaseDrafts();},onChange:()=>{if(recoveryReady)drawRecovery();}});recoveryReady=true;
+ const recovery=await moduleRecovery({api,workspaceId:state.book.id,moduleId:definition.id,onStatus:()=>{status();if(recoveryReady&&!disposed&&!busy&&!currentId&&drafts.size&&recovery.canPark())void releaseDrafts().then(drawList);},onChange:()=>{if(recoveryReady)drawRecovery();}});recoveryReady=true;
  const operationDirty=()=>!!operation&&JSON.stringify(operation.values)!==JSON.stringify(operation.base);
  const checkpoint=()=>recovery.schedule([...drafts.values()].filter(d=>dirty(d)||d.id===currentId&&operationDirty()&&definition.recoverOperation).map(d=>d.id===currentId&&operationDirty()&&definition.recoverOperation?{...d,operation}:d));
+ const linkedWork=state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion===21?moduleReferenceLinks(services,{moduleId:definition.id,current:()=>drafts.get(currentId),changed:change,draw:()=>{if(!disposed)render();}}):null;
  const references=moduleReferencesUI(services,{moduleId:definition.id,current:()=>drafts.get(currentId),changed:change,draw:()=>render()});
- const itemChoices=definition.paged?moduleItemChoices(services,{moduleId:definition.id,fields:draft=>definition.itemFields?.(draft)??[],current:()=>drafts.get(currentId),changed:change,draw:()=>{if(!disposed)render();}}):null;
+ const itemChoices=definition.paged?moduleItemChoices(services,{moduleId:definition.id,includeLinks:!linkedWork,fields:draft=>definition.itemFields?.(draft)??[],current:()=>drafts.get(currentId),changed:change,draw:()=>{if(!disposed)render();}}):null;
  const all=type=>(definition.availableItems?definition.availableItems(snapshot.entities,state.book):definition.scoped?snapshot.entities.filter(e=>projectUsesTool(state.book,ownerOf(e,snapshot.entities),moduleForEntity(e,snapshot.entities)?.id??definition.id)):snapshot.entities).filter(e=>!type||e.type===type);
  const get=id=>snapshot.entities.find(e=>e.id===id);
  function adopt(data){
@@ -82,9 +85,13 @@ export async function moduleEditor(services,definition){
   if(definition.paged)snapshot={...snapshot,entities:snapshot.entities.filter(e=>e.id===keep||drafts.has(e.id))};
   for(const key of disclosures.keys())if(!drafts.has(key.split(':')[0]))disclosures.delete(key);
  }
- async function releaseDrafts(){
+ async function releaseDrafts({durable=false,current=()=>true}={}){
   if(!drafts.size)return true;
   checkpoint();
+  if(durable){
+   await recovery.flush();if(!current()||disposed)throw new DOMException('Module recovery changed','AbortError');
+   if(recovery.error)throw recovery.error;if(!recovery.canPark())throw new Error(t('moduleRecovery','unavailable'));
+  }
   // Release only a durable checkpoint, synchronously. Waiting and refreshing
   // its recovery listing must never disable navigation or replace newer input.
   if(!recovery.parkSaved()){void recovery.flush();return true;}
@@ -92,9 +99,10 @@ export async function moduleEditor(services,definition){
   if(definition.paged)snapshot={...snapshot,entities:[]};
   void recovery.refresh();return true;
  }
- async function list(type=listType){if(!await releaseDrafts())return;cancelReads();historyPages.clear();currentId=null;operation=null;failedId=null;releaseClean();listType=type;state.modulePath=route(definition.listPath?.(type,context)??type);query='';filter='';if(itemPages)void loadItems();render();}
+ async function list(type=listType){if(!await releaseDrafts())return;returnGeneration++;cancelReads();historyPages.clear();currentId=null;operation=null;failedId=null;releaseClean();listType=type;state.modulePath=route(definition.listPath?.(type,context)??type);query='';filter='';if(itemPages)void loadItems();render();}
  async function switchEdit(id,type,initial={}){if(!drafts.has(id)&&!await releaseDrafts())return;edit(id,type,initial);}
  function edit(id,type,initial={},{draw=true}={}){
+  returnGeneration++;
   // A list response must never replace an editor after its input has focus.
   clearTimeout(searchTimer);itemPages?.cancel();
   historyPages.clear();
@@ -112,7 +120,7 @@ export async function moduleEditor(services,definition){
   if(!drafts.has(id)&&!await releaseDrafts())return;
   if(!definition.paged){edit(id,type);return;}
   if(drafts.has(id)&&(!refresh||drafts.get(id).expectedRevision===null)){edit(id,type);return;}
-  const ticket=++openGeneration,contextKey=identity();openController?.abort();openController=new AbortController();let changed=false;if(!background){busy=true;failedId=null;error=null;status();}
+  const ticket=++openGeneration,contextKey=identity();openController?.abort();openController=new AbortController();let changed=false;if(!background){cancelRecovery();busy=true;failedId=null;error=null;status();}
   try{
    const value=await api('/api/modules/item',{workspaceId:state.book.id,id},{signal:openController.signal});
    if(ticket!==openGeneration||disposed||contextKey!==identity())return;
@@ -173,7 +181,7 @@ export async function moduleEditor(services,definition){
    ...all().flatMap(e=>{const module=moduleForEntity(e,all());return module?[{type:e.type,id:e.id,title:e.data.name??e.data.title,...module.reference?.(e,all()),moduleId:module.id,enabled:enabledModule(state.dashboardSettings,module.id)}]:[]})
   ];
  }
- function links(refs){return refs.map(ref=>{
+ function links(refs){if(linkedWork)return refs.map(linkedWork.link).join('');return refs.map(ref=>{
   if(ref.workspaceId!==state.book.id)return `<span class="module-link">${esc(tr('missingItem',{type:researchKindLabel(ref.type)}))}</span>`;
   if(ref.type==='record')return `<span class="module-link">${references.recordLink(ref.id)}<small>${esc(researchKindLabel(ref.type))}</small></span>`;
   if(itemChoices&&!['project','notebook'].includes(ref.type))return `<span class="module-link">${itemChoices.link(ref)}</span>`;
@@ -182,6 +190,7 @@ export async function moduleEditor(services,definition){
   return `<span class="module-link">${target&&target.enabled!==false?`<button type="button" class="text-button" data-action="${action??'module-open'}" data-id="${ref.id}" data-module-id="${target?.moduleId??''}" data-module-path="${target?.path??ref.type+'/'+ref.id}">${esc(title)}</button>`:esc(title)}<small>${esc(researchKindLabel(ref.type))}</small></span>`;
  }).join('');}
  function referenceFields(refs=context.current.data.links){
+  if(linkedWork)return `<section class="module-block"><h2>${esc(tr('heading'))}</h2><div class="module-link-list">${refs.map((ref,i)=>`<div>${linkedWork.link(ref)}${button(tr('remove'),'remove-link',`data-index="${i}"`,'subtle')}</div>`).join('')||'<p class="muted">'+esc(tr('empty'))+'</p>'}</div>${linkedWork.buttons()}</section>`;
   if(itemChoices)return `<section class="module-block"><h2>${esc(tr('heading'))}</h2><div class="module-link-list">${refs.map((ref,i)=>`<div>${links([ref])}${button(tr('remove'),'remove-link',`data-index="${i}"`,'subtle')}</div>`).join('')||'<p class="muted">'+esc(tr('empty'))+'</p>'}</div>${references.researchButton()}${itemChoices.button()}</section>`;
   return `<section class="module-block"><h2>${esc(tr('heading'))}</h2><div class="module-link-list">${refs.map((ref,i)=>`<div>${links([ref])}${button(tr('remove'),'remove-link',`data-index="${i}"`,'subtle')}</div>`).join('')||'<p class="muted">'+esc(tr('empty'))+'</p>'}</div>${references.researchButton()}<div class="module-inline">${field(esc(tr('moduleItem')),`<select data-link-choice><option value="">${esc(tr('chooseItem'))}</option>${candidates().filter(c=>c.enabled!==false&&c.id!==currentId&&!refs.some(l=>l.id===c.id&&l.type===c.type)).map(c=>`<option value="${c.type+':'+c.id}">${esc(c.title)} / ${esc(c.type)}</option>`).join('')}</select>`)}${button(tr('add'),'add-link')}</div></section>`;
  }
@@ -256,19 +265,25 @@ export async function moduleEditor(services,definition){
   if(await historyPages.action(name,buttonNode))return;
   if(operation&&JSON.stringify(operation.values)!==JSON.stringify(operation.base)&&['new','edit','list','section'].includes(name)){error={message:'Finish this stock operation, or use Cancel to discard it.'};render();return;}
   if(name==='recover'){
-   if(!await releaseDrafts())return;
+   const selectedCheckpoint=recovery.available.find(value=>value.id===a.id);
+   if(!selectedCheckpoint)throw new Error(t('moduleRecovery','unavailable'));
+   const token={workspaceId:state.book.id,moduleId:definition.id,id:a.id,etag:selectedCheckpoint.revision};
+   const request={};recoveryAction=request;let generation=returnGeneration,key=identity();const currentRecovery=()=>!disposed&&recoveryAction===request&&generation===returnGeneration&&key===identity();
    busy=true;status();try{
-   const values=await recovery.restore(a.id);
+   await releaseDrafts({durable:true,current:currentRecovery});if(!currentRecovery())throw new DOMException('Module recovery changed','AbortError');
+   state.modulePath=route(definition.listPath?.(listType,context)??listType);key=identity();
+   const values=await recovery.readReturn(token);if(!currentRecovery())throw new DOMException('Module recovery changed','AbortError');
    if(operationDirty()||values.some(d=>!definition.types.some(t=>t.id===d.type)||drafts.has(d.id)&&dirty(drafts.get(d.id))))throw new Error('Keep or save the open draft before restoring this checkpoint.');
    const operations=values.filter(d=>d.operation);
    if(operations.length>1||operations.some(d=>!definition.recoverOperation?.(d)))throw new Error('This recovery operation is unavailable. Its checkpoint has been kept.');
    for(const draft of values){const {operation:op,...entity}=draft;drafts.set(entity.id,structuredClone(entity));}
    const selected=operations[0]??values[0];
-   if(selected)edit(selected.id,selected.type);
+   if(selected)edit(selected.id,selected.type);generation=returnGeneration;key=identity();
    if(operations.length){operation=structuredClone(operations[0].operation);section='stock';}
-   checkpoint();await recovery.flush();if(recovery.error)throw recovery.error;
-   await recovery.remove(a.id);render();
-   }finally{busy=false;if(!disposed)render();status();}
+   checkpoint();await recovery.flush();if(!currentRecovery())throw new DOMException('Module recovery changed','AbortError');if(recovery.error)throw recovery.error;
+   await recovery.retireReturn(token);if(currentRecovery())render();
+   }catch(e){if(!currentRecovery())throw new DOMException('Module recovery changed','AbortError');throw e;}
+   finally{if(recoveryAction===request){const active=currentRecovery();recoveryAction=null;busy=false;if(active)render();status();}}
   }
   else if(name==='remove-recovery'){await recovery.remove(a.id);render();}
   else if(name==='cancel-operation'){operation=null;error=null;checkpoint();render();}
@@ -322,10 +337,37 @@ export async function moduleEditor(services,definition){
    if(!disposed)render();
   }
  }
+ async function captureReturn(){
+  const selected=context.current;if(!selected||!dirty(selected)&&!operationDirty())return null;
+  const generation=returnGeneration,key=identity();
+  checkpoint();const token=await recovery.captureReturn();
+  if(disposed||generation!==returnGeneration||key!==identity()||currentId!==selected.id)throw new DOMException('Module owner changed','AbortError');
+  return token?{checkpoint:token,itemId:selected.id}:null;
+ }
+ async function restoreReturn(token,{current=()=>true}={}){
+  if(!token)return false;
+  if(!current())throw new DOMException('Module return changed','AbortError');
+  const retained=drafts.get(token.itemId);
+  if(retained&&dirty(retained)){edit(retained.id,retained.type);return true;}
+  if(operationDirty()||[...drafts.values()].some(dirty))throw new Error(t('moduleRecovery','returnConflict'));
+  const generation=returnGeneration,key=identity();
+  const values=await recovery.readReturn(token.checkpoint);
+  if(disposed||!current()||generation!==returnGeneration||key!==identity())throw new DOMException('Module owner changed','AbortError');
+  if(operationDirty()||[...drafts.values()].some(dirty))throw new Error(t('moduleRecovery','returnConflict'));
+  const selected=values.find(draft=>draft.id===token.itemId);
+  if(!selected||values.some(draft=>!definition.types.some(type=>type.id===draft.type))||values.filter(draft=>draft.operation).length>1||values.some(draft=>draft.operation&&!definition.recoverOperation?.(draft)))throw new Error(t('moduleRecovery','unavailable'));
+  for(const draft of values){const {operation:unused,...entity}=draft;void unused;drafts.set(entity.id,structuredClone(entity));}
+  edit(selected.id,selected.type);if(selected.operation){operation=structuredClone(selected.operation);section='stock';}
+  const restoredGeneration=returnGeneration,restoredKey=identity();
+  const activeReturn=()=>!disposed&&current()&&restoredGeneration===returnGeneration&&restoredKey===identity();
+  checkpoint();await recovery.flush();if(recovery.error)throw recovery.error;
+  if(!activeReturn())throw new DOMException('Module owner changed','AbortError');
+  await recovery.retireReturn(token.checkpoint);if(!activeReturn())throw new DOMException('Module owner changed','AbortError');render();return true;
+ }
  initialized=true;
- return {navigation,view,action,create,input:inputEvent,submit,bind(){references.bind();void itemChoices?.bind();definition.bind?.(context);},deactivate(){cancelReads();references.stop();itemChoices?.stop();definition.deactivate?.(context);},referenceAction:async node=>await itemChoices?.action(node)||references.action(node),activate,needsNavigationGuard:()=>operationDirty()||[...drafts.values()].some(dirty)&&!recovery.canPark(),isDirty:()=>[...drafts.values()].some(dirty)||!!operation&&JSON.stringify(operation.values)!==JSON.stringify(operation.base),
+ return {captureReturn,restoreReturn,navigation,view,action,create,input:inputEvent,submit,bind(){void linkedWork?.bind();references.bind();void itemChoices?.bind();definition.bind?.(context);},deactivate(){returnGeneration++;cancelReads();linkedWork?.stop();references.stop();itemChoices?.stop();definition.deactivate?.(context);},referenceAction:async node=>await linkedWork?.action(node)||await itemChoices?.action(node)||references.action(node),activate,needsNavigationGuard:()=>operationDirty()||[...drafts.values()].some(dirty)&&!recovery.canPark(),isDirty:()=>[...drafts.values()].some(dirty)||!!operation&&JSON.stringify(operation.values)!==JSON.stringify(operation.base),
   async save(){if(operation)throw new Error('Finish or cancel the stock operation before leaving.');for(const d of drafts.values())if(dirty(d))await saveDraft(d);if(disposed)return;checkpoint();await recovery.flush();if(!disposed)render();},
   async discard(){drafts.clear();currentId=null;operation=null;state.modulePath=route(listType);checkpoint();if(!disposed)render();await recovery.flush();},
-  dispose(){definition.dispose?.(context);historyPages.clear();references.stop();itemChoices?.stop();itemPages?.clear();clearTimeout(searchTimer);openController?.abort();openGeneration++;disposed=true;recovery.stop();drafts.clear();snapshot=null;}
+  dispose(){returnGeneration++;definition.dispose?.(context);historyPages.clear();linkedWork?.stop();references.stop();itemChoices?.stop();itemPages?.clear();clearTimeout(searchTimer);openController?.abort();openGeneration++;disposed=true;recovery.stop();drafts.clear();snapshot=null;}
  };
 }

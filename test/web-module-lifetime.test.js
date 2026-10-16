@@ -71,3 +71,12 @@ test('a failed old module open cannot report an error on a later screen',async t
 test('a current unavailable module still opens its explanatory view',async t=>{
  const f=fixture(t);f.state.dashboardSettings.enabledModules=[];await f.open();assert.equal(f.state.page,'module');assert.equal(f.created.length,0);assert.equal(f.renders,1);
 });
+
+test('reference-return tokens are scoped to the originating owner, module and route',async t=>{
+ const f=fixture(t),instance=await f.workbench.ready(f.id),checkpoint={id:randomUUID(),etag:'a'.repeat(64)},itemId=randomUUID(),restored=[];
+ f.state.page='module';f.state.modulePath='item/'+itemId;instance.captureReturn=async()=>({checkpoint,itemId});instance.restoreReturn=async token=>{restored.push(token);return true;};
+ const token=await f.workbench.captureReturn();assert.equal(token.workspaceId,f.state.book.id);assert.equal(token.modulePath,f.state.modulePath);assert.equal(await f.workbench.restoreReturn(token),true);
+ for(const property of ['workspaceId','moduleId','modulePath'])await assert.rejects(f.workbench.restoreReturn({...token,[property]:'changed'}),{name:'AbortError'});
+ assert.equal(restored.length,1);
+ const held=deferred();instance.captureReturn=()=>held.promise;const pending=f.workbench.captureReturn(),rejected=assert.rejects(pending,{name:'AbortError'});f.state.modulePath='item/'+randomUUID();held.resolve({checkpoint,itemId});await rejected;
+});

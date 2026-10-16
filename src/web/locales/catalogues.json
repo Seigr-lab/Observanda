@@ -1,4 +1,5 @@
 {
+  "moduleReferenceTargets": ["en"],
   "workspaceRename": ["en"],
   "projectAccess": [
     "en"

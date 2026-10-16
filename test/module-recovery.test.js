@@ -173,3 +173,19 @@ test('late save cleanup streams a large retained sibling draft after the editor 
  const complete=recovery.completionFor(first),original=saved.id;recovery.stop();assert.equal(await complete(),true);
  assert.equal(transfers,2);assert.equal(saved.id,original);assert.deepEqual(saved.drafts,[large]);assert.equal(saved.etag,'revision-1');
 });
+
+test('reference return captures only an exact durable checkpoint and preserves a changed checkpoint',async t=>{
+ let stored=null,changed=false;const writes=[];
+ const api=async(route,body)=>{
+  if(route.endsWith('/list'))return page();
+  if(route.endsWith('/read'))return {draft:{...stored,workspaceId,moduleId},etag:changed?'b'.repeat(64):'a'.repeat(64)};
+  writes.push(structuredClone(body));stored=structuredClone(body);return {etag:'a'.repeat(64)};
+ };
+ const first=await moduleRecovery({api,workspaceId,moduleId});t.after(()=>first.stop());
+ first.schedule([{id:randomUUID(),type:'resource',expectedRevision:1,base:{title:'Saved'},data:{title:'Unfinished'}}]);
+ const token=await first.captureReturn();assert.equal(token.etag,'a'.repeat(64));assert.deepEqual(Object.keys(token).sort(),['etag','id','moduleId','workspaceId']);first.stop();
+ const second=await moduleRecovery({api,workspaceId,moduleId});t.after(()=>second.stop());
+ assert.equal((await second.readReturn(token))[0].data.title,'Unfinished');
+ changed=true;await assert.rejects(second.readReturn(token),/no longer available/i);assert.equal(writes.length,1,'A changed checkpoint must never be retired or overwritten');
+ await assert.rejects(second.readReturn({...token,workspaceId:randomUUID()}),/no longer available/i);
+});

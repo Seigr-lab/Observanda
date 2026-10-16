@@ -12,6 +12,7 @@ import {clearVault} from '../../src/encryption.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {defaultDashboard} from '../../src/web/dashboard-model.js';
 import {writeWorkspaceDashboard,readWorkspaceDashboard} from '../../src/security/dashboard-storage.js';
+import {ProjectModuleReader} from '../../src/project-module-reader.js';
 import {workspaceModules} from '../../src/modules/index.js';
 import {ProjectModuleDrafts} from '../../src/project-module-drafts.js';
 import {ProjectDraftCatalogue} from '../../src/project-draft-catalogue.js';
@@ -102,33 +103,33 @@ test('module history pages open one original, retain drafts and recover failed n
  }finally{await f.close();}
 });
 for(const count of [42,420])test('tools, linked inventory and planning retain no '+count+'-record corpus',async({page})=>{
- test.setTimeout(150000);const f=await fixture(page,count),main=page.locator('main'),dialog=page.locator('#dialog');
+ test.setTimeout(150000);const f=await fixture(page,count),main=page.locator('main'),dialog=page.locator('[data-module-reference-picker]');
  try{
   await page.goto(f.app.url);await navigate(page,'Scientific calculator');await main.getByRole('button',{name:'New calculation',exact:true}).click();
   await main.getByLabel('Name',{exact:true}).fill('Retained calculation');await main.getByLabel('Expression 1',{exact:true}).fill('sqrt(4)');await expect(main.getByLabel('Result 1',{exact:true})).toHaveText('2');
-  await page.route('**/api/research/records/query',route=>route.fulfill({status:503,json:{message:'Synthetic search interruption'}}),{times:1});
+  await page.route('**/api/modules/references/query',route=>route.fulfill({status:503,json:{message:'Synthetic search interruption'}}),{times:1});
   await main.getByRole('button',{name:'Link research',exact:true}).click();await expect(dialog.getByRole('alert')).toHaveText('Synthetic search interruption');
-  await dialog.getByRole('button',{name:'Refresh results',exact:true}).click();await expect(dialog.locator('.research-link-targets li')).toHaveCount(25);
-  await dialog.getByRole('button',{name:'Next results',exact:true}).click();await expect(dialog.locator('[data-target-status]')).toContainText('26');
-  await dialog.getByLabel('Find in this workspace').fill('Specimen 030');await expect(dialog.locator('.research-link-targets li')).toHaveCount(1);
-  await dialog.locator('[data-action="research-target-choose"]').focus();await page.keyboard.press('Enter');await expect(dialog).not.toBeVisible();
+  await dialog.getByRole('button',{name:'Retry linked work',exact:true}).click();await expect(dialog.locator('.research-link-targets li')).toHaveCount(25);
+  await dialog.getByRole('button',{name:'Next items',exact:true}).click();await expect(dialog.locator('[data-reference-content] > [role="status"]')).toContainText('26');
+  await dialog.getByLabel('Search linked work').fill('Specimen 030');await expect(dialog.locator('.research-link-targets li')).toHaveCount(1);
+  await dialog.locator('[data-reference-command="choose"]').focus();await page.keyboard.press('Enter');await expect(dialog).not.toBeVisible();
   await expect(main.locator('.module-link')).toContainText('Specimen 030');await expect(main.getByLabel('Expression 1',{exact:true})).toHaveValue('sqrt(4)');
   await page.route('**/api/modules/command*',route=>route.fulfill({status:503,json:{message:'Synthetic save interruption'}}),{times:1});
   await main.getByRole('button',{name:'Save calculation',exact:true}).click();await expect(main.getByRole('alert')).toContainText('Synthetic save interruption');
   await expect(main.locator('.module-link')).toContainText('Specimen 030');await main.getByRole('button',{name:'Save calculation',exact:true}).click();await expect(main.locator('[data-module-status]')).toHaveText('Saved');
-  await page.route('**/api/workspace/read/labels',route=>route.fulfill({status:503,json:{message:'Synthetic title interruption'}}),{times:1});
-  await page.reload();await expect(main.getByRole('alert')).toContainText('Synthetic title interruption');await main.getByRole('button',{name:'Retry record titles',exact:true}).click();await expect(main.locator('.module-link')).toContainText('Specimen 030');
-  const saved=(await workspaceModules(f.workspace).read()).entities.find(e=>e.type==='calculation');expect(saved.data.links).toEqual([{workspaceId:f.book.id,type:'record',id:f.book.entries[30].id}]);
+  await page.route('**/api/modules/references/labels',route=>route.fulfill({status:503,json:{message:'Synthetic title interruption'}}),{times:1});
+  await page.reload();await expect(main.getByRole('alert')).toContainText('Synthetic title interruption');await main.getByRole('button',{name:'Retry linked item titles',exact:true}).click();await expect(main.locator('.module-link')).toContainText('Specimen 030');
+  const reader=new ProjectModuleReader(f.workspace,f.book.id),item=(await reader.list({workspaceId:f.book.id,type:'calculation'})).items[0],saved=(await reader.selected({workspaceId:f.book.id,id:item.id})).entity;expect(saved.data.links).toEqual([{workspaceId:f.book.id,type:'record',id:f.book.entries[30].id}]);
   for(const [name,create,label,value,save] of [['Spreadsheet','New spreadsheet','Name','Measurement table','Save spreadsheet'],['Chemical structures','New chemical import','Name','Editable structure','Save chemical import']]){
    await navigate(page,name);await main.getByRole('button',{name:create,exact:true}).click();await main.getByLabel(label,{exact:true}).fill(value);
    if(name==='Spreadsheet')await main.getByLabel('Cell A1',{exact:true}).fill('9007199254740993');else await main.getByLabel('Chemical source').fill('CCO');
    await main.getByRole('button',{name:save,exact:true}).click();await expect(main.locator('[data-module-status]')).toHaveText('Saved');
   }
   await navigate(page,'Inventory');await main.getByRole('button',{name:'New item',exact:true}).click();await main.getByLabel('Item name',{exact:true}).fill('Bench instrument');
-  await main.getByRole('button',{name:'Link research',exact:true}).click();await dialog.getByLabel('Look for').selectOption('notebook');await dialog.locator('[data-action="research-target-choose"]').first().click();
+  await main.getByRole('button',{name:'Link research',exact:true}).click();await dialog.getByLabel('Look for').selectOption('notebook');await dialog.locator('[data-reference-command="choose"]').first().click();
   await main.getByRole('button',{name:'Save item',exact:true}).click();await expect(main.getByRole('heading',{name:'Placement',exact:true})).toBeVisible();
   await navigate(page,'Calendar & planning');await main.getByRole('button',{name:'Tasks',exact:true}).click();await main.getByRole('button',{name:'New task',exact:true}).click();await main.getByLabel('Task title',{exact:true}).fill('Inspect prototype');
-  await main.getByRole('button',{name:'Link research',exact:true}).click();await dialog.getByLabel('Find in this workspace').fill('Specimen 031');await expect(dialog.locator('.research-link-targets li')).toHaveCount(1);await dialog.locator('[data-action="research-target-choose"]').click();
+  await main.getByRole('button',{name:'Link research',exact:true}).click();await dialog.getByLabel('Search linked work').fill('Specimen 031');await expect(dialog.locator('.research-link-targets li')).toHaveCount(1);await dialog.locator('[data-reference-command="choose"]').click();
   await main.getByRole('button',{name:'Save task',exact:true}).click();await expect(main.locator('[data-module-status]')).toHaveText('Saved');await page.reload();await expect(main.locator('.module-link')).toContainText('Specimen 031');
   await main.getByRole('button',{name:'Link research',exact:true}).click();await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='20px');await expect(dialog.locator('.research-link-targets li')).toHaveCount(25);await page.screenshot({path:test.info().outputPath('module-research-phone.png')});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.keyboard.press('Escape');
   expect(f.bodies).toEqual([]);expect(f.requests.filter(r=>r.path==='/api/workspace/read/page')).toEqual([]);expect(f.errors).toEqual([]);
@@ -137,12 +138,12 @@ for(const count of [42,420])test('tools, linked inventory and planning retain no
 });
 
 test('module link searches discard late replies and retain an unfinished item on cancel',async({page})=>{
- test.setTimeout(90000);const f=await fixture(page,42),main=page.locator('main'),dialog=page.locator('#dialog');
+ test.setTimeout(90000);const f=await fixture(page,42),main=page.locator('main'),dialog=page.locator('[data-module-reference-picker]');
  try{
   await page.goto(f.app.url);await navigate(page,'Scientific calculator');await main.getByRole('button',{name:'New calculation',exact:true}).click();await main.getByLabel('Name',{exact:true}).fill('Unfinished calculation');
   let release,arrived;const held=new Promise(r=>release=r),received=new Promise(r=>arrived=r);
-  await page.route('**/api/research/records/query',async route=>{const response=await route.fetch();arrived();await held;await route.fulfill({response}).catch(()=>{});},{times:1});
-  await main.getByRole('button',{name:'Link research',exact:true}).click();await received;await dialog.getByLabel('Find in this workspace').fill('Specimen 041');await expect(dialog.locator('.research-link-targets li')).toHaveCount(1);release();await expect(dialog.locator('.research-link-targets li')).toHaveCount(1);await expect(dialog.locator('.research-link-targets')).toContainText('Specimen 041');
+  await page.route('**/api/modules/references/query',async route=>{const response=await route.fetch();arrived();await held;await route.fulfill({response}).catch(()=>{});},{times:1});
+  await main.getByRole('button',{name:'Link research',exact:true}).click();await received;await dialog.getByLabel('Search linked work').fill('Specimen 041');await expect(dialog.locator('.research-link-targets li')).toHaveCount(1);release();await expect(dialog.locator('.research-link-targets li')).toHaveCount(1);await expect(dialog.locator('.research-link-targets')).toContainText('Specimen 041');
   await page.keyboard.press('Escape');await expect(main.getByLabel('Name',{exact:true})).toHaveValue('Unfinished calculation');expect(f.bodies).toEqual([]);expect(f.errors).toEqual([]);
  }finally{await f.close();}
 });
@@ -158,7 +159,7 @@ test('BOM research selection accepts a newly saved record without reading its or
   await expect(main.getByRole('button',{name:'Prototype / run record',exact:true})).toContainText(record.title);await expect(main.getByRole('button',{name:'Prototype / run record',exact:true})).toBeFocused();expect(f.bodies).toEqual([]);
   await main.getByRole('button',{name:'Add component',exact:true}).click();await main.getByLabel('Value / description',{exact:true}).fill('Optional capacitor');await main.getByLabel('Do not populate (DNP)',{exact:true}).check();
   await main.getByRole('button',{name:'Save BOM',exact:true}).click();await expect(main.locator('[data-module-status]')).toHaveText('Saved');
-  const saved=(await workspaceModules(f.workspace).read()).entities.find(e=>e.type==='bom');expect(saved.data.recordId).toBe(record.id);expect(saved.data.recordRevision).toBe(recordRevision(created));expect(f.bodies).toEqual([]);
+  const reader=new ProjectModuleReader(f.workspace,f.book.id),item=(await reader.list({workspaceId:f.book.id,type:'bom'})).items[0],saved=(await reader.selected({workspaceId:f.book.id,id:item.id})).entity;expect(saved.data.recordId).toBe(record.id);expect(saved.data.recordRevision).toBe(recordRevision(created));expect(f.bodies).toEqual([]);
   await page.reload();await expect(main.getByRole('button',{name:'Prototype / run record',exact:true})).toContainText(record.title);expect(f.bodies).toEqual([]);expect(f.errors).toEqual([]);
  }finally{await f.close();}
 });
@@ -167,13 +168,13 @@ test('invalid and missing record labels retain saved module links and allow reco
  test.setTimeout(90000);const f=await fixture(page,42),main=page.locator('main'),id=randomUUID(),record=f.book.entries[0],data={name:'Linked calculation',links:[{workspaceId:f.book.id,type:'record',id:record.id}],engine:1,mode:'expression',angle:'rad',expression:'2+2',digits:'',fromBase:10,toBase:6};
  try{
   await workspaceModules(f.workspace).execute({workspaceId:f.book.id,commandId:randomUUID(),action:'calculation.save',payload:{id,expectedRevision:null,data}});
-  await page.route('**/api/workspace/read/labels',async route=>{const payload=route.request().postDataJSON();await route.fulfill({json:{workspaceId:payload.workspaceId,etag:payload.etag,records:[null],missing:[]}});},{times:1});
+  await page.route('**/api/modules/references/labels',async route=>{const payload=route.request().postDataJSON();await route.fulfill({json:{workspaceId:payload.workspaceId,etag:payload.etag,items:[null]}});},{times:1});
   await page.goto(f.app.url);await navigate(page,'Scientific calculator');await main.getByRole('button',{name:'Open calculation',exact:true}).click();
-  await expect(main.getByRole('alert')).toContainText('The record labels were incomplete');await main.getByRole('button',{name:'Retry record titles',exact:true}).click();await expect(main.locator('.module-link')).toContainText(record.title);
+  await expect(main.getByRole('alert')).toContainText('The linked-work response could not be verified');await main.getByRole('button',{name:'Retry linked item titles',exact:true}).click();await expect(main.locator('.module-link')).toContainText(record.title);
   expect(f.bodies).toEqual([]);
   await new ResearchRecords(f.workspace,{}).remove({workspaceId:f.book.id,recordId:record.id,expectedRevision:recordRevision(record)});f.bodies.length=0;
-  await page.reload();await expect(main.locator('.module-link')).toContainText('Record unavailable');await expect(main.locator('.module-link button')).toBeDisabled();
+  await page.reload();await expect(main.locator('.module-link')).toContainText('Linked item unavailable');await expect(main.locator('.module-link button')).toBeDisabled();
   await main.getByLabel('Name',{exact:true}).fill('Reference preserved');await main.getByRole('button',{name:'Save calculation',exact:true}).click();await expect(main.locator('[data-module-status]')).toHaveText('Saved');
-  expect((await workspaceModules(f.workspace).read()).entities.find(e=>e.id===id).data.links).toEqual(data.links);expect(f.bodies).toEqual([]);expect(f.errors).toEqual([]);
+  expect((await new ProjectModuleReader(f.workspace,f.book.id).selected({workspaceId:f.book.id,id})).entity.data.links).toEqual(data.links);expect(f.bodies).toEqual([]);expect(f.errors).toEqual([]);
  }finally{await f.close();}
 });

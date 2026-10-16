@@ -60,6 +60,22 @@ export async function moduleRecovery({api,workspaceId,moduleId,onStatus,onChange
   schedule(drafts){latest=structuredClone(checkpointDrafts(drafts));clearTimeout(timer);timer=setTimeout(flush,600);},
   flush,
   canPark,parkSaved,
+  async captureReturn(){
+   await flush();if(error)throw error;if(!canPark())throw new Error(tr('unavailable'));
+   return latest.length&&etag?{workspaceId,moduleId,id,etag}:null;
+  },
+  async readReturn(token){
+   if(stopped||token?.workspaceId!==workspaceId||token.moduleId!==moduleId||!researchId(token.id)||!revisionId(token.etag))throw new Error(tr('unavailable'));
+   const result=await api('/api/modules/drafts/read',{id:token.id});
+   if(stopped)throw new DOMException('Recovery owner changed','AbortError');
+   if(result?.etag!==token.etag||result.draft?.id!==token.id||result.draft.workspaceId!==workspaceId||result.draft.moduleId!==moduleId||!Array.isArray(result.draft.drafts))throw new Error(tr('unavailable'));
+   return result.draft.drafts;
+  },
+  async retireReturn(token){
+   if(token?.workspaceId!==workspaceId||token.moduleId!==moduleId||!researchId(token.id)||!revisionId(token.etag)||token.id===id)throw new Error(tr('unavailable'));
+   await write(()=>api('/api/modules/drafts/write',{workspaceId,moduleId,id:token.id,etag:token.etag,drafts:[]}));
+   if(!stopped)await load();
+  },
   completionFor(draft){
    // Capture the durable editor checkpoint before dispatching a save. A late
    // receipt may retire only that exact saved draft, never newer recovery work.

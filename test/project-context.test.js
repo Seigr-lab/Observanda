@@ -209,3 +209,40 @@ test('workspace and project body tool controls declare valid navigation owners',
  await context.beforeAction(workspaceButton);assert.equal(state.projectOwner,null);
  await context.beforeAction(projectButton);assert.equal(state.projectOwner.projectId,projectId);
 });
+
+for(const outcome of ['success','failure'])test('cancelling a pending owner read preserves same-owner navigation on '+outcome,async()=>{
+ const root=book(),project=book(),state={storage:{contextId:'root'},book:root,page:'record-reader'},metadata=deferred(),seen=[];
+ const context=projectContexts({state,api:()=>metadata.promise,adopt:result=>{state.book=result.book;seen.push(result.book.id);}});
+ const opening=context.enter(project.projects[0].id),cancelled=assert.rejects(opening,{name:'AbortError'});
+ assert.equal(context.pending(),true);context.cancelPending();assert.equal(context.pending(),false);state.page='module';
+ await context.beforeAction({dataset:{action:'module-open',moduleId:'scientific-calculator'}});
+ if(outcome==='failure')metadata.reject({code:'ACCESS_LOCKED'});else metadata.resolve(response(project));
+ await cancelled;assert.deepEqual(seen,[]);assert.equal(state.book,root);assert.equal(state.projectOwner,undefined);assert.equal(state.page,'module');assert.equal(context.root(),root);
+});
+
+for(const outcome of ['success','failure'])test('cancelling owner initialization prevents its late '+outcome+' from completing navigation',async()=>{
+ const root=book(),project=book(),state={storage:{contextId:'root'},book:root,page:'record-reader'},entered=deferred(),finish=deferred();
+ const context=projectContexts({state,api:async()=>response(project),adopt:result=>{state.book=result.book;},afterEnter:async()=>{entered.resolve();await finish.promise;}});
+ const opening=context.enter(project.projects[0].id),cancelled=assert.rejects(opening,{name:'AbortError'});await entered.promise;
+ context.cancelPending();assert.equal(context.pending(),false);state.page='module';
+ if(outcome==='failure')finish.reject({code:'ACCESS_LOCKED'});else finish.resolve();
+ await cancelled;assert.equal(state.page,'module');assert.equal(state.book,project);assert.equal(state.projectOwner.projectId,project.projects[0].id);assert.equal(context.root(),root);
+});
+
+test('a replacement owner activation coalesces independently of the cancelled read',async()=>{
+ const root=book(),project=book(),state={storage:{contextId:'root'},book:root},reads=[],entered=deferred(),finish=deferred();let initializations=0;
+ const context=projectContexts({state,api:()=>{const wait=deferred();reads.push(wait);return wait.promise;},adopt:result=>{state.book=result.book;},afterEnter:async()=>{initializations++;entered.resolve();await finish.promise;}});
+ const old=context.enter(project.projects[0].id),cancelled=assert.rejects(old,{name:'AbortError'});context.cancelPending();
+ const replacement=context.enter(project.projects[0].id),coalesced=context.enter(project.projects[0].id);assert.equal(reads.length,2);
+ reads[0].resolve(response(project));await cancelled;assert.equal(state.book,root);assert.equal(context.pending(),true);
+ reads[1].resolve(response(project));await entered.promise;const initialized=context.enter(project.projects[0].id);assert.equal(reads.length,2);assert.equal(initializations,1);
+ finish.resolve();await Promise.all([replacement,coalesced,initialized]);assert.equal(context.pending(),false);assert.equal(state.book,project);assert.equal(context.root(),root);
+ context.cancelPending();assert.equal(state.book,project);assert.equal(state.projectOwner.projectId,project.projects[0].id);
+});
+
+test('owner initialization exposes its lifetime before applying delayed owner settings',async()=>{
+ const root=book(),project=book(),state={storage:{contextId:'root'},book:root,mediaPolicy:'current'},entered=deferred(),finish=deferred();let current;
+ const context=projectContexts({state,api:async()=>response(project),adopt:result=>{state.book=result.book;},afterEnter:async(result,lifetime)=>{current=lifetime.current;assert.equal(current(),true);entered.resolve();await finish.promise;if(current())state.mediaPolicy='obsolete';}});
+ const opening=context.enter(project.projects[0].id),cancelled=assert.rejects(opening,{name:'AbortError'});await entered.promise;
+ context.cancelPending();assert.equal(current(),false);finish.resolve();await cancelled;assert.equal(state.mediaPolicy,'current');
+});

@@ -2,7 +2,7 @@ import {t} from '../i18n/index.js';
 import {moduleForEntity,enabledModule} from '../feature-modules.js';
 import {moduleItemPages,validModuleSummary} from './item-pages.js';
 const tr=(key,values)=>t('moduleCurrent',key,values);
-export function moduleItemChoices(services,{current,changed,draw,moduleId,fields=()=>[]}){
+export function moduleItemChoices(services,{current,changed,draw,moduleId,fields=()=>[],includeLinks=true}){
  const {api,state,esc,field,showDialog}=services;
  let session=null,timer=null,labelRequest=null,labelKey=null,labelError=null,labels=new Map(),generation=0;
  const identity=()=>JSON.stringify([state.storage?.contextId,state.book?.id,current()?.id]);
@@ -34,7 +34,7 @@ export function moduleItemChoices(services,{current,changed,draw,moduleId,fields
  }
  async function bind(){
   if(!active()){stop();return;}if(session&&!valid(session))stopPicker();
-  const refs=[...(current()?.data.links??[]),...fields(current()).flatMap(f=>{const value=fieldValue(f);return (f.multiple?value??[]:value?[value]:[]).map(id=>({workspaceId:state.book.id,type:f.type,id}));}),...[...document.querySelectorAll('[data-module-label-link]')].map(n=>({workspaceId:state.book.id,type:n.dataset.moduleLabelType,id:n.dataset.moduleLabelLink}))].filter(r=>!['record','project','notebook'].includes(r.type)&&r.workspaceId===state.book.id),key=identity()+JSON.stringify(refs);
+  const refs=[...(includeLinks?current()?.data.links??[]:[]),...fields(current()).flatMap(f=>{const value=fieldValue(f);return (f.multiple?value??[]:value?[value]:[]).map(id=>({workspaceId:state.book.id,type:f.type,id}));}),...[...document.querySelectorAll('[data-module-label-link]')].map(n=>({workspaceId:state.book.id,type:n.dataset.moduleLabelType,id:n.dataset.moduleLabelLink}))].filter(r=>!['record','project','notebook'].includes(r.type)&&r.workspaceId===state.book.id),key=identity()+JSON.stringify(refs);
   if(labelKey===key){paintLabels();return;}labelKey=key;labelError=null;labelRequest?.abort();labelRequest=new AbortController();const request=++generation;
   const visible=new Set(refs.map(r=>r.id));for(const id of labels.keys())if(!visible.has(id))labels.delete(id);
   try{

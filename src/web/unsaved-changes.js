@@ -1,10 +1,20 @@
 // One decision before leaving an editing context. The original screen/form stays mounted.
-export function unsavedChanges({esc,changes,save,discard,busy,notify,defaultScope='all'}) {
+export function unsavedChanges({esc,changes,save,discard,busy,notify,prepare,defaultScope='all'}) {
   const dialog=document.createElement('dialog');dialog.id='leave-dialog';dialog.setAttribute('aria-labelledby','leave-title');document.body.append(dialog);
-  let active=false,work=null;
+  let active=false,work=null,generation=0,preparing=null;
   async function run(next,{scope=defaultScope}={}){
     if(active)return false;
+    const request=++generation;
     if(busy()){notify('Wait for the current operation to finish before leaving.',true);return false;}
+    // A durable draft checkpoint may make navigation safe without applying the
+    // draft. Reassess the guard only after that preparation has completed.
+    if(prepare){
+      preparing=request;
+      try{await prepare(scope);}catch(error){if(request!==generation)return false;throw error;}
+      finally{if(preparing===request)preparing=null;}
+      if(request!==generation)return false;
+      if(busy()){notify('Wait for the current operation to finish before leaving.',true);return false;}
+    }
     const pending=changes(scope);
     if(!pending.labels.length){await next();return true;}
     active=true;
@@ -34,7 +44,7 @@ export function unsavedChanges({esc,changes,save,discard,busy,notify,defaultScop
     active=false;
     if(decision){await next();return true;}return false;
   }
-  return {run,isActive:()=>active,canLeaveImmediately:(scope=defaultScope)=>!active&&!busy()&&!changes(scope).labels.length};
+  return {run,isActive:()=>active,canLeaveImmediately:(scope=defaultScope)=>!active&&preparing===null&&!busy()&&!changes(scope).labels.length};
 }
 
 // Forms use independent snapshots, including unchecked controls. Nothing is persisted here.

@@ -26,7 +26,7 @@ for(const count of [65,650])test('spreadsheet pages and edits load selected orig
  const cdp=await page.context().newCDPSession(page);let heap=0;const measure=async()=>{heap=Math.max(heap,(await cdp.send('Runtime.getHeapUsage')).usedSize);};
  try{
   const session=await page.request.post(app.origin+'/api/session',{data:{token:app.launchToken},headers:{Origin:app.origin}});expect(session.ok()).toBe(true);
-  await page.goto(app.origin+'/#/modules/spreadsheet/sheet');const main=page.locator('main'),dialog=page.locator('#dialog');
+  await page.goto(app.origin+'/#/modules/spreadsheet/sheet');const main=page.locator('main'),dialog=page.locator('[data-module-reference-picker]');
   await expect(main.locator('.module-item')).toHaveCount(25);expect(loaded).toEqual([]);await measure();
   await main.getByRole('button',{name:'Next items',exact:true}).click();await expect(main.locator('[data-module-items-status]')).toContainText('26');expect(loaded).toEqual([]);
   await page.route('**/api/modules/items',route=>route.fulfill({status:503,json:{message:'Synthetic list interruption'}}),{times:1});
@@ -34,7 +34,7 @@ for(const count of [65,650])test('spreadsheet pages and edits load selected orig
   await main.getByRole('button',{name:'Retry items',exact:true}).click();await expect(main.locator('[data-module-items-status]')).toContainText('51');
   await main.getByLabel('Search items',{exact:true}).fill('Sheet 030');await expect(main.locator('.module-item')).toHaveCount(1);
   await main.getByRole('button',{name:'Open spreadsheet',exact:true}).focus();await page.keyboard.press('Enter');await expect(main.getByLabel('Name',{exact:true})).toHaveValue('Sheet 030');expect(loaded).toEqual([entities[30].id]);await measure();
-  await main.getByLabel('Name',{exact:true}).fill('Authored table');await main.getByRole('button',{name:'Choose module item',exact:true}).click();await dialog.getByLabel('Search items',{exact:true}).fill('Reference calculation');await expect(dialog.locator('.module-item')).toHaveCount(1);await dialog.getByRole('button',{name:'Select Reference calculation',exact:true}).click();
+  await main.getByLabel('Name',{exact:true}).fill('Authored table');await main.getByRole('button',{name:'Choose module item',exact:true}).click();await dialog.getByLabel('Search linked work',{exact:true}).fill('Reference calculation');await expect(dialog.locator('[data-reference-command="choose"]')).toHaveCount(1);await dialog.getByRole('button',{name:'Reference calculation',exact:true}).click();
   await expect(main.locator('.module-link-list')).toContainText('Reference calculation');expect(loaded).toEqual([entities[30].id]);
   await main.getByRole('button',{name:'Save spreadsheet',exact:true}).click();await expect(main.locator('[data-module-status]')).toHaveText('Saved');expect(new Set(loaded)).toEqual(new Set([entities[30].id]));
   await main.getByRole('button',{name:'Back to spreadsheets',exact:true}).click();await expect(main.locator('.module-item')).toHaveCount(25);await expect(main.locator('[data-module-form]')).not.toBeVisible();
@@ -57,17 +57,17 @@ for(const count of [65,650])test('spreadsheet pages and edits load selected orig
   const {entity:saved}=await new ProjectModuleReader(f.workspace,book.id).selected({workspaceId:book.id,id:entities[30].id});expect(saved.data.cells).toEqual(entities[30].data.cells);expect(saved.data.links).toEqual([recordLink,{workspaceId:book.id,type:'calculation',id:reference.id}]);
   await page.setViewportSize({width:1280,height:900});await page.evaluate(()=>document.documentElement.style.fontSize='');
   const originalCount=loaded.length;await page.goto(app.origin+'/#/records/'+book.entries[0].id);
-  const connected=main.locator('[data-module-links]');await expect(connected.locator('[data-module-items-status]')).toContainText('of '+count);await expect(connected.locator('[data-action="module-open"]')).toHaveCount(25);expect(loaded).toHaveLength(originalCount);
-  await connected.getByRole('button',{name:'Next items',exact:true}).click();await expect(connected.locator('[data-module-items-status]')).toContainText('26');expect(loaded).toHaveLength(originalCount);
+  const connected=main.locator('[data-module-links]');await expect(connected.getByRole('status')).toContainText('of '+count);await expect(connected.locator('[data-action="module-reference-open"]')).toHaveCount(25);expect(loaded).toHaveLength(originalCount);
+  await connected.getByRole('button',{name:'Next items',exact:true}).click();await expect(connected.getByRole('status')).toContainText('26');expect(loaded).toHaveLength(originalCount);
   await connected.getByRole('button',{name:'Previous items',exact:true}).click();await connected.getByRole('button',{name:'Authored table',exact:true}).click();await expect(main.getByLabel('Name',{exact:true})).toHaveValue('Authored table');expect(loaded.at(-1)).toBe(entities[30].id);
-  await page.route('**/api/modules/labels',route=>route.fulfill({status:503,json:{message:'Synthetic title interruption'}}),{times:1});await page.reload();
-  await expect(main.getByRole('alert')).toContainText('Item titles could not be loaded');await main.getByRole('button',{name:'Retry item titles',exact:true}).click();await expect(main.locator('.module-link-list')).toContainText('Reference calculation');
+  await page.route('**/api/modules/references/labels',route=>route.fulfill({status:503,json:{message:'Synthetic title interruption'}}),{times:1});await page.reload();
+  await expect(main.getByRole('alert')).toContainText('Synthetic title interruption');await main.getByRole('button',{name:'Retry linked item titles',exact:true}).click();await expect(main.locator('.module-link-list')).toContainText('Reference calculation');
   // A late selected-original response must not reopen a module after navigation.
   let release,started;const gate=new Promise(resolve=>{release=resolve;}),waiting=new Promise(resolve=>{started=resolve;});
   await page.route('**/api/modules/item',async route=>{const response=await route.fetch();started();await gate;await route.fulfill({response}).catch(()=>{});},{times:1});
   await main.getByRole('button',{name:'Back to spreadsheets',exact:true}).click();await expect(main.locator('.module-item')).toHaveCount(25);
   await main.locator('.module-item').filter({hasText:'Sheet 000'}).getByRole('button').click();await waiting;
-  await page.goto(app.origin+'/#/records/'+book.entries[1].id);await expect(connected.locator('[data-module-items-status]')).toHaveText('No matching items.');release();
+  await page.goto(app.origin+'/#/records/'+book.entries[1].id);await expect(connected.getByRole('status')).toHaveText('No matching items.');release();
   await expect(page).toHaveURL(new RegExp('/records/'+book.entries[1].id+'$'));await expect(main.locator('[data-module-links]')).toBeVisible();
   expect(requests.filter(p=>p==='/api/modules/data')).toEqual([]);expect(errors).toEqual([]);
   console.log(JSON.stringify({items:count,largestPage:Math.max(...sizes),sampledBrowserHeapMiB:Math.round(heap/1024/1024),originalIds:new Set(loaded).size}));

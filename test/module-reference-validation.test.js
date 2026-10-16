@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
-import {linkCheck} from '../src/modules/validation.js';
+import {linkCheck,linksValid} from '../src/modules/validation.js';
 import {workspaceSnapshotRequest} from '../src/workspace-read-admission.js';
 import {projectModuleRequest} from '../src/project-module-requests.js';
 import {projectRequest} from '../src/project-application.js';
@@ -24,4 +24,13 @@ test('reference discovery and resolution are snapshot readers in every owner rou
   for(const prefix of ['/api/projects/'+projectId,'/api/projects/'+projectId+'/lab-books/'+bookId])assert.equal(projectRequest(prefix+route.slice(4),'POST').write,false);
  }
  assert.equal(workspaceSnapshotRequest('POST','/api/modules/command'),false);
+});
+
+test('reference uniqueness follows namespace, type and identity independently of property order',async()=>{
+ const ref=reference(),reordered={id:ref.id,type:ref.type,workspaceId:ref.workspaceId};
+ assert.equal(linksValid([ref,reordered]),false);
+ await assert.rejects(linkCheck({book:{id:ref.workspaceId}},[ref,reordered],[ref]),{code:'MODULE_INVALID'});
+ assert.equal(linksValid([ref,{...ref,workspaceId:randomUUID()}]),true);
+ assert.equal(linksValid([ref,{...ref,type:'calculation'}]),true);
+ assert.equal(linksValid([ref,{...ref,id:randomUUID()}]),true);
 });

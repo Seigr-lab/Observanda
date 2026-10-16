@@ -9,7 +9,7 @@ export const instant=v=>typeof v==='string'&&Number.isFinite(Date.parse(v))&&new
 export const fail=(field,code='MODULE_INVALID')=>{throw new AppError(code,[{field}]);};
 export const requireValue=(valid,field,code)=>{if(!valid)fail(field,code);};
 export const unique=values=>new Set(values).size===values.length;
-export const linksValid=links=>Array.isArray(links)&&links.every(l=>exact(l,['workspaceId','type','id'])&&uuid(l.workspaceId)&&uuid(l.id)&&/^[a-z][a-z-]{0,39}$/.test(l.type))&&unique(links.map(l=>JSON.stringify(l)));
+export const linksValid=links=>Array.isArray(links)&&links.every(l=>exact(l,['workspaceId','type','id'])&&uuid(l.workspaceId)&&uuid(l.id)&&/^[a-z][a-z-]{0,39}$/.test(l.type))&&unique(links.map(l=>JSON.stringify([l.workspaceId,l.type,l.id])));
 export async function linkCheck(tx,links,previous=[]){
  requireValue(linksValid(links),'links');
  for(const link of links){

@@ -46,6 +46,19 @@ export function moduleWorkbench(services){
  const available=()=>{const module=descriptor(state.moduleId);return module&&enabledModule(state.dashboardSettings,module.id)&&(!module.locationTool||projectToolScope(state.book,parseScope(state.modulePath).projectId,module.id));};
  return {
   ready,
+  async captureReturn(){
+   reconcile();if(state.page!=='module')return null;
+   const instance=active(),view=selection(),workspaceId=state.book.id,moduleId=state.moduleId,modulePath=state.modulePath;
+   const token=await instance?.captureReturn?.();
+   if(view!==selection()||instance!==active())throw new DOMException('Module owner changed','AbortError');
+   return token?{workspaceId,moduleId,modulePath,...token}:null;
+  },
+  async restoreReturn(token,{current=()=>true}={}){
+   if(!token)return false;reconcile();
+   if(token.workspaceId!==state.book.id||token.moduleId!==state.moduleId||token.modulePath!==state.modulePath||state.page!=='module')throw new DOMException('Module owner changed','AbortError');
+   if(!current())throw new DOMException('Module return changed','AbortError');
+   return await active()?.restoreReturn?.(token,{current})??false;
+  },
   async refreshVisible(){if(state.page==='module'&&available()&&!active()?.isDirty?.())await active()?.activate?.({background:true});},
   supportsOutline:id=>descriptor(id)?.metadataOnly===true,
   view(){
