@@ -30,6 +30,7 @@ async function fixture(t){
 const calculation=f=>({workspaceId:f.book.id,commandId:randomUUID(),action:'calculation.save',payload:{id:randomUUID(),expectedRevision:null,data:{name:'Independent calculation',links:[],engine:1,mode:'expression',angle:'rad',expression:'2+3',digits:'',fromBase:10,toBase:16}}});
 const calendar=f=>({workspaceId:f.book.id,commandId:randomUUID(),action:'calendar.save',payload:{id:randomUUID(),expectedRevision:null,data:{name:'Independent calendar',projectId:f.projectId,color:'#123456',archived:false}}});
 async function command(f,domain,value){return f.domains.run([domain],get=>executeModuleCommand(workspaceModules(f.storage),get(domain),{book:f.book},value,moduleCommandFingerprint(value),{compact:true}),{write:[domain]});}
+async function verifyDomain(f,store){const owner=workspaceModules(f.storage);return new ModuleCatalogue(store).verify(f.book.id,{entity:entity=>{store.assertModuleType(entity.type);owner.validateEntity(entity);},event:event=>{for(const entity of event.changes)store.assertModuleType(entity.type);owner.validateEvent(event);},constraints:source=>owner.validateSource(source)});}
 function gate(){let enter,release;return {started:new Promise(resolve=>enter=resolve),hold:new Promise(resolve=>release=resolve),enter:()=>enter(),release:()=>release()};}
 
 test('project domains commit actual calculator and calendar commands independently of research and each other', {timeout:120000},async t=>{
@@ -50,7 +51,7 @@ test('project domains commit actual calculator and calendar commands independent
  assert.deepEqual(await f.storage.read(),original);
  await f.storage.catalogue(async store=>assert.equal((await new ModuleCatalogue(store).head(f.book.id)).revision,0));
  await f.domains.run(['calculator','calendars'],async get=>{
-  for(const domain of ['calculator','calendars']){const store=get(domain);await workspaceModules(f.storage).verifyCatalogue(store,f.book.id);const names=(await store.db.all('SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname=$1',store.db.schema)).map(r=>r.tablename);assert.deepEqual(names.sort(),['domain_format','module_entities','module_events','objects','state']);}
+  for(const domain of ['calculator','calendars']){const store=get(domain);await verifyDomain(f,store);const names=(await store.db.all('SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname=$1',store.db.schema)).map(r=>r.tablename);assert.deepEqual(names.sort(),['domain_format','module_entities','module_events','objects','state']);}
  });
  await f.runtime.closeProject(f.storage.root);const moved=path.join(f.root,'relocated');await rename(f.storage.root,moved);f.storage=new ProjectStorage(moved,f.projectId,f.vault);f.domains=new ProjectDomains(f.storage,f.book.id);
  assert.equal((await command(f,'calculator',first)).replayed,true);assert.deepEqual(await f.storage.read(),original);
@@ -147,7 +148,7 @@ test('independent module schemas survive archived and rekeyed project copies wit
 test('project copy move and deletion fence module writes and carry retained domain history', {timeout:180000},async t=>{
  const f=await fixture(t);await f.domains.initialize(['calculator','calendars']);const saved=calculation(f);await command(f,'calculator',saved);await command(f,'calendars',calendar(f));
  const {copyProjectLocation}=await import('../src/project-transfer.js'),{ProjectRegistry}=await import('../src/project-registry.js'),{ProjectMoves}=await import('../src/project-move.js'),{ProjectDeletions}=await import('../src/project-deletion.js'),{Workspace}=await import('../src/storage.js'),{databaseRetention,validDatabaseRetention,verifyDatabaseRetention}=await import('../src/workspace-database-retention.js');
- const destination=path.join(f.root,'stream-copy'),copyId=randomUUID(),held=gate();
+ const destination=path.join(f.root,'stream-copy','project'),copyId=randomUUID(),held=gate();await mkdir(path.dirname(destination));
  const writer=detached(()=>f.domains.run(['calculator'],async get=>{await get('calculator').putObject('checkpoint',{value:1});held.enter();await held.hold;},{write:['calculator']}));await held.started;
  try{await assert.rejects(copyProjectLocation(f.storage,destination,{id:copyId}),{code:'LOCKED'});}
  finally{held.release();await writer;}
@@ -156,7 +157,7 @@ test('project copy move and deletion fence module writes and carry retained doma
  await copiedDomains.run(['calculator'],async get=>assert.deepEqual(await get('calculator').object('checkpoint'),{value:1}));
  const proof=await f.storage.catalogue(store=>databaseRetention(store.db));assert.ok(validDatabaseRetention(proof));assert.equal(proof.domains.calculator.count,1);assert.equal(proof.domains.calendars.count,1);await verifyDatabaseRetention(copied,proof);
  const {initializeLocation}=await import('../src/locations.js'),registryRoot=path.join(f.root,'registry'),registryBook=sampleNotebook();await initializeLocation(registryRoot,registryBook,f.access,f.vault);const registry=new ProjectRegistry(new Workspace(registryRoot,f.vault),registryBook.id);await registry.attach(f.storage,{expected:'new'});
- const movedRoot=path.join(f.root,'moved-project'),moves=new ProjectMoves(registry),move=await moves.run(f.projectId,f.vault,{id:randomUUID(),path:movedRoot});assert.equal(move.phase,'complete');
+ const movedRoot=path.join(f.root,'moved-project','project');await mkdir(path.dirname(movedRoot));const moves=new ProjectMoves(registry),move=await moves.run(f.projectId,f.vault,{id:randomUUID(),path:movedRoot});assert.equal(move.phase,'complete');
  const moved=new ProjectStorage(movedRoot,f.projectId,f.vault),movedContext={...f,storage:moved,domains:new ProjectDomains(moved,f.book.id)};assert.equal((await command(movedContext,'calculator',saved)).replayed,true);await verifyDatabaseRetention(moved,proof);
  const deleting=new ProjectDeletions(registry,f.projectId),pending=gate(),pendingWriter=detached(()=>movedContext.domains.run(['calendars'],async get=>{await get('calendars').putObject('before-delete',{value:2});pending.enter();await pending.hold;},{write:['calendars']}));await pending.started;
  try{await assert.rejects(deleting.run(f.vault,{id:randomUUID(),expectedRoot:movedRoot}),{code:'LOCKED'});}
@@ -202,7 +203,7 @@ test('small module edits update authenticated size totals without scanning unrel
  try{assert.equal((await command(f,'calculator',value)).modulePatch.revision,81);}
  finally{ModuleCatalogue.prototype.members=members;}
  await f.domains.run(['calculator'],async get=>{
-  const store=get('calculator');await workspaceModules(f.storage).verifyCatalogue(store,f.book.id);
+  const store=get('calculator');await verifyDomain(f,store);
   // Simulate a valid older head that predates size totals. The first subsequent
   // edit establishes its total once; later edits take the bounded path again.
   const head=await new ModuleCatalogue(store).head(f.book.id);delete head.totalBytes;await store.db.run("UPDATE state SET payload=$1 WHERE slot='modules'",store.encode('state','modules',head));
@@ -212,10 +213,10 @@ test('small module edits update authenticated size totals without scanning unrel
  try{await command(f,'calculator',next);assert.equal(scans,1);}
  finally{ModuleCatalogue.prototype.members=members;}
  await f.domains.run(['calculator'],async get=>{
-  const store=get('calculator');await workspaceModules(f.storage).verifyCatalogue(store,f.book.id);const head=await new ModuleCatalogue(store).head(f.book.id);head.totalBytes++;
+  const store=get('calculator');await verifyDomain(f,store);const head=await new ModuleCatalogue(store).head(f.book.id);head.totalBytes++;
   await store.db.run("UPDATE state SET payload=$1 WHERE slot='modules'",store.encode('state','modules',head));
-  await assert.rejects(workspaceModules(f.storage).verifyCatalogue(store,f.book.id),{code:'CATALOGUE_DAMAGED'});
+  await assert.rejects(verifyDomain(f,store),{code:'CATALOGUE_DAMAGED'});
   throw Error('roll back deliberate corruption');
  },{write:['calculator']}).then(()=>assert.fail('expected rollback'),error=>assert.match(error.message,/roll back deliberate corruption/));
- await f.domains.run(['calculator'],get=>workspaceModules(f.storage).verifyCatalogue(get('calculator'),f.book.id));
+ await f.domains.run(['calculator'],get=>verifyDomain(f,get('calculator')));
 });
