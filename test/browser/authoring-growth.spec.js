@@ -68,12 +68,12 @@ test('large saved workspaces open, edit, recover drafts and change lab-book sett
    await navigate(page,'Scientific calculator');
    await page.getByRole('button',{name:'New calculation',exact:true}).click();
    await page.locator('main').getByLabel('Name',{exact:true}).fill('Large workspace calculation');
-   await page.getByLabel('Expressions (one per line)',{exact:true}).fill('mean(2, 4, 6)');
+   await page.getByLabel('Expression 1',{exact:true}).fill('mean(2, 4, 6)');
    await expect(page.locator('[data-tool-output="scientific-calculator"] output')).toHaveText('4');
    await page.getByRole('button',{name:'Save calculation',exact:true}).click();
    await expect(page.locator('[data-module-status]')).toHaveText('Saved');
    await page.reload();
-   await expect(page.getByLabel('Expressions (one per line)',{exact:true})).toHaveValue('mean(2, 4, 6)');
+   await expect(page.getByLabel('Expression 1',{exact:true})).toHaveValue('mean(2, 4, 6)');
    await preferences(page,'Help');
    await page.getByLabel('Search documentation',{exact:true}).fill('record');
    await expect(page.locator('main')).toContainText('matching section');

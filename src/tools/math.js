@@ -2,7 +2,7 @@ import {create,all} from 'mathjs';
 const math=create(all,{number:'BigNumber',precision:64,predictable:true});
 const functions=new Set(['abs','sqrt','cbrt','sin','cos','tan','asin','acos','atan','atan2','sinh','cosh','tanh','log','log10','log2','exp','floor','ceil','round','min','max','mean','median','std','variance','sum','prod','hypot']);
 const operators=new Set(['+','-','*','/','^','%','mod','to']);
-export function calculate(expression,{angle='rad',variables={}}={}){
+function parsedExpression(expression,variables={}){
  if(typeof expression!=='string'||expression.length>2000)throw Error('Use an expression of at most 2,000 characters.');
  const node=math.parse(expression);let count=0;
  node.traverse(n=>{
@@ -13,6 +13,11 @@ export function calculate(expression,{angle='rad',variables={}}={}){
   if(n.type==='OperatorNode'&&!operators.has(n.op))throw Error('Operator is not available: '+n.op);
   if(n.type==='SymbolNode'&&!Object.hasOwn(variables,n.name)&&!functions.has(n.name)&&!['pi','e','tau'].includes(n.name)&&!math.Unit.isValuelessUnit(n.name))throw Error('Unknown value: '+n.name);
  });
+ return node;
+}
+export function calculationPreview(expression){return parsedExpression(expression).toTex({parenthesis:'keep',implicit:'hide'});}
+export function calculate(expression,{angle='rad',variables={}}={}){
+ const node=parsedExpression(expression,variables);
  const scope=new Map(Object.entries(variables).map(([key,value])=>[key,math.bignumber(value)]));
  if(angle==='deg')for(const name of ['sin','cos','tan'])scope.set(name,x=>math[name](math.isUnit(x)?x:math.multiply(x,math.divide(math.pi,180))));
  if(angle==='deg')for(const name of ['asin','acos','atan'])scope.set(name,x=>math.multiply(math[name](x),math.divide(180,math.pi)));
