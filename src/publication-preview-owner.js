@@ -4,7 +4,7 @@ import {RecordPublicationIndex} from './record-publication-index.js';
 import {publicationRecords} from './publication-records.js';
 import {SnapshotIndex} from './snapshot-index.js';
 import {selectedPublicationRows} from './publication-source.js';
-import {publicationSourceMetadata} from './web/publication-sources-model.js';
+import {publicationSourceContext} from './web/publication-sources-model.js';
 import {publicationOwnerProjection,publicationPageRecord} from './publication-owner-projection.js';
 import {publicationDescriptor} from './publication-record-descriptor.js';
 import {recordRevision} from './research.js';
@@ -26,9 +26,9 @@ export class PublicationPreviewOwner{
   this.history=new Map((source.edition?.history??[]).filter(choice=>choice.include).map(choice=>[this.id('record',revisionPageId(source.workspaceId,choice.id,choice.revision)),structuredClone(choice)]));
  }
  async initialize(){
-  const {value}=await this.reader.use(this.source.workspaceId,undefined,async(_store,snapshot,pinned)=>({
-   snapshotId:pinned.snapshotId,owner:{...pinned.owner,projectNamespaceId:pinned.projectNamespaceId},metadata:publicationSourceMetadata(snapshot.metadata,this.source)
-  }));
+  const {value}=await this.reader.use(this.source.workspaceId,undefined,async(_store,snapshot,pinned)=>{
+   return {...publicationSourceContext(snapshot.metadata,this.source,pinned.owner),snapshotId:pinned.snapshotId,owner:{...pinned.owner,projectNamespaceId:pinned.projectNamespaceId}};
+  });
   Object.assign(this,value);
   this.projected=publicationOwnerProjection({metadata:this.metadata,records:[]},this.owner,this.identities).metadata;
   return this;

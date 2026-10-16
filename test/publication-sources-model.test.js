@@ -3,7 +3,7 @@ import {validateNotebook} from '../src/model.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID as id} from 'node:crypto';
-import {validPublicationSources,emptyPublicationSource,publicationSourceMetadata} from '../src/web/publication-sources-model.js';
+import {validPublicationSources,emptyPublicationSource,publicationSourceMetadata,resolvePublicationSource} from '../src/web/publication-sources-model.js';
 import {websiteRecordShare} from '../src/web/website-selection.js';
 test('publication source selection starts private and cannot select another namespace implicitly',()=>{
  const workspaceId=id(),projectId=id(),other=id(),record={id:id(),share:true},metadata={id:workspaceId,projects:[{id:projectId,share:true},{id:other,share:true}]},source=emptyPublicationSource(workspaceId);
@@ -28,4 +28,17 @@ test('website source consent is validated with the owning document',()=>{
  assert.doesNotThrow(()=>validateNotebook(book));
  book.website.researchSources[0].selection.defaultShare=true;
  assert.throws(()=>validateNotebook(book));
+});
+
+
+test('dedicated book consent follows its book identity across parent changes without broadening consent',()=>{
+ const workspaceId=id(),labBookId=id(),oldProject=id(),newProject=id(),recordId=id(),source=emptyPublicationSource(workspaceId,labBookId);
+ source.projectIds=[oldProject];source.selection.includeProjects=[oldProject];source.selection.records=[{id:recordId,share:false,attachments:[{id:id(),share:false}]}];
+ const before=structuredClone(source),metadata={id:workspaceId,projects:[{id:newProject,share:false}],notebooks:[{id:labBookId,projectId:newProject}]},owner={labBookId};
+ const resolved=resolvePublicationSource(metadata,source,owner);assert.deepEqual(resolved.projectIds,[newProject]);assert.deepEqual(resolved.selection.includeProjects,[newProject]);assert.equal(websiteRecordShare(resolved.selection,{id:recordId,share:true},newProject),false);assert.deepEqual(resolved.selection.records,source.selection.records);assert.deepEqual(source,before);
+ assert.equal(publicationSourceMetadata(metadata,source,owner).projects[0].share,true);
+ const sparse={...source,selection:{...source.selection,includeProjects:[]}};assert.deepEqual(resolvePublicationSource(metadata,sparse,owner).selection.includeProjects,[]);
+ assert.throws(()=>resolvePublicationSource(metadata,source,{labBookId:id()}),/Invalid publication source/);assert.throws(()=>resolvePublicationSource({...metadata,id:id()},source,owner),/Invalid publication source/);assert.throws(()=>resolvePublicationSource({...metadata,notebooks:[...metadata.notebooks,{id:id(),projectId:newProject}]},source,owner),/Invalid publication source/);
+ assert.equal(validPublicationSources([{...source,projectIds:[oldProject,newProject]}]),false);assert.equal(validPublicationSources([{...source,labBookId:'invalid'}]),false);
+ assert.throws(()=>resolvePublicationSource(metadata,{workspaceId,projectIds:[oldProject],selection:source.selection},owner),/Invalid publication source/);
 });

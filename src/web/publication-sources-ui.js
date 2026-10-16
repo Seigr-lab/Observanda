@@ -1,5 +1,5 @@
 import {publicationSourceClient} from './publication-source-client.js';
-import {emptyPublicationSource,validPublicationSources} from './publication-sources-model.js';
+import {emptyPublicationSource,validPublicationSources,resolvePublicationSource} from './publication-sources-model.js';
 import {websiteRecordShare} from './website-selection.js';
 import {websiteContext} from './website-context.js';
 import {researchId} from './research-reference.js';
@@ -16,11 +16,12 @@ export function publicationSourcesUI({state,api,esc,access,checkpoint,changed,no
  const active=()=>state.page==='website'&&!state.access?.locked&&!state.storageUnavailable&&!!root();
  function stop(){version++;controller?.abort();controller=null;clearTimeout(timer);timer=null;}
  function close(){stop();client.close();context=null;page=null;head=null;owner=null;records=null;details=null;projectId=null;offset=0;revision=null;search='';recordSearch='';cursor=null;loading=false;error=false;}
- function source(){return (state.book.website.researchSources??[]).find(source=>source.workspaceId===owner?.workspaceId);}
+ function source(){const row=(state.book.website.researchSources??[]).find(source=>source.workspaceId===owner?.workspaceId);return row?.labBookId&&head?resolvePublicationSource({...head,id:head.workspaceId},row,owner):row;}
  function change(edit){
   if(!active()||context!==identity()||!owner||!head)return;
   const sources=structuredClone(state.book.website.researchSources??[]);let row=sources.find(source=>source.workspaceId===owner.workspaceId);
-  if(!row){row=emptyPublicationSource(owner.workspaceId);sources.push(row);}edit(row,sources);
+  if(!row){row=emptyPublicationSource(owner.workspaceId,owner.labBookId);sources.push(row);}
+  else if(owner.labBookId){Object.assign(row,resolvePublicationSource({...head,id:head.workspaceId},row,owner));row.labBookId=owner.labBookId;}edit(row,sources);
   if(!validPublicationSources(sources)){notify(text('limit'),true);paint();return;}
   checkpoint('publication-sources');state.book.website.researchSources=sources;changed();paint();
  }

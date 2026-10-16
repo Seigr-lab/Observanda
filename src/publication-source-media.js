@@ -24,14 +24,14 @@ export async function publicationSourceMedia(store,snapshot,pinned,host,query,{s
  let first=null,last=null,records=0,attachments=0,more=false;
  for await(const candidate of publicationSourceCandidates(store,snapshot,owner,{after,backward:reverse,signal})){
   signal?.throwIfAborted();if(records===128||attachments===256||items.length===12){more=true;break;}records++;
-  const patch=source.selection.records.find(choice=>choice.id===candidate.row?.id);
+  const patch=owner.source.selection.records.find(choice=>choice.id===candidate.row?.id);
   let recordId,title,notebookId,selected=null;
   if(candidate.historical){
    const descriptor=await owner.describeHistory(candidate.historical);selected=owner.originals.get(candidate.historical);recordId=descriptor.id;title=descriptor.title;notebookId=descriptor.notebookId;
   }else{
    const [summary]=await Array.fromAsync(store.queryDocuments([candidate.row],snapshot.metadata,{signal,search:false,publication:true}));
    const book=owner.metadata.notebooks.find(book=>book.id===summary.notebookId),project=owner.metadata.projects.find(project=>project.id===book?.projectId);
-   if(!project?.share||!websiteRecordShare(source.selection,summary,project.id)){first??={record:candidate.key,attachment:0};last={record:candidate.key,attachment:0};continue;}
+   if(!project?.share||!websiteRecordShare(owner.source.selection,summary,project.id)){first??={record:candidate.key,attachment:0};last={record:candidate.key,attachment:0};continue;}
    recordId=owner.id('record',summary.id);title=summary.title;notebookId=owner.id('notebook',summary.notebookId);
    if(owner.choices.has(summary.id))selected=(await owner.selected(store,snapshot,owner.projectedRow(candidate.row))).selected;
   }

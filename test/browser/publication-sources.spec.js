@@ -13,11 +13,11 @@ async function fixture(page){
   window.state={page:'website',book:{id:id(),website:{}},etag:'a'.repeat(64),storage:{contextId:'host'},access:{locked:false}};
   window.owners=['First project','Second project'].map(label=>({workspaceId:id(),projectId:id(),labBookId:null,kind:'project',label,ancestors:[]}));
   const notebook=id(),records=Array.from({length:25},(_,i)=>({id:id(),title:'Observation '+String(i).padStart(2,'0'),notebookId:notebook,type:'note',share:true,attachmentCount:1})),attachment=id();
-  window.ids=records.map(r=>r.id);window.changes=0;window.messages=[];window.calls=[];window.requests=[];
+  window.notebook=notebook;window.ids=records.map(r=>r.id);window.changes=0;window.messages=[];window.calls=[];window.requests=[];
   const api=async(route,body,options)=>{
    calls.push({route,body,adopt:options.adopt});requests.push(options.signal);
    if(route.endsWith('publication-source-directory')){const items=body.projectId?[{...owners.find(o=>o.projectId===body.projectId),kind:'content'}]:owners;return {workspaceId:state.book.id,projectId:body.projectId,revision:'d'.repeat(64),items,offset:0,total:items.length};}
-   const owner=owners.find(o=>o.workspaceId===body.sourceId),identity={workspaceId:owner.workspaceId,projectId:owner.projectId,labBookId:null};
+   const owner=owners.find(o=>o.workspaceId===body.sourceId),identity={workspaceId:owner.workspaceId,projectId:owner.projectId,labBookId:owner.labBookId};
    let value={workspaceId:owner.workspaceId,snapshotId:'b'.repeat(64)};
    if(body.operation==='head')value={...value,title:owner.label,projects:[{id:owner.projectId,title:owner.label,share:false,parentId:null}],notebooks:[{id:notebook,title:'Measurements',projectId:owner.projectId}]};
    else if(body.operation==='content'){
@@ -55,4 +55,15 @@ test('leaving during a source query cancels it and cannot create a pending edit'
  await page.getByRole('button',{name:'Next',exact:true}).click();await expect.poll(()=>page.evaluate(()=>window.pending)).toBe(true);await expect(page.getByLabel('Include all records in this project',{exact:true})).toBeDisabled();
  await page.evaluate(()=>{state.page='module';controls.sync();document.querySelector('main').innerHTML='<h1>Another section</h1>';release();});
  await expect(page.getByRole('heading',{name:'Another section',exact:true})).toBeVisible();expect(await page.evaluate(()=>requests.at(-1).aborted)).toBe(true);expect(await page.evaluate(()=>changes)).toBe(0);expect(await page.evaluate(()=>state.book.website.researchSources)).toBeUndefined();
+});
+
+
+test('saved book consent remains visible and editable after its parent project changes',async({page})=>{
+ await fixture(page);await page.evaluate(()=>{owners[0].kind='book';owners[0].labBookId=notebook;controls.close();controls.bind();});
+ await page.getByRole('button',{name:'Choose content',exact:true}).click();await expect(page.locator('[data-source-record]')).toHaveCount(10);
+ await page.getByLabel('Include all records in this lab book',{exact:true}).check();await expect(page.locator('[data-source-record]').first()).toBeChecked();await page.locator('[data-source-record]').first().uncheck();
+ const saved=await page.evaluate(()=>structuredClone(state.book.website.researchSources));expect(saved[0].labBookId).toBe(await page.evaluate(()=>notebook));
+ await page.evaluate(()=>{owners[0].projectId=crypto.randomUUID();controls.close();controls.bind();});await page.getByRole('button',{name:'Choose content',exact:true}).click();await expect(page.locator('[data-source-record]')).toHaveCount(10);
+ await expect(page.getByLabel('Include all records in this lab book',{exact:true})).toBeChecked();await expect(page.locator('[data-source-record]').first()).not.toBeChecked();await expect(page.locator('[data-source-record]').nth(1)).toBeChecked();expect(await page.evaluate(()=>state.book.website.researchSources)).toEqual(saved);
+ await page.locator('[data-source-record]').nth(1).uncheck();expect(await page.evaluate(()=>state.book.website.researchSources[0].projectIds)).toEqual(await page.evaluate(()=>[owners[0].projectId]));expect(await page.evaluate(()=>state.book.website.researchSources[0].selection.records.filter(record=>record.share===false).length)).toBe(2);expect(await page.evaluate(()=>messages)).toEqual([]);
 });

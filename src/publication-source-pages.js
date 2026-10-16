@@ -34,7 +34,7 @@ export async function publicationSourcePages(store,snapshot,pinned,host,query,{s
    owner.originals.delete(candidate.historical);owner.descriptors.delete(candidate.historical);owner.rows.delete(candidate.historical);
   }else{
    const [summary]=await Array.fromAsync(store.queryDocuments([candidate.row],snapshot.metadata,{signal,search:false,publication:true}));
-   if(!notebooks.has(summary.notebookId)||!websiteRecordShare(source.selection,summary,metadata.notebooks.find(book=>book.id===summary.notebookId)?.projectId))continue;
+   if(!notebooks.has(summary.notebookId)||!websiteRecordShare(owner.source.selection,summary,metadata.notebooks.find(book=>book.id===summary.notebookId)?.projectId))continue;
    page=publicationSourcePage(host,{...pinned.owner,projectNamespaceId:pinned.projectNamespaceId},metadata,{...summary,attachments:[]});page.context=page.notebook.title;
   }
   if(needle&&!page.title.toLocaleLowerCase().includes(needle))continue;

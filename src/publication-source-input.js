@@ -1,7 +1,7 @@
 import {ResearchMaterials} from './research-materials.js';
 import {AppError} from './errors.js';
 import {publicationAnalysisGroups} from './publication-analysis-state.js';
-import {validPublicationSources,publicationSourceMetadata} from './web/publication-sources-model.js';
+import {validPublicationSources,publicationSourceContext} from './web/publication-sources-model.js';
 import {selectedPublicationRecords} from './publication-source.js';
 import {retainPublicationInput,finalizePublicationInput} from './publication-input.js';
 import {retainPublicationMedia} from './publication-input-media.js';
@@ -32,8 +32,8 @@ export async function retainPublicationSources(workspace,jobId,local,sources,rea
   for(const source of sources){
    signal?.throwIfAborted();
    await reader.use(source.workspaceId,undefined,async(store,snapshot,pinned)=>{
-    const metadata=publicationSourceMetadata(snapshot.metadata,source),owner={...pinned.owner,projectNamespaceId:pinned.projectNamespaceId},storage=pinOwner(workspace,pinned.storage,jobId,source.workspaceId,identities,store);
-    const records=selectedPublicationRecords(store,snapshot,{metadata,selection:source.selection,signal});
+    const {source:consent,metadata}=publicationSourceContext(snapshot.metadata,source,pinned.owner),owner={...pinned.owner,projectNamespaceId:pinned.projectNamespaceId},storage=pinOwner(workspace,pinned.storage,jobId,source.workspaceId,identities,store);
+    const records=selectedPublicationRecords(store,snapshot,{metadata,selection:consent.selection,signal});
     const input=await retainPublicationInput(storage,jobId,metadata,records,{sourceEtag:pinned.snapshotId,recordHead:async id=>(await store.member(snapshot,id))?.revision??null,signal,deferFinalization:true,edition:source.edition});
     const projected=publicationOwnerProjection(input,owner,identities),media=new MediaStore(pinned.storage),assets=new Map();
     for(const record of projected.records)for(const [id,publicId] of Object.entries(record.mediaIdentities))assets.set(publicId,id);
