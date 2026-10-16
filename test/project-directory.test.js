@@ -78,3 +78,13 @@ test('switching storage formats discards a pending directory reply and preserves
  state.storage.researchStorage='catalogue';fail=true;await directory.refresh();assert.match(directory.cards(null),/Unlock this workspace/);assert.match(directory.cards(null),/project-directory-retry/);assert.equal(paints,1);
  fail=false;await directory.action({dataset:{action:'project-directory-retry',parent:''}});assert.equal(directory.entries().length,1);assert.doesNotMatch(directory.cards(null),/Unlock this workspace/);
 });
+
+
+test('completion refresh preserves loaded directory pages and replaces a pending page read with the same requested depth',async()=>{
+ const state={book:{projects:[]},page:'projects',storage:{contextId:'workspace',researchStorage:'catalogue'}},rows=[row(),row()],wait=deferred(),calls=[];let held=false;
+ const directory=projectDirectory({state,esc:s=>s,changed:()=>{},api:async(route,input)=>{calls.push(input);if(input.offset===1&&!held){held=true;return wait.promise;}return {projects:rows.slice(input.offset,input.offset+1),ancestors:[],total:2,revision:'new'};}});
+ await directory.refresh();const more=directory.action({dataset:{action:'project-directory-more',parent:''}}),refresh=directory.activity({contextId:'workspace',operations:[{id:randomUUID(),kind:'/api/projects/'+rows[0].projectId+'/settings/save',state:'completed'}]});
+ await refresh;wait.resolve({projects:[{...rows[1],summary:{title:'Stale title',description:'',kind:'Project'}}],ancestors:[],total:2,revision:'old'});await more;
+ assert.equal(directory.entries().length,2);assert.equal(directory.entries()[1].summary.title,rows[1].summary.title);assert.deepEqual(calls.map(call=>call.offset),[0,1,0,1]);
+ calls.length=0;await directory.refresh();assert.deepEqual(calls.map(call=>call.offset),[0,1]);assert.equal(directory.entries().length,2);
+});

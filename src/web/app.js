@@ -479,7 +479,7 @@ const publishUI=lazyFeatureUI({enabled:()=>enabledModule(state.dashboardSettings
 const help=helpUI({state,esc,render});
 const accessHelp=accessHelpUI({api,esc});
 const languageControls=languageUI({api,esc,render,beforeChange:task=>leave.run(task).catch(report)});
-const projectDirectoryUI=projectDirectory({state,api,esc,changed:()=>render()});
+const projectDirectoryUI=projectDirectory({state,api,esc,changed:()=>{const sidebar=$('#main-navigation'),topbar=$('.topbar');if(state.book&&!state.access?.locked&&sidebar&&topbar)navigation.update(sidebar,topbar);}});
 const labBookDirectoryUI=labBookDirectory({state,api,esc,changed:()=>render(),directoryChanged:()=>{const sidebar=$('#main-navigation'),topbar=$('.topbar');if(state.book&&!state.access?.locked&&sidebar&&topbar)navigation.update(sidebar,topbar);},access:operation=>withProjectAccess(operation)});
 const structureUI = workspaceUI({state,api,esc,field,option,icon,dirty,save,render,showDialog,notify,recordsTable:renderRecordTable,logosFor,isUploading:()=>uploading,projectDirectory:projectDirectoryUI,labBookDirectory:labBookDirectoryUI,accessProject:(operation,options)=>withProjectAccess(operation,options),enterProject:(id,bookId)=>projectOwners.enter(id,bookId),rootBook:()=>projectOwners.root(),renameWorkspace:name=>storageControls.rename(name)});
 let recordOpenRequest=0;
