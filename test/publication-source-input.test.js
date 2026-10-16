@@ -35,7 +35,7 @@ import {researchReference} from '../src/web/research-reference.js';
 import {publicationText} from './publication-fixture.js';
 
 test('a combined edition pins explicit owners once and renders their copied identities after access closes',async()=>{
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-publication-owners-')),runtime=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:id(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(runtime),keys=[];let application;const recordMethod=ResearchCatalogue.prototype.record;
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-publication-owners-')),runtime=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:id(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(runtime),keys=[];let application;const recordMethod=ResearchCatalogue.prototype.record,mediaMethod=MediaStore.prototype.get;
  try{
   const host=sampleNotebook();host.entries=[];host.notebooks=[];host.projects=[];
   const f=await encryptedFixture(directory,host);keys.push(f.vault);const registry=new ProjectRegistry(f.workspace,host.id),client={},template=sampleNotebook(),mediaId=id(),one=structuredClone(template),two=structuredClone(template);
@@ -58,10 +58,12 @@ test('a combined edition pins explicit owners once and renders their copied iden
   const sources=[one,two].map(book=>({workspaceId:book.id,projectIds:[book.projects[0].id],selection:{defaultShare:false,includeProjects:[],records:[{id:book.entries[0].id,share:true,attachments:[]}]}}));
   const choice=defaultEditionRecord(one.entries[0],recordRevision(one.entries[0]));choice.sections=[one.entries[0].sections[0].id];sources[0].edition={version:1,records:[choice]};
   const releases=new PublicationJobs(f.workspace,{sources,sourceReader:options=>publicationSourceReader(application,client,{workspaceId:host.id,...options})}),command={workspaceId:host.id,etag:(await f.workspace.outline()).etag};
-  await assert.rejects(f.workspace.withLock(()=>releases.pin(command)),error=>{if(!['ACCESS_LOCKED','DEVICE_UNKNOWN'].includes(error.code))throw error;return error.projectId===two.projects[0].id;});
+  const captureQueue=workspaceJobs(f.workspace).queue;
+  await assert.rejects(releases.start(command,captureQueue),error=>{if(!['ACCESS_LOCKED','DEVICE_UNKNOWN'].includes(error.code))throw error;return error.projectId===two.projects[0].id;});
   await application.unlock(client,two.projects[0].id,{password:'Separate project password'});
   const loaded=[];ResearchCatalogue.prototype.record=function(recordId,...args){loaded.push(recordId);return recordMethod.call(this,recordId,...args);};
-  const pinned=await f.workspace.withLock(()=>releases.pin(command));ResearchCatalogue.prototype.record=recordMethod;
+  let savedDuringMedia=false;MediaStore.prototype.get=async function(...args){const asset=await mediaMethod.apply(this,args);if(this.root===owners[0].storage.root){await f.workspace.withLock(()=>f.workspace.writeMetadata('.observanda/capture-concurrency.json','{}'));savedDuringMedia=true;}return asset;};
+  const jobInput=await releases.start(command,captureQueue),pinned=await releases.source(jobInput.id);ResearchCatalogue.prototype.record=recordMethod;MediaStore.prototype.get=mediaMethod;assert.equal(savedDuringMedia,true);
   assert.deepEqual(loaded,[one.entries[0].id,two.entries[0].id]);assert.equal(pinned.records.length,2);assert.equal(pinned.retainedMedia.length,2);assert.equal(new Set(pinned.records.map(row=>row.id)).size,2);assert.equal(new Set(pinned.retainedMedia.map(row=>row.id)).size,2);assert.equal(pinned.researchReview.references.count,0);
   for(const [index,book] of [one,two].entries())assert.deepEqual(await readPublicationRecord(f.workspace,pinned,pinned.records[index]),book.entries[0]);
   const review=new AnalysisPublicationReview(f.workspace,{sourceReader:options=>publicationSourceReader(application,client,{workspaceId:host.id,...options})});await review.fresh(pinned);await assert.rejects(new AnalysisPublicationReview(f.workspace).fresh(pinned),{code:'ACCESS_LOCKED'});
@@ -72,7 +74,7 @@ test('a combined edition pins explicit owners once and renders their copied iden
   const result=await resumed.read(candidate.reviewId),text=await publicationText(result);assert.match(text,/First pinned content/);assert.match(text,/Second pinned content/);assert.ok(!text.includes('Later research title'));assert.ok(!text.includes('WITHHELD_'));assert.ok(!text.includes(one.id));assert.ok(!text.includes(two.id));
   for(const [index,owner] of owners.entries()){const media=pinned.records[index].media[0].id;assert.deepEqual(await contentBuffer(result.files.get('media/'+media+'.png')),owner.bytes);}
   const firstPage=(await contentBuffer(result.files.get('entries/'+pinned.records[0].id+'.html'))).toString();assert.ok(firstPage.includes(pinned.records[1].id+'.html#record-figure-'+pinned.records[1].media[0].id));assert.ok(!firstPage.includes(researchReference(one.entries[0].relations[0].target)));
- }finally{ResearchCatalogue.prototype.record=recordMethod;await application?.close();await runtime.close();detach();keys.forEach(clearVault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-publication-owners-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{ResearchCatalogue.prototype.record=recordMethod;MediaStore.prototype.get=mediaMethod;await application?.close();await runtime.close();detach();keys.forEach(clearVault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-publication-owners-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 async function runPublicationJob(queue){

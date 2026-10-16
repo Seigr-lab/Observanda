@@ -1,6 +1,6 @@
+import {withPublicationCapture} from './publication-capture.js';
 import {retainPublicationSources} from './publication-source-input.js';
 import {validPublicationSources} from './web/publication-sources-model.js';
-import {removePublicationMedia} from './publication-input-media.js';
 import {isDownloadPath} from './web/website-file.js';
 import os from 'node:os';
 import path from 'node:path';
@@ -23,32 +23,31 @@ const inputFile=id=>{if(!researchId(id))throw new AppError('INVALID');return '.o
 const candidateFile=id=>{if(!hash(id))throw new AppError('INVALID');return '.observanda/release-candidates/'+id+'.json';};
 export class PublicationJobs{
  constructor(workspace,{sources,sourceReader}={}){if(sources!==undefined&&!validPublicationSources(sources))throw new AppError('INVALID');this.workspace=workspace;this.sources=sources===undefined?undefined:structuredClone(sources);this.sourceReader=sourceReader;this.feed=new MetadataFeed(workspace,'.observanda/release-list');}
- async pin({etag,book,workspaceId,draft:command,edition,blockedValues=[]},{signal}={}){
-   const id=randomUUID();
-   try{
-   const input=await publicationSource(this.workspace,{etag,book,workspaceId,draft:command},{signal,consume:async(metadata,records,options)=>{const sources=this.sources??metadata.website.researchSources??[];if(!validPublicationSources(sources))throw new AppError('INVALID');const input=await retainPublicationInput(this.workspace,id,metadata,records,{...options,signal,edition,deferFinalization:!!sources.length});return sources.length?retainPublicationSources(this.workspace,id,input,sources,await this.sourceReader?.({signal}),{signal}):input;}});
-   const destination=await new Publisher(this.workspace.root,{workspace:this.workspace},this.workspace.vault).read();
-   const source={version:2,id,reviewId:digest(id),workspaceId:input.metadata.id,...(this.workspace.websiteId?{websiteId:this.workspace.websiteId}:{}),createdAt:new Date().toISOString(),etag,...input,blockedValues,
+ async pin({etag,book,workspaceId,draft:command,edition,blockedValues=[]},{signal,workspace=this.workspace,id=randomUUID()}={}){
+   const input=await publicationSource(workspace,{etag,book,workspaceId,draft:command},{signal,consume:async(metadata,records,options)=>{const sources=this.sources??metadata.website.researchSources??[];if(!validPublicationSources(sources))throw new AppError('INVALID');const input=await retainPublicationInput(workspace,id,metadata,records,{...options,signal,edition,deferFinalization:!!sources.length});return sources.length?retainPublicationSources(workspace,id,input,sources,await this.sourceReader?.({signal}),{signal}):input;}});
+   const destination=await new Publisher(workspace.root,{workspace},workspace.vault).read();
+   const source={version:2,id,reviewId:digest(id),workspaceId:input.metadata.id,...(workspace.websiteId?{websiteId:workspace.websiteId}:{}),createdAt:new Date().toISOString(),etag,...input,blockedValues,
     configEtag:destination.etag,destination:destination.configured?destination.config:null};
    signal?.throwIfAborted();
-   await this.workspace.writeMetadata(inputFile(id),serialize(source));
+   await workspace.writeMetadata(inputFile(id),serialize(source));
    return source;
-   }catch(error){await removePublicationMedia(this.workspace,id);if(await this.workspace.storageKind()!=='catalogue')await removePublicationInput(this.workspace,id);throw error;}
  }
  async start(command,queue){
-  return queue.transaction(async()=>{
-   const source=await this.pin(command),id=source.id;
-   await this.feed.ensureLocked();
-   await this.workspace.writeMetadata('.observanda/release-list/'+id+'.json',serialize({id,reviewId:source.reviewId,createdAt:source.createdAt,summary:source.summary}));
-   await this.feed.putLocked(source);
-   return queue.enqueueLocked({id,type:'publication.prepare',scope:source.workspaceId,input:{revision:digest(serialize(source))}});
-  });
+  return withPublicationCapture(this.workspace,async(workspace,id,finish)=>{
+   const source=await this.pin(command,{workspace,id});
+   return finish(async()=>{
+    await this.feed.ensureLocked();
+    await this.workspace.writeMetadata('.observanda/release-list/'+id+'.json',serialize({id,reviewId:source.reviewId,createdAt:source.createdAt,summary:source.summary}));
+    await this.feed.putLocked(source);
+    return queue.enqueueLocked({id,type:'publication.prepare',scope:source.workspaceId,input:{revision:digest(serialize(source))}});
+   });
+  },{write:fn=>queue.transaction(fn)});
  }
  // Compatibility callers wait for their reply, but use the same pinned input,
  // page renderer and retained-file reader as durable background preparations.
  async inline(command,{signal}={}){
   signal??=new AbortController().signal;
-  const source=await this.workspace.withLock(()=>this.pin(command,{signal})),job={id:source.id,lease:{token:randomUUID()}};
+  const source=await withPublicationCapture(this.workspace,async(workspace,id,finish)=>{const source=await this.pin(command,{signal,workspace,id});return finish(()=>source);},{signal}),job={id:source.id,lease:{token:randomUUID()}};
   let committed=false;
   try{
    const candidate=await this.prepare(job,{signal,progress:async()=>{}});signal.throwIfAborted();

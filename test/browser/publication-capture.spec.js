@@ -1,0 +1,48 @@
+import {test,expect} from '@playwright/test';
+import {mkdtemp,rm,readFile} from 'node:fs/promises';
+import {randomUUID} from 'node:crypto';
+import {AsyncLocalStorage} from 'node:async_hooks';
+import os from 'node:os';
+import path from 'node:path';
+import {sampleNotebook} from '../../src/sample.js';
+import {WebsiteSites} from '../../src/website-sites.js';
+import {ResearchCatalogue} from '../../src/research-catalogue.js';
+import {PublicationJobs} from '../../src/publication-jobs.js';
+import {startServer} from '../../src/server.js';
+import {clearVault} from '../../src/encryption.js';
+import {encryptedFixture} from './encrypted-fixture.js';
+import {navigate} from './preferences-helper.js';
+import {task} from './composer-helper.js';
+
+test('navigation and another website save finish while selected edition inputs are still being read',async({page})=>{
+ test.setTimeout(120000);page.setDefaultTimeout(15000);
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-capture-ui-')),scope=new AsyncLocalStorage(),pin=PublicationJobs.prototype.pin,record=ResearchCatalogue.prototype.record;
+ let fixture,app,other,arrive,resume,count=0,paused=false;
+ const ready=new Promise(resolve=>arrive=resolve),held=new Promise(resolve=>resume=resolve),errors=[];
+ try{
+  const book=sampleNotebook(),seed=book.entries[0];book.entries=Array.from({length:48},(_,index)=>({...structuredClone(seed),id:randomUUID(),title:'Selected observation '+index,body:'Approved observation '+index,share:true,attachments:[],figures:[],sections:[],relations:[]}));
+  fixture=await encryptedFixture(directory,book);const sites=new WebsiteSites(fixture.workspace),ids=[];
+  for(const name of ['Observation journal','Course website'])ids.push((await sites.change({workspaceId:book.id,etag:(await fixture.workspace.outline()).etag,operation:'create',name})).id);
+  const first=await sites.read(ids[0]);await sites.save(ids[0],{workspaceId:book.id,baseEtag:first.etag,metadata:{},projects:[],changes:[],removed:[],selection:{defaultShare:false,includeProjects:book.projects.map(project=>project.id),records:[]}});
+  PublicationJobs.prototype.pin=function(...args){return scope.run(this.workspace.websiteId===ids[0],()=>pin.apply(this,args));};
+  ResearchCatalogue.prototype.record=async function(...args){const value=await record.apply(this,args);if(scope.getStore()&&++count===40){paused=true;arrive();await held;}return value;};
+  app=await startServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(directory,'preferences.json'),port:0});
+  page.on('pageerror',error=>errors.push(error.message));await page.goto(app.url);await navigate(page,'Website editor');await page.goto(new URL('/#/websites/'+ids[0]+'/editor',app.url).href);
+  await expect(page.locator('.website-site-context')).toContainText('Observation journal');await page.getByRole('button',{name:'Preview & export',exact:true}).click();
+  const response=page.waitForResponse(value=>new URL(value.url()).pathname==='/api/publication-jobs/start');
+  await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();await ready;
+  await page.getByRole('button',{name:'Continue working',exact:true}).click();await navigate(page,'Preferences');await page.getByRole('button',{name:'Integrations',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Integrations',exact:true})).toBeVisible();expect(paused).toBe(true);
+  other=await page.context().newPage();other.setDefaultTimeout(15000);other.on('pageerror',error=>errors.push(error.message));await other.goto(new URL('/#/websites/'+ids[1]+'/editor',app.url).href);
+  await expect(other.locator('.website-site-context')).toContainText('Course website');await task(other,'Site');await other.getByLabel('Website title',{exact:true}).fill('Saved during input capture');
+  await other.getByRole('button',{name:'Save website',exact:true}).click();await expect(other.locator('#save-status')).toHaveText('Saved');
+  expect(paused).toBe(true);expect((await sites.read(ids[1])).book.website.title).toBe('Saved during input capture');
+  paused=false;resume();expect((await response).status()).toBe(202);
+  await page.evaluate(id=>location.hash='/websites/'+id+'/publishing',ids[0]);await expect(page.getByRole('heading',{name:'Publishing',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Website preparations',exact:true}).click();await expect(page.getByRole('button',{name:'Open review',exact:true})).toBeVisible({timeout:30000});await page.getByRole('button',{name:'Open review',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Download website ZIP',exact:true})).toBeEnabled();
+  await page.getByLabel('I have reviewed this website and its media for sharing.').check();const downloading=page.waitForEvent('download');await page.getByRole('button',{name:'Download website ZIP',exact:true}).click();
+  const bytes=await readFile(await (await downloading).path());expect(bytes.includes(Buffer.from('Approved observation 47'))).toBe(true);expect(bytes.includes(Buffer.from('Saved during input capture'))).toBe(false);
+  await page.screenshot({path:test.info().outputPath('capture-completed.png'),fullPage:true});expect(errors).toEqual([]);
+ }finally{resume();PublicationJobs.prototype.pin=pin;ResearchCatalogue.prototype.record=record;await other?.close();await page.close();await app?.close();if(fixture)clearVault(fixture.vault);expect(path.dirname(directory)).toBe(path.resolve(os.tmpdir()));expect(path.basename(directory).startsWith('observanda-capture-ui-')).toBe(true);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+});
