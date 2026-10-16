@@ -1,5 +1,5 @@
 // Placement changes move an existing owner between named parent folders.
-// The workspace registry supplies membership; no project payload is copied.
+// The workspace registry supplies membership independently of owner payloads.
 import path from 'node:path';
 import {assertRegular} from './storage.js';
 import {storageCreationPath} from './storage-names.js';

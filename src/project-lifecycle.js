@@ -16,7 +16,7 @@ export async function withProjectLifecycle(registry,projectId,kind,operation,{wa
    if(other===kind||['copy','archive'].includes(kind)&&['copy','archive'].includes(other))continue;const file=path.join(registry.workspace.root,'.observanda',folder,projectId+'.obsv'),stat=await assertRegular(file,{missing:true});if(!stat)continue;
    if(stat.size>(['move','rename','delete'].includes(other)?16*1024*1024:32768))throw new AppError('STORAGE_PROJECT_BUSY');let receipt;
    try{receipt=JSON.parse(await registry.workspace.readFile(file,'utf8'));}catch{throw new AppError('STORAGE_PROJECT_BUSY');}
-   if(!(other==='move'?[1,2]:[1]).includes(receipt?.version)||receipt.projectId!==projectId||!researchId(receipt.id)||!(receipt.phase==='complete'||['copy','archive','move','rename'].includes(other)&&receipt.phase==='cancelled'))throw new AppError('STORAGE_PROJECT_BUSY');
+   if(!(['move','rename'].includes(other)?[1,2]:[1]).includes(receipt?.version)||receipt.projectId!==projectId||!researchId(receipt.id)||!(receipt.phase==='complete'||['copy','archive','move','rename'].includes(other)&&receipt.phase==='cancelled'))throw new AppError('STORAGE_PROJECT_BUSY');
   }
   return operation();
  },{wait});

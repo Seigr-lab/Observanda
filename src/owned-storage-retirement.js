@@ -14,13 +14,15 @@ import {AppError} from './errors.js';
 const inside=(root,file)=>{const relative=path.relative(root,file);return relative!==''&&relative!=='..'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative);};
 export const removeRetiredProject=(value,options)=>removeRetiredOwner(value,options);
 export const removeRetiredLabBook=(value,options)=>removeRetiredOwner(value,{...options,labBook:true});
-async function removeRetiredOwner(value,{verify,checkpoint,labBook=false}){
+async function removeRetiredOwner(value,{verify,checkpoint,labBook=false,ownerDirectories=[]}){
  const boundaries=value.boundaries??[],nested=!!boundaries.length,root=nested?value.source:path.join(path.dirname(value.source),'.observanda-'+(labBook?'lab-book':'project')+'-move-'+value.id);
  if(!await assertRegular(root,{directory:true,missing:true})){if(nested)throw new AppError('STORAGE_MOVE_STATE');return;}
  if(await realpath(path.dirname(root))!==path.dirname(root))throw new AppError('UNSAFE');
- if(nested||labBook)await assertProjectMoveDirectory(root,value.sourceDirectory);
- const marker=await moveSource(root),bookNames=new Set((value.books??[]).map(book=>book.directory));
- const ownedRelative=relative=>{const parts=relative.split('/');return bookNames.has(parts[0])?parts.slice(1).join('/'):relative;};
+ if(nested||labBook||value.sourceDirectory)await assertProjectMoveDirectory(root,value.sourceDirectory);
+ const marker=await moveSource(root),ownerRoots=[...(value.books??[]).map(book=>book.directory),...ownerDirectories];
+ for(const relative of ownerRoots)if(typeof relative!=='string'||!relative||relative.includes('\\')||path.posix.normalize(relative)!==relative||relative.split('/').some(part=>!part||part==='.'||part==='..')||!inside(root,path.resolve(root,...relative.split('/'))))throw new AppError('STORAGE_MOVE_STATE');
+ ownerRoots.sort((a,b)=>b.length-a.length);
+ const ownedRelative=relative=>{const owner=ownerRoots.find(prefix=>relative.startsWith(prefix+'/'));return owner?relative.slice(owner.length+1):relative;};
  if(marker&&(marker.id!==value.id||marker.destination!==value.destination))throw new AppError('STORAGE_MOVE_STATE');
  async function remove(relative,directory){
   const own=ownedRelative(relative),file=path.join(root,relative);if(!inside(root,file))throw new AppError('UNSAFE');

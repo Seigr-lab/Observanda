@@ -1,3 +1,4 @@
+import {readProjectRename} from './project-rename-receipt.js';
 import {assertProjectImportsSettled} from './project-import-state.js';
 // Child creation and parent relocation meet at a short, parent-specific lease.
 // The workspace holds these control files so moving a project never moves a held lease.
@@ -48,9 +49,7 @@ export async function assertProjectRelocationsSettled(registry,parents,{except=n
  const ids=new Set(parents),directory=path.join(registry.workspace.root,'.observanda/project-renames');if(!await assertRegular(directory,{directory:true,missing:true}))return;
  for await(const entry of await opendir(directory)){
   if(!entry.name.endsWith('.obsv')||!researchId(entry.name.slice(0,-5))||entry.name===except+'.obsv')continue;
-  const file=path.join(directory,entry.name),stat=await assertRegular(file);if(stat.size>16*1024*1024)throw new AppError('STORAGE_PROJECT_BUSY');
-  let value;try{value=JSON.parse(await registry.workspace.readFile(file,'utf8'));}catch{throw new AppError('STORAGE_PROJECT_BUSY');}
-  if(value.version!==1||!researchId(value.projectId))throw new AppError('STORAGE_PROJECT_BUSY');
+  const value=await readProjectRename(registry,entry.name.slice(0,-5));if(!value)continue;
   if(!['complete','cancelled'].includes(value.phase)&&(ids.has(value.parentId)||value.placement&&ids.has(value.placement.parentId)))throw new AppError('STORAGE_PROJECT_BUSY');
  }
 }

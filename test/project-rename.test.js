@@ -1,22 +1,16 @@
+import {projectTreeFixture as fixture,destinationProject} from './project-tree-fixture.js';
 import fs from 'node:fs/promises';
 import {syncBuiltinESMExports} from 'node:module';
 import {ProjectAccessSettings} from '../src/project-access-settings.js';
 import {startServer} from '../src/server.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,rm,stat,readdir,readFile} from 'node:fs/promises';
-import path from 'node:path';import os from 'node:os';import {randomUUID} from 'node:crypto';
+import {stat,readdir,readFile} from 'node:fs/promises';
+import path from 'node:path';import {randomUUID} from 'node:crypto';
 import {Workspace} from '../src/storage.js';
-import {createNotebook} from '../src/model.js';
-import {sampleNotebook} from '../src/sample.js';
-import {initializeLocation} from '../src/locations.js';
 import {createWorkspaceAccess,takeCreatedVault,readAccess,verifyAccess} from '../src/access.js';
 import {clearVault} from '../src/encryption.js';
-import {TestDeviceStore} from './device-fixture.js';
-import {WorkspaceDatabases} from '../src/workspace-databases.js';
-import {installDatabaseProvider} from '../src/workspace-database-context.js';
 import {ProjectRegistry} from '../src/project-registry.js';
-import {ProjectCreation} from '../src/project-creation.js';
 import {ProjectStorage} from '../src/project-storage.js';
 import {LabBookCreation} from '../src/lab-book-creation.js';
 import {LabBookStorage} from '../src/lab-book-storage.js';
@@ -26,19 +20,6 @@ import {WorkspaceRenames} from '../src/workspace-rename.js';
 import {workspaceRename} from '../src/workspace-rename-state.js';
 import {catalogueBinding} from '../src/postgres-activation.js';
 
-async function fixture(t){
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-project-rename-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider),vaults=[];
- t.after(async()=>{await provider.close();detach();vaults.forEach(clearVault);assert.equal(path.dirname(path.resolve(directory)),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-rename-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
- const deviceStore=new TestDeviceStore({file:path.join(directory,'device.key')}),metadata=createNotebook('Research Workspace 1'),root=path.join(directory,metadata.title),access=await createWorkspaceAccess('','',deviceStore),vault=takeCreatedVault(access);vaults.push(vault);await initializeLocation(root,metadata,access,vault);
- const workspace=new Workspace(root,vault),registry=new ProjectRegistry(workspace,metadata.id),creation=new ProjectCreation(registry,deviceStore),projects=[],books=[];
- for(const title of ['Field Project 1','Nested Project 2']){
-  const projectId=randomUUID(),{project:entry}=await creation.create({id:randomUUID(),username:'',password:'',project:{id:projectId,title,description:'',parentId:projects[0]?.projectId??null,share:false,logoId:null}}),key=await verifyAccess(await readAccess(entry.root),'','',{deviceStore});vaults.push(key);
-  const storage=new ProjectStorage(entry.root,projectId,key);projects.push({...entry,key,binding:await catalogueBinding(entry.root),inode:(await stat(path.join(entry.root,'.observanda/postgresql/data/PG_VERSION'))).ino});
-  const {book}=await new LabBookCreation(storage,deviceStore).create({id:randomUUID(),username:'',password:'Protected observations 456!',book:{id:randomUUID(),projectId,title:'Observations for '+title}}),bookKey=await verifyAccess(await readAccess(book.root),'','Protected observations 456!',{deviceStore});vaults.push(bookKey);const bookStorage=new LabBookStorage(book.root,book.labBookId,bookKey);
-  await bookStorage.update(value=>{value.entries=[{...sampleNotebook().entries[0],id:randomUUID(),notebookId:book.labBookId,title:'Retained observation'}];return value;});books.push({...book,projectId,key:bookKey,before:await bookStorage.read(),inode:(await stat(path.join(book.root,'.observanda/postgresql/data/PG_VERSION'))).ino});
- }
- return {directory,provider,deviceStore,workspace,registry,creation,projects,books,root};
-}
 test('project rename carries nested projects and books through interrupted native handoffs',{timeout:360000},async t=>{
  const {directory,provider,deviceStore,workspace,registry,creation,projects,books,root}=await fixture(t);
  const callbacks={withProject:async(id,use)=>{const entry=await registry.locate(id),saved=projects.find(p=>p.projectId===id);return use(new ProjectStorage(entry.root,id,saved.key));},withBook:async(parent,id,use)=>{const entry=await new LabBookRegistry(parent).locate(id),saved=books.find(b=>b.labBookId===id);return use(new LabBookStorage(entry.root,id,saved.key));}};
@@ -120,9 +101,6 @@ test('workspace rename completes an interrupted nested project rename before mov
 });
 
 
-async function destinationProject(f,t,password=''){
- const id=randomUUID(),result=await f.creation.create({id:randomUUID(),username:'',password,project:{id,title:'Destination Project',description:'',parentId:null,share:false,logoId:null}}),key=await verifyAccess(await readAccess(result.project.root),'',password,{deviceStore:f.deviceStore});t.after(()=>clearVault(key));return {...result.project,key};
-}
 test('project placement moves existing nested owners and recovers interruption without copying',{timeout:300000},async t=>{
  const f=await fixture(t),target=await destinationProject(f,t),selected=f.projects[0],renames=new ProjectRenames(f.registry,selected.projectId);
  const callbacks={withProject:async(id,use)=>use(new ProjectStorage((await f.registry.locate(id)).root,id,f.projects.find(p=>p.projectId===id).key)),withBook:async(parent,id,use)=>use(new LabBookStorage((await new LabBookRegistry(parent).locate(id)).root,id,f.books.find(book=>book.labBookId===id).key))};
@@ -146,13 +124,14 @@ test('project placement moves existing nested owners and recovers interruption w
  }
 });
 
-test('HTTP project placement requires destination and nested-book access and survives restart',{timeout:180000},async t=>{
+for(const crossFilesystem of [false,true])test('HTTP project placement requires destination and nested-book access and survives restart'+(crossFilesystem?' across filesystems':''),{timeout:300000},async t=>{
  const f=await fixture(t),target=await destinationProject(f,t,'Destination project password 456!'),selected=f.projects[0],options={root:f.root,deviceStore:f.deviceStore,port:0,headless:true,preferencesFile:path.join(f.directory,'preferences.json')};let app=await startServer(options);t.after(()=>app.close());let a=await client(app);const prefix='/api/projects/'+selected.projectId,command={id:randomUUID(),parentId:target.projectId,expectedParentId:null};
  assert.equal((await a(prefix+'/storage/move',{id:randomUUID(),path:path.join(f.directory,'External project')})).value.code,'INVALID');
  const denied=await a(prefix+'/storage/move',command);assert.equal(denied.value.code,'DEVICE_UNKNOWN',JSON.stringify(denied));assert.equal(denied.value.projectId,target.projectId);assert.equal((await f.registry.locate(selected.projectId)).parentId,null);
  assert.equal((await a('/api/projects/'+target.projectId+'/access/unlock',{username:'',password:'Destination project password 456!',recovery:''})).status,200);
  for(const book of [f.books[1],f.books[0]]){const locked=await a(prefix+'/directory/reparent',command);assert.equal(locked.value.code,'DEVICE_UNKNOWN',JSON.stringify(locked));assert.equal(locked.value.labBookId,book.labBookId);assert.equal(locked.value.projectId,book.projectId);assert.equal((await a('/api/projects/'+book.projectId+'/lab-books/'+book.labBookId+'/access/unlock',{username:'',password:'Protected observations 456!',recovery:''})).status,200);}
- const moved=await a(prefix+'/storage/move',command);assert.equal(moved.status,200,JSON.stringify(moved));assert.equal(moved.value.project.root,path.join(target.root,path.basename(selected.root)));assert.equal((await a(prefix+'/directory/reparent',command)).status,200);
+ const originalRename=fs.rename;if(crossFilesystem){fs.rename=async(from,to)=>{if(from===selected.root&&to===path.join(target.root,path.basename(selected.root)))throw Object.assign(Error('Another filesystem'),{code:'EXDEV'});return originalRename(from,to);};syncBuiltinESMExports();t.after(()=>{fs.rename=originalRename;syncBuiltinESMExports();});}
+ const moved=await a(prefix+'/storage/move',command);fs.rename=originalRename;syncBuiltinESMExports();assert.equal(moved.status,200,JSON.stringify(moved));assert.equal(moved.value.project.root,path.join(target.root,path.basename(selected.root)));assert.equal((await a(prefix+'/directory/reparent',command)).status,200);
  for(const book of f.books)assert.equal((await a('/api/projects/'+book.projectId+'/lab-books/'+book.labBookId+'/workspace/read/start',{})).status,200);
  await app.close();app=await startServer(options);a=await client(app);const reopened=await a(prefix+'/workspace/read/start',{});assert.equal(reopened.status,200,JSON.stringify(reopened));assert.equal(reopened.value.metadata.title,path.basename(selected.root));const directory=await f.registry.read();assert.equal(directory.value.projects.find(item=>item.projectId===selected.projectId).parentId,target.projectId);
  const placed=await f.registry.locate(selected.projectId),renames=new ProjectRenames(f.registry,selected.projectId),callbacks={withProject:async(id,use)=>use(new ProjectStorage((await f.registry.locate(id)).root,id,f.projects.find(p=>p.projectId===id).key)),withBook:async(parent,id,use)=>use(new LabBookStorage((await new LabBookRegistry(parent).locate(id)).root,id,f.books.find(book=>book.labBookId===id).key))};
@@ -173,13 +152,13 @@ test('workspace rename resolves a prepared project placement and retains its new
 });
 
 
-test('unsupported volume placement restores the entire project tree through interrupted cancellation',{timeout:240000},async t=>{
+test('legacy volume cancellation restores the entire project tree through interrupted cleanup',{timeout:240000},async t=>{
  const f=await fixture(t),target=await destinationProject(f,t),selected=f.projects[0],renames=new ProjectRenames(f.registry,selected.projectId),source=new ProjectStorage(selected.root,selected.projectId,selected.key);
  const callbacks={withProject:async(id,use)=>use(new ProjectStorage((await f.registry.locate(id)).root,id,f.projects.find(p=>p.projectId===id).key)),withBook:async(parent,id,use)=>use(new LabBookStorage((await new LabBookRegistry(parent).locate(id)).root,id,f.books.find(book=>book.labBookId===id).key))};
  for(const boundary of ['cancelling','cancel-projects-cleared','cancel-books-cleared','cancel-unfrozen','cancelled']){
-  const command={id:randomUUID(),name:path.basename(source.root),expectedName:path.basename(source.root),placement:{parentId:target.projectId,expectedParentId:null},...callbacks},original=fs.rename;
-  fs.rename=async(from,to)=>{if(from===source.root)throw Object.assign(Error('Another filesystem'),{code:'EXDEV'});return original(from,to);};syncBuiltinESMExports();
-  try{await assert.rejects(renames.run(source,{...command,checkpoint:async stage=>{if(stage===boundary)throw Error('Interrupted '+boundary);}}),new RegExp('Interrupted '+boundary));}finally{fs.rename=original;syncBuiltinESMExports();}
+  const command={id:randomUUID(),name:path.basename(source.root),expectedName:path.basename(source.root),placement:{parentId:target.projectId,expectedParentId:null},...callbacks};
+  await assert.rejects(renames.run(source,{...command,checkpoint:async(stage,value)=>{if(stage==='stopped'){value.phase='cancelling';value.cancelReason='volume';await renames.save(value);throw Error('Legacy cancellation');}}}),/Legacy cancellation/);
+  if(boundary!=='cancelling')await assert.rejects(renames.run(source,{...command,checkpoint:async stage=>{if(stage===boundary)throw Error('Interrupted '+boundary);}}),new RegExp('Interrupted '+boundary));
   await assert.rejects(renames.run(source,command),{code:'STORAGE_RENAME_VOLUME'});assert.equal((await renames.read()).phase,'cancelled');
   await assert.rejects(stat(path.join(target.root,path.basename(source.root))),{code:'ENOENT'});
   for(const saved of f.projects){

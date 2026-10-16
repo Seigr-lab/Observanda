@@ -1,3 +1,4 @@
+import {ProjectPlacementTransfer} from './project-placement-transfer.js';
 import {trackProjectTransfer} from './project-transfer-tasks.js';
 import {projectPlacementLocation,checkPlacementParent} from './project-placement.js';
 import {validateIndexedMetadata} from './catalogue-metadata.js';
@@ -89,8 +90,13 @@ export class ProjectRenames{
   if(vault?.id!==value.vaultId)throw new AppError('ACCESS_DENIED');
   return renameScope(value.id,async()=>{
    if(value.phase==='cancelling')return this.cancelFrozen(value,vault,{check,checkpoint});
-   await checkPlacementParent(this.registry,value);const scope=this.scope(value);let root=await locateProjectRename(this.registry,value);authenticateKeyring((await readAccess(root)).value,vault);await check();
+   const transfer=new ProjectPlacementTransfer(this,value,vault,{check,checkpoint});
+   await checkPlacementParent(this.registry,value);
+   if(value.phase==='copying')await transfer.copy();
+   if(['registered','retiring','retired'].includes(value.phase)){await transfer.retire();value.phase='complete';await this.save(value);await checkpoint('complete',value);const root=this.scope(value).destination;await this.clear(root,value);return {id:value.id,project:await this.registry.locate(this.projectId),complete:true};}
+   const scope=this.scope(value);let root=await locateProjectRename(this.registry,value);authenticateKeyring((await readAccess(root)).value,vault);await check();
    if(value.phase==='complete'){await this.clear(root,value);return {id:value.id,project:await this.registry.locate(this.projectId),complete:true};}
+   if(value.version===2)await transfer.activate();
    const marker=await workspaceRename(root);if(marker&&marker.id!==value.id)throw new AppError('STORAGE_RENAMING');
    if(!marker){
     if(value.phase!=='prepared'||root!==scope.source)throw new AppError('STORAGE_RENAME_STATE');
@@ -110,7 +116,7 @@ export class ProjectRenames{
     }finally{await lease.close();}
     await checkPlacementParent(this.registry,value);
     try{await operationStage(value.placement?'place-project-folder':'rename-project-folder',{},()=>rename(root,scope.destination));}
-    catch(error){if(error.code!=='EXDEV')throw error;value.phase='cancelling';value.cancelReason='volume';await this.save(value);await checkpoint('cancelling',value);return this.cancelFrozen(value,vault,{check,checkpoint});}
+    catch(error){if(error.code!=='EXDEV')throw error;if(!value.placement){value.phase='cancelling';value.cancelReason='volume';await this.save(value);await checkpoint('cancelling',value);return this.cancelFrozen(value,vault,{check,checkpoint});}await transfer.begin();await transfer.copy();await transfer.activate();}
     root=scope.destination;await checkpoint('renamed',value);value.phase='moved';await this.save(value);
    }
    const storage=new ProjectStorage(root,this.projectId,vault),{projects,books}=this.helpers(storage);
@@ -127,7 +133,8 @@ export class ProjectRenames{
     for(const item of entries){const entry=current.value.projects.find(p=>p.projectId===item.projectId),suffix=item.relative?item.relative.split('/'):[];if(!entry||entry.namespaceId!==item.namespaceId||entry.vaultId!==item.vaultId||![path.join(scope.source,...suffix),path.join(scope.destination,...suffix)].includes(entry.root))throw new AppError('CONFLICT');}
     try{await this.registry.change(current.revision,data=>{for(const item of entries){const entry=data.projects.find(p=>p.projectId===item.projectId);entry.root=path.join(scope.destination,...(item.relative?item.relative.split('/'):[]));if(item.projectId===this.projectId){if(value.placement){if(![value.parentId,value.placement.parentId].includes(entry.parentId))throw new AppError('CONFLICT');entry.parentId=value.placement.parentId;}if(entry.summary)entry.summary.title=name;}}return data;});break;}catch(error){if(error.code!=='CONFLICT'||attempt>=7)throw error;}
    }
-   await checkpoint('registered',value);value.phase='complete';await this.save(value);await checkpoint('complete',value);await this.clear(root,value);return {id:value.id,project:await this.registry.locate(this.projectId),complete:true};
+   if(value.version===2){value.phase='registered';await this.save(value);}
+   await checkpoint('registered',value);if(value.version===2)await transfer.retire();value.phase='complete';await this.save(value);await checkpoint('complete',value);await this.clear(root,value);return {id:value.id,project:await this.registry.locate(this.projectId),complete:true};
   });
  }
  async cancelFrozen(value,vault,{check=async()=>{},checkpoint=async()=>{}}={}){
