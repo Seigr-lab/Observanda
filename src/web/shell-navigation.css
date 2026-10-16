@@ -6,6 +6,13 @@ html[data-context-navigation=open][data-navigation=top]{--shell-content-top:calc
 @supports not (scrollbar-gutter:stable){html{overflow-y:scroll}}
 .shell{--navigation-size:min(var(--app-navigation-width,272px),calc(100% - 380px));position:relative;min-height:100dvh;padding-top:var(--shell-topbar-height,64px);grid-template-rows:1fr}
 .topbar{position:fixed;inset:0 0 auto;z-index:60;display:grid;grid-template-columns:40px minmax(0,1fr) 40px;gap:.75rem;min-height:64px;padding:.6rem 1rem;border-bottom:1px solid var(--ui-border);background:var(--ui-surface)}
+.shell-activity{grid-column:3;grid-row:1;min-width:0;max-width:min(24rem,40vw);justify-self:end}
+.shell-activity:empty,.shell-activity:has(>.app-activity[hidden]){display:none}
+.topbar:has(.app-activity:not([hidden])){grid-template-columns:40px minmax(0,1fr) auto}
+html[data-navigation=right] .shell-activity{grid-column:1;justify-self:start}
+html[data-navigation=right] .topbar:has(.app-activity:not([hidden])){grid-template-columns:auto minmax(0,1fr) 40px}
+html[data-context-navigation=drawer] .shell-activity{visibility:hidden}
+@media(max-width:760px){.topbar:has(.app-activity:not([hidden])),html[data-navigation=right] .topbar:has(.app-activity:not([hidden])){grid-template-columns:40px minmax(0,1fr) 40px}.shell-activity,html[data-navigation=right] .shell-activity{grid-column:1 / -1;grid-row:2;max-width:100%;justify-self:end}}
 .shell-menu{grid-column:1;grid-row:1;display:grid;place-items:center;width:40px;height:40px;padding:8px;border:1px solid transparent;border-radius:var(--ui-control-radius);background:transparent;color:var(--ui-muted);cursor:pointer}
 .shell-menu:hover{background:var(--ui-tint);color:var(--ui-accent)}
 .shell-menu:focus-visible{outline:2px solid var(--ui-accent);outline-offset:2px}

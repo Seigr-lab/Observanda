@@ -51,13 +51,15 @@ function presentation(kind,value){
 export function activityUI({onChange=()=>{}}={}){
  const host=document.createElement('div');host.className='app-activity';host.hidden=true;
  host.innerHTML='<button type="button" class="button" aria-controls="app-activity-panel" aria-expanded="false" data-toggle></button><section id="app-activity-panel" aria-labelledby="app-activity-heading" hidden><header><h2 id="app-activity-heading" tabindex="-1"></h2><button type="button" data-close>&times;</button></header><p data-connection role="status"></p><p data-empty></p><div data-list></div><button type="button" class="button" data-clear></button></section>';
- document.body.append(host);
+
  const toggle=host.querySelector('[data-toggle]'),panel=host.querySelector('section'),list=host.querySelector('[data-list]'),cards=new Map(),owned=new Map();
  let snapshot=null,pending=null,timer=null,stopped=false,generation=0;
  const owner=entry=>activityOwner(entry.kind,entry.view);
  const ordered=()=>[...(snapshot?.operations??[])].sort((a,b)=>({running:0,queued:1}[a.state]??2)-({running:0,queued:1}[b.state]??2)||b.startedAt-a.startedAt);
- function open(){panel.hidden=false;toggle.setAttribute('aria-expanded','true');host.querySelector('h2').focus();}
- function close(){panel.hidden=true;toggle.setAttribute('aria-expanded','false');toggle.focus();}
+ function mount(){const slot=document.querySelector('[data-activity-slot]');if(slot&&host.parentNode!==slot)slot.append(host);}
+ function visibility(){updateProperty(host,'hidden',!snapshot||!snapshot.operations.length&&panel.hidden);}
+ function open(){mount();panel.hidden=false;toggle.setAttribute('aria-expanded','true');visibility();host.querySelector('h2').focus();}
+ function close(){panel.hidden=true;toggle.setAttribute('aria-expanded','false');visibility();(host.hidden?document.querySelector('[data-action="shell-menu"]'):toggle)?.focus();}
  function clear(map){for(const card of map.values()){card.progress?.close();card.node.remove();}map.clear();}
  function create(entry,target,detailed){
   const node=document.createElement('article');node.dataset.operation=entry.id;
@@ -76,6 +78,7 @@ export function activityUI({onChange=()=>{}}={}){
   }else{card.progress?.close();card.progress=null;}
  }
  function bind(){
+  mount();
   for(const [id,card] of owned)if(!card.node.isConnected){card.progress?.close();owned.delete(id);}
   const main=document.querySelector('#main');if(!snapshot||!main){clear(owned);return;}
   let fallback=main.querySelector('[data-owned-activity]:not([data-owner-container])');
@@ -102,7 +105,7 @@ export function activityUI({onChange=()=>{}}={}){
   const empty=host.querySelector('[data-empty]');updateText(empty,text('empty'));updateProperty(empty,'hidden',!!snapshot.operations.length);
   const ids=new Set(snapshot.operations.map(entry=>entry.id));for(const [id,card] of cards)if(!ids.has(id)){card.node.remove();cards.delete(id);}
   for(const [index,entry] of ordered().entries()){let card=cards.get(entry.id);if(!card){card=create(entry,list,false);cards.set(entry.id,card);}update(card,entry,false);placeAt(list,card.node,index);}
-  updateProperty(host.querySelector('[data-clear]'),'disabled',!snapshot.operations.some(entry=>!active(entry)));bind();
+  updateProperty(host.querySelector('[data-clear]'),'disabled',!snapshot.operations.some(entry=>!active(entry)));visibility();bind();
  }
  async function refresh(){
   if(pending)return pending;
@@ -110,7 +113,7 @@ export function activityUI({onChange=()=>{}}={}){
   pending=(async()=>{
    const response=await fetch('/api/activity',{cache:'no-store'});
    if(!response.ok){if([401,403].includes(response.status)){snapshot=null;clear(cards);clear(owned);host.hidden=true;}throw await response.json();}
-   const next=await response.json();if(epoch!==generation)return next;snapshot=next;updateProperty(host,'hidden',false);updateText(host.querySelector('[data-connection]'),'');render();onChange(next);return next;
+   const next=await response.json();if(epoch!==generation)return next;snapshot=next;updateText(host.querySelector('[data-connection]'),'');render();onChange(next);return next;
   })().catch(error=>{updateText(host.querySelector('[data-connection]'),text('connection'));throw error;}).finally(()=>{pending=null;});
   return pending;
  }
@@ -122,5 +125,5 @@ export function activityUI({onChange=()=>{}}={}){
   try{const response=await fetch('/api/activity/clear',{method:'POST',headers:{'Content-Type':'application/json','X-Observanda-Workspace':snapshot.contextId},body:'{}'});if(!response.ok)throw await response.json();await refresh();}catch{updateText(host.querySelector('[data-connection]'),text('connection'));}
  });
  const unsubscribe=onLanguageChange(render);
- return {open,refresh,bind,storageBusy:()=>!!snapshot?.busy&&(!snapshot.readable||snapshot.operations.some(entry=>entry.kind.startsWith('/api/storage/')&&active(entry))),start(){stopped=false;void poll();},hide(){generation++;host.hidden=true;clear(cards);clear(owned);snapshot=null;},stop(){stopped=true;clearTimeout(timer);unsubscribe();clear(cards);clear(owned);host.remove();}};
+ return {open,refresh,bind,storageBusy:()=>!!snapshot?.busy&&(!snapshot.readable||snapshot.operations.some(entry=>entry.kind.startsWith('/api/storage/')&&active(entry))),start(){stopped=false;void poll();},hide(){generation++;host.hidden=true;panel.hidden=true;toggle.setAttribute('aria-expanded','false');clear(cards);clear(owned);snapshot=null;},stop(){stopped=true;clearTimeout(timer);unsubscribe();clear(cards);clear(owned);host.remove();}};
 }

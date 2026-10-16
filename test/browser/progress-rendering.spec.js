@@ -5,11 +5,11 @@ async function fixture(page){
  const namespaces=new Set(['operationProgress','storageProgress','activity']);
  await page.route('http://progress.test/**',async route=>{
   const pathname=new URL(route.request().url()).pathname;
-  if(pathname==='/')return route.fulfill({contentType:'text/html',body:'<main id="main"><h1>Storage</h1></main>'});
+  if(pathname==='/')return route.fulfill({contentType:'text/html',body:'<header><div data-activity-slot></div></header><main id="main"><h1>Storage</h1></main>'});
   let body=await readFile(new URL('../../src/web'+pathname.replace('/locales/nb/','/locales/en/'),import.meta.url),'utf8');
   if(pathname==='/locales/catalogues.json')body=JSON.stringify(Object.fromEntries(Object.keys(JSON.parse(body)).map(ns=>[ns,namespaces.has(ns)?['en','nb']:['en']])));
   if(pathname.startsWith('/locales/nb/'))body=JSON.stringify(Object.fromEntries(Object.entries(JSON.parse(body)).map(([key,value])=>[key,typeof value==='string'?'[nb] '+value:Object.fromEntries(Object.entries(value).map(([form,label])=>[form,'[nb] '+label]))])));
-  await route.fulfill({contentType:pathname.endsWith('.json')?'application/json':'text/javascript',body});
+  await route.fulfill({contentType:pathname.endsWith('.json')?'application/json':pathname.endsWith('.css')?'text/css':'text/javascript',body});
  });
  await page.goto('http://progress.test/');await page.clock.install();
 }
@@ -86,6 +86,58 @@ test('verification keeps its place in a transfer when the revision bar completes
  await expect(sequences.first().locator('li').nth(3)).toHaveAttribute('data-state','pending');
  expect(await page.evaluate(()=>rows.every((row,index)=>document.querySelectorAll('.operation-sequence li')[index]===row))).toBe(true);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
- await page.screenshot({path:'.local/operation-sequence-review.png',fullPage:true});
+ await page.screenshot({path:test.info().outputPath('operation-sequence.png'),fullPage:true});
  await page.evaluate(()=>progress.close());
+});
+
+
+test('activity stays in the shell header without covering Save controls and hides its empty index',async({page})=>{
+ await fixture(page);
+ for(const stylesheet of ['/app.css','/operation-progress.css','/shell-navigation.css'])await page.addStyleTag({url:stylesheet});
+ await page.evaluate(async()=>{
+  document.body.innerHTML='<div id="app"></div>';document.documentElement.dataset.navigation='left';
+  const {applicationShell}=await import('/application-shell.js'),{shellNavigation}=await import('/shell-navigation.js'),{activityUI}=await import('/activity-ui.js');
+  window.i18n=await import('/i18n/index.js');const navigation=shellNavigation();
+  const content=()=>'<div class="page-heading"><h1>'+(location.hash==='#/preferences/storage'?'Storage':'Calculator')+'</h1></div><label>Calculation<input value="2 + 2"></label><div style="min-height:110vh"></div><div class="section-save"><span>Unsaved changes</span><button class="button primary" data-save>Save calculation</button></div>';
+  window.shell=applicationShell({root:document.querySelector('#app'),mark:'',navigation:{update(sidebar,header){if(!header.querySelector('.workspace-heading')){const heading=document.createElement('div');heading.className='workspace-heading';heading.innerHTML='<button class="workspace-identity"><span class="workspace-name">A workspace with a long display name</span></button>';header.append(heading);}return false;},unmount(){}},applyLayout:()=>navigation.apply('module')});
+  window.renderPage=()=>{shell.showWorkspace(content);activity.bind();};
+  window.snapshot={contextId:'fixture',busy:false,readable:true,operations:[]};
+  const fetchOriginal=window.fetch;window.fetch=(...args)=>args[0]==='/api/activity'?Promise.resolve(new Response(JSON.stringify(snapshot))):args[0]==='/api/activity/clear'?(snapshot.operations=[],Promise.resolve(new Response('{}'))):fetchOriginal(...args);
+  window.activity=activityUI();shell.showWorkspace(content);await activity.refresh();
+  window.activityHost=document.querySelector('.app-activity');window.saveCount=0;
+  document.addEventListener('click',event=>{if(event.target.matches('[data-save]'))saveCount++;});
+  window.addEventListener('hashchange',renderPage);
+ });
+ const activity=page.locator('.app-activity'),toggle=activity.locator('[data-toggle]'),panel=page.locator('#app-activity-panel'),save=page.locator('[data-save]');
+ await expect(activity).toBeHidden();await expect(page.locator('.topbar [data-activity-slot] .app-activity')).toHaveCount(1);
+ await page.evaluate(async()=>{
+  snapshot.busy=true;snapshot.operations=[{id:'copy',kind:'/api/storage/copy',state:'running',startedAt:1,progress:{stage:'verify-snapshots',completed:3,total:100,unit:'snapshots'}},{id:'record',kind:'/api/research/records/writing/save',view:'#/preferences/general',state:'queued',startedAt:2,progress:{stage:'waiting-writer'}}];await activity.refresh();
+ });
+ await expect(toggle).toHaveText('Activity (1 running, 1 queued)');
+ for(const width of [1440,390]){
+  await page.setViewportSize({width,height:844});
+  for(const direction of ['left','right','top']){
+   await page.evaluate(direction=>{document.documentElement.dataset.navigation=direction;renderPage();},direction);
+   await save.scrollIntoViewIfNeeded();await expect(save).toBeInViewport();
+   const geometry=await page.evaluate(()=>{
+    const header=document.querySelector('.topbar').getBoundingClientRect(),activity=document.querySelector('.app-activity [data-toggle]').getBoundingClientRect(),save=document.querySelector('[data-save]').getBoundingClientRect();
+    return {contained:activity.top>=header.top&&activity.bottom<=header.bottom,above:activity.bottom<=save.top,reachable:document.elementFromPoint(save.x+save.width/2,save.y+save.height/2)===document.querySelector('[data-save]'),overflow:document.documentElement.scrollWidth>innerWidth};
+   });expect(geometry).toEqual({contained:true,above:true,reachable:true,overflow:false});await save.click();
+   await toggle.click();await expect(toggle).toHaveAttribute('aria-expanded','true');await expect(panel.locator('h2')).toBeFocused();
+   const bounds=await panel.boundingBox();expect(bounds.x).toBeGreaterThanOrEqual(0);expect(bounds.x+bounds.width).toBeLessThanOrEqual(width);
+   await page.keyboard.press('Escape');await expect(panel).toBeHidden();await expect(toggle).toBeFocused();
+  }
+  await page.screenshot({path:test.info().outputPath('activity-header-'+width+'.png')});
+ }
+ expect(await page.evaluate(()=>saveCount)).toBe(6);
+ await page.evaluate(async()=>{await i18n.prepareLanguage('nb');i18n.activateLanguage('nb');});await expect(toggle).toContainText('[nb] Activity');
+ await toggle.click();await expect(panel.locator('h2')).toHaveText('[nb] Activity');
+ await panel.locator('[data-operation="copy"] [data-owner]').click();await expect(page).toHaveURL(/#\/preferences\/storage$/);await expect(panel).toBeHidden();
+ await expect(page.locator('#main [data-owned-activity] .operation-progress')).toHaveCount(1);
+ expect(await page.evaluate(()=>activityHost===document.querySelector('.app-activity'))).toBe(true);
+ await page.evaluate(async()=>{for(const entry of snapshot.operations)entry.state='completed';snapshot.busy=false;await activity.refresh();});
+ await expect(page.locator('#main [data-owned-activity] .operation-progress')).toHaveCount(0);
+ await toggle.click();await panel.locator('[data-clear]').click();await expect(panel.locator('[data-empty]')).toBeVisible();
+ await panel.locator('[data-close]').click();await expect(activity).toBeHidden();await expect(page.locator('[data-action="shell-menu"]')).toBeFocused();
+ await page.evaluate(()=>activity.stop());
 });

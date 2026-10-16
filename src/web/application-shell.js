@@ -7,6 +7,7 @@ export function applicationShell({root,mark,navigation,applyLayout}) {
     root.innerHTML=`<div class="shell">
       <header class="topbar">
         <button class="shell-menu" data-action="shell-menu" aria-label="" aria-controls="main-navigation" aria-expanded="false" title=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path class="menu-divider" d="M9 4v16"/><path class="menu-chevron" d="m14 9 3 3-3 3"/></svg></button>
+        <div class="shell-activity" data-activity-slot></div>
       </header>
       <button class="shell-menu-backdrop" data-action="shell-menu-close" tabindex="-1" aria-label="" hidden></button>
       <aside class="sidebar" id="main-navigation"><a href="#" class="brand" data-action="workspace-refresh">${mark}Observanda</a></aside>
