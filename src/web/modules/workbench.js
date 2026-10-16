@@ -32,13 +32,21 @@ export async function moduleEditor(services,definition){
   const input=document.activeElement?.matches('[data-module-search],[data-module-list-input]')?document.activeElement:null,start=input?.selectionStart,end=input?.selectionEnd;
   render();if(input){const next=input.hasAttribute('data-module-list-input')?document.querySelector('[data-module-list-input="'+CSS.escape(input.dataset.moduleListInput)+'"]'):document.querySelector('[data-module-search]');next?.focus({preventScroll:true});if(start!==null&&next?.setSelectionRange)next.setSelectionRange(start,end);}
  }
+ function recoveryView(){return '<div data-module-recovery>'+moduleRecoveryView(recovery,{esc,button})+'</div>';}
+ function drawRecovery(){
+  if(!initialized||disposed||state.page!=='module'||state.moduleId!==definition.id)return;
+  const host=document.querySelector('[data-module-recovery]');if(!host)return;
+  const focused=host.contains(document.activeElement)?document.activeElement:null,command=focused?.dataset.command,id=focused?.dataset.id;
+  const html=moduleRecoveryView(recovery,{esc,button});if(host.innerHTML===html)return;host.innerHTML=html;
+  if(command){const next=[...host.querySelectorAll('[data-command]')].find(node=>!node.disabled&&node.dataset.command===command&&node.dataset.id===id);next?.focus({preventScroll:true});}
+ }
  const itemPages=definition.paged?moduleItemPages({api,workspaceId:state.book.id,esc,draw:drawList}):null;
  const listQuery=()=>({type:listType,query,status:filter,...(definition.listQuery?.(listType)??{}),...(definition.scoped?{moduleId:definition.id,projectId:scopeId,recursive}:{})});
  const loadItems=()=>{const options=listQuery();listQueryKey=JSON.stringify(options);return itemPages.load(options);};
  if(itemPages)await loadItems();
  const historyPages=moduleHistoryUI({api,esc,draw:()=>{if(!disposed)render();},current:()=>drafts.get(currentId)});
  let recoveryReady=false;
- const recovery=await moduleRecovery({api,workspaceId:state.book.id,moduleId:definition.id,onStatus:()=>{status();if(recoveryReady&&!disposed&&!busy&&!currentId&&drafts.size&&recovery.canPark())void releaseDrafts();},onChange:()=>{if(recoveryReady)drawList();}});recoveryReady=true;
+ const recovery=await moduleRecovery({api,workspaceId:state.book.id,moduleId:definition.id,onStatus:()=>{status();if(recoveryReady&&!disposed&&!busy&&!currentId&&drafts.size&&recovery.canPark())void releaseDrafts();},onChange:()=>{if(recoveryReady)drawRecovery();}});recoveryReady=true;
  const operationDirty=()=>!!operation&&JSON.stringify(operation.values)!==JSON.stringify(operation.base);
  const checkpoint=()=>recovery.schedule([...drafts.values()].filter(d=>dirty(d)||d.id===currentId&&operationDirty()&&definition.recoverOperation).map(d=>d.id===currentId&&operationDirty()&&definition.recoverOperation?{...d,operation}:d));
  const references=moduleReferencesUI(services,{moduleId:definition.id,current:()=>drafts.get(currentId),changed:change,draw:()=>render()});
@@ -191,7 +199,7 @@ export async function moduleEditor(services,definition){
     const [type,id]=path.split('/');
     if(id&&definition.types.some(t=>t.id===type)&&!drafts.has(id)){
      if(!busy&&failedId!==id)void openExisting(id,type);
-     return `<section class="module-workbench"><h1>${esc(definition.label)}</h1>${error?`<p role="alert">${esc(error.message)}</p>${button(currentText('retry'),'open-item-retry',`data-id="${esc(id)}" data-type="${type}"`)}`:`<p role="status">${esc(currentText('loadingItem'))}</p>`}${moduleRecoveryView(recovery,{esc,button})}</section>`;
+     return `<section class="module-workbench"><h1>${esc(definition.label)}</h1>${error?`<p role="alert">${esc(error.message)}</p>${button(currentText('retry'),'open-item-retry',`data-id="${esc(id)}" data-type="${type}"`)}`:`<p role="status">${esc(currentText('loadingItem'))}</p>`}${recoveryView()}</section>`;
     }
    }
    const [type,id]=path.split('/');if(definition.types.some(t=>t.id===type)){listType=type;if(id&&id!==currentId){const entity=get(id);if(entity&&!drafts.has(id))drafts.set(id,{id,type:entity.type,expectedRevision:entity.revision,base:structuredClone(entity.data),data:structuredClone(entity.data)});currentId=entity||drafts.has(id)?id:null;if(currentId)section=definition.openSection?.(context.current)??'details';}else if(!id)currentId=null;}
@@ -205,7 +213,7 @@ export async function moduleEditor(services,definition){
    ${definition.scoped?(definition.scopeControl?.(context)??scopeControl(state.book,scopeId,esc,{recursive,moduleId:definition.id})):''}${definition.tools?.(context)??''}
    ${error?`<div class="module-error" role="alert"><strong>${esc(error.message??'Save interrupted. Your draft is retained.')}</strong>${(error.details??[]).map(e=>'<p>'+esc(e.field)+'</p>').join('')}${error.code==='MODULE_CHANGED'&&!operation?button('Compare saved version','compare'):''}</div>`:''}
    <p class="module-recovery-status" data-recovery-status role="status"></p>
-   ${moduleRecoveryView(recovery,{esc,button})}
+   ${recoveryView()}
    ${unsaved.length?`<div class="module-drafts">Drafts: ${unsaved.map(d=>button(d.data.name||d.data.title||'New '+d.type,'edit',`data-id="${d.id}" data-type="${d.type}"`,'subtle')).join('')}</div>`:''}
    ${d?editor(d,type):listing(type)+(definition.extraList?.(type,context)??'')}
    </div>`;

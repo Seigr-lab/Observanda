@@ -13,7 +13,8 @@ import {encryptedFixture} from './encrypted-fixture.js';
 import {defaultDashboard} from '../../src/web/dashboard-model.js';
 import {writeWorkspaceDashboard,readWorkspaceDashboard} from '../../src/security/dashboard-storage.js';
 import {workspaceModules} from '../../src/modules/index.js';
-import {ModuleDrafts} from '../../src/modules/drafts.js';
+import {ProjectModuleDrafts} from '../../src/project-module-drafts.js';
+import {ProjectDraftCatalogue} from '../../src/project-draft-catalogue.js';
 import {navigate} from './preferences-helper.js';
 import {setTimeout as delay} from 'node:timers/promises';
 
@@ -26,20 +27,20 @@ async function fixture(page,count){
  const app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')}),bodies=[],requests=[],errors=[],original=ResearchCatalogue.prototype.record;
  ResearchCatalogue.prototype.record=function(id,...args){bodies.push(id);return original.call(this,id,...args);};
  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.url().includes('/api/'))requests.push({path:new URL(r.url()).pathname,data:r.postData()});});
- return {...f,app,book,bodies,requests,errors,async close(){ResearchCatalogue.prototype.record=original;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}};
+ return {...f,app,book,bodies,requests,errors,async close(){ResearchCatalogue.prototype.record=original;await page.unrouteAll({behavior:'wait'});await page.close();await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}};
 }
 
 test('recovery pages preserve unfinished calculations, retry failed navigation and restore only the chosen checkpoint',async({page})=>{
- test.setTimeout(120000);const f=await fixture(page,42),main=page.locator('main'),drafts=new ModuleDrafts(f.workspace),ids=[],original=ResearchCatalogue.prototype.objectValue,loaded=[];
+ test.setTimeout(120000);const f=await fixture(page,42),main=page.locator('main'),drafts=new ProjectModuleDrafts(f.workspace,f.book.id),ids=[],original=ProjectDraftCatalogue.prototype.objectValue,loaded=[];
  try{
   for(let i=0;i<25;i++){
    const id=randomUUID();ids.push(id);await drafts.write({workspaceId:f.book.id,moduleId:'scientific-calculator',id,etag:null,drafts:[{id:randomUUID(),type:'calculation',expectedRevision:null,base:null,data:{name:'Recovered calculation '+i,links:[],engine:1,mode:'expression',angle:'rad',expression:'sqrt(4)',digits:'',fromBase:10,toBase:6}}]});
   }
-  ResearchCatalogue.prototype.objectValue=function(id,...args){if(ids.some(item=>id==='metadata:.observanda/module-drafts/'+item+'.json'))loaded.push(id);return original.call(this,id,...args);};
+  ProjectDraftCatalogue.prototype.objectValue=function(id,...args){if(ids.some(item=>id==='metadata:.observanda/module-drafts/'+item+'.json'))loaded.push(id);return original.call(this,id,...args);};
   const lists=[];page.on('response',async response=>{if(new URL(response.url()).pathname==='/api/modules/drafts/list'&&response.ok())lists.push(await response.json());});
   await page.goto(f.app.url);await navigate(page,'Scientific calculator');await expect(main.locator('[data-recovery-item]')).toHaveCount(10);expect(loaded).toEqual([]);
-  await main.getByRole('button',{name:'New calculation',exact:true}).click();await main.getByLabel('Name',{exact:true}).fill('My unfinished calculation');await main.getByLabel('Expressions (one per line)').fill('sqrt(9)');
-  await main.getByRole('button',{name:'Next checkpoints',exact:true}).focus();await page.keyboard.press('Enter');await expect(main.locator('.module-recovery')).toContainText('Recovered calculation 14');await expect(main.getByRole('button',{name:'Next checkpoints',exact:true})).toBeFocused();
+  await main.getByRole('button',{name:'New calculation',exact:true}).click();await main.getByLabel('Name',{exact:true}).fill('My unfinished calculation');await main.getByLabel('Expression 1',{exact:true}).fill('sqrt(9)');
+  await page.evaluate(()=>{window.retainedCalculatorInput=document.querySelector('[data-calc-expression="0"]');});await main.getByRole('button',{name:'Next checkpoints',exact:true}).focus();await page.keyboard.press('Enter');await expect(main.locator('.module-recovery')).toContainText('Recovered calculation 14');await expect(main.getByRole('button',{name:'Next checkpoints',exact:true})).toBeFocused();expect(await page.evaluate(()=>window.retainedCalculatorInput===document.querySelector('[data-calc-expression="0"]'))).toBe(true);await expect(main.getByLabel('Expression 1',{exact:true})).toHaveValue('sqrt(9)');
   await page.route('**/api/modules/drafts/list',route=>route.fulfill({status:503,json:{message:'Synthetic recovery interruption'}}),{times:1});
   await main.getByRole('button',{name:'Next checkpoints',exact:true}).click();await expect(main.getByRole('alert')).toContainText('Synthetic recovery interruption');await expect(main.locator('[data-recovery-item]')).toHaveCount(10);
   await main.getByRole('button',{name:'Retry recovery list',exact:true}).click();await expect(main.locator('[data-recovery-item]')).toHaveCount(5);await expect(main.getByRole('button',{name:'Next checkpoints',exact:true})).toBeDisabled();
@@ -49,11 +50,11 @@ test('recovery pages preserve unfinished calculations, retry failed navigation a
   const selected=await main.locator('[data-recovery-item]').first().getAttribute('data-recovery-item');await main.getByRole('button',{name:'Restore draft',exact:true}).first().focus();await page.keyboard.press('Enter');
   await expect(main.getByLabel('Name',{exact:true})).toHaveValue('Recovered calculation 14');await expect(main.locator('[data-recovery-item="'+selected+'"]')).toHaveCount(0);
   expect(loaded.length).toBeGreaterThan(0);expect(new Set(loaded)).toEqual(new Set(['metadata:.observanda/module-drafts/'+selected+'.json']));
-  await main.locator('[data-recovery-item]').filter({hasText:'My unfinished calculation'}).getByRole('button',{name:'Restore draft',exact:true}).click();await expect(main.getByLabel('Expressions (one per line)')).toHaveValue('sqrt(9)');
+  await main.locator('[data-recovery-item]').filter({hasText:'My unfinished calculation'}).getByRole('button',{name:'Restore draft',exact:true}).click();await expect(main.getByLabel('Expression 1',{exact:true})).toHaveValue('sqrt(9)');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);expect(lists.length).toBeGreaterThan(3);expect(lists.every(p=>p.drafts.length<=10&&!JSON.stringify(p).includes('sqrt(4)'))).toBe(true);expect(f.errors).toEqual([]);
- }finally{ResearchCatalogue.prototype.objectValue=original;await f.close();}
+ }finally{ProjectDraftCatalogue.prototype.objectValue=original;await f.close();}
 });
-test('leaving an unfinished item keeps it open on a lost checkpoint reply and retries without duplicate drafts',async({page})=>{
+test('navigation retains an unfinished item after a lost checkpoint reply and replays without duplicate drafts',async({page})=>{
  test.setTimeout(120000);const f=await fixture(page,42),main=page.locator('main');let lost=true,writes=0;
  try{
   await page.goto(f.app.url);await navigate(page,'Scientific calculator');await main.getByRole('button',{name:'New calculation',exact:true}).click();
@@ -61,13 +62,13 @@ test('leaving an unfinished item keeps it open on a lost checkpoint reply and re
    const response=await route.fetch();expect(response.ok(),response.ok()?'':await response.text()).toBe(true);writes++;
    if(lost)await route.fulfill({status:503,json:{message:'Synthetic lost checkpoint reply'}});else await route.fulfill({response});
   });
-  await main.getByLabel('Name',{exact:true}).fill('Unfinished protected calculation');await main.getByLabel('Expressions (one per line)').fill('sqrt(81)');
+  await main.getByLabel('Name',{exact:true}).fill('Unfinished protected calculation');await main.getByLabel('Expression 1',{exact:true}).fill('sqrt(81)');
   await main.getByRole('button',{name:'Back to calculations',exact:true}).click();
-  await expect(main.getByRole('alert')).toContainText('Your edits are still open');await expect(main.getByLabel('Expressions (one per line)')).toHaveValue('sqrt(81)');
+  await expect(main.locator('[data-recovery-status]')).toContainText('could not save');await main.locator('.module-drafts').getByRole('button',{name:'Unfinished protected calculation',exact:true}).click();await expect(main.getByLabel('Expression 1',{exact:true})).toHaveValue('sqrt(81)');
   lost=false;await main.getByRole('button',{name:'Back to calculations',exact:true}).click();
   await expect(main.locator('[data-recovery-item]')).toHaveCount(1);await expect(main.locator('[data-module-form]')).toHaveCount(0);
   await page.reload();await expect(main.locator('[data-recovery-item]')).toHaveCount(1);
-  await main.getByRole('button',{name:'Restore draft',exact:true}).click();await expect(main.getByLabel('Name',{exact:true})).toHaveValue('Unfinished protected calculation');await expect(main.getByLabel('Expressions (one per line)')).toHaveValue('sqrt(81)');
+  await main.getByRole('button',{name:'Restore draft',exact:true}).click();await expect(main.getByLabel('Name',{exact:true})).toHaveValue('Unfinished protected calculation');await expect(main.getByLabel('Expression 1',{exact:true})).toHaveValue('sqrt(81)');
   expect(writes).toBeGreaterThan(1);expect(f.errors).toEqual([]);
  }finally{await f.close();}
 });
@@ -104,14 +105,14 @@ for(const count of [42,420])test('tools, linked inventory and planning retain no
  test.setTimeout(150000);const f=await fixture(page,count),main=page.locator('main'),dialog=page.locator('#dialog');
  try{
   await page.goto(f.app.url);await navigate(page,'Scientific calculator');await main.getByRole('button',{name:'New calculation',exact:true}).click();
-  await main.getByLabel('Name',{exact:true}).fill('Retained calculation');await main.getByLabel('Expressions (one per line)').fill('sqrt(4)');await expect(main.locator('.tool-answer output')).toHaveText('2');
+  await main.getByLabel('Name',{exact:true}).fill('Retained calculation');await main.getByLabel('Expression 1',{exact:true}).fill('sqrt(4)');await expect(main.getByLabel('Result 1',{exact:true})).toHaveText('2');
   await page.route('**/api/research/records/query',route=>route.fulfill({status:503,json:{message:'Synthetic search interruption'}}),{times:1});
   await main.getByRole('button',{name:'Link research',exact:true}).click();await expect(dialog.getByRole('alert')).toHaveText('Synthetic search interruption');
   await dialog.getByRole('button',{name:'Refresh results',exact:true}).click();await expect(dialog.locator('.research-link-targets li')).toHaveCount(25);
   await dialog.getByRole('button',{name:'Next results',exact:true}).click();await expect(dialog.locator('[data-target-status]')).toContainText('26');
   await dialog.getByLabel('Find in this workspace').fill('Specimen 030');await expect(dialog.locator('.research-link-targets li')).toHaveCount(1);
   await dialog.locator('[data-action="research-target-choose"]').focus();await page.keyboard.press('Enter');await expect(dialog).not.toBeVisible();
-  await expect(main.locator('.module-link')).toContainText('Specimen 030');await expect(main.getByLabel('Expressions (one per line)')).toHaveValue('sqrt(4)');
+  await expect(main.locator('.module-link')).toContainText('Specimen 030');await expect(main.getByLabel('Expression 1',{exact:true})).toHaveValue('sqrt(4)');
   await page.route('**/api/modules/command*',route=>route.fulfill({status:503,json:{message:'Synthetic save interruption'}}),{times:1});
   await main.getByRole('button',{name:'Save calculation',exact:true}).click();await expect(main.getByRole('alert')).toContainText('Synthetic save interruption');
   await expect(main.locator('.module-link')).toContainText('Specimen 030');await main.getByRole('button',{name:'Save calculation',exact:true}).click();await expect(main.locator('[data-module-status]')).toHaveText('Saved');
