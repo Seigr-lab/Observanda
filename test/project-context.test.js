@@ -167,3 +167,45 @@ for(const outcome of ['success','failure'])test('requests for the same owner awa
  if(outcome==='failure')finish.reject(failure);else finish.resolve();
  await Promise.all([firstResult,readResult,initializedResult]);assert.equal(context.pending(),false);assert.equal(state.book,project);
 });
+
+
+test('sidebar project tools retain the dedicated project instead of returning to workspace storage',async()=>{
+ const root=book(),project=book(),projectId=project.projects[0].id,state={storage:{contextId:'root'},book:root},calls=[];
+ const context=projectContexts({state,isOwned:id=>id===projectId,api:async(route,data,{owner})=>{calls.push(owner);return response(owner?project:root);},adopt:result=>state.book=result.book});
+ await context.enter(projectId);
+ await context.beforeAction({dataset:{action:'module-open',moduleId:'resources',modulePath:'scope/'+projectId+'/resource',moduleProjectId:projectId},closest:selector=>selector==='#workspace-navigation'?{}:null});
+ assert.equal(state.projectOwner?.projectId,projectId);assert.equal(state.book.id,project.id);assert.deepEqual(calls,[projectId]);
+});
+
+
+test('explicit module targets separate workspace, legacy project and nested book ownership',async()=>{
+ const root=book(),project=book(),other=book(),projectId=project.projects[0].id,otherId=other.projects[0].id,legacyId=root.projects[0].id,labBookId=randomUUID();
+ const nested={...book(),projects:project.projects,notebooks:[{id:labBookId,projectId}]},state={storage:{contextId:'root'},book:root},calls=[];
+ const context=projectContexts({state,isOwned:id=>[projectId,otherId].includes(id),api:async(route,data,{owner})=>{calls.push(owner);return response(typeof owner==='object'&&owner!==null?nested:owner===projectId?project:owner===otherId?other:root);},adopt:result=>state.book=result.book});
+ const target=id=>({dataset:{action:'module-open',moduleId:'planning',modulePath:'scope/'+id+'/agenda',moduleProjectId:id}});
+ await context.enter(projectId,labBookId);
+ await context.beforeAction({dataset:{action:'module-open',moduleId:'scientific-calculator'}});assert.equal(state.projectOwner.labBookId,labBookId);
+ await context.beforeAction(target(projectId));assert.equal(state.book,project);assert.equal(state.projectOwner.labBookId,undefined);
+ await context.beforeAction(target(otherId));assert.equal(state.book,other);assert.equal(state.projectOwner.projectId,otherId);
+ await context.beforeAction({dataset:{action:'module-open',moduleId:'scientific-calculator',moduleWorkspace:'true'}});assert.equal(state.book,root);assert.equal(state.projectOwner,null);
+ await context.enter(projectId,labBookId);await context.beforeAction(target(legacyId));assert.equal(state.book,root);assert.equal(state.projectOwner,null);
+ const count=calls.length;await assert.rejects(context.beforeAction(target('invalid')),{name:'TypeError'});assert.equal(calls.length,count);
+ assert.deepEqual(calls,[{projectId,labBookId},projectId,otherId,null,{projectId,labBookId},null]);
+});
+
+
+test('workspace and project body tool controls declare valid navigation owners',async()=>{
+ const {locationToolsView}=await import('../src/web/modules/location-tools.js'),root=book(),project=book(),projectId=project.projects[0].id,state={book:root,storage:{contextId:'root'},dashboardSettings:{enabledModules:['resources','planning']}};
+ project.projects[0].tools=['resources','planning'];
+ const context=projectContexts({state,isOwned:id=>id===projectId,api:async(route,data,{owner})=>response(owner?project:root),adopt:result=>state.book=result.book});
+ const renderTarget=id=>{
+  const html=locationToolsView(state,id,value=>String(value)),button=html.match(/<button[^>]*data-module-id="resources"[^>]*>/)?.[0];assert.ok(button);
+  const dataset={action:'module-open',moduleId:'resources'};
+  for(const [attribute,key] of [['data-module-workspace','moduleWorkspace'],['data-module-project-id','moduleProjectId']]){const value=button.match(new RegExp(attribute+'="([^"]*)"'))?.[1];if(value!==undefined)dataset[key]=value;}
+  return {dataset};
+ };
+ const workspaceButton=renderTarget(null);assert.equal(workspaceButton.dataset.moduleWorkspace,'true');assert.equal(workspaceButton.dataset.moduleProjectId,undefined);
+ await context.enter(projectId);const projectButton=renderTarget(projectId);assert.equal(projectButton.dataset.moduleProjectId,projectId);assert.equal(projectButton.dataset.moduleWorkspace,undefined);
+ await context.beforeAction(workspaceButton);assert.equal(state.projectOwner,null);
+ await context.beforeAction(projectButton);assert.equal(state.projectOwner.projectId,projectId);
+});

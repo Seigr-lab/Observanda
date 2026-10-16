@@ -56,7 +56,10 @@ export function projectContexts({state,api,adopt,access=operation=>operation(),a
    else if(['filter-notebook','edit-notebook','rename-notebook','configure-lab-notebook','specialize-notebook'].includes(name)&&bookOwner(node.dataset.id)){const owner=bookOwner(node.dataset.id);await enter(owner.projectId,owner.labBookId);}
    else if(name==='new-notebook'&&researchId(node.dataset.id)&&isOwned(node.dataset.id))await enter(node.dataset.id);
    else if(state.projectOwner&&name==='filter-notebook'&&rootBook?.notebooks.some(n=>n.id===node.dataset.id))await enter(null);
-   else if(name==='module-open'&&node.closest?.('#workspace-navigation'))await enter(null);
+   else if(name==='module-open'&&node.dataset.moduleProjectId!==undefined){
+    const id=node.dataset.moduleProjectId;if(!researchId(id))throw new TypeError('Invalid module project owner');
+    await enter(!isOwned(id)&&(rootBook??state.book)?.projects.some(p=>p.id===id)?null:id);
+   }else if(name==='module-open'&&node.dataset.moduleWorkspace==='true')await enter(null);
    else if(['workspace','projects','preferences','user-profile','dashboard-settings','templates','appearance','integrations','storage','storage-workspaces','website','publishing','help'].includes(name))await enter(null);
   }
  };

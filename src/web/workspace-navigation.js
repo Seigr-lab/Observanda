@@ -91,6 +91,7 @@ export function workspaceNavigation({state,icon,logosFor}) {
         text(node.querySelector('.tree-title'),entry.label);
         node.classList.toggle('nav-submodule',entry.depth>0);
         attr(node,'data-module-id',entry.moduleId??null);
+        attr(node,'data-module-workspace',entry.action==='module-open'?'true':null);
         attr(node,'data-module-path',entry.moduleId?entry.modulePath??'':null);
         active(node,entry.action==='module-open'
           ?state.page==='module'&&state.moduleId===entry.moduleId&&parseScope(state.modulePath).projectId===parseScope(entry.modulePath).projectId&&(!entry.modulePath||state.modulePath===entry.modulePath||state.modulePath?.startsWith(entry.modulePath+'/'))
@@ -127,7 +128,7 @@ export function workspaceNavigation({state,icon,logosFor}) {
         let node=item.tools.get(module.id);
         if(!node){node=button('module-open',module.locationTool.label,'folder');node.classList.add('location-tool-link');node.dataset.moduleId=module.id;item.tools.set(module.id,node);}
         text(node.querySelector('.tree-title'),locationToolLabel(book,project.id,module));
-        node.dataset.modulePath=scopePath(project.id,module.locationTool.path);
+        node.dataset.modulePath=scopePath(project.id,module.locationTool.path);node.dataset.moduleProjectId=project.id;
         active(node,state.page==='module'&&state.moduleId===module.id&&parseScope(state.modulePath).projectId===project.id);ordered.push(node);
       }
       for(const [id,node] of item.tools)if(!wantedTools.has(id)){node.remove();item.tools.delete(id);}
