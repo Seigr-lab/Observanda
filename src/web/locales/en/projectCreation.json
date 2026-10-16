@@ -1,0 +1,10 @@
+{
+  "title": "Finish creating {title}",
+  "running": "Creating project…",
+  "resume": "Resume creation",
+  "password": "Project password",
+  "cancel": "Cancel",
+  "failed": "The project could not be created.",
+  "retry": "Retry",
+  "more": "More unfinished projects"
+}

@@ -1,0 +1,136 @@
+{
+  "topics": [
+    {
+      "id": "getting-started",
+      "title": "Projectes i llibres de laboratori",
+      "sections": [
+        {
+          "id": "structure",
+          "title": "Organitzeu l’espai de treball",
+          "paragraphs": [
+            "Un espai de treball conté projectes, i els projectes contenen llibres de laboratori. Feu servir el botó més al costat de Projectes per crear un projecte. Doneu-li un nom, trieu-ne el pare i seleccioneu una plantilla predeterminada si us és útil. Crear un projecte no requereix editar cap plantilla.",
+            "Obriu el projecte i trieu New lab book. La plantilla del projecte queda seleccionada inicialment; el desplegable permet triar-ne una altra de disponible. Poseu nom al llibre i deseu-lo. Els llibres d’un mateix projecte poden utilitzar plantilles diferents."
+          ]
+        },
+        {
+          "id": "templates",
+          "title": "Trieu i personalitzeu plantilles",
+          "paragraphs": [
+            "Activeu més tipus de llibres a Preferències → Mòduls → Lab-book types. Aquests tipus opcionals proporcionen plantilles; l’espai de treball, els projectes i els llibres sempre estan disponibles. Desactivar un tipus conserva els llibres i els registres existents.",
+            "Feu servir l’editor de plantilles dedicat per personalitzar tipus de registre, orientacions i camps. Els canvis de plantilla no reescriuen els valors dels registres existents. Separeu els prototips de programari dels experiments físics amb PCB quan necessitin estructures diferents."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "records",
+      "title": "Registres, mètodes i execucions",
+      "sections": [
+        {
+          "id": "writing",
+          "title": "Escriviu i connecteu registres",
+          "paragraphs": [
+            "Obriu un llibre i trieu New record. Seleccioneu un tipus, poseu un títol descriptiu i ompliu les seccions pertinents. Deseu abans de sortir. Els títols, textos, nombres i evidències escrits pels usuaris no es tradueixen en canviar la llengua de la interfície.",
+            "Connecteu treballs relacionats amb enllaços de recerca. Un enllaç actual segueix el registre vigent. Una referència exacta a un mètode identifica la revisió seguida. Creeu registres individuals per a les repeticions o preses i documenteu paràmetres modificats, desviacions i resultats incomplets."
+          ]
+        },
+        {
+          "id": "history",
+          "title": "Consulteu l’historial i els enllaços",
+          "paragraphs": [
+            "Obriu l’historial des del mateix registre per inspeccionar versions desades. Restaurar crea una versió actual d’aquell registre; els altres registres no canvien. Reviseu el contingut restaurat abans de compartir-lo.",
+            "Seguiu els enllaços a mètodes, evidències i registres relacionats. Una comprovació de programari reeixida no demostra una execució física, ni una única execució reeixida demostra repetibilitat. Registreu aquests esdeveniments i conclusions per separat."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "evidence",
+      "title": "Evidències originals i anàlisi",
+      "sections": [
+        {
+          "id": "originals",
+          "title": "Conserveu els fitxers originals",
+          "paragraphs": [
+            "Adjunteu evidències des dels controls del registre. Poseu-hi un títol descriptiu i indiqueu-ne la procedència. Les captures binàries, el codi font i les exportacions d’instruments són evidències encara que no tinguin previsualització. Conserveu els bytes originals separats dels mitjans convertits i les dades derivades.",
+            "Un hash identifica els bytes, però no demostra exactitud ni autoria. Si una importació s’interromp, comproveu-ne l’estat i utilitzeu els controls de recuperació oferts abans de crear una altra còpia. Recupereu l’original per examinar-lo amb una eina externa adequada."
+          ]
+        },
+        {
+          "id": "analysis",
+          "title": "Distingiu les dades de la interpretació",
+          "paragraphs": [
+            "Conserveu el conjunt de dades independentment de la figura. Manteniu unitats, significat dels valors absents, exclusions i identitats de fila. Declareu explícitament les representacions no decimals i els enters grans exactes; no els convertiu silenciosament en nombres decimals ordinaris.",
+            "Vinculeu l’anàlisi a entrades, paràmetres i versions exactes del mètode o eina. Conserveu els resultats revisats separats dels anteriors. Reviseu figures i conclusions dependents si canvien les entrades. Els resums calculats i els valors editats manualment tenen procedències diferents."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "inventory",
+      "title": "Inventari i components de prototips",
+      "sections": [
+        {
+          "id": "ownership",
+          "title": "Propietat i assignació",
+          "paragraphs": [
+            "L’inventari pertany a l’espai de treball. Un article pot quedar sense assignar a cap projecte. Assignar quantitats indica a quins projectes es destinen els recursos; no crea una còpia addicional de les existències. Activeu Inventory a Mòduls per utilitzar-ne la vista dedicada.",
+            "Creeu articles amb noms, unitats i quantitats significatius. Distingiu la ubicació física de l’assignació a un projecte. Per exemple, 100 components repartits entre dos projectes continuen sumant 100 components a l’espai de treball."
+          ]
+        },
+        {
+          "id": "usage",
+          "title": "Feu seguiment de l’ús i la disponibilitat",
+          "paragraphs": [
+            "Connecteu les llistes de materials dels prototips amb articles d’inventari. Registreu les quantitats realment utilitzades i distingiu-les de la demanda prevista i les reserves. Una BOM és un pla, no una prova de consum.",
+            "Reviseu les quantitats disponibles i utilitzades abans d’un altre muntatge. Registreu substitucions i resultats de muntatge a l’experiment per poder entendre l’elecció dels components juntament amb els resultats."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "publishing",
+      "title": "Dissenyeu i publiqueu un web",
+      "sections": [
+        {
+          "id": "design",
+          "title": "Construïu i reviseu les pàgines",
+          "paragraphs": [
+            "Obriu Website editor per triar pàgines i ordenar seccions. Creeu una pàgina inicial si la voleu. Feu servir la pestanya Page per construir l’estructura i el control d’edició dedicat per modificar la secció seleccionada. Deseu abans de preparar una publicació.",
+            "Trieu a Content què pot ser públic. El llenç de treball pot mostrar contingut no publicat: no és l’edició pública. Feu servir Preview & export per inspeccionar la selecció, les figures, la navegació i els enllaços."
+          ]
+        },
+        {
+          "id": "release",
+          "title": "Publiqueu una edició aprovada",
+          "paragraphs": [
+            "Manteniu les evidències privades i els detalls operatius fora de la selecció pública. Comproveu noms de fitxer, metadades, enllaços i dades de les figures, a més del text visible. Podeu explicar que les evidències no estan disponibles públicament sense revelar-ne les metadades privades.",
+            "Desar, generar, crear un commit, enviar i verificar el desplegament són estats diferents. Configureu la destinació a Publishing i seguiu el procés de revisió. Verifiqueu l’edició desplegada: un enviament reeixit no prova que el web s’hagi actualitzat. L’exportació estàtica també permet publicar sense un servei integrat."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "storage",
+      "title": "Emmagatzematge, còpies i accés",
+      "sections": [
+        {
+          "id": "backup",
+          "title": "Verifiqueu les còpies de seguretat",
+          "paragraphs": [
+            "Feu servir Emmagatzematge i accés per gestionar l’emmagatzematge i les còpies. Deseu les còpies separades de les dades de treball. Espereu que acabi la verificació i inspeccioneu-ne el resultat; tenir un fitxer copiat no demostra que tots els originals es puguin recuperar.",
+            "Proveu la restauració en una ubicació de prova separada i recupereu registres, revisions històriques i evidències representatives. Comproveu-ne les identitats i els bytes. La còpia ha de ser utilitzable sense dependre de les rutes de l’ordinador original."
+          ]
+        },
+        {
+          "id": "access",
+          "title": "Protegiu l’accés",
+          "paragraphs": [
+            "Conserveu contrasenyes i material de recuperació en un lloc segur independent de l’espai de treball. Bloquegeu-lo en acabar. El xifratge protegeix el contingut desat, però no substitueix el control d’un ordinador desbloquejat.",
+            "L’accés des d’un dispositiu no demostra que hi hagi invitacions en línia, rols d’organització o lliurament entre col·laboradors. Utilitzeu només les accions disponibles a la versió instal·lada i comproveu la identitat del revisor i la revisió exacta de cada entrada testificada."
+          ]
+        }
+      ]
+    }
+  ]
+}

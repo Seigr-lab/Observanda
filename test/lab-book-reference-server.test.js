@@ -1,0 +1,80 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,readFile,rm} from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import {randomUUID} from 'node:crypto';
+import {WorkspaceDatabases} from '../src/workspace-databases.js';
+import {installDatabaseProvider} from '../src/workspace-database-context.js';
+import {createWorkspaceAccess,takeCreatedVault,readAccess,verifyAccess} from '../src/access.js';
+import {initializeLocation} from '../src/locations.js';
+import {createNotebook} from '../src/model.js';
+import {sampleNotebook} from '../src/sample.js';
+import {clearVault} from '../src/encryption.js';
+import {startServer} from '../src/server.js';
+import {LabBookStorage} from '../src/lab-book-storage.js';
+import {LabBookDirectory} from '../src/lab-book-directory.js';
+import {Workspace} from '../src/storage.js';
+import {ProjectStorage} from '../src/project-storage.js';
+import {ProjectRegistry} from '../src/project-registry.js';
+import {ResearchMaterials} from '../src/research-materials.js';
+import {recordRevision} from '../src/research.js';
+import {TestDeviceStore} from './device-fixture.js';
+async function result(response,status=200){assert.equal(response.status,status,await response.clone().text());return response.json();}
+
+test('book namespace links resolve current and retained content with independent grants and writers',{timeout:200000},async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-book-reference-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider),vaults=[];let app;
+ const publish=LabBookDirectory.prototype.register;
+ t.after(async()=>{LabBookDirectory.prototype.register=publish;await app?.close();await provider.close();detach();for(const vault of vaults)clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-book-reference-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const device=new TestDeviceStore({file:path.join(directory,'device.key')}),access=await createWorkspaceAccess('','',device),vault=takeCreatedVault(access);vaults.push(vault);
+ const root=path.join(directory,'Research Workspace 1'),initial=createNotebook('Research Workspace 1');await initializeLocation(root,initial,access,vault);const workspace=new Workspace(root,vault),registry=new ProjectRegistry(workspace,initial.id),addresses=new LabBookDirectory(registry);
+ app=await startServer({root,port:0,headless:true,deviceStore:device});
+ const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});assert.equal(session.status,200);const cookie=session.headers.get('set-cookie').split(';')[0],context=(await result(await fetch(app.origin+'/api/storage',{headers:{Cookie:cookie}}))).contextId;
+ const headers={Origin:app.origin,Cookie:cookie,'X-Observanda-Workspace':context};
+ const call=(route,data={})=>fetch(app.origin+route,{signal:AbortSignal.timeout(30000),method:'POST',headers:{...headers,'Content-Type':'application/json','X-Observanda-Wait':'1'},body:JSON.stringify(data)});
+ const projectId=randomUUID(),base='/api/projects/'+projectId;
+ const project=(await result(await call('/api/projects/create',{id:randomUUID(),username:'',password:'',project:{id:projectId,title:'Field Project 1',description:'',share:false,logoId:null}}))).project;
+ const request={id:randomUUID(),username:'',password:'',book:{id:randomUUID(),projectId,title:'Observations 1'}};
+ // Publishing the namespace is part of creation completion and must be retryable.
+ let fail=true;LabBookDirectory.prototype.register=function(...args){if(fail)throw Error('Interrupted namespace publication');return publish.apply(this,args);};
+ await result(await call(base+'/lab-books/create',request),500);fail=false;
+ const book=(await result(await call(base+'/lab-books/create/resume',{id:request.id,username:'',password:''}))).book;
+ assert.equal((await result(await call(base+'/lab-books/list'))).total,1);
+ assert.equal((await addresses.read(book.namespaceId)).labBookId,book.labBookId);
+ const raw=await readFile(addresses.file(book.namespaceId));assert.equal(raw.includes(Buffer.from(projectId)),false);
+ const sibling=(await result(await call(base+'/lab-books/create',{id:randomUUID(),username:'',password:'',book:{id:randomUUID(),projectId,title:'Sibling Book'}}))).book;
+ const own=base+'/lab-books/'+book.labBookId,other=base+'/lab-books/'+sibling.labBookId;
+ async function owned(entry,Class,id){const key=await verifyAccess(await readAccess(entry.root),'','',{deviceStore:device});vaults.push(key);return new Class(entry.root,id,key);}
+ const selected=await owned(book,LabBookStorage,book.labBookId),unrelated=await owned(sibling,LabBookStorage,sibling.labBookId),parent=await owned(project,ProjectStorage,projectId);
+ const record={...sampleNotebook().entries[0],id:randomUUID(),notebookId:book.labBookId,title:'Retained observation'};
+ await result(await call(own+'/research/records/save',{workspaceId:book.namespaceId,changes:[{id:record.id,expectedRevision:null,record}]}));
+ const saved=(await selected.read()).book.entries[0],reference={workspaceId:book.namespaceId,kind:'record',id:saved.id},retained={...reference,revision:recordRevision(saved)};
+ const before=await result(await call(own+'/research/records/writing/read',{workspaceId:book.namespaceId,recordId:saved.id,sectionId:null}));
+ await result(await call(own+'/research/records/writing/save',{workspaceId:book.namespaceId,recordId:saved.id,sectionId:null,expectedRevision:before.revision,value:{body:'A later observation'}}));
+ const materials=new ResearchMaterials(selected),bytes=Buffer.from('Measurements 1, 2, 3'),upload=await materials.startImport({recordId:saved.id,name:'measurements.txt',size:bytes.length});await materials.appendImport(upload.id,0,[bytes]);const artifact={...await materials.finishImport(upload.id),workspaceId:book.namespaceId};
+ let release,entered;const gate=new Promise(resolve=>entered=resolve),hold=new Promise(resolve=>release=resolve);
+ const busy=workspace.withLock(()=>parent.withLock(()=>unrelated.withLock(async()=>{entered();await hold;})));await gate;
+ try{
+  const located=await result(await call('/api/projects/reference-location',retained));assert.equal(located.projectId,projectId);assert.equal(located.labBookId,book.labBookId);assert.equal(located.namespaceId,book.namespaceId);
+  assert.equal((await result(await call('/api/projects/reference',reference))).value.body,'A later observation');
+  assert.equal((await result(await call('/api/projects/reference',retained))).value.body,saved.body);
+  const material=await result(await call('/api/projects/material-reference/read',{ref:artifact}));assert.equal(material.labBookId,book.labBookId);assert.equal(material.value.id,artifact.id);
+  const retainedMaterial=await result(await call('/api/projects/material-reference/record',{ref:retained}));assert.equal(retainedMaterial.labBookId,book.labBookId);assert.equal(retainedMaterial.value.previous.record.id,saved.id);
+  const original=await fetch(app.origin+'/api/projects/material-reference/original/'+book.namespaceId+'/'+artifact.id+'/'+artifact.revision+'?context='+context,{headers:{...headers,Range:'bytes=2-7'}});assert.equal(original.status,206);assert.deepEqual(Buffer.from(await original.arrayBuffer()),bytes.subarray(2,8));
+ }finally{release();await busy;}
+ assert.deepEqual(await result(await call('/api/projects/reference-location',{...reference,workspaceId:randomUUID()})),{registered:false});
+ await result(await call(other+'/reference',reference),422);
+ await result(await call('/api/projects/reference',{...reference,id:randomUUID()}),404);
+ await result(await call('/api/projects/reference',{...retained,revision:'f'.repeat(64)}),404);
+ await assert.rejects(addresses.register(randomUUID(),book),{code:'DATABASE_LOCATION'});
+ await assert.rejects(addresses.register(projectId,{...book,labBookId:sibling.labBookId}),{code:'DATABASE_LOCATION'});
+ await result(await call(own+'/access/lock'));
+ const denied=await result(await call('/api/projects/reference-location',reference),401);assert.equal(denied.projectId,projectId);assert.equal(denied.labBookId,book.labBookId);
+ assert.equal((await result(await call('/api/projects/material-reference/read',{ref:artifact}),401)).labBookId,book.labBookId);
+ await result(await call(own+'/access/unlock'));
+ const renamed=await result(await call(own+'/storage/rename',{id:randomUUID(),expectedName:book.directory,name:'Observations 2'}));assert.ok(renamed);
+ assert.equal((await result(await call('/api/projects/reference',retained))).value.body,saved.body);
+ await result(await call(own+'/storage/delete',{id:randomUUID(),expectedName:'Observations 2'}));
+ assert.notEqual((await call('/api/projects/reference',reference)).status,200);
+ assert.notEqual((await call('/api/projects/material-reference/read',{ref:artifact})).status,200);
+});

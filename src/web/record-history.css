@@ -1,0 +1,25 @@
+.project-overview { color:inherit; font:inherit; letter-spacing:inherit; text-transform:inherit; background:none; border:0; padding:.35rem 0; cursor:pointer; text-align:start; }
+.project-overview:hover,.project-overview[aria-current=page] { color:var(--ui-accent); text-decoration:underline; text-underline-offset:.2rem; }
+.project-overview:focus-visible { outline:2px solid var(--ui-accent); outline-offset:4px; border-radius:3px; }
+.record-toolbar { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:.75rem; margin-bottom:1rem; }
+.record-toolbar .back-button { margin:0; }
+dialog:has(.record-history) { width:min(960px,calc(100% - 2rem)); max-height:90dvh; padding:0; overflow:hidden; }
+.record-history { display:flex; flex-direction:column; box-sizing:border-box; max-height:calc(90dvh - 2px); min-width:0; padding:1.25rem; }
+.record-history-content { overflow:auto; min-height:0; padding-inline-end:.5rem; scrollbar-gutter:stable; overflow-wrap:anywhere; }
+.record-history > h2,.record-history > .dialog-actions { flex:none; }
+.record-history-list { list-style:none; padding:0; }
+.record-history-list li { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:1rem 0; border-bottom:1px solid var(--ui-border); }
+.record-history-list p { margin:.25rem 0; }
+.record-history-list button { flex:none; }
+.record-history summary { padding:.6rem 0; cursor:pointer; }
+.record-revision { border-top:1px solid var(--ui-border); padding-top:1rem; }
+.record-revision-columns { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:1rem; }
+.record-revision-columns > div { min-width:0; }
+.record-revision-change { border-bottom:1px solid var(--ui-border); padding-block:1rem; }
+.record-revision pre,.record-revision-change pre { white-space:pre-wrap; overflow-wrap:anywhere; }
+@media(max-width:600px){
+ .record-history-list li { align-items:start; flex-wrap:wrap; }
+ .record-revision-columns { grid-template-columns:1fr; }
+ .record-history > .dialog-actions { flex-wrap:wrap; }
+ .record-history { padding:1rem; }
+}

@@ -1,0 +1,25 @@
+import {researchContext,ownedAssetURL} from './project-context.js';
+import {t} from './i18n/index.js';
+import {setCustomFonts,fontFamily,fontStack,fontLabel} from './font-catalogue.js';
+const message=(key,parameters)=>t('fonts',key,parameters);
+export function fontLibraryUI({state,api,esc,render,notify}){
+ const text=key=>esc(message(key));
+ let fonts=[],faces=[],upload=null,generation=0;
+ function clear(){generation++;upload?.abort();upload=null;for(const face of faces)document.fonts.delete(face);faces=[];fonts=[];setCustomFonts([]);}
+ async function load(){clear();if(!state.book||state.access?.locked)return;const version=generation,context=researchContext(state),loadedFonts=await api('/api/fonts');if(version!==generation||context!==researchContext(state)||state.access?.locked)return;fonts=loadedFonts;setCustomFonts(fonts);for(const font of fonts){const face=font.faces[0],descriptors={weight:face.weight.join(' '),style:face.style};if(face.axes.wdth)descriptors.stretch=face.axes.wdth.min+'% '+face.axes.wdth.max+'%';const loaded=new FontFace(fontFamily(font.id),'url("'+ownedAssetURL(state,'/api/fonts/'+font.id)+'?workspace='+encodeURIComponent(state.storage.contextId)+'")',descriptors);faces.push(loaded);document.fonts.add(loaded);}}
+ function view(){return `<section class="panel font-library"><h2>${text('title')}</h2><p>${text('uploadHelp')}</p><label class="checkbox"><input type="checkbox" data-font-upload-embed>${text('allowExport')}</label><p class="muted">${text('licence')}</p><label>${text('add')}<input type="file" data-font-upload accept=".ttf,.otf,.woff,.woff2"></label><div class="font-upload-progress" hidden><progress max="100" value="0" aria-label="${text('progress')}"></progress><span role="status">${text('uploading')}</span><button class="button" type="button" data-font-cancel>${text('cancel')}</button></div>${fonts.map(font=>`<div class="custom-font-row"><strong data-font-sample="${font.id}">${esc(fontLabel(font))}</strong><small>${Object.keys(font.faces[0].axes).length?message('variableFont'):message('staticFont')}${font.hidden?message('hidden'):''}</small><label class="checkbox"><input type="checkbox" data-font-embed="${font.id}" ${font.embed?'checked':''} ${font.restricted?'disabled':''}>${text('allowEmbed')}</label><button class="button" type="button" data-font-hide="${font.id}">${font.hidden?message('show'):message('hide')}</button></div>`).join('')}<p class="muted">${text('hideNote')}</p></section>`;}
+ async function refresh(){await load();render();}
+ function decorate(){for(const el of document.querySelectorAll('[data-font-sample]'))el.style.fontFamily=fontStack(el.dataset.fontSample);}
+ async function importFile(input){
+  const file=input.files[0];if(!file)return;if(file.size>8*1024*1024){input.value='';notify(message('sizeLimit'),true);return;}
+  const context=researchContext(state),box=input.closest('.font-library'),progress=box.querySelector('.font-upload-progress'),embed=box.querySelector('[data-font-upload-embed]').checked;
+  progress.hidden=false;input.disabled=true;const xhr=new XMLHttpRequest();upload=xhr;
+  try{await new Promise((resolve,reject)=>{xhr.open('POST',ownedAssetURL(state,'/api/fonts/import')+'?embed='+embed);xhr.setRequestHeader('Content-Type','application/octet-stream');xhr.setRequestHeader('X-Observanda-Workspace',state.storage.contextId);xhr.upload.onprogress=e=>{if(e.lengthComputable)progress.querySelector('progress').value=e.loaded/e.total*100;};xhr.upload.onload=()=>{progress.querySelector('[role=status]').textContent=message('checking');};xhr.onload=()=>{let result;try{result=JSON.parse(xhr.responseText);}catch{reject(Error(message('failed')));return;}xhr.status>=200&&xhr.status<300?resolve(result):reject(result);};xhr.onerror=()=>reject(Error(message('failed')));xhr.onabort=()=>reject({name:'AbortError'});xhr.send(file);});
+   if(researchContext(state)!==context)return;upload=null;await refresh();notify(message('added'));
+  }catch(error){if(researchContext(state)===context)notify(error.name==='AbortError'?message('cancelled'):error.message,true);}
+  finally{if(upload===xhr)upload=null;if(input.isConnected){input.disabled=false;input.value='';progress.hidden=true;}}
+ }
+ document.addEventListener('change',e=>{if(e.target.matches('[data-font-upload]'))void importFile(e.target);if(e.target.dataset.fontEmbed){const font=fonts.find(f=>f.id===e.target.dataset.fontEmbed),checkbox=e.target;checkbox.disabled=true;api('/api/fonts/update',{id:font.id,embed:checkbox.checked,hidden:font.hidden}).then(refresh).catch(error=>{checkbox.checked=font.embed;checkbox.disabled=false;notify(error.message,true);});}});
+ document.addEventListener('click',e=>{if(e.target.closest('[data-font-cancel]'))upload?.abort();const hide=e.target.closest('[data-font-hide]');if(hide){const font=fonts.find(f=>f.id===hide.dataset.fontHide);hide.disabled=true;api('/api/fonts/update',{id:font.id,embed:font.embed,hidden:!font.hidden}).then(refresh).catch(error=>{hide.disabled=false;notify(error.message,true);});}});
+ return {view,load,clear,decorate,busy:()=>!!upload};
+}

@@ -1,0 +1,10 @@
+{
+  "name": "observanda-desktop",
+  "productName": "Observanda",
+  "version": "0.3.0-dev.20261012.1",
+  "private": true,
+  "description": "Private lab books, evidence and reviewed publication.",
+  "author": "Seigr Lab",
+  "type": "module",
+  "main": "main.js"
+}

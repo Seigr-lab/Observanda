@@ -1,0 +1,12 @@
+{
+  "invalid": "The workspace response was incomplete. Reload to try again.",
+  "busy": "A workspace read is already running.",
+  "changed": "The workspace changed while loading. Reload to open it.",
+  "refreshLabel": "Observanda — refresh saved workspace",
+  "refreshing": "Checking saved changes…",
+  "refreshPending": "New saved changes are available. Finish your edits or close the open dialog, then refresh with the Observanda logo.",
+  "refreshDeferred": "Your draft is still here. Save or discard your edits and close any open dialog before refreshing.",
+  "refreshFailed": "Could not check saved changes. Your current view is unchanged. Click the Observanda logo to retry.",
+  "refreshCurrent": "Your workspace is up to date.",
+  "refreshed": "Saved workspace changes loaded."
+}

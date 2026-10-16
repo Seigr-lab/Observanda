@@ -1,0 +1,8 @@
+{
+  "invalid": "The figure needs an exact retained analysis reference.",
+  "retained": "{title} · Calculation revision {revision}",
+  "inspect": "Inspect calculation",
+  "back": "Back to previous evidence",
+  "changed": "The figure or record changed while its calculation link was being checked. Try the copy again.",
+  "checking": "Checking retained calculation links…"
+}

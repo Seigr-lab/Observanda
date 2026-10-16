@@ -1,0 +1,16 @@
+{
+  "dashboard": "Dashboard",
+  "projects": "Projects",
+  "overview": "Open project overview",
+  "newProject": "New project",
+  "settings": "Settings",
+  "workspaceSettings": "Workspace settings",
+  "workspaces": "Workspaces",
+  "preferences": "Preferences",
+  "lock": "Lock workspace",
+  "openProject": "Open project {title}",
+  "menu": "Menu",
+  "openMenu": "Open app menu",
+  "closeMenu": "Close app menu",
+  "resize": "Resize navigation"
+}

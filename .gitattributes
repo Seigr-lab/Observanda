@@ -1,0 +1,8 @@
+* text=auto eol=lf
+*.png binary
+*.zip binary
+*.ttf binary
+# Preserve upstream license bytes covered by font provenance checksums.
+src/fonts/*-OFL.txt -text whitespace=-blank-at-eol
+# Generated upstream strings can contain significant trailing spaces.
+src/web/vendor/tools-worker.js -whitespace

@@ -1,0 +1,27 @@
+.inventory-report { margin-top: 1.5rem; }
+.external-logbook-inspection { border-top:1px solid var(--ui-border,#ced5e4); padding-top:1rem; }
+dialog:has(.external-logbook-inspection) .dialog-actions { flex-wrap:wrap; }
+.inventory-report dd, .inventory-objects small { overflow-wrap:anywhere; }
+.inventory-objects { display:grid; gap:1rem; margin-block:1rem; }
+.inventory-objects article { border-bottom:1px solid var(--line,#ced5e4); padding-block:1rem; }
+.inventory-objects article > strong, .inventory-objects article > span, .inventory-objects article > small { display:block; }
+.inventory-objects pre { max-height:28rem; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; }
+#inventory-form { max-width:65rem; }
+#inventory-progress { min-height:1.5em; }
+
+.inventory-objects article, .inventory-targets li { overflow-wrap:anywhere; min-width:0; }
+.inventory-objects dl { display:grid; grid-template-columns:max-content minmax(0,1fr); gap:.25rem 1rem; }
+.inventory-objects dd { margin:0; }
+.inventory-objects details { margin-block:.5rem; }
+@media (max-width:480px) { .inventory-objects dl { grid-template-columns:1fr; } }
+.migration-import { margin-block:1.5rem; max-width:65rem; overflow-wrap:anywhere; }
+.migration-import fieldset { margin-block:1rem; min-width:0; }
+.migration-import details { margin-block:.7rem; }
+.migration-import pre { white-space:pre-wrap; max-height:25rem; overflow:auto; overflow-wrap:anywhere; }
+.provenance-dialog { max-height:calc(100dvh - 2rem); overflow:auto; scrollbar-gutter:stable; }
+.provenance-dialog>.migration-import { margin-block:0; }
+.migration-reconciliation { display:grid; grid-template-columns:minmax(0,1fr) minmax(4rem,1fr); gap:.3rem 1rem; }
+.migration-reconciliation dd { margin:0; }
+.migration-table-preview { overflow:auto; max-height:24rem; margin-block:1rem; }
+.migration-table-preview table { width:100%; }
+.migration-table-preview th, .migration-table-preview td { padding:.5rem; text-align:start; border-bottom:1px solid var(--line,#ced5e4); }

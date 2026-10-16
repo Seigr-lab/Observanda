@@ -1,0 +1,22 @@
+{
+ "group":"Planning",
+ "task":"Tasks",
+ "calendar":"Calendars",
+ "event":"Calendar events",
+ "booking":"Equipment bookings",
+ "search":"Contains text",
+ "filterStatus":"Status (optional)",
+ "owner":"Owner",
+ "status":"Status",
+ "priority":"Priority",
+ "dueOn":"Due date",
+ "assignees":"People",
+ "checklist":"Checklist",
+ "color":"Colour",
+ "startsAt":"Starts",
+ "endsAt":"Ends",
+ "location":"Location",
+ "resource":"Equipment",
+ "notes":"Notes",
+ "invalid":"The planning card could not be verified. Refresh the card and try again."
+}

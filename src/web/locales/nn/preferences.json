@@ -1,0 +1,18 @@
+{
+  "title": "Innstillingar",
+  "section": "Innstillingsdel",
+  "sections": "Innstillingsdelar",
+  "general": "Generelt",
+  "modules": "Modular",
+  "appearance": "Utsjånad",
+  "integrations": "Integrasjonar",
+  "storage": "Lagring og tilgang",
+  "help": "Hjelp",
+  "language": "Språk",
+  "coverage": "Språkvalet gjeld førebels navigasjon, overskrifter i Innstillingar og Hjelp. Andre skjermbilete bruker framleis engelsk. Oppføringane dine blir aldri omsette.",
+  "saving": "Lagrar språk…",
+  "failed": "Språket kunne ikkje lastast inn eller lagrast. Det førre valet blir halde ved lag.",
+  "saved": "Språket er lagra.",
+  "coverageTitle": "Omsetjingsdekning",
+  "loadFailed": "Det lagra språket kunne ikkje lastast inn. Engelsk blir brukt i denne økta."
+}

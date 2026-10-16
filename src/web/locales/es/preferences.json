@@ -1,0 +1,18 @@
+{
+  "title": "Preferencias",
+  "section": "Sección de preferencias",
+  "sections": "Secciones de preferencias",
+  "general": "General",
+  "modules": "Módulos",
+  "appearance": "Apariencia",
+  "integrations": "Integraciones",
+  "storage": "Almacenamiento y acceso",
+  "help": "Ayuda",
+  "language": "Idioma",
+  "coverage": "El idioma se aplica actualmente a la navegación, a los encabezados de Preferencias y a la Ayuda. Las demás pantallas siguen en inglés. Tus registros nunca se traducen.",
+  "saving": "Guardando el idioma…",
+  "failed": "No se ha podido cargar o guardar el idioma. Se mantiene la selección anterior.",
+  "saved": "Idioma guardado.",
+  "coverageTitle": "Cobertura de la traducción",
+  "loadFailed": "No se ha podido cargar el idioma guardado. Esta sesión utiliza el inglés."
+}

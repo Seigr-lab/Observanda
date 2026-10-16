@@ -1,0 +1,41 @@
+
+/* Shared document tools: writing surface grows with its content. */
+.document-field{margin:0 0 1.3rem;min-width:0}
+.document-label{font-weight:600;color:var(--ui-muted);margin-bottom:.5rem}
+.document-tools{position:sticky;top:var(--shell-content-top,64px);z-index:4;border:1px solid var(--ui-border);border-radius:8px 8px 0 0;background:color-mix(in srgb,var(--ui-accent) 5%,var(--ui-surface))}
+.document-content{border:1px solid var(--ui-border);border-top:0;border-radius:0 0 8px 8px;background:var(--ui-surface)}
+/* App writing follows reading preferences; authored marks and website typography stay independent. */
+.document-content.ProseMirror{font-size:var(--app-font-size,17px);line-height:var(--app-line-height,1.6);padding:1rem;min-height:7rem;max-height:none;overflow:visible;outline:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.document-content.ProseMirror>:first-child{margin-top:0}
+.document-content.ProseMirror>:last-child{margin-bottom:0}
+.document-field:focus-within .document-content,.document-field:focus-within .document-tools{border-color:var(--ui-accent)}
+.document-tools .rich-toolbar{display:flex;align-items:center;gap:3px;flex-wrap:wrap;padding:.35rem}
+.document-tools .rich-toolbar>.button{width:32px;min-height:32px;padding:4px}
+.document-tools .rich-toolbar>[data-rich-command=book]{width:auto;flex:none;padding:.35rem .65rem;white-space:nowrap}
+.rich-toolbar svg{width:18px;height:18px;display:block}
+.document-tools .rich-toolbar select{width:auto;min-width:0;max-width:160px;padding:.35rem;font-size:.85rem}
+.document-tools .rich-toolbar .button[aria-pressed=true]{background:var(--ui-accent);color:white}
+.text-more{font-size:.8rem;min-width:0}
+.text-more[open]{flex:1 0 100%}
+.text-more>summary{cursor:pointer;padding:.4rem}
+.text-more>div{display:flex;align-items:center;flex-wrap:wrap;gap:5px;padding:.5rem 0 0;border-top:1px solid var(--ui-border);max-width:100%}
+.text-more .button{min-width:32px;min-height:32px;padding:4px}
+.text-more .rich-color{display:flex;align-items:center;gap:4px}
+.text-more input[type=color]{width:30px;height:30px;padding:2px}
+dialog.rich-link-panel{position:fixed;inset:0;margin:auto;width:min(560px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto;padding:1.25rem;display:block;border:1px solid color-mix(in srgb,var(--ui-accent) 25%,var(--ui-border));border-radius:12px;background:color-mix(in srgb,var(--ui-accent) 7%,var(--ui-surface));color:var(--ui-text);box-shadow:0 16px 60px #14243a30;z-index:100}
+dialog.rich-link-panel[hidden]{display:none}
+dialog.rich-link-panel::backdrop{background:#1b294630}
+.rich-link-panel header{display:flex;align-items:center;justify-content:space-between}
+.rich-link-panel h3{margin:0 0 .5rem}
+.rich-link-panel label{display:block;font-size:.85rem;margin:.7rem 0}
+.rich-link-panel input:not([type=checkbox]),.rich-link-panel select{display:block;width:100%;margin-top:.35rem;background:var(--ui-surface)}
+.text-link-targets{max-height:180px;overflow:auto;border:1px solid var(--ui-border);border-radius:6px;background:var(--ui-surface)}
+.text-link-targets button{display:flex;flex-direction:column;align-items:start;width:100%;padding:.55rem .7rem;border:0;border-bottom:1px solid var(--ui-border);background:none;text-align:left;color:var(--ui-text);cursor:pointer}
+.text-link-targets button[hidden]{display:none}
+.text-link-targets button:hover{background:color-mix(in srgb,var(--ui-accent) 8%,var(--ui-surface))}
+.text-link-targets small{color:var(--ui-muted)}
+.text-link-options{display:grid;grid-template-columns:1fr 1fr;gap:0 .7rem}
+.rich-link-panel footer{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:1rem}
+@media(max-width:600px){.document-content.ProseMirror{padding:.65rem}.document-tools .rich-toolbar{gap:3px}.text-link-options{grid-template-columns:1fr}}
+
+.document-tools select,.rich-link-panel input:not([type=checkbox]),.rich-link-panel select{border:1px solid var(--ui-border);border-radius:var(--ui-control-radius,5px);background:var(--ui-surface);color:var(--ui-text);font:inherit;padding:.45rem .6rem}

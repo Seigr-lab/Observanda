@@ -1,0 +1,23 @@
+{
+ "invalid":"The saved-item response could not be verified. Your draft is retained. Refresh and compare the saved version before retrying.",
+ "loading":"Loading items…",
+ "loadingItem":"Opening saved item…",
+ "retry":"Retry items",
+ "refresh":"Refresh items",
+ "previous":"Previous items",
+ "next":"Next items",
+ "pages":"Item pages",
+ "range":"Items {first}–{last} of {total}",
+ "empty":"No matching items.",
+ "search":"Search items",
+ "status":"Status",
+ "allStatuses":"All statuses",
+ "choose":"Choose module item",
+ "select":"Select {title}",
+ "cancel":"Cancel",
+ "unavailable":"Item unavailable",
+ "labelsUnavailable":"Item titles could not be loaded. Saved links are kept.",
+ "retryLabels":"Retry item titles",
+ "open":"Open {name}",
+ "checkpointFailed":"Could not keep a recovery checkpoint: {reason} Your edits are still open. Retry, save, or discard them before opening another item."
+}

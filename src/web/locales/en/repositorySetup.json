@@ -1,0 +1,15 @@
+{
+  "title": "Repository setup",
+  "guidance": "Setup initializes the website branch. Website content is uploaded only after your review.",
+  "stop": "Stop setup",
+  "resume": "Resume setup",
+  "created": "Repository created. Review your website to publish it.",
+  "initialized": "Repository initialized. Review your website to publish it.",
+  "emptyTitle": "Initialize empty repository",
+  "emptyGuidance": "{repository} is empty. Create its first commit with an empty .nojekyll file and use {branch} as the website branch. This preserves the repository's visibility and does not upload your website or configure Pages.",
+  "initialize": "Initialize repository",
+  "emptyStatus": "This repository is empty. Review initialization in the destination settings.",
+  "checking": "Checking repository",
+  "initializing": "Initializing website branch",
+  "saving": "Saving publishing destination"
+}

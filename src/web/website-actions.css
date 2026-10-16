@@ -1,0 +1,23 @@
+/* Defaults and overrides live on each actionable element, never on its parent:
+   styling a popup trigger must not restyle the links and controls inside it. */
+.site-action.site-action--button,:is(button,a).site-visitor-button{
+ --action-font:var(--button-font,var(--reading-font));--action-font-axes:var(--button-font-axes,var(--reading-axes));--action-font-size:var(--button-font-size,var(--body-size));--action-font-weight:var(--button-font-weight,600);--action-line-height:var(--button-line-height,1.4);--action-letter-spacing:var(--button-letter-spacing,0px);
+ --action-color:var(--button-color,var(--accent));--action-background:var(--button-background,transparent);--action-border-color:var(--button-border-color,var(--accent));--action-hover-color:var(--button-hover-color,var(--page-surface));--action-hover-background:var(--button-hover-background,var(--accent));--action-hover-border-color:var(--button-hover-border-color,var(--accent));
+ --action-padding-x:var(--button-padding-x,1rem);--action-padding-y:var(--button-padding-y,.6rem);--action-radius:var(--button-radius,var(--corner-radius));--action-border-width:var(--button-border-width,1px);--action-border-style:var(--button-border-style,solid);--action-underline:var(--button-underline,none);--action-width:var(--button-width,auto);
+}
+.site-action.site-action--link{
+ --action-font:var(--link-font,var(--reading-font));--action-font-axes:var(--link-font-axes,var(--reading-axes));--action-font-size:var(--link-font-size,var(--body-size));--action-font-weight:var(--link-font-weight,var(--reading-weight));--action-line-height:var(--link-line-height,var(--line-height));--action-letter-spacing:var(--link-letter-spacing,var(--letter-spacing));
+ --action-color:var(--link-color,var(--accent));--action-hover-color:var(--link-hover-color,var(--accent));--action-background:transparent;--action-hover-background:transparent;--action-border-color:transparent;--action-hover-border-color:transparent;--action-padding-x:0px;--action-padding-y:0px;--action-radius:0px;--action-border-width:0px;--action-border-style:solid;--action-underline:var(--link-underline,underline);--action-width:var(--link-width,auto);
+}
+.site-action.site-action--button,.site-action.site-action--link,:is(button,a).site-visitor-button{
+ display:inline-flex;align-items:center;justify-content:center;gap:.6em;box-sizing:border-box;max-width:100%;min-height:0;margin:0;width:var(--action-width);font-family:var(--action-font);font-size:var(--action-font-size);font-variation-settings:var(--action-font-axes);font-weight:var(--action-font-weight);line-height:var(--action-line-height);letter-spacing:var(--action-letter-spacing);color:var(--action-color);background:var(--action-background);border:var(--action-border-width) var(--action-border-style) var(--action-border-color);border-radius:var(--action-radius);padding:var(--action-padding-y) var(--action-padding-x);text-decoration:var(--action-underline);text-align:center;white-space:normal;overflow-wrap:anywhere;cursor:pointer;
+}
+.site-action.site-action--button:hover,.site-action.site-action--link:hover,:is(button,a).site-visitor-button:hover{color:var(--action-hover-color);background:var(--action-hover-background);border-color:var(--action-hover-border-color)}
+.site-action[hidden]{display:none}
+.site-action:focus-visible,:is(button,a).site-visitor-button:focus-visible{outline:3px solid var(--accent);outline-offset:4px}
+.public-popup-close.site-action--link{--action-underline:none;--action-color:var(--page-text);--action-hover-color:var(--page-text)}
+.public-popup-close.site-action{min-height:2.5rem;min-width:2.5rem;flex-shrink:0}
+.public-popup-close [data-close-icon]{font-family:system-ui,sans-serif;font-size:1.5em;line-height:1}
+
+.site-visitor-button[hidden]{display:none}
+.site-visitor-button:disabled{opacity:.5;cursor:default}

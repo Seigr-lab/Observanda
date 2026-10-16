@@ -1,0 +1,72 @@
+import {test,expect} from '@playwright/test';
+import {mkdtemp,readFile,rm} from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import {randomUUID} from 'node:crypto';
+import {sampleNotebook} from '../../src/sample.js';
+import {upgradeNotebook} from '../../src/model.js';
+import {MediaStore} from '../../src/media.js';
+import {startServer} from '../../src/server.js';
+import {clearVault} from '../../src/encryption.js';
+import {encryptedFixture} from './encrypted-fixture.js';
+import {navigate} from './preferences-helper.js';
+import {task,editorTab,addSection,openBlock,sectionTools} from './composer-helper.js';
+
+let root,app,fixture,book,assets,research;
+const canvas=page=>page.frameLocator('#website-draft-preview');
+const save=async page=>{await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');};
+test.beforeEach(async({page})=>{
+ root=await mkdtemp(path.join(os.tmpdir(),'observanda-website-inventories-'));book=upgradeNotebook(sampleNotebook());book.website.home.sections=[];
+ const project=book.projects[0],notebook=book.notebooks[0],record=book.entries[0];
+ book.projects=Array.from({length:6},(_,i)=>({...structuredClone(project),id:randomUUID(),title:'Project '+i,share:false}));
+ book.notebooks=book.projects.map(p=>({...structuredClone(notebook),id:randomUUID(),projectId:p.id,title:p.title+' lab book'}));
+ book.entries=book.notebooks.flatMap((n,i)=>Array.from({length:13},(_,j)=>({...structuredClone(record),id:randomUUID(),notebookId:n.id,title:'Record '+i+'-'+String(j).padStart(2,'0'),body:'Private original '+i+'-'+j,share:false,relations:[],attachments:[],figures:[]})));
+ fixture=await encryptedFixture(root,book);const store=new MediaStore(fixture.workspace.root,fixture.vault),bytes=await readFile(new URL('../../src/preview-assets/image.png',import.meta.url));
+ assets=[];for(let i=0;i<26;i++)assets.push({...await store.import(bytes,'image'),caption:'Library image '+String(i).padStart(2,'0'),alt:'Library image '+i,transcript:''});
+ research=[];for(let i=0;i<15;i++)research.push({...await store.import(bytes,'image'),caption:'Research image '+String(i).padStart(2,'0'),alt:'Research image '+i,transcript:'Private evidence',share:false});
+ const current=await fixture.workspace.read();current.book.website.assets=assets;current.book.entries[0].attachments=research.slice(0,14);current.book.entries.at(-1).attachments=research.slice(14);await fixture.workspace.save(current.book,current.etag);book=(await fixture.workspace.read()).book;
+ app=await startServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(root,'preferences.json'),port:0});await page.goto(app.url);await navigate(page,'Website editor');
+ await expect(canvas(page).locator('body')).toHaveAttribute('data-page','home');
+});
+test.afterEach(async()=>{await app?.close();if(fixture)clearVault(fixture.vault);await rm(root,{recursive:true,force:true});});
+
+test('media discovery, gallery ordering and uploads retain selections across bounded windows, undo and reopening',async({page},testInfo)=>{
+ test.setTimeout(90000);const errors=[];page.on('pageerror',error=>errors.push(error.message));
+ await editorTab(page,'Media');await expect(page.locator('.website-media-library article')).toHaveCount(12);
+ await page.getByRole('button',{name:'Next media',exact:true}).click();await expect(page.locator('[data-library-asset]').first()).toHaveAttribute('data-library-asset',assets[12].id);
+ await page.getByRole('button',{name:'Next media',exact:true}).click();await expect(page.locator('.website-media-library article')).toHaveCount(2);
+ await page.locator('.website-controls').getByLabel('Find media',{exact:true}).fill('image 25');await expect(page.locator('.website-media-library article')).toHaveCount(1);await page.getByLabel('Media caption',{exact:true}).fill('Selected field image');
+ await addSection(page,'asset');const select=page.locator('[data-website-media-select]');await expect(select.locator('option')).toHaveCount(14);await select.selectOption('find');
+ const dialog=page.getByRole('dialog');await expect(dialog.locator('[data-choose-media]')).toHaveCount(12);await dialog.getByRole('button',{name:'Next media',exact:true}).click();await expect(dialog.locator('[data-choose-media]').first()).toHaveAttribute('data-choose-media',assets[12].id);
+ await dialog.getByLabel('Find media',{exact:true}).fill('Selected field');await expect(dialog.locator('[data-choose-media]')).toHaveCount(1);await page.screenshot({path:testInfo.outputPath('media-picker.png')});await dialog.locator('[data-choose-media]').click();
+ await expect(select).toHaveValue(assets[25].id);await expect(select).toBeFocused();await expect(select.locator('option')).toHaveCount(15);await expect(canvas(page).locator('.section-asset img')).toBeVisible();
+ await page.getByRole('button',{name:'Undo',exact:true}).click();await expect(select).toHaveValue('');await page.getByRole('button',{name:'Redo',exact:true}).click();await expect(select).toHaveValue(assets[25].id);
+ await select.selectOption('find');await dialog.getByLabel('Find media',{exact:true}).fill('absent');await expect(dialog.locator('[data-choose-media]')).toHaveCount(0);await page.keyboard.press('Escape');await expect(select).toHaveValue(assets[25].id);await expect(select).toBeFocused();
+ await addSection(page,'gallery');await page.getByRole('button',{name:'Choose and arrange images',exact:true}).click();await expect(page.locator('[data-gallery-asset]')).toHaveCount(12);
+ for(let i=0;i<12;i++)await page.locator('[data-gallery-asset][value="'+assets[i].id+'"]').check();
+ await page.locator('[data-media-pager="gallery"]').getByRole('button',{name:'Next media',exact:true}).click();await page.locator('[data-gallery-asset][value="'+assets[12].id+'"]').check();await expect(page.locator('.gallery-order li')).toHaveCount(12);
+ await page.locator('[data-media-pager="order"]').getByRole('button',{name:'Next media',exact:true}).click();await expect(page.locator('.gallery-order li')).toHaveCount(1);await page.getByRole('button',{name:'Move Library image 12 earlier',exact:true}).click();await expect(page.locator('.gallery-order li').last()).toContainText('Library image 12');
+ await page.locator('.website-controls').getByLabel('Find media',{exact:true}).fill('image 12');await expect(page.locator('[data-gallery-asset]')).toBeChecked();await page.locator('.website-controls').getByLabel('Find media',{exact:true}).fill('image 25');await expect(page.locator('[data-gallery-asset]')).toHaveCount(0);
+ await addSection(page,'hero');await sectionTools(page,'Image & link');await page.getByLabel('Hero image',{exact:true}).selectOption('find');await dialog.getByLabel('Find media',{exact:true}).fill('image 24');await dialog.locator('[data-choose-media]').click();await expect(page.getByLabel('Hero image',{exact:true})).toHaveValue(assets[24].id);
+ await editorTab(page,'Media');await page.locator('.website-controls').getByLabel('Find media',{exact:true}).fill('Selected field');await expect(page.getByRole('button',{name:'Remove from library',exact:true})).toHaveCount(0);
+ await page.getByLabel('Upload website media',{exact:true}).setInputFiles('src/preview-assets/image.png');await expect(page.locator('.website-media-library article')).toHaveCount(3);await page.getByLabel('Media caption',{exact:true}).last().fill('Uploaded last image');
+ await save(page);await page.reload();await openBlock(page,0);await expect(page.locator('[data-website-media-select]')).toHaveValue(assets[25].id);
+ await openBlock(page,1);await page.getByRole('button',{name:'Choose and arrange images',exact:true}).click();await page.setViewportSize({width:390,height:844});await page.screenshot({path:testInfo.outputPath('gallery-phone.png')});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+ const saved=(await fixture.workspace.read()).book;expect(saved.website.home.sections[0].assetId).toBe(assets[25].id);expect(saved.website.home.sections[1].assetIds).toEqual([...assets.slice(0,11).map(a=>a.id),assets[12].id,assets[11].id]);expect(saved.website.home.sections[2].assetId).toBe(assets[24].id);expect(saved.website.assets.at(-1).caption).toBe('Uploaded last image');expect(saved.entries).toEqual(book.entries);expect(errors).toEqual([]);
+});
+
+test('content paging and research selection keep private material excluded through save and reviewed export',async({page},testInfo)=>{
+ test.setTimeout(90000);const errors=[];page.on('pageerror',error=>errors.push(error.message));
+ await task(page,'Content');await expect(page.locator('.publication-project')).toHaveCount(5);await expect(page.locator('[data-publish-entry]')).toHaveCount(50);await expect(page.locator('[data-website-media]')).toHaveCount(0);
+ await page.locator('[data-content-media="'+book.entries[0].id+'"] summary').click();await expect(page.locator('[data-website-media]')).toHaveCount(14);await page.locator('.publication-project').first().getByRole('button',{name:'Next records',exact:true}).click();await expect(page.locator('.publication-project').first().locator('[data-publish-entry]')).toHaveCount(3);await expect(page.locator('[data-website-media]')).toHaveCount(0);
+ await page.getByRole('button',{name:'Next projects',exact:true}).click();await expect(page.locator('.publication-project')).toHaveCount(1);await page.getByRole('button',{name:'Next records',exact:true}).click();await expect(page.locator('[data-publish-entry]')).toHaveCount(3);
+ const target=book.entries.at(-1);await page.locator('[data-project-share]').check();await page.locator('[data-publish-entry="'+target.id+'"]').check();await page.locator('[data-content-media="'+target.id+'"] summary').click();await page.locator('[data-website-media="'+research[14].id+'"]').check();
+ await page.getByLabel('Find projects or records',{exact:true}).fill('Record 5-12');await expect(page.locator('[data-publish-entry]')).toHaveCount(1);await expect(page.locator('[data-publish-entry]')).toBeChecked();await page.screenshot({path:testInfo.outputPath('content-search.png')});
+ await page.getByLabel('Find projects or records',{exact:true}).fill('missing');await expect(page.locator('.publication-project')).toHaveCount(0);await page.getByLabel('Find projects or records',{exact:true}).fill('Project 5');await expect(page.locator('[data-publish-entry]')).toHaveCount(10);await page.getByRole('button',{name:'Next records',exact:true}).click();await expect(page.locator('[data-publish-entry="'+target.id+'"]').first()).toBeChecked();
+ await task(page,'Page');await page.locator('[data-palette-kind="media"]').click();const dialog=page.getByRole('dialog',{name:'Choose research media'});await expect(dialog.locator('[data-research-media-key]')).toHaveCount(12);await dialog.getByLabel('Find media',{exact:true}).fill('Research image 14');await expect(dialog.locator('[data-research-media-key]')).toHaveCount(1);await dialog.locator('[data-research-media-key]').click();await expect(canvas(page).locator('.section-media img')).toHaveAttribute('src',new RegExp(research[14].id));
+ await page.locator('[data-palette-kind="media"]').click();await dialog.getByLabel('Find media',{exact:true}).fill('Research image 00');await expect(dialog.locator('[data-research-media-key]')).toHaveCount(1);await dialog.locator('[data-research-media-key]').click();await save(page);await page.reload();
+ const saved=(await fixture.workspace.read()).book;expect(saved.entries.filter(e=>e.share).map(e=>e.id)).toEqual([target.id]);expect(saved.entries[0]).toEqual(book.entries[0]);expect(saved.entries.at(-1).attachments[0].share).toBe(true);
+ await page.getByRole('button',{name:'Preview & export',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();const href=await page.getByRole('link',{name:'Open full preview',exact:true}).getAttribute('href');
+ const preview=await page.request.get(new URL(href,app.origin).href),html=await preview.text();expect(html).toContain(research[14].id);expect(html).not.toContain(research[0].id);
+ const release=href.split('/')[2],manifest=await (await page.request.get(app.origin+'/preview/'+release+'/publication.json')).json();const files=JSON.stringify(manifest.files);expect(files).toContain(research[14].id);expect(files).not.toContain(research[0].id);expect(files).not.toContain(assets[0].id);expect(files).not.toContain(book.entries[0].id);expect(errors).toEqual([]);
+});

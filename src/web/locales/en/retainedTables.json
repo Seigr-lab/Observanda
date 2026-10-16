@@ -1,0 +1,17 @@
+{
+ "base":"base {radix}",
+ "table":"Retained result table",
+ "linear":"Read table row by row",
+ "help":"Choose the exact dataset revision and columns to include. The selected values become a publication table; other dataset values and private source files are excluded. The table is checked against its pinned dataset when the record is saved.",
+ "columns":"Table columns",
+ "offset":"Skip matching rows",
+ "count":"Maximum rows to include (1–1,000)",
+ "includeExcluded":"Include excluded rows and their reasons",
+ "load":"Load selected table",
+ "source":"Supporting dataset revision",
+ "exclusion":"Exclusion",
+ "null":"Declared null",
+ "absent":"Absent",
+ "missing":"Missing",
+ "invalid":"Choose a retained dataset, 1–64 columns and a nonempty row range. Tables support up to 1,000 rows and 256 KiB; split larger selections into separate tables."
+}

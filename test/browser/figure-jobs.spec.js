@@ -1,0 +1,88 @@
+import {test,expect} from '@playwright/test';
+import {mkdtemp,rm} from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import {encryptedFixture} from './encrypted-fixture.js';
+import {clearVault} from '../../src/encryption.js';
+import {sampleNotebook} from '../../src/sample.js';
+import {startServer} from '../../src/server.js';
+import {ResearchMaterials} from '../../src/research-materials.js';
+const column=(name,representation='text')=>({name,representation,radix:10,unit:'',missing:[{value:'',meaning:'Not recorded'}],time:{kind:'none',reference:'',resolution:'',uncertainty:''}});
+test('figure calculation survives a lost response, reload, cancellation and retry; coverage opens pinned rows',async({page})=>{
+ test.setTimeout(90000);page.setDefaultTimeout(10000);
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-figure-ui-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),materials=new ResearchMaterials(f.workspace),record=book.entries[0];
+ const bytes=Buffer.from('Take,Level\nA,10\nA,\nA,30\nB,50\nB,100\n'),session=await materials.startImport({recordId:record.id,name:'listening.csv',size:bytes.length});
+ await materials.appendImport(session.id,0,[bytes]);const artifact=await materials.finishImport(session.id);
+ const dataset=await materials.dataset({recordId:record.id,title:'Listening observations',artifact,columns:[column('Take'),column('Level','decimal')],exclusions:{[artifact.id+':6']:'Interrupted recording'}});
+ const app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json')}),dialog=page.locator('#dialog'),errors=[];
+ page.on('pageerror',e=>errors.push(e.message));
+ const prepare=ResearchMaterials.prototype.preparePlot;let hold=true;
+ ResearchMaterials.prototype.preparePlot=async function(command,options){
+  if(hold)await new Promise((resolve,reject)=>{if(options.signal.aborted)reject(options.signal.reason);else options.signal.addEventListener('abort',()=>reject(options.signal.reason),{once:true});});
+  return prepare.call(this,command,options);
+ };
+ try{
+  await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,record.id);
+  await page.getByRole('button',{name:'Open evidence & analysis'}).click();
+  await dialog.locator('.material-list li').filter({hasText:'Listening observations'}).getByRole('button',{name:'Inspect',exact:true}).click();
+  await dialog.getByRole('button',{name:'Create reproducible figure'}).click();
+  await dialog.getByLabel('Title',{exact:true}).fill('Median listening level');
+  await dialog.getByLabel('Transformation').selectOption('median');
+  await dialog.getByLabel('Chart type').selectOption('bar');
+  await dialog.locator('[data-material-value="1"]').check();
+  let loseResponse=true,release;const attempts=[],gate=new Promise(resolve=>{release=resolve;});
+  await page.route('**/api/research/materials/plot',async route=>{
+   attempts.push(route.request().postDataJSON().jobId);
+   if(loseResponse){loseResponse=false;await route.fetch();await gate;await route.abort('failed');}else await route.continue();
+  });
+  const failed=page.waitForEvent('requestfailed',{predicate:request=>request.url().endsWith('/api/research/materials/plot')});
+  await dialog.getByRole('button',{name:'Calculate & retain figure'}).click();
+  await expect(dialog.getByRole('button',{name:'Calculate & retain figure'})).toBeDisabled();
+  await expect(dialog.getByLabel('Title',{exact:true})).toBeDisabled();
+  await expect.poll(()=>attempts.length).toBe(1);release();await failed;
+  await expect(dialog.getByRole('button',{name:'Calculate & retain figure'})).toBeEnabled();
+  await dialog.getByRole('button',{name:'Calculate & retain figure'}).click();
+  await expect(dialog.getByRole('heading',{name:'Calculate figure',exact:true})).toBeVisible();
+  expect(attempts.length).toBe(2);expect(new Set(attempts).size).toBe(1);
+  await page.unroute('**/api/research/materials/plot');
+  await dialog.getByRole('button',{name:'Back to evidence'}).click();
+  await page.reload();await page.getByRole('button',{name:'Open evidence & analysis'}).click();
+  await dialog.getByText('Evidence preparation jobs',{exact:true}).click();
+  await dialog.getByRole('button',{name:'Check calculation'}).click();
+  await page.setViewportSize({width:390,height:844});
+  expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBeTruthy();
+  await dialog.getByRole('button',{name:'Cancel figure calculation'}).focus();await page.keyboard.press('Enter');
+  await expect(dialog.getByText('Figure calculation cancelled.',{exact:false})).toBeVisible();
+  expect((await materials.heads()).filter(h=>h.kind==='analysis')).toEqual([]);
+  hold=false;await dialog.getByRole('button',{name:'Retry figure calculation'}).click();
+  await expect(dialog.locator('svg')).toBeVisible({timeout:15000});
+  await expect(dialog).toContainText('5 rows; 4 included. 1 excluded.');
+  await dialog.getByText('Calculation coverage',{exact:true}).click();await expect(dialog).toContainText('Level: 1');
+  expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBeTruthy();
+  await dialog.screenshot({path:test.info().outputPath('figure-phone.png')});
+  const first=(await materials.heads()).find(h=>h.kind==='analysis'),saved=await materials.read(first);
+  expect(saved.content.figure.series[0].points.map(p=>p.y)).toEqual([20,50]);
+  // An amended schema does not change the calculation's source inspection.
+  const source=await materials.read(dataset),columns=await materials.datasetColumns(source);columns[1].unit='relative amplitude';
+  await materials.dataset({recordId:record.id,id:dataset.id,expectedRevision:dataset.revision,baseDataset:dataset,title:source.title,artifact,columns});
+  await dialog.getByRole('button',{name:'Inspect source rows & exclusions'}).click();
+  await expect(dialog.getByRole('region',{name:'Dataset values'})).toContainText('Interrupted recording');
+  await expect(dialog.getByRole('region',{name:'Dataset values'})).not.toContainText('relative amplitude');
+  await dialog.getByRole('button',{name:'Back to evidence'}).click();
+  await dialog.locator('.material-list li').filter({hasText:'Median listening level'}).getByRole('button',{name:'Inspect',exact:true}).click();
+  // The source is deliberately outside the first discovery page.
+  await f.workspace.withLock(async()=>{for(let i=0;i<22;i++)await materials.commit({kind:'collection',recordId:record.id,title:'Later collection '+i,content:{inputs:[]}});});
+  expect((await materials.list()).items.some(m=>m.id===dataset.id)).toBe(false);
+  await dialog.getByRole('button',{name:'Recalculate with latest dataset'}).click();
+  await expect(dialog.getByRole('button',{name:'Previous revision',exact:true})).toBeVisible();
+  const after=(await materials.heads()).find(h=>h.id===first.id),revised=await materials.read(after);
+  expect(after.revision).not.toBe(first.revision);expect(revised.previous).toBe(first.revision);
+  await dialog.getByRole('button',{name:'Previous revision'}).click();
+  await expect(dialog.locator('#material-form > p').first()).toContainText(first.revision);
+  await dialog.getByRole('button',{name:'Add retained figure to record'}).click();
+  await expect(dialog).not.toBeVisible();
+  await page.locator('.section-save [data-action="save"]').click();await expect(page.locator('#save-status')).toHaveText('Saved');
+  expect((await f.workspace.read()).book.entries.find(e=>e.id===record.id).figures.find(v=>v.id===saved.content.figure.id)).toEqual({...saved.content.figure,source:{kind:'analysis',id:first.id,revision:first.revision}});
+  expect(errors).toEqual([]);
+ }finally{await app.close();ResearchMaterials.prototype.preparePlot=prepare;clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+});

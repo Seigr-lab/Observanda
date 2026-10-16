@@ -1,0 +1,121 @@
+
+.lab-workspace-tools{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin:1rem 0;color:var(--muted,#53627a)}
+.lab-profile-picker{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:12px}
+.lab-profile-choice{display:flex;align-items:flex-start;gap:12px;border:1px solid var(--border,#d4dbe8);background:color-mix(in srgb,var(--surface,#fff) 95%,#4865a4);border-radius:10px;padding:18px;cursor:pointer}
+.lab-profile-choice:has(input:checked){background:color-mix(in srgb,var(--surface,#fff) 90%,#4865a4);border-color:#8a9dc3;box-shadow:inset 3px 0 #4865a4}
+.lab-profile-choice input{flex:none;margin-top:4px}
+.lab-profile-choice strong,.lab-profile-choice small{display:block}
+.lab-profile-choice small{font-weight:400;color:#526278;margin-top:6px;line-height:1.5}
+.lab-profile-tags{display:flex;flex-wrap:wrap;gap:6px}
+.lab-profile-tags span{background:color-mix(in srgb,var(--surface,#fff) 90%,#4865a4);border-radius:5px;padding:5px 9px;font-size:.8rem;color:#3e5678}
+.lab-capability-note{font-size:.85rem;line-height:1.6;color:#526278;max-width:85ch}
+.lab-record-scope{display:flex;gap:18px;flex-wrap:wrap;align-items:end;padding:18px;border:1px solid var(--border,#d4dbe8);border-radius:10px;background:color-mix(in srgb,var(--surface,#fff) 90%,#4865a4);margin:1rem 0}
+.lab-record-scope>.field{flex:1;min-width:180px}
+.lab-section-config{border:1px solid var(--border,#d4dbe8);border-radius:8px;margin-block:10px;background:color-mix(in srgb,var(--surface,#fff) 95%,#4865a4)}
+.lab-section-config summary{padding:15px;cursor:pointer}
+.lab-section-config summary small{display:block;margin:5px 0 0 18px;color:#526278;font-weight:400}
+.lab-section-config-body{padding:18px;background:var(--surface,#fff)}
+.lab-field-config{border-top:1px solid var(--border,#d4dbe8);padding:16px 0}
+.desk-module-configure{margin:0 0 20px 0}
+#lab-search{width:min(100%,24rem);min-width:min(100%,16rem)}
+
+.lab-domain-description{color:var(--ui-muted);max-width:80ch}
+.lab-domain-tools{padding:1rem;background:color-mix(in srgb,var(--ui-surface) 94%,var(--ui-accent));border:1px solid var(--ui-border);border-radius:10px;margin-bottom:1.2rem}
+.lab-domain-sections,.lab-domain-launchers{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem}
+.lab-domain-sections [aria-current=page]{background:var(--ui-accent);color:var(--ui-accent-contrast,#fff);border-color:var(--ui-accent)}
+.lab-domain-actions{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+
+.module-inline-settings{margin:-.35rem 0 1rem}
+.module-inline-settings>button{font-size:.85rem}
+.module-settings-unsaved{font-size:.75rem;border-radius:4px;padding:.1rem .4rem;background:var(--ui-tint);color:var(--ui-accent)}
+.lab-type-settings{margin-top:.7rem;border:1px solid var(--ui-border);border-radius:10px;background:color-mix(in srgb,var(--ui-surface) 94%,var(--ui-accent));min-width:0;container:lab-settings / inline-size}
+.lab-type-settings>header{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1rem 1.1rem;border-bottom:1px solid var(--ui-border)}
+.lab-type-settings h3{margin:0;font-size:1rem}
+.lab-type-settings header p,.lab-type-hint{font-size:.83rem;color:var(--ui-muted);margin:.3rem 0 0}
+.lab-type-draft{border:0;margin:0;padding:1rem;min-width:0}
+.lab-type-layout{display:grid;grid-template-columns:minmax(13rem,18rem) minmax(0,1fr);gap:1rem;align-items:start}
+.lab-type-catalogue,.lab-type-detail{min-width:0}
+.lab-type-list-heading,.lab-type-detail-heading{display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-bottom:.7rem}
+.lab-type-list-heading{flex-wrap:wrap;font-size:.85rem}
+.lab-type-list-heading>.button{font-size:.8rem;min-height:32px;padding:.3rem}
+.lab-type-choice{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.2rem .5rem;width:100%;text-align:left;padding:.7rem .8rem;margin:.3rem 0;border:1px solid transparent;border-radius:7px;background:transparent;color:var(--ui-text);overflow-wrap:anywhere}
+.lab-type-choice [data-type-title]{grid-column:1/-1;font-weight:600}
+.lab-type-choice small,.lab-type-modified{font-size:.76rem;color:var(--ui-muted)}
+.lab-type-choice[aria-current=true]{border-color:var(--ui-border);background:var(--ui-surface);box-shadow:inset 3px 0 var(--ui-accent)}
+.lab-type-choice:hover{background:var(--ui-surface)}
+.lab-type-modified{color:var(--ui-accent)}
+.lab-type-detail{padding:1rem;background:var(--ui-surface);border:1px solid var(--ui-border);border-radius:8px}
+.lab-type-detail-heading{flex-wrap:wrap;font-size:.88rem}
+.lab-type-detail-heading>div{display:flex;gap:.65rem;flex-wrap:wrap}
+.lab-type-detail-heading .button{font-size:.8rem;min-height:32px;padding:.25rem}
+.lab-schema-details{container:lab-schema / inline-size}
+.lab-schema-details>.field{margin-bottom:.8rem}
+.lab-schema-details textarea{min-height:0;line-height:1.5}
+.lab-fields-heading{display:flex;align-items:center;justify-content:space-between;gap:.7rem;flex-wrap:wrap;margin:1.1rem 0 .4rem}
+.lab-fields-heading h4{margin:0;font-size:.9rem}
+.lab-fields-heading p{font-size:.78rem;color:var(--ui-muted);margin:.2rem 0 0}
+.lab-fields-heading .button{font-size:.8rem;min-height:32px;padding:.35rem .65rem}
+.lab-field-config{padding:.7rem 0;border-top:1px solid var(--ui-border)}
+.lab-field-primary{display:grid;grid-template-columns:minmax(8rem,2fr) minmax(8rem,1fr) auto;gap:.7rem;align-items:end}
+.lab-field-primary:has([data-lab-field-prop=unit]){grid-template-columns:minmax(8rem,2fr) minmax(8rem,1fr) minmax(5rem,.7fr) auto}
+.lab-field-config .field{margin:0;font-size:.8rem}
+.lab-field-config>.field{margin-top:.6rem}
+.lab-field-actions{display:flex;align-items:center;gap:.6rem;min-height:42px;flex-wrap:wrap}
+.lab-field-actions .checkbox{margin:0;font-size:.8rem;font-weight:400}
+.lab-field-actions .button{font-size:.8rem;min-height:32px;padding:.25rem}
+.lab-type-settings>footer{position:sticky;bottom:0;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;padding:.75rem 1rem;background:color-mix(in srgb,var(--ui-surface) 92%,var(--ui-accent));border-top:1px solid var(--ui-border);border-radius:0 0 10px 10px;box-shadow:0 -3px 12px #152c5010;font-size:.83rem}
+.lab-type-settings>footer>div{display:flex;gap:.6rem}
+.lab-removed-types{margin-top:1rem;font-size:.82rem}
+.lab-removed-types summary{cursor:pointer;padding:.4rem}
+@container lab-schema (max-width:670px){.lab-field-primary,.lab-field-primary:has([data-lab-field-prop=unit]){grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.lab-field-actions{grid-column:1/-1;justify-content:flex-end}}
+@container lab-schema (max-width:340px){.lab-field-primary,.lab-field-primary:has([data-lab-field-prop=unit]){grid-template-columns:minmax(0,1fr)}}
+@container lab-settings (max-width:740px){.lab-type-layout{grid-template-columns:minmax(0,1fr)}.lab-type-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,155px),1fr));gap:.25rem}.lab-type-settings>header{align-items:start;flex-direction:column}.lab-type-detail{padding:.75rem}.lab-type-draft{padding:.6rem}.lab-type-settings>footer{gap:.6rem}.lab-type-settings>footer>div{margin-left:auto}}
+
+/* Long, customizable section lists stay compact on small screens. */
+.lab-domain-section-select{display:none}
+@media(max-width:650px){.lab-domain-sections{display:none}.lab-domain-section-select{display:block;margin-bottom:1rem}}
+
+.notebook-project-choices,.notebook-profile-choices{border:1px solid var(--ui-border);border-radius:8px;padding:1rem;margin-block:1rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:.7rem 1rem}
+.notebook-project-choices legend,.notebook-profile-choices legend{font-weight:600;padding-inline:.3rem}
+.notebook-project-choices p,.notebook-profile-choices p{grid-column:1/-1;margin:0}
+.notebook-existing-notes{margin-block:1rem}.notebook-existing-notes summary{cursor:pointer}.notebook-existing-notes .checkbox{margin-block:.7rem}
+.project-notebook .inline-actions{margin-top:1rem}.project-notebook .lab-profile-tags{margin-bottom:.7rem}
+.lab-included-notes{margin-block:1.5rem}
+
+.lab-notebook-tools{display:flex;align-items:end;gap:1rem;flex-wrap:wrap;padding:1rem;margin-block:1rem;background:color-mix(in srgb,var(--ui-surface) 94%,var(--ui-accent));border:1px solid var(--ui-border);border-radius:10px}
+.lab-notebook-tools .field{flex:1 1 220px;margin:0}
+.lab-notebook-tools .checkbox{margin:.65rem 0}
+.location-trail>.button{margin-left:auto}
+@media(max-width:650px){.location-trail>.button{margin-left:0}.lab-notebook-tools{gap:.6rem}.lab-notebook-tools .field{flex-basis:100%}}
+
+
+/* Shared notebook settings keep actions outside the scrollable controls. */
+#dialog:has(.notebook-config-form){width:min(1180px,calc(100vw - 64px));max-width:none;max-height:calc(100dvh - 2rem);overflow:hidden;background:color-mix(in srgb,var(--ui-surface) 96%,var(--ui-accent));padding:1.5rem}
+#dialog:has(.notebook-create-form){width:min(720px,calc(100vw - 64px))}
+.notebook-config-form{min-width:0;container:lab-settings / inline-size;display:flex;flex-direction:column;max-height:calc(100dvh - 5rem)}
+.notebook-config-form h2{flex:none;margin:0 0 1rem}.notebook-config-form h2:focus{outline:none}
+.notebook-config-scroll{overflow:auto;min-height:0;padding:.15rem .2rem .5rem}
+.notebook-config-form .lab-type-layout{margin-top:1.25rem}
+.notebook-config-form .dialog-actions{flex:none;border-top:1px solid var(--ui-border);padding:1rem 0 0;margin:0;gap:.6rem}
+.notebook-type-picker{display:none}
+.tree-project>.tree-project{margin-left:.8rem;border-left:1px solid var(--ui-border);padding-left:.5rem}
+@container lab-settings (max-width:740px){.notebook-type-picker{display:flex;align-items:end;gap:.5rem;margin-top:1rem}.notebook-type-picker .field{flex:1;min-width:0;margin:0}.notebook-type-picker .button{font-size:.8rem;white-space:normal}.notebook-config-form .lab-type-catalogue{display:none}}
+@media(max-width:700px){#dialog:has(.notebook-config-form){width:calc(100vw - 24px);padding:1rem}.notebook-config-form{max-height:calc(100dvh - 4rem)}.notebook-config-form .form-grid{grid-template-columns:1fr}}
+/* Project details and reusable template authoring have separate forms. */
+#dialog:has(.project-config-form){width:min(760px,calc(100vw - 48px));max-width:none;max-height:calc(100dvh - 2rem);padding:1.5rem;overflow:hidden}
+.project-config-form{display:flex;flex-direction:column;max-height:calc(100dvh - 5rem);min-width:0;container:lab-settings / inline-size}
+.project-config-form>h2{flex:none;margin:0 0 1rem}
+.project-config-scroll{flex:1 1 auto;border:0;margin:0;padding:.15rem .25rem .75rem;overflow:auto;min-height:0;min-inline-size:0}
+.project-config-form>.dialog-actions{flex:none;border-top:1px solid var(--ui-border);padding-top:1rem;margin:0;gap:.5rem}
+.project-template-panel{padding:1rem;border:1px solid var(--ui-border);border-radius:.5rem;margin:.5rem 0 1.25rem}
+.project-template-panel h3{margin:0}.project-template-panel p{font-size:.88rem;margin:.65rem 0}
+.project-template-source{display:flex;gap:.6rem;align-items:end;margin-bottom:.8rem}.project-template-source>.field{flex:1;min-width:0;margin:0}.project-template-source>.button{flex:none;max-width:45%;white-space:normal}
+#dialog:has(.project-template-form){width:min(1100px,calc(100vw - 48px))}
+.project-template-form .lab-type-layout{margin:1rem 0}
+.project-template-form .lab-type-list{max-height:22rem;overflow:auto}
+.project-template-summary{display:grid;gap:.4rem;padding-left:1.2rem;margin:.5rem 0}.project-template-summary li{padding-left:.2rem}.project-template-summary span{margin-left:.6rem;color:var(--ui-muted);font-size:.8rem}
+@container lab-settings (max-width:740px){.project-template-form .lab-type-list{max-height:12rem}}
+.project-template-confirm{border:1px solid var(--ui-accent);padding:.7rem;margin:.6rem 0}.project-template-confirm .button{margin:.3rem .3rem 0 0}
+@media(max-width:700px){#dialog:has(.project-config-form),#dialog:has(.project-template-form){width:calc(100vw - 24px);padding:1rem}.project-config-form{max-height:calc(100dvh - 4rem)}.project-config-form .form-grid{grid-template-columns:1fr}.project-template-panel{padding:.65rem}.project-template-source{flex-wrap:wrap}.project-template-source>.field{flex-basis:100%}.project-template-source>.button{max-width:none}.project-config-form>.dialog-actions .button{flex:1 1 auto;white-space:normal}}
+
+.project-config-fields{border:0;padding:0;margin:0;min-inline-size:0}

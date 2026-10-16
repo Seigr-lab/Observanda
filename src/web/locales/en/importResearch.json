@@ -1,0 +1,20 @@
+{
+  "title": "Structured record facts",
+  "source": "Record-facts declaration",
+  "none": "Keep source metadata as provenance only",
+  "root": "Entire metadata object",
+  "help": "Select a declared set of record facts to map its progress, outcome, template fields, preparations, execution events, assessments and results. Review the proposed values before applying the batch. Original metadata remains available in Source provenance.",
+  "absent": "This source contains no supported record-facts declaration. Its adapter must explicitly map the source into the observanda-record-facts version 1 format; Observanda does not infer conditions or conclusions from metadata names.",
+  "methods": "A preparation's methods must have exact Uses method relationships in the mapping above. Corrections append facts and identify what they supersede; existing saved facts cannot be replaced.",
+  "preview": "Proposed record facts",
+  "progress": "Progress",
+  "outcome": "Outcome",
+  "status-draft": "Draft",
+  "status-planned": "Planned",
+  "status-in progress": "In progress",
+  "status-completed": "Completed",
+  "status-failed": "Failed",
+  "status-incomplete": "Incomplete",
+  "status-inconclusive": "Inconclusive",
+  "status-cancelled": "Cancelled"
+}

@@ -1,0 +1,7 @@
+{
+ "loading":"Loading event notes…",
+ "retry":"Retry event notes",
+ "invalid":"The event details could not be verified. Close this window and refresh the calendar.",
+ "readOnly":"Read-only calendar event.",
+ "close":"Close"
+}

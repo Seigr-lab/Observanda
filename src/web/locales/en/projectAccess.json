@@ -1,0 +1,10 @@
+{
+  "title": "Unlock project",
+  "username": "Username",
+  "password": "Project password",
+  "recovery": "Use a recovery key",
+  "recoveryKey": "Recovery key",
+  "cancel": "Cancel",
+  "unlock": "Unlock",
+  "failed": "Could not unlock this project."
+}

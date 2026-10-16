@@ -1,0 +1,13 @@
+{
+  "destination": "Link destination",
+  "open": "Open link",
+  "list": "Links in this record",
+  "workspace": "Workspace",
+  "project": "Project",
+  "notebook": "Lab book",
+  "record": "Record",
+  "anotherWorkspace": "Another project or workspace",
+  "current": "Current saved item",
+  "revision": "Retained revision {revision}",
+  "section": "{kind}: {id}"
+}

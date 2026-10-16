@@ -1,0 +1,27 @@
+[
+  {
+    "id": "en",
+    "name": "English",
+    "direction": "ltr"
+  },
+  {
+    "id": "ca",
+    "name": "Català",
+    "direction": "ltr"
+  },
+  {
+    "id": "es",
+    "name": "Español",
+    "direction": "ltr"
+  },
+  {
+    "id": "nb",
+    "name": "Norsk bokmål",
+    "direction": "ltr"
+  },
+  {
+    "id": "nn",
+    "name": "Norsk nynorsk",
+    "direction": "ltr"
+  }
+]

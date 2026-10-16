@@ -1,0 +1,6 @@
+{
+  "range": "Items {first}–{last} of {total}",
+  "previous": "Previous items",
+  "next": "Next items",
+  "invalidPage": "The card response was incomplete. Retry loading this card."
+}

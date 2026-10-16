@@ -1,0 +1,4 @@
+[data-book-static] :is(input,select,button),[data-index-cancel],[data-index-retry]{font:inherit;color:var(--page-text);background:var(--page-surface);border:1px solid var(--page-border);border-radius:var(--corner-radius);padding:.45em .65em;max-width:100%;box-sizing:border-box}
+[data-book-static] :is(input,select){width:100%;min-width:0}
+[data-book-static] button,[data-index-cancel],[data-index-retry]{cursor:pointer;margin-block:.4em}
+[data-book-static] :is(input,select,button):focus-visible,[data-index-cancel]:focus-visible,[data-index-retry]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}

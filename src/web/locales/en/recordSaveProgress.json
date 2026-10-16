@@ -1,0 +1,15 @@
+{
+ "verify-file":"Checking media bytes",
+ "encrypt-file":"Retaining encrypted media",
+ "title":"Saving records",
+ "newerEdits":"Submitted changes saved. Newer edits remain unsaved; save again when ready.",
+ "pending":"Changes are saved only when the complete save succeeds. You can keep editing; newer changes remain unsaved.",
+ "selectedPending":"Your recovery checkpoint remains available until this save is confirmed.",
+ "read-record-bases":"Reading saved records",
+ "prepare-record-edits":"Preparing record changes",
+ "validate-records":"Checking record changes and links",
+ "write-records":"Writing records and history",
+ "write-record-blocks":"Writing record content",
+ "index-records":"Updating search and navigation",
+ "read-saved-records":"Loading saved records"
+}

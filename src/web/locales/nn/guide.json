@@ -1,0 +1,136 @@
+{
+  "topics": [
+    {
+      "id": "getting-started",
+      "title": "Prosjekt og labbøker",
+      "sections": [
+        {
+          "id": "structure",
+          "title": "Organiser arbeidsområdet",
+          "paragraphs": [
+            "Eit arbeidsområde inneheld prosjekt, og prosjekt inneheld labbøker. Bruk plussknappen ved Prosjekt for å opprette eit prosjekt. Gje det eit namn, vel overordna prosjekt og eventuelt ein standardmal. Du treng ikkje redigere ein mal for å opprette eit prosjekt.",
+            "Opne prosjektet og vel New lab book. Prosjektmalen er vald på førehand; nedtrekkslista lèt deg velje ein annan tilgjengeleg mal. Gje boka eit namn og lagre henne. Bøker i same prosjekt kan bruke ulike malar."
+          ]
+        },
+        {
+          "id": "templates",
+          "title": "Vel og tilpass malar",
+          "paragraphs": [
+            "Aktiver fleire boktypar under Innstillingar → Modular → Lab-book types. Desse valfrie typane gjev tilgang til malar; arbeidsområdet, prosjekta og labbøkene er alltid tilgjengelege. Deaktivering av ein type bevarer eksisterande bøker og oppføringar.",
+            "Bruk den eigne malredigeraren til å tilpasse oppføringstypar, rettleiing og felt. Malendringar skriv ikkje om verdiane i eksisterande oppføringar. Skil programvareprototypar og fysiske PCB-forsøk i eigne bøker når dei treng ulike strukturar."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "records",
+      "title": "Oppføringar, metodar og køyringar",
+      "sections": [
+        {
+          "id": "writing",
+          "title": "Skriv og knyt saman oppføringar",
+          "paragraphs": [
+            "Opne ei bok og vel New record. Vel type, gje oppføringa ein skildrande tittel og fyll ut relevante delar. Lagre før du går vidare. Titlane, teksten, tala og dokumentasjonen til brukarane blir aldri omsette når grensesnittspråket endrar seg.",
+            "Knyt saman relatert arbeid med forskingslenkjer. Ei lenkje til gjeldande oppføring følgjer den nyaste versjonen. Ein eksakt metodereferanse identifiserer revisjonen som vart følgd. Opprett eigne oppføringar for repetisjonar eller opptak, og dokumenter endra parametrar, avvik og ufullstendige resultat."
+          ]
+        },
+        {
+          "id": "history",
+          "title": "Les historikk og samanheng",
+          "paragraphs": [
+            "Opne historikken frå sjølve oppføringa for å sjå lagra versjonar. Gjenoppretting opprettar ein gjeldande versjon av denne oppføringa; andre oppføringar er uendra. Gå gjennom innhaldet før du deler det.",
+            "Følg lenkjer til metodar, dokumentasjon og relaterte oppføringar. Ein vellukka programvarekontroll beviser ikkje fysisk køyring, og éi vellukka køyring beviser ikkje repeterbarheit. Registrer hendingane og konklusjonane kvar for seg."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "evidence",
+      "title": "Originalmateriale og analyse",
+      "sections": [
+        {
+          "id": "originals",
+          "title": "Bevar originalfilene",
+          "paragraphs": [
+            "Legg til dokumentasjon med kontrollane i oppføringa. Oppgje ein skildrande tittel og opphav. Binære opptak, kjeldekode og instrumenteksportar er dokumentasjon sjølv utan førehandsvising. Bevar originalbytane separat frå konverterte medium og avleidde datasett.",
+            "Ein filhash identifiserer bytane, men beviser ikkje nøyaktigheit eller opphav. Ved avbroten import må du kontrollere status og bruke tilgjengeleg gjenoppretting før du startar ein ny kopi. Hent originalen for inspeksjon med eit eigna eksternt verktøy."
+          ]
+        },
+        {
+          "id": "analysis",
+          "title": "Skil datasett frå tolking",
+          "paragraphs": [
+            "Bevar datasettet uavhengig av figuren. Behald einingar, tydinga av manglande verdiar, utelatingar og radidentitetar. Oppgje ikkje-desimale representasjonar og eksakte store heiltal uttrykkeleg; ikkje gjer dei om til vanlege desimaltal utan å dokumentere det.",
+            "Knyt analysen til eksakte inndata, parametrar og metode- eller verktøyversjon. Behald reviderte resultat separat frå tidlegare resultat. Gå gjennom avhengige figurar og konklusjonar når inndata endrar seg. Utrekna samandrag og manuelt redigerte verdiar har ulikt opphav."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "inventory",
+      "title": "Lager og prototypekomponentar",
+      "sections": [
+        {
+          "id": "ownership",
+          "title": "Eigarskap og tildeling",
+          "paragraphs": [
+            "Lageret høyrer til arbeidsområdet. Ei vare kan vere utan prosjekttildeling. Tildeling av mengder viser kva prosjekt ressursane er sette av til; det opprettar ikkje ein ekstra kopi av behaldninga. Aktiver Inventory i Modular for å bruke lagervisninga.",
+            "Opprett varer med tydelege namn, einingar og mengder. Skil fysisk lagerplass frå prosjekttildeling. Til dømes er 100 komponentar fordelte på to prosjekt framleis 100 komponentar i arbeidsområdet."
+          ]
+        },
+        {
+          "id": "usage",
+          "title": "Følg bruk og tilgjenge",
+          "paragraphs": [
+            "Knyt stykklistene til prototypane til lagervarer. Registrer faktisk brukte mengder og skil dei frå planlagt behov og reservasjonar. Ein BOM er ein plan, ikkje dokumentasjon på at komponentane er brukte.",
+            "Kontroller tilgjengelege og brukte mengder før neste bygg. Registrer erstatningskomponentar og monteringsresultat i forsøksoppføringa, slik at komponentvalet kan forståast saman med resultata."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "publishing",
+      "title": "Utform og publiser ein nettstad",
+      "sections": [
+        {
+          "id": "design",
+          "title": "Bygg og gå gjennom sider",
+          "paragraphs": [
+            "Opne Website editor for å velje sider og plassere seksjonar. Opprett ei heimeside om du vil ha ei. Bruk fana Page til strukturen og den eigne redigeringskontrollen til å endre vald seksjon. Lagre før du klargjer ei publisering.",
+            "Vel offentleg innhald i Content. Arbeidsflata kan vise upublisert innhald og er ikkje den offentlege utgåva. Bruk Preview & export til å kontrollere utvalet, figurar, navigasjon og lenkjer."
+          ]
+        },
+        {
+          "id": "release",
+          "title": "Publiser ei godkjend utgåve",
+          "paragraphs": [
+            "Hald privat dokumentasjon og driftsdetaljar utanfor det offentlege utvalet. Kontroller filnamn, metadata, lenkjer og figurdata i tillegg til synleg tekst. Du kan forklare at støttemateriale ikkje er offentleg tilgjengeleg utan å røpe private metadata.",
+            "Lagring, generering, commit, push og kontroll av publisering er ulike tilstandar. Set opp målet i Publishing og følg gjennomgangsprosessen. Kontroller den publiserte utgåva; ein vellukka push beviser ikkje at nettstaden er oppdatert. Statisk eksport støttar òg publisering utan integrert vertsteneste."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "storage",
+      "title": "Lagring, tryggleikskopiar og tilgang",
+      "sections": [
+        {
+          "id": "backup",
+          "title": "Kontroller tryggleikskopiar",
+          "paragraphs": [
+            "Bruk Lagring og tilgang til lagring og tryggleikskopiering. Oppbevar kopiar separat frå arbeidsdata. Vent til verifiseringa er ferdig og les resultatet; ei kopiert fil åleine beviser ikkje at alle originalar kan gjenopprettast.",
+            "Prøv gjenoppretting på ein eigen teststad, og hent representative oppføringar, historiske revisjonar og originalmateriale. Kontroller at identitetar og byteinnhald stemmer. Kopien må kunne brukast utan å vere avhengig av stiar på den opphavlege maskina."
+          ]
+        },
+        {
+          "id": "access",
+          "title": "Beskytt tilgangen",
+          "paragraphs": [
+            "Oppbevar passord og gjenopprettingsmateriale trygt og uavhengig av arbeidsområdet. Lås arbeidsområdet når du er ferdig. Kryptering beskyttar lagra innhald, men erstattar ikkje kontroll over ei ulåst maskin.",
+            "Einingstilgang beviser ikkje at nettinvitasjonar, organisasjonsroller eller levering mellom samarbeidspartnarar er tilgjengelege. Bruk berre handlingane den installerte versjonen tilbyr, og kontroller identiteten til granskaren og eksakt revisjon for kvar bevitna oppføring."
+          ]
+        }
+      ]
+    }
+  ]
+}

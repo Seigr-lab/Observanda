@@ -1,0 +1,374 @@
+{
+  "projectAccess": [
+    "en"
+  ],
+  "projectStorage": [
+    "en"
+  ],
+  "projectDirectory": [
+    "en"
+  ],
+  "projectDeletion": [
+    "en"
+  ],
+  "projectOpening": [
+    "en"
+  ],
+  "projectChoices": [
+    "en"
+  ],
+  "projectCreation": [
+    "en"
+  ],
+  "activity": [
+    "en"
+  ],
+  "writerRecovery": [
+    "en"
+  ],
+  "pendingSettings": [
+    "en"
+  ],
+  "workspaceDeletion": [
+    "en"
+  ],
+  "storageProgress": [
+    "en"
+  ],
+  "operationProgress": [
+    "en"
+  ],
+  "recordSaveProgress": [
+    "en"
+  ],
+  "recordContent": [
+    "en"
+  ],
+  "recordWriting": [
+    "en"
+  ],
+  "recordValues": [
+    "en"
+  ],
+  "recordDraftReview": [
+    "en"
+  ],
+  "recordReferences": [
+    "en"
+  ],
+  "measurementOutput": [
+    "en"
+  ],
+  "customFields": [
+    "en"
+  ],
+  "recordHistory": [
+    "en"
+  ],
+  "websiteFeeds": [
+    "en"
+  ],
+  "researchCapacity": [
+    "en"
+  ],
+  "githubTransfer": [
+    "en"
+  ],
+  "evidenceCorrections": [
+    "en"
+  ],
+  "userProfile": [
+    "en"
+  ],
+  "onlineEvidence": [
+    "en"
+  ],
+  "importResearch": [
+    "en"
+  ],
+  "online": [
+    "en"
+  ],
+  "collaborationIdentity": [
+    "en"
+  ],
+  "organizations": [
+    "en"
+  ],
+  "sharing": [
+    "en"
+  ],
+  "figureAxes": [
+    "en"
+  ],
+  "figureObservations": [
+    "en"
+  ],
+  "figureMarkerArea": [
+    "en"
+  ],
+  "figureIntervals": [
+    "en"
+  ],
+  "figureHeatmap": [
+    "en"
+  ],
+  "datasetCalculations": [
+    "en"
+  ],
+  "datasetAggregation": [
+    "en"
+  ],
+  "retainedTables": [
+    "en"
+  ],
+  "datasetPreparation": [
+    "en"
+  ],
+  "sketch": [
+    "en"
+  ],
+  "recordStarters": [
+    "en"
+  ],
+  "websiteSites": [
+    "en"
+  ],
+  "localIntake": [
+    "en"
+  ],
+  "book": [
+    "en"
+  ],
+  "analyses": [
+    "en"
+  ],
+  "preferences": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "navigation": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "help": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "setup": [
+    "en"
+  ],
+  "access": [
+    "en"
+  ],
+  "labBookTypes": [
+    "en"
+  ],
+  "recordAuthoring": [
+    "en"
+  ],
+  "recordWorkflow": [
+    "en"
+  ],
+  "dashboardLibrary": [
+    "en"
+  ],
+  "recordLists": [
+    "en"
+  ],
+  "recordViews": [
+    "en"
+  ],
+  "recordDrafts": [
+    "en"
+  ],
+  "recordRecovery": [
+    "en"
+  ],
+  "recordSections": [
+    "en"
+  ],
+  "recordSelection": [
+    "en"
+  ],
+  "recordUpdates": [
+    "en"
+  ],
+  "workspaceRead": [
+    "en"
+  ],
+  "structureProgress": [
+    "en"
+  ],
+  "operationStream": [
+    "en"
+  ],
+  "publishingData": [
+    "en"
+  ],
+  "labBookData": [
+    "en"
+  ],
+  "errors": [
+    "en"
+  ],
+  "recordTypes": [
+    "en"
+  ],
+  "dashboardChoices": [
+    "en"
+  ],
+  "dashboardPaging": [
+    "en"
+  ],
+  "researchPicker": [
+    "en"
+  ],
+  "branding": [
+    "en"
+  ],
+  "appearance": [
+    "en"
+  ],
+  "fonts": [
+    "en"
+  ],
+  "interface": [
+    "en"
+  ],
+  "reviews": [
+    "en"
+  ],
+  "websiteEditor": [
+    "en"
+  ],
+  "websitePages": [
+    "en"
+  ],
+  "websiteMedia": [
+    "en"
+  ],
+  "websiteContent": [
+    "en"
+  ],
+  "moduleReferences": [
+    "en"
+  ],
+  "moduleHistory": [
+    "en"
+  ],
+  "moduleCurrent": [
+    "en"
+  ],
+  "moduleConnected": [
+    "en"
+  ],
+  "calendarDetails": [
+    "en"
+  ],
+  "planningData": [
+    "en"
+  ],
+  "inventoryData": [
+    "en"
+  ],
+  "locationTools": [
+    "en"
+  ],
+  "calendar": [
+    "en"
+  ],
+  "moduleRecovery": [
+    "en"
+  ],
+  "moduleFields": [
+    "en"
+  ],
+  "sampleAnalysis": [
+    "en"
+  ],
+  "timeline": [
+    "en"
+  ],
+  "recordDates": [
+    "en"
+  ],
+  "materialAnalysis": [
+    "en"
+  ],
+  "evidenceUpload": [
+    "en"
+  ],
+  "evidenceIntake": [
+    "en"
+  ],
+  "materialSources": [
+    "en"
+  ],
+  "publication": [
+    "en"
+  ],
+  "repositorySetup": [
+    "en"
+  ],
+  "localExport": [
+    "en"
+  ],
+  "migration": [
+    "en"
+  ],
+  "migrationImport": [
+    "en"
+  ],
+  "attempts": [
+    "en"
+  ],
+  "measurements": [
+    "en"
+  ],
+  "githubConnection": [
+    "en"
+  ],
+  "about": [
+    "en"
+  ],
+  "materialFiles": [
+    "en"
+  ],
+  "recordReading": [
+    "en"
+  ],
+  "recordLinks": [
+    "en"
+  ],
+  "figureComposition": [
+    "en"
+  ],
+  "figureProvenance": [
+    "en"
+  ],
+  "startup": [
+    "en"
+  ],
+  "workspaceNaming": [
+    "en"
+  ],
+  "labBookAccess": [
+    "en"
+  ],
+  "labBookDirectory": [
+    "en"
+  ],
+  "labBookStorage": [
+    "en"
+  ]
+}

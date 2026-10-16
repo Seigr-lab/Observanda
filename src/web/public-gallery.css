@@ -1,0 +1,15 @@
+.site-gallery a[data-gallery-image]{display:block;cursor:zoom-in}
+.site-gallery a[data-gallery-image]:focus-visible{outline:3px solid var(--accent);outline-offset:4px}
+.public-gallery-viewer{box-sizing:border-box;width:min(1400px,96vw);max-width:96vw;max-height:96dvh;padding:1rem;border:1px solid var(--page-border);border-radius:var(--corner-radius);background:var(--page-surface);color:var(--page-text);overflow:auto}
+.public-gallery-viewer::backdrop{background:#000b}
+.public-gallery-controls{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-bottom:.75rem}
+.public-gallery-controls button,.public-gallery-controls a{font:inherit;font-size:.875rem;color:inherit;background:var(--page-surface);border:1px solid var(--page-border);padding:.5rem .75rem;border-radius:.25rem;cursor:pointer;min-height:2.5rem}
+.public-gallery-controls button:disabled{opacity:.45;cursor:default}
+.public-gallery-controls button[aria-pressed=true]{outline:2px solid var(--accent)}
+.public-gallery-controls>:last-child{margin-inline-start:auto}
+.public-gallery-image{max-height:65dvh;overflow:auto;text-align:center;background:var(--page-background)}
+.public-gallery-image img{display:inline-block;max-width:100%;max-height:65dvh;width:auto;height:auto;vertical-align:middle}
+.public-gallery-image.gallery-actual-size img{max-width:none;max-height:none}
+.public-gallery-caption,.public-gallery-position{overflow-wrap:anywhere;margin:.6rem 0 0}
+.public-gallery-position{font-size:.85rem;color:var(--page-muted)}
+@media print{.public-gallery-viewer{display:none!important}}

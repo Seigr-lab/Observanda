@@ -1,0 +1,7 @@
+{
+  "preparing": "Checking the workspace change…",
+  "records": "Processing records: {loaded} of {total}",
+  "indexing": "Saving the updated indexes and history…",
+  "stop": "Stop waiting",
+  "stopped": "Stopped waiting and requested cancellation. If saving had already finished, retrying will recover its result without repeating the change. Your choices are still here."
+}

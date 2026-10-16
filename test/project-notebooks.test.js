@@ -1,0 +1,85 @@
+
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {mkdtemp} from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import {sampleNotebook} from '../src/sample.js';
+import {Workspace} from '../src/storage.js';
+import {saveStructure} from '../src/structure.js';
+import {validateNotebook} from '../src/model.js';
+import {ResearchRecords,recordRevision} from '../src/research.js';
+import {enableProfile} from '../src/web/laboratory/catalog.js';
+import {validConfiguration,templateFrom} from '../src/web/notebook-schema.js';
+import {ancestors,descendants,recordsIn} from '../src/web/workspace-structure.js';
+import {notebookDirectory,notebookRecordScope} from '../src/web/laboratory/notebook-model.js';
+import {createDataRegistry} from '../src/web/data-registry.js';
+import {createModuleHost} from '../src/web/feature-modules.js';
+
+test('user-defined structure supports direct lab books, nested projects, moves and cycle rejection',()=>{
+ let book=sampleNotebook(),root=book.projects[0],child={...root,id:randomUUID(),title:'Album',kind:'Release',parentId:root.id};
+ book=saveStructure(book,{kind:'project',value:child}).book;
+ const notebook={id:randomUUID(),projectId:child.id,title:'Sessions',configuration:{profiles:[],sections:[]}};
+ book=saveStructure(book,{kind:'notebook',value:notebook}).book;
+ book.entries.push({...book.entries[0],id:randomUUID(),notebookId:notebook.id,title:'Nested record',sections:[]});
+ assert.deepEqual(ancestors(book,child.id).map(p=>p.id),[root.id,child.id]);
+ assert.deepEqual([...descendants(book,root.id)],[root.id,child.id]);
+ assert.equal(notebookDirectory(book,root.id).length,1);
+ assert.equal(recordsIn(book,root.id).length,book.entries.length);
+ assert.equal(notebookRecordScope(book,{projectId:root.id,notebookId:notebook.id}).general.length,1);
+ assert.throws(()=>saveStructure(book,{kind:'project',value:{...root,parentId:child.id}}),{code:'INVALID'});
+ assert.throws(()=>saveStructure(book,{kind:'project',value:{...child,parentId:randomUUID()}}),{code:'INVALID'});
+ const moved=saveStructure(book,{kind:'notebook',value:{...notebook,projectId:root.id}}).book;
+ assert.equal(moved.entries.at(-1).share,false);
+ assert.equal(moved.entries.at(-1).notebookId,notebook.id);
+ assert.equal(recordsIn(moved,child.id).length,0);
+});
+
+test('lab templates create full canonical records and freeze their field definitions at save',async()=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-unified-')),ws=new Workspace(root);
+ let book=sampleNotebook(),n=book.notebooks[0];n.configuration={profiles:[],sections:[]};
+ enableProfile(n.configuration,'arts-creative',true);
+ const section=n.configuration.sections.find(s=>s.key==='sessions');section.fields.push({key:'tempo',label:'Tempo',type:'number',unit:'bpm',required:true,choices:[]});
+ book.entries=[];
+ await ws.create(book);
+ const record={...sampleNotebook().entries[0],id:randomUUID(),notebookId:n.id,title:'Recording',template:templateFrom(section)};
+ record.template.values.tempo='92.5';
+ const records=new ResearchRecords(ws,{get:async()=>({})});
+ await records.save({workspaceId:book.id,changes:[{id:record.id,expectedRevision:null,record}]});
+ let stored=await ws.read();assert.deepEqual(stored.book.entries[0].template,record.template);
+ const configuration=structuredClone(n.configuration);configuration.sections.find(s=>s.id===section.id).label='Renamed sessions';
+ const changed=saveStructure(stored.book,{kind:'notebook',value:{...n,configuration}}).book;
+ await ws.save(changed,stored.etag);
+ const baseline=stored.book.entries[0];
+ const edited={...baseline,title:'Second take',template:{...record.template,values:{tempo:'96'}}};
+ await records.save({workspaceId:book.id,changes:[{id:record.id,expectedRevision:recordRevision(baseline),record:edited}]});
+ stored=await ws.read();assert.equal(stored.book.entries[0].template.label,'Rehearsals & recordings');
+ assert.equal(stored.book.entries[0].template.values.tempo,'96');
+ await assert.rejects(records.save({workspaceId:book.id,changes:[{id:record.id,expectedRevision:recordRevision(record),record}]}),{code:'RECORD_CHANGED'});
+ const invalid=structuredClone(stored.book);invalid.entries[0].template.values.tempo='quick';
+ assert.throws(()=>validateNotebook(invalid),{code:'INVALID'});
+ assert.equal(validConfiguration({profiles:[],sections:[null]}),false);
+});
+
+test('domain cards and ordinary research cards read the same record identities within nested scope',async()=>{
+ const book=sampleNotebook(),n=book.notebooks[0];n.configuration={profiles:[],sections:[]};enableProfile(n.configuration,'computer-it',true);
+ const e=book.entries[0];e.template=templateFrom(n.configuration.sections[0]);e.template.values={};
+ const registry=createDataRegistry(),host=createModuleHost(registry);
+ await host.configure(['research','laboratory','laboratory-computer-it']);
+ const child={...book.projects[0],id:randomUUID(),parentId:book.projects[0].id,title:'Nested work'};
+ book.projects.push(child);n.projectId=child.id;
+ const context={book};
+ const options={projectId:book.projects[0].id,notebookId:n.id};
+ const all=registry.get('records').items(context,null,options);
+ assert.equal(registry.get('notebooks').items(context,null,options)[0].key,n.id);
+ assert.ok(registry.get('records').settings(context,options).find(s=>s.key==='notebookIds').choices.some(c=>c.value===n.id));
+ const domain=registry.get('laboratory-computer-it-records').items(context,null,{projectId:book.projects[0].id});
+ assert.equal(registry.get('records').items(context,null,{...options,recordType:'template:'+e.template.id})[0].key,e.id);
+ assert.ok(!registry.get('records').items(context,null,{...options,recordType:e.type}).some(item=>item.key===e.id));
+ assert.equal(domain[0].key,e.id);assert.equal(all.find(i=>i.key===e.id).action.name,'edit-entry');
+ assert.equal(domain[0].action.name,'edit-entry');
+ assert.equal(registry.get('notebooks').items(context,null,{})[0].key,n.id);
+ await host.configure(['research']);assert.equal(registry.get('laboratory-computer-it-records'),undefined);
+ assert.equal(registry.get('records').items(context,null,{}).length,book.entries.length);
+});

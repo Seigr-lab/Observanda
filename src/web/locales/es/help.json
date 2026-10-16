@@ -1,0 +1,21 @@
+{
+  "returnToForm": "Volver al formulario",
+  "title": "Ayuda",
+  "intro": "Lee la guía o busca entre todos sus temas. La documentación se incluye con Observanda y funciona sin conexión.",
+  "search": "Buscar en la documentación",
+  "contents": "Contenido",
+  "all": "Leer toda la guía",
+  "clear": "Borrar la búsqueda",
+  "results": {
+    "one": "{count} sección coincidente",
+    "other": "{count} secciones coincidentes"
+  },
+  "empty": "No hay secciones coincidentes. Prueba una frase más corta u otro término.",
+  "loading": "Cargando la documentación…",
+  "failed": "No se ha podido cargar la documentación.",
+  "retry": "Reintentar",
+  "missing": "Este tema de la documentación no está disponible.",
+  "back": "Volver al contenido",
+  "coverage": "Esta guía cubre los flujos de trabajo que se indican a continuación. Todavía se está redactando documentación especializada y de administración adicional.",
+  "link": "Enlace a esta sección"
+}

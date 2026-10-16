@@ -1,0 +1,11 @@
+{
+  "title": "Writer recovery",
+  "explanation": "This location contains an empty writer marker from an older Observanda version. Close other Observanda installations using the location before releasing it.",
+  "workspace": "Workspace",
+  "preferences": "Local preferences",
+  "device": "Device identity setup",
+  "closed": "All other Observanda installations using this location are closed.",
+  "recover": "Release old writer marker",
+  "ready": "No old writer markers need recovery.",
+  "continue": "Continue"
+}

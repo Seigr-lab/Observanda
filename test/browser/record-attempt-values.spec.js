@@ -1,0 +1,46 @@
+import {test,expect} from '@playwright/test';
+import {randomUUID} from 'node:crypto';
+import path from 'node:path';
+import {figureValueFixture} from '../record-figure-values-fixture.js';
+import {testServer} from '../device-fixture.js';
+import {ResearchCatalogue} from '../../src/research-catalogue.js';
+import {ResearchRecords} from '../../src/research.js';
+import {ResearchDrafts} from '../../src/research-drafts.js';
+import {RecordContent} from '../../src/record-content.js';
+import {preparation,event} from '../fixtures/attempts.js';
+const target=(f,kind,id)=>({workspaceId:f.book.id,recordId:f.record.id,field:'attempt:'+kind+':'+id});
+async function append(f,kind,item){const base=await f.values.read(target(f,kind,item.id));return f.values.save({...target(f,kind,item.id),expectedRevision:base.revision,value:{value:item}});}
+const dialogFor=page=>page.getByRole('dialog',{name:'Edit Preparation, events and assessments',exact:true});
+
+test('reader preparations recover incomplete inputs, pin a method and assess an acquisition without whole-record editing',async({page},info)=>{
+ test.setTimeout(240000);page.setDefaultTimeout(15000);const f=await figureValueFixture(),method={...structuredClone(f.record),id:randomUUID(),title:'Independent decoding method',type:'protocol',sections:[],figures:[],body:'Exact decoder instructions',relations:[]};delete method.results;
+ await new ResearchRecords(f.workspace,{}).save({workspaceId:f.book.id,changes:[{id:method.id,expectedRevision:null,record:method}]});
+ const app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(f.directory,'preferences.json')}),original=ResearchCatalogue.prototype.record;
+ ResearchCatalogue.prototype.record=function(id,...args){if(id===f.record.id)throw Error('Run authoring reconstructed the selected record');return original.call(this,id,...args);};
+ const errors=[],requests=[];page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.url().includes('/api/'))requests.push(new URL(r.url()).pathname);});page.on('dialog',d=>d.accept());const dialog=dialogFor(page),form=dialog.locator('#attempt-form'),save=()=>dialog.getByRole('button',{name:'Save changes',exact:true}).click();
+ try{
+  await page.goto(app.url);await page.goto(app.origin+'/#/records/'+f.record.id+'/read');await page.getByRole('button',{name:'Prepare an attempt',exact:true}).click();
+  await form.getByRole('button',{name:'Add input identity',exact:true}).click();await form.getByLabel('Declared content hash',{exact:true}).fill('Incomplete digest');await expect(dialog.locator('[data-writing-status]')).toHaveText('Recovery checkpoint saved.');
+  await dialog.getByRole('button',{name:'Keep recovery checkpoint and close',exact:true}).click();await page.reload();await page.getByRole('button',{name:'Review drafts',exact:true}).click();await page.getByRole('dialog',{name:'Recoverable record drafts',exact:true}).getByRole('button',{name:'Review draft',exact:true}).click();await expect(form.getByLabel('Declared content hash',{exact:true})).toHaveValue('Incomplete digest');
+  await form.getByLabel('Applies to',{exact:true}).fill('First acquisition window');await form.locator('[data-row="inputs.0"]').getByLabel('Label',{exact:true}).fill('Prepared image');await form.getByLabel('Declared content hash',{exact:true}).fill('a'.repeat(64));
+  await form.getByRole('group',{name:'Exact methods',exact:true}).getByRole('button',{name:'Choose saved record revision',exact:true}).click();await form.getByRole('button',{name:/Independent decoding method/}).click();await expect(form.getByRole('group',{name:'Exact methods',exact:true})).toContainText('Independent decoding method');
+  await form.getByRole('button',{name:'Add criterion',exact:true}).click();const criterion=form.locator('[data-row="criteria.0"]');await criterion.getByLabel('Label',{exact:true}).fill('Returned capture');await criterion.getByLabel('Expected value / condition',{exact:true}).fill('No lost observations');await criterion.getByLabel('Comparator / assessment rule',{exact:true}).fill('Review decoder result');await save();await expect(dialog).not.toBeVisible();
+  await expect(page.locator('.record-attempt-values')).toContainText('First acquisition window');await page.locator('.record-attempt-values [data-action="attempt-open-ref"]').click();await expect(page.locator('#dialog')).toContainText('Exact decoder instructions');await page.locator('#dialog').getByRole('button',{name:'Close',exact:true}).click();
+  await page.getByRole('button',{name:'Record event',exact:true}).click();await form.getByLabel('Event kind',{exact:true}).selectOption('acquired');await form.getByLabel('Event completion',{exact:true}).selectOption('complete');await form.getByLabel('Observation context',{exact:true}).selectOption('host');await form.getByLabel('Time meaning',{exact:true}).selectOption('device-counter');await form.getByLabel('Declared time / counter value',{exact:true}).fill('10000000000000001 (base six)');
+  await form.getByRole('button',{name:'Choose retained evidence or analysis',exact:true}).click();await form.locator('#selected-attempt-material').selectOption('analysis:'+f.analysis.id+':'+f.analysis.revision);await form.getByRole('button',{name:'Use this revision',exact:true}).click();await expect(form).toContainText('Retained plot calculation');await save();await expect(dialog).not.toBeVisible();
+  await page.getByRole('button',{name:'Assess criterion',exact:true}).click();await form.getByLabel('Assessment outcome',{exact:true}).selectOption('unresolved');await form.getByLabel('Observed value / condition',{exact:true}).fill('Capture returned; comparison incomplete');await form.getByLabel('Reason / limitations',{exact:true}).fill('Reference still needed');
+  await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='200%');expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);await page.screenshot({path:info.outputPath('reader-assessment-mobile.png')});await save();await expect(dialog).not.toBeVisible();await expect(page.locator('.record-attempt-values')).toContainText('Returned capture — Unresolved');
+  await expect.poll(async()=>(await new ResearchDrafts(f.workspace).list({workspaceId:f.book.id})).drafts.length).toBe(0);expect(requests.filter(route=>/^\/api\/workspace\/read\/(selection|page)$/.test(route)||route==='/api/research/records/save')).toEqual([]);expect(errors).toEqual([]);
+ }finally{ResearchCatalogue.prototype.record=original;await app.close();await f.close();}
+});
+
+test('reader corrections require review of concurrent facts and retry a lost acknowledgement only once',async({page})=>{
+ test.setTimeout(180000);page.setDefaultTimeout(15000);const f=await figureValueFixture(),p=preparation();await append(f,'preparation',p);const e=event(p);await append(f,'event',e);
+ const app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(f.directory,'preferences.json')}),original=ResearchCatalogue.prototype.record;ResearchCatalogue.prototype.record=()=>{throw Error('Correction loaded the full record');};const errors=[];page.on('pageerror',e=>errors.push(e.message));const dialog=dialogFor(page),form=dialog.locator('#attempt-form'),save=()=>dialog.getByRole('button',{name:'Save changes',exact:true}).click();
+ try{
+  await page.goto(app.url);await page.goto(app.origin+'/#/records/'+f.record.id+'/read');await page.locator('.attempt-event').getByRole('button',{name:'Add correction',exact:true}).click();await form.getByLabel('Circumstances, including accidental attempts or reused media',{exact:true}).fill('Draft correction');await form.getByLabel('Reason / limitations',{exact:true}).fill('First review');
+  const other={...e,id:randomUUID(),supersedes:e.id,reason:'Concurrent receipt review',circumstances:'Other saved correction'};await append(f,'event',other);await save();await expect(dialog.locator('.record-writing-conflict')).toContainText('Other saved correction');await dialog.getByRole('button',{name:'Keep my edit after review',exact:true}).click();await expect(form.getByLabel('Reason / limitations',{exact:true})).toHaveValue('');await expect(form.getByLabel('Circumstances, including accidental attempts or reused media',{exact:true})).toHaveValue('Draft correction');await form.getByLabel('Reason / limitations',{exact:true}).fill('Reviewed against the concurrent receipt');
+  let dropped=false;await page.route('**/api/research/records/values/save',async route=>{if(dropped)return route.continue();dropped=true;await route.fetch();await route.abort('failed');});await save();await expect(dialog.locator('[data-writing-error]')).not.toBeEmpty();await save();await expect(dialog).not.toBeVisible();
+  const latest=(await new RecordContent(f.workspace).read({workspaceId:f.book.id,recordId:f.record.id,pagedHeader:true})).header.attempt;expect(latest.events).toHaveLength(3);expect(latest.events[0]).toEqual(e);expect(latest.events[1]).toEqual(other);expect(latest.events[2].supersedes).toBe(other.id);expect(latest.events[2].reason).toBe('Reviewed against the concurrent receipt');expect(errors).toEqual([]);
+ }finally{ResearchCatalogue.prototype.record=original;await app.close();await f.close();}
+});

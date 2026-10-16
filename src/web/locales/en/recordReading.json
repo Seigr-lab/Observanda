@@ -1,0 +1,12 @@
+{
+  "read": "Read lab book",
+  "list": "Record list",
+  "view": "Lab-book view",
+  "details": "Evidence and record details",
+  "edit": "Edit record",
+  "linkedRecord": "Linked record",
+  "researchLinks": "Research links",
+  "exactRevision": "Retained revision {revision}",
+  "changed": "Saved records have changed. Refresh this reading view.",
+  "incomplete": "Some records could not be loaded. Refresh this reading view."
+}

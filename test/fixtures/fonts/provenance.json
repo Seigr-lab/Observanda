@@ -1,0 +1,22 @@
+[
+  {
+    "file": "dm-sans.woff2",
+    "source": "https://cdn.jsdelivr.net/npm/@fontsource-variable/dm-sans@5.3.0/files/dm-sans-latin-wght-normal.woff2",
+    "sha256": "9fea608a947e67020c33cad9a6fe3d60c54119dfb8cff87768a8117a15ed7543"
+  },
+  {
+    "file": "source-serif.otf",
+    "source": "https://raw.githubusercontent.com/adobe-fonts/source-serif/4.005R/OTF/SourceSerif4-Regular.otf",
+    "sha256": "edf160d0d584deee8a3bb2c3371b2a7624ca63580fbe02c57c1f4c91e84d8787"
+  },
+  {
+    "file": "source-serif-OFL.txt",
+    "source": "https://raw.githubusercontent.com/adobe-fonts/source-serif/4.005R/LICENSE.md",
+    "sha256": "75784a295293a8992f5a8d99210566e0064a012e6dab6731305e3787f15896c7"
+  },
+  {
+    "file": "dm-sans-OFL.txt",
+    "source": "https://cdn.jsdelivr.net/npm/@fontsource-variable/dm-sans@5.3.0/LICENSE",
+    "sha256": "6fbd040a29c2037a765dfb9f2561e9965b5c95c6dcb5dce516089d63d5f17af7"
+  }
+]

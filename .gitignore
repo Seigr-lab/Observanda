@@ -1,0 +1,26 @@
+roadmap.md
+done.md
+node_modules/
+.local/
+test-results/
+playwright-report/
+coverage/
+dist/
+desktop/icon.png
+desktop/icon.ico
+desktop/icon-black.png
+desktop/icon-white.png
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+Desktop.ini
+/docs/
+
+README.md
+
+# Generated PowerShell cache
+/Microsoft/
+Microsoft/

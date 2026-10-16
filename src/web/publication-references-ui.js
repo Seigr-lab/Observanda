@@ -1,0 +1,13 @@
+import {publicationText} from './publication-review.js';
+import {editionRevisionKey,editionAvailabilityKey} from './publication-selection.js';
+import {publicationChoiceView} from './publication-choice-view.js';
+
+export function publicationReferencesView(recordId,state,{history,availability,esc,rootId=recordId,originalId=recordId,revision,title}){
+ const text=(key,args)=>esc(publicationText(key,args)),button=(key,offset)=>`<button type="button" class="button" data-action="edition-references" data-record="${originalId}" data-owner="${recordId}" data-root="${rootId}" ${revision?`data-revision="${revision}"`:""} data-offset="${offset}">${text(key)}</button>`;
+ if(!state)return button('reviewReferences',0);
+ return `<section data-edition-references="${recordId}"><h3>${text('reviewReferences')}</h3>${revision?`<p>${esc(title)} · ${esc(revision.slice(0,12))}</p><button type="button" class="button" data-action="edition-references-back" data-root="${rootId}">${text('referenceBack')}</button>`:''}<p>${text('referenceGuidance')}</p>${state.items.length?state.items.map(item=>{
+  const key=editionRevisionKey(item.target),note=availability.get(editionAvailabilityKey({recordId,target:item.target}))?.statement??'';
+  const details=item.record?`<details class="panel" data-edition-history="${key}" data-edition-owner="${key}"><summary>${esc(item.record.title)} · ${esc(item.target.revision.slice(0,12))}</summary><p>${text('historicalRevision',{revision:item.target.revision})}</p><details><summary>${text('reviewRevisionText')}</summary><div class="prose">${esc(item.preview.body)}</div>${[...item.preview.sections,...item.preview.fields.map(f=>({title:f.title,body:f.value}))].map(s=>`<h4>${esc(s.title)}</h4><div class="prose">${esc(s.body)}</div>`).join('')}</details>${publicationChoiceView(item.record,history.get(key)??{...item.record.choice,include:false},esc)}<button type="button" class="button" data-action="edition-references" data-record="${item.target.id}" data-owner="${item.record.pageId}" data-root="${rootId}" data-revision="${item.target.revision}" data-title="${esc(item.record.title)}" data-offset="0">${text('reviewReferences')}</button></details>`:`<p>${text('revisionUnavailable')}</p>`;
+  return `<div data-edition-reference="${esc(editionAvailabilityKey({recordId,target:item.target}))}">${details}<label>${text('availabilityLabel')}<textarea data-edition-statement maxlength="2000">${esc(note)}</textarea></label><p class="muted">${text('availabilityGuidance')}</p></div>`;
+ }).join(''):`<p>${text('noReferences')}</p>`}<div class="inline-actions">${state.offset>0?button('previousReferences',Math.max(0,state.offset-20)):''}${state.next!==null?button('nextReferences',state.next):''}</div></section>`;
+}

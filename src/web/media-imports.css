@@ -1,0 +1,5 @@
+#media-import-list li { display:block; overflow-wrap:anywhere; }
+#media-import-list .inline-actions { display:flex; flex-wrap:wrap; gap:.5rem; margin-top:.5rem; }
+#media-import-list input[type=file] { display:block; max-width:100%; }
+#media-upload-status { margin:.75rem 0; overflow-wrap:anywhere; }
+[data-action="media-import-open"] { margin-top:.5rem; }

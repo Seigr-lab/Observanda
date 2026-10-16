@@ -1,0 +1,21 @@
+{
+  "returnToForm": "Tilbake til skjemaet",
+  "title": "Hjelp",
+  "intro": "Les rettleiinga eller søk i alle emna. Dokumentasjonen følgjer med Observanda og verkar utan nett.",
+  "search": "Søk i dokumentasjonen",
+  "contents": "Innhald",
+  "all": "Les heile rettleiinga",
+  "clear": "Tøm søket",
+  "results": {
+    "one": "{count} samsvarande del",
+    "other": "{count} samsvarande delar"
+  },
+  "empty": "Ingen samsvarande delar. Prøv eit kortare uttrykk eller eit anna ord.",
+  "loading": "Lastar inn dokumentasjon…",
+  "failed": "Dokumentasjonen kunne ikkje lastast inn.",
+  "retry": "Prøv igjen",
+  "missing": "Dette dokumentasjonsemnet er ikkje tilgjengeleg.",
+  "back": "Tilbake til innhaldet",
+  "coverage": "Denne rettleiinga dekkjer arbeidsflytane nedanfor. Meir dokumentasjon for fagområde og administratorar er framleis under utarbeiding.",
+  "link": "Lenkje til denne delen"
+}

@@ -1,0 +1,22 @@
+{
+  "title": "Record sections",
+  "contents": "On this record",
+  "navigation": "Browse writing sections",
+  "range": "Sections {first}–{last} of {total}",
+  "previous": "Previous sections",
+  "next": "Next sections",
+  "goTo": "Go to section number",
+  "go": "Go",
+  "findHeading": "Find section heading",
+  "findNext": "Find next",
+  "noMatch": "No section heading matches.",
+  "enterHeading": "Enter a section heading to find.",
+  "heading": "Section heading",
+  "content": "{title} content",
+  "up": "Move {title} up",
+  "down": "Move {title} down",
+  "remove": "Remove {title}",
+  "confirmRemove": "Remove this section and its text?",
+  "new": "New section",
+  "add": "Add section"
+}

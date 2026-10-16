@@ -1,0 +1,11 @@
+{
+ "opening":"Opening Observanda…",
+ "skip":"Skip to main content",
+ "moduleFailed":"Observanda could not load",
+ "moduleMessage":"A required application file did not load. Reload to try again.",
+ "connectionFailed":"Observanda could not finish opening",
+ "connectionMessage":"The connection or workspace initialization was interrupted. Reload to try again. Your saved workspace has not been replaced.",
+ "unauthorized":"Open your lab book",
+ "authorizationMessage":"Open Observanda from its application icon, or use its current launch link to connect this browser.",
+ "reload":"Reload Observanda"
+}

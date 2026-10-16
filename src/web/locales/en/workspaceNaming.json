@@ -1,0 +1,5 @@
+{
+  "conflict": "Another registered workspace uses this folder name. Choose a different name in Workspace details.",
+  "copyToProject": "Copy workspace details to a project",
+  "copyToProjectDescription": "Use {name} and its introduction as the project details."
+}

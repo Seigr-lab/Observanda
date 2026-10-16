@@ -1,0 +1,21 @@
+{
+ "region":"XY acceptance region",
+ "callout":"Observation callout",
+ "addRegion":"Add XY region",
+ "addCallout":"Annotate observation",
+ "series":"Observation series",
+ "observation":"Observation",
+ "pointIndex":"Observation row",
+ "dx":"Label horizontal offset (SVG units)",
+ "dy":"Label vertical offset (SVG units)",
+ "xLower":"Region coordinate minimum",
+ "xUpper":"Region coordinate maximum",
+ "yLower":"Region value minimum",
+ "yUpper":"Region value maximum",
+ "position":"Bounds / attached observation",
+ "encodingDetails":"Encoding details",
+ "invalid":"Give the annotation a label, colour and valid settings.",
+ "regionRange":"XY regions require increasing numerical or calendar coordinate bounds and increasing value bounds. Logarithmic bounds must be positive.",
+ "calloutRange":"Choose an existing measured observation and finite label offsets between −2,000 and 2,000 SVG units.",
+ "referenced":"This observation or series has an attached annotation. Remove or retarget that annotation before deleting its observation."
+}

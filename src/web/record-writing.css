@@ -1,0 +1,23 @@
+.record-writing{width:min(68rem,calc(100% - 2rem));max-width:none;max-height:calc(100dvh - 2rem);overflow:auto;overscroll-behavior:contain}
+.record-writing h2{margin-top:0}.record-writing>p{overflow-wrap:anywhere}
+.record-writing [data-writing-fields]{min-width:0}.record-writing .document-content{min-height:12rem}
+.record-writing .document-tools{position:static}
+.record-writing .dialog-actions{position:static;display:flex;flex-wrap:wrap;gap:.5rem;padding:1rem 0;background:var(--ui-surface)}
+.record-writing-conflict{border:1px solid var(--ui-border);padding:1rem;margin-top:1rem;overflow-wrap:anywhere}
+.record-writing [data-writing-error]:empty,.record-writing [data-writing-status]:empty{display:none}
+.record-figure-writing{width:calc(100% - 2rem)}
+.record-figure-writing .record-figures{min-width:0}
+.record-figure-writing .figure-workbench{min-width:0;max-width:100%}
+@media(max-width:700px){dialog.record-figure-writing{width:calc(100% - 16px);padding:12px}.record-figure-writing .figure-workbench{padding:8px}}
+@media print{.record-figure-edit{display:none}}
+.record-contributor-values li{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-bottom:.75rem}
+.record-contributor-values li p{flex:1 1 14rem;margin:0;min-width:0;overflow-wrap:anywhere}
+.record-contributor-values .button{white-space:normal;overflow-wrap:anywhere;max-width:100%}
+.record-tags li{margin-block:1rem;overflow-wrap:anywhere}.record-tags label{min-width:0;max-width:100%}.record-tags input{display:block;max-width:100%;min-width:0}.record-tags .button{white-space:normal}
+@media(max-width:700px){.record-writing{padding:1rem}.record-writing .button{white-space:normal}}
+.result-figure-choices { display: grid; gap: .5rem; margin-block: .75rem; }
+.result-figure-choices button { white-space: normal; overflow-wrap: anywhere; }
+[data-result-fields] { min-width: 0; }
+.record-draft-edit [data-checkpoint-fields] { display:block; }
+.record-draft-edit select { max-width:100%;min-width:0; }
+@media(max-width:700px){dialog.record-draft-edit{width:calc(100% - 16px);max-height:calc(100dvh - 16px);padding:12px}}

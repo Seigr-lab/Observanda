@@ -1,0 +1,31 @@
+import {buildPublication} from '../src/publication.js';
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,rm,readFile} from 'node:fs/promises';
+import path from 'node:path';import os from 'node:os';import {randomUUID,createHash} from 'node:crypto';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {sampleNotebook} from '../src/sample.js';import {clearVault} from '../src/encryption.js';
+import {Reviews} from '../src/reviews.js';import {reviewHash,verifySigned} from '../src/security/review-exchange.js';
+import {recordRevision,ResearchRecords} from '../src/research.js';
+import {copyPlan,copyWorkspace} from '../src/locations.js';import {Workspace} from '../src/storage.js';import {workspaceModules} from '../src/modules/index.js';
+test('two installations exchange pinned, encrypted, signed reviews and preserve them through backup',async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-review-exchange-')),a=await encryptedFixture(path.join(directory,'author'),sampleNotebook()),b=await encryptedFixture(path.join(directory,'reviewer'),sampleNotebook());t.after(async()=>{clearVault(a.vault);clearVault(b.vault);await rm(directory,{recursive:true,force:true});});
+ const author=new Reviews(a.workspace,a.deviceStore),reviewer=new Reviews(b.workspace,b.deviceStore),book=(await a.workspace.read()).book,other=(await b.workspace.read()).book;
+ const run=(service,workspaceId)=>(operation,data={})=>service.run(operation,{workspaceId,...data}),A=run(author,book.id),B=run(reviewer,other.id),ac=(await A('identity')).contact,bc=(await B('identity')).contact;
+ await assert.rejects(A('contact',{name:'Reviewer',contact:bc,verified:false}));await A('contact',{name:'Reviewer',contact:bc,verified:true});
+ const records=book.entries.slice(0,2).map(r=>({id:r.id,revision:recordRevision(r)})),id=randomUUID(),payload={id,recipient:reviewHash(bc),message:'Check these independent takes.',records};
+ const request=await A('create',payload);assert.ok(!JSON.stringify(request.file).includes(book.entries[0].title));await assert.rejects(B('import',request));await B('contact',{name:'Author',contact:ac,verified:true});
+ await assert.rejects(A('import',request));const corrupted=structuredClone(request);corrupted.file.data=Buffer.from('altered').toString('base64');await assert.rejects(B('import',corrupted));
+ assert.equal((await B('import',request)).id,id);assert.equal((await B('import',request)).replayed,true);const p=(await B('read',{id})).packet;assert.deepEqual(p.request.value.records[0].record,book.entries[0]);
+ const forged=structuredClone(p.request);forged.value.records[0].record.title='Forged';assert.throws(()=>verifySigned(forged));
+ const decisions=records.map((r,i)=>({...r,decision:i?'inconclusive':'reviewed',comment:i?'Incomplete results.':'Text and supplied data reviewed.'}));const response=await B('respond',{id,decisions});await A('import',response);assert.equal((await A('import',response)).replayed,true);assert.equal((await B('respond',{id,decisions})).replayed,true);await assert.rejects(B('respond',{id,decisions:decisions.map(d=>({...d,comment:'different'}))}));
+ const signedBefore=(await A('read',{id})).packet.response;const before=await A('list');assert.equal(before.items[0].records[0].current,true);assert.equal(before.items[0].decisions[1].decision,'inconclusive');
+ const r=book.entries[0];await new ResearchRecords(a.workspace,{}).save({workspaceId:book.id,changes:[{id:r.id,expectedRevision:recordRevision(r),record:{...r,title:'Later revision'}}]});assert.equal((await A('list')).items[0].records[0].current,false);assert.deepEqual((await A('read',{id})).packet.response,signedBefore);
+ const store=workspaceModules(a.workspace),bytes=Buffer.from('CCO ethanol\r\n'),original={name:'take.smi',size:bytes.length,bytes:bytes.toString('base64'),sha256:createHash('sha256').update(bytes).digest('hex')},toolId=randomUUID(),data={name:'Original molecule',links:[],engine:1,format:'smiles',source:bytes.toString(),original};
+ await store.execute({workspaceId:book.id,commandId:randomUUID(),action:'chemical.save',payload:{id:toolId,expectedRevision:null,data}});
+ const destination=await copyWorkspace(await copyPlan(a.workspace.root,path.join(directory,'backup')),{vault:a.vault}),restored=new Workspace(destination,a.vault),restoredReviews=new Reviews(restored,a.deviceStore);
+ assert.deepEqual(await restoredReviews.run('list',{workspaceId:book.id}),await A('list'));assert.deepEqual((await workspaceModules(restored).read()).entities.find(e=>e.id===toolId).data.original,original);
+ assert.deepEqual(await new Reviews(restored,b.deviceStore).run('list',{workspaceId:book.id}),await A('list'));
+ await A('untrust',{fingerprint:reviewHash(bc)});await assert.rejects(A('import',response));assert.equal((await A('list')).items[0].decisions.length,2);await assert.rejects(A('export',{id}));
+ const publicBook=(await restored.read()).book;assert.ok(!JSON.stringify(publicBook).includes('Incomplete results.'));assert.ok(!JSON.stringify(publicBook).includes(original.sha256));const publication=buildPublication(publicBook);for(const content of publication.files.values()){const text=String(content);assert.ok(!text.includes('Incomplete results.'));assert.ok(!text.includes(original.sha256));assert.ok(!text.includes(ac.signing.publicKey));}
+});

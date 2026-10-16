@@ -1,0 +1,46 @@
+import {test,expect} from '@playwright/test';
+import {mkdtemp,rm} from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import {randomUUID} from 'node:crypto';
+import {encryptedFixture} from './encrypted-fixture.js';
+import {sampleNotebook} from '../../src/sample.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../../src/access.js';
+import {initializeLocation} from '../../src/locations.js';
+import {Workspace} from '../../src/storage.js';
+import {clearVault} from '../../src/encryption.js';
+import {startServer} from '../../src/server.js';
+import {workspaceModules} from '../../src/modules/index.js';
+import {ModuleCatalogue} from '../../src/modules/catalogue.js';
+import {defaultDashboard} from '../../src/web/dashboard-model.js';
+import {readWorkspaceDashboard,writeWorkspaceDashboard} from '../../src/security/dashboard-storage.js';
+test('connected calendar opens selected notes with retry and cancels a closed detail request',async({page})=>{
+ test.setTimeout(90000);
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-calendar-details-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),other=sampleNotebook();other.id=randomUUID();
+ const access=await createWorkspaceAccess('','',f.deviceStore),vault=takeCreatedVault(access),root=path.join(directory,'connected');await initializeLocation(root,other,access,vault);
+ const source=new Workspace(root,vault),calendar=randomUUID(),event=randomUUID(),connection=randomUUID(),notes='Private selected event notes. '.repeat(2500);
+ const save=(ws,type,id,data)=>workspaceModules(ws).execute({workspaceId:ws===source?other.id:book.id,commandId:randomUUID(),action:type+'.save',payload:{id,expectedRevision:null,data}},{compact:true});
+ await save(source,'calendar',calendar,{name:'Remote studio',projectId:null,color:'#3958ba',archived:false});
+ await save(source,'event',event,{title:'Remote field session',calendarId:calendar,startsAt:'2026-10-15',endsAt:'2026-10-16',allDay:true,timeZone:'UTC',location:'Outside studio',notes,status:'confirmed'});
+ await save(f.workspace,'calendar-connection',connection,{name:'Other workspace',projectId:null,color:'#38786c',path:root,enabled:true});
+ const settings=defaultDashboard();settings.enabledModules=['planning'];settings.views[0].panels=[];await writeWorkspaceDashboard(f.workspace,settings,(await readWorkspaceDashboard(f.workspace)).etag);
+ const original=ModuleCatalogue.prototype.read,selected=ModuleCatalogue.prototype.selected,opened=[],errors=[];
+ ModuleCatalogue.prototype.read=function(...args){if(this.store.workspace.root===root)throw Error('Full connected module data loaded');return original.apply(this,args);};
+ ModuleCatalogue.prototype.selected=async function(head,id){const value=await selected.call(this,head,id);if(this.store.workspace.root===root&&value?.type==='event')opened.push(id);return value;};
+ const app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences')}),main=page.locator('main'),dialog=page.locator('#dialog');let release=()=>{};
+ page.on('pageerror',e=>errors.push(e.message));
+ try{
+  const auth=await page.request.post(app.origin+'/api/session',{data:{token:app.launchToken},headers:{Origin:app.origin}});expect(auth.ok()).toBe(true);
+  await page.goto(app.origin+'/#/modules/planning');await main.getByLabel('Month',{exact:true}).fill('2026-10');
+  await main.getByRole('button',{name:'Unlock workspace',exact:true}).click();await dialog.getByRole('button',{name:'Unlock',exact:true}).click();await expect(dialog).not.toBeVisible();
+  const eventButton=main.locator('[data-calendar-day="2026-10-15"]').getByRole('button',{name:/Remote field session/});await expect(eventButton).toBeVisible();expect(opened).toEqual([]);await expect(main).not.toContainText('Private selected event notes');
+  await page.route('**/api/calendars/event',route=>route.fulfill({status:503,json:{message:'Synthetic notes interruption'}}),{times:1});await eventButton.click();await expect(dialog.getByRole('alert')).toContainText('Synthetic notes interruption');
+  await dialog.getByRole('button',{name:'Retry event notes',exact:true}).focus();await page.keyboard.press('Enter');await expect(dialog.locator('.calendar-notes')).toHaveText(notes);expect(opened).toEqual([event]);
+  await dialog.getByRole('button',{name:'Close',exact:true}).click();
+  let started;const gate=new Promise(resolve=>{release=resolve;}),waiting=new Promise(resolve=>{started=resolve;});
+  await page.route('**/api/calendars/event',async route=>{const response=await route.fetch();started();await gate;await route.fulfill({response}).catch(()=>{});},{times:1});
+  await eventButton.click();await waiting;await expect(dialog).toContainText('Loading event notes');await page.keyboard.press('Escape');release();await expect(dialog).not.toBeVisible();
+  await eventButton.click();await expect(dialog.locator('.calendar-notes')).toHaveText(notes);await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='20px');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+  expect(errors).toEqual([]);
+ }finally{release();ModuleCatalogue.prototype.read=original;ModuleCatalogue.prototype.selected=selected;await app.close();clearVault(vault);clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+});

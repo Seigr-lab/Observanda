@@ -1,0 +1,21 @@
+{
+  "returnToForm": "Torna al formulari",
+  "title": "Ajuda",
+  "intro": "Llegiu la guia o cerqueu entre tots els temes. La documentació s’inclou amb Observanda i funciona sense connexió.",
+  "search": "Cerca a la documentació",
+  "contents": "Contingut",
+  "all": "Llegeix tota la guia",
+  "clear": "Esborra la cerca",
+  "results": {
+    "one": "{count} secció coincident",
+    "other": "{count} seccions coincidents"
+  },
+  "empty": "No hi ha seccions coincidents. Proveu una frase més curta o un altre terme.",
+  "loading": "S’està carregant la documentació…",
+  "failed": "No s’ha pogut carregar la documentació.",
+  "retry": "Torna-ho a provar",
+  "missing": "Aquest tema de la documentació no està disponible.",
+  "back": "Torna al contingut",
+  "coverage": "Aquesta guia cobreix els fluxos de treball indicats a continuació. Encara s’està redactant documentació especialitzada i d’administració addicional.",
+  "link": "Enllaç a aquesta secció"
+}

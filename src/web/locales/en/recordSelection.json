@@ -1,0 +1,14 @@
+{
+  "invalid": "The selected record response was incomplete. Your draft is retained.",
+  "limit": "This selection is too large to edit together. Open fewer records. Your recovery checkpoint is retained.",
+  "title": "Loading selected records",
+  "description": "Loading the saved records needed for this view. Your editor stays unchanged until loading finishes.",
+  "committed": "Your records were saved. Loading the saved versions to update this editor.",
+  "progress": "Loaded {loaded} of {total} records",
+  "cancel": "Cancel loading",
+  "retry": "Retry loading",
+  "failed": "Selected records could not be loaded. Retry to continue from the last completed batch.",
+  "cancelled": "Loading cancelled. Your editor and recovery checkpoint are retained.",
+  "savedCancelled": "Your records were saved, but loading them was cancelled. Retry Save to compare your editor with the saved records.",
+  "busy": "Finish loading the current selection first."
+}

@@ -1,0 +1,23 @@
+{
+  "kind": "Lab book",
+  "open": "Open lab book",
+  "settings": "Lab book settings",
+  "retry": "Retry",
+  "loading": "Loading lab books...",
+  "empty": "Create a lab book and choose its type.",
+  "more": "More lab books",
+  "failed": "Could not load lab books.",
+  "deleteEffect": "This permanently removes this book, its records, history and original evidence.",
+  "deleting": "Deleting {name}",
+  "deletingFiles": "Removing the book's database and files...",
+  "finishDeleting": "Finish deleting",
+  "moreDeletions": "More unfinished deletions",
+  "deleteFailed": "Could not finish deleting the lab book.",
+  "creating": "Creating {name}",
+  "creatingFiles": "Preparing the lab book...",
+  "finishCreating": "Finish creating",
+  "moreCreations": "More unfinished creations",
+  "creationFailed": "Could not finish creating the lab book.",
+  "creationPassword": "Lab book password",
+  "cancel": "Cancel"
+}

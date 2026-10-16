@@ -1,0 +1,23 @@
+{
+  "retainedRecord": "Retained record",
+  "retainedInput": "Retained input",
+  "title": "Title",
+  "collectionName": "Evidence collection",
+  "analysisName": "Analysis",
+  "collectionHeading": "Create evidence collection",
+  "analysisHeading": "Record external analysis",
+  "tool": "Tool / method",
+  "version": "Tool version or source revision",
+  "procedure": "Parameters and procedure",
+  "method": "Saved method / run (optional)",
+  "none": "No saved method or run selected.",
+  "choose": "Choose saved method / run",
+  "remove": "Remove selected method / run",
+  "selected": "{title} · Retained revision {revision}",
+  "finishChoosing": "Choose a saved revision or cancel the method search before saving.",
+  "saveCollection": "Save collection",
+  "saveAnalysis": "Save analysis",
+  "inputs": "Exact input revisions",
+  "outputs": "Retained output artifacts",
+  "required": "Enter a title, and for analysis choose inputs and identify its tool and version."
+}

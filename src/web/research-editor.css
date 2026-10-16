@@ -1,0 +1,90 @@
+/* Text is part of the document, never an independently scrolling viewport. */
+textarea{resize:none!important;overflow:hidden!important;max-height:none!important;box-sizing:border-box}
+.research-location{display:flex;gap:.8rem;align-items:center;flex-wrap:wrap}
+.research-location span{display:flex;gap:.4rem;align-items:center}.research-location small{color:var(--ui-muted)}
+.record-section .section-controls{margin-bottom:.4rem}.record-section .section-controls .field{margin-bottom:0}
+.record-section .section-controls input{font-weight:650}.record-section textarea{font-weight:400}
+.record-section-navigation{display:flex;align-items:center;flex-wrap:wrap;gap:.6rem 1rem;margin-block:.8rem 1.2rem}
+.record-section-navigation>span{flex:1 1 100%}.record-section-navigation .field{margin:0;max-width:12rem;min-width:0}
+.record-section-navigation .button{white-space:normal}.record-section-navigation input{width:100%;min-width:0}
+.record-section-find{display:flex;flex:1 1 100%;align-items:end;gap:.6rem;flex-wrap:wrap}.record-section-find [role=status]{flex:1 1 100%}
+@media print{.record-section-navigation .field,.record-section-navigation .inline-actions,.record-section-find{display:none}}
+.research-people,.research-links{margin-top:1.5rem;padding-top:1.2rem;border-top:1px solid var(--ui-border)}
+.research-people h3,.research-links h3{font-size:1.05rem;margin:0}
+.research-people header,.research-links header{display:flex;align-items:center;justify-content:space-between;gap:.7rem;flex-wrap:wrap;margin-bottom:.8rem}
+.contributor-row{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) auto;gap:.7rem;align-items:end}
+.contributor-row .field{margin-bottom:.7rem}.contributor-row button{margin-bottom:.7rem}
+.research-link-list{list-style:none;padding:0;margin:0}
+.research-link-list li{display:flex;align-items:center;gap:.65rem;padding:.65rem 0;border-bottom:1px solid var(--ui-border)}
+.research-link-list li>div{flex:1;min-width:0}.research-link-list small{display:block;color:var(--ui-muted)}
+.research-link-list button{text-align:left;overflow-wrap:anywhere}
+.research-link-targets{list-style:none;margin:1rem 0;padding:0}
+dialog[open]:has(> [data-research-picker]){display:flex;flex-direction:column;overflow:hidden;max-height:calc(100dvh - 2rem)}
+dialog:has(> [data-research-picker])>h2,dialog:has(> [data-research-picker])>.dialog-actions{flex-shrink:0}
+[data-research-picker]{overflow:auto;min-height:0;padding:.15rem;scrollbar-gutter:stable}
+.research-link-targets .button{width:100%;justify-content:flex-start;text-align:left;white-space:normal;margin:.2rem 0}
+.research-reference{overflow-wrap:anywhere;user-select:all}
+@media(max-width:600px){.contributor-row{grid-template-columns:minmax(0,1fr) auto}.contributor-row>.field:first-child{grid-column:1/-1}}
+
+.record-section>textarea{display:block;width:100%;min-height:6rem;padding:.7rem;border:1px solid var(--ui-border);border-radius:var(--ui-control-radius);background:var(--ui-surface);color:var(--ui-text);font:inherit;line-height:var(--app-line-height,1.6)}
+.tree-project-link{border:0;background:none;padding:0;font:inherit;font-weight:650;color:inherit;text-align:left;overflow-wrap:anywhere;cursor:pointer}
+.tree-project-link:hover{text-decoration:underline}
+
+.editor-paper .title-input{padding:.65rem .75rem;font-size:1.25rem;line-height:1.45;font-weight:650}
+
+.editor-paper{min-width:0}
+
+.record-activity{margin:1rem 0;padding:1rem 0;border-block:1px solid var(--ui-border);overflow-wrap:anywhere}
+.record-activity header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.7rem}
+.record-activity h2{font-size:1.15rem;margin:.5rem 0}.record-activity select{max-width:100%}
+.record-workflow{margin:1rem 0;padding:1rem 0;border-block:1px solid var(--ui-border)}
+.record-workflow h2{font-size:1.15rem}.record-workflow .inline-actions{margin-top:1rem}
+.run-list{padding-left:1.4rem}.run-list li{padding:.4rem 0}.run-list span{display:block;color:var(--ui-muted)}
+.run-comparison{margin-block:1rem}.run-comparison th,.run-comparison td{min-width:10rem;white-space:pre-wrap;overflow-wrap:anywhere;vertical-align:top}
+.record-reader{max-width:78ch;margin-inline:auto;min-width:0;overflow-wrap:anywhere}
+.record-reader h1{line-height:1.25}.record-reader section[id]{scroll-margin-top:6rem}
+.record-contents{display:flex;flex-wrap:wrap;gap:.5rem 1rem;margin:1rem 0;padding-block:.8rem;border-block:1px solid var(--ui-border)}
+.record-reader .research-links button{white-space:normal}
+.record-media-intake{min-width:0}.record-media-intake input{display:block;min-width:0;max-width:100%;margin-bottom:.6rem}
+@media print{.record-media-intake,[data-record-media]>.inline-actions{display:none}}
+.record-toolbar{flex-wrap:wrap;gap:.5rem}
+@media print{.record-toolbar,.record-reader button,.record-reader .record-workflow .inline-actions{display:none}.record-reader{max-width:none}.run-comparison .table-scroll{overflow:visible}}
+
+.research-location small{flex-shrink:0;white-space:nowrap}
+.record-outcome{display:block;color:var(--ui-muted);overflow-wrap:anywhere}
+.optional-workflow{margin-block:1rem}
+
+.record-browse{margin-block:0 1.2rem;border:1px solid var(--ui-border);border-radius:var(--ui-control-radius);padding:.8rem 1rem}
+.record-browse summary{cursor:pointer;font-weight:600}
+.record-browse-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,12rem),1fr));align-items:end;gap:.7rem 1rem;margin-top:1rem}
+.record-browse-fields .field{margin:0;min-width:0}.record-browse-fields input,.record-browse-fields select{width:100%;min-width:0}
+.record-browse .muted{font-size:.85rem;margin-bottom:0}.record-filter-error{border-left:3px solid var(--ui-accent);padding:1rem}
+
+.section-bar.record-list-bar .filters{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;min-width:0}
+.section-bar.record-list-bar .search-input{flex:1 1 12rem;min-width:min(100%,12rem)}
+.section-bar.record-list-bar .filter-select{width:auto;max-width:100%;flex:1 1 12rem;min-width:min(100%,12rem)}
+.section-bar.record-list-bar .filters>.button{flex-shrink:0}
+
+.record-date-fields{min-width:0;margin:1rem 0;padding:.8rem;border:1px solid var(--ui-border);border-radius:var(--ui-control-radius)}
+.record-date-fields legend{font-weight:650;padding-inline:.3rem}
+.record-date-fields input,.record-date-fields select{min-width:0;max-width:100%}
+.record-date-fields .muted{font-size:.85rem;line-height:1.5}
+.record-date-fields [data-record-date-error]:empty{display:none}
+.record-date-fields [data-record-date-error]{font-size:.9rem;color:var(--ui-text);border-left:3px solid var(--ui-accent);padding-left:.6rem}
+
+/* Saved record views reuse the record list, with readable summaries on small screens. */
+.record-view-list{list-style:none;padding:0}.record-view-list li{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.75rem;padding:1rem 0;border-bottom:1px solid var(--ui-border)}.record-view-list h3,.record-view-list p{margin:.2rem 0;overflow-wrap:anywhere}.record-view-list li>div:first-child{flex:1 1 16rem;min-width:0}.record-view-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,14rem),1fr));gap:.75rem}.record-view-summary dt{font-weight:600}.record-view-summary dd{margin:0;overflow-wrap:anywhere}.record-views .checkbox{display:flex;gap:.6rem;align-items:center;margin-block:1rem}.record-views .button{white-space:normal}
+.material-file-summary{display:grid;grid-template-columns:auto minmax(0,1fr);gap:.2rem .7rem;margin:.5rem 0;font-size:.85rem}
+.material-file-summary dt{font-weight:600}
+.material-file-summary dd{margin:0;overflow-wrap:anywhere}
+.material-file-summary code{white-space:normal;overflow-wrap:anywhere}
+.material-list li>div{min-width:0}
+.record-edit-navigation{display:flex;flex-wrap:wrap;gap:.25rem .5rem;border-block:1px solid var(--ui-border);padding-block:1rem;margin-block:1rem}
+.record-edit-navigation .button{white-space:normal;text-align:start;max-width:100%}
+.record-edit-area{min-width:0;scroll-margin-top:6rem;border-bottom:1px solid var(--ui-border);padding-block:1rem}
+.record-edit-area>h2{font-size:1.25rem;line-height:1.4}
+.record-edit-area>.inline-actions{align-items:end}
+.record-edit-details{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,14rem),1fr));gap:.75rem 1rem}
+.record-edit-details dt{font-weight:600}.record-edit-details dd{margin:0;overflow-wrap:anywhere}
+.record-edit-area:focus-visible{outline:2px solid var(--ui-accent);outline-offset:.3rem}
+@media print{.record-edit-navigation{display:none}}

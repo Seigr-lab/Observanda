@@ -1,0 +1,12 @@
+{
+  "record": "Record content",
+  "metadata": "Workspace settings",
+  "recordSelection": "Selected record content",
+  "recordCommand": "Record save request",
+  "recordCheckpoint": "Recovery checkpoint",
+  "checkpointRequest": "Recovery checkpoint request",
+  "amount": "{owner} needs {requested} bytes; this version supports {limit} bytes for that operation.",
+  "saveGuidance": "The save was refused. Keep this editor open and check the checkpoint status before leaving; unsaved edits are not a saved research revision.",
+  "checkpointGuidance": "This checkpoint was not written. Any earlier checkpoint is unchanged. Keep this editor open to retain the newer edits.",
+  "selectionGuidance": "The requested records were not loaded into the editor. The saved records are unchanged. You can open each record separately."
+}

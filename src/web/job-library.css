@@ -1,0 +1,15 @@
+dialog:has(> .job-library) { overflow:hidden; max-height:calc(100dvh - 2rem); }
+.job-library { display:flex; flex-direction:column; gap:.85rem; min-height:0; max-height:calc(100dvh - 5.25rem); }
+.job-library > h2, .job-library > p, .job-library > .dialog-actions { margin:0; flex-shrink:0; }
+.job-library > .inline-actions { flex-shrink:0; flex-wrap:wrap; align-items:center; }
+.job-library-items { min-height:0; overflow:auto; overscroll-behavior:contain; margin:0; padding:.15rem; }
+.job-library-items:focus-visible { outline:2px solid var(--ui-accent); outline-offset:1px; }
+.job-library-items > .panel + .panel { margin-top:.75rem; }
+.job-library-items .inline-actions { flex-wrap:wrap; }
+.job-library-items progress { display:block; max-width:100%; margin-bottom:.5rem; }
+.job-library #media-upload-status { margin:0; flex-shrink:0; }
+@media (max-width:480px) {
+ dialog:has(> .job-library) { padding:1rem; }
+ .job-library { max-height:calc(100dvh - 4.25rem); gap:.6rem; }
+ .job-library .button { white-space:normal; }
+}

@@ -1,0 +1,2 @@
+export const packedMapping=(count=3888)=>({format:'json-nested',rowsPath:'/runs/*/acquisitions',joins:[{name:'timing',mode:'position',rowsPath:'/runs/*/packed',packed:{offset:384,width:6,count}}],fields:[{name:'Acquisition',source:'row',path:'/id'},...Array.from({length:6},(_,i)=>({name:'Timing '+i,source:'timing',path:'/'+i}))]});
+export const packedSource=(count=3888)=>({runs:[0,1].map(run=>({packed:[...Array(384).fill(-1),...Array.from({length:count*6},(_,i)=>run*100000+i),-2,-3],acquisitions:Array.from({length:count},(_,id)=>({id}))}))});

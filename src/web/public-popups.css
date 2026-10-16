@@ -1,0 +1,20 @@
+.section-popup-content{margin:0;text-align:var(--section-body-align,start)}
+.section-popup-content>summary{display:inline-block;list-style:none;font:inherit;border:1px solid var(--accent);color:inherit;padding:.6em 1em;border-radius:var(--corner-radius);overflow-wrap:anywhere;cursor:pointer}
+.section-popup-content>summary::-webkit-details-marker{display:none}
+.popup-body{min-width:0;overflow-wrap:anywhere;text-align:var(--section-body-align,start)}
+.popup-body>h2{margin-top:0;text-align:var(--section-heading-align,start)}
+.popup-body>.container-content{display:flex;gap:1rem;min-width:0}
+.section-popup-content>.popup-body{padding-block:1rem}
+.public-popup{box-sizing:border-box;width:min(var(--popup-width,640px),94vw);max-width:94vw;max-height:92dvh;margin:auto;padding:var(--popup-padding,clamp(1rem,3vw,2rem));overflow:auto;border:1px solid var(--page-border);border-radius:var(--popup-radius,var(--corner-radius));font:inherit;background:var(--popup-background,var(--page-surface));color:var(--page-text);text-align:start}
+.public-popup::backdrop{background:#000b}
+.popup-controls{display:flex;justify-content:flex-end;margin-bottom:1rem}
+.popup-controls[hidden]{display:none}
+.popup-controls button,.public-copy button{font:inherit;color:inherit;border:1px solid var(--page-border);border-radius:var(--corner-radius);background:transparent;padding:.5em .8em;min-height:2.5rem;cursor:pointer;overflow-wrap:anywhere}
+.popup-controls button{display:inline-flex;align-items:center;justify-content:center;min-width:2.5rem;padding:.2em;font-size:1.5em;line-height:1}
+.public-copy{min-width:0;text-align:var(--section-body-align,start)}
+.section-copy-text>h2{font-size:calc(var(--body-size) * 1.15);margin-bottom:.6em}
+.public-copy .prose{margin-bottom:.5em}
+.public-copy textarea{box-sizing:border-box;display:block;width:100%;max-width:100%;min-height:3.5em;resize:vertical;font:inherit;font-family:monospace;line-height:1.5;background:transparent;color:inherit;border:1px solid var(--page-border);border-radius:var(--corner-radius);padding:.6em;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-all;margin-block:.5rem}
+.public-copy .copy-status{font-size:.9em;overflow-wrap:anywhere;margin:.5em 0 0}
+.public-copy .copy-status:empty{display:none}
+@media print{.section-popup-content::details-content{display:block;content-visibility:visible}.public-copy button,.popup-controls{display:none!important}.section-popup-content>.popup-body{display:block}}

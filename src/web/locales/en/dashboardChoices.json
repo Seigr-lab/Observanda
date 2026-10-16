@@ -1,0 +1,20 @@
+{
+  "recordType": "Record type",
+  "allTypes": "All types",
+  "searchRecordTypes": "Search record types",
+  "selected": "Saved selection",
+  "unavailable": "Unavailable in this scope",
+  "loading": "Loading choices…",
+  "empty": "No matching choices.",
+  "range": "{first}–{last} of {total}",
+  "error": "Choices could not be loaded. Your saved selection is unchanged.",
+  "retry": "Retry choices",
+  "previous": "Previous choices",
+  "next": "Next choices",
+  "invalidPage": "The choices response is invalid.",
+  "projects": "Projects to include",
+  "books": "Lab books to include",
+  "searchProjects": "Search projects",
+  "searchBooks": "Search lab books",
+  "allBooks": "All lab books"
+}

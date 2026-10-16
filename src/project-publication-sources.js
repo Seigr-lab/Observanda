@@ -1,0 +1,47 @@
+import {AppError} from './errors.js';
+import {revisionId} from './web/revision-model.js';
+import {researchId} from './web/research-reference.js';
+import {LabBookDirectory} from './lab-book-directory.js';
+import {projectCollectionReader} from './project-collection-reader.js';
+import {WebsiteResearch} from './website-research.js';
+
+// One request owns source credentials; a saved website owns only namespace
+// references and consent. The registry resolves each namespace when it is used.
+export async function publicationSourceReader(application,client,{workspaceId,scope=null,signal,check=async()=>{}}){
+ if(!researchId(workspaceId))throw new AppError('INVALID');
+ const registry=await application.registry(),directory=await registry.read(),host=scope?directory.value.projects.find(project=>project.projectId===scope):null;
+ if(scope&&!host)throw new AppError('NOT_FOUND');if(workspaceId!==(host?.namespaceId??registry.workspaceId))throw new AppError('WORKSPACE_CHANGED');
+ const reader=projectCollectionReader(application,client,check);
+ return {
+  async use(sourceId,snapshotId,consume,{prepare}={}){
+   if(!researchId(sourceId)||snapshotId!==undefined&&!revisionId(snapshotId))throw new AppError('INVALID');signal?.throwIfAborted();
+   if(directory.value.deleted?.some(project=>project.namespaceId===sourceId))throw new AppError('PROJECT_DELETED');
+   const entry=directory.value.projects.find(project=>project.namespaceId===sourceId)??(sourceId!==registry.workspaceId?await new LabBookDirectory(registry).locate(sourceId):null);
+   if(!entry&&sourceId!==registry.workspaceId)throw new AppError('NOT_FOUND');
+   const target={workspaceId:sourceId,projectId:entry?.projectId??null,labBookId:entry?.labBookId??null};
+   const value=await reader.use(target,snapshotId,(store,snapshot,pinned)=>consume(store,snapshot,{...pinned,owner:target,projectNamespaceId:entry?directory.value.projects.find(project=>project.projectId===entry.projectId)?.namespaceId:null}),{prepare});
+   signal?.throwIfAborted();return {owner:target,value};
+  },
+  async verify(){await reader.verify();if((await registry.read()).revision!==directory.revision)throw new AppError('RECORD_QUERY_CURSOR');signal?.throwIfAborted();},
+  close:()=>reader.close()
+ };
+}
+
+// Publication selectors read one explicit namespace. Locating a book neither
+// opens its siblings nor borrows their credentials or publication choices.
+export async function projectPublicationSource(application,client,command,{scope=null,signal,check=async()=>{}}={}){
+ if(!command||Object.keys(command).sort().join()!=='operation,query,sourceId,workspaceId'||!researchId(command.workspaceId)||!researchId(command.sourceId)||!['head','summary','content','record','sections','media'].includes(command.operation)||!command.query||typeof command.query!=='object'||Array.isArray(command.query))throw new AppError('INVALID');
+ const {workspaceId,sourceId,operation,query}=command;
+ if(operation==='head'?Object.keys(query).length:query.workspaceId!==sourceId||!revisionId(query.snapshotId))throw new AppError('INVALID');
+ const reader=await publicationSourceReader(application,client,{workspaceId,scope,signal,check});
+ try{
+  const result=await reader.use(sourceId,operation==='head'?undefined:query.snapshotId,async(store,snapshot,pinned)=>{
+   if(operation==='head'){
+    const metadata=snapshot.metadata;
+    return {workspaceId:sourceId,snapshotId:pinned.snapshotId,title:metadata.title,projects:metadata.projects.map(({id,title,parentId,share})=>({id,title,parentId:parentId??null,share})),notebooks:metadata.notebooks.map(({id,projectId,title})=>({id,projectId,title}))};
+   }
+   return new WebsiteResearch({storageKind:async()=>'catalogue',catalogue:fn=>fn(store)}).run(operation,query,{signal});
+  });
+  await reader.verify();return result;
+ }finally{await reader.close();}
+}

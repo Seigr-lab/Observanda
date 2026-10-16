@@ -1,0 +1,31 @@
+import {publicationVerificationDefinitions} from './publication-verification-jobs.js';
+import {deploymentJobDefinitions} from './deployment-jobs.js';
+import {repositoryJobDefinitions} from './github-repository.js';
+import {Publisher} from './publishing.js';
+import {publicationJobDefinitions} from './publication-jobs.js';
+// Modules provide job semantics; one workspace worker schedules all types.
+import {DurableJobs,JobWorker} from './jobs.js';
+import {researchJobDefinitions} from './research-jobs.js';
+import {mediaJobDefinitions} from './media-imports.js';
+import {intakeJobDefinitions} from './intake/jobs.js';
+import {websiteWorkspace,websiteJobQueue} from './website-workspace.js';
+export function websitePublisher(publisher,workspace){
+ if(!workspace.websiteId)return publisher;
+ const scoped=new Publisher(workspace.root,{workspace,request:publisher.request,ssh:publisher.ssh,connection:publisher.connection},workspace.vault);
+ Object.defineProperty(scoped,'token',{get:()=>publisher.token,set:value=>{publisher.token=value;}});return scoped;
+}
+function publicationDefinitions(workspace,publisher,current){
+ const definitions=(w,p,q)=>({...publicationJobDefinitions(w,q),...deploymentJobDefinitions(w,p,q),...repositoryJobDefinitions(w,p,q),...publicationVerificationDefinitions(w,p,q)});
+ const normal=definitions(workspace,publisher,current),result={};
+ for(const [type,definition] of Object.entries(normal))result[type]=Object.fromEntries(Object.keys(definition).map(method=>[method,(job,...args)=>{
+  if(!job.input.websiteId)return definition[method](job,...args);
+  const scoped=websiteWorkspace(workspace,job.input.websiteId),services=definitions(scoped,websitePublisher(publisher,scoped),()=>websiteJobQueue(current(),job.input.websiteId));
+  return services[type][method](job,...args);
+ }]));return result;
+}
+export function workspaceJobDefinitions(workspace,publisher,current){return {...intakeJobDefinitions(workspace,current),...researchJobDefinitions(workspace,current),...mediaJobDefinitions(workspace,current),...publicationDefinitions(workspace,publisher,current)};}
+export function workspaceJobs(workspace,publisher=new Publisher(workspace.root,{},workspace.vault),options={}){
+ const current=()=>queue;
+ const queue=new DurableJobs(workspace,workspaceJobDefinitions(workspace,publisher,current),options);
+ return {queue,worker:new JobWorker(queue)};
+}

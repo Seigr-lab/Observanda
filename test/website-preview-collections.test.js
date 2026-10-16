@@ -1,0 +1,84 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,rm} from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import {randomUUID} from 'node:crypto';
+import {sampleNotebook} from '../src/sample.js';
+import {upgradeNotebook} from '../src/model.js';
+import {newElement} from '../src/web/composition-tree.js';
+import {defaultFeed,orderFeed} from '../src/web/website-feed-model.js';
+import {createRegion,assignRegion} from '../src/web/website-regions.js';
+import {websitePreviewSource} from '../src/website-preview-source.js';
+import {workspaceSaveRequest} from '../src/web/workspace-edits.js';
+import {recordRevisions} from '../src/research.js';
+import {ResearchCatalogue} from '../src/research-catalogue.js';
+import {renderPublication} from '../src/publication.js';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {clearVault} from '../src/encryption.js';
+import {copyPlan,encryptedCopy} from '../src/locations.js';
+import {createAccess,takeCreatedVault} from '../src/access.js';
+import {Workspace} from '../src/storage.js';
+
+async function fixture(t,count=601){
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-canvas-collections-')),book=upgradeNotebook(sampleNotebook()),seed=book.entries[0];
+ book.entries=Array.from({length:count},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'Observation '+String(i).padStart(4,'0'),body:'Exact original '+i,occurredOn:'2026-10-'+String(1+i%9).padStart(2,'0'),sections:[],attachments:[],figures:[],relations:[],tags:i%2?['odd']:['even'],share:i%3===0}));
+ const feed=(size,tag='',limit=0)=>({...newElement('records',randomUUID),filter:{projectId:null,tag,limit},feed:{...defaultFeed('records'),pageSize:size,visitorFilters:true,visitorOrder:true,visitorView:true}});
+ book.website.home.sections=[feed(10),feed(17,'odd',81)];
+ const sidebar=createRegion(book.website,'sidebar','Independent view',{makeId:randomUUID});sidebar.sections=[feed(7,'even')];assignRegion(book.website,'home','sidebar',sidebar.id);
+ const f=await encryptedFixture(directory,book),etag=(await f.workspace.outline()).etag;
+ t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ return {...f,directory,book,command:draft=>({...workspaceSaveRequest(book,draft,recordRevisions(book)),baseEtag:etag})};
+}
+const navigation=(page,cursor,visitor=page.visitor)=>{
+ const params=new URLSearchParams();if(cursor){params.set('collection',page.key);params.set('cards',cursor);}
+ if(visitor){params.set('feed',page.key);for(const name of ['search','tag','type','order'])if(visitor[name])params.set('feed'+name[0].toUpperCase()+name.slice(1),visitor[name]);}
+ return {key:page.key,definition:page.definition,query:params.toString()};
+};
+const ids=records=>records.map(record=>record.id);
+
+test('canvas feeds retain independent windows over growing saved and unsaved records, with reversible author limits',async t=>{
+ const f=await fixture(t),draft=structuredClone(f.book);draft.entries.splice(4,1);draft.entries[2].occurredOn='2030-01-01';draft.entries[2].tags=['odd'];draft.entries.push({...structuredClone(draft.entries[0]),id:randomUUID(),title:'New unsaved observation',occurredOn:'2031-01-01'});
+ const command=f.command(draft),load=collections=>websitePreviewSource(f.workspace,command,{designTarget:'home',collections});
+ const original=ResearchCatalogue.prototype.record,documents=ResearchCatalogue.prototype.queryDocuments,allowed=new Set([...command.changes,...command.removed].filter(c=>f.book.entries.some(r=>r.id===c.id)).map(c=>c.id));let read=0;
+ ResearchCatalogue.prototype.record=function(id,...args){assert.ok(allowed.has(id),'A feed loaded an original record');return original.call(this,id,...args);};
+ ResearchCatalogue.prototype.queryDocuments=async function*(...args){for await(const value of documents.apply(this,args)){read++;yield value;}};
+ try{
+  let {context}=await load([]);assert.ok(context.recordCards.length<=34);assert.equal(context.entries.length,0);assert.ok(read<140);const keys=draft.website.home.sections.map(s=>'section:'+s.id),first=context.collectionPages.find(p=>p.key===keys[0]),limited=context.collectionPages.find(p=>p.key===keys[1]);
+  const expected=orderFeed(draft.entries,'records','newest');assert.deepEqual(first.recordIds,ids(expected.slice(0,10)));assert.deepEqual(limited.recordIds,ids(expected.filter(r=>r.tags.includes('odd')).slice(0,17)));
+  const second=navigation(first,first.nextCursor);({context}=await load([second]));assert.deepEqual(context.collectionPages.find(p=>p.key===keys[0]).recordIds,ids(expected.slice(10,20)));assert.deepEqual(context.collectionPages.find(p=>p.key===keys[1]).recordIds,limited.recordIds);
+  const backwards=navigation(limited,null,{...limited.visitor,order:'oldest'}),selection=expected.filter(r=>r.tags.includes('odd')).slice(0,81).reverse(),seen=[];let current=backwards;
+  for(;;){
+   ({context}=await load([second,current]));const page=context.collectionPages.find(p=>p.key===keys[1]);seen.push(...page.recordIds);assert.deepEqual(context.collectionPages.find(p=>p.key===keys[0]).recordIds,ids(expected.slice(10,20)));
+   if(!page.nextCursor){assert.equal(page.recordIds.length,13);current=navigation(page,page.previousCursor);break;}current=navigation(page,page.nextCursor);
+  }
+  assert.deepEqual(seen,ids(selection));({context}=await load([second,current]));assert.deepEqual(context.collectionPages.find(p=>p.key===keys[1]).recordIds,ids(selection.slice(51,68)));
+  // Presentation edits retain position; author selection edits restart only
+  // the changed feed, without applying a stale selection's cursor.
+  draft.website.title='Edited design';let result=await websitePreviewSource(f.workspace,f.command(draft),{designTarget:'home',collections:[second,current]});assert.deepEqual(result.context.collectionPages.find(p=>p.key===keys[0]).recordIds,ids(expected.slice(10,20)));
+  draft.website.home.sections[1].filter.tag='even';result=await websitePreviewSource(f.workspace,f.command(draft),{designTarget:'home',collections:[second,current]});assert.deepEqual(result.context.collectionPages.find(p=>p.key===keys[0]).recordIds,ids(expected.slice(10,20)));assert.deepEqual(result.context.collectionPages.find(p=>p.key===keys[1]).recordIds,ids(expected.filter(r=>r.tags.includes('even')).slice(0,17)));
+  for(const collections of [null,[second,second],[{...second,query:second.query+'&unknown=x'}],[{...second,query:'collection='+encodeURIComponent(first.key)+'&cards=invalid'}]])await assert.rejects(load(collections),{code:'INVALID'});
+  const changedSite={...f.workspace,websiteId:randomUUID(),outline:f.workspace.outline.bind(f.workspace),storageKind:f.workspace.storageKind.bind(f.workspace),catalogue:f.workspace.catalogue.bind(f.workspace)};
+  await assert.rejects(websitePreviewSource(changedSite,command,{designTarget:'home',collections:[second]}),{code:'INVALID'});
+  assert.throws(()=>renderPublication(context),{code:'INVALID'});
+ }finally{ResearchCatalogue.prototype.record=original;ResearchCatalogue.prototype.queryDocuments=documents;}
+});
+
+test('sparse feed filters and default record directories continue without retaining the corpus and restore under a fresh key',async t=>{
+ const f=await fixture(t,601),command=f.command(f.book),target='notebook:'+f.book.notebooks[0].id,expected=ids(orderFeed(f.book.entries,'records','newest'));let collections=[],seen=[],last;
+ for(;;){const {context}=await websitePreviewSource(f.workspace,command,{designTarget:target,collections});assert.ok(context.recordCards.length<=24);last=context.collectionPages.find(p=>p.key==='body');seen.push(...last.recordIds);if(!last.nextCursor)break;collections=[navigation(last,last.nextCursor)];}
+ assert.deepEqual(seen,expected);assert.equal(last.recordIds.length,1);
+ const home=await websitePreviewSource(f.workspace,command,{designTarget:'home'}),page=home.context.collectionPages.find(p=>p.key.startsWith('section:'));
+ const query=navigation(page,null,{...page.visitor,search:'No such observation'}),sparse=await websitePreviewSource(f.workspace,command,{designTarget:'home',collections:[query]}),window=sparse.context.collectionPages.find(p=>p.key===page.key);
+ assert.equal(window.scanned,256);assert.deepEqual(window.recordIds,[]);assert.ok(window.nextCursor);assert.ok(sparse.context.recordCards.length<=24);
+ const output=renderPublication(sparse.context,{designTarget:'home',workspaceContent:true,singlePage:true});assert.match(output.files.get('index.html'),/No matches in this part of the feed/);
+ const further=await websitePreviewSource(f.workspace,command,{designTarget:'home',collections:[navigation(window,window.nextCursor)]}),forward=further.context.collectionPages.find(p=>p.key===page.key);assert.equal(forward.scanned,256);assert.ok(forward.previousCursor);
+ const back=await websitePreviewSource(f.workspace,command,{designTarget:'home',collections:[navigation(forward,forward.previousCursor)]});assert.equal(back.context.collectionPages.find(p=>p.key===page.key).previousCursor,null);
+ const controller=new AbortController();controller.abort();await assert.rejects(websitePreviewSource(f.workspace,command,{designTarget:target,signal:controller.signal}),{name:'AbortError'});
+ const access=await createAccess('','canvas collection recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const location=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'restored')),access,vault,f.vault),restored=new Workspace(location,vault),recovered=await websitePreviewSource(restored,command,{designTarget:'home'});
+ assert.deepEqual(recovered.context.collectionPages.map(p=>p.recordIds),home.context.collectionPages.map(p=>p.recordIds));
+ const next=home.context.collectionPages[0],restoredPage=recovered.context.collectionPages[0];
+ const originalNext=await websitePreviewSource(f.workspace,command,{designTarget:'home',collections:[navigation(next,next.nextCursor)]}),restoredNext=await websitePreviewSource(restored,command,{designTarget:'home',collections:[navigation(restoredPage,restoredPage.nextCursor)]});
+ assert.deepEqual(restoredNext.context.recordCards,originalNext.context.recordCards);
+});

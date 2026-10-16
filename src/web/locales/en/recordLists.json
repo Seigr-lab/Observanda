@@ -1,0 +1,27 @@
+{
+  "refresh": "Refresh records",
+  "loading": "Loading records...",
+  "range": "Records {first}-{last} of {total}",
+  "emptyRange": "0 records",
+  "pages": "Record pages",
+  "previous": "Previous records",
+  "next": "Next records",
+  "noMatches": "No records match these filters",
+  "adjust": "Adjust the filters or clear them to see the records in this scope.",
+  "clear": "Clear filters",
+  "changed": "Saved records have changed. Refresh records to see the latest results.",
+  "invalidPage": "The record list response was incomplete. Refresh records to try again.",
+  "experiments": {
+    "one": "{count} experiment",
+    "other": "{count} experiments"
+  },
+  "runs": {
+    "one": "{count} run / take",
+    "other": "{count} runs / takes"
+  },
+  "other": {
+    "one": "{count} other record",
+    "other": "{count} other records"
+  },
+  "unlock": "Unlock to load records"
+}

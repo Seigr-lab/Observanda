@@ -1,0 +1,45 @@
+import {test,expect} from '@playwright/test';
+import path from 'node:path';
+import {attemptWindowFixture} from '../record-attempt-window-fixture.js';
+import {testServer} from '../device-fixture.js';
+import {RecordDocument} from '../../src/record-document.js';
+import {RecordContent} from '../../src/record-content.js';
+import {ResearchDrafts} from '../../src/research-drafts.js';
+import {RecordValueDrafts} from '../../src/record-value-drafts.js';
+import {retainedDraft} from '../fixtures/record-draft-review.js';
+import {preparation,event} from '../fixtures/attempts.js';
+
+test('preparation choices page, retry and recover the exact selected context before saving new run facts',async({page},info)=>{
+ test.setTimeout(180000);page.setDefaultTimeout(15000);const f=await attemptWindowFixture(),app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(f.directory,'preferences.json')}),original=RecordDocument.prototype.field,errors=[];
+ RecordDocument.prototype.field=function(path,...args){if(path.join()==='attempt')throw Error('Authoring loaded the full run history');return original.call(this,path,...args);};page.on('pageerror',e=>errors.push(e.message));
+ const dialog=page.getByRole('dialog',{name:'Edit Preparation, events and assessments',exact:true}),form=dialog.locator('#attempt-form');
+ const save=async()=>{const receipt=page.waitForResponse(r=>r.url().endsWith('/api/research/records/values/save')),cleanup=page.waitForResponse(r=>r.url().endsWith('/api/research/drafts/remove'));await dialog.getByRole('button',{name:'Save changes',exact:true}).click();expect((await receipt).ok()).toBe(true);expect((await cleanup).ok()).toBe(true);await expect(dialog).not.toBeVisible();};
+ try{
+  await page.goto(app.url);await page.goto(app.origin+'/#/records/'+f.record.id+'/read');await page.getByRole('button',{name:'Record event',exact:true}).click();await expect(form.locator('[data-attempt-preparation]')).toContainText('Preparation revision 9');
+  await form.getByLabel('Label',{exact:true}).fill('New acquisition with earlier preparation');await form.getByRole('button',{name:'Choose preparation revision',exact:true}).click();await expect(form.locator('[data-attempt-preparation-choices]')).toContainText('1–4 of 9');
+  let failed=false;await page.route('**/api/research/records/values/attempt-context',async route=>{if(!failed&&route.request().postDataJSON().offset===4){failed=true;await route.abort('failed');return;}await route.continue();});
+  await form.getByRole('button',{name:'Next preparations',exact:true}).click();await expect(form.locator('[data-attempt-error]')).not.toBeEmpty();await expect(form.locator('[data-attempt-preparation-choices]')).toContainText('1–4 of 9');
+  await form.getByRole('button',{name:'Next preparations',exact:true}).click();await expect(form.locator('[data-attempt-preparation-choices]')).toContainText('5–8 of 9');await form.locator('[data-attempt-preparation-choices] > section').filter({hasText:'Preparation revision 6'}).getByRole('button',{name:'Use this preparation',exact:true}).click();await expect(form.locator('[data-attempt-preparation]')).toContainText('Preparation revision 6');
+  await dialog.getByRole('button',{name:'Keep recovery checkpoint and close',exact:true}).click();await expect(dialog).not.toBeVisible();
+  const retained=(await new ResearchDrafts(f.workspace).list({workspaceId:f.book.id})).drafts[0],checkpoint=await new RecordValueDrafts(f.workspace).read({id:retained.id,workspaceId:f.book.id,expectedRevision:retained.revision});expect(checkpoint.value.value.preparationId).toBe(f.record.attempt.preparations[5].id);
+  await page.reload();await page.getByRole('button',{name:'Review drafts',exact:true}).click();await page.getByRole('dialog',{name:'Recoverable record drafts',exact:true}).getByRole('button',{name:'Review draft',exact:true}).click();await expect(form.getByLabel('Label',{exact:true})).toHaveValue('New acquisition with earlier preparation');await expect(form.locator('[data-attempt-preparation]')).toContainText('Preparation revision 6');await save();
+  const reader=new RecordContent(f.workspace),target={workspaceId:f.book.id,recordId:f.record.id,pagedHeader:true};const afterEvent=await reader.read({...target,windows:{events:15}});expect(afterEvent.header.attempt.events[0].preparationId).toBe(f.record.attempt.preparations[5].id);
+  await page.getByRole('button',{name:'Assess criterion',exact:true}).click();await form.getByRole('button',{name:'Choose preparation revision',exact:true}).click();await form.getByRole('button',{name:'Next preparations',exact:true}).click();await form.locator('[data-attempt-preparation-choices] > section').filter({hasText:'Preparation revision 7'}).getByRole('button',{name:'Use this preparation',exact:true}).click();await form.locator('[name="criterionId"]').selectOption(f.record.attempt.preparations[6].criteria[1].id);await form.getByLabel('Reason / limitations',{exact:true}).fill('Independent review of the earlier configuration');
+  await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='200%');expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);await page.screenshot({path:info.outputPath('selected-preparation-context-mobile.png')});await save();const afterAssessment=await reader.read({...target,windows:{assessments:15}});expect(afterAssessment.header.attempt.assessments[0].criterionId).toBe(f.record.attempt.preparations[6].criteria[1].id);expect(errors).toEqual([]);
+ }finally{RecordDocument.prototype.field=original;await app.close();await f.close();}
+});
+
+test('recovery preparation selection uses revisions authored in that checkpoint',async({page})=>{
+ test.setTimeout(180000);const f=await attemptWindowFixture(),mine=structuredClone(f.record),p={...preparation(),supersedes:mine.attempt.preparations.at(-1).id,reason:'New setup',applicability:'Checkpoint-only configuration'},e=event(mine.attempt.preparations.at(-1),{label:'Unfinished new event'});
+ mine.attempt.preparations.push(p);mine.attempt.events.push(e);await retainedDraft(f.workspace,f.book.id,f.record,mine);
+ const app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(f.directory,'preferences.json')}),original=RecordDocument.prototype.field,errors=[];page.on('pageerror',error=>errors.push(error.message));
+ RecordDocument.prototype.field=function(path,...args){if(path.join()==='attempt')throw Error('Checkpoint editing loaded all run history');return original.call(this,path,...args);};
+ const review=page.locator('.record-draft-review'),editor=page.locator('.record-draft-edit');
+ try{
+  await page.goto(app.url);await page.getByRole('button',{name:'Review drafts',exact:true}).click();await page.locator('.record-draft-list').getByRole('button',{name:'Review draft',exact:true}).click();await page.locator('[data-preview-recover]').click();await review.getByRole('button',{name:'Edit checkpoint',exact:true}).click();
+  await editor.locator('[data-checkpoint-group]').selectOption('events');await editor.getByRole('button',{name:'Next values',exact:true}).click();await editor.locator('[data-checkpoint-select]').selectOption('attempt:event:'+e.id);await expect(editor.getByLabel('Label',{exact:true})).toHaveValue('Unfinished new event');
+  await editor.getByRole('button',{name:'Choose preparation revision',exact:true}).click();await editor.getByRole('button',{name:'Next preparations',exact:true}).click();await expect(editor.locator('[data-attempt-preparation-choices]')).toContainText('5–8 of 10');await editor.getByRole('button',{name:'Next preparations',exact:true}).click();await editor.locator('[data-attempt-preparation-choices] > section').filter({hasText:'Checkpoint-only configuration'}).getByRole('button',{name:'Use this preparation',exact:true}).click();await expect(editor.locator('[data-checkpoint-status]')).toHaveText('Checkpoint changes kept.');
+  await editor.getByRole('button',{name:'Keep changes and return to review',exact:true}).click();await review.getByRole('button',{name:'Save recovered record',exact:true}).click();await expect(review).toHaveCount(0,{timeout:30000});
+  const saved=await new RecordContent(f.workspace).read({workspaceId:f.book.id,recordId:f.record.id,pagedHeader:true,windows:{events:15}});expect(saved.header.attempt.events[0].preparationId).toBe(p.id);expect(errors).toEqual([]);
+ }finally{RecordDocument.prototype.field=original;await app.close();await f.close();}
+});

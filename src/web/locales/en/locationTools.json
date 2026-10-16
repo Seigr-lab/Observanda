@@ -1,0 +1,8 @@
+{
+  "label": "Project tools",
+  "overview": "{name} overview",
+  "oneItem": "1 item",
+  "items": "{count} items",
+  "failed": "Item counts could not be loaded.",
+  "retry": "Retry counts"
+}

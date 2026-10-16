@@ -1,0 +1,73 @@
+import {test,expect} from '@playwright/test';
+import {mkdtemp,rm} from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import {randomUUID} from 'node:crypto';
+import {sampleNotebook} from '../../src/sample.js';
+import {encryptedFixture} from './encrypted-fixture.js';
+import {testServer} from '../device-fixture.js';
+import {clearVault} from '../../src/encryption.js';
+import {RecordWriting} from '../../src/record-writing.js';
+import {ResearchCatalogue} from '../../src/research-catalogue.js';
+import {ResearchDrafts} from '../../src/research-drafts.js';
+import {RecordContent} from '../../src/record-content.js';
+
+test('edit and recover a late section through the reader without loading an entire record',async({page},info)=>{
+ test.setTimeout(180000);
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-writing-ui-')),book=sampleNotebook(),record=book.entries[0];
+ record.sections=Array.from({length:129},(_,i)=>({id:randomUUID(),title:'Section '+(i+1),body:'Exact retained '+i+' '+('observation '.repeat(100))}));
+ const f=await encryptedFixture(directory,book),app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')});
+ const recordRead=ResearchCatalogue.prototype.record,errors=[],requests=[];
+ ResearchCatalogue.prototype.record=()=>{throw Error('The selected-writing workflow loaded an entire record');};
+ page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{if(request.url().includes('/api/'))requests.push(new URL(request.url()).pathname);});
+ try{
+  await page.goto(app.url);await page.goto(app.origin+'/#/records/'+record.id+'/read/'+record.sections[128].id);
+  const section=page.locator('#record-section-'+record.sections[128].id),dialog=page.getByRole('dialog',{name:'Edit writing section',exact:true});
+  await section.getByRole('button',{name:'Edit section',exact:true}).click();await expect(dialog.getByLabel('Section heading',{exact:true})).toHaveValue('Section 129');
+  await dialog.getByLabel('Section heading',{exact:true}).fill('Recovered late section');
+  await dialog.locator('.ProseMirror').fill('Selected writing survives a reload.');
+  await expect(dialog.locator('[data-writing-status]')).toHaveText('Recovery checkpoint saved.');
+  await dialog.getByRole('button',{name:'Keep recovery checkpoint and close',exact:true}).click();await expect(dialog).not.toBeVisible();
+  await page.reload();await expect(page.getByRole('button',{name:'Review drafts',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Review drafts',exact:true}).click();
+  await page.getByRole('dialog',{name:'Recoverable record drafts',exact:true}).getByRole('button',{name:'Review draft',exact:true}).click();
+  await expect(dialog.getByLabel('Section heading',{exact:true})).toHaveValue('Recovered late section');await expect(dialog.locator('.ProseMirror')).toHaveText('Selected writing survives a reload.');
+  await dialog.getByRole('button',{name:'Save changes',exact:true}).click();await expect(dialog).not.toBeVisible();
+  await expect(section).toContainText('Recovered late section');await expect(section).toContainText('Selected writing survives a reload.');
+  await expect.poll(async()=>(await new ResearchDrafts(f.workspace).list({workspaceId:book.id})).drafts.length).toBe(0);
+  await section.getByRole('button',{name:'Edit section',exact:true}).click();await dialog.locator('.ProseMirror').fill('My concurrent edit.');
+  const service=new RecordWriting(f.workspace),target={workspaceId:book.id,recordId:record.id,sectionId:record.sections[128].id},latest=await service.read(target);
+  await service.save({...target,expectedRevision:latest.revision,value:{title:'Changed by another session',body:'Saved competing observation.'}});
+  await dialog.getByRole('button',{name:'Save changes',exact:true}).click();
+  await expect(dialog.locator('.record-writing-conflict')).toContainText('Saved competing observation.');await expect(dialog.locator('.ProseMirror')).toHaveText('My concurrent edit.');
+  await dialog.getByRole('button',{name:'Use saved writing',exact:true}).click();
+  await expect(dialog.locator('.ProseMirror')).toHaveText('Saved competing observation.');await expect(dialog.getByRole('button',{name:'Save changes',exact:true})).toBeDisabled();
+  await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='200%');
+  expect(await dialog.evaluate(element=>element.scrollWidth<=element.clientWidth+1)).toBe(true);
+  await dialog.getByLabel('Section heading',{exact:true}).focus();
+  expect(await dialog.evaluate(element=>{
+   const fields=element.querySelector('[data-writing-fields]').getBoundingClientRect(),actions=element.querySelector('.dialog-actions').getBoundingClientRect();return actions.top>=fields.bottom;
+  })).toBe(true);
+  await page.screenshot({path:info.outputPath('selected-writing-mobile.png')});
+  await dialog.getByRole('button',{name:'Close',exact:true}).click();
+  await page.setViewportSize({width:1280,height:900});await page.evaluate(()=>document.documentElement.style.fontSize='');
+  // The service commits the insertion, but its first response is lost. The
+  // explicit retry must confirm that same section instead of creating another.
+  await page.route('**/api/research/records/sections',async route=>{await route.fetch();await route.abort('failed');},{times:1});
+  await page.getByRole('button',{name:'Add writing section',exact:true}).click();
+  await page.getByRole('button',{name:'Retry section change',exact:true}).click();
+  await expect(dialog).toBeVisible();await dialog.getByLabel('Section heading',{exact:true}).fill('Added through the reader');
+  await dialog.locator('.ProseMirror').fill('New writing uses the same retained block workflow.');
+  await dialog.getByRole('button',{name:'Save changes',exact:true}).click();await expect(dialog).not.toBeVisible();
+  const content=new RecordContent(f.workspace),read=()=>content.read({workspaceId:book.id,recordId:record.id,offset:128,header:false});
+  await expect.poll(async()=>(await read()).sections.total).toBe(130);
+  const created=(await read()).sections.values.find(value=>value.title==='Added through the reader');expect(created).toBeTruthy();
+  const newSection=page.locator('#record-section-'+created.id);await expect(newSection).toContainText('New writing uses the same retained block workflow.');
+  await newSection.getByRole('button',{name:'Move up',exact:true}).click();
+  await expect.poll(async()=>(await read()).sections.values[0].id).toBe(created.id);
+  page.once('dialog',prompt=>prompt.accept());await newSection.getByRole('button',{name:'Remove section',exact:true}).click();
+  await expect.poll(async()=>(await read()).sections.total).toBe(129);await expect(newSection).toHaveCount(0);
+  expect(requests.filter(route=>/^\/api\/workspace\/read\/(selection|page)$/.test(route)||route==='/api/research/records/save'||route==='/api/research/drafts/transfer/readBase')).toEqual([]);
+  expect(errors).toEqual([]);
+ }finally{ResearchCatalogue.prototype.record=recordRead;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+});

@@ -1,0 +1,44 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';
+import {mkdtemp,rm} from 'node:fs/promises';import path from 'node:path';import os from 'node:os';
+import {encryptedFixture} from './browser/encrypted-fixture.js';import {sampleNotebook} from '../src/sample.js';import {startServer} from '../src/server.js';import {clearVault} from '../src/encryption.js';
+import {migrationFixture} from './migration-fixture.js';import {readProgressStream} from '../src/web/progress-stream.js';
+import {randomUUID} from 'node:crypto';
+test('source inspection is authenticated, context-bound, cancellable and leaves the encrypted workspace unchanged',async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-inventory-http-')),f=await encryptedFixture(path.join(directory,'app'),sampleNotebook()),source=path.join(directory,'source');
+ await migrationFixture(source,{creative:true});const app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences')});
+ t.after(async()=>{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:5,retryDelay:100});});
+ const route=app.origin+'/api/migration/inventory',payload=JSON.stringify({source});
+ assert.equal((await fetch(route,{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:payload})).status,401);
+ const login=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});
+ const cookie=login.headers.get('set-cookie').split(';')[0],base={Origin:app.origin,Cookie:cookie,'Content-Type':'application/json'};
+ const storage=await (await fetch(app.origin+'/api/storage',{headers:base})).json(),headers={...base,'X-Observanda-Workspace':storage.contextId};
+ const before=await f.workspace.read();
+ assert.equal((await fetch(route,{method:'POST',headers:{...headers,Origin:'https://example.invalid'},body:payload})).status,403);
+ assert.equal((await fetch(route,{method:'POST',headers:{...headers,'X-Observanda-Workspace':'stale'},body:payload})).status,409);
+ const response=await fetch(route,{method:'POST',headers,body:payload}),progress=[];
+ assert.match(response.headers.get('content-type'),/ndjson/);const report=await readProgressStream(response,p=>progress.push(p));
+ assert.equal(report.complete,true);assert.ok(progress.length);assert.deepEqual(await f.workspace.read(),before);
+ const bad=await fetch(route,{method:'POST',headers,body:JSON.stringify({source,manifest:'../escape'})});
+ await assert.rejects(readProgressStream(bad,()=>{}),{code:'INVENTORY_INVALID'});
+ const importRoute=app.origin+'/api/migration/import/',command={workspaceId:before.book.id,id:randomUUID()},post=async(op,extra={})=>{
+  const response=await fetch(importRoute+op,{method:'POST',headers,body:JSON.stringify({...command,...extra})});return readProgressStream(response,()=>{});
+ };
+ assert.equal((await fetch(importRoute+'create',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:'{}'})).status,401);
+ assert.equal((await fetch(importRoute+'list',{method:'POST',headers:{...headers,'X-Observanda-Workspace':'stale'},body:'{}'})).status,409);
+ let batch=await post('create',{source,expectedPin:report.source.pin,notebookId:before.book.notebooks[0].id});while(batch.state==='staging')batch=await post('stage');
+ assert.deepEqual(await f.workspace.read(),before);assert.equal((await post('detail',{index:0})).source.id,'listening-method');
+ const original=app.origin+'/api/migration/original/'+command.id+'/0/0?context='+storage.contextId;
+ assert.equal((await fetch(original)).status,401);assert.equal((await fetch(original.replace(storage.contextId,'stale'),{headers:base})).status,409);
+ const download=await fetch(original,{headers:base});assert.equal(download.status,200);assert.equal(download.headers.get('content-type'),'application/octet-stream');assert.match(download.headers.get('content-disposition'),/^attachment;/);assert.match(await download.text(),/Listen and note changes/);
+ const controller=new AbortController();const pending=await fetch(route,{method:'POST',headers,body:payload,signal:controller.signal});controller.abort();
+ await assert.rejects(pending.text());
+ const locked=await fetch(app.origin+'/api/access/lock',{method:'POST',headers,body:'{}'});assert.equal(locked.status,200,await locked.text());
+ assert.equal((await fetch(route,{method:'POST',headers,body:payload})).status,401);
+ assert.equal((await fetch(original,{headers:base})).status,401);assert.equal((await fetch(importRoute+'page',{method:'POST',headers,body:JSON.stringify(command)})).status,401);
+});
+test('progress transport rejects truncated results and data following a result',async()=>{
+ const response=s=>new Response(s);
+ await assert.rejects(readProgressStream(response('{"progress":{"filesRead":1}}\n'),()=>{}),/interrupted/);
+ await assert.rejects(readProgressStream(response('{"result":{}}\n{"progress":{}}\n'),()=>{}),/Unexpected/);
+ await assert.rejects(readProgressStream(response('{"error":{"code":"INVENTORY_CHANGED"}}\n'),()=>{}),{code:'INVENTORY_CHANGED'});
+});

@@ -1,0 +1,16 @@
+{
+  "dashboard": "Oversikt",
+  "projects": "Prosjekt",
+  "overview": "Opne prosjektoversikta",
+  "newProject": "Nytt prosjekt",
+  "settings": "Innstillingar",
+  "workspaceSettings": "Innstillingar for arbeidsområdet",
+  "workspaces": "Arbeidsområde",
+  "preferences": "Innstillingar",
+  "lock": "Lås arbeidsområdet",
+  "openProject": "Opne prosjektet {title}",
+  "menu": "Meny",
+  "openMenu": "Opne appmenyen",
+  "closeMenu": "Lukk appmenyen",
+  "resize": "Endre breidda på navigasjonen"
+}

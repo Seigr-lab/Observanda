@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="100%" height="100%" viewBox="0 0 512 512" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:affinity="https://www.affinity.studio/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+    <g transform="matrix(0.782315,0,0,0.782315,51.133877,51.396357)">
+        <path d="M261.872,91.261C355.849,91.261 432.147,167.559 432.147,261.536C432.147,355.513 355.849,431.811 261.872,431.811C167.894,431.811 91.596,355.513 91.596,261.536C91.596,167.559 167.894,91.261 261.872,91.261ZM261.872,201.94C294.764,201.94 321.468,228.644 321.468,261.536C321.468,294.428 294.764,321.132 261.872,321.132C228.979,321.132 202.275,294.428 202.275,261.536C202.275,228.644 228.979,201.94 261.872,201.94Z" style="fill:white;"/>
+    </g>
+    <g id="cercles-blancs" affinity:id="cercles blancs" transform="matrix(0.965926,0.258819,-0.258819,0.965926,73.821167,-56.727432)">
+        <g>
+            <g transform="matrix(1,0,0,1,116.666799,-3.491481)">
+                <circle cx="134.624" cy="52.2" r="23.291" style="fill:white;"/>
+            </g>
+            <g transform="matrix(1,0,0,1,121.375588,403.090942)">
+                <circle cx="134.624" cy="52.2" r="23.291" style="fill:white;"/>
+            </g>
+            <g transform="matrix(1,0,0,1,-62.624412,307.79973)">
+                <circle cx="134.624" cy="52.2" r="23.291" style="fill:white;"/>
+            </g>
+            <g transform="matrix(1,0,0,1,297.375588,307.79973)">
+                <circle cx="134.624" cy="52.2" r="23.291" style="fill:white;"/>
+            </g>
+            <g transform="matrix(1,0,0,1,298.084377,91.79973)">
+                <circle cx="134.624" cy="52.2" r="23.291" style="fill:white;"/>
+            </g>
+            <g transform="matrix(1,0,0,1,-61.915623,91.79973)">
+                <circle cx="134.624" cy="52.2" r="23.291" style="fill:white;"/>
+            </g>
+        </g>
+        <g transform="matrix(0.965926,0.258819,-0.258819,0.965926,73.821167,-56.727432)">
+            <g transform="matrix(1,0,0,1,116.666799,-3.491481)">
+                <circle cx="134.624" cy="52.2" r="23.291" style="fill:white;"/>
+            </g>
+            <g transform="matrix(1,0,0,1,121.375588,403.090942)">
+                <circle cx="134.624" cy="52.2" r="23.291" style="fill:white;"/>
+            </g>
+            <g transform="matrix(1,0,0,1,-62.624412,307.79973)">
+                <circle cx="134.624" cy="52.2" r="23.291" style="fill:white;"/>
+            </g>
+            <g transform="matrix(1,0,0,1,297.375588,307.79973)">
+                <circle cx="134.624" cy="52.2" r="23.291" style="fill:white;"/>
+            </g>
+            <g transform="matrix(1,0,0,1,298.084377,91.79973)">
+                <circle cx="134.624" cy="52.2" r="23.291" style="fill:white;"/>
+            </g>
+            <g transform="matrix(1,0,0,1,-61.915623,91.79973)">
+                <circle cx="134.624" cy="52.2" r="23.291" style="fill:white;"/>
+            </g>
+        </g>
+        <g transform="matrix(0.866025,0.5,-0.5,0.866025,159.809078,-92.415599)">
+            <g transform="matrix(1,0,0,1,116.666799,-3.491481)">
+                <circle cx="134.624" cy="52.2" r="23.291" style="fill:white;"/>
+            </g>
+            <g transform="matrix(1,0,0,1,121.375588,403.090942)">
+                <circle cx="134.624" cy="52.2" r="23.291" style="fill:white;"/>
+            </g>
+            <g transform="matrix(1,0,0,1,-62.624412,307.79973)">
+                <circle cx="134.624" cy="52.2" r="23.291" style="fill:white;"/>
+            </g>
+            <g transform="matrix(1,0,0,1,297.375588,307.79973)">
+                <circle cx="134.624" cy="52.2" r="23.291" style="fill:white;"/>
+            </g>
+            <g transform="matrix(1,0,0,1,298.084377,91.79973)">
+                <circle cx="134.624" cy="52.2" r="23.291" style="fill:white;"/>
+            </g>
+            <g transform="matrix(1,0,0,1,-61.915623,91.79973)">
+                <circle cx="134.624" cy="52.2" r="23.291" style="fill:white;"/>
+            </g>
+        </g>
+    </g>
+</svg>

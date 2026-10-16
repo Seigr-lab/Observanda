@@ -1,0 +1,17 @@
+{
+ "heading":"Saved revisions",
+ "invalid":"The history response was incomplete. Retry to load this page.",
+ "retry":"Retry history",
+ "loading":"Loading history…",
+ "range":"Revisions {first}–{last} of {total}",
+ "empty":"No saved revisions yet.",
+ "changed":"New revisions are available. Refresh history to see them.",
+ "pages":"History pages",
+ "first":"First history page",
+ "previous":"Previous history page",
+ "next":"Next history page",
+ "refresh":"Refresh history",
+ "open":"Open revision {revision}",
+ "selected":"Saved revision {revision}",
+ "close":"Close revision"
+}

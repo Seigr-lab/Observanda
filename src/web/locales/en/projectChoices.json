@@ -1,0 +1,11 @@
+{
+  "parents": "Search projects",
+  "templates": "Search saved templates",
+  "loading": "Loading choices…",
+  "count": "{count} of {total}",
+  "more": "More choices",
+  "retry": "Retry",
+  "failed": "Project choices could not be loaded.",
+  "book-parents": "Search destination projects",
+  "record-parents": "Search projects"
+}

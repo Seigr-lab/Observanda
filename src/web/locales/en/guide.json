@@ -1,0 +1,605 @@
+{
+  "topics": [
+    {
+      "id":"compound-figures",
+      "title":"Multi-panel figures, intervals and boundaries",
+      "sections":[
+        {"id":"panels","title":"Compare panels without losing their individual data","paragraphs":[
+          "In a record's Figures section, choose {ui:figureComposition.add}. The first two existing plots are copied into the figure when available. Use {ui:figureComposition.editing} to choose a panel, then edit it with the same data, axis and design controls as an individual plot. Choose a source and {ui:figureComposition.copy} to replace a panel with another saved-data snapshot, or use {ui:figureComposition.blank}. Figures support two to eight panels and one to three columns; reading and website views stack panels on narrow screens.",
+          "Copies keep their own measurements, uncertainty, annotations and presentation. Later edits to the source plot do not alter a copied panel. Explicit supporting results are copied with their exact analysis references and limitations. Use Results to declare or revise the interpretation for a whole figure or an individual panel. A figure with supporting results cannot be removed or replaced until those results have been retargeted or removed.",
+          "{ui:figureComposition.linkX} and {ui:figureComposition.linkY} use the combined range of the panels, including uncertainty and each panel's explicit limits. Shared axes require the same coordinate type, scale, label and orientation. Category coordinates cannot share a range. Turning range sharing off restores each panel's own saved settings."
+        ]},
+        {"id":"annotations","title":"Mark intervals and decision boundaries","paragraphs":[
+          "Open {ui:figureComposition.annotations} inside a plot. Choose {ui:figureComposition.addBoundary} for a single coordinate or {ui:figureComposition.addInterval} for a shaded region. Enter a label, axis, position and, for an interval, its end. Numeric coordinates use the axis's units; date coordinates accept ISO dates or timestamps with a timezone. Logarithmic coordinates must be positive. Change the color and interval opacity to suit the figure.",
+          "Annotations describe the plot and do not change its measurements or fitted axis range. Marks outside the visible range are clipped, while the data table retains their complete coordinates and labels. Download SVG preserves the complete figure. Download data includes measurements, uncertainty and a separate row for each annotation; multi-panel downloads identify the panel for every row. Workspace backups preserve the complete editable model."
+        ]}
+      ]
+    },
+    {
+      "id":"evidence-association-repair",
+      "title":"Review and repair missing imported evidence associations",
+      "sections":[{"id":"review","title":"Check an already applied batch","paragraphs":[
+        "From Workspaces, open Inspect external logbook and Review or resume saved imports. Open an applied batch and choose {ui:migrationImport.evidenceCheck}. Review each filename, original path, byte count, SHA-256 and owning record. Shared bytes remain stored once, while each record and relative source path has its own association.",
+        "{ui:migrationImport.evidenceApply} verifies the retained original bytes and adds only the missing associations displayed on that page. A changed review must be checked again. Continue through all pages to inspect the complete batch. Records intentionally removed from the workspace are identified and are not recreated. Download links allow inspection before applying a repair.",
+        "Repairs preserve authored records, source metadata, original files and valid existing associations. Each applied page has a retained receipt. Repeating the same request returns its receipt without duplicating attachments. Encrypted backup verification also checks the repaired associations. This action does not rerun an import or infer any scientific meaning from filenames."
+      ]}]
+    },
+    {
+      "id": "organizations",
+      "title": "Organizations and team membership",
+      "sections": [
+        {
+          "id": "administration",
+          "title": "Create an organization and manage teams",
+          "paragraphs": [
+            "Enable {ui:organizations.title} in Preferences → Modules, then open it from navigation. Choose {ui:organizations.create}, enter the organization name and your name, and save. This installation's dedicated signing identity becomes the first administrator. An administrator manages membership and teams; this role does not grant workspace encryption keys, research access, publication or recovery authority.",
+            "Use {ui:organizations.newTeam} to name a team and select its active organization members. Edit a member to change their organization role or remove them. Removal also removes their team memberships. Another administrator must remain before the last administrator can be removed or demoted. A removed member must accept a new invitation to rejoin.",
+            "Open {ui:organizations.activity} to inspect saved invitations, acceptances, role changes, removals and team membership changes, including the acting administrator and time. History is saved with each change and is visible only to current administrators. {ui:organizations.activityOlder} pages through earlier changes without mixing organizations; {ui:organizations.activityLatest} returns to the newest changes. This local history is not an independent timestamp or proof against restoring an earlier complete backup."
+          ]
+        },
+        {
+          "id": "invitations",
+          "title": "Exchange and verify enrollment files",
+          "paragraphs": [
+            "The recipient chooses {ui:organizations.identity} on their installation and sends the public identity file to the administrator. It contains no private signing key. The administrator chooses {ui:organizations.invite}, opens that file and verifies the complete displayed fingerprint with the recipient through another channel. Choose the role, teams and invitation lifetime before saving and sending the downloaded invitation.",
+            "The recipient chooses {ui:organizations.openInvitation}, reviews the organization, role and expiry, and independently verifies the inviting installation's fingerprint. {ui:organizations.accept} downloads a signed acceptance to send back. The administrator uses {ui:organizations.receive} to enroll the member and sends the resulting confirmation back. The recipient uses {ui:organizations.receipt} to retain it.",
+            "Reopening the same invitation returns the same retained acceptance. Reimporting that acceptance does not create another member and preserves the original acceptance time. If the invitation download is lost, create a replacement invitation; this revokes the earlier pending invitation to that recipient in the organization. The recipient's signing key is required to accept, so possession of the invitation file alone does not enroll somebody else."
+          ]
+        },
+        {
+          "id": "boundaries",
+          "title": "Revocation and retained confirmations",
+          "paragraphs": [
+            "Use {ui:organizations.revoke} to cancel a pending invitation. Expired and revoked invitations cannot be accepted. Removing or demoting an administrator cancels their pending invitations. Membership changes are checked again when a signed command is received, including repeated commands.",
+            "The exchange files record organization enrollment; they contain no lab-book content or workspace decryption keys. Confirmation receipts on another installation report when acceptance occurred. They are not live membership checks and do not update automatically when the administering installation changes membership."
+          ]
+        }
+      ]
+    },
+    {
+      "id":"continuing-intake",
+      "title":"Continuing intake and run readiness",
+      "sections":[
+        {"id":"workflow","title":"Bring in the next preparation or returned evidence","paragraphs":["Create and save the target run with the ordinary record tools. Open Evidence & analysis, then {ui:localIntake.open}. Choose the folder containing intake.observanda.json and use {ui:localIntake.validate}. The preview identifies the workspace, record, expected revision, source revision, files and analyses. Nothing is imported by validation. {ui:localIntake.stage} retains encrypted private files; {ui:localIntake.apply} attaches the reviewed originals and analyses together. Applying a record amendment also makes that record private.","Saved proposals remain available after restart. Cancel stops the worker; Resume retries the same proposal and identities. If a response is lost, repeat the same proposal ID and SHA-256 to retrieve the existing result. Reusing that ID for different content is rejected. Changed source bytes or target revisions require a fresh proposal and review. Importing never executes scripts, decides scientific outcomes, commits, pushes or publishes."]},
+        {"id":"contract","title":"Version 1 local intake contract","paragraphs":["The proposal is UTF-8 JSON named intake.observanda.json. Required properties: version (1), id (new UUID v4 idempotency key), workspaceId, recordId, expectedRevision (saved record SHA-256), purpose (preparation, evidence, analysis or amendment), title, files, analyses, source and verification. Copy the workspace, record and revision identifiers from the intake screen. The entire manifest is limited to 4 MiB. Unknown version or top-level properties are rejected.","files contains at most 1,000 items: id (new UUID v4), path (relative path inside the proposal folder), size (exact byte count), sha256 and provenance (text). Empty arrays are allowed. Links, traversal, device files and ambiguous paths are rejected. Analyses contains at most 32 items: id (new UUID or existing analysis identity), expectedRevision (null for a new analysis, otherwise its exact SHA-256), title, tool, version, toolSha256, parameters (text), inputs and outputs. A file reference is {\"file\":\"UUID\"}; an existing retained reference is {\"kind\":\"artifact\",\"id\":\"UUID\",\"revision\":\"SHA-256\"}. Inputs may also reference datasets, records, collections and analyses. Outputs must reference artifacts. Each list has at most 64 references. An optional method uses the existing versioned analysis-provenance schema; exact numerical values remain strings.","source is {\"revision\":\"external revision label\",\"sha256\":\"source SHA-256\"}. verification is {\"tool\":\"validator name\",\"version\":\"validator version\",\"sha256\":\"validator source SHA-256\",\"statement\":\"what was checked and its limits\"}. These are retained declarations, not proof that a tool ran or that a measurement is correct. Analysis execution stays outside Observanda. An optional record is the complete proposed record in the existing authoring schema, with the same ID and lab book, share:false and no media attachments; it is subject to ordinary immutable-fact and expected-revision validation. Omit record to attach materials without altering the narrative. At least one file, analysis or record amendment is required."]},
+        {"id":"automation","title":"Local CLI and authenticated local API","paragraphs":["Use node src/cli.js intake --action preview --workspace <directory> --workspace-id <UUID> --record-id <UUID> --source <proposal-directory>. Supply --password-stdin when required; never put a password in the command line. Standard output is a versioned JSON envelope with ok and result or error. Runtime startup messages go to standard error. Exit 0 indicates a successful command, 1 a rejected command, and 2 a stopped or failed awaited job.","Stage adds --action stage --id <proposal UUID> --pin <reviewed SHA-256>. Apply uses --action apply with the same ID and pin. Use --wait to await stage, apply or resume; otherwise the app's shared worker continues the queued job when running. Status, cancel, resume and list use the same explicit workspace and record identities; readiness returns the record's readiness view. --action watch --source <parent-folder> reports proposals in immediate child folders as JSON lines. Watching only validates and notifies: it never stages or applies. Stop the watcher with Ctrl+C.","The local API is POST /api/v1/intake/{preview|stage|apply|status|cancel|resume|list|readiness|link-receipt|policy}. Requests include version:1, workspaceId and recordId; preview and stage include source, stage includes id and expectedPin, apply includes id and expectedPin, and status/control include id. List accepts the returned cursor. Responses use the same service result as CLI result; errors use the app's stable code/message/details envelope. The API requires the unlocked local app session, allowed Host and same-origin checks, and the active workspace context header when required. It is not a public multi-user API or a substitute for future scoped integration keys. Manual authoring and file imports need no watcher or integration."]},
+        {"id":"readiness","title":"Receipts and completion policy","paragraphs":["{ui:localIntake.readiness} summarizes original evidence, stale analyses, unresolved declared criteria, pending reviews and private receipts on this record. It does not infer physical success. A met or not-met criterion is assessed; an unresolved, unavailable or unassessed criterion remains visible. Negative results can still be completed. No hypotheses or criteria are compulsory for creative or field records.","Applied proposals link their private source revision and declared validation to the resulting record revision. Use {ui:localIntake.addReceipt} for a manual validation declaration, a prepared publication edition containing this exact record revision, or an optional Git commit declaration. Git declarations identify an external commit and the stated source hash; Observanda does not create, push or independently authenticate that commit. Earlier receipts remain visible after amendments. Publication receipts identify a prepared edition, not proof of live deployment.","{ui:localIntake.policy} is optional and applies to all lab books directly inside the selected project. It can require validation, publication and/or Git receipts before completing a record. Save changed content as a draft, link the required receipts to that saved revision, then mark it completed as a separate action. Ordinary GUI, CLI and import record commands share this policy check. The completion receipt preserves the connection through that status change; later authored changes require fresh applicable receipts. Review signatures, measurements and release qualification retain their separate meanings."]}
+      ]
+    },
+    {
+      "id":"book-reading",
+      "title":"Writing and reading a connected book",
+      "sections":[
+        {"id":"content","title":"Tables, equations, diagrams and citations","paragraphs":["Use {ui:book.content} in a writing field to insert an authored table, equation, citation, inline figure or preserved source block. Each existing block has {ui:book.edit}; editing and insertion are separate actions. Tables retain cell values as text, including leading zeros and very large numbers. They do not evaluate formulas. Select a code block to enter its own language label; saved whitespace and digits remain unchanged.","Equations retain their TeX source and render offline as MathML. External resources and trusted HTML commands are disabled. Unsupported input shows the original source and an explicit rendering message. Citations retain the author, edition, locator and optional web address.","Upload an image or create a figure in the record before placing it in the writing. Supply an ordered text alternative, one step per line. SVG originals remain verified private source bytes; reading and publication use prepared static images. A chart keeps its data table. Wide authored tables offer {ui:book.tableReading}, and printing uses the linear rows. App appearance and website appearance are separate settings."]},
+        {"id":"references","title":"Reference exact content and follow research","paragraphs":["Open a lab book and choose {ui:recordReading.read} to read full records in pages without entering an editor. Filters and sorting also apply to the reading view. {ui:recordReading.details} opens a record with its evidence, history and relationships. Choose {ui:recordReading.edit} explicitly to change its content. Back to records returns to the originating reading view or list.","Writing links are underlined and colored. Select a link in the editor to see {ui:recordLinks.destination} and use {ui:recordLinks.open} in the existing toolbar. Reading views offer {ui:recordLinks.list}, including full addresses and retained-revision references.","Use {ui:book.copy} in the record to choose a heading, writing section, table, equation, citation or figure. A current reference follows the saved content identity across renaming and reordering. {ui:book.exact} requires a saved record and retains that revision. Paste a copied reference into a writing link or Link research. Removed content remains an unavailable reference rather than being redirected to another section.","Use {ui:book.journey} in record filters to browse concepts, decisions, methods, experiments or results. Save the view for later. These categories do not copy records or change experiment counts. Follow linked records, individual runs and exact methods from the reader; Back to records keeps the originating filters. Linked records shows incoming references, including comparisons that cite a run."]},
+        {"id":"publication","title":"Browse the reviewed public book","paragraphs":["The exported {ui:book.browse} index includes only the edition's selected public records. Combine text, tag, reading journey, type and date filters. The address records those choices; {ui:book.reset} clears them. Record links retain a return to the filtered index. With JavaScript disabled, the complete static index, record pages, figures and equations remain readable.","Previous and next links name individual records. Filtered ordering is retained within the same browser session; an independently opened record still has its static lab-book neighbors. Exact references to older revisions are not substituted with current text. Publishing historical revisions is a separate edition-selection capability. Review public selection and plotted values before sharing."]},
+        {"id":"import","title":"Review imported book content against its source","paragraphs":["In a staged import's mapping, choose {ui:migrationImport.htmlBook} to keep supported HTML writing, headings, simple tables and code as editable book content. Unsupported blocks are retained verbatim with a preservation explanation and require explicit conversion acknowledgement. They are displayed as source text, never executed or fetched.","Review the content preview and {ui:book.sourceMappings}. Offsets and lengths identify UTF-8 ranges in the original file named by its SHA-256 hash. After applying the import, Source provenance retains the mapping and authenticated originals for reconciliation. If a complex table, diagram or embedded formula cannot be represented safely, preserve it and create an explicit authored replacement with its own description. The original remains available privately."]}
+      ]
+    },
+    {
+      "id": "analysis-comparisons",
+      "title": "Analysis, comparisons and result review",
+      "sections": [
+        {
+          "id": "provenance",
+          "title": "Retain an external analysis and its method",
+          "paragraphs": [
+            "In a saved record, open Evidence & analysis. Record external analysis keeps its exact input and output revisions, tool and version, procedure, and optional saved method or run. Method provenance adds pinned tool source, decoder and calibration identities, structured parameters with reasons and source revisions, uncertainty convention and limitations. Identify unavailable tool identities explicitly. A tool name or matching hash does not establish accuracy. Imported analysis code never executes in Observanda.",
+            "Use {ui:analyses.create} to interpret one or more retained result datasets. Select columns for the value, supplied category, original lower/upper boundaries and optional context. Category spellings map to correct, mismatched, unresolved, unavailable or excluded. An excluded row requires a reason. Dataset exclusions and unavailable cells override a claimed successful observation. Optional context columns use the documented tokens shown in the mapping form; unrecognized tokens stop preparation. Changing a mapping creates a retained revision and keeps its predecessor."
+          ]
+        },
+        {
+          "id": "exceptions",
+          "title": "Compare without hiding exceptions",
+          "paragraphs": [
+            "Declare the investigation, run or boot, condition, operation/profile, calibration, membership and window relationship for each source. Raw observations and aggregates have separate counts. Successful / assessed counts include only raw correct and mismatched observations; missing, unresolved and excluded observations remain explicit categories. Aggregate denominators are preserved as source text and are never pooled automatically. Distinct declared run records are counted independently of the number of readings. Disjoint windows do not establish independent runs, and calibration/training data are not treated as held-out evidence.",
+            "Analysis views include exceptions, value distributions, exact boundary margins, category transitions and a diagnostic timeline. Select a value to inspect its original source cell and native bytes, then return to the comparison. Boundaries retain their original spelling. The signed margin is the exact minimum distance to supplied bounds, with negative values outside the interval; no unit conversion or uncertainty propagation is inferred. Category counts describe supplied assessments and do not overwrite them from boundary comparisons. Transitions require an explicit source-order declaration and remain within source/context sequences. Before/after request and concurrent-operation fields are descriptive, never automatically causal.",
+            "Comparison preparation is a cancellable, retryable workspace job. It streams retained dataset pages and keeps at most 2,048 contexts, 4,096 distinct context/value/category distributions and 4,096 transition groups. Exceeding these limits fails visibly and retains the original inputs; narrow the analysis. Observation views read at most 50 rows per response and allow a maximum 1 MiB of observations per response. A selected original still authenticates completely before its bounded byte view is displayed."
+          ]
+        },
+        {
+          "id": "verification",
+          "title": "Check an independent expected fixture",
+          "paragraphs": [
+            "The optional expected-fixture mapping pins a separately retained dataset, its row-key and value columns, and the corresponding actual source/key. Version 1 compares rows in declared file order, verifies matching keys and units, and compares supported numeric values as exact rationals. Text and unsupported representations compare as exact strings. Missing values, exclusions, mismatched keys and unmatched trailing rows are counted separately. Reordering keys is not silently reconciled. Document the origin and independence of the expected values; Observanda cannot establish independence from a declaration alone. The built-in exception comparison and fixture algorithms have named versioned definitions."
+          ]
+        },
+        {
+          "id": "results",
+          "title": "Connect conclusions and review changed inputs",
+          "paragraphs": [
+            "Use {ui:analyses.addResult} on a record to declare a conclusion, number, table text, comparison or figure result. A figure result names an existing figure in the record; its published caption links to the statement and provenance. Figures without a declared supporting result identify that missing provenance explicitly. Mark it explicitly authored with its sources and limitations, or select a pinned supporting analysis. Save the record to retain the statement. Record history preserves earlier statements and their exact analysis identities. Free-form prose remains authored prose; Observanda does not infer scientific claims from arbitrary text.",
+            "Selected result statements appear on the website with their provenance basis and limitations. Supporting private analysis manifests, source names and original files are not implicitly published. A statement supported by private evidence says that the evidence is not included. Public release selection for original artifacts and older source revisions remains a separate publication workflow.",
+            "Publication review checks assessment analyses, dependent figures and result statements, including tables and comparisons. If an analysis or its transitive inputs changed or became unavailable, record an applicability decision for each affected result before ZIP export, local export or deployment. To omit or replace a result, edit the record and prepare another edition. Decisions belong to that edition and the dependency heads observed at preparation; another input change requires a new preparation and review. These checks establish traceability, not scientific acceptance."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "measurements",
+      "title": "Exact measurements and native evidence",
+      "sections": [
+        {
+          "id": "schema",
+          "title": "Declare values without rewriting them",
+          "paragraphs": [
+            "Open Evidence & analysis in a saved record, create or inspect a dataset, then use Edit schema & exclusions. Columns retain their source spelling, explicit radix, units and missing-value meanings. Integers larger than JavaScript's safe range and finite radix fractions remain exact strings. Unsupported notations can use {ui:measurements.unsupported}; they remain readable and downloadable but cannot silently enter numeric calculations. JSON null, an absent field, a declared missing value and numeric zero are distinct.",
+            "Expand {ui:measurements.quantity} to distinguish requested, measured, derived and raw-code values and select retained conversion or calibration revisions. Raw instrument codes cannot be assigned physical units. A separate derived measurement may declare a physical unit with its conversion source. Changing a schema creates another revision; prior analyses keep their original schema and values.",
+            "{ui:measurements.time} distinguishes device counters, acquisition order, wall-clock dates, elapsed time, powered duration and inferred elapsed time. Declare counter width, frequency, ordering, wrap/reset boundaries, reference, resolution and uncertainty when known. Observanda does not unwrap counters or infer duration. An external transformation must pin its model and reference data; a different time representation does not increase oscillator precision. Unknown timestamps stay unknown."
+          ]
+        },
+        {
+          "id": "locators",
+          "title": "Follow a value to its original",
+          "paragraphs": [
+            "Select a value in a retained dataset to open {ui:measurements.heading}. The inspector shows its spelling, schema, exact rational identity where supported, exclusion and nearby observations. Use {ui:measurements.original} to follow the retained source. CSV rows have original byte ranges; JSON fields have structured pointers. Other originals remain available as complete downloads.",
+            "When creating a dataset or mapping a staged import, expand {ui:measurements.nativeMapping}. Select the native original and the decoded columns containing byte offsets and lengths, JSON Pointer paths or native-record identifiers. Column numbers start at 1; byte offsets start at 0. An identifier without a byte or field mapping is explicitly unresolved. No imported decoder, script or source program runs in Observanda.",
+            "Byte inspection returns at most 4,096 selected bytes plus 64 bytes of context on either side. Use Previous bytes and Next bytes for larger ranges. Download displayed byte slice saves only the selected range; Download original recovers the unchanged file. Encrypted originals are fully authenticated before plaintext is returned, so inspection of a large source may take time even for a small range. JSON inspection is bounded to 60,000 characters and preserves number tokens but normalizes whitespace and escaping; larger selections need a narrower pointer or the original download."
+          ]
+        },
+        {
+          "id": "provenance",
+          "title": "Retain an interpretation and link it to a criterion",
+          "paragraphs": [
+            "From the value or original inspector, choose {ui:measurements.retain}. Declare the exact value, availability, quantity and time meanings, decoder source/version, schema, calibration and conversion references, completeness and limitations. Add contributing cells, byte ranges, structured fields or retained analyses. Integrity and completion are authored declarations; storage authentication does not establish apparatus success or scientific accuracy.",
+            "Save retains an immutable analysis revision. Use Retain revised interpretation to amend it; the preceding revision remains inspectable. From an attempt assessment, choose the retained measurement as evidence for the selected preparation and criterion. Readers can follow that assessment through the measurement's contributors to native bytes. These private sources are not automatically published.",
+            "Plot coordinates are approximate. The normal policy refuses unsafe integer and explicit-base numeric conversion. {ui:measurements.approximate} explicitly permits rounding of supported integers and radix fractions for display; its policy and algorithm version stay with the retained figure analysis. Exact dataset values remain unchanged. Nonfinite coordinates and nonzero values that would underflow to zero are rejected."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "attempt-evidence",
+      "title": "Preparations, attempt events and assessments",
+      "sections": [
+        {
+          "id": "preparing",
+          "title": "Freeze a preparation for an attempt",
+          "paragraphs": [
+            "Open a saved record and expand {ui:attempts.title}. These optional controls do not impose a scientific workflow on creative or field notes. Use {ui:attempts.addPreparation} to declare the applicable attempt or stage, exact saved methods, controlled variables, input hashes, calibration references, planned observations and criteria. Source discovery searches saved records or retained evidence without loading the entire workspace.",
+            "A condition records its value, declared unit and whether it is stated, inherited or measured. Inherited conditions require an exact source reference. Repeating a run copies preparation and conditions as inherited; it carries neither events nor assessments. Change the deliberate parameters for the next attempt explicitly. It does not count an inherited measurement as a new observation.",
+            "Use {ui:attempts.save}, then save the record to freeze the new preparation. {ui:attempts.amendPreparation} appends a revision with a reason and explicit applicability. Existing assessments and events keep their selected preparation and criterion identities. Prospective criteria and exploratory reanalysis have separate scope fields; explain exploratory criteria instead of silently changing a previous threshold."
+          ]
+        },
+        {
+          "id": "events",
+          "title": "Record what happened without inferring execution",
+          "paragraphs": [
+            "{ui:attempts.addEvent} records preparation, checks, transport, installation, readback, execution observations, returns, acquisitions, reviews or a custom event. Select a preparation revision when applicable and give the source, actor, time meaning and exact retained evidence. Completion may be complete, partial, failed, cancelled or unknown. Use the circumstances field for accidental attempts, reused media and other qualifications.",
+            "An event explicitly distinguishes the host/preparation system from physical-target observations. Recording a completed host job or acquisition does not establish physical execution, scientific success or a new boot. Add several acquisitions to the same attempt when they describe the same physical attempt. The record's progress and overall outcome are not automatically changed.",
+            "Declared wall-clock time, device counters, elapsed durations and other source-declared time are kept separate from the Observanda entry timestamp. Unknown time remains unknown. Values stay as text with their original spelling; entering a number does not infer a radix, unit or conversion."
+          ]
+        },
+        {
+          "id": "assessments",
+          "title": "Assess criteria and inspect changes",
+          "paragraphs": [
+            "{ui:attempts.addAssessment} selects an exact preparation revision and criterion. Record the observed value, applicable denominator, actor, source, assessed time, reason and exact evidence or analysis revisions. Choose met, not met, unresolved, unavailable or not assessed, and optionally add a domain-specific outcome. A complete acquisition can coexist with an unresolved recognition criterion.",
+            "Saved facts cannot be overwritten. {ui:attempts.correct} adds a correction identifying the earlier event or assessment; the earlier facts remain inspectable. An assessment against an amended criterion is a new assessment of that preparation revision, not a replacement for the earlier criterion's result. Restoring older narrative text also keeps the recorded preparation/event/assessment history. Independent concurrent additions can merge. Conflicting amendments or corrections require review: keep the saved facts and add a further correction, or cancel to keep your unfinished checkpoint.",
+            "Open the investigation's paged run comparison to inspect structured conditions, events and criterion outcomes alongside existing narrative conditions and method revisions. Changed parameter values are highlighted against the first run on the displayed page. Stated, inherited and measured provenance remains visible. Comparison is not an automatic assessment of reliability or independence.",
+            "A published record includes its authored preparations, events and assessments, including their distinctions and corrections. References to private records, unavailable exact record revisions and private evidence are withheld before rendering. Publication does not expose original evidence files. Review the public preview before sharing; selecting a record also selects the authored values, names and explanations in its attempt evidence."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "getting-started",
+      "title": "Projects and lab books",
+      "sections": [
+        {
+          "id": "refresh",
+          "title": "See changes saved elsewhere",
+          "paragraphs": [
+            "Observanda checks for saved workspace changes while the window is visible and when you return to it. New projects, lab books and records appear without restarting. Click the Observanda logo to refresh the current page immediately; its accessible label is {ui:workspaceRead.refreshLabel}.",
+            "Unsaved edits and open dialogs stay in place when newer saved content arrives. Finish and save your work, or discard it deliberately, then close the dialog and refresh. If another writer changed the same record, saving uses the ordinary change-review workflow. A failed refresh keeps the current view and offers a retry through the logo. This refresh reads the current workspace; it does not synchronize separate computers or publish content."
+          ]
+        },
+        {
+          "id": "setup",
+          "title": "Create or open a workspace",
+          "paragraphs": [
+            "Use {ui:setup.createTitle} for a new workspace, or {ui:access.openExisting} for one you already have. In setup, enter the workspace name, select the lab-book types you want available, then choose a storage folder and protection method. {ui:setup.back} and {ui:setup.continue} keep your choices while you move between steps.",
+            "{ui:setup.useDevice} unlocks through an authorized operating-system account when supported. {ui:setup.usePassword} requires matching passwords of at least 12 characters. After creation, configure a separate recovery key in {ui:preferences.storage}. Help can be opened during setup without submitting the form; {ui:help.returnToForm} keeps the current step and entered values."
+          ]
+        },
+        {
+          "id": "structure",
+          "title": "Organize your workspace",
+          "paragraphs": [
+            "A workspace contains projects, and projects contain lab books. Use the plus button beside Projects to create a project. Give it a name, choose its parent, and select a default lab-book template if useful. Creating a project does not require editing a template.",
+            "Open the project and choose New lab book. The project’s chosen template is selected initially; the dropdown lets you choose another available template. Enter the book’s name and save it. Different books in the same project can use different templates."
+          ]
+        },
+        {
+          "id": "templates",
+          "title": "Choose and customize templates",
+          "paragraphs": [
+            "Activate additional lab-book types in Preferences → Modules → Lab-book types. These optional types supply templates; the workspace, projects and lab books are always available. Turning a type off keeps existing books and records.",
+            "Use the dedicated template editor to customize record types, guidance and fields. Changes to a template do not rewrite values in existing records. Keep software prototypes and physical PCB experiments in separate books when their record structures differ."
+          ]
+        },
+        {
+          "id": "dashboard-types",
+          "title": "Filter dashboard cards by record type",
+          "paragraphs": [
+            "Open a card’s settings and choose {ui:dashboardChoices.recordType}. Choices appear in alphabetical pages; search by name or use {ui:dashboardChoices.next} and {ui:dashboardChoices.previous} to browse. The list includes types preserved on records in the chosen projects and lab books, including types no longer offered for new records.",
+            "Your selected type stays visible while you search or browse other choices. Changing the project or lab-book scope refreshes the choices; an unavailable selection remains selected until you choose another type or {ui:dashboardChoices.allTypes}. A failed lookup does not change your saved filter. Close the settings to return to the dashboard."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "records",
+      "title": "Records, methods and runs",
+      "sections": [
+        {
+          "id": "writing",
+          "title": "Write and connect records",
+          "paragraphs": [
+            "Open a lab book and choose New record. Select a record type, use a descriptive title, and fill in the sections relevant to your work. Save the record before leaving. User-written titles, prose, numbers and evidence are never translated when you change the interface language.",
+            "Use research links to connect related work. An ordinary current link follows the current record. An exact method reference identifies the revision followed by a run. Create individual run or take records for repetitions, and document changed parameters, deviations and incomplete outcomes."
+          ]
+        },
+        {
+          "id": "history",
+          "title": "Read history and linked work",
+          "paragraphs": [
+            "Open history from the record itself to inspect saved versions. Restoring creates a current version of that record; unrelated records remain unchanged. Review the restored content before sharing it.",
+            "Follow linked methods, evidence and related records to read the context. A successful software check does not establish a physical run, and one successful run does not establish repeatability. Record those events and conclusions separately."
+          ]
+        },
+        {
+          "id": "type-filters",
+          "title": "Find records by type",
+          "paragraphs": [
+            "Use {ui:recordTypes.filter} in a record list for the first page of available types. Choose {ui:recordTypes.find} to search or page through further choices from the current project or lab book. Your selected type stays visible even when it is outside the first page.",
+            "{ui:recordTypes.cancel} leaves the current filter unchanged. If a lookup fails, {ui:recordTypes.retry} repeats that lookup. {ui:recordViews.title} lets you save the type together with the current filters and scope, then reopen that view later."
+          ]
+        },
+        {
+          "id": "draft-recovery",
+          "title": "Recover unfinished record work",
+          "paragraphs": [
+            "Choose {ui:recordDrafts.reviewDrafts} when Observanda finds unsaved record checkpoints. The list shows ten drafts at a time. Use {ui:recordDrafts.next} and {ui:recordDrafts.previous} to browse, or {ui:recordDrafts.refresh} to see recent changes. Closing the list keeps every draft.",
+            "{ui:recordDrafts.review} opens the selected checkpoint for comparison with the saved record. Choose {ui:recordRecovery.continueEditing} to recover the combined work into the editor, then review it before saving. A checkpoint is not a saved record. If the new checkpoint cannot be stored, keep the window open and use {ui:recordDrafts.retryCheckpoint}; the original recovery copy remains available.",
+            "Larger checkpoints load their selected records in batches. {ui:recordSelection.retry} continues an interrupted load; {ui:recordSelection.cancel} keeps the editor and recovery checkpoint. After a save succeeds, the loading dialog says that the records were saved. Retrying that load does not submit another save. If you cancel it, use Save again to compare your editor with the saved versions before continuing.",
+            "A draft may still be open in another window. {ui:recordDrafts.discard} asks for {ui:recordDrafts.confirm} before removing a checkpoint. If it has changed since the list was loaded, refresh and review it again. A failed cleanup after saving leaves the saved record intact and the remaining checkpoint accessible."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "evidence",
+      "title": "Original evidence and analysis",
+      "sections": [
+        {
+          "id": "originals",
+          "title": "Preserve original files",
+          "paragraphs": [
+            "Attach evidence through the record’s evidence controls. Give it a descriptive title and provenance. Binary captures, source files and instrument exports are evidence even when they have no visual preview. Retain original bytes separately from converted media and derived datasets.",
+            "A file hash identifies its bytes; it does not prove accuracy or authorship. If an upload is interrupted, reopen the record’s evidence, choose {ui:evidenceUpload.resumeUpload} and select the same original file. Observanda checks the bytes already received before continuing. A changed file is rejected without replacing the saved chunks. Once verification finishes, download the retained original to inspect it in a suitable external tool.",
+            "Use {ui:evidenceIntake.heading} to keep related original files together. Upload them, then choose {ui:evidenceIntake.finish}. Until verification and attachment complete, the files stay in {ui:evidenceIntake.unfinished}. After an interruption, continue that set and reselect its original files. If the manifest is incomplete, reselect the complete set; otherwise you can select only the remaining files. Identical files still keep their separate acquisition identities."
+          ]
+        },
+        {
+          "id": "analysis",
+          "title": "Keep datasets and interpretations distinct",
+          "paragraphs": [
+            "Retain a dataset independently of a figure. Preserve units, missing-value meanings, exclusions and row identities. Declare nondecimal representations and exact large integers explicitly; do not silently recast them as ordinary decimal numbers.",
+            "Use {ui:materialAnalysis.analysisHeading} to record the tool, version, procedure and exact inputs. {ui:materialAnalysis.choose} searches saved record summaries without leaving your analysis form. Choose a result to retain its exact revision. If it changed since the search, refresh and choose again. Cancel closes only the search; your analysis fields and evidence selections stay in place. For evidence selections, use {ui:materialSources.more} to browse further results and {ui:materialSources.moreSelected} to review chosen sources. Selections keep their exact revisions across searches. Saving a collection or analysis transfers the selection in batches; an interrupted save appears in unfinished work and can be continued. Later edits to the selected method do not change the retained input. Keep revised results distinct, and review dependent figures and conclusions when inputs change. Generated summaries and manually edited values have different provenance."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sample-analysis",
+      "title": "Samples, results and local review",
+      "sections": [
+        {
+          "id": "records",
+          "title": "Find a sample or result",
+          "paragraphs": [
+            "Open {ui:sampleAnalysis.title} and use {ui:sampleAnalysis.register} to record a sample's code, material, source and dates. Choose {ui:sampleAnalysis.recordAnalysis} to enter a result. {ui:sampleAnalysis.findSample} searches available samples; paging that selector keeps the result fields you have entered.",
+            "Samples, analyses, the review queue and archived results have separate lists. Use {ui:sampleAnalysis.search}, {ui:sampleAnalysis.next} and {ui:sampleAnalysis.previous} to browse. Open a result to edit its fields. An interrupted list request keeps the preceding page; {ui:sampleAnalysis.retry} retries it. {ui:sampleAnalysis.refresh} shows newer records. Dashboard cards use the same paged lists."
+          ]
+        },
+        {
+          "id": "review",
+          "title": "Review and amend a result",
+          "paragraphs": [
+            "Choose {ui:sampleAnalysis.submit} to save the current result and place it in the review queue. {ui:sampleAnalysis.reviewResult} records the reviewer's name, decision and comment. These are local acknowledgments, not authenticated electronic signatures.",
+            "An approved result provides {ui:sampleAnalysis.print}. That sheet retains the approved revision after later amendments. Use {ui:sampleAnalysis.amend} and state the reason before changing a submitted or approved result. Archived results remain readable.",
+            "Expand {ui:sampleAnalysis.history} on a result and choose {ui:sampleAnalysis.loadHistory}. History loads twenty events per page; browsing it keeps unfinished result fields intact. Sample-analysis data stays private and is excluded from the website."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "inventory",
+      "title": "Inventory and prototype components",
+      "sections": [
+        {
+          "id": "drafts",
+          "title": "Recover unfinished tool work",
+          "paragraphs": [
+            "If a tool has unfinished checkpoints, {ui:moduleRecovery.heading} shows ten at a time. Use {ui:moduleRecovery.next} and {ui:moduleRecovery.previous} to browse, or {ui:moduleRecovery.refresh} to see newer checkpoints. {ui:moduleRecovery.retry} repeats a failed page request; it keeps your current form and the last available list.",
+            "{ui:moduleRecovery.restore} opens the selected checkpoint for editing. Observanda saves a new recovery copy before removing that source checkpoint. Save the recovered item when you are satisfied with it. Other unfinished items remain available under Drafts. {ui:moduleRecovery.discard} removes only the selected recovery copy; a copy changed in another window must be refreshed before it can be discarded."
+          ]
+        },
+        {
+          "id": "history",
+          "title": "Read an item's saved revisions",
+          "paragraphs": [
+            "Open an inventory item, task, calculation or another tool item and choose History. {ui:moduleHistory.heading} lists twenty revision summaries at a time. Use {ui:moduleHistory.next} and {ui:moduleHistory.previous} to browse, or {ui:moduleHistory.first} to return to the beginning. Open a revision to inspect its saved fields; {ui:moduleHistory.close} returns focus to that revision's button.",
+            "Reading history keeps your current draft. Return to Details to continue editing. New saves do not move the history page you are reading; use {ui:moduleHistory.refresh} to see them. If a page or revision cannot load, {ui:moduleHistory.retry} repeats that request without saving or discarding your draft."
+          ]
+        },
+        {
+          "id": "ownership",
+          "title": "Ownership and allocation",
+          "paragraphs": [
+            "Inventory belongs to the workspace. An item can remain unassigned to any project. Allocating quantities to projects records where resources are assigned; it does not create an additional copy of the owned stock. Enable Inventory in Modules to use its dedicated view.",
+            "Create items with meaningful names, units and quantities. Keep physical storage location distinct from project allocation. For example, 100 owned components split between two projects still total 100 components in the workspace.",
+            "Categories define reusable item fields. Large schemas show ten fields per page; use {ui:moduleFields.findFields} to locate a field. Choice definitions and item choices show twenty options per page, with {ui:moduleFields.findChoices} for searching. Moving between pages preserves your edits and selected values. If a required field on another page is incomplete, saving takes you to that field. Existing items keep their saved category version until you explicitly apply the current category fields."
+          ]
+        },
+        {
+          "id": "usage",
+          "title": "Track usage and availability",
+          "paragraphs": [
+            "Use {ui:moduleReferences.chooseResearch} in a tool, task or inventory item to search saved records, lab books or projects. Search results are paged; selecting a link keeps the item draft in place. Unavailable records keep their references, and {ui:moduleReferences.retry} retries an interrupted title lookup without changing your edits.",
+            "In a BOM, {ui:moduleReferences.prototype} opens the same record search. Saving pins the selected run revision. Review a changed run before reserving stock. Connect prototype bills of materials to inventory items. Record quantities actually used and distinguish them from planned demand and reservations. A BOM is a plan; it is not proof that the components were consumed.",
+            "Review available and used quantities before another build. Keep substitutions and assembly outcomes in the experiment record so the component choice can be understood alongside the results."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "publishing",
+      "title": "Design and publish a website",
+      "sections": [
+        {
+          "id":"project-websites",
+          "title":"Separate project websites",
+          "paragraphs":[
+            "Open a project and choose {ui:websiteSites.projectWebsites}, or choose {ui:websiteSites.title} above the website editor. Use {ui:websiteSites.new} to name a website and choose its project. A project can have several websites, such as a research journal and a Help site. Each website can use records from that project and its subprojects.",
+            "Each website owns its pages, design, public content choices, publishing destination and retained editions. New websites start with no records selected for publication. Choose records in Public content and save the website. These choices do not change your research originals or another website's selection.",
+            "The website name stays visible above its editor and publishing controls. Open {ui:websiteSites.destination} to choose a GitHub repository and branch or a dedicated SSH hosting directory for this website. Use a separate repository, website folder or hosting directory for each independent site. Review and publish each edition explicitly; creating or switching websites does not deploy anything.",
+            "The existing workspace website remains available in {ui:websiteSites.title}. To create another project website, return to that list. Website changes saved elsewhere can be refreshed through the Observanda logo; unsaved edits stay protected."
+          ]
+        },
+        {
+          "id": "appearance",
+          "title": "Choose fonts, colours and layout",
+          "paragraphs": [
+            "In Preferences, open {ui:appearance.title} to choose a theme, colours and fonts. {ui:appearance.saveAs} keeps a named design in this workspace; {ui:appearance.saveAppearance} saves the current changes. App text size, menu layout and header alignment are personal settings on this computer, independent of website text and layout.",
+            "Use {ui:appearance.previewContent} to switch between fictional examples and saved content selected for your website. The preview applies your current appearance without saving it or creating a reviewed release. {ui:appearance.previewPage} chooses a page; {ui:appearance.retryPreview} retries an interrupted preview without discarding your edits. Review and publish separately through Publishing or Website editor.",
+            "In {ui:fonts.title}, upload a TTF, OTF, WOFF or WOFF2 file. Variable fonts expose {ui:fonts.variableSettings}. Allow website embedding only when the font licence permits it. Hiding a font from pickers keeps existing text and saved editions intact."
+          ]
+        },
+        {
+          "id": "design",
+          "title": "Build and review pages",
+          "paragraphs": [
+            "Open Website editor to choose pages and arrange sections. Create a homepage if you want one. Use the Page tab to build the structure, then the dedicated edit control to change a selected section. Save website changes before preparing a release.",
+            "Choose which content may be public in {ui:websiteEditor.content}. The workspace canvas may show unpublished content: it is not the public edition. Use Preview & export to inspect the selected release, including figures, navigation and links.",
+            "Use {ui:websiteContent.search} in Public content to find a project or record. Project and record lists have separate page controls. Expand a record's Media row to select attachments and its card cover. Include all entries applies to the entire project, including records outside the current search or page.",
+            "In the Media library, use {ui:websiteMedia.search} and {ui:websiteMedia.kind} to find uploaded files. Image and research-media selectors offer {ui:websiteMedia.find} for larger libraries. Choosing media returns you to the same element. Gallery choices remain selected across searches and pages; arrange their display order in the selected-images list. Choosing research media does not make a private record or attachment public.",
+            "On {ui:websiteEditor.page}, choose {ui:websiteEditor.area} to work on page content, a sidebar or the footer. Create a design or reuse an existing one. Its elements use the same text, media, layout and style controls as the page. Use the dedicated Edit control, then Back to return without changing pages.",
+            "{ui:websiteEditor.default} applies a sidebar or footer to pages that use the site default, including future pages. {ui:websiteEditor.choosePages} opens a searchable list of pages. Choose a page type, find a title and check or uncheck its assignment. {ui:websitePages.done} returns to the design; Save website saves the changes. Shared edits affect every page using that design; {ui:websiteEditor.copy} creates an independent composition, including image presentation settings. Deleting a design removes it from every assigned page and can be undone before saving.",
+            "A {ui:websiteEditor.contents} element links the current page's visible section headings, using stable anchors. The same sidebar adapts its index on each page. Hidden or excluded sections do not enter the published index. Set sidebar position, width and scrolling behavior in {ui:websiteEditor.appearance}; narrow screens place the sidebar before the content.",
+            "Image and button links offer {ui:websitePages.chooseLink}. Find a page without leaving the current design, or enter an external address directly. Choosing a destination has its own undo step. Text links use the Link settings search.",
+            "Create a footer design to arrange text, images, links and containers. Existing footer text seeds its first text element. Powered by Observanda stays at the end of the same footer, using its surface, text color and text alignment. If you deliberately mix alignments, the credit follows the final visible text block. It is centered only when there is no authored footer. Save, reopen and review the exported website before publishing."
+          ]
+        },
+        {
+          "id": "local-export",
+          "title": "Export into an existing local website",
+          "paragraphs": [
+            "In Publishing, prepare and review the website, then choose {ui:publication.localExport}. Choose the existing website root or a dedicated subfolder. Relative links support both locations. Use {ui:localExport.review} to inspect every added, updated, removed and unchanged output file before confirming {ui:localExport.apply}.",
+            "The first export never overwrites existing files. Later exports update or remove only files previously written to that exact folder by this workspace. A manually changed or deleted file is a conflict: restore the expected file, move it yourself, or select another folder and review again. Unrelated pages and Git history stay untouched. No commit, push or upload happens automatically.",
+            "Export to a local copy and upload only after completion. Files are verified before switching, but the entire folder cannot switch atomically alongside unrelated files. During an interruption it can contain a partial edition and temporary public output files. Reopen the same edition through Website preparations, choose Export to local folder, and use Resume export. The saved review and recovery journal remain encrypted in the workspace. Discard preparation is available before file switching starts; afterward resume the pinned edition before preparing another export to that folder.",
+            "Keep the workspace and its backups: they retain ownership and recovery receipts for the destination. Copying a website alone does not transfer that ownership to another workspace. This workflow requires a local filesystem supporting hard links; network shares and directly served live folders are not qualified destinations. A completed export verifies its bytes on disk, not a hosted deployment or resistance to sudden power loss on every platform."
+          ]
+        },
+        {
+          "id": "repository-setup",
+          "title": "Set up a website repository",
+          "paragraphs": [
+            "In Publishing, open Configure destination, enter the GitHub owner and repository name, save the destination and choose {ui:githubConnection.signIn}. Complete authorization in your web browser. GitHub identifies the authorization helper as Git Credential Manager. Observanda protects the credential in this computer's credential store, separately from workspace files. Seigr does not receive or manage it. Check connection verifies access. For an empty repository created outside Observanda, review the displayed repository and branch, then choose {ui:repositorySetup.initialize}. This creates only an empty .nojekyll file in the first commit, preserves the repository's visibility and prepares the chosen website branch. It does not publish your records or configure Pages.",
+            "The selected account reconnects after restart using this computer's credential store. Use {ui:githubConnection.choose} to switch saved accounts, {ui:githubConnection.disconnect} to disconnect this workspace, or {ui:githubConnection.forget} to remove Observanda's credential for the account from this computer. Manage authorization on GitHub can revoke access or authorize an organization. A revoked credential requires signing in again. Temporary tokens remain available under Advanced for managed installations and expire from app memory at restart. If initialization is interrupted, check the connection and choose {ui:repositorySetup.resume}. Observanda verifies the repository identity and its own initial commit before continuing. Changes made elsewhere can block setup and require another destination review. {ui:repositorySetup.stop} stops further work; it does not erase a commit already created. After setup, review a selected edition before uploading it."
+          ]
+        },
+        {
+          "id": "release",
+          "title": "Publish an approved edition",
+          "paragraphs": [
+            "Keep private evidence and operational details out of public selections. Check filenames, metadata, links and embedded figure data as well as visible prose. You can author an explanation that supporting evidence is unavailable publicly without exposing its private metadata.",
+            "Use {ui:publication.selectionTitle} before preparing an edition. Expand a record to withhold its main writing, selected sections, template fields, attachments or charts. Choices apply to this edition only. Records you do not change keep their saved public selection. Exact chart tables and CSV downloads start off and require an explicit selection for each chart. A chart itself still reveals plotted values through its SVG, marks and labels; withholding a CSV does not make those plotted values secret. Original datasets and source artifacts are never included automatically. Unavailable research references are listed in the private review, with their labels and destinations excluded from the public edition.",
+            "Saving, generating output, committing, pushing and verifying deployment are separate states. In Publishing, configure the destination and use {ui:publication.reviewTitle} to prepare the saved public selection. {ui:publication.preparations} reopens retained editions; {ui:publication.continue} leaves preparation running. Review returns to Publishing when opened there. Unsaved website designs are prepared from Preview & export in the website editor. Verify the deployed edition; a successful push alone does not establish that the website has updated. Static export also supports publication without an integrated host."
+          ]
+        },
+        {
+          "id": "repository-files",
+          "title": "Publish beside an existing website",
+          "paragraphs": [
+            "Configure destination includes {ui:publication.websiteFolder}. Leave it blank for the repository root, or choose a folder such as lab/field-notes. If you supply a public website URL, point it to that folder; otherwise GitHub Pages verification includes the folder automatically. Changing the folder starts a separate publishing destination and leaves the earlier site in place.",
+            "From the prepared website, choose {ui:publication.repositoryReview} to inspect the exact additions, updates, removals, unchanged website files and unrelated files that will be preserved. A first upload to an existing branch and any removal require confirmation. Only files previously published to this destination by this workspace may be updated or removed. Identical existing files can be adopted after review; different files at the same path block publication. Keep workspace backups: file ownership is private workspace metadata and is not written into the website.",
+            "If a previously published file was changed or deleted outside Observanda, publishing stops. Review the conflicting paths, restore the expected files or choose another publishing folder. Refresh the repository review after resolving the conflict. Approval never overrides a file conflict, and a changed branch invalidates the earlier review. Existing Git commits, unrelated pages, scripts and other repository files are preserved.",
+            "Uploads and retries use the reviewed repository tree. After an interrupted push, reconnect GitHub and resume to reconcile its result. Files are verified before the branch is advanced; live website verification is a separate step. Existing repository workflows may run when their branch changes. Removing a published file does not erase earlier Git history, host caches or copies kept by visitors."
+          ]
+        },
+        {
+          "id": "historical-editions",
+          "title": "Publish an exact historical method or result",
+          "paragraphs": [
+            "In {ui:publication.selectionTitle}, expand a referring record and choose {ui:publication.reviewReferences}. Read the retained text and fields before enabling {ui:publication.selectionInclude}. You can select individual parts and withhold chart data independently. Review referenced revisions again inside a historical record to follow its dependencies; {ui:publication.referenceBack} returns to the referring record with your choices intact. A reference never grants publication permission automatically.",
+            "Historical pages carry a revision label and a stable URL derived from that exact revision. They do not replace the current record page or add duplicate cards to the public browsing index. Current edits do not alter retained editions. When preparing another edition, explicitly include the older revisions that should remain on the live website.",
+            "For an excluded or unavailable reference, enter {ui:publication.availabilityLabel} if you want a public explanation. This is authored public text: do not include private names, locations or operational details. The excluded reference itself contributes no public identifier, title or destination."
+          ]
+        },
+        {
+          "id": "legacy-links",
+          "title": "Keep old chapter addresses and fragments",
+          "paragraphs": [
+            "Open {ui:publication.legacyLinks} in Publishing. Add each old relative HTML path, its public page title and one mapping for each fragment. Choose the individual destination record and whether the link follows its current selected version or names the exact saved revision. Every label here is public text. Saving mappings does not publish them.",
+            "Preparation checks each mapping against the selected edition. Missing destinations, duplicate paths or fragments, and collisions with generated pages block preparation and identify the affected address. Correct the mapping or include the exact referenced revision before preparing again. A chapter with several experiments becomes a static contents page with distinct fragment targets and links; it does not redirect all fragments to one record.",
+            "Existing repository file conflicts still require resolution. A legacy mapping does not authorize replacing unrelated or externally edited files at that address. Inspect the repository file review before confirming an upload."
+          ]
+        },
+        {
+          "id": "publication-recovery",
+          "title": "Recover an upload or restore an older edition",
+          "paragraphs": [
+            "Prepared editions retain the reviewed bytes. Reopen an older edition from {ui:publication.preparations} and choose {ui:publication.rollbackReview}. Review the current destination and any changed analysis dependencies, then confirm the replacement explicitly. GitHub rollback makes a new commit containing the retained edition and preserves newer local authoring. It does not force-reset the branch or overwrite concurrent remote work.",
+            "SSH publishing requires verified OpenSSH host keys, local ssh and sftp, and a remote POSIX shell with find, sha256sum and GNU coreutils. Serve only the configured hosting directory's current subdirectory. Observanda stages and hashes every output before switching the current link atomically. Completed editions remain under releases; configure the web server so that the parent hosting directory and staging directories are not publicly accessible.",
+            "If an SSH upload or switch is interrupted, keep the workspace and choose {ui:publication.deploymentResume}. The retained operation checks its own remote claim and current release before continuing. Stop requests prevent further work but cannot undo a switch already accepted remotely; resume reconciles that uncertainty. Do not remove another operation's claim or manually replace the current link to bypass a failure.",
+            "Verify live website compares the served manifest and every file with the reviewed edition, then rechecks the manifest. Progress remains available in Publishing; use {ui:publication.liveCheckStop} or {ui:publication.liveCheckResume} after an interruption. Resuming checks the current served bytes again. Removed URLs must return HTTP 404 or 410; a stale cached page or an error page returned with HTTP 200 does not pass. A failed recheck replaces the earlier verified status. Verification samples the configured URL from this installation; it cannot erase browser copies, old Git history or every cache worldwide."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "reviews",
+      "title": "Review and witness saved records",
+      "sections": [
+        {
+          "id": "contacts",
+          "title": "Verify a collaborator",
+          "paragraphs": [
+            "Enable Collaboration in Preferences → Modules, then open {ui:reviews.title}. Each installation has its own review identity. Use {ui:reviews.identity} and {ui:reviews.downloadContact} to exchange public contact files. Before using {ui:reviews.contact}, compare the complete fingerprint with your collaborator through another trusted channel.",
+            "{ui:reviews.untrust} blocks new file exchange with that contact. It keeps earlier signed reviews. It cannot remove files the recipient already holds. Review identity keys belong to this installation; a restored workspace retains its reviews but does not by itself transfer another installation’s signing authority."
+          ]
+        },
+        {
+          "id": "request",
+          "title": "Send exact saved revisions",
+          "paragraphs": [
+            "Open a record’s {ui:reviews.witnesses} control and choose {ui:reviews.request}, or request a lab-book review from Collaboration. Choose the reviewer and scope, add instructions, then use {ui:reviews.preview} to inspect the selected titles and revision identifiers. {ui:reviews.create} downloads an encrypted file for that reviewer; send it through your chosen file-sharing channel.",
+            "Requests include private saved record text and fields, but exclude linked media, evidence files and other records. Each request accepts up to 50 records and 750 KB. Larger books require individual record requests. If the selected records or lab-book membership change before creation, preview the selection again. Unsaved edits are not reviewable."
+          ]
+        },
+        {
+          "id": "signatures",
+          "title": "Read and return a signed review",
+          "paragraphs": [
+            "Use {ui:reviews.importFile} after verifying the sender. {ui:reviews.open} shows the exact received revisions and their saved fields. Choose a decision and comments for each record, confirm your intent, then use {ui:reviews.sign}. Return the downloaded encrypted response to the author for import. {ui:reviews.witnesses} shows the result and whether that saved record has changed since review.",
+            "Use {ui:reviews.previous} and {ui:reviews.next} to browse reviews; {ui:reviews.refresh} restarts browsing after new requests arrive. A signature verifies the signing key and unchanged signed content. Its time is claimed by the signer’s computer; it is not independent proof of time, measurement accuracy or physical execution. Encrypted review exchange does not provide online invitations or synchronization."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "storage",
+      "title": "Storage, backup and access",
+      "sections": [
+        {
+          "id": "unlock",
+          "title": "Unlock and recover access",
+          "paragraphs": [
+            "On {ui:access.unlock}, use an authorized device or enter the workspace password. If a recovery key has been configured, expand {ui:access.useRecovery} and enter that key instead. Then choose {ui:access.unlock}. Opening Help does not submit or copy your password or recovery key.",
+            "If this device is not authorized, {ui:access.deviceRequest} creates a request for an authorized workspace owner to review. It does not grant access by itself. A missing password cannot be recovered from Help. Keep an authorized device or a previously configured recovery key available; resetting app preferences does not decrypt a workspace."
+          ]
+        },
+        {
+          "id": "reconnect",
+          "title": "Reconnect to a workspace",
+          "paragraphs": [
+            "When a previous workspace location is unavailable, open {ui:access.previousLocation} to inspect the folder and use {ui:access.retry} after reconnecting its drive or network share. {ui:access.openWorkspace} lets you choose another existing workspace folder and supply its access credentials. {ui:access.newWorkspace} begins a separate setup.",
+            "In the folder form, use {ui:access.chooseFolder} or {ui:access.browseServer}, then {ui:access.checkFolder} to inspect the destination. Supply the workspace password or configured recovery key when needed. Help and {ui:help.returnToForm} preserve the folder and credentials already entered. A verified backup can be opened as an existing workspace; confirm its records and original evidence before relying on it."
+          ]
+        },
+        {
+          "id": "backup",
+          "title": "Verify backups",
+          "paragraphs": [
+            "Use Storage & access to manage storage and backup operations. Keep backups separately from the working storage. Let verification finish and inspect the reported result; the presence of a copied file alone does not prove that every retained original is recoverable.",
+            "Test restoration into a separate test location and retrieve representative records, historical revisions and original evidence. Check that their identities and bytes match. A backup must remain usable without depending on paths on the original workstation."
+          ]
+        },
+        {
+          "id": "access",
+          "title": "Protect workspace access",
+          "paragraphs": [
+            "Keep passwords and recovery material in a safe place independent of the workspace. Lock the workspace when you finish. Encryption protects stored content; it does not replace control of an unlocked computer.",
+            "Do not treat device access as proof that online invitations, organization roles or delivery between collaborators are available. Use only the collaboration actions the installed version provides, and verify the reviewer identity and exact revision on any witnessed entry."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "timeline",
+      "title": "Timelines across projects and lab books",
+      "sections": [
+        {
+          "id": "sources",
+          "title": "Choose sources and filters",
+          "paragraphs": [
+            "Enable {ui:timeline.label} in Preferences → Modules, then create a timeline. In {ui:timeline.sources}, combine any projects and individual lab books. {ui:timeline.descendants} controls whether a project's nested projects are included. Overlapping selections do not duplicate records. With no sources selected, the view includes all lab books.",
+            "Filter by title or tag, status and record-date range. Month, year and range dates overlap the selected period; unknown dates appear last and are excluded by a date range. {ui:timeline.ordering} Save the view to reopen its settings; this does not alter the records."
+          ]
+        },
+        {
+          "id": "browsing",
+          "title": "Browse and refresh saved records",
+          "paragraphs": [
+            "{ui:timeline.previous} and {ui:timeline.next} show one page of summaries at a time. {ui:timeline.branches} groups that page by project or lab book; branches can continue on another page. Open a named record to read its content. Returning within the session retains the current page; reloading starts at the first page.",
+            "Pages stay at the saved snapshot where browsing started. After records change, {ui:timeline.refresh} starts from the latest snapshot. {ui:timeline.retry} repeats an interrupted request without losing view edits. Unavailable sources stay selected until you remove or replace them; their removal never broadens the view to all records."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "migration",
+      "title": "Importing an external logbook",
+      "sections": [
+        {
+          "id": "inspection",
+          "title": "Review a declared source",
+          "paragraphs": [
+            "Open Workspaces and choose {ui:migration.title}. Choose the source export folder and {ui:migration.inspect}. Opening this screen does not start inspection. The folder must contain a version-1 Observanda declared-source inventory manifest; an ordinary website or arbitrary folder is not yet an editable import.",
+            "The result accounts for every declared object and file, with filters for exclusions, missing items and conflicts. Use {ui:migration.search} to find titles, source identities, revisions or original file paths. Open {ui:migration.targets} to check each original file and declared target. Source dates, exact relationships and original URLs are available separately. {ui:migration.declaration} shows the complete source declaration.",
+            "JSON pointers select exact members or array elements. HTML anchors select the named element, including its contents; they do not automatically mean the following section or chapter. Missing targets, duplicate names, nested overlapping mappings, invalid formats and inspection limits leave visible issues. Source scripts do not run and URLs are not fetched."
+          ]
+        },
+        {
+          "id": "review",
+          "title": "Resolve and repeat an inspection",
+          "paragraphs": [
+            "Correct the source export declaration when an item needs resolution, then inspect it again. Use {ui:migration.cancel} to stop an inspection. No records are imported or published by this workflow, including after an interrupted inspection.",
+            "The snapshot hash identifies the manifest and original bytes independently of the folder location. An unchanged relocated export has the same hash. A complete inventory establishes declared source coverage and target verification; it does not establish scientific accuracy, native-format interpretation or completed migration.",
+            "Inspection results remain private to the current app session and clear when the workspace is locked or switched. Staging an import is a separate, explicit action."
+          ]
+        },
+        {
+          "id": "staging",
+          "title": "Stage and map a private import",
+          "paragraphs": [
+            "After a complete inspection, choose the destination lab book and {ui:migrationImport.stage}. Original files are retained encrypted with their hashes. Staging does not create editable records. Use {ui:migrationImport.pause} to stop work; {ui:migrationImport.resume} opens saved batches after closing or restarting the app.",
+            "Open {ui:migrationImport.mapping} for each object that needs a different destination, title, record type, occurrence date, attribution or relationship meaning. Choose exactly one current revision for each source identity; historical revisions keep exact references. Exclusions and omitted links require reasons. Different attempts must have distinct declared source identities and boundaries.",
+            "Plain text, selected JSON and inert HTML text can become editable writing. JSON numbers retain their original spellings. HTML conversion reports omitted elements and formatting for explicit review; it never runs scripts or fetches URLs. Large tables can use {ui:migrationImport.dataset}: choose the declared row array and fields, or a delimited table's separator and headings. The review shows a bounded sample with exact numeric spellings and distinct null, empty and absent values. Units and number representations are declarations, not inferred scientific meaning.",
+            "A declared figure can use {ui:migrationImport.figure} when its source follows Observanda's portable figure schema. Plot coordinates use the figure renderer's numeric representation; any potentially approximate values require acknowledgement. Original numeric spellings remain in the editable source text and retained bytes. Other chart formats need an explicit source conversion, rather than inferred measurements."
+          ]
+        },
+        {
+          "id": "record-facts",
+          "title": "Review explicitly declared research facts",
+          "paragraphs": [
+            "When a prepared source includes a supported record-facts declaration, choose it under {ui:importResearch.source}. The declaration explicitly maps progress, outcome, template fields, preparations, execution events, criterion assessments and result statements into their native record structures. This requires an adapter prepared for that source; arbitrary metadata keys are not interpreted as scientific findings.",
+            "Prepare the import review, reopen the mapping and inspect {ui:importResearch.preview}. Check conditions, inputs, expectations, observed results and limitations. Method references must name exact Uses method relationships. Exact scientific numbers belong in text values with their declared units and numerical base. Existing retained datasets and analyses may support results; retained result tables must match their pinned source values before the import can be approved.",
+            "Corrections append facts with explicit superseded identities. An import cannot silently rewrite an earlier preparation, event or assessment, even when source content is chosen to resolve other conflicts. Reversal preserves facts appended to a previously existing run. {ui:migrationImport.metadataMode} controls whether other metadata remains only in Source provenance or also appears in a writing section. Older saved mappings keep their previous treatment until explicitly changed."
+          ]
+        },
+        {
+          "id": "applying",
+          "title": "Review changes, apply and reverse",
+          "paragraphs": [
+            "Choose {ui:migrationImport.review} and inspect the reconciliation counts and object mappings. Repeated imports reuse source identities. Conflicting authored fields or edited datasets require an explicit resolution. Changed bytes under an existing source revision are flagged. {ui:migrationImport.apply} commits the reviewed records, relationships and receipts together; changed destinations invalidate the review. Use {ui:migrationImport.openRecord} from the applied batch to continue working with a record and its complete dataset.",
+            "Imported records start private. New mappings keep unmapped metadata in private provenance by default; including it as a writing section requires an explicit mapping choice. Shared original bytes retain an evidence association for every mapped record and relative source path. Evidence lists show each original filename, relative path, size and SHA-256 with a download of that exact revision. All declared source dates remain distinct from the import timestamp. Open {ui:migrationImport.provenance} from a record to inspect its original identifiers, dates, URLs, boundaries and mapping decisions, or download original files. Source history and scientific outcomes are not inferred.",
+            "Use {ui:migrationImport.reverse} from a saved batch to remove importer-created records or restore prior revisions only where the current content still matches that import. Later record or dataset edits, subsequent imports, new references, page customizations and shared original bytes are retained. Review the reversal report for preserved items. Reapplying the source uses the same destination identities. Backups include staged imports and provenance; verify a restored copy before relying on it."
+          ]
+        }
+      ]
+    }
+  ]
+}

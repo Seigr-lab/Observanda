@@ -1,0 +1,56 @@
+import {test,expect} from '@playwright/test';
+import assert from 'node:assert/strict';
+import {mkdtemp,rm,stat,mkdir} from 'node:fs/promises';
+import path from 'node:path';import os from 'node:os';import {randomUUID} from 'node:crypto';
+import {testServer} from '../device-fixture.js';
+import {encryptedFixture} from './encrypted-fixture.js';
+import {sampleNotebook} from '../../src/sample.js';
+import {WorkspaceDatabases} from '../../src/workspace-databases.js';
+import {installDatabaseProvider} from '../../src/workspace-database-context.js';
+import {initializeProjectLocation,ProjectStorage} from '../../src/project-storage.js';
+import {ProjectRegistry} from '../../src/project-registry.js';
+import {ProjectRenames} from '../../src/project-rename.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../../src/access.js';
+import {clearVault} from '../../src/encryption.js';
+
+test('project copy and move remain visible in their page across navigation and reload',async({page})=>{
+ test.setTimeout(180000);
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-project-transfer-ui-')),owner=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(owner),vaults=[];let app,release,entered;
+ const gate=new Promise(resolve=>release=resolve),ready=new Promise(resolve=>entered=resolve),finish=ProjectRenames.prototype.finish,errors=[];
+ try{
+  const rootBook=sampleNotebook();rootBook.title='workspace';
+  const f=await encryptedFixture(path.join(directory,'workspace'),rootBook);vaults.push(f.vault);
+  const book=sampleNotebook(),id=book.projects[0].id;book.projects[0].title='Portable project';
+  const access=await createWorkspaceAccess('','',f.deviceStore),vault=takeCreatedVault(access);vaults.push(vault);
+  book.title=book.projects[0].title;
+  const source=await initializeProjectLocation(path.join(f.workspace.root,book.projects[0].title),id,book,access,vault),registry=new ProjectRegistry(f.workspace,rootBook.id);await registry.attach(source,{expected:'new'});
+  const childBook=sampleNotebook(),childAccess=await createWorkspaceAccess('','',f.deviceStore),childVault=takeCreatedVault(childAccess);vaults.push(childVault);
+  childBook.title=childBook.projects[0].title='Child Project 1';
+  const child=await initializeProjectLocation(path.join(source.root,'Child Project 1'),childBook.projects[0].id,childBook,childAccess,childVault);await registry.attach(child,{parentId:id,expected:(await registry.read()).revision});
+  const targetBook=sampleNotebook();targetBook.title=targetBook.projects[0].title='Collection';const targetAccess=await createWorkspaceAccess('','',f.deviceStore),targetKey=takeCreatedVault(targetAccess);vaults.push(targetKey);
+  const target=await initializeProjectLocation(path.join(f.workspace.root,targetBook.title),targetBook.projects[0].id,targetBook,targetAccess,targetKey);await registry.attach(target,{expected:(await registry.read()).revision});
+  const destination=path.join(target.root,book.title),copy=path.join(directory,'copied',book.title);await mkdir(path.dirname(copy));
+  const inode=(await stat(path.join(source.root,'.observanda/postgresql/data/PG_VERSION'))).ino,childInode=(await stat(path.join(child.root,'.observanda/postgresql/data/PG_VERSION'))).ino;
+  ProjectRenames.prototype.finish=function(value,key,options){return finish.call(this,value,key,{...options,checkpoint:async stage=>{if(stage==='stopped'){entered();await gate;}}});};
+  app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,headless:true,preferencesFile:path.join(directory,'preferences.json')});
+  page.on('pageerror',error=>errors.push(error.message));await page.goto(app.url);
+  await expect(page.getByRole('button',{name:'Preferences',exact:true})).toBeVisible();
+  await page.goto(app.origin+'/#/owners/'+id+'/projects/'+id);
+  const storage=page.locator('[data-project-storage="'+id+'"]');await expect(storage).toContainText(source.root);
+  await storage.getByRole('button',{name:'Copy project',exact:true}).click();await page.locator('#project-storage-path').fill(path.dirname(copy));await page.locator('#project-storage-form').getByRole('button',{name:'Copy project',exact:true}).click();
+  await expect(page.locator('#project-storage-form')).not.toBeVisible();await expect(storage).toContainText('Copied to '+copy,{timeout:60000});assert.ok(await stat(source.root));
+  await storage.getByRole('button',{name:'Move project',exact:true}).click();const placement=page.locator('#project-placement-form');await placement.getByLabel('Move into',{exact:true}).selectOption(target.projectId);await placement.getByRole('button',{name:'Move project',exact:true}).click();await ready;
+  const status=await page.evaluate(async id=>{const context=(await(await fetch('/api/storage')).json()).contextId;const response=await fetch('/api/projects/'+id+'/storage/details',{method:'POST',headers:{'Content-Type':'application/json','X-Observanda-Workspace':context},body:'{}',signal:AbortSignal.timeout(3000)});return {status:response.status,value:await response.json()};},id);expect(status.status).toBe(200);expect(status.value.move.mode).toBe('placement');expect(status.value.move.running).toBe(true);
+  await page.getByRole('button',{name:'Preferences',exact:true}).click();await expect(page.getByLabel('Workspace name',{exact:true})).toHaveValue(rootBook.title);
+  await page.goBack();await expect(page.locator('[data-owned-activity]')).toContainText('Moving project');
+  await page.reload();await expect(page.locator('[data-owned-activity]')).toContainText('Moving project');await expect(page.getByRole('button',{name:'Preferences',exact:true})).toBeEnabled();
+  await expect(page.locator('[data-owned-activity]')).toContainText('Moving project');release();
+  await expect(storage).toContainText(destination,{timeout:60000});await expect(storage.getByRole('button',{name:'Move project',exact:true})).toBeEnabled();
+  expect((await new ProjectRenames(registry,id).read()).phase).toBe('complete');assert.equal((await registry.locate(id)).root,destination);await assert.rejects(stat(path.join(source.root,'.observanda/postgresql')),{code:'ENOENT'});
+  const childRoot=path.join(destination,'Child Project 1');assert.equal((await registry.locate(child.projectId)).root,childRoot);assert.deepEqual((await new ProjectStorage(childRoot,child.projectId,childVault).read()).book,childBook);for(const targetRoot of [destination,copy])assert.ok(await stat(path.join(targetRoot,'Child Project 1','.observanda/postgresql/data/PG_VERSION')));
+  assert.equal((await stat(path.join(destination,'.observanda/postgresql/data/PG_VERSION'))).ino,inode);assert.equal((await stat(path.join(childRoot,'.observanda/postgresql/data/PG_VERSION'))).ino,childInode);
+  assert.deepEqual((await new ProjectStorage(destination,id,vault).read()).book,book);assert.deepEqual((await new ProjectStorage(copy,id,vault).read()).book,book);
+  await expect(page.locator('#project-recent-records')).toContainText(book.entries[0].title);await expect(page.locator('#project-recent-records [role=alert]')).toHaveCount(0);
+  await page.screenshot({path:test.info().outputPath('project-storage.png'),fullPage:true});expect(errors).toEqual([]);
+ }finally{release();ProjectRenames.prototype.finish=finish;await page.close();await app?.close();await owner.close();detach();vaults.forEach(clearVault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-transfer-ui-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+});

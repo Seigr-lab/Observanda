@@ -1,0 +1,10 @@
+.attempt-editor{margin-block:1.5rem;border-block-start:1px solid var(--border);padding-block:1rem}
+.attempt-details,.attempt-form,.attempt-comparison{min-width:0;overflow-wrap:anywhere}
+.attempt-details h3{font-size:1rem}.attempt-details h4{font-size:1rem;margin-block:1rem .5rem}
+.attempt-details dl{display:grid;grid-template-columns:minmax(7rem,1fr) minmax(0,3fr);gap:.35rem 1rem}.attempt-details dd{margin:0;white-space:pre-wrap}
+.attempt-details .table-scroll{max-width:100%;overflow:auto}.attempt-details th,.attempt-details td{padding:.6rem;vertical-align:top;text-align:start;white-space:pre-wrap;min-width:7rem;border-bottom:1px solid var(--border,currentColor)}
+.attempt-details small,.attempt-comparison small{display:block}.attempt-details code{overflow-wrap:anywhere;white-space:normal}.attempt-details details{margin-block:1rem}
+.attempt-form fieldset{margin-block:1rem;min-width:0}.attempt-form label{display:block;margin-block:.5rem}.attempt-form input,.attempt-form select,.attempt-form textarea{width:100%;min-width:0}.attempt-form-row{padding-block:1rem;border-block-end:1px solid var(--border)}
+.attempt-difference{font-weight:bold}.attempt-comparison ul{padding-inline-start:1.2rem}
+@media(max-width:600px){.attempt-details dl{display:block}.attempt-details dt{font-weight:bold;margin-top:.7rem}.attempt-details dd{margin-block:.2rem}}
+@media print{.attempt-details .table-scroll{overflow:visible}.attempt-details table{width:100%;table-layout:fixed}.attempt-details td,.attempt-details th{min-width:0}.attempt-details details> *{display:block!important}}

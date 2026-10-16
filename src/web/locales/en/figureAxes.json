@@ -1,0 +1,17 @@
+{
+ "settings":"Axis direction and tick labels",
+ "x":"Coordinate axis",
+ "y":"Value axis",
+ "reverse":"Reverse axis direction",
+ "ticks":"Labels at exact positions",
+ "help":"Empty tick lists use automatic labels. Custom labels retain their exact numeric positions. Axis reversal changes the direction, while minimum and maximum remain increasing. Crowded labels use leaders to their tick positions.",
+ "value":"Numeric tick position",
+ "label":"Tick label",
+ "add":"Add tick label",
+ "remove":"Remove tick label",
+ "invalid":"Use distinct finite tick positions with labels inside the declared axis range. Logarithmic ticks must be positive. Custom ticks require numeric or calendar coordinates, with at most 100 labels per axis.",
+ "date":"For calendar coordinates, tick positions are milliseconds since 1970-01-01T00:00:00Z.",
+ "direction":"Direction",
+ "normal":"Increasing",
+ "reversed":"Reversed"
+}

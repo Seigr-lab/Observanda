@@ -1,0 +1,9 @@
+{
+  "buildingTree": "Preparing reviewed repository files",
+  "uploading": "Uploading selected files",
+  "committing": "Creating publication commit",
+  "pushing": "Pushing publication branch",
+  "verifying": "Verifying remote files",
+  "repositoryVerified": "Repository files verified; Pages settings unchanged",
+  "livePending": "Remote files verified; live verification pending"
+}

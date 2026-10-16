@@ -1,0 +1,62 @@
+@layer shell-navigation {
+.workspace-refresh-status{margin:.25rem 1rem .75rem;font-size:.8rem;line-height:1.5;color:var(--ui-muted);overflow-wrap:anywhere}
+/* The application frame belongs to the viewport, independent of page length. */
+html{--main-content-gutter:clamp(1rem,3vw,3.5rem);--shell-content-top:var(--shell-topbar-height,64px);scrollbar-gutter:stable;scroll-padding-top:calc(var(--shell-content-top) + 16px)}
+html[data-context-navigation=open][data-navigation=top]{--shell-content-top:calc(var(--shell-topbar-height,64px) + var(--shell-navigation-height,0px))}
+@supports not (scrollbar-gutter:stable){html{overflow-y:scroll}}
+.shell{--navigation-size:min(var(--app-navigation-width,272px),calc(100% - 380px));position:relative;min-height:100dvh;padding-top:var(--shell-topbar-height,64px);grid-template-rows:1fr}
+.topbar{position:fixed;inset:0 0 auto;z-index:60;display:grid;grid-template-columns:40px minmax(0,1fr) 40px;gap:.75rem;min-height:64px;padding:.6rem 1rem;border-bottom:1px solid var(--ui-border);background:var(--ui-surface)}
+.shell-menu{grid-column:1;grid-row:1;display:grid;place-items:center;width:40px;height:40px;padding:8px;border:1px solid transparent;border-radius:var(--ui-control-radius);background:transparent;color:var(--ui-muted);cursor:pointer}
+.shell-menu:hover{background:var(--ui-tint);color:var(--ui-accent)}
+.shell-menu:focus-visible{outline:2px solid var(--ui-accent);outline-offset:2px}
+.shell-menu svg{width:22px;height:22px}
+html[data-navigation=right] .shell-menu{grid-column:3}
+html[data-navigation=right] .shell-menu svg{transform:scaleX(-1)}
+html[data-navigation=top] .shell-menu svg{transform:rotate(90deg)}
+/* The shell owns horizontal page spacing for every feature view. */
+.main{padding-inline:var(--main-content-gutter)}
+.workspace-heading{grid-column:2;grid-row:1;min-width:0;justify-self:center;max-width:100%}
+.workspace-identity{display:flex;align-items:center;justify-content:center;gap:.6rem;min-width:0;max-width:100%;border:0;padding:0;background:none;color:var(--ui-text);cursor:pointer}
+html[data-header-alignment=left] .workspace-heading{justify-self:start}
+html[data-header-alignment=right] .workspace-heading{justify-self:end}
+.workspace-name{font:650 1.25rem/1.3 var(--ui-heading);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.workspace-logo{width:auto;max-width:6rem;height:32px;object-fit:contain;flex-shrink:0}
+html[data-context-navigation=closed] .shell,html[data-context-navigation=drawer] .shell{grid-template-columns:minmax(0,1fr);grid-template-areas:"main";grid-template-rows:1fr}
+html[data-context-navigation=closed] #main-navigation{display:none}
+html[data-context-navigation=closed] .navigation-resizer,html[data-context-navigation=drawer] .navigation-resizer{display:none}
+html[data-context-navigation=open] .shell{grid-template-columns:var(--navigation-size) minmax(0,1fr);grid-template-areas:"navigation main";grid-template-rows:1fr}
+html[data-context-navigation=open][data-navigation=right] .shell{grid-template-columns:minmax(0,1fr) var(--navigation-size);grid-template-areas:"main navigation"}
+html[data-context-navigation=open] #main-navigation{display:flex;position:fixed;inset:var(--shell-topbar-height,64px) auto 0 0;z-index:50;width:var(--navigation-size);height:auto;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-gutter:stable}
+html[data-context-navigation=open][data-navigation=right] #main-navigation{inset:var(--shell-topbar-height,64px) 0 0 auto}
+html[data-context-navigation=open]:not([data-navigation=top]) .navigation-resizer{display:block;position:fixed;z-index:51;top:var(--shell-topbar-height,64px);bottom:0;left:calc(min(var(--app-navigation-width,272px),100% - 380px) - 4px)}
+html[data-context-navigation=open][data-navigation=right] .navigation-resizer{left:auto;right:calc(min(var(--app-navigation-width,272px),100% - 380px) - 4px)}
+html[data-context-navigation=open][data-navigation=top] .shell{grid-template-columns:minmax(0,1fr);grid-template-areas:"main";padding-top:calc(var(--shell-topbar-height,64px) + var(--shell-navigation-height,0px))}
+html[data-context-navigation=open][data-navigation=top] #main-navigation{inset:var(--shell-topbar-height,64px) 0 auto;width:auto;max-height:45dvh;display:block;border-bottom:1px solid var(--ui-border)}
+html[data-context-navigation=open][data-navigation=top] .navigation-resizer{display:none}
+#main-navigation .workspace-tree{max-height:none;overflow:visible}
+html[data-context-navigation=drawer] #main-navigation{display:flex;position:fixed;inset:var(--shell-topbar-height,64px) auto 0 0;width:min(var(--app-navigation-width,272px),88vw);height:auto;z-index:101;box-shadow:4px 0 28px #0002;overflow-y:auto;overscroll-behavior:contain}
+html[data-context-navigation=drawer][data-navigation=right] #main-navigation{inset:var(--shell-topbar-height,64px) 0 0 auto}
+html[data-context-navigation=drawer] #workspace-navigation{display:flex;flex-direction:column;grid-column:auto}
+html[data-context-navigation=drawer] .nav-group-label,html[data-context-navigation=drawer] .workspace-label{display:flex}
+html[data-context-navigation=drawer] .workspace-navigation nav{display:grid;overflow:visible}
+html[data-context-navigation=drawer] .workspace-navigation .nav-button{width:100%;white-space:normal}
+.shell-menu-backdrop{display:none}
+html[data-context-navigation=drawer] .shell-menu-backdrop{display:block;position:fixed;inset:var(--shell-topbar-height,64px) 0 0;z-index:100;border:0;background:#0003;cursor:default}
+html[data-context-navigation=drawer] .topbar{z-index:102}
+html[data-editor-page=website] .main{max-width:none;width:100%;margin:0;padding-block:1rem}
+html[data-editor-page=website] .section-save{margin-top:.65rem;padding-top:.65rem}
+#main-navigation{padding:.85rem .7rem;background:var(--ui-surface);border-right:1px solid var(--ui-border)}
+#main-navigation .brand{margin:0 .3rem .85rem;font-size:1.2rem}
+.app-logo{width:31px;height:31px;flex:none;object-fit:contain}
+#main-navigation .workspace-navigation{gap:.8rem}
+#main-navigation nav,#main-navigation section{margin:0;padding:0}
+#main-navigation .nav-group-label,#main-navigation .workspace-label{display:flex;margin:.15rem .6rem .3rem;font-size:.73rem;line-height:1.4;letter-spacing:.045em}
+#main-navigation .workspace-label{align-items:center}
+#main-navigation .nav-button{padding:.5rem .6rem;min-height:40px;gap:.65rem;font-size:.92rem;line-height:1.45}
+#main-navigation .tree-project{margin:0 0 .25rem}
+.tree-project>summary{cursor:pointer;font-size:.92rem;font-weight:600;padding:.45rem .5rem;overflow-wrap:anywhere}
+.tree-project>summary::marker{color:var(--ui-muted)}
+.tree-project-link{font:inherit}
+.tree-project .notebook-link{margin-left:.5rem;width:calc(100% - .5rem)}
+@media(max-width:760px){.topbar{padding:.5rem .75rem;gap:.5rem}.workspace-name{font-size:1.1rem}.workspace-logo{max-width:min(3rem,12vw);height:28px;flex-shrink:1;min-width:0}.workspace-identity{gap:.4rem}.navigation-resizer{display:none}}
+}

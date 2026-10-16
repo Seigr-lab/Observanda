@@ -1,0 +1,47 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,rm} from 'node:fs/promises';
+import {randomUUID} from 'node:crypto';
+import os from 'node:os';
+import path from 'node:path';
+import {sampleNotebook} from '../src/sample.js';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {clearVault} from '../src/encryption.js';
+import {workspaceModules} from '../src/modules/index.js';
+import {ModuleReader} from '../src/modules/reader.js';
+import {ModuleHistory} from '../src/modules/history.js';
+import {ModuleCatalogue} from '../src/modules/catalogue.js';
+import {seedModuleCurrent} from './module-current-fixture.js';
+import {InventoryReader} from '../src/modules/inventory-reader.js';
+import {copyPlan,copyWorkspace} from '../src/locations.js';
+import {Workspace} from '../src/storage.js';
+import {validResourceTags,parseResourceTags,matchesResourceTags} from '../src/web/modules/resource-tags.js';
+const data=(name='Meter')=>({projectId:null,placementId:null,name,code:'',kind:'material',description:'Private resource description',categoryId:null,schemaRevision:null,fieldSchema:[],values:{},location:'Bench',unit:'items',capacity:1,status:'available',links:[]});
+test('resource tags are explicit, bounded and compare complete Unicode-normalized terms',()=>{
+ assert.deepEqual(parseResourceTags(' field work, PCB, pcb , Ångström, A\u030angström, '),['field work','PCB','Ångström']);
+ assert.ok(validResourceTags(['PCB','field work']));assert.ok(matchesResourceTags(['Ångström','PCB'],['A\u030angström','pcb']));assert.equal(matchesResourceTags(['PCB prototype'],['PCB']),false);assert.ok(matchesResourceTags(['PCB'],['PCB','field work'],'any'));
+ for(const invalid of [null,'PCB',[''],['a','A'],['bad,tag'],['bad\nline'],[' space '],['x'.repeat(81)],Array.from({length:25},(_,i)=>'tag'+i)])assert.equal(validResourceTags(invalid),false);
+});
+test('tag edits retain stock, old revisions, conflict checks and encrypted recovery',async t=>{
+ const dir=await mkdtemp(path.join(os.tmpdir(),'observanda-resource-tags-')),book=sampleNotebook(),f=await encryptedFixture(dir,book),workspaceId=book.id,modules=workspaceModules(f.workspace),id=randomUUID();t.after(async()=>{clearVault(f.vault);await rm(dir,{recursive:true,force:true});});
+ const command=(action,payload)=>modules.execute({workspaceId,commandId:randomUUID(),action,payload});
+ await command('resource.create',{id,data:data(),openingStock:{quantity:'40.000000000000000001',projectId:null}});
+ const reader=new ModuleReader(f.workspace),before=await reader.selected({workspaceId,id});assert.equal(before.entity.data.tags,undefined);
+ const tagged={...before.entity.data,tags:['PCB','field work']};await command('resource.save',{id,expectedRevision:before.entity.revision,data:tagged});
+ const current=await reader.selected({workspaceId,id});assert.deepEqual(current.entity.data.tags,tagged.tags);assert.equal((await new ModuleHistory(f.workspace).read({id,revision:before.entity.revision})).entity.data.tags,undefined);
+ await assert.rejects(command('resource.save',{id,expectedRevision:before.entity.revision,data:{...tagged,tags:['Conflict']}}),{code:'MODULE_CHANGED'});
+ await assert.rejects(command('resource.save',{id,expectedRevision:current.entity.revision,data:{...tagged,tags:['Same','same']}}),{code:'RESOURCE_TAGS'});
+ const stock=await new InventoryReader(f.workspace).stock({workspaceId,ids:[id]});assert.equal(stock.items[0].locations[0].physical,'40.000000000000000001');
+ const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(dir,'backup')),{vault:f.vault}),restored=new Workspace(backup,f.vault);const selected=await new ModuleReader(restored).selected({workspaceId,id});assert.deepEqual(selected.entity,current.entity);assert.equal((await new ModuleReader(restored).list({workspaceId,type:'resource',tags:['pcb']})).total,1);
+});
+test('650-item tag queries use authenticated summaries, retain exact filters across pages and preserve legacy views',async t=>{
+ const dir=await mkdtemp(path.join(os.tmpdir(),'observanda-resource-tag-page-')),book=sampleNotebook(),f=await encryptedFixture(dir,book),workspaceId=book.id,now=new Date().toISOString();t.after(async()=>{clearVault(f.vault);await rm(dir,{recursive:true,force:true});});
+ const entities=Array.from({length:650},(_,i)=>({id:randomUUID(),type:'resource',revision:1,createdAt:now,updatedAt:now,data:{...data('Item '+String(i).padStart(3,'0')),description:'Retained unabridged body. '.repeat(400),...(i%3?{tags:i%2?['PCB','field work']:['PCB']}:{})}}));await seedModuleCurrent(f.workspace,workspaceId,entities);
+ const original=ModuleCatalogue.prototype.selected;ModuleCatalogue.prototype.selected=()=>{throw Error('Tag filtering loaded original resource bodies');};t.after(()=>{ModuleCatalogue.prototype.selected=original;});
+ const reader=new ModuleReader(f.workspace),started=performance.now(),query={workspaceId,type:'resource',tags:['pcb','field work'],tagMode:'all',limit:7},first=await reader.list(query),second=await reader.list({...query,cursor:first.nextCursor});
+ const expected=entities.filter(e=>matchesResourceTags(e.data.tags,query.tags));assert.equal(first.total,expected.length);assert.equal(first.items.length,7);assert.ok(first.items.every(v=>v.tags.includes('field work')));assert.ok(second.items.every(v=>!first.items.some(w=>w.id===v.id)));assert.equal(first.items.some(v=>v.description.includes('unabridged body. '.repeat(20))),false);
+ assert.equal((await reader.list({...query,tagMode:'any'})).total,entities.filter(e=>e.data.tags).length);
+ assert.equal((await reader.list({...query,tags:['PC']})).total,0);await assert.rejects(reader.list({...query,tags:['field work'],cursor:first.nextCursor}),{code:'MODULE_QUERY_CURSOR'});
+ await assert.rejects(reader.list({...query,type:'category'}),{code:'RESOURCE_TAGS'});await assert.rejects(reader.list({...query,workspaceId:randomUUID()}),{code:'WORKSPACE_CHANGED'});
+ assert.ok(performance.now()-started<15000);t.diagnostic('650-item exact tag paging completed without reading original bodies.');
+});

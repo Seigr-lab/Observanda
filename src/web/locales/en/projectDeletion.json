@@ -1,0 +1,16 @@
+{
+  "delete": "Delete project",
+  "confirm": "Delete {title}?",
+  "effect": "Permanently remove this project, its lab books and their databases, records, history and files. Subprojects are kept at the workspace root.",
+  "cancel": "Cancel",
+  "resume": "Finish deletion",
+  "pending": "Project deletion",
+  "working": "Deleting project…",
+  "completed": "Project deleted.",
+  "failed": "The project could not be deleted.",
+  "retry": "Retry",
+  "more": "More pending deletions",
+  "username": "Username (optional)",
+  "password": "Project password",
+  "recovery": "Recovery key (optional)"
+}

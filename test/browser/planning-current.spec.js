@@ -1,0 +1,54 @@
+import {test,expect} from '@playwright/test';
+import {mkdtemp,rm} from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import {randomUUID} from 'node:crypto';
+import {encryptedFixture} from './encrypted-fixture.js';
+import {sampleNotebook} from '../../src/sample.js';
+import {clearVault} from '../../src/encryption.js';
+import {startServer} from '../../src/server.js';
+import {ModuleCatalogue} from '../../src/modules/catalogue.js';
+import {defaultDashboard,createPanel} from '../../src/web/dashboard-model.js';
+import {readWorkspaceDashboard,writeWorkspaceDashboard} from '../../src/security/dashboard-storage.js';
+import {seedModuleCurrent} from '../module-current-fixture.js';
+for(const count of [65,650])test('planning pages, prerequisites and bookings use selected originals at '+count+' items',async({page})=>{
+ test.setTimeout(90000);page.setDefaultTimeout(10000);
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-planning-current-')),book=sampleNotebook();book.projects[0].tools=['planning'];
+ const f=await encryptedFixture(directory,book),now=new Date().toISOString();
+ const tasks=Array.from({length:count},(_,i)=>({id:randomUUID(),type:'task',revision:1,createdAt:now,updatedAt:now,data:{projectId:i%2?book.projects[0].id:null,title:'Task '+String(i).padStart(3,'0'),description:'Private task notes. '.repeat(4000),status:'todo',priority:'normal',dueOn:'2026-10-15',assignees:[],checklist:[],dependencies:[],links:[]}}));
+ const equipment={id:randomUUID(),type:'resource',revision:1,createdAt:now,updatedAt:now,data:{name:'Reference instrument',projectId:null,code:'',kind:'equipment',description:'Private instrument notes',categoryId:null,schemaRevision:null,fieldSchema:[],values:{},location:'Bench',unit:'',capacity:1,status:'available',links:[]}};
+ await seedModuleCurrent(f.workspace,book.id,[...tasks,equipment]);const settings=defaultDashboard();settings.enabledModules=['planning'];const card=createPanel('tasks','planning-growth-card');card.moduleId='planning';card.count=5;settings.views[0].panels=[card];await writeWorkspaceDashboard(f.workspace,settings,(await readWorkspaceDashboard(f.workspace)).etag);
+ const app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences')}),read=ModuleCatalogue.prototype.read,selected=ModuleCatalogue.prototype.selected,opened=[],requests=[],errors=[];
+ ModuleCatalogue.prototype.read=()=>{throw Error('Planning loaded full module state');};ModuleCatalogue.prototype.selected=async function(head,id){const value=await selected.call(this,head,id);if(value)opened.push(id);return value;};
+ page.on('request',r=>requests.push(new URL(r.url()).pathname));page.on('pageerror',e=>errors.push(e.message));
+ const cdp=await page.context().newCDPSession(page);let heap=0;const measure=async()=>{heap=Math.max(heap,(await cdp.send('Runtime.getHeapUsage')).usedSize);};
+ try{
+  const auth=await page.request.post(app.origin+'/api/session',{data:{token:app.launchToken},headers:{Origin:app.origin}});expect(auth.ok()).toBe(true);
+  await page.goto(app.origin+'/#/modules/planning/task');const main=page.locator('main'),dialog=page.locator('#dialog');
+  await expect(main.locator('.module-item')).toHaveCount(25);expect(opened).toEqual([]);await test.step('Measure initial page',measure);
+  await main.getByRole('combobox',{name:'Show location',exact:true}).selectOption(book.projects[0].id);await expect(main.locator('[data-module-items-status]')).toContainText('of '+Math.floor(count/2));
+  await main.getByRole('combobox',{name:'Show location',exact:true}).selectOption('');await expect(main.locator('[data-module-items-status]')).toContainText('of '+count);
+  await main.getByLabel('Search items',{exact:true}).fill('Task 030');await expect(main.locator('.module-item')).toHaveCount(1);await main.getByRole('button',{name:'Open task',exact:true}).click();await expect(main.getByLabel('Task title',{exact:true})).toHaveValue('Task 030');expect(opened).toEqual([tasks[30].id]);
+  await main.getByRole('button',{name:'Add prerequisite',exact:true}).click();await dialog.getByLabel('Search items',{exact:true}).fill('Task 031');await expect(dialog.locator('.module-item')).toHaveCount(1);await dialog.getByRole('button',{name:'Select Task 031',exact:true}).click();await expect(main).toContainText('Task 031');expect(opened).toEqual([tasks[30].id]);
+  await main.getByRole('button',{name:'Save task',exact:true}).click();await expect(main.locator('[data-module-status]')).toHaveText('Saved');await measure();
+  await main.getByLabel('Status',{exact:true}).selectOption('done');await main.getByRole('button',{name:'Save task',exact:true}).click();await expect(main.getByRole('alert')).toBeVisible();await expect(main.getByLabel('Task title',{exact:true})).toHaveValue('Task 030');
+  await main.getByRole('button',{name:'Discard edits',exact:true}).click();await expect(main.getByLabel('Status',{exact:true})).toHaveValue('todo');
+  let releaseList,listingStarted,listingFinished;const listGate=new Promise(resolve=>{releaseList=resolve;}),listStarted=new Promise(resolve=>{listingStarted=resolve;}),listFinished=new Promise(resolve=>{listingFinished=resolve;});
+  await page.route('**/api/modules/items',async route=>{
+   if(route.request().postDataJSON()?.type!=='booking')return route.continue();
+   listingStarted();const response=await route.fetch();await listGate;await route.fulfill({response}).catch(()=>{});listingFinished();
+  });
+  await main.getByRole('button',{name:'Equipment agenda',exact:true}).click();await listStarted;await main.getByRole('button',{name:'New booking',exact:true}).click();await main.getByLabel('Booking title',{exact:true}).fill('Selected equipment');
+  const titleInput=await main.getByLabel('Booking title',{exact:true}).elementHandle();releaseList();await listFinished;expect(await titleInput.evaluate(el=>el.isConnected&&el===document.activeElement)).toBe(true);await titleInput.dispose();
+  await main.getByRole('button',{name:'Equipment',exact:true}).click();await expect(dialog.locator('.module-item')).toHaveCount(1);await dialog.getByRole('button',{name:'Select Reference instrument',exact:true}).click();expect(opened).not.toContain(equipment.id);
+  await expect(main.getByLabel('Booking title',{exact:true})).toHaveValue('Selected equipment');
+  await main.getByLabel('Starts',{exact:true}).fill('2026-10-15T10:00');await main.getByLabel('Ends',{exact:true}).fill('2026-10-15T11:00');await main.getByRole('button',{name:'Save booking',exact:true}).click();await expect(main.locator('[data-module-status]')).toHaveText('Saved');expect(opened).toContain(equipment.id);
+  await main.getByRole('button',{name:'Calendar overview',exact:true}).click();await main.getByLabel('Month',{exact:true}).fill('2026-10');await expect(main.locator('[data-calendar-source^="tasks:"]')).toHaveCount(2);
+  for(const source of await main.locator('[data-calendar-source^="tasks:"]').evaluateAll(nodes=>nodes.map(n=>n.dataset.calendarSource)))await main.locator('[data-calendar-source="'+source+'"]').uncheck();
+  await expect(main.locator('.calendar-content')).toContainText('Selected equipment');await measure();
+  await page.getByRole('button',{name:'Dashboard',exact:true}).click();const panel=page.locator('[data-desk-card="planning-growth-card"]');await expect(panel).toContainText('Task 000');await expect(panel).not.toContainText('Task 005');await panel.getByRole('button',{name:'Next items',exact:true}).click();await expect(panel).toContainText('Task 005');await expect(panel).not.toContainText('Task 000');await measure();
+  const beforeDiscovery=opened.length;await page.getByRole('button',{name:'+ Add cards',exact:true}).click();const library=page.getByRole('region',{name:'Data library',exact:true});await library.getByRole('combobox',{name:'Show',exact:true}).selectOption('tasks');await library.getByRole('searchbox',{name:'Find data to display',exact:true}).fill('Task '+String(count-1).padStart(3,'0'));await expect(library.locator('.desk-library-item')).toHaveCount(1);expect(opened.length).toBe(beforeDiscovery);await library.getByRole('button',{name:'Close data library',exact:true}).click();
+  expect(requests).not.toContain('/api/modules/data');expect(requests).not.toContain('/api/notebook');expect(requests).not.toContain('/api/workspace/read/page');expect(errors).toEqual([]);expect(heap).toBeLessThan(96*1024*1024);
+  console.log(JSON.stringify({items:count,sampledBrowserHeapMiB:Math.round(heap/1024/1024),openedOriginals:new Set(opened).size}));
+ }finally{ModuleCatalogue.prototype.read=read;ModuleCatalogue.prototype.selected=selected;await cdp.detach();await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+});

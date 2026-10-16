@@ -1,0 +1,32 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,rm} from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import {randomUUID} from 'node:crypto';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {sampleNotebook} from '../src/sample.js';
+import {startServer} from '../src/server.js';
+import {clearVault} from '../src/encryption.js';
+
+test('organization operations require the launch session, correct origin and workspace, and an unlocked vault',async t=>{
+  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-organization-routes-')),f=await encryptedFixture(directory,sampleNotebook()),app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences')});
+  t.after(async()=>{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:5});});
+  const book=(await f.workspace.outline()).metadata;
+  const request=(operation,data,headers={})=>fetch(app.origin+'/api/organizations/'+operation,{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json',...headers},body:JSON.stringify({workspaceId:book.id,...data})});
+  assert.equal((await request('state',{})).status,401);
+  const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=session.headers.get('set-cookie').split(';')[0],headers={Cookie:cookie};
+  const initial=await request('state',{},headers);assert.equal(initial.status,200);assert.deepEqual((await initial.json()).organizations,[]);
+  assert.equal((await request('create',{name:'Should not be created',administratorName:'Administrator',expectedRevision:0},{...headers,Origin:'https://invalid.example'})).status,403);
+  assert.equal((await request('create',{workspaceId:randomUUID(),name:'Wrong workspace',administratorName:'Administrator',expectedRevision:0},headers)).status,409);
+  const result=await request('create',{name:'Authorized organization',administratorName:'Administrator',expectedRevision:0},headers);assert.equal(result.status,200);
+  const state=await (await request('state',{},headers)).json();assert.equal(state.organizations.length,1);
+  const shared=(operation,data={},extra={})=>fetch(app.origin+'/api/sharing/'+operation,{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json',...extra},body:JSON.stringify({workspaceId:book.id,...data})});
+  assert.equal((await shared('state')).status,401);assert.equal((await shared('contact',{},headers)).status,200);
+  assert.equal((await shared('state',{workspaceId:randomUUID()},headers)).status,409);
+  assert.equal((await shared('contact',{}, {...headers,Origin:'https://invalid.example'})).status,403);
+  assert.equal((await shared('state',{},headers)).status,200);
+  const leak=JSON.stringify(state);assert.ok(!leak.includes('tokenHash'));assert.ok(!leak.includes('protectedKey'));assert.ok(!leak.includes(f.vault.key.toString('base64')));
+  const locked=await fetch(app.origin+'/api/access/lock',{method:'POST',headers:{...headers,Origin:app.origin,'Content-Type':'application/json'},body:'{}'});assert.equal(locked.status,200);
+  for(const operation of ['state','identity','create','command','inspect','accept','receive','receipt','activity'])assert.equal((await request(operation,{},headers)).status,401,operation);
+});

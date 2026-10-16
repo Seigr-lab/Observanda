@@ -1,0 +1,48 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,readFile,readdir,rm} from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import {randomBytes,createHash} from 'node:crypto';
+import {setTimeout as delay} from 'node:timers/promises';
+import {convertMedia,mediaCommand} from '../src/media.js';
+import {unseal} from '../src/encryption.js';
+import {defaultMediaPolicy} from '../src/media-policy.js';
+
+test('a fast child cannot lose output while encrypted storage is still opening', {timeout:10000},async t=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-fast-media-'));t.after(()=>rm(root,{recursive:true,force:true}));
+ const output=path.join(root,'prepared'),payload=Buffer.alloc(1024,93),key=randomBytes(32),aad='synthetic encrypted output';
+ const workspace={vault:{key},fileAAD:()=>aad,requireStorageKey:()=>delay(750)};
+ const result=await convertMedia(['-e','process.stdout.write(Buffer.alloc(1024,93))'],workspace,output,defaultMediaPolicy(),null,{binary:process.execPath});
+ assert.equal(result.size,payload.length);assert.equal(result.sha256,createHash('sha256').update(payload).digest('hex'));
+ assert.deepEqual(unseal(await readFile(output),key,aad),payload);
+});
+
+test('conversion limits keep their cause when backpressure tears down the output pipeline', {timeout:10000},async t=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-limit-media-'));t.after(()=>rm(root,{recursive:true,force:true}));
+ const workspace={vault:{},requireStorageKey:async()=>{}},output=path.join(root,'prepared');
+ await assert.rejects(convertMedia(['-e','process.stdout.write(Buffer.alloc(1024*1024))'],workspace,output,{...defaultMediaPolicy(),maxPreparedBytes:10},null,{binary:process.execPath}),{code:'MEDIA_LIMIT'});
+ assert.deepEqual(await readdir(root),[]);
+});
+test('cancelling a running conversion releases its child and removes the unfinished encrypted write', {timeout:10000},async t=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-cancel-media-'));t.after(()=>rm(root,{recursive:true,force:true}));
+ const marker=path.join(root,'ready'),controller=new AbortController(),workspace={vault:{},requireStorageKey:async()=>{}};
+ const code="require('node:fs').writeFileSync(process.argv[1],String(process.pid));process.stdout.write(Buffer.alloc(1024));setInterval(()=>{},1000)";
+ const pending=convertMedia(['-e',code,marker],workspace,path.join(root,'prepared'),defaultMediaPolicy(),controller.signal,{binary:process.execPath});
+ const rejected=assert.rejects(pending,error=>error.name==='AbortError');
+ let pid;for(let n=0;n<100;n++){try{pid=Number(await readFile(marker,'utf8'));break;}catch{await delay(20);}}
+ assert.ok(pid);controller.abort();await rejected;
+ assert.throws(()=>process.kill(pid,0),{code:'ESRCH'});assert.deepEqual(await readdir(root),['ready']);
+});
+test('probe commands honour cancellation and a configured timeout', {timeout:10000},async t=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-probe-media-'));t.after(()=>rm(root,{recursive:true,force:true}));
+ const marker=path.join(root,'ready'),controller=new AbortController();
+ const code="require('node:fs').writeFileSync(process.argv[1],String(process.pid));setInterval(()=>{},1000)";
+ const pending=mediaCommand(process.execPath,['-e',code,marker],0,{signal:controller.signal}),rejected=assert.rejects(pending,error=>error.name==='AbortError');
+ let pid;for(let n=0;n<100;n++){try{pid=Number(await readFile(marker,'utf8'));break;}catch{await delay(20);}}
+ assert.ok(pid);controller.abort();await rejected;
+ // execFile cancellation reports early; the OS must still terminate its process.
+ for(let n=0;n<100;n++){try{process.kill(pid,0);await delay(10);}catch{break;}}
+ assert.throws(()=>process.kill(pid,0),{code:'ESRCH'});
+ await assert.rejects(mediaCommand(process.execPath,['-e','setInterval(()=>{},1000)'],100),{code:'MEDIA_LIMIT'});
+});

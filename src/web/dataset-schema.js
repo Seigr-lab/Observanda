@@ -1,0 +1,1 @@
+export const defaultColumn=column=>({name:column.label,representation:'text',radix:10,unit:'',missing:[{value:'',meaning:'Not observed'}],time:{kind:'none',reference:'',resolution:'',uncertainty:''}});

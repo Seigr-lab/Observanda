@@ -1,0 +1,93 @@
+import {aggregationInspection} from './dataset-aggregation-ui.js';
+import {measurementText as m,provenanceFields,readProvenance,wireProvenance} from './measurement-schema-ui.js';
+import {REPRESENTATIONS,MEASUREMENT_ROLES,validMeasurement} from './measurement-model.js';
+import {materialSourcePicker} from './material-source-picker.js';
+
+export function measurementUI({call,frame,esc,field,guard,owner,inspect,notify,download,origin,readOnly=()=>false}){
+ let source=null,byteOffset=0,draft=null,title='',dispose=null,picker=null,inspection=null,back=null,editing=null,generation=0,trail=[],returnTarget=null,saving=false;
+ const button=(key,action,data='')=>`<button type="button" class="button" data-action="material-measurement-${action}" ${data}>${esc(m(key))}</button>`;
+ const input=(key,value='',type='text')=>field(esc(m(key)),key==='note'?`<textarea data-measurement="note" maxlength="10000" rows="3">${esc(value)}</textarea>`:`<input data-measurement="${key}" type="${type}" maxlength="${({title:300,spelling:8192,unit:100,pointer:2048,nativeId:500})[key]??1000}" value="${esc(value)}">`);
+ const select=(key,value,values)=>field(esc(m(key)),`<select data-measurement="${key}">${values.map(v=>`<option value="${v}"${value===v?' selected':''}>${esc(m(v==='radix'?'radixLabel':v))}</option>`).join('')}</select>`);
+ const val=k=>document.querySelector('[data-measurement="'+k+'"]').value;
+ const sourceButton=(value,key='open')=>button(key,'inspect',`data-source="${esc(JSON.stringify(value))}"`);
+ const sourceDescription=s=>[m(s.selector.kind),...Object.entries(s.selector).filter(([k])=>k!=='kind').map(([k,v])=>m(k)+': '+(['page','row','column'].includes(k)?v+1:v)),s.ref.revision.slice(0,12)].join(' · ');
+ const refButton=r=>`<button type="button" class="button" data-action="material-reference" data-ref="${esc(JSON.stringify(r))}">${esc(r.label??r.kind)} · ${esc(r.revision.slice(0,12))}</button>`;
+ const pairs=(values)=>'<dl>'+values.filter(([,v])=>v!==''&&v!==null&&v!==undefined).map(([k,v])=>'<dt>'+esc(m(k))+'</dt><dd>'+esc(v)+'</dd>').join('')+'</dl>';
+ function facts(value){
+  const q=value.quantity??{},time=value.time??{},clock=time.clock;
+  return pairs([['spelling',value.value.spelling],['presence',m(value.value.presence)],['representation',m(value.value.representation==='radix'?'radixLabel':value.value.representation)],['radix',value.value.radix],['unit',value.value.unit],['origin',m(q.origin??'unspecified')],['time-kind',m(time.kind??'unknown')],...['reference','resolution','uncertainty'].map(k=>['time-'+k,time[k]??'']),...(clock?['width','frequency','ordering','wrap','reset','epoch'].map(k=>[k,['ordering','wrap','reset'].includes(k)?m(clock[k]==='source'?'sourceOrder':clock[k]):clock[k]??'']):[])])+[['conversion',q.conversion],['calibration',q.calibration],['model',clock?.model],['referenceData',clock?.referenceData]].filter(([,ref])=>ref).map(([key,ref])=>'<p><strong>'+esc(m(key))+'</strong><br>'+refButton(ref)+'</p>').join('');
+ }
+ function view(value){return `<section class="measurement-details"><h3>${esc(m('heading'))}</h3>${facts(value)}${pairs([['decoderVersion',value.decoderVersion],['integrity',m(value.integrity)],['completion',m(value.completion)],['note',value.note]])}<p>${esc(m('integrityHelp'))}</p>${MEASUREMENT_ROLES.some(k=>value.references[k])?'<h4>'+esc(m('references'))+'</h4>':''}${MEASUREMENT_ROLES.filter(k=>value.references[k]).map(k=>`<p>${esc(m(k))}: ${refButton(value.references[k])}</p>`).join('')}<h4>${esc(m('sources'))}</h4><ol>${value.sources.map(s=>'<li>'+esc(sourceDescription(s))+' '+sourceButton(s)+'</li>').join('')}</ol></section>`;}
+ function clean(){generation++;dispose?.();dispose=null;picker?.dispose();picker=null;}
+ function renderForm(){
+  clean();frame(m('heading'),`<p>${esc(m('help'))}</p>${input('title',title)}<div class="material-fields">${input('spelling',draft.value.spelling)}${select('presence',draft.value.presence,['value','missing','null','absent','unknown'])}${select('representation',draft.value.representation,REPRESENTATIONS)}${input('radix',draft.value.radix,'number')}${input('unit',draft.value.unit)}</div>${provenanceFields(draft,{esc,field,extra:true})}${select('integrity',draft.integrity,['unknown','not-checked','verified','failed'])}${select('completion',draft.completion,['unknown','complete','partial'])}${input('note',draft.note)}<p>${esc(m('integrityHelp'))}</p><h3>${esc(m('sources'))}</h3><ol>${draft.sources.map((s,i)=>`<li>${esc(m(s.selector.kind))} · ${esc(s.ref.revision.slice(0,12))} ${button('remove','remove',`data-index="${i}"`)}</li>`).join('')}</ol>${button('addSource','add-source')}<div data-measurement-picker></div><input type="hidden" id="measurement-edited" value="1">`,button('save','save')+button('cancel','back'));
+  dispose=wireProvenance(document.getElementById('material-form'),{call,esc,field,recordId:owner(),guard});
+ }
+ function capture(){
+  title=val('title');draft.value={spelling:val('spelling'),presence:val('presence'),representation:val('representation'),radix:Number(val('radix')),unit:val('unit')};
+  Object.assign(draft,readProvenance(document.getElementById('material-form'),draft));
+  draft.decoderVersion=document.querySelector('[data-provenance="decoderVersion"]').value;
+  for(const role of ['decoder','schema'])draft.references[role]=JSON.parse(document.querySelector('[data-provenance="ref-'+role+'"]').value);
+  draft.integrity=val('integrity');draft.completion=val('completion');draft.note=val('note');
+ }
+ async function start(s){
+  const request=++generation,seed=await call('measurement-seed',{source:s});guard();if(request!==generation)return;
+  back=()=>open(s,{returning:true});editing={id:crypto.randomUUID(),expectedRevision:null};draft={version:1,...seed,references:Object.fromEntries(MEASUREMENT_ROLES.map(k=>[k,null])),decoderVersion:'',integrity:'unknown',completion:'unknown',note:''};title=m('heading');renderForm();
+ }
+ async function open(s,{offset=0,returning=false}={}){
+  if(!returning){if(document.querySelector('[data-measurement-inspection]')){trail.push({source,offset:byteOffset});if(trail.length>32)trail.shift();}else{trail=[];returnTarget=origin();}}
+  clean();const request=generation;source=s;byteOffset=offset;frame(m('heading'),'<p role="status">'+esc(m('loading'))+'</p>');
+  const data=await call('measurement-inspect',{source:s,offset});guard();if(request!==generation||!document.getElementById('dialog')?.open)return;inspection=data;
+  let html='';
+  if(data.kind==='cell')html=facts(data)+(data.exact?pairs([['exact',data.exact.numerator+' / '+data.exact.denominator]]):'')+pairs([['rowIdentity',data.row.id],['exclusion',data.row.excluded??'']])+`<h3>${esc(m('surrounding'))}</h3><div class="material-table"><table><thead><tr><th>${esc(m('row'))}</th><th>${esc(m('value'))}</th><th>${esc(m('exclusion'))}</th></tr></thead><tbody>${data.surrounding.map(r=>`<tr><td>${r.order}</td><td>${sourceButton({ref:s.ref,selector:{...s.selector,page:r.page,row:r.row}})} ${esc(r.presence!=='value'?m(r.presence):r.value)}</td><td>${esc(r.excluded??'')}</td></tr>`).join('')}</tbody></table></div>${data.original?sourceButton(data.original,'original'):''}${data.native?sourceButton(data.native,'native'):''}`;
+  else if(data.kind==='bytes')html=`<p>${esc(m('bytesHelp'))}</p><p>${esc(m('range',{offset:data.offset,end:data.offset+data.length-1,total:data.total,context:data.contextOffset}))}</p><pre>${esc(data.hex)}</pre><pre>${esc(data.text)}</pre>${button('downloadSlice','download-slice')}${data.previous!==null?button('previous','previous'):''}${data.next!==null?button('next','next'):''}`;
+  else if(data.kind==='json-pointer')html=`<p>${esc(m('jsonHelp'))}</p><p>${esc(data.pointer)}</p><pre>${esc(data.text)}</pre>`;
+  else if(data.kind==='unresolved')html='<p>'+esc(m('unresolved'))+'</p><pre>'+esc(data.nativeId)+'</pre>';
+  else html=refButton(s.ref);
+  if(data.aggregation)html+=aggregationInspection(data,{esc,sourceButton,button});
+  if(data.derivedSources)html+='<h3>'+esc(m('sources'))+'</h3><ol>'+data.derivedSources.map(source=>'<li>'+esc(sourceDescription(source))+' '+sourceButton(source)+'</li>').join('')+'</ol>';
+  frame(m('heading'),`<div class="measurement-details" data-measurement-inspection>${html}</div>`,(readOnly()?'':button('retain','retain'))+(s.ref.kind==='artifact'?button('download','download'):'')+button('back','back-source'));
+ }
+ async function addSource(){
+  capture();if(draft.sources.length>=32)throw Error(m('tooMany'));
+  const root=document.querySelector('[data-measurement-picker]');root.innerHTML='<div data-picker><input type="hidden" data-value value=""></div>'+select('selector','whole',['whole','cell','bytes','json-pointer','native-record'])+'<div data-selector-fields></div>'+button('add','add')+button('cancel','cancel-source');
+  const choose=root.querySelector('[data-measurement="selector"]'),fields=root.querySelector('[data-selector-fields]');
+  const update=()=>{fields.innerHTML=choose.value==='cell'?input('page','1','number')+input('row','1','number')+input('column','1','number'):choose.value==='bytes'?input('offset','0','number')+input('length','1','number')+input('nativeId'):choose.value==='json-pointer'?input('pointer'):choose.value==='native-record'?input('nativeId'):'';};choose.onchange=update;update();
+  picker=materialSourcePicker({root:root.querySelector('[data-picker]'),call,esc,field,guard,recordId:owner(),label:m('source'),id:'measurement-source'});
+  const kinds=()=>{if(!root.isConnected)return;let ref;try{ref=picker.values()[0];}catch{choose.disabled=true;return;}choose.disabled=false;const values=ref.kind==='dataset'?['cell']:ref.kind==='artifact'?['whole','bytes','json-pointer','native-record']:['whole'];choose.innerHTML=values.map(v=>`<option value="${v}">${esc(m(v))}</option>`).join('');update();};
+  root.addEventListener('change',event=>{if(event.target.id==='measurement-source')kinds();});await picker.ready;if(root.isConnected)kinds();
+ }
+ async function action(act,control){
+  if(!act.startsWith('measurement-'))return false;
+  const key=act.slice(12);guard();
+  if(readOnly()&&!['inspect','from-artifact','back-source','previous','next','download','download-slice'].includes(key))return true;
+  if(saving)return true;
+  if(key==='inspect')await open(JSON.parse(control.dataset.source));
+  if(key==='retain')await start(source);
+  if(key==='from-artifact')await open({ref:JSON.parse(control.dataset.ref),selector:{kind:'whole'}});
+  if(key==='back-source'){const previous=trail.pop();if(previous)await open(previous.source,{offset:previous.offset,returning:true});else await inspect(returnTarget?.ref??source.ref,{atPage:returnTarget?.page??0,comparisonView:returnTarget?.comparisonView});}
+  if(key==='back'){clean();await back();}
+  if(key==='remove'){capture();draft.sources.splice(Number(control.dataset.index),1);renderForm();}
+  if(key==='add-source')await addSource();
+  if(key==='cancel-source'){picker?.dispose();picker=null;document.querySelector('[data-measurement-picker]').replaceChildren();}
+  if(key==='add'){
+   const ref=picker.values()[0],kind=val('selector');let selector={kind};
+   if(kind==='cell')Object.assign(selector,{page:Number(val('page'))-1,row:Number(val('row'))-1,column:Number(val('column'))-1});
+   if(kind==='bytes')Object.assign(selector,{offset:Number(val('offset')),length:Number(val('length')),...(val('nativeId')?{nativeId:val('nativeId')}:{})});
+   if(kind==='json-pointer')selector.pointer=val('pointer');if(kind==='native-record')selector.nativeId=val('nativeId');
+   await call('measurement-inspect',{source:{ref,selector}});guard();draft.sources.push({ref,selector});renderForm();
+  }
+  if(key==='save'){
+   capture();if(!title.trim()||!validMeasurement(draft))throw Error(m('invalid'));control.disabled=true;saving=true;
+   try{const result=await call('measurement-save',{recordId:owner(),title,...editing,measurement:draft});guard();clean();await inspect(result.ref);notify(m('saved'));}finally{saving=false;if(control.isConnected)control.disabled=false;}
+  }
+  if(key==='revise'){const ref=JSON.parse(control.dataset.ref),doc=await call('read',{ref});guard();draft=structuredClone(doc.content.measurement);title=doc.title;editing={id:ref.id,expectedRevision:ref.revision};back=()=>inspect(ref);renderForm();}
+  if(key==='previous'||key==='next')await open(source,{offset:inspection[key],returning:true});
+  if(key==='download')download(source.ref);
+  if(key==='download-slice'){
+   const bytes=Uint8Array.from(atob(inspection.base64),c=>c.charCodeAt(0)),url=URL.createObjectURL(new Blob([bytes],{type:'application/octet-stream'})),a=document.createElement('a');a.href=url;a.download='bytes-'+inspection.offset+'-'+inspection.length+'.bin';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
+  return true;
+ }
+ return {action,view,sourceButton,clean,isBusy:()=>saving};
+}

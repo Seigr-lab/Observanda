@@ -1,0 +1,56 @@
+import {test,expect} from '@playwright/test';
+import {mkdtemp,rm} from 'node:fs/promises';
+import {randomUUID} from 'node:crypto';
+import path from 'node:path';
+import os from 'node:os';
+import {sampleNotebook} from '../../src/sample.js';
+import {upgradeNotebook} from '../../src/model.js';
+import {clearVault} from '../../src/encryption.js';
+import {ResearchRecords,recordRevision} from '../../src/research.js';
+import {encryptedFixture} from './encrypted-fixture.js';
+import {testServer} from '../device-fixture.js';
+
+test('encrypted indexed searches keep old pages, refresh edits, recover errors and remain usable on a narrow screen',async({page},testInfo)=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-indexed-search-ui-')),book=upgradeNotebook(sampleNotebook());
+ const seed={...book.entries[0],type:'note',figures:[],attachments:[],sections:[],relations:[],contributors:[],tags:[],share:false};
+ book.entries=Array.from({length:32},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'Field take '+String(i).padStart(2,'0'),body:'Private quartz sensor observation '+i,status:i===31?'incomplete':'completed'}));
+ const {workspace:ws,vault,deviceStore}=await encryptedFixture(directory,book),app=await testServer({root:ws.root,deviceStore,port:0,headless:true});
+ const errors=[];page.on('pageerror',error=>errors.push(error.message));
+ try{
+  await page.goto(app.url);await page.evaluate(id=>location.hash='#/notebooks/'+id,book.notebooks[0].id);
+  const search=page.getByRole('searchbox',{name:'Search records',exact:true}),rows=page.locator('.records-table tbody tr');
+  await search.fill('QUARTZ');await expect(page.locator('[data-record-list-status]')).toHaveText('Records 1-25 of 32');
+  await page.getByText('Filters',{exact:true}).click();await page.getByLabel('Sort records',{exact:true}).selectOption('title');
+  await expect(rows.first()).toContainText('Field take 00');
+  const base=await ws.read(),changed={...base.book.entries[0],body:'Private feldspar observation'};
+  await new ResearchRecords(ws,{}).save({workspaceId:book.id,baseEtag:base.etag,changes:[{id:changed.id,expectedRevision:recordRevision(base.book.entries[0]),record:changed}]},{compact:true});
+  await page.getByRole('button',{name:'Next records',exact:true}).click();
+  await expect(page.locator('[data-record-list-status]')).toHaveText('Records 26-32 of 32');
+  await expect(page.getByText('Saved records have changed. Refresh records to see the latest results.',{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Previous records',exact:true}).click();await expect(rows.first()).toContainText('Field take 00');
+  await page.getByRole('button',{name:'Refresh records',exact:true}).click();
+  await expect(page.locator('[data-record-list-status]')).toHaveText('Records 1-25 of 31');await expect(rows.first()).toContainText('Field take 01');
+  await page.getByLabel('Progress',{exact:true}).selectOption('incomplete');await expect(rows).toHaveCount(1);await expect(rows).toContainText('Field take 31');
+  await page.reload();await expect(search).toHaveValue('QUARTZ');await expect(rows).toHaveCount(1);
+  await page.getByRole('button',{name:'Field take 31',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Edit record',exact:true})).toBeVisible();
+  await expect(page.locator('.record-reader')).toContainText('Private quartz sensor observation 31');
+  await page.getByRole('button',{name:'Back to records',exact:true}).click();await expect(rows).toHaveCount(1);
+  await page.route('**/api/research/records/query',route=>route.fulfill({status:500,contentType:'application/json',body:JSON.stringify({error:'IO',message:'Synthetic interrupted search'})}));
+  await page.getByRole('button',{name:'Refresh records',exact:true}).click();await expect(page.locator('#entry-results [role="alert"]')).toHaveText('Synthetic interrupted search');
+  await expect(search).toHaveValue('QUARTZ');await expect(page.getByLabel('Progress',{exact:true})).toHaveValue('incomplete');
+  await page.unroute('**/api/research/records/query');await page.getByRole('button',{name:'Refresh records',exact:true}).click();await expect(rows).toHaveCount(1);
+  await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.setProperty('--app-font-size','24px'));
+  await search.focus();await page.keyboard.press('ControlOrMeta+A');await page.keyboard.type('feldspar');
+  await page.getByLabel('Progress',{exact:true}).selectOption('all');
+  await expect(rows).toHaveCount(1);await expect(rows).toContainText('Field take 00');
+  await page.getByRole('button',{name:'Refresh records',exact:true}).focus();await page.keyboard.press('Enter');
+  await expect(page.locator('[data-record-list-status]')).toBeFocused();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+  expect(await page.getByRole('combobox',{name:'Filter by record type',exact:true}).evaluate(el=>el.getBoundingClientRect().width>=Math.min(el.parentElement.clientWidth,12*parseFloat(getComputedStyle(document.documentElement).fontSize))-1)).toBe(true);
+  await page.screenshot({path:testInfo.outputPath('indexed-search-phone.png'),fullPage:true});
+  await search.fill('no matching crystals');await expect(page.getByRole('heading',{name:'No records match these filters',exact:true})).toBeVisible();
+  await page.locator('.workspace-empty').getByRole('button',{name:'Clear filters',exact:true}).click();await expect(rows).toHaveCount(25);
+  expect(errors).toEqual([]);
+ }finally{await app.close();clearVault(vault);await rm(directory,{recursive:true,force:true});}
+});

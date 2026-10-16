@@ -1,0 +1,15 @@
+/* App research links are distinct even where authored text overrides its color.
+   This stylesheet does not change the user's published website typography. */
+.document-content a[href],.record-reader a[href],.lab-book-reading a[href]{color:var(--ui-accent);text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:.18em;cursor:pointer;overflow-wrap:anywhere}
+.document-content a[href]:hover,.record-reader a[href]:hover,.lab-book-reading a[href]:hover{text-decoration-thickness:3px;background:var(--ui-tint)}
+.document-content a[href]:focus-visible,.record-reader a[href]:focus-visible,.lab-book-reading a[href]:focus-visible{outline:2px solid var(--ui-accent);outline-offset:3px}
+.record-link-inspector{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;padding:.5rem .65rem;border-top:1px solid var(--ui-border);font-size:.85rem}
+.record-link-inspector[hidden]{display:none}
+.record-link-inspector strong{flex-basis:100%;overflow-wrap:anywhere}
+.record-link-inspector code{flex:1;min-width:0;overflow-wrap:anywhere;white-space:normal}
+.record-link-inspector .button{flex:none}
+.record-link-listing{border-top:1px solid var(--ui-border);padding-top:.8rem;margin-top:1rem}
+.record-link-listing summary{cursor:pointer}
+.record-link-listing li{padding-block:.6rem}
+.record-link-listing li>*{display:block;overflow-wrap:anywhere}
+.record-link-listing code{white-space:normal;font-size:.8rem}

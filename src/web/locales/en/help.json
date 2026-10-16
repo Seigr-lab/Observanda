@@ -1,0 +1,21 @@
+{
+  "returnToForm": "Return to form",
+  "title": "Help",
+  "intro": "Read the guide or search across all its topics. Documentation is included with Observanda and works offline.",
+  "search": "Search documentation",
+  "contents": "Contents",
+  "all": "Read the entire guide",
+  "clear": "Clear search",
+  "results": {
+    "one": "{count} matching section",
+    "other": "{count} matching sections"
+  },
+  "empty": "No matching sections. Try a shorter phrase or another term.",
+  "loading": "Loading documentation…",
+  "failed": "Documentation could not be loaded.",
+  "retry": "Try again",
+  "missing": "This documentation topic is unavailable.",
+  "back": "Back to contents",
+  "coverage": "This guide covers the workflows listed below. Additional specialist and administrator documentation is still being written.",
+  "link": "Link to this section"
+}

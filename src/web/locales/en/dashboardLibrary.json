@@ -1,0 +1,22 @@
+{
+ "region":"Data library",
+ "find":"Find data to display",
+ "placeholder":"Search cards and research…",
+ "show":"Show",
+ "all":"All data",
+ "collections":"Collections",
+ "closed":"Closed cards",
+ "closedDescription":"Closed card · settings retained",
+ "hint":"Drag onto the dashboard or click to add",
+ "close":"Close data library",
+ "pin":"Pin {name}",
+ "unpin":"Unpin {name}",
+ "empty":"No matching data. Try a different search or category.",
+ "range":"{first}–{last} of {total}",
+ "previous":"Previous",
+ "next":"Next",
+ "loading":"Finding card sources…",
+ "retry":"Retry card search",
+ "invalidPage":"The card search response was incomplete. Retry this search.",
+ "loadFailed":"Card sources could not be loaded. Retry this search."
+}

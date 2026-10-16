@@ -1,0 +1,65 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {readDelimitedTable, tableNumber} from '../src/web/tabular-data.js';
+import {createFigure, figureCSV} from '../src/web/figure-model.js';
+import {suggestFigureMapping, mapFigureTable} from '../src/web/figure-import-model.js';
+
+const cars = 'Year,Make,Model,Description,Price\r\n1997,Ford,E350,"ac, abs, moon",3000.00\r\n1999,Chevy,"Venture ""Extended Edition""",,4900.00\r\n1999,Chevy,"Venture ""Extended Edition, Very Large""",,5000.00\r\n1996,Jeep,Grand Cherokee,"MUST SELL!\nair, moon roof, loaded",4799.00\r\n';
+test('mixed quoted CSV suggests numeric roles; mapping and grouping preserve original measurements', () => {
+  const table = readDelimitedTable('\uFEFF' + cars), figure = createFigure(), original = structuredClone(figure);
+  assert.equal(table.rows[3].cells[3], 'MUST SELL!\nair, moon roof, loaded');
+  assert.equal(table.rows[2].cells[2], 'Venture "Extended Edition, Very Large"');
+  const mapping = suggestFigureMapping(table, figure);
+  assert.equal(mapping.xKind, 'number');
+  assert.deepEqual(mapping.values, [{column:4, error:null}]);
+  mapping.group = 1; mapping.kind = 'scatter';
+  const result = mapFigureTable(table, mapping, figure);
+  assert.deepEqual(result.issues, []);
+  assert.deepEqual(result.figure.series.map(s => s.name), ['Ford','Chevy','Jeep']);
+  assert.deepEqual(result.figure.series[1].points, [{x:1999,y:4900,error:null},{x:1999,y:5000,error:null}]);
+  assert.deepEqual(figure, original, 'preview must not change the original figure');
+  const append = mapFigureTable(table, {...mapping,mode:'append'}, result.figure);
+  assert.deepEqual(append.issues, []);
+  assert.equal(append.figure.series.length,6);
+  assert.deepEqual(append.figure.series.slice(0,3),result.figure.series);
+  assert.equal(append.figure.series[3].name,'Ford (2)');
+  assert.notEqual(append.figure.series[3].color,append.figure.series[0].color);
+  mapping.values.push({column:1,error:null});
+  const failed = mapFigureTable(table, mapping, figure);
+  assert.equal(failed.figure, null);
+  assert.equal(failed.issues[0].line, 2);
+  assert.equal(failed.issues[0].column, 1);
+  assert.deepEqual(figure, original, 'rejected data must not change the original figure');
+});
+test('decimal comma, date coordinates, mapped uncertainty, gaps and exported tables keep their meaning', () => {
+  const table = readDelimitedTable('Day;Notes;Result;Error\n2026-02-03;first;1,5;0,2\n2026-02-01;missing;;\n2026-02-02;second;2,75;0,1');
+  assert.equal(table.delimiter, ';');
+  const figure = createFigure(), mapping = suggestFigureMapping(table, figure, ',');
+  mapping.values = [{column:2,error:3}];mapping.order='ascending';
+  const result = mapFigureTable(table,mapping,figure);
+  assert.deepEqual(result.issues, []);
+  assert.deepEqual(result.figure.series[0].points, [{x:'2026-02-01',y:null,error:null},{x:'2026-02-02',y:2.75,error:.1},{x:'2026-02-03',y:1.5,error:.2}]);
+  const exported = readDelimitedTable(figureCSV(result.figure));
+  const reimported = mapFigureTable(exported,suggestFigureMapping(exported,figure),figure);
+  assert.deepEqual(reimported.figure.series.map(s=>s.points),result.figure.series.map(s=>s.points));
+  assert.ok(Number.isNaN(tableNumber('=1+2')));
+  assert.ok(Number.isNaN(tableNumber('0x10')));
+  assert.equal(tableNumber(''),null);
+  assert.throws(()=>readDelimitedTable('A,B\n"unclosed,2'));
+  assert.throws(()=>readDelimitedTable('A,B\n1,2,3',{delimiter:','}), /Line 2/);
+});
+
+test('categorical summaries are explicit and multiple measures retain their own values',()=>{
+  const figure=createFigure(),table=readDelimitedTable('Team,Location,Result,Other\nA,North,10,100\nA,North,30,200\nA,South,50,300\nB,North,20,400\nB,North,,500');
+  const mapping={...suggestFigureMapping(table,figure),group:1};
+  const raw=mapFigureTable(table,mapping,figure);
+  assert.equal(raw.figure.series.length,4);
+  assert.deepEqual(raw.figure.series[0].points.map(p=>p.y),[10,30,20,null]);
+  const mean=mapFigureTable(table,{...mapping,operation:'mean',values:[{column:2,error:null}]},figure);
+  assert.deepEqual(mean.figure.series[0].points.map(p=>[p.x,p.y]),[['A',20],['B',20]]);
+  assert.equal(mean.figure.summary.missing,1);
+  const count=mapFigureTable(table,{...mapping,group:null,values:[],operation:'count'},figure);
+  assert.deepEqual(count.figure.series[0].points.map(p=>[p.x,p.y]),[['A',3],['B',2]]);
+  assert.equal(count.figure.y.label,'Count');
+  assert.equal(figure.series[0].points.length,0,'summary preview leaves the current data unchanged');
+});

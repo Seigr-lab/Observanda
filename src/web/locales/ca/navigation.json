@@ -1,0 +1,16 @@
+{
+  "dashboard": "Tauler",
+  "projects": "Projectes",
+  "overview": "Obre la vista general dels projectes",
+  "newProject": "Projecte nou",
+  "settings": "Configuració",
+  "workspaceSettings": "Configuració de l’espai de treball",
+  "workspaces": "Espais de treball",
+  "preferences": "Preferències",
+  "lock": "Bloqueja l’espai de treball",
+  "openProject": "Obre el projecte {title}",
+  "menu": "Menú",
+  "openMenu": "Obre el menú de l’aplicació",
+  "closeMenu": "Tanca el menú de l’aplicació",
+  "resize": "Canvia l’amplada de la navegació"
+}

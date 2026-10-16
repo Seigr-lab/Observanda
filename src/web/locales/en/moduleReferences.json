@@ -1,0 +1,18 @@
+{
+  "heading": "Related work",
+  "empty": "Link this item to the research or resources it belongs to.",
+  "remove": "Remove",
+  "chooseResearch": "Link research",
+  "chooseRecord": "Choose a saved record",
+  "prototype": "Prototype / run record",
+  "moduleItem": "Link a tool or inventory item",
+  "chooseItem": "Choose an item...",
+  "add": "Link item",
+  "loading": "Loading record title...",
+  "unavailable": "Record unavailable",
+  "unavailableLabel": "Record title unavailable",
+  "missingItem": "Unavailable {type}",
+  "invalid": "The record labels were incomplete. Retry to load them again.",
+  "loadFailed": "Record titles could not load. Your links and edits are retained.",
+  "retry": "Retry record titles"
+}

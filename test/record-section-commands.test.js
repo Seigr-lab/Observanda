@@ -1,0 +1,46 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,rm} from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import {randomUUID} from 'node:crypto';
+import {sampleNotebook} from '../src/sample.js';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {clearVault} from '../src/encryption.js';
+import {RecordSectionCommands,writingValueRevision} from '../src/record-section-commands.js';
+import {RecordMemberCollections,memberStructureRevision,memberCollectionCount} from '../src/record-member-collections.js';
+import {RecordWriting} from '../src/record-writing.js';
+import {ResearchCatalogue} from '../src/research-catalogue.js';
+import {RecordContent} from '../src/record-content.js';
+
+test('stored section commands add, move and remove without reconstructing records or losing concurrent writing',async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-section-commands-')),book=sampleNotebook(),record=book.entries[0];book.entries=[record];
+ record.contributors=[];record.relations=[];record.attachments=[];record.figures=[];
+ record.sections=Array.from({length:64},(_,i)=>({id:randomUUID(),title:'Section '+i,body:'Retained '+i}));
+ const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const commands=new RecordSectionCommands(f.workspace),writing=new RecordWriting(f.workspace),target={workspaceId:book.id,recordId:record.id};
+ const member=()=>f.workspace.catalogue(async store=>store.member(await store.snapshot(),record.id));
+ const before=(await f.workspace.outline()).etag,initial=await member();assert.equal(initial.collections,undefined);
+ t.mock.method(ResearchCatalogue.prototype,'record',()=>{throw Error('Section structure loaded a complete record');});
+ const inserted=randomUUID(),insert={...target,action:'insert',sectionId:inserted,expectedStructureRevision:memberStructureRevision(initial),beforeId:null,value:{title:'New section',body:'Added writing'}};
+ const added=await commands.run(insert);assert.equal(memberCollectionCount(await member(),'sections'),65);assert.ok((await member()).collections);
+ assert.deepEqual(await commands.run(insert),added,'An unknown-response retry must not add another section');
+ const selected=await writing.read({...target,sectionId:inserted});
+ await writing.save({...target,sectionId:inserted,expectedRevision:selected.revision,value:{title:'Revised new section',body:'Concurrent writing'}});
+ const moved=await commands.run({...target,action:'move',sectionId:inserted,position:0,expectedStructureRevision:added.structureRevision});
+ const first=await new RecordContent(f.workspace).read({...target,offset:0,header:false});assert.equal(first.sections.values[0].body,'Concurrent writing');
+ assert.deepEqual(await commands.run({...target,action:'move',sectionId:inserted,position:0,expectedStructureRevision:added.structureRevision}),moved);
+ await assert.rejects(commands.run({...target,action:'move',sectionId:record.sections[2].id,position:0,expectedStructureRevision:added.structureRevision}),{code:'RECORD_CHANGED'});
+ await assert.rejects(commands.run({...target,action:'remove',sectionId:inserted,expectedStructureRevision:moved.structureRevision,expectedValueRevision:writingValueRevision(insert.value)}),{code:'RECORD_CHANGED'});
+ const removed=await commands.run({...target,action:'remove',sectionId:inserted,expectedStructureRevision:moved.structureRevision,expectedValueRevision:first.writingRevisions[inserted]});
+ assert.deepEqual(await commands.run({...target,action:'remove',sectionId:inserted,expectedStructureRevision:moved.structureRevision,expectedValueRevision:first.writingRevisions[inserted]}),removed);
+ assert.equal(memberCollectionCount(await member(),'sections'),64);
+ assert.deepEqual((await new RecordContent(f.workspace).read({...target,snapshotId:before,offset:60,header:false})).sections.values,record.sections.slice(60));
+ await f.workspace.catalogue(async store=>{
+  const current=await store.member(await store.snapshot(),record.id);
+  assert.deepEqual(await Array.fromAsync(new RecordMemberCollections(store).ids(current,'sections')),record.sections.map(s=>s.id));
+  await store.verifyRecordHistory(record.id);await store.verifySnapshot(undefined,book.id);
+ });
+ await assert.rejects(commands.run({...insert,sectionId:book.projects[0].id,expectedStructureRevision:removed.structureRevision}),{code:'INVALID'});
+ assert.equal((await f.workspace.outline()).etag,removed.etag);
+});

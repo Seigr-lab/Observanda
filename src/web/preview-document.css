@@ -1,0 +1,8 @@
+/* Embedded previews expand into the host page, including side navigation. */
+html.embedded-preview{overflow:clip;scroll-behavior:auto}
+.embedded-preview body{display:flow-root;min-height:0}
+@media(min-width:761px){
+  .embedded-preview body.navigation-side{display:grid;grid-template-columns:250px minmax(0,1fr);padding-left:0}
+  .embedded-preview .navigation-side .site-top{position:static;grid-column:1;grid-row:1 / span 3;width:auto;margin:0;align-self:stretch;overflow:visible}
+  .embedded-preview .navigation-side>:is(.site-header,main,footer){grid-column:2;width:100%}
+}

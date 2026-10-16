@@ -1,0 +1,6 @@
+.app-logo{display:inline-grid;width:31px;height:31px;flex:none}
+.app-logo img{grid-area:1/1;width:100%;height:100%;object-fit:contain}
+.app-logo-black{display:var(--app-logo-surface-black,block)}
+.app-logo-white{display:var(--app-logo-surface-white,none)}
+.setup-shell .app-logo-black{display:var(--app-logo-background-black,block)}
+.setup-shell .app-logo-white{display:var(--app-logo-background-white,none)}

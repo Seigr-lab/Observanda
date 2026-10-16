@@ -1,0 +1,8 @@
+{
+ "retaining": "Saving…",
+ "waiting": "Saved",
+ "saving": "Saving…",
+ "failed": "The settings could not be saved. Your pending changes are retained.",
+ "conflict": "The saved settings changed in another session. Your pending changes are retained for review.",
+ "discard": "Discard pending changes"
+}

@@ -1,0 +1,17 @@
+{
+ "settings":"Marker area from counts",
+ "enable":"Scale marker area by observation count",
+ "label":"Count meaning / legend title",
+ "unitArea":"Area per count (square SVG units)",
+ "count":"Observation count",
+ "defaultLabel":"Observations",
+ "none":"No count mapping",
+ "help":"Each marker's area equals its count multiplied by this scale. Shape changes preserve area. Reduce the scale for large counts. Counts must be non-negative integers; zero has no marker.",
+ "legendRule":"Area = count × {area} square SVG units",
+ "zero":"Count 0: no marker",
+ "countInvalid":"Observation counts must be non-negative safe integers.",
+ "needScale":"Declare a marker area scale for the mapped observation counts.",
+ "invalid":"Give the count a label and a positive area scale no greater than 65,536.",
+ "range":"Count-sized markers require a line or scatter plot, a count for every measurement, and area no greater than 65,536 square SVG units. Reduce the area scale for large counts.",
+ "mapping":"Count columns apply to individual measurements and must contain exact non-negative integers."
+}

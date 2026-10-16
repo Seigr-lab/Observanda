@@ -1,0 +1,197 @@
+[
+  {
+    "file": "atkinson.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/atkinsonhyperlegiblenext/AtkinsonHyperlegibleNext%5Bwght%5D.ttf",
+    "sha256": "5a455d1cfa099b601ab70751bb9673e8fe1854dc4500c80e1a220d0d75e31745"
+  },
+  {
+    "file": "atkinson-OFL.txt",
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/atkinsonhyperlegiblenext/OFL.txt",
+    "sha256": "aca6a428580965d2297d1b718042dd427c2a9443ece3b0d02d758e161e0c4030"
+  },
+  {
+    "file": "source-serif.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/sourceserif4/SourceSerif4%5Bopsz%2Cwght%5D.ttf",
+    "sha256": "97b2d4da6e3cb494b5a1e66ae176914d852ccabef49e0c02c0df25f3e39aca0b"
+  },
+  {
+    "file": "source-serif-OFL.txt",
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/sourceserif4/OFL.txt",
+    "sha256": "5f94c3fd3a23131a417ab5a0c8452de57e70c3cfb9f604d88241f7065ebf9fd9"
+  },
+  {
+    "file": "space-grotesk.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/spacegrotesk/SpaceGrotesk%5Bwght%5D.ttf",
+    "sha256": "acad6de1fc93436f5c0f1f4137751ef04f1aea3063e7036535970ffcfbd79f72"
+  },
+  {
+    "file": "space-grotesk-OFL.txt",
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/spacegrotesk/OFL.txt",
+    "sha256": "564ce565c371c5e5bbf286006565a7c9aa55a9f56e7ca58d56e05d649dd61a72"
+  },
+  {
+    "file": "poiret-one.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/poiretone/PoiretOne-Regular.ttf",
+    "sha256": "457f2d03263f58e5a6dbcc1b607b10dff6581e7cf9c4ebdf330ec3e6772a3558"
+  },
+  {
+    "file": "poiret-one-OFL.txt",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/poiretone/OFL.txt",
+    "sha256": "708e33bed791c40638926a7577bcef8ff8748f84045f3825277540cbb8d483ba"
+  },
+  {
+    "file": "amatic-sc.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/amaticsc/AmaticSC-Regular.ttf",
+    "sha256": "513a76f96d39a5366bd27c258674aaea35ee51c42b8f3060387f74649ee8c8aa"
+  },
+  {
+    "file": "amatic-sc-1.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/amaticsc/AmaticSC-Bold.ttf",
+    "sha256": "d367beadee66efbb657d24d3d8f30f3b60633e9d5c8ded7385541cf775cabb4d"
+  },
+  {
+    "file": "amatic-sc-OFL.txt",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/amaticsc/OFL.txt",
+    "sha256": "301f77908df2b00141b4dcea50cc1a586c3afcee78843bd811088e8263623f9d"
+  },
+  {
+    "file": "averia-serif-libre.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/averiaseriflibre/AveriaSerifLibre-Light.ttf",
+    "sha256": "974986d0a74bb2a888e7fd13e5556388add3ccceeba77c699e43bb3121facf18"
+  },
+  {
+    "file": "averia-serif-libre-1.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/averiaseriflibre/AveriaSerifLibre-LightItalic.ttf",
+    "sha256": "cfd452ad90bddf59b5e20d9e6b623fce176bd7fa4bf53180e95c6ad9d5cb41bc"
+  },
+  {
+    "file": "averia-serif-libre-2.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/averiaseriflibre/AveriaSerifLibre-Regular.ttf",
+    "sha256": "c64545bce66be1d737832337c1188015f9acacc5230ccbeb4ce646a0eaa252da"
+  },
+  {
+    "file": "averia-serif-libre-3.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/averiaseriflibre/AveriaSerifLibre-Italic.ttf",
+    "sha256": "c532f0f6ab4e98054942f56de25361505c7c7032c393f2b5ce2d8c82c22b2499"
+  },
+  {
+    "file": "averia-serif-libre-4.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/averiaseriflibre/AveriaSerifLibre-Bold.ttf",
+    "sha256": "a4f49c9df1351b6151969737493446fa1add16ed1a22fa8b9a4aecbdffeb1b3b"
+  },
+  {
+    "file": "averia-serif-libre-5.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/averiaseriflibre/AveriaSerifLibre-BoldItalic.ttf",
+    "sha256": "3f6d6fe8403f2080c63a48db0bf862243c6c28785a133da2a9273906eb064cd6"
+  },
+  {
+    "file": "averia-serif-libre-OFL.txt",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/averiaseriflibre/OFL.txt",
+    "sha256": "46239ba6485d28553fd944da4ad32a00d9c403aa1c3e111676b0b96fe458d1d4"
+  },
+  {
+    "file": "reenie-beanie.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/reeniebeanie/ReenieBeanie.ttf",
+    "sha256": "0ea608aa325bf9e11c9590cc0b63dcf7cd215e270784f1ebbe6fad4927b31ff8"
+  },
+  {
+    "file": "reenie-beanie-OFL.txt",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/reeniebeanie/OFL.txt",
+    "sha256": "fbb941b371c6348ee2572ce8c78fb66128a61885f960dec1906c4e44ca4b4d3c"
+  },
+  {
+    "file": "rubik-dirt.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/rubikdirt/RubikDirt-Regular.ttf",
+    "sha256": "9de3d928e434a47ec85d759012c8a0ebfeab0860076eea4e3989a47c5e213123"
+  },
+  {
+    "file": "rubik-dirt-OFL.txt",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/rubikdirt/OFL.txt",
+    "sha256": "f9e2d4498ea80d38bac7b8841d68af68c132fa67e1552e7c05717e6987de1d74"
+  },
+  {
+    "file": "crimson-text.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/crimsontext/CrimsonText-Regular.ttf",
+    "sha256": "48e6c5d5ad1d01599d374ecb817e15890d1feb3b8a3a88e527d44c90389e1f06"
+  },
+  {
+    "file": "crimson-text-1.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/crimsontext/CrimsonText-Italic.ttf",
+    "sha256": "4ed1699ac7c64e8b3d33f6bb8323c3d7206b0d7bacb9ee2d65c697e6014d29de"
+  },
+  {
+    "file": "crimson-text-2.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/crimsontext/CrimsonText-SemiBold.ttf",
+    "sha256": "802e84000740fec2a9fbe0ae09b6b6811bd86a78a0173b15d44450a1530e9410"
+  },
+  {
+    "file": "crimson-text-3.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/crimsontext/CrimsonText-SemiBoldItalic.ttf",
+    "sha256": "8f4a0db2d181ba4493a4ad53042edc3b57ab50fedd8fa32c7b2ad57173208543"
+  },
+  {
+    "file": "crimson-text-4.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/crimsontext/CrimsonText-Bold.ttf",
+    "sha256": "a3a0765fc5e8d0b49b540a23aefe0184887dd79f06a0bdf4db7035cea6befa93"
+  },
+  {
+    "file": "crimson-text-5.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/crimsontext/CrimsonText-BoldItalic.ttf",
+    "sha256": "467013e913e46304760461c46661c994b2aa1769e3fbd31371026300315181b4"
+  },
+  {
+    "file": "crimson-text-OFL.txt",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/crimsontext/OFL.txt",
+    "sha256": "50fd67cddc097377a5c871e8452b778bc5aedfa3480a705cb27c5e3a078218df"
+  },
+  {
+    "file": "aref-ruqaa-ink.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/arefruqaaink/ArefRuqaaInk-Regular.ttf",
+    "sha256": "0415c2410b1e453f5d0ea0db114fb95d01f65ba2e9e2dc4ae67c5fb73c33e863"
+  },
+  {
+    "file": "aref-ruqaa-ink-1.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/arefruqaaink/ArefRuqaaInk-Bold.ttf",
+    "sha256": "601b5c607e7e20e7957673b92947d35eb87620cd406214037a140695221c31b4"
+  },
+  {
+    "file": "aref-ruqaa-ink-OFL.txt",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/arefruqaaink/OFL.txt",
+    "sha256": "c5211cc6a0eb32a23608076d74585942dc4d9a738357cfe40b7dddcee1442f33"
+  },
+  {
+    "file": "dm-sans.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/dmsans/DMSans%5Bopsz%2Cwght%5D.ttf",
+    "sha256": "8cd08d97e89c24d0aa92edd2f0f4c8ee6195eee9b7c9f154865a58b02f0c1c0d"
+  },
+  {
+    "file": "dm-sans-1.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/dmsans/DMSans-Italic%5Bopsz%2Cwght%5D.ttf",
+    "sha256": "22259c0cc8237221b80f44c76ba8d36e6bce3cda72779f5b2773643d499720ae"
+  },
+  {
+    "file": "dm-sans-OFL.txt",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/dmsans/OFL.txt",
+    "sha256": "9af36190332437f5ecd09974de43c1f7c77a310a996cdd8ceb25628b458840e1"
+  },
+  {
+    "file": "sue-ellen-francisco.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/sueellenfrancisco/SueEllenFrancisco-Regular.ttf",
+    "sha256": "d6d72e046e8e92f659eacfb7457cf7e1f2142c112c3d8c43c0b5a3904a5c8621"
+  },
+  {
+    "file": "sue-ellen-francisco-OFL.txt",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/sueellenfrancisco/OFL.txt",
+    "sha256": "0e441ae9f18ad0c294cc5b6ae3974c2db1614cab220598578b1b58c4cc334485"
+  },
+  {
+    "file": "patua-one.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/patuaone/PatuaOne-Regular.ttf",
+    "sha256": "a3faa8b9efdd9d89980b56fa2b080669d66f3f977f07a2a6295498dbe7c26a7c"
+  },
+  {
+    "file": "patua-one-OFL.txt",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/patuaone/OFL.txt",
+    "sha256": "cd2dea62cd4b0c5fb335cf07ff04fd5c4bacb49b8d6c2bbbef9766c663d79b1c"
+  }
+]

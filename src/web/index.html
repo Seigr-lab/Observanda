@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f3f6fb">
+  <title>Observanda</title>
+  <link rel="icon" type="image/svg+xml" href="/observanda-black.svg" media="(prefers-color-scheme: light)">
+  <link rel="icon" type="image/svg+xml" href="/observanda-white.svg" media="(prefers-color-scheme: dark)">
+  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/operation-progress.css">
+  <link rel="stylesheet" href="/bundled-fonts.css">
+  <link rel="stylesheet" href="/fonts.css">
+  <link rel="stylesheet" href="/migration.css">
+  <link rel="stylesheet" href="/dashboard.css">
+  <link rel="stylesheet" href="/modules/operations.css">
+  <link rel="stylesheet" href="/tools/tools.css">
+  <link rel="stylesheet" href="/laboratory/workspace.css">
+  <link rel="stylesheet" href="/website.css">
+  <link rel="stylesheet" href="/rich-text-editor.css">
+  <link rel="stylesheet" href="/shell-navigation.css">
+  <link rel="stylesheet" href="/app-brand.css">
+  <link rel="stylesheet" href="/record-recovery.css">
+  <link rel="stylesheet" href="/record-writing.css">
+  <link rel="stylesheet" href="/research-editor.css">
+  <link rel="stylesheet" href="/record-reading.css">
+  <link rel="stylesheet" href="/record-links.css">
+  <link rel="stylesheet" href="/sharing.css">
+  <link rel="stylesheet" href="/attempts.css">
+  <link rel="stylesheet" href="/document-editor.css">
+  <link rel="stylesheet" href="/book.css">
+  <link rel="stylesheet" href="/figure-editor.css">
+  <script src="/startup.js"></script>
+  <script id="application-module" type="module" src="/app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">{{startup.skip}}</a>
+  <div id="app"><div class="loading">{{startup.opening}}</div></div>
+  <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+  <dialog id="dialog" aria-labelledby="dialog-title"></dialog>
+</body>
+</html>

@@ -1,0 +1,6 @@
+{
+  "afterResult": "Unexpected data arrived after the operation result.",
+  "invalid": "The operation returned an invalid response.",
+  "limit": "The operation response exceeds capacity.",
+  "interrupted": "The connection was interrupted before a complete result arrived. Retry to check the operation's outcome."
+}

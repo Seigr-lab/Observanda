@@ -1,0 +1,22 @@
+{
+  "unnamed": "Project {id}",
+  "project": "Project",
+  "settings": "Settings",
+  "failed": "The project directory could not be loaded.",
+  "retry": "Retry",
+  "loading": "Loading projects…",
+  "more": "More projects",
+  "folder": "Project folder",
+  "choose": "Choose folder",
+  "password": "Project password",
+  "passwordHint": "Optional",
+  "username": "Username",
+  "create": "Create project",
+  "legacyParent": "Move this project to dedicated storage before adding a subproject.",
+  "inside": "Inside",
+  "newSaved": "Project created.",
+  "folderRequired": "Choose a folder for this project.",
+  "templateUnavailable": "This project template is unavailable. Choose another template or enable its lab-book types in Preferences.",
+  "placementFailed": "The project could not be placed there.",
+  "creating": "Creating project…"
+}

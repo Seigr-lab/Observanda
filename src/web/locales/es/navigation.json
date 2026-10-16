@@ -1,0 +1,16 @@
+{
+  "dashboard": "Panel",
+  "projects": "Proyectos",
+  "overview": "Abrir la vista general de proyectos",
+  "newProject": "Nuevo proyecto",
+  "settings": "Configuración",
+  "workspaceSettings": "Configuración del espacio de trabajo",
+  "workspaces": "Espacios de trabajo",
+  "preferences": "Preferencias",
+  "lock": "Bloquear el espacio de trabajo",
+  "openProject": "Abrir el proyecto {title}",
+  "menu": "Menú",
+  "openMenu": "Abrir el menú de la aplicación",
+  "closeMenu": "Cerrar el menú de la aplicación",
+  "resize": "Cambiar el ancho de la navegación"
+}

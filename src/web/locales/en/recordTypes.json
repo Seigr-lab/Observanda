@@ -1,0 +1,19 @@
+{
+  "filter": "Filter by record type",
+  "find": "Find record type",
+  "title": "Choose a record type filter",
+  "search": "Search record types",
+  "saved": "Saved record type",
+  "unavailable": "Unavailable record type",
+  "all": "All types",
+  "loading": "Loading record types…",
+  "range": "{first}–{last} of {total}",
+  "empty": "No matching record types.",
+  "error": "Record types could not be loaded. Your filter is unchanged.",
+  "invalidPage": "The record type response is invalid.",
+  "retry": "Retry record types",
+  "next": "Next types",
+  "previous": "Previous types",
+  "pages": "Record type pages",
+  "cancel": "Cancel"
+}

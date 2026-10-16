@@ -1,0 +1,11 @@
+{
+ "format":"Result number format",
+ "resultRadix":"Result numeral base (2–36)",
+ "default":"Default: exact fraction; integer for counts",
+ "decimal":"Exact decimal",
+ "integer":"Integer (base 10)",
+ "radix":"Integer in an explicit base",
+ "radix-fraction":"Fractional numeral in an explicit base",
+ "rational":"Exact fraction (base 10 numerator/denominator)",
+ "exact":"The result format is retained with this recipe. No rounding is applied. If a result cannot be written exactly in the selected format, choose an exact fraction or a compatible base."
+}

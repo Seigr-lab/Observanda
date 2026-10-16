@@ -1,0 +1,81 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {mkdtemp} from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import {Workspace} from '../src/storage.js';
+import {createNotebook} from '../src/model.js';
+import {workspaceModules} from '../src/modules/index.js';
+import {sectionAction} from '../src/web/laboratory/section-editor.js';
+import {createDataRegistry} from '../src/web/data-registry.js';
+import {createModuleHost,moduleForEntity} from '../src/web/feature-modules.js';
+import {laboratoryProfiles,enableProfile,availableSections} from '../src/web/laboratory/catalog.js';
+
+test('combined lab submodules retain customized sections and saved evidence across configuration changes',async()=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-labs-')),ws=new Workspace(root),book=createNotebook('Lab research');
+ await ws.create(book);const store=workspaceModules(ws);
+ const save=(type,id,data,revision=null,commandId=randomUUID())=>store.execute({workspaceId:book.id,commandId,action:type+'.save',payload:{id,expectedRevision:revision,data}});
+ const lab={name:'Computing and field station',description:'',archived:false,profiles:[],sections:[],links:[]};
+ for(const profile of laboratoryProfiles)enableProfile(lab,profile.id,true);
+ const totalSections=laboratoryProfiles.reduce((sum,p)=>sum+p.sections.length,0);
+ assert.equal(lab.profiles.length,laboratoryProfiles.length);assert.equal(availableSections(lab).length,totalSections);
+ const section=lab.sections.find(s=>s.profileId==='computer-it');
+ section.label='Build provenance';section.fields.push({key:'temperature',label:'Ambient temperature',type:'number',unit:'C',required:true,choices:[]});
+ const labId=randomUUID(),entryId=randomUUID();
+ await save('lab-space',labId,lab);
+ const entry={title:'Baseline build',labId,sectionId:section.id,schemaRevision:1,sectionSchema:{label:section.label,description:section.description,fields:structuredClone(section.fields)},notes:'Recorded before configuration changed.',values:{temperature:'20.4'},contributors:[{id:randomUUID(),name:'First author',role:'Investigation'},{id:randomUUID(),name:'Second author',role:'Analysis'}],links:[{workspaceId:book.id,type:'lab-space',id:labId}]};
+ const cmd=randomUUID();await save('lab-entry',entryId,entry,null,cmd);
+ assert.equal((await save('lab-entry',entryId,entry,null,cmd)).replayed,true);
+ section.fields[0].label='Renamed current field';enableProfile(lab,'computer-it',false);
+ await save('lab-space',labId,lab,1);
+ assert.equal(availableSections(lab).length,totalSections-laboratoryProfiles.find(p=>p.id==='computer-it').sections.length);
+ const reopened=await workspaceModules(new Workspace(root)).read();
+ assert.deepEqual(reopened.entities.find(e=>e.id===entryId).data,entry);
+ await save('lab-entry',entryId,{...entry,notes:'Retained work can still be amended.'},1);
+ const before=await store.read();
+ await assert.rejects(save('lab-entry',entryId,entry,1),{code:'MODULE_CHANGED'});
+ await assert.rejects(save('lab-entry',entryId,{...entry,sectionSchema:{...entry.sectionSchema,label:'Reinterpreted'}},2),{code:'MODULE_INVALID'});
+ await assert.rejects(save('lab-entry',randomUUID(),entry),{code:'MODULE_REFERENCE'});
+ assert.deepEqual(await store.read(),before);
+ enableProfile(lab,'computer-it',true);
+ assert.equal(lab.sections.length,totalSections);assert.equal(lab.sections.find(s=>s.id===section.id).label,'Build provenance');
+ await save('lab-space',labId,lab,2);
+ await assert.rejects(save('lab-entry',randomUUID(),entry),{code:'MODULE_CHANGED'});
+ const current={...entry,schemaRevision:3,sectionSchema:{label:section.label,description:section.description,fields:section.fields}};
+ await save('lab-entry',randomUUID(),current);
+ await assert.rejects(save('lab-entry',randomUUID(),{...current,values:{temperature:'not a number'}}),{code:'MODULE_INVALID'});
+});
+
+
+test('legacy arts data remains readable without owning canonical notebook navigation',async()=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-arts-')),ws=new Workspace(root),book=createNotebook('Creative collective');
+ await ws.create(book);const store=workspaceModules(ws);
+ const save=(type,id,data,revision=null)=>store.execute({workspaceId:book.id,commandId:randomUUID(),action:type+'.save',payload:{id,expectedRevision:revision,data}});
+ const makeLab=name=>{const lab={name,description:'',archived:false,profiles:[],sections:[],links:[]};enableProfile(lab,'arts-creative',true);return lab;};
+ const studio=makeLab('Nightjar rehearsal room'),gallery=makeLab('Gallery study room');
+ const studioId=randomUUID(),galleryId=randomUUID(),sessionId=randomUUID(),collectionId=randomUUID();
+ const session=studio.sections.find(s=>s.key==='sessions'),collection=gallery.sections.find(s=>s.key==='collections');
+ session.label='Band sessions';
+ session.fields.push({key:'tempo',label:'Tempo',type:'number',unit:'bpm',required:false,choices:[]});
+ await save('lab-space',studioId,studio);await save('lab-space',galleryId,gallery);
+ const entry=(title,labId,section,values,contributors=[],links=[])=>({title,labId,sectionId:section.id,schemaRevision:1,sectionSchema:{label:section.label,description:section.description,fields:structuredClone(section.fields)},notes:'',values,contributors,links});
+ const credits=[{id:randomUUID(),name:'Nightjar collective',role:'Performers'},{id:randomUUID(),name:'Mira',role:'Recording'}];
+ await save('lab-entry',sessionId,entry('Installation rehearsal',studioId,session,{sessionDate:'2026-09-28',tempo:'92.5'},credits));
+ await save('lab-entry',collectionId,entry('Sound installation documentation',galleryId,collection,{accession:'EX-26-07',provenance:'Commissioned from Nightjar collective'},[],[{workspaceId:book.id,type:'lab-entry',id:sessionId}]));
+ let data=await workspaceModules(new Workspace(root)).read();
+ const savedSession=data.entities.find(e=>e.id===sessionId);
+ assert.deepEqual(savedSession.data.contributors,credits);
+ // Contributor commands must pass through the schema editor to their record owner.
+ assert.equal(sectionAction(savedSession.data,'contributor-add',{}),false);
+ assert.equal(sectionAction(savedSession.data,'contributor-remove',{index:'0'}),false);
+ assert.deepEqual(savedSession.data.contributors,credits);
+ assert.equal(data.entities.find(e=>e.id===collectionId).data.links[0].id,sessionId);
+ assert.equal(data.entities.find(e=>e.id===galleryId).data.sections.find(s=>s.key==='sessions').label,'Rehearsals & recordings');
+ assert.equal(moduleForEntity(savedSession,data.entities),undefined);
+ // Existing module bytes are no longer projected as a second notebook hierarchy.
+ const registry=createDataRegistry(),host=createModuleHost(registry);
+ await host.configure(['research','laboratory-arts-creative']);
+ assert.deepEqual(registry.get('laboratory-arts-creative-records').items({book},{data}),[]);
+ assert.deepEqual(await store.read(),data);
+});

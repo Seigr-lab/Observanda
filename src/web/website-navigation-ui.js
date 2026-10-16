@@ -1,0 +1,13 @@
+import {navigationItems,menuCanNest} from './website-model.js';
+import {t} from './i18n/index.js';
+const text=(key,args)=>t('websiteEditor',key,args);
+
+// Menu visibility is presentation, independent of public-content consent.
+// Unpublished destinations stay editable and never enter a public projection.
+export function websiteNavigationFields(book,selection,{esc,field,option}){
+ const items=navigationItems(book,selection),design=book.website.design;
+ const move=(key,i,disabled)=>'<button type="button" class="button" data-action="menu-'+key+'" data-index="'+i+'" aria-label="'+esc(text('menuMove',{item:i+1,direction:text(key)}))+'"'+(disabled?' disabled':'')+'>'+esc(text(key))+'</button>';
+ return '<section class="panel website-navigation-controls"><h2>'+esc(text('navigationTitle'))+'</h2>'+field(text('navigationPlacement'),'<select data-site-design="navigation">'+['top','side','none'].map(value=>option(value,text('navigation_'+value),design.navigation)).join('')+'</select>')+
+ '<label class="checkbox"><input type="checkbox" data-site-design="browseLink"'+(design.browseLink!==false?' checked':'')+'><span>'+esc(text('browseLink'))+'</span></label><p>'+esc(text('navigationHelp'))+'</p><button type="button" class="button" data-action="website-menu-clear">'+esc(text('clearMenu'))+'</button></section>'+
+ '<section class="panel"><p id="website-order-help" class="website-visually-hidden">'+esc(text('menuKeyboard'))+'</p><ol id="website-menu-order" class="website-menu-order">'+items.map((item,i)=>'<li data-reorder-item="'+esc(item.target)+'"><button type="button" class="button drag-handle" aria-describedby="website-order-help" data-reorder-handle="'+esc(item.target)+'" aria-label="'+esc(text('menuHandle',{item:i+1}))+'">&#10303;</button><div class="website-menu-fields"><label class="checkbox"><input type="checkbox" data-menu="'+i+'" data-column="show"'+(item.show?' checked':'')+' aria-label="'+esc(text('menuShow',{name:item.label}))+'"></label><input data-menu="'+i+'" data-column="label" aria-label="'+esc(text('menuLabel',{item:i+1}))+'" value="'+esc(item.label)+'" maxlength="160">'+(!item.available?'<small class="muted">'+esc(text('menuUnpublished'))+'</small>':'')+'</div><div class="inline-actions">'+move('up',i,i===0)+move('down',i,i===items.length-1)+'</div><label class="menu-parent">'+esc(text('menuUnder'))+'<select data-menu="'+i+'" data-column="parent" aria-label="'+esc(text('menuParent',{item:i+1}))+'"><option value="">'+esc(text('menuTop'))+'</option>'+items.filter(p=>p.target!==item.target&&menuCanNest(items,item.target,p.target)).map(p=>option(p.target,p.label,item.parent)).join('')+'</select></label></li>').join('')+'</ol><p id="website-move-status" role="status"></p></section>';
+}

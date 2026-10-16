@@ -1,0 +1,33 @@
+import {reviewRequest} from './review-requests.js';
+import {recordDraftRequest} from './record-draft-requests.js';
+import {recordStarterRequest} from './record-starter-requests.js';
+// Only routes owned by snapshot readers may continue during a storage copy or
+// database preparation. Admission closes and drains before replacing their
+// catalogue, clearing its key, or retiring its folder.
+const get=new Set(['/api/dashboard','/api/notebook','/api/modules/data','/api/modules/version','/api/modules/history','/api/laboratory','/api/history','/api/media-policy','/api/fonts','/api/publishing']);
+const post=new Set([
+ ...['version','start','page','changes','change-page','selection','labels','dashboard','dashboard-types','record-types','discovery','timeline','record-content','record-selectors'].map(name=>'/api/workspace/read/'+name),
+ ...['items','item','labels','bom-source','inventory/dashboard','inventory/discovery','inventory/stock','inventory/ledger','planning/dashboard','planning/discovery'].map(name=>'/api/modules/'+name),
+ ...['query','open','history/list','history/read','runs','runs/comparison','writing/read','values/read','values/figures','values/figure-copy-choices','values/figure-copy-source','values/attempt-context','runs/prepare'].map(name=>'/api/research/records/'+name),
+ ...['overview','list','references','figure-sources','current','schema','current-record','record','read','rows','retained-table','analysis-status'].map(name=>'/api/research/materials/'+name),
+ ...['summary','content','record','sections','media'].map(name=>'/api/website/research/'+name),
+ '/api/calendars/page','/api/calendars/event',
+ '/api/github-connection/status','/api/deployment-jobs/list','/api/deployment-jobs/status',
+ '/api/repository-setup/current','/api/repository-setup/status','/api/publishing/verification',
+ '/api/design-preview','/api/appearance-preview','/api/websites/list','/api/websites/open','/api/modules/drafts/read',
+ '/api/laboratory/read/query','/api/laboratory/read/selected','/api/research/drafts/list','/api/modules/drafts/list'
+]);
+export const workspaceSnapshotRequest=(method,route)=>{
+ if(method==='GET')return get.has(route)||/^\/api\/fonts\/[a-f0-9-]{36}$/.test(route)||/^\/(?:appearance-preview|preview)\/[a-f0-9]{64}\/.+/.test(route)||/^\/api\/appearance-preview\/[a-f0-9]{64}\/pages$/.test(route);
+ if(method!=='POST')return false;const command=recordStarterRequest(route)??recordDraftRequest(route)??reviewRequest(route);return post.has(route)||route==='/api/research/views/list'||Boolean(command&&!command.write);
+};
+export class WorkspaceReadAdmission{
+ constructor(){this.accepting=true;this.active=new Set();}
+ enter(){
+  if(!this.accepting)return null;
+  let finish;const pending=new Promise(resolve=>finish=resolve);this.active.add(pending);
+  return ()=>{this.active.delete(pending);finish();};
+ }
+ async close(){this.accepting=false;await Promise.all(this.active);}
+ open(){this.accepting=true;}
+}

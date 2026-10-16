@@ -1,0 +1,30 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {attemptWindowFixture} from './record-attempt-window-fixture.js';
+import {RecordContent} from '../src/record-content.js';
+import {RecordDocument,withRecordDocument} from '../src/record-document.js';
+import {RecordValueTree} from '../src/record-value-tree.js';
+import {RecordValues} from '../src/record-values.js';
+import {RecordHistory} from '../src/record-history.js';
+import {ResearchMaterials} from '../src/research-materials.js';
+import {RetainedRecordDocuments} from '../src/retained-record-documents.js';
+import {recordRevision} from '../src/research.js';
+import {attemptView} from '../src/web/attempt-view.js';
+import {escapeHTML} from '../src/publication.js';
+
+test('run history windows retain global positions, correction state and exact preparation context across revisions',async t=>{
+ const f=await attemptWindowFixture();t.after(f.close);const reader=new RecordContent(f.workspace),target={workspaceId:f.book.id,recordId:f.record.id},before=await f.workspace.outline(),forbidden=new Set();
+ const pinned=await new ResearchMaterials(f.workspace).pinRecord(f.record.id,recordRevision(f.record));
+ await f.workspace.catalogue(async store=>{const row=await store.member(await store.snapshot(),f.record.id);await withRecordDocument(store,row.id,row.revision,async document=>{for(const path of [['attempt'],['attempt','preparations'],['attempt','events'],['attempt','assessments']])forbidden.add(await document.reference(path));});});
+ const read=RecordValueTree.prototype.read,field=RecordDocument.prototype.field;
+ t.mock.method(RecordValueTree.prototype,'read',function(reference){assert.ok(!forbidden.has(reference),'Reader assembled the run history');return read.call(this,reference);});
+ t.mock.method(RecordDocument.prototype,'field',function(path,...args){assert.ok(path.join()!=='attempt','Reader loaded all run facts');return field.call(this,path,...args);});
+ const first=await reader.read({...target,pagedHeader:true});assert.deepEqual(first.collections.events,{offset:0,total:15,count:4});assert.equal(first.collections.preparations.total,9);assert.equal(first.header.attempt.preparations.length,6);
+ assert.ok(first.attemptWindow.superseded.includes(f.record.attempt.events[0].id));assert.ok(first.attemptWindow.superseded.includes(f.record.attempt.assessments[0].id));assert.equal(first.attemptWindow.preparationPositions[f.record.attempt.preparations[8].id],8);
+ const html=attemptView(first.header.attempt,escapeHTML,{window:first.attemptWindow,correct:()=>'<button>Add correction</button>'});assert.match(html,/Preparation revision 9/);assert.match(html,/Preparation revision 7/);assert.match(html,/Superseded by a later correction/);assert.equal((html.match(/Add correction/g)??[]).length,6);assert.doesNotMatch(html,/Preparation window 8/);
+ const late=await reader.read({...target,pagedHeader:true,windows:{events:11,assessments:11,preparations:7}});assert.equal(late.header.attempt.events.at(-1).label,'Corrected acquisition zero');assert.deepEqual(late.attemptWindow.visiblePreparations,f.record.attempt.preparations.slice(7).map(p=>p.id));assert.equal(late.collections.events.offset,11);
+ const values=new RecordValues(f.workspace),selected=await values.read({...target,field:'title'});await values.save({...target,field:'title',expectedRevision:selected.revision,value:{value:'Later interpretation'}});
+ assert.equal((await reader.read({...target,pagedHeader:true,snapshotId:before.etag,windows:{events:11}})).header.title,f.record.title);
+ const history=new RecordHistory(f.workspace,{}),old=(await history.list(target)).versions.find(v=>!v.current),comparison=await history.read({...target,...old,paged:true,windows:{assessments:11}});assert.equal(comparison.previous.collections.assessments.total,15);assert.equal(comparison.record.attempt.assessments.at(-1).observed,'Corrected assessment zero');
+ const retained=await new RetainedRecordDocuments(f.workspace).read({ref:pinned,windows:{events:11},compare:true});assert.equal(retained.previous.attemptWindow.preparationPositions[f.record.attempt.preparations[8].id],8);assert.equal(retained.current.collections.events.total,15);
+});

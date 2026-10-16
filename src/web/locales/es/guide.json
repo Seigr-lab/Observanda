@@ -1,0 +1,136 @@
+{
+  "topics": [
+    {
+      "id": "getting-started",
+      "title": "Proyectos y libros de laboratorio",
+      "sections": [
+        {
+          "id": "structure",
+          "title": "Organiza tu espacio de trabajo",
+          "paragraphs": [
+            "Un espacio de trabajo contiene proyectos, y los proyectos contienen libros de laboratorio. Usa el botón más junto a Proyectos para crear un proyecto. Dale un nombre, elige su padre y selecciona una plantilla predeterminada si te resulta útil. Crear un proyecto no requiere editar una plantilla.",
+            "Abre el proyecto y elige New lab book. La plantilla del proyecto se selecciona inicialmente; el desplegable permite elegir otra disponible. Pon nombre al libro y guárdalo. Los libros de un mismo proyecto pueden usar plantillas diferentes."
+          ]
+        },
+        {
+          "id": "templates",
+          "title": "Elige y personaliza plantillas",
+          "paragraphs": [
+            "Activa más tipos de libros en Preferencias → Módulos → Lab-book types. Estos tipos opcionales proporcionan plantillas; el espacio de trabajo, los proyectos y los libros siempre están disponibles. Desactivar un tipo conserva los libros y registros existentes.",
+            "Usa el editor de plantillas dedicado para personalizar tipos de registro, instrucciones y campos. Los cambios de plantilla no reescriben los valores de registros existentes. Separa los prototipos de software y los experimentos físicos con PCB cuando necesiten estructuras diferentes."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "records",
+      "title": "Registros, métodos y ejecuciones",
+      "sections": [
+        {
+          "id": "writing",
+          "title": "Escribe y conecta registros",
+          "paragraphs": [
+            "Abre un libro y elige New record. Selecciona un tipo, pon un título descriptivo y rellena las secciones pertinentes. Guarda antes de salir. Los títulos, textos, números y evidencias escritos por los usuarios nunca se traducen al cambiar el idioma de la interfaz.",
+            "Conecta trabajos relacionados con enlaces de investigación. Un enlace actual sigue el registro vigente. Una referencia exacta a un método identifica la revisión utilizada. Crea registros individuales para las repeticiones o tomas y documenta parámetros modificados, desviaciones y resultados incompletos."
+          ]
+        },
+        {
+          "id": "history",
+          "title": "Consulta el historial y los enlaces",
+          "paragraphs": [
+            "Abre el historial desde el propio registro para inspeccionar versiones guardadas. Restaurar crea una versión actual de ese registro; los demás no cambian. Revisa el contenido restaurado antes de compartirlo.",
+            "Sigue los enlaces a métodos, evidencias y registros relacionados. Una comprobación de software satisfactoria no demuestra una ejecución física, y una única ejecución satisfactoria no demuestra repetibilidad. Registra esos eventos y conclusiones por separado."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "evidence",
+      "title": "Evidencias originales y análisis",
+      "sections": [
+        {
+          "id": "originals",
+          "title": "Conserva los archivos originales",
+          "paragraphs": [
+            "Adjunta evidencias desde los controles del registro. Añade un título descriptivo y su procedencia. Las capturas binarias, el código fuente y las exportaciones de instrumentos son evidencias aunque no tengan vista previa. Conserva los bytes originales separados de los medios convertidos y los datos derivados.",
+            "Un hash identifica los bytes, pero no demuestra exactitud ni autoría. Si se interrumpe una importación, comprueba su estado y usa los controles de recuperación ofrecidos antes de crear otra copia. Recupera el original para examinarlo con una herramienta externa adecuada."
+          ]
+        },
+        {
+          "id": "analysis",
+          "title": "Distingue datos e interpretación",
+          "paragraphs": [
+            "Conserva el conjunto de datos independientemente de una figura. Mantén unidades, significado de valores ausentes, exclusiones e identidades de fila. Declara explícitamente representaciones no decimales y enteros grandes exactos; no los conviertas silenciosamente en números decimales ordinarios.",
+            "Vincula el análisis a entradas, parámetros y versiones exactas del método o herramienta. Conserva los resultados revisados separados de los anteriores. Revisa figuras y conclusiones dependientes si cambian las entradas. Los resúmenes calculados y los valores editados manualmente tienen procedencias distintas."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "inventory",
+      "title": "Inventario y componentes de prototipos",
+      "sections": [
+        {
+          "id": "ownership",
+          "title": "Propiedad y asignación",
+          "paragraphs": [
+            "El inventario pertenece al espacio de trabajo. Un artículo puede quedar sin asignar a ningún proyecto. Asignar cantidades indica a qué proyectos se destinan los recursos; no crea otra copia de las existencias. Activa Inventory en Módulos para usar su vista dedicada.",
+            "Crea artículos con nombres, unidades y cantidades significativos. Distingue ubicación física y asignación a un proyecto. Por ejemplo, 100 componentes repartidos entre dos proyectos siguen sumando 100 componentes en el espacio de trabajo."
+          ]
+        },
+        {
+          "id": "usage",
+          "title": "Sigue el uso y la disponibilidad",
+          "paragraphs": [
+            "Conecta las listas de materiales de prototipos con artículos del inventario. Registra las cantidades realmente usadas y distínguelas de la demanda prevista y las reservas. Una BOM es un plan, no una prueba de consumo.",
+            "Revisa las cantidades disponibles y usadas antes de otro montaje. Registra sustituciones y resultados del montaje en el experimento para entender la elección de componentes junto con los resultados."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "publishing",
+      "title": "Diseña y publica una web",
+      "sections": [
+        {
+          "id": "design",
+          "title": "Construye y revisa las páginas",
+          "paragraphs": [
+            "Abre Website editor para elegir páginas y ordenar secciones. Crea una página de inicio si la quieres. Usa la pestaña Page para construir la estructura y el control de edición dedicado para cambiar la sección seleccionada. Guarda antes de preparar una publicación.",
+            "Elige en Content qué puede ser público. El lienzo de trabajo puede mostrar contenido no publicado: no es la edición pública. Usa Preview & export para inspeccionar la selección, las figuras, la navegación y los enlaces."
+          ]
+        },
+        {
+          "id": "release",
+          "title": "Publica una edición aprobada",
+          "paragraphs": [
+            "Mantén las evidencias privadas y los detalles operativos fuera de la selección pública. Comprueba nombres de archivo, metadatos, enlaces y datos de figuras, además del texto visible. Puedes explicar que las evidencias no están disponibles públicamente sin revelar sus metadatos privados.",
+            "Guardar, generar, crear un commit, enviar y verificar el despliegue son estados diferentes. Configura el destino en Publishing y sigue el proceso de revisión. Verifica la edición desplegada: un envío correcto no prueba que la web se haya actualizado. La exportación estática también permite publicar sin un servicio integrado."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "storage",
+      "title": "Almacenamiento, copias y acceso",
+      "sections": [
+        {
+          "id": "backup",
+          "title": "Verifica las copias de seguridad",
+          "paragraphs": [
+            "Usa Almacenamiento y acceso para gestionar almacenamiento y copias. Guarda las copias separadas de los datos de trabajo. Espera a que termine la verificación e inspecciona el resultado; tener un archivo copiado no demuestra que todos los originales sean recuperables.",
+            "Prueba la restauración en una ubicación de prueba separada y recupera registros, revisiones históricas y evidencias representativas. Comprueba sus identidades y bytes. La copia debe ser utilizable sin depender de las rutas del ordenador original."
+          ]
+        },
+        {
+          "id": "access",
+          "title": "Protege el acceso",
+          "paragraphs": [
+            "Conserva contraseñas y material de recuperación en un lugar seguro independiente del espacio de trabajo. Bloquéalo al terminar. El cifrado protege el contenido guardado, pero no sustituye el control de un ordenador desbloqueado.",
+            "El acceso desde un dispositivo no demuestra que haya invitaciones en línea, roles de organización o entrega entre colaboradores. Usa solo las acciones disponibles en la versión instalada y comprueba la identidad del revisor y la revisión exacta de cada entrada atestiguada."
+          ]
+        }
+      ]
+    }
+  ]
+}

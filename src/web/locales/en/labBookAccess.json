@@ -1,0 +1,20 @@
+{
+  "title": "Unlock lab book",
+  "username": "Username",
+  "password": "Lab book password",
+  "recovery": "Use a recovery key",
+  "recoveryKey": "Recovery key",
+  "cancel": "Cancel",
+  "unlock": "Unlock",
+  "failed": "Could not unlock this lab book.",
+  "section": "Lab book access",
+  "passwordReady": "A password is set for this lab book.",
+  "passwordHint": "Set a password to open this lab book on another computer.",
+  "newPassword": "New lab book password",
+  "confirmPassword": "Confirm password",
+  "savePassword": "Save lab book password",
+  "lock": "Lock lab book",
+  "loading": "Loading access settings?",
+  "saved": "Lab book password saved.",
+  "passwordMismatch": "The passwords do not match."
+}

@@ -1,0 +1,147 @@
+import {test,expect} from '@playwright/test';
+import {mkdtemp,rm} from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import {createNotebook} from '../../src/model.js';
+import {encryptedFixture} from './encrypted-fixture.js';
+import {clearVault} from '../../src/encryption.js';
+import {testServer} from '../device-fixture.js';
+import {navigate} from './preferences-helper.js';
+import {task,sectionTools,editorTab} from './composer-helper.js';
+
+const canvas=page=>page.frameLocator('#website-draft-preview');
+const settings=(page,slot,key)=>page.locator('[data-action-slot="'+slot+'"][data-action-style-key="'+key+'"]');
+const shape=async(page,slot)=>{
+ const details=settings(page,slot,'radius').locator('xpath=ancestor::details[1]');
+ if(!await details.evaluate(el=>el.open))await details.locator(':scope>summary').click();
+};
+
+test('author site button defaults, plain links and independent popup close styles; preserve them in the exported website',async({page,browser},info)=>{
+ test.setTimeout(150000);page.setDefaultTimeout(15000);
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-actions-'));
+ const f=await encryptedFixture(root,createNotebook('Studio',''));
+ const app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(root,'preferences.json')});
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ try{
+  await page.goto(app.url);await navigate(page,'Website editor');
+  await page.getByRole('button',{name:'Add page',exact:true}).click();
+  await page.getByLabel('Page title',{exact:true}).fill('Support our work');
+  const target=await page.getByLabel('Page',{exact:true}).inputValue();
+  await editorTab(page,'Links & buttons');
+  await settings(page,'buttons','font').locator('..').getByRole('combobox').click();
+  await page.getByRole('option',{name:/^DM Sans/}).click();
+  await settings(page,'buttons','fontWeight').fill('625');
+  await settings(page,'buttons','background').fill('#173f3a');
+  await settings(page,'buttons','color').fill('#ffffff');
+  await settings(page,'buttons','hoverBackground').fill('#315e55');
+  await settings(page,'buttons','hoverColor').fill('#eeeeee');
+  await settings(page,'buttons','fontSize').fill('18');
+  await shape(page,'buttons');
+  await settings(page,'buttons','radius').fill('20');
+  await settings(page,'buttons','paddingX').fill('24');
+  await settings(page,'buttons','paddingY').fill('12');
+  const linkDefaults=settings(page,'links','color').locator('xpath=ancestor::details[2]');
+  await linkDefaults.locator(':scope>summary').click();
+  await settings(page,'links','color').fill('#185b90');
+  await task(page,'Page');await page.locator('[data-palette-kind=popup]').click();
+  await canvas(page).locator('.section-popup>.canvas-section-edit').click();
+  await page.getByLabel('Section heading',{exact:true}).fill('Support choices');
+  await page.getByLabel('Popup button label',{exact:true}).fill('Support');
+  const close=canvas(page).locator('.public-popup-close');
+  // The default is a plain X. Authors can choose text, a button, or both.
+  await expect(close).toHaveText('×');await expect(close).toHaveCSS('border-top-width','0px');
+  await page.getByLabel('Close content',{exact:true}).selectOption('text');
+  await page.getByLabel('Close label',{exact:true}).fill('close');
+  await page.getByLabel('Close appearance',{exact:true}).selectOption('button');
+  await expect(close).toHaveText('close');await expect(close).toHaveCSS('background-color','rgb(23, 63, 58)');
+  await sectionTools(page,'Style');
+  const closeStyles=page.getByText('Close control styling',{exact:true});await closeStyles.click();
+  await settings(page,'close','background').fill('#512e4a');
+  await settings(page,'close','hoverBackground').fill('#714b68');
+  await shape(page,'close');await settings(page,'close','radius').fill('7');
+  await settings(page,'action','background').fill('#354e78');
+  await expect(close).toHaveCSS('border-radius','7px');
+  await expect(close).toHaveCSS('background-color','rgb(81, 46, 74)');
+  await sectionTools(page,'Content');
+  await page.getByLabel('Close appearance',{exact:true}).selectOption('link');
+  await expect(close).toHaveText('close');await expect(close).toHaveCSS('border-top-width','0px');
+  await expect(close).toHaveCSS('background-color','rgba(0, 0, 0, 0)');
+  await page.getByLabel('Close appearance',{exact:true}).selectOption('button');
+  await expect(close).toHaveCSS('background-color','rgb(81, 46, 74)');
+  await page.getByLabel('Close content',{exact:true}).selectOption('both');
+  await expect(close).toHaveText('×close');
+  await page.getByRole('button',{name:'Undo',exact:true}).click();await expect(close).toHaveText('close');
+  await task(page,'Page');
+  for(const [label,button]of [['Visit the work',false],['Sponsor the work',true]]){
+   const count=await canvas(page).locator('.section-popup .section-link').count();
+   await page.locator('[data-palette-kind=link]').click();
+   await expect(canvas(page).locator('.section-popup .section-link')).toHaveCount(count+1);
+   await canvas(page).locator('.section-popup .section-link>.canvas-section-edit').last().click();
+   await page.getByLabel('Link label',{exact:true}).fill(label);
+   await page.getByLabel('Link destination',{exact:true}).fill('https://example.org/'+(button?'sponsor':'work'));
+   if(button)await page.getByLabel('Display as',{exact:true}).selectOption('button');
+   await task(page,'Page');
+  }
+  const textLink=canvas(page).getByRole('link',{name:'Visit the work',exact:true});
+  const buttonLink=canvas(page).getByRole('link',{name:'Sponsor the work',exact:true});
+  await expect(textLink).toHaveCSS('border-top-width','0px');
+  await expect(textLink).toHaveCSS('background-color','rgba(0, 0, 0, 0)');
+  await expect(textLink).toHaveCSS('color','rgb(24, 91, 144)');
+  await expect(buttonLink).toHaveCSS('background-color','rgb(23, 63, 58)');
+  await expect(buttonLink).toHaveCSS('border-radius','20px');
+  await expect(buttonLink).toHaveCSS('padding-left','24px');
+  await expect(buttonLink).toHaveCSS('font-weight','625');
+  await page.locator('[data-palette-kind=copy-text]').click();
+  await expect(canvas(page).locator('.section-copy-text')).toHaveCount(1);
+  await canvas(page).locator('.section-copy-text>.canvas-section-edit').click();
+  await page.getByLabel('Section heading',{exact:true}).fill('Example address');
+  await page.getByLabel('Text to copy',{exact:true}).fill('Example-Exact-Address');
+  await page.getByLabel('Copy button label',{exact:true}).fill('Copy address');
+  await page.getByLabel('Display as',{exact:true}).selectOption('link');
+  await expect(canvas(page).getByRole('button',{name:'Copy address',exact:true})).toBeVisible();
+  await expect(canvas(page).getByRole('button',{name:'Copy address',exact:true})).toHaveCSS('border-top-width','0px');
+  // Reset applies to this close control only, and undo recovers its overrides.
+  await canvas(page).locator('.section-popup>.canvas-section-edit').click();await sectionTools(page,'Style');
+  await page.getByText('Close control styling',{exact:true}).click();
+  await page.locator('[data-action=website-action-reset][data-action-slot=close]:not([data-key])').click();
+  await expect(close).toHaveCSS('border-radius','20px');
+  await page.getByRole('button',{name:'Undo',exact:true}).click();await expect(close).toHaveCSS('border-radius','7px');
+  await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
+  await page.reload();await expect(close).toHaveText('close');await expect(close).toHaveCSS('background-color','rgb(81, 46, 74)');
+  await expect(buttonLink).toHaveCSS('background-color','rgb(23, 63, 58)');
+  await page.screenshot({path:info.outputPath('action-styling-editor.png')});
+  await page.getByRole('button',{name:'Preview & export',exact:true}).click();
+  await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible();
+  await page.getByLabel('Preview page',{exact:true}).selectOption(target);
+  const href=await page.locator('#full-public-preview').getAttribute('href'),url=new URL(href,app.origin).href;
+  const visitor=await page.context().newPage();visitor.on('pageerror',e=>errors.push(e.message));
+  try{
+   await visitor.goto(url);const trigger=visitor.locator('[data-public-popup]>summary');
+   await expect(trigger).toHaveCSS('background-color','rgb(53, 78, 120)');
+   await trigger.click();const dialog=visitor.getByRole('dialog',{name:'Support choices',exact:true});
+   const closeButton=dialog.getByRole('button',{name:'close',exact:true});
+   await expect(closeButton).toBeFocused();await expect(closeButton).toHaveText('close');
+   await expect(closeButton).toHaveCSS('background-color','rgb(81, 46, 74)');
+   await expect(closeButton).toHaveCSS('border-radius','7px');
+   await expect(closeButton).toHaveCSS('font-weight','625');
+   await closeButton.hover();await expect(closeButton).toHaveCSS('background-color','rgb(113, 75, 104)');
+   await visitor.mouse.move(0,0);
+   await expect(dialog.getByRole('link',{name:'Visit the work',exact:true})).toHaveCSS('color','rgb(24, 91, 144)');
+   await expect(dialog.getByRole('link',{name:'Sponsor the work',exact:true})).toHaveCSS('background-color','rgb(23, 63, 58)');
+   await expect(dialog.getByRole('button',{name:'Copy address',exact:true})).toHaveCSS('border-top-width','0px');
+   await dialog.getByRole('link',{name:'Sponsor the work',exact:true}).hover();
+   await expect(dialog.getByRole('link',{name:'Sponsor the work',exact:true})).toHaveCSS('background-color','rgb(49, 94, 85)');
+   await visitor.mouse.move(0,0);await visitor.screenshot({path:info.outputPath('action-styling-desktop.png')});
+   await visitor.setViewportSize({width:390,height:844});await visitor.evaluate(()=>document.documentElement.style.fontSize='24px');
+   expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
+   await visitor.screenshot({path:info.outputPath('action-styling-mobile.png')});
+   await closeButton.click();await expect(dialog).toBeHidden();await expect(trigger).toBeFocused();
+   await visitor.keyboard.press('Enter');await expect(dialog).toBeVisible();
+   await visitor.keyboard.press('Escape');await expect(trigger).toBeFocused();
+  }finally{await visitor.close();}
+  const fallback=await browser.newContext({javaScriptEnabled:false});await fallback.addCookies(await page.context().cookies());const reader=await fallback.newPage();
+  try{await reader.goto(url);await reader.locator('[data-public-popup]>summary').click();await expect(reader.getByRole('link',{name:'Visit the work',exact:true})).toHaveAttribute('href','https://example.org/work');await expect(reader.locator('.public-popup-close')).toBeHidden();}finally{await fallback.close();}
+  expect(errors).toEqual([]);
+ }finally{await app.close();clearVault(f.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+});

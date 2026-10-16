@@ -1,0 +1,10 @@
+// Signed review values retain their original namespace and record revisions.
+import {validateDetachedRecords} from './model.js';
+import {verifySigned,reviewHash} from './security/review-exchange.js';
+import {recordRevision} from './research.js';
+import {exact,uuid,text,instant,requireValue,unique} from './modules/validation.js';
+const hash=v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v);
+export const reviewDecisions=['reviewed','witnessed','changes-requested','inconclusive'];
+export function requestValue(signed){const v=verifySigned(signed);requireValue(exact(v,['kind','id','workspaceId','createdAt','sender','recipient','message','records'])&&v.kind==='request'&&uuid(v.id)&&uuid(v.workspaceId)&&instant(v.createdAt)&&hash(v.recipient)&&text(v.message,4000)&&Array.isArray(v.records)&&v.records.length>0&&v.records.length<=50&&unique(v.records.map(r=>r.id))&&v.records.every(r=>exact(r,['id','revision','record'])&&uuid(r.id)&&hash(r.revision)&&r.record?.id===r.id&&text(r.record.title,1000)&&recordRevision(r.record)===r.revision),'Review request');validateDetachedRecords(v.records.map(r=>r.record));return v;}
+export function responseValue(signed,request){const v=verifySigned(signed),q=requestValue(request);requireValue(exact(v,['kind','id','requestId','requestHash','createdAt','sender','recipient','decisions'])&&v.kind==='response'&&uuid(v.id)&&v.requestId===q.id&&v.requestHash===reviewHash(request)&&instant(v.createdAt)&&v.recipient===reviewHash(q.sender)&&reviewHash(v.sender)===q.recipient&&Array.isArray(v.decisions)&&v.decisions.length>0&&v.decisions.length<=q.records.length&&unique(v.decisions.map(d=>d.id))&&v.decisions.every(d=>exact(d,['id','revision','decision','comment'])&&q.records.some(r=>r.id===d.id&&r.revision===d.revision)&&reviewDecisions.includes(d.decision)&&text(d.comment,8000)),'Signed review decisions');return v;}
+export function validateReviewPacket(packet){requireValue(exact(packet,['direction','request','response'])&&['incoming','outgoing'].includes(packet.direction),'Review packet');requestValue(packet.request);if(packet.response!==null)responseValue(packet.response,packet.request);return packet;}

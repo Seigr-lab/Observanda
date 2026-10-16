@@ -1,0 +1,49 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {mkdtemp,rm,readFile} from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import {sampleNotebook} from '../src/sample.js';
+import {validateNotebook} from '../src/model.js';
+import {buildPublication} from '../src/publication.js';
+import {safeWebsiteLink,websiteLinkPath} from '../src/web/website-links.js';
+import {websiteSectionWindow} from '../src/web/website-section-links.js';
+import {newElement} from '../src/web/composition-tree.js';
+import {mediaStyle} from '../src/web/media-presentation.js';
+import {WebsiteResearch} from '../src/website-research.js';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {clearVault} from '../src/encryption.js';
+import {ResearchCatalogue} from '../src/research-catalogue.js';
+import {RecordDocument} from '../src/record-document.js';
+
+test('buttons, introductions, rich text and images preserve exact local and cross-page fragments',async()=>{
+ const book=sampleNotebook(),id=randomUUID(),asset=randomUUID(),hidden=randomUUID(),target='page:'+id;
+ const heading={...newElement('heading',randomUUID),title:'Findings'},fragment='section-'+heading.id;
+ book.website.assets=[{id:asset,kind:'image',caption:'Go to findings',alt:'Findings',transcript:''}];
+ book.pages.push({id,title:'Chapter',body:'',share:true,sections:[heading]},{id:hidden,title:'EXCLUDED_CHAPTER',body:'',share:false,sections:[]});
+ const image={...newElement('asset',randomUUID),assetId:asset};
+ const textLink=href=>({type:'doc',content:[{type:'paragraph',content:[{type:'text',text:'Read the detail',marks:[{type:'link',attrs:{href,title:'',target:'_self',nofollow:false}}]}]}]});
+ book.website.home.sections=[{...newElement('link',randomUUID),href:target+'#'+fragment,label:'Inspect findings'},{...newElement('hero',randomUUID),href:target+'#'+fragment,label:'Read chapter'},image,{...newElement('link',randomUUID),href:'page:'+hidden+'#private',label:'PRIVATE_LINK'},{...newElement('text',randomUUID),body:'Read the detail',format:'rich',richText:textLink(target+'#'+fragment)}];
+ book.pages[0].sections.push({...newElement('text',randomUUID),body:'Back to overview',format:'rich',richText:textLink('home#section-'+image.id)});
+ const scope='home#'+image.id;book.website.presentation.media.push({...mediaStyle(book.website,scope,asset),scope,id:asset,link:target+'#'+fragment});
+ validateNotebook(book);const output=buildPublication(book,{mediaFiles:new Map([[asset,{kind:'image',extension:'png',bytes:await readFile(new URL('../src/preview-assets/image.png',import.meta.url))}]])}),html=output.files.get('index.html');
+ assert.equal((html.match(new RegExp('href="pages/'+id+'\\.html#'+fragment+'"','g'))??[]).length,4);assert.ok(!html.includes('PRIVATE_LINK'));assert.ok(output.files.get('pages/'+id+'.html').includes('id="'+fragment+'"'));assert.ok(output.files.get('pages/'+id+'.html').includes('href="../index.html#section-'+image.id+'"'));
+ assert.equal(websiteLinkPath('#'+fragment,'../'),'#'+fragment);assert.equal(websiteLinkPath('home#opening','../'),'../index.html#opening');assert.equal(websiteLinkPath(target+'#'+fragment,'../../'),'../../pages/'+id+'.html#'+fragment);
+ for(const bad of ['javascript:alert(1)','file:///x','//example.org','#','home#bad space','home#x#y','home#%xy','https://user:password@example.org','page:no-such-id#x'])assert.equal(safeWebsiteLink(bad),false,bad);
+ for(const good of ['#section-example','home#section-example',target+'#section-example','https://example.org/#detail'])assert.equal(safeWebsiteLink(good),true,good);
+ const group={...newElement('disclosure',randomUUID),title:'Hidden group',show:false};book.pages[0].sections.push(group,{...newElement('heading',randomUUID),title:'PRIVATE_NESTED',parentId:group.id});
+ assert.ok(!websiteSectionWindow(book,target).items.some(item=>item.title==='PRIVATE_NESTED'));
+});
+
+test('section destinations page pinned headings without full record or prose reads',async t=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-section-destinations-')),book=sampleNotebook(),record=book.entries[0];record.sections=Array.from({length:57},(_,i)=>({id:randomUUID(),title:'Section '+i,body:'Retained evidence '+i}));
+ const f=await encryptedFixture(root,book);t.after(async()=>{clearVault(f.vault);await rm(root,{recursive:true,force:true});});const outline=await f.workspace.outline(),base={workspaceId:book.id,snapshotId:outline.etag,recordId:record.id};
+ t.mock.method(ResearchCatalogue.prototype,'record',()=>{throw Error('Full record read');});const selected=RecordDocument.prototype.field,paths=[];
+ t.mock.method(RecordDocument.prototype,'field',function(path,...args){paths.push(path);assert.ok(['id','title'].includes(path.at(-1)));return selected.call(this,path,...args);});
+ const service=new WebsiteResearch(f.workspace),first=await service.run('sections',{...base,offset:0}),second=await service.run('sections',{...base,offset:first.next}),last=await service.run('sections',{...base,offset:second.next});
+ assert.equal(first.total,57);assert.equal(first.items.length,25);assert.equal(second.items[0].title,'Section 25');assert.equal(last.items.length,7);assert.equal(last.next,null);assert.equal(last.previous,25);assert.equal(new Set([...first.items,...second.items,...last.items].map(item=>item.id)).size,57);assert.equal(paths.length,114);
+ assert.deepEqual((await service.run('sections',{...base,offset:last.previous})).items,second.items);
+ await assert.rejects(service.run('sections',{...base,offset:1}),{code:'INVALID'});await assert.rejects(service.run('sections',{...base,offset:75}),{code:'INVALID'});await assert.rejects(service.run('sections',{...base,workspaceId:randomUUID(),offset:0}),{code:'WORKSPACE_CHANGED'});
+ const aborted=new AbortController();aborted.abort();await assert.rejects(service.run('sections',{...base,offset:0},{signal:aborted.signal}),{name:'AbortError'});
+});

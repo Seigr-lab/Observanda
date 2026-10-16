@@ -1,0 +1,15 @@
+{
+  "invalid": "The saved record update was incomplete. Your editor and recovery checkpoint are retained.",
+  "incomplete": "Incomplete record update. Reload the workspace; your draft is retained.",
+  "reloadBase": "Reload the saved workspace before applying this response. Your draft is retained.",
+  "busy": "A saved record update is already loading.",
+  "title": "Updating saved records",
+  "description": "Loading changes from other windows. Your editor stays unchanged until loading finishes.",
+  "committed": "Your changes were saved. Loading the resulting saved revision to update this editor.",
+  "progress": "Received {loaded} of up to {total} record updates in this step",
+  "cancel": "Cancel loading",
+  "retry": "Retry loading",
+  "failed": "Saved changes could not be loaded. Retry to continue from the last completed page.",
+  "cancelled": "Loading cancelled. Your editor and recovery checkpoint are retained.",
+  "savedCancelled": "Your changes were saved, but loading their saved revision was cancelled. Your editor and recovery checkpoint are retained. Reload the saved workspace before making another change."
+}

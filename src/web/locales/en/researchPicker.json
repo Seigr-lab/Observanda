@@ -1,0 +1,23 @@
+{
+ "title":"Link research",
+ "refresh":"Refresh results",
+ "loading":"Loading research...",
+ "changed":"Records have changed since this search. Refresh for current results.",
+ "range":"{first}–{last} of {total}",
+ "empty":"No matching research.",
+ "previous":"Previous results",
+ "next":"Next results",
+ "invalid":"The research search response was incomplete. Refresh to try again.",
+ "record":"Record",
+ "searchFailed":"Could not search this workspace.",
+ "find":"Find in this workspace",
+ "placeholder":"Search research",
+ "kind":"Look for",
+ "records":"Records",
+ "notebooks":"Lab books",
+ "projects":"Projects",
+ "workspace":"Workspace",
+ "cancel":"Cancel",
+ "recordChanged":"That record changed after this search. Refresh the results and choose its revision again.",
+ "chooseFailed":"Could not select this research."
+}
