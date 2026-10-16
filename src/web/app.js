@@ -601,7 +601,7 @@ const workspaceLive=workspaceRefresh({state,api,notify,onAccessError:report,
  }
 });
 window.addEventListener('pagehide',()=>workspaceLive.stop(),{once:true});
-const navigationActions=new Set(['laboratory-open-owned','module-open-owned','research-open-owned','help','help-open','record-activity-inspect','record-activity-create','migration-open','review-witnesses','publication-jobs-open-review','record-views','record-view-back','record-view-open','record-read','record-edit','record-read-linked','record-section-jump','workflow-new-run','configure-lab-notebook','specialize-notebook','attach-lab-notebook','module-open','laboratory-samples','preferences','dashboard-settings','integrations','workspace','projects','entries','appearance','website','laboratory','publishing','storage','branding','branding-back','open-project','project-records','filter-notebook','browse-record','edit-entry','open-issue','back-to-records','new-entry','new-project','new-notebook','edit-project','edit-project-template','edit-notebook','rename-notebook','workspace-reorganize','record-history-open','preview','storage-new','storage-open-dialog','storage-copy-dialog','storage-move-dialog','storage-portable-dialog','storage-encrypt-dialog','storage-open-recent','storage-cancel-new','storage-lock','storage-reset-dialog','publish-disconnect','record-link-open','record-backlink-open']);
+const navigationActions=new Set(['laboratory-open-owned','module-open-owned','research-open-owned','help','help-open','record-activity-inspect','record-activity-create','migration-open','review-witnesses','publication-jobs-open-review','record-views','record-view-back','record-view-open','record-read','record-edit','record-read-linked','record-section-jump','workflow-new-run','configure-lab-notebook','specialize-notebook','attach-lab-notebook','module-open','laboratory-samples','preferences','dashboard-settings','integrations','workspace','workspaces','projects','entries','appearance','website','laboratory','publishing','storage','storage-workspaces','branding','branding-back','open-project','project-records','filter-notebook','browse-record','edit-entry','open-issue','back-to-records','new-entry','new-project','new-notebook','edit-project','edit-project-template','edit-notebook','rename-notebook','workspace-reorganize','record-history-open','preview','storage-new','storage-open-dialog','storage-copy-dialog','storage-move-dialog','storage-portable-dialog','storage-encrypt-dialog','storage-open-recent','storage-cancel-new','storage-lock','storage-reset-dialog','publish-disconnect','record-link-open','record-backlink-open']);
 async function action(button){
   if(removingRecord)return;
   if(accessHelp.action(button))return;
@@ -624,7 +624,7 @@ function renderAccess(content){help.stop();appShell.showStandalone(content);acce
 function renderOnboarding() { renderAccess(setupControls.view()); }
 
 const supportsRecordSelection=()=>state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion===21;
-const outlineViewSupported=(page=state.page,moduleId=state.moduleId)=>['record-reader','user-profile','websites','help','entries','projects','project','preferences','dashboard-settings','branding','appearance','laboratory','website','publishing','integrations','review','storage','migration'].includes(page)||page==='workspace'&&dashboard.supportsOutline()||page==='module'&&modules.supportsOutline(moduleId);
+const outlineViewSupported=(page=state.page,moduleId=state.moduleId)=>['record-reader','user-profile','websites','help','entries','projects','project','preferences','dashboard-settings','workspaces','branding','appearance','laboratory','website','publishing','integrations','review','storage','migration'].includes(page)||page==='workspace'&&dashboard.supportsOutline()||page==='module'&&modules.supportsOutline(moduleId);
 async function openRecordReading(id,anchor=null,reading=true){
  const sameRecord=state.page==='record-reader'&&state.selected===id;
  if(!sameRecord&&!await selectRecord(id,{metadataOnly:true}))return false;
@@ -659,6 +659,7 @@ function render() {
   bookReferences.checkContext();
   if(state.access?.locked){userProfile.release();activity.hide();}
   workspaceLive.bind();
+  if(state.page!=='workspaces')storageControls.workspaces.bind();
   releaseCompleteWorkspace();structureUI.bind();recordDetails.sync();branding.sync();if(!['editor','record-reader'].includes(state.page)||state.access?.locked||state.storageUnavailable||state.newWorkspace){recordActivity.stop();workflow.stop();}
   if((state.workspaceOutline||state.recordScope&&state.page!=='editor')&&!state.access?.locked&&!state.storageUnavailable&&!state.newWorkspace&&!outlineViewSupported()){
     void ensureCompleteWorkspace().then(render).catch(report);return;
@@ -673,6 +674,7 @@ function render() {
   designUI.applyToApp();
   if(document.documentElement.dataset.appMode!=='workspace')shellMenu.apply(null);
   if(state.access?.locked){recordWriting.locked();recordValues.locked();dashboard.releaseData();recordList.stop({clear:true});fontLibrary.clear();recordSelectionLoading.close();recordUpdatesLoading.close();recordRecovery.close();recordDrafts.close();$('#dialog').close();$('#notice').hidden=true;renderAccess(storageControls.lockView());return;}
+  if(state.page==='workspaces'&&!state.newWorkspace&&(state.storageUnavailable||!state.book)){renderAccess(storageControls.workspaces.view({standalone:true}));storageControls.workspaces.bind();syncRoute();return;}
   if(state.storageUnavailable&&!state.newWorkspace){renderAccess(storageControls.unavailable());return;}
   if (!state.book || state.newWorkspace) { renderOnboarding(); drafts.track(); return; }
   accessHelp.close();appShell.showWorkspace(renderPage);structureUI.projectStorage.bind();projectDirectoryUI.bind();labBookDirectoryUI.bind();bookAccessSettings.bind();bookStorage.bind();structureUI.projectCreation.bind();structureUI.projectMoves.bind();structureUI.projectOpening.bind();structureUI.projectDeletion.bind();
@@ -681,7 +683,7 @@ function render() {
   previewSurfaces=[...document.querySelectorAll('#design-preview,iframe[title="Publication preview"]')].map(frame=>previewSurface(frame));
   const reviewFrame=document.querySelector('iframe[title="Publication preview"]');
   reviewFrame?.addEventListener('load',()=>{try{const prefix=publicationPreviewUrl(state,state.preview.id),url=new URL(reviewFrame.contentWindow.location.href),path=url.pathname.slice(prefix.length);if(url.origin===location.origin&&url.pathname.startsWith(prefix)&&state.preview.pages.some(p=>p.path===path)){state.preview.currentPage=path;state.preview.url=url.pathname;$('#preview-page').value=path;$('#full-public-preview').href=url.pathname;}}catch{/* A visitor link may lead outside the reviewed site. */}});
-  syncRoute();activity.bind();recordContent.bind();help.bind();workflow.focusSection();recordSections.bind();workflow.bind();recordList.bind();recordActivity.bind();labUI.bind();decorateRecordLinks(document,state.book);
+  syncRoute();storageControls.workspaces.bind();activity.bind();recordContent.bind();help.bind();workflow.focusSection();recordSections.bind();workflow.bind();recordList.bind();recordActivity.bind();labUI.bind();decorateRecordLinks(document,state.book);
   userProfile.bind();
   if (state.page === 'appearance') void designPreview.update();
 }
@@ -701,6 +703,7 @@ function renderPage(){
  case 'user-profile':content=userProfile.view();break;
  case 'help':content=languageControls.view()+help.view();break;
  case 'dashboard-settings':content=dashboard.preferences();break;
+ case 'workspaces':content=storageControls.workspaces.view();break;
  case 'integrations':content=publishUI.view(true);break;
  case 'storage':content=storageControls.view()+renderMediaPolicy();break;
  case 'project':content=structureUI.projectView();break;
@@ -1161,7 +1164,7 @@ async function loadWorkspaceOwned(){
    activity.bind();return;
   }
   state.storage=await api('/api/storage');state.storageUnavailable=state.storage.expectedExisting&&!state.storage.available;
-  if(state.storageUnavailable){render();return;}
+  if(state.storageUnavailable){if(location.hash==='#/workspaces')state.page='workspaces';render();return;}
   let result;
   document.querySelector('#dialog').close();
   workspaceOpening=true;
@@ -1201,12 +1204,13 @@ function refreshRecordResults(){
 }
 function rememberFilters(){history.replaceState({...history.state,observandaIndex:routeIndex,search:state.search,filter:state.filter,recordBrowse:recordBrowse(state.recordBrowse),filterWorkspaceId:state.book.id},'',location.href);}
 function syncRoute(){
-  if(!state.book||state.ownerOperation||restoringRoute||workspaceLoadTask)return;
+  if(!state.book&&state.page!=='workspaces'||state.ownerOperation||restoringRoute||workspaceLoadTask)return;
   const next=routeFor(state);
-  if(location.hash!==next){const push=location.hash.startsWith('#/');if(push)routeIndex++;history[push?'pushState':'replaceState']({observandaIndex:routeIndex,search:state.search,filter:state.filter,recordBrowse:recordBrowse(state.recordBrowse),filterWorkspaceId:state.book.id},'',next);window.scrollTo(0,0);}
+  if(location.hash!==next){const push=location.hash.startsWith('#/');if(push)routeIndex++;history[push?'pushState':'replaceState']({observandaIndex:routeIndex,search:state.search,filter:state.filter,recordBrowse:recordBrowse(state.recordBrowse),filterWorkspaceId:state.book?.id},'',next);window.scrollTo(0,0);}
   else markHistory();
 }
 async function restoreRoute(){
+  if(!state.access?.locked&&!state.newWorkspace&&(state.storageUnavailable||!state.book))state.page=location.hash==='#/workspaces'?'workspaces':'workspace';
   if(state.access?.locked||state.storageUnavailable&&!state.newWorkspace||!state.book||state.newWorkspace){render();markHistory();return;}
   const request=++routeRestoreVersion,requestedRoute=location.hash,current=()=>request===routeRestoreVersion&&location.hash===requestedRoute;
   restoringRoute=true;

@@ -5,7 +5,7 @@ import {createHash} from 'node:crypto';
 import {migrationGrowthFixture} from '../migration-growth-fixture.js';
 test('Workspaces opens a private inventory preview, accounts for blocked items and never imports on open or scan',async({page})=>{
  test.setTimeout(90000);
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-inventory-ui-')),source=path.join(directory,'source'),f=await encryptedFixture(path.join(directory,'app'),sampleNotebook());
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-inventory-ui-')),source=path.join(directory,'source'),f=await encryptedFixture(path.join(directory,'app'),{...sampleNotebook(),title:'workspace'});
  await migrationFixture(source,{creative:true});let scans=0;
  const app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences')}),errors=[];
  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.url().endsWith('/api/migration/inventory'))scans++;});
@@ -21,9 +21,9 @@ test('Workspaces opens a private inventory preview, accounts for blocked items a
   await page.locator('#inventory-filter').selectOption('unsupported');await expect(page.locator('.inventory-objects')).toContainText('extra.txt');await expect(page.locator('.inventory-objects article')).toHaveCount(1);
   await page.setViewportSize({width:390,height:844});await page.screenshot({path:test.info().outputPath('inventory-phone.png'),fullPage:true});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
-  await page.getByRole('button',{name:'Back to workspaces',exact:true}).click();await expect(page.getByRole('heading',{name:'Your workspaces',exact:true})).toBeVisible();
-  await page.getByRole('button',{name:'Close',exact:true}).click();await page.getByLabel('Source folder',{exact:true}).fill(source+'-missing');
-  await page.getByRole('button',{name:'Back to workspaces',exact:true}).click();await expect(page.locator('#leave-dialog')).not.toBeVisible();await page.getByRole('button',{name:'Close',exact:true}).click();
+  await page.getByRole('button',{name:'Back to workspaces',exact:true}).click();await expect(page.getByRole('heading',{name:'Workspaces',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Inspect external logbook',exact:true}).click();await page.getByLabel('Source folder',{exact:true}).fill(source+'-missing');
+  await page.getByRole('button',{name:'Back to workspaces',exact:true}).click();await expect(page.locator('#leave-dialog')).not.toBeVisible();
   expect((await f.workspace.read()).etag).toBe(before.etag);expect(scans).toBe(2);expect(errors).toEqual([]);
  }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:5,retryDelay:100});}
 });

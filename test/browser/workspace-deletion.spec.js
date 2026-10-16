@@ -28,11 +28,11 @@ test('deleting from Workspaces confirms the name, clears local bindings, and lea
  const errors=[];page.on('pageerror',error=>errors.push(error.message));
  try{
   await page.goto(app.url);await page.getByRole('button',{name:'Workspaces',exact:true}).click();
-  const dialog=page.locator('#dialog');await dialog.locator('article').filter({hasText:f.workspace.root}).getByRole('button',{name:'Delete workspace',exact:true}).click();
+  const dialog=page.locator('#dialog');await page.locator('.workspace-management article').filter({hasText:f.workspace.root}).getByRole('button',{name:'Delete workspace',exact:true}).click();
   await expect(dialog.getByRole('heading',{name:'Permanently delete workspace'})).toBeVisible();
   await expect(dialog.getByText(f.workspace.root,{exact:true})).toBeVisible();
   await expect(dialog.getByText("The workspace's dedicated PostgreSQL database will also be removed.",{exact:true})).toBeVisible();
-  await page.screenshot({path:'.local/workspace-delete-dialog.png'});
+  await page.screenshot({path:test.info().outputPath('workspace-delete-dialog.png')});
   await dialog.getByRole('button',{name:'Cancel',exact:true}).click();await access(f.workspace.root);
   await preferences(page,'Storage & access');await page.getByRole('button',{name:'Delete workspace',exact:true}).click();
   await dialog.getByLabel('Type the workspace name to confirm').fill('wrong name');await dialog.getByRole('checkbox').check();await dialog.getByRole('button',{name:'Delete workspace',exact:true}).click();
@@ -46,7 +46,7 @@ test('deleting from Workspaces confirms the name, clears local bindings, and lea
   await expect(access(f.workspace.root)).rejects.toMatchObject({code:'ENOENT'});
   const saved=await readPreferences(prefs);expect(saved.workspace).toBe(null);expect(saved.recent.map(r=>r.path)).toEqual([other.workspace.root]);
   expect(await readFile(f.deviceStore.file)).toEqual(deviceBefore);expect((await other.workspace.read()).book.title).toBe(sampleNotebook().title);
-  await page.getByRole('button',{name:'Workspaces',exact:true}).click();await expect(dialog.getByText(other.workspace.root,{exact:true})).toBeVisible();await expect(dialog.getByText(f.workspace.root,{exact:true})).toHaveCount(0);
+  await page.getByRole('button',{name:'Workspaces',exact:true}).click();await expect(page.locator('.workspace-management').getByText(other.workspace.root,{exact:true})).toBeVisible();await expect(page.locator('.workspace-management').getByText(f.workspace.root,{exact:true})).toHaveCount(0);
   expect(errors).toEqual([]);
  }finally{await app.close();await owner.close();detach();clearVault(f.vault);clearVault(other.vault);clearVault(projectVault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
@@ -61,9 +61,9 @@ for(const interruption of ['frozen','retired'])test('restart exposes unfinished 
  try{
   await page.goto(app.url);await expect(page.getByRole('heading',{name:'Choose a workspace',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Workspaces',exact:true}).click();const dialog=page.locator('#dialog');
-  await expect(dialog.getByRole('heading',{name:'Unfinished workspace deletions',exact:true})).toBeVisible();await dialog.getByRole('button',{name:'Finish deletion',exact:true}).click();
+  await expect(page.locator('.workspace-management').getByRole('heading',{name:'Unfinished workspace deletions',exact:true})).toBeVisible();await page.locator('.workspace-management').getByRole('button',{name:'Finish deletion',exact:true}).click();
   await page.setViewportSize({width:760,height:950});await dialog.getByRole('button',{name:'Finish deletion',exact:true}).click();
-  await expect(dialog).not.toBeVisible({timeout:60000});await expect(page.locator('#create-form')).toBeVisible();
+  await expect(dialog).not.toBeVisible({timeout:60000});await expect(page.locator('.workspace-management').getByRole('heading',{name:'Workspaces',exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:'Unfinished workspace deletions',exact:true})).toHaveCount(0);
   await expect(access(f.workspace.root)).rejects.toMatchObject({code:'ENOENT'});expect(await deletion.list()).toEqual([]);
  }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

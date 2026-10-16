@@ -1,0 +1,16 @@
+{
+  "title": "Workspaces",
+  "saved": "Saved workspace",
+  "workspace": "workspace",
+  "current": "Currently open",
+  "open": "Open {title}",
+  "openExisting": "Open existing workspace",
+  "new": "New workspace",
+  "empty": "No saved workspaces.",
+  "loading": "Loading workspaces...",
+  "failed": "Workspaces could not be loaded.",
+  "retry": "Retry",
+  "external": "External logbooks",
+  "inspect": "Inspect external logbook",
+  "linked": "Open the workspace containing the linked research."
+}

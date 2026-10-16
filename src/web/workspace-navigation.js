@@ -177,6 +177,7 @@ export function workspaceNavigation({state,icon,logosFor}) {
       const structureChanged=updateModules();
       updateTree(initial);updateIdentity();
       active(dashboard,state.page==='workspace');
+      active(settings.querySelector('[data-action="storage-workspaces"]'),state.page==='workspaces');
       active(settings.querySelector('[data-action="preferences"]'),preferencePage(state.page)||state.page==='branding'&&(!state.brandReturn||state.brandReturn.startsWith('#/preferences')));
       if(state.access?.protected){if(!lock.isConnected)settings.append(lock);}else lock.remove();
       return initial||structureChanged;

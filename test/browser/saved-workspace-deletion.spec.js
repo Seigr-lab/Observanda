@@ -33,10 +33,10 @@ test('every saved workspace has deletion; closed device, password and legacy own
  const before=await f.workspace.read(),device=await readFile(f.deviceStore.file),app=await startServer({root:f.workspace.root,port:0,headless:true,preferencesFile:prefs,deviceStore:f.deviceStore}),errors=[],opened=[];
  page.on('pageerror',error=>errors.push(error.message));page.on('request',r=>{if(r.url().endsWith('/api/storage/open'))opened.push(r.url());});
  try{
-  await page.goto(app.url);await page.evaluate(()=>window.deletionTestMarker='same document');await preferences(page,'General');await page.getByLabel('Workspace name',{exact:true}).fill('Still editing active workspace');await page.getByRole('button',{name:'Workspaces',exact:true}).click();
-  const dialog=page.locator('#dialog');await expect(dialog.getByRole('button',{name:'Delete workspace',exact:true})).toHaveCount(4);
+  await page.goto(app.url);await page.evaluate(()=>window.deletionTestMarker='same document');await page.getByRole('button',{name:'Workspaces',exact:true}).click();
+  const dialog=page.locator('#dialog'),management=page.locator('.workspace-management');await expect(management.getByRole('button',{name:'Delete workspace',exact:true})).toHaveCount(4);
   for(const target of targets){
-   await dialog.locator('article').filter({hasText:target.root}).getByRole('button',{name:'Delete workspace',exact:true}).click();
+   await management.locator('article').filter({hasText:target.root}).getByRole('button',{name:'Delete workspace',exact:true}).click();
    if(target.password){
     await expect(dialog.locator('#storage-delete-unlock-form')).toBeVisible();await dialog.getByLabel('Workspace password',{exact:true}).fill('incorrect-password');await dialog.getByRole('button',{name:'Continue',exact:true}).click();
     await expect(dialog.getByRole('button',{name:'Continue',exact:true})).toBeEnabled();await expect(dialog.locator('#storage-delete-unlock-form')).toBeVisible();
@@ -44,18 +44,18 @@ test('every saved workspace has deletion; closed device, password and legacy own
    }
    await expect(dialog.getByRole('heading',{name:'Permanently delete workspace',exact:true})).toBeVisible();await expect(dialog.getByText(target.root,{exact:true})).toBeVisible();
    await dialog.getByLabel('Type the workspace name to confirm').fill(target.title);await dialog.getByRole('checkbox').check();
-   if(target===targets[0])await page.screenshot({path:'.local/saved-workspace-delete-review.png'});
+   if(target===targets[0])await page.screenshot({path:test.info().outputPath('saved-workspace-delete-review.png')});
    await dialog.getByRole('button',{name:'Delete workspace',exact:true}).click();
    if(target===targets[0]){
-    await expect(dialog.getByLabel('Project password',{exact:true})).toBeVisible();await expect(dialog.getByText('Saved private project',{exact:true})).toBeVisible();await dialog.locator('[data-project-unlock-cancel]').click();await expect(dialog.getByRole('heading',{name:'Your workspaces',exact:true})).toBeVisible();await access(target.root);
-    await dialog.locator('article').filter({hasText:target.root}).getByRole('button',{name:'Delete workspace',exact:true}).click();await dialog.getByLabel('Type the workspace name to confirm').fill(target.title);await dialog.getByRole('checkbox').check();await dialog.getByRole('button',{name:'Delete workspace',exact:true}).click();
+    await expect(dialog.getByLabel('Project password',{exact:true})).toBeVisible();await expect(dialog.getByText('Saved private project',{exact:true})).toBeVisible();await dialog.locator('[data-project-unlock-cancel]').click();await expect(dialog).not.toBeVisible();await expect(management.getByRole('heading',{name:'Workspaces',exact:true})).toBeVisible();await access(target.root);
+    await management.locator('article').filter({hasText:target.root}).getByRole('button',{name:'Delete workspace',exact:true}).click();await dialog.getByLabel('Type the workspace name to confirm').fill(target.title);await dialog.getByRole('checkbox').check();await dialog.getByRole('button',{name:'Delete workspace',exact:true}).click();
     for(const [label,password] of [['Project password','Protected project password'],['Lab book password','Protected book password']]){await expect(dialog.getByLabel(label,{exact:true})).toBeVisible();await dialog.getByLabel(label,{exact:true}).fill(password);await dialog.getByRole('button',{name:'Unlock',exact:true}).click();}
    }
-   await expect(dialog.getByRole('heading',{name:'Your workspaces',exact:true})).toBeVisible({timeout:60000});
-   await expect(dialog.getByText(target.root,{exact:true})).toHaveCount(0);await expect(dialog.getByText(f.workspace.root,{exact:true})).toBeVisible();await expect(access(target.root)).rejects.toMatchObject({code:'ENOENT'});
+   await expect(management.getByRole('heading',{name:'Workspaces',exact:true})).toBeVisible({timeout:60000});
+   await expect(management.getByText(target.root,{exact:true})).toHaveCount(0,{timeout:60000});await expect(dialog).not.toBeVisible();await expect(management.getByText(f.workspace.root,{exact:true})).toBeVisible();await expect(access(target.root)).rejects.toMatchObject({code:'ENOENT'});
   }
   expect((await readPreferences(prefs)).workspace).toBe(f.workspace.root);expect(await f.workspace.read()).toEqual(before);expect(await readFile(f.deviceStore.file)).toEqual(device);
   expect(opened).toEqual([]);expect(errors).toEqual([]);expect(await page.evaluate(()=>window.deletionTestMarker)).toBe('same document');
-  await dialog.getByRole('button',{name:'Close',exact:true}).click();await expect(page.locator('#create-form')).toHaveCount(0);await expect(page.getByLabel('Workspace name',{exact:true})).toHaveValue('Still editing active workspace');await expect(page.locator('#leave-dialog')).not.toBeVisible();
+  await preferences(page,'General');await expect(page.locator('#create-form')).toHaveCount(0);await expect(page.getByLabel('Workspace name',{exact:true})).toHaveValue('workspace');await expect(page.locator('#leave-dialog')).not.toBeVisible();
  }finally{await app.close();await owner.close();detach();clearVault(projectVault);clearVault(f.vault);targets.forEach(t=>clearVault(t.vault));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

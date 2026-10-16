@@ -9,7 +9,7 @@ import {Workspace} from '../../src/storage.js';
 import {sampleNotebook} from '../../src/sample.js';
 import {proseText} from '../../src/web/prose-model.js';
 let app,root,parent,book;
-test.beforeEach(async({page})=>{parent=await mkdtemp(path.join(os.tmpdir(),'observanda-editing-'));root=path.join(parent,'book');book=sampleNotebook();await new Workspace(root).create(book);app=await startServer({root,port:0,preferencesFile:path.join(parent,'preferences.json')});await page.goto(app.url);});
+test.beforeEach(async({page})=>{parent=await mkdtemp(path.join(os.tmpdir(),'observanda-editing-'));root=path.join(parent,'book');book={...sampleNotebook(),title:'book'};await new Workspace(root).create(book);app=await startServer({root,port:0,preferencesFile:path.join(parent,'preferences.json')});await page.goto(app.url);});
 test.afterEach(async()=>{await app.close();if(path.dirname(parent)===path.resolve(os.tmpdir()))await rm(parent,{recursive:true,force:true,maxRetries:5,retryDelay:100});});
 const guard=page=>page.getByRole('dialog',{name:'Unsaved changes',exact:true});
 const choose=(page,name)=>guard(page).getByRole('button',{name,exact:true}).click();
@@ -67,7 +67,7 @@ test('inline workspace details protect edits and invalid forms cannot be saved b
 test('workspace switching asks before saving and does not implicitly persist the active draft',async({page})=>{
   const before=await readFile(path.join(root,'observanda.json'),'utf8');await editRecord(page);await page.getByLabel('Summary / context').fill('Do not persist on switching');
   await page.getByRole('button',{name:'Workspaces',exact:true}).click();await choose(page,'Stay here');await expect(page.getByLabel('Summary / context')).toHaveText('Do not persist on switching');
-  await page.getByRole('button',{name:'Workspaces',exact:true}).click();await choose(page,'Discard changes');await expect(page.getByRole('dialog',{name:'Your workspaces',exact:true})).toBeVisible();expect(await readFile(path.join(root,'observanda.json'),'utf8')).toBe(before);
+  await page.getByRole('button',{name:'Workspaces',exact:true}).click();await choose(page,'Discard changes');await expect(page.getByRole('heading',{name:'Workspaces',exact:true})).toBeVisible();expect(await readFile(path.join(root,'observanda.json'),'utf8')).toBe(before);
 });
 
 test('menu placement, size, visibility and ordering are previewable, discardable and persist only when saved',async({page})=>{

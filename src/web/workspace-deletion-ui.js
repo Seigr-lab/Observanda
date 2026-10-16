@@ -31,17 +31,18 @@ export function workspaceDeletionUI({api,accessOwners=operation=>operation(),esc
  async function submit(form,data){
   if(form.id==='storage-delete-unlock-form'){await prepare(form.dataset.path,{username:data.get('username'),password:data.get('password'),recovery:data.get('recovery')});return true;}
   const finish=form.id==='storage-delete-finish-form';if(!finish&&form.id!=='storage-delete-form')return false;
-  if(!finish&&data.get('title')!==review?.title){form.elements.title.setCustomValidity(t('errors','STORAGE_DELETE_CONFIRM'));form.elements.title.reportValidity();form.elements.title.oninput=()=>form.elements.title.setCustomValidity('');return true;}
+  const selectedReview=review;
+  if(!finish&&data.get('title')!==selectedReview?.title){form.elements.title.setCustomValidity(t('errors','STORAGE_DELETE_CONFIRM'));form.elements.title.reportValidity();form.elements.title.oninput=()=>form.elements.title.setCustomValidity('');return true;}
   const progress=operationProgress({className:'storage-progress',host:form,stageText:key=>m(key),presentation:value=>{
    const deleting=value.stage==='delete-files'&&Number.isSafeInteger(value.total),count=value.completed?.toLocaleString()??'0';
    return {path:'',count:deleting?m('count',{count,total:value.total.toLocaleString()}):['delete-check','delete-count','delete-check-owners'].includes(value.stage)?m('checking',{count}):['projects','books'].includes(value.unit)&&Number.isSafeInteger(value.total)?m('ownerCount',{count,total:value.total.toLocaleString(),unit:progressUnit(value.unit)}):'',work:deleting?m('bytes',{size:storageSize(value.activity?.bytes)}):'',detail:'',barLabel:m('delete'),total:value.total??0,completed:value.completed??0};
   }});
   let error,result;
-  const command=()=>{if(!form.isConnected){const dialog=document.getElementById('dialog');dialog.replaceChildren(form);dialog.showModal();}return api(finish?'/api/workspaces/delete/finish':review.selected?'/api/workspaces/delete/confirm':'/api/storage/delete',finish?{id:form.dataset.id,confirmed:true,username:data.get('username'),password:data.get('password'),recovery:data.get('recovery')}:{id:review.id,path:review.source,title:data.get('title'),confirmed:data.get('confirmed')==='on'},{onProgress:progress.update});};
-  try{result=finish?await command():await accessOwners(command,review.selected?{unlock:(access,options)=>api('/api/workspaces/delete/unlock',{id:review.id,...access},{adopt:false,...options})}:{});}
+  const command=()=>{if(!form.isConnected){const dialog=document.getElementById('dialog');dialog.replaceChildren(form);dialog.showModal();}return api(finish?'/api/workspaces/delete/finish':selectedReview.selected?'/api/workspaces/delete/confirm':'/api/storage/delete',finish?{id:form.dataset.id,confirmed:true,username:data.get('username'),password:data.get('password'),recovery:data.get('recovery')}:{id:selectedReview.id,path:selectedReview.source,title:data.get('title'),confirmed:data.get('confirmed')==='on'},{onProgress:progress.update});};
+  try{result=finish?await command():await accessOwners(command,selectedReview.selected?{unlock:(access,options)=>api('/api/workspaces/delete/unlock',{id:selectedReview.id,...access},{adopt:false,...options})}:{});}
   catch(e){error=e;}finally{progress.close();}
-  if(finish||review.selected)await refreshWorkspaces();else await switched();
-  if(error?.name==='AbortError'){if(!finish&&review.selected)await api('/api/workspaces/delete/cancel',{id:review.id},{adopt:false});return true;}
+  if(finish||selectedReview.selected)await refreshWorkspaces({form});else await switched();
+  if(error?.name==='AbortError'){if(!finish&&selectedReview.selected)await api('/api/workspaces/delete/cancel',{id:selectedReview.id},{adopt:false});return true;}
   if(error)notify(error.message+' '+m('retryHint'),true);else notify(m(result.result.cancelled?'cancelled':'done'));
   return true;
  }
