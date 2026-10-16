@@ -22,7 +22,7 @@ import {plainRichText} from '../src/web/rich-text-model.js';
 import {researchReference} from '../src/web/research-reference.js';
 import {copyPlan,copyWorkspace} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
-import {digest,serialize} from '../src/storage-format.js';
+import {legacyPublicationQuery} from './fixtures/legacy-publication-query.js';
 
 async function fixture(t,book){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-appearance-pages-')),f=await encryptedFixture(directory,book);
@@ -98,11 +98,7 @@ test('older flat snapshots and pre-descriptor summaries retain page order and fa
  const f=await fixture(t,book);
  await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{
   const manifest=await store.manifest();
-  for(const row of manifest.records){
-   const slot='record-summary:'+row.id+':'+row.summaryRevision,value=store.decode('state',slot,(await store.db.get('SELECT payload FROM state WHERE slot=$1',slot)).payload);
-   delete value.publicationDescriptor;row.summaryRevision=digest(serialize(value));const prior='record-summary:'+row.id+':'+row.summaryRevision;
-   await store.db.run('INSERT INTO state VALUES ($1,$2)',prior,store.encode('state',prior,value));
-  }
+  for(const row of manifest.records)await legacyPublicationQuery(store,row);
   await store.db.run('UPDATE snapshots SET payload=$1 WHERE id=$2',store.encode('snapshot',f.command.etag,manifest),f.command.etag);
  }));
  const choices=await appearancePreviewChoices(f.workspace,f.command);assert.deepEqual(choices.pages.filter(p=>p.path.startsWith('entries/')).map(p=>p.path),book.entries.map(r=>'entries/'+r.id+'.html'));
@@ -115,7 +111,7 @@ test('cached publication references are verified against their originals',async 
  const book=upgradeNotebook(sampleNotebook()),f=await fixture(t,book),record=book.entries[0];
  await f.workspace.catalogue(store=>store.verify(catalogueDescriptor(book)));
  await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{
-  const row=await store.member(await store.snapshot(),record.id),slot='record-summary:'+record.id+':'+row.summaryRevision;
+  const row=await store.member(await store.snapshot(),record.id),slot='record-query:'+record.id+':'+row.queryRevision;
   const value=store.decode('state',slot,(await store.db.get('SELECT payload FROM state WHERE slot=$1',slot)).payload);
   value.publicationDescriptor.title='Incorrect derived title';
   await store.db.run('UPDATE state SET payload=$1 WHERE slot=$2',store.encode('state',slot,value),slot);

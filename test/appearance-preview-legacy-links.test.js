@@ -11,7 +11,7 @@ import {ResearchCatalogue} from '../src/research-catalogue.js';
 import {ResearchRecords} from '../src/research.js';
 import {appearancePreviewPage} from '../src/appearance-preview.js';
 import {renderPublication} from '../src/publication.js';
-import {digest,serialize} from '../src/storage-format.js';
+import {legacyPublicationQuery} from './fixtures/legacy-publication-query.js';
 import {clearVault} from '../src/encryption.js';
 import {copyPlan,encryptedCopy} from '../src/locations.js';
 import {createAccess,takeCreatedVault} from '../src/access.js';
@@ -30,12 +30,7 @@ test('older preview backlink discovery retains only related public descriptors a
   const etag=(await f.workspace.outline()).etag;
   await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{
    const manifest=await store.manifest();
-   for(const row of manifest.records){
-    const slot='record-summary:'+row.id+':'+row.summaryRevision,value=store.decode('state',slot,(await store.db.get('SELECT payload FROM state WHERE slot=$1',slot)).payload);
-    delete value.publicationDescriptor;if(missingReferences)delete value.referenceTargets;
-    row.summaryRevision=digest(serialize(value));const older='record-summary:'+row.id+':'+row.summaryRevision;
-    await store.db.run('INSERT INTO state VALUES ($1,$2)',older,store.encode('state',older,value));
-   }
+   for(const row of manifest.records)await legacyPublicationQuery(store,row,{missingReferences});
    await store.db.run('UPDATE snapshots SET payload=$1 WHERE id=$2',store.encode('snapshot',etag,manifest),etag);
   }));
   const original=ResearchCatalogue.prototype.record,loaded=[];
