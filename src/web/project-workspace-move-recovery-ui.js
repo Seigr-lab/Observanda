@@ -35,7 +35,9 @@ export function projectWorkspaceMoveRecoveryUI({state,api,esc,field,accessProjec
   view:()=>'<section data-project-workspace-moves hidden></section>',
   bind(){sync();const shown=visible(),entered=shown&&!visibleBefore;visibleBefore=shown;if(shown){if(!loading&&(entered||!loaded))void load();else paint();}},
   completed(result,path){sync();notice={path,title:path.split(/[\\/]/).at(-1)};paint();},
-  async action(node){const form=node.closest('[data-move]'),entry=items.find(item=>item.id===form?.dataset.move);
+  async action(node){
+   const name=node.dataset.action;if(name!=='project-storage-target-unlock'&&!name?.startsWith('project-workspace-moves-'))return false;
+   const form=node.closest?.('[data-move]'),entry=items.find(item=>item.id===form?.dataset.move);
    if(node.dataset.action==='project-storage-target-unlock'&&entry){await targets.unlock(entry,form);if(entry.target)await run(entry);return true;}
    if(!node.dataset.action?.startsWith('project-workspace-moves-'))return false;
    if(node.dataset.action==='project-workspace-moves-refresh'||node.dataset.action==='project-workspace-moves-more'){await load(node.dataset.action.endsWith('-more'));return true;}if(entry)await run(entry);return true;
