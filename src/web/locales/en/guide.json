@@ -362,7 +362,7 @@
           "id":"project-websites",
           "title":"Separate project websites",
           "paragraphs":[
-            "Open a project and choose {ui:websiteSites.projectWebsites}, or choose {ui:websiteSites.title} above the website editor. Use {ui:websiteSites.new} to name a website and choose its project. A project can have several websites, such as a research journal and a Help site. Each website can use records from that project and its subprojects.",
+            "Choose {ui:websiteSites.title} above the website editor, then {ui:websiteSites.new} to name a website. Create separate websites for different audiences or destinations, such as a research journal and a Help site. Choose content separately for each website.",
             "Each website owns its pages, design, public content choices, publishing destination and retained editions. New websites start with no records selected for publication. Choose records in Public content and save the website. These choices do not change your research originals or another website's selection.",
             "The website name stays visible above its editor and publishing controls. Open {ui:websiteSites.destination} to choose a GitHub repository and branch or a dedicated SSH hosting directory for this website. Use a separate repository, website folder or hosting directory for each independent site. Review and publish each edition explicitly; creating or switching websites does not deploy anything.",
             "The existing workspace website remains available in {ui:websiteSites.title}. To create another project website, return to that list. Website changes saved elsewhere can be refreshed through the Observanda logo; unsaved edits stay protected."

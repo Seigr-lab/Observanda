@@ -8,7 +8,8 @@ import {researchId} from './web/research-reference.js';
 import {SnapshotIndex} from './snapshot-index.js';
 
 // A website owns presentation and selection. Research originals keep their own
-// revisions; the shared catalogue transaction commits each website edit.
+// revisions. New websites belong to the workspace, independently of research
+// projects and lab books; source selection does not establish ownership.
 export class WebsiteSites{
  constructor(workspace){this.workspace=workspace;}
  async list(){const s=await this.workspace.outline();return {workspaceId:s.metadata.id,etag:s.etag,sites:(s.metadata.websites??[]).map(({id,name,projectId})=>({id,name,projectId}))};}
@@ -34,17 +35,17 @@ export class WebsiteSites{
   });
   return {site,etag:s.etag,book,outline:true,recordRevisions:{},notebookCounts,total,selectionProjects};
  }
- async change({workspaceId,etag,operation,id,name,projectId}){
+ async change({workspaceId,etag,operation,id,name,projectId=null}){
+  if(operation==='create'&&(this.workspace.projectId||this.workspace.labBookId||projectId!==null))throw new AppError('INVALID');
   return this.workspace.withLock(()=>this.workspace.catalogue(async store=>{
    const head=await store.head(),snapshot=await store.snapshot(head);
    if(snapshot.metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');if(etag!==head)throw new AppError('CONFLICT');
    const sites=structuredClone(snapshot.metadata.websites??[]);
    if(operation==='create'){
-    const project=snapshot.metadata.projects.find(p=>p.id===projectId);if(!project)throw new AppError('INVALID');
     const document=websiteDocument(snapshot.metadata);
     document.website={...websiteDefaults(),title:name,description:'',home:emptyHomepage(),design:siteLayoutDefaults(),assets:[],layouts:[],templates:[],typography:{},presentation:presentationDefaults(),palette:{},logoId:null,logoAlt:'',footer:'',navigation:[]};
     document.pages=[];document.branding=[];
-    id=randomUUID();sites.push({id,name,projectId,document,projects:[{id:projectId,share:true,logoId:project.logoId}],selection:{defaultShare:false,includeProjects:[],records:[]}});
+    id=randomUUID();sites.push({id,name,projectId:null,document,projects:snapshot.metadata.projects.map(({id,logoId})=>({id,share:true,logoId})),selection:{defaultShare:false,includeProjects:[],records:[]}});
    }else if(operation==='rename'){
     const site=sites.find(s=>s.id===id);if(!site)throw new AppError('NOT_FOUND');site.name=name;
    }else throw new AppError('INVALID');

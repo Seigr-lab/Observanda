@@ -703,7 +703,7 @@ function renderPage(){
  case 'dashboard-settings':content=dashboard.preferences();break;
  case 'integrations':content=publishUI.view(true);break;
  case 'storage':content=storageControls.view()+renderMediaPolicy();break;
- case 'project':content=sites.projectButton(state.project)+structureUI.projectView();break;
+ case 'project':content=structureUI.projectView();break;
  case 'laboratory':content=labUI.view();break;
  case 'publishing':content=publishUI.view();break;
  case 'branding':content=branding.view();break;
@@ -813,7 +813,6 @@ async function rawAction(button) {
   if(name?.startsWith('project-deletion-'))return structureUI.projectDeletion.action(button);
   if(name==='project-open-folder'||name?.startsWith('project-opening-'))return structureUI.projectOpening.action(button);
   if(name?.startsWith('project-creation-'))return structureUI.projectCreation.action(button);
-  if(await sites.choiceAction(button))return;
   if(await recordDestination.action(button))return;
   if(await structureUI.projectStorage.choiceAction(button))return;
   if(await bookStorage.choiceAction(button))return;

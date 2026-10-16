@@ -41,7 +41,7 @@ export function projectContexts({state,api,adopt,access=operation=>operation(),a
    const name=node.dataset.action;
    if(['open-project','project-records','edit-project','edit-project-template'].includes(name)){
     const id=node.dataset.id;if(researchId(id)&&(state.projectOwner?.projectId!==id||state.projectOwner?.labBookId))await enter(!isOwned(id)&&(rootBook??state.book)?.projects.some(p=>p.id===id)?null:id);
-   }else if(name==='site-list'&&researchId(node.dataset.project)){const id=node.dataset.project;await enter(!isOwned(id)&&(rootBook??state.book)?.projects.some(p=>p.id===id)?null:id);}
+   }else if(name==='site-list'){await enter(null);}
    else if(['filter-notebook','edit-notebook','rename-notebook','configure-lab-notebook','specialize-notebook'].includes(name)&&bookOwner(node.dataset.id)){const owner=bookOwner(node.dataset.id);await enter(owner.projectId,owner.labBookId);}
    else if(name==='new-notebook'&&researchId(node.dataset.id)&&isOwned(node.dataset.id))await enter(node.dataset.id);
    else if(state.projectOwner&&name==='filter-notebook'&&rootBook?.notebooks.some(n=>n.id===node.dataset.id))await enter(null);

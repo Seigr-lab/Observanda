@@ -1,3 +1,4 @@
+import {websiteDocument} from '../src/web/website-sites-model.js';
 import {ReviewIdentity,reviewHash} from '../src/security/review-exchange.js';
 import {TestDeviceStore} from './device-fixture.js';
 import {retainedDraft} from './fixtures/record-draft-review.js';
@@ -446,11 +447,12 @@ test('addressed evidence reads enforce the owning project grant and retain exact
 });
 
 
-test('project websites publish selected editions while unrelated owners remain writable',{timeout:180000},async t=>{
- const f=await fixture(t),sourceHead=(await f.workspace.outline()).etag,sourceDb=await f.workspace.openCatalogue();let release;
+test('previously stored scoped websites remain readable while new websites cannot be created under research projects',{timeout:180000},async t=>{
+ const f=await fixture(t),sourceHead=(await f.workspace.outline()).etag,sourceDb=await f.workspace.openCatalogue(),site=randomUUID();let release;
+ await f.a.storage.update(book=>{book.websites=[{id:site,name:'Previously stored site',projectId:f.a.id,document:websiteDocument(book),projects:book.projects.map(({id,logoId})=>({id,logoId,share:true})),selection:{defaultShare:false,includeProjects:[],records:[]}}];return book;});
  try{
   await sourceDb.run('BEGIN');await sourceDb.lock();
-  const created=await result(await f.project(f.a,'websites/change',{workspaceId:f.a.book.id,etag:(await f.a.storage.outline()).etag,operation:'create',name:'Independent research website',projectId:f.a.id})),site=created.id;
+  await result(await f.project(f.a,'websites/change',{workspaceId:f.a.book.id,etag:(await f.a.storage.outline()).etag,operation:'create',name:'New website'}),422);
   const opened=await result(await f.project(f.a,'websites/open',{id:site}));
   const edit={workspaceId:f.a.book.id,baseEtag:opened.etag,metadata:{website:{...opened.book.website,footer:'PROJECT_A_PUBLIC_FOOTER'}},projects:[],changes:[],removed:[],selection:{defaultShare:false,includeProjects:[],records:[{id:f.a.book.entries[0].id,share:true,attachments:[]}]}};
   const saved=await result(await f.project(f.a,'websites/save',{id:site,command:edit})),headers={'X-Observanda-Website':site};

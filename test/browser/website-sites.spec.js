@@ -9,12 +9,12 @@ import {encryptedFixture} from './encrypted-fixture.js';
 import {navigate} from './preferences-helper.js';
 import {task,openPageSettings,chooseWebsitePage} from './composer-helper.js';
 
-test('create two project websites, edit and publish their own saved content without changing research originals',async({page},info)=>{
+test('create two independent websites, edit and publish their own saved content without changing research originals',async({page},info)=>{
  test.setTimeout(120000);
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-sites-ui-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json'),port:0});
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  const original=await f.workspace.read(),record=original.book.entries[0],project=original.book.projects.find(p=>original.book.notebooks.find(n=>n.id===record.notebookId).projectId===p.id);
- const create=async name=>{await page.getByRole('button',{name:'New website',exact:true}).click();await page.getByLabel('Website name',{exact:true}).fill(name);await page.getByLabel('Project',{exact:true}).selectOption(project.id);await page.getByRole('button',{name:'Create website',exact:true}).click();await expect(page.locator('.website-site-context')).toContainText(name);};
+ const create=async name=>{await page.getByRole('button',{name:'New website',exact:true}).click();await page.getByLabel('Website name',{exact:true}).fill(name);await expect(page.getByLabel('Project',{exact:true})).toHaveCount(0);await page.getByRole('button',{name:'Create website',exact:true}).click();await expect(page.locator('.website-site-context')).toContainText(name);};
  const manager=async()=>page.locator('.website-site-context').getByRole('button',{name:'Websites',exact:true}).click();
  const open=async name=>{await page.locator('section.panel').filter({has:page.getByRole('heading',{name,exact:true})}).getByRole('button',{name:'Website editor',exact:true}).click();await expect(page.locator('.website-site-context')).toContainText(name);};
  try{

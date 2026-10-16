@@ -75,7 +75,7 @@ test('moving between projects removes old website membership and overrides desti
  await f.workspace.update(book=>{book.projects.push(project);book.notebooks.find(n=>n.id===f.notebook.id).projectId=project.id;return book;});
  const sites=new WebsiteSites(f.workspace),ids=[];
  for(const projectId of [f.book.projects[0].id,project.id]){
-  const created=await sites.change({workspaceId:f.book.id,etag:(await f.workspace.outline()).etag,operation:'create',name:'Site '+ids.length,projectId});ids.push(created.id);
+  const created=await sites.change({workspaceId:f.book.id,etag:(await f.workspace.outline()).etag,operation:'create',name:'Site '+ids.length});ids.push(created.id);
   const current=await sites.read(created.id);await sites.save(created.id,{workspaceId:f.book.id,baseEtag:current.etag,metadata:{},projects:[],changes:[],removed:[],selection:{defaultShare:false,includeProjects:[projectId],records:[]}});
  }
  const before=(await f.workspace.outline()).etag,source=websiteWorkspace(f.workspace,ids[0]),destination=websiteWorkspace(f.workspace,ids[1]);

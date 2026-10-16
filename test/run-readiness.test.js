@@ -52,7 +52,7 @@ test('manual receipts pin record and evidence, reject stale forms, replay lost r
 test('receipt edition selection respects each website, exact record revisions and completed preparations',async t=>{
  const f=await intakeFixture(t),ready=new RunReadiness(f.ws),sites=new WebsiteSites(f.ws),projectId=f.book.notebooks.find(n=>n.id===f.record.notebookId).projectId;
  const create=async(name,include)=>{
-  const {id}=await sites.change({workspaceId:f.book.id,etag:(await f.ws.outline()).etag,operation:'create',name,projectId}),current=await sites.read(id);
+  const {id}=await sites.change({workspaceId:f.book.id,etag:(await f.ws.outline()).etag,operation:'create',name}),current=await sites.read(id);
   await sites.save(id,{workspaceId:f.book.id,baseEtag:current.etag,metadata:{},projects:[],changes:[],removed:[],selection:{defaultShare:false,includeProjects:[],records:[{id:include.id,share:true,attachments:[]}]}});return id;
  };
  const a=await create('Journal',f.record),b=await create('Different selection',f.book.entries[1]);
@@ -73,7 +73,7 @@ test('receipt edition selection respects each website, exact record revisions an
 
 test('continuing intake replays once, amends an analysis and regenerates selected output while retaining the earlier edition',async t=>{
  const f=await intakeFixture(t),materials=new ResearchMaterials(f.ws),records=new ResearchRecords(f.ws,{}),ready=new RunReadiness(f.ws),sites=new WebsiteSites(f.ws),projectId=f.book.notebooks.find(n=>n.id===f.record.notebookId).projectId;
- const {id:siteId}=await sites.change({workspaceId:f.book.id,etag:(await f.ws.outline()).etag,operation:'create',name:'Selected journal',projectId}),site=await sites.read(siteId);
+ const {id:siteId}=await sites.change({workspaceId:f.book.id,etag:(await f.ws.outline()).etag,operation:'create',name:'Selected journal'}),site=await sites.read(siteId);
  await sites.save(siteId,{workspaceId:f.book.id,baseEtag:site.etag,metadata:{},projects:[],changes:[],removed:[],selection:{defaultShare:false,includeProjects:[],records:[{id:f.record.id,share:true,attachments:[]}]}});
  const releases=new PublicationJobs(websiteWorkspace(f.ws,siteId)),statementId=randomUUID(),editions=[],inputs=[];
  for(const number of [1,2]){

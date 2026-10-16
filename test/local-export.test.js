@@ -87,7 +87,7 @@ test('indexed export ownership and an interrupted journal survive fresh-key work
 test('independent websites retain isolated export reviews and cannot adopt each other\'s output files',async t=>{
  const f=await fixture(t),sites=new WebsiteSites(f.workspace),initial=await f.workspace.read(),record=initial.book.entries[0],projectId=initial.book.notebooks.find(n=>n.id===record.notebookId).projectId,ids=[];
  for(const name of ['Project journal','Project guide']){
-  const created=await sites.change({workspaceId:initial.book.id,etag:(await f.workspace.outline()).etag,operation:'create',name,projectId}),current=await sites.read(created.id);ids.push(created.id);
+  const created=await sites.change({workspaceId:initial.book.id,etag:(await f.workspace.outline()).etag,operation:'create',name}),current=await sites.read(created.id);ids.push(created.id);
   await sites.save(created.id,{workspaceId:initial.book.id,baseEtag:current.etag,metadata:{},projects:[],changes:[],removed:[],selection:{defaultShare:false,includeProjects:[],records:[{id:record.id,share:true,attachments:[]}]}});
  }
  const [a,b]=ids.map(id=>websiteWorkspace(f.workspace,id)),etag=(await f.workspace.outline()).etag,first=await new PublicationJobs(a).inline({etag}),second=await new PublicationJobs(b).inline({etag}),sa=new LocalExport(a),sb=new LocalExport(b);

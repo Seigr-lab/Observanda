@@ -3,7 +3,6 @@
   "workspace": "Workspace website",
   "new": "New website",
   "name": "Website name",
-  "project": "Project",
   "create": "Create website",
   "rename": "Rename website",
   "saveName": "Save name",
@@ -11,10 +10,9 @@
   "editor": "Website editor",
   "publishing": "Publishing",
   "destination": "Publishing destination",
-  "empty": "No websites for this project yet.",
-  "help": "Each website has its own design, public content selection and publishing destination.",
+  "empty": "No websites yet.",
+  "help": "Create websites with their own designs, selected lab books and publishing destinations.",
   "private": "New websites start with no records selected for publication.",
-  "projectWebsites": "Project websites",
   "choose": "Website",
   "changed": "The selected website changed. Reopen it before continuing.",
   "ownerWebsite": "{name} website",
@@ -24,6 +22,5 @@
   "directoryRange": "{first} to {last} of {total} websites",
   "directoryPrevious": "Previous websites",
   "directoryNext": "Next websites",
-  "directoryRetry": "Retry websites",
-  "chooseProject": "Choose a project"
+  "directoryRetry": "Retry websites"
 }

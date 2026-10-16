@@ -64,7 +64,7 @@ test('pending media originals and independent project editions participate in th
  const prepared=await imports.prepare(pending.id,randomUUID(),{});await f.workspace.withLock(()=>imports.commit(pending.id,prepared));
  await rejectMissing((await new MediaStore(f.workspace.root,f.vault).get(pending.id,{streamed:true})).bytes.file,'unplaced-display');
  const sites=new WebsiteSites(f.workspace),initial=await f.workspace.outline(),projectId=initial.metadata.projects[0].id;
- const site=await sites.change({workspaceId:initial.metadata.id,etag:initial.etag,operation:'create',name:'Separate project site',projectId});
+ const site=await sites.change({workspaceId:initial.metadata.id,etag:initial.etag,operation:'create',name:'Separate project site'});
  const selected=await sites.read(site.id);
  await sites.save(site.id,{workspaceId:initial.metadata.id,baseEtag:selected.etag,metadata:{},projects:[],changes:[],removed:[],selection:{defaultShare:false,includeProjects:[projectId],records:[]}});
  const scoped=websiteWorkspace(f.workspace,site.id),edition=await new PublicationJobs(scoped).inline({etag:(await f.workspace.outline()).etag});

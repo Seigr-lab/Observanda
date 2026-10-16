@@ -69,6 +69,6 @@ export class ProjectSourceAuthority{
   const value=(metadata[kind==='notebook'?'notebooks':'websites']??[]).find(item=>item.id===id);
   if(value)return {id,projectId:value.projectId,ambiguous:false};
   const saved=await this.read('project-source-scope:'+kind+':'+id);if(!saved)return null;
-  if(!exact(saved,['id','projectId','ambiguous'])||saved.id!==id||!researchId(saved.projectId)||typeof saved.ambiguous!=='boolean')throw new AppError('CATALOGUE_DAMAGED');return saved;
+  if(!exact(saved,['id','projectId','ambiguous'])||saved.id!==id||!(kind==='website'&&saved.projectId===null)&&!researchId(saved.projectId)||typeof saved.ambiguous!=='boolean')throw new AppError('CATALOGUE_DAMAGED');return saved;
  }
 }

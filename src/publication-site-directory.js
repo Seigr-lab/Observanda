@@ -19,7 +19,7 @@ export async function publicationSiteDirectory(pages,client,command,{scope=null,
   const ownerLabel=owner.labBookId?[owner.projectTitle,metadata.notebooks.find(book=>book.id===owner.labBookId)?.title??metadata.title].filter(Boolean).join(' / '):owner.projectTitle??metadata.title;
   const add=(siteId,name)=>{const item={key:owner.workspaceId+'/'+(siteId??'default'),workspaceId:owner.workspaceId,projectId:owner.projectId,labBookId:owner.labBookId,siteId,name,ownerLabel};if((name+' '+ownerLabel).toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))page.add(item);};
   if(!localProjectId)add(null,metadata.title);
-  for(const site of metadata.websites??[])if(selected.has(site.projectId))add(site.id,site.name);
+  for(const site of metadata.websites??[])if(site.projectId===null&&!localProjectId||selected.has(site.projectId))add(site.id,site.name);
  }),{workspaceId,query:{projectId},scope,signal});
  if(session.snapshots&&Object.keys(session.snapshots).some(id=>!Object.hasOwn(snapshots,id)))throw new AppError('RECORD_QUERY_CURSOR');
  signal?.throwIfAborted();const result=page.finish(),items=result.records,offset=session.offset,encode=pages.retain(session,snapshots);

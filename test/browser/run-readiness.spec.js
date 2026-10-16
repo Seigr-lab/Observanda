@@ -9,7 +9,7 @@ import {PublicationJobs} from '../../src/publication-jobs.js';
 test('manual readiness selects project editions, exposes source receipts and detects new evidence without an importer',async({page},testInfo)=>{
  test.setTimeout(60000);let cleanup,releasePolicy;const f=await intakeFixture({after:fn=>{cleanup=fn;}}),sites=new WebsiteSites(f.ws),ids=[],projectId=f.book.notebooks.find(n=>n.id===f.record.notebookId).projectId;
  for(const [name,record] of [['Research journal',f.record],['Unrelated website',f.book.entries[1]]]){
-  const site=await sites.change({workspaceId:f.book.id,etag:(await f.ws.outline()).etag,operation:'create',name,projectId}),current=await sites.read(site.id);ids.push(site.id);
+  const site=await sites.change({workspaceId:f.book.id,etag:(await f.ws.outline()).etag,operation:'create',name}),current=await sites.read(site.id);ids.push(site.id);
   await sites.save(site.id,{workspaceId:f.book.id,baseEtag:current.etag,metadata:{},projects:[],changes:[],removed:[],selection:{defaultShare:false,includeProjects:[],records:[{id:record.id,share:true,attachments:[]}]}});
   await new PublicationJobs(websiteWorkspace(f.ws,site.id)).inline({etag:(await f.ws.outline()).etag});
  }

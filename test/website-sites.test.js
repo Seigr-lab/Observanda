@@ -5,7 +5,7 @@ import path from 'node:path';
 import os from 'node:os';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {sampleNotebook} from '../src/sample.js';
-import {upgradeNotebook} from '../src/model.js';
+import {upgradeNotebook,createNotebook} from '../src/model.js';
 import {WebsiteSites} from '../src/website-sites.js';
 import {websiteWorkspace,websiteJobQueue} from '../src/website-workspace.js';
 import {publicationSource} from '../src/publication-source.js';
@@ -24,11 +24,11 @@ import {websiteSelectionDraft} from '../src/web/website-selection.js';
 
 async function run(queue){const job=await queue.claim();const output=await queue.definition(job).prepare(job,{signal:new AbortController().signal,progress:async()=>{}});return queue.complete(job.id,job.lease.token,output);}
 
-test('project websites persist separate designs, selections, destinations and retained editions',async t=>{
+test('independent websites persist separate designs, selections, destinations and retained editions',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-sites-')),book=upgradeNotebook(sampleNotebook()),f=await encryptedFixture(directory,book),sites=new WebsiteSites(f.workspace),jobs=workspaceJobs(f.workspace);
  t.after(async()=>{await jobs.worker.stop();clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const original=await f.workspace.read(),projectId=book.notebooks.find(n=>n.id===book.entries[0].notebookId).projectId;
- const create=async name=>sites.change({workspaceId:book.id,etag:(await f.workspace.outline()).etag,operation:'create',name,projectId});
+ const create=async name=>sites.change({workspaceId:book.id,etag:(await f.workspace.outline()).etag,operation:'create',name});
  const a=(await create('Project journal')).id,b=(await create('Help website')).id;
  const read=await sites.read(a);assert.equal(read.book.projects[0].id,projectId);assert.ok(read.outline);
  const selected=book.entries.find(r=>read.book.notebooks.some(n=>n.id===r.notebookId));
@@ -54,7 +54,7 @@ test('project websites persist separate designs, selections, destinations and re
  assert.equal((await new WebsiteSites(f.workspace).read(a)).book.website.footer,'Journal footer');assert.equal((await sites.read(b)).book.website.footer,'');
 });
 
-test('separate projects reject cross-site content and review IDs, and jobs deploy to their pinned repositories after restart',async t=>{
+test('independent websites isolate selections and review IDs and deploy to pinned repositories after restart',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-project-sites-')),book=upgradeNotebook(sampleNotebook());
  const project={...structuredClone(book.projects[0]),id:randomUUID(),title:'Other project',parentId:null},notebook={...structuredClone(book.notebooks[0]),id:randomUUID(),projectId:project.id};
  const other={...structuredClone(book.entries[0]),id:randomUUID(),notebookId:notebook.id,title:'Other project secret',body:'OTHER_PROJECT_PRIVATE',share:true,sections:[],attachments:[],figures:[],relations:[]};
@@ -64,10 +64,10 @@ test('separate projects reject cross-site content and review IDs, and jobs deplo
  let jobs=workspaceJobs(f.workspace,publisher),app=null;
  t.after(async()=>{if(app)await app.close();await jobs.worker.stop();clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const ids=[];for(const [i,p] of [book.projects[0],project].entries()){
-  const created=await sites.change({workspaceId:book.id,etag:(await f.workspace.outline()).etag,operation:'create',name:'Site '+i,projectId:p.id});ids.push(created.id);
+  const created=await sites.change({workspaceId:book.id,etag:(await f.workspace.outline()).etag,operation:'create',name:'Site '+i});ids.push(created.id);
   const current=await sites.read(created.id),command={workspaceId:book.id,baseEtag:current.etag,metadata:{},projects:[],changes:[],removed:[],selection:{defaultShare:false,includeProjects:[p.id],records:[]}};
   await sites.save(created.id,command);
-  if(i===0){const etag=(await f.workspace.outline()).etag;await assert.rejects(sites.save(created.id,{...command,baseEtag:etag,selection:{defaultShare:false,includeProjects:[],records:[{id:other.id,share:true,attachments:[]}]}}),{code:'INVALID'});assert.equal((await f.workspace.outline()).etag,etag);}
+  if(i===0){const etag=(await f.workspace.outline()).etag;await assert.rejects(sites.save(created.id,{...command,baseEtag:etag,selection:{defaultShare:false,includeProjects:[],records:[{id:randomUUID(),share:true,attachments:[]}]}}),{code:'INVALID'});assert.equal((await f.workspace.outline()).etag,etag);}
  }
  const scoped=ids.map(id=>websiteWorkspace(f.workspace,id)),publishers=scoped.map(w=>websitePublisher(publisher,w));
  const etag=(await f.workspace.outline()).etag;
@@ -100,4 +100,33 @@ test('separate projects reject cross-site content and review IDs, and jobs deplo
  await records.remove({workspaceId:book.id,recordId:other.id,expectedRevision:recordRevision(now)});
  assert.ok((await sites.read(ids[0])).site.selection.records.every(r=>r.id!==other.id));
  assert.ok(await new PublicationJobs(scoped[1]).read(prepared[1].result.id));
+});
+
+
+test('websites can be created before research projects exist and have no fixed count ceiling',async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-independent-sites-')),book=createNotebook('Empty workspace',''),f=await encryptedFixture(directory,book),sites=new WebsiteSites(f.workspace);
+ t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ const head=await f.workspace.outline();assert.deepEqual(head.metadata.projects,[]);
+ const created=await sites.change({workspaceId:book.id,etag:head.etag,operation:'create',name:'Public journal'}),first=await sites.read(created.id);
+ assert.equal(first.site.projectId,null);assert.deepEqual(first.book.notebooks,[]);assert.equal(first.total,0);
+ await f.workspace.update(value=>{value.websites=Array.from({length:100},(_,i)=>({...structuredClone(first.site),id:randomUUID(),name:'Website '+i}));return value;});
+ const last=await sites.change({workspaceId:book.id,etag:(await f.workspace.outline()).etag,operation:'create',name:'Website 101'});
+ assert.equal(last.sites.length,101);assert.equal((await sites.read(last.id)).site.name,'Website 101');
+ await assert.rejects(sites.change({workspaceId:book.id,etag:last.etag,operation:'create',name:'Wrong owner',projectId:randomUUID()}),{code:'INVALID'});
+ assert.equal((await f.workspace.outline()).etag,last.etag);
+});
+
+test('one independent website combines lab books from different projects without changing another website',async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-mixed-sites-')),book=sampleNotebook(),project={...structuredClone(book.projects[0]),id:randomUUID(),title:'Second research project'},notebook={...structuredClone(book.notebooks[0]),id:randomUUID(),projectId:project.id,title:'Second lab book'},record={...structuredClone(book.entries[0]),id:randomUUID(),notebookId:notebook.id,title:'Selected from a second book'};
+ book.projects.push(project);book.notebooks.push(notebook);book.entries.push(record);
+ const f=await encryptedFixture(directory,book),sites=new WebsiteSites(f.workspace);
+ t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ const before=await f.workspace.read(),ids=[];
+ for(const name of ['Combined website','Different website'])ids.push((await sites.change({workspaceId:book.id,etag:(await f.workspace.outline()).etag,operation:'create',name})).id);
+ const original=book.entries[0],read=await sites.read(ids[0]);
+ await sites.save(ids[0],{workspaceId:book.id,baseEtag:read.etag,metadata:{},projects:[],changes:[],removed:[],selection:{defaultShare:false,includeProjects:[],records:[original,record].map(({id})=>({id,share:true,attachments:[]}))}});
+ const etag=(await f.workspace.outline()).etag,selected=await publicationSource(websiteWorkspace(f.workspace,ids[0]),{etag});
+ assert.deepEqual(new Set(selected.entries.map(r=>r.id)),new Set([original.id,record.id]));
+ assert.equal((await publicationSource(websiteWorkspace(f.workspace,ids[1]),{etag})).entries.length,0);
+ assert.deepEqual((await f.workspace.read()).book.entries,before.book.entries);
 });
