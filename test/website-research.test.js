@@ -32,7 +32,7 @@ for(const count of [65,650])test('website selections and media discovery stay bo
  const media=await service.run('media',{...base,search:'',cursor:null});assert.equal(media.items.length,12);assert.equal(reads.length,12);reads.length=0;
  const details=await service.run('record',{...base,recordId:book.entries[0].id});assert.equal(details.record.body,undefined);assert.deepEqual(details.record.attachments,book.entries[0].attachments);assert.deepEqual(reads,[book.entries[0].id]);reads.length=0;
  const selection={includeProjects:[projectId],records:[{id:book.entries[0].id,share:false,attachments:[]},{id:book.entries[1].id,share:null,attachments:[{id:book.entries[1].attachments[0].id,share:true}]}]};
- const proposed=await service.run('summary',{...base,selection,search:''});assert.equal(proposed.entries,count-1);assert.equal(proposed.media,1);assert.deepEqual(reads,[]);
+ const proposed=await service.run('summary',{...base,selection,search:''});assert.equal(proposed.entries,count-1);assert.equal(proposed.media,1);assert.deepEqual(reads,[]);assert.deepEqual(proposed.selectionProjects,{[book.entries[0].id]:projectId,[book.entries[1].id]:projectId});
  const command={workspaceId:book.id,baseEtag:outline.etag,metadata:{website:{...outline.metadata.website,footer:'A reviewed footer'}},projects:[],changes:[],removed:[],selection,response:'outline'};
  const beforeCommit=performance.now(),saved=await new WorkspaceEdits(f.workspace,{}).save(command),commitMs=performance.now()-beforeCommit;assert.equal(saved.outline,true);assert.equal(saved.book.entries.length,0);assert.equal(reads.length,count);assert.ok(commitMs<30000);
  const source=await f.workspace.catalogue(store=>store.snapshot(saved.etag));assert.equal(source.metadata.website.footer,'A reviewed footer');

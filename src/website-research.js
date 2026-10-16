@@ -40,10 +40,10 @@ export class WebsiteResearch{
    }
    if(operation==='summary'){
     const projects=new Map(metadata.projects.map(p=>[p.id,{id:p.id,total:0,included:0,media:0,includedMedia:0,matches:!needle||p.title.toLocaleLowerCase().includes(needle)}]));
-    const selectedNotebooks=new Set();let media=0,entries=0;
+    const selectedNotebooks=new Set(),selectionProjects={},overrides=new Set(command.selection.records.map(row=>row.id));let media=0,entries=0;
     for await(const record of documents(store.members(snapshot,{signal}))){
      signal?.throwIfAborted();const projectId=projectIds.get(record.notebookId),group=projects.get(projectId);if(!group)throw new AppError('CATALOGUE_DAMAGED');
-     group.total++;group.media+=record.cardSources.files.length;
+     group.total++;group.media+=record.cardSources.files.length;if(overrides.has(record.id))selectionProjects[record.id]=projectId;
      if(needle&&record.title.toLocaleLowerCase().includes(needle))group.matches=true;
      if(websiteRecordShare(command.selection,record,projectId)){
       group.included++;selectedNotebooks.add(record.notebookId);entries++;
@@ -52,7 +52,7 @@ export class WebsiteResearch{
       media+=includedMedia;group.includedMedia+=includedMedia;
      }
     }
-    return {...response,projects:[...projects.values()],notebookIds:[...selectedNotebooks],entries,media};
+    return {...response,projects:[...projects.values()],notebookIds:[...selectedNotebooks],entries,media,selectionProjects};
    }
    if(operation==='content'){
     const project=metadata.projects.find(p=>p.id===command.projectId);if(!project)invalid();

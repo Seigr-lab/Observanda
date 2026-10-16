@@ -1,3 +1,4 @@
+import publicationSources from '../locales/en/publicationSources.json' with {type:'json'};
 import labBookAccess from '../locales/en/labBookAccess.json' with {type:'json'};
 import labBookDirectory from '../locales/en/labBookDirectory.json' with {type:'json'};
 import workspaceNaming from '../locales/en/workspaceNaming.json' with {type:'json'};
@@ -181,6 +182,7 @@ english.collaborationIdentity=collaborationIdentity;
 english.importResearch=importResearch;
 english.labBookAccess=labBookAccess;
 english.labBookDirectory=labBookDirectory;
+english.publicationSources=publicationSources;
 export const MESSAGE_NAMESPACES=Object.freeze(Object.keys(english));
 export const catalogueLanguages=namespace=>catalogues[namespace]??[];
 export const messageLanguage=namespace=>catalogueLanguages(namespace).includes(current)?current:'en';
