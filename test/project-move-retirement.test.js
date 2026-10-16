@@ -16,7 +16,7 @@ test('nested retirement preserves uncopied additions and resumes after removing 
  await assert.rejects(removeRetiredProject(value,{verify:false,checkpoint:async()=>{}}),{code:'STORAGE_COPY'});assert.equal(await readFile(path.join(source,'.observanda','original'),'utf8'),'Copied evidence');
  await writeFile(path.join(destination,'.observanda','original'),'Copied evidence');
  const added=path.join(source,'.observanda','New independent owner');await mkdir(added);await writeFile(path.join(added,'keep'),'Uncopied work');
- await assert.rejects(removeRetiredProject(value,{verify:false,checkpoint:async()=>{}}),{code:'ENOENT'});assert.equal(await readFile(path.join(added,'keep'),'utf8'),'Uncopied work');assert.equal(await readFile(sentinel,'utf8'),'Independent project');
+ await assert.rejects(removeRetiredProject(value,{verify:false,checkpoint:async()=>{}}),{code:'STORAGE_MOVE_CONTENTS'});assert.equal(await readFile(path.join(added,'keep'),'utf8'),'Uncopied work');assert.equal(await readFile(sentinel,'utf8'),'Independent project');
  assert.equal(path.dirname(added),path.join(source,'.observanda'));await rm(added,{recursive:true});
  await assert.rejects(removeRetiredProject(value,{verify:false,checkpoint:async stage=>{if(stage==='marker-removed')throw Error('Lost completion');}}),/Lost completion/);
  await assert.rejects(access(path.join(source,MOVE_SOURCE)),{code:'ENOENT'});

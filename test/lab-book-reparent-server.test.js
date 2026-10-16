@@ -1,3 +1,5 @@
+import fs from 'node:fs/promises';
+import {syncBuiltinESMExports} from 'node:module';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm,stat} from 'node:fs/promises';
@@ -16,16 +18,17 @@ import {LabBookReparents} from '../src/lab-book-reparent.js';
 import {TestDeviceStore} from './device-fixture.js';
 async function result(response,status=200){assert.equal(response.status,status,await response.clone().text());return response.json();}
 
-test('book placement API authenticates both parents and the book and resumes after server restart',{timeout:180000},async t=>{
+for(const crossFilesystem of [false,true])test('book placement API authenticates both parents and the book and resumes after server restart'+(crossFilesystem?' across filesystems':''),{timeout:180000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-book-placement-api-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider);let app,vault;
- const original=LabBookReparents.prototype.run;
- t.after(async()=>{LabBookReparents.prototype.run=original;await app?.close();await provider.close();detach();clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-book-placement-api-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const original=LabBookReparents.prototype.run,rename=fs.rename;
+ t.after(async()=>{fs.rename=rename;syncBuiltinESMExports();LabBookReparents.prototype.run=original;await app?.close();await provider.close();detach();clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-book-placement-api-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const device=new TestDeviceStore({file:path.join(directory,'device.key')}),access=await createWorkspaceAccess('','',device);vault=takeCreatedVault(access);const root=path.join(directory,'Research Workspace 1');await initializeLocation(root,createNotebook('Research Workspace 1'),access,vault);
  async function start(){app=await startServer({root,port:0,headless:true,deviceStore:device});const response=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});assert.equal(response.status,200);const cookie=response.headers.get('set-cookie').split(';')[0],context=(await result(await fetch(app.origin+'/api/storage',{headers:{Cookie:cookie}}))).contextId;return (route,data={})=>fetch(app.origin+route,{signal:AbortSignal.timeout(45000),method:'POST',headers:{Origin:app.origin,Cookie:cookie,'Content-Type':'application/json','X-Observanda-Workspace':context,'X-Observanda-Wait':'1'},body:JSON.stringify(data)});}
  let call=await start();
  async function createProject(title,password=''){return (await result(await call('/api/projects/create',{id:randomUUID(),username:'',password,project:{id:randomUUID(),title,description:'',share:false,logoId:null}}))).project;}
  const source=await createProject('Source Project'),target=await createProject('Target Project','Target project password'),prefix='/api/projects/'+source.projectId;
  const book=(await result(await call(prefix+'/lab-books/create',{id:randomUUID(),username:'',password:'Book password',book:{id:randomUUID(),projectId:source.projectId,title:'Observations 1'}}))).book,own=prefix+'/lab-books/'+book.labBookId,there='/api/projects/'+target.projectId+'/lab-books/'+book.labBookId,id=randomUUID();
+ if(crossFilesystem){fs.rename=async(from,to)=>{if(from===book.root&&to===path.join(target.root,book.directory))throw Object.assign(Error('Another filesystem'),{code:'EXDEV'});return rename(from,to);};syncBuiltinESMExports();}
  const targetDenied=await result(await call(own+'/storage/move',{id,projectId:target.projectId}),422);assert.equal(targetDenied.projectId,target.projectId);
  await result(await call('/api/projects/'+target.projectId+'/access/unlock',{password:'Target project password'}));
  const bookDenied=await result(await call(own+'/storage/move',{id,projectId:target.projectId}),422);assert.equal(bookDenied.projectId,source.projectId);assert.equal(bookDenied.labBookId,book.labBookId);
