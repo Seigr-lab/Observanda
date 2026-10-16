@@ -25,9 +25,10 @@ export class PublicationPreviewOwner{
   this.rows=new Map();this.descriptors=new Map();this.originals=new Map();this.choices=new Map((source.edition?.records??[]).map(choice=>[choice.id,choice]));
   this.history=new Map((source.edition?.history??[]).filter(choice=>choice.include).map(choice=>[this.id('record',revisionPageId(source.workspaceId,choice.id,choice.revision)),structuredClone(choice)]));
  }
- async initialize(){
-  const {value}=await this.reader.use(this.source.workspaceId,undefined,async(_store,snapshot,pinned)=>{
-   return {...publicationSourceContext(snapshot.metadata,this.source,pinned.owner),snapshotId:pinned.snapshotId,owner:{...pinned.owner,projectNamespaceId:pinned.projectNamespaceId}};
+ async initialize({counts=false}={}){
+  const {value}=await this.reader.use(this.source.workspaceId,undefined,async(store,snapshot,pinned)=>{
+   const context=publicationSourceContext(snapshot.metadata,this.source,pinned.owner);
+   return {...context,snapshotId:pinned.snapshotId,owner:{...pinned.owner,projectNamespaceId:pinned.projectNamespaceId},...(counts?{notebookCounts:await this.countValues(store,snapshot,context.metadata)}:{})};
   });
   Object.assign(this,value);
   this.projected=publicationOwnerProjection({metadata:this.metadata,records:[]},this.owner,this.identities).metadata;
@@ -97,18 +98,21 @@ export class PublicationPreviewOwner{
   }
   this.selectedOverrides=values;return values;
  }
+ // A canvas always displays counts. Capture them during its initial owner
+ // admission, while selectors that do not need counts remain lazy.
+ async countValues(store,snapshot,metadata=this.metadata){
+  const counts={},index=new SnapshotIndex(store),all=new Set(this.source.selection.includeProjects),books=new Map(metadata.notebooks.map(book=>[book.id,book]));
+  for(const book of metadata.notebooks)if(metadata.projects.some(project=>project.id===book.projectId&&project.share))counts[this.id('notebook',book.id)]=all.has(book.projectId)?await index.scopedCount(snapshot.membership,book.id):0;
+  const overrides=await this.overrides(store,snapshot),ids=new Set([...overrides.keys(),...this.choices.keys()]);
+  for(const id of ids){
+   const row=overrides.get(id)?.row??await store.member(snapshot,id);if(!row)throw new AppError('RECORD_CHANGED');
+   const book=books.get(row.notebookId),mapped=book&&this.id('notebook',book.id);if(!Object.hasOwn(counts,mapped))continue;
+   const before=all.has(book.projectId),share=overrides.get(id)?.patch.share??before,after=share&&this.included(id);counts[mapped]+=Number(after)-Number(before);
+  }
+  return counts;
+ }
  async counts(){
-  if(!this.notebookCounts)await this.use(async(store,snapshot)=>{
-   const counts={},index=new SnapshotIndex(store),all=new Set(this.source.selection.includeProjects),books=new Map(this.metadata.notebooks.map(book=>[book.id,book]));
-   for(const book of this.metadata.notebooks)if(this.metadata.projects.some(project=>project.id===book.projectId&&project.share))counts[this.id('notebook',book.id)]=all.has(book.projectId)?await index.scopedCount(snapshot.membership,book.id):0;
-   const overrides=await this.overrides(store,snapshot),ids=new Set([...overrides.keys(),...this.choices.keys()]);
-   for(const id of ids){
-    const row=overrides.get(id)?.row??await store.member(snapshot,id);if(!row)throw new AppError('RECORD_CHANGED');
-    const book=books.get(row.notebookId),mapped=book&&this.id('notebook',book.id);if(!Object.hasOwn(counts,mapped))continue;
-    const before=all.has(book.projectId),share=overrides.get(id)?.patch.share??before,after=share&&this.included(id);counts[mapped]+=Number(after)-Number(before);
-   }
-   this.notebookCounts=counts;
-  });
+  this.notebookCounts??=await this.use((store,snapshot)=>this.countValues(store,snapshot));
   return Object.fromEntries(this.projected.notebooks.map(book=>[book.id,this.notebookCounts[book.id]??0]));
  }
  async neighbours(row){

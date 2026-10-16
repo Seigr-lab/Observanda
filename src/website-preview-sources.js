@@ -28,7 +28,7 @@ export class WebsitePreviewSources{
    item.sourceId=item.id;item.sourceWorkspaceId=namespace;item.referenceNamespaces=[...new Set([this.metadata.id,namespace])];
   }
   for(const source of sources){
-   const owner=await new PublicationPreviewOwner(source,this.reader,this.identities,{signal:this.signal}).initialize();
+   const owner=await new PublicationPreviewOwner(source,this.reader,this.identities,{signal:this.signal}).initialize({counts:true});
    appendPublicationCollections(this.metadata,owner.projected);this.owners.push(owner);
   }
   this.binding=digest(serialize(this.owners.map(owner=>({source:owner.source,snapshotId:owner.snapshotId}))));

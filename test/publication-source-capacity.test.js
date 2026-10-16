@@ -27,6 +27,9 @@ import {publicationSourceFactory,projectPublicationSource} from '../src/project-
 import {WebsiteSites} from '../src/website-sites.js';
 import {websiteWorkspace} from '../src/website-workspace.js';
 import {websitePreviewSource} from '../src/website-preview-source.js';
+import {renderWebsitePreview} from '../src/website-preview.js';
+import {WorkspaceFonts} from '../src/workspace-fonts.js';
+import {contentBuffer} from '../src/file-content.js';
 import {PublicationJobs} from '../src/publication-jobs.js';
 import {publicationOwnerId} from '../src/publication-owner-identities.js';
 import {emptyPublicationSource} from '../src/web/publication-sources-model.js';
@@ -38,6 +41,14 @@ function request(operation){
 }
 
 const edit=site=>({workspaceId:site.book.id,baseEtag:site.etag,metadata:{},projects:[],changes:[],removed:[],selection:site.site.selection});
+
+async function renderedPreview(storage,command,options){
+ const start=performance.now(),preview=await websitePreviewSource(storage,command,options);
+ const sourceMs=Math.round(performance.now()-start);
+ const candidate=await renderWebsitePreview(preview.context,{...options,media:preview.media,fonts:new WorkspaceFonts(storage)});
+ const html=(await contentBuffer(candidate.files.get(candidate.defaultPage))).toString();
+ return {...preview,html,sourceMs,previewMs:Math.round(performance.now()-start)};
+}
 
 test('independent websites preview and publish during authoring with bounded source reads at tenfold growth',{timeout:300000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-source-capacity-')),runtime=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:id(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(runtime),keys=[],scope=new AsyncLocalStorage(),original=ResearchCatalogue.prototype.record,documents=ResearchCatalogue.prototype.queryDocuments;let application,releaseBusy,busy;
@@ -82,8 +93,8 @@ test('independent websites preview and publish during authoring with bounded sou
    const started=performance.now(),controller=new AbortController(),timer=setTimeout(()=>{controller.abort();releaseBusy();},30000);timer.unref();
    try{
     const results=await Promise.allSettled([
-     scope.run(metrics,()=>websitePreviewSource(storages[0],edit(journal),{designTarget:'entry:'+selectedId(),sourceReader,signal:controller.signal})),
-     websitePreviewSource(storages[1],edit(report),{designTarget:'home',sourceReader:publicationSourceFactory(application,client,storages[1]),signal:controller.signal}),
+     scope.run(metrics,()=>renderedPreview(storages[0],edit(journal),{designTarget:'entry:'+selectedId(),sourceReader,signal:controller.signal})),
+     renderedPreview(storages[1],edit(report),{designTarget:'home',sourceReader:publicationSourceFactory(application,client,storages[1]),signal:controller.signal}),
      request(()=>new PublicationJobs(storages[1],{sourceReader:publicationSourceFactory(application,client,storages[1])}).inline({etag:report.etag},{signal:controller.signal})),
      (async()=>{const at=performance.now();await update(books[1],1,'Independent amendment '+count);metrics.editMs=Math.round(performance.now()-at);})(),
      request(async()=>{const at=performance.now(),command=edit(await sites.read(ids[0]));command.metadata.website={...journal.book.website,footer:'Saved during publication '+count};await sites.save(ids[0],command);metrics.settingsMs=Math.round(performance.now()-at);}),
@@ -92,7 +103,13 @@ test('independent websites preview and publish during authoring with bounded sou
     for(const [index,result] of results.entries())if(result.status==='rejected')t.diagnostic(JSON.stringify({task:index,code:result.reason.code,message:result.reason.message}));
     for(const result of results)if(result.status==='rejected')throw result.reason;
     const [preview,home,edition,,,pages]=results.map(result=>result.value);metrics.elapsedMs=Math.round(performance.now()-started);metrics.responseBytes=Buffer.byteLength(JSON.stringify({context:preview.context,editor:preview.editor}));
+    metrics.recordPreviewMs=preview.previewMs;metrics.homePreviewMs=home.previewMs;metrics.recordSourceMs=preview.sourceMs;metrics.homeSourceMs=home.sourceMs;
     t.diagnostic(JSON.stringify(metrics));
+    assert.ok(metrics.recordPreviewMs<5000,'A selected record preview exceeded five seconds');
+    assert.ok(metrics.homePreviewMs<5000,'A selected home preview exceeded five seconds');
+    assert.match(preview.html,/Full journal footer/);assert.doesNotMatch(preview.html,/Selected report footer/);
+    assert.match(home.html,/Selected report footer/);assert.doesNotMatch(home.html,/Full journal footer/);
+    assert.match(home.html,/First observations 0/);assert.match(home.html,/Second observations 0/);
     assert.equal(controller.signal.aborted,false,'Publication exceeded its concurrent-operation deadline');
     assert.equal(preview.context.entries.length,1);assert.equal(preview.context.entries[0].body,before);assert.equal(metrics.originals,1);
     assert.equal(home.context.recordCards.length,2);assert.equal(edition.entries.length,2);assert.equal(pages.value.items.length,25);assert.ok(pages.value.nextCursor);

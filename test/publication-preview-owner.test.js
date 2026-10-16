@@ -183,3 +183,11 @@ test('an independent website combines sibling books without becoming owned by ei
  assert.equal(new Set(page.context.recordCards.map(record=>record.notebookId)).size,2);
  assert.equal(page.metadata.id,host.book.id);assert.equal((await host.f.workspace.outline()).metadata.website.researchSources,undefined);
 });
+
+
+test('canvas initialization captures selected counts without reopening its immutable source',async t=>{
+ const f=await fixture(t);f.source.selection.records=[{id:f.book.entries[2].id,share:false,attachments:[]}];
+ const owner=await new PublicationPreviewOwner(f.source,f.reader,f.identities).initialize({counts:true}),opens=f.opens;
+ assert.equal(Object.values(await owner.counts()).reduce((total,count)=>total+count,0),36);
+ assert.equal(f.opens,opens);assert.equal(owner.originals.size,0);assert.equal(owner.descriptors.size,0);
+});

@@ -16,11 +16,16 @@ export function projectCollectionReader(application,client,check){
   async use(target,snapshotId,consume,{prepare}={}){
    await check();const identity=JSON.stringify(target);
    if(current?.identity!==identity){
-    await close();const selected={identity,target,owner:null,vault:null,storage:null};current=selected;
+    // Adjacent books can share the same authenticated project parent. Release
+    // the previous book key while retaining only that request-owned parent;
+    // its original grant and every book grant still participate in verification.
+    const parent=current&&current.target.projectId===target.projectId?current.owner:null;
+    if(parent){clearVault(current.vault);current=null;}else await close();
+    const selected={identity,target,owner:parent,vault:null,storage:null};current=selected;
     try{
      if(!target.projectId){selected.storage=application.workspace;selected.verify=check;}
      else{
-      const owner=new ProjectSessionOwner(application,client,target.projectId,{check,recoverRenames:false});selected.owner=owner;
+      const owner=selected.owner??new ProjectSessionOwner(application,client,target.projectId,{check,recoverRenames:false});selected.owner=owner;
       await owner.use(async project=>{
        selected.storage=project;selected.verify=()=>owner.check();
        if(target.labBookId){
