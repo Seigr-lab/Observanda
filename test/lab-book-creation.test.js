@@ -1,3 +1,5 @@
+import {readProjectDomainRegistry} from '../src/project-domain-registry.js';
+import {moduleDomains} from '../src/modules/domains.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,readFile,readdir,rm} from 'node:fs/promises';
@@ -60,7 +62,7 @@ test('committed book initialization recovers before descriptor publication witho
  try{await assert.rejects(f.creation.create(command),/simulated descriptor interruption/);}finally{LabBookStorage.prototype.writeFile=write;}
  assert.equal(interrupted,true);const root=path.join(f.project.root,command.book.title),binding=await catalogueBinding(root),before=await readFile(path.join(root,'.observanda/access.json'));
  const result=await new LabBookCreation(f.project,f.device).create(command);assert.deepEqual(await catalogueBinding(root),binding);assert.deepEqual(await readFile(path.join(root,'.observanda/access.json')),before);
- assert.equal((await (await f.open(result.book)).outline()).metadata.notebooks[0].id,command.book.id);await assert.rejects(readFile(path.join(root,'.observanda/copy-in-progress')),{code:'ENOENT'});
+ const recovered=await f.open(result.book);assert.equal((await recovered.outline()).metadata.notebooks[0].id,command.book.id);assert.deepEqual((await recovered.catalogue(readProjectDomainRegistry)).domains,moduleDomains);await assert.rejects(readFile(path.join(root,'.observanda/copy-in-progress')),{code:'ENOENT'});
 });
 
 test('creation recovery discovers bounded requests without opening books and preserves protected identity',async t=>{

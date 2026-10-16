@@ -1,3 +1,4 @@
+import {withProjectModuleInitialization} from './project-module-initialization.js';
 // Initialize a new book with a durable identity and one local transaction.
 // An interrupted caller resumes its intent rather than generating another book.
 import path from 'node:path';
@@ -47,7 +48,7 @@ export async function initializeLabBookLocation(input,labBookId,book,access,vaul
    await db.run('BEGIN');await db.lock();
    await db.scope(()=>catalogueContext.run({root,labBookId,vault,db,afterCommit},async()=>{
     const store=storage.catalogueStore(db),head=await db.get("SELECT 1 FROM state WHERE slot='head'");
-    if(!head){await store.put(book);await store.putObject(receiptName,{fingerprint});}
+    if(!head){await store.put(book);await withProjectModuleInitialization(store,book.id,async()=>{});await store.putObject(receiptName,{fingerprint});}
     else if((await store.object(receiptName))?.fingerprint!==fingerprint)throw new AppError('CONFLICT');
     await store.verify(descriptor);
    }));
