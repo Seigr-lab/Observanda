@@ -1,3 +1,4 @@
+import {publicationSourceDirectory} from './publication-source-directory.js';
 import {projectPublicationSource,publicationSourceFactory} from './project-publication-sources.js';
 import {publicationSiteDirectory} from './publication-site-directory.js';
 import {timelineCollectionQuery} from './timeline-collection-query.js';
@@ -60,6 +61,7 @@ import {executeResearchRequest,researchRequest} from './research-requests.js';
 import {AppError} from './errors.js';
 
 export function projectRequest(route,method){
+ if(route==='/api/projects/publication-source-directory')return {operation:'publication-source-directory',write:false,limit:16384};
  if(route==='/api/projects/publication-source')return {operation:'publication-source',write:false,limit:1048576};
  if(route==='/api/projects/publication-sites')return {operation:'publication-sites',write:false,limit:16384};
  if(['/api/projects/timeline-collection/query','/api/projects/timeline-collection/choices'].includes(route))return {operation:route.slice('/api/projects/'.length),write:false,limit:131072};
@@ -72,6 +74,7 @@ export function projectRequest(route,method){
  if(['/api/projects/list','/api/projects/choices','/api/projects/create'].includes(route))return {operation:route.split('/').at(-1),write:route.endsWith('/create'),limit:MAX_BYTES};
  const match=/^\/api\/projects\/([a-f0-9-]{36})\/(.+)$/.exec(route);
  if(!match||!researchId(match[1]))return null;
+ if(match[2]==='publication-source-directory')return {projectId:match[1],operation:'publication-source-directory',write:false,limit:16384};
  if(match[2]==='publication-source')return {projectId:match[1],operation:'publication-source',write:false,limit:1048576};
  if(match[2]==='publication-sites')return {projectId:match[1],operation:match[2],write:false,limit:16384};
  if(['timeline-collection/query','timeline-collection/choices'].includes(match[2]))return {projectId:match[1],operation:match[2],write:false,limit:131072};
@@ -165,6 +168,7 @@ export class ProjectApplication{
   },selected.projectId);
  }
  async execute(client,selected,data,{signal,onProgress,download,stream,websiteId,binary,headless,query,contentLength,check=async()=>{},setCheck=()=>{}}={}){
+  if(selected.operation==='publication-source-directory')return this.tracked(()=>publicationSourceDirectory(this,client,data,{scope:selected.projectId??null,labBookId:selected.labBookId??null,signal,check}),selected.projectId);
   if(selected.operation==='publication-source')return this.tracked(()=>projectPublicationSource(this,client,data,{scope:selected.projectId??null,labBookId:selected.labBookId??null,signal,check}),selected.projectId);
   if(selected.operation==='publication-sites')return this.tracked(()=>publicationSiteDirectory(this.recordCollections,client,data,{scope:selected.projectId??null,visit:projectRecordCollection(this,client,check),signal}),selected.projectId);
   if(['timeline-collection/query','timeline-collection/choices'].includes(selected.operation))return this.tracked(async()=> (selected.operation.endsWith('/choices')?timelineCollectionChoices:timelineCollectionQuery)(this.recordCollections,client,data,{scope:selected.projectId??null,registry:await this.registry(),visit:projectRecordCollection(this,client,check),check,signal}),selected.projectId);

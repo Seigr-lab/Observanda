@@ -1,3 +1,4 @@
+import {publicationSourceHost} from './publication-source-host.js';
 import {AppError} from './errors.js';
 import {revisionId} from './web/revision-model.js';
 import {researchId} from './web/research-reference.js';
@@ -8,11 +9,7 @@ import {WebsiteResearch} from './website-research.js';
 // One request owns source credentials; a saved website owns only namespace
 // references and consent. The registry resolves each namespace when it is used.
 export async function publicationSourceReader(application,client,{workspaceId,scope=null,labBookId=null,signal,check=async()=>{}}){
- if(!researchId(workspaceId))throw new AppError('INVALID');
- const registry=await application.registry(),directory=await registry.read(),host=scope?directory.value.projects.find(project=>project.projectId===scope):null;
- if(scope&&!host)throw new AppError('NOT_FOUND');
- const book=labBookId?await new LabBookDirectory(registry).locate(workspaceId):null;
- if(labBookId?(!scope||!book||book.projectId!==scope||book.labBookId!==labBookId):workspaceId!==(host?.namespaceId??registry.workspaceId))throw new AppError('WORKSPACE_CHANGED');
+ const {registry,directory}=await publicationSourceHost(application,{workspaceId,scope,labBookId});
  const reader=projectCollectionReader(application,client,check);
  return {
   async use(sourceId,snapshotId,consume,{prepare}={}){
