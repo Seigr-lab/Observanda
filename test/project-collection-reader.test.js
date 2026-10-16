@@ -4,6 +4,7 @@ import {randomUUID} from 'node:crypto';
 import {projectTreeFixture} from './project-tree-fixture.js';
 import {ProjectStorage} from '../src/project-storage.js';
 import {LabBookCreation} from '../src/lab-book-creation.js';
+import {LabBookRegistry} from '../src/lab-book-registry.js';
 import {ProjectApplication,projectRequest} from '../src/project-application.js';
 import {ProjectSessionOwner} from '../src/project-session-owner.js';
 import {LabBookAccessSession} from '../src/lab-book-access-session.js';
@@ -34,6 +35,18 @@ test('collection readers reuse only the live parent and recheck every previous b
  const retained=parents.at(-1),retainedKey=retained.vault.key;
  await next.use({workspaceId:f.books[1].namespaceId,projectId:f.books[1].projectId,labBookId:f.books[1].labBookId},undefined,()=>{});
  assert.equal(retained.closed,true);assert.ok(retainedKey.every(value=>value===0));
+ await next.verify();
+ // An unrelated sibling directory change does not revoke this exact book.
+ const sibling=(await new LabBookCreation(storage,f.deviceStore).create({id:randomUUID(),username:'',password:'',book:{id:randomUUID(),projectId:parent.projectId,title:'Later independent book'}})).book;
+ const parentCount=parents.length;await next.verify();assert.equal(parents.length,parentCount+1);assert.equal(parents.at(-1).closed,true);
+ const unchangedCount=parents.length;await next.verify();assert.equal(parents.length,unchangedCount);
+ const directory=new LabBookRegistry(storage),before=await directory.read();
+ await directory.change(before.revision,value=>({...value,books:value.books.map(book=>book.labBookId===sibling.labBookId?{...book,directory:'Renamed independent book'}:book)}));
+ await next.verify();
+ const selected=await directory.read();
+ await directory.change(selected.revision,value=>({...value,books:value.books.map(book=>book.labBookId===extra.labBookId?{...book,vaultId:randomUUID()}:book)}));
+ await assert.rejects(next.verify(),error=>error.code==='ACCESS_LOCKED'&&error.labBookId===extra.labBookId);
+ const restore=await directory.read();await directory.change(restore.revision,()=>selected.value);
  await next.verify();
  await app.lock(client,parent.projectId);await assert.rejects(next.verify(),{code:'ACCESS_LOCKED'});
  await next.close();assert.ok(bookKeys.every(value=>value.every(byte=>byte===0)));

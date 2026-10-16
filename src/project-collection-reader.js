@@ -29,11 +29,25 @@ export function projectCollectionReader(application,client,check){
       await owner.use(async project=>{
        selected.storage=project;selected.verify=()=>owner.check();
        if(target.labBookId){
-        const registry=new LabBookRegistry(project),access=new LabBookAccessSession(application,client,project,target.labBookId,()=>owner.check());let root,etag;
+        const registry=new LabBookRegistry(project),access=new LabBookAccessSession(application,client,project,target.labBookId,()=>owner.check());let root,etag,entry;
         try{
-         const router=new LabBookRouter(registry,{authorize:async()=>{await access.check();return true;},unlock:async(entry,saved)=>{root=entry.root;etag=saved.etag;return selected.vault=await access.key(root);}});
-         await router.withLabBook(target.labBookId,storage=>{selected.storage=storage;});const stamp=digest(await readFile(registry.file));
-         selected.verify=async()=>{await owner.check();await access.check();if(digest(await readFile(registry.file))!==stamp||(await readAccess(root)).etag!==etag)throw access.error(new AppError('ACCESS_LOCKED'));};
+         let stamp=digest(await readFile(registry.file));
+         const router=new LabBookRouter(registry,{authorize:async()=>{await access.check();return true;},unlock:async(location,saved)=>{entry=location;root=entry.root;etag=saved.etag;return selected.vault=await access.key(root);}});
+         await router.withLabBook(target.labBookId,storage=>{selected.storage=storage;});
+         selected.verify=async()=>{
+          await owner.check();await access.check();const currentStamp=digest(await readFile(registry.file));
+          if(currentStamp!==stamp){
+           // Directory changes may concern a sibling. Reopen only the parent
+           // with the original grants; previous reader keys may be cleared.
+           const fresh=new ProjectSessionOwner(application,client,target.projectId,{check:async()=>{await owner.check();await access.check();},recoverRenames:false});
+           try{await fresh.use(async project=>{
+            const current=await new LabBookRegistry(project).locate(target.labBookId);
+            if(['root','vaultId','namespaceId'].some(key=>current[key]!==entry[key]))throw access.error(new AppError('ACCESS_LOCKED'));
+           },{locationOnly:true});}finally{await fresh.close();}
+           stamp=currentStamp;
+          }
+          if((await readAccess(root)).etag!==etag)throw access.error(new AppError('ACCESS_LOCKED'));
+         };
         }catch(error){throw access.error(error);}
        }
       },{locationOnly:true});
