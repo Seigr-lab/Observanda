@@ -10,13 +10,13 @@ permissions:
 
 jobs:
   check:
-    name: Node 24 / ${{ matrix.os }}
+    name: Source checks / ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -27,6 +27,28 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
+
+  test:
+    name: ${{ matrix.suite }} ${{ matrix.shard }}/8 / ${{ matrix.os }}
+    needs: check
+    strategy:
+      fail-fast: false
+      max-parallel: 12
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        suite: [native, browser]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: ${{ matrix.suite == 'native' && 120 || 60 }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
       - name: Media tools (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -49,6 +71,14 @@ jobs:
             if (-not (Test-Path -LiteralPath "$tlsTools/openssl.exe")) { throw 'OpenSSL is required for real PostgreSQL TLS qualification' }
             $tlsTools | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
           }
-      - run: npm test
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:browser
+      # Capacity assertions need exclusive runner resources. Split files across
+      # jobs, while preserving each test's own time, memory and query budgets.
+      - name: Native tests
+        if: matrix.suite == 'native'
+        run: node scripts/test.js --test-concurrency=1 --test-shard=${{ matrix.shard }}/8 "test/*.test.js"
+      - name: Install browser
+        if: matrix.suite == 'browser'
+        run: npx playwright install --with-deps chromium
+      - name: Browser tests
+        if: matrix.suite == 'browser'
+        run: node scripts/test.js --browser --shard=${{ matrix.shard }}/8 --forbid-only
