@@ -48,11 +48,11 @@ export class ProjectBookOwners{
   }
   await this.ready();const latest=await this.registry.read(),described=books.map(({identity,accessHash,...entry})=>entry);if(serialize(latest.value.books)!==serialize(described))throw new AppError('CONFLICT');this.revision=latest.revision;this.books=validateRenameBooks(books);return this.books;
  }
- async withStorageHandoff(operation){
+ async withStorageHandoff(operation,{checkOwner}={}){
   const entries=[...this.books].sort((a,b)=>a.labBookId.localeCompare(b.labBookId));
   const next=async index=>{
    if(index===entries.length)return operation();const item=entries[index],storage=await this.checked(item);
-   return storage.withStorageHandoff(async()=>{await this.checked(item);return next(index+1);},{existing:true});
+   return storage.withStorageHandoff(async()=>{await this.checked(item);await checkOwner?.(storage);return next(index+1);},{existing:true});
   };
   const directory=await privateDirectory(this.project.root,'.observanda/lab-book-creation');
   const take=index=>{if(index===entries.length)return next(0);const file=path.join(directory,'book-'+entries[index].labBookId+'.lock');return writerLeaseHeld(file)?take(index+1):withWriterLease(file,()=>take(index+1));};

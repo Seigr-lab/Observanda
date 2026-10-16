@@ -1,3 +1,4 @@
+import {inventoryOperationAccessFactory} from './inventory-operation-access.js';
 import {comparisonSourceFactory} from './comparison-source-access.js';
 import {comparisonSourceDiscovery} from './comparison-source-discovery.js';
 import {moduleReferenceFactory} from './module-reference-access.js';
@@ -831,8 +832,8 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       const moduleRequest=req.method==='POST'?projectModuleRequest(url.pathname):null;
       if(moduleRequest&&(moduleRequest.references||moduleRequest.taskReadiness||await moduleDomainRoute(workspace)!==null)){
         const data=await body(req,moduleRequest.limit),controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
-        try{const result=await moduleRequest.run(workspace,data,{signal:controller.signal,check:req.checkWriter,referenceAccess:moduleReferenceFactory(historyProjects,client,{check:req.checkWriter}),taskSourceAccess:planningTaskAccessFactory(historyProjects,client,{check:req.checkWriter})});
-          if(url.pathname==='/api/modules/command')selectedContext.calendarSources.reconcile(result.entities,{partial:true});
+        try{const result=await moduleRequest.run(workspace,data,{signal:controller.signal,check:req.checkWriter,referenceAccess:moduleReferenceFactory(historyProjects,client,{check:req.checkWriter}),taskSourceAccess:planningTaskAccessFactory(historyProjects,client,{check:req.checkWriter}),inventorySourceAccess:inventoryOperationAccessFactory(historyProjects,client,{check:req.checkWriter})});
+          if(url.pathname==='/api/modules/command'&&result.entities)selectedContext.calendarSources.reconcile(result.entities,{partial:true});
           return json(result);
         }finally{res.off('close',abort);}
       }

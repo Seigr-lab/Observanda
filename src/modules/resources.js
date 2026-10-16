@@ -1,3 +1,4 @@
+import {validateManagedReservation,validateManagedReservationLedger} from './bom-integrity.js';
 import {validResourceTags} from '../web/modules/resource-tags.js';
 import {AppError} from '../errors.js';
 import {stockTracked,assetPlacement,inventoryLocations} from '../web/modules/inventory-model.js';
@@ -16,7 +17,7 @@ export function validateResource(d){
  validateValues(d.fieldSchema,d.values);
 }
 function validateMovement(d){requireValue(ownedShape(d,['resourceId','delta','unit','reason','links','reservationId'])&&uuid(d.resourceId)&&decimal(d.delta)&&compare(d.delta,'0')!==0&&text(d.unit,80,true)&&text(d.reason,2000,true)&&linksValid(d.links)&&(d.reservationId===null||uuid(d.reservationId)),'Stock movement');}
-function validateReservation(d){requireValue(ownedShape(d,['resourceId','quantity','unit','reason','status','links'])&&uuid(d.resourceId)&&decimal(d.quantity)&&compare(d.quantity,'0')>0&&text(d.unit,80,true)&&text(d.reason,2000,true)&&['active','released','consumed','settled'].includes(d.status)&&linksValid(d.links),'Stock reservation');}
+function validateReservation(d){requireValue(ownedShape(d,['resourceId','quantity','unit','reason','status','links',...(Object.hasOwn(d,'managed')?['managed']:[])])&&uuid(d.resourceId)&&decimal(d.quantity)&&compare(d.quantity,'0')>0&&text(d.unit,80,true)&&text(d.reason,2000,true)&&['active','released','consumed','settled'].includes(d.status)&&linksValid(d.links),'Stock reservation');validateManagedReservation(d);}
 function validateTransfer(d){
  requireValue(exact(d,['resourceId','fromProjectId','toProjectId','quantity','unit','reason','links'])&&uuid(d.resourceId)&&[d.fromProjectId,d.toProjectId].every(id=>id===null||uuid(id))&&d.fromProjectId!==d.toProjectId&&decimal(d.quantity)&&compare(d.quantity,'0')>0&&text(d.unit,80,true)&&text(d.reason,2000,true)&&linksValid(d.links),'Stock transfer');
 }
@@ -41,6 +42,7 @@ export function validateResources(entities){
  for(const e of entities.filter(e=>e.type==='asset-transfer'))requireValue(resources.some(r=>r.id===e.data.resourceId&&!stockTracked(r.data)),'Transferred individual item');
  for(const e of entities.filter(e=>['movement','reservation','stock-transfer'].includes(e.type))){
   const r=resources.find(r=>r.id===e.data.resourceId);requireValue(r&&stockTracked(r.data)&&r.data.unit===e.data.unit,'Stock resource and unit');
+  if(e.type==='reservation'&&e.data.managed){const used=entities.filter(value=>value.type==='movement'&&value.data.reservationId===e.id).reduce((total,value)=>add(total,negate(value.data.delta)),'0');validateManagedReservationLedger(e,r,used);}
  }
 }
 function stockResource(tx,p){
@@ -68,6 +70,7 @@ export const resourceDefinitions={
     const c=tx.get(d.categoryId);requireValue(c?.type==='category'&&!c.data.archived&&c.revision===d.schemaRevision&&JSON.stringify(c.data.fields)===JSON.stringify(d.fieldSchema),'Reload the category before applying its fields','MODULE_REFERENCE');
    }else if(old)requireValue(JSON.stringify(d.fieldSchema)===JSON.stringify(old.data.fieldSchema),'Saved field schema');
    if(old&&await tx.some(['movement','reservation','stock-transfer'],e=>e.data.resourceId===p.id))requireValue(d.kind===old.data.kind&&d.unit===old.data.unit&&(d.projectId??null)===(old.data.projectId??null),'An item with stock history retains its owner, unit and kind; use Transfer stock to change its placement');
+   if(old&&d.status!==old.data.status)requireValue(!await tx.some('reservation',e=>e.data.resourceId===p.id&&e.data.status==='active'&&e.data.managed),'Finish the managed BOM reservation before changing item status');
    if(old&&await tx.some('booking',e=>e.data.resourceId===p.id&&e.data.status==='confirmed'))requireValue(d.kind==='equipment','Booked equipment must remain equipment');
    tx.put('resource',p.id,d);
   },
@@ -103,7 +106,7 @@ export const resourceDefinitions={
   async 'stock.resolve'(tx,p){
    requireValue(exact(p,['id','expectedRevision','decision'])&&['release','consume'].includes(p.decision),'Reservation command');const e=tx.get(p.id);
    requireValue(e?.type==='reservation'&&e.data.status==='active','Active reservation');tx.expect(e.id,p.expectedRevision);
-   requireValue(!await tx.some('bom',b=>b.data.allocations.some(a=>a.reservationId===e.id)),'Use the linked BOM to record actual use or release its reservation');
+   requireValue(!e.data.managed&&!await tx.some('bom',b=>!b.data.externalStock&&b.data.allocations.some(a=>a.reservationId===e.id)),'Use the linked BOM to record actual use or release its reservation');
    const r=tx.get(e.data.resourceId);
    if(p.decision==='consume'){
     requireValue(r.data.status==='available','Material is not available','STOCK_UNAVAILABLE');

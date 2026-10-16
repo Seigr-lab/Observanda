@@ -148,7 +148,7 @@ export async function moveWorkspace(plan,{vault,onProgress,activate,recovery}={}
     await workspaceInventory(plan.destination,plan.inventorySalt,{expectedFiles:plan});
     await freeze(plan.destination);
    },{detached:true,moveId:plan.id,existing:true});
-  }else await copyWorkspace(plan,{vault,reuseCatalogue:true,afterSnapshotVerified:freeze});
+  }else await copyWorkspace(plan,{vault,relocation:true,reuseCatalogue:true,afterSnapshotVerified:freeze});
   // Activation may write the canonical folder name into the retained database.
   // Persist the source guard before releasing that database's writer.
   operationTransfer({phase:'opening'});await activate(plan.destination,plan.source);
@@ -183,7 +183,7 @@ async function moveOwnedWorkspace(plan,{vault,activate,recovery}){
   await workspaceInventory(plan.source,plan.inventorySalt,{expectedFiles:plan,projectRoots:plan.projectRoots??[]});
   await workspaceInventory(plan.destination,plan.inventorySalt,{expectedFiles:plan,projectRoots:(plan.projectRoots??[]).map(root=>path.resolve(plan.destination,path.relative(plan.source,root)))});
   await verifyDatabaseRetention(new Workspace(plan.destination,vault),plan.databaseRetention);
- }else await copyWorkspace(plan,{vault,activateCatalogue:true,...(recovery?{recovery,afterSnapshotVerified:freeze}:{afterVerified:freeze})});
+ }else await copyWorkspace(plan,{vault,relocation:true,activateCatalogue:true,...(recovery?{recovery,afterSnapshotVerified:freeze}:{afterVerified:freeze})});
  await databaseProvider()?.closeWorkspace(plan.source);
  operationTransfer({phase:'opening'});await activate(plan.destination,plan.source);
  return cleanup(receipt,{vault,verified:true});

@@ -1,3 +1,4 @@
+import {assertInventoryObligationsSettled} from './inventory-obligation-lifecycle.js';
 import {assertProjectRelocationsSettled} from './project-membership.js';
 import {ProjectBookCopy} from './project-book-copy.js';
 import {copyProjectAdoptions,reconcileCopiedProjectConversions} from './workspace-project-conversion-copy.js';
@@ -23,7 +24,7 @@ const same=(a,b)=>['projectId','root','namespaceId','vaultId'].every(key=>a?.[ke
 export class WorkspaceProjectCopy {
   constructor(source,{withProject,withBook,onCopiedBook=async()=>{},onCopiedProject=async()=>{},check=async()=>{},checkpoint=async()=>{}}={}){this.source=source;this.withProject=withProject;this.withBook=withBook;this.onCopiedBook=onCopiedBook;this.onCopiedProject=onCopiedProject;this.check=check;this.checkpoint=checkpoint;}
   async prepare(destination,{portable=false}={}) {
-    await this.check();
+    await this.check();await assertInventoryObligationsSettled(this.source);
     const outline=await this.source.outline();this.sourceRevision=outline.etag;
     this.registry=new ProjectRegistry(this.source,outline.metadata.id);
     const original=await this.registry.read();

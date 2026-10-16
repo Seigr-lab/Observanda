@@ -1,3 +1,4 @@
+import {inventoryOperationRequest} from './inventory-operation-requests.js';
 // Explicit project routes select a verified storage generation. Reads retain
 // compatibility; writes never fall back to the old shared module writer.
 import {moduleDomainRoute} from './module-domain-context.js';
@@ -21,6 +22,7 @@ async function requestState(storage,data){
  if(data?.workspaceId!==namespaceId)throw new AppError('WORKSPACE_CHANGED');return {namespaceId,dedicated:domainId!==null};
 }
 export function projectModuleRequest(route){
+ const inventory=inventoryOperationRequest(route);if(inventory)return inventory;
  if(route==='/api/modules/planning/readiness')return {write:false,taskReadiness:true,limit:MODULE_BYTES,run:async(storage,data,options={})=>{
   const state=await requestState(storage,data);if(!state.dedicated)throw new AppError('ACCESS_UPGRADE');
   return planningTaskReadiness(storage,state.namespaceId,data,{sourceAccess:options.taskSourceAccess,check:options.check,signal:options.signal});

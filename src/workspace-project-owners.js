@@ -48,11 +48,11 @@ export class WorkspaceProjectOwners {
   if(projects.length&&directory.value.version<7)directory=await this.registry.change(directory.revision,value=>value);
   this.revision=directory.revision;this.projects=validateRenameProjects(projects);return this.projects;
  }
- async withStorageHandoff(operation){
+ async withStorageHandoff(operation,{checkOwner}={}){
   const entries=[...this.projects].sort((a,b)=>a.projectId.localeCompare(b.projectId));
   const next=async index=>{
    if(index===entries.length)return operation();const item=entries[index],storage=await this.checked(item);
-   return withProjectLifecycle(this.registry,item.projectId,'open',()=>storage.withStorageHandoff(async()=>{await this.checked(item);return this.bookOwners.get(item.projectId).withStorageHandoff(()=>next(index+1));},{existing:true}));
+   return withProjectLifecycle(this.registry,item.projectId,'open',()=>storage.withStorageHandoff(async()=>{await this.checked(item);await checkOwner?.(storage);return this.bookOwners.get(item.projectId).withStorageHandoff(()=>next(index+1),{checkOwner});},{existing:true}));
   };
   return next(0);
  }

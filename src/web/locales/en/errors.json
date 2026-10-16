@@ -1,4 +1,9 @@
 {
+  "INVENTORY_SOURCE_WORKSPACE": "Connect the workspace containing this stock owner to continue.",
+  "INVENTORY_SOURCE_AMBIGUOUS": "More than one connected workspace contains this stock owner. Keep only the original owner connected.",
+  "INVENTORY_OPERATION_BUSY": "Finish the current stock operation before starting another for this bill of materials.",
+  "INVENTORY_OWNER_LIMIT": "A build can reserve stock from up to 32 owners. Split this build into smaller bills of materials.",
+  "INVENTORY_OBLIGATIONS": "Finish or cancel builds with external stock reservations before copying or deleting this owner.",
   "ANALYSIS_SOURCE_ACCESS": "Authorize the comparison sources and retry this job.",
   "STORAGE_PORTABLE_BOOK_ACCESS": "Set a password or recovery key for each lab book before exporting its backup.",
   "LAB_BOOK_FOLDER": "Choose a folder containing an Observanda lab book.",

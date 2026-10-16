@@ -1,3 +1,4 @@
+import {assertInventoryObligationsSettled} from './inventory-obligation-lifecycle.js';
 import {assertRenameDatabaseOwners} from './workspace-rename-inventory.js';
 import {ProjectChildPreservation,validatePreservedChildren,insideProject} from './project-child-preservation.js';
 import {directoryIdentity,sameDirectory} from './project-rename-receipt.js';
@@ -47,7 +48,7 @@ export class ProjectDeletions extends OwnedStorageDeletions{
  handoff(storage,operation){
   return withProjectMembership(this.registry,[this.projectId],async()=>{
    await assertProjectCreationSettled(this.registry,[this.projectId]);await assertProjectRelocationsSettled(this.registry,[this.projectId]);
-   return this.bookOwners.withStorageHandoff(()=>storage.withStorageHandoff(()=>withWriterLease(path.join(storage.root,'.observanda/lab-books.lock'),async()=>{await assertRenameDatabaseOwners(storage.root,this.bookOwners.books.map(book=>path.join(storage.root,book.directory)),{stage:'delete-check-owners',errorCode:'STORAGE_DELETE_CONTENTS'});return operation();}),{existing:true}));
+   return this.bookOwners.withStorageHandoff(()=>storage.withStorageHandoff(()=>withWriterLease(path.join(storage.root,'.observanda/lab-books.lock'),async()=>{await assertRenameDatabaseOwners(storage.root,this.bookOwners.books.map(book=>path.join(storage.root,book.directory)),{stage:'delete-check-owners',errorCode:'STORAGE_DELETE_CONTENTS'});return operation();}),{existing:true}),{checkOwner:assertInventoryObligationsSettled});
   });
  }
  prepareReceipt(storage,value){return this.bookOwners.persist(value.id,value);}

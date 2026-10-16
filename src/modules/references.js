@@ -5,6 +5,7 @@ import {proseReferences} from '../web/prose-model.js';
 export function moduleReferences(entity){
  const d=entity.data,links=new Map();
  for(const link of [...(d.links??[]),...Object.values(d).flatMap(proseReferences).map(r=>({workspaceId:r.workspaceId,type:r.kind,id:r.id}))])links.set(JSON.stringify([link.workspaceId,link.type,link.id]),link);
+ if(entity.type==='bom')for(const line of d.lines)if(line.resourceId&&typeof line.resourceId==='object'){const link=line.resourceId;links.set(JSON.stringify([link.workspaceId,link.type,link.id]),link);}
  if(entity.type==='timeline-view')for(const [type,values] of [['project',d.projects],['notebook',d.books]])for(const value of values)if(value.includes('/')){const ref=timelineSource(value,null),link={workspaceId:ref.workspaceId,type,id:ref.id};links.set(JSON.stringify([link.workspaceId,link.type,link.id]),link);}
  return {links:[...links.values()],projectId:d.projectId??null,
   ownerId:Object.hasOwn(d,'projectId')?null:d.calendarId??d.resourceId??null};

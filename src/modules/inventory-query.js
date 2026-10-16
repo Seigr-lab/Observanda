@@ -1,3 +1,5 @@
+import {withScratch} from '../scratch-work.js';
+import {localBOMResource} from '../web/modules/bom-model.js';
 import {AppError} from '../errors.js';
 import {add,negate} from '../web/modules/quantities.js';
 import {stockTracked,assetPlacement} from '../web/modules/inventory-model.js';
@@ -5,6 +7,7 @@ import {stockTracked,assetPlacement} from '../web/modules/inventory-model.js';
 // Quantities are accumulated from authenticated constraint facts. Never infer
 // a balance from the subset of ledger originals displayed on the current page.
 export async function inventoryQuantities(context,ids,{signal,scope=null}={}){
+ return withScratch(async work=>{
  const resources=new Map();
  for(const id of ids){
   signal?.throwIfAborted();const member=await context.member(id);
@@ -32,10 +35,19 @@ export async function inventoryQuantities(context,ids,{signal,scope=null}={}){
     else if(d.status==='active')value.reserved=add(value.reserved,d.quantity);
    }
   }
-  if(entity.type==='bom'&&d.status==='finished'){
+  if(entity.type==='reservation'&&d.managed?.settlement?.action==='finish'&&item){
+   const used=d.managed.settlement,value=row(item,d.projectId),identity=JSON.stringify([d.managed.bom.workspaceId,d.managed.bom.id,item.id]);
+   value.used=add(value.used,used.used);value.scrapped=add(value.scrapped,used.scrapped);
+   if(await work.add('place:'+JSON.stringify([identity,d.projectId])))value.builds++;
+   if(!scope||scope.has(d.projectId)){
+    item.usage.used=add(item.usage.used,used.used);item.usage.scrapped=add(item.usage.scrapped,used.scrapped);
+    if(await work.add('total:'+identity))item.usage.builds++;
+   }
+  }
+  if(entity.type==='bom'&&d.status==='finished'&&!d.externalStock){
    const counted=new Set(),builds=new Set();
    for(const usage of d.usage){
-    const line=d.lines.find(l=>l.id===usage.lineId),item=line&&resources.get(line.resourceId);if(!item)continue;
+    const line=d.lines.find(l=>l.id===usage.lineId),item=line&&resources.get(localBOMResource(line,context.head?.workspaceId??context.book?.id));if(!item)continue;
     const value=row(item,line.sourceProjectId);value.used=add(value.used,usage.used);value.scrapped=add(value.scrapped,usage.scrapped);
     if(!scope||scope.has(line.sourceProjectId)){item.usage.used=add(item.usage.used,usage.used);item.usage.scrapped=add(item.usage.scrapped,usage.scrapped);if(!builds.has(item.id)){builds.add(item.id);item.usage.builds++;}}
     const key=item.id+':'+line.sourceProjectId;if(!counted.has(key)){counted.add(key);value.builds++;}
@@ -43,6 +55,7 @@ export async function inventoryQuantities(context,ids,{signal,scope=null}={}){
   }
  }
  return new Map([...resources].map(([id,item])=>[id,{...item,locations:[...item.locations.values()].map(value=>({...value,available:stockTracked(item.data)?add(value.physical,negate(value.reserved)):item.data.status==='available'?value.physical:'0'}))}]));
+ },{signal});
 }
 
 // Scope membership includes recorded placements even when their current stock

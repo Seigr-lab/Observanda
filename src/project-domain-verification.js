@@ -1,3 +1,4 @@
+import {verifyInventoryOperations} from './inventory-operation-verification.js';
 import {verifySampleAnalysisCatalogue} from './sample-analysis-catalogue.js';
 import {cataloguePrefixExists} from './postgres-indexes.js';
 import {verifyProjectModuleDrafts} from './project-module-draft-verification.js';
@@ -42,6 +43,7 @@ export async function verifyProjectDomains(research){
    };
    await owner.validateSource(source);
    await verifyProjectModuleIdentities(research.workspace.catalogueStore(session.schema(research.db.schema)),registry,async domain=>stores.find(store=>store.domain===domain));
+   await verifyInventoryOperations(context);
   });
  }finally{session.close();for(const store of stores)store.close();await research.db.run('SET LOCAL search_path TO "'+research.db.schema+'", pg_catalog').catch(error=>{if(error.code!=='25P02')throw error;});}
 }

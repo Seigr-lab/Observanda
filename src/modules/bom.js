@@ -2,7 +2,8 @@ import {validBOMSource,verifyBOMSource} from '../bom-import.js';
 import {randomUUID} from 'node:crypto';
 import {exact,text,uuid,unique,linksValid,requireValue,saved} from './validation.js';
 import {decimal,add,compare,negate} from '../web/modules/quantities.js';
-import {requiredQuantity} from '../web/modules/bom-model.js';
+import {requiredQuantity,validBOMResource,bomResourceReference,localBOMResource} from '../web/modules/bom-model.js';
+import {validateExternalBOMStock} from './bom-integrity.js';
 import {resourceDefinitions} from './resources.js';
 import {bomConstraintTypes,validateBOMSource} from './bom-constraints.js';
 
@@ -11,7 +12,7 @@ const nonnegative=value=>decimal(value)&&compare(value,'0')>=0;
 const revision=value=>value===null||typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const activeLines=bom=>bom.lines.filter(line=>!line.dnp);
 export function validateBOM(d){
- requireValue(exact(d,['title','projectId','recordId','recordTitle','recordRevision','designRevision','buildCount','notes','lines','status','allocations','usage','links',...(Object.hasOwn(d,'source')?['source']:[])])
+ requireValue(exact(d,['title','projectId','recordId','recordTitle','recordRevision','designRevision','buildCount','notes','lines','status','allocations','usage','links',...(Object.hasOwn(d,'source')?['source']:[]),...(Object.hasOwn(d,'externalStock')?['externalStock']:[])])
   &&text(d.title,240,true)&&uuid(d.projectId)&&uuid(d.recordId)&&text(d.recordTitle,180,true)&&revision(d.recordRevision)&&d.recordRevision!==null
   &&text(d.designRevision,240)&&typeof d.buildCount==='string'&&/^[1-9]\d{0,5}$/.test(d.buildCount)&&text(d.notes,10000)
   &&['draft','reserved','finished','cancelled'].includes(d.status)&&Array.isArray(d.lines)&&d.lines.length>0&&d.lines.length<=200&&unique(d.lines.map(l=>l?.id))
@@ -19,15 +20,15 @@ export function validateBOM(d){
  for(const line of d.lines){
   requireValue(exact(line,['id','references','value','footprint','partNumber','quantity','unit','resourceId','sourceProjectId','dnp','notes'])
    &&uuid(line.id)&&text(line.references,500)&&text(line.value,240,true)&&text(line.footprint,240)&&text(line.partNumber,240)
-   &&positive(line.quantity)&&text(line.unit,80,true)&&(line.resourceId===null||uuid(line.resourceId))
+   &&positive(line.quantity)&&text(line.unit,80,true)&&validBOMResource(line.resourceId)
    &&(line.sourceProjectId===null||uuid(line.sourceProjectId))&&typeof line.dnp==='boolean'&&text(line.notes,2000),'BOM line');
   try{requireValue(decimal(requiredQuantity(d,line)),'BOM total quantity');}catch{requireValue(false,'BOM total quantity exceeds supported precision');}
  }
  requireValue(!Object.hasOwn(d,'source')||d.source===null||validBOMSource(d.source),'BOM original source');
  const references=d.lines.flatMap(l=>l.references.split(',').map(v=>v.trim().toLowerCase()).filter(Boolean));
  requireValue(unique(references),'Each reference designator can appear only once; use comma-separated references');
- requireValue(d.allocations.every(a=>exact(a,['lineId','reservationId'])&&uuid(a.lineId)&&uuid(a.reservationId))
-  &&unique(d.allocations.map(a=>a.lineId))&&unique(d.allocations.map(a=>a.reservationId)),'BOM reservations');
+ requireValue(d.allocations.every(a=>exact(a,['lineId','reservationId',...(Object.hasOwn(d,'externalStock')?['workspaceId']:[])])&&uuid(a.lineId)&&uuid(a.reservationId))
+  &&unique(d.allocations.map(a=>a.lineId))&&unique(d.allocations.map(a=>Object.hasOwn(d,'externalStock')?JSON.stringify([a.workspaceId,a.reservationId]):a.reservationId)),'BOM reservations');
  requireValue(d.usage.every(u=>exact(u,['lineId','used','scrapped'])&&uuid(u.lineId)&&nonnegative(u.used)&&nonnegative(u.scrapped))
   &&unique(d.usage.map(u=>u.lineId)),'BOM actual usage');
  const lines=activeLines(d);
@@ -36,6 +37,7 @@ export function validateBOM(d){
  requireValue(d.status==='finished'?d.usage.length===lines.length&&lines.every(l=>{
   const usage=d.usage.find(u=>u.lineId===l.id);return usage&&compare(add(usage.used,usage.scrapped),requiredQuantity(d,l))<=0;
  }):d.usage.length===0,'Actual use and scrap must not exceed reserved quantities');
+ validateExternalBOMStock(d);
 }
 function bom(tx,p,status){
  requireValue(uuid(p.id),'BOM identity');const e=tx.get(p.id);
@@ -45,15 +47,18 @@ const links=(tx,e)=>[{workspaceId:tx.book.id,type:'record',id:e.data.recordId},{
 export const bomDefinitions={
  constraintTypes:bomConstraintTypes,validateSource:validateBOMSource,
  types:{bom:validateBOM},
- validate:[entities=>{
-  for(const b of entities.filter(e=>e.type==='bom'))for(const allocation of b.data.allocations){
+ validate:[(entities,{workspaceId}={})=>{
+  for(const b of entities.filter(e=>e.type==='bom')){
+   validateExternalBOMStock(b.data,workspaceId,b.id);if(b.data.externalStock)continue;
+   for(const allocation of b.data.allocations){
    const line=b.data.lines.find(l=>l.id===allocation.lineId),r=entities.find(e=>e.id===allocation.reservationId);
-   requireValue(r?.type==='reservation'&&r.data.resourceId===line.resourceId&&r.data.projectId===line.sourceProjectId&&r.data.unit===line.unit
+   requireValue(r?.type==='reservation'&&!r.data.managed&&r.data.resourceId===localBOMResource(line,workspaceId)&&r.data.projectId===line.sourceProjectId&&r.data.unit===line.unit
     &&compare(r.data.quantity,requiredQuantity(b.data,line))===0&&r.data.links.some(l=>l.type==='bom'&&l.id===b.id)
     &&(b.data.status==='reserved'?r.data.status==='active':r.data.status!=='active'),'BOM reservation integrity');
    const movements=entities.filter(e=>e.type==='movement'&&e.data.reservationId===r.id);
    const total=movements.reduce((sum,e)=>add(sum,negate(e.data.delta)),'0'),usage=b.data.usage.find(u=>u.lineId===line.id);
    requireValue(compare(total,usage?add(usage.used,usage.scrapped):'0')===0,'BOM usage integrity');
+   }
   }
  }],
  commands:{
@@ -67,14 +72,22 @@ export const bomDefinitions={
    if(old?.data.source)requireValue(JSON.stringify(old.data.source)===JSON.stringify(data.source),'The original BOM source is fixed; create a new BOM for a different source');
    else if(data.source)await verifyBOMSource(tx.workspace,data.source);
    for(const line of data.lines){
-    if(line.resourceId){const r=tx.get(line.resourceId);requireValue(r?.type==='resource'&&r.data.kind==='material'&&r.data.unit===line.unit,'Choose a material stock item with the same unit');}
-    requireValue(line.sourceProjectId===null||tx.book.projects.some(p=>p.id===line.sourceProjectId),'Choose an existing stock source');
+    const reference=bomResourceReference(line,tx.book.id),local=localBOMResource(line,tx.book.id);
+    if(reference&&!local){
+     const previous=old?.data.lines.find(value=>value.id===line.id),retained=previous&&bomResourceReference(previous,tx.book.id);
+     const unchanged=retained&&retained.workspaceId===reference.workspaceId&&retained.id===reference.id&&previous.unit===line.unit&&previous.sourceProjectId===line.sourceProjectId;
+     if(!unchanged){requireValue(!!tx.bomResources,'Choose an authorized inventory owner','MODULE_REFERENCE');await tx.bomResources.validate(reference,{unit:line.unit,sourceProjectId:line.sourceProjectId});}
+    }else{
+     if(local){const r=tx.get(local);requireValue(r?.type==='resource'&&r.data.kind==='material'&&r.data.unit===line.unit,'Choose a material stock item with the same unit');}
+     requireValue(line.sourceProjectId===null||tx.book.projects.some(p=>p.id===line.sourceProjectId),'Choose an existing stock source');
+    }
    }
    tx.put('bom',p.id,data);
   },
   async 'bom.reserve'(tx,p){
    requireValue(exact(p,['id','expectedRevision','resources'])&&Array.isArray(p.resources)&&p.resources.every(r=>exact(r,['id','revision'])&&uuid(r.id)&&Number.isSafeInteger(r.revision))&&unique(p.resources.map(r=>r.id)),'BOM reservation request');
    const e=bom(tx,p,'draft'),d=e.data,lines=activeLines(d),record=await tx.recordSummary(d.recordId);
+   requireValue(lines.every(line=>line.resourceId===null||typeof line.resourceId==='string'),'Use the addressed BOM operation','MODULE_REFERENCE');
    requireValue(record&&record.revision===d.recordRevision,'The linked record changed. Review and save the BOM before reserving stock.');
    requireValue(lines.length>0&&lines.every(l=>l.resourceId),'Link every populated line to an inventory item; DNP lines do not reserve stock');
    const ids=[...new Set(lines.map(l=>l.resourceId))];requireValue(ids.length===p.resources.length&&ids.every(id=>p.resources.some(r=>r.id===id)),'Review the inventory items before reserving');
@@ -90,7 +103,7 @@ export const bomDefinitions={
    tx.put('bom',e.id,{...d,status:'reserved',allocations});
   },
   'bom.finish'(tx,p){
-   requireValue(exact(p,['id','expectedRevision','usage']),'BOM completion request');const e=bom(tx,p,'reserved'),next={...e.data,status:'finished',usage:p.usage};validateBOM(next);
+   requireValue(exact(p,['id','expectedRevision','usage']),'BOM completion request');const e=bom(tx,p,'reserved');requireValue(!e.data.externalStock,'Use the managed BOM operation','MODULE_REFERENCE');const next={...e.data,status:'finished',usage:p.usage};validateBOM(next);
    for(const allocation of e.data.allocations){
     const reservation=tx.get(allocation.reservationId),line=e.data.lines.find(l=>l.id===allocation.lineId),usage=p.usage.find(u=>u.lineId===line.id),r=tx.get(line.resourceId),total=add(usage.used,usage.scrapped);
     requireValue(reservation?.data.status==='active','The reserved stock changed');
@@ -104,7 +117,7 @@ export const bomDefinitions={
    tx.put('bom',e.id,next);
   },
   'bom.cancel'(tx,p){
-   requireValue(exact(p,['id','expectedRevision']),'BOM cancellation request');const e=bom(tx,p,'reserved');
+   requireValue(exact(p,['id','expectedRevision']),'BOM cancellation request');const e=bom(tx,p,'reserved');requireValue(!e.data.externalStock,'Use the managed BOM operation','MODULE_REFERENCE');
    for(const a of e.data.allocations){const r=tx.get(a.reservationId);requireValue(r?.data.status==='active','The reserved stock changed');tx.put('reservation',r.id,{...r.data,status:'released'});const item=tx.get(r.data.resourceId);tx.put('resource',item.id,item.data);}
    tx.put('bom',e.id,{...e.data,status:'cancelled'});
   }

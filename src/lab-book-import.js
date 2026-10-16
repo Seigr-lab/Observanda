@@ -1,3 +1,4 @@
+import {assertInventoryObligationsSettled} from './inventory-obligation-lifecycle.js';
 // Import one authenticated book into its containing project's literal folder.
 // An already nested owner is adopted in place; an archive is restored only at
 // its destination. The parent keeps a bounded command, never a second catalogue.
@@ -121,6 +122,7 @@ export class LabBookImports{
     }
     await operationStage('import-book-register',{},async()=>{
      await check();await this.current();
+     if(value.archiveDigest)await assertInventoryObligationsSettled(target);
      const entry=await this.registry.describe(target,{staged:true});if(!same(entry,value)||entry.directory!==value.directory)throw new AppError('DATABASE_LOCATION');
      for(let attempt=0;;attempt++){
       const current=await this.registry.read(),prior=current.value.books.find(book=>book.labBookId===value.labBookId);if(prior){if(!same(prior,entry)||prior.directory!==entry.directory)throw new AppError('CONFLICT');break;}

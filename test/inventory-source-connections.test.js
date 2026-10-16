@@ -1,0 +1,54 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import {randomUUID} from 'node:crypto';
+import {projectTreeFixture} from './project-tree-fixture.js';
+import {Workspace} from '../src/storage.js';
+import {createNotebook} from '../src/model.js';
+import {sampleNotebook} from '../src/sample.js';
+import {initializeLocation} from '../src/locations.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {clearVault} from '../src/encryption.js';
+import {ProjectRegistry} from '../src/project-registry.js';
+import {ProjectStorage} from '../src/project-storage.js';
+import {LabBookStorage} from '../src/lab-book-storage.js';
+import {LabBookDirectory} from '../src/lab-book-directory.js';
+import {LabBookRegistry} from '../src/lab-book-registry.js';
+import {ProjectApplication} from '../src/project-application.js';
+import {ProjectWorkspaceMoves} from '../src/project-workspace-move.js';
+import {ProjectModuleCommands} from '../src/project-module-commands.js';
+import {inventoryOperationAccessFactory} from '../src/inventory-operation-access.js';
+import {inventoryOperationRequest} from '../src/inventory-operation-requests.js';
+import {blankBOM,bomLine} from '../src/web/modules/bom-model.js';
+import {assertInventoryObligationsSettled} from '../src/inventory-obligation-lifecycle.js';
+const command=(workspaceId,action,payload)=>({workspaceId,commandId:randomUUID(),action,payload});
+test('a reserved source moved to another workspace reconnects with independent client grants and settles once',{timeout:300000},async t=>{
+ const f=await projectTreeFixture(t),sourceBook=f.books[0],sourceProject=f.projects[0],source=new LabBookStorage(sourceBook.root,sourceBook.labBookId,sourceBook.key),hostId=f.registry.workspaceId;
+ const metadata=createNotebook('Receiving Workspace'),access=await createWorkspaceAccess('','',f.deviceStore),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const targetRoot=path.join(f.directory,metadata.title);await initializeLocation(targetRoot,metadata,access,vault);const target=new Workspace(targetRoot,vault),targetRegistry=new ProjectRegistry(target,metadata.id);
+ const app=new ProjectApplication(f.workspace,{deviceStore:f.deviceStore,workspaceLocations:async()=>[{path:targetRoot,title:metadata.title}]}),client={},other={};t.after(()=>app.close());
+ for(const book of f.books)await new LabBookDirectory(f.registry).register(book.projectId,book);
+ const sourceAccess=inventoryOperationAccessFactory(app,client),opts={inventorySourceAccess:sourceAccess},commands=new ProjectModuleCommands(f.workspace,hostId),sourceCommands=new ProjectModuleCommands(source,sourceBook.namespaceId);await commands.initialize();await sourceCommands.initialize();
+ await app.unlock(client,sourceBook.projectId,{});await app.inventoryConnections.request(client,'list',{workspaceId:hostId});
+ // The protected book requires its own grant even while its parent is open.
+ const {projectRequest}=await import('../src/project-application.js');
+ await app.run(client,projectRequest('/api/projects/'+sourceBook.projectId+'/lab-books/'+sourceBook.labBookId+'/access/unlock','POST'),{password:'Protected observations 456!'});
+ const resourceId=randomUUID(),reference={workspaceId:sourceBook.namespaceId,type:'resource',id:resourceId};
+ await sourceCommands.execute(command(sourceBook.namespaceId,'resource.create',{id:resourceId,data:{projectId:null,placementId:null,name:'Moved material',code:'M1',kind:'material',description:'',categoryId:null,schemaRevision:null,fieldSchema:[],values:{},location:'',unit:'items',capacity:1,status:'available',links:[]},openingStock:{quantity:'10',projectId:null}}));
+ const sample=sampleNotebook(),record={...sample.entries[0],id:randomUUID()};await f.workspace.update(book=>{book.projects=sample.projects;book.notebooks=sample.notebooks;book.entries=[record];return book;});
+ const bomId=randomUUID(),line={...bomLine(),resourceId:reference,value:'Moved part',quantity:'3'};
+ await commands.execute(command(hostId,'bom.save',{id:bomId,expectedRevision:null,data:{...blankBOM(),title:'Portable owner build',recordId:record.id,lines:[line]}}),opts);
+ const reserved=await commands.execute(command(hostId,'bom.reserve',{id:bomId,expectedRevision:1,resources:[{id:reference,revision:1}]}),opts);assert.equal(reserved.entities[0].data.status,'reserved');
+ await assert.rejects(assertInventoryObligationsSettled(source),{code:'INVENTORY_OBLIGATIONS'});
+ const moving=new ProjectStorage(sourceProject.root,sourceProject.projectId,sourceProject.key),moves=new ProjectWorkspaceMoves(f.registry,targetRegistry,sourceProject.projectId);
+ const moved=await moves.run(moving,{id:randomUUID(),parentId:null,expectedParentId:null,withProject:async(id,use)=>use(new ProjectStorage((await f.registry.locate(id)).root,id,f.projects.find(item=>item.projectId===id).key)),withBook:async(parent,id,use)=>use(new LabBookStorage((await new LabBookRegistry(parent).locate(id)).root,id,f.books.find(item=>item.labBookId===id).key))});assert.equal(moved.complete,true);
+ const cancel=command(hostId,'bom.cancel',{id:bomId,expectedRevision:2}),pending=await commands.execute(cancel,opts);assert.equal(pending.operationPending,true);assert.equal(pending.operation.error.code,'INVENTORY_SOURCE_WORKSPACE');
+ const request=async(actor,action,data)=>inventoryOperationRequest('/api/modules/bom/connections/'+action).run(f.workspace,{workspaceId:hostId,...data},{inventorySourceAccess:inventoryOperationAccessFactory(app,actor)});
+ const opened=await request(client,'open',{path:targetRoot,username:'',password:'',recovery:''});assert.equal(opened.sourceWorkspaceId,metadata.id);
+ const isolated=await inventoryOperationAccessFactory(app,other)(hostId);try{await assert.rejects(isolated.useOwner(sourceBook.namespaceId,()=>assert.fail('Another client borrowed source access')),{code:'INVENTORY_SOURCE_WORKSPACE'});}finally{await isolated.close();}
+ const locked=await commands.execute(cancel,opts);assert.equal(locked.operationPending,true);assert.equal(locked.operation.error.owner.sourceWorkspaceId,metadata.id);assert.equal(locked.operation.error.owner.labBookId,sourceBook.labBookId);
+ await request(client,'unlock',{sourceWorkspaceId:metadata.id,projectId:sourceBook.projectId,labBookId:sourceBook.labBookId,username:'',password:'Protected observations 456!',recovery:''});
+ const complete=await commands.execute(cancel,opts);assert.equal(complete.entities[0].data.status,'cancelled');await assertInventoryObligationsSettled(f.workspace);
+ await request(client,'close',{sourceWorkspaceId:metadata.id});assert.equal((await commands.execute(cancel,opts)).replayed,true);
+ const closed=await sourceAccess(hostId);try{await assert.rejects(closed.useOwner(sourceBook.namespaceId,()=>assert.fail('Closed connection retained access')),{code:'INVENTORY_SOURCE_WORKSPACE'});}finally{await closed.close();}
+});

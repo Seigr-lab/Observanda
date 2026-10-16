@@ -6,7 +6,7 @@ const transfer=ownedStorageTransfer({Storage:ProjectStorage,placement:'project',
 export async function copyProjectLocation(source,input,options={}){
  const books=new ProjectBookCopy(source);
  try{
-  await books.prepare(options.withBook,{portable:options.portable});
+  await books.prepare(options.withBook,{portable:options.portable,relocation:options.relocation});
   return await books.using(()=>transfer.copy(source,input,{...options,...(options.afterVerified?{afterVerified:(target,receipt)=>options.afterVerified(target,receipt,books)}:{}),onVerified:async(target,receipt)=>{await books.copied(target,receipt,options);if(options.onVerified)await options.onVerified(target,receipt);},beforeVerified:async(target,receipt,save)=>{await books.copy(target,receipt,save,options);if(options.beforeVerified)await options.beforeVerified(target,receipt,save);}}),{holdBooks:!!options.afterVerified});
  }finally{books.close();}
 }

@@ -1,3 +1,4 @@
+import {assertInventoryObligationsSettled} from './inventory-obligation-lifecycle.js';
 import {assertRenameDatabaseOwners} from './workspace-rename-inventory.js';
 import {WorkspaceProjectDeletion} from './workspace-project-deletion.js';
 import {ProjectRegistry} from './project-registry.js';
@@ -47,7 +48,7 @@ export class WorkspaceDeletions extends OwnedStorageDeletions{
   return this.owners.withStorageHandoff(()=>workspace.withStorageHandoff(()=>this.owners.withDirectoryHandoff(async()=>{
    const roots=this.owners.projects.flatMap(item=>{const root=nestedRenameRoot(workspace.root,item.relative);return [root,...this.owners.bookOwners.get(item.projectId).books.map(book=>path.join(root,book.directory))];});
    await assertRenameDatabaseOwners(workspace.root,roots,{stage:'delete-check-owners',errorCode:'STORAGE_DELETE_CONTENTS'});return operation();
-  }),{existing:true}));
+  }),{existing:true}),{checkOwner:assertInventoryObligationsSettled});
  }
  prepareReceipt(workspace,value){return this.owners?.persist(value);}
  async begin(workspace,review,options={}){

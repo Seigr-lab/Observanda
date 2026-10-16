@@ -60,7 +60,7 @@ export class ProjectPlacementTransfer{
      const projectRoots=owners.filter(other=>inside(source.root,other.storage.root)).map(other=>other.storage.root);let verified=false;
      operationItem(item.relative||path.basename(scope.source));
      const copy=item.kind==='project'?copyProjectOwnerLocation:copyLabBookLocation;
-     await copy(source,destination,{id:item.id,projectRoots,retainIncomplete:true,
+     await copy(source,destination,{id:item.id,projectRoots,retainIncomplete:true,relocation:true,
       checkpoint:async(stage,...args)=>{if(stage==='verified')verified=true;await this.check();await this.checkpoint('copy:'+stage,value,item.relative,...args);},
       onVerified:async(target,receipt)=>{
        const binding=await catalogueBinding(target.root);

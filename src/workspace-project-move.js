@@ -66,7 +66,7 @@ export class WorkspaceProjectMove{
   if(current.value.projects.length&&typeof this.withProject!=='function')throw new AppError('ACCESS_LOCKED');
   for(const entry of current.value.projects){
    if(entry.root===destination||inside(entry.root,destination)||inside(destination,entry.root))throw new AppError('STORAGE_PATH');
-   await this.withProject(entry.projectId,async owner=>{if(owner.root!==entry.root||owner.vault.id!==entry.vaultId||(await owner.outline()).metadata.id!==entry.namespaceId)throw new AppError('CONFLICT');const books=new ProjectBookCopy(owner);try{await books.prepare(this.withBook?((id,use)=>this.withBook(owner,id,use)):undefined);}finally{books.close();}});
+   await this.withProject(entry.projectId,async owner=>{if(owner.root!==entry.root||owner.vault.id!==entry.vaultId||(await owner.outline()).metadata.id!==entry.namespaceId)throw new AppError('CONFLICT');const books=new ProjectBookCopy(owner);try{await books.prepare(this.withBook?((id,use)=>this.withBook(owner,id,use)):undefined,{relocation:true});}finally{books.close();}});
   }
   await this.check();const projects=current.value.projects.map(entry=>({...entry,transferId:randomUUID(),destination:path.resolve(destination,inside(this.source.root,entry.root)?path.relative(this.source.root,entry.root):path.join('projects',entry.projectId,path.basename(entry.root)))}));
   if(!await new WorkspaceCopyRecovery(this.source,destination).emptyPreparation())await prepareCopyDestination(destination);

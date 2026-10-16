@@ -1,3 +1,4 @@
+import {assertInventoryObligationsSettled} from './inventory-obligation-lifecycle.js';
 import {incomingProjectMove,assertIncomingProjectMovesSettled,assertIncomingProjectAddresses} from './project-incoming-moves.js';
 import {acceptRelocatedProject} from './project-relocation-directory.js';
 // Adopt a selected project tree into its literal containing folder. Transport
@@ -94,6 +95,7 @@ export class ProjectImports{
         if(metadata.id!==entry.namespaceId||metadata.title!==path.basename(destination)||entry.kind==='project'&&(metadata.projects[0]?.id!==entry.projectId||metadata.projects[0]?.title!==path.basename(destination))||entry.kind==='lab-book'&&(metadata.notebooks[0]?.id!==entry.labBookId||metadata.notebooks[0]?.projectId!==entry.projectId||metadata.notebooks[0]?.title!==path.basename(destination)))throw new AppError('DATABASE_LOCATION');
         entry.restored=true;await saveProjectImport(this.registry,value);await checkpoint('owner-restored',entry);
        }
+       if(entry.archiveDigest)await assertInventoryObligationsSettled(target);
       }finally{await (entry.kind==='project'?databaseProvider()?.closeProject(destination):databaseProvider()?.closeLabBook(destination));}
       operationAdvance();
      }

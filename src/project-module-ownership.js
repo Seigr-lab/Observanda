@@ -1,3 +1,4 @@
+import {bomResourceReference,localBOMResource} from './web/modules/bom-model.js';
 import {localTaskDependency} from './web/task-prerequisite-model.js';
 // Domain facts establish ownership. Links, stock locations and lab scopes do
 // not turn a shared item into project-owned content.
@@ -25,8 +26,8 @@ export function* moduleMigrationDependencies(entity,namespaceId){
  }
  if(entity.type==='bom'){
   yield {kind:'record',id:d.recordId};
-  for(const line of d.lines){if(line.resourceId)yield module('resource',line.resourceId);if(line.sourceProjectId)yield {kind:'project',id:line.sourceProjectId};}
-  for(const item of d.allocations)yield module('reservation',item.reservationId);
+  for(const line of d.lines){const reference=bomResourceReference(line,namespaceId),local=localBOMResource(line,namespaceId);if(local)yield module('resource',local);else if(reference)yield {kind:'external',...reference};if(line.sourceProjectId&&(!reference||local))yield {kind:'project',id:line.sourceProjectId};}
+  for(const item of d.allocations)if(!item.workspaceId||item.workspaceId===namespaceId)yield module('reservation',item.reservationId);else yield {kind:'external',workspaceId:item.workspaceId,type:'reservation',id:item.reservationId};
  }
  for(const key of ['projectId','fromProjectId','toProjectId','placementId'])if(d[key])yield {kind:'project',id:d[key]};
  if(entity.type==='lab-space'){

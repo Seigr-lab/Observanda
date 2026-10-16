@@ -1,3 +1,4 @@
+import {assertInventoryObligationsSettled} from './inventory-obligation-lifecycle.js';
 // Permanent deletion is authorized against an unlocked workspace, then frozen
 // and retired to a unique sibling. Retries never traverse a reused source path.
 import path from 'node:path';
@@ -63,6 +64,7 @@ export class OwnedStorageDeletions{
  async review(workspace,{protectedPaths=[],recent=[],exceptId=null}={}){
   const source=await realpath(workspace.root);await assertNotDeleting(source);await assertNotMoving(source);
   if([this.directory,...protectedPaths].filter(Boolean).some(p=>inside(source,path.resolve(p))))throw new AppError('STORAGE_DELETE_CONTENTS');
+  await assertInventoryObligationsSettled(workspace);
   const inventory=await this.inventory(workspace),descriptor=await this.ownedDirectory(source,inventory),snapshot=await workspace.outline(),binding=await this.binding(source);
   if(!this.validBinding(binding))throw new AppError('DATABASE_LOCATION');
   await this.ready(workspace,binding);
@@ -85,6 +87,7 @@ export class OwnedStorageDeletions{
    let receipt;
    await this.handoff(workspace,async()=>{
     await this.ready(workspace,await this.binding(review.source));
+    await assertInventoryObligationsSettled(workspace);
     if(workspace.root!==review.source||await this.ownedDirectory(review.source,review)!==review.descriptor||(await workspace.outline()).etag!==review.etag||JSON.stringify(await this.binding(review.source))!==JSON.stringify(review.binding)||await fingerprint(path.join(review.source,review.descriptor))!==review.descriptorHash||await fingerprint(path.join(review.source,'.observanda/access.json'))!==review.accessHash)throw new AppError('CONFLICT');
     await operationStage('delete-check',{unit:'files'},async()=>{for await(const item of files(review.source,'',{skipDatabase:true})){operationItem(item.name);operationAdvance();}});
     receipt={...review,title:workspace.vault?.key?'':review.title,version:1,id,phase:'prepared',databaseRemoved:false};

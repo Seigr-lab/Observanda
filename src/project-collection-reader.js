@@ -13,7 +13,8 @@ export function projectCollectionReader(application,client,check){
  let current=null;const guards=new Map();
  async function close(){const saved=current;current=null;clearVault(saved?.vault);await saved?.owner?.close();}
  return {
-  async use(target,snapshotId,consume,{prepare}={}){
+  useStorage(target,consume){return this.use(target,null,consume,{storageOnly:true});},
+  async use(target,snapshotId,consume,{prepare,storageOnly=false}={}){
    await check();const identity=JSON.stringify(target);
    if(current?.identity!==identity){
     // Adjacent books can share the same authenticated project parent. Release
@@ -55,7 +56,14 @@ export function projectCollectionReader(application,client,check){
     }catch(error){if(target.projectId&&['ACCESS_LOCKED','ACCESS_DENIED','ACCESS_WAIT','AUTH','DEVICE_UNKNOWN'].includes(error.code))error.projectId??=target.projectId;await close();throw error;}
    }
    const selected=current;
-   const result=await application.tracked(async()=>{await selected.verify();await prepare?.(selected.storage);await selected.verify();return selected.storage.catalogue(async store=>{
+   const result=await application.tracked(async()=>{await selected.verify();await prepare?.(selected.storage);await selected.verify();
+    if(storageOnly){
+     // Mutation callers acquire their own short domain transaction. Never
+     // retain the reader transaction across an independently owned write.
+     await selected.storage.catalogue(async store=>{if((await store.snapshot()).metadata.id!==target.workspaceId)throw new AppError('DATABASE_LOCATION');});
+     const value=await consume(selected.storage,{check:selected.verify});await selected.verify();return value;
+    }
+    return selected.storage.catalogue(async store=>{
     const revision=snapshotId??await store.head(),snapshot=await store.snapshot(revision);if(snapshot.metadata.id!==target.workspaceId)throw new AppError('DATABASE_LOCATION');
     const value=await consume(store,snapshot,{snapshotId:revision,storage:selected.storage});await selected.verify();return value;
    });},target.projectId,target.labBookId??undefined);

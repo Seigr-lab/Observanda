@@ -63,7 +63,7 @@ export class ProjectMoves{
     if(within(source,destination)||within(destination,source)||within(this.workspace.root,destination)||within(destination,this.workspace.root)||members.some(item=>item.projectId!==projectId&&(within(destination,item.root)||within(item.root,destination)&&!destinationParents.includes(item.root))))throw new AppError('STORAGE_PATH');
     for(const parent of destinationParents){if(!members.some(item=>item.root===parent)||!within(parent,destination)||parent===destination||['.observanda/postgresql','.observanda/database-transition'].some(relative=>within(path.join(parent,relative),destination)))throw new AppError('STORAGE_PATH');}
     const boundaries=projectCopyBoundaries(source,projectCopyRoots(source,members)),books=new ProjectBookCopy(new ProjectStorage(source,projectId,vault));
-    try{requireStorageName(destination,storageFolderName(source));await books.prepare(withBook);await ownedProjectFolder(source,boundaries,books.books);await assertRenameDatabaseOwners(source,books.books.map(book=>path.join(source,book.directory)),{errorCode:'STORAGE_MOVE_CONTENTS',skipRoots:boundaries.map(relative=>path.resolve(source,...relative.split('/')))});}catch(error){error.operationNotStarted=true;throw error;}finally{books.close();}
+    try{requireStorageName(destination,storageFolderName(source));await books.prepare(withBook,{relocation:true});await ownedProjectFolder(source,boundaries,books.books);await assertRenameDatabaseOwners(source,books.books.map(book=>path.join(source,book.directory)),{errorCode:'STORAGE_MOVE_CONTENTS',skipRoots:boundaries.map(relative=>path.resolve(source,...relative.split('/')))});}catch(error){error.operationNotStarted=true;throw error;}finally{books.close();}
     const access=await readAccess(source),binding=await catalogueBinding(source);authenticateKeyring(access.value,vault);
     if(entry.vaultId!==vault.id||binding?.placement!=='project'||binding.projectId!==projectId)throw new AppError('DATABASE_LOCATION');
     value={version:2,...(workspaceMoveId?{workspaceMoveId}:{}),boundaries,...(boundaries.length?{sourceDirectory:await projectMoveDirectory(source)}:{}),id,projectId,source,destination,vaultId:vault.id,namespaceId:entry.namespaceId,sourceId:binding.id,phase:'copying'};await this.save(value);
@@ -97,7 +97,7 @@ export class ProjectMoves{
    let fresh=false,verified=false;
    if(value.phase==='copying'){
     if(adoptOnly)return status(value);
-    await operationStage('copy-project',{},()=>copyProjectLocation(source,value.destination,{id,projectRoots:retainedCopyRoots(value),withBook,onCopiedBook,checkpoint:async(stage,...args)=>checkpoint('copy:'+stage,...args),afterVerified:freeze}));fresh=true;
+    await operationStage('copy-project',{},()=>copyProjectLocation(source,value.destination,{id,relocation:true,projectRoots:retainedCopyRoots(value),withBook,onCopiedBook,checkpoint:async(stage,...args)=>checkpoint('copy:'+stage,...args),afterVerified:freeze}));fresh=true;
    }
    if(value.phase==='verified'){
     const marker=await moveSource(source.root);
@@ -107,7 +107,7 @@ export class ProjectMoves{
     }else{
      // Interruption before freezing left the original usable. Recheck it under
      // its writer before committing a previously prepared destination.
-     await copyProjectLocation(source,value.destination,{id,projectRoots:retainedCopyRoots(value),withBook,onCopiedBook,checkpoint:async(stage,...args)=>checkpoint('copy:'+stage,...args),afterVerified:freeze});
+     await copyProjectLocation(source,value.destination,{id,relocation:true,projectRoots:retainedCopyRoots(value),withBook,onCopiedBook,checkpoint:async(stage,...args)=>checkpoint('copy:'+stage,...args),afterVerified:freeze});
     }
    }
    if(['adopted','retired'].includes(value.phase))await onAdopt(await this.registry.locate(projectId));

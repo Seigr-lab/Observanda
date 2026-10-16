@@ -1,3 +1,4 @@
+import {assertInventoryObligationsSettled} from './inventory-obligation-lifecycle.js';
 import {LabBookStorage} from './lab-book-storage.js';
 // A project bundle contains independently transferred book owners. Membership
 // is fixed for the command; ordinary writers in unrelated owners remain free.
@@ -15,8 +16,9 @@ import {researchId} from './web/research-reference.js';
 import {AppError} from './errors.js';
 export class ProjectBookCopy extends ProjectBookOwners{
  constructor(project){super(project,{busyCode:'STORAGE_PROJECT_BUSY',missingAccessCode:'ACCESS_LOCKED'});}
- async prepare(withBook,{portable=false}={}){
+ async prepare(withBook,{portable=false,relocation=false}={}){
   this.withBook=withBook;await super.prepare(withBook);
+  if(!relocation){await assertInventoryObligationsSettled(this.project);for(const book of this.books)await assertInventoryObligationsSettled(await this.checked(book));}
   if(portable)for(const book of this.books){const storage=await this.checked(book),access=await readAccess(storage.root);if(!access.value.password&&!access.value.recovery)throw new AppError('STORAGE_PORTABLE_BOOK_ACCESS');}
  }
  async using(operation,{holdBooks=false}={}){
@@ -36,7 +38,7 @@ export class ProjectBookCopy extends ProjectBookOwners{
   }
  }
 
- async copy(target,receipt,save,{portable=false,checkpoint=async()=>{}}={}){
+ async copy(target,receipt,save,{portable=false,relocation=false,checkpoint=async()=>{}}={}){
   if(!this.books.length)return;
   if(receipt.bookRegistryRevision!==undefined&&receipt.bookRegistryRevision!==this.revision)throw new AppError('CONFLICT');
   if(receipt.bookTransfers===undefined){receipt.bookRegistryRevision=this.revision;receipt.bookTransfers=this.books.map(book=>({labBookId:book.labBookId,id:randomUUID()}));await save();}
@@ -48,7 +50,7 @@ export class ProjectBookCopy extends ProjectBookOwners{
     operationItem(book.directory);await this.checked(book);const destination=path.join(target.root,book.directory);
     await this.withBook(book.labBookId,async storage=>{
      const current=await this.checked(book);if(storage.root!==current.root||storage.vault?.id!==book.vaultId)throw new AppError('CONFLICT');
-     const copied=await copyLabBookLocation(storage,destination,{id:transfers[index].id,portable,...(this.holdingBooks?{sourceHandoff:operation=>operation(),afterVerified:async()=>{}}:{}),checkpoint:(stage,file)=>checkpoint('book-'+stage,{labBookId:book.labBookId,file})});
+     const copied=await copyLabBookLocation(storage,destination,{id:transfers[index].id,portable,relocation,...(this.holdingBooks?{sourceHandoff:operation=>operation(),afterVerified:async()=>{}}:{}),checkpoint:(stage,file)=>checkpoint('book-'+stage,{labBookId:book.labBookId,file})});
      try{if((await labBookTransferReceipt(copied)).namespaceId!==book.namespaceId)throw new AppError('DATABASE_LOCATION');}finally{await databaseProvider()?.closeLabBook(destination);}
     });
     await assertRegular(destination,{directory:true});operationAdvance();await checkpoint('book',book.labBookId);

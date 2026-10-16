@@ -1,3 +1,4 @@
+import {assertInventoryObligationsSettled} from './inventory-obligation-lifecycle.js';
 import {initializeWorkspaceSettings} from './workspace-settings.js';
 import {withProjectModuleInitialization} from './project-module-initialization.js';
 import {withRetiredRecordCopy} from './project-retired-records.js';
@@ -148,11 +149,13 @@ export async function prepareCopyDestination(expected){
   if((await readdir(destination)).some(name=>name!=='.observanda'))throw new AppError('EXISTS');
   return {destination,marker};
 }
-export async function copyWorkspace(plan,{vault=null,onProgress,afterCopy,afterVerified,reuseCatalogue=false,activateCatalogue=false,beforePublish,recovery,beforeSnapshot,afterSnapshotVerified}={}){
+export async function copyWorkspace(plan,{vault=null,onProgress,afterCopy,afterVerified,reuseCatalogue=false,activateCatalogue=false,beforePublish,recovery,beforeSnapshot,afterSnapshotVerified,relocation=false}={}){
+  if(typeof relocation!=='boolean')throw new AppError('INVALID');
   if(reuseCatalogue&&(activateCatalogue||beforePublish||recovery))throw new AppError('INVALID');
   return withOperationProgress(onProgress,()=>operationStage('copy-workspace',{},async()=>{
    let publication;
    const result=recovery?.snapshotReady?(publication={destination:plan.destination,marker:recovery.marker},plan.destination):await new Workspace(plan.source,vault).withStorageHandoff(async()=>{
+    if(!relocation)await assertInventoryObligationsSettled(new Workspace(plan.source,vault));
     if(beforeSnapshot)await beforeSnapshot();
     operationTransfer({phase:'checking',files:0,bytes:0,totalFiles:plan.transferFiles??plan.fileCount,totalBytes:plan.fileBytes??plan.bytes});
     let destination,marker;
@@ -216,6 +219,7 @@ export async function copyWorkspace(plan,{vault=null,onProgress,afterCopy,afterV
 export async function encryptedCopy(plan,access,vault,sourceVault=null,{onProgress}={}){
   if(!isEncryptedAccess(access)||!vault?.key||vault.id!==access.vaultId)throw new AppError('ACCESS_LOCKED');
   return withOperationProgress(onProgress,()=>operationStage('copy-workspace',{},()=>new Workspace(plan.source,sourceVault).withStorageHandoff(async()=>{
+    await assertInventoryObligationsSettled(new Workspace(plan.source,sourceVault));
     await reviewedInventory(plan);
     const {destination,marker}=await prepareCopyDestination(plan.destination);
     const source=new Workspace(plan.source,sourceVault),target=new Workspace(destination,vault);

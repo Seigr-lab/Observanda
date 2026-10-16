@@ -33,13 +33,13 @@ for(const count of [20,200])test(count+'-line BOM import, reservation and actual
   const before=await modules.current();
   await assert.rejects(command('bom.save',{id,expectedRevision:1,data:{...before.entities.find(e=>e.id===id).data,lines:[...lines,...Array.from({length:201-count},(_,i)=>({...bomLine(),references:'X'+i,value:'Additional part',resourceId:ids[0]}))]}}),{code:'MODULE_INVALID'});
   assert.deepEqual(await modules.current(),before);
-  start=performance.now();const reserved=await command('bom.reserve',{id,expectedRevision:1,resources:ids.map(id=>({id,revision:1}))}),reserveMs=performance.now()-start;assert.ok(reserveMs<10000);
-  for(const resourceId of ids)assert.deepEqual(balance(reserved.data.entities,resourceId),{physical:'100',reserved:'2',available:'98'});
+  start=performance.now();await command('bom.reserve',{id,expectedRevision:1,resources:ids.map(id=>({id,revision:1}))});const reserveMs=performance.now()-start;assert.ok(reserveMs<10000);const reserved=await modules.current();
+  for(const resourceId of ids)assert.deepEqual(balance(reserved.entities,resourceId),{physical:'100',reserved:'2',available:'98'});
   const usage=lines.map((line,i)=>({lineId:line.id,used:'1',scrapped:i%2?'0':'1'})),receipt=randomUUID(),payload={id,expectedRevision:2,usage};
-  start=performance.now();const finished=await command('bom.finish',payload,receipt),finishMs=performance.now()-start;assert.ok(finishMs<10000);
-  for(const [i,resourceId] of ids.entries()){const physical=i%2?'99':'98';assert.deepEqual(balance(finished.data.entities,resourceId),{physical,reserved:'0',available:physical});}
+  start=performance.now();await command('bom.finish',payload,receipt);const finishMs=performance.now()-start;assert.ok(finishMs<10000);const finished=await modules.current();
+  for(const [i,resourceId] of ids.entries()){const physical=i%2?'99':'98';assert.deepEqual(balance(finished.entities,resourceId),{physical,reserved:'0',available:physical});}
   assert.equal((await command('bom.finish',payload,receipt)).replayed,true);
-  const current=await modules.current(),sorted=data=>({...data,entities:[...data.entities].sort((a,b)=>a.id.localeCompare(b.id))});assert.deepEqual(sorted(current),sorted(finished.data));
+  const current=await modules.current(),sorted=data=>({...data,entities:[...data.entities].sort((a,b)=>a.id.localeCompare(b.id))});assert.deepEqual(sorted(current),sorted(finished));
   assert.deepEqual(current.entities.find(e=>e.id===id).data.source,source);
   await f.workspace.catalogue(store=>modules.verifyCatalogue(store,base.id));
   assert.deepEqual((await f.workspace.read()).book.entries,base.entries);

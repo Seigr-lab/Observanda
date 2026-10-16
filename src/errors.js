@@ -22,6 +22,7 @@ export function safeError(error) {
       if(typeof error.labBookName==='string'&&error.labBookName.length<=160&&!/[\\/:\r\n\0]/.test(error.labBookName))result.labBookName=error.labBookName;
     }
   }
+  if(ownerId(error.sourceWorkspaceId))result.sourceWorkspaceId=error.sourceWorkspaceId;
   if(ownerId(error.destinationWorkspaceId))result.destinationWorkspaceId=error.destinationWorkspaceId;
   if(error.code==='PROJECT_MOVED'&&ownerId(error.workspaceId))result.workspaceId=error.workspaceId;
   if(error.operationNotStarted===true)result.operationNotStarted=true;

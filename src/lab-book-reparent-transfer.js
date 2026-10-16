@@ -35,7 +35,7 @@ export class LabBookRelocationTransfer{
   if(await this.command.locate(value)!==source.root||(await workspaceRename(source.root))?.id!==value.id)throw new AppError('STORAGE_RENAME_STATE');
   if((await catalogueBinding(source.root))?.id!==value.transfer.sourceId)throw new AppError('DATABASE_LOCATION');
   await ownedProjectFolder(source.root);await this.check();let verified=false;
-  await copyLabBookLocation(source,roots.destination,{id:value.id,retainIncomplete:true,
+  await copyLabBookLocation(source,roots.destination,{id:value.id,retainIncomplete:true,relocation:true,
    checkpoint:async(stage,...args)=>{if(stage==='verified')verified=true;await this.check();await this.checkpoint('copy:'+stage,...args);},
    onVerified:async(target,receipt)=>{
     const binding=await catalogueBinding(target.root);

@@ -45,9 +45,9 @@ export class InventoryReader{
    if(c.head.revision!==page.revision)throw new AppError('MODULE_QUERY_CURSOR');
    const items=[];
    for(const summary of page.items){signal?.throwIfAborted();const entity=await c.selected(summary.id);if(!entity)throw new AppError('CATALOGUE_DAMAGED');this.reader.modules.validateEntity(entity);items.push(entity);}
-   const managed=new Set();if(kind==='reservations')for await(const member of c.members({signal})){
+   const managed=new Set(items.filter(item=>item.type==='reservation'&&item.data.managed).map(item=>item.id));if(kind==='reservations'&&managed.size<items.length)for await(const member of c.members({signal})){
     signal?.throwIfAborted();if(member.type&&member.type!=='bom')continue;
-    const facts=await c.constraint(member);if(facts.type==='bom')for(const allocation of facts.data.allocations)if(items.some(i=>i.id===allocation.reservationId))managed.add(allocation.reservationId);
+    const facts=await c.constraint(member);if(facts.type==='bom'&&!facts.data.externalStock)for(const allocation of facts.data.allocations)if(items.some(i=>i.id===allocation.reservationId))managed.add(allocation.reservationId);
    }
    return {...page,items,managed:[...managed]};
   });
