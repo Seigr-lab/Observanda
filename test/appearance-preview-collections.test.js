@@ -11,6 +11,7 @@ import {clearVault} from '../src/encryption.js';
 import {ResearchCatalogue} from '../src/research-catalogue.js';
 import {appearancePreviewPage,appearancePreviewChoices} from '../src/appearance-preview.js';
 import {renderPublication} from '../src/publication.js';
+import {hasPrivateText} from '../src/privacy.js';
 import {sectionItems} from '../src/web/website-model.js';
 import {createRegion,assignRegion} from '../src/web/website-regions.js';
 import {copyPlan,copyWorkspace} from '../src/locations.js';
@@ -64,7 +65,12 @@ test('unlimited collections traverse every public card at tenfold growth with bo
    summaries=0;const context=await get(f,request),page=collection(context);first??=page;if(seen.length===24)second=page;
    assert.ok(context.recordCards.length<=24);assert.ok(summaries<=24);assert.equal(bodies,0);assert.ok(Buffer.byteLength(JSON.stringify(context))<65000);
    assert.deepEqual(sectionItems(context.website.home.sections[0],context).map(r=>r.id),page.recordIds);
-   const html=renderPublication(context,{emitBrowse:false}).files.get('index.html');assert.ok(!html.includes('PRIVATE_CARD'));assert.equal((html.match(/<article class="publication-card/g)??[]).length,page.recordIds.length);
+   let html;try{html=renderPublication(context,{emitBrowse:false}).files.get('index.html');}
+   catch(error){
+    if(error.code==='PRIVACY')t.diagnostic(JSON.stringify({records:count,completed:seen.length,cursorPrivacy:context.collectionPages.map(item=>({key:item.key,previous:!!item.previousCursor&&hasPrivateText(item.previousCursor),next:!!item.nextCursor&&hasPrivateText(item.nextCursor)}))}));
+    throw error;
+   }
+   assert.ok(!html.includes('PRIVATE_CARD'));assert.equal((html.match(/<article class="publication-card/g)??[]).length,page.recordIds.length);
    seen.push(...page.recordIds);request=page.nextCursor?next('index.html',page):null;
   }while(request);
   assert.deepEqual(seen,f.book.entries.filter(r=>r.share).map(r=>r.id));

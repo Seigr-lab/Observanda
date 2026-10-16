@@ -1,4 +1,5 @@
 import {AppError} from './errors.js';
+import {encodeAppearanceCursor,decodeAppearanceCursor} from './appearance-preview-cursor.js';
 import {digest,serialize} from './storage-format.js';
 import {calendarDate,dateBounds,recordDateLabel} from './web/record-date.js';
 import {BOOK_JOURNEYS,readingJourney} from './web/book-journeys.js';
@@ -24,7 +25,7 @@ export async function appearanceBrowsePage(records,query){
  const identity=metadata.id,binding=digest(serialize({snapshot:records.snapshotId,websiteId:records.websiteId,metadata,selection:records.selection,filters}));
  let anchor={after:null,backward:false};
  if(cursor){
-  try{anchor=store.decode('appearance-browse-page',identity,Buffer.from(cursor,'base64url'));}catch{throw new AppError('INVALID');}
+  try{anchor=store.decode('appearance-browse-page',identity,decodeAppearanceCursor(cursor));}catch{throw new AppError('INVALID');}
   if(!anchor||Object.keys(anchor).sort().join()!=='after,backward,binding'||anchor.binding!==binding||
    !Number.isSafeInteger(anchor.after)||anchor.after<0||typeof anchor.backward!=='boolean')throw new AppError('INVALID');
  }
@@ -37,7 +38,7 @@ export async function appearanceBrowsePage(records,query){
   const bounds=dateBounds(item.occurredOn),text=item.title+bookText(item.journey)+' · '+recordDateLabel(item.occurredOn)+(item.tags.length?item.tags.join(' · '):'');
   if(matchesPublicRecord({...item,text,start:bounds?.from??'',end:bounds?.to??''},filters))items.push(item);
  }
- const encode=(after,backward)=>store.encode('appearance-browse-page',identity,{binding,after,backward}).toString('base64url');
+ const encode=(after,backward)=>encodeAppearanceCursor(store.encode('appearance-browse-page',identity,{binding,after,backward}));
  const before=first===null?anchor.after:first,after=last===null?anchor.after:last;
  const prior=anchor.after!==null&&before!==null?encode(before,!anchor.backward):null,next=more?encode(after,anchor.backward):null;
  if(anchor.backward)items.reverse();

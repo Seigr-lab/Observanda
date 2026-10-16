@@ -1,4 +1,5 @@
 import {AppError} from './errors.js';
+import {encodeAppearanceCursor,decodeAppearanceCursor} from './appearance-preview-cursor.js';
 import {digest,serialize} from './storage-format.js';
 import {recordReferenceCandidates} from './record-reference-candidates.js';
 import {publicationLinkResolver} from './publication-prose.js';
@@ -25,7 +26,7 @@ export async function appearanceReferencePage(records,id,cursor=null){
  const binding=digest(serialize({snapshot:records.snapshotId,websiteId:records.websiteId,metadata,selection:records.selection,id}));
  let anchor={after:null,backward:false};
  if(cursor){
-  try{anchor=store.decode('appearance-reference-page',metadata.id,Buffer.from(cursor,'base64url'));}catch{throw new AppError('INVALID');}
+  try{anchor=store.decode('appearance-reference-page',metadata.id,decodeAppearanceCursor(cursor));}catch{throw new AppError('INVALID');}
   if(!anchor||Object.keys(anchor).sort().join()!=='after,backward,binding'||anchor.binding!==binding||!Number.isSafeInteger(anchor.after)||anchor.after<0||typeof anchor.backward!=='boolean')throw new AppError('INVALID');
  }
  const matches=recordQueryMatcher({relatedTo:{workspaceId:metadata.id,id:selected.recordId??id},referenceNamespaces:selected.referenceNamespaces}),resolve=publicationLinkResolver(metadata.id,{entries:[selected]});
@@ -40,7 +41,7 @@ export async function appearanceReferencePage(records,id,cursor=null){
   if(!details.publicationDescriptor.relations.some(link=>resolve(researchReference(link.target))))continue;
   await records.get(row.id,details);items.push(row.id);
  }
- const encode=(after,backward)=>store.encode('appearance-reference-page',metadata.id,{binding,after,backward}).toString('base64url');
+ const encode=(after,backward)=>encodeAppearanceCursor(store.encode('appearance-reference-page',metadata.id,{binding,after,backward}));
  const prior=anchor.after!==null?encode(first??anchor.after,!anchor.backward):null,next=more?encode(last??anchor.after,anchor.backward):null;
  if(anchor.backward)items.reverse();
  return {recordIds:items,scanned,previousCursor:anchor.backward?next:prior,nextCursor:anchor.backward?prior:next};

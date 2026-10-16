@@ -1,4 +1,5 @@
 import {AppError} from './errors.js';
+import {encodeAppearanceCursor,decodeAppearanceCursor} from './appearance-preview-cursor.js';
 import {digest,serialize} from './storage-format.js';
 import {compareRecordDates} from './web/record-date.js';
 import {compareKey} from './web/query-order.js';
@@ -27,7 +28,7 @@ export async function appearanceFeedPage(records,{key,target,notebooks,filter={}
  const {store}=records,binding=digest(serialize({snapshot:records.snapshotId,metadata:records.metadata,websiteId:records.websiteId,selection:records.selection,target,key,notebooks:[...notebooks].sort(),filter,feed,query}));
  let anchor=null,backward=false,boundary=null;
  if(cursor){
-  let value;try{value=store.decode('appearance-feed-page',records.metadata.id,Buffer.from(cursor,'base64url'));}catch{throw new AppError('INVALID');}
+  let value;try{value=store.decode('appearance-feed-page',records.metadata.id,decodeAppearanceCursor(cursor));}catch{throw new AppError('INVALID');}
   if(value?.binding!==binding||typeof value.backward!=='boolean'||!value.anchor)throw new AppError('INVALID');
   ({anchor,backward,boundary}=value);
  }
@@ -52,7 +53,7 @@ export async function appearanceFeedPage(records,{key,target,notebooks,filter={}
   items.push({id,title,notebookId,occurredOn,status,tags,type,excerpt,hasBody,attachments});
  }
  if(backward)items.reverse();
- const encode=(value,direction)=>store.encode('appearance-feed-page',records.metadata.id,{binding,anchor:point(value),backward:direction,boundary}).toString('base64url');
+ const encode=(value,direction)=>encodeAppearanceCursor(store.encode('appearance-feed-page',records.metadata.id,{binding,anchor:point(value),backward:direction,boundary}));
  const previous=backward?more:anchor!==null,next=backward?anchor!==null:more;
  return {key,records:items,scanned,visitor:query,previousCursor:previous?encode(items[0]??anchor,true):null,nextCursor:next?encode(items.at(-1)??anchor,false):null};
 }

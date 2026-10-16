@@ -1,4 +1,5 @@
 import {AppError} from './errors.js';
+import {encodeAppearanceCursor,decodeAppearanceCursor} from './appearance-preview-cursor.js';
 import {digest,serialize} from './storage-format.js';
 import {researchId} from './web/research-reference.js';
 import {validRecordDate} from './web/record-date.js';
@@ -18,7 +19,7 @@ export async function appearanceCollectionPage(records,{key,target,notebooks,fil
  const binding=digest(serialize({snapshot:records.snapshotId,websiteId:records.websiteId,metadata:records.metadata,selection:records.selection,target,key,notebooks:[...notebooks].sort(),tag,limit}));
  let anchor={after:null,backward:false,matched:0};
  if(cursor){
-  try{anchor=store.decode('appearance-card-page',records.metadata.id,Buffer.from(cursor,'base64url'));}catch{throw new AppError('INVALID');}
+  try{anchor=store.decode('appearance-card-page',records.metadata.id,decodeAppearanceCursor(cursor));}catch{throw new AppError('INVALID');}
   if(!anchor||Object.keys(anchor).sort().join()!=='after,backward,binding,matched'||anchor.binding!==binding||typeof anchor.backward!=='boolean'||
    !Number.isSafeInteger(anchor.matched)||anchor.matched<0||limit&&anchor.matched>limit||!researchId(anchor.after?.id)||!validRecordDate(anchor.after?.occurredOn))throw new AppError('INVALID');
  }
@@ -34,7 +35,7 @@ export async function appearanceCollectionPage(records,{key,target,notebooks,fil
  }
  const start=anchor.backward?anchor.matched-items.length:anchor.matched,end=start+items.length;
  if(start<0)throw new AppError('INVALID');
- const encode=(after,backward,matched)=>store.encode('appearance-card-page',records.metadata.id,{binding,after,backward,matched}).toString('base64url');
+ const encode=(after,backward,matched)=>encodeAppearanceCursor(store.encode('appearance-card-page',records.metadata.id,{binding,after,backward,matched}));
  const previous=anchor.backward?more:anchor.after!==null,next=anchor.backward?anchor.after!==null:more;
  if(anchor.backward)items.reverse();
  const before=(anchor.backward?last:first)??anchor.after,after=(anchor.backward?first:last)??anchor.after;
