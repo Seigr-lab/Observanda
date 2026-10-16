@@ -6,9 +6,9 @@ import {websitePageWindow} from './website-page-targets.js';
 const text=(key,values)=>t('websitePages',key,values),limit=WEBSITE_PAGE_LIMIT;
 // Page discovery owns only the current result window. It never adopts a
 // workspace snapshot or reads originals. Selection callbacks own draft changes.
-export function websitePagePicker({state,api,esc,field,showDialog,onChoose,pageBook=()=>state.book}){
+export function websitePagePicker({state,api,esc,field,showDialog,onChoose,pageBook=()=>state.book,recordPages=options=>websiteRecordPages({state,api,...options})}){
  let session=null,controller=null,timer=null,generation=0;
- const identity=()=>JSON.stringify([websiteContext(state),state.book?.id,state.etag]);
+ const identity=()=>JSON.stringify([websiteContext(state),state.book?.id,state.etag,state.book?.website.researchSources]);
  const valid=s=>s&&s===session&&s.identity===identity()&&state.page==='website'&&!state.access?.locked&&!state.storageUnavailable&&s.root.isConnected&&s.dialog.open;
  const button=(key,extra='')=>`<button type="button" class="button" data-page-picker="${key}" ${extra}>${esc(text(key))}</button>`;
  function cancel(){controller?.abort();controller=null;clearTimeout(timer);timer=null;generation++;}
@@ -20,7 +20,7 @@ export function websitePagePicker({state,api,esc,field,showDialog,onChoose,pageB
   const s=session;if(!valid(s))return;
   const result=s.result,host=s.root.querySelector('[data-page-results]');host.setAttribute('aria-busy',String(s.loading));
   host.innerHTML=`${s.error?`<p role="alert">${esc(s.error)}</p>${button('retry')}`:''}${s.selectionError?`<p role="alert">${esc(s.selectionError)}</p>`:''}${s.loading?`<p role="status">${esc(text('loading'))}</p>`:result?`
-   <p role="status" tabindex="-1" data-page-range>${esc(result.total?text('range',{first:result.offset+1,last:result.offset+result.items.length,total:result.total}):text('empty'))}</p>
+   <p role="status" tabindex="-1" data-page-range>${esc(result.total?text('range',{first:result.offset+1,last:result.offset+result.items.length,total:result.total}):result.items.length?text('pageResults',{count:result.items.length}):text('empty'))}</p>
    ${result.changed?`<p>${esc(text('changed'))}</p>`:''}
    <ul class="website-page-results">${result.items.map(item=>{const label=`<span>${esc(item.target==='home'?text('home'):item.title)}</span>${item.context?`<small>${esc(item.context)}</small>`:''}`;return `<li>${s.selection?`<label class="website-page-assignment"><input type="checkbox" data-page-selection="${esc(item.path)}" ${s.selection.has(item)?'checked':''}><span>${label}</span></label>`:`<button type="button" class="button" data-page-path="${esc(item.path)}">${label}</button>`}</li>`;}).join('')}</ul>
    <div class="inline-actions">${button('previous',result.previousCursor===null?'disabled':'')}${button('next',result.nextCursor===null?'disabled':'')}</div>`:''}`;
@@ -30,7 +30,7 @@ export function websitePagePicker({state,api,esc,field,showDialog,onChoose,pageB
   const request=generation;controller=new AbortController();const signal=controller.signal;s.loading=true;s.error='';s.selectionError='';s.result=null;paint();
   try{
    let result;
-   if(s.kind==='entry')result=await websiteRecordPages({state,api,search:s.search,cursor,signal});
+   if(s.kind==='entry')result=await recordPages({search:s.search,cursor,signal});
    else result=websitePageWindow(pageBook(),{kind:s.kind,search:s.search,offset:cursor??0,limit});
    if(!valid(s)||request!==generation)return;s.result=result;
   }catch(error){if(!valid(s)||request!==generation||signal.aborted)return;s.error=error.message??text('failed');}

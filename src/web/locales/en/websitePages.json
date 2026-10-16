@@ -12,6 +12,7 @@
   "placeholder": "Search pages",
   "loading": "Finding pages…",
   "range": "{first}–{last} of {total}",
+  "pageResults": "{count} matching pages",
   "empty": "No matching pages.",
   "noPages": "No pages yet",
   "previous": "Previous",

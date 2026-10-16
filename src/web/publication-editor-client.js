@@ -26,6 +26,7 @@ export function publicationEditorClient({state}){
   selected={id:page.record.id,title:page.title,notebookId:page.record.notebookId};
  }
  return {accept,remember,sync,close,
+  sources(){sync();return projection?.sources??[];},
   recordCount(){sync();return projection?.recordCount??null;},
   record(id){sync();return projection?.records.find(record=>record.id===id)??null;},
   pageBook(book){sync();if(!projection&&!selected)return book;const entries=new Map(book.entries.map(record=>[record.id,record]));for(const record of projection?.records??[])entries.set(record.id,record);if(selected&&!entries.has(selected.id))entries.set(selected.id,selected);return {...book,projects:[...book.projects,...projection?.projects??[]],notebooks:[...book.notebooks,...projection?.notebooks??[]],entries:[...entries.values()]};}

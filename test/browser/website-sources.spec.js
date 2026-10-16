@@ -34,7 +34,7 @@ test('an independent website combines dedicated books, retains its page designs 
    const project=await initializeProjectLocation(path.join(host.workspace.root,book.title),id,book,access,vault);await registry.attach(project,{expected:(await registry.read()).revision});
    const created=await new LabBookCreation(project,host.deviceStore,{publish:entry=>new LabBookDirectory(registry).register(id,entry)}).create({id:randomUUID(),username:'',password:'',book:{id:randomUUID(),projectId:id,title:'Book '+label,configuration:{profiles:[],sections:[]}}});
    const key=await verifyAccess(await readAccess(created.book.root),'','',{deviceStore:host.deviceStore});keys.push(key);
-   const storage=new LabBookStorage(created.book.root,created.book.labBookId,key),saved=await storage.outline(),record={...structuredClone(sampleNotebook().entries[0]),id:randomUUID(),notebookId:created.book.labBookId,title:'Observation '+label,body:'Original observation '+label,share:false,attachments:[],figures:[],relations:[]};
+   const storage=new LabBookStorage(created.book.root,created.book.labBookId,key),saved=await storage.outline(),record={...structuredClone(sampleNotebook().entries[0]),id:randomUUID(),notebookId:created.book.labBookId,title:'Observation '+label,body:'Original observation '+label,share:false,attachments:[],figures:[],relations:[],sections:[{id:randomUUID(),title:'Method '+label,body:'Method details '+label}]};
    await new ResearchRecords(storage,new MediaStore(storage)).save({workspaceId:saved.metadata.id,changes:[{id:record.id,expectedRevision:null,record}]});
    owners.push({storage,before:await storage.read(),label});
   }
@@ -51,6 +51,10 @@ test('an independent website combines dedicated books, retains its page designs 
   }
   await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
   await expect(page.frameLocator('#website-draft-preview').locator('body')).toContainText('Project Alpha');await expect(page.frameLocator('#website-draft-preview').locator('body')).toContainText('Project Beta');
+  await page.locator('#website-preview-page').selectOption('find');await page.locator('#website-page-kind').selectOption('entry');await page.locator('#website-page-search').fill('Observation Alpha');
+  await page.locator('[data-website-page-picker]').getByRole('button',{name:'Observation Alpha Book Alpha',exact:true}).click();await expect(page.frameLocator('#website-draft-preview').locator('body')).toContainText('Original observation Alpha',{timeout:20000});
+  await page.locator('#website-preview-page').selectOption('index.html');await addSection(page,'link');await page.getByLabel('Link label',{exact:true}).fill('Read the other method');await page.getByRole('button',{name:'Choose section link',exact:true}).click();
+  await page.getByRole('dialog').getByLabel('Page type',{exact:true}).selectOption('entry');await page.getByRole('dialog').getByLabel('Find a page',{exact:true}).fill('Observation Beta');await page.getByRole('dialog').getByRole('button',{name:'Observation Beta Book Beta',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'Method Beta',exact:true}).click();await expect(page.getByLabel('Link destination',{exact:true})).toHaveValue(/^entry:[a-f0-9-]+#record-section-[a-f0-9-]+$/);
   await task(page,'Content');await sources.locator('section.website-record').filter({has:page.getByText('Project Beta',{exact:true})}).getByRole('button',{name:'Lab books',exact:true}).click();await sources.locator('section.website-record').filter({hasText:'Book Beta'}).getByRole('button',{name:'Choose content',exact:true}).click();
   await sources.getByRole('button',{name:'Edit website page',exact:true}).click();await expect(page.frameLocator('#website-draft-preview').locator('body')).toContainText('Original observation Beta',{timeout:20000});
   await openPageSettings(page);await page.getByText('Page header',{exact:true}).click();await page.getByLabel('Display heading',{exact:true}).fill('Independent journal heading');await expect(page.frameLocator('#website-draft-preview').getByRole('heading',{name:'Independent journal heading',exact:true})).toBeVisible({timeout:20000});
@@ -59,8 +63,9 @@ test('an independent website combines dedicated books, retains its page designs 
   for(const owner of owners)expect((await owner.storage.read()).book).toEqual(owner.before.book);
   await page.screenshot({path:info.outputPath('combined-website.png')});
   await page.getByRole('button',{name:'Preview & export',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();await expect(page.locator('#full-public-preview')).toBeVisible({timeout:30000});
-  const preview=await page.locator('#full-public-preview').getAttribute('href'),published=await page.context().newPage();
-  try{await published.goto(new URL(preview,app.url).href);await expect(published.locator('body')).toContainText('Project Alpha');await expect(published.locator('body')).toContainText('Project Beta');}finally{await published.close();}
+  await page.getByLabel('Preview page',{exact:true}).selectOption('index.html');
+  const preview=await page.locator('#full-public-preview').getAttribute('href'),published=await page.context().newPage();published.setDefaultTimeout(15000);
+  try{await published.goto(new URL(preview,app.url).href);await expect(published.locator('body')).toContainText('Project Alpha');await expect(published.locator('body')).toContainText('Project Beta');await published.getByRole('link',{name:'Read the other method',exact:true}).click();await expect(published.getByRole('heading',{name:'Method Beta',exact:true})).toBeInViewport();}finally{await published.close();}
   for(const owner of owners)expect((await owner.storage.read()).book).toEqual(owner.before.book);
   expect(errors).toEqual([]);
  }finally{await app?.close();await runtime.close();detach();for(const key of keys)clearVault(key);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));await rm(directory,{recursive:true,force:true});}

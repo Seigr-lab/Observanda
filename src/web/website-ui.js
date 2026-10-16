@@ -1,3 +1,4 @@
+import {publicationPageClient,publicationPageSections} from './publication-page-client.js';
 import {publicationSourcesUI} from './publication-sources-ui.js';
 import {publicationEditorClient} from './publication-editor-client.js';
 import {websiteDownloadFields} from './website-download-ui.js';
@@ -53,9 +54,10 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
   const researchMedia=websiteResearchMedia({state,research,esc,field,showDialog,notify});
   const sourcePages=publicationEditorClient({state});
   const pageBook=()=>sourcePages.pageBook(research.pageBook());
-  const linkDestinations=websiteLinkDestinations({state,api});
-  const pagePicker=websitePagePicker({state,api,esc,field,showDialog,pageBook,onChoose:item=>{research.choosePage(item);if(websitePageAtPath(pageBook(),item.path))changePreviewPage(item.path);}});
-  const sectionPicker=websiteSectionPicker({state,api,esc,showDialog,pagePicker,previewTarget,onChoose:(selector,href)=>{const field=document.querySelector(selector);if(field){field.value=href;input(field,{discrete:true});}}});
+  const recordPages=publicationPageClient({state,api,access,snapshots:()=>sourcePages.sources()});
+  const linkDestinations=websiteLinkDestinations({state,api,pageBook,recordPages});
+  const pagePicker=websitePagePicker({state,api,esc,field,showDialog,pageBook,recordPages,onChoose:item=>{if(item.owner)sourcePages.remember(item);research.choosePage(item);if(websitePageAtPath(pageBook(),item.path))changePreviewPage(item.path);}});
+  const sectionPicker=websiteSectionPicker({state,api,esc,showDialog,pagePicker,previewTarget,pageBook,recordSections:options=>publicationPageSections({state,api,access,...options}),onChoose:(selector,href)=>{const field=document.querySelector(selector);if(field){field.value=href;input(field,{discrete:true});}}});
   const history=new WebsiteHistory(),documentContexts=new WebsitePageContexts();
   const referenceNavigation=new WebsiteReferenceNavigation(),collectionNavigation=new WebsiteCollectionNavigation(api),canvasSources=new WeakMap(),canvasRequests=new WeakMap();
   let previewController=null;
@@ -189,11 +191,11 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
   const sectionName=s=>s.title||({download:t('websiteMedia','downloadElement'),popup:tr('popup'),'copy-text':tr('copy-text'),disclosure:tr('disclosure'),contents:tr('contents'),container:'Container',heading:'Heading',hero:'Introduction',gallery:'Gallery',text:'Text',callout:'Callout',media:'Research media',link:'Link',divider:'Divider',asset:'Media',projects:'Projects',records:'Records',pages:'Pages'}[s.kind]??s.kind);
   function previewPageOptions(){
     const {choices,more}=websitePageChoices(pageBook(),previewPage),text=key=>t('websitePages',key);
-    if(!choices.length)return '<option value="">'+esc(text('noPages'))+'</option>';
+    if(!choices.length)return '<option value="">'+esc(text('noPages'))+'</option>'+(state.book.website.researchSources?.length?'<option value="find">'+esc(text('find'))+'</option>':'');
     return ['home','page','project','notebook','entry'].map(kind=>{
       const items=choices.filter(p=>p.target.split(':')[0]===kind),options=items.map(p=>option(p.path,kind==='home'?text('home'):p.title,previewPage)).join('');
       return kind==='home'?options:items.length?'<optgroup label="'+esc(text(kind))+'">'+options+'</optgroup>':'';
-    }).join('')+(more||research.enabled()&&state.workspaceOutline?.total>0?'<option value="find">'+esc(text('find'))+'</option>':'');
+    }).join('')+(more||state.book.website.researchSources?.length||research.enabled()&&state.workspaceOutline?.total>0?'<option value="find">'+esc(text('find'))+'</option>':'');
   }
   function previewTarget(){return websitePageAtPath(pageBook(),previewPage)?.target??null;}
   function changePreviewPage(path){storePageContext();previewPage=path;restorePageContext();refreshTools();schedulePreview();}

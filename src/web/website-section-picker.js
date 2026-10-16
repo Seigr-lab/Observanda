@@ -1,11 +1,12 @@
+import {websiteContext} from './website-context.js';
 import {websiteSectionWindow} from './website-section-links.js';
 import {websiteLink} from './website-links.js';
 import {t} from './i18n/index.js';
 const tr=(key,values)=>t('websitePages',key,values);
 
-export function websiteSectionPicker({state,api,esc,showDialog,pagePicker,previewTarget,onChoose}){
+export function websiteSectionPicker({state,api,esc,showDialog,pagePicker,previewTarget,onChoose,pageBook=()=>state.book,recordSections}){
  let session=null,controller=null,generation=0;
- const identity=()=>JSON.stringify([state.book?.id,state.etag,state.storage?.contextId]);
+ const identity=()=>JSON.stringify([websiteContext(state),state.book?.id,state.etag,state.book?.website.researchSources]);
  const valid=s=>s===session&&s.identity===identity()&&state.page==='website'&&!state.access?.locked&&!state.storageUnavailable&&s.root.isConnected&&s.dialog.open;
  function stop(){controller?.abort();controller=null;generation++;const s=session;session=null;s?.unbind();return s;}
  function close(){const s=stop();if(s?.dialog.open)s.dialog.close();document.querySelector(s?.selector??'#website-preview-page')?.focus({preventScroll:true});}
@@ -17,17 +18,18 @@ export function websiteSectionPicker({state,api,esc,showDialog,pagePicker,previe
   try{
    let result;
    const cached=state.book.entries.find(entry=>'entry:'+entry.id===s.target);
-   if(s.record&&state.storage?.researchStorage==='catalogue'&&!Array.isArray(cached?.sections)){
+   if(s.record&&s.item.owner)result=await recordSections({item:s.item,offset,signal});
+   else if(s.record&&state.storage?.researchStorage==='catalogue'&&!Array.isArray(cached?.sections)){
     result=await api('/api/website/research/sections',{workspaceId:state.book.id,snapshotId:state.etag,recordId:s.target.slice(6),offset},{adopt:false,signal});
     if(result.workspaceId!==state.book.id||result.snapshotId!==state.etag)throw Error(tr('invalid'));
-   }else result=websiteSectionWindow(state.book,s.target,{record:s.record,offset});
+   }else result=websiteSectionWindow(pageBook(),s.target,{record:s.record,offset});
    if(valid(s)&&request===generation)s.result=result;
   }catch(error){if(valid(s)&&request===generation&&!signal.aborted)s.error=error.message||tr('failed');}
   finally{if(valid(s)&&request===generation){s.loading=false;controller=null;paint();}}
  }
  function sections(item,selector){stop();const hasRecord=item.target.startsWith('entry:')&&state.book.website.layouts.find(layout=>layout.target===item.target)?.placement!=='replace';
   showDialog('<h2 id="dialog-title">'+esc(tr('sectionTitle',{title:item.title}))+'</h2><div data-website-section-picker>'+ (hasRecord?'<label>'+esc(tr('sectionSource'))+'<select data-section-source><option value="record">'+esc(tr('recordSections'))+'</option><option value="design">'+esc(tr('designSections'))+'</option></select></label>':'')+'<div data-section-results></div><div class="dialog-actions">'+button('cancel')+'</div></div>');
-  const root=document.querySelector('[data-website-section-picker]'),dialog=root.closest('dialog'),s=session={root,dialog,selector,target:item.target,record:hasRecord,identity:identity(),result:null,loading:false,error:''};
+  const root=document.querySelector('[data-website-section-picker]'),dialog=root.closest('dialog'),s=session={root,dialog,selector,item,target:item.target,record:hasRecord,identity:identity(),result:null,loading:false,error:''};
   const click=event=>{const control=event.target.closest('[data-section-picker],[data-section-destination]');if(!control||!root.contains(control))return;event.preventDefault();event.stopPropagation();if(!valid(s))return;
    if(control.dataset.sectionPicker==='cancel'){close();return;}if(s.loading)return;
    if(control.dataset.sectionDestination){const item=s.result?.items.find(item=>item.id===control.dataset.sectionDestination);if(item){const href=s.target+'#'+item.id;close();onChoose(selector,href);}return;}
