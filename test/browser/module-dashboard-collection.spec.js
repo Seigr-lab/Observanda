@@ -11,16 +11,19 @@ test('planning and stock cards open and save in their selected dedicated book',a
  try{
   const f=await moduleDashboardFixture({after:fn=>cleanup.push(fn)});
   const selected=f.books[0],options={scopeMode:'selected',projectIds:[selected.projectId],includeDescendants:false,includeWorkspace:false,notebookMode:'selected',notebookIds:[selected.labBookId]};
-  for(const owner of f.owners){const settings=defaultDashboard();settings.enabledModules.push('planning','resources');if(!owner.projectId)settings.views[0].panels=[{...createPanel('calendar-events','events'),moduleId:'planning',options},{...createPanel('resources','stock'),moduleId:'resources',options}];await writeWorkspaceDashboard(owner.storage,settings,(await readWorkspaceDashboard(owner.storage)).etag);}
-  app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,headless:true,preferencesFile:path.join(f.directory,'preferences.json')});page.on('pageerror',error=>errors.push(error.message));await page.goto(app.url);
+  for(const owner of f.owners){const settings=defaultDashboard();settings.enabledModules.push('planning','resources');if(!owner.projectId)settings.views[0].panels=[{...createPanel('calendar-events','events'),moduleId:'planning',options},{...createPanel('resources','stock'),moduleId:'resources',options},{...createPanel('calendar-agenda','agenda'),moduleId:'planning',options:{...options,notebookMode:'all',notebookIds:[]}}];await writeWorkspaceDashboard(owner.storage,settings,(await readWorkspaceDashboard(owner.storage)).etag);}
+  app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,headless:true,preferencesFile:path.join(f.directory,'preferences.json')});page.on('pageerror',error=>errors.push(error.message));await page.clock.setFixedTime(new Date('2026-10-01T12:00:00Z'));await page.goto(app.url);
   const events=page.locator('[data-desk-card="events"]'),stock=page.locator('[data-desk-card="stock"]');
   await expect(events.getByRole('button',{name:'Retry',exact:true})).toBeVisible();await events.getByRole('button',{name:'Retry',exact:true}).click();
   const unlock=page.locator('#project-unlock-form');await unlock.getByLabel('Lab book password',{exact:true}).fill('Protected observations 456!');await unlock.getByRole('button',{name:'Unlock',exact:true}).click();await expect(unlock).not.toBeVisible();
   await expect(events.getByRole('button',{name:'Shared event identity',exact:true})).toBeVisible();
   if(await stock.getByRole('button',{name:'Retry',exact:true}).isVisible())await stock.getByRole('button',{name:'Retry',exact:true}).click();
   await expect(stock.getByRole('button',{name:'Shared resource identity',exact:true})).toBeVisible();
+  const agenda=page.locator('[data-desk-card="agenda"]');if(await agenda.getByRole('button',{name:'Retry',exact:true}).isVisible())await agenda.getByRole('button',{name:'Retry',exact:true}).click();await expect(agenda.getByRole('button',{name:'Shared event identity',exact:true})).toHaveCount(2);
+  await page.getByRole('button',{name:'Settings for Combined calendar',exact:true}).click();const inspector=page.locator('.desk-inspector');await inspector.getByLabel('Lab books',{exact:true}).selectOption('selected');
+  await inspector.locator('[data-desk-option="notebookIds"][value="'+selected.labBookId+'"]').check();await inspector.getByRole('button',{name:'Close card settings',exact:true}).click();await expect(agenda.getByRole('button',{name:'Shared event identity',exact:true})).toHaveCount(1);
   await page.screenshot({path:test.info().outputPath('dedicated-module-cards.png'),fullPage:true});
-  const home=page.url();await events.getByRole('button',{name:'Shared event identity',exact:true}).click();
+  const home=page.url();await agenda.getByRole('button',{name:'Shared event identity',exact:true}).click();
   await expect(page).toHaveURL(new RegExp('/owners/'+selected.projectId+'/books/'+selected.labBookId+'/'));
   await expect(page.getByLabel('Event title',{exact:true})).toHaveValue('Shared event identity');
   for(const location of ['First edit','Second edit','Updated book location']){

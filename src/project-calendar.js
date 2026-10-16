@@ -38,10 +38,10 @@ export class ProjectCalendars{
   entry.expires=Date.now()+8*60*60*1000;return entry.sources;
  }
  reconcile(session,id,entities){this.sessions.get(session)?.get(id)?.sources.reconcile(entities,{partial:true});}
- async run(session,storage,etag,method,data,{signal,authenticate,ownerId=storage.projectId,projectId=storage.projectId}={}){
+ async run(session,storage,etag,method,data,{signal,authenticate,ownerId=storage.projectId,projectId=storage.projectId,source:providedSource,collect}={}){
   const {metadata:book}=await storage.outline();if(data?.workspaceId!==book.id)throw new AppError('WORKSPACE_CHANGED');
-  const source=this.owner(session,storage,etag,{ownerId,projectId}),reader=await calendarReader(storage,book.id,signal);
-  if(method==='page')return calendarPage(storage,source,data,{signal,reader});
+  const source=providedSource??this.owner(session,storage,etag,{ownerId,projectId}),reader=await calendarReader(storage,book.id,signal);
+  if(method==='page')return calendarPage(storage,source,data,{signal,reader,collect});
   if(method==='event')return source.detail(storage,data,{signal});
   if(method!=='unlock')throw new AppError('INVALID');
   const {entity}=await reader.selected({workspaceId:book.id,id:data.id},{signal});

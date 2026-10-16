@@ -1,3 +1,4 @@
+import {calendarDashboardCollection} from './calendar-dashboard-collection.js';
 import {moduleDashboardCollection} from './module-dashboard-collection.js';
 import {ProjectWorkspaceTargets} from './project-workspace-targets.js';
 import {ProjectWorkspaceMoveApplication} from './project-workspace-move-application.js';
@@ -69,7 +70,7 @@ export function projectRequest(route,method){
  if(route==='/api/projects/publication-source')return {operation:'publication-source',write:false,limit:1048576};
  if(route==='/api/projects/publication-sites')return {operation:'publication-sites',write:false,limit:16384};
  if(['/api/projects/timeline-collection/query','/api/projects/timeline-collection/choices'].includes(route))return {operation:route.slice('/api/projects/'.length),write:false,limit:131072};
- if(['/api/projects/record-collection/query','/api/projects/record-collection/types','/api/projects/dashboard-collection/records','/api/projects/dashboard-collection/discovery','/api/projects/dashboard-collection/types','/api/projects/dashboard-collection/structure','/api/projects/dashboard-collection/choices','/api/projects/dashboard-collection/modules'].includes(route))return {operation:route.slice('/api/projects/'.length),write:false,limit:16384};
+ if(['/api/projects/record-collection/query','/api/projects/record-collection/types','/api/projects/dashboard-collection/records','/api/projects/dashboard-collection/discovery','/api/projects/dashboard-collection/types','/api/projects/dashboard-collection/structure','/api/projects/dashboard-collection/choices','/api/projects/dashboard-collection/modules','/api/projects/dashboard-collection/calendar'].includes(route))return {operation:route.slice('/api/projects/'.length),write:false,limit:16384};
  const addressed=projectMaterialReferenceRequest(route);if(addressed)return addressed;
  if(route==='/api/projects/delete/pending')return {operation:'delete/pending',write:false,limit:16384};
  if(['/api/projects/open','/api/projects/open/resume','/api/projects/open/cancel','/api/projects/open/pending'].includes(route))return {operation:route.slice('/api/projects/'.length),write:!route.endsWith('/pending'),limit:2*1024*1024};
@@ -83,7 +84,7 @@ export function projectRequest(route,method){
  if(match[2]==='publication-sites')return {projectId:match[1],operation:match[2],write:false,limit:16384};
  if(['timeline-collection/query','timeline-collection/choices'].includes(match[2]))return {projectId:match[1],operation:match[2],write:false,limit:131072};
  const bookRequest=labBookRequest(match[2],method);if(bookRequest)return {projectId:match[1],...bookRequest};
- if(['record-collection/query','record-collection/types','dashboard-collection/records','dashboard-collection/discovery','dashboard-collection/types','dashboard-collection/structure','dashboard-collection/choices','dashboard-collection/modules'].includes(match[2]))return {projectId:match[1],operation:match[2],write:false,limit:16384};
+ if(['record-collection/query','record-collection/types','dashboard-collection/records','dashboard-collection/discovery','dashboard-collection/types','dashboard-collection/structure','dashboard-collection/choices','dashboard-collection/modules','dashboard-collection/calendar'].includes(match[2]))return {projectId:match[1],operation:match[2],write:false,limit:16384};
  if(match[2]==='settings/save')return {projectId:match[1],operation:match[2],write:true,limit:MAX_BYTES};
  if(match[2]==='directory/reparent')return {projectId:match[1],operation:match[2],write:true,limit:16384};
  if(['storage/details','storage/copy','storage/copy/resume','storage/copy/cancel','storage/export','storage/export/resume','storage/export/cancel','storage/move','storage/move/resume','storage/move/cancel','storage/move/status','storage/delete','storage/delete/resume','storage/delete/status'].includes(match[2]))return {projectId:match[1],operation:match[2],write:!['storage/details','storage/move/status','storage/delete/status'].includes(match[2]),limit:16384};
@@ -172,12 +173,13 @@ export class ProjectApplication{
    }finally{await owners?.close();clearVault(vault);}
   },selected.projectId);
  }
- async execute(client,selected,data,{signal,onProgress,download,stream,websiteId,binary,headless,query,contentLength,check=async()=>{},setCheck=()=>{}}={}){
+ async execute(client,selected,data,{signal,onProgress,download,stream,websiteId,binary,headless,query,contentLength,calendarSources,check=async()=>{},setCheck=()=>{}}={}){
   if(selected.operation?.startsWith('move/'))return this.tracked(()=>this.workspaceMoves.target(client,selected.operation,data,{check}));
   if(selected.operation==='publication-source-directory')return this.tracked(()=>publicationSourceDirectory(this,client,data,{scope:selected.projectId??null,labBookId:selected.labBookId??null,signal,check}),selected.projectId);
   if(selected.operation==='publication-source')return this.tracked(()=>projectPublicationSource(this,client,data,{scope:selected.projectId??null,labBookId:selected.labBookId??null,signal,check}),selected.projectId);
   if(selected.operation==='publication-sites')return this.tracked(()=>publicationSiteDirectory(this.recordCollections,client,data,{scope:selected.projectId??null,visit:selected.projectId?projectRecordCollection(this,client,check):async visit=>{await check();signal?.throwIfAborted();await visit(this.workspace,{workspaceId:data.workspaceId,projectId:null,labBookId:null},data.projectId);await check();},signal}),selected.projectId);
   if(['timeline-collection/query','timeline-collection/choices'].includes(selected.operation))return this.tracked(async()=> (selected.operation.endsWith('/choices')?timelineCollectionChoices:timelineCollectionQuery)(this.recordCollections,client,data,{scope:selected.projectId??null,registry:await this.registry(),visit:projectRecordCollection(this,client,check),check,signal}),selected.projectId);
+  if(selected.operation==='dashboard-collection/calendar')return this.tracked(()=>calendarDashboardCollection(this.dashboardCollections,client,data,{scope:selected.projectId??null,visit:projectRecordCollection(this,client,check),signal,read:async(storage,owner,command,options)=>this.calendars.run(this.session(client),storage,(await readAccess(storage.root)).etag,'page',command,{...options,source:!owner.projectId?calendarSources:undefined,ownerId:owner.labBookId?'book:'+owner.projectId+':'+owner.labBookId:owner.projectId??'workspace:'+owner.workspaceId,projectId:owner.projectId})}),selected.projectId);
   if(selected.operation==='dashboard-collection/modules')return this.tracked(()=>moduleDashboardCollection(this.dashboardCollections,client,data,{scope:selected.projectId??null,visit:projectRecordCollection(this,client,check),signal}),selected.projectId);
   if(selected.operation==='dashboard-collection/choices')return this.tracked(async()=>dashboardCollectionChoices(this.dashboardCollections,client,data,{scope:selected.projectId??null,registry:await this.registry(),visit:projectRecordCollection(this,client,check),check,signal}),selected.projectId);
   if(selected.operation==='dashboard-collection/structure')return this.tracked(()=>dashboardCollectionStructure(this.dashboardCollections,client,data,{scope:selected.projectId??null,visit:projectRecordCollection(this,client,check),signal}),selected.projectId);

@@ -466,7 +466,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         if(selectedProject.operation==='access/lock'){if(Object.keys(data).length)throw new AppError('INVALID');return json(await projects.lock(client,selectedProject.projectId));}
         if(selectedProject.write){activeWrites++;countedWrite=true;}
         else req.operationActivity=null;
-        const execute=options=>projects.run(client,selectedProject,data,{...options,check,setCheck:next=>{req.checkWriter=next;}});
+        const execute=options=>projects.run(client,selectedProject,data,{...options,calendarSources:selectedContext.calendarSources,check,setCheck:next=>{req.checkWriter=next;}});
         if(selectedProject.write)return await operationResponse(req,res,execute,json,{continueAfterDisconnect:['lab-books/import','lab-books/import/resume','lab-books/import/cancel','lab-books/storage/copy','lab-books/storage/move','lab-books/storage/move/resume','lab-books/storage/copy/resume','lab-books/storage/export','lab-books/storage/export/resume','storage/copy','storage/copy/resume','storage/export','storage/export/resume','storage/move','storage/move/resume','create','create/resume','open','open/resume','open/cancel','settings/save','directory/reparent','lab-books/create','lab-books/create/resume','lab-books/storage/rename','lab-books/settings/save','lab-books/storage/delete','lab-books/storage/delete/resume'].includes(selectedProject.operation)});
         const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
         try{return json(await execute({signal:controller.signal}));}finally{res.off('close',abort);}

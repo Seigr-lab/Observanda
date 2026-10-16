@@ -1,5 +1,5 @@
 import {dashboardCollection,moduleCollectionQuery,moduleCollectionDiscovery,moduleResourceChoices,validModuleCollectionItem} from './dashboard-collection.js';
-import {dashboardScope,dashboardScopeSettings} from '../dashboard-scope.js';
+import {dashboardScope,dashboardScopeSettings,dashboardBookSettings} from '../dashboard-scope.js';
 import {proseReferences} from '../prose-model.js';
 import {researchId} from '../research-reference.js';
 import {t} from '../i18n/index.js';
@@ -28,7 +28,7 @@ export function registerInventoryCards(registry){
   ['stock-reservations','reservation',['quantity','unit','reason','status']],
   ['stock-transfers','stock-transfer',['quantity','unit','reason','updatedAt']]
  ])registry.register({id,label:tr(type),group:tr('group'),icon:'projects',scoped:type!=='category',defaultFields:fields,
-  ...inventoryPageProvider(type),settings:(c,options={},panel)=>[...(type==='category'?[]:dashboardScopeSettings(c,options,panel)),{key:'search',label:tr('search'),type:'text'},{key:'status',label:tr('status'),type:'text'}]
+  ...inventoryPageProvider(type),settings:(c,options={},panel)=>[...(type==='category'&&!dashboardCollection(c)?[]:dashboardScopeSettings(c,options,panel)),...(dashboardCollection(c)?dashboardBookSettings(c,options,panel):[]),{key:'search',label:tr('search'),type:'text'},{key:'status',label:tr('status'),type:'text'}]
  });
 }
 export const inventoryItemChoices={

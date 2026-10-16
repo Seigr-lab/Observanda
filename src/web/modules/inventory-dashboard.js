@@ -1,4 +1,5 @@
-import {dashboardScopeSettings} from '../dashboard-scope.js';
+import {dashboardCollection} from '../dashboard-collection-client.js';
+import {dashboardScopeSettings,dashboardBookSettings} from '../dashboard-scope.js';
 import {renderFigure} from '../figure-renderer.js';
 import {balance} from './quantities.js';
 import {inventoryLocation,stockTracked,assetPlacement,inventoryBOMUsage} from './inventory-model.js';
@@ -39,7 +40,7 @@ export function registerInventoryDashboard(registry){
   fieldMetadata:{physical:{label:'On hand in selection'},reserved:{label:'Reserved in selection'},available:{label:'Available in selection'},owner:{label:'Owned by'},used:{label:'Used in BOMs from selected stock'},scrapped:{label:'Scrapped in BOMs from selected stock'}},
   views:[{id:'comparison',label:'Project comparison',defaultFields:[],figure:({item,options})=>inventoryComparisonFigure(item,options),render:comparison},{id:'holdings',label:'Holdings table',defaultFields:[],render:({item,esc,options})=>holdingsTable(item,esc,options)}],
   settings:(c,options={},panel)=>[
-   ...dashboardScopeSettings(c,options,panel),
+   ...dashboardScopeSettings(c,options,panel),...(dashboardCollection(c)?dashboardBookSettings(c,options,panel):[]),
    {key:'resourceMode',label:'Inventory items',type:'select',default:'all',choices:[{value:'all',label:'All matching items'},{value:'selected',label:'Choose items'}]},
    ...(options.resourceMode==='selected'?[inventoryItemChoices]:[]),
    {key:'search',label:'Item name contains',type:'text'},
