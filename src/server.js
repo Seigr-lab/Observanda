@@ -1,3 +1,4 @@
+import {publicationRevisionCurrent} from './publication-freshness.js';
 import {publicationSourceFactory} from './project-publication-sources.js';
 import {PublicationSourceAccess} from './publication-source-access.js';
 import {withWorkspaceDeletionSession} from './workspace-deletion-session.js';
@@ -1017,7 +1018,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         startJobs(context);const releases=new PublicationJobs(workspace,{sourceReader}),queue=publicationQueue(),data=await body(req),operation=url.pathname.slice('/api/publication-jobs/'.length);
         if(operation==='start'){const job=await releases.start({...data,blockedValues},queue);context.jobs.worker.wake();return json({job:jobSummary(job)},202);}
         if(operation==='list'){const page=await releases.page(queue,data);return json({...page,items:page.items.map(item=>({...item,job:jobSummary(item.job)}))});}
-        if(operation==='open'){const candidate=await retainedCandidate(data.id);if(!candidate)throw new AppError('NOT_FOUND');return json({...releases.summary(candidate),analysisReview:await new AnalysisPublicationReview(workspace,{sourceReader}).status(candidate),stale:candidate.etag!==(await workspace.outline()).etag||candidate.configEtag!==(await publisher.read()).etag});}
+        if(operation==='open'){const candidate=await retainedCandidate(data.id);if(!candidate)throw new AppError('NOT_FOUND');return json({...releases.summary(candidate),analysisReview:await new AnalysisPublicationReview(workspace,{sourceReader}).status(candidate),stale:!await publicationRevisionCurrent(workspace,candidate.etag)||candidate.configEtag!==(await publisher.read()).etag});}
         if(operation==='rollback-review'){
           const candidate=await retainedCandidate(data.id);if(!candidate)throw new AppError('NOT_FOUND');
           const approval=await new PublicationRollback(workspace,publisher,{sourceReader}).review(data);
@@ -1075,7 +1076,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
           const candidate=await retainedCandidate(data.id);
           if(!candidate)throw new AppError('PUBLISH_STALE');
           if(data.rollbackReview)await new PublicationRollback(workspace,publisher,{sourceReader}).authorize(candidate,data.rollbackReview);
-          else if(candidate.configEtag!==data.configEtag||(await workspace.outline()).etag!==candidate.etag)throw new AppError('PUBLISH_STALE');
+          else if(candidate.configEtag!==data.configEtag||!await publicationRevisionCurrent(workspace,candidate.etag))throw new AppError('PUBLISH_STALE');
           const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
           try{return json(await publisher.reviewDestination(candidate,data.configEtag,{signal:controller.signal}));}
           finally{res.removeListener('close',abort);}
@@ -1211,7 +1212,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         const data=req.method==='POST'?await body(req):{id:url.pathname.split('/').at(-1),rollbackReview:url.searchParams.get('rollbackReview')};let candidate=await retainedCandidate(data.id);
         if(!candidate)throw new AppError('STALE');
         if(data.rollbackReview){const rollback=new PublicationRollback(workspace,publisher,{sourceReader});candidate=rollback.project(candidate,await rollback.authorize(candidate,data.rollbackReview));}
-        else if(candidate.etag!==(await workspace.outline()).etag)throw new AppError('STALE');
+        else if(!await publicationRevisionCurrent(workspace,candidate.etag))throw new AppError('STALE');
         await new AnalysisPublicationReview(workspace,{sourceReader}).assert(candidate);
         verifyPublication(candidate);
         res.writeHead(200,{'Content-Type':'application/zip','Content-Disposition':'attachment; filename="observanda-site.zip"'});

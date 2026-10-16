@@ -1,3 +1,4 @@
+import {publicationRevisionCurrent} from './publication-freshness.js';
 import path from 'node:path';
 import os from 'node:os';
 import {randomUUID} from 'node:crypto';
@@ -58,7 +59,7 @@ export class LocalExport {
  async candidate(id,{fresh=false}={}){
   const candidate=await new PublicationJobs(this.workspace).read(id);if(!candidate)throw new AppError('NOT_FOUND');
   verifyPublication(candidate);await new AnalysisPublicationReview(this.workspace,{sourceReader:this.sourceReader}).assert(candidate);
-  if(fresh&&candidate.etag!==(await this.workspace.outline()).etag)throw new AppError('PUBLISH_STALE');
+  if(fresh&&!await publicationRevisionCurrent(this.workspace,candidate.etag))throw new AppError('PUBLISH_STALE');
   return candidate;
  }
  async plan({reviewId,directory}){

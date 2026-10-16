@@ -1,3 +1,4 @@
+import {publicationRevisionCurrent} from './publication-freshness.js';
 import {randomUUID} from 'node:crypto';
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
@@ -23,7 +24,7 @@ export class PublicationRollback{
  async authorize(candidate,id){
   const raw=await this.workspace.readMetadata(file(id),16*1024*1024);if(!raw)throw new AppError('PUBLISH_STALE');
   const review=JSON.parse(raw),saved=await this.publisher.read(),current=await this.workspace.outline();
-  if(review.version!==1||review.id!==id||review.workspaceId!==current.metadata.id||review.workspaceEtag!==current.etag||review.reviewId!==candidate.reviewId||review.releaseId!==candidate.id||review.configEtag!==saved.etag||review.destinationKey!==this.publisher.destinationKey(saved.config)||digest(serialize(review.previous))!==digest(serialize(receiptIdentity(saved.receipt))))throw new AppError('PUBLISH_STALE');
+  if(review.version!==1||review.id!==id||review.workspaceId!==current.metadata.id||!await publicationRevisionCurrent(this.workspace,review.workspaceEtag,{current})||review.reviewId!==candidate.reviewId||review.releaseId!==candidate.id||review.configEtag!==saved.etag||review.destinationKey!==this.publisher.destinationKey(saved.config)||digest(serialize(review.previous))!==digest(serialize(receiptIdentity(saved.receipt))))throw new AppError('PUBLISH_STALE');
   return review;
  }
  project(candidate,review){return {...candidate,...(review.sourceSnapshots?{sourceSnapshots:review.sourceSnapshots}:{}),analysisReviewId:digest(review.id),researchReview:{...candidate.researchReview,analysis:review.analysis}};}

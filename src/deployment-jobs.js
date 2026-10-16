@@ -1,3 +1,4 @@
+import {publicationRevisionCurrent} from './publication-freshness.js';
 import {recordDeploymentInventory,prepareDeploymentInventory,assertDeploymentInventory} from './publication-live.js';
 import {verifyPreparedInventory} from './publication-live-inventory.js';
 import {randomUUID} from 'node:crypto';
@@ -21,7 +22,7 @@ export class DeploymentJobs{
    let candidate=await this.releases.read(reviewId);const saved=await this.publisher.read(),current=await this.workspace.outline();
    if(!candidate||reviewed!==true||saved.etag!==configEtag||!saved.configured)throw new AppError('PUBLISH_STALE');
    if(rollbackReview){if(rollbackConfirmed!==true)throw new AppError('PUBLISH_STALE');const rollback=new PublicationRollback(this.workspace,this.publisher,{sourceReader:this.sourceReader});candidate=rollback.project(candidate,await rollback.authorize(candidate,rollbackReview));}
-   else{if(candidate.configEtag!==configEtag)throw new AppError('PUBLISH_STALE');if(candidate.etag!==current.etag)throw new AppError('STALE');}
+   else{if(candidate.configEtag!==configEtag)throw new AppError('PUBLISH_STALE');if(!await publicationRevisionCurrent(this.workspace,candidate.etag,{current}))throw new AppError('STALE');}
    await new AnalysisPublicationReview(this.workspace,{sourceReader:this.sourceReader}).assert(candidate);
    enforcePublishingLimits(candidate,saved.config);
    const key=this.publisher.destinationKey(saved.config),active=await this.workspace.readMetadata('.observanda/deployment-active/'+key+'.json',4096);

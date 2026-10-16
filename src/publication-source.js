@@ -1,3 +1,4 @@
+import {publicationRevisionCurrent} from './publication-freshness.js';
 import {AppError} from './errors.js';
 import {upgradeNotebook} from './model.js';
 import {publicationRecords} from './publication-records.js';
@@ -94,7 +95,7 @@ export async function publicationSource(workspace,{etag,book,workspaceId,draft},
  signal?.throwIfAborted();
  const current=await workspace.outline();
  if(workspaceId!==undefined&&workspaceId!==current.metadata.id)throw new AppError('WORKSPACE_CHANGED');
- if(etag!==current.etag)throw new AppError('CONFLICT');
+ if(!await publicationRevisionCurrent(workspace,etag,{current}))throw new AppError('CONFLICT');
  if(draft!==undefined){
   validateWorkspaceEditCommand(draft);
   if(book!==undefined||draft.baseEtag!==etag||draft.changes.length||draft.removed.length)throw new AppError('INVALID');
