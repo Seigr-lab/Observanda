@@ -1,3 +1,4 @@
+import {publicationSourceMedia} from './publication-source-media.js';
 import {publicationSourceSections} from './publication-source-sections.js';
 import {publicationSourcePages} from './publication-source-pages.js';
 import {publicationSourcePage} from './publication-source-page.js';
@@ -33,12 +34,13 @@ export async function publicationSourceReader(application,client,{workspaceId,sc
 // Publication selectors read one explicit namespace. Locating a book neither
 // opens its siblings nor borrows their credentials or publication choices.
 export async function projectPublicationSource(application,client,command,{scope=null,labBookId=null,signal,check=async()=>{}}={}){
- if(!command||Object.keys(command).sort().join()!=='operation,query,sourceId,workspaceId'||!researchId(command.workspaceId)||!researchId(command.sourceId)||!['head','summary','content','record','sections','media','pages','page-sections'].includes(command.operation)||!command.query||typeof command.query!=='object'||Array.isArray(command.query))throw new AppError('INVALID');
+ if(!command||Object.keys(command).sort().join()!=='operation,query,sourceId,workspaceId'||!researchId(command.workspaceId)||!researchId(command.sourceId)||!['head','summary','content','record','sections','media','pages','page-sections','source-media'].includes(command.operation)||!command.query||typeof command.query!=='object'||Array.isArray(command.query))throw new AppError('INVALID');
  const {workspaceId,sourceId,operation,query}=command;
- if(operation==='head'?(Object.keys(query).some(key=>key!=='snapshotId')||query.snapshotId!==undefined&&!revisionId(query.snapshotId)):query.workspaceId!==sourceId||!(operation==='pages'&&query.snapshotId===null)&&!revisionId(query.snapshotId))throw new AppError('INVALID');
+ if(operation==='head'?(Object.keys(query).some(key=>key!=='snapshotId')||query.snapshotId!==undefined&&!revisionId(query.snapshotId)):query.workspaceId!==sourceId||!(['pages','source-media'].includes(operation)&&query.snapshotId===null)&&!revisionId(query.snapshotId))throw new AppError('INVALID');
  const reader=await publicationSourceReader(application,client,{workspaceId,scope,labBookId,signal,check});
  try{
   const result=await reader.use(sourceId,query.snapshotId??undefined,async(store,snapshot,pinned)=>{
+   if(operation==='source-media')return publicationSourceMedia(store,snapshot,pinned,reader.host,query,{signal});
    if(operation==='page-sections')return publicationSourceSections(store,snapshot,pinned,reader.host,query,{signal});
    if(operation==='pages')return publicationSourcePages(store,snapshot,pinned,reader.host,query,{signal});
    if(operation==='head'){

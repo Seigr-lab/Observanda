@@ -1,11 +1,10 @@
-import {RecordSearchIndex} from './record-search-index.js';
+import {publicationSourceCandidates} from './publication-source-candidates.js';
 import {websiteRecordShare} from './web/website-selection.js';
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
 import {validPublicationSources} from './web/publication-sources-model.js';
 import {PublicationPreviewOwner} from './publication-preview-owner.js';
 import {PublicationOwnerIdentities} from './publication-owner-identities.js';
-import {publicationRecords} from './publication-records.js';
 import {publicationSourcePage} from './publication-source-page.js';
 
 const invalid=()=>{throw new AppError('INVALID');};
@@ -23,29 +22,9 @@ export async function publicationSourcePages(store,snapshot,pinned,host,query,{s
  const reader={use:async(_id,_revision,consume)=>({value:await consume(store,snapshot,pinned)})};
  const owner=await new PublicationPreviewOwner(source,reader,new PublicationOwnerIdentities(host.workspaceId),{signal}).initialize();
  const metadata=owner.metadata,notebooks=new Set(metadata.notebooks.filter(book=>metadata.projects.some(project=>project.id===book.projectId&&project.share)).map(book=>book.id));
- const history=[...owner.history.keys()],boundary=anchor.after,reverse=anchor.backward,needle=search.trim().toLocaleLowerCase();
- const historyBase=snapshot.nextPosition;
- async function* current(){
-  if(!reverse&&boundary!==null&&boundary>=historyBase)return;
-  const after=boundary===null||boundary>=historyBase?null:boundary;
-  const overrides=await owner.overrides(store,snapshot);
-  if(needle&&snapshot.searchIndex){
-   const index=new RecordSearchIndex(store),lanes=[];
-   for(const notebookId of notebooks){const iterator=index.candidates(snapshot.searchIndex,new Set([notebookId]),needle,{signal,after,backward:reverse})[Symbol.asyncIterator]();lanes.push({iterator,next:await iterator.next()});}
-   try{for(;;){const available=lanes.filter(lane=>!lane.next.done).sort((a,b)=>(a.next.value.position-b.next.value.position)*(reverse?-1:1)),lane=available[0];if(!lane)break;const row=lane.next.value;if(owner.included(row.id))yield {key:row.position,row};lane.next=await lane.iterator.next();}}
-   finally{for(const lane of lanes)await lane.iterator.return?.();}
-  }else for await(const row of publicationRecords(store,snapshot,{...owner.options(),notebooks,overrides,after,backward:reverse}))if(owner.included(row.id))yield {key:row.position,row};
- }
- async function* historical(){
-  for(let step=0;step<history.length;step++){
-   const index=reverse?history.length-1-step:step,key=historyBase+index;
-   if(boundary!==null&&(reverse?key>=boundary:key<=boundary))continue;
-   yield {key,historical:history[index]};
-  }
- }
- async function* candidates(){if(reverse){yield* historical();yield* current();}else{yield* current();yield* historical();}}
+ const boundary=anchor.after,reverse=anchor.backward,needle=search.trim().toLocaleLowerCase();
  const items=[];let first=null,last=null,scanned=0,more=false;
- for await(const candidate of candidates()){
+ for await(const candidate of publicationSourceCandidates(store,snapshot,owner,{after:boundary,backward:reverse,search,signal})){
   signal?.throwIfAborted();if(scanned===256||items.length===25){more=true;break;}
   first??=candidate.key;last=candidate.key;scanned++;
   let page;

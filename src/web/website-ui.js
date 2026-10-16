@@ -1,3 +1,4 @@
+import {publicationMediaClient} from './publication-media-client.js';
 import {publicationPageClient,publicationPageSections} from './publication-page-client.js';
 import {publicationSourcesUI} from './publication-sources-ui.js';
 import {publicationEditorClient} from './publication-editor-client.js';
@@ -51,8 +52,9 @@ const tr=(key,values)=>t('websiteEditor',key,values);
 
 export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,showDialog,selection,access,bindMedia=()=>{},previewDraft=book=>({book})}) {
   const research=websiteResearchClient({state,api,selection,onChange:()=>{if(state.page==='website')refreshSummary();}});
-  const researchMedia=websiteResearchMedia({state,research,esc,field,showDialog,notify});
   const sourcePages=publicationEditorClient({state});
+  const mediaQuery=publicationMediaClient({state,api,access,research,snapshots:()=>sourcePages.sources()});
+  const researchMedia=websiteResearchMedia({state,research,esc,field,showDialog,notify,query:mediaQuery});
   const pageBook=()=>sourcePages.pageBook(research.pageBook());
   const recordPages=publicationPageClient({state,api,access,snapshots:()=>sourcePages.sources()});
   const linkDestinations=websiteLinkDestinations({state,api,pageBook,recordPages});
