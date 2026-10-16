@@ -24,7 +24,7 @@ export class LabBookDirectory{
   await this.workspace.requireStorageKey();const file=this.file(entry.namespaceId),directory=await privateDirectory(this.workspace.root,'.observanda/lab-book-directory');
   const lock=path.join(directory,entry.namespaceId+'.lock'),register=async()=>{
    const projects=(await this.registry.read()).value;
-   if(!projects.projects.some(project=>project.projectId===projectId)||projects.projects.some(project=>project.namespaceId===entry.namespaceId)||(projects.deleted??[]).some(project=>project.namespaceId===entry.namespaceId))throw new AppError('DATABASE_LOCATION');
+   if(!projects.projects.some(project=>project.projectId===projectId)||projects.projects.some(project=>project.namespaceId===entry.namespaceId)||[...(projects.deleted??[]),...(projects.relocated??[])].some(project=>project.namespaceId===entry.namespaceId))throw new AppError('DATABASE_LOCATION');
    const previous=await this.read(entry.namespaceId);if(previous){if(!same(previous,entry))throw new AppError('DATABASE_LOCATION');return previous;}
    await this.workspace.writeFile(file,serialize({version:1,workspaceId:this.registry.workspaceId,...entry}));return entry;
   };return writerLeaseHeld(lock)?register():withWriterLease(lock,register);

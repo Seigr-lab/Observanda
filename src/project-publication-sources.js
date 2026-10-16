@@ -1,3 +1,4 @@
+import {assertProjectPresent} from './project-relocation-directory.js';
 import {publicationSourceMedia} from './publication-source-media.js';
 import {publicationSourceSections} from './publication-source-sections.js';
 import {publicationSourcePages} from './publication-source-pages.js';
@@ -19,7 +20,7 @@ export async function publicationSourceReader(application,client,{workspaceId,sc
   host:{workspaceId,projectId:scope,labBookId,projectNamespaceId:scope?directory.value.projects.find(project=>project.projectId===scope).namespaceId:null},
   async use(sourceId,snapshotId,consume,{prepare}={}){
    if(!researchId(sourceId)||snapshotId!==undefined&&!revisionId(snapshotId))throw new AppError('INVALID');signal?.throwIfAborted();
-   if(directory.value.deleted?.some(project=>project.namespaceId===sourceId))throw new AppError('PROJECT_DELETED');
+   assertProjectPresent(directory.value,{namespaceId:sourceId});
    const entry=directory.value.projects.find(project=>project.namespaceId===sourceId)??(sourceId!==registry.workspaceId?await new LabBookDirectory(registry).locate(sourceId):null);
    if(!entry&&sourceId!==registry.workspaceId)throw new AppError('NOT_FOUND');
    const target={workspaceId:sourceId,projectId:entry?.projectId??null,labBookId:entry?.labBookId??null};

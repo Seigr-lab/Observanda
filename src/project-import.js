@@ -1,3 +1,5 @@
+import {incomingProjectMove,assertIncomingProjectMovesSettled,assertIncomingProjectAddresses} from './project-incoming-moves.js';
+import {acceptRelocatedProject} from './project-relocation-directory.js';
 // Adopt a selected project tree into its literal containing folder. Transport
 // and activation belong to each independent owner; registration is published
 // only after all those owners can open at their final destinations.
@@ -46,8 +48,11 @@ export class ProjectImports{
  async parent(parentId){return parentId===null?await realpath(this.workspace.root):(await this.registry.locate(parentId)).root;}
  async admit(value,{fresh=false}={}){
   if(storageCreationPath(await this.parent(value.parentId),path.basename(value.destination))!==value.destination)throw new AppError('CONFLICT');
+  await assertIncomingProjectMovesSettled(this.registry,[value.parentId]);await assertIncomingProjectAddresses(this.registry,value.owners);
   const listed=(await this.registry.read()).value,projectOwners=value.owners.filter(owner=>owner.kind==='project');
   for(const owner of value.owners){const root=ownerRoot(value.destination,owner),existing=listed.projects.find(entry=>entry.projectId===owner.projectId);
+   if(owner.kind==='project'&&await incomingProjectMove(this.registry,owner.projectId))throw new AppError('STORAGE_PROJECT_BUSY');
+   if(owner.kind==='project')acceptRelocatedProject(structuredClone(listed),owner);
    if(owner.kind==='project'&&existing&&(fresh||existing.root!==root||existing.namespaceId!==owner.namespaceId||existing.vaultId!==owner.vaultId))throw new AppError('PROJECT_LOCATION_EXISTS');
    if(listed.projects.some(entry=>entry.projectId!==owner.projectId&&(entry.namespaceId===owner.namespaceId||entry.vaultId===owner.vaultId||entry.root===root))||(listed.deleted??[]).some(entry=>entry.projectId===owner.projectId||entry.namespaceId===owner.namespaceId||entry.vaultId===owner.vaultId))throw new AppError('DATABASE_LOCATION');
    const book=await new LabBookDirectory(this.registry).read(owner.namespaceId);if(book&&(owner.kind!=='lab-book'||book.projectId!==owner.projectId||book.labBookId!==owner.labBookId||book.vaultId!==owner.vaultId))throw new AppError('DATABASE_LOCATION');
@@ -104,7 +109,7 @@ export class ProjectImports{
      const rootStorage=new ProjectStorage(value.destination,value.manifest.projectId,inventory.keys.get(''));await writeProjectTree(rootStorage,value.manifest);
      await withProjectMembership(this.registry,[value.parentId],async()=>{for(let attempt=0;;attempt++){
       const current=await this.registry.read();let references=current.value.aliases??null;for(const bundle of portable)if(bundle)references=await aliases.prepare(references,bundle.owner,bundle.targets());await this.admit(value);await check();
-      try{await this.registry.change(current.revision,data=>{for(const entry of entries){const prior=data.projects.find(project=>project.projectId===entry.projectId);if(prior){if(['root','parentId','vaultId','namespaceId'].some(key=>prior[key]!==entry[key]))throw new AppError('CONFLICT');}else data.projects.push(entry);}data.aliases=references;return data;});break;}catch(error){if(error.code!=='CONFLICT'||attempt>=7)throw error;}
+      try{await this.registry.change(current.revision,data=>{for(const entry of entries){const prior=data.projects.find(project=>project.projectId===entry.projectId);if(prior){if(['root','parentId','vaultId','namespaceId'].some(key=>prior[key]!==entry[key]))throw new AppError('CONFLICT');}else{acceptRelocatedProject(data,entry);data.projects.push(entry);}}data.aliases=references;return data;});break;}catch(error){if(error.code!=='CONFLICT'||attempt>=7)throw error;}
      }});value.phase='registered';await saveProjectImport(this.registry,value);await checkpoint('registered',value);
      for(const item of value.owners.filter(item=>item.kind==='lab-book'))await new LabBookDirectory(this.registry).register(item.projectId,item);await checkpoint('addressed',value);
      for(const item of value.owners)await unlink(path.join(ownerRoot(value.destination,item),'.observanda/copy-in-progress')).catch(error=>{if(error.code!=='ENOENT')throw error;});

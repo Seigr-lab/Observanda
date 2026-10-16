@@ -1,3 +1,4 @@
+import {assertProjectRelocationsSettled} from './project-membership.js';
 import {ProjectBookCopy} from './project-book-copy.js';
 import {copyProjectAdoptions,reconcileCopiedProjectConversions} from './workspace-project-conversion-copy.js';
 import {retainCopiedProjectCommands} from './workspace-project-continuations.js';
@@ -26,6 +27,7 @@ export class WorkspaceProjectCopy {
     const outline=await this.source.outline();this.sourceRevision=outline.etag;
     this.registry=new ProjectRegistry(this.source,outline.metadata.id);
     const original=await this.registry.read();
+    await assertProjectRelocationsSettled(this.registry,[null,...original.value.projects.map(entry=>entry.projectId)]);
     if(original.value.projects.length&&typeof this.withProject!=='function')throw new AppError('ACCESS_LOCKED');
     for(const entry of original.value.projects) {
       if(within(entry.root,destination)||within(destination,entry.root))throw new AppError('STORAGE_PATH');
@@ -119,7 +121,7 @@ export class WorkspaceProjectCopy {
         await this.checkpoint('project',entry.projectId);operationAdvance();
       }
     });
-    const expected=structuredClone(this.directory.value);expected.version=6;expected.deleted??=[];expected.aliases??=null;
+    const expected=structuredClone(this.directory.value);expected.version=7;expected.relocated??=[];expected.deleted??=[];expected.aliases??=null;
     for(const entry of expected.projects){entry.summary??=null;entry.root=locations.get(entry.projectId);}
     // Publishing the registry and recording the bundle checkpoint are separate
     // atomic writes. Accept the exact already-published registry on recovery.

@@ -481,7 +481,7 @@ const accessHelp=accessHelpUI({api,esc});
 const languageControls=languageUI({api,esc,render,beforeChange:task=>leave.run(task).catch(report)});
 const projectDirectoryUI=projectDirectory({state,api,esc,changed:()=>render()});
 const labBookDirectoryUI=labBookDirectory({state,api,esc,changed:()=>render(),access:operation=>withProjectAccess(operation)});
-const structureUI = workspaceUI({state,api,esc,field,option,icon,dirty,save,render,showDialog,notify,recordsTable:renderRecordTable,logosFor,isUploading:()=>uploading,projectDirectory:projectDirectoryUI,labBookDirectory:labBookDirectoryUI,accessProject:operation=>withProjectAccess(operation),enterProject:(id,bookId)=>projectOwners.enter(id,bookId),rootBook:()=>projectOwners.root(),renameWorkspace:name=>storageControls.rename(name)});
+const structureUI = workspaceUI({state,api,esc,field,option,icon,dirty,save,render,showDialog,notify,recordsTable:renderRecordTable,logosFor,isUploading:()=>uploading,projectDirectory:projectDirectoryUI,labBookDirectory:labBookDirectoryUI,accessProject:(operation,options)=>withProjectAccess(operation,options),enterProject:(id,bookId)=>projectOwners.enter(id,bookId),rootBook:()=>projectOwners.root(),renameWorkspace:name=>storageControls.rename(name)});
 let recordOpenRequest=0;
 const recordContent=recordContentUI({state,api,esc,field,render,report,refresh:()=>workspaceLive.check(),editWriting:target=>recordWriting.open(target),tools:()=>bookReferences.button()+recordHistory.button({saved:true})+reviews.button()+migrationProvenance.button()+recordStarters.button()+recordLocation.button(),before:()=>recordActivity.view({readonly:true})+workflow.view({readonly:true}),after:()=>materials.view(displayedRecord())+connectedWork.view()+recordRemoval.view(),links:record=>recordDetails.relations(record,{readonly:true,selectedEdits:true}),attemptReference:attempts.reference,resultReference:results.reference});
 const recordList=recordListUI({state,api,esc,showDialog,render,access:operation=>withProjectAccess(operation),decorate:root=>decorateRecordLinks(root,state.book),chooseType:value=>{state.filter=value;refreshRecordResults();},table:rows=>renderRecordTable(rows,{action:'browse-record'})});
@@ -518,9 +518,9 @@ async function withProjectAccess(operation,options={}){
  const authorized=new Set();
  for(;;)try{return await operation();}catch(error){
   if(error.code==='LAB_BOOK_MOVED'&&error.projectId&&projectRoute(location.hash).labBookId===error.labBookId){location.hash=ownedRoute(projectRoute(location.hash).hash,{projectId:error.projectId,labBookId:error.labBookId});throw {name:'AbortError'};}
-  const owner=error.projectId+':'+(error.labBookId??'');
+  const owner=(error.destinationWorkspaceId??'source')+':'+error.projectId+':'+(error.labBookId??'');
   if(!error.projectId||!['ACCESS_LOCKED','ACCESS_DENIED','DEVICE_UNKNOWN'].includes(error.code)||authorized.has(owner))throw error;
-  const context=researchContext(state);await projectAccess.open(error.projectId,error.labBookId,error.labBookName??error.projectName,options);
+  const context=researchContext(state);await projectAccess.open(error.projectId,error.labBookId,error.labBookName??error.projectName,typeof options==='function'?options(error):options);
   if(context!==researchContext(state))throw {name:'AbortError'};authorized.add(owner);
  }
 }
@@ -675,7 +675,7 @@ function render() {
   if(state.access?.locked){recordWriting.locked();recordValues.locked();dashboard.releaseData();recordList.stop({clear:true});fontLibrary.clear();recordSelectionLoading.close();recordUpdatesLoading.close();recordRecovery.close();recordDrafts.close();$('#dialog').close();$('#notice').hidden=true;renderAccess(storageControls.lockView());return;}
   if(state.storageUnavailable&&!state.newWorkspace){renderAccess(storageControls.unavailable());return;}
   if (!state.book || state.newWorkspace) { renderOnboarding(); drafts.track(); return; }
-  accessHelp.close();appShell.showWorkspace(renderPage);structureUI.projectStorage.bind();projectDirectoryUI.bind();labBookDirectoryUI.bind();bookAccessSettings.bind();bookStorage.bind();structureUI.projectCreation.bind();structureUI.projectOpening.bind();structureUI.projectDeletion.bind();
+  accessHelp.close();appShell.showWorkspace(renderPage);structureUI.projectStorage.bind();projectDirectoryUI.bind();labBookDirectoryUI.bind();bookAccessSettings.bind();bookStorage.bind();structureUI.projectCreation.bind();structureUI.projectMoves.bind();structureUI.projectOpening.bind();structureUI.projectDeletion.bind();
   workspaceLive.bind();
   fontLibrary.decorate();drafts.track();shellMenu.apply(state.page);updateSaveStatus();dashboard.bind();operationsLive.bind();sites.bind();website.bind();modules.bind();connectedWork.bind();documents.bind();figures.bind();mediaImports.bind();branding.bind();
   previewSurfaces=[...document.querySelectorAll('#design-preview,iframe[title="Publication preview"]')].map(frame=>previewSurface(frame));
@@ -811,6 +811,7 @@ async function rawAction(button) {
   const name = button.dataset.action;
   if(name==='research-open-owned'){const target={workspaceId:button.dataset.workspaceId,kind:button.dataset.kind??'record',id:button.dataset.id};if(!validTarget(target))throw {code:'INVALID'};return navigateResearch(target);}
   if(name?.startsWith('project-deletion-'))return structureUI.projectDeletion.action(button);
+  if(await structureUI.projectMoves.action(button))return;
   if(name==='project-open-folder'||name?.startsWith('project-opening-'))return structureUI.projectOpening.action(button);
   if(name?.startsWith('project-creation-'))return structureUI.projectCreation.action(button);
   if(await recordDestination.action(button))return;
@@ -1018,6 +1019,7 @@ async function submitForm(form){
   if(form.dataset.busy)return;
   if(form.id==='website-site-form')return sites.submit(form,new FormData(form));
   if(['project-deletion-form','project-deletion-resume-form'].includes(form.id))return structureUI.projectDeletion.submit(form);
+  if(await structureUI.projectMoves.submit(form))return;
   if(form.id==='project-opening-form')return structureUI.projectOpening.submit(form);
   if(form.hasAttribute('data-book-creation-resume')||form.hasAttribute('data-book-import-form'))return labBookDirectoryUI.submit(form);
   if(form.id==='project-creation-resume-form')return structureUI.projectCreation.submit(form);

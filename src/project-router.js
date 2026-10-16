@@ -1,3 +1,4 @@
+import {incomingProjectMove} from './project-incoming-moves.js';
 import {assertImportedProjectReady} from './project-import-state.js';
 import {readProjectArchiveIdentity} from './project-archive.js';
 import {projectPortableReferences} from './project-portable-references.js';
@@ -13,6 +14,7 @@ export class ProjectRouter{
  async withProject(projectId,operation,{action='read',target=null,locationOnly=false}={}){
   if(!['read','write'].includes(action)||typeof operation!=='function')throw new AppError('INVALID');
   if(await this.authorize({projectId,action,target})!==true)throw new AppError('ACCESS_DENIED');
+  if(!locationOnly&&await incomingProjectMove(this.registry,projectId))throw new AppError('STORAGE_PROJECT_BUSY');
   await assertImportedProjectReady(this.registry,projectId);let entry=await this.registry.locate(projectId);const binding=await catalogueBinding(entry.root),access=await readAccess(entry.root);
   if(binding&&(binding.placement!=='project'||binding.projectId!==projectId)||access.value.vaultId!==entry.vaultId)throw new AppError('DATABASE_LOCATION');
   const vault=await this.unlock(entry,access);if(!vault?.key)throw new AppError('ACCESS_LOCKED');

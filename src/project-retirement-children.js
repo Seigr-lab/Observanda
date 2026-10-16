@@ -3,7 +3,7 @@
 // Registry publication checks the graph again under its hierarchy lease.
 import {AppError} from './errors.js';
 export function legacyProjectChildren(value,metadata,projectId){
- const owned=new Set([...value.projects,...(value.deleted??[])].map(project=>project.projectId));
+ const owned=new Set([...value.projects,...(value.deleted??[]),...(value.relocated??[])].map(project=>project.projectId));
  return metadata.projects.filter(project=>!owned.has(project.id)&&project.parentId===projectId);
 }
 export async function detachLegacyProjectChildren(registry,entry){

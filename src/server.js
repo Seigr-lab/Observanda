@@ -433,7 +433,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         activities.clear(context.id);return json({ok:true});
       }
       if(contextRequired&&(req.method==='POST'||['/api/dashboard','/api/dashboard/pending','/api/notebook','/api/media-policy','/api/laboratory','/api/publishing','/api/history','/api/modules/data','/api/modules/version','/api/modules/history','/api/calendars'].includes(url.pathname))&&req.headers['x-observanda-workspace']!==context.id)throw new AppError('WORKSPACE_CHANGED');
-      const historyProjects=selectedContext.projects??=new ProjectApplication(workspace,{deviceStore,authenticate,publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})});
+      const historyProjects=selectedContext.projects??=new ProjectApplication(workspace,{deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})});
       const sourceReader=publicationSourceFactory(historyProjects,client,selectedContext.workspace,{check:req.checkWriter});
       return await historyProjects.withSourceHistory(client,async()=>{
       const selectedProject=projectRequest(url.pathname,req.method);
@@ -445,13 +445,13 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         }
         if(selectedProject.material){
           const check=req.checkWriter;await check();
-          const projects=selectedContext.projects??=new ProjectApplication(workspace,{deviceStore,authenticate,publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})});
+          const projects=selectedContext.projects??=new ProjectApplication(workspace,{deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})});
           if(selectedProject.write){activeWrites++;countedWrite=true;}else req.operationActivity=null;
           return await materialHttp(req,res,selectedProject,{contextId:selectedContext.id,body,json,execute:(data,options)=>projects.run(client,selectedProject,data,{...options,check,setCheck:next=>{req.checkWriter=next;}})});
         }
         const data=await body(req,selectedProject.limit,selectedProject.capacity),check=req.checkWriter;
         await check();
-        const projects=selectedContext.projects??=new ProjectApplication(workspace,{deviceStore,authenticate,publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})});
+        const projects=selectedContext.projects??=new ProjectApplication(workspace,{deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})});
         if(['create','create/resume'].includes(selectedProject.operation))req.activityRecoveryKey='project-create:'+data?.id;
         if(['lab-books/import','lab-books/import/resume','lab-books/import/cancel'].includes(selectedProject.operation))req.activityRecoveryKey='lab-book-import:'+data?.id;
         if(['lab-books/create','lab-books/create/resume'].includes(selectedProject.operation))req.activityRecoveryKey='lab-book-create:'+data?.id;
@@ -460,6 +460,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         if(['settings/save','directory/reparent'].includes(selectedProject.operation))req.activityRecoveryKey=(selectedProject.operation==='settings/save'?'project-settings':'project-placement')+':'+data?.id;
         if(['open','open/resume','open/cancel'].includes(selectedProject.operation))req.activityRecoveryKey='project-open:'+data?.id;
         if(['storage/delete','storage/delete/resume'].includes(selectedProject.operation))req.activityRecoveryKey='project-delete:'+data?.id;
+        if(/^storage\/(copy|export|move)(?:\/(resume|cancel))?$/.test(selectedProject.operation))req.activityRecoveryKey='project-'+selectedProject.operation.split('/')[1]+':'+data?.id;
         if(['lab-books/access/unlock','lab-books/access/lock'].includes(selectedProject.operation)){req.operationActivity=null;return json(await projects.run(client,selectedProject,data,{check}));}
         if(selectedProject.operation==='access/unlock')return json(await projects.unlock(client,selectedProject.projectId,data,{check}));
         if(selectedProject.operation==='access/lock'){if(Object.keys(data).length)throw new AppError('INVALID');return json(await projects.lock(client,selectedProject.projectId));}
@@ -618,7 +619,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
              return await withWorkspaceRenameSession(historyProjects,client,async rename=>{
               const result=await workspaceDirectory.using(target,{replacing:source},async()=>{return rename.begin(renames,data.name,{protectedPaths:[preferencesFile,deviceStore.file,fileURLToPath(new URL('..',import.meta.url)),...(await workspaceDirectory.list()).filter(item=>item.path!==source).map(item=>item.path)]});});
               await activate(result.destination,client,vault,{movingFrom:source});
-              await rename.install(context.projects??=new ProjectApplication(context.workspace,{deviceStore,authenticate,publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})}));return metadata();
+              await rename.install(context.projects??=new ProjectApplication(context.workspace,{deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})}));return metadata();
              });
             }catch(error){clearVault(vault);throw error;}
            },json);
@@ -690,7 +691,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
               return await storageResponse(req,res,async()=>workspaceDirectory.using(await resolveLocation(data.path),{},()=>withWorkspaceCopySession(historyProjects,client,async copy=>{
                 const location=await copy.copy(await copy.plan(data.path,{inspect:false}));operationTransfer({phase:'opening'});
                 await activate(location,client,cloneVault(context.vault),{followSettings:true});
-                await copy.install(context.projects??=new ProjectApplication(context.workspace,{deviceStore,authenticate,publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})}));return metadata();
+                await copy.install(context.projects??=new ProjectApplication(context.workspace,{deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})}));return metadata();
               })),json);
             }
             const plan=plans.get(data.id);if(!plan||plan.portable||plan.expires<Date.now()||data.reviewed!==true)throw new AppError('STALE');
@@ -698,14 +699,14 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
             return await storageResponse(req,res,()=>workspaceDirectory.using(plan.destination,{},()=>withWorkspaceCopySession(historyProjects,client,async copy=>{
               const location=await copy.copy(plan);plans.delete(data.id);operationTransfer({phase:'opening'});
               await activate(location,client,cloneVault(context.vault),{followSettings:true});
-              await copy.install(context.projects??=new ProjectApplication(context.workspace,{deviceStore,authenticate,publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})}));return metadata();
+              await copy.install(context.projects??=new ProjectApplication(context.workspace,{deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})}));return metadata();
             })),json);
           }
           if(url.pathname==='/api/storage/move'){
             if(data.confirmed!==true||data.id!==undefined)throw new AppError('INVALID');
             return await storageResponse(req,res,async()=>{return workspaceDirectory.using(await resolveLocation(data.path),{replacing:context.root},async()=>{const projects=await (await historyProjects.registry()).read();
               if(projects.value.projects.length)await withWorkspaceMoveSession(historyProjects,client,async move=>{
-                await move.move(data.path,{activate:async(destination,movingFrom)=>{await activate(destination,client,cloneVault(context.vault),{movingFrom,followSettings:true});await move.install(context.projects??=new ProjectApplication(context.workspace,{deviceStore,authenticate,publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})}));}});
+                await move.move(data.path,{activate:async(destination,movingFrom)=>{await activate(destination,client,cloneVault(context.vault),{movingFrom,followSettings:true});await move.install(context.projects??=new ProjectApplication(context.workspace,{deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})}));}});
               });else await moveWorkspaceTo(context.root,data.path,{vault:context.vault,activate:(destination,movingFrom)=>activate(destination,client,cloneVault(context.vault),{movingFrom,followSettings:true})});return metadata();});},json);
           }
           if(url.pathname==='/api/storage/move/finish'){

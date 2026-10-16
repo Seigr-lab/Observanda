@@ -1,3 +1,5 @@
+import {ProjectWorkspaceTargets} from './project-workspace-targets.js';
+import {ProjectWorkspaceMoveApplication} from './project-workspace-move-application.js';
 import {publicationSourceDirectory} from './publication-source-directory.js';
 import {projectPublicationSource,publicationSourceFactory} from './project-publication-sources.js';
 import {publicationSiteDirectory} from './publication-site-directory.js';
@@ -61,6 +63,7 @@ import {executeResearchRequest,researchRequest} from './research-requests.js';
 import {AppError} from './errors.js';
 
 export function projectRequest(route,method){
+ if(['/api/projects/move/targets','/api/projects/move/target/open','/api/projects/move/target/choices','/api/projects/move/target/unlock','/api/projects/move/target/release','/api/projects/move/pending'].includes(route))return {operation:route.slice('/api/projects/'.length),write:false,limit:16384};
  if(route==='/api/projects/publication-source-directory')return {operation:'publication-source-directory',write:false,limit:16384};
  if(route==='/api/projects/publication-source')return {operation:'publication-source',write:false,limit:1048576};
  if(route==='/api/projects/publication-sites')return {operation:'publication-sites',write:false,limit:16384};
@@ -90,9 +93,9 @@ export function projectRequest(route,method){
  return null;
 }
 export class ProjectApplication{
- constructor(workspace,{deviceStore,authenticate,publisherOptions}={}){
+ constructor(workspace,{deviceStore,authenticate,publisherOptions,workspaceLocations}={}){
   this.workspace=workspace;this.deviceStore=deviceStore;this.authenticate=authenticate??((root,access,username,password,recovery)=>verifyAccess(access,username,password,{deviceStore,recovery}));
-  this.renames=new ProjectRenameApplication(this);this.bookPlacements=new LabBookReparentApplication(this);this.sessions=new WeakMap();this.calendars=new ProjectCalendars();this.jobs=new ProjectJobs({publisherOptions});this.credentials=new Set();this.active=new Map();this.closed=false;this.recordCollections=new RecordCollectionPages();this.dashboardCollections=new RecordCollectionPages({max:256,maxBytes:16*1024*1024,reuse:true});
+  this.moveTargets=new ProjectWorkspaceTargets(this,workspaceLocations);this.workspaceMoves=new ProjectWorkspaceMoveApplication(this);this.renames=new ProjectRenameApplication(this);this.bookPlacements=new LabBookReparentApplication(this);this.sessions=new WeakMap();this.calendars=new ProjectCalendars();this.jobs=new ProjectJobs({publisherOptions});this.credentials=new Set();this.active=new Map();this.closed=false;this.recordCollections=new RecordCollectionPages();this.dashboardCollections=new RecordCollectionPages({max:256,maxBytes:16*1024*1024,reuse:true});
  }
  async recoverProjectRename(client,projectId,options){return this.renames.recover(client,projectId,options);}
  async registry(){
@@ -110,9 +113,10 @@ export class ProjectApplication{
   if(this.closed)throw new AppError('ACCESS_LOCKED');let release;const active=new Promise(resolve=>release=resolve);this.active.set(active,{projectId,labBookId});
   try{return await operation();}finally{this.active.delete(active);release();}
  }
- expire(now=Date.now()){this.recordCollections.expire();this.dashboardCollections.expire();this.jobs.expire(now);this.calendars.expire(now);for(const entry of this.credentials)if(entry.expires<=now){clearVault(entry.vault);this.credentials.delete(entry);}}
- async close(){this.closed=true;this.recordCollections.clear();this.dashboardCollections.clear();this.calendars.clear();const jobs=this.jobs.close();await Promise.all(this.active.keys());await jobs;this.calendars.clear();for(const entry of this.credentials)clearVault(entry.vault);this.credentials.clear();this.sessions=new WeakMap();}
+ expire(now=Date.now()){this.moveTargets.expire();this.recordCollections.expire();this.dashboardCollections.expire();this.jobs.expire(now);this.calendars.expire(now);for(const entry of this.credentials)if(entry.expires<=now){clearVault(entry.vault);this.credentials.delete(entry);}}
+ async close(){this.closed=true;this.recordCollections.clear();this.dashboardCollections.clear();this.calendars.clear();const jobs=this.jobs.close();await Promise.all(this.active.keys());await jobs;await this.moveTargets.close();this.calendars.clear();for(const entry of this.credentials)clearVault(entry.vault);this.credentials.clear();this.sessions=new WeakMap();}
  async unlock(client,projectId,data,{check=async()=>{}}={}){
+  const recovery=await this.workspaceMoves.unlockRecovery(client,projectId,data,{check});if(recovery)return recovery;
   if(!data||Object.keys(data).some(key=>!['username','password','recovery'].includes(key))||Object.values(data).some(value=>typeof value!=='string'||value.length>1024))throw new AppError('INVALID');
   return this.tracked(async()=>{
    await check();const session=this.session(client),previous=session.get(projectId),registry=await this.registry(),entry=await registry.locate(projectId),access=await readAccess(entry.root);
@@ -168,6 +172,7 @@ export class ProjectApplication{
   },selected.projectId);
  }
  async execute(client,selected,data,{signal,onProgress,download,stream,websiteId,binary,headless,query,contentLength,check=async()=>{},setCheck=()=>{}}={}){
+  if(selected.operation?.startsWith('move/'))return this.tracked(()=>this.workspaceMoves.target(client,selected.operation,data,{check}));
   if(selected.operation==='publication-source-directory')return this.tracked(()=>publicationSourceDirectory(this,client,data,{scope:selected.projectId??null,labBookId:selected.labBookId??null,signal,check}),selected.projectId);
   if(selected.operation==='publication-source')return this.tracked(()=>projectPublicationSource(this,client,data,{scope:selected.projectId??null,labBookId:selected.labBookId??null,signal,check}),selected.projectId);
   if(selected.operation==='publication-sites')return this.tracked(()=>publicationSiteDirectory(this.recordCollections,client,data,{scope:selected.projectId??null,visit:selected.projectId?projectRecordCollection(this,client,check):async visit=>{await check();signal?.throwIfAborted();await visit(this.workspace,{workspaceId:data.workspaceId,projectId:null,labBookId:null},data.projectId);await check();},signal}),selected.projectId);
@@ -231,6 +236,7 @@ export class ProjectApplication{
    }
    await check();return result;
   },selected.operation==='create'?data?.project?.id:undefined);
+  if(selected.operation==='storage/move'&&Object.hasOwn(data??{},'target'))return this.tracked(()=>this.workspaceMoves.run(client,selected.projectId,data,{check}),selected.projectId);
   if(['directory/reparent','storage/move'].includes(selected.operation))return this.tracked(()=>this.renames.reparent(client,selected.projectId,data,{check}),selected.projectId);
   if(selected.operation==='storage/move/resume'){const resumed=await this.tracked(()=>this.renames.resumeMove(client,selected.projectId,data,{check}),selected.projectId);if(resumed)return resumed;}
   if(selected.operation==='settings/save')return this.tracked(()=>this.renames.save(client,selected.projectId,data,{check}),selected.projectId);

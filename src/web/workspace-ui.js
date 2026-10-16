@@ -1,3 +1,4 @@
+import {projectWorkspaceMoveRecoveryUI} from './project-workspace-move-recovery-ui.js';
 import {projectRecentRecords} from './project-recent-records.js';
 import {t} from './i18n/index.js';
 import {projectDeletionUI} from './project-deletion-ui.js';
@@ -15,7 +16,8 @@ export function workspaceUI({state,api,esc,field,option,icon,dirty,save,render,s
   const projectOpening=projectOpeningUI({state,api,esc,field,showDialog,refreshDirectory:()=>projectDirectory.refresh(),enterProject,render});
   const projectCreation=projectCreationRecoveryUI({state,api,esc,field,showDialog,refreshDirectory:()=>projectDirectory.refresh()});
   const projectDeletion=projectDeletionUI({state,api,accessProject,esc,field,showDialog,enterProject,render,refreshDirectory:()=>projectDirectory.refresh()});
-  const projectStorage=projectStorageUI({state,api,esc,field,showDialog,accessProject,projectDirectory,rootBook,projectRoot:id=>projectDirectory.entries().find(entry=>entry.projectId===id)?.root,deleteProject:entry=>projectDeletion.confirm(entry)});
+  const projectMoves=projectWorkspaceMoveRecoveryUI({state,api,esc,field,accessProject,refreshDirectory:()=>projectDirectory.refresh()});
+  const projectStorage=projectStorageUI({state,api,esc,field,showDialog,accessProject,projectDirectory,rootBook,projectRoot:id=>projectDirectory.entries().find(entry=>entry.projectId===id)?.root,deleteProject:entry=>projectDeletion.confirm(entry),moved:async(result,targetPath)=>{await enterProject(null);state.page='projects';state.project=null;location.hash='#/projects';projectMoves.completed(result,targetPath);render();}});
   const labNotebooks=projectNotebooksUI({state,api,esc,field,option,showDialog,render,notify,projectDirectory,labBookDirectory,accessProject,enterProject,rootBook});
   const ownedRecent=projectRecentRecords({state,api,access:accessProject,esc,table:recordsTable});
   const toolCounts=locationToolCounts({state,api,esc});
@@ -54,7 +56,7 @@ export function workspaceUI({state,api,esc,field,option,icon,dirty,save,render,s
   function overview() {
     const b=state.book;
     return `<div class="page-heading overview-heading"><div><h1>Projects</h1>${b.description?`<p class="subtitle">${esc(b.description)}</p>`:''}</div><div class="inline-actions">${projectOpening.button()}<button class="button primary" data-action="new-project">${icon('plus')}New project</button></div></div>
-      ${projectOpening.view()}${projectCreation.view()}${projectDeletion.view()}${locationToolsView(state,null,esc)}${b.projects.length?`<div class="project-grid">${childrenOf(b).map(projectCard).join('')}</div>`:''}${projectDirectory.cards(null)}`;
+      ${projectOpening.view()}${projectCreation.view()}${projectMoves.view()}${projectDeletion.view()}${locationToolsView(state,null,esc)}${b.projects.length?`<div class="project-grid">${childrenOf(b).map(projectCard).join('')}</div>`:''}${projectDirectory.cards(null)}`;
   }
 
   function projectView() {
@@ -104,5 +106,5 @@ function generalPreferences(){
     }
     document.querySelector('#dialog').close();render();notify('Workspace structure saved.');return true;
   }
-  return {projectOpening,projectCreation,projectDeletion,projectStorage,bind,recordContext,overview,projectView,generalPreferences,action,submit,notebooks:labNotebooks};
+  return {projectOpening,projectCreation,projectMoves,projectDeletion,projectStorage,bind,recordContext,overview,projectView,generalPreferences,action,submit,notebooks:labNotebooks};
 }

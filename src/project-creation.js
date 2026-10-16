@@ -1,3 +1,4 @@
+import {incomingProjectMove} from './project-incoming-moves.js';
 import {withProjectMembership} from './project-membership.js';
 import {validateStorageName,requireStorageName,storageCreationPath} from './storage-names.js';
 import {assertProjectRoot} from './project-root-boundaries.js';
@@ -99,7 +100,8 @@ export class ProjectCreation{
      if(resume)throw new AppError('NOT_FOUND');
      await withProjectMembership(this.registry,[parentId],async()=>{
      const current=await this.registry.read();
-     if(current.value.projects.some(entry=>entry.projectId===command.project.id))throw new AppError('EXISTS');
+     if(await incomingProjectMove(this.registry,command.project.id))throw new AppError('STORAGE_PROJECT_BUSY');
+     if([...current.value.projects,...(current.value.deleted??[]),...(current.value.relocated??[])].some(entry=>entry.projectId===command.project.id))throw new AppError('EXISTS');
      const parent=parentId===null?this.workspace.root:current.value.projects.find(entry=>entry.projectId===parentId)?.root;
      if(!parent)throw new AppError('NOT_FOUND');
      const derived=storageCreationPath(parent,command.project.title),root=command.path===undefined?derived:await resolveLocation(command.path);

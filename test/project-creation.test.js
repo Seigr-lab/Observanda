@@ -61,11 +61,11 @@ test('competing creation requests for one project identity create only one root'
 test('version one directories upgrade summaries without opening unrelated project databases',async t=>{
  const f=await fixture(t),command=f.command('cached'),created=await f.creation.create(command),entry=created.project;
  assert.equal(entry.summary.title,'cached');
- const old=structuredClone((await f.registry.read()).value);old.version=1;delete old.deleted;delete old.aliases;for(const project of old.projects)delete project.summary;
+ const old=structuredClone((await f.registry.read()).value);old.version=1;delete old.deleted;delete old.aliases;delete old.relocated;for(const project of old.projects)delete project.summary;
  await f.workspace.writeFile(f.registry.file,JSON.stringify(old));assert.equal((await f.registry.read()).value.version,1);
  const storage=await f.open(entry),metadata=(await storage.outline()).metadata;
  await f.registry.refreshSummary(entry.projectId,metadata);
- const upgraded=await f.registry.read();assert.equal(upgraded.value.version,6);assert.equal(upgraded.value.aliases,null);assert.deepEqual(upgraded.value.deleted,[]);assert.equal(upgraded.value.projects[0].summary.title,'cached');
+ const upgraded=await f.registry.read();assert.equal(upgraded.value.version,7);assert.deepEqual(upgraded.value.relocated,[]);assert.equal(upgraded.value.aliases,null);assert.deepEqual(upgraded.value.deleted,[]);assert.equal(upgraded.value.projects[0].summary.title,'cached');
  await f.registry.refreshSummary(entry.projectId,metadata);assert.equal((await f.registry.read()).revision,upgraded.revision);
  assert.throws(()=>f.registry.validate({...upgraded.value,projects:[{...upgraded.value.projects[0],summary:{title:'x'.repeat(161),description:'',kind:'Project'}}]}),{code:'FORMAT'});
 });

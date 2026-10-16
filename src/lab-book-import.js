@@ -1,6 +1,7 @@
 // Import one authenticated book into its containing project's literal folder.
 // An already nested owner is adopted in place; an archive is restored only at
 // its destination. The parent keeps a bounded command, never a second catalogue.
+import {assertIncomingProjectAddresses} from './project-incoming-moves.js';
 import {ImportDiscard} from './import-discard.js';
 import {prepareImportDestination} from './import-destination.js';
 import path from 'node:path';
@@ -86,6 +87,7 @@ export class LabBookImports{
  async perform(value,vault,{check,checkpoint,opened,onProgress}){
   await check();await this.current();const destination=this.destination(value),existing=await this.read(value.id),registered=(await this.registry.read()).value;
   if(terminal(value))return this.complete(value,vault,opened);
+  await assertIncomingProjectAddresses(this.workspaceRegistry,[value]);
   await assertBookPlacementAvailable(this.project,value.labBookId,value.directory,{except:value.id});
   const address=await this.addresses.read(value.namespaceId);if(address&&(address.projectId!==this.project.projectId||!same(address,value)))throw new AppError('DATABASE_LOCATION');
   const prior=registered.books.find(book=>book.labBookId===value.labBookId);

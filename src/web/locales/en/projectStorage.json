@@ -39,5 +39,16 @@
   "movingTree": "Moving project...",
   "movedTree": "Project moved.",
   "chooseParent": "Choose a destination",
-  "moveFailed": "The project could not be moved."
+  "moveFailed": "The project could not be moved.",
+  "destinationWorkspace": "Destination workspace",
+  "currentWorkspace": "Current workspace",
+  "openingDestination": "Opening destination workspace...",
+  "destinationPassword": "Destination workspace password",
+  "unlockWorkspace": "Unlock workspace",
+  "useRecovery": "Use a recovery key",
+  "recoveryKey": "Recovery key",
+  "pendingWorkspaceMove": "Move {title}",
+  "movedToWorkspace": "Project moved to {title}.",
+  "openDestination": "Open destination workspace",
+  "moreMoves": "More pending moves"
 }

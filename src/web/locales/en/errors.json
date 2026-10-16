@@ -280,6 +280,7 @@
   "STORAGE_PROJECT_BUSY": "Finish this project’s pending copy, move or deletion before starting another storage operation.",
   "PROJECT_MIGRATION_OWNERSHIP": "This project has historical content with missing or conflicting ownership. Resolve those owners before moving it into a dedicated database.",
   "PROJECT_MIGRATION_FORMAT": "This project has older history that needs an explicit ownership conversion before it can be separated.",
+  "PROJECT_MOVED": "This project has moved to another workspace. Open that workspace to use it.",
   "PROJECT_DELETED": "This project was deleted. Restore its backup to open its records again.",
   "PROJECT_MIGRATION_DEPENDENCY": "This project refers to evidence owned by another project. Its linked evidence must have a verified project owner before migration can finish.",
   "PROJECT_MIGRATION_DRAFT_INCOMPLETE": "Finish the pending record draft upload before separating this project. Its project ownership is not yet available.",
@@ -295,5 +296,6 @@
   "LAB_BOOK_IMPORT_PENDING": "Finish importing this lab book before changing its storage.",
   "LAB_BOOK_IMPORT_ACCESS": "The lab book could not be unlocked. Check its password or recovery key.",
   "PROJECT_IMPORT_ACCESS": "Unlock the selected project or lab book to continue importing.",
-  "PUBLICATION_IDENTITY": "The selected sources contain conflicting publication identities."
+  "PUBLICATION_IDENTITY": "The selected sources contain conflicting publication identities.",
+  "PROJECT_MOVE_DESTINATION_ACCESS": "Unlock the destination workspace to continue this move."
 }

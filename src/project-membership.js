@@ -1,3 +1,5 @@
+import {assertIncomingProjectMovesSettled} from './project-incoming-moves.js';
+import {readProjectWorkspaceMove} from './project-workspace-move-state.js';
 import {readProjectRename} from './project-rename-receipt.js';
 import {assertProjectImportsSettled} from './project-import-state.js';
 // Child creation and parent relocation meet at a short, parent-specific lease.
@@ -46,7 +48,14 @@ export async function assertProjectCreationSettled(registry,parents){
 // An interrupted relocation reserves both parent memberships until its
 // physical move and registry update agree. Ordinary parent records stay usable.
 export async function assertProjectRelocationsSettled(registry,parents,{except=null}={}){
- const ids=new Set(parents),directory=path.join(registry.workspace.root,'.observanda/project-renames');if(!await assertRegular(directory,{directory:true,missing:true}))return;
+ await assertIncomingProjectMovesSettled(registry,parents);
+ const ids=new Set(parents),outgoing=path.join(registry.workspace.root,'.observanda/project-workspace-moves');
+ if(await assertRegular(outgoing,{directory:true,missing:true}))for await(const entry of await opendir(outgoing)){
+  if(!entry.name.endsWith('.obsv')||!researchId(entry.name.slice(0,-5))||entry.name===except+'.obsv')continue;
+  const value=await readProjectWorkspaceMove(registry,entry.name.slice(0,-5));
+  if(value&&!['complete','cancelled'].includes(value.phase)&&(ids.has(value.parentId)||value.entries.some(owner=>ids.has(owner.projectId))))throw new AppError('STORAGE_PROJECT_BUSY');
+ }
+ const directory=path.join(registry.workspace.root,'.observanda/project-renames');if(!await assertRegular(directory,{directory:true,missing:true}))return;
  for await(const entry of await opendir(directory)){
   if(!entry.name.endsWith('.obsv')||!researchId(entry.name.slice(0,-5))||entry.name===except+'.obsv')continue;
   const value=await readProjectRename(registry,entry.name.slice(0,-5));if(!value)continue;

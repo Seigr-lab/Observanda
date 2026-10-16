@@ -1,3 +1,4 @@
+import {assertProjectPresent,acceptRelocatedProject} from './project-relocation-directory.js';
 import {LabBookDirectory} from './lab-book-directory.js';
 import {projectRenameLocation} from './project-rename-receipt.js';
 import {encodeProjectRegistryLocations,decodeProjectRegistryLocations} from './project-registry-locations.js';
@@ -24,7 +25,7 @@ const validSummary=value=>value===null||exact(value,['title','description','kind
 export class ProjectRegistry{
  constructor(workspace,workspaceId){if(workspace.projectId||workspace.labBookId||!researchId(workspaceId))throw new AppError('INVALID');this.workspace=workspace;this.workspaceId=workspaceId;this.file=path.join(workspace.root,'.observanda','project-registry.observanda');}
  validate(value,{legacyProjects=null}={}){
-  if(!exact(value,value?.version>=4?['version','workspaceId','projects','deleted','aliases']:value?.version===3?['version','workspaceId','projects','deleted']:['version','workspaceId','projects'])||![1,2,3,4,5,6].includes(value.version)||value.workspaceId!==this.workspaceId||!Array.isArray(value.projects))throw new AppError('FORMAT');
+  if(!exact(value,value?.version>=4?['version','workspaceId','projects','deleted','aliases',...(value.version>=7?['relocated']:[])]:value?.version===3?['version','workspaceId','projects','deleted']:['version','workspaceId','projects'])||![1,2,3,4,5,6,7].includes(value.version)||value.workspaceId!==this.workspaceId||!Array.isArray(value.projects))throw new AppError('FORMAT');
   if(value.version>=4&&!validTableRef(value.aliases))throw new AppError('FORMAT');
   const byId=new Map(),roots=new Set(),namespaces=new Set(),vaults=new Set();
   for(const entry of value.projects){
@@ -35,6 +36,13 @@ export class ProjectRegistry{
    if(!Array.isArray(value.deleted))throw new AppError('FORMAT');
    for(const entry of value.deleted){
     if(!exact(entry,['projectId','namespaceId','vaultId','operationId'])||!Object.values(entry).every(researchId)||byId.has(entry.projectId)||namespaces.has(entry.namespaceId)||vaults.has(entry.vaultId)||entry.namespaceId===this.workspaceId)throw new AppError('FORMAT');
+    byId.set(entry.projectId,null);namespaces.add(entry.namespaceId);vaults.add(entry.vaultId);
+   }
+  }
+  if(value.version>=7){
+   if(!Array.isArray(value.relocated))throw new AppError('FORMAT');
+   for(const entry of value.relocated){
+    if(!exact(entry,['projectId','namespaceId','vaultId','operationId','workspaceId'])||!Object.values(entry).every(researchId)||entry.workspaceId===this.workspaceId||byId.has(entry.projectId)||namespaces.has(entry.namespaceId)||vaults.has(entry.vaultId)||entry.namespaceId===this.workspaceId)throw new AppError('FORMAT');
     byId.set(entry.projectId,null);namespaces.add(entry.namespaceId);vaults.add(entry.vaultId);
    }
   }
@@ -54,10 +62,10 @@ export class ProjectRegistry{
   const directory=await privateDirectory(this.workspace.root,'.observanda');
   return withWriterLease(path.join(directory,'project-registry.lock'),async()=>{
    const current=await this.read();if(current.revision!==expected)throw new AppError('CONFLICT');
-   const editable=structuredClone(current.value);editable.version=6;editable.deleted??=[];editable.aliases??=null;for(const entry of editable.projects)entry.summary??=null;
+   const editable=structuredClone(current.value);editable.version=7;editable.relocated??=[];editable.deleted??=[];editable.aliases??=null;for(const entry of editable.projects)entry.summary??=null;
    const next=this.validate(edit(editable)),raw=serialize(encodeProjectRegistryLocations(next,this.workspace.root));
    if(Buffer.byteLength(raw)>16*1024*1024-128)throw new AppError('LIMIT');
-   const hierarchy=value=>serialize({projects:value.projects.map(({projectId,parentId})=>({projectId,parentId})),deleted:(value.deleted??[]).map(({projectId})=>projectId)});
+   const hierarchy=value=>serialize({projects:value.projects.map(({projectId,parentId})=>({projectId,parentId})),deleted:(value.deleted??[]).map(({projectId})=>projectId),relocated:(value.relocated??[]).map(({projectId})=>projectId)});
    // Locations, aliases and cached labels do not change ancestry. They must
    // remain available while the source catalogue is busy or unavailable.
    if(hierarchy(current.value)===hierarchy(next)){await this.workspace.writeFile(this.file,raw);return {value:next,revision:digest(raw)};}
@@ -72,7 +80,7 @@ export class ProjectRegistry{
    }finally{await db.close();}
   });
  }
- async hierarchy(value,metadata=null){metadata??=(await this.workspace.outline()).metadata;if(metadata.id!==this.workspaceId)throw new AppError('WORKSPACE_CHANGED');this.validate(value,{legacyProjects:metadata.projects});const owned=new Set([...value.projects,...(value.deleted??[])].map(item=>item.projectId));return [...value.projects,...metadata.projects.filter(item=>!owned.has(item.id)).map(item=>({projectId:item.id,parentId:item.parentId??null,summary:summaryOf(item),legacy:true}))];}
+ async hierarchy(value,metadata=null){metadata??=(await this.workspace.outline()).metadata;if(metadata.id!==this.workspaceId)throw new AppError('WORKSPACE_CHANGED');this.validate(value,{legacyProjects:metadata.projects});const owned=new Set([...value.projects,...(value.deleted??[]),...(value.relocated??[])].map(item=>item.projectId));return [...value.projects,...metadata.projects.filter(item=>!owned.has(item.id)).map(item=>({projectId:item.id,parentId:item.parentId??null,summary:summaryOf(item),legacy:true}))];}
  async directory(){
   for(let attempt=0;;attempt++){
    const current=await this.read(),projects=await this.hierarchy(current.value);
@@ -127,19 +135,19 @@ export class ProjectRegistry{
   }
  }
  registerExisting(expected,entry,{aliases}={}){return this.change(expected,value=>{
-  const gone=value.deleted.find(p=>p.projectId===entry.projectId);if(gone&&(gone.namespaceId!==entry.namespaceId||gone.vaultId!==entry.vaultId))throw new AppError('DATABASE_LOCATION');
+  acceptRelocatedProject(value,entry);const gone=value.deleted.find(p=>p.projectId===entry.projectId);if(gone&&(gone.namespaceId!==entry.namespaceId||gone.vaultId!==entry.vaultId))throw new AppError('DATABASE_LOCATION');
   value.deleted=value.deleted.filter(p=>p.projectId!==entry.projectId);value.projects.push(entry);if(aliases!==undefined)value.aliases=aliases;return value;
  });}
  async reference(target){
   if(!validProjectReferenceTarget(target))throw new AppError('INVALID');
   const {value}=await this.read();
-  if(value.deleted?.some(p=>p.namespaceId===target.workspaceId))throw new AppError('PROJECT_DELETED');
+  assertProjectPresent(value,{namespaceId:target.workspaceId});
   const direct=value.projects.find(p=>p.namespaceId===target.workspaceId);if(direct)return projectRenameLocation(this,direct,value.projects);
   const book=await new LabBookDirectory(this).locate(target.workspaceId);if(book)return book;
   const alias=await new ProjectReferenceAliases(this.workspace).locate(value.aliases??null,target);if(!alias)throw new AppError('NOT_FOUND');
-  if(value.deleted?.some(p=>p.projectId===alias.projectId))throw new AppError('PROJECT_DELETED');
+  assertProjectPresent(value,{projectId:alias.projectId});
   const entry=value.projects.find(p=>p.projectId===alias.projectId);if(!entry||entry.namespaceId!==alias.namespaceId)throw new AppError('DATABASE_LOCATION');return projectRenameLocation(this,entry,value.projects);
  }
- async namespace(namespaceId){if(!researchId(namespaceId))throw new AppError('INVALID');const {value}=await this.read();if(value.deleted?.some(p=>p.namespaceId===namespaceId))throw new AppError('PROJECT_DELETED');const entry=value.projects.find(p=>p.namespaceId===namespaceId);if(!entry)throw new AppError('NOT_FOUND');return projectRenameLocation(this,entry,value.projects);}
- async locate(projectId){if(!researchId(projectId))throw new AppError('INVALID');const {value}=await this.read();if(value.deleted?.some(p=>p.projectId===projectId))throw new AppError('PROJECT_DELETED');const entry=value.projects.find(p=>p.projectId===projectId);if(!entry)throw new AppError('NOT_FOUND');return projectRenameLocation(this,entry,value.projects);}
+ async namespace(namespaceId){if(!researchId(namespaceId))throw new AppError('INVALID');const {value}=await this.read();assertProjectPresent(value,{namespaceId});const entry=value.projects.find(p=>p.namespaceId===namespaceId);if(!entry)throw new AppError('NOT_FOUND');return projectRenameLocation(this,entry,value.projects);}
+ async locate(projectId){if(!researchId(projectId))throw new AppError('INVALID');const {value}=await this.read();assertProjectPresent(value,{projectId});const entry=value.projects.find(p=>p.projectId===projectId);if(!entry)throw new AppError('NOT_FOUND');return projectRenameLocation(this,entry,value.projects);}
 }

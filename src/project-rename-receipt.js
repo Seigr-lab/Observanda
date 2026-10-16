@@ -1,3 +1,4 @@
+import {workspaceProjectMoveLocation} from './project-workspace-move-location.js';
 import {validProjectPlacementTransfer} from './project-placement-transfer-state.js';
 import {projectMoveDirectory} from './project-move-boundaries.js';
 import {validProjectPlacement} from './project-placement.js';
@@ -50,7 +51,7 @@ export async function pendingProjectRename(registry,projectId,projects){
  return null;
 }
 export async function projectRenameLocation(registry,entry,projects){
- const value=await pendingProjectRename(registry,entry.projectId,projects);if(!value)return entry;
+ const value=await pendingProjectRename(registry,entry.projectId,projects);if(!value)return workspaceProjectMoveLocation(registry,entry,projects);
  const source=nestedRenameRoot(registry.workspace.root,value.source),destination=nestedRenameRoot(registry.workspace.root,value.destination),root=await locateProjectRename(registry,value);
  const prefix=[source,destination].find(parent=>entry.root===parent||entry.root.startsWith(parent+path.sep));if(!prefix)throw new AppError('STORAGE_RENAME_STATE');
  return {...entry,root:path.join(root,path.relative(prefix,entry.root))};

@@ -17,7 +17,7 @@ export async function copyProjectAdoptions(source,directory){
  if((await registry.read()).revision!==directory.revision)throw new AppError('CONFLICT');
  if(!await hasCatalogue(source.root))return [];
  return source.catalogue(async store=>{
-  const prefix='project-source-authority:project:',adoptions=[],owners=new Map(directory.value.projects.map(entry=>[entry.projectId,entry])),deleted=new Map((directory.value.deleted??[]).map(entry=>[entry.projectId,entry]));
+  const prefix='project-source-authority:project:',adoptions=[],owners=new Map(directory.value.projects.map(entry=>[entry.projectId,entry])),deleted=new Map([...(directory.value.deleted??[]),...(directory.value.relocated??[])].map(entry=>[entry.projectId,entry]));
   for await(const row of store.db.rows('SELECT slot,payload FROM state WHERE slot COLLATE "C">=$1 AND slot COLLATE "C"<$2 ORDER BY slot COLLATE "C"',[prefix,prefix+'~'],{batchSize:32})){
    const projectId=row.slot.slice(prefix.length),receipt=store.decode('state',row.slot,row.payload),entry=owners.get(projectId),owner=entry??deleted.get(projectId);
    if(!validProjectSourceAuthority(receipt)||receipt.projectId!==projectId)throw new AppError('CATALOGUE_DAMAGED');

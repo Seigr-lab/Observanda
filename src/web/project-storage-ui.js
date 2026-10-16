@@ -4,10 +4,10 @@ import {localizedText} from './i18n/index.js';
 const text=localizedText('projectStorage');
 // Project storage owns its commands and selected location. A transfer may
 // outlive this view; returning reads its durable command status.
-export function projectStorageUI({state,api,esc,field,showDialog,deleteProject,accessProject=operation=>operation(),projectRoot=()=>null,projectDirectory,rootBook}){
+export function projectStorageUI({state,api,esc,field,showDialog,deleteProject,accessProject=operation=>operation(),projectRoot=()=>null,projectDirectory,rootBook,moved=async()=>{}}){
  const accessSettings=projectAccessSettingsUI({state,api,esc,field});
  const entries=new Map();let dialogCommand=null;
- const placement=projectPlacementUI({state,api,esc,field,accessProject,projectDirectory,rootBook,changed:id=>paint(current(id)),finished:async id=>{const entry=current(id);entry.data=null;entry.version++;await load(entry);}});
+ const placement=projectPlacementUI({state,api,esc,field,accessProject,projectDirectory,rootBook,changed:id=>paint(current(id)),finished:async(id,result,targetPath)=>{if(result?.workspaceId){await moved(result,targetPath);return;}const entry=current(id);entry.data=null;entry.version++;await load(entry);}});
  const key=id=>JSON.stringify([state.storage?.contextId,id]);
  const current=id=>{const idKey=key(id);if(!entries.has(idKey))entries.set(idKey,{id,context:state.storage?.contextId,loading:false,pending:false,data:null,error:'',root:null,version:0});return entries.get(idKey);};
  const host=entry=>entry.context===state.storage?.contextId?document.querySelector('[data-project-storage="'+entry.id+'"]'):null;

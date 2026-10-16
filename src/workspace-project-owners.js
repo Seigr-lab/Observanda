@@ -45,7 +45,7 @@ export class WorkspaceProjectOwners {
   const current=await this.registry.read(),owners=value=>serialize(value.projects.map(({summary,...entry})=>entry));
   const captured=new Map(projects.map(item=>[item.projectId,nestedRenameRoot(this.workspace.root,item.relative)])),expected={...directory.value,projects:directory.value.projects.map(entry=>({...entry,root:captured.get(entry.projectId)??entry.root,parentId:capturedParents.has(entry.projectId)?capturedParents.get(entry.projectId):entry.parentId}))};
   if(owners(current.value)!==owners(expected))throw new AppError('CONFLICT');directory=current;
-  if(projects.length&&directory.value.version!==6)directory=await this.registry.change(directory.revision,value=>value);
+  if(projects.length&&directory.value.version<7)directory=await this.registry.change(directory.revision,value=>value);
   this.revision=directory.revision;this.projects=validateRenameProjects(projects);return this.projects;
  }
  async withStorageHandoff(operation){

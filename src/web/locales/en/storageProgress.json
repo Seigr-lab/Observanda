@@ -126,5 +126,9 @@
   "copy-child-projects": "Copying subprojects",
   "import-project-tree": "Importing project",
   "import-project-owners": "Opening project and lab-book databases",
-  "import-project-register": "Adding the project hierarchy"
+  "import-project-register": "Adding the project hierarchy",
+  "move-project-verify": "Verifying the moved project and lab books",
+  "move-project-register": "Registering the project in its destination workspace",
+  "move-project-departure": "Updating the source workspace directory",
+  "move-project-release": "Finishing the project move"
 }
