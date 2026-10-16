@@ -16,9 +16,13 @@ export class InventoryReader{
   const page=await this.reader.list({...command,moduleId:'resources'},{signal});
   return this.reader.context(command.workspaceId,async c=>{
    if(c.head.revision!==page.revision)throw new AppError('MODULE_QUERY_CURSOR');
-   const stock=command.type==='resource'?await inventoryQuantities(c,page.items.map(i=>i.id),{signal,scope:command.scopeIds&&new Set(command.scopeIds)}):null,items=[];
-   const scope=command.scopeIds&&new Set(command.scopeIds);
-   for(const summary of page.items){
+   return {...page,items:await this.present(c,page.items,{type:command.type,scopeIds:command.scopeIds,signal})};
+  });
+ }
+ async present(c,summaries,{type,scopeIds,signal}={}){
+   const stock=type==='resource'?await inventoryQuantities(c,summaries.map(i=>i.id),{signal,scope:scopeIds&&new Set(scopeIds)}):null,items=[];
+   const scope=scopeIds&&new Set(scopeIds);
+   for(const summary of summaries){
     signal?.throwIfAborted();const entity=await c.selected(summary.id);if(!entity)throw new AppError('CATALOGUE_DAMAGED');this.reader.modules.validateEntity(entity);
     const resource=entity.data.resourceId&&await c.member(entity.data.resourceId),resourceView=resource&&await c.view(resource);
     const data={...entity.data,owner:inventoryOwner(c.book,entity.data.projectId??resourceView?.projectId),revision:entity.revision,updatedAt:entity.updatedAt,...(resourceView?{resource:resourceView.title}:{})};
@@ -32,8 +36,7 @@ export class InventoryReader{
     }
     items.push(item);
    }
-   return {...page,items};
-  });
+   return items;
  }
  async ledger({workspaceId,resourceId,kind='movements',cursor=null,limit=25},{signal}={}){
   if(!uuid(resourceId)||!['movements','reservations'].includes(kind))throw new AppError('INVALID');

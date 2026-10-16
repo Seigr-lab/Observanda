@@ -1,3 +1,5 @@
+import {projectModuleRequest} from './project-module-requests.js';
+import {projectCalendarRequest} from './project-calendar.js';
 import {locateResearchReference,resolveResearchReference} from './research-owner-reference.js';
 import {validTarget} from './web/research-reference.js';
 import {LabBookCopies} from './lab-book-copy.js';
@@ -40,7 +42,7 @@ export function labBookRequest(suffix,method='POST'){
  if(method==='POST'&&match[2]==='publication-source-directory')return {operation:'publication-source-directory',labBookId:match[1],write:false,limit:16384};
  if(method==='POST'&&match[2]==='publication-source')return {operation:'publication-source',labBookId:match[1],write:false,limit:1048576};
  const route='/api/'+match[2];
- const command=projectAssetRequest(route,method)??projectPublicationRequest(route)??reviewRequest(route,method)??recordStarterRequest(route,method)??materialRequest(route)??intakeRequest(route)??(method==='POST'&&/^\/api\/(?:research\/|workspace\/read\/)/.test(route)?researchRequest(route):null);return command?{...command,bookOperation:'research',labBookId:match[1],route}:null;
+ const command=projectModuleRequest(route)??projectCalendarRequest(route)??projectAssetRequest(route,method)??projectPublicationRequest(route)??reviewRequest(route,method)??recordStarterRequest(route,method)??materialRequest(route)??intakeRequest(route)??(method==='POST'&&/^\/api\/(?:research\/|workspace\/read\/)/.test(route)?researchRequest(route):null);return command?{...command,bookOperation:'research',labBookId:match[1],route}:null;
 }
 export async function executeLabBookRequest(project,selected,data,{deviceStore,access:bookAccess,check=async()=>{},jobs,stopJobs=async()=>{},publishBook=async()=>{},...options}={}){
  const registry=new LabBookRegistry(project);await check();
@@ -123,6 +125,8 @@ export async function executeLabBookRequest(project,selected,data,{deviceStore,a
    if(selected.starter)return executeRecordStarterRequest(storage,selected,data,options);
    if(selected.publication){const owner=await background();return owner.publications.run(selected,data,{...options,sourceReader:options.publicationSources?.(owner.storage),check:()=>current()});}
    if(selected.intake){const owner=await background(),response=await intakeCommand(storage,owner.queue,selected.intake,data,options);owner.worker.wake();return response;}
+   if(selected.calendar)return options.calendar(storage,etag,selected.calendar,data);
+   if(selected.run&&projectModuleRequest(selected.route)){const response=await selected.run(storage,data,{...options,check:()=>current()});if(selected.route==='/api/modules/command'&&response.entities)options.reconcileModules?.(response.entities);return response;}
    return executeResearchRequest(storage,selected.route,data,options);
   },{action:selected.write?'write':'read'});
   await current();return result;

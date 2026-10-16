@@ -1,3 +1,4 @@
+import {dashboardSourceIdentity} from './dashboard-source-key.js';
 import {RECORD_TYPES,STATUSES} from './record-types.js';
 // Shared, versioned presentation contracts. No research, secrets or file paths belong here.
 export const defaultPanelConfig = () => ({title:'',workspaceId:null,projectId:null,notebookId:null,recordType:'all',status:'all',tag:''});
@@ -23,7 +24,8 @@ function validVersion(v,version){
  return v.views.every(view=>keys(view,['id','name','panels'])&&id(view.id)&&text(view.name,80)&&view.name.trim().length>0&&Array.isArray(view.panels)&&view.panels.length<=32&&unique(view.panels.map(p=>p?.id))&&view.panels.every(p=>keys(p,['id','tool','width','count',...(version>=2?['config']:[]),...(version>=3?['height']:[])])&&id(p.id)&&id(p.tool)&&(version>=3?['quarter','standard','half','wide','full']:['standard','wide','full']).includes(p.width)&&Number.isInteger(p.count)&&p.count>=1&&p.count<=20&&(version<2||validPanelConfig(p.config))&&(version<3||Number.isInteger(p.height)&&(p.height===0||p.height>=240&&p.height<=1200))));
 }
 const validScopeOptions=v=>Object.entries(v).every(([key,value])=>{
- if(['projectIds','notebookIds','resourceIds'].includes(key))return Array.isArray(value)&&value.every(uuid);
+ if(key==='resourceIds')return Array.isArray(value)&&value.every(item=>uuid(dashboardSourceIdentity(item)?.key));
+ if(['projectIds','notebookIds'].includes(key))return Array.isArray(value)&&value.every(uuid);
  if(['scopeMode','notebookMode','resourceMode'].includes(key))return ['all','selected'].includes(value);
  if(['includeWorkspace','includeDescendants'].includes(key))return typeof value==='boolean';
  return true;

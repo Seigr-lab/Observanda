@@ -99,18 +99,22 @@ export async function moduleEditor(services,definition){
   }
   currentId=id;listType=drafts.get(id).type;checkpoint();state.modulePath=route(listType+'/'+id);section=definition.openSection?.(context.current)??'details';error=null;operation=null;if(draw)render();
  }
- async function openExisting(id,type,{refresh=false}={}){
+ async function openExisting(id,type,{refresh=false,background=false}={}){
+  if(background&&(busy||openController||drafts.has(id)&&dirty(drafts.get(id))))return;
   if(!drafts.has(id)&&!await releaseDrafts())return;
   if(!definition.paged){edit(id,type);return;}
   if(drafts.has(id)&&(!refresh||drafts.get(id).expectedRevision===null)){edit(id,type);return;}
-  const ticket=++openGeneration,contextKey=identity();openController?.abort();openController=new AbortController();busy=true;failedId=null;error=null;status();
+  const ticket=++openGeneration,contextKey=identity();openController?.abort();openController=new AbortController();let changed=false;if(!background){busy=true;failedId=null;error=null;status();}
   try{
    const value=await api('/api/modules/item',{workspaceId:state.book.id,id},{signal:openController.signal});
    if(ticket!==openGeneration||disposed||contextKey!==identity())return;
    if(value?.workspaceId!==state.book.id||!validModuleRevision(value.revision)||value.entity?.id!==id||value.entity.type!==type||!Number.isSafeInteger(value.entity.revision)||!value.entity.data)throw Error(currentText('invalid'));
-   releaseClean(id);adopt({...snapshot,revision:value.revision,revisions:value.revisions,entities:[...snapshot.entities.filter(e=>e.id!==id),value.entity]});const previousSection=section;edit(id,type,{},{draw:false});if(refresh)section=previousSection;
-  }catch(e){if(ticket===openGeneration&&!disposed&&contextKey===identity()&&e.name!=='AbortError'){failedId=id;error=e;}}
-  finally{if(ticket===openGeneration){busy=false;openController=null;if(!disposed)render();status();}}
+   // A refresh may finish after typing or a save has begun. Retain the form
+   // and its base revision so a subsequent save can detect a competing edit.
+   if(background&&(busy||drafts.has(id)&&dirty(drafts.get(id))||document.activeElement?.closest('[data-module-form]')||drafts.get(id)?.expectedRevision>=value.entity.revision))return;
+   changed=true;releaseClean(id);adopt({...snapshot,revision:value.revision,revisions:value.revisions,entities:[...snapshot.entities.filter(e=>e.id!==id),value.entity]});const previousSection=section;edit(id,type,{},{draw:false});if(refresh)section=previousSection;
+  }catch(e){if(!background&&ticket===openGeneration&&!disposed&&contextKey===identity()&&e.name!=='AbortError'){failedId=id;error=e;}}
+  finally{if(ticket===openGeneration){if(!background)busy=false;openController=null;if(!disposed&&(!background||changed))render();status();}}
  }
  async function create(type=listType,initial={}){
   try{
@@ -121,11 +125,11 @@ export async function moduleEditor(services,definition){
   }catch(e){error=e;if(!disposed)render();}
  }
  async function refresh(){if(itemPages){if(currentId&&context.current.expectedRevision!==null)await openExisting(currentId,context.current.type,{refresh:true});else await loadItems();return;}adopt((await api('/api/modules/data')).data);error=null;if(!disposed)render();}
- async function activate(){
+ async function activate({background=false}={}){
   if(!itemPages){await refresh();return;}
   const path=definition.scoped?parseScope(state.modulePath??''): {path:state.modulePath??''};if(definition.scoped)scopeId=path.projectId;
   const [type,id]=path.path.split('/'),known=definition.types.some(t=>t.id===type);
-  if(known&&id){if(openController||failedId===id)return;await openExisting(id,type,{refresh:true});return;}
+  if(known&&id){if(openController||failedId===id)return;await openExisting(id,type,{refresh:true,background});return;}
   if(!await releaseDrafts())return;currentId=null;releaseClean();if(known&&type!==listType){listType=type;query='';filter='';}await loadItems();
  }
  async function command(action,payload,{savedDraft=null}={}){

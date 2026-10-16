@@ -1,4 +1,4 @@
-import {validTarget} from './research-reference.js';
+import {validTarget,researchId} from './research-reference.js';
 import {projectOperationView} from './project-operation-view.js';
 import {labBookStorageUI} from './lab-book-storage-ui.js';
 import {labBookAccessSettingsUI} from './lab-book-access-settings-ui.js';
@@ -601,7 +601,7 @@ const workspaceLive=workspaceRefresh({state,api,notify,onAccessError:report,
  }
 });
 window.addEventListener('pagehide',()=>workspaceLive.stop(),{once:true});
-const navigationActions=new Set(['research-open-owned','help','help-open','record-activity-inspect','record-activity-create','migration-open','review-witnesses','publication-jobs-open-review','record-views','record-view-back','record-view-open','record-read','record-edit','record-read-linked','record-section-jump','workflow-new-run','configure-lab-notebook','specialize-notebook','attach-lab-notebook','module-open','laboratory-samples','preferences','dashboard-settings','integrations','workspace','projects','entries','appearance','website','laboratory','publishing','storage','branding','branding-back','open-project','project-records','filter-notebook','browse-record','edit-entry','open-issue','back-to-records','new-entry','new-project','new-notebook','edit-project','edit-project-template','edit-notebook','rename-notebook','workspace-reorganize','record-history-open','preview','storage-new','storage-open-dialog','storage-copy-dialog','storage-move-dialog','storage-portable-dialog','storage-encrypt-dialog','storage-open-recent','storage-cancel-new','storage-lock','storage-reset-dialog','publish-disconnect','record-link-open','record-backlink-open']);
+const navigationActions=new Set(['module-open-owned','research-open-owned','help','help-open','record-activity-inspect','record-activity-create','migration-open','review-witnesses','publication-jobs-open-review','record-views','record-view-back','record-view-open','record-read','record-edit','record-read-linked','record-section-jump','workflow-new-run','configure-lab-notebook','specialize-notebook','attach-lab-notebook','module-open','laboratory-samples','preferences','dashboard-settings','integrations','workspace','projects','entries','appearance','website','laboratory','publishing','storage','branding','branding-back','open-project','project-records','filter-notebook','browse-record','edit-entry','open-issue','back-to-records','new-entry','new-project','new-notebook','edit-project','edit-project-template','edit-notebook','rename-notebook','workspace-reorganize','record-history-open','preview','storage-new','storage-open-dialog','storage-copy-dialog','storage-move-dialog','storage-portable-dialog','storage-encrypt-dialog','storage-open-recent','storage-cancel-new','storage-lock','storage-reset-dialog','publish-disconnect','record-link-open','record-backlink-open']);
 async function action(button){
   if(removingRecord)return;
   if(accessHelp.action(button))return;
@@ -809,6 +809,12 @@ async function rawAction(button) {
   if(navigationActions.has(button.dataset.action))ownerOperation.clear();
   if(help.action(button))return;
   const name = button.dataset.action;
+  if(name==='module-open-owned'){
+    const {workspaceId,projectId,labBookId,moduleId,modulePath}=button.dataset;
+    if(!researchId(workspaceId)||projectId&&!researchId(projectId)||labBookId&&(!projectId||!researchId(labBookId))||!['planning','resources'].includes(moduleId)||typeof modulePath!=='string')throw {code:'INVALID'};
+    await projectOwners.enter(projectId||null,labBookId||null);if(state.book.id!==workspaceId)throw {code:'WORKSPACE_CHANGED'};
+    return modules.action({dataset:{action:'module-open',moduleId,modulePath}});
+  }
   if(name==='research-open-owned'){const target={workspaceId:button.dataset.workspaceId,kind:button.dataset.kind??'record',id:button.dataset.id};if(!validTarget(target))throw {code:'INVALID'};return navigateResearch(target);}
   if(name?.startsWith('project-deletion-'))return structureUI.projectDeletion.action(button);
   if(await structureUI.projectMoves.action(button))return;

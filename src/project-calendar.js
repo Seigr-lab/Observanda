@@ -29,17 +29,18 @@ export class ProjectCalendars{
  invalidateProject(projectId){for(const entry of this.owners)if(entry.projectId===projectId){entry.sources.clear();this.owners.delete(entry);entry.closed=true;}}
  expire(now=Date.now()){for(const entry of this.owners)if(entry.expires<=now){entry.sources.clear();this.owners.delete(entry);entry.closed=true;}}
  clear(){for(const entry of this.owners)entry.sources.clear();this.owners.clear();this.sessions=new WeakMap();}
- owner(session,storage,etag){
+ invalidateBook(projectId,labBookId){const id='book:'+projectId+':'+labBookId;for(const entry of this.owners)if(entry.id===id){entry.sources.clear();this.owners.delete(entry);entry.closed=true;}}
+ owner(session,storage,etag,{ownerId=storage.projectId,projectId=storage.projectId}={}){
   let entries=this.sessions.get(session);if(!entries){entries=new Map();this.sessions.set(session,entries);}
-  let entry=entries.get(storage.projectId);
-  if(entry&&(entry.closed||entry.root!==storage.root||entry.etag!==etag||entry.expires<=Date.now())){this.forget(session,storage.projectId);entry=null;}
-  if(!entry){entry={projectId:storage.projectId,root:storage.root,etag,sources:new CalendarSources({...this.options,read:readProjectCalendar})};entries.set(storage.projectId,entry);this.owners.add(entry);}
+  let entry=entries.get(ownerId);
+  if(entry&&(entry.closed||entry.root!==storage.root||entry.etag!==etag||entry.expires<=Date.now())){this.forget(session,ownerId);entry=null;}
+  if(!entry){entry={id:ownerId,projectId,root:storage.root,etag,sources:new CalendarSources({...this.options,read:readProjectCalendar})};entries.set(ownerId,entry);this.owners.add(entry);}
   entry.expires=Date.now()+8*60*60*1000;return entry.sources;
  }
  reconcile(session,id,entities){this.sessions.get(session)?.get(id)?.sources.reconcile(entities,{partial:true});}
- async run(session,storage,etag,method,data,{signal,authenticate}={}){
+ async run(session,storage,etag,method,data,{signal,authenticate,ownerId=storage.projectId,projectId=storage.projectId}={}){
   const {metadata:book}=await storage.outline();if(data?.workspaceId!==book.id)throw new AppError('WORKSPACE_CHANGED');
-  const source=this.owner(session,storage,etag),reader=await calendarReader(storage,book.id,signal);
+  const source=this.owner(session,storage,etag,{ownerId,projectId}),reader=await calendarReader(storage,book.id,signal);
   if(method==='page')return calendarPage(storage,source,data,{signal,reader});
   if(method==='event')return source.detail(storage,data,{signal});
   if(method!=='unlock')throw new AppError('INVALID');

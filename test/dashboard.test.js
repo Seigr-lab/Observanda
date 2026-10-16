@@ -52,7 +52,7 @@ test('dedicated preference routes retain old bookmarks and stable dashboard navi
 });
 
 test('dashboard API enforces session, origin and conflict checks, survives restart and never edits the research manifest',async()=>{
- const root=await temp(),file=path.join(root,'preferences.json');await new Workspace(root).create(sampleNotebook());const original=await readFile(path.join(root,'observanda.json'),'utf8');let app=await startServer({root,preferencesFile:file,port:0});
+ const root=await temp(),file=path.join(root,'preferences.json'),book=sampleNotebook();book.title=path.basename(root);await new Workspace(root).create(book);const original=await readFile(path.join(root,'observanda.json'),'utf8');let app=await startServer({root,preferencesFile:file,port:0});
  try{
   assert.equal((await fetch(app.origin+'/api/dashboard')).status,401);
   const auth=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});const cookie=auth.headers.get('set-cookie').split(';')[0];

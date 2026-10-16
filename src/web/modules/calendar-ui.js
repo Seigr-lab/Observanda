@@ -99,7 +99,7 @@ export function calendarUI(services,editor){
    if(!timer)timer=setInterval(()=>{if(shown()&&!document.hidden&&!loading&&Date.now()-last>=60000)load(false,data.cursor??null);},15000);
    const key=queryKey();if(loadedKey!==key&&loadingKey!==key)void load();
   },
-  async activate(){await editor.activate();loadedKey='';if(shown())await load();},
+  async activate(options){await editor.activate(options);loadedKey='';if(shown())await load();},
   input(el){
    if(!shown())return editor.input(el);
    if(el.hasAttribute('data-operation-scope')){state.modulePath=scopePath(el.value||null,'agenda');sourceCursor=null;render();return true;}

@@ -33,7 +33,7 @@ export class ModuleReader{
   return operation({book:(await this.workspace.outline()).metadata,head:data,members:()=>data.entities,member:async id=>data.entities.find(e=>e.id===id)??null,view:async member=>moduleView(member),search:async member=>moduleSearch(member),references:async member=>moduleReferences(member),constraint:async member=>moduleConstraint(member),calendar:async member=>calendarFacts(member),inventory:async member=>inventoryFacts(member),selected:async id=>data.entities.find(e=>e.id===id)??null,
    encode:value=>Buffer.from(JSON.stringify(value)).toString('base64url'),decode:value=>JSON.parse(Buffer.from(value,'base64url'))});
  }
- async list({workspaceId,type=null,types=null,reference=null,query='',status='',tags=[],tagMode='all',kind=null,archived=null,moduleId=null,projectId=null,scopeIds=null,key=null,keys=null,resourceId=null,sort='title',recursive=true,cursor=null,limit=25},{signal}={}){
+ async list({workspaceId,type=null,types=null,reference=null,query='',status='',tags=[],tagMode='all',kind=null,archived=null,moduleId=null,projectId=null,scopeIds=null,key=null,keys=null,resourceId=null,sort='title',recursive=true,cursor=null,limit=25},{signal,collect}={}){
   if(!validResourceTags(tags)||!['all','any'].includes(tagMode)||tags.length&&type!=='resource')throw new AppError('RESOURCE_TAGS');
   if(!['title','created-desc'].includes(sort))throw new AppError('INVALID');
   if(type!==null&&!Object.hasOwn(this.modules.definitions.types,type)||typeof query!=='string'||query.length>256||typeof status!=='string'||status.length>80||!Number.isSafeInteger(limit)||limit<1||limit>25||cursor!==null&&(typeof cursor!=='string'||cursor.length>8192))throw new AppError('INVALID');
@@ -86,7 +86,7 @@ export class ModuleReader{
     const view=await c.view(member);if(type&&view.type!==type||types&&!types.includes(view.type)||status&&view.status!==status)continue;
     if(tags.length&&!matchesResourceTags(view.tags,tags,tagMode))continue;
     if(needle&&!(await c.search(member)).includes(needle))continue;
-    page.add(view);
+    collect?.(view);page.add(view);
    }
    let pageData;try{pageData=page.finish();}catch(error){if(error.code==='RECORD_QUERY_CURSOR')invalid();throw error;}
    const {records:items,total,after,previousAfter}=pageData,next=anchor.offset+items.length;

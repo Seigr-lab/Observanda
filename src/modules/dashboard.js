@@ -14,8 +14,12 @@ export class PlanningDashboard{
   const page=await this.reader.list({...command,moduleId:'planning'},{signal});
   return this.reader.context(command.workspaceId,async c=>{
    if(c.head.revision!==page.revision)throw new AppError('MODULE_QUERY_CURSOR');
+   return {...page,items:await this.present(c,page.items,{signal})};
+  });
+ }
+ async present(c,summaries,{signal}={}){
    const items=[];
-   for(const summary of page.items){
+   for(const summary of summaries){
     signal?.throwIfAborted();
     const entity=await c.selected(summary.id);if(!entity)throw new AppError('CATALOGUE_DAMAGED');
     this.reader.modules.validateEntity(entity);
@@ -25,8 +29,7 @@ export class PlanningDashboard{
     items.push({key:entity.id,title:summary.title,data:{...entity.data,owner:ownerLabel(c.book,projectId),revision:entity.revision,updatedAt:entity.updatedAt,...(resource?{resource:(await c.view(resource)).title}:{})},
      action:{name:'module-open',data:{moduleId:'planning',modulePath:scopePath(projectId,entity.type+'/'+entity.id)}}});
    }
-   return {...page,items};
-  });
+   return items;
  }
  async discover({workspaceId,type,search='',offset=0,limit=12},{signal}={}){
   if(!types.includes(type)||typeof search!=='string'||search.length>256||!Number.isSafeInteger(offset)||offset<0||!Number.isSafeInteger(limit)||limit<1||limit>25)throw new AppError('INVALID');

@@ -46,7 +46,7 @@ export function moduleWorkbench(services){
  const available=()=>{const module=descriptor(state.moduleId);return module&&enabledModule(state.dashboardSettings,module.id)&&(!module.locationTool||projectToolScope(state.book,parseScope(state.modulePath).projectId,module.id));};
  return {
   ready,
-  async refreshVisible(){if(state.page==='module'&&available()&&!active()?.isDirty?.())await active()?.activate?.();},
+  async refreshVisible(){if(state.page==='module'&&available()&&!active()?.isDirty?.())await active()?.activate?.({background:true});},
   supportsOutline:id=>descriptor(id)?.metadataOnly===true,
   view(){
    const module=descriptor(state.moduleId);
