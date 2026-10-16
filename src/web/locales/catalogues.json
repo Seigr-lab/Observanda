@@ -1,4 +1,5 @@
 {
+  "taskPrerequisites": ["en"],
   "retainedSources": ["en"],
   "moduleReferenceTargets": ["en"],
   "workspaceRename": ["en"],

@@ -1,3 +1,4 @@
+import taskPrerequisites from '../locales/en/taskPrerequisites.json' with {type:'json'};
 import retainedSources from '../locales/en/retainedSources.json' with {type:'json'};
 import moduleReferenceTargets from '../locales/en/moduleReferenceTargets.json' with {type:'json'};
 import workspaceRename from '../locales/en/workspaceRename.json' with {type:'json'};
@@ -128,7 +129,7 @@ import about from '../locales/en/about.json' with {type:'json'};
 import materialFiles from '../locales/en/materialFiles.json' with {type:'json'};
 import {resolveLanguage,validLanguage,translator,validateCatalogue,LANGUAGES} from './runtime.js';
 export {LANGUAGES,validLanguage,resolveLanguage};
-const english={retainedSources,moduleReferenceTargets,workspaceRename,workspaceManagement,templatePreferences,calculator,repositorySetup,book,analyses,measurements,preferences,navigation,help,setup,access,labBookTypes,recordAuthoring,recordWorkflow,attempts,dashboardLibrary,recordLists,recordViews,recordDrafts,recordRecovery,recordSelection,recordUpdates,workspaceRead,structureProgress,operationStream,publishingData,labBookData,errors,recordTypes,dashboardChoices,dashboardPaging,researchPicker,branding,appearance,fonts,interface:interfaceMessages,reviews,websiteEditor,websitePages,websiteMedia,websiteContent,moduleReferences,moduleHistory,moduleCurrent,moduleConnected,calendarDetails,planningData,inventoryData,locationTools,calendar,moduleRecovery,moduleFields,sampleAnalysis,timeline,recordDates,materialAnalysis,evidenceUpload,evidenceIntake,materialSources,publication,localExport,migration,migrationImport},cache=new Map([['en',english]]);
+const english={taskPrerequisites,retainedSources,moduleReferenceTargets,workspaceRename,workspaceManagement,templatePreferences,calculator,repositorySetup,book,analyses,measurements,preferences,navigation,help,setup,access,labBookTypes,recordAuthoring,recordWorkflow,attempts,dashboardLibrary,recordLists,recordViews,recordDrafts,recordRecovery,recordSelection,recordUpdates,workspaceRead,structureProgress,operationStream,publishingData,labBookData,errors,recordTypes,dashboardChoices,dashboardPaging,researchPicker,branding,appearance,fonts,interface:interfaceMessages,reviews,websiteEditor,websitePages,websiteMedia,websiteContent,moduleReferences,moduleHistory,moduleCurrent,moduleConnected,calendarDetails,planningData,inventoryData,locationTools,calendar,moduleRecovery,moduleFields,sampleAnalysis,timeline,recordDates,materialAnalysis,evidenceUpload,evidenceIntake,materialSources,publication,localExport,migration,migrationImport},cache=new Map([['en',english]]);
 english.localIntake=localIntake;
 english.projectCreation=projectCreation;
 english.projectChoices=projectChoices;

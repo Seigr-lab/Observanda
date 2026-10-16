@@ -1,0 +1,11 @@
+/* The task editor owns compact prerequisite rows; status updates keep them mounted. */
+[data-task-prerequisites] [data-prerequisite-rows]{margin-block:.75rem}
+.task-prerequisite-row{padding-block:.65rem;border-bottom:1px solid var(--border,#d4dce8)}
+.task-prerequisite-row:last-child{border-bottom:0}
+.task-prerequisite-heading{display:flex;align-items:start;justify-content:space-between;gap:.75rem}
+.task-prerequisite-heading>div{min-width:0}
+.task-prerequisite-heading [data-prerequisite-title]{overflow-wrap:anywhere;text-align:start}
+.task-prerequisite-heading small{display:block;color:var(--muted,#53657d);margin-top:.15rem}
+.task-prerequisite-heading .button{flex:none;padding:.35rem .65rem}
+.task-prerequisite-row p{margin:.25rem 0 0;font-size:.94em}
+[data-task-prerequisites] [hidden]{display:none}
