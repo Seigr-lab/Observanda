@@ -49,11 +49,13 @@ export class CalendarSources{
     let events=[];
     if(entity.type==='subscription'){
      let cached=this.cache.get(entity.id);
-     if(refresh||!cached||cached.url!==d.url||Date.now()-cached.at>300000){
-      const text=await this.fetch(d.url,{signal});cached={url:d.url,text,hash:digest(text),at:Date.now()};
-      if(this.generation!==generation)throw new AppError('ACCESS_LOCKED');
+     if(refresh||!cached||cached.url!==d.url||Date.now()-cached.at>(cached.error?60000:300000)){
+      try{const text=await this.fetch(d.url,{signal});cached={url:d.url,text,hash:digest(text),at:Date.now()};}
+      catch(error){if(signal?.aborted||this.generation!==generation)throw error;cached={url:d.url,error,at:Date.now()};}
+      signal?.throwIfAborted();if(this.generation!==generation)throw new AppError('ACCESS_LOCKED');
       this.cache.set(entity.id,cached);
      }
+     if(cached.error)throw cached.error;
      events=(await this.parse(cached.text,range,{signal})).map(e=>{const {notes,...summary}=e;return e.id===detail?.eventId?e:summary;});source.checkedAt=new Date(cached.at).toISOString();versions.set(entity.id,cached.hash);
     }else{
      const connected=this.connections.get(entity.id);
