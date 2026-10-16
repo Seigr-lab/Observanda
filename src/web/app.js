@@ -480,7 +480,7 @@ const help=helpUI({state,esc,render});
 const accessHelp=accessHelpUI({api,esc});
 const languageControls=languageUI({api,esc,render,beforeChange:task=>leave.run(task).catch(report)});
 const projectDirectoryUI=projectDirectory({state,api,esc,changed:()=>render()});
-const labBookDirectoryUI=labBookDirectory({state,api,esc,changed:()=>render(),access:operation=>withProjectAccess(operation)});
+const labBookDirectoryUI=labBookDirectory({state,api,esc,changed:()=>render(),directoryChanged:()=>{const sidebar=$('#main-navigation'),topbar=$('.topbar');if(state.book&&!state.access?.locked&&sidebar&&topbar)navigation.update(sidebar,topbar);},access:operation=>withProjectAccess(operation)});
 const structureUI = workspaceUI({state,api,esc,field,option,icon,dirty,save,render,showDialog,notify,recordsTable:renderRecordTable,logosFor,isUploading:()=>uploading,projectDirectory:projectDirectoryUI,labBookDirectory:labBookDirectoryUI,accessProject:(operation,options)=>withProjectAccess(operation,options),enterProject:(id,bookId)=>projectOwners.enter(id,bookId),rootBook:()=>projectOwners.root(),renameWorkspace:name=>storageControls.rename(name)});
 let recordOpenRequest=0;
 const recordContent=recordContentUI({state,api,esc,field,render,report,refresh:()=>workspaceLive.check(),editWriting:target=>recordWriting.open(target),tools:()=>bookReferences.button()+recordHistory.button({saved:true})+reviews.button()+migrationProvenance.button()+recordStarters.button()+recordLocation.button(),before:()=>recordActivity.view({readonly:true})+workflow.view({readonly:true}),after:()=>materials.view(displayedRecord())+connectedWork.view()+recordRemoval.view(),links:record=>recordDetails.relations(record,{readonly:true,selectedEdits:true}),attemptReference:attempts.reference,resultReference:results.reference});
@@ -489,6 +489,7 @@ const ownerOperation=projectOperationView({state,esc,projectDirectory:projectDir
 const activity=activityUI({onChange:snapshot=>{
  void ownerOperation.activity(snapshot).catch(report);
  void projectDirectoryUI.activity(snapshot).catch(report);
+ void labBookDirectoryUI.activity(snapshot).catch(report);
  if(snapshot.busy||workspaceLoadTask)return;
  if(state.waitingForOperation){state.waitingForOperation=false;void loadWorkspace().catch(report);}
  else if(state.storage?.contextId&&snapshot.contextId!==state.storage.contextId){if(!uploading&&!savePromise&&!pendingChanges('all').labels.length)void loadWorkspace().catch(report);}
