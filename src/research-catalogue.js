@@ -108,7 +108,7 @@ export class ResearchCatalogue{
   if(value.typeIndex!==undefined&&(!value.indexVersion||!RecordTypeIndex.valid(value.typeIndex)||(value.typeIndex.root?.count??0)>value.count))fail();
   if(value.recentIndex!==undefined&&(!value.indexVersion||!RecordRecentIndex.valid(value.recentIndex)||(value.recentIndex.root?.count??0)!==value.count))fail();
   if(value.readingIndex!==undefined&&(!value.indexVersion||!RecordReadingIndex.valid(value.readingIndex)||(value.readingIndex.root?.count??0)!==value.count*2))fail();
-  if(value.publicationIndex!==undefined&&(!value.indexVersion||!RecordPublicationIndex.valid(value.publicationIndex)||(value.publicationIndex.root?.count??0)!==value.count*value.publicationIndex.version))fail();
+  if(value.publicationIndex!==undefined&&(!value.indexVersion||!RecordPublicationIndex.valid(value.publicationIndex)||value.publicationIndex.version===3&&value.publicationIndex.workspaceId!==value.metadata.id||(value.publicationIndex.root?.count??0)!==value.count*RecordPublicationIndex.entriesPerRecord(value.publicationIndex.version)))fail();
   return value;
  }
  async member(snapshot,id){
@@ -223,7 +223,7 @@ export class ResearchCatalogue{
   const reading=new RecordReadingIndex(this);
   snapshot.readingIndex=current?.readingIndex?await reading.replace(current.readingIndex,before,after):await reading.build(snapshot);
   const publication=new RecordPublicationIndex(this);
-  snapshot.publicationIndex=current?.publicationIndex?.version===2?await publication.replace(current.publicationIndex,before,after):await publication.build(snapshot);
+  snapshot.publicationIndex=current?.publicationIndex?.version===3?await publication.replace(current.publicationIndex,before,after):await publication.build(snapshot);
   await this.db.run('INSERT INTO snapshots VALUES ($1,$2,$3)',etag,ordinal,this.encode('snapshot',etag,snapshot));
 
   for(const record of book.entries)await this.rememberHistory(record,metadata,etag,newRecords.has(record.id),fresh.get(record.id));
@@ -368,7 +368,7 @@ export class ResearchCatalogue{
    snapshot.readingIndex=current.readingIndex?await reading.replace(current.readingIndex,before,after):await reading.build(snapshot);
    operationAdvance();
    const publication=new RecordPublicationIndex(this);
-   snapshot.publicationIndex=current.publicationIndex?.version===2?await publication.replace(current.publicationIndex,before,after):await publication.build(snapshot);
+   snapshot.publicationIndex=current.publicationIndex?.version===3?await publication.replace(current.publicationIndex,before,after):await publication.build(snapshot);
    operationAdvance();
    await this.db.run('INSERT INTO snapshots VALUES ($1,$2,$3)',etag,ordinal,this.encode('snapshot',etag,snapshot));
    await this.db.run("UPDATE state SET payload=$1 WHERE slot='head'",this.encode('state','head',{id:etag}));

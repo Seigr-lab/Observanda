@@ -1,6 +1,6 @@
 // Resolve sparse website consent against original sharing ranges. The saved
 // index remains unchanged by draft choices or other websites' selections.
-import {RecordPublicationIndex} from './record-publication-index.js';
+import {RecordPublicationIndex,publicationReadingKey} from './record-publication-index.js';
 import {recordOrder} from './record-order.js';
 import {RecordReadingIndex,readingKey} from './record-reading-index.js';
 export async function* publicationRecords(store,snapshot,{metadata,selection,overrides,notebooks,order='position',after=null,backward=false,signal}){
@@ -14,9 +14,9 @@ export async function* publicationRecords(store,snapshot,{metadata,selection,ove
   const all=selection.includeProjects.includes(owners.get(id))||selection.defaultShare===true;
   if(all||selection.defaultShare!==false)scopes.set(id,all?'all':'shared');
  }
- const index=new RecordPublicationIndex(store),included=[],key=row=>readingKey(row,order),boundary=after===null?null:key(order==='position'?{position:after}:after),compare=(a,b)=>(key(a)<key(b)?-1:key(a)>key(b)?1:0)*(backward?-1:1);
+ const index=new RecordPublicationIndex(store),included=[],key=row=>order==='publication'?publicationReadingKey(row,metadata.id):readingKey(row,order),boundary=after===null?null:order==='publication'?readingKey(after,'date'):key(order==='position'?{position:after}:after),compare=(a,b)=>(key(a)<key(b)?-1:key(a)>key(b)?1:0)*(backward?-1:1);
  for(const {row,patch} of overrides.values())if(patch.share===true){
-  signal?.throwIfAborted();const value=await index.describe(row,order==='date'),at=key(value);
+  signal?.throwIfAborted();const value=await index.describe(row,order!=='position'),at=key(value);
   if(notebooks.has(value.notebookId)&&(boundary===null||(backward?at<boundary:at>boundary)))included.push(value);
  }
  included.sort(compare);

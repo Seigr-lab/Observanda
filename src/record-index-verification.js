@@ -77,7 +77,11 @@ export async function verifyMembershipChange(store,before,after){
 }
 export async function verifyDerivedRecordChange(store,index,field,before,after){
  if(!before?.indexVersion||!after.indexVersion||!index.constructor.valid(before[field])||!index.constructor.valid(after[field])||before[field].version!==after[field].version)return false;
+ if(before[field].workspaceId!==undefined||after[field].workspaceId!==undefined){
+  if(before[field].workspaceId!==before.metadata.id||after[field].workspaceId!==after.metadata.id)fail();
+  if(before[field].workspaceId!==after[field].workspaceId)return false;
+ }
  const members=new SnapshotIndex(store,{cacheSize:4096});
- await audit(index,before[field].root,after[field].root,records(members,before,after),async row=>{if(index.keys)return index.keys(row,after[field].version);const key=await index.key(row);return key===null?[]:[key];});
+ await audit(index,before[field].root,after[field].root,records(members,before,after),async row=>{if(index.keys)return index.keys(row,after[field].version,after.metadata.id);const key=await index.key(row);return key===null?[]:[key];});
  return true;
 }

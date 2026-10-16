@@ -46,7 +46,7 @@ async function indexedRows(f,etag=f.source.etag,options={}){
 
 test('sparse public choices seek across private records with a fixed page working set at tenfold growth',async t=>{
  const decode=ResearchCatalogue.prototype.decode,record=ResearchCatalogue.prototype.record;let summaries=0,bodies=0,measuring=false;
- ResearchCatalogue.prototype.decode=function(table,id,...args){if(measuring&&table==='state'&&id.startsWith('record-summary:'))summaries++;return decode.call(this,table,id,...args);};
+ ResearchCatalogue.prototype.decode=function(table,id,...args){if(measuring&&table==='state'&&/^(record-summary|record-query):/.test(id))summaries++;return decode.call(this,table,id,...args);};
  ResearchCatalogue.prototype.record=function(...args){if(measuring)bodies++;return record.apply(this,args);};
  t.after(()=>{ResearchCatalogue.prototype.decode=decode;ResearchCatalogue.prototype.record=record;});
  for(const count of [80,800]){
@@ -89,11 +89,11 @@ test('public dated cards and reverse neighbours seek across private gaps without
  }
 });
 
-test('position-only publication indexes remain readable and an atomic write adds date ranges without rewriting earlier snapshots',async t=>{
+test('position-only publication indexes remain readable and an atomic write adds date and owner ranges without rewriting earlier snapshots',async t=>{
  const f=await fixture(t),record=f.book.entries.find(r=>r.share);
  await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{
   const snapshot=await store.snapshot(),index=new RecordPublicationIndex(store);let root=snapshot.publicationIndex.root;
-  for await(const row of store.members(snapshot))root=await index.change(root,(await index.keys(row))[1],null);
+  for await(const row of store.members(snapshot))for(const key of (await index.keys(row,snapshot.publicationIndex.version,snapshot.metadata.id)).slice(1))root=await index.change(root,key,null);
   await index.flush(root);snapshot.publicationIndex={version:1,root};await store.db.run('UPDATE snapshots SET payload=$1 WHERE id=$2',store.encode('snapshot',f.source.etag,snapshot),f.source.etag);
   await index.verify(snapshot);
  }));
@@ -102,7 +102,7 @@ test('position-only publication indexes remain readable and an atomic write adds
  try{await assert.rejects(service.save(change,{receipt:true}),/Interrupted date index/);}finally{RecordPublicationIndex.prototype.build=build;}
  assert.equal((await f.workspace.outline()).etag,f.source.etag);await service.save(change,{receipt:true});
  const after=(await f.workspace.outline()).etag;assert.equal((await indexedRows(f,after,options))[0].id,record.id);assert.deepEqual(await indexedRows(f,f.source.etag,options),before);
- await f.workspace.catalogue(async store=>{assert.equal((await store.snapshot(f.source.etag)).publicationIndex.version,1);assert.equal((await store.snapshot()).publicationIndex.version,2);await store.verify(catalogueDescriptor(f.book));});
+ await f.workspace.catalogue(async store=>{assert.equal((await store.snapshot(f.source.etag)).publicationIndex.version,1);assert.equal((await store.snapshot()).publicationIndex.version,3);await store.verify(catalogueDescriptor(f.book));});
  const copied=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'copy')),{vault:f.vault});assert.deepEqual(await indexedRows({...f,workspace:new Workspace(copied,f.vault)},f.source.etag,options),before);
 });
 
@@ -110,10 +110,10 @@ test('missing or substituted date lanes fail direct reading and full and increme
  const f=await fixture(t),service=new ResearchRecords(f.workspace,{}),record=f.book.entries.find(r=>r.share);
  await service.save({workspaceId:f.book.id,changes:[{id:record.id,expectedRevision:recordRevision(record),record:{...record,occurredOn:'2027-01-01'}}]},{receipt:true});
  await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{
-  const before=await store.snapshot(f.source.etag),snapshot=await store.snapshot(),index=new RecordPublicationIndex(store),row=await store.member(snapshot,record.id),key=(await index.keys(row))[1];
+  const before=await store.snapshot(f.source.etag),snapshot=await store.snapshot(),index=new RecordPublicationIndex(store),row=await store.member(snapshot,record.id),key=(await index.keys(row,snapshot.publicationIndex.version,snapshot.metadata.id))[1];
   const replacement=await index.membership.retain(await store.member(snapshot,f.book.entries.find(r=>r.id!==record.id).id));
   for(const value of [null,replacement]){
-   const root=await index.change(snapshot.publicationIndex.root,key,value);await index.flush(root);const wrong={...snapshot,publicationIndex:{version:2,root}};
+   const root=await index.change(snapshot.publicationIndex.root,key,value);await index.flush(root);const wrong={...snapshot,publicationIndex:{...snapshot.publicationIndex,root}};
    await assert.rejects(index.verify(wrong),{code:'CATALOGUE_DAMAGED'});await assert.rejects(verifyDerivedRecordChange(store,index,'publicationIndex',before,wrong),{code:'CATALOGUE_DAMAGED'});
    if(value!==null)await assert.rejects(Array.fromAsync(index.rows(wrong,new Map([[record.notebookId,'shared']]),{order:'date'})),{code:'CATALOGUE_DAMAGED'});
   }
@@ -191,9 +191,45 @@ test('missing, substituted and unrelated changed index entries cannot pass full 
   const before=await store.snapshot(f.source.etag),snapshot=await store.snapshot(),index=new RecordPublicationIndex(store),row=await store.member(snapshot,f.book.entries[5].id),key=await index.key(row);
   for(const value of [null,await index.membership.retain(await store.member(snapshot,f.book.entries[6].id))]){
    const root=await index.change(snapshot.publicationIndex.root,key,value);await index.flush(root);
-   const wrong={...snapshot,publicationIndex:{version:snapshot.publicationIndex.version,root}};
+   const wrong={...snapshot,publicationIndex:{...snapshot.publicationIndex,root}};
    await assert.rejects(index.verify(wrong),{code:'CATALOGUE_DAMAGED'});
    await assert.rejects(verifyDerivedRecordChange(store,index,'publicationIndex',before,wrong),{code:'CATALOGUE_DAMAGED'});
+  }
+ }));
+});
+
+
+test('version two snapshots retain date paging while new writes add namespace-bound publication ranges',async t=>{
+ const f=await fixture(t,16),record=f.book.entries[0];
+ await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{
+  const snapshot=await store.snapshot(),index=new RecordPublicationIndex(store);let root=snapshot.publicationIndex.root;
+  for await(const row of store.members(snapshot))for(const key of (await index.keys(row,3,snapshot.metadata.id)).slice(2))root=await index.change(root,key,null);
+  await index.flush(root);snapshot.publicationIndex={version:2,root};await store.db.run('UPDATE snapshots SET payload=$1 WHERE id=$2',store.encode('snapshot',f.source.etag,snapshot),f.source.etag);await index.verify(snapshot);
+ }));
+ const before=await indexedRows(f,f.source.etag,{order:'date'});
+ await new ResearchRecords(f.workspace,{}).save({workspaceId:f.book.id,changes:[{id:record.id,expectedRevision:recordRevision(record),record:{...record,title:'Current title'}}]},{receipt:true});
+ assert.deepEqual(await indexedRows(f,f.source.etag,{order:'date'}),before);
+ await f.workspace.catalogue(async store=>{
+  const old=await store.snapshot(f.source.etag),snapshot=await store.snapshot(),index=new RecordPublicationIndex(store);
+  assert.equal(old.publicationIndex.version,2);assert.equal(snapshot.publicationIndex.version,3);await index.verify(old);await index.verify(snapshot);
+  const wrong={...snapshot,publicationIndex:{...snapshot.publicationIndex,workspaceId:randomUUID()}};
+  await assert.rejects(index.verify(wrong),{code:'CATALOGUE_DAMAGED'});
+  await assert.rejects(Array.fromAsync(index.rows(wrong,new Map([[record.notebookId,'all']]),{order:'date'})),{code:'CATALOGUE_DAMAGED'});
+  await assert.rejects(verifyDerivedRecordChange(store,index,'publicationIndex',snapshot,wrong),{code:'CATALOGUE_DAMAGED'});
+ });
+});
+
+
+test('publication order and direct identity entries reject substitution during full and incremental verification',async t=>{
+ const f=await fixture(t,12),record=f.book.entries[0];
+ await new ResearchRecords(f.workspace,{}).save({workspaceId:f.book.id,changes:[{id:record.id,expectedRevision:recordRevision(record),record:{...record,title:'Updated record'}}]},{receipt:true});
+ await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{
+  const before=await store.snapshot(f.source.etag),snapshot=await store.snapshot(),index=new RecordPublicationIndex(store),row=await store.member(snapshot,record.id),keys=await index.keys(row,3,snapshot.metadata.id),other=await index.membership.retain(await store.member(snapshot,f.book.entries[1].id));
+  const id=keys[3].slice('record:'.length);assert.equal((await index.record(snapshot,id)).id,record.id);assert.equal(await index.record(snapshot,randomUUID()),null);
+  for(const key of keys.slice(2))for(const value of [null,other]){
+   const root=await index.change(snapshot.publicationIndex.root,key,value);await index.flush(root);const wrong={...snapshot,publicationIndex:{...snapshot.publicationIndex,root}};
+   await assert.rejects(index.verify(wrong),{code:'CATALOGUE_DAMAGED'});await assert.rejects(verifyDerivedRecordChange(store,index,'publicationIndex',before,wrong),{code:'CATALOGUE_DAMAGED'});
+   if(key===keys[3]&&value!==null)await assert.rejects(index.record(wrong,id),{code:'CATALOGUE_DAMAGED'});
   }
  }));
 });
