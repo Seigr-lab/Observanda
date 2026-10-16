@@ -1155,7 +1155,9 @@ function renderMediaPolicy(){
 function mediaPolicyField([key,label,unit]){const value=state.mediaPolicy.policy[key];return field(label,`<input type="number" min="0" step="any" name="${key}" value="${value?value/unit:''}" placeholder="No limit">`);}
 
 let workspaceLoadTask=null;
-function loadWorkspace(){return workspaceLoadTask??=loadWorkspaceOwned().finally(()=>{workspaceLoadTask=null;});}
+function loadWorkspace(){
+ return workspaceLoadTask??=loadWorkspaceOwned().then(loaded=>{workspaceLoadTask=null;if(loaded)syncRoute();},error=>{workspaceLoadTask=null;throw error;});
+}
 async function loadWorkspaceOwned(){
   recordDestination.reset();
   projectOwners.reset();
@@ -1187,6 +1189,7 @@ async function loadWorkspaceOwned(){
     if(route)history.replaceState(null,'',route);else notify('The workspace opened, but the linked item is unavailable.',true);
   }
   await restoreRoute();
+  return true;
 }
 
 await startApplication({api,esc,show:content=>appShell.showStandalone(content),load:async()=>{
@@ -1209,7 +1212,7 @@ function refreshRecordResults(){
 }
 function rememberFilters(){history.replaceState({...history.state,observandaIndex:routeIndex,search:state.search,filter:state.filter,recordBrowse:recordBrowse(state.recordBrowse),filterWorkspaceId:state.book.id},'',location.href);}
 function syncRoute(){
-  if(!state.book&&state.page!=='workspaces'||state.ownerOperation||restoringRoute||workspaceLoadTask)return;
+  if(!state.book&&state.page!=='workspaces'||state.ownerOperation||restoringRoute||workspaceLoadTask||projectOwners.pending())return;
   const next=routeFor(state);
   if(location.hash!==next){const push=location.hash.startsWith('#/');if(push)routeIndex++;history[push?'pushState':'replaceState']({observandaIndex:routeIndex,search:state.search,filter:state.filter,recordBrowse:recordBrowse(state.recordBrowse),filterWorkspaceId:state.book?.id},'',next);window.scrollTo(0,0);}
   else markHistory();
@@ -1222,7 +1225,7 @@ async function restoreRoute(){
   try{
     if(state.websiteId)await sites.exit();
     if(!current())return;
-    try{await projectOwners.restore(requestedRoute);}catch(error){if(ownerOperation.show(error,projectRoute(location.hash),location.hash))return;throw error;}
+    try{await projectOwners.restore(requestedRoute);}catch(error){if(error.name==='AbortError'){if(request===routeRestoreVersion){restoringRoute=false;syncRoute();}return;}if(ownerOperation.show(error,projectRoute(location.hash),location.hash))return;throw error;}
     if(!current())return;ownerOperation.clear();
     await sites.restore(projectRoute(requestedRoute).hash);if(!current())return;
     const recordRoute=/^#\/records\/([a-f0-9-]{36})(?:\/read(?:\/[a-f0-9-]{36})?)?$/.exec(projectRoute(location.hash).hash);

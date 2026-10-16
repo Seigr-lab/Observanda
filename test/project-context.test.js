@@ -125,3 +125,45 @@ test('relocation preserves the requested book owner without adopting incomplete 
  assert.equal(adopted,false);assert.equal(state.book,root);assert.equal(state.projectOwner,undefined);
  await context.beforeAction({dataset:{action:'preferences'}});assert.equal(state.book,root);
 });
+
+for(const outcome of ['success','failure'])test('late owner initialization '+outcome+' cannot fail or replace newer workspace navigation',async()=>{
+ const root=book(),project=book(),state={storage:{contextId:'root'},book:root},entered=deferred(),finish=deferred(),returning=deferred(),finishRoot=deferred();
+ const context=projectContexts({state,api:async(route,data,{owner})=>response(owner?project:root),adopt:result=>{state.book=result.book;},afterEnter:async result=>{if(result.book.id===project.id){entered.resolve();await finish.promise;}else{returning.resolve();await finishRoot.promise;}}});
+ const first=context.enter(project.projects[0].id),cancelled=assert.rejects(first,{name:'AbortError'});await entered.promise;assert.equal(context.pending(),true);
+ const second=context.beforeAction({dataset:{action:'workspace'}});await returning.promise;
+ if(outcome==='failure')finish.reject({code:'WORKSPACE_CHANGED'});else finish.resolve();
+ await cancelled;assert.equal(state.book,root);assert.equal(state.projectOwner,null);assert.equal(context.pending(),true);
+ finishRoot.resolve();await second;assert.equal(context.pending(),false);
+});
+
+test('current owner initialization errors remain actionable',async()=>{
+ const root=book(),project=book(),state={storage:{contextId:'root'},book:root};
+ const error={code:'ACCESS_LOCKED',projectId:project.projects[0].id};
+ const context=projectContexts({state,api:async()=>response(project),adopt:result=>{state.book=result.book;},afterEnter:async()=>{throw error;}});
+ await assert.rejects(context.enter(project.projects[0].id),value=>value===error);
+ assert.equal(state.book,project);assert.equal(state.projectOwner.projectId,project.projects[0].id);assert.equal(context.pending(),false);
+});
+
+test('changing or resetting the workspace cancels its pending owner activation',async()=>{
+ for(const invalidate of ['reset','workspace']){
+  const root=book(),project=book(),state={storage:{contextId:'root'},book:root},entered=deferred(),finish=deferred();
+  const context=projectContexts({state,api:async()=>response(project),adopt:result=>{state.book=result.book;},afterEnter:async()=>{entered.resolve();await finish.promise;}});
+  const pending=context.enter(project.projects[0].id),cancelled=assert.rejects(pending,{name:'AbortError'});await entered.promise;assert.equal(context.pending(),true);
+  if(invalidate==='reset')context.reset();else state.storage.contextId='another';
+  assert.equal(context.pending(),false);finish.resolve();await cancelled;assert.equal(context.pending(),false);
+ }
+});
+
+for(const outcome of ['success','failure'])test('requests for the same owner await its existing initialization '+outcome,async()=>{
+ const root=book(),project=book(),state={storage:{contextId:'root'},book:root},metadata=deferred(),entered=deferred(),finish=deferred(),failure={code:'ACCESS_LOCKED'};let reads=0,initializations=0;
+ const context=projectContexts({state,api:async()=>{reads++;return metadata.promise;},adopt:result=>{state.book=result.book;},afterEnter:async()=>{initializations++;entered.resolve();await finish.promise;}});
+ const first=context.enter(project.projects[0].id),duringRead=context.enter(project.projects[0].id);
+ const firstResult=outcome==='failure'?assert.rejects(first,error=>error===failure):first;
+ const readResult=outcome==='failure'?assert.rejects(duringRead,error=>error===failure):duringRead;
+ metadata.resolve(response(project));await entered.promise;
+ const duringInitialization=context.enter(project.projects[0].id),initializedResult=outcome==='failure'?assert.rejects(duringInitialization,error=>error===failure):duringInitialization;
+ let settled=false;void initializedResult.then(()=>{settled=true;});await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(settled,false);assert.equal(context.pending(),true);assert.equal(reads,1);assert.equal(initializations,1);
+ if(outcome==='failure')finish.reject(failure);else finish.resolve();
+ await Promise.all([firstResult,readResult,initializedResult]);assert.equal(context.pending(),false);assert.equal(state.book,project);
+});

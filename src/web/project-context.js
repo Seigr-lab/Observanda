@@ -19,13 +19,17 @@ export function projectRoute(hash){
 }
 export const ownedRoute=(hash,owner)=>owner?'#/owners/'+owner.projectId+(owner.labBookId?'/books/'+owner.labBookId:'')+hash.slice(1):hash;
 export function projectContexts({state,api,adopt,access=operation=>operation(),afterEnter=async()=>{},isOwned=()=>false,bookOwner=()=>null}){
- let generation=0,rootBook=null,context=state.storage?.contextId;
- const sync=()=>{if(context!==state.storage?.contextId){generation++;context=state.storage?.contextId;rootBook=null;state.projectOwner=null;state.ownerOperation=null;}};
- function reset(){generation++;context=state.storage?.contextId;rootBook=null;state.projectOwner=null;state.ownerOperation=null;}
+ let generation=0,pending=null,rootBook=null,context=state.storage?.contextId;
+ const sync=()=>{if(context!==state.storage?.contextId){generation++;pending=null;context=state.storage?.contextId;rootBook=null;state.projectOwner=null;state.ownerOperation=null;}};
+ function reset(){generation++;pending=null;context=state.storage?.contextId;rootBook=null;state.projectOwner=null;state.ownerOperation=null;}
  async function enter(projectId,labBookId=null){
   sync();if(labBookId!==null&&(!researchId(labBookId)||!researchId(projectId)))throw new TypeError('Invalid lab-book owner');if(projectId!==null&&!researchId(projectId))throw new TypeError('Invalid project owner');
-  const request=++generation,captured=context;
+  if(pending?.projectId===projectId&&pending.labBookId===labBookId)return pending.task;
+  const request=++generation,captured=context;pending=null;
   if((state.projectOwner?.projectId??null)===projectId&&(state.projectOwner?.labBookId??null)===labBookId)return;
+  const activation={request,projectId,labBookId,task:null};pending=activation;
+  activation.task=(async()=>{
+  try{
   const result=await access(()=>workspaceReader((route,data,options)=>api(route,data,{...options,adopt:false,owner:labBookId?{projectId,labBookId}:projectId})).read({metadataOnly:true,requireOutline:true})).catch(error=>{if(request!==generation||captured!==state.storage?.contextId)throw {name:'AbortError'};if(error.code==='STORAGE_RENAMING')error.requestedOwner={projectId,...(labBookId?{labBookId}:{})};throw error;});
   if(request!==generation||captured!==state.storage?.contextId)throw {name:'AbortError'};
   if(projectId&&(result.book.projects.length!==1||result.book.projects[0].id!==projectId||result.book.projects[0].parentId!=null||result.book.notebooks.some(n=>n.projectId!==projectId)))throw {code:'WORKSPACE_READ_INVALID'};
@@ -33,10 +37,17 @@ export function projectContexts({state,api,adopt,access=operation=>operation(),a
   if(!state.projectOwner)rootBook=state.book;
   state.projectOwner=projectId?{projectId,...(labBookId?{labBookId}:{}),namespaceId:result.book.id}:null;
   if(!projectId)rootBook=null;
-  adopt(result);await afterEnter(result);
+  adopt(result);
+  try{await afterEnter(result);}catch(error){
+   if(request!==generation||captured!==state.storage?.contextId)throw {name:'AbortError'};
+   throw error;
+  }
   if(request!==generation||captured!==state.storage?.contextId)throw {name:'AbortError'};
+  }finally{if(pending===activation)pending=null;}
+  })();
+  return activation.task;
  }
- return {enter,reset,root(){sync();return rootBook??state.book;},navigation(){sync();if(!rootBook||!state.projectOwner)return state.book;const id=state.projectOwner.projectId;return {...rootBook,projects:[...rootBook.projects.filter(p=>p.id!==id),...state.book.projects],notebooks:[...rootBook.notebooks.filter(n=>n.projectId!==id),...state.book.notebooks]};},async restore(hash){const owner=projectRoute(hash);await enter(owner.projectId,owner.labBookId??null);},
+ return {enter,reset,pending(){sync();return pending!==null;},root(){sync();return rootBook??state.book;},navigation(){sync();if(!rootBook||!state.projectOwner)return state.book;const id=state.projectOwner.projectId;return {...rootBook,projects:[...rootBook.projects.filter(p=>p.id!==id),...state.book.projects],notebooks:[...rootBook.notebooks.filter(n=>n.projectId!==id),...state.book.notebooks]};},async restore(hash){const owner=projectRoute(hash);await enter(owner.projectId,owner.labBookId??null);},
   async beforeAction(node){
    const name=node.dataset.action;
    if(['open-project','project-records','edit-project','edit-project-template'].includes(name)){
