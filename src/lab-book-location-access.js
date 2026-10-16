@@ -1,3 +1,4 @@
+import {ProjectSessionOwner} from './project-session-owner.js';
 import {LabBookRouter} from './lab-book-router.js';
 import {labBookTransferReceipt} from './lab-book-transfer.js';
 import {LabBookRenames} from './lab-book-rename.js';
@@ -14,6 +15,15 @@ import {AppError} from './errors.js';
 // verified parent rename. Recovery capabilities remain separate from grants.
 export class LabBookLocationAccess{
  constructor(application,client){this.application=application;this.client=client;this.owners=new Map();this.grants=new Map();}
+ captureRename(project,receipt,parent){
+  const session=this.application.session(this.client);
+  for(const item of project.books??[]){
+   const id='book:'+project.projectId+':'+item.labBookId,saved=session.get(id),source=path.resolve(receipt.source,...project.relative.split('/'),item.directory),destination=path.resolve(receipt.destination,...project.relative.split('/'),item.directory);
+   if(!saved?.vault||saved.locked||saved.expires<=Date.now()||saved.vault.id!==item.vaultId||![source,destination].includes(saved.root))continue;
+   const access=new LabBookAccessSession(this.application,this.client,project,item.labBookId,()=>parent.check());
+   this.owners.set(id,{projectId:project.projectId,id:item.labBookId,parent,entry:{root:source,namespaceId:item.namespaceId,vaultId:item.vaultId},access,etag:saved.etag,vault:cloneVault(saved.vault)});
+  }
+ }
  async use(project,id,parent,operation){
   return this.application.tracked(async()=>{
    const access=new LabBookAccessSession(this.application,this.client,project,id,()=>parent.check()),registry=new LabBookRegistry(project),renames=new LabBookRenames(project);let entry=await registry.locate(id),vault;
@@ -50,9 +60,20 @@ export class LabBookLocationAccess{
    for(const [id,grant] of this.grants){
     const owner=this.owners.get(id);if(!this.valid(owner)||grant.expires<=Date.now())continue;
     const project=await registry.locate(owner.projectId),parent=session.get(owner.projectId);
-    if(!parent?.vault||parent.locked||parent.root!==project.root||parent.expires<=Date.now())continue;
+    if(parent?.locked||parent?.vault&&(parent.root!==project.root||parent.expires<=Date.now()))continue;
     if(session.has(id))throw new AppError('CONFLICT');
-    const entry=await new LabBookRegistry(new ProjectStorage(project.root,project.projectId,parent.vault)).locate(owner.id),access=await readAccess(entry.root);
+    let entry;
+    if(parent?.vault)entry=await new LabBookRegistry(new ProjectStorage(project.root,project.projectId,parent.vault)).locate(owner.id);
+    else{
+     // A book may have an explicit password grant while its parent uses the
+     // device. Authenticate that parent normally; never create a parent grant
+     // from a rename recovery key merely to retain the existing book grant.
+     const selected=new ProjectSessionOwner(application,client,owner.projectId);
+     try{entry=await selected.use(storage=>new LabBookRegistry(storage).locate(owner.id));}
+     catch(error){if(['ACCESS_LOCKED','ACCESS_DENIED','DEVICE_UNKNOWN'].includes(error.code))continue;throw error;}
+     finally{await selected.close();}
+    }
+    const access=await readAccess(entry.root);
     if(entry.root!==grant.root||entry.namespaceId!==grant.namespaceId||entry.vaultId!==grant.vault.id||access.etag!==grant.etag)throw new AppError('DATABASE_LOCATION');authenticateKeyring(access.value,grant.vault);
     prepared.push([id,{root:entry.root,etag:access.etag,vault:cloneVault(grant.vault),expires:grant.expires}]);
    }

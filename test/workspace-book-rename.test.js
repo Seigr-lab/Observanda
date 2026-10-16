@@ -68,3 +68,19 @@ test('HTTP parent rename authenticates protected books and retains only the requ
  const selected=await a.call(prefix+'/workspace/read/start',{});assert.equal(selected.status,200,JSON.stringify(selected));assert.equal((await b.call(prefix+'/workspace/read/start',{})).status,409);
  await app.close();app=await startServer({...options,root:moved.value.root});const reopened=await client(app);const locked=await reopened.call(prefix+'/workspace/read/start',{});assert.equal(locked.value.code,'DEVICE_UNKNOWN');assert.equal((await reopened.call(prefix+'/access/unlock',{username:'',password:protectedBook.password,recovery:''})).status,200);assert.equal((await reopened.call(prefix+'/workspace/read/start',{})).status,200);
 });
+
+
+test('HTTP interrupted parent rename retains existing protected book access when the source is already absent',{timeout:180000},async t=>{
+ const f=await fixture(t),app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,headless:true,preferencesFile:path.join(f.directory,'preferences.json')});t.after(()=>app.close());
+ const a=await client(app),b=await client(app),snapshot=(await a.call('/api/notebook')).value,protectedBook=f.books[1],prefix='/api/projects/'+f.projectId+'/lab-books/'+protectedBook.entry.labBookId;
+ assert.equal((await a.call(prefix+'/access/unlock',{username:'',password:protectedBook.password,recovery:''})).status,200);
+ const finish=WorkspaceRenames.prototype.finishLocked;let interrupted=false;
+ WorkspaceRenames.prototype.finishLocked=function(value,vault,options){return finish.call(this,value,vault,{...options,checkpoint:async(stage,receipt)=>{await options?.checkpoint?.(stage,receipt);if(value.source===f.workspace.root&&stage==='renamed'&&!interrupted){interrupted=true;throw Object.assign(Error('Disposable interruption after move'),{code:'EBUSY'});}}});};
+ try{
+  const failed=await a.call('/api/storage/rename',{name:'Resumed Research Workspace',etag:snapshot.etag});assert.equal(failed.value.code,'IO',JSON.stringify(failed));await assert.rejects(readdir(f.workspace.root),{code:'ENOENT'});
+  const pending=await a.call('/api/storage');assert.equal(pending.status,200,JSON.stringify(pending));assert.ok(pending.value.rename);
+  const moved=await a.call('/api/storage/rename/resume',{id:pending.value.rename.id});assert.equal(moved.status,200,JSON.stringify(moved));a.adopt(moved.value);await assertBooks(f,moved.value.root);
+  assert.equal((await a.call(prefix+'/workspace/read/start',{})).status,200);assert.equal((await b.call(prefix+'/workspace/read/start',{})).status,409);
+  b.adopt(moved.value);assert.equal((await b.call(prefix+'/workspace/read/start',{})).value.code,'DEVICE_UNKNOWN');
+ }finally{WorkspaceRenames.prototype.finishLocked=finish;}
+});

@@ -1,3 +1,4 @@
+import {workspaceRenameAccess,workspaceRenameRecovery} from './workspace-rename-recovery.js';
 import {publicationRevisionCurrent} from './publication-freshness.js';
 import {publicationSourceFactory} from './project-publication-sources.js';
 import {PublicationSourceAccess} from './publication-source-access.js';
@@ -214,7 +215,14 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
     await workspaceDirectory.using(ctx.root,{allowExisting:true,replacing:await renames.completedSource(ctx.root)},async()=>{
      try{await synchronizeWorkspaceName(ctx.workspace);}catch(error){if(!['MISSING','CATALOGUE_UNAVAILABLE'].includes(error.code))throw error;}
     });
-   })().catch(error=>{ctx.identityPrepared=null;throw error;});
+   })().catch(async error=>{
+    ctx.identityPrepared=null;
+    // Authentication has already succeeded. An interrupted rename remains
+    // usable as a recovery screen even if the startup attempt cannot finish.
+    const recovery=await renames.recovery(ctx.root).catch(()=>null);
+    if(recovery){ctx.renameAccessRoot=recovery.root;return;}
+    throw error;
+   });
    return ctx.identityPrepared;
   };
   const dashboardTasks=new Set();
@@ -272,7 +280,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
     client.access='none';client.expires=Date.now()+8*60*60*1000;
   };
   const setCookie=(res,id)=>res.setHeader('Set-Cookie',`observanda=${id}; HttpOnly; SameSite=Strict; Path=/`);
-  const contextAccess=()=>context.root?readAccess(context.root):Promise.resolve({value:{formatVersion:1,username:'',password:null},etag:'none'});
+  const contextAccess=()=>workspaceRenameAccess(context,renames);
   const status=async client=>{const access=await contextAccess();if(context.protectedOnce&&access.etag==='none')throw new AppError('ACCESS_FORMAT');context.protectedOnce ||= requiresAccess(access.value);return {access,locked:!!context.manualLock||requiresAccess(access.value)&&(client.access!==access.etag||client.expires<Date.now()||(isEncryptedAccess(access.value)&&!context.vault.key))};};
   const authenticate=async(root,access,username,password,recovery='')=>{
     const attempts=failures.get(root)??{count:0,until:0};if(attempts.count>=5&&Date.now()<attempts.until)throw new AppError('ACCESS_WAIT');
@@ -300,6 +308,8 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
     }finally{priorContext.adopting=false;if(context===priorContext)priorContext.readers.open();}
   });
   const metadata=async()=>{
+    const rename=await workspaceRenameRecovery(renames,context.root);
+    if(rename)return {root:context.root,contextId:context.id,rename,locations:[],database:{ready:false},preferencesFile:preferencesFile??null,folderPicker:await picker.capabilities(),available:false,expectedExisting:true,encrypted:!!context.vault.id,unavailableReason:'workspace-renaming'};
     const provider=databaseProvider(),moving=context.root?await moveSource(context.root):null;let status;
     try{status=await databaseStatus(provider&&context.vault.key&&!moving?await provider.environment(context.root,{vault:context.vault}):undefined);}catch(error){status={engine:'PostgreSQL',ready:false,code:error.code??'DATABASE_UNAVAILABLE'};}
     const database={...status,...(provider?await provider.details(context.workspace):{placement:'external',path:null}),message:status.ready?'PostgreSQL is connected.':safeError(new AppError(status.code)).message};
@@ -606,7 +616,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
           if(!selectedContext.concurrentReads)await selectedContext.readers.close();
           // Independent project workers and grants remain available while a
           // workspace snapshot is copied. Activation revokes the old context.
-          if(selectedContext.concurrentReads||['/api/storage/rename','/api/storage/delete/preview','/api/storage/delete'].includes(url.pathname))await stopWorkspaceJobs(selectedContext);else await stopJobs(selectedContext);
+          if(selectedContext.concurrentReads||['/api/storage/rename','/api/storage/rename/resume','/api/storage/delete/preview','/api/storage/delete'].includes(url.pathname))await stopWorkspaceJobs(selectedContext);else await stopJobs(selectedContext);
           if(['/api/storage/rename','/api/storage/delete/preview','/api/storage/delete','/api/storage/delete/finish','/api/storage/copy/preview','/api/storage/copy','/api/storage/encrypt','/api/storage/portable/preview','/api/storage/portable','/api/storage/move','/api/storage/move/finish'].includes(url.pathname)&&await context.jobs?.queue.hasActive())throw new AppError('JOB_BUSY');
           if(url.pathname==='/api/storage/delete/finish'){
             if(data.confirmed!==true)throw new AppError('INVALID');
@@ -629,11 +639,24 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
             const vault=cloneVault(context.vault);
             try{
              return await withWorkspaceRenameSession(historyProjects,client,async rename=>{
-              const result=await workspaceDirectory.using(target,{replacing:source},async()=>{return rename.begin(renames,data.name,{protectedPaths:[preferencesFile,deviceStore.file,fileURLToPath(new URL('..',import.meta.url)),...(await workspaceDirectory.list()).filter(item=>item.path!==source).map(item=>item.path)]});});
+              const result=await workspaceDirectory.using(target,{replacing:source},async()=>{return rename.begin(renames,data.name,{checkpoint:async stage=>{if(stage==='renamed')selectedContext.renameAccessRoot=target;},protectedPaths:[preferencesFile,deviceStore.file,fileURLToPath(new URL('..',import.meta.url)),...(await workspaceDirectory.list()).filter(item=>item.path!==source).map(item=>item.path)]});});
               await activate(result.destination,client,vault,{movingFrom:source});
               await rename.install(context.projects??=new ProjectApplication(context.workspace,{deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})}));return metadata();
              });
             }catch(error){clearVault(vault);throw error;}
+           },json);
+          }
+          if(url.pathname==='/api/storage/rename/resume'){
+           if(Object.keys(data).join()!=='id'||typeof data.id!=='string')throw new AppError('INVALID');
+           const recovery=await renames.recovery(context.root);if(!recovery||recovery.value.id!==data.id)throw new AppError('STORAGE_RENAME_STATE');
+           const receipt=recovery.value;req.activityRecoveryKey='workspace-rename:'+receipt.workspaceId;
+           return await storageResponse(req,res,async()=>{
+            const vault=cloneVault(context.vault);
+            try{return await withWorkspaceRenameSession(historyProjects,client,async rename=>{
+             const result=await workspaceDirectory.using(receipt.destination,{replacing:receipt.source,allowExisting:true},async()=>rename.resume(renames,data.id,{checkpoint:async stage=>{if(stage==='renamed')selectedContext.renameAccessRoot=receipt.destination;},protectedPaths:[preferencesFile,deviceStore.file,fileURLToPath(new URL('..',import.meta.url)),...(await workspaceDirectory.list()).filter(item=>item.path!==receipt.source).map(item=>item.path)]}));
+             await activate(result.destination,client,vault,{movingFrom:receipt.source});
+             await rename.install(context.projects??=new ProjectApplication(context.workspace,{deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})}));return metadata();
+            });}catch(error){clearVault(vault);throw error;}
            },json);
           }
           if(url.pathname==='/api/storage/folder')return json(await createFolder(data.parent,data.name),201);
@@ -1235,8 +1258,8 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       if(req.method==='GET'&&(appearanceChoices||appearanceFile)){
         const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
         try{
-          if(appearanceChoices)return json(await appearancePreviews.choices(appearanceChoices[1],{cursor:url.searchParams.get('cursor'),path:url.searchParams.get('path'),signal:controller.signal}));
-          const file=await appearancePreviews.file(appearanceFile[1],appearanceFile[2]+url.search,{signal:controller.signal});
+          if(appearanceChoices)return json(await appearancePreviews.choices(appearanceChoices[1],{cursor:url.searchParams.get('cursor'),path:url.searchParams.get('path'),signal:controller.signal,client}));
+          const file=await appearancePreviews.file(appearanceFile[1],appearanceFile[2]+url.search,{signal:controller.signal,client});
           return await serveContent(req,res,file.content,mime(file.name));
         }finally{res.removeListener('close',abort);}
       }

@@ -43,11 +43,26 @@ export class WorkspaceRenames{
   if(value.phase==='prepared')for(const root of [value.source,value.destination])await atomicWrite(path.join(this.directory,digest(root)+'.pointer'),value.id);
  }
  async locked(operation){await mkdir(this.directory,{recursive:true,mode:0o700});await assertRegular(this.directory,{directory:true});return withWriterLease(path.join(this.directory,'write.lock'),operation);}
- async pending(root){
+ async journal(root){
   const file=path.join(this.directory,digest(root)+'.pointer'),stat=await assertRegular(file,{missing:true});if(!stat)return null;
   if(stat.size!==36)throw new AppError('STORAGE_RENAME_STATE');
   const value=await this.read(await readFile(file,'utf8'));if(![value.source,value.destination].includes(root))throw new AppError('STORAGE_RENAME_STATE');
-  return value.phase==='complete'?null:value;
+  return value;
+ }
+ async pending(root){const value=await this.journal(root);return value?.phase==='complete'?null:value;}
+ async recovery(root){
+  const value=await this.journal(root);if(!value)return null;
+  if(value.phase==='complete'){
+   if(await workspaceRename(value.destination)){return {value,root:await this.locate(value)};}
+   if(root===value.source&&await this.completedSource(value.destination)===value.source)return {value,root:value.destination};
+   return null;
+  }
+  if(value.phase==='prepared'&&!await workspaceRename(value.source)){
+   const stat=await assertRegular(value.source,{directory:true});
+   if(await realpath(value.source)!==value.source||!sameIdentity(identity(stat),value.identity)||await fingerprint(path.join(value.source,'.observanda/access.json'))!==value.accessHash)throw new AppError('STORAGE_RENAME_STATE');
+   return {value,root:value.source};
+  }
+  return {value,root:await this.locate(value)};
  }
  async discard(value){
   // No parent fence was published, so none of the projects was frozen.

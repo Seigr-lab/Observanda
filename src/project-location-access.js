@@ -16,6 +16,20 @@ const inside=(parent,child)=>{const relative=path.relative(parent,child);return 
 export class ProjectLocationAccess {
   #owners=new Map();#grants=new Map();#destination=null;#installed=false;#closed=false;#rename=false;
   constructor(application,client,{check=async()=>{},recoverRenames=true,skipRenameId=null}={}){this.application=application;this.client=client;this.check=check;this.recoverRenames=recoverRenames;this.skipRenameId=skipRenameId;this.books=new LabBookLocationAccess(application,client);}
+  captureRename(receipt){
+    if(this.#closed||this.#destination||this.#owners.size||![receipt.source,receipt.destination].includes(this.application.workspace.root))throw new AppError('ACCESS_LOCKED');
+    const session=this.application.session(this.client);
+    for(const item of receipt.projects??[]){
+      const source=path.resolve(receipt.source,...item.relative.split('/')),destination=path.resolve(receipt.destination,...item.relative.split('/')),saved=session.get(item.projectId);
+      if(saved?.locked||saved?.vault&&saved.expires<=Date.now())continue;
+      const explicit=saved?.vault&&saved.vault.id===item.vaultId&&[source,destination].includes(saved.root);
+      if(saved?.vault&&!explicit)continue;
+      const owner=new ProjectSessionOwner(this.application,this.client,item.projectId,{check:this.check});
+      owner.entry={projectId:item.projectId,root:source,namespaceId:item.namespaceId,vaultId:item.vaultId};
+      if(explicit){owner.vault=cloneVault(saved.vault);owner.etag=saved.etag;}
+      this.#owners.set(item.projectId,owner);this.books.captureRename(item,receipt,owner);
+    }
+  }
   async withProject(id,operation) {
     if(this.#closed||this.#destination)throw new AppError('ACCESS_LOCKED');
     return this.application.tracked(async()=>{
@@ -47,6 +61,7 @@ export class ProjectLocationAccess {
     const receipt=await renames.read(id);
     if(receipt.phase!=='complete'||receipt.source!==source||receipt.destination!==destination||await renames.completedSource(destination)!==source||await workspaceRename(destination))throw new AppError('STORAGE_RENAME_STATE');
     for(const [projectId,owner] of this.#owners){
+      if(!owner.vault)continue;
       // Revocation cannot undo a completed physical rename. Omit that grant;
       // normal project access will require authentication in the new context.
       if(owner.session.get(projectId)!==owner.sessionEntry||owner.sessionEntry?.locked||owner.sessionEntry?.vault&&owner.sessionEntry.expires<=Date.now())continue;
@@ -86,7 +101,7 @@ export class ProjectLocationAccess {
   }
   async install(application,client) {
     if(client!==this.client||this.#closed||this.#installed||!this.#destination||application.closed||application.workspace.root!==this.#destination)throw new AppError('ACCESS_DENIED');
-    if(!this.#grants.size){this.#installed=true;return;}
+    if(!this.#grants.size){await this.books.install(application,client);this.#installed=true;return;}
     const registry=await application.registry(),listed=await registry.read(),session=application.session(client),prepared=[];
     try {
       for(const [id,grant] of this.#grants) {

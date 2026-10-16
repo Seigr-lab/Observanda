@@ -2,7 +2,7 @@ export function activityOwner(kind, view){
  const bookCreation=/^\/api\/projects\/([a-f0-9-]{36})\/lab-books\/(?:create|import)(?:\/(?:resume|cancel))?$/.exec(kind);if(bookCreation)return '#/projects/'+bookCreation[1];
  const bookDelete=/^\/api\/projects\/([a-f0-9-]{36})\/lab-books\/[a-f0-9-]{36}\/storage\/delete(?:\/resume)?$/.exec(kind);if(bookDelete)return '#/projects/'+bookDelete[1];
  if(/^\/api\/projects\/[a-f0-9-]{36}\/storage\/delete(?:\/resume)?$/.test(kind))return '#/projects';
- if(kind==='/api/storage/rename')return '#/preferences';
+ if(['/api/storage/rename','/api/storage/rename/resume'].includes(kind))return '#/preferences';
  if(kind.startsWith('/api/storage/'))return '#/preferences/storage';
  return typeof view==='string'&&/^#\/[a-zA-Z0-9/_:-]*$/.test(view)?view:null;
 }

@@ -204,7 +204,7 @@ async function api(route, data, {adopt=true,signal,onProgress,metadataOnly=false
   if(state.websiteId&&websiteRequest(route))headers['X-Observanda-Website']=state.websiteId;
   const stop=structureStream?new AbortController():null;
   if(stop)signal=signal?AbortSignal.any([signal,stop.signal]):stop.signal;
-  const storageOperation=/^\/api\/projects\/[a-f0-9-]{36}\/(?:settings\/save|directory\/reparent)$/.test(route)||['/api/storage/rename','/api/storage/delete','/api/storage/delete/finish','/api/storage/open','/api/storage/copy/preview','/api/storage/copy','/api/storage/move','/api/storage/move/finish','/api/storage/encrypt','/api/storage/portable/preview','/api/storage/portable'].includes(route);
+  const storageOperation=/^\/api\/projects\/[a-f0-9-]{36}\/(?:settings\/save|directory\/reparent)$/.test(route)||['/api/storage/rename','/api/storage/rename/resume','/api/storage/delete','/api/storage/delete/finish','/api/storage/open','/api/storage/copy/preview','/api/storage/copy','/api/storage/move','/api/storage/move/finish','/api/storage/encrypt','/api/storage/portable/preview','/api/storage/portable'].includes(route);
   const recordOperation=['/api/research/records/remove','/api/research/records/location','/api/research/records/runs/create','/api/research/records/save','/api/research/records/writing/save','/api/research/records/values/save','/api/research/records/sections','/api/research/records/media','/api/research/records/figures','/api/research/records/tags','/api/research/records/history/restore','/api/research/drafts/review/prepare','/api/research/drafts/review/apply'].includes(route);
   let result;const progress=onProgress?null:structureStream?structureProgress({cancel:()=>stop.abort()}):storageOperation?storageProgress():recordOperation?recordSaveProgress():null;
   if(progress?.element)progress.element.dataset.operationKind=route;
@@ -692,7 +692,7 @@ function render() {
   if (state.page === 'appearance') void designPreview.update();
 }
 
-function renderGeneralPreferences(){return structureUI.generalPreferences();}
+function renderGeneralPreferences(){return storageControls.recoveryPanel()||structureUI.generalPreferences();}
 
 function renderPage(){
  if(state.ownerOperation)return ownerOperation.view();
