@@ -40,7 +40,7 @@ export function projectNotebooksUI(services){
    ${option('blank','Blank lab book',templateChoice)}
    ${profiles.length?'<optgroup label="Enabled lab-book types">'+profiles.map(p=>option('profile:'+p.id,p.label,templateChoice)).join('')+'</optgroup>':''}
    ${saved.length?'<optgroup label="Saved project templates">'+saved.map(p=>option('project:'+p.id,p.label,templateChoice)).join('')+'</optgroup>':''}
-  </select>`)+`<p class="muted">Choose more templates in Preferences / Modules / Lab-book types. You can customize this book later in Lab book settings.</p>`;
+  </select>`)+`<p class="muted">${esc(t('templatePreferences','chooseMore',{preferences:t('preferences','title'),templates:t('preferences','templates')}))}</p>`;
  }
  const isDirty=()=>{if(deleteBusy)return false;capture();return !!editing&&JSON.stringify(editing)!==JSON.stringify(base);};
  function card(n){return `<article class="panel project-notebook"><p class="scope-kicker">Lab book</p><h2><button class="text-button" ${attrs(n.route)}>${esc(n.title)}</button></h2>
@@ -58,8 +58,8 @@ export function projectNotebooksUI(services){
   showDialog(`<form id="notebook-config-form" class="notebook-config-form ${creating?'notebook-create-form':''}"><h2 id="dialog-title" tabindex="-1">${creating?'New lab book':'Lab book settings'}</h2>
    <div class="notebook-config-scroll"><div class="form-grid">${field('Lab book name',`<input name="title" required maxlength="160" value="${esc(editing.title)}">`)}
    ${field('Project',`<select name="projectId" data-notebook-owner required>${state.book.projects.map(p=>option(p.id,locationName(state.book,p.id),editing.projectId)).join('')}</select>`)}</div>
-   ${creating&&projectTemplate&&!templateAvailable(projectTemplate,state.dashboardSettings)?'<p class="muted">The project default uses a type that is turned off. Choose another template or enable the default in Preferences / Modules / Lab-book types.</p>':''}${creating?templatePicker():`<fieldset class="notebook-profile-choices"><legend>Lab-book types</legend>
-    ${profiles.map(p=>`<label class="checkbox"><input type="checkbox" data-notebook-profile="${p.id}" ${c.profiles.some(ch=>ch.id===p.id&&ch.enabled)?'checked':''}>${esc(p.label)}</label>`).join('')||'<p>Enable lab-book types in Preferences / Modules, or add your own record types below.</p>'}
+   ${creating&&projectTemplate&&!templateAvailable(projectTemplate,state.dashboardSettings)?'<p class="muted">'+esc(t('templatePreferences','defaultUnavailable',{preferences:t('preferences','title'),templates:t('preferences','templates')}))+'</p>':''}${creating?templatePicker():`<fieldset class="notebook-profile-choices"><legend>Lab-book types</legend>
+    ${profiles.map(p=>`<label class="checkbox"><input type="checkbox" data-notebook-profile="${p.id}" ${c.profiles.some(ch=>ch.id===p.id&&ch.enabled)?'checked':''}>${esc(p.label)}</label>`).join('')||'<p>'+esc(t('templatePreferences','enableTypes',{preferences:t('preferences','title'),templates:t('preferences','templates')}))+'</p>'}
    </fieldset>
    <div class="notebook-type-picker">${field('Record type',`<select data-notebook-type>${choices.map(s=>option(s.id,s.label+(s.enabled?'':' (removed)'),selected)).join('')}</select>`)}${button('Add record type','section-add','','subtle')}</div>
    <div class="lab-type-layout"><aside class="lab-type-catalogue" aria-label="Record types"><div class="lab-type-list-heading"><strong>Record types</strong>${button('Add record type','section-add','','subtle')}</div>

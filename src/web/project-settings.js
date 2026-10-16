@@ -1,5 +1,5 @@
 import {projectDirectoryChoices} from './project-directory-choices.js';
-import {localizedText} from './i18n/index.js';
+import {localizedText,t} from './i18n/index.js';
 const projectText=localizedText('projectDirectory');
 import {availableLocationTools} from './modules/location-tools.js';
 import {enabledLabBookTypes} from './feature-modules.js';
@@ -65,7 +65,7 @@ export function projectSettings(services){
   const section=choices.find(s=>s.id===selected),index=choices.indexOf(section),siblings=choices.filter(s=>s.enabled&&s.profileId===section?.profileId),position=siblings.indexOf(section);
   return '<p>Default template for <strong>'+esc(draft.title)+'</strong>. Changes apply to new lab books. Existing lab books and records keep their own contents.</p>'+
    '<div class="project-template-source">'+field('Starting template','<select data-project-template-source>'+sourceOptions()+'</select>'+directoryChoices.view('templates'))+button('Use template','apply',source==='choose'?'disabled':'')+'</div>'+
-   '<p class="muted">Choose more types in Preferences &rarr; Modules &rarr; Lab-book types.</p>'+
+   '<p class="muted">'+esc(t('templatePreferences','manage',{preferences:t('preferences','title'),templates:t('preferences','templates')}))+'</p>'+
    (replace?'<div class="project-template-confirm" role="alert"><p>Replace this template draft?</p>'+button('Replace template','replace')+button('Keep template','keep')+'</div>':'')+
    (!template?'<p>No default template. Choose a starting template to create one.</p>':
     field('Template name','<input name="templateName" required maxlength="160" value="'+esc(template.name)+'">')+
@@ -83,7 +83,7 @@ export function projectSettings(services){
    (creation?'<div class="form-grid">'+field(projectText('username')+' <small>'+esc(projectText('passwordHint'))+'</small>','<input name="projectUsername" autocomplete="off" value="'+esc(creation.username)+'">')+field(projectText('password')+' <small>'+esc(projectText('passwordHint'))+'</small>','<input name="projectPassword" type="password" autocomplete="new-password" value="'+esc(creation.password)+'">')+'</div>':'')+
    (type==='custom'?field('Custom project type','<input name="customKind" required maxlength="80" value="'+esc(draft.kind)+'">'):'')+
    field('Description','<textarea name="description" rows="2" maxlength="1500">'+esc(draft.description)+'</textarea>')+
-   '<section class="project-template-panel" aria-label="Template selection">'+field('Default lab-book template','<select data-project-template-source>'+sourceOptions()+'</select>'+directoryChoices.view('templates'))+summary()+'<p class="muted">Enable more types in Preferences &rarr; Modules &rarr; Lab-book types.</p></section>'+
+   '<section class="project-template-panel" aria-label="Template selection">'+field('Default lab-book template','<select data-project-template-source>'+sourceOptions()+'</select>'+directoryChoices.view('templates'))+summary()+'<p class="muted">'+esc(t('templatePreferences','manage',{preferences:t('preferences','title'),templates:t('preferences','templates')}))+'</p></section>'+
    (tools.length?'<fieldset class="project-tool-choices"><legend>Project tools</legend>'+tools.map(m=>'<label class="checkbox"><input type="checkbox" name="projectTool" value="'+m.id+'" '+(draft.tools?.includes(m.id)?'checked':'')+'>'+esc(m.locationTool.label)+'</label>').join('')+'</fieldset>':'');
  }
  function draw(focus){
@@ -110,7 +110,7 @@ export function projectSettings(services){
   if(source==='choose')return;
   if(source==='current'){draft.labBookTemplate=structuredClone(base.labBookTemplate);return;}
   const profile=recommendedProfile(source,state.dashboardSettings);
-  if(source.startsWith('profile:')&&!profile)throw new Error('Enable this type in Preferences / Modules / Lab-book types first.');
+  if(source.startsWith('profile:')&&!profile)throw new Error(t('templatePreferences','enableFirst',{preferences:t('preferences','title'),templates:t('preferences','templates')}));
   const existing=source.startsWith('project:')?(state.book.projects.find(p=>p.id===source.slice(8))?.labBookTemplate??remoteTemplates.get(source.slice(8))):null;
   if(source.startsWith('project:')&&!templateAvailable(existing,state.dashboardSettings))throw new Error('This project template is no longer available.');
   if(source==='blank'&&mode==='project')delete draft.labBookTemplate;

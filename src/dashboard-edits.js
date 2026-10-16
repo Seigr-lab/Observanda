@@ -89,6 +89,15 @@ export class DashboardEdits{
    await unlink(current.file);return {completed:true};
   });
  }
+ async recordFailure(workspace,id,code){
+  return this.transaction(workspace,async()=>{
+   const entry=await this.find(workspace);
+   // A late worker failure belongs only to the intent it attempted.
+   if(!entry||selected(entry.value).id!==id)return false;
+   if(!entry.value.error){entry.value.error=code;await this.write(workspace,entry);}
+   return true;
+  });
+ }
  async discard(workspace,id){
   return this.worker(workspace,()=>this.transaction(workspace,async()=>{
    const entry=await this.find(workspace);if(!entry)return;

@@ -14,5 +14,6 @@
   "failed": "No se ha podido cargar o guardar el idioma. Se mantiene la selección anterior.",
   "saved": "Idioma guardado.",
   "coverageTitle": "Cobertura de la traducción",
-  "loadFailed": "No se ha podido cargar el idioma guardado. Esta sesión utiliza el inglés."
+  "loadFailed": "No se ha podido cargar el idioma guardado. Esta sesión utiliza el inglés.",
+  "templates": "Plantillas"
 }

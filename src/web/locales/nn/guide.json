@@ -16,7 +16,7 @@
           "id": "templates",
           "title": "Vel og tilpass malar",
           "paragraphs": [
-            "Aktiver fleire boktypar under Innstillingar → Modular → Lab-book types. Desse valfrie typane gjev tilgang til malar; arbeidsområdet, prosjekta og labbøkene er alltid tilgjengelege. Deaktivering av ein type bevarer eksisterande bøker og oppføringar.",
+            "Aktiver fleire boktypar under Innstillingar → {ui:preferences.templates}. Desse valfrie typane gjev tilgang til malar; arbeidsområdet, prosjekta og labbøkene er alltid tilgjengelege. Deaktivering av ein type bevarer eksisterande bøker og oppføringar.",
             "Bruk den eigne malredigeraren til å tilpasse oppføringstypar, rettleiing og felt. Malendringar skriv ikkje om verdiane i eksisterande oppføringar. Skil programvareprototypar og fysiske PCB-forsøk i eigne bøker når dei treng ulike strukturar."
           ]
         }

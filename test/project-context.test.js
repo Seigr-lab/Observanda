@@ -36,11 +36,12 @@ test('invalid project data and an expired workspace cannot change selected owner
 });
 
 
-test('project website management keeps its owner across website selection and leaves for workspace navigation',async()=>{
+test('website management leaves research ownership and keeps independent website selection at workspace level',async()=>{
  const root=book(),a=book(),state={storage:{contextId:'root'},book:root},calls=[];
  const context=projectContexts({state,isOwned:id=>id===a.projects[0].id,api:async(route,data,options)=>{calls.push(options.owner);return response(options.owner?a:root);},adopt:result=>state.book=result.book});
- await context.beforeAction({dataset:{action:'site-list',project:a.projects[0].id}});assert.equal(state.projectOwner.projectId,a.projects[0].id);
- await context.beforeAction({dataset:{action:'site-open',id:randomUUID()}});await context.beforeAction({dataset:{action:'site-list'}});assert.equal(state.book,a);assert.deepEqual(calls,[a.projects[0].id]);
+ await context.enter(a.projects[0].id);assert.equal(state.projectOwner.projectId,a.projects[0].id);
+ await context.beforeAction({dataset:{action:'site-list',project:a.projects[0].id}});assert.equal(state.projectOwner,null);assert.equal(state.book,root);
+ await context.beforeAction({dataset:{action:'site-open',id:randomUUID()}});await context.beforeAction({dataset:{action:'site-list'}});assert.equal(state.book,root);assert.deepEqual(calls,[a.projects[0].id,null]);
  await context.beforeAction({dataset:{action:'publishing'}});assert.equal(state.projectOwner,null);assert.equal(state.book,root);
 });
 

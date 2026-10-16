@@ -14,5 +14,6 @@
   "failed": "No s’ha pogut carregar o desar la llengua. Es manté la selecció anterior.",
   "saved": "S’ha desat la llengua.",
   "coverageTitle": "Cobertura de la traducció",
-  "loadFailed": "No s’ha pogut carregar la llengua desada. Aquesta sessió utilitza l’anglès."
+  "loadFailed": "No s’ha pogut carregar la llengua desada. Aquesta sessió utilitza l’anglès.",
+  "templates": "Plantilles"
 }

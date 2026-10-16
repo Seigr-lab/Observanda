@@ -218,25 +218,32 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
    return ctx.identityPrepared;
   };
   const dashboardTasks=new Set();
+  const readDashboardPending=async ctx=>{
+    const pending=await dashboardEdits.read(ctx.workspace),failure=ctx.dashboardFailure;
+    return pending&&failure?.id===pending.id&&!pending.error?{...pending,state:'failed',error:failure.code}:pending;
+  };
   const startDashboardEdits=ctx=>{
     if(ctx.dashboardTask||!ctx.workspace||!ctx.vault.key||ctx.manualLock||shuttingDown)return;
-    let activity,commandId;
+    let commandId=null;
     const task=(async()=>{
       while(context===ctx&&!ctx.manualLock&&ctx.vault.key&&!shuttingDown){
-        const pending=await dashboardEdits.read(ctx.workspace);if(!pending){activity?.remove();return;}
+        commandId=null;
+        const pending=await readDashboardPending(ctx);if(!pending||pending.error)return;
         commandId=pending.id;
-        if(pending.error){if(ctx.dashboardFailure!==pending.id+':'+pending.error){activity??=activities.begin(ctx.id,'/api/dashboard');activity.finish(new AppError(pending.error));ctx.dashboardFailure=pending.id+':'+pending.error;}return;}
-        ctx.dashboardFailure=null;activity??=activities.begin(ctx.id,'/api/dashboard');
-        activity.waiting();
         if(!changing&&!loginBusy){
-          activeWrites++;activity.running('saving-settings');
-          try{const result=await withoutWriterWait(()=>dashboardEdits.apply(ctx.workspace));if(result.completed||result.idle){activity.finish();activity=null;}}
+          activeWrites++;
+          try{await withoutWriterWait(()=>dashboardEdits.apply(ctx.workspace));}
           finally{activeWrites--;}
         }
         await new Promise(resolve=>setTimeout(resolve,250));
       }
-      activity?.remove();
-    })().catch(error=>{if(ctx.manualLock||context!==ctx||shuttingDown)activity?.remove();else{activity?.finish(error);ctx.dashboardFailure=commandId+':'+(error.code??'IO');}}).finally(()=>{ctx.dashboardTask=null;dashboardTasks.delete(task);});
+    })().catch(async error=>{
+      if(!commandId||ctx.manualLock||context!==ctx||shuttingDown)return;
+      const failure={id:commandId,code:error.code??'IO'};ctx.dashboardFailure=failure;
+      // Preserve the failure across restarts when possible. If the intent file
+      // itself cannot be written, its owning panel still receives this error.
+      try{await dashboardEdits.recordFailure(ctx.workspace,failure.id,failure.code);}catch{}
+    }).finally(()=>{ctx.dashboardTask=null;dashboardTasks.delete(task);});
     ctx.dashboardTask=task;dashboardTasks.add(task);
   };
   const startJobs=ctx=>{if(ctx.workspace&&ctx.vault.key&&!ctx.manualLock&&!shuttingDown&&!changing){ctx.publicationSourceAccess??=new PublicationSourceAccess();ctx.jobs??=workspaceJobs(ctx.workspace,ctx.publisher,{sourceAccess:ctx.publicationSourceAccess,observe:job=>activities.job(ctx.id,job)});ctx.jobs.worker.start();startDashboardEdits(ctx);}};
@@ -497,15 +504,20 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
           if(context.settingsClosed)throw new AppError('STORAGE_DELETING');
           activeWrites++;countedWrite=true;
           const task=(async()=>{
-            if(data.action==='discard')await dashboardEdits.discard(workspace,data.id);
-            else if(data.action==='retry')await dashboardEdits.retry(workspace,data.id);
+            if(data.action==='discard'||data.action==='retry'){
+              const before=await readDashboardPending(selectedContext);
+              if(before?.id===data.id&&before.error)await selectedContext.dashboardTask;
+              if(data.action==='discard')await dashboardEdits.discard(workspace,data.id);
+              else await dashboardEdits.retry(workspace,data.id);
+              if(selectedContext.dashboardFailure?.id===data.id)selectedContext.dashboardFailure=null;
+            }
             else if(data.action==='save')accepted=await dashboardEdits.submit(workspace,{id:data.id,settings:data.settings,etag:data.etag});
             else throw new AppError('INVALID');
           })();
           (selectedContext.settingsWrites??=new Set()).add(task);
           try{await task;}finally{selectedContext.settingsWrites.delete(task);}
         }
-        const pending=await dashboardEdits.read(workspace);startDashboardEdits(selectedContext);return json({pending,accepted});
+        const pending=await readDashboardPending(selectedContext);startDashboardEdits(selectedContext);return json({pending,accepted});
       }
       if(url.pathname==='/api/dashboard'&&['GET','POST'].includes(req.method)){
         if(req.method==='GET'&&context.vault.id)return json(await readWorkspaceDashboard(workspace));

@@ -46,7 +46,7 @@ export function projectContexts({state,api,adopt,access=operation=>operation(),a
    else if(name==='new-notebook'&&researchId(node.dataset.id)&&isOwned(node.dataset.id))await enter(node.dataset.id);
    else if(state.projectOwner&&name==='filter-notebook'&&rootBook?.notebooks.some(n=>n.id===node.dataset.id))await enter(null);
    else if(name==='module-open'&&node.closest?.('#workspace-navigation'))await enter(null);
-   else if(['workspace','projects','preferences','user-profile','dashboard-settings','appearance','integrations','storage','storage-workspaces','website','publishing','help'].includes(name))await enter(null);
+   else if(['workspace','projects','preferences','user-profile','dashboard-settings','templates','appearance','integrations','storage','storage-workspaces','website','publishing','help'].includes(name))await enter(null);
   }
  };
 }

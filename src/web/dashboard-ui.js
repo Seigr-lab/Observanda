@@ -2,7 +2,7 @@ import {dashboardPinnedItem} from './dashboard-collection-client.js';
 import {figurePreviews} from './figure-preview.js';
 import {dashboardSelection,dashboardScopeLabel} from './dashboard-scope.js';
 import {moduleSettings} from './module-settings.js';
-import {modulePreferences} from './module-preferences.js';
+import {modulePreferences,templatePreferences} from './module-preferences.js';
 import {cardInspector,bindCardInspector} from './dashboard-inspector.js';
 import {enabledModule} from './feature-modules.js';
 import {validDashboard,createPanel,panelSpan} from './dashboard-model.js';
@@ -30,7 +30,7 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,a
  const reference=p=>p.source??{provider:p.tool,key:null};
  const provider=p=>workspaceData.get(reference(p).provider);
  const attrs=source=>esc(JSON.stringify(source));
- const visible=()=>['workspace','dashboard-settings'].includes(state.page);
+ const visible=()=>['workspace','dashboard-settings','templates'].includes(state.page);
  const button=(label,action,extra='',cls='')=>`<button class="desk-button ${cls}" data-action="${action}" ${extra}>${label}</button>`;
  const actionAttrs=action=>Object.entries(action.data??(action.id?{id:action.id}:{})).filter(([key,value])=>/^[a-zA-Z][a-zA-Z0-9]*$/.test(key)&&['string','number','boolean'].includes(typeof value)).map(([key,value])=>'data-'+key.replace(/[A-Z]/g,c=>'-'+c.toLowerCase())+'="'+esc(value)+'"').join(' ');
  const iconButton=(icon,label,action,extra='')=>button(cardIcon(icon),action,`aria-label="${esc(label)}" title="${esc(label)}" ${extra}`,'desk-icon');
@@ -39,7 +39,7 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,a
  const choiceUI=dashboardChoiceUI({api,esc,access,onChange:()=>refreshInspector()});
  function status(){
   const node=document.querySelector('#desk-save-state');
-  if(node){node.textContent=saveError?(saveError.code==='DASHBOARD_CHANGED'?t('pendingSettings','conflict'):t('pendingSettings','failed')):pending||isDirty()?t('pendingSettings','retaining'):retained?t('pendingSettings',retained.state):'';node.classList.toggle('desk-error',Boolean(saveError));}
+  if(node){node.textContent=saveError?(saveError.code==='DASHBOARD_CHANGED'?t('pendingSettings','conflict'):t('pendingSettings','failed')):pending||isDirty()?t('pendingSettings','retaining'):'';node.classList.toggle('desk-error',Boolean(saveError));node.closest('.desk-save-message').hidden=!node.textContent;}
   const recovery=document.querySelector('#desk-save-recovery');if(recovery){recovery.hidden=!saveError;recovery.querySelector('[data-action="dashboard-save-retry"]').hidden=!saveError;recovery.querySelector('[data-action="dashboard-reload"]').textContent=t('pendingSettings','discard');}
   onChange();
  }
@@ -251,8 +251,8 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,a
   if(!visible()){library.close();choiceUI.close();}
   for(const id of cardPages.keys())if(!draft?.views.some(view=>view.panels.some(p=>p.id===id)))cardPages.delete(id);
   session?.retainSlots(new Set(['default',...(draft?active().panels.filter(p=>!p.hidden&&moduleVisible(p)).map(p=>'card:'+p.id):[]),...(draft?.shortcuts??[]).map(s=>'shortcut:'+s.id)]));
-  settings.bind({refresh:state.page==='dashboard-settings'&&lastPage!=='dashboard-settings'});
-  dispose();dispose=()=>{};disposeInspector();disposeInspector=()=>{};const returned=visible()&&!['workspace','dashboard-settings'].includes(lastPage);lastPage=state.page;if(!visible()||!draft)return;if(returned)session.invalidate();
+  settings.bind({refresh:['dashboard-settings','templates'].includes(state.page)&&lastPage!==state.page});
+  dispose();dispose=()=>{};disposeInspector();disposeInspector=()=>{};const returned=visible()&&!['workspace','dashboard-settings','templates'].includes(lastPage);lastPage=state.page;if(!visible()||!draft)return;if(returned)session.invalidate();
   const root=document.querySelector('.desk-desktop'),sources=document.querySelector('.desk-workspace'),toolbar=document.querySelector('.desk-toolbar');
   if(sources)sources.onkeydown=event=>{
    if(event.key==='Escape'&&event.target.closest('.desk-inspector')){
@@ -268,7 +268,8 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,a
   disposeInspector=bindCardInspector(document.querySelector('.desk-inspector'),inspectorPosition);status();
  }
 
- function modulesView(){return modulePreferences({settings:draft,esc,error:id=>workspaceFeatures.error(id),configuration:module=>settings.view(module)});}
+ function modulesView(templates=false){return (templates?templatePreferences:modulePreferences)({settings:draft,esc,error:id=>workspaceFeatures.error(id),configuration:module=>settings.view(module)});}
+ function settingsStatus(){return '<div class="desk-save-message" hidden><span id="desk-save-state" role="status"></span><span id="desk-save-recovery" hidden>'+button('Retry','dashboard-save-retry')+button('Reload saved layout','dashboard-reload')+'</span></div>';}
 
  function input(el){
   if(choiceUI.input(el))return true;
@@ -279,7 +280,7 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,a
    el.disabled=true;
    (async()=>{
     draft.enabledModules=checked?[...new Set([...draft.enabledModules,id])]:draft.enabledModules.filter(value=>value!==id);
-    state.dashboardSettings=draft;autosave();await workspaceFeatures.configure(draft.enabledModules);session?.invalidate();
+    state.dashboardSettings=draft;void save().catch(()=>status());await workspaceFeatures.configure(draft.enabledModules);session?.invalidate();
     render();document.querySelector('[data-desk-module="'+id+'"]')?.focus({preventScroll:true});
    })().catch(error=>{el.disabled=false;el.checked=!checked;notify(error.message);});return true;
   }
@@ -322,11 +323,8 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,a
   return false;
  }
  async function action(el){
-  // Module activation and its dedicated settings share one workspace writer.
-  // Finish our pending activation/layout save before opening or saving settings.
-  if(el.dataset.action==='module-settings-toggle'||el.dataset.action==='module-settings-command'&&el.dataset.command==='save')await save();
   if(await settings.action(el))return true;
-  const name=el.dataset.action;if(!name?.startsWith('dashboard-'))return false;
+  const name=el.dataset.action;if(name!=='templates'&&!name?.startsWith('dashboard-'))return false;
   if(await library.action(el)||await choiceUI.action(el))return true;
   if(name==='dashboard-inspector'){
    if(selectedCard===el.dataset.id){selectCard(null);el.focus({preventScroll:true});return true;}
@@ -335,7 +333,7 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,a
   if(name==='dashboard-inspector-close'){const id=selectedCard;selectCard(null);document.querySelector('[data-action="dashboard-inspector"][data-id="'+id+'"]')?.focus({preventScroll:true});return true;}
   if(name==='dashboard-inspector-tab'){inspectorTab=el.dataset.tab;refreshInspector(true);document.querySelector('[data-tab="'+inspectorTab+'"]')?.focus({preventScroll:true});return true;}
   if(name==='dashboard-views'){viewsOpen=!viewsOpen;render();return true;}
-  if(name==='dashboard-settings'){state.page='dashboard-settings';render();return true;}
+  if(name==='dashboard-settings'||name==='templates'){state.page=name;render();return true;}
   if(name==='dashboard-library'||name==='dashboard-library-close'){if(name==='dashboard-library'&&!library.isOpen())library.open();else library.close();render();return true;}
   if(name==='dashboard-closed'){library.open('closed');render();return true;}
   if(name==='dashboard-add'){add(JSON.parse(el.dataset.source),null,null,el.dataset.restore,el.dataset.workspace||null);return true;}
@@ -368,5 +366,5 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,a
   return active().panels.filter(p=>!p.hidden&&moduleVisible(p)).every(p=>accepts(reference(p).provider))&&
    draft.shortcuts.every(s=>s.source.key===null||accepts(s.source.provider));
  }
- return {supportsOutline,releaseData:()=>{watchGeneration++;clearTimeout(watchTimer);choiceUI.close();library.close();session?.close();session=null;cardPages.clear();previews.release();},refreshData:()=>session?.invalidate(),load,flushAutosave:save,save:async()=>{await save();await settings.save();},discard:async()=>{await settings.discard();await discard();},isDirty:()=>isDirty()||settings.isDirty(),view,preferences:()=>modulesView()+'<div class="desk-save-message"><span id="desk-save-state" role="status"></span><span id="desk-save-recovery" hidden>'+button('Retry','dashboard-save-retry')+button('Reload saved layout','dashboard-reload')+'</span></div>',action,input,bind};
+ return {supportsOutline,releaseData:()=>{watchGeneration++;clearTimeout(watchTimer);choiceUI.close();library.close();session?.close();session=null;cardPages.clear();previews.release();},refreshData:()=>session?.invalidate(),load,flushAutosave:save,save:async()=>{await save();await settings.save();},discard:async()=>{await settings.discard();await discard();},isDirty:()=>isDirty()||settings.isDirty(),needsNavigationGuard:()=>settings.isDirty(),saveNavigation:()=>settings.save(),discardNavigation:()=>settings.discard(),view,preferences:()=>modulesView()+settingsStatus(),templates:()=>modulesView(true)+settingsStatus(),action,input,bind};
 }

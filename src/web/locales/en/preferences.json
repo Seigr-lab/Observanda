@@ -14,5 +14,6 @@
   "failed": "The language could not be loaded or saved. Your previous choice is unchanged.",
   "saved": "Language saved.",
   "coverageTitle": "Translation coverage",
-  "loadFailed": "The saved language could not be loaded. English is being used for this session."
+  "loadFailed": "The saved language could not be loaded. English is being used for this session.",
+  "templates": "Templates"
 }

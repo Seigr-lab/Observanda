@@ -16,7 +16,7 @@
           "id": "templates",
           "title": "Trieu i personalitzeu plantilles",
           "paragraphs": [
-            "Activeu més tipus de llibres a Preferències → Mòduls → Lab-book types. Aquests tipus opcionals proporcionen plantilles; l’espai de treball, els projectes i els llibres sempre estan disponibles. Desactivar un tipus conserva els llibres i els registres existents.",
+            "Activeu més tipus de llibres a Preferències → {ui:preferences.templates}. Aquests tipus opcionals proporcionen plantilles; l’espai de treball, els projectes i els llibres sempre estan disponibles. Desactivar un tipus conserva els llibres i els registres existents.",
             "Feu servir l’editor de plantilles dedicat per personalitzar tipus de registre, orientacions i camps. Els canvis de plantilla no reescriuen els valors dels registres existents. Separeu els prototips de programari dels experiments físics amb PCB quan necessitin estructures diferents."
           ]
         }

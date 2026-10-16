@@ -538,18 +538,20 @@ const designUI = appearanceUI({fontLibrary,textControls,state,esc,field,option,d
 
 const saveableForms=new Set(['starter-edit-form','starter-details-form','starter-field-form','starter-tag-form','record-view-form','notebook-config-form','structure-project-form','project-template-form','workspace-name-form','theme-name-form','lab-sample-form','lab-analysis-form','lab-result-form','storage-access-form','media-policy-form']);
 function pendingChanges(scope='all'){
+  const navigation=scope==='navigation';if(navigation)scope='all';
   const forms=drafts.changed(scope),labels=forms.map(form=>form.closest('dialog')?.querySelector('h2')?.textContent??({'workspace-name-form':'Workspace details','storage-access-form':'Local access settings','create-form':'Workspace setup','publish-token-form':'Unsubmitted connection details'}[form.id]??'Unsubmitted form'));
   if(structureUI.notebooks.isDirty())labels.push($('#dialog #project-template-form')?'Lab-book template':'Project or lab book settings');
   if(scope==='all'&&state.dirty)labels.push(state.page==='editor'?'Record: '+(entry()?.title??'New record'):(document.querySelector('main h1')?.textContent??'Workspace')+' edits');
   if(scope==='all'&&state.publishing?.dirty)labels.push('Publishing destination');
   if(scope==='all'&&modules.needsNavigationGuard())labels.push('Module edits');
-  if(scope==='all'&&dashboard.isDirty())labels.push('Module and dashboard settings');
+  if(scope==='all'&&(navigation?dashboard.needsNavigationGuard():dashboard.isDirty()))labels.push('Module and dashboard settings');
   if(scope==='all'&&userProfile.isDirty())labels.push(t('userProfile','title'));
   if(textControls.isDirty()&&(scope==='all'||$('#dialog[open] [data-interface]')))labels.push('App text and layout settings');
   if(attempts.isDirty())labels.push(t('attempts','title'));
   return {forms,labels:[...new Set(labels)],canSave:!attempts.isDirty()&&forms.every(form=>saveableForms.has(form.id))};
 }
 async function savePending(scope='all',forms=drafts.changed(scope),{requireClean=true}={}){
+ const guardScope=scope;if(scope==='navigation')scope='all';
  if(figures.isBusy())throw Error(t('figureProvenance','checking'));
   if(forms.some(form=>!saveableForms.has(form.id)))throw new Error('Complete this action using its own form, or discard the unfinished form.');
   for(const form of forms)if(!form.checkValidity())throw new Error('Complete the required fields before saving. Choose Stay here to return to the form.');
@@ -562,16 +564,17 @@ async function savePending(scope='all',forms=drafts.changed(scope),{requireClean
   if(textControls.isDirty()&&(scope==='all'||$('#dialog[open] [data-interface]')))await textControls.save();
   if(scope==='all'&&state.publishing?.dirty)await publishUI.save();
   if(scope==='all'&&modules.isDirty())await modules.save();
-  if(scope==='all'&&dashboard.isDirty())await dashboard.save();
+  if(scope==='all'&&dashboard.isDirty())await (guardScope==='navigation'?dashboard.saveNavigation():dashboard.save());
   if(scope==='all'&&userProfile.isDirty())await userProfile.save();
   if(state.page==='website'&&scope==='all'){website.validate();for(const el of document.querySelectorAll('.website-controls input,.website-controls textarea'))if(!el.reportValidity())throw new Error('Complete the required website fields before saving.');}
   if(scope==='all'&&state.page==='editor')recordDetails.validate();
   if(scope==='all'||forms.length)await save();
-  const complete=pendingChanges(scope).labels.length===0;
+  const complete=pendingChanges(guardScope).labels.length===0;
   if(!complete&&requireClean)throw new Error('Newer changes still need saving. Save again or stay on this screen.');
   return complete;
 }
 async function discardPending(scope='all',forms=drafts.changed(scope)){
+  const navigation=scope==='navigation';if(navigation)scope='all';
   if(savePromise)await savePromise;
   drafts.reset(forms);
   attempts.stop();
@@ -580,14 +583,14 @@ async function discardPending(scope='all',forms=drafts.changed(scope)){
     if(state.dirty&&savedBook){const latest=await api('/api/notebook',undefined,{metadataOnly:Boolean(state.workspaceOutline)});state.book=latest.book;state.etag=latest.etag;if(latest.site)websiteSelection.load(latest.site.selection,latest.selectionProjects);else websiteSelection.reset();state.dirty=false;changeVersion++;state.preview=null;designUI.resetUndo();await recordDrafts.clear();}
     if(state.publishing?.dirty)await publishUI.discard();
     if(modules.isDirty())await modules.discard();
-    if(dashboard.isDirty())await dashboard.discard();
+    if(dashboard.isDirty())await (navigation?dashboard.discardNavigation():dashboard.discard());
     if(userProfile.isDirty())await userProfile.discard();
   }
   if(textControls.isDirty()&&(scope==='all'||$('#dialog[open] [data-interface]')))await textControls.discard();
   updateSaveStatus();
   if(scope==='all'){const previous=restoringRoute;restoringRoute=true;try{render();}finally{restoringRoute=previous;}}
 }
-const leave=unsavedChanges({esc,changes:pendingChanges,save:savePending,discard:discardPending,busy:()=>removingRecord||uploading||fontLibrary.busy()||figures.isBusy()||materials.isBusy()||recordHistory.isBusy()||reviews.isBusy()||Boolean(document.querySelector('form[data-busy]:not([data-navigation-ready])')),notify});
+const leave=unsavedChanges({esc,defaultScope:'navigation',changes:pendingChanges,save:savePending,discard:discardPending,busy:()=>removingRecord||uploading||fontLibrary.busy()||figures.isBusy()||materials.isBusy()||recordHistory.isBusy()||reviews.isBusy()||Boolean(document.querySelector('form[data-busy]:not([data-navigation-ready])')),notify});
 const workspaceLive=workspaceRefresh({state,api,notify,onAccessError:report,
  blocked:()=>Boolean(workspaceOpening||completingWorkspace||savePromise||restoringRoute||uploading||removingRecord||fontLibrary.busy()||figures.isBusy()||materials.isBusy()||recordHistory.isBusy()||reviews.isBusy()||pendingChanges().labels.length||document.querySelector('dialog[open],form[data-busy]')||document.activeElement?.matches('input,textarea,select,[contenteditable="true"]')),
  read:({signal})=>state.websiteId?api('/api/websites/open',{id:state.websiteId},{adopt:false,signal}):state.recordScope?api('/api/workspace/read/selection',{workspaceId:state.book.id,ids:state.recordScope.ids},{adopt:false,signal}):newWorkspaceReader().read({requireOutline:Boolean(state.workspaceOutline),signal}),
@@ -601,21 +604,21 @@ const workspaceLive=workspaceRefresh({state,api,notify,onAccessError:report,
  }
 });
 window.addEventListener('pagehide',()=>workspaceLive.stop(),{once:true});
-const navigationActions=new Set(['laboratory-open-owned','module-open-owned','research-open-owned','help','help-open','record-activity-inspect','record-activity-create','migration-open','review-witnesses','publication-jobs-open-review','record-views','record-view-back','record-view-open','record-read','record-edit','record-read-linked','record-section-jump','workflow-new-run','configure-lab-notebook','specialize-notebook','attach-lab-notebook','module-open','laboratory-samples','preferences','dashboard-settings','integrations','workspace','workspaces','projects','entries','appearance','website','laboratory','publishing','storage','storage-workspaces','branding','branding-back','open-project','project-records','filter-notebook','browse-record','edit-entry','open-issue','back-to-records','new-entry','new-project','new-notebook','edit-project','edit-project-template','edit-notebook','rename-notebook','workspace-reorganize','record-history-open','preview','storage-new','storage-open-dialog','storage-copy-dialog','storage-move-dialog','storage-portable-dialog','storage-encrypt-dialog','storage-open-recent','storage-cancel-new','storage-lock','storage-reset-dialog','publish-disconnect','record-link-open','record-backlink-open']);
+const navigationActions=new Set(['laboratory-open-owned','module-open-owned','research-open-owned','help','help-open','record-activity-inspect','record-activity-create','migration-open','review-witnesses','publication-jobs-open-review','record-views','record-view-back','record-view-open','record-read','record-edit','record-read-linked','record-section-jump','workflow-new-run','configure-lab-notebook','specialize-notebook','attach-lab-notebook','module-open','laboratory-samples','preferences','dashboard-settings','templates','integrations','workspace','workspaces','projects','entries','appearance','website','laboratory','publishing','storage','storage-workspaces','branding','branding-back','open-project','project-records','filter-notebook','browse-record','edit-entry','open-issue','back-to-records','new-entry','new-project','new-notebook','edit-project','edit-project-template','edit-notebook','rename-notebook','workspace-reorganize','record-history-open','preview','storage-new','storage-open-dialog','storage-copy-dialog','storage-move-dialog','storage-portable-dialog','storage-encrypt-dialog','storage-open-recent','storage-cancel-new','storage-lock','storage-reset-dialog','publish-disconnect','record-link-open','record-backlink-open']);
 async function action(button){
   if(removingRecord)return;
   if(accessHelp.action(button))return;
   if(shellMenu.action(button))return;
   shellMenu.beforeAction(button);
   const name=button.dataset.action;
-  if(name==='user-profile')return leave.run(()=>rawAction(button));
+  if(name==='user-profile')return leave.run(()=>rawAction(button),{scope:'navigation'});
   if(name?.startsWith('starter-')&&!['starter-add','starter-remove','starter-up','starter-down'].includes(name))return leave.run(()=>rawAction(button));
   if(name?.startsWith('site-'))return leave.run(async()=>{await projectOwners.beforeAction(button);return sites.action(button);});
   if(['material-home','material-close','material-draft-back'].includes(name))return leave.run(()=>rawAction(button),{scope:'dialog'});
   if(name==='close-dialog')return leave.run(async()=>await localExport.close()||($('#dialog[open] .folder-browser')?storageControls.action({dataset:{action:'storage-browse-cancel'}}):rawAction(button)),{scope:'dialog'});
-  if((['preferences','dashboard-settings','integrations','workspace','projects','appearance','website','publishing','storage'].includes(name)&&state.page===name&&!state.newWorkspace&&!state.projectOwner&&!state.websiteId)||(['edit-entry','open-issue'].includes(name)&&state.page==='editor'&&state.selected===button.dataset.id)){if(name==='open-issue')$('#dialog').close();return;}
+  if((['preferences','dashboard-settings','templates','integrations','workspace','projects','appearance','website','publishing','storage'].includes(name)&&state.page===name&&!state.newWorkspace&&!state.projectOwner&&!state.websiteId)||(['edit-entry','open-issue'].includes(name)&&state.page==='editor'&&state.selected===button.dataset.id)){if(name==='open-issue')$('#dialog').close();return;}
   if(name==='preview'||name==='website'&&state.page==='review')return rawAction(button);
-  if(navigationActions.has(name)){if(dashboard.isDirty())try{await dashboard.flushAutosave();}catch{/* Failed autosave remains protected by the leave guard. */}return leave.run(()=>rawAction(button));}
+  if(navigationActions.has(name)){if(dashboard.isDirty())try{await dashboard.flushAutosave();}catch{/* Automatic settings remain available for retry in their section. */}const scope=['storage-new','storage-open-dialog','storage-open-recent','storage-copy-dialog','storage-move-dialog','storage-portable-dialog','storage-encrypt-dialog','storage-lock','storage-reset-dialog'].includes(name)?'all':'navigation';return leave.run(()=>rawAction(button),{scope});}
   return rawAction(button);
 }
 $('#dialog').addEventListener('cancel',event=>{event.preventDefault();action({dataset:{action:'close-dialog'}}).catch(report);});
@@ -624,7 +627,7 @@ function renderAccess(content){help.stop();appShell.showStandalone(content);acce
 function renderOnboarding() { renderAccess(setupControls.view()); }
 
 const supportsRecordSelection=()=>state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion===21;
-const outlineViewSupported=(page=state.page,moduleId=state.moduleId)=>['record-reader','user-profile','websites','help','entries','projects','project','preferences','dashboard-settings','workspaces','branding','appearance','laboratory','website','publishing','integrations','review','storage','migration'].includes(page)||page==='workspace'&&dashboard.supportsOutline()||page==='module'&&modules.supportsOutline(moduleId);
+const outlineViewSupported=(page=state.page,moduleId=state.moduleId)=>['record-reader','user-profile','websites','help','entries','projects','project','preferences','dashboard-settings','templates','workspaces','branding','appearance','laboratory','website','publishing','integrations','review','storage','migration'].includes(page)||page==='workspace'&&dashboard.supportsOutline()||page==='module'&&modules.supportsOutline(moduleId);
 async function openRecordReading(id,anchor=null,reading=true){
  const sameRecord=state.page==='record-reader'&&state.selected===id;
  if(!sameRecord&&!await selectRecord(id,{metadataOnly:true}))return false;
@@ -703,6 +706,7 @@ function renderPage(){
  case 'user-profile':content=userProfile.view();break;
  case 'help':content=languageControls.view()+help.view();break;
  case 'dashboard-settings':content=dashboard.preferences();break;
+ case 'templates':content=dashboard.templates();break;
  case 'workspaces':content=storageControls.workspaces.view();break;
  case 'integrations':content=publishUI.view(true);break;
  case 'storage':content=storageControls.view()+renderMediaPolicy();break;
@@ -880,7 +884,7 @@ async function rawAction(button) {
   const appearanceAction=name==='appearance'||name?.startsWith('interface-')||state.page==='appearance'&&(['save','discard-section'].includes(name)||name?.startsWith('theme-'));
   const outlineModuleAction=name==='laboratory-samples'||state.page==='laboratory'&&name?.startsWith('lab-')||name?.startsWith('review-')||name==='module-open'&&modules.supportsOutline(button.dataset.moduleId)||state.page==='module'&&modules.supportsOutline(state.moduleId)&&(name==='module-command'||['module-reference-','module-choice-','research-target-'].some(prefix=>name?.startsWith(prefix)));
   const publicationAction=['publishing','integrations','preview','export','website','analysis-review-save'].includes(name)||state.page==='website'&&(['save','discard-section','include-project-entries','delete-page','branding'].includes(name)||name?.startsWith('website-')||name?.startsWith('media-import-')||name?.startsWith('menu-'))||name?.startsWith('publish-')||name?.startsWith('publication-jobs-')||name?.startsWith('local-export-')||state.page==='review'&&name?.startsWith('storage-browse');
-  const administrationAction=name==='storage'||name==='activity-show'||['storage-','security-','migration-','inventory-'].some(prefix=>name?.startsWith(prefix));
+  const administrationAction=name==='templates'||name==='storage'||name==='activity-show'||['storage-','security-','migration-','inventory-'].some(prefix=>name?.startsWith(prefix));
   if((state.workspaceOutline||state.recordScope&&!scopedRecordAction(name))&&!readingAction&&!administrationAction&&!brandingAction&&!appearanceAction&&!publicationAction&&!name?.startsWith('edition-')&&!outlineModuleAction&&!recordCreationActions.has(name)&&!structureActions.has(name)&&!state.access?.locked&&!state.storageUnavailable&&!state.newWorkspace&&!['browse-record','edit-entry','open-issue','record-read-linked','storage-lock','workspace','entries','projects','open-project','project-records','project-recent-retry','project-recent-collection-retry','research-copy-context','filter-notebook','clear-record-filters','close-dialog','preferences','workspace-discard'].includes(name)&&!(state.page==='entries'&&name?.startsWith('record-type-'))&&!name?.startsWith('record-list-')&&!name?.startsWith('record-view')&&!name?.startsWith('starter-')&&!name?.startsWith('dashboard-')&&!name?.startsWith('module-settings-')){const route=location.hash;await ensureCompleteWorkspace();if(location.hash!==route){await restoreRoute();return;}}
   const module=moduleForPage(name);
   if(module&&!enabledModule(state.dashboardSettings,module.id)){notify('Enable '+module.label+' in Preferences > Modules & dashboard.');return;}
@@ -1251,11 +1255,11 @@ window.addEventListener('popstate',event=>{
     const delta=targetIndex-routeIndex;
     if(!delta)return;
     if(state.page==='review'&&location.hash==='#/website'){routeIndex=targetIndex;await restoreRoute();restoreEditorScroll();return;}
-    if(!historyBusy&&leave.canLeaveImmediately()){routeIndex=targetIndex;await restoreRoute();return;}
+    if(!historyBusy&&leave.canLeaveImmediately('navigation')){routeIndex=targetIndex;await restoreRoute();return;}
     // Return to the original URL only when an editing decision is needed.
     await travelHistory(-delta);
     if(historyBusy||leave.isActive())return;
     historyBusy=true;
-    try{if(dashboard.isDirty())try{await dashboard.flushAutosave();}catch{}await leave.run(async()=>{const remaining=targetIndex-routeIndex;if(remaining)await travelHistory(remaining);routeIndex=targetIndex;await restoreRoute();});}finally{historyBusy=false;}
+    try{if(dashboard.isDirty())try{await dashboard.flushAutosave();}catch{}await leave.run(async()=>{const remaining=targetIndex-routeIndex;if(remaining)await travelHistory(remaining);routeIndex=targetIndex;await restoreRoute();},{scope:'navigation'});}finally{historyBusy=false;}
   })().catch(report);
 });

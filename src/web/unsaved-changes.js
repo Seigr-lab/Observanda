@@ -1,8 +1,8 @@
 // One decision before leaving an editing context. The original screen/form stays mounted.
-export function unsavedChanges({esc,changes,save,discard,busy,notify}) {
+export function unsavedChanges({esc,changes,save,discard,busy,notify,defaultScope='all'}) {
   const dialog=document.createElement('dialog');dialog.id='leave-dialog';dialog.setAttribute('aria-labelledby','leave-title');document.body.append(dialog);
   let active=false,work=null;
-  async function run(next,{scope='all'}={}){
+  async function run(next,{scope=defaultScope}={}){
     if(active)return false;
     if(busy()){notify('Wait for the current operation to finish before leaving.',true);return false;}
     const pending=changes(scope);
@@ -34,7 +34,7 @@ export function unsavedChanges({esc,changes,save,discard,busy,notify}) {
     active=false;
     if(decision){await next();return true;}return false;
   }
-  return {run,isActive:()=>active,canLeaveImmediately:(scope='all')=>!active&&!busy()&&!changes(scope).labels.length};
+  return {run,isActive:()=>active,canLeaveImmediately:(scope=defaultScope)=>!active&&!busy()&&!changes(scope).labels.length};
 }
 
 // Forms use independent snapshots, including unchecked controls. Nothing is persisted here.

@@ -69,6 +69,7 @@ for(const count of [42,420])test('general and module preferences save metadata w
   const inventory=main.getByRole('switch',{name:'Enable Inventory',exact:true});if(!await inventory.isChecked())await inventory.check();
   await main.locator('[data-module-settings-id="resources"]').click();const tools=main.locator('[data-module-settings-slot="resources"]');
   await tools.locator('[data-tool-project="'+f.book.projects[0].id+'"]').check();await tools.getByRole('button',{name:'Save changes',exact:true}).click();await expect(tools.locator('[role="status"]')).toHaveText('Saved');
+  await main.getByRole('button',{name:'Templates',exact:true}).click();
   const research=main.getByRole('switch',{name:'Enable Research & development',exact:true});if(!await research.isChecked())await research.check();
   await main.locator('[data-module-settings-id="laboratory-research-development"]').click();const types=main.locator('[data-module-settings-slot="laboratory-research-development"]');
   await types.getByLabel('Record type name',{exact:true}).fill('Research questions');
@@ -76,7 +77,7 @@ for(const count of [42,420])test('general and module preferences save metadata w
   await types.getByRole('button',{name:'Save changes',exact:true}).click();await expect(types.locator('[data-type-status]')).toHaveText('Synthetic settings interruption');await expect(types.getByLabel('Record type name',{exact:true})).toHaveValue('Research questions');
   await types.getByRole('button',{name:'Save changes',exact:true}).click();await expect(types.locator('[data-type-status]')).toHaveText('No unsaved changes');
   await page.reload();await main.locator('[data-module-settings-id="laboratory-research-development"]').click();await expect(types.getByLabel('Record type name',{exact:true})).toHaveValue('Research questions');
-  await main.getByRole('button',{name:'General',exact:true}).click();await expect(main.getByLabel('Workspace name',{exact:true})).toHaveValue('Research collective');await page.goBack();await expect(main.locator('[data-module-preference="research"]')).toBeVisible();
+  await main.getByRole('button',{name:'General',exact:true}).click();await expect(main.getByLabel('Workspace name',{exact:true})).toHaveValue('Research collective');await page.goBack();await expect(main.getByRole('group',{name:'Lab-book templates',exact:true})).toBeVisible();
   expect(f.requests.filter(r=>r.url.endsWith('/page'))).toHaveLength(0);expect(f.bodies).toHaveLength(0);expect(f.errors).toEqual([]);
   const saved=(await f.ws.read()).book;expect(saved.entries).toEqual(f.book.entries);expect(saved.projects[0].tools).toContain('resources');expect(saved.notebooks[0].configuration.sections[0].label).toBe('Research questions');
  }finally{await f.close();}

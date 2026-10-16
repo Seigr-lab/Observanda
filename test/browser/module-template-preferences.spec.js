@@ -1,0 +1,76 @@
+import {test,expect} from '@playwright/test';
+import {mkdtemp,rm} from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import {randomUUID} from 'node:crypto';
+import {WorkspaceDatabases} from '../../src/workspace-databases.js';
+import {installDatabaseProvider} from '../../src/workspace-database-context.js';
+import {encryptedFixture} from './encrypted-fixture.js';
+import {sampleNotebook} from '../../src/sample.js';
+import {startServer} from '../../src/server.js';
+import {clearVault} from '../../src/encryption.js';
+import {defaultDashboard} from '../../src/web/dashboard-model.js';
+import {starterTemplate} from '../../src/web/project-templates.js';
+import {readWorkspaceDashboard,writeWorkspaceDashboard} from '../../src/security/dashboard-storage.js';
+import {navigate,preferences} from './preferences-helper.js';
+
+// This journey uses an actual dedicated workspace writer, not a blocked request
+// pretending to be a background database operation.
+test('module and template switches save independently, retain failed edits and keep navigation usable',async({page})=>{
+ test.setTimeout(180000);page.setDefaultTimeout(12000);
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-preference-sections-'));
+ const runtime=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(runtime);
+ let app,f,writer;const errors=[];
+ try{
+  const book=sampleNotebook();book.title='workspace';book.notebooks[0].configuration=starterTemplate('research-development').configuration;book.notebooks[0].configuration.sections[0].label='Custom research question';
+  f=await encryptedFixture(directory,book);const settings=defaultDashboard();settings.enabledModules=['laboratory-research-development','publishing'];settings.views[0].panels=[];
+  await writeWorkspaceDashboard(f.workspace,settings,(await readWorkspaceDashboard(f.workspace)).etag);
+  app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json')});
+  const before=await f.workspace.read(),main=page.locator('main');page.on('pageerror',error=>errors.push(error.message));
+  await page.goto(app.url);await navigate(page,'Preferences');await preferences(page,'Modules');
+  const labels=await main.locator('.desk-modules > .module-preference-branch > .desk-module strong').allTextContents();
+  expect(labels).toEqual([...labels].sort((a,b)=>a.localeCompare(b,'en',{sensitivity:'base'})));
+  await expect(main.getByRole('switch',{name:'Enable Research & development',exact:true})).toHaveCount(0);
+  await expect(main.getByRole('button',{name:'Discard pending changes',exact:true})).toBeHidden();
+  writer=await f.workspace.openCatalogue();await writer.run('BEGIN');await writer.lock();
+  await main.getByRole('switch',{name:'Enable Inventory',exact:true}).check();
+  await expect.poll(async()=>(await readWorkspaceDashboard(f.workspace)).settings.enabledModules).toContain('resources');
+  await preferences(page,'Templates');await expect(page).toHaveURL(/#\/preferences\/templates$/);
+  const templates=main.getByRole('group',{name:'Lab-book templates',exact:true}),research=templates.getByRole('switch',{name:'Enable Research & development',exact:true});
+  await expect(research).toBeChecked();await expect(main.getByRole('switch',{name:'Enable Inventory',exact:true})).toHaveCount(0);
+  const templateLabels=await templates.locator('.desk-module strong').allTextContents();expect(templateLabels).toEqual([...templateLabels].sort((a,b)=>a.localeCompare(b,'en',{sensitivity:'base'})));
+  await research.uncheck();await expect.poll(async()=>(await readWorkspaceDashboard(f.workspace)).settings.enabledModules).not.toContain('laboratory-research-development');
+  expect((await f.workspace.read()).book).toEqual(before.book);
+  await research.check();await expect.poll(async()=>(await readWorkspaceDashboard(f.workspace)).settings.enabledModules).toContain('laboratory-research-development');
+  await main.locator('[data-module-settings-id="laboratory-research-development"]').click();await expect(main.getByLabel('Record type name',{exact:true})).toHaveValue('Custom research question');
+  await main.locator('[data-module-settings-id="laboratory-research-development"]').click();
+  await expect(main.locator('.desk-save-message')).toBeHidden();
+  expect((await page.request.get(app.origin+'/api/activity').then(r=>r.json())).operations.filter(item=>item.kind==='/api/dashboard')).toEqual([]);
+  await writer.run('ROLLBACK');await writer.close();writer=null;
+  await preferences(page,'Modules');
+  const fail=async route=>route.request().method()==='POST'?route.fulfill({status:503,json:{code:'IO',message:'Synthetic settings save failure'}}):route.continue();
+  await page.route('**/api/dashboard/pending',fail);
+  await main.getByRole('switch',{name:'Enable Planning',exact:true}).check();await expect(main.locator('#desk-save-state')).toContainText('could not be saved');
+  await main.locator('[data-module-settings-id="resources"]').click();await expect(main.locator('[data-module-settings-slot="resources"]')).toBeVisible();
+  await main.locator('[data-tool-project="'+before.book.projects[0].id+'"]').check();
+  await preferences(page,'General');await expect(page.locator('#leave-dialog')).toBeVisible();
+  await page.locator('#leave-dialog').getByRole('button',{name:'Save and continue',exact:true}).click();await expect(page.locator('#leave-dialog')).not.toBeVisible();
+  const configured=(await f.workspace.read()).book,expected=structuredClone(before.book);expected.projects[0].tools=[...(expected.projects[0].tools??[]),'resources'];expected.revision++;expected.updatedAt=configured.updatedAt;expect(configured).toEqual(expected);expect(Date.parse(configured.updatedAt)).toBeGreaterThan(Date.parse(before.book.updatedAt));await expect(main.getByLabel('Workspace name',{exact:true})).toBeVisible();
+  await preferences(page,'Modules');await expect(main.getByRole('switch',{name:'Enable Planning',exact:true})).toBeChecked();await expect(main.locator('#desk-save-state')).toContainText('could not be saved');
+  await preferences(page,'General');await expect(page.locator('#leave-dialog')).not.toBeVisible();await expect(main.getByLabel('Workspace name',{exact:true})).toBeVisible();
+  await preferences(page,'Modules');await expect(main.getByRole('switch',{name:'Enable Planning',exact:true})).toBeChecked();await expect(main.locator('#desk-save-state')).toContainText('could not be saved');
+  await navigate(page,'Website editor');await main.locator('.website-site-context').getByRole('button',{name:'Websites',exact:true}).click();
+  await expect(page).toHaveURL(/#\/websites$/);await expect(page.locator('#leave-dialog')).not.toBeVisible();
+  await page.goBack();await expect(main.locator('.website-site-context')).toBeVisible();await expect(page.locator('#leave-dialog')).not.toBeVisible();
+  await navigate(page,'Preferences');await preferences(page,'Modules');await expect(main.locator('#desk-save-state')).toContainText('could not be saved');
+  await page.unroute('**/api/dashboard/pending',fail);await main.getByRole('button',{name:'Retry',exact:true}).click();
+  await expect.poll(async()=>(await readWorkspaceDashboard(f.workspace)).settings.enabledModules).toContain('planning');
+  await expect(main.locator('.desk-save-message')).toBeHidden();
+  await preferences(page,'Templates');await page.reload();await expect(page).toHaveURL(/#\/preferences\/templates$/);await expect(research).toBeChecked();
+  await page.screenshot({path:test.info().outputPath('templates-desktop.png')});
+  await page.setViewportSize({width:390,height:844});await expect(main.getByLabel('Preferences section',{exact:true})).toHaveValue('templates');
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:test.info().outputPath('templates-narrow.png')});
+  await preferences(page,'Modules');await expect(main.getByRole('switch',{name:'Enable Planning',exact:true})).toBeChecked();await expect(main.getByRole('switch',{name:'Enable Inventory',exact:true})).toBeChecked();
+  expect((await f.workspace.read()).book).toEqual(configured);expect(errors).toEqual([]);
+ }finally{if(writer){await writer.run('ROLLBACK');await writer.close();}await app?.close();await runtime.close();detach();if(f)clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+});

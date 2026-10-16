@@ -14,5 +14,6 @@
   "failed": "Språket kunne ikke lastes inn eller lagres. Det forrige valget beholdes.",
   "saved": "Språket er lagret.",
   "coverageTitle": "Oversettelsesdekning",
-  "loadFailed": "Det lagrede språket kunne ikke lastes inn. Engelsk brukes i denne økten."
+  "loadFailed": "Det lagrede språket kunne ikke lastes inn. Engelsk brukes i denne økten.",
+  "templates": "Maler"
 }

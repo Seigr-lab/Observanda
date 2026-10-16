@@ -23,7 +23,8 @@ test('physical and VST templates coexist; a record BOM reserves parts and record
  page.on('pageerror',error=>errors.push(error.message));
  try{
   await page.goto(app.url);await navigate(page,'Preferences');await preferences(page,'Modules');
-  for(const name of ['Enable Physical prototyping','Enable Audio software & VST','Enable Inventory']){
+  await main.getByRole('switch',{name:'Enable Inventory',exact:true}).check();await preferences(page,'Templates');
+  for(const name of ['Enable Physical prototyping','Enable Audio software & VST']){
    const toggle=main.getByRole('switch',{name,exact:true});await expect(toggle).not.toBeChecked();await toggle.check();
   }
   await page.goto(app.origin+'/#/notebooks/'+book.notebooks[0].id);

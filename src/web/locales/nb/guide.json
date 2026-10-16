@@ -16,7 +16,7 @@
           "id": "templates",
           "title": "Velg og tilpass maler",
           "paragraphs": [
-            "Aktiver flere boktyper under Innstillinger → Moduler → Lab-book types. Disse valgfrie typene gir tilgang til maler; arbeidsområdet, prosjektene og labbøkene er alltid tilgjengelige. Deaktivering av en type bevarer eksisterende bøker og oppføringer.",
+            "Aktiver flere boktyper under Innstillinger → {ui:preferences.templates}. Disse valgfrie typene gir tilgang til maler; arbeidsområdet, prosjektene og labbøkene er alltid tilgjengelige. Deaktivering av en type bevarer eksisterende bøker og oppføringer.",
             "Bruk den egne malredigereren til å tilpasse oppføringstyper, veiledning og felt. Malendringer skriver ikke om verdiene i eksisterende oppføringer. Skill programvareprototyper og fysiske PCB-forsøk i egne bøker når de trenger ulike strukturer."
           ]
         }

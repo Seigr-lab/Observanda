@@ -39,9 +39,9 @@ test('enable beekeeping, record distinct inspections, reopen hive history and re
  const open=async id=>{await page.goto(app.origin+'/#/records/'+id+'/read');await expect(page.locator('.record-reader')).toBeVisible();};
  const save=async()=>{await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');};
  try{
-  await page.goto(app.url);await navigate(page,'Preferences');await preferences(page,'Modules');
+  await page.goto(app.url);await navigate(page,'Preferences');await preferences(page,'Templates');
   await expect(main.getByRole('switch',{name:'Enable Beekeeping',exact:true})).not.toBeChecked();
-  const enabled=page.waitForResponse(r=>r.url().endsWith('/api/dashboard')&&r.request().method()==='POST'&&r.ok());await main.getByRole('switch',{name:'Enable Beekeeping',exact:true}).check();await enabled;
+  const enabled=page.waitForResponse(r=>r.url().endsWith('/api/dashboard/pending')&&r.request().method()==='POST'&&r.ok());await main.getByRole('switch',{name:'Enable Beekeeping',exact:true}).check();await enabled;
   await open(hive.id);await expect(history().getByRole('link',{name:inspection.title,exact:true})).toBeVisible();
   await history().getByRole('button',{name:'New inspection',exact:true}).focus();await page.keyboard.press('Enter');
   await expect(page.getByLabel('Record title',{exact:true})).toHaveValue(/Hive inspection.*Hive 01/);
@@ -77,7 +77,7 @@ test('enable beekeeping, record distinct inspections, reopen hive history and re
   await history().getByRole('button',{name:'Add linked record',exact:true}).click();await expect(dialog.getByLabel('Record template')).toBeVisible();
   await dialog.getByLabel('Record template').selectOption({label:'Hive & equipment movement'});await dialog.getByRole('button',{name:'Create record',exact:true}).click();
   await expect(page.getByLabel('Record title',{exact:true})).toHaveValue(/Hive & equipment movement/);await page.getByLabel('Destination apiary / address',{exact:true}).fill('Synthetic upper apiary');await save();
-  await navigate(page,'Preferences');await preferences(page,'Modules');const disabled=page.waitForResponse(r=>r.url().endsWith('/api/dashboard')&&r.request().method()==='POST'&&r.ok());await main.getByRole('switch',{name:'Enable Beekeeping',exact:true}).uncheck();await disabled;
+  await navigate(page,'Preferences');await preferences(page,'Templates');const disabled=page.waitForResponse(r=>r.url().endsWith('/api/dashboard/pending')&&r.request().method()==='POST'&&r.ok());await main.getByRole('switch',{name:'Enable Beekeeping',exact:true}).uncheck();await disabled;
   await open(hive.id);await expect(history().getByRole('button',{name:'New inspection',exact:true})).toHaveCount(0);await expect(history().getByRole('link',{name:created.title,exact:true})).toBeVisible();
   expect(errors).toEqual([]);
  }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}

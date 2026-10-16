@@ -16,7 +16,7 @@
           "id": "templates",
           "title": "Elige y personaliza plantillas",
           "paragraphs": [
-            "Activa más tipos de libros en Preferencias → Módulos → Lab-book types. Estos tipos opcionales proporcionan plantillas; el espacio de trabajo, los proyectos y los libros siempre están disponibles. Desactivar un tipo conserva los libros y registros existentes.",
+            "Activa más tipos de libros en Preferencias → {ui:preferences.templates}. Estos tipos opcionales proporcionan plantillas; el espacio de trabajo, los proyectos y los libros siempre están disponibles. Desactivar un tipo conserva los libros y registros existentes.",
             "Usa el editor de plantillas dedicado para personalizar tipos de registro, instrucciones y campos. Los cambios de plantilla no reescriben los valores de registros existentes. Separa los prototipos de software y los experimentos físicos con PCB cuando necesiten estructuras diferentes."
           ]
         }

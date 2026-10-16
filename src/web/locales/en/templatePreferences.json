@@ -1,0 +1,11 @@
+{
+  "title": "Lab-book templates",
+  "intro": "Choose the templates available when creating or configuring a lab book.",
+  "enable": "Enable {name}",
+  "loadFailed": "Could not load these tools. Turn them off and on to retry.",
+  "chooseMore": "Choose more templates in {preferences} / {templates}. Customize this book in Lab book settings.",
+  "manage": "Choose more templates in {preferences} / {templates}.",
+  "defaultUnavailable": "The project default uses a type that is turned off. Choose another template or enable the default in {preferences} / {templates}.",
+  "enableFirst": "Enable this template in {preferences} / {templates} first.",
+  "enableTypes": "Enable lab-book types in {preferences} / {templates}, or add your own record types below."
+}

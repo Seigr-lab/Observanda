@@ -2,6 +2,8 @@ import {WorkspaceDatabases} from '../../src/workspace-databases.js';
 import {installDatabaseProvider} from '../../src/workspace-database-context.js';
 import {ProjectRegistry} from '../../src/project-registry.js';
 import {ProjectStorage} from '../../src/project-storage.js';
+import {LabBookRegistry} from '../../src/lab-book-registry.js';
+import {LabBookStorage} from '../../src/lab-book-storage.js';
 import {readAccess,verifyAccess} from '../../src/access.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -16,17 +18,27 @@ import {randomUUID} from 'node:crypto';
 import {starterTemplate} from '../../src/web/project-templates.js';
 import {laboratoryProfiles} from '../../src/web/laboratory/catalog.js';
 
+test.beforeEach(async({page})=>page.setDefaultTimeout(15000));
+
 async function fixture(configure=()=>{},password=''){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-project-types-ui-')),book=sampleNotebook();
- book.title='Seigr';book.projects=[];book.notebooks=[];book.entries=[];book.website.navigation=[];book.branding=[];book.website.layouts=[];
+ book.title='workspace';book.projects=[];book.notebooks=[];book.entries=[];book.website.navigation=[];book.branding=[];book.website.layouts=[];
  configure(book);
  const owner=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(owner);
- const f=await encryptedFixture(path.join(directory,'workspace'),book),app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json')});
+ const f=await encryptedFixture(directory,book),app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json')});
  const registry=new ProjectRegistry(f.workspace,book.id);
  const readProject=async(index=0)=>{const entry=(await registry.read()).value.projects[index],vault=await verifyAccess(await readAccess(entry.root),'',index===0?password:'',{deviceStore:f.deviceStore});try{return await new ProjectStorage(entry.root,entry.projectId,vault).read();}finally{clearVault(vault);}};
- return {...f,app,directory,readProject,close:async()=>{await app.close();await owner.close();detach();clearVault(f.vault);if(path.dirname(directory)!==path.resolve(os.tmpdir())||!path.basename(directory).startsWith('observanda-project-types-ui-'))throw Error('Invalid fixture');await rm(directory,{recursive:true,force:true});}};
+ const readLabBooks=async(index=0)=>{
+  const entry=(await registry.read()).value.projects[index],vault=await verifyAccess(await readAccess(entry.root),'',index===0?password:'',{deviceStore:f.deviceStore});
+  try{
+   const books=new LabBookRegistry(new ProjectStorage(entry.root,entry.projectId,vault)),result=[];
+   for(const item of (await books.read()).value.books){const location=books.location(item),key=await verifyAccess(await readAccess(location.root),'','',{deviceStore:f.deviceStore});try{result.push((await new LabBookStorage(location.root,location.labBookId,key).read()).book);}finally{clearVault(key);}}
+   return result;
+  }finally{clearVault(vault);}
+ };
+ return {...f,app,directory,readProject,readLabBooks,close:async()=>{await app.close();await owner.close();detach();clearVault(f.vault);if(path.dirname(directory)!==path.resolve(os.tmpdir())||!path.basename(directory).startsWith('observanda-project-types-ui-'))throw Error('Invalid fixture');await rm(directory,{recursive:true,force:true});}};
 }
-const rejectSave=(page)=>page.route(/\/api\/(?:projects(?:\/[a-f0-9-]+\/workspace\/structure|\/create)|workspace\/structure)$/,route=>route.fulfill({status:422,contentType:'application/json',body:JSON.stringify({code:'INVALID',message:'Synthetic rejected save'})}),{times:1});
+const rejectSave=(page)=>page.route(/\/api\/(?:projects(?:\/[a-f0-9-]+\/(?:workspace\/structure|settings\/save)|\/create)|workspace\/structure)$/,route=>route.fulfill({status:422,contentType:'application/json',body:JSON.stringify({code:'INVALID',message:'Synthetic rejected save'})}),{times:1});
 const noTemplateEditor=async dialog=>{
  for(const label of ['Template name','Record type name','Field label','Purpose / guidance'])await expect(dialog.getByLabel(label,{exact:true})).toHaveCount(0);
  for(const label of ['Use template','Customize template','Add record type','Add field','Save and create lab book'])await expect(dialog.getByRole('button',{name:label,exact:true})).toHaveCount(0);
@@ -39,7 +51,7 @@ test('project creation selects a complete template; only the dedicated editor ch
  const saveProject=()=>dialog.getByRole('button',{name:'Create project',exact:true}).click();
  const openTemplate=()=>main.getByRole('button',{name:'Lab-book template',exact:true}).click();
  try{
-  await page.goto(f.app.url);await navigate(page,'Preferences');await preferences(page,'Modules');await main.getByRole('switch',{name:'Enable Research & development',exact:true}).check();
+  await page.goto(f.app.url);await navigate(page,'Preferences');await preferences(page,'Templates');await main.getByRole('switch',{name:'Enable Research & development',exact:true}).check();
   await navigate(page,'Projects');await main.getByRole('button',{name:'New project',exact:true}).click();await dialog.getByLabel('Name',{exact:true}).fill('Field Lab');
   await expect(dialog.locator('[data-project-type] option')).toHaveText(['No type selected','Research & development','Custom type']);
   await dialog.getByLabel('Project type',{exact:true}).selectOption('profile:research-development');
@@ -48,8 +60,9 @@ test('project creation selects a complete template; only the dedicated editor ch
   await page.screenshot({path:test.info().outputPath('project-creation-desktop.png')});await saveProject();await expect(dialog).not.toBeVisible({timeout:60000});
   const initial=(await f.readProject()).book,project=initial.projects[0];expect(initial.notebooks).toHaveLength(0);expect(project.labBookTemplate.configuration.sections).toHaveLength(4);expect(project.tools).toEqual([]);
   await page.reload();await main.getByRole('button',{name:'Settings',exact:true}).click();await noTemplateEditor(dialog);await expect(dialog.locator('.project-template-summary strong')).toHaveCount(4);await dialog.getByRole('button',{name:'Cancel',exact:true}).click();await expect(dialog).not.toBeVisible();
-  await main.getByRole('button',{name:'New lab book',exact:true}).click();await dialog.getByLabel('Lab book name',{exact:true}).fill('First investigation');await dialog.getByRole('button',{name:'Save lab book',exact:true}).click();await expect(dialog).not.toBeVisible();
-  const before=(await f.readProject()).book;
+  await main.getByRole('button',{name:'New lab book',exact:true}).click();await dialog.getByLabel('Lab book name',{exact:true}).fill('First investigation');await dialog.getByRole('button',{name:'Save lab book',exact:true}).click();await expect(dialog).not.toBeVisible({timeout:60000});
+  const before=(await f.readProject()).book,beforeBooks=await f.readLabBooks();expect(beforeBooks).toHaveLength(1);
+  await main.getByRole('navigation',{name:'Project hierarchy',exact:true}).getByRole('button',{name:project.title,exact:true}).click();
   await openTemplate();await expect(dialog.getByRole('heading',{name:'Lab-book template',exact:true})).toBeVisible();await expect(dialog.getByLabel('Name',{exact:true})).toHaveCount(0);
   const types=dialog.getByRole('complementary',{name:'Record types',exact:true});await expect(types.locator('.lab-type-choice')).toHaveCount(4);
   for(const section of project.labBookTemplate.configuration.sections){
@@ -62,11 +75,11 @@ test('project creation selects a complete template; only the dedicated editor ch
   await page.screenshot({path:test.info().outputPath('template-editor-desktop.png')});
   await rejectSave(page);await dialog.getByRole('button',{name:'Save template',exact:true}).click();await expect(dialog.locator('[data-project-error]')).toContainText('Synthetic rejected save');await expect(dialog.getByLabel('Field label',{exact:true}).last()).toHaveValue('Investigation area');expect((await f.readProject()).book.projects[0]).toEqual(project);
   await dialog.getByRole('button',{name:'Save template',exact:true}).click();await expect(dialog).not.toBeVisible();
-  const updated=(await f.readProject()).book;expect(updated.notebooks).toEqual(before.notebooks);expect(updated.entries).toEqual(before.entries);expect({...updated.projects[0],labBookTemplate:project.labBookTemplate}).toEqual(project);
+  const updated=(await f.readProject()).book;expect(await f.readLabBooks()).toEqual(beforeBooks);expect(updated.notebooks).toEqual(before.notebooks);expect(updated.entries).toEqual(before.entries);expect({...updated.projects[0],labBookTemplate:project.labBookTemplate}).toEqual(project);
   expect(updated.projects[0].labBookTemplate.configuration.sections[0].label).toBe('Research questions');
   await main.getByRole('button',{name:'New lab book',exact:true}).click();await expect(dialog.getByLabel('Lab-book template',{exact:true})).toHaveValue('default');await noTemplateEditor(dialog);
-  await dialog.getByLabel('Lab book name',{exact:true}).fill('Second investigation');await dialog.getByRole('button',{name:'Save lab book',exact:true}).click();await expect(dialog).not.toBeVisible();
-  const second=(await f.readProject()).book.notebooks.find(n=>n.title==='Second investigation');expect(second.configuration.sections[0].label).toBe('Research questions');expect(second.configuration.sections[0].fields.at(-1).label).toBe('Investigation area');expect(errors).toEqual([]);
+  await dialog.getByLabel('Lab book name',{exact:true}).fill('Second investigation');await dialog.getByRole('button',{name:'Save lab book',exact:true}).click();await expect(dialog).not.toBeVisible({timeout:60000});
+  const second=(await f.readLabBooks()).flatMap(book=>book.notebooks).find(n=>n.title==='Second investigation');expect(second.configuration.sections[0].label).toBe('Research questions');expect(second.configuration.sections[0].fields.at(-1).label).toBe('Investigation area');expect(errors).toEqual([]);
  }finally{await f.close();}
 });
 
@@ -99,10 +112,10 @@ test('new lab books select all enabled templates from one dropdown and keep inde
  const project=(title,labBookTemplate)=>({id:randomUUID(),title,description:'',share:false,logoId:null,labBookTemplate});
  const first=project('Research studio',research),second=project('Sound studio',custom);
  const f=await fixture(book=>book.projects=[first,second]),main=page.locator('main'),dialog=page.locator('#dialog');
- const picker=()=>dialog.getByLabel('Lab-book template',{exact:true}),save=async()=>{await dialog.getByRole('button',{name:'Save lab book',exact:true}).click();await expect(dialog).not.toBeVisible();};
+ const picker=()=>dialog.getByLabel('Lab-book template',{exact:true}),save=async()=>{await dialog.getByRole('button',{name:'Save lab book',exact:true}).click();await expect(dialog).not.toBeVisible({timeout:60000});};
  const open=()=>main.getByRole('button',{name:'New lab book',exact:true}).click();
  try{
-  await page.goto(f.app.url);await navigate(page,'Preferences');await preferences(page,'Modules');
+  await page.goto(f.app.url);await navigate(page,'Preferences');await preferences(page,'Templates');
   for(const p of laboratoryProfiles)await main.getByRole('switch',{name:'Enable '+p.label,exact:true}).check();
   await navigate(page,'Projects');await main.locator('.project-card').filter({has:page.getByRole('button',{name:first.title,exact:true})}).getByRole('button',{name:'Open',exact:true}).click();
   await open();await expect(picker().locator('option:checked')).toHaveText('Research practice (project default)');await noTemplateEditor(dialog);await expect(dialog.getByRole('checkbox')).toHaveCount(0);

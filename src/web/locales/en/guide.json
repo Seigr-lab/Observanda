@@ -214,7 +214,7 @@
           "id": "templates",
           "title": "Choose and customize templates",
           "paragraphs": [
-            "Activate additional lab-book types in Preferences → Modules → Lab-book types. These optional types supply templates; the workspace, projects and lab books are always available. Turning a type off keeps existing books and records.",
+            "Activate additional lab-book types in Preferences → {ui:preferences.templates}. These optional types supply templates; the workspace, projects and lab books are always available. Turning a type off keeps existing books and records.",
             "Use the dedicated template editor to customize record types, guidance and fields. Changes to a template do not rewrite values in existing records. Keep software prototypes and physical PCB experiments in separate books when their record structures differ."
           ]
         },

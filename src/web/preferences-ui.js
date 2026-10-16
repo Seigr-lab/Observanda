@@ -2,7 +2,7 @@ import {enabledModule,moduleForPage} from './feature-modules.js';
 import {t,language} from './i18n/index.js';
 import {aboutView} from './about-ui.js';
 const tabs=[
- ['preferences','general'],['user-profile',null],['dashboard-settings','modules'],['appearance','appearance'],
+ ['preferences','general'],['user-profile',null],['dashboard-settings','modules'],['templates','templates'],['appearance','appearance'],
  ['integrations','integrations'],['storage','storage'],['help','help']
 ];
 // Labels are obtained at render time so mounted navigation can change language.

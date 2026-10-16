@@ -10,14 +10,15 @@ import {sampleNotebook} from '../src/sample.js';
 import {readWorkspaceDashboard,writeWorkspaceDashboard} from '../src/security/dashboard-storage.js';
 import {clearVault} from '../src/encryption.js';
 import {openCatalogue} from '../src/postgres.js';
+import {projectDomainLock} from '../src/project-domain-lock.js';
 import {copyWorkspaceTo} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
 
 async function fixture(t){const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-pending-settings-')),f=await encryptedFixture(directory,sampleNotebook()),queue=new DashboardEdits(path.join(directory,'pending'));t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});return {...f,directory,queue};}
 const change=(settings,id)=>({...structuredClone(settings),enabledModules:[...new Set([...settings.enabledModules,id])]});
 
-test('settings are retained while the workspace writer is occupied and resume after service restart',async t=>{
- const f=await fixture(t),initial=await readWorkspaceDashboard(f.workspace),holder=await openCatalogue(f.workspace.root);await holder.run('BEGIN');await holder.lock();
+test('settings are retained while the settings writer is occupied and resume after service restart',async t=>{
+ const f=await fixture(t),initial=await readWorkspaceDashboard(f.workspace),holder=await openCatalogue(f.workspace.root);await holder.run('BEGIN');await projectDomainLock(holder,'Observanda/workspace-settings/'+holder.id+'/dashboard');
  try{
   const desired=change(initial.settings,'planning'),command={id:randomUUID(),settings:desired,etag:initial.etag};
   const submitted=await f.queue.submit(f.workspace,command);assert.equal(submitted.state,'waiting');assert.deepEqual(await f.queue.submit(f.workspace,command),submitted);
@@ -33,7 +34,7 @@ test('new unsaved changes coalesce and a pending next save follows its exact pre
  let latest=await f.queue.submit(f.workspace,{id:randomUUID(),settings:a,etag:initial.etag});
  latest=await f.queue.submit(f.workspace,{id:randomUUID(),settings:b,etag:latest.etag});
  await f.queue.apply(f.workspace);assert.deepEqual((await readWorkspaceDashboard(f.workspace)).settings,b);
- const holder=await openCatalogue(f.workspace.root);await holder.run('BEGIN');await holder.lock();
+ const holder=await openCatalogue(f.workspace.root);await holder.run('BEGIN');await projectDomainLock(holder,'Observanda/workspace-settings/'+holder.id+'/dashboard');
  try{
   const c=change(b,'organizations'),d=change(c,'collaboration');latest=await f.queue.submit(f.workspace,{id:randomUUID(),settings:c,etag:latest.etag});
   await f.queue.apply(f.workspace);await f.queue.submit(f.workspace,{id:randomUUID(),settings:d,etag:latest.etag});

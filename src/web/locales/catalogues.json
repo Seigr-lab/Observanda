@@ -377,6 +377,9 @@
   "workspaceManagement": [
     "en"
   ],
+  "templatePreferences": [
+    "en"
+  ],
   "calculator": [
     "en"
   ]

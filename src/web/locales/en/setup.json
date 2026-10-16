@@ -13,7 +13,7 @@
   "description": "Workspace description",
   "chooseTypes": "Choose your lab-book types",
   "typesHint": "Select the templates you want available in this workspace. You can choose several, or start with your own custom templates.",
-  "typesLater": "Change your selection later in Preferences → Modules → Lab-book types. Projects and lab books are always available.",
+  "typesLater": "Change your selection later in Preferences → Templates.",
   "encrypted": "Encrypted storage",
   "encryptionHint": "Records, drafts, history and attachments are encrypted automatically.",
   "useDevice": "Use this device",

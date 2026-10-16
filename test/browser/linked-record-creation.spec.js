@@ -20,7 +20,7 @@ for(const templated of [false,true])test(`create ${templated?'a template inspect
  const dialog=page.getByRole('dialog',{name:'Add linked record',exact:true}),reader=page.locator('.record-reader');
  try{
   await page.goto(app.url);
-  if(templated){await navigate(page,'Preferences');await preferences(page,'Modules');const enabled=page.waitForResponse(r=>r.url().endsWith('/api/dashboard/pending')&&r.request().method()==='POST'&&r.request().postDataJSON()?.action==='save'&&r.ok());await page.getByRole('switch',{name:'Enable Beekeeping',exact:true}).check();await enabled;}
+  if(templated){await navigate(page,'Preferences');await preferences(page,'Templates');const enabled=page.waitForResponse(r=>r.url().endsWith('/api/dashboard/pending')&&r.request().method()==='POST'&&r.request().postDataJSON()?.action==='save'&&r.ok());await page.getByRole('switch',{name:'Enable Beekeeping',exact:true}).check();await enabled;}
   await page.goto(app.origin+'/#/records/'+hive.id+'/read');await expect(reader).toContainText(hive.title);
   await page.getByRole('button',{name:'Add linked record',exact:true}).click();await dialog.getByRole('button',{name:'Cancel',exact:true}).click();await expect(reader).toContainText(hive.title);expect(requests).toEqual([]);
   await page.getByRole('button',{name:'Add linked record',exact:true}).click();await page.evaluate(id=>location.hash='#/records/'+id+'/read',other.id);await expect(dialog).not.toBeVisible();await expect(reader).toContainText(other.title);

@@ -37,3 +37,26 @@ test('lab-book types unload independently while workspace projects and lab books
  assert.equal(enabledModule({enabledModules:[]},'projects'),true);
  assert.equal(enabledModule({enabledModules:[]},'laboratory'),false);
 });
+
+
+test('preferences separate templates from modules and sort each level without changing enabled choices',async()=>{
+ const {modulePreferences,templatePreferences,sortedPreferenceModules}=await import('../src/web/module-preferences.js');
+ const {prepareLanguage,activateLanguage,t}=await import('../src/web/i18n/index.js');
+ const {readFile}=await import('node:fs/promises');
+ const settings={enabledModules:['laboratory-beekeeping','planning']},before=structuredClone(settings),configured=[];
+ const services={settings,esc:value=>String(value),error:()=>null,configuration:module=>{configured.push(module.id);return '';}};
+ const modules=modulePreferences(services),templates=templatePreferences(services);
+ assert.ok(!modules.includes('data-module-preference="research"'));
+ assert.ok(!modules.includes('data-module-preference="laboratory-beekeeping"'));
+ assert.ok(templates.includes('data-module-preference="laboratory-beekeeping"'));
+ assert.ok(!templates.includes('data-module-preference="planning"'));
+ assert.deepEqual([...modules.matchAll(/<strong>(.*?)<\/strong>/g)].map(m=>m[1]),[...modules.matchAll(/<strong>(.*?)<\/strong>/g)].map(m=>m[1]).sort((a,b)=>a.localeCompare(b,'en',{sensitivity:'base'})));
+ assert.deepEqual(configured,['planning','laboratory-beekeeping']);assert.deepEqual(settings,before);
+ assert.deepEqual(sortedPreferenceModules([{id:'z',label:'Zulu'},{id:'b',label:'beta'},{id:'a',label:'Alpha'}]).map(m=>m.id),['a','b','z']);
+ await prepareLanguage('es',{fetcher:async url=>({ok:true,json:async()=>JSON.parse(await readFile(url,'utf8'))})});activateLanguage('es');
+ try{
+  const localized=templatePreferences(services),labels=[...localized.matchAll(/<strong>(.*?)<\/strong>/g)].map(m=>m[1]);
+  assert.deepEqual(labels,[...labels].sort((a,b)=>a.localeCompare(b,'es',{sensitivity:'base'})));
+  assert.ok(localized.includes(t('labBookTypes','beekeeping.label')));assert.deepEqual(settings,before);
+ }finally{activateLanguage('en');}
+});
