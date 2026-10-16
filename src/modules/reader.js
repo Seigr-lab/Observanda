@@ -18,13 +18,13 @@ import {inventoryFacts} from './inventory-facts.js';
 const invalid=()=>{throw new AppError('MODULE_QUERY_CURSOR');};
 const order=(a,b)=>{const x=a.title.toLowerCase(),y=b.title.toLowerCase();return x<y?-1:x>y?1:a.id<b.id?-1:a.id>b.id?1:0;};
 export class ModuleReader{
- constructor(workspace,{context}={}){this.workspace=workspace;this.modules=workspaceModules(workspace);this.readContext=context;}
+ constructor(workspace,{context,domains=null}={}){this.workspace=workspace;this.modules=workspaceModules(workspace);this.readContext=context;this.readDomains=domains;}
  async context(workspaceId,operation){
   if(!uuid(workspaceId))throw new AppError('INVALID');
   if(this.readContext)return this.readContext(workspaceId,operation);
   if(await this.workspace.storageKind()==='catalogue')return this.workspace.catalogue(async store=>{
    const {metadata:book}=await store.snapshot();if(book.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
-   const owned=await moduleDomainContext(store,operation);if(owned)return owned.value;
+   const owned=await moduleDomainContext(store,operation,{domains:this.readDomains});if(owned)return owned.value;
    const catalogue=new ModuleCatalogue(store),head=await catalogue.head(workspaceId);
    return operation({book,head,members:options=>catalogue.members(head,options),member:id=>catalogue.member(head,id),view:member=>catalogue.view(head,member),search:member=>catalogue.search(head,member),references:member=>catalogue.references(head,member),constraint:member=>catalogue.constraint(head,member),calendar:member=>catalogue.calendar(head,member),inventory:member=>catalogue.inventory(head,member),selected:id=>catalogue.selected(head,id),
     encode:value=>store.encode('module-page',workspaceId,value).toString('base64url'),decode:value=>store.decode('module-page',workspaceId,Buffer.from(value,'base64url'))});
@@ -33,16 +33,18 @@ export class ModuleReader{
   return operation({book:(await this.workspace.outline()).metadata,head:data,members:()=>data.entities,member:async id=>data.entities.find(e=>e.id===id)??null,view:async member=>moduleView(member),search:async member=>moduleSearch(member),references:async member=>moduleReferences(member),constraint:async member=>moduleConstraint(member),calendar:async member=>calendarFacts(member),inventory:async member=>inventoryFacts(member),selected:async id=>data.entities.find(e=>e.id===id)??null,
    encode:value=>Buffer.from(JSON.stringify(value)).toString('base64url'),decode:value=>JSON.parse(Buffer.from(value,'base64url'))});
  }
- async list({workspaceId,type=null,types=null,reference=null,query='',status='',tags=[],tagMode='all',kind=null,archived=null,moduleId=null,projectId=null,scopeIds=null,key=null,keys=null,resourceId=null,sort='title',recursive=true,cursor=null,limit=25},{signal,collect}={}){
+ async list({workspaceId,type=null,types=null,reference=null,query='',status='',tags=[],tagMode='all',kind=null,archived=null,moduleId=null,projectId=null,scopeIds=null,key=null,keys=null,resourceId=null,sort='title',recursive=true,cursor=null,limit=25},{signal,collect,referenceNamespaces=null}={}){
   if(!validResourceTags(tags)||!['all','any'].includes(tagMode)||tags.length&&type!=='resource')throw new AppError('RESOURCE_TAGS');
   if(!['title','created-desc'].includes(sort))throw new AppError('INVALID');
   if(type!==null&&!Object.hasOwn(this.modules.definitions.types,type)||typeof query!=='string'||query.length>256||typeof status!=='string'||status.length>80||!Number.isSafeInteger(limit)||limit<1||limit>25||cursor!==null&&(typeof cursor!=='string'||cursor.length>8192))throw new AppError('INVALID');
   if(types!==null&&(!Array.isArray(types)||types.length>40||new Set(types).size!==types.length||!types.every(t=>Object.hasOwn(this.modules.definitions.types,t))))throw new AppError('INVALID');
-  if(reference!==null&&(!uuid(reference.id)||reference.workspaceId!==workspaceId||!['record','project','notebook',...Object.keys(this.modules.definitions.types)].includes(reference.type)))throw new AppError('INVALID');
+  if(reference!==null&&(!uuid(reference.id)||!uuid(reference.workspaceId)||!['record','project','notebook',...Object.keys(this.modules.definitions.types)].includes(reference.type)))throw new AppError('INVALID');
   if(kind!==null&&(type!=='resource'||!['object','material','equipment','software'].includes(kind))||archived!==null&&(!['calendar','category'].includes(type)||typeof archived!=='boolean')||moduleId!==null&&!['planning','resources'].includes(moduleId)||projectId!==null&&!uuid(projectId)||typeof recursive!=='boolean')throw new AppError('INVALID');
   if(resourceId!==null&&!uuid(resourceId)||keys!==null&&(!Array.isArray(keys)||keys.length>4096||new Set(keys).size!==keys.length||!keys.every(uuid)))throw new AppError('INVALID');
   if(key!==null&&!uuid(key)||scopeIds!==null&&(!Array.isArray(scopeIds)||scopeIds.length>10000||new Set(scopeIds).size!==scopeIds.length||!scopeIds.every(id=>id===null||uuid(id))))throw new AppError('INVALID');
-  const queryHash=digest(JSON.stringify({workspaceId,type,types,reference,query,status,tags,tagMode,kind,archived,moduleId,projectId,scopeIds,key,keys,resourceId,sort,recursive,limit}));
+  if(referenceNamespaces!==null&&(!reference||!Array.isArray(referenceNamespaces)||referenceNamespaces.length<1||referenceNamespaces.length>2||new Set(referenceNamespaces).size!==referenceNamespaces.length||!referenceNamespaces.every(uuid)))throw new AppError('INVALID');
+  const namespaces=referenceNamespaces??(reference?[reference.workspaceId]:[]);
+  const queryHash=digest(JSON.stringify({workspaceId,type,types,reference,referenceNamespaces,query,status,tags,tagMode,kind,archived,moduleId,projectId,scopeIds,key,keys,resourceId,sort,recursive,limit}));
   return this.context(workspaceId,async c=>{
    let anchor;try{anchor=cursor?c.decode(cursor):{workspaceId,revision:c.head.revision,queryHash,limit,offset:0};}catch{invalid();}
    if(!anchor||anchor.workspaceId!==workspaceId||anchor.revision!==c.head.revision||anchor.queryHash!==queryHash||anchor.limit!==limit||!Number.isSafeInteger(anchor.offset)||anchor.offset<0||anchor.offset>0&&(!uuid(anchor.after?.id)||typeof anchor.after.title!=='string'))invalid();
@@ -75,8 +77,8 @@ export class ModuleReader{
      if(moduleId&&!projectUsesTool(c.book,owner,moduleId)||scope&&!scope.has(owner??null)||!inScope(c.book,owner,projectId,recursive))continue;
     }
     if(reference){
-     const facts=await c.references(member);let linked=facts.links.some(r=>r.workspaceId===reference.workspaceId&&r.type===reference.type&&r.id===reference.id);
-     if(!linked&&reference.type==='resource'){const constraint=await c.constraint(member);linked=constraint.data.resourceId===reference.id||constraint.type==='bom'&&constraint.data.lines.some(line=>line.resourceId===reference.id);}
+     const facts=await c.references(member);let linked=facts.links.some(r=>namespaces.includes(r.workspaceId)&&r.type===reference.type&&r.id===reference.id);
+     if(!linked&&reference.type==='resource'&&reference.workspaceId===workspaceId){const constraint=await c.constraint(member);linked=constraint.data.resourceId===reference.id||constraint.type==='bom'&&constraint.data.lines.some(line=>line.resourceId===reference.id);}
      if(!linked)continue;
      if(['task','booking','calendar','event','subscription','calendar-connection'].includes(member.type)){
       const parent=facts.ownerId&&await c.member(facts.ownerId),owner=parent?(await c.references(parent)).projectId:facts.projectId;

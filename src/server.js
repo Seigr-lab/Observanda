@@ -1,3 +1,4 @@
+import {moduleReferenceFactory} from './module-reference-access.js';
 import {workspaceRenameAccess,workspaceRenameRecovery} from './workspace-rename-recovery.js';
 import {publicationRevisionCurrent} from './publication-freshness.js';
 import {publicationSourceFactory} from './project-publication-sources.js';
@@ -825,9 +826,9 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         return await projectContentHttp(req,res,starter,{body,json,mime,headless,contextId:context.id,execute:(data,options)=>executeRecordStarterRequest(workspace,starter,data,options)});
       }
       const moduleRequest=req.method==='POST'?projectModuleRequest(url.pathname):null;
-      if(moduleRequest&&await moduleDomainRoute(workspace)!==null){
+      if(moduleRequest&&(moduleRequest.references||await moduleDomainRoute(workspace)!==null)){
         const data=await body(req,moduleRequest.limit),controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
-        try{const result=await moduleRequest.run(workspace,data,{signal:controller.signal,check:req.checkWriter});
+        try{const result=await moduleRequest.run(workspace,data,{signal:controller.signal,check:req.checkWriter,referenceAccess:moduleReferenceFactory(historyProjects,client,{check:req.checkWriter})});
           if(url.pathname==='/api/modules/command')selectedContext.calendarSources.reconcile(result.entities,{partial:true});
           return json(result);
         }finally{res.off('close',abort);}

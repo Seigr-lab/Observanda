@@ -13,8 +13,9 @@ import {clearVault} from './encryption.js';
 import {AppError} from './errors.js';
 const fingerprint=async file=>{try{return digest(await readFile(file));}catch(error){if(error.code==='ENOENT')return null;throw error;}};
 const accessCodes=new Set(['ACCESS_LOCKED','ACCESS_DENIED','ACCESS_WAIT','AUTH','DEVICE_UNKNOWN']);
+const unavailableCodes=new Set([...accessCodes,'STORAGE_PROJECT_BUSY','LAB_BOOK_IMPORT_PENDING','STORAGE_INCOMPLETE']);
 export function projectRecordCollection(application,client,check){
- return async(consume,{workspaceId,query,scope,signal,selection=null,namespaces=null,includeBooks=true,includeOwner=()=>true})=>{
+ return async(consume,{workspaceId,query,scope,signal,selection=null,namespaces=null,includeBooks=true,includeOwner=()=>true,onUnavailable=null})=>{
   const registry=await application.registry(),directory=await registry.read(),projects=directory.value.projects;
   const root=scope?projects.find(p=>p.projectId===scope):null;
   if(scope&&!root)throw new AppError('NOT_FOUND');
@@ -32,26 +33,28 @@ export function projectRecordCollection(application,client,check){
   for(const entry of selected){
    signal?.throwIfAborted();await check();
    await application.tracked(async()=>{
-    const owner=new ProjectSessionOwner(application,client,entry.projectId,{check,recoverRenames:false});
+    const owner=new ProjectSessionOwner(application,client,entry.projectId,{check,recoverRenames:false});let admitted=false;
+    const unavailable=async(error,address)=>{if(!onUnavailable||!unavailableCodes.has(error.code))return false;await check();await onUnavailable(error,address);return true;};
     try{
      await owner.use(async project=>{
+      admitted=true;
       const books=new LabBookRegistry(project),before=await books.read(),stamp=await fingerprint(books.file),current=()=>owner.check();
       if(includeOwner({workspaceId:entry.namespaceId,projectId:entry.projectId,labBookId:null})&&(!namespaces||namespaces.has(entry.namespaceId)))await consume(project,{workspaceId:entry.namespaceId,projectId:entry.projectId,labBookId:null,projectTitle:entry.summary.title},selectedScope);
       for(const book of (includeBooks?before.value.books:[]).slice().sort((a,b)=>a.namespaceId<b.namespaceId?-1:a.namespaceId>b.namespaceId?1:0)){
        if(!includeOwner({workspaceId:book.namespaceId,projectId:entry.projectId,labBookId:book.labBookId})||selectedScope?.notebookIds&&!selectedScope.notebookIds.has(book.labBookId)||namespaces&&!namespaces.has(book.namespaceId))continue;
        signal?.throwIfAborted();await current();
-       const access=new LabBookAccessSession(application,client,project,book.labBookId,current);let vault,accessEtag,bookRoot;
+       const access=new LabBookAccessSession(application,client,project,book.labBookId,current);let vault,accessEtag,bookRoot,bookAdmitted=false;
        try{
         const router=new LabBookRouter(books,{authorize:async()=>{await access.check();return true;},unlock:async(value,saved)=>{bookRoot=value.root;accessEtag=saved.etag;return vault=await access.key(value.root);}});
-        await application.tracked(()=>router.withLabBook(book.labBookId,storage=>consume(storage,{workspaceId:book.namespaceId,projectId:entry.projectId,labBookId:book.labBookId,projectTitle:entry.summary.title},selectedScope)),entry.projectId,book.labBookId);
+        await application.tracked(()=>router.withLabBook(book.labBookId,storage=>{bookAdmitted=true;return consume(storage,{workspaceId:book.namespaceId,projectId:entry.projectId,labBookId:book.labBookId,projectTitle:entry.summary.title},selectedScope);}),entry.projectId,book.labBookId);
         const assertBook=async()=>{await access.check();if((await readAccess(bookRoot)).etag!==accessEtag)throw access.error(new AppError('ACCESS_LOCKED'));};
         await assertBook();checks.push(assertBook);
-       }catch(error){throw access.error(error);}finally{clearVault(vault);}
+       }catch(error){const failure=access.error(error);if(bookAdmitted||!await unavailable(failure,{workspaceId:book.namespaceId,projectId:entry.projectId,labBookId:book.labBookId}))throw failure;}finally{clearVault(vault);}
       }
       if((await books.read()).revision!==before.revision)throw new AppError('RECORD_QUERY_CURSOR');
       checks.push(async()=>{await current();if(await fingerprint(books.file)!==stamp)throw new AppError('RECORD_QUERY_CURSOR');});
      },{locationOnly:true});
-    }catch(error){if(accessCodes.has(error.code))error.projectId??=entry.projectId;throw error;}finally{await owner.close();}
+    }catch(error){if(accessCodes.has(error.code))error.projectId??=entry.projectId;if(admitted||!await unavailable(error,{workspaceId:entry.namespaceId,projectId:entry.projectId,labBookId:null}))throw error;}finally{await owner.close();}
    },entry.projectId);
   }
   if((await registry.read()).revision!==directory.revision)throw new AppError('RECORD_QUERY_CURSOR');

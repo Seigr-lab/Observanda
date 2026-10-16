@@ -17,7 +17,7 @@ export async function prepareModuleCommand(owner,catalogue,head,research,command
   if(originals.has(id))return originals.get(id)??undefined;
   throw new AppError('MODULE_FORMAT');
  };
- const tx={workspace:owner.workspace,book,hasRecord:research.hasRecord,recordSummary:research.recordSummary,now,get,
+ const tx={workspace:owner.workspace,book,hasRecord:research.hasRecord,recordSummary:research.recordSummary,externalReference:research.externalReference,now,get,
   some:source.some,has:source.has,balance:source.balance,
   expect(id,revision){if((get(id)?.revision??null)!==revision)throw new AppError('MODULE_CHANGED',[{field:id}]);},
   put(type,id,data){

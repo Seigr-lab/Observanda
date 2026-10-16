@@ -20,6 +20,12 @@ async function requestState(storage,data){
  if(data?.workspaceId!==namespaceId)throw new AppError('WORKSPACE_CHANGED');return {namespaceId,dedicated:domainId!==null};
 }
 export function projectModuleRequest(route){
+ const reference=/^\/api\/modules\/references\/(owners|query|labels|resolve|incoming)$/.exec(route);
+ if(reference)return {write:false,references:true,limit:65536,run:async(storage,data,options={})=>{
+  await requestState(storage,data);if(!options.referenceAccess)throw new AppError('ACCESS_UPGRADE');
+  const owner=await options.referenceAccess(data.workspaceId,{signal:options.signal});
+  try{const result=await owner[reference[1]](data);await owner.verify();return result;}finally{await owner.close();}
+ }};
  if(route==='/api/modules/bom-source')return {write:false,limit:MODULE_BYTES,run:(storage,data,options)=>readBOMSource(storage,data,options)};
  const query={'/api/modules/version':['version','version'],'/api/modules/inventory/dashboard':['inventory','page'],'/api/modules/inventory/discovery':['inventory','discover'],'/api/modules/inventory/stock':['inventory','stock'],'/api/modules/inventory/ledger':['inventory','ledger'],'/api/modules/planning/dashboard':['planning','page'],'/api/modules/planning/discovery':['planning','discover']}[route];
  if(query)return {write:false,limit:MODULE_BYTES,run:async(storage,data,options)=>{

@@ -14,7 +14,11 @@ export async function linkCheck(tx,links,previous=[]){
  requireValue(linksValid(links),'links');
  for(const link of links){
   if(previous.some(p=>p.workspaceId===link.workspaceId&&p.type===link.type&&p.id===link.id))continue;
-  requireValue(link.workspaceId===tx.book.id,'Linked item is no longer available.','MODULE_REFERENCE');
+  // Authenticated per-identity routing takes precedence over a stale retained
+  // local copy. Unchanged links above never require the target to be unlocked.
+  if(link.workspaceId!==tx.book.id||tx.externalReference&&['record','project','notebook'].includes(link.type)){
+   requireValue(!!tx.externalReference&&await tx.externalReference(link),'Linked item is no longer available.','MODULE_REFERENCE');continue;
+  }
   const collections={project:tx.book.projects,notebook:tx.book.notebooks};
   const exists=link.type==='record'?await tx.hasRecord(link.id):collections[link.type]?.some(e=>e.id===link.id)||await tx.has(link.type,link.id);
   requireValue(exists,'Linked item is no longer available.','MODULE_REFERENCE');

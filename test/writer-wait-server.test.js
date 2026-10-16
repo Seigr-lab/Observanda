@@ -137,3 +137,21 @@ test('custom font reads remain fenced during an exclusive rename and after works
   const locked=await asset();assert.equal(locked.status,401);assert.equal((await locked.json()).code,'ACCESS_LOCKED');
  }finally{release();WorkspaceRenames.prototype.begin=begin;if(renaming)await renaming;}
 });
+
+
+test('module reference discovery and selected-owner summaries remain read-only during workspace copy',async t=>{
+ const f=await fixture(t),destination=path.join(f.directory,'reference-copy'),reference={workspaceId:f.book.id,type:'record',id:f.book.entries[0].id};
+ const verify=ResearchCatalogue.prototype.verifyRecordHistory;let release,entered;
+ const gate=new Promise(resolve=>release=resolve),ready=new Promise(resolve=>entered=resolve);
+ ResearchCatalogue.prototype.verifyRecordHistory=async function(...args){entered();await gate;return verify.apply(this,args);};let copying;
+ try{
+  copying=f.call('/api/storage/copy',{path:destination,confirmed:true});await ready;
+  for(const [method,data] of [
+   ['owners',{workspaceId:f.book.id,projectId:null,search:'',offset:0,limit:25,revision:null}],
+   ['query',{workspaceId:f.book.id,sourceId:f.book.id,types:['record'],query:'',cursor:null,limit:25}],
+   ['labels',{workspaceId:f.book.id,references:[reference]}],
+   ['resolve',{workspaceId:f.book.id,target:reference}]
+  ]){const response=await f.call('/api/modules/references/'+method,data,AbortSignal.timeout(10000));assert.equal(response.status,200,JSON.stringify(await response.json()));}
+  const activity=await(await f.call('/api/activity')).json();assert.equal(activity.operations.length,1);assert.equal(activity.operations[0].kind,'/api/storage/copy');
+ }finally{release();ResearchCatalogue.prototype.verifyRecordHistory=verify;if(copying)assert.equal((await copying).status,200);}
+});

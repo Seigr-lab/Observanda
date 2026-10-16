@@ -11,6 +11,7 @@ const post=new Set([
  ...['query','open','history/list','history/read','runs','runs/comparison','writing/read','values/read','values/figures','values/figure-copy-choices','values/figure-copy-source','values/attempt-context','runs/prepare'].map(name=>'/api/research/records/'+name),
  ...['overview','list','references','figure-sources','current','schema','current-record','record','read','rows','retained-table','analysis-status'].map(name=>'/api/research/materials/'+name),
  ...['summary','content','record','sections','media'].map(name=>'/api/website/research/'+name),
+ ...['owners','query','labels','resolve','incoming'].map(name=>'/api/modules/references/'+name),
  '/api/calendars/page','/api/calendars/event',
  '/api/github-connection/status','/api/deployment-jobs/list','/api/deployment-jobs/status',
  '/api/repository-setup/current','/api/repository-setup/status','/api/publishing/verification',
