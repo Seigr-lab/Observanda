@@ -7,6 +7,7 @@ import {readAccess,verifyAccess} from '../../src/access.js';
 import {DeviceStore} from '../../src/security/device-store.js';
 import {unseal,clearVault} from '../../src/encryption.js';
 import {openCatalogue} from '../../src/postgres.js';
+import {projectDomainLock} from '../../src/project-domain-lock.js';
 
 test('closing during retained work asks, remains visible and closes only after completion',async()=>{
  test.skip(process.platform!=='win32');test.setTimeout(180000);
@@ -18,10 +19,10 @@ test('closing during retained work asks, remains visible and closes only after c
   await page.getByLabel('Create in',{exact:true}).fill(fixture.directory);await page.getByLabel('Use this device',{exact:false}).check();await page.getByRole('button',{name:'Create workspace',exact:true}).click();await expect(page.locator('.workspace-name')).toHaveText('Closing progress',{timeout:30000});
   vault=await verifyAccess(await readAccess(root),'','',{deviceStore:new DeviceStore({file:path.join(fixture.directory,...(fixture.packaged?['.observanda']:[]),'preferences.json.device-key')})});
   const encrypted=await readFile(path.join(root,'.observanda/postgresql/service.observanda')),bytes=unseal(encrypted,vault.key,'Observanda/workspace-postgresql/v1/'+vault.id);let config;try{config=JSON.parse(bytes);}finally{bytes.fill(0);}
-  holder=await openCatalogue(root,{env:{...process.env,OBSERVANDA_DATABASE_URL:'postgresql://observanda:'+config.appPassword+'@127.0.0.1:'+config.port+'/observanda'}});config=null;await holder.run('BEGIN');await holder.lock();
+  holder=await openCatalogue(root,{env:{...process.env,OBSERVANDA_DATABASE_URL:'postgresql://observanda:'+config.appPassword+'@127.0.0.1:'+config.port+'/observanda'}});config=null;await holder.run('BEGIN');await projectDomainLock(holder,'Observanda/workspace-settings/'+holder.id+'/dashboard');
   await preferences(page,'Modules');const retained=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/dashboard/pending'&&response.request().method()==='POST');
-  await page.getByRole('switch',{name:'Enable Inventory',exact:true}).check();await expect(page.locator('#desk-save-state')).toHaveText('Saved');
-  const saved=await retained;expect(saved.ok()).toBe(true);expect((await saved.json()).pending?.state).toBe('waiting');
+  const inventory=page.getByRole('switch',{name:'Enable Inventory',exact:true});await inventory.check();
+  const saved=await retained;expect(saved.ok()).toBe(true);expect((await saved.json()).pending?.state).toBe('waiting');await expect(inventory).toBeChecked();await expect(page.locator('.desk-save-message')).toBeHidden();
   await app.evaluate(({dialog,BrowserWindow})=>{globalThis.closeQuestions=[];globalThis.closeChoice=0;dialog.showMessageBox=async(_window,options)=>{globalThis.closeQuestions.push(options.title);return {response:globalThis.closeChoice};};BrowserWindow.getAllWindows()[0].close();});
   await expect.poll(()=>app.evaluate(()=>globalThis.closeQuestions)).toContain('Work is still running');expect(await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].isDestroyed())).toBe(false);
   await preferences(page,'General');await expect(page.getByRole('heading',{name:'Workspace details',exact:true})).toBeVisible();
