@@ -24,6 +24,7 @@ import {figureSourceEntries,withoutFigureSources} from './web/figure-provenance.
 import {createFigureMapper} from './web/figure-import-model.js';
 import {PagedMedian} from './paged-median.js';
 import {withMaterialTraversal} from './material-traversal.js';
+import {withScratch} from './scratch-work.js';
 import {MaterialUploadChunks} from './material-upload-chunks.js';
 import {withWorkspaceMetadataBatch,metadataBatchIndex} from './metadata-batch.js';
 import {MaterialIndex} from './material-index.js';
@@ -579,7 +580,7 @@ export class ResearchMaterials {
   });
  }
  async list(options={}){return this.index.page(options);}
- async overview(recordId,{cursor=null,importCursor=null,limit=20,signal}={}){
+ async overview(recordId,{cursor=null,importCursor=null,limit=20,signal,dependencyReview}={}){
   await this.assertOwner(recordId);
   return this.readSnapshot(async store=>{
   const listing=await this.list({recordId,cursor,limit,signal}),heads=listing.items;
@@ -604,8 +605,8 @@ export class ResearchMaterials {
   // Inspect only small dependency manifests, never evidence bytes/table rows.
   const statuses=[];
   for(const head of heads.filter(h=>h.recordId===recordId)){
-   const changed=[];let changedCount=0;await traversal.reset();
-   await traversal.walk(this.references(head),async(ref,enqueue)=>{
+   const reviewed=await dependencyReview?.(head),changed=reviewed?.changed??[];let changedCount=reviewed?.changedCount??0;await traversal.reset();
+   if(!reviewed)await traversal.walk(this.references(head),async(ref,enqueue)=>{
     signal?.throwIfAborted();const now=await current(ref);if(now!==ref.revision){changedCount++;if(changed.length<20)changed.push({...ref,current:now});}
     if(ref.kind!=='record')for await(const input of this.index.iterInputs(ref))await enqueue(input);
    });
@@ -616,7 +617,7 @@ export class ResearchMaterials {
     else figure=book.entries.find(r=>r.id===recordId)?.figures.find(f=>f.id===head.figureId);
    }
    const file=head.kind==='artifact'?(await this.read(head)).content:null;
-   statuses.push({...head,...(file?{file:{name:file.name,size:file.size,sha256:file.sha256,...(file.sourcePath?{sourcePath:file.sourcePath}:{}),...(file.sourcePurpose?{sourcePurpose:file.sourcePurpose}:{})}}:{}),changed,changedCount,figureState:head.figureHash?figure?figureFingerprint(figure)===head.figureHash?'matches':'edited':'not-attached':null});
+   statuses.push({...head,...(file?{file:{name:file.name,size:file.size,sha256:file.sha256,...(file.sourcePath?{sourcePath:file.sourcePath}:{}),...(file.sourcePurpose?{sourcePurpose:file.sourcePurpose}:{})}}:{}),changed,changedCount,...(reviewed??{}),figureState:head.figureHash?figure?figureFingerprint(figure)===head.figureHash?'matches':'edited':'not-attached':null});
   }
   return statuses;
   },{signal});
@@ -691,14 +692,26 @@ export class ResearchMaterials {
  // The caller pins the catalogue snapshot (or holds the writer lock). A
  // detached restore audit must never create derived indexes or activate itself.
  async verifySnapshot({readOnly=false}={}){
-  try{return await withMaterialTraversal(async traversal=>{
-   const originals=new Set();let bytes=0;
+  try{return await withScratch(references=>withMaterialTraversal(async traversal=>{
+   const originals=new Set();let bytes=0,externalReferences=0;
    const check=ref=>traversal.walk([ref],async(ref,enqueue)=>{
-    if(ref.kind==='record'){await this.checkReference(ref);return;}
+    if(ref.kind==='record'){
+     if(await references.has('history:'+materialReferenceKey(ref))&&await this.workspace.storageKind()==='catalogue')await new RetainedRecordDocuments(this.workspace).open(ref,async(document,row)=>{const encoded=await document.encoding();if(encoded.contentRevision!==ref.revision||row.revision&&encoded.revision!==row.revision)fail('MATERIAL_MISSING');},{history:true,legacy:()=>{}});
+     else await this.checkReference(ref);return;
+    }
     const doc=await this.read(ref);
     if(revisionText(await this.index.inputSet(ref))!==revisionText(this.referenceSet(doc.content)))fail('CATALOGUE_DAMAGED');
     if(doc.previous)await enqueue({...ref,revision:doc.previous});
-    for await(const input of this.references(doc.content))await enqueue(input);
+    const comparison=doc.content.comparison?.version===2;
+    if(comparison){
+     if(doc.kind!=='analysis')fail('CATALOGUE_DAMAGED');
+     const retained=await this.comparisons.verifyIntegrity(doc);
+     for(const input of retained.references){
+      if(await workspaceReferenceNamespaceMatches(this.workspace,input)){
+       if(input.kind==='record')await references.add('history:'+materialReferenceKey(input));await enqueue(input);
+      }else if(await references.add('external:'+materialReferenceKey(input)))externalReferences++;
+     }
+    }else for await(const input of this.references(doc.content))await enqueue(input);
     for await(const output of this.references(doc.content,'outputs'))await enqueue(output);
     if(doc.content.acquisition)await enqueue(doc.content.acquisition);
     if(ref.kind==='dataset'){
@@ -715,8 +728,8 @@ export class ResearchMaterials {
      if(aggregationContext&&memberOffset!==aggregationContext.index.count)fail('MATERIAL_MISSING');
     }
     if(doc.content.measurement)await this.measurements.validate(doc.content.measurement);
-    if(doc.content.method){if(!validAnalysisMethod(doc.content.method))fail('CATALOGUE_DAMAGED');for(const r of analysisMethodReferences(doc.content.method))await enqueue(r);}
-    if(doc.content.comparison){const c=doc.content;await this.comparisons.verify({recordId:doc.recordId,title:doc.title,tool:c.tool,version:c.version,method:c.method,comparison:c.comparison},c.summary);}
+    if(doc.content.method&&!comparison){if(!validAnalysisMethod(doc.content.method))fail('CATALOGUE_DAMAGED');for(const r of analysisMethodReferences(doc.content.method))await enqueue(r);}
+    if(doc.content.comparison&&!comparison){const c=doc.content;await this.comparisons.verify({recordId:doc.recordId,title:doc.title,tool:c.tool,version:c.version,method:c.method,comparison:c.comparison},c.summary);}
     if(ref.kind==='artifact'){
      const identity=path.join(this.workspace.root,...artifactRelative(doc).split('/'))+':'+doc.content.size+':'+doc.content.sha256;
      if(!originals.has(identity)){await this.artifact(ref);if(originals.size>=64)originals.delete(originals.values().next().value);originals.add(identity);}
@@ -731,7 +744,7 @@ export class ResearchMaterials {
    }
    await this.drafts.verify(check);await this.intakes.verify(check,{verified:originals});await this.associations.verify(check);await new EvidenceCorrections(this).verify(check);
    if(await this.workspace.storageKind()==='catalogue')await this.index.verify({initialize:!readOnly});
-   return {revisions:traversal.size,originalBytes:bytes,pendingImports,receivedBytes};
-  });}catch(error){if(error.code==='ENOENT')fail('MATERIAL_MISSING');throw error;}
+   return {revisions:traversal.size,originalBytes:bytes,pendingImports,receivedBytes,...(externalReferences?{externalReferences}:{})};
+  }));}catch(error){if(error.code==='ENOENT')fail('MATERIAL_MISSING');throw error;}
  }
 }

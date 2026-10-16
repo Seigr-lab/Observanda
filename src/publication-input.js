@@ -9,7 +9,7 @@ import {publicationExcerpt} from './web/publication-card.js';
 import {publicationLinkResolver,publicationRecordText} from './publication-prose.js';
 import {websiteSummary} from './web/website-model.js';
 import {ResearchMaterials} from './research-materials.js';
-import {analysisDependencyState} from './analysis-dependencies.js';
+import {publicationDependencyState} from './publication-analysis-inputs.js';
 import {proseReferences} from './web/prose-model.js';
 import {emptyEditionSelection,defaultEditionRecord,selectEditionRecord} from './web/publication-selection.js';
 import {validateEditionSelection,validateEditionRecord} from './publication-selection.js';
@@ -21,7 +21,7 @@ const recordFile=(job,id)=>{if(!researchId(job)||!researchId(id))throw new AppEr
 export {publicationDescriptor} from './publication-record-descriptor.js';
 // Each edition pins its selected originals independently. The job manifest and
 // page renderer retain descriptors, never a second in-memory corpus of prose.
-export async function retainPublicationInput(workspace,id,metadata,originals,{sourceEtag,recordHead,signal,edition=emptyEditionSelection(),deferFinalization=false}={}){
+export async function retainPublicationInput(workspace,id,metadata,originals,{sourceEtag,recordHead,signal,sourceReader,edition=emptyEditionSelection(),deferFinalization=false}={}){
  validateEditionSelection(edition);const choices=new Map(edition.records.map(r=>[r.id,r])),found=new Set();
  const projects=new Set(metadata.projects.filter(p=>p.share).map(p=>p.id)),notebooks=new Set(metadata.notebooks.filter(n=>projects.has(n.projectId)).map(n=>n.id));
  const records=[],sourceRevisions={},sourceMaterials=[],warnings=[],linkedCards=new Set(),materials=new ResearchMaterials(workspace);
@@ -49,7 +49,7 @@ export async function retainPublicationInput(workspace,id,metadata,originals,{so
   if(!owner||![...owner.relations.map(r=>r.target),...owner.references].some(r=>researchReference(r)===href))throw new AppError('INVALID');
  }
 
- const analysis=await analysisDependencyState(materials,sourceMaterials,{recordHead,signal});
+ const analysis=await publicationDependencyState(materials,sourceMaterials,{workspaceId:metadata.id,sourceReader,recordHead,signal});
  const input={metadata,records,sourceRevisions,sourceMaterials,availability:edition.availability??[],linkedCards:[...linkedCards],
   researchReview:{retainedFigures:sourceMaterials.filter(source=>source.figureId).length,changedInputs:warnings.filter(warning=>warning.reason==='inputs').length,editedFigures:warnings.filter(warning=>warning.reason==='edited').length,analysis}};
  return deferFinalization?input:finalizePublicationInput(workspace,id,input,{signal});

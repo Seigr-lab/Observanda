@@ -1,3 +1,4 @@
+import {withComparisonInputs} from '../comparison-request-inputs.js';
 import {MAX_BYTES} from '../model.js';
 // The local CLI and authenticated UI share this versioned command boundary.
 import {AppError} from '../errors.js';
@@ -7,7 +8,7 @@ export async function intakeCommand(workspace,queue,action,command,options={}){
  if(!command||command.version!==1)throw new AppError('INTAKE_INVALID');
  const {version,...input}=command;void version;
  const service=new LocalIntake(workspace,queue);
- if(action==='readiness')return new RunReadiness(workspace).view(input,options);
+ if(action==='readiness'){const readiness=new RunReadiness(workspace);return withComparisonInputs(readiness.materials,options,inputs=>readiness.view(input,{...options,inputs}));}
  if(action==='receipt-editions')return new RunReadiness(workspace).editions(input,options);
  if(action==='link-receipt')return new RunReadiness(workspace).link(input);
  if(action==='policy')return new RunReadiness(workspace).setPolicy(input);

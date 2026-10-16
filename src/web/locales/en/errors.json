@@ -1,4 +1,5 @@
 {
+  "ANALYSIS_SOURCE_ACCESS": "Authorize the comparison sources and retry this job.",
   "STORAGE_PORTABLE_BOOK_ACCESS": "Set a password or recovery key for each lab book before exporting its backup.",
   "LAB_BOOK_FOLDER": "Choose a folder containing an Observanda lab book.",
   "STORAGE_NAME_MISMATCH": "The name must exactly match the folder name, including spaces and spelling.",

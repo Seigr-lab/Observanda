@@ -99,11 +99,11 @@ export class MaterialIndex{
    if(expected.size)damaged();
   }));
  }
- async page({recordId=null,kind=null,query='',cursor=null,limit=20,pending=false,signal}={}){
+ async page({recordId=null,kind=null,query='',cursor=null,limit=20,pending=false,signal}={},{initialize=true}={}){
   if(recordId!==null&&!researchId(recordId)||kind!==null&&!kinds.includes(kind)||typeof query!=='string'||query.length>200||!Number.isSafeInteger(limit)||limit<1||limit>50||typeof pending!=='boolean')invalid();
   if(pending&&(!recordId||kind||query))invalid();
   if(cursor!==null&&(typeof cursor!=='string'||cursor.length>4096||!/^[A-Za-z0-9_-]+$/.test(cursor)))invalid();
-  await this.ensure();
+  if(initialize)await this.ensure();else if(!await this.state())throw new AppError('ACCESS_UPGRADE');
   const feed=this.feed(recordId,kind,pending);
   return this.workspace.catalogue(async store=>{
    const state=await this.state(),scope=JSON.stringify({recordId,kind,query,limit,pending});if(!state)damaged();

@@ -1,3 +1,4 @@
+import {createComparisonSourceAccess} from './comparison-source-access.js';
 import {assertProjectPresent} from './project-relocation-directory.js';
 import {publicationSourceMedia} from './publication-source-media.js';
 import {publicationSourceSections} from './publication-source-sections.js';
@@ -57,8 +58,12 @@ export async function projectPublicationSource(application,client,command,{scope
 
 // The host is the job-owned storage instance, whose key outlives its HTTP reply.
 export function publicationSourceFactory(application,client,storage,{scope=null,labBookId=null,check=async()=>{}}={}){
- return async({signal}={})=>{
+ const sourceReader=async({signal}={})=>{
   await check();signal?.throwIfAborted();const {metadata}=await storage.outline();
   return publicationSourceReader(application,client,{workspaceId:metadata.id,scope,labBookId,signal,check});
  };
+ // Dependency access is independent of the edition's selected public content.
+ // It retains the requesting client without borrowing the active source reader.
+ sourceReader.materialAccess=({workspace=storage,signal}={})=>createComparisonSourceAccess(application,client,{workspace,check,signal});
+ return sourceReader;
 }

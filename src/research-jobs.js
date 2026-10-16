@@ -1,14 +1,26 @@
+import {AnalysisComparisons} from './analysis-comparisons.js';
+import {createComparisonInputReader} from './comparison-input-reader.js';
 // Research owns import semantics; the worker owns durable execution and leases.
 import {ResearchMaterials} from './research-materials.js';
 import {AppError} from './errors.js';
 import {authorizeLive,liveRecord} from './collaboration/live-access.js';
 import {auditLive} from './collaboration/live-audit.js';
-export function researchJobDefinitions(workspace,queue){
- const materials=new ResearchMaterials(workspace);
+export function researchJobDefinitions(workspace,queue,{comparisonAccess}={}){
+ const materials=new ResearchMaterials(workspace),attempts=new Map();
  return {'analysis.compare':{
   authorize:async job=>{if(job.scope!==job.input.command?.recordId)throw new AppError('JOB_CHANGED');await materials.assertOwner(job.scope);},
-  prepare:(job,options)=>materials.comparisons.prepare(job.input.command,{...options,jobId:job.id,writePage:fn=>queue().transaction(async()=>{await queue().held(job.id,job.lease.token);return fn();})}),
-  commit:(job,prepared)=>materials.comparisons.commit(job.input.command,prepared)
+  prepare:async(job,options)=>{
+   const workspaceId=(await workspace.outline()).metadata.id,command=job.input.command,refs=materials.comparisons.references(command.method,command.comparison);
+   let comparisons=materials.comparisons;
+   if(command.comparison.version===2||refs.some(ref=>ref.workspaceId&&ref.workspaceId!==workspaceId)){
+    if(!comparisonAccess)throw new AppError('ANALYSIS_SOURCE_ACCESS');
+    const open=comparisonAccess.take(workspaceId,job),access=await open(workspace,options),inputs=createComparisonInputReader(materials,{workspaceId,access,signal:options.signal});
+    comparisons=new AnalysisComparisons(materials,{inputs});attempts.set(job.lease.token,comparisons);
+   }
+   return comparisons.prepare(command,{...options,jobId:job.id,writePage:fn=>queue().transaction(async()=>{await queue().held(job.id,job.lease.token);return fn();})});
+  },
+  discard:async job=>{const saved=attempts.get(job.lease.token);attempts.delete(job.lease.token);await saved?.inputs.close();},
+  commit:(job,prepared)=>{const comparisons=attempts.get(job.lease.token);if(job.input.command.comparison.version===2&&!comparisons)throw new AppError('ANALYSIS_SOURCE_ACCESS');return (comparisons??materials.comparisons).commit(job.input.command,prepared);}
  },'figure.calculate':{
   authorize:async job=>{if(job.scope!==job.input.command?.recordId)throw new AppError('JOB_CHANGED');await materials.assertOwner(job.scope);},
   prepare:async(job,options)=>{

@@ -61,7 +61,7 @@ export class RunReadiness{
   if(!Array.isArray(command.required)||new Set(command.required).size!==command.required.length||command.required.some(k=>!receiptKinds.includes(k)))throw new AppError('INTAKE_INVALID');
   const value={version:1,required:command.required};await this.workspace.writeMetadata(prefix+'projects/'+projectId+'.json',JSON.stringify(value));return {...value,etag:intakeHash(value)};
  });}
- async view(command,{signal}={}){
+ async view(command,{signal,inputs}={}){
   await this.materials.index.ensure();await this.target(command,{signal});await this.receiptStore(command.recordId).ensure();
   return this.workspace.catalogue(async()=>{
    const {record,revision,projectId}=await this.target(command,{attempt:true,signal}),receiptStore=this.receiptStore(record.id),receiptPage=await receiptStore.page({cursor:command.receiptCursor??null,signal}),policy=await this.policy(projectId);
@@ -70,7 +70,7 @@ export class RunReadiness{
    do{
     signal?.throwIfAborted();const page=await this.materials.list({recordId:record.id,cursor,limit:20,signal});cursor=page.next;
     const sources=[];for(const item of page.items){digest.add(item);if(item.kind==='artifact')counts.artifacts++;if(item.kind==='analysis'){counts.analyses++;sources.push({recordId:record.id,label:item.title,analysis:{kind:item.kind,id:item.id,revision:item.revision}});}}
-    const state=await analysisDependencyState(this.materials,sources,{signal});counts.staleAnalyses+=state.items.length;for(const item of state.items)if(issues.length<100)issues.push({kind:'stale-analysis',id:item.analysis.id,label:item.label});
+    const state=await analysisDependencyState(this.materials,sources,{signal,inputs});counts.staleAnalyses+=state.items.length;for(const item of state.items)if(issues.length<100)issues.push({kind:'stale-analysis',id:item.analysis.id,label:item.label});
    }while(cursor);
    const preparation=record.attempt?.preparations.at(-1),assessments=currentAttemptItems(record.attempt?.assessments??[]);
    const unresolved=record.unresolvedCriteria??(preparation?.criteria??[]).filter(c=>!assessments.some(a=>a.preparationId===preparation.id&&a.criterionId===c.id&&['met','not-met'].includes(a.outcome)));

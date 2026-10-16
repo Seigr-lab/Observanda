@@ -1,3 +1,4 @@
+import {ComparisonJobAccess} from './comparison-job-access.js';
 import {ProjectPublications} from './project-publications.js';
 import {PublicationSourceAccess} from './publication-source-access.js';
 import {AsyncLocalStorage} from 'node:async_hooks';
@@ -24,7 +25,7 @@ class ProjectWorker extends JobWorker{
  wake(){return withoutWriterWait(()=>withDatabaseRequest(undefined,()=>super.wake()));}
 }
 export class ProjectJobs{
- constructor({publisherOptions=()=>({})}={}){this.publisherOptions=publisherOptions;this.sessions=new WeakMap();this.entries=new Set();this.stopping=new Set();this.closed=false;}
+ constructor({publisherOptions=()=>({})}={}){this.publisherOptions=publisherOptions;this.comparisonAccess=new ComparisonJobAccess();this.sessions=new WeakMap();this.entries=new Set();this.stopping=new Set();this.closed=false;}
  stop(entry){
   if(entry.stopped)return entry.stopped;entry.closed=true;entry.sourceAccess?.clear();entry.publications?.clear();this.entries.delete(entry);
   const pending=entry.worker.stop().then(async()=>{entry.publisher.token=null;await entry.publisher.connection?.cancel();}).finally(()=>{clearVault(entry.storage.vault);entry.grant?.close();this.stopping.delete(pending);});
@@ -35,7 +36,7 @@ export class ProjectJobs{
  async invalidateBook(projectId,labBookId){await Promise.all([...this.entries].filter(entry=>entry.projectId===projectId&&entry.storage.labBookId===labBookId).map(entry=>this.stop(entry)));}
  async invalidateProject(id){await Promise.all([...this.entries].filter(entry=>entry.projectId===id).map(entry=>this.stop(entry)));}
  expire(now=Date.now()){for(const entry of this.entries)if(entry.expires<=now)void this.stop(entry).catch(()=>{});}
- async close(){this.closed=true;await Promise.all([...this.entries].map(entry=>this.stop(entry)));await Promise.all(this.stopping);this.sessions=new WeakMap();}
+ async close(){this.closed=true;this.comparisonAccess.clear();await Promise.all([...this.entries].map(entry=>this.stop(entry)));await Promise.all(this.stopping);this.sessions=new WeakMap();}
  async owner(session,storage,etag,check,{projectId=storage.projectId,retain}={}){
   const book=storage.labBookId!==undefined;if(!researchId(projectId)||book&&(!researchId(storage.labBookId)||storage.projectId!==undefined||typeof retain!=='function'))throw new AppError('INVALID');
   const key=book?'book:'+projectId+':'+storage.labBookId:projectId;
@@ -50,10 +51,10 @@ export class ProjectJobs{
    catch(error){grant?.close();clearVault(owned.vault);throw error;}
    entry={storage:owned,projectId,grant,routePrefix:'/api/projects/'+projectId+(book?'/lab-books/'+storage.labBookId:''),etag,expires:Date.now()+8*60*60*1000,closed:false};
    try{
-   const current=()=>entry.queue;entry.sourceAccess=new PublicationSourceAccess();
+   const current=()=>entry.queue;entry.sourceAccess=new PublicationSourceAccess();entry.comparisonAccess=this.comparisonAccess;
    entry.publisher=new Publisher(owned.root,{...this.publisherOptions(owned),workspace:owned},owned.vault);
-   entry.queue=new AuthorizedJobs(owned,workspaceJobDefinitions(owned,entry.publisher,current,{sourceAccess:entry.sourceAccess}),async()=>{
-    try{await (entry.grant?.check??check)();}catch(error){if(['ACCESS_LOCKED','WORKSPACE_CHANGED','NOT_FOUND','STORAGE_DELETING','STORAGE_MOVING'].includes(error.code))void this.stop(entry).catch(()=>{});throw error;}
+   entry.queue=new AuthorizedJobs(owned,workspaceJobDefinitions(owned,entry.publisher,current,{sourceAccess:entry.sourceAccess,comparisonAccess:this.comparisonAccess}),async()=>{
+    try{if(entry.closed||entry.expires<=Date.now())throw new AppError('ACCESS_LOCKED');await (entry.grant?.check??check)();}catch(error){if(['ACCESS_LOCKED','WORKSPACE_CHANGED','NOT_FOUND','STORAGE_DELETING','STORAGE_MOVING'].includes(error.code))void this.stop(entry).catch(()=>{});throw error;}
    });
    entry.worker=new ProjectWorker(entry.queue);entry.publications=new ProjectPublications(entry);owners.set(key,entry);this.entries.add(entry);
    }catch(error){grant?.close();clearVault(owned.vault);throw error;}

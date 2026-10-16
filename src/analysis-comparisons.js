@@ -7,6 +7,8 @@ import {analysisObservation,analysisObservations} from './analysis-observations.
 import messages from './web/locales/en/analyses.json' with {type:'json'};
 import {ComparisonIndex} from './analysis-comparison-index.js';
 import {calculateComparison} from './analysis-comparison-calculation.js';
+import {verifyComparisonIntegrity} from './analysis-comparison-integrity.js';
+import {comparisonSourceIdentities} from './analysis-comparison-identities.js';
 import {MaterialSequence} from './material-sequence.js';
 import {withScratch} from './scratch-work.js';
 import {researchId} from './web/research-reference.js';
@@ -17,7 +19,8 @@ const ref=materialReference;
 const key=o=>JSON.stringify([analysisIdentity(o.investigation),analysisIdentity(o.run),o.condition,o.operation,o.profile,analysisIdentity(o.calibration),o.unit,o.membership,o.window,o.windowRelation,o.evidence]);
 const pick=o=>Object.fromEntries(['investigation','run','condition','operation','profile','calibration','unit','membership','window','windowRelation','evidence'].map(k=>[k,o[k]]));
 export class AnalysisComparisons{
- constructor(materials){this.materials=materials;}
+ constructor(materials,{inputs=materials}={}){this.materials=materials;this.inputs=inputs;}
+ async verifyInputs(){if(this.inputs!==this.materials)await this.inputs.verify();}
  async snapshot(operation){
   const workspace=this.materials.workspace;if(await workspace.storageKind()!=='catalogue')return operation();
   return workspace.catalogue(async store=>{
@@ -27,32 +30,40 @@ export class AnalysisComparisons{
   });
  }
  references(method,comparison){return [...new Map([...analysisMethodReferences(method),...comparison.sources.flatMap(analysisSourceReferences),...(comparison.expected?[comparison.expected.dataset]:[])].map(r=>[materialReferenceKey(r),ref(r)])).values()];}
- async validate(command,{retained=false}={}){
+ async validateOutput(command,{retained=false}={}){
   if(!analysisTextValue(command.title,300,true)||!analysisTextValue(command.tool,200,true)||!analysisTextValue(command.version,200,true)||!validAnalysisMethod(command.method)||!validComparison(command.comparison))fail();
+  if(command.comparison.version===2&&!this.references(command.method,command.comparison).every(r=>researchId(r.workspaceId)))fail();
   if(!retained)await this.materials.assertOwner(command.recordId);
-  for(const r of this.references(command.method,command.comparison))await this.materials.read(r);
+  if(command.id){const head=await this.materials.current(command.id);if((head?.revision??null)!==(command.expectedRevision??null)||head&&(head.recordId!==command.recordId||head.kind!=='analysis'))fail('MATERIAL_CHANGED');}
+ }
+ async validate(command,options={}){
+  await this.validateOutput(command,options);
+  const addressed=command.comparison.version===2,resolved=new Map(),namespace=addressed&&this.inputs===this.materials?(await this.materials.workspace.outline()).metadata.id:null;
+  for(const r of this.references(command.method,command.comparison)){const doc=await this.inputs.read(r);if(addressed)resolved.set(materialReferenceKey(r),this.inputs===this.materials?{...r,workspaceId:namespace}:this.inputs.reference(doc));}
+  const identities=addressed?comparisonSourceIdentities(command.comparison,r=>resolved.get(materialReferenceKey(r))):null;
   const expected=command.comparison.expected;
   for(const [index,s] of command.comparison.sources.entries()){
-   const doc=await this.materials.read(s.dataset),columns=await this.materials.datasetColumns(doc);
+   const doc=await this.inputs.read(s.dataset),columns=await this.inputs.datasetColumns(doc);
    if(Object.values(s.columns).some(i=>i!==null&&i>=columns.length))fail();
    if(expected?.source===index&&expected.actualKey>=columns.length)fail();
   }
-  if(expected){const columns=await this.materials.datasetColumns(await this.materials.read(expected.dataset));if(expected.value>=columns.length||expected.key>=columns.length)fail();}
-  if(command.id){const head=await this.materials.current(command.id);if((head?.revision??null)!==(command.expectedRevision??null)||head&&(head.recordId!==command.recordId||head.kind!=='analysis'))fail('MATERIAL_CHANGED');}
+  if(expected){const columns=await this.inputs.datasetColumns(await this.inputs.read(expected.dataset));if(expected.value>=columns.length||expected.key>=columns.length)fail();}
+  await this.verifyInputs();return identities;
  }
  async prepare(command,options={}){
-  await this.validate(command,options);options.signal?.throwIfAborted();
+  const sourceIdentities=await this.validate(command,options);options.signal?.throwIfAborted();
   if(options.retained)return this.snapshot(()=>withScratch(async scratch=>{
    const temporary={readMetadata:async name=>(await scratch.get(name))?.text??null,writeMetadata:(name,text)=>scratch.put(name,{text})};
-   return calculateComparison(this,command,{...options,sequences:new MaterialSequence(temporary),checkpoint:false,writePage:fn=>fn()});
+   return calculateComparison(this,command,{...options,sourceIdentities,sequences:new MaterialSequence(temporary),checkpoint:false,writePage:fn=>fn()});
   },{signal:options.signal}));
-  return calculateComparison(this,command,options);
+  return calculateComparison(this,command,{...options,sourceIdentities});
  }
  async prepareLegacy(command,{signal,progress=async()=>{},retained=false}={}){
+  if(command.comparison?.version!==1)fail();
   await this.validate(command,{retained});const {comparison,method}=command,groups=new Map(),distribution=new Map(),transitions=new Map(),previous=new Map(),runs=new Set();let rows=0;
   const summary={version:1,algorithm:'observanda-exception-comparison',algorithmVersion:'1',ordering:comparison.ordering,rows:0,raw:counts(),aggregate:counts(),runs:0,unknownRunRows:0,groups:[],distribution:[],transitions:[],verification:null};
-  let total=0;for(const s of comparison.sources)total+=(await this.materials.read(s.dataset)).content.rowCount;
-  for await(const o of analysisObservations(this.materials,comparison,{signal})){
+  let total=0;for(const s of comparison.sources)total+=(await this.inputs.read(s.dataset)).content.rowCount;
+  for await(const o of analysisObservations(this.inputs,comparison,{signal})){
    rows++;for(const k of ['condition','operation','profile','window'])if(o[k].length>300)fail('ANALYSIS_LIMIT');
    if(o.run)runs.add(o.run.id);else summary.unknownRunRows++;
    summary[o.evidence][o.category]++;const k=key(o);
@@ -77,8 +88,8 @@ export class AnalysisComparisons{
   return {commandHash:digest(revisionText(command)),content};
  }
  async verifyExpected(comparison,{signal}={}){
-  const e=comparison.expected,s=comparison.sources[e.source],actualDoc=await this.materials.read(s.dataset),expectedDoc=await this.materials.read(e.dataset),ac=await this.materials.datasetColumns(actualDoc),ec=await this.materials.datasetColumns(expectedDoc);
-  const ai=this.materials.iterateDataset(s.dataset)[Symbol.asyncIterator](),ei=this.materials.iterateDataset(e.dataset)[Symbol.asyncIterator](),out={algorithm:'ordered-exact-fixture-comparison',version:'1',correct:0,mismatched:0,unavailable:0,excluded:0,unmatched:0,rows:0,examples:[],expected:e.dataset,rationale:e.rationale};
+  const e=comparison.expected,s=comparison.sources[e.source],actualDoc=await this.inputs.read(s.dataset),expectedDoc=await this.inputs.read(e.dataset),ac=await this.inputs.datasetColumns(actualDoc),ec=await this.inputs.datasetColumns(expectedDoc);
+  const ai=this.inputs.iterateDataset(s.dataset)[Symbol.asyncIterator](),ei=this.inputs.iterateDataset(e.dataset)[Symbol.asyncIterator](),out={algorithm:'ordered-exact-fixture-comparison',version:'1',correct:0,mismatched:0,unavailable:0,excluded:0,unmatched:0,rows:0,examples:[],expected:e.dataset,rationale:e.rationale};
   const available=(r,i,c)=>!['null','absent'].includes(r.valueKinds?.[i])&&!c.missing.some(m=>m.value===r.cells[i]);
   try{for(;;){signal?.throwIfAborted();const [a,b]=await Promise.all([ai.next(),ei.next()]);if(a.done&&b.done)break;out.rows++;let state;
    if(a.done||b.done||a.value.cells[e.actualKey]!==b.value.cells[e.key])state='unmatched';
@@ -89,14 +100,20 @@ export class AnalysisComparisons{
   }}finally{await ai.return?.();await ei.return?.();}return out;
  }
  async commit(command,prepared){
-  if(prepared.commandHash!==digest(revisionText(command)))fail('MATERIAL_CHANGED');await this.validate(command);
-  const result=await this.materials.commit({kind:'analysis',recordId:command.recordId,title:command.title,id:command.id,expectedRevision:command.expectedRevision,content:prepared.content});
+  if(prepared.commandHash!==digest(revisionText(command)))fail('MATERIAL_CHANGED');
+  await this.verifyInputs();await this.validateOutput(command);
+  // Foreign manifests were authenticated during prepare; committing only checks
+  // access and the result owner, never opens a source read inside this writer.
+  if(this.inputs===this.materials)await this.validate(command);
+  await this.verifyInputs();const result=await this.materials.commit({kind:'analysis',recordId:command.recordId,title:command.title,id:command.id,expectedRevision:command.expectedRevision,content:prepared.content});
   if(prepared.workId){if(!researchId(prepared.workId))fail('INVALID');await this.materials.workspace.removeMetadata('.observanda/materials/comparison-work/'+prepared.workId+'.json');}
-  return result;
+  await this.verifyInputs();return result;
  }
  async save(command,options={}){const prepared=await this.prepare(command,options);return this.materials.workspace.withLock(()=>this.commit(command,prepared));}
  index(summary){if(summary.version!==2||summary.index?.version!==1)fail('MATERIAL_MISSING');return new ComparisonIndex(this.materials.sequences,summary.index.root);}
+ async verifyIntegrity(doc,options={}){return this.snapshot(()=>verifyComparisonIntegrity(this,doc,options));}
  async verify(command,summary){
+  if(summary.algorithm!=='observanda-exception-comparison'||(summary.version===1?summary.algorithmVersion!=='1'||command.comparison?.version!==1:summary.version!==2||summary.algorithmVersion!==(command.comparison?.version===2?'3':'2')))fail('CATALOGUE_DAMAGED');
   return this.snapshot(async()=>{
   const prepared=await (summary.version===1?this.prepareLegacy(command,{retained:true}):this.prepare(command,{retained:true}));
   if(revisionText(prepared.content.summary)!==revisionText(summary))fail('CATALOGUE_DAMAGED');
@@ -117,7 +134,7 @@ export class AnalysisComparisons{
     yield* page.items;if(page.next===null)return;offset=page.next;
    }
   }
-  if(view==='observations')yield* analysisObservations(this.materials,doc.content.comparison,options);
+  if(view==='observations')yield* analysisObservations(this.inputs,doc.content.comparison,options);
   else yield* summary[view];
  }
  async page(command,options={}){return this.snapshot(()=>this.pageSnapshot(command,options));}
@@ -134,7 +151,7 @@ export class AnalysisComparisons{
   }
   if(backward)offset=Math.max(0,offset-limit);
   const items=[];let matched=0,next=null,bytes=0;
-  for await(const o of analysisObservations(this.materials,c.comparison,{signal})){
+  for await(const o of analysisObservations(this.inputs,c.comparison,{signal})){
    if(category&&o.category!==category||group&&key(o)!==group||view==='exceptions'&&o.category==='correct'||view==='boundary'&&o.boundary==='unknown')continue;
    if(matched++<offset)continue;if(items.length===limit){next=offset+items.length;break;}
    bytes+=Buffer.byteLength(JSON.stringify(o));if(bytes>1024*1024)fail('ANALYSIS_LIMIT');items.push(o);

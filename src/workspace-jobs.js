@@ -1,3 +1,4 @@
+import {ComparisonJobAccess} from './comparison-job-access.js';
 import {publicationVerificationDefinitions} from './publication-verification-jobs.js';
 import {deploymentJobDefinitions} from './deployment-jobs.js';
 import {repositoryJobDefinitions} from './github-repository.js';
@@ -23,9 +24,9 @@ function publicationDefinitions(workspace,publisher,current,services){
   return services[type][method](job,...args);
  }]));return result;
 }
-export function workspaceJobDefinitions(workspace,publisher,current,services={}){return {...intakeJobDefinitions(workspace,current),...researchJobDefinitions(workspace,current),...mediaJobDefinitions(workspace,current),...publicationDefinitions(workspace,publisher,current,services)};}
+export function workspaceJobDefinitions(workspace,publisher,current,services={}){return {...intakeJobDefinitions(workspace,current),...researchJobDefinitions(workspace,current,services),...mediaJobDefinitions(workspace,current),...publicationDefinitions(workspace,publisher,current,services)};}
 export function workspaceJobs(workspace,publisher=new Publisher(workspace.root,{},workspace.vault),options={}){
- const current=()=>queue;
- const queue=new DurableJobs(workspace,workspaceJobDefinitions(workspace,publisher,current,{sourceAccess:options.sourceAccess}),options);
- return {queue,worker:new JobWorker(queue)};
+ const current=()=>queue,comparisonAccess=options.comparisonAccess??new ComparisonJobAccess();
+ const queue=new DurableJobs(workspace,workspaceJobDefinitions(workspace,publisher,current,{sourceAccess:options.sourceAccess,comparisonAccess}),options);
+ return {queue,worker:new JobWorker(queue),comparisonAccess};
 }

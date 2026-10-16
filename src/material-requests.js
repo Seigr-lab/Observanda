@@ -1,3 +1,6 @@
+import {comparisonDependencyReview} from './comparison-dependency-review.js';
+import {withComparisonInputs} from './comparison-request-inputs.js';
+import {retryComparison} from './comparison-job-admission.js';
 // Evidence commands are shared by workspace and selected-project HTTP adapters.
 // The caller supplies the authorized storage owner and its own durable job service.
 import {ResearchMaterials} from './research-materials.js';
@@ -13,7 +16,7 @@ import {jobSummary} from './jobs.js';
 import {MAX_BYTES} from './model.js';
 import {researchId} from './web/research-reference.js';
 import {AppError} from './errors.js';
-const reads=new Set(['overview','list','references','correction-preview','correction-status','correction-history','association-read','association-list','figure-sources','selection-page','intakes','intake-selection-page','intake-page','intake-session','drafts','draft-read','draft-references','current','schema','measurement-inspect','measurement-seed','current-record','record','read','analysis-status','job','retained-table','calculation-schema','dataset-preview','dataset-jobs','rows','comparison-page','verify','download']);
+const reads=new Set(['source-owners','source-items','source-resolve','overview','list','references','correction-preview','correction-status','correction-history','association-read','association-list','figure-sources','selection-page','intakes','intake-selection-page','intake-page','intake-session','drafts','draft-read','draft-references','current','schema','measurement-inspect','measurement-seed','current-record','record','read','analysis-status','job','retained-table','calculation-schema','dataset-preview','dataset-jobs','rows','comparison-page','verify','download']);
 const writes=new Set(['associate-original','correction-apply','association-start','association-step','association-cancel','selection-change','intake-start','intake-selection-append','intake-append','intake-finish','draft-start','draft-append','draft-finish','draft-cancel','measurement-save','pin','start','finish','cancel-job','retry-job','dataset','collection','analysis','comparison','reuse','plot']);
 const accepted=new Set(['intake-finish','finish','dataset','comparison','plot']);
 export function materialRequest(route){
@@ -25,13 +28,15 @@ export function materialRequest(route){
  if(!reads.has(operation)&&!writes.has(operation))return null;
  return {material:operation,method:'POST',write:writes.has(operation),limit:MAX_BYTES,status:accepted.has(operation)?202:200,download:operation==='download'};
 }
-export async function executeMaterialRequest(storage,request,data,{signal,jobs,download,stream}={}){
+export async function executeMaterialRequest(storage,request,data,{signal,jobs,download,stream,sourceAccess,sourceDiscovery}={}){
  const materials=new ResearchMaterials(storage),operation=request.material;
+ const summary=job=>({...jobSummary(job),...(job?.type==='analysis.compare'?{sources:materials.comparisons.references(job.input.command.method,job.input.command.comparison)}:{})});
  const jobService=async()=>{const result=await jobs?.();if(!result)throw new AppError('ACCESS_LOCKED');return result;};
  switch(operation){
+ case 'source-owners':case 'source-items':case 'source-resolve':{if(!sourceDiscovery)throw new AppError('ACCESS_LOCKED');return sourceDiscovery(storage,operation,data,{signal});}
  case 'chunk':return materials.uploads.summary(await materials.appendImport(request.id,request.index,stream,{signal}));
  case 'download':{if(typeof download!=='function')throw new AppError('INVALID');return download(await materials.artifact(request.ref??data.ref));}
- case 'overview':{const result=await materials.overview(data.recordId,{cursor:data.cursor,importCursor:data.importCursor,limit:data.limit});if(result.imports.length){const {queue}=await jobService();for(const session of result.imports)session.job=jobSummary(await queue.read(session.id));}return result;}
+ case 'overview':{const result=await materials.overview(data.recordId,{cursor:data.cursor,importCursor:data.importCursor,limit:data.limit,signal,dependencyReview:sourceAccess?head=>comparisonDependencyReview(materials,head,{sourceAccess,signal}):undefined});if(result.imports.length){const {queue}=await jobService();for(const session of result.imports)session.job=jobSummary(await queue.read(session.id));}return result;}
  case 'list':{const page=await materials.list({...data,pending:false,signal});return {...page,items:page.items.map(({kind,id,revision,recordId,title,createdAt})=>({kind,id,revision,recordId,title,createdAt}))};}
  case 'references':return materials.referencePage(data.ref,data);
  case 'associate-original':return {ref:await associateOriginal(materials,data)};
@@ -71,14 +76,14 @@ export async function executeMaterialRequest(storage,request,data,{signal,jobs,d
  case 'pin':return materials.pinRecord(data.id,data.expectedRevision);
  case 'record':return new RetainedRecordDocuments(storage).read(data,{signal});
  case 'read':return materials.read(data.ref);
- case 'analysis-status':{const doc=await materials.read(data.ref);if(doc.kind!=='analysis')throw new AppError('ANALYSIS_INVALID');return analysisDependencyState(materials,[{recordId:doc.recordId,analysis:data.ref}]);}
+ case 'analysis-status':{const doc=await materials.read(data.ref);if(doc.kind!=='analysis')throw new AppError('ANALYSIS_INVALID');return withComparisonInputs(materials,{sourceAccess,signal},inputs=>analysisDependencyState(materials,[{recordId:doc.recordId,analysis:data.ref}],{inputs,signal}));}
  case 'start':return materials.uploads.summary(await materials.startImport(data));
  case 'finish':{if(!storage.vault.key)throw new AppError('ACCESS_LOCKED');const session=await materials.importState(data.id);if(session.batchId)throw new AppError('MATERIAL_CHANGED');await materials.assertOwner(session.recordId);if(materials.uploads.bytes(session)!==session.size)throw new AppError('MATERIAL_INCOMPLETE');const {queue,worker}=await jobService(),job=await queue.enqueue({id:session.id,type:'evidence.finalize',scope:session.recordId,input:{importId:session.id,size:session.size}});worker.wake();return {job:jobSummary(job)};}
- case 'job':case 'cancel-job':case 'retry-job':{const {queue,worker}=await jobService(),job=await queue.read(data.id);if(!job)throw new AppError('NOT_FOUND');await queue.authorize(job);if(operation==='job')return {job:jobSummary(job)};const result=await queue.control(data.id,operation==='cancel-job'?'cancel':'retry');if(operation==='cancel-job')worker.cancel(data.id);else worker.wake();return {job:jobSummary(result)};}
+ case 'job':case 'cancel-job':case 'retry-job':{const service=await jobService(),{queue,worker}=service,job=await queue.read(data.id);if(!job)throw new AppError('NOT_FOUND');await queue.authorize(job);if(operation==='job')return {job:summary(job)};const result=operation==='retry-job'&&job.type==='analysis.compare'?await retryComparison(materials,service,job,{sourceAccess,signal}):await queue.control(data.id,operation==='cancel-job'?'cancel':'retry');if(operation==='cancel-job'){worker.cancel(data.id);service.comparisonAccess?.forget((await storage.outline()).metadata.id,data.id);}else worker.wake();return {job:summary(result)};}
  case 'retained-table':return retainedTable(materials,data);
  case 'calculation-schema':return {columns:await new DatasetCalculations(materials).schema(data.ref,data.view)};
  case 'dataset-preview':return materials.previewDataset(data,{signal});
- case 'dataset':case 'comparison':case 'plot':{const {queue,worker}=await jobService(),{jobId,...command}=data,enqueue=operation==='dataset'?enqueueDataset:operation==='comparison'?enqueueComparison:enqueuePlot,job=await enqueue(materials,queue,command,jobId);worker.wake();return {job};}
+ case 'dataset':case 'comparison':case 'plot':{const {queue,worker,comparisonAccess}=await jobService(),{jobId,...command}=data,enqueue=operation==='dataset'?enqueueDataset:operation==='comparison'?enqueueComparison:enqueuePlot,job=await enqueue(materials,queue,command,jobId,{sourceAccess,comparisonAccess,signal});worker.wake();return {job};}
  case 'dataset-jobs':{const {queue}=await jobService();return datasetJobs(materials,queue,data.recordId,{cursor:data.cursor??null});}
  case 'rows':return materials.datasetPage(data.ref,data.page??0,{columnOffset:data.columnOffset??0});
  case 'collection':return materials.collection(data);

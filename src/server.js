@@ -1,3 +1,5 @@
+import {comparisonSourceFactory} from './comparison-source-access.js';
+import {comparisonSourceDiscovery} from './comparison-source-discovery.js';
 import {moduleReferenceFactory} from './module-reference-access.js';
 import {workspaceRenameAccess,workspaceRenameRecovery} from './workspace-rename-recovery.js';
 import {publicationRevisionCurrent} from './publication-freshness.js';
@@ -256,7 +258,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
     ctx.dashboardTask=task;dashboardTasks.add(task);
   };
   const startJobs=ctx=>{if(ctx.workspace&&ctx.vault.key&&!ctx.manualLock&&!shuttingDown&&!changing){ctx.publicationSourceAccess??=new PublicationSourceAccess();ctx.jobs??=workspaceJobs(ctx.workspace,ctx.publisher,{sourceAccess:ctx.publicationSourceAccess,observe:job=>activities.job(ctx.id,job)});ctx.jobs.worker.start();startDashboardEdits(ctx);}};
-  const stopWorkspaceJobs=async ctx=>{await ctx.live?.close();delete ctx.live;await ctx.jobs?.worker.stop();ctx.publicationSourceAccess?.clear();await ctx.publisher?.connection?.clear();};
+  const stopWorkspaceJobs=async ctx=>{await ctx.live?.close();delete ctx.live;await ctx.jobs?.worker.stop();ctx.publicationSourceAccess?.clear();ctx.jobs?.comparisonAccess.clear();await ctx.publisher?.connection?.clear();};
   const stopJobs=async ctx=>{await ctx.projects?.close();delete ctx.projects;await stopWorkspaceJobs(ctx);};
   const deletions=new WorkspaceDeletions((preferencesFile??deviceStore.file)+'.workspace-deletions');
   if(root&&(await workspaceDeletion(root)||(await deletions.list()).some(item=>item.source===root&&item.phase!=='prepared')))root=null;
@@ -452,7 +454,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       }
       if(contextRequired&&(req.method==='POST'||['/api/dashboard','/api/dashboard/pending','/api/notebook','/api/media-policy','/api/laboratory','/api/publishing','/api/history','/api/modules/data','/api/modules/version','/api/modules/history','/api/calendars'].includes(url.pathname))&&req.headers['x-observanda-workspace']!==context.id)throw new AppError('WORKSPACE_CHANGED');
       const historyProjects=selectedContext.projects??=new ProjectApplication(workspace,{deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})});
-      const sourceReader=publicationSourceFactory(historyProjects,client,selectedContext.workspace,{check:req.checkWriter});
+      const sourceReader=publicationSourceFactory(historyProjects,client,selectedContext.workspace,{check:req.checkWriter}),comparisonSources=comparisonSourceFactory(historyProjects,client,{check:req.checkWriter});
       return await historyProjects.withSourceHistory(client,async()=>{
       const selectedProject=projectRequest(url.pathname,req.method);
       if(selectedProject&&(req.method==='POST'||(selectedProject.material||selectedProject.publication||selectedProject.asset||selectedProject.sampleAnalysis)&&req.method==='GET')){
@@ -782,7 +784,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         const data=await body(req),controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
         try{
           if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');startJobs(context);
-          const result=await intakeCommand(workspace,context.jobs.queue,url.pathname.slice('/api/v1/intake/'.length),data,{signal:controller.signal});
+          const result=await intakeCommand(workspace,context.jobs.queue,url.pathname.slice('/api/v1/intake/'.length),data,{signal:controller.signal,sourceAccess:comparisonSources});
           if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');if((await status(client)).locked)throw new AppError('ACCESS_LOCKED');
           context.jobs.worker.wake();return json(result);
         }finally{res.removeListener('close',abort);}
@@ -987,7 +989,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         const {events,...data}=result.data;selectedContext.calendarSources.reconcile(data.entities);return json({...result,data});
       }
       const material=materialRequest(url.pathname);
-      if(material&&req.method===material.method)return await materialHttp(req,res,material,{contextId:context.id,body,json,execute:(data,options)=>executeMaterialRequest(workspace,material,data,{...options,jobs:()=>{startJobs(context);return context.jobs;}})});
+      if(material&&req.method===material.method)return await materialHttp(req,res,material,{contextId:context.id,body,json,execute:(data,options)=>executeMaterialRequest(workspace,material,data,{...options,sourceAccess:comparisonSources,sourceDiscovery:(host,operation,input,options)=>comparisonSourceDiscovery(historyProjects,client,host,operation,input,{...options,check:req.checkWriter}),jobs:()=>{startJobs(context);return context.jobs;}})});
       const research=researchRequest(url.pathname);
       if(req.method==='POST'&&research){
         const data=await body(req,research.limit,research.capacity);

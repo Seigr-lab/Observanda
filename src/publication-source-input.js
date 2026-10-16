@@ -21,7 +21,7 @@ function pinOwner(host,source,jobId,namespace,identities,store){
 }
 // Pin one selected namespace at a time, then release its credentials. A website
 // owns presentation consent; no research sharing flag is changed in its owner.
-export async function retainPublicationSources(workspace,jobId,local,sources,reader,{signal}={}){
+export async function retainPublicationSources(workspace,jobId,local,sources,reader,{signal,sourceReader}={}){
  if(!validPublicationSources(sources)||sources.some(source=>source.workspaceId===local.metadata.id))throw new AppError('INVALID');
  if(!sources.length)return finalizePublicationInput(workspace,jobId,local,{signal});
  if(!reader)throw new AppError('ACCESS_LOCKED');
@@ -34,7 +34,7 @@ export async function retainPublicationSources(workspace,jobId,local,sources,rea
    await reader.use(source.workspaceId,undefined,async(store,snapshot,pinned)=>{
     const {source:consent,metadata}=publicationSourceContext(snapshot.metadata,source,pinned.owner),owner={...pinned.owner,projectNamespaceId:pinned.projectNamespaceId},storage=pinOwner(workspace,pinned.storage,jobId,source.workspaceId,identities,store);
     const records=selectedPublicationRecords(store,snapshot,{metadata,selection:consent.selection,signal});
-    const input=await retainPublicationInput(storage,jobId,metadata,records,{sourceEtag:pinned.snapshotId,recordHead:async id=>(await store.member(snapshot,id))?.revision??null,signal,deferFinalization:true,edition:source.edition});
+    const input=await retainPublicationInput(storage,jobId,metadata,records,{sourceEtag:pinned.snapshotId,recordHead:async id=>(await store.member(snapshot,id))?.revision??null,signal,sourceReader,deferFinalization:true,edition:source.edition});
     const projected=publicationOwnerProjection(input,owner,identities),media=new MediaStore(pinned.storage),assets=new Map();
     for(const record of projected.records)for(const [id,publicId] of Object.entries(record.mediaIdentities))assets.set(publicId,id);
     async function* selectedAssets(){for(const [publicId,id] of assets){signal?.throwIfAborted();yield {...await media.get(id,{streamed:true,includeHeader:false,signal}),id:publicId};}}
