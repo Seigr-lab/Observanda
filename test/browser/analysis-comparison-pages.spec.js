@@ -29,7 +29,7 @@ test('comparison contexts and retained observations page independently and survi
   await expect(dialog.locator('[data-comparison-filter]')).toContainText('Group 24');await expect(groups.locator('tbody tr')).toHaveCount(5);await expect(groups).toHaveAttribute('open','');
   await groups.getByRole('button',{name:'Previous groups',exact:true}).click();await expect(groups.locator('tbody tr')).toHaveCount(20);await expect(groups).toHaveAttribute('open','');
   await dialog.getByRole('button',{name:'Show all groups',exact:true}).click();await expect(dialog.getByRole('button',{name:'Inspect source',exact:true})).toHaveCount(20);
-  let failNext=true,failFilter=false;await page.route('**/api/research/materials/comparison-page',async route=>{
+  let failNext=true,failFilter=false;await page.route('**/api/**/comparison-page',async route=>{
    const command=route.request().postDataJSON();if(failNext&&command.view==='distribution'&&command.offset===20||failFilter&&command.category==='correct'){failNext=false;failFilter=false;return route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'IO',error:'Synthetic interrupted comparison query'})});}return route.continue();
   });
   await dialog.getByRole('button',{name:'More observations',exact:true}).click();await expect(page.locator('#notice')).toBeVisible();

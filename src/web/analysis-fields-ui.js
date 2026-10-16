@@ -12,7 +12,7 @@ export function analysisMethodFields(method,{esc,field}){
 }
 export function analysisParameterFields(p,{esc,field}){return `<fieldset data-parameter>${['name','value','unit','reason'].map(k=>field(esc(atext(k)),`<input data-parameter-key="${k}" maxlength="${k==='value'?8192:k==='reason'?2000:k==='name'?200:100}" value="${esc(p[k])}">`)).join('')}${analysisReferenceField('reference',p.reference,{esc})}<button type="button" class="text-button" data-analysis-remove-parameter>${esc(atext('remove'))}</button></fieldset>`;}
 export function readAnalysisMethod(root){return {version:1,references:Object.fromEntries(ANALYSIS_ROLES.map(k=>[k,JSON.parse(root.querySelector('[data-analysis-ref="'+k+'"] [data-ref-value]').value)])),...Object.fromEntries(['unavailable','uncertainty','limitations'].map(k=>[k,root.querySelector('[data-method="'+k+'"]').value])),parameters:[...root.querySelectorAll('[data-parameter]')].map(el=>({...Object.fromEntries([...el.querySelectorAll('[data-parameter-key]')].map(i=>[i.dataset.parameterKey,i.value])),reference:JSON.parse(el.querySelector('[data-ref-value]').value)}))};}
-export function wireAnalysisFields(root,{state,api,call,esc,field,guard,recordId,onReference=()=>{}}){
+export function wireAnalysisFields(root,{state,api,call,esc,field,guard,recordId,onReference=()=>{},chooseReference=null}){
  const controller=new AbortController(),pickers=new Set();let disposed=false;
  const active=()=>!disposed&&root.isConnected;
  root.addEventListener('click',event=>{
@@ -24,7 +24,10 @@ export function wireAnalysisFields(root,{state,api,call,esc,field,guard,recordId
    const set=async value=>{input.value=JSON.stringify(value);label.textContent=value?value.label??value.revision:atext('none');input.dispatchEvent(new Event('input',{bubbles:true}));await onReference(region,value);};
    if(b.hasAttribute('data-ref-remove')){await set(null);return;}b.disabled=true;
    let picker;const close=()=>{picker?.dispose?.();picker?.stop?.();pickers.delete(picker);host.replaceChildren();b.disabled=false;};
-   if(region.dataset.records==='true'){
+   if(chooseReference){
+    try{const value=await chooseReference({title:atext(region.dataset.analysisRef.split('.').at(-1)),kind:region.dataset.kind||null,recordsOnly:region.dataset.records==='true',selected:JSON.parse(input.value)});
+    if(active()&&value!==undefined){guard();await set(value);}}finally{close();}
+   }else if(region.dataset.records==='true'){
     picker=researchTargetPicker({state,api,esc,field,active,excludeId:()=>null});pickers.add(picker);
     picker.open({root:host,title:atext(region.dataset.analysisRef),recordsOnly:true,onCancel:close,onChoose:async(item,{signal,stillCurrent})=>{const retained=await call('pin',{id:item.id,expectedRevision:item.revision},{signal,adopt:false});if(!stillCurrent()||!active())return;guard();await set({kind:'record',id:retained.id,revision:retained.revision,label:item.title});close();}});
    }else{
@@ -34,6 +37,6 @@ export function wireAnalysisFields(root,{state,api,call,esc,field,guard,recordId
    }
   })().catch(showError);
  },{signal:controller.signal});
- function showError(error){if(!active())return;let p=root.querySelector('[data-analysis-field-error]');if(!p){p=document.createElement('p');p.dataset.analysisFieldError='';p.setAttribute('role','alert');root.append(p);}p.textContent=error.message;}
+ function showError(error){if(!active()||error.name==='AbortError')return;let p=root.querySelector('[data-analysis-field-error]');if(!p){p=document.createElement('p');p.dataset.analysisFieldError='';p.setAttribute('role','alert');root.append(p);}p.textContent=error.message;}
  return ()=>{disposed=true;controller.abort();for(const picker of pickers){picker.dispose?.();picker.stop?.();}};
 }

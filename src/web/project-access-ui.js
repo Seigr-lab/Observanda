@@ -2,13 +2,14 @@ import {t} from './i18n/index.js';
 // Credentials belong to the selected project or book. Cancelling leaves the
 // workspace and other unlocked owners available.
 export function projectAccessUI({state,api,esc,field,showDialog}){
- const dialog=document.getElementById('dialog');let pending=null;
+ const primary=document.getElementById('dialog');let pending=null;
  function open(projectId,labBookId,name,{unlock}={}){
   const text=key=>t(labBookId?'labBookAccess':'projectAccess',key),prefix='/api/projects/'+projectId+(labBookId?'/lab-books/'+labBookId:'');
-  pending?.cancel();const context=state.storage?.contextId;
+  pending?.cancel();const context=state.storage?.contextId,stacked=primary.open,dialog=stacked?document.createElement('dialog'):primary,origin=document.activeElement;
+  if(stacked){dialog.dataset.projectAccess='';dialog.setAttribute('aria-labelledby','project-access-title');document.body.append(dialog);}
   return new Promise((resolve,reject)=>{
    const controller=new AbortController();let settled=false;
-   const finish=(error)=>{if(settled)return;settled=true;controller.abort();dialog.removeEventListener('close',cancel);dialog.removeEventListener('cancel',escape,true);dialog.removeEventListener('submit',submit,true);dialog.removeEventListener('click',click,true);if(pending?.cancel===cancel)pending=null;if(error)reject(error);else resolve();};
+   const finish=(error)=>{if(settled)return;settled=true;controller.abort();dialog.removeEventListener('close',cancel);dialog.removeEventListener('cancel',escape,true);dialog.removeEventListener('submit',submit,true);dialog.removeEventListener('click',click,true);if(pending?.cancel===cancel)pending=null;dialog.close();if(stacked){dialog.remove();if(origin?.isConnected)origin.focus({preventScroll:true});}if(error)reject(error);else resolve();};
    const cancel=()=>finish({name:'AbortError'});
    const escape=event=>{event.preventDefault();event.stopImmediatePropagation();cancel();dialog.close();};
    const click=event=>{if(event.target.closest('[data-project-unlock-cancel]')){event.preventDefault();event.stopImmediatePropagation();cancel();dialog.close();}};
@@ -26,7 +27,8 @@ export function projectAccessUI({state,api,esc,field,showDialog}){
     }finally{delete form.dataset.busy;form.querySelector('[type="submit"]').disabled=false;}
    }
    pending={cancel};
-   showDialog('<form id="project-unlock-form"><h2 id="dialog-title">'+esc(text('title'))+'</h2>'+(name?'<p>'+esc(name)+'</p>':'')+field(text('username'),'<input name="username" autocomplete="username">')+field(text('password'),'<input name="password" type="password" autocomplete="current-password">')+'<details><summary>'+esc(text('recovery'))+'</summary>'+field(text('recoveryKey'),'<input name="recovery" type="password" autocomplete="off">')+'</details><p role="alert" hidden></p><div class="dialog-actions"><button type="button" class="button" data-project-unlock-cancel>'+esc(text('cancel'))+'</button><button type="submit" class="button primary">'+esc(text('unlock'))+'</button></div></form>');
+   const markup='<form id="project-unlock-form"><h2 id="'+(stacked?'project-access-title':'dialog-title')+'">'+esc(text('title'))+'</h2>'+(name?'<p>'+esc(name)+'</p>':'')+field(text('username'),'<input name="username" autocomplete="username">')+field(text('password'),'<input name="password" type="password" autocomplete="current-password">')+'<details><summary>'+esc(text('recovery'))+'</summary>'+field(text('recoveryKey'),'<input name="recovery" type="password" autocomplete="off">')+'</details><p role="alert" hidden></p><div class="dialog-actions"><button type="button" class="button" data-project-unlock-cancel>'+esc(text('cancel'))+'</button><button type="submit" class="button primary">'+esc(text('unlock'))+'</button></div></form>';
+   if(stacked){dialog.innerHTML=markup;dialog.showModal();}else showDialog(markup);
    dialog.addEventListener('close',cancel);dialog.addEventListener('cancel',escape,true);dialog.addEventListener('click',click,true);dialog.addEventListener('submit',submit,true);dialog.querySelector('[name="password"]').focus();
   });
  }

@@ -1,3 +1,4 @@
+import {retainedSourceClient} from './retained-source-client.js';
 import {materialReference} from './material-reference.js';
 import {materialReferenceReader,materialOriginalRoute,inheritMaterialNamespace} from './material-reference-requests.js';
 import {materialReferenceElements} from './material-reference-elements.js';
@@ -37,15 +38,15 @@ import {evidenceCorrectionsUI} from './evidence-corrections-ui.js';
 import {allFigurePlots,withFigureSource} from './figure-provenance.js';
 import {retainedRecordUI} from './retained-record-ui.js';
 
-export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty,render,revisions,create,getRecord=null,editRetainedFigure=null,refreshReader=null}){
+export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty,render,revisions,create,getRecord=null,editRetainedFigure=null,refreshReader=null,access=run=>run()}){
  const retainedRecords=retainedRecordUI({state,api,esc,showDialog});
- let referenceContext=false,schemaDispose=null,referenceTrail=[],readerRefreshPending=false;
+ let referenceContext=false,referenceOrigin=false,schemaDispose=null,referenceTrail=[],readerRefreshPending=false;
  const previews=figurePreviews();document.getElementById('dialog')?.addEventListener('close',()=>{referenceContext=false;previews.release();stopWatching();uploader.pause();});
  const endpoint='/api/research/materials/',record=getRecord??(()=>state.book?.entries.find(e=>e.id===state.selected));
  let projectOwner=null,readNamespace=null;
  const route=value=>projectApiRoute(value,projectOwner);
  const call=materialReferenceReader({api,local:(name,data,options)=>api(route(endpoint+name),data,{...options,owner:projectOwner}),onOwner:(result,name)=>{
-  guard();if(['read','measurement-inspect'].includes(name)){readNamespace=result.namespaceId;if(!sameResearchOwner(result.labBookId?{projectId:result.projectId,labBookId:result.labBookId}:result.projectId,projectOwner))referenceContext=true;}
+  guard();if(['read','measurement-inspect'].includes(name)){readNamespace=result.namespaceId;referenceContext=referenceOrigin||!sameResearchOwner(result.labBookId?{projectId:result.projectId,labBookId:result.labBookId}:result.projectId,projectOwner);}
  }}),ref=materialReference;
  const originalRoute=r=>materialOriginalRoute(r)??route(endpoint+'original/'+r.id+'/'+r.revision);
  const button=(label,action,extra='')=>`<button type="button" class="button" data-action="material-${action}" ${extra}>${label}</button>`;
@@ -73,8 +74,14 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
  },...options});sourcePickers[id]=picker;return picker.ready;};
  const titleField=title=>field('Title',`<input id="material-title" maxlength="300" value="${esc(title)}">`);
  const guard=()=>{if(!sameResearchOwner(projectOwner,researchOwner(state))||workspaceContext!==state.storage?.contextId||owner!==(record()?.id??null))throw Error('The workspace or record changed. Reopen evidence.');};
+ const sources=retainedSourceClient({state,api,access,identity:()=>[jobView,owner],active:()=>!!document.getElementById('dialog')?.open});
+ const currentView=generation=>{guard();if(generation!==jobView||!document.getElementById('dialog')?.open)throw new DOMException('Evidence view changed','AbortError');};
+ async function authorizeSource(reference){
+  if(state.storage?.researchStorage!=='catalogue'||!reference?.workspaceId)return;
+  const generation=jobView;await sources.resolve(reference,{unlock:true});currentView(generation);
+ }
  const measurements=measurementUI({call,frame,esc,field,guard,owner:()=>owner,readOnly:()=>referenceContext,inspect,notify,origin:()=>({ref:selectedRef,page,comparisonView:opened?.content?.comparison?comparisons.snapshot():null}),download:r=>{guard();const a=document.createElement('a');a.href=originalRoute(r)+'?context='+encodeURIComponent(workspaceContext);a.download='';a.click();}});
- const comparisons=analysisComparisonUI({state,api,call,frame,esc,field,guard,owner:()=>owner,readOnly:()=>referenceContext,inspect:r=>r?inspect(r):referenceContext?document.getElementById('dialog').close():home(),watchJob,measurements,notify});
+ const comparisons=analysisComparisonUI({state,api,call,frame,esc,field,guard,owner:()=>owner,readOnly:()=>referenceContext,inspect:r=>r?inspect(r):referenceContext?document.getElementById('dialog').close():home(),watchJob,measurements,notify,access});
  const calculations=datasetCalculationUI({state,api,call,frame,esc,field,guard,owner:()=>owner,inspect,watchJob,notify});
  const aggregations=datasetAggregationUI({state,api,call,frame,esc,field,guard,owner:()=>owner,inspect,watchJob,notify});
  document.getElementById('dialog')?.addEventListener('close',()=>aggregations.clean());
@@ -100,7 +107,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
    ${imports.length?`<h3>Imports in progress</h3><ul>${imports.map((s,i)=>`<li>${esc(s.name)} &middot; ${s.receivedBytes.toLocaleString()} / ${s.size.toLocaleString()} bytes &middot; ${esc(s.job?.state??'Upload paused')} ${button(s.job?'Check verification':s.receivedBytes===s.size?'Verify original':uploadText('resumeUpload'),s.job?'job-open':s.receivedBytes===s.size?'job-start':'resume-form',`data-index="${i}"`)}</li>`).join('')}</ul>`:''}
    <div class="inline-actions">${importCursor?button('Recent imports','imports-first'):''}${importsNext?button('Older imports','imports-next'):''}</div>
    ${datasetJobPage.items.length?`<details class="material-more"><summary>${esc(atext('jobs'))}</summary><ul>${datasetJobPage.items.map(j=>`<li>${esc(j.title)} &middot; ${esc(j.state)} ${button(j.type==='analysis.compare'?atext(j.state==='completed'?'open':'check'):j.state==='completed'?(j.type==='figure.calculate'?'Open figure':'Open dataset'):(j.type==='figure.calculate'?'Check calculation':'Check preparation'),'dataset-job',`data-job="${esc(j.id)}"`)}</li>`).join('')}</ul><div class="inline-actions">${datasetJobCursor?button('Latest preparations','dataset-jobs-first'):''}${datasetJobPage.next?button('Older preparations','dataset-jobs-next'):''}</div></details>`:''}
-   ${items.length?`<ul class="material-list">${items.map((m,i)=>`<li><div><strong>${esc(m.title)}</strong><p>${esc(m.kind)} · Revision ${m.revision.slice(0,12)}</p>${materialFileSummary(m,{context:workspaceContext,esc,route})}${m.changed.length?'<p class="material-review" role="status">Newer or unavailable inputs — review relevance. Retained results are unchanged.</p>':''}${m.figureState==='edited'?'<p class="material-review">The record figure was edited after calculation. The retained result is unchanged.</p>':''}</div>${button('Inspect','inspect',`data-index="${i}"`)}</li>`).join('')}</ul>`:'<p>No evidence yet. Import an original file, then retain a dataset or document an analysis.</p>'}
+   ${items.length?`<ul class="material-list">${items.map((m,i)=>`<li><div><strong>${esc(m.title)}</strong><p>${esc(m.kind)} · Revision ${m.revision.slice(0,12)}</p>${materialFileSummary(m,{context:workspaceContext,esc,route})}${m.dependencyStatus==='unavailable'?'<p class="material-review" role="status">'+esc(t('retainedSources','reviewUnavailable'))+'</p>':''}${m.changed.length?'<p class="material-review" role="status">Newer or unavailable inputs — review relevance. Retained results are unchanged.</p>':''}${m.figureState==='edited'?'<p class="material-review">The record figure was edited after calculation. The retained result is unchanged.</p>':''}</div>${button('Inspect','inspect',`data-index="${i}"`)}</li>`).join('')}</ul>`:'<p>No evidence yet. Import an original file, then retain a dataset or document an analysis.</p>'}
    <div class="inline-actions">${button(esc(t('evidenceCorrections','history')),'correction-history')}${materialCursor?button('Latest evidence','heads-first'):''}${materialPage.next?button('Older evidence','heads-next'):''}</div>${materialPage.changed?'<p role="status">Evidence changed since this list was opened. Return to latest evidence to refresh.</p>':''}
    <p class="muted">A hash identifies bytes; it does not establish accuracy or authorship. Use Storage &amp; access to create a verified backup, then verify evidence after restoration.</p>`,button('Close','close'));
  }
@@ -367,7 +374,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   if(act.startsWith('correction-'))return corrections.action(act,control);
   if(corrections.isBusy())return true;
   if(act==='figure-source'){await openReference(JSON.parse(control.dataset.ref));return true;}
-  if(act.startsWith('measurement-'))return measurements.action(act,control);
+  if(act.startsWith('measurement-')){if(act==='measurement-inspect')await authorizeSource(JSON.parse(control.dataset.source).ref);if(act==='measurement-from-artifact')await authorizeSource(JSON.parse(control.dataset.ref));return measurements.action(act,control);}
   if(act.startsWith('comparison-'))return comparisons.action(act,control);
   if(act.startsWith('calculation-'))return referenceContext?true:calculations.action(act,control);
   if(act.startsWith('aggregation-'))return referenceContext?true:aggregations.action(act,control);
@@ -386,7 +393,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
    frame('Compare retained and current record',recordRevisionComparison(historical.snapshot,current,esc,{assetUrl:id=>route('/api/media/'+id)}),button('Close','close'));return true;
   }
   if(act==='close'){stopWatching();document.getElementById('dialog').close();return true;}
-  if(act==='open'){referenceContext=false;readNamespace=state.book?.id;referenceTrail=[];if(!saved()){notify('Save the record before opening evidence and analysis.',true);return true;}if(owner!==record().id||workspaceContext!==state.storage?.contextId||!sameResearchOwner(projectOwner,researchOwner(state))){referenceIntent=null;referenceDraft=null;draftCursor=null;datasetJobCursor=null;materialCursor=null;importCursor=null;}owner=record().id;workspaceContext=state.storage?.contextId;projectOwner=researchOwner(state);await home();return true;}
+  if(act==='open'){referenceOrigin=false;referenceContext=false;readNamespace=state.book?.id;referenceTrail=[];if(!saved()){notify('Save the record before opening evidence and analysis.',true);return true;}if(owner!==record().id||workspaceContext!==state.storage?.contextId||!sameResearchOwner(projectOwner,researchOwner(state))){referenceIntent=null;referenceDraft=null;draftCursor=null;datasetJobCursor=null;materialCursor=null;importCursor=null;}owner=record().id;workspaceContext=state.storage?.contextId;projectOwner=researchOwner(state);await home();return true;}
   if(act==='repeat'){
    if(!saved()){notify('Save this run first.',true);return true;}
    if(repeating)return true;
@@ -406,7 +413,17 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   if(act==='home'){stopWatching();await home();}
   if(act==='job-open'){const session=imports[Number(control.dataset.index)];await watchJob((await call('job',{id:session.id})).job);}
   if(act==='job-start'){const session=imports[Number(control.dataset.index)];await watchJob((await call('finish',{id:session.id})).job);}
-  if(act==='job-cancel'||act==='job-retry'){stopWatching();control.disabled=true;try{await watchJob((await call(act==='job-cancel'?'cancel-job':'retry-job',{id:control.dataset.job})).job);}finally{control.disabled=false;}}
+  if(act==='job-cancel'||act==='job-retry'){
+   const generation=jobView,id=control.dataset.job;control.disabled=true;
+   try{
+    if(act==='job-retry'){
+     const result=await call('job',{id},{adopt:false});currentView(generation);
+     if(result.job.type==='analysis.compare'&&state.storage?.researchStorage==='catalogue')for(const source of result.job.sources??[]){await sources.resolve(inheritMaterialNamespace(source,state.book.id),{unlock:true});currentView(generation);}
+    }
+    const run=async()=>{currentView(generation);try{const result=await call(act==='job-cancel'?'cancel-job':'retry-job',{id});currentView(generation);return result;}catch(error){currentView(generation);throw error;}};
+    const result=await(act==='job-retry'?access(run):run());await watchJob(result.job);
+   }finally{if(control.isConnected)control.disabled=false;}
+  }
   if(act==='upload-form')await uploader.form();
   if(act==='resume-form')await uploader.form(imports[Number(control.dataset.index)]);
   if(act==='upload')await uploader.upload();
@@ -464,7 +481,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
    await saveReferenceSelection();
   }
   if(act==='inspect')await inspect(items[Number(control.dataset.index)]);
-  if(act==='reference'){const r=JSON.parse(control.dataset.ref);if(referenceContext&&selectedRef)referenceTrail.push({ref:selectedRef,page});if(r.kind==='record')await openRevision(r);else await inspect(r);}
+  if(act==='reference'){const r=JSON.parse(control.dataset.ref);await authorizeSource(r);if(referenceContext&&selectedRef)referenceTrail.push({ref:selectedRef,page});if(r.kind==='record')await openRevision(r);else await inspect(r);}
   if(act==='reference-back'){const previous=referenceTrail.pop();if(previous)await inspect(previous.ref,{atPage:previous.page});}
   if(act==='previous')await inspect({...selectedRef,revision:opened.previous});
   if(act==='rows-prev'){page--;await datasetView();}
@@ -508,7 +525,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   return true;
  }
  async function openReference(target){
-  owner=record()?.id??null;workspaceContext=state.storage?.contextId;projectOwner=researchOwner(state);referenceContext=true;readNamespace=state.book?.id;referenceTrail=[];selectedRef=null;
+  referenceOrigin=true;owner=record()?.id??null;workspaceContext=state.storage?.contextId;projectOwner=researchOwner(state);referenceContext=true;readNamespace=state.book?.id;referenceTrail=[];selectedRef=null;
   if(target.kind==='record')return openRevision(target);
   return inspect(target);
  }
