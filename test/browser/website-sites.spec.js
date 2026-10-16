@@ -3,6 +3,8 @@ import {mkdtemp,rm} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {sampleNotebook} from '../../src/sample.js';
+import {createNotebook} from '../../src/model.js';
+import {WebsiteSites} from '../../src/website-sites.js';
 import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
 import {encryptedFixture} from './encrypted-fixture.js';
@@ -52,4 +54,27 @@ test('create two independent websites, edit and publish their own saved content 
   await page.setViewportSize({width:390,height:844});await expect(page.locator('.website-site-context')).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:info.outputPath('project-website-narrow.png'),fullPage:false});
   const after=await f.workspace.read();expect(after.book.entries).toEqual(original.book.entries);expect(after.book.website).toEqual(original.book.website);expect(after.book.websites).toHaveLength(2);expect(errors).toEqual([]);
  }finally{await page.close();await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+});
+
+
+test('two open website editors save their own changes without reloading each other',async({page})=>{
+ test.setTimeout(90000);
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-site-tabs-'));let fixture,app,second;
+ try{
+  const book=createNotebook('Publishing workspace');fixture=await encryptedFixture(directory,book);const sites=new WebsiteSites(fixture.workspace),ids=[];
+  for(const name of ['Field journal','Course website'])ids.push((await sites.change({workspaceId:book.id,etag:(await fixture.workspace.outline()).etag,operation:'create',name})).id);
+  app=await startServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(directory,'preferences.json'),port:0});
+  await page.goto(app.url);await navigate(page,'Website editor');second=await page.context().newPage();
+  const pages=[page,second],titles=['Field journal title','Course website title'];
+  for(const [index,editor] of pages.entries()){
+   await editor.goto(new URL('/#/websites/'+ids[index]+'/editor',app.url).href);await expect(editor.locator('.website-site-context')).toContainText(index?'Course website':'Field journal');
+   await task(editor,'Site');await editor.getByLabel('Website title',{exact:true}).fill(titles[index]);
+  }
+  await Promise.all(pages.map(editor=>editor.getByRole('button',{name:'Save website',exact:true}).click()));
+  for(const [index,editor] of pages.entries()){
+   await expect(editor.locator('#save-status')).toHaveText('Saved');await expect(editor.locator('#leave-dialog')).not.toBeVisible();
+   await editor.reload();await task(editor,'Site');await expect(editor.getByLabel('Website title',{exact:true})).toHaveValue(titles[index]);
+   expect((await sites.read(ids[index])).book.website.title).toBe(titles[index]);
+  }
+ }finally{await second?.close();await page.close();await app?.close();if(fixture)clearVault(fixture.vault);expect(path.dirname(directory)).toBe(path.resolve(os.tmpdir()));await rm(directory,{recursive:true,force:true});}
 });

@@ -6,6 +6,7 @@ import {websiteDefaults,emptyHomepage,siteLayoutDefaults} from './web/website-mo
 import {presentationDefaults} from './web/media-presentation.js';
 import {researchId} from './web/research-reference.js';
 import {SnapshotIndex} from './snapshot-index.js';
+import {serialize} from './storage-format.js';
 
 // A website owns presentation and selection. Research originals keep their own
 // revisions. New websites belong to the workspace, independently of research
@@ -59,8 +60,16 @@ export class WebsiteSites{
   if(edit.changes.length||edit.removed.length||Object.keys(edit.metadata).some(k=>!WEBSITE_DOCUMENT_FIELDS.includes(k)))throw new AppError('INVALID');
   return this.workspace.withLock(()=>this.workspace.catalogue(async store=>{
    const head=await store.head(),snapshot=await store.snapshot(head);
-   if(snapshot.metadata.id!==edit.workspaceId)throw new AppError('WORKSPACE_CHANGED');if(head!==edit.baseEtag)throw new AppError('CONFLICT');
+   if(snapshot.metadata.id!==edit.workspaceId)throw new AppError('WORKSPACE_CHANGED');
    const metadata=structuredClone(snapshot.metadata),site=metadata.websites?.find(s=>s.id===id);if(!site)throw new AppError('NOT_FOUND');
+   if(head!==edit.baseEtag){
+    // Another website or research owner may have advanced the host snapshot.
+    // Rebase only an unchanged website onto the current authenticated metadata.
+    const before=(await store.snapshot(edit.baseEtag)).metadata;
+    if(before.id!==metadata.id)throw new AppError('WORKSPACE_CHANGED');
+    const previous=before.websites?.find(value=>value.id===id);
+    if(!previous||serialize(previous)!==serialize(site))throw new AppError('CONFLICT');
+   }
    const book=workspaceEditMetadata(websiteBook(metadata,site),edit);
    site.document=websiteDocument(book);site.projects=book.projects.map(({id,share,logoId})=>({id,share,logoId}));
    if(edit.selection)site.selection=structuredClone(edit.selection);
