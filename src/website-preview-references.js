@@ -8,9 +8,9 @@ import {recordQueryMatcher} from './web/record-query.js';
 import {recordRevision} from './research.js';
 import {bookSelectors} from './web/book-selectors.js';
 
-async function* candidates(records,id,anchor){
+export async function* websiteReferenceCandidates(records,id,anchor,workspaceId=records.metadata.id){
  const {store,snapshot,metadata,signal}=records,notebooks=new Set(metadata.notebooks.map(n=>n.id));
- const source=recordReferenceCandidates({store,snapshot,notebooks,workspaceId:metadata.id,signal,fallback:({after,backward})=>records.reading.rows(snapshot,notebooks,{signal,order:'position',after:after===null?null:{position:after},backward})},id,anchor);
+ const source=recordReferenceCandidates({store,snapshot,notebooks,workspaceId,signal,fallback:({after,backward})=>records.reading.rows(snapshot,notebooks,{signal,order:'position',after:after===null?null:{position:after},backward})},id,anchor);
  const edited=[...records.rows.values()].filter(row=>row&&records.changed.has(row.id)&&(anchor.after===null||(anchor.backward?row.position<anchor.after:row.position>anchor.after))).sort((a,b)=>(a.position-b.position)*(anchor.backward?-1:1));
  let at=0;
  for await(const row of source){
@@ -36,7 +36,7 @@ export async function websiteReferencePage(records,id,cursor=null){
  }
  const matches=recordQueryMatcher({relatedTo:{workspaceId:metadata.id,id},referenceNamespaces:selected.referenceNamespaces}),resolve=publicationLinkResolver(metadata.id,{entries:[selected]},{workspaceContent:true});
  const items=[];let scanned=0,first=null,last=null,more=false;
- for await(const row of candidates(records,id,anchor)){
+ for await(const row of websiteReferenceCandidates(records,id,anchor)){
   if(items.length===24||scanned===256){more=true;break;}
   signal?.throwIfAborted();first??=row.position;last=row.position;scanned++;
   const value=await records.document(row);if(!matches(value))continue;

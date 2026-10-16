@@ -5,7 +5,7 @@ import {validPublicationSources,publicationSourceMetadata} from './web/publicati
 import {selectedPublicationRecords} from './publication-source.js';
 import {retainPublicationInput,finalizePublicationInput} from './publication-input.js';
 import {retainPublicationMedia} from './publication-input-media.js';
-import {publicationOwnerProjection} from './publication-owner-projection.js';
+import {publicationOwnerProjection,appendPublicationCollections} from './publication-owner-projection.js';
 import {PublicationOwnerIdentities} from './publication-owner-identities.js';
 import {MediaStore} from './media.js';
 
@@ -18,14 +18,6 @@ function pinOwner(host,source,jobId,namespace,identities,store){
   if(['readMetadata','writeMetadata'].includes(key))return (file,...args)=>retained(file)?host[key](mapped(file),...args):target[key](file,...args);
   const value=target[key];return typeof value==='function'?value.bind(target):value;
  }});
-}
-function appendCollections(target,incoming){
- for(const key of ['projects','notebooks'])for(const item of incoming[key]){
-  const existing=target[key].find(value=>value.id===item.id);
-  if(!existing){target[key].push(item);continue;}
-  if(existing.sourceId!==item.sourceId||key==='notebooks')throw new AppError('PUBLICATION_IDENTITY');
-  existing.referenceNamespaces=[...new Set([...existing.referenceNamespaces,...item.referenceNamespaces])];
- }
 }
 // Pin one selected namespace at a time, then release its credentials. A website
 // owns presentation consent; no research sharing flag is changed in its owner.
@@ -47,7 +39,7 @@ export async function retainPublicationSources(workspace,jobId,local,sources,rea
     for(const record of projected.records)for(const [id,publicId] of Object.entries(record.mediaIdentities))assets.set(publicId,id);
     async function* selectedAssets(){for(const [publicId,id] of assets){signal?.throwIfAborted();yield {...await media.get(id,{streamed:true,includeHeader:false,signal}),id:publicId};}}
     if(assets.size)retainedMedia.push(...await retainPublicationMedia(workspace,jobId,selectedAssets(),{signal}));
-    appendCollections(merged.metadata,projected.metadata);merged.records.push(...projected.records);
+    appendPublicationCollections(merged.metadata,projected.metadata);merged.records.push(...projected.records);
     for(const [id,revision] of Object.entries(input.sourceRevisions))merged.sourceRevisions[identities.identity(source.workspaceId,'record',id)]=revision;
     merged.availability.push(...input.availability.map(note=>({...note,recordId:identities.identity(source.workspaceId,'record',note.recordId)})));
     merged.linkedCards.push(...input.linkedCards.map(id=>identities.identity(source.workspaceId,'record',id)));

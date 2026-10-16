@@ -51,8 +51,8 @@ export class ProjectPublications{
   if(operation==='workspace/save')return new WorkspaceEdits(storage,new MediaStore(storage)).save(data);
   if(operation.startsWith('website/research/'))return new WebsiteResearch(workspace).run(operation.slice(17),data,{signal});
   if(operation==='design-preview'){
-   const result=await publicationDesignPreview(workspace,data,{signal,blockedValues}),id=randomBytes(32).toString('hex');this.designs.set(id,result.candidate);
-   return {url:this.previewUrl(id,result.defaultPage),baseUrl:this.previewUrl(id),defaultPage:result.defaultPage,source:result.source,pages:result.candidate.pages};
+   const result=await publicationDesignPreview(workspace,data,{signal,blockedValues,sourceReader}),id=randomBytes(32).toString('hex');this.designs.set(id,result.candidate);
+   return {url:this.previewUrl(id,result.defaultPage),baseUrl:this.previewUrl(id),defaultPage:result.defaultPage,source:result.source,pages:result.candidate.pages,...(result.editor?{editor:result.editor}:{})};
   }
   if(operation==='preview'){const value=await releases.inline({...data,blockedValues},{signal});this.candidates.set(cacheKey(value.reviewId),value);return this.summary(releases,value);}
   if(operation==='file'){

@@ -53,3 +53,11 @@ test('an unlock retry cannot outlive the source or editor that requested it',asy
  const client=publicationSourceClient({state,access:async run=>{await permission.promise;return run();},api:async()=>{calls++;return head(source);}});
  const opening=client.open(source,{unlock:true}),rejected=assert.rejects(opening,{name:'AbortError'});client.close();permission.resolve();await rejected;assert.equal(calls,0);
 });
+
+
+test('canvas metadata reads pin their original snapshot and reject a substituted head',async()=>{
+ const state=setup(),source=owner(),snapshotId='c'.repeat(64),calls=[];let substitute=false;
+ const client=publicationSourceClient({state,api:async(_route,body)=>{calls.push(body);return head(source,substitute?'d'.repeat(64):snapshotId);}});
+ await client.open(source,{snapshotId});assert.equal(calls[0].query.snapshotId,snapshotId);assert.equal(client.current().head.snapshotId,snapshotId);
+ substitute=true;await assert.rejects(client.open(source,{snapshotId}),/PUBLICATION_SOURCE_RESPONSE/);assert.equal(client.current(),null);
+});

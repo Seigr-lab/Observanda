@@ -13,8 +13,14 @@ test('publication source head returns metadata and revision from the same snapsh
  assert.equal(result.value.snapshotId,f.first);assert.equal(result.value.title,'Before');assert.equal(f.state.heads,1);assert.deepEqual(f.state.reads,[f.first]);assert.equal('privateSettings' in result.value,false);assert.deepEqual(result.owner,{workspaceId:f.command.workspaceId,projectId:null,labBookId:null});
 });
 test('publication source rejects mismatched ownership, malformed reads and cancellation',async()=>{
- const f=fixture();await assert.rejects(projectPublicationSource(f.application,{}, {...f.command,query:{snapshotId:f.first}}),{code:'INVALID'});assert.equal(f.state.heads,0);
+ const f=fixture();await assert.rejects(projectPublicationSource(f.application,{}, {...f.command,query:{snapshotId:'invalid'}}),{code:'INVALID'});assert.equal(f.state.heads,0);
  await assert.rejects(projectPublicationSource(f.application,{}, {...f.command,operation:'content',query:{workspaceId:randomUUID(),snapshotId:f.first}}),{code:'INVALID'});assert.equal(f.state.heads,0);
  const controller=new AbortController();controller.abort();await assert.rejects(projectPublicationSource(f.application,{}, f.command,{signal:controller.signal}),{name:'AbortError'});assert.equal(f.state.heads,0);
  f.state.mismatched=true;await assert.rejects(projectPublicationSource(f.application,{},f.command),{code:'DATABASE_LOCATION'});
+});
+
+
+test('an authorized source head can reopen the immutable snapshot used by its canvas',async()=>{
+ const f=fixture(),snapshotId='c'.repeat(64),result=await projectPublicationSource(f.application,{}, {...f.command,query:{snapshotId}});
+ assert.equal(result.value.snapshotId,snapshotId);assert.deepEqual(f.state.reads,[snapshotId]);
 });

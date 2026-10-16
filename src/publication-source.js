@@ -27,7 +27,7 @@ export async function selectedPublicationBook(store,snapshot,{signal,metadata=sn
  const entries=[];for await(const record of selectedPublicationRecords(store,snapshot,{signal,metadata,selection}))entries.push(record);
  return {...metadata,entries};
 }
-async function* selectedPublicationRows(store,snapshot,{signal,metadata=snapshot.metadata,selection=emptyWebsiteSelection(),page,inventory=false}={}){
+export async function* selectedPublicationRows(store,snapshot,{signal,metadata=snapshot.metadata,selection=emptyWebsiteSelection(),page,inventory=false}={}){
  const book=metadata,selected=new Map(selection.records.map(r=>[r.id,r])),overrides=new Map();
  if(selection.includeProjects.some(id=>!metadata.projects.some(p=>p.id===id)))throw new AppError('INVALID');
  const projects=new Set(book.projects.filter(p=>p.share).map(p=>p.id));

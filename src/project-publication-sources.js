@@ -1,3 +1,4 @@
+import {publicationSourcePage} from './publication-source-page.js';
 import {publicationSourceHost} from './publication-source-host.js';
 import {AppError} from './errors.js';
 import {revisionId} from './web/revision-model.js';
@@ -12,6 +13,7 @@ export async function publicationSourceReader(application,client,{workspaceId,sc
  const {registry,directory}=await publicationSourceHost(application,{workspaceId,scope,labBookId});
  const reader=projectCollectionReader(application,client,check);
  return {
+  host:{workspaceId,projectId:scope,labBookId,projectNamespaceId:scope?directory.value.projects.find(project=>project.projectId===scope).namespaceId:null},
   async use(sourceId,snapshotId,consume,{prepare}={}){
    if(!researchId(sourceId)||snapshotId!==undefined&&!revisionId(snapshotId))throw new AppError('INVALID');signal?.throwIfAborted();
    if(directory.value.deleted?.some(project=>project.namespaceId===sourceId))throw new AppError('PROJECT_DELETED');
@@ -31,15 +33,16 @@ export async function publicationSourceReader(application,client,{workspaceId,sc
 export async function projectPublicationSource(application,client,command,{scope=null,labBookId=null,signal,check=async()=>{}}={}){
  if(!command||Object.keys(command).sort().join()!=='operation,query,sourceId,workspaceId'||!researchId(command.workspaceId)||!researchId(command.sourceId)||!['head','summary','content','record','sections','media'].includes(command.operation)||!command.query||typeof command.query!=='object'||Array.isArray(command.query))throw new AppError('INVALID');
  const {workspaceId,sourceId,operation,query}=command;
- if(operation==='head'?Object.keys(query).length:query.workspaceId!==sourceId||!revisionId(query.snapshotId))throw new AppError('INVALID');
+ if(operation==='head'?(Object.keys(query).some(key=>key!=='snapshotId')||query.snapshotId!==undefined&&!revisionId(query.snapshotId)):query.workspaceId!==sourceId||!revisionId(query.snapshotId))throw new AppError('INVALID');
  const reader=await publicationSourceReader(application,client,{workspaceId,scope,labBookId,signal,check});
  try{
-  const result=await reader.use(sourceId,operation==='head'?undefined:query.snapshotId,async(store,snapshot,pinned)=>{
+  const result=await reader.use(sourceId,query.snapshotId,async(store,snapshot,pinned)=>{
    if(operation==='head'){
     const metadata=snapshot.metadata;
     return {workspaceId:sourceId,snapshotId:pinned.snapshotId,title:metadata.title,projects:metadata.projects.map(({id,title,parentId,share})=>({id,title,parentId:parentId??null,share})),notebooks:metadata.notebooks.map(({id,projectId,title})=>({id,projectId,title}))};
    }
-   return new WebsiteResearch({storageKind:async()=>'catalogue',catalogue:fn=>fn(store)}).run(operation,query,{signal});
+   const value=await new WebsiteResearch({storageKind:async()=>'catalogue',catalogue:fn=>fn(store)}).run(operation,query,{signal});
+   return operation==='record'?{...value,page:publicationSourcePage(reader.host,{...pinned.owner,projectNamespaceId:pinned.projectNamespaceId},snapshot.metadata,value.record)}:value;
   });
   await reader.verify();return result;
  }finally{await reader.close();}

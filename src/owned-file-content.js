@@ -8,10 +8,10 @@ export class OwnedFileContent extends FileContent{
  async *read(start=0,end=this.size-1,{signal}={}){
   signal?.throwIfAborted();const output=new PassThrough({objectMode:true,highWaterMark:1});let failure;
   output.on('error',()=>{});
-  const pending=Promise.resolve().then(()=>this.withSource(content=>pipeline(Readable.from(content.read(start,end,{signal})),output,...(signal?[{signal}]:[])))).catch(error=>{failure=error;output.destroy(error);});
+  const pending=Promise.resolve().then(()=>this.withSource(content=>pipeline(Readable.from(content.read(start,end,{signal})),output,...(signal?[{signal}]:[])),{signal})).catch(error=>{failure=error;output.destroy(error);});
   try{yield* output;await pending;if(failure)throw failure;}
   finally{output.destroy();await pending;}
  }
- async verify(options){await this.withSource(content=>content.verify(options));return this;}
- copyTo(workspace,file,options){return this.withSource(content=>content.copyTo(workspace,file,options));}
+ async verify(options){await this.withSource(content=>content.verify(options),options);return this;}
+ copyTo(workspace,file,options){return this.withSource(content=>content.copyTo(workspace,file,options),options);}
 }

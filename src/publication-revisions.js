@@ -33,8 +33,13 @@ export async function exactPublicationRecord(workspace,target){
   if(await workspace.storageKind()!=='catalogue')throw error;
   record=await workspace.catalogue(async store=>{
    const row=await store.db.get('SELECT 1 FROM records WHERE id=$1 AND revision=$2',target.id,target.revision);
-   if(!row)throw new AppError('MATERIAL_MISSING');
-   return store.record(target.id,target.revision);
+   if(row)return store.record(target.id,target.revision);
+   // Public references use the canonical content revision. Encrypted catalogue
+   // rows use their storage revision; the authenticated history binds the two.
+   if(!await store.db.get('SELECT 1 FROM records WHERE id=$1 LIMIT 1',target.id))throw new AppError('MATERIAL_MISSING');
+   const history=store.historyIndex(target.id),saved=await history.lookup(await history.head(),'view',target.revision,{optional:true});
+   if(!saved)throw new AppError('MATERIAL_MISSING');
+   return store.record(target.id,saved.item.revision);
   });
  }
  if(record.id!==target.id||recordRevision(record)!==target.revision)throw new AppError('CATALOGUE_DAMAGED');

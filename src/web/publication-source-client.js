@@ -39,12 +39,12 @@ export function publicationSourceClient({state,api,access=operation=>operation()
   return result;
  }
  async function open(owner,options={}){
-  sync();if(!ownerValid(owner)||owner.workspaceId===state.book.id)throw new TypeError('Invalid publication source');
+  sync();if(!ownerValid(owner)||owner.workspaceId===state.book.id||options.snapshotId!==undefined&&!revisionId(options.snapshotId))throw new TypeError('Invalid publication source');
   cancel();selected=null;const version=epoch,host=state.book.id,target={workspaceId:owner.workspaceId,projectId:owner.projectId,labBookId:owner.labBookId};opening=target;
   try{
-   const result=await request('publication-source',{workspaceId:host,sourceId:target.workspaceId,operation:'head',query:{}},options);
+   const result=await request('publication-source',{workspaceId:host,sourceId:target.workspaceId,operation:'head',query:options.snapshotId?{snapshotId:options.snapshotId}:{}},options);
    if(version!==epoch)throw aborted();
-   if(!ownerValid(result?.owner)||!sameOwner(result.owner,target)||result.value?.workspaceId!==target.workspaceId||!headValid(result.value))invalid();
+   if(!ownerValid(result?.owner)||!sameOwner(result.owner,target)||result.value?.workspaceId!==target.workspaceId||!headValid(result.value)||options.snapshotId&&result.value.snapshotId!==options.snapshotId)invalid();
    selected={owner:target,head:structuredClone(result.value)};return structuredClone(selected);
   }finally{if(version===epoch)opening=null;}
  }

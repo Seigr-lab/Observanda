@@ -28,3 +28,14 @@ export function publicationPageRecord(selected,row){
   ...(row.sourceWorkspaceId?{sourceWorkspaceId:row.sourceWorkspaceId}:{}),...(row.referenceNamespaces?{referenceNamespaces:row.referenceNamespaces}:{}),
   ...(row.historical?{historical:true,revision:row.revision}:{})};
 }
+
+// Merge real project groups across their independently owned books. A repeated
+// book identity or two unrelated projects sharing a public ID is never merged.
+export function appendPublicationCollections(target,incoming){
+ for(const key of ['projects','notebooks'])for(const item of incoming[key]){
+  const existing=target[key].find(value=>value.id===item.id);
+  if(!existing){target[key].push(item);continue;}
+  if(existing.sourceId!==item.sourceId||key==='notebooks')throw new AppError('PUBLICATION_IDENTITY');
+  existing.referenceNamespaces=[...new Set([...(existing.referenceNamespaces??[]),...(item.referenceNamespaces??[])])];
+ }
+}
