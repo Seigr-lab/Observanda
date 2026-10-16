@@ -1,6 +1,7 @@
 import {comparisonSourceFactory} from './comparison-source-access.js';
 import {comparisonSourceDiscovery} from './comparison-source-discovery.js';
 import {moduleReferenceFactory} from './module-reference-access.js';
+import {planningTaskAccessFactory} from './planning-task-access.js';
 import {workspaceRenameAccess,workspaceRenameRecovery} from './workspace-rename-recovery.js';
 import {publicationRevisionCurrent} from './publication-freshness.js';
 import {publicationSourceFactory} from './project-publication-sources.js';
@@ -828,9 +829,9 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         return await projectContentHttp(req,res,starter,{body,json,mime,headless,contextId:context.id,execute:(data,options)=>executeRecordStarterRequest(workspace,starter,data,options)});
       }
       const moduleRequest=req.method==='POST'?projectModuleRequest(url.pathname):null;
-      if(moduleRequest&&(moduleRequest.references||await moduleDomainRoute(workspace)!==null)){
+      if(moduleRequest&&(moduleRequest.references||moduleRequest.taskReadiness||await moduleDomainRoute(workspace)!==null)){
         const data=await body(req,moduleRequest.limit),controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
-        try{const result=await moduleRequest.run(workspace,data,{signal:controller.signal,check:req.checkWriter,referenceAccess:moduleReferenceFactory(historyProjects,client,{check:req.checkWriter})});
+        try{const result=await moduleRequest.run(workspace,data,{signal:controller.signal,check:req.checkWriter,referenceAccess:moduleReferenceFactory(historyProjects,client,{check:req.checkWriter}),taskSourceAccess:planningTaskAccessFactory(historyProjects,client,{check:req.checkWriter})});
           if(url.pathname==='/api/modules/command')selectedContext.calendarSources.reconcile(result.entities,{partial:true});
           return json(result);
         }finally{res.off('close',abort);}
@@ -1278,7 +1279,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
     } catch (error) {
       req.activity?.finish(error);
       const safe = safeError(error);
-      const statuses = { RECORD_COMMAND_LIMIT:413, DRAFT_SIZE_LIMIT:413, STARTER_CHANGED:409, STARTER_ARCHIVED:409, RECORD_SELECTION_LIMIT:413, RECORD_SIZE_LIMIT:413, WORKSPACE_METADATA_LIMIT:413, WORKSPACE_READ_LIMIT:413, SERVER_CLOSING:503, DATABASE_BUSY:503, DATABASE_UNAVAILABLE:503, RECORD_VIEW_CHANGED:409, RECORD_VIEW_NAME:409, RECORD_VIEW_FORMAT:500, MODULE_CHANGED:409, MODULE_REPLAY:409, BOOKING_CONFLICT:409, STOCK_UNAVAILABLE:409, DRAFT_CHANGED:409, RECORD_CHANGED:409, DASHBOARD_CHANGED:409, FOLDER_PICKER_BUSY:409, PREFERENCES_CHANGED:409, ACCESS_LOCKED:401, ACCESS_DENIED:401, ACCESS_WAIT:429, WORKSPACE_CHANGED:409, AUTH: 401, ORIGIN: 403, CONFLICT: 409, EXISTS: 409, STALE: 409, LOCKED: 423, MISSING: 404, NOT_FOUND: 404, LIMIT: 413, IO: 500 };
+      const statuses = { TASK_DEPENDENCY_OWNER_LIMIT:422, TASK_DEPENDENCY_DATABASE_LIMIT:422, TASK_PREREQUISITE_ACCESS:403, TASK_PREREQUISITE_CHANGED:409, TASK_PREREQUISITE_UNSUPPORTED:422, RECORD_COMMAND_LIMIT:413, DRAFT_SIZE_LIMIT:413, STARTER_CHANGED:409, STARTER_ARCHIVED:409, RECORD_SELECTION_LIMIT:413, RECORD_SIZE_LIMIT:413, WORKSPACE_METADATA_LIMIT:413, WORKSPACE_READ_LIMIT:413, SERVER_CLOSING:503, DATABASE_BUSY:503, DATABASE_UNAVAILABLE:503, RECORD_VIEW_CHANGED:409, RECORD_VIEW_NAME:409, RECORD_VIEW_FORMAT:500, MODULE_CHANGED:409, MODULE_REPLAY:409, BOOKING_CONFLICT:409, STOCK_UNAVAILABLE:409, DRAFT_CHANGED:409, RECORD_CHANGED:409, DASHBOARD_CHANGED:409, FOLDER_PICKER_BUSY:409, PREFERENCES_CHANGED:409, ACCESS_LOCKED:401, ACCESS_DENIED:401, ACCESS_WAIT:429, WORKSPACE_CHANGED:409, AUTH: 401, ORIGIN: 403, CONFLICT: 409, EXISTS: 409, STALE: 409, LOCKED: 423, MISSING: 404, NOT_FOUND: 404, LIMIT: 413, IO: 500 };
       if (!res.headersSent) json(safe, identityRecoveryStatus[safe.code] ?? organizationErrorStatus[safe.code] ?? statuses[safe.code] ?? 422); else res.destroy();
     } finally {releaseRead?.();req.activity?.finish();if(ownsGithubMutation)githubMutation=false;if(countedWrite)activeWrites--;pending.delete(request);if(!pending.size)for(const resolve of drained.splice(0))resolve();}
   }));

@@ -10,7 +10,7 @@ export function moduleConstraint(entity){
   case 'reservation':data=pick(d,['resourceId','projectId','quantity','unit','status','links']);break;
   case 'stock-transfer':data=pick(d,['resourceId','fromProjectId','toProjectId','quantity','unit']);break;
   case 'asset-transfer':data=pick(d,['resourceId']);break;
-  case 'task':data={...pick(d,['dependencies','status']),checklist:d.checklist.map(c=>({done:c.done}))};break;
+  case 'task':data={...pick(d,['dependencies','status']),checklist:d.checklist.map(c=>({done:c.done})),...pick(d,['prerequisiteObservations'])};break;
   case 'booking':data=pick(d,['resourceId','status','kind','places','startsAt','endsAt']);break;
   case 'bom':data={...pick(d,['status','buildCount','allocations','usage']),lines:d.lines.map(line=>pick(line,['id','resourceId','sourceProjectId','unit','quantity','dnp']))};break;
   case 'lab-space':data={scope:{notebookIds:d.scope?.notebookIds??[]},sections:d.sections.map(s=>({id:s.id}))};break;

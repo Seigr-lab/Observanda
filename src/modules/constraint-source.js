@@ -49,5 +49,5 @@ export function moduleConstraintSource(catalogue,head,changed=new Map(),{work,or
   }
   return {physical,reserved,available:add(physical,negate(reserved))};
  }
- return {get,all,some,balance,previous:baseGet,get changes(){return head.currentVersion===1&&changed.size?changed:null;},async has(type,id){return (await get(id))?.type===type;}};
+ return {workspaceId:head.workspaceId,get,all,some,balance,previous:baseGet,get changes(){return head.currentVersion===1&&changed.size?changed:null;},async has(type,id){return (await get(id))?.type===type;}};
 }

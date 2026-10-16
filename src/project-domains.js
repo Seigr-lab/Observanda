@@ -3,6 +3,7 @@ import {assertNotRenaming} from './workspace-rename-state.js';
 import {moduleDomainOwner} from './module-domain-owner.js';
 import {moduleDraftDomain,moduleDraftOwners} from './modules/draft-domains.js';
 import {projectDomainLock,projectDomainHandoff} from './project-domain-lock.js';
+import {acquireTaskAdmission} from './task-admission-lock.js';
 // Domain transactions take only their declared feature locks. Lifecycle
 // operations acquire the exclusive handoff before replacing owned storage.
 import {projectDomainSchema,createProjectDomainSchema} from './project-domain-schema.js';
@@ -63,6 +64,7 @@ export class ProjectDomains{
    // exclusively; ordinary commands share it and lock only declared domains.
    if(write.length||authoring.length){
     await projectDomainHandoff(db,{shared:true});
+    if(write.includes('tasks'))await acquireTaskAdmission(db,this.namespaceId);
     if(write.length)for(const domain of domains)await projectDomainLock(db,'Observanda/project-domain/'+db.id+'/'+domain,{shared:!write.includes(domain)});
     for(const moduleId of [...authoring].sort())await projectDomainLock(db,'Observanda/project-authoring/'+db.id+'/'+moduleId);
    }

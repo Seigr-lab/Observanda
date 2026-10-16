@@ -7,6 +7,7 @@ import {InventoryReader} from './modules/inventory-reader.js';
 import {PlanningDashboard} from './modules/dashboard.js';
 import {workspaceModules} from './modules/index.js';
 import {ProjectModuleCommands} from './project-module-commands.js';
+import {planningTaskReadiness} from './planning-task-readiness.js';
 import {ProjectModuleReader} from './project-module-reader.js';
 import {ModuleReader} from './modules/reader.js';
 import {ModuleHistory} from './modules/history.js';
@@ -20,6 +21,10 @@ async function requestState(storage,data){
  if(data?.workspaceId!==namespaceId)throw new AppError('WORKSPACE_CHANGED');return {namespaceId,dedicated:domainId!==null};
 }
 export function projectModuleRequest(route){
+ if(route==='/api/modules/planning/readiness')return {write:false,taskReadiness:true,limit:MODULE_BYTES,run:async(storage,data,options={})=>{
+  const state=await requestState(storage,data);if(!state.dedicated)throw new AppError('ACCESS_UPGRADE');
+  return planningTaskReadiness(storage,state.namespaceId,data,{sourceAccess:options.taskSourceAccess,check:options.check,signal:options.signal});
+ }};
  const reference=/^\/api\/modules\/references\/(owners|query|labels|resolve|incoming)$/.exec(route);
  if(reference)return {write:false,references:true,limit:65536,run:async(storage,data,options={})=>{
   await requestState(storage,data);if(!options.referenceAccess)throw new AppError('ACCESS_UPGRADE');

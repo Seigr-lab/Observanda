@@ -1,3 +1,4 @@
+import {localTaskDependency} from './web/task-prerequisite-model.js';
 // Domain facts establish ownership. Links, stock locations and lab scopes do
 // not turn a shared item into project-owned content.
 import {moduleReferences} from './modules/references.js';
@@ -18,7 +19,10 @@ export function* moduleMigrationDependencies(entity,namespaceId){
  if(d.labId)yield module('lab-space',d.labId);
  if(d.resourceId)yield module('resource',d.resourceId);
  if(d.reservationId)yield module('reservation',d.reservationId);
- if(entity.type==='task')for(const id of d.dependencies)yield module('task',id);
+ if(entity.type==='task')for(const dependency of d.dependencies){
+  if(localTaskDependency(dependency,namespaceId))yield module('task',typeof dependency==='string'?dependency:dependency.id);
+  else yield {kind:'external',...dependency};
+ }
  if(entity.type==='bom'){
   yield {kind:'record',id:d.recordId};
   for(const line of d.lines){if(line.resourceId)yield module('resource',line.resourceId);if(line.sourceProjectId)yield {kind:'project',id:line.sourceProjectId};}

@@ -44,7 +44,7 @@ export class ModuleStore{
    commands.add(event.commandId);
   }
   if(history&&data.revision!==data.events.length)throw new AppError('MODULE_FORMAT');
-  for(const validate of this.definitions.validate??[])validate(data.entities);
+  for(const validate of this.definitions.validate??[])validate(data.entities,{workspaceId:data.workspaceId});
   return data;
  }
  async read(book){

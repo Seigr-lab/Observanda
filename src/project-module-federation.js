@@ -3,7 +3,7 @@ import {moduleDomain} from './modules/domains.js';
 import {AppError} from './errors.js';
 export async function projectModuleFederation(identities,domains){
  const selected=new Set(domains),owners=new Map();for(const domain of domains)owners.set(domain,await identities.owner(domain));
- const head={currentVersion: [...owners.values()].every(o=>o.head.revision===0||o.head.currentVersion===1)?1:undefined};
+ const head={workspaceId:identities.registry.namespaceId,currentVersion: [...owners.values()].every(o=>o.head.revision===0||o.head.currentVersion===1)?1:undefined};
  async function locate(id){const value=await identities.locate('entity',id);if(!value)return null;if(!selected.has(value.domain))throw new AppError('MODULE_REFERENCE');return owners.get(value.domain);}
  return {head,owners,
   async selected(_head,id){const owner=await locate(id);return owner?owner.catalogue.selected(owner.head,id):null;},

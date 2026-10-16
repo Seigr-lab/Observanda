@@ -34,7 +34,7 @@ export async function verifyProjectDomains(research){
    const context={research:research.workspace.catalogueStore(session.schema(research.db.schema)),registry,inspect:async domain=>stores.find(store=>store.domain===domain)};
    if(registry.authoringVersion===1&&await cataloguePrefixExists(context.research.db,'objects','metadata:.observanda/module-draft'))throw new AppError('CATALOGUE_DAMAGED');
    for(const domain of registry.domains)await verifyProjectModuleDrafts(context,domain);
-   const source={
+   const source={workspaceId:registry.namespaceId,
     async get(id){for(const current of sources.values()){const value=await current.get(id);if(value)return value;}return null;},
     async *all(types=null){const selected=types===null?null:new Set((Array.isArray(types)?types:[types]).map(moduleDomain));for(const [domain,current] of sources)if(!selected||selected.has(domain))yield* current.all(types);},
     async has(type,id){return (await source.get(id))?.type===type;},

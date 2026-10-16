@@ -17,3 +17,10 @@ test('closing snapshot admission drains existing reads and rejects new reads unt
  release();await closing;assert.equal(closed,true);assert.equal(admission.enter(),null);
  admission.open();const next=admission.enter();assert.equal(typeof next,'function');next();await admission.close();
 });
+
+
+test('task readiness remains a snapshot read while task commands require write admission',()=>{
+ assert.equal(workspaceSnapshotRequest('POST','/api/modules/planning/readiness'),true);
+ assert.equal(workspaceSnapshotRequest('GET','/api/modules/planning/readiness'),false);
+ assert.equal(workspaceSnapshotRequest('POST','/api/modules/command'),false);
+});

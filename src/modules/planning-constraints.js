@@ -1,33 +1,35 @@
+import {localTaskDependency,validTaskObservations,sameTaskConstraintDraft,sameTaskObservations} from '../web/task-prerequisite-model.js';
 import {withScratch} from '../scratch-work.js';
 import {scratchOrder} from '../scratch-order.js';
 import {requireValue} from './validation.js';
 export const planningConstraintTypes=['task','booking','resource'];
 const edgePageSize=32;
 const blocked='Complete checklist and dependencies before finishing this task';
-function sameTaskConstraints(previous,current){
- if(previous?.type!=='task')return false;
- const a=previous.data,b=current.data;
- return a.status===b.status&&a.dependencies.length===b.dependencies.length&&a.dependencies.every((id,i)=>id===b.dependencies[i])&&a.checklist.length===b.checklist.length&&a.checklist.every((item,i)=>item.done===b.checklist[i].done);
-}
+function sameTaskConstraints(previous,current){return previous?.type==='task'&&sameTaskConstraintDraft(previous.data,current.data)&&sameTaskObservations(previous.data,current.data);}
 async function validateTasks(source,work){
  const edgeKey=(id,page)=>'edges:'+id+':'+page;
  async function enter(task,parent){
   requireValue(task?.type==='task','Task dependency');
-  const {id,data}=task;
+  const {id,data}=task;requireValue(validTaskObservations(data,source.workspaceId),'Task prerequisite observations');
   if(data.status==='done')requireValue(data.checklist.every(c=>c.done),blocked,'TASK_BLOCKED');
-  await work.put('task:'+id,{status:data.status,done:!data.dependencies.length});
-  if(!data.dependencies.length)return null;
-  // Stage each adjacency once per traversal. Pending edges and frames live in
-  // encrypted scratch storage; neither JS recursion nor a full graph is retained.
-  let pages=[];
-  for(let offset=edgePageSize;offset<data.dependencies.length;offset+=edgePageSize){
-   pages.push([edgeKey(id,offset/edgePageSize),data.dependencies.slice(offset,offset+edgePageSize)]);
-   if(pages.length===32){await work.putMany(pages);pages=[];}
+  // Stage each local adjacency once per traversal. Foreign observations are
+  // retained evidence; integrity never opens or imports their source owners.
+  let first=[],page=[],pages=[],total=0;
+  for(const dependency of data.dependencies)if(localTaskDependency(dependency,source.workspaceId)){
+   page.push(typeof dependency==='string'?dependency:dependency.id);total++;
+   if(page.length===edgePageSize){
+    if(total===edgePageSize)first=page;else pages.push([edgeKey(id,total/edgePageSize-1),page]);
+    page=[];if(pages.length===32){await work.putMany(pages);pages=[];}
+   }
   }
-  await work.putMany(pages);
-  return {id,parent,status:data.status,total:data.dependencies.length,page:0,offset:0,dependencies:data.dependencies.slice(0,edgePageSize)};
+  if(total<edgePageSize)first=page;
+  else if(page.length)pages.push([edgeKey(id,Math.floor(total/edgePageSize)),page]);
+  await work.putMany(pages);await work.put('task:'+id,{status:data.status,done:total===0});
+  if(!total)return null;
+  return {id,parent,status:data.status,total,page:0,offset:0,dependencies:first};
  }
  for await(const initial of source.all('task')){
+  requireValue(validTaskObservations(initial.data,source.workspaceId),'Task prerequisite observations');
   if(!initial.data.dependencies.length){
    if(initial.data.status==='done')requireValue(initial.data.checklist.every(c=>c.done),blocked,'TASK_BLOCKED');
    continue;
