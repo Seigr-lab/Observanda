@@ -7,10 +7,12 @@ import {WebsiteResearch} from './website-research.js';
 
 // One request owns source credentials; a saved website owns only namespace
 // references and consent. The registry resolves each namespace when it is used.
-export async function publicationSourceReader(application,client,{workspaceId,scope=null,signal,check=async()=>{}}){
+export async function publicationSourceReader(application,client,{workspaceId,scope=null,labBookId=null,signal,check=async()=>{}}){
  if(!researchId(workspaceId))throw new AppError('INVALID');
  const registry=await application.registry(),directory=await registry.read(),host=scope?directory.value.projects.find(project=>project.projectId===scope):null;
- if(scope&&!host)throw new AppError('NOT_FOUND');if(workspaceId!==(host?.namespaceId??registry.workspaceId))throw new AppError('WORKSPACE_CHANGED');
+ if(scope&&!host)throw new AppError('NOT_FOUND');
+ const book=labBookId?await new LabBookDirectory(registry).locate(workspaceId):null;
+ if(labBookId?(!scope||!book||book.projectId!==scope||book.labBookId!==labBookId):workspaceId!==(host?.namespaceId??registry.workspaceId))throw new AppError('WORKSPACE_CHANGED');
  const reader=projectCollectionReader(application,client,check);
  return {
   async use(sourceId,snapshotId,consume,{prepare}={}){
@@ -29,11 +31,11 @@ export async function publicationSourceReader(application,client,{workspaceId,sc
 
 // Publication selectors read one explicit namespace. Locating a book neither
 // opens its siblings nor borrows their credentials or publication choices.
-export async function projectPublicationSource(application,client,command,{scope=null,signal,check=async()=>{}}={}){
+export async function projectPublicationSource(application,client,command,{scope=null,labBookId=null,signal,check=async()=>{}}={}){
  if(!command||Object.keys(command).sort().join()!=='operation,query,sourceId,workspaceId'||!researchId(command.workspaceId)||!researchId(command.sourceId)||!['head','summary','content','record','sections','media'].includes(command.operation)||!command.query||typeof command.query!=='object'||Array.isArray(command.query))throw new AppError('INVALID');
  const {workspaceId,sourceId,operation,query}=command;
  if(operation==='head'?Object.keys(query).length:query.workspaceId!==sourceId||!revisionId(query.snapshotId))throw new AppError('INVALID');
- const reader=await publicationSourceReader(application,client,{workspaceId,scope,signal,check});
+ const reader=await publicationSourceReader(application,client,{workspaceId,scope,labBookId,signal,check});
  try{
   const result=await reader.use(sourceId,operation==='head'?undefined:query.snapshotId,async(store,snapshot,pinned)=>{
    if(operation==='head'){
@@ -44,4 +46,12 @@ export async function projectPublicationSource(application,client,command,{scope
   });
   await reader.verify();return result;
  }finally{await reader.close();}
+}
+
+// The host is the job-owned storage instance, whose key outlives its HTTP reply.
+export function publicationSourceFactory(application,client,storage,{scope=null,labBookId=null,check=async()=>{}}={}){
+ return async({signal}={})=>{
+  await check();signal?.throwIfAborted();const {metadata}=await storage.outline();
+  return publicationSourceReader(application,client,{workspaceId:metadata.id,scope,labBookId,signal,check});
+ };
 }

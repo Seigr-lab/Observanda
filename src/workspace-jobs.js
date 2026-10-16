@@ -14,8 +14,8 @@ export function websitePublisher(publisher,workspace){
  const scoped=new Publisher(workspace.root,{workspace,request:publisher.request,ssh:publisher.ssh,connection:publisher.connection},workspace.vault);
  Object.defineProperty(scoped,'token',{get:()=>publisher.token,set:value=>{publisher.token=value;}});return scoped;
 }
-function publicationDefinitions(workspace,publisher,current){
- const definitions=(w,p,q)=>({...publicationJobDefinitions(w,q),...deploymentJobDefinitions(w,p,q),...repositoryJobDefinitions(w,p,q),...publicationVerificationDefinitions(w,p,q)});
+function publicationDefinitions(workspace,publisher,current,services){
+ const definitions=(w,p,q)=>({...publicationJobDefinitions(w,q),...deploymentJobDefinitions(w,p,q,services),...repositoryJobDefinitions(w,p,q),...publicationVerificationDefinitions(w,p,q)});
  const normal=definitions(workspace,publisher,current),result={};
  for(const [type,definition] of Object.entries(normal))result[type]=Object.fromEntries(Object.keys(definition).map(method=>[method,(job,...args)=>{
   if(!job.input.websiteId)return definition[method](job,...args);
@@ -23,9 +23,9 @@ function publicationDefinitions(workspace,publisher,current){
   return services[type][method](job,...args);
  }]));return result;
 }
-export function workspaceJobDefinitions(workspace,publisher,current){return {...intakeJobDefinitions(workspace,current),...researchJobDefinitions(workspace,current),...mediaJobDefinitions(workspace,current),...publicationDefinitions(workspace,publisher,current)};}
+export function workspaceJobDefinitions(workspace,publisher,current,services={}){return {...intakeJobDefinitions(workspace,current),...researchJobDefinitions(workspace,current),...mediaJobDefinitions(workspace,current),...publicationDefinitions(workspace,publisher,current,services)};}
 export function workspaceJobs(workspace,publisher=new Publisher(workspace.root,{},workspace.vault),options={}){
  const current=()=>queue;
- const queue=new DurableJobs(workspace,workspaceJobDefinitions(workspace,publisher,current),options);
+ const queue=new DurableJobs(workspace,workspaceJobDefinitions(workspace,publisher,current,{sourceAccess:options.sourceAccess}),options);
  return {queue,worker:new JobWorker(queue)};
 }

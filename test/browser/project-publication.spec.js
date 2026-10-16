@@ -18,7 +18,7 @@ import {navigate} from './preferences-helper.js';
 
 test('project website editing preview and export retain their owner through reload and workspace navigation',async({page})=>{
  test.setTimeout(180000);page.setDefaultTimeout(12000);
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-project-publication-ui-')),owner=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(owner),vaults=[];let app,db;
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-project-publication-ui-')),owner=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(owner),vaults=[],errors=[],requests=[];let app,db;
  try{
   const rootBook=sampleNotebook();rootBook.projects.push(...Array.from({length:30},(_,i)=>({...rootBook.projects[0],id:randomUUID(),title:'Catalogue project '+String(i).padStart(2,'0'),share:false})));const f=await encryptedFixture(path.join(directory,'Workspace'),rootBook);vaults.push(f.vault);
   const book=sampleNotebook();book.projects[0].title='Independent project';book.entries[0].title='Independent experiment';const id=book.projects[0].id,access=await createWorkspaceAccess('','',f.deviceStore),vault=takeCreatedVault(access);vaults.push(vault);
@@ -26,7 +26,7 @@ test('project website editing preview and export retain their owner through relo
   const storage=await initializeProjectLocation(path.join(directory,'Independent project'),id,book,access,vault),registry=new ProjectRegistry(f.workspace,rootBook.id);await registry.attach(storage,{expected:(await registry.read()).revision});
   const font=await new WorkspaceFonts(storage).import(await readFile('src/fonts/dm-sans.ttf'));
   app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,headless:true,preferencesFile:path.join(directory,'preferences.json')});
-  const errors=[],requests=[];page.on('pageerror',error=>errors.push(error.message));page.on('response',response=>{if(response.url().includes('/api/'))requests.push({status:response.status(),route:new URL(response.url()).pathname});});
+  page.on('pageerror',error=>errors.push(error.message));page.on('response',response=>{if(response.url().includes('/api/'))requests.push({status:response.status(),route:new URL(response.url()).pathname});});
   await page.goto(app.url);await expect(page.getByRole('button',{name:'Preferences',exact:true})).toBeVisible();
   await page.goto(app.origin+'/#/owners/'+id+'/projects/'+id);await expect(page.locator('#main h1')).toHaveText('Independent project');expect(await page.evaluate(async id=>(await document.fonts.load('16px \"Observanda '+id+'\"')).some(font=>font.status==='loaded'),font.id)).toBe(true);
   db=await f.workspace.openCatalogue();await db.run('BEGIN');await db.lock();
@@ -51,5 +51,8 @@ test('project website editing preview and export retain their owner through relo
   await page.goto(websiteUrl);await expect(page.locator('.website-site-context')).toContainText('Experiment journal');
   expect((await f.workspace.outline()).metadata.websites??[]).toEqual([]);expect((await storage.outline()).metadata.websites[0].name).toBe('Experiment journal');
   expect(requests.filter(r=>r.status>=400)).toEqual([]);expect(errors).toEqual([]);
+ }catch(error){
+  await test.info().attach('publication-requests',{body:JSON.stringify({errors,requests},null,2),contentType:'application/json'});
+  await test.info().attach('publication-before-cleanup',{body:await page.screenshot(),contentType:'image/png'});throw error;
  }finally{await db?.close();await app?.close();await owner.close();detach();for(const vault of vaults)clearVault(vault);if(path.dirname(directory)!==path.resolve(os.tmpdir())||!path.basename(directory).startsWith('observanda-project-publication-ui-'))throw Error('Invalid test directory');await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

@@ -29,21 +29,21 @@ export class ProjectPublications{
  clear(){this.candidates.clear();this.designs.clear();}
  previewUrl(id,file=''){return (this.entry.routePrefix??'/api/projects/'+this.entry.storage.projectId)+'/publication-preview/'+id+'/'+file;}
  summary(releases,candidate){return {...releases.summary(candidate),url:this.previewUrl(candidate.reviewId,candidate.defaultPage)};}
- async run(request,data,{websiteId=null,signal,headless=true,check=async()=>{},binary}={}){
+ async run(request,data,{websiteId=null,signal,headless=true,check=async()=>{},binary,sourceReader}={}){
   const {storage,publisher:basePublisher,queue:baseQueue,worker}=this.entry,operation=request.publication;
   await check();signal?.throwIfAborted();if(websiteId!==null&&!researchId(websiteId))throw new AppError('INVALID');
   // Iframe and download requests carry their edition identity in their own URL.
   // Resolve its saved website owner only within this authorized project.
   if(request.id&&!websiteId){const raw=await storage.readMetadata('.observanda/website-editions/'+request.id+'.json',4096);if(raw)websiteId=JSON.parse(raw).websiteId;}
   const workspace=websiteWorkspace(storage,websiteId);if(websiteId)await workspace.website();
-  const publisher=websitePublisher(basePublisher,workspace),queue=websiteJobQueue(baseQueue,websiteId),releases=new PublicationJobs(workspace),blockedValues=[storage.root,os.homedir(),os.hostname()],cacheKey=id=>(websiteId??'')+':'+id;
+  const publisher=websitePublisher(basePublisher,workspace),queue=websiteJobQueue(baseQueue,websiteId),releases=new PublicationJobs(workspace,{sourceReader}),blockedValues=[storage.root,os.homedir(),os.hostname()],cacheKey=id=>(websiteId??'')+':'+id;
   const candidate=async id=>{
    if(typeof id!=='string'||!/^[a-f0-9]{64}$/.test(id))throw new AppError('INVALID');
    let value=this.candidates.get(cacheKey(id));if(!value){value=await releases.read(id);if(value)this.candidates.set(cacheKey(id),value);}return value;
   };
   const retained=async id=>{const value=await candidate(id);if(!value)throw new AppError('NOT_FOUND');return value;};
-  const rollback=async value=>data.rollbackReview?new PublicationRollback(workspace,publisher).project(value,await new PublicationRollback(workspace,publisher).authorize(value,data.rollbackReview)):value;
-  const control=async(type,kind)=>{const job=await queue.read(data.id);if(!job||job.type!==type)throw new AppError('NOT_FOUND');await queue.authorize(job);if(kind==='status')return jobSummary(job);const next=await queue.control(job.id,kind);if(kind==='cancel')worker.cancel(job.id);else worker.wake();return jobSummary(next);};
+  const rollback=async value=>data.rollbackReview?new PublicationRollback(workspace,publisher,{sourceReader}).project(value,await new PublicationRollback(workspace,publisher,{sourceReader}).authorize(value,data.rollbackReview)):value;
+  const control=async(type,kind)=>{const job=await queue.read(data.id);if(!job||job.type!==type)throw new AppError('NOT_FOUND');await queue.authorize(job);if(kind==='status')return jobSummary(job);const next=await (type==='publication.deploy'?new DeploymentJobs(workspace,publisher,queue,{sourceReader,sourceAccess:this.entry.sourceAccess}).control(job.id,kind):queue.control(job.id,kind));if(kind==='cancel')worker.cancel(job.id);else worker.wake();return jobSummary(next);};
   if(operation.startsWith('websites/')){
    const sites=new WebsiteSites(storage),method=operation.slice(9);
    if(method==='list')return sites.list();if(method==='open')return sites.read(data.id,{signal});if(method==='change')return sites.change(data);return sites.save(data.id,data.command);
@@ -59,22 +59,22 @@ export class ProjectPublications{
    const design=this.designs.get(request.id),value=design??await retained(request.id);if(!value.files.has(request.file))throw new AppError('NOT_FOUND');verifyPublication(value,{allowDesign:!!design});await check();return binary({name:request.file,content:value.files.get(request.file)});
   }
   if(operation==='export'){
-   const value=await rollback(await retained(request.id??data.id));if(!data.rollbackReview&&value.etag!==(await workspace.outline()).etag)throw new AppError('STALE');await new AnalysisPublicationReview(workspace).assert(value);verifyPublication(value);await check();return binary({archive:value.files});
+   const value=await rollback(await retained(request.id??data.id));if(!data.rollbackReview&&value.etag!==(await workspace.outline()).etag)throw new AppError('STALE');await new AnalysisPublicationReview(workspace,{sourceReader}).assert(value);verifyPublication(value);await check();return binary({archive:value.files});
   }
-  if(operation.startsWith('local-export/')){const result=await new LocalExport(workspace)[operation.slice(13)](data),project=value=>value?.previewUrl?{...value,previewUrl:this.previewUrl(value.reviewId,value.previewUrl.split('/').slice(3).join('/'))}:value;return result?.plan?{...result,plan:project(result.plan)}:project(result);}
+  if(operation.startsWith('local-export/')){const result=await new LocalExport(workspace,{sourceReader})[operation.slice(13)](data),project=value=>value?.previewUrl?{...value,previewUrl:this.previewUrl(value.reviewId,value.previewUrl.split('/').slice(3).join('/'))}:value;return result?.plan?{...result,plan:project(result.plan)}:project(result);}
   if(operation.startsWith('publication-links/')){const links=new PublicationLinks(workspace);return operation.endsWith('/save')?links.save(data):links.read();}
   if(operation==='publication-selection'||operation==='publication-references')return (operation==='publication-selection'?publicationSelection:publicationReferences)(workspace,data,{signal});
   if(operation.startsWith('publication-jobs/')){
    const method=operation.slice(17);
    if(method==='start'){const job=await releases.start({...data,blockedValues},queue);worker.wake();return {job:jobSummary(job)};}
    if(method==='list'){const page=await releases.page(queue,data);return {...page,items:page.items.map(item=>({...item,job:jobSummary(item.job)}))};}
-   if(method==='open'){const value=await retained(data.id);return {...this.summary(releases,value),analysisReview:await new AnalysisPublicationReview(workspace).status(value),stale:value.etag!==(await workspace.outline()).etag||value.configEtag!==(await publisher.read()).etag};}
-   if(method==='rollback-review'){const value=await retained(data.id),owner=new PublicationRollback(workspace,publisher),approval=await owner.review(data),reviewed=owner.project(value,approval.review);return {...this.summary(releases,reviewed),destination:approval.destination,configEtag:approval.configEtag,rollback:approval.review,analysisReview:await new AnalysisPublicationReview(workspace).status(reviewed),stale:false};}
-   if(method==='analysis-review')return new AnalysisPublicationReview(workspace).save(await rollback(await retained(data.id)),data.decisions);
+   if(method==='open'){const value=await retained(data.id);return {...this.summary(releases,value),analysisReview:await new AnalysisPublicationReview(workspace,{sourceReader}).status(value),stale:value.etag!==(await workspace.outline()).etag||value.configEtag!==(await publisher.read()).etag};}
+   if(method==='rollback-review'){const value=await retained(data.id),owner=new PublicationRollback(workspace,publisher,{sourceReader}),approval=await owner.review(data),reviewed=owner.project(value,approval.review);return {...this.summary(releases,reviewed),destination:approval.destination,configEtag:approval.configEtag,rollback:approval.review,analysisReview:await new AnalysisPublicationReview(workspace,{sourceReader}).status(reviewed),stale:false};}
+   if(method==='analysis-review')return new AnalysisPublicationReview(workspace,{sourceReader}).save(await rollback(await retained(data.id)),data.decisions);
    return {job:await control('publication.prepare',method)};
   }
   if(operation.startsWith('deployment-jobs/')){
-   const method=operation.slice(16),deployments=new DeploymentJobs(workspace,publisher,queue);
+   const method=operation.slice(16),deployments=new DeploymentJobs(workspace,publisher,queue,{sourceReader,sourceAccess:this.entry.sourceAccess});
    if(method==='start'){const job=await deployments.start(data);worker.wake();return {job:jobSummary(job)};}
    if(method==='list'){const page=await deployments.page(data);return {...page,items:page.items.map(item=>({...item,job:jobSummary(item.job)}))};}
    const job=await control('publication.deploy',method);return method==='status'?{...deployments.summary(await deployments.read(data.id)),job}:{job};
@@ -99,14 +99,14 @@ export class ProjectPublications{
   if(method==='connect'){await githubIdle();await publisher.connection?.cancel();return publisher.connect(data.token);}
   if(method==='disconnect'){await githubIdle();publisher.token=null;return publisher.read();}
   if(method==='check')return publisher.check({reviewExisting:true});
-  if(method==='plan'){const value=await retained(data.id);if(data.rollbackReview)await new PublicationRollback(workspace,publisher).authorize(value,data.rollbackReview);else if(value.configEtag!==data.configEtag||(await workspace.outline()).etag!==value.etag)throw new AppError('PUBLISH_STALE');return publisher.reviewDestination(value,data.configEtag,{signal});}
+  if(method==='plan'){const value=await retained(data.id);if(data.rollbackReview)await new PublicationRollback(workspace,publisher,{sourceReader}).authorize(value,data.rollbackReview);else if(value.configEtag!==data.configEtag||(await workspace.outline()).etag!==value.etag)throw new AppError('PUBLISH_STALE');return publisher.reviewDestination(value,data.configEtag,{signal});}
   if(['verify','verification','verification-cancel','verification-retry'].includes(method)){
    const checks=new PublicationVerificationJobs(workspace,publisher,queue);
    if(method==='verify'){const job=await checks.start(data);worker.wake();return {job:jobSummary(job)};}
    const job=await checks.current();if(method==='verification')return {job:jobSummary(job),receipt:(await publisher.read()).receipt};
    if(!job||job.id!==data.id)throw new AppError('PUBLISH_STALE');return {job:await control('publication.verify',method==='verification-cancel'?'cancel':'retry')};
   }
-  if(method==='deploy'){const value=await rollback(await retained(data.id));if(data.reviewed!==true||!data.rollbackReview&&value.configEtag!==data.configEtag)throw new AppError('PUBLISH_STALE');await new AnalysisPublicationReview(workspace).assert(value);const job=await new DeploymentJobs(workspace,publisher,queue).start(data);worker.wake();return {job:jobSummary(job)};}
+  if(method==='deploy'){const value=await rollback(await retained(data.id));if(data.reviewed!==true||!data.rollbackReview&&value.configEtag!==data.configEtag)throw new AppError('PUBLISH_STALE');await new AnalysisPublicationReview(workspace,{sourceReader}).assert(value);const job=await new DeploymentJobs(workspace,publisher,queue,{sourceReader,sourceAccess:this.entry.sourceAccess}).start(data);worker.wake();return {job:jobSummary(job)};}
   throw new AppError('NOT_FOUND');
  }
 }

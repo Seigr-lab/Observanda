@@ -1,4 +1,5 @@
 import {ProjectPublications} from './project-publications.js';
+import {PublicationSourceAccess} from './publication-source-access.js';
 import {AsyncLocalStorage} from 'node:async_hooks';
 // Background evidence work owns a key for its full lifetime. HTTP request keys
 // can be cleared as soon as the response finishes without stopping the worker.
@@ -25,7 +26,7 @@ class ProjectWorker extends JobWorker{
 export class ProjectJobs{
  constructor({publisherOptions=()=>({})}={}){this.publisherOptions=publisherOptions;this.sessions=new WeakMap();this.entries=new Set();this.stopping=new Set();this.closed=false;}
  stop(entry){
-  if(entry.stopped)return entry.stopped;entry.closed=true;entry.publications?.clear();this.entries.delete(entry);
+  if(entry.stopped)return entry.stopped;entry.closed=true;entry.sourceAccess?.clear();entry.publications?.clear();this.entries.delete(entry);
   const pending=entry.worker.stop().then(async()=>{entry.publisher.token=null;await entry.publisher.connection?.cancel();}).finally(()=>{clearVault(entry.storage.vault);entry.grant?.close();this.stopping.delete(pending);});
   this.stopping.add(pending);entry.stopped=pending;return pending;
  }
@@ -49,9 +50,9 @@ export class ProjectJobs{
    catch(error){grant?.close();clearVault(owned.vault);throw error;}
    entry={storage:owned,projectId,grant,routePrefix:'/api/projects/'+projectId+(book?'/lab-books/'+storage.labBookId:''),etag,expires:Date.now()+8*60*60*1000,closed:false};
    try{
-   const current=()=>entry.queue;
+   const current=()=>entry.queue;entry.sourceAccess=new PublicationSourceAccess();
    entry.publisher=new Publisher(owned.root,{...this.publisherOptions(owned),workspace:owned},owned.vault);
-   entry.queue=new AuthorizedJobs(owned,workspaceJobDefinitions(owned,entry.publisher,current),async()=>{
+   entry.queue=new AuthorizedJobs(owned,workspaceJobDefinitions(owned,entry.publisher,current,{sourceAccess:entry.sourceAccess}),async()=>{
     try{await (entry.grant?.check??check)();}catch(error){if(['ACCESS_LOCKED','WORKSPACE_CHANGED','NOT_FOUND','STORAGE_DELETING','STORAGE_MOVING'].includes(error.code))void this.stop(entry).catch(()=>{});throw error;}
    });
    entry.worker=new ProjectWorker(entry.queue);entry.publications=new ProjectPublications(entry);owners.set(key,entry);this.entries.add(entry);

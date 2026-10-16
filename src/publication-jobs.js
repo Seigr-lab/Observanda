@@ -22,11 +22,11 @@ const hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const inputFile=id=>{if(!researchId(id))throw new AppError('INVALID');return '.observanda/release-inputs/'+id+'.json';};
 const candidateFile=id=>{if(!hash(id))throw new AppError('INVALID');return '.observanda/release-candidates/'+id+'.json';};
 export class PublicationJobs{
- constructor(workspace,{sources=[],sourceReader}={}){if(!validPublicationSources(sources))throw new AppError('INVALID');this.workspace=workspace;this.sources=structuredClone(sources);this.sourceReader=sourceReader;this.feed=new MetadataFeed(workspace,'.observanda/release-list');}
+ constructor(workspace,{sources,sourceReader}={}){if(sources!==undefined&&!validPublicationSources(sources))throw new AppError('INVALID');this.workspace=workspace;this.sources=sources===undefined?undefined:structuredClone(sources);this.sourceReader=sourceReader;this.feed=new MetadataFeed(workspace,'.observanda/release-list');}
  async pin({etag,book,workspaceId,draft:command,edition,blockedValues=[]},{signal}={}){
    const id=randomUUID();
    try{
-   const input=await publicationSource(this.workspace,{etag,book,workspaceId,draft:command},{signal,consume:async(metadata,records,options)=>{const input=await retainPublicationInput(this.workspace,id,metadata,records,{...options,signal,edition,deferFinalization:!!this.sources.length});return this.sources.length?retainPublicationSources(this.workspace,id,input,this.sources,await this.sourceReader?.({signal}),{signal}):input;}});
+   const input=await publicationSource(this.workspace,{etag,book,workspaceId,draft:command},{signal,consume:async(metadata,records,options)=>{const sources=this.sources??metadata.website.researchSources??[];if(!validPublicationSources(sources))throw new AppError('INVALID');const input=await retainPublicationInput(this.workspace,id,metadata,records,{...options,signal,edition,deferFinalization:!!sources.length});return sources.length?retainPublicationSources(this.workspace,id,input,sources,await this.sourceReader?.({signal}),{signal}):input;}});
    const destination=await new Publisher(this.workspace.root,{workspace:this.workspace},this.workspace.vault).read();
    const source={version:2,id,reviewId:digest(id),workspaceId:input.metadata.id,...(this.workspace.websiteId?{websiteId:this.workspace.websiteId}:{}),createdAt:new Date().toISOString(),etag,...input,blockedValues,
     configEtag:destination.etag,destination:destination.configured?destination.config:null};

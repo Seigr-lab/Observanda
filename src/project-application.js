@@ -1,4 +1,4 @@
-import {projectPublicationSource} from './project-publication-sources.js';
+import {projectPublicationSource,publicationSourceFactory} from './project-publication-sources.js';
 import {publicationSiteDirectory} from './publication-site-directory.js';
 import {timelineCollectionQuery} from './timeline-collection-query.js';
 import {timelineCollectionChoices} from './timeline-collection-choices.js';
@@ -165,7 +165,7 @@ export class ProjectApplication{
   },selected.projectId);
  }
  async execute(client,selected,data,{signal,onProgress,download,stream,websiteId,binary,headless,query,contentLength,check=async()=>{},setCheck=()=>{}}={}){
-  if(selected.operation==='publication-source')return this.tracked(()=>projectPublicationSource(this,client,data,{scope:selected.projectId??null,signal,check}),selected.projectId);
+  if(selected.operation==='publication-source')return this.tracked(()=>projectPublicationSource(this,client,data,{scope:selected.projectId??null,labBookId:selected.labBookId??null,signal,check}),selected.projectId);
   if(selected.operation==='publication-sites')return this.tracked(()=>publicationSiteDirectory(this.recordCollections,client,data,{scope:selected.projectId??null,visit:projectRecordCollection(this,client,check),signal}),selected.projectId);
   if(['timeline-collection/query','timeline-collection/choices'].includes(selected.operation))return this.tracked(async()=> (selected.operation.endsWith('/choices')?timelineCollectionChoices:timelineCollectionQuery)(this.recordCollections,client,data,{scope:selected.projectId??null,registry:await this.registry(),visit:projectRecordCollection(this,client,check),check,signal}),selected.projectId);
   if(selected.operation==='dashboard-collection/choices')return this.tracked(async()=>dashboardCollectionChoices(this.dashboardCollections,client,data,{scope:selected.projectId??null,registry:await this.registry(),visit:projectRecordCollection(this,client,check),check,signal}),selected.projectId);
@@ -245,7 +245,7 @@ export class ProjectApplication{
       return imports.run(data,{resume:selected.operation.endsWith('/resume'),check:assertCurrent,onProgress,opened:async(entry,vault)=>{await assertCurrent();new LabBookAccessSession(this,client,storage,entry.labBookId,assertCurrent).save(entry.root,(await readAccess(entry.root)).etag,vault);}});
      }
      if(selected.bookOperation==='placements'){if(!data||Object.keys(data).some(key=>!['after','limit'].includes(key)))throw new AppError('INVALID');return this.bookPlacements.pending(storage,data);}
-     if(selected.bookOperation)return executeLabBookRequest(storage,selected,data,{deviceStore:this.deviceStore,placementStatus:()=>this.bookPlacements.status(storage,selected.labBookId),placementRoot:()=>this.bookPlacements.root(storage,selected.labBookId),publishBook:async entry=>{await assertCurrent();await new LabBookDirectory(registry).register(selected.projectId,entry);},access:new LabBookAccessSession(this,client,storage,selected.labBookId,assertCurrent),transferRoots:async()=>[this.workspace.root,...(await registry.read()).value.projects.map(entry=>entry.root)],check:assertCurrent,signal,onProgress,download,stream,websiteId,binary,headless,query,contentLength,stopJobs:()=>this.jobs.invalidateBook(selected.projectId,selected.labBookId),jobs:(book,etag,current,retain)=>this.jobs.owner(session,book,etag,current,{projectId:selected.projectId,retain})});
+     if(selected.bookOperation)return executeLabBookRequest(storage,selected,data,{deviceStore:this.deviceStore,placementStatus:()=>this.bookPlacements.status(storage,selected.labBookId),placementRoot:()=>this.bookPlacements.root(storage,selected.labBookId),publishBook:async entry=>{await assertCurrent();await new LabBookDirectory(registry).register(selected.projectId,entry);},access:new LabBookAccessSession(this,client,storage,selected.labBookId,assertCurrent),transferRoots:async()=>[this.workspace.root,...(await registry.read()).value.projects.map(entry=>entry.root)],check:assertCurrent,signal,onProgress,download,stream,websiteId,binary,headless,query,contentLength,stopJobs:()=>this.jobs.invalidateBook(selected.projectId,selected.labBookId),publicationSources:host=>publicationSourceFactory(this,client,host,{scope:selected.projectId,labBookId:selected.labBookId,check}),jobs:(book,etag,current,retain)=>this.jobs.owner(session,book,etag,current,{projectId:selected.projectId,retain})});
      if(selected.operation==='access/details'){if(!data||Object.keys(data).length)throw new AppError('INVALID');return new ProjectAccessSettings(storage).details();}
      if(selected.operation==='access/password'){await this.jobs.invalidateProject(selected.projectId);return new ProjectAccessSettings(storage).password(data,{deviceStore:this.deviceStore,check:assertCurrent,changed:etag=>owner.accessChanged(etag)});}
      if(selected.operation?.startsWith('storage/')){
@@ -266,7 +266,7 @@ export class ProjectApplication{
      if(selected.review)return executeReviewRequest(storage,this.deviceStore,selected.review,data);
      if(selected.starter)return executeRecordStarterRequest(storage,selected,data,{signal,binary});
      if(selected.asset)return executeProjectAsset(storage,selected,data,{signal,stream,query,contentLength,binary,jobs:()=>this.jobs.owner(session,storage,owner.etag,assertCurrent)});
-     if(selected.publication){const jobs=await this.jobs.owner(session,storage,owner.etag,assertCurrent);return jobs.publications.run(selected,data,{websiteId,binary,headless,signal,check:assertCurrent});}
+     if(selected.publication){const jobs=await this.jobs.owner(session,storage,owner.etag,assertCurrent);return jobs.publications.run(selected,data,{websiteId,binary,headless,signal,check:assertCurrent,sourceReader:publicationSourceFactory(this,client,jobs.storage,{scope:selected.projectId,check})});}
      if(selected.intake){const jobs=await this.jobs.owner(session,storage,owner.etag,assertCurrent),response=await intakeCommand(storage,jobs.queue,selected.intake,data,{signal});jobs.worker.wake();return response;}
      if(selected.material)return executeMaterialRequest(storage,selected,data,{signal,download,stream,jobs:()=>this.jobs.owner(session,storage,owner.etag,assertCurrent)});
      if(selected.calendar)return this.calendars.run(session,storage,owner.etag,selected.calendar,data,{signal,authenticate:this.authenticate});

@@ -32,5 +32,6 @@ test('analysis approval checks the selected database even when its record snapsh
  assert.equal((await source.workspace.outline()).etag,snapshotId);await assert.rejects(review.assert(candidate),{code:'ANALYSIS_REVIEW'});
  const current=await publicationAnalysisState(host.workspace,candidate,{sourceReader,requireCurrent:false});assert.equal(current.analysis.items.length,1);assert.equal(current.analysis.items[0].sourceWorkspaceId,source.book.id);assert.equal(current.analysis.items[0].recordId,identities.identity(source.book.id,'record',source.recordId));
  const reviewed={...candidate,researchReview:{analysis:current.analysis}};await review.save(reviewed,current.analysis.items.map(item=>({id:item.id,reason:'This edition retains the original analysis with its documented input interpretation.'})));await review.assert(reviewed);
+ const stopped=new AbortController();stopped.abort();const reads=opened;await assert.rejects(review.assert(candidate,{signal:stopped.signal}),{name:'AbortError'});assert.equal(opened,reads);
  const calls=opened;await assert.rejects(publicationAnalysisState(host.workspace,{...candidate,sourceGroups:[groups[0],groups[1],groups[1]]},{sourceReader}),{code:'JOB_DAMAGED'});assert.equal(opened,calls);
 });

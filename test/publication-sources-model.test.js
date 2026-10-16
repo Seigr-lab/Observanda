@@ -1,3 +1,5 @@
+import {sampleNotebook} from '../src/sample.js';
+import {validateNotebook} from '../src/model.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID as id} from 'node:crypto';
@@ -19,4 +21,11 @@ test('per-owner edition choices reject malformed records before source access',(
  const source=emptyPublicationSource(id());source.edition={version:1,records:[]};assert.equal(validPublicationSources([source]),true);
  source.edition.records=[{id:id(),include:true}];assert.equal(validPublicationSources([source]),false);
  source.edition={version:1,records:[],unexpected:'local-only'};assert.equal(validPublicationSources([source]),false);
+});
+
+test('website source consent is validated with the owning document',()=>{
+ const book=sampleNotebook(),source=emptyPublicationSource(id());book.website.researchSources=[source];
+ assert.doesNotThrow(()=>validateNotebook(book));
+ book.website.researchSources[0].selection.defaultShare=true;
+ assert.throws(()=>validateNotebook(book));
 });

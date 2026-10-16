@@ -1,3 +1,5 @@
+import {publicationSourceFactory} from './project-publication-sources.js';
+import {PublicationSourceAccess} from './publication-source-access.js';
 import {withWorkspaceDeletionSession} from './workspace-deletion-session.js';
 import {publicationDesignPreview} from './publication-design-preview.js';
 import {projectContentHttp} from './project-content-http.js';
@@ -236,8 +238,8 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
     })().catch(error=>{if(ctx.manualLock||context!==ctx||shuttingDown)activity?.remove();else{activity?.finish(error);ctx.dashboardFailure=commandId+':'+(error.code??'IO');}}).finally(()=>{ctx.dashboardTask=null;dashboardTasks.delete(task);});
     ctx.dashboardTask=task;dashboardTasks.add(task);
   };
-  const startJobs=ctx=>{if(ctx.workspace&&ctx.vault.key&&!ctx.manualLock&&!shuttingDown&&!changing){ctx.jobs??=workspaceJobs(ctx.workspace,ctx.publisher,{observe:job=>activities.job(ctx.id,job)});ctx.jobs.worker.start();startDashboardEdits(ctx);}};
-  const stopWorkspaceJobs=async ctx=>{await ctx.live?.close();delete ctx.live;await ctx.jobs?.worker.stop();await ctx.publisher?.connection?.clear();};
+  const startJobs=ctx=>{if(ctx.workspace&&ctx.vault.key&&!ctx.manualLock&&!shuttingDown&&!changing){ctx.publicationSourceAccess??=new PublicationSourceAccess();ctx.jobs??=workspaceJobs(ctx.workspace,ctx.publisher,{sourceAccess:ctx.publicationSourceAccess,observe:job=>activities.job(ctx.id,job)});ctx.jobs.worker.start();startDashboardEdits(ctx);}};
+  const stopWorkspaceJobs=async ctx=>{await ctx.live?.close();delete ctx.live;await ctx.jobs?.worker.stop();ctx.publicationSourceAccess?.clear();await ctx.publisher?.connection?.clear();};
   const stopJobs=async ctx=>{await ctx.projects?.close();delete ctx.projects;await stopWorkspaceJobs(ctx);};
   const deletions=new WorkspaceDeletions((preferencesFile??deviceStore.file)+'.workspace-deletions');
   if(root&&(await workspaceDeletion(root)||(await deletions.list()).some(item=>item.source===root&&item.phase!=='prepared')))root=null;
@@ -431,6 +433,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       }
       if(contextRequired&&(req.method==='POST'||['/api/dashboard','/api/dashboard/pending','/api/notebook','/api/media-policy','/api/laboratory','/api/publishing','/api/history','/api/modules/data','/api/modules/version','/api/modules/history','/api/calendars'].includes(url.pathname))&&req.headers['x-observanda-workspace']!==context.id)throw new AppError('WORKSPACE_CHANGED');
       const historyProjects=selectedContext.projects??=new ProjectApplication(workspace,{deviceStore,authenticate,publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})});
+      const sourceReader=publicationSourceFactory(historyProjects,client,selectedContext.workspace,{check:req.checkWriter});
       return await historyProjects.withSourceHistory(client,async()=>{
       const selectedProject=projectRequest(url.pathname,req.method);
       if(selectedProject&&(req.method==='POST'||(selectedProject.material||selectedProject.publication||selectedProject.asset)&&req.method==='GET')){
@@ -988,14 +991,14 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
           if(owner){workspace=websiteWorkspace(selectedContext.workspace,JSON.parse(owner).websiteId);publisher=websitePublisher(selectedContext.publisher,workspace);}
         }
         if(candidates.has(id)){const candidate=candidates.get(id);return (candidate.websiteId??null)===(workspace.websiteId??null)?candidate:null;}
-        const candidate=await new PublicationJobs(workspace).read(id);if(!candidate)return null;
+        const candidate=await new PublicationJobs(workspace,{sourceReader}).read(id);if(!candidate)return null;
         // One verified immutable edition serves its page, stylesheet and assets.
         // This private cache is bounded and cleared with the workspace key.
         candidates.set(id,candidate);while(candidates.size>5)candidates.delete(candidates.keys().next().value);return candidate;
       };
       if(req.method==='POST'&&url.pathname.startsWith('/api/local-export/')){
         if(!workspace.vault?.key)throw new AppError('ACCESS_LOCKED');
-        const data=await body(req),operation=url.pathname.slice('/api/local-export/'.length),exports=new LocalExport(workspace);
+        const data=await body(req),operation=url.pathname.slice('/api/local-export/'.length),exports=new LocalExport(workspace,{sourceReader});
         if(!['plan','current','page','apply','discard'].includes(operation))throw new AppError('INVALID');
         if(['current','page'].includes(operation))return json(await exports[operation](data));
         if(publishing||changing)throw new AppError('LOCKED');
@@ -1011,17 +1014,17 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       }
       if(req.method==='POST'&&url.pathname.startsWith('/api/publication-jobs/')){
         if(!workspace.vault?.key)throw new AppError('ACCESS_LOCKED');
-        startJobs(context);const releases=new PublicationJobs(workspace),queue=publicationQueue(),data=await body(req),operation=url.pathname.slice('/api/publication-jobs/'.length);
+        startJobs(context);const releases=new PublicationJobs(workspace,{sourceReader}),queue=publicationQueue(),data=await body(req),operation=url.pathname.slice('/api/publication-jobs/'.length);
         if(operation==='start'){const job=await releases.start({...data,blockedValues},queue);context.jobs.worker.wake();return json({job:jobSummary(job)},202);}
         if(operation==='list'){const page=await releases.page(queue,data);return json({...page,items:page.items.map(item=>({...item,job:jobSummary(item.job)}))});}
-        if(operation==='open'){const candidate=await retainedCandidate(data.id);if(!candidate)throw new AppError('NOT_FOUND');return json({...releases.summary(candidate),analysisReview:await new AnalysisPublicationReview(workspace).status(candidate),stale:candidate.etag!==(await workspace.outline()).etag||candidate.configEtag!==(await publisher.read()).etag});}
+        if(operation==='open'){const candidate=await retainedCandidate(data.id);if(!candidate)throw new AppError('NOT_FOUND');return json({...releases.summary(candidate),analysisReview:await new AnalysisPublicationReview(workspace,{sourceReader}).status(candidate),stale:candidate.etag!==(await workspace.outline()).etag||candidate.configEtag!==(await publisher.read()).etag});}
         if(operation==='rollback-review'){
           const candidate=await retainedCandidate(data.id);if(!candidate)throw new AppError('NOT_FOUND');
-          const approval=await new PublicationRollback(workspace,publisher).review(data);
-          const reviewed=new PublicationRollback(workspace,publisher).project(candidate,approval.review);
-          return json({...releases.summary(reviewed),destination:approval.destination,configEtag:approval.configEtag,rollback:approval.review,analysisReview:await new AnalysisPublicationReview(workspace).status(reviewed),stale:false});
+          const approval=await new PublicationRollback(workspace,publisher,{sourceReader}).review(data);
+          const reviewed=new PublicationRollback(workspace,publisher,{sourceReader}).project(candidate,approval.review);
+          return json({...releases.summary(reviewed),destination:approval.destination,configEtag:approval.configEtag,rollback:approval.review,analysisReview:await new AnalysisPublicationReview(workspace,{sourceReader}).status(reviewed),stale:false});
         }
-        if(operation==='analysis-review'){let candidate=await retainedCandidate(data.id);if(!candidate)throw new AppError('NOT_FOUND');if(data.rollbackReview){const rollback=new PublicationRollback(workspace,publisher);candidate=rollback.project(candidate,await rollback.authorize(candidate,data.rollbackReview));}return json(await new AnalysisPublicationReview(workspace).save(candidate,data.decisions));}
+        if(operation==='analysis-review'){let candidate=await retainedCandidate(data.id);if(!candidate)throw new AppError('NOT_FOUND');if(data.rollbackReview){const rollback=new PublicationRollback(workspace,publisher,{sourceReader});candidate=rollback.project(candidate,await rollback.authorize(candidate,data.rollbackReview));}return json(await new AnalysisPublicationReview(workspace,{sourceReader}).save(candidate,data.decisions));}
         const job=await queue.read(data.id);if(!job||job.type!=='publication.prepare')throw new AppError('NOT_FOUND');await queue.authorize(job);
         if(operation==='status')return json({job:jobSummary(job)});
         if(['cancel','retry'].includes(operation)){const next=await queue.control(job.id,operation);if(operation==='cancel')context.jobs.worker.cancel(job.id);else context.jobs.worker.wake();return json({job:jobSummary(next)});}
@@ -1029,12 +1032,12 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       }
       if(req.method==='POST'&&url.pathname.startsWith('/api/deployment-jobs/')){
         if(!workspace.vault?.key)throw new AppError('ACCESS_LOCKED');
-        startJobs(context);const queue=publicationQueue(),deployments=new DeploymentJobs(workspace,publisher,queue),data=await body(req),operation=url.pathname.slice('/api/deployment-jobs/'.length);
+        startJobs(context);const queue=publicationQueue(),deployments=new DeploymentJobs(workspace,publisher,queue,{sourceReader,sourceAccess:context.publicationSourceAccess}),data=await body(req),operation=url.pathname.slice('/api/deployment-jobs/'.length);
         if(operation==='start'){const job=await deployments.start(data);context.jobs.worker.wake();return json({job:jobSummary(job)},202);}
         if(operation==='list'){const page=await deployments.page(data);return json({...page,items:page.items.map(item=>({...item,job:jobSummary(item.job)}))});}
         const job=await queue.read(data.id);if(!job||job.type!=='publication.deploy')throw new AppError('NOT_FOUND');await queue.authorize(job);
         if(operation==='status')return json({...deployments.summary(await deployments.read(job.id)),job:jobSummary(job)});
-        if(['cancel','retry'].includes(operation)){const next=await queue.control(job.id,operation);if(operation==='cancel')context.jobs.worker.cancel(job.id);else context.jobs.worker.wake();return json({job:jobSummary(next)});}
+        if(['cancel','retry'].includes(operation)){const next=await deployments.control(job.id,operation);if(operation==='cancel')context.jobs.worker.cancel(job.id);else context.jobs.worker.wake();return json({job:jobSummary(next)});}
         throw new AppError('INVALID');
       }
       if (req.method === 'GET' && url.pathname === '/api/publishing') return json(await publisher.read());
@@ -1071,7 +1074,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         if (url.pathname === '/api/publishing/plan') {
           const candidate=await retainedCandidate(data.id);
           if(!candidate)throw new AppError('PUBLISH_STALE');
-          if(data.rollbackReview)await new PublicationRollback(workspace,publisher).authorize(candidate,data.rollbackReview);
+          if(data.rollbackReview)await new PublicationRollback(workspace,publisher,{sourceReader}).authorize(candidate,data.rollbackReview);
           else if(candidate.configEtag!==data.configEtag||(await workspace.outline()).etag!==candidate.etag)throw new AppError('PUBLISH_STALE');
           const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
           try{return json(await publisher.reviewDestination(candidate,data.configEtag,{signal:controller.signal}));}
@@ -1088,10 +1091,10 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         if (url.pathname === '/api/publishing/deploy') {
           let candidate = await retainedCandidate(data.id);
           if (!candidate || data.reviewed !== true || !data.rollbackReview&&candidate.configEtag !== data.configEtag) throw new AppError('PUBLISH_STALE');
-          if(data.rollbackReview){const rollback=new PublicationRollback(workspace,publisher);candidate=rollback.project(candidate,await rollback.authorize(candidate,data.rollbackReview));}
-          await new AnalysisPublicationReview(workspace).assert(candidate);
+          if(data.rollbackReview){const rollback=new PublicationRollback(workspace,publisher,{sourceReader});candidate=rollback.project(candidate,await rollback.authorize(candidate,data.rollbackReview));}
+          await new AnalysisPublicationReview(workspace,{sourceReader}).assert(candidate);
           if(workspace.vault?.key){
-            startJobs(context);const job=await new DeploymentJobs(workspace,publisher,publicationQueue()).start(data);context.jobs.worker.wake();return json({job:jobSummary(job)},202);
+            startJobs(context);const job=await new DeploymentJobs(workspace,publisher,publicationQueue(),{sourceReader,sourceAccess:context.publicationSourceAccess}).start(data);context.jobs.worker.wake();return json({job:jobSummary(job)},202);
           }
           publishing = true;
           try { return json(await publisher.deploy(candidate, data.configEtag, (await workspace.outline()).metadata.id, data)); }
@@ -1182,7 +1185,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       if (req.method === 'POST' && url.pathname === '/api/preview') {
         const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
         try{
-          const data=await body(req),releases=new PublicationJobs(workspace),candidate=await releases.inline({...data,blockedValues},{signal:controller.signal});
+          const data=await body(req),releases=new PublicationJobs(workspace,{sourceReader}),candidate=await releases.inline({...data,blockedValues},{signal:controller.signal});
           candidates.set(candidate.reviewId,candidate);while(candidates.size>5)candidates.delete(candidates.keys().next().value);
           return json(releases.summary(candidate));
         }finally{res.removeListener('close',abort);}
@@ -1207,9 +1210,9 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       if (req.method === 'POST' && url.pathname === '/api/export' || req.method==='GET' && /^\/api\/export\/[a-f0-9]{64}$/.test(url.pathname)) {
         const data=req.method==='POST'?await body(req):{id:url.pathname.split('/').at(-1),rollbackReview:url.searchParams.get('rollbackReview')};let candidate=await retainedCandidate(data.id);
         if(!candidate)throw new AppError('STALE');
-        if(data.rollbackReview){const rollback=new PublicationRollback(workspace,publisher);candidate=rollback.project(candidate,await rollback.authorize(candidate,data.rollbackReview));}
+        if(data.rollbackReview){const rollback=new PublicationRollback(workspace,publisher,{sourceReader});candidate=rollback.project(candidate,await rollback.authorize(candidate,data.rollbackReview));}
         else if(candidate.etag!==(await workspace.outline()).etag)throw new AppError('STALE');
-        await new AnalysisPublicationReview(workspace).assert(candidate);
+        await new AnalysisPublicationReview(workspace,{sourceReader}).assert(candidate);
         verifyPublication(candidate);
         res.writeHead(200,{'Content-Type':'application/zip','Content-Disposition':'attachment; filename="observanda-site.zip"'});
         await pipeline(Readable.from(zipStream(candidate.files)),res);return;

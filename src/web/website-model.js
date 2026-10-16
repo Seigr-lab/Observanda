@@ -1,4 +1,5 @@
 import {validActionStyle,validAction,ACTION_KINDS} from './website-action-style.js';
+import {validPublicationSources} from './publication-sources-model.js';
 import {websiteLink,safeWebsiteLink} from './website-links.js';
 import {compareKey} from './query-order.js';
 import {validFeed,orderFeed} from './website-feed-model.js';
@@ -44,7 +45,7 @@ export function validSections(sections,extended=true,composed=true,rich=true,ext
   });
 }
 export function validWebsiteComposition(site,extended=true,composed=true,rich=true,extendedText=true,tree=true,optionalHome=true){
-  if(!object(site))return false;
+  if(!object(site)||site.researchSources!==undefined&&!validPublicationSources(site.researchSources))return false;
   if(!(site.title===null||text(site.title,160))||!(site.description===null||text(site.description,1500)))return false;
   const h=site.home;
   return keys(h,['title','showTitle','sections',...(optionalHome?['enabled','introduction'].filter(k=>Object.hasOwn(h??{},k)):[])])&&(h.enabled===undefined||typeof h.enabled==='boolean')&&(h.introduction===undefined||text(h.introduction,1500))&&(h.title===null||text(h.title,160))&&typeof h.showTitle==='boolean'&&validSections(h.sections,extended,composed,rich,extendedText,tree);
