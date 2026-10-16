@@ -20,8 +20,13 @@ import {incomingProjectMove} from '../src/project-incoming-moves.js';
 import {workspaceRename,renameScope} from '../src/workspace-rename-state.js';
 import {catalogueBinding} from '../src/postgres-activation.js';
 
-async function fixture(t){
- const f=await projectTreeFixture(t),metadata=createNotebook('Receiving Workspace 2'),target=await encryptedFixture(path.join(f.directory,metadata.title),metadata);t.after(()=>clearVault(target.vault));
+async function fixture(t,{destinationParent}={}){
+ const f=await projectTreeFixture(t);let receivingParent=f.directory;
+ if(destinationParent){
+  const parent=await fs.realpath(destinationParent);receivingParent=await fs.mkdtemp(path.join(parent,'observanda-project-volume-'));
+  t.after(async()=>{assert.equal(path.dirname(receivingParent),parent);assert.ok(path.basename(receivingParent).startsWith('observanda-project-volume-'));await fs.rm(receivingParent,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ }
+ const metadata=createNotebook('Receiving Workspace 2'),target=await encryptedFixture(path.join(receivingParent,metadata.title),metadata);t.after(()=>clearVault(target.vault));
  const targetRegistry=new ProjectRegistry(target.workspace,metadata.id),selected=f.projects[0],source=new ProjectStorage(selected.root,selected.projectId,selected.key),moves=new ProjectWorkspaceMoves(f.registry,targetRegistry,selected.projectId),sibling=await destinationProject(f,t);
  const callbacks={withProject:async(id,use)=>use(new ProjectStorage((await f.registry.locate(id)).root,id,f.projects.find(project=>project.projectId===id).key)),withBook:async(parent,id,use)=>use(new LabBookStorage((await new LabBookRegistry(parent).locate(id)).root,id,f.books.find(book=>book.labBookId===id).key))};
  return {...f,targetRegistry,source,moves,sibling,options:{id:randomUUID(),parentId:null,expectedParentId:null,...callbacks},destination:path.join(target.workspace.root,path.basename(source.root))};
@@ -89,4 +94,18 @@ test('killed cross-workspace transfer recovers retirement without deleting a rep
  await assert.rejects(fs.stat(path.join(path.dirname(f.source.root),'.observanda-project-move-'+f.options.id)),{code:'ENOENT'});
  for(const book of f.books){const root=path.join(f.destination,path.relative(f.source.root,book.root));assert.deepEqual(await new LabBookStorage(root,book.labBookId,book.key).read(),book.before);}
  assert.equal((await f.registry.read()).value.relocated.length,2);assert.equal((await f.targetRegistry.read()).value.projects.length,2);
+});
+
+
+// Opt-in mounted-volume qualification uses only a newly created temporary child.
+// Normal CI still exercises all deterministic cross-filesystem fault boundaries.
+test('actual cross-volume workspace handoff resumes after publication with independent owner databases',{timeout:600000,skip:!process.env.OBSERVANDA_TEST_SECOND_VOLUME},async t=>{
+ const f=await fixture(t,{destinationParent:process.env.OBSERVANDA_TEST_SECOND_VOLUME});
+ assert.notEqual((await fs.stat(f.source.root)).dev,(await fs.stat(f.targetRegistry.workspace.root)).dev,'The destination must be a different mounted volume');
+ await assert.rejects(f.moves.run(f.source,{...f.options,checkpoint:stage=>{if(stage==='registered')throw Error('Interrupted after destination publication');}}),/Interrupted after destination publication/);
+ assert.equal((await f.moves.read()).version,2);
+ await f.stopProvider();f.restartProvider();
+ assert.equal((await f.moves.resume(f.source.vault)).complete,true);
+ await tree(f,true);
+ assert.equal((await f.moves.read()).released,true);
 });
