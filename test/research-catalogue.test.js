@@ -1,3 +1,4 @@
+import {AppError} from '../src/errors.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,readFile,rm} from 'node:fs/promises';
@@ -214,7 +215,9 @@ test('catalogue backups and fresh-key copies retain a 64 MiB streamed original b
  assert.equal(copied.sha256,original.sha256);assert.equal(copied.size,original.size);
  const access=await createAccess('','large successor password'),newVault=takeCreatedVault(access);
  try{
-  const successor=await encryptedCopy(await copyPlan(ws.root,path.join(root,'large-successor')),access,newVault,vault);
+  const plan=await copyPlan(ws.root,path.join(root,'large-successor')),open=Workspace.prototype.openCatalogue;let sourceOpens=0;
+  t.mock.method(Workspace.prototype,'openCatalogue',function(options){if(this.root===ws.root)sourceOpens++;return open.call(this,options);});
+  const successor=await encryptedCopy(plan,access,newVault,vault);assert.equal(sourceOpens,1);
   const restored=await describeContent(new Workspace(successor,newVault),path.join(successor,'.observanda','synthetic-original.bin'));
   assert.equal(restored.sha256,original.sha256);assert.equal(restored.size,original.size);
  }finally{clearVault(newVault);}
@@ -233,12 +236,14 @@ test('legacy record shapes retain their exact bytes and upgrade consistently in 
 });
 
 test('failed verification leaves the destination incomplete and source available',async t=>{
- const {root,sourceWorkspace,vault,source}=await fixture(t),before=await workspaceManifest(source),original=ResearchCatalogue.prototype.verify;
+ const {root,sourceWorkspace,vault,source}=await fixture(t),before=await workspaceManifest(source),original=ResearchCatalogue.prototype.verify,attempts=[];let failedDestination;
  const access=await createAccess('','synthetic failed fresh-key copy'),freshVault=takeCreatedVault(access);t.after(()=>clearVault(freshVault));
- ResearchCatalogue.prototype.verify=()=>{throw Error('Synthetic verification failure');};
+ ResearchCatalogue.prototype.verify=function(...args){if(this.workspace.root===failedDestination){attempts.push(this.workspace.root);throw new AppError('STORAGE_COPY');}return original.apply(this,args);};
  try{for(const fresh of [false,true]){
   const destination=path.join(root,fresh?'failed-fresh-key':'failed-backup'),plan=await copyPlan(source,destination);
-  await assert.rejects(fresh?encryptedCopy(plan,access,freshVault,vault):copyWorkspace(plan,{vault}),/Synthetic verification failure/);
+  failedDestination=destination;
+  await assert.rejects(fresh?encryptedCopy(plan,access,freshVault,vault):copyWorkspace(plan,{vault}),{code:'STORAGE_COPY'});
+  assert.equal(attempts.filter(root=>root===destination).length,1);
   await assert.rejects(new Workspace(destination,fresh?freshVault:vault).read(),{code:'STORAGE_INCOMPLETE'});
  }}
  finally{ResearchCatalogue.prototype.verify=original;}

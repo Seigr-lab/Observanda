@@ -663,11 +663,16 @@ export class ResearchCatalogue{
 // Rekey encrypted objects into a portable backup, preserving historical identities.
 export async function rekeyCatalogue(source,target,descriptor){
  return operationStage('rekey',{},async()=>{
- const sourceDb=await source.openCatalogue({detached:true});let targetDb;
+ // A storage handoff already owns and freezes this source catalogue. Reuse
+ // that transaction rather than restoring and verifying the same archive in
+ // another connection while its writer is held. catalogue() checks the owner
+ // namespace and vault before allowing the borrowed connection.
+ const borrowed=catalogueContext.getStore()?.root===source.root?await source.catalogue(store=>store):null;
+ const sourceDb=borrowed?.db??await source.openCatalogue({detached:true});let targetDb;
  try{
   targetDb=await target.openCatalogue({create:true,detached:true});
-  await sourceDb.run('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');await targetDb.run('BEGIN ISOLATION LEVEL REPEATABLE READ');
-  const from=source.catalogueStore(sourceDb),to=target.catalogueStore(targetDb);
+  if(!borrowed)await sourceDb.run('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');await targetDb.run('BEGIN ISOLATION LEVEL REPEATABLE READ');
+  const from=borrowed??source.catalogueStore(sourceDb),to=target.catalogueStore(targetDb);
   const transferRows=(table,query,visit)=>operationStage('rekey-table',{unit:'rows',item:table},async()=>{
    for await(const row of sourceDb.rows(query,[],{batchSize:1})){await visit(row);operationAdvance();}
   });
@@ -708,9 +713,9 @@ export async function rekeyCatalogue(source,target,descriptor){
   // Verify the copied descriptor and all re-encrypted content in the same
   // transaction that creates this exclusively owned, still-marked destination.
   await targetDb.scope(()=>withRetiredRecordCopy(source,target,()=>to.verify(descriptor)));
-  await targetDb.run('COMMIT');await sourceDb.run('COMMIT');
+  await targetDb.run('COMMIT');if(!borrowed)await sourceDb.run('COMMIT');
   await backupCatalogue(target.root,target.root,{connection:targetDb});
- }finally{await sourceDb.close();await targetDb?.close();}
+ }finally{if(!borrowed)await sourceDb.close();await targetDb?.close();}
  });
 }
 export async function verifyCatalogueArchive(workspace,descriptor){
