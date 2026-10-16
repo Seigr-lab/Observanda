@@ -1,3 +1,4 @@
+import {selectedPublicationSources} from './publication-sources-model.js';
 import {publicationMediaClient} from './publication-media-client.js';
 import {publicationPageClient,publicationPageSections} from './publication-page-client.js';
 import {publicationSourcesUI} from './publication-sources-ui.js';
@@ -105,7 +106,7 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
   function counts(){
     const s=summary(),totals=research.totals(),groups=totals?.projects.filter(group=>s.projects.some(p=>p.id===group.id));
     if(research.enabled()&&!groups)return research.error()||t('websiteContent','loading');
-    if(state.book.website.researchSources?.length){const sourceCount=sourcePages.recordCount();return sourceCount===null?t('websiteContent','loading'):t('publicationSources','counts',{projects:s.projects.length,notebooks:s.notebooks.length,records:(groups?.reduce((sum,p)=>sum+p.included,0)??s.entries.length)+sourceCount,pages:s.pages.length});}
+    if(s.sourceCount){const sourceCount=sourcePages.recordCount();return sourceCount===null?t('publicationSources','selectionReady',{sources:s.sourceCount,pages:s.pages.length}):t('publicationSources','counts',{projects:s.projects.length,notebooks:s.notebooks.length,records:(groups?.reduce((sum,p)=>sum+p.included,0)??s.entries.length)+sourceCount,pages:s.pages.length});}
     return t('websiteContent','counts',{projects:s.projects.length,notebooks:s.notebooks.length,records:groups?groups.reduce((n,p)=>n+p.included,0):s.entries.length,pages:s.pages.length,media:groups?groups.reduce((n,p)=>n+p.includedMedia,0)+s.media.filter(a=>state.book.website.assets.some(asset=>asset.id===a.id)).length:s.media.length});
   }
   const toolActive=value=>tool===value||value==='page'&&['page-settings','library','selection','gallery','insert'].includes(tool)||value==='site'&&['typography','layout','menu','media','actions'].includes(tool);
@@ -157,7 +158,7 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
         <p id="website-order-help" class="website-visually-hidden">Drag to place an element. On a move handle, use Up and Down to reorder, Right to move into the previous container, Left to move out, or Escape to cancel a drag.</p>
       </aside><div class="website-inspector-resizer" role="separator" aria-label="Resize website controls" aria-orientation="vertical" tabindex="0"></div><section class="website-preview-panel" data-zoom="${zoom}" aria-label="Page canvas">
         <div class="website-preview-tools"><div class="canvas-toolbar"><label class="canvas-page">Page<select id="website-preview-page" aria-label="Page">${previewPageOptions()}</select></label>${button('Add page','website-create-page')}${button('Create homepage','website-create-home',hasHomepage(state.book)?'hidden':'')}<label>Viewport<select id="website-device" aria-label="Viewport">${[['canvas','Canvas'],['desktop','Desktop'],['tablet','Tablet'],['phone','Phone']].map(([v,l])=>option(v,l,device)).join('')}</select></label><label>Zoom<select id="website-zoom" aria-label="Zoom">${option('fit','Fit',zoom)}${option('actual','100%',zoom)}</select></label><div class="inline-actions">${canvasButton(inspector?'Hide controls':'Show controls','website-inspector')}${canvasButton(expanded?'Exit full screen':'Full screen','website-expand')}${canvasButton('Undo','website-undo',history.undoCount?'':'disabled')}${canvasButton('Redo','website-redo',history.redoCount?'':'disabled')}</div></div><p id="website-history-status" class="canvas-content-scope" role="status" ${history.trimmed?'':'hidden'}>${esc(tr('historyLimited'))}</p>
-        ${textToolbar()}<p id="website-content-scope" class="canvas-content-scope" hidden></p></div><div class="website-canvas" id="website-canvas"><div id="website-preview-empty" class="website-empty" role="status" hidden><h2>No page selected</h2><p>Create a page to start designing your website. A homepage is optional.</p></div>
+        ${textToolbar()}<p id="website-content-scope" class="canvas-content-scope" hidden></p></div><div class="website-canvas" id="website-canvas"><div id="website-preview-empty" class="website-empty" role="status" hidden><h2>No page selected</h2><p>${emptyPageDetail()}</p></div>
           <div id="website-preview-frame"><iframe id="website-draft-preview" title="Website draft preview" sandbox="allow-same-origin" ${preview?`src="${preview.baseUrl}${previewPage}"`:''}></iframe></div>
         </div><div class="canvas-status"><span id="website-preview-status" role="status"></span>${button('Retry preview','website-refresh','id="website-preview-retry" hidden')}<span id="website-viewport-size"></span></div>
         <p id="website-counts" class="website-visually-hidden">${counts()}</p>
@@ -193,7 +194,7 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
   const sectionName=s=>s.title||({download:t('websiteMedia','downloadElement'),popup:tr('popup'),'copy-text':tr('copy-text'),disclosure:tr('disclosure'),contents:tr('contents'),container:'Container',heading:'Heading',hero:'Introduction',gallery:'Gallery',text:'Text',callout:'Callout',media:'Research media',link:'Link',divider:'Divider',asset:'Media',projects:'Projects',records:'Records',pages:'Pages'}[s.kind]??s.kind);
   function previewPageOptions(){
     const {choices,more}=websitePageChoices(pageBook(),previewPage),text=key=>t('websitePages',key);
-    if(!choices.length)return '<option value="">'+esc(text('noPages'))+'</option>'+(state.book.website.researchSources?.length?'<option value="find">'+esc(text('find'))+'</option>':'');
+    if(!choices.length)return '<option value="">'+esc(selectedPublicationSources(state.book.website.researchSources).length?t('publicationSources','choosePage'):text('noPages'))+'</option>'+(state.book.website.researchSources?.length?'<option value="find">'+esc(text('find'))+'</option>':'');
     return ['home','page','project','notebook','entry'].map(kind=>{
       const items=choices.filter(p=>p.target.split(':')[0]===kind),options=items.map(p=>option(p.path,kind==='home'?text('home'):p.title,previewPage)).join('');
       return kind==='home'?options:items.length?'<optgroup label="'+esc(text(kind))+'">'+options+'</optgroup>':'';
@@ -214,7 +215,8 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
     richMount={node:mount,attributes:[...mount.attributes].map(a=>[a.name,a.value])};richId=selected.id;richContext=websiteContext(state);richEditor=mountRichText({mount,toolbar,section:selected,getDestinations:linkDestinations,revealSelection:view=>{surface?.measure();const tools=document.querySelector(".website-preview-tools"),top=Math.max(document.querySelector(".topbar")?.getBoundingClientRect().bottom??0,getComputedStyle(tools).position==="sticky"?tools.getBoundingClientRect().bottom:0);surface?.reveal(view.coordsAtPos(view.state.selection.head),top);return true;},initialState:richStates.get(selected.id),onError:message=>notify(message,true),onChange:value=>{checkpoint('rich:'+selected.id);const current=previewSections().find(s=>s.id===selected.id);if(!current)return;current.richText=value;current.format='rich';current.body=richTextPlain(value);refreshRichStyles(doc,value);dirty();refreshSummary();previewKey=null;schedulePreview();updateHistoryControls();}});
   }
 
-  function emptyPage(){return `<section class="panel"><h2>Create a page</h2><p>Use Add page or Create homepage above the canvas. A homepage is optional.</p></section>`;}
+  function emptyPageDetail(){return selectedPublicationSources(state.book.website.researchSources).length?esc(t('publicationSources','choosePageDetail')):'Use Add page or Create homepage above the canvas. A homepage is optional.';}
+  function emptyPage(){return `<section class="panel"><h2>${selectedPublicationSources(state.book.website.researchSources).length?esc(t('publicationSources','choosePage')):'Create a page'}</h2><p>${emptyPageDetail()}</p></section>`;}
   function siteFields(){const b=state.book,identity=siteIdentity(b);return `${field('Website title',`<input data-site="title" value="${esc(identity.title)}" maxlength="160" aria-describedby="website-title-help">`)}<p id="website-title-help" class="muted">${esc(tr('titleHelp'))}</p>${field('Website description',`<textarea data-site="description" rows="3" maxlength="1500">${esc(identity.description)}</textarea>`)}`;}
   function home(){
     const b=state.book,h=b.website.home;
@@ -648,5 +650,5 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
     if(button){button.title=expanded?'Exit full screen':'Full screen';button.setAttribute('aria-label',button.title);}
     fitPreview();
   });
-  return {view,input,action,bind,summary,acceptAsset,validate,focusEmpty:()=>{const hasResearch=state.book.projects.length>0;tool=hasResearch?'content':'insert';inspector=true;refreshTools();document.querySelector(hasResearch?'[data-project-share]':'#element-search')?.focus();notify(hasResearch?'Choose the logbook content to publish.':'Add content to the page before previewing.');},currentPath:()=>previewPage,saved:()=>{syncHistory();updateHistoryControls();}};
+  return {view,input,action,bind,summary,acceptAsset,validate,focusEmpty:()=>{const hasResearch=state.book.projects.length>0||Boolean(state.book.website.researchSources?.length);tool=hasResearch?'content':'insert';inspector=true;refreshTools();document.querySelector(hasResearch?'[data-project-share]':'#element-search')?.focus();notify(hasResearch?'Choose the logbook content to publish.':'Add content to the page before previewing.');},currentPath:()=>previewPage,saved:()=>{syncHistory();updateHistoryControls();}};
 }

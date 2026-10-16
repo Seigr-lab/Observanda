@@ -1,3 +1,4 @@
+import {emptyPublicationSource} from '../src/web/publication-sources-model.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
@@ -69,4 +70,13 @@ test('a standalone custom page publishes without a homepage or project',()=>{
  assert.deepEqual(result.pages,[{title:page.title,path:result.defaultPage}]);
  assert.equal(websiteSummary(book).canPublish,true);
  assert.deepEqual(navigationItems(book).map(n=>n.label),[page.title]);
+});
+
+test('a website can prepare selected independent research without adding a homepage or copying originals',()=>{
+ const book=createNotebook('Research website'),source=emptyPublicationSource(randomUUID(),randomUUID()),projectId=randomUUID();
+ book.website.researchSources=[source];assert.equal(websiteSummary(book).canPublish,false);
+ source.projectIds=[projectId];source.selection.includeProjects=[projectId];const original=structuredClone(book),summary=websiteSummary(book);
+ assert.equal(summary.canPublish,true);assert.equal(summary.sourceCount,1);assert.deepEqual(summary.entries,[]);assert.deepEqual(summary.projects,[]);assert.deepEqual(summary.notebooks,[]);
+ assert.deepEqual(book,original);assert.equal(hasHomepage(book),false);
+ source.selection.includeProjects=[];assert.equal(websiteSummary(book).canPublish,false);
 });

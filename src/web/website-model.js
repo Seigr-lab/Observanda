@@ -1,5 +1,5 @@
 import {validActionStyle,validAction,ACTION_KINDS} from './website-action-style.js';
-import {validPublicationSources} from './publication-sources-model.js';
+import {validPublicationSources,selectedPublicationSources} from './publication-sources-model.js';
 import {websiteLink,safeWebsiteLink} from './website-links.js';
 import {compareKey} from './query-order.js';
 import {validFeed,orderFeed} from './website-feed-model.js';
@@ -102,7 +102,8 @@ export function websiteSummary(book){
   const regionSections=projectedRegions(book.website,[...(selected.homeEnabled?['home']:[]),...['projects','notebooks','entries','pages'].flatMap(key=>selected[key].map(v=>({projects:'project',notebooks:'notebook',entries:'entry',pages:'page'}[key])+':'+v.id))],s=>publicSections(s,selected)).flatMap(r=>r.sections);
   const used=new Set(usedAssetIds([...regionSections,...sections,...selected.pages.flatMap(p=>publicSections(p.sections,selected)),...layouts.flatMap(l=>publicSections(l.sections,selected))]));
   const media=[...new Map([...selected.entries.flatMap(e=>e.attachments.filter(a=>a.share)),...selected.assets.filter(a=>used.has(a.id))].map(a=>[a.id,a])).values()];
-  return {...selected,media,sections,canPublish:Boolean(selected.projects.length||selected.pages.length||hasHomepage(book)&&(homeIntroduction(book).trim()||sections.length))};
+  const sourceCount=selectedPublicationSources(book.website.researchSources).length;
+  return {...selected,media,sections,sourceCount,canPublish:Boolean(sourceCount||selected.projects.length||selected.pages.length||hasHomepage(book)&&(homeIntroduction(book).trim()||sections.length))};
 }
 export function navigationItems(book,selection=selectedContent(book)){
   const s=selection,targets=[...(hasHomepage(book)?[{target:'home',label:'Home',show:true,available:true}]:[]),

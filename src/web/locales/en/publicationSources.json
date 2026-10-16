@@ -23,5 +23,8 @@
   "noRecords": "No matching records.",
   "range": "{first}\u2013{last} of {total}",
   "attachments": "Media",
-  "limit": "This selection exceeds the supported publication selection size."
+  "limit": "This selection exceeds the supported publication selection size.",
+  "selectionReady": "{sources} research sources selected ? {pages} pages",
+  "choosePage": "Choose a research page",
+  "choosePageDetail": "Use Page to find a selected research page, or add your own page. A homepage is optional."
 }

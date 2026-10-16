@@ -3,7 +3,7 @@ import {validateNotebook} from '../src/model.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID as id} from 'node:crypto';
-import {validPublicationSources,emptyPublicationSource,publicationSourceMetadata,resolvePublicationSource} from '../src/web/publication-sources-model.js';
+import {validPublicationSources,emptyPublicationSource,publicationSourceMetadata,resolvePublicationSource,selectedPublicationSources} from '../src/web/publication-sources-model.js';
 import {websiteRecordShare} from '../src/web/website-selection.js';
 test('publication source selection starts private and cannot select another namespace implicitly',()=>{
  const workspaceId=id(),projectId=id(),other=id(),record={id:id(),share:true},metadata={id:workspaceId,projects:[{id:projectId,share:true},{id:other,share:true}]},source=emptyPublicationSource(workspaceId);
@@ -41,4 +41,16 @@ test('dedicated book consent follows its book identity across parent changes wit
  assert.throws(()=>resolvePublicationSource(metadata,source,{labBookId:id()}),/Invalid publication source/);assert.throws(()=>resolvePublicationSource({...metadata,id:id()},source,owner),/Invalid publication source/);assert.throws(()=>resolvePublicationSource({...metadata,notebooks:[...metadata.notebooks,{id:id(),projectId:newProject}]},source,owner),/Invalid publication source/);
  assert.equal(validPublicationSources([{...source,projectIds:[oldProject,newProject]}]),false);assert.equal(validPublicationSources([{...source,labBookId:'invalid'}]),false);
  assert.throws(()=>resolvePublicationSource(metadata,{workspaceId,projectIds:[oldProject],selection:source.selection},owner),/Invalid publication source/);
+});
+
+test('source preparation requires explicit research consent rather than remembered sources or media choices',()=>{
+ const source=emptyPublicationSource(id()),recordId=id(),projectId=id();
+ assert.deepEqual(selectedPublicationSources(),[]);assert.deepEqual(selectedPublicationSources([source]),[]);
+ source.projectIds=[projectId];source.selection.records=[{id:recordId,share:null,attachments:[{id:id(),share:true}]}];
+ assert.deepEqual(selectedPublicationSources([source]),[]);
+ source.selection.records[0].share=false;assert.deepEqual(selectedPublicationSources([source]),[]);
+ source.selection.records[0].share=true;assert.deepEqual(selectedPublicationSources([source]),[source]);
+ source.projectIds=[];assert.deepEqual(selectedPublicationSources([source]),[]);
+ source.projectIds=[projectId];source.selection.records=[];source.selection.includeProjects=[projectId];assert.deepEqual(selectedPublicationSources([source]),[source]);
+ source.selection.defaultShare=true;assert.deepEqual(selectedPublicationSources([source]),[]);
 });
