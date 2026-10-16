@@ -4,9 +4,9 @@ import {randomUUID} from 'node:crypto';
 import {moduleWorkbench} from '../src/web/module-workbench.js';
 import {FEATURE_MODULES,registerFeatureModule} from '../src/web/feature-modules.js';
 const deferred=()=>{let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};};
-function fixture(t,{delayed=false}={}){
- const id='lifetime-'+randomUUID(),created=[],state={storage:{contextId:'workspace'},book:{id:randomUUID()},projectOwner:{projectId:randomUUID()},dashboardSettings:{enabledModules:[id]},page:'workspace',moduleId:id,modulePath:''};let renders=0;
- const module=registerFeatureModule({id,label:'Lifetime fixture',load:async()=>()=>{},createUI:()=>{
+function fixture(t,{delayed=false,scoped=false}={}){
+ const id='lifetime-'+randomUUID(),created=[],state={storage:{contextId:'workspace'},book:{id:randomUUID(),projects:[]},projectOwner:{projectId:randomUUID()},dashboardSettings:{enabledModules:[id]},page:'workspace',moduleId:id,modulePath:''};let renders=0;
+ const module=registerFeatureModule({id,label:'Lifetime fixture',...(scoped?{locationTool:{label:'Scoped fixture',path:'item'}}:{}),load:async()=>()=>{},createUI:()=>{
   const gate=deferred(),instance={disposed:0,actions:[],creations:[],dispose(){this.disposed++;},action(...args){this.actions.push(args);},create(...args){this.creations.push(args);}};
   created.push({gate,instance});return delayed?gate.promise:Promise.resolve(instance);
  }});
@@ -79,4 +79,19 @@ test('reference-return tokens are scoped to the originating owner, module and ro
  for(const property of ['workspaceId','moduleId','modulePath'])await assert.rejects(f.workbench.restoreReturn({...token,[property]:'changed'}),{name:'AbortError'});
  assert.equal(restored.length,1);
  const held=deferred();instance.captureReturn=()=>held.promise;const pending=f.workbench.captureReturn(),rejected=assert.rejects(pending,{name:'AbortError'});f.state.modulePath='item/'+randomUUID();held.resolve({checkpoint,itemId});await rejected;
+});
+
+for(const warm of [false,true])test((warm?'reused':'new')+' scoped editors publish one canonical item route before activation',async t=>{
+ const f=fixture(t,{scoped:true}),itemId=randomUUID(),path='scope/workspace/item/'+itemId;
+ if(warm){const instance=await f.workbench.ready(f.id);instance.activate=async()=>{assert.equal(f.state.modulePath,path);f.state.modulePath=path;};}
+ await f.workbench.action({dataset:{action:'module-open',moduleId:f.id,modulePath:'item/'+itemId}});
+ assert.equal(f.state.page,'module');assert.equal(f.state.modulePath,path);assert.equal(f.renders,1);assert.equal(f.created.length,1);
+});
+
+test('scoped opening retains its selected location and discards an obsolete activation',async t=>{
+ const f=fixture(t,{scoped:true}),projectId=randomUUID(),itemId=randomUUID(),gate=deferred();
+ f.state.book.projects=[{id:projectId,parentId:null,tools:[f.id]}];const instance=await f.workbench.ready(f.id),path='scope/'+projectId+'/item/'+itemId;
+ instance.activate=()=>{assert.equal(f.state.modulePath,path);return gate.promise;};
+ const pending=f.workbench.action({dataset:{action:'module-open',moduleId:f.id,modulePath:path}});f.state.page='preferences';f.workbench.bind();gate.resolve();await pending;
+ assert.equal(f.state.page,'preferences');assert.equal(f.renders,0);assert.equal(f.state.modulePath,path);
 });

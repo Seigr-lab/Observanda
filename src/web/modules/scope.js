@@ -27,6 +27,7 @@ export function parseScope(path=''){
  const parts=path.split('/');
  return parts[0]==='scope'?{projectId:parts[1]==='workspace'?null:parts[1],path:parts.slice(2).join('/')}:{projectId:null,path};
 }
+export function normalizeScopePath(path='',fallback=''){const parsed=parseScope(path);return scopePath(parsed.projectId,parsed.path||fallback);}
 export function scopeControl(book,projectId,esc,{recursive=true,moduleId=null}={}){
  return `<div class="operations-scope"><label>Show location<select data-operation-scope><option value="">${esc(book.title)} / All locations</option>${book.projects.filter(p=>!moduleId||projectToolScope(book,p.id,moduleId)).map(p=>`<option value="${p.id}" ${p.id===projectId?'selected':''}>${esc(locationName(book,p.id))}</option>`).join('')}</select></label>${projectId?`<label class="checkbox"><input type="checkbox" data-operation-descendants ${recursive?'checked':''}>Include locations inside</label>`:''}</div>`;
 }

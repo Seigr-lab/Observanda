@@ -197,7 +197,8 @@ export async function moduleEditor(services,definition){
 
  function history(){return historyPages.view();}
  function view(path){
-  if(definition.scoped){const parsed=parseScope(path);scopeId=parsed.projectId;path=parsed.path||definition.initialType||definition.types[0].id;}
+  // Establish the final route before a selected-item read can trigger another render.
+  if(definition.scoped){const parsed=parseScope(path);scopeId=parsed.projectId;path=parsed.path||definition.initialType||definition.types[0].id;state.modulePath=route(path);}
   // Other feature editors may save the same shared entity. Adopt the newer
   // snapshot without replacing any dirty drafts or rebuilding navigation.
   if(!definition.paged&&state.moduleData?.workspaceId===snapshot.workspaceId&&state.moduleData.revision>snapshot.revision)adopt(state.moduleData);

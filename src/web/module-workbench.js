@@ -1,7 +1,7 @@
 import {researchContext} from './project-context.js';
 import {moduleOwnerApi} from './modules/owner-api.js';
 import {projectToolScope} from './project-tools.js';
-import {parseScope} from './modules/scope.js';
+import {parseScope,normalizeScopePath} from './modules/scope.js';
 import {FEATURE_MODULES,enabledModule} from './feature-modules.js';
 
 // The shell dispatches generic module routes and editing commands. Feature UI
@@ -71,7 +71,8 @@ export function moduleWorkbench(services){
   async action(button){
    const {action,command}=button.dataset,moduleId=button.dataset.moduleId??FEATURE_MODULES.find(m=>m.aliases?.includes(action))?.id;
    if(action==='module-open'||moduleId&&FEATURE_MODULES.find(m=>m.id===moduleId)?.aliases?.includes(action)){
-    state.moduleId=moduleId;state.modulePath=button.dataset.modulePath??'';reconcile();const request=++opening,started=visit;let editor;
+    const path=button.dataset.modulePath??'',location=descriptor(moduleId)?.locationTool;
+    state.moduleId=moduleId;state.modulePath=location?normalizeScopePath(path,location.path):path;reconcile();const request=++opening,started=visit;let editor;
     try{editor=await ready(moduleId);}catch(error){reconcile();if(request!==opening||started!==visit)return true;throw error;}
     reconcile();if(request!==opening||started!==visit)return true;
     state.page='module';if(button.dataset.createType&&editor?.create)await editor.create(button.dataset.createType,button.dataset.recordId?{recordId:button.dataset.recordId}:{});else render();return true;

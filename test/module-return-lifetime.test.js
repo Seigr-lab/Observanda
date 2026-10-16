@@ -4,7 +4,7 @@ import {randomUUID} from 'node:crypto';
 import {moduleEditor} from '../src/web/modules/workbench.js';
 const deferred=()=>{let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};};
 const turn=()=>new Promise(resolve=>setImmediate(resolve));
-async function fixture(t,{holdWrite=false,includeCheckpoint=false,writeFailure=null,paged=false}={}){
+async function fixture(t,{holdWrite=false,includeCheckpoint=false,writeFailure=null,paged=false,scoped=false}={}){
  const host={inert:false,attributes:{},setAttribute(name,value){this.attributes[name]=value;},querySelectorAll:()=>[]};
  const previous=globalThis.document;globalThis.document={querySelector:selector=>selector==='.module-workbench'?host:null,querySelectorAll:()=>[],activeElement:null};t.after(()=>{globalThis.document=previous;});
  const workspaceId=randomUUID(),itemId=randomUUID(),checkpoint={workspaceId,moduleId:'inventory',id:randomUUID(),etag:'a'.repeat(64)},read=deferred(),write=deferred(),itemRead=deferred(),writes=[];
@@ -19,7 +19,7 @@ async function fixture(t,{holdWrite=false,includeCheckpoint=false,writeFailure=n
   if(route.endsWith('/drafts/write')){writes.push(structuredClone(body));if(writeFailure)throw writeFailure;if(holdWrite&&body.id!==checkpoint.id)await write.promise;return {etag:'b'.repeat(64)};}
   throw Error('Unexpected route '+route);
  };
- const editor=await moduleEditor({state,api,esc:value=>value,field:()=>'',option:()=>'',render:()=>{renders++;},notify:()=>{}},{id:'inventory',label:'Inventory',paged,types:[{id:'resource',label:'Resources',singular:'resource'}],blank:()=>({name:''}),setup:value=>{context=value;},form:()=>''});
+ const editor=await moduleEditor({state,api,esc:value=>value,field:()=>'',option:()=>'',render:()=>{renders++;},notify:()=>{}},{id:'inventory',label:'Inventory',paged,scoped,types:[{id:'resource',label:'Resources',singular:'resource'}],blank:()=>({name:''}),setup:value=>{context=value;},form:()=>''});
  t.after(()=>editor.dispose());return {state,editor,checkpoint,itemId,draft,read,write,itemRead,writes,result,context,host,get selectedReads(){return selectedReads;},get renders(){return renders;},get reads(){return reads;},token:{checkpoint,itemId}};
 }
 
@@ -91,4 +91,14 @@ for(const failure of [false,true])test('an obsolete recovery '+(failure?'failure
  if(failure)f.read.reject(Error('Obsolete selected checkpoint failure'));else f.read.resolve(f.result);await rejected;
  assert.equal(f.host.attributes['aria-busy'],'true');assert.equal(f.host.inert,true);assert.equal(f.renders,rendered);assert.equal(f.state.modulePath,'resource/'+other);assert.equal(f.writes.length,0);
  f.itemRead.resolve({workspaceId:f.state.book.id,revision:3,entity:{id:other,type:'resource',revision:2,data:{name:'Newer selected item'}}});await opening;assert.equal(f.context.current.id,other);assert.equal(f.host.attributes['aria-busy'],'false');assert.equal(f.host.inert,false);
+});
+
+for(const explicitScope of [false,true])test('scoped item route is final before loading begins '+(explicitScope?'with a selected location':'without an explicit location'),async t=>{
+ const f=await fixture(t,{paged:true,scoped:true}),projectId=explicitScope?randomUUID():null;
+ if(projectId){f.state.book.projects.push({id:projectId,title:'Selected location',parentId:null,tools:['inventory']});f.state.modulePath='scope/'+projectId+'/resource/'+f.itemId;}
+ const expected='scope/'+(projectId??'workspace')+'/resource/'+f.itemId;
+ assert.match(f.editor.view(f.state.modulePath),/Opening saved item/);assert.equal(f.state.modulePath,expected);
+ await turn();assert.equal(f.selectedReads,1);
+ f.itemRead.resolve({workspaceId:f.state.book.id,revision:3,entity:{id:f.itemId,type:'resource',revision:2,data:{name:'Opened item',projectId}}});await turn();
+ assert.equal(f.context.current.id,f.itemId);assert.equal(f.state.modulePath,expected);assert.equal(f.selectedReads,1);
 });

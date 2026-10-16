@@ -72,6 +72,7 @@ import {websiteContext,websiteRequest,websitePages} from './website-context.js';
 import {moduleLinks} from './module-links.js';
 import {operationsUpdates} from './modules/live-updates.js';
 import {moduleWorkbench} from './module-workbench.js';
+import {replaceRestoredModuleRoute} from './module-route-normalization.js';
 import {recordActivityUI} from './record-activity-ui.js';
 import {documentRecord} from './record-activity.js';
 import {recordWorkflowUI} from './record-workflow-ui.js';
@@ -1237,7 +1238,7 @@ async function restoreRoute(){
   invalidateResearchReturn();
   if(!state.access?.locked&&!state.newWorkspace&&(state.storageUnavailable||!state.book))state.page=location.hash==='#/workspaces'?'workspaces':'workspace';
   if(state.access?.locked||state.storageUnavailable&&!state.newWorkspace||!state.book||state.newWorkspace){render();markHistory();return;}
-  const request=++routeRestoreVersion,requestedRoute=location.hash,current=()=>request===routeRestoreVersion&&location.hash===requestedRoute;
+  const request=++routeRestoreVersion;let requestedRoute=location.hash;const current=()=>request===routeRestoreVersion&&location.hash===requestedRoute;
   restoringRoute=true;
   try{
     if(state.websiteId)await sites.exit();
@@ -1253,7 +1254,7 @@ async function restoreRoute(){
     if(state.book){Object.assign(state,resolveRoute(requestedRoute,state.book));state.recordReturn=null;
 
       if(state.page==='module'&&moduleDestination(state.moduleId)){state.page=moduleDestination(state.moduleId);state.project=null;state.notebook='all';history.replaceState(history.state,'',routeFor(state));}
-      if(state.page==='module')await modules.ready(state.moduleId);
+      if(state.page==='module'){requestedRoute=replaceRestoredModuleRoute(state,{current,history,routeFor})??requestedRoute;await modules.ready(state.moduleId);}
       if(state.page==='entries'){const saved=history.state?.filterWorkspaceId===state.book.id?history.state:{};
        state.search=typeof saved.search==='string'?saved.search:'';state.filter=validViewFilter(saved.filter)?saved.filter:'all';state.recordBrowse=recordBrowse(saved.recordBrowse);}
       if(moduleForPage(state.page)&&!enabledModule(state.dashboardSettings,moduleForPage(state.page).id)){render();return;}
