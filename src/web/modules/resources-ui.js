@@ -1,3 +1,6 @@
+import {bomSourcesUI} from './bom-sources-ui.js';
+import {bomOperationUI} from './bom-operation-ui.js';
+import {localBOMResource} from './bom-model.js';
 import {resourceTagsUI} from './resource-tags-ui.js';
 import {newBOM,bomForm,bomStock,bomReadonly,bomInput,bomAction,bomSubmit,stockPreview} from './bom-ui.js';
 import {moduleSchemaFields} from './schema-fields.js';
@@ -14,10 +17,12 @@ export function createResourcesUI(services){let context;const tags=resourceTagsU
  const applyCategory=(draft,value)=>{draft.data.categoryId=value?.id??null;draft.data.schemaRevision=value?.revision??null;draft.data.fieldSchema=structuredClone(value?.data.fields??[]);draft.data.values=Object.fromEntries(draft.data.fieldSchema.filter(f=>Object.hasOwn(draft.data.values,f.key)).map(f=>[f.key,draft.data.values[f.key]]));};
  return moduleEditor(services,{
  listQuery:tags.query,listTools:tags.filters,listInput:tags.filterInput,
- id:'resources',initialType:'resource',scoped:true,paged:true,label:'Inventory',readOnly:bomReadonly,
- setup(c){context=c;c.schema=moduleSchemaFields(c);c.inventory=inventoryClient(c,{card:inventoryCardFacts,stock:inventoryStockSection,bom:stockPreview});},
- bind:c=>c.inventory.bind(),deactivate:c=>c.inventory.stop(),dispose:c=>c.inventory.stop(),afterCommand:c=>c.inventory.invalidate(),
- itemFields:d=>d?.type==='resource'?[{key:'categoryId',type:'category',query:{archived:false},select:async item=>{const value=await category(item.id);return ()=>applyCategory(d,value);}}]:d?.type==='bom'?d.data.lines.map(line=>({key:'bom-'+line.id,type:'resource',query:{kind:'material'},get:()=>line.resourceId,select:async item=>{const value=await context.inventory.selected(item.id);return ()=>{line.resourceId=item.id;line.unit=value.data.unit;if(!line.value)line.value=value.data.name;};}})):[],
+ id:'resources',initialType:'resource',scoped:true,paged:true,label:'Inventory',readOnly:d=>bomReadonly(d)||d.type==='bom'&&!!context?.bomOperations?.summary()&&!context.bomOperations.summary().terminal,
+ setup(c){context=c;c.schema=moduleSchemaFields(c);c.inventory=inventoryClient(c,{card:inventoryCardFacts,stock:inventoryStockSection,bom:stockPreview});if(services.state.storage?.researchStorage==='catalogue'&&services.state.storage.researchFormatVersion===21){c.bomSources=bomSourcesUI(services,c);c.bomOperations=bomOperationUI(services,c);}},
+ bind:c=>{c.inventory.bind();c.bomSources?.bind();c.bomOperations?.bind();},deactivate:c=>{c.inventory.stop();c.bomSources?.stop();c.bomOperations?.stop();},dispose:c=>{c.inventory.stop();c.bomSources?.stop();c.bomOperations?.stop();},afterCommand:c=>{c.inventory.invalidate();c.bomSources?.invalidate();c.bomOperations?.settled();},
+ commandRequest:(run,command)=>context.bomOperations?context.bomOperations.commandRequest(run,command):run(),
+ pendingCommand:(result,command)=>context.bomOperations.pendingCommand(result,command),
+ itemFields:d=>d?.type==='resource'?[{key:'categoryId',type:'category',query:{archived:false},select:async item=>{const value=await category(item.id);return ()=>applyCategory(d,value);}}]:d?.type==='bom'?d.data.lines.filter(line=>!line.resourceId||localBOMResource(line,services.state.book.id)).map(line=>({key:'bom-'+line.id,type:'resource',query:{kind:'material'},get:()=>localBOMResource(line,services.state.book.id),select:async item=>{const value=await context.inventory.selected(item.id);return ()=>{line.resourceId=item.id;line.unit=value.data.unit;if(!line.value)line.value=value.data.name;};}})):[],
  summaryCard:(e,c)=>`<h2>${c.esc(e.title)}</h2>${tags.summary(e.tags,c)}${e.description?`<p>${c.esc(e.description)}</p>`:''}${e.type==='resource'?`<div data-inventory-card="${e.id}">${c.inventory.get(e.id)?inventoryCardFacts(c.inventory.get(e.id),c):c.inventory.message()}</div>`:''}`,
  operationConflictMessage:'This item changed while you were preparing the transaction. Nothing was transferred or consumed. Cancel this transaction, review the latest stock, then try again.',
  availableItems:entities=>entities,entityAvailable:()=>true,scopeItems:inventoryItems,scopeControl:c=>c.current?.type==='bom'?'':inventoryScopeControl(c),
@@ -64,6 +69,7 @@ export function createResourcesUI(services){let context;const tags=resourceTagsU
   return false;
  },
  async action(name,node,c){
+  if(await c.bomSources?.action(name,node)||await c.bomOperations?.action(name,node))return;
   if(await bomAction(name,node,c))return;
   if(c.schema.action(name,node))return;
   const d=c.current,a=node.dataset;
@@ -72,6 +78,6 @@ export function createResourcesUI(services){let context;const tags=resourceTagsU
   if(name==='upgrade-schema'){const value=await category(d.data.categoryId);if(c.current!==d)return;applyCategory(d,value);c.change();c.draw();}
   await inventoryStockAction(name,node,c);
  },
- submit:async(form,c)=>{if(!await bomSubmit(form,c))await inventoryStockSubmit(form,c);}
+ submit:async(form,c)=>{const result=await bomSubmit(form,c);return result||await inventoryStockSubmit(form,c);}
 
 });}

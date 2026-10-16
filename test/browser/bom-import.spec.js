@@ -10,7 +10,8 @@ import {clearVault} from '../../src/encryption.js';
 import {startServer} from '../../src/server.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
 import {workspaceModules} from '../../src/modules/index.js';
-import {balance} from '../../src/web/modules/quantities.js';
+import {InventoryReader} from '../../src/modules/inventory-reader.js';
+import {ProjectModuleReader} from '../../src/project-module-reader.js';
 import {readWorkspaceDashboard} from '../../src/security/dashboard-storage.js';
 import {navigate,preferences} from './preferences-helper.js';
 
@@ -25,6 +26,7 @@ test('retained BOM table mapping is reviewed before draft changes; originals, ex
  await store.execute({workspaceId:book.id,commandId:randomUUID(),action:'resource.create',payload:{id:itemId,data:{projectId:null,placementId:null,name:'4k7',code:'RES',kind:'material',description:'',categoryId:null,schemaRevision:null,fieldSchema:[],values:{},location:'Drawer',unit:'items',capacity:1,status:'available',links:[]},openingStock:{quantity:'10',projectId:null}}});
  const app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json')}),main=page.locator('main'),dialog=page.locator('#dialog'),errors=[];
  const requestErrors=[];page.on('response',r=>{if(r.status()>=400)requestErrors.push(new URL(r.url()).pathname+' '+r.status());});
+ const stock=async()=>{const row=(await new InventoryReader(f.workspace).stock({workspaceId:book.id,ids:[itemId]})).items[0].locations.find(value=>value.projectId===null);return {physical:row.physical,reserved:row.reserved,available:row.available};};
  page.on('pageerror',e=>errors.push(e.message));
  try{
   await page.goto(app.url);await navigate(page,'Preferences');await preferences(page,'Modules');
@@ -68,7 +70,7 @@ test('retained BOM table mapping is reviewed before draft changes; originals, ex
   await dialog.getByRole('button',{name:'Add reviewed components',exact:true}).click();await checkpoint;
   await expect(dialog).not.toBeVisible();await expect(main.locator('.bom-line')).toHaveCount(2);
   await expect(main.locator('.bom-line').first().getByRole('button',{name:'Choose inventory item',exact:true})).toHaveText('Choose inventory item');
-  expect(balance((await store.read()).entities,itemId).physical).toBe('10');
+  expect((await stock()).physical).toBe('10');
   expect(requestErrors).toEqual([]);
   // The new BOM has a recovery checkpoint, but no saved original yet.
   const missing=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/modules/item'&&r.status()===404);
@@ -78,7 +80,7 @@ test('retained BOM table mapping is reviewed before draft changes; originals, ex
   await main.locator('.bom-line').first().getByRole('button',{name:'Choose inventory item',exact:true}).click();await page.locator('#dialog').getByRole('button',{name:'Select 4k7',exact:true}).click();
   await main.getByRole('button',{name:'Save BOM',exact:true}).click();
   await expect(main.locator('[data-module-status]')).toHaveText('Saved');
-  let data=await store.read(),bom=data.entities.find(e=>e.type==='bom');
+  const reader=new ProjectModuleReader(f.workspace,book.id),bomId=(await reader.list({workspaceId:book.id,type:'bom',limit:25})).items[0].id,bom=(await reader.selected({workspaceId:book.id,id:bomId})).entity;
   expect(bom.data.source.artifact).toEqual(original);expect(bom.data.lines[0].partNumber).toBe('00123');
   expect(bom.data.lines[1].dnp).toBe(true);
   await main.getByText('Original BOM source',{exact:true}).click();
@@ -94,7 +96,7 @@ test('retained BOM table mapping is reviewed before draft changes; originals, ex
   await page.goto(app.origin+'/#/modules/resources/resource/'+itemId);
   await main.getByRole('button',{name:'Stock & allocations',exact:true}).click();
   await expect(main.locator('.inventory-bom-use')).toContainText('1 items used; 1 items scrapped');
-  data=await store.read();expect(balance(data.entities,itemId)).toEqual({physical:'8',reserved:'0',available:'8'});
+  expect((await stock())).toEqual({physical:'8',reserved:'0',available:'8'});
 
   await page.setViewportSize({width:1280,height:900});
   await page.evaluate(()=>document.documentElement.style.fontSize='');
@@ -110,7 +112,7 @@ test('retained BOM table mapping is reviewed before draft changes; originals, ex
   await inspector.getByRole('button',{name:'Close card settings',exact:true}).click();
   await expect(card.locator('.figure-series-graphic[data-series-name="Used in BOMs"]')).toBeVisible();
   await card.locator('summary').filter({hasText:'Exact quantities'}).click();
-  await expect(card.getByRole('row').filter({hasText:book.title+' / Central stock'})).toHaveText(/8\s*1\s*1/);
+  await expect(card.getByRole('row').filter({hasText:path.basename(f.workspace.root)+' / Central stock'})).toHaveText(/8\s*1\s*1/);
   await expect.poll(async()=>((await readWorkspaceDashboard(f.workspace)).settings.views[0].panels.find(p=>(p.source?.provider??p.tool)==='resources')?.options?.comparisonMetrics)).toEqual(['available','used','scrapped']);
   await page.reload();
   await expect(card.locator('.figure-series-graphic[data-series-name="Scrapped in BOMs"]')).toBeVisible();

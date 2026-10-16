@@ -1,3 +1,4 @@
+import {localBOMResource} from './bom-model.js';
 import {validModuleRevision} from './revision.js';
 import {decimal} from './quantities.js';
 import {inventoryScope} from './inventory-model.js';
@@ -23,7 +24,7 @@ export function inventoryClient(c,{card,stock,bom}){
   const target=item.reference?'data-action="module-reference-open" data-reference-workspace="'+c.esc(item.reference.workspaceId)+'" data-reference-type="'+c.esc(item.reference.type)+'" data-reference-id="'+c.esc(item.reference.id)+'"':'data-action="module-open" data-module-id="'+c.esc(module?.id??'')+'" data-module-path="'+c.esc(item.openType+'/'+item.openId)+'"';
   return '<article class="module-item"><h3>'+c.esc(item.title)+'</h3>'+(owner?'<small>'+c.esc(owner)+'</small>':'')+'<button class="button" type="button" '+target+' '+(enabled?'':'disabled')+'>'+c.esc(t('moduleCurrent','open',{name:item.type}))+'</button></article>';
  });}
- const ids=()=>c.current?(c.current.type==='resource'&&c.current.expectedRevision!==null?[c.current.id]:c.current.type==='bom'?[...new Set(c.current.data.lines.map(l=>l.resourceId).filter(Boolean))]:[]):(c.itemsPage?.items??[]).filter(i=>i.type==='resource').map(i=>i.id);
+ const ids=()=>c.current?(c.current.type==='resource'&&c.current.expectedRevision!==null?[c.current.id]:c.current.type==='bom'?[...new Set(c.current.data.lines.map(l=>localBOMResource(l,state.book.id)).filter(Boolean))]:[]):(c.itemsPage?.items??[]).filter(i=>i.type==='resource').map(i=>i.id);
  async function fetchStock(selected,signal){
   const result=new Map();let revision=null;
   for(let offset=0;offset<selected.length;offset+=25){
@@ -38,7 +39,7 @@ export function inventoryClient(c,{card,stock,bom}){
   if(!active())return;
   for(const node of document.querySelectorAll('[data-inventory-card]')){const item=values.get(node.dataset.inventoryCard);node.innerHTML=item?card(item,c):message();}
   const region=document.querySelector('[data-inventory-stock]');if(region&&!c.operation)region.innerHTML=loading||error?message():stock(c);
-  const preview=document.querySelector('[data-bom-preview]');if(preview)preview.innerHTML=loading||error?message():bom(c.current.data,c);
+  const preview=document.querySelector('[data-bom-preview]');if(preview){if(c.bomSources?.handles(c.current.data))c.bomSources.paint();else preview.innerHTML=loading||error?message():bom(c.current.data,c);}
   const reserve=document.querySelector('[data-command="bom-reserve"]');if(reserve)reserve.disabled=loading||Boolean(error);
   void c.bindItemLabels();
  }

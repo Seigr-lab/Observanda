@@ -521,7 +521,7 @@ async function withProjectAccess(operation,options={}){
  const authorized=new Set();
  for(;;)try{return await operation();}catch(error){
   if(error.code==='LAB_BOOK_MOVED'&&error.projectId&&projectRoute(location.hash).labBookId===error.labBookId){location.hash=ownedRoute(projectRoute(location.hash).hash,{projectId:error.projectId,labBookId:error.labBookId});throw {name:'AbortError'};}
-  const owner=(error.destinationWorkspaceId??'source')+':'+error.projectId+':'+(error.labBookId??'');
+  const owner=(error.sourceWorkspaceId??error.destinationWorkspaceId??'source')+':'+error.projectId+':'+(error.labBookId??'');
   if(!error.projectId||!['ACCESS_LOCKED','ACCESS_DENIED','DEVICE_UNKNOWN'].includes(error.code)||authorized.has(owner))throw error;
   const context=researchContext(state);await projectAccess.open(error.projectId,error.labBookId,error.labBookName??error.projectName,typeof options==='function'?options(error):options);
   if(context!==researchContext(state))throw {name:'AbortError'};authorized.add(owner);
@@ -531,7 +531,7 @@ const projectOwners=projectContexts({state,api,bookOwner:id=>labBookDirectoryUI.
 const migration=migrationUI({state,api,esc,field,render,showDialog});
 const migrationProvenance=migrationProvenanceUI({state,api,esc});
 const reviews=reviewsUI({getRecord:displayedRecord,state,api,esc,showDialog,notify,render});
-const modules=moduleWorkbench({state,api,esc,field,option,icon,render,notify,showDialog,documents,reviews,recordsTable:renderRecordTable,openReference:target=>openModuleReference(target),access:operation=>withProjectAccess(operation)});
+const modules=moduleWorkbench({state,api,esc,field,option,icon,render,notify,showDialog,documents,reviews,recordsTable:renderRecordTable,openReference:target=>openModuleReference(target),access:(operation,options)=>withProjectAccess(operation,options)});
 async function captureResearchReturn(){
  const origin=researchReturn(state);
  if(state.page==='module')origin.moduleReturn=await modules.captureReturn();

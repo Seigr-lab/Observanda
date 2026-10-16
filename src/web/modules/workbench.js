@@ -158,7 +158,13 @@ export async function moduleEditor(services,definition){
   try{
    await recovery.flush();if(disposed)throw new DOMException('','AbortError');
    const finishSaved=savedDraft?recovery.completionFor(savedDraft):null;
-   const run=()=>api('/api/modules/command?compact=1',{workspaceId,commandId,action,payload}),result=await (definition.commandRequest?definition.commandRequest(run,{action,payload,context}):run());
+   const run=()=>api('/api/modules/command?compact=1',{workspaceId,commandId,action,payload}),result=await (definition.commandRequest?definition.commandRequest(run,{action,payload,commandId,context}):run());
+   if(Object.hasOwn(result,'operationPending')){
+    if(!definition.pendingCommand)throw Error(currentText('invalid'));
+    await definition.pendingCommand(result,{action,payload,commandId,context});
+    if(!result.operationPending)pending=null;
+    return result;
+   }
    const data=definition.paged&&result.revisions?applyModuleDomainReceipt(base,result):definition.paged&&result.modulePatch?applyModulePatch({...base,revision:result.modulePatch.baseRevision},result.modulePatch):result.modulePatch?(applyModulePatch(base,result.modulePatch)??(await api('/api/modules/data')).data):result.data;
    if(definition.paged&&(result.modulePatch?.workspaceId??result.workspaceId)!==workspaceId)throw Error(currentText('invalid'));
    if(disposed){await finishSaved?.();return {...result,data};}
@@ -326,7 +332,14 @@ export async function moduleEditor(services,definition){
  }
  async function submit(form){
   try{
-   if(form.dataset.operation){await definition.submit?.(form,context);operation=null;}
+   if(form.dataset.operation){
+    const result=await definition.submit?.(form,context);
+    if(result&&Object.hasOwn(result,'operationPending')){
+     if(result.operationPending)operation=null;
+     if(disposed)return;checkpoint();await recovery.flush();if(!disposed)render();return;
+    }
+    operation=null;
+   }
    else await saveDraft(context.current);
    if(disposed)return;
    checkpoint();await recovery.flush();if(!disposed){render();notify('Saved.');}

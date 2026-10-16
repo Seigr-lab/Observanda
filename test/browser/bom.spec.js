@@ -9,7 +9,7 @@ import {upgradeNotebook} from '../../src/model.js';
 import {clearVault} from '../../src/encryption.js';
 import {startServer} from '../../src/server.js';
 import {workspaceModules} from '../../src/modules/index.js';
-import {balance} from '../../src/web/modules/quantities.js';
+import {InventoryReader} from '../../src/modules/inventory-reader.js';
 import {navigate,preferences} from './preferences-helper.js';
 
 test('physical and VST templates coexist; a record BOM reserves parts and records actual use through inventory',async({page})=>{
@@ -20,6 +20,7 @@ test('physical and VST templates coexist; a record BOM reserves parts and record
  await store.execute({workspaceId:book.id,commandId:randomUUID(),action:'resource.create',payload:{id,data:{projectId:null,placementId:null,name:'4k7 resistor',code:'RES-4K7',kind:'material',description:'',categoryId:null,schemaRevision:null,fieldSchema:[],values:{},location:'Drawer A',unit:'items',capacity:1,status:'available',links:[]},openingStock:{quantity:'100',projectId:null}}});
  const app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json')}),main=page.locator('main'),dialog=page.locator('#dialog'),errors=[];
  const requestErrors=[];page.on('response',r=>{if(r.status()>=400)requestErrors.push(new URL(r.url()).pathname+' '+r.status());});
+ const stock=async()=>{const row=(await new InventoryReader(f.workspace).stock({workspaceId:book.id,ids:[id]})).items[0].locations.find(value=>value.projectId===null);return {physical:row.physical,reserved:row.reserved,available:row.available};};
  page.on('pageerror',error=>errors.push(error.message));
  try{
   await page.goto(app.url);await navigate(page,'Preferences');await preferences(page,'Modules');
@@ -60,8 +61,8 @@ test('physical and VST templates coexist; a record BOM reserves parts and record
   await dnp.getByLabel('Do not populate (DNP)',{exact:true}).check();
   await main.getByRole('button',{name:'Save BOM',exact:true}).click();
   await expect(main.locator('[data-module-status]')).toHaveText('Saved');
-  let data=await store.read(),bom=data.entities.find(e=>e.type==='bom');
-  expect(balance(data.entities,id).physical).toBe('100');
+
+  expect((await stock()).physical).toBe('100');
   await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:test.info().outputPath('bom-desktop.png')});
   // Check the narrow-screen form and keyboard while the complete plan is visible.
   await page.setViewportSize({width:390,height:844});
@@ -72,7 +73,7 @@ test('physical and VST templates coexist; a record BOM reserves parts and record
   await main.getByRole('button',{name:'Build & stock',exact:true}).click();
   await main.getByRole('button',{name:'Reserve components',exact:true}).click();
   await expect(main.getByRole('button',{name:'Record actual use',exact:true})).toBeVisible();
-  expect(balance((await store.read()).entities,id)).toEqual({physical:'100',reserved:'4',available:'96'});
+  expect((await stock())).toEqual({physical:'100',reserved:'4',available:'96'});
   await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:test.info().outputPath('bom-stock-narrow.png')});
   await main.getByRole('button',{name:'Record actual use',exact:true}).click();
   await expect(main.getByLabel('Actually used',{exact:true})).toHaveValue('');
@@ -83,7 +84,7 @@ test('physical and VST templates coexist; a record BOM reserves parts and record
   await main.getByRole('button',{name:'Restore draft',exact:true}).click();
   await expect(main.getByLabel('Actually used',{exact:true})).toHaveValue('2');
   await expect(main.getByLabel('Scrapped',{exact:true})).toHaveValue('1');
-  expect(balance((await store.read()).entities,id).reserved).toBe('4');
+  expect((await stock()).reserved).toBe('4');
   // Lose the reply after commit: retry must recover the receipt, not consume again.
   let fail=true;
   await page.route('**/api/modules/command*',async route=>{
@@ -93,11 +94,11 @@ test('physical and VST templates coexist; a record BOM reserves parts and record
   await main.getByRole('button',{name:'Record use and release unused',exact:true}).click();
   await expect(main.getByLabel('Actually used',{exact:true})).toHaveValue('2');
   await expect(main.getByRole('alert')).toBeVisible();
-  expect(balance((await store.read()).entities,id).physical).toBe('97');
+  expect((await stock()).physical).toBe('97');
   await main.getByRole('button',{name:'Record use and release unused',exact:true}).click();
   await expect(main.getByRole('heading',{name:'Actual component use',exact:true})).toBeVisible();
   await expect(main).toContainText('2 used, 1 scrapped, 1 unused');
-  data=await store.read();expect(balance(data.entities,id)).toEqual({physical:'97',reserved:'0',available:'97'});
+  expect((await stock())).toEqual({physical:'97',reserved:'0',available:'97'});
   await main.getByRole('button',{name:'Details',exact:true}).click();
   await expect(main.getByRole('button',{name:'Save BOM',exact:true})).toBeDisabled();
   await page.reload();
@@ -117,7 +118,7 @@ test('physical and VST templates coexist; a record BOM reserves parts and record
   await main.getByRole('button',{name:'Reserve components',exact:true}).click();
   await main.getByRole('button',{name:'Cancel build and release stock',exact:true}).click();
   await expect(main).toContainText('All reservations were released');
-  expect(balance((await store.read()).entities,id).physical).toBe('97');
+  expect((await stock()).physical).toBe('97');
   expect(errors).toEqual([]);expect(requestErrors).toEqual([]);
  }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
