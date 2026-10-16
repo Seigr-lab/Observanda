@@ -1,6 +1,6 @@
 import {t} from '../i18n/index.js';
 const tr=(key,values)=>t('moduleReferenceTargets',key,values);
-const locked=error=>['ACCESS_LOCKED','ACCESS_DENIED','DEVICE_UNKNOWN'].includes(error?.code);
+const locked=error=>['ACCESS_LOCKED','ACCESS_DENIED','DEVICE_UNKNOWN','ACCESS_CANCELLED'].includes(error?.code);
 
 // A separate dialog keeps the source form and selected location intact while
 // the access owner presents its own unlock dialog above this one.
@@ -29,7 +29,7 @@ export function moduleReferencePicker({state,client,esc,field,current,onChoose,t
   try{
    const result=s.mode==='owners'?await client.owners({projectId:s.projectId,search:s.query,offset,limit:25,revision:offset?s.page?.revision:null},{signal:request.signal,unlock}):await client.query({sourceId:s.sourceId,types:s.kind?[s.kind]:s.types,query:s.query,cursor,limit:25},{signal:request.signal,unlock});
    if(valid(s)&&s.request===request)s.page=result;
-  }catch(error){if(valid(s)&&s.request===request&&error.name!=='AbortError')s.error=error;}
+  }catch(error){if(valid(s)&&s.request===request&&!request.signal.aborted){if(error.name!=='AbortError')s.error=error;else if(unlock)s.error={code:'ACCESS_CANCELLED',message:tr('cancelled')};}}
   finally{if(valid(s)&&s.request===request){s.busy=false;paint();}}
  }
  async function command(node){
@@ -59,7 +59,7 @@ export function moduleReferencePicker({state,client,esc,field,current,onChoose,t
     if(!valid(s)||s.request!==request)return;
     await onChoose(resolved,{draft:s.draft,stillCurrent:()=>valid(s)&&s.request===request});
     if(valid(s))stop();
-   }catch(error){if(valid(s)&&s.request===request&&error.name!=='AbortError')s.error=error;}
+   }catch(error){if(valid(s)&&s.request===request&&!request.signal.aborted)s.error=error.name==='AbortError'?{code:'ACCESS_CANCELLED',message:tr('cancelled')}:error;}
    finally{if(valid(s)&&s.request===request){s.busy=false;paint();}}
   }
  }

@@ -27,5 +27,6 @@
  "notebook": "Lab book",
  "project": "Project",
  "partial": "Some locations could not be checked. Available linked work is shown.",
- "retryIncoming": "Retry connected work"
+ "retryIncoming": "Retry connected work",
+ "cancelled": "Access was cancelled. Your selection and edits are retained."
 }
