@@ -14,6 +14,7 @@ export function appearanceReferenceQuery(params){
 // Merge each book's authenticated postings in saved record order. Only one
 // frontier per book and a bounded index cache survive between emitted rows.
 async function* candidates(records,id,after,backward){
+ if(records.referenceRows){yield* records.referenceRows(id,after,backward);return;}
  const {store,snapshot,signal}=records;
  yield* recordReferenceCandidates({store,snapshot,signal,notebooks:records.notebooks,workspaceId:records.metadata.id,fallback:({after,backward})=>records.rows({after:after===null?null:{position:after},backward})},id,{after,backward});
 }
@@ -27,15 +28,15 @@ export async function appearanceReferencePage(records,id,cursor=null){
   try{anchor=store.decode('appearance-reference-page',metadata.id,Buffer.from(cursor,'base64url'));}catch{throw new AppError('INVALID');}
   if(!anchor||Object.keys(anchor).sort().join()!=='after,backward,binding'||anchor.binding!==binding||!Number.isSafeInteger(anchor.after)||anchor.after<0||typeof anchor.backward!=='boolean')throw new AppError('INVALID');
  }
- const matches=recordQueryMatcher({relatedTo:{workspaceId:metadata.id,id},referenceNamespaces:selected.referenceNamespaces}),resolve=publicationLinkResolver(metadata.id,{entries:[selected]});
+ const matches=recordQueryMatcher({relatedTo:{workspaceId:metadata.id,id:selected.recordId??id},referenceNamespaces:selected.referenceNamespaces}),resolve=publicationLinkResolver(metadata.id,{entries:[selected]});
  const items=[];let scanned=0,first=null,last=null,more=false;
  for await(const row of candidates(records,id,anchor.after,anchor.backward)){
   if(items.length===24||scanned===256){more=true;break;}
   signal?.throwIfAborted();first??=row.position;last=row.position;scanned++;
   if(!await records.visible(row))continue;
-  const [summary]=await Array.fromAsync(store.queryDocuments([row],metadata,{signal,search:false,references:true}));
+  const summary=await records.summary(row,{references:true});
   if(!matches(summary))continue;
-  const [details]=await Array.fromAsync(store.queryDocuments([row],metadata,{signal,search:false,publicationDetails:true}));
+  const details=await records.summary(row,{publicationDetails:true});
   if(!details.publicationDescriptor.relations.some(link=>resolve(researchReference(link.target))))continue;
   await records.get(row.id,details);items.push(row.id);
  }

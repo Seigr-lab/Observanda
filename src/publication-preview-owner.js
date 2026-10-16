@@ -25,10 +25,10 @@ export class PublicationPreviewOwner{
   this.rows=new Map();this.descriptors=new Map();this.originals=new Map();this.choices=new Map((source.edition?.records??[]).map(choice=>[choice.id,choice]));
   this.history=new Map((source.edition?.history??[]).filter(choice=>choice.include).map(choice=>[this.id('record',revisionPageId(source.workspaceId,choice.id,choice.revision)),structuredClone(choice)]));
  }
- async initialize({counts=false}={}){
-  const {value}=await this.reader.use(this.source.workspaceId,undefined,async(store,snapshot,pinned)=>{
+ async initialize({counts=false,snapshotId}={}){
+  const {value}=await this.reader.use(this.source.workspaceId,snapshotId,async(store,snapshot,pinned)=>{
    const context=publicationSourceContext(snapshot.metadata,this.source,pinned.owner);
-   return {...context,snapshotId:pinned.snapshotId,owner:{...pinned.owner,projectNamespaceId:pinned.projectNamespaceId},...(counts?{notebookCounts:await this.countValues(store,snapshot,context.metadata)}:{})};
+   return {...context,snapshotId:pinned.snapshotId,positionSpan:snapshot.nextPosition??snapshot.records.length,owner:{...pinned.owner,projectNamespaceId:pinned.projectNamespaceId},...(counts?{notebookCounts:await this.countValues(store,snapshot,context.metadata)}:{})};
   });
   Object.assign(this,value);
   this.projected=publicationOwnerProjection({metadata:this.metadata,records:[]},this.owner,this.identities).metadata;
@@ -85,6 +85,17 @@ export class PublicationPreviewOwner{
     const index=values.findIndex(value=>compare(row,value)<0);values.splice(index<0?values.length:index,0,row);if(values.length>limit)values.pop();
    }
    this.notebookCounts=counts;return values;
+  });
+ }
+ // Saved-order pages share the same authenticated selection as the canvas.
+ async positionWindow({after=null,backward=false,limit=128}={}){
+  if(!Number.isInteger(limit)||limit<1||limit>257)throw new AppError('INVALID');
+  return this.use(async(store,snapshot)=>{
+   const notebooks=new Set(this.metadata.notebooks.filter(book=>this.metadata.projects.some(project=>project.id===book.projectId&&project.share)).map(book=>book.id)),values=[];
+   for await(const row of publicationRecords(store,snapshot,{...this.options(),notebooks,overrides:await this.overrides(store,snapshot),after,backward})){
+    if(this.included(row.id)&&await this.admit(store,snapshot,row))values.push(this.projectedRow(row));if(values.length===limit)break;
+   }
+   return values;
   });
  }
  async overrides(store,snapshot){

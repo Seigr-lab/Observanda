@@ -1,3 +1,5 @@
+import {AppearancePreviewSources} from './appearance-preview-sources.js';
+import {validPublicationSources} from './web/publication-sources-model.js';
 import {referenceNamespaceMatches} from './research-reference-namespace.js';
 import {AppError} from './errors.js';
 import {validAppearance} from './web/themes.js';
@@ -21,7 +23,7 @@ import {appearanceReferencePage,appearanceReferenceQuery} from './appearance-pre
 // Appearance edits carry only design tokens. Website content comes from the
 // immutable saved snapshot, with sharing checked before retrieving any body.
 // The existing publisher still owns projection, assets, rendering and privacy.
-async function withSource(workspace,command,{signal}={},consume){
+async function withSource(workspace,command,{signal,sourceReader,sourceSnapshots,mediaOrigins}={},consume){
  if(!command||Object.keys(command).sort().join()!=='appearance,etag,mode,workspaceId'||
   !researchId(command.workspaceId)||!revisionId(command.etag)||!validAppearance(command.appearance)||
   !['auto','examples','website'].includes(command.mode))throw new AppError('INVALID');
@@ -35,8 +37,16 @@ async function withSource(workspace,command,{signal}={},consume){
   if(snapshot.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
   const book={...snapshot.metadata,entries:[],appearance:structuredClone(command.appearance)};
   if(command.mode==='examples')return consume({book,source:'examples',snapshot,store,records:null});
-  const records=await new AppearancePreviewRecords(store,snapshot,{signal,snapshotId:command.etag,websiteId:workspace.websiteId??null}).initialize();
-  return consume({book,source:command.mode==='auto'?(records.counts.total||book.pages.some(p=>p.share)?'website':'examples'):command.mode,snapshot,store,records});
+  const local=await new AppearancePreviewRecords(store,snapshot,{signal,snapshotId:command.etag,websiteId:workspace.websiteId??null}).initialize();
+  const sources=book.website.researchSources??[];
+  if(!validPublicationSources(sources)||sources.some(source=>source.workspaceId===book.id))throw new AppError('INVALID');
+  const consumeRecords=(records,metadata=book)=>consume({book:metadata,source:command.mode==='auto'?(records.counts.total||metadata.pages.some(p=>p.share)?'website':'examples'):command.mode,snapshot,store,records});
+  if(!sources.length)return consumeRecords(local);
+  const reader=await sourceReader?.({signal});if(!reader)throw new AppError('ACCESS_LOCKED');
+  try{
+   const records=await new AppearancePreviewSources(local,reader,{snapshots:sourceSnapshots,mediaOrigins}).initialize(sources);
+   const value=await consumeRecords(records,{...records.metadata,entries:[],appearance:book.appearance});await reader.verify();return value;
+  }finally{await reader.close();}
  });
 }
 export const appearancePreviewSource=(workspace,command,options)=>withSource(workspace,command,options,({book,source})=>({book,source}));
@@ -72,8 +82,9 @@ function staticChoices(selection){
 }
 // Bounded page choices, with a snapshot-bound continuation. Changing appearance
 // does not require retrieving all page titles, much less all original records.
-export async function appearancePreviewChoices(workspace,command,{cursor=null,path=null,signal}={}){
- return withSource(workspace,command,{signal},async({book,records,snapshot,store,source})=>{
+export async function appearancePreviewChoices(workspace,command,options={}){
+ const {cursor=null,path=null}=options;
+ return withSource(workspace,command,options,async({book,records,source})=>{
   if(source!=='website')throw new AppError('INVALID');
   const selection=selectionFor(book,records),fixed=staticChoices(selection);
   if(path!==null){
@@ -85,23 +96,23 @@ export async function appearancePreviewChoices(workspace,command,{cursor=null,pa
   let anchor={offset:0,after:null};
   if(cursor!==null){
    try{if(typeof cursor!=='string'||cursor.length>2048)throw Error();anchor=JSON.parse(Buffer.from(cursor,'base64url'));}catch{throw new AppError('INVALID');}
-   if(Object.keys(anchor).sort().join()!=='after,etag,offset,websiteId'||anchor.etag!==command.etag||anchor.websiteId!==(workspace.websiteId??null)||!Number.isSafeInteger(anchor.offset)||anchor.offset<0||anchor.offset>fixed.length||anchor.after!==null&&(!Number.isSafeInteger(anchor.after)||anchor.after<0||anchor.offset!==fixed.length))throw new AppError('INVALID');
+   if(Object.keys(anchor).sort().join()!=='after,etag,offset,websiteId'||anchor.etag!==records.snapshotId||anchor.websiteId!==(workspace.websiteId??null)||!Number.isSafeInteger(anchor.offset)||anchor.offset<0||anchor.offset>fixed.length||anchor.after!==null&&(!Number.isSafeInteger(anchor.after)||anchor.after<0||anchor.offset!==fixed.length))throw new AppError('INVALID');
   }
   const pages=[],limit=40;let offset=anchor.offset,after=anchor.after,more=false;
   while(offset<fixed.length&&pages.length<limit)pages.push(fixed[offset++]);
   if(offset<fixed.length)more=true;
   else for await(const row of records.rows({after:after===null?null:{position:after}})){
    if(pages.length===limit){more=true;break;}
-   const [summary]=await Array.fromAsync(store.queryDocuments([row],snapshot.metadata,{search:false,signal}));
+   const summary=await records.summary(row);
    pages.push({path:targetPath('entry:'+row.id),title:summary.title});after=row.position;
   }
-  return {pages,nextCursor:more?Buffer.from(JSON.stringify({offset,after,etag:command.etag,websiteId:workspace.websiteId??null})).toString('base64url'):null};
+  return {pages,nextCursor:more?Buffer.from(JSON.stringify({offset,after,etag:records.snapshotId,websiteId:workspace.websiteId??null})).toString('base64url'):null};
  });
 }
 
-export async function appearancePreviewPage(workspace,command,path,{signal}={}){
- const request=appearancePreviewRequest(path),target=request.target;
- return withSource(workspace,command,{signal},async({book,source,records})=>{
+export async function appearancePreviewPage(workspace,command,path,options={}){
+ const {signal}=options,request=appearancePreviewRequest(path),target=request.target;
+ return withSource(workspace,command,options,async({book,source,records})=>{
   if(source!=='website')throw new AppError('INVALID');
   const selection=selectionFor(book,records),[kind,id]=target.split(':');
   const item=kind==='entry'?await records.get(id):selection[{project:'projects',notebook:'notebooks',page:'pages'}[kind]]?.find(v=>v.id===id);
@@ -136,7 +147,7 @@ export async function appearancePreviewPage(workspace,command,path,{signal}={}){
   if(request.feed&&!collectionPages.some(page=>page.key===request.feed.key&&page.visitor))throw new AppError('NOT_FOUND');
   for(const entry of entries.values())for(const doc of [entry.body,...entry.sections.map(s=>s.body)])await richLinks(doc);
   for(const card of cards.values())references.push(...records.descriptors.get(card.id).relations.filter(link=>link.role==='mention').map(link=>link.target));
-  for(const reference of references)if(reference.kind==='record'&&await referenceNamespaceMatches(records.store,reference))await records.get(reference.id);
+  for(const reference of references)if(reference.kind==='record'){if(records.resolveReference)await records.resolveReference(reference);else if(await referenceNamespaceMatches(records.store,reference))await records.get(reference.id);}
   const resolve=publicationLinkResolver(book.id,{...selection,entries:[...records.descriptors.values()]});
   for(const card of cards.values())if(records.descriptors.get(card.id).relations.some(link=>link.role==='mention')){
    const original=await records.original(card.id);card.excerpt=publicationExcerpt(publicationRecordText(original.body,original,resolve));

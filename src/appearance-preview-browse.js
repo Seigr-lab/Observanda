@@ -32,7 +32,7 @@ export async function appearanceBrowsePage(records,query){
  if(!(filters.from&&filters.to&&filters.from>filters.to))for await(const row of records.rows({after:anchor.after===null?null:{position:anchor.after},backward:anchor.backward})){
   if(items.length===40||scanned===256){more=true;break;}
   first??=row.position;last=row.position;scanned++;
-  const [summary]=await Array.fromAsync(store.queryDocuments([row],metadata,{search:false,signal:records.signal}));
+  const summary=await records.summary(row);
   const item={id:summary.id,title:summary.title,notebookId:summary.notebookId,type:summary.template?.label??summary.type,journey:readingJourney(summary),tags:summary.tags,occurredOn:summary.occurredOn};
   const bounds=dateBounds(item.occurredOn),text=item.title+bookText(item.journey)+' · '+recordDateLabel(item.occurredOn)+(item.tags.length?item.tags.join(' · '):'');
   if(matchesPublicRecord({...item,text,start:bounds?.from??'',end:bounds?.to??''},filters))items.push(item);

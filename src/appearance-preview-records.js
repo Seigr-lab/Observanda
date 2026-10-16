@@ -16,6 +16,7 @@ export class AppearancePreviewRecords{
   this.notebooks=new Set(this.metadata.notebooks.filter(n=>this.metadata.projects.some(p=>p.id===n.projectId&&p.share)).map(n=>n.id));
   this.descriptors=new Map();this.originals=new Map();this.members=new Map();
  }
+ async summary(row,options={}){return (await Array.fromAsync(this.store.queryDocuments([row],this.metadata,{search:false,signal:this.signal,...options})))[0];}
  async member(id){
   const row=await this.store.member(this.snapshot,id);
   return row&&!this.snapshot.indexVersion?{...row,position:this.snapshot.records.findIndex(value=>value.id===id)}:row;

@@ -28,7 +28,7 @@ export async function appearanceCollectionPage(records,{key,target,notebooks,fil
   if(!anchor.backward&&limit&&anchor.matched+items.length===limit)break;
   if(items.length===24||scanned===256){more=true;break;}
   first??=point(row);last=point(row);scanned++;
-  if(tag){const [summary]=await Array.fromAsync(store.queryDocuments([row],records.metadata,{search:false,signal:records.signal}));if(!summary.tags.includes(tag))continue;}
+  if(tag){const summary=await records.summary(row);if(!summary.tags.includes(tag))continue;}
   const {id,title,notebookId,occurredOn,status,tags,type,excerpt,hasBody,attachments}=await records.get(row.id);
   items.push({id,title,notebookId,occurredOn,status,tags,type,excerpt,hasBody,attachments});
  }

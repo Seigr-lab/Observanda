@@ -31,7 +31,7 @@ export async function appearanceFeedPage(records,{key,target,notebooks,filter={}
   if(value?.binding!==binding||typeof value.backward!=='boolean'||!value.anchor)throw new AppError('INVALID');
   ({anchor,backward,boundary}=value);
  }
- const summary=async row=>(await Array.fromAsync(store.queryDocuments([row],records.metadata,{search:false,signal:records.signal})))[0];
+ const summary=row=>records.summary(row);
  // Author selection precedes visitor filtering and ordering. A retained
  // boundary prevents reversing a limited feed from choosing different records.
  if(filter.limit&&!cursor){

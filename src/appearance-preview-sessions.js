@@ -1,3 +1,5 @@
+import {publicationPreviewMedia} from './publication-preview-media.js';
+import {appearancePreviewSource} from './appearance-preview.js';
 import {randomBytes} from 'node:crypto';
 import {appearancePreviewChoices,appearancePreviewPage,appearancePreviewRequest} from './appearance-preview.js';
 import {DesignCandidates} from './design-candidates.js';
@@ -11,33 +13,34 @@ import {feedFilePath} from './publication-feeds.js';
 export class AppearancePreviewSessions{
  constructor({maxSessions=5,cache=new DesignCandidates()}={}){this.maxSessions=maxSessions;this.cache=cache;this.sessions=new Map();}
  clear(){this.sessions.clear();this.cache.clear();}
- async create(workspace,command,{media,fonts,blockedValues=[],signal}={}){
-  const choices=await appearancePreviewChoices(workspace,command,{signal}),defaultPage=choices.pages[0]?.path;
+ async create(workspace,command,{media,fonts,blockedValues=[],signal,sourceReader,client}={}){
+  const sourceSnapshots=new Map(),choices=await appearancePreviewChoices(workspace,command,{signal,sourceReader,sourceSnapshots}),defaultPage=choices.pages[0]?.path;
   if(!defaultPage)throw new AppError('PUBLICATION_EMPTY');
   const id=randomBytes(32).toString('hex');
   while(this.sessions.size>=this.maxSessions)this.sessions.delete(this.sessions.keys().next().value);
-  this.sessions.set(id,{workspace,command:structuredClone(command),media,fonts,blockedValues});
-  try{await this.page(id,defaultPage,{signal});}catch(error){this.sessions.delete(id);throw error;}
+  this.sessions.set(id,{workspace,command:structuredClone(command),media,fonts,blockedValues,sourceReader,sourceSnapshots,client});
+  try{await this.page(id,defaultPage,{signal,client});}catch(error){this.sessions.delete(id);throw error;}
   return {source:'website',...choices,defaultPage,baseUrl:'/appearance-preview/'+id+'/',url:'/appearance-preview/'+id+'/'+defaultPage,pagesUrl:'/api/appearance-preview/'+id+'/pages'};
  }
- get(id){const session=this.sessions.get(id);if(!session)throw new AppError('NOT_FOUND');return session;}
- async choices(id,options){const {workspace,command}=this.get(id);return appearancePreviewChoices(workspace,command,options);}
- async page(id,path,{signal}={}){
+ get(id,client){const session=this.sessions.get(id);if(!session||session.client!==client)throw new AppError('NOT_FOUND');return session;}
+ async choices(id,options={}){const {workspace,command,sourceReader,sourceSnapshots}=this.get(id,options.client);return appearancePreviewChoices(workspace,command,{...options,sourceReader,sourceSnapshots});}
+ async page(id,path,{signal,client}={}){
   signal?.throwIfAborted();
-  const request=appearancePreviewRequest(path),session=this.get(id),key=id+':'+request.key,cached=this.cache.get(key);if(cached)return cached;
-  const {workspace,command,media,fonts,blockedValues}=session;
-  const context=await appearancePreviewPage(workspace,command,request.key,{signal}),plan=publicationPage(context,request.target),mediaFiles=new Map();
-  for(const [id,kind] of plan.media){signal?.throwIfAborted();const file=await media.get(id,{streamed:true,signal});if(file.kind!==kind)throw new AppError('MEDIA_INVALID');mediaFiles.set(id,file);}
+  const request=appearancePreviewRequest(path),session=this.get(id,client),key=id+':'+request.key,cached=this.cache.get(key);
+  const {workspace,command,media,fonts,blockedValues,sourceReader,sourceSnapshots}=session;
+  if(cached){if(sourceSnapshots.size)await appearancePreviewSource(workspace,command,{signal,sourceReader,sourceSnapshots});return cached;}
+  const mediaOrigins=new Map(),context=await appearancePreviewPage(workspace,command,request.key,{signal,sourceReader,sourceSnapshots,mediaOrigins}),plan=publicationPage(context,request.target),mediaFiles=new Map(),sourceMedia=mediaOrigins.size?publicationPreviewMedia(workspace,mediaOrigins,sourceReader):media;
+  for(const [id,kind] of plan.media){signal?.throwIfAborted();const file=await sourceMedia.get(id,{streamed:true,signal});if(file.kind!==kind)throw new AppError('MEDIA_INVALID');mediaFiles.set(id,file);}
   const fontFiles=await fonts.files(plan.fonts,{preview:true,signal});signal?.throwIfAborted();
   const candidate=renderPublication(context,{blockedValues,mediaFiles,fontFiles,emitBrowse:false});
   verifyPublicationManifest(candidate);
   if(this.sessions.get(id)!==session)throw new AppError('NOT_FOUND');
   signal?.throwIfAborted();try{this.cache.set(key,candidate);}catch(error){if(error.code!=='DESIGN_PREVIEW_LIMIT')throw error;}return candidate;
  }
- async file(id,path,{signal}={}){
+ async file(id,path,{signal,client}={}){
   const asset=/^_assets\/([A-Za-z0-9_-]+)\/(.+)$/.exec(path),page=asset?Buffer.from(asset[1],'base64url').toString('utf8'):path;
   if(asset&&Buffer.from(page).toString('base64url')!==asset[1])throw new AppError('NOT_FOUND');
-  const request=appearancePreviewRequest(page),candidate=await this.page(id,request.key,{signal}),file=asset?asset[2]:request.path;
+  const request=appearancePreviewRequest(page),candidate=await this.page(id,request.key,{signal,client}),file=asset?asset[2]:request.path;
   if(!candidate.files.has(file)||asset&&!/^(styles\.css|public-(?:book|feeds)\.js|(?:media|fonts)\/[^/]+)$/.test(file)&&!feedFilePath(file))throw new AppError('NOT_FOUND');
   if(asset&&!feedFilePath(file))return {content:candidate.files.get(file),name:file};
   // Page links keep their normal relative destinations. Resources carry the

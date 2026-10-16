@@ -1238,8 +1238,8 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       if(req.method==='POST'&&url.pathname==='/api/appearance-preview'){
         const data=await body(req),controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
         try{
-          const {book,source}=await appearancePreviewSource(workspace,data,{signal:controller.signal});
-          if(source==='website')return json(await appearancePreviews.create(workspace,{...data,mode:'website'},{signal:controller.signal,media,fonts:new WorkspaceFonts(workspace),blockedValues}));
+          const {book,source}=await appearancePreviewSource(workspace,data,{signal:controller.signal,sourceReader});
+          if(source==='website')return json(await appearancePreviews.create(workspace,{...data,mode:'website'},{signal:controller.signal,media,fonts:new WorkspaceFonts(workspace),blockedValues,sourceReader,client}));
           const fontFiles=await new WorkspaceFonts(workspace).files(book.appearance,{preview:true,signal:controller.signal}),result=buildDesignExamples(book.appearance,{blockedValues,fontFiles}),id=randomBytes(32).toString('hex');
           controller.signal.throwIfAborted();designCandidates.set(id,result.candidate);return json({url:`/preview/${id}/${result.defaultPage}`,baseUrl:`/preview/${id}/`,defaultPage:result.defaultPage,source,pages:result.candidate.pages});
         }finally{res.off('close',abort);}
