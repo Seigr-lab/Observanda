@@ -22,13 +22,13 @@ async function fixture(t,count=0){
   const s={...sample,id:randomUUID(),code:'S-'+i};lab.samples.push(s);
   for(let j=0;j<2;j++)lab.analyses.push({id:randomUUID(),code:'A-'+i+'-'+j,sampleId:s.id,result:{...result,notes:'private-result '.repeat(120)},status:'draft',review:null,updatedAt:'2026-10-01T00:00:00.000Z'});
  }
- if(count)await f.workspace.withLock(()=>f.workspace.catalogue(store=>seedSampleAnalysis(store,lab)));
+ if(count)await new Laboratory(f.workspace).catalogue(store=>seedSampleAnalysis(store,lab),{write:true});
  const service=new Laboratory(f.workspace.root,f.vault);return {...f,book,lab,service,reader:new SampleAnalysisReader(service)};
 }
 test('new installations retain separate originals; commands, reviews, reports and event pages share the same pinned indexes',async t=>{
  const f=await fixture(t),save=(command,options={})=>f.service.change(command,{compact:true,commandId:randomUUID(),...options});
  const first=await save({action:'create-sample',etag:'new',sample});
- const head=await f.workspace.catalogue(s=>s.object('laboratory'));assert.equal(head.formatVersion,2);assert.ok(Buffer.byteLength(serialize(head))<1000);
+ const head=await f.service.catalogue(s=>s.object('laboratory'));assert.equal(head.formatVersion,2);assert.ok(Buffer.byteLength(serialize(head))<1000);
  const idempotency=randomUUID(),create={action:'create-analysis',etag:'new',analysis:{code:'A-01',sampleId:first.selectedId,result}};
  const a=await save(create,{commandId:idempotency});assert.deepEqual(await save(create,{commandId:idempotency}),a);
  const selected=await f.reader.selected({workspaceId:f.book.id,kind:'analysis',id:a.selectedId});
@@ -51,7 +51,7 @@ test('new installations retain separate originals; commands, reviews, reports an
  }finally{Laboratory.prototype.read=read;SampleAnalysisCatalogue.prototype.assemble=assemble;}
  const before=await f.service.read();await assert.rejects(save({action:'create-sample',etag:before.etag,sample:{...sample,code:'s-01'}}),{code:'LAB_INVALID'});
  assert.equal((await f.service.read()).etag,before.etag);
- await f.workspace.catalogue(async store=>new SampleAnalysisCatalogue(store).verify(await new SampleAnalysisCatalogue(store).source()));
+ await f.service.catalogue(async store=>new SampleAnalysisCatalogue(store).verify(await new SampleAnalysisCatalogue(store).source()));
 });
 test('65 and 650 samples have bounded original reads and SQL for pages, late history and single-result edits',async t=>{
  t.diagnostic(JSON.stringify({platform:process.platform,node:process.version,cpu:os.cpus()[0].model,totalMemoryGiB:Math.round(os.totalmem()/1024**3)}));
@@ -73,7 +73,7 @@ test('65 and 650 samples have bounded original reads and SQL for pages, late his
 });
 test('missing originals and altered summaries fail selected reading or complete catalogue verification',async t=>{
  const f=await fixture(t,3),id=f.lab.analyses[0].id;
- await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{
+ await f.service.catalogue(async store=>{
   const owner=new SampleAnalysisCatalogue(store),source=await owner.source(),member=await owner.member(source.head,'analysis',id);
   const slot='sample-analysis-value:'+member.revision,row=await store.db.get('SELECT payload FROM state WHERE slot=$1',slot);
   await store.db.run('DELETE FROM state WHERE slot=$1',slot);
@@ -81,6 +81,7 @@ test('missing originals and altered summaries fail selected reading or complete 
   await store.db.run('INSERT INTO state VALUES ($1,$2)',slot,row.payload);
   const changed={...member,summary:{...member.summary,code:'Unrelated summary'}};await owner.put(source.head,changed,member);await owner.index.flush(source.head.root);
   await assert.rejects(owner.verify(source),{code:'LAB_INVALID'});
-  await store.putObject('laboratory',source.head);await assert.rejects(store.verify(catalogueDescriptor(f.book)),{code:'LAB_INVALID'});
- }));
+  await store.putObject('laboratory',source.head);
+ },{write:true});
+ await assert.rejects(f.workspace.catalogue(store=>store.verify(catalogueDescriptor(f.book))),{code:'LAB_INVALID'});
 });

@@ -38,7 +38,7 @@ export class ProjectDomains{
    const owned=new Set(registry?.domains??[]);
    for(const domain of domains){
     const connection=session.schema(projectDomainSchema(db.id,domain)),store=new ProjectDomainCatalogue(this.storage,connection,domain,this.namespaceId,{writable:true});stores.push(store);
-    if(!owned.has(domain)){await createProjectDomainSchema(connection);await store.putObject('owner',{...moduleDomainOwner(this.storage,this.namespaceId),domain,vaultId:this.storage.vault.id});owned.add(domain);}
+    if(!owned.has(domain)){if(domain==='samples'&&await research.object('laboratory'))throw new AppError('ACCESS_UPGRADE');await createProjectDomainSchema(connection);await store.putObject('owner',{...moduleDomainOwner(this.storage,this.namespaceId),domain,vaultId:this.storage.vault.id});owned.add(domain);}
     await checkProjectDomainOwner(store);
    }
    if(commands&&!registry?.commandVersion){

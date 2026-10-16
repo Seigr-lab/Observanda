@@ -1,3 +1,5 @@
+import {readProjectDomainRegistry,writeProjectDomainRegistry} from '../src/project-domain-registry.js';
+import {projectDomainSchema} from '../src/project-domain-schema.js';
 // Seed realistic immutable state without measuring thousands of UI commands.
 // Production command behavior is tested separately against this retained data.
 import {SampleAnalysisCatalogue} from '../src/sample-analysis-catalogue.js';
@@ -20,4 +22,12 @@ export async function seedSampleAnalysis(store,lab){
  }
  head.root=await buildIndex(store,owner.index,entries(),()=>{throw Error('Invalid sample fixture index');});
  await store.putObject('laboratory',head);return head;
+}
+
+export async function legacySampleAnalysisFixture(workspace){
+ await workspace.withLock(()=>workspace.catalogue(async store=>{
+  const registry=await readProjectDomainRegistry(store);if(!registry?.domains.includes('samples'))return;
+  await store.db.run('DROP SCHEMA "'+projectDomainSchema(store.db.id,'samples')+'" CASCADE');
+  await writeProjectDomainRegistry(store,registry.domains.filter(d=>d!=='samples'),registry.namespaceId,registry);
+ }));
 }

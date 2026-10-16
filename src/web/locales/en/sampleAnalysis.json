@@ -90,5 +90,6 @@
   "eventSaveSubmit": "Result saved and submitted for review",
   "eventReview": "Review recorded",
   "eventAmend": "Amendment started",
-  "eventArchive": "Result archived"
+  "eventArchive": "Result archived",
+  "owner": "Project / lab book"
 }

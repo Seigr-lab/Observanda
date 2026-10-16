@@ -1,3 +1,4 @@
+import {verifySampleAnalysisCatalogue} from './sample-analysis-catalogue.js';
 import {cataloguePrefixExists} from './postgres-indexes.js';
 import {verifyProjectModuleDrafts} from './project-module-draft-verification.js';
 import {operationStage} from './operation-progress.js';
@@ -16,9 +17,11 @@ export async function verifyProjectDomains(research){
  const registry=await readProjectDomainRegistry(research);await checkProjectDomainSchemas(research,registry);if(!registry)return;
  const session=databaseSchemaSession(research.db),stores=[],sources=new Map(),owner=workspaceModules(research.workspace);
  try{
+  if(registry.domains.includes('samples')&&await research.object('laboratory'))throw new AppError('CATALOGUE_DAMAGED');
   await withScratch(async identities=>{
    for(const domain of registry.domains){
     const store=new ProjectDomainCatalogue(research.workspace,session.schema(projectDomainSchema(research.db.id,domain)),domain,registry.namespaceId);stores.push(store);await checkProjectDomainOwner(store);
+    if(domain==='samples')await verifySampleAnalysisCatalogue(store);
     const catalogue=new ModuleCatalogue(store),head=await catalogue.head(registry.namespaceId);sources.set(domain,moduleConstraintSource(catalogue,head));
     await catalogue.verify(registry.namespaceId,{
      entity:entity=>{store.assertModuleType(entity.type);owner.validateEntity(entity);},

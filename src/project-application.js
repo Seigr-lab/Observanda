@@ -1,3 +1,5 @@
+import {sampleAnalysisCollection} from './sample-analysis-collection.js';
+import {sampleAnalysisRequest,executeSampleAnalysisRequest} from './sample-analysis-requests.js';
 import {calendarDashboardCollection} from './calendar-dashboard-collection.js';
 import {moduleDashboardCollection} from './module-dashboard-collection.js';
 import {ProjectWorkspaceTargets} from './project-workspace-targets.js';
@@ -70,7 +72,7 @@ export function projectRequest(route,method){
  if(route==='/api/projects/publication-source')return {operation:'publication-source',write:false,limit:1048576};
  if(route==='/api/projects/publication-sites')return {operation:'publication-sites',write:false,limit:16384};
  if(['/api/projects/timeline-collection/query','/api/projects/timeline-collection/choices'].includes(route))return {operation:route.slice('/api/projects/'.length),write:false,limit:131072};
- if(['/api/projects/record-collection/query','/api/projects/record-collection/types','/api/projects/dashboard-collection/records','/api/projects/dashboard-collection/discovery','/api/projects/dashboard-collection/types','/api/projects/dashboard-collection/structure','/api/projects/dashboard-collection/choices','/api/projects/dashboard-collection/modules','/api/projects/dashboard-collection/calendar'].includes(route))return {operation:route.slice('/api/projects/'.length),write:false,limit:16384};
+ if(['/api/projects/record-collection/query','/api/projects/record-collection/types','/api/projects/dashboard-collection/records','/api/projects/dashboard-collection/discovery','/api/projects/dashboard-collection/types','/api/projects/dashboard-collection/structure','/api/projects/dashboard-collection/choices','/api/projects/dashboard-collection/modules','/api/projects/dashboard-collection/calendar','/api/projects/dashboard-collection/samples'].includes(route))return {operation:route.slice('/api/projects/'.length),write:false,limit:16384};
  const addressed=projectMaterialReferenceRequest(route);if(addressed)return addressed;
  if(route==='/api/projects/delete/pending')return {operation:'delete/pending',write:false,limit:16384};
  if(['/api/projects/open','/api/projects/open/resume','/api/projects/open/cancel','/api/projects/open/pending'].includes(route))return {operation:route.slice('/api/projects/'.length),write:!route.endsWith('/pending'),limit:2*1024*1024};
@@ -84,11 +86,11 @@ export function projectRequest(route,method){
  if(match[2]==='publication-sites')return {projectId:match[1],operation:match[2],write:false,limit:16384};
  if(['timeline-collection/query','timeline-collection/choices'].includes(match[2]))return {projectId:match[1],operation:match[2],write:false,limit:131072};
  const bookRequest=labBookRequest(match[2],method);if(bookRequest)return {projectId:match[1],...bookRequest};
- if(['record-collection/query','record-collection/types','dashboard-collection/records','dashboard-collection/discovery','dashboard-collection/types','dashboard-collection/structure','dashboard-collection/choices','dashboard-collection/modules','dashboard-collection/calendar'].includes(match[2]))return {projectId:match[1],operation:match[2],write:false,limit:16384};
+ if(['record-collection/query','record-collection/types','dashboard-collection/records','dashboard-collection/discovery','dashboard-collection/types','dashboard-collection/structure','dashboard-collection/choices','dashboard-collection/modules','dashboard-collection/calendar','dashboard-collection/samples'].includes(match[2]))return {projectId:match[1],operation:match[2],write:false,limit:16384};
  if(match[2]==='settings/save')return {projectId:match[1],operation:match[2],write:true,limit:MAX_BYTES};
  if(match[2]==='directory/reparent')return {projectId:match[1],operation:match[2],write:true,limit:16384};
  if(['storage/details','storage/copy','storage/copy/resume','storage/copy/cancel','storage/export','storage/export/resume','storage/export/cancel','storage/move','storage/move/resume','storage/move/cancel','storage/move/status','storage/delete','storage/delete/resume','storage/delete/status'].includes(match[2]))return {projectId:match[1],operation:match[2],write:!['storage/details','storage/move/status','storage/delete/status'].includes(match[2]),limit:16384};
- const command=reviewRequest('/api/'+match[2],method)??recordStarterRequest('/api/'+match[2],method)??projectAssetRequest('/api/'+match[2],method)??projectPublicationRequest('/api/'+match[2])??intakeRequest('/api/'+match[2])??materialRequest('/api/'+match[2])??researchRequest('/api/'+match[2])??projectModuleRequest('/api/'+match[2])??projectCalendarRequest('/api/'+match[2]);
+ const command=sampleAnalysisRequest('/api/'+match[2],method)??reviewRequest('/api/'+match[2],method)??recordStarterRequest('/api/'+match[2],method)??projectAssetRequest('/api/'+match[2],method)??projectPublicationRequest('/api/'+match[2])??intakeRequest('/api/'+match[2])??materialRequest('/api/'+match[2])??researchRequest('/api/'+match[2])??projectModuleRequest('/api/'+match[2])??projectCalendarRequest('/api/'+match[2]);
  if(command)return {projectId:match[1],route:'/api/'+match[2],...command};
  if(['access/details','access/password'].includes(match[2]))return {projectId:match[1],operation:match[2],write:match[2]==='access/password',limit:16384};
  if(['access/unlock','access/lock','reference'].includes(match[2]))return {projectId:match[1],operation:match[2],write:false,limit:16384};
@@ -179,6 +181,7 @@ export class ProjectApplication{
   if(selected.operation==='publication-source')return this.tracked(()=>projectPublicationSource(this,client,data,{scope:selected.projectId??null,labBookId:selected.labBookId??null,signal,check}),selected.projectId);
   if(selected.operation==='publication-sites')return this.tracked(()=>publicationSiteDirectory(this.recordCollections,client,data,{scope:selected.projectId??null,visit:selected.projectId?projectRecordCollection(this,client,check):async visit=>{await check();signal?.throwIfAborted();await visit(this.workspace,{workspaceId:data.workspaceId,projectId:null,labBookId:null},data.projectId);await check();},signal}),selected.projectId);
   if(['timeline-collection/query','timeline-collection/choices'].includes(selected.operation))return this.tracked(async()=> (selected.operation.endsWith('/choices')?timelineCollectionChoices:timelineCollectionQuery)(this.recordCollections,client,data,{scope:selected.projectId??null,registry:await this.registry(),visit:projectRecordCollection(this,client,check),check,signal}),selected.projectId);
+  if(selected.operation==='dashboard-collection/samples')return this.tracked(()=>sampleAnalysisCollection(this.dashboardCollections,client,data,{scope:selected.projectId??null,visit:projectRecordCollection(this,client,check),signal}),selected.projectId);
   if(selected.operation==='dashboard-collection/calendar')return this.tracked(()=>calendarDashboardCollection(this.dashboardCollections,client,data,{scope:selected.projectId??null,visit:projectRecordCollection(this,client,check),signal,read:async(storage,owner,command,options)=>this.calendars.run(this.session(client),storage,(await readAccess(storage.root)).etag,'page',command,{...options,source:!owner.projectId?calendarSources:undefined,ownerId:owner.labBookId?'book:'+owner.projectId+':'+owner.labBookId:owner.projectId??'workspace:'+owner.workspaceId,projectId:owner.projectId})}),selected.projectId);
   if(selected.operation==='dashboard-collection/modules')return this.tracked(()=>moduleDashboardCollection(this.dashboardCollections,client,data,{scope:selected.projectId??null,visit:projectRecordCollection(this,client,check),signal}),selected.projectId);
   if(selected.operation==='dashboard-collection/choices')return this.tracked(async()=>dashboardCollectionChoices(this.dashboardCollections,client,data,{scope:selected.projectId??null,registry:await this.registry(),visit:projectRecordCollection(this,client,check),check,signal}),selected.projectId);
@@ -277,6 +280,7 @@ export class ProjectApplication{
       const roots=[this.workspace.root,...(await registry.read()).value.projects.map(entry=>entry.root)];if(roots.some(root=>within(root,destination)||within(destination,root)))throw new AppError('STORAGE_PATH');
       return copyOwner(selected.operation==='storage/export'?archives:copies,{id:data.id,path:destination,onProgress});
      }
+     if(selected.sampleAnalysis)return executeSampleAnalysisRequest(storage,selected,data,{signal,check:assertCurrent,query,binary});
      if(selected.review)return executeReviewRequest(storage,this.deviceStore,selected.review,data);
      if(selected.starter)return executeRecordStarterRequest(storage,selected,data,{signal,binary});
      if(selected.asset)return executeProjectAsset(storage,selected,data,{signal,stream,query,contentLength,binary,jobs:()=>this.jobs.owner(session,storage,owner.etag,assertCurrent)});

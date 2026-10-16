@@ -14,18 +14,18 @@ export class SampleAnalysisReader{
  async indexed(workspaceId,etag,operation,{signal}={}){
   if(!researchId(workspaceId)||!etagValid(etag))invalid();signal?.throwIfAborted();
   const workspace=this.laboratory.workspace;if(await workspace.storageKind()!=='catalogue')return null;
-  return workspace.catalogue(async store=>{
-   if((await store.snapshot()).metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
+  return this.laboratory.catalogue(async store=>{
+   if((store.namespaceId??(await store.snapshot()).metadata.id)!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
    const owner=new SampleAnalysisCatalogue(store),source=await owner.source(etag);signal?.throwIfAborted();
    return source?operation(owner,source):null;
-  });
+  },{signal});
  }
  async source(workspaceId,etag,{signal}={}){
   if(!researchId(workspaceId)||!etagValid(etag))invalid();signal?.throwIfAborted();
   if((await this.laboratory.workspace.outline()).metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
   const current=await this.laboratory.snapshot(etag);signal?.throwIfAborted();return current;
  }
- async query(command,{signal}={}){
+ async query(command,{signal,collect}={}){
   if(!command||Object.keys(command).some(k=>!['workspaceId','view','search','sampleId','recordId','key','cursor','offset','limit'].includes(k)))invalid();
   const {workspaceId,view='samples',search='',sampleId=null,recordId=null,key=null,cursor=null,limit=25}=command;let offset=command.offset??0,etag=null;
   if(!views.includes(view)||typeof search!=='string'||search.length>512||![sampleId,recordId,key].every(id=>id===null||researchId(id))||!Number.isInteger(limit)||limit<1||limit>100||!Number.isSafeInteger(offset)||offset<0||offset>50000)invalid();
@@ -38,7 +38,7 @@ export class SampleAnalysisReader{
    if(!value||value.query!==query||!etagValid(value.etag)||value.etag===null||!Number.isSafeInteger(value.offset)||value.offset<0||value.offset>50000)invalid();
    ({offset,etag}=value);
   }
-  const indexed=await this.indexed(workspaceId,etag,async(owner,source)=>({...await owner.query(source,{view,search,sampleId,recordId,key,offset,limit,signal}),etag:source.etag}),{signal});
+  const indexed=await this.indexed(workspaceId,etag,async(owner,source)=>({...await owner.query(source,{view,search,sampleId,recordId,key,offset,limit,signal,collect}),etag:source.etag}),{signal});
   if(indexed)return this.page({workspaceId,view,query,offset,limit,...indexed});
   const current=await this.source(workspaceId,etag,{signal}),lab=current.lab,samples=new Map(lab.samples.map(s=>[s.id,s])),counts={samples:lab.samples.length,analyses:0,review:0,archive:0,approved:0,events:lab.events.length},perSample=new Map();
   for(const a of lab.analyses){signal?.throwIfAborted();counts[a.status==='archived'?'archive':'analyses']++;if(a.status==='in review')counts.review++;if(a.status==='approved')counts.approved++;perSample.set(a.sampleId,(perSample.get(a.sampleId)??0)+1);}
@@ -48,9 +48,9 @@ export class SampleAnalysisReader{
    if(!['samples','events','all'].includes(view)&&(view==='archive'?row.status!=='archived':row.status==='archived')||view==='review'&&row.status!=='in review')continue;
    const sample=samples.get(row.sampleId),haystack=view==='samples'?[row.code,row.material,row.source]:view==='events'?[row.action,row.actor,row.reason]:[row.code,row.result.analyte,sample?.code];
    if(needle&&!haystack.join(' ').toLocaleLowerCase('en').includes(needle))continue;
-   if(total++<offset||items.length===limit)continue;
+   const position=total++;if(!collect&&(position<offset||items.length===limit))continue;
    const value=view==='samples'?{...row,analyses:perSample.get(row.id)??0}:view==='events'?{id:row.id,at:row.at,action:row.action,recordId:row.recordId,actor:row.actor,reason:row.reason}:{id:row.id,code:row.code,sampleId:row.sampleId,sampleCode:sample.code,status:row.status,updatedAt:row.updatedAt,result:{method:row.result.method,analyte:row.result.analyte,kind:row.result.kind,value:row.result.value,unit:row.result.unit,lower:row.result.lower,upper:row.result.upper}};
-   items.push(value);
+   if(collect)await collect(value);else items.push(value);
   }
   return this.page({workspaceId,view,query,offset,limit,items,counts,total,etag:current.etag});
  }

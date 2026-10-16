@@ -437,9 +437,9 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       const sourceReader=publicationSourceFactory(historyProjects,client,selectedContext.workspace,{check:req.checkWriter});
       return await historyProjects.withSourceHistory(client,async()=>{
       const selectedProject=projectRequest(url.pathname,req.method);
-      if(selectedProject&&(req.method==='POST'||(selectedProject.material||selectedProject.publication||selectedProject.asset)&&req.method==='GET')){
+      if(selectedProject&&(req.method==='POST'||(selectedProject.material||selectedProject.publication||selectedProject.asset||selectedProject.sampleAnalysis)&&req.method==='GET')){
         if(!workspace||req.method==='POST'&&req.headers['x-observanda-workspace']!==selectedContext.id)throw new AppError('WORKSPACE_CHANGED');
-        if(selectedProject.publication||selectedProject.asset||selectedProject.starter){
+        if(selectedProject.publication||selectedProject.asset||selectedProject.starter||selectedProject.sampleAnalysis){
           const check=req.checkWriter;await check();if(selectedProject.write){activeWrites++;countedWrite=true;}else req.operationActivity=null;
           return await projectContentHttp(req,res,selectedProject,{body,json,mime,headless,contextId:context.id,execute:(data,options)=>historyProjects.run(client,selectedProject,data,{...options,check,setCheck:next=>{req.checkWriter=next;}})});
         }
@@ -981,7 +981,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
         try{const reader=new SampleAnalysisReader(laboratory),data=await body(req);return json(await reader[url.pathname.endsWith('/query')?'query':'selected'](data,{signal:controller.signal}));}finally{res.removeListener('close',abort);}
       }
-      if (req.method === 'POST' && url.pathname === '/api/laboratory/change') { await workspace.outline(); const {commandId,...command}=await body(req);return json(await laboratory.change(command,{compact:url.searchParams.get('compact')==='1',commandId:commandId??null})); }
+      if (req.method === 'POST' && url.pathname === '/api/laboratory/change') { await workspace.outline(); const {commandId,...command}=await body(req);return json(await laboratory.change(command,{compact:url.searchParams.get('compact')==='1',commandId:commandId??null,check:req.checkWriter})); }
       const resultSheet = /^\/api\/laboratory\/report\/([a-f0-9-]{36})$/.exec(url.pathname);
       if (req.method === 'GET' && resultSheet) return sendBytes(req, res, await laboratory.report(resultSheet[1], url.searchParams.get('revision'), blockedValues), 'text/html; charset=utf-8');
       const issuedSheet=/^\/api\/laboratory\/issued\/([a-f0-9-]{36})$/.exec(url.pathname);

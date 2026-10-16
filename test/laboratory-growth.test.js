@@ -12,7 +12,7 @@ import {clearVault} from '../src/encryption.js';
 import {digest,serialize} from '../src/storage-format.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 import {createAccess,takeCreatedVault} from '../src/access.js';
-import {seedSampleAnalysis} from './sample-analysis-fixture.js';
+import {seedSampleAnalysis,legacySampleAnalysisFixture} from './sample-analysis-fixture.js';
 import {SampleAnalysisReader} from '../src/sample-analysis-reader.js';
 const instant='2026-10-01T00:00:00.000Z',capacity=16*1024*1024;
 function corpus(samples,analyses=samples*2,events=samples*8){
@@ -25,6 +25,7 @@ function corpus(samples,analyses=samples*2,events=samples*8){
 async function fixture(t,lab,{indexed=false}={}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-laboratory-growth-')),f=await encryptedFixture(directory,sampleNotebook());
  t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ await legacySampleAnalysisFixture(f.workspace);
  await f.workspace.withLock(()=>f.workspace.catalogue(store=>indexed?seedSampleAnalysis(store,lab):store.putObject('laboratory',lab)));
  return {...f,directory,service:new Laboratory(f.workspace.root,f.vault)};
 }

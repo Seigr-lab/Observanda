@@ -21,7 +21,7 @@ for(const count of [65,650])test('sample-analysis navigation retains pages and o
  for(let i=0;i<count;i++)lab.samples.push({id:randomUUID(),code:'S-'+String(i).padStart(4,'0'),material:'Synthetic water',source:'PRIVATE_SAMPLE_SOURCE',collectedOn:'2026-10-01',receivedOn:'2026-10-01'});
  for(let i=0;i<count*2;i++)lab.analyses.push({id:randomUUID(),code:'A-'+String(i).padStart(4,'0'),sampleId:lab.samples[i%count].id,result:{method:'Synthetic method v1',analyte:'Absorbance',kind:'numeric',value:0.3,unit:'AU',lower:0,upper:1,notes:'PRIVATE_ANALYSIS_NOTES '.repeat(80)},status:'draft',review:null,updatedAt:instant});
  for(let i=0;i<count;i++){const event={id:randomUUID(),at:instant,action:'save-result',recordId:lab.analyses[0].id,actor:'',reason:'Correction '+i,previous:lab.events.at(-1)?.hash??''};lab.events.push({...event,hash:digest(serialize(event))});}
- await f.workspace.withLock(()=>f.workspace.catalogue(store=>seedSampleAnalysis(store,lab)));
+ await new Laboratory(f.workspace).catalogue(store=>seedSampleAnalysis(store,lab),{write:true});
  const settings=defaultDashboard();settings.enabledModules.push('laboratory');settings.views[0].panels=['samples','analyses','lab-events','laboratory'].map(id=>createPanel(id,id));await writeWorkspaceDashboard(f.workspace,settings,(await readWorkspaceDashboard(f.workspace)).etag);
  const app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')}),errors=[],requests=[],responses=[];page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>requests.push(new URL(r.url()).pathname));
  page.on('response',r=>{if(new URL(r.url()).pathname==='/api/laboratory/read/query'&&r.ok())responses.push(r.json());});

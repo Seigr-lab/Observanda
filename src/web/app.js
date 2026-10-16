@@ -601,7 +601,7 @@ const workspaceLive=workspaceRefresh({state,api,notify,onAccessError:report,
  }
 });
 window.addEventListener('pagehide',()=>workspaceLive.stop(),{once:true});
-const navigationActions=new Set(['module-open-owned','research-open-owned','help','help-open','record-activity-inspect','record-activity-create','migration-open','review-witnesses','publication-jobs-open-review','record-views','record-view-back','record-view-open','record-read','record-edit','record-read-linked','record-section-jump','workflow-new-run','configure-lab-notebook','specialize-notebook','attach-lab-notebook','module-open','laboratory-samples','preferences','dashboard-settings','integrations','workspace','projects','entries','appearance','website','laboratory','publishing','storage','branding','branding-back','open-project','project-records','filter-notebook','browse-record','edit-entry','open-issue','back-to-records','new-entry','new-project','new-notebook','edit-project','edit-project-template','edit-notebook','rename-notebook','workspace-reorganize','record-history-open','preview','storage-new','storage-open-dialog','storage-copy-dialog','storage-move-dialog','storage-portable-dialog','storage-encrypt-dialog','storage-open-recent','storage-cancel-new','storage-lock','storage-reset-dialog','publish-disconnect','record-link-open','record-backlink-open']);
+const navigationActions=new Set(['laboratory-open-owned','module-open-owned','research-open-owned','help','help-open','record-activity-inspect','record-activity-create','migration-open','review-witnesses','publication-jobs-open-review','record-views','record-view-back','record-view-open','record-read','record-edit','record-read-linked','record-section-jump','workflow-new-run','configure-lab-notebook','specialize-notebook','attach-lab-notebook','module-open','laboratory-samples','preferences','dashboard-settings','integrations','workspace','projects','entries','appearance','website','laboratory','publishing','storage','branding','branding-back','open-project','project-records','filter-notebook','browse-record','edit-entry','open-issue','back-to-records','new-entry','new-project','new-notebook','edit-project','edit-project-template','edit-notebook','rename-notebook','workspace-reorganize','record-history-open','preview','storage-new','storage-open-dialog','storage-copy-dialog','storage-move-dialog','storage-portable-dialog','storage-encrypt-dialog','storage-open-recent','storage-cancel-new','storage-lock','storage-reset-dialog','publish-disconnect','record-link-open','record-backlink-open']);
 async function action(button){
   if(removingRecord)return;
   if(accessHelp.action(button))return;
@@ -809,6 +809,13 @@ async function rawAction(button) {
   if(navigationActions.has(button.dataset.action))ownerOperation.clear();
   if(help.action(button))return;
   const name = button.dataset.action;
+  if(name==='laboratory-open-owned'){
+    const {workspaceId,projectId,labBookId,kind,id}=button.dataset;
+    if(!researchId(workspaceId)||projectId&&!researchId(projectId)||labBookId&&(!projectId||!researchId(labBookId))||!['sample','analysis','event'].includes(kind)||!researchId(id))throw {code:'INVALID'};
+    await projectOwners.enter(projectId||null,labBookId||null);if(state.book.id!==workspaceId)throw {code:'WORKSPACE_CHANGED'};
+    await labUI.action({dataset:{action:'laboratory-samples'}});
+    if(kind!=='event')await labUI.action({dataset:{action:kind==='sample'?'lab-sample':'lab-open',id}});return;
+  }
   if(name==='module-open-owned'){
     const {workspaceId,projectId,labBookId,moduleId,modulePath}=button.dataset;
     if(!researchId(workspaceId)||projectId&&!researchId(projectId)||labBookId&&(!projectId||!researchId(labBookId))||!['planning','resources'].includes(moduleId)||typeof modulePath!=='string')throw {code:'INVALID'};

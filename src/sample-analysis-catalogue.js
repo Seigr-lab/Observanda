@@ -110,19 +110,26 @@ export class SampleAnalysisCatalogue{
   const row=member.summary;
   return member.kind==='sample'?{...row,analyses:(await this.range(head,'sample-analyses:'+row.id+':')).total}:row;
  }
- async query(source,{view,search,sampleId,recordId,key,offset,limit,signal}){
+ async query(source,{view,search,sampleId,recordId,key,offset,limit,signal,collect}){
   const {head}=source,kind=view==='samples'?'sample':view==='events'?'event':'analysis';
   const prefix=view==='events'&&recordId?'record-events:'+recordId+':':kind==='analysis'&&sampleId?'sample-analyses:'+sampleId+':':'list:'+view+':';
   const range=await this.range(head,prefix),needle=search.trim().toLocaleLowerCase('en'),items=[];
   const filter=!!(needle||key||recordId&&view!=='events'||sampleId&&kind!=='analysis'||sampleId&&kind==='analysis'&&view!=='all');let total=filter?0:range.total;
-  for(let at=range.lower+(filter?0:offset);at<range.upper;at++){
-   signal?.throwIfAborted();if(!filter&&items.length===limit)break;
-   const entry=await this.index.entryAt(head,at),member=await this.value(entry.revision),row=member.summary;
-   if(member.kind!==kind||!this.keys(member).includes(entry.id))fail();
+  const owner=this;
+  async function* members(){
+   if(key){const member=await owner.member(head,kind,key);if(member)yield member;return;}
+   if(collect||filter){for await(const entry of owner.index.entries(head,prefix)){const member=await owner.value(entry.revision);if(!owner.keys(member).includes(entry.id))fail();yield member;}return;}
+   for(let at=range.lower+offset;at<Math.min(range.upper,range.lower+offset+limit);at++){
+    const entry=await owner.index.entryAt(head,at),member=await owner.value(entry.revision);if(!owner.keys(member).includes(entry.id))fail();yield member;
+   }
+  }
+  for await(const member of members()){
+   signal?.throwIfAborted();const row=member.summary;if(member.kind!==kind)fail();
    if(key&&row.id!==key||recordId&&(kind==='event'?row.recordId:row.id)!==recordId||sampleId&&(kind==='sample'?row.id:row.sampleId)!==sampleId)continue;
    if(kind==='analysis'&&view!=='all'&&(view==='archive'?row.status!=='archived':row.status==='archived')||view==='review'&&row.status!=='in review')continue;
    const fields=kind==='sample'?[row.code,row.material,row.source]:kind==='event'?[row.action,row.actor,row.reason]:[row.code,row.result.analyte,row.sampleCode];
    if(needle&&!fields.join(' ').toLocaleLowerCase('en').includes(needle))continue;
+   if(collect){if(filter)total++;await collect(row);continue;}
    if(filter&&total++<offset||items.length===limit)continue;
    items.push(await this.summary(head,member));
   }

@@ -1,3 +1,4 @@
+import {sampleAnalysisRequest,executeSampleAnalysisRequest} from './sample-analysis-requests.js';
 import {projectModuleRequest} from './project-module-requests.js';
 import {projectCalendarRequest} from './project-calendar.js';
 import {locateResearchReference,resolveResearchReference} from './research-owner-reference.js';
@@ -42,7 +43,7 @@ export function labBookRequest(suffix,method='POST'){
  if(method==='POST'&&match[2]==='publication-source-directory')return {operation:'publication-source-directory',labBookId:match[1],write:false,limit:16384};
  if(method==='POST'&&match[2]==='publication-source')return {operation:'publication-source',labBookId:match[1],write:false,limit:1048576};
  const route='/api/'+match[2];
- const command=projectModuleRequest(route)??projectCalendarRequest(route)??projectAssetRequest(route,method)??projectPublicationRequest(route)??reviewRequest(route,method)??recordStarterRequest(route,method)??materialRequest(route)??intakeRequest(route)??(method==='POST'&&/^\/api\/(?:research\/|workspace\/read\/)/.test(route)?researchRequest(route):null);return command?{...command,bookOperation:'research',labBookId:match[1],route}:null;
+ const command=sampleAnalysisRequest(route,method)??projectModuleRequest(route)??projectCalendarRequest(route)??projectAssetRequest(route,method)??projectPublicationRequest(route)??reviewRequest(route,method)??recordStarterRequest(route,method)??materialRequest(route)??intakeRequest(route)??(method==='POST'&&/^\/api\/(?:research\/|workspace\/read\/)/.test(route)?researchRequest(route):null);return command?{...command,bookOperation:'research',labBookId:match[1],route}:null;
 }
 export async function executeLabBookRequest(project,selected,data,{deviceStore,access:bookAccess,check=async()=>{},jobs,stopJobs=async()=>{},publishBook=async()=>{},...options}={}){
  const registry=new LabBookRegistry(project);await check();
@@ -119,6 +120,7 @@ export async function executeLabBookRequest(project,selected,data,{deviceStore,a
     if(!data||Object.keys(data).sort().join()!=='expectedName,id,name')throw new AppError('INVALID');
     await stopJobs();const result=await renames.run(storage,{...data,check:bookAccess?()=>bookAccess.check():check});entry=await registry.locate(selected.labBookId);etag=(await readAccess(entry.root)).etag;return result;
    }
+   if(selected.sampleAnalysis)return executeSampleAnalysisRequest(storage,selected,data,{...options,check:()=>current()});
    if(selected.asset)return executeProjectAsset(storage,selected,data,{...options,jobs:background});
    if(selected.material)return executeMaterialRequest(storage,selected,data,{...options,jobs:background});
    if(selected.review)return executeReviewRequest(storage,deviceStore,selected.review,data);
