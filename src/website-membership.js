@@ -1,9 +1,10 @@
+import {publicationPresentationTarget} from './web/publication-presentation-target.js';
 import {siteProjectIds,validWebsites} from './web/website-sites-model.js';
 import {AppError} from './errors.js';
 
 // Hierarchy/removal commands reconcile presentation references in their own
 // transaction. Retained editions and original research references stay intact.
-export async function reconcileWebsiteMembership(metadata,member,{moved=[]}={}){
+export async function reconcileWebsiteMembership(metadata,member,{moved=[],removed=[],previous=metadata}={}){
  if(!metadata.websites?.length)return;
  const cached=new Map(),read=async id=>{if(!cached.has(id))cached.set(id,await member(id));return cached.get(id);};
  metadata.websites=structuredClone(metadata.websites);
@@ -15,7 +16,15 @@ export async function reconcileWebsiteMembership(metadata,member,{moved=[]}={}){
   for(const id of moved)if(await inside(id)){
    const choice=records.find(r=>r.id===id);if(choice)choice.share=false;else records.push({id,share:false,attachments:[]});
   }
-  const valid=async target=>{const [kind,id]=target.split(':');return kind==='project'?projects.has(id):kind==='notebook'?notebooks.has(id):kind==='entry'?inside(id):true;};
+  const valid=async target=>{
+   const [kind,id]=target.split(':');
+   if(kind==='project'){if(projects.has(id))return true;if(previous.projects.some(project=>project.id===id))return false;}
+   else if(kind==='notebook'){if(notebooks.has(id))return true;if(previous.notebooks.some(book=>book.id===id))return false;}
+   else if(kind==='entry'){const row=await read(id);if(row)return notebooks.has(row.notebookId);if(removed.includes(id))return false;}
+   else return true;
+   // Local membership cannot decide whether another owner's page was removed.
+   return publicationPresentationTarget(site.document.website,target);
+  };
   for(const collection of [site.document.branding,site.document.website.layouts,site.document.website.navigation]){
    const kept=[];for(const value of collection)if(await valid(value.target))kept.push(value);collection.splice(0,collection.length,...kept);
   }

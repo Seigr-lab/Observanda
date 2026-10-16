@@ -1,3 +1,4 @@
+import {websiteContext} from './website-context.js';
 import {t} from './i18n/index.js';
 import {websiteRecordPages,WEBSITE_PAGE_LIMIT} from './website-page-query.js';
 import {websitePageWindow} from './website-page-targets.js';
@@ -5,9 +6,9 @@ import {websitePageWindow} from './website-page-targets.js';
 const text=(key,values)=>t('websitePages',key,values),limit=WEBSITE_PAGE_LIMIT;
 // Page discovery owns only the current result window. It never adopts a
 // workspace snapshot or reads originals. Selection callbacks own draft changes.
-export function websitePagePicker({state,api,esc,field,showDialog,onChoose}){
+export function websitePagePicker({state,api,esc,field,showDialog,onChoose,pageBook=()=>state.book}){
  let session=null,controller=null,timer=null,generation=0;
- const identity=()=>JSON.stringify([state.storage?.contextId,state.book?.id,state.etag]);
+ const identity=()=>JSON.stringify([websiteContext(state),state.book?.id,state.etag]);
  const valid=s=>s&&s===session&&s.identity===identity()&&state.page==='website'&&!state.access?.locked&&!state.storageUnavailable&&s.root.isConnected&&s.dialog.open;
  const button=(key,extra='')=>`<button type="button" class="button" data-page-picker="${key}" ${extra}>${esc(text(key))}</button>`;
  function cancel(){controller?.abort();controller=null;clearTimeout(timer);timer=null;generation++;}
@@ -30,7 +31,7 @@ export function websitePagePicker({state,api,esc,field,showDialog,onChoose}){
   try{
    let result;
    if(s.kind==='entry')result=await websiteRecordPages({state,api,search:s.search,cursor,signal});
-   else result=websitePageWindow(state.book,{kind:s.kind,search:s.search,offset:cursor??0,limit});
+   else result=websitePageWindow(pageBook(),{kind:s.kind,search:s.search,offset:cursor??0,limit});
    if(!valid(s)||request!==generation)return;s.result=result;
   }catch(error){if(!valid(s)||request!==generation||signal.aborted)return;s.error=error.message??text('failed');}
   finally{if(valid(s)&&request===generation){s.loading=false;controller=null;paint();if(focus)(s.root.querySelector('[data-page-path],[data-page-selection]')??s.root.querySelector('[data-page-range]')??s.root.querySelector('[data-page-picker="retry"]'))?.focus();}}

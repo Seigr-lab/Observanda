@@ -52,7 +52,7 @@ test('source choices page independently, preserve copied IDs and never write whi
 
 test('leaving during a source query cancels it and cannot create a pending edit',async({page})=>{
  await fixture(page);await open(page);await page.evaluate(()=>{window.delay=true;});
- await page.getByRole('button',{name:'Next',exact:true}).click();await expect.poll(()=>page.evaluate(()=>window.pending)).toBe(true);
+ await page.getByRole('button',{name:'Next',exact:true}).click();await expect.poll(()=>page.evaluate(()=>window.pending)).toBe(true);await expect(page.getByLabel('Include all records in this project',{exact:true})).toBeDisabled();
  await page.evaluate(()=>{state.page='module';controls.sync();document.querySelector('main').innerHTML='<h1>Another section</h1>';release();});
  await expect(page.getByRole('heading',{name:'Another section',exact:true})).toBeVisible();expect(await page.evaluate(()=>requests.at(-1).aborted)).toBe(true);expect(await page.evaluate(()=>changes)).toBe(0);expect(await page.evaluate(()=>state.book.website.researchSources)).toBeUndefined();
 });

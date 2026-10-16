@@ -1,3 +1,5 @@
+import {publicationSourcesUI} from './publication-sources-ui.js';
+import {publicationEditorClient} from './publication-editor-client.js';
 import {websiteDownloadFields} from './website-download-ui.js';
 import {websiteSectionPicker} from './website-section-picker.js';
 import {websiteActionUI} from './website-action-ui.js';
@@ -46,12 +48,13 @@ import {bindReorder} from './reorder-ui.js';
 import {moveItem} from './dashboard-model.js';
 const tr=(key,values)=>t('websiteEditor',key,values);
 
-export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,showDialog,selection,bindMedia=()=>{},previewDraft=book=>({book})}) {
+export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,showDialog,selection,access,bindMedia=()=>{},previewDraft=book=>({book})}) {
   const research=websiteResearchClient({state,api,selection,onChange:()=>{if(state.page==='website')refreshSummary();}});
   const researchMedia=websiteResearchMedia({state,research,esc,field,showDialog,notify});
-  const pageBook=()=>research.pageBook();
+  const sourcePages=publicationEditorClient({state});
+  const pageBook=()=>sourcePages.pageBook(research.pageBook());
   const linkDestinations=websiteLinkDestinations({state,api});
-  const pagePicker=websitePagePicker({state,api,esc,field,showDialog,onChoose:item=>{research.choosePage(item);if(websitePageAtPath(pageBook(),item.path))changePreviewPage(item.path);}});
+  const pagePicker=websitePagePicker({state,api,esc,field,showDialog,pageBook,onChoose:item=>{research.choosePage(item);if(websitePageAtPath(pageBook(),item.path))changePreviewPage(item.path);}});
   const sectionPicker=websiteSectionPicker({state,api,esc,showDialog,pagePicker,previewTarget,onChoose:(selector,href)=>{const field=document.querySelector(selector);if(field){field.value=href;input(field,{discrete:true});}}});
   const history=new WebsiteHistory(),documentContexts=new WebsitePageContexts();
   const referenceNavigation=new WebsiteReferenceNavigation(),collectionNavigation=new WebsiteCollectionNavigation(api),canvasSources=new WeakMap(),canvasRequests=new WeakMap();
@@ -83,6 +86,7 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
   const legacyContent=websiteContentUI({state,esc,field,option,render:refreshTools});
   const contentPages=websiteContentPages({state,esc,field,option,render:refreshTools,research,selection});
   const contentUI=Object.fromEntries(['view','input','action','bind','sync'].map(key=>[key,(...args)=>(research.enabled()?contentPages:legacyContent)[key](...args)]));
+  const sourceUI=publicationSourcesUI({state,api,esc,access,checkpoint,changed,notify,onOpenPage:page=>{sourcePages.remember(page);research.choosePage(page);changePreviewPage(page.path);tool='page';refreshTools();}});
   const compositionKind=()=>area!=='body'?area:previewTarget()==='home'?'home':previewTarget()?.startsWith('page:')?'page':'layout';
   const activeRoot=doc=>doc?.querySelector('[data-composition="'+compositionKind()+'"]');
   function goTool(next){if(tool!==next)toolTrail.push({tool,scroll:window.scrollY});tool=next;inspector=true;refreshTools();}
@@ -90,13 +94,14 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
   const summary=()=>{
     if(!research.enabled())return websiteSummary(state.book);
     const selected=research.cachedRecord(),projectId=state.book.notebooks.find(n=>n.id===selected?.notebookId)?.projectId;
-    const result=websiteSummary({...state.book,entries:selected?[{...selected,share:selection.projectRecordShare(selected,projectId)}]:[]}),totals=research.totals();
-    if(totals)result.notebooks=state.book.notebooks.filter(n=>totals.notebookIds.includes(n.id)&&state.book.projects.some(p=>p.id===n.projectId&&p.share));
+    const display=sourcePages.pageBook({...state.book,entries:selected?[{...selected,share:selection.projectRecordShare(selected,projectId)}]:[]}),result=websiteSummary(display),totals=research.totals();
+    if(totals)result.notebooks=display.notebooks.filter(n=>(!state.book.notebooks.some(local=>local.id===n.id)||totals.notebookIds.includes(n.id))&&display.projects.some(p=>p.id===n.projectId&&p.share));
     return result;
   };
   function counts(){
     const s=summary(),totals=research.totals(),groups=totals?.projects.filter(group=>s.projects.some(p=>p.id===group.id));
     if(research.enabled()&&!groups)return research.error()||t('websiteContent','loading');
+    if(state.book.website.researchSources?.length){const sourceCount=sourcePages.recordCount();return sourceCount===null?t('websiteContent','loading'):t('publicationSources','counts',{projects:s.projects.length,notebooks:s.notebooks.length,records:(groups?.reduce((sum,p)=>sum+p.included,0)??s.entries.length)+sourceCount,pages:s.pages.length});}
     return t('websiteContent','counts',{projects:s.projects.length,notebooks:s.notebooks.length,records:groups?groups.reduce((n,p)=>n+p.included,0):s.entries.length,pages:s.pages.length,media:groups?groups.reduce((n,p)=>n+p.includedMedia,0)+s.media.filter(a=>state.book.website.assets.some(asset=>asset.id===a.id)).length:s.media.length});
   }
   const toolActive=value=>tool===value||value==='page'&&['page-settings','library','selection','gallery','insert'].includes(tool)||value==='site'&&['typography','layout','menu','media','actions'].includes(tool);
@@ -105,9 +110,9 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
   function inspectorBody(){
     if(!previewTarget()&&['page','page-settings','insert','library','selection'].includes(tool))return emptyPage();
     if(tool==='page')return pageOutline();
-    if(tool==='content')return contentUI.view();
+    if(tool==='content')return (state.book.projects.length?contentUI.view():'')+sourceUI.view();
     if(tool==='media')return mediaUI.library();
-    if(tool==='menu')return websiteNavigationFields(state.book,summary(),{esc,field,option});
+    if(tool==='menu')return websiteNavigationFields(pageBook(),summary(),{esc,field,option});
     if(tool==='gallery')return '<section class="panel"><h2>'+esc(t('websiteMedia','gallery'))+'</h2>'+mediaUI.gallery(sections().find(s=>s.id===openSection))+'</section>';
     if(tool==='insert')return insertPanel();
     if(tool==='selection')return selectedMedia?mediaInspector():openSection?`<section class="panel selected-section"><h2 data-selection-title>${esc(sectionName(sections().find(s=>s.id===openSection)??{kind:'Selection'}))}</h2><ol id="website-section-order" class="website-section-order">${sections().filter(s=>s.id===openSection).map(s=>sectionEditor(s,sections().indexOf(s))).join('')}</ol></section>`:'<section class="panel"><h2>Selection</h2><p>Select text, an image, or a section on the page.</p></section>';
@@ -124,7 +129,7 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
     if(context!==websiteContext(state)){context=websiteContext(state);area='body';toolTrail=[];richStates.clear();documentContexts.clear();structureOpen=false;selectedMedia=null;tab='home';tool='page';preview=null;previewPage='index.html';openSection=null;selectedMedia=null;history.clear();
       try{
         const stored=sessionStorage.getItem('observanda.editor.'+state.book.id+'.'+(state.websiteId??'workspace')),remembered=stored&&stored.length<=65536?JSON.parse(stored):null;
-        if(research.enabled()&&remembered?.recordPage&&/^entries\/[a-f0-9-]{36}\.html$/.test(remembered.path)&&remembered.path==='entries/'+remembered.recordPage.id+'.html'&&typeof remembered.recordPage.title==='string'&&remembered.recordPage.title.length<=160)research.choosePage({target:'entry:'+remembered.recordPage.id,title:remembered.recordPage.title});
+        if(research.enabled()&&remembered?.recordPage&&/^entries\/[a-f0-9-]{36}\.html$/.test(remembered.path)&&remembered.path==='entries/'+remembered.recordPage.id+'.html'&&typeof remembered.recordPage.title==='string'&&remembered.recordPage.title.length<=180)research.choosePage({target:'entry:'+remembered.recordPage.id,title:remembered.recordPage.title});
         if(remembered&&websitePageAtPath(pageBook(),remembered.path)){
           documentContexts.restore(remembered.documents);
           documentContexts.set(remembered.path,{...remembered,scroll:documentContexts.get(remembered.path)?.scroll});
@@ -215,7 +220,7 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
     const style=sectionStyle(s);
     return `<li data-section-editor="${s.id}"><nav class="inspector-subtabs" aria-label="Section tools">${[['content','Content'],['layout','Layout'],['style','Style'],...(s.kind==='hero'?[['link','Image & link']]:[])].map(([key,label])=>button(label,'website-section-tab',`data-tab="${key}" aria-pressed="${sectionTab===key}"`)).join('')}</nav>
       ${sectionTab==='content'?`${field('Section heading',`<input data-home-section="${s.id}" data-key="title" value="${esc(s.title)}" maxlength="160">`)}
-      ${['text','callout','hero'].includes(s.kind)?button('Edit text on page','website-edit-text',`data-id="${s.id}"`):s.kind==='media'?mediaUI.selector(s,{research:true,label:t('websiteMedia','research')}):s.kind==='download'?websiteDownloadFields(s,{book:state.book,esc,field,selector:mediaUI.selector}):s.kind==='asset'?assetFields(s):s.kind==='gallery'?button('Choose and arrange images','website-tool','data-tool="gallery"'):s.kind==='link'?`${field(t('websitePages','linkDestination'),`<input data-home-section="${s.id}" data-key="href" value="${esc(s.href)}">`)}${button(esc(t('websitePages','chooseLink')),'website-choose-link',`data-link-owner="${s.id}"`)}${button(esc(t('websitePages','chooseSection')),'website-choose-section',`data-link-owner="${s.id}"`)}${field('Link label',`<input data-home-section="${s.id}" data-key="label" value="${esc(s.label)}" maxlength="160">`)}${field('Link description',`<textarea data-home-section="${s.id}" data-key="body" rows="2">${esc(s.body)}</textarea>`)}${linkFields(s)}`:s.kind==='container'?containerFields(s):['popup','copy-text'].includes(s.kind)?websitePopupFields(s,esc):s.kind==='disclosure'?websiteDisclosureFields(s,esc):s.kind==='heading'?field('Heading level',`<select data-home-section="${s.id}" data-key="level">${[1,2,3,4,5,6].map(n=>option(String(n),'Heading '+n,String(s.level))).join('')}</select>`):s.kind==='contents'?'<p>'+esc(tr('contentsHelp'))+'</p>':s.kind==='divider'?'':`${field('Collection layout',`<select data-home-section="${s.id}" data-key="layout">${[['inherit','Theme'],['grid','Cards'],['list','Single column'],['editorial','Editorial rows']].map(([v,l])=>option(v,l,s.layout)).join('')}</select>`)}${['projects','records'].includes(s.kind)?`${field('Project',`<select data-block-filter="${s.id}" data-key="projectId"><option value="">All included projects</option>${state.book.projects.map(p=>option(p.id,p.title,s.filter?.projectId)).join('')}</select>`)}${s.kind==='records'?field('Tag',`<input data-block-filter="${s.id}" data-key="tag" maxlength="40" value="${esc(s.filter?.tag??'')}">`):''}${field(t('websiteFeeds','totalLimit'),`<input type="number" min="0" step="1" data-block-filter="${s.id}" data-key="limit" value="${s.filter?.limit??0}">`)}`:''}`}
+      ${['text','callout','hero'].includes(s.kind)?button('Edit text on page','website-edit-text',`data-id="${s.id}"`):s.kind==='media'?mediaUI.selector(s,{research:true,label:t('websiteMedia','research')}):s.kind==='download'?websiteDownloadFields(s,{book:state.book,esc,field,selector:mediaUI.selector}):s.kind==='asset'?assetFields(s):s.kind==='gallery'?button('Choose and arrange images','website-tool','data-tool="gallery"'):s.kind==='link'?`${field(t('websitePages','linkDestination'),`<input data-home-section="${s.id}" data-key="href" value="${esc(s.href)}">`)}${button(esc(t('websitePages','chooseLink')),'website-choose-link',`data-link-owner="${s.id}"`)}${button(esc(t('websitePages','chooseSection')),'website-choose-section',`data-link-owner="${s.id}"`)}${field('Link label',`<input data-home-section="${s.id}" data-key="label" value="${esc(s.label)}" maxlength="160">`)}${field('Link description',`<textarea data-home-section="${s.id}" data-key="body" rows="2">${esc(s.body)}</textarea>`)}${linkFields(s)}`:s.kind==='container'?containerFields(s):['popup','copy-text'].includes(s.kind)?websitePopupFields(s,esc):s.kind==='disclosure'?websiteDisclosureFields(s,esc):s.kind==='heading'?field('Heading level',`<select data-home-section="${s.id}" data-key="level">${[1,2,3,4,5,6].map(n=>option(String(n),'Heading '+n,String(s.level))).join('')}</select>`):s.kind==='contents'?'<p>'+esc(tr('contentsHelp'))+'</p>':s.kind==='divider'?'':`${field('Collection layout',`<select data-home-section="${s.id}" data-key="layout">${[['inherit','Theme'],['grid','Cards'],['list','Single column'],['editorial','Editorial rows']].map(([v,l])=>option(v,l,s.layout)).join('')}</select>`)}${['projects','records'].includes(s.kind)?`${field('Project',`<select data-block-filter="${s.id}" data-key="projectId"><option value="">All included projects</option>${pageBook().projects.map(p=>option(p.id,p.title,s.filter?.projectId)).join('')}</select>`)}${s.kind==='records'?field('Tag',`<input data-block-filter="${s.id}" data-key="tag" maxlength="40" value="${esc(s.filter?.tag??'')}">`):''}${field(t('websiteFeeds','totalLimit'),`<input type="number" min="0" step="1" data-block-filter="${s.id}" data-key="limit" value="${s.filter?.limit??0}">`)}`:''}`}
       ${actionUI.content(s)}
       ${FEED_KINDS.includes(s.kind)?websiteFeedFields(s,{esc,field,option}):''}
       `:sectionTab==='link'?heroFields(s)+linkFields(s):sectionTab==='layout'?`${s.kind==='container'?containerFields(s):''}<div class="block-style-fields">${[['width','Width',[['full','Full'],['half','Half'],['third','One third'],['two-thirds','Two thirds']]],['surface','Surface',[['none','None'],['card','Card'],['tint','Accent tint']]],['space','Spacing',[['compact','Compact'],['normal','Normal'],['roomy','Roomy']]]].map(([key,label,values])=>field(label,`<select data-block-style="${s.id}" data-key="${key}">${values.map(([v,l])=>option(v,l,style[key])).join('')}</select>`)).join('')}</div>${alignmentFields(s)}`:advancedStyle(s)+actionUI.sectionStyle(s)}
@@ -237,7 +242,7 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
     return section?.entryId??state.book.entries.find(e=>e.attachments.some(a=>a.id===id))?.id;
   }
   function mediaInspector(){
-    const {id,scope,entryId}=selectedMedia,entry=research.enabled()?research.cachedRecord():state.book.entries.find(e=>e.id===entryId);
+    const {id,scope,entryId}=selectedMedia,entry=sourcePages.record(entryId)??(research.enabled()?research.cachedRecord():state.book.entries.find(e=>e.id===entryId));
     if(research.enabled()&&entryId&&entry?.id!==entryId){if(!research.recordError(entryId))void research.record(entryId).catch(()=>{}).finally(()=>{if(selectedMedia?.entryId===entryId)refreshTools();});return '<section class="panel"><p role="status">'+esc(research.recordError(entryId)??t('websiteContent','loading'))+'</p>'+button(esc(t('websiteContent','retry')),'website-media-retry')+'</section>';}
     const a=entry?.attachments.find(a=>a.id===id)??state.book.website.assets.find(a=>a.id===id);if(!a)return '<section class="panel">This media is unavailable.</section>';
     const m=mediaStyle(state.book.website,scope,id),cover=scope.startsWith('cover:');
@@ -327,7 +332,7 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
     if(el.dataset.homeSection){const s=sections().find(s=>s.id===el.dataset.homeSection);if(!s)return true;
       s[el.dataset.key]=el.type==='checkbox'?el.checked:['columns','gap','level','dialogWidth'].includes(el.dataset.key)?Number(el.value):el.value;if(el.dataset.key==='title'){const heading=document.querySelector('[data-selection-title]');if(heading)heading.textContent=sectionName(s);}changed();return true;
     }
-    if(el.dataset.menu!==undefined){const items=navigationItems(state.book,summary());items[Number(el.dataset.menu)][el.dataset.column]=el.type==='checkbox'?el.checked:el.dataset.column==='parent'?el.value||null:el.value;state.book.website.navigation=storedNavigation(items);changed(el.dataset.column==='parent');return true;}
+    if(el.dataset.menu!==undefined){const items=navigationItems(pageBook(),summary());items[Number(el.dataset.menu)][el.dataset.column]=el.type==='checkbox'?el.checked:el.dataset.column==='parent'?el.value||null:el.value;state.book.website.navigation=storedNavigation(items);changed(el.dataset.column==='parent');return true;}
     if(el.dataset.projectShare){state.book.projects.find(p=>p.id===el.dataset.projectShare).share=el.checked;changed(true);return true;}
     if(el.dataset.publishEntry){if(research.enabled()){selection.share(el.dataset.publishEntry,el.checked,el.closest('[data-project]')?.dataset.project);research.invalidate();contentPages.refresh();}else editableRecord(state.book,el.dataset.publishEntry).share=el.checked;changed(true);return true;}
     if(el.dataset.pageShare){state.book.pages.find(p=>p.id===el.dataset.pageShare).share=el.checked;changed();return true;}
@@ -337,7 +342,7 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
   function reorder(kind,from,to,key){
     checkpoint();
     if(kind==='sections'){const element=sections().find(e=>e.id===key);if(!element)return;const siblings=childrenOf(sections(),element.parentId??null),i=siblings.findIndex(e=>e.id===key),before=to<from?siblings[Math.max(0,i-1)]?.id:siblings[i+2]?.id??null;setSections(moveElement(sections(),key,element.parentId??null,before));}
-    else state.book.website.navigation=storedNavigation(moveItem(navigationItems(state.book,summary()),from,to));
+    else state.book.website.navigation=storedNavigation(moveItem(navigationItems(pageBook(),summary()),from,to));
     changed(true);document.querySelector(`#website-${kind==='sections'?'outline':'menu-order'} [data-reorder-handle="${key}"]`)?.focus();
     const status=document.querySelector('#website-move-status');if(status)status.textContent=`Moved to position ${to+1}.`;
   }
@@ -407,8 +412,8 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
     if(name==='website-add-section'){const selected=sections().find(s=>s.id===openSection),parent=acceptsChildren(selected)?selected.id:selected?.parentId??null,siblings=childrenOf(sections(),parent),before=!selected||acceptsChildren(selected)?null:siblings[siblings.findIndex(s=>s.id===openSection)+1]?.id??null;insertKind(buttonEl.dataset.kind,parent,before);return true;}
     if(name==='website-section-remove'){const element=sections().find(e=>e.id===buttonEl.dataset.id);if(!element)return true;const ids=descendantsOf(sections(),element.id);clearSectionPresentation(state.book.website,presentationTarget(),sections().filter(e=>ids.has(e.id)));setSections(sections().filter(e=>!ids.has(e.id)));openSection=element.parentId??null;selectedMedia=null;tool=openSection?'selection':'page';changed(true);return true;}
     if(name==='website-section-up'||name==='website-section-down'){reorder('sections',index,index+(name.endsWith('up')?-1:1),sections()[index].id);return true;}
-    if(name==='website-menu-clear'){checkpoint();state.book.website.navigation=storedNavigation(navigationItems(state.book,summary()).map(item=>({...item,show:false})));state.book.website.design.browseLink=false;changed(true);return true;}
-    if(name==='menu-up'||name==='menu-down'){reorder('menu',index,index+(name==='menu-up'?-1:1),navigationItems(state.book,summary())[index].target);return true;}
+    if(name==='website-menu-clear'){checkpoint();state.book.website.navigation=storedNavigation(navigationItems(pageBook(),summary()).map(item=>({...item,show:false})));state.book.website.design.browseLink=false;changed(true);return true;}
+    if(name==='menu-up'||name==='menu-down'){reorder('menu',index,index+(name==='menu-up'?-1:1),navigationItems(pageBook(),summary())[index].target);return true;}
     if(name==='include-project-entries'){
       state.book.projects.find(p=>p.id===buttonEl.dataset.id).share=true;
       if(research.enabled()){selection.includeProject(buttonEl.dataset.id);research.invalidate();contentPages.refresh();changed(true);return true;}
@@ -457,7 +462,7 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
       try{const command={mode:'website',...source,designPageId,designTarget,workspaceContent:true,...(source.draft?{referenceCursor:referenceRequest.cursor,collections:collectionRequest.collections}:{})};
         const result=await api('/api/design-preview',command,{adopt:false,signal:controller.signal});
         if(revision!==version||state.page!=='website'||currentContext!==websiteContext(state))return;
-        preview=result;previewKey=key;if(!result.pages.some(p=>p.path===previewPage))throw new Error(tr('pageRenderFailed'));
+        sourcePages.accept(result.editor);refreshSummary();preview=result;previewKey=key;if(!result.pages.some(p=>p.path===previewPage))throw new Error(tr('pageRenderFailed'));
         select.innerHTML=previewPageOptions();
         await showPreview(result,iframe,revision,controller.signal,command,collectionRequest);if(revision!==version||state.page!=='website')return;referenceNavigation.accept(referenceRequest);iframe.hidden=false;status.textContent=privatePage?tr('previewPrivate'):'';fitPreview();
       }catch(error){if(controller.signal.aborted||revision!==version||state.page!=='website'||currentContext!==websiteContext(state))return;
@@ -469,14 +474,14 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
   }
   function bind(){
     researchMedia.sync();
-    pagePicker.sync();sectionPicker.sync();mediaUI.sync();contentUI.sync();releaseRichEditor();
+    pagePicker.sync();sectionPicker.sync();mediaUI.sync();contentUI.sync();sourceUI.sync();sourcePages.sync();releaseRichEditor();
     dispose();disposeCanvas();disposeDrag();surface?.destroy();surface=null;resizeObserver?.disconnect();clearTimeout(timer);previewController?.abort();previewController=null;version++;
-    if(state.page!=='website'){research.close();context=null;previewKey=null;preview=null;history.clear();historyBook=null;richStates.clear();documentContexts.clear();return;}
+    if(state.page!=='website'){research.close();sourceUI.close();sourcePages.close();context=null;previewKey=null;preview=null;history.clear();historyBook=null;richStates.clear();documentContexts.clear();return;}
     const kind='menu',root=document.querySelector('#website-menu-order');
     dispose=bindReorder(root,{label:kind==='sections'?'Section':'Menu item',commit:(from,to,key)=>reorder(kind,from,to,key),announce:text=>{const node=document.querySelector('#website-move-status');if(node)node.textContent=text;}});
     document.querySelectorAll('[data-section-details]').forEach(el=>el.addEventListener('toggle',()=>{if(el.open){openSection=el.dataset.sectionDetails;document.querySelectorAll('[data-section-details]').forEach(other=>{if(other!==el)other.open=false;});}}));
 
-    library.bind();regionUI.bind();contentUI.bind();bindStructure();if(!document.querySelector('#website-canvas'))return;bindInspector();document.querySelectorAll('.page-settings').forEach(el=>el.addEventListener('toggle',()=>{pageOptions=el.open;}));
+    library.bind();regionUI.bind();contentUI.bind();sourceUI.bind();bindStructure();if(!document.querySelector('#website-canvas'))return;bindInspector();document.querySelectorAll('.page-settings').forEach(el=>el.addEventListener('toggle',()=>{pageOptions=el.open;}));
     const canvas=document.querySelector('#website-canvas'),iframe=document.querySelector('#website-draft-preview');
     surface=previewSurface(iframe,{geometry:previewGeometry});
     resizeObserver=new ResizeObserver(fitPreview);resizeObserver.observe(canvas);resizeObserver.observe(document.querySelector('.website-controls'));
@@ -579,7 +584,7 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
     document.querySelector('#website-preview-page').innerHTML=previewPageOptions();
     document.querySelectorAll('[data-action=website-create-home]').forEach(b=>b.hidden=hasHomepage(state.book));
     document.querySelector('#website-text-tools').outerHTML=textToolbar();
-    dispose();dispose=bindReorder(host.querySelector('#website-menu-order'),{label:'Menu item',commit:(from,to,key)=>reorder('menu',from,to,key),announce:text=>notify(text)});library.bind();regionUI.bind();contentUI.bind();
+    dispose();dispose=bindReorder(host.querySelector('#website-menu-order'),{label:'Menu item',commit:(from,to,key)=>reorder('menu',from,to,key),announce:text=>notify(text)});library.bind();regionUI.bind();contentUI.bind();sourceUI.bind();
     const frame=document.querySelector('#website-draft-preview'),doc=frame?.contentDocument;
     if(doc?.body?.dataset.page!==previewTarget()){frame.style.pointerEvents='none';frame.setAttribute('aria-busy','true');document.querySelector('.website-preview-panel').classList.add('canvas-is-loading');document.querySelectorAll('[data-palette-kind]').forEach(b=>b.disabled=true);}
     if(doc?.querySelector('main')&&doc.body.dataset.page===previewTarget()){mountCanvasEditor(doc);decorateCanvas(doc);}

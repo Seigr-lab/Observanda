@@ -348,7 +348,7 @@ export class ResearchCatalogue{
    if(metadata.websites?.length){
     const old=new Map(before.map(r=>[r.id,r])),project=(m,n)=>m.notebooks.find(book=>book.id===n)?.projectId;
     const moved=after.filter(r=>old.has(r.id)&&(old.get(r.id).notebookId!==r.notebookId||project(current.metadata,r.notebookId)!==project(metadata,r.notebookId))).map(r=>r.id);
-    await reconcileWebsiteMembership(metadata,id=>index.get(membership,id),{moved});
+    await reconcileWebsiteMembership(metadata,id=>index.get(membership,id),{moved,removed,previous:current.metadata});
     admitResearchBytes('metadata',Buffer.byteLength(serialize(metadata)));
    }
    const snapshot={indexVersion:1,metadata,membership,count,bytes,nextPosition,

@@ -1,3 +1,4 @@
+import {publicationPresentationTarget} from './web/publication-presentation-target.js';
 import {validDownloadInfo} from './web/website-file.js';
 import {calendarDate,validRecordDate,recordDateIssue} from './web/record-date.js';
 import {workflowIssues} from './web/record-workflow.js';
@@ -156,17 +157,17 @@ function validateBook(book,{reservedIds=[],entryTargets=[],websiteContexts}={}) 
     check(Array.isArray(book.pages) && book.pages.length <= 50 && book.pages.every(p => keys(p, ['id', 'title', 'body', 'share', ...(book.formatVersion>=7&&p&&Object.hasOwn(p??{},'sections')?['sections']:[])]) && (!Object.hasOwn(p??{},'sections')||validSections(p.sections,true,book.formatVersion>=8,book.formatVersion>=9,book.formatVersion>=10,book.formatVersion>=12)) && unique(p) && text(p.title, 160, true) && text(p.body, 60000) && typeof p.share === 'boolean'), 'pages');
     if (book.formatVersion >= 8) {
       const targets=new Set(issues.length?[]:[...layoutTargets(book).map(t=>t.target),...entryTargets]);
-      check(Array.isArray(site.layouts)&&site.layouts.length<=1700&&new Set(site.layouts.map(l=>l?.target)).size===site.layouts.length&&site.layouts.every(l=>keys(l,['target','showHeading','heading','description','placement','sections'])&&targets.has(l.target)&&typeof l.showHeading==='boolean'&&text(l.heading,180)&&text(l.description,1500)&&['before','after','replace'].includes(l.placement)&&(!l.target.startsWith('entry:')||l.placement!=='replace')&&validSections(l.sections,true,true,book.formatVersion>=9,book.formatVersion>=10,book.formatVersion>=12)), 'page layouts');
+      check(Array.isArray(site.layouts)&&site.layouts.length<=1700&&new Set(site.layouts.map(l=>l?.target)).size===site.layouts.length&&site.layouts.every(l=>keys(l,['target','showHeading','heading','description','placement','sections'])&&(targets.has(l.target)||publicationPresentationTarget(site,l.target))&&typeof l.showHeading==='boolean'&&text(l.heading,180)&&text(l.description,1500)&&['before','after','replace'].includes(l.placement)&&(!l.target.startsWith('entry:')||l.placement!=='replace')&&validSections(l.sections,true,true,book.formatVersion>=9,book.formatVersion>=10,book.formatVersion>=12)), 'page layouts');
       check(Array.isArray(site.templates)&&site.templates.length<=100&&site.templates.every(t=>keys(t,['id','name','sections'])&&id(t.id)&&text(t.name,80,true)&&validSections(t.sections,true,true,book.formatVersion>=9,book.formatVersion>=10,book.formatVersion>=12))&&new Set(site.templates.map(t=>t.id)).size===site.templates.length, 'page templates');
     }
     if (!issues.length) {
       const targets = new Set(['home', ...book.projects.map(p => 'project:' + p.id), ...book.notebooks.map(n => 'notebook:' + n.id), ...book.pages.map(p => 'page:' + p.id)]);
-      check(site.navigation.every(item => targets.has(item.target)), 'navigation');
+      check(site.navigation.every(item => targets.has(item.target)||publicationPresentationTarget(site,item.target,{records:false})), 'navigation');
     }
   }
   if (book.formatVersion >= 3) {
     const targets = new Set(issues.length ? [] : [...brandingTargets(book).map(item => item.target),...entryTargets]);
-    check(Array.isArray(book.branding) && book.branding.length <= 1700 && book.branding.every(item => keys(item, ['target', 'logos']) && targets.has(item.target) && Array.isArray(item.logos) && item.logos.length <= 4 && item.logos.every(logo => keys(logo, ['id', 'alt']) && id(logo.id) && text(logo.alt, 160))) && new Set(book.branding.map(item => item.target)).size === book.branding.length, 'branding');
+    check(Array.isArray(book.branding) && book.branding.length <= 1700 && book.branding.every(item => keys(item, ['target', 'logos']) && (targets.has(item.target)||publicationPresentationTarget(book.website,item.target)) && Array.isArray(item.logos) && item.logos.length <= 4 && item.logos.every(logo => keys(logo, ['id', 'alt']) && id(logo.id) && text(logo.alt, 160))) && new Set(book.branding.map(item => item.target)).size === book.branding.length, 'branding');
   }
   if (book.formatVersion >= 4) {
     check(Array.isArray(book.themes) && book.themes.length <= 50 && book.themes.every(preset => keys(preset, ['id', 'name', 'appearance']) && unique(preset) && text(preset.name, 80, true) && validAppearance(preset.appearance)), 'themes');
