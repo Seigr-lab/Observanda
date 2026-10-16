@@ -20,8 +20,8 @@ test('cancelled media survives restart, downloads intact, retries and attaches o
  MediaStore.prototype.prepare=async function(...args){if(first){first=false;await delay(30000,null,{signal:args[4]?.signal});}return prepare.apply(this,args);};
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  try{
-  await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,book.entries[0].id);
-  await page.getByLabel('Add media',{exact:true}).setInputFiles({name:'private-study.svg',mimeType:'image/svg+xml',buffer:bytes});
+  await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id+'/read',book.entries[0].id);
+  await page.getByLabel('Add image, audio or video',{exact:true}).setInputFiles({name:'private-study.svg',mimeType:'image/svg+xml',buffer:bytes});
   await expect(page.locator('#media-upload-status')).toContainText(/process|preparing/i,{timeout:15000});
   await page.getByRole('button',{name:'Media imports',exact:true}).click();const dialog=page.locator('#dialog');
   await expect(dialog).toContainText('private-study.svg');await expect(dialog).toContainText('running');
@@ -29,14 +29,17 @@ test('cancelled media survives restart, downloads intact, retries and attaches o
   const downloadEvent=page.waitForEvent('download');await dialog.getByRole('link',{name:'Download original',exact:true}).click();const download=await downloadEvent;expect(await readFile(await download.path())).toEqual(bytes);
   const url=await dialog.getByRole('link',{name:'Download original'}).getAttribute('href');expect((await fetch(new URL(url,app.url))).ok).toBe(false);
   const wrong=await page.request.get(new URL(url.replace(/context=[^&]+/,'context=wrong'),app.url).href);expect((await wrong.json()).code).toBe('WORKSPACE_CHANGED');
-  await app.close();app=await startServer(options);await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,book.entries[0].id);
+  await app.close();app=await startServer(options);await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id+'/read',book.entries[0].id);
   await page.getByRole('button',{name:'Media imports',exact:true}).click();await expect(dialog).toContainText('cancelled');
   await dialog.getByRole('button',{name:'Retry processing',exact:true}).click();await expect(dialog.getByRole('button',{name:'Use media',exact:true})).toBeVisible({timeout:15000});
   expect((await f.workspace.read()).book.entries[0].attachments).toEqual([]);
-  await dialog.getByRole('button',{name:'Use media',exact:true}).click();await expect(page.locator('.media-editor .media-item img')).toBeVisible();
-  await page.locator('.section-save [data-action="save"]').click();await expect(page.locator('#save-status')).toHaveText('Saved');
+  await dialog.getByRole('button',{name:'Use media',exact:true}).click();await expect(dialog).not.toBeVisible();
+  const media=page.locator('[data-record-media] img');await expect(media).toHaveCount(1);await expect(media).toBeVisible();
   expect((await f.workspace.read()).book.entries[0].attachments).toHaveLength(1);expect((await new MediaImports(f.workspace).list())).toHaveLength(1);
-  await page.reload();await expect(page.locator('.media-editor .media-item img')).toBeVisible();expect(errors).toEqual([]);
+  await page.getByRole('button',{name:'Edit record',exact:true}).click();
+  await expect(page.getByRole('navigation',{name:'Record editing areas',exact:true})).toBeVisible();await expect(media).toBeVisible();
+  await page.getByRole('button',{name:'Read record',exact:true}).click();await page.reload();
+  await expect(page.locator('.record-reader h1')).toHaveText(book.entries[0].title);await expect(media).toHaveCount(1);await expect(media).toBeVisible();expect(errors).toEqual([]);
  }finally{MediaStore.prototype.prepare=prepare;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
