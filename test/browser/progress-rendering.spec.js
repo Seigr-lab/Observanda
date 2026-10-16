@@ -43,6 +43,42 @@ test('progress patches measured fields only; clock and language have independent
  expect(await page.evaluate(()=>presentations-baseline.presentations)).toBe(0);await expect(region).toHaveCount(0);
 });
 
+test('ordinary progress uses only populated rows and bounds long details without replacing its DOM',async({page})=>{
+ await fixture(page);await page.setViewportSize({width:760,height:1000});
+ await page.addStyleTag({url:'/operation-progress.css'});
+ await page.addStyleTag({content:'html{font-size:24px}body{margin:1rem}'});
+ await page.evaluate(async()=>{
+  const {operationProgress}=await import('/operation-progress-ui.js');
+  window.progress=operationProgress({host:document.querySelector('main'),scroll:false,disableControls:false,title:'Saving records',hint:'Your recovery checkpoint remains available until this save is confirmed.',stageText:stage=>stage==='write-records'?'Writing records and history':stage});
+  window.value={stage:'write-records',completed:9,total:100,unit:'records',elapsedMs:5000};progress.update(value);
+  window.nodes=[...progress.element.querySelectorAll('*')];
+ });
+ const region=page.locator('.operation-progress');
+ for(const field of ['path','item','work','detail','wait']){
+  const row=region.locator('[data-'+field+']');await expect(row).toBeHidden();
+  expect(await row.evaluate(node=>node.getBoundingClientRect().height)).toBe(0);
+ }
+ const geometry=await region.evaluate(node=>({height:node.getBoundingClientRect().height,fontSize:parseFloat(getComputedStyle(document.documentElement).fontSize),numeric:getComputedStyle(node).fontVariantNumeric,rows:[...node.querySelectorAll('h3,[data-count],[data-time]')].map(row=>({height:row.getBoundingClientRect().height,line:parseFloat(getComputedStyle(row).lineHeight)}))}));
+ expect(geometry.height).toBeLessThan(18*geometry.fontSize);expect(geometry.numeric).toContain('tabular-nums');
+ for(const row of geometry.rows)expect(row.height).toBeLessThanOrEqual(row.line+1);
+ await page.evaluate(()=>progress.update({...value,completed:10}));
+ expect((await region.boundingBox()).height).toBe(geometry.height);
+ await page.evaluate(()=>progress.update({...value,stages:['A long nested operation description '.repeat(40),'write-records'],item:'a-long-evidence-name-'.repeat(200)}));
+ for(const field of ['path','item']){
+  const row=region.locator('[data-'+field+']');await expect(row).toBeVisible();
+  const bounds=await row.evaluate(node=>({height:node.getBoundingClientRect().height,line:parseFloat(getComputedStyle(node).lineHeight),scroll:node.scrollHeight,client:node.clientHeight}));
+  expect(bounds.height).toBeLessThanOrEqual(4*bounds.line+1);expect(bounds.scroll).toBeGreaterThan(bounds.client);
+ }
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.evaluate(()=>progress.update(value));
+ await expect(region.locator('[data-path]')).toBeHidden();await expect(region.locator('[data-item]')).toBeHidden();
+ expect((await region.boundingBox()).height).toBe(geometry.height);
+ expect(await page.evaluate(()=>nodes.every((node,index)=>progress.element.querySelectorAll('*')[index]===node))).toBe(true);
+ await page.clock.fastForward(16000);await expect(region.locator('[data-wait]')).toBeVisible();
+ await page.evaluate(()=>progress.finish());await expect(region.locator('[data-wait]')).toBeHidden();
+ await page.evaluate(()=>progress.close());
+});
+
 test('activity polling preserves cards, disclosure, focus and selection when only progress changes',async({page})=>{
  await fixture(page);
  await page.evaluate(async()=>{

@@ -28,7 +28,7 @@ export function operationProgress({stageText,presentation,title=()=>text('title'
   }
   return labels.get(stage);
  }
- function field(key,next){updateText(fields[key],next);if(compact||key==='hint')updateProperty(fields[key],'hidden',!fields[key].textContent);}
+ function field(key,next){updateText(fields[key],next);updateProperty(fields[key],'hidden',!fields[key].textContent);}
  function renderClock(){
   const since=performance.now()-received,elapsed=value.elapsedMs??(received-started);
   field('time',text('elapsed',{time:duration(elapsed+(finished?0:since))}));
