@@ -1,3 +1,4 @@
+import {resultDocumentPosition} from './record-result-document.js';
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
 import {resultValueId} from './web/record-result-value.js';
@@ -20,10 +21,7 @@ export async function findResultFigure(document,id,{signal}={}){
  return null;
 }
 export async function selectedResultValue(document,field,{signal}={}){
- const id=resultValueId(field);let position=-1,value={value:null};
- if(await document.tree.select(document.root,['results','statements']))for await(const item of document.items(['results','statements'],{signal})){
-  if((await document.tree.selected(item.value,['id'])).value===id){position=item.index;value={value:await document.tree.read(item.value)};break;}
- }
+ const id=resultValueId(field),position=await resultDocumentPosition(document,id,{signal}),value={value:position<0?null:(await document.field(['results','statements',String(position)],{signal})).value};
  return {resultId:id,position,path:position<0?null:['results','statements',String(position)],value,revision:digest(serialize(value)),definition:{kind:'result',existing:position>=0,original:value.value,figureTarget:await findResultFigure(document,value.value?.figureId,{signal})}};
 }
 export async function replaceResultValue(document,value,selected){

@@ -14,6 +14,7 @@ import {searchRecordSections} from './record-section-search.js';
 import {catalogueFormat,requireRetainedRecordDocuments} from './catalogue-format.js';
 import {RecordContent} from './record-content.js';
 import {RecordValueTree} from './record-value-tree.js';
+import {resultAnchorId} from './record-result-document.js';
 const format='observanda-retained-record',fail=()=>{throw new AppError('MATERIAL_MISSING');};
 const validRef=ref=>ref?.kind==='record'&&validMaterialReference(ref);
 const file=ref=>'.observanda/materials/records/'+ref.id+'/'+ref.revision+'.json';
@@ -74,19 +75,20 @@ export class RetainedRecordDocuments{
   });
  }
  async read(command,{signal}={}){
-  const {ref,offset=0,windows={},anchor,cursor,compare=false,currentSnapshotId}=command??{};
-  if(!validRef(ref)||!Number.isSafeInteger(offset)||offset<0||!validHeaderWindows(windows)||typeof compare!=='boolean'||anchor!==undefined&&(typeof anchor!=='string'||! /^(?:record-(?:section|figure|table|equation|citation|block)-)?[a-f0-9-]{36}$/.test(anchor))||cursor!==undefined&&(typeof cursor!=='string'||!cursor.length||cursor.length>4096||!anchor)||currentSnapshotId!==undefined&&!revisionId(currentSnapshotId))throw new AppError('INVALID');
+  const {ref,offset=0,windows={},anchor,cursor,compare=false,currentSnapshotId,resultFigure}=command??{};
+  if(!validRef(ref)||!Number.isSafeInteger(offset)||offset<0||!validHeaderWindows(windows)||resultFigure!==undefined&&!researchId(resultFigure)||typeof compare!=='boolean'||anchor!==undefined&&(typeof anchor!=='string'||! /^(?:(?:record-)?result-|record-(?:section|figure|table|equation|citation|block)-)?[a-f0-9-]{36}$/.test(anchor))||cursor!==undefined&&(typeof cursor!=='string'||!cursor.length||cursor.length>4096||!anchor)||currentSnapshotId!==undefined&&!revisionId(currentSnapshotId))throw new AppError('INVALID');
   return this.withDocument(ref,async(document,row,store)=>{
    const workspaceId=(await store.snapshot()).metadata.id,total=await document.tree.arrayLength(document.root,['sections']);let at=Math.min(offset,Math.max(0,total-1)),found=null;
-   if(anchor){
+   const resultAnchor=resultAnchorId(anchor),figureId=resultAnchor?undefined:resultFigure;
+   if(anchor&&!resultAnchor){
     const search=await searchRecordSections(store,{workspaceId,recordId:ref.id,anchor,cursor},{etag:ref.revision,total,signal,selected:async path=>(await document.field(path,{signal})).value,page:(offset,limit)=>document.tree.page(document.root,['sections'],{offset,limit})});
     if(search.nextCursor)return {ref,search};found=search.found;if(found!==null)at=found;
    }
-   const sections=await document.tree.page(document.root,['sections'],{offset:at,limit:4}),header=await recordReadingHeader(store,row,document,sections.values,{windows,anchor,signal});
+   const sections=await document.tree.page(document.root,['sections'],{offset:at,limit:4}),header=await recordReadingHeader(store,row,document,sections.values,{windows,anchor,resultFigure:figureId,signal});
    const previous={...header,sections,record:{...header.header,sections:sections.values}};
    const etag=currentSnapshotId??await store.head(),snapshot=await store.snapshot(etag);if(snapshot.metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
    const latest=compare?await store.member(snapshot,ref.id):null;
-   const requestedOffset=anchor?at:offset,current=latest?await new RecordContent(this.workspace).read({workspaceId,recordId:ref.id,snapshotId:etag,offset:requestedOffset,pagedHeader:true,windows},{signal}):null;
+   const requestedOffset=anchor&&!resultAnchor?at:offset,current=latest?await new RecordContent(this.workspace).read({workspaceId,recordId:ref.id,snapshotId:etag,offset:requestedOffset,pagedHeader:true,windows,...(resultAnchor?{anchor}:{}),...(figureId?{resultFigure:figureId}:{})},{signal}):null;
    signal?.throwIfAborted();return {ref,previous,current:current?{...current,record:{...current.header,sections:current.sections.values}}:null,currentSnapshotId:etag,offset:requestedOffset,found};
   },{signal,history:true});
  }

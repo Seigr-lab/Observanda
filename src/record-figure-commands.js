@@ -5,7 +5,7 @@ import {revisionId,revisionText} from './web/revision-model.js';
 import {placedFigures} from './web/book-selectors.js';
 import {cloneFigure} from './web/figure-composition.js';
 import {allFigurePlots} from './web/figure-provenance.js';
-import {copyFigureResults} from './web/figure-result-links.js';
+import {copyFigureDocumentResults} from './record-figure-copy-values.js';
 import {resolveFigureSources} from './figure-provenance.js';
 import {ResearchMaterials} from './research-materials.js';
 import {RecordValues,selectedRecordValue} from './record-values.js';
@@ -59,10 +59,8 @@ export class RecordFigureCommands{
      const source=structuredClone(selected.value.value),byId=new Map(prepared.map(item=>[item.figureId,item.ref]));
      for(const plot of allFigurePlots([source]))if(byId.has(plot.id))plot.source=byId.get(plot.id);
      let first=true;const copy=cloneFigure(source,()=>{if(first){first=false;return command.id;}return randomUUID();});
-     const results=(await original.field(['results'])).value;let copied;
-     try{copied=copyFigureResults(results,[[source,copy]]);}catch{throw new AppError('FIGURE_RESULT_COPY');}
      position=memberCollectionCount(row,'figures');figureId=copy.id;document=await original.splice(['figures'],position,0,[copy]);
-     if(copied!==results)document=await document.property([],'results',copied);
+     document=await copyFigureDocumentResults(original,document,[[source,copy]]);
     }
     const member=await members.changed(row,'figures',document),saved=await commitRecordDocument(store,{etag,snapshot,row,document,member}),result={etag:saved.etag,saved:true,figureId,position};
     await this.workspace.writeMetadata(file,serialize({version:1,request,result}));return result;

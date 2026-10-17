@@ -16,6 +16,7 @@ import {sampleNotebook} from '../src/sample.js';
 import {ModuleCatalogue} from '../src/modules/catalogue.js';
 import {workspaceModules} from '../src/modules/index.js';
 import {executeModuleCommand} from '../src/modules/command.js';
+import {catalogueFormat} from '../src/catalogue-format.js';
 import {moduleCommandFingerprint} from '../src/modules/command-fingerprint.js';
 const detached=AsyncLocalStorage.snapshot();
 async function fixture(t){
@@ -34,7 +35,10 @@ async function verifyDomain(f,store){const owner=workspaceModules(f.storage);ret
 function gate(){let enter,release;return {started:new Promise(resolve=>enter=resolve),hold:new Promise(resolve=>release=resolve),enter:()=>enter(),release:()=>release()};}
 
 test('project domains commit actual calculator and calendar commands independently of research and each other', {timeout:120000},async t=>{
- const f=await fixture(t);await f.domains.initialize(['calculator','calendars']);const original=await f.storage.read(),first=calculation(f),second=calculation(f),scheduled=calendar(f),research=gate();
+ const f=await fixture(t);await f.domains.initialize(['calculator','calendars']);
+ await f.storage.update(book=>{book.entries[0].results={version:1,statements:[{id:randomUUID(),kind:'conclusion',title:'Retained observation',text:'Observed result',basis:'authored',source:null,limitations:'Test scope'}]};return book;});
+ assert.equal(await f.storage.catalogue(store=>catalogueFormat(store.db)),27);
+ const original=await f.storage.read(),first=calculation(f),second=calculation(f),scheduled=calendar(f),research=gate();
  const researchWrite=detached(()=>f.storage.withLock(async()=>{research.enter();await research.hold;}));await research.started;
  try{const saved=await command(f,'calculator',first);assert.equal(saved.modulePatch.revision,1);assert.equal(saved.replayed,false);}
  finally{research.release();await researchWrite;}

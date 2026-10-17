@@ -13,6 +13,7 @@ import {Workspace} from '../src/storage.js';
 import {readWorkspaceDashboard,writeWorkspaceDashboard} from '../src/security/dashboard-storage.js';
 import {projectDomainHandoff,projectDomainLock} from '../src/project-domain-lock.js';
 import {catalogueStamp} from '../src/postgres.js';
+import {catalogueFormat} from '../src/catalogue-format.js';
 
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-workspace-settings-'));
@@ -22,7 +23,10 @@ async function fixture(t){
  return {...f,runtime};
 }
 test('workspace preferences persist independently of research writes with conflict and lifecycle fencing',{timeout:90000},async t=>{
- const f=await fixture(t),before=await readWorkspaceDashboard(f.workspace),head=(await f.workspace.outline()).etag,stamp=await catalogueStamp(f.workspace.root),settings=structuredClone(before.settings);settings.enabledModules=['planning'];
+ const f=await fixture(t);
+ await f.workspace.update(book=>{book.entries[0].results={version:1,statements:[{id:randomUUID(),kind:'conclusion',title:'Retained observation',text:'Observed result',basis:'authored',source:null,limitations:'Test scope'}]};return book;});
+ assert.equal(await f.workspace.catalogue(store=>catalogueFormat(store.db)),28);
+ const before=await readWorkspaceDashboard(f.workspace),head=(await f.workspace.outline()).etag,stamp=await catalogueStamp(f.workspace.root),settings=structuredClone(before.settings);settings.enabledModules=['planning'];
  const db=await f.workspace.openCatalogue();
  try{
   await db.run('BEGIN');await db.lock();

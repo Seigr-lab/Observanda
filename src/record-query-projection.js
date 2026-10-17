@@ -12,6 +12,7 @@ import {bookSelectors,placedFigures} from './web/book-selectors.js';
 import {proseText,proseReferences} from './web/prose-model.js';
 import {attemptDocumentHeader,attemptDocumentReferences,attemptDocumentSearchParts} from './record-attempt-document.js';
 import {withScratch} from './scratch-work.js';
+import {resultDocumentHeader,resultDocumentStatements} from './record-result-document.js';
 import {recordTemplateHeader} from './record-template-document.js';
 import {recordProjectionReuse} from './record-projection-reuse.js';
 import {mapRecordProjection} from './record-projection-map.js';
@@ -25,7 +26,7 @@ export async function retainedQueryProjection(document,revision,{signal,previous
  const {tree,blocks}=document,header={},reuse=recordProjectionReuse(document,previous,{signal});
  for(const name of await tree.propertyNames(document.root)){
   signal?.throwIfAborted();
-  Object.defineProperty(header,name,{value:collections.includes(name)?[]:name==='attempt'?await attemptDocumentHeader(document,{signal}):name==='template'?await recordTemplateHeader(document,{signal}):(await document.field([name],{signal})).value,enumerable:true});
+  Object.defineProperty(header,name,{value:collections.includes(name)?[]:name==='attempt'?await attemptDocumentHeader(document,{signal}):name==='results'?await resultDocumentHeader(document,{signal}):name==='template'?await recordTemplateHeader(document,{signal}):(await document.field([name],{signal})).value,enumerable:true});
  }
  const empty={...header,body:'',attempt:undefined},plain={...recordQueryDocument(header),publication:recordPublicationSummary(header),publicationCard:publicationCard(header),publicationDescriptor:null,editionInventory:recordEditionInventory(header,revision),recordRevision:revision};
  const object=async(value,references={})=>{
@@ -63,7 +64,7 @@ export async function retainedQueryProjection(document,revision,{signal,previous
   for await(const item of items('contributors',['name','role'])){yield item.name;yield item.role;}
   yield header.template?.label??'';if(header.template)for await(const child of document.properties(['template','values'],{signal}))yield await tree.read(child.value);
   if(header.attempt)yield* attemptDocumentSearchParts(document,{signal});
-  for(const item of header.results?.statements??[]){yield item.title;yield item.text;yield item.limitations;}
+  for await(const item of resultDocumentStatements(document,{signal,fields:['title','text','limitations']})){yield item.title;yield item.text;yield item.limitations;}
  }
  async function* searchText(){let first=true;for await(const value of searchParts()){if(!first)yield ' ';first=false;yield String(value??'').toLocaleLowerCase();}}
  async function* proseMentions(){

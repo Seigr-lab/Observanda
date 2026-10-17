@@ -10,6 +10,7 @@ import {RecordValueTree} from './record-value-tree.js';
 import {operationStage,operationAdvance} from './operation-progress.js';
 import {validAttemptIndex} from './record-attempt-index.js';
 import {validMethodIndex} from './record-method-index.js';
+import {validResultIndex} from './record-result-index.js';
 
 const fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 const hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
@@ -21,6 +22,7 @@ export function validBlockedRecord(value){
  const keys=Object.keys(value).sort().join();
  if(value.version===1)return keys==='format,id,notebookId,root,version';
  if(value.version===2)return keys==='attemptIndex,format,id,notebookId,root,version'&&validAttemptIndex(value.attemptIndex);
+ if(value.version===4)return keys===(Object.hasOwn(value,'attemptIndex')?'attemptIndex,':'')+'format,id,'+(Object.hasOwn(value,'methodIndex')?'methodIndex,':'')+'notebookId,resultIndex,root,version'&&validResultIndex(value.resultIndex)&&(!Object.hasOwn(value,'attemptIndex')||validAttemptIndex(value.attemptIndex))&&(!Object.hasOwn(value,'methodIndex')||validMethodIndex(value.methodIndex));
  return value.version===3&&keys===(Object.hasOwn(value,'attemptIndex')?'attemptIndex,':'')+'format,id,methodIndex,notebookId,root,version'&&validMethodIndex(value.methodIndex)&&(!Object.hasOwn(value,'attemptIndex')||validAttemptIndex(value.attemptIndex));
 }
 export class RecordBlockStore{

@@ -4,10 +4,12 @@ import {placedFigures} from './web/book-selectors.js';
 import {RecordMemberCollections} from './record-member-collections.js';
 import {AppError} from './errors.js';
 import {recordAttemptWindow} from './record-attempt-window.js';
+import {resultDocumentWindow,resultFigureCount} from './record-result-document.js';
+import {figureTargets} from './web/figure-composition.js';
 const attemptCollections=['preparations','events','assessments'];
-export const recordHeaderCollections=['contributors','relations','figures','attachments','tags','fields',...attemptCollections];
+export const recordHeaderCollections=['contributors','relations','figures','attachments','tags','fields','results',...attemptCollections];
 export const validHeaderWindows=value=>value&&typeof value==='object'&&!Array.isArray(value)&&Object.entries(value).every(([name,offset])=>recordHeaderCollections.includes(name)&&Number.isSafeInteger(offset)&&offset>=0);
-export async function recordReadingHeader(store,row,document,sections,{windows={},anchor,signal}={}){
+export async function recordReadingHeader(store,row,document,sections,{windows={},anchor,resultFigure,signal}={}){
  const header={},pages={},inline={figures:[],attachments:[]},contextRelations=[],membership=new RecordMemberCollections(store);
  const selected=async path=>(await document.field(path,{signal})).value;
  const position=async(name,id)=>{
@@ -28,7 +30,7 @@ export async function recordReadingHeader(store,row,document,sections,{windows={
  // An unplaced figure anchor can name a late collection item directly. A prose
  // placement is resolved below and remains beside its original paragraph.
  const anchored=anchor?.startsWith('record-figure-')?anchor.slice('record-figure-'.length):null;
- for(const name of recordHeaderCollections.filter(name=>name!=='fields'&&!attemptCollections.includes(name))){
+ for(const name of recordHeaderCollections.filter(name=>!['fields','results'].includes(name)&&!attemptCollections.includes(name))){
   signal?.throwIfAborted();
   if(anchored&&['figures','attachments'].includes(name)){
    const found=await position(name,anchored);if(found>=0)windows={...windows,[name]:found};
@@ -61,5 +63,9 @@ export async function recordReadingHeader(store,row,document,sections,{windows={
   if((await document.tree.selected(ref.value,['role'])).value==='run-of'){contextRelations.push(await document.tree.read(ref.value));break;}
  }
  const run=await recordAttemptWindow(document,{windows,signal});if(run.attempt)header.attempt=run.attempt;Object.assign(pages,run.pages);
- return {header,collections:pages,inline,contextRelations,attemptWindow:run.window};
+ const results=await resultDocumentWindow(document,{offset:windows.results??0,figureId:resultFigure??null,anchor,signal});
+ if(results.results)header.results=results.results;pages.results=results.page;
+ const resultFigures={};
+ for(const {id} of figureTargets([...header.figures,...inline.figures]))resultFigures[id]=await resultFigureCount(document,id,{signal});
+ return {header,collections:pages,inline,contextRelations,attemptWindow:run.window,resultWindow:{figureId:results.figureId},resultFigures};
 }

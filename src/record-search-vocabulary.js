@@ -5,6 +5,7 @@
 import {RetainedTableIndex,validTableRef} from './retained-table-index.js';
 import {collectionChanges,sameItemFields} from './record-projection-dependency.js';
 import {proseText} from './web/prose-model.js';
+import {resultDocumentSearchText} from './record-result-document.js';
 import {attemptDocumentSearchParts} from './record-attempt-document.js';
 import {retainAttemptSearchParts} from './record-attempt-query.js';
 import {grams} from './record-search-terms.js';
@@ -128,7 +129,7 @@ export async function retainSearchVocabulary(document,{previous,signal,version=3
   if(version>=3)await retainAttemptSearchParts(document,old?previous.document:null,set,{signal});
   else{const text=(await document.field(['attempt','version'],{signal})).found?(async function*(){let first=true;for await(const value of attemptDocumentSearchParts(document,{signal})){if(!first)yield ' ';first=false;yield value;}})():null;await set('70',text);}
  }
- if(!await same(['results'])){const results=await field(['results']),values=(results?.statements??[]).flatMap(item=>[item.title,item.text,item.limitations]);await set('80',values.length?values.join(' '):null);}
+ if(!await same(['results']))await set('80',await resultDocumentSearchText(document,{signal}));
  // A changed part can affect its own separator and the next two separators.
  // Sorted deltas let us deduplicate these windows with a small frontier.
  const seams=new Set();

@@ -1,0 +1,74 @@
+import {test,expect} from '@playwright/test';
+import {mkdtemp,rm} from 'node:fs/promises';
+import {randomUUID} from 'node:crypto';
+import os from 'node:os';
+import path from 'node:path';
+import {sampleNotebook} from '../../src/sample.js';
+import {upgradeNotebook} from '../../src/model.js';
+import {clearVault} from '../../src/encryption.js';
+import {createFigure} from '../../src/web/figure-model.js';
+import {createComposition} from '../../src/web/figure-composition.js';
+import {ResearchMaterials} from '../../src/research-materials.js';
+import {ResearchRecords,recordRevision} from '../../src/research.js';
+import {ResearchCatalogue} from '../../src/research-catalogue.js';
+import {RecordValues} from '../../src/record-values.js';
+import {encryptedFixture} from './encrypted-fixture.js';
+import {testServer} from '../device-fixture.js';
+
+const anchorLink=(label,anchor)=>({type:'text',text:label,marks:[{type:'link',attrs:{href:'#'+anchor,title:label,target:'_self',nofollow:false}}]});
+async function fixture(){
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-result-paging-')),book=upgradeNotebook(sampleNotebook()),record=book.entries[2];book.entries=[record];record.status='draft';record.attachments=[];record.relations=[];
+ record.sections=Array.from({length:13},(_,i)=>({id:randomUUID(),title:'Observation '+(i+1),body:'Exact section '+i}));
+ const plots=Array.from({length:2},(_,i)=>{const figure=createFigure();figure.title='Acquisition '+(i+1);figure.series[0].points=[{x:1,y:i+2,error:null},{x:2,y:i+3,error:null}];return figure;});
+ const figure=createComposition(plots);figure.title='Independent acquisitions';record.figures=[figure];const panel=figure.panels[0].figure;
+ record.results={version:1,statements:Array.from({length:73},(_,i)=>({id:randomUUID(),kind:i>=64?'figure':'conclusion',...(i>=64?{figureId:panel.id}:{}),title:'Result '+(i+1),text:'Exact retained statement '+i,limitations:'Synthetic observations only.',basis:'authored',source:null}))};
+ const last=record.results.statements.at(-1);
+ record.body={type:'doc',content:[{type:'paragraph',content:[anchorLink('Read the final result','result-'+last.id),{type:'text',text:' '},anchorLink('Read the stable result alias','record-result-'+last.id)]},{type:'book_figure',attrs:{version:1,id:randomUUID(),figureId:figure.id,alternative:'Independent acquisitions'}}]};
+ const f=await encryptedFixture(directory,book),materials=new ResearchMaterials(f.workspace),ref=await materials.pinRecord(record.id,recordRevision(record)),linkId=randomUUID(),source={...structuredClone(record),id:randomUUID(),title:'Exact result reference',body:'Read the retained result document.',sections:[],figures:[],results:{version:1,statements:[]},relations:[{id:linkId,type:'Related to',label:'Retained result document',target:ref}]};
+ await new ResearchRecords(f.workspace,{}).save({workspaceId:book.id,changes:[{id:source.id,expectedRevision:null,record:source}]},{receipt:true});
+ return {...f,directory,book,record,figure,panel,last,source,linkId};
+}
+
+test('result windows preserve selected edits, figure filters and exact retained/history anchors',async({page})=>{
+ test.setTimeout(240000);page.setDefaultTimeout(15000);const f=await fixture(),app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(f.directory,'preferences.json')});
+ const original=ResearchCatalogue.prototype.record,errors=[],requests=[],responses=[];ResearchCatalogue.prototype.record=()=>{throw Error('Paged result reading reconstructed the complete record');};
+ page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{if(request.url().includes('/api/'))requests.push(new URL(request.url()).pathname);});
+ page.on('response',response=>{if(response.ok()&&['/api/workspace/read/record-content','/api/research/records/history/read','/api/research/materials/record'].includes(new URL(response.url()).pathname))responses.push(response.json());});
+ const reader=page.locator('.record-reader'),results=reader.locator('.record-result-values'),nav=reader.locator('[data-record-collection="results"]'),sections=reader.getByRole('navigation',{name:'Writing section navigation',exact:true}),dialog=page.locator('#dialog');let release=()=>{};
+ try{
+  await page.goto(app.url);await page.goto(app.origin+'/#/records/'+f.record.id+'/read');await expect(results.locator('.result-statements>section')).toHaveCount(4);await expect(nav).toContainText('1\u20134 of 73');
+  await expect(reader.locator('[data-result-figure="'+f.panel.id+'"]')).toHaveText(/View results \(9\)/);await expect(reader.locator('#record-figure-'+f.figure.id)).not.toContainText('A supporting result, sources and interpretation limits have not been declared.');
+  await sections.getByLabel('Go to section number',{exact:true}).fill('9');await sections.getByRole('button',{name:'Go',exact:true}).click();await expect(sections).toContainText('Sections 9\u201312 of 13');
+  await reader.getByRole('link',{name:'Read the final result',exact:true}).click();await expect(results.locator('#result-'+f.last.id)).toBeFocused();await expect(nav).toContainText('73\u201373 of 73');await expect(sections).toContainText('Sections 9\u201312 of 13');
+  await results.locator('#result-'+f.last.id).getByRole('button',{name:'Edit result statement',exact:true}).click();const editor=page.getByRole('dialog',{name:'Edit Result statement',exact:true});await editor.locator('[data-result-value="text"]').fill('Revised late result with the original identity');await editor.getByRole('button',{name:'Save changes',exact:true}).click();await expect(editor).not.toBeVisible();await expect(results.locator('#result-'+f.last.id)).toContainText('Revised late result with the original identity');await expect(nav).toContainText('73\u201373 of 73');
+  await nav.getByLabel('Go to item',{exact:true}).fill('1');await nav.getByRole('button',{name:'Go',exact:true}).click();await reader.getByRole('link',{name:'Read the stable result alias',exact:true}).click();await expect(results.locator('#result-'+f.last.id)).toBeFocused();
+  await reader.locator('[data-result-figure="'+f.panel.id+'"]').click();await expect(nav).toContainText('1\u20134 of 9');await expect(results.locator('.result-statements>section').first()).toHaveAttribute('id','result-'+f.record.results.statements[64].id);await expect(results.locator('.result-statements>section').first()).toBeFocused();await expect(sections).toContainText('Sections 9\u201312 of 13');
+  let failed=false;const attempts=[];await page.route('**/api/workspace/read/record-content',async route=>{const command=route.request().postDataJSON();if(command.resultFigure===f.panel.id&&command.windows.results===4){attempts.push(command);if(!failed){failed=true;return route.fulfill({status:503,json:{code:'IO',message:'Synthetic interrupted result window'}});}}await route.continue();});
+  await nav.getByRole('button',{name:'Next items',exact:true}).click();await expect(reader.getByRole('alert')).toContainText('Synthetic interrupted result window');await reader.getByRole('button',{name:'Try again',exact:true}).click();await expect(nav).toContainText('5\u20138 of 9');expect(attempts).toHaveLength(2);expect(attempts[1]).toEqual(attempts[0]);await expect(nav.getByRole('button',{name:'Next items',exact:true})).toBeFocused();await page.unroute('**/api/workspace/read/record-content');
+  let entered;const reached=new Promise(resolve=>entered=resolve),held=new Promise(resolve=>release=resolve);let hold=true;
+  await page.route('**/api/workspace/read/record-content',async route=>{if(hold&&route.request().postDataJSON().windows.results===8){hold=false;entered();await held;}await route.continue().catch(()=>{});});
+  await nav.getByRole('button',{name:'Next items',exact:true}).click();await reached;await reader.getByRole('button',{name:'Cancel loading',exact:true}).click();release();await expect(reader.getByRole('alert')).toContainText('Loading stopped');await expect(nav).toContainText('5\u20138 of 9');await reader.getByRole('button',{name:'Try again',exact:true}).click();await expect(nav).toContainText('9\u20139 of 9');await expect(results.locator('#result-'+f.last.id)).toContainText('Revised late result');await page.unroute('**/api/workspace/read/record-content');
+  await reader.getByRole('button',{name:'All results',exact:true}).click();await expect(nav).toContainText('1\u20134 of 73');await expect(sections).toContainText('Sections 9\u201312 of 13');
+
+  await page.locator('.record-toolbar').getByRole('button',{name:'History',exact:true}).click();await dialog.getByRole('button',{name:'Review version',exact:true}).click();const retained=dialog.locator('[data-history-retained]'),historyNav=dialog.getByRole('navigation',{name:'Version content navigation',exact:true});
+  await retained.getByRole('link',{name:'Read the final result',exact:true}).click();await expect(retained.locator('#result-'+f.last.id)).toBeFocused();await expect(retained.locator('#result-'+f.last.id)).toContainText(f.last.text);await expect(historyNav).toContainText('Items 73\u201373 of 73');
+  await dialog.getByText('Compare with current saved version',{exact:true}).click();const current=dialog.locator('[data-history-current]');await current.getByRole('link',{name:'Read the stable result alias',exact:true}).click();await expect(current.locator('#history-current-result-'+f.last.id)).toBeFocused();await expect(current.locator('#history-current-result-'+f.last.id)).toContainText('Revised late result');
+  await retained.locator('[data-result-figure="'+f.panel.id+'"]').click();await expect(historyNav).toContainText('Items 1\u20134 of 9');await historyNav.getByRole('button',{name:'Next items',exact:true}).click();await expect(historyNav).toContainText('Items 5\u20138 of 9');
+  await historyNav.getByRole('combobox',{name:'Browse content',exact:true}).selectOption('sections');await historyNav.getByRole('button',{name:'Next items',exact:true}).click();await expect(historyNav).toContainText('Items 5\u20138 of 13');await expect(retained.locator('.result-statements>section').first()).toHaveAttribute('id','result-'+f.record.results.statements[68].id);
+  await historyNav.getByRole('combobox',{name:'Browse content',exact:true}).selectOption('results');await expect(dialog.getByRole('button',{name:'All results',exact:true})).toHaveCount(1);await dialog.getByRole('button',{name:'All results',exact:true}).click();await expect(historyNav).toContainText('Items 1\u20134 of 73');await expect(retained).toContainText('Exact section 4');
+  let listed,finished;const listReached=new Promise(resolve=>listed=resolve),listFinished=new Promise(resolve=>finished=resolve),listHeld=new Promise(resolve=>release=resolve);
+  await page.route('**/api/research/records/history/list',async route=>{try{const response=await route.fetch();listed();await listHeld;await route.fulfill({response});}catch{}finally{finished();}});
+  await dialog.getByRole('button',{name:'Back to history',exact:true}).click();await listReached;await expect(dialog.getByRole('button',{name:'Close',exact:true})).toBeEnabled();await dialog.getByRole('button',{name:'Close',exact:true}).click();release();await listFinished;await expect(dialog).not.toBeVisible();await page.unroute('**/api/research/records/history/list');
+
+  await page.goto(app.origin+'/#/records/'+f.source.id+'/read');await reader.locator('[data-action="record-link-open"][data-id="'+f.linkId+'"]').click();const exact=dialog.locator('[data-retained-previous]'),exactNav=dialog.getByRole('navigation',{name:'Retained record content',exact:true});
+  await exact.getByRole('link',{name:'Read the stable result alias',exact:true}).click();await expect(exact.locator('#result-'+f.last.id)).toBeFocused();await expect(exact.locator('#result-'+f.last.id)).toContainText(f.last.text);await expect(exactNav).toContainText('73\u201373 of 73');await expect(reader.locator('h1')).toHaveText(f.source.title);
+  await exact.locator('[data-result-figure="'+f.panel.id+'"]').click();await expect(exactNav).toContainText('1\u20134 of 9');await exactNav.getByRole('button',{name:'Next items',exact:true}).click();await expect(exactNav).toContainText('5\u20138 of 9');
+  await exactNav.getByRole('combobox',{name:'Navigate',exact:true}).selectOption('sections');await exactNav.getByRole('button',{name:'Next items',exact:true}).click();await expect(exact).toContainText('Exact section 4');await expect(exact.locator('.result-statements>section').first()).toHaveAttribute('id','result-'+f.record.results.statements[68].id);
+  await dialog.getByRole('button',{name:'Compare with saved record',exact:true}).click();const saved=dialog.locator('[data-retained-current]');await saved.getByRole('link',{name:'Read the final result',exact:true}).click();await expect(saved.locator('#retained-current-result-'+f.last.id)).toBeFocused();await expect(saved.locator('#retained-current-result-'+f.last.id)).toContainText('Revised late result');await expect(exact.locator('#result-'+f.last.id)).toContainText(f.last.text);await expect(exactNav).toContainText('73\u201373 of 73');
+  await exact.getByRole('link',{name:'Read the final result',exact:true}).click();await expect(exact.locator('#result-'+f.last.id)).toBeFocused();await dialog.getByRole('button',{name:'Close',exact:true}).click();await expect(dialog).not.toBeVisible();
+  const values=new RecordValues(f.workspace);expect((await values.read({workspaceId:f.book.id,recordId:f.record.id,field:'result:'+f.last.id})).value.value).toEqual({...f.last,text:'Revised late result with the original identity'});
+  const pages=(await Promise.all(responses)).flatMap(result=>result.previous?[result.previous,result.next??result.current].filter(Boolean):[result]);expect(pages.length).toBeGreaterThan(20);expect(pages.every(result=>(result.header?.results?.statements??result.record?.results?.statements??[]).length<=4&&result.collections.results.count<=4)).toBe(true);
+  expect(requests.filter(route=>/^\/api\/workspace\/read\/(selection|page)$/.test(route)||route==='/api/research/records/save')).toEqual([]);expect(errors).toEqual([]);
+  ResearchCatalogue.prototype.record=original;const savedRecord=(await f.workspace.read()).book.entries.find(record=>record.id===f.record.id);expect(savedRecord.results.statements).toEqual(f.record.results.statements.map(statement=>statement.id===f.last.id?{...statement,text:'Revised late result with the original identity'}:statement));expect(savedRecord.sections).toEqual(f.record.sections);
+ }finally{release();await page.unrouteAll({behavior:'ignoreErrors'});ResearchCatalogue.prototype.record=original;await app.close();clearVault(f.vault);await rm(f.directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+});

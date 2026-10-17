@@ -10,10 +10,10 @@ const invalid=()=>{throw new AppError('INVALID');};
 const natural=v=>Number.isSafeInteger(v)&&v>=0;
 export class RecordDocument{
  #attemptAppend=null;
- constructor(blocks,root,{mutable=false,attemptIndex=null,methodIndex=null}={}){this.blocks=blocks;this.tree=blocks.tree();this.root=root;this.mutable=mutable;this.attemptIndex=attemptIndex;this.methodIndex=methodIndex;}
+ constructor(blocks,root,{mutable=false,attemptIndex=null,methodIndex=null,resultIndex=null}={}){this.blocks=blocks;this.tree=blocks.tree();this.root=root;this.mutable=mutable;this.attemptIndex=attemptIndex;this.methodIndex=methodIndex;this.resultIndex=resultIndex;}
  attemptAppendBase(){return this.#attemptAppend?.root===this.root?structuredClone(this.#attemptAppend.base):null;}
  async #derived(root,{attemptChanged=false,append=false,signal}={}){
-  const next=new RecordDocument(this.blocks,root,{mutable:true,attemptIndex:this.attemptIndex,methodIndex:this.methodIndex});let base=this.attemptAppendBase();
+  const next=new RecordDocument(this.blocks,root,{mutable:true,attemptIndex:this.attemptIndex,methodIndex:this.methodIndex,resultIndex:this.resultIndex});let base=this.attemptAppendBase();
   if(append&&!base&&this.attemptIndex?.source===await this.reference(['attempt'],{signal}))base=this.attemptIndex;
   if(base&&(!attemptChanged||append))next.#attemptAppend={root,base:structuredClone(base)};
   return next;
@@ -143,6 +143,6 @@ export async function withRecordDocument(store,id,revision,consume,{mutable=fals
    blocks.flush=async()=>{};
   }
   const root=value.format==='observanda-record-blocks'?value.root:await blocks.tree().retain(value);
-  return consume(new RecordDocument(blocks,root,{mutable,attemptIndex:value.attemptIndex??null,methodIndex:value.methodIndex??null}));
+  return consume(new RecordDocument(blocks,root,{mutable,attemptIndex:value.attemptIndex??null,methodIndex:value.methodIndex??null,resultIndex:value.resultIndex??null}));
  });
 }

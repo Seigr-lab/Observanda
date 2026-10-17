@@ -15,7 +15,7 @@ export function validResultStatement(s,{draft=false}={}){
  if(draft&&s.source===null)return !table;
  return measurementRef(s.source)&&(s.kind==='table'&&draft&&!table&&!selection?['analysis','dataset'].includes(s.source.kind):s.source.kind===(table||selection?'dataset':'analysis'));
 }
-export function validResults(v){return v&&Object.keys(v).sort().join()==='statements,version'&&v.version===1&&Array.isArray(v.statements)&&v.statements.length<=64&&new Set(v.statements.map(s=>s?.id)).size===v.statements.length&&v.statements.every(s=>validResultStatement(s));}
+export function validResults(v){return v&&Object.keys(v).sort().join()==='statements,version'&&v.version===1&&Array.isArray(v.statements)&&new Set(v.statements.map(s=>s?.id)).size===v.statements.length&&v.statements.every(s=>validResultStatement(s));}
 export function figureResultView(figure,results,esc){
  const targets=figureTargets([figure]),ids=new Set(targets.map(f=>f.id)),statements=results?.statements.filter(s=>s.kind==='figure'&&ids.has(s.figureId))??[];
  if(!statements.length)return '<p>'+esc(messages.figureUnlinked)+'</p>';

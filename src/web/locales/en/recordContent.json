@@ -79,5 +79,10 @@
  "findHeading":"Find section heading",
  "findNext":"Find next",
  "noMatch":"No section heading matches.",
- "enterHeading":"Enter a section heading to find."
+ "enterHeading":"Enter a section heading to find.",
+ "collection_results":"result statements",
+ "figureResults":"View results ({count})",
+ "figureResultsUnknown":"View result statements",
+ "resultsForFigure":"Results for the selected figure or panel",
+ "allResults":"All results"
 }

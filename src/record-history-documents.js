@@ -12,6 +12,7 @@ import {recordDocumentSummary} from './record-document-summary.js';
 import {validateRecordDocument} from './record-document-validation.js';
 import {validateDocumentSources} from './record-document-sources.js';
 import {commitRecordDocument} from './record-document-commit.js';
+import {resultAnchorId} from './record-result-document.js';
 
 const target=command=>command&&researchId(command.workspaceId)&&researchId(command.recordId)&&revisionId(command.revision)&&command.source&&['current','workspace','retained'].includes(command.source.kind)&&(command.source.kind==='current'||revisionId(command.source.id));
 const fields=['title','type','status','outcome','occurredOn','body','sections','template','tags','contributors','relations','figures','attachments','notebookId','share','attempt','results'];
@@ -35,13 +36,13 @@ export class RecordHistoryDocuments{
   return {etag,snapshot,row,selected,old,current};
  }
  async read(command,{signal}={}){
-  if(!target(command)||command.offset!==undefined&&(!Number.isSafeInteger(command.offset)||command.offset<0)||command.windows!==undefined&&!validHeaderWindows(command.windows))throw new AppError('INVALID');
+  if(!target(command)||command.offset!==undefined&&(!Number.isSafeInteger(command.offset)||command.offset<0)||command.windows!==undefined&&!validHeaderWindows(command.windows)||command.resultFigure!==undefined&&!researchId(command.resultFigure)||command.anchor!==undefined&&!researchId(resultAnchorId(command.anchor)))throw new AppError('INVALID');
   return this.workspace.catalogue(async store=>{
    const context=await this.context(store,command);if(!context)return null;const {row,old,current}=context;
    return withRecordDocument(store,old.id,old.revision,earlier=>withRecordDocument(store,row.id,row.revision,async latest=>{
     const page=async(document,member)=>{
      const total=await document.tree.arrayLength(document.root,['sections']),offset=Math.min(command.offset??0,Math.max(0,total-1)),sections=await document.tree.page(document.root,['sections'],{offset,limit:4});
-     const header=await recordReadingHeader(store,member,document,sections.values,{windows:command.windows,signal});
+     const header=await recordReadingHeader(store,member,document,sections.values,{windows:command.windows,anchor:command.anchor,resultFigure:resultAnchorId(command.anchor)?undefined:command.resultFigure,signal});
      return {...header,sections,record:{...header.header,sections:sections.values}};
     };
     const fingerprint=async(document,name)=>{const ref=await document.reference([name],{signal});if(!ref)return null;const hash=createHash('sha256');for await(const chunk of document.tree.json(ref,{canonical:true,signal}))hash.update(chunk);return hash.digest('hex');};

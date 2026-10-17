@@ -13,7 +13,7 @@ const hash=value=>createHash('sha256').update(value).digest('hex'),tables={state
 test('archive headers restore each guarded catalogue generation',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-archive-generation-'));t.after(()=>rm(directory,{recursive:true,force:true}));
  const file=path.join(directory,'archive');
- for(const generation of [8,9,10,11,12,13,14,15,16,17,18,19,20,21,23]){
+ for(const generation of [8,9,10,11,12,13,14,15,16,17,18,19,20,21,23,26]){
   const payload=seal(Buffer.from('Synthetic state'),randomBytes(32),'test');let restored=generation;
   const db={async *rows(){yield {slot:'head',payload_bytes:payload.length};},all:async sql=>sql==='SELECT version FROM catalogue_format'?[{version:restored}]:[{slot:'head',payload}],get:async()=>({found:1}),run:async(sql,value)=>{if(sql.startsWith('UPDATE catalogue_format'))restored=value;}};
   archiveDatabaseFixture(db);const handle=await open(file,'w');try{await writeCatalogueArchive(db,handle,tables);}finally{await handle.close();}restored=3;

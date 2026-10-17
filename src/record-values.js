@@ -1,5 +1,6 @@
 // Individually owned record details. A value revision guards only this field;
 // other fields and growing collections remain references to their saved values.
+import {resultFigureCount} from './record-result-document.js';
 import {AppError} from './errors.js';
 import {researchId} from './web/research-reference.js';
 import {revisionId,revisionText} from './web/revision-model.js';
@@ -45,10 +46,7 @@ export async function selectedRecordValue(document,field,{position,signal}={}){
   if(collection.kind==='media'&&!selected)throw new AppError('MISSING');
   if(collection.kind==='figure'){
    const value={value:selected},ids=new Set(selected?figureTargets([selected]).map(f=>f.id):[]),linkedFigureIds=new Set();
-   if(await document.tree.select(document.root,['results','statements']))for await(const item of document.items(['results','statements'],{signal})){
-    if((await document.tree.selected(item.value,['kind'])).value!=='figure')continue;
-    const id=(await document.tree.selected(item.value,['figureId'])).value;if(ids.has(id))linkedFigureIds.add(id);
-   }
+   for(const id of ids)if(await resultFigureCount(document,id,{signal}))linkedFigureIds.add(id);
    return {path,position,collection,definition:{kind:'figure',existing:!!selected,linkedFigureIds:[...linkedFigureIds]},value,revision:digest(serialize(value))};
   }
   const value={value:selected?(collection.kind==='media'?mediaDetails(selected):collection.kind==='relation'?relationValue(selected):{name:selected.name,role:selected.role}):null};

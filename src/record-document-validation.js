@@ -9,6 +9,7 @@ import {withScratch} from './scratch-work.js';
 import {AppError} from './errors.js';
 import {recordTemplateHeader,validateRecordTemplate} from './record-template-document.js';
 import {attemptDocumentHeader,validateAttemptDocument} from './record-attempt-document.js';
+import {resultDocumentHeader,validateResultDocument} from './record-result-document.js';
 
 const collections=['sections','contributors','relations','figures','attachments','tags'];
 const ordinaryDetails=new Set(['title','status','outcome','occurredOn','share','updatedAt']);
@@ -31,7 +32,7 @@ export async function validateRecordDocument(document,metadata,{signal,summaries
  const reuse=await detailsOnly(document,admitted,names,{signal});
  for(const name of names){
   signal?.throwIfAborted();
-  Object.defineProperty(header,name,{value:collections.includes(name)?[]:name==='attempt'?await (reuse?attemptDocumentHeader:validateAttemptDocument)(document,{signal}):name==='template'?await recordTemplateHeader(document,{signal}):(await document.field([name],{signal})).value,enumerable:true,writable:true});
+  Object.defineProperty(header,name,{value:collections.includes(name)?[]:name==='attempt'?await (reuse?attemptDocumentHeader:validateAttemptDocument)(document,{signal}):name==='results'?await (reuse?resultDocumentHeader:validateResultDocument)(document,{signal}):name==='template'?await recordTemplateHeader(document,{signal}):(await document.field([name],{signal})).value,enumerable:true,writable:true});
  }
  if(!reuse)await validateRecordTemplate(document,header.template,{signal});
  validateRecordChanges(metadata,[header],summaries,{capacity:false});

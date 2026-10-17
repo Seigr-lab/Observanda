@@ -18,14 +18,14 @@ export const recordChanges=(previous,current)=>Object.keys(labels).filter(key=>!
 const typeName=record=>record.template?.label??RECORD_TYPES.find(t=>t.id===record.type)?.label??record.type;
 const value=(v,esc)=>v?.type==='doc'?renderProse(v):esc(typeof v==='object'?JSON.stringify(v):String(v??''));
 
-export function recordRevisionField(key,record,esc,{anchors=false,assetUrl=id=>'/api/media/'+id,figureSources=true,figureActions,figure=recordFigureRenderer(record,esc,{assetUrl,figureSources,figureActions})}={}){
+export function recordRevisionField(key,record,esc,{anchors=false,assetUrl=id=>'/api/media/'+id,figureSources=true,figureActions,figureResults=null,figure=recordFigureRenderer(record,esc,{assetUrl,figureSources,figureActions,figureResults})}={}){
  const prose=v=>renderProse(v,{figure});
  if(key==='results')return resultStatementsView(record.results,esc);
  if(key==='attempt')return attemptView(record.attempt,esc);
  const v=record[key],list=items=>items.length?'<ul>'+items.map(item=>'<li>'+item+'</li>').join('')+'</ul>':'<p class="muted">None</p>';
  if(key==='body')return prose(v);
  if(key==='sections')return v.map(s=>'<section'+(anchors?' id="'+esc(sectionAnchor(s))+'"':'')+'><h2>'+esc(s.title)+'</h2>'+prose(s.body)+'</section>').join('')||'<p>No writing sections</p>';
- if(key==='figures')return v.filter(f=>!placedFigures(record).has(f.id)).map(f=>recordFigure(record,f.id,esc,{assetUrl,figureSources,figureActions})).join('');
+ if(key==='figures')return v.filter(f=>!placedFigures(record).has(f.id)).map(f=>recordFigure(record,f.id,esc,{assetUrl,figureSources,figureActions,figureResults})).join('');
  if(key==='occurredOn')return esc(recordDateLabel(v));
  if(key==='type')return esc(typeName(record));
  if(key==='share')return record.share?'Included in website':'Private';
@@ -36,9 +36,9 @@ export function recordRevisionField(key,record,esc,{anchors=false,assetUrl=id=>'
  if(key==='template')return v?'<p>'+esc(v.label)+'</p><dl>'+v.fields.map(f=>'<dt>'+esc(customFieldLabel(f))+'</dt><dd>'+value(v.values[f.key],esc)+'</dd>').join('')+'</dl>':'<p>No custom record fields</p>';
  return value(v,esc);
 }
-export function recordRevisionView(record,esc,{relations=true,anchors=false,sectionsHtml=null,fieldsHtml={},inlineRecord=record,attemptReference=null,attemptWindow=null,resultReference=null,assetUrl=id=>'/api/media/'+id,figureSources=true,figureActions}={}){
- const figure=recordFigureRenderer(inlineRecord,esc,{assetUrl,figureSources,figureActions});
- const fieldView=key=>Object.hasOwn(fieldsHtml,key)?fieldsHtml[key]:recordRevisionField(key,record,esc,{assetUrl,figureSources,figureActions});
+export function recordRevisionView(record,esc,{relations=true,anchors=false,sectionsHtml=null,fieldsHtml={},inlineRecord=record,attemptReference=null,attemptWindow=null,resultReference=null,assetUrl=id=>'/api/media/'+id,figureSources=true,figureActions,figureResults=null}={}){
+ const figure=recordFigureRenderer(inlineRecord,esc,{assetUrl,figureSources,figureActions,figureResults});
+ const fieldView=key=>Object.hasOwn(fieldsHtml,key)?fieldsHtml[key]:recordRevisionField(key,record,esc,{assetUrl,figureSources,figureActions,figureResults});
  const figures=fieldView('figures'),details=['tags','contributors',...(relations?['relations']:[]),'attachments'].filter(k=>record[k]?.length||fieldsHtml[k]).map(k=>({key:k,html:fieldView(k)})).filter(v=>v.html);
  return '<article class="record-revision"><p class="scope-kicker">'+esc(typeName(record))+' &middot; '+esc(record.status)+' &middot; '+esc(recordDateLabel(record.occurredOn))+'</p>'+
   (record.outcome?'<p><strong>Outcome:</strong> '+esc(record.outcome)+'</p>':'')+'<div class="prose">'+recordRevisionField('body',record,esc,{anchors,figure})+(record.sections.length?(sectionsHtml?sectionsHtml(figure):recordRevisionField('sections',record,esc,{anchors,figure})):'' )+'</div>'+

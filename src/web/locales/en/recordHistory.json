@@ -61,5 +61,9 @@
   "field_preparations": "Preparation revisions",
   "field_events": "Events",
   "field_assessments": "Assessments",
-  "field_results": "Analysis results"
+  "field_results": "Analysis results",
+  "resultsForFigure": "Results for the selected figure or panel",
+  "allResults": "All results",
+  "contentRetry": "Try again",
+  "resultUnavailable": "This result statement is not present in this version."
 }

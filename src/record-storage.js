@@ -6,12 +6,13 @@ import {AppError} from './errors.js';
 import {seal,unseal} from './encryption.js';
 import {digest,serialize} from './storage-format.js';
 import {RecordBlockStore,blockedRecord,validBlockedRecord} from './record-block-store.js';
-import {catalogueFormat,requireRecordBlocks,requireAttemptIndexes,requireCurrentAttemptIndexes,requireRecordMethodIndexes} from './catalogue-format.js';
+import {catalogueFormat,requireRecordBlocks,requireAttemptIndexes,requireCurrentAttemptIndexes,requireRecordMethodIndexes,requireRecordResultIndexes} from './catalogue-format.js';
 import {jsonFitsBytes} from './web/json-chunks.js';
 import {recordEncoding} from './record-encoding.js';
 import {RecordDocument,withRecordDocument} from './record-document.js';
 import {RecordAttemptIndex} from './record-attempt-index.js';
 import {RecordMethodIndex} from './record-method-index.js';
+import {RecordResultIndex} from './record-result-index.js';
 const fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 const requireIndexFormat=(db,index)=>index.version>=2?requireCurrentAttemptIndexes(db):requireAttemptIndexes(db);
 export async function withRecordEnvelope(store,id,revision,consume){
@@ -28,10 +29,11 @@ export async function withStoredRecord(store,id,revision,consume){
   if(retiredProjectRecord(value)){if(await catalogueFormat(store.db)<23)fail();return withRetiredProjectRecord(store,value,id,revision,row.scope_id,consume);}
   let blocks=null;
   if(blockedRecord(value)){
-   if(!validBlockedRecord(value)||await catalogueFormat(store.db)<(value.version===3?14:value.attemptIndex?.version===2?12:value.version===2?11:4))fail();blocks=new RecordBlockStore(store,row.scope_id,row.generation,key);
+   if(!validBlockedRecord(value)||await catalogueFormat(store.db)<(value.version===4?26:value.version===3?14:value.attemptIndex?.version===2?12:value.version===2?11:4))fail();blocks=new RecordBlockStore(store,row.scope_id,row.generation,key);
    for(const [name,expected] of [['id',id],['notebookId',row.scope_id]]){const selected=await blocks.tree().selected(value.root,[name]);if(!selected.found||selected.value!==expected)fail();}
    if(value.attemptIndex){const document=new RecordDocument(blocks,value.root);if(value.attemptIndex.source!==await document.reference(['attempt']))fail();}
    if(value.methodIndex){const document=new RecordDocument(blocks,value.root);if(value.methodIndex.source!==await document.reference(['relations']))fail();}
+   if(value.resultIndex&&!await RecordResultIndex.open(new RecordDocument(blocks,value.root,{resultIndex:value.resultIndex})))fail();
   }else if(digest(serialize(value))!==revision)fail();
   return await consume({store,row,key,value,blocks});
  });
@@ -40,13 +42,14 @@ export async function retainStoredRecord(store,record,revision){
  const scopeId=record.notebookId,generation=1,key=await store.scopeKey(scopeId,generation,{create:true});
  try{
   let retained;
-  // This is a representation threshold, not a content limit. Small originals
-  // keep their existing compact envelope; larger ones share immutable blocks.
-  if(record.attempt||record.relations?.some(link=>link.role==='uses-method')||!jsonFitsBytes(record,65535,{pretty:true})){
+  // Indexed owners and larger originals share immutable blocks. The byte
+  // threshold chooses representation; it does not limit record content.
+  if(record.attempt||record.results||record.relations?.some(link=>link.role==='uses-method')||!jsonFitsBytes(record,65535,{pretty:true})){
    await requireRecordBlocks(store.db);
    const blocks=new RecordBlockStore(store,scopeId,generation,key),value=await blocks.retain(record),document=new RecordDocument(blocks,value.root),attemptIndex=await RecordAttemptIndex.retain(document);
    if(attemptIndex){await requireIndexFormat(store.db,attemptIndex);value.version=2;value.attemptIndex=attemptIndex;}
-   const methodIndex=await RecordMethodIndex.retain(document);if(methodIndex){await requireRecordMethodIndexes(store.db);value.version=3;value.methodIndex=methodIndex;}await blocks.flush();
+   const methodIndex=await RecordMethodIndex.retain(document);if(methodIndex){await requireRecordMethodIndexes(store.db);value.version=3;value.methodIndex=methodIndex;}
+   const resultIndex=await RecordResultIndex.retain(document);if(resultIndex){await requireRecordResultIndexes(store.db);value.version=4;value.resultIndex=resultIndex;}await blocks.flush();
    retained=serialize(value);
   }else retained=serialize(record);
   await store.db.run('INSERT INTO records VALUES ($1,$2,$3,$4,$5)',record.id,revision,scopeId,generation,seal(Buffer.from(retained),key,store.recordAAD(record.id,revision,scopeId,generation)));
@@ -65,8 +68,9 @@ export async function retainStoredDocument(store,document,encoding){
  const revision=encoding.revision;
  if(await store.db.get('SELECT 1 FROM records WHERE id=$1 AND revision=$2',id,revision))return false;
  await requireRecordBlocks(store.db);const attemptIndex=await RecordAttemptIndex.retain(document);if(attemptIndex)await requireIndexFormat(store.db,attemptIndex);
- const methodIndex=await RecordMethodIndex.retain(document);if(methodIndex)await requireRecordMethodIndexes(store.db);await blocks.flush();
- const value={format:'observanda-record-blocks',version:methodIndex?3:attemptIndex?2:1,id,notebookId:scopeId,root:document.root,...(attemptIndex?{attemptIndex}:{}),...(methodIndex?{methodIndex}:{})};
+ const methodIndex=await RecordMethodIndex.retain(document);if(methodIndex)await requireRecordMethodIndexes(store.db);
+ const resultIndex=await RecordResultIndex.retain(document);if(resultIndex)await requireRecordResultIndexes(store.db);await blocks.flush();
+ const value={format:'observanda-record-blocks',version:resultIndex?4:methodIndex?3:attemptIndex?2:1,id,notebookId:scopeId,root:document.root,...(attemptIndex?{attemptIndex}:{}),...(methodIndex?{methodIndex}:{}),...(resultIndex?{resultIndex}:{})};
  await store.db.run('INSERT INTO records VALUES ($1,$2,$3,$4,$5)',id,revision,scopeId,blocks.generation,
   seal(Buffer.from(serialize(value)),blocks.key,store.recordAAD(id,revision,scopeId,blocks.generation)));
  return true;
@@ -75,10 +79,11 @@ export async function verifyStoredRecord(store,id,revision,{signal}={}){
  signal?.throwIfAborted();
  const indexed=await withStoredRecord(store,id,revision,async({value,blocks})=>{
   if(blocks){const hash=createHash('sha256');for await(const text of blocks.tree().json(value.root,{signal}))hash.update(text);hash.update('\n');if(hash.digest('hex')!==revision)fail();}
-  return {attempt:!!value.attemptIndex,methods:!!value.methodIndex};
+  return {attempt:!!value.attemptIndex,methods:!!value.methodIndex,results:!!value.resultIndex};
  });
- if(indexed.attempt||indexed.methods)await withRecordDocument(store,id,revision,async document=>{
+ if(indexed.attempt||indexed.methods||indexed.results)await withRecordDocument(store,id,revision,async document=>{
   if(indexed.attempt)await (await RecordAttemptIndex.open(document,{signal})).verify({signal});
   if(indexed.methods)await (await RecordMethodIndex.open(document,{signal})).verify({signal});
+  if(indexed.results)await (await RecordResultIndex.open(document,{signal})).verify({signal});
  });
 }

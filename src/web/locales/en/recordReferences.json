@@ -29,5 +29,8 @@
   "comparisonPinned": "This comparison keeps the saved version from when it opened. Refresh to include later edits.",
   "refreshComparison": "Refresh comparison",
   "removed": "The record has been removed. Its retained version remains readable.",
-  "close": "Close"
+  "close": "Close",
+  "results": "Result statements",
+  "resultsForFigure": "Results for the selected figure or panel",
+  "allResults": "All results"
 }

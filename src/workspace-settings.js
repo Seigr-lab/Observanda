@@ -2,7 +2,7 @@ import {cataloguePrefixExists} from './postgres-indexes.js';
 import {readProjectDomainRegistry} from './project-domain-registry.js';
 // Workspace preferences have their own authenticated rows and writer lock.
 // They share the lifecycle handoff with other owners, not the research writer.
-import {catalogueFormat,requireWorkspaceSettings} from './catalogue-format.js';
+import {catalogueFormat,catalogueRequiresSettings,requireWorkspaceSettings} from './catalogue-format.js';
 import {projectDomainHandoff,projectDomainLock} from './project-domain-lock.js';
 import {assertNotDeleting} from './workspace-delete-state.js';
 import {assertNotMoving} from './workspace-move-state.js';
@@ -20,7 +20,7 @@ async function row(store,slot){
 }
 export async function workspaceSettingsRegistry(store){
  const value=await row(store,registrySlot),format=await catalogueFormat(store.db);
- if(format<25){if(value)damaged();return null;}
+ if(!catalogueRequiresSettings(format)){if(value)damaged();return null;}
  const namespaceId=(await store.snapshot()).metadata.id;
  if(store.workspace.projectId||!value||Object.keys(value).sort().join()!=='features,namespaceId,version'||value.version!==1||value.namespaceId!==namespaceId||!Array.isArray(value.features)||value.features.join()!=='dashboard')damaged();
  return value;

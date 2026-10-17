@@ -10,6 +10,7 @@ import {withRecordProjectionScratch} from './record-projection-scratch.js';
 import {validateFigureSources} from './figure-provenance.js';
 import {revisionText} from './web/revision-model.js';
 import {RecordMemberCollections,memberCollectionFields,memberCollectionCount} from './record-member-collections.js';
+import {RecordResultIndex} from './record-result-index.js';
 import {RecordAttemptIndex} from './record-attempt-index.js';
 import {retainSearchVocabulary,verifySearchVocabulary} from './record-search-vocabulary.js';
 import {retainReferenceIndex,verifyReferenceIndex} from './record-reference-index.js';
@@ -22,6 +23,7 @@ async function fieldDigest(tree,root,name,{signal}={}){
 export async function verifyRecordDocument(store,row,metadata,summaries,media,{signal}={}){
  return withRecordDocument(store,row.id,row.revision,async document=>{
   const header=await validateRecordDocument(document,metadata,{summaries,signal}),encoding=await document.encoding({signal});
+  await (await RecordResultIndex.open(document,{signal}))?.verify({signal});
   await (await RecordAttemptIndex.open(document,{signal}))?.verify({signal});
   if(row.collections){
    const membership=new RecordMemberCollections(store);

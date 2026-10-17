@@ -1,5 +1,7 @@
 import {figureTargets} from './figure-composition.js';
 import messages from './locales/en/figureComposition.json' with {type:'json'};
+import {t} from './i18n/index.js';
+import {researchId} from './research-reference.js';
 import {revisionText} from './revision-model.js';
 
 export function figureHasResults(figure,results){const ids=new Set(figureTargets([figure]).map(f=>f.id));return !!results?.statements.some(s=>s.kind==='figure'&&ids.has(s.figureId));}
@@ -21,6 +23,19 @@ export function copyFigureResults(results,pairs,{uuid=()=>crypto.randomUUID()}={
    additions.push({...structuredClone(statement),id:uuid(),figureId:to[i].id});
   }
  }
- if(results.statements.length+additions.length>64)throw new Error(messages.resultLimit);
  return additions.length?{...results,statements:[...results.statements,...additions]}:results;
+}
+
+// Reading windows carry counts for the visible figure and its panels, never a
+// partial list that could falsely imply the absence of a supporting statement.
+export function figureResultLinks(figure,counts,esc,{action='content-results-figure'}={}){
+ const targets=figureTargets([figure]),known=id=>Number.isSafeInteger(counts?.[id])&&counts[id]>=0;
+ const available=targets.filter(target=>!known(target.id)||counts[target.id]>0);
+ if(!available.length)return '<p>'+esc(t('analyses','figureUnlinked'))+'</p>';
+ const links='<div class="inline-actions">'+available.map(target=>'<button type="button" class="text-button" data-action="'+action+'" data-result-figure="'+target.id+'">'+esc(target.title||figure.title)+' - '+esc(known(target.id)?t('recordContent','figureResults',{count:counts[target.id]}):t('recordContent','figureResultsUnknown'))+'</button>').join('')+'</div>';
+ const missing=figure.kind==='panels'&&known(figure.id)&&counts[figure.id]===0?figure.panels.filter(panel=>known(panel.figure.id)&&counts[panel.figure.id]===0):[];
+ return links+missing.map(panel=>'<p>'+esc(messages.missingPanelResult.replace('{panel}',()=>panel.label))+'</p>').join('');
+}
+export function resultStatementAnchor(value){
+ const match=/^(?:record-)?result-(.+)$/.exec(value??'');return match&&researchId(match[1])?'result-'+match[1]:null;
 }

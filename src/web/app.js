@@ -1002,8 +1002,12 @@ document.addEventListener('click', event => {
   const href=event.target.closest('.record-reader a[href], .lab-book-reading a[href], .records-table a[href]')?.getAttribute('href'),target=href&&parseResearchReference(href);
   if(target){event.preventDefault();leave.run(()=>navigateResearch(target)).catch(report);return;}
   if(href?.startsWith('#')&&!href.startsWith('#/')){
-    event.preventDefault();const anchor=document.getElementById(href.slice(1));
-    if(anchor){anchor.setAttribute('tabindex','-1');anchor.focus();anchor.scrollIntoView({block:'start'});}else notify(t('book','unavailable'),true);return;
+    event.preventDefault();
+    (async()=>{
+      const id=href.slice(1);if(event.target.closest('.record-reader')&&await recordContent.openAnchor(id))return;
+      const anchor=document.getElementById(id);
+      if(anchor){anchor.setAttribute('tabindex','-1');anchor.focus();anchor.scrollIntoView({block:'start'});}else notify(t('book','unavailable'),true);
+    })().catch(report);return;
   }
   const button = event.target.closest('[data-action]');
   if (button) { event.preventDefault(); const previous = `${state.page}/${state.project}/${state.notebook}`; action(button).then(() => { if (`${state.page}/${state.project}/${state.notebook}` !== previous) window.scrollTo(0,0); }).catch(report); }

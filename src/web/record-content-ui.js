@@ -14,23 +14,27 @@ import {recordAttemptControls} from './record-attempt-values-ui.js';
 import {recordTagActions} from './record-tag-actions.js';
 import {recordResultControls} from './record-result-values-ui.js';
 import {recordEditingView} from './record-editing-view.js';
+import {figureResultLinks,resultStatementAnchor} from './figure-result-links.js';
 
 // Reading windows live outside editable workspace snapshots. Selected editing
 // owners persist their own values, so a window can never overwrite omissions.
 export function recordContentUI({state,api,esc,field,render,report,refresh,editWriting,tools=()=>'',before=()=>'',after=()=>'',links=()=>'',attemptReference=null,resultReference=null}){
  const assetUrl=id=>ownedAssetURL(state,'/api/media/'+id);
  const text=(key,args)=>t('recordContent',key,args);
- let owner=null,reading=null,controller=null,busy=false,error=null,offset=0,search='',lastSearch=null,focus=null,lastAnchor=null,pending=null,progress=null,windows={},detailField='title';
+ let owner=null,reading=null,controller=null,busy=false,error=null,offset=0,search='',lastSearch=null,focus=null,lastAnchor=null,pending=null,progress=null,windows={},detailField='title',resultFigure=null,collectionFocus=null,pendingCollection=null;
  const identity=()=>state.page==='record-reader'&&!state.access?.locked&&!state.storageUnavailable&&state.book?JSON.stringify([state.storage?.contextId,state.book.id,state.selected,state.etag]):null;
  const sectionActions=recordSectionActions({state,api,esc,current:()=>owner===identity()?reading:null,refresh,edit:editWriting,render,report});
  const mediaActions=recordMediaActions({state,api,esc,current:()=>owner===identity()?reading:null,refresh,reveal:async position=>{windows={...windows,attachments:Math.max(0,position)};await load();},render,report});
  const figureCommands=recordFigureActions({state,api,esc,current:()=>owner===identity()?reading:null,refresh,reveal:async position=>{windows={...windows,figures:Math.max(0,position)};await load();},render,report});
  const tags=recordTagActions({state,api,esc,current:()=>owner===identity()?reading:null,refresh,reveal:async position=>{windows={...windows,tags:Math.max(0,position)};await load();},render,report});
- function clear(){sectionActions.checkContext();figureCommands.checkContext();tags.checkContext();controller?.abort();controller=null;owner=null;reading=null;busy=false;error=null;offset=0;search='';lastSearch=null;focus=null;lastAnchor=null;pending=null;progress=null;windows={};detailField='title';}
+ function clear(){sectionActions.checkContext();figureCommands.checkContext();tags.checkContext();controller?.abort();controller=null;owner=null;reading=null;busy=false;error=null;offset=0;search='';lastSearch=null;focus=null;lastAnchor=null;pending=null;progress=null;windows={};detailField='title';resultFigure=null;collectionFocus=null;pendingCollection=null;}
  async function load(extra={},retry=false){
   const key=identity();if(!key)return;
   controller?.abort();const request=new AbortController();controller=request;busy=true;error=null;
-  if(!retry||!pending)pending={workspaceId:state.book.id,recordId:state.selected,snapshotId:reading?.etag??state.etag,offset,pagedHeader:true,windows:{...windows},...extra};
+  if(!retry||!pending){
+   pending={workspaceId:state.book.id,recordId:state.selected,snapshotId:reading?.etag??state.etag,offset,pagedHeader:true,windows:{...windows},...(resultFigure?{resultFigure}:{}),...extra};
+   if(pending.resultFigure===null)delete pending.resultFigure;pendingCollection=collectionFocus;
+  }
   try{
    let result;
    while(true){
@@ -42,13 +46,15 @@ export function recordContentUI({state,api,esc,field,render,report,refresh,editW
     progress=next;pending={...pending,cursor:next.nextCursor};render();
    }
    if(result.sections.values.length>4)throw Error(text('failed'));
-   reading={...result,header:result.header??reading?.header};offset=result.sections.offset;
+   const header=result.header??reading?.header,resultPage=result.collections?.results;
+   if(resultPage&&(![resultPage.offset,resultPage.count,resultPage.total].every(value=>Number.isSafeInteger(value)&&value>=0)||resultPage.count>4||resultPage.offset+resultPage.count>resultPage.total||(header?.results?.statements??[]).length!==resultPage.count))throw Error(text('failed'));
+   reading={...result,header};offset=result.sections.offset;resultFigure=reading.resultWindow?.figureId??null;
    windows=Object.fromEntries(Object.entries(reading.collections??{}).map(([name,page])=>[name,page.offset]));
    const notebook=state.book.notebooks.find(n=>n.id===reading.header.notebookId);if(notebook){state.notebook=notebook.id;state.project=notebook.projectId;}
    if(pending.search&&result.found===null)error=text('noMatch');
    if(focus)focus=result.sections.values[0]?.id??null;
-   pending=null;progress=null;
-  }catch(failure){if(!request.signal.aborted&&identity()===key){error=failure.message??text('failed');if(failure.code==='ACCESS_LOCKED')report(failure);}}
+   pending=null;pendingCollection=null;progress=null;
+  }catch(failure){if(!request.signal.aborted&&identity()===key){collectionFocus=null;error=failure.message??text('failed');if(failure.code==='ACCESS_LOCKED')report(failure);}}
   finally{if(controller===request){controller=null;busy=false;if(identity()===key)render();}}
  }
  const button=(key,action,disabled=false)=>'<button type="button" class="button" data-action="content-'+action+'" '+(disabled?'disabled':'')+'>'+esc(text(key))+'</button>';
@@ -60,30 +66,36 @@ export function recordContentUI({state,api,esc,field,render,report,refresh,editW
   const editing=state.recordReading===false,controls='<div class="record-toolbar"><button class="button" data-action="back-to-records">'+esc(text('back'))+'</button><button class="button" data-action="'+(editing?'record-read':'record-edit')+'">'+esc(text(editing?'read':'edit'))+'</button>'+tools()+'</div>';
   const status=(error?'<p role="alert">'+esc(error)+'</p>'+button('retry','retry',busy):'')+(busy?'<div class="inline-actions"><p role="status">'+esc(progress?text('searchProgress',progress):text('loading'))+'</p>'+button('cancel','cancel')+'</div>':'');
   if(!reading||owner!==identity())return controls+'<section aria-busy="'+busy+'">'+(status||'<p role="status">'+esc(text('loading'))+'</p>')+'</section>';
-  const record={...reading.header,sections:reading.sections.values},inlineRecord={...record,figures:[...record.figures,...reading.inline?.figures??[]],attachments:[...record.attachments,...reading.inline?.attachments??[]]},figureActions=f=>'<div class="inline-actions">'+recordFigureAction(f,esc,busy)+figureCommands.controls(f)+'</div>',figure=recordFigureRenderer(inlineRecord,esc,{assetUrl,figureActions});
-  const fieldsHtml={};for(const [name,page] of Object.entries(reading.collections??{}))if(!['relations','preparations','events','assessments'].includes(name)){
-   const key=name==='fields'?'template':name;fieldsHtml[key]=page.total?recordHeaderControls(name,page,esc,busy)+recordRevisionField(key,record,esc,{assetUrl,figureActions}):'';
+  const figureResults=figure=>figureResultLinks(figure,reading.resultFigures,esc);
+  const record={...reading.header,sections:reading.sections.values},inlineRecord={...record,figures:[...record.figures,...reading.inline?.figures??[]],attachments:[...record.attachments,...reading.inline?.attachments??[]]},figureActions=f=>'<div class="inline-actions">'+recordFigureAction(f,esc,busy)+figureCommands.controls(f)+'</div>',figure=recordFigureRenderer(inlineRecord,esc,{assetUrl,figureActions,figureResults});
+  const fieldsHtml={};for(const [name,page] of Object.entries(reading.collections??{}))if(!['relations','preparations','events','assessments','results'].includes(name)){
+   const key=name==='fields'?'template':name;fieldsHtml[key]=page.total?recordHeaderControls(name,page,esc,busy)+recordRevisionField(key,record,esc,{assetUrl,figureActions,figureResults}):'';
   }
   fieldsHtml.contributors=recordHeaderControls('contributors',reading.collections?.contributors,esc,busy)+recordContributorControls(record,esc,busy);
   fieldsHtml.figures=figureCommands.add()+(fieldsHtml.figures??'');
   fieldsHtml.attempt=recordAttemptControls(record,esc,attemptReference,{window:reading.attemptWindow,navigation:name=>recordHeaderControls(name,reading.collections?.[name],esc,busy)});
-  fieldsHtml.results=recordResultControls(record,esc,resultReference);
+  fieldsHtml.results=(resultFigure?'<div class="inline-actions"><p>'+esc(text('resultsForFigure'))+'</p>'+button('allResults','results-all',busy)+'</div>':'')+recordHeaderControls('results',reading.collections?.results,esc,busy)+recordResultControls(record,esc,resultReference);
   fieldsHtml.tags=recordHeaderControls('tags',reading.collections?.tags,esc,busy)+tags.view();
   fieldsHtml.attachments=mediaActions.add()+recordHeaderControls('attachments',reading.collections?.attachments,esc,busy)+recordMediaControls(record,esc,busy,mediaActions.controls,{assetUrl});
   const sections=()=>'<section class="record-sections">'+(editing?'':'<h3>'+esc(text('sections'))+'</h3>')+navigation()+record.sections.map((s,i)=>'<section id="record-section-'+s.id+'" tabindex="-1"><div class="section-bar"><h'+(editing?'3':'2')+'>'+esc(s.title)+'</h'+(editing?'3':'2')+'><button type="button" class="button" data-action="writing-edit" data-section="'+s.id+'">'+esc(text('editSection'))+'</button></div>'+sectionActions.controls(s,reading.sections.offset+i,reading.sections.total)+renderProse(s.body,{figure})+'</section>').join('')+'</section>';
   if(editing)return controls+recordEditingView({record,esc,status,busy,details:recordValueControls(record,esc,detailField),summary:'<button type="button" class="button" data-action="writing-edit">'+esc(text('editSummary'))+'</button><div class="prose">'+renderProse(record.body,{figure})+'</div>',sections:sectionActions.add()+sections(),fields:fieldsHtml,activity:before(),evidence:after(),relations:recordHeaderControls('relations',reading.collections?.relations,esc,busy)+links(record)});
-  return controls+'<article class="record-reader" aria-busy="'+busy+'"><h1>'+esc(record.title)+'</h1>'+status+recordValueControls(record,esc,detailField)+before()+'<div class="inline-actions"><button type="button" class="button" data-action="writing-edit">'+esc(text('editSummary'))+'</button>'+sectionActions.add()+'</div>'+recordRevisionView(record,esc,{relations:false,anchors:true,sectionsHtml:sections,fieldsHtml,inlineRecord,attemptReference,resultReference,figureActions,assetUrl})+after()+recordHeaderControls('relations',reading.collections?.relations,esc,busy)+links(record)+'</article>';
+  return controls+'<article class="record-reader" aria-busy="'+busy+'"><h1>'+esc(record.title)+'</h1>'+status+recordValueControls(record,esc,detailField)+before()+'<div class="inline-actions"><button type="button" class="button" data-action="writing-edit">'+esc(text('editSummary'))+'</button>'+sectionActions.add()+'</div>'+recordRevisionView(record,esc,{relations:false,anchors:true,sectionsHtml:sections,fieldsHtml,inlineRecord,attemptReference,resultReference,figureActions,figureResults,assetUrl})+after()+recordHeaderControls('relations',reading.collections?.relations,esc,busy)+links(record)+'</article>';
  }
  function bind(){
   const key=identity();if(!key){clear();return;}
   if(key!==owner){
    const previous=owner&&JSON.parse(owner),current=JSON.parse(key),sameRecord=previous&&previous.slice(0,3).every((v,i)=>v===current[i]),anchor=state.recordSection??(sameRecord?reading?.sections.values[0]?.id:null);
-   const previousWindows=windows,previousDetail=detailField;clear();if(sameRecord){windows=previousWindows;detailField=previousDetail;}owner=key;lastAnchor=state.recordSection;void load(anchor?{anchor}:{});render();return;
+   const previousWindows=windows,previousDetail=detailField,previousFigure=resultFigure,previousOffset=offset;clear();if(sameRecord){windows=previousWindows;detailField=previousDetail;resultFigure=previousFigure;offset=previousOffset;}owner=key;lastAnchor=state.recordSection;void load(anchor?{anchor,...(resultStatementAnchor(anchor)?{resultFigure:null}:{})}:{});render();return;
   }
-  if(state.recordSection&&state.recordSection!==lastAnchor){lastAnchor=state.recordSection;void load({anchor:lastAnchor});return;}
+  if(state.recordSection&&state.recordSection!==lastAnchor){lastAnchor=state.recordSection;void load({anchor:lastAnchor,...(resultStatementAnchor(lastAnchor)?{resultFigure:null}:{})});render();return;}
   if(busy)return;
+  if(collectionFocus){
+   const {name,action,first}=collectionFocus,nav=document.querySelector('[data-record-collection="'+name+'"]'),results=name==='results'?document.querySelector('.record-result-values'):null;
+   const target=first?results?.querySelector('.result-statements>section')??results:nav?.querySelector('[data-action="'+action+'"]:not([disabled])')??nav?.querySelector('input')??results;
+   if(target){if(!target.matches('button,input,select,a[href]'))target.tabIndex=-1;target.focus({preventScroll:true});target.scrollIntoView({block:'nearest'});}collectionFocus=null;return;
+  }
   if(focus){const target=document.getElementById('record-section-'+focus);target?.focus({preventScroll:true});target?.scrollIntoView({block:'nearest'});focus=null;}
-  else if(state.recordSection){const id=state.recordSection.startsWith('record-')?state.recordSection:'record-section-'+state.recordSection,node=document.getElementById(id);node?.focus({preventScroll:true});node?.scrollIntoView({block:'nearest'});}
+  else if(state.recordSection){const id=resultStatementAnchor(state.recordSection)??(state.recordSection.startsWith('record-')?state.recordSection:'record-section-'+state.recordSection),node=document.getElementById(id);if(node)node.tabIndex=-1;node?.focus({preventScroll:true});node?.scrollIntoView({block:'nearest'});}
  }
  async function action(control){
   if(control.dataset.action==='content-edit-area'){
@@ -94,14 +106,20 @@ export function recordContentUI({state,api,esc,field,render,report,refresh,editW
   if(await figureCommands.action(control))return true;
   if(await mediaActions.action(control))return true;
   if(await sectionActions.action(control))return true;
+  if(['content-results-figure','content-results-all'].includes(control.dataset.action)){
+   if(busy||!reading)return true;
+   const figureId=control.dataset.action==='content-results-all'?null:control.dataset.resultFigure;if(figureId&&!resultStatementAnchor('result-'+figureId))return true;
+   collectionFocus={name:'results',first:true};focus=null;state.recordSection=null;lastAnchor=null;
+   const task=load({resultFigure:figureId,windows:{...windows,results:0}});render();await task;return true;
+  }
   if(control.dataset.action?.startsWith('content-collection-')){
    if(busy)return true;const name=control.dataset.collection,page=reading?.collections?.[name];if(!page)return true;
    let position=page.offset+(control.dataset.action==='content-collection-previous'?-4:4);
    if(control.dataset.action==='content-collection-go'){const input=document.querySelector('[data-collection-position="'+name+'"]');if(!input.reportValidity())return true;position=Number(input.value)-1;}
-   windows={...windows,[name]:Math.max(0,position)};state.recordSection=null;const task=load();render();await task;return true;
+   windows={...windows,[name]:Math.max(0,position)};collectionFocus={name,action:control.dataset.action};focus=null;state.recordSection=null;const task=load();render();await task;return true;
   }
   const name=control.dataset.action;if(!['content-previous','content-next','content-go','content-find','content-retry','content-cancel'].includes(name))return false;
-  if(name==='content-cancel'){controller?.abort();controller=null;busy=false;error=text('cancelled');progress=null;focus=null;render();return true;}
+  if(name==='content-cancel'){controller?.abort();controller=null;busy=false;error=text('cancelled');progress=null;focus=null;collectionFocus=null;render();return true;}
   if(busy)return true;let extra={};
   if(name==='content-find'){
    search=document.querySelector('[data-content-search]').value.trim();if(!search){error=text('enterHeading');render();return true;}
@@ -109,8 +127,12 @@ export function recordContentUI({state,api,esc,field,render,report,refresh,editW
   }else if(name==='content-go'){
    const input=document.querySelector('[data-content-position]');if(!input.reportValidity())return true;extra={offset:Number(input.value)-1};
   }else if(name!=='content-retry')extra={offset:Math.max(0,offset+(name==='content-previous'?-4:4))};
-  focus=true;state.recordSection=null;const task=load(extra,name==='content-retry');render();await task;return true;
+  collectionFocus=name==='content-retry'?pendingCollection:null;focus=!collectionFocus;state.recordSection=null;const task=load(extra,name==='content-retry');render();await task;return true;
  }
- return {view,bind,action,clear,captureTarget:()=>identity()?{native:true,id:state.selected,snapshotId:owner===identity()&&reading?reading.etag:state.etag}:null,
+ return {view,bind,action,clear,async openAnchor(anchor){
+  if(!resultStatementAnchor(anchor)||!identity())return false;
+  state.recordSection=anchor;lastAnchor=anchor;focus=null;collectionFocus=null;
+  const task=load({anchor,resultFigure:null});render();await task;return true;
+ },captureTarget:()=>identity()?{native:true,id:state.selected,snapshotId:owner===identity()&&reading?reading.etag:state.etag}:null,
  savedRevision:()=>reading&&owner===identity()?reading.revision:null,removalTarget:()=>reading&&owner===identity()?{workspaceId:reading.workspaceId,recordId:reading.recordId,expectedRevision:reading.revision,title:reading.header.title}:null,attachMedia:mediaActions.attach,locationTarget:()=>reading&&owner===identity()?{workspaceId:reading.workspaceId,recordId:reading.recordId,sourceNotebookId:reading.header.notebookId,expectedStorageRevision:reading.storageRevision,title:reading.header.title}:null,async revealFigure(target,position){if(state.page!=='record-reader'||state.book?.id!==target.workspaceId||state.selected!==target.recordId||!Number.isSafeInteger(position)||position<0)return;windows={...windows,figures:position};await load();},current:()=>reading&&owner===identity()?{...reading.header,sections:reading.sections.values,relations:[...reading.header.relations,...reading.contextRelations??[]],figures:[...reading.header.figures,...reading.inline?.figures??[]],attachments:[...reading.header.attachments,...reading.inline?.attachments??[]]}:null,input(el){if(tags.input(el))return true;if(el.hasAttribute('data-record-detail-field')){detailField=el.value;return true;}if(!el.hasAttribute('data-content-search'))return false;search=el.value;return true;}};
 }
