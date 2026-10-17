@@ -29,6 +29,7 @@ async function owners(store,id,stored){
  return [];
 }
 export async function assertRecordOwnerObjectWritable(store,id,previous,value){
+ if(/^record-owner-(?:resource|resource-claim|reclaim):/.test(id)){const {assertRecordOwnerResourceMutation}=await import('./record-owner-resources.js');assertRecordOwnerResourceMutation(store);return;}
  if(/^record-owner-(?:draft-origin|draft-original|draft-review|draft-edit|draft-head|drafts|revision-prior|revision-copy):/.test(id)){assertRecordOwnerTransferAuthority(store);return;}
  if(!/^(?:record-draft-|record-history-restore:|metadata:\.observanda\/(?:materials|drafts|draft-list|record-draft-|run-readiness|jobs|intake))/.test(id))return;
  for(const recordId of new Set([...await owners(store,id,previous),...await owners(store,id,value)]))await assertRecordOwnerWritable(store,recordId);

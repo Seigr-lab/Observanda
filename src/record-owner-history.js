@@ -9,6 +9,7 @@ import {validMember} from './snapshot-index.js';
 import {validRecordOwner} from './record-owner-transfer-state.js';
 import {catalogueFormat,catalogueRequiresRecordOwnerTransfers} from './catalogue-format.js';
 import {websiteMetadataShell} from './website-owned-metadata.js';
+import {retainRecordOwnerResource} from './record-owner-resources.js';
 const prefix='record-owner-history:';
 const hash=value=>digest(serialize(value));
 const fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
@@ -24,7 +25,8 @@ export function recordOwnerHistoryMetadata(metadata,notebookId,workspaceId){
 export async function retainRecordOwnerHistory(store,{recordId,sourceOwner,sourceSnapshotId,metadata,member}){
  if(!researchId(recordId)||!validRecordOwner(sourceOwner)||!revisionId(sourceSnapshotId)||!validMember(member)||member.id!==recordId||metadata.id!==(await store.snapshot()).metadata.id)throw new AppError('INVALID');
  const value={version:1,recordId,sourceOwner,sourceSnapshotId,metadata,member},id=hash(value),slot=prefix+id;
- const prior=await store.object(slot);if(prior&&hash(prior)!==id)fail();if(!prior)await store.putObject(slot,value);return id;
+ const prior=await store.object(slot);if(prior&&hash(prior)!==id)fail();
+ await retainRecordOwnerResource(store,{kind:'object',key:slot,revision:id},{present:!!prior,dependencies:[{kind:'record',id:recordId,revision:member.revision},...Object.values(member.collections??{}).filter(Boolean).map(ref=>({kind:'state',key:'record-member-collection:'+ref.hash,revision:ref.hash}))]});if(!prior)await store.putObject(slot,value);return id;
 }
 export async function readRecordOwnerHistory(store,id,recordId){
  if(!revisionId(id)||!researchId(recordId))throw new AppError('INVALID');

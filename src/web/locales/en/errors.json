@@ -173,6 +173,8 @@
   "RECORD_TRANSFER_BUSY": "This record is being moved. You can continue working on other records while it finishes.",
   "RECORD_TRANSFER_ACTIVATING": "The destination is being activated. This move can no longer be cancelled; reopen Move record to continue it.",
   "RECORD_DRAFT_EXISTS": "The destination already has a different draft with the same identity. Resolve that draft before moving this record.",
+  "RECORD_TRANSFER_COPY_PENDING": "Finish or cancel the record move before making this copy or export. You can continue editing other records.",
+  "RECORD_TRANSFER_CLEANUP_PENDING": "Finish cancelling the record move before making this copy or export. You can continue editing your records.",
   "RECORD_TRANSFER_CANCELLED": "This record move was cancelled. The record remains in its original lab book.",
   "RECORD_TRANSFER_PENDING": "Finish or cancel this record's unfinished evidence work before moving it.",
   "RECORD_TRANSFER_EXISTS": "This record already exists in the destination. Choose another lab book.",

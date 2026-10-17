@@ -12,7 +12,8 @@ import {publicationDescriptorDetails} from './publication-record-descriptor.js';
 import {recordWriteEncoding,recordWriteDisplay} from './record-write-encoding.js';
 import {retainQueryValue,readQueryValue,withQueryValue} from './record-query-storage.js';
 import {retainedQueryProjection} from './record-query-projection.js';
-import {RecordBlockStore} from './record-block-store.js';
+import {RecordBlockStore,recordBlockResource} from './record-block-store.js';
+import {retainRecordOwnerResource} from './record-owner-resources.js';
 import {RecordDocument,withRecordDocument} from './record-document.js';
 import {jsonFitsBytes} from './web/json-chunks.js';
 import {requireAttemptQueries} from './catalogue-format.js';
@@ -26,7 +27,8 @@ function retainedBrowseDocument(document){
  const summary=browseDocument(document);for(const field of Object.values(details))delete summary[field];return summary;
 }
 export class RecordQueryDocuments{
- constructor(store){this.store=store;}
+ constructor(store,{write=null}={}){if(write!==null&&typeof write!=='function')throw new AppError('INVALID');this.store=store;this.write=write;}
+ async persistWith(operation){return this.write?this.write(operation):operation(this.store);}
  async retain(record,metadata){
   const prepared=recordWriteEncoding(this.store,record,metadata),display=recordWriteDisplay(this.store,record,metadata)??historicalRecordValue(metadata,record),revision=prepared?.contentRevision??recordRevision(display);
   if(!jsonFitsBytes(display,65535,{pretty:true})){
@@ -54,21 +56,25 @@ export class RecordQueryDocuments{
    });
   }else projection=await project(null);
   const {root,browse,summaryRoot,vocabulary,referenceIndex}=projection;
-  await requireAttemptQueries(this.store.db);await blocks.flush();
+  await this.persistWith(store=>requireAttemptQueries(store.db));await blocks.flush();
   const descriptor={format:'observanda-record-query-blocks',version:1,id:browse.id,notebookId:browse.notebookId,generation:blocks.generation};
   return this.retainValues(browse.id,{...descriptor,version:6,root,vocabulary,referenceIndex},{...descriptor,root:summaryRoot});
  }
  async retainValues(id,document,browse){
+  return this.persistWith(async store=>{
   const result={};
   for(const [field,kind,source] of [['queryRevision','record-query',document],['summaryRevision','record-summary',browse]]){
-   const value=await retainQueryValue(this.store,source);
+   const value=await retainQueryValue(store,source);
    const revision=hash(value),slot=kind+':'+id+':'+revision;
-   const prior=await this.store.db.get('SELECT payload FROM state WHERE slot=$1',slot);
-   if(prior){if(hash(this.store.decode('state',slot,prior.payload))!==revision)damaged();}
-   else await this.store.db.run('INSERT INTO state VALUES ($1,$2)',slot,this.store.encode('state',slot,value));
+   const prior=await store.db.get('SELECT payload FROM state WHERE slot=$1',slot);
+   if(prior){if(hash(store.decode('state',slot,prior.payload))!==revision)damaged();}
+   const dependencies=[];if(value.format==='observanda-record-query-blocks'){const ref=(kind,version)=>recordBlockResource(value.notebookId,value.generation,kind,version);dependencies.push(ref('value',value.root));if(value.vocabulary){for(const name of ['parts','terms'])if(value.vocabulary[name])dependencies.push(ref('index',value.vocabulary[name].hash));if(value.vocabulary.text)dependencies.push(ref('value',value.vocabulary.text));}if(value.referenceIndex){for(const name of ['occurrences','terms'])if(value.referenceIndex[name])dependencies.push(ref('index',value.referenceIndex[name].hash));for(const name of ['raw','root'])dependencies.push(ref('value',value.referenceIndex[name]));}}
+   await retainRecordOwnerResource(store,{kind:'state',key:slot,revision},{present:!!prior,dependencies});
+   if(!prior)await store.db.run('INSERT INTO state VALUES ($1,$2)',slot,store.encode('state',slot,value));
    result[field]=revision;
   }
   return result;
+  });
  }
  async *read(rows,metadata,{signal,references=false,revisions=false,cardSources=false,publication=false,cards=false,inventory=false,inventoryFallback=true,publicationDetails=false,search=true,stored=false,matching=''}={}){
   const owner=this;

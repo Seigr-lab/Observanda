@@ -1,6 +1,7 @@
 // Selected evidence crosses owners as immutable originals and receipt-bound
 // heads. Each metadata group commits independently; publication is one segment.
 import path from 'node:path';
+import {retainRecordOwnerResource,recordOwnerMetadataDependencies,journalRecordOwnerMutation} from './record-owner-resources.js';
 import {lstat} from 'node:fs/promises';
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
@@ -73,24 +74,27 @@ export async function prepareRecordOwnerEvidence(source,target,receipt,{write,si
   if(prior){if(serialize(prior)!==serialize(entry))damaged();return;}
   if(part.kind==='original'){
    const file=target.metadataPath(part.name);await privateDirectory(target.root,path.posix.dirname(part.name));
-   if(await lstat(file).catch(error=>{if(error.code==='ENOENT')return null;throw error;}))await new FileContent(target,file,bytes,sha256).verify({signal,onProgress:check});
-   else await part.content.copyTo(target,file,{signal,check,resume:true});
+   const present=!!await lstat(file).catch(error=>{if(error.code==='ENOENT')return null;throw error;});
+   if(present)await new FileContent(target,file,bytes,sha256).verify({signal,onProgress:check});
+   await write(store=>retainRecordOwnerResource(store,{kind:'file',relative:part.name,bytes,sha256},{present,receipt}));
+   if(!present)await part.content.copyTo(target,file,{signal,check,resume:true});
   }
   await write(async store=>{
    if(part.kind==='metadata'){
     const pin=/^\.observanda\/materials\/records\/([a-f0-9-]{36})\/([a-f0-9]{64})\.json$/.exec(part.name);if(pin){if(pin[1]!==recordId)damaged();await stageRecordOwnerRevision(store,receipt,pin[2]);}
-    const previous=await target.readMetadata(part.name,Math.max(bytes+1,16*1024*1024));if(previous!==null&&previous!==part.content)throw new AppError('RECORD_TRANSFER_EXISTS');if(previous===null)await target.writeMetadata(part.name,part.content);
+    const previous=await target.readMetadata(part.name,Math.max(bytes+1,16*1024*1024));if(previous!==null&&previous!==part.content)throw new AppError('RECORD_TRANSFER_EXISTS');await retainRecordOwnerResource(store,{kind:'object',key:'metadata:'+part.name,revision:digest(serialize({text:part.content}))},{present:previous!==null,receipt,dependencies:await recordOwnerMetadataDependencies(store,part.name,part.content)});if(previous===null)await target.writeMetadata(part.name,part.content);
    }
    if(part.kind==='metadata')await store.putObject(dataKey(receipt.id,part.name),{version:1,transferId:receipt.id,recordId,relative:part.name,text:part.content});
    state.files=await incoming.sequences.append(state.files,[entry]);await store.putObject(partKey(receipt.id,part.name),entry);await persist(store);
   });
  };
  const transfer=new ResearchTransfer(source,new Set([recordId]),[receipt.command.sourceNotebookId],emit);transfer.mediaIds=boundedSet();transfer.sequenceNodes=boundedSet();
+ transfer.sequence=async value=>{if(!value)return;materials.sequences.validate(value);const tree=materials.sequences.tree();async function visit(ref){if(!ref||transfer.sequenceNodes.has(ref.hash))return;const node=await tree.node(ref);transfer.sequenceNodes.add(ref.hash);await visit(node.left);await visit(node.right);const chunk=await materials.sequences.read('chunks',node.revision);if(!chunk)damaged();if(chunk.kind==='pages')for(const page of chunk.items){const text=await source.readMetadata('.observanda/materials/tables/'+page.hash+'.json',16*1024*1024);if(text===null)damaged();await emit({kind:'metadata',name:'.observanda/materials/tables/'+page.hash+'.json',content:text});}await emit({kind:'metadata',name:'.observanda/materials/sequences/chunks/'+node.revision+'.json',content:serialize(chunk)});await emit({kind:'metadata',name:'.observanda/materials/sequences/nodes/'+ref.hash+'.json',content:serialize(node)});}await visit(value.root);};
  const sourceFonts=new WorkspaceFonts(source);
  const font=async id=>{
   const value=await sourceFonts.get(id,{includeSource:true}),{bytes,sourceText,...entry}=value;void bytes;
   await emit({kind:'metadata',name:'.observanda/fonts/'+id+'.json',content:sourceText});
-  await write(async()=>{const library=new WorkspaceFonts(target),list=await library.list(),prior=list.find(value=>value.id===id);if(prior)return;if(list.length>=64)throw new AppError('FONT_LIMIT');await target.writeMetadata('.observanda/fonts/library.json',JSON.stringify([...list,entry]));});
+  await write(async store=>{const library=new WorkspaceFonts(target),list=await library.list(),prior=list.find(value=>value.id===id);if(prior)return;if(list.length>=64)throw new AppError('FONT_LIMIT');const key='metadata:.observanda/fonts/'+id+'.json',retained=await store.object(key);await journalRecordOwnerMutation(store,receipt,{kind:'font',key:id},null,entry,{dependencies:[{kind:'object',key,revision:digest(serialize(retained))}]});await target.writeMetadata('.observanda/fonts/library.json',JSON.stringify([...list,entry]));});
  };
  const origin=async ref=>write(async store=>{
   await retainRecordOrigin(store,{...ref,sourceOwner:receipt.sourceOwner,transferId:receipt.id});
@@ -112,7 +116,7 @@ export async function prepareRecordOwnerEvidence(source,target,receipt,{write,si
    await source.catalogue(async from=>{
     const tree=materials.choices.tree(from);
     async function visit(ref){if(!ref)return;signal?.throwIfAborted();const node=await tree.node(ref);await visit(node.left);await visit(node.right);const item=await materials.choices.item(from,node);await enqueue(item.ref);
-     await write(async store=>{for(const [slot,value] of [[tree.slot(ref),node],['material-choice:'+node.revision,item]]){const prior=await store.db.get('SELECT payload FROM state WHERE slot=$1',slot);if(prior){if(digest(serialize(store.decode('state',slot,prior.payload)))!==digest(serialize(value)))damaged();}else await store.db.run('INSERT INTO state VALUES ($1,$2)',slot,store.encode('state',slot,value));}});
+     await write(async store=>{for(const [slot,value,dependencies] of [['material-choice:'+node.revision,item,[]],[tree.slot(ref),node,[{kind:'state',key:'material-choice:'+node.revision,revision:digest(serialize(item))},...[node.left,node.right].filter(Boolean).map(child=>({kind:'state',key:tree.slot(child),revision:child.hash}))]]]){const prior=await store.db.get('SELECT payload FROM state WHERE slot=$1',slot);if(prior&&digest(serialize(store.decode('state',slot,prior.payload)))!==digest(serialize(value)))damaged();await retainRecordOwnerResource(store,{kind:'state',key:slot,revision:digest(serialize(value))},{present:!!prior,dependencies});if(!prior)await store.db.run('INSERT INTO state VALUES ($1,$2)',slot,store.encode('state',slot,value));}});
     }await visit(value.root);
    });
   };

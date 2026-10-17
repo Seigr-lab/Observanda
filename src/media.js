@@ -1,3 +1,4 @@
+import {adoptRecordOwnerMedia} from './record-owner-resources.js';
 import {retiredMediaContent} from './project-media-content.js';
 import {validDownloadName,validDownloadInfo,downloadInfo} from './web/website-file.js';
 import {FileContent,writeContent,serveContent,contentBuffer} from './file-content.js';
@@ -164,7 +165,7 @@ export class MediaStore {
     if(metadata.storageId!==undefined&&!safeId(metadata.storageId))throw new AppError('MEDIA_INVALID');
     const profile = metadata.kind==='file'?{extension:'bin',mime:'application/octet-stream'}:profiles[metadata.kind];
     if (!profile || metadata.id !== id || metadata.extension !== profile.extension || metadata.mime !== profile.mime || !Number.isSafeInteger(metadata.bytes) || metadata.bytes < 0 || metadata.bytes===0&&metadata.kind!=='file' || metadata.kind==='file'&&(!validDownloadInfo(downloadInfo(metadata))||metadata.originalBytes!==metadata.bytes||metadata.originalSha256!==metadata.sha256)) throw new AppError('MEDIA_INVALID');
-    return {directory,metadata};
+    await adoptRecordOwnerMedia(this.workspace,id,metadata);return {directory,metadata};
   }
 
   async originalContent(id,known=null) {

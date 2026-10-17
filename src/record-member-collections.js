@@ -5,6 +5,8 @@ import {buildIndex} from './index-builder.js';
 import {digest,serialize} from './storage-format.js';
 import {requireMemberCollections} from './catalogue-format.js';
 import {AppError} from './errors.js';
+import {retainRecordOwnerResource} from './record-owner-resources.js';
+import {writeCatalogueRows} from './catalogue-writes.js';
 export const memberCollectionFields=['sections','contributors','relations','figures','attachments'];
 const fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 const id=v=>typeof v==='string'&&/^[a-f0-9-]{36}$/.test(v);
@@ -17,21 +19,31 @@ export function memberCollectionCount(row,field){
 }
 export const memberStructureRevision=row=>row.collections?digest(serialize(row.collections.sections)):digest(serialize(row.sections));
 export class RecordMemberCollections extends ObjectIndex{
- constructor(store){super(store,{namespace:'record-member-collection:',immutable:true});}
+ constructor(store,{write=null}={}){super(store,{namespace:'record-member-collection:',immutable:true,write});}
  async value(entry){
   if(!entry)return null;const slot='record-member-item:'+entry.revision;
   const row=await this.store.db.get('SELECT payload FROM state WHERE slot=$1',slot),value=this.store.decode('state',slot,row?.payload);
   if(!value||Object.keys(value).sort().join()!=='id,position'||!id(value.id)||!natural(value.position)||digest(serialize(value))!==entry.revision)fail();return value;
  }
  async build(values){
-  const self=this;
+  const self=this;let batch=[];
+  const flush=async()=>{
+   if(!batch.length)return;
+   await self.persistWith(async store=>{
+    const found=new Map((await store.db.all('SELECT slot,payload FROM state WHERE slot=ANY($1::text[])',batch.map(item=>item.slot))).map(row=>[row.slot,row.payload])),rows=[];
+    for(const {item,revision,slot} of batch){
+     if(found.has(slot)&&digest(serialize(store.decode('state',slot,found.get(slot))))!==revision)fail();
+     await retainRecordOwnerResource(store,{kind:'state',key:slot,revision},{present:found.has(slot)});
+     if(!found.has(slot))rows.push([slot,store.encode('state',slot,item)]);
+    }
+    await writeCatalogueRows(store.db,'state',rows,{create:true});
+   });batch=[];
+  };
   async function* entries(){let position=0;for await(const value of values){
    if(!id(value))fail();const item={id:value,position:position++},revision=digest(serialize(item)),slot='record-member-item:'+revision;
-   const prior=await self.store.db.get('SELECT payload FROM state WHERE slot=$1',slot);
-   if(prior){if(digest(serialize(self.store.decode('state',slot,prior.payload)))!==revision)fail();}
-   else await self.store.db.run('INSERT INTO state VALUES ($1,$2)',slot,self.store.encode('state',slot,item));
+   batch.push({item,revision,slot});if(batch.length===32)await flush();
    yield {id:'id:'+item.id,revision};yield {id:positionKey(item.position),revision};
-  }}
+  }await flush();}
   return buildIndex(this.store,this,entries(),fail);
  }
  async position(row,field,itemId){
@@ -56,7 +68,7 @@ export class RecordMemberCollections extends ObjectIndex{
   if(row.collections)return row;
   // Encoding choice only: no workload is rejected at this boundary.
   if(!row.cardItems||memberCollectionFields.reduce((n,field)=>n+memberCollectionCount(row,field),0)<=64)return row;
-  await requireMemberCollections(this.store.db);const collections={};
+  await this.persistWith(store=>requireMemberCollections(store.db));const collections={};
   for(const field of memberCollectionFields)collections[field]=await this.build(field==='sections'?row.sections:row.cardItems[field]);
   const {sections,cardItems,...rest}=row;void sections;void cardItems;return {...rest,collections};
  }
@@ -70,7 +82,7 @@ export class RecordMemberCollections extends ObjectIndex{
     const ids=await Array.fromAsync(selected());return field==='sections'?{...row,sections:ids}:{...row,cardItems:{...row.cardItems,[field]:ids}};
    }
   }
-  await requireMemberCollections(this.store.db);const collections={};
+  await this.persistWith(store=>requireMemberCollections(store.db));const collections={};
   for(const name of memberCollectionFields)collections[name]=name===field?await this.build(selected()):row.collections?.[name]??await this.build(self.ids(row,name));
   const {sections,cardItems,...rest}=row;void sections;void cardItems;return {...rest,collections};
  }

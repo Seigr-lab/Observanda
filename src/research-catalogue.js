@@ -1,5 +1,6 @@
 import {assertRecordOwnerObjectWritable,assertRecordOwnerRowsWritable} from './record-owner-write-authority.js';
 import {readRecordOwnerHistory} from './record-owner-history.js';
+import {withoutRecordOwnerResourceAdoption,adoptRecordOwnerResource,journalRecordOwnerObject} from './record-owner-resources.js';
 import {catalogueRequiresRecordOwnerTransfers,restoreRecordOwnerTransferCatalogueFormat,catalogueRequiresPublicationDocuments,restorePublicationCatalogueFormat} from './catalogue-format.js';
 import {workspaceSettingsRegistry,verifyWorkspaceSettings} from './workspace-settings.js';
 import {readProjectDomainRegistry} from './project-domain-registry.js';
@@ -158,7 +159,7 @@ export class ResearchCatalogue{
  recordAAD(id,version,scopeId,generation){return this.aad('record',id+'/'+version+'/'+scopeId+'/'+generation);}
  async putRecord(record){
   const version=(recordWriteEncoding(this,record)?.encoding??recordEncoding(record)).revision;
-  if((await this.db.get('SELECT 1 FROM records WHERE id=$1 AND revision=$2',record.id,version)))return false;
+  if((await this.db.get('SELECT 1 FROM records WHERE id=$1 AND revision=$2',record.id,version))){await adoptRecordOwnerResource(this,{kind:'record',id:record.id,revision:version});return false;}
   await retainStoredRecord(this,record,version);return true;
  }
  async record(id,version){
@@ -542,8 +543,10 @@ export class ResearchCatalogue{
   if(id.startsWith('metadata:.observanda/module-draft')&&(await readProjectDomainRegistry(this))?.authoringVersion===1)throw new AppError('ACCESS_UPGRADE');
   const index=this.objectIndex(),head=await index.head(),expected=await index.find(head,id),revision=hash(value);
   const previous=expected?await this.objectValue(id,expected):null;
-  if(expected?.revision===revision)return;
+  if(expected)await adoptRecordOwnerResource(this,{kind:'object',key:id,revision:expected.revision});
+  if(expected?.revision===revision){await journalRecordOwnerObject(this,id,previous,value);return;}
   await assertRecordOwnerObjectWritable(this,id,previous,value);
+  await journalRecordOwnerObject(this,id,previous,value);
   // Convert an older index before changing row counts. Both the index and
   // object payload commit together under the workspace writer lock.
   await index.update(head,id,revision);
@@ -559,6 +562,7 @@ export class ResearchCatalogue{
   const index=this.objectIndex(),head=await index.head(),expected=await index.find(head,id);
   const previous=await this.objectValue(id,expected);if(!expected)return;
   await assertRecordOwnerObjectWritable(this,id,previous,null);
+  await journalRecordOwnerObject(this,id,previous,null);
   await index.update(head,id,null);
   const batch=metadataBatchIndex(this);
   if(batch)await batch.stageObject(id,null);else await this.db.run('DELETE FROM objects WHERE id=$1',id);
@@ -658,7 +662,7 @@ export class ResearchCatalogue{
   return snapshot;
  }
  async verify(descriptor){
-  return operationStage('verify-copy',{},async()=>{
+  return withoutRecordOwnerResourceAdoption(()=>operationStage('verify-copy',{},async()=>{
   if(!descriptor||Object.keys(descriptor).sort().join()!=='format,version,workspaceId'||descriptor.format!=='observanda-research-catalogue'||descriptor.version!==2||!identifier(descriptor.workspaceId))fail();
   if((await this.snapshot()).metadata.id!==descriptor.workspaceId)fail();
   await withCatalogueVerification(this,verified=>this.workspace.inspectCatalogue(this,async()=>{
@@ -693,13 +697,14 @@ export class ResearchCatalogue{
    });
    });
   }));
-  });
+  }));
  }
 }
 
 // Rekey encrypted objects into a portable backup, preserving historical identities.
 export async function rekeyCatalogue(source,target,descriptor){
  return operationStage('rekey',{},async()=>{
+ const {assertRecordOwnerReclamationSettled}=await import('./record-owner-transfer-state.js');await source.catalogue(store=>assertRecordOwnerReclamationSettled(store));
  // A storage handoff already owns and freezes this source catalogue. Reuse
  // that transaction rather than restoring and verifying the same archive in
  // another connection while its writer is held. catalogue() checks the owner

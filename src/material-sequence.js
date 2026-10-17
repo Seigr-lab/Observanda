@@ -2,6 +2,8 @@
 // authenticated tree pins encrypted chunks; no growing array enters a revision.
 import {ObjectIndex,validIndexRef} from './object-index.js';
 import {digest,serialize} from './storage-format.js';
+import {retainRecordOwnerResource,recordOwnerMetadataDependencies,recordOwnerResourcesTracking} from './record-owner-resources.js';
+import {catalogueContext} from './research-catalogue.js';
 import {AppError} from './errors.js';
 const prefix='.observanda/materials/sequences';
 const hash=value=>digest(serialize(value));
@@ -10,7 +12,7 @@ const key=page=>'chunk:'+String(page).padStart(16,'0');
 export class MaterialSequence{
  constructor(workspace){this.workspace=workspace;}
  async read(kind,id,limit=1048576){const raw=await this.workspace.readMetadata(prefix+'/'+kind+'/'+id+'.json',limit);if(raw===null)return null;let value;try{value=JSON.parse(raw);}catch{fail();}if(hash(value)!==id)fail();return value;}
- async put(kind,value){const id=hash(value),prior=await this.read(kind,id);if(prior===null)await this.workspace.writeMetadata(prefix+'/'+kind+'/'+id+'.json',serialize(value));return id;}
+ async put(kind,value){const id=hash(value),prior=await this.read(kind,id),relative=prefix+'/'+kind+'/'+id+'.json',text=serialize(value);if(catalogueContext.getStore())await this.workspace.catalogue(async store=>{if(!await recordOwnerResourcesTracking(store))return;const dependencies=await recordOwnerMetadataDependencies(store,relative,text);await retainRecordOwnerResource(store,{kind:'object',key:'metadata:'+relative,revision:hash({text})},{present:prior!==null,dependencies});});if(prior===null)await this.workspace.writeMetadata(relative,text);return id;}
  tree(){return new ObjectIndex(null,{immutable:true,nodeStorage:{read:ref=>this.read('nodes',ref.hash,8192),write:(ref,node)=>this.put('nodes',node)}});}
  validate(value){
   if(!value||value.format!==1||!['pages','columns','references','files','upload-chunks','aggregation-members'].includes(value.kind)||!Number.isSafeInteger(value.count)||value.count<0||value.chunkSize!==(value.kind==='columns'?16:64)||!validIndexRef(value.root)||(value.root?.count??0)!==Math.ceil(value.count/value.chunkSize))fail();

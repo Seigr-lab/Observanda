@@ -22,7 +22,7 @@ const fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 const same=(a,b)=>revisionText(a)===revisionText(b);
 const exact=(value,keys)=>value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).sort().join()===keys.slice().sort().join();
 const natural=value=>Number.isSafeInteger(value)&&value>=0;
-const terminal=value=>['complete','cancelled'].includes(value.phase);
+const terminal=value=>value.phase==='complete'||value.phase==='cancelled'&&value.progress.reclamation?.state!=='pending';
 async function verifyMember(store,document,member,{signal}={}){
  if(!validMember(member))fail();const header={};
  for(const field of ['id','notebookId','type','share','occurredOn','updatedAt'])header[field]=(await document.field([field],{signal})).value;
@@ -41,11 +41,23 @@ async function verifyMember(store,document,member,{signal}={}){
 }
 export async function verifyRecordOwnerTransfers(store,{signal}={}){
  const current=await store.snapshot(),namespaceId=current.metadata.id,format=await catalogueFormat(store.db);
+ const {readRecordOwnerReclamation,verifyRecordOwnerResources}=await import('./record-owner-resources.js');await verifyRecordOwnerResources(store,{signal});
  const capability=()=>{if(!catalogueRequiresRecordOwnerTransfers(format))fail();};
  for await(const {slot} of store.db.rows("SELECT slot FROM state WHERE slot LIKE 'record-owner-transfer:%' ORDER BY slot")){
   signal?.throwIfAborted();capability();const id=slot.slice('record-owner-transfer:'.length);if(!researchId(id))fail();
   const receipt=await readRecordOwnerTransfer(store,id),{command,progress,result}=receipt;
+  const cleanupSlot='record-owner-transfer-cleanup:'+id,cleanup=await store.db.get('SELECT payload FROM state WHERE slot=$1',cleanupSlot);
+  if(receipt.phase==='cancelled'&&progress.reclamation?.state==='pending'){if(!cleanup||!same(store.decode('state',cleanupSlot,cleanup.payload),{version:1,id,recordId:command.recordId}))fail();}else if(cleanup)fail();
+  const activeSlot='record-owner-transfer-active:'+id,active=await store.db.get('SELECT payload FROM state WHERE slot=$1',activeSlot);
+  if(!terminal(receipt)){if(!active||!same(store.decode('state',activeSlot,active.payload),{version:1,id,recordId:command.recordId}))fail();}else if(active)fail();
   const source=receipt.sourceOwner.workspaceId===namespaceId,target=receipt.targetOwner.workspaceId===namespaceId;if(source===target)fail();
+  let reclaiming=false;
+  if(target&&receipt.phase==='cancelled'){
+   const reclamation=await readRecordOwnerReclamation(store,id);
+   if(reclamation&&(reclamation.version!==1||reclamation.id!==id||reclamation.recordId!==command.recordId||reclamation.namespaceId!==namespaceId))fail();
+   if(progress.reclamation&&(!reclamation||progress.reclamation.state==='complete'&&reclamation.state!=='complete'))fail();
+   reclaiming=!!reclamation&&['cleaning','complete'].includes(reclamation.state);
+  }
   if(progress.previousOwnerTransfer!==undefined){if(!researchId(progress.previousOwnerTransfer))fail();if(target)await readRecordOwnerPreviousTransfer(store,receipt);}
   if(!natural(progress.history)||progress.historyAfter!==null&&progress.historyAfter!==undefined&&!revisionId(progress.historyAfter))fail();
   const fence=await readRecordOwnerFence(store,command.recordId);
@@ -64,7 +76,7 @@ export async function verifyRecordOwnerTransfers(store,{signal}={}){
   if(['retiring','complete'].includes(receipt.phase)){
    if(!exact(result,['recordId','notebookId','workspaceId','projectId','labBookId','storageRevision'])||result.recordId!==command.recordId||result.notebookId!==command.targetNotebookId||result.workspaceId!==command.targetWorkspaceId||result.projectId!==receipt.targetOwner.projectId||result.labBookId!==receipt.targetOwner.labBookId||result.storageRevision!==progress.prepared?.member?.revision||!revisionId(progress.activatedSnapshotId))fail();
   }else if(result!==null)fail();
-  if(target&&progress.prepared){
+  if(target&&progress.prepared&&!reclaiming){
    const {descriptor,member,view}=progress.prepared;
    if(!descriptor||descriptor.notebookId!==command.targetNotebookId||!Number.isSafeInteger(descriptor.generation)||descriptor.generation<1||!revisionId(descriptor.root)||!validMember(member)||member.id!==command.recordId||member.notebookId!==command.targetNotebookId||!view||view.revision!==descriptor.encoding?.contentRevision)fail();
    await withRecordOwnerDocument(store,descriptor,async document=>{const encoding=await verifyMember(store,document,member,{signal});if(!same(encoding,descriptor.encoding))fail();});
@@ -75,6 +87,12 @@ export async function verifyRecordOwnerTransfers(store,{signal}={}){
     const {verifyRecordOwnerEvidence}=await import('./record-owner-evidence.js');await verifyRecordOwnerEvidence(store.workspace,receipt,progress.evidence,{signal});
    }
   }
+ }
+ for await(const {slot} of store.db.rows("SELECT slot FROM state WHERE slot LIKE 'record-owner-transfer-cleanup:%' ORDER BY slot")){
+  signal?.throwIfAborted();capability();const id=slot.slice('record-owner-transfer-cleanup:'.length);if(!researchId(id)||!await readRecordOwnerTransfer(store,id))fail();
+ }
+ for await(const {slot} of store.db.rows("SELECT slot FROM state WHERE slot LIKE 'record-owner-transfer-active:%' ORDER BY slot")){
+  signal?.throwIfAborted();capability();const id=slot.slice('record-owner-transfer-active:'.length);if(!researchId(id)||!await readRecordOwnerTransfer(store,id))fail();
  }
  for await(const {slot} of store.db.rows("SELECT slot FROM state WHERE slot LIKE 'record-owner-transfer-record:%' ORDER BY slot")){
   signal?.throwIfAborted();capability();const id=slot.slice('record-owner-transfer-record:'.length);if(!researchId(id))fail();

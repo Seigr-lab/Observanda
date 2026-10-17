@@ -3,6 +3,7 @@
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage.js';
 import {retainedRecordDisplay} from './record-history-display.js';
+import {adoptRecordOwnerMutation,journalRecordOwnerMutations} from './record-owner-resources.js';
 const validRevision=v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v);
 const fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 const validItem=v=>v&&validRevision(v.revision)&&validRevision(v.snapshotId)&&(!v.view||validRevision(v.view.revision)&&typeof v.view.title==='string'&&typeof v.view.status==='string'&&typeof v.view.updatedAt==='string');
@@ -54,6 +55,8 @@ export class RecordHistoryIndex{
  }
  async append(item,{initialize=false,fresh=true}={}){
   if(!validItem(item)||!item.view)fail();
+  const original=await this.get(this.root);
+  if(original)await adoptRecordOwnerMutation(this.store,{kind:'state',key:this.root},original);
   let head=await this.head({initialize});await this.check(head);
   if(head.legacy){
    // Upgrade this record's index in the caller's transaction, without changing
@@ -61,21 +64,31 @@ export class RecordHistoryIndex{
    const legacy=head.legacy;head={formatVersion:2,recordId:this.id,count:0,revisions:0};
    for(const old of legacy){
     const view=old.view??await this.display(old);
-    head=await this.appendTo(head,{...old,view},true);
+    head=await this.appendTo(head,{...old,view},true,{saveHead:false});
    }
+   head=await this.appendTo(head,item,fresh,{saveHead:false});
+   // Reclamation restores the entire legacy head before pruning its new
+   // lookup slots, so every retained original stays visible between batches.
+   await journalRecordOwnerMutations(this.store,null,[{address:{kind:'state',key:this.root},before:original,after:head}],{chain:{kind:'state',key:this.root}});
+   await this.saveHead(head);return;
   }
   await this.appendTo(head,item,fresh);
  }
- async appendTo(head,item,fresh){
+ async appendTo(head,item,fresh,{saveHead=true}={}){
   const existing=await this.lookup(head,'version',item.revision,{optional:true});
   if(existing){if(!same(existing.item.view,item.view))fail();return head;}
   if(!fresh)fail();
   const visible=await this.lookup(head,'view',item.view.revision,{optional:true});
   if(visible&&!same(visible.item.view,item.view))fail();
-  const ordinal=visible?.ordinal??head.count,pointer={ordinal,viewRevision:item.view.revision};
-  if(!visible){await this.insert(this.prefix+'row:'+ordinal,item);await this.insert(this.prefix+'view:'+item.view.revision,pointer);}
-  await this.insert(this.prefix+'version:'+item.revision,pointer);
-  const next={formatVersion:2,recordId:this.id,count:head.count+Number(!visible),revisions:head.revisions+1};await this.saveHead(next);return next;
+  const ordinal=visible?.ordinal??head.count,pointer={ordinal,viewRevision:item.view.revision},rows=[];
+  if(!visible)rows.push([this.prefix+'row:'+ordinal,item],[this.prefix+'view:'+item.view.revision,pointer]);
+  rows.push([this.prefix+'version:'+item.revision,pointer]);
+  const next={formatVersion:2,recordId:this.id,count:head.count+Number(!visible),revisions:head.revisions+1};
+  const changes=rows.map(([key,after])=>({address:{kind:'state',key},before:null,after}));
+  if(saveHead)changes.push({address:{kind:'state',key:this.root},before:await this.get(this.root),after:next});
+  await journalRecordOwnerMutations(this.store,null,changes,{chain:{kind:'state',key:this.root},dependencies:[{kind:'record',id:this.id,revision:item.revision},{kind:'object',key:'record-owner-history:'+item.snapshotId,revision:item.snapshotId}]});
+  for(const [slot,value] of rows)await this.insert(slot,value);
+  if(saveHead)await this.saveHead(next);return next;
  }
  async display(item){
   if(item.view)return item.view;

@@ -20,14 +20,14 @@ export function recordLocationUI({state,api,esc,target,refresh,notify,choose,acc
  function paint(){
   const s=session;if(!s)return;dialog.setAttribute('aria-label',text('Title'));
   const choices=s.notebooks.map(n=>'<option value="'+n.id+'"'+(n.id===s.destination?' selected':'')+'>'+esc(locationName(state.book,n.projectId)+' / '+n.title)+'</option>').join('');
-  const locked=s.busy||s.checking||s.command||s.transferCommand||s.transfer,transfer=s.transfer;
-  const selection=transfer||s.transferCommand?'<p>'+esc(transfer?phaseText(transfer.phase):text('TransferUnconfirmed'))+'</p>':s.target?'<p><strong>'+esc(s.target.label)+'</strong></p>':choices?'<label for="record-location-destination">'+esc(text('Destination'))+'</label><select id="record-location-destination" data-record-location required'+(locked?' disabled':'')+'><option value="">'+esc(text('Choose'))+'</option>'+choices+'</select>':'';
+  const locked=s.busy||s.checking||s.command||s.transferCommand||s.transfer,transfer=s.transfer,cancelling=transfer?.phase==='cancelled'&&transfer.canResume;
+  const selection=transfer||s.transferCommand?'<p'+(cancelling?' role="status"':'')+'>'+esc(cancelling?text('TransferCancelling'):transfer?phaseText(transfer.phase):text('TransferUnconfirmed'))+'</p>':s.target?'<p><strong>'+esc(s.target.label)+'</strong></p>':choices?'<label for="record-location-destination">'+esc(text('Destination'))+'</label><select id="record-location-destination" data-record-location required'+(locked?' disabled':'')+'><option value="">'+esc(text('Choose'))+'</option>'+choices+'</select>':'';
   const button=(attribute,label,disabled=false)=>'<button type="button" class="button" '+attribute+(disabled?' disabled':'')+'>'+esc(text(label))+'</button>';
-  const submit=transfer?.phase==='complete'?button('data-location-open-result','TransferOpen',s.busy):transfer?button('data-location-resume','TransferResume',s.busy||!transfer.canResume):button('data-location-save',''+(s.command||s.transferCommand?'Retry':'Move'),s.busy||s.checking||s.statusFailed||s.stale||!s.target&&!choices&&!s.transferCommand);
+  const submit=transfer?.phase==='complete'?button('data-location-open-result','TransferOpen',s.busy):transfer?button('data-location-resume',cancelling?'TransferFinishCancellation':'TransferResume',s.busy||!transfer.canResume):button('data-location-save',''+(s.command||s.transferCommand?'Retry':'Move'),s.busy||s.checking||s.statusFailed||s.stale||!s.target&&!choices&&!s.transferCommand);
   dialog.innerHTML='<h2 id="record-location-title">'+esc(text('Title'))+'</h2><p>'+esc(s.title)+'</p><p>'+esc(text('Help'))+'</p>'+selection+
    (choose&&!s.command&&!s.transferCommand&&!transfer?button('data-location-choose','TransferChoose',locked):'')+
    '<p role="alert">'+esc(s.error??'')+'</p>'+(s.checking?'<p role="status">'+esc(text('TransferChecking'))+'</p>':s.message?'<p role="status">'+esc(s.message)+'</p>':'')+
-   (s.command||s.transferCommand||transfer&&transfer.phase!=='complete'?'<p role="status">'+esc(text(s.command?'Pending':'TransferPending'))+'</p>':'')+'<div data-location-progress></div>'+
+   (s.command||s.transferCommand||transfer&&transfer.phase!=='complete'?'<p role="status">'+esc(text(cancelling?'TransferCancellationPending':s.command?'Pending':'TransferPending'))+'</p>':'')+'<div data-location-progress></div>'+
    '<div class="dialog-actions">'+button('data-location-close','Close')+(s.stale?button('data-location-refresh','Refresh'):'')+(s.statusFailed||s.transferCommand||transfer&&transfer.phase!=='complete'?button('data-location-status','TransferCheck',s.busy||s.checking):'')+submit+(transfer?.canCancel?button('data-location-cancel','TransferCancel',s.busy):'')+'</div>';
  }
  function checkContext(){
@@ -44,8 +44,8 @@ export function recordLocationUI({state,api,esc,target,refresh,notify,choose,acc
  }
  function adoptStatus(s,value){
   s.transfer=validate(s,value);s.statusFailed=false;
-  if(value?.phase==='cancelled'){pending.delete(key(s));s.transfer=null;s.transferCommand=null;s.target=null;s.message=text('TransferCancelled');}
-  else if(value)pending.set(key(s),{transferCommand:s.transferCommand,transfer:value,target:s.target});
+  if(value?.phase==='cancelled'&&!value.canResume){pending.delete(key(s));s.transfer=null;s.transferCommand=null;s.target=null;s.message=text('TransferCancelled');}
+  else if(value){s.message='';pending.set(key(s),{transferCommand:s.transferCommand,transfer:value,target:s.target});}
  }
  async function discover(s){
   s.controller?.abort();s.controller=new AbortController();const controller=s.controller;s.checking=true;s.statusFailed=false;s.error='';paint();
@@ -76,7 +76,7 @@ export function recordLocationUI({state,api,esc,target,refresh,notify,choose,acc
  async function transfer(s,operation){
   if(operation==='start')s.transferCommand??={id:crypto.randomUUID(),workspaceId:s.workspaceId,recordId:s.recordId,sourceNotebookId:s.sourceNotebookId,expectedStorageRevision:s.expectedStorageRevision,targetProjectId:s.target.projectId,targetLabBookId:s.target.labBookId,targetWorkspaceId:s.target.workspaceId,targetNotebookId:s.target.notebookId};
   pending.set(key(s),{transferCommand:s.transferCommand,transfer:s.transfer,target:s.target});s.busy=true;s.error='';paint();
-  const progress=operationProgress({host:dialog.querySelector('[data-location-progress]'),title:()=>text('Working'),stageText:stage=>{const phase=stage.replace(/^record-transfer-/,'');return phases.has(phase)?phaseText(phase):text('Working');},disableControls:false});
+  const progress=operationProgress({host:dialog.querySelector('[data-location-progress]'),title:()=>text(s.transfer?.phase==='cancelled'?'TransferCancelling':'Working'),stageText:stage=>{if(s.transfer?.phase==='cancelled')return text('TransferCancelling');const phase=stage.replace(/^record-transfer-/,'');return phases.has(phase)?phaseText(phase):text('Working');},disableControls:false});
   try{
    const status=await access(()=>call(s,operation,operation==='start'?s.transferCommand:commandStatus(s),{onProgress:progress.update}));
    validate(s,status);if(status===null)throw Error(text('Incomplete'));

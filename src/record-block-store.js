@@ -7,6 +7,7 @@ import {seal,unseal} from './encryption.js';
 import {digest,serialize} from './storage-format.js';
 import {writeCatalogueRows} from './catalogue-writes.js';
 import {RecordValueTree} from './record-value-tree.js';
+import {retainRecordOwnerResource} from './record-owner-resources.js';
 import {operationStage,operationAdvance} from './operation-progress.js';
 import {validAttemptIndex} from './record-attempt-index.js';
 import {validMethodIndex} from './record-method-index.js';
@@ -24,6 +25,19 @@ export function validBlockedRecord(value){
  if(value.version===2)return keys==='attemptIndex,format,id,notebookId,root,version'&&validAttemptIndex(value.attemptIndex);
  if(value.version===4)return keys===(Object.hasOwn(value,'attemptIndex')?'attemptIndex,':'')+'format,id,'+(Object.hasOwn(value,'methodIndex')?'methodIndex,':'')+'notebookId,resultIndex,root,version'&&validResultIndex(value.resultIndex)&&(!Object.hasOwn(value,'attemptIndex')||validAttemptIndex(value.attemptIndex))&&(!Object.hasOwn(value,'methodIndex')||validMethodIndex(value.methodIndex));
  return value.version===3&&keys===(Object.hasOwn(value,'attemptIndex')?'attemptIndex,':'')+'format,id,methodIndex,notebookId,root,version'&&validMethodIndex(value.methodIndex)&&(!Object.hasOwn(value,'attemptIndex')||validAttemptIndex(value.attemptIndex));
+}
+export const recordBlockResource=(scopeId,generation,nodeKind,revision)=>({kind:'block',scopeId,generation,nodeKind,revision});
+export function recordBlockDependencies(scopeId,generation,kind,node){
+ const refs=[],add=(nodeKind,revision)=>{if(hash(revision))refs.push(recordBlockResource(scopeId,generation,nodeKind,revision));};
+ if(kind==='index'){
+  for(const child of node.children??[])add('index',child.hash);
+  // Counted vocabulary leaves can encode a scalar in revision; only a real
+  // provisional child has a claim, so an untracked value creates no edge.
+  for(const item of node.entries??[])add('value',item.revision);
+ }else if(['item','property'].includes(node.type))add('value',node.value);
+ else if(['array','keyed-array','object','string','joined-string'].includes(node.type))add('index',node.root?.hash);
+ else if(node.type===undefined&&Object.hasOwn(node,'terms')){add('index',node.terms?.hash);add('value',node.text);}
+ return refs;
 }
 export class RecordBlockStore{
  constructor(store,scopeId,generation,key){
@@ -47,7 +61,8 @@ export class RecordBlockStore{
   if(this.retiredSource)throw new AppError('PROJECT_RELOCATED',[{projectId:this.store.workspace.projectId}]);
   const encoded=serialize(node),bytes=Buffer.byteLength(encoded);if(bytes>65536)throw new AppError('INVALID');
   const version=digest(encoded),slot=this.slot(kind,version);
-  if(this.pending.has(slot)||this.cache.has(slot))return version;
+  if(this.pending.has(slot))return version;
+  if(this.cache.has(slot)){if(this.store.db)await retainRecordOwnerResource(this.store,{kind:'block',scopeId:this.scopeId,generation:this.generation,nodeKind:kind,revision:version},{present:true,dependencies:recordBlockDependencies(this.scopeId,this.generation,kind,node)});return version;}
   this.pending.set(slot,{node:structuredClone(node),version,bytes});this.pendingBytes+=bytes;
   if(this.pending.size>=32||this.pendingBytes>=256*1024)await this.flush();return version;
  }
@@ -55,7 +70,8 @@ export class RecordBlockStore{
   if(!this.pending.size)return;await withProjectRecordBlockOwner(this.store,this.scopeId,this.generation,async()=>{},{mutable:true});const batch=[...this.pending],found=new Map((await this.store.db.all('SELECT slot,payload FROM state WHERE slot=ANY($1::text[])',batch.map(([slot])=>slot))).map(row=>[row.slot,row.payload])),rows=[];
   for(const [slot,{node,version}] of batch){
    if(found.has(slot))this.decode(slot,this.store.decode('state',slot,found.get(slot)),version);
-   else rows.push([slot,this.store.encode('state',slot,this.encode(slot,node))]);
+   await retainRecordOwnerResource(this.store,{kind:'block',scopeId:this.scopeId,generation:this.generation,nodeKind:slot.split(':').at(-2),revision:version},{present:found.has(slot),dependencies:recordBlockDependencies(this.scopeId,this.generation,slot.split(':').at(-2),node)});
+   if(!found.has(slot))rows.push([slot,this.store.encode('state',slot,this.encode(slot,node))]);
   }
   await writeCatalogueRows(this.store.db,'state',rows,{create:true});
   operationAdvance(batch.length,'write-record-blocks');

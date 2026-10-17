@@ -7,10 +7,11 @@ import {revisionId} from './web/revision-model.js';
 import {readRecordOwnerFence,readRecordOwnerTransfer,withRecordOwnerTransferWrite} from './record-owner-transfer-state.js';
 import {copyRecordOwnerValue} from './record-owner-document.js';
 import {RecordDocument} from './record-document.js';
-import {withRecordBlockStore} from './record-block-store.js';
+import {withRecordBlockStore,recordBlockResource} from './record-block-store.js';
 import {ObjectIndex} from './object-index.js';
 import {RecordDraftChunks} from './record-draft-chunks.js';
 import {MAX_RECORD_COMMAND_BYTES} from './web/research-capacity.js';
+import {retainRecordOwnerResource,journalRecordOwnerMutation,journalRecordOwnerMutations} from './record-owner-resources.js';
 const hash=value=>digest(serialize(value)),fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 const prefix='record-owner-draft-',originKey=id=>prefix+'origin:'+id,originalKey=revision=>prefix+'original:'+revision;
 const originArchive=(transferId,id)=>prefix+'origin:'+transferId+':'+id;
@@ -106,15 +107,19 @@ function selectedChangeRaw(raw,position){
   value();space();if(raw[at++]!==',')fail();
  }
 }
-async function putExact(store,id,value){const before=await store.object(id);if(before&&serialize(before)!==serialize(value))throw new AppError('CONFLICT');if(!before)await store.putObject(id,value);}
+async function putExact(store,id,value,{dependencies=[]}={}){const before=await store.object(id);if(before&&serialize(before)!==serialize(value))throw new AppError('CONFLICT');await retainRecordOwnerResource(store,{kind:'object',key:id,revision:hash(value)},{present:!!before,dependencies});if(!before)await store.putObject(id,value);}
 async function archive(store,receipt,kind,id,value){
+ const dependencies=[];
+ if(kind==='review'||kind==='edit'){for(const revision of kind==='review'?[...Object.values(value.roots),value.conflicts]:[value.before,value.root,value.value])if(revision)dependencies.push(recordBlockResource(value.notebookId,value.generation,'value',revision));if(value.choices)dependencies.push({kind:'state',key:'record-draft-review:index:'+value.choices.hash,revision:value.choices.hash});}
+ if(kind==='head'){const key=prefix+'edit:'+value.revision,edit=await store.object(key);if(edit)dependencies.push({kind:'object',key,revision:hash(edit)});}
  const key=prefix+kind+':'+id,prior=await store.object(key);if(prior){
   if(serialize(prior.value)!==serialize(value))throw new AppError('CONFLICT');await authorized(store,prior);
   // An interrupted copy may have retained this value before its graph was
   // complete. Bind that unchanged value to the retry's verification gate.
   if(await store.object('record-owner-drafts:'+prior.transferId))return;
  }
- await store.putObject(key,{version:1,transferId:receipt.id,fingerprint:receipt.fingerprint,recordId:receipt.command.recordId,value});
+ const after={version:1,transferId:receipt.id,fingerprint:receipt.fingerprint,recordId:receipt.command.recordId,value};
+ await journalRecordOwnerMutation(store,receipt,{kind:'object',key},prior,after,{dependencies});await store.putObject(key,after);
 }
 async function copyPlan(from,target,receipt,plan,options){
  const {write,signal}=options;
@@ -123,7 +128,8 @@ async function copyPlan(from,target,receipt,plan,options){
   for(const root of [...Object.values(plan.roots),plan.conflicts])await copy(root);
   const index=new ObjectIndex(from,{namespace:'record-draft-review:index:',immutable:true});
   async function branches(ref){if(!ref)return;signal?.throwIfAborted();const node=await index.node(ref);await branches(node.left);await branches(node.right);await copy(node.revision);await write(async store=>{
-   const slot=index.slot(ref),previous=await store.db.get('SELECT payload FROM state WHERE slot=$1',slot);if(previous){if(hash(store.decode('state',slot,previous.payload))!==ref.hash)fail();return;}
+   const slot=index.slot(ref),previous=await store.db.get('SELECT payload FROM state WHERE slot=$1',slot);if(previous&&hash(store.decode('state',slot,previous.payload))!==ref.hash)fail();
+   await retainRecordOwnerResource(store,{kind:'state',key:slot,revision:ref.hash},{present:!!previous,dependencies:[recordBlockResource(plan.notebookId,plan.generation,'value',node.revision),...[node.left,node.right].filter(Boolean).map(child=>({kind:'state',key:index.slot(child),revision:child.hash}))]});if(previous)return;
    await store.db.run('INSERT INTO state VALUES ($1,$2)',slot,store.encode('state',slot,node));
   });}await branches(plan.choices);
  });
@@ -148,7 +154,11 @@ async function copyCorrections(from,target,receipt,options){
 }
 async function copyChunks(source,target,id,content,{write,signal}){
  const chunks=new RecordDraftChunks(source,id),tree=chunks.tree();
- const copy=async(kind,revision)=>{const file=chunks.prefix+'/'+kind+'/'+revision+'.json',raw=await source.readMetadata(file,2*1024*1024);if(raw===null)fail();await write(async store=>{const previous=await store.object('metadata:'+file);if(previous&&previous.text!==raw)throw new AppError('CONFLICT');if(!previous)await target.writeMetadata(file,raw);});};
+ const copy=async(kind,revision)=>{const file=chunks.prefix+'/'+kind+'/'+revision+'.json',raw=await source.readMetadata(file,2*1024*1024);if(raw===null)fail();await write(async store=>{
+  const previous=await store.object('metadata:'+file);if(previous&&previous.text!==raw)throw new AppError('CONFLICT');const dependencies=[];
+  if(kind==='nodes'){const node=JSON.parse(raw);for(const [part,version] of [['chunks',node.revision],...[node.left,node.right].filter(Boolean).map(ref=>['nodes',ref.hash])]){const key='metadata:'+chunks.prefix+'/'+part+'/'+version+'.json',value=await store.object(key);if(!value)fail();dependencies.push({kind:'object',key,revision:hash(value)});}}
+  await retainRecordOwnerResource(store,{kind:'object',key:'metadata:'+file,revision:hash({text:raw})},{present:!!previous,dependencies});if(!previous)await target.writeMetadata(file,raw);
+ });};
  async function visit(ref){if(!ref)return;signal?.throwIfAborted();const node=await tree.node(ref);await visit(node.left);await visit(node.right);await chunks.read('chunks',node.revision,2*1024*1024);await copy('chunks',node.revision);await copy('nodes',ref.hash);}await visit(content.root);
 }
 export async function prepareRecordOwnerDrafts(source,target,receipt,{write,signal,checkpoint=async()=>{}}={}){
@@ -165,23 +175,54 @@ export async function prepareRecordOwnerDrafts(source,target,receipt,{write,sign
    const previousOrigin=await recordOwnerDraftOrigin(from,id),identity=previousOrigin?.revision===result.revision?previousOrigin.owner:sourceIdentity;
    const {RecordDraftEdits}=await import('./record-draft-edits.js'),edits=new RecordDraftEdits(from),editRevision=await edits.head({...identity,sourcePosition:identity.position});
    const reviewId=previousOrigin?.revision===result.revision?previousOrigin.reviewId:hash([id,result.revision,receipt.command.expectedStorageRevision,...(draft.formatVersion!==4?[position]:[]),...(editRevision?[editRevision]:[])]);
-   const origin={version:1,id,revision:projectedRevision,recordId,transferId:receipt.id,fingerprint:receipt.fingerprint,owner:identity,reviewId,original:previousOrigin?.revision===result.revision?previousOrigin.original:draft.changes?.length>1?{kind:'selection',checkpointRevision:result.revision,position,header:{formatVersion:draft.formatVersion,id:draft.id,workspaceId:draft.workspaceId,updatedAt:draft.updatedAt},raw:selectedChangeRaw(raw,position)}:{kind:'checkpoint',raw}};
+   const origin={version:1,id,revision:projectedRevision,recordId,transferId:receipt.id,fingerprint:receipt.fingerprint,owner:identity,reviewId,sourceCheckpoint:{workspaceId:draft.workspaceId,revision:result.revision},original:previousOrigin?.revision===result.revision?previousOrigin.original:draft.changes?.length>1?{kind:'selection',checkpointRevision:result.revision,position,header:{formatVersion:draft.formatVersion,id:draft.id,workspaceId:draft.workspaceId,updatedAt:draft.updatedAt},raw:selectedChangeRaw(raw,position)}:{kind:'checkpoint',raw}};
    await write(async store=>{
     const existing=await target.readMetadata(draftPath(id),MAX_RECORD_COMMAND_BYTES),prior=await recordOwnerDraftOrigin(store,id);
     if(existing!==null&&(!prior||prior.transferId!==receipt.id&&(await authorized(store,prior)).phase!=='cancelled'||prior.recordId!==recordId||digest(existing)!==prior.revision))throw new AppError('RECORD_DRAFT_EXISTS');
    });
    if(draft.document)await withRecordBlockStore(from,draft.document.notebookId,draft.document.generation,async blocks=>{if((await copyRecordOwnerValue(new RecordDocument(blocks,draft.document.root),target,options)).root!==draft.document.root)fail();});
    if(draft.content)await copyChunks(source,target,id,draft.content,options);
-   // The source archive can include its own siblings. It never leaves this
-   // owner; the destination receives only the selected change and its identity.
-   await source.withLock(()=>source.catalogue(store=>withRecordOwnerTransferWrite(store,receipt,async()=>{const key=originalKey(result.revision),prior=await store.object(key);if(prior){if(prior.raw!==raw||prior.id!==id||prior.workspaceId!==draft.workspaceId)fail();return;}await store.putObject(key,{version:1,id,workspaceId:draft.workspaceId,recordId,transferId:receipt.id,fingerprint:receipt.fingerprint,raw});})));
    await write(async store=>{
-    await putExact(store,originArchive(receipt.id,id),origin);await store.putObject(originKey(id),{version:1,transferId:receipt.id,revision:hash(origin)});await target.writeMetadata(draftPath(id),projectedRaw);
-    await targetDrafts.index.putLocked({draft:projected,revision:projectedRevision},hash({text:projectedRaw}));
+    const pointer={version:1,transferId:receipt.id,revision:hash(origin)},result={draft:projected,revision:projectedRevision},summary=targetDrafts.index.summary(result,hash({text:projectedRaw}));
+    const values=[[originKey(id),pointer],['metadata:'+draftPath(id),{text:projectedRaw}],['metadata:'+targetDrafts.index.path(summary),{text:serialize(summary)}]],changes=[];
+    for(const [key,after] of values)changes.push({address:{kind:'object',key},before:await store.object(key),after});
+    const dependencies=[];if(draft.document)dependencies.push(recordBlockResource(draft.document.notebookId,draft.document.generation,'value',draft.document.root));
+    if(draft.content?.root){const key='metadata:.observanda/record-draft-blocks/'+id+'/nodes/'+draft.content.root.hash+'.json',value=await store.object(key);if(!value)fail();dependencies.push({kind:'object',key,revision:hash(value)});}
+    const archiveId=originArchive(receipt.id,id);await putExact(store,archiveId,origin,{dependencies});
+    await journalRecordOwnerMutations(store,receipt,changes,{dependencies:[{kind:'object',key:archiveId,revision:hash(origin)},...dependencies]});
+    await store.putObject(originKey(id),pointer);await target.writeMetadata(draftPath(id),projectedRaw);
+    await targetDrafts.index.putLocked(result,hash({text:projectedRaw}));
    });count++;await checkpoint('draft',{id,recordId,count});
   }
  });
  const descriptor={version:1,id:receipt.id,recordId,count};await write(store=>putExact(store,manifestId,descriptor));await target.catalogue(store=>verifyRecordOwnerDrafts(store,{signal,receiptId:receipt.id}));return descriptor;
+}
+// Source-only legacy envelopes can include siblings. Retain them only after
+// cancellation is forbidden, using the exact scalar proof saved at preparation.
+export async function retainRecordOwnerSourceDrafts(source,target,receipt,{signal,check=async()=>{}}={}){
+ const selected=prefix+'origin:'+receipt.id+':';let after=null;
+ for(;;){
+  signal?.throwIfAborted();await check();
+  const batch=await target.catalogue(async store=>{
+   const index=store.objectIndex(),head=await index.head(),rows=[];
+   for await(const entry of index.entries(head,selected,after)){rows.push(entry.id);if(rows.length===32)break;}
+   return rows;
+  });if(!batch.length)return;
+  for(const id of batch){
+   signal?.throwIfAborted();await check();const origin=await target.catalogue(async store=>{const value=await store.object(id);await authorized(store,value);return value;}),expected=origin.sourceCheckpoint;
+   // Earlier transfer versions retained this source envelope during preparation.
+   if(!expected){after=id;continue;}
+   if(Object.keys(expected).sort().join()!=='revision,workspaceId'||expected.workspaceId!==receipt.sourceOwner.workspaceId||!revisionId(expected.revision)||origin.transferId!==receipt.id||origin.recordId!==receipt.command.recordId)fail();
+   await source.withLock(()=>source.catalogue(store=>withRecordOwnerTransferWrite(store,receipt,async()=>{
+    const saved=await readRecordOwnerTransfer(store,receipt.id);if(saved?.fingerprint!==receipt.fingerprint||saved.phase!=='activating')throw new AppError('CONFLICT');
+    const key=originalKey(expected.revision),prior=await store.object(key);
+    if(prior){if(prior.id!==origin.id||prior.workspaceId!==expected.workspaceId||typeof prior.raw!=='string'||digest(prior.raw)!==expected.revision)fail();return;}
+    const raw=await source.readMetadata(draftPath(origin.id),MAX_RECORD_COMMAND_BYTES);if(raw===null||digest(raw)!==expected.revision)fail();
+    let draft;try{draft=JSON.parse(raw);}catch{fail();}if(draft.id!==origin.id||draft.workspaceId!==expected.workspaceId||!records(draft).includes(receipt.command.recordId))fail();
+    await store.putObject(key,{version:1,id:origin.id,workspaceId:expected.workspaceId,recordId:receipt.command.recordId,transferId:receipt.id,fingerprint:receipt.fingerprint,raw});
+   })));after=id;
+  }
+ }
 }
 export async function activateRecordOwnerDrafts(target,receipt,descriptor,{store}){
  void target;if(!descriptor||descriptor.version!==1||descriptor.id!==receipt.id||descriptor.recordId!==receipt.command.recordId||!Number.isSafeInteger(descriptor.count)||descriptor.count<0||serialize(await store.object('record-owner-drafts:'+receipt.id))!==serialize(descriptor))fail();
@@ -197,6 +238,7 @@ export async function verifyRecordOwnerDrafts(store,{signal,receiptId=null}={}){
   if(researchId(tail)){await recordOwnerDraftOrigin(store,tail);continue;}
   const [transferId,draftId,...extra]=tail.split(':');if(extra.length||!researchId(transferId)||!researchId(draftId))fail();
   const origin=await store.object(id),receipt=await authorized(store,origin);
+  if(origin.sourceCheckpoint&&(Object.keys(origin.sourceCheckpoint).sort().join()!=='revision,workspaceId'||origin.sourceCheckpoint.workspaceId!==receipt.sourceOwner.workspaceId||!revisionId(origin.sourceCheckpoint.revision)))fail();
   if(origin.id!==draftId||origin.transferId!==transferId||!validDraftOriginOwner(origin.owner)||origin.owner.recordId!==origin.recordId||!revisionId(origin.revision)||!revisionId(origin.reviewId))fail();
   const original=origin.original;if(!original||typeof original.raw!=='string')fail();let retained;try{retained=JSON.parse(original.raw);}catch{fail();}
   let projected;

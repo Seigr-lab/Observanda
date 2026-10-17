@@ -5,16 +5,23 @@ import {createHash} from 'node:crypto';
 import {AppError} from './errors.js';
 import {seal,unseal} from './encryption.js';
 import {digest,serialize} from './storage-format.js';
-import {RecordBlockStore,blockedRecord,validBlockedRecord} from './record-block-store.js';
+import {RecordBlockStore,blockedRecord,validBlockedRecord,recordBlockResource} from './record-block-store.js';
 import {catalogueFormat,requireRecordBlocks,requireAttemptIndexes,requireCurrentAttemptIndexes,requireRecordMethodIndexes,requireRecordResultIndexes} from './catalogue-format.js';
 import {jsonFitsBytes} from './web/json-chunks.js';
 import {recordEncoding} from './record-encoding.js';
+import {retainRecordOwnerResource} from './record-owner-resources.js';
 import {RecordDocument,withRecordDocument} from './record-document.js';
 import {RecordAttemptIndex} from './record-attempt-index.js';
 import {RecordMethodIndex} from './record-method-index.js';
 import {RecordResultIndex} from './record-result-index.js';
 const fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 const requireIndexFormat=(db,index)=>index.version>=2?requireCurrentAttemptIndexes(db):requireAttemptIndexes(db);
+function recordResources(value,generation){
+ if(!blockedRecord(value))return [];
+ const ref=(kind,revision)=>recordBlockResource(value.notebookId,generation,kind,revision),dependencies=[ref('value',value.root)];
+ for(const key of ['attemptIndex','methodIndex','resultIndex'])if(value[key]){dependencies.push(ref('value',value[key].source));if(value[key].root)dependencies.push(ref('index',value[key].root.hash));}
+ return dependencies;
+}
 export async function withRecordEnvelope(store,id,revision,consume){
  const row=await store.db.get('SELECT scope_id,generation,payload FROM records WHERE id=$1 AND revision=$2',id,revision);if(!row)fail();
  const key=await store.scopeKey(row.scope_id,row.generation);
@@ -41,7 +48,7 @@ export async function withStoredRecord(store,id,revision,consume){
 export async function retainStoredRecord(store,record,revision){
  const scopeId=record.notebookId,generation=1,key=await store.scopeKey(scopeId,generation,{create:true});
  try{
-  let retained;
+  let retained,dependencies=[];
   // Indexed owners and larger originals share immutable blocks. The byte
   // threshold chooses representation; it does not limit record content.
   if(record.attempt||record.results||record.relations?.some(link=>link.role==='uses-method')||!jsonFitsBytes(record,65535,{pretty:true})){
@@ -50,8 +57,9 @@ export async function retainStoredRecord(store,record,revision){
    if(attemptIndex){await requireIndexFormat(store.db,attemptIndex);value.version=2;value.attemptIndex=attemptIndex;}
    const methodIndex=await RecordMethodIndex.retain(document);if(methodIndex){await requireRecordMethodIndexes(store.db);value.version=3;value.methodIndex=methodIndex;}
    const resultIndex=await RecordResultIndex.retain(document);if(resultIndex){await requireRecordResultIndexes(store.db);value.version=4;value.resultIndex=resultIndex;}await blocks.flush();
-   retained=serialize(value);
+   retained=serialize(value);dependencies=recordResources(value,generation);
   }else retained=serialize(record);
+  await retainRecordOwnerResource(store,{kind:'record',id:record.id,revision},{present:false,dependencies});
   await store.db.run('INSERT INTO records VALUES ($1,$2,$3,$4,$5)',record.id,revision,scopeId,generation,seal(Buffer.from(retained),key,store.recordAAD(record.id,revision,scopeId,generation)));
  }finally{key.fill(0);}
 }
@@ -66,11 +74,13 @@ export async function retainStoredDocument(store,document,encoding){
  const id=(await document.field(['id'])).value,scopeId=(await document.field(['notebookId'])).value,{blocks}=document;
  if(blocks.store!==store||scopeId!==blocks.scopeId)throw new AppError('INVALID');
  const revision=encoding.revision;
- if(await store.db.get('SELECT 1 FROM records WHERE id=$1 AND revision=$2',id,revision))return false;
+ const present=!!await store.db.get('SELECT 1 FROM records WHERE id=$1 AND revision=$2',id,revision);
+ if(present){await retainRecordOwnerResource(store,{kind:'record',id,revision},{present:true});return false;}
  await requireRecordBlocks(store.db);const attemptIndex=await RecordAttemptIndex.retain(document);if(attemptIndex)await requireIndexFormat(store.db,attemptIndex);
  const methodIndex=await RecordMethodIndex.retain(document);if(methodIndex)await requireRecordMethodIndexes(store.db);
  const resultIndex=await RecordResultIndex.retain(document);if(resultIndex)await requireRecordResultIndexes(store.db);await blocks.flush();
  const value={format:'observanda-record-blocks',version:resultIndex?4:methodIndex?3:attemptIndex?2:1,id,notebookId:scopeId,root:document.root,...(attemptIndex?{attemptIndex}:{}),...(methodIndex?{methodIndex}:{}),...(resultIndex?{resultIndex}:{})};
+ await retainRecordOwnerResource(store,{kind:'record',id,revision},{present:false,dependencies:recordResources(value,blocks.generation)});
  await store.db.run('INSERT INTO records VALUES ($1,$2,$3,$4,$5)',id,revision,scopeId,blocks.generation,
   seal(Buffer.from(serialize(value)),blocks.key,store.recordAAD(id,revision,scopeId,blocks.generation)));
  return true;

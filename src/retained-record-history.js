@@ -4,6 +4,7 @@
 import {digest} from './storage-format.js';
 import {AppError} from './errors.js';
 import {catalogueObjectPrefixCount} from './postgres-indexes.js';
+import {journalRecordOwnerMutation,adoptRecordOwnerMutation,recordOwnerResourcesReclaiming} from './record-owner-resources.js';
 const path=/^metadata:\.observanda\/materials\/records\/([a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})\/[a-f0-9]{64}\.json$/;
 const slot=id=>'retained-record-history:'+id;
 export async function retainedHistoryGeneration(store,id){
@@ -14,9 +15,11 @@ export async function retainedHistoryGeneration(store,id){
  return value.generation;
 }
 export async function changedRetainedHistory(store,objectId,revision){
- const id=path.exec(objectId)?.[1];if(!id)return;
- const generation=digest((await retainedHistoryGeneration(store,id)??'')+'\0'+objectId+'\0'+(revision??'')),key=slot(id);
- await store.db.run('INSERT INTO state VALUES ($1,$2) ON CONFLICT(slot) DO UPDATE SET payload=excluded.payload',key,store.encode('state',key,{format:1,recordId:id,generation}));
+ const id=path.exec(objectId)?.[1];if(!id||recordOwnerResourcesReclaiming())return;
+ const previous=await retainedHistoryGeneration(store,id),key=slot(id),before=previous===null?null:{format:1,recordId:id,generation:previous},after={format:1,recordId:id,generation:digest((previous??'')+'\0'+objectId+'\0'+(revision??''))};
+ if(before)await adoptRecordOwnerMutation(store,{kind:'state',key},before);
+ await journalRecordOwnerMutation(store,null,{kind:'state',key},before,after);
+ await store.db.run('INSERT INTO state VALUES ($1,$2) ON CONFLICT(slot) DO UPDATE SET payload=excluded.payload',key,store.encode('state',key,after));
 }
 export async function retainedHistoryState(store,id){
  const prefix='metadata:.observanda/materials/records/'+id+'/',index=store.objectIndex({cacheReads:true}),head=await index.head();

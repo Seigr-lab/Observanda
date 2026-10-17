@@ -49,7 +49,8 @@ test('selected owner move retains exact evidence, unavailable sibling provenance
  try{await assert.rejects(engine.cancel(cancelRequest),/Synthetic destination cancellation refusal/);}finally{target.withLock=targetLock;}
  assert.equal((await engine.status(cancelRequest)).phase,'cancelled');assert.equal((await target.catalogue(store=>readRecordOwnerTransfer(store,cancelledCommand.id))).phase,'copying');
  const cancelled=await engine.resume(cancelRequest);assert.equal(cancelled.phase,'cancelled');assert.equal((await target.catalogue(store=>readRecordOwnerTransfer(store,cancelledCommand.id))).phase,'cancelled');assert.deepEqual(await engine.cancel(cancelRequest),cancelled);assert.deepEqual(await engine.start(cancelledCommand),cancelled);
- await assert.rejects(new RetainedRecordDocuments(target).read({ref:savedRef}),{code:'MATERIAL_INCOMPLETE'});
+ await assert.rejects(new RetainedRecordDocuments(target).read({ref:savedRef}),{code:'WORKSPACE_CHANGED'});
+ assert.equal(Number((await target.catalogue(store=>store.db.get('SELECT COUNT(*) AS n FROM records WHERE id=$1',record.id))).n),0);
  t.diagnostic('Cancelled source reconciles an interrupted destination update on exact retry; a new command follows.');
  const originalCopy=FileContent.prototype.copyTo;let copying=false,copiedBytes=0,lifeChecks=0;
  FileContent.prototype.copyTo=async function(owner,file,options){if(owner!==target||this.sha256!==expected.get(large.id).content.sha256)return originalCopy.call(this,owner,file,options);copying=true;try{return await originalCopy.call(this,owner,file,{...options,onProgress:async done=>{copiedBytes=done;}});}finally{copying=false;}};

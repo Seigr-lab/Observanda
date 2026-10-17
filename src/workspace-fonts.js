@@ -1,3 +1,4 @@
+import {adoptRecordOwnerFont} from './record-owner-resources.js';
 import {Worker} from 'node:worker_threads';
 import {createHash} from 'node:crypto';
 import {AppError} from './errors.js';
@@ -31,7 +32,7 @@ export class WorkspaceFonts{
   });
  }
  async update(id,{embed,hidden}){if(!customFontId(id)||typeof embed!=='boolean'||typeof hidden!=='boolean')throw new AppError('INVALID');return this.workspace.withLock(async()=>{const fonts=await this.list(),font=fonts.find(f=>f.id===id);if(!font)throw new AppError('FONT_MISSING');if(embed&&font.restricted)throw new AppError('FONT_EMBED');Object.assign(font,{embed,hidden});await this.workspace.writeMetadata(indexFile,JSON.stringify(fonts));return font;});}
- async get(id,{includeSource=false}={}){if(!customFontId(id))throw new AppError('INVALID');const font=(await this.list()).find(f=>f.id===id);if(!font)throw new AppError('FONT_MISSING');const raw=await this.workspace.readMetadata(assetFile(id),Math.ceil(MAX_FONT_BYTES*4/3)+128);if(!raw)throw new AppError('FONT_MISSING');const bytes=Buffer.from(JSON.parse(raw).bytes,'base64');if(createHash('sha256').update(bytes).digest('hex')!==id.slice(7))throw new AppError('FONT_INVALID');return {...font,bytes,...(includeSource?{sourceText:raw}:{})};}
+ async get(id,{includeSource=false}={}){if(!customFontId(id))throw new AppError('INVALID');const font=(await this.list()).find(f=>f.id===id);if(!font)throw new AppError('FONT_MISSING');const raw=await this.workspace.readMetadata(assetFile(id),Math.ceil(MAX_FONT_BYTES*4/3)+128);if(!raw)throw new AppError('FONT_MISSING');const bytes=Buffer.from(JSON.parse(raw).bytes,'base64');if(createHash('sha256').update(bytes).digest('hex')!==id.slice(7))throw new AppError('FONT_INVALID');await adoptRecordOwnerFont(this.workspace,id,font,raw);return {...font,bytes,...(includeSource?{sourceText:raw}:{})};}
  async files(value,{preview=false,signal}={}){
   signal?.throwIfAborted();
   const ids=new Set();function visit(v){if(v&&typeof v==='object')for(const [key,part] of Object.entries(v)){if(['font','headingFont'].includes(key)&&customFontId(part))ids.add(part);else visit(part);}}visit(value);

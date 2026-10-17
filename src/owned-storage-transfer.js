@@ -1,3 +1,4 @@
+import {assertRecordOwnerReclamationSettled} from './record-owner-transfer-state.js';
 import {assertInventoryObligationsSettled} from './inventory-obligation-lifecycle.js';
 import {requireStorageName,storageFolderName} from './storage-names.js';
 import {reconcileProjectFiles} from './project-transfer-files.js';
@@ -33,6 +34,7 @@ async function intent(storage){
 async function save(storage,value){const raw=serialize(value);if(Buffer.byteLength(raw)>16*1024*1024-128)throw new AppError('LIMIT');await storage.writeFile(path.join(storage.root,intentName),raw);}
 async function copy(source,input,{id,onProgress,checkpoint=async()=>{},afterVerified,beforeVerified,onVerified,sourceHandoff,projectRoots=[],portable=false,retainIncomplete=false,relocation=false}={}){
  if(!(source instanceof Storage)||!researchId(id)||typeof checkpoint!=='function'||afterVerified!==undefined&&typeof afterVerified!=='function'||beforeVerified!==undefined&&typeof beforeVerified!=='function'||onVerified!==undefined&&typeof onVerified!=='function'||sourceHandoff!==undefined&&typeof sourceHandoff!=='function'||typeof portable!=='boolean'||typeof retainIncomplete!=='boolean'||typeof relocation!=='boolean'||portable&&relocation||portable&&afterVerified!==undefined)throw new AppError('INVALID');
+ await source.catalogue(store=>assertRecordOwnerReclamationSettled(store));
  if(!relocation)await assertInventoryObligationsSettled(source);
  const sourceRoot=await realpath(source.root),destination=await resolveLocation(input);
  if(within(sourceRoot,destination)||within(destination,sourceRoot))throw new AppError('STORAGE_PATH');
@@ -64,7 +66,8 @@ async function copy(source,input,{id,onProgress,checkpoint=async()=>{},afterVeri
    }
    const handoff=sourceHandoff??(operation=>source.withStorageHandoff(operation,{existing:true}));
    return handoff(async()=>{
-    if(!relocation)await assertInventoryObligationsSettled(source);
+    await source.catalogue(store=>assertRecordOwnerReclamationSettled(store));
+ if(!relocation)await assertInventoryObligationsSettled(source);
     const binding=await catalogueBinding(sourceRoot),outline=await source.outline();
     if(binding?.placement!==placement||binding[ownerId]!==source[ownerId])throw new AppError('DATABASE_LOCATION');
     if(receipt&&(receipt.sourceId!==binding.id||receipt.namespaceId!==outline.metadata.id))throw new AppError('CONFLICT');

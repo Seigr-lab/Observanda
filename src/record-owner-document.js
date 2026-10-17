@@ -38,9 +38,10 @@ export async function copyRecordOwnerDocument(source,target,{write,signal,notebo
   return {notebookId,generation,root:document.root,encoding,attemptIndex,methodIndex,resultIndex};
  }finally{key.fill(0);}
 }
-export async function withRecordOwnerDocument(store,value,operation){
+export async function withRecordOwnerDocument(store,value,operation,{write=null,signal}={}){
+ if(write!==null&&typeof write!=='function')throw new AppError('INVALID');signal?.throwIfAborted();
  const key=await store.scopeKey(value.notebookId,value.generation);
- try{return await operation(new RecordDocument(new RecordBlockStore(store,value.notebookId,value.generation,key),value.root,{mutable:true,attemptIndex:value.attemptIndex??null,methodIndex:value.methodIndex??null,resultIndex:value.resultIndex??null}));}
+ try{const blocks=write?new TransferBlocks(store.workspace,value.notebookId,value.generation,key,write,signal):new RecordBlockStore(store,value.notebookId,value.generation,key);return await operation(new RecordDocument(blocks,value.root,{mutable:true,attemptIndex:value.attemptIndex??null,methodIndex:value.methodIndex??null,resultIndex:value.resultIndex??null}));}
  finally{key.fill(0);}
 }
 

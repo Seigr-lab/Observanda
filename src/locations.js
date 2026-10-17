@@ -1,3 +1,4 @@
+import {assertRecordOwnerReclamationSettled} from './record-owner-transfer-state.js';
 import {assertInventoryObligationsSettled} from './inventory-obligation-lifecycle.js';
 import {initializeWorkspaceSettings} from './workspace-settings.js';
 import {withProjectModuleInitialization} from './project-module-initialization.js';
@@ -160,6 +161,7 @@ export async function copyWorkspace(plan,{vault=null,onProgress,afterCopy,afterV
     operationTransfer({phase:'checking',files:0,bytes:0,totalFiles:plan.transferFiles??plan.fileCount,totalBytes:plan.fileBytes??plan.bytes});
     let destination,marker;
     const catalogue=await hasCatalogue(plan.source);
+    if(catalogue)await new Workspace(plan.source,vault).catalogue(store=>assertRecordOwnerReclamationSettled(store));
     await workspaceInventory(plan.source,plan.inventorySalt,{projectRoots:plan.projectRoots??[],expected:plan.fingerprint?plan:undefined,consume:async(inventory,items)=>{
      Object.assign(plan,inventory);
      ({destination,marker}=recovery?await recovery.prepare(plan):await prepareCopyDestination(plan.destination));

@@ -6,6 +6,7 @@ import {catalogueIndexedCount,cataloguePrefixExists} from './postgres-indexes.js
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
 import {writeCatalogueRows} from './catalogue-writes.js';
+import {retainRecordOwnerResource} from './record-owner-resources.js';
 const fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 const hash=value=>digest(serialize(value));
 const revision=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
@@ -24,9 +25,10 @@ const equal=(a,b)=>a?.hash===b?.hash;
 const authenticatedNodes=new WeakMap();
 const validNode=node=>node&&Object.keys(node).sort().join()==='id,left,revision,right'&&identifier(node.id)&&revision(node.revision)&&validRef(node.left)&&validRef(node.right)&&Math.abs(height(node.left)-height(node.right))<=1;
 export class ObjectIndex{
- constructor(store,{namespace='object-index:',immutable=false,nodeStorage=null,cacheReads=false,scanAhead=false,cacheSize=128}={}){
+ constructor(store,{namespace='object-index:',immutable=false,nodeStorage=null,cacheReads=false,scanAhead=false,cacheSize=128,write=null}={}){
   if(!Number.isSafeInteger(cacheSize)||cacheSize<1||cacheSize>16384)throw new AppError('INVALID');
-  this.store=store;this.cacheReads=cacheReads;this.scanAhead=scanAhead;this.cacheSize=cacheSize;this.nodeStorage=nodeStorage;this.namespace=namespace;this.immutable=immutable;this.cache=new Map();this.cachedVersions=new Map();this.pending=new Map();this.writes=new Map();
+  if(write!==null&&(typeof write!=='function'||!immutable||nodeStorage))throw new AppError('INVALID');
+  this.write=write;this.store=store;this.cacheReads=cacheReads;this.scanAhead=scanAhead;this.cacheSize=cacheSize;this.nodeStorage=nodeStorage;this.namespace=namespace;this.immutable=immutable;this.cache=new Map();this.cachedVersions=new Map();this.pending=new Map();this.writes=new Map();
   this.cacheBytes=0;this.nodeBytes=new WeakMap();this.pendingBytes=0;
  }
  forgetCached(version){
@@ -83,6 +85,7 @@ export class ObjectIndex{
   const slot=this.slot(ref),load=()=>this.store.db.get('SELECT payload FROM state WHERE slot=$1',slot);
   const row=this.store.readCache?await this.store.readCache.row(slot,load):await load();return row?this.store.decode('state',slot,row.payload):this.readMissingNode(ref);
  }
+ async persistWith(operation){return this.write?this.write(operation):operation(this.store);}
  async flush(root){return this.flushRoots([root]);}
  async flushRoots(roots){
   if(!Array.isArray(roots))throw new AppError('INVALID');
@@ -93,13 +96,16 @@ export class ObjectIndex{
   let batch=[],bytes=0;const visited=new Set();
   const write=async()=>{
    if(!batch.length)return;
-   const found=new Map((await this.store.db.all('SELECT slot,payload FROM state WHERE slot=ANY($1::text[])',batch.map(item=>item.slot))).map(row=>[row.slot,row.payload]));
-   const rows=[];
-   for(const {slot,node,version} of batch){
-    if(found.has(slot)){if(hash(this.store.decode('state',slot,found.get(slot)))!==version)fail();}
-    else rows.push([slot,this.store.encode('state',slot,node)]);
-   }
-   await writeCatalogueRows(this.store.db,'state',rows,{create:true});batch=[];bytes=0;
+   await this.persistWith(async store=>{
+    const found=new Map((await store.db.all('SELECT slot,payload FROM state WHERE slot=ANY($1::text[])',batch.map(item=>item.slot))).map(row=>[row.slot,row.payload]));
+    const rows=[];
+    for(const {slot,node,version} of batch){
+     if(found.has(slot)){if(hash(store.decode('state',slot,found.get(slot)))!==version)fail();}
+     await retainRecordOwnerResource(store,{kind:'state',key:slot,revision:version},{present:found.has(slot),dependencies:[...([node.left,node.right].filter(Boolean).map(ref=>({kind:'state',key:this.slot(ref),revision:ref.hash}))),...(this.namespace==='record-member-collection:'?[{kind:'state',key:'record-member-item:'+node.revision,revision:node.revision}]:[])]});
+     if(!found.has(slot))rows.push([slot,store.encode('state',slot,node)]);
+    }
+    await writeCatalogueRows(store.db,'state',rows,{create:true});
+   });batch=[];bytes=0;
   };
   const visit=async ref=>{
    if(!ref||visited.has(ref.hash))return;const node=this.pending.get(ref.hash);if(!node)return;visited.add(ref.hash);
@@ -113,7 +119,9 @@ export class ObjectIndex{
     batch.push({slot:this.slot(ref),node,version:ref.hash});bytes+=size;
    }
   };
-  for(const root of roots)await visit(root);await write();this.pending.clear();this.pendingBytes=0;this.writes.clear();
+  for(const root of roots)await visit(root);await write();
+  if(!this.nodeStorage)for(let offset=0;offset<roots.length;offset+=32)await this.persistWith(async store=>{for(const root of roots.slice(offset,offset+32))if(root)await retainRecordOwnerResource(store,{kind:'state',key:this.slot(root),revision:root.hash},{present:true});});
+  this.pending.clear();this.pendingBytes=0;this.writes.clear();
  }
  async assertEmpty(){
   if(await cataloguePrefixExists(this.store.db,'objects')||await cataloguePrefixExists(this.store.db,'state','object-index:'))fail();
