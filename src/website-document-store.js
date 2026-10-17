@@ -13,6 +13,10 @@ import {validWebsiteSelection} from './web/website-selection.js';
 import {researchId} from './web/research-reference.js';
 import {revisionId} from './web/revision-model.js';
 import {catalogueIndexedCount} from './postgres-indexes.js';
+import {catalogueFormat,catalogueRequiresWebsiteEditor,requireWebsiteEditor} from './catalogue-format.js';
+import {WebsiteCollectionIndex,validWebsiteCollectionIndexes} from './website-collection-index.js';
+import {WebsiteEditorNavigation,validWebsiteNavigationProjection} from './website-editor-navigation.js';
+import {validateWebsiteDocument,websiteDocumentHeader} from './website-document-validation.js';
 const damaged=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 const invalid=()=>{throw new AppError('INVALID');};
 const hash=value=>digest(serialize(value));
@@ -80,22 +84,23 @@ export class WebsiteDocumentStore{
   if(!revisionId(revision))invalid();const head=await this.savedHead(id,registry,{removed:true}),known=await this.index(id,'versions').find({root:head.versions},revision);
   if(!known||known.revision!==revision){if(head.revision===revision)damaged();throw new AppError('NOT_FOUND');}
   const slot=versionSlot(id,revision),row=await this.store.db.get('SELECT payload FROM state WHERE slot=$1',slot),value=this.store.decode('state',slot,row?.payload);
-  if(!value||Object.keys(value).sort().join()!=='researchSnapshotId,root,version,websiteId,workspaceId'||value.version!==1||value.workspaceId!==registry.workspaceId||value.websiteId!==id||!revisionId(value.root)||!revisionId(value.researchSnapshotId)||hash(value)!==revision)damaged();return value;
+  if(!value||![1,2].includes(value.version)||Object.keys(value).sort().join()!==(value.version===2?'collectionIndexes,navigationProjection,researchSnapshotId,root,version,websiteId,workspaceId':'researchSnapshotId,root,version,websiteId,workspaceId')||value.workspaceId!==registry.workspaceId||value.websiteId!==id||!revisionId(value.root)||!revisionId(value.researchSnapshotId)||hash(value)!==revision)damaged();
+  if(value.version===2&&(!catalogueRequiresWebsiteEditor(await catalogueFormat(this.store.db))||!validWebsiteCollectionIndexes(value.collectionIndexes)||!validWebsiteNavigationProjection(value.navigationProjection)))damaged();return value;
  }
- async document(websiteId,{researchSnapshotId,websiteRevision,signal}={}){
+ async document(websiteId,{researchSnapshotId,websiteRevision,signal,mutable=false}={}){
   signal?.throwIfAborted();const registry=await this.registry(),explicitSnapshot=researchSnapshotId!==undefined;researchSnapshotId??=await this.store.head();if(!revisionId(researchSnapshotId))invalid();
   const snapshot=await this.store.snapshot(researchSnapshotId);
   if(!registry||websiteRevision===null||websiteRevision===undefined&&explicitSnapshot&&snapshot.websiteDocuments!==1){
    if(websiteRevision!==undefined&&websiteRevision!==null)invalid();const value=await this.legacy(websiteId,{researchSnapshotId,signal}),blocks=memoryBlocks(),root=await blocks.tree().retain(value.site);
-   return {researchSnapshotId,websiteId,websiteRevision:null,document:new RecordDocument(blocks,root)};
+   return {researchSnapshotId,websiteId,websiteRevision:null,document:new RecordDocument(blocks,root),collectionIndexes:null,navigationProjection:null};
   }
   const id=await this.ownedId(websiteId,registry);
   if(websiteRevision===undefined){if(explicitSnapshot&&researchSnapshotId!==await this.store.head())invalid();websiteRevision=(await this.savedHead(id,registry)).revision;}
-  const value=await this.revision(id,websiteRevision,registry),blocks=new WebsiteDocumentBlockStore(this.store,id),document=new RecordDocument(blocks,value.root);
+  const value=await this.revision(id,websiteRevision,registry),blocks=new WebsiteDocumentBlockStore(this.store,id,{readOnly:!mutable}),document=new RecordDocument(blocks,value.root,{mutable});
   if((await document.field(['id'],{signal})).value!==id)damaged();
-  return {researchSnapshotId,websiteId:id===registry.defaultSiteId?null:id,websiteRevision,document};
+  return {researchSnapshotId,websiteId:id===registry.defaultSiteId?null:id,websiteRevision,document,collectionIndexes:value.collectionIndexes??null,navigationProjection:value.navigationProjection??null};
  }
- async read(websiteId,options){const {document,...pin}=await this.document(websiteId,options);return {...pin,site:await document.tree.read(document.root)};}
+ async read(websiteId,options){const {document,researchSnapshotId,websiteId:id,websiteRevision}=await this.document(websiteId,options);return {researchSnapshotId,websiteId:id,websiteRevision,site:await document.tree.read(document.root)};}
  async #register(site,researchSnapshotId){
   site=structuredClone(site);const registry=await this.registry();if(!registry||!researchId(site?.id)||!revisionId(researchSnapshotId))invalid();
   const directory=websiteDirectoryIndex(this.store);if(await directory.find(registry,site.id)||await this.store.db.get('SELECT 1 FROM state WHERE slot=$1',headSlot(site.id)))throw new AppError('EXISTS');
@@ -110,17 +115,37 @@ export class WebsiteDocumentStore{
   if(head.revision!==expectedRevision)throw new AppError('CONFLICT');if(site?.id!==id||site.projectId!==head.projectId||!revisionId(researchSnapshotId))invalid();
   const next=await this.#retain(site,researchSnapshotId,registry,head);return {researchSnapshotId,...this.summary(next,registry)};
  }
- async #retain(site,researchSnapshotId,registry,previous){
-  const snapshot=await this.store.snapshot(researchSnapshotId);if(snapshot.metadata.id!==registry.workspaceId||!validWebsites([site],snapshot.metadata))invalid();
-  const blocks=new WebsiteDocumentBlockStore(this.store,site.id),root=await blocks.tree().retain(site);
-  if(previous&&(await this.revision(site.id,previous.revision,registry)).root===root)return previous;
-  const value={version:1,workspaceId:registry.workspaceId,websiteId:site.id,researchSnapshotId,root},revision=hash(value),slot=versionSlot(site.id,revision),row=await this.store.db.get('SELECT payload FROM state WHERE slot=$1',slot);
+ async saveDocument(websiteId,document,{researchSnapshotId,expectedRevision,collectionIndexes=null,navigationProjection=null,signal}={}){
+  const registry=await this.registry();if(!registry)throw new AppError('ACCESS_UPGRADE');const id=await this.ownedId(websiteId,registry),head=await this.savedHead(id,registry);
+  if(head.revision!==expectedRevision)throw new AppError('CONFLICT');if(!revisionId(researchSnapshotId)||document.blocks.store!==this.store||document.blocks.websiteId!==id||document.blocks.readOnly)invalid();
+  const previous=await this.revision(id,head.revision,registry),priorDocument=new RecordDocument(new WebsiteDocumentBlockStore(this.store,id,{readOnly:true}),previous.root),previousSite=await websiteDocumentHeader(priorDocument,{signal});
+  const snapshot=await this.store.snapshot(researchSnapshotId),{site}=await validateWebsiteDocument(this.store,snapshot,document,{signal,previous:previousSite});
+  if(site.id!==id||site.projectId!==head.projectId||snapshot.metadata.id!==registry.workspaceId)invalid();
+  if(previous.root===document.root)return {researchSnapshotId,...this.summary(head,registry)};
+  collectionIndexes=await WebsiteCollectionIndex.retainAll(document,collectionIndexes??previous.collectionIndexes,{signal});
+  navigationProjection=await WebsiteEditorNavigation.retain(this.store,snapshot,document,site,collectionIndexes,navigationProjection??previous.navigationProjection,{signal});
+  await requireWebsiteEditor(this.store.db);const value={version:2,workspaceId:registry.workspaceId,websiteId:id,researchSnapshotId,root:document.root,collectionIndexes,navigationProjection};
+  const next=await this.#publish(site,value,document.blocks,head);return {researchSnapshotId,...this.summary(next,registry)};
+ }
+ async #publish(site,value,blocks,previous){
+  const revision=hash(value),slot=versionSlot(site.id,revision),row=await this.store.db.get('SELECT payload FROM state WHERE slot=$1',slot);
   if(row){if(hash(this.store.decode('state',slot,row.payload))!==revision)damaged();}else await this.store.db.run('INSERT INTO state VALUES ($1,$2)',slot,this.store.encode('state',slot,value));
   await blocks.flush();const history=this.index(site.id,'history'),versions=this.index(site.id,'versions'),position=previous?previous.ordinal+1:0;
   const historyRoot=await history.change(previous?.history??null,ordinal(position),revision),versionsRoot=await versions.change(previous?.versions??null,revision,revision);
   await history.flush(historyRoot);await versions.flush(versionsRoot);
-  const head={version:1,workspaceId:registry.workspaceId,websiteId:site.id,revision,name:site.name,projectId:site.projectId,removed:false,ordinal:position,history:historyRoot,versions:versionsRoot};
+  const head={version:1,workspaceId:value.workspaceId,websiteId:site.id,revision,name:site.name,projectId:site.projectId,removed:false,ordinal:position,history:historyRoot,versions:versionsRoot};
   await this.store.db.run('INSERT INTO state VALUES ($1,$2) ON CONFLICT(slot) DO UPDATE SET payload=excluded.payload',headSlot(site.id),this.store.encode('state',headSlot(site.id),head));return head;
+ }
+ async #retain(site,researchSnapshotId,registry,previous){
+  const snapshot=await this.store.snapshot(researchSnapshotId);if(snapshot.metadata.id!==registry.workspaceId||!validWebsites([site],snapshot.metadata))invalid();
+  const blocks=new WebsiteDocumentBlockStore(this.store,site.id),root=await blocks.tree().retain(site);
+  if(previous&&(await this.revision(site.id,previous.revision,registry)).root===root)return previous;
+  let value={version:1,workspaceId:registry.workspaceId,websiteId:site.id,researchSnapshotId,root};
+  if(catalogueRequiresWebsiteEditor(await catalogueFormat(this.store.db))){
+   const document=new RecordDocument(blocks,root),collectionIndexes=await WebsiteCollectionIndex.retainAll(document),navigationProjection=await WebsiteEditorNavigation.retain(this.store,snapshot,document,site,collectionIndexes);
+   value={...value,version:2,collectionIndexes,navigationProjection};
+  }
+  return this.#publish(site,value,blocks,previous);
  }
  async remove(websiteId,{expectedRevision}={}){
   const registry=await this.registry();if(!registry)throw new AppError('ACCESS_UPGRADE');const id=await this.ownedId(websiteId,registry);if(id===registry.defaultSiteId)invalid();
@@ -134,7 +159,7 @@ export class WebsiteDocumentStore{
   const notebooks=new Set(metadata.notebooks.map(book=>book.id));
   for(const selected of site.selection.records){const row=await this.store.member(snapshot,selected.id);if(!row||!notebooks.has(row.notebookId))damaged();}
  }
- async verify({signal,onRevision}={}){
+ async verify({signal,onRevision,onDocument}={}){
   const registry=await this.registry();if(!registry)return;const current=await this.store.snapshot();
   const directory=websiteDirectoryIndex(this.store);if(!await directory.find(registry,registry.defaultSiteId)||(await catalogueIndexedCount(this.store.db,'state',prefix+'head:'))!==(registry.root?.count??0))damaged();
   let owners=0;
@@ -146,17 +171,22 @@ export class WebsiteDocumentStore{
    if(count!==head.ordinal+1||last!==head.revision||(await catalogueIndexedCount(this.store.db,'state',prefix+'revision:'+entry.id+':'))!==head.versions.count)damaged();
    let revisions=0;
    for await(const item of versions.entries({root:head.versions})){
-    signal?.throwIfAborted();revisions++;if(!revisionId(item.id)||item.id!==item.revision)damaged();const value=await this.revision(entry.id,item.revision,registry),snapshot=await this.store.snapshot(value.researchSnapshotId),blocks=new WebsiteDocumentBlockStore(this.store,entry.id),tree=blocks.tree();
+    signal?.throwIfAborted();revisions++;if(!revisionId(item.id)||item.id!==item.revision)damaged();const value=await this.revision(entry.id,item.revision,registry),snapshot=await this.store.snapshot(value.researchSnapshotId),blocks=new WebsiteDocumentBlockStore(this.store,entry.id,{readOnly:true}),tree=blocks.tree();
     // Exhaust the independent tree verifier before applying semantic admission.
     for await(const chunk of tree.json(value.root,{signal}))void chunk;
-    const site=await tree.read(value.root);if(site.id!==entry.id)damaged();await this.verifySite(site,snapshot);
+    const document=new RecordDocument(blocks,value.root);let site;
+    try{({site}=await validateWebsiteDocument(this.store,snapshot,document,{signal}));}catch(error){if(['INVALID','FORMAT','LIMIT','WORKSPACE_METADATA_LIMIT'].includes(error.code))damaged();throw error;}
+    if(site.id!==entry.id)damaged();
+    if(value.version===2){for(const collection of ['pages','navigation','assets']){const index=await WebsiteCollectionIndex.open(document,collection,value.collectionIndexes[collection],{signal});if(!index)damaged();await index.verify({signal});}await new WebsiteEditorNavigation(document,value.navigationProjection).verify(this.store,snapshot,site,value.collectionIndexes,{signal});}
+
     if(item.revision===head.revision){
      if(site.name!==head.name||site.projectId!==head.projectId)damaged();
      // A live document can accompany later body-only research snapshots. Prove
      // current membership separately, without changing its retained identity.
-     if(!head.removed)await this.verifySite(site,current);
+     if(!head.removed)try{await validateWebsiteDocument(this.store,current,document,{signal});}catch(error){if(['INVALID','FORMAT','LIMIT','WORKSPACE_METADATA_LIMIT'].includes(error.code))damaged();throw error;}
     }
-    await onRevision?.(site,{researchSnapshotId:value.researchSnapshotId,websiteId:entry.id===registry.defaultSiteId?null:entry.id,websiteRevision:item.revision});
+    const pin={researchSnapshotId:value.researchSnapshotId,websiteId:entry.id===registry.defaultSiteId?null:entry.id,websiteRevision:item.revision};
+    if(onDocument)await onDocument(document,pin);else if(onRevision)await onRevision(await tree.read(value.root),pin);
    }
    if(revisions!==head.versions.count)damaged();
   }

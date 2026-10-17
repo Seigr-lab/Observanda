@@ -1,4 +1,5 @@
-import {publicationWorkspace,publicationSnapshot} from './publication-pin.js';
+import {publicationWorkspace,publicationSnapshot,assertWebsitePin} from './publication-pin.js';
+import {websiteEditorProjection} from './website-editor-projection.js';
 import {websiteRecordSections} from './website-record-sections.js';
 import {AppError} from './errors.js';
 import {researchId} from './web/research-reference.js';
@@ -12,16 +13,33 @@ const exact=(value,keys)=>value&&typeof value==='object'&&!Array.isArray(value)&
 const invalid=()=>{throw new AppError('INVALID');};
 const searchValid=value=>typeof value==='string'&&value.length<=512;
 const cursorValid=value=>value===null||typeof value==='string'&&value.length>0&&value.length<=4096;
+// Native website discovery needs only its immutable header. Keep the same
+// notebook boundary as the legacy website adapter when using research storage.
+function scopedResearchStore(store,metadata){
+ const ids=new Set(metadata.notebooks.map(notebook=>notebook.id)),adapter={
+  async member(snapshot,id){const row=await store.member(snapshot,id);return row&&ids.has(row.notebookId)?row:null;},
+  async *members(snapshot,options){for await(const row of store.members(snapshot,options))if(ids.has(row.notebookId))yield row;},
+  async *queryDocuments(rows,book,options){async function* selected(){for await(const row of rows)if(!row.notebookId||ids.has(row.notebookId))yield row;}yield* store.queryDocuments(selected(),book,options);}
+ };
+ return new Proxy(store,{get(target,key){if(Object.hasOwn(adapter,key))return adapter[key];const value=target[key];return typeof value==='function'?value.bind(target):value;}});
+}
 export class WebsiteResearch{
  constructor(workspace){this.workspace=publicationWorkspace(workspace);}
  async run(operation,command,{signal}={}){
   const fields={summary:['selection','search'],content:['projectId','search','cursor'],record:['recordId'],sections:['recordId','offset'],media:['search','cursor']}[operation];
   if(!fields||!exact(command,['workspaceId','snapshotId',...(Object.hasOwn(command??{},'websitePin')?['websitePin']:[]),...fields])||!researchId(command.workspaceId)||!revisionId(command.snapshotId))invalid();
   if('search' in command&&!searchValid(command.search)||'cursor' in command&&!cursorValid(command.cursor)||operation==='summary'&&!validWebsiteSelection(command.selection)||operation==='content'&&!researchId(command.projectId)||['record','sections'].includes(operation)&&!researchId(command.recordId)||operation==='sections'&&(!Number.isSafeInteger(command.offset)||command.offset<0))invalid();
-  signal?.throwIfAborted();if(await this.workspace.storageKind()!=='catalogue')throw new AppError('FORMAT');
-  return this.workspace.catalogue(async store=>{
-   if((await store.snapshot()).metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
-   const snapshot=await publicationSnapshot(store,this.workspace,command.snapshotId,command.websitePin),metadata=snapshot.metadata;
+  command=structuredClone(command);signal?.throwIfAborted();if(await this.workspace.storageKind()!=='catalogue')throw new AppError('FORMAT');
+  const native=!!command.websitePin?.websiteRevision,workspace=native?(this.workspace.baseWorkspace??this.workspace):this.workspace;
+  return workspace.catalogue(async sourceStore=>{
+   if((await sourceStore.snapshot()).metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
+   let snapshot,store=sourceStore;
+   if(native){
+    assertWebsitePin(this.workspace,command.websitePin,command.snapshotId);
+    ({snapshot}=await websiteEditorProjection(sourceStore,this.workspace.websiteId??null,{websitePin:command.websitePin,pageLabels:false,signal}));
+    store=scopedResearchStore(sourceStore,snapshot.metadata);
+   }else snapshot=await publicationSnapshot(store,this.workspace,command.snapshotId,command.websitePin);
+   const metadata=snapshot.metadata;
    if(metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
    const response={workspaceId:command.workspaceId,snapshotId:command.snapshotId,websitePin:snapshot.websitePin},projectIds=new Map(metadata.notebooks.map(n=>[n.id,n.projectId])),needle=command.search?.trim().toLocaleLowerCase();
    const documents=(rows,options={})=>store.queryDocuments(rows,metadata,{signal,search:false,cardSources:true,publication:true,...options});

@@ -20,7 +20,7 @@ test('create two independent websites, edit and publish their own saved content 
  const manager=async()=>page.locator('.website-site-context').getByRole('button',{name:'Websites',exact:true}).click();
  const open=async name=>{await page.locator('section.panel').filter({has:page.getByRole('heading',{name,exact:true})}).getByRole('button',{name:'Website editor',exact:true}).click();await expect(page.locator('.website-site-context')).toContainText(name);};
  try{
-  await page.goto(app.url);await navigate(page,'Website editor');await manager();await create('Research journal');
+  await page.goto(app.url);await navigate(page,'Website editor');await expect(page.locator('.website-site-context')).toBeVisible();await manager();await create('Research journal');
   await task(page,'Site');await page.getByLabel('Website title',{exact:true}).fill('Research journal title');
   await task(page,'Content');await expect(page.locator('[data-publish-entry]')).not.toHaveCount(0);await expect(page.locator('[data-publish-entry="'+record.id+'"]').first()).not.toBeChecked();await page.locator('[data-publish-entry="'+record.id+'"]').check();
   await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
@@ -50,7 +50,7 @@ test('create two independent websites, edit and publish their own saved content 
    await published.locator('a[href$="entries/'+record.id+'.html"]').first().click();
    await expect(published.getByRole('heading',{name:'Research journal record',exact:true})).toBeVisible();
   }finally{await published.close();}
-  await navigate(page,'Website editor');await expect(page.locator('.website-site-context')).toContainText('Workspace website');await expect(page.frameLocator('#website-draft-preview').locator('body')).toContainText(project.title);await page.screenshot({path:info.outputPath('project-website.png'),fullPage:false});
+  await navigate(page,'Website editor');await expect(page.locator('.website-site-context')).toBeVisible();await expect(page.locator('.website-site-context')).toContainText('Workspace website');await expect(page.frameLocator('#website-draft-preview').locator('body')).toContainText(project.title);await page.screenshot({path:info.outputPath('project-website.png'),fullPage:false});
   await page.setViewportSize({width:390,height:844});await expect(page.locator('.website-site-context')).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:info.outputPath('project-website-narrow.png'),fullPage:false});
   const after=await f.workspace.read();expect(after.book.entries).toEqual(original.book.entries);expect(after.book.website).toEqual(original.book.website);expect((await new WebsiteSites(f.workspace).list()).sites.filter(site=>site.id!==null)).toHaveLength(2);expect(errors).toEqual([]);
  }finally{await page.close();await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
@@ -64,10 +64,10 @@ test('default and named website editors save independently and refresh their own
   const book=createNotebook('Publishing workspace');fixture=await encryptedFixture(directory,book);const sites=new WebsiteSites(fixture.workspace),ids=[];
   for(const name of ['Field journal','Course website'])ids.push((await sites.change({workspaceId:book.id,etag:(await fixture.workspace.outline()).etag,operation:'create',name})).id);
   app=await startServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(directory,'preferences.json'),port:0});
-  await page.goto(app.url);await navigate(page,'Website editor');
+  await page.goto(app.url);await navigate(page,'Website editor');await expect(page.locator('.website-site-context')).toBeVisible();
   const research=await fixture.workspace.outline(),defaultBefore=await sites.read(null);await task(page,'Site');await page.getByLabel('Website title',{exact:true}).fill('Default website title');
-  const defaultSave=page.waitForRequest(request=>new URL(request.url()).pathname==='/api/websites/save');await page.getByRole('button',{name:'Save website',exact:true}).click();
-  const defaultCommand=(await defaultSave).postDataJSON();expect(defaultCommand.id).toBeNull();expect(defaultCommand.command.websitePin).toEqual(defaultBefore.websitePin);await expect(page.locator('#save-status')).toHaveText('Saved');
+  const defaultSave=page.waitForRequest(request=>new URL(request.url()).pathname==='/api/websites/editor/save');await page.getByRole('button',{name:'Save website',exact:true}).click();
+  const defaultCommand=(await defaultSave).postDataJSON();expect(defaultCommand.websiteId).toBeNull();expect(defaultCommand.websitePin).toEqual(defaultBefore.websitePin);expect(defaultCommand.draftId).toEqual(expect.any(String));expect(defaultCommand.expectedRevision).toMatch(/^[a-f0-9]{64}$/);await expect(page.locator('#save-status')).toHaveText('Saved');
   expect((await sites.read(null)).book.website.title).toBe('Default website title');expect((await fixture.workspace.outline()).etag).toBe(research.etag);second=await page.context().newPage();
   const pages=[page,second],titles=['Field journal title','Course website title'];
   for(const [index,editor] of pages.entries()){

@@ -80,6 +80,7 @@ import {RecordTypeQuery} from './record-type-query.js';
 import {DashboardDiscovery} from './dashboard-discovery.js';
 import {workspaceJobs,websitePublisher} from './workspace-jobs.js';
 import {WebsiteSites} from './website-sites.js';
+import {WebsiteEditor} from './website-editor.js';
 import {websiteWorkspace,websiteJobQueue,websiteRequest} from './website-workspace.js';
 import {jobSummary} from './jobs.js';
 import {databaseStatus,databaseCapacity} from './postgres.js';
@@ -778,6 +779,14 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       }
       if(req.method==='POST'&&url.pathname.startsWith('/api/websites/')){
         const data=await body(req);if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');const sites=new WebsiteSites(workspace),operation=url.pathname.slice('/api/websites/'.length);
+        if(operation.startsWith('editor/')){
+          const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
+          try{
+            const result=await new WebsiteEditor(workspace).execute(operation.slice(7),data,{signal:controller.signal});
+            if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');if((await status(client)).locked)throw new AppError('ACCESS_LOCKED');
+            return json(result);
+          }finally{res.off('close',abort);}
+        }
         if(operation==='list')return json(await sites.list(data));
         if(operation==='open')return json(await sites.read(data.id,{websitePin:data.websitePin}));
         if(operation==='version')return json(await sites.version(data.id,{websitePin:data.websitePin}));
@@ -1241,15 +1250,15 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       }
       if(req.method==='POST'&&url.pathname==='/api/design-preview'){
         const data=await body(req),controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
-        try{const result=await publicationDesignPreview(workspace,data,{signal:controller.signal,blockedValues,sourceReader}),id=randomBytes(32).toString('hex');designCandidates.set(id,result.candidate);return json({url:`/preview/${id}/${result.defaultPage}`,baseUrl:`/preview/${id}/`,defaultPage:result.defaultPage,source:result.source,pages:result.candidate.pages,...(result.websitePin?{websitePin:result.websitePin}:{}),...(result.editor?{editor:result.editor}:{})});}finally{res.off('close',abort);}
+        try{const result=await publicationDesignPreview(workspace,data,{signal:controller.signal,blockedValues,sourceReader}),id=randomBytes(32).toString('hex');designCandidates.set(id,result.candidate);return json({url:`/preview/${id}/${result.defaultPage}`,baseUrl:`/preview/${id}/`,defaultPage:result.defaultPage,source:result.source,pages:result.candidate.pages,...(result.websitePin?{websitePin:result.websitePin}:{}),...(result.websiteDraft?{websiteDraft:result.websiteDraft}:{}),...(result.editor?{editor:result.editor}:{})});}finally{res.off('close',abort);}
       }
       if(req.method==='POST'&&url.pathname==='/api/appearance-preview'){
         const data=await body(req),controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
         try{
-          const {book,source,websitePin}=await appearancePreviewSource(workspace,data,{signal:controller.signal,sourceReader});
+          const {book,source,websitePin,websiteDraft}=await appearancePreviewSource(workspace,data,{signal:controller.signal,sourceReader});
           if(source==='website')return json(await appearancePreviews.create(workspace,{...data,websitePin,mode:'website'},{signal:controller.signal,media,fonts:new WorkspaceFonts(workspace),blockedValues,sourceReader,client}));
           const fontFiles=await new WorkspaceFonts(workspace).files(book.appearance,{preview:true,signal:controller.signal}),result=buildDesignExamples(book.appearance,{blockedValues,fontFiles}),id=randomBytes(32).toString('hex');
-          controller.signal.throwIfAborted();designCandidates.set(id,result.candidate);return json({url:`/preview/${id}/${result.defaultPage}`,baseUrl:`/preview/${id}/`,defaultPage:result.defaultPage,source,websitePin,pages:result.candidate.pages});
+          controller.signal.throwIfAborted();designCandidates.set(id,result.candidate);return json({url:`/preview/${id}/${result.defaultPage}`,baseUrl:`/preview/${id}/`,defaultPage:result.defaultPage,source,websitePin,...(websiteDraft?{websiteDraft}:{}),pages:result.candidate.pages});
         }finally{res.off('close',abort);}
       }
       if (req.method === 'POST' && url.pathname === '/api/export' || req.method==='GET' && /^\/api\/export\/[a-f0-9]{64}$/.test(url.pathname)) {

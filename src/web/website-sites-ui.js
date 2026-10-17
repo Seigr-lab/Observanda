@@ -7,26 +7,27 @@ const tr=key=>t('websiteSites',key);
 
 // Owns website navigation and the research/presentation boundary. The editor
 // receives one website draft; the navigation keeps the full project hierarchy.
-export function websiteSitesUI({state,api,esc,field,showDialog,render,rootSnapshot,adopt,selection,ready,access=operation=>operation(),enterOwner}){
+export function websiteSitesUI({state,api,esc,field,showDialog,render,rootSnapshot,adopt,selection,ready,documents,access=operation=>operation(),enterOwner}){
  let base=null,owner=null,generation=0;
  const directory=websiteDirectoryUI({state,api,esc,access,open:async item=>{await exit();await enterOwner(item.projectId,item.labBookId);await show(item.siteId);}});
- const sync=()=>{if(owner!==researchContext(state)){owner=researchContext(state);base=null;state.websiteId=null;state.websitePin=null;state.website=null;}};
+ const sync=()=>{if(owner!==researchContext(state)){owner=researchContext(state);base=null;state.websiteId=null;state.websitePin=null;state.website=null;state.websiteEditor=null;documents.stop();}};
  const root=()=>{sync();return base?.book??state.book;};
  const button=(key,action,extra='')=>`<button type="button" class="button" data-action="${action}" ${extra}>${esc(tr(key))}</button>`;
  async function enter(id){
   sync();const request=++generation;if(activeWebsite(state)&&(state.websiteId??null)===(id??null))return;
   const context=owner;
   const original=await rootSnapshot();
-  const result=await api('/api/websites/open',{id:id??null},{adopt:false});
+  const version=await api('/api/websites/version',{id:id??null},{adopt:false});
+  const result=await documents.open({websiteId:id??null,websitePin:version.websitePin,base:original});
   if(context!==researchContext(state)||request!==generation)throw {name:'AbortError'};
   base=original;state.websiteId=id??null;state.website=result.site??null;state.preview=null;state.publishing=null;
-  selection.reset();adopt(result);if(result.site)selection.load(result.site.selection,result.selectionProjects);
+  selection.reset();adopt(result);if(result.site)selection.load(result.site.selection,result.selectionProjects);documents.installed();
  }
  async function exit(){
   sync();const request=++generation;if(!activeWebsite(state))return;
   const context=owner,result=await rootSnapshot();
   if(context!==researchContext(state)||request!==generation)throw {name:'AbortError'};
-  base=null;state.websiteId=null;state.websitePin=null;state.website=null;state.preview=null;state.publishing=null;selection.reset();adopt(result);
+  documents.stop();base=null;state.websiteId=null;state.websitePin=null;state.website=null;state.websiteEditor=null;state.preview=null;state.publishing=null;selection.reset();adopt(result);
  }
  async function show(id,page='website'){
   await enter(id);Object.assign(state,{page,project:null,notebook:'all',selected:null});await ready(page);render();
@@ -58,6 +59,7 @@ export function websiteSitesUI({state,api,esc,field,showDialog,render,rootSnapsh
    form.dataset.busy='true';const button=form.querySelector('[type=submit]');button.disabled=true;
    const id=form.dataset.site,name=data.get('name').trim(),context=researchContext(state);
    try{
+    if(id&&documents.enabled()){await documents.perform([{type:'settings',path:['name'],value:name}]);document.querySelector('#dialog').close();render();return true;}
     const destination=id?state.projectOwner?.labBookId?{projectId:state.projectOwner.projectId,labBookId:state.projectOwner.labBookId}:state.projectOwner?.projectId??null:null;
     const read=()=>workspaceReader((route,body,options)=>api(route,body,{...options,adopt:false,owner:destination})).read({metadataOnly:true,requireOutline:true});
     const snapshot=id?{book:state.book,etag:state.etag}:await access(read);if(context!==researchContext(state))throw {name:'AbortError'};

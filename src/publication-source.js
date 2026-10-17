@@ -1,3 +1,9 @@
+import {websiteEditorProjection} from './website-editor-projection.js';
+import {validateWebsiteDocument,websiteDocumentHeader} from './website-document-validation.js';
+import {WebsiteDocumentStore} from './website-document-store.js';
+import {websiteBook} from './web/website-sites-model.js';
+import {validWebsitePin} from './web/website-pin.js';
+import {validWebsiteDraftPin} from './web/website-draft-pin.js';
 import {publicationWorkspace,publicationSnapshot} from './publication-pin.js';
 import {projectWebsiteAttachmentChoices} from './website-selection-admission.js';
 import {publicationRevisionCurrent} from './publication-freshness.js';
@@ -94,9 +100,12 @@ async function* selectedPublicationInventories(store,snapshot,options){
  }
 }
 
-export async function publicationSource(workspace,{etag,websitePin,book,workspaceId,draft},{signal,consume,page,inventory=false}={}){
+export async function publicationSource(workspace,{etag,websitePin,websiteDraft,book,workspaceId,draft},{signal,consume,page,inventory=false}={}){
  signal?.throwIfAborted();
  workspace=publicationWorkspace(workspace);
+ if(websiteDraft!==undefined&&!validWebsiteDraftPin(websiteDraft))throw new AppError('INVALID');
+ if(websitePin?.websiteRevision&&book===undefined&&draft===undefined)return websiteDocumentPublicationSource(workspace,{etag,websitePin,websiteDraft,workspaceId},{signal,consume,page,inventory});
+ if(websiteDraft!==undefined)throw new AppError('INVALID');
  const current=await workspace.currentOutline();
  if(workspaceId!==undefined&&workspaceId!==current.metadata.id)throw new AppError('WORKSPACE_CHANGED');
  if(!await publicationRevisionCurrent(workspace,{etag,websitePin},{current}))throw new AppError('CONFLICT');
@@ -125,5 +134,28 @@ export async function publicationSource(workspace,{etag,websitePin,book,workspac
   const selection=draft?.selection??snapshot.websiteSelection,paging=publicationSelectionPage(store,{snapshotId:etag,websiteId:workspace.websiteId,websitePin:snapshot.websitePin,metadata,selection},page);
   const options={signal,metadata,selection,page:paging.page};
   return consume?consume(metadata,(inventory?selectedPublicationInventories:selectedPublicationRecords)(store,snapshot,options),{sourceEtag:etag,websitePin:snapshot.websitePin,nextCursor:paging.nextCursor}):selectedPublicationBook(store,snapshot,options);
+ });
+}
+
+async function websiteDocumentPublicationSource(workspace,{etag,websitePin,websiteDraft,workspaceId},{signal,consume,page,inventory}){
+ const id=workspace.websiteId??null,base=workspace.baseWorkspace??workspace;
+ if(!validWebsitePin(websitePin)||websitePin.websiteId!==id||websitePin.researchSnapshotId!==etag)throw new AppError('INVALID');
+ if(!await publicationRevisionCurrent(workspace,{etag,websitePin}))throw new AppError('CONFLICT');
+ return base.catalogue(async store=>{
+  const projected=await websiteEditorProjection(store,id,{websitePin,websiteDraft,pageLabels:false,signal});
+  if(workspaceId!==undefined&&workspaceId!==projected.metadata.id)throw new AppError('WORKSPACE_CHANGED');
+  const raw=await store.snapshot(etag);
+  // Selection/inventory pages consume labels, not the website's page bodies.
+  // Full preparation still passes the complete document to its retained-input
+  // owner, after one streaming semantic admission of an unsaved draft.
+  if(websiteDraft&&!page&&!inventory){
+   const previous=await websiteDocumentHeader((await new WebsiteDocumentStore(store).document(id,websitePin)).document,{signal});
+   await validateWebsiteDocument(store,raw,projected.document,{signal,previous});
+  }
+  const site=page||inventory?projected.site:await projected.document.tree.read(projected.document.root);
+  const metadata=page||inventory?projected.metadata:websiteBook(raw.metadata,site),selection=site.selection;
+  const snapshot={...raw,metadata,websiteSelection:selection,websitePin};
+  const paging=publicationSelectionPage(store,{snapshotId:etag,websiteId:id,websitePin,websiteDraft,metadata,selection},page),options={signal,metadata,selection,page:paging.page};
+  return consume?consume(metadata,(inventory?selectedPublicationInventories:selectedPublicationRecords)(store,snapshot,options),{sourceEtag:etag,websitePin,nextCursor:paging.nextCursor}):selectedPublicationBook(store,snapshot,options);
  });
 }

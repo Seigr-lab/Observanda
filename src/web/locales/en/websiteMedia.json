@@ -56,5 +56,8 @@
   "fileIntegrity": "File size and SHA-256",
   "bytes": "bytes",
   "downloadOriginal": "Download original",
-  "fileProgress": "Checking original file: {done} of {total}"
+  "fileProgress": "Checking original file: {done} of {total}",
+  "loading": "Loading media?",
+  "loadFailed": "Could not load media.",
+  "retry": "Retry"
 }

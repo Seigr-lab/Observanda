@@ -1,3 +1,5 @@
+import {websitePagePicker} from './website-page-picker.js';
+import {websiteDocumentPages} from './website-document-pages.js';
 import {websiteSnapshot} from './website-context.js';
 import {ownedAssetURL} from './project-context.js';
 import {logosFor} from './branding.js';
@@ -7,25 +9,28 @@ const text=(key,parameters)=>t('branding',key,parameters);
 
 // Branding owns presentation metadata. Record bodies belong to the record
 // editor; scope discovery and direct links need only one page or one label.
-export function brandingUI({state,api,esc,field,option,showDialog,render,dirty,leave,report,uploading}){
+export function brandingUI({state,api,esc,field,option,showDialog,render,dirty,leave,report,uploading,documents}){
  const active=()=>state.page==='branding'&&!state.access?.locked&&!state.storageUnavailable&&!state.newWorkspace;
+ const nativePage=()=>documents?.enabled()&&target().startsWith('page:');
  const target=()=>state.brandTarget??'home';
- const key=()=>JSON.stringify([websiteSnapshot(state),state.book?.id,target()]);
+ const key=()=>JSON.stringify([websiteSnapshot(state),state.book?.id,target(),documents?.enabled()?documents.viewKey():null]);
+ const pages=websitePagePicker({state,api,esc,field,showDialog,documents,active,kinds:['site'],structurePages:options=>websiteDocumentPages(documents,state.book,{...options,kind:'page'}),onChoose:item=>{state.brandTarget=item.target;render();}});
  const picker=researchTargetPicker({state,api,esc,field,showDialog,active,excludeId:()=>null});
  let label=null,controller=null;
- function stop(){controller?.abort();controller=null;label=null;picker.stop();}
- function sync(){picker.sync();if(!active()){stop();return;}if(label?.key!==key()){controller?.abort();controller=null;label=null;}}
+ function stop(){controller?.abort();controller=null;label=null;picker.stop();pages.close();}
+ function sync(){picker.sync();pages.sync();if(!active()){stop();return;}if(label?.key!==key()){controller?.abort();controller=null;label=null;}}
  function editableLogos(scope=target()){
   let branding=state.book.branding.find(b=>b.target===scope);
   if(!branding){branding={target:scope,logos:structuredClone(logosFor(state.book,scope))};state.book.branding.push(branding);}
   return branding.logos;
  }
  async function loadLabel(){
-  controller?.abort();const request=controller=new AbortController(),stamp=key(),id=target().slice(6),workspaceId=state.book.id,etag=state.etag;
+  controller?.abort();const request=controller=new AbortController(),stamp=key(),id=target().slice(nativePage()?5:6),workspaceId=state.book.id,etag=state.etag;
   label={key:stamp,loading:true};
   try{
    let record;
-   if(state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion===21){
+   if(nativePage())record=(await documents.item('pages',id,{signal:request.signal,retain:false})).value;
+   else if(state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion===21){
     const result=await api('/api/workspace/read/labels',{workspaceId,etag,ids:[id]},{adopt:false,signal:request.signal});
     if(result.workspaceId!==workspaceId||result.etag!==etag||!Array.isArray(result.records)||!Array.isArray(result.missing)||result.records.length+result.missing.length!==1||result.records.some(r=>r.id!==id||typeof r.title!=='string'||!state.book.notebooks.some(n=>n.id===r.notebookId))||result.missing.some(value=>value!==id))throw Error(text('invalid'));
     record=result.records[0];
@@ -38,7 +43,7 @@ export function brandingUI({state,api,esc,field,option,showDialog,render,dirty,l
  function bind(){
   sync();if(!active())return;
   const input=document.querySelector('input[data-upload="branding"]'),imports=input?.parentElement.querySelector('[data-action="media-import-open"]');if(imports)imports.disabled=input.disabled;
-  if(target().startsWith('entry:')&&!label)void loadLabel();
+  if((target().startsWith('entry:')||nativePage())&&!label)void loadLabel();
  }
  function chooseRecord(){
   picker.open({title:text('pickRecord'),recordsOnly:true,onChoose:async(item,{stillCurrent})=>{
@@ -49,7 +54,7 @@ export function brandingUI({state,api,esc,field,option,showDialog,render,dirty,l
   if(picker.input(el))return true;
   if(!active())return false;
   if(el.id==='branding-target'){
-   const choice=el.value;el.value=target();leave.run(()=>{if(choice==='record-picker')chooseRecord();else{state.brandTarget=choice;render();}}).catch(report);return true;
+   const choice=el.value;el.value=target();leave.run(()=>{if(choice==='record-picker')chooseRecord();else if(choice==='page-picker')pages.open(null,{title:text('choosePage'),returnFocus:'#branding-target'});else{state.brandTarget=choice;render();}}).catch(report);return true;
   }
   if(el.dataset.logoAlt!==undefined){const logo=editableLogos()[Number(el.dataset.logoAlt)];if(logo){logo.alt=el.value;dirty();}return true;}
   return false;
@@ -66,13 +71,13 @@ export function brandingUI({state,api,esc,field,option,showDialog,render,dirty,l
   return false;
  }
  function acceptAsset(scope,asset){
-  if(!active()||scope!==target()||scope.startsWith('entry:')&&(!label||label.key!==key()||label.loading||label.error||label.missing))throw Error(text('invalid'));
+  if(!active()||scope!==target()||(scope.startsWith('entry:')||nativePage())&&(!label||label.key!==key()||label.loading||label.error||label.missing))throw Error(text('invalid'));
   const logos=editableLogos(scope);if(logos.some(a=>a.id===asset.id))return;if(logos.length>=4)throw Error(text('limit'));logos.push({id:asset.id,alt:''});
  }
  function view(){
-  sync();const scope=target(),logos=logosFor(state.book,scope),record=scope.startsWith('entry:'),ready=!record||label&&!label.loading&&!label.error&&!label.missing;
-  const choices=[option('home',text('home'),scope),...['project','notebook','page'].flatMap(kind=>state.book[kind==='project'?'projects':kind==='notebook'?'notebooks':'pages'].map(item=>option(kind+':'+item.id,text(kind,{title:item.title}),scope)))];
-  if(record)choices.push(option(scope,text('record',{title:label?.title??text('selectedRecord')}),scope));choices.push(option('record-picker',text('chooseRecord'),scope));
+  sync();const scope=target(),logos=logosFor(state.book,scope),record=scope.startsWith('entry:')||nativePage(),ready=!record||label&&!label.loading&&!label.error&&!label.missing;
+  const choices=[option('home',text('home'),scope),...(documents?.enabled()?['project','notebook']:['project','notebook','page']).flatMap(kind=>state.book[kind==='project'?'projects':kind==='notebook'?'notebooks':'pages'].map(item=>option(kind+':'+item.id,text(kind,{title:item.title}),scope)))];
+  if(record)choices.push(option(scope,text(nativePage()?'page':'record',{title:label?.title??text('selectedRecord')}),scope));if(documents?.enabled())choices.push(option('page-picker',text('choosePage'),scope));choices.push(option('record-picker',text('chooseRecord'),scope));
   const back=state.brandReturn?.startsWith('#/website')?'backWebsite':!state.brandReturn||state.brandReturn.startsWith('#/preferences')?'backAppearance':'backPrevious';
   return `<div class="page-heading"><div><button class="button branding-return" data-action="branding-back">${esc(text(back))}</button><h1>${esc(text('title'))}</h1><p class="subtitle">${esc(text('description'))}</p></div></div>
    <section class="panel">${field(esc(text('scope')),`<select id="branding-target">${choices.join('')}</select>`)}

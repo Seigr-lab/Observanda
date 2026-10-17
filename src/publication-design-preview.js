@@ -1,5 +1,5 @@
 // Build an editor preview from its explicitly supplied content owner.
-import {websitePreviewSource} from './website-preview-source.js';
+import {websitePreviewSource,websiteDocumentPreviewSource} from './website-preview-source.js';
 import {websitePreview,renderWebsitePreview} from './website-preview.js';
 import {WorkspaceFonts} from './workspace-fonts.js';
 import {MediaStore} from './media.js';
@@ -11,8 +11,12 @@ import {publicProjection,buildPublication} from './publication.js';
 import {AppError} from './errors.js';
 export async function publicationDesignPreview(workspace,data,{signal,blockedValues=[],sourceReader}={}){
  const mode=data.mode??'auto';if(!['auto','examples','website'].includes(mode))throw new AppError('INVALID');
- let book,context,previewMedia,editor,websitePin;
- if(Object.hasOwn(data,'draft')){
+ let book,context,previewMedia,editor,websitePin,websiteDraft;
+ if(Object.hasOwn(data,'websitePin')&&!Object.hasOwn(data,'draft')&&!Object.hasOwn(data,'book')){
+  if(Object.keys(data).some(key=>!['websitePin','websiteDraft','mode','designTarget','designPageId','workspaceContent','referenceCursor','collections'].includes(key))||mode!=='website'||data.workspaceContent!==true||!data.designTarget)throw new AppError('INVALID');
+  websiteDraft=data.websiteDraft===undefined?undefined:structuredClone(data.websiteDraft);
+  ({metadata:book,context,media:previewMedia,editor,websitePin}=await websiteDocumentPreviewSource(workspace,{...data,...(websiteDraft?{websiteDraft}:{})},{designTarget:data.designTarget,referenceCursor:data.referenceCursor,collections:data.collections,signal,sourceReader}));
+ }else if(Object.hasOwn(data,'draft')){
   if(Object.keys(data).some(key=>!['draft','websitePin','mode','designTarget','designPageId','workspaceContent','referenceCursor','collections'].includes(key))||mode!=='website'||data.workspaceContent!==true||!data.designTarget)throw new AppError('INVALID');
   ({metadata:book,context,media:previewMedia,editor,websitePin}=await websitePreviewSource(workspace,data.draft,{websitePin:data.websitePin,designTarget:data.designTarget,referenceCursor:data.referenceCursor,collections:data.collections,signal,sourceReader}));
  }else if(data.book){if(workspace.websiteId)throw new AppError('INVALID');book=upgradeNotebook(data.book);}
@@ -23,5 +27,5 @@ export async function publicationDesignPreview(workspace,data,{signal,blockedVal
  const canvas=source==='website'&&workspaceContent&&designTarget,fonts=new WorkspaceFonts(workspace),media=previewMedia??new MediaStore(workspace),fontFiles=canvas?new Map():await fonts.files(source==='examples'?book.appearance:publicProjection(book,{designPageId,designTarget,workspaceContent}),{preview:true});
  signal?.throwIfAborted();
  const result=canvas?{candidate:await (context?renderWebsitePreview:websitePreview)(context??book,{designTarget,blockedValues,media,fonts,signal})}:source==='examples'?buildDesignExamples(book.appearance,{blockedValues,fontFiles}):{candidate:buildPublication(book,{blockedValues,fontFiles,designPageId,designTarget,workspaceContent,mediaFiles:await media.publicFiles(book,{streamed:true,designPageId,designTarget,workspaceContent})})};
- signal?.throwIfAborted();const defaultPage=result.defaultPage??result.candidate.defaultPage;if(!defaultPage)throw new AppError('PUBLICATION_EMPTY');return {...result,defaultPage,source,...(websitePin?{websitePin}:{}),...(editor?{editor}:{})};
+ signal?.throwIfAborted();const defaultPage=result.defaultPage??result.candidate.defaultPage;if(!defaultPage)throw new AppError('PUBLICATION_EMPTY');return {...result,defaultPage,source,...(websitePin?{websitePin}:{}),...(websiteDraft?{websiteDraft}:{}),...(editor?{editor}:{})};
 }

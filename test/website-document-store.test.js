@@ -5,6 +5,7 @@ import {createNotebook,validateCatalogueMetadata} from '../src/model.js';
 import {websiteDocument} from '../src/web/website-sites-model.js';
 import {validWebsiteSelection} from '../src/web/website-selection.js';
 import {WebsiteDocumentStore} from '../src/website-document-store.js';
+import {WebsiteEditorStore} from '../src/website-editor-store.js';
 import {readWebsiteDocumentRegistry,websiteDocumentLocks} from '../src/website-document-registry.js';
 import {catalogueFormat,catalogueRequiresDomains,catalogueRequiresSettings,catalogueRequiresWebsites,requireWebsiteDocuments,requireWorkspaceDomains,requireWorkspaceSettings,requireRecordResultIndexes} from '../src/catalogue-format.js';
 import {digest,serialize} from '../src/storage-format.js';
@@ -17,7 +18,7 @@ function fixture({projectId=null,legacySite=false,populated=false}={}){
  const metadata=createNotebook('Website document fixture'),states=new Map(),snapshots=new Map(),key=randomBytes(32),queries=[];let head,version=3,writes=0;
  if(populated)metadata.projects=[{id:randomUUID(),title:'Retained project',description:'',share:true,logoId:null}];
  if(legacySite)metadata.websites=[site(metadata,'Earlier inline website')];
- const advance=(snapshot={metadata})=>{head=digest(serialize(snapshot));snapshots.set(head,structuredClone(snapshot));return head;};advance();
+ const advance=(snapshot={metadata})=>{snapshot={records:[],...snapshot};head=digest(serialize(snapshot));snapshots.set(head,structuredClone(snapshot));return head;};advance();
  const range=args=>[...states.keys()].filter(key=>(!args[0]||key>=args[0])&&(!args[1]||key<args[1])&&(!args[2]||key>args[2])).sort();
  const db={id:randomUUID(),
   async all(sql,...args){queries.push(sql);if(sql==='SELECT version FROM catalogue_format')return [{version}];if(sql.startsWith('SELECT slot,payload FROM state WHERE slot=ANY'))return args[0].filter(slot=>states.has(slot)).map(slot=>({slot,payload:states.get(slot)}));assert.fail(sql);},
@@ -34,6 +35,7 @@ function fixture({projectId=null,legacySite=false,populated=false}={}){
    if(sql.startsWith('ALTER TABLE catalogue_format')||sql.startsWith('CREATE INDEX records_scope_revision'))return;
    if(sql.startsWith('UPDATE catalogue_format')){version=Math.max(version,args[0]);return;}
    if(sql.startsWith('INSERT INTO state')){for(let i=0;i<args.length;i+=2){if(states.has(args[i])&&!sql.includes('ON CONFLICT'))throw Object.assign(Error('Duplicate state'),{code:'23505'});states.set(args[i],Buffer.from(args[i+1]));}return;}
+   if(sql==='DELETE FROM state WHERE slot=$1'){states.delete(args[0]);return;}
    if(sql==='UPDATE state SET payload=$1 WHERE slot=$2'){states.set(args[1],Buffer.from(args[0]));return;}
    assert.fail(sql);
   },
@@ -41,7 +43,7 @@ function fixture({projectId=null,legacySite=false,populated=false}={}){
  };
  const store={db,workspace:{projectId,labBookId:null},async head(){return head;},async snapshot(id=head){const value=snapshots.get(id);if(!value)throw Object.assign(Error('Missing snapshot'),{code:'RECORD_HISTORY_MISSING'});return structuredClone(value);},
   encode(kind,id,value){return seal(Buffer.from(serialize(value)),key,metadata.id+'/'+kind+'/'+id);},decode(kind,id,value){if(!value)throw Object.assign(Error('Missing value'),{code:'CATALOGUE_DAMAGED'});return JSON.parse(unseal(value,key,metadata.id+'/'+kind+'/'+id).toString());},
-  async validateMetadata(_before,value){validateCatalogueMetadata(value);},async member(){return null;}
+  async validateMetadata(_before,value){validateCatalogueMetadata(value);},async member(){return null;},async *members(snapshot){yield* snapshot.records;},async *queryDocuments(rows){for await(const row of rows)assert.fail('Unexpected fixture record '+row.id);}
  };
  return {store,states,snapshots,metadata,queries,advance,get writes(){return writes;},close(){key.fill(0);}};
 }
@@ -117,4 +119,14 @@ test('default internal UUID cannot select named ownership and live heads must ma
  const original=await f.store.snapshot(f.current);f.advance({...original,metadata:{...original.metadata,projects:[],notebooks:[]}});
  assert.deepEqual((await owner.read(null,{researchSnapshotId:f.current,websiteRevision:current.websiteRevision})).site,current.site);
  await assert.rejects(owner.verify(),{code:'CATALOGUE_DAMAGED'});
+});
+
+
+test('first selected edit accepts an unchanged inline reader and rejects it after a separate saved edit',async t=>{
+ const f=await initialized(t),editor=new WebsiteEditorStore(f.store),websitePin={researchSnapshotId:f.original,websiteId:null,websiteRevision:null};
+ const command={websitePin,draftId:null,expectedRevision:null,commandId:randomUUID(),operations:[{type:'settings',path:['document','website','footer'],value:'New selected footer'}]};
+ const draft=await editor.change(null,command);assert.notEqual(draft.websitePin.websiteRevision,null);assert.equal(draft.site.document.website.footer,'New selected footer');assert.deepEqual(await editor.change(null,command),draft);
+ await editor.discard(null,{draftId:draft.draft.id,expectedRevision:draft.draft.revision,commandId:randomUUID()});
+ const saved=await f.owner.read(null),changed=structuredClone(saved.site);changed.document.website.footer='Another tab saved';await f.owner.save(null,changed,{researchSnapshotId:f.current,expectedRevision:saved.websiteRevision});
+ await assert.rejects(editor.change(null,{...command,commandId:randomUUID()}),{code:'CONFLICT'});assert.equal((await f.owner.read(null)).site.document.website.footer,'Another tab saved');
 });

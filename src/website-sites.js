@@ -11,6 +11,7 @@ import {validWebsitePin} from './web/website-pin.js';
 import {SnapshotIndex} from './snapshot-index.js';
 import {serialize} from './storage-format.js';
 import {WebsiteDocumentStore} from './website-document-store.js';
+import {websiteDocumentHeader} from './website-document-validation.js';
 import {projectWebsiteAttachmentChoices} from './website-selection-admission.js';
 import {readWebsiteDocumentRegistry,websiteDocumentLocks} from './website-document-registry.js';
 import {defaultWebsiteSelection,mergeLegacyWebsiteSelection} from './website-owned-metadata.js';
@@ -99,6 +100,12 @@ export class WebsiteSites{
     document.pages=[];document.branding=[];id=randomUUID();
     const site={id,name,projectId:null,document,projects:snapshot.metadata.projects.map(({id,logoId})=>({id,share:true,logoId})),selection:{defaultShare:false,includeProjects:[],records:[]}};
     await this.validate(store,snapshot,null,site);return documents.create(site,{researchSnapshotId:head});
+   }
+   if(websitePin?.websiteRevision){
+    const current=await documents.document(id,{mutable:true}),site=await websiteDocumentHeader(current.document);
+    await new ProjectSourceAuthority(store).writable(site.projectId);
+    const expected=await this.expected(store,documents,id,{baseEtag:etag,websitePin},current),document=await current.document.property([],'name',name);
+    return documents.saveDocument(id,document,{researchSnapshotId:head,expectedRevision:expected,collectionIndexes:current.collectionIndexes,navigationProjection:current.navigationProjection});
    }
    const current=await documents.read(id);await new ProjectSourceAuthority(store).writable(current.site.projectId);const expected=await this.expected(store,documents,id,{baseEtag:etag,websitePin},current);
    const site={...current.site,name};await this.validate(store,snapshot,current.site,site);

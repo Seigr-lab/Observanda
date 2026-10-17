@@ -1,3 +1,4 @@
+import {sameWebsitePin} from './website-pin.js';
 import {REGION_SLOTS,resolveRegion} from './website-regions.js';
 import {publicationCollectionKey} from './publication-collections.js';
 import {canvasResourceLinks} from './website-canvas-resources.js';
@@ -20,7 +21,7 @@ function activeKeys(book,target){
 export class WebsiteCollectionNavigation{
  constructor(api){this.api=api;this.key=null;this.queries=new Map();this.documents=new WeakMap();this.pending=null;this.focus=null;}
  prepare(context,target,source,book){
-  const draft=source.draft,key=JSON.stringify([context,target,source.websitePin,draft?.baseEtag,draft?.changes,draft?.removed]);
+  const draft=source.draft,key=JSON.stringify([context,target,source.websitePin,source.websiteDraft,draft?.baseEtag,draft?.changes,draft?.removed]);
   if(key!==this.key){this.key=key;this.queries.clear();this.pending=null;this.focus=null;}
   const active=activeKeys(book,target);for(const key of this.queries.keys())if(!active.has(key))this.queries.delete(key);
   return {key,context:JSON.parse(context)[0],collections:[...this.queries.values()]};
@@ -42,13 +43,14 @@ export class WebsiteCollectionNavigation{
  }
  async fetch(doc,path,options,baseURL){
   const source=this.documents.get(doc),url=new URL(path,baseURL),key=url.searchParams.get('collection')??url.searchParams.get('feed');
-  if(!source?.command.draft||!key)return fetch(path,options);
+  if(!(source?.command.draft||source?.command.websitePin)||!key)return fetch(path,options);
   const root=[...doc.querySelectorAll('[data-public-feed]')].find(node=>JSON.parse(node.dataset.feedConfig).cursor?.query.key===key),definition=root&&JSON.parse(root.dataset.feedConfig).cursor.definition;
   if(!definition)return fetch(path,options);
   const pagePath=/^\/preview\/[a-f0-9]{64}(\/(?:index\.html|(?:entries|projects|notebooks|pages)\/[a-f0-9-]{36}\.html))$/;
   if(url.origin!==location.origin||!pagePath.test(url.pathname)||pagePath.exec(url.pathname)[1]!==pagePath.exec(new URL(baseURL).pathname)?.[1])throw Error('Invalid canvas destination');
   const request={key,query:url.searchParams.toString(),definition},collections=new Map(this.queries);collections.set(key,request);
   const result=await this.api('/api/design-preview',{...source.command,collections:[...collections.values()]},{adopt:false,signal:options.signal});
+  if(source.command.websitePin&&(!sameWebsitePin(result.websitePin,source.command.websitePin)||(result.websiteDraft?.id??null)!==(source.command.websiteDraft?.id??null)||(result.websiteDraft?.revision??null)!==(source.command.websiteDraft?.revision??null)))throw Error('Invalid canvas draft');
   const address=new URL(result.url,location.href),response=await fetch(address,{signal:options.signal});if(!response.ok)return response;
   const parsed=new DOMParser().parseFromString(await response.text(),'text/html');options.signal?.throwIfAborted();
   canvasResourceLinks(parsed,address.href,source.context);

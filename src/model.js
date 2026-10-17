@@ -1,5 +1,5 @@
 import {publicationPresentationTarget} from './web/publication-presentation-target.js';
-import {validDownloadInfo} from './web/website-file.js';
+import {validWebsitePage,validWebsiteNavigationItem,validWebsiteAsset,validWebsiteLayout,validWebsiteBranding} from './web/website-item-validation.js';
 import {calendarDate,validRecordDate,recordDateIssue} from './web/record-date.js';
 import {workflowIssues} from './web/record-workflow.js';
 import {validAttempt} from './web/attempt-model.js';
@@ -145,19 +145,19 @@ function validateBook(book,{reservedIds=[],entryTargets=[],websiteContexts}={}) 
   if (book.formatVersion >= 2) {
     check(validFont(a?.headingFont) && ['background', 'surface', 'text'].every(key => /^#[0-9a-f]{6}$/i.test(a?.[key])), 'appearance');
     const site = book.website;
-    check(keys(site, ['logoId', 'logoAlt', 'footer', 'navigation', ...(site.researchSources===undefined?[]:['researchSources']), ...(book.formatVersion >= 6 ? ['title','description','home'] : []), ...(book.formatVersion >= 7 ? ['design','assets'] : []), ...(book.formatVersion >= 8 ? ['layouts','templates'] : []), ...(book.formatVersion >= 10 ? ['typography'] : []), ...(book.formatVersion >= 11 ? ['presentation','palette'] : [])]) && (site.logoId === null || id(site.logoId)) && text(site.logoAlt, 160) && text(site.footer, 1500) && Array.isArray(site.navigation) && site.navigation.length <= 200 && site.navigation.every(item => keys(item, ['target', 'label', 'show', ...(book.formatVersion>=7&&item&&Object.hasOwn(item,'parent')?['parent']:[])]) && text(item.target, 100, true) && text(item.label, 160) && typeof item.show === 'boolean') && new Set(site.navigation.map(item => item.target)).size === site.navigation.length, 'website');
+    check(keys(site, ['logoId', 'logoAlt', 'footer', 'navigation', ...(site.researchSources===undefined?[]:['researchSources']), ...(book.formatVersion >= 6 ? ['title','description','home'] : []), ...(book.formatVersion >= 7 ? ['design','assets'] : []), ...(book.formatVersion >= 8 ? ['layouts','templates'] : []), ...(book.formatVersion >= 10 ? ['typography'] : []), ...(book.formatVersion >= 11 ? ['presentation','palette'] : [])]) && (site.logoId === null || id(site.logoId)) && text(site.logoAlt, 160) && text(site.footer, 1500) && Array.isArray(site.navigation) && site.navigation.length <= 200 && site.navigation.every(item => validWebsiteNavigationItem(item,{formatVersion:book.formatVersion})) && new Set(site.navigation.map(item => item.target)).size === site.navigation.length, 'website');
     if (book.formatVersion >= 11) {check(validPresentation(site.presentation), 'media presentation');check(validPalette(site.palette), 'website colors');}
     if (book.formatVersion >= 10) check(validTypography(site.typography), 'website typography');
     if (book.formatVersion >= 6) check(validWebsiteComposition(site,book.formatVersion>=7,book.formatVersion>=8,book.formatVersion>=9,book.formatVersion>=10,book.formatVersion>=12,book.formatVersion>=18), 'website composition');
     if (book.formatVersion >= 7) {
       check(Array.isArray(site.navigation)&&validMenuParents(site.navigation), 'menu hierarchy');
       check(validSiteLayout(site.design), 'website layout');
-      check(Array.isArray(site.assets)&&site.assets.length<=500&&new Set(site.assets.map(a=>a?.id)).size===site.assets.length&&site.assets.every(a=>keys(a,['id','kind','caption','alt','transcript',...(a.kind==='file'?['name','size','sha256']:[])])&&id(a.id)&&['image','audio','video','file'].includes(a.kind)&&(a.kind!=='file'||validDownloadInfo(a))&&text(a.caption,1500)&&text(a.alt,1500)&&text(a.transcript,60000)), 'website assets');
+      check(Array.isArray(site.assets)&&site.assets.length<=500&&new Set(site.assets.map(a=>a?.id)).size===site.assets.length&&site.assets.every(validWebsiteAsset), 'website assets');
     }
-    check(Array.isArray(book.pages) && book.pages.length <= 50 && book.pages.every(p => keys(p, ['id', 'title', 'body', 'share', ...(book.formatVersion>=7&&p&&Object.hasOwn(p??{},'sections')?['sections']:[])]) && (!Object.hasOwn(p??{},'sections')||validSections(p.sections,true,book.formatVersion>=8,book.formatVersion>=9,book.formatVersion>=10,book.formatVersion>=12)) && unique(p) && text(p.title, 160, true) && text(p.body, 60000) && typeof p.share === 'boolean'), 'pages');
+    check(Array.isArray(book.pages) && book.pages.length <= 50 && book.pages.every(p => validWebsitePage(p,{formatVersion:book.formatVersion}) && unique(p)), 'pages');
     if (book.formatVersion >= 8) {
       const targets=new Set(issues.length?[]:[...layoutTargets(book).map(t=>t.target),...entryTargets]);
-      check(Array.isArray(site.layouts)&&site.layouts.length<=1700&&new Set(site.layouts.map(l=>l?.target)).size===site.layouts.length&&site.layouts.every(l=>keys(l,['target','showHeading','heading','description','placement','sections'])&&(targets.has(l.target)||publicationPresentationTarget(site,l.target))&&typeof l.showHeading==='boolean'&&text(l.heading,180)&&text(l.description,1500)&&['before','after','replace'].includes(l.placement)&&(!l.target.startsWith('entry:')||l.placement!=='replace')&&validSections(l.sections,true,true,book.formatVersion>=9,book.formatVersion>=10,book.formatVersion>=12)), 'page layouts');
+      check(Array.isArray(site.layouts)&&site.layouts.length<=1700&&new Set(site.layouts.map(l=>l?.target)).size===site.layouts.length&&site.layouts.every(l=>validWebsiteLayout(l,{formatVersion:book.formatVersion})&&(targets.has(l.target)||publicationPresentationTarget(site,l.target))), 'page layouts');
       check(Array.isArray(site.templates)&&site.templates.length<=100&&site.templates.every(t=>keys(t,['id','name','sections'])&&id(t.id)&&text(t.name,80,true)&&validSections(t.sections,true,true,book.formatVersion>=9,book.formatVersion>=10,book.formatVersion>=12))&&new Set(site.templates.map(t=>t.id)).size===site.templates.length, 'page templates');
     }
     if (!issues.length) {
@@ -167,7 +167,7 @@ function validateBook(book,{reservedIds=[],entryTargets=[],websiteContexts}={}) 
   }
   if (book.formatVersion >= 3) {
     const targets = new Set(issues.length ? [] : [...brandingTargets(book).map(item => item.target),...entryTargets]);
-    check(Array.isArray(book.branding) && book.branding.length <= 1700 && book.branding.every(item => keys(item, ['target', 'logos']) && (targets.has(item.target)||publicationPresentationTarget(book.website,item.target)) && Array.isArray(item.logos) && item.logos.length <= 4 && item.logos.every(logo => keys(logo, ['id', 'alt']) && id(logo.id) && text(logo.alt, 160))) && new Set(book.branding.map(item => item.target)).size === book.branding.length, 'branding');
+    check(Array.isArray(book.branding) && book.branding.length <= 1700 && book.branding.every(item => validWebsiteBranding(item) && (targets.has(item.target)||publicationPresentationTarget(book.website,item.target))) && new Set(book.branding.map(item => item.target)).size === book.branding.length, 'branding');
   }
   if (book.formatVersion >= 4) {
     check(Array.isArray(book.themes) && book.themes.length <= 50 && book.themes.every(preset => keys(preset, ['id', 'name', 'appearance']) && unique(preset) && text(preset.name, 80, true) && validAppearance(preset.appearance)), 'themes');

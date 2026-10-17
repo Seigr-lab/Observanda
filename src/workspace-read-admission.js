@@ -6,6 +6,7 @@ import {recordStarterRequest} from './record-starter-requests.js';
 // catalogue, clearing its key, or retiring its folder.
 const get=new Set(['/api/dashboard','/api/notebook','/api/modules/data','/api/modules/version','/api/modules/history','/api/laboratory','/api/history','/api/media-policy','/api/fonts','/api/publishing']);
 const post=new Set([
+ ...['open','window','item'].map(name=>'/api/websites/editor/'+name),
  ...['version','start','page','changes','change-page','selection','labels','dashboard','dashboard-types','record-types','discovery','timeline','record-content','record-selectors'].map(name=>'/api/workspace/read/'+name),
  ...['items','item','labels','bom-source','inventory/dashboard','inventory/discovery','inventory/stock','inventory/ledger','planning/dashboard','planning/discovery','planning/readiness'].map(name=>'/api/modules/'+name),
  ...['query','open','history/list','history/read','runs','runs/comparison','writing/read','values/read','values/figures','values/figure-copy-choices','values/figure-copy-source','values/attempt-context','runs/prepare'].map(name=>'/api/research/records/'+name),

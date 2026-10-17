@@ -8,6 +8,7 @@ import {publicationRevisionCurrent} from './publication-freshness.js';
 import os from 'node:os';
 import {randomBytes} from 'node:crypto';
 import {WebsiteSites} from './website-sites.js';
+import {WebsiteEditor} from './website-editor.js';
 import {WebsiteResearch} from './website-research.js';
 import {WorkspaceEdits} from './workspace-edits.js';
 import {MediaStore} from './media.js';
@@ -52,13 +53,14 @@ export class ProjectPublications{
   const control=async(type,kind)=>{const job=await queue.read(data.id);if(!job||job.type!==type)throw new AppError('NOT_FOUND');await queue.authorize(job);if(kind==='status')return jobSummary(job);const next=await (type==='publication.deploy'?new DeploymentJobs(workspace,publisher,queue,{sourceReader,sourceAccess:this.entry.sourceAccess}).control(job.id,kind):queue.control(job.id,kind));if(kind==='cancel')worker.cancel(job.id);else worker.wake();return jobSummary(next);};
   if(operation.startsWith('websites/')){
    const sites=new WebsiteSites(storage),method=operation.slice(9);
+   if(method.startsWith('editor/')){const result=await new WebsiteEditor(storage).execute(method.slice(7),data,{signal});await check();return result;}
    if(method==='list')return sites.list(data);if(method==='open')return sites.read(data.id,{signal,websitePin:data.websitePin});if(method==='version')return sites.version(data.id,{websitePin:data.websitePin});if(method==='change')return sites.change(data);return sites.save(data.id,data.command);
   }
   if(operation==='workspace/save')return new WorkspaceEdits(storage,new MediaStore(storage)).save(data);
   if(operation.startsWith('website/research/'))return new WebsiteResearch(workspace).run(operation.slice(17),data,{signal});
   if(operation==='design-preview'){
    const result=await publicationDesignPreview(workspace,data,{signal,blockedValues,sourceReader}),id=randomBytes(32).toString('hex');this.designs.set(id,result.candidate);
-   return {url:this.previewUrl(id,result.defaultPage),baseUrl:this.previewUrl(id),defaultPage:result.defaultPage,source:result.source,pages:result.candidate.pages,...(result.websitePin?{websitePin:result.websitePin}:{}),...(result.editor?{editor:result.editor}:{})};
+   return {url:this.previewUrl(id,result.defaultPage),baseUrl:this.previewUrl(id),defaultPage:result.defaultPage,source:result.source,pages:result.candidate.pages,...(result.websitePin?{websitePin:result.websitePin}:{}),...(result.websiteDraft?{websiteDraft:result.websiteDraft}:{}),...(result.editor?{editor:result.editor}:{})};
   }
   if(operation==='appearance-preview'){
    const source=await appearancePreviewSource(workspace,data,{signal,sourceReader}),fonts=new WorkspaceFonts(workspace);
@@ -68,7 +70,7 @@ export class ProjectPublications{
     return {...result,baseUrl:this.appearanceUrl(id),url:this.appearanceUrl(id,result.defaultPage),pagesUrl:this.appearanceUrl(id,'pages')};
    }
    const fontFiles=await fonts.files(source.book.appearance,{preview:true,signal}),result=buildDesignExamples(source.book.appearance,{blockedValues,fontFiles}),id=randomBytes(32).toString('hex');
-   signal?.throwIfAborted();this.designs.set(id,result.candidate);return {url:this.previewUrl(id,result.defaultPage),baseUrl:this.previewUrl(id),defaultPage:result.defaultPage,source:source.source,websitePin:source.websitePin,pages:result.candidate.pages};
+   signal?.throwIfAborted();this.designs.set(id,result.candidate);return {url:this.previewUrl(id,result.defaultPage),baseUrl:this.previewUrl(id),defaultPage:result.defaultPage,source:source.source,websitePin:source.websitePin,...(source.websiteDraft?{websiteDraft:source.websiteDraft}:{}),pages:result.candidate.pages};
   }
   if(operation==='appearance-pages')return this.appearancePreviews.choices(request.id,{cursor:query.cursor??null,path:query.path??null,signal});
   if(operation==='appearance-file'){

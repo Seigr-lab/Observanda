@@ -14,11 +14,12 @@ export class AppearancePreviewSessions{
  constructor({maxSessions=5,cache=new DesignCandidates()}={}){this.maxSessions=maxSessions;this.cache=cache;this.sessions=new Map();}
  clear(){this.sessions.clear();this.cache.clear();}
  async create(workspace,command,{media,fonts,blockedValues=[],signal,sourceReader,client}={}){
+  command=structuredClone(command);
   const sourceSnapshots=new Map(),choices=await appearancePreviewChoices(workspace,command,{signal,sourceReader,sourceSnapshots}),defaultPage=choices.pages[0]?.path;
   if(!defaultPage)throw new AppError('PUBLICATION_EMPTY');
   const id=randomBytes(32).toString('hex');
   while(this.sessions.size>=this.maxSessions)this.sessions.delete(this.sessions.keys().next().value);
-  this.sessions.set(id,{workspace,command:structuredClone({...command,websitePin:choices.websitePin}),media,fonts,blockedValues,sourceReader,sourceSnapshots,client});
+  this.sessions.set(id,{workspace,command:structuredClone({...command,websitePin:choices.websitePin,...(choices.websiteDraft?{websiteDraft:choices.websiteDraft}:{})}),media,fonts,blockedValues,sourceReader,sourceSnapshots,client});
   try{await this.page(id,defaultPage,{signal,client});}catch(error){this.sessions.delete(id);throw error;}
   return {source:'website',...choices,defaultPage,baseUrl:'/appearance-preview/'+id+'/',url:'/appearance-preview/'+id+'/'+defaultPage,pagesUrl:'/api/appearance-preview/'+id+'/pages'};
  }

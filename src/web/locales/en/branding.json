@@ -4,6 +4,7 @@
  "backAppearance":"Back to Appearance",
  "backPrevious":"Back to previous page",
  "description":"Workspace logos appear in the app and website headers. Additional logos identify individual projects, lab books, records, and custom pages.",
+ "choosePage":"Choose a custom page",
  "scope":"Branding scope",
  "home":"Workspace and website identity",
  "project":"Project: {title}",

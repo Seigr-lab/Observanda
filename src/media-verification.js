@@ -38,6 +38,12 @@ export class MediaVerification{
   for(const site of metadata.websites??[])for(const ref of designReferences(site.document,site.projects))await this.asset(ref);
  }
  async website(site){for(const ref of designReferences(site.document,site.projects))await this.asset(ref);}
+ async websiteDocument(document){
+  const logoId=(await document.field(['document','website','logoId'])).value;if(logoId)await this.asset({id:logoId,kind:'image'});
+  for await(const item of document.items(['projects'])){const project=await document.tree.read(item.value);if(project.logoId)await this.asset({id:project.logoId,kind:'image'});}
+  for await(const item of document.items(['document','branding']))for(const logo of (await document.tree.read(item.value)).logos)await this.asset({id:logo.id,kind:'image'});
+  for await(const item of document.items(['document','website','assets']))await this.asset(await document.tree.read(item.value));
+ }
  async record(record){for(const ref of record.attachments??[])await this.asset(ref);}
  async pending(){
   for await(const file of this.workspace.metadataNames('.observanda/media-imports')){

@@ -5,9 +5,9 @@ import {websiteLink} from './website-links.js';
 import {t} from './i18n/index.js';
 const tr=(key,values)=>t('websitePages',key,values);
 
-export function websiteSectionPicker({state,api,esc,showDialog,pagePicker,previewTarget,onChoose,pageBook=()=>state.book,recordSections}){
+export function websiteSectionPicker({state,api,esc,showDialog,pagePicker,previewTarget,onChoose,pageBook=()=>state.book,documents,recordSections}){
  let session=null,controller=null,generation=0;
- const identity=()=>JSON.stringify([websiteSnapshot(state),state.book?.id,state.etag,state.book?.website.researchSources]);
+ const identity=()=>JSON.stringify([websiteSnapshot(state),state.book?.id,state.etag,state.book?.website.researchSources,documents?.enabled()?documents.viewKey():null]);
  const valid=s=>s===session&&s.identity===identity()&&state.page==='website'&&!state.access?.locked&&!state.storageUnavailable&&s.root.isConnected&&s.dialog.open;
  function stop(){controller?.abort();controller=null;generation++;const s=session;session=null;s?.unbind();return s;}
  function close(){const s=stop();if(s?.dialog.open)s.dialog.close();document.querySelector(s?.selector??'#website-preview-page')?.focus({preventScroll:true});}
@@ -23,7 +23,7 @@ export function websiteSectionPicker({state,api,esc,showDialog,pagePicker,previe
    else if(s.record&&state.storage?.researchStorage==='catalogue'&&!Array.isArray(cached?.sections)){
     result=await api('/api/website/research/sections',{workspaceId:state.book.id,snapshotId:state.etag,websitePin:state.websitePin,recordId:s.target.slice(6),offset},{adopt:false,signal});
     if(result.workspaceId!==state.book.id||result.snapshotId!==state.etag||state.websitePin&&!sameWebsitePin(result.websitePin,state.websitePin))throw Error(tr('invalid'));
-   }else result=websiteSectionWindow(pageBook(),s.target,{record:s.record,offset});
+   }else {let book=pageBook();if(documents?.enabled()&&s.target.startsWith('page:')){const item=await documents.item('pages',s.target.slice(5),{signal,retain:false});book={...book,pages:[item.value]};}result=websiteSectionWindow(book,s.target,{record:s.record,offset});}
    if(valid(s)&&request===generation)s.result=result;
   }catch(error){if(valid(s)&&request===generation&&!signal.aborted)s.error=error.message||tr('failed');}
   finally{if(valid(s)&&request===generation){s.loading=false;controller=null;paint();}}

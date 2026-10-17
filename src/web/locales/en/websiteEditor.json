@@ -150,5 +150,18 @@
   "action_solid": "Solid",
   "action_dashed": "Dashed",
   "action_dotted": "Dotted",
-  "action_double": "Double"
+  "action_double": "Double",
+  "documentInvalid": "The selected website document could not be verified. Reopen the website to try again.",
+  "documentCheckpointFailed": "The website draft could not be retained. Retry before leaving this page.",
+  "documentDraftSaved": "Unsaved website draft retained.",
+  "documentSaved": "Website saved.",
+  "documentLoadRetry": "Retry loading",
+  "documentLoading": "Loading selected website content...",
+  "documentRetry": "Retry retaining draft",
+  "documentMediaCounts": "{pages} custom pages included",
+  "documentParent": "Choose parent item",
+  "documentMenuSearch": "Find menu items",
+  "documentMenuRange": "{first} - {last} of {total} menu items",
+  "documentMenuEmpty": "No matching menu items.",
+  "documentBusy": "Saving the selected website changes..."
 }

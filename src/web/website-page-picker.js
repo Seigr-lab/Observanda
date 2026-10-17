@@ -6,15 +6,15 @@ import {websitePageWindow} from './website-page-targets.js';
 const text=(key,values)=>t('websitePages',key,values),limit=WEBSITE_PAGE_LIMIT;
 // Page discovery owns only the current result window. It never adopts a
 // workspace snapshot or reads originals. Selection callbacks own draft changes.
-export function websitePagePicker({state,api,esc,field,showDialog,onChoose,pageBook=()=>state.book,recordPages=options=>websiteRecordPages({state,api,...options})}){
+export function websitePagePicker({state,api,esc,field,showDialog,onChoose,documents,active=()=>state.page==='website',kinds=['site','project','notebook','entry'],pageBook=()=>state.book,structurePages=options=>websitePageWindow(pageBook(),options),recordPages=options=>websiteRecordPages({state,api,...options})}){
  let session=null,controller=null,timer=null,generation=0;
- const identity=()=>JSON.stringify([websiteSnapshot(state),state.book?.id,state.etag,state.book?.website.researchSources]);
- const valid=s=>s&&s===session&&s.identity===identity()&&state.page==='website'&&!state.access?.locked&&!state.storageUnavailable&&s.root.isConnected&&s.dialog.open;
+ const identity=()=>JSON.stringify([websiteSnapshot(state),state.book?.id,state.etag,state.book?.website.researchSources,documents?.enabled()?documents.viewKey():null]);
+ const valid=s=>s&&s===session&&s.identity===identity()&&active()&&!state.access?.locked&&!state.storageUnavailable&&s.root.isConnected&&s.dialog.open;
  const button=(key,extra='')=>`<button type="button" class="button" data-page-picker="${key}" ${extra}>${esc(text(key))}</button>`;
  function cancel(){controller?.abort();controller=null;clearTimeout(timer);timer=null;generation++;}
  function stop(){cancel();const s=session;session=null;s?.unbind();}
  const restoreFocus=s=>(document.querySelector(s?.returnFocus??'#website-preview-page')??document.querySelector('[data-region-choice]')??document.querySelector('#website-preview-page'))?.focus({preventScroll:true});
- function close(){const s=session;stop();if(s?.dialog.open)s.dialog.close();restoreFocus(s);}
+ function close(){const s=session;stop();if(s?.dialog.open)s.dialog.close();if(s)restoreFocus(s);}
  function sync(){if(session&&!valid(session))close();}
  function paint(){
   const s=session;if(!valid(s))return;
@@ -31,25 +31,25 @@ export function websitePagePicker({state,api,esc,field,showDialog,onChoose,pageB
   try{
    let result;
    if(s.kind==='entry')result=await recordPages({search:s.search,cursor,signal});
-   else result=websitePageWindow(pageBook(),{kind:s.kind,search:s.search,offset:cursor??0,limit});
+   else result=await structurePages({kind:s.kind,search:s.search,offset:cursor??0,limit,signal});
    if(!valid(s)||request!==generation)return;s.result=result;
   }catch(error){if(!valid(s)||request!==generation||signal.aborted)return;s.error=error.message??text('failed');}
   finally{if(valid(s)&&request===generation){s.loading=false;controller=null;paint();if(focus)(s.root.querySelector('[data-page-path],[data-page-selection]')??s.root.querySelector('[data-page-range]')??s.root.querySelector('[data-page-picker="retry"]'))?.focus();}}
  }
  function open(currentTarget,{choose=onChoose,selection=null,title=text('title'),help='',returnFocus='#website-preview-page'}={}){
-  stop();const candidate=currentTarget?.split(':')[0],kind=['project','notebook','entry'].includes(candidate)?candidate:'site';
+  stop();const candidate=currentTarget?.split(':')[0],kind=kinds.includes(candidate)?candidate:kinds[0];
   showDialog(`<h2 id="dialog-title">${esc(title)}</h2><div data-website-page-picker>${help?`<p>${esc(help)}</p>`:''}
-   <div class="grid two">${field(esc(text('kind')),`<select id="website-page-kind">${['site','project','notebook','entry'].map(value=>`<option value="${value}" ${value===kind?'selected':''}>${esc(text(value))}</option>`).join('')}</select>`)}
-   ${field(esc(text('search')),`<input id="website-page-search" type="search" maxlength="512" placeholder="${esc(text('placeholder'))}">`)}</div>
+   <div class="grid two">${field(esc(text('kind')),`<select id="website-page-kind">${kinds.map(value=>`<option value="${value}" ${value===kind?'selected':''}>${esc(text(value))}</option>`).join('')}</select>`)}
+   ${field(esc(text('search')),`<input id="website-page-search" type="search" maxlength="200" placeholder="${esc(text('placeholder'))}">`)}</div>
    <div data-page-results aria-busy="false"></div><div class="dialog-actions">${button(selection?'done':'cancel')}</div></div>`);
   const root=document.querySelector('[data-website-page-picker]'),dialog=root.closest('dialog');
   session={root,dialog,kind,search:'',identity:identity(),result:null,loading:false,error:'',selectionError:'',choose,selection,returnFocus};
-  const click=event=>{
+  const click=async event=>{
    const control=event.target.closest('[data-page-picker],[data-page-path]');if(!control||!root.contains(control))return;event.preventDefault();event.stopPropagation();
    const s=session;if(!valid(s))return;
    if(['cancel','done'].includes(control.dataset.pagePicker)){close();return;}
    if(s.loading)return;
-   if(control.dataset.pagePath){const item=s.result?.items.find(item=>item.path===control.dataset.pagePath);if(item){close();s.choose(item);restoreFocus(s);}return;}
+   if(control.dataset.pagePath){const item=s.result?.items.find(item=>item.path===control.dataset.pagePath);if(item){s.loading=true;paint();try{await s.choose(item);if(valid(s)){close();restoreFocus(s);}}catch(error){if(valid(s)){s.loading=false;s.selectionError=error.message??text('failed');paint();}}}return;}
    const key=control.dataset.pagePicker,cursor=key==='next'?s.result?.nextCursor:key==='previous'?s.result?.previousCursor:null;
    if(cursor!==undefined)void load(cursor,{focus:true});
   };

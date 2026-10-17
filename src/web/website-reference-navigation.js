@@ -3,7 +3,7 @@
 export class WebsiteReferenceNavigation{
  constructor(){this.key=null;this.cursor=null;this.shown=null;this.focus=null;}
  prepare(context,target,source){
-  const draft=source.draft,key=JSON.stringify([context,target,source.websitePin,draft?.baseEtag,draft?.changes,draft?.removed]);
+  const draft=source.draft,key=JSON.stringify([context,target,source.websitePin,source.websiteDraft,draft?.baseEtag,draft?.changes,draft?.removed]);
   if(key!==this.key){this.key=key;this.cursor=null;this.shown=null;this.focus=null;}
   return {key,cursor:this.cursor};
  }

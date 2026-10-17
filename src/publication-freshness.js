@@ -1,3 +1,4 @@
+import {WebsiteDocumentStore} from './website-document-store.js';
 import {serialize} from './storage-format.js';
 import {revisionId} from './web/revision-model.js';
 import {publicationWorkspace,publicationSnapshot,assertWebsitePin} from './publication-pin.js';
@@ -13,6 +14,12 @@ export async function publicationRevisionCurrent(workspace,source,{current}={}){
  const revision=typeof source==='string'?source:source?.etag??source?.workspaceEtag,pin=typeof source==='string'?undefined:source?.websitePin;
  if(!revisionId(revision))return false;
  if(pin!==undefined)assertWebsitePin(workspace,pin,revision);
+ // An identical owner pair needs no metadata/body comparison. The current
+ // directory proves that the pin is a registered, still-open website.
+ if(pin?.websiteRevision&&await workspace.storageKind()==='catalogue'){
+  const base=workspace.baseWorkspace??workspace;
+  if(await base.catalogue(async store=>await store.head()===revision&&(await new WebsiteDocumentStore(store).head(workspace.websiteId??null)).websiteRevision===pin.websiteRevision))return true;
+ }
  current??=await workspace.currentOutline();
  if(await workspace.storageKind()!=='catalogue')return revision===current.etag&&(pin===undefined||pin.websiteRevision===null);
  return workspace.catalogue(async store=>{
