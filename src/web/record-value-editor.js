@@ -91,7 +91,10 @@ export function recordValueEditor({state,api,esc,notify,onSaved,onClosed,adapter
    if(result?.saved!==true||!revisionId(result.revision)||!revisionId(result.etag))throw Error(text('invalidSave'));
    dirty=false;status=text('finishingSave');paint();let retained=false;try{await removeCheckpoint();}catch{retained=true;}
    if(owner!==savingOwner)return;
-   finish();notify(text(retained?'savedDraftRemains':'saved'));await onSaved(result,savedTarget);
+   // Keep the acknowledged editor busy until its reader has adopted the save.
+   // A failed refresh must still close this editor and report the durable save.
+   try{await onSaved(result,savedTarget,{completedDialog:dialog});}
+   finally{if(owner===savingOwner){finish();notify(text(retained?'savedDraftRemains':'saved'));}}
   }catch(failure){
    if(owner!==savingOwner)return;
    if(failure.code==='RECORD_CHANGED'||adapter.conflictCodes?.includes(failure.code)){

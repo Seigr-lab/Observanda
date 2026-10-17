@@ -3,7 +3,7 @@ import {workspaceReferenceNamespaceMatches} from './research-reference-namespace
 // never assemble a second copy of the preparations, events and assessments.
 import {AppError} from './errors.js';
 import {withScratch} from './scratch-work.js';
-import {emptyAttempt,validAttemptFact,attemptReferences,attemptFactSearchParts,attemptHistoryLimits} from './web/attempt-model.js';
+import {emptyAttempt,validAttemptFact,attemptReferences,attemptFactSearchParts} from './web/attempt-model.js';
 import {revisionText} from './web/revision-model.js';
 import {ResearchMaterials} from './research-materials.js';
 import {RecordAttemptIndex} from './record-attempt-index.js';
@@ -23,11 +23,11 @@ export async function* attemptDocumentFacts(document,{signal,offsets}={}){
 }
 export async function validateAttemptDocument(document,{signal,draft=false}={}){
  const header=await attemptDocumentHeader(document,{signal});if(!header)return undefined;
- // These are the existing domain policies, shared with whole-form admission.
- // Paging and authoring continuation must land before those policies change.
+ // History collections continue through indexed appends and counted reader
+ // windows. Each fact keeps its own semantic and nested-collection policies.
  const base=document.attemptAppendBase?.()??null,indexed=base?new RecordAttemptIndex(document,base):null;
- for(const [group,limit] of Object.entries(attemptHistoryLimits)){
-  const count=await document.tree.arrayLength(document.root,['attempt',group]);if(count>limit||count<(base?.[group]??0))invalid();
+ for(const group of attemptGroups){
+  const count=await document.tree.arrayLength(document.root,['attempt',group]);if(count<(base?.[group]??0))invalid();
  }
  return withScratch(async identities=>{
   // The document owns this proof: only tail appends preserve it. The saved

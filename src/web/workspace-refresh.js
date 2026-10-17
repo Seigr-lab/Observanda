@@ -18,12 +18,12 @@ export function workspaceRefresh({state,api,read,apply,blocked,notify,onAccessEr
   const message=manualBusy?text('refreshing'):failure?text('refreshFailed'):pending?text('refreshPending'):'';
   status.hidden=!message;if(status.textContent!==message)status.textContent=message;
  }
- async function check({manual=false,background=false}={}){
+ async function check({manual=false,background=false,completedDialog=null}={}){
   const key=identity();
   if(stopped||!key||background&&document.hidden)return false;
   // Explicit refreshes (including our own completed save) must observe a new
   // revision after any older poll. Background activity is not a read lock.
-  if(task){if(background)return task;await task;return check({manual});}
+  if(task){if(background)return task;await task;return check({manual,completedDialog});}
   const base=state.etag,workspaceId=state.book.id,route=location.hash;
   const request=new AbortController();controller=request;
   const current=()=>!stopped&&!request.signal.aborted&&identity()===key&&state.etag===base&&location.hash===route;
@@ -35,11 +35,11 @@ export function workspaceRefresh({state,api,read,apply,blocked,notify,onAccessEr
     if(version.workspaceId!==workspaceId||!revisionId(version.etag))throw Error(text('refreshFailed'));
     failure=false;pending=version.etag!==base;paint();
     if(!pending){if(manual)notify(text('refreshCurrent'));return true;}
-    if(blocked()){if(manual)notify(text('refreshDeferred'));return false;}
+    if(blocked({completedDialog})){if(manual)notify(text('refreshDeferred'));return false;}
     const result=await read({signal:request.signal});
     // Typing, saving, navigating, locking and switching workspaces can all occur
     // during the read. Keep the user's current view/draft in each of those cases.
-    if(!current()||blocked())return false;
+    if(!current()||blocked({completedDialog}))return false;
     if(result.book?.id!==workspaceId||!revisionId(result.etag))throw Error(text('refreshFailed'));
     apply(result);pending=false;
     if(manual)notify(text('refreshed'));return true;

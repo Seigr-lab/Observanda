@@ -2,6 +2,14 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import path from 'node:path';
+import {attemptWindowFixture} from './record-attempt-window-fixture.js';
+import {RecordContent} from '../src/record-content.js';
+import {ResearchMaterials} from '../src/research-materials.js';
+import {RetainedRecordDocuments} from '../src/retained-record-documents.js';
+import {RecordQuery} from '../src/record-query.js';
+import {recordBrowse} from '../src/web/record-query.js';
+import {RunReadiness} from '../src/run-readiness.js';
+import {buildPublication} from '../src/publication.js';
 import {figureValueFixture} from './record-figure-values-fixture.js';
 import {preparation,event,assessment} from './fixtures/attempts.js';
 import {ResearchCatalogue} from '../src/research-catalogue.js';
@@ -99,4 +107,27 @@ test('ordinary fact saves carry their append proof through validation and projec
  });
  for(const item of [event(p),event(p,{kind:'reviewed'})])await save(f,await f.values.read(target(f,'event',item.id)),item);
  assert.equal(extensions,2);assert.equal(queries,2);t.mock.restoreAll();await f.workspace.catalogue(store=>store.verifySnapshot(undefined,f.book.id));
+});
+
+
+test('selected facts continue beyond former history limits with recovery, corrections and publication',async t=>{
+ const f=await attemptWindowFixture({preparationCount:32,eventCount:256,assessmentCount:256});t.after(f.close);f.values=new RecordValues(f.workspace);
+ const materials=new ResearchMaterials(f.workspace),method=f.book.entries.find(record=>record.id!==f.record.id),reference={...await materials.pinRecord(method.id,recordRevision(method)),label:'PRIVATE retained preparation method'},pinned=await materials.pinRecord(f.record.id,recordRevision(f.record));
+ const p={...preparation({protocols:[reference]}),supersedes:f.record.attempt.preparations.at(-1).id,reason:'Later physical setup',applicability:'Preparation beyond thirty-two revisions'},unfinished={...structuredClone(p),inputs:p.inputs.map(input=>({...input,hash:'unfinished'}))},base=await f.values.read(target(f,'preparation',p.id));
+ forbid(t,f);const field=RecordDocument.prototype.field;t.mock.method(RecordDocument.prototype,'field',function(path,...args){if(path[0]==='attempt'&&(path.length===1||path.length===2&&path[1]!=='version'))throw Error('Assembled a complete history while continuing it');return field.call(this,path,...args);});
+ const drafts=new RecordValueDrafts(f.workspace),command={id:randomUUID(),workspaceId:f.book.id,recordId:f.record.id,expectedRevision:null,selection:{field:base.field,revision:base.revision,storageRevision:base.storageRevision},value:{value:unfinished}},receipt=await drafts.write(command),reopened=new Workspace(f.workspace.root,f.vault),recovered=await new RecordValueDrafts(reopened).read({id:command.id,workspaceId:f.book.id,expectedRevision:receipt.revision});
+ assert.deepEqual(recovered.value.value,unfinished);await assert.rejects(save(f,base,unfinished),{code:'INVALID'});recovered.value.value.inputs[0].hash=p.inputs[0].hash;await new RecordValues(reopened).save({...target(f,'preparation',p.id),expectedRevision:base.revision,value:recovered.value});await new ResearchDrafts(f.workspace).remove({id:command.id,workspaceId:f.book.id,expectedRevision:receipt.revision});
+ const e=event(p,{label:'Zirconium post-limit acquisition',references:[reference]}),eBase=await f.values.read(target(f,'event',e.id));await save(f,eBase,e);const head=(await f.workspace.outline()).etag;await save(f,eBase,e);assert.equal((await f.workspace.outline()).etag,head);
+ const a=assessment(p,1,{observed:'Late criterion observation',reason:'Independent late-configuration review'});await save(f,await f.values.read(target(f,'assessment',a.id)),a);
+ const correction={...e,id:randomUUID(),supersedes:e.id,reason:'Later receipt review beyond the former event limit',extent:'partial',label:'Corrected zirconium acquisition'};await save(f,await f.values.read(target(f,'event',correction.id)),correction);
+ await assert.rejects(save(f,await f.values.read(target(f,'event',e.id)),{...e,extent:'failed'}),{code:'ATTEMPT_IMMUTABLE'});const rival={...correction,id:randomUUID()};await assert.rejects(save(f,await f.values.read(target(f,'event',rival.id)),rival),{code:'ATTEMPT_CONFLICT'});
+ const request={workspaceId:f.book.id,recordId:f.record.id},reader=new RecordContent(f.workspace),late=await reader.read({...request,pagedHeader:true,windows:{preparations:32,events:256,assessments:256}});
+ assert.deepEqual(late.collections.preparations,{offset:32,total:33,count:1});assert.deepEqual(late.collections.events,{offset:256,total:258,count:2});assert.deepEqual(late.collections.assessments,{offset:256,total:257,count:1});assert.deepEqual(late.header.attempt.events,[e,correction]);assert.deepEqual(late.header.attempt.assessments,[a]);assert.equal(late.attemptWindow.preparationPositions[p.id],32);assert.ok(late.attemptWindow.superseded.includes(e.id));
+ const selected=await f.values.read(target(f,'assessment',randomUUID()));assert.equal(selected.definition.attempt.preparations.length,1);assert.equal(selected.definition.attempt.preparations[0].id,p.id);assert.equal(selected.definition.preparations.items.length,4);
+ const retained=await new RetainedRecordDocuments(f.workspace).read({ref:pinned,compare:true,windows:{preparations:32,events:256,assessments:256}});assert.equal(retained.previous.collections.preparations.total,32);assert.equal(retained.previous.collections.events.total,256);assert.deepEqual(retained.current.header.attempt.events,[e,correction]);
+ assert.deepEqual((await new RunReadiness(f.workspace).view(request)).unresolved,p.criteria.map(({id,label})=>({id,label})));
+ const found=await new RecordQuery(f.workspace).list({workspaceId:f.book.id,query:{projectId:null,notebookId:null,filter:'all',search:e.label,browse:recordBrowse()}});assert.deepEqual(found.records.map(record=>record.id),[f.record.id]);
+ await f.workspace.catalogue(async store=>{await store.verifySnapshot(undefined,f.book.id);const row=await store.member(await store.snapshot(),f.record.id);await withRecordDocument(store,row.id,row.revision,async document=>{const index=await RecordAttemptIndex.open(document);await index.verify();assert.equal((await index.correction(e.id)).id,correction.id);});});
+ t.mock.restoreAll();const saved=(await f.workspace.read()).book,record=saved.entries.find(record=>record.id===f.record.id);for(const group of ['preparations','events','assessments'])assert.deepEqual(record.attempt[group].slice(0,f.record.attempt[group].length),f.record.attempt[group]);assert.deepEqual(record.attempt.preparations.at(-1),p);
+ saved.entries.forEach(item=>item.share=item.id===record.id);saved.projects.forEach(project=>project.share=true);const publication=buildPublication(saved),html=publication.files.get('entries/'+record.id+'.html');assert.equal((html.match(/class="attempt-event"/g)??[]).length,258);assert.equal((html.match(/class="attempt-assessment"/g)??[]).length,257);assert.match(html,/Preparation revision 33/);assert.match(html,/Late criterion observation/);assert.match(html,/Corrected zirconium acquisition/);const all=[...publication.files.values()].filter(value=>typeof value==='string').join('\n');assert.ok(!all.includes(reference.label));assert.ok(!all.includes(reference.id));
 });

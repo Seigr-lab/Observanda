@@ -23,7 +23,7 @@ async function append(document,values){
 }
 
 test('append validation and source admission read new facts and selected context without walking earlier history',async t=>{
- for(const count of [19,95,251]){
+ for(const count of [19,257,1031]){
   const p=preparation(),attempt={...emptyAttempt(),preparations:[p],events:Array.from({length:count},()=>event(p)),assessments:[assessment(p)]},f=await fixture(attempt);
   const q={...preparation(),supersedes:p.id,reason:'New inputs'},last=attempt.events.at(-1),next=await append(f.document,{preparations:[q],events:[event(q),{...last,id:randomUUID(),supersedes:last.id,reason:'Corrected acquisition'}],assessments:[assessment(q)]});
   const base=next.attemptAppendBase(),items=next.items,read=next.tree.read,oldFacts=new Set();

@@ -672,13 +672,14 @@ export class ResearchMaterials {
     await reviewInputs(doc,record.id,figure.id);
    }
    for(const record of book.entries.filter(r=>selectedIds.includes(r.id))){
+    const preparations=new Map((record.attempt?.preparations??[]).map(preparation=>[preparation.id,preparation]));
     for(const result of record.results?.statements??[])if(result.source){
      const reference=materialReference(result.source),doc=await this.read(reference);sources.push({recordId:record.id,resultId:result.id,label:result.title,analysis:reference});
      if(result.kind==='figure'&&doc.content.figure){const figure=record.figures.flatMap(f=>[f,...(f.kind==='panels'?figurePlots(f):[])]).find(f=>f.id===result.figureId);if(figure&&!sameFigureCalculation(figure,doc.content.figure))warnings.push({recordId:record.id,figureId:figure.id,reason:'edited'});}
     }
     for(const assessment of currentAttemptItems(record.attempt?.assessments??[]))for(const source of assessment.references.filter(r=>r.kind==='analysis')){
      const reference=materialReference(source);await this.read(reference);
-     const criterion=record.attempt.preparations.find(p=>p.id===assessment.preparationId)?.criteria.find(c=>c.id===assessment.criterionId);
+     const criterion=preparations.get(assessment.preparationId)?.criteria.find(c=>c.id===assessment.criterionId);
      sources.push({recordId:record.id,assessmentId:assessment.id,label:criterion?.label??source.label,analysis:reference});
     }
    }

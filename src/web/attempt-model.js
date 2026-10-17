@@ -11,12 +11,12 @@ export const ASSESSMENT_OUTCOMES=['met','not-met','unresolved','unavailable','no
 export const INPUT_KINDS=['configuration','source','image','calibration','other'];
 export const TIME_MEANINGS=['unknown','wall-clock','device-counter','elapsed','source-declared'];
 export const emptyAttempt=()=>({version:1,preparations:[],events:[],assessments:[]});
-export const attemptHistoryLimits={preparations:32,events:256,assessments:256};
 const keys=(v,names)=>v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).sort().join()===names.slice().sort().join();
 const text=(v,max=2000,required=false)=>typeof v==='string'&&v.length<=max&&(!required||!!v.trim())&&!/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(v);
 const stamp=v=>typeof v==='string'&&/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(v)&&Number.isFinite(Date.parse(v))&&new Date(v).toISOString()===v;
 const unique=rows=>new Set(rows.map(r=>r?.id)).size===rows.length;
-const list=(rows,max,check)=>Array.isArray(rows)&&rows.length<=max&&unique(rows)&&rows.every(check);
+const facts=(rows,check)=>Array.isArray(rows)&&unique(rows)&&rows.every(check);
+const list=(rows,max,check)=>Array.isArray(rows)&&rows.length<=max&&facts(rows,check);
 export const attemptReference=ref=>keys(ref,['workspaceId','kind','id','revision','label'])&&researchId(ref.workspaceId)&&researchId(ref.id)&&revisionId(ref.revision)&&['record','artifact','dataset','analysis','collection'].includes(ref.kind)&&text(ref.label,300,true);
 const optionalRef=ref=>ref===null||attemptReference(ref);
 const refs=values=>Array.isArray(values)&&values.length<=20&&values.every(attemptReference)&&new Set(values.map(r=>revisionText(r))).size===values.length;
@@ -33,19 +33,20 @@ export const attemptGroup=kind=>kind==='preparation'?'preparations':kind==='even
 // A checkpoint accepts unfinished form text but never arbitrary fields or
 // unpinned references. A final save validates new facts against the admitted
 // immutable history, or validates the complete history for a replacement.
-export function validAttemptFact(kind,item,{draft=false,preparations=[]}={}){
+export function validAttemptFact(kind,item,{draft=false,preparations=[],preparationById=null}={}){
  if(kind==='preparation')return validPreparation(item,{draft});
  const time=v=>draft?keys(v,['meaning','value'])&&TIME_MEANINGS.includes(v.meaning)&&text(v.value,300):validAttemptTime(v);
- const preparation=id=>preparations.find(p=>p.id===id);
+ const preparation=id=>preparationById?preparationById.get(id):preparations.find(p=>p.id===id);
  const p=item;
  if(kind==='event')return keys(p,['id','supersedes','recordedAt','reason','preparationId','kind','label','extent','context','circumstances','actor','source','time','references'])&&base(p,draft)&&(p.preparationId===null||(draft?researchId(p.preparationId):!!preparation(p.preparationId)))&&EVENT_KINDS.includes(p.kind)&&text(p.label,160,!draft&&p.kind==='custom')&&EVENT_EXTENTS.includes(p.extent)&&EVENT_CONTEXTS.includes(p.context)&&text(p.circumstances)&&text(p.actor,160)&&text(p.source,500)&&time(p.time)&&refs(p.references);
  if(kind==='assessment')return keys(p,['id','supersedes','recordedAt','reason','preparationId','criterionId','outcome','domainOutcome','observed','denominator','actor','source','time','references'])&&base(p,draft)&&(draft?(p.preparationId===null||p.preparationId===''||researchId(p.preparationId))&&(p.criterionId===''||researchId(p.criterionId)):preparation(p.preparationId)?.criteria.some(c=>c.id===p.criterionId))&&ASSESSMENT_OUTCOMES.includes(p.outcome)&&text(p.domainOutcome,500)&&text(p.observed)&&text(p.denominator,500)&&text(p.actor,160)&&text(p.source,500)&&time(p.time)&&text(p.reason,2000,!draft)&&refs(p.references);
  return false;
 }
 export function validAttempt(value,{draft=false}={}){
- if(!keys(value,['version','preparations','events','assessments'])||value.version!==1||!list(value.preparations,attemptHistoryLimits.preparations,p=>validPreparation(p,{draft})))return false;
- if(!list(value.events,attemptHistoryLimits.events,e=>validAttemptFact('event',e,{...value,draft})))return false;
- if(!list(value.assessments,attemptHistoryLimits.assessments,a=>validAttemptFact('assessment',a,{...value,draft})))return false;
+ if(!keys(value,['version','preparations','events','assessments'])||value.version!==1||!facts(value.preparations,p=>validPreparation(p,{draft})))return false;
+ const preparationById=new Map(value.preparations.map(p=>[p.id,p]));
+ if(!facts(value.events,e=>validAttemptFact('event',e,{draft,preparationById})))return false;
+ if(!facts(value.assessments,a=>validAttemptFact('assessment',a,{draft,preparationById})))return false;
  const ids=[...value.preparations,...value.events,...value.assessments].map(r=>r.id);if(new Set(ids).size!==ids.length)return false;
  if(draft)return true;
  for(const group of ['preparations','events','assessments']){
@@ -69,14 +70,17 @@ export function appendOnlyAttempt(previous,next){
  if(!previous)return true;if(!next)return false;
  return ['preparations','events','assessments'].every(group=>previous[group].every((item,i)=>revisionText(item)===revisionText(next[group][i])));
 }
-export const currentAttemptItems=rows=>rows.filter(r=>!rows.some(later=>later.supersedes===r.id));
+export function currentAttemptItems(rows){const superseded=new Set(rows.map(row=>row.supersedes));return rows.filter(row=>!superseded.has(row.id));}
 export function mergeAttemptAdditions(base,mine,stored){
  if(!mine||!stored||!appendOnlyAttempt(base,mine)||!appendOnlyAttempt(base,stored))return null;
  const merged=structuredClone(stored);
- for(const group of ['preparations','events','assessments'])for(const row of mine[group]){
-  const existing=merged[group].find(r=>r.id===row.id);
-  if(existing){if(revisionText(existing)!==revisionText(row))return null;}
-  else merged[group].push(structuredClone(row));
+ for(const group of ['preparations','events','assessments']){
+  const identities=new Map(merged[group].map(row=>[row.id,row]));
+  for(const row of mine[group]){
+   const existing=identities.get(row.id);
+   if(existing){if(revisionText(existing)!==revisionText(row))return null;}
+   else{const copy=structuredClone(row);merged[group].push(copy);identities.set(row.id,copy);}
+  }
  }
  return validAttempt(merged)?merged:null;
 }
@@ -90,11 +94,11 @@ export function repeatPreparation(record,reference,{uuid=()=>crypto.randomUUID()
 }
 export function attemptComparison(value){
  if(!value)return null;
- const preparation=value.preparations.at(-1);
+ const preparation=value.preparations.at(-1),preparations=new Map(value.preparations.map((item,position)=>[item.id,{item,number:position+1}]));
  return {preparationId:preparation?.id??null,preparationNumber:value.preparations.length,applicability:preparation?.applicability??'',conditions:preparation?.conditions.map(({id,name,value,unit,basis})=>({id,name,value,unit,basis}))??[],
   assessments:currentAttemptItems(value.assessments).map(a=>{
-   const p=value.preparations.find(p=>p.id===a.preparationId),c=p.criteria.find(c=>c.id===a.criterionId);
-   return {criterion:c.label,preparationId:a.preparationId,preparationNumber:value.preparations.indexOf(p)+1,expected:c.expected,comparator:c.comparator,scope:c.scope,outcome:a.outcome,domainOutcome:a.domainOutcome,observed:a.observed,denominator:a.denominator};
+   const {item:p,number}=preparations.get(a.preparationId),c=p.criteria.find(c=>c.id===a.criterionId);
+   return {criterion:c.label,preparationId:a.preparationId,preparationNumber:number,expected:c.expected,comparator:c.comparator,scope:c.scope,outcome:a.outcome,domainOutcome:a.domainOutcome,observed:a.observed,denominator:a.denominator};
   }),
   events:currentAttemptItems(value.events).map(({kind,label,extent,context})=>({kind,label,extent,context}))};
 }
