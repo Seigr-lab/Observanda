@@ -145,6 +145,11 @@ export class WebsiteEditorStore{
   if(operation.type==='settings'){const path=operation.path.slice(0,-1),name=operation.path.at(-1);context.document=await context.document.property(path,name,structuredClone(operation.value),{remove:operation.remove===true,signal});const next=await validateWebsiteDocumentHeader(this.store,snapshot,context.document,{signal,draft:true});
    if(['selection','projects'].includes(operation.path[0])){const original=await this.documents.document(context.websitePin.websiteId,context.websitePin),previous=await websiteDocumentHeader(original.document,{signal});await validateWebsiteDocumentSelection(this.store,snapshot,next,{signal,previous});}
    if(operation.path[0]==='document'&&operation.path[1]==='themes')for(const theme of next.document.themes)if(await this.sourceItem(context,'pages',theme.id,{signal}))invalid();return;}
+  // A command's bounded explicit batch is authoritative while validating
+  // ancestry. Do not materialize an implicit parent that the same append
+  // already supplies, even when the parent follows its children.
+  const navigationBatch=operation.type==='append'&&operation.collection==='navigation'?new Map(operation.values.map(value=>[value?.target,value])):null;
+  if(navigationBatch&&navigationBatch.size!==operation.values.length)invalid();
   const admit=async(collection,value)=>{
    if(!(collection==='pages'?validWebsitePage(value,{draft:true}):collection==='navigation'?validWebsiteNavigationItem(value):collection==='layouts'?validWebsiteLayout(value):collection==='branding'?validWebsiteBranding(value):validWebsiteAsset(value)))invalid();
    if(collection==='pages'){
@@ -161,7 +166,7 @@ export class WebsiteEditorStore{
    }
    if(collection==='navigation'){
     const source=await WebsiteEditorNavigation.source(this.store,snapshot,context.document,site,context.checkpoint.collectionIndexes,{signal});if(!await source.target(value.target))invalid();const seen=new Set([value.target]);let parent=value.parent;
-    while(parent){if(seen.has(parent)||seen.size>8)invalid();seen.add(parent);const ancestor=await this.sourceItem(context,'navigation',parent,{signal});if(!ancestor){const destination=await source.target(parent);if(!destination)invalid();context.document=await context.document.splice(WEBSITE_COLLECTION_PATHS.navigation,await context.document.tree.arrayLength(context.document.root,WEBSITE_COLLECTION_PATHS.navigation),0,[{target:parent,label:'',show:destination.show,parent:null}],{signal});context.checkpoint=await this.prepare(context,{signal});parent=null;}else parent=ancestor.value.parent;}
+    while(parent){if(seen.has(parent)||seen.size>8)invalid();seen.add(parent);const ancestor=navigationBatch?.has(parent)?{value:navigationBatch.get(parent)}:await this.sourceItem(context,'navigation',parent,{signal});if(!ancestor){const destination=await source.target(parent);if(!destination)invalid();context.document=await context.document.splice(WEBSITE_COLLECTION_PATHS.navigation,await context.document.tree.arrayLength(context.document.root,WEBSITE_COLLECTION_PATHS.navigation),0,[{target:parent,label:'',show:destination.show,parent:null}],{signal});context.checkpoint=await this.prepare(context,{signal});parent=null;}else parent=ancestor.value.parent;}
    }
   };
   if(operation.type==='append'){

@@ -130,3 +130,21 @@ test('first selected edit accepts an unchanged inline reader and rejects it afte
  const saved=await f.owner.read(null),changed=structuredClone(saved.site);changed.document.website.footer='Another tab saved';await f.owner.save(null,changed,{researchSnapshotId:f.current,expectedRevision:saved.websiteRevision});
  await assert.rejects(editor.change(null,{...command,commandId:randomUUID()}),{code:'CONFLICT'});assert.equal((await f.owner.read(null)).site.document.website.footer,'Another tab saved');
 });
+
+test('one navigation append preserves explicit parents in either batch order and rejects cyclic checkpoints',async t=>{
+ const f=await initialized(t),editor=new WebsiteEditorStore(f.store),initial=await editor.open(null),pages=Array.from({length:31},(_,index)=>({id:randomUUID(),title:'Batch page '+index,body:'',share:true,sections:[]}));
+ for(const parentLast of [false,true]){
+  const parent={target:'page:'+pages[0].id,label:'Explicit parent label',show:false,parent:null},children=pages.slice(1).map(page=>({target:'page:'+page.id,label:page.title,show:true,parent:parent.target})),navigation=parentLast?[...children,parent]:[parent,...children];
+  const command={websitePin:initial.websitePin,draftId:null,expectedRevision:null,commandId:randomUUID(),operations:[{type:'append',collection:'pages',values:pages},{type:'append',collection:'navigation',values:navigation}]};
+  const changed=await editor.change(null,command),retained=await editor.document(null,{websitePin:changed.websitePin,draftId:changed.draft.id,draftRevision:changed.draft.revision});
+  const stored=(await retained.document.field(['document','website','navigation'])).value;
+  assert.deepEqual(stored,navigation);assert.equal(new Set(stored.map(row=>row.target)).size,31);assert.equal(retained.collectionIndexes.navigation.count,31);assert.deepEqual(await editor.change(null,command),changed);
+  await editor.discard(null,{draftId:changed.draft.id,expectedRevision:changed.draft.revision,commandId:randomUUID()});
+ }
+ const cycle=pages.slice(0,2).map((page,index)=>({target:'page:'+page.id,label:page.title,show:true,parent:'page:'+pages[1-index].id}));
+ await assert.rejects(editor.change(null,{websitePin:initial.websitePin,draftId:null,expectedRevision:null,commandId:randomUUID(),operations:[{type:'append',collection:'pages',values:pages.slice(0,2)},{type:'append',collection:'navigation',values:cycle}]}),{code:'INVALID'});
+ const rejected=await editor.open(null);assert.equal(rejected.draft.dirty,false);assert.equal(rejected.draft.generation,0);assert.equal((await f.owner.read(null)).site.document.pages.length,0);await editor.discard(null,{draftId:rejected.draft.id,expectedRevision:rejected.draft.revision,commandId:randomUUID()});
+ const duplicate={target:'page:'+pages[0].id,label:'Duplicate',show:true,parent:null};
+ await assert.rejects(editor.change(null,{websitePin:initial.websitePin,draftId:null,expectedRevision:null,commandId:randomUUID(),operations:[{type:'append',collection:'pages',values:[pages[0]]},{type:'append',collection:'navigation',values:[duplicate,duplicate]}]}),{code:'INVALID'});
+ assert.equal((await editor.open(null)).draft.dirty,false);
+});
