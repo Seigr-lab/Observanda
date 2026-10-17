@@ -2,6 +2,7 @@ import {publicationReviewChoicesUI} from './publication-review-choices.js';
 import {moduleReferenceNavigation,availableOwnedModule} from './module-reference-navigation.js';
 import {researchReturn,researchReturnNavigation} from './research-return.js';
 import {validTarget,researchId} from './research-reference.js';
+import {revisionId} from './revision-model.js';
 import {projectOperationView} from './project-operation-view.js';
 import {labBookStorageUI} from './lab-book-storage-ui.js';
 import {labBookAccessSettingsUI} from './lab-book-access-settings-ui.js';
@@ -130,7 +131,7 @@ const types = RECORD_TYPES.map(type => type.id);
 const titleCase = text => text.charAt(0).toUpperCase() + text.slice(1);
 const state = { book: null, etag: null, websitePin: null, websiteId: null, page: 'workspace', project: null, selected: null, notebook: 'all', dirty: false, search: '', filter: 'all', preview: null };
 let previewSurfaces=[],dialogSurface=null;
-let noticeTimer, savePromise, savedBook=null,savedRecordRevisions={},savedRecordBases={};
+let noticeTimer, savePromise, savedBook=null,savedRecordRevisions={},savedRecordBases={},initialRecordSave=null;
 const drafts=formDrafts(),recordChanges=recordDraftTracker();
 expandingText();
 let uploading = false, fieldSequence = 0;
@@ -341,6 +342,8 @@ async function save() {
 async function saveRecords(){
   if(websiteDocuments.enabled()){await websiteDocuments.save();state.dirty=websiteDocuments.isDirty();return;}
   figures.validate();
+  const creation=recordChanges.command(),native=state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion===21;
+  if(native&&creation?.changes.length===1&&(creation.changes[0].expectedRevision===null||initialRecordSave?.workspaceId===state.book.id&&initialRecordSave.recordId===creation.changes[0].id))return saveInitialRecord();
   await recordDrafts.flush();
   const version=changeVersion,{book:submitted,command:recordCommand}=recordChanges.submission(state.book),previousRevisions={...savedRecordRevisions},previousBases={...savedRecordBases};
   const selection=websiteSelection.isDirty()?websiteSelection.snapshot():null,command=selection?null:recordCommand;
@@ -380,6 +383,36 @@ async function saveRecords(){
     dirty();render();await recordDrafts.flush();
     throw {code:'RECORD_REVIEW',message:state.dirty?'Combined changes are ready in the editor. Review them, then save the record.':'The saved record already contains these changes.'};
   }
+}
+// Initial authoring commits its streamed checkpoint through the same selected
+// document transaction used by recovery. The client retains only its own exact
+// submitted value; acknowledgement reads never reconstruct the saved record.
+async function saveInitialRecord(){
+  const current=recordChanges.command(),id=current?.changes[0]?.id;
+  if(!current||current.changes.length!==1)throw Error(t('recordDrafts','saveChanged'));
+  if(!initialRecordSave||initialRecordSave.workspaceId!==state.book.id||initialRecordSave.recordId!==id)initialRecordSave={workspaceId:state.book.id,recordId:id,baseRevision:null,pending:null};
+  const session=initialRecordSave;
+  session.pending??={...recordChanges.submission(state.book),baseRevision:session.baseRevision};
+  const submitted=session.pending,changes=submitted.command.changes.map(change=>({record:change.record,base:savedRecordBases[change.id]??null,expectedRevision:change.expectedRevision}));
+  let committed;
+  try{committed=await recordDrafts.commit(changes,{baseRevision:submitted.baseRevision});}
+  catch(error){if(error.checkpointRejected)session.pending=null;throw error;}
+  const saved=committed.saved,workspaceId=session.workspaceId;
+  const [outline,content]=await Promise.all([
+    newWorkspaceReader({snapshotId:saved.etag}).read({requireOutline:true}),
+    api('/api/workspace/read/record-content',{workspaceId,recordId:id,snapshotId:saved.etag,offset:0,pagedHeader:true},{adopt:false})
+  ]);
+  if(initialRecordSave!==session||state.book.id!==workspaceId||content.workspaceId!==workspaceId||content.recordId!==id||content.etag!==saved.etag||outline.etag!==saved.etag||content.header?.id!==id||!revisionId(content.storageRevision)||!revisionId(content.revision))throw Error(t('recordDrafts','invalidPage'));
+  const sent=submitted.command.changes[0].record;
+  if(content.header.createdAt!==sent.createdAt||typeof content.header.updatedAt!=='string'||!Number.isFinite(Date.parse(content.header.updatedAt)))throw Error(t('recordDrafts','invalidPage'));
+  const acknowledged={...sent,createdAt:content.header.createdAt,updatedAt:content.header.updatedAt},pending=state.book;
+  const result={book:{...outline.book,entries:[acknowledged]},etag:saved.etag,recordRevisions:{[id]:content.revision},recordScope:{ids:[id],missing:[],notebookCounts:outline.notebookCounts,total:outline.total}};
+  adoptSnapshot(result);state.book=retainPendingEdits(submitted.book,pending,result.book);state.etag=saved.etag;state.dirty=recordChanges.inspect(state.book);
+  session.baseRevision=content.storageRevision;session.pending=null;recordDrafts.acknowledge();
+  if(state.dirty){recordDrafts.schedule();return;}
+  await recordDrafts.clear();initialRecordSave=null;
+  // Continue in the already qualified selected editor after the first commit.
+  adoptSnapshot(outline);state.book=outline.book;state.etag=outline.etag;state.selected=id;state.page='record-reader';state.recordReading=false;state.recordSection=null;recordContent.clear();render();
 }
 function recordCheckpoint(){
   if(!state.book||!state.dirty||state.access?.locked)return null;
@@ -590,11 +623,12 @@ async function savePending(scope='all',forms=drafts.changed(scope),{requireClean
 async function discardPending(scope='all',forms=drafts.changed(scope)){
   const navigation=scope==='navigation';if(navigation)scope='all';
   if(savePromise)await savePromise;
+  if(initialRecordSave?.pending&&recordDrafts.saveUncertain())await saveInitialRecord();
   drafts.reset(forms);
   attempts.stop();
   structureUI.notebooks.discard();
   if(scope==='all'){
-    if(state.dirty&&savedBook){const latest=websiteDocuments.enabled()?await websiteDocuments.discard():await api('/api/notebook',undefined,{metadataOnly:Boolean(state.workspaceOutline)});state.book=latest.book;state.etag=latest.etag;if(latest.site)websiteSelection.load(latest.site.selection,latest.selectionProjects);else websiteSelection.reset();state.dirty=false;changeVersion++;state.preview=null;designUI.resetUndo();await recordDrafts.clear();}
+    if(state.dirty&&savedBook){const latest=websiteDocuments.enabled()?await websiteDocuments.discard():await api('/api/notebook',undefined,{metadataOnly:Boolean(state.workspaceOutline)});state.book=latest.book;state.etag=latest.etag;if(latest.site)websiteSelection.load(latest.site.selection,latest.selectionProjects);else websiteSelection.reset();state.dirty=false;changeVersion++;state.preview=null;designUI.resetUndo();await recordDrafts.clear();initialRecordSave=null;}
     if(state.publishing?.dirty)await publishUI.discard();
     if(modules.isDirty())await modules.discard();
     if(dashboard.isDirty())await (navigation?dashboard.discardNavigation():dashboard.discard());

@@ -8,15 +8,16 @@ import {encryptedFixture} from './encrypted-fixture.js';
 import {testServer} from '../device-fixture.js';
 import {clearVault} from '../../src/encryption.js';
 import {ResearchCatalogue} from '../../src/research-catalogue.js';
+import {readProgressStream} from '../../src/web/progress-stream.js';
 import {navigate,preferences} from './preferences-helper.js';
 
 for(const templated of [false,true])test(`create ${templated?'a template inspection':'an ordinary linked record'} from a large source without loading its body`,async({page})=>{
  test.setTimeout(120000);page.setDefaultTimeout(10000);const {book,hive,other}=beekeepingFixture();if(!templated)hive.template=null;
  hive.sections=Array.from({length:templated?257:67},(_,i)=>({id:randomUUID(),title:'Retained observation '+i,body:'Unchanged source evidence '.repeat(100)}));
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-linked-creation-')),f=await encryptedFixture(directory,book),app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')});
- const original=ResearchCatalogue.prototype.record,loaded=[],requests=[],errors=[];let created,finished=false;
+ const original=ResearchCatalogue.prototype.record,loaded=[],requests=[],errors=[],applyCommands=[];let created,plan,acknowledgement,interrupted=false,finished=false;
  ResearchCatalogue.prototype.record=function(id,...args){if(book.entries.some(r=>r.id===id))throw Error('Linked creation loaded an existing body');loaded.push(id);return original.call(this,id,...args);};
- page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{if(/\/api\/workspace\/read\/(selection|page)$/.test(new URL(request.url()).pathname))requests.push({path:new URL(request.url()).pathname,body:request.postDataJSON()});});
+ page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{const route=new URL(request.url()).pathname;if(/\/api\/workspace\/read\/(selection|page)$/.test(route)||route==='/api/research/records/save')requests.push({path:route,body:request.postDataJSON()});if(route==='/api/research/drafts/review/apply')applyCommands.push(request.postDataJSON());});
  const dialog=page.getByRole('dialog',{name:'Add linked record',exact:true}),reader=page.locator('.record-reader');
  try{
   await page.goto(app.url);
@@ -27,12 +28,15 @@ for(const templated of [false,true])test(`create ${templated?'a template inspect
   await page.goto(app.origin+'/#/records/'+hive.id+'/read');
   if(templated){await page.getByRole('button',{name:'New inspection',exact:true}).click();await expect(page.getByLabel('Queen observation',{exact:true})).toHaveValue('');}
   else{await page.getByRole('button',{name:'Add linked record',exact:true}).click();await dialog.getByLabel('Record template').selectOption('type:note');await dialog.getByRole('button',{name:'Create record',exact:true}).click();}
-  await page.getByLabel('Record title',{exact:true}).fill('New linked observation');expect(requests).toEqual([]);
-  await page.route('**/api/research/records/save',route=>route.fulfill({status:503,json:{code:'IO',message:'Synthetic interrupted creation'}}),{times:1});
-  await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('#notice')).toContainText('Synthetic interrupted creation');await expect(page.getByLabel('Record title',{exact:true})).toHaveValue('New linked observation');
-  await page.locator('#notice').getByRole('button',{name:'Dismiss',exact:true}).click();
-  const saved=page.waitForResponse(r=>r.url().endsWith('/api/research/records/save')&&r.ok());await page.getByRole('button',{name:'Save record',exact:true}).click();await saved;await expect(page.locator('#save-status')).toHaveText('Saved');
-  created=loaded[0];expect(created).toBeTruthy();expect(new Set(loaded)).toEqual(new Set([created]));expect(requests.every(r=>r.path.endsWith('/selection')&&r.body.ids.every(id=>id===created))).toBe(true);
+  await page.getByLabel('Record title',{exact:true}).fill('New linked observation');expect(requests).toEqual([]);created=new URL(page.url()).hash.split('/')[2];expect(created).toBeTruthy();expect(book.entries.some(record=>record.id===created)).toBe(false);
+  // Initial Save commits the durable checkpoint through a retained review plan.
+  // Interrupt its apply request, then prove retry keeps that exact identity.
+  await page.route('**/api/research/drafts/review/prepare',async route=>{const response=await route.fetch();plan=await readProgressStream(new Response(await response.body()),()=>{});await route.fulfill({response});});
+  await page.route('**/api/research/drafts/review/apply',async route=>{if(!interrupted){interrupted=true;return route.fulfill({status:503,json:{code:'IO',message:'Synthetic interrupted creation'}});}const response=await route.fetch();acknowledgement=await readProgressStream(new Response(await response.body()),()=>{});await route.fulfill({response});});
+  const prepared=page.waitForResponse(r=>r.url().endsWith('/api/research/drafts/review/prepare')&&r.ok());await page.getByRole('button',{name:'Save record',exact:true}).click();await prepared;expect(plan).toMatchObject({recordId:created,newRecord:true,count:0,storageRevision:null});await expect(page.locator('#notice')).toContainText('Synthetic interrupted creation');await expect(page.getByLabel('Record title',{exact:true})).toHaveValue('New linked observation');
+  expect(await f.workspace.catalogue(async store=>store.member(await store.snapshot(),created))).toBe(null);await page.locator('#notice').getByRole('button',{name:'Dismiss',exact:true}).click();
+  const saved=page.waitForResponse(r=>r.url().endsWith('/api/research/drafts/review/apply')&&r.ok());await page.getByRole('button',{name:'Save record',exact:true}).click();await saved;expect(acknowledgement).toMatchObject({recordDraftRecovered:true,recordId:created});expect(acknowledgement.book).toBeUndefined();await expect(page.locator('.record-editing h1')).toHaveText('New linked observation');
+  expect(applyCommands).toHaveLength(2);expect(applyCommands[0]).toEqual({id:plan.id,workspaceId:book.id,expectedRevision:plan.revision});expect(applyCommands[1]).toEqual(applyCommands[0]);expect(loaded).toEqual([]);expect(requests).toEqual([]);
   await page.getByRole('button',{name:'Back to records',exact:true}).click();await expect(page.locator('#entry-results')).toBeVisible();
   await page.goto(app.origin+'/#/records/'+hive.id+'/read');if(!templated)await page.getByRole('button',{name:'Show linked records',exact:true}).click();await page.getByRole('region',{name:templated?'Hive history':'Linked records',exact:true}).getByRole('link',{name:'New linked observation',exact:true}).click();await expect(reader.locator('h1')).toHaveText('New linked observation');expect(errors).toEqual([]);
   finished=true;
