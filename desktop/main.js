@@ -11,7 +11,10 @@ const closeText=JSON.parse(readFileSync(new URL('./locales/en/close.json',import
 
 app.setName('Observanda');app.setAppUserModelId('org.observanda.desktop');app.enableSandbox();
 const development=!app.isPackaged,here=path.dirname(fileURLToPath(import.meta.url));
-const profile=development&&process.env.OBSERVANDA_DESKTOP_TEST_HOME?path.resolve(process.env.OBSERVANDA_DESKTOP_TEST_HOME):null;
+// Visibility applies to both executable modes; packaged profile layout stays
+// beside the disposable home's normal preferences, exactly as for a user launch.
+const testLaunch=!!process.env.OBSERVANDA_DESKTOP_TEST_HOME;
+const profile=development&&testLaunch?path.resolve(process.env.OBSERVANDA_DESKTOP_TEST_HOME):null;
 // Keep the window profile beside the existing application preferences. This
 // also avoids depending on Windows shell-folder registration at startup.
 app.setPath('userData',path.join(profile??path.join(os.homedir(),'.observanda'),'window'));
@@ -34,7 +37,7 @@ function guardWindow(win){
   win.webContents.on('will-redirect',(event,url)=>{if(!localUrl(url,origin))event.preventDefault();});
   win.webContents.on('will-attach-webview',event=>event.preventDefault());
   win.webContents.setWindowOpenHandler(({url})=>{
-    if(localUrl(url,origin))return {action:'allow',overrideBrowserWindowOptions:{title:'Observanda preview',webPreferences:{...windowPreferences,session:win.webContents.session}}};
+    if(localUrl(url,origin))return {action:'allow',overrideBrowserWindowOptions:{title:'Observanda preview',show:!testLaunch,webPreferences:{...windowPreferences,session:win.webContents.session}}};
     void openExternal(url);return {action:'deny'};
   });
   win.webContents.on('did-create-window',guardWindow);
@@ -51,7 +54,7 @@ function stopService(){
 }
 if(!app.requestSingleInstanceLock()){app.quit();}
 else{
-  app.on('second-instance',()=>{if(main){if(main.isMinimized())main.restore();if(!profile)main.maximize();main.show();main.focus();}});
+  app.on('second-instance',()=>{if(main&&!testLaunch){if(main.isMinimized())main.restore();main.maximize();main.show();main.focus();}});
   app.on('before-quit',event=>{if(quitting)return;event.preventDefault();if(main&&!main.isDestroyed())main.close();else void stopService();});
   app.on('window-all-closed',()=>void stopService());
   void app.whenReady().then(async()=>{
@@ -61,7 +64,7 @@ else{
   isolated.on('will-download',(_event,item)=>{const url=item.getURL();if(!localUrl(url,origin)&&!url.startsWith('blob:'+origin+'/'))item.cancel();});
   main=new BrowserWindow({title:'Observanda',show:false,width:1320,height:900,minWidth:390,minHeight:480,backgroundColor:'#f5f6fa',icon:windowIcon(here,nativeTheme.shouldUseDarkColors),webPreferences:{...windowPreferences,session:isolated}});
   // Let the window manager fit the current display before showing the window.
-  main.once('ready-to-show',()=>{if(main&&!profile){main.maximize();main.show();}});
+  main.once('ready-to-show',()=>{if(main&&!testLaunch){main.maximize();main.show();}});
   guardWindow(main);main.on('closed',()=>{main=null;for(const win of BrowserWindow.getAllWindows())win.close();if(!BrowserWindow.getAllWindows().length)void stopService();});
   closingGuard=closeGuard({status:serviceState,close:()=>main?.close(),
     ask:async()=>((await dialog.showMessageBox(main,{type:'question',title:closeText.busyTitle,message:closeText.busyMessage,detail:closeText.busyDetail,buttons:[closeText.keepOpen,closeText.whenFinished],defaultId:0,cancelId:0})).response===1),

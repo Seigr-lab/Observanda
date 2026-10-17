@@ -31,7 +31,12 @@ export async function desktopFixture(prefix='observanda-desktop-test-'){
     await access(path.resolve('desktop',name)).catch(()=>{throw Error('Desktop test asset is missing: '+name+'. Prepare desktop assets before launching the test.');});
    }
    const app=await electron.launch({...(executablePath?{executablePath}:{}),args:executablePath?[]:[path.resolve('desktop')],env,timeout:30000});
-   await app.firstWindow();await app.evaluate(({BrowserWindow},screenshots)=>BrowserWindow.getAllWindows().forEach(window=>{window.webContents.setBackgroundThrottling(false);if(screenshots)window.showInactive();else{window.on('show',()=>window.hide());window.hide();}}),screenshots);return app;
+   try{
+    await app.firstWindow();await app.evaluate(({BrowserWindow},screenshots)=>BrowserWindow.getAllWindows().forEach(window=>{window.webContents.setBackgroundThrottling(false);if(screenshots)window.showInactive();else if(window.isVisible())throw Error('Desktop test launch unexpectedly showed a window');}),screenshots);return app;
+   }catch(error){
+    try{await close(app);}catch(cleanup){throw new AggregateError([error,cleanup],'Desktop test launch failed and its application could not close');}
+    throw error;
+   }
   },
   async screenshot(app,file){
    // Hidden Windows compositors do not reliably produce screenshots. Opt in
