@@ -10,7 +10,21 @@ let runtime,server,starting=false,stopping=false,closed;const startup=new AbortC
 const send=message=>{if(process.connected)process.send(message);};
 const protector={available:()=>true,protect:bytes=>transform('encrypt',bytes.toString('base64')).then(value=>Buffer.from(value,'base64')),unprotect:bytes=>transform('decrypt',bytes.toString('base64')).then(value=>Buffer.from(value,'base64'))};
 function transform(operation,value){return new Promise((resolve,reject)=>{const id=++sequence,timer=setTimeout(()=>{pending.delete(id);reject(new AppError('DEVICE_UNAVAILABLE'));},15000);pending.set(id,{resolve,reject,timer});send({type:'protect',id,operation,value});});}
-async function stop(){stopping=true;startup.abort();if(starting)return;return closed??=(async()=>{try{await server?.close();await runtime?.close();}finally{for(const item of pending.values()){clearTimeout(item.timer);item.reject(new AppError('DEVICE_UNAVAILABLE'));}pending.clear();if(process.connected)process.disconnect();}})();}
+async function stop(){
+ stopping=true;startup.abort();if(starting)return;
+ return closed??=(async()=>{
+  let failure;
+  try{await server?.close();}catch(error){failure=error;}
+  // A failed HTTP shutdown must not strand any workspace, project or book
+  // database. The manager drains every owner before the service disconnects.
+  try{await runtime?.close();}catch(error){failure??=error;}
+  finally{
+   if(failure){process.exitCode=1;console.error(safeError(failure).message);}
+   for(const item of pending.values()){clearTimeout(item.timer);item.reject(new AppError('DEVICE_UNAVAILABLE'));}
+   pending.clear();if(process.connected)process.disconnect();
+  }
+ })();
+}
 process.on('disconnect',()=>void stop());process.on('SIGTERM',()=>void stop());process.on('SIGINT',()=>void stop());
 process.on('message',async message=>{
   if(message?.type==='shutdown-status'&&Number.isSafeInteger(message.id)){send({type:'shutdown-status',id:message.id,...(server?.shutdownStatus()??{busy:starting||stopping,failure:0})});return;}

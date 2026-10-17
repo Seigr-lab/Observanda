@@ -62,7 +62,14 @@ export class LabBookPostgres{
   try{await this.#runtime.authorizeMove(root,key,moveId);await this.closeLabBook(root);await this.#runtime.stopForMove(root,key,moveId);}finally{clearVault(key);}
  }
  stats(){return this.#pool.stats();}
- async close(){await this.#pool.closeAll();await this.#runtime.close();}
+ async close(){
+  let failure;
+  try{await this.#pool.closeAll();}catch(error){failure=error;}
+  // A failed pool stop can leave an owned runtime before its close begins.
+  // Drain those remaining runtimes while preserving the first failure.
+  try{await this.#runtime.close();}catch(error){failure??=error;}
+  if(failure)throw failure;
+ }
 }
 
 export async function assertLabBookDatabaseStopped(root,labBookId,vault){

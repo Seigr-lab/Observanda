@@ -67,7 +67,14 @@ export class ProjectPostgres{
   try{await this.#runtime.authorizeDeletion(root,key,deleteId);await this.closeProject(root);await this.#runtime.stopForDeletion(root,key,deleteId);}finally{clearVault(key);}
  }
  stats(){return this.#pool.stats();}
- async close(){await this.#pool.closeAll();await this.#runtime.close();}
+ async close(){
+  let failure;
+  try{await this.#pool.closeAll();}catch(error){failure=error;}
+  // A failed pool stop can leave an owned runtime before its close begins.
+  // Drain those remaining runtimes while preserving the first failure.
+  try{await this.#runtime.close();}catch(error){failure??=error;}
+  if(failure)throw failure;
+ }
 
 }
 
