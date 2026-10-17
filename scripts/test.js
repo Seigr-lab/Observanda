@@ -4,9 +4,12 @@ import path from 'node:path';
 import os from 'node:os';
 import {spawn} from 'node:child_process';
 import {startManagedPostgres} from '../src/postgres-runtime.js';
+import {nativeTestArguments} from './test-selection.js';
 const controller=new AbortController();let child,service,directory;
 const stop=()=>{controller.abort();child?.kill('SIGTERM');};process.on('SIGINT',stop);process.on('SIGTERM',stop);
 try{
+ const args=process.argv.slice(2),browser=args[0]==='--browser';if(browser)args.shift();
+ const commandArgs=browser?['node_modules/@playwright/test/cli.js','test',...args]:['--test','--test-reporter=tap','--test-concurrency=4',...await nativeTestArguments(args)];
  // Fixtures compare canonical workspace paths. Resolve runner aliases such as
  // macOS /var and Windows short-user paths before creating temporary owners.
  const temporaryRoot=await realpath(os.tmpdir());
@@ -17,8 +20,6 @@ try{
   service=await startManagedPostgres({directory,env,signal:controller.signal,onProgress:({stage,percent})=>{if(stage==='download'&&percent%10===0)console.log('Installing test PostgreSQL: '+percent+'%');}});
   env.OBSERVANDA_TEST_POSTGRES_BIN=service.bin;
  }
- const args=process.argv.slice(2),browser=args[0]==='--browser';if(browser)args.shift();
- const commandArgs=browser?['node_modules/@playwright/test/cli.js','test',...args]:['--test','--test-reporter=tap','--test-concurrency=4',...(args.length?args:['test/*.test.js'])];
  console.log('Testing with an isolated PostgreSQL database.');
  await new Promise((resolve,reject)=>{
   child=spawn(process.execPath,commandArgs,{windowsHide:true,stdio:'inherit',env,signal:controller.signal});child.once('error',reject);child.once('exit',(code,signal)=>code===0?resolve():reject(Error('Test command failed ('+(signal??code)+').')));
