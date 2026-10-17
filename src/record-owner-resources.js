@@ -1,3 +1,4 @@
+import {lockRecordOwnerResource as lock} from './record-owner-resource-lock.js';
 // Prospective allocations for selected-record transfers. These independently keyed
 // authenticated rows never replace the catalogue's shared object-index root.
 import {withScratch} from './scratch-work.js';
@@ -32,7 +33,6 @@ function validAddress(value){return exact(value,['kind','key'])&&(['object','sta
 async function get(store,slot){const row=await store.db.get('SELECT payload FROM state WHERE slot=$1',slot);return row?store.decode('state',slot,row.payload):null;}
 async function put(store,slot,value){return mutation.run(store,()=>store.db.run('INSERT INTO state VALUES ($1,$2) ON CONFLICT(slot) DO UPDATE SET payload=excluded.payload',slot,store.encode('state',slot,value)));}
 async function remove(store,slot){return mutation.run(store,()=>store.db.run('DELETE FROM state WHERE slot=$1',slot));}
-async function lock(store,key){if(!(await store.db.get('SELECT pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended($1,0)) AS locked',(store.db.id??'')+':record-resource:'+key)).locked)throw new AppError('LOCKED');}
 async function page(store,prefix,{reverse=false,limit=32}={}){return store.db.all('SELECT slot,payload FROM state WHERE slot COLLATE "C">=$1 AND slot COLLATE "C"<$2 ORDER BY slot COLLATE "C" '+(reverse?'DESC':'ASC')+' LIMIT '+limit,prefix,prefix+'~');}
 function authority(store){try{return assertRecordOwnerTransferAuthority(store)??null;}catch(error){if(error.code!=='RECORD_TRANSFER_BUSY')throw error;return null;}}
 function saveContext(store,value){const allowed=authority(store);contexts.set(store.db??store,{workspace:store.workspace,authorityId:allowed?.id??null,value});return value;}
