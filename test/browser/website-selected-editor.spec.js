@@ -6,6 +6,7 @@ import {randomUUID} from 'node:crypto';
 import {createNotebook} from '../../src/model.js';
 import {defaultPageLayout} from '../../src/web/website-layouts.js';
 import {WebsiteSites} from '../../src/website-sites.js';
+import {WebsiteEditor} from '../../src/website-editor.js';
 import {MediaStore} from '../../src/media.js';
 import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
@@ -71,4 +72,27 @@ test('selected pages, layouts, logos and media retain independent edits across w
   for(const request of requests.filter(request=>new URL(request.url()).pathname==='/api/websites/editor/window'))expect(request.postDataJSON().limit).toBeLessThanOrEqual(100);
   expect(errors).toEqual([]);
  }finally{await page.close();await app?.close();if(fixture)clearVault(fixture.vault);expect(path.dirname(directory)).toBe(path.resolve(os.tmpdir()));await rm(directory,{recursive:true,force:true});}
+});
+
+
+test('branding page-name completion keeps a pressed return control and redo history',async({page})=>{
+ test.setTimeout(60000);page.setDefaultTimeout(10000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-branding-return-'));let fixture,app,release;
+ try{
+  const book=createNotebook('Branding return');fixture=await encryptedFixture(directory,book);const sites=new WebsiteSites(fixture.workspace),id=(await sites.change({workspaceId:book.id,etag:(await fixture.workspace.outline()).etag,operation:'create',name:'Selected website'})).id;
+  const authored={id:randomUUID(),title:'Named page',body:'Original text',share:true,sections:[]},before=await sites.read(id);
+  await sites.save(id,{workspaceId:book.id,baseEtag:before.etag,websitePin:before.websitePin,metadata:{pages:[authored],branding:[{target:'page:'+authored.id,logos:[]}]},projects:[],changes:[],removed:[],selection:before.site.selection});
+  const editor=new WebsiteEditor(fixture.workspace),common={workspaceId:book.id,websiteId:id},opened=await editor.execute('open',common),changed=await editor.execute('change',{...common,websitePin:opened.websitePin,draftId:null,expectedRevision:null,commandId:randomUUID(),operations:[{type:'settings',path:['document','website','footer'],value:'Retained redo'}]});
+  await editor.execute('undo',{...common,websitePin:changed.websitePin,draftId:changed.draft.id,expectedRevision:changed.draft.revision,commandId:randomUUID()});
+  app=await startServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(directory,'preferences.json'),port:0});await page.goto(app.url);await expect(page.getByRole('button',{name:'Menu',exact:true})).toBeVisible();await page.goto(new URL('/#/websites/'+id+'/editor',app.url).href);await expect(page.locator('.website-site-context')).toContainText('Selected website');
+  await chooseWebsitePage(page,'pages/'+authored.id+'.html');await openPageSettings(page);await page.getByText('Page actions',{exact:true}).click();await expect(page.getByRole('button',{name:'Redo',exact:true})).toBeEnabled();
+  let arrived;const waiting=new Promise(resolve=>{arrived=resolve;}),held=new Promise(resolve=>{release=resolve;});
+  await page.route('**/api/websites/editor/item',async route=>{const data=route.request().postDataJSON();if(data.collection!=='pages'||data.key!==authored.id){await route.continue();return;}const response=await route.fetch();arrived();await held;await route.fulfill({response}).catch(()=>{});});
+  await page.getByRole('button',{name:'Page logos',exact:true}).click();await waiting;
+  const back=page.getByRole('button',{name:'Back to website editor',exact:true}),original=await back.elementHandle(),box=await back.boundingBox();
+  await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();release();
+  await expect(page.getByLabel('Branding scope',{exact:true}).locator('option:checked')).toHaveText('Page: Named page');
+  const retained=await original.evaluate(node=>node.isConnected);await page.mouse.up();expect(retained,'Completing a name lookup replaced the pressed Back button').toBe(true);
+  await expect(page.locator('#website-preview-page')).toBeVisible();await expect(page.getByRole('button',{name:'Redo',exact:true})).toBeEnabled();await page.getByRole('button',{name:'Redo',exact:true}).click();
+  await expect.poll(async()=>{const current=await editor.execute('open',common);return current.site.document.website.footer;}).toBe('Retained redo');
+ }finally{release?.();await page.mouse.up().catch(()=>{});await page.close();await app?.close();if(fixture)clearVault(fixture.vault);expect(path.dirname(directory)).toBe(path.resolve(os.tmpdir()));await rm(directory,{recursive:true,force:true});}
 });
