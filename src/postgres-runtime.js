@@ -1,3 +1,4 @@
+import {initializeManagedApplication} from './postgres-runtime-bootstrap.js';
 import {verifyManagedApplication} from './postgres-runtime-readiness.js';
 import {assertNotRenaming,workspaceRename} from './workspace-rename-state.js';
 // PostgreSQL process lifecycle. Portable clusters belong to their workspace;
@@ -155,7 +156,7 @@ async function managePostgres({directory,env=process.env,signal,onProgress=()=>{
  const stateFile=path.join(directory,'service.observanda'),data=path.join(directory,'data'),portableKey=workspace?Buffer.from(workspace.vault.key):null;
  const aad=workspace?'Observanda/workspace-postgresql/v1/'+workspace.vault.id:null;
  const protector=workspace?{protect:bytes=>seal(bytes,portableKey,aad),unprotect:bytes=>unseal(bytes,portableKey,aad)}:windows?new WindowsProtector():null;
- let config,verifiedCluster=false;
+ let config,verifiedCluster=false,freshCluster=false;
  const save=async()=>{const bytes=Buffer.from(JSON.stringify(config));try{await atomicWrite(stateFile,protector?await protector.protect(bytes):bytes);}finally{bytes.fill(0);}};
  const ctl=(args,options={})=>runtimeCommand(executable(config.bin,'pg_ctl'),['-D',data,...args],options);
  try{
@@ -196,7 +197,7 @@ async function managePostgres({directory,env=process.env,signal,onProgress=()=>{
    if(config.phase!=='initializing')throw new AppError('DATABASE_RUNTIME');
    if(await assertRegular(stage,{directory:true,missing:true}))await rm(stage,{recursive:true,force:true});
    const passwordFile=path.join(directory,'bootstrap-password');await atomicWrite(passwordFile,config.adminPassword);
-   try{onProgress({stage:'initialize'});await runtimeCommand(executable(config.bin,'initdb'),['-D',stage,'-U','observanda_admin','--pwfile='+passwordFile,'--auth-host=scram-sha-256','--auth-local=scram-sha-256','--encoding=UTF8','--no-locale','--data-checksums'],{signal});await rename(stage,data);}
+   try{onProgress({stage:'initialize'});await runtimeCommand(executable(config.bin,'initdb'),['-D',stage,'-U','observanda_admin','--pwfile='+passwordFile,'--auth-host=scram-sha-256','--auth-local=scram-sha-256','--encoding=UTF8','--no-locale','--data-checksums'],{signal});await rename(stage,data);freshCluster=true;}
    finally{await rm(passwordFile,{force:true});}
   }
   if((await readFile(path.join(data,'PG_VERSION'),'utf8')).trim()!==String(config.major))throw new AppError('DATABASE_RUNTIME');
@@ -211,14 +212,10 @@ async function managePostgres({directory,env=process.env,signal,onProgress=()=>{
   onProgress({stage:'start'});
   // Foreground app owns lifecycle; recovery after app termination stops only this cluster.
   await ctl(['-l',path.join(directory,'postgresql.log'),'-o','-h 127.0.0.1 -p '+config.port+' -c max_connections=32 -c shared_buffers='+sharedBuffers+'MB -c unix_socket_directories= -c password_encryption=scram-sha-256 -c log_statement=none','-w','-t','60','start'],{signal});
-  const admin=new Client({host:'127.0.0.1',port:config.port,user:'observanda_admin',password:config.adminPassword,database:'postgres',connectionTimeoutMillis:5000});admin.on('error',()=>{});
+  const admin=new Client({host:'127.0.0.1',port:config.port,user:'observanda_admin',password:config.adminPassword,database:'template1',connectionTimeoutMillis:5000});admin.on('error',()=>{});
   try{
    await admin.connect();
-   if(config.phase==='initializing'){
-    if(!(await admin.query("SELECT 1 FROM pg_roles WHERE rolname='observanda'")).rowCount)await admin.query("CREATE ROLE observanda LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD '"+config.appPassword+"'");
-    if(!(await admin.query("SELECT 1 FROM pg_database WHERE datname='observanda'")).rowCount)await admin.query('CREATE DATABASE observanda OWNER observanda');
-    await admin.query('REVOKE ALL ON DATABASE observanda FROM PUBLIC');
-   }
+   if(config.phase==='initializing')await initializeManagedApplication(admin,config,{freshCluster});
   }finally{await admin.end();}
   await verifyManagedApplication(config,{signal});
   if(config.phase==='initializing'){config.phase='ready';await save();}
