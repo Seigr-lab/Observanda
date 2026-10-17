@@ -73,7 +73,7 @@ function validatePreparedInventory(prepared){if(!prepared||prepared.version!==1|
 export async function verifyPreparedInventory(workspace,prepared,{signal,files}={}){
  validatePreparedInventory(prepared);const index=new LivePathIndex(workspace);
  if(files&&files.size!==(prepared.files.root?.count??0))fail();
- for await(const path of index.paths(prepared.files)){signal?.throwIfAborted();if(files&&!files.has(path))fail();}
+ for await(const path of index.paths(prepared.files)){signal?.throwIfAborted();if(files&&!await files.has(path))fail();}
  for await(const path of index.paths(prepared.removed)){signal?.throwIfAborted();if(await index.has(prepared.files,path))fail();}
 }
 export async function recordDeploymentInventory(workspace,key,receipt,prepared){

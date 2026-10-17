@@ -27,7 +27,7 @@ import {WorkspaceFonts} from '../src/workspace-fonts.js';
 import {MediaStore} from '../src/media.js';
 import {contentBuffer} from '../src/file-content.js';
 
-const publicationPageText=async(candidate,file=candidate.defaultPage)=>(await contentBuffer(candidate.files.get(file))).toString('utf8');
+const publicationPageText=async(candidate,file=candidate.defaultPage)=>(await contentBuffer(await candidate.files.get(file))).toString('utf8');
 const edit=site=>({workspaceId:site.book.id,baseEtag:site.etag,websitePin:site.websitePin,metadata:{},projects:[],changes:[],removed:[],selection:site.site.selection});
 
 test('another website edit preserves preparation, export, deployment admission and rollback review without admitting changed publication inputs',async()=>{
@@ -93,7 +93,7 @@ test('default website retains exact appearance and edition pins after a same-hea
   const saved=await sites.save(null,command),otherId=(await sites.change({workspaceId:book.id,etag:saved.etag,operation:'create',name:'Independent website'})).id;
   const workspace=websiteWorkspace(fixture.workspace,null),other=websiteWorkspace(fixture.workspace,otherId),publisher=new Publisher(workspace.root,{workspace,request:()=>{throw Error('Unexpected provider call');}},workspace.vault),config=defaultPublishing();Object.assign(config.github,{owner:'example',repository:'default-website'});
   const destination=await publisher.save(config,'new'),releases=new PublicationJobs(workspace),source={etag:saved.etag,websitePin:saved.websitePin},candidate=await releases.inline(source);
-  assert.equal(candidate.entries.length,1);assert.equal(candidate.websiteId,null);assert.equal(candidate.version,2);assert.deepEqual(candidate.websitePin,saved.websitePin);assert.equal((await releases.source(candidate.jobId)).version,3);
+  assert.equal(candidate.files.output.count('entries'),1);assert.equal(candidate.websiteId,null);assert.equal(candidate.version,3);assert.deepEqual(candidate.websitePin,saved.websitePin);assert.equal((await releases.source(candidate.jobId)).version,6);
   assert.equal(workspace.metadataPath('.observanda/publishing.json'),fixture.workspace.metadataPath('.observanda/publishing.json'));
   assert.deepEqual(JSON.parse(await fixture.workspace.readMetadata('.observanda/publishing.json',16384)),config);assert.equal(await other.readMetadata('.observanda/publishing.json',16384),null);
   const stored=JSON.parse(await fixture.workspace.readMetadata('.observanda/release-candidates/'+candidate.reviewId+'.json',1024*1024));assert.deepEqual(stored.websitePin,saved.websitePin);assert.equal(await other.readMetadata('.observanda/release-candidates/'+candidate.reviewId+'.json',1024*1024),null);
@@ -111,7 +111,7 @@ test('default website retains exact appearance and edition pins after a same-hea
   // Ordinary research edits change the original membership, not saved website
   // consent. Removed attachments disappear from current projections while the
   // exact earlier edition and appearance session retain their original image.
-  const original=book.entries[0],entryPage='entries/'+original.id+'.html',mediaPath='media/'+asset.id+'.png';assert.ok(candidate.files.has(mediaPath));
+  const original=book.entries[0],entryPage='entries/'+original.id+'.html',mediaPath='media/'+asset.id+'.png';assert.ok(await candidate.files.has(mediaPath));
   await records.save({workspaceId:book.id,changes:[{id:original.id,expectedRevision:recordRevision(original),record:{...original,attachments:[]}}]},{receipt:true});
   const afterRemoval=await sites.read(null),currentSource={etag:afterRemoval.etag,websitePin:afterRemoval.websitePin};
   assert.notEqual(afterRemoval.etag,next.etag);assert.equal(afterRemoval.websitePin.websiteRevision,next.websitePin.websiteRevision);
@@ -120,7 +120,7 @@ test('default website retains exact appearance and edition pins after a same-hea
   const inventory=await publicationSelection(workspace,{source:currentSource});assert.deepEqual(inventory.items[0].attachments,[]);assert.deepEqual(inventory.items[0].choice.attachments,[]);
   const {websitePin:inheritedPin,...inheritedDraft}=edit(afterRemoval);void inheritedPin;
   assert.deepEqual((await publicationSource(workspace,{...currentSource,draft:inheritedDraft})).entries[0].attachments,[]);
-  const currentCandidate=await releases.inline({...currentSource,draft:inheritedDraft});assert.equal(currentCandidate.files.has(mediaPath),false);assert.ok(!(await publicationPageText(currentCandidate,entryPage)).includes(asset.id));
+  const currentCandidate=await releases.inline({...currentSource,draft:inheritedDraft});assert.equal(await currentCandidate.files.has(mediaPath),false);assert.ok(!(await publicationPageText(currentCandidate,entryPage)).includes(asset.id));
   const currentPreview=await previews.create(workspace,{...appearance,...currentSource},{media,fonts:new WorkspaceFonts(workspace)}),currentSession=currentPreview.baseUrl.split('/').filter(Boolean).at(-1),currentPage=await previews.page(currentSession,entryPage);
   assert.equal(currentPage.files.has(mediaPath),false);assert.ok(!(await publicationPageText(currentPage,entryPage)).includes(asset.id));
   const inherited=await sites.save(null,edit(afterRemoval));assert.deepEqual(inherited.websitePin,afterRemoval.websitePin);
@@ -132,7 +132,7 @@ test('default website retains exact appearance and edition pins after a same-hea
   const cleared=edit(inherited);cleared.selection=structuredClone(cleared.selection);cleared.selection.records.find(value=>value.id===original.id).attachments=[];
   const recovered=await sites.save(null,cleared);assert.deepEqual(recovered.site.selection.records.find(value=>value.id===original.id).attachments,[]);
   previews.cache.clear();const oldPage=await previews.page(sessionId,entryPage);assert.ok(oldPage.files.has(mediaPath));assert.ok((await publicationPageText(oldPage,entryPage)).includes(asset.id));
-  assert.deepEqual(await contentBuffer((await releases.read(candidate.reviewId)).files.get(mediaPath)),await contentBuffer(candidate.files.get(mediaPath)));
+  assert.deepEqual(await contentBuffer(await (await releases.read(candidate.reviewId)).files.get(mediaPath)),await contentBuffer(await candidate.files.get(mediaPath)));
   assert.deepEqual((await sites.read(null,{websitePin:saved.websitePin})).site.selection.records.find(value=>value.id===original.id).attachments,[{id:asset.id,share:true}]);
  }finally{previews?.clear();if(fixture)clearVault(fixture.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-default-website-pin-'));await rm(directory,{recursive:true,force:true});}
 });

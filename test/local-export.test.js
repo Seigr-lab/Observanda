@@ -19,22 +19,28 @@ import {WebsiteSites} from '../src/website-sites.js';
 import {websiteWorkspace} from '../src/website-workspace.js';
 import {verifyPublicationStorage} from '../src/publication-storage-verification.js';
 
+async function publicationCommand(releases){const {etag,websitePin,metadata}=await releases.workspace.outline();return {etag,websitePin,workspaceId:metadata.id};}
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-local-export-')),book=sampleNotebook();book.projects.forEach(p=>p.share=true);book.entries[2].share=true;book.entries[1].share=false;book.entries[1].title='PRIVATE_UNRELEASED_COMPONENT';
  const f=await encryptedFixture(directory,book),destination=path.join(directory,'website'),releases=new PublicationJobs(f.workspace),jobs=workspaceJobs(f.workspace);
  await mkdir(destination);await mkdir(path.join(destination,'.git'));await writeFile(path.join(destination,'.git','HEAD'),'Unrelated repository history');await writeFile(path.join(destination,'manual.html'),'An unrelated page');
  const prepare=async()=>{
-  const {etag,metadata}=await f.workspace.outline(),job=await releases.start({etag,workspaceId:metadata.id},jobs.queue),claimed=await jobs.queue.claim();
+  const job=await releases.start(await publicationCommand(releases),jobs.queue),claimed=await jobs.queue.claim();
   assert.equal(claimed.id,job.id);const candidate=await releases.prepare(claimed,{signal:new AbortController().signal,progress:async()=>{}});
   await jobs.queue.complete(job.id,claimed.lease.token,candidate);return releases.read(candidate.reviewId);
  };
  const first=await prepare();t.after(async()=>{await jobs.worker.stop();clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  return {...f,directory,destination,prepare,first,service:new LocalExport(f.workspace)};
 }
-async function verifyOutput(candidate,directory){for(const [name,content] of candidate.files)assert.deepEqual(await readFile(path.join(directory,name)),await contentBuffer(content),name);}
+async function verifyOutput(candidate,directory){for await(const [name,content] of candidate.files)assert.deepEqual(await readFile(path.join(directory,name)),await contentBuffer(content),name);}
 const planFor=(f,c=f.first,directory=f.destination)=>f.service.plan({reviewId:c.reviewId,directory});
 const apply=(service,id)=>service.apply({id,reviewed:true});
-async function revised(f){const current=await f.workspace.read();current.book.entries[0].title='Revised oscillator trial';current.book.entries[2].share=false;await f.workspace.save(current.book,current.etag);return f.prepare();}
+async function revised(f){
+ const current=await f.workspace.read();current.book.entries[0].title='Revised oscillator trial';current.book.entries[2].share=false;await f.workspace.save(current.book,current.etag);
+ const sites=new WebsiteSites(f.workspace),site=await sites.read(null),selection=structuredClone(site.site.selection),recordId=current.book.entries[2].id,choice=selection.records.find(row=>row.id===recordId);
+ if(choice)choice.share=false;else selection.records.push({id:recordId,share:false,attachments:[]});
+ await sites.save(null,{workspaceId:current.book.id,baseEtag:site.etag,websitePin:site.websitePin,metadata:{},projects:[],changes:[],removed:[],selection});return f.prepare();
+}
 
 test('legacy export plans and ownership receipts recover and continue into indexed editions',async t=>{
  const f=await fixture(t),review=await planFor(f),saved=await f.service.get(review.id),changes=await Array.fromAsync(f.service.changes(saved));
@@ -88,9 +94,9 @@ test('independent websites retain isolated export reviews and cannot adopt each 
  const f=await fixture(t),sites=new WebsiteSites(f.workspace),initial=await f.workspace.read(),record=initial.book.entries[0],projectId=initial.book.notebooks.find(n=>n.id===record.notebookId).projectId,ids=[];
  for(const name of ['Project journal','Project guide']){
   const created=await sites.change({workspaceId:initial.book.id,etag:(await f.workspace.outline()).etag,operation:'create',name}),current=await sites.read(created.id);ids.push(created.id);
-  await sites.save(created.id,{workspaceId:initial.book.id,baseEtag:current.etag,metadata:{},projects:[],changes:[],removed:[],selection:{defaultShare:false,includeProjects:[],records:[{id:record.id,share:true,attachments:[]}]}});
+  await sites.save(created.id,{workspaceId:initial.book.id,baseEtag:current.etag,websitePin:current.websitePin,metadata:{},projects:[],changes:[],removed:[],selection:{defaultShare:false,includeProjects:[],records:[{id:record.id,share:true,attachments:[]}]}});
  }
- const [a,b]=ids.map(id=>websiteWorkspace(f.workspace,id)),etag=(await f.workspace.outline()).etag,first=await new PublicationJobs(a).inline({etag}),second=await new PublicationJobs(b).inline({etag}),sa=new LocalExport(a),sb=new LocalExport(b);
+ const [a,b]=ids.map(id=>websiteWorkspace(f.workspace,id)),firstReleases=new PublicationJobs(a),secondReleases=new PublicationJobs(b),first=await firstReleases.inline(await publicationCommand(firstReleases)),second=await secondReleases.inline(await publicationCommand(secondReleases)),sa=new LocalExport(a),sb=new LocalExport(b);
  const plan=await sa.plan({reviewId:first.reviewId,directory:f.destination});await assert.rejects(sb.get(plan.id),{code:'NOT_FOUND'});await apply(sa,plan.id);
  const collision=await sb.plan({reviewId:second.reviewId,directory:f.destination});assert.ok(collision.counts.conflict>0);await assert.rejects(apply(sb,collision.id),{code:'LOCAL_EXPORT_CHANGED'});
  const other=path.join(f.directory,'second-website');await mkdir(other);await apply(sb,(await sb.plan({reviewId:second.reviewId,directory:other})).id);
@@ -106,11 +112,11 @@ test('reviewed root and nested exports preserve unrelated bytes, sync only owned
  delete f.workspace.read;const next=await revised(f),update=await planFor(f,next);assert.ok(update.counts.replaced>0);assert.ok(update.counts.removed>0);
  const changes=(await f.service.page({id:update.id})).files;assert.ok(changes.every(c=>!c.path.startsWith('.git')&&!c.path.includes('manual.html')));
  await apply(f.service,update.id);await verifyOutput(next,f.destination);
- for(const name of f.first.files.keys())if(!next.files.has(name))await assert.rejects(readFile(path.join(f.destination,name)),{code:'ENOENT'});
+ for await(const name of f.first.files.keys())if(!await next.files.has(name))await assert.rejects(readFile(path.join(f.destination,name)),{code:'ENOENT'});
  assert.equal(await readFile(path.join(f.destination,'manual.html'),'utf8'),'An unrelated page');assert.equal(await readFile(path.join(f.destination,'.git','HEAD'),'utf8'),'Unrelated repository history');
  const nested=path.join(f.destination,'lab');await mkdir(nested);await apply(f.service,(await planFor(f,next,nested)).id);await verifyOutput(next,nested);
  const names=await readdir(f.destination,{recursive:true});assert.ok(!names.some(n=>n.startsWith('.observanda-')));
- for(const content of next.files.values()){const bytes=await contentBuffer(content);for(const value of ['PRIVATE_UNRELEASED_COMPONENT',f.workspace.root,f.destination])assert.equal(bytes.includes(Buffer.from(value)),false);}
+ for await(const content of next.files.values()){const bytes=await contentBuffer(content);for(const value of ['PRIVATE_UNRELEASED_COMPONENT',f.workspace.root,f.destination])assert.equal(bytes.includes(Buffer.from(value)),false);}
 });
 
 test('unowned collisions, manual edits, deletions and stale source block writes without adopting outside files',async t=>{
@@ -119,8 +125,8 @@ test('unowned collisions, manual edits, deletions and stale source block writes 
  await unlink(path.join(f.destination,'index.html'));plan=await planFor(f);await apply(f.service,plan.id);
  const next=await revised(f);plan=await planFor(f,next);const stylesheet=path.join(f.destination,'styles.css');await writeFile(stylesheet,'Manual edit after review');
  await assert.rejects(apply(f.service,plan.id),{code:'LOCAL_EXPORT_CHANGED'});assert.equal(await readFile(stylesheet,'utf8'),'Manual edit after review');
- await writeFile(stylesheet,await contentBuffer(f.first.files.get('styles.css')));await unlink(path.join(f.destination,'index.html'));assert.ok((await planFor(f,next)).counts.conflict);
- await writeFile(path.join(f.destination,'index.html'),await contentBuffer(f.first.files.get('index.html')));plan=await planFor(f,next);await revised(f);await assert.rejects(apply(f.service,plan.id),{code:'PUBLISH_STALE'});
+ await writeFile(stylesheet,await contentBuffer(await f.first.files.get('styles.css')));await unlink(path.join(f.destination,'index.html'));assert.ok((await planFor(f,next)).counts.conflict);
+ await writeFile(path.join(f.destination,'index.html'),await contentBuffer(await f.first.files.get('index.html')));plan=await planFor(f,next);await revised(f);await assert.rejects(apply(f.service,plan.id),{code:'PUBLISH_STALE'});
 });
 
 for(const phase of ['staged','ready','moved','installed','verified','committed'])test('interrupted '+phase+' resumes the pinned edition with durable receipts',async t=>{
@@ -151,7 +157,7 @@ test('recovery rejects edits to installed files and preserves both the manual ed
  const interrupted=new LocalExport(f.workspace,{checkpoint:async(stage,name)=>{if(stage==='installed'&&name==='index.html')throw Error('Stop');}});
  await assert.rejects(apply(interrupted,plan.id));const homepage=path.join(f.destination,'index.html');await writeFile(homepage,'Manual change during interruption');
  await assert.rejects(apply(f.service,plan.id),{code:'LOCAL_EXPORT_CHANGED'});assert.equal(await readFile(homepage,'utf8'),'Manual change during interruption');
- assert.deepEqual(await readFile(temporary(homepage,plan.id,'old')),await contentBuffer(f.first.files.get('index.html')));
+ assert.deepEqual(await readFile(temporary(homepage,plan.id,'old')),await contentBuffer(await f.first.files.get('index.html')));
 });
 
 test('paths, links and non-regular destinations cannot redirect an export',async t=>{
@@ -164,7 +170,7 @@ test('paths, links and non-regular destinations cannot redirect an export',async
 
 test('a concurrent identical file is still unowned; a moved concurrent edit is returned without overwriting it',async t=>{
  const f=await fixture(t),plan=await planFor(f),homepage=path.join(f.destination,'index.html');
- const collision=new LocalExport(f.workspace,{checkpoint:async stage=>{if(stage==='ready')await writeFile(homepage,await contentBuffer(f.first.files.get('index.html')));}});
+ const collision=new LocalExport(f.workspace,{checkpoint:async stage=>{if(stage==='ready')await writeFile(homepage,await contentBuffer(await f.first.files.get('index.html')));}});
  await assert.rejects(apply(collision,plan.id),{code:'LOCAL_EXPORT_CHANGED'});await assert.rejects(apply(f.service,plan.id),{code:'LOCAL_EXPORT_CHANGED'});
  await unlink(homepage);await apply(f.service,plan.id);const next=await revised(f),update=await planFor(f,next);
  const racing=new LocalExport(f.workspace,{checkpoint:async(stage,name)=>{if(stage==='moved'&&name==='index.html')await writeFile(temporary(homepage,update.id,'old'),'Concurrent manual original');}});

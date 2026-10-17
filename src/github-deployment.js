@@ -1,3 +1,4 @@
+import {contentHash} from './file-content.js';
 import {contentBuffer} from './file-content.js';
 import {buildGithubTree,verifyRemoteGithubTree} from './github-trees.js';
 import {admitGithubPlan} from './github-publication-plan.js';
@@ -33,7 +34,7 @@ export async function deployGithub(publisher,candidate,config,{plan=null,journal
    if(uploaded.has(entry.sha))continue;
    await report(messages.uploading);
    const source=c.directory?entry.path.slice(c.directory.length+1):entry.path;
-   const blob=await call('/git/blobs','POST',{content:(await contentBuffer(candidate.files.get(source))).toString('base64'),encoding:'base64'});
+   const blob=await call('/git/blobs','POST',{content:(await contentBuffer(await candidate.files.get(source))).toString('base64'),encoding:'base64'});
    if(blob.sha!==entry.sha)throw new AppError('PUBLISH_REMOTE');journal.uploaded.push(entry.sha);uploaded.add(entry.sha);await checkpoint();
   }
   await buildGithubTree(call,journal,{checkpoint,signal,onProgress:(done,total)=>progress({stage:messages.buildingTree,done,total})});
@@ -57,7 +58,7 @@ export async function deployGithub(publisher,candidate,config,{plan=null,journal
  }
  const verified=await call(`/git/ref/heads/${c.branch}`);
  if(verified.object?.sha!==journal.commit)throw new AppError('PUBLISH_STALE');
- journal.receipt??={releaseId:candidate.id,commit:journal.commit,at:new Date().toISOString(),status:'uploaded',manifestHash:digest(candidate.files.get('publication.json'))};
+ journal.receipt??={releaseId:candidate.id,commit:journal.commit,at:new Date().toISOString(),status:'uploaded',manifestHash:contentHash(await candidate.files.get('publication.json'))};
  await checkpoint();await pushed(journal.receipt,journal);
  await report(messages.verifying);
  await verifyRemoteGithubTree(call,journal.tree,[...journal.preservedEntries,...journal.entries],{signal});

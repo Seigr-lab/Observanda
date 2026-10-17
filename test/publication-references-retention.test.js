@@ -15,10 +15,10 @@ import {Workspace} from '../src/storage.js';
 test('retained reference continuation files restore byte for byte under a fresh encryption key',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-reference-edition-')),book=referenceBook(),f=await encryptedFixture(directory,book),jobs=new PublicationJobs(f.workspace);
  t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
- const etag=(await f.workspace.outline()).etag,candidate=await jobs.inline({etag}),names=[...candidate.files.keys()].filter(name=>name.startsWith('entries/references-'+book.entries[0].id+'-'));
- assert.equal(names.length,2);const original=await Promise.all(names.map(async name=>(await contentBuffer(candidate.files.get(name))).toString()));
+ const candidate=await jobs.inline(await jobs.workspace.outline()),names=(await Array.fromAsync(candidate.files.keys())).filter(name=>name.startsWith('entries/references-'+book.entries[0].id+'-'));
+ assert.equal(names.length,2);const original=await Promise.all(names.map(async name=>(await contentBuffer(await candidate.files.get(name))).toString()));
  const access=await createAccess('','reference edition restore'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const destination=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'restored')),access,vault,f.vault),restored=new PublicationJobs(new Workspace(destination,vault));
  await restored.verifyFiles(candidate.reviewId);const copy=await restored.read(candidate.reviewId);assert.equal(copy.id,candidate.id);
- for(const [index,name]of names.entries())assert.equal((await contentBuffer(copy.files.get(name))).toString(),original[index]);
+ for(const [index,name]of names.entries())assert.equal((await contentBuffer(await copy.files.get(name))).toString(),original[index]);
 });

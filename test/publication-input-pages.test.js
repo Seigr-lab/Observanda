@@ -12,6 +12,8 @@ import {WebsiteEditorStore} from '../src/website-editor-store.js';
 import {WebsiteSites} from '../src/website-sites.js';
 import {websiteWorkspace} from '../src/website-workspace.js';
 import {PublicationJobs} from '../src/publication-jobs.js';
+import {openPublicationInput} from '../src/publication-input-reader.js';
+import {isPublicationDocumentBlockName} from '../src/publication-document.js';
 import {withPublicationCapture} from '../src/publication-capture.js';
 import {readPublicationPage,retainPublicationPages,validatePublicationPages} from '../src/publication-input-pages.js';
 import {serialize} from '../src/storage-format.js';
@@ -52,16 +54,18 @@ test('preparing a website beyond the former input envelope reads one pinned cust
  WebsiteEditorStore.prototype.document=async function(...args){const result=await originalDocument.apply(this,args),read=result.document.tree.read.bind(result.document.tree);result.document.tree.read=async root=>{assert.notEqual(root,result.document.root,'Preparation hydrated the whole website');return read(root);};return result;};
  let pinned;
  try{pinned=await withPublicationCapture(storage,async(captured,id,finish)=>{const value=await releases.pin(source,{workspace:captured,id});return finish(()=>value);});}finally{WebsiteEditorStore.prototype.document=originalDocument;}
- assert.equal(pinned.version,5);assert.equal(pinned.pageInputs.length,pages.length);assert.equal(pinned.summary.media,1);assert.ok(Buffer.byteLength(serialize(pinned))<100000);assert.ok(pinned.metadata.pages.every(value=>value.body===''&&value.sections.length===0));
- assert.equal((await storage.listMetadata('.observanda/release-inputs/'+pinned.id)).length,pages.length);
+ assert.equal(pinned.version,6);const input=await openPublicationInput(storage,pinned);assert.equal(await input.count('pageInputs'),pages.length);assert.equal(pinned.summary.media,1);assert.ok(Buffer.byteLength(serialize(pinned))<100000);assert.equal(Object.hasOwn(pinned,'pageInputs'),false);assert.deepEqual((await input.metadata()).pages,[]);
+ assert.equal(await input.count('pages',{shared:false}),pages.length+1);for await(const value of input.items('pages',{shared:false})){assert.equal(value.body,'');assert.deepEqual(value.sections,[]);}
+ const originals=new Set();for await(const name of storage.metadataNames('.observanda/release-inputs/'+pinned.id)){if(isPublicationDocumentBlockName(name))continue;assert.match(name,/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\.json$/);originals.add(name);}
+ assert.equal(originals.size,pages.length);for await(const ref of input.items('pageInputs'))assert.ok(originals.has(ref.fileId+'.json'));
  await execute('discard',{draftId:state.draft.id,expectedRevision:state.draft.revision,commandId:randomUUID()});
  const reopened=new PublicationJobs(websiteWorkspace(f.workspace,websiteId)),retained=await reopened.source(pinned.id);assert.deepEqual(retained,pinned);
  const job={id:pinned.id,lease:{token:randomUUID()}},candidate=await reopened.prepare(job,{signal:new AbortController().signal,progress:async()=>{}});await storage.withLock(()=>reopened.commit(job,candidate));
- const edition=await reopened.read(candidate.reviewId),home=(await contentBuffer(edition.files.get('index.html'))).toString();
+ const edition=await reopened.read(candidate.reviewId),home=(await contentBuffer(await edition.files.get('index.html'))).toString();
  assert.match(home,/CHAPTER_TEASER_17/);assert.doesNotMatch(home,/PRIVATE_PAGE_NEVER_PUBLISHED/);
- const last=(await contentBuffer(edition.files.get('pages/'+pages.at(-1).id+'.html'))).toString();assert.match(last,/CHAPTER_TEASER_17/);assert.match(last,/Controlled published observation/);
- assert.equal(edition.pages.filter(value=>value.path.startsWith('pages/')).length,pages.length);
- assert.ok([...edition.files.keys()].some(name=>name.startsWith('downloads/')));
+ const last=(await contentBuffer(await edition.files.get('pages/'+pages.at(-1).id+'.html'))).toString();assert.match(last,/CHAPTER_TEASER_17/);assert.match(last,/Controlled published observation/);
+ let publishedPages=0,cursor=null;do{const choices=await reopened.pageChoices(edition,{cursor,limit:16});publishedPages+=choices.items.filter(value=>value.path.startsWith('pages/')).length;cursor=choices.next;}while(cursor!==null);assert.equal(publishedPages,pages.length);
+ let hasDownload=false;for await(const name of edition.files.keys())if(name.startsWith('downloads/')){hasDownload=true;break;}assert.ok(hasDownload);
  // Capture identities are immutable even when a later source chooses the same file.
  await assert.rejects(withPublicationCapture(storage,async(captured,id)=>{const file='.observanda/release-inputs/'+id+'/'+randomUUID()+'.json';await captured.writeMetadata(file,'{}');await captured.writeMetadata(file,'{"changed":true}');}),{code:'PUBLICATION_IDENTITY'});
  assert.deepEqual(await storage.listMetadata('.observanda/release-captures'),[]);

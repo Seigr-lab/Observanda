@@ -1,3 +1,5 @@
+import {contentHash} from './file-content.js';
+import {verifyPublicationCandidate} from './retained-publication-files.js';
 import {publicationWorkspace} from './publication-pin.js';
 import {publicationRevisionCurrent} from './publication-freshness.js';
 import {deploymentInventory,recordDeploymentInventory,prepareDeploymentInventory,assertDeploymentInventory,deploymentInventoryPaths,verifyLiveFiles,LiveVerificationError} from './publication-live.js';
@@ -10,7 +12,6 @@ import {contentSize} from './file-content.js';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import { Workspace, digest, serialize } from './storage.js';
-import { verifyPublication } from './publication.js';
 import { AppError } from './errors.js';
 import { SSHHost } from './ssh-host.js';
 
@@ -91,7 +92,7 @@ export class Publisher {
   async buildDestinationPlan(candidate, configEtag, {signal}={}) {
     signal?.throwIfAborted();
     const remote=(route,missing=false)=>{signal?.throwIfAborted();return this.github(route,'GET',undefined,missing,signal);};
-    verifyPublication(candidate);
+    await verifyPublicationCandidate(candidate);
     const saved=await this.read();
     if(!saved.configured||saved.etag!==configEtag||saved.config.kind!=='github')throw new AppError('PUBLISH_STALE');
     const c=saved.config.github,base=`/repos/${c.owner}/${c.repository}`,repo=await remote(base);
@@ -185,12 +186,12 @@ export class Publisher {
     return digest(serialize({kind:config.kind,destination}));
   }
   async deploy(candidate, expectedConfigEtag, workspaceId, review={}) {
-    verifyPublication(candidate);
+    await verifyPublicationCandidate(candidate);
     const saved = await this.read();
     if (!saved.configured || saved.etag !== expectedConfigEtag) throw new AppError('PUBLISH_STALE');
     const config = saved.config;
     const plan=await this.readDestinationPlan(candidate,expectedConfigEtag,review);
-    enforcePublishingLimits(candidate,config);
+    await enforcePublishingLimits(candidate,config);
     const inventoryKey=this.destinationKey(config),preparedInventory=await prepareDeploymentInventory(this.workspace,inventoryKey,candidate.files.keys(),{removed:(plan?.removed??[]).map(p=>config.github.directory?p.slice(config.github.directory.length+1):p)});
     // Hold the workspace lock through publication so another writer cannot invalidate the review.
     return this.workspace.withLock(async () => {
@@ -204,7 +205,7 @@ export class Publisher {
       else {
         receipt=await deployGithub(this,candidate,config,{plan,journal:{},save:async()=>{},guard:async()=>{},pushed:async (value,journal)=>{await writeGithubOwnership(this.workspace,key,journal);await recordDeploymentInventory(this.workspace,key,value,preparedInventory);receipts[key]=value;await this.workspace.writeMetadata('.observanda/publishing-receipts.json',serialize(receipts));}});
       }
-      receipt.manifestHash = digest(candidate.files.get('publication.json'));
+      receipt.manifestHash = contentHash(await candidate.files.get('publication.json'));
       await recordDeploymentInventory(this.workspace,key,receipt,preparedInventory);
       receipts[key] = receipt; await this.workspace.writeMetadata('.observanda/publishing-receipts.json', serialize(receipts));
       return receipt;
@@ -214,7 +215,8 @@ export class Publisher {
 
 export function enforcePublishingLimits(candidate,config){
  const policy=config.limits?.[config.kind]??{maxFileBytes:0,maxTotalBytes:0};let total=0;
- for(const content of candidate.files.values()){const size=contentSize(content);total+=size;if(policy.maxFileBytes&&size>policy.maxFileBytes)throw new AppError('PUBLISH_POLICY');if(config.kind==='github'&&size>100*1024*1024)throw new AppError('PUBLISH_SIZE');}
- if(policy.maxTotalBytes&&total>policy.maxTotalBytes)throw new AppError('PUBLISH_POLICY');
- if(config.kind==='github'&&total>1000000000)throw new AppError('PUBLISH_SIZE');
+ const check=content=>{const size=contentSize(content);total+=size;if(policy.maxFileBytes&&size>policy.maxFileBytes)throw new AppError('PUBLISH_POLICY');if(config.kind==='github'&&size>100*1024*1024)throw new AppError('PUBLISH_SIZE');};
+ const finish=()=>{if(policy.maxTotalBytes&&total>policy.maxTotalBytes)throw new AppError('PUBLISH_POLICY');if(config.kind==='github'&&total>1000000000)throw new AppError('PUBLISH_SIZE');};
+ const values=candidate.files.values();if(typeof values[Symbol.iterator]==='function'){for(const content of values)check(content);return finish();}
+ return (async()=>{for await(const content of values)check(content);finish();})();
 }

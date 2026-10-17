@@ -38,7 +38,7 @@ test('a new prepared edition opens automatically and keeps review confirmation e
 });
 
 test('prepared edition pages expose older cancelled work and preserve its page during retry',async({page})=>{
- test.setTimeout(60000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-edition-pages-')),f=await encryptedFixture(directory,sampleNotebook()),releases=new PublicationJobs(f.workspace),{workspaceJobs}=await import('../../src/workspace-jobs.js'),jobs=workspaceJobs(f.workspace),current=await f.workspace.read();let oldest;
+ test.setTimeout(60000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-edition-pages-')),f=await encryptedFixture(directory,sampleNotebook()),releases=new PublicationJobs(f.workspace),{workspaceJobs}=await import('../../src/workspace-jobs.js'),jobs=workspaceJobs(f.workspace),current=await releases.workspace.outline();let oldest;
  for(let i=0;i<22;i++){const job=await releases.start(current,jobs.queue);if(i===0)oldest=job;await jobs.queue.control(job.id,'cancel');}
  const app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json')});
  try{

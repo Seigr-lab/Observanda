@@ -9,9 +9,11 @@ import {analysisDependencyState} from '../src/analysis-dependencies.js';
 import {publicationDependencyState} from '../src/publication-analysis-inputs.js';
 import {ResearchRecords,recordRevision} from '../src/research.js';
 import {PublicationJobs} from '../src/publication-jobs.js';
+import {WebsiteSites} from '../src/website-sites.js';
 import {AnalysisPublicationReview} from '../src/analysis-publication-review.js';
 import {contentBuffer} from '../src/file-content.js';
 import {AppError} from '../src/errors.js';
+async function publicationCommand(releases){const {etag,websitePin}=await releases.workspace.outline();return {etag,websitePin};}
 
 function authorizedSources(host,foreign){
  let allowed=true,opened=0,closed=0,foreignReads=0;
@@ -54,12 +56,15 @@ test('published comparison conclusions check private foreign inputs without expo
  let analysis;try{analysis=await new AnalysisComparisons(host.m,{inputs}).save(command);}finally{await inputs.close();}
  const conclusion=host.book.entries[2],result={id:randomUUID(),kind:'conclusion',title:'Selected conclusion',text:'Four retained readings matched and two differed.',basis:'retained',source:{...analysis,label:'PRIVATE_COMPARISON_LABEL'},limitations:'Synthetic qualification only.'};
  await new ResearchRecords(host.workspace,{}).save({workspaceId:host.book.id,changes:[{id:conclusion.id,expectedRevision:recordRevision(conclusion),record:{...conclusion,share:true,results:{version:1,statements:[result]}}}]},{compact:true});
+ // The independent website owns its publication consent for this previously private record.
+ const sites=new WebsiteSites(host.workspace),site=await sites.read(null),selection=structuredClone(site.site.selection);selection.records=selection.records.filter(row=>row.id!==conclusion.id);selection.records.push({id:conclusion.id,share:true,attachments:[]});
+ await sites.save(null,{workspaceId:host.book.id,baseEtag:site.etag,websitePin:site.websitePin,metadata:{},projects:[],changes:[],removed:[],selection});
  const sourceSnapshot=(await foreign.workspace.outline()).etag,releases=new PublicationJobs(host.workspace,{sourceReader:access.sourceReader});
- const candidate=await releases.inline({etag:(await host.workspace.outline()).etag}),review=new AnalysisPublicationReview(host.workspace,{sourceReader:access.sourceReader});
- assert.equal(candidate.researchReview.analysis.items.length,0);await review.assert(candidate);
- const html=await contentBuffer(candidate.files.get('entries/'+conclusion.id+'.html'));
+ const candidate=await releases.inline(await publicationCommand(releases)),review=new AnalysisPublicationReview(host.workspace,{sourceReader:access.sourceReader});
+ assert.equal(candidate.researchReview.analysis.count,0);await review.assert(candidate);
+ const entry=await candidate.files.get('entries/'+conclusion.id+'.html');assert.ok(entry,'The selected conclusion must have a retained page');const html=await contentBuffer(entry);
  assert.ok(html.includes(Buffer.from(result.text)));
- for(const [name,content] of candidate.files){
+ for await(const [name,content] of candidate.files){
   const bytes=await contentBuffer(content);
   for(const privateValue of ['PRIVATE_COMPARISON_LABEL',foreign.book.id,foreign.dataset.id,foreign.artifact.id])assert.ok(!bytes.includes(Buffer.from(privateValue)),name+': '+privateValue);
  }
@@ -71,11 +76,11 @@ test('published comparison conclusions check private foreign inputs without expo
  await foreign.m.dataset({recordId:foreign.recordId,title:dataset.title,id:foreign.dataset.id,expectedRevision:foreign.dataset.revision,artifact:foreign.artifact,baseDataset:foreign.dataset,columnChanges:[{index:0,column:{...column,unit:'ticks'}}]});
  assert.equal((await foreign.workspace.outline()).etag,sourceSnapshot);
  await assert.rejects(review.assert(candidate),{code:'ANALYSIS_REVIEW'});
- const next=await releases.inline({etag:(await host.workspace.outline()).etag});
- assert.equal(next.researchReview.analysis.items.length,1);
- assert.ok(next.researchReview.analysis.items[0].sample.some(ref=>ref.workspaceId===foreign.book.id&&ref.id===foreign.dataset.id));
+ const next=await releases.inline(await publicationCommand(releases));
+ assert.equal(next.researchReview.analysis.count,1);const changed=await review.window(next,{limit:4});assert.equal(changed.total,1);assert.equal(changed.items.length,1);
+ assert.ok(changed.items[0].sample.some(ref=>ref.workspaceId===foreign.book.id&&ref.id===foreign.dataset.id));
  await assert.rejects(review.assert(next),{code:'ANALYSIS_REVIEW'});
- await review.save(next,next.researchReview.analysis.items.map(item=>({id:item.id,reason:'The conclusion reports the original retained input interpretation.'})));await review.assert(next);
+ await review.save(next,changed.items.map(item=>({id:item.id,reason:'The conclusion reports the original retained input interpretation.'})));await review.assert(next);
  assert.equal(access.stats().opened,access.stats().closed);
  assert.deepEqual((await host.m.read(analysis)).content.comparison,command.comparison);
 });

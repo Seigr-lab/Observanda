@@ -17,6 +17,7 @@ import {WebsiteEditorStore} from '../src/website-editor-store.js';
 import {RecordDocument} from '../src/record-document.js';
 import {websiteWorkspace} from '../src/website-workspace.js';
 import {PublicationJobs} from '../src/publication-jobs.js';
+import {openPublicationInput} from '../src/publication-input-reader.js';
 import {withPublicationCapture} from '../src/publication-capture.js';
 import {websiteDocumentPreviewSource} from '../src/website-preview-source.js';
 import {publicationPage} from '../src/publication-page.js';
@@ -95,11 +96,11 @@ test('native previews and retained editions select presentation values and keep 
   const home=await websiteDocumentPreviewSource(storage,{websitePin:state.websitePin,websiteDraft},{designTarget:'home'});assert.ok(publicationPage(home.context,'home').media.has(images[2].id));
   pinned=await withPublicationCapture(storage,async(captured,id,finish)=>{const source=await releases.pin(command,{workspace:captured,id});return finish(()=>source);});
  }finally{RecordDocument.prototype.field=field;WebsiteEditorStore.prototype.document=document;}
- assert.equal(pinned.version,5);assert.deepEqual(pinned.presentationCounts,{layouts:1,branding:2});assert.equal(pinned.summary.media,3);assert.ok(reads.includes('document/website/layouts/0'));
+ assert.equal(pinned.version,6);const input=await openPublicationInput(storage,pinned);assert.equal(await input.count('layoutInputs'),1);assert.equal(await input.count('brandingInputs'),2);assert.equal(pinned.summary.media,3);assert.ok(reads.includes('document/website/layouts/0'));
  await execute('discard',{draftId:state.draft.id,expectedRevision:state.draft.revision,commandId:randomUUID()});
  const job={id:pinned.id,lease:{token:randomUUID()}},candidate=await releases.prepare(job,{signal:new AbortController().signal,progress:async()=>{}});await storage.withLock(()=>releases.commit(job,candidate));const edition=await releases.read(candidate.reviewId);
- const html=(await contentBuffer(edition.files.get('pages/'+authored.id+'.html'))).toString();assert.match(html,/Selected retained layout/);assert.match(html,/Page retained logo/);assert.match((await contentBuffer(edition.files.get('index.html'))).toString(),/Page card teaser/);
- for(const image of images)assert.ok(edition.files.has('media/'+image.id+'.png'));
- let interrupted;await assert.rejects(withPublicationCapture(storage,async(captured,id)=>{interrupted=id;await retainPublicationPresentation(captured,id,pinned.metadata,streams([layout('home',[{id:'large',kind:'copy-text',title:'',show:true,value:'x'.repeat(300000),body:'',label:'Copy'}])],[]));throw new DOMException('Capture cancelled','AbortError');}),{name:'AbortError'});
+ const html=(await contentBuffer(await edition.files.get('pages/'+authored.id+'.html'))).toString();assert.match(html,/Selected retained layout/);assert.match(html,/Page retained logo/);assert.match((await contentBuffer(await edition.files.get('index.html'))).toString(),/Page card teaser/);
+ for(const image of images)assert.ok(await edition.files.has('media/'+image.id+'.png'));
+ let interrupted;await assert.rejects(withPublicationCapture(storage,async(captured,id)=>{interrupted=id;await retainPublicationPresentation(captured,id,await input.metadata(),streams([layout('home',[{id:'large',kind:'copy-text',title:'',show:true,value:'x'.repeat(300000),body:'',label:'Copy'}])],[]));throw new DOMException('Capture cancelled','AbortError');}),{name:'AbortError'});
  assert.deepEqual(await storage.listMetadata('.observanda/release-inputs/'+interrupted),[]);assert.deepEqual(await storage.listMetadata('.observanda/release-captures'),[]);
 });

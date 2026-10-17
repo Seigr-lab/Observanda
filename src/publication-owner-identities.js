@@ -28,3 +28,15 @@ export class PublicationOwnerIdentities{
  }
  project(owner,id){return this.identity(owner.projectId===id?owner.projectNamespaceId??owner.workspaceId:owner.workspaceId,'project',id);}
 }
+
+// Capture collision tracking lives in the immutable publication owner rather
+// than a Map proportional to the number of selected records and media files.
+export class PublicationCaptureIdentities{
+ constructor(workspaceId,builder){if(!researchId(workspaceId))throw new AppError('INVALID');this.workspaceId=workspaceId;this.builder=builder;}
+ async identity(namespaceId,kind,id){
+  const value=publicationOwnerId(this.workspaceId,namespaceId,kind,id),origin=namespaceId+'/'+kind+'/'+id,previous=await this.builder.get('identities',value);
+  if(previous&&previous.origin!==origin)throw new AppError('PUBLICATION_IDENTITY');
+  if(!previous)await this.builder.append('identities',value,{origin});return value;
+ }
+ project(owner,id){return this.identity(owner.projectId===id?owner.projectNamespaceId??owner.workspaceId:owner.workspaceId,'project',id);}
+}

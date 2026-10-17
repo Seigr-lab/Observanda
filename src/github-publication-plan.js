@@ -44,7 +44,7 @@ export async function writeGithubOwnership(workspace,key,journal){
 export async function githubFilePlan(candidate,files,ownership,directory='',{signal}={}){
  signal?.throwIfAborted();
  const prefix=directory?directory+'/':'',entries=[];
- for(const [name,content] of candidate.files)entries.push({path:prefix+name,mode:'100644',type:'blob',sha:await githubBlobHash(content,{signal})});
+ for await(const [name,content] of candidate.files)entries.push({path:prefix+name,mode:'100644',type:'blob',sha:await githubBlobHash(content,{signal})});
  const remote=new Map(files.map(f=>[f.path,f])),owned=new Map((ownership?.files??[]).map(f=>[f.path,f])),desired=new Map(entries.map(f=>[f.path,f]));
  const added=[],replaced=[],removed=[],unchanged=[],preserved=[],conflicts=new Set();
  for(const old of owned.values())if(!same(old,remote.get(old.path)))conflicts.add(old.path);

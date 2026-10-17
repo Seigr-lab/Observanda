@@ -9,7 +9,7 @@ import {AppError} from './errors.js';
 import {digest,serialize} from './storage.js';
 import {PublicationJobs} from './publication-jobs.js';
 import {AnalysisPublicationReview} from './analysis-publication-review.js';
-import {verifyPublication} from './publication.js';
+import {verifyPublicationCandidate} from './retained-publication-files.js';
 import {contentHash,contentSize} from './file-content.js';
 import {researchId} from './web/research-reference.js';
 import {destinationDirectory,within,outputName,memberPath,fingerprint,sameFile,stageFiles,checkOriginals,applyFiles,cleanFiles,temporary,regular} from './local-export-files.js';
@@ -59,7 +59,7 @@ export class LocalExport {
  }
  async candidate(id,{fresh=false}={}){
   const candidate=await new PublicationJobs(this.workspace).read(id);if(!candidate)throw new AppError('NOT_FOUND');
-  verifyPublication(candidate);await new AnalysisPublicationReview(this.workspace,{sourceReader:this.sourceReader}).assert(candidate);
+  await verifyPublicationCandidate(candidate);await new AnalysisPublicationReview(this.workspace,{sourceReader:this.sourceReader}).assert(candidate);
   if(fresh&&!await publicationRevisionCurrent(this.workspace,candidate))throw new AppError('PUBLISH_STALE');
   return candidate;
  }
@@ -76,14 +76,14 @@ export class LocalExport {
     const actual=await fingerprint(await memberPath(directory,name)),kind=!sameFile(actual,previous)?'conflict':sameFile(previous,next)?'unchanged':!previous?'added':!next?'removed':'replaced';
     await changes.append({path:name,kind,before:previous,after:next});counts[kind]++;
    };
-   for(const [name,content] of candidate.files){
+   for await(const [name,content] of candidate.files){
     outputName(name);const previous=await this.manifest.find(before,name);
     // A case-only replacement cannot be represented as two independent owned
     // paths on every supported filesystem. Do not adopt either spelling.
     if(previous&&previous.path!==name)throw new AppError('UNSAFE');
     await add(name,previous?{bytes:previous.bytes,sha256:previous.sha256}:null,{bytes:contentSize(content),sha256:contentHash(content)});
    }
-   for await(const previous of this.manifest.entries(before))if(!candidate.files.has(previous.path))await add(previous.path,{bytes:previous.bytes,sha256:previous.sha256},null);
+   for await(const previous of this.manifest.entries(before))if(!await candidate.files.has(previous.path))await add(previous.path,{bytes:previous.bytes,sha256:previous.sha256},null);
    const plan={version:2,id:randomUUID(),reviewId,releaseId:candidate.id,defaultPage:candidate.defaultPage,directory,state:'planned',createdAt:new Date().toISOString(),changes:await changes.finish(),counts,cleaned:false,applied:0};
    await this.save(plan,{...owner,version:2,files:before,pending:plan.id});return this.summary(plan);
   });

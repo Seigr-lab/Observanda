@@ -1,3 +1,4 @@
+import {openPublicationInput} from './publication-input-reader.js';
 import {createHash} from 'node:crypto';
 import {AppError} from './errors.js';
 import {ResearchMaterials} from './research-materials.js';
@@ -47,17 +48,20 @@ export async function publicationReceipt(workspace,{websiteId=null,publicationJo
  if(!researchId(publicationJob))throw new AppError('INTAKE_INVALID');
  const scoped=await receiptWebsite(workspace,websiteId),source=await new PublicationJobs(scoped.workspace).source(publicationJob);
  const raw=await scoped.workspace.readMetadata('.observanda/release-candidates/'+source.reviewId+'.json',16*1024*1024);
- if(!raw||!source.records?.some(r=>(r.recordId??r.id)===recordId&&r.revision===revision))throw new AppError('INTAKE_RECEIPT');
- const candidate=JSON.parse(raw);
+ const input=await openPublicationInput(scoped.workspace,source),record=await input.recordTarget({workspaceId:source.workspaceId,kind:'record',id:recordId,revision});
+ if(!raw||!record)throw new AppError('INTAKE_RECEIPT');
+ const candidate=JSON.parse(raw),metadata=await input.metadata();
  if(candidate.jobId!==source.id||candidate.reviewId!==source.reviewId||!revisionId(candidate.id)||(candidate.websiteId??null)!==websiteId||(source.websiteId??null)!==websiteId)throw new AppError('INTAKE_RECEIPT');
- return {jobId:source.id,reviewId:source.reviewId,releaseId:candidate.id,websiteId,websiteName:scoped.name??source.metadata?.website?.title??source.metadata?.title??source.book?.title,createdAt:candidate.createdAt};
+ return {jobId:source.id,reviewId:source.reviewId,releaseId:candidate.id,websiteId,websiteName:scoped.name??metadata.website?.title??metadata.title,createdAt:candidate.createdAt};
 }
 export async function receiptEditions(workspace,{websiteId=null,cursor=null},recordId,revision,{signal}={}){
  const scoped=await receiptWebsite(workspace,websiteId),releases=new PublicationJobs(scoped.workspace),page=await releases.feed.page({cursor,limit:20}),items=[];
  for(const item of page.items){
-  signal?.throwIfAborted();const source=await releases.source(item.id),matches=source.records?.filter(r=>(r.recordId??r.id)===recordId)??[];
-  if(!matches.length)continue;
-  try{const ref=await publicationReceipt(workspace,{websiteId,publicationJob:item.id},recordId,matches.find(r=>r.revision===revision)?.revision??matches[0].revision);items.push({...ref,current:matches.some(r=>r.revision===revision)});}
+  signal?.throwIfAborted();const source=await releases.source(item.id),input=await openPublicationInput(scoped.workspace,source,{signal}),exact=await input.recordTarget({workspaceId:source.workspaceId,kind:'record',id:recordId,revision});
+  let selected=exact;
+  if(!selected){if(source.version===6)selected=(await input.window('records',{index:'original',prefix:source.workspaceId+'/'+recordId+'/',limit:1})).items[0];else selected=(source.records??[]).find(row=>(row.recordId??row.id)===recordId);}
+  if(!selected)continue;
+  try{const ref=await publicationReceipt(workspace,{websiteId,publicationJob:item.id},recordId,selected.revision);items.push({...ref,current:!!exact});}
   catch(error){if(error.code!=='INTAKE_RECEIPT')throw error;}
  }
  return {items,next:page.next};

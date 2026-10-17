@@ -1,3 +1,5 @@
+import {WebsiteSites} from '../src/website-sites.js';
+import {contentBuffer} from '../src/file-content.js';
 import {PublicationRollback} from '../src/publication-rollback.js';
 import {createAccess,takeCreatedVault} from '../src/access.js';
 import {copyPlan,encryptedCopy} from '../src/locations.js';
@@ -18,6 +20,18 @@ import {Publisher,defaultPublishing} from '../src/publishing.js';
 import {clearVault} from '../src/encryption.js';
 import {githubFixture} from './github-fixture.js';
 import {readGithubOwnership} from '../src/github-publication-plan.js';
+test('deployment summaries preserve indexed SSH progress and legacy uploaded arrays',()=>{
+ const intent={reviewId:'a'.repeat(64),releaseId:'b'.repeat(64),key:'c'.repeat(64),config:{kind:'ssh',ssh:{host:'publish.example',directory:'/site'}}};
+ const summary=journal=>DeploymentJobs.prototype.summary({id:randomUUID(),createdAt:'2026-10-17T00:00:00.000Z',intent,journal});
+ assert.equal(summary({uploadedCount:25,total:60}).uploaded,25);
+ assert.equal(summary({uploadedCount:60,total:60,receipt:{status:'uploaded-remote-verified'}}).uploaded,60);
+ assert.equal(summary({uploadedCount:0,uploaded:['stale-entry'],total:60}).uploaded,0);
+ assert.equal(summary({uploaded:['index.html','style.css'],total:3}).uploaded,2);
+ assert.equal(summary({total:3}).uploaded,0);assert.equal(summary({uploadedCount:25,total:60}).total,60);
+ const github=DeploymentJobs.prototype.summary({intent:{...intent,config:{kind:'github',github:{owner:'example',repository:'research',branch:'main',directory:''}}},journal:{uploaded:['blob-a'],entries:[{sha:'blob-a'},{sha:'blob-a'},{sha:'blob-b'}]}});
+ assert.equal(github.uploaded,1);assert.equal(github.total,2);
+});
+
 const token='synthetic_github_token_1234567890';
 async function fixture(t,{nested=false,extraRecords=0}={}){
  const book=sampleNotebook(),seed=book.entries[0];
@@ -25,13 +39,18 @@ async function fixture(t,{nested=false,extraRecords=0}={}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-deploy-')),f=await encryptedFixture(directory,book),remote=githubFixture(nested?{branch:'main',initialFiles:{'index.html':'Existing home','lab/handwritten.html':'Existing notes'}}:{}),publisher=new Publisher(f.workspace.root,{request:remote.request},f.vault),jobs=workspaceJobs(f.workspace,publisher);
  t.after(async()=>{await jobs.worker.stop();clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const config=defaultPublishing();Object.assign(config.github,{owner:'example',repository:'notebook',branch:nested?'main':'observanda-site',directory:nested?'lab/field-notes':'',pages:true});config.publicUrl='https://public.example/research/';const saved=await publisher.save(config,'new');await publisher.connect(token);
- const releases=new PublicationJobs(f.workspace);await releases.start(await f.workspace.read(),jobs.queue);const prepared=await run(jobs.queue);assert.equal(prepared.state,'completed',prepared.error);
+ const releases=new PublicationJobs(f.workspace);await releases.start(await releases.workspace.outline(),jobs.queue);const prepared=await run(jobs.queue);assert.equal(prepared.state,'completed',prepared.error);
  const deployments=new DeploymentJobs(f.workspace,publisher,jobs.queue),candidate=await releases.read(prepared.result.id),intent={id:prepared.result.id,configEtag:saved.etag,reviewed:true};
  if(nested){const plan=await publisher.reviewDestination(candidate,saved.etag);Object.assign(intent,{destinationReview:plan.id,destinationReviewed:true});}
  return {...f,...jobs,directory,remote,publisher,deployments,candidate,intent};
 }
 async function run(queue){const job=await queue.claim();if(!job)return null;try{const output=await queue.definition(job).prepare(job,{signal:new AbortController().signal,progress:p=>queue.pulse(job.id,job.lease.token,p)});return await queue.complete(job.id,job.lease.token,output);}catch(error){return queue.release(job.id,job.lease.token,{error});}}
 const writes=remote=>remote.calls.filter(c=>c.method!=='GET');
+async function saveFooter(workspace,footer){
+ const sites=new WebsiteSites(workspace),current=await sites.read(null);
+ return sites.save(null,{workspaceId:current.book.id,baseEtag:current.etag,websitePin:current.websitePin,metadata:{website:{...current.book.website,footer}},projects:[],changes:[],removed:[]});
+}
+
 
 test('a damaged prepared live inventory blocks resumed provider writes',async t=>{
  const f=await fixture(t),job=await f.deployments.start(f.intent);
@@ -65,7 +84,7 @@ test('interrupted upload resumes acknowledged blobs after restart and retains se
  const saved=await f.deployments.read(job.id);assert.ok(saved.journal.receipt);assert.equal(f.remote.commits.size,1);assert.equal(f.remote.head,saved.journal.commit);
  for(const hash of saved.journal.uploaded.slice(0,2))assert.equal(f.remote.calls.filter(c=>c.route.endsWith('/git/blobs')&&c.data&&Buffer.from(c.data.content,'base64').equals(f.remote.blobs.get(hash))).length,1);
  assert.equal((await restarted.read()).receipt.verification,undefined);await assert.rejects(restarted.verifyLive(),{code:'PUBLISH_NOT_LIVE'});
- f.remote.setManifest(f.candidate.files.get('publication.json'));await restarted.verifyLive();assert.ok((await restarted.read()).receipt.verification);assert.ok((await f.deployments.page()).items[0].verification);
+ f.remote.setManifest((await contentBuffer(await f.candidate.files.get('publication.json'))).toString('utf8'));await restarted.verifyLive();assert.ok((await restarted.read()).receipt.verification);assert.ok((await f.deployments.page()).items[0].verification);
  assert.equal((await f.deployments.start(f.intent)).id,job.id);assert.equal((await f.deployments.page()).items.length,1);
  assert.ok(!JSON.stringify(await f.deployments.read(job.id)).includes(token));
 });
@@ -126,13 +145,13 @@ test('failed local receipt commits retain recoverable push intent through a fres
 
 test('reviewed rollback republishes exact retained files as a new non-forced commit',async t=>{
  const f=await fixture(t);await f.deployments.start(f.intent);assert.equal((await run(f.queue)).state,'completed');const first=f.remote.head;
- const current=await f.workspace.read();current.book.website.footer='The newer edition';await f.workspace.save(current.book,current.etag);
- const releases=new PublicationJobs(f.workspace);await releases.start(await f.workspace.read(),f.queue);const prepared=await run(f.queue);assert.equal(prepared.state,'completed');
+ await saveFooter(f.workspace,'The newer edition');
+ const releases=new PublicationJobs(f.workspace);await releases.start(await releases.workspace.outline(),f.queue);const prepared=await run(f.queue);assert.equal(prepared.state,'completed');
  const newer=await releases.read(prepared.result.id),plan=await f.publisher.reviewDestination(newer,f.intent.configEtag);
  await f.deployments.start({id:newer.reviewId,configEtag:f.intent.configEtag,reviewed:true,destinationReview:plan.id,destinationReviewed:true});assert.equal((await run(f.queue)).state,'completed');const second=f.remote.head;
  const rollback=new PublicationRollback(f.workspace,f.publisher),approval=await rollback.review({id:f.candidate.reviewId}),restorePlan=await f.publisher.reviewDestination(f.candidate,f.intent.configEtag),intent={...f.intent,rollbackReview:approval.review.id,rollbackConfirmed:true,destinationReview:restorePlan.id,destinationReviewed:true};
  await assert.rejects(f.deployments.start({...intent,rollbackConfirmed:false}),{code:'PUBLISH_STALE'});
- const before=await f.workspace.read();await f.deployments.start(intent);const completed=await run(f.queue);assert.equal(completed.state,'completed',completed.error);assert.deepEqual(f.remote.commits.get(f.remote.head).parents,[second]);assert.notEqual(f.remote.head,first);assert.deepEqual(f.remote.trees.get(f.remote.commits.get(f.remote.head).tree),f.remote.trees.get(f.remote.commits.get(first).tree));assert.deepEqual(await f.workspace.read(),before);
+ const before=await f.workspace.read(),websiteBefore=await new WebsiteSites(f.workspace).read(null);await f.deployments.start(intent);const completed=await run(f.queue);assert.equal(completed.state,'completed',completed.error);assert.deepEqual(f.remote.commits.get(f.remote.head).parents,[second]);assert.notEqual(f.remote.head,first);assert.deepEqual(f.remote.trees.get(f.remote.commits.get(f.remote.head).tree),f.remote.trees.get(f.remote.commits.get(first).tree));assert.deepEqual(await f.workspace.read(),before);assert.deepEqual(await new WebsiteSites(f.workspace).read(null),websiteBefore);
 });
 
 test('rollback approval is invalidated by a later workspace edit or changed destination',async t=>{
@@ -145,8 +164,8 @@ test('rollback approval is invalidated by a later workspace edit or changed dest
 test('a concurrent remote edit blocks rollback, and a fresh review preserves that edit',async t=>{
  const f=await fixture(t);await f.deployments.start(f.intent);assert.equal((await run(f.queue)).state,'completed');
  const first=f.remote.head,original=f.remote.trees.get(f.remote.commits.get(first).tree);
- const local=await f.workspace.read();local.book.website.footer='A new edition';await f.workspace.save(local.book,local.etag);
- const releases=new PublicationJobs(f.workspace);await releases.start(await f.workspace.read(),f.queue);const prepared=await run(f.queue),newer=await releases.read(prepared.result.id),plan=await f.publisher.reviewDestination(newer,f.intent.configEtag);
+ await saveFooter(f.workspace,'A new edition');
+ const releases=new PublicationJobs(f.workspace);await releases.start(await releases.workspace.outline(),f.queue);const prepared=await run(f.queue),newer=await releases.read(prepared.result.id),plan=await f.publisher.reviewDestination(newer,f.intent.configEtag);
  await f.deployments.start({id:newer.reviewId,configEtag:f.intent.configEtag,reviewed:true,destinationReview:plan.id,destinationReviewed:true});assert.equal((await run(f.queue)).state,'completed');
  const second=f.remote.head,rollback=new PublicationRollback(f.workspace,f.publisher);
  const approve=async()=>{const approval=await rollback.review({id:f.candidate.reviewId}),plan=await f.publisher.reviewDestination(f.candidate,f.intent.configEtag);return {...f.intent,rollbackReview:approval.review.id,rollbackConfirmed:true,destinationReview:plan.id,destinationReviewed:true};};
@@ -156,5 +175,5 @@ test('a concurrent remote edit blocks rollback, and a fresh review preserves tha
  f.remote.setHook(null);const accepted=await approve(),retry=await f.deployments.start(accepted);assert.notEqual(retry.id,attempt.id);assert.equal((await f.deployments.start(accepted)).id,retry.id);
  const result=await run(f.queue);assert.equal(result.state,'completed',result.error);assert.deepEqual(f.remote.commits.get(f.remote.head).parents,[other]);
  const files=f.remote.trees.get(f.remote.commits.get(f.remote.head).tree);assert.deepEqual(files.filter(e=>e.path!=='news.html'),original);assert.equal(files.find(e=>e.path==='news.html').sha,blob);
- assert.equal((await f.workspace.read()).book.website.footer,'A new edition');
+ assert.equal((await new WebsiteSites(f.workspace).read(null)).book.website.footer,'A new edition');
 });

@@ -64,7 +64,7 @@ export async function stageFiles(plan,candidate,checkpoint,changes=()=>plan.chan
   const file=await memberPath(plan.directory,change.path,{create:true}),stage=temporary(file,plan.id,'new');
   const existing=await fingerprint(stage);
   if(existing){if(sameFile(existing,change.after))continue;await unlink(stage);}
-  await writePublicFile(stage,candidate.files.get(change.path));await checkpoint('staged',change.path);
+  await writePublicFile(stage,await candidate.files.get(change.path));await checkpoint('staged',change.path);
  }
 }
 export async function checkOriginals(plan,changes=()=>plan.changes){

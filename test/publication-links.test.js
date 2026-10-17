@@ -6,15 +6,15 @@ import {PublicationLinks} from '../src/publication-links.js';
 import {contentBuffer} from '../src/file-content.js';
 import {defaultEditionRecord} from '../src/web/publication-selection.js';
 import {revisionPageId} from '../src/publication-revisions.js';
-import {verifyPublication} from '../src/publication.js';
+import {verifyPublicationCandidate} from '../src/retained-publication-files.js';
 
 function mappings(f){return {version:1,pages:[{id:randomUUID(),path:'archive/chapter.html',title:'Two investigations',anchors:[{id:randomUUID(),fragment:'first-run',label:'First investigation',target:{workspaceId:f.book.id,kind:'record',id:f.run.id}},{id:randomUUID(),fragment:'original-method',label:'Original method',target:f.target}]}]};}
 test('a legacy chapter preserves distinct fragments and exact revision links with no redirect',async t=>{
  const f=await historicalFixture(t),links=new PublicationLinks(f.workspace),config=mappings(f),choice=defaultEditionRecord(f.old,f.target.revision);choice.sections=[];
  await links.save({workspaceId:f.book.id,etag:'new',config});
- const candidate=await f.releases.inline({...f.source,edition:{version:1,records:[],history:[choice]}}),html=(await contentBuffer(candidate.files.get(config.pages[0].path))).toString(),old=revisionPageId(f.book.id,f.method.id,f.target.revision);
- assert.match(html,/id="first-run"/);assert.match(html,/id="original-method"/);assert.ok(html.includes('href="../entries/'+f.run.id+'.html"'));assert.ok(html.includes('href="../entries/'+old+'.html"'));assert.match(html,/rel="canonical" href="\.\.\/archive\/chapter.html"/);assert.ok(!html.includes('http-equiv="refresh"'));assert.ok(candidate.pages.some(p=>p.path===config.pages[0].path));verifyPublication(candidate);
- const next=await f.releases.inline({...f.source,edition:{version:1,records:[],history:[choice]}});assert.ok(next.files.has(config.pages[0].path));
+ const candidate=await f.releases.inline({...f.source,edition:{version:1,records:[],history:[choice]}}),html=(await contentBuffer(await candidate.files.get(config.pages[0].path))).toString(),old=revisionPageId(f.book.id,f.method.id,f.target.revision);
+ assert.match(html,/id="first-run"/);assert.match(html,/id="original-method"/);assert.ok(html.includes('href="../entries/'+f.run.id+'.html"'));assert.ok(html.includes('href="../entries/'+old+'.html"'));assert.match(html,/rel="canonical" href="\.\.\/archive\/chapter.html"/);assert.ok(!html.includes('http-equiv="refresh"'));assert.equal((await f.releases.pageChoices(candidate,{path:config.pages[0].path,limit:1})).items[0].path,config.pages[0].path);await verifyPublicationCandidate(candidate);
+ const next=await f.releases.inline({...f.source,edition:{version:1,records:[],history:[choice]}});assert.ok(await next.files.has(config.pages[0].path));
  await assert.rejects(links.save({workspaceId:f.book.id,etag:'new',config}),{code:'CONFLICT'});
 });
 test('ambiguous fragments, excluded targets and generated path collisions stop edition preparation',async t=>{

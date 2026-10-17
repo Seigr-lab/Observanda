@@ -26,29 +26,29 @@ export class DeploymentJobs{
    if(rollbackReview){if(rollbackConfirmed!==true)throw new AppError('PUBLISH_STALE');const rollback=new PublicationRollback(this.workspace,this.publisher,{sourceReader:this.sourceReader});candidate=rollback.project(candidate,await rollback.authorize(candidate,rollbackReview));}
    else{if(candidate.configEtag!==configEtag)throw new AppError('PUBLISH_STALE');if(!await publicationRevisionCurrent(this.workspace,candidate,{current}))throw new AppError('STALE');}
    await new AnalysisPublicationReview(this.workspace,{sourceReader:this.sourceReader}).assert(candidate);
-   enforcePublishingLimits(candidate,saved.config);
+   await enforcePublishingLimits(candidate,saved.config);
    const key=this.publisher.destinationKey(saved.config),active=await this.workspace.readMetadata('.observanda/deployment-active/'+key+'.json',4096);
    if(active){
     const previous=await this.read(JSON.parse(active).id),job=await this.queue.read(previous.id);
     if(!job)throw new AppError('JOB_DAMAGED');
     const sameReview=previous.intent.reviewId===reviewId&&previous.intent.configEtag===configEtag&&(previous.intent.rollbackReview??null)===(rollbackReview??null)&&(previous.intent.plan?.id??null)===(destinationReview??null);
-    if(sameReview){if(candidate.sourceGroups&&['queued','running'].includes(job.state))this.sourceAccess?.bind(job.id,this.sourceReader);return job;}
+    if(sameReview){if((candidate.hasSources||candidate.sourceGroups)&&['queued','running'].includes(job.state))this.sourceAccess?.bind(job.id,this.sourceReader);return job;}
     if(['queued','running'].includes(job.state)||deploymentUncertain(previous.journal,previous.intent.config.kind))throw new AppError('PUBLISH_PENDING');
    }
    const plan=await this.publisher.readDestinationPlan(candidate,configEtag,{destinationReview,destinationReviewed});
-   const id=randomUUID(),createdAt=new Date().toISOString(),intent={reviewId,releaseId:candidate.id,configEtag,config:saved.config,key,...(rollbackReview?{rollbackReview,analysisReviewId:candidate.analysisReviewId,analysis:candidate.researchReview.analysis,...(candidate.sourceSnapshots?{sourceSnapshots:candidate.sourceSnapshots}:{})}:{}),...(plan?{plan}: {})};
+   const id=randomUUID(),createdAt=new Date().toISOString(),intent={reviewId,releaseId:candidate.id,configEtag,config:saved.config,key,...(rollbackReview?{rollbackReview,analysisReviewId:candidate.analysisReviewId,analysis:candidate.researchReview.analysis,...(candidate.analysisDocument?{analysisDocument:candidate.analysisDocument}:{}),...(candidate.sourceSnapshots?{sourceSnapshots:candidate.sourceSnapshots}:{})}:{}),...(plan?{plan}: {})};
    const d={version:1,id,scope:current.metadata.id,createdAt,intent,journal:{createdAt}};
    await this.feed.ensureLocked();await this.workspace.writeMetadata(file(id),serialize(d));
    await this.workspace.writeMetadata('.observanda/deployment-list/'+id+'.json',serialize({id,createdAt}));await this.feed.putLocked(d);
    await this.workspace.writeMetadata('.observanda/deployment-active/'+key+'.json',serialize({id}));
    const job=await this.queue.enqueueLocked({id,type:'publication.deploy',scope:d.scope,input:{revision:digest(serialize(intent))}});
-   if(candidate.sourceGroups)this.sourceAccess?.bind(id,this.sourceReader);return job;
+   if((candidate.hasSources||candidate.sourceGroups))this.sourceAccess?.bind(id,this.sourceReader);return job;
   });
  }
  async control(id,action){
   const job=await this.queue.read(id);if(!job||job.type!=='publication.deploy')throw new AppError('NOT_FOUND');await this.queue.authorize(job);
   let revoke;
-  try{if(action==='retry'){const d=await this.read(id),candidate=await this.releases.read(d.intent.reviewId);if(!candidate)throw new AppError('JOB_DAMAGED');if(candidate.sourceGroups)revoke=this.sourceAccess?.bind(id,this.sourceReader);}
+  try{if(action==='retry'){const d=await this.read(id),candidate=await this.releases.read(d.intent.reviewId);if(!candidate)throw new AppError('JOB_DAMAGED');if((candidate.hasSources||candidate.sourceGroups))revoke=this.sourceAccess?.bind(id,this.sourceReader);}
    const next=await this.queue.control(id,action);if(action==='cancel')this.sourceAccess?.forget(id);return next;
   }catch(error){revoke?.();throw error;}
  }
@@ -60,10 +60,10 @@ export class DeploymentJobs{
  }
  async prepare(job,{signal,progress}){
   const d=await this.read(job.id);let candidate=await this.releases.read(d.intent.reviewId);if(!candidate||candidate.id!==d.intent.releaseId)throw new AppError('JOB_DAMAGED');
-  if(d.intent.rollbackReview)candidate={...candidate,...(d.intent.sourceSnapshots?{sourceSnapshots:d.intent.sourceSnapshots}:{}),analysisReviewId:d.intent.analysisReviewId,researchReview:{...candidate.researchReview,analysis:d.intent.analysis}};
+  if(d.intent.rollbackReview)candidate={...candidate,...(d.intent.sourceSnapshots?{sourceSnapshots:d.intent.sourceSnapshots}:{}),analysisReviewId:d.intent.analysisReviewId,...(d.intent.analysisDocument?{analysisDocument:d.intent.analysisDocument}:{}),researchReview:{...candidate.researchReview,analysis:d.intent.analysis}};
   const sourceReader=this.sourceReader??this.sourceAccess?.take(job.id);
   if(!d.journal.pushAttempted)await new AnalysisPublicationReview(this.workspace,{sourceReader}).assert(candidate,{signal});
-  enforcePublishingLimits(candidate,d.intent.config);
+  await enforcePublishingLimits(candidate,d.intent.config);
   const guard=async()=>{signal.throwIfAborted();await this.workspace.catalogue(async()=>{await this.held(job);if((await this.publisher.read()).etag!==d.intent.configEtag)throw new AppError('PUBLISH_STALE');if(d.journal.liveInventory)await assertDeploymentInventory(this.workspace,d.intent.key,d.journal.liveInventory,d.journal.receipt);});};
   if(!d.journal.liveInventory){
    const removed=d.intent.config.kind==='github'?(d.journal.removed??d.intent.plan?.removed??[]).map(p=>d.intent.config.github.directory?p.slice(d.intent.config.github.directory.length+1):p):[];
@@ -78,7 +78,7 @@ export class DeploymentJobs{
   return d.intent.config.kind==='ssh'?this.publisher.ssh.deploy(d.intent.config.ssh,candidate,this.workspace.websiteId??d.scope,options):deployGithub(this.publisher,candidate,d.intent.config,options);
  }
  async commit(job,receipt){const d=await this.held(job);if(receipt.commit!==d.journal.receipt?.commit)throw new AppError('JOB_CHANGED');return {id:job.id,status:receipt.status};}
- summary(d){const j=d.journal;return {id:d.id,createdAt:d.createdAt,reviewId:d.intent.reviewId,releaseId:d.intent.releaseId,kind:d.intent.config.kind,destinationKey:d.intent.key,destination:d.intent.config.kind==='ssh'?`${d.intent.config.ssh.host} / ${d.intent.config.ssh.directory}/current`:`${d.intent.config.github.owner}/${d.intent.config.github.repository} / ${d.intent.config.github.branch}${d.intent.config.github.directory?' / '+d.intent.config.github.directory:''}`,uploaded:j.uploaded?.length??0,total:d.intent.config.kind==='ssh'?(j.total??0):new Set((j.entries??[]).map(entry=>entry.sha)).size,commit:j.commit??null,pushAttempted:!!j.pushAttempted,receipt:j.receipt??null};}
+ summary(d){const j=d.journal;return {id:d.id,createdAt:d.createdAt,reviewId:d.intent.reviewId,releaseId:d.intent.releaseId,kind:d.intent.config.kind,destinationKey:d.intent.key,destination:d.intent.config.kind==='ssh'?`${d.intent.config.ssh.host} / ${d.intent.config.ssh.directory}/current`:`${d.intent.config.github.owner}/${d.intent.config.github.repository} / ${d.intent.config.github.branch}${d.intent.config.github.directory?' / '+d.intent.config.github.directory:''}`,uploaded:j.uploadedCount??j.uploaded?.length??0,total:d.intent.config.kind==='ssh'?(j.total??0):new Set((j.entries??[]).map(entry=>entry.sha)).size,commit:j.commit??null,pushAttempted:!!j.pushAttempted,receipt:j.receipt??null};}
  async page(options){return this.workspace.catalogue(async()=>{const page=await this.feed.page(options),items=[];for(const row of page.items){const d=await this.read(row.id),job=await this.queue.read(row.id);if(!job)throw new AppError('JOB_DAMAGED');const verification=await this.workspace.readMetadata('.observanda/deployment-verifications/'+row.id+'.json',4096);items.push({...this.summary(d),verification:verification?JSON.parse(verification):null,job});}return {items,next:page.next};});}
 }
 export function deploymentJobDefinitions(workspace,publisher,queue,options={}){const service=()=>new DeploymentJobs(workspace,publisher,queue(),options);return {'publication.deploy':{authorize:job=>service().authorize(job),prepare:(job,options)=>service().prepare(job,options),commit:(job,receipt)=>service().commit(job,receipt)}};}

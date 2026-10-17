@@ -1,4 +1,4 @@
-import {websitePublicationMetadata,websitePublicationPages,websitePublicationPresentation} from './publication-website-input.js';
+import {websitePublicationMetadata,websitePublicationPages,websitePublicationCollections} from './publication-website-input.js';
 import {websiteEditorProjection} from './website-editor-projection.js';
 import {validateWebsiteDocument,websiteDocumentHeader} from './website-document-validation.js';
 import {WebsiteDocumentStore} from './website-document-store.js';
@@ -143,7 +143,7 @@ async function websiteDocumentPublicationSource(workspace,{etag,websitePin,websi
  if(!validWebsitePin(websitePin)||websitePin.websiteId!==id||websitePin.researchSnapshotId!==etag)throw new AppError('INVALID');
  if(!await publicationRevisionCurrent(workspace,{etag,websitePin}))throw new AppError('CONFLICT');
  return base.catalogue(async store=>{
-  const retained=!!consume&&!page&&!inventory,projected=await websiteEditorProjection(store,id,{websitePin,websiteDraft,pageLabels:retained,signal});
+  const retained=!!consume&&!page&&!inventory,projected=await websiteEditorProjection(store,id,{websitePin,websiteDraft,pageLabels:false,signal});
   if(workspaceId!==undefined&&workspaceId!==projected.metadata.id)throw new AppError('WORKSPACE_CHANGED');
   const raw=await store.snapshot(etag);
   // Selection/inventory pages consume labels, not the website's page bodies.
@@ -157,6 +157,6 @@ async function websiteDocumentPublicationSource(workspace,{etag,websitePin,websi
   const metadata=retained?await websitePublicationMetadata(projected,{signal}):page||inventory?projected.metadata:websiteBook(raw.metadata,site),selection=site.selection;
   const snapshot={...raw,metadata,websiteSelection:selection,websitePin};
   const paging=publicationSelectionPage(store,{snapshotId:etag,websiteId:id,websitePin,websiteDraft,metadata,selection},page),options={signal,metadata,selection,page:paging.page};
-  return consume?consume(metadata,(inventory?selectedPublicationInventories:selectedPublicationRecords)(store,snapshot,options),{sourceEtag:etag,websitePin,nextCursor:paging.nextCursor,...(retained?{websitePages:websitePublicationPages(projected,{signal}),websitePresentation:await websitePublicationPresentation(projected,{signal})}:{})}):selectedPublicationBook(store,snapshot,options);
+  return consume?consume(metadata,(inventory?selectedPublicationInventories:selectedPublicationRecords)(store,snapshot,options),{sourceEtag:etag,websitePin,nextCursor:paging.nextCursor,...(retained?{websitePages:websitePublicationPages(projected,{signal}),websiteCollections:await websitePublicationCollections(projected,{signal})}:{})}):selectedPublicationBook(store,snapshot,options);
  });
 }

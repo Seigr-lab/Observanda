@@ -14,6 +14,7 @@ import {clearVault} from '../src/encryption.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {PublicationOwnerIdentities} from '../src/publication-owner-identities.js';
 import {PublicationPreviewOwner} from '../src/publication-preview-owner.js';
+import {WebsiteSites} from '../src/website-sites.js';
 import {defaultEditionRecord} from '../src/web/publication-selection.js';
 import {revisionPageId} from '../src/publication-revisions.js';
 import {contentBuffer} from '../src/file-content.js';
@@ -40,14 +41,15 @@ async function fixture(t,configure=()=>{},count=37){
   await f.workspace.writeFile(path.join(folder,'asset.json'),serialize(metadata));await f.workspace.writeFile(path.join(folder,'public.png'),bytes);await f.workspace.writeFile(path.join(folder,'original'),bytes);
  }
  await new ResearchRecords(f.workspace,new MediaStore(f.workspace)).save({workspaceId:book.id,changes:book.entries.map(record=>({id:record.id,expectedRevision:null,record}))});
- Object.assign(book,(await f.workspace.read()).book);
+ const research=await f.workspace.read(),site=await new WebsiteSites(f.workspace).read(null);
+ Object.assign(book,site.book,{entries:research.book.entries});
  const snapshotId=(await f.workspace.outline()).etag,identities=new PublicationOwnerIdentities(randomUUID());
  let active=false,opens=0;
  const reader={async use(workspaceId,revision,consume){assert.equal(active,false);assert.equal(workspaceId,book.id);active=true;opens++;const selectedSnapshot=revision??(await f.workspace.outline()).etag;
   try{return {value:await f.workspace.catalogue(async store=>consume(store,await store.snapshot(selectedSnapshot),{snapshotId:selectedSnapshot,storage:f.workspace,owner:{workspaceId:book.id,projectId:book.projects[0].id,labBookId:null},projectNamespaceId:book.id}))};}finally{active=false;}
  }};
  const source={workspaceId:book.id,projectIds:[book.projects[0].id],selection:{defaultShare:false,includeProjects:[book.projects[0].id],records:[]}};
- return {book,f,identities,source,reader,get active(){return active;},get opens(){return opens;}};
+ return {book,f,websitePin:site.websitePin,identities,source,reader,get active(){return active;},get opens(){return opens;}};
 }
 
 test('owner preview pages rank projected identities without originals or retained corpus identities',async t=>{
@@ -91,26 +93,26 @@ test('a combined canvas admits selected sources, follows cross-owner references 
  const sourceReader=async()=>{readers++;return {...source.reader,verify:async()=>{verified++;},close:async()=>{closed++;}};};
  const identities=new PublicationOwnerIdentities(host.book.id),foreignId=identities.identity(source.book.id,'record',source.book.entries[0].id);
  const read=ResearchCatalogue.prototype.record,loaded=[];ResearchCatalogue.prototype.record=function(id,...args){loaded.push({workspaceId:this.workspace?.id,id});return read.call(this,id,...args);};t.after(()=>{ResearchCatalogue.prototype.record=read;});
- const home=await websitePreviewSource(host.f.workspace,makeCommand(),{designTarget:'home',sourceReader});
+ const home=await websitePreviewSource(host.f.workspace,makeCommand(),{websitePin:host.websitePin,designTarget:'home',sourceReader});
  assert.equal(home.context.entries.length,0);assert.deepEqual(loaded,[]);assert.ok(home.context.recordCards.length<=24);assert.equal(readers,closed);assert.equal(readers,verified);
- const page=await websitePreviewSource(host.f.workspace,makeCommand(),{designTarget:'entry:'+foreignId,sourceReader});
+ const page=await websitePreviewSource(host.f.workspace,makeCommand(),{websitePin:host.websitePin,designTarget:'entry:'+foreignId,sourceReader});
  assert.equal(page.context.entries.length,1);assert.equal(page.context.entries[0].body,'Foreign original body');assert.equal(page.context.entries[0].relations[0].id,host.book.entries[0].id);
  assert.equal(loaded.length,1);assert.equal(readers,closed);
  assert.equal(page.editor.workspaceId,host.book.id);const editorRecord=page.editor.records.find(record=>record.id===foreignId);
  assert.equal(editorRecord.title,'Foreign selected record');assert.equal(editorRecord.attachments.length,1);
  assert.deepEqual(Object.keys(editorRecord.attachments[0]).sort(),['alt','caption','id','kind','share']);assert.equal(Object.hasOwn(editorRecord,'body'),false);
  assert.equal(page.editor.sources[0].workspaceId,source.book.id);
- const references=await websitePreviewSource(host.f.workspace,makeCommand(),{designTarget:'entry:'+host.book.entries[0].id,sourceReader});
+ const references=await websitePreviewSource(host.f.workspace,makeCommand(),{websitePin:host.websitePin,designTarget:'entry:'+host.book.entries[0].id,sourceReader});
  assert.ok(references.context.referencePage.recordIds.includes(foreignId));
  const mediaId=identities.identity(source.book.id,'media',source.book.entries[0].attachments[0].id),media=await page.media.get(mediaId,{streamed:true});
  assert.deepEqual(await contentBuffer(media.bytes),await readFile(new URL('../src/preview-assets/image.png',import.meta.url)));assert.equal(readers,closed);
  const first=home.context.collectionPages[0];assert.ok(first.nextCursor);
  const collections=[{key:first.key,definition:first.definition,query:new URLSearchParams({collection:first.key,cards:first.nextCursor}).toString()}];
- const second=await websitePreviewSource(host.f.workspace,makeCommand(),{designTarget:'home',sourceReader,collections});
+ const second=await websitePreviewSource(host.f.workspace,makeCommand(),{websitePin:host.websitePin,designTarget:'home',sourceReader,collections});
  assert.equal(second.context.collectionPages[0].recordIds.some(id=>first.recordIds.includes(id)),false);
  draft.website.researchSources=structuredClone([source.source]);draft.website.researchSources[0].selection.records[0].share=false;
- await assert.rejects(websitePreviewSource(host.f.workspace,makeCommand(),{designTarget:'home',sourceReader,collections}),{code:'INVALID'});
- draft.website.researchSources=[];await assert.rejects(websitePreviewSource(host.f.workspace,makeCommand(),{designTarget:'entry:'+foreignId,sourceReader}),{code:'INVALID'});
+ await assert.rejects(websitePreviewSource(host.f.workspace,makeCommand(),{websitePin:host.websitePin,designTarget:'home',sourceReader,collections}),{code:'INVALID'});
+ draft.website.researchSources=[];await assert.rejects(websitePreviewSource(host.f.workspace,makeCommand(),{websitePin:host.websitePin,designTarget:'entry:'+foreignId,sourceReader}),{code:'INVALID'});
  assert.equal((await host.f.workspace.outline()).etag,request.etag);assert.equal(readers,closed);
 });
 
@@ -124,9 +126,9 @@ test('explicit foreign historical pages keep their revision and selected section
  const head=await host.f.workspace.outline(),command={...workspaceSaveRequest(host.book,draft,recordRevisions(host.book)),baseEtag:head.etag},identities=new PublicationOwnerIdentities(host.book.id);
  const currentId=identities.identity(source.book.id,'record',raw.id),oldId=identities.identity(source.book.id,'record',revisionPageId(source.book.id,raw.id,choice.revision));
  const sourceReader=async()=>({...source.reader,verify:async()=>{},close:async()=>{}});
- const present=await websitePreviewSource(host.f.workspace,command,{designTarget:'entry:'+currentId,sourceReader});
+ const present=await websitePreviewSource(host.f.workspace,command,{websitePin:host.websitePin,designTarget:'entry:'+currentId,sourceReader});
  assert.equal(present.context.entries[0].relations[0].id,oldId);
- const historical=await websitePreviewSource(host.f.workspace,command,{designTarget:'entry:'+oldId,sourceReader});
+ const historical=await websitePreviewSource(host.f.workspace,command,{websitePin:host.websitePin,designTarget:'entry:'+oldId,sourceReader});
  assert.equal(historical.context.entries[0].body,raw.body);assert.equal(historical.context.entries[0].revisionEdition.revision,choice.revision);assert.equal(historical.context.entries[0].revisionEdition.current,currentId);
  assert.equal(historical.context.entries[0].sections.some(section=>section.body==='Private details'),false);assert.equal(historical.context.browseRecords.some(record=>record.id===oldId),false);
 });
@@ -177,11 +179,11 @@ test('an independent website combines sibling books without becoming owned by ei
  const sourceReader=async()=>({use:(id,revision,consume)=>{const selected=[first,second].find(source=>source.book.id===id);assert.ok(selected);return selected.reader.use(id,revision,(store,snapshot,pinned)=>consume(store,snapshot,{...pinned,projectNamespaceId:projectNamespace}));},verify:async()=>{},close:async()=>{}});
  const command={...workspaceSaveRequest(host.book,draft,recordRevisions(host.book)),baseEtag:(await host.f.workspace.outline()).etag};
  const publicProject=new PublicationOwnerIdentities(host.book.id).project({workspaceId:first.book.id,projectId,projectNamespaceId:projectNamespace},projectId);
- const page=await websitePreviewSource(host.f.workspace,command,{designTarget:'project:'+publicProject,sourceReader});
+ const page=await websitePreviewSource(host.f.workspace,command,{websitePin:host.websitePin,designTarget:'project:'+publicProject,sourceReader});
  assert.equal(page.metadata.projects.filter(project=>project.id===publicProject).length,1);
  assert.equal(page.metadata.notebooks.filter(book=>book.projectId===publicProject).length,2);assert.equal(page.context.recordCards.length,24);
  assert.equal(new Set(page.context.recordCards.map(record=>record.notebookId)).size,2);
- assert.equal(page.metadata.id,host.book.id);assert.equal((await host.f.workspace.outline()).metadata.website.researchSources,undefined);
+ assert.equal(page.metadata.id,host.book.id);assert.deepEqual((await new WebsiteSites(host.f.workspace).read(null)).book.website.researchSources,host.book.website.researchSources);
 });
 
 

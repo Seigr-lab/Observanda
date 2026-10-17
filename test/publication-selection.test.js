@@ -17,29 +17,31 @@ import {copyPlan,copyWorkspace} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
 import {recordRevision} from '../src/research.js';
 import {MediaStore} from '../src/media.js';
-import {buildPublication,verifyPublication} from '../src/publication.js';
+import {buildPublication} from '../src/publication.js';
+import {verifyPublicationCandidate} from '../src/retained-publication-files.js';
+import {openPublicationInput} from '../src/publication-input-reader.js';
 import {contentBuffer} from '../src/file-content.js';
 import {publicationText} from './publication-fixture.js';
 import {defaultEditionRecord} from '../src/web/publication-selection.js';
 import {readPublicationRecord} from '../src/publication-input.js';
 
-async function fixture(t,count){const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-edition-selection-')),data=selectionBook(count),f=await encryptedFixture(directory,data.book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});return {...data,...f,releases:new PublicationJobs(f.workspace),source:{workspaceId:data.book.id,etag:(await f.workspace.outline()).etag}};}
+async function fixture(t,count){const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-edition-selection-')),data=selectionBook(count),f=await encryptedFixture(directory,data.book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});const releases=new PublicationJobs(f.workspace),{etag,websitePin}=await releases.workspace.outline();return {...data,...f,releases,source:{workspaceId:data.book.id,etag,websitePin}};}
 
 test('edition choices exclude writing, sections, charts, attachments and CSV before all output surfaces without changing originals',async t=>{
  const f=await fixture(t),media=new MediaStore(f.workspace.root,f.vault),asset=await media.import(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="red"/></svg>'),'image'),before=await f.workspace.read();
  before.book.entries[0].attachments=[{id:asset.id,kind:'image',caption:'WITHHELD_ATTACHMENT',alt:'Image',transcript:'WITHHELD_TRANSCRIPT',share:true}];await f.workspace.save(before.book,before.etag);
- const saved=await f.workspace.read(),record=saved.book.entries[0],source={etag:saved.etag,workspaceId:saved.book.id};
+ const saved=await f.workspace.read(),record=saved.book.entries[0],source={...await f.releases.workspace.outline(),workspaceId:saved.book.id};
  const choice=defaultEditionRecord(record,recordRevision(record));choice.body=false;choice.sections=[record.sections[0].id];choice.attachments=[];choice.fields=['public'];
  const edition={version:1,records:[choice]},candidate=await f.releases.inline({...source,edition}),text=await publicationText(candidate);
  for(const value of ['WITHHELD_',record.sections[1].id,asset.id,f.secret.id,'C:/Users/private',f.workspace.root])assert.ok(!text.includes(value),value);
- assert.ok(text.includes('Public steps'));assert.ok([...candidate.files.keys()].some(p=>p.endsWith('.svg')));assert.ok(![...candidate.files.keys()].some(p=>p.endsWith('.csv')));assert.ok(!text.includes('View the data'));
- assert.equal(candidate.researchReview.references.count,1);assert.deepEqual(candidate.sourceRevisions[record.id],recordRevision(record));
- assert.deepEqual(await f.workspace.read(),saved);assert.ok(text.includes('9007199254740993'));verifyPublication(candidate);
- const direct=buildPublication(saved.book,{edition});for(const [name,value] of direct.files)if(!['styles.css','publication.json'].includes(name))assert.deepEqual(await contentBuffer(candidate.files.get(name)),await contentBuffer(value),name);
+ assert.ok(text.includes('Public steps'));assert.ok((await Array.fromAsync(candidate.files.keys())).some(p=>p.endsWith('.svg')));assert.ok(!(await Array.fromAsync(candidate.files.keys())).some(p=>p.endsWith('.csv')));assert.ok(!text.includes('View the data'));
+ assert.equal(candidate.researchReview.references.count,1);assert.equal((await (await openPublicationInput(f.releases.workspace,await f.releases.source(candidate.jobId))).get('records',record.id)).revision,recordRevision(record));
+ assert.deepEqual(await f.workspace.read(),saved);assert.ok(text.includes('9007199254740993'));await verifyPublicationCandidate(candidate);
+ const direct=buildPublication({...source.metadata,entries:saved.book.entries},{edition});for(const [name,value] of direct.files)if(!['styles.css','publication.json'].includes(name))assert.deepEqual(await contentBuffer(await candidate.files.get(name)),await contentBuffer(value),name);
  const downloads=structuredClone(edition);downloads.records[0].figures[0].data=true;
- const withData=await f.releases.inline({...source,edition:downloads});assert.ok([...withData.files.keys()].some(p=>p.endsWith('.csv')));assert.match(await publicationText(withData),/View the data/);
+ const withData=await f.releases.inline({...source,edition:downloads});assert.ok((await Array.fromAsync(withData.files.keys())).some(p=>p.endsWith('.csv')));assert.match(await publicationText(withData),/View the data/);
  const withoutChart=structuredClone(edition);withoutChart.records[0].figures=[];
- const without=await f.releases.inline({...source,edition:withoutChart});assert.ok(![...without.files.keys()].some(p=>p.startsWith('figures/')));assert.ok(!(await publicationText(without)).includes(record.figures[0].title));assert.deepEqual(await f.workspace.read(),saved);
+ const without=await f.releases.inline({...source,edition:withoutChart});assert.ok(!(await Array.fromAsync(without.files.keys())).some(p=>p.startsWith('figures/')));assert.ok(!(await publicationText(without)).includes(record.figures[0].title));assert.deepEqual(await f.workspace.read(),saved);
 });
 
 test('publication inventories use authenticated labels without loading private prose or figure values',async t=>{
@@ -92,7 +94,7 @@ test('catalogue verification rejects internally rehashed inventory labels that d
 test('inventory attachment defaults follow unsaved consent without changing the original revision',async t=>{
  const f=await fixture(t),media=new MediaStore(f.workspace.root,f.vault),asset=await media.import(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><circle cx="4" cy="4" r="3"/></svg>'),'image'),before=await f.workspace.read();
  before.book.entries[0].attachments=[{id:asset.id,kind:'image',caption:'Private original image',alt:'Circle',transcript:'',share:false}];await f.workspace.save(before.book,before.etag);
- const saved=await f.workspace.read(),record=saved.book.entries[0],draft={workspaceId:saved.book.id,baseEtag:saved.etag,metadata:{},projects:[],changes:[],removed:[],selection:{includeProjects:[],records:[{id:record.id,share:true,attachments:[{id:asset.id,share:true}]}]}},source={etag:saved.etag,draft};
+ const saved=await f.workspace.read(),record=saved.book.entries[0],draft={workspaceId:saved.book.id,baseEtag:saved.etag,metadata:{},projects:[],changes:[],removed:[],selection:{includeProjects:[],records:[{id:record.id,share:true,attachments:[{id:asset.id,share:true}]}]}},source={...await f.releases.workspace.outline(),draft};
  const original=ResearchCatalogue.prototype.record;ResearchCatalogue.prototype.record=()=>{throw Error('Original requested by inventory');};
  try{
   const included=(await publicationSelection(f.workspace,{source})).items[0];assert.deepEqual(included.choice.attachments,[asset.id]);assert.equal(included.choice.revision,recordRevision(record));assert.equal(included.attachments[0].title,'Private original image');
@@ -106,7 +108,7 @@ test('edition choices reject stale revisions, unselected records, duplicate iden
  const f=await fixture(t),choice=(await publicationSelection(f.workspace,{source:f.source})).items[0].choice;
  for(const [change,code] of [[{revision:'0'.repeat(64)},'RECORD_CHANGED'],[{sections:[randomUUID()]},'INVALID'],[{id:f.secret.id},'RECORD_CHANGED'],[{figures:[{id:randomUUID(),data:true}]},'INVALID'],[{body:'yes'},'INVALID'],[{extra:'ignored'},'INVALID']])await assert.rejects(f.releases.inline({...f.source,edition:{version:1,records:[{...choice,...change}]}}),{code});
  await assert.rejects(f.releases.inline({...f.source,edition:{version:1,records:[choice,choice]}}),{code:'INVALID'});
- await assert.rejects(publicationSelection(f.workspace,{source:{...f.source,etag:'0'.repeat(64)}}),{code:'CONFLICT'});
+ await assert.rejects(publicationSelection(f.workspace,{source:{...f.source,etag:'0'.repeat(64),websitePin:{...f.source.websitePin,researchSnapshotId:'0'.repeat(64)}}}),{code:'CONFLICT'});
  await assert.rejects(publicationSelection(f.workspace,{source:f.source,offset:-1}),{code:'INVALID'});
  assert.equal((await f.workspace.outline()).etag,f.source.etag);
 });
@@ -116,10 +118,10 @@ test('unsaved public selection keeps the original research revision and exact li
  Object.assign(method,{title:'Newly selected method',body:'Original method text'});Object.assign(run,{body:'A run using an exact method',sections:[]});other.body='Other public record';
  await f.workspace.save(current.book,current.etag);const linked=await f.workspace.read(),methodRevision=recordRevision(linked.book.entries.find(r=>r.id===method.id));
  linked.book.entries.find(r=>r.id===run.id).relations=[{id:randomUUID(),type:'Uses method',target:{workspaceId:current.book.id,kind:'record',id:method.id,revision:methodRevision},label:method.title}];
- await f.workspace.save(linked.book,linked.etag);const saved=await f.workspace.read(),source={etag:saved.etag,draft:{workspaceId:saved.book.id,baseEtag:saved.etag,metadata:{},projects:[],changes:[],removed:[],selection:{includeProjects:[],records:[{id:method.id,share:true,attachments:[]}]}}};
+ await f.workspace.save(linked.book,linked.etag);const saved=await f.workspace.read(),source={...await f.releases.workspace.outline(),draft:{workspaceId:saved.book.id,baseEtag:saved.etag,metadata:{},projects:[],changes:[],removed:[],selection:{includeProjects:[],records:[{id:method.id,share:true,attachments:[]}]}}};
  const inventory=await publicationSelection(f.workspace,{source}),choice=inventory.items.find(i=>i.id===method.id).choice;
  assert.equal(choice.revision,methodRevision);const candidate=await f.releases.inline({...source,edition:{version:1,records:[choice]}});
- assert.equal(candidate.sourceRevisions[method.id],methodRevision);assert.equal(candidate.researchReview.references.count,0);
- const html=(await contentBuffer(candidate.files.get('entries/'+run.id+'.html'))).toString();assert.ok(html.includes('entries/'+method.id+'.html'));assert.ok(html.includes('Newly selected method'));
- const pinned=await f.releases.source(candidate.jobId),row=pinned.records.find(r=>r.id===method.id);assert.equal((await readPublicationRecord(f.workspace,pinned,row)).share,false);assert.equal(row.selection.include,true);assert.deepEqual(await f.workspace.read(),saved);
+ assert.equal((await (await openPublicationInput(f.releases.workspace,await f.releases.source(candidate.jobId))).get('records',method.id)).revision,methodRevision);assert.equal(candidate.researchReview.references.count,0);
+ const html=(await contentBuffer(await candidate.files.get('entries/'+run.id+'.html'))).toString();assert.ok(html.includes('entries/'+method.id+'.html'));assert.ok(html.includes('Newly selected method'));
+ const pinned=await f.releases.source(candidate.jobId),row=await (await openPublicationInput(f.releases.workspace,pinned)).get('records',method.id);assert.equal((await readPublicationRecord(f.workspace,pinned,row)).share,false);assert.equal(row.selection.include,true);assert.deepEqual(await f.workspace.read(),saved);
 });

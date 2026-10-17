@@ -27,6 +27,7 @@ import {websitePublisher} from './workspace-jobs.js';
 import {publicationDesignPreview} from './publication-design-preview.js';
 import {DesignCandidates} from './design-candidates.js';
 import {verifyPublication} from './publication.js';
+import {verifyPublicationCandidate} from './retained-publication-files.js';
 import {jobSummary} from './jobs.js';
 import {researchId} from './web/research-reference.js';
 import {AppError} from './errors.js';
@@ -35,7 +36,7 @@ export class ProjectPublications{
  clear(){this.candidates.clear();this.designs.clear();this.appearancePreviews.clear();}
  previewUrl(id,file=''){return (this.entry.routePrefix??'/api/projects/'+this.entry.storage.projectId)+'/publication-preview/'+id+'/'+file;}
  appearanceUrl(id,file=''){return (this.entry.routePrefix??'/api/projects/'+this.entry.storage.projectId)+'/appearance-preview/'+id+'/'+file;}
- summary(releases,candidate){return {...releases.summary(candidate),url:this.previewUrl(candidate.reviewId,candidate.defaultPage)};}
+ async summary(releases,candidate){return {...await releases.summary(candidate),url:this.previewUrl(candidate.reviewId,candidate.defaultPage)};}
  async run(request,data,{websiteId=null,websitePin,websiteContext=false,query={},signal,headless=true,check=async()=>{},binary,sourceReader}={}){
   const {storage,publisher:basePublisher,queue:baseQueue,worker}=this.entry,operation=request.publication;
   await check();signal?.throwIfAborted();if(websiteId!==null&&!researchId(websiteId))throw new AppError('INVALID');
@@ -79,10 +80,10 @@ export class ProjectPublications{
   }
   if(operation==='preview'){const value=await releases.inline({...data,blockedValues},{signal});this.candidates.set(cacheKey(value.reviewId),value);return this.summary(releases,value);}
   if(operation==='file'){
-   const design=this.designs.get(request.id),value=design??await retained(request.id);if(!value.files.has(request.file))throw new AppError('NOT_FOUND');verifyPublication(value,{allowDesign:!!design});await check();return binary({name:request.file,content:value.files.get(request.file)});
+   const design=this.designs.get(request.id),value=design??await retained(request.id);if(!await value.files.has(request.file))throw new AppError('NOT_FOUND');if(design||value.version!==3)verifyPublication(value,{allowDesign:!!design});const content=await value.files.get(request.file);await check();return binary({name:request.file,content});
   }
   if(operation==='export'){
-   const value=await rollback(await retained(request.id??data.id));if(!data.rollbackReview&&!await publicationRevisionCurrent(workspace,value))throw new AppError('STALE');await new AnalysisPublicationReview(workspace,{sourceReader}).assert(value);verifyPublication(value);await check();return binary({archive:value.files});
+   const value=await rollback(await retained(request.id??data.id));if(!data.rollbackReview&&!await publicationRevisionCurrent(workspace,value))throw new AppError('STALE');await new AnalysisPublicationReview(workspace,{sourceReader}).assert(value);await verifyPublicationCandidate(value,{signal});await check();return binary({archive:value.files});
   }
   if(operation.startsWith('local-export/')){const result=await new LocalExport(workspace,{sourceReader})[operation.slice(13)](data),project=value=>value?.previewUrl?{...value,previewUrl:this.previewUrl(value.reviewId,value.previewUrl.split('/').slice(3).join('/'))}:value;return result?.plan?{...result,plan:project(result.plan)}:project(result);}
   if(operation.startsWith('publication-links/')){const links=new PublicationLinks(workspace);return operation.endsWith('/save')?links.save(data):links.read();}
@@ -91,8 +92,15 @@ export class ProjectPublications{
    const method=operation.slice(17);
    if(method==='start'){const job=await releases.start({...data,blockedValues},queue);worker.wake();return {job:jobSummary(job)};}
    if(method==='list'){const page=await releases.page(queue,data);return {...page,items:page.items.map(item=>({...item,job:jobSummary(item.job)}))};}
-   if(method==='open'){const value=await retained(data.id);return {...this.summary(releases,value),analysisReview:await new AnalysisPublicationReview(workspace,{sourceReader}).status(value),stale:!await publicationRevisionCurrent(workspace,value)||value.configEtag!==(await publisher.read()).etag};}
-   if(method==='rollback-review'){const value=await retained(data.id),owner=new PublicationRollback(workspace,publisher,{sourceReader}),approval=await owner.review(data),reviewed=owner.project(value,approval.review);return {...this.summary(releases,reviewed),destination:approval.destination,configEtag:approval.configEtag,rollback:approval.review,analysisReview:await new AnalysisPublicationReview(workspace,{sourceReader}).status(reviewed),stale:false};}
+   if(method==='open'){
+    const read=async()=>{const value=await retained(data.id);return {...await this.summary(releases,value),analysisReview:await new AnalysisPublicationReview(workspace,{sourceReader}).status(value),stale:!await publicationRevisionCurrent(workspace,value)};};
+    const review=await workspace.storageKind()==='catalogue'?await workspace.catalogue(read):await read();
+    return {...review,stale:review.stale||review.configEtag!==(await publisher.read()).etag};
+   }
+   if(method==='rollback-review'){const value=await retained(data.id),owner=new PublicationRollback(workspace,publisher,{sourceReader}),approval=await owner.review(data),reviewed=owner.project(value,approval.review);return {...await this.summary(releases,reviewed),destination:approval.destination,configEtag:approval.configEtag,rollback:approval.review,analysisReview:await new AnalysisPublicationReview(workspace,{sourceReader}).status(reviewed),stale:false};}
+   if(method==='pages')return releases.pageChoices(await retained(data.id),{...data,signal});
+   if(method==='references')return releases.referenceChoices(await retained(data.id),{...data,signal});
+   if(method==='analysis-review-window')return new AnalysisPublicationReview(workspace,{sourceReader}).window(await rollback(await retained(data.id)),{...data,signal});
    if(method==='analysis-review')return new AnalysisPublicationReview(workspace,{sourceReader}).save(await rollback(await retained(data.id)),data.decisions);
    return {job:await control('publication.prepare',method)};
   }

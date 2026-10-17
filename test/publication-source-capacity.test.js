@@ -40,10 +40,10 @@ function request(operation){
  return requestWriterWait(req,res,operation);
 }
 
-const edit=site=>({workspaceId:site.book.id,baseEtag:site.etag,metadata:{},projects:[],changes:[],removed:[],selection:site.site.selection});
+const edit=site=>({workspaceId:site.book.id,baseEtag:site.etag,websitePin:site.websitePin,metadata:{},projects:[],changes:[],removed:[],selection:site.site.selection});
 
 async function renderedPreview(storage,command,options){
- const start=performance.now(),preview=await websitePreviewSource(storage,command,options);
+ const {websitePin,...draft}=command,start=performance.now(),preview=await websitePreviewSource(storage,draft,{...options,websitePin});
  const sourceMs=Math.round(performance.now()-start);
  const candidate=await renderWebsitePreview(preview.context,{...options,media:preview.media,fonts:new WorkspaceFonts(storage)});
  const html=(await contentBuffer(candidate.files.get(candidate.defaultPage))).toString();
@@ -95,7 +95,7 @@ test('independent websites preview and publish during authoring with bounded sou
     const results=await Promise.allSettled([
      scope.run(metrics,()=>renderedPreview(storages[0],edit(journal),{designTarget:'entry:'+selectedId(),sourceReader,signal:controller.signal})),
      renderedPreview(storages[1],edit(report),{designTarget:'home',sourceReader:publicationSourceFactory(application,client,storages[1]),signal:controller.signal}),
-     request(()=>new PublicationJobs(storages[1],{sourceReader:publicationSourceFactory(application,client,storages[1])}).inline({etag:report.etag},{signal:controller.signal})),
+     request(()=>new PublicationJobs(storages[1],{sourceReader:publicationSourceFactory(application,client,storages[1])}).inline({etag:report.etag,websitePin:report.websitePin},{signal:controller.signal})),
      (async()=>{const at=performance.now();await update(books[1],1,'Independent amendment '+count);metrics.editMs=Math.round(performance.now()-at);})(),
      request(async()=>{const at=performance.now(),command=edit(await sites.read(ids[0]));command.metadata.website={...journal.book.website,footer:'Saved during publication '+count};await sites.save(ids[0],command);metrics.settingsMs=Math.round(performance.now()-at);}),
      projectPublicationSource(application,client,{workspaceId:host.id,sourceId:sources[1].workspaceId,operation:'pages',query:{workspaceId:sources[1].workspaceId,snapshotId:null,source:sources[1],search:'',cursor:null,backward:false}},{signal:controller.signal})
@@ -112,7 +112,7 @@ test('independent websites preview and publish during authoring with bounded sou
     assert.match(home.html,/First observations 0/);assert.match(home.html,/Second observations 0/);
     assert.equal(controller.signal.aborted,false,'Publication exceeded its concurrent-operation deadline');
     assert.equal(preview.context.entries.length,1);assert.equal(preview.context.entries[0].body,before);assert.equal(metrics.originals,1);
-    assert.equal(home.context.recordCards.length,2);assert.equal(edition.entries.length,2);assert.equal(pages.value.items.length,25);assert.ok(pages.value.nextCursor);
+    assert.equal(home.context.recordCards.length,2);assert.equal(edition.files.output.count('entries'),2);assert.equal(pages.value.items.length,25);assert.ok(pages.value.nextCursor);
     assert.equal((await sites.read(ids[0])).book.website.footer,'Saved during publication '+count);assert.equal((await sites.read(ids[1])).book.website.footer,'Selected report footer');
     assert.ok(metrics.settingsMs<5000,'A website settings save exceeded five seconds');
     assert.ok(metrics.editMs<5000,'An independent authoring save exceeded five seconds');assert.ok(metrics.sourceUses<30);assert.ok(metrics.queries<500);assert.ok(metrics.responseBytes<65536);

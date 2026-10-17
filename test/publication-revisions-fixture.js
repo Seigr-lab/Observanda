@@ -20,5 +20,6 @@ export async function historicalFixture(t,{chain=false}={}){
  const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  await f.workspace.withLock(()=>new ResearchMaterials(f.workspace).retainRecord(old));
  if(linked)await f.workspace.withLock(()=>new ResearchMaterials(f.workspace).retainRecord(linked));
- return {...f,book,run,method,old,target,linked,source:{workspaceId:book.id,etag:(await f.workspace.outline()).etag},releases:new PublicationJobs(f.workspace)};
+ const releases=new PublicationJobs(f.workspace),{etag,websitePin}=await releases.workspace.outline();
+ return {...f,book,run,method,old,target,linked,source:{workspaceId:book.id,etag,websitePin},releases};
 }

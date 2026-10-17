@@ -51,7 +51,8 @@ export function publicProjection(source, options={}) {
 
 // Internal projection boundary: the caller has validated metadata and originals.
 // Destination summaries resolve links/counts; they are never rendered as records.
-export function projectPublication(book,selection,{designPageId=null,designTarget=null,workspaceContent=false,singlePage=false,entryDestinations=null,publicationTarget=null,previewCounts=null,publicationCounts=null,browsePage=null,collectionPages=null,collectionQuery='',referencePage=null,referenceQuery='',edition}={}) {
+export function projectPublication(book,selection,{designPageId=null,designTarget=null,workspaceContent=false,singlePage=false,entryDestinations=null,publicationTarget=null,previewCounts=null,publicationCounts=null,browsePage=null,collectionPages=null,collectionQuery='',referencePage=null,referenceQuery='',referenceResolver=null,recordResolver=null,collectionResolver=null,edition}={}) {
+  if((referenceResolver||recordResolver||collectionResolver)&&!publicationTarget)throw new AppError('INVALID');
   if(browsePage&&publicationTarget!=='browse')throw new AppError('INVALID');
   if(publicationCounts&&!publicationTarget)throw new AppError('INVALID');
   if(collectionPages&&!publicationTarget&&!(workspaceContent&&singlePage&&designTarget&&entryDestinations))throw new AppError('INVALID');
@@ -64,22 +65,22 @@ export function projectPublication(book,selection,{designPageId=null,designTarge
   const destinations=entryDestinations??selection.entries;
   const links={...selection,entries:destinations};
   selection={...selection,...(entryDestinations?{entryDestinations}:{}),...(collectionPages?{collectionPages}:{})};
-  const destination=target=>publicationRecordDestination(destinations,target,book.id);
+  const destination=recordResolver??(target=>publicationRecordDestination(destinations,target,book.id));
   const revisionMatches=target=>!!destination(target);
   const availability=(id,target)=>(edition?.availability??[]).find(r=>r.recordId===id&&researchReference(r.target)===researchReference(target))?.statement;
   const sectionsFor=(target,sections)=>paged&&target!==pageTarget?[]:sections;
-  const projectLink=publicationLinkResolver(book.id,links,{workspaceContent});
+  const projectLink=referenceResolver??publicationLinkResolver(book.id,links,{workspaceContent});
   const publicText=value=>projectProse(value,projectLink);
   const recordText=(value,record)=>publicationRecordText(value,record,projectLink,{workspaceContent});
   const cleanSections=sections=>sections.map(section=>section.richText?{...section,richText:publicText(section.richText),body:proseText(publicText(section.richText))}:section);
-  const projects = selection.projects.map(p => ({ id: p.id, title: p.title, description: p.description, logos: logosFor(book, 'project:' + p.id) }));
+  const projects = selection.projects.map(p => ({ id: p.id, title: p.title, description: p.description, ...(p.recordCount===undefined?{}:{recordCount:p.recordCount}), logos: logosFor(book, 'project:' + p.id) }));
   const entries = selection.entries.map(e => ({
-    ...(e.historical?{revisionEdition:{revision:e.revision,current:publicationRecordDestination(destinations,{workspaceId:e.sourceWorkspaceId??book.id,id:e.recordId},book.id)?.id??null}}:{}),
+    ...(e.historical?{revisionEdition:{revision:e.revision,current:destination({kind:'record',workspaceId:e.sourceWorkspaceId??book.id,id:e.recordId})?.id??null}}:{}),
     availability:(edition?.availability??[]).filter(r=>r.recordId===e.id&&!projectLink(researchReference(r.target))).map(r=>r.statement),
     id: e.id, notebookId: e.notebookId, type: e.template?.label??e.type, journey:readingJourney(e), title: e.title, body: recordText(e.body,e), contributors:e.contributors.map(person=>({name:person.name,role:person.role})),
     relations:e.relations.flatMap(link=>{
       const href=projectLink(researchReference(link.target));if(!href)return [];
-      const target=link.target.kind==='record'?destination(link.target):publicationCollectionDestination(selection,link.target,book.id);
+      const target=link.target.kind==='record'?destination(link.target):(collectionResolver?collectionResolver(link.target):publicationCollectionDestination(selection,link.target,book.id));
       return [{type:link.type,...(link.role?{role:link.role}:{}),kind:link.target.kind,id:target?.id??book.id,...(link.target.selector?{fragment:selectorAnchor(publicationTargetSelector(target,link.target.selector))}:{}),label:link.target.kind==='workspace'?book.title:target.title}];
     }),
     logos: logosFor(book, 'entry:' + e.id), tags: [...e.tags], occurredOn: structuredClone(e.occurredOn), status: e.status, outcome:e.outcome??'',
@@ -99,7 +100,7 @@ export function projectPublication(book,selection,{designPageId=null,designTarge
   const layouts=book.website.layouts.filter(l=>(!paged||l.target===pageTarget)&&linkAvailable(l.target,selection)).map(l=>({...l,sections:cleanSections(publicSections(l.sections,selection,{includeUnpublished:workspaceContent,editing:designTarget===l.target,region:'layout'}))}));
   const pageTargets=paged?[pageTarget]:[...targets.map(t=>t.target),...entries.map(e=>'entry:'+e.id)];
   const regionTarget=target=>target==='browse'?(selection.homeEnabled?'home':'project:'+selection.projects[0]?.id):target;
-  const regions=projectedRegions(book.website,pageTargets.map(regionTarget),(sections,target,region)=>cleanSections(publicSections(sections,selection,{includeUnpublished:workspaceContent,editing:designTarget===target,region}))).map(region=>publicationTarget==='browse'?{...region,target:'browse'}:region);
+  const regions=projectedRegions(book.website,pageTargets.map(regionTarget),(sections,target,region)=>cleanSections(publicSections(sections,selection,{includeUnpublished:workspaceContent,editing:designTarget===target,region}))).filter(region=>publicationTarget!=='browse'||region.kind==='footer').map(region=>publicationTarget==='browse'?{...region,target:'browse'}:region);
   const assetIds=new Set(usedAssetIds([...regions.flatMap(r=>r.sections),...publicSections(selection.homeEnabled?sectionsFor('home',book.website.home.sections):[],selection,{includeUnpublished:workspaceContent,editing:designTarget==='home'}),...pages.flatMap(p=>p.sections),...layouts.flatMap(l=>l.sections)]));
   const assets=book.website.assets.filter(a=>assetIds.has(a.id)).map(a=>({id:a.id,kind:a.kind,caption:a.caption,alt:a.alt,transcript:a.transcript,...(a.kind==='file'?{name:a.name,size:a.size,sha256:a.sha256}:{})}));
   const homeSections=cleanSections(publicSections(selection.homeEnabled?sectionsFor('home',book.website.home.sections):[],selection,{includeUnpublished:workspaceContent,editing:designTarget==='home'})),mediaUses=new Map();

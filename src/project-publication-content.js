@@ -2,7 +2,7 @@
 import path from 'node:path';
 import {FileContent} from './file-content.js';
 import {OwnedFileContent} from './owned-file-content.js';
-import {publicationFiles,publicationFileStamp} from './publication-files.js';
+import {publicationFileRows,publicationFileStamp} from './publication-files.js';
 import {retiredMetadataSourceLocation,retainedMetadataValue} from './project-retired-metadata.js';
 import {adoptedMetadataFact,exclusiveMetadataFact} from './project-metadata-ownership.js';
 import {withRetiredProjectCatalogue} from './project-retired-records.js';
@@ -21,8 +21,7 @@ export async function retainedPublicationCandidate(store,owner,key,revision){
  const value=await retainedMetadataValue(store,revision);if(typeof value.text!=='string'||Buffer.byteLength(value.text)>16*1024*1024)damaged();let candidate;try{candidate=JSON.parse(value.text);}catch{damaged();}
  if(candidate.websiteId!==match[1]||publicationMetadataKey(candidate.websiteId,candidate.reviewId)!==key)damaged();return candidate;
 }
-export async function* projectPublicationContents(workspace,stored,{offset=0}={}){
- const files=publicationFiles(stored);if(!Number.isSafeInteger(offset)||offset<0||offset>files.length)throw new AppError('INVALID');
+export async function* projectPublicationContents(workspace,stored,options={}){
  const base=workspace.baseWorkspace??workspace,site=workspace.websiteId;
  if(site&&stored.websiteId!==site)damaged();
  const location=site&&!base.projectId&&await base.storageKind()==='catalogue'?await base.catalogue(store=>retiredMetadataSourceLocation(store,publicationMetadataKey(site,stored.reviewId))):null;
@@ -30,8 +29,7 @@ export async function* projectPublicationContents(workspace,stored,{offset=0}={}
  // Validate the potentially large immutable descriptor once for this iterator.
  // Each deferred file read still authenticates current project access and owner.
  if(location)await base.catalogue(store=>withRetiredProjectCatalogue(store,location.owner,target,async selected=>{if(hash(await retainedPublicationCandidate(selected,location.owner,location.id,location.revision))!==hash(stored))damaged();}));
- for(let index=offset;index<files.length;index++){
-  const {file,relative}=files[index];
+ for await(const {file,relative} of publicationFileRows(workspace,stored,options)){
   const absolute=path.join(base.root,...relative.split('/')),header=file.type==='media'?Buffer.from(file.header,'hex'):undefined;let content;
   if(!location){await publicationFileStamp(base.root,relative);content=new FileContent(base,absolute,file.size,file.sha256,header);}
   else{

@@ -1,3 +1,4 @@
+import {openPublicationInput} from './publication-input-reader.js';
 import {isStorageTemporary} from './storage-temporary.js';
 import path from 'node:path';
 import {readdir,unlink,rmdir} from 'node:fs/promises';
@@ -34,6 +35,15 @@ export async function retainPublicationMedia(workspace,jobId,assets,{signal}={})
  }catch(error){await removePublicationMedia(workspace,jobId);throw error;}
 }
 export function publicationInputMedia(workspace,source){
+ if(source.version===6){
+  let pending;const local=new MediaStore(workspace);
+  return {async get(id,options={}){
+   options.signal?.throwIfAborted();const input=await (pending??=openPublicationInput(workspace,source)),row=await input.get('retainedMedia',id);
+   if(!row){const identity=await input.get('identities',id);if(identity?.origin.split('/')[1]==='media'&&identity.origin.split('/')[0]!==source.metadata.id)throw new AppError('JOB_DAMAGED');return local.get(id,options);}if(!valid(row)||row.id!==id)throw new AppError('JOB_DAMAGED');
+   const root=await mediaDirectory(workspace,source.id),file=path.join(root,fileName(id));await assertRegular(file);options.signal?.throwIfAborted();
+   return {id,kind:row.kind,extension:row.extension,mime:row.mime,bytes:new FileContent(workspace,file,row.size,row.sha256,Buffer.from(row.header,'hex'))};
+  }};
+ }
  const rows=source.retainedMedia??[];
  if(!Array.isArray(rows)||!rows.every(valid)||new Set(rows.map(row=>row.id)).size!==rows.length)throw new AppError('JOB_DAMAGED');
  const retained=new Map(rows.map(row=>[row.id,row])),foreign=new Set((source.records??[]).filter(row=>row.sourceWorkspaceId&&row.sourceWorkspaceId!==source.metadata.id).flatMap(row=>row.media.map(asset=>asset.id)));

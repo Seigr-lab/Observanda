@@ -1,3 +1,4 @@
+import {verifyPublicationCandidate} from './retained-publication-files.js';
 import {websiteRequestContext} from './website-request-context.js';
 import {inventoryOperationAccessFactory} from './inventory-operation-access.js';
 import {comparisonSourceFactory} from './comparison-source-access.js';
@@ -1071,12 +1072,23 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         startJobs(context);const releases=new PublicationJobs(workspace,{sourceReader}),queue=publicationQueue(),data=await body(req),operation=url.pathname.slice('/api/publication-jobs/'.length);
         if(operation==='start'){const job=await releases.start({...data,blockedValues},queue);context.jobs.worker.wake();return json({job:jobSummary(job)},202);}
         if(operation==='list'){const page=await releases.page(queue,data);return json({...page,items:page.items.map(item=>({...item,job:jobSummary(item.job)}))});}
-        if(operation==='open'){const candidate=await retainedCandidate(data.id);if(!candidate)throw new AppError('NOT_FOUND');return json({...releases.summary(candidate),analysisReview:await new AnalysisPublicationReview(workspace,{sourceReader}).status(candidate),stale:!await publicationRevisionCurrent(workspace,candidate)||candidate.configEtag!==(await publisher.read()).etag});}
+        if(['pages','references','analysis-review-window'].includes(operation)){
+          let candidate=await retainedCandidate(data.id);if(!candidate)throw new AppError('NOT_FOUND');
+          if(data.rollbackReview){const owner=new PublicationRollback(workspace,publisher,{sourceReader});candidate=owner.project(candidate,await owner.authorize(candidate,data.rollbackReview));}
+          return json(operation==='pages'?await releases.pageChoices(candidate,data):operation==='references'?await releases.referenceChoices(candidate,data):await new AnalysisPublicationReview(workspace,{sourceReader}).window(candidate,data));
+        }
+        if(operation==='open'){
+          // Only bounded retained metadata shares this snapshot. Cached lazy
+          // file readers keep the live workspace, and no database lease escapes.
+          const read=async()=>{const candidate=await retainedCandidate(data.id);if(!candidate)throw new AppError('NOT_FOUND');return {...await releases.summary(candidate),analysisReview:await new AnalysisPublicationReview(workspace,{sourceReader}).status(candidate),stale:!await publicationRevisionCurrent(workspace,candidate)};};
+          const review=await workspace.storageKind()==='catalogue'?await workspace.catalogue(read):await read();
+          return json({...review,stale:review.stale||review.configEtag!==(await publisher.read()).etag});
+        }
         if(operation==='rollback-review'){
           const candidate=await retainedCandidate(data.id);if(!candidate)throw new AppError('NOT_FOUND');
           const approval=await new PublicationRollback(workspace,publisher,{sourceReader}).review(data);
           const reviewed=new PublicationRollback(workspace,publisher,{sourceReader}).project(candidate,approval.review);
-          return json({...releases.summary(reviewed),destination:approval.destination,configEtag:approval.configEtag,rollback:approval.review,analysisReview:await new AnalysisPublicationReview(workspace,{sourceReader}).status(reviewed),stale:false});
+          return json({...await releases.summary(reviewed),destination:approval.destination,configEtag:approval.configEtag,rollback:approval.review,analysisReview:await new AnalysisPublicationReview(workspace,{sourceReader}).status(reviewed),stale:false});
         }
         if(operation==='analysis-review'){let candidate=await retainedCandidate(data.id);if(!candidate)throw new AppError('NOT_FOUND');if(data.rollbackReview){const rollback=new PublicationRollback(workspace,publisher,{sourceReader});candidate=rollback.project(candidate,await rollback.authorize(candidate,data.rollbackReview));}return json(await new AnalysisPublicationReview(workspace,{sourceReader}).save(candidate,data.decisions));}
         const job=await queue.read(data.id);if(!job||job.type!=='publication.prepare')throw new AppError('NOT_FOUND');await queue.authorize(job);
@@ -1241,7 +1253,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         try{
           const data=await body(req),releases=new PublicationJobs(workspace,{sourceReader}),candidate=await releases.inline({...data,blockedValues},{signal:controller.signal});
           candidates.set(candidate.reviewId,candidate);while(candidates.size>5)candidates.delete(candidates.keys().next().value);
-          return json(releases.summary(candidate));
+          return json(await releases.summary(candidate));
         }finally{res.removeListener('close',abort);}
       }
       if(req.method==='POST'&&url.pathname==='/api/layout-check'){
@@ -1267,7 +1279,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         if(data.rollbackReview){const rollback=new PublicationRollback(workspace,publisher,{sourceReader});candidate=rollback.project(candidate,await rollback.authorize(candidate,data.rollbackReview));}
         else if(!await publicationRevisionCurrent(workspace,candidate))throw new AppError('STALE');
         await new AnalysisPublicationReview(workspace,{sourceReader}).assert(candidate);
-        verifyPublication(candidate);
+        await verifyPublicationCandidate(candidate);
         res.writeHead(200,{'Content-Type':'application/zip','Content-Disposition':'attachment; filename="observanda-site.zip"'});
         await pipeline(Readable.from(zipStream(candidate.files)),res);return;
       }
@@ -1283,9 +1295,9 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       const preview = /^\/preview\/([a-f0-9]{64})\/(.+)$/.exec(url.pathname);
       if (req.method === 'GET' && preview) {
         const candidate = designCandidates.get(preview[1]) ?? await retainedCandidate(preview[1]);
-        if (!candidate || !candidate.files.has(preview[2])) throw new AppError('NOT_FOUND');
-        verifyPublication(candidate,{allowDesign:designCandidates.get(preview[1])===candidate});
-        return await serveContent(req, res, candidate.files.get(preview[2]), mime(preview[2]));
+        if (!candidate || !await candidate.files.has(preview[2])) throw new AppError('NOT_FOUND');
+        if(candidate.version!==3)verifyPublication(candidate,{allowDesign:designCandidates.get(preview[1])===candidate});
+        return await serveContent(req, res, await candidate.files.get(preview[2]), mime(preview[2]));
       }
       throw new AppError('NOT_FOUND');
       },{check:()=>req.checkWriter()});

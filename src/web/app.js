@@ -1,3 +1,4 @@
+import {publicationReviewChoicesUI} from './publication-review-choices.js';
 import {moduleReferenceNavigation,availableOwnedModule} from './module-reference-navigation.js';
 import {researchReturn,researchReturnNavigation} from './research-return.js';
 import {validTarget,researchId} from './research-reference.js';
@@ -32,7 +33,7 @@ import {migrationUI} from './migration-ui.js';
 import {migrationProvenanceUI} from './migration-provenance-ui.js';
 import {attemptUI} from './attempt-ui.js';
 import {resultStatementsUI} from './result-statements-ui.js';
-import {saveAnalysisEditionReview,requireAnalysisEditionReview} from './analysis-review-ui.js';
+import {saveAnalysisEditionReview,requireAnalysisEditionReview,loadAnalysisEditionReview} from './analysis-review-ui.js';
 import {readProgressStream} from './progress-stream.js';
 import {structureProgress,structureRequestIds} from './structure-progress.js';
 import {storageProgress} from './storage-progress.js';
@@ -473,6 +474,7 @@ const recordViews=recordViewsUI({state,api,esc,field,showDialog,notify,snapshot:
 const figures=figureEditor({getFigures:()=>entry()?.figures??[],getResults:()=>entry()?.results,setResults:value=>{entry().results=value;results.refresh();},prepareCopies:items=>materials.pinFigureSources(items),busyChanged:updateSaveStatus,changed:()=>dirtyRecord(),notify,context:()=>state.book?.id??null});
 
 const option = (value, label, selected) => `<option value="${esc(value)}"${value === selected ? ' selected' : ''}>${esc(label)}</option>`;
+const publicationReviewChoices=publicationReviewChoicesUI({state,api,esc,option});
 const branding=brandingUI({state,api,documents:websiteDocuments,esc,field,option,showDialog,render,dirty,leave:{run:fn=>leave.run(fn)},report,uploading:()=>uploading});
 const labUI=lazyFeatureUI({enabled:()=>enabledModule(state.dashboardSettings,'laboratory'),handles:name=>name==='laboratory-samples'||name.startsWith('lab-'),load:()=>import('./laboratory-ui.js').then(m=>m.laboratoryUI({state,api,esc,field,option,showDialog,render,notify}))});
 const publishUI=lazyFeatureUI({enabled:()=>enabledModule(state.dashboardSettings,'publishing'),handles:name=>name==='publishing'||(name.startsWith('publish-')||name.startsWith('publication-links-')),load:()=>import('./publishing-ui.js').then(m=>m.publishingUI({state,api,esc,field,option,render,notify,showDialog,onChange:updateSaveStatus}))});
@@ -721,7 +723,7 @@ function render() {
   fontLibrary.decorate();drafts.track();shellMenu.apply(state.page);updateSaveStatus();dashboard.bind();operationsLive.bind();sites.bind();website.bind();modules.bind();connectedWork.bind();documents.bind();figures.bind();mediaImports.bind();branding.bind();
   previewSurfaces=[...document.querySelectorAll('#design-preview,iframe[title="Publication preview"]')].map(frame=>previewSurface(frame));
   const reviewFrame=document.querySelector('iframe[title="Publication preview"]');
-  reviewFrame?.addEventListener('load',()=>{try{const prefix=publicationPreviewUrl(state,state.preview.id),url=new URL(reviewFrame.contentWindow.location.href),path=url.pathname.slice(prefix.length);if(url.origin===location.origin&&url.pathname.startsWith(prefix)&&state.preview.pages.some(p=>p.path===path)){state.preview.currentPage=path;state.preview.url=url.pathname;$('#preview-page').value=path;$('#full-public-preview').href=url.pathname;}}catch{/* A visitor link may lead outside the reviewed site. */}});
+  reviewFrame?.addEventListener('load',()=>publicationReviewChoices.follow(reviewFrame,publicationPreviewUrl(state,state.preview.id)).catch(error=>notify(error.message)));
   syncRoute();storageControls.workspaces.bind();activity.bind();recordContent.bind();help.bind();workflow.focusSection();recordSections.bind();workflow.bind();recordList.bind();recordActivity.bind();labUI.bind();decorateRecordLinks(document,state.book);
   userProfile.bind();
   if (state.page === 'appearance') void designPreview.update();
@@ -921,7 +923,7 @@ async function rawAction(button) {
   const brandingAction=name==='branding'||state.page==='branding'&&(['branding-back','save','discard-section'].includes(name)||['brand-','research-target-','media-import-'].some(prefix=>name?.startsWith(prefix)));
   const appearanceAction=name==='appearance'||name?.startsWith('interface-')||state.page==='appearance'&&(['save','discard-section'].includes(name)||name?.startsWith('theme-'));
   const outlineModuleAction=name==='laboratory-samples'||state.page==='laboratory'&&name?.startsWith('lab-')||name?.startsWith('review-')||name==='module-open'&&modules.supportsOutline(button.dataset.moduleId)||state.page==='module'&&modules.supportsOutline(state.moduleId)&&(name==='module-command'||['module-reference-','module-choice-','research-target-'].some(prefix=>name?.startsWith(prefix)));
-  const publicationAction=['publishing','integrations','preview','export','website','analysis-review-save'].includes(name)||state.page==='website'&&(['save','discard-section','include-project-entries','delete-page','branding'].includes(name)||name?.startsWith('website-')||name?.startsWith('media-import-')||name?.startsWith('menu-'))||name?.startsWith('publish-')||name?.startsWith('publication-jobs-')||name?.startsWith('local-export-')||state.page==='review'&&name?.startsWith('storage-browse');
+  const publicationAction=['publishing','integrations','preview','export','website','analysis-review-save'].includes(name)||state.page==='website'&&(['save','discard-section','include-project-entries','delete-page','branding'].includes(name)||name?.startsWith('website-')||name?.startsWith('media-import-')||name?.startsWith('menu-'))||name?.startsWith('publish-')||name?.startsWith('publication-jobs-')||name?.startsWith('publication-review-')||name?.startsWith('analysis-review-')||name?.startsWith('local-export-')||state.page==='review'&&name?.startsWith('storage-browse');
   const administrationAction=name==='templates'||name==='storage'||name==='activity-show'||['storage-','security-','migration-','inventory-'].some(prefix=>name?.startsWith(prefix));
   if((state.workspaceOutline||state.recordScope&&!scopedRecordAction(name))&&!readingAction&&!administrationAction&&!brandingAction&&!appearanceAction&&!publicationAction&&!name?.startsWith('edition-')&&!outlineModuleAction&&!recordCreationActions.has(name)&&!structureActions.has(name)&&!state.access?.locked&&!state.storageUnavailable&&!state.newWorkspace&&!['browse-record','edit-entry','open-issue','record-read-linked','storage-lock','workspace','entries','projects','open-project','project-records','project-recent-retry','project-recent-collection-retry','research-copy-context','filter-notebook','clear-record-filters','close-dialog','preferences','workspace-discard'].includes(name)&&!(state.page==='entries'&&name?.startsWith('record-type-'))&&!name?.startsWith('record-list-')&&!name?.startsWith('record-view')&&!name?.startsWith('starter-')&&!name?.startsWith('dashboard-')&&!name?.startsWith('module-settings-')){const route=location.hash;await ensureCompleteWorkspace();if(location.hash!==route){await restoreRoute();return;}}
   const module=moduleForPage(name);
@@ -1014,6 +1016,8 @@ async function rawAction(button) {
     button.disabled = true;
     try { const a=document.createElement('a');a.href=projectApiRoute('/api/export/'+state.preview.id,researchOwner(state))+(state.preview.rollback?'?rollbackReview='+state.preview.rollback.id:'');a.download='observanda-site.zip';a.click(); } finally { button.disabled = false; }
   }
+  if(name==='publication-review-pages'||name==='publication-review-references')await publicationReviewChoices.load(name.endsWith('pages')?'pages':'references',{offset:Number(button.dataset.offset)});
+  if(name==='analysis-review-next'||name==='analysis-review-previous'){await loadAnalysisEditionReview(state,api,{offset:Number(button.dataset.offset)});render();}
   if(name==='analysis-review-save'){button.disabled=true;try{await saveAnalysisEditionReview(state,api);render();}finally{if(button.isConnected)button.disabled=false;}}
 
 }
@@ -1185,7 +1189,7 @@ async function extendedAction(button) {
 document.addEventListener('change', event => {
   if (event.target.dataset.upload) uploadMedia(event.target).catch(report);
   if(event.target.dataset.mediaResume)mediaImports.resume(event.target).catch(report);
-  if (event.target.id === 'preview-page' && state.preview) {state.preview.currentPage=event.target.value;const url=publicationPreviewUrl(state,state.preview.id,event.target.value);$('iframe.preview-frame').src=url;$('#full-public-preview').href=url;}
+  if (event.target.id === 'preview-page' && event.target.value && state.preview) {state.preview.currentPage=event.target.value;const url=publicationPreviewUrl(state,state.preview.id,event.target.value);$('iframe.preview-frame').src=url;$('#full-public-preview').href=url;}
 });
 
 const mediaPolicyFields=[['maxUploadBytes','Maximum original file (MiB)',1048576],['maxPreparedBytes','Maximum website copy (MiB)',1048576],['maxDurationSeconds','Maximum recording length (minutes)',60],['reserveBytes','Keep disk space free (GiB)',1073741824],['maxImagePixels','Maximum image size (megapixels)',1000000],['maxAudioChannels','Maximum audio channels',1],['maxSampleRate','Maximum audio sample rate (Hz)',1],['processingTimeoutSeconds','Processing time limit (minutes)',60]];

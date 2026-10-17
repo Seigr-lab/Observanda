@@ -17,6 +17,10 @@ function navigation(previous,next,esc){
 // scripts. Authenticated previews continue with snapshot-bound index cursors.
 export function* publicationReferenceWindows(context,record,esc){
  const all=rows(context,record.id),state=context.referencePage;
+ if(state?.staticPage){
+  const {page,total}=state.staticPage,href=number=>path(record.id,number).slice(8)+'#record-references',body=content(all,record.id,esc);
+  yield {path:path(record.id,page),content:total>24?'<div id="record-references">'+body+navigation(page?href(page-1):null,(page+1)*24<total?href(page+1):null,esc)+'</div>':body};return;
+ }
  if(state){
   const ids=new Set(state.recordIds),items=all.filter(r=>ids.has(r.id)),continued=!!(state.previousCursor||state.nextCursor);
   const href=cursor=>{if(!cursor)return null;const query=new URLSearchParams(context.referenceQuery);query.set('references',cursor);return '?'+query+'#record-references';};

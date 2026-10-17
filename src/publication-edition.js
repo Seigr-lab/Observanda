@@ -1,3 +1,4 @@
+import {buildIndexedPublicationEdition} from './publication-edition-renderer.js';
 import {publicationPresentationReader,publicationBrandingTargets} from './publication-input-presentation.js';
 import {readPublicationPage} from './publication-input-pages.js';
 import {publicationPageRecord} from './publication-owner-projection.js';
@@ -49,7 +50,8 @@ function* collectionWindows(source,selection,target,metadata){
  yield* publicationCollectionWindows(rows,target);
 }
 
-export async function buildPublicationEdition(workspace,source,{blockedValues=[],signal,progress,retain}){
+export async function buildPublicationEdition(workspace,source,{blockedValues=[],signal,progress,retain,writer}){
+ if(source.version===6)return buildIndexedPublicationEdition(workspace,source,{blockedValues,signal,progress,writer});
  const presentation=source.version===5?publicationPresentationReader(workspace,source):null;
  const pageInputs=new Map((source.pageInputs??[]).map(row=>[row.id,row]));
  const selection=selectedContent({...source.metadata,entries:source.records.map(r=>({...r,attachments:r.media}))});

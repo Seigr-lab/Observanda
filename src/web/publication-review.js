@@ -1,3 +1,4 @@
+import {publicationPageChoices,publicationReferenceChoices} from './publication-review-choices.js';
 import {t} from './i18n/index.js';
 import {analysisEditionReviewView} from './analysis-review-ui.js';
 export const publicationText=(key,values)=>t('publication',key,values);
@@ -16,9 +17,9 @@ export function publicationReviewView(p,{esc,field,option,icon}){
   <p>${text('reviewGuidance')}</p>${p.stale?`<p role="status">${text('stale')}</p><button class="button" data-action="publish-rollback-review">${text('rollbackReview')}</button>`:''}${p.rollback?`<section class="panel"><h2>${text('rollbackTitle')}</h2><p>${text('rollbackGuidance')}</p><label class="checkbox"><input id="rollback-confirm" type="checkbox"><span>${text('rollbackConfirm')}</span></label></section>`:''}
   ${p.researchReview?.changedInputs?`<p class="material-review" role="status">${text('changedInputs',{count:p.researchReview.changedInputs})}</p>`:''}
   ${p.researchReview?.editedFigures?`<p class="material-review" role="status">${text('editedFigures',{count:p.researchReview.editedFigures})}</p>`:''}
-  ${p.researchReview?.references?.count?`<section class="material-review"><p>${text('unresolvedReferences',{count:p.researchReview.references.count})}</p><ul>${p.researchReview.references.items.map(r=>`<li>${text('unresolvedRecord',r)}</li>`).join('')}</ul></section>`:''}
+  ${p.researchReview?.references?.count?`<section class="material-review"><p>${text('unresolvedReferences',{count:p.researchReview.references.count})}</p><div id="publication-reference-choices">${publicationReferenceChoices(p,{esc})}</div></section>`:''}
   ${analysisEditionReviewView(p,{esc,field})}
-  ${field(text('previewPage'),`<select id="preview-page">${p.pages.map(page=>option(page.path,page.title,p.currentPage??p.pages[0]?.path)).join('')}</select>`)}
+  ${field(text('previewPage'),`<div id="publication-page-choices">${publicationPageChoices(p,{esc,option})}</div>`)}
   ${repositoryReview}<label class="checkbox"><input type="checkbox" id="review-confirm"><span>${text('confirm')}</span></label><div class="review-actions">
   <button class="button primary" data-action="export" ${p.stale?'disabled':''}>${icon('export')}${text('download')}</button>
   ${!p.rollback?`<button class="button" data-action="local-export-open">${text('localExport')}</button>`:''}

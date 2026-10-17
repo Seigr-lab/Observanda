@@ -4,14 +4,14 @@ const commands={
  'github-connection/':['status','start','cancel','choose','disconnect'],
  'websites/':['list','open','version','change','save',...['open','window','item','change','undo','redo','discard','save'].map(name=>'editor/'+name)],
  'website/research/':['summary','content','record','sections','media'],
- 'publication-jobs/':['start','list','open','rollback-review','analysis-review','status','cancel','retry'],
+ 'publication-jobs/':['start','list','open','pages','references','rollback-review','analysis-review','analysis-review-window','status','cancel','retry'],
  'deployment-jobs/':['start','list','status','cancel','retry'],
  'repository-setup/':['start','review','initialize','current','status','cancel','retry'],
  'publishing/':['save','connect','disconnect','check','plan','verify','verification','verification-cancel','verification-retry','deploy'],
  'local-export/':['plan','current','page','apply','discard'],
  'publication-links/':['read','save']
 };
-const reads=new Set([...['open','window','item'].map(name=>'websites/editor/'+name),'github-connection/status','websites/list','websites/open','websites/version','publication-jobs/list','publication-jobs/open','publication-jobs/status','deployment-jobs/list','deployment-jobs/status','repository-setup/current','repository-setup/status','publishing/verification','publication-links/read','publication-selection','publication-references','local-export/current','local-export/page']);
+const reads=new Set([...['open','window','item'].map(name=>'websites/editor/'+name),'github-connection/status','websites/list','websites/open','websites/version','publication-jobs/list','publication-jobs/open','publication-jobs/pages','publication-jobs/references','publication-jobs/analysis-review-window','publication-jobs/status','deployment-jobs/list','deployment-jobs/status','repository-setup/current','repository-setup/status','publishing/verification','publication-links/read','publication-selection','publication-references','local-export/current','local-export/page']);
 export function projectPublicationRequest(route){
  if(!route.startsWith('/api/'))return null;const operation=route.slice(5);
  const appearance=/^appearance-preview\/([a-f0-9]{64})\/(.+)$/.exec(operation);

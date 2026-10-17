@@ -1,3 +1,5 @@
+import {Readable} from 'node:stream';
+import {pipeline} from 'node:stream/promises';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {mkdtemp,rm,copyFile,mkdir,readlink} from 'node:fs/promises';
@@ -12,7 +14,7 @@ export async function sshFixture(t){
  let hook=null;const calls=[];
  const run=async(program,args,options={})=>{
   const call={program,args,options};calls.push(call);await hook?.(call,'before');let output='';
-  if(program==='ssh')output=await new Promise((resolve,reject)=>{const child=execFile(shell,['-c',args.at(-1)],{env,windowsHide:true,maxBuffer:1024*1024,timeout:180000,signal:options.signal},(error,stdout,stderr)=>error?reject(Object.assign(error,{message:error.message+' '+stderr})):resolve(stdout));child.stdin.on('error',()=>{});child.stdin.end(options.input??'');});
+  if(program==='ssh')output=await new Promise((resolve,reject)=>{const child=execFile(shell,['-c',args.at(-1)],{env,windowsHide:true,maxBuffer:1024*1024,timeout:180000,signal:options.signal},(error,stdout,stderr)=>error?reject(Object.assign(error,{message:error.message+' '+stderr})):resolve(stdout));child.stdin.on('error',()=>{});if(options.input&&typeof options.input[Symbol.asyncIterator]==='function')pipeline(Readable.from(options.input),child.stdin).catch(error=>{child.kill();reject(error);});else child.stdin.end(options.input??'');});
   else if(program==='sftp')for(const line of options.input.trim().split('\n')){
    const match=/^put "([^"]+)" "([^"]+)"$/.exec(line);if(!match)throw Error('Unexpected SFTP command');
    if(!match[2].startsWith(root+'/'))throw Error('Fixture escaped remote root');const relative=match[2].slice(root.length+1),target=path.resolve(directory,relative);

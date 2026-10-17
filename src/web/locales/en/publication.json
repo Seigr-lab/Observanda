@@ -216,5 +216,10 @@
   "copyValue": "Text to copy",
   "copyAction": "Copy",
   "copySuccess": "Copied to clipboard.",
-  "copyFallback": "Automatic copying is unavailable. Select and copy the text above."
+  "copyFallback": "Automatic copying is unavailable. Select and copy the text above.",
+  "previousChoices": "Previous pages",
+  "nextChoices": "Next pages",
+  "choicesPosition": "Pages {start}?{end} of {total}",
+  "choosePreviewPage": "Choose a page",
+  "referencesPosition": "References {start}?{end} of {total}"
 }

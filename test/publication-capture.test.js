@@ -13,6 +13,8 @@ import {ResearchCatalogue} from '../src/research-catalogue.js';
 import {ResearchRecords,recordRevision} from '../src/research.js';
 import {MediaStore} from '../src/media.js';
 import {PublicationJobs} from '../src/publication-jobs.js';
+import {openPublicationInput} from '../src/publication-input-reader.js';
+import {openPublicationOutput} from '../src/publication-output.js';
 import {readPublicationRecord} from '../src/publication-input.js';
 import {workspaceJobs} from '../src/workspace-jobs.js';
 import {websiteWorkspace,websiteJobQueue} from '../src/website-workspace.js';
@@ -66,10 +68,10 @@ test('publication capture permits authoring and another preparation while retain
   assert.equal((await f.storage.listMetadata('.observanda/release-captures')).length,1);
   assert.ok((await f.storage.listMetadata('.observanda/release-inputs/'+firstId)).length>=32);
   resume();const first=await pending;assert.equal(first.id,firstId);restore();
-  const before=await f.releases.source(first.id),after=await f.releases.source(second.id);
-  assert.equal(before.records.length,72);assert.equal(after.records.length,72);
-  assert.equal((await readPublicationRecord(f.storage,before,before.records.find(row=>row.id===original.id))).title,original.title);
-  assert.equal((await readPublicationRecord(f.storage,after,after.records.find(row=>row.id===original.id))).title,changed.title);
+  const before=await f.releases.source(first.id),after=await f.releases.source(second.id),beforeInput=await openPublicationInput(f.storage,before),afterInput=await openPublicationInput(f.storage,after);
+  assert.equal(await beforeInput.recordCount(),72);assert.equal(await afterInput.recordCount(),72);
+  assert.equal((await readPublicationRecord(f.storage,before,await beforeInput.get('records',original.id))).title,original.title);
+  assert.equal((await readPublicationRecord(f.storage,after,await afterInput.get('records',original.id))).title,changed.title);
   assert.deepEqual(await f.storage.listMetadata('.observanda/release-captures'),[]);
   assert.equal((await f.queue.read(first.id)).state,'queued');assert.equal((await f.queue.read(second.id)).state,'queued');
   await f.workspace.withStorageHandoff(async()=>{});
@@ -89,7 +91,7 @@ test('interrupted input cleanup is recovered before another preparation without 
  const job=await releases.start(await publicationCommand(storage),queue);
  assert.deepEqual(await storage.listMetadata('.observanda/release-inputs/'+abandoned),[]);
  assert.deepEqual(await storage.listMetadata('.observanda/release-captures'),[]);
- assert.equal((await releases.source(job.id)).records.length,72);assert.equal((await queue.read(job.id)).state,'queued');
+ assert.equal(await (await openPublicationInput(storage,await releases.source(job.id))).recordCount(),72);assert.equal((await queue.read(job.id)).state,'queued');
 });
 
 test('aborting capture removes its committed input batches and releases its lifecycle lease',{timeout:120000},async t=>{
@@ -114,8 +116,8 @@ test('a lost admission reply preserves the committed job and its retained input'
  finally{f.queue.transaction=transaction;}
  assert.ok(admitted);assert.deepEqual(await f.storage.listMetadata('.observanda/release-captures'),[]);
  assert.equal((await f.queue.read(admitted.id)).state,'queued');
- const source=await f.releases.source(admitted.id);assert.equal(source.records.length,72);
- const retained=source.records[0];assert.equal((await readPublicationRecord(f.storage,source,retained)).id,retained.id);
+ const source=await f.releases.source(admitted.id),input=await openPublicationInput(f.storage,source);assert.equal(await input.recordCount(),72);
+ const retained=(await input.window('records',{limit:1})).items[0];assert.equal((await readPublicationRecord(f.storage,source,retained)).id,retained.id);
 });
 
 test('a burst of preparations leaves database capacity for input commits',{timeout:120000},async t=>{
@@ -133,7 +135,7 @@ test('a killed capture releases its lease and its partial input is removed on th
  assert.ok((await f.storage.listMetadata('.observanda/release-inputs/'+abandoned)).length>=32);assert.equal(await f.queue.read(abandoned),null);
  const job=await f.releases.start(await publicationCommand(f.storage),f.queue);
  assert.deepEqual(await f.storage.listMetadata('.observanda/release-inputs/'+abandoned),[]);assert.deepEqual(await f.storage.listMetadata('.observanda/release-captures'),[]);
- assert.equal((await f.releases.source(job.id)).records.length,72);await f.workspace.withStorageHandoff(async()=>{});
+ assert.equal(await (await openPublicationInput(f.storage,await f.releases.source(job.id))).recordCount(),72);await f.workspace.withStorageHandoff(async()=>{});
 });
 
 test('a complete 720-record selection keeps ordinary website saves within their latency budget',{timeout:240000},async t=>{
@@ -151,7 +153,8 @@ test('a complete 720-record selection keeps ordinary website saves within their 
  }})();
  const results=await Promise.allSettled([preparing,saving]);for(const result of results)if(result.status==='rejected')throw result.reason;
  const job=results[0].value,source=await f.releases.source(job.id),candidate=await f.releases.stored(job.result.id),elapsedMs=Math.round(performance.now()-started),maximumSaveMs=Math.max(...latencies);
- t.diagnostic(JSON.stringify({records:source.records.length,files:candidate.files.length,inputBytes:extra.reduce((sum,record)=>sum+Buffer.byteLength(record.body),0),elapsedMs,saves:latencies.length,maximumSaveMs}));
- assert.equal(source.records.length,720);assert.equal(candidate.entries.length,720);assert.ok(candidate.files.length>720);assert.ok(latencies.length>=2);assert.ok(maximumSaveMs<5000,'A website settings save exceeded five seconds');assert.ok(elapsedMs<180000,'Full selected publication exceeded three minutes');
- const last=source.records.find(row=>row.id===extra.at(-1).id);assert.equal((await readPublicationRecord(f.storage,source,last)).body,extra.at(-1).body);
+ const input=await openPublicationInput(f.storage,source),output=await openPublicationOutput(f.storage,candidate),recordCount=await input.recordCount(),fileCount=output.count('files');
+ t.diagnostic(JSON.stringify({records:recordCount,files:fileCount,inputBytes:extra.reduce((sum,record)=>sum+Buffer.byteLength(record.body),0),elapsedMs,saves:latencies.length,maximumSaveMs}));
+ assert.equal(recordCount,720);assert.equal(output.count('entries'),720);assert.ok(fileCount>720);assert.ok(latencies.length>=2);assert.ok(maximumSaveMs<5000,'A website settings save exceeded five seconds');assert.ok(elapsedMs<180000,'Full selected publication exceeded three minutes');
+ const last=await input.get('records',extra.at(-1).id);assert.equal((await readPublicationRecord(f.storage,source,last)).body,extra.at(-1).body);
 });
