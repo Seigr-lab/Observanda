@@ -1277,7 +1277,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         try{
           if(appearanceChoices)return json(await appearancePreviews.choices(appearanceChoices[1],{cursor:url.searchParams.get('cursor'),path:url.searchParams.get('path'),signal:controller.signal,client}));
           const file=await appearancePreviews.file(appearanceFile[1],appearanceFile[2]+url.search,{signal:controller.signal,client});
-          return await serveContent(req,res,file.content,mime(file.name));
+          return await serveContent(req,res,file.content,mime(file.name),{signal:controller.signal});
         }finally{res.removeListener('close',abort);}
       }
       const preview = /^\/preview\/([a-f0-9]{64})\/(.+)$/.exec(url.pathname);
