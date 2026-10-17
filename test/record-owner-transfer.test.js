@@ -4,6 +4,7 @@ import {randomUUID} from 'node:crypto';
 import path from 'node:path';
 import {mkdir} from 'node:fs/promises';
 import {projectTreeFixture} from './project-tree-fixture.js';
+import {ProjectStorage} from '../src/project-storage.js';
 import {LabBookStorage} from '../src/lab-book-storage.js';
 import {LabBookDirectory} from '../src/lab-book-directory.js';
 import {RecordOwnerTransfer} from '../src/record-owner-transfer.js';
@@ -11,6 +12,7 @@ import {RetainedRecordDocuments} from '../src/retained-record-documents.js';
 import {ResearchRecords,recordRevision} from '../src/research.js';
 import {ResearchMaterials} from '../src/research-materials.js';
 import {EvidenceCorrections} from '../src/evidence-corrections.js';
+import {referenceOriginKey,referenceNamespaceMatches} from '../src/research-reference-namespace.js';
 import {RunReceiptStore} from '../src/run-receipt-store.js';
 import {verifyRecordOwnerTransfers} from '../src/record-owner-transfer-verification.js';
 import {copyLabBookLocation} from '../src/lab-book-transfer.js';
@@ -89,4 +91,28 @@ test('selected owner move retains exact evidence, unavailable sibling provenance
  await source.withLock(()=>source.catalogue(store=>writeRecordOwnerTransfer(store,{...completed,progress:{...completed.progress,previousOwnerTransfer:randomUUID()}})));await assert.rejects(source.catalogue(store=>verifyRecordOwnerTransfers(store)),{code:'CATALOGUE_DAMAGED'});await source.withLock(()=>source.catalogue(store=>writeRecordOwnerTransfer(store,completed)));
  await verifyCatalogueArchive(source,JSON.parse(await source.readFile(await workspaceFile(source.root),'utf8')));
 
+});
+
+test('project record move preserves authenticated former namespaces for external evidence',{timeout:180000},async t=>{
+ const f=await projectTreeFixture(t),project=f.projects[0],[original,to]=f.books,source=new ProjectStorage(project.root,project.projectId,project.key),target=new LabBookStorage(to.root,to.labBookId,to.key),materials=new ResearchMaterials(source);
+ const record={...structuredClone(original.before.book.entries[0]),id:randomUUID()},sibling={...structuredClone(record),id:randomUUID(),title:'Retained sibling'};
+ await source.update(book=>{book.notebooks=[structuredClone(original.before.book.notebooks[0])];book.entries=[record,sibling];return book;});
+ const namespace=(await source.outline()).metadata.id,artifact=await upload(materials,sibling.id,'sibling.txt',Buffer.from('Original sibling evidence')),priorNamespace=randomUUID(),qualified={...artifact,workspaceId:priorNamespace};
+ await source.withLock(()=>source.catalogue(async store=>{
+  await store.putObject('project:research-migration',{version:1,projectId:project.projectId,namespaceId:namespace,sourceNamespace:priorNamespace});
+  await store.putObject(referenceOriginKey(qualified),{version:1,projectId:project.projectId,namespaceId:namespace,sourceNamespace:priorNamespace,kind:artifact.kind,id:artifact.id});
+  assert.equal(await referenceNamespaceMatches(store,qualified),true);
+  assert.equal(await referenceNamespaceMatches(store,{...qualified,id:randomUUID()}),false);
+ }));
+ const analysis=await materials.analysis({recordId:record.id,title:'References retain their addresses',tool:'Synthetic',version:'1',parameters:'',inputs:[artifact,qualified],outputs:[]}),expected=await materials.read(analysis);
+ const sourceOwner={projectId:project.projectId,labBookId:null,workspaceId:namespace},targetOwner={projectId:to.projectId,labBookId:to.labBookId,workspaceId:to.namespaceId};
+ const member=await source.catalogue(async store=>store.member(await store.snapshot(),record.id)),engine=new RecordOwnerTransfer(source,target,{registry:f.registry,sourceOwner,targetOwner});
+ const result=await engine.start({id:randomUUID(),workspaceId:namespace,recordId:record.id,sourceNotebookId:record.notebookId,expectedStorageRevision:member.revision,targetWorkspaceId:to.namespaceId,targetNotebookId:to.labBookId});assert.equal(result.phase,'complete');
+ const incoming=new ResearchMaterials(target);assert.deepEqual(await incoming.read(analysis),expected);
+ assert.deepEqual(await incoming.referenceAddress(artifact),{...artifact,workspaceId:namespace});
+ assert.deepEqual(await incoming.referenceAddress(qualified),qualified);await assert.rejects(incoming.read(qualified),{code:'MATERIAL_INVALID'});
+ assert.deepEqual(await materials.read(qualified),await materials.read(artifact));
+ assert.equal((await source.read()).book.entries.some(item=>item.id===sibling.id),true);
+ assert.equal((await source.read()).book.entries.some(item=>item.id===record.id),false);
+ await target.catalogue(store=>verifyRecordOwnerTransfers(store));await incoming.verify();
 });

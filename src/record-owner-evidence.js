@@ -14,7 +14,7 @@ import {withScratch} from './scratch-work.js';
 import {withRecordDocument} from './record-document.js';
 import {recordReferenceLocation} from './record-reference-location.js';
 import {RetainedRecordDocuments,retainedRecordPointer} from './retained-record-documents.js';
-import {retainRecordOrigin,recordOrigins,retainRecordOwnerExternalReference} from './record-owner-provenance.js';
+import {retainRecordOrigin,recordOrigin,recordOrigins,retainRecordOwnerExternalReference} from './record-owner-provenance.js';
 import {referenceNamespaceMatches} from './research-reference-namespace.js';
 import {validMaterialReference,materialReference} from './web/material-reference.js';
 import {researchId} from './web/research-reference.js';
@@ -106,7 +106,10 @@ export async function prepareRecordOwnerEvidence(source,target,receipt,{write,si
   if(ref.workspaceId===receipt.targetOwner.workspaceId){await incoming.read(ref);return;}
   if(local&&ref.kind==='record')await source.catalogue(store=>recordReferenceLocation(store,ref.id,ref.revision));
   else if(local)await materials.read(ref);
-  const owner=local?receipt.sourceOwner:{projectId:null,labBookId:null,workspaceId:ref.workspaceId};
+  // A readable former address keeps its original namespace. Local readability
+  // does not rewrite a reference to the owner's current namespace.
+  const prior=local&&ref.workspaceId&&ref.workspaceId!==receipt.sourceOwner.workspaceId?await source.catalogue(store=>recordOrigin(store,ref)):null;
+  const owner=ref.workspaceId&&ref.workspaceId!==receipt.sourceOwner.workspaceId?(prior?.sourceOwner??{projectId:null,labBookId:null,workspaceId:ref.workspaceId}):receipt.sourceOwner;
   await write(store=>retainRecordOwnerExternalReference(store,receipt,materialReference(ref),{sourceOwner:owner}));
  };
  await withScratch(async inspected=>withMaterialTraversal(async traversal=>{
