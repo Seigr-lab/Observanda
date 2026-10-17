@@ -11,18 +11,28 @@ const text=(key,parameters)=>t('branding',key,parameters);
 // editor; scope discovery and direct links need only one page or one label.
 export function brandingUI({state,api,esc,field,option,showDialog,render,dirty,leave,report,uploading,documents}){
  const active=()=>state.page==='branding'&&!state.access?.locked&&!state.storageUnavailable&&!state.newWorkspace;
- const nativePage=()=>documents?.enabled()&&target().startsWith('page:');
+ const native=()=>Boolean(documents?.enabled());
+ const nativePage=()=>native()&&target().startsWith('page:');
  const target=()=>state.brandTarget??'home';
  const key=()=>JSON.stringify([websiteSnapshot(state),state.book?.id,target(),documents?.enabled()?documents.viewKey():null]);
- const pages=websitePagePicker({state,api,esc,field,showDialog,documents,active,kinds:['site'],structurePages:options=>websiteDocumentPages(documents,state.book,{...options,kind:'page'}),onChoose:item=>{state.brandTarget=item.target;render();}});
+ const pages=websitePagePicker({state,api,esc,field,showDialog,documents,active,kinds:['site'],structurePages:options=>websiteDocumentPages(documents,state.book,{...options,kind:'page'}),onChoose:item=>changeScope(item.target)});
  const picker=researchTargetPicker({state,api,esc,field,showDialog,active,excludeId:()=>null});
- let label=null,controller=null;
- function stop(){controller?.abort();controller=null;label=null;picker.stop();pages.close();}
- function sync(){picker.sync();pages.sync();if(!active()){stop();return;}if(label?.key!==key()){controller?.abort();controller=null;label=null;}}
+ let label=null,controller=null,override=null,overrideController=null;
+ const overrideReady=()=>!native()||documents.hasSelected('branding',target());
+ async function changeScope(scope){const stamp=key();if(native())await documents.flush();if(!active()||stamp!==key())return;state.brandTarget=scope;render();}
+ function stop(){controller?.abort();controller=null;label=null;overrideController?.abort();overrideController=null;override=null;picker.stop();pages.close();}
+ function sync(){picker.sync();pages.sync();if(!active()){stop();return;}if(label?.key!==key()){controller?.abort();controller=null;label=null;}if(override?.key!==key()){overrideController?.abort();overrideController=null;override=null;}}
  function editableLogos(scope=target()){
+  if(native())return documents.editableOverride('branding',scope,()=>({target:scope,logos:structuredClone(logosFor(state.book,scope))})).logos;
   let branding=state.book.branding.find(b=>b.target===scope);
   if(!branding){branding={target:scope,logos:structuredClone(logosFor(state.book,scope))};state.book.branding.push(branding);}
   return branding.logos;
+ }
+ async function loadOverride(){
+  const request=overrideController=new AbortController(),stamp=key(),scope=target();override={key:stamp,loading:true};
+  try{await documents.selectOverride('branding',scope,{signal:request.signal});if(!request.signal.aborted&&active()&&stamp===key())override={key:stamp};}
+  catch(error){if(!request.signal.aborted&&active()&&stamp===key())override={key:stamp,error:error.message??text('overrideInvalid')};}
+  finally{if(overrideController===request)overrideController=null;if(!request.signal.aborted&&active()&&stamp===key())render();}
  }
  async function loadLabel(){
   controller?.abort();const request=controller=new AbortController(),stamp=key(),id=target().slice(nativePage()?5:6),workspaceId=state.book.id,etag=state.etag;
@@ -44,17 +54,18 @@ export function brandingUI({state,api,esc,field,option,showDialog,render,dirty,l
   sync();if(!active())return;
   const input=document.querySelector('input[data-upload="branding"]'),imports=input?.parentElement.querySelector('[data-action="media-import-open"]');if(imports)imports.disabled=input.disabled;
   if((target().startsWith('entry:')||nativePage())&&!label)void loadLabel();
+  if(native()&&!overrideReady()&&!override)void loadOverride();
  }
  function chooseRecord(){
   picker.open({title:text('pickRecord'),recordsOnly:true,onChoose:async(item,{stillCurrent})=>{
-   if(!stillCurrent())return;state.brandTarget='entry:'+item.id;document.querySelector('#dialog').close();picker.stop();render();document.querySelector('#branding-target')?.focus();
+   if(!stillCurrent())return;await changeScope('entry:'+item.id);document.querySelector('#dialog').close();picker.stop();document.querySelector('#branding-target')?.focus();
   }});
  }
  function input(el){
   if(picker.input(el))return true;
   if(!active())return false;
   if(el.id==='branding-target'){
-   const choice=el.value;el.value=target();leave.run(()=>{if(choice==='record-picker')chooseRecord();else if(choice==='page-picker')pages.open(null,{title:text('choosePage'),returnFocus:'#branding-target'});else{state.brandTarget=choice;render();}}).catch(report);return true;
+   const choice=el.value;el.value=target();const change=async()=>{if(choice==='record-picker')chooseRecord();else if(choice==='page-picker')pages.open(null,{title:text('choosePage'),returnFocus:'#branding-target'});else await changeScope(choice);};(native()?change():leave.run(change)).catch(report);return true;
   }
   if(el.dataset.logoAlt!==undefined){const logo=editableLogos()[Number(el.dataset.logoAlt)];if(logo){logo.alt=el.value;dirty();}return true;}
   return false;
@@ -63,6 +74,8 @@ export function brandingUI({state,api,esc,field,option,showDialog,render,dirty,l
   if(await picker.action(el))return true;
   if(!active())return false;
   const name=el.dataset.action,index=Number(el.dataset.index);
+  if(name==='brand-override-retry'){override=null;render();return true;}
+  if(name==='brand-default'){await documents.perform([{type:'remove',collection:'branding',key:target()}]);dirty();render();return true;}
   if(name==='brand-label-retry'){label=null;render();return true;}
   if(name==='brand-remove'||name==='brand-up'){
    const logos=editableLogos();if(name==='brand-remove')logos.splice(index,1);else if(index>0)[logos[index-1],logos[index]]=[logos[index],logos[index-1]];
@@ -71,17 +84,19 @@ export function brandingUI({state,api,esc,field,option,showDialog,render,dirty,l
   return false;
  }
  function acceptAsset(scope,asset){
-  if(!active()||scope!==target()||(scope.startsWith('entry:')||nativePage())&&(!label||label.key!==key()||label.loading||label.error||label.missing))throw Error(text('invalid'));
+  if(!active()||scope!==target()||!overrideReady()||(scope.startsWith('entry:')||nativePage())&&(!label||label.key!==key()||label.loading||label.error||label.missing))throw Error(text('invalid'));
   const logos=editableLogos(scope);if(logos.some(a=>a.id===asset.id))return;if(logos.length>=4)throw Error(text('limit'));logos.push({id:asset.id,alt:''});
  }
  function view(){
-  sync();const scope=target(),logos=logosFor(state.book,scope),record=scope.startsWith('entry:')||nativePage(),ready=!record||label&&!label.loading&&!label.error&&!label.missing;
+  sync();const scope=target(),known=overrideReady(),logos=known?logosFor(state.book,scope):[],record=scope.startsWith('entry:')||nativePage(),labelReady=!record||label&&!label.loading&&!label.error&&!label.missing,ready=known&&labelReady;
   const choices=[option('home',text('home'),scope),...(documents?.enabled()?['project','notebook']:['project','notebook','page']).flatMap(kind=>state.book[kind==='project'?'projects':kind==='notebook'?'notebooks':'pages'].map(item=>option(kind+':'+item.id,text(kind,{title:item.title}),scope)))];
   if(record)choices.push(option(scope,text(nativePage()?'page':'record',{title:label?.title??text('selectedRecord')}),scope));if(documents?.enabled())choices.push(option('page-picker',text('choosePage'),scope));choices.push(option('record-picker',text('chooseRecord'),scope));
   const back=state.brandReturn?.startsWith('#/website')?'backWebsite':!state.brandReturn||state.brandReturn.startsWith('#/preferences')?'backAppearance':'backPrevious';
   return `<div class="page-heading"><div><button class="button branding-return" data-action="branding-back">${esc(text(back))}</button><h1>${esc(text('title'))}</h1><p class="subtitle">${esc(text('description'))}</p></div></div>
    <section class="panel">${field(esc(text('scope')),`<select id="branding-target">${choices.join('')}</select>`)}
-   ${record&&!ready?`<p role="${label?.error||label?.missing?'alert':'status'}">${esc(label?.error??text(label?.missing?'missing':'loading'))}</p>${label?.error?`<button class="button" data-action="brand-label-retry">${esc(text('retry'))}</button>`:''}`:''}
+   ${record&&!labelReady?`<p role="${label?.error||label?.missing?'alert':'status'}">${esc(label?.error??text(label?.missing?'missing':'loading'))}</p>${label?.error?`<button class="button" data-action="brand-label-retry">${esc(text('retry'))}</button>`:''}`:''}
+   ${!known?`<p role="${override?.error?'alert':'status'}">${esc(override?.error??text('overrideLoading'))}</p>${override?.error?`<button class="button" data-action="brand-override-retry">${esc(text('overrideRetry'))}</button>`:''}`:''}
+   ${native()&&known&&state.book.branding.some(item=>item.target===scope)?`<button class="button" data-action="brand-default">${esc(text('useDefault'))}</button>`:''}
    <div class="branding-grid">${logos.map((logo,index)=>`<div class="logo-editor"><img src="${esc(ownedAssetURL(state,'/api/media/'+logo.id))}" alt="${esc(logo.alt||text('preview'))}">${field(esc(text('alt',{number:index+1})),`<input data-logo-alt="${index}" maxlength="160" value="${esc(logo.alt)}" ${ready?'':'disabled'}>`)}<div class="inline-actions"><button class="button" data-action="brand-up" data-index="${index}" ${index===0||!ready?'disabled':''}>${esc(text('earlier'))}</button><button class="button" data-action="brand-remove" data-index="${index}" ${ready?'':'disabled'}>${esc(text('remove',{number:index+1}))}</button></div></div>`).join('')}</div>
    ${logos.length<4?field(esc(text('add')),`<input type="file" data-upload="branding" data-target="${esc(scope)}" accept="image/svg+xml,.svg,image/png,image/jpeg,image/webp,image/bmp,image/tiff" ${uploading()||!ready?'disabled':''}>`):`<p>${esc(text('full'))}</p>`}<p class="muted">${esc(text('formats'))}</p></section>`;
  }

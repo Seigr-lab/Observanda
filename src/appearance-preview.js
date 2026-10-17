@@ -1,5 +1,5 @@
 import {publicationWorkspace,assertWebsitePin,sameWebsitePin} from './publication-pin.js';
-import {websiteEditorProjection,websiteEditorAssets} from './website-editor-projection.js';
+import {websiteEditorProjection,websiteEditorPresentation} from './website-editor-projection.js';
 import {validWebsiteDraftPin} from './web/website-draft-pin.js';
 import {AppearancePreviewSources} from './appearance-preview-sources.js';
 import {validPublicationSources} from './web/publication-sources-model.js';
@@ -52,11 +52,7 @@ async function withSource(workspace,command,{signal,sourceReader,sourceSnapshots
   const sources=book.website.researchSources??[];
   if(!validPublicationSources(sources)||sources.some(source=>source.workspaceId===book.id))throw new AppError('INVALID');
   const consumeRecords=async(records,metadata=book)=>{
-   if(designTarget==='browse'&&sources.length){
-    const target=hasHomepage(metadata)?'home':'project:'+metadata.projects.find(project=>project.share)?.id;
-    const sections=[...(metadata.website.layouts.find(item=>item.target==='browse')?.sections??[]),...REGION_SLOTS.flatMap(kind=>resolveRegion(metadata.website,target,kind)?.sections??[])];
-    metadata={...metadata,website:{...metadata.website,assets:await websiteEditorAssets(projected.document,projected.collectionIndexes,sections,{signal})}};
-   }
+   if(designTarget!==undefined&&sources.length)metadata=await websiteEditorPresentation(projected.document,projected.collectionIndexes,metadata,designTarget,{signal});
    return consume({book:metadata,source:command.mode==='auto'?(records.counts.total||metadata.pages.some(p=>p.share)?'website':'examples'):command.mode,snapshot,store,records});
   };
   if(!sources.length)return consumeRecords(local);

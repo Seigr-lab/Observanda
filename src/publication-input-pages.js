@@ -19,7 +19,7 @@ function labels(metadata,fail){
  }
  return result;
 }
-function knownIds(metadata,records=[]){
+export function publicationInputIds(metadata,records=[]){
  const result=new Set();
  // These are already admitted metadata values. Only identifiers are copied;
  // traversal never accumulates their prose or collection members.
@@ -43,7 +43,7 @@ async function exists(workspace,path){
 // queues at most 32 files / 256 KiB per commit and owns interrupted cleanup.
 export async function retainPublicationPages(workspace,jobId,metadata,pages,{signal,excludeIds=[]}={}){
  if(!researchId(jobId)||!Array.isArray(excludeIds)||excludeIds.some(id=>!researchId(id))||!pages||typeof pages[Symbol.asyncIterator]!=='function'&&typeof pages[Symbol.iterator]!=='function')invalid();
- const expected=labels(metadata,invalid),reserved=knownIds(metadata),seen=new Set(),retained=new Map(),formatVersion=metadata.formatVersion??21;
+ const expected=labels(metadata,invalid),reserved=publicationInputIds(metadata),seen=new Set(),retained=new Map(),formatVersion=metadata.formatVersion??21;
  for(const id of excludeIds)reserved.add(id);
  for await(const page of pages){
   signal?.throwIfAborted();const label=expected.get(page?.id);
@@ -60,12 +60,12 @@ export async function retainPublicationPages(workspace,jobId,metadata,pages,{sig
  for(const label of expected.values())if(label.share){const ref=retained.get(label.id);if(!ref)invalid();refs.push(ref);}
  return refs;
 }
-// Whole-source admission runs once when a retained v4 source is opened.
+// Whole-source admission runs once when a retained v4/v5 source is opened.
 // Older manifests retain their exact inline custom-page representation.
 export function validatePublicationPages(source){
  if([1,2,3].includes(source?.version))return;
- if(source?.version!==4||!researchId(source.id)||!Array.isArray(source.pageInputs))damaged();
- const expected=labels(source.metadata,damaged),reserved=knownIds(source.metadata,Array.isArray(source.records)?source.records:[]),seen=new Set();
+ if(![4,5].includes(source?.version)||!researchId(source.id)||!Array.isArray(source.pageInputs))damaged();
+ const expected=labels(source.metadata,damaged),reserved=publicationInputIds(source.metadata,Array.isArray(source.records)?source.records:[]),seen=new Set();
  for(const ref of source.pageInputs){
   if(!validRef(ref)||seen.has(ref.id)||reserved.has(ref.fileId))damaged();const label=expected.get(ref.id);if(!label?.share)damaged();seen.add(ref.id);reserved.add(ref.fileId);
  }
@@ -76,7 +76,7 @@ export async function readPublicationPage(workspace,source,pageId,{signal}={}){
  if([1,2,3].includes(source?.version)){
   const pages=source.version===1?source.book?.pages:source.metadata?.pages,page=Array.isArray(pages)?pages.find(value=>value.id===pageId):null;if(!page)damaged();return page;
  }
- if(source?.version!==4||!researchId(source.id)||!Array.isArray(source.metadata?.pages)||!Array.isArray(source.pageInputs))damaged();
+ if(![4,5].includes(source?.version)||!researchId(source.id)||!Array.isArray(source.metadata?.pages)||!Array.isArray(source.pageInputs))damaged();
  // The complete mapping was checked on source admission. Recheck the selected
  // references and label directly without revalidating every other page.
  let label=null,ref=null;

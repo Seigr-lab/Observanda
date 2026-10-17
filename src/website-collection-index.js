@@ -10,9 +10,9 @@ const fail=()=>{throw new AppError('CATALOGUE_DAMAGED');},invalid=()=>{throw new
 const natural=v=>Number.isSafeInteger(v)&&v>=0,ordinal=n=>String(n).padStart(16,'0');
 const keys=row=>['key:'+row.key,'position:'+ordinal(row.position),...(row.shared?['shared:'+ordinal(row.position)]:[])];
 export const validWebsiteCollectionIndex=v=>v&&Object.keys(v).sort().join()==='count,root,source,version'&&v.version===1&&revisionId(v.source)&&natural(v.count)&&validTableRef(v.root)&&(v.count===0?v.root===null:!!v.root&&v.root.count>=v.count*2&&v.root.count<=v.count*3);
-export const validWebsiteCollectionIndexes=v=>v&&Object.keys(v).sort().join()==='assets,navigation,pages'&&Object.values(v).every(validWebsiteCollectionIndex);
+export const validWebsiteCollectionIndexes=(v,{version=1}={})=>[1,2].includes(version)&&v&&Object.keys(v).sort().join()===(version===1?'assets,navigation,pages':'assets,branding,layouts,navigation,pages')&&Object.values(v).every(validWebsiteCollectionIndex);
 async function sourceRow(document,collection,position,{signal}={}){
- const path=WEBSITE_COLLECTION_PATHS[collection],key=(await document.field([...path,String(position),collection==='navigation'?'target':'id'],{signal})).value;
+ const path=WEBSITE_COLLECTION_PATHS[collection],key=(await document.field([...path,String(position),['navigation','layouts','branding'].includes(collection)?'target':'id'],{signal})).value;
  if(!validWebsiteCollectionKey(collection,key))fail();const shared=collection==='pages'?(await document.field([...path,String(position),'share'],{signal})).value:false;
  const label=collection==='pages'?(await document.field([...path,String(position),'title'],{signal})).value:null;if(typeof shared!=='boolean'||label!==null&&typeof label!=='string')fail();return {key,position,shared,label};
 }
@@ -62,5 +62,5 @@ export class WebsiteCollectionIndex{
   }await index.flush(value.root);}
   if(!validWebsiteCollectionIndex(value))fail();return value;
  }
- static async retainAll(document,previous=null,options={}){const indexes={};for(const collection of Object.keys(WEBSITE_COLLECTION_PATHS))indexes[collection]=await this.retain(document,collection,previous?.[collection],options);return indexes;}
+ static async retainAll(document,previous=null,{version=2,...options}={}){if(![1,2].includes(version))invalid();const indexes={};for(const collection of version===1?['pages','navigation','assets']:Object.keys(WEBSITE_COLLECTION_PATHS))indexes[collection]=await this.retain(document,collection,previous?.[collection],options);return indexes;}
 }

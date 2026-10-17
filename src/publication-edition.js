@@ -1,3 +1,4 @@
+import {publicationPresentationReader,publicationBrandingTargets} from './publication-input-presentation.js';
 import {readPublicationPage} from './publication-input-pages.js';
 import {publicationPageRecord} from './publication-owner-projection.js';
 import {AppError} from './errors.js';
@@ -17,11 +18,10 @@ import {publicationCollectionWindows} from './publication-collection-pages.js';
 
 // Public selection has already been pinned. Only originals drawn on this page
 // are loaded; cards, destinations and reverse links use selected descriptors.
-async function pageContext(workspace,source,selection,target,{signal,bodyWindow}){
- let metadata=source.metadata;const rows=source.records,needed=new Set(),cards=new Set(),[kind,id]=target.split(':');
- if(kind==='page'&&source.version===4){
-  const page=await readPublicationPage(workspace,source,id,{signal});
-  metadata={...metadata,pages:metadata.pages.map(value=>value.id===id?page:value)};
+async function pageContext(workspace,source,selection,target,{signal,bodyWindow,metadata}){
+ const rows=source.records,needed=new Set(),cards=new Set(),[kind,id]=target.split(':');
+ if(kind==='page'&&source.version>=4){
+  const page=metadata.pages.find(value=>value.id===id);
   selection={...selection,pages:selection.pages.map(value=>value.id===id?page:value)};
  }
  const layout=metadata.website.layouts.find(l=>l.target===target),original=layout?.placement!=='replace';
@@ -41,8 +41,8 @@ async function pageContext(workspace,source,selection,target,{signal,bodyWindow}
  return projectPublication(metadata,{...selection,entries,recordCards},{publicationTarget:target,entryDestinations:rows,...(bodyWindow?{collectionPages:[bodyWindow]}:{}),edition:{version:1,records:rows.flatMap(r=>r.selection?[{...r.selection,id:r.id}]:[]),availability:source.availability??[]}});
 }
 
-function* collectionWindows(source,selection,target){
- const [kind,id]=target.split(':'),layout=source.metadata.website.layouts.find(l=>l.target===target);
+function* collectionWindows(source,selection,target,metadata){
+ const [kind,id]=target.split(':'),layout=metadata.website.layouts.find(l=>l.target===target);
  if(!['project','notebook'].includes(kind)||layout?.placement==='replace'){yield null;return;}
  const notebooks=new Set(kind==='notebook'?[id]:selection.notebooks.filter(n=>n.projectId===id).map(n=>n.id));
  const rows=source.records.filter(row=>!row.historical&&notebooks.has(row.notebookId)).sort((a,b)=>compareRecordDates(a,b,{descending:true})||a.id.localeCompare(b.id,'en'));
@@ -50,9 +50,10 @@ function* collectionWindows(source,selection,target){
 }
 
 export async function buildPublicationEdition(workspace,source,{blockedValues=[],signal,progress,retain}){
+ const presentation=source.version===5?publicationPresentationReader(workspace,source):null;
  const pageInputs=new Map((source.pageInputs??[]).map(row=>[row.id,row]));
  const selection=selectedContent({...source.metadata,entries:source.records.map(r=>({...r,attachments:r.media}))});
- if(source.version===4)selection.pages=selection.pages.map(page=>{const row=pageInputs.get(page.id);return {...page,excerpt:row.excerpt,hasBody:row.hasBody};});
+ if(source.version>=4)selection.pages=selection.pages.map(page=>{const row=pageInputs.get(page.id);return {...page,excerpt:row.excerpt,hasBody:row.hasBody};});
  // The descriptor's card contains only shared image captions and alt text.
  // Selection's attachment IDs also admit explicitly chosen research-media blocks.
  const targets=[...(selection.homeEnabled?['home']:[]),...selection.projects.map(p=>'project:'+p.id),...selection.pages.map(p=>'page:'+p.id),
@@ -64,8 +65,14 @@ export async function buildPublicationEdition(workspace,source,{blockedValues=[]
  };
  const media=publicationInputMedia(workspace,source),fonts=new WorkspaceFonts(workspace);
  for(const target of targets){
-  for(const bodyWindow of collectionWindows(source,selection,target)){
-   signal.throwIfAborted();const context=await pageContext(workspace,source,selection,target,{signal,bodyWindow}),plan=publicationPage(context,target),mediaFiles=new Map();
+  // One target's originals survive only its continuation pages. Later targets
+  // reopen their own immutable values; the source stays body-free.
+  let metadata=source.metadata;
+  if(source.version===5){const layout=await presentation.layout(target,{signal});metadata={...metadata,website:{...metadata.website,layouts:layout?[layout]:[]}};}
+  if(source.version>=4&&target.startsWith('page:')){const page=await readPublicationPage(workspace,source,target.slice(5),{signal});metadata={...metadata,pages:metadata.pages.map(value=>value.id===page.id?page:value)};}
+  if(source.version===5){const branding=[];for(const key of publicationBrandingTargets(metadata,target,selection)){const value=await presentation.branding(key,{signal});if(value)branding.push(value);}metadata={...metadata,branding};}
+  for(const bodyWindow of collectionWindows(source,selection,target,metadata)){
+   signal.throwIfAborted();const context=await pageContext(workspace,source,selection,target,{signal,bodyWindow,metadata}),plan=publicationPage(context,target),mediaFiles=new Map();
    for(const [id,kind] of plan.media){signal.throwIfAborted();const file=await media.get(id,{streamed:true});if(file.kind!==kind)throw new AppError('MEDIA_INVALID');mediaFiles.set(id,file);}
    if(completed===0&&!(bodyWindow?.staticPage.page))context.legacyPages=source.legacyPages??[];
    const fontFiles=await fonts.files(plan.fonts,{signal}),page=renderPublication(context,{blockedValues,mediaFiles,fontFiles,emitBrowse:pages.length===0});

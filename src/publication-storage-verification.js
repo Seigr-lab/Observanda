@@ -1,3 +1,4 @@
+import {publicationPresentationReader} from './publication-input-presentation.js';
 import {readPublicationPage} from './publication-input-pages.js';
 import {PublicationJobs} from './publication-jobs.js';
 import {websiteWorkspace} from './website-workspace.js';
@@ -17,7 +18,8 @@ export async function verifyPublicationStorage(workspace){
    // Their inputs are recovered by the capture owner, never rendered as jobs.
    if(await scoped.readMetadata('.observanda/release-captures/'+id+'.json',1024)!==null)continue;
    const source=await releases.source(id);
-   if(source.version===4)for(const row of source.pageInputs)await readPublicationPage(scoped,source,row.id);
+   if(source.version>=4)for(const row of source.pageInputs)await readPublicationPage(scoped,source,row.id);
+   if(source.version===5){const presentation=publicationPresentationReader(scoped,source);for(const target of presentation.layoutTargets())await presentation.layout(target);for(const target of presentation.brandingTargets())await presentation.branding(target);}
   }
   for await(const file of scoped.metadataNames('.observanda/release-candidates')){
    if(!/^[a-f0-9]{64}\.json$/.test(file))throw new AppError('JOB_DAMAGED');

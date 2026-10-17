@@ -98,7 +98,7 @@ test('independent verification detects missing registries, missing heads and cor
 
 test('website capability admission preserves required module and settings owners and lock ordering',async()=>{
  for(const [before,after] of [[3,29],[22,30],[23,29],[24,30],[25,31],[26,29],[27,30],[28,31],[29,29],[30,30],[31,31]]){
-  let version=before;const db={async all(){return [{version}];},async run(sql,...args){if(sql.startsWith('UPDATE catalogue_format'))version=Math.max(version,args[0]);}};
+  let version=before;const db={async all(){return [{version}];},async get(){return null;},async run(sql,...args){if(sql.startsWith('UPDATE catalogue_format'))version=Math.max(version,args[0]);}};
   const domains=catalogueRequiresDomains(before),settings=catalogueRequiresSettings(before);await requireWebsiteDocuments(db);assert.equal(await catalogueFormat(db),after);assert.equal(catalogueRequiresWebsites(after),true);assert.equal(catalogueRequiresDomains(after),domains);assert.equal(catalogueRequiresSettings(after),settings);
   await requireRecordResultIndexes(db);assert.equal(version,after);await requireWorkspaceDomains(db);assert.equal(version,settings?31:30);await requireWorkspaceSettings(db);assert.equal(version,31);
  }

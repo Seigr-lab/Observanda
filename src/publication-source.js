@@ -1,4 +1,4 @@
-import {websitePublicationMetadata,websitePublicationPages} from './publication-website-input.js';
+import {websitePublicationMetadata,websitePublicationPages,websitePublicationPresentation} from './publication-website-input.js';
 import {websiteEditorProjection} from './website-editor-projection.js';
 import {validateWebsiteDocument,websiteDocumentHeader} from './website-document-validation.js';
 import {WebsiteDocumentStore} from './website-document-store.js';
@@ -157,6 +157,6 @@ async function websiteDocumentPublicationSource(workspace,{etag,websitePin,websi
   const metadata=retained?await websitePublicationMetadata(projected,{signal}):page||inventory?projected.metadata:websiteBook(raw.metadata,site),selection=site.selection;
   const snapshot={...raw,metadata,websiteSelection:selection,websitePin};
   const paging=publicationSelectionPage(store,{snapshotId:etag,websiteId:id,websitePin,websiteDraft,metadata,selection},page),options={signal,metadata,selection,page:paging.page};
-  return consume?consume(metadata,(inventory?selectedPublicationInventories:selectedPublicationRecords)(store,snapshot,options),{sourceEtag:etag,websitePin,nextCursor:paging.nextCursor,...(retained?{websitePages:websitePublicationPages(projected,{signal})}:{})}):selectedPublicationBook(store,snapshot,options);
+  return consume?consume(metadata,(inventory?selectedPublicationInventories:selectedPublicationRecords)(store,snapshot,options),{sourceEtag:etag,websitePin,nextCursor:paging.nextCursor,...(retained?{websitePages:websitePublicationPages(projected,{signal}),websitePresentation:await websitePublicationPresentation(projected,{signal})}:{})}):selectedPublicationBook(store,snapshot,options);
  });
 }

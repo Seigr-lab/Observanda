@@ -27,7 +27,7 @@ export function resolveRoute(hash,book,{contentReading=false}={}) {
    if(researchId(parts[1])){const page={editor:'website',publishing:'publishing',settings:'integrations',appearance:'appearance',review:'review',branding:'branding'}[parts[2]];
     if(['website','publishing','integrations','appearance'].includes(page)&&parts.length===3)return {...base,page,websiteId:parts[1]};
     if(page==='review'&&parts.length===4&&/^[a-f0-9]{64}$/.test(parts[3]))return {...base,page,websiteId:parts[1],reviewId:parts[3]};
-    if(page==='branding'&&parts.length===4){const target=resolveRoute('#/branding/'+parts[3],book);if(target.page==='branding')return {...target,websiteId:parts[1]};}
+    if(page==='branding'&&parts.length===4){const target=resolveRoute('#/branding/'+parts[3],book,{contentReading});if(target.page==='branding')return {...target,websiteId:parts[1]};}
    }return base;
   }
   if(parts[0]==='laboratory'&&parts[1]==='samples'&&parts.length===2)return {...base,page:'laboratory',labSampleRoute:true};
@@ -41,7 +41,7 @@ export function resolveRoute(hash,book,{contentReading=false}={}) {
   if(parts[0]==='projects'&&parts.length<=3){const p=book.projects.find(p=>p.id===parts[1]);if(p&&(!parts[2]||parts[2]==='records'))return {...base,page:parts[2]?'entries':'project',project:p.id};}
   if(parts[0]==='notebooks'&&(parts.length===2||parts.length===3&&parts[2]==='read')){const n=book.notebooks.find(n=>n.id===parts[1]);if(n)return {...base,page:'entries',project:n.projectId,notebook:n.id,bookReading:parts[2]==='read'};}
   if(parts[0]==='records'&&(parts.length===2||(parts[2]==='read'&&parts.length<=4))){const e=book.entries.find(e=>e.id===parts[1]),n=book.notebooks.find(n=>n.id===e?.notebookId);if(e&&n)return {...base,page:'editor',project:n.projectId,notebook:n.id,selected:e.id,recordReading:parts[2]==='read',recordSection:e.sections.some(s=>s.id===parts[3])||bookSelectors(e).some(s=>selectorAnchor(s)===parts[3])?parts[3]:null};}
-  if(parts[0]==='branding'&&parts.length===2){let target;try{target=decodeURIComponent(parts[1]);}catch{return base;}if(target==='home'||target.startsWith('entry:')&&researchId(target.slice(6))||['project','notebook','page'].some((type,i)=>[book.projects,book.notebooks,book.pages][i].some(item=>target===type+':'+item.id)))return {...base,page:'branding',brandTarget:target};}
+  if(parts[0]==='branding'&&parts.length===2){let target;try{target=decodeURIComponent(parts[1]);}catch{return base;}if(target==='home'||target.startsWith('entry:')&&researchId(target.slice(6))||contentReading&&target.startsWith('page:')&&researchId(target.slice(5))||['project','notebook','page'].some((type,i)=>[book.projects,book.notebooks,book.pages][i].some(item=>target===type+':'+item.id)))return {...base,page:'branding',brandTarget:target};}
   if(parts[0]==='review')return parts.length===2&&/^[a-f0-9]{64}$/.test(parts[1])?{...base,page:'review',reviewId:parts[1]}:{...base,page:'website'};
   return base;
 }

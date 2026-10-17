@@ -1,5 +1,5 @@
 import {publicationWorkspace,publicationSnapshot} from './publication-pin.js';
-import {websiteEditorProjection} from './website-editor-projection.js';
+import {websiteEditorProjection,websiteEditorPresentation} from './website-editor-projection.js';
 import {publicationEditorProjection} from './publication-editor-projection.js';
 import {WebsitePreviewSources} from './website-preview-sources.js';
 import {publicationPreviewMedia} from './publication-preview-media.js';
@@ -51,7 +51,7 @@ export async function websiteDocumentPreviewSource(workspace,{websitePin,website
  if(typeof designTarget!=='string'||! /^(home|(?:page|project|notebook|entry):[a-f0-9-]{36})$/.test(designTarget)||referenceCursor!==null&&!designTarget.startsWith('entry:'))throw new AppError('INVALID');
  const websiteId=workspace.websiteId??null,base=workspace.baseWorkspace??workspace;
  return base.catalogue(async store=>{
-  const {metadata,snapshot}=await websiteEditorProjection(store,websiteId,{websitePin,websiteDraft,designTarget,signal});
+  const projected=await websiteEditorProjection(store,websiteId,{websitePin,websiteDraft,designTarget,signal}),{metadata,snapshot}=projected;
   const command={workspaceId:metadata.id,baseEtag:websitePin.researchSnapshotId,metadata:{},projects:[],changes:[],removed:[]};
   const records=new WebsitePreviewRecords(store,snapshot,metadata,command,{signal,websiteId,metadataAdmitted:true});await records.initialize();
   const sources=metadata.website.researchSources??[];
@@ -59,7 +59,7 @@ export async function websiteDocumentPreviewSource(workspace,{websitePin,website
   if(!sources.length)return {...await websitePreviewPage(records,metadata,{designTarget,referenceCursor,collections,signal}),websitePin};
   const reader=await sourceReader?.({signal});if(!reader)throw new AppError('ACCESS_LOCKED');
   try{
-   const combined=await new WebsitePreviewSources(records,reader).initialize(sources),page=await websitePreviewPage(combined,combined.metadata,{designTarget,referenceCursor,collections,signal});
+   const combined=await new WebsitePreviewSources(records,reader).initialize(sources),presentation=await websiteEditorPresentation(projected.document,projected.collectionIndexes,combined.metadata,designTarget,{signal}),page=await websitePreviewPage(combined,presentation,{designTarget,referenceCursor,collections,signal});
    await reader.verify();return {...page,websitePin,editor:publicationEditorProjection(combined),media:publicationPreviewMedia(workspace,combined.mediaOrigins,sourceReader)};
   }finally{await reader.close();}
  });

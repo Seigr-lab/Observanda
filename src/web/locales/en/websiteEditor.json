@@ -163,5 +163,6 @@
   "documentMenuSearch": "Find menu items",
   "documentMenuRange": "{first} - {last} of {total} menu items",
   "documentMenuEmpty": "No matching menu items.",
+  "documentLayoutDefault": "Use default page header and layout",
   "documentBusy": "Saving the selected website changes..."
 }

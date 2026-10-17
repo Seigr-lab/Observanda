@@ -115,7 +115,7 @@ import {storageUI} from './storage-ui.js';
 import { workspaceUI } from './workspace-ui.js';
 import { routeFor as localRouteFor, resolveRoute as resolveNavigationRoute } from './navigation.js';
 const routeFor=state=>ownedRoute(localRouteFor(state),state.projectOwner);
-const resolveRoute=(hash,book)=>resolveNavigationRoute(projectRoute(hash).hash,book,{contentReading:supportsRecordSelection()});
+const resolveRoute=(hash,book)=>resolveNavigationRoute(projectRoute(hash).hash,book,{contentReading:supportsRecordSelection()||Boolean(state.websiteEditor)});
 import { appearanceUI } from './appearance-ui.js';
 import {validWebsitePin} from './website-pin.js';
 import {appearancePreview} from './appearance-preview.js';
@@ -549,10 +549,10 @@ const designUI = appearanceUI({fontLibrary,textControls,state,esc,field,option,d
 
 const saveableForms=new Set(['starter-edit-form','starter-details-form','starter-field-form','starter-tag-form','record-view-form','notebook-config-form','structure-project-form','project-template-form','workspace-name-form','theme-name-form','lab-sample-form','lab-analysis-form','lab-result-form','storage-access-form','media-policy-form']);
 function pendingChanges(scope='all'){
-  const navigation=scope==='navigation';if(navigation)scope='all';
+  const websiteEditing=scope==='website-editor',navigation=scope==='navigation'||websiteEditing;if(navigation)scope='all';
   const forms=drafts.changed(scope),labels=forms.map(form=>form.closest('dialog')?.querySelector('h2')?.textContent??({'workspace-name-form':'Workspace details','storage-access-form':'Local access settings','create-form':'Workspace setup','publish-token-form':'Unsubmitted connection details'}[form.id]??'Unsubmitted form'));
   if(structureUI.notebooks.isDirty())labels.push($('#dialog #project-template-form')?'Lab-book template':'Project or lab book settings');
-  if(scope==='all'&&state.dirty)labels.push(state.page==='editor'?'Record: '+(entry()?.title??'New record'):(document.querySelector('main h1')?.textContent??'Workspace')+' edits');
+  if(scope==='all'&&state.dirty&&!websiteEditing)labels.push(state.page==='editor'?'Record: '+(entry()?.title??'New record'):(document.querySelector('main h1')?.textContent??'Workspace')+' edits');
   if(scope==='all'&&state.publishing?.dirty)labels.push('Publishing destination');
   if(scope==='all'&&modules.needsNavigationGuard())labels.push('Module edits');
   if(scope==='all'&&(navigation?dashboard.needsNavigationGuard():dashboard.isDirty()))labels.push('Module and dashboard settings');
@@ -617,6 +617,20 @@ const workspaceLive=workspaceRefresh({state,api,notify,onAccessError:report,
 });
 window.addEventListener('pagehide',()=>workspaceLive.stop(),{once:true});
 const navigationActions=new Set(['module-reference-open','laboratory-open-owned','module-open-owned','research-open-owned','help','help-open','record-activity-inspect','record-activity-create','migration-open','review-witnesses','publication-jobs-open-review','record-views','record-view-back','record-view-open','record-read','record-edit','record-read-linked','record-section-jump','workflow-new-run','configure-lab-notebook','specialize-notebook','attach-lab-notebook','module-open','laboratory-samples','preferences','dashboard-settings','templates','integrations','workspace','workspaces','projects','entries','appearance','website','laboratory','publishing','storage','storage-workspaces','branding','branding-back','open-project','project-records','filter-notebook','browse-record','edit-entry','open-issue','back-to-records','new-entry','new-project','new-notebook','edit-project','edit-project-template','edit-notebook','rename-notebook','workspace-reorganize','record-history-open','preview','storage-new','storage-open-dialog','storage-copy-dialog','storage-move-dialog','storage-portable-dialog','storage-encrypt-dialog','storage-open-recent','storage-cancel-new','storage-lock','storage-reset-dialog','publish-disconnect','record-link-open','record-backlink-open']);
+const websiteEditPages=new Set(['website','appearance','branding']);
+const brandingReturnRoute=()=>state.brandReturn??routeFor({...state,page:'appearance'});
+function sameWebsiteEditRoute(hash){
+ if(!websiteDocuments.enabled()||!websiteEditPages.has(state.page))return false;
+ const owner=projectRoute(hash),destination=resolveRoute(hash,state.book);
+ return owner.projectId===(state.projectOwner?.projectId??null)&&(owner.labBookId??null)===(state.projectOwner?.labBookId??null)&&websiteEditPages.has(destination.page)&&(destination.websiteId??null)===(state.websiteId??null);
+}
+async function navigateWebsiteDraft(next){
+ if(!leave.canLeaveImmediately('website-editor'))return leave.run(next,{scope:'navigation'});
+ const context=websiteContext(state);await websiteDocuments.flush();
+ if(context!==websiteContext(state))return;
+ if(!leave.canLeaveImmediately('website-editor'))return leave.run(next,{scope:'navigation'});
+ return next();
+}
 function invalidatesResearchReturn(button){const name=button.dataset.action;return navigationActions.has(name)||name==='user-profile'||name==='module-command'||name?.startsWith('site-')||name?.startsWith('starter-');}
 function invalidateResearchReturn(){returnNavigation.invalidate();projectOwners.cancelPending();}
 async function action(button){
@@ -626,6 +640,12 @@ async function action(button){
   shellMenu.beforeAction(button);
   const name=button.dataset.action;
   if(invalidatesResearchReturn(button))invalidateResearchReturn();
+  const websiteEdit=websiteDocuments.enabled()&&websiteEditPages.has(state.page)&&!button.closest?.('#main-navigation')&&(['branding','website','appearance'].includes(name)||name==='site-view'&&websiteEditPages.has(button.dataset.page)||name==='branding-back'&&sameWebsiteEditRoute(brandingReturnRoute()));
+  if(websiteEdit)return navigateWebsiteDraft(async()=>{
+   if(name==='branding')return rawAction(button);
+   if(name==='branding-back'){const destination=resolveRoute(brandingReturnRoute(),state.book);if(destination.page==='website')await website.load();Object.assign(state,destination);render();return;}
+   const page=name==='site-view'?button.dataset.page:name;if(page==='website')await website.load();Object.assign(state,{page,project:null,notebook:'all',selected:null});render();
+  });
   if(name==='user-profile')return leave.run(()=>rawAction(button),{scope:'navigation'});
   if(name?.startsWith('starter-')&&!['starter-add','starter-remove','starter-up','starter-down'].includes(name))return leave.run(()=>rawAction(button));
   if(name?.startsWith('site-'))return leave.run(async()=>{await projectOwners.beforeAction(button);return sites.action(button);});
@@ -1152,7 +1172,7 @@ function extendedInput(el) {
 }
 async function extendedAction(button) {
   const name = button.dataset.action, id = button.dataset.id, index = Number(button.dataset.index);
-  if(name==='branding-back'){location.hash=state.brandReturn??'#/preferences/appearance';return true;}
+  if(name==='branding-back'){location.hash=brandingReturnRoute();return true;}
   if(name==='workspace-discard'){drafts.reset([document.querySelector('main #workspace-name-form')]);render();return true;}
   if (name === 'branding') { state.brandReturn=routeFor(state); state.brandTarget = button.dataset.target ?? 'home'; state.page = 'branding'; $('#dialog').close(); render(); return true; }
   if(recordSections.action(button))return true;
@@ -1238,13 +1258,14 @@ function syncRoute(){
   if(location.hash!==next){const push=location.hash.startsWith('#/');if(push)routeIndex++;history[push?'pushState':'replaceState']({observandaIndex:routeIndex,search:state.search,filter:state.filter,recordBrowse:recordBrowse(state.recordBrowse),filterWorkspaceId:state.book?.id},'',next);window.scrollTo(0,0);}
   else markHistory();
 }
-async function restoreRoute(){
+async function restoreRoute({websiteReady=false}={}){
   invalidateResearchReturn();
   if(!state.access?.locked&&!state.newWorkspace&&(state.storageUnavailable||!state.book))state.page=location.hash==='#/workspaces'?'workspaces':'workspace';
   if(state.access?.locked||state.storageUnavailable&&!state.newWorkspace||!state.book||state.newWorkspace){render();markHistory();return;}
   const request=++routeRestoreVersion;let requestedRoute=location.hash;const current=()=>request===routeRestoreVersion&&location.hash===requestedRoute;
   restoringRoute=true;
   try{
+    if(sameWebsiteEditRoute(requestedRoute)){if(!websiteReady)await websiteDocuments.flush();const destination=resolveRoute(requestedRoute,state.book);if(!websiteReady&&destination.page==='website')await website.load();if(!current())return;Object.assign(state,destination);render();return;}
     if(activeWebsite(state))await sites.exit();
     if(!current())return;
     try{await projectOwners.restore(requestedRoute);}catch(error){if(error.name==='AbortError'){if(request===routeRestoreVersion){restoringRoute=false;syncRoute();}return;}if(ownerOperation.show(error,projectRoute(location.hash),location.hash))return;throw error;}
@@ -1278,14 +1299,14 @@ window.addEventListener('popstate',event=>{
   (async()=>{
     const targetIndex=Number.isInteger(event.state?.observandaIndex)?event.state.observandaIndex:routeIndex+1;
     if(!Number.isInteger(event.state?.observandaIndex))history.replaceState({...history.state,observandaIndex:targetIndex},'',location.href);
-    const delta=targetIndex-routeIndex;
+    const delta=targetIndex-routeIndex,targetHash=location.hash,sameWebsite=sameWebsiteEditRoute(targetHash);
     if(!delta)return;
     if(state.page==='review'&&location.hash==='#/website'){routeIndex=targetIndex;await restoreRoute();restoreEditorScroll();return;}
-    if(!historyBusy&&leave.canLeaveImmediately('navigation')){routeIndex=targetIndex;await restoreRoute();return;}
+    if(!sameWebsite&&!historyBusy&&leave.canLeaveImmediately('navigation')){routeIndex=targetIndex;await restoreRoute();return;}
     // Return to the original URL only when an editing decision is needed.
     await travelHistory(-delta);
     if(historyBusy||leave.isActive())return;
     historyBusy=true;
-    try{if(dashboard.isDirty())try{await dashboard.flushAutosave();}catch{}await leave.run(async()=>{const remaining=targetIndex-routeIndex;if(remaining)await travelHistory(remaining);routeIndex=targetIndex;await restoreRoute();},{scope:'navigation'});}finally{historyBusy=false;}
+    try{if(dashboard.isDirty())try{await dashboard.flushAutosave();}catch{}const navigate=async()=>{if(sameWebsite&&resolveRoute(targetHash,state.book).page==='website')await website.load();const remaining=targetIndex-routeIndex;if(remaining)await travelHistory(remaining);routeIndex=targetIndex;await restoreRoute({websiteReady:sameWebsite});};if(sameWebsite)await navigateWebsiteDraft(navigate);else await leave.run(navigate,{scope:'navigation'});}finally{historyBusy=false;}
   })().catch(report);
 });

@@ -16,3 +16,13 @@ export async function* websitePublicationPages(projected,{signal}={}){
   yield (await projected.document.field([...WEBSITE_COLLECTION_PATHS.pages,String(position)],{signal})).value;
  }
 }
+
+export async function websitePublicationPresentation(projected,{signal}={}){
+ const streams={};
+ for(const collection of ['layouts','branding']){
+  const path=WEBSITE_COLLECTION_PATHS[collection],count=await projected.document.tree.arrayLength(projected.document.root,path);
+  async function* items(){for(let position=0;position<count;position++){signal?.throwIfAborted();yield (await projected.document.field([...path,String(position)],{signal})).value;}}
+  streams[collection]={count,items:items()};
+ }
+ return streams;
+}

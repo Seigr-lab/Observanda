@@ -1,3 +1,4 @@
+import {retainPublicationPresentation,publicationPresentationMedia} from './publication-input-presentation.js';
 import {retainPublicationPages,readPublicationPage} from './publication-input-pages.js';
 import {usedAssetIds} from './web/website-layouts.js';
 import {publicationResearchWorkspace} from './publication-pin.js';
@@ -24,7 +25,7 @@ const recordFile=(job,id)=>{if(!researchId(job)||!researchId(id))throw new AppEr
 export {publicationDescriptor} from './publication-record-descriptor.js';
 // Each edition pins its selected originals independently. The job manifest and
 // page renderer retain descriptors, never a second in-memory corpus of prose.
-export async function retainPublicationInput(workspace,id,metadata,originals,{sourceEtag,recordHead,signal,sourceReader,edition=emptyEditionSelection(),deferFinalization=false,websitePages}={}){
+export async function retainPublicationInput(workspace,id,metadata,originals,{sourceEtag,recordHead,signal,sourceReader,edition=emptyEditionSelection(),deferFinalization=false,websitePages,websitePresentation}={}){
  validateEditionSelection(edition);const choices=new Map(edition.records.map(r=>[r.id,r])),found=new Set();
  const projects=new Set(metadata.projects.filter(p=>p.share).map(p=>p.id)),notebooks=new Set(metadata.notebooks.filter(n=>projects.has(n.projectId)).map(n=>n.id));
  const records=[],sourceRevisions={},sourceMaterials=[],warnings=[],linkedCards=new Set(),research=publicationResearchWorkspace(workspace),materials=new ResearchMaterials(research);
@@ -54,16 +55,18 @@ export async function retainPublicationInput(workspace,id,metadata,originals,{so
 
  const analysis=await publicationDependencyState(materials,sourceMaterials,{workspaceId:metadata.id,sourceReader,recordHead,signal});
  const pageInputs=websitePages?await retainPublicationPages(workspace,id,metadata,websitePages,{signal,excludeIds:records.map(record=>record.id)}):undefined;
- const input={metadata,records,sourceRevisions,sourceMaterials,...(pageInputs?{pageInputs}:{}),availability:edition.availability??[],linkedCards:[...linkedCards],
+ const presentation=websitePresentation?await retainPublicationPresentation(workspace,id,metadata,websitePresentation,{signal,excludeIds:[...records.map(record=>record.id),...(pageInputs??[]).map(row=>row.fileId)]}):{};
+ const input={metadata,records,sourceRevisions,sourceMaterials,...presentation,...(pageInputs?{pageInputs}:{}),availability:edition.availability??[],linkedCards:[...linkedCards],
   researchReview:{retainedFigures:sourceMaterials.filter(source=>source.figureId).length,changedInputs:warnings.filter(warning=>warning.reason==='inputs').length,editedFigures:warnings.filter(warning=>warning.reason==='edited').length,analysis}};
  return deferFinalization?input:finalizePublicationInput(workspace,id,input,{signal});
 }
 export async function finalizePublicationInput(workspace,id,input,{signal}={}){
  const {metadata,records,linkedCards=[],...rest}=input;
  const selected=websiteSummary({...metadata,entries:records.map(r=>({...r,attachments:r.media}))});
- if(input.pageInputs){
+ if(input.layoutInputs)selected.media=await publicationPresentationMedia(workspace,{...input,id,version:5},selected,{signal});
+ else if(input.pageInputs){
   const used=new Set(),source={...input,id,version:4};
-  for(const row of input.pageInputs){signal?.throwIfAborted();const page=await readPublicationPage(workspace,source,row.id,{signal});for(const asset of usedAssetIds(publicSections(page.sections,selected)))used.add(asset);}
+  for(const row of input.pageInputs??[]){signal?.throwIfAborted();const page=await readPublicationPage(workspace,source,row.id,{signal});for(const asset of usedAssetIds(publicSections(page.sections,selected)))used.add(asset);}
   selected.media=[...new Map([...selected.media,...selected.assets.filter(asset=>used.has(asset.id))].map(asset=>[asset.id,asset])).values()];
  }
  if(!selected.canPublish)throw new AppError('PUBLICATION_EMPTY');

@@ -26,5 +26,9 @@
  "full":"Four logos added for this scope.",
  "formats":"SVG, PNG, JPEG, WebP, BMP and TIFF are supported. Originals are retained privately; display and published copies are PNG images. Add up to four logos per scope. Use Remove and Add to replace a logo. Logos attached to private content are excluded from publication.",
  "limit":"Remove a logo before adding another.",
+ "overrideLoading":"Loading selected logos...",
+ "overrideInvalid":"The selected logos could not be verified. Try again.",
+ "overrideRetry":"Retry loading logos",
+ "useDefault":"Use default logos",
  "save":"Save branding"
 }

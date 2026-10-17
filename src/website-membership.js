@@ -4,6 +4,10 @@ import {sameJSONData} from './web/json-data-equality.js';
 import {WebsiteDocumentStore} from './website-document-store.js';
 import {websiteDocumentLocks} from './website-document-registry.js';
 import {AppError} from './errors.js';
+import {websiteDocumentHeader} from './website-document-validation.js';
+import {WEBSITE_COLLECTION_PATHS} from './web/website-collection-model.js';
+import {RecordDocument} from './record-document.js';
+import {retainRecordContainer} from './record-tree-values.js';
 
 // Presentation consent changes only when membership or its project ownership
 // changes. Body-only research edits never take the website membership gate.
@@ -13,6 +17,44 @@ export function websiteMembershipChange(previous,metadata,before,after,{removed=
  const hierarchy=m=>({projects:m.projects.map(({id,parentId})=>({id,parentId:parentId??null})),notebooks:m.notebooks.map(({id,projectId})=>({id,projectId}))});
  return {moved,removed,previous,changed:removed.length>0||moved.length>0||!sameJSONData(hierarchy(previous),hierarchy(metadata))};
 }
+function membershipTargetExists(site,metadata,member,{removed=[],previous=metadata}={}){
+ const projects=siteProjectIds(metadata,site.projectId),notebooks=new Set(metadata.notebooks.filter(book=>projects.has(book.projectId)).map(book=>book.id));
+ return async target=>{
+  const [kind,id]=target.split(':');
+  if(kind==='project'){if(projects.has(id))return true;if(previous.projects.some(project=>project.id===id))return false;}
+  else if(kind==='notebook'){if(notebooks.has(id))return true;if(previous.notebooks.some(book=>book.id===id))return false;}
+  else if(kind==='entry'){const row=await member(id);if(row)return notebooks.has(row.notebookId);if(removed.includes(id))return false;}
+  else return true;
+  return publicationPresentationTarget(site.document.website,target);
+ };
+}
+// A membership change filters immutable references. Layout sections and logos
+// stay in their owned values instead of joining a complete website read.
+async function reconcileDocumentTargets(document,valid){
+ for(const name of ['branding','layouts','navigation']){
+  const path=WEBSITE_COLLECTION_PATHS[name],count=await document.tree.arrayLength(document.root,path);
+  const changedAt=async position=>{
+   const target=(await document.field([...path,String(position),'target'])).value;
+   if(!await valid(target))return true;
+   const parent=name==='navigation'?(await document.field([...path,String(position),'parent'])).value:null;
+   return !!parent&&!await valid(parent);
+  };
+  let changed=false;for(let position=0;position<count;position++)if(await changedAt(position)){changed=true;break;}
+  if(!changed)continue;
+  const original=document;
+  async function* kept(){
+   for await(const item of original.items(path)){
+    const target=(await original.tree.selected(item.value,['target'])).value;if(!await valid(target))continue;
+    const parent=name==='navigation'?(await original.tree.selected(item.value,['parent'])).value:null;
+    if(parent&&!await valid(parent)){const value=await original.tree.read(item.value);yield {value:await original.tree.retain({...value,parent:null})};}
+    else yield {value:item.value};
+   }
+  }
+  const root=await retainRecordContainer(document.blocks,'array',kept());
+  document=new RecordDocument(document.blocks,await document.replaceReference(document.root,path,root),{mutable:true});
+ }
+ return document;
+}
 async function reconcileSite(site,metadata,member,{moved=[],removed=[],previous=metadata}={}){
  const projects=siteProjectIds(metadata,site.projectId),notebooks=new Set(metadata.notebooks.filter(n=>projects.has(n.projectId)).map(n=>n.id));
  const inside=async id=>{const row=await member(id);return !!row&&notebooks.has(row.notebookId);};
@@ -21,14 +63,7 @@ async function reconcileSite(site,metadata,member,{moved=[],removed=[],previous=
  for(const id of moved)if(await inside(id)){
   const choice=records.find(r=>r.id===id);if(choice)choice.share=false;else records.push({id,share:false,attachments:[]});
  }
- const valid=async target=>{
-  const [kind,id]=target.split(':');
-  if(kind==='project'){if(projects.has(id))return true;if(previous.projects.some(project=>project.id===id))return false;}
-  else if(kind==='notebook'){if(notebooks.has(id))return true;if(previous.notebooks.some(book=>book.id===id))return false;}
-  else if(kind==='entry'){const row=await member(id);if(row)return notebooks.has(row.notebookId);if(removed.includes(id))return false;}
-  else return true;
-  return publicationPresentationTarget(site.document.website,target);
- };
+ const valid=membershipTargetExists(site,metadata,member,{removed,previous});
  for(const collection of [site.document.branding,site.document.website.layouts,site.document.website.navigation]){
   const kept=[];for(const value of collection)if(await valid(value.target))kept.push(value);collection.splice(0,collection.length,...kept);
  }
@@ -52,7 +87,7 @@ export async function reconcileOwnedWebsiteMembership(store,researchSnapshotId,s
  const movedBooks=new Set(metadata.notebooks.filter(book=>previous.notebooks.some(old=>old.id===book.id&&old.projectId!==book.projectId)).map(book=>book.id));
  for await(const head of documents.entries()){
   if(head.projectId!==null&&!metadata.projects.some(project=>project.id===head.projectId)){await documents.remove(head.websiteId,{expectedRevision:head.websiteRevision});continue;}
-  const current=await documents.read(head.websiteId,{researchSnapshotId,websiteRevision:head.websiteRevision}),site=structuredClone(current.site);
+  const current=await documents.document(head.websiteId,{researchSnapshotId,websiteRevision:head.websiteRevision,mutable:true}),before=await websiteDocumentHeader(current.document),site=structuredClone(before);
   await reconcileSite(site,metadata,id=>store.member(snapshot,id),options);
   // Moving a whole lab book can change ownership without modifying its records.
   // Explicitly withdraw any inherited project consent for those records too.
@@ -62,6 +97,8 @@ export async function reconcileOwnedWebsiteMembership(store,researchSnapshotId,s
     const value=selected.get(row.id);if(value)value.share=false;else site.selection.records.push({id:row.id,share:false,attachments:[]});
    }
   }
-  if(!sameJSONData(site,current.site))await documents.save(head.websiteId,site,{researchSnapshotId,expectedRevision:head.websiteRevision});
+  let document=await reconcileDocumentTargets(current.document,membershipTargetExists(site,metadata,id=>store.member(snapshot,id),options));
+  for(const key of ['projects','selection'])if(!sameJSONData(site[key],before[key]))document=await document.replace([key],site[key]);
+  if(document.root!==current.document.root)await documents.saveDocument(head.websiteId,document,{researchSnapshotId,expectedRevision:head.websiteRevision,collectionIndexes:current.collectionIndexes,navigationProjection:current.navigationProjection});
  }
 }

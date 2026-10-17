@@ -5,35 +5,36 @@ import {researchId} from './research-reference.js';
 import {sameJSONData} from './json-data-equality.js';
 import {t} from './i18n/index.js';
 
-const collections=['pages','navigation','assets'];
-const keyOf=(collection,value)=>collection==='navigation'?value.target:value.id;
-const values=(book,collection)=>collection==='pages'?book.pages:book.website[collection];
+const collections=['pages','navigation','assets','layouts','branding'];
+const overrides=new Set(['layouts','branding']);
+const keyOf=(collection,value)=>['navigation','layouts','branding'].includes(collection)?value.target:value.id;
+const values=(book,collection)=>collection==='branding'?book.branding:collection==='pages'?book.pages:book.website[collection];
 const copy=value=>structuredClone(value);
 const failure=key=>Error(t('websiteEditor',key));
 // The authoritative compact document never contains collection arrays. Only
 // selected values enter the rendering book; this owner alone submits changes.
 export function websiteDocumentClient({state,api,selection,onStatus=()=>{}}){
  let envelope=null,outline=null,context=null,generation=0,timer=null,queue=Promise.resolve(),pending=null,actionPending=null,lastActionResult=null,error='',local=false,editVersion=0,viewVersion=0;
- let settings=null,pageKey=null,pageSelection=0;const selected=new Map(collections.map(name=>[name,new Map()]));
+ let settings=null,pageKey=null,pageSelection=0;const activeOverrides=new Map();const selected=new Map(collections.map(name=>[name,new Map()]));
  const owner=()=>JSON.stringify([researchContext(state),state.book?.id]);
  const enabled=()=>Boolean(envelope&&context===owner()&&state.websiteEditor);
  const snapshot=()=>enabled()?JSON.stringify([context,envelope.websitePin,envelope.draft?.id??null,envelope.draft?.revision??null,editVersion]):null;
  const count=name=>envelope?.collections[name]?.count??0;
  const current=(stamp,epoch)=>stamp===context&&epoch===generation&&stamp===owner();
  function validate(result,pin=envelope?.websitePin){
-  if(!result||!validWebsitePin(result.websitePin)||pin&&result.websitePin.websiteId!==pin.websiteId||!result.site?.document||collections.some(name=>!Number.isSafeInteger(result.collections?.[name]?.count)||result.collections[name].count<0)||Object.hasOwn(result.site.document,'pages')||['navigation','assets'].some(name=>Object.hasOwn(result.site.document.website??{},name))||result.draft&&(!revisionId(result.draft.revision)||!researchId(result.draft.id)||typeof result.draft.dirty!=='boolean'))throw failure('documentInvalid');
+  if(!result||!validWebsitePin(result.websitePin)||pin&&result.websitePin.websiteId!==pin.websiteId||!result.site?.document||collections.some(name=>!Number.isSafeInteger(result.collections?.[name]?.count)||result.collections[name].count<0)||['pages','branding'].some(name=>Object.hasOwn(result.site.document,name))||['navigation','assets','layouts'].some(name=>Object.hasOwn(result.site.document.website??{},name))||result.draft&&(!revisionId(result.draft.revision)||!researchId(result.draft.id)||typeof result.draft.dirty!=='boolean'))throw failure('documentInvalid');
   return result;
  }
  const common=()=>({workspaceId:outline.book.id,websiteId:envelope.websitePin.websiteId,websitePin:envelope.websitePin});
  const readTarget=()=>({...common(),...(envelope.draft?{draftId:envelope.draft.id,draftRevision:envelope.draft.revision}:{})});
- function stop(){clearTimeout(timer);timer=null;generation++;pending=null;actionPending=null;queue=Promise.resolve();envelope=outline=settings=null;context=null;local=false;error='';pageKey=null;pageSelection++;for(const map of selected.values())map.clear();}
+ function stop(){clearTimeout(timer);timer=null;generation++;pending=null;actionPending=null;queue=Promise.resolve();envelope=outline=settings=null;context=null;local=false;error='';pageKey=null;pageSelection++;activeOverrides.clear();for(const map of selected.values())map.clear();}
  function compact(book=state.book){
-  const {assets,navigation,...website}=book.website;void assets;void navigation;
-  return {document:{website,...Object.fromEntries(['branding','appearance','themes','activeThemeId'].map(key=>[key,book[key]]))},projects:book.projects.map(({id,share,logoId})=>({id,share,logoId})),selection:selection.snapshot()};
+  const {assets,navigation,layouts,...website}=book.website;void assets;void navigation;void layouts;
+  return {document:{website,...Object.fromEntries(['appearance','themes','activeThemeId'].map(key=>[key,book[key]]))},projects:book.projects.map(({id,share,logoId})=>({id,share,logoId})),selection:selection.snapshot()};
  }
  function project(){
   const site=envelope.site,base=envelope.research?.metadata??outline.book,projects=base.projects.map(project=>({...project,share:false,...site.projects.find(value=>value.id===project.id)})),ids=new Set(projects.map(project=>project.id));
-  return {...base,...copy(site.document),projects,notebooks:base.notebooks.filter(book=>ids.has(book.projectId)),entries:[],website:{...copy(site.document.website),navigation:[],assets:[]},pages:[]};
+  return {...base,...copy(site.document),projects,notebooks:base.notebooks.filter(book=>ids.has(book.projectId)),entries:[],website:{...copy(site.document.website),navigation:[],assets:[],layouts:[]},pages:[],branding:[]};
  }
  function receipt(){return {...outline,...envelope,outline:true,etag:envelope.websitePin.researchSnapshotId,websitePin:envelope.websitePin,site:{...envelope.site,id:envelope.websitePin.websiteId},websiteEditor:envelope,book:project(),recordRevisions:{}};}
  function status(){if(enabled())state.websiteEditor=envelope;onStatus({dirty:isDirty(),error,busy:Boolean(local||pending||actionPending)});}
@@ -44,21 +45,48 @@ export function websiteDocumentClient({state,api,selection,onStatus=()=>{}}){
  }
  async function request(operation,data,{signal}={}){
   const stamp=context,epoch=generation,pin=envelope.websitePin;
-  const result=await api('/api/websites/editor/'+operation,{...common(),...data},{adopt:false,signal,websitePin:pin});
+  const result=await api('/api/websites/editor/'+operation,{...common(),...data},{adopt:false,signal,websitePin:pin}).catch(reason=>{if(!current(stamp,epoch))throw new DOMException('Website editor changed','AbortError');throw reason;});
   if(!current(stamp,epoch))throw new DOMException('Website editor changed','AbortError');return result;
  }
  async function open({websiteId,websitePin,base,signal}){
   stop();viewVersion++;outline=base;context=owner();const stamp=context,epoch=generation;
   const result=await api('/api/websites/editor/open',{workspaceId:base.book.id,websiteId,websitePin},{adopt:false,signal,websitePin});
   if(!current(stamp,epoch))throw new DOMException('Website editor changed','AbortError');envelope=validate(result,websitePin);
-  const resultSnapshot=receipt();settings=copy({document:envelope.site.document,projects:envelope.site.projects,selection:envelope.site.selection});return resultSnapshot;
+  const resultSnapshot=receipt();await readOverride('branding','home',{signal,book:resultSnapshot.book});if(!current(stamp,epoch))throw new DOMException('Website editor changed','AbortError');settings=copy({document:envelope.site.document,projects:envelope.site.projects,selection:envelope.site.selection});return resultSnapshot;
  }
  function installed(){if(!envelope)return;state.websiteEditor=envelope;settings=copy(compact());status();}
- function remember(collection,item){
+ function remember(collection,item,book=state.book){
   if(!item||typeof item.key!=='string'||!Number.isSafeInteger(item.position)||item.position<0||!item.value||keyOf(collection,item.value)!==item.key)throw failure('documentInvalid');
   const value=copy(item.value),map=selected.get(collection);map.delete(item.key);map.set(item.key,{...item,base:copy(value)});
-  const list=values(state.book,collection),index=list.findIndex(value=>keyOf(collection,value)===item.key);if(index<0)list.push(value);else list[index]=value;
-  while(map.size>64){const oldest=map.keys().next().value;map.delete(oldest);const at=list.findIndex(item=>keyOf(collection,item)===oldest);if(at>=0)list.splice(at,1);}return value;
+  const list=values(book,collection),index=list.findIndex(value=>keyOf(collection,value)===item.key);if(index<0)list.push(value);else list[index]=value;
+  trim(collection,book);return value;
+ }
+ function trim(collection,book=state.book){
+  const map=selected.get(collection),list=values(book,collection);
+  while(map.size>64){const oldest=[...map.keys()].find(key=>key!==activeOverrides.get(collection)&&!(collection==='branding'&&key==='home'));map.delete(oldest);const at=list.findIndex(item=>keyOf(collection,item)===oldest);if(at>=0)list.splice(at,1);}
+ }
+ function rememberMissing(collection,key,book=state.book){
+  const map=selected.get(collection),list=values(book,collection),at=list.findIndex(item=>keyOf(collection,item)===key);if(at>=0)list.splice(at,1);
+  map.delete(key);map.set(key,{key,position:count(collection),revision:null,base:null});trim(collection,book);
+ }
+ async function readOverride(collection,key,{signal,book=state.book,target=readTarget()}={}){
+  try{const result=await request('item',{...target,collection,key},{signal});if(!sameWebsitePin(result.websitePin,target.websitePin)||result.key!==key)throw failure('documentInvalid');return remember(collection,result,book);}
+  catch(reason){if(reason.code!=='NOT_FOUND')throw reason;rememberMissing(collection,key,book);return null;}
+ }
+ const hasSelected=(collection,key)=>selected.get(collection)?.has(key)??false;
+ async function selectOverride(collection,key,{signal}={}){
+  if(!overrides.has(collection))throw failure('documentInvalid');await flush();activeOverrides.set(collection,key);
+  if(hasSelected(collection,key))return values(state.book,collection).find(item=>item.target===key)??null;
+  const stamp=snapshot(),book=state.book;
+  // Adopt only while the same selected draft and rendering book are still current.
+  const result=await request('item',{...readTarget(),collection,key},{signal}).catch(reason=>{if(reason.code==='NOT_FOUND')return null;throw reason;});
+  if(stamp!==snapshot()||book!==state.book)throw new DOMException('Website draft changed','AbortError');
+  if(result){if(!sameWebsitePin(result.websitePin,envelope.websitePin)||result.key!==key)throw failure('documentInvalid');return remember(collection,result);}
+  rememberMissing(collection,key);return null;
+ }
+ function editableOverride(collection,key,create){
+  if(!overrides.has(collection)||!hasSelected(collection,key))throw failure('documentLoading');activeOverrides.set(collection,key);
+  const list=values(state.book,collection);let value=list.find(item=>item.target===key);if(!value){value=create();if(value.target!==key)throw failure('documentInvalid');list.push(value);}return value;
  }
  async function item(collection,key,{signal,retain=true}={}){
   await flush();const stamp=snapshot(),result=await request('item',{...readTarget(),collection,key},{signal});
@@ -77,18 +105,18 @@ export function websiteDocumentClient({state,api,selection,onStatus=()=>{}}){
   selected.get('pages').clear();state.book.pages=[];pageKey=key;if(result)remember('pages',result);return result?.value??null;
  }
  async function replaceWindow(collection,items){
-  await flush();selected.get(collection).clear();if(collection==='pages')state.book.pages=[];else state.book.website[collection]=[];
+  await flush();selected.get(collection).clear();values(state.book,collection).length=0;
   for(const item of items)remember(collection,item);
  }
  function changes(){
   if(!enabled())return [];
   const next=compact(),operations=[];
   for(const key of new Set([...Object.keys(settings.document.website),...Object.keys(next.document.website)]))if(!sameJSONData(settings.document.website[key],next.document.website[key]))operations.push({type:'settings',path:['document','website',key],...(next.document.website[key]===undefined?{remove:true}:{value:copy(next.document.website[key])})});
-  for(const key of ['branding','appearance','themes','activeThemeId'])if(!sameJSONData(settings.document[key],next.document[key]))operations.push({type:'settings',path:['document',key],value:copy(next.document[key])});
+  for(const key of ['appearance','themes','activeThemeId'])if(!sameJSONData(settings.document[key],next.document[key]))operations.push({type:'settings',path:['document',key],value:copy(next.document[key])});
   for(const key of ['projects','selection'])if(!sameJSONData(settings[key],next[key]))operations.push({type:'settings',path:[key],value:copy(next[key])});
   for(const collection of collections)for(const [key,saved] of selected.get(collection)){
    const value=values(state.book,collection).find(value=>keyOf(collection,value)===key);
-   if(value&&!sameJSONData(value,saved.base))operations.push(saved.base===null?{type:'append',collection,values:[copy(value)]}:{type:'replace',collection,key,value:copy(value)});
+   if(value&&!sameJSONData(value,saved.base))operations.push(saved.base===null&&!overrides.has(collection)?{type:'append',collection,values:[copy(value)]}:{type:'replace',collection,key,value:copy(value)});
   }
   return operations;
  }
@@ -113,9 +141,6 @@ export function websiteDocumentClient({state,api,selection,onStatus=()=>{}}){
    }
   });queue=task.catch(()=>{});return task;
  }
- async function refreshSelected(){
-  const key=pageKey;if(key)try{const result=await request('item',{...readTarget(),collection:'pages',key});remember('pages',result);}catch(reason){if(reason.code!=='NOT_FOUND')throw reason;pageKey=null;state.book.pages=[];}
- }
  function restoreEdits(operations,bases){
   for(const operation of operations){
    if(operation.type==='settings'){let object=operation.path[0]==='document'?state.book:null;const path=operation.path[0]==='document'?operation.path.slice(1):operation.path;if(!object){if(path[0]==='selection'){selection.restore(operation.value);continue;}object=state.book;}for(const key of path.slice(0,-1))object=object[key];if(operation.remove)delete object[path.at(-1)];else object[path.at(-1)]=copy(operation.value);}
@@ -129,9 +154,14 @@ export function websiteDocumentClient({state,api,selection,onStatus=()=>{}}){
   try{result=await request(command.operation,command.payload);}catch(reason){if(['INVALID','LIMIT','CONFLICT','PRIVACY','NOT_FOUND'].includes(reason.code))actionPending=null;local=changes().length>0;error=reason.message??t('websiteEditor','documentCheckpointFailed');status();throw reason;}
   actionPending=null;error='';let page=null;const selectedKey=pageKey;
   if(selectedKey)try{page=await request('item',{websitePin:result.websitePin,...(result.draft?{draftId:result.draft.id,draftRevision:result.draft.revision}:{}),collection:'pages',key:selectedKey});}catch(reason){if(reason.name==='AbortError')throw reason;if(reason.code==='NOT_FOUND')pageKey=null;else error=reason.message;}
+  const overrideRows=[];
+  for(const collection of overrides)for(const key of new Set([...(collection==='branding'?['home']:[]),activeOverrides.get(collection)].filter(Boolean))){
+   try{const item=await request('item',{websitePin:result.websitePin,...(result.draft?{draftId:result.draft.id,draftRevision:result.draft.revision}:{}),collection,key});overrideRows.push({collection,key,item});}
+   catch(reason){if(reason.name==='AbortError')throw reason;if(reason.code==='NOT_FOUND')overrideRows.push({collection,key,item:null});else error=reason.message;}
+  }
   // Typing during an acknowledged save belongs to the next checkpoint.
   const later=command.discard?[]:changes(),bases=new Map([...selected].map(([name,map])=>[name,new Map(map)]));
-  local=false;adopt(result,{replace:true});if(page)remember('pages',page);restoreEdits(later,bases);
+  local=false;adopt(result,{replace:true});if(page)remember('pages',page);for(const {collection,key,item} of overrideRows)if(item)remember(collection,item);else rememberMissing(collection,key);restoreEdits(later,bases);
   lastActionResult=['save','discard'].includes(command.operation)?{...receipt(),book:state.book}:result;return lastActionResult;
  }
  async function transition(operation,operations){
@@ -159,7 +189,7 @@ export function websiteDocumentClient({state,api,selection,onStatus=()=>{}}){
   const asset=copy(value);selected.get('assets').set(asset.id,{key:asset.id,position:count('assets'),revision:null,base:null});state.book.website.assets.push(asset);return asset;
  }
  async function preview(){await flush();return {websitePin:envelope.websitePin,...(envelope.draft?{websiteDraft:{id:envelope.draft.id,revision:envelope.draft.revision}}:{})};}
- return {open,installed,stop,enabled,snapshot,count,item,window,remember,replaceWindow,selectPage,stageAsset,changed,flush,perform,history,save,discard,preview,isDirty,
+ return {open,installed,stop,enabled,snapshot,count,item,window,remember,replaceWindow,selectPage,selectOverride,hasSelected,editableOverride,stageAsset,changed,flush,perform,history,save,discard,preview,isDirty,
   viewKey:()=>JSON.stringify([context,viewVersion]),descriptor:()=>envelope,draft:()=>envelope?.draft??null,error:()=>error,selectedPage:()=>pageKey,
   settingBook:()=>project(),async append(collection,value){await perform([{type:'append',collection,values:[value]}]);if(collection==='pages')await selectPage(value.id);else await item(collection,keyOf(collection,value));return value;}
  };

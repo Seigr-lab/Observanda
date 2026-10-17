@@ -52,7 +52,7 @@ test('preparing a website beyond the former input envelope reads one pinned cust
  WebsiteEditorStore.prototype.document=async function(...args){const result=await originalDocument.apply(this,args),read=result.document.tree.read.bind(result.document.tree);result.document.tree.read=async root=>{assert.notEqual(root,result.document.root,'Preparation hydrated the whole website');return read(root);};return result;};
  let pinned;
  try{pinned=await withPublicationCapture(storage,async(captured,id,finish)=>{const value=await releases.pin(source,{workspace:captured,id});return finish(()=>value);});}finally{WebsiteEditorStore.prototype.document=originalDocument;}
- assert.equal(pinned.version,4);assert.equal(pinned.pageInputs.length,pages.length);assert.equal(pinned.summary.media,1);assert.ok(Buffer.byteLength(serialize(pinned))<100000);assert.ok(pinned.metadata.pages.every(value=>value.body===''&&value.sections.length===0));
+ assert.equal(pinned.version,5);assert.equal(pinned.pageInputs.length,pages.length);assert.equal(pinned.summary.media,1);assert.ok(Buffer.byteLength(serialize(pinned))<100000);assert.ok(pinned.metadata.pages.every(value=>value.body===''&&value.sections.length===0));
  assert.equal((await storage.listMetadata('.observanda/release-inputs/'+pinned.id)).length,pages.length);
  await execute('discard',{draftId:state.draft.id,expectedRevision:state.draft.revision,commandId:randomUUID()});
  const reopened=new PublicationJobs(websiteWorkspace(f.workspace,websiteId)),retained=await reopened.source(pinned.id);assert.deepEqual(retained,pinned);

@@ -112,3 +112,20 @@ test('editor client retries lost acknowledgements and retains typing during a sa
  state.book.website.title='Discard this draft';client.changed();await client.flush();lost.add('discard');await assert.rejects(client.discard(),/Connection ended/);await client.discard();
  const discards=calls.filter(call=>call.operation==='discard');assert.deepEqual(discards.at(-1).data,discards.at(-2).data);assert.equal(state.book.website.title,'Typed during save');assert.equal(client.isDirty(),false);
 });
+
+
+test('editor client rejects a superseded missing-override response', {timeout:120000},async t=>{
+ const f=await fixture(t),state={book:f.book,page:'website',storage:{contextId:'disposable'}},selection=websiteSelectionDraft();
+ let reached,release,holdMissing=true;const missing=new Promise(resolve=>{reached=resolve;}),gate=new Promise(resolve=>{release=resolve;});t.after(()=>release());
+ const client=websiteDocumentClient({state,selection,api:async(route,data)=>{
+  try{return structuredClone(await f.editor.execute(route.split('/').at(-1),data));}
+  catch(error){if(holdMissing&&route.endsWith('/item')&&data.collection==='branding'&&data.key==='home'&&error.code==='NOT_FOUND'){holdMissing=false;reached();await gate;}throw error;}
+ }});t.after(()=>client.stop());
+ const first=client.open({websiteId:f.websiteId,base:{book:f.book}}),rejected=assert.rejects(first,{name:'AbortError'});await missing;
+ const initial=await f.execute('open'),override={target:'home',logos:[]},changed=await f.execute('change',f.edit(initial,[{type:'replace',collection:'branding',key:'home',value:override}]));
+ const second=await client.open({websiteId:f.websiteId,base:{book:f.book}});Object.assign(state,second);selection.load(second.site.selection);client.installed();
+ assert.deepEqual(state.book.branding,[override]);assert.equal(client.draft().revision,changed.draft.revision);
+ release();await rejected;assert.deepEqual(state.book.branding,[override]);assert.equal(client.draft().revision,changed.draft.revision);
+ // The superseded absence must not replace the selected row's acknowledged base.
+ client.changed();await client.flush();assert.equal(client.draft().revision,changed.draft.revision);assert.deepEqual(client.editableOverride('branding','home',()=>assert.fail('Existing override was lost')),override);
+});

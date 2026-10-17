@@ -11,7 +11,7 @@ import {researchId} from './web/research-reference.js';
 import {publicationPresentationTarget} from './web/publication-presentation-target.js';
 import {validWebsitePage,validWebsiteNavigationItem,validWebsiteAsset,validWebsiteLayout,validWebsiteBranding} from './web/website-item-validation.js';
 const invalid=field=>{throw new AppError('INVALID',[{field}]);};
-const paths={pages:['document','pages'],navigation:['document','website','navigation'],assets:['document','website','assets']};
+const paths={pages:['document','pages'],navigation:['document','website','navigation'],assets:['document','website','assets'],layouts:['document','website','layouts'],branding:['document','branding']};
 const define=(value,name,item)=>Object.defineProperty(value,name,{value:item,enumerable:true,writable:true,configurable:true});
 async function headerObject(document,path,omitted,nested,{signal}={}){
  const value={},target=await document.tree.select(document.root,path);if(!target)invalid('website');
@@ -25,8 +25,8 @@ async function headerObject(document,path,omitted,nested,{signal}={}){
  return value;
 }
 export function websiteDocumentHeader(document,{signal}={}){
- const website=()=>headerObject(document,['document','website'],['navigation','assets'],{},{signal});
- const content=()=>headerObject(document,['document'],['pages'],{website},{signal});
+ const website=()=>headerObject(document,['document','website'],['navigation','assets','layouts'],{},{signal});
+ const content=()=>headerObject(document,['document'],['pages','branding'],{website},{signal});
  return headerObject(document,[],[],{document:content},{signal});
 }
 async function* collection(document,path,{signal,sectionsOnly=false}={}){
@@ -46,20 +46,18 @@ async function* collection(document,path,{signal,sectionsOnly=false}={}){
 function validateHeader(site,snapshot,{draft=false}={}){
  if(snapshot.metadata.formatVersion!==21)throw new AppError('FORMAT');
  if(typeof draft!=='boolean'||!validWebsites([site],snapshot.metadata))invalid('website');
- const book=websiteBook(snapshot.metadata,site),website=book.website,layouts=website.layouts,branding=book.branding;
+ const book=websiteBook(snapshot.metadata,site),website=book.website;
  // Empty collections are internal sentinels only. Selected checkpoints validate
  // their changed members separately; final admission proves every membership.
  const header={...book,pages:[],branding:[],website:{...website,navigation:[],assets:[],layouts:[]}};
  validateCatalogueMetadata(header);
- if(!Array.isArray(layouts)||layouts.length>1700||!layouts.every(value=>validWebsiteLayout(value))||new Set(layouts.map(value=>value.target)).size!==layouts.length)invalid('page layouts');
- if(!Array.isArray(branding)||branding.length>1700||!branding.every(validWebsiteBranding)||new Set(branding.map(value=>value.target)).size!==branding.length)invalid('branding');
  return site;
 }
 export async function validateWebsiteDocumentHeader(store,snapshot,document,{signal,draft=false}={}){
  void store;signal?.throwIfAborted();return validateHeader(await websiteDocumentHeader(document,{signal}),snapshot,{draft});
 }
 export async function validateWebsiteDocument(store,snapshot,document,{signal,draft=false,previous}={}){
- const site=await validateWebsiteDocumentHeader(store,snapshot,document,{signal,draft}),book=websiteBook(snapshot.metadata,site),website=book.website,layouts=website.layouts,branding=book.branding;
+ const site=await validateWebsiteDocumentHeader(store,snapshot,document,{signal,draft}),book=websiteBook(snapshot.metadata,site),website=book.website;
  const counts={};for(const [name,path] of Object.entries(paths))counts[name]=await document.tree.arrayLength(document.root,path);
  const index=new SnapshotIndex(store);
  const researchIdentity=async id=>snapshot.indexVersion?index.member(await index.find({root:snapshot.membership},'identity:'+id)):snapshot.records.find(row=>row.id===id||row.sections.includes(id));
@@ -98,11 +96,11 @@ export async function validateWebsiteDocument(store,snapshot,document,{signal,dr
   for await(const {value:asset} of collection(document,paths.assets,{signal})){
    if(!validWebsiteAsset(asset))invalid('website assets');await unique('asset:'+asset.id,'website assets');
   }
-  for(const layout of layouts){
+  for await(const {value:layout} of collection(document,paths.layouts,{signal})){
    signal?.throwIfAborted();if(!validWebsiteLayout(layout)||!await targetExists(layout.target,{home:website.home.enabled!==false}))invalid('page layouts');
    await unique('layout:'+layout.target,'page layouts');
   }
-  for(const item of branding){
+  for await(const {value:item} of collection(document,paths.branding,{signal})){
    signal?.throwIfAborted();if(!validWebsiteBranding(item)||!await targetExists(item.target))invalid('branding');await unique('branding:'+item.target,'branding');
   }
   await validateWebsiteDocumentSelection(store,snapshot,site,{signal,previous});

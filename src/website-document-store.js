@@ -13,7 +13,7 @@ import {validWebsiteSelection} from './web/website-selection.js';
 import {researchId} from './web/research-reference.js';
 import {revisionId} from './web/revision-model.js';
 import {catalogueIndexedCount} from './postgres-indexes.js';
-import {catalogueFormat,catalogueRequiresWebsiteEditor,requireWebsiteEditor} from './catalogue-format.js';
+import {catalogueFormat,catalogueRequiresWebsiteEditor,catalogueRequiresWebsitePresentation,requireWebsitePresentation} from './catalogue-format.js';
 import {WebsiteCollectionIndex,validWebsiteCollectionIndexes} from './website-collection-index.js';
 import {WebsiteEditorNavigation,validWebsiteNavigationProjection} from './website-editor-navigation.js';
 import {validateWebsiteDocument,websiteDocumentHeader} from './website-document-validation.js';
@@ -84,8 +84,8 @@ export class WebsiteDocumentStore{
   if(!revisionId(revision))invalid();const head=await this.savedHead(id,registry,{removed:true}),known=await this.index(id,'versions').find({root:head.versions},revision);
   if(!known||known.revision!==revision){if(head.revision===revision)damaged();throw new AppError('NOT_FOUND');}
   const slot=versionSlot(id,revision),row=await this.store.db.get('SELECT payload FROM state WHERE slot=$1',slot),value=this.store.decode('state',slot,row?.payload);
-  if(!value||![1,2].includes(value.version)||Object.keys(value).sort().join()!==(value.version===2?'collectionIndexes,navigationProjection,researchSnapshotId,root,version,websiteId,workspaceId':'researchSnapshotId,root,version,websiteId,workspaceId')||value.workspaceId!==registry.workspaceId||value.websiteId!==id||!revisionId(value.root)||!revisionId(value.researchSnapshotId)||hash(value)!==revision)damaged();
-  if(value.version===2&&(!catalogueRequiresWebsiteEditor(await catalogueFormat(this.store.db))||!validWebsiteCollectionIndexes(value.collectionIndexes)||!validWebsiteNavigationProjection(value.navigationProjection)))damaged();return value;
+  if(!value||![1,2,3].includes(value.version)||Object.keys(value).sort().join()!==(value.version>=2?'collectionIndexes,navigationProjection,researchSnapshotId,root,version,websiteId,workspaceId':'researchSnapshotId,root,version,websiteId,workspaceId')||value.workspaceId!==registry.workspaceId||value.websiteId!==id||!revisionId(value.root)||!revisionId(value.researchSnapshotId)||hash(value)!==revision)damaged();
+  if(value.version>=2&&(!(value.version===3?catalogueRequiresWebsitePresentation:catalogueRequiresWebsiteEditor)(await catalogueFormat(this.store.db))||!validWebsiteCollectionIndexes(value.collectionIndexes,{version:value.version-1})||!validWebsiteNavigationProjection(value.navigationProjection)))damaged();return value;
  }
  async document(websiteId,{researchSnapshotId,websiteRevision,signal,mutable=false}={}){
   signal?.throwIfAborted();const registry=await this.registry(),explicitSnapshot=researchSnapshotId!==undefined;researchSnapshotId??=await this.store.head();if(!revisionId(researchSnapshotId))invalid();
@@ -124,7 +124,7 @@ export class WebsiteDocumentStore{
   if(previous.root===document.root)return {researchSnapshotId,...this.summary(head,registry)};
   collectionIndexes=await WebsiteCollectionIndex.retainAll(document,collectionIndexes??previous.collectionIndexes,{signal});
   navigationProjection=await WebsiteEditorNavigation.retain(this.store,snapshot,document,site,collectionIndexes,navigationProjection??previous.navigationProjection,{signal});
-  await requireWebsiteEditor(this.store.db);const value={version:2,workspaceId:registry.workspaceId,websiteId:id,researchSnapshotId,root:document.root,collectionIndexes,navigationProjection};
+  await requireWebsitePresentation(this.store.db);const value={version:3,workspaceId:registry.workspaceId,websiteId:id,researchSnapshotId,root:document.root,collectionIndexes,navigationProjection};
   const next=await this.#publish(site,value,document.blocks,head);return {researchSnapshotId,...this.summary(next,registry)};
  }
  async #publish(site,value,blocks,previous){
@@ -142,8 +142,8 @@ export class WebsiteDocumentStore{
   if(previous&&(await this.revision(site.id,previous.revision,registry)).root===root)return previous;
   let value={version:1,workspaceId:registry.workspaceId,websiteId:site.id,researchSnapshotId,root};
   if(catalogueRequiresWebsiteEditor(await catalogueFormat(this.store.db))){
-   const document=new RecordDocument(blocks,root),collectionIndexes=await WebsiteCollectionIndex.retainAll(document),navigationProjection=await WebsiteEditorNavigation.retain(this.store,snapshot,document,site,collectionIndexes);
-   value={...value,version:2,collectionIndexes,navigationProjection};
+   const version=catalogueRequiresWebsitePresentation(await catalogueFormat(this.store.db))?3:2,document=new RecordDocument(blocks,root),collectionIndexes=await WebsiteCollectionIndex.retainAll(document,null,{version:version-1}),navigationProjection=await WebsiteEditorNavigation.retain(this.store,snapshot,document,site,collectionIndexes);
+   value={...value,version,collectionIndexes,navigationProjection};
   }
   return this.#publish(site,value,blocks,previous);
  }
@@ -177,7 +177,7 @@ export class WebsiteDocumentStore{
     const document=new RecordDocument(blocks,value.root);let site;
     try{({site}=await validateWebsiteDocument(this.store,snapshot,document,{signal}));}catch(error){if(['INVALID','FORMAT','LIMIT','WORKSPACE_METADATA_LIMIT'].includes(error.code))damaged();throw error;}
     if(site.id!==entry.id)damaged();
-    if(value.version===2){for(const collection of ['pages','navigation','assets']){const index=await WebsiteCollectionIndex.open(document,collection,value.collectionIndexes[collection],{signal});if(!index)damaged();await index.verify({signal});}await new WebsiteEditorNavigation(document,value.navigationProjection).verify(this.store,snapshot,site,value.collectionIndexes,{signal});}
+    if(value.version>=2){for(const collection of Object.keys(value.collectionIndexes)){const index=await WebsiteCollectionIndex.open(document,collection,value.collectionIndexes[collection],{signal});if(!index)damaged();await index.verify({signal});}await new WebsiteEditorNavigation(document,value.navigationProjection).verify(this.store,snapshot,site,value.collectionIndexes,{signal});}
 
     if(item.revision===head.revision){
      if(site.name!==head.name||site.projectId!==head.projectId)damaged();

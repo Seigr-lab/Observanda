@@ -1,9 +1,9 @@
 import {websiteSnapshot} from './website-context.js';
 import {copySectionPresentation,clearSectionPresentation} from './media-presentation.js';
-import {PAGE_STARTERS,instantiateLayout,defaultPageLayout} from './website-layouts.js';
+import {PAGE_STARTERS,instantiateLayout} from './website-layouts.js';
 import {validSections} from './website-model.js';
 
-export function websiteLibraryUI({state,esc,field,option,sections,setSections,scopeTarget,checkpoint,changed,notify,api,render}) {
+export function websiteLibraryUI({state,esc,field,option,sections,setSections,scopeTarget,changeLayout,checkpoint,changed,notify,api,render}) {
   let selected='field-journal',expanded=true;
   const choices=()=>[...PAGE_STARTERS,...state.book.website.templates.map(t=>({...t,description:'Saved in this workspace.'}))];
   const current=()=>choices().find(t=>t.id===selected)??choices()[0];
@@ -25,7 +25,7 @@ export function websiteLibraryUI({state,esc,field,option,sections,setSections,sc
     if(name==='website-layout-apply'){const source=instantiateLayout(current().sections,()=>crypto.randomUUID()),replace=document.querySelector('#website-layout-mode').value==='replace';if(source.length+(replace?0:sections().length)>200)throw new Error('This layout exceeds the current page section limit.');checkpoint();copySectionPresentation(state.book.website,'template:'+current().id,current().sections,scopeTarget(),source,{replace});const blank=sections().length===0;setSections(replace?source:[...sections(),...source]);
       if((replace||blank)&&source.some(s=>s.kind==='heading'&&s.level===1)){
         const target=scopeTarget();if(target==='home')state.book.website.home.showTitle=false;
-        else{let layout=state.book.website.layouts.find(l=>l.target===target);if(!layout){layout=defaultPageLayout(target);state.book.website.layouts.push(layout);}layout.showHeading=false;}
+        else changeLayout('showHeading',false);
       }changed(true);}
     if(name==='website-layout-save'){if(!validSections(sections()))throw new Error('Complete the section fields before saving a layout.');const input=document.querySelector('#website-layout-name'),title=input.value.trim();if(!title){input.setCustomValidity('Name the layout.');input.reportValidity();return true;}if(state.book.website.templates.length>=100)throw new Error('The current workspace layout limit has been reached.');checkpoint();const item={id:crypto.randomUUID(),name:title,sections:structuredClone(sections())};copySectionPresentation(state.book.website,scopeTarget(),sections(),'template:'+item.id,item.sections);state.book.website.templates.push(item);selected=item.id;changed(true);}
     if(name==='website-layout-update'||name==='website-layout-rename'){if(name.endsWith('update')&&!validSections(sections()))throw new Error('Complete the section fields before updating a layout.');const item=state.book.website.templates.find(t=>t.id===selected);if(!item)return true;const input=document.querySelector('#website-layout-name'),title=input.value.trim();if(name.endsWith('rename')&&!title){input.setCustomValidity('Enter the new name.');input.reportValidity();return true;}checkpoint();if(name.endsWith('update')){item.sections=structuredClone(sections());copySectionPresentation(state.book.website,scopeTarget(),sections(),'template:'+item.id,item.sections,{replace:true});}if(title)item.name=title;changed(true);}
