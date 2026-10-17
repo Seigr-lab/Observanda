@@ -26,6 +26,7 @@ import {stageRecordOwnerMaterialIdentity,stageMaterialReturnRetirement} from './
 import {readRecordOwnerMetadata,classifyRecordOwnerAuditMetadata,recordOwnerAuditPathKey,recordOwnerAuditMutablePath} from './record-owner-audit-metadata.js';
 import {customFontId} from './web/font-catalogue.js';
 import {stageRecordOwnerRevision} from './record-owner-read-visibility.js';
+import {workflowReceiptKeys,pendingEvidenceReceiptKeys,recordOwnerWorkflows} from './record-owner-workflows.js';
 const kinds=['all','artifact','dataset','analysis','collection'];
 const empty=kind=>({format:1,kind,root:null,count:0,chunkSize:64});
 const stateKey=id=>'record-owner-evidence-progress:'+id;
@@ -134,7 +135,21 @@ export async function prepareRecordOwnerEvidence(source,target,receipt,{write,si
    await visitValue(value,item=>inspect(item,ref=>inspected.put('seed:'+JSON.stringify(ref),ref)));
   };
   async function* seeds(){
-   for(const prefix of ['.observanda/materials/imports/','.observanda/materials/drafts/','.observanda/materials/intakes/','.observanda/materials/associations/','.observanda/materials/corrections/','.observanda/intake/','.observanda/jobs/'])for await(const key of objectNames(source,'metadata:'+prefix,{signal}))await audit(key.slice(9));
+   const workflows=await recordOwnerWorkflows(source,recordId,{signal,onProgress:completed=>checkpoint('evidence-workflows',{completed})});
+   if(workflows){
+    for(const {key,prefix,folder} of workflows.names){await audit(key.slice(9));if(prefix&&folder!=='imports')for await(const child of objectNames(source,prefix,{signal}))await audit(child.slice(9));}
+    for(const folder of ['intakes','drafts'])for(const suffix of ['/'+recordId+'/', '/'+recordId+'-order'])for await(const key of objectNames(source,'metadata:.observanda/materials/'+folder+'/by-record'+suffix,{signal}))await audit(key.slice(9));
+   }else{
+   const ranges={objectIdPage:(...args)=>source.catalogue(store=>store.objectIdPage(...args)),objectIdentity:key=>source.catalogue(store=>store.objectIdentity(key))};
+   for await(const {key,prefix,folder} of workflowReceiptKeys(ranges,{signal})){
+    const classified=await classifyRecordOwnerAuditMetadata(source,key.slice(9));if(classified?.recordId!==recordId)continue;
+    await audit(key.slice(9));
+    if(folder!=='imports')for await(const child of objectNames(source,prefix,{signal}))await audit(child.slice(9));
+   }
+   // Record feeds live beside the workflow identities and are selected directly.
+   for(const folder of ['intakes','drafts'])for(const suffix of ['/'+recordId+'/', '/'+recordId+'-order'])for await(const key of objectNames(source,'metadata:.observanda/materials/'+folder+'/by-record'+suffix,{signal}))await audit(key.slice(9));
+   for(const prefix of ['.observanda/materials/associations/','.observanda/materials/corrections/','.observanda/intake/','.observanda/jobs/'])for await(const key of objectNames(source,'metadata:'+prefix,{signal}))await audit(key.slice(9));
+   }
    for await(const key of objectNames(source,'record-owner-evidence-audit-path:',{signal})){const alias=await source.catalogue(store=>store.object(key));if(alias?.recordId===recordId)await audit(alias.relative);}
    let after='';for(;;){const rows=await source.catalogue(store=>store.db.all('SELECT revision FROM records WHERE id=$1 AND revision COLLATE "C">$2 ORDER BY revision COLLATE "C" LIMIT 32',recordId,after));if(!rows.length)break;
     for(const row of rows){signal?.throwIfAborted();await source.catalogue(store=>withRecordDocument(store,recordId,row.revision,async document=>{
@@ -203,28 +218,11 @@ export async function verifyRecordOwnerEvidence(target,receipt,descriptor,{signa
  for await(const ref of materials.sequences.items(descriptor.sequences.all)){signal?.throwIfAborted();const doc=await materials.readStored(ref);if(doc.recordId!==descriptor.recordId||doc.kind!==ref.kind)damaged();if(receipt.phase!=='complete'){const head=await materials.current(ref.id,{includeStaged:true});if(!head||head.ownerTransfer!==receipt.id||head.revision!==ref.revision)damaged();}}
  return {revisions:descriptor.revisions.count,heads:descriptor.sequences.all.count,files:descriptor.files.count};
 }
-// Workflow folders also contain arbitrarily many chunk and item documents.
-// Seek between their fixed-width identities using the authenticated range index;
-// only the root receipt can describe whether that workflow is still pending.
-async function* pendingEvidenceReceiptKeys(store,{signal}={}){
- for(const [folder,receipt] of [['imports','session'],['intakes','batch'],['drafts','draft']]){
-  const prefix='metadata:.observanda/materials/'+folder+'/';let after=null;
-  while(true){
-   signal?.throwIfAborted();const {items}=await store.objectIdPage(prefix,{after,limit:1,signal}),key=items[0];if(!key)break;
-   const match=/^([a-f0-9-]{36})\//.exec(key.slice(prefix.length));
-   if(!match){after=key;continue;}
-   const root=prefix+match[1],selected=root+'/'+receipt+'.json';
-   if(await store.objectIdentity(selected))yield selected;
-   // All descendants start with '/', which sorts before '0'.
-   after=root+'0';
-  }
- }
- for(const prefix of ['metadata:.observanda/materials/associations/','metadata:.observanda/intake/proposals/','metadata:.observanda/jobs/'])yield* store.objectIdEntries(prefix,{signal});
-}
 // Read-only admission runs before the fence. Its authenticated object root is
 // rechecked in the short source transaction, closing start/queue races without
 // keeping a writer while scanning completed receipts.
 export async function recordOwnerEvidenceAdmission(source,recordId,{signal}={}){
+ const selected=await recordOwnerWorkflows(source,recordId,{signal});if(selected){if(selected.pending)throw new AppError('RECORD_TRANSFER_PENDING');return selected.proof;}
  return source.catalogue(async store=>{
   const materials=new ResearchMaterials(source),proof=digest(serialize(await store.objectIndex().head()));
   for await(const key of pendingEvidenceReceiptKeys(store,{signal})){
