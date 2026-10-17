@@ -1,3 +1,4 @@
+import {websitePublicationMetadata,websitePublicationPages} from './publication-website-input.js';
 import {websiteEditorProjection} from './website-editor-projection.js';
 import {validateWebsiteDocument,websiteDocumentHeader} from './website-document-validation.js';
 import {WebsiteDocumentStore} from './website-document-store.js';
@@ -142,20 +143,20 @@ async function websiteDocumentPublicationSource(workspace,{etag,websitePin,websi
  if(!validWebsitePin(websitePin)||websitePin.websiteId!==id||websitePin.researchSnapshotId!==etag)throw new AppError('INVALID');
  if(!await publicationRevisionCurrent(workspace,{etag,websitePin}))throw new AppError('CONFLICT');
  return base.catalogue(async store=>{
-  const projected=await websiteEditorProjection(store,id,{websitePin,websiteDraft,pageLabels:false,signal});
+  const retained=!!consume&&!page&&!inventory,projected=await websiteEditorProjection(store,id,{websitePin,websiteDraft,pageLabels:retained,signal});
   if(workspaceId!==undefined&&workspaceId!==projected.metadata.id)throw new AppError('WORKSPACE_CHANGED');
   const raw=await store.snapshot(etag);
   // Selection/inventory pages consume labels, not the website's page bodies.
-  // Full preparation still passes the complete document to its retained-input
-  // owner, after one streaming semantic admission of an unsaved draft.
+  // Preparation streams independently retained pages after semantic admission;
+  // the ordinary selection routes continue to consume the compact header.
   if(websiteDraft&&!page&&!inventory){
    const previous=await websiteDocumentHeader((await new WebsiteDocumentStore(store).document(id,websitePin)).document,{signal});
    await validateWebsiteDocument(store,raw,projected.document,{signal,previous});
   }
-  const site=page||inventory?projected.site:await projected.document.tree.read(projected.document.root);
-  const metadata=page||inventory?projected.metadata:websiteBook(raw.metadata,site),selection=site.selection;
+  const site=retained||page||inventory?projected.site:await projected.document.tree.read(projected.document.root);
+  const metadata=retained?await websitePublicationMetadata(projected,{signal}):page||inventory?projected.metadata:websiteBook(raw.metadata,site),selection=site.selection;
   const snapshot={...raw,metadata,websiteSelection:selection,websitePin};
   const paging=publicationSelectionPage(store,{snapshotId:etag,websiteId:id,websitePin,websiteDraft,metadata,selection},page),options={signal,metadata,selection,page:paging.page};
-  return consume?consume(metadata,(inventory?selectedPublicationInventories:selectedPublicationRecords)(store,snapshot,options),{sourceEtag:etag,websitePin,nextCursor:paging.nextCursor}):selectedPublicationBook(store,snapshot,options);
+  return consume?consume(metadata,(inventory?selectedPublicationInventories:selectedPublicationRecords)(store,snapshot,options),{sourceEtag:etag,websitePin,nextCursor:paging.nextCursor,...(retained?{websitePages:websitePublicationPages(projected,{signal})}:{})}):selectedPublicationBook(store,snapshot,options);
  });
 }

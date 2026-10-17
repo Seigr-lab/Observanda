@@ -26,7 +26,8 @@ function request(operation){
  const req={waitForWriter:true,checkWriter:async()=>{},socket:{timeout:60000,destroyed:false,setTimeout(){}}},res=new EventEmitter();res.setTimeout=()=>{};res.writableEnded=false;
  return requestWriterWait(req,res,operation);
 }
-const edit=site=>({workspaceId:site.book.id,baseEtag:site.etag,metadata:{},projects:[],changes:[],removed:[],selection:site.site.selection});
+const edit=site=>({workspaceId:site.book.id,baseEtag:site.etag,websitePin:site.websitePin,metadata:{},projects:[],changes:[],removed:[],selection:site.site.selection});
+async function publicationCommand(storage){const {etag,websitePin}=await storage.outline();return {etag,websitePin};}
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-publication-capture-')),book=sampleNotebook();
  book.entries=Array.from({length:72},(_,index)=>({...structuredClone(book.entries[0]),id:randomUUID(),title:'Observation '+index,body:'Retained observation '+index,share:true,attachments:[],figures:[],sections:[],relations:[]}));
@@ -48,7 +49,7 @@ test('publication capture permits authoring and another preparation while retain
  const f=await fixture(t);let arrive,resume,waiting=true;
  const ready=new Promise(resolve=>arrive=resolve),held=new Promise(resolve=>resume=resolve);
  const restore=intercept(t,f.workspace,async count=>{if(waiting&&count===40){waiting=false;arrive();await held;}});
- const initial=await f.storage.outline(),pending=f.releases.start({etag:initial.etag},f.queue);pending.catch(()=>{});
+ const initial=await f.storage.outline(),pending=f.releases.start({etag:initial.etag,websitePin:initial.websitePin},f.queue);pending.catch(()=>{});
  try{
   await Promise.race([ready,pending.then(()=>assert.fail('Preparation did not reach the capture barrier'))]);
   const journals=await f.storage.listMetadata('.observanda/release-captures');assert.equal(journals.length,1);
@@ -61,7 +62,7 @@ test('publication capture permits authoring and another preparation while retain
   await new ResearchRecords(f.workspace,new MediaStore(f.workspace)).save({workspaceId:f.book.id,changes:[{id:original.id,expectedRevision:recordRevision(original),record:changed}]});
   assert.equal((await f.sites.read(f.ids[1])).book.website.footer,'Saved while capture is paused');
   // Recovery must skip the first preparation's live lease, not erase its input.
-  const second=await new PublicationJobs(f.storage).start({etag:(await f.storage.outline()).etag},f.queue);
+  const second=await new PublicationJobs(f.storage).start(await publicationCommand(f.storage),f.queue);
   assert.equal((await f.storage.listMetadata('.observanda/release-captures')).length,1);
   assert.ok((await f.storage.listMetadata('.observanda/release-inputs/'+firstId)).length>=32);
   resume();const first=await pending;assert.equal(first.id,firstId);restore();
@@ -79,13 +80,13 @@ test('interrupted input cleanup is recovered before another preparation without 
  const f=await fixture(t),remove=f.workspace.removeMetadata;
  const restore=intercept(t,f.workspace,async count=>{if(count===40)throw new AppError('IO');});
  f.workspace.removeMetadata=async function(file){if(file.includes('/release-inputs/'))throw new AppError('STORAGE_FULL');return remove.call(this,file);};
- try{await assert.rejects(f.releases.start({etag:(await f.storage.outline()).etag},f.queue),{code:'IO'});}
+ try{await assert.rejects(f.releases.start(await publicationCommand(f.storage),f.queue),{code:'IO'});}
  finally{f.workspace.removeMetadata=remove;restore();}
  const journals=await f.storage.listMetadata('.observanda/release-captures');assert.equal(journals.length,1);
  const abandoned=journals[0].slice(0,-5);assert.ok((await f.storage.listMetadata('.observanda/release-inputs/'+abandoned)).length>=32);
  assert.equal(await f.queue.read(abandoned),null);await assert.rejects(f.releases.source(abandoned),{code:'NOT_FOUND'});
  const reopened=new Workspace(f.workspace.root,f.vault),storage=websiteWorkspace(reopened,f.ids[0]),jobs=workspaceJobs(reopened),queue=websiteJobQueue(jobs.queue,f.ids[0]),releases=new PublicationJobs(storage);
- const job=await releases.start({etag:(await storage.outline()).etag},queue);
+ const job=await releases.start(await publicationCommand(storage),queue);
  assert.deepEqual(await storage.listMetadata('.observanda/release-inputs/'+abandoned),[]);
  assert.deepEqual(await storage.listMetadata('.observanda/release-captures'),[]);
  assert.equal((await releases.source(job.id)).records.length,72);assert.equal((await queue.read(job.id)).state,'queued');
@@ -94,7 +95,7 @@ test('interrupted input cleanup is recovered before another preparation without 
 test('aborting capture removes its committed input batches and releases its lifecycle lease',{timeout:120000},async t=>{
  const f=await fixture(t),controller=new AbortController();
  const restore=intercept(t,f.workspace,async count=>{if(count===40)controller.abort(new AppError('WRITE_CANCELLED'));});
- try{await assert.rejects(f.releases.inline({etag:(await f.storage.outline()).etag},{signal:controller.signal}),{code:'WRITE_CANCELLED'});}
+ try{await assert.rejects(f.releases.inline(await publicationCommand(f.storage),{signal:controller.signal}),{code:'WRITE_CANCELLED'});}
  finally{restore();}
  assert.deepEqual(await f.storage.listMetadata('.observanda/release-captures'),[]);
  assert.deepEqual(await f.storage.listMetadata('.observanda/release-inputs'),[]);
@@ -109,7 +110,7 @@ test('a lost admission reply preserves the committed job and its retained input'
   if(result?.type==='publication.prepare'){admitted=result;throw new AppError('DATABASE_UNAVAILABLE');}
   return result;
  };
- try{await assert.rejects(f.releases.start({etag:(await f.storage.outline()).etag},f.queue),{code:'DATABASE_UNAVAILABLE'});}
+ try{await assert.rejects(f.releases.start(await publicationCommand(f.storage),f.queue),{code:'DATABASE_UNAVAILABLE'});}
  finally{f.queue.transaction=transaction;}
  assert.ok(admitted);assert.deepEqual(await f.storage.listMetadata('.observanda/release-captures'),[]);
  assert.equal((await f.queue.read(admitted.id)).state,'queued');
@@ -119,8 +120,8 @@ test('a lost admission reply preserves the committed job and its retained input'
 
 test('a burst of preparations leaves database capacity for input commits',{timeout:120000},async t=>{
  const f=await fixture(t),site=await f.sites.read(f.ids[0]),command=edit(site);command.selection={defaultShare:false,includeProjects:[],records:[{id:f.book.entries[0].id,share:true,attachments:[]}]};await f.sites.save(f.ids[0],command);
- const etag=(await f.storage.outline()).etag;
- const results=await Promise.allSettled(Array.from({length:14},()=>request(()=>new PublicationJobs(f.storage).start({etag},f.queue))));
+ const {etag,websitePin}=await publicationCommand(f.storage);
+ const results=await Promise.allSettled(Array.from({length:14},()=>request(()=>new PublicationJobs(f.storage).start({etag,websitePin},f.queue))));
  for(const result of results)if(result.status==='rejected')t.diagnostic(result.reason.code??result.reason.message);
  assert.equal(results.filter(result=>result.status==='fulfilled').length,14);
  assert.deepEqual(await f.storage.listMetadata('.observanda/release-captures'),[]);
@@ -130,7 +131,7 @@ test('a killed capture releases its lease and its partial input is removed on th
  const f=await fixture(t);await interruptWorkspace(f.workspace.root,f.vault,'publication-capture',{websiteId:f.ids[0]});
  const journals=await f.storage.listMetadata('.observanda/release-captures');assert.equal(journals.length,1);const abandoned=journals[0].slice(0,-5);
  assert.ok((await f.storage.listMetadata('.observanda/release-inputs/'+abandoned)).length>=32);assert.equal(await f.queue.read(abandoned),null);
- const job=await f.releases.start({etag:(await f.storage.outline()).etag},f.queue);
+ const job=await f.releases.start(await publicationCommand(f.storage),f.queue);
  assert.deepEqual(await f.storage.listMetadata('.observanda/release-inputs/'+abandoned),[]);assert.deepEqual(await f.storage.listMetadata('.observanda/release-captures'),[]);
  assert.equal((await f.releases.source(job.id)).records.length,72);await f.workspace.withStorageHandoff(async()=>{});
 });
@@ -138,9 +139,9 @@ test('a killed capture releases its lease and its partial input is removed on th
 test('a complete 720-record selection keeps ordinary website saves within their latency budget',{timeout:240000},async t=>{
  const f=await fixture(t),seed=f.book.entries[0],extra=Array.from({length:648},(_,index)=>({...structuredClone(seed),id:randomUUID(),title:'Extended observation '+index,body:('Selected observation '+index+' ').repeat(512)}));
  await new ResearchRecords(f.workspace,new MediaStore(f.workspace)).save({workspaceId:f.book.id,changes:extra.map(record=>({id:record.id,expectedRevision:null,record}))},{receipt:true});
- const etag=(await f.storage.outline()).etag,started=performance.now(),latencies=[];let finished=false;
+ const {etag,websitePin}=await publicationCommand(f.storage),started=performance.now(),latencies=[];let finished=false;
  const preparing=request(async()=>{
-  const job=await f.releases.start({etag},f.queue);f.worker.start();
+  const job=await f.releases.start({etag,websitePin},f.queue);f.worker.start();
   try{for(;;){const current=await f.queue.read(job.id);if(['completed','failed','cancelled'].includes(current.state)){assert.equal(current.state,'completed',current.error);return current;}await delay(100);}}finally{await f.worker.stop();}
  });preparing.finally(()=>{finished=true;}).catch(()=>{});
  const saving=(async()=>{while(!finished){

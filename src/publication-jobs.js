@@ -1,3 +1,4 @@
+import {validatePublicationPages} from './publication-input-pages.js';
 import {publicationWorkspace,validWebsitePin,retainedWebsitePin} from './publication-pin.js';
 import {withPublicationCapture} from './publication-capture.js';
 import {retainPublicationSources} from './publication-source-input.js';
@@ -28,7 +29,7 @@ export class PublicationJobs{
    let capturedPin;
    const input=await publicationSource(workspace,{etag,websitePin,websiteDraft,book,workspaceId,draft:command},{signal,consume:async(metadata,records,options)=>{capturedPin=options.websitePin;const sources=this.sources??metadata.website.researchSources??[];if(!validPublicationSources(sources))throw new AppError('INVALID');const input=await retainPublicationInput(workspace,id,metadata,records,{...options,signal,sourceReader:this.sourceReader,edition,deferFinalization:!!sources.length});return sources.length?retainPublicationSources(workspace,id,input,sources,await this.sourceReader?.({signal}),{signal,sourceReader:this.sourceReader}):input;}});
    const destination=await new Publisher(workspace.root,{workspace},workspace.vault).read();
-   const source={version:3,id,reviewId:digest(id),workspaceId:input.metadata.id,websiteId:capturedPin.websiteId,websitePin:capturedPin,createdAt:new Date().toISOString(),etag:capturedPin.researchSnapshotId,...input,blockedValues,
+   const source={version:input.pageInputs?4:3,id,reviewId:digest(id),workspaceId:input.metadata.id,websiteId:capturedPin.websiteId,websitePin:capturedPin,createdAt:new Date().toISOString(),etag:capturedPin.researchSnapshotId,...input,blockedValues,
     configEtag:destination.etag,destination:destination.configured?destination.config:null};
    signal?.throwIfAborted();
    await workspace.writeMetadata(inputFile(id),serialize(source));
@@ -57,7 +58,7 @@ export class PublicationJobs{
    return this.read(source.reviewId);
   }finally{await this.clean(source.id,{only:job.lease.token});if(!committed)await this.workspace.withLock(()=>removePublicationInput(this.workspace,source.id));}
  }
- async source(id){const raw=await this.workspace.readMetadata(inputFile(id),16*1024*1024);if(raw===null)throw new AppError('NOT_FOUND');const s=JSON.parse(raw);if(![1,2,3].includes(s.version)||s.id!==id||s.reviewId!==digest(id)||!researchId(s.workspaceId)||(s.websiteId??null)!==(this.workspace.websiteId??null)||(s.version===1?s.book?.id:s.metadata?.id)!==s.workspaceId||s.version>=2&&(!Array.isArray(s.records)||s.records.some(r=>!researchId(r.id)||!hash(r.sha256)||!hash(r.revision)))||s.version===3&&(!validWebsitePin(s.websitePin)||s.websitePin.websiteId!==s.websiteId||s.websitePin.researchSnapshotId!==s.etag))throw new AppError('JOB_DAMAGED');return s;}
+ async source(id){const raw=await this.workspace.readMetadata(inputFile(id),16*1024*1024);if(raw===null)throw new AppError('NOT_FOUND');const s=JSON.parse(raw);if(![1,2,3,4].includes(s.version)||s.id!==id||s.reviewId!==digest(id)||!researchId(s.workspaceId)||(s.websiteId??null)!==(this.workspace.websiteId??null)||(s.version===1?s.book?.id:s.metadata?.id)!==s.workspaceId||s.version>=2&&(!Array.isArray(s.records)||s.records.some(r=>!researchId(r.id)||!hash(r.sha256)||!hash(r.revision)))||s.version>=3&&(!validWebsitePin(s.websitePin)||s.websitePin.websiteId!==s.websiteId||s.websitePin.researchSnapshotId!==s.etag))throw new AppError('JOB_DAMAGED');validatePublicationPages(s);return s;}
  async authorize(job){await this.workspace.requireStorageKey();const s=await this.source(job.id);if(job.scope!==s.workspaceId||job.input.revision!==digest(serialize(s)))throw new AppError('JOB_CHANGED');}
  async directory(id,attempt){if(!researchId(id)||attempt!==undefined&&!researchId(attempt))throw new AppError('INVALID');return privateDirectory(this.workspace.root,'.observanda/releases/'+id+(attempt?'/'+attempt:''));}
  async prepare(job,{signal,progress}){

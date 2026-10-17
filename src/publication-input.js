@@ -1,3 +1,5 @@
+import {retainPublicationPages,readPublicationPage} from './publication-input-pages.js';
+import {usedAssetIds} from './web/website-layouts.js';
 import {publicationResearchWorkspace} from './publication-pin.js';
 import {removePublicationMedia} from './publication-input-media.js';
 import {recordReferenceNamespaces} from './research-reference-namespace.js';
@@ -8,7 +10,7 @@ import {recordRevision} from './research.js';
 import {researchId} from './web/research-reference.js';
 import {publicationExcerpt} from './web/publication-card.js';
 import {publicationLinkResolver,publicationRecordText} from './publication-prose.js';
-import {websiteSummary} from './web/website-model.js';
+import {websiteSummary,publicSections} from './web/website-model.js';
 import {ResearchMaterials} from './research-materials.js';
 import {publicationDependencyState} from './publication-analysis-inputs.js';
 import {proseReferences} from './web/prose-model.js';
@@ -22,7 +24,7 @@ const recordFile=(job,id)=>{if(!researchId(job)||!researchId(id))throw new AppEr
 export {publicationDescriptor} from './publication-record-descriptor.js';
 // Each edition pins its selected originals independently. The job manifest and
 // page renderer retain descriptors, never a second in-memory corpus of prose.
-export async function retainPublicationInput(workspace,id,metadata,originals,{sourceEtag,recordHead,signal,sourceReader,edition=emptyEditionSelection(),deferFinalization=false}={}){
+export async function retainPublicationInput(workspace,id,metadata,originals,{sourceEtag,recordHead,signal,sourceReader,edition=emptyEditionSelection(),deferFinalization=false,websitePages}={}){
  validateEditionSelection(edition);const choices=new Map(edition.records.map(r=>[r.id,r])),found=new Set();
  const projects=new Set(metadata.projects.filter(p=>p.share).map(p=>p.id)),notebooks=new Set(metadata.notebooks.filter(n=>projects.has(n.projectId)).map(n=>n.id));
  const records=[],sourceRevisions={},sourceMaterials=[],warnings=[],linkedCards=new Set(),research=publicationResearchWorkspace(workspace),materials=new ResearchMaterials(research);
@@ -51,13 +53,19 @@ export async function retainPublicationInput(workspace,id,metadata,originals,{so
  }
 
  const analysis=await publicationDependencyState(materials,sourceMaterials,{workspaceId:metadata.id,sourceReader,recordHead,signal});
- const input={metadata,records,sourceRevisions,sourceMaterials,availability:edition.availability??[],linkedCards:[...linkedCards],
+ const pageInputs=websitePages?await retainPublicationPages(workspace,id,metadata,websitePages,{signal,excludeIds:records.map(record=>record.id)}):undefined;
+ const input={metadata,records,sourceRevisions,sourceMaterials,...(pageInputs?{pageInputs}:{}),availability:edition.availability??[],linkedCards:[...linkedCards],
   researchReview:{retainedFigures:sourceMaterials.filter(source=>source.figureId).length,changedInputs:warnings.filter(warning=>warning.reason==='inputs').length,editedFigures:warnings.filter(warning=>warning.reason==='edited').length,analysis}};
  return deferFinalization?input:finalizePublicationInput(workspace,id,input,{signal});
 }
 export async function finalizePublicationInput(workspace,id,input,{signal}={}){
  const {metadata,records,linkedCards=[],...rest}=input;
  const selected=websiteSummary({...metadata,entries:records.map(r=>({...r,attachments:r.media}))});
+ if(input.pageInputs){
+  const used=new Set(),source={...input,id,version:4};
+  for(const row of input.pageInputs){signal?.throwIfAborted();const page=await readPublicationPage(workspace,source,row.id,{signal});for(const asset of usedAssetIds(publicSections(page.sections,selected)))used.add(asset);}
+  selected.media=[...new Map([...selected.media,...selected.assets.filter(asset=>used.has(asset.id))].map(asset=>[asset.id,asset])).values()];
+ }
  if(!selected.canPublish)throw new AppError('PUBLICATION_EMPTY');
  // Resolve reference labels only after selected membership is known. Reopen
  // one pinned original at a time; never retain corpus prose in descriptors.

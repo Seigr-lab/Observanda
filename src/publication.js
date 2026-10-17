@@ -204,7 +204,7 @@ export function renderPublication(context, { blockedValues = [], mediaFiles = ne
     if(section.kind==='projects')content='<div class="publication-cards">'+selected.map(projectCard).join('')+'</div>';
     if(section.kind==='records')content=cards(selected,prefix)+publicationCollectionNavigation(context,publicationCollectionKey(section,collectionScope),(region?region+'-':'')+'section-'+section.id,esc);
     if(section.kind==='records'&&section.feed)content=feeds.render({section,target,pageKey:feedPage,key:publicationCollectionKey(section,collectionScope),items:selected,card:item=>cardItems([item],prefix),continuation:publicationCollection(context,publicationCollectionKey(section,collectionScope))});
-    const pageCard=p=>`<article class="publication-card"><h2><a href="${prefix}pages/${p.id}.html">${esc(p.title)}</a></h2>${p.body?`<p class="prose">${esc(excerpt(p.body))}</p>`:''}</article>`;
+    const pageCard=p=>`<article class="publication-card"><h2><a href="${prefix}pages/${p.id}.html">${esc(p.title)}</a></h2>${(p.hasBody??Boolean(p.body))?`<p class="prose">${esc(p.excerpt??excerpt(p.body))}</p>`:''}</article>`;
     if(section.kind==='pages')content='<div class="publication-cards">'+selected.map(pageCard).join('')+'</div>';
     if(['projects','pages'].includes(section.kind)&&section.feed)content=feeds.render({section,target,pageKey:feedPage,key:publicationCollectionKey(section,collectionScope),items:selected,card:section.kind==='projects'?projectCard:pageCard});
     if(section.kind==='media'){const e=entries.find(e=>e.id===section.entryId);content=mediaMarkup(e.attachments.find(a=>a.id===section.attachmentId),e,prefix,target+'#'+section.id);}

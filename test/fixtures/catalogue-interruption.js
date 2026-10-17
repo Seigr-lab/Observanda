@@ -35,7 +35,7 @@ process.once('message',async({root,vault,point,upload,record,websiteId})=>{
   if(point==='publication-capture'){
    let count=0;const read=ResearchCatalogue.prototype.record,storage=websiteWorkspace(workspace,websiteId);
    ResearchCatalogue.prototype.record=async function(...args){const value=await read.apply(this,args);if(++count===40)await pause();return value;};
-   await new PublicationJobs(storage).start({etag:(await storage.outline()).etag},websiteJobQueue(workspaceJobs(workspace).queue,websiteId));
+   const {etag,websitePin}=await storage.outline();await new PublicationJobs(storage).start({etag,websitePin},websiteJobQueue(workspaceJobs(workspace).queue,websiteId));
   }else if(point==='upload-stream'){
    async function* bytes(){yield Buffer.alloc(4096,0x5a);await pause();}
    await new ResearchMaterials(workspace).appendImport(upload.id,upload.index,bytes());

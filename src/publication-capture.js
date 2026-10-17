@@ -64,7 +64,7 @@ async function capture(workspace,operation,{signal,write=fn=>transaction(workspa
  return workspace.catalogue(async store=>{
   await projectDomainHandoff(store.db,{shared:true});
   await recover(workspace,store.db,write);signal?.throwIfAborted();
-  const id=randomUUID(),prefix=input(id)+'/',pending=new Map();let bytes=0,finished=false;
+  const id=randomUUID(),prefix=input(id)+'/',pending=new Map(),written=new Set();let bytes=0,finished=false;
   if(!await lock(store.db,id))throw new AppError('LOCKED');
   await write(()=>workspace.writeMetadata(journal(id),JSON.stringify({version:1,id})));
   const retained=file=>file===input(id)+'.json'||typeof file==='string'&&file.startsWith(prefix)&&researchId(file.slice(prefix.length,-5))&&file.endsWith('.json');
@@ -77,6 +77,9 @@ async function capture(workspace,operation,{signal,write=fn=>transaction(workspa
   const captured=new Proxy(workspace,{get(target,method){
    if(method==='writeMetadata')return async(file,text)=>{
     if(!retained(file))throw new AppError('INVALID');signal?.throwIfAborted();
+    // Record and custom-page inputs share the capture's flat namespace. Even
+    // a later federated identity must never replace an already pinned input.
+    if(written.has(file))throw new AppError('PUBLICATION_IDENTITY');written.add(file);
     const size=Buffer.byteLength(text);if(pending.size>=32||bytes+size>256*1024)await flush();
     bytes-=Buffer.byteLength(pending.get(file)??'');pending.set(file,text);bytes+=size;
     if(bytes>=256*1024)await flush();

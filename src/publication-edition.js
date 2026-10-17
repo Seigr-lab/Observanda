@@ -1,3 +1,4 @@
+import {readPublicationPage} from './publication-input-pages.js';
 import {publicationPageRecord} from './publication-owner-projection.js';
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
@@ -17,7 +18,12 @@ import {publicationCollectionWindows} from './publication-collection-pages.js';
 // Public selection has already been pinned. Only originals drawn on this page
 // are loaded; cards, destinations and reverse links use selected descriptors.
 async function pageContext(workspace,source,selection,target,{signal,bodyWindow}){
- const metadata=source.metadata,rows=source.records,needed=new Set(),cards=new Set(),[kind,id]=target.split(':');
+ let metadata=source.metadata;const rows=source.records,needed=new Set(),cards=new Set(),[kind,id]=target.split(':');
+ if(kind==='page'&&source.version===4){
+  const page=await readPublicationPage(workspace,source,id,{signal});
+  metadata={...metadata,pages:metadata.pages.map(value=>value.id===id?page:value)};
+  selection={...selection,pages:selection.pages.map(value=>value.id===id?page:value)};
+ }
  const layout=metadata.website.layouts.find(l=>l.target===target),original=layout?.placement!=='replace';
  if(kind==='entry')needed.add(id);
  const sources=[layout?.sections??[],...REGION_SLOTS.map(kind=>resolveRegion(metadata.website,target,kind)?.sections??[]),
@@ -44,7 +50,9 @@ function* collectionWindows(source,selection,target){
 }
 
 export async function buildPublicationEdition(workspace,source,{blockedValues=[],signal,progress,retain}){
+ const pageInputs=new Map((source.pageInputs??[]).map(row=>[row.id,row]));
  const selection=selectedContent({...source.metadata,entries:source.records.map(r=>({...r,attachments:r.media}))});
+ if(source.version===4)selection.pages=selection.pages.map(page=>{const row=pageInputs.get(page.id);return {...page,excerpt:row.excerpt,hasBody:row.hasBody};});
  // The descriptor's card contains only shared image captions and alt text.
  // Selection's attachment IDs also admit explicitly chosen research-media blocks.
  const targets=[...(selection.homeEnabled?['home']:[]),...selection.projects.map(p=>'project:'+p.id),...selection.pages.map(p=>'page:'+p.id),

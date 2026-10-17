@@ -11,7 +11,7 @@ import {sampleNotebook} from '../src/sample.js';
 import {upgradeNotebook} from '../src/model.js';
 import {clearVault} from '../src/encryption.js';
 import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
-import {Workspace,workspaceFile,atomicWrite,serialize} from '../src/storage.js';
+import {Workspace,workspaceFile,atomicWrite,serialize,digest} from '../src/storage.js';
 import {ResearchRecords,recordRevision} from '../src/research.js';
 import {backupCatalogue,CATALOGUE_ARCHIVE} from '../src/postgres.js';
 import {catalogueBinding} from '../src/postgres-activation.js';
@@ -20,6 +20,12 @@ import {WebsiteDocumentStore} from '../src/website-document-store.js';
 import {WebsiteEditor} from '../src/website-editor.js';
 import {websiteDocumentLocks} from '../src/website-document-registry.js';
 import {websiteDocument} from '../src/web/website-sites-model.js';
+import {newElement} from '../src/web/composition-tree.js';
+import {websiteWorkspace} from '../src/website-workspace.js';
+import {PublicationJobs} from '../src/publication-jobs.js';
+import {withPublicationCapture} from '../src/publication-capture.js';
+import {readPublicationPage} from '../src/publication-input-pages.js';
+import {verifyPublicationStorage} from '../src/publication-storage-verification.js';
 const detached=AsyncLocalStorage.snapshot();
 function gate(){let enter,release;return {started:new Promise(resolve=>enter=resolve),hold:new Promise(resolve=>release=resolve),enter:()=>enter(),release:()=>release()};}
 function named(metadata,name){return {id:randomUUID(),name,projectId:null,document:websiteDocument(metadata),projects:metadata.projects.map(({id,share,logoId})=>({id,share,logoId:logoId??null})),selection:{defaultShare:false,includeProjects:[],records:[]}};}
@@ -66,21 +72,39 @@ test('independent website current and retained documents survive archive activat
  const created=await write(workspace,[],async(documents,store)=>documents.create(a,{researchSnapshotId:await store.head()}),{registration:true});
  await write(workspace,[a.id],async(documents,store)=>documents.save(a.id,{...a,name:'Retained and current design',document:{...a.document,website:{...a.document.website,footer:'Exact retained website bytes'}}},{researchSnapshotId:await store.head(),expectedRevision:created.websiteRevision}));
  const expected=await read(workspace,a.id),original=await read(workspace,a.id,created),defaultOwner=await read(workspace,null),descriptor=await workspace.readFile(await workspaceFile(workspace.root),'utf8');
- const editor=new WebsiteEditor(workspace),opened=await editor.execute('open',{workspaceId:initial.book.id,websiteId:a.id}),draft=await editor.execute('change',{workspaceId:initial.book.id,websiteId:a.id,websitePin:opened.websitePin,draftId:null,expectedRevision:null,commandId:randomUUID(),operations:[{type:'settings',path:['document','website','footer'],value:'Unfinished portable website draft'}]});
+ const authored={id:randomUUID(),title:'Portable draft page',body:'Exact retained custom-page body.\nSecond observation: \u00e6.',share:true,sections:[{...newElement('text',randomUUID),body:'Exact authored section.'}]};
+ const editor=new WebsiteEditor(workspace),opened=await editor.execute('open',{workspaceId:initial.book.id,websiteId:a.id}),draft=await editor.execute('change',{workspaceId:initial.book.id,websiteId:a.id,websitePin:opened.websitePin,draftId:null,expectedRevision:null,commandId:randomUUID(),operations:[{type:'settings',path:['document','website','footer'],value:'Unfinished portable website draft'},{type:'append',collection:'pages',values:[authored]}]});
+ const publication=websiteWorkspace(workspace,a.id),releases=new PublicationJobs(publication),command={workspaceId:initial.book.id,etag:draft.websitePin.researchSnapshotId,websitePin:draft.websitePin,websiteDraft:{id:draft.draft.id,revision:draft.draft.revision}};
+ const pinned=await withPublicationCapture(publication,async(captured,id,finish)=>{const source=await releases.pin(command,{workspace:captured,id});return finish(()=>source);});
+ assert.equal(pinned.version,4);assert.deepEqual(pinned.websitePin,draft.websitePin);assert.deepEqual(pinned.metadata.pages,[{...authored,body:'',sections:[]}]);assert.equal(pinned.pageInputs.length,1);
+ const pageInput=pinned.pageInputs[0],pageBytes=serialize(authored),manifestBytes=serialize(pinned),pageFile='.observanda/release-inputs/'+pinned.id+'/'+pageInput.fileId+'.json';
+ assert.deepEqual(pageInput,{id:authored.id,fileId:pageInput.fileId,sha256:digest(pageBytes),bytes:Buffer.byteLength(pageBytes),excerpt:'Exact retained custom-page body. Second observation: \u00e6.',hasBody:true});assert.notEqual(pageInput.fileId,authored.id);
+ const verifyInput=async owner=>{
+  const scoped=websiteWorkspace(owner,a.id),source=await new PublicationJobs(scoped).source(pinned.id);assert.deepEqual(source,pinned);
+  assert.equal(await scoped.readMetadata('.observanda/release-inputs/'+pinned.id+'.json',Buffer.byteLength(manifestBytes)),manifestBytes);
+  assert.equal(await scoped.readMetadata(pageFile,pageInput.bytes),pageBytes);assert.deepEqual(await readPublicationPage(scoped,source,authored.id),authored);return scoped;
+ };
+ await verifyInput(workspace);
  await verifyCatalogueArchive(workspace,JSON.parse(descriptor));
  const copyRoot=path.join(f.directory,'archive-copy');await mkdir(path.join(copyRoot,'.observanda'),{recursive:true});
  for(const file of [path.basename(await workspaceFile(workspace.root)),'.observanda/access.json'])await copyFile(path.join(workspace.root,file),path.join(copyRoot,file));
  const db=await workspace.openCatalogue();try{await backupCatalogue(workspace.root,copyRoot,{connection:db});}finally{await db.close();}
  const header=JSON.parse((await readFile(path.join(copyRoot,CATALOGUE_ARCHIVE),'utf8')).split('\n')[0]);assert.equal(header.version,11);assert.ok([38,39,40,41,42,43].includes(header.catalogueVersion));
  const copied=new Workspace(copyRoot,f.vault);assert.deepEqual(await copied.read(),initial);await verifyCatalogueArchive(copied,JSON.parse(descriptor));assert.notEqual((await catalogueBinding(copied.root)).id,(await catalogueBinding(workspace.root)).id);
- assert.deepEqual(await read(copied,a.id),expected);assert.deepEqual(await read(copied,a.id,created),original);assert.deepEqual(await read(copied,null),defaultOwner);
+ assert.deepEqual(await read(copied,a.id),expected);assert.deepEqual(await read(copied,a.id,created),original);assert.deepEqual(await read(copied,null),defaultOwner);const copiedPublication=await verifyInput(copied);
  assert.deepEqual((await new WebsiteEditor(copied).execute('open',{workspaceId:initial.book.id,websiteId:a.id})).draft,draft.draft);
  const access=await createWorkspaceAccess('','',new TestDeviceStore({file:path.join(f.directory,'fresh-device')})),vault=takeCreatedVault(access);f.vaults.push(vault);
  const target=new Workspace(path.join(f.directory,'rekeyed'),vault);await mkdir(path.join(target.root,'.observanda'),{recursive:true});await atomicWrite(path.join(target.root,'.observanda/access.json'),serialize(access));await target.writeFile(await workspaceFile(target.root,{secure:true}),descriptor);
- await rekeyCatalogue(workspace,target,JSON.parse(descriptor));await verifyCatalogueArchive(target,JSON.parse(descriptor));assert.deepEqual(await target.read(),initial);assert.deepEqual(await read(target,a.id),expected);assert.deepEqual(await read(target,a.id,created),original);assert.deepEqual(await read(target,null),defaultOwner);
+ await rekeyCatalogue(workspace,target,JSON.parse(descriptor));await verifyCatalogueArchive(target,JSON.parse(descriptor));assert.deepEqual(await target.read(),initial);assert.deepEqual(await read(target,a.id),expected);assert.deepEqual(await read(target,a.id,created),original);assert.deepEqual(await read(target,null),defaultOwner);await verifyInput(target);
  const targetEditor=new WebsiteEditor(target),targetDraft=await targetEditor.execute('open',{workspaceId:initial.book.id,websiteId:a.id});assert.deepEqual(targetDraft.draft,draft.draft);
  await targetEditor.execute('save',{workspaceId:initial.book.id,websiteId:a.id,draftId:targetDraft.draft.id,expectedRevision:targetDraft.draft.revision,commandId:randomUUID()});
+ assert.deepEqual((await read(target,a.id)).site.document.pages.find(page=>page.id===authored.id),authored);
  assert.equal((await read(target,a.id)).site.document.website.footer,'Unfinished portable website draft');assert.deepEqual(await read(workspace,a.id),expected);assert.deepEqual((await editor.execute('open',{workspaceId:initial.book.id,websiteId:a.id})).draft,draft.draft);
+ const corrupted=pageBytes.replace('Exact retained custom-page body.','Exact tampered custom-page body.');assert.equal(Buffer.byteLength(corrupted),pageInput.bytes);assert.notEqual(digest(corrupted),pageInput.sha256);
+ await copied.withLock(()=>copiedPublication.writeMetadata(pageFile,corrupted));
+ try{await assert.rejects(verifyPublicationStorage(copied),{code:'JOB_DAMAGED'});await assert.rejects(verifyCatalogueArchive(copied,JSON.parse(descriptor)),{code:'JOB_DAMAGED'});}
+ finally{await copied.withLock(()=>copiedPublication.writeMetadata(pageFile,pageBytes));}
+ await verifyCatalogueArchive(copied,JSON.parse(descriptor));await verifyInput(copied);
  await copied.withLock(()=>copied.catalogue(async store=>{await store.db.run("DELETE FROM state WHERE slot=$1",'website-document:head:'+a.id);}));
  await assert.rejects(verifyCatalogueArchive(copied,JSON.parse(descriptor)),{code:'CATALOGUE_DAMAGED'});await verifyCatalogueArchive(workspace,JSON.parse(descriptor));
 });

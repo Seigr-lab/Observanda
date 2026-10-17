@@ -94,7 +94,7 @@ export function projectPublication(book,selection,{designPageId=null,designTarge
     })}:{})
   }));
   const notebooks = selection.notebooks.map(n => ({ id: n.id, title: n.title, projectId: n.projectId, logos: logosFor(book, 'notebook:' + n.id) }));
-  const pages = selection.pages.map(p => ({ id: p.id, title: p.title, body: p.body, sections:cleanSections(publicSections(sectionsFor('page:'+p.id,p.sections),selection,{includeUnpublished:workspaceContent,editing:designTarget==='page:'+p.id||designPageId===p.id})), logos: logosFor(book, 'page:' + p.id) }));
+  const pages = selection.pages.map(p => ({ id: p.id, title: p.title, body: p.body, ...(p.excerpt===undefined?{}:{excerpt:p.excerpt}), ...(p.hasBody===undefined?{}:{hasBody:p.hasBody}), sections:cleanSections(publicSections(sectionsFor('page:'+p.id,p.sections),selection,{includeUnpublished:workspaceContent,editing:designTarget==='page:'+p.id||designPageId===p.id})), logos: logosFor(book, 'page:' + p.id) }));
   const targets = [...(selection.homeEnabled?[{ target: 'home', title: 'Home', path: 'index.html' }]:[]), ...projects.map(p => ({ target: 'project:' + p.id, title: p.title, path: `projects/${p.id}.html` })), ...notebooks.map(n => ({ target: 'notebook:' + n.id, title: n.title, path: `notebooks/${n.id}.html` })), ...pages.map(p => ({ target: 'page:' + p.id, title: p.title, path: `pages/${p.id}.html` }))];
   const layouts=book.website.layouts.filter(l=>(!paged||l.target===pageTarget)&&linkAvailable(l.target,selection)).map(l=>({...l,sections:cleanSections(publicSections(l.sections,selection,{includeUnpublished:workspaceContent,editing:designTarget===l.target,region:'layout'}))}));
   const pageTargets=paged?[pageTarget]:[...targets.map(t=>t.target),...entries.map(e=>'entry:'+e.id)];
