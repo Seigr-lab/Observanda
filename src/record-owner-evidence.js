@@ -203,13 +203,31 @@ export async function verifyRecordOwnerEvidence(target,receipt,descriptor,{signa
  for await(const ref of materials.sequences.items(descriptor.sequences.all)){signal?.throwIfAborted();const doc=await materials.readStored(ref);if(doc.recordId!==descriptor.recordId||doc.kind!==ref.kind)damaged();if(receipt.phase!=='complete'){const head=await materials.current(ref.id,{includeStaged:true});if(!head||head.ownerTransfer!==receipt.id||head.revision!==ref.revision)damaged();}}
  return {revisions:descriptor.revisions.count,heads:descriptor.sequences.all.count,files:descriptor.files.count};
 }
+// Workflow folders also contain arbitrarily many chunk and item documents.
+// Seek between their fixed-width identities using the authenticated range index;
+// only the root receipt can describe whether that workflow is still pending.
+async function* pendingEvidenceReceiptKeys(store,{signal}={}){
+ for(const [folder,receipt] of [['imports','session'],['intakes','batch'],['drafts','draft']]){
+  const prefix='metadata:.observanda/materials/'+folder+'/';let after=null;
+  while(true){
+   signal?.throwIfAborted();const {items}=await store.objectIdPage(prefix,{after,limit:1,signal}),key=items[0];if(!key)break;
+   const match=/^([a-f0-9-]{36})\//.exec(key.slice(prefix.length));
+   if(!match){after=key;continue;}
+   const root=prefix+match[1],selected=root+'/'+receipt+'.json';
+   if(await store.objectIdentity(selected))yield selected;
+   // All descendants start with '/', which sorts before '0'.
+   after=root+'0';
+  }
+ }
+ for(const prefix of ['metadata:.observanda/materials/associations/','metadata:.observanda/intake/proposals/','metadata:.observanda/jobs/'])yield* store.objectIdEntries(prefix,{signal});
+}
 // Read-only admission runs before the fence. Its authenticated object root is
 // rechecked in the short source transaction, closing start/queue races without
 // keeping a writer while scanning completed receipts.
 export async function recordOwnerEvidenceAdmission(source,recordId,{signal}={}){
  return source.catalogue(async store=>{
   const materials=new ResearchMaterials(source),proof=digest(serialize(await store.objectIndex().head()));
-  for(const prefix of ['metadata:.observanda/materials/','metadata:.observanda/intake/proposals/','metadata:.observanda/jobs/'])for await(const key of store.objectIdEntries(prefix,{signal})){
+  for await(const key of pendingEvidenceReceiptKeys(store,{signal})){
    signal?.throwIfAborted();const name=key.slice(9);
    if(!/^(?:\.observanda\/materials\/(?:imports\/[a-f0-9-]{36}\/session|intakes\/[a-f0-9-]{36}\/batch|drafts\/[a-f0-9-]{36}\/draft|associations\/[a-f0-9-]{36})|\.observanda\/intake\/proposals\/[a-f0-9-]{36}|\.observanda\/jobs\/[a-f0-9-]{36})\.json$/.test(name))continue;
    const text=await source.readMetadata(name,16*1024*1024);let value;try{value=JSON.parse(text);}catch{damaged();}
