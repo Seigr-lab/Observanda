@@ -24,7 +24,10 @@ test('native capture avoids writers for absent nodes and preserves flushed reads
   assert.ok(writers-initialWriters<=2,'New blocks were not batched');
   const first=values[0],file=prefix+'/'+publicationDocumentBlockName('value',first.hash);
   assert.deepEqual(await blocks.read('value',first.hash),first.value);
+  const beforeFlushedReads=writers;
+  assert.equal(await captured.readMetadata(file,65536),serialize(first.value));
   await assert.rejects(captured.readMetadata(file,1),{code:'LIMIT'});
+  assert.equal(writers,beforeFlushedReads,'Flushed immutable-node reads opened writer transactions');
   const summary=serialize({first:first.hash});await captured.writeMetadata(prefix+'.json',summary);
   return finish(()=>({id,values,summary}));
  });
