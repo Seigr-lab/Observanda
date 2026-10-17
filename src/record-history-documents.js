@@ -4,7 +4,7 @@ import {revisionId} from './web/revision-model.js';
 import {withRecordDocument,RecordDocument} from './record-document.js';
 import {recordReadingHeader,validHeaderWindows} from './record-reading-header.js';
 import {digest} from './storage-format.js';
-import {createHash} from 'node:crypto';
+import {changedRecordFields} from './record-document-comparison.js';
 import {copyRecordValue} from './record-document-copy.js';
 import {RecordContainerBuilder} from './record-tree-values.js';
 import {RecordMemberCollections} from './record-member-collections.js';
@@ -45,8 +45,7 @@ export class RecordHistoryDocuments{
      const header=await recordReadingHeader(store,member,document,sections.values,{windows:command.windows,anchor:command.anchor,resultFigure:resultAnchorId(command.anchor)?undefined:command.resultFigure,signal});
      return {...header,sections,record:{...header.header,sections:sections.values}};
     };
-    const fingerprint=async(document,name)=>{const ref=await document.reference([name],{signal});if(!ref)return null;const hash=createHash('sha256');for await(const chunk of document.tree.json(ref,{canonical:true,signal}))hash.update(chunk);return hash.digest('hex');};
-    const changed=[];for(const name of fields)if(await fingerprint(earlier,name)!==await fingerprint(latest,name))changed.push(name);
+    const changed=await changedRecordFields(earlier,latest,fields,{signal});
     const previous=await page(earlier,old),next=await page(latest,row);signal?.throwIfAborted();
     return {paged:true,record:previous.record,current:next.record,previous,next,changed,currentRevision:current};
    }));
