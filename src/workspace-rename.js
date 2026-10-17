@@ -141,7 +141,9 @@ export class WorkspaceRenames{
       const bytes=unseal(await readFile(path.join(root,'.observanda/postgresql/service.observanda')),vault?.key,'Observanda/workspace-postgresql/v1/'+vault?.id);
       try{const service=JSON.parse(bytes.toString());if(service.workspaceId!==vault.id||service.running!==false)throw new AppError('DATABASE_WORKSPACE_RUNNING');}finally{bytes.fill(0);}
      }
-     if(await realpath(path.dirname(root))!==path.dirname(root)||await this.locate(value)!==root)throw new AppError('STORAGE_RENAME_STATE');
+     // Windows realpath may omit the trailing separator of a UNC share root.
+     const parent=path.dirname(root);
+     if(path.resolve(await realpath(parent))!==path.resolve(parent)||await this.locate(value)!==root)throw new AppError('STORAGE_RENAME_STATE');
      const existing=await assertRegular(value.destination,{directory:true,missing:true});if(existing&&await realpath(value.destination)!==root)throw new AppError('EXISTS');
      await checkpoint('stopped',value);
      // Windows requires every handle below the directory to be closed. The
