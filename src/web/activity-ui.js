@@ -17,6 +17,7 @@ function title(kind,view){
  if(/^\/api\/projects\/[a-f0-9-]{36}\/directory\/reparent$/.test(kind))return text('projectPlacement');
  if(activityResource(kind).startsWith('project:')&&(activityCommand(kind).startsWith('/api/workspace/')||activityCommand(kind)==='/api/settings/save'))return text('projectStructure');
  kind=activityCommand(kind);
+ if(kind.startsWith('/api/research/records/transfer/'))return text('location');
  if(kind.startsWith('job:'))return optional('activity',kind)||text('operation');
  if(kind.startsWith('/api/storage/')){
   const key=kind.endsWith('/preview')?'review':kind.includes('/database/')?'convert':kind.split('/')[3];

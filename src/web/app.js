@@ -234,6 +234,7 @@ async function api(route, data, {adopt=true,signal,onProgress,metadataOnly=false
   if(!adopt&&route.startsWith('/api/projects/')){if(requestContext!==state.storage?.contextId)throw {code:'WORKSPACE_CHANGED',message:t('recordDrafts','workspaceChanged')};return result;}
   if(scopedWebsite&&requestWebsite!==websiteContext(state))throw {name:'AbortError',message:t('websiteSites','changed')};
   if(requestContext!==state.storage?.contextId||requestResearch!==researchContext(state))throw {code:'WORKSPACE_CHANGED',message:t('recordDrafts','workspaceChanged')};
+  if(result===null&&route==='/api/research/records/transfer/status')return null;
   if(result.recordUpdate){
     const reader=recordUpdateReader((route,data,options)=>api(route,data,{...options,adopt:false}),result);
     const {recordUpdate,...receipt}=result;void recordUpdate;
@@ -452,7 +453,7 @@ const documents=documentEditors({book:()=>state.book,figures:()=>entry()?[...ent
 const recordWriting=recordWritingUI({state,api,esc,field,destinations:recordLinkDestinations,figures:()=>displayedRecord()?[...displayedRecord().figures,...displayedRecord().attachments.filter(a=>a.kind==='image')]:[],notify,onOpenLink:openEditorLink,onSaved:(_result,_target,options)=>workspaceLive.check(options),onClosed:()=>recordDrafts.refresh()});
 const recordValues=recordValuesUI({state,api,esc,field,notify,onSaved:async(result,target,options)=>{await workspaceLive.check(options);if(target?.field?.startsWith('figure:'))await recordContent.revealFigure(target,result.position);},onClosed:()=>recordDrafts.refresh()});
 const runCreation=recordRunCreationUI({state,api,esc,notify,onCreated:async result=>{await workspaceLive.check();await openRecordReading(result.recordId);}});
-const recordLocation=recordLocationUI({state,api,esc,notify,target:()=>recordContent.locationTarget(),refresh:()=>workspaceLive.check()});
+const recordLocation=recordLocationUI({state,api,esc,notify,target:()=>recordContent.locationTarget(),refresh:()=>workspaceLive.check(),choose:options=>recordDestination.open(options),access:operation=>withProjectAccess(operation),moved:result=>{location.hash=ownedRoute('#/records/'+result.recordId+'/read',{projectId:result.projectId,labBookId:result.labBookId});}});
 const recordRemoval=recordRemovalUI({state,api,esc,notify,target:()=>recordContent.removalTarget(),refresh:()=>workspaceLive.check(),onRemoved:result=>{adoptSnapshot(result);state.book=result.book;state.etag=result.etag;state.selected=null;state.page='entries';state.preview=null;render();}});
 const recordSections=recordSectionsUI({state,documents,esc,field,icon,dirty:dirtyRecord,render});
 const materials=researchMaterialsUI({access:operation=>withProjectAccess(operation),refreshReader:()=>workspaceLive.check(),getRecord:displayedRecord,state,api,esc,field,showDialog,notify,dirty,render,revisions:()=>savedRecordRevisions,create:openCreatedRecord,editRetainedFigure:({recordId,figure})=>recordValues.open({recordId,field:'figure:'+figure.id,retainedFigure:figure})});
