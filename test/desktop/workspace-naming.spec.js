@@ -5,7 +5,7 @@ import {desktopFixture} from './fixture.js';
 import {sampleNotebook} from '../../src/sample.js';
 
 test('packaged upgrade adopts the existing folder name, renames its database and reopens preserved research',async()=>{
- test.skip(!process.env.OBSERVANDA_DESKTOP_PREVIOUS_EXECUTABLE,'Requires the previous installed development build.');
+ test.skip(!process.env.OBSERVANDA_DESKTOP_PREVIOUS_EXECUTABLE||!process.env.OBSERVANDA_DESKTOP_EXECUTABLE,'Requires both previous and candidate packaged builds.');
  test.setTimeout(240000);
  const fixture=await desktopFixture('observanda-desktop-naming-'),source=path.join(fixture.directory,'Legacy workspace folder'),name='Research Workspace 1 – café',destination=path.join(fixture.directory,name),bytes=Buffer.alloc(1024*1024,81);
  let app,page;const errors=[];

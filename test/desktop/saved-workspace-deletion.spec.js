@@ -4,7 +4,7 @@ import path from 'node:path';
 import {desktopFixture} from './fixture.js';
 
 test('packaged upgrade deletes a closed dedicated workspace and reopens the preserved active owner',async()=>{
- test.skip(!process.env.OBSERVANDA_DESKTOP_PREVIOUS_EXECUTABLE,'Requires the previous development build.');test.setTimeout(240000);
+ test.skip(!process.env.OBSERVANDA_DESKTOP_PREVIOUS_EXECUTABLE||!process.env.OBSERVANDA_DESKTOP_EXECUTABLE,'Requires both previous and candidate packaged builds.');test.setTimeout(240000);
  const fixture=await desktopFixture('observanda-desktop-saved-delete-'),remove=path.join(fixture.directory,'remove'),keep=path.join(fixture.directory,'keep'),bytes=Buffer.alloc(2*1024*1024,73);let app,page;
  const launch=async(executable)=>{app=await fixture.start(executable);page=await app.firstWindow();};
  const create=async(title,root)=>{
