@@ -1,3 +1,4 @@
+import {isConfigurationReference,validConfigurationReference} from './web/configuration-reference.js';
 import {publicationPresentationTarget} from './web/publication-presentation-target.js';
 import {validWebsitePage,validWebsiteNavigationItem,validWebsiteAsset,validWebsiteLayout,validWebsiteBranding} from './web/website-item-validation.js';
 import {calendarDate,validRecordDate,recordDateIssue} from './web/record-date.js';
@@ -112,13 +113,13 @@ export function validateNotebook(book) {return validateBook(book);}
 export function validateCatalogueMetadata(book,{reservedIds=[],entryTargets=[],websiteContexts}={}){
  if(book?.formatVersion!==21||!Array.isArray(book.entries)||book.entries.length)throw new AppError('FORMAT');
  admitResearchBytes('metadata',researchBytes(book));
- return validateBook(book,{reservedIds,entryTargets,websiteContexts});
+ return validateBook(book,{reservedIds,entryTargets,websiteContexts,configurationReferences:true});
 }
-function validateBook(book,{reservedIds=[],entryTargets=[],websiteContexts}={}) {
+function validateBook(book,{reservedIds=[],entryTargets=[],websiteContexts,configurationReferences=false}={}) {
   if(Object.hasOwn(book??{},'websites')){
     if(book.formatVersion!==21||!validWebsites(book.websites,book))throw new AppError('INVALID');
-    for(const site of book.websites)validateBook(websiteBook(book,site),websiteContexts?.get(site.id)??{reservedIds,entryTargets});
-    const {websites,...source}=book;return validateBook(source,{reservedIds,entryTargets});
+    for(const site of book.websites)validateBook(websiteBook(book,site),{...(websiteContexts?.get(site.id)??{reservedIds,entryTargets}),configurationReferences});
+    const {websites,...source}=book;return validateBook(source,{reservedIds,entryTargets,configurationReferences});
   }
   const issues = [];
   const check = (valid, field, recordId) => { if (!valid) issues.push({ field, ...(id(recordId) ? { recordId } : {}) }); };
@@ -138,9 +139,9 @@ function validateBook(book,{reservedIds=[],entryTargets=[],websiteContexts}={}) 
   const unique = record => { const valid = id(record.id) && !allIds.has(record.id); allIds.add(record.id); return valid; };
   for (const p of book.projects) check(keys(p, book.formatVersion === 1 ? ['id', 'title', 'description'] : ['id', 'title', 'description', 'share', 'logoId',...(book.formatVersion>=15?['parentId','kind'].filter(k=>Object.hasOwn(p??{},k)):[]),...(book.formatVersion>=16&&Object.hasOwn(p??{},'tools')?['tools']:[]),...(book.formatVersion>=21&&Object.hasOwn(p??{},'labBookTemplate')?['labBookTemplate']:[])]) && (book.formatVersion === 1 || (typeof p.share === 'boolean' && (p.logoId === null || id(p.logoId)))) && unique(p) && text(p.title, 160, true) && text(p.description, 1500), 'project', p?.id);
   check(validHierarchy(book.projects), 'structure hierarchy');
-  for(const p of book.projects){if(Object.hasOwn(p??{},'labBookTemplate'))check(validLabBookTemplate(p.labBookTemplate),'project lab-book template',p.id);if(Object.hasOwn(p??{},'tools'))check(validProjectTools(p.tools),'project tools',p.id);if(Object.hasOwn(p??{},'parentId'))check(p.parentId===null||id(p.parentId),'parent',p.id);if(Object.hasOwn(p??{},'kind'))check(text(p.kind,80,true),'kind',p.id);}
+  for(const p of book.projects){if(Object.hasOwn(p??{},'labBookTemplate'))check(configurationReferences&&isConfigurationReference(p.labBookTemplate?.configuration)?keys(p.labBookTemplate,['name','configuration'])&&text(p.labBookTemplate.name,160,true)&&validConfigurationReference(p.labBookTemplate.configuration,{workspaceId:book.id,projectId:p.id,notebookId:null,slot:'labBookTemplate'}):validLabBookTemplate(p.labBookTemplate),'project lab-book template',p.id);if(Object.hasOwn(p??{},'tools'))check(validProjectTools(p.tools),'project tools',p.id);if(Object.hasOwn(p??{},'parentId'))check(p.parentId===null||id(p.parentId),'parent',p.id);if(Object.hasOwn(p??{},'kind'))check(text(p.kind,80,true),'kind',p.id);}
   for (const n of book.notebooks) check(keys(n, ['id', 'projectId', 'title',...(book.formatVersion>=15&&Object.hasOwn(n??{},'configuration')?['configuration']:[])]) && unique(n) && book.projects.some(p => p?.id === n.projectId) && text(n.title, 160, true), 'notebook', n?.id);
-  for(const n of book.notebooks)if(Object.hasOwn(n??{},'configuration'))check(validConfiguration(n.configuration),'notebook configuration',n.id);
+  for(const n of book.notebooks)if(Object.hasOwn(n??{},'configuration'))check(configurationReferences&&isConfigurationReference(n.configuration)?validConfigurationReference(n.configuration,{workspaceId:book.id,projectId:n.projectId,notebookId:n.id,slot:'configuration'}):validConfiguration(n.configuration),'notebook configuration',n.id);
   checkRecords(book,book.entries,unique,check);
   if (book.formatVersion >= 2) {
     check(validFont(a?.headingFont) && ['background', 'surface', 'text'].every(key => /^#[0-9a-f]{6}$/i.test(a?.[key])), 'appearance');

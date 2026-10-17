@@ -1,3 +1,4 @@
+import {configurationBootstrap,hasSharedConfigurations,matchingSharedStructure} from './configuration-transfer.js';
 import {AppError} from '../errors.js';
 import {uuid} from '../modules/validation.js';
 import {createWorkspaceAccess,takeCreatedVault} from '../access.js';
@@ -27,6 +28,7 @@ export class ResearchExchange{
    const {notebookIds}=await this.access.authorize({organizationId:grant.organizationId,principalId,grantId}),{metadata}=await this.workspace.outline();
    const editionFile='.observanda/collaboration/editions/'+grant.id+'.json',editionRaw=await this.workspace.readMetadata(editionFile,1024),edition=editionRaw?JSON.parse(editionRaw).edition+1:1;valid(Number.isSafeInteger(edition)&&edition>=1,'COLLABORATION_DAMAGED');
    const selection={version:1,kind:'offer',id:parts.id,baseId:null,edition,createdAt:new Date().toISOString(),grant:{id:grant.id,generation:grant.generation,organizationId:grant.organizationId,principalId,role:grant.role},owner:await this.contact(),recipient:contact,metadata:selectedMetadata(metadata,notebookIds)};
+   if(hasSharedConfigurations(selection.metadata))selection.version=2;
    await parts.add({kind:'description',name:'selection',content:JSON.stringify(selection)});await collectResearch(this.workspace,selection.metadata,parts);
    await parts.finish({direction:'outgoing',selectionHash:identityHash(selection)});
    await this.workspace.writeMetadata(editionFile,JSON.stringify({edition}));
@@ -78,7 +80,7 @@ export class ResearchExchange{
   valid(selection.recipient.identity.id===(await this.identity.signer.public()).id);
   const access=await createWorkspaceAccess('', '',this.device),vault=takeCreatedVault(access);
   try{
-   return await initializeLocation(destination,selection.metadata,access,vault,{populate:async workspace=>{
+   return await initializeLocation(destination,configurationBootstrap(selection.metadata),access,vault,{populate:async workspace=>{
     await populateSharedWorkspace(workspace,parts);
     await retainWorkingBase(workspace,parts,selection);
    }});
@@ -92,7 +94,7 @@ export class ResearchExchange{
    const selection={...working.selection,kind:'changes',id:parts.id,baseId:working.selection.id,createdAt:new Date().toISOString()};
    // The owner controls structure and publishing. Changed research uses the
    // original shared structure, making unknown/moved books a review error.
-   valid(identityHash({...selectedMetadata(metadata,selection.metadata.notebooks.map(n=>n.id)),updatedAt:selection.metadata.updatedAt})===identityHash(selection.metadata),'COLLABORATION_STRUCTURE');
+   valid(await matchingSharedStructure(this.workspace,{...selectedMetadata(metadata,selection.metadata.notebooks.map(n=>n.id)),updatedAt:selection.metadata.updatedAt},selection.metadata),'COLLABORATION_STRUCTURE');
    await parts.add({kind:'description',name:'selection',content:JSON.stringify(selection)});await collectResearch(this.workspace,selection.metadata,parts);await parts.finish({direction:'outgoing',selectionHash:identityHash(selection)});return this.summary(parts,selection);
   }).catch(async error=>{await parts.discardUncommitted();throw error;});
  }

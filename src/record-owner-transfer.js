@@ -13,7 +13,7 @@ import {readRecordOwnerTransfer,writeRecordOwnerTransfer,readRecordOwnerFence,se
 import {copyRecordOwnerDocument,withRecordOwnerDocument} from './record-owner-document.js';
 import {withRecordDocument} from './record-document.js';
 import {retainStoredDocument,verifyStoredRecord} from './record-storage.js';
-import {recordOwnerHistoryMetadata,retainRecordOwnerHistory} from './record-owner-history.js';
+import {copyRecordOwnerHistoryMetadata,retainRecordOwnerHistory} from './record-owner-history.js';
 import {retainRecordOrigin,recordOrigins,recordOrigin,registerRecordOwnerReference} from './record-owner-provenance.js';
 import {validateRecordDocument} from './record-document-validation.js';
 import {RecordQueryDocuments} from './record-query-documents.js';
@@ -189,12 +189,13 @@ export class RecordOwnerTransfer{
     const view=await from.historyIndex(recordId).display(item);
     await withRecordDocument(from,recordId,revision,async document=>{
      const descriptor=await copyRecordOwnerDocument(document,this.target,{write,signal});if(descriptor.encoding.revision!==revision)throw new AppError('CATALOGUE_DAMAGED');
+     const metadata=await copyRecordOwnerHistoryMetadata(from,this.target,source.metadata,descriptor.notebookId,value.targetOwner.workspaceId,{write,signal});
      await write(async store=>withRecordOwnerDocument(store,descriptor,async copied=>{
       const {collections:sourceCollections,queryRevision,summaryRevision,...sourceMember}=row;void sourceCollections;void queryRevision;void summaryRevision;
       let member={...sourceMember,revision,notebookId:descriptor.notebookId,sections:[],cardItems:{contributors:[],relations:[],figures:[],attachments:[]},bytes:descriptor.encoding.memberBytes};
       const collections=new RecordMemberCollections(store);for(const field of memberCollectionFields)if(await copied.tree.select(copied.root,[field]))member=await collections.changed(member,field,copied);
       await stageRecordOwnerRevision(store,value,view.revision);await retainStoredDocument(store,copied,descriptor.encoding);
-      const metadata=recordOwnerHistoryMetadata(source.metadata,descriptor.notebookId,value.targetOwner.workspaceId),snapshotId=await retainRecordOwnerHistory(store,{recordId,sourceOwner:value.sourceOwner,sourceSnapshotId:item.snapshotId,metadata,member});
+      const snapshotId=await retainRecordOwnerHistory(store,{recordId,sourceOwner:value.sourceOwner,sourceSnapshotId:item.snapshotId,metadata,member});
       await store.historyIndex(recordId).append({revision,snapshotId,view},{initialize:true,fresh:true});
       await retainRecordOrigin(store,{kind:'record',id:recordId,sourceOwner:value.sourceOwner,transferId:value.id});
       for await(const origin of recordOrigins(from,'record',recordId))await retainRecordOrigin(store,{kind:'record',id:recordId,sourceOwner:origin.sourceOwner,transferId:value.id});

@@ -1,3 +1,4 @@
+import {collectConfigurations,admitConfigurations,configurationPartName} from './configuration-transfer.js';
 import path from 'node:path';
 import {AppError} from '../errors.js';
 import {privateDirectory,assertRegular} from '../storage.js';
@@ -18,6 +19,7 @@ export async function packageRecords(parts){
  return records;
 }
 export async function collectResearch(workspace,metadata,parts){
+ await collectConfigurations(workspace,metadata,part=>parts.add(part));
  await workspace.catalogue(async store=>{
   const snapshot=await store.snapshot(),notebookIds=new Set(metadata.notebooks.map(n=>n.id)),ids=new Set();
   async function* records(){for await(const row of store.members(snapshot,{notebookIds}))yield store.record(row.id,row.revision);}
@@ -32,6 +34,7 @@ export async function collectResearch(workspace,metadata,parts){
 export async function admitParts(workspace,parts,{heads=true}={}){
  for await(const item of parts.items()){
   if(item.kind==='metadata'){
+   if(configurationPartName(item.name))continue;
    if(!heads&&item.name.endsWith('/head.json'))continue;
    const raw=(await contentBuffer(parts.content(item))).toString('utf8'),old=await workspace.readMetadata(item.name,16*1024*1024);
    if(old!==null&&!item.name.endsWith('/head.json')&&item.name!=='.observanda/fonts/library.json'){
@@ -59,11 +62,13 @@ export async function admitParts(workspace,parts,{heads=true}={}){
 export async function populateSharedWorkspace(workspace,parts){
  const selection=await packageSelection(parts),records=await packageRecords(parts),notebooks=new Set(selection.metadata.notebooks.map(n=>n.id));
  for(const record of records.values())if(!notebooks.has(record.notebookId))fail();
+ await admitConfigurations(workspace,parts,selection.metadata);
  await admitParts(workspace,parts);
  await workspace.catalogue(async store=>{
   const head=await store.head(),snapshot=await store.snapshot(head);if(snapshot.count||snapshot.metadata.id!==selection.metadata.id)fail();
   async function* changed(){for(const record of records.values())yield parts.value('record',record.id);}
-  await store.commitChanges(head,snapshot,snapshot.metadata,changed());
+  const metadata={...selection.metadata,revision:snapshot.metadata.revision};await store.validateMetadata(snapshot,metadata);
+  await store.commitChanges(head,snapshot,metadata,changed());
   await new ResearchMaterials(workspace).index.ensureLocked();
   await store.verify({format:'observanda-research-catalogue',version:2,workspaceId:selection.metadata.id});
  });
@@ -77,6 +82,6 @@ export async function populateSharedWorkspace(workspace,parts){
  });
  async function* values(){for(const record of records.values())yield parts.value('record',record.id);}
  await transfer.copy(values(),new ResearchMaterials(workspace).headEntries());
- for await(const item of parts.items())if(['metadata','original'].includes(item.kind)&&!seen.has(item.kind+':'+item.name))fail();
+ for await(const item of parts.items())if(['metadata','original'].includes(item.kind)&&!configurationPartName(item.name)&&!seen.has(item.kind+':'+item.name))fail();
  return selection;
 }

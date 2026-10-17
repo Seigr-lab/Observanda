@@ -1,3 +1,4 @@
+import {configurationRecordCreation} from './configuration-record-creation.js';
 import {publicationReviewChoicesUI} from './publication-review-choices.js';
 import {moduleReferenceNavigation,availableOwnedModule} from './module-reference-navigation.js';
 import {researchReturn,researchReturnNavigation} from './research-return.js';
@@ -131,7 +132,7 @@ const types = RECORD_TYPES.map(type => type.id);
 const titleCase = text => text.charAt(0).toUpperCase() + text.slice(1);
 const state = { book: null, etag: null, websitePin: null, websiteId: null, page: 'workspace', project: null, selected: null, notebook: 'all', dirty: false, search: '', filter: 'all', preview: null };
 let previewSurfaces=[],dialogSurface=null;
-let noticeTimer, savePromise, savedBook=null,savedRecordRevisions={},savedRecordBases={},initialRecordSave=null;
+let noticeTimer, savePromise, savedBook=null,savedRecordRevisions={},savedRecordBases={},initialRecordSave=null,configurationRecord=null;
 const drafts=formDrafts(),recordChanges=recordDraftTracker();
 expandingText();
 let uploading = false, fieldSequence = 0;
@@ -328,7 +329,7 @@ function changed(dirtyState){
   changeVersion++;state.dirty=dirtyState;state.preview=null;updateSaveStatus();
   if(recordChanges.command())recordDrafts.schedule();else if(!state.dirty)void recordDrafts.clear();else recordDrafts.pause();
 }
-function dirty(){if(websiteDocuments.enabled()){websiteDocuments.changed();changed(websiteDocuments.isDirty());return;}changed(recordChanges.inspect(state.book)||websiteSelection.isDirty());}
+function dirty(){if(configurationRecord?.active()){state.dirty=true;changeVersion++;updateSaveStatus();return;}if(websiteDocuments.enabled()){websiteDocuments.changed();changed(websiteDocuments.isDirty());return;}changed(recordChanges.inspect(state.book)||websiteSelection.isDirty());}
 function dirtyRecord(id=state.selected){changed(recordChanges.updateRecord(state.book,id));}
 async function save() {
   checkFontInputs();
@@ -340,6 +341,7 @@ async function save() {
   try{return await savePromise;}finally{savePromise=null;updateSaveStatus();}
 }
 async function saveRecords(){
+  if(configurationRecord?.active())return configurationRecord.save();
   if(websiteDocuments.enabled()){await websiteDocuments.save();state.dirty=websiteDocuments.isDirty();return;}
   figures.validate();
   const creation=recordChanges.command(),native=state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion===21;
@@ -415,7 +417,7 @@ async function saveInitialRecord(){
   adoptSnapshot(outline);state.book=outline.book;state.etag=outline.etag;state.selected=id;state.page='record-reader';state.recordReading=false;state.recordSection=null;recordContent.clear();render();
 }
 function recordCheckpoint(){
-  if(!state.book||!state.dirty||state.access?.locked)return null;
+  if(configurationRecord?.active()||!state.book||!state.dirty||state.access?.locked)return null;
   return recordChanges.checkpoint(savedRecordBases);
 }
 const recordRecovery=recordRecoveryUI({esc});
@@ -520,6 +522,11 @@ const labBookDirectoryUI=labBookDirectory({state,api,esc,changed:()=>render(),di
 const structureUI = workspaceUI({state,api,esc,field,option,icon,dirty,save,render,showDialog,notify,recordsTable:renderRecordTable,logosFor,isUploading:()=>uploading,projectDirectory:projectDirectoryUI,labBookDirectory:labBookDirectoryUI,accessProject:(operation,options)=>withProjectAccess(operation,options),enterProject:(id,bookId)=>projectOwners.enter(id,bookId),rootBook:()=>projectOwners.root(),renameWorkspace:name=>storageControls.rename(name)});
 let recordOpenRequest=0;
 const recordContent=recordContentUI({state,api,esc,field,render,report,refresh:()=>workspaceLive.check(),editWriting:target=>recordWriting.open(target),tools:()=>bookReferences.button()+recordHistory.button({saved:true})+reviews.button()+migrationProvenance.button()+recordStarters.button()+recordLocation.button(),before:()=>recordActivity.view({readonly:true})+workflow.view({readonly:true}),after:()=>materials.view(displayedRecord())+connectedWork.view()+recordRemoval.view(),links:record=>recordDetails.relations(record,{readonly:true,selectedEdits:true}),attemptReference:attempts.reference,resultReference:results.reference});
+configurationRecord=configurationRecordCreation({state,api,esc,field,render,onDirty:()=>{state.dirty=true;changeVersion++;updateSaveStatus();},editorOptions:{notify,destinations:recordLinkDestinations,figures:()=>[]},onSaved:async(result,original)=>{
+ const [outline,content]=await Promise.all([newWorkspaceReader({snapshotId:result.etag}).read({requireOutline:true}),api('/api/workspace/read/record-content',{workspaceId:state.book.id,recordId:result.recordId,snapshotId:result.etag,offset:0,pagedHeader:true},{adopt:false})]);
+ if(outline.etag!==result.etag||content.etag!==result.etag||content.recordId!==original.id||content.header?.createdAt!==original.createdAt||!revisionId(content.storageRevision))throw Error(t('recordDrafts','invalidPage'));
+ adoptSnapshot(outline);state.book=outline.book;state.etag=outline.etag;state.selected=result.recordId;state.page='record-reader';state.recordReading=false;state.recordSection=null;state.dirty=false;recordContent.clear();render();await recordDrafts.refresh();
+},onDiscard:async()=>{const latest=await newWorkspaceReader().read({requireOutline:true});adoptSnapshot(latest);state.book=latest.book;state.etag=latest.etag;state.dirty=false;state.selected=null;state.page='entries';render();}});
 const recordList=recordListUI({state,api,esc,showDialog,render,access:operation=>withProjectAccess(operation),decorate:root=>decorateRecordLinks(root,state.book),chooseType:value=>{state.filter=value;refreshRecordResults();},table:rows=>renderRecordTable(rows,{action:'browse-record'})});
 const ownerOperation=projectOperationView({state,esc,projectDirectory:projectDirectoryUI,restore:restoreRoute,render});
 const activity=activityUI({onChange:snapshot=>{
@@ -624,9 +631,10 @@ async function discardPending(scope='all',forms=drafts.changed(scope)){
   const navigation=scope==='navigation';if(navigation)scope='all';
   if(savePromise)await savePromise;
   if(initialRecordSave?.pending&&recordDrafts.saveUncertain())await saveInitialRecord();
+  if(configurationRecord?.active())await configurationRecord.discard();
   drafts.reset(forms);
   attempts.stop();
-  structureUI.notebooks.discard();
+  await structureUI.notebooks.discard();
   if(scope==='all'){
     if(state.dirty&&savedBook){const latest=websiteDocuments.enabled()?await websiteDocuments.discard():await api('/api/notebook',undefined,{metadataOnly:Boolean(state.workspaceOutline)});state.book=latest.book;state.etag=latest.etag;if(latest.site)websiteSelection.load(latest.site.selection,latest.selectionProjects);else websiteSelection.reset();state.dirty=false;changeVersion++;state.preview=null;designUI.resetUndo();await recordDrafts.clear();initialRecordSave=null;}
     if(state.publishing?.dirty)await publishUI.discard();
@@ -699,7 +707,7 @@ function renderAccess(content){help.stop();appShell.showStandalone(content);acce
 function renderOnboarding() { renderAccess(setupControls.view()); }
 
 const supportsRecordSelection=()=>state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion===21;
-const outlineViewSupported=(page=state.page,moduleId=state.moduleId)=>['record-reader','user-profile','websites','help','entries','projects','project','preferences','dashboard-settings','templates','workspaces','branding','appearance','laboratory','website','publishing','integrations','review','storage','migration'].includes(page)||page==='workspace'&&dashboard.supportsOutline()||page==='module'&&modules.supportsOutline(moduleId);
+const outlineViewSupported=(page=state.page,moduleId=state.moduleId)=>page==='editor'&&configurationRecord?.active()||['record-reader','user-profile','websites','help','entries','projects','project','preferences','dashboard-settings','templates','workspaces','branding','appearance','laboratory','website','publishing','integrations','review','storage','migration'].includes(page)||page==='workspace'&&dashboard.supportsOutline()||page==='module'&&modules.supportsOutline(moduleId);
 async function openRecordReading(id,anchor=null,reading=true,origin=null){
  const returnOrigin=origin??(!['editor','record-reader'].includes(state.page)?await captureResearchReturn():null);
  const sameRecord=state.page==='record-reader'&&state.selected===id;
@@ -727,6 +735,7 @@ function releaseCompleteWorkspace(){
  const result={outline:true,book:{...savedBook,entries:[]},etag:state.etag,recordRevisions:{},notebookCounts,total:state.recordScope?.total??savedBook.entries.length};adoptSnapshot(result);state.book=result.book;
 }
 function render() {
+  configurationRecord?.checkContext();
   runCreation.checkContext();
   recordLocation.checkContext();
   recordRemoval.checkContext();
@@ -760,7 +769,7 @@ function render() {
   const reviewFrame=document.querySelector('iframe[title="Publication preview"]');
   reviewFrame?.addEventListener('load',()=>publicationReviewChoices.follow(reviewFrame,publicationPreviewUrl(state,state.preview.id)).catch(error=>notify(error.message)));
   syncRoute();storageControls.workspaces.bind();activity.bind();recordContent.bind();help.bind();workflow.focusSection();recordSections.bind();workflow.bind();recordList.bind();recordActivity.bind();labUI.bind();decorateRecordLinks(document,state.book);
-  userProfile.bind();
+  userProfile.bind();configurationRecord?.bind();
   if (state.page === 'appearance') void designPreview.update();
 }
 
@@ -818,6 +827,7 @@ function renderRecordTable(entries,{action='edit-entry'}={}) {
 }
 
 function renderEditor() {
+  if(configurationRecord?.active())return configurationRecord.view();
   const e=entry();
   if(!e){state.page='entries';return renderEntries();}
   if(state.recordReading)return `<div class="record-toolbar"><button class="button" data-action="back-to-records">Back to records</button><button class="button" data-action="record-edit">Edit record</button>${bookReferences.button()}${recordHistory.button()}${reviews.button()}${migrationProvenance.button()}${recordStarters.button()}</div>
@@ -858,28 +868,29 @@ function renderReview() {
   return state.preview?publicationReviewView(state.preview,{esc,field,option,icon}):publishUI.view();
 }
 
-function addEntry(type, notebookId,section=null,subject=null) {
+async function addEntry(type, notebookId,section=null,subject=null) {
   const local = new Date(), now = local.toISOString();
   const occurredOn = [local.getFullYear(), String(local.getMonth() + 1).padStart(2, '0'), String(local.getDate()).padStart(2, '0')].join('-');
   const template = RECORD_TYPES.find(item => item.id === type);
   if (!template || !state.book.notebooks.some(n => n.id === notebookId)) return;
   const e = { id: crypto.randomUUID(), notebookId, type, title: t('recordAuthoring','untitled',{type:(section?.label??template.label).toLowerCase()}), body: '', contributors: [], relations: [], tags: [], occurredOn, createdAt: now, updatedAt: now, share: false, figures: [], status: 'draft', sections: template.sections.map(title => ({ id: crypto.randomUUID(), title, body: '' })), attachments: [] };
-  if(section)e.template=templateFrom(section);
+  if(section&&!section.configurationPin)e.template=templateFrom(section);
   if(subject){documentRecord(state.book.id,e,subject);e.title=t('recordAuthoring','subjectTitle',{type:section?.label??template.label,subject:subject.title,date:occurredOn}).slice(0,180);}
+  if(section?.configurationPin){openCreatedRecord(e,{selectedDraft:true});await configurationRecord.open(e,section);return;}
   openCreatedRecord(e);
 }
-function openCreatedRecord(e){
+function openCreatedRecord(e,{selectedDraft=false}={}){
   const notebookId=e.notebookId;
   if(supportsRecordSelection()){
     const scoped=recordCreationBase({book:savedBook,etag:state.etag,recordRevisions:savedRecordRevisions,recordScope:state.recordScope,outline:Boolean(state.workspaceOutline),...state.workspaceOutline},e.id);
     adoptSnapshot(scoped);state.book=scoped.book;
   }
-  state.recordReturn = {bookReading:!!state.bookReading,page:['editor','record-reader'].includes(state.page)?'entries':state.page,project:state.project,notebook:state.notebook,search:state.search,filter:state.filter,recordBrowse:recordBrowse(state.recordBrowse),filterWorkspaceId:state.book.id}; state.book.entries.push(e); state.notebook=notebookId; state.project=state.book.notebooks.find(n=>n.id===notebookId).projectId; state.selected = e.id; state.page = 'editor'; state.recordReading=false;state.recordSection=null; dirty(); render();
+  state.recordReturn = {bookReading:!!state.bookReading,page:['editor','record-reader'].includes(state.page)?'entries':state.page,project:state.project,notebook:state.notebook,search:state.search,filter:state.filter,recordBrowse:recordBrowse(state.recordBrowse),filterWorkspaceId:state.book.id}; state.book.entries.push(e); state.notebook=notebookId; state.project=state.book.notebooks.find(n=>n.id===notebookId).projectId; state.selected = e.id; state.page = 'editor'; state.recordReading=false;state.recordSection=null;if(selectedDraft){state.dirty=true;changeVersion++;return;}dirty();render();
   $('[data-entry=title]').focus(); $('[data-entry=title]').select();
 }
 
-const structureActions=new Set(['new-project','edit-project','edit-project-template','project-template-command','new-notebook','edit-notebook','rename-notebook','configure-lab-notebook','specialize-notebook','notebook-config-command','lab-book-delete','lab-book-delete-cancel','workspace-reorganize','location-counts-retry']);
-const recordCreationActions=new Set(['new-entry','choose-notebook','choose-template','choose-type']);
+const structureActions=new Set(['configuration-profile-retry','configuration-edit','new-project','edit-project','edit-project-template','project-template-command','new-notebook','edit-notebook','rename-notebook','configure-lab-notebook','specialize-notebook','notebook-config-command','lab-book-delete','lab-book-delete-cancel','workspace-reorganize','location-counts-retry']);
+const recordCreationActions=new Set(['new-entry','choose-notebook','choose-template','choose-type','configuration-record-retry']);
 const scopedRecordAction=name=>name?.startsWith('starter-')||name?.startsWith('record-content-')||name?.startsWith('result-')||name?.startsWith('attempt-')||name?.startsWith('workflow-')||name?.startsWith('material-')||name?.startsWith('media-import-')||recordCreationActions.has(name)||name==='delete-entry'||name==='save'||name==='discard-section'||name==='back-to-records'||name==='record-read'||name==='record-edit'||name==='record-section-jump'||name==='record-copy-reference'||name==='record-workflow-link'||name?.startsWith('record-link-')||name?.startsWith('research-target-')||name==='record-backlink-open'||name?.startsWith('record-history-')||name?.startsWith('record-activity-')||name?.startsWith('record-contributor-')||name?.startsWith('section-')||name?.startsWith('figure-')||name==='remove-media';
 async function rawAction(button) {
   if(invalidatesResearchReturn(button))invalidateResearchReturn();
@@ -911,6 +922,7 @@ async function rawAction(button) {
   if(name==='project-open-folder'||name?.startsWith('project-opening-'))return structureUI.projectOpening.action(button);
   if(name?.startsWith('project-creation-'))return structureUI.projectCreation.action(button);
   if(await recordDestination.action(button))return;
+  if(await recordCreation.action(button)||await configurationRecord?.action(button))return;
   if(await structureUI.projectStorage.choiceAction(button))return;
   if(await bookStorage.choiceAction(button))return;
   if(name?.startsWith('lab-book-storage-'))return bookStorage.action(button);
@@ -976,7 +988,7 @@ async function rawAction(button) {
   if(name==='module-open')document.querySelector('#dialog').close();
   if(await recordStarters.action(button)||await bookReferences.action(button)||await results.action(button)||await attempts.action(button)||await migrationProvenance.action(button)||await localExport.action(button)||await migration.action(button)||await reviews.action(button)||await publicationJobs.action(button)||await mediaImports.action(button)||await recordList.action(button)||await recordViews.action(button)||await recordActivity.action(button)||await workflow.action(button)||await recordHistory.action(button)||await materials.action(button)||await figures.action(button)||await modules.action(button)||await recordDetails.action(button)||await dashboard.action(button)||await website.action(button))return;
   if (await setupControls.action(button) || await textControls.action(button) || await storageControls.action(button) || await structureUI.action(button) || await designUI.action(button) || await labUI.action(button) || await publishUI.action(button) || await extendedAction(button)) return;
-  if (name === 'close-dialog') { recordDestination.reset();structureUI.notebooks.close();state.pendingResearchLink=null; $('#dialog').close(); return; }
+  if (name === 'close-dialog') { recordDestination.reset();await structureUI.notebooks.close();state.pendingResearchLink=null; $('#dialog').close(); return; }
   if (name === 'discard-section') { await discardPending(); return; }
   if (name === 'save') { button.disabled = true; try { const complete=await savePending('all',undefined,{requireClean:state.page!=='editor'}); if(state.page==='website')website.saved(); notify(complete?'Changes saved.':t('recordSaveProgress','newerEdits')); } finally { updateSaveStatus(); } return; }
   if(name==='clear-record-filters'){state.search='';state.filter='all';state.recordBrowse=null;rememberFilters();render();$('#search')?.focus();return;}
@@ -1072,7 +1084,7 @@ document.addEventListener('click', event => {
   if (button) { event.preventDefault(); const previous = `${state.page}/${state.project}/${state.notebook}`; action(button).then(() => { if (`${state.page}/${state.project}/${state.notebook}` !== previous) window.scrollTo(0,0); }).catch(report); }
 });
 document.addEventListener('input', event => {
-  if(recordDestination.input(event.target))return;
+  if(recordDestination.input(event.target)||recordCreation.input(event.target))return;
   if(bookStorage.input(event.target))return;
   if(editionSelection.input(event.target)||localExport.input(event.target)||languageControls.input(event.target)||help.input(event.target))return;
   if(event.target.id==='preferences-section'){const next=event.target.value;event.target.value=state.page;action({dataset:{action:next}}).catch(report);return;}
@@ -1152,7 +1164,7 @@ document.addEventListener('keydown', event => { if ((event.ctrlKey || event.meta
 
 
 
-const recordCreation=recordCreationUI({state,notebooks:structureUI.notebooks,esc,showDialog,locationName:(book,id)=>locationName(projectDirectoryUI.navigation(book),id)});
+const recordCreation=recordCreationUI({state,api,create:addEntry,notebooks:structureUI.notebooks,esc,showDialog,locationName:(book,id)=>locationName(projectDirectoryUI.navigation(book),id)});
 const recordDestination=recordDestinationUI({state,api,esc,field,showDialog,access:operation=>withProjectAccess(operation),rootBook:()=>projectOwners.root(),selected:async(projectId,bookId,legacy)=>{await projectOwners.enter(legacy?null:projectId,legacy?null:bookId);state.project=projectId;state.notebook=bookId;state.page='entries';state.search='';state.filter='all';state.recordBrowse=null;render();recordCreation.choose(bookId);}});
 const chooseEntry=preferredNotebook=>{const id=preferredNotebook??(state.notebook!=='all'?state.notebook:null);if(id&&state.book.notebooks.some(book=>book.id===id))return recordCreation.choose(id);recordDestination.open();};
 

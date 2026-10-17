@@ -30,6 +30,16 @@ for(const kind of ['copy','record','failed-record'])test(`${kind} activity remai
   },{kind,command});
   await expect(page.locator('.app-activity [data-toggle]')).toContainText('1 running');
   if(kind==='copy'){
+   // Configuration browsing remains a read while the destination verifies.
+   const configuration=await page.evaluate(async owner=>{
+    const context=(await(await fetch('/api/storage')).json()).contextId;
+    const request=async(route,data)=>{const response=await fetch(route,{method:'POST',headers:{'Content-Type':'application/json','X-Observanda-Workspace':context,'X-Observanda-Wait':'1'},body:JSON.stringify(data),signal:AbortSignal.timeout(10000)});return {status:response.status,value:await response.json()};};
+    const opened=await request('/api/research/configurations/open',{...owner,saved:true});
+    const window=opened.status===200?await request('/api/research/configurations/window',{...owner,configurationPin:opened.value.configurationPin,collection:'sections',offset:0,limit:20}):null;
+    const invalidReview=await request('/api/sharing/configuration',{workspaceId:owner.workspaceId,reviewId:'invalid',notebookId:owner.notebookId,version:'incoming',operation:'open'});
+    return {opened,window,invalidReview};
+   },{workspaceId:book.id,projectId:book.notebooks[0].projectId,notebookId:book.notebooks[0].id,slot:'configuration'});
+   expect(configuration.opened.status).toBe(200);expect(configuration.window.status).toBe(200);expect(configuration.window.value.rows.length).toBeLessThanOrEqual(20);expect(configuration.invalidReview.status).toBe(422);expect(configuration.invalidReview.value.code).toBe('INVALID');
    await preferences(page,'Integrations');
    await expect(page.locator('#github-connection')).toBeVisible();
    await expect(page.locator('#destination-status')).toBeVisible();

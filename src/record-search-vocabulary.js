@@ -1,3 +1,4 @@
+import {recordTemplateSearchText} from './record-template-document.js';
 // Search contributions belong to individual source fields. A record-wide term
 // count keeps a word searchable when it is removed from only one of its fields.
 // Ordered seams retain phrases crossing fields, including empty fields and
@@ -124,7 +125,7 @@ export async function retainSearchVocabulary(document,{previous,signal,version=3
    const item={};for(const name of fields)item[name]=await field([...itemPath,name]);const values=project(item);for(let i=0;i<values.length;i++)await set(key+':'+i,values[i]);
   }
  }
- if(!await same(['template'])){const template=await field(['template']);await set('60',[template?.label??'',...Object.values(template?.values??{})].join(' '));}
+ if(!await same(['template']))await set('60',await recordTemplateSearchText(document,{signal}));
  if(!await same(['attempt'])){
   if(version>=3)await retainAttemptSearchParts(document,old?previous.document:null,set,{signal});
   else{const text=(await document.field(['attempt','version'],{signal})).found?(async function*(){let first=true;for await(const value of attemptDocumentSearchParts(document,{signal})){if(!first)yield ' ';first=false;yield value;}})():null;await set('70',text);}

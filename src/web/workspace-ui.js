@@ -27,7 +27,7 @@ export function workspaceUI({state,api,esc,field,option,icon,dirty,save,render,s
   let recentSession=null,recentContext=null;
   const recentActive=()=>state.page==='project'&&state.workspaceOutline&&!state.access?.locked&&!state.storageUnavailable&&!state.newWorkspace;
   const recentContextId=()=>JSON.stringify([state.storage?.contextId,state.book?.id,projectDirectory.entries().find(entry=>entry.projectId===state.projectOwner?.projectId)?.root??null]);
-  function bind(){ownedRecent.bind();projectStorage.bind();toolCounts.bind();if(recentSession&&(!recentActive()||recentContext!==recentContextId())){recentSession.close();recentSession=null;recentContext=null;}}
+  function bind(){labNotebooks.bind();ownedRecent.bind();projectStorage.bind();toolCounts.bind();if(recentSession&&(!recentActive()||recentContext!==recentContextId())){recentSession.close();recentSession=null;recentContext=null;}}
   function recentRecords(id){
     if(state.projectOwner&&!state.projectOwner.labBookId)return ownedRecent.view();
     if(!state.workspaceOutline)return recordsTable(records(id).sort((a,b)=>(b.updatedAt??b.occurredOn).localeCompare(a.updatedAt??a.occurredOn)).slice(0,10));

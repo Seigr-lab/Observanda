@@ -1,3 +1,4 @@
+import {projectSummaryForBook,reparentConfigurationMetadata} from './configuration-metadata.js';
 import {assertInventoryObligationsSettled} from './inventory-obligation-lifecycle.js';
 // Import one authenticated book into its containing project's literal folder.
 // An already nested owner is adopted in place; an archive is restored only at
@@ -117,7 +118,7 @@ export class LabBookImports{
       const head=await store.head(),snapshot=await store.snapshot(head);if(snapshot.metadata.id!==value.namespaceId||snapshot.metadata.notebooks[0].id!==value.labBookId||snapshot.metadata.title!==value.directory||snapshot.metadata.notebooks[0].title!==value.directory)throw new AppError('DATABASE_LOCATION');
       if(snapshot.metadata.notebooks[0].projectId===this.project.projectId)return;
       const parent=(await this.project.outline()).metadata.projects.find(item=>item.id===this.project.projectId);if(!parent)throw new AppError('DATABASE_LOCATION');
-      const current=await store.indexed(snapshot),metadata={...current.metadata,projects:[{...parent,parentId:null}],notebooks:current.metadata.notebooks.map(book=>({...book,projectId:this.project.projectId}))};await store.commitChanges(head,current,metadata,[],{now:new Date().toISOString()});
+      const current=await store.indexed(snapshot),metadata={...current.metadata,projects:[projectSummaryForBook(parent)],notebooks:current.metadata.notebooks.map(book=>({...book,projectId:this.project.projectId}))};await reparentConfigurationMetadata(store,current.metadata,metadata);await store.validateMetadata(current,metadata);await store.commitChanges(head,current,metadata,[],{now:new Date().toISOString()});
      }));value.phase='parent';await this.save(value);await checkpoint('parent',value);
     }
     await operationStage('import-book-register',{},async()=>{

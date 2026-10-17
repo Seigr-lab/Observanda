@@ -14,5 +14,5 @@ export async function liveCreationFixture(t){
  return {...f,templateId};
 }
 export const creationCommand=(options,overrides={})=>{
- const choice=options.choices[0];return {id:randomUUID(),notebookId:options.notebookId,source:{kind:choice.kind,id:choice.id,revision:choice.revision},title:'Next acquisition',occurredOn:'2026-10-09',values:{counter:'9007199254740993.123456789',accepted:false,conditions:'Dark chamber'},...overrides};
+ const choice=options.choices[0];return {id:randomUUID(),notebookId:options.notebookId,source:{kind:choice.kind,id:choice.id,revision:choice.revision,...(choice.kind==='template'?{configurationPin:choice.configurationPin}:{})},title:'Next acquisition',occurredOn:'2026-10-09',values:{counter:'9007199254740993.123456789',accepted:false,conditions:'Dark chamber'},...overrides};
 };

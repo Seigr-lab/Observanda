@@ -39,7 +39,7 @@ async function verifyMember(store,document,member,{signal}={}){
  }
  return encoding;
 }
-export async function verifyRecordOwnerTransfers(store,{signal}={}){
+export async function verifyRecordOwnerTransfers(store,{signal,verified}={}){
  const current=await store.snapshot(),namespaceId=current.metadata.id,format=await catalogueFormat(store.db);
  const {readRecordOwnerReclamation,verifyRecordOwnerResources}=await import('./record-owner-resources.js');await verifyRecordOwnerResources(store,{signal});
  const capability=()=>{if(!catalogueRequiresRecordOwnerTransfers(format))fail();};
@@ -100,7 +100,7 @@ export async function verifyRecordOwnerTransfers(store,{signal}={}){
  }
  for await(const key of store.objectIdEntries('record-owner-history:')){
   signal?.throwIfAborted();capability();const id=key.slice('record-owner-history:'.length),value=await store.object(key);if(!revisionId(id)||!researchId(value?.recordId))fail();
-  const snapshot=await readRecordOwnerHistory(store,id,value.recordId);if(!snapshot)fail();const member=snapshot.records[0];
+  const snapshot=await readRecordOwnerHistory(store,id,value.recordId,{verifyConfigurations:true,signal,verified});if(!snapshot)fail();const member=snapshot.records[0];
   await verifyStoredRecord(store,member.id,member.revision,{signal});
   if(snapshot.metadata.formatVersion===21)await withRecordDocument(store,member.id,member.revision,document=>verifyMember(store,document,member,{signal}));
   else await retainedRecordDisplay(store,member.id,member.revision,snapshot.metadata,{signal});

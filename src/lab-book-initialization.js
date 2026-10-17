@@ -15,11 +15,12 @@ import {requireStorageName} from './storage-names.js';
 import {withWriterLease} from './writer-lease.js';
 import {AppError} from './errors.js';
 const intentName='.observanda/lab-book-creation.observanda',receiptName='lab-book:initialization';
-export async function initializeLabBookLocation(input,labBookId,book,access,vault){
+export async function initializeLabBookLocation(input,labBookId,book,access,vault,{populate,populateId=null}={}){
+ if(populate!==undefined&&(typeof populate!=='function'||typeof populateId!=='string'||!populateId.length||populateId.length>160)||populate===undefined&&populateId!==null)throw new AppError('INVALID');
  if(access?.formatVersion!==3)throw new AppError('ACCESS_FORMAT');authenticateKeyring(access,vault);validateNotebook(book);
  if(book.projects.length!==1||book.projects[0].parentId!=null||book.notebooks.length!==1||book.notebooks[0].id!==labBookId||book.notebooks[0].projectId!==book.projects[0].id)throw new AppError('INVALID');
  const root=await resolveLocation(input);requireStorageName(root,book.notebooks[0].title);
- const storage=new LabBookStorage(root,labBookId,vault),fingerprint=digest(serialize({labBookId,book})),intentFile=path.join(root,intentName),marker=path.join(root,'.observanda','copy-in-progress');
+ const storage=new LabBookStorage(root,labBookId,vault),fingerprint=digest(serialize({labBookId,book,...(populateId===null?{}:{populateId})})),intentFile=path.join(root,intentName),marker=path.join(root,'.observanda','copy-in-progress');
  if(!await assertRegular(root,{directory:true,missing:true})){
   await probeLocation(root);await mkdir(root,{mode:0o700}).catch(error=>{if(error.code!=='EEXIST')throw error;});await assertRegular(root,{directory:true});
  }
@@ -48,7 +49,7 @@ export async function initializeLabBookLocation(input,labBookId,book,access,vaul
    await db.run('BEGIN');await db.lock();
    await db.scope(()=>catalogueContext.run({root,labBookId,vault,db,afterCommit},async()=>{
     const store=storage.catalogueStore(db),head=await db.get("SELECT 1 FROM state WHERE slot='head'");
-    if(!head){await store.put(book);await withProjectModuleInitialization(store,book.id,async()=>{});await store.putObject(receiptName,{fingerprint});}
+    if(!head){await store.put(book);await withProjectModuleInitialization(store,book.id,async()=>{});if(populate)await populate(storage);await store.putObject(receiptName,{fingerprint});}
     else if((await store.object(receiptName))?.fingerprint!==fingerprint)throw new AppError('CONFLICT');
     await store.verify(descriptor);
    }));

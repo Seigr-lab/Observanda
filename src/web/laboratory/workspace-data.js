@@ -20,11 +20,11 @@ export function registerLabWorkspaceData(registry,{profile=null}={}){
   fieldMetadata:{occurredOn:{label:text('date'),format:(v,{esc})=>esc(recordDateLabel(v))},location:{label:text('project')},notebook:{label:text('book')},recordType:{label:text('recordType')},profiles:{label:text('types')}},
   scoped:true,settings:(c,options={},panel)=>[...dashboardScopeSettings(c,options,panel),...dashboardBookSettings(c,options,panel),{key:'search',label:text('search'),type:'text'}],
   items:(c,result,options={})=>{
-   if(!records&&result?.collection)return result.items;
-   const list=result?.collection?[]:notebooks(c,options),ids=new Set(list.map(n=>n.id));
+   if(!records&&result?.items)return result.items.map(item=>item.data?.profilesMore?{...item,data:{...item.data,profiles:[...item.data.profiles,t('configurationEditor','moreProfileTypes')]}}:item);
+   const list=c.outline?[]:notebooks(c,options),ids=new Set(list.map(n=>n.id));
    if(!records)return list.filter(n=>!options.search||n.title.toLowerCase().includes(options.search.toLowerCase())).map(n=>({key:n.id,title:n.title,data:{...n,location:locationName(c.book,n.projectId),profiles:configurationOf(n).profiles.filter(p=>p.enabled).map(p=>p.id)},action:{name:'filter-notebook',id:n.id}}));
-   return (c.outline?result?.records??[]:c.book.entries).filter(e=>result?.collection||ids.has(e.notebookId)&&labDataRecord(e,profile)&&recordQueryMatcher({search:options.search??''})(e)).map(e=>{
-    const n=list.find(n=>n.id===e.notebookId);
+   return (c.outline?result?.records??[]:c.book.entries).filter(e=>c.outline||ids.has(e.notebookId)&&labDataRecord(e,profile)&&recordQueryMatcher({search:options.search??''})(e)).map(e=>{
+    const n=c.book.notebooks.find(n=>n.id===e.notebookId);
     return {key:dashboardRecordIdentity(e),owner:e.owner,title:e.title,data:{...dashboardRecordData(e),location:e.owner?.projectTitle??locationName(c.book,n.projectId),notebook:e.owner?.notebookTitle??n.title,recordType:e.template?.label??e.type},action:dashboardRecordAction(e)};
    });
   }

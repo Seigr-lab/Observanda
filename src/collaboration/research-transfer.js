@@ -1,3 +1,4 @@
+import {configurationPartName} from './configuration-transfer.js';
 import path from 'node:path';
 import {ResearchMaterials} from '../research-materials.js';
 import {materialHeadVisible} from '../material-visibility.js';
@@ -137,4 +138,4 @@ const id='[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}',h
 const metadata=new RegExp('^(?:\\.observanda/materials/(?:records/'+id+'/'+hash+'\\.json|objects/'+id+'/(?:'+hash+'|head)\\.json|sequences/(?:nodes|chunks|comparison-nodes|comparison-values|comparison-state)/'+hash+'\\.json|tables/'+hash+'\\.json)|\\.observanda/media-(?:imports|assets)/'+id+'\\.json)$');
 const originals=new RegExp('^\\.observanda/(?:materials/originals/'+id+'/(?:original|'+id+'\\.original)|media/'+id+'/(?:asset\\.json|original|'+id+'\\.original|(?:'+id+'\\.)?public\\.(?:png|wav|mp4)))$');
 const fonts=new RegExp('^\\.observanda/fonts/(?:library|custom-'+hash+')\\.json$');
-export function validTransferPart(kind,name){return typeof name==='string'&&(kind==='metadata'?metadata.test(name)||fonts.test(name):kind==='original'?originals.test(name):kind==='record'?new RegExp('^'+id+'$').test(name):kind==='description'&&name==='selection');}
+export function validTransferPart(kind,name){return typeof name==='string'&&(kind==='metadata'?metadata.test(name)||fonts.test(name)||configurationPartName(name):kind==='original'?originals.test(name):kind==='record'?new RegExp('^'+id+'$').test(name):kind==='description'&&name==='selection');}

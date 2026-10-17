@@ -1,3 +1,4 @@
+import {DraftTemplateComparison} from './record-draft-template.js';
 // A backup must prove both checkpoint representations agree. Authentication of
 // individual envelopes alone cannot establish that their selected fields match.
 import {ResearchDrafts} from './research-drafts.js';
@@ -15,11 +16,14 @@ export async function verifyRetainedDraft(store,draft,{signal}={}){
  if(draft.formatVersion===5){signal?.throwIfAborted();await verifyWritingDraft(store,draft);return;}
  if(![3,4].includes(draft.formatVersion))return;
  const inspect=async document=>{
-  const fields=new Set();let collection=null,count=0;
+  const fields=new Set();let collection=null,count=0,template=null;
   const close=async()=>{if(document&&collection!==null&&await document.tree.arrayLength(document.root,[collection])!==count)fail();collection=null;count=0;};
-  const inspected=await inspectTransferredDraft(store.workspace,draft.id,draft.content,{signal,ownership:true,part:async part=>{
+  const inspected=await inspectTransferredDraft(store.workspace,draft.id,draft.content,{signal,ownership:true,part:async(part,{templateScratch}={})=>{
    if(part.kind!=='item')await close();
    if(part.kind==='change')return;
+   if(part.kind==='template'){
+    fields.add('template');if(document){template??=new DraftTemplateComparison(document,{signal,scratch:templateScratch});await template.accept(part);if(part.type==='end'&&!part.path.length)template=null;}return;
+   }
    if(part.kind==='array'){fields.add(part.name);collection=part.name;return;}
    const path=part.kind==='item'?[part.name,String(part.index)]:[part.name];
    if(part.kind==='item'){if(collection!==part.name||part.index!==count++)fail();}else fields.add(part.name);

@@ -28,6 +28,7 @@ export async function onlineUI({state,api,esc,field,showDialog,notify,render}){
  async function action(command,node){
   if(!command?.startsWith('online-')||busy)return;busy=true;
   try{const op=command.slice(7);
+   if(await creation.action(op,node))return;
    if(op==='cancel'){closeDialog();return;}
    if(op==='create'){if(room?.isDirty()){notify(tr('finishForms'),true);return;}await creation.open(connectionId,listing.notebooks,notebookId);return;}
    if(op==='drafts'){await leave();showDrafts=true;await drafts.load();return;}

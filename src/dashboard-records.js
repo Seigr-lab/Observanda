@@ -1,3 +1,6 @@
+import {dashboardOwnerStructure} from './dashboard-owner-structure.js';
+import {dashboardStructureProvider} from './dashboard-collection-structure.js';
+import {configurationProfileBooks} from './configuration-profiles.js';
 import {dashboardRecordMembers} from './dashboard-record-members.js';
 import {QUERY_ORDER_VERSION,recentRecordOrder} from './web/query-order.js';
 import {dashboardRecent} from './dashboard-recent.js';
@@ -11,7 +14,7 @@ import {defaultDashboard,createPanel,validDashboard} from './web/dashboard-model
 import {queryPanel} from './web/dashboard-queries.js';
 import {validViewFilter} from './web/record-view-model.js';
 import {STATUSES} from './web/record-types.js';
-import {labRecordProvider,labDataNotebooks} from './web/laboratory/data-scope.js';
+import {labRecordProvider} from './web/laboratory/data-scope.js';
 
 export class DashboardRecords{
  constructor(workspace){this.workspace=workspace;}
@@ -19,8 +22,8 @@ export class DashboardRecords{
   if(!command||!['config,etag,key,limit,options,workspaceId','config,etag,key,limit,options,provider,workspaceId','config,cursor,etag,key,limit,options,provider,workspaceId'].includes(Object.keys(command).sort().join()))throw new AppError('INVALID');
   const {workspaceId,etag,config,options,limit,key,provider='records',cursor=null}=command,field=Object.hasOwn(researchCardFields,provider)?researchCardFields[provider]:null;
   if(cursor!==null&&(typeof cursor!=='string'||cursor.length>4096))throw new AppError('INVALID');
-  const lab=labRecordProvider(provider);
-  if(provider!=='records'&&!field&&!lab)throw new AppError('INVALID');
+  const lab=labRecordProvider(provider),structure=dashboardStructureProvider(provider);
+  if(provider!=='records'&&!field&&!lab&&!structure)throw new AppError('INVALID');
   if(!researchId(workspaceId)||!revisionId(etag)||!Number.isInteger(limit)||limit<1||limit>100||key!==null&&(typeof key!=='string'||!key.split(':').every(researchId)||(!field||provider==='figures'?key.split(':').length!==1:key.split(':').length!==2)))throw new AppError('INVALID');
   const settings=defaultDashboard(),panel={...createPanel('records','query'),config,options};settings.views[0].panels=[panel];
   if(!validDashboard(settings))throw new AppError('INVALID');
@@ -30,6 +33,7 @@ export class DashboardRecords{
   return this.workspace.catalogue(async store=>{
    if((await store.snapshot()).metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
    const snapshot=await store.snapshot(etag),metadata=snapshot.metadata;
+   if(structure)return dashboardOwnerStructure(store,snapshot,{...command,cursor},{signal});
    if(metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
    const signature=digest(serialize({order:QUERY_ORDER_VERSION,workspaceId,etag,config,options,limit,key,provider}));let anchor={signature,offset:0,after:null};
    if(cursor){try{anchor=store.decode('dashboard-page',workspaceId,Buffer.from(cursor,'base64url'));}catch(error){if(error.code==='ACCESS_LOCKED')throw error;throw new AppError('RECORD_QUERY_CURSOR');}}
@@ -39,7 +43,7 @@ export class DashboardRecords{
    const backward=anchor.direction==='backward';
    const encode=value=>store.encode('dashboard-page',workspaceId,value).toString('base64url');
    const scope=queryPanel(metadata,panel);if(scope.unavailable)throw new AppError('RECORD_VIEW_SCOPE');
-   const ids=new Set((lab?labDataNotebooks(scope.notebooks,lab.profile):scope.notebooks).map(n=>n.id)),c={...config,...options},selected=[];
+   const ids=new Set((lab?await configurationProfileBooks(store,metadata,scope.notebooks,lab.profile,{signal}):scope.notebooks).map(n=>n.id)),c={...config,...options},selected=[];
    if(snapshot.recentIndex&&provider==='records'&&key===null&&c.recordType==='all'&&c.status==='all'&&!c.tag)
     return dashboardRecent(store,snapshot,ids,{workspaceId,etag,limit,anchor,encode,signal});
    let total=0;

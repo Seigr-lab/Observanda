@@ -1,3 +1,4 @@
+import {isConfigurationReference} from './configuration-reference.js';
 import {profileById,availableSections,laboratoryModuleId} from './laboratory/catalog.js';
 import {configurationOf} from './notebook-schema.js';
 import {enabledModule} from './feature-modules.js';
@@ -5,14 +6,15 @@ import {RECORD_TYPES} from './record-types.js';
 
 // Subject histories use ordinary record relationships and saved record identities.
 // A profile can suggest actions without owning records or their persistence.
-export function activityContext(book,record){
+export function activityContext(book,record,{selectedSection=null}={}){
  const notebook=book.notebooks.find(n=>n.id===record?.notebookId),configuration=configurationOf(notebook);
- const section=configuration.sections.find(s=>s.id===record?.template?.id),profile=profileById(record?.template?.profileId);
+ const section=selectedSection??(isConfigurationReference(configuration)?null:configuration.sections.find(s=>s.id===record?.template?.id)),profile=profileById(record?.template?.profileId);
  const tracking=profile?.tracking;
  return {notebook,section,tracking,subject:!!tracking?.subjects.includes(section?.key),event:!!tracking?.events.includes(section?.key)};
 }
 export function activityTemplates(book,record,settings){
  const {notebook}=activityContext(book,record);
+ if(isConfigurationReference(configurationOf(notebook)))return [];
  return availableSections(configurationOf(notebook)).filter(s=>!s.profileId||enabledModule(settings,laboratoryModuleId(s.profileId)));
 }
 export function activitySubjects(book,record){

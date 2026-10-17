@@ -29,5 +29,5 @@ define('read',null,null,{run:async(storage,data)=>{
  return result;
 }});
 for(const method of ['start','part','finish','readPart','readBase'])define('transfer/'+method,ResearchDraftTransfer,method,{write:['start','part','finish'].includes(method),cancellable:method==='finish'});
-for(const method of ['prepare','choose','apply','editWrite','page','value','records','content','editFields','editRead','editFigures','editAttempts'])define('review/'+method,RecordDraftReview,method,{write:['prepare','choose','apply','editWrite'].includes(method),large:true});
+for(const method of ['prepare','choose','apply','editWrite','page','value','records','content','editFields','editRead','editFigures','editAttempts','editChoices'])define('review/'+method,RecordDraftReview,method,{write:['prepare','choose','apply','editWrite'].includes(method),large:true});
 export const recordDraftRequest=route=>commands.get(route)??null;

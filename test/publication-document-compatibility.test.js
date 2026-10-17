@@ -37,7 +37,7 @@ function expected(features){return {domains:features.owners>=1,settings:features
 
 test('publication admission and every existing feature transition preserve all 24 owner combinations',async()=>{
  const transitions=[[formats.requireWorkspaceDomains,{owners:1}],[formats.requireProjectDomains,{owners:1}],[formats.requireWorkspaceSettings,{owners:2}],[formats.requireWebsiteDocuments,{website:1}],[formats.requireWebsiteEditor,{website:2}],[formats.requireWebsitePresentation,{website:3}],[formats.requireStagedEvidence,{staged:true}]];
- const olderAdmissions=Object.entries(formats).filter(([name])=>name.startsWith('require')&&!transitions.some(([admit])=>admit===formats[name])&&!['requirePublicationDocuments','requireRecordOwnerTransfers'].includes(name)).map(([,admit])=>admit);
+ const olderAdmissions=Object.entries(formats).filter(([name])=>name.startsWith('require')&&!transitions.some(([admit])=>admit===formats[name])&&!['requirePublicationDocuments','requireRecordOwnerTransfers','requireConfigurationDocuments'].includes(name)).map(([,admit])=>admit);
  const generations=new Set();
  for(const features of combinations){
   const generation=formats.publicationCatalogueGeneration(features);generations.add(generation);
@@ -111,6 +111,46 @@ test('archive 14 restores transfer capabilities without adding or omitting owner
   const raw=parts.join(''),lines=raw.trimEnd().split('\n'),header=JSON.parse(lines[0]);assert.equal(header.version,14);assert.equal(header.catalogueVersion,version);
   const restored=database(3);await readCatalogueStream(Readable.from([Buffer.from(raw)]),restored,tables);assert.equal(restored.version,version);assert.deepEqual(restored.inserted,[['head',payload]]);
   for(const change of [{version:13},{catalogueVersion:73},{catalogueVersion:122},{domains:ordinary.owners?[]:['tasks']}]){
+   const damaged=JSON.stringify({...header,...change})+'\n'+lines.slice(1).join('\n')+'\n';await assert.rejects(readCatalogueStream(Readable.from([Buffer.from(damaged)]),database(3),tables),{code:'CATALOGUE_DAMAGED'});
+  }
+ }
+});
+
+
+test('configuration documents preserve all 96 capability combinations in either upgrade order',async()=>{
+ const transitions=[[formats.requireWorkspaceDomains,{owners:1}],[formats.requireProjectDomains,{owners:1}],[formats.requireWorkspaceSettings,{owners:2}],[formats.requireWebsiteDocuments,{website:1}],[formats.requireWebsiteEditor,{website:2}],[formats.requireWebsitePresentation,{website:3}],[formats.requireStagedEvidence,{staged:true}],[formats.requirePublicationDocuments,{publication:true}],[formats.requireRecordOwnerTransfers,{transfers:true}]];
+ const seen=new Set();
+ for(const transfers of [false,true])for(const publication of [false,true])for(const ordinary of combinations){
+  const features={...ordinary,publication,transfers},generation=formats.configurationCatalogueGeneration(features);seen.add(generation);
+  assert.deepEqual(formats.configurationCatalogueFeatures(generation),features);assert.equal(formats.catalogueRequiresConfigurationDocuments(generation),true);assert.deepEqual(requirements(generation),expected(features));assert.equal(formats.catalogueRequiresPublicationDocuments(generation),publication);assert.equal(formats.catalogueRequiresRecordOwnerTransfers(generation),transfers);
+  const previous=transfers?formats.recordOwnerTransferCatalogueGeneration({...ordinary,publication}):publication?formats.publicationCatalogueGeneration(ordinary):legacyGeneration(ordinary),db=database(previous);
+  await formats.requireConfigurationDocuments(db);assert.equal(db.version,generation);await formats.requireConfigurationDocuments(db);assert.equal(db.version,generation);
+  const restored=database(3);await formats.restoreConfigurationCatalogueFormat(restored,generation);assert.equal(restored.version,generation);assert.equal(restored.retiredIndex,true);
+  if(publication){const restored=database(3);await formats.restorePublicationCatalogueFormat(restored,generation);assert.equal(restored.version,generation);}
+  if(transfers){const restored=database(3);await formats.restoreRecordOwnerTransferCatalogueFormat(restored,generation);assert.equal(restored.version,generation);}
+  for(const [admit,change] of transitions){
+   const changing=database(generation);await admit(changing);const next={website:Math.max(features.website,change.website??0),staged:features.staged||change.staged===true,owners:Math.max(features.owners,change.owners??0),publication:features.publication||change.publication===true,transfers:features.transfers||change.transfers===true};
+   assert.deepEqual(formats.configurationCatalogueFeatures(changing.version),next);await admit(changing);assert.equal(changing.version,formats.configurationCatalogueGeneration(next));
+  }
+ }
+ assert.deepEqual([...seen],Array.from({length:96},(_,i)=>122+i));
+ for(let version=3;version<=121;version++){
+  const db=database(version),before=requirements(version),publication=formats.catalogueRequiresPublicationDocuments(version),transfers=formats.catalogueRequiresRecordOwnerTransfers(version);
+  await formats.requireConfigurationDocuments(db);assert.deepEqual(requirements(db.version),before);assert.equal(formats.catalogueRequiresPublicationDocuments(db.version),publication);assert.equal(formats.catalogueRequiresRecordOwnerTransfers(db.version),transfers);
+ }
+ const oldProject=database(23,{optionalDomains:true});await formats.requireConfigurationDocuments(oldProject);assert.equal(formats.catalogueRequiresDomains(oldProject.version),true);
+ for(const invalid of [121,218,122.5,null]){assert.equal(formats.catalogueRequiresConfigurationDocuments(invalid),false);await assert.rejects(formats.restoreConfigurationCatalogueFormat(database(3),invalid),{code:'CATALOGUE_DAMAGED'});}
+ await assert.rejects(formats.catalogueFormat(database(218)),{code:'CATALOGUE_DAMAGED'});
+});
+
+test('archive 15 restores every configuration capability combination and rejects header downgrades',async()=>{
+ const payload=seal(Buffer.from('Immutable configuration node'),randomBytes(32),'test'),tables={state:['slot','payload']};
+ for(const transfers of [false,true])for(const publication of [false,true])for(const ordinary of combinations){
+  const version=formats.configurationCatalogueGeneration({...ordinary,publication,transfers}),domains=ordinary.owners?['tasks']:[],parts=[];
+  await writeCatalogueArchive(database(version,{payload,domains}),{writeFile:async text=>parts.push(text)},tables,{observe:false});
+  const raw=parts.join(''),lines=raw.trimEnd().split('\n'),header=JSON.parse(lines[0]);assert.equal(header.version,15);assert.equal(header.catalogueVersion,version);assert.deepEqual(header.domains,domains);
+  const restored=database(3);await readCatalogueStream(Readable.from([Buffer.from(raw)]),restored,tables);assert.equal(restored.version,version);assert.deepEqual(restored.inserted,[['head',payload]]);
+  for(const change of [{version:14},{version:13},{catalogueVersion:121},{catalogueVersion:218},{domains:ordinary.owners?[]:['tasks']}]){
    const damaged=JSON.stringify({...header,...change})+'\n'+lines.slice(1).join('\n')+'\n';await assert.rejects(readCatalogueStream(Readable.from([Buffer.from(damaged)]),database(3),tables),{code:'CATALOGUE_DAMAGED'});
   }
  }

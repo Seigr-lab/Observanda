@@ -1,3 +1,4 @@
+import {validateConfigurationChanges} from './configuration-metadata.js';
 // Validate presentation identities and exact record targets through the
 // authenticated catalogue. Each project website has its own target scope.
 import {SnapshotIndex} from './snapshot-index.js';
@@ -31,5 +32,6 @@ export async function validateIndexedMetadata(store,current,metadata,{removed=[]
    websiteContexts.set(site.id,await context(before,websiteBook(metadata,site)));
   }
  }
- return validateCatalogueMetadata(metadata,{...root,websiteContexts});
+ const result=validateCatalogueMetadata(metadata,{...root,websiteContexts});
+ await validateConfigurationChanges(store,current.metadata,metadata);return result;
 }

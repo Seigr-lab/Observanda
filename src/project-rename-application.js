@@ -1,3 +1,5 @@
+import {configurationCheckpoint} from './configuration-commands.js';
+import {digest,serialize} from './storage-format.js';
 import {projectTransferRunning} from './project-transfer-tasks.js';
 import {ProjectSessionOwner} from './project-session-owner.js';
 import {validProjectPlacement} from './project-placement.js';
@@ -81,15 +83,21 @@ export class ProjectRenameApplication{
  }
  callbacks(owners){return {withProject:(id,use)=>owners.withProject(id,async storage=>{await this.application.jobs.invalidateProject(id);return use(storage);}),withBook:(project,id,use)=>owners.withBook(project,id,use)};}
  async save(client,projectId,data,{check=async()=>{}}={}){
-  if(!data||Object.keys(data).sort().join()!=='etag,id,project'||!researchId(data.id)||typeof data.etag!=='string'||data.project?.id!==projectId||data.project.parentId!=null)throw new AppError('INVALID');
-  const app=this.application;await this.recover(client,projectId,{check});const registry=await app.registry(),owners=new ProjectLocationAccess(app,client,{check});
+  if(!data||Object.keys(data).some(key=>!['etag','id','project','configurationDraft','configurationPin'].includes(key))||!researchId(data.id)||typeof data.etag!=='string'||data.project?.id!==projectId||data.project.parentId!=null)throw new AppError('INVALID');
+  const app=this.application,selected=data.configurationDraft!==undefined||data.configurationPin!==undefined;await this.recover(client,projectId,{check});const registry=await app.registry(),owners=new ProjectLocationAccess(app,client,{check});
   try{
-   const storage=await owners.withProject(projectId,storage=>storage),renames=new ProjectRenames(registry,projectId),prior=await renames.read(),settings={etag:data.etag,project:data.project};
+   const storage=await owners.withProject(projectId,storage=>storage),renames=new ProjectRenames(registry,projectId),prior=await renames.read();let settings={etag:data.etag,project:data.project};
+   if(selected&&prior?.id===data.id){const input=digest(serialize({etag:data.etag,project:data.project,draft:data.configurationDraft,pin:data.configurationPin}));if(prior.settings?.input!==input)throw new AppError('CONFLICT');settings=prior.settings;}
    if(prior?.id===data.id&&prior.phase==='complete'){
     if(JSON.stringify(prior.settings)!==JSON.stringify(settings))throw new AppError('CONFLICT');
    }else if(path.basename(storage.root)===data.project.title){
-    const result=await new StructureCommands(storage).execute('structure',{etag:data.etag,change:{kind:'project',value:data.project},response:'outline',commandId:data.id});await registry.refreshSummary(projectId,result.book);return result;
+    const result=await new StructureCommands(storage).execute('structure',{etag:data.etag,change:{kind:'project',value:data.project},response:'outline',commandId:data.id,...(selected?{configurationDraft:data.configurationDraft,configurationPin:data.configurationPin}:{})});await registry.refreshSummary(projectId,result.book);return result;
    }else{
+    if(selected&&prior?.id!==data.id){
+     const owner={workspaceId:(await storage.outline()).metadata.id,projectId,notebookId:null,slot:'labBookTemplate'},checkpoint=await storage.catalogue(store=>configurationCheckpoint(store,owner,data.configurationDraft,data.configurationPin));
+     const project={...data.project};if(checkpoint.absent)delete project.labBookTemplate;else project.labBookTemplate={name:checkpoint.name,configuration:checkpoint.configuration};
+     settings={etag:data.etag,project,...(checkpoint.draft?{checkpoint:data.configurationDraft}:{}),input:digest(serialize({etag:data.etag,project:data.project,draft:data.configurationDraft,pin:data.configurationPin}))};
+    }
     await app.jobs.invalidateProject(projectId);await renames.run(storage,{id:data.id,name:data.project.title,expectedName:path.basename(storage.root),settings,check,...this.callbacks(owners)});await owners.adoptProjectRename(renames);
    }
    const entry=await registry.locate(projectId),opened=new ProjectStorage(entry.root,projectId,storage.vault);

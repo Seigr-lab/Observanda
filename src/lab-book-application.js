@@ -52,9 +52,9 @@ export async function executeLabBookRequest(project,selected,data,{deviceStore,a
   if(!data||Object.keys(data).some(key=>!['after','limit','revision'].includes(key)))throw new AppError('INVALID');return registry.list(data);
  }
  if(selected.bookOperation==='deletions'){if(!data||Object.keys(data).some(key=>!['after','limit'].includes(key)))throw new AppError('INVALID');return pendingLabBookDeletions(project,data);}
- if(selected.bookOperation==='creations'){if(!data||Object.keys(data).some(key=>!['after','limit'].includes(key)))throw new AppError('INVALID');return new LabBookCreation(project,deviceStore,{publish:publishBook}).pending(data);}
- if(selected.bookOperation==='resumeCreation')return new LabBookCreation(project,deviceStore,{publish:publishBook}).resume(data,{check});
- if(selected.bookOperation==='create')return new LabBookCreation(project,deviceStore,{publish:publishBook}).create(data,{check});
+ if(selected.bookOperation==='creations'){if(!data||Object.keys(data).some(key=>!['after','limit'].includes(key)))throw new AppError('INVALID');return new LabBookCreation(project,deviceStore,{publish:publishBook,withConfigurationSource:options.withConfigurationSource}).pending(data);}
+ if(selected.bookOperation==='resumeCreation')return new LabBookCreation(project,deviceStore,{publish:publishBook,withConfigurationSource:options.withConfigurationSource}).resume(data,{check});
+ if(selected.bookOperation==='create')return new LabBookCreation(project,deviceStore,{publish:publishBook,withConfigurationSource:options.withConfigurationSource}).create(data,{check});
  if(selected.operation==='lab-books/access/unlock')return bookAccess.unlock(data);
  if(selected.operation==='lab-books/access/lock'){if(!data||Object.keys(data).length)throw new AppError('INVALID');return bookAccess.lock();}
  const keyFor=root=>bookAccess?bookAccess.key(root):readAccess(root).then(value=>verifyAccess(value,'','',{deviceStore}));

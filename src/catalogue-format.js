@@ -3,15 +3,15 @@
 import {AppError} from './errors.js';
 // New representations can be introduced with independent domain, settings
 // and website owners. Preserve their requirements in either upgrade order.
-export const catalogueRequiresDomains=format=>((recordOwnerTransferCatalogueFeatures(format)??publicationCatalogueFeatures(format))?.owners??0)>=1||[22,24,25,27,28,30,31,33,34,36,37,39,40,42,43,45,46,48,49].includes(format);
-export const catalogueRequiresSettings=format=>((recordOwnerTransferCatalogueFeatures(format)??publicationCatalogueFeatures(format))?.owners??0)>=2||[25,28,31,34,37,40,43,46,49].includes(format);
-export const catalogueRequiresWebsites=format=>((recordOwnerTransferCatalogueFeatures(format)??publicationCatalogueFeatures(format))?.website??0)>=1||[29,30,31,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49].includes(format);
-export const catalogueRequiresStagedEvidence=format=>(recordOwnerTransferCatalogueFeatures(format)??publicationCatalogueFeatures(format))?.staged===true||[32,33,34,35,36,37,41,42,43,47,48,49].includes(format);
-export const catalogueRequiresWebsiteEditor=format=>((recordOwnerTransferCatalogueFeatures(format)??publicationCatalogueFeatures(format))?.website??0)>=2||[38,39,40,41,42,43,44,45,46,47,48,49].includes(format);
-export const catalogueRequiresWebsitePresentation=format=>((recordOwnerTransferCatalogueFeatures(format)??publicationCatalogueFeatures(format))?.website??0)>=3||[44,45,46,47,48,49].includes(format);
+export const catalogueRequiresDomains=format=>((configurationCatalogueFeatures(format)??recordOwnerTransferCatalogueFeatures(format)??publicationCatalogueFeatures(format))?.owners??0)>=1||[22,24,25,27,28,30,31,33,34,36,37,39,40,42,43,45,46,48,49].includes(format);
+export const catalogueRequiresSettings=format=>((configurationCatalogueFeatures(format)??recordOwnerTransferCatalogueFeatures(format)??publicationCatalogueFeatures(format))?.owners??0)>=2||[25,28,31,34,37,40,43,46,49].includes(format);
+export const catalogueRequiresWebsites=format=>((configurationCatalogueFeatures(format)??recordOwnerTransferCatalogueFeatures(format)??publicationCatalogueFeatures(format))?.website??0)>=1||[29,30,31,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49].includes(format);
+export const catalogueRequiresStagedEvidence=format=>(configurationCatalogueFeatures(format)??recordOwnerTransferCatalogueFeatures(format)??publicationCatalogueFeatures(format))?.staged===true||[32,33,34,35,36,37,41,42,43,47,48,49].includes(format);
+export const catalogueRequiresWebsiteEditor=format=>((configurationCatalogueFeatures(format)??recordOwnerTransferCatalogueFeatures(format)??publicationCatalogueFeatures(format))?.website??0)>=2||[38,39,40,41,42,43,44,45,46,47,48,49].includes(format);
+export const catalogueRequiresWebsitePresentation=format=>((configurationCatalogueFeatures(format)??recordOwnerTransferCatalogueFeatures(format)??publicationCatalogueFeatures(format))?.website??0)>=3||[44,45,46,47,48,49].includes(format);
 export async function catalogueFormat(db){
  const rows=await db.all('SELECT version FROM catalogue_format');
- if(rows.length!==1||![3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49].includes(rows[0].version)&&!catalogueRequiresPublicationDocuments(rows[0].version)&&!catalogueRequiresRecordOwnerTransfers(rows[0].version))throw new AppError('CATALOGUE_DAMAGED');
+ if(rows.length!==1||![3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49].includes(rows[0].version)&&!catalogueRequiresPublicationDocuments(rows[0].version)&&!catalogueRequiresRecordOwnerTransfers(rows[0].version)&&!catalogueRequiresConfigurationDocuments(rows[0].version))throw new AppError('CATALOGUE_DAMAGED');
  return rows[0].version;
 }
 export async function requireRecordBlocks(db){
@@ -93,7 +93,7 @@ export async function requireFigureCopyDrafts(db){return requireCatalogueFormat(
 async function requireCatalogueFormat(db,version){
  if(await catalogueFormat(db)>=version)return;
  await db.run('ALTER TABLE catalogue_format DROP CONSTRAINT catalogue_format_version_check');
- await db.run('ALTER TABLE catalogue_format ADD CONSTRAINT catalogue_format_version_check CHECK(version IN (3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121))');
+ await db.run('ALTER TABLE catalogue_format ADD CONSTRAINT catalogue_format_version_check CHECK(version IN (3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,131,132,133,134,135,136,137,138,139,140,141,142,143,144,145,146,147,148,149,150,151,152,153,154,155,156,157,158,159,160,161,162,163,164,165,166,167,168,169,170,171,172,173,174,175,176,177,178,179,180,181,182,183,184,185,186,187,188,189,190,191,192,193,194,195,196,197,198,199,200,201,202,203,204,205,206,207,208,209,210,211,212,213,214,215,216,217))');
  await db.run('UPDATE catalogue_format SET version=$1 WHERE version<$1',version);
 }
 
@@ -101,6 +101,7 @@ async function requireCatalogueFormat(db,version){
 // as independent websites. These 24 combinations preserve existing owner
 // requirements without manufacturing an absent website or module registry.
 export function publicationCatalogueFeatures(format){
+ const configured=configurationCatalogueFeatures(format);if(configured)return configured.publication?{website:configured.website,staged:configured.staged,owners:configured.owners}:null;
  const transferred=recordOwnerTransferCatalogueFeatures(format);
  if(transferred){if(!transferred.publication)return null;const {publication,...features}=transferred;return features;}
  if(!Number.isInteger(format)||format<50||format>73)return null;
@@ -112,13 +113,16 @@ export function publicationCatalogueGeneration({website,staged,owners}){
  return 50+website*6+(staged?3:0)+owners;
 }
 async function upgradePublicationCatalogue(db,changes){
- const format=await catalogueFormat(db),transferred=recordOwnerTransferCatalogueFeatures(format);
+ const format=await catalogueFormat(db),configured=configurationCatalogueFeatures(format);
+ if(configured){await requireCatalogueFormat(db,configurationCatalogueGeneration({...configured,website:Math.max(configured.website,changes.website??0),staged:configured.staged||changes.staged===true,owners:Math.max(configured.owners,changes.owners??0)}));return true;}
+ const transferred=recordOwnerTransferCatalogueFeatures(format);
  if(transferred){await requireCatalogueFormat(db,recordOwnerTransferCatalogueGeneration({...transferred,website:Math.max(transferred.website,changes.website??0),staged:transferred.staged||changes.staged===true,owners:Math.max(transferred.owners,changes.owners??0)}));return true;}
  const previous=publicationCatalogueFeatures(format);if(!previous)return false;
  await requireCatalogueFormat(db,publicationCatalogueGeneration({website:Math.max(previous.website,changes.website??0),staged:previous.staged||changes.staged===true,owners:Math.max(previous.owners,changes.owners??0)}));return true;
 }
 export async function requirePublicationDocuments(db){
  const previous=await catalogueFormat(db);if(catalogueRequiresPublicationDocuments(previous))return;
+ const configured=configurationCatalogueFeatures(previous);if(configured)return requireCatalogueFormat(db,configurationCatalogueGeneration({...configured,publication:true}));
  const transferred=recordOwnerTransferCatalogueFeatures(previous);if(transferred)return requireCatalogueFormat(db,recordOwnerTransferCatalogueGeneration({...transferred,publication:true}));
  const domains=catalogueRequiresDomains(previous)||previous===23&&Boolean(await db.get('SELECT 1 FROM state WHERE slot=$1','project-domains'));
  const features={website:catalogueRequiresWebsitePresentation(previous)?3:catalogueRequiresWebsiteEditor(previous)?2:catalogueRequiresWebsites(previous)?1:0,staged:catalogueRequiresStagedEvidence(previous),owners:catalogueRequiresSettings(previous)?2:domains?1:0};
@@ -127,6 +131,7 @@ export async function requirePublicationDocuments(db){
 // Archive and direct rekey share this exact restoration instead of maintaining
 // parallel 24-entry switches. Copied owner rows are verified by their owners.
 export async function restorePublicationCatalogueFormat(db,format){
+ if(catalogueRequiresConfigurationDocuments(format)&&catalogueRequiresPublicationDocuments(format))return restoreConfigurationCatalogueFormat(db,format);
  if(catalogueRequiresRecordOwnerTransfers(format)&&catalogueRequiresPublicationDocuments(format))return restoreRecordOwnerTransferCatalogueFormat(db,format);
  const features=publicationCatalogueFeatures(format);if(!features)throw new AppError('CATALOGUE_DAMAGED');
  if(features.owners===2)await requireWorkspaceSettings(db);else if(features.owners===1)await requireWorkspaceDomains(db);
@@ -138,6 +143,7 @@ export async function restorePublicationCatalogueFormat(db,format){
 // A record transfer introduces authenticated history envelopes and write fences.
 // Its independent flags retain the exact owner and publication requirements.
 export function recordOwnerTransferCatalogueFeatures(format){
+ const configured=configurationCatalogueFeatures(format);if(configured)return configured.transfers?{website:configured.website,staged:configured.staged,owners:configured.owners,publication:configured.publication}:null;
  if(!Number.isInteger(format)||format<74||format>121)return null;
  const value=(format-74)%24;return {website:Math.floor(value/6),staged:value%6>=3,owners:value%3,publication:format>=98};
 }
@@ -148,14 +154,41 @@ export function recordOwnerTransferCatalogueGeneration({website,staged,owners,pu
 }
 export async function requireRecordOwnerTransfers(db){
  const previous=await catalogueFormat(db);if(catalogueRequiresRecordOwnerTransfers(previous))return;
+ const configured=configurationCatalogueFeatures(previous);if(configured)return requireCatalogueFormat(db,configurationCatalogueGeneration({...configured,transfers:true}));
  const domains=catalogueRequiresDomains(previous)||previous===23&&Boolean(await db.get('SELECT 1 FROM state WHERE slot=$1','project-domains'));
  const features={website:catalogueRequiresWebsitePresentation(previous)?3:catalogueRequiresWebsiteEditor(previous)?2:catalogueRequiresWebsites(previous)?1:0,staged:catalogueRequiresStagedEvidence(previous),owners:catalogueRequiresSettings(previous)?2:domains?1:0,publication:catalogueRequiresPublicationDocuments(previous)};
  await requireRetiredProjectRecords(db);return requireCatalogueFormat(db,recordOwnerTransferCatalogueGeneration(features));
 }
 export async function restoreRecordOwnerTransferCatalogueFormat(db,format){
+ if(catalogueRequiresConfigurationDocuments(format)&&catalogueRequiresRecordOwnerTransfers(format))return restoreConfigurationCatalogueFormat(db,format);
  const features=recordOwnerTransferCatalogueFeatures(format);if(!features)throw new AppError('CATALOGUE_DAMAGED');
  if(features.owners===2)await requireWorkspaceSettings(db);else if(features.owners===1)await requireWorkspaceDomains(db);
  if(features.website===3)await requireWebsitePresentation(db);else if(features.website===2)await requireWebsiteEditor(db);else if(features.website===1)await requireWebsiteDocuments(db);
  if(features.staged)await requireStagedEvidence(db);if(features.publication)await requirePublicationDocuments(db);await requireRecordOwnerTransfers(db);
+ if(await catalogueFormat(db)!==format)throw new AppError('CATALOGUE_DAMAGED');
+}
+
+// Immutable notebook configurations and project templates are snapshot-owned.
+// These 96 combinations preserve every independently required representation.
+export function configurationCatalogueFeatures(format){
+ if(!Number.isInteger(format)||format<122||format>217)return null;
+ const value=(format-122)%24;return {website:Math.floor(value/6),staged:value%6>=3,owners:value%3,publication:(format-122)%48>=24,transfers:format>=170};
+}
+export const catalogueRequiresConfigurationDocuments=format=>configurationCatalogueFeatures(format)!==null;
+export function configurationCatalogueGeneration({website,staged,owners,publication,transfers}){
+ if(typeof publication!=='boolean'||typeof transfers!=='boolean')throw new AppError('INVALID');
+ return publicationCatalogueGeneration({website,staged,owners})+72+(publication?24:0)+(transfers?48:0);
+}
+export async function requireConfigurationDocuments(db){
+ const previous=await catalogueFormat(db);if(catalogueRequiresConfigurationDocuments(previous))return;
+ const domains=catalogueRequiresDomains(previous)||previous===23&&Boolean(await db.get('SELECT 1 FROM state WHERE slot=$1','project-domains'));
+ const features={website:catalogueRequiresWebsitePresentation(previous)?3:catalogueRequiresWebsiteEditor(previous)?2:catalogueRequiresWebsites(previous)?1:0,staged:catalogueRequiresStagedEvidence(previous),owners:catalogueRequiresSettings(previous)?2:domains?1:0,publication:catalogueRequiresPublicationDocuments(previous),transfers:catalogueRequiresRecordOwnerTransfers(previous)};
+ await requireRetiredProjectRecords(db);return requireCatalogueFormat(db,configurationCatalogueGeneration(features));
+}
+export async function restoreConfigurationCatalogueFormat(db,format){
+ const features=configurationCatalogueFeatures(format);if(!features)throw new AppError('CATALOGUE_DAMAGED');
+ if(features.owners===2)await requireWorkspaceSettings(db);else if(features.owners===1)await requireWorkspaceDomains(db);
+ if(features.website===3)await requireWebsitePresentation(db);else if(features.website===2)await requireWebsiteEditor(db);else if(features.website===1)await requireWebsiteDocuments(db);
+ if(features.staged)await requireStagedEvidence(db);if(features.publication)await requirePublicationDocuments(db);if(features.transfers)await requireRecordOwnerTransfers(db);await requireConfigurationDocuments(db);
  if(await catalogueFormat(db)!==format)throw new AppError('CATALOGUE_DAMAGED');
 }

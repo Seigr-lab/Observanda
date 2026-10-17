@@ -1,3 +1,4 @@
+import {configurationOwner,configurationCheckpoint,discardConfigurationCheckpoint} from './configuration-commands.js';
 // Existing structure forms use one command adapter. Metadata-only changes never
 // assemble the record corpus; moves visit the selected lab book's branch only.
 import {AppError} from './errors.js';
@@ -59,7 +60,13 @@ export class StructureCommands{
   const complete=await hasSnapshotOwnership(store,source);
   if(preview&&!complete)return legacyStructurePreview(store,source,data.change,etag,{signal});
   if(!complete)onProgress?.({stage:'indexing'});
-  const current=complete?source:await completeSnapshotOwnership(store,source,{signal}),index=new SnapshotIndex(store,{cacheSize:4096,cacheMembers:true}),change=data.change;
+  const current=complete?source:await completeSnapshotOwnership(store,source,{signal}),index=new SnapshotIndex(store,{cacheSize:4096,cacheMembers:true}),change=structuredClone(data.change);
+  let configuration=null;
+  if(data.configurationDraft!==undefined||data.configurationPin!==undefined){
+   const owner=configurationOwner(data.configurationPin);if(kind!=='structure'||!['project','notebook'].includes(change.kind)||change.kind==='notebook'&&(owner.slot!=='configuration'||owner.notebookId!==change.value?.id||owner.projectId!==change.value?.projectId)||change.kind==='project'&&(owner.slot!=='labBookTemplate'||owner.projectId!==change.value?.id))throw new AppError('INVALID');
+   configuration={owner,...await configurationCheckpoint(store,owner,data.configurationDraft,data.configurationPin,{signal,validate:false})};
+   if(configuration.absent)delete change.value[owner.slot];else if(change.kind==='notebook')change.value.configuration=configuration.configuration;else change.value.labBookTemplate={name:configuration.name,configuration:configuration.configuration};
+  }
   const edit=kind==='notebook'?change:kind==='structure'&&change.kind==='notebook'?change.value:null;
   const deletion=kind==='structure'&&change.kind==='delete-notebook'?change.value:null;
   const notebook=source.metadata.notebooks.find(n=>n.id===(edit?.id??deletion?.id));
@@ -85,6 +92,7 @@ export class StructureCommands{
   if(preview)return {summary:result.summary,etag};
   const targets=new Map(result.book.entries.map(r=>[r.id,r])),now=new Date().toISOString();
   await commitStructureDocuments(store,etag,current,metadata,selected,targets,{removed,now,membershipRebuilt:!complete,signal,onProgress});
+  if(configuration?.draft)await discardConfigurationCheckpoint(store,configuration.owner,{id:configuration.draft.id,revision:configuration.revision});
   signal?.throwIfAborted();
   if(receiptFile)await this.workspace.writeMetadata(receiptFile,serialize({version:1,workspaceId,fingerprint,etag:await store.head(),extras:extras(result)}));
   return {...await (data.response==='outline'?store.recordOutline():store.recordPatch(etag)),...extras(result)};

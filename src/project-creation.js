@@ -1,3 +1,4 @@
+import {configurationCreationOptions,hasConfigurationCreation,validCreationConfiguration,prepareCreationConfiguration,populateCreationConfiguration,discardCreationConfiguration,localConfigurationSource} from './configuration-creation.js';
 import {incomingProjectMove} from './project-incoming-moves.js';
 import {withProjectMembership} from './project-membership.js';
 import {validateStorageName,requireStorageName,storageCreationPath} from './storage-names.js';
@@ -21,14 +22,14 @@ import {revisionText} from './web/revision-model.js';
 import {AppError} from './errors.js';
 const active=new Set(),intentLimit=2*MAX_BYTES+ACCESS_LIMIT+16384;
 export class ProjectCreation{
- constructor(registry,deviceStore){this.registry=registry;this.workspace=registry.workspace;this.deviceStore=deviceStore;}
+ constructor(registry,deviceStore,{withConfigurationSource=localConfigurationSource(registry.workspace)}={}){this.registry=registry;this.workspace=registry.workspace;this.deviceStore=deviceStore;this.withConfigurationSource=withConfigurationSource;}
  file(id,completed=false){if(!researchId(id))throw new AppError('INVALID');return path.join(this.workspace.root,'.observanda',completed?'project-created':'project-creation',id+'.obsv');}
  async read(id){
   for(const completed of [true,false]){
    const file=this.file(id,completed);if(!await assertRegular(path.dirname(file),{directory:true,missing:true}))continue;const stat=await assertRegular(file,{missing:true});if(!stat)continue;if(stat.size>intentLimit+256)throw new AppError('FORMAT');let intent;
    try{intent=JSON.parse(await this.workspace.readFile(file,'utf8'));}catch(error){if(error instanceof SyntaxError)throw new AppError('FORMAT');throw error;}
    if(!intent||!['prepared','attached'].includes(intent.phase)||!researchId(intent.projectId)||!/^[a-f0-9]{64}$/.test(intent.fingerprint??''))throw new AppError('FORMAT');
-   if(intent.version===1){if(intent.moduleLayout!==undefined&&intent.moduleLayout!=='domains-and-authoring-v1'||!intent.book||intent.book.projects?.length!==1||intent.book.projects[0].id!==intent.projectId||!path.isAbsolute(intent.root??'')||path.resolve(intent.root)!==intent.root||intent.parentId!==null&&!researchId(intent.parentId)||!researchId(intent.access?.vaultId)||!researchId(intent.book.id))throw new AppError('FORMAT');}
+   if(intent.version===1){if(intent.configuration!==undefined&&!validCreationConfiguration(intent.configuration))throw new AppError('FORMAT');if(intent.moduleLayout!==undefined&&intent.moduleLayout!=='domains-and-authoring-v1'||!intent.book||intent.book.projects?.length!==1||intent.book.projects[0].id!==intent.projectId||!path.isAbsolute(intent.root??'')||path.resolve(intent.root)!==intent.root||intent.parentId!==null&&!researchId(intent.parentId)||!researchId(intent.access?.vaultId)||!researchId(intent.book.id))throw new AppError('FORMAT');}
    else if(intent.version!==2||intent.phase!=='attached'||!researchId(intent.namespaceId)||!researchId(intent.vaultId))throw new AppError('FORMAT');
    return {intent,file,completed};
   }
@@ -39,6 +40,7 @@ export class ProjectCreation{
   if(entry.namespaceId!==(intent.namespaceId??intent.book.id)||entry.vaultId!==(intent.vaultId??intent.access.vaultId))throw new AppError('CONFLICT');return {project:entry};
  }
  async finish(id,intent,file){
+  await discardCreationConfiguration(this.workspace,intent.configuration);
   const directory=await privateDirectory(this.workspace.root,'.observanda/project-created'),target=path.join(directory,id+'.obsv');
   const receipt={version:2,fingerprint:intent.fingerprint,phase:'attached',projectId:intent.projectId,namespaceId:intent.namespaceId??intent.book.id,vaultId:intent.vaultId??intent.access.vaultId};
   // Authenticate against the receipt's final path before retiring the intent.
@@ -75,12 +77,12 @@ export class ProjectCreation{
   return this.create({...command,path:intent.root,project:{...intent.book.projects[0],parentId:intent.parentId}},{...options,resume:true});
  }
  async create(command,{check=async()=>{},resume=false}={}){
-  if(!command||!['id,password,path,project,username','id,password,project,username'].includes(Object.keys(command).sort().join())||!researchId(command.id)||!researchId(command.project?.id)||typeof command.username!=='string'||typeof command.password!=='string')throw new AppError('INVALID');
+  if(!command||!['id,password,path,project,username','id,password,project,username'].includes(Object.keys(command).filter(key=>!configurationCreationOptions.includes(key)).sort().join())||!researchId(command.id)||!researchId(command.project?.id)||typeof command.username!=='string'||typeof command.password!=='string')throw new AppError('INVALID');
   const {password,...request}=command;const fingerprint=digest(revisionText(request));
   // Validate editable content before generating keys or writing a request.
   const parentId=command.project.parentId??null;if(parentId!==null&&!researchId(parentId))throw new AppError('INVALID');
   validateStorageName(command.project.title);
-  const draft=createNotebook(command.project.title,command.project.description);draft.projects=[{...command.project,parentId:null}];validateNotebook(draft);
+  const draft=createNotebook(command.project.title,command.project.description);draft.projects=[{...command.project,parentId:null}];if(hasConfigurationCreation(command))delete draft.projects[0].labBookTemplate;validateNotebook(draft);
   await check();const directory=await privateDirectory(this.workspace.root,'.observanda/project-creation'),file=path.join(directory,command.id+'.obsv');
   return withWriterLease(path.join(directory,command.id+'.lock'),()=>withWriterLease(path.join(directory,'owner-'+command.project.id+'.lock'),async()=>{
    await check();let intent,vault;active.add(file);
@@ -98,6 +100,8 @@ export class ProjectCreation{
      vault=await verifyAccess({value:intent.access},command.username,password,{deviceStore:this.deviceStore});
     }else{
      if(resume)throw new AppError('NOT_FOUND');
+     const selected=await prepareCreationConfiguration(this.workspace,command,{projectId:command.project.id,notebookId:null,slot:'labBookTemplate'},{withConfigurationSource:this.withConfigurationSource,check});
+     if(selected&&Object.hasOwn(selected,'inline')&&selected.inline)draft.projects[0].labBookTemplate=selected.inline;validateNotebook(draft);
      await withProjectMembership(this.registry,[parentId],async()=>{
      const current=await this.registry.read();
      if(await incomingProjectMove(this.registry,command.project.id))throw new AppError('STORAGE_PROJECT_BUSY');
@@ -109,12 +113,13 @@ export class ProjectCreation{
      requireStorageName(root,command.project.title);
      if(root!==derived)throw new AppError('STORAGE_PATH');
      const access=await createWorkspaceAccess(command.username,password,this.deviceStore);vault=takeCreatedVault(access);
-     intent={version:1,moduleLayout:'domains-and-authoring-v1',fingerprint,phase:'prepared',root,projectId:draft.projects[0].id,parentId:parentId,book:draft,access};
+     intent={version:1,moduleLayout:'domains-and-authoring-v1',fingerprint,phase:'prepared',root,projectId:draft.projects[0].id,parentId:parentId,book:draft,access,...(selected?.frozen?{configuration:selected.frozen}:{})};
      const serialized=serialize(intent);if(Buffer.byteLength(serialized)>intentLimit)throw new AppError('LIMIT');await this.workspace.writeFile(file,serialized);
      });
     }
     await check();
-    const project=await initializeProjectLocation(intent.root,intent.projectId,intent.book,intent.access,vault,intent.moduleLayout==='domains-and-authoring-v1'?{populateId:'project-domains-and-authoring-v1',populate:storage=>storage.catalogue(store=>withProjectModuleInitialization(store,intent.book.id,async()=>{}))}:{});
+    const populate=intent.moduleLayout==='domains-and-authoring-v1'||intent.configuration?{populateId:'project-domains-and-authoring-v1'+(intent.configuration?':configuration:'+digest(serialize(intent.configuration)):''),populate:async storage=>{if(intent.moduleLayout==='domains-and-authoring-v1')await storage.catalogue(store=>withProjectModuleInitialization(store,intent.book.id,async()=>{}));if(intent.configuration)await populateCreationConfiguration(storage,this.workspace,intent.configuration,{commandId:command.id,projectId:intent.projectId,notebookId:null,slot:'labBookTemplate',withConfigurationSource:this.withConfigurationSource,check});}}:{};
+    const project=await initializeProjectLocation(intent.root,intent.projectId,intent.book,intent.access,vault,populate);
     await check();const entry=await this.registry.describe(project,intent.parentId);
     return await withProjectMembership(this.registry,[intent.parentId],async()=>{
     // Only registry membership serializes here. Unrelated project creation and

@@ -1,7 +1,8 @@
+import {assertConfigurationMetadata,admitConfigurationMetadata,configurationReferences} from './configuration-metadata.js';
 import {assertRecordOwnerObjectWritable,assertRecordOwnerRowsWritable} from './record-owner-write-authority.js';
 import {readRecordOwnerHistory} from './record-owner-history.js';
 import {withoutRecordOwnerResourceAdoption,adoptRecordOwnerResource,journalRecordOwnerObject} from './record-owner-resources.js';
-import {catalogueRequiresRecordOwnerTransfers,restoreRecordOwnerTransferCatalogueFormat,catalogueRequiresPublicationDocuments,restorePublicationCatalogueFormat} from './catalogue-format.js';
+import {catalogueRequiresConfigurationDocuments,restoreConfigurationCatalogueFormat,catalogueRequiresRecordOwnerTransfers,restoreRecordOwnerTransferCatalogueFormat,catalogueRequiresPublicationDocuments,restorePublicationCatalogueFormat} from './catalogue-format.js';
 import {workspaceSettingsRegistry,verifyWorkspaceSettings} from './workspace-settings.js';
 import {readProjectDomainRegistry} from './project-domain-registry.js';
 import {retiredMetadataSourceLocation,resolveMetadataValue} from './project-retired-metadata.js';
@@ -106,6 +107,7 @@ export class ResearchCatalogue{
   if(!row)throw new AppError('RECORD_HISTORY_MISSING');
   const value=this.decode('snapshot',id,row.payload);
   if(!value||!identifier(value.metadata?.id)||!Array.isArray(value.metadata.entries)||value.metadata.entries.length||value.websiteDocuments!==undefined&&value.websiteDocuments!==1)fail();
+  assertConfigurationMetadata(value.metadata);
   if(value.websiteDocuments===1){try{assertWebsiteMetadataShell(value.metadata);}catch(error){if(error.code==='INVALID')fail();throw error;}}
   if(value.indexVersion===undefined){
    if(!Array.isArray(value.records)||!value.records.every(validMember)||new Set(value.records.map(r=>r.id)).size!==value.records.length)fail();
@@ -195,8 +197,25 @@ export class ResearchCatalogue{
   // This compatibility response intentionally promises a complete document.
   // Reject it before original reads; ordinary app views use outline/selection
   // and bounded query owners instead of silently assembling a large corpus.
-  if(count>MAX_WORKSPACE_RECORDS||assembledBytes(snapshot.metadata,count,bytes)>MAX_BYTES)throw new AppError('WORKSPACE_READ_LIMIT');
-  const manifest=await this.manifest(id),book={...manifest.metadata,entries:await Promise.all(manifest.records.map(r=>this.record(r.id,r.revision)))};
+  if(count>MAX_WORKSPACE_RECORDS)throw new AppError('WORKSPACE_READ_LIMIT');
+  const metadata=structuredClone(snapshot.metadata),references=[...configurationReferences(metadata)];
+  const target=owner=>owner.slot==='configuration'?metadata.notebooks.find(value=>value.id===owner.notebookId):metadata.projects.find(value=>value.id===owner.projectId).labBookTemplate;
+  for(const {owner} of references)target(owner).configuration=null;
+  let remaining=MAX_BYTES-assembledBytes(metadata,count,bytes);
+  if(remaining<0)throw new AppError('WORKSPACE_READ_LIMIT');
+  if(references.length){
+   const {ConfigurationDocuments}=await import('./configuration-documents.js'),documents=new ConfigurationDocuments(this);
+   for(const {owner,reference} of references){
+    const reader=await documents.open(owner,reference),chunks=[];remaining+=4; // Replace the counted null placeholder.
+    // Count JSON at its complete-document indentation before parsing. Neither
+    // a large schema nor its original records are hydrated beyond this budget.
+    for await(const chunk of reader.document.tree.json(reference.root,{depth:owner.slot==='configuration'?3:4})){
+     remaining-=Buffer.byteLength(chunk);if(remaining<0)throw new AppError('WORKSPACE_READ_LIMIT');chunks.push(chunk);
+    }
+    target(owner).configuration=JSON.parse(chunks.join(''));
+   }
+  }
+  const manifest=await this.manifest(id),book={...metadata,entries:await Promise.all(manifest.records.map(r=>this.record(r.id,r.revision)))};
   return {book,etag:id};
  }
  // Call within the caller's PostgreSQL transaction. Unchanged records are retained
@@ -242,6 +261,7 @@ export class ResearchCatalogue{
   snapshot.readingIndex=current?.readingIndex?await reading.replace(current.readingIndex,before,after):await reading.build(snapshot);
   const publication=new RecordPublicationIndex(this);
   snapshot.publicationIndex=current?.publicationIndex?.version===3?await publication.replace(current.publicationIndex,before,after):await publication.build(snapshot);
+  await admitConfigurationMetadata(this,metadata);
   await this.db.run('INSERT INTO snapshots VALUES ($1,$2,$3)',etag,ordinal,this.encode('snapshot',etag,snapshot));
   if(websiteDocuments&&current){const present=new Set(after.map(row=>row.id)),removed=before.filter(row=>!present.has(row.id)).map(row=>row.id);await reconcileOwnedWebsiteMembership(this,etag,snapshot,websiteMembershipChange(current.metadata,metadata,before,after,{removed}));}
 
@@ -401,7 +421,8 @@ export class ResearchCatalogue{
    const publication=new RecordPublicationIndex(this);
    snapshot.publicationIndex=current.publicationIndex?.version===3?await publication.replace(current.publicationIndex,before,after):await publication.build(snapshot);
    operationAdvance();
-   await this.db.run('INSERT INTO snapshots VALUES ($1,$2,$3)',etag,ordinal,this.encode('snapshot',etag,snapshot));
+   await admitConfigurationMetadata(this,metadata);
+  await this.db.run('INSERT INTO snapshots VALUES ($1,$2,$3)',etag,ordinal,this.encode('snapshot',etag,snapshot));
    if(websiteDocuments)await reconcileOwnedWebsiteMembership(this,etag,snapshot,websiteChange);
    await this.db.run("UPDATE state SET payload=$1 WHERE slot='head'",this.encode('state','head',{id:etag}));
    return etag;
@@ -601,6 +622,15 @@ export class ResearchCatalogue{
   if(!verified.stableSnapshot)previous=null;
   const snapshot=await this.snapshot(id),index=new SnapshotIndex(this,{cacheSize:4096}),context=hash(verificationContext(snapshot.metadata));
   if(snapshot.metadata.id!==workspaceId)fail();
+  const configuration=async(owner,pointer)=>{
+   if(pointer?.format!=='observanda-configuration')return;
+   await verified.once(['configuration-document',owner,pointer],async()=>{
+    if(!catalogueRequiresConfigurationDocuments(await catalogueFormat(this.db)))fail();
+    const {ConfigurationDocuments}=await import('./configuration-documents.js');await new ConfigurationDocuments(this).verify(owner,pointer);
+   });
+  };
+  for(const notebook of snapshot.metadata.notebooks)await configuration({workspaceId,projectId:notebook.projectId,notebookId:notebook.id,slot:'configuration'},notebook.configuration);
+  for(const project of snapshot.metadata.projects)await configuration({workspaceId,projectId:project.id,notebookId:null,slot:'labBookTemplate'},project.labBookTemplate?.configuration);
   if(snapshot.websiteDocuments===1)await verified.once(['website-document-registry'],async()=>{if(!await readWebsiteDocumentRegistry(this))fail();});
   if(snapshot.indexVersion)await verified.once(['membership',snapshot.membership,snapshot.searchIndex,snapshot.count,snapshot.bytes,snapshot.nextPosition],async()=>{
    if(!previous||!await verifyMembershipChange(this,previous,snapshot))await index.verify(snapshot);
@@ -674,7 +704,7 @@ export class ResearchCatalogue{
    });
    const {workspaceModules}=await import('./modules/index.js');
    await operationStage('verify-modules',{},async()=>{await workspaceModules(this.workspace).verifyCatalogue(this,descriptor.workspaceId);});
-   await operationStage('verify-objects',{},async()=>{await verifyWorkspaceSettings(this);await new WebsiteDocumentStore(this).verify({onDocument:document=>media.websiteDocument(document)});await verifyWebsiteEditor(this,{onDocument:document=>media.websiteDocument(document)});for await(const object of this.verifiedObjects())void object;});
+   await operationStage('verify-objects',{},async()=>{const {verifyConfigurationBlocks}=await import('./configuration-documents.js');await verifyConfigurationBlocks(this);await verifyWorkspaceSettings(this);await new WebsiteDocumentStore(this).verify({onDocument:document=>media.websiteDocument(document)});await verifyWebsiteEditor(this,{onDocument:document=>media.websiteDocument(document)});for await(const object of this.verifiedObjects())void object;});
    const {verifySampleAnalysisCatalogue}=await import('./sample-analysis-catalogue.js');
    await operationStage('verify-analysis',{},()=>verifySampleAnalysisCatalogue(this));
    await operationStage('verify-reviews',{},()=>new ReviewScopeIndex(this).verify());
@@ -693,7 +723,7 @@ export class ResearchCatalogue{
    });
    await operationStage('verify-history',{total:Number((await this.db.get('SELECT count(DISTINCT id)::text AS total FROM records')).total),unit:'records'},async()=>{
     for await(const row of this.db.rows('SELECT DISTINCT id FROM records ORDER BY id')){operationItem(row.id);await this.verifyRecordHistory(row.id);operationAdvance();}
-    const {verifyRecordOwnerTransfers}=await import('./record-owner-transfer-verification.js');await verifyRecordOwnerTransfers(this);
+    const {verifyRecordOwnerTransfers}=await import('./record-owner-transfer-verification.js');await verifyRecordOwnerTransfers(this,{verified});
    });
    });
   }));
@@ -719,7 +749,7 @@ export async function rekeyCatalogue(source,target,descriptor){
    for await(const row of sourceDb.rows(query,[],{batchSize:1})){await visit(row);operationAdvance();}
   });
   const format=await catalogueFormat(sourceDb);
-  if(catalogueRequiresRecordOwnerTransfers(format))await restoreRecordOwnerTransferCatalogueFormat(targetDb,format);else if(catalogueRequiresPublicationDocuments(format))await restorePublicationCatalogueFormat(targetDb,format);else if(format>=4)await ({4:requireRecordBlocks,5:requireRecordQueryBlocks,6:requireMemberCollections,7:requireSelectedValueDrafts,8:requireRetainedRecordDocuments,9:requireRunReceiptStore,10:requireDraftEdits,11:requireAttemptIndexes,12:requireCurrentAttemptIndexes,13:requireRecordTypeDrafts,14:requireRecordMethodIndexes,15:requireFigureCopyDrafts,16:requireSearchVocabulary,17:requireJoinedQueryText,18:requireKeyedQueryArrays,19:requireReferenceQueries,20:requireAttemptQueries,21:requireStarterDocuments,22:requireProjectDomains,23:requireRetiredProjectRecords,24:requireWorkspaceDomains,25:requireWorkspaceSettings,26:requireRecordResultIndexes,27:async db=>{await requireWorkspaceDomains(db);await requireRecordResultIndexes(db);},28:async db=>{await requireWorkspaceSettings(db);await requireRecordResultIndexes(db);},29:requireWebsiteDocuments,30:async db=>{await requireWorkspaceDomains(db);await requireWebsiteDocuments(db);},31:async db=>{await requireWorkspaceSettings(db);await requireWebsiteDocuments(db);},32:requireStagedEvidence,33:async db=>{await requireWorkspaceDomains(db);await requireStagedEvidence(db);},34:async db=>{await requireWorkspaceSettings(db);await requireStagedEvidence(db);},35:async db=>{await requireWebsiteDocuments(db);await requireStagedEvidence(db);},36:async db=>{await requireWorkspaceDomains(db);await requireWebsiteDocuments(db);await requireStagedEvidence(db);},37:async db=>{await requireWorkspaceSettings(db);await requireWebsiteDocuments(db);await requireStagedEvidence(db);},38:requireWebsiteEditor,39:async db=>{await requireWorkspaceDomains(db);await requireWebsiteEditor(db);},40:async db=>{await requireWorkspaceSettings(db);await requireWebsiteEditor(db);},41:async db=>{await requireStagedEvidence(db);await requireWebsiteEditor(db);},42:async db=>{await requireWorkspaceDomains(db);await requireStagedEvidence(db);await requireWebsiteEditor(db);},43:async db=>{await requireWorkspaceSettings(db);await requireStagedEvidence(db);await requireWebsiteEditor(db);},44:requireWebsitePresentation,45:async db=>{await requireWorkspaceDomains(db);await requireWebsitePresentation(db);},46:async db=>{await requireWorkspaceSettings(db);await requireWebsitePresentation(db);},47:async db=>{await requireStagedEvidence(db);await requireWebsitePresentation(db);},48:async db=>{await requireWorkspaceDomains(db);await requireStagedEvidence(db);await requireWebsitePresentation(db);},49:async db=>{await requireWorkspaceSettings(db);await requireStagedEvidence(db);await requireWebsitePresentation(db);}}[format])(targetDb);
+  if(catalogueRequiresConfigurationDocuments(format))await restoreConfigurationCatalogueFormat(targetDb,format);else if(catalogueRequiresRecordOwnerTransfers(format))await restoreRecordOwnerTransferCatalogueFormat(targetDb,format);else if(catalogueRequiresPublicationDocuments(format))await restorePublicationCatalogueFormat(targetDb,format);else if(format>=4)await ({4:requireRecordBlocks,5:requireRecordQueryBlocks,6:requireMemberCollections,7:requireSelectedValueDrafts,8:requireRetainedRecordDocuments,9:requireRunReceiptStore,10:requireDraftEdits,11:requireAttemptIndexes,12:requireCurrentAttemptIndexes,13:requireRecordTypeDrafts,14:requireRecordMethodIndexes,15:requireFigureCopyDrafts,16:requireSearchVocabulary,17:requireJoinedQueryText,18:requireKeyedQueryArrays,19:requireReferenceQueries,20:requireAttemptQueries,21:requireStarterDocuments,22:requireProjectDomains,23:requireRetiredProjectRecords,24:requireWorkspaceDomains,25:requireWorkspaceSettings,26:requireRecordResultIndexes,27:async db=>{await requireWorkspaceDomains(db);await requireRecordResultIndexes(db);},28:async db=>{await requireWorkspaceSettings(db);await requireRecordResultIndexes(db);},29:requireWebsiteDocuments,30:async db=>{await requireWorkspaceDomains(db);await requireWebsiteDocuments(db);},31:async db=>{await requireWorkspaceSettings(db);await requireWebsiteDocuments(db);},32:requireStagedEvidence,33:async db=>{await requireWorkspaceDomains(db);await requireStagedEvidence(db);},34:async db=>{await requireWorkspaceSettings(db);await requireStagedEvidence(db);},35:async db=>{await requireWebsiteDocuments(db);await requireStagedEvidence(db);},36:async db=>{await requireWorkspaceDomains(db);await requireWebsiteDocuments(db);await requireStagedEvidence(db);},37:async db=>{await requireWorkspaceSettings(db);await requireWebsiteDocuments(db);await requireStagedEvidence(db);},38:requireWebsiteEditor,39:async db=>{await requireWorkspaceDomains(db);await requireWebsiteEditor(db);},40:async db=>{await requireWorkspaceSettings(db);await requireWebsiteEditor(db);},41:async db=>{await requireStagedEvidence(db);await requireWebsiteEditor(db);},42:async db=>{await requireWorkspaceDomains(db);await requireStagedEvidence(db);await requireWebsiteEditor(db);},43:async db=>{await requireWorkspaceSettings(db);await requireStagedEvidence(db);await requireWebsiteEditor(db);},44:requireWebsitePresentation,45:async db=>{await requireWorkspaceDomains(db);await requireWebsitePresentation(db);},46:async db=>{await requireWorkspaceSettings(db);await requireWebsitePresentation(db);},47:async db=>{await requireStagedEvidence(db);await requireWebsitePresentation(db);},48:async db=>{await requireWorkspaceDomains(db);await requireStagedEvidence(db);await requireWebsitePresentation(db);},49:async db=>{await requireWorkspaceSettings(db);await requireStagedEvidence(db);await requireWebsitePresentation(db);}}[format])(targetDb);
   // Rekey the retained representation itself: rebuilding books changes index
   // roots/deltas and omits non-record state. Fresh per-scope keys encrypt the
   // same original records; all content identities and historical roots survive.

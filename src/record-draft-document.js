@@ -1,3 +1,4 @@
+import {DraftTemplateBuilder} from './record-draft-template.js';
 // A recovery checkpoint retains addressable fields and collection items under
 // its notebook key. The original transport remains available for compatibility.
 import {RecordBlockStore,withRecordBlockStore} from './record-block-store.js';
@@ -16,10 +17,13 @@ export async function retainDraftDocument(workspace,id,content,expected,{signal}
   // typing. Preserve that unfinished work; a research save resolves ownership.
   const generation=1,key=await store.scopeKey(expected.notebookId,generation,{create:true});
   try{
-   const blocks=new RecordBlockStore(store,expected.notebookId,generation,key),tree=blocks.tree(),record=new RecordContainerBuilder(blocks,'object');let collection=null;
+   const blocks=new RecordBlockStore(store,expected.notebookId,generation,key),tree=blocks.tree(),record=new RecordContainerBuilder(blocks,'object');let collection=null,template=null;
    const close=async()=>{if(collection){await record.add({name:collection.name,value:await collection.builder.finish()});collection=null;}};
    const inspected=await inspectTransferredDraft(workspace,id,content,{signal,ownership:true,part:async part=>{
     if(part.kind!=='item')await close();
+    if(part.kind==='template'){
+     template??=new DraftTemplateBuilder(blocks);const root=await template.accept(part);if(root){await record.add({name:'template',value:root});template=null;}return;
+    }
     if(part.kind==='array')collection={name:part.name,builder:new RecordContainerBuilder(blocks,'array')};
     else if(part.kind==='item'){
      if(collection?.name!==part.name||collection.builder.count!==part.index)throw new AppError('INVALID');

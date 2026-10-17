@@ -1,3 +1,5 @@
+import {configurationCreationOptions,hasConfigurationCreation,validCreationConfiguration,prepareCreationConfiguration,populateCreationConfiguration,discardCreationConfiguration,localConfigurationSource} from './configuration-creation.js';
+import {projectSummaryForBook} from './configuration-metadata.js';
 import {assertBookPlacementAvailable} from './lab-book-placement-state.js';
 import path from 'node:path';
 import {readdir,opendir,unlink} from 'node:fs/promises';
@@ -17,14 +19,14 @@ import {AppError} from './errors.js';
 const intentLimit=2*MAX_BYTES+ACCESS_LIMIT+16384;
 const nameKey=name=>process.platform==='win32'||process.platform==='darwin'?name.normalize('NFC').toLowerCase():name;
 export class LabBookCreation{
- constructor(project,deviceStore,{publish=async()=>{}}={}){this.publish=publish;this.project=project;this.registry=new LabBookRegistry(project);this.deviceStore=deviceStore;}
+ constructor(project,deviceStore,{publish=async()=>{},withConfigurationSource=localConfigurationSource(project)}={}){this.publish=publish;this.project=project;this.registry=new LabBookRegistry(project);this.deviceStore=deviceStore;this.withConfigurationSource=withConfigurationSource;}
  file(id,completed=false){if(!researchId(id))throw new AppError('INVALID');return path.join(this.project.root,'.observanda',completed?'lab-book-created':'lab-book-creation',id+'.obsv');}
  async read(id){
   const completed=this.file(id,true),file=await assertRegular(completed,{missing:true})?completed:this.file(id),stat=await assertRegular(file,{missing:true});if(!stat)return null;if(stat.size>intentLimit+128)throw new AppError('LIMIT');let value;
   try{value=JSON.parse(await this.project.readFile(file,'utf8'));}catch(error){if(error instanceof SyntaxError)throw new AppError('FORMAT');throw error;}
   if(!value||value.version!==1||!['prepared','attached'].includes(value.phase)||!researchId(value.labBookId)||!/^[a-f0-9]{64}$/.test(value.fingerprint??'')||!researchId(value.namespaceId)||!researchId(value.vaultId))throw new AppError('FORMAT');
   const fields=value.phase==='prepared'?'access,book,directory,fingerprint,labBookId,namespaceId,phase,vaultId,version':'fingerprint,labBookId,namespaceId,phase,vaultId,version';
-  if(Object.keys(value).sort().join()!==fields)throw new AppError('FORMAT');
+  if(Object.keys(value).filter(key=>key!=='configuration').sort().join()!==fields||value.configuration!==undefined&&(value.phase!=='prepared'||!validCreationConfiguration(value.configuration)))throw new AppError('FORMAT');
   if(value.phase==='prepared'){
    validateStorageName(value.directory,{nameError:'FORMAT'});validateNotebook(value.book);
    if(value.directory.toLowerCase()==='.observanda'||value.book.id!==value.namespaceId||value.book.notebooks.length!==1||value.book.notebooks[0].id!==value.labBookId||value.book.notebooks[0].title!==value.directory||value.book.projects.length!==1||value.book.projects[0].id!==this.project.projectId||value.access?.vaultId!==value.vaultId)throw new AppError('FORMAT');
@@ -33,7 +35,7 @@ export class LabBookCreation{
  }
  async acknowledge(id,intent){
   const entry=await this.registry.locate(intent.labBookId);if(entry.namespaceId!==intent.namespaceId||entry.vaultId!==intent.vaultId)throw new AppError('CONFLICT');
-  await this.publish(entry);
+  await this.publish(entry);await discardCreationConfiguration(this.project,intent.configuration);
   if(!await assertRegular(this.file(id,true),{missing:true})){await privateDirectory(this.project.root,'.observanda/lab-book-created');await this.project.writeFile(this.file(id,true),serialize({version:1,phase:'attached',labBookId:intent.labBookId,namespaceId:intent.namespaceId,vaultId:intent.vaultId,fingerprint:intent.fingerprint}));}
   await unlink(this.file(id)).catch(error=>{if(error.code!=='ENOENT')throw error;});
   return {book:entry};
@@ -61,7 +63,7 @@ export class LabBookCreation{
   return this.create({...command,book:intent.book.notebooks[0]},{check,resume:true});
  }
  async create(command,{check=async()=>{},resume=false}={}){
-  if(!command||Object.keys(command).sort().join()!=='book,id,password,username'||!researchId(command.id)||!researchId(command.book?.id)||command.book.projectId!==this.project.projectId||typeof command.username!=='string'||typeof command.password!=='string')throw new AppError('INVALID');
+  if(!command||Object.keys(command).filter(key=>!configurationCreationOptions.includes(key)).sort().join()!=='book,id,password,username'||!researchId(command.id)||!researchId(command.book?.id)||command.book.projectId!==this.project.projectId||typeof command.username!=='string'||typeof command.password!=='string')throw new AppError('INVALID');
   validateStorageName(command.book.title);if(command.book.title.toLowerCase()==='.observanda')throw new AppError('FOLDER_NAME');
   const {password,...request}=command,fingerprint=digest(revisionText(request));
   await check();const directory=await privateDirectory(this.project.root,'.observanda/lab-book-creation');
@@ -78,12 +80,14 @@ export class LabBookCreation{
      const current=await this.registry.read();if(current.value.relocated?.some(entry=>entry.labBookId===command.book.id)||current.value.deleted.some(entry=>entry.labBookId===command.book.id)||current.value.books.some(entry=>entry.labBookId===command.book.id||nameKey(entry.directory)===nameKey(command.book.title)))throw new AppError('EXISTS');
      const root=storageCreationPath(this.project.root,command.book.title);if(await assertRegular(root,{directory:true,missing:true})&&(await readdir(root)).length)throw new AppError('EXISTS');
      const {metadata}=await this.project.outline(),parent=metadata.projects.find(entry=>entry.id===this.project.projectId);if(!parent)throw new AppError('DATABASE_LOCATION');
-     const book=createNotebook(command.book.title);book.projects=[{...parent,parentId:null}];book.notebooks=[structuredClone(command.book)];validateNotebook(book);
+     const book=createNotebook(command.book.title);book.projects=[projectSummaryForBook(parent)];book.notebooks=[structuredClone(command.book)];if(hasConfigurationCreation(command))delete book.notebooks[0].configuration;validateNotebook(book);
+     const selected=await prepareCreationConfiguration(this.project,command,{projectId:this.project.projectId,notebookId:command.book.id,slot:'configuration'},{withConfigurationSource:this.withConfigurationSource,check});
+     if(selected&&Object.hasOwn(selected,'inline'))book.notebooks[0].configuration=selected.inline?.configuration??{profiles:[],sections:[]};validateNotebook(book);
      const access=await createWorkspaceAccess(command.username,password,this.deviceStore);vault=takeCreatedVault(access);
-     intent={version:1,phase:'prepared',labBookId:command.book.id,namespaceId:book.id,vaultId:vault.id,directory:command.book.title,book,access,fingerprint};
+     intent={version:1,phase:'prepared',labBookId:command.book.id,namespaceId:book.id,vaultId:vault.id,directory:command.book.title,book,access,fingerprint,...(selected?.frozen?{configuration:selected.frozen}:{})};
      const raw=serialize(intent);if(Buffer.byteLength(raw)>intentLimit)throw new AppError('LIMIT');await withWriterLease(path.join(this.project.root,'.observanda/lab-books.lock'),()=>this.project.writeFile(this.file(command.id),raw));
     }
-    await check();await this.project.requireStorageKey();const root=storageCreationPath(this.project.root,intent.directory),storage=await initializeLabBookLocation(root,intent.labBookId,intent.book,intent.access,vault);
+    await check();await this.project.requireStorageKey();const root=storageCreationPath(this.project.root,intent.directory),storage=await initializeLabBookLocation(root,intent.labBookId,intent.book,intent.access,vault,intent.configuration?{populateId:'configuration-v1:'+digest(serialize(intent.configuration)),populate:storage=>populateCreationConfiguration(storage,this.project,intent.configuration,{commandId:command.id,projectId:this.project.projectId,notebookId:intent.labBookId,slot:'configuration',withConfigurationSource:this.withConfigurationSource,check})}:{});
     await check();
     for(let attempt=0;;attempt++){
      const current=await this.registry.read();

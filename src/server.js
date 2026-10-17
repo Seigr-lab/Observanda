@@ -1,3 +1,4 @@
+import {configurationSourceAccess} from './configuration-source-access.js';
 import {recordOwnerTransferCompletionError} from './record-owner-transfer-application.js';
 import {verifyPublicationCandidate} from './retained-publication-files.js';
 import {websiteRequestContext} from './website-request-context.js';
@@ -1010,7 +1011,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       const research=researchRequest(url.pathname);
       if(req.method==='POST'&&research){
         const data=await body(req,research.limit,research.capacity);
-        if(research.write)return await operationResponse(req,res,options=>executeResearchRequest(workspace,url.pathname,data,options),json);
+        if(research.write)return await operationResponse(req,res,options=>executeResearchRequest(workspace,url.pathname,data,{...options,withConfigurationSource:configurationSourceAccess(historyProjects,client,{check:req.checkWriter})}),json);
         const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
         try{return json(await executeResearchRequest(workspace,url.pathname,data,{signal:controller.signal}));}finally{res.off('close',abort);}
       }

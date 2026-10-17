@@ -1,3 +1,4 @@
+import {discardConfigurationCheckpoint} from './configuration-commands.js';
 import {ProjectPlacementTransfer} from './project-placement-transfer.js';
 import {trackProjectTransfer} from './project-transfer-tasks.js';
 import {projectPlacementLocation,checkPlacementParent} from './project-placement.js';
@@ -11,7 +12,7 @@ import {ProjectStorage} from './project-storage.js';
 import {WorkspaceProjectRename,clearRenamedProjects} from './workspace-project-rename.js';
 import {ProjectBookRename,clearRenamedBooks} from './project-book-rename.js';
 import {RENAME_KEYS_FILE,RENAME_BOOK_KEYS_FILE} from './workspace-rename-keys.js';
-import {projectRenameFile,readProjectRename,locateProjectRename,directoryIdentity,sameDirectory} from './project-rename-receipt.js';
+import {projectRenameFile,readProjectRename,locateProjectRename,directoryIdentity,sameDirectory,validProjectRenameSettings} from './project-rename-receipt.js';
 import {nestedRenameRoot} from './workspace-rename-paths.js';
 import {withProjectLifecycle} from './project-lifecycle.js';
 import {withWriterLease} from './writer-lease.js';
@@ -35,7 +36,7 @@ export class ProjectRenames{
  scope(value){return {...value,source:nestedRenameRoot(this.registry.workspace.root,value.source),destination:nestedRenameRoot(this.registry.workspace.root,value.destination)};}
  helpers(storage){return {projects:new WorkspaceProjectRename(storage,{registry:this.registry}),books:new ProjectBookRename(storage,{keyFile:RENAME_BOOK_KEYS_FILE})};}
  async run(storage,{id,name,expectedName,settings=null,placement=null,withProject,withBook,check=async()=>{},checkpoint=async()=>{}}){
-  if(settings!==null&&(!settings||Object.keys(settings).sort().join()!=='etag,project'||typeof settings.etag!=='string'||settings.project?.id!==this.projectId||settings.project.title!==name||settings.project.parentId!=null))throw new AppError('INVALID');
+  if(settings!==null&&(!validProjectRenameSettings(settings)||settings.project?.id!==this.projectId||settings.project.title!==name||settings.project.parentId!=null))throw new AppError('INVALID');
   if(storage?.projectId!==this.projectId||!researchId(id))throw new AppError('INVALID');validateStorageName(name);validateStorageName(expectedName);if(placement&&name!==expectedName)throw new AppError('INVALID');
   return trackProjectTransfer(projectRenameFile(this.registry,this.projectId),()=>withProjectLifecycle(this.registry,this.projectId,'rename',async()=>{
    await check();let prior=await this.read();
@@ -126,7 +127,7 @@ export class ProjectRenames{
     const head=await store.head(),snapshot=await store.snapshot(head);if(snapshot.metadata.id!==value.namespaceId)throw new AppError('STORAGE_RENAME_STATE');
     if(snapshot.metadata.title===name&&snapshot.metadata.projects[0].title===name&&(!value.settings||serialize(snapshot.metadata.projects[0])===serialize(value.settings.project)))return;
     if(value.settings&&head!==value.settings.etag)throw new AppError('CONFLICT');
-    const current=await store.indexed(snapshot),metadata={...current.metadata,title:name,projects:value.settings?[value.settings.project]:current.metadata.projects.map(project=>({...project,title:name}))};await store.validateMetadata(current,metadata,{records:[]});await store.commitChanges(head,current,metadata,[],{now:new Date().toISOString()});
+    const current=await store.indexed(snapshot),metadata={...current.metadata,title:name,projects:value.settings?[value.settings.project]:current.metadata.projects.map(project=>({...project,title:name}))};await store.validateMetadata(current,metadata,{records:[]});await store.commitChanges(head,current,metadata,[],{now:new Date().toISOString()});if(value.settings?.checkpoint)await discardConfigurationCheckpoint(store,{workspaceId:metadata.id,projectId:this.projectId,notebookId:null,slot:'labBookTemplate'},value.settings.checkpoint);
    })));await checkpoint('metadata',value);
    for(let attempt=0;;attempt++){
     const current=await this.registry.read(),entries=[{projectId:this.projectId,namespaceId:value.namespaceId,vaultId:value.vaultId,relative:''},...(value.projects??[])];

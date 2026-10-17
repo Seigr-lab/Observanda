@@ -1,3 +1,4 @@
+import {inspectDraftTemplate} from './record-draft-template.js';
 import {createHash} from 'node:crypto';
 import {RecordDraftChunks} from './record-draft-chunks.js';
 import {recordDraftParts} from './record-draft-parts.js';
@@ -6,8 +7,12 @@ import {revisionId} from './web/revision-model.js';
 import {AppError} from './errors.js';
 
 export async function inspectRecordDraft(chunks,{signal,part:consume,ownership=false}={}){
- const record=new DraftRecordValidation(),change={};
- for await(const part of recordDraftParts(chunks,{signal})){
+ const record=new DraftRecordValidation(),change={},parts=recordDraftParts(chunks,{signal});
+ for await(const part of parts){
+  if(part.kind==='template'){
+   if(part.type!=='object'||part.path.length)throw new AppError('INVALID');
+   await inspectDraftTemplate(part,parts,consume,{signal});if(!record.field('template',null))throw new AppError('INVALID');continue;
+  }
   let valid;
   if(part.kind==='change'){valid=part.value===null||revisionId(part.value);change[part.name]=part.value;}
   else if(part.kind==='array')valid=record.array(part.name);

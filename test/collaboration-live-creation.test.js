@@ -7,6 +7,7 @@ import {LiveClient} from '../src/collaboration/live-client.js';
 import {LiveConnections} from '../src/collaboration/live-connections.js';
 import {ResearchRecords} from '../src/research.js';
 import {AppError} from '../src/errors.js';
+import {ConfigurationCommands} from '../src/configuration-commands.js';
 
 async function setup(t){
  const f=await liveCreationFixture(t),host=await startLiveHost(f.author.workspace,f.author.deviceStore,{host:'127.0.0.1',advertise:'https://127.0.0.1',port:0});t.after(()=>host.close());
@@ -68,4 +69,17 @@ test('encrypted creation outbox survives a lost host response, restart and local
  await manager.command('creation-acknowledge',{connectionId,id:command.id});assert.equal((await manager.command('creation-pending',{connectionId})).pending,null);
  const bad={...command,id:randomUUID(),values:{}};const rejected=await manager.command('create-record',{connectionId,command:bad});assert.equal(rejected.rejected.code,'INVALID');
  await manager.command('creation-acknowledge',{connectionId,id:bad.id});
+});
+
+
+test('shared configuration pages retain exact authorized source pins for late fields and choices',async t=>{
+ const f=await setup(t),notebook=f.book.notebooks[0],commands=new ConfigurationCommands(f.author.workspace),owner={workspaceId:f.book.id,projectId:notebook.projectId,notebookId:notebook.id,slot:'configuration'};
+ const opened=await commands.open({...owner,saved:true}),changed=await commands.change({...owner,configurationPin:opened.configurationPin,draftId:null,expectedRevision:null,commandId:randomUUID(),operations:Array.from({length:28},(_,i)=>({type:'append',collection:'fields',sectionId:f.templateId,value:{key:'field-'+i,label:'Field '+i,type:'select',unit:'',required:false,choices:Array.from({length:97},(_,j)=>'Choice '+j)}}))});
+ await commands.save({...owner,configurationPin:opened.configurationPin,draftId:changed.draft.id,expectedRevision:changed.draft.revision,commandId:randomUUID()});
+ const options=await f.client.call('creation',{notebookId:notebook.id,offset:0,limit:1});assert.equal(options.choices.length,1);assert.equal(options.next,1);assert.equal(Object.hasOwn(options.choices[0],'fields'),false);
+ const command=creationCommand(options),fields=await f.client.call('creationFields',{notebookId:notebook.id,source:command.source,offset:32,limit:1});assert.equal(fields.fields[0].key,'field-27');assert.equal(fields.total,33);assert.equal(fields.fields[0].choiceCount,97);assert.equal(Object.hasOwn(fields.fields[0],'choices'),false);
+ const choices=await f.client.call('creationChoices',{notebookId:notebook.id,source:command.source,fieldKey:'field-27',offset:96,limit:1});assert.deepEqual(choices.items,['Choice 96']);assert.deepEqual(choices.source,command.source);
+ await assert.rejects(f.client.call('creationFields',{notebookId:f.book.notebooks.at(-1).id,source:command.source}),{code:'COLLABORATION_DENIED'});
+ await assert.rejects(f.client.call('creationChoices',{notebookId:notebook.id,source:{...command.source,configurationPin:{...command.source.configurationPin,notebookId:randomUUID()}},fieldKey:'field-27'}),{code:'RECORD_CHANGED'});
+ const created=await f.client.call('create',{...command,values:{...command.values,'field-27':'Choice 96'}}),read=await f.client.call('read',{recordId:created.record.id});assert.equal(read.record.template.values['field-27'],'Choice 96');assert.equal(read.record.template.fields.length,33);
 });

@@ -1,3 +1,4 @@
+import {customFieldChoices} from './custom-field-choices-ui.js';
 import {recordValueEditor} from './record-value-editor.js';
 import {recordValueFields,contributorValueId,relationValueId,mediaValueId,figureValueId} from './record-value-model.js';
 import {recordFigureView} from './record-figure-values-ui.js';
@@ -27,13 +28,13 @@ export function recordValuesUI(options){
 }
 export function recordValuesView(options,lifecycle){
  const {esc,field}=options,option=(value,name,current)=>'<option value="'+esc(value)+'"'+(value===current?' selected':'')+'>'+esc(name)+'</option>',helpers={esc,field,option};
- let retainedContributor=null;const media=recordMediaView(options);
+ let retainedContributor=null;const media=recordMediaView(options),choices=customFieldChoices({api:options.api,esc,lifecycle});
  const display=base=>base.field==='type'?recordLabel(base.value.value):base.field==='occurredOn'?recordDateLabel(base.value.value):base.field==='status'?text('status_'+base.value.value):base.value.value===null?text('empty'):typeof base.value.value==='boolean'?text(base.value.value?'yes':'no'):base.value.value;
  const relations=recordRelationView(options,lifecycle),figures=recordFigureView(options,lifecycle),attempts=recordAttemptView(options,lifecycle),results=recordResultView(options,lifecycle);return {
   prepare:(base,value,input)=>attemptValueField(base.field)?attempts.prepare(base,value,input):undefined,
   initialize(base,value,input,changed){if(resultValueId(base.field))results.initialize(base,value,input,changed);else if(attemptValueField(base.field))attempts.initialize(base,value,input,changed);else if(figureValueId(base.field))figures.initialize(base,value,input,changed);},
   rebase(base,value){if(attemptValueField(base.field))attempts.rebase(base,value);},
-  bind:dialog=>{relations.bind(dialog);figures.bind(dialog);attempts.bind(dialog);results.bind(dialog);},release:()=>{relations.release();figures.release();attempts.release();results.release();},busy:()=>relations.busy()||figures.busy()||attempts.busy()||results.busy(),
+  bind:dialog=>{choices.bind(dialog);relations.bind(dialog);figures.bind(dialog);attempts.bind(dialog);results.bind(dialog);},release:()=>{choices.release();relations.release();figures.release();attempts.release();results.release();},busy:()=>relations.busy()||figures.busy()||attempts.busy()||results.busy(),
   heading:base=>base?text('heading',{field:label(base.field,base.definition)}):text('edit'),focus:'[data-writing-fields] input,[data-writing-fields] select,[data-writing-fields] textarea',
   fields(base,value,changed){
    const name=base.field,item=value.value;
@@ -49,7 +50,8 @@ export function recordValuesView(options,lifecycle){
    }
    if(name==='occurredOn')return recordDateFields(item,helpers);
    let control;
-   if(base.definition)control=templateFieldInput(base.definition,item,{esc,attrs:'data-record-value'});
+   if(choices.supported(base.definition))control=choices.fields(base,value,changed);
+   else if(base.definition)control=templateFieldInput(base.definition,item,{esc,attrs:'data-record-value'});
    else if(name==='type')control='<select data-record-value>'+RECORD_TYPES.map(type=>option(type.id,recordLabel(type.id),item)).join('')+'</select><p class="muted">'+esc(text('typeHelp'))+'</p>';
    else if(name==='status')control='<select data-record-value>'+STATUSES.map(id=>option(id,text('status_'+id),item)).join('')+'</select>';
    else if(name==='share')control='<select data-record-value>'+option('false',text('private'),String(item))+option('true',text('public'),String(item))+'</select>';

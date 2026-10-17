@@ -30,6 +30,7 @@ export async function sharingCommand(workspace,device,operation,data){
  if(operation==='copy')return {path:await exchange.acceptCopy(data.id,data.destination)};
  const review=new ChangeReview(exchange);
  if(operation==='review')return review.review(data.id);
+ if(operation==='configuration')return review.configuration(data);
  if(operation==='record')return {record:await review.record(data.reviewId,data.recordId,data.version),materials:await review.materials(data.reviewId,data.recordId,data.version),fonts:await review.fonts(data.reviewId,data.recordId,data.version)};
  if(operation==='apply')return review.apply({reviewId:data.reviewId,choices:data.choices});
  throw new AppError('INVALID');

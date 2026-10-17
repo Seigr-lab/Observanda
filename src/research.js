@@ -1,3 +1,5 @@
+import {isConfigurationReference} from './web/configuration-reference.js';
+import {validateCurrentInlineRecordTemplate} from './record-template-configuration.js';
 import {recordContentRevision} from './record-encoding.js';
 import {AppError} from './errors.js';
 import {reconcileWebsiteMembership} from './website-membership.js';
@@ -114,8 +116,10 @@ export class ResearchRecords {
         if(basis?.templateRevision){if(recordRevision(schema)!==basis.templateRevision)throw new AppError('INVALID',[{field:'Record type snapshot',recordId:record.id}]);}
         else if(previous?.template){const {values:oldValues,...oldSchema}=previous.template;if(JSON.stringify(schema)!==JSON.stringify(oldSchema))throw new AppError('INVALID',[{field:'Record type snapshot',recordId:record.id}]);}
         else{
-          const notebook=book.notebooks.find(n=>n.id===record.notebookId),section=notebook?.configuration?.sections.find(s=>s.id===record.template.id);
-          if(!section?.enabled||JSON.stringify(schema)!==JSON.stringify({id:section.id,profileId:section.profileId,label:section.label,description:section.description,fields:section.fields}))throw new AppError('RECORD_CHANGED',[{field:'Lab book record type changed',recordId:record.id}]);
+          const notebook=book.notebooks.find(n=>n.id===record.notebookId);
+          if(isConfigurationReference(notebook?.configuration))await this.workspace.catalogue(store=>validateCurrentInlineRecordTemplate(store,book,record));
+          else{const section=notebook?.configuration?.sections?.find(s=>s.id===record.template.id);
+           if(!section?.enabled||JSON.stringify(schema)!==JSON.stringify({id:section.id,profileId:section.profileId,label:section.label,description:section.description,fields:section.fields}))throw new AppError('RECORD_CHANGED',[{field:'Lab book record type changed',recordId:record.id}]);}
         }
       }
 

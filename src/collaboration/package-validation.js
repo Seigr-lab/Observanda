@@ -1,3 +1,4 @@
+import {configurationBootstrap} from './configuration-transfer.js';
 import {mkdtemp,rm,realpath} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -16,7 +17,7 @@ export async function validateResearchPackage(parts){
  let db;
  try{
   const workspace=new Workspace(directory,vault);await privateDirectory(directory,'.observanda');db=await openCatalogue(directory,{create:true,detached:true});await db.run('BEGIN');
-  await catalogueContext.run({root:directory,db,afterCommit:[]},async()=>{await new ResearchCatalogue(workspace,db).put(selection.metadata);await populateSharedWorkspace(workspace,parts);});
+  await catalogueContext.run({root:directory,db,afterCommit:[]},async()=>{await new ResearchCatalogue(workspace,db).put(configurationBootstrap(selection.metadata));await populateSharedWorkspace(workspace,parts);});
  }finally{
   try{await db?.close();}finally{clearVault(vault);if(path.dirname(directory)===await realpath(os.tmpdir())&&path.basename(directory).startsWith('observanda-collaboration-validation-'))await rm(directory,{recursive:true,force:true,maxRetries:5});}
  }

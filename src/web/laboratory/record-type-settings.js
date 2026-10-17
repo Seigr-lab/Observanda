@@ -1,3 +1,4 @@
+import {configurationTypeSettings} from '../configuration-type-settings.js';
 import {configurationOf} from '../notebook-schema.js';
 import {locationName} from '../workspace-structure.js';
 
@@ -5,6 +6,7 @@ import {sectionDetails,sectionInput,sectionAction} from './section-editor.js';
 
 // A configuration draft is committed only through an explicit save.
 export async function recordTypeSettings(services,profile){
+ if(services.state.storage?.researchStorage==='catalogue')return configurationTypeSettings(services,profile);
  const {state,api,esc,field,option,draw,changed}=services,workspaceId=state.book.id;
  let snapshot,entity,base,draft,pending=null,request=null,error=null,disposed=false,selectedId=null,showRemoved=false;
  const copy=v=>structuredClone(v),equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);

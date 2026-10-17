@@ -87,9 +87,11 @@ test('desktop portable owners preserve originals and links and publish only sele
   // The website owns only consent and presentation. Save stable source identities
   // before import, including a book whose project placement will change.
   const sites=await call('/api/websites/list',{}),created=await call('/api/websites/change',{workspaceId:sites.workspaceId,etag:sites.etag,operation:'create',name:'Independent field journal',projectId:null});
-  let site=await call('/api/websites/open',{id:created.id});expect(site.site.projectId).toBeNull();
+  const website={workspaceId:sites.workspaceId,websiteId:created.id};
+  let site=await call('/api/websites/editor/open',{...website,websitePin:created.websitePin});expect(site.site.projectId).toBeNull();
   const sources=books.map(book=>({workspaceId:book.namespaceId,labBookId:book.labBookId,projectIds:[book.projectId],selection:{defaultShare:false,includeProjects:[],records:[{id:book.records[0].id,share:true,attachments:[]}]}}));
-  await call('/api/websites/save',{id:created.id,command:{workspaceId:site.book.id,baseEtag:site.etag,metadata:{website:{...site.book.website,researchSources:sources}},projects:[],changes:[],removed:[],selection:site.site.selection}});
+  site=await call('/api/websites/editor/change',{...website,websitePin:site.websitePin,draftId:null,expectedRevision:null,commandId:randomUUID(),operations:[{type:'settings',path:['document','website','researchSources'],value:sources}]});
+  await call('/api/websites/editor/save',{...website,websitePin:site.websitePin,draftId:site.draft.id,expectedRevision:site.draft.revision,commandId:randomUUID()});
   const imported=await call('/api/projects/open',{id:randomUUID(),path:copiedProject,parentId:null,username:'',password:'',recovery:'',owners:[]});
   expect(imported.project.projectId).toBe(parent.projectId);expect(imported.project.root).toBe(path.join(receivingRoot,path.basename(parent.root)));
   await call(projectRoute(parent.projectId)+'/lab-books/import',{id:randomUUID(),path:copiedBook,username:'',password:'',recovery:''});
@@ -117,7 +119,7 @@ test('desktop portable owners preserve originals and links and publish only sele
   const amended=(await selection(importedBook)).book.entries,amendedRecord=amended.find(record=>record.id===address.recordId);
   expect(amendedRecord.body).toBe(amendedBody);expect(amendedRecord.relations).toEqual(importedBook.saved.find(record=>record.id===address.recordId).relations);
   expect(amended.find(record=>record.id===importedBook.records[1].id)).toEqual(importedBook.saved.find(record=>record.id===importedBook.records[1].id));importedBook.saved=amended;
-  site=await call('/api/websites/open',{id:created.id});expect(site.book.website.researchSources).toEqual(sources);expect(site.book.entries).toEqual([]);
+  site=await call('/api/websites/editor/open',website);expect(site.site.document.website.researchSources).toEqual(sources);expect(site.research.count).toBe(0);expect(site.research.metadata.entries).toBeUndefined();
   console.log('Portable owners: reopened imported owners with original workspace and copy locations unavailable; originals, history and cross-owner reference match.');
   await page.evaluate(id=>location.hash='#/websites/'+id+'/editor',created.id);await expect(page.locator('.website-site-context')).toContainText('Independent field journal');
   // Explicitly place one website-owned original download; research originals and

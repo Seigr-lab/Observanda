@@ -1,3 +1,4 @@
+import {verifyPackageConfigurations} from './configuration-transfer.js';
 import {Organizations} from './organizations.js';
 import {ContentAccess} from './content-access.js';
 import {ExchangeParts} from './exchange-parts.js';
@@ -24,6 +25,7 @@ export async function verifyCollaboration(workspace,verified){
    const pointer=await parts.descriptor(item.kind,item.name);if(identityHash(pointer)!==identityHash(item))throw new AppError('COLLABORATION_DAMAGED');
    const content=parts.content(item);await verified.once(['collaboration-file',parts.id,item.index,item.size,item.sha256],()=>content.verify());
   }
+  await verified.once(['collaboration-configurations',parts.id,head.selectionHash],()=>verifyPackageConfigurations(parts,selection.metadata));
   if(head.direction==='incoming'||head.direction==='base'){
    if(!head.attestation)throw new AppError('COLLABORATION_DAMAGED');
    const signed=verifyOrganizationCommand(head.attestation),sender=selection.kind==='offer'?selection.owner.identity.id:selection.recipient.identity.id;

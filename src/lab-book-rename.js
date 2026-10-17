@@ -1,3 +1,5 @@
+import {validConfigurationReference} from './web/configuration-reference.js';
+import {discardConfigurationCheckpoint} from './configuration-commands.js';
 import {assertBookPlacementAvailable} from './lab-book-placement-state.js';
 import {assertBookTransfersComplete} from './lab-book-transfer-state.js';
 // Rename the existing book directory and its current metadata as one recoverable
@@ -20,7 +22,7 @@ import {researchId} from './web/research-reference.js';
 import {validConfiguration} from './web/notebook-schema.js';
 import {MAX_BYTES} from './model.js';
 import {AppError} from './errors.js';
-const validSettings=value=>value===null||value&&Object.keys(value).sort().join()==='configuration,etag'&&hash(value.etag)&&validConfiguration(value.configuration);
+const validSettings=value=>value===null||value&&['configuration,etag','configuration,etag,input','etag,input','checkpoint,configuration,etag,input'].includes(Object.keys(value).sort().join())&&hash(value.etag)&&(!Object.hasOwn(value,'configuration')||validConfiguration(value.configuration)||validConfigurationReference(value.configuration))&&(!Object.hasOwn(value,'input')||hash(value.input))&&(!Object.hasOwn(value,'checkpoint')||value.checkpoint&&Object.keys(value.checkpoint).sort().join()==='id,revision'&&researchId(value.checkpoint.id)&&hash(value.checkpoint.revision));
 const hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const nameKey=name=>['win32','darwin'].includes(process.platform)?name.normalize('NFC').toLowerCase():name;
 const identity=stat=>({dev:String(stat.dev),ino:String(stat.ino)});
@@ -107,8 +109,9 @@ export class LabBookRenames{
    await storage.withLock(()=>storage.catalogue(async store=>{
     const head=await store.head(),snapshot=await store.snapshot(head);if(snapshot.metadata.id!==value.namespaceId)throw new AppError('STORAGE_RENAME_STATE');
     if(snapshot.metadata.notebooks[0].title===value.destination&&snapshot.metadata.title===value.destination&&(!value.settings||serialize(snapshot.metadata.notebooks[0].configuration)===serialize(value.settings.configuration)))return;
-    const current=await store.indexed(snapshot),metadata={...current.metadata,title:value.destination,notebooks:current.metadata.notebooks.map(book=>({...book,title:value.destination,...(value.settings?{configuration:value.settings.configuration}:{})}))};
-    await store.commitChanges(head,current,metadata,[],{now:new Date().toISOString()});
+    const current=await store.indexed(snapshot),metadata={...current.metadata,title:value.destination,notebooks:current.metadata.notebooks.map(book=>{const next={...book,title:value.destination};if(value.settings){if(Object.hasOwn(value.settings,'configuration'))next.configuration=value.settings.configuration;else delete next.configuration;}return next;})};
+    await store.validateMetadata(current,metadata);await store.commitChanges(head,current,metadata,[],{now:new Date().toISOString()});
+    if(value.settings?.checkpoint)await discardConfigurationCheckpoint(store,{workspaceId:metadata.id,projectId:value.projectId,notebookId:value.labBookId,slot:'configuration'},value.settings.checkpoint);
    }));await checkpoint('metadata',value);
    for(let attempt=0;;attempt++){
     const current=await this.registry.read(),entry=current.value.books.find(book=>book.labBookId===value.labBookId);

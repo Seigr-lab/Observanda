@@ -1,11 +1,13 @@
+import {isConfigurationReference} from '../configuration-reference.js';
+import {t} from '../i18n/index.js';
 
 import {profileById} from './catalog.js';
 import {configurationOf} from '../notebook-schema.js';
 import {notebooksIn,recordsIn} from '../workspace-structure.js';
 export const notebookRoute=id=>({action:'filter-notebook',id});
-export const notebookTypes=n=>configurationOf(n).profiles.filter(p=>p.enabled).map(p=>profileById(p.id)?.label??p.id);
+export const notebookTypes=n=>isConfigurationReference(n?.configuration)?[t('configurationEditor','profilesLoading')]:configurationOf(n).profiles.filter(p=>p.enabled).map(p=>profileById(p.id)?.label??p.id);
 export function notebookDirectory(book,projectId=null,options){
- return notebooksIn(book,projectId,options).map(n=>({id:n.id,title:n.title,kind:'notebook',projectIds:[n.projectId],types:notebookTypes(n),count:options?.counts?.[n.id]??(n.dedicated?null:book.entries.filter(e=>e.notebookId===n.id).length),route:notebookRoute(n.id)}));
+ return notebooksIn(book,projectId,options).map(n=>({id:n.id,title:n.title,kind:'notebook',projectIds:[n.projectId],types:options?.types?options.types(n):notebookTypes(n),count:options?.counts?.[n.id]??(n.dedicated?null:book.entries.filter(e=>e.notebookId===n.id).length),route:notebookRoute(n.id)}));
 }
 export const generalProjectRecords=(book,projectId=null)=>recordsIn(book,projectId);
 export function notebookRecordScope(book,{projectId=null,notebookId=null}={}){

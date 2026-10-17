@@ -1,3 +1,4 @@
+import {admitConfigurations,openPackageConfiguration} from './configuration-transfer.js';
 import {randomUUID} from 'node:crypto';
 import {AppError} from '../errors.js';
 import {exact,uuid} from '../modules/validation.js';
@@ -36,7 +37,7 @@ export class ChangeReview{
   const {parts}=await this.inputs(id);await validateResearchPackage(parts);
   return this.workspace.withLock(async()=>{
    const {base,selection,working}=await this.inputs(id),prior=await this.workspace.readMetadata(receiptPath(selection.id),16*1024*1024);if(prior)return {receipt:JSON.parse(prior)};
-   if(working){requireNewEdition(working,selection);updatedStructure((await this.workspace.outline()).metadata,working.selection,selection);}
+   if(working){requireNewEdition(working,selection);await updatedStructure((await this.workspace.outline()).metadata,working.selection,selection,{workspace:this.workspace});}
    const before=await packageRecords(base),after=await packageRecords(parts),baseHeads=await packageHeads(base),afterHeads=await packageHeads(parts),currentHeads=new Map();
    for await(const head of new ResearchMaterials(this.workspace).headEntries())currentHeads.set(head.id,head);
    const rows=[];
@@ -61,6 +62,30 @@ export class ChangeReview{
   const raw=await this.workspace.readMetadata(reviewPath(reviewId),16*1024*1024);valid(raw);const review=JSON.parse(raw),{base,parts,selection}=await this.inputs(review.packageId,{baseId:review.baseId});valid(review.rows.some(r=>r.id===recordId));
   if(version==='current')return this.workspace.catalogue(async store=>{const member=await store.member(await store.snapshot(),recordId),record=member?await store.record(recordId,member.revision):null,books=[...selection.metadata.notebooks,...(selection.kind==='offer'?(await packageSelection(base)).metadata.notebooks:[])];valid(!record||books.some(n=>n.id===record.notebookId),'COLLABORATION_DENIED');return record;});
   const source=version==='base'?base:parts;return await source.descriptor('record',recordId)?source.value('record',recordId):null;
+ }
+ async configuration(data){
+  const basic=['workspaceId','reviewId','notebookId','version','operation'];
+  valid(data&&uuid(data.workspaceId)&&uuid(data.reviewId)&&uuid(data.notebookId)&&['base','incoming'].includes(data.version)&&['open','window','item'].includes(data.operation),'INVALID');
+  const collection=data.collection,selected=data.operation!=='open';
+  if(selected)valid(['profiles','sections','fields','choices'].includes(collection),'INVALID');
+  const context=selected&&['fields','choices'].includes(collection)?['sectionId',...(collection==='choices'?['fieldKey']:[])]:[];
+  const required=[...basic,...(selected?['collection',...context]:[]),...(data.operation==='item'?['key']:[])],optional=data.operation==='window'?['offset','limit']:[];
+  valid(required.every(key=>Object.hasOwn(data,key))&&Object.keys(data).every(key=>required.includes(key)||optional.includes(key)),'INVALID');
+  if(data.operation==='window')valid(Number.isSafeInteger(data.offset??0)&&(data.offset??0)>=0&&Number.isSafeInteger(data.limit??20)&&(data.limit??20)>=1&&(data.limit??20)<=20,'INVALID');
+  const raw=await this.workspace.readMetadata(reviewPath(data.reviewId),16*1024*1024);valid(raw);
+  const review=JSON.parse(raw),{base,parts,selection}=await this.inputs(review.packageId,{baseId:review.baseId});
+  valid(review.id===data.reviewId&&review.exchangeId===selection.id&&review.kind===selection.kind&&review.baseId===base.id);
+  const source=data.version==='base'?base:parts,pinned=await packageSelection(source),side=data.version==='base'?'before':'after';
+  const row=review.structure?.books.find(value=>value.before?.id===data.notebookId||value.after?.id===data.notebookId),book=pinned.metadata.notebooks.find(value=>value.id===data.notebookId);
+  valid(pinned.metadata.id===data.workspaceId&&book&&row?.[side]?.id===data.notebookId&&identityHash(row[side])===identityHash(book),'COLLABORATION_SCOPE');
+  const read=async()=>{
+   const reader=await openPackageConfiguration(source,pinned,data.notebookId);
+   if(data.operation==='open')return {header:reader?await reader.header():null};
+   valid(reader,'NOT_FOUND');const query={collection,...Object.fromEntries(context.map(key=>[key,data[key]]))};
+   if(data.operation==='item')return {item:await reader.item({...query,key:data.key})};
+   return reader.window({...query,offset:data.offset??0,limit:data.limit??20});
+  };
+  return await source.workspace.storageKind()==='catalogue'?source.workspace.catalogue(read):read();
  }
  async materials(reviewId,recordId,version){
   await this.record(reviewId,recordId,version);
@@ -114,7 +139,8 @@ export class ChangeReview{
     }
     const removed=review.rows.filter(r=>chosen.has(r.id)&&r.kind==='removed').map(r=>r.id),retainedBookIds=new Set();
     if(working)for await(const member of store.members(snapshot))if(!removed.includes(member.id))retainedBookIds.add(member.notebookId);
-    const metadata=working?updatedStructure(snapshot.metadata,working.selection,selection,{retainedBookIds}):structuredClone(snapshot.metadata),service=new ResearchRecords(this.workspace,new MediaStore(this.workspace));
+    if(working)await admitConfigurations(this.workspace,parts,selection.metadata);
+    const metadata=working?await updatedStructure(snapshot.metadata,working.selection,selection,{workspace:this.workspace,retainedBookIds}):structuredClone(snapshot.metadata),service=new ResearchRecords(this.workspace,new MediaStore(this.workspace));
     metadata.branding=metadata.branding.filter(b=>!removed.some(id=>b.target==='entry:'+id));metadata.website.layouts=metadata.website.layouts.filter(l=>!removed.some(id=>l.target==='entry:'+id));
     await reconcileWebsiteMembership(metadata,id=>removed.includes(id)?null:store.member(snapshot,id));
     async function* changed(){

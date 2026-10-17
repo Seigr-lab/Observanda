@@ -1,3 +1,4 @@
+import {configurationProfileBooks,configurationProfileSummary} from './configuration-profiles.js';
 import {digest} from './storage-format.js';
 import {AppError} from './errors.js';
 import {summaryPage} from './summary-page.js';
@@ -6,9 +7,7 @@ import {dashboardCollectionContract} from './dashboard-collection-contract.js';
 import {dashboardSourceKey} from './web/dashboard-source-key.js';
 import {LabBookRegistry} from './lab-book-registry.js';
 import {catalogueOutline} from './catalogue-outline.js';
-import {labRecordProvider,labDataNotebooks} from './web/laboratory/data-scope.js';
-import {notebookTypes} from './web/laboratory/notebook-model.js';
-import {configurationOf} from './web/notebook-schema.js';
+import {labRecordProvider} from './web/laboratory/data-scope.js';
 import {discoveryMatches} from './web/data-discovery.js';
 
 export const dashboardStructureProvider=provider=>['projects','notebooks','workspace'].includes(provider)||typeof provider==='string'&&provider.endsWith('-spaces')&&Boolean(labRecordProvider(provider.replace(/-spaces$/,'-records')));
@@ -43,9 +42,9 @@ export async function dashboardCollectionStructure(pages,client,command,{scope=n
   const counts=await catalogueOutline(store,snapshot,{signal});
   for(const book of books)totalRecords+=counts.notebookCounts[book.id];
   if(provider==='workspace')return;
-  for(const book of lab?labDataNotebooks(books,lab.profile):books){
+  for(const book of lab?await configurationProfileBooks(store,metadata,books,lab.profile,{signal}):books){
    const project=metadata.projects.find(project=>project.id===book.projectId),itemOwner={...owner,projectTitle:owner.projectTitle??project?.title??'',notebookTitle:book.title};
-   add({key:dashboardSourceKey(owner.workspaceId,book.id),title:book.title,subtitle:itemOwner.projectTitle,owner:itemOwner,data:{...book,projectIds:[book.projectId],location:itemOwner.projectTitle,types:notebookTypes(book),profiles:configurationOf(book).profiles.filter(profile=>profile.enabled).map(profile=>profile.id),count:counts.notebookCounts[book.id]},action:action(owner,'notebook',book.id)});
+   add({key:dashboardSourceKey(owner.workspaceId,book.id),title:book.title,subtitle:itemOwner.projectTitle,owner:itemOwner,data:{...book,projectIds:[book.projectId],location:itemOwner.projectTitle,...await configurationProfileSummary(store,metadata,book,{signal}),count:counts.notebookCounts[book.id]},action:action(owner,'notebook',book.id)});
   }
  }),{workspaceId,scope,selection,signal,includeBooks:provider!=='projects'});
  if(session.snapshots&&Object.keys(session.snapshots).some(id=>!Object.hasOwn(snapshots,id)))throw new AppError('RECORD_QUERY_CURSOR');

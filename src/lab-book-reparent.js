@@ -1,3 +1,4 @@
+import {projectSummaryForBook,reparentConfigurationMetadata} from './configuration-metadata.js';
 // Change a book's containing project by relocating its existing directory.
 // Current parent metadata changes; retained record revisions keep their identity.
 import path from 'node:path';
@@ -120,7 +121,7 @@ export class LabBookReparents{
    await storage.withLock(()=>storage.catalogue(async store=>{
     const head=await store.head(),snapshot=await store.snapshot(head);if(snapshot.metadata.id!==value.namespaceId||![value.sourceProjectId,value.targetProjectId].includes(snapshot.metadata.notebooks[0].projectId))throw new AppError('DATABASE_LOCATION');
     if(snapshot.metadata.notebooks[0].projectId===value.targetProjectId)return;
-    const current=await store.indexed(snapshot),metadata={...current.metadata,projects:[value.parent],notebooks:current.metadata.notebooks.map(book=>({...book,projectId:value.targetProjectId}))};await store.commitChanges(head,current,metadata,[],{now:new Date().toISOString()});
+    const current=await store.indexed(snapshot),metadata={...current.metadata,projects:[projectSummaryForBook(value.parent)],notebooks:current.metadata.notebooks.map(book=>({...book,projectId:value.targetProjectId}))};await reparentConfigurationMetadata(store,current.metadata,metadata);await store.validateMetadata(current,metadata);await store.commitChanges(head,current,metadata,[],{now:new Date().toISOString()});
    }));await checkpoint('metadata',value);
    const next=await to.describe(storage,{staged:value.version===2});
    await withWriterLease(path.join(target.root,'.observanda/lab-books.lock'),async()=>{

@@ -1,3 +1,4 @@
+import {matchingSharedStructure} from './configuration-transfer.js';
 import {AppError} from '../errors.js';
 import {identityHash} from './identity.js';
 import {selectedMetadata} from './selection.js';
@@ -19,12 +20,12 @@ export function requireNewEdition(working,selection){
  valid(selection.edition>working.selection.edition&&selection.grant.generation>=working.selection.grant.generation,'STALE');
 }
 
-export function updatedStructure(current,base,selection,{retainedBookIds=null}={}){
+export async function updatedStructure(current,base,selection,{workspace,retainedBookIds=null}={}){
  const ids=base.metadata.notebooks.map(n=>n.id);
  const incomingBooks=new Set(selection.metadata.notebooks.map(n=>n.id));
  valid(current.notebooks.every(n=>!incomingBooks.has(n.id)||ids.includes(n.id)),'COLLABORATION_SCOPE');
  const projected=selectedMetadata(current,ids);projected.updatedAt=base.metadata.updatedAt;
- valid(identityHash(projected)===identityHash(base.metadata),'COLLABORATION_STRUCTURE');
+ valid(await matchingSharedStructure(workspace,projected,base.metadata),'COLLABORATION_STRUCTURE');
  const next=structuredClone(current),books=new Set(ids),projects=new Set(base.metadata.projects.map(p=>p.id));
  next.title=selection.metadata.title;
  next.notebooks=[...current.notebooks.filter(n=>!incomingBooks.has(n.id)&&(!books.has(n.id)||retainedBookIds===null||retainedBookIds.has(n.id))),...structuredClone(selection.metadata.notebooks)];
@@ -34,6 +35,10 @@ export function updatedStructure(current,base,selection,{retainedBookIds=null}={
 }
 
 export async function retainWorkingBase(workspace,parts,selection){
+ const retain=()=>retainWorkingBaseFromSnapshot(workspace,parts,selection);
+ return await parts.workspace.storageKind()==='catalogue'?parts.workspace.catalogue(retain):retain();
+}
+async function retainWorkingBaseFromSnapshot(workspace,parts,selection){
  const base=new ExchangeParts(workspace,selection.id),old=await workspace.readMetadata(base.prefix+'/head.json',8192);
  if(old===null){const head=await parts.open();for await(const item of parts.entries())await base.add(item);await base.finish({direction:'base',selectionHash:identityHash(selection),...(head.attestation?{attestation:head.attestation,sender:head.sender,signatureHash:head.signatureHash}:{})});}
  else{await base.open();valid(identityHash(await base.value('description','selection'))===identityHash(selection),'COLLABORATION_DAMAGED');}

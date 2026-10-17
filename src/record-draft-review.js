@@ -1,3 +1,5 @@
+import {recordTemplateChoices} from './record-template-document.js';
+import {validateCurrentRecordTemplate} from './record-template-configuration.js';
 import {recordOwnerDraftPlanOrigin,validDraftOriginOwner,verifyDraftPlanOrigin} from './record-owner-drafts.js';
 // Durable, paged review of a full-record checkpoint. Source documents and
 // decisions remain encrypted; the browser receives one conflict/value window.
@@ -48,9 +50,10 @@ export class RecordDraftReview{
    return {id:draft.id,workspaceId:draft.workspaceId,revision:result.revision,offset:command.offset,total,items};
   });
  }
- async prepare(command){
+ async prepare(command){return this.workspace.withLock(()=>this.prepareLocked(command));}
+ async prepareLocked(command){
   if(!command||Object.keys(command).filter(k=>k!=='position').sort().join()!=='expectedRevision,id,workspaceId'||![command.id,command.workspaceId].every(researchId)||!revisionId(command.expectedRevision)||!natural(command.position??0))invalid();
-  return this.workspace.withLock(()=>this.workspace.catalogue(async store=>{
+  return this.workspace.catalogue(async store=>{
    const snapshot=await store.snapshot();if(snapshot.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
    const checkpoint=await this.drafts.read(command.id,{expand:false,header:true});
    if(!checkpoint||checkpoint.revision!==command.expectedRevision)throw new AppError('DRAFT_CHANGED');
@@ -88,7 +91,7 @@ export class RecordDraftReview{
     await store.putObject(prefix+id,plan);return this.summary(plan);
     });
    });
-  }));
+  });
  }
  validate(plan){
   if(plan?.origin&&(!validDraftOriginOwner(plan.origin)||plan.origin.recordId!==plan.recordId||!revisionId(plan.origin.reviewId)))throw new AppError('CATALOGUE_DAMAGED');
@@ -97,29 +100,39 @@ export class RecordDraftReview{
   if(!plan||![1,2,3].includes(plan.format)||![plan.id,plan.draftRevision,plan.conflicts,plan.roots?.mine].every(revisionId)||![plan.storageRevision,plan.roots?.base,plan.roots?.stored].every(optional)||(plan.storageRevision===null)!==(plan.roots.stored===null)||Object.keys(plan.roots??{}).sort().join()!=='base,mine,stored'||![plan.workspaceId,plan.recordId,plan.draftId,plan.notebookId].every(researchId)||!Number.isSafeInteger(plan.generation)||plan.generation<1||!natural(plan.count)||!natural(plan.decided)||plan.decided>plan.count||!validIndexRef(plan.choices)||typeof plan.title!=='string'||plan.format===3&&(!natural(plan.sourcePosition)||!natural(plan.sourceCount)||plan.sourcePosition>=plan.sourceCount))throw new AppError('CATALOGUE_DAMAGED');
  }
  summary(plan){return {id:plan.id,workspaceId:plan.workspaceId,recordId:plan.recordId,storageRevision:plan.storageRevision,revision:revision(plan),count:plan.count,decided:plan.decided,title:plan.title,source:{id:plan.draftId,workspaceId:plan.workspaceId,expectedRevision:plan.draftRevision,...(plan.format===3?{position:plan.sourcePosition}:{})},...(plan.format>=2?{newRecord:plan.roots.base===null&&plan.roots.stored===null,removedRecord:plan.roots.base!==null&&plan.roots.stored===null}:{}),...(plan.saved?{saved:plan.saved}:{})};}
- async editFields(command,options){return this.workspace.catalogue(store=>this.context(store,command,(plan,document)=>new RecordDraftEdits(store).mine(plan,document,async mine=>draftEditFields(mine,command.group,command.offset,options))));}
- async editRead(command,options){return this.workspace.catalogue(store=>this.context(store,command,(plan,document)=>new RecordDraftEdits(store).mine(plan,document,async(mine,editRevision)=>{
+ // Selected draft reads may decompose inline leaves. Keep those derived nodes
+ // in bounded encrypted scratch storage, never in the saved catalogue.
+ async readEdit(command,consume,{signal}={}){
+  return this.workspace.catalogue(store=>this.context(store,command,(plan,document)=>new RecordDraftEdits(store).mine(plan,document,(mine,editRevision)=>withRecordProjectionScratch(mine,reader=>consume(reader,editRevision,plan),{signal}))));
+ }
+ async editFields(command,options){return this.readEdit(command,mine=>draftEditFields(mine,command.group,command.offset,options),options);}
+ async editRead(command,options){return this.readEdit(command,async(mine,editRevision,plan)=>{
   const selected=await selectDraftEdit(mine,command.field,options);
   return {workspaceId:plan.workspaceId,recordId:plan.recordId,recordTitle:(await mine.field(['title'])).value,field:command.field,sectionId:command.field.startsWith('section:')?command.field.slice(8):null,editRevision,revision:selected.revision,value:selected.value,definition:selected.definition};
- })));}
+ },options);}
+ async editChoices(command,{signal}={}){return this.readEdit(command,async(mine,editRevision,plan)=>{
+  if(command.editRevision!==editRevision)throw new AppError('DRAFT_CHANGED');
+  return {workspaceId:plan.workspaceId,recordId:plan.recordId,field:command.field,editRevision,...await recordTemplateChoices(mine,command.field,{schemaRevision:command.schemaRevision,offset:command.offset??0,query:command.query??'',signal})};
+ },{signal});}
  async editAttempts(command,{signal}={}){
-  if(!validAttemptContext(command))invalid();return this.workspace.catalogue(store=>this.context(store,command,(plan,document)=>new RecordDraftEdits(store).mine(plan,document,mine=>attemptValueContext(mine,command.field,{...command,signal}))));
+  if(!validAttemptContext(command))invalid();return this.readEdit(command,mine=>attemptValueContext(mine,command.field,{...command,signal}),{signal});
  }
  async editFigures(command,{signal}={}){
-  if(!natural(command.offset))invalid();return this.workspace.catalogue(store=>this.context(store,command,(plan,document)=>new RecordDraftEdits(store).mine(plan,document,async mine=>{
+  if(!natural(command.offset))invalid();return this.readEdit(command,async mine=>{
    const total=await mine.tree.arrayLength(mine.root,['figures']),items=[];
    for(let i=command.offset;i<Math.min(command.offset+4,total);i++)items.push(...await resultFigureTargets(mine,i,{signal}));
    return {offset:command.offset,total,nextOffset:command.offset+4<total?command.offset+4:null,items};
-  })));
+  },{signal});
  }
- async editWrite(command){return this.workspace.withLock(()=>this.workspace.catalogue(store=>this.context(store,command,async(plan,document)=>{
+ async editWrite(command){return this.workspace.withLock(()=>this.editWriteLocked(command));}
+ async editWriteLocked(command){return this.workspace.catalogue(store=>this.context(store,command,async(plan,document)=>{
   const edits=new RecordDraftEdits(store),retry=await edits.replay(plan,command);if(retry)return retry;
   if(plan.saved)throw new AppError('DRAFT_CHANGED');
   const checkpoint=await this.drafts.read(plan.draftId,{expand:false,header:true});
   if(!checkpoint||checkpoint.revision!==plan.draftRevision)throw new AppError('DRAFT_CHANGED');
   if(plan.format===3&&await new RecordDraftRecoveryLedger(store).receipt(plan.draftId,plan.draftRevision,plan.sourcePosition))throw new AppError('DRAFT_CHANGED');
   return edits.write(plan,document,command);
- })));}
+ }));}
  async content(command,{signal}={}){
   if(!natural(command?.offset))invalid();
   return this.workspace.catalogue(store=>this.context(store,command,async(plan,document)=>{
@@ -176,8 +189,9 @@ export class RecordDraftReview{
    const next={...plan,choices,decided:plan.decided+(before?0:1)};await store.putObject(prefix+plan.id,next);return this.summary(next);
   },{retryChoice:true})));
  }
- async apply(command){
-  return this.workspace.withLock(()=>this.workspace.catalogue(store=>this.context(store,command,async(plan,document)=>{
+ async apply(command){return this.workspace.withLock(()=>this.applyLocked(command));}
+ async applyLocked(command){
+  return this.workspace.catalogue(store=>this.context(store,command,async(plan,document)=>{
    if(plan.saved)return plan.saved;
    await new RecordDraftEdits(store).assertCurrent(plan);
    const ledger=new RecordDraftRecoveryLedger(store),previous=plan.format===3?await ledger.receipt(plan.draftId,plan.draftRevision,plan.sourcePosition):null;if(previous)return previous.saved;
@@ -204,17 +218,13 @@ export class RecordDraftReview{
    if((await merged.field(['notebookId'])).value!==plan.notebookId)throw new AppError('RECORD_CHANGED');
    const header=await validateRecordDocument(merged,snapshot.metadata),priorRecord=row?document:null;
    await validateDocumentSources(store,snapshot,merged,header,priorRecord,this.media);
-   if(!row&&header.template){
-    const template=(await merged.field(['template'])).value,{values,...schema}=template;void values;
-    const section=snapshot.metadata.notebooks.find(n=>n.id===header.notebookId)?.configuration?.sections.find(s=>s.id===template.id);
-    if(!section?.enabled||serialize(schema)!==serialize({id:section.id,profileId:section.profileId,label:section.label,description:section.description,fields:section.fields}))throw new AppError('RECORD_CHANGED');
-   }
+   if(!row&&header.template)await validateCurrentRecordTemplate(store,snapshot,merged,header);
    const membership=new RecordMemberCollections(store);let member=row??{id:header.id,collections:{sections:null,contributors:null,relations:null,figures:null,attachments:null}};
    for(const field of ['sections','contributors','relations','figures','attachments'])member=await membership.changed(member,field,merged);
    member={...member,...await recordDocumentSummary(merged,header,{revision:row?.revision??plan.roots.mine,memberBytes:row?.bytes??0},{collections:member.collections})};
    const result=await commitRecordDocument(store,{etag:await store.head(),snapshot,row,document:merged,member}),saved={recordDraftRecovered:true,recordId:plan.recordId,etag:result.etag};
    return finish(saved);
-  })));
+  }));
  }
 }
 

@@ -1,4 +1,5 @@
 {
+  "configurationEditor": ["en"],
   "taskPrerequisites": ["en"],
   "retainedSources": ["en"],
   "moduleReferenceTargets": ["en"],

@@ -1,10 +1,10 @@
+import {configurationProfileBooks} from './configuration-profiles.js';
 import {RecordRecentIndex} from './record-recent-index.js';
 import {digest} from './storage-format.js';
 import {AppError} from './errors.js';
 import {rankedRangePage} from './ranked-range-page.js';
 import {dashboardRecordMembers} from './dashboard-record-members.js';
 import {dashboardCollectionContract} from './dashboard-collection-contract.js';
-import {labDataNotebooks} from './web/laboratory/data-scope.js';
 import {recentRecordOrder,compareKey,QUERY_ORDER_VERSION} from './web/query-order.js';
 import {dashboardSourceKey} from './web/dashboard-source-key.js';
 import {researchCardItems} from './web/research-card-items.js';
@@ -24,7 +24,7 @@ export async function dashboardCollectionRecords(pages,client,command,{scope=nul
   snapshots[owner.workspaceId]=snapshotId;const snapshot=await store.snapshot(snapshotId),metadata=snapshot.metadata;
   if(metadata.id!==owner.workspaceId)throw new AppError('DATABASE_LOCATION');
   const books=metadata.notebooks.filter(book=>selected.projectIds.has(book.projectId??null)&&(!selected.notebookIds||selected.notebookIds.has(book.id)));for(const book of books)seenBooks.add(book.id);
-  const ids=new Set((lab?labDataNotebooks(books,lab.profile):books).map(book=>book.id));
+  const ids=new Set((lab?await configurationProfileBooks(store,metadata,books,lab.profile,{signal}):books).map(book=>book.id));
   const describe=row=>{const book=books.find(book=>book.id===row.notebookId),project=metadata.projects.find(project=>project.id===book?.projectId);return {...row,owner:{...owner,projectTitle:owner.projectTitle??project?.title??'',notebookTitle:book?.title??''}};};
   if(snapshot.recentIndex&&provider==='records'&&!key&&filters.recordType==='all'&&filters.status==='all'&&!filters.tag){
    const relative=session.after?compareKey(owner.workspaceId,session.after.owner.workspaceId):0;

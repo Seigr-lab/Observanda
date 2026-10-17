@@ -1,3 +1,4 @@
+import {recordTemplateFieldWindow} from './record-template-document.js';
 // The reader's growing header collections are separate counted windows. Values
 // needed by visible prose are resolved by identity, independently of those windows.
 import {placedFigures} from './web/book-selectors.js';
@@ -43,7 +44,7 @@ export async function recordReadingHeader(store,row,document,sections,{windows={
   const node=template.inline?{type:'inline',value:template.value}:await document.tree.node(template.revision);
   if(node.type==='inline'&&node.value===null)header.template=null;
   else{
-   const result=await page('fields',['template','fields']),value={};
+   const result=await recordTemplateFieldWindow(document,{offset:windows.fields??0,signal}),value={};
    for(const name of ['id','profileId','label','description'])value[name]=await selected(['template',name]);
    value.fields=result.values;value.values={};
    for(const definition of result.values){const stored=await document.field(['template','values',definition.key],{signal});if(stored.found)value.values[definition.key]=stored.value;}

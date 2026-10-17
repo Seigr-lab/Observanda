@@ -1,5 +1,6 @@
 // Individually owned record details. A value revision guards only this field;
 // other fields and growing collections remain references to their saved values.
+import {recordTemplateDefinition,recordTemplateChoices} from './record-template-document.js';
 import {resultFigureCount} from './record-result-document.js';
 import {AppError} from './errors.js';
 import {researchId} from './web/research-reference.js';
@@ -53,14 +54,8 @@ export async function selectedRecordValue(document,field,{position,signal}={}){
   return {path,position,collection,definition:{kind:collection.kind,original:value.value,...(collection.kind==='media'?{mediaKind:selected.kind}:{}),...(collection.kind==='relation'?{recordType:(await document.field(['type'])).value}:{})},value,revision:digest(serialize(value))};
  }
  const custom=field.startsWith('template:'),key=custom?field.slice(9):field,path=custom?['template','values',key]:[key];let definition=null;
- if(custom){
-  const present=await document.tree.select(document.root,['template','fields']);
-  if(present)for await(const item of document.items(['template','fields'])){
-   if((await document.tree.selected(item.value,['key'])).value===key){definition=await document.tree.read(item.value);break;}
-  }
-  if(!definition)throw new AppError('MISSING');
- }
- const selected=await document.field(path),value={value:selected.found?selected.value:null};
+ if(custom)definition=await recordTemplateDefinition(document,field,{signal});
+ const selected=await document.field(path,{signal}),value={value:selected.found?selected.value:null};
  return {path,definition,value,revision:digest(serialize(value))};
 }
 export async function replaceRecordValue(document,field,value,selected=null){
@@ -78,6 +73,14 @@ export async function replaceRecordValue(document,field,value,selected=null){
 }
 export class RecordValues{
  constructor(workspace){this.workspace=workspace;}
+ async choices(command,{signal}={}){
+  if(!exact(command,['workspaceId','recordId','storageRevision','field','schemaRevision','offset','query'])||!target(command)||!command.field.startsWith('template:')||!revisionId(command.storageRevision))throw new AppError('INVALID');
+  return this.workspace.catalogue(async store=>{
+   await this.select(store,command);
+   const history=store.historyIndex(command.recordId);await history.lookup(await history.head(),'version',command.storageRevision);
+   return withRecordDocument(store,command.recordId,command.storageRevision,async document=>({workspaceId:command.workspaceId,recordId:command.recordId,storageRevision:command.storageRevision,field:command.field,...await recordTemplateChoices(document,command.field,{...command,signal})}));
+  });
+ }
  async attemptContext(command,{signal}={}){
   if(!exact(command,['workspaceId','recordId','storageRevision','field','prior','preparationId','offset'])||!target(command)||!revisionId(command.storageRevision)||!validAttemptContext(command))throw new AppError('INVALID');
   return this.workspace.catalogue(async store=>{

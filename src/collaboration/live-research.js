@@ -28,15 +28,17 @@ export class LiveResearch{
   return auditLive(this.workspace,access,recordId,operation,detail);
  }
  async dispatch(identity,scope,operation,data={}){
-  valid(['list','read','details','document','steps','fields','comments','comment','activity','evidence','evidence-read','evidence-page','evidence-uploads','evidence-upload','evidence-start','evidence-chunk','evidence-finish','creation','create','link-targets','link-read','link-write','links','attempt','attempt-pin','attempt-read','attempt-page','attempt-append'].includes(operation));
-  const write=['steps','fields','comment','creation','create','link-write','attempt-pin','attempt-append','evidence-start','evidence-chunk','evidence-finish'].includes(operation);
+  valid(['list','read','details','document','steps','fields','comments','comment','activity','evidence','evidence-read','evidence-page','evidence-uploads','evidence-upload','evidence-start','evidence-chunk','evidence-finish','creation','creationFields','creationChoices','create','link-targets','link-read','link-write','links','attempt','attempt-pin','attempt-read','attempt-page','attempt-append'].includes(operation));
+  const write=['steps','fields','comment','creation','creationFields','creationChoices','create','link-write','attempt-pin','attempt-append','evidence-start','evidence-chunk','evidence-finish'].includes(operation);
   // Authorization and the actual access/mutation share a transaction, including
   // grants, current team membership and records moved out of the shared scope.
   return organizationTransaction(this.workspace,()=>this.workspace.catalogue(async store=>{
    const access=await this.authorized(identity,scope,{write});
-   if(operation==='creation'||operation==='create'){
+   if(['creation','creationFields','creationChoices','create'].includes(operation)){
     const creation=new LiveRecordCreation(this.workspace);
-    return operation==='creation'?creation.options(store,access,data.notebookId):creation.create(store,access,scope,data,this.audit.bind(this));
+    if(operation==='creation')return creation.options(store,access,data.notebookId,data);
+    if(operation==='creationFields'||operation==='creationChoices')return creation.window(store,access,data,{choices:operation==='creationChoices'});
+    return creation.create(store,access,scope,data,this.audit.bind(this));
    }
    if(operation==='list'){
     valid(data.after===undefined||data.after===null||uuid(data.after));valid(data.notebookId===undefined||access.notebookIds.includes(data.notebookId),'COLLABORATION_DENIED');
