@@ -2,7 +2,7 @@ import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 
 async function fixture(page){
- const namespaces=new Set(['operationProgress','storageProgress','activity']);
+ const namespaces=new Set(['operationProgress','storageProgress','activity','evidenceIntake']);
  await page.route('http://progress.test/**',async route=>{
   const pathname=new URL(route.request().url()).pathname;
   if(pathname==='/')return route.fulfill({contentType:'text/html',body:'<header><div data-activity-slot></div></header><main id="main"><h1>Storage</h1></main>'});
@@ -176,4 +176,52 @@ test('activity stays in the shell header without covering Save controls and hide
  await toggle.click();await panel.locator('[data-clear]').click();await expect(panel.locator('[data-empty]')).toBeVisible();
  await panel.locator('[data-close]').click();await expect(activity).toBeHidden();await expect(page.locator('[data-action="shell-menu"]')).toBeFocused();
  await page.evaluate(()=>activity.stop());
+});
+
+
+test('file set attachment progress is localized inline and ignores an inactive intake response',async({page})=>{
+ await fixture(page);
+ await page.evaluate(async()=>{
+  const {evidenceIntakeUI}=await import('/evidence-intake-ui.js');window.i18n=await import('/i18n/index.js');
+  window.job={state:'queued',progress:{stage:'queued',done:0,total:0},message:null};window.frames=0;window.jobCalls=0;window.holdJob=false;
+  const batch={id:'file-set',title:'Selected originals',state:'processing',count:8,registered:8,ready:8};
+  const call=async action=>{
+   if(action==='intake-page')return {batch,items:[{id:'original',name:'capture.raw',size:1024,sha256:'original-digest'}],next:null};
+   if(action!=='job')throw Error('Unexpected intake request: '+action);jobCalls++;
+   if(holdJob)return new Promise(resolve=>{window.resumeJob=resolve;});return {job:structuredClone(job)};
+  };
+  window.intake=evidenceIntakeUI({call,esc:value=>String(value),field:()=>'',guard:()=>{},owner:()=>null,context:()=>null,frame:(title,body,footer)=>{
+   intake.stop();frames++;document.querySelector('main').innerHTML='<h1>'+title+'</h1><form id="material-form">'+body+'</form><footer>'+footer+'</footer>';
+  }});
+  await intake.action({dataset:{action:'material-intake-open',id:batch.id}});
+  window.nodes=[...document.querySelectorAll('main *')];
+ });
+ const status=page.locator('#intake-status'),meter=page.locator('#intake-progress'),summary=page.locator('#material-form summary');
+ await expect(status).toHaveText('Waiting to verify file set.');await summary.click();await summary.focus();
+ const stages=[
+  [{stage:'preparing',done:0,total:0},'Preparing file verification.'],
+  [{stage:'Verifying file 2 of 8',done:512,total:1024,unit:'bytes'},'Verifying file 2 of 8: 512 / 1,024 bytes'],
+  [{stage:'Verified files',done:2,total:8},'Verified files: 2 / 8 files'],
+  [{stage:'Attaching verified files',done:3,total:8,unit:'files'},'Attaching verified files: 3 / 8 files']
+ ];
+ for(const [progress,label] of stages){
+  await page.evaluate(progress=>{job={...job,state:'running',progress};},progress);await page.clock.fastForward(800);await expect(status).toHaveText(label);
+ }
+ await expect(meter).toHaveJSProperty('value',3/8);await expect(summary).toBeFocused();await expect(page.locator('#material-form details')).toHaveAttribute('open','');
+ expect(await page.evaluate(()=>frames===1&&nodes.every((node,index)=>document.querySelectorAll('main *')[index]===node))).toBe(true);
+ await page.evaluate(()=>{window.mutations=[];window.observer=new MutationObserver(records=>mutations.push(...records));observer.observe(document.querySelector('main'),{subtree:true,childList:true,characterData:true,attributes:true});});
+ await page.clock.fastForward(800);expect(await page.evaluate(()=>mutations.length)).toBe(0);
+ await page.evaluate(async()=>{await i18n.prepareLanguage('nb');i18n.activateLanguage('nb');job.progress.done=4;});await page.clock.fastForward(800);
+ await expect(status).toHaveText('[nb] Attaching verified files: 4 / 8 files');await expect(meter).toHaveJSProperty('value',1/2);
+ expect(await page.evaluate(async()=>{
+  const {evidenceIntakeProgress:format}=await import('/evidence-intake-progress.js');
+  return [format({...job,progress:{stage:'Unknown future stage',done:1,total:8}}),format({...job,state:'queued'}),format({...job,progress:{stage:'preparing',done:0,total:0}}),format({...job,progress:{stage:'Verifying file 2 of 8',done:2,total:8,unit:'bytes'}}),format({...job,progress:{stage:'Verified files',done:2,total:8}})];
+ })).toEqual(['[nb] Processing file set: 1 / 8','[nb] Waiting to verify file set.','[nb] Preparing file verification.','[nb] Verifying file 2 of 8: 2 / 8 bytes','[nb] Verified files: 2 / 8 files']);
+ await page.evaluate(()=>{holdJob=true;});await page.clock.fastForward(800);await expect.poll(()=>page.evaluate(()=>typeof resumeJob)).toBe('function');
+ await page.evaluate(()=>{
+  intake.stop();document.querySelector('main').innerHTML='<h1>Another evidence view</h1><p id="intake-status">Current view</p>';window.callsAtExit=jobCalls;
+  resumeJob({job:{...job,progress:{stage:'Attaching verified files',done:7,total:8,unit:'files'}}});
+ });
+ await page.clock.fastForward(1600);await expect(page.locator('h1')).toHaveText('Another evidence view');await expect(status).toHaveText('Current view');
+ expect(await page.evaluate(()=>jobCalls===callsAtExit&&frames===1)).toBe(true);
 });

@@ -9,6 +9,7 @@ import {validMaterialReference} from './web/material-reference.js';
 import {researchId} from './web/research-reference.js';
 import {validEvidencePath,evidencePurposes} from './web/evidence-files.js';
 import {MetadataFeed} from './metadata-feed.js';
+import {materialHeadVisible} from './material-visibility.js';
 import {associateOriginalLocked} from './evidence-associations.js';
 const root='.observanda/materials/corrections';
 const exact=(v,keys)=>v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).length===keys.length&&keys.every(k=>Object.hasOwn(v,k));
@@ -106,7 +107,8 @@ export class EvidenceCorrections{
    const source=await this.materials.read(event.command.ref);if(source.recordId!==event.command.recordId)fail('CATALOGUE_DAMAGED');
    if(event.previousEvent){const previous=await this.event(event.previousEvent);if(previous.command.ref.id!==source.id||previous.id===event.id)fail('CATALOGUE_DAMAGED');}
    for(const head of [event.before,event.after].filter(Boolean)){
-    const doc=await this.materials.read(head),expected={...reference(head),recordId:doc.recordId,title:doc.title,createdAt:doc.createdAt,...this.materials.referenceSet(doc.content),figureHash:null,figureId:null};
+    const doc=await this.materials.read(head),expected={...reference(head),recordId:doc.recordId,title:doc.title,createdAt:doc.createdAt,...this.materials.referenceSet(doc.content),figureHash:null,figureId:null,...(head.stagedBatch===undefined?{}:{stagedBatch:head.stagedBatch})};
+    if(!await materialHeadVisible(this.workspace,head))fail('CATALOGUE_DAMAGED');
     if(fingerprint(head)!==fingerprint(expected))fail('CATALOGUE_DAMAGED');
    }
    if(event.replacement&&(await this.materials.read(event.replacement)).recordId!==event.command.replacementRecordId)fail('CATALOGUE_DAMAGED');

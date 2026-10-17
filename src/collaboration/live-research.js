@@ -97,8 +97,8 @@ export class LiveResearch{
     return {items,before:start||null,count};
    }
    const materials=new ResearchMaterials(this.workspace),items=[];await materials.index.ensureLocked();
-   const feed=materials.index.feed(record.id);await feed.ensureLocked();const page=await feed.page({cursor:data.cursor??null});
-   for(const item of page.items){const head=await materials.current(item.id);valid(head?.recordId===record.id,'MATERIAL_MISSING');const doc=await materials.read(head);items.push({id:head.id,kind:head.kind,title:head.title,revision:head.revision,...(head.kind==='artifact'?{name:doc.content.name,size:doc.content.size,sha256:doc.content.sha256,sourcePath:doc.content.sourcePath??null,sourcePurpose:doc.content.sourcePurpose??null,provenance:doc.content.provenance??''}:{})});}
+   const page=await materials.index.page({recordId:record.id,cursor:data.cursor??null,limit:20});
+   for(const head of page.items){valid(head?.recordId===record.id,'MATERIAL_MISSING');const doc=await materials.read(head);items.push({id:head.id,kind:head.kind,title:head.title,revision:head.revision,...(head.kind==='artifact'?{name:doc.content.name,size:doc.content.size,sha256:doc.content.sha256,sourcePath:doc.content.sourcePath??null,sourcePurpose:doc.content.sourcePurpose??null,provenance:doc.content.provenance??''}:{})});}
    return {items,next:page.next};
   }));
  }

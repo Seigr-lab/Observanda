@@ -58,6 +58,7 @@ export function researchJobDefinitions(workspace,queue,{comparisonAccess}={}){
  },'evidence.batch':{
   authorize:job=>materials.intakes.authorize(job),
   prepare:(job,options)=>materials.intakes.prepare(job,options,fn=>queue().transaction(async()=>{await queue().held(job.id,job.lease.token);return fn();})),
-  commit:(job,prepared)=>materials.intakes.commit(job,prepared)
+  commit:(job,prepared)=>materials.intakes.commit(job,prepared),
+  afterComplete:job=>materials.intakes.finalization.cleanup(job.id)
  }};
 }

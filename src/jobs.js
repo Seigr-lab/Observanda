@@ -84,11 +84,17 @@ export class DurableJobs{
   const {job,now}=await this.held(id,token);if(progress){if(!Number.isSafeInteger(progress.done)||!Number.isSafeInteger(progress.total)||progress.done<0||progress.done>progress.total||typeof progress.stage!=='string'||progress.stage.length>80)throw new AppError('INVALID');job.progress=progress;}
   job.lease.until=now+this.leaseMs;job.updatedAt=new Date(now).toISOString();await this.write(job);return job;
  });}
- async complete(id,token,prepared){return this.transaction(async()=>{
-  const {job}=await this.held(id,token);await this.authorize(job);
-  job.result=await this.definition(job).commit(job,prepared);job.state='completed';job.progress={...job.progress,stage:'completed',done:job.progress.total};job.lease=null;job.updatedAt=new Date(await this.now()).toISOString();
-  await this.write(job);return job;
- });}
+ async complete(id,token,prepared){
+  const job=await this.transaction(async()=>{
+   const {job}=await this.held(id,token);await this.authorize(job);
+   job.result=await this.definition(job).commit(job,prepared);job.state='completed';job.progress={...job.progress,stage:'completed',done:job.progress.total};job.lease=null;job.updatedAt=new Date(await this.now()).toISOString();
+   await this.write(job);return job;
+  });
+  // Cleanup belongs to the completed result, not the serialized job writer.
+  // Direct callers still await it; other controls and heartbeats may proceed.
+  try{await this.definition(job).afterComplete?.(job);}catch{/* Cleanup cannot revoke a committed job. */}
+  return job;
+ }
  async release(id,token,{error=null,paused=false}={}){return this.transaction(async()=>{
   await this.relocations.writable(id);const job=await this.read(id);if(!job||job.state!=='running'||job.lease.token!==token)return job;
   job.state=job.cancelRequested?'cancelled':paused?'queued':'failed';job.lease=null;job.error=job.state==='failed'?safeError(error??new AppError('IO')).code:null;job.updatedAt=new Date(await this.now()).toISOString();

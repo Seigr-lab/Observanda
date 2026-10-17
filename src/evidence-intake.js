@@ -1,8 +1,10 @@
 import {withScratch} from './scratch-work.js';
 import {EvidenceFileChoices} from './evidence-file-choices.js';
+import {EvidenceIntakeFinalization} from './evidence-intake-finalization.js';
+import {materialBatch} from './material-visibility.js';
 import {withWorkspaceMetadataBatch} from './metadata-batch.js';
 // File sets stage private originals through the existing chunk importer. A
-// fenced durable job attaches the entire set in one catalogue transaction.
+// fenced job checkpoints hidden artifacts and publishes their sequence atomically.
 import {randomUUID} from 'node:crypto';
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
@@ -16,7 +18,7 @@ const hash=value=>digest(serialize(value));
 const text=(value,max)=>typeof value==='string'&&value.length<=max&&!/[\u0000-\u001f]/u.test(value);
 const empty=kind=>({format:1,kind,root:null,count:0,chunkSize:64});
 export class EvidenceIntake{
- constructor(materials){this.materials=materials;this.workspace=materials.workspace;this.choices=new EvidenceFileChoices(this.workspace);}
+ constructor(materials){this.materials=materials;this.workspace=materials.workspace;this.choices=new EvidenceFileChoices(this.workspace);this.finalization=new EvidenceIntakeFinalization(this);}
  file(id,suffix='batch.json'){if(!researchId(id))fail();return root+'/'+id+'/'+suffix;}
  feed(recordId){if(!researchId(recordId))fail();return new MetadataFeed(this.workspace,root+'/by-record/'+recordId);}
  async json(file){const raw=await this.workspace.readMetadata(file,131072);if(raw===null)return null;try{return JSON.parse(raw);}catch{fail('CATALOGUE_DAMAGED');}}
@@ -33,6 +35,8 @@ export class EvidenceIntake{
   if(!Number.isSafeInteger(batch.ready)||batch.ready<0||batch.ready>batch.files.count||batch.files.kind!=='files'||batch.files.count>batch.command.count||!Number.isSafeInteger(batch.bytes)||batch.bytes<0||batch.bytes>batch.command.bytes||
    batch.state!=='open'&&(batch.files.count!==batch.command.count||batch.bytes!==batch.command.bytes))fail('CATALOGUE_DAMAGED');
   if(batch.state==='completed'&&(batch.result?.kind!=='collection'||batch.result.id!==id||!validFingerprint(batch.result.revision)))fail('CATALOGUE_DAMAGED');
+  const finalization=this.finalization.validate(batch);
+  if(finalization&&(batch.state==='open'||batch.state==='completed'&&finalization.count!==batch.files.count))fail('CATALOGUE_DAMAGED');
   return batch;
  }
  async authorized(id){const batch=await this.read(id);await this.materials.assertOwner(batch.command.recordId);return batch;}
@@ -69,13 +73,14 @@ export class EvidenceIntake{
     }
     if(!Number.isSafeInteger(batch.bytes+file.size)||batch.bytes+file.size>batch.command.bytes)fail();
     const seenFile=this.file(id,'fingerprints/'+file.fingerprint+'.json'),seen=await this.json(seenFile);
-    const cached=await this.json(root+'/reuse/'+batch.command.recordId+'/'+file.fingerprint+'.json');
+    let cached=await this.json(root+'/reuse/'+batch.command.recordId+'/'+file.fingerprint+'.json');
+    if(cached?.stagedBatch){const owner=await materialBatch(this.workspace,cached.stagedBatch);if(owner.command.recordId!==batch.command.recordId)fail('CATALOGUE_DAMAGED');if(owner.state!=='completed')cached=null;}
     let reuse=null;
     if(seen)reuse={importId:seen.id};
     else if(cached){
      const doc=await this.materials.read(cached);
      if(doc.kind!=='artifact'||doc.recordId!==batch.command.recordId||doc.content.fingerprint!==file.fingerprint||doc.content.size!==file.size)fail('MATERIAL_MISSING');
-     reuse={ref:cached};
+     reuse={ref:{kind:cached.kind,id:cached.id,revision:cached.revision}};
     }
     const session=await this.materials.startImportLocked({recordId:batch.command.recordId,name:file.name,size:file.size,provenance:batch.command.provenance,derivesFrom:[]},
      {batchId:id,acquisition:batch.acquisition,fingerprint:file.fingerprint,reuse,...(file.sourcePath?{sourcePath:file.sourcePath}:{}),...(batch.command.purpose?{sourcePurpose:batch.command.purpose}:{})});
@@ -106,18 +111,27 @@ export class EvidenceIntake{
   const batch=await this.authorized(session.batchId);if(batch.state!=='open')fail('MATERIAL_CHANGED');batch.ready++;await this.put(this.file(batch.id),batch);
  }
  async enqueue(id,queue){
-  return queue.transaction(()=>withWorkspaceMetadataBatch(this.workspace,async()=>{
+  // Validate the frozen file set without monopolizing the writer. Admission
+  // rechecks its immutable manifest and upload counters in the transaction.
+  const inspected=await this.materials.readSnapshot(async()=>{
    const batch=await this.authorized(id);
    if(batch.files.count!==batch.command.count||batch.bytes!==batch.command.bytes||batch.ready!==batch.command.count)fail('MATERIAL_INCOMPLETE');
-   for await(const file of this.materials.sequences.items(batch.files)){
+   // A processing/completed batch has already admitted this immutable
+   // manifest; replay must not walk its files again just to find its job.
+   if(batch.state==='open')for await(const file of this.materials.sequences.items(batch.files)){
     const session=await this.session(batch,file);
     if(!session.reuse&&!session.completed){
      if(this.materials.uploads.count(session)!==Math.ceil(session.size/session.chunkSize))fail('MATERIAL_INCOMPLETE');
      if(await fileFingerprint(session.size,this.materials.uploads.entries(session),digest)!==file.fingerprint)fail('MATERIAL_SOURCE_CHANGED');
     }
    }
+   return {manifest:hash(batch.files),intent:batch.intent,ready:batch.ready,bytes:batch.bytes};
+  });
+  return queue.transaction(()=>withWorkspaceMetadataBatch(this.workspace,async()=>{
+   const batch=await this.authorized(id);
+   if(hash(batch.files)!==inspected.manifest||batch.intent!==inspected.intent||batch.ready!==inspected.ready||batch.bytes!==inspected.bytes)fail('MATERIAL_CHANGED');
    if(batch.state==='open'){batch.state='processing';await this.put(this.file(id),batch);}
-   return queue.enqueueLocked({id,type:'evidence.batch',scope:batch.command.recordId,input:{manifest:hash(batch.files)}});
+   return queue.enqueueLocked({id,type:'evidence.batch',scope:batch.command.recordId,input:{manifest:inspected.manifest}});
   }));
  }
  async authorize(job){
@@ -191,30 +205,10 @@ export class EvidenceIntake{
    }
    await checkpoint();
   });
-  return {manifest:hash(batch.files)};
+  return this.finalization.stage(job,{signal,progress},write);
  }
  async commit(job,prepared){
-  return withWorkspaceMetadataBatch(this.workspace,()=>this.commitFiles(job,prepared));
- }
- async commitFiles(job,prepared){
-  const batch=await this.authorize(job);
-  if(batch.state==='completed')return batch.result;
-  if(prepared.manifest!==hash(batch.files))fail('MATERIAL_CHANGED');
-  const refs=this.materials.sequences.builder('references',fn=>fn());
-  for await(const file of this.materials.sequences.items(batch.files)){
-   const session=await this.session(batch,file),receipt=await this.json(this.file(batch.id,'prepared/'+file.id+'.json'));
-   if(!receipt||receipt.sessionHash!==digest(JSON.stringify(session)))fail('MATERIAL_CHANGED');
-   const ref=await this.materials.commitImport(file.id,receipt,{cleanup:false});
-   await refs.append(ref);await this.put(root+'/reuse/'+job.scope+'/'+file.fingerprint+'.json',ref);
-  }
-  batch.result=await this.materials.commit({kind:'collection',id:batch.id,recordId:job.scope,title:batch.command.title,
-   content:{inputsIndex:await refs.finish(),acquisition:batch.acquisition,intake:{id:batch.id,files:batch.files,bytes:batch.bytes,provenance:batch.command.provenance,...(batch.command.purpose?{purpose:batch.command.purpose}:{})}}});
-  batch.state='completed';await this.put(this.file(batch.id),batch);
-  const feed=this.feed(job.scope);await this.workspace.removeMetadata(feed.order+'/'+feed.key(batch));
-  await this.workspace.afterCommit(()=>this.materials.readSnapshot(async()=>{
-   for await(const file of this.materials.sequences.items(batch.files))await this.materials.cleanImport(await this.session(batch,file));
-  }).catch(()=>{}));
-  return batch.result;
+  return withWorkspaceMetadataBatch(this.workspace,()=>this.finalization.publish(job,prepared));
  }
  async list(recordId,options={}){
   await this.materials.assertOwner(recordId);return this.materials.readSnapshot(async()=>{
@@ -228,12 +222,13 @@ export class EvidenceIntake{
   for await(const id of this.workspace.metadataNames(root)){
    if(!researchId(id))continue;const batch=await this.read(id);await check(batch.acquisition);
    await withScratch(async ids=>{
-   let bytes=0,ready=0;
+   let bytes=0,ready=0,position=0;
    for await(const file of this.materials.sequences.items(batch.files)){
     if(!researchId(file.id)||!validEvidenceFile(file)||!await ids.add(file.id))fail('CATALOGUE_DAMAGED');bytes+=file.size;
     const session=await this.session(batch,file),prepared=await this.json(this.file(id,'prepared/'+file.id+'.json'));
     if(session.reuse||this.materials.uploads.bytes(session)===session.size)ready++;
     if(prepared)await this.verifyPrepared(session,prepared,{verified});
+    await this.finalization.verifyFile(batch,file,position++,session,prepared);
     if(batch.state==='completed'){
      if(!session.completed||!prepared)fail('CATALOGUE_DAMAGED');await check(session.completed);
      const doc=await this.materials.read(session.completed),c=doc.content;
@@ -241,6 +236,8 @@ export class EvidenceIntake{
     }else if(session.completed)fail('CATALOGUE_DAMAGED');
    }
    if(bytes!==batch.bytes||ready!==batch.ready)fail('CATALOGUE_DAMAGED');
+   let attached=0;for await(const name of this.workspace.metadataNames(this.file(id,'attached'))){if(!/^[a-f0-9-]{36}\.json$/.test(name)||!await ids.has(name.slice(0,-5)))fail('CATALOGUE_DAMAGED');attached++;}
+   if(attached!==(batch.finalization?.count??0))fail('CATALOGUE_DAMAGED');
    let accepted=0;
    while(accepted<batch.files.count){
     const receipt=await this.json(this.file(id,'accepted/'+accepted+'.json'));

@@ -4,12 +4,14 @@ import {MetadataFeed} from './metadata-feed.js';
 import {withScratch} from './scratch-work.js';
 import {catalogueContext} from './research-catalogue.js';
 import {researchId} from './web/research-reference.js';
+import {MaterialIndexSegments} from './material-index-segments.js';
+import {materialHeadVisible} from './material-visibility.js';
 const root='.observanda/materials/index',marker=root+'/state.json';
 const kinds=['artifact','dataset','analysis','collection'];
 const invalid=()=>{throw new AppError('INVALID');};
 const damaged=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 export class MaterialIndex{
- constructor(materials){this.materials=materials;this.workspace=materials.workspace;}
+ constructor(materials){this.materials=materials;this.workspace=materials.workspace;this.segments=new MaterialIndexSegments(materials);}
  feed(recordId=null,kind=null,pending=false){return new MetadataFeed(this.workspace,root+'/'+(pending?'pending':'heads')+'/'+(recordId??'all')+'/'+(kind??'all'));}
  async state(){const raw=await this.workspace.readMetadata(marker,1024);if(raw===null)return null;const value=JSON.parse(raw);if(value.version!==1||!Number.isSafeInteger(value.generation)||value.generation<0)damaged();return value;}
  async write(operation){return catalogueContext.getStore()?.root===this.workspace.root?operation():this.workspace.withLock(operation);}
@@ -31,29 +33,49 @@ export class MaterialIndex{
  async add(feed,item){await feed.putLocked(item);await this.workspace.writeMetadata(feed.marker,JSON.stringify({version:1}));}
  async addHead(head){
   const file=root+'/items/'+head.id+'.json',raw=await this.workspace.readMetadata(file,2048);
-  if(raw!==null){const item=JSON.parse(raw);if(item.id!==head.id||item.kind!==head.kind||item.recordId!==head.recordId)damaged();return;}
-  const item={id:head.id,createdAt:head.createdAt,kind:head.kind,recordId:head.recordId};
+  if(raw!==null){const item=JSON.parse(raw);if(item.id!==head.id||item.kind!==head.kind||item.recordId!==head.recordId||item.stagedBatch!==head.stagedBatch)damaged();return;}
+  const retired=head.stagedBatch?await this.segments.retired(head.id):null;
+  if(retired&&(retired.kind!==head.kind||retired.recordId!==head.recordId||retired.stagedBatch!==head.stagedBatch))damaged();
+  const item=retired??{id:head.id,createdAt:head.createdAt,kind:head.kind,recordId:head.recordId,...(head.stagedBatch?{stagedBatch:head.stagedBatch}:{})};
   await this.workspace.writeMetadata(file,JSON.stringify(item));
+  if(head.stagedBatch){await this.segments.restore(item);return;}
   for(const recordId of [null,head.recordId])for(const kind of [null,head.kind])await this.add(this.feed(recordId,kind),item);
  }
- async changed(head,doc){
+ async changed(head,doc,{stagedBatch=null}={}){
+  if(stagedBatch!==null){
+   if(!researchId(stagedBatch)||head.stagedBatch!==stagedBatch||head.kind!=='artifact')invalid();
+  }
   await this.addHead(head);
   await this.workspace.writeMetadata(root+'/dependencies/'+doc.id+'/'+head.revision+'.json',JSON.stringify({kind:doc.kind,id:doc.id,revision:head.revision,...this.materials.referenceSet(doc.content)}));
-  const state=await this.state();await this.workspace.writeMetadata(marker,JSON.stringify({...state,generation:state.generation+1}));
+  if(stagedBatch===null)await this.advance();
+ }
+ async advance(){const state=await this.state();if(!state)damaged();await this.workspace.writeMetadata(marker,JSON.stringify({...state,generation:state.generation+1}));}
+ async publishBatch(command){
+  await this.ensureLocked();if(await this.segments.publish(command))await this.advance();
  }
  // Remove only the current discovery pointer. Immutable revisions and their
  // dependency indexes remain available to historical references.
  async removeHead(head){
   const file=root+'/items/'+head.id+'.json',raw=await this.workspace.readMetadata(file,2048);if(raw===null)damaged();
-  const item=JSON.parse(raw);if(item.id!==head.id||item.kind!==head.kind||item.recordId!==head.recordId)damaged();
-  for(const recordId of [null,head.recordId])for(const kind of [null,head.kind]){const feed=this.feed(recordId,kind);await this.workspace.removeMetadata(feed.order+'/'+feed.key(item));}
-  await this.workspace.removeMetadata(file);const state=await this.state();await this.workspace.writeMetadata(marker,JSON.stringify({...state,generation:state.generation+1}));
+  const item=JSON.parse(raw);if(item.id!==head.id||item.kind!==head.kind||item.recordId!==head.recordId||item.stagedBatch!==head.stagedBatch)damaged();
+  if(item.stagedBatch){if(!await materialHeadVisible(this.workspace,head))damaged();await this.segments.retire(item);}
+  else for(const recordId of [null,head.recordId])for(const kind of [null,head.kind]){const feed=this.feed(recordId,kind);await this.workspace.removeMetadata(feed.order+'/'+feed.key(item));}
+  await this.workspace.removeMetadata(file);await this.advance();
  }
  async addImport(item){if(item.batchId)return;await this.add(this.feed(item.recordId,null,true),item);}
  async finishImport(item){if(item.batchId)return;const feed=this.feed(item.recordId,null,true);await this.workspace.removeMetadata(feed.order+'/'+feed.key(item));}
  async inputSet(ref){
+  return this.workspace.catalogue(async()=>{
+   const value=await this.inputSetStored(ref),head=await this.materials.current(ref.id,{includeStaged:true});
+   if(head&&!await materialHeadVisible(this.workspace,head))throw new AppError('MATERIAL_INCOMPLETE');
+   return value;
+  });
+ }
+ // Integrity verification may inspect an unpublished dependency row, but this
+ // entry point never supplies an attached material to product readers.
+ async inputSetStored(ref){
   const raw=await this.workspace.readMetadata(root+'/dependencies/'+ref.id+'/'+ref.revision+'.json',1024*1024);
-  if(raw===null)return this.materials.referenceSet((await this.materials.read(ref)).content);
+  if(raw===null)return this.materials.referenceSet((await this.materials.readStored(ref)).content);
   const value=JSON.parse(raw);
   if(value.id!==ref.id||value.kind!==ref.kind||value.revision!==ref.revision)damaged();
   return this.materials.referenceSet(value);
@@ -61,35 +83,43 @@ export class MaterialIndex{
  async *iterInputs(ref){yield* this.materials.references(await this.inputSet(ref));}
  async inputs(ref){const items=[];for await(const input of this.iterInputs(ref))items.push(input);return items;}
  async verify({initialize=true}={}){
-  if(initialize)await this.ensureLocked();
-  else if(!await this.state())return;
+  if(initialize)await this.ensureLocked();else if(!await this.state())return;
   return this.workspace.catalogue(async store=>withScratch(async expected=>{
    const checkedFeeds=new Set();
    const read=async file=>{const raw=await this.workspace.readMetadata(file,8192);if(raw===null)damaged();try{return JSON.parse(raw);}catch{damaged();}};
-   const check=async(feed,item)=>{
-    if(!checkedFeeds.has(feed.marker)){
-     if(!await feed.initialized())damaged();
-     if(checkedFeeds.size>=128)checkedFeeds.delete(checkedFeeds.values().next().value);
-     checkedFeeds.add(feed.marker);
-    }
-    const file=feed.order+'/'+feed.key(item),pointer=await read(file);
-    if(JSON.stringify(pointer)!==JSON.stringify({id:item.id,createdAt:item.createdAt}))damaged();
-    if(!await expected.add('metadata:'+file))damaged();
+   const check=async(feed,item,pointer={id:item.id,createdAt:item.createdAt})=>{
+    if(!checkedFeeds.has(feed.marker)){if(!await feed.initialized())damaged();if(checkedFeeds.size>=128)checkedFeeds.delete(checkedFeeds.values().next().value);checkedFeeds.add(feed.marker);}
+    const file=feed.order+'/'+feed.key(item),stored=await read(file);
+    if(JSON.stringify(stored)!==JSON.stringify(pointer)||!await expected.add('metadata:'+file))damaged();
    };
-   // Authenticate each expected pointer once in this catalogue snapshot. The
-   // temporary ledger bounds memory while the reverse pass rejects every extra
-   // pointer, including entries under unknown scopes or kinds.
-   for await(const head of this.materials.headEntries()){
+   for await(const head of this.materials.headEntries({includeStaged:true})){
     const item=await read(root+'/items/'+head.id+'.json');
-    if(item.id!==head.id||item.kind!==head.kind||item.recordId!==head.recordId)damaged();
-    for(const recordId of [null,head.recordId])for(const kind of [null,head.kind])await check(this.feed(recordId,kind),item);
+    if(item.id!==head.id||item.kind!==head.kind||item.recordId!==head.recordId||item.stagedBatch!==head.stagedBatch)damaged();
+    if(item.stagedBatch){if(await materialHeadVisible(this.workspace,head)&&!await expected.add('batch-member:'+item.stagedBatch+':'+item.id))damaged();}
+    else for(const recordId of [null,head.recordId])for(const kind of [null,head.kind])await check(this.feed(recordId,kind),item);
+   }
+   await withScratch(async seen=>{
+    for await(const segment of this.segments.entries()){
+     const pointer={id:segment.id,createdAt:segment.createdAt,batchId:segment.batchId};
+     for(const recordId of [null,segment.recordId])for(const kind of [null,'artifact'])await check(this.segments.feed(recordId,kind),pointer,pointer);
+     for await(const ref of this.materials.sequences.items(segment.inputsIndex)){
+      if(!ref||ref.kind!=='artifact'||!researchId(ref.id)||!await seen.add(ref.id))damaged();
+      const head=await this.segments.item(segment,ref),doc=await this.materials.read(ref);
+      if(doc.recordId!==segment.recordId)damaged();
+      if(head){if(!await expected.remove('batch-member:'+segment.batchId+':'+ref.id))damaged();}
+      else if(!await expected.add('retired:'+ref.id))damaged();
+     }
+    }
+   });
+   for await(const name of this.workspace.metadataNames(root+'/retired')){
+    if(!/^[a-f0-9-]{36}\.json$/.test(name))damaged();const id=name.slice(0,-5);await this.segments.retired(id);if(!await expected.remove('retired:'+id))damaged();
    }
    for await(const id of this.materials.names('imports'))if(researchId(id)){
-    const item=await this.materials.importState(id);
-    if(!item.completed&&!item.batchId)await check(this.feed(item.recordId,null,true),item);
+    const item=await this.materials.importState(id);if(!item.completed&&!item.batchId)await check(this.feed(item.recordId,null,true),item);
    }
-   for(const pending of [false,true]){
-    const start='metadata:'+root+'/'+(pending?'pending':'heads')+'/';
+   // Authenticate the reverse pointer set, including unknown scope/kind feeds.
+   for(const family of ['heads','pending','segments']){
+    const start='metadata:'+root+'/'+family+'/';
     for await(const id of store.objectIdEntries(start)){
      const parts=id.slice(start.length).split('/');
      if(parts.length===2&&parts[1].endsWith('-order.json'))continue;
@@ -104,31 +134,47 @@ export class MaterialIndex{
   if(pending&&(!recordId||kind||query))invalid();
   if(cursor!==null&&(typeof cursor!=='string'||cursor.length>4096||!/^[A-Za-z0-9_-]+$/.test(cursor)))invalid();
   if(initialize)await this.ensure();else if(!await this.state())throw new AppError('ACCESS_UPGRADE');
-  const feed=this.feed(recordId,kind,pending);
+  const feed=this.feed(recordId,kind,pending),segments=!pending&&(kind===null||kind==='artifact')?this.segments.feed(recordId,kind):null;
   return this.workspace.catalogue(async store=>{
    const state=await this.state(),scope=JSON.stringify({recordId,kind,query,limit,pending});if(!state)damaged();
-   let anchor={scope,generation:state.generation,after:null};
-   if(cursor){try{anchor=store.decode('material-page',scope,Buffer.from(cursor,'base64url'));}catch{invalid();}if(anchor.scope!==scope)invalid();}
-   if(!await feed.initialized()){
-    // Global initialization already indexed every source. Empty scopes require
-    // no write, especially when this page belongs to a pinned read snapshot.
-    const found=await store.objectIdPage('metadata:'+feed.order+'/');
-    if(found.items.length||anchor.after)damaged();
-    return {items:[],next:null,changed:anchor.generation!==state.generation,scanned:0};
+   let anchor={scope,generation:state.generation,normal:null,segments:null,active:null};
+   if(cursor){try{anchor=store.decode('material-page',scope,Buffer.from(cursor,'base64url'));}catch{invalid();}if(anchor.scope!==scope)invalid();
+    // Existing cursors retain their ordinary-feed continuation. No batch was
+    // visible when the old representation created such a cursor.
+    if(Object.hasOwn(anchor,'after'))anchor={scope,generation:anchor.generation,normal:anchor.after,segments:null,active:null};
    }
-   let after=anchor.after,scanned=0;const items=[];
-   do{
+   if(!Number.isSafeInteger(anchor.generation)||anchor.generation<0||!['normal','segments'].every(key=>anchor[key]===null||typeof anchor[key]==='string')||anchor.active!==null&&(!researchId(anchor.active?.batchId)||!researchId(anchor.active?.segmentId)||!Number.isSafeInteger(anchor.active?.offset)||anchor.active.offset<0))invalid();
+   if(!segments&&(anchor.segments!==null||anchor.active!==null))invalid();
+   const source=async(owner,slot)=>{
+    if(!owner)return {peek:async()=>null,take:()=>{}};
+    const initialized=await owner.initialized();if(!initialized){const found=await store.objectIdPage('metadata:'+owner.order+'/');if(found.items.length||anchor[slot]!==null)damaged();return {peek:async()=>null,take:()=>{}};}
+    let buffer=[],done=false;
+    return {async peek(){if(!buffer.length&&!done){const page=await owner.page({cursor:anchor[slot],limit:32});buffer=page.items;done=page.next===null;}return buffer[0]??null;},take(){const value=buffer.shift();anchor[slot]=owner.cursor(owner.key(value));}};
+   };
+   const normal=await source(feed,'normal'),batches=await source(segments,'segments'),items=[];let scanned=0;
+   while(items.length<limit&&scanned<200){
     signal?.throwIfAborted();
-    const page=await feed.page({cursor:after,limit:Math.min(limit-items.length,200-scanned)});
-    for(const pointer of page.items){
-     signal?.throwIfAborted();scanned++;
-     const item=pending?await this.materials.importState(pointer.id):await this.materials.current(pointer.id);
-     if(!item||recordId&&item.recordId!==recordId||kind&&item.kind!==kind||pending&&item.completed)damaged();
-     if(!query||item.title.toLocaleLowerCase().includes(query.toLocaleLowerCase()))items.push(item);
+    if(anchor.active){
+     const segment=await this.segments.read(anchor.active.batchId);
+     if(segment.id!==anchor.active.segmentId||recordId&&segment.recordId!==recordId||anchor.active.offset>segment.inputsIndex.count)damaged();
+     const page=await this.materials.sequences.page(segment.inputsIndex,{offset:anchor.active.offset,limit:Math.min(limit-items.length,200-scanned)});
+     for(const ref of page.items){signal?.throwIfAborted();scanned++;anchor.active.offset++;const item=await this.segments.item(segment,ref);if(item&&(!query||item.title.toLocaleLowerCase().includes(query.toLocaleLowerCase())))items.push(item);}
+     if(anchor.active.offset===segment.inputsIndex.count)anchor.active=null;
+     continue;
     }
-    after=page.next;
-   }while(after&&items.length<limit&&scanned<200);
-   return {items,next:after?store.encode('material-page',scope,{...anchor,after}).toString('base64url'):null,changed:anchor.generation!==state.generation,scanned};
+    const a=await normal.peek(),b=await batches.peek();if(!a&&!b)break;
+    if(b&&(!a||segments.key(b)<feed.key(a))){
+     if(!researchId(b.batchId))damaged();const segment=await this.segments.read(b.batchId);
+     if(segment.id!==b.id||segment.createdAt!==b.createdAt||recordId&&segment.recordId!==recordId)damaged();
+     batches.take();scanned++;anchor.active={batchId:b.batchId,segmentId:b.id,offset:0};continue;
+    }
+    normal.take();scanned++;
+    const item=pending?await this.materials.importState(a.id):await this.materials.current(a.id);
+    if(!item||recordId&&item.recordId!==recordId||kind&&item.kind!==kind||pending&&item.completed||!pending&&item.stagedBatch!==undefined)damaged();
+    if(!query||item.title.toLocaleLowerCase().includes(query.toLocaleLowerCase()))items.push(item);
+   }
+   const more=anchor.active!==null||!!await normal.peek()||!!await batches.peek();
+   return {items,next:more?store.encode('material-page',scope,anchor).toString('base64url'):null,changed:anchor.generation!==state.generation,scanned};
   });
  }
 }

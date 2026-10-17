@@ -28,6 +28,7 @@ import {withScratch} from './scratch-work.js';
 import {MaterialUploadChunks} from './material-upload-chunks.js';
 import {withWorkspaceMetadataBatch,metadataBatchIndex} from './metadata-batch.js';
 import {MaterialIndex} from './material-index.js';
+import {materialHeadVisible} from './material-visibility.js';
 import {MaterialSequence} from './material-sequence.js';
 import {MaterialDrafts} from './material-drafts.js';
 import {MaterialChoices} from './material-choices.js';
@@ -147,6 +148,13 @@ export class ResearchMaterials {
   });
  }
  async read(ref){
+  const doc=await this.readStored(ref);
+  if(ref.kind!=='record'){const head=await this.current(ref.id,{includeStaged:true});if(head&&!await materialHeadVisible(this.workspace,head))fail('MATERIAL_INCOMPLETE');}
+  return doc;
+ }
+ // Internal integrity and ownership checks may inspect an unpublished revision.
+ // Public references always pass through read() and its atomic visibility gate.
+ async readStored(ref){
   if(!materialRef(ref))fail();
   await this.assertReferenceWorkspace(ref);
   if(ref.kind==='record'&&await this.workspace.storageKind()==='catalogue')return new RetainedRecordDocuments(this.workspace).value(ref);
@@ -163,25 +171,26 @@ export class ResearchMaterials {
   if(ref?.kind==='record'&&await this.workspace.storageKind()==='catalogue')return new RetainedRecordDocuments(this.workspace).check(ref,{signal});
   await this.read(ref);
  }
- async *headEntries(){
+ async *headEntries({includeStaged=false}={}){
   for await(const id of this.names('objects')){if(!researchId(id))continue;
-   const head=await this.current(id);if(head)yield head;
+   const head=await this.current(id,{includeStaged});if(head)yield head;
   }
  }
  async heads(){return Array.fromAsync(this.headEntries());}
- async current(id){if(!researchId(id))fail();const head=await this.json(this.metadataFile('objects/'+id+'/head.json'),{missing:true});if(head!==null&&(!materialRef(head)||head.id!==id))fail('MATERIAL_MISSING');return head;}
+ async current(id,{includeStaged=false}={}){if(!researchId(id))fail();const head=await this.json(this.metadataFile('objects/'+id+'/head.json'),{missing:true});if(head!==null&&(!materialRef(head)||head.id!==id))fail('MATERIAL_MISSING');return head&&(includeStaged||await materialHeadVisible(this.workspace,head))?head:null;}
  // Call under the workspace lock. Revision and head share the metadata transaction.
- async commit({kind,recordId,title,content,id=randomUUID(),expectedRevision=null}){
+ async commit({kind,recordId,title,content,id=randomUUID(),expectedRevision=null},{stagedBatch=null}={}){
   if(!kinds.includes(kind)||!researchId(id)||!required(title,300))fail();
   await this.assertOwner(recordId,{write:true});await this.index.ensureLocked();
   const headFile=this.metadataFile('objects/'+id+'/head.json'),previous=await this.json(headFile,{missing:true});
-  if((previous?.revision??null)!==expectedRevision||previous&&(previous.kind!==kind||previous.recordId!==recordId))fail('MATERIAL_CHANGED');
+  if((previous?.revision??null)!==expectedRevision||previous&&(previous.kind!==kind||previous.recordId!==recordId)||previous&&!await materialHeadVisible(this.workspace,previous))fail('MATERIAL_CHANGED');
+  if(stagedBatch!==null){const batch=await this.intakes.read(stagedBatch);if(previous||kind!=='artifact'||batch.command.recordId!==recordId||batch.state!=='processing')fail('MATERIAL_CHANGED');}
   const doc={format:1,kind,id,recordId,title,createdAt:new Date().toISOString(),previous:previous?.revision??null,content};
   if(Buffer.byteLength(JSON.stringify(doc))+1>16*1024*1024)fail('LIMIT');
   const ref=refOf(doc),file=this.metadataFile('objects/'+id+'/'+ref.revision+'.json');
   await this.put(file,doc);
-  const head={...ref,recordId,title,createdAt:doc.createdAt,...this.referenceSet(content),figureHash:content.figure?figureFingerprint(content.figure):null,figureId:content.figure?.id??null};
-  await this.put(headFile,head);await this.index.changed(head,doc);
+  const head={...ref,recordId,title,createdAt:doc.createdAt,...this.referenceSet(content),figureHash:content.figure?figureFingerprint(content.figure):null,figureId:content.figure?.id??null,...(stagedBatch||previous?.stagedBatch?{stagedBatch:stagedBatch??previous.stagedBatch}:{})};
+  await this.put(headFile,head);await this.index.changed(head,doc,{stagedBatch});
   return ref;
  }
  async startImport(command){return this.workspace.withLock(()=>this.startImportLocked(command));}
@@ -195,7 +204,11 @@ export class ResearchMaterials {
    const session={id,recordId,name,size,provenance,derivesFrom,acquisition,chunkSize:EVIDENCE_CHUNK,...this.uploads.initial(),createdAt:new Date().toISOString(),completed:null,...batch};
    await this.put(this.metadataFile('imports/'+id+'/session.json'),session);await this.index.addImport(session);return session;
  }
- async importState(id){if(!researchId(id))fail();return this.uploads.validate(await this.json(this.metadataFile('imports/'+id+'/session.json')));}
+ async importState(id,{raw=false}={}){
+  if(!researchId(id))fail();let session=this.uploads.validate(await this.json(this.metadataFile('imports/'+id+'/session.json')));
+  if(!raw&&session.batchId&&!session.completed){const batch=await this.intakes.read(session.batchId);if(batch.state==='completed'&&batch.finalization)session={...session,completed:(await this.intakes.finalization.receipt(batch,session)).ref};}
+  return session;
+ }
  async imports(recordId){
   await this.assertOwner(recordId);const out=[];
   for await(const id of this.names('imports')){if(researchId(id)){const item=await this.importState(id);if(item.recordId===recordId&&!item.completed)out.push(item);}}
@@ -234,26 +247,37 @@ export class ResearchMaterials {
    signal?.throwIfAborted();return {...result,storageId,sessionHash:digest(JSON.stringify(session))};
   },{signal});
  }
+ // Build the immutable artifact once; staging and single-file completion share
+ // validation and provenance, but publish through different visibility owners.
+ async importCommand(session,prepared){
+  if(!researchId(prepared.storageId)||prepared.sessionHash!==digest(JSON.stringify({...session,completed:null}))||prepared.size!==session.size)fail('MATERIAL_CHANGED');
+  const originalId=prepared.originalId??session.id;if(!researchId(originalId))fail('MATERIAL_CHANGED');
+  const file=path.join(await this.directory('originals/'+originalId,{create:false}),prepared.storageId+'.original');await assertRegular(file);
+  return {kind:'artifact',id:session.id,recordId:session.recordId,title:session.name,content:{name:session.name,size:prepared.size,sha256:prepared.sha256,storageId:prepared.storageId,...(session.batchId?{originalId,fingerprint:session.fingerprint,intakeId:session.batchId}:{}),...(session.sourcePath?{sourcePath:session.sourcePath}:{}),...(session.sourcePurpose?{sourcePurpose:session.sourcePurpose}:{}),provenance:session.provenance,acquisition:session.acquisition,inputs:session.derivesFrom}};
+ }
  // The caller holds the workspace transaction, including the worker lease fence.
  async commitImport(id,prepared,{cleanup=true}={}){
   const session=await this.importState(id);if(session.completed)return session.completed;
-  if(!researchId(prepared.storageId)||prepared.sessionHash!==digest(JSON.stringify(session))||prepared.size!==session.size)fail('MATERIAL_CHANGED');
-  const originalId=prepared.originalId??id;if(!researchId(originalId))fail('MATERIAL_CHANGED');
-  const file=path.join(await this.directory('originals/'+originalId,{create:false}),prepared.storageId+'.original');await assertRegular(file);
-  const ref=await this.commit({kind:'artifact',id,recordId:session.recordId,title:session.name,content:{name:session.name,size:prepared.size,sha256:prepared.sha256,storageId:prepared.storageId,...(session.batchId?{originalId,fingerprint:session.fingerprint,intakeId:session.batchId}:{}),...(session.sourcePath?{sourcePath:session.sourcePath}:{}),...(session.sourcePurpose?{sourcePurpose:session.sourcePurpose}:{}),provenance:session.provenance,acquisition:session.acquisition,inputs:session.derivesFrom}});
+  const ref=await this.commit(await this.importCommand(session,prepared));
   session.completed=ref;await this.put(this.metadataFile('imports/'+id+'/session.json'),session);await this.index.finishImport(session);
   if(cleanup)await this.workspace.afterCommit(()=>this.readSnapshot(()=>this.cleanImport(session)).catch(()=>{}));return ref;
+ }
+ async stageImport(id,prepared,batchId){
+  const session=await this.importState(id,{raw:true});if(session.completed||session.batchId!==batchId)fail('MATERIAL_CHANGED');
+  return this.commit(await this.importCommand(session,prepared),{stagedBatch:batchId});
  }
  async cleanAttempts(id,{only=null}={}){
   const session=await this.importState(id),folder=await this.directory('originals/'+id);
   const manifest=session.completed?await this.read(session.completed):null;
-  const retained=manifest?(manifest.content.storageId?manifest.content.storageId+'.original':'original'):null;
+  const retained=new Set(manifest?[manifest.content.storageId?manifest.content.storageId+'.original':'original']:[]);
+  if(session.batchId){const prepared=await this.intakes.json(this.intakes.file(session.batchId,'prepared/'+id+'.json'));if(prepared){await this.intakes.preparedContent(session,prepared);if(prepared.originalId===id)retained.add(prepared.storageId+'.original');}}
   for(const name of await readdir(folder)){
-   if(name===retained||only&&name!==only+'.original'||!/^([a-f0-9-]{36}\.original|\.stream-[a-f0-9-]{36})$/.test(name))continue;
+   if(retained.has(name)||only&&name!==only+'.original'||!/^([a-f0-9-]{36}\.original|\.stream-[a-f0-9-]{36})$/.test(name))continue;
    try{const file=path.join(folder,name);if(await assertRegular(file,{missing:true}))await unlink(file);}catch{/* An interrupted attempt may still hold its file; later cleanup is safe. */}
   }
  }
  async cleanImport(session){
+  session=await this.importState(session.id);if(!session.completed)return;
   await this.cleanAttempts(session.id);
   // Only remove known uploaded chunks after the original's manifest is durable.
   for(let i=0;i<this.uploads.count(session);i++){

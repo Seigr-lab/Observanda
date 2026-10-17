@@ -1,5 +1,6 @@
 import path from 'node:path';
 import {ResearchMaterials} from '../research-materials.js';
+import {materialHeadVisible} from '../material-visibility.js';
 import {withMaterialTraversal} from '../material-traversal.js';
 import {recordRevision,historicalBook} from '../research.js';
 import {attemptReferences} from '../web/attempt-model.js';
@@ -75,7 +76,11 @@ export class ResearchTransfer{
    async function* seeds(){
     for await(const record of currentRecords)yield {kind:'record',id:record.id,revision:recordRevision(record)};
     for await(const head of heads)if(owner.recordIds.has(head.recordId)){
-     await owner.metadata('.observanda/materials/objects/'+head.id+'/head.json',head);yield head;
+     if(!await materialHeadVisible(owner.workspace,head))dependency();
+     // A portable packet contains published evidence, not its source owner's
+     // private staging receipts. The canonical artifact document stays exact.
+     const {stagedBatch,...published}=head;void stagedBatch;
+     await owner.metadata('.observanda/materials/objects/'+head.id+'/head.json',published);yield published;
     }
    }
    await traversal.walk(seeds(),async(ref,enqueue)=>{

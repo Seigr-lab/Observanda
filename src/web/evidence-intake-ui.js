@@ -1,3 +1,5 @@
+import {evidenceIntakeProgress} from './evidence-intake-progress.js';
+import {updateText,updateProperty} from './progress-dom.js';
 import {FILE_CHUNK} from './evidence-fingerprint.js';
 import {createFileSelection,registerFileManifest,selectedFiles} from './evidence-file-selection.js';
 import {compareEvidenceFiles,evidencePurposes} from './evidence-files.js';
@@ -6,9 +8,9 @@ const tr=(key,parameters)=>t('evidenceIntake',key,parameters);
 export function evidenceIntakeUI({route=value=>value,call,frame,esc,field,guard,context,owner}){
  let batch=null,offset=0,page=null,cursor=null,listPage=null,controller=null,busy=false,timer=null,generation=0,intent=null;
  const button=(key,action,extra='')=>'<button type="button" class="button" data-action="material-intake-'+action+'" '+extra+'>'+esc(tr(key))+'</button>';
- const status=message=>{const node=document.getElementById('intake-status');if(node)node.textContent=message;};
+ const status=message=>{const node=document.getElementById('intake-status');if(node)updateText(node,message);};
  const stop=()=>{clearTimeout(timer);timer=null;generation++;};
- const meter=(done,total)=>{const node=document.getElementById('intake-progress');if(node)node.value=total?done/total:1;};
+ const meter=(done,total)=>{const node=document.getElementById('intake-progress');if(node)updateProperty(node,'value',total?done/total:1);};
  const progress=(completed=false)=>'<p id="intake-status" role="status" aria-live="polite"></p><progress id="intake-progress" max="1" value="'+(completed?'1':'0')+'" aria-label="'+esc(tr('progress'))+'"'+(completed?' hidden':'')+'></progress>';
  function newForm(){
   batch=null;intent=null;offset=0;frame(tr('heading'),
@@ -53,10 +55,10 @@ export function evidenceIntakeUI({route=value=>value,call,frame,esc,field,guard,
   try{
    const {job}=await call('job',{id});guard();if(version!==generation)return;
    if(job.state==='completed'){await open(id,{at:offset});return;}
-   status(job.message??tr('jobProgress',{state:job.state,...job.progress}));meter(job.progress.done,job.progress.total);
+   status(evidenceIntakeProgress(job));meter(job.progress.done,job.progress.total);
    const cancel=document.querySelector('[data-action="material-intake-cancel"]'),retry=document.querySelector('[data-action="material-intake-retry"]');
-   if(cancel)cancel.hidden=['failed','cancelled','relocated'].includes(job.state);
-   if(retry)retry.hidden=!['failed','cancelled'].includes(job.state);
+   if(cancel)updateProperty(cancel,'hidden',['failed','cancelled','relocated'].includes(job.state));
+   if(retry)updateProperty(retry,'hidden',!['failed','cancelled'].includes(job.state));
    if(!['failed','cancelled','relocated'].includes(job.state))timer=setTimeout(()=>watch(),800);
   }catch(error){if(version===generation)status(tr('refreshFailed',{error:error.message??''}));}
  }
