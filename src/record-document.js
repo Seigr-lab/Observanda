@@ -1,6 +1,6 @@
 // A pinned record document exposes fields and counted collection windows.
 // Readers and writers share this owner; omitted values are never empty values.
-import {createHash} from 'node:crypto';
+import {recordDocumentEncoding,withStoredRecordEncoding} from './record-document-encoding.js';
 import {AppError} from './errors.js';
 import {RecordBlockStore} from './record-block-store.js';
 import {withStoredRecord} from './record-storage.js';
@@ -121,12 +121,7 @@ export class RecordDocument{
   const member=await this.blocks.put('value',{...child,value:changed}),next=await this.tree.index.change(node.root,entry.id,member);await this.tree.index.flush(next);
   return this.blocks.put('value',{...node,root:next});
  }
- async encoding({signal}={}){
-  const storage=createHash('sha256'),canonical=createHash('sha256');let bytes=0,lines=1;
-  for await(const text of this.tree.json(this.root,{signal})){storage.update(text);bytes+=Buffer.byteLength(text);for(const c of text)if(c==='\n')lines++;}
-  storage.update('\n');for await(const text of this.tree.json(this.root,{canonical:true,signal}))canonical.update(text);
-  return {revision:storage.digest('hex'),contentRevision:canonical.digest('hex'),bytes:bytes+1,memberBytes:bytes+4*lines};
- }
+ encoding(options){return recordDocumentEncoding(this,options);}
 }
 export async function withRecordDocument(store,id,revision,consume,{mutable=false}={}){
  return withStoredRecord(store,id,revision,async({store:owner=store,value,blocks,row,key})=>{
@@ -143,6 +138,7 @@ export async function withRecordDocument(store,id,revision,consume,{mutable=fals
    blocks.flush=async()=>{};
   }
   const root=value.format==='observanda-record-blocks'?value.root:await blocks.tree().retain(value);
-  return consume(new RecordDocument(blocks,root,{mutable,attemptIndex:value.attemptIndex??null,methodIndex:value.methodIndex??null,resultIndex:value.resultIndex??null}));
+  const document=new RecordDocument(blocks,root,{mutable,attemptIndex:value.attemptIndex??null,methodIndex:value.methodIndex??null,resultIndex:value.resultIndex??null});
+  return withStoredRecordEncoding(document,owner,id,revision,row,value,()=>consume(document));
  });
 }

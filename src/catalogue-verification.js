@@ -3,6 +3,7 @@
 import {withScratch,withScratchSession} from './scratch-work.js';
 import {digest,serialize} from './storage-format.js';
 import {CatalogueReadCache} from './catalogue-read-cache.js';
+import {withRecordEncodingAudit} from './record-document-encoding.js';
 export function verificationContext(metadata){
  // These values cannot change current-format record validation or projection.
  // Earlier formats retain their complete context for historical upgrades.
@@ -15,11 +16,11 @@ export async function withCatalogueVerification(store,operation){
  // changes. Only a fixed database snapshot permits reusing earlier checks.
  if(!['repeatable read','serializable'].includes(isolation))return operation({once:(_identity,verify)=>verify()});
  const previous=store.readCache,cache=new CatalogueReadCache({maxRows:16384,maxBytes:16*1024*1024,readAhead:true});store.readCache=cache;
- try{return await withScratchSession(()=>withScratch(receipts=>operation({
+ try{return await withScratchSession(()=>withScratch(receipts=>withRecordEncodingAudit(store,receipts,()=>operation({
   stableSnapshot:true,
   async once(identity,verify){
    const key=digest(serialize(identity));if(await receipts.has(key))return;
    await verify();await receipts.add(key);
   }
- })));}finally{cache.clear();store.readCache=previous;}
+ }))));}finally{cache.clear();store.readCache=previous;}
 }
