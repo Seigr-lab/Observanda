@@ -38,11 +38,11 @@ export function workspaceRefresh({state,api,version:readVersion,read,apply,block
     if(version.workspaceId!==workspaceId||!revisionId(version.etag)||website&&(!validWebsitePin(version.websitePin)||version.websitePin.websiteId!==pin.websiteId||version.websitePin.researchSnapshotId!==version.etag))throw Error(text('refreshFailed'));
     failure=false;pending=version.etag!==base||website&&!sameWebsitePin(version.websitePin,pin);paint();
     if(!pending){if(manual)notify(text('refreshCurrent'));return true;}
-    if(blocked({completedDialog})){if(manual)notify(text('refreshDeferred'));return false;}
+    if(blocked({completedDialog,manual})){if(manual)notify(text('refreshDeferred'));return false;}
     const result=await read({signal:request.signal,version});
     // Typing, saving, navigating, locking and switching workspaces can all occur
     // during the read. Keep the user's current view/draft in each of those cases.
-    if(!current()||blocked({completedDialog}))return false;
+    if(!current()||blocked({completedDialog,manual}))return false;
     if(result.book?.id!==workspaceId||!revisionId(result.etag)||website&&!sameWebsitePin(result.websitePin,version.websitePin))throw Error(text('refreshFailed'));
     apply(result);pending=false;
     if(manual)notify(text('refreshed'));return true;

@@ -4,7 +4,7 @@
   "changed": "The workspace changed while loading. Reload to open it.",
   "refreshLabel": "Observanda — refresh saved workspace",
   "refreshing": "Checking saved changes…",
-  "refreshPending": "New saved changes are available. Finish your edits or close the open dialog, then refresh with the Observanda logo.",
+  "refreshPending": "New saved changes are available. Refresh with the Observanda logo when you are ready.",
   "refreshDeferred": "Your draft is still here. Save or discard your edits and close any open dialog before refreshing.",
   "refreshFailed": "Could not check saved changes. Your current view is unchanged. Click the Observanda logo to retry.",
   "refreshCurrent": "Your workspace is up to date.",
