@@ -1,3 +1,4 @@
+import {materialReferenceElements} from '../src/web/material-reference-elements.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
@@ -21,4 +22,15 @@ test('failed owner authorization never retries a reference against the editor da
  const ref={kind:'artifact',id:randomUUID(),revision:'b'.repeat(64),workspaceId:randomUUID()},denied={code:'ACCESS_LOCKED',projectId:randomUUID()};
  const read=materialReferenceReader({api:async()=>{throw denied;},local:()=>assert.fail('Do not fall back to another owner'),onOwner:()=>assert.fail('Do not adopt an unauthorized owner')});
  await assert.rejects(read('read',{ref}),error=>error===denied);
+});
+
+
+test('displayed embedded evidence resolves exact origin addresses in bounded pages without mutating retained values',async()=>{
+ const workspaceId=randomUUID(),origin=randomUUID(),refs=Array.from({length:71},()=>({kind:'artifact',id:randomUUID(),revision:'a'.repeat(64)})),before=structuredClone(refs),foreign={...refs[0],workspaceId:randomUUID()};
+ const buttons=[...refs,foreign].map(ref=>({dataset:{ref:JSON.stringify(ref)},disabled:false})),source={ref:refs[0],selector:{kind:'bytes',offset:0,length:1}},measurement={dataset:{source:JSON.stringify(source)},disabled:false},calls=[];
+ const root={querySelectorAll:selector=>selector.includes('measurement-inspect')?[measurement]:buttons};
+ await materialReferenceElements(root,workspaceId,{resolve:async items=>{calls.push(items.length);assert.ok(buttons[0].disabled||calls.length>1);return {items:items.map(ref=>({...ref,workspaceId:origin}))};}});
+ assert.deepEqual(calls,[32,32,8]);assert.deepEqual(refs,before);assert.deepEqual(JSON.parse(buttons.at(-1).dataset.ref),foreign);assert.ok(buttons.every(button=>!button.disabled));
+ assert.equal(JSON.parse(buttons[0].dataset.ref).workspaceId,origin);assert.deepEqual(JSON.parse(measurement.dataset.source),{...source,ref:{...source.ref,workspaceId:origin}});
+ const malformed={dataset:{ref:JSON.stringify(refs[0])},disabled:false};await assert.rejects(materialReferenceElements({querySelectorAll:selector=>selector.includes('measurement-inspect')?[]:[malformed]},workspaceId,{resolve:async()=>({items:[{...refs[1],workspaceId:origin}]})}),/Invalid retained reference/);assert.equal(malformed.disabled,true);
 });

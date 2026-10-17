@@ -8,7 +8,8 @@ import {sourceChunks} from '../migration/source-files.js';
 import {withWorkspaceMetadataBatch} from '../metadata-batch.js';
 import {LocalIntake} from './service.js';
 import {inspectIntake} from './source.js';
-import {inspectPreparedIntake,assertPreparedIntakeUnchanged} from './prepared.js';
+import {inspectPreparedIntake} from './prepared.js';
+import {LocalIntakeFinalization} from './finalization.js';
 export function intakeJobDefinitions(workspace,queue){
  const intake=()=>new LocalIntake(workspace,queue());
  const authorize=async job=>{
@@ -38,8 +39,7 @@ export function intakeJobDefinitions(workspace,queue){
   p.state='prepared';await service.write(p);return {id:p.id,pin:p.pin};
  }},'intake.apply':{authorize,prepare:async(job,{signal,progress})=>{
   const service=intake(),p=await service.read(job.input.id);await service.validateTargets(p.manifest);
-  return inspectPreparedIntake(service,p,{signal,progress});
- },commit:async(job,result)=>withWorkspaceMetadataBatch(workspace,async()=>{
-  const service=intake(),p=await service.read(job.input.id);if(result.pin!==p.pin)throw new AppError('INTAKE_CHANGED');await assertPreparedIntakeUnchanged(workspace,p,result);const receipt=await service.commit(p);await assertPreparedIntakeUnchanged(workspace,p,result);return receipt;
- })}};
+  const report=await inspectPreparedIntake(service,p,{signal,progress});return new LocalIntakeFinalization(service).stage(job,report,{signal,progress});
+ },beforeComplete:(job,report,options)=>new LocalIntakeFinalization(intake()).beforeComplete(job,report,options),
+ commit:(job,proof)=>withWorkspaceMetadataBatch(workspace,()=>new LocalIntakeFinalization(intake()).commit(job,proof))}};
 }

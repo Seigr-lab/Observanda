@@ -84,9 +84,14 @@ export class DurableJobs{
   const {job,now}=await this.held(id,token);if(progress){if(!Number.isSafeInteger(progress.done)||!Number.isSafeInteger(progress.total)||progress.done<0||progress.done>progress.total||typeof progress.stage!=='string'||progress.stage.length>80)throw new AppError('INVALID');job.progress=progress;}
   job.lease.until=now+this.leaseMs;job.updatedAt=new Date(now).toISOString();await this.write(job);return job;
  });}
- async complete(id,token,prepared){
+ async complete(id,token,prepared,{signal}={}){
+  // Opted-in domains may finish expensive immutable-source proofs without
+  // occupying the serialized writer. The final transaction rechecks the lease.
+  const initial=await this.read(id);if(!initial)throw new AppError('JOB_LEASE');const beforeComplete=this.definition(initial).beforeComplete;
+  if(beforeComplete){const {job}=await this.held(id,token);await this.authorize(job);prepared=await beforeComplete(job,prepared,{signal});}
+  signal?.throwIfAborted();
   const job=await this.transaction(async()=>{
-   const {job}=await this.held(id,token);await this.authorize(job);
+   signal?.throwIfAborted();const {job}=await this.held(id,token);await this.authorize(job);
    job.result=await this.definition(job).commit(job,prepared);job.state='completed';job.progress={...job.progress,stage:'completed',done:job.progress.total};job.lease=null;job.updatedAt=new Date(await this.now()).toISOString();
    await this.write(job);return job;
   });
@@ -127,9 +132,9 @@ export class JobWorker{
   try{
    if(!this.enabled)controller.abort();
    const prepared=await this.queue.definition(job).prepare(job,{signal:controller.signal,progress:async progress=>{if(Date.now()-lastProgress<250&&progress.done!==progress.total)return;lastProgress=Date.now();await refresh(progress);}});
-   clearInterval(heartbeat);await pulse;controller.signal.throwIfAborted();await this.queue.complete(job.id,job.lease.token,prepared);
+   if(!this.queue.definition(job).beforeComplete)clearInterval(heartbeat);await pulse;controller.signal.throwIfAborted();await this.queue.complete(job.id,job.lease.token,prepared,{signal:controller.signal});
   }catch(error){clearInterval(heartbeat);await pulse.catch(()=>{});await this.queue.release(job.id,job.lease.token,{error,paused:!this.enabled}).catch(()=>{});}
-  finally{clearInterval(heartbeat);await this.queue.definition(job).discard?.(job).catch(()=>{});this.active=null;this.controller=null;}
+  finally{clearInterval(heartbeat);await pulse.catch(()=>{});await this.queue.definition(job).discard?.(job).catch(()=>{});this.active=null;this.controller=null;}
  }
  async stop(){this.enabled=false;clearTimeout(this.timer);this.controller?.abort();await this.running;}
  cancel(id){if(this.active?.id===id)this.controller?.abort(new AppError('JOB_CANCELLED'));}

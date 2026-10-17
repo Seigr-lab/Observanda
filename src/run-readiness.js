@@ -1,3 +1,4 @@
+import {readRecordOwnerMetadata} from './record-owner-audit-metadata.js';
 import {projectRunRequestMatches} from './project-run-receipt-origin.js';
 // Completion evidence is private metadata linked to an exact record revision.
 // It summarizes existing owners and never creates a second narrative record.
@@ -20,7 +21,7 @@ import {attemptDocumentReadiness} from './record-attempt-document.js';
 const prefix='.observanda/run-readiness/';
 export class RunReadiness{
  constructor(workspace){this.workspace=workspace;this.materials=new ResearchMaterials(workspace);}
- async json(name,fallback){const raw=await this.workspace.readMetadata(prefix+name+'.json',1024*1024);if(raw===null)return fallback;try{return JSON.parse(raw);}catch{throw new AppError('CATALOGUE_DAMAGED');}}
+ async json(name,fallback){const raw=await readRecordOwnerMetadata(this.workspace,prefix+name+'.json',1024*1024);if(raw===null)return fallback;try{return JSON.parse(raw);}catch{throw new AppError('CATALOGUE_DAMAGED');}}
  async target(command,{attempt=false,signal}={}){
   if(!researchId(command.recordId)||!researchId(command.workspaceId))throw new AppError('INTAKE_INVALID');
   signal?.throwIfAborted();

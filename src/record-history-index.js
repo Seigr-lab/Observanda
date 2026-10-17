@@ -79,7 +79,7 @@ export class RecordHistoryIndex{
  }
  async display(item){
   if(item.view)return item.view;
-  const snapshot=await this.store.snapshot(item.snapshotId);if((await this.store.member(snapshot,this.id))?.revision!==item.revision)fail();
+  const snapshot=await this.store.recordSnapshot(item.snapshotId,this.id);if((await this.store.member(snapshot,this.id))?.revision!==item.revision)fail();
   return retainedRecordDisplay(this.store,this.id,item.revision,snapshot.metadata);
  }
  async *items(head){for(let n=0;n<head.count;n+=50)for(const item of await this.rows(head,Array.from({length:Math.min(50,head.count-n)},(_,i)=>n+i)))yield item;}

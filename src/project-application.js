@@ -1,3 +1,5 @@
+import {locateResearchReference,resolveResearchReference} from './research-owner-reference.js';
+import {RecordOwnerTransferApplication,recordOwnerTransferRequest} from './record-owner-transfer-application.js';
 import {InventoryWorkspaceConnections} from './inventory-workspace-connections.js';
 import {inventoryOperationAccessFactory} from './inventory-operation-access.js';
 import {comparisonSourceFactory} from './comparison-source-access.js';
@@ -73,6 +75,7 @@ import {executeResearchRequest,researchRequest} from './research-requests.js';
 import {AppError} from './errors.js';
 
 export function projectRequest(route,method){
+ const rootTransfer=recordOwnerTransferRequest(route,method);if(rootTransfer)return rootTransfer;
  if(['/api/projects/move/targets','/api/projects/move/target/open','/api/projects/move/target/choices','/api/projects/move/target/unlock','/api/projects/move/target/release','/api/projects/move/pending'].includes(route))return {operation:route.slice('/api/projects/'.length),write:false,limit:16384};
  if(route==='/api/projects/publication-source-directory')return {operation:'publication-source-directory',write:false,limit:16384};
  if(route==='/api/projects/publication-source')return {operation:'publication-source',write:false,limit:1048576};
@@ -96,7 +99,7 @@ export function projectRequest(route,method){
  if(match[2]==='settings/save')return {projectId:match[1],operation:match[2],write:true,limit:MAX_BYTES};
  if(match[2]==='directory/reparent')return {projectId:match[1],operation:match[2],write:true,limit:16384};
  if(['storage/details','storage/copy','storage/copy/resume','storage/copy/cancel','storage/export','storage/export/resume','storage/export/cancel','storage/move','storage/move/resume','storage/move/cancel','storage/move/status','storage/delete','storage/delete/resume','storage/delete/status'].includes(match[2]))return {projectId:match[1],operation:match[2],write:!['storage/details','storage/move/status','storage/delete/status'].includes(match[2]),limit:16384};
- const command=sampleAnalysisRequest('/api/'+match[2],method)??reviewRequest('/api/'+match[2],method)??recordStarterRequest('/api/'+match[2],method)??projectAssetRequest('/api/'+match[2],method)??projectPublicationRequest('/api/'+match[2])??intakeRequest('/api/'+match[2])??materialRequest('/api/'+match[2])??researchRequest('/api/'+match[2])??projectModuleRequest('/api/'+match[2])??projectCalendarRequest('/api/'+match[2]);
+ const command=recordOwnerTransferRequest('/api/'+match[2],method)??sampleAnalysisRequest('/api/'+match[2],method)??reviewRequest('/api/'+match[2],method)??recordStarterRequest('/api/'+match[2],method)??projectAssetRequest('/api/'+match[2],method)??projectPublicationRequest('/api/'+match[2])??intakeRequest('/api/'+match[2])??materialRequest('/api/'+match[2])??researchRequest('/api/'+match[2])??projectModuleRequest('/api/'+match[2])??projectCalendarRequest('/api/'+match[2]);
  if(command)return {projectId:match[1],route:'/api/'+match[2],...command};
  if(['access/details','access/password'].includes(match[2]))return {projectId:match[1],operation:match[2],write:match[2]==='access/password',limit:16384};
  if(['access/unlock','access/lock','reference'].includes(match[2]))return {projectId:match[1],operation:match[2],write:false,limit:16384};
@@ -105,7 +108,7 @@ export function projectRequest(route,method){
 export class ProjectApplication{
  constructor(workspace,{deviceStore,authenticate,publisherOptions,workspaceLocations}={}){
   this.workspace=workspace;this.deviceStore=deviceStore;this.authenticate=authenticate??((root,access,username,password,recovery)=>verifyAccess(access,username,password,{deviceStore,recovery}));
-  this.inventoryConnections=new InventoryWorkspaceConnections(this,workspaceLocations);this.moveTargets=new ProjectWorkspaceTargets(this,workspaceLocations);this.workspaceMoves=new ProjectWorkspaceMoveApplication(this);this.renames=new ProjectRenameApplication(this);this.bookPlacements=new LabBookReparentApplication(this);this.sessions=new WeakMap();this.calendars=new ProjectCalendars();this.jobs=new ProjectJobs({publisherOptions});this.credentials=new Set();this.active=new Map();this.closed=false;this.recordCollections=new RecordCollectionPages();this.dashboardCollections=new RecordCollectionPages({max:256,maxBytes:16*1024*1024,reuse:true});
+  this.recordTransfers=new RecordOwnerTransferApplication(this);this.inventoryConnections=new InventoryWorkspaceConnections(this,workspaceLocations);this.moveTargets=new ProjectWorkspaceTargets(this,workspaceLocations);this.workspaceMoves=new ProjectWorkspaceMoveApplication(this);this.renames=new ProjectRenameApplication(this);this.bookPlacements=new LabBookReparentApplication(this);this.sessions=new WeakMap();this.calendars=new ProjectCalendars();this.jobs=new ProjectJobs({publisherOptions});this.credentials=new Set();this.active=new Map();this.closed=false;this.recordCollections=new RecordCollectionPages();this.dashboardCollections=new RecordCollectionPages({max:256,maxBytes:16*1024*1024,reuse:true});
  }
  async recoverProjectRename(client,projectId,options){return this.renames.recover(client,projectId,options);}
  async registry(){
@@ -182,6 +185,7 @@ export class ProjectApplication{
   },selected.projectId);
  }
  async execute(client,selected,data,{signal,onProgress,download,stream,websiteId,websitePin,websiteContext,binary,headless,query,contentLength,calendarSources,check=async()=>{},setCheck=()=>{}}={}){
+  if(selected.recordTransfer)return this.recordTransfers.run(client,selected,data,{check,signal,onProgress});
   if(selected.operation?.startsWith('move/'))return this.tracked(()=>this.workspaceMoves.target(client,selected.operation,data,{check}));
   if(selected.operation==='publication-source-directory')return this.tracked(()=>publicationSourceDirectory(this,client,data,{scope:selected.projectId??null,labBookId:selected.labBookId??null,signal,check}),selected.projectId);
   if(selected.operation==='publication-source')return this.tracked(()=>projectPublicationSource(this,client,data,{scope:selected.projectId??null,labBookId:selected.labBookId??null,signal,check}),selected.projectId);
@@ -200,7 +204,8 @@ export class ProjectApplication{
    try{entry=await registry.reference(ref);}catch(error){if(error.code!=='NOT_FOUND'||ref.workspaceId!==registry.workspaceId)throw error;}
    // Only a reference to this workspace's own namespace can remain here. A
    // registered or retired project never falls back to the source catalogue.
-   if(!entry)return this.tracked(async()=>{
+   if(!entry||entry.projectId===null)return this.tracked(async()=>{
+    if(entry&&entry.namespaceId!==registry.workspaceId)throw new AppError('DATABASE_LOCATION');
     await check();signal?.throwIfAborted();const value=await executeMaterialRequest(this.workspace,request,command,{signal,download,stream,sourceAccess:comparisonSourceFactory(this,client,{check})});await check();
     return selected.download?value:{projectId:null,namespaceId:registry.workspaceId,value};
    });
@@ -217,6 +222,12 @@ export class ProjectApplication{
    try{entry=await (await this.registry()).reference(data);}catch(error){if(selected.operation==='research-reference-location'&&error.code==='NOT_FOUND')return {registered:false};throw error;}
    const {workspaceId,...reference}=data;
    const operation=selected.operation==='research-reference-location'?'reference-location':'reference';
+   if(entry.projectId===null)return this.tracked(async()=>{
+    const registry=await this.registry();if(entry.namespaceId!==registry.workspaceId)throw new AppError('DATABASE_LOCATION');
+    await check();signal?.throwIfAborted();
+    const result=await (operation==='reference-location'?locateResearchReference:resolveResearchReference)(this.workspace,data,{namespaceId:registry.workspaceId});
+    await check();return {...result,registered:true,target:structuredClone(data),projectId:null,namespaceId:registry.workspaceId};
+   });
    const result=await this.run(client,{projectId:entry.projectId,operation:entry.labBookId?'lab-books/'+operation:operation,write:false,...(entry.labBookId?{labBookId:entry.labBookId,bookOperation:'reference',bookIdentity:{namespaceId:entry.namespaceId,vaultId:entry.bookVaultId}}:{})},entry.labBookId?data:{...reference,domain:'research'},{signal,check,setCheck});
    return {...result,registered:true,target:structuredClone(data),projectId:entry.projectId,...(entry.labBookId?{labBookId:entry.labBookId}:{}),namespaceId:entry.namespaceId};
   }

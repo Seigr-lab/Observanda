@@ -64,7 +64,8 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   actions??=referenceContext?(referenceTrail.length?button(esc(t('figureProvenance','back')),'reference-back'):'')+'<button type="button" class="button" data-action="close-dialog">'+esc(t('attempts','close'))+'</button>':button('Back to evidence','home');
   let n=0;body=body.replace(/<(input|select|textarea)\b(?![^>]*\bname=)/g,(_,tag)=>'<'+tag+' name="material-'+(++n)+'" ');
   showDialog(`<div class="material-workbench"><h2 id="dialog-title">${esc(title)}</h2><form id="material-form">${body}</form><div class="dialog-actions">${actions}</div></div>`);
-  materialReferenceElements(document.getElementById('material-form'),readNamespace??state.book?.id);
+  const form=document.getElementById('material-form'),reference=selectedRef;
+  void materialReferenceElements(form,readNamespace??state.book?.id,{resolve:reference?items=>call('reference-addresses',{ref:reference,items}):undefined}).catch(error=>{if(form.isConnected)notify(error.message,true);});
  };
  const choose=(label,id,choices,selected)=>field(label,`<select id="material-${id}">${choices.map(([v,l])=>option(v,l,selected)).join('')}</select>`);
  const sourceBusy=new Set();

@@ -1,3 +1,4 @@
+import {recordOrigin,recordOrigins} from './record-owner-provenance.js';
 // Legacy addresses are accepted only for identities explicitly transferred to
 // this authenticated project. Sharing an old workspace namespace alone grants
 // neither ownership nor access to another project's records or evidence.
@@ -6,6 +7,7 @@ export const referenceOriginKey=ref=>'project:reference-origin:'+ref.kind+':'+re
 export async function referenceNamespaceMatches(store,ref){
  const current=(await store.snapshot()).metadata.id;
  if(!ref?.workspaceId||ref.workspaceId===current)return true;
+ if(await recordOrigin(store,ref))return true;
  const projectId=store.workspace.projectId;
  if(!projectId||!researchId(ref.workspaceId)||!researchId(ref.id)||!['record','artifact','dataset','analysis','collection'].includes(ref.kind))return false;
  const receipt=await store.object('project:research-migration');
@@ -25,5 +27,6 @@ export async function recordReferenceNamespaces(store,reference){
  if(ref.workspaceId!==current&&!await referenceNamespaceMatches(store,ref))return [ref.workspaceId];
  const receipt=store.workspace.projectId?await store.object('project:research-migration'):null;
  const prior=receipt?.sourceNamespace;
- return prior&&prior!==current&&await referenceNamespaceMatches(store,{...ref,workspaceId:prior})?[current,prior]:[current];
+ const names=new Set(prior&&prior!==current&&await referenceNamespaceMatches(store,{...ref,workspaceId:prior})?[current,prior]:[current]);
+ for await(const origin of recordOrigins(store,'record',ref.id))names.add(origin.sourceNamespace);return [...names];
 }

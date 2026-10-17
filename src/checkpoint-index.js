@@ -13,9 +13,9 @@ export function validCheckpointSummary(value){
  return value&&researchId(value.id)&&researchId(value.workspaceId)&&revisionId(value.revision)&&revisionId(value.sourceRevision)&&validCheckpointTime(value.updatedAt)&&Number.isSafeInteger(value.count)&&value.count>0&&Array.isArray(value.titles)&&value.titles.length===Math.min(value.count,3)&&value.titles.every(t=>typeof t==='string'&&t.length<=160);
 }
 export class CheckpointIndex{
- constructor(workspace,read,{source,order,cursorKind,summary,validSummary,scopeOf=()=>''}){
+ constructor(workspace,read,{source,order,cursorKind,summary,validSummary,scopeOf=()=>'',present=null}){
   this.workspace=workspace;this.read=read;this.source='metadata:'+source+'/';this.prefix='metadata:'+order+'/';this.order=order;this.marker=order+'.json';
-  this.cursorKind=cursorKind;this.summary=summary;this.validSummary=validSummary;this.scopeOf=scopeOf;
+  this.cursorKind=cursorKind;this.summary=summary;this.validSummary=validSummary;this.scopeOf=scopeOf;this.present=present;
  }
  path(summary){return this.order+'/'+(this.scopeOf(summary)?this.scopeOf(summary)+'/':'')+checkpointKey(summary);}
  async initialized(workspaceId){
@@ -75,7 +75,8 @@ export class CheckpointIndex{
      signal?.throwIfAborted();const id=entry.id.slice(this.source.length,-5);
      if(!entry.id.endsWith('.json')||!researchId(id))fail();
      const result=await this.read(id);if(!result||result.draft.workspaceId!==workspaceId)fail();
-     const summary=this.summary(result,entry.revision);if(summary===null)continue;if(!this.validSummary(summary))fail();
+     const displayed=this.present?await this.present(result):result;if(!displayed)continue;
+     const summary=this.summary(displayed,entry.revision);if(summary===null)continue;if(!this.validSummary(summary))fail();
      if(this.scopeOf(summary)!==scope||summary.id===excludeId)continue;
      const key=checkpointKey(summary);if(first===null||key<first)first=key;if(last===null||key>last)last=key;
      if(anchor.after&&(anchor.reverse?key>=anchor.after:key<=anchor.after))continue;
@@ -88,23 +89,24 @@ export class CheckpointIndex{
     signal?.throwIfAborted();return {workspaceId,drafts:items,previousCursor:items.length&&(anchor.reverse?more:opposite)?encode(items[0],true):null,nextCursor:items.length&&(anchor.reverse?opposite:more)?encode(items.at(-1),false):null};
    }
    const rows=(reverse,after)=>reverse?index.reverseEntries(head,prefix,after===null?null:prefix+after):index.entries(head,prefix,after===null?null:prefix+after);
+   const display=async summary=>{if(!this.present)return summary;const raw=await this.read(summary.id);if(!raw||hash(this.summary(raw,summary.sourceRevision))!==hash(summary))fail();const result=await this.present(raw);return result?this.summary(result,summary.sourceRevision):null;};
    const items=[];let more=false;
    for await(const entry of rows(anchor.reverse,anchor.after)){
     signal?.throwIfAborted();
     if(entry.id.slice(-41,-5)===excludeId)continue;
-    if(items.length===limit){more=true;break;}
     const value=await store.objectValue(entry.id,entry);let summary;
     try{summary=JSON.parse(value.text);}catch{fail();}
     if(!this.validSummary(summary)||summary.workspaceId!==workspaceId||this.scopeOf(summary)!==scope||entry.id!==prefix+checkpointKey(summary))fail();
     const original=await index.find(head,this.source+summary.id+'.json');
     if(original?.revision!==summary.sourceRevision)fail();
-    const {sourceRevision,workspaceId:owner,...visible}=summary;void sourceRevision;void owner;items.push(visible);
+    const shown=await display(summary);if(!shown)continue;if(items.length===limit){more=true;break;}
+    const {sourceRevision,workspaceId:owner,...visible}=shown;void sourceRevision;void owner;items.push(visible);
    }
    if(anchor.reverse)items.reverse();
    let opposite=false;
    // Live lists keep no cursor stack or transaction between requests.
    if(items.length)for await(const entry of rows(!anchor.reverse,checkpointKey(anchor.reverse?items.at(-1):items[0]))){
-    signal?.throwIfAborted();if(entry.id.slice(-41,-5)!==excludeId){opposite=true;break;}
+    signal?.throwIfAborted();if(entry.id.slice(-41,-5)!==excludeId){if(this.present){const value=await store.objectValue(entry.id,entry),summary=JSON.parse(value.text);if(!await display(summary))continue;}opposite=true;break;}
    }
    const encode=(after,reverse)=>store.encode(this.cursorKind,workspaceId,{workspaceId,scope,excludeId,limit,after,reverse}).toString('base64url');
    signal?.throwIfAborted();return {workspaceId,drafts:items,

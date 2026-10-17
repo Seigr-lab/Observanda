@@ -1,0 +1,46 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {intakeFixture} from './fixtures/local-intake.js';
+import {ResearchRecords,recordRevision} from '../src/research.js';
+import {ResearchMaterials} from '../src/research-materials.js';
+import {RetainedRecordDocuments} from '../src/retained-record-documents.js';
+import {recordReferenceLocation} from '../src/record-reference-location.js';
+import {requireRecordOwnerTransfers} from '../src/catalogue-format.js';
+import {recordOwnerTransferFingerprint,writeRecordOwnerTransfer,setRecordOwnerFence,withRecordOwnerTransferWrite} from '../src/record-owner-transfer-state.js';
+import {stageRecordOwnerRevision,verifyRecordOwnerRevisionVisibility} from '../src/record-owner-read-visibility.js';
+const media={get:async()=>{throw Error('Unexpected synthetic attachment');}};
+const ref=value=>({kind:'record',id:value.id,revision:recordRevision(value)});
+const file=value=>'.observanda/materials/records/'+value.id+'/'+value.revision+'.json';
+
+test('return history visibility preserves former originals and refuses new, cancelled and corrupt copy proofs',async t=>{
+ const f=await intakeFixture(t),materials=new ResearchMaterials(f.ws),records=new ResearchRecords(f.ws,media),retained=new RetainedRecordDocuments(f.ws),first=f.record;
+ await records.save({workspaceId:f.book.id,changes:[{id:first.id,expectedRevision:recordRevision(first),record:{...first,title:'Former owner second saved version'}}]});
+ const second=(await f.ws.read()).book.entries.find(row=>row.id===first.id),secondPin=await materials.pinRecord(second.id,recordRevision(second));
+ const standalone={...first,title:'Former owner standalone original'},standaloneRef=await f.ws.withLock(()=>materials.retainRecord(standalone));
+ const basis=await f.ws.catalogue(async store=>{const snapshotId=await store.head(),snapshot=await store.snapshot(snapshotId);return {snapshotId,row:await store.member(snapshot,first.id)};});
+ await records.remove({workspaceId:f.book.id,recordId:first.id,expectedRevision:recordRevision(second)});
+ const title=value=>retained.open(value,async document=>(await document.field(['title'])).value,{history:true,legacy:row=>row.title});
+ assert.equal(await title(ref(first)),first.title);assert.equal(await title(secondPin),second.title);assert.deepEqual(await materials.read(standaloneRef),standalone);
+ const sourceOwner={projectId:null,labBookId:null,workspaceId:f.book.id},targetOwner={projectId:null,labBookId:null,workspaceId:randomUUID()},id=randomUUID(),command={id,workspaceId:f.book.id,recordId:first.id,sourceNotebookId:first.notebookId,expectedStorageRevision:basis.row.revision,targetWorkspaceId:targetOwner.workspaceId,targetNotebookId:randomUUID()},timestamp='2026-01-01T00:00:00.000Z';
+ const outgoing={version:1,id,command,sourceOwner,targetOwner,fingerprint:recordOwnerTransferFingerprint(command,sourceOwner,targetOwner),phase:'complete',sourceSnapshotId:basis.snapshotId,createdAt:timestamp,updatedAt:timestamp,progress:{},result:null};
+ const install=(receipt,direction)=>f.ws.withLock(()=>f.ws.catalogue(async store=>{await requireRecordOwnerTransfers(store.db);await writeRecordOwnerTransfer(store,receipt);await setRecordOwnerFence(store,receipt,direction);}));
+ await install(outgoing,'outgoing');assert.equal(await title(ref(first)),first.title);assert.equal((await f.ws.catalogue(store=>recordReferenceLocation(store,first.id,recordRevision(first)))).row.id,first.id);
+ const returning=structuredClone(outgoing);returning.id=randomUUID();returning.command={...command,id:returning.id,workspaceId:targetOwner.workspaceId,sourceNotebookId:command.targetNotebookId,targetWorkspaceId:f.book.id,targetNotebookId:first.notebookId};returning.sourceOwner=targetOwner;returning.targetOwner=sourceOwner;returning.fingerprint=recordOwnerTransferFingerprint(returning.command,targetOwner,sourceOwner);returning.phase='copying';returning.progress={previousOwnerTransfer:outgoing.id};await install(returning,'incoming');
+ const write=(receipt,operation)=>f.ws.withLock(()=>f.ws.catalogue(store=>withRecordOwnerTransferWrite(store,receipt,()=>operation(store))));
+ const copied={...second,title:'New incoming retained interpretation'},copiedRef=ref(copied);
+ await write(returning,async store=>{await stageRecordOwnerRevision(store,returning,copiedRef.revision);await f.ws.writeMetadata(file(copiedRef),JSON.stringify(copied));});
+ // The first saved view and standalone envelope have not been visited by copy.
+ assert.equal(await title(ref(first)),first.title);assert.equal(await title(secondPin),second.title);assert.deepEqual(await materials.read(standaloneRef),standalone);
+ await assert.rejects(title(copiedRef),{code:'MATERIAL_INCOMPLETE'});await assert.rejects(materials.read(copiedRef),{code:'MATERIAL_INCOMPLETE'});assert.deepEqual(await materials.readStored(copiedRef),copied);await retained.check(copiedRef,{raw:true});await materials.verifySnapshot({readOnly:true});
+ await assert.rejects(f.ws.withLock(()=>f.ws.catalogue(store=>stageRecordOwnerRevision(store,returning,recordRevision(first)))),{code:'RECORD_TRANSFER_BUSY'});
+ await write(returning,async store=>{await stageRecordOwnerRevision(store,returning,recordRevision(first));await stageRecordOwnerRevision(store,returning,standaloneRef.revision);await stageRecordOwnerRevision(store,returning,recordRevision(first));});
+ assert.equal(await title(ref(first)),first.title);assert.deepEqual(await materials.read(standaloneRef),standalone);await f.ws.catalogue(store=>verifyRecordOwnerRevisionVisibility(store));
+ const key='record-owner-revision-prior:'+returning.id+':'+first.id+':'+copiedRef.revision,checkpoint=await f.ws.catalogue(store=>store.object(key));
+ await write(returning,store=>store.putObject(key,{...checkpoint,recordId:randomUUID()}));await assert.rejects(title(copiedRef),{code:'CATALOGUE_DAMAGED'});await assert.rejects(f.ws.catalogue(store=>verifyRecordOwnerRevisionVisibility(store)),{code:'CATALOGUE_DAMAGED'});await write(returning,store=>store.putObject(key,checkpoint));
+ returning.phase='cancelled';await install(returning,'incoming');await assert.rejects(title(copiedRef),{code:'MATERIAL_INCOMPLETE'});assert.equal(await title(ref(first)),first.title);
+ const retry=structuredClone(returning);retry.id=randomUUID();retry.command.id=retry.id;retry.fingerprint=recordOwnerTransferFingerprint(retry.command,retry.sourceOwner,retry.targetOwner);retry.phase='copying';await install(retry,'incoming');
+ assert.equal(await title(ref(first)),first.title);assert.deepEqual(await materials.read(standaloneRef),standalone);await assert.rejects(title(copiedRef),{code:'MATERIAL_INCOMPLETE'});
+ await write(retry,store=>stageRecordOwnerRevision(store,retry,copiedRef.revision));await assert.rejects(title(copiedRef),{code:'MATERIAL_INCOMPLETE'});await f.ws.catalogue(store=>verifyRecordOwnerRevisionVisibility(store));
+ retry.phase='complete';await install(retry,'incoming');assert.deepEqual(await materials.read(copiedRef),copied);assert.equal(await title(ref(first)),first.title);await f.ws.catalogue(store=>verifyRecordOwnerRevisionVisibility(store));
+});

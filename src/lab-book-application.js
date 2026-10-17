@@ -1,3 +1,4 @@
+import {recordOwnerTransferRequest} from './record-owner-transfer-application.js';
 import {sampleAnalysisRequest,executeSampleAnalysisRequest} from './sample-analysis-requests.js';
 import {projectModuleRequest} from './project-module-requests.js';
 import {projectCalendarRequest} from './project-calendar.js';
@@ -43,7 +44,7 @@ export function labBookRequest(suffix,method='POST'){
  if(method==='POST'&&match[2]==='publication-source-directory')return {operation:'publication-source-directory',labBookId:match[1],write:false,limit:16384};
  if(method==='POST'&&match[2]==='publication-source')return {operation:'publication-source',labBookId:match[1],write:false,limit:1048576};
  const route='/api/'+match[2];
- const command=sampleAnalysisRequest(route,method)??projectModuleRequest(route)??projectCalendarRequest(route)??projectAssetRequest(route,method)??projectPublicationRequest(route)??reviewRequest(route,method)??recordStarterRequest(route,method)??materialRequest(route)??intakeRequest(route)??(method==='POST'&&/^\/api\/(?:research\/|workspace\/read\/)/.test(route)?researchRequest(route):null);return command?{...command,bookOperation:'research',labBookId:match[1],route}:null;
+ const command=recordOwnerTransferRequest(route,method)??sampleAnalysisRequest(route,method)??projectModuleRequest(route)??projectCalendarRequest(route)??projectAssetRequest(route,method)??projectPublicationRequest(route)??reviewRequest(route,method)??recordStarterRequest(route,method)??materialRequest(route)??intakeRequest(route)??(method==='POST'&&/^\/api\/(?:research\/|workspace\/read\/)/.test(route)?researchRequest(route):null);return command?{...command,bookOperation:'research',labBookId:match[1],route}:null;
 }
 export async function executeLabBookRequest(project,selected,data,{deviceStore,access:bookAccess,check=async()=>{},jobs,stopJobs=async()=>{},publishBook=async()=>{},...options}={}){
  const registry=new LabBookRegistry(project);await check();
@@ -96,7 +97,7 @@ export async function executeLabBookRequest(project,selected,data,{deviceStore,a
   const result=await router.withLabBook(selected.labBookId,async storage=>{
    if(selected.bookOperation==='reference'){
     if(!validTarget(data)||data.kind==='workspace')throw new AppError('INVALID');
-    return (selected.operation.endsWith('-location')?locateResearchReference:resolveResearchReference)(storage,data,{namespaceId:data.workspaceId});
+    return (selected.operation.endsWith('-location')?locateResearchReference:resolveResearchReference)(storage,data,{namespaceId:entry.namespaceId});
    }
    const background=()=>jobs(storage,etag,()=>current(),retain);
    if(selected.bookOperation==='transfer'){

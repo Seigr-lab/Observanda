@@ -2,7 +2,8 @@
 // owners. Shared index markers are derived; immutable parts are handled by the
 // source-change coordinator only when newly added, never when altered/deleted.
 import {EvidenceCorrections} from './evidence-corrections.js';
-import {materialBatch} from './material-visibility.js';
+import {materialBatch,materialOwnerTransfer} from './material-visibility.js';
+import {materialSegmentOwner} from './material-index-segments.js';
 import {ResearchMaterials,materialRef} from './research-materials.js';
 import {retainedRecordValue} from './retained-record-envelope.js';
 import {researchId} from './web/research-reference.js';
@@ -18,10 +19,14 @@ export function projectSourceEvidenceOwner(store,record,{signal}={}){
  async function head(id){
   const value=await materials.current(id,{includeStaged:true});if(!value||!researchId(value.recordId))damaged();
   const doc=await materials.readStored(value);if(doc.recordId!==value.recordId)damaged();
-  if(value.stagedBatch!==undefined){const batch=await materialBatch(store.workspace,value.stagedBatch);if(value.kind!=='artifact'||batch.command.recordId!==value.recordId||doc.content.intakeId!==batch.id)damaged();}
+  if(value.stagedBatch!==undefined){const batch=await materialBatch(store.workspace,value.stagedBatch);if(value.kind!=='artifact'||batch.command.recordId!==value.recordId)damaged();
+   if(batch.owner==='local-intake'){const {LocalIntake}=await import('./intake/service.js'),proposal=await new LocalIntake(store.workspace).read(batch.id),file=proposal.manifest.files.find(file=>file.id===id),prepared=proposal.prepared.find(file=>file.id===id);if(proposal.pin!==batch.pin||!file||!prepared||doc.content.sha256!==file.sha256||doc.content.size!==file.size||doc.content.storageId!==prepared.storageId)damaged();}
+   else if(doc.content.intakeId!==batch.id)damaged();
+  }
+  if(value.ownerTransfer!==undefined){if(value.stagedBatch!==undefined)damaged();await materialOwnerTransfer(store.workspace,value.ownerTransfer,value.recordId);}
   return value;
  }
- async function item(id){const value=await head(id),item=await json(root+'index/items/'+id+'.json');if(item.id!==value.id||item.recordId!==value.recordId||item.kind!==value.kind||item.stagedBatch!==value.stagedBatch)damaged();return item;}
+ async function item(id){const value=await head(id),item=await json(root+'index/items/'+id+'.json');if(item.id!==value.id||item.recordId!==value.recordId||item.kind!==value.kind||item.stagedBatch!==value.stagedBatch||item.ownerTransfer!==value.ownerTransfer)damaged();return item;}
  return async id=>{
   if(!id.startsWith(root))return null;
   return store.workspace.inspectCatalogue(store,async()=>{
@@ -54,13 +59,13 @@ export function projectSourceEvidenceOwner(store,record,{signal}={}){
    if((match=/^index\/dependencies\/([^/]+)\/([a-f0-9]{64})\.json$/.exec(tail))){const item=await json(id);if(item.id!==match[1]||item.revision!==match[2]||!materialRef(item))damaged();return record((await materials.readStored(item)).recordId);}
    if((match=/^index\/batches\/([^/]+)\.json$/.exec(tail)))return record((await materials.index.segments.read(match[1])).recordId);
    if((match=/^index\/retired\/([^/]+)\.json$/.exec(tail))){
-    const item=await materials.index.segments.retired(match[1]);if(!item)damaged();const segment=await materials.index.segments.read(item.stagedBatch);if(segment.recordId!==item.recordId)damaged();return record(item.recordId);
+    const item=await materials.index.segments.retired(match[1]);if(!item)damaged();const segment=await materials.index.segments.read(materialSegmentOwner(item));if(segment.recordId!==item.recordId)damaged();return record(item.recordId);
    }
-   if((match=/^index\/segments\/(all|[^/]+)\/(all|artifact)-order(\.json|\/[^/]+\.json)$/.exec(tail))){
+   if((match=/^index\/segments\/(all|[^/]+)\/(all|artifact|dataset|analysis|collection)-order(\.json|\/[^/]+\.json)$/.exec(tail))){
     const [,scope,bucket,suffix]=match;if(scope!=='all'&&!researchId(scope))damaged();
     if(suffix==='.json'){if((await json(id)).version!==1)damaged();return scope==='all'?derived:record(scope);}
     const pointer=await json(id),segment=await materials.index.segments.read(pointer.batchId),feed=materials.index.segments.feed(scope==='all'?null:scope,bucket==='all'?null:bucket);
-    if(pointer.id!==segment.id||pointer.createdAt!==segment.createdAt||scope!=='all'&&segment.recordId!==scope||parts.at(-1)!==feed.key(pointer))damaged();return record(segment.recordId);
+    if(pointer.id!==segment.id||pointer.createdAt!==segment.createdAt||!materials.index.segments.buckets(segment).includes(bucket==='all'?null:bucket)||scope!=='all'&&segment.recordId!==scope||parts.at(-1)!==feed.key(pointer))damaged();return record(segment.recordId);
    }
    if((match=/^index\/(heads|pending)\/(all|[^/]+)\/(all|artifact|dataset|analysis|collection)-order(\.json|\/[^/]+\.json)$/.exec(tail))){
     const [,kind,scope,bucket,suffix]=match;if(scope!=='all'&&!researchId(scope)||kind==='pending'&&(scope==='all'||bucket!=='all'))damaged();

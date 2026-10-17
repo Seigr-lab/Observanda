@@ -1,3 +1,4 @@
+import {assertRecordOwnerRevisionVisible} from './record-owner-read-visibility.js';
 // Record history projects existing encrypted snapshots; it does not create a
 // second history store. Restoration changes only one record under the same lock.
 import path from 'node:path';
@@ -89,7 +90,7 @@ export class RecordHistory {
    }
    const currentView=await index.display(currentItem.item),versions=[];
    for(const item of await index.rows(head,ordinals)){
-    const view=await index.display(item);versions.push({...view,source:{kind:'workspace',id:item.snapshotId},current:view.revision===currentView.revision});
+    const view=await index.display(item);await assertRecordOwnerRevisionVisible(store,recordId,view.revision,{code:'RECORD_HISTORY_MISSING'});versions.push({...view,source:{kind:'workspace',id:item.snapshotId},current:view.revision===currentView.revision});
    }
    const next={...anchor};let examined=0;
    // Continue in key order after the ordinary saved versions. Duplicate exact
@@ -104,6 +105,7 @@ export class RecordHistory {
      if(extra&&versions.length===limit)break scan;
      next.retainedAfter=id;next.retainedSeen++;
      if(!extra)continue;
+     await assertRecordOwnerRevisionVisible(store,recordId,revision,{code:'RECORD_HISTORY_MISSING'});
      let value;try{value=JSON.parse((await store.object(id)).text);}catch{throw new AppError('CATALOGUE_DAMAGED');}
      if(value.id!==recordId||recordRevision(value)!==revision)throw new AppError('CATALOGUE_DAMAGED');
      versions.push({revision,title:value.title,status:value.status,updatedAt:value.updatedAt,source:{kind:'retained',id:revision},current:revision===currentView.revision});next.retainedShown++;
@@ -127,7 +129,8 @@ export class RecordHistory {
    if(source.kind==='workspace'){
     if(await this.workspace.storageKind()==='catalogue'){
      value=await this.workspace.catalogue(async store=>{
-      const manifest=await store.snapshot(source.id),row=await store.member(manifest,recordId);
+      await assertRecordOwnerRevisionVisible(store,recordId,revision,{code:'RECORD_HISTORY_MISSING'});
+      const manifest=await store.recordSnapshot(source.id,recordId),row=await store.member(manifest,recordId);
       if(manifest.metadata.id!==book.id||!row)throw new AppError('RECORD_HISTORY_MISSING');
       return historicalBook(manifest.metadata,await store.record(row.id,row.revision)).entries[0];
      });

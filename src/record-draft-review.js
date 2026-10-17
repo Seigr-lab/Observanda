@@ -1,3 +1,4 @@
+import {recordOwnerDraftPlanOrigin,validDraftOriginOwner,verifyDraftPlanOrigin} from './record-owner-drafts.js';
 // Durable, paged review of a full-record checkpoint. Source documents and
 // decisions remain encrypted; the browser receives one conflict/value window.
 import {AppError} from './errors.js';
@@ -21,7 +22,7 @@ import {recordDocumentSummary} from './record-document-summary.js';
 import {commitRecordDocument} from './record-document-commit.js';
 import {operationStage} from './operation-progress.js';
 import {withRecordProjectionScratch} from './record-projection-scratch.js';
-import {RecordDraftEdits,verifyRecordDraftEdits,draftEditOwner} from './record-draft-edits.js';
+import {RecordDraftEdits,verifyRecordDraftEdits} from './record-draft-edits.js';
 import {draftEditFields,selectDraftEdit} from './record-draft-edit-values.js';
 import {resultFigureTargets} from './record-result-values.js';
 
@@ -58,38 +59,39 @@ export class RecordDraftReview{
    const position=command.position??0,source=recoveryRecord(draft,position),legacy=draft.formatVersion!==4,row=await store.member(snapshot,source.recordId);
    const recovered=legacy?await new RecordDraftRecoveryLedger(store).receipt(draft.id,checkpoint.revision,position):null;
    if(recovered){this.validate(recovered);return this.summary(recovered);}
-   const editOwner={workspaceId:command.workspaceId,recordId:source.recordId,draftId:draft.id,draftRevision:checkpoint.revision,sourcePosition:position},edits=new RecordDraftEdits(store),editRevision=await edits.head(editOwner);
+   const origin=await recordOwnerDraftPlanOrigin(store,checkpoint,position,row),editOwner={workspaceId:command.workspaceId,recordId:source.recordId,draftId:draft.id,draftRevision:checkpoint.revision,sourcePosition:position,...(origin?{origin}:{})},edits=new RecordDraftEdits(store),editRevision=await edits.head(editOwner);
    const id=digest(serialize([draft.id,checkpoint.revision,row?.revision??null,...(legacy?[position]:[]),...(editRevision?[editRevision]:[])])),previous=await store.object(prefix+id);
    if(previous){this.validate(previous);return this.summary(previous);}
    let baseRevision=null;
    if(source.revision&&draft.formatVersion!==1){const found=await recoveryHistoryBase(store,source.recordId,source.revision);baseRevision=found.revision;
-    const baseSnapshot=await store.snapshot(found.snapshotId);if(baseSnapshot.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');}
+    const baseSnapshot=await store.recordSnapshot(found.snapshotId,source.recordId);if(baseSnapshot.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');}
    return withRecoveryDraft(store,draft,position,async(mine,inlineBase)=>{
     const withLatest=consume=>row?withRecordDocument(store,row.id,row.revision,consume,{mutable:true}):consume(new RecordDocument(mine.blocks,mine.root,{mutable:true}));
     return withLatest(async latest=>{
     const copy=source=>copyRecordValue(source,latest,source.root);
     const roots=await operationStage('read-record-bases',{},async()=>({base:inlineBase?await copy(inlineBase):baseRevision?await withRecordDocument(store,source.recordId,baseRevision,copy):null,mine:await copy(mine),stored:row?latest.root:null}));
     if(editRevision)roots.mine=await edits.document(await edits.node(editRevision),copy);
-    const conflicts=new RecordContainerBuilder(latest.blocks,'array'),priorPlan=editRevision?await store.object(prefix+(await edits.node(editRevision)).planId):null,index=indexFor(store);
+    const conflicts=new RecordContainerBuilder(latest.blocks,'array'),priorPlan=editRevision?await edits.plan((await edits.node(editRevision)).planId):origin?await edits.plan(origin.reviewId):null,index=indexFor(store);
     let choices=null,decided=0;
     await operationStage('validate-records',{},()=>mergeRecordDocuments(latest,{...roots,choose:async item=>{
      await conflicts.add({value:await latest.tree.retain(item)});
-     if(priorPlan?.choices&&priorPlan.notebookId===latest.blocks.scopeId&&priorPlan.generation===latest.blocks.generation){
-      const entry=await index.find({root:priorPlan.choices},pathKey(item.path)),choice=entry?await latest.tree.read(entry.revision):null;
-      if(choice?.basis&&serialize(choice.basis)===serialize(item)){choices=await index.change(choices,pathKey(item.path),entry.revision);decided++;}
+     if(priorPlan?.choices){
+      const entry=await index.find({root:priorPlan.choices},pathKey(item.path)),choice=entry?await withRecordBlockStore(store,priorPlan.notebookId,priorPlan.generation,blocks=>blocks.tree().read(entry.revision)):null;
+      if(choice?.basis&&serialize(choice.basis)===serialize(item)){choices=await index.change(choices,pathKey(item.path),await latest.tree.retain(choice));decided++;}
      }
      return item.stored;
     }}));
     await index.flush(choices);
     const conflictRoot=await conflicts.finish();await latest.blocks.flush();
-    const plan={format:legacy?3:2,...(legacy?{sourcePosition:position,sourceCount:recoveryRecordCount(draft)}:{}),id,workspaceId:command.workspaceId,recordId:source.recordId,draftId:draft.id,draftRevision:checkpoint.revision,storageRevision:row?.revision??null,notebookId:latest.blocks.scopeId,generation:latest.blocks.generation,roots,conflicts:conflictRoot,count:conflicts.count,choices:null,decided:0,title:(await mine.field(['title'])).value};
-    if(editRevision){plan.editRevision=editRevision;plan.title=(await latest.tree.selected(roots.mine,['title'])).value;plan.choices=choices;plan.decided=decided;}
+    const plan={format:legacy?3:2,...(legacy?{sourcePosition:position,sourceCount:recoveryRecordCount(draft)}:{}),id,workspaceId:command.workspaceId,recordId:source.recordId,...(origin?{origin}:{}),draftId:draft.id,draftRevision:checkpoint.revision,storageRevision:row?.revision??null,notebookId:latest.blocks.scopeId,generation:latest.blocks.generation,roots,conflicts:conflictRoot,count:conflicts.count,choices:null,decided:0,title:(await mine.field(['title'])).value};
+    if(editRevision){plan.editRevision=editRevision;plan.title=(await latest.tree.selected(roots.mine,['title'])).value;}plan.choices=choices;plan.decided=decided;
     await store.putObject(prefix+id,plan);return this.summary(plan);
     });
    });
   }));
  }
  validate(plan){
+  if(plan?.origin&&(!validDraftOriginOwner(plan.origin)||plan.origin.recordId!==plan.recordId||!revisionId(plan.origin.reviewId)))throw new AppError('CATALOGUE_DAMAGED');
   const optional=value=>revisionId(value)||plan?.format>=2&&value===null;
   if(Object.hasOwn(plan??{},'editRevision')&&!revisionId(plan.editRevision))throw new AppError('CATALOGUE_DAMAGED');
   if(!plan||![1,2,3].includes(plan.format)||![plan.id,plan.draftRevision,plan.conflicts,plan.roots?.mine].every(revisionId)||![plan.storageRevision,plan.roots?.base,plan.roots?.stored].every(optional)||(plan.storageRevision===null)!==(plan.roots.stored===null)||Object.keys(plan.roots??{}).sort().join()!=='base,mine,stored'||![plan.workspaceId,plan.recordId,plan.draftId,plan.notebookId].every(researchId)||!Number.isSafeInteger(plan.generation)||plan.generation<1||!natural(plan.count)||!natural(plan.decided)||plan.decided>plan.count||!validIndexRef(plan.choices)||typeof plan.title!=='string'||plan.format===3&&(!natural(plan.sourcePosition)||!natural(plan.sourceCount)||plan.sourcePosition>=plan.sourceCount))throw new AppError('CATALOGUE_DAMAGED');
@@ -130,7 +132,7 @@ export class RecordDraftReview{
   if(!command||!researchId(command.workspaceId)||!revisionId(command.id)||!revisionId(command.expectedRevision))invalid();
   if((await store.snapshot()).metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
   const plan=await store.object(prefix+command.id);if(!plan)throw new AppError('DRAFT_CHANGED');this.validate(plan);
-  if(plan.workspaceId!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
+  if(plan.workspaceId!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');await verifyDraftPlanOrigin(store,plan);
   const stale=revision(plan)!==command.expectedRevision;
   if(stale&&!retryChoice)throw new AppError('DRAFT_CHANGED');
   return withRecordBlockStore(store,plan.notebookId,plan.generation,(blocks,owner)=>consume(plan,new RecordDocument(blocks,plan.roots.stored??plan.roots.mine,{mutable:owner===store}),stale));
@@ -227,8 +229,17 @@ export async function verifyRecordDraftReviews(store,{signal}={}){
   signal?.throwIfAborted();const plan=await store.object(id);review.validate(plan);
   if(id!==prefix+plan.id||plan.workspaceId!==workspaceId||(plan.choices?.count??0)!==plan.decided)fail();
   if(plan.format===3&&plan.saved&&(await new RecordDraftRecoveryLedger(store).receipt(plan.draftId,plan.draftRevision,plan.sourcePosition))?.id!==plan.id)fail();
-  await review.context(store,{id:plan.id,workspaceId,expectedRevision:revision(plan)},async(_,source)=>withRecordProjectionScratch(source,async document=>{
-   if(plan.editRevision){const edits=new RecordDraftEdits(store),node=await edits.node(plan.editRevision),root=node.notebookId===plan.notebookId&&node.generation===plan.generation?node.root:await edits.document(node,doc=>copyRecordValue(doc,document,doc.root,{signal}));if(serialize(node.owner)!==serialize(draftEditOwner(plan))||root!==plan.roots.mine)fail();}
+  await verifyDraftPlanOrigin(store,plan);await verifyRecordDraftPlan(store,plan,{signal});
+ }
+}
+
+// A transferred original plan keeps its source namespace and content addresses.
+// The adapter authenticates that origin before invoking the same semantic check.
+export async function verifyRecordDraftPlan(store,plan,{signal}={}){
+ const review=new RecordDraftReview(store.workspace),fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};review.validate(plan);
+ if((plan.choices?.count??0)!==plan.decided)fail();
+ await withRecordBlockStore(store,plan.notebookId,plan.generation,blocks=>withRecordProjectionScratch(new RecordDocument(blocks,plan.roots.stored??plan.roots.mine),async document=>{
+   if(plan.editRevision){const edits=new RecordDraftEdits(store),node=await edits.node(plan.editRevision),root=node.notebookId===plan.notebookId&&node.generation===plan.generation?node.root:await edits.document(node,doc=>copyRecordValue(doc,document,doc.root,{signal}));if(!edits.matches(plan,node.owner)||root!==plan.roots.mine)fail();}
    if(await document.tree.arrayLength(plan.conflicts,[])!==plan.count)fail();
    for(const root of Object.values(plan.roots)){
     if(root===null)continue;
@@ -246,5 +257,4 @@ export async function verifyRecordDraftReviews(store,{signal}={}){
    if(position!==plan.count||decided!==plan.decided)fail();
    if(plan.saved&&(!plan.saved.recordDraftRecovered||plan.saved.recordId!==plan.recordId||!revisionId(plan.saved.etag)))fail();
   },{signal}));
- }
 }

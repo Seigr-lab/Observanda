@@ -1,3 +1,4 @@
+import {readRecordOwnerMetadata} from './record-owner-audit-metadata.js';
 // Immutable completion receipts with a paged history and exact applicability
 // lookup. Total receipt count is independent of request and working-set size.
 import {AppError} from './errors.js';
@@ -17,7 +18,7 @@ export function validateRunReceipt(value){
 const parse=raw=>{try{return JSON.parse(raw);}catch{damaged();}};
 export class RunReceiptStore{
  constructor(workspace,recordId){if(!researchId(recordId))throw new AppError('INTAKE_INVALID');this.workspace=workspace;this.recordId=recordId;this.root=prefix+recordId;this.marker=this.root+'.json';this.feed=new MetadataFeed(workspace,this.root+'/items');}
- async json(file,limit=1024*1024){const raw=await this.workspace.readMetadata(file,limit);return raw===null?null:parse(raw);}
+ async json(file,limit=1024*1024){const raw=await readRecordOwnerMetadata(this.workspace,file,limit);return raw===null?null:parse(raw);}
  async metadata(){const value=await this.json(this.marker,1024);if(value&&(value.version!==1||!Number.isSafeInteger(value.count)||value.count<0))damaged();return value;}
  file(id){if(!researchId(id))throw new AppError('INTAKE_INVALID');return this.root+'/items/'+id+'.json';}
  basis(receipt){return this.root+'/basis/'+receipt.recordRevision+'/'+receipt.evidenceRevision+'/'+receipt.kind+'.json';}

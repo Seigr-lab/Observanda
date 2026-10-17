@@ -1,3 +1,4 @@
+import {recordOwnerDraftArchived} from './record-owner-drafts.js';
 // Corrections belong to the original checkpoint, independently of whichever
 // saved revision is currently being reviewed. Immutable edit receipts make
 // interrupted writes retryable and retain every prior checkpoint value.
@@ -17,12 +18,14 @@ const owner=plan=>({workspaceId:plan.workspaceId,recordId:plan.recordId,draftId:
 export const draftEditOwner=owner;
 export class RecordDraftEdits{
  constructor(store){this.store=store;}
- async head(plan){const value=await this.store.object(headPrefix+hash(owner(plan)));if(value&&(!revisionId(value.revision)||hash(value.owner)!==hash(owner(plan))))fail();return value?.revision??null;}
- async node(id){if(!revisionId(id))fail();const node=await this.store.object(nodePrefix+id);if(!node||hash(node)!==id||![node.before,node.root,node.value,node.planId,node.requestHash,node.owner?.draftRevision].every(revisionId)||node.previous!==null&&!revisionId(node.previous)||![node.notebookId,node.operationId,node.owner?.workspaceId,node.owner?.recordId,node.owner?.draftId].every(researchId)||!Number.isSafeInteger(node.generation)||node.generation<1||!Number.isSafeInteger(node.owner.position)||node.owner.position<0)fail();if(node.field==='type'&&await catalogueFormat(this.store.db)<13)fail();return node;}
+ async head(plan){const identity=owner(plan),value=await this.store.object(headPrefix+hash(identity))??await recordOwnerDraftArchived(this.store,'head',hash(identity));if(value&&(!revisionId(value.revision)||hash(value.owner)!==hash(identity)))fail();if(value)return value.revision;return plan.origin?this.head({...plan.origin,sourcePosition:plan.origin.position}):null;}
+ matches(plan,value){return hash(value)===hash(owner(plan))||plan.origin&&hash(value)===hash(owner({...plan.origin,sourcePosition:plan.origin.position}));}
+ async plan(id){return await this.store.object('record-draft-review:'+id)??await recordOwnerDraftArchived(this.store,'review',id);}
+ async node(id){if(!revisionId(id))fail();const node=await this.store.object(nodePrefix+id)??await recordOwnerDraftArchived(this.store,'edit',id);if(!node||hash(node)!==id||![node.before,node.root,node.value,node.planId,node.requestHash,node.owner?.draftRevision].every(revisionId)||node.previous!==null&&!revisionId(node.previous)||![node.notebookId,node.operationId,node.owner?.workspaceId,node.owner?.recordId,node.owner?.draftId].every(researchId)||!Number.isSafeInteger(node.generation)||node.generation<1||!Number.isSafeInteger(node.owner.position)||node.owner.position<0)fail();if(node.field==='type'&&await catalogueFormat(this.store.db)<13)fail();return node;}
  async document(node,consume){return withRecordBlockStore(this.store,node.notebookId,node.generation,(blocks,owner)=>consume(new RecordDocument(blocks,node.root,{mutable:owner===this.store})));}
  async mine(plan,document,consume){
   const revision=await this.head(plan);if(!revision)return consume(new RecordDocument(document.blocks,plan.roots.mine,{mutable:true}),null);
-  const node=await this.node(revision);if(hash(node.owner)!==hash(owner(plan)))fail();return this.document(node,doc=>consume(doc,revision));
+  const node=await this.node(revision);if(!this.matches(plan,node.owner))fail();return this.document(node,doc=>consume(doc,revision));
  }
  async assertCurrent(plan){if((await this.head(plan))!==(plan.editRevision??null))throw new AppError('DRAFT_CHANGED');}
  async replay(plan,command){
@@ -51,8 +54,21 @@ export async function verifyRecordDraftEdits(store,{signal}={}){
  for await(const id of store.objectIdEntries(nodePrefix,{signal})){
   signal?.throwIfAborted();if(format<10)fail();const revision=id.slice(nodePrefix.length),node=await edits.node(revision),plan=await store.object('record-draft-review:'+node.planId);
   if(node.owner.workspaceId!==workspaceId||!plan||hash(owner(plan))!==hash(node.owner)||(await store.object(operationPrefix+node.operationId))?.revision!==revision)fail();
+  await verifyRecordDraftEdit(store,node,{signal});
+ }
+ for await(const id of store.objectIdEntries(headPrefix,{signal})){
+  const head=await store.object(id),node=await edits.node(head?.revision);
+  if(id!==headPrefix+hash(node.owner)||hash(head.owner)!==hash(node.owner))fail();
+ }
+ for await(const id of store.objectIdEntries(operationPrefix,{signal})){
+  const receipt=await store.object(id),node=await edits.node(receipt?.revision);if(id!==operationPrefix+node.operationId)fail();
+ }
+}
+
+export async function verifyRecordDraftEdit(store,node,{signal}={}){
+ const edits=new RecordDraftEdits(store),plan=await edits.plan(node.planId);if(!plan||!edits.matches(plan,node.owner))fail();
   const previous=node.previous?await edits.node(node.previous):null;
-  if(previous&&hash(previous.owner)!==hash(node.owner))fail();
+  if(previous&&!edits.matches(plan,previous.owner))fail();
   await edits.document(node,source=>withRecordProjectionScratch(source,async document=>{
    const base=previous??{...plan,root:plan.roots.mine};
    // Shared immutable roots already authenticate unchanged fields. Only a key
@@ -63,12 +79,4 @@ export async function verifyRecordDraftEdits(store,{signal}={}){
    if(!validDraftEdit(node.field,value)||(await replaceDraftEdit(before,node.field,value,selected)).root!==node.root)fail();
    if((await document.field(['id'])).value!==node.owner.recordId)fail();
   },{signal}));
- }
- for await(const id of store.objectIdEntries(headPrefix,{signal})){
-  const head=await store.object(id),node=await edits.node(head?.revision);
-  if(id!==headPrefix+hash(node.owner)||hash(head.owner)!==hash(node.owner))fail();
- }
- for await(const id of store.objectIdEntries(operationPrefix,{signal})){
-  const receipt=await store.object(id),node=await edits.node(receipt?.revision);if(id!==operationPrefix+node.operationId)fail();
- }
 }

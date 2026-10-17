@@ -38,9 +38,10 @@ export async function verifyResearchDrafts(store,{signal}={}){
  const drafts=new ResearchDrafts(store.workspace),workspaceId=(await store.snapshot()).metadata.id;
  for await(const name of store.workspace.metadataNames('.observanda/drafts')){
   signal?.throwIfAborted();if(!/^[a-f0-9-]{36}\.json$/.test(name))fail();
-  const result=await drafts.read(name.slice(0,-5),{expand:false,header:true});
+  const result=await drafts.read(name.slice(0,-5),{expand:false,header:true,raw:true});
   if(!result||result.draft.workspaceId!==workspaceId)fail();operationItem(result.draft.titles?.[0]??name);
   await verifyRetainedDraft(store,result.draft,{signal});operationAdvance();
  }
  const {verifyRecordDraftReviews}=await import('./record-draft-review.js');await verifyRecordDraftReviews(store,{signal});
+ const {verifyRecordOwnerDrafts}=await import('./record-owner-drafts.js');await verifyRecordOwnerDrafts(store,{signal});
 }

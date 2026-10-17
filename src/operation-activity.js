@@ -23,7 +23,7 @@ export class OperationActivity{
     }
     entry.updatedAt=Date.now();
    },
-   finish:error=>{if(entry.finishedAt)return;entry.state=error?.code==='WRITE_CANCELLED'?'cancelled':error?'failed':'completed';entry.updatedAt=Date.now();entry.finishedAt=entry.updatedAt;if(error)entry.error=failure(error);if(entry.state==='failed')this.failureSequence++;
+   finish:error=>{if(entry.finishedAt)return;entry.state=['WRITE_CANCELLED','RECORD_TRANSFER_CANCELLED'].includes(error?.code)?'cancelled':error?'failed':'completed';entry.updatedAt=Date.now();entry.finishedAt=entry.updatedAt;if(error)entry.error=failure(error);if(entry.state==='failed')this.failureSequence++;
     if(!error&&entry.recoveryKey)for(const previous of this.entries.values()){if(previous===entry)break;if(previous.scope===entry.scope&&previous.recoveryKey===entry.recoveryKey&&previous.state==='failed')previous.resolvedAt=entry.finishedAt;}
    }
   };

@@ -1,3 +1,4 @@
+import {assertRecordOwnerRevisionVisible} from './record-owner-read-visibility.js';
 // Exact references pin an existing immutable original. They do not duplicate
 // its body into a workspace-key metadata envelope or impose its JSON budget.
 import {validMaterialReference} from './web/material-reference.js';
@@ -35,17 +36,18 @@ export class RetainedRecordDocuments{
    await this.workspace.writeMetadata(file(ref),JSON.stringify({format,version:1,id,revision:view.revision,storageRevision:row.revision,snapshotId})+'\n');return ref;
   });
  }
- async check(ref,{signal}={}){return this.open(ref,()=>{}, {verify:true,signal,legacy:()=>{}});}
- async value(ref){return this.open(ref,document=>document.tree.read(document.root),{verify:true,legacy:value=>value});}
+ async check(ref,{signal,raw=false}={}){return this.open(ref,()=>{}, {verify:true,signal,raw,legacy:()=>{}});}
+ async value(ref,{raw=false}={}){return this.open(ref,document=>document.tree.read(document.root),{verify:true,raw,legacy:value=>value});}
  async summary(ref){return this.open(ref,async document=>({title:(await document.field(['title'])).value}),{legacy:value=>({title:value.title})});}
  async withDocument(ref,consume,options){return this.open(ref,consume,options);}
- async open(ref,consume,{verify=false,signal,legacy,history=false}={}){
+ async open(ref,consume,{verify=false,signal,legacy,history=false,raw:unpublished=false}={}){
   if(!validRef(ref))throw new AppError('MATERIAL_INVALID');signal?.throwIfAborted();
   return this.workspace.catalogue(async store=>{
    const current=await store.snapshot();if(!await referenceNamespaceMatches(store,ref))throw new AppError('WORKSPACE_CHANGED');
+   if(!unpublished)await assertRecordOwnerRevisionVisible(store,ref.id,ref.revision);
    const raw=await this.workspace.readMetadata(file(ref),16*1024*1024);let value;
    if(raw===null&&history){
-    let located;try{located=await recordReferenceLocation(store,ref.id,ref.revision);}catch(error){if(error.code==='NOT_FOUND')fail();throw error;}
+    let located;try{located=await recordReferenceLocation(store,ref.id,ref.revision,{raw:true});}catch(error){if(error.code==='NOT_FOUND')fail();throw error;}
     const {snapshot,row}=located;
     if(snapshot.metadata.id!==current.metadata.id||snapshot.metadata.formatVersion!==21)fail();
     return withRecordDocument(store,ref.id,row.revision,document=>consume(document,row,store));
@@ -57,7 +59,7 @@ export class RetainedRecordDocuments{
    };
    if(retainedRecordPointer(value)){
     if(Object.keys(value).sort().join()!=='format,id,revision,snapshotId,storageRevision,version'||value.version!==1||value.id!==ref.id||value.revision!==ref.revision||![value.snapshotId,value.storageRevision].every(revisionId)||await catalogueFormat(store.db)<8)fail();
-    const snapshot=await store.snapshot(value.snapshotId),row=await store.member(snapshot,ref.id);
+    const snapshot=await store.recordSnapshot(value.snapshotId,ref.id),row=await store.member(snapshot,ref.id);
     if(snapshot.metadata.id!==current.metadata.id||snapshot.metadata.formatVersion!==21||row?.revision!==value.storageRevision)fail();
     const history=store.historyIndex(ref.id),found=await history.lookup(await history.head(),'version',value.storageRevision),view=await history.display(found.item);if(view.revision!==ref.revision)fail();
     return withRecordDocument(store,ref.id,row.revision,document=>use(document,row));

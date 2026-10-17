@@ -1,3 +1,4 @@
+import {readRecordOwnerMetadata,readRecordOwnerAuditMetadata} from './record-owner-audit-metadata.js';
 // Corrections change current association discovery, never immutable evidence.
 // Reviewed commands, old heads and reasons are retained with the same workspace
 // transaction as the replacement association and discovery indexes.
@@ -21,7 +22,7 @@ const fail=(code='EVIDENCE_CORRECTION_INVALID')=>{throw new AppError(code);};
 export class EvidenceCorrections{
  constructor(materials){this.materials=materials;this.workspace=materials.workspace;}
  feed(recordId){return new MetadataFeed(this.workspace,root+'/records/'+recordId);}
- async json(file){const raw=await this.workspace.readMetadata(file,64*1024);if(raw===null)return null;try{return JSON.parse(raw);}catch{fail('CATALOGUE_DAMAGED');}}
+ async json(file){const raw=await readRecordOwnerMetadata(this.workspace,file,64*1024);if(raw===null)return null;try{return JSON.parse(raw);}catch{fail('CATALOGUE_DAMAGED');}}
  async state(id){const state=await this.json(root+'/state/'+id+'.json');if(state&&(!exact(state,['version','lastEvent','retired'])||state.version!==1||!researchId(state.lastEvent)||state.retired!==null&&!ref(state.retired)))fail('CATALOGUE_DAMAGED');return state;}
  async isRetired(id){return Boolean((await this.state(id))?.retired);}
  validate(command){
@@ -63,6 +64,7 @@ export class EvidenceCorrections{
     const result=await this.materials.commit({kind:'artifact',id:doc.id,recordId:doc.recordId,title,content,expectedRevision:command.ref.revision});after=await this.materials.current(result.id);
    }else if(command.action==='restore'){
     const previous=await this.event(plan.previousEvent);after=previous.before;
+    if(await readRecordOwnerAuditMetadata(this.workspace,root+'/events/'+previous.id+'.json',{recordId:doc.recordId})){const {stagedBatch,ownerTransfer,...plain}=after;void stagedBatch;void ownerTransfer;after=plain;}
     if(!after||fingerprint(reference(after))!==fingerprint(reference(command.ref)))fail('CATALOGUE_DAMAGED');
     await this.materials.put(this.materials.metadataFile('objects/'+doc.id+'/head.json'),after);await this.materials.index.changed(after,doc);
    }else{
@@ -107,7 +109,7 @@ export class EvidenceCorrections{
    const source=await this.materials.read(event.command.ref);if(source.recordId!==event.command.recordId)fail('CATALOGUE_DAMAGED');
    if(event.previousEvent){const previous=await this.event(event.previousEvent);if(previous.command.ref.id!==source.id||previous.id===event.id)fail('CATALOGUE_DAMAGED');}
    for(const head of [event.before,event.after].filter(Boolean)){
-    const doc=await this.materials.read(head),expected={...reference(head),recordId:doc.recordId,title:doc.title,createdAt:doc.createdAt,...this.materials.referenceSet(doc.content),figureHash:null,figureId:null,...(head.stagedBatch===undefined?{}:{stagedBatch:head.stagedBatch})};
+    const doc=await this.materials.read(head),expected={...reference(head),recordId:doc.recordId,title:doc.title,createdAt:doc.createdAt,...this.materials.referenceSet(doc.content),figureHash:null,figureId:null,...(head.stagedBatch===undefined?{}:{stagedBatch:head.stagedBatch}),...(head.ownerTransfer===undefined?{}:{ownerTransfer:head.ownerTransfer})};
     if(!await materialHeadVisible(this.workspace,head))fail('CATALOGUE_DAMAGED');
     if(fingerprint(head)!==fingerprint(expected))fail('CATALOGUE_DAMAGED');
    }

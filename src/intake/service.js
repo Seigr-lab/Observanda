@@ -1,3 +1,4 @@
+import {readRecordOwnerMetadata,readRecordOwnerAuditMetadata} from '../record-owner-audit-metadata.js';
 import {projectIntakeTarget} from '../project-intake-origin.js';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
@@ -15,8 +16,6 @@ import {recordReplacementBase,validateReplacementAttempt,replacementCompletion} 
 import {validateFigureSources} from '../figure-provenance.js';
 import {validateResultSources} from '../result-statements.js';
 import {analysisMethodReferences} from '../web/analysis-model.js';
-import {RunReadiness} from '../run-readiness.js';
-import {runEvidenceRevision} from '../run-receipts.js';
 import {MediaStore} from '../media.js';
 import {intakeHash,intakePreview,validateIntake} from './contract.js';
 import {inspectIntake} from './source.js';
@@ -28,12 +27,18 @@ export class LocalIntake{
  file(id){if(!researchId(id))throw new AppError('INTAKE_INVALID');return prefix+'proposals/'+id+'.json';}
  async write(value){await this.workspace.writeMetadata(this.file(value.id),JSON.stringify(value));}
  async read(id,{optional=false}={}){
-  const raw=await this.workspace.readMetadata(this.file(id),8*1024*1024);if(raw===null){if(optional)return null;throw new AppError('NOT_FOUND');}
+  const raw=await readRecordOwnerMetadata(this.workspace,this.file(id),8*1024*1024);if(raw===null){if(optional)return null;throw new AppError('NOT_FOUND');}
   let value;try{value=JSON.parse(raw);validateIntake(value.manifest);}catch{throw new AppError('CATALOGUE_DAMAGED');}
   if(value.id!==id||value.version!==1||value.pin!==intakeHash(value.manifest))throw new AppError('CATALOGUE_DAMAGED');return value;
  }
  feed(recordId){if(!researchId(recordId))throw new AppError('INTAKE_INVALID');return new MetadataFeed(this.workspace,prefix+'by-record/'+recordId);}
- async executionManifest(manifest){return projectIntakeTarget(this.workspace,manifest);}
+ async executionManifest(manifest){
+  if(researchId(manifest.id)){
+   const origin=await readRecordOwnerAuditMetadata(this.workspace,this.file(manifest.id),{recordId:manifest.recordId,limit:8*1024*1024});
+   if(origin){const proposal=JSON.parse(origin.text);if(proposal.state!=='completed'||!proposal.receipt||proposal.pin!==intakeHash(manifest)||proposal.manifest.workspaceId!==manifest.workspaceId)throw new AppError('CATALOGUE_DAMAGED');return {...manifest,workspaceId:origin.targetOwner.workspaceId};}
+  }
+  return projectIntakeTarget(this.workspace,manifest);
+ }
  async bind(command,{checkRevision=true,fullRecord=false}={}){
   const {workspaceId,recordId,expectedRevision}=await this.executionManifest(command);
   if(!researchId(workspaceId)||!researchId(recordId))throw new AppError('INTAKE_INVALID');
@@ -102,7 +107,8 @@ export class LocalIntake{
  }
  async status(command){
   return this.workspace.catalogue(async()=>{
-   const p=await this.bound(command),job=await this.queue.read(p.state==='staging'?p.stageJob:p.applyJob);
+   const p=await this.bound(command),jobId=p.state==='staging'?p.stageJob:p.applyJob,origin=await readRecordOwnerAuditMetadata(this.workspace,'.observanda/jobs/'+jobId+'.json',{recordId:p.manifest.recordId,limit:1048576}),job=origin?JSON.parse(origin.text):await this.queue.read(jobId);
+   if(origin&&(job.id!==jobId||job.scope!==p.manifest.recordId||!['completed','failed','cancelled'].includes(job.state)))throw new AppError('CATALOGUE_DAMAGED');
    return {...intakePreview(p.manifest,p.pin),state:p.state,createdAt:p.createdAt,stagedFiles:p.prepared.length,receipt:p.receipt,job:jobSummary(job)};
   });
  }
@@ -123,20 +129,5 @@ export class LocalIntake{
  async control(command,action){
   const p=await this.bound(command);if(p.receipt)return this.status(command);
   await this.queue.control(p.state==='staging'?p.stageJob:p.applyJob,action);return this.status(command);
- }
- async commit(p){
-  const manifest=await this.executionManifest(p.manifest);
-  const {record}=await this.validateTargets(p.manifest),acquisition=await this.materials.retainCurrentRecordLocked(record.id),files=[];
-  if(p.prepared.length!==p.manifest.files.length)throw new AppError('INTAKE_NOT_READY');
-  for(const f of p.manifest.files){
-   const prepared=p.prepared.find(v=>v.id===f.id);if(!prepared||prepared.sha256!==f.sha256||prepared.size!==f.size)throw new AppError('CATALOGUE_DAMAGED');
-   files.push(await this.materials.commit({kind:'artifact',id:f.id,recordId:record.id,title:path.posix.basename(f.path),content:{name:path.posix.basename(f.path),size:f.size,sha256:f.sha256,storageId:prepared.storageId,provenance:f.provenance,acquisition,inputs:[]}}));
-  }
-  const resolve=r=>r.file?files.find(f=>f.id===r.file):r,analyses=[];
-  for(const a of p.manifest.analyses){const {toolSha256,...command}=a;analyses.push(await this.materials.analysisLocked({...command,recordId:record.id,inputs:a.inputs.map(resolve),outputs:a.outputs.map(resolve),toolSha256}));}
-  if(p.manifest.record)await this.records().saveLocked({workspaceId:manifest.workspaceId,changes:[{id:record.id,expectedRevision:p.manifest.expectedRevision,record:p.manifest.record}]},{receipt:true});
-  const {revision}=await this.bind(p.manifest,{checkRevision:false}),receipt={version:1,id:p.id,pin:p.pin,workspaceId:manifest.workspaceId,recordId:record.id,priorRevision:p.manifest.expectedRevision,recordRevision:revision,source:p.manifest.source,verification:p.manifest.verification,files,analyses,committedAt:new Date().toISOString()};
-  await new RunReadiness(this.workspace).appendLocked(record.id,{id:p.id,kind:'validation',recordRevision:receipt.recordRevision,evidenceRevision:await runEvidenceRevision(this.workspace,record.id),source:p.manifest.source,verification:p.manifest.verification,intakeId:p.id,pin:p.pin,recordedAt:receipt.committedAt,declared:true});
-  p.receipt=receipt;p.state='completed';await this.write(p);return receipt;
  }
 }

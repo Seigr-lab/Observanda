@@ -1,3 +1,4 @@
+import {readRecordOwnerMetadata} from './record-owner-audit-metadata.js';
 import {materialReference} from './web/material-reference.js';
 // Resumable reference intake. Each accepted batch and its receipt commit with
 // the draft root; completion attaches one immutable collection or analysis.
@@ -27,7 +28,7 @@ export class MaterialDrafts{
   if(Buffer.byteLength(JSON.stringify(command))>100000)fail('ANALYSIS_LIMIT');
  }
  async read(id){
-  const raw=await this.workspace.readMetadata(this.file(id),131072);if(raw===null)fail('NOT_FOUND');
+  const raw=await readRecordOwnerMetadata(this.workspace,this.file(id),131072);if(raw===null)fail('NOT_FOUND');
   let draft;try{draft=JSON.parse(raw);}catch{fail('CATALOGUE_DAMAGED');}
   if(!draft||draft.format!==1||draft.draftId!==id||!draft.command||!['open','completed','cancelled'].includes(draft.state)||hash(draft.command)!==draft.intent)fail('CATALOGUE_DAMAGED');
   try{this.validate(draft.command);}catch{fail('CATALOGUE_DAMAGED');}
@@ -48,7 +49,7 @@ export class MaterialDrafts{
   return this.workspace.withLock(async()=>{
    await this.materials.assertOwner(command.recordId);
    if(command.method)for(const ref of analysisMethodReferences(command.method))await this.materials.checkReference(ref);
-   if(await this.workspace.readMetadata(file,131072)!==null){const prior=await this.read(draftId);if(prior.intent!==intent)fail('MATERIAL_CHANGED');return this.summary(prior);}
+   if(await readRecordOwnerMetadata(this.workspace,file,131072)!==null){const prior=await this.read(draftId);if(prior.intent!==intent)fail('MATERIAL_CHANGED');return this.summary(prior);}
    const current=await this.materials.current(command.id);
    if((current?.revision??null)!==command.expectedRevision||current&&(current.kind!==command.kind||current.recordId!==command.recordId))fail('MATERIAL_CHANGED');
    const draft={format:1,draftId,command,intent,state:'open',inputs:empty(),outputs:empty(),result:null,createdAt:new Date().toISOString()};
@@ -58,7 +59,7 @@ export class MaterialDrafts{
   });
  }
  async receipt(draft,slot,offset,raw){
-  raw??=await this.workspace.readMetadata(root+'/'+draft.draftId+'/accepted/'+slot+'/'+offset+'.json',1024);
+  raw??=await readRecordOwnerMetadata(this.workspace,root+'/'+draft.draftId+'/accepted/'+slot+'/'+offset+'.json',1024);
   let value;try{value=JSON.parse(raw);}catch{fail('CATALOGUE_DAMAGED');}
   if(!value||!revisionId(value.hash)||!Number.isSafeInteger(value.count)||value.count<1||value.count>64||offset+value.count>draft[slot].count)fail('CATALOGUE_DAMAGED');
   const page=await this.materials.sequences.page(draft[slot],{offset,limit:value.count});

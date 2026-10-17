@@ -1,3 +1,4 @@
+import {assertRecordOwnerRevisionVisible} from './record-owner-read-visibility.js';
 import {AppError} from './errors.js';
 import {researchId} from './web/research-reference.js';
 import {revisionId} from './web/revision-model.js';
@@ -27,11 +28,12 @@ export class RecordHistoryDocuments{
   if(command.source.kind==='retained'){
    if(command.source.id!==command.revision)throw new AppError('RECORD_HISTORY_MISSING');
    const found=await history.lookup(head,'view',command.revision,{optional:true});if(!found)return null;
-   selected=await store.snapshot(found.item.snapshotId);
-  }else selected=command.source.kind==='current'?snapshot:await store.snapshot(command.source.id);
+   selected=await store.recordSnapshot(found.item.snapshotId,command.recordId);
+  }else selected=command.source.kind==='current'?snapshot:await store.recordSnapshot(command.source.id,command.recordId);
   if(selected.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
   if(selected.metadata.formatVersion!==21)return null;
   const old=await store.member(selected,command.recordId);if(!old)throw new AppError('RECORD_HISTORY_MISSING');
+  await assertRecordOwnerRevisionVisible(store,command.recordId,command.revision,{code:'RECORD_HISTORY_MISSING'});
   if((await history.display((await history.lookup(head,'version',old.revision)).item)).revision!==command.revision)throw new AppError('RECORD_HISTORY_MISSING');
   return {etag,snapshot,row,selected,old,current};
  }

@@ -1,6 +1,9 @@
+import {assertRecordOwnerRevisionVisible} from './record-owner-read-visibility.js';
+import {readRecordOwnerMetadata} from './record-owner-audit-metadata.js';
 import {artifactRelative,retiredArtifactContent} from './project-artifact-content.js';
 import {materialKinds,validMaterialReference,materialReference,materialReferenceKey} from './web/material-reference.js';
 import {workspaceReferenceNamespaceMatches} from './research-reference-namespace.js';
+import {recordOwnerExternalReference} from './record-owner-provenance.js';
 import {INTERVAL_FIELDS} from './web/figure-intervals.js';
 // Private, revision-addressed research material. Original bytes never enter the
 // workspace document or publication projection. Uses the existing encrypted I/O.
@@ -28,7 +31,7 @@ import {withScratch} from './scratch-work.js';
 import {MaterialUploadChunks} from './material-upload-chunks.js';
 import {withWorkspaceMetadataBatch,metadataBatchIndex} from './metadata-batch.js';
 import {MaterialIndex} from './material-index.js';
-import {materialHeadVisible} from './material-visibility.js';
+import {materialHeadVisible,materialBatch,materialReferenceVisible,materialReturnedHead,settleMaterialReturnHead} from './material-visibility.js';
 import {MaterialSequence} from './material-sequence.js';
 import {MaterialDrafts} from './material-drafts.js';
 import {MaterialChoices} from './material-choices.js';
@@ -88,8 +91,8 @@ export class ResearchMaterials {
  metadataFile(relative){return this.workspace.metadataPath('.observanda/materials/'+relative);}
  relative(file){return path.relative(this.workspace.root,file).split(path.sep).join('/');}
  async present(file){return (await this.workspace.readMetadata(this.relative(file),16*1024*1024))!==null;}
- async json(file,{missing=false}={}){const raw=await this.workspace.readMetadata(this.relative(file),16*1024*1024);if(raw===null){if(missing)return null;fail('MATERIAL_MISSING');}return JSON.parse(raw);}
- async put(file,data){await this.workspace.writeMetadata(this.relative(file),JSON.stringify(data)+'\n');}
+ async json(file,{missing=false}={}){const raw=await readRecordOwnerMetadata(this.workspace,this.relative(file),16*1024*1024);if(raw===null){if(missing)return null;fail('MATERIAL_MISSING');}return JSON.parse(raw);}
+ async put(file,data){if(file===this.metadataFile('objects/'+data.id+'/head.json'))await settleMaterialReturnHead(this.workspace,data.id);await this.workspace.writeMetadata(this.relative(file),JSON.stringify(data)+'\n');}
  names(relative){return this.workspace.metadataNames('.observanda/materials/'+relative);}
  async assertOwner(recordId,{write=false}={}){
   if(!researchId(recordId))fail();
@@ -103,6 +106,7 @@ export class ResearchMaterials {
    const [notebookId,projectId]=JSON.parse(cache?await cache.proof('material-owner:'+head+':'+recordId,check):await check());
    // Membership belongs to the pinned research head. Write authority can change
    // independently, so read its live handover receipts on every write check.
+   if(write){const {assertRecordOwnerWritable}=await import('./record-owner-transfer-state.js');await assertRecordOwnerWritable(store,recordId);}
    if(write&&!this.workspace.projectId&&notebookId){const {ProjectSourceAuthority}=await import('./project-source-authority.js');await new ProjectSourceAuthority(store).notebook(notebookId,{notebooks:projectId!==null?[{id:notebookId,projectId}]:[]});}
   });
  }
@@ -149,7 +153,8 @@ export class ResearchMaterials {
  }
  async read(ref){
   const doc=await this.readStored(ref);
-  if(ref.kind!=='record'){const head=await this.current(ref.id,{includeStaged:true});if(head&&!await materialHeadVisible(this.workspace,head))fail('MATERIAL_INCOMPLETE');}
+  if(ref.kind==='record'&&await this.workspace.storageKind()==='catalogue')await this.workspace.catalogue(store=>assertRecordOwnerRevisionVisible(store,ref.id,ref.revision));
+  if(ref.kind!=='record'){const head=await this.current(ref.id,{includeStaged:true});if(!await materialReferenceVisible(this.workspace,ref,head))fail('MATERIAL_INCOMPLETE');}
   return doc;
  }
  // Internal integrity and ownership checks may inspect an unpublished revision.
@@ -157,7 +162,7 @@ export class ResearchMaterials {
  async readStored(ref){
   if(!materialRef(ref))fail();
   await this.assertReferenceWorkspace(ref);
-  if(ref.kind==='record'&&await this.workspace.storageKind()==='catalogue')return new RetainedRecordDocuments(this.workspace).value(ref);
+  if(ref.kind==='record'&&await this.workspace.storageKind()==='catalogue')return new RetainedRecordDocuments(this.workspace).value(ref,{raw:true});
   const doc=await this.json(this.metadataFile((ref.kind==='record'?'records/':'objects/')+ref.id+'/'+ref.revision+'.json'));
   if((ref.kind==='record'?recordRevision(doc):digest(revisionText(doc)))!==ref.revision)fail('MATERIAL_MISSING');
   if(ref.kind!=='record'&&(doc.format!==1||doc.kind!==ref.kind||doc.id!==ref.id))fail('MATERIAL_MISSING');
@@ -166,6 +171,8 @@ export class ResearchMaterials {
  async assertReferenceWorkspace(ref){
   if(!materialRef(ref)||!await workspaceReferenceNamespaceMatches(this.workspace,ref))fail();
  }
+ async externalReference(ref){if(!materialRef(ref))fail();return recordOwnerExternalReference(this.workspace,ref);}
+ async referenceAddress(ref){return await this.externalReference(ref)??materialReference(ref);}
  async checkReference(ref,{signal}={}){
   await this.assertReferenceWorkspace(ref);
   if(ref?.kind==='record'&&await this.workspace.storageKind()==='catalogue')return new RetainedRecordDocuments(this.workspace).check(ref,{signal});
@@ -177,19 +184,19 @@ export class ResearchMaterials {
   }
  }
  async heads(){return Array.fromAsync(this.headEntries());}
- async current(id,{includeStaged=false}={}){if(!researchId(id))fail();const head=await this.json(this.metadataFile('objects/'+id+'/head.json'),{missing:true});if(head!==null&&(!materialRef(head)||head.id!==id))fail('MATERIAL_MISSING');return head&&(includeStaged||await materialHeadVisible(this.workspace,head))?head:null;}
+ async current(id,{includeStaged=false}={}){if(!researchId(id))fail();const raw=await this.json(this.metadataFile('objects/'+id+'/head.json'),{missing:true}),head=await materialReturnedHead(this.workspace,id,raw,{includeStaged});if(head!==null&&(!materialRef(head)||head.id!==id))fail('MATERIAL_MISSING');return head&&(includeStaged||await materialHeadVisible(this.workspace,head))?head:null;}
  // Call under the workspace lock. Revision and head share the metadata transaction.
- async commit({kind,recordId,title,content,id=randomUUID(),expectedRevision=null},{stagedBatch=null}={}){
-  if(!kinds.includes(kind)||!researchId(id)||!required(title,300))fail();
-  await this.assertOwner(recordId,{write:true});await this.index.ensureLocked();
+ async commit({kind,recordId,title,content,id=randomUUID(),expectedRevision=null},{stagedBatch=null,createdAt=new Date().toISOString()}={}){
+  if(!kinds.includes(kind)||!researchId(id)||!required(title,300)||typeof createdAt!=='string'||!Number.isFinite(Date.parse(createdAt)))fail();
+  await this.assertOwner(recordId,{write:true});await this.index.ensureLocked();await settleMaterialReturnHead(this.workspace,id);
   const headFile=this.metadataFile('objects/'+id+'/head.json'),previous=await this.json(headFile,{missing:true});
   if((previous?.revision??null)!==expectedRevision||previous&&(previous.kind!==kind||previous.recordId!==recordId)||previous&&!await materialHeadVisible(this.workspace,previous))fail('MATERIAL_CHANGED');
-  if(stagedBatch!==null){const batch=await this.intakes.read(stagedBatch);if(previous||kind!=='artifact'||batch.command.recordId!==recordId||batch.state!=='processing')fail('MATERIAL_CHANGED');}
-  const doc={format:1,kind,id,recordId,title,createdAt:new Date().toISOString(),previous:previous?.revision??null,content};
+  if(stagedBatch!==null){const batch=await materialBatch(this.workspace,stagedBatch);if(previous||kind!=='artifact'||batch.command.recordId!==recordId||batch.state!=='processing')fail('MATERIAL_CHANGED');}
+  const doc={format:1,kind,id,recordId,title,createdAt,previous:previous?.revision??null,content};
   if(Buffer.byteLength(JSON.stringify(doc))+1>16*1024*1024)fail('LIMIT');
   const ref=refOf(doc),file=this.metadataFile('objects/'+id+'/'+ref.revision+'.json');
   await this.put(file,doc);
-  const head={...ref,recordId,title,createdAt:doc.createdAt,...this.referenceSet(content),figureHash:content.figure?figureFingerprint(content.figure):null,figureId:content.figure?.id??null,...(stagedBatch||previous?.stagedBatch?{stagedBatch:stagedBatch??previous.stagedBatch}:{})};
+  const head={...ref,recordId,title,createdAt:doc.createdAt,...this.referenceSet(content),figureHash:content.figure?figureFingerprint(content.figure):null,figureId:content.figure?.id??null,...(stagedBatch||previous?.stagedBatch?{stagedBatch:stagedBatch??previous.stagedBatch}:{}),...(previous?.ownerTransfer?{ownerTransfer:previous.ownerTransfer}:{})};
   await this.put(headFile,head);await this.index.changed(head,doc,{stagedBatch});
   return ref;
  }
@@ -476,6 +483,10 @@ export class ResearchMaterials {
   // opened from inside that read cannot make new index markers visible to it.
   await this.index.ensure();return this.workspace.catalogue(operation);
  }
+ async referenceAddresses(ref,items){
+  if(!Array.isArray(items)||items.length>32||!items.every(materialRef))fail();
+  return this.workspace.catalogue(async()=>{await this.checkReference(ref);return {items:await Promise.all(items.map(item=>this.referenceAddress(item)))};});
+ }
  async referencePage(ref,{slot='inputs',offset=0,limit=20}={}){
   return this.readSnapshot(async()=>{
   if(!Number.isSafeInteger(offset)||offset<0||!Number.isSafeInteger(limit)||limit<1||limit>50)fail();
@@ -487,14 +498,14 @@ export class ResearchMaterials {
   });
  }
  async describeReferences(page){
-  const items=[];for(const ref of page.items){const doc=ref.kind==='record'&&await this.workspace.storageKind()==='catalogue'?await new RetainedRecordDocuments(this.workspace).summary(ref):await this.read(ref);items.push({...ref,title:doc.title});}return {...page,items};
+  const items=[];for(const ref of page.items){const external=await this.externalReference(ref);if(external){items.push({...external,title:external.id,unavailable:true});continue;}const doc=ref.kind==='record'&&await this.workspace.storageKind()==='catalogue'?await new RetainedRecordDocuments(this.workspace).summary(ref):await this.read(ref);items.push({...ref,title:doc.title});}return {...page,items};
  }
- async retainReferences(items,{outputs=false}={}){
+ async retainReferences(items,{outputs=false,checkReference=ref=>this.checkReference(ref),write=fn=>fn()}={}){
   if(!Array.isArray(items))fail();
   if(items.length>64)fail('MATERIAL_REFERENCE_LIMIT');
   if(!items.every(materialRef)||outputs&&items.some(r=>r.kind!=='artifact'))fail();
-  const builder=this.sequences.builder('references',fn=>fn()),seen=new Set();
-  for(const ref of items){await this.checkReference(ref);const item=materialReference(ref),key=materialReferenceKey(item);if(seen.has(key))fail('MATERIAL_DUPLICATE');seen.add(key);await builder.append(item);}
+  const builder=this.sequences.builder('references',write),seen=new Set();
+  for(const ref of items){await checkReference(ref);const item=materialReference(ref),key=materialReferenceKey(item);if(seen.has(key))fail('MATERIAL_DUPLICATE');seen.add(key);await builder.append(item);}
   return builder.finish();
  }
  async collection(command){
@@ -506,14 +517,15 @@ export class ResearchMaterials {
  async analysis(command){
   return this.workspace.withLock(()=>this.analysisLocked(command));
  }
- async analysisLocked(command){
+ async analysisLocked(command){return this.commit(await this.prepareAnalysis(command));}
+ async prepareAnalysis(command,options={}){
    const {inputs,tool,version,parameters,outputs=[],method,toolSha256,...identity}=command;
    if(!Array.isArray(inputs)||!inputs.length||!required(tool,200)||!required(version,200)||!text(parameters,20000))fail();
    if(method!==undefined&&!validAnalysisMethod(method))fail('ANALYSIS_INVALID');
    if(toolSha256!==undefined&&!revisionId(toolSha256))fail('ANALYSIS_INVALID');
    const refs=[...new Map([...inputs,...(method?analysisMethodReferences(method):[])].map(r=>[materialReferenceKey(r),r])).values()];
-   const inputsIndex=await this.retainReferences(refs),outputsIndex=await this.retainReferences(outputs,{outputs:true});
-   return this.commit({...identity,kind:'analysis',content:{inputsIndex,tool,version,parameters,outputsIndex,...(method?{method}:{}),...(toolSha256?{toolSha256}:{})}});
+   const inputsIndex=await this.retainReferences(refs,options),outputsIndex=await this.retainReferences(outputs,{...options,outputs:true});
+   return {...identity,kind:'analysis',content:{inputsIndex,tool,version,parameters,outputsIndex,...(method?{method}:{}),...(toolSha256?{toolSha256}:{})}};
  }
  async validatePlot(command){
   const {recordId,title,id,expectedRevision,dataset,mapping,base}=command;
@@ -631,7 +643,7 @@ export class ResearchMaterials {
   for(const head of heads.filter(h=>h.recordId===recordId)){
    const reviewed=await dependencyReview?.(head),changed=reviewed?.changed??[];let changedCount=reviewed?.changedCount??0;await traversal.reset();
    if(!reviewed)await traversal.walk(this.references(head),async(ref,enqueue)=>{
-    signal?.throwIfAborted();const now=await current(ref);if(now!==ref.revision){changedCount++;if(changed.length<20)changed.push({...ref,current:now});}
+    signal?.throwIfAborted();const external=await this.externalReference(ref);if(external){changedCount++;if(changed.length<20)changed.push({...external,current:null});return;}const now=await current(ref);if(now!==ref.revision){changedCount++;if(changed.length<20)changed.push({...ref,current:now});}
     if(ref.kind!=='record')for await(const input of this.index.iterInputs(ref))await enqueue(input);
    });
    let figure=null;
@@ -672,6 +684,7 @@ export class ResearchMaterials {
    const reviewInputs=async(doc,recordId,figureId)=>{
     let changed=false;await traversal.reset();
     await traversal.walk(this.references(doc.content),async(input,enqueue)=>{
+     if(await this.externalReference(input)){changed=true;return;}
      const current=input.kind==='record'?await recordHead(input.id):(await this.current(input.id))?.revision;
      if(current!==input.revision)changed=true;
      if(input.kind!=='record')for await(const nested of this.index.iterInputs(input))await enqueue(nested);
@@ -720,9 +733,13 @@ export class ResearchMaterials {
   try{return await withScratch(references=>withMaterialTraversal(async traversal=>{
    const originals=new Set();let bytes=0,externalReferences=0;
    const check=ref=>traversal.walk([ref],async(ref,enqueue)=>{
+    const external=await this.externalReference(ref);if(external){if(await references.add('external:'+materialReferenceKey(external)))externalReferences++;return;}
     if(ref.kind==='record'){
-     if(await references.has('history:'+materialReferenceKey(ref))&&await this.workspace.storageKind()==='catalogue')await new RetainedRecordDocuments(this.workspace).open(ref,async(document,row)=>{const encoded=await document.encoding();if(encoded.contentRevision!==ref.revision||row.revision&&encoded.revision!==row.revision)fail('MATERIAL_MISSING');},{history:true,legacy:()=>{}});
-     else await this.checkReference(ref);return;
+     if(await this.workspace.storageKind()==='catalogue'){
+      const retained=new RetainedRecordDocuments(this.workspace);
+      if(await references.has('history:'+materialReferenceKey(ref)))await retained.open(ref,async(document,row)=>{const encoded=await document.encoding();if(encoded.contentRevision!==ref.revision||row.revision&&encoded.revision!==row.revision)fail('MATERIAL_MISSING');},{history:true,raw:true,legacy:()=>{}});
+      else await retained.check(ref,{raw:true});
+     }else await this.checkReference(ref);return;
     }
     const doc=await this.read(ref);
     if(revisionText(await this.index.inputSet(ref))!==revisionText(this.referenceSet(doc.content)))fail('CATALOGUE_DAMAGED');
@@ -767,7 +784,8 @@ export class ResearchMaterials {
    for await(const id of this.names('imports')){if(!researchId(id))continue;const session=await this.importState(id);if(session.completed)continue;
     pendingImports++;await this.withUploadChunks(session,async chunks=>{for await(const part of chunks)receivedBytes+=part.receipt.size;});
    }
-   await this.drafts.verify(check);await this.intakes.verify(check,{verified:originals});await this.associations.verify(check);await new EvidenceCorrections(this).verify(check);
+   await this.drafts.verify(check);await this.intakes.verify(check,{verified:originals});
+   const {verifyLocalIntakeFinalizations}=await import('./intake/finalization.js');await verifyLocalIntakeFinalizations(this.workspace,check);await this.associations.verify(check);await new EvidenceCorrections(this).verify(check);
    if(await this.workspace.storageKind()==='catalogue')await this.index.verify({initialize:!readOnly});
    return {revisions:traversal.size,originalBytes:bytes,pendingImports,receivedBytes,...(externalReferences?{externalReferences}:{})};
   }));}catch(error){if(error.code==='ENOENT')fail('MATERIAL_MISSING');throw error;}

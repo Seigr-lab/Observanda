@@ -5,5 +5,5 @@ export function draftSummary({draft,revision},sourceRevision){
 }
 export const validDraftSummary=validCheckpointSummary;
 export class ResearchDraftIndex extends CheckpointIndex{
- constructor(workspace,read){super(workspace,read,{source:'.observanda/drafts',order:'.observanda/draft-list',cursorKind:'draft-page',summary:draftSummary,validSummary:validDraftSummary});}
+ constructor(workspace,read,present=null){super(workspace,read,{source:'.observanda/drafts',order:'.observanda/draft-list',cursorKind:'draft-page',summary:draftSummary,validSummary:validDraftSummary,present});}
 }

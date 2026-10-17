@@ -79,7 +79,7 @@ export class ResearchTransfer{
      if(!await materialHeadVisible(owner.workspace,head))dependency();
      // A portable packet contains published evidence, not its source owner's
      // private staging receipts. The canonical artifact document stays exact.
-     const {stagedBatch,...published}=head;void stagedBatch;
+     const {stagedBatch,ownerTransfer,...published}=head;void stagedBatch;void ownerTransfer;
      await owner.metadata('.observanda/materials/objects/'+head.id+'/head.json',published);yield published;
     }
    }

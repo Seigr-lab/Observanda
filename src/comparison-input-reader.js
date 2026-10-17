@@ -62,7 +62,8 @@ export function createComparisonInputReader(localMaterials,{workspaceId,access,s
   async *inputs(reference){
    const retained=await use(reference,async(materials,canonical)=>{
     await materials.assertReferenceWorkspace(canonical);
-    return {reference:canonical,set:await materials.index.inputSet(canonical)};
+    const set=await materials.index.inputSet(canonical),qualify=async items=>{const result=[];for(const ref of items)result.push(await materials.referenceAddress(ref));return result;};
+    return {reference:canonical,set:{...set,...(set.provenanceInputs?{provenanceInputs:await qualify(set.provenanceInputs)}:{}),...(!set.inputsIndex?{inputs:await qualify(set.inputs)}:{})}};
    });
    const {reference:canonical,set}=retained,namespace=canonical.workspaceId;
    const nested=ref=>{if(!validMaterialReference(ref))throw new AppError('MATERIAL_MISSING');return namespace===workspaceId?materialReference(ref):qualify(ref,namespace);};
@@ -70,7 +71,7 @@ export function createComparisonInputReader(localMaterials,{workspaceId,access,s
    if(!set.inputsIndex){for(const ref of set.inputs){check();yield nested(ref);}return;}
    let offset=0;
    for(;;){
-    const page=await use(canonical,materials=>materials.sequences.page(set.inputsIndex,{offset,limit:32}));
+    const page=await use(canonical,async materials=>{const page=await materials.sequences.page(set.inputsIndex,{offset,limit:32}),items=[];for(const ref of page.items)items.push(await materials.referenceAddress(ref));return {...page,items};});
     for(const ref of page.items){check();yield nested(ref);}
     if(page.next===null)return;offset=page.next;
    }

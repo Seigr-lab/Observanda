@@ -1,3 +1,4 @@
+import {recordOwnerTransferCompletionError} from './record-owner-transfer-application.js';
 import {verifyPublicationCandidate} from './retained-publication-files.js';
 import {websiteRequestContext} from './website-request-context.js';
 import {inventoryOperationAccessFactory} from './inventory-operation-access.js';
@@ -477,6 +478,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         const data=await body(req,selectedProject.limit,selectedProject.capacity),check=req.checkWriter;
         await check();
         const projects=selectedContext.projects??=new ProjectApplication(workspace,{deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})});
+        if(selectedProject.recordTransfer&&selectedProject.write)req.activityRecoveryKey='record-transfer:'+data?.id;
         if(['create','create/resume'].includes(selectedProject.operation))req.activityRecoveryKey='project-create:'+data?.id;
         if(['lab-books/import','lab-books/import/resume','lab-books/import/cancel'].includes(selectedProject.operation))req.activityRecoveryKey='lab-book-import:'+data?.id;
         if(['lab-books/create','lab-books/create/resume'].includes(selectedProject.operation))req.activityRecoveryKey='lab-book-create:'+data?.id;
@@ -492,7 +494,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         if(selectedProject.write){activeWrites++;countedWrite=true;}
         else req.operationActivity=null;
         const execute=options=>projects.run(client,selectedProject,data,{...options,calendarSources:selectedContext.calendarSources,check,setCheck:next=>{req.checkWriter=next;}});
-        if(selectedProject.write)return await operationResponse(req,res,execute,json,{continueAfterDisconnect:['lab-books/import','lab-books/import/resume','lab-books/import/cancel','lab-books/storage/copy','lab-books/storage/move','lab-books/storage/move/resume','lab-books/storage/copy/resume','lab-books/storage/export','lab-books/storage/export/resume','storage/copy','storage/copy/resume','storage/export','storage/export/resume','storage/move','storage/move/resume','create','create/resume','open','open/resume','open/cancel','settings/save','directory/reparent','lab-books/create','lab-books/create/resume','lab-books/storage/rename','lab-books/settings/save','lab-books/storage/delete','lab-books/storage/delete/resume'].includes(selectedProject.operation)});
+        if(selectedProject.write)return await operationResponse(req,res,execute,json,{completionError:selectedProject.recordTransfer?recordOwnerTransferCompletionError:undefined,continueAfterDisconnect:['record-transfer/start','record-transfer/resume','record-transfer/cancel','lab-books/import','lab-books/import/resume','lab-books/import/cancel','lab-books/storage/copy','lab-books/storage/move','lab-books/storage/move/resume','lab-books/storage/copy/resume','lab-books/storage/export','lab-books/storage/export/resume','storage/copy','storage/copy/resume','storage/export','storage/export/resume','storage/move','storage/move/resume','create','create/resume','open','open/resume','open/cancel','settings/save','directory/reparent','lab-books/create','lab-books/create/resume','lab-books/storage/rename','lab-books/settings/save','lab-books/storage/delete','lab-books/storage/delete/resume'].includes(selectedProject.operation)});
         const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
         try{return json(await execute({signal:controller.signal}));}finally{res.off('close',abort);}
       }

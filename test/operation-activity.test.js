@@ -140,3 +140,12 @@ test('an unmet access prerequisite creates no failed activity, while an admitted
  await assert.rejects(operationResponse(req,res,async()=>{throw new AppError('ACCESS_LOCKED');},()=>{}),{code:'ACCESS_LOCKED'});
  assert.equal(registry.list('scope')[0].state,'failed');assert.equal(registry.failureSequence,1);
 });
+
+
+test('a recovered cancelled move returns its receipt and records cancellation without a failed activity',async()=>{
+ const {recordOwnerTransferCompletionError}=await import('../src/record-owner-transfer-application.js');
+ const registry=new OperationActivity(),res=new Response(),req={socket:{timeout:60000,setTimeout(){}},headers:{},operationActivity:()=>registry.begin('a','/api/research/records/transfer/resume')},receipt={phase:'cancelled'};
+ const result=await operationResponse(req,res,async()=>receipt,value=>value,{completionError:recordOwnerTransferCompletionError});
+ assert.equal(result,receipt);assert.equal(registry.list('a')[0].state,'cancelled');assert.equal(registry.list('a')[0].error.code,'RECORD_TRANSFER_CANCELLED');assert.equal(registry.failureSequence,0);
+ assert.equal(recordOwnerTransferCompletionError({phase:'complete'}),null);
+});

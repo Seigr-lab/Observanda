@@ -14,7 +14,7 @@ export class SelectedRecordDrafts{
  constructor(workspace,spec){this.workspace=workspace;this.spec=spec;this.drafts=new ResearchDrafts(workspace);}
  async retainedBase(store,workspaceId,recordId,selection,consume,{mutable=false}={}){
   const history=store.historyIndex(recordId),head=await history.head(),found=await history.lookup(head,'version',selection.storageRevision);
-  const snapshot=await store.snapshot(found.item.snapshotId),row=await store.member(snapshot,recordId);
+  const snapshot=await store.recordSnapshot(found.item.snapshotId,recordId),row=await store.member(snapshot,recordId);
   if(snapshot.metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
   if(!row||row.revision!==found.item.revision)fail();
   return withRecordDocument(store,recordId,selection.storageRevision,async document=>{

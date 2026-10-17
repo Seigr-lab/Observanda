@@ -1,3 +1,4 @@
+import {readRecordOwnerMetadata,readRecordOwnerAuditMetadata} from './record-owner-audit-metadata.js';
 // Resumable attachment of an immutable selection. Each bounded transaction
 // publishes record associations and its receipt together; no original is copied.
 import {randomUUID} from 'node:crypto';
@@ -16,7 +17,7 @@ export class EvidenceAssociationBatches{
  feed(recordId){if(!researchId(recordId))fail();return new MetadataFeed(this.workspace,root+'/by-record/'+recordId);}
  summary(batch){return {id:batch.id,recordId:batch.recordId,count:batch.count,attached:batch.results.count,state:batch.state,createdAt:batch.createdAt};}
  async read(id){
-  const raw=await this.workspace.readMetadata(this.file(id),16384);if(raw===null)fail('NOT_FOUND');
+  const raw=await readRecordOwnerMetadata(this.workspace,this.file(id),16384);if(raw===null)fail('NOT_FOUND');
   let batch;try{batch=JSON.parse(raw);}catch{fail('CATALOGUE_DAMAGED');}
   if(!batch||batch.format!==1||batch.id!==id||!researchId(batch.recordId)||!batch.selection||typeof batch.selection.scope!=='string'||!validIndexRef(batch.selection.root)||
    !Number.isSafeInteger(batch.count)||batch.count<1||!['open','completed','cancelled'].includes(batch.state))fail('CATALOGUE_DAMAGED');
@@ -27,7 +28,21 @@ export class EvidenceAssociationBatches{
  async authorized(id){const batch=await this.read(id);await this.materials.assertOwner(batch.recordId);return batch;}
  async selection(batch,offset=0){
   const scope=JSON.parse(batch.selection.scope);if(scope.recordId!==batch.recordId||scope.kind!=='artifact')fail('CATALOGUE_DAMAGED');
-  const page=await this.materials.choices.pagePinned(batch.selection,{offset,limit:32});
+  const origin=researchId(batch.id)?await readRecordOwnerAuditMetadata(this.workspace,this.file(batch.id),{recordId:batch.recordId,limit:16384}):null;
+  let page;
+  if(origin){
+   const retained=JSON.parse(origin.text);if(revisionText(retained.selection)!==revisionText(batch.selection)||!['completed','cancelled'].includes(retained.state))fail('CATALOGUE_DAMAGED');
+   page=await this.workspace.catalogue(async store=>{
+    const choices=this.materials.choices,tree=choices.tree(store),state=batch.selection,count=(state.root?.count??0)/2,items=[];
+    if(!Number.isSafeInteger(offset)||offset<0||offset>count)fail();
+    const start=offset?await tree.entryAt(state,offset-1):null;
+    for await(const entry of tree.entries(state,'order:',start?.id??null)){
+     const value=await choices.item(store,entry),member=await tree.find(state,'ref:'+value.ref.kind+':'+value.ref.id+':'+value.ref.revision+(value.ref.workspaceId===undefined?'':':'+value.ref.workspaceId));
+     if(member?.revision!==entry.revision)fail('CATALOGUE_DAMAGED');items.push({...value.ref,title:value.title});if(items.length===32)break;
+    }
+    if(items.length!==Math.min(32,count-offset))fail('CATALOGUE_DAMAGED');return {items,selected:[],offset,count,next:offset+items.length<count?offset+items.length:null};
+   });
+  }else page=await this.materials.choices.pagePinned(batch.selection,{offset,limit:32});
   if(page.count!==batch.count)fail('MATERIAL_CHANGED');return page;
  }
  async start({id=randomUUID(),recordId,selection,count}){

@@ -1,4 +1,6 @@
-import {catalogueRequiresPublicationDocuments,restorePublicationCatalogueFormat} from './catalogue-format.js';
+import {assertRecordOwnerObjectWritable,assertRecordOwnerRowsWritable} from './record-owner-write-authority.js';
+import {readRecordOwnerHistory} from './record-owner-history.js';
+import {catalogueRequiresRecordOwnerTransfers,restoreRecordOwnerTransferCatalogueFormat,catalogueRequiresPublicationDocuments,restorePublicationCatalogueFormat} from './catalogue-format.js';
 import {workspaceSettingsRegistry,verifyWorkspaceSettings} from './workspace-settings.js';
 import {readProjectDomainRegistry} from './project-domain-registry.js';
 import {retiredMetadataSourceLocation,resolveMetadataValue} from './project-retired-metadata.js';
@@ -118,6 +120,9 @@ export class ResearchCatalogue{
   if(value.publicationIndex!==undefined&&(!value.indexVersion||!RecordPublicationIndex.valid(value.publicationIndex)||value.publicationIndex.version===3&&value.publicationIndex.workspaceId!==value.metadata.id||(value.publicationIndex.root?.count??0)!==value.count*RecordPublicationIndex.entriesPerRecord(value.publicationIndex.version)))fail();
   return value;
  }
+ async recordSnapshot(id,recordId){
+  try{return await this.snapshot(id);}catch(error){if(error.code!=='RECORD_HISTORY_MISSING')throw error;const retained=await readRecordOwnerHistory(this,id,recordId);if(!retained)throw error;return retained;}
+ }
  async member(snapshot,id){
   if(!identifier(id))throw new AppError('INVALID');
   return snapshot.indexVersion?new SnapshotIndex(this).get(snapshot.membership,id):snapshot.records.find(row=>row.id===id)??null;
@@ -221,6 +226,7 @@ export class ResearchCatalogue{
    const remaining=new Set(rows.map(row=>row.id));
    for(const row of rows){const old=await index.get(current.membership,row.id);if(!old||hash(old)!==hash(row)){if(old)before.push(old);after.push(row);}}
    for await(const old of index.members(current.membership))if(!remaining.has(old.id))before.push(old);
+   await assertRecordOwnerRowsWritable(this,before,after);
    membership=await index.replace(current.membership,before,after);
   }
   await assertProjectHierarchyChange(this,current?.metadata??null,metadata);
@@ -361,6 +367,7 @@ export class ResearchCatalogue{
  // membership, history and derived-index transaction. No head is advanced until
  // all the retained values and indexes have been written successfully.
  async finishRecordChanges(currentId,current,metadata,before,after,{removed=[],changedIds=new Set(after.map(row=>row.id)),membershipRebuilt=false,bulk=false,index=new SnapshotIndex(this),etag,ordinal,count=current.count-before.length+after.length,bytes=current.bytes-before.reduce((n,row)=>n+row.bytes,0)+after.reduce((n,row)=>n+row.bytes,0),nextPosition=current.nextPosition}={}){
+   await assertRecordOwnerRowsWritable(this,before,after);
    const websiteDocuments=current.websiteDocuments===1||!!await readWebsiteDocumentRegistry(this);
    if(websiteDocuments)assertWebsiteMetadataShell(metadata);
    await assertProjectHierarchyChange(this,current.metadata,metadata);
@@ -447,14 +454,14 @@ export class ResearchCatalogue{
  }
  historyIndex(id){return new RecordHistoryIndex(this,id);}
  async historyItem(id,row){
-  const manifest=await this.snapshot(row.snapshotId);
+  const manifest=await this.recordSnapshot(row.snapshotId,id);
   if((await this.member(manifest,id))?.revision!==row.revision)fail();
   return {record:await this.record(id,row.revision),metadata:manifest.metadata,snapshotId:row.snapshotId};
  }
  async verifyRecordHistory(id){
   const index=this.historyIndex(id),head=await index.head();await index.check(head);let ordinal=0;
   for await(const row of index.items(head)){
-   const snapshot=await this.snapshot(row.snapshotId);if((await this.member(snapshot,id))?.revision!==row.revision)fail();
+   const snapshot=await this.recordSnapshot(row.snapshotId,id);if((await this.member(snapshot,id))?.revision!==row.revision)fail();
    const display=await retainedRecordDisplay(this,id,row.revision,snapshot.metadata);
    if(row.view&&hash(row.view)!==hash(display))fail();
    if(!head.legacy&&(await index.lookup(head,'view',display.revision)).ordinal!==ordinal)fail();ordinal++;
@@ -463,7 +470,7 @@ export class ResearchCatalogue{
   // one canonical revision. Stream identities rather than retaining all bodies.
   let count=0;
   for await(const row of this.db.rows('SELECT revision FROM records WHERE id=$1',[id])){
-    const found=await index.lookup(head,'version',row.revision),source=await this.snapshot(found.item.snapshotId);
+    const found=await index.lookup(head,'version',row.revision),source=await this.recordSnapshot(found.item.snapshotId,id);
     // Visible revisions were authenticated above. Only an alternate serialized
     // spelling needs another body traversal to prove the same logical identity.
     if(row.revision!==found.item.revision){
@@ -534,8 +541,9 @@ export class ResearchCatalogue{
   if(id==='metadata:.observanda/dashboard.observanda'&&await workspaceSettingsRegistry(this))throw new AppError('ACCESS_UPGRADE');
   if(id.startsWith('metadata:.observanda/module-draft')&&(await readProjectDomainRegistry(this))?.authoringVersion===1)throw new AppError('ACCESS_UPGRADE');
   const index=this.objectIndex(),head=await index.head(),expected=await index.find(head,id),revision=hash(value);
-  if(expected)await this.objectValue(id,expected);
+  const previous=expected?await this.objectValue(id,expected):null;
   if(expected?.revision===revision)return;
+  await assertRecordOwnerObjectWritable(this,id,previous,value);
   // Convert an older index before changing row counts. Both the index and
   // object payload commit together under the workspace writer lock.
   await index.update(head,id,revision);
@@ -549,7 +557,8 @@ export class ResearchCatalogue{
  }
  async deleteObject(id){
   const index=this.objectIndex(),head=await index.head(),expected=await index.find(head,id);
-  await this.objectValue(id,expected);if(!expected)return;
+  const previous=await this.objectValue(id,expected);if(!expected)return;
+  await assertRecordOwnerObjectWritable(this,id,previous,null);
   await index.update(head,id,null);
   const batch=metadataBatchIndex(this);
   if(batch)await batch.stageObject(id,null);else await this.db.run('DELETE FROM objects WHERE id=$1',id);
@@ -680,6 +689,7 @@ export class ResearchCatalogue{
    });
    await operationStage('verify-history',{total:Number((await this.db.get('SELECT count(DISTINCT id)::text AS total FROM records')).total),unit:'records'},async()=>{
     for await(const row of this.db.rows('SELECT DISTINCT id FROM records ORDER BY id')){operationItem(row.id);await this.verifyRecordHistory(row.id);operationAdvance();}
+    const {verifyRecordOwnerTransfers}=await import('./record-owner-transfer-verification.js');await verifyRecordOwnerTransfers(this);
    });
    });
   }));
@@ -704,7 +714,7 @@ export async function rekeyCatalogue(source,target,descriptor){
    for await(const row of sourceDb.rows(query,[],{batchSize:1})){await visit(row);operationAdvance();}
   });
   const format=await catalogueFormat(sourceDb);
-  if(catalogueRequiresPublicationDocuments(format))await restorePublicationCatalogueFormat(targetDb,format);else if(format>=4)await ({4:requireRecordBlocks,5:requireRecordQueryBlocks,6:requireMemberCollections,7:requireSelectedValueDrafts,8:requireRetainedRecordDocuments,9:requireRunReceiptStore,10:requireDraftEdits,11:requireAttemptIndexes,12:requireCurrentAttemptIndexes,13:requireRecordTypeDrafts,14:requireRecordMethodIndexes,15:requireFigureCopyDrafts,16:requireSearchVocabulary,17:requireJoinedQueryText,18:requireKeyedQueryArrays,19:requireReferenceQueries,20:requireAttemptQueries,21:requireStarterDocuments,22:requireProjectDomains,23:requireRetiredProjectRecords,24:requireWorkspaceDomains,25:requireWorkspaceSettings,26:requireRecordResultIndexes,27:async db=>{await requireWorkspaceDomains(db);await requireRecordResultIndexes(db);},28:async db=>{await requireWorkspaceSettings(db);await requireRecordResultIndexes(db);},29:requireWebsiteDocuments,30:async db=>{await requireWorkspaceDomains(db);await requireWebsiteDocuments(db);},31:async db=>{await requireWorkspaceSettings(db);await requireWebsiteDocuments(db);},32:requireStagedEvidence,33:async db=>{await requireWorkspaceDomains(db);await requireStagedEvidence(db);},34:async db=>{await requireWorkspaceSettings(db);await requireStagedEvidence(db);},35:async db=>{await requireWebsiteDocuments(db);await requireStagedEvidence(db);},36:async db=>{await requireWorkspaceDomains(db);await requireWebsiteDocuments(db);await requireStagedEvidence(db);},37:async db=>{await requireWorkspaceSettings(db);await requireWebsiteDocuments(db);await requireStagedEvidence(db);},38:requireWebsiteEditor,39:async db=>{await requireWorkspaceDomains(db);await requireWebsiteEditor(db);},40:async db=>{await requireWorkspaceSettings(db);await requireWebsiteEditor(db);},41:async db=>{await requireStagedEvidence(db);await requireWebsiteEditor(db);},42:async db=>{await requireWorkspaceDomains(db);await requireStagedEvidence(db);await requireWebsiteEditor(db);},43:async db=>{await requireWorkspaceSettings(db);await requireStagedEvidence(db);await requireWebsiteEditor(db);},44:requireWebsitePresentation,45:async db=>{await requireWorkspaceDomains(db);await requireWebsitePresentation(db);},46:async db=>{await requireWorkspaceSettings(db);await requireWebsitePresentation(db);},47:async db=>{await requireStagedEvidence(db);await requireWebsitePresentation(db);},48:async db=>{await requireWorkspaceDomains(db);await requireStagedEvidence(db);await requireWebsitePresentation(db);},49:async db=>{await requireWorkspaceSettings(db);await requireStagedEvidence(db);await requireWebsitePresentation(db);}}[format])(targetDb);
+  if(catalogueRequiresRecordOwnerTransfers(format))await restoreRecordOwnerTransferCatalogueFormat(targetDb,format);else if(catalogueRequiresPublicationDocuments(format))await restorePublicationCatalogueFormat(targetDb,format);else if(format>=4)await ({4:requireRecordBlocks,5:requireRecordQueryBlocks,6:requireMemberCollections,7:requireSelectedValueDrafts,8:requireRetainedRecordDocuments,9:requireRunReceiptStore,10:requireDraftEdits,11:requireAttemptIndexes,12:requireCurrentAttemptIndexes,13:requireRecordTypeDrafts,14:requireRecordMethodIndexes,15:requireFigureCopyDrafts,16:requireSearchVocabulary,17:requireJoinedQueryText,18:requireKeyedQueryArrays,19:requireReferenceQueries,20:requireAttemptQueries,21:requireStarterDocuments,22:requireProjectDomains,23:requireRetiredProjectRecords,24:requireWorkspaceDomains,25:requireWorkspaceSettings,26:requireRecordResultIndexes,27:async db=>{await requireWorkspaceDomains(db);await requireRecordResultIndexes(db);},28:async db=>{await requireWorkspaceSettings(db);await requireRecordResultIndexes(db);},29:requireWebsiteDocuments,30:async db=>{await requireWorkspaceDomains(db);await requireWebsiteDocuments(db);},31:async db=>{await requireWorkspaceSettings(db);await requireWebsiteDocuments(db);},32:requireStagedEvidence,33:async db=>{await requireWorkspaceDomains(db);await requireStagedEvidence(db);},34:async db=>{await requireWorkspaceSettings(db);await requireStagedEvidence(db);},35:async db=>{await requireWebsiteDocuments(db);await requireStagedEvidence(db);},36:async db=>{await requireWorkspaceDomains(db);await requireWebsiteDocuments(db);await requireStagedEvidence(db);},37:async db=>{await requireWorkspaceSettings(db);await requireWebsiteDocuments(db);await requireStagedEvidence(db);},38:requireWebsiteEditor,39:async db=>{await requireWorkspaceDomains(db);await requireWebsiteEditor(db);},40:async db=>{await requireWorkspaceSettings(db);await requireWebsiteEditor(db);},41:async db=>{await requireStagedEvidence(db);await requireWebsiteEditor(db);},42:async db=>{await requireWorkspaceDomains(db);await requireStagedEvidence(db);await requireWebsiteEditor(db);},43:async db=>{await requireWorkspaceSettings(db);await requireStagedEvidence(db);await requireWebsiteEditor(db);},44:requireWebsitePresentation,45:async db=>{await requireWorkspaceDomains(db);await requireWebsitePresentation(db);},46:async db=>{await requireWorkspaceSettings(db);await requireWebsitePresentation(db);},47:async db=>{await requireStagedEvidence(db);await requireWebsitePresentation(db);},48:async db=>{await requireWorkspaceDomains(db);await requireStagedEvidence(db);await requireWebsitePresentation(db);},49:async db=>{await requireWorkspaceSettings(db);await requireStagedEvidence(db);await requireWebsitePresentation(db);}}[format])(targetDb);
   // Rekey the retained representation itself: rebuilding books changes index
   // roots/deltas and omits non-record state. Fresh per-scope keys encrypt the
   // same original records; all content identities and historical roots survive.

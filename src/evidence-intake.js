@@ -1,3 +1,4 @@
+import {readRecordOwnerMetadata} from './record-owner-audit-metadata.js';
 import {withScratch} from './scratch-work.js';
 import {EvidenceFileChoices} from './evidence-file-choices.js';
 import {EvidenceIntakeFinalization} from './evidence-intake-finalization.js';
@@ -21,7 +22,7 @@ export class EvidenceIntake{
  constructor(materials){this.materials=materials;this.workspace=materials.workspace;this.choices=new EvidenceFileChoices(this.workspace);this.finalization=new EvidenceIntakeFinalization(this);}
  file(id,suffix='batch.json'){if(!researchId(id))fail();return root+'/'+id+'/'+suffix;}
  feed(recordId){if(!researchId(recordId))fail();return new MetadataFeed(this.workspace,root+'/by-record/'+recordId);}
- async json(file){const raw=await this.workspace.readMetadata(file,131072);if(raw===null)return null;try{return JSON.parse(raw);}catch{fail('CATALOGUE_DAMAGED');}}
+ async json(file){const raw=await readRecordOwnerMetadata(this.workspace,file,131072);if(raw===null)return null;try{return JSON.parse(raw);}catch{fail('CATALOGUE_DAMAGED');}}
  async put(file,value){await this.workspace.writeMetadata(file,serialize(value));}
  validate(command){
   if(!researchId(command.recordId)||!text(command.title,300)||!command.title.trim()||typeof command.provenance!=='string'||command.provenance.length>10000||
@@ -46,7 +47,7 @@ export class EvidenceIntake{
   return this.workspace.withLock(async()=>{
    await this.materials.assertOwner(recordId);const file=this.file(id),prior=await this.json(file);
    if(prior){const batch=await this.read(id);if(batch.intent!==hash(command))fail('MATERIAL_CHANGED');return this.summary(batch);}
-   if(await this.materials.current(id))fail('MATERIAL_CHANGED');
+   if(await this.materials.current(id)||await this.workspace.readMetadata('.observanda/intake/finalization/'+id+'/batch.json',131072)!==null)fail('MATERIAL_CHANGED');
    await this.materials.index.ensureLocked();
    const acquisition=await this.materials.retainCurrentRecordLocked(recordId);
    const batch={format:1,id,command,intent:hash(command),files:empty('files'),bytes:0,ready:0,acquisition,state:'open',result:null,createdAt:new Date().toISOString()};

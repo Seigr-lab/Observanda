@@ -65,20 +65,20 @@ export class FileContent {
   // Internal owner transfer: plaintext is consumed only by an encrypted
   // private temporary file. The destination becomes visible after the source
   // tag, declared digest, size and stable-file check have all succeeded.
-  async copyTo(workspace,file,{signal,onProgress,reserveBytes=0,resume=false}={}){
-    signal?.throwIfAborted();await this.workspace.requireStorageKey();await workspace.requireStorageKey();
+  async copyTo(workspace,file,{signal,onProgress,check=async()=>{},reserveBytes=0,resume=false}={}){
+    signal?.throwIfAborted();await check();await this.workspace.requireStorageKey();await workspace.requireStorageKey();
     if(!workspace.vault?.key||!workspace.vault.id||!Number.isSafeInteger(this.size)||this.size<0||! /^[a-f0-9]{64}$/.test(this.sha256))throw new AppError('INVALID');
     if(await lstat(file).catch(error=>{if(error.code==='ENOENT')return null;throw error;}))throw new AppError('EXISTS');
-    if(resume)return checkpointedFileCopy(this,workspace,file,{decode:decoded,space:diskSpace,signal,onProgress,reserveBytes});
+    if(resume)return checkpointedFileCopy(this,workspace,file,{decode:decoded,space:diskSpace,signal,onProgress,check,reserveBytes});
     const handle=await open(this.file,'r'),owner=this;
     try{
       const before=await handle.stat({bigint:true});if(!before.isFile()||before.nlink>1n)throw new AppError('UNSAFE');
       async function* checked(){
         let size=0;const hash=createHash('sha256');await onProgress?.(0,owner.size);
         for await(const chunk of decoded(handle,owner.workspace,owner.file)){
-          signal?.throwIfAborted();size+=chunk.length;if(size>owner.size)throw new AppError('MEDIA_INVALID');hash.update(chunk);yield chunk;await onProgress?.(size,owner.size);
+          signal?.throwIfAborted();await check();size+=chunk.length;if(size>owner.size)throw new AppError('MEDIA_INVALID');hash.update(chunk);yield chunk;await onProgress?.(size,owner.size);
         }
-        signal?.throwIfAborted();if(size!==owner.size||hash.digest('hex')!==owner.sha256||!sameFile(before,await handle.stat({bigint:true})))throw new AppError('MEDIA_INVALID');
+        signal?.throwIfAborted();await check();if(size!==owner.size||hash.digest('hex')!==owner.sha256||!sameFile(before,await handle.stat({bigint:true})))throw new AppError('MEDIA_INVALID');
       }
       return await writeContent(workspace,file,checked(),{signal,reserveBytes,maxBytes:this.size});
     }finally{await handle.close();}

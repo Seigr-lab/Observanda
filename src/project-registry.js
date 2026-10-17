@@ -1,3 +1,4 @@
+import {resolveRecordOwnerReference} from './record-owner-provenance.js';
 import {assertProjectPresent,acceptRelocatedProject} from './project-relocation-directory.js';
 import {LabBookDirectory} from './lab-book-directory.js';
 import {projectRenameLocation} from './project-rename-receipt.js';
@@ -140,6 +141,7 @@ export class ProjectRegistry{
  });}
  async reference(target){
   if(!validProjectReferenceTarget(target))throw new AppError('INVALID');
+  const moved=await resolveRecordOwnerReference(this,target);if(moved)return moved;
   const {value}=await this.read();
   assertProjectPresent(value,{namespaceId:target.workspaceId});
   const direct=value.projects.find(p=>p.namespaceId===target.workspaceId);if(direct)return projectRenameLocation(this,direct,value.projects);

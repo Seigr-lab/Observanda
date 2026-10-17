@@ -21,7 +21,7 @@ export class LiveMaterialReading{
   let document=await this.resolve(store,access,ref);
   for(const step of trail){
    valid(ref.kind!=='record');const page=await this.materials.referencePage(ref,{slot:step.slot,offset:step.index,limit:1});valid(page.items.length===1,'COLLABORATION_DENIED');
-   const item=page.items[0];ref={kind:item.kind,id:item.id,revision:item.revision};document=await this.resolve(store,access,ref);
+   const item=page.items[0];ref={kind:item.kind,id:item.id,revision:item.revision,...(item.workspaceId?{workspaceId:item.workspaceId}:{})};document=await this.resolve(store,access,ref);
   }
   const reference={kind:ref.kind,id:ref.id,revision:ref.revision};
   return ref.kind==='record'?{record:document,revision:ref.revision,reference}:{document,revision:ref.revision,reference};

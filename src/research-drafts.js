@@ -1,3 +1,4 @@
+import {projectRecordOwnerDraft} from './record-owner-drafts.js';
 import {upgradeRecord} from './web/record-model.js';
 import {validDraftRecord as record} from './record-draft-validation.js';
 import {ResearchDraftIndex,draftSummary,draftKey} from './research-draft-index.js';
@@ -31,12 +32,12 @@ const validChanges=validDraftChanges;
 // manifest, record history or publication selection. Each editor owns a unique
 // checkpoint ID, with a revision guard for recovery from another window.
 export class ResearchDrafts {
-  constructor(workspace){this.workspace=workspace;this.index=new ResearchDraftIndex(workspace,id=>this.read(id,{indexed:false,expand:false,header:true}));}
-  async read(idValue,{indexed=true,expand=true,header=false}={}){
-    if(await this.workspace.storageKind()==='catalogue')return this.workspace.catalogue(()=>this.readValue(idValue,indexed,expand,header));
-    return this.readValue(idValue,false,expand,header);
+  constructor(workspace){this.workspace=workspace;this.index=new ResearchDraftIndex(workspace,id=>this.read(id,{indexed:false,expand:false,header:true,raw:true}),result=>projectRecordOwnerDraft(workspace,result));}
+  async read(idValue,{indexed=true,expand=true,header=false,raw=false,includePending=false}={}){
+    if(await this.workspace.storageKind()==='catalogue')return this.workspace.catalogue(()=>this.readValue(idValue,indexed,expand,header,{raw,includePending}));
+    return this.readValue(idValue,false,expand,header,{raw,includePending});
   }
-  async readValue(idValue,indexed,expand,header){
+  async readValue(idValue,indexed,expand,header,options){
     if(!id(idValue))throw new AppError('INVALID');
     await this.workspace.requireStorageKey();
     const raw=await this.workspace.readMetadata('.observanda/drafts/'+idValue+'.json',MAX_BYTES);if(raw===null)return null;
@@ -51,8 +52,9 @@ export class ResearchDrafts {
     }else if([3,4].includes(draft?.formatVersion)){
       if(!keys(draft,['formatVersion','id','workspaceId','updatedAt','count','titles','base','content',...(draft.formatVersion===4?['document']:[])])||draft.formatVersion===4&&!validDraftDocument(draft.document)||draft.id!==idValue||!id(draft.workspaceId)||!text(draft.updatedAt)||draft.count!==1||!Array.isArray(draft.titles)||draft.titles.length!==1||!text(draft.titles[0])||draft.titles[0].length>160||!keys(draft.base,['recordId','revision'])||!id(draft.base.recordId)||!revision(draft.base.revision)||!new RecordDraftChunks(this.workspace,idValue).valid(draft.content))throw new AppError('FORMAT');
     }else if(!keys(draft,['formatVersion','id','workspaceId','updatedAt','changes'])||![1,2].includes(draft.formatVersion)||draft.id!==idValue||!id(draft.workspaceId)||!text(draft.updatedAt)||!validChanges(draft.changes,draft.formatVersion===2))throw new AppError('FORMAT');
-    const result={draft,revision:digest(raw)};
+    let result={draft,revision:digest(raw)};
     if(indexed)await this.index.verifySelected(result,digest(serialize({text:raw})));
+    if(!options.raw){result=await projectRecordOwnerDraft(this.workspace,result,options);if(!result)return null;draft=result.draft;}
     if([5,6].includes(draft.formatVersion))return result;
     if([3,4].includes(draft.formatVersion)){
       if(header)return result;
