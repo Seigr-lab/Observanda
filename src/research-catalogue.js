@@ -8,7 +8,10 @@ import {rekeyProjectDomains} from './project-domain-rekey.js';
 // Transactional research storage. PostgreSQL sees encrypted payloads and opaque IDs,
 // never titles, prose or file paths. Workspace owns locking and key custody.
 import {AsyncLocalStorage} from 'node:async_hooks';
-import {reconcileWebsiteMembership} from './website-membership.js';
+import {reconcileWebsiteMembership,reconcileOwnedWebsiteMembership,websiteMembershipChange} from './website-membership.js';
+import {WebsiteDocumentStore} from './website-document-store.js';
+import {readWebsiteDocumentRegistry,websiteDocumentLocks} from './website-document-registry.js';
+import {websiteMetadataShell,assertWebsiteMetadataShell,defaultWebsiteSelection} from './website-owned-metadata.js';
 import {withCatalogueVerification,verificationContext} from './catalogue-verification.js';
 import {verifiedCatalogueObjects} from './catalogue-object-verification.js';
 import {randomUUID,randomBytes} from 'node:crypto';
@@ -51,7 +54,7 @@ import {digest,serialize} from './storage.js';
 import {openCatalogue,backupCatalogue} from './postgres.js';
 import {retainStoredRecord,readStoredRecord,withStoredRecord,withRecordEnvelope,verifyStoredRecord} from './record-storage.js';
 import {RECORD_BLOCK_PREFIX,rekeyRecordBlock} from './record-block-store.js';
-import {catalogueFormat,requireRecordBlocks,requireRecordQueryBlocks,requireMemberCollections,requireSelectedValueDrafts,requireRetainedRecordDocuments,requireRunReceiptStore,requireDraftEdits,requireAttemptIndexes,requireCurrentAttemptIndexes,requireRecordTypeDrafts,requireRecordMethodIndexes,requireFigureCopyDrafts,requireSearchVocabulary,requireJoinedQueryText,requireKeyedQueryArrays,requireReferenceQueries,requireAttemptQueries,requireStarterDocuments,requireProjectDomains,requireRetiredProjectRecords,requireWorkspaceDomains,requireWorkspaceSettings,requireRecordResultIndexes} from './catalogue-format.js';
+import {catalogueFormat,requireRecordBlocks,requireRecordQueryBlocks,requireMemberCollections,requireSelectedValueDrafts,requireRetainedRecordDocuments,requireRunReceiptStore,requireDraftEdits,requireAttemptIndexes,requireCurrentAttemptIndexes,requireRecordTypeDrafts,requireRecordMethodIndexes,requireFigureCopyDrafts,requireSearchVocabulary,requireJoinedQueryText,requireKeyedQueryArrays,requireReferenceQueries,requireAttemptQueries,requireStarterDocuments,requireProjectDomains,requireRetiredProjectRecords,requireWorkspaceDomains,requireWorkspaceSettings,requireRecordResultIndexes,requireWebsiteDocuments} from './catalogue-format.js';
 import {catalogueObjectPrefixCount} from './postgres-indexes.js';
 import {recordEncoding} from './record-encoding.js';
 import {withRecordWriteEncoding,recordWriteEncoding} from './record-write-encoding.js';
@@ -97,7 +100,8 @@ export class ResearchCatalogue{
   const row=await this.db.get('SELECT payload FROM snapshots WHERE id=$1',id);
   if(!row)throw new AppError('RECORD_HISTORY_MISSING');
   const value=this.decode('snapshot',id,row.payload);
-  if(!value||!identifier(value.metadata?.id)||!Array.isArray(value.metadata.entries)||value.metadata.entries.length)fail();
+  if(!value||!identifier(value.metadata?.id)||!Array.isArray(value.metadata.entries)||value.metadata.entries.length||value.websiteDocuments!==undefined&&value.websiteDocuments!==1)fail();
+  if(value.websiteDocuments===1){try{assertWebsiteMetadataShell(value.metadata);}catch(error){if(error.code==='INVALID')fail();throw error;}}
   if(value.indexVersion===undefined){
    if(!Array.isArray(value.records)||!value.records.every(validMember)||new Set(value.records.map(r=>r.id)).size!==value.records.length)fail();
   }else if(value.indexVersion!==1||!SnapshotIndex.valid(value.membership)||!Number.isSafeInteger(value.count)||value.count<0||
@@ -120,13 +124,13 @@ export class ResearchCatalogue{
   const value=await this.snapshot(id);
   if(!value.indexVersion)return value;
   const records=(await new SnapshotIndex(this).rows(value)).sort((a,b)=>a.position-b.position).map(({position,...row})=>row);
-  return {metadata:value.metadata,records};
+  return {metadata:value.metadata,records,...(value.websiteDocuments===1?{websiteDocuments:1}:{})};
  }
  async indexed(snapshot){
   if(snapshot.indexVersion)return snapshot;
   const rows=snapshot.records.map((row,position)=>({...row,position}));
   return {indexVersion:1,metadata:snapshot.metadata,membership:await new SnapshotIndex(this).build(rows),
-   count:rows.length,bytes:rows.reduce((total,row)=>total+row.bytes,0),nextPosition:rows.length};
+   count:rows.length,bytes:rows.reduce((total,row)=>total+row.bytes,0),nextPosition:rows.length,...(snapshot.websiteDocuments===1?{websiteDocuments:1}:{})};
  }
  async scopeKey(scopeId,generation=1,{create=false}={}){
   if(!identifier(scopeId)||!Number.isSafeInteger(generation)||generation<1)throw new AppError('INVALID');
@@ -194,6 +198,8 @@ export class ResearchCatalogue{
   if((await this.db.get('SELECT id FROM snapshots WHERE id=$1',etag)))throw new AppError('CONFLICT');
   const beforeHead=await this.db.get("SELECT payload FROM state WHERE slot='head'");
   const beforeSnapshot=beforeHead?await this.snapshot(this.decode('state','head',beforeHead.payload).id):null;
+  const websiteDocuments=beforeSnapshot?.websiteDocuments===1||beforeSnapshot&&!!await readWebsiteDocumentRegistry(this);
+  if(websiteDocuments)assertWebsiteMetadataShell(metadata);
   for(const record of book.entries){
    await withRecordWriteEncoding(this,record,metadata,async (prepared,record)=>{
     const prior=beforeSnapshot?await this.member(beforeSnapshot,record.id):null;
@@ -217,7 +223,7 @@ export class ResearchCatalogue{
   }
   await assertProjectHierarchyChange(this,current?.metadata??null,metadata);
   const authority=new ProjectSourceAuthority(this);if(await authority.active()){await authority.metadata(current?.metadata??null,metadata);await authority.fullBookRecords(current,metadata,before,after,rows);}
-  const snapshot={indexVersion:1,metadata,membership,count:rows.length,bytes:rows.reduce((total,row)=>total+row.bytes,0),nextPosition:rows.length},search=new RecordSearchIndex(this);
+  const snapshot={indexVersion:1,metadata,membership,count:rows.length,bytes:rows.reduce((total,row)=>total+row.bytes,0),nextPosition:rows.length,...(websiteDocuments?{websiteDocuments:1}:{})},search=new RecordSearchIndex(this);
   snapshot.searchIndex=current?.searchIndex?await search.replace(current.searchIndex,before,after,metadata,{beforeMetadata:current.metadata}):await search.build(snapshot);
   const types=new RecordTypeIndex(this);
   snapshot.typeIndex=current?.typeIndex?await types.replace(current.typeIndex,before,after):await types.build(snapshot);
@@ -228,10 +234,20 @@ export class ResearchCatalogue{
   const publication=new RecordPublicationIndex(this);
   snapshot.publicationIndex=current?.publicationIndex?.version===3?await publication.replace(current.publicationIndex,before,after):await publication.build(snapshot);
   await this.db.run('INSERT INTO snapshots VALUES ($1,$2,$3)',etag,ordinal,this.encode('snapshot',etag,snapshot));
+  if(websiteDocuments&&current){const present=new Set(after.map(row=>row.id)),removed=before.filter(row=>!present.has(row.id)).map(row=>row.id);await reconcileOwnedWebsiteMembership(this,etag,snapshot,websiteMembershipChange(current.metadata,metadata,before,after,{removed}));}
 
   for(const {id,item,initialize,fresh} of history)await this.historyIndex(id).append(item,{initialize,fresh});
   (await this.db.run("INSERT INTO state VALUES ('head',$1) ON CONFLICT(slot) DO UPDATE SET payload=excluded.payload",this.encode('state','head',{id:etag})));
   return {book,etag};
+ }
+ // Explicit conversion is a writer operation. Retained inline snapshots are
+ // preserved; ordinary reads and record saves never initialize website owners.
+ async initializeWebsiteDocuments(){
+  if(await readWebsiteDocumentRegistry(this))return;
+  await websiteDocumentLocks(this,{registration:true,membership:'exclusive'});
+  const researchSnapshotId=await this.head(),snapshot=await this.snapshot(researchSnapshotId),defaultSelection=await defaultWebsiteSelection(this,snapshot);
+  await new WebsiteDocumentStore(this).initialize(researchSnapshotId,snapshot,{defaultSelection});
+  await this.commitChanges(researchSnapshotId,await this.indexed(snapshot),websiteMetadataShell(snapshot.metadata),[]);
  }
  // Validate metadata against authenticated record identities without loading bodies.
  validateMetadata(current,metadata,options){return validateIndexedMetadata(this,current,metadata,options);}
@@ -343,19 +359,20 @@ export class ResearchCatalogue{
  // membership, history and derived-index transaction. No head is advanced until
  // all the retained values and indexes have been written successfully.
  async finishRecordChanges(currentId,current,metadata,before,after,{removed=[],changedIds=new Set(after.map(row=>row.id)),membershipRebuilt=false,bulk=false,index=new SnapshotIndex(this),etag,ordinal,count=current.count-before.length+after.length,bytes=current.bytes-before.reduce((n,row)=>n+row.bytes,0)+after.reduce((n,row)=>n+row.bytes,0),nextPosition=current.nextPosition}={}){
+   const websiteDocuments=current.websiteDocuments===1||!!await readWebsiteDocumentRegistry(this);
+   if(websiteDocuments)assertWebsiteMetadataShell(metadata);
    await assertProjectHierarchyChange(this,current.metadata,metadata);
    const authority=new ProjectSourceAuthority(this);if(await authority.active()){await authority.metadata(current.metadata,metadata);await authority.recordRows(current.metadata,before);await authority.recordRows(metadata,after);}
    return operationStage('index-records',{total:5,unit:'indexes'},async()=>{
    if(!Number.isSafeInteger(count)||count<0||!Number.isSafeInteger(bytes)||bytes<0||!Number.isSafeInteger(nextPosition))throw new AppError('LIMIT');
    admitResearchBytes('metadata',Buffer.byteLength(serialize(metadata)));
    const membership=await index.replace(current.membership,before,after);
+   const websiteChange=websiteMembershipChange(current.metadata,metadata,before,after,{removed});
    if(metadata.websites?.length){
-    const old=new Map(before.map(r=>[r.id,r])),project=(m,n)=>m.notebooks.find(book=>book.id===n)?.projectId;
-    const moved=after.filter(r=>old.has(r.id)&&(old.get(r.id).notebookId!==r.notebookId||project(current.metadata,r.notebookId)!==project(metadata,r.notebookId))).map(r=>r.id);
-    await reconcileWebsiteMembership(metadata,id=>index.get(membership,id),{moved,removed,previous:current.metadata});
+    await reconcileWebsiteMembership(metadata,id=>index.get(membership,id),websiteChange);
     admitResearchBytes('metadata',Buffer.byteLength(serialize(metadata)));
    }
-   const snapshot={indexVersion:1,metadata,membership,count,bytes,nextPosition,
+   const snapshot={indexVersion:1,metadata,membership,count,bytes,nextPosition,...(websiteDocuments?{websiteDocuments:1}:{}),
     // Reconstructed old membership changes authenticated descriptors even when
     // no original changed. A record-only delta cannot describe that transition.
     ...(!membershipRebuilt&&count===current.count-removed.length?{delta:{parent:currentId,changed:[...changedIds],...(removed.length?{removed}: {})}}:{})};
@@ -375,6 +392,7 @@ export class ResearchCatalogue{
    snapshot.publicationIndex=current.publicationIndex?.version===3?await publication.replace(current.publicationIndex,before,after):await publication.build(snapshot);
    operationAdvance();
    await this.db.run('INSERT INTO snapshots VALUES ($1,$2,$3)',etag,ordinal,this.encode('snapshot',etag,snapshot));
+   if(websiteDocuments)await reconcileOwnedWebsiteMembership(this,etag,snapshot,websiteChange);
    await this.db.run("UPDATE state SET payload=$1 WHERE slot='head'",this.encode('state','head',{id:etag}));
    return etag;
    });
@@ -568,6 +586,7 @@ export class ResearchCatalogue{
   if(!verified.stableSnapshot)previous=null;
   const snapshot=await this.snapshot(id),index=new SnapshotIndex(this,{cacheSize:4096}),context=hash(verificationContext(snapshot.metadata));
   if(snapshot.metadata.id!==workspaceId)fail();
+  if(snapshot.websiteDocuments===1)await verified.once(['website-document-registry'],async()=>{if(!await readWebsiteDocumentRegistry(this))fail();});
   if(snapshot.indexVersion)await verified.once(['membership',snapshot.membership,snapshot.searchIndex,snapshot.count,snapshot.bytes,snapshot.nextPosition],async()=>{
    if(!previous||!await verifyMembershipChange(this,previous,snapshot))await index.verify(snapshot);
   });
@@ -640,7 +659,7 @@ export class ResearchCatalogue{
    });
    const {workspaceModules}=await import('./modules/index.js');
    await operationStage('verify-modules',{},async()=>{await workspaceModules(this.workspace).verifyCatalogue(this,descriptor.workspaceId);});
-   await operationStage('verify-objects',{},async()=>{await verifyWorkspaceSettings(this);for await(const object of this.verifiedObjects())void object;});
+   await operationStage('verify-objects',{},async()=>{await verifyWorkspaceSettings(this);await new WebsiteDocumentStore(this).verify({onRevision:site=>media.website(site)});for await(const object of this.verifiedObjects())void object;});
    const {verifySampleAnalysisCatalogue}=await import('./sample-analysis-catalogue.js');
    await operationStage('verify-analysis',{},()=>verifySampleAnalysisCatalogue(this));
    await operationStage('verify-reviews',{},()=>new ReviewScopeIndex(this).verify());
@@ -683,7 +702,7 @@ export async function rekeyCatalogue(source,target,descriptor){
    for await(const row of sourceDb.rows(query,[],{batchSize:1})){await visit(row);operationAdvance();}
   });
   const format=await catalogueFormat(sourceDb);
-  if(format>=4)await ({4:requireRecordBlocks,5:requireRecordQueryBlocks,6:requireMemberCollections,7:requireSelectedValueDrafts,8:requireRetainedRecordDocuments,9:requireRunReceiptStore,10:requireDraftEdits,11:requireAttemptIndexes,12:requireCurrentAttemptIndexes,13:requireRecordTypeDrafts,14:requireRecordMethodIndexes,15:requireFigureCopyDrafts,16:requireSearchVocabulary,17:requireJoinedQueryText,18:requireKeyedQueryArrays,19:requireReferenceQueries,20:requireAttemptQueries,21:requireStarterDocuments,22:requireProjectDomains,23:requireRetiredProjectRecords,24:requireWorkspaceDomains,25:requireWorkspaceSettings,26:requireRecordResultIndexes,27:async db=>{await requireWorkspaceDomains(db);await requireRecordResultIndexes(db);},28:async db=>{await requireWorkspaceSettings(db);await requireRecordResultIndexes(db);}}[format])(targetDb);
+  if(format>=4)await ({4:requireRecordBlocks,5:requireRecordQueryBlocks,6:requireMemberCollections,7:requireSelectedValueDrafts,8:requireRetainedRecordDocuments,9:requireRunReceiptStore,10:requireDraftEdits,11:requireAttemptIndexes,12:requireCurrentAttemptIndexes,13:requireRecordTypeDrafts,14:requireRecordMethodIndexes,15:requireFigureCopyDrafts,16:requireSearchVocabulary,17:requireJoinedQueryText,18:requireKeyedQueryArrays,19:requireReferenceQueries,20:requireAttemptQueries,21:requireStarterDocuments,22:requireProjectDomains,23:requireRetiredProjectRecords,24:requireWorkspaceDomains,25:requireWorkspaceSettings,26:requireRecordResultIndexes,27:async db=>{await requireWorkspaceDomains(db);await requireRecordResultIndexes(db);},28:async db=>{await requireWorkspaceSettings(db);await requireRecordResultIndexes(db);},29:requireWebsiteDocuments,30:async db=>{await requireWorkspaceDomains(db);await requireWebsiteDocuments(db);},31:async db=>{await requireWorkspaceSettings(db);await requireWebsiteDocuments(db);}}[format])(targetDb);
   // Rekey the retained representation itself: rebuilding books changes index
   // roots/deltas and omits non-record state. Fresh per-scope keys encrypt the
   // same original records; all content identities and historical roots survive.

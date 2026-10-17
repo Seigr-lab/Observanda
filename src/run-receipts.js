@@ -2,6 +2,7 @@ import {createHash} from 'node:crypto';
 import {AppError} from './errors.js';
 import {ResearchMaterials} from './research-materials.js';
 import {PublicationJobs} from './publication-jobs.js';
+import {WebsiteDocumentStore} from './website-document-store.js';
 import {websiteWorkspace} from './website-workspace.js';
 import {researchId} from './web/research-reference.js';
 import {revisionId} from './web/revision-model.js';
@@ -35,9 +36,12 @@ export function declaredReceipt(command){
 }
 export async function receiptWebsite(workspace,websiteId=null){
  if(websiteId!==null&&!researchId(websiteId))throw new AppError('INTAKE_INVALID');
- const {metadata}=await workspace.outline(),site=websiteId?metadata.websites?.find(s=>s.id===websiteId):null;
- if(websiteId&&!site)throw new AppError('NOT_FOUND');
- return {workspace:websiteWorkspace(workspace,websiteId),websiteId,name:site?.name??metadata.website.title??metadata.title};
+ const scoped=websiteWorkspace(workspace,websiteId);let name=null;
+ if(await workspace.storageKind()==='catalogue'){
+  try{name=(await workspace.catalogue(store=>new WebsiteDocumentStore(store).head(websiteId,{includeRemoved:true}))).name;}
+  catch(error){if(error.code!=='NOT_FOUND')throw error;}
+ }else name=(await scoped.website()).name;
+ return {workspace:scoped,websiteId,name};
 }
 export async function publicationReceipt(workspace,{websiteId=null,publicationJob},recordId,revision){
  if(!researchId(publicationJob))throw new AppError('INTAKE_INVALID');
@@ -46,7 +50,7 @@ export async function publicationReceipt(workspace,{websiteId=null,publicationJo
  if(!raw||!source.records?.some(r=>(r.recordId??r.id)===recordId&&r.revision===revision))throw new AppError('INTAKE_RECEIPT');
  const candidate=JSON.parse(raw);
  if(candidate.jobId!==source.id||candidate.reviewId!==source.reviewId||!revisionId(candidate.id)||(candidate.websiteId??null)!==websiteId||(source.websiteId??null)!==websiteId)throw new AppError('INTAKE_RECEIPT');
- return {jobId:source.id,reviewId:source.reviewId,releaseId:candidate.id,websiteId,websiteName:scoped.name,createdAt:candidate.createdAt};
+ return {jobId:source.id,reviewId:source.reviewId,releaseId:candidate.id,websiteId,websiteName:scoped.name??source.metadata?.website?.title??source.metadata?.title??source.book?.title,createdAt:candidate.createdAt};
 }
 export async function receiptEditions(workspace,{websiteId=null,cursor=null},recordId,revision,{signal}={}){
  const scoped=await receiptWebsite(workspace,websiteId),releases=new PublicationJobs(scoped.workspace),page=await releases.feed.page({cursor,limit:20}),items=[];
@@ -57,4 +61,16 @@ export async function receiptEditions(workspace,{websiteId=null,cursor=null},rec
   catch(error){if(error.code!=='INTAKE_RECEIPT')throw error;}
  }
  return {items,next:page.next};
+}
+
+// Only labels and owner IDs cross this continuation boundary. Selecting an
+// edition resolves its own immutable source separately.
+export async function receiptWebsites(workspace,{after=null,limit=20,signal}={}){
+ if(after!==null&&after!=='default'&&!researchId(after)||!Number.isSafeInteger(limit)||limit<1||limit>20)throw new AppError('INTAKE_INVALID');
+ if(await workspace.storageKind()==='catalogue')return workspace.catalogue(async store=>{
+  const page=await new WebsiteDocumentStore(store).list({after,limit,includeDefault:after===null});signal?.throwIfAborted();
+  return {items:page.sites.map(({websiteId,name})=>({id:websiteId,name})),next:page.next};
+ });
+ const {metadata}=await workspace.outline(),sites=[{id:null,name:metadata.website.title||metadata.title},...(metadata.websites??[])].filter(site=>after===null||site.id!==null&&(after==='default'||site.id>after)).sort((a,b)=>a.id===null?-1:b.id===null?1:a.id<b.id?-1:1),items=sites.slice(0,limit).map(({id,name})=>({id,name}));
+ return {items,next:sites.length>limit?(items.at(-1).id??'default'):null};
 }

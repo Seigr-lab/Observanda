@@ -11,7 +11,7 @@ import {analysisDependencyState} from './analysis-dependencies.js';
 import {intakeHash} from './intake/contract.js';
 import {Reviews} from './reviews.js';
 import {readReviewSummary} from './review-summaries.js';
-import {receiptKinds,evidenceDigest,runEvidenceRevision,applicableReceipt,declaredReceipt,publicationReceipt,receiptEditions} from './run-receipts.js';
+import {receiptKinds,evidenceDigest,runEvidenceRevision,applicableReceipt,declaredReceipt,publicationReceipt,receiptEditions,receiptWebsites} from './run-receipts.js';
 import {documentRevision,sameDocumentContent} from './record-document-revision.js';
 import {materialRecordSummary} from './material-record-summary.js';
 import {withRecordDocument} from './record-document.js';
@@ -52,6 +52,7 @@ export class RunReadiness{
   }else Object.assign(receipt,declaredReceipt(command));
   await this.materials.retainCurrentRecordLocked(record.id);return this.appendLocked(record.id,receipt);
  });}
+ async websites(command,{signal}={}){return this.materials.readSnapshot(async()=>{const {revision}=await this.target(command,{signal});if(command.expectedRevision!==revision)throw new AppError('RECORD_CHANGED');return receiptWebsites(this.workspace,{after:command.after??null,limit:command.limit??20,signal});});}
  async editions(command,options){return this.materials.readSnapshot(async()=>{const {record,revision}=await this.target(command,options);if(command.expectedRevision!==revision)throw new AppError('RECORD_CHANGED');return receiptEditions(this.workspace,command,record.id,revision,options);});}
  async policy(projectId){if(!researchId(projectId))throw new AppError('INTAKE_INVALID');return this.json('projects/'+projectId,{version:1,required:[]});}
  async setPolicy(command){return this.workspace.withLock(async()=>{
@@ -83,8 +84,7 @@ export class RunReadiness{
     if(!summary.decisions.some(d=>d.id===record.id&&['reviewed','witnessed'].includes(d.decision)))counts.pendingReviews++;
    }
    const evidenceRevision=digest.finish(),valid=await receiptStore.matching(policy.required,[basis,revision],evidenceRevision,{signal}),missing=policy.required.filter(k=>!valid.has(k));
-   const {metadata}=await this.workspace.outline();
-   return {version:1,recordId:record.id,revision,evidenceRevision,projectId,websites:[{id:null,name:metadata.website.title||metadata.title},...(metadata.websites??[]).map(({id,name})=>({id,name}))],policy:{...policy,etag:intakeHash(policy)},missing,counts,unresolved:unresolved.map(c=>({id:c.id,label:c.label})),issues,receiptPage:{next:receiptPage.next,total:receiptPage.total},receipts:receiptPage.items.map(r=>({...r,current:applicableReceipt(r,[basis,revision],evidenceRevision),evidenceChanged:r.evidenceRevision!==evidenceRevision}))};
+   return {version:1,recordId:record.id,revision,evidenceRevision,projectId,policy:{...policy,etag:intakeHash(policy)},missing,counts,unresolved:unresolved.map(c=>({id:c.id,label:c.label})),issues,receiptPage:{next:receiptPage.next,total:receiptPage.total},receipts:receiptPage.items.map(r=>({...r,current:applicableReceipt(r,[basis,revision],evidenceRevision),evidenceChanged:r.evidenceRevision!==evidenceRevision}))};
   });
  }
  // Invoked by the shared record commit, so GUI/API/import cannot bypass policy.

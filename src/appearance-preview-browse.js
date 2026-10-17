@@ -22,7 +22,7 @@ export function appearanceBrowseQuery(query=''){
 // are authenticated and tied to the saved website selection and filters.
 export async function appearanceBrowsePage(records,query){
  const {filters,cursor,query:filterQuery}=appearanceBrowseQuery(query),{store,metadata}=records;
- const identity=metadata.id,binding=digest(serialize({snapshot:records.snapshotId,websiteId:records.websiteId,metadata,selection:records.selection,filters}));
+ const identity=metadata.id,binding=digest(serialize({snapshot:records.snapshotId,websiteId:records.websiteId,websitePin:records.websitePin,metadata,selection:records.selection,filters}));
  let anchor={after:null,backward:false};
  if(cursor){
   try{anchor=store.decode('appearance-browse-page',identity,decodeAppearanceCursor(cursor));}catch{throw new AppError('INVALID');}

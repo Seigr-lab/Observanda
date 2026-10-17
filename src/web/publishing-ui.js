@@ -131,7 +131,7 @@ export function publishingUI({state,api,esc,field,option,render,notify,showDialo
         setupJob=(await api('/api/repository-setup/'+(name==='publish-setup-retry'?'retry':'cancel'),{id:setupJob.id})).job;render();scheduleSetup();return true;
       }
       if(name==='publish-refresh-plan'){
-        const preview=state.preview,plan=await api('/api/publishing/plan',{id:preview.id,configEtag:preview.configEtag,...(preview.rollback?{rollbackReview:preview.rollback.id}:{})});
+        const preview=state.preview,plan=await api('/api/publishing/plan',{id:preview.id,configEtag:preview.configEtag,...(preview.rollback?{rollbackReview:preview.rollback.id}:{})},{websitePin:preview.websitePin});
         if(state.preview===preview){preview.destinationPlan=plan;render();}return true;
       }
       if(name==='publish-job-cancel'||name==='publish-job-retry'){await deploymentCall(name==='publish-job-cancel'?'cancel':'retry',{id:button.dataset.id});await refreshDeployments();return true;}
@@ -154,7 +154,7 @@ export function publishingUI({state,api,esc,field,option,render,notify,showDialo
       if(name==='publish-disconnect'){await api('/api/publishing/disconnect',{});await load();render();}
       if(name==='publish-rollback-review'){
         const preview=state.preview,context=websiteContext(state),route=location.hash;
-        const result=await api('/api/publication-jobs/rollback-review',{id:preview.id},{adopt:false});
+        const result=await api('/api/publication-jobs/rollback-review',{id:preview.id},{adopt:false,websitePin:preview.websitePin});
         if(state.preview===preview&&context===websiteContext(state)&&route===location.hash){state.preview={...result,returnTo:preview.returnTo};render();}
       }
       if(name==='publish-release'){
@@ -170,7 +170,7 @@ export function publishingUI({state,api,esc,field,option,render,notify,showDialo
         if(state.preview.destinationPlan?.conflicts.length){notify(publicationText('conflictGuidance'),true);return true;}
         const plan=state.preview.destinationPlan,destinationReviewed=!!document.querySelector('#destination-confirm')?.checked;
         if(plan?.requiresReview&&!destinationReviewed){notify('Review and confirm the changes to this website repository.',true);return true;}
-        const result=await api('/api/publishing/deploy',{id:state.preview.id,configEtag:state.preview.configEtag,reviewed:true,...(state.preview.rollback?{rollbackReview:state.preview.rollback.id,rollbackConfirmed:true}:{}),...(plan?{destinationReview:plan.id,destinationReviewed}: {})});
+        const result=await api('/api/publishing/deploy',{id:state.preview.id,configEtag:state.preview.configEtag,reviewed:true,...(state.preview.rollback?{rollbackReview:state.preview.rollback.id,rollbackConfirmed:true}:{}),...(plan?{destinationReview:plan.id,destinationReviewed}: {})},{websitePin:state.preview.websitePin});
         state.publishOutcome=result.job?null:result.status==='uploaded-repository-only'?'Repository files uploaded and verified. Pages settings were left unchanged.':result.status==='uploaded-remote-verified'?'Uploaded and verified on the SSH server. Check the live manifest to verify the web server.':result.status==='uploaded-pages-setup-required'?'Files uploaded and verified. GitHub Pages setup failed; check Pages permissions/settings before retrying.':'Files uploaded and verified. GitHub Pages deployment is pending; check the live manifest after deployment.';
         state.page='publishing';await load();render();
       }

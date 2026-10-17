@@ -1,3 +1,4 @@
+import {websiteContext} from './website-context.js';
 import {publicationErrorView} from './publication-error-view.js';
 import {publicationText} from './publication-review.js';
 import {readPublicationChoice,publicationChoiceView} from './publication-choice-view.js';
@@ -7,7 +8,7 @@ import {emptyEditionSelection,editionRevisionKey,editionAvailabilityKey} from '.
 export function publicationSelectionUI({state,api,esc,showDialog}){
  const text=(key,values)=>esc(publicationText(key,values));
  let session=null,generation=0;
- const current=s=>s&&s===session&&s.generation===generation&&s.context===state.storage?.contextId&&s.route===location.hash&&document.querySelector('#dialog[open] #edition-selection');
+ const current=s=>s&&s===session&&s.generation===generation&&s.context===websiteContext(state)&&s.route===location.hash&&document.querySelector('#dialog[open] #edition-selection');
  const button=(key,action,disabled=false)=>`<button type="button" class="button" data-action="edition-${action}"${disabled?' disabled':''}>${text(key)}</button>`;
  function remember(){
   session.open=new Set([...document.querySelectorAll('[data-edition-record][open]')].map(el=>el.dataset.editionRecord));
@@ -46,7 +47,7 @@ export function publicationSelectionUI({state,api,esc,showDialog}){
   s.loaded=true;draw(s);
  }
  async function open(source,prepare){
-  const s=session={source:structuredClone(source),prepare,context:state.storage?.contextId,route:location.hash,generation:++generation,request:0,choices:new Map(),history:new Map(),availability:new Map(),references:new Map(),focus:new Map(),cursors:new Map(),open:new Set(),items:[],offset:0,next:null};
+  const s=session={source:structuredClone(source),prepare,context:websiteContext(state),route:location.hash,generation:++generation,request:0,choices:new Map(),history:new Map(),availability:new Map(),references:new Map(),focus:new Map(),cursors:new Map(),open:new Set(),items:[],offset:0,next:null};
   shell();
   await load(s,0);
  }
@@ -90,7 +91,7 @@ export function publicationSelectionUI({state,api,esc,showDialog}){
     generation++;document.getElementById('dialog').close();await s.prepare({...s.source,edition});
    }
   }catch(error){
-   if(s===session&&s.context===state.storage?.contextId&&s.route===location.hash&&s.loaded){
+   if(s===session&&s.context===websiteContext(state)&&s.route===location.hash&&s.loaded){
     if(op==='prepare'&&!document.querySelector('#dialog[open]')){s.generation=++generation;shell();draw(s);}
     else if(current(s))draw(s);
    }

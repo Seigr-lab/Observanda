@@ -1,4 +1,4 @@
-import {websiteContext} from './website-context.js';
+import {websiteSnapshot} from './website-context.js';
 import {researchId} from './research-reference.js';
 import {revisionId} from './revision-model.js';
 
@@ -6,7 +6,7 @@ import {revisionId} from './revision-model.js';
 // host document are never replaced by the combined canvas's display labels.
 export function publicationEditorClient({state}){
  let context=null,consent=null,projection=null,selected=null;
- const identity=()=>JSON.stringify([websiteContext(state),state.book?.id]);
+ const identity=()=>JSON.stringify([websiteSnapshot(state),state.book?.id]);
  const selection=()=>JSON.stringify(state.book?.website.researchSources??[]);
  function close(){context=null;consent=null;projection=null;selected=null;}
  function sync(){const next=identity(),choices=selection();if(context!==next||consent!==choices){projection=null;selected=null;context=next;consent=choices;}if(state.access?.locked||state.storageUnavailable||state.page!=='website')close();}

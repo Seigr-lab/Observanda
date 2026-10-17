@@ -68,7 +68,7 @@ import {researchTargets,researchReference,parseResearchReference} from './record
 import {applicationShell} from './application-shell.js';
 import {workspaceNavigation} from './workspace-navigation.js';
 import {websiteSitesUI} from './website-sites-ui.js';
-import {websiteContext,websiteRequest,websitePages} from './website-context.js';
+import {activeWebsite,websiteContext,websiteRequest,websitePages} from './website-context.js';
 import {moduleLinks} from './module-links.js';
 import {operationsUpdates} from './modules/live-updates.js';
 import {moduleWorkbench} from './module-workbench.js';
@@ -116,6 +116,7 @@ import { routeFor as localRouteFor, resolveRoute as resolveNavigationRoute } fro
 const routeFor=state=>ownedRoute(localRouteFor(state),state.projectOwner);
 const resolveRoute=(hash,book)=>resolveNavigationRoute(projectRoute(hash).hash,book,{contentReading:supportsRecordSelection()});
 import { appearanceUI } from './appearance-ui.js';
+import {validWebsitePin} from './website-pin.js';
 import {appearancePreview} from './appearance-preview.js';
 import {logosFor} from './branding.js';
 import {applicationMark} from './app-brand.js';
@@ -125,7 +126,7 @@ const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const types = RECORD_TYPES.map(type => type.id);
 const titleCase = text => text.charAt(0).toUpperCase() + text.slice(1);
-const state = { book: null, etag: null, page: 'workspace', project: null, selected: null, notebook: 'all', dirty: false, search: '', filter: 'all', preview: null };
+const state = { book: null, etag: null, websitePin: null, websiteId: null, page: 'workspace', project: null, selected: null, notebook: 'all', dirty: false, search: '', filter: 'all', preview: null };
 let previewSurfaces=[],dialogSurface=null;
 let noticeTimer, savePromise, savedBook=null,savedRecordRevisions={},savedRecordBases={};
 const drafts=formDrafts(),recordChanges=recordDraftTracker();
@@ -162,6 +163,8 @@ const navigation=workspaceNavigation({state:new Proxy(state,{get:(target,key)=>k
 
 const websiteSelection=websiteSelectionDraft();
 function adoptSnapshot(result){
+  if(result.websitePin&&(!validWebsitePin(result.websitePin)||result.websitePin.researchSnapshotId!==result.etag)||result.site&&(!result.websitePin||result.websitePin.websiteId!==result.site.id))throw {code:'WORKSPACE_READ_INVALID',message:t('workspaceRead','invalid')};
+  state.websitePin=result.websitePin??null;state.websiteId=result.websitePin?.websiteId??null;state.website=result.site??null;
   if(savedBook?.id!==result.book?.id)websiteSelection.reset();
   state.workspaceOutline=result.outline?{notebookCounts:result.notebookCounts,total:result.total}:null;
   state.recordScope=result.recordScope??null;
@@ -171,8 +174,8 @@ function adoptSnapshot(result){
   savedRecordBases=Object.fromEntries(savedBook.entries.map(record=>[record.id,record]));
   recordChanges.reset(savedBook,savedRecordRevisions);
 }
-async function api(route, data, {adopt=true,signal,onProgress,metadataOnly=false,view=location.hash,owner=researchOwner(state)}={}) {
-  if(route==='/api/notebook'&&data===undefined&&state.websiteId)return api('/api/websites/open',{id:state.websiteId},{adopt,signal});
+async function api(route, data, {adopt=true,signal,onProgress,metadataOnly=false,view=location.hash,owner=researchOwner(state),websitePin}={}) {
+  if(route==='/api/notebook'&&data===undefined&&activeWebsite(state))return api('/api/websites/open',{id:state.websiteId},{adopt,signal});
   if(route==='/api/workspace/read/selection'&&!validRecordSelection(data?.ids)){
     const result=await readRecordSelection(data,{signal});
     if(adopt)adoptSnapshot(result);else result.book=snapshotWorkspace(result.book);return result;
@@ -191,7 +194,7 @@ async function api(route, data, {adopt=true,signal,onProgress,metadataOnly=false
     const result=await newWorkspaceReader().read({signal,onProgress});
     if(adopt&&result.book&&result.etag)adoptSnapshot(result);return result;
   }
-  const requestResearch=researchContext(state),requestContext=state.storage?.contextId,requestWebsite=websiteContext(state),scopedWebsite=websiteRequest(route)||route==='/api/websites/save';
+  const requestResearch=researchContext(state),requestContext=state.storage?.contextId,requestWebsite=websiteContext(state),scopedWebsite=websiteRequest(route)||route==='/api/websites/save'||websitePin!==undefined;
   const outlineWrite=Boolean(state.workspaceOutline||state.recordScope)&&['/api/workspace/structure','/api/workspace/notebook','/api/workspace/reorganize','/api/workspace/save'].includes(route);
   const structureSelection=outlineWrite&&state.recordScope?state.recordScope.ids:null;
   if(outlineWrite)data={...data,response:'outline'};
@@ -204,7 +207,8 @@ async function api(route, data, {adopt=true,signal,onProgress,metadataOnly=false
   if(scopedWrite)data={...data,...(receiptWrite?{receipt:true}:{recordIds:selectionIds})};
   const expectedSelection=route==='/api/workspace/read/selection'?data.ids:route==='/api/research/records/remove'?[data.recordId]:scopedWrite?selectionIds:null;
   const headers={'X-Observanda-Wait':'1','X-Observanda-View':view,...(state.storage?.contextId?{'X-Observanda-Workspace':state.storage.contextId}:{})};
-  if(state.websiteId&&websiteRequest(route))headers['X-Observanda-Website']=state.websiteId;
+  const pin=websitePin??data?.websitePin??data?.source?.websitePin??data?.command?.websitePin??state.websitePin;
+  if(scopedWebsite&&pin){headers['X-Observanda-Website']=pin.websiteId??'default';headers['X-Observanda-Website-Pin']=JSON.stringify(pin);}
   const stop=structureStream?new AbortController():null;
   if(stop)signal=signal?AbortSignal.any([signal,stop.signal]):stop.signal;
   const storageOperation=/^\/api\/projects\/[a-f0-9-]{36}\/(?:settings\/save|directory\/reparent)$/.test(route)||['/api/storage/rename','/api/storage/rename/resume','/api/storage/delete','/api/storage/delete/finish','/api/storage/open','/api/storage/copy/preview','/api/storage/copy','/api/storage/move','/api/storage/move/finish','/api/storage/encrypt','/api/storage/portable/preview','/api/storage/portable'].includes(route);
@@ -331,10 +335,10 @@ async function save() {
   try{return await savePromise;}finally{savePromise=null;updateSaveStatus();}
 }
 async function saveRecords(){
-  if(state.websiteId){
+  if(activeWebsite(state)){
     const version=changeVersion,submitted=draftWorkspace(state.book),command=workspaceSaveRequest(savedBook,submitted,savedRecordRevisions);
     if(!command)throw {code:'INVALID',message:t('websiteSites','changed')};
-    const result=await api('/api/websites/save',{id:state.websiteId,command:{...command,baseEtag:state.etag,selection:websiteSelection.snapshot()}});
+    const result=await api('/api/websites/save',{id:state.websiteId,command:{...command,baseEtag:state.etag,websitePin:state.websitePin,selection:websiteSelection.snapshot()}});
     state.website=result.site;state.etag=result.etag;
     if(version===changeVersion){state.book=result.book;websiteSelection.load(result.site.selection,result.selectionProjects);state.dirty=false;}
     else{state.book=retainPendingEdits(submitted,state.book,result.book);state.dirty=true;}
@@ -506,7 +510,7 @@ const shellMenu=shellNavigation();
 const appShell=applicationShell({root:$('#app'),mark,navigation,applyLayout:textControls.applyLayout});
 const website=lazyFeatureUI({enabled:()=>enabledModule(state.dashboardSettings,'publishing'),handles:name=>name==='website'||name.startsWith('website-'),load:()=>import('./website-ui.js').then(m=>m.websiteUI({state,api,esc,field,option,icon,dirty,render,notify,showDialog,selection:websiteSelection,access:operation=>withProjectAccess(operation),bindMedia:()=>mediaImports.bind(),previewDraft:book=>{
   const command=state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion===21?workspaceSaveRequest(savedBook,book,savedRecordRevisions):null;
-  return command?{draft:{...command,baseEtag:state.etag,...(websiteSelection.isDirty()?{selection:websiteSelection.snapshot()}: {})}}:{book};
+  return {websitePin:state.websitePin,...(command?{draft:{...command,baseEtag:state.etag,...(websiteSelection.isDirty()?{selection:websiteSelection.snapshot()}: {})}}:{book})};
  }}))});
 const connectedWork=moduleLinks({state,api,esc});
 const sites=websiteSitesUI({state,api,esc,field,showDialog,render,selection:websiteSelection,access:operation=>withProjectAccess(operation),enterOwner:(id,bookId)=>projectOwners.enter(id,bookId),
@@ -605,7 +609,8 @@ async function discardPending(scope='all',forms=drafts.changed(scope)){
 const leave=unsavedChanges({esc,defaultScope:'navigation',prepare:scope=>scope==='navigation'&&state.page==='module'?modules.captureReturn():undefined,changes:pendingChanges,save:savePending,discard:discardPending,busy:()=>removingRecord||uploading||fontLibrary.busy()||figures.isBusy()||materials.isBusy()||recordHistory.isBusy()||reviews.isBusy()||Boolean(document.querySelector('form[data-busy]:not([data-navigation-ready])')),notify});
 const workspaceLive=workspaceRefresh({state,api,notify,onAccessError:report,
  blocked:({completedDialog=null}={})=>Boolean(workspaceOpening||completingWorkspace||savePromise||restoringRoute||uploading||removingRecord||fontLibrary.busy()||figures.isBusy()||materials.isBusy()||recordHistory.isBusy()||reviews.isBusy()||pendingChanges().labels.length||[...document.querySelectorAll('dialog[open],form[data-busy]')].some(element=>element!==completedDialog&&!completedDialog?.contains(element))||document.activeElement?.matches('input,textarea,select,[contenteditable="true"]')&&!completedDialog?.contains(document.activeElement)),
- read:({signal})=>state.websiteId?api('/api/websites/open',{id:state.websiteId},{adopt:false,signal}):state.recordScope?api('/api/workspace/read/selection',{workspaceId:state.book.id,ids:state.recordScope.ids},{adopt:false,signal}):newWorkspaceReader().read({requireOutline:Boolean(state.workspaceOutline),signal}),
+ version:({workspaceId,signal})=>activeWebsite(state)?api('/api/websites/version',{id:state.websiteId,websitePin:state.websitePin},{adopt:false,signal}):api('/api/workspace/read/version',{workspaceId},{adopt:false,signal}),
+ read:({signal,version})=>activeWebsite(state)?api('/api/websites/open',{id:state.websiteId,websitePin:version.websitePin},{adopt:false,signal}):state.recordScope?api('/api/workspace/read/selection',{workspaceId:state.book.id,ids:state.recordScope.ids},{adopt:false,signal}):newWorkspaceReader().read({requireOutline:Boolean(state.workspaceOutline),signal}),
  apply:result=>{
   const scroll={x:window.scrollX,y:window.scrollY},sidebar=document.querySelector('#main-navigation'),sideScroll=sidebar?.scrollTop;
   adoptSnapshot(result);state.book=result.book;state.etag=result.etag;
@@ -631,7 +636,7 @@ async function action(button){
   if(name?.startsWith('site-'))return leave.run(async()=>{await projectOwners.beforeAction(button);return sites.action(button);});
   if(['material-home','material-close','material-draft-back'].includes(name))return leave.run(()=>rawAction(button),{scope:'dialog'});
   if(name==='close-dialog')return leave.run(async()=>await localExport.close()||($('#dialog[open] .folder-browser')?storageControls.action({dataset:{action:'storage-browse-cancel'}}):rawAction(button)),{scope:'dialog'});
-  if((['preferences','dashboard-settings','templates','integrations','workspace','projects','appearance','website','publishing','storage'].includes(name)&&state.page===name&&!state.newWorkspace&&!state.projectOwner&&!state.websiteId)||(['edit-entry','open-issue'].includes(name)&&state.page==='editor'&&state.selected===button.dataset.id)){if(name==='open-issue')$('#dialog').close();return;}
+  if((['preferences','dashboard-settings','templates','integrations','workspace','projects','appearance','website','publishing','storage'].includes(name)&&state.page===name&&!state.newWorkspace&&!state.projectOwner&&!activeWebsite(state))||(['edit-entry','open-issue'].includes(name)&&state.page==='editor'&&state.selected===button.dataset.id)){if(name==='open-issue')$('#dialog').close();return;}
   if(name==='preview'||name==='website'&&state.page==='review')return rawAction(button);
   if(navigationActions.has(name)){if(dashboard.isDirty())try{await dashboard.flushAutosave();}catch{/* Automatic settings remain available for retry in their section. */}const scope=['storage-new','storage-open-dialog','storage-open-recent','storage-copy-dialog','storage-move-dialog','storage-portable-dialog','storage-encrypt-dialog','storage-lock','storage-reset-dialog'].includes(name)?'all':'navigation';return leave.run(()=>rawAction(button),{scope});}
   return rawAction(button);
@@ -826,7 +831,8 @@ const recordCreationActions=new Set(['new-entry','choose-notebook','choose-templ
 const scopedRecordAction=name=>name?.startsWith('starter-')||name?.startsWith('record-content-')||name?.startsWith('result-')||name?.startsWith('attempt-')||name?.startsWith('workflow-')||name?.startsWith('material-')||name?.startsWith('media-import-')||recordCreationActions.has(name)||name==='delete-entry'||name==='save'||name==='discard-section'||name==='back-to-records'||name==='record-read'||name==='record-edit'||name==='record-section-jump'||name==='record-copy-reference'||name==='record-workflow-link'||name?.startsWith('record-link-')||name?.startsWith('research-target-')||name==='record-backlink-open'||name?.startsWith('record-history-')||name?.startsWith('record-activity-')||name?.startsWith('record-contributor-')||name?.startsWith('section-')||name?.startsWith('figure-')||name==='remove-media';
 async function rawAction(button) {
   if(invalidatesResearchReturn(button))invalidateResearchReturn();
-  if(state.websiteId&&button.closest?.('#main-navigation')&&['website','publishing','integrations'].includes(button.dataset.action))await sites.exit();
+  if(activeWebsite(state)&&button.closest?.('#main-navigation')&&['website','publishing','integrations','appearance'].includes(button.dataset.action))await sites.exit();
+  if(activeWebsite(state)&&navigationActions.has(button.dataset.action)&&!['website','publishing','integrations','appearance','preview','branding','branding-back','publication-jobs-open-review'].includes(button.dataset.action))await sites.exit();
   try{await projectOwners.beforeAction(button);}catch(error){
    if(error.code==='STORAGE_RENAMING'&&error.requestedOwner?.projectId){const owner=error.requestedOwner,route=ownedRoute(owner.labBookId?'#/notebooks/'+owner.labBookId:'#/projects/'+owner.projectId,owner);history.pushState({observandaIndex:++routeIndex},'',route);if(ownerOperation.show(error,owner,route))return;}throw error;
   }
@@ -889,14 +895,13 @@ async function rawAction(button) {
   if(state.page==='record-reader'&&name==='record-link-open'){const link=recordContent.current()?.relations.find(link=>link.id===button.dataset.id);if(link)await navigateResearch(link.target);return;}
   if(supportsRecordSelection()&&['browse-record','record-read-linked','record-read','record-edit','edit-entry','open-issue'].includes(name)){
    const id=button.dataset.id??state.selected,unsaved=state.page==='editor'&&state.book.entries.some(record=>record.id===id)&&!savedRecordRevisions[id];
-   if(!unsaved){if(state.websiteId)await sites.exit();$('#dialog').close();return openRecordReading(id,null,['browse-record','record-read-linked','record-read'].includes(name)||name==='edit-entry'&&button.dataset.reading==='true');}
+   if(!unsaved){if(activeWebsite(state))await sites.exit();$('#dialog').close();return openRecordReading(id,null,['browse-record','record-read-linked','record-read'].includes(name)||name==='edit-entry'&&button.dataset.reading==='true');}
   }
   if(name==='user-profile'||name?.startsWith('user-profile-')){
-    if(state.websiteId)await sites.exit();
+    if(activeWebsite(state))await sites.exit();
     if(await userProfile.action(button))return;
   }
   if(name==='workspace-refresh'){await workspaceLive.check({manual:true});return;}
-  if(state.websiteId&&navigationActions.has(name)&&!['website','publishing','integrations','preview','branding','branding-back','publication-jobs-open-review'].includes(name))await sites.exit();
   const readingAction=state.page==='record-reader'&&name==='back-to-records';
   const brandingAction=name==='branding'||state.page==='branding'&&(['branding-back','save','discard-section'].includes(name)||['brand-','research-target-','media-import-'].some(prefix=>name?.startsWith(prefix)));
   const appearanceAction=name==='appearance'||name?.startsWith('interface-')||state.page==='appearance'&&(['save','discard-section'].includes(name)||name?.startsWith('theme-'));
@@ -906,6 +911,7 @@ async function rawAction(button) {
   if((state.workspaceOutline||state.recordScope&&!scopedRecordAction(name))&&!readingAction&&!administrationAction&&!brandingAction&&!appearanceAction&&!publicationAction&&!name?.startsWith('edition-')&&!outlineModuleAction&&!recordCreationActions.has(name)&&!structureActions.has(name)&&!state.access?.locked&&!state.storageUnavailable&&!state.newWorkspace&&!['browse-record','edit-entry','open-issue','record-read-linked','storage-lock','workspace','entries','projects','open-project','project-records','project-recent-retry','project-recent-collection-retry','research-copy-context','filter-notebook','clear-record-filters','close-dialog','preferences','workspace-discard'].includes(name)&&!(state.page==='entries'&&name?.startsWith('record-type-'))&&!name?.startsWith('record-list-')&&!name?.startsWith('record-view')&&!name?.startsWith('starter-')&&!name?.startsWith('dashboard-')&&!name?.startsWith('module-settings-')){const route=location.hash;await ensureCompleteWorkspace();if(location.hash!==route){await restoreRoute();return;}}
   const module=moduleForPage(name);
   if(module&&!enabledModule(state.dashboardSettings,module.id)){notify('Enable '+module.label+' in Preferences > Modules & dashboard.');return;}
+  if((['website','publishing','integrations','appearance','branding','preview'].includes(name))&&!activeWebsite(state))await sites.enter(null);
   if(name==='website'||name==='preview'&&state.page==='website')await website.ready();
 
   if(name==='preferences'){state.page='preferences';render();return;}
@@ -961,7 +967,7 @@ async function rawAction(button) {
     if(state.page!=='website'){
       button.disabled=true;
       try{
-        const command={workspaceId:state.book.id,etag:state.etag},context=state.storage.contextId,route=location.hash;
+        const command={workspaceId:state.book.id,etag:state.etag,websitePin:state.websitePin},context=state.storage.contextId,route=location.hash;
         await editionSelection.open(command,async selected=>{
           if(state.storage.encrypted)await publicationJobs.start(selected);
           else{const preview=await api('/api/preview',selected,{adopt:false});if(context===state.storage?.contextId&&route===location.hash)showReview(preview);}
@@ -977,7 +983,7 @@ async function rawAction(button) {
       website.validate();
       const revision=changeVersion,book=draftWorkspace(state.book);state.editorReturnScroll=window.scrollY;
       const command=state.workspaceOutline?workspaceSaveRequest(savedBook,book,savedRecordRevisions):null;
-      const source=command?{etag:state.etag,draft:{...command,baseEtag:state.etag,...(websiteSelection.isDirty()?{selection:websiteSelection.snapshot()}: {})}}:{etag:state.etag,book};
+      const source={websitePin:state.websitePin,...(command?{etag:state.etag,draft:{...command,baseEtag:state.etag,...(websiteSelection.isDirty()?{selection:websiteSelection.snapshot()}: {})}}:{etag:state.etag,book})};
       const context=state.storage?.contextId,route=location.hash;
       await editionSelection.open(source,async selected=>{
         if(state.storage.encrypted){await publicationJobs.start(selected);return;}
@@ -1245,7 +1251,7 @@ async function restoreRoute(){
   const request=++routeRestoreVersion;let requestedRoute=location.hash;const current=()=>request===routeRestoreVersion&&location.hash===requestedRoute;
   restoringRoute=true;
   try{
-    if(state.websiteId)await sites.exit();
+    if(activeWebsite(state))await sites.exit();
     if(!current())return;
     try{await projectOwners.restore(requestedRoute);}catch(error){if(error.name==='AbortError'){if(request===routeRestoreVersion){restoringRoute=false;syncRoute();}return;}if(ownerOperation.show(error,projectRoute(location.hash),location.hash))return;throw error;}
     if(!current())return;ownerOperation.clear();

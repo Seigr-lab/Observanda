@@ -1,5 +1,5 @@
 import {publicationOwnerWindows} from './publication-owner-windows.js';
-import {websiteContext} from './website-context.js';
+import {websiteSnapshot} from './website-context.js';
 import {websiteRecordPages,WEBSITE_PAGE_LIMIT} from './website-page-query.js';
 import {researchId} from './research-reference.js';
 import {revisionId} from './revision-model.js';
@@ -14,8 +14,8 @@ export function publicationPageClient({state,api,...options}){
 export async function publicationPageSections({state,api,access=run=>run(),item,offset=0,signal}){
  const source=state.book.website.researchSources?.find(source=>source.workspaceId===item.owner?.workspaceId);
  if(!source||!revisionId(item.snapshotId)||item.target!=='entry:'+item.record?.id)invalid();
- const identity=JSON.stringify([websiteContext(state),state.book.id,state.etag,source]);
- const check=()=>{signal?.throwIfAborted();if(state.page!=='website'||state.access?.locked||state.storageUnavailable||identity!==JSON.stringify([websiteContext(state),state.book.id,state.etag,state.book.website.researchSources?.find(value=>value.workspaceId===source.workspaceId)]))throw aborted();};check();
+ const identity=JSON.stringify([websiteSnapshot(state),state.book.id,state.etag,source]);
+ const check=()=>{signal?.throwIfAborted();if(state.page!=='website'||state.access?.locked||state.storageUnavailable||identity!==JSON.stringify([websiteSnapshot(state),state.book.id,state.etag,state.book.website.researchSources?.find(value=>value.workspaceId===source.workspaceId)]))throw aborted();};check();
  const owner=state.projectOwner,route='/api/projects/'+(owner?.projectId?owner.projectId+'/'+(owner.labBookId?'lab-books/'+owner.labBookId+'/':''):'')+'publication-source';
  const response=await access(()=>{check();return api(route,{workspaceId:state.book.id,sourceId:source.workspaceId,operation:'page-sections',query:{workspaceId:source.workspaceId,snapshotId:item.snapshotId,source,target:item.target,offset}},{adopt:false,signal});});check();
  const result=response?.value;

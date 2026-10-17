@@ -1,4 +1,4 @@
-import {websiteContext} from './website-context.js';
+import {websiteSnapshot} from './website-context.js';
 import {researchId} from './research-reference.js';
 import {revisionId} from './revision-model.js';
 
@@ -16,7 +16,7 @@ const headValid=value=>value&&revisionId(value.snapshotId)&&typeof value.title==
 export function publicationSourceClient({state,api,access=operation=>operation()}){
  let context=null,epoch=0,selected=null,opening=null;
  const controllers=new Set();
- const identity=()=>JSON.stringify([websiteContext(state),state.book?.id,state.etag]);
+ const identity=()=>JSON.stringify([websiteSnapshot(state),state.book?.id,state.etag]);
  const active=()=>state.page==='website'&&!state.access?.locked&&!state.storageUnavailable;
  function cancel(){epoch++;for(const controller of controllers)controller.abort();controllers.clear();opening=null;}
  function close(){cancel();selected=null;context=null;}

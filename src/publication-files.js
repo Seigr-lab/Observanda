@@ -1,3 +1,4 @@
+import {validWebsitePin} from './web/website-pin.js';
 // A retained edition owns numbered blobs under its job and attempt identities.
 import path from 'node:path';
 import {lstat} from 'node:fs/promises';
@@ -7,7 +8,7 @@ import {revisionId} from './web/revision-model.js';
 import {AppError} from './errors.js';
 const damaged=()=>{throw new AppError('JOB_DAMAGED');};
 export function publicationFiles(stored){
- if(stored?.version!==1||!researchId(stored.jobId)||!researchId(stored.attempt)||stored.reviewId!==digest(stored.jobId)||!revisionId(stored.id)||!Array.isArray(stored.files))damaged();
+ if(![1,2].includes(stored?.version)||stored.version===2&&(!validWebsitePin(stored.websitePin)||stored.websitePin.websiteId!==stored.websiteId||stored.websitePin.researchSnapshotId!==stored.etag)||!researchId(stored.jobId)||!researchId(stored.attempt)||stored.reviewId!==digest(stored.jobId)||!revisionId(stored.id)||!Array.isArray(stored.files))damaged();
  const names=new Set();return stored.files.map(value=>{
   if(!value||value.index!==names.size||!Number.isSafeInteger(value.size)||value.size<0||!revisionId(value.sha256)||typeof value.name!=='string'||names.has(value.name)||!['text','binary','media'].includes(value.type))damaged();names.add(value.name);
   if(value.type==='media'&&(typeof value.header!=='string'||value.header.length>8192||value.header.length%2||!/^[a-f0-9]*$/.test(value.header)))damaged();

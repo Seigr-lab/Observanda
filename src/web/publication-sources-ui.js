@@ -1,7 +1,7 @@
 import {publicationSourceClient} from './publication-source-client.js';
 import {emptyPublicationSource,validPublicationSources,resolvePublicationSource} from './publication-sources-model.js';
 import {websiteRecordShare} from './website-selection.js';
-import {websiteContext} from './website-context.js';
+import {websiteSnapshot} from './website-context.js';
 import {researchId} from './research-reference.js';
 import {t} from './i18n/index.js';
 const text=(key,args)=>t('publicationSources',key,args);
@@ -12,7 +12,7 @@ export function publicationSourcesUI({state,api,esc,access,checkpoint,changed,no
  const client=publicationSourceClient({state,api,access});
  let context=null,version=0,controller=null,timer=null,projectId=null,offset=0,revision=null,search='',page=null,owner=null,head=null,recordProject=null,records=null,recordSearch='',cursor=null,details=null,error=false,loading=false;
  const root=()=>document.querySelector('[data-publication-sources]');
- const identity=()=>JSON.stringify([websiteContext(state),state.book?.id,state.etag]);
+ const identity=()=>JSON.stringify([websiteSnapshot(state),state.book?.id,state.etag]);
  const active=()=>state.page==='website'&&!state.access?.locked&&!state.storageUnavailable&&!!root();
  function stop(){version++;controller?.abort();controller=null;clearTimeout(timer);timer=null;}
  function close(){stop();client.close();context=null;page=null;head=null;owner=null;records=null;details=null;projectId=null;offset=0;revision=null;search='';recordSearch='';cursor=null;loading=false;error=false;}

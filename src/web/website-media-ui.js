@@ -1,3 +1,4 @@
+import {websiteSnapshot} from './website-context.js';
 import {ownedAssetURL} from './project-context.js';
 import {websiteFileDetails} from './website-download-ui.js';
 import {t} from './i18n/index.js';
@@ -6,7 +7,7 @@ const tr=(key,values)=>t('websiteMedia',key,values);
 
 export function websiteMediaUI({state,esc,field,option,showDialog,render,sections,checkpoint,changed,notify,research,researchMedia}){
  let context=null,query='',kind='all',offset=0,galleryId=null,galleryQuery='',galleryOffset=0,orderOffset=0,session=null;
- const identity=()=>JSON.stringify([state.book?.id,state.storage?.contextId]);
+ const identity=()=>JSON.stringify([state.book?.id,websiteSnapshot(state)]);
  const button=(key,extra='')=>`<button type="button" class="button" data-action="website-media-${key}" ${extra}>${esc(tr(key))}</button>`;
  const range=page=>page.total?esc(tr('range',{first:page.offset+1,last:page.offset+page.items.length,total:page.total})):esc(tr('empty'));
  const pager=(page,scope)=>`<div class="inline-actions inventory-pager" data-media-pager="${scope}">${button('previous',`data-inventory="${scope}" ${page.previous===null?'disabled':''}`)}<span role="status">${range(page)}</span>${button('next',`data-inventory="${scope}" ${page.next===null?'disabled':''}`)}</div>`;

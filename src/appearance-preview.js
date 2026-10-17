@@ -1,3 +1,4 @@
+import {publicationWorkspace,publicationSnapshot,sameWebsitePin} from './publication-pin.js';
 import {AppearancePreviewSources} from './appearance-preview-sources.js';
 import {validPublicationSources} from './web/publication-sources-model.js';
 import {referenceNamespaceMatches} from './research-reference-namespace.js';
@@ -24,16 +25,17 @@ import {appearanceReferencePage,appearanceReferenceQuery} from './appearance-pre
 // immutable saved snapshot, with sharing checked before retrieving any body.
 // The existing publisher still owns projection, assets, rendering and privacy.
 async function withSource(workspace,command,{signal,sourceReader,sourceSnapshots,mediaOrigins}={},consume){
- if(!command||Object.keys(command).sort().join()!=='appearance,etag,mode,workspaceId'||
+ if(!command||Object.keys(command).filter(key=>key!=='websitePin').sort().join()!=='appearance,etag,mode,workspaceId'||
   !researchId(command.workspaceId)||!revisionId(command.etag)||!validAppearance(command.appearance)||
   !['auto','examples','website'].includes(command.mode))throw new AppError('INVALID');
  signal?.throwIfAborted();
  if(!workspace)throw new AppError('MISSING');
+ workspace=publicationWorkspace(workspace);
  const outline=await workspace.outline();
  if(outline.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
  return workspace.catalogue(async store=>{
   if((await store.snapshot()).metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
-  const snapshot=await store.snapshot(command.etag);
+  const snapshot=await publicationSnapshot(store,workspace,command.etag,command.websitePin);
   if(snapshot.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
   const book={...snapshot.metadata,entries:[],appearance:structuredClone(command.appearance)};
   if(command.mode==='examples')return consume({book,source:'examples',snapshot,store,records:null});
@@ -49,7 +51,7 @@ async function withSource(workspace,command,{signal,sourceReader,sourceSnapshots
   }finally{await reader.close();}
  });
 }
-export const appearancePreviewSource=(workspace,command,options)=>withSource(workspace,command,options,({book,source})=>({book,source}));
+export const appearancePreviewSource=(workspace,command,options)=>withSource(workspace,command,options,({book,source,snapshot})=>({book,source,websitePin:snapshot.websitePin}));
 
 const targetPath=target=>target==='home'?'index.html':target==='browse'?'browse.html':({entry:'entries',project:'projects',notebook:'notebooks',page:'pages'}[target.split(':')[0]]+'/'+target.split(':')[1]+'.html');
 export function appearancePreviewTarget(path){
@@ -84,19 +86,19 @@ function staticChoices(selection){
 // does not require retrieving all page titles, much less all original records.
 export async function appearancePreviewChoices(workspace,command,options={}){
  const {cursor=null,path=null}=options;
- return withSource(workspace,command,options,async({book,records,source})=>{
+ return withSource(workspace,command,options,async({book,records,source,snapshot})=>{
   if(source!=='website')throw new AppError('INVALID');
   const selection=selectionFor(book,records),fixed=staticChoices(selection);
   if(path!==null){
    const request=appearancePreviewRequest(path),target=request.target,item=target.startsWith('entry:')?await records.get(target.slice(6)):null;
    const fixedChoice=fixed.find(v=>v.path===request.path);
    const choice=fixedChoice?{...fixedChoice,path:request.key}:item?{title:item.title,path:request.key}:target==='browse'&&records.counts.total?{title:bookText('browse'),path:request.key}:null;
-   if(!choice)throw new AppError('NOT_FOUND');return {pages:[choice],nextCursor:null};
+   if(!choice)throw new AppError('NOT_FOUND');return {pages:[choice],nextCursor:null,websitePin:snapshot.websitePin};
   }
   let anchor={offset:0,after:null};
   if(cursor!==null){
    try{if(typeof cursor!=='string'||cursor.length>2048)throw Error();anchor=JSON.parse(Buffer.from(cursor,'base64url'));}catch{throw new AppError('INVALID');}
-   if(Object.keys(anchor).sort().join()!=='after,etag,offset,websiteId'||anchor.etag!==records.snapshotId||anchor.websiteId!==(workspace.websiteId??null)||!Number.isSafeInteger(anchor.offset)||anchor.offset<0||anchor.offset>fixed.length||anchor.after!==null&&(!Number.isSafeInteger(anchor.after)||anchor.after<0||anchor.offset!==fixed.length))throw new AppError('INVALID');
+   if(Object.keys(anchor).sort().join()!=='after,etag,offset,websiteId,websitePin'||anchor.etag!==records.snapshotId||anchor.websiteId!==(workspace.websiteId??null)||!sameWebsitePin(anchor.websitePin,snapshot.websitePin)||!Number.isSafeInteger(anchor.offset)||anchor.offset<0||anchor.offset>fixed.length||anchor.after!==null&&(!Number.isSafeInteger(anchor.after)||anchor.after<0||anchor.offset!==fixed.length))throw new AppError('INVALID');
   }
   const pages=[],limit=40;let offset=anchor.offset,after=anchor.after,more=false;
   while(offset<fixed.length&&pages.length<limit)pages.push(fixed[offset++]);
@@ -106,7 +108,7 @@ export async function appearancePreviewChoices(workspace,command,options={}){
    const summary=await records.summary(row);
    pages.push({path:targetPath('entry:'+row.id),title:summary.title});after=row.position;
   }
-  return {pages,nextCursor:more?Buffer.from(JSON.stringify({offset,after,etag:records.snapshotId,websiteId:workspace.websiteId??null})).toString('base64url'):null};
+  return {pages,websitePin:snapshot.websitePin,nextCursor:more?Buffer.from(JSON.stringify({offset,after,etag:records.snapshotId,websiteId:workspace.websiteId??null,websitePin:snapshot.websitePin})).toString('base64url'):null};
  });
 }
 

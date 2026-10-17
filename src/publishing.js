@@ -1,3 +1,4 @@
+import {publicationWorkspace} from './publication-pin.js';
 import {publicationRevisionCurrent} from './publication-freshness.js';
 import {deploymentInventory,recordDeploymentInventory,prepareDeploymentInventory,assertDeploymentInventory,deploymentInventoryPaths,verifyLiveFiles,LiveVerificationError} from './publication-live.js';
 import {publicationText} from './web/publication-messages.js';
@@ -193,7 +194,8 @@ export class Publisher {
     const inventoryKey=this.destinationKey(config),preparedInventory=await prepareDeploymentInventory(this.workspace,inventoryKey,candidate.files.keys(),{removed:(plan?.removed??[]).map(p=>config.github.directory?p.slice(config.github.directory.length+1):p)});
     // Hold the workspace lock through publication so another writer cannot invalidate the review.
     return this.workspace.withLock(async () => {
-      if (!await publicationRevisionCurrent(this.workspace,candidate.etag)) throw new AppError('STALE');
+      await publicationWorkspace(this.workspace).lockWebsite();
+      if (!await publicationRevisionCurrent(this.workspace,candidate)) throw new AppError('STALE');
       if ((await this.read()).etag !== expectedConfigEtag) throw new AppError('PUBLISH_STALE');
       await assertDeploymentInventory(this.workspace,inventoryKey,preparedInventory);
       const receipts = await this.readFile(this.receiptsFile, {}), key = this.destinationKey(config);

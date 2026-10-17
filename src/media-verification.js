@@ -37,6 +37,7 @@ export class MediaVerification{
   for(const ref of designReferences(metadata,metadata.projects))await this.asset(ref);
   for(const site of metadata.websites??[])for(const ref of designReferences(site.document,site.projects))await this.asset(ref);
  }
+ async website(site){for(const ref of designReferences(site.document,site.projects))await this.asset(ref);}
  async record(record){for(const ref of record.attachments??[])await this.asset(ref);}
  async pending(){
   for await(const file of this.workspace.metadataNames('.observanda/media-imports')){

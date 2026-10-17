@@ -1,3 +1,4 @@
+import {publicationResearchWorkspace} from './publication-pin.js';
 import {removePublicationMedia} from './publication-input-media.js';
 import {recordReferenceNamespaces} from './research-reference-namespace.js';
 import {PublicationLinks,projectPublicationLinks} from './publication-links.js';
@@ -24,7 +25,7 @@ export {publicationDescriptor} from './publication-record-descriptor.js';
 export async function retainPublicationInput(workspace,id,metadata,originals,{sourceEtag,recordHead,signal,sourceReader,edition=emptyEditionSelection(),deferFinalization=false}={}){
  validateEditionSelection(edition);const choices=new Map(edition.records.map(r=>[r.id,r])),found=new Set();
  const projects=new Set(metadata.projects.filter(p=>p.share).map(p=>p.id)),notebooks=new Set(metadata.notebooks.filter(n=>projects.has(n.projectId)).map(n=>n.id));
- const records=[],sourceRevisions={},sourceMaterials=[],warnings=[],linkedCards=new Set(),materials=new ResearchMaterials(workspace);
+ const records=[],sourceRevisions={},sourceMaterials=[],warnings=[],linkedCards=new Set(),research=publicationResearchWorkspace(workspace),materials=new ResearchMaterials(research);
  async function pin(original,choice,pageId=original.id){
   const saved=publicationOriginal(original),revision=recordRevision(saved),selection=choice??defaultEditionRecord(original,revision),record=selectEditionRecord(original,selection),raw=serialize(saved);
   await workspace.writeMetadata(recordFile(id,pageId),raw);
@@ -43,7 +44,7 @@ export async function retainPublicationInput(workspace,id,metadata,originals,{so
  }
  if(found.size!==choices.size)throw new AppError('RECORD_CHANGED');
  await retainSelectedRevisions(workspace,metadata,edition,records,pin,{signal});
- if(await workspace.storageKind()==='catalogue')await workspace.catalogue(async store=>{for(const row of records){signal?.throwIfAborted();row.referenceNamespaces=await recordReferenceNamespaces(store,{workspaceId:metadata.id,id:row.recordId??row.id});}});
+ if(await research.storageKind()==='catalogue')await research.catalogue(async store=>{for(const row of records){signal?.throwIfAborted();row.referenceNamespaces=await recordReferenceNamespaces(store,{workspaceId:metadata.id,id:row.recordId??row.id});}});
  for(const note of edition.availability??[]){
   const owner=records.find(r=>r.id===note.recordId),href=researchReference(note.target);
   if(!owner||![...owner.relations.map(r=>r.target),...owner.references].some(r=>researchReference(r)===href))throw new AppError('INVALID');

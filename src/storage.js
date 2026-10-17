@@ -1,4 +1,5 @@
 import {projectDomainHandoff} from './project-domain-lock.js';
+import {websiteMetadataShell} from './website-owned-metadata.js';
 import {withProjectSourceMetadataAuthority} from './project-source-metadata-authority.js';
 import {inspectRecordedCatalogue,assertCatalogueWritable} from './catalogue-inspection.js';
 import {workspaceFolderName} from './workspace-names.js';
@@ -264,6 +265,7 @@ export class Workspace {
       await store.put(book);
       for(const [relative,text] of Object.entries(metadata)){this.metadataPath(relative);await store.putObject('metadata:'+relative,{text});}
       if(populate)await catalogueContext.run({root:this.root,projectId:this.projectId,labBookId:this.labBookId,vault:this.vault,db,afterCommit},()=>populate(this));
+      if(!this.projectId&&!this.labBookId)await store.initializeWebsiteDocuments();
       await store.verify(descriptor);
       await db.run('COMMIT');
       await this.writeFile(file,serialize(descriptor));
@@ -405,7 +407,10 @@ export class Workspace {
   async restore(revisionId, expectedEtag) {
     const previous = await this.readRevision(revisionId);
     const current = await this.read();
-    return this.save(this.prepareRestoredBook(previous,current.book), expectedEtag);
+    const separateWebsites=await this.storageKind()==='catalogue'&&await this.catalogue(async store=>(await store.snapshot(current.etag)).websiteDocuments===1);
+    // Restoring research never replaces independently saved website originals.
+    const research=separateWebsites?websiteMetadataShell(previous):previous;
+    return this.save(this.prepareRestoredBook(research,current.book), expectedEtag);
   }
   prepareRestoredBook(previous,current){
     previous.revision=current.revision;

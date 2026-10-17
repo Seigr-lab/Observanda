@@ -3,9 +3,9 @@
 import {digest,serialize} from './storage-format.js';
 import {AppError} from './errors.js';
 const invalid=()=>{throw new AppError('PUBLICATION_SELECTION_CURSOR');};
-export function publicationSelectionPage(store,{snapshotId,websiteId,metadata,selection},requested){
+export function publicationSelectionPage(store,{snapshotId,websiteId,websitePin,metadata,selection},requested){
  if(!requested)return {page:undefined};
- const identity=metadata.id,query=digest(serialize({snapshotId,websiteId:websiteId??null,metadata,selection})),positions=new WeakMap();
+ const identity=metadata.id,query=digest(serialize({snapshotId,websiteId:websiteId??null,websitePin,metadata,selection})),positions=new WeakMap();
  let after=null,offset=requested.offset;
  if(requested.cursor){
   let anchor;

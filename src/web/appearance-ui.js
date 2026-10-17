@@ -1,3 +1,4 @@
+import {websiteContext} from './website-context.js';
 import { STARTING_THEMES, fontStack, startingAppearance, sameAppearance, contrastRatio } from './themes.js';
 import {fontSelect,axisControls} from './font-picker.js';
 import {variationCSS} from './font-catalogue.js';
@@ -7,7 +8,8 @@ import {enhanceAppearanceReading} from './appearance-preview-reading.js';
 const message=(key,parameters)=>t('appearance',key,parameters);
 
 export function appearanceUI({ fontLibrary, textControls, state, esc, field, option, dirty, save, render, showDialog, notify, preview, previewPages }) {
-  let undo = null;
+  let undo = null,context=null;
+  const sync=()=>{const next=websiteContext(state);if(next!==context){undo=null;context=next;}};
   const text=(key,parameters)=>esc(message(key,parameters));
   const active = () => state.book.themes.find(t => t.id === state.book.activeThemeId);
   const chosen = () => state.book.themes.find(t => t.id === document.querySelector('#saved-theme')?.value);
@@ -43,6 +45,7 @@ export function appearanceUI({ fontLibrary, textControls, state, esc, field, opt
     state.book.appearance = structuredClone(appearance); state.book.activeThemeId = id; dirty(); render();
   }
   function view() {
+    sync();
     const a = state.book.appearance, selected = active();
     const range = (key, label, min, max, step = 1) => field(`${label} <output data-value-for="${key}">${a[key]}${['width','radius','fontSize'].includes(key) ? ' px' : ''}</output>`, `<input type="range" min="${min}" max="${max}" step="${step}" data-appearance="${key}" value="${a[key]}">`);
     return `<div class="page-heading"><div><h1>${text('title')}</h1></div><button class="button primary" data-action="theme-save-as">${text('saveAs')}</button></div>
@@ -55,6 +58,7 @@ export function appearanceUI({ fontLibrary, textControls, state, esc, field, opt
       <section class="design-preview"><div class="preview-toolbar"><strong>${text('preview')}</strong><div class="inline-actions"><button class="button" data-action="theme-preview-expand">${text('expand')}</button><button class="button" data-action="theme-preview-width" data-width="full" aria-pressed="${state.designWidth !== 'phone'}">${text('desktop')}</button><button class="button" data-action="theme-preview-width" data-width="phone" aria-pressed="${state.designWidth === 'phone'}">${text('phone')}</button></div></div><div class="design-source-controls">${field(message('previewContent'),`<select id="design-source">${option('examples',message('examples'),state.designEffectiveSource??'examples')}${option('website',message('website'),state.designEffectiveSource)}</select>`)}${field(message('previewPage'),`<select id="design-page"><option>${text('loadingPage')}</option></select>`)}</div><div id="design-page-paging" class="inline-actions" hidden><button type="button" class="button" data-action="theme-preview-previous-pages" disabled>${text('previousPages')}</button><button type="button" class="button" data-action="theme-preview-next-pages" disabled>${text('nextPages')}</button></div><p id="design-preview-note" class="preview-label" role="status">${text('loadingPreview')}</p><button class="button" type="button" data-action="theme-preview-retry" hidden>${text('retryPreview')}</button><div class="preview-canvas ${state.designWidth === 'phone' ? 'phone-preview' : ''}"><iframe id="design-preview" class="preview-frame" title="${text('previewTitle')}" sandbox="allow-same-origin"></iframe></div></section></div>`;
   }
   async function action(button) {
+    sync();
     const name = button.dataset.action;
     if (!name?.startsWith('theme-')) return false;
     if (name === 'theme-preview-retry') { preview(); return true; }
@@ -95,6 +99,7 @@ export function appearanceUI({ fontLibrary, textControls, state, esc, field, opt
     return true;
   }
   function input(el) {
+    sync();
     if(el.dataset.appearanceAxis){if(!el.checkValidity())return true;remember();const key=el.dataset.appearanceAxis+'Axes',axes=state.book.appearance[key]??={},tag=el.dataset.fontAxis;if(el.value==='')delete axes[tag];else axes[tag]=Number(el.value);dirty();refresh();preview();return true;}
     if(el.id==='design-source'){state.designSource=el.value;state.designPage=null;preview();return true;}
     if(el.id==='design-page'){state.designPage=el.value;const result=state.designResult;if(result)document.querySelector('#design-preview').src=result.baseUrl+el.value;return true;}

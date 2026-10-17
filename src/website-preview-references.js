@@ -28,7 +28,7 @@ export async function websiteReferencePage(records,id,cursor=null){
  if(cursor!==null&&(typeof cursor!=='string'||!cursor||cursor.length>4096))throw new AppError('INVALID');
  const selected=await records.get(id),original=await records.original(id);if(!selected||!original)throw new AppError('NOT_FOUND');
  selected.revision=recordRevision(original);selected.selectors=bookSelectors(original);
- const binding=digest(serialize({workspaceId:metadata.id,websiteId:records.websiteId,snapshot:command.baseEtag,changes:command.changes,removed:command.removed,id}));
+ const binding=digest(serialize({workspaceId:metadata.id,websiteId:records.websiteId,websitePin:records.websitePin,snapshot:command.baseEtag,changes:command.changes,removed:command.removed,id}));
  let anchor={after:null,backward:false};
  if(cursor){
   try{anchor=store.decode('website-reference-page',metadata.id,Buffer.from(cursor,'base64url'));}catch{throw new AppError('INVALID');}

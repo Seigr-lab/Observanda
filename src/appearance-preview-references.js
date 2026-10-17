@@ -23,7 +23,7 @@ async function* candidates(records,id,after,backward){
 export async function appearanceReferencePage(records,id,cursor=null){
  const {store,metadata,signal}=records,selected=await records.get(id);
  if(!selected)throw new AppError('NOT_FOUND');
- const binding=digest(serialize({snapshot:records.snapshotId,websiteId:records.websiteId,metadata,selection:records.selection,id}));
+ const binding=digest(serialize({snapshot:records.snapshotId,websiteId:records.websiteId,websitePin:records.websitePin,metadata,selection:records.selection,id}));
  let anchor={after:null,backward:false};
  if(cursor){
   try{anchor=store.decode('appearance-reference-page',metadata.id,decodeAppearanceCursor(cursor));}catch{throw new AppError('INVALID');}

@@ -17,7 +17,7 @@ import {digest,serialize} from './storage-format.js';
 // record bodies and page assets survive into the authenticated canvas.
 export class WebsitePreviewSources{
  constructor(local,reader){
-  Object.assign(this,{local,reader,store:local.store,snapshot:local.snapshot,command:local.command,signal:local.signal,websiteId:local.websiteId});
+  Object.assign(this,{local,reader,store:local.store,snapshot:local.snapshot,command:local.command,signal:local.signal,websiteId:local.websiteId,websitePin:local.websitePin});
   this.metadata=structuredClone(local.metadata);this.identities=new PublicationOwnerIdentities(this.metadata.id);
   this.owners=[];this.rows=new Map();this.descriptors=new Map();this.mediaOrigins=new Map();
  }

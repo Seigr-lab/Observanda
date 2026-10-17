@@ -1,3 +1,4 @@
+import {websiteSnapshot} from './website-context.js';
 import {ownedAssetURL} from './project-context.js';
 import {logosFor} from './branding.js';
 import {researchTargetPicker} from './research-target-picker.js';
@@ -9,7 +10,7 @@ const text=(key,parameters)=>t('branding',key,parameters);
 export function brandingUI({state,api,esc,field,option,showDialog,render,dirty,leave,report,uploading}){
  const active=()=>state.page==='branding'&&!state.access?.locked&&!state.storageUnavailable&&!state.newWorkspace;
  const target=()=>state.brandTarget??'home';
- const key=()=>JSON.stringify([state.storage?.contextId,state.book?.id,state.etag,target()]);
+ const key=()=>JSON.stringify([websiteSnapshot(state),state.book?.id,target()]);
  const picker=researchTargetPicker({state,api,esc,field,showDialog,active,excludeId:()=>null});
  let label=null,controller=null;
  function stop(){controller?.abort();controller=null;label=null;picker.stop();}

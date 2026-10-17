@@ -36,5 +36,5 @@ export async function completeSnapshotOwnership(store,snapshot,{signal}={}){
  const membership=await index.build(rows());signal?.throwIfAborted();
  // Other indexes authenticate the previous member hashes. The normal commit
  // rebuilds them against this root; carrying them across would be inconsistent.
- return {indexVersion:1,metadata:snapshot.metadata,membership,count,bytes,nextPosition:snapshot.nextPosition??count};
+ return {indexVersion:1,metadata:snapshot.metadata,membership,count,bytes,nextPosition:snapshot.nextPosition??count,...(snapshot.websiteDocuments===1?{websiteDocuments:1}:{})};
 }

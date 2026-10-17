@@ -5,8 +5,8 @@ export const emptyWebsiteSelection=()=>({includeProjects:[],records:[]});
 // Publication choices are a sparse draft of booleans and identities. They are
 // not editable research originals and never carry prose or attachment bytes.
 export function validWebsiteSelection(value){
- return exact(value,['includeProjects','records',...(Object.hasOwn(value??{},'defaultShare')?['defaultShare']:[])])&&(value.defaultShare===undefined||typeof value.defaultShare==='boolean')&&Array.isArray(value.includeProjects)&&value.includeProjects.length<=100&&value.includeProjects.every(researchId)&&new Set(value.includeProjects).size===value.includeProjects.length&&
-  Array.isArray(value.records)&&value.records.length<=1000&&new Set(value.records.map(item=>item?.id)).size===value.records.length&&value.records.every(item=>
+ return exact(value,['includeProjects','records',...(Object.hasOwn(value??{},'defaultShare')?['defaultShare']:[])])&&(value.defaultShare===undefined||typeof value.defaultShare==='boolean')&&Array.isArray(value.includeProjects)&&value.includeProjects.every(researchId)&&new Set(value.includeProjects).size===value.includeProjects.length&&
+  Array.isArray(value.records)&&new Set(value.records.map(item=>item?.id)).size===value.records.length&&value.records.every(item=>
    exact(item,['id','share','attachments'])&&researchId(item.id)&&(item.share===null||typeof item.share==='boolean')&&Array.isArray(item.attachments)&&new Set(item.attachments.map(a=>a?.id)).size===item.attachments.length&&item.attachments.every(a=>exact(a,['id','share'])&&researchId(a.id)&&typeof a.share==='boolean'));
 }
 export function websiteRecordShare(selection,record,projectId){

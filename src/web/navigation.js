@@ -5,7 +5,7 @@ const preferenceRoutes={preferences:'general','user-profile':'user','dashboard-s
 // URLs identify locations by stable IDs, never by titles or filesystem paths.
 export function routeFor(state) {
   if(state.page==='websites')return '#/websites'+(state.project?'/'+state.project:'');
-  if(state.websiteId&&['website','publishing','integrations','review','branding'].includes(state.page))return '#/websites/'+state.websiteId+'/'+(state.page==='website'?'editor':state.page==='integrations'?'settings':state.page)+(state.page==='review'?'/'+state.preview.id:state.page==='branding'?'/'+encodeURIComponent(state.brandTarget??'home'):'');
+  if(state.websiteId&&['website','publishing','integrations','review','branding','appearance'].includes(state.page))return '#/websites/'+state.websiteId+'/'+(state.page==='website'?'editor':state.page==='integrations'?'settings':state.page)+(state.page==='review'?'/'+state.preview.id:state.page==='branding'?'/'+encodeURIComponent(state.brandTarget??'home'):'');
   if(state.page==='review'&&state.preview?.releaseId)return '#/review/'+state.preview.id;
   if(state.page==='laboratory')return '#/laboratory/samples';
   if(state.page==='module')return '#/modules/'+encodeURIComponent(state.moduleId)+(state.modulePath?'/'+state.modulePath.split('/').map(encodeURIComponent).join('/'):'');
@@ -24,8 +24,8 @@ export function resolveRoute(hash,book,{contentReading=false}={}) {
   const parts=hash.replace(/^#\//,'').split('/');
   if(parts[0]==='websites'){
    if(parts.length<=2)return {...base,page:'websites',project:book.projects.some(p=>p.id===parts[1])?parts[1]:null};
-   if(researchId(parts[1])){const page={editor:'website',publishing:'publishing',settings:'integrations',review:'review',branding:'branding'}[parts[2]];
-    if(['website','publishing','integrations'].includes(page)&&parts.length===3)return {...base,page,websiteId:parts[1]};
+   if(researchId(parts[1])){const page={editor:'website',publishing:'publishing',settings:'integrations',appearance:'appearance',review:'review',branding:'branding'}[parts[2]];
+    if(['website','publishing','integrations','appearance'].includes(page)&&parts.length===3)return {...base,page,websiteId:parts[1]};
     if(page==='review'&&parts.length===4&&/^[a-f0-9]{64}$/.test(parts[3]))return {...base,page,websiteId:parts[1],reviewId:parts[3]};
     if(page==='branding'&&parts.length===4){const target=resolveRoute('#/branding/'+parts[3],book);if(target.page==='branding')return {...target,websiteId:parts[1]};}
    }return base;

@@ -33,3 +33,14 @@ test('a folder-operation fence defers polling without a failed-read banner or ac
  code=null;assert.equal(await live.check({background:true}),true);assert.equal(applied,1);
  code='DATABASE_UNAVAILABLE';await live.check({background:true});assert.equal(status.hidden,false);assert.match(status.textContent,/Could not check/);
 });
+
+
+test('website refresh observes its own revision at the same research snapshot and preserves newer editor state',async t=>{
+ const {state,restore}=environment();document.hidden=false;state.websiteId=null;state.websitePin={researchSnapshotId:state.etag,websiteId:null,websiteRevision:'b'.repeat(64)};
+ const next={...state.websitePin,websiteRevision:'c'.repeat(64)};let dirty=true,reads=0,applied=0,release;
+ const live=workspaceRefresh({state,blocked:()=>dirty,version:async()=>({workspaceId:state.book.id,etag:state.etag,websitePin:next}),read:async({version})=>{reads++;assert.deepEqual(version.websitePin,next);if(release)await release.promise;return {book:state.book,etag:state.etag,websitePin:next};},apply:result=>{applied++;state.websitePin=result.websitePin;},notify:()=>{}});t.after(()=>{live.stop();restore();});
+ assert.equal(await live.check(),false);assert.equal(reads,0);dirty=false;assert.equal(await live.check(),true);assert.equal(applied,1);assert.deepEqual(state.websitePin,next);
+ const original={...state.websitePin,websiteRevision:'d'.repeat(64)};state.websitePin=original;release={};release.promise=new Promise(resolve=>release.resolve=resolve);
+ const pending=live.check();await new Promise(resolve=>setImmediate(resolve));assert.equal(reads,2);state.websitePin={...original,websiteRevision:'e'.repeat(64)};release.resolve();
+ assert.equal(await pending,false);assert.equal(applied,1);assert.equal(state.websitePin.websiteRevision,'e'.repeat(64));
+});

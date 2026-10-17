@@ -15,7 +15,7 @@ const post=new Set([
  '/api/calendars/page','/api/calendars/event',
  '/api/github-connection/status','/api/deployment-jobs/list','/api/deployment-jobs/status',
  '/api/repository-setup/current','/api/repository-setup/status','/api/publishing/verification',
- '/api/design-preview','/api/appearance-preview','/api/websites/list','/api/websites/open','/api/modules/drafts/read',
+ '/api/design-preview','/api/appearance-preview','/api/websites/list','/api/websites/open','/api/websites/version','/api/modules/drafts/read',
  '/api/laboratory/read/query','/api/laboratory/read/selected','/api/research/drafts/list','/api/modules/drafts/list'
 ]);
 export const workspaceSnapshotRequest=(method,route)=>{

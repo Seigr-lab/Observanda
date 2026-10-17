@@ -21,7 +21,7 @@ test('independent website files and retained edition addresses never belong to a
  assert.deepEqual(await owner('metadata:'+metadataKey),{kind:'workspace',selected:false});
  assert.deepEqual(await owner('metadata:.observanda/website-editions/'+'a'.repeat(64)+'.json'),{kind:'workspace',selected:false});
  await assert.rejects(owner('metadata:.observanda/websites/'+id()+'/publishing.json'),{code:'PROJECT_MIGRATION_OWNERSHIP'});
- const saved={id:siteId,projectId:null,ambiguous:false},authority=new ProjectSourceAuthority({db:{get:async()=>({payload:saved})},decode:(_kind,_slot,value)=>value});
+ const saved={id:siteId,projectId:null,ambiguous:false},authority=new ProjectSourceAuthority({db:{get:async(_query,slot)=>slot?.startsWith('project-source-scope:')?{payload:saved}:null,all:async()=>[{version:3}]},decode:(_kind,_slot,value)=>value});
  assert.deepEqual(await authority.scope('website',siteId,{websites:[]}),saved);
  await assert.rejects(authority.scope('notebook',siteId,{notebooks:[]}),{code:'CATALOGUE_DAMAGED'});
 });

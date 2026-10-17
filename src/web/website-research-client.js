@@ -1,4 +1,5 @@
-import {websiteContext} from './website-context.js';
+import {sameWebsitePin} from './website-pin.js';
+import {websiteContext,websiteSnapshot} from './website-context.js';
 import {t} from './i18n/index.js';
 import {researchId} from './research-reference.js';
 const message=key=>t('websiteContent',key);
@@ -10,14 +11,14 @@ export function websiteResearchClient({state,api,selection,onChange}){
  const controllers=new Set();
  function close(){generation++;for(const controller of controllers)controller.abort();controllers.clear();pending=null;recordRequest=null;}
  const enabled=()=>state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion===21;
- const identity=()=>JSON.stringify([websiteContext(state),state.book?.id,state.etag]);
+ const identity=()=>JSON.stringify([websiteSnapshot(state),state.book?.id]);
  function sync(){if(context!==identity()){close();const owner=JSON.stringify([websiteContext(state),state.book?.id]);if(workspace!==owner)selectedPage=null;workspace=owner;context=identity();details=null;recordRequest=null;recordError=null;totals=null;pending=null;error='';generation++;}}
  async function query(operation,data,{signal}={}){
-  sync();const key=context,workspaceId=state.book.id,snapshotId=state.etag;
+  sync();const key=context,workspaceId=state.book.id,snapshotId=state.etag,websitePin=state.websitePin;
   const controller=new AbortController();controllers.add(controller);signal=signal?AbortSignal.any([signal,controller.signal]):controller.signal;
-  let result;try{result=await api('/api/website/research/'+operation,{workspaceId,snapshotId,...data},{adopt:false,signal});}finally{controllers.delete(controller);}
+  let result;try{result=await api('/api/website/research/'+operation,{workspaceId,snapshotId,websitePin,...data},{adopt:false,signal});}finally{controllers.delete(controller);}
   if(signal?.aborted||key!==identity()||state.page!=='website'||state.access?.locked||state.storageUnavailable)throw new DOMException('Website context changed','AbortError');
-  if(result?.workspaceId!==workspaceId||result.snapshotId!==snapshotId)throw Error(message('invalid'));
+  if(result?.workspaceId!==workspaceId||result.snapshotId!==snapshotId||websitePin&&!sameWebsitePin(result.websitePin,websitePin))throw Error(message('invalid'));
   return result;
  }
  function record(id){sync();if(details?.id===id)return Promise.resolve(details);if(recordRequest?.id===id)return recordRequest.promise;

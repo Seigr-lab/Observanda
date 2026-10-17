@@ -1,3 +1,4 @@
+import {websiteRequestContext} from './website-request-context.js';
 import {inventoryOperationAccessFactory} from './inventory-operation-access.js';
 import {comparisonSourceFactory} from './comparison-source-access.js';
 import {comparisonSourceDiscovery} from './comparison-source-discovery.js';
@@ -771,13 +772,15 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       // An unavailable prior location blocks operations on it, but must not block an
       // explicit request to create a workspace in a folder selected by the user.
       if(requiredWorkspaceMissing&&!(req.method==='POST'&&url.pathname==='/api/notebook/create'))throw new AppError('STORAGE_UNAVAILABLE');
-      if(req.headers['x-observanda-website']&&websiteRequest(url.pathname)){
-        workspace=websiteWorkspace(workspace,req.headers['x-observanda-website']);await workspace.website();publisher=websitePublisher(publisher,workspace);
+      if(websiteRequest(url.pathname)){
+        const {websiteId,websitePin}=websiteRequestContext(req.headers);
+        workspace=websiteWorkspace(workspace,websiteId,{websitePin});publisher=websitePublisher(publisher,workspace);
       }
       if(req.method==='POST'&&url.pathname.startsWith('/api/websites/')){
         const data=await body(req);if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');const sites=new WebsiteSites(workspace),operation=url.pathname.slice('/api/websites/'.length);
-        if(operation==='list')return json(await sites.list());
-        if(operation==='open')return json(await sites.read(data.id));
+        if(operation==='list')return json(await sites.list(data));
+        if(operation==='open')return json(await sites.read(data.id,{websitePin:data.websitePin}));
+        if(operation==='version')return json(await sites.version(data.id,{websitePin:data.websitePin}));
         if(operation==='change')return json(await sites.change(data));
         if(operation==='save')return json(await sites.save(data.id,data.command));
         throw new AppError('NOT_FOUND');
@@ -1059,7 +1062,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         startJobs(context);const releases=new PublicationJobs(workspace,{sourceReader}),queue=publicationQueue(),data=await body(req),operation=url.pathname.slice('/api/publication-jobs/'.length);
         if(operation==='start'){const job=await releases.start({...data,blockedValues},queue);context.jobs.worker.wake();return json({job:jobSummary(job)},202);}
         if(operation==='list'){const page=await releases.page(queue,data);return json({...page,items:page.items.map(item=>({...item,job:jobSummary(item.job)}))});}
-        if(operation==='open'){const candidate=await retainedCandidate(data.id);if(!candidate)throw new AppError('NOT_FOUND');return json({...releases.summary(candidate),analysisReview:await new AnalysisPublicationReview(workspace,{sourceReader}).status(candidate),stale:!await publicationRevisionCurrent(workspace,candidate.etag)||candidate.configEtag!==(await publisher.read()).etag});}
+        if(operation==='open'){const candidate=await retainedCandidate(data.id);if(!candidate)throw new AppError('NOT_FOUND');return json({...releases.summary(candidate),analysisReview:await new AnalysisPublicationReview(workspace,{sourceReader}).status(candidate),stale:!await publicationRevisionCurrent(workspace,candidate)||candidate.configEtag!==(await publisher.read()).etag});}
         if(operation==='rollback-review'){
           const candidate=await retainedCandidate(data.id);if(!candidate)throw new AppError('NOT_FOUND');
           const approval=await new PublicationRollback(workspace,publisher,{sourceReader}).review(data);
@@ -1117,7 +1120,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
           const candidate=await retainedCandidate(data.id);
           if(!candidate)throw new AppError('PUBLISH_STALE');
           if(data.rollbackReview)await new PublicationRollback(workspace,publisher,{sourceReader}).authorize(candidate,data.rollbackReview);
-          else if(candidate.configEtag!==data.configEtag||!await publicationRevisionCurrent(workspace,candidate.etag))throw new AppError('PUBLISH_STALE');
+          else if(candidate.configEtag!==data.configEtag||!await publicationRevisionCurrent(workspace,candidate))throw new AppError('PUBLISH_STALE');
           const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
           try{return json(await publisher.reviewDestination(candidate,data.configEtag,{signal:controller.signal}));}
           finally{res.removeListener('close',abort);}
@@ -1238,22 +1241,22 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       }
       if(req.method==='POST'&&url.pathname==='/api/design-preview'){
         const data=await body(req),controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
-        try{const result=await publicationDesignPreview(workspace,data,{signal:controller.signal,blockedValues,sourceReader}),id=randomBytes(32).toString('hex');designCandidates.set(id,result.candidate);return json({url:`/preview/${id}/${result.defaultPage}`,baseUrl:`/preview/${id}/`,defaultPage:result.defaultPage,source:result.source,pages:result.candidate.pages,...(result.editor?{editor:result.editor}:{})});}finally{res.off('close',abort);}
+        try{const result=await publicationDesignPreview(workspace,data,{signal:controller.signal,blockedValues,sourceReader}),id=randomBytes(32).toString('hex');designCandidates.set(id,result.candidate);return json({url:`/preview/${id}/${result.defaultPage}`,baseUrl:`/preview/${id}/`,defaultPage:result.defaultPage,source:result.source,pages:result.candidate.pages,...(result.websitePin?{websitePin:result.websitePin}:{}),...(result.editor?{editor:result.editor}:{})});}finally{res.off('close',abort);}
       }
       if(req.method==='POST'&&url.pathname==='/api/appearance-preview'){
         const data=await body(req),controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
         try{
-          const {book,source}=await appearancePreviewSource(workspace,data,{signal:controller.signal,sourceReader});
-          if(source==='website')return json(await appearancePreviews.create(workspace,{...data,mode:'website'},{signal:controller.signal,media,fonts:new WorkspaceFonts(workspace),blockedValues,sourceReader,client}));
+          const {book,source,websitePin}=await appearancePreviewSource(workspace,data,{signal:controller.signal,sourceReader});
+          if(source==='website')return json(await appearancePreviews.create(workspace,{...data,websitePin,mode:'website'},{signal:controller.signal,media,fonts:new WorkspaceFonts(workspace),blockedValues,sourceReader,client}));
           const fontFiles=await new WorkspaceFonts(workspace).files(book.appearance,{preview:true,signal:controller.signal}),result=buildDesignExamples(book.appearance,{blockedValues,fontFiles}),id=randomBytes(32).toString('hex');
-          controller.signal.throwIfAborted();designCandidates.set(id,result.candidate);return json({url:`/preview/${id}/${result.defaultPage}`,baseUrl:`/preview/${id}/`,defaultPage:result.defaultPage,source,pages:result.candidate.pages});
+          controller.signal.throwIfAborted();designCandidates.set(id,result.candidate);return json({url:`/preview/${id}/${result.defaultPage}`,baseUrl:`/preview/${id}/`,defaultPage:result.defaultPage,source,websitePin,pages:result.candidate.pages});
         }finally{res.off('close',abort);}
       }
       if (req.method === 'POST' && url.pathname === '/api/export' || req.method==='GET' && /^\/api\/export\/[a-f0-9]{64}$/.test(url.pathname)) {
         const data=req.method==='POST'?await body(req):{id:url.pathname.split('/').at(-1),rollbackReview:url.searchParams.get('rollbackReview')};let candidate=await retainedCandidate(data.id);
         if(!candidate)throw new AppError('STALE');
         if(data.rollbackReview){const rollback=new PublicationRollback(workspace,publisher,{sourceReader});candidate=rollback.project(candidate,await rollback.authorize(candidate,data.rollbackReview));}
-        else if(!await publicationRevisionCurrent(workspace,candidate.etag))throw new AppError('STALE');
+        else if(!await publicationRevisionCurrent(workspace,candidate))throw new AppError('STALE');
         await new AnalysisPublicationReview(workspace,{sourceReader}).assert(candidate);
         verifyPublication(candidate);
         res.writeHead(200,{'Content-Type':'application/zip','Content-Disposition':'attachment; filename="observanda-site.zip"'});

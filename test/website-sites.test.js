@@ -22,6 +22,7 @@ import {DeploymentJobs} from '../src/deployment-jobs.js';
 import {ResearchRecords,recordRevision} from '../src/research.js';
 import {websiteSelectionDraft} from '../src/web/website-selection.js';
 
+const source=async workspace=>{const value=await workspace.currentOutline();return {etag:value.etag,websitePin:value.websitePin};};
 async function run(queue){const job=await queue.claim();const output=await queue.definition(job).prepare(job,{signal:new AbortController().signal,progress:async()=>{}});return queue.complete(job.id,job.lease.token,output);}
 
 test('independent websites persist separate designs, selections, destinations and retained editions',async t=>{
@@ -32,18 +33,18 @@ test('independent websites persist separate designs, selections, destinations an
  const a=(await create('Project journal')).id,b=(await create('Help website')).id;
  const read=await sites.read(a);assert.equal(read.book.projects[0].id,projectId);assert.ok(read.outline);
  const selected=book.entries.find(r=>read.book.notebooks.some(n=>n.id===r.notebookId));
- const edit={workspaceId:book.id,baseEtag:read.etag,metadata:{website:{...read.book.website,footer:'Journal footer'}},projects:[],changes:[],removed:[],selection:{defaultShare:false,includeProjects:[],records:[{id:selected.id,share:true,attachments:[]}]}};
+ const edit={workspaceId:book.id,baseEtag:read.etag,websitePin:read.websitePin,metadata:{website:{...read.book.website,footer:'Journal footer'}},projects:[],changes:[],removed:[],selection:{defaultShare:false,includeProjects:[],records:[{id:selected.id,share:true,attachments:[]}]}};
  await sites.save(a,edit);
  const reopened=await sites.read(a),draft=websiteSelectionDraft();draft.load(reopened.site.selection,reopened.selectionProjects);assert.equal(draft.isDirty(),false);draft.includeProject(projectId);assert.deepEqual(draft.snapshot(),{defaultShare:false,includeProjects:[projectId],records:[]});
  await assert.rejects(sites.save(a,edit),{code:'CONFLICT'});
  const wa=websiteWorkspace(f.workspace,a),wb=websiteWorkspace(f.workspace,b),etag=(await f.workspace.outline()).etag;
- assert.deepEqual((await publicationSource(wa,{etag})).entries.map(r=>r.id),[selected.id]);
- assert.equal((await publicationSource(wb,{etag})).entries.length,0);
- await assert.rejects(publicationSource(wa,{etag,book}),{code:'INVALID'});
+ assert.deepEqual((await publicationSource(wa,await source(wa))).entries.map(r=>r.id),[selected.id]);
+ assert.equal((await publicationSource(wb,await source(wb))).entries.length,0);
+ await assert.rejects(publicationSource(wa,{...await source(wa),book}),{code:'INVALID'});
  const pa=new Publisher(f.workspace.root,{workspace:wa},f.vault),pb=new Publisher(f.workspace.root,{workspace:wb},f.vault),config=await pa.read();
  await pa.save({...config.config,github:{...config.config.github,owner:'Example',repository:'journal'}},config.etag);
  assert.equal((await pb.read()).configured,false);assert.equal((await pa.read()).config.github.repository,'journal');
- const queue=websiteJobQueue(jobs.queue,a),release=new PublicationJobs(wa),job=await release.start({etag},queue);
+ const queue=websiteJobQueue(jobs.queue,a),release=new PublicationJobs(wa),job=await release.start(await source(wa),queue);
  assert.equal(job.input.websiteId,a);assert.equal(await websiteJobQueue(jobs.queue,b).read(job.id),null);
  const leased=await jobs.queue.claim(),output=await jobs.queue.definitions[leased.type].prepare(leased,{signal:new AbortController().signal,progress:async()=>{}});
  await jobs.queue.complete(leased.id,leased.lease.token,output);
@@ -65,13 +66,13 @@ test('independent websites isolate selections and review IDs and deploy to pinne
  t.after(async()=>{if(app)await app.close();await jobs.worker.stop();clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const ids=[];for(const [i,p] of [book.projects[0],project].entries()){
   const created=await sites.change({workspaceId:book.id,etag:(await f.workspace.outline()).etag,operation:'create',name:'Site '+i});ids.push(created.id);
-  const current=await sites.read(created.id),command={workspaceId:book.id,baseEtag:current.etag,metadata:{},projects:[],changes:[],removed:[],selection:{defaultShare:false,includeProjects:[p.id],records:[]}};
+  const current=await sites.read(created.id),command={workspaceId:book.id,baseEtag:current.etag,websitePin:current.websitePin,metadata:{},projects:[],changes:[],removed:[],selection:{defaultShare:false,includeProjects:[p.id],records:[]}};
   await sites.save(created.id,command);
-  if(i===0){const etag=(await f.workspace.outline()).etag;await assert.rejects(sites.save(created.id,{...command,baseEtag:etag,selection:{defaultShare:false,includeProjects:[],records:[{id:randomUUID(),share:true,attachments:[]}]}}),{code:'INVALID'});assert.equal((await f.workspace.outline()).etag,etag);}
+  if(i===0){const etag=(await f.workspace.outline()).etag;await assert.rejects(sites.save(created.id,{...command,baseEtag:etag,websitePin:(await sites.read(created.id)).websitePin,selection:{defaultShare:false,includeProjects:[],records:[{id:randomUUID(),share:true,attachments:[]}]}}),{code:'INVALID'});assert.equal((await f.workspace.outline()).etag,etag);}
  }
  const scoped=ids.map(id=>websiteWorkspace(f.workspace,id)),publishers=scoped.map(w=>websitePublisher(publisher,w));
  const etag=(await f.workspace.outline()).etag;
- for(let i=0;i<2;i++){const current=await publishers[i].read();await publishers[i].save({...current.config,github:{...current.config.github,owner:'example',repository:i?'site-b':'site-a',branch:'main'}},current.etag);await new PublicationJobs(scoped[i]).start({etag},websiteJobQueue(jobs.queue,ids[i]));}
+ for(let i=0;i<2;i++){const current=await publishers[i].read();await publishers[i].save({...current.config,github:{...current.config.github,owner:'example',repository:i?'site-b':'site-a',branch:'main'}},current.etag);await new PublicationJobs(scoped[i]).start(await source(scoped[i]),websiteJobQueue(jobs.queue,ids[i]));}
  // A fresh worker dispatches each immutable job through its own website.
  jobs=workspaceJobs(f.workspace,publisher);const prepared=[await run(jobs.queue),await run(jobs.queue)];
  for(let i=0;i<2;i++){const candidate=await new PublicationJobs(scoped[i]).read(prepared[i].result.id),text=await publicationText(candidate);assert.equal(text.includes('OTHER_PROJECT_PRIVATE'),i===1);const configEtag=(await publishers[i].read()).etag,plan=await publishers[i].reviewDestination(candidate,configEtag);await new DeploymentJobs(scoped[i],publishers[i],websiteJobQueue(jobs.queue,ids[i])).start({id:candidate.reviewId,configEtag,reviewed:true,destinationReview:plan.id,destinationReviewed:true});}
@@ -95,8 +96,8 @@ test('independent websites isolate selections and review IDs and deploy to pinne
  const records=new ResearchRecords(f.workspace,{}),moved={...other,notebookId:book.notebooks[0].id};
  await records.save({workspaceId:book.id,changes:[{id:other.id,expectedRevision:recordRevision(other),record:moved}]});
  let current=await f.workspace.read(),now=current.book.entries.find(r=>r.id===other.id);
- assert.equal((await publicationSource(scoped[0],{etag:current.etag})).entries.some(r=>r.id===other.id),false);
- assert.equal((await publicationSource(scoped[1],{etag:current.etag})).entries.some(r=>r.id===other.id),false);
+ assert.equal((await publicationSource(scoped[0],await source(scoped[0]))).entries.some(r=>r.id===other.id),false);
+ assert.equal((await publicationSource(scoped[1],await source(scoped[1]))).entries.some(r=>r.id===other.id),false);
  await records.remove({workspaceId:book.id,recordId:other.id,expectedRevision:recordRevision(now)});
  assert.ok((await sites.read(ids[0])).site.selection.records.every(r=>r.id!==other.id));
  assert.ok(await new PublicationJobs(scoped[1]).read(prepared[1].result.id));
@@ -109,9 +110,9 @@ test('websites can be created before research projects exist and have no fixed c
  const head=await f.workspace.outline();assert.deepEqual(head.metadata.projects,[]);
  const created=await sites.change({workspaceId:book.id,etag:head.etag,operation:'create',name:'Public journal'}),first=await sites.read(created.id);
  assert.equal(first.site.projectId,null);assert.deepEqual(first.book.notebooks,[]);assert.equal(first.total,0);
- await f.workspace.update(value=>{value.websites=Array.from({length:100},(_,i)=>({...structuredClone(first.site),id:randomUUID(),name:'Website '+i}));return value;});
+ for(let i=1;i<100;i++)await sites.change({workspaceId:book.id,etag:head.etag,operation:'create',name:'Website '+i});
  const last=await sites.change({workspaceId:book.id,etag:(await f.workspace.outline()).etag,operation:'create',name:'Website 101'});
- assert.equal(last.sites.length,101);assert.equal((await sites.read(last.id)).site.name,'Website 101');
+ assert.equal(last.sites.length,20);let after=null;const ids=new Set();do{const page=await sites.list({after,limit:20});for(const site of page.sites){assert.equal(ids.has(site.id),false);ids.add(site.id);}after=page.next;}while(after);assert.equal(ids.size,101);assert.equal((await sites.read(last.id)).site.name,'Website 101');
  await assert.rejects(sites.change({workspaceId:book.id,etag:last.etag,operation:'create',name:'Wrong owner',projectId:randomUUID()}),{code:'INVALID'});
  assert.equal((await f.workspace.outline()).etag,last.etag);
 });
@@ -124,9 +125,9 @@ test('one independent website combines lab books from different projects without
  const before=await f.workspace.read(),ids=[];
  for(const name of ['Combined website','Different website'])ids.push((await sites.change({workspaceId:book.id,etag:(await f.workspace.outline()).etag,operation:'create',name})).id);
  const original=book.entries[0],read=await sites.read(ids[0]);
- await sites.save(ids[0],{workspaceId:book.id,baseEtag:read.etag,metadata:{},projects:[],changes:[],removed:[],selection:{defaultShare:false,includeProjects:[],records:[original,record].map(({id})=>({id,share:true,attachments:[]}))}});
- const etag=(await f.workspace.outline()).etag,selected=await publicationSource(websiteWorkspace(f.workspace,ids[0]),{etag});
+ await sites.save(ids[0],{workspaceId:book.id,baseEtag:read.etag,websitePin:read.websitePin,metadata:{},projects:[],changes:[],removed:[],selection:{defaultShare:false,includeProjects:[],records:[original,record].map(({id})=>({id,share:true,attachments:[]}))}});
+ const etag=(await f.workspace.outline()).etag,selected=await publicationSource(websiteWorkspace(f.workspace,ids[0]),await source(websiteWorkspace(f.workspace,ids[0])));
  assert.deepEqual(new Set(selected.entries.map(r=>r.id)),new Set([original.id,record.id]));
- assert.equal((await publicationSource(websiteWorkspace(f.workspace,ids[1]),{etag})).entries.length,0);
+ assert.equal((await publicationSource(websiteWorkspace(f.workspace,ids[1]),await source(websiteWorkspace(f.workspace,ids[1])))).entries.length,0);
  assert.deepEqual((await f.workspace.read()).book.entries,before.book.entries);
 });

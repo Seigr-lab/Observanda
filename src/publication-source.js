@@ -1,3 +1,5 @@
+import {publicationWorkspace,publicationSnapshot} from './publication-pin.js';
+import {projectWebsiteAttachmentChoices} from './website-selection-admission.js';
 import {publicationRevisionCurrent} from './publication-freshness.js';
 import {AppError} from './errors.js';
 import {upgradeNotebook} from './model.js';
@@ -12,14 +14,14 @@ import {recordEditionInventory} from './web/publication-inventory.js';
 const originals=new WeakMap();
 export const publicationOriginal=record=>originals.get(record)??record;
 
-function consumeBook(book,consume,page,inventory){
+function consumeBook(book,consume,page,inventory,websitePin){
  if(page?.cursor)throw new AppError('PUBLICATION_SELECTION_CURSOR');
  if(!consume)return book;
  const {entries,...metadata}=book,heads=new Map(entries.map(record=>[record.id,recordRevision(record)]));
  const notebooks=new Set(metadata.notebooks.filter(n=>metadata.projects.some(p=>p.id===n.projectId&&p.share)).map(n=>n.id));
  const selected=entries.filter(r=>r.share&&notebooks.has(r.notebookId)&&(!page?.recordId||r.id===page.recordId));
  const records=page?selected.slice(page.offset,page.offset+page.limit):selected;
- return consume(metadata,inventory?records.map(record=>({...recordEditionInventory(record,recordRevision(record)),notebook:metadata.notebooks.find(n=>n.id===record.notebookId)?.title??''})):records,{recordHead:id=>heads.get(id)??null});
+ return consume(metadata,inventory?records.map(record=>({...recordEditionInventory(record,recordRevision(record)),notebook:metadata.notebooks.find(n=>n.id===record.notebookId)?.title??''})):records,{recordHead:id=>heads.get(id)??null,sourceEtag:websitePin.researchSnapshotId,websitePin});
 }
 
 // Resolve saved selection before retrieving originals. Rendering and privacy
@@ -29,13 +31,13 @@ export async function selectedPublicationBook(store,snapshot,{signal,metadata=sn
  return {...metadata,entries};
 }
 export async function* selectedPublicationRows(store,snapshot,{signal,metadata=snapshot.metadata,selection=emptyWebsiteSelection(),page,inventory=false}={}){
- const book=metadata,selected=new Map(selection.records.map(r=>[r.id,r])),overrides=new Map();
+ const book=metadata,selected=new Map(selection.records.map(r=>[r.id,r])),saved=new Map((snapshot.websiteSelection?.records??[]).map(r=>[r.id,r])),overrides=new Map();
  if(selection.includeProjects.some(id=>!metadata.projects.some(p=>p.id===id)))throw new AppError('INVALID');
  const projects=new Set(book.projects.filter(p=>p.share).map(p=>p.id));
  const notebooks=new Set(book.notebooks.filter(n=>projects.has(n.projectId)).map(n=>n.id));
  const owners=new Map(metadata.notebooks.map(n=>[n.id,n.projectId]));
  // Validate explicit overrides independently of the displayed page. A late
- // stale attachment/record must still fail, but ordinary pages need not scan
+ // unknown attachment/record must still fail, but ordinary pages need not scan
  // the entire private corpus merely to prove that all overrides were found.
  async function* overrideRows(){
   for(const id of selected.keys()){
@@ -44,7 +46,8 @@ export async function* selectedPublicationRows(store,snapshot,{signal,metadata=s
   }
  }
  for await(const summary of store.queryDocuments(overrideRows(),snapshot.metadata,{signal,search:false,publication:true})){
-  if(selected.get(summary.id).attachments.some(a=>!summary.publication.attachments.some(item=>item.id===a.id)))throw new AppError('INVALID');
+  const patch=selected.get(summary.id),projected={...patch,attachments:projectWebsiteAttachmentChoices(patch.attachments,summary.publication.attachments,saved.get(summary.id)?.attachments)};
+  selected.set(summary.id,projected);overrides.get(summary.id).patch=projected;
  }
  async function* rows(){
   if(page?.recordId){const row=await store.member(snapshot,page.recordId);if(row)yield row;return;}
@@ -91,35 +94,36 @@ async function* selectedPublicationInventories(store,snapshot,options){
  }
 }
 
-export async function publicationSource(workspace,{etag,book,workspaceId,draft},{signal,consume,page,inventory=false}={}){
+export async function publicationSource(workspace,{etag,websitePin,book,workspaceId,draft},{signal,consume,page,inventory=false}={}){
  signal?.throwIfAborted();
- const current=await workspace.outline();
+ workspace=publicationWorkspace(workspace);
+ const current=await workspace.currentOutline();
  if(workspaceId!==undefined&&workspaceId!==current.metadata.id)throw new AppError('WORKSPACE_CHANGED');
- if(!await publicationRevisionCurrent(workspace,etag,{current}))throw new AppError('CONFLICT');
+ if(!await publicationRevisionCurrent(workspace,{etag,websitePin},{current}))throw new AppError('CONFLICT');
  if(draft!==undefined){
   validateWorkspaceEditCommand(draft);
   if(book!==undefined||draft.baseEtag!==etag||draft.changes.length||draft.removed.length)throw new AppError('INVALID');
   if(draft.workspaceId!==current.metadata.id)throw new AppError('WORKSPACE_CHANGED');
  }
  if(book!==undefined){
-  if(workspace.websiteId)throw new AppError('INVALID');
+  if(workspace.websiteId||current.websitePin?.websiteRevision)throw new AppError('INVALID');
   const draft=upgradeNotebook(book);
   if(draft.id!==current.metadata.id)throw new AppError('INVALID');
-  return consumeBook(draft,consume,page,inventory);
+  return consumeBook(draft,consume,page,inventory,websitePin??{researchSnapshotId:etag,websiteId:null,websiteRevision:null});
  }
  // Legacy file workspaces have no catalogue to address independently.
  if(await workspace.storageKind()!=='catalogue'){
   if(draft!==undefined)throw new AppError('FORMAT');
   const saved=await workspace.read();if(saved.etag!==etag)throw new AppError('CONFLICT');
-  return consumeBook(upgradeNotebook(saved.book),consume,page,inventory);
+  return consumeBook(upgradeNotebook(saved.book),consume,page,inventory,websitePin??{researchSnapshotId:etag,websiteId:null,websiteRevision:null});
  }
  return workspace.catalogue(async store=>{
-  const snapshot=await store.snapshot(etag);
+  const snapshot=await publicationSnapshot(store,workspace,etag,websitePin);
   if(snapshot.metadata.id!==current.metadata.id)throw new AppError('WORKSPACE_CHANGED');
   const metadata=draft?workspaceEditMetadata(snapshot.metadata,draft):snapshot.metadata;
   if(draft)await store.validateMetadata(snapshot,metadata);
-  const selection=draft?.selection??snapshot.websiteSelection,paging=publicationSelectionPage(store,{snapshotId:etag,websiteId:workspace.websiteId,metadata,selection},page);
+  const selection=draft?.selection??snapshot.websiteSelection,paging=publicationSelectionPage(store,{snapshotId:etag,websiteId:workspace.websiteId,websitePin:snapshot.websitePin,metadata,selection},page);
   const options={signal,metadata,selection,page:paging.page};
-  return consume?consume(metadata,(inventory?selectedPublicationInventories:selectedPublicationRecords)(store,snapshot,options),{sourceEtag:etag,nextCursor:paging.nextCursor}):selectedPublicationBook(store,snapshot,options);
+  return consume?consume(metadata,(inventory?selectedPublicationInventories:selectedPublicationRecords)(store,snapshot,options),{sourceEtag:etag,websitePin:snapshot.websitePin,nextCursor:paging.nextCursor}):selectedPublicationBook(store,snapshot,options);
  });
 }

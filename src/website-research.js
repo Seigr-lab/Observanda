@@ -1,3 +1,4 @@
+import {publicationWorkspace,publicationSnapshot} from './publication-pin.js';
 import {websiteRecordSections} from './website-record-sections.js';
 import {AppError} from './errors.js';
 import {researchId} from './web/research-reference.js';
@@ -12,20 +13,20 @@ const invalid=()=>{throw new AppError('INVALID');};
 const searchValid=value=>typeof value==='string'&&value.length<=512;
 const cursorValid=value=>value===null||typeof value==='string'&&value.length>0&&value.length<=4096;
 export class WebsiteResearch{
- constructor(workspace){this.workspace=workspace;}
+ constructor(workspace){this.workspace=publicationWorkspace(workspace);}
  async run(operation,command,{signal}={}){
   const fields={summary:['selection','search'],content:['projectId','search','cursor'],record:['recordId'],sections:['recordId','offset'],media:['search','cursor']}[operation];
-  if(!fields||!exact(command,['workspaceId','snapshotId',...fields])||!researchId(command.workspaceId)||!revisionId(command.snapshotId))invalid();
+  if(!fields||!exact(command,['workspaceId','snapshotId',...(Object.hasOwn(command??{},'websitePin')?['websitePin']:[]),...fields])||!researchId(command.workspaceId)||!revisionId(command.snapshotId))invalid();
   if('search' in command&&!searchValid(command.search)||'cursor' in command&&!cursorValid(command.cursor)||operation==='summary'&&!validWebsiteSelection(command.selection)||operation==='content'&&!researchId(command.projectId)||['record','sections'].includes(operation)&&!researchId(command.recordId)||operation==='sections'&&(!Number.isSafeInteger(command.offset)||command.offset<0))invalid();
   signal?.throwIfAborted();if(await this.workspace.storageKind()!=='catalogue')throw new AppError('FORMAT');
   return this.workspace.catalogue(async store=>{
    if((await store.snapshot()).metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
-   const snapshot=await store.snapshot(command.snapshotId),metadata=snapshot.metadata;
+   const snapshot=await publicationSnapshot(store,this.workspace,command.snapshotId,command.websitePin),metadata=snapshot.metadata;
    if(metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
-   const response={workspaceId:command.workspaceId,snapshotId:command.snapshotId},projectIds=new Map(metadata.notebooks.map(n=>[n.id,n.projectId])),needle=command.search?.trim().toLocaleLowerCase();
+   const response={workspaceId:command.workspaceId,snapshotId:command.snapshotId,websitePin:snapshot.websitePin},projectIds=new Map(metadata.notebooks.map(n=>[n.id,n.projectId])),needle=command.search?.trim().toLocaleLowerCase();
    const documents=(rows,options={})=>store.queryDocuments(rows,metadata,{signal,search:false,cardSources:true,publication:true,...options});
    const window=(limit,order,point)=>{
-    const {cursor,...query}=command,identity=digest(JSON.stringify({operation,...query}));let anchor={identity,offset:0,after:null};
+    const {cursor,...query}=command,identity=digest(JSON.stringify({operation,...query,websitePin:snapshot.websitePin}));let anchor={identity,offset:0,after:null};
     if(cursor){try{anchor=store.decode('website-research-page',command.workspaceId,Buffer.from(cursor,'base64url'));}catch{throw new AppError('RECORD_QUERY_CURSOR');}}
     if(anchor?.identity!==identity||!Number.isSafeInteger(anchor.offset)||anchor.offset<0||anchor.offset%limit||anchor.offset>0&&(!anchor.after||typeof anchor.after.title!=='string'||typeof anchor.after.id!=='string'))throw new AppError('RECORD_QUERY_CURSOR');
     const page=summaryPage({...anchor,limit,order,point}),encode=value=>store.encode('website-research-page',command.workspaceId,value).toString('base64url');

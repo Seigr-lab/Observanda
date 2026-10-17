@@ -1,3 +1,4 @@
+import {publicationResearchWorkspace} from './publication-pin.js';
 // Capture immutable publication inputs in bounded commits. The lifecycle lease
 // protects their folder while ordinary authoring keeps its own short writers.
 import {randomUUID} from 'node:crypto';
@@ -59,7 +60,7 @@ async function capture(workspace,operation,{signal,write=fn=>transaction(workspa
  if(await workspace.storageKind()!=='catalogue')return workspace.withLock(async()=>{
   const id=randomUUID();try{return await operation(workspace,id,fn=>fn());}catch(error){await removePublicationInput(workspace,id);throw error;}
  });
- await new ResearchMaterials(workspace).index.ensure();
+ await new ResearchMaterials(publicationResearchWorkspace(workspace)).index.ensure();
  return workspace.catalogue(async store=>{
   await projectDomainHandoff(store.db,{shared:true});
   await recover(workspace,store.db,write);signal?.throwIfAborted();

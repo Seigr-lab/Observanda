@@ -18,7 +18,7 @@ export class AppearancePreviewSessions{
   if(!defaultPage)throw new AppError('PUBLICATION_EMPTY');
   const id=randomBytes(32).toString('hex');
   while(this.sessions.size>=this.maxSessions)this.sessions.delete(this.sessions.keys().next().value);
-  this.sessions.set(id,{workspace,command:structuredClone(command),media,fonts,blockedValues,sourceReader,sourceSnapshots,client});
+  this.sessions.set(id,{workspace,command:structuredClone({...command,websitePin:choices.websitePin}),media,fonts,blockedValues,sourceReader,sourceSnapshots,client});
   try{await this.page(id,defaultPage,{signal,client});}catch(error){this.sessions.delete(id);throw error;}
   return {source:'website',...choices,defaultPage,baseUrl:'/appearance-preview/'+id+'/',url:'/appearance-preview/'+id+'/'+defaultPage,pagesUrl:'/api/appearance-preview/'+id+'/pages'};
  }

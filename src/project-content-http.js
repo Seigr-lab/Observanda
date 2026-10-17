@@ -1,3 +1,4 @@
+import {websiteRequestContext} from './website-request-context.js';
 // HTTP transport for explicitly owned content, assets and template packages.
 import {serveContent} from './file-content.js';
 import {zipStream} from './zip-stream.js';
@@ -24,6 +25,6 @@ export async function projectContentHttp(req,res,request,{body,json,mime,execute
   if(!archive)return serveContent(req,res,content,contentType??mime(name),{signal:controller.signal});
   res.writeHead(200,{'Content-Type':'application/zip','Content-Disposition':'attachment; filename="observanda-site.zip"'});await pipeline(Readable.from(zipStream(archive)),res,{signal:controller.signal});
  };
- const run=options=>execute(data,{...options,signal:controller.signal,stream:req,query:Object.fromEntries(url.searchParams),contentLength:req.headers['content-length'],headless,websiteId:req.headers['x-observanda-website']??null,binary});
+ const run=options=>execute(data,{...options,signal:controller.signal,stream:req,query:Object.fromEntries(url.searchParams),contentLength:req.headers['content-length'],headless,...websiteRequestContext(req.headers),binary});
  try{if(request.binary)return await run();if(request.write&&request.input!=='stream')return await operationResponse(req,res,run,json);return json(await run());}finally{res.off('close',abort);}
 }

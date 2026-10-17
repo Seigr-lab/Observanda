@@ -1,3 +1,4 @@
+import {websiteSnapshot} from './website-context.js';
 import {t} from './i18n/index.js';
 import {recordLabel} from './record-types.js';
 const tr=(key,args)=>t('websiteContent',key,args);
@@ -6,7 +7,7 @@ const tr=(key,args)=>t('websiteContent',key,args);
 export function websiteContentPages({state,esc,field,option,render,research,selection}){
  let key=null,search='',projectOffset=0,groups=null,loading=false,error='',generation=0,summaryVersion=0,timer=null,controller=null,openMedia=null;
  const pages=new Map();
- function sync(){const next=JSON.stringify([state.storage?.contextId,state.book?.id,state.etag]);if(next!==key){controller?.abort();key=next;generation++;pages.clear();groups=null;openMedia=null;loading=false;error='';}}
+ function sync(){const next=JSON.stringify([websiteSnapshot(state),state.book?.id]);if(next!==key){controller?.abort();key=next;generation++;pages.clear();groups=null;openMedia=null;loading=false;error='';}}
  function redraw(){if(state.page==='website'&&document.querySelector('#website-content-search'))render();}
  async function loadGroups(){
   sync();controller?.abort();controller=new AbortController();const signal=controller.signal,epoch=generation,version=++summaryVersion;loading=true;error='';redraw();

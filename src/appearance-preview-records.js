@@ -1,4 +1,5 @@
 import {recordReferenceNamespaces} from './research-reference-namespace.js';
+import {projectWebsiteAttachmentChoices} from './website-selection-admission.js';
 import {AppError} from './errors.js';
 import {RecordPublicationIndex} from './record-publication-index.js';
 import {publicationRecords} from './publication-records.js';
@@ -10,7 +11,7 @@ import {historicalBook} from './research.js';
 // actually drawn or linked on the page; scanning a range does not cache it.
 export class AppearancePreviewRecords{
  constructor(store,snapshot,{signal,snapshotId,websiteId=null}={}){
-  Object.assign(this,{store,snapshot,signal,snapshotId,websiteId});this.metadata=snapshot.metadata;
+  Object.assign(this,{store,snapshot,signal,snapshotId,websiteId,websitePin:snapshot.websitePin});this.metadata=snapshot.metadata;
   this.selection=snapshot.websiteSelection??emptyWebsiteSelection();this.overrides=new Map();
   this.owners=new Map(this.metadata.notebooks.map(n=>[n.id,n.projectId]));
   this.notebooks=new Set(this.metadata.notebooks.filter(n=>this.metadata.projects.some(p=>p.id===n.projectId&&p.share)).map(n=>n.id));
@@ -26,8 +27,8 @@ export class AppearancePreviewRecords{
    this.signal?.throwIfAborted();const row=await this.member(patch.id);
    if(!row)throw new AppError('RECORD_CHANGED');
    const [summary]=await Array.fromAsync(this.store.queryDocuments([row],this.metadata,{search:false,publication:true,signal:this.signal}));
-   if(patch.attachments.some(a=>!summary.publication.attachments.some(v=>v.id===a.id)))throw new AppError('INVALID');
-   this.overrides.set(patch.id,{row,patch});
+   const attachments=projectWebsiteAttachmentChoices(patch.attachments,summary.publication.attachments,patch.attachments);
+   this.overrides.set(patch.id,{row,patch:{...patch,attachments}});
   }
   const counts={};
   if(this.snapshot.publicationIndex){

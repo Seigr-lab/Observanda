@@ -1,3 +1,4 @@
+import {sameWebsitePin} from './website-pin.js';
 import {selectedPublicationSources} from './publication-sources-model.js';
 import {publicationMediaClient} from './publication-media-client.js';
 import {publicationPageClient,publicationPageSections} from './publication-page-client.js';
@@ -9,7 +10,7 @@ import {websiteActionUI} from './website-action-ui.js';
 import {websitePopupFields} from './website-popup-ui.js';
 import {websiteDisclosureFields} from './website-disclosure-ui.js';
 import {REGION_SLOTS} from './website-regions.js';
-import {websiteContext} from './website-context.js';
+import {websiteContext,websiteSnapshot} from './website-context.js';
 import {WebsiteReferenceNavigation} from './website-reference-navigation.js';
 import {WebsiteCollectionNavigation} from './website-collection-navigation.js';
 import {canvasResourceLinks} from './website-canvas-resources.js';
@@ -458,7 +459,7 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
     }
     const previewedPage=state.book.pages.find(p=>'pages/'+p.id+'.html'===previewPage),privatePage=!linkAvailable(previewTarget(),summary());empty.hidden=true;iframe.hidden=false;document.querySelector('#website-preview-frame').hidden=false;select.parentElement.hidden=false;
 
-    const designPageId=previewedPage?.id??null,designTarget=previewTarget(),currentContext=websiteContext(state),source=previewDraft(draftWorkspace(state.book)),referenceRequest=referenceNavigation.prepare(currentContext,designTarget,source);
+    const designPageId=previewedPage?.id??null,designTarget=previewTarget(),currentContext=websiteContext(state),currentSnapshot=websiteSnapshot(state),source=previewDraft(draftWorkspace(state.book)),referenceRequest=referenceNavigation.prepare(currentContext,designTarget,source);
     const collectionRequest=collectionNavigation.prepare(currentContext,designTarget,source,state.book);
     const key={book:state.book,designPageId,designTarget,referenceCursor:referenceRequest.cursor,collections:JSON.stringify(collectionRequest.collections)};
     if(preview&&previewKey?.book===key.book&&previewKey.designPageId===designPageId&&previewKey.designTarget===designTarget&&previewKey.referenceCursor===key.referenceCursor&&previewKey.collections===key.collections){select.innerHTML=previewPageOptions();const src=preview.baseUrl+previewPage;if(iframe.contentDocument?.body?.dataset.page!==designTarget&&iframe.getAttribute('src')!==src)iframe.src=src;status.textContent=privatePage?tr('previewPrivate'):'';fitPreview();return;}
@@ -467,11 +468,12 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
       const controller=new AbortController();previewController=controller;
       try{const command={mode:'website',...source,designPageId,designTarget,workspaceContent:true,...(source.draft?{referenceCursor:referenceRequest.cursor,collections:collectionRequest.collections}:{})};
         const result=await api('/api/design-preview',command,{adopt:false,signal:controller.signal});
-        if(revision!==version||state.page!=='website'||currentContext!==websiteContext(state))return;
+        if(revision!==version||state.page!=='website'||(currentContext!==websiteContext(state)||currentSnapshot!==websiteSnapshot(state)))return;
+        if(source.draft&&source.websitePin&&!sameWebsitePin(result.websitePin,source.websitePin))throw new Error(tr('pageRenderFailed'));
         sourcePages.accept(result.editor);refreshSummary();preview=result;previewKey=key;if(!result.pages.some(p=>p.path===previewPage))throw new Error(tr('pageRenderFailed'));
         select.innerHTML=previewPageOptions();
         await showPreview(result,iframe,revision,controller.signal,command,collectionRequest);if(revision!==version||state.page!=='website')return;referenceNavigation.accept(referenceRequest);iframe.hidden=false;status.textContent=privatePage?tr('previewPrivate'):'';fitPreview();
-      }catch(error){if(controller.signal.aborted||revision!==version||state.page!=='website'||currentContext!==websiteContext(state))return;
+      }catch(error){if(controller.signal.aborted||revision!==version||state.page!=='website'||(currentContext!==websiteContext(state)||currentSnapshot!==websiteSnapshot(state)))return;
         referenceNavigation.reject(referenceRequest);
         collectionNavigation.reject(collectionRequest);
         preview=null;previewKey=null;document.querySelector('#website-preview-retry').hidden=false;if(!iframe.contentDocument?.querySelector('main')){iframe.hidden=true;iframe.removeAttribute('src');}status.textContent=error.code==='PRIVACY'?tr('previewPrivacy'):error.message??tr('previewFailed');

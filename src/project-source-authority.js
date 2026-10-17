@@ -1,3 +1,5 @@
+import {WebsiteDocumentStore} from './website-document-store.js';
+import {readWebsiteDocumentRegistry} from './website-document-registry.js';
 // A source catalogue relinquishes write authority in the same transaction as
 // its handover receipt. Lookup is by selected project/scope, never by opening
 // sibling databases or scanning retained workspace history on each command.
@@ -66,6 +68,10 @@ export class ProjectSourceAuthority{
  }
  async scope(kind,id,metadata){
   if(!['notebook','website'].includes(kind)||!researchId(id))throw new AppError('INVALID');
+  if(kind==='website'&&await readWebsiteDocumentRegistry(this.store)){
+   try{const site=await new WebsiteDocumentStore(this.store).head(id);return {id,projectId:site.projectId,ambiguous:false};}
+   catch(error){if(error.code!=='NOT_FOUND')throw error;}
+  }
   const value=(metadata[kind==='notebook'?'notebooks':'websites']??[]).find(item=>item.id===id);
   if(value)return {id,projectId:value.projectId,ambiguous:false};
   const saved=await this.read('project-source-scope:'+kind+':'+id);if(!saved)return null;

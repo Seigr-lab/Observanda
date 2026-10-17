@@ -1,3 +1,4 @@
+import {publicationWorkspace} from './publication-pin.js';
 import {publicationRevisionCurrent} from './publication-freshness.js';
 import {recordDeploymentInventory,prepareDeploymentInventory,assertDeploymentInventory} from './publication-live.js';
 import {verifyPreparedInventory} from './publication-live-inventory.js';
@@ -15,14 +16,15 @@ import {PublicationRollback} from './publication-rollback.js';
 import {deploymentUncertain} from './publication-deployment-state.js';
 const file=id=>{if(!researchId(id))throw new AppError('INVALID');return '.observanda/deployments/'+id+'.json';};
 export class DeploymentJobs{
- constructor(workspace,publisher,queue,{sourceReader,sourceAccess}={}){this.workspace=workspace;this.publisher=publisher;this.queue=queue;this.sourceReader=sourceReader;this.sourceAccess=sourceAccess;this.releases=new PublicationJobs(workspace);this.feed=new MetadataFeed(workspace,'.observanda/deployment-list');}
+ constructor(workspace,publisher,queue,{sourceReader,sourceAccess}={}){workspace=publicationWorkspace(workspace);this.workspace=workspace;this.publisher=publisher;this.queue=queue;this.sourceReader=sourceReader;this.sourceAccess=sourceAccess;this.releases=new PublicationJobs(workspace);this.feed=new MetadataFeed(workspace,'.observanda/deployment-list');}
  async read(id){const raw=await this.workspace.readMetadata(file(id),16*1024*1024);if(raw===null)throw new AppError('NOT_FOUND');const d=JSON.parse(raw);if(d.version!==1||d.id!==id||!researchId(d.scope)||!d.intent||!d.journal||!['github','ssh'].includes(d.intent.config.kind))throw new AppError('JOB_DAMAGED');return d;}
  async start({id:reviewId,configEtag,reviewed,destinationReview,destinationReviewed,rollbackReview,rollbackConfirmed}){
   return this.queue.transaction(async()=>{
-   let candidate=await this.releases.read(reviewId);const saved=await this.publisher.read(),current=await this.workspace.outline();
+   await this.workspace.lockWebsite();
+   let candidate=await this.releases.read(reviewId);const saved=await this.publisher.read(),current=await this.workspace.currentOutline();
    if(!candidate||reviewed!==true||saved.etag!==configEtag||!saved.configured)throw new AppError('PUBLISH_STALE');
    if(rollbackReview){if(rollbackConfirmed!==true)throw new AppError('PUBLISH_STALE');const rollback=new PublicationRollback(this.workspace,this.publisher,{sourceReader:this.sourceReader});candidate=rollback.project(candidate,await rollback.authorize(candidate,rollbackReview));}
-   else{if(candidate.configEtag!==configEtag)throw new AppError('PUBLISH_STALE');if(!await publicationRevisionCurrent(this.workspace,candidate.etag,{current}))throw new AppError('STALE');}
+   else{if(candidate.configEtag!==configEtag)throw new AppError('PUBLISH_STALE');if(!await publicationRevisionCurrent(this.workspace,candidate,{current}))throw new AppError('STALE');}
    await new AnalysisPublicationReview(this.workspace,{sourceReader:this.sourceReader}).assert(candidate);
    enforcePublishingLimits(candidate,saved.config);
    const key=this.publisher.destinationKey(saved.config),active=await this.workspace.readMetadata('.observanda/deployment-active/'+key+'.json',4096);

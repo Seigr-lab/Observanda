@@ -1,4 +1,4 @@
-import {websiteContext} from './website-context.js';
+import {websiteSnapshot} from './website-context.js';
 import {revisionId} from './revision-model.js';
 const aborted=()=>new DOMException('Website source discovery changed','AbortError');
 const tokenValid=value=>value===null||typeof value==='string'&&value.length>0&&value.length<=4096;
@@ -9,8 +9,8 @@ export function publicationOwnerWindows({state,api,access=run=>run(),snapshots=(
  return async({search='',cursor=null,signal}={})=>{
   const sources=structuredClone(state.book.website.researchSources??[]);
   if(!sources.length)return local({search,cursor,signal});
-  const identity=JSON.stringify([operation,websiteContext(state),state.book.id,state.etag,sources,search]),host=state.book.id;
-  const valid=()=>state.page==='website'&&!state.access?.locked&&!state.storageUnavailable&&identity===JSON.stringify([operation,websiteContext(state),state.book.id,state.etag,state.book.website.researchSources??[],search]);
+  const identity=JSON.stringify([operation,websiteSnapshot(state),state.book.id,state.etag,sources,search]),host=state.book.id;
+  const valid=()=>state.page==='website'&&!state.access?.locked&&!state.storageUnavailable&&identity===JSON.stringify([operation,websiteSnapshot(state),state.book.id,state.etag,state.book.website.researchSources??[],search]);
   const check=()=>{signal?.throwIfAborted();if(!valid())throw aborted();};check();
   const owners=[...(state.book.notebooks.length?[null]:[]),...sources],pin=Object.fromEntries(snapshots().map(source=>[source.workspaceId,source.snapshotId]));
   let at=cursor?.index??0,token=cursor?.token??null,backward=cursor?.backward??false,page=cursor?.page??0,pins={...pin,...cursor?.pins},tails={...cursor?.tails},direction=cursor?.direction??1;

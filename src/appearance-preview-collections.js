@@ -16,7 +16,7 @@ export function appearanceCollectionQuery(params){
 // (including zero for all records) remains a selection, not a resource policy.
 export async function appearanceCollectionPage(records,{key,target,notebooks,filter={},cursor=null}){
  const {tag='',limit=0}=filter,{store}=records;
- const binding=digest(serialize({snapshot:records.snapshotId,websiteId:records.websiteId,metadata:records.metadata,selection:records.selection,target,key,notebooks:[...notebooks].sort(),tag,limit}));
+ const binding=digest(serialize({snapshot:records.snapshotId,websiteId:records.websiteId,websitePin:records.websitePin,metadata:records.metadata,selection:records.selection,target,key,notebooks:[...notebooks].sort(),tag,limit}));
  let anchor={after:null,backward:false,matched:0};
  if(cursor){
   try{anchor=store.decode('appearance-card-page',records.metadata.id,decodeAppearanceCursor(cursor));}catch{throw new AppError('INVALID');}

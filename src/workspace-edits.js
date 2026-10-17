@@ -8,8 +8,8 @@ import {websiteSelectionRecords} from './website-selection.js';
 
 const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 
-// Website, branding and preferences share the existing record/storage owners.
-// An exact base guards mixed edits so selections cannot overwrite concurrent work.
+// Research edits retain an exact base. Website choices use their independent
+// owner; only older inline workspaces accept the legacy mixed selection edit.
 export class WorkspaceEdits{
  constructor(workspace,evidence){this.workspace=workspace;this.records=new ResearchRecords(workspace,evidence);}
  async save(command){
@@ -28,6 +28,7 @@ export class WorkspaceEdits{
   const head=await store.head(),source=await store.snapshot(head);
   if(source.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
   if(head!==command.baseEtag)throw new AppError('CONFLICT');
+  if(source.websiteDocuments===1&&command.selection)throw new AppError('INVALID');
   const current=await store.indexed(source),metadata=workspaceEditMetadata(current.metadata,command);
   const previous=new Map(),removed=command.removed.map(r=>r.id),deleted=new Set(removed);
   for(const change of [...command.changes,...command.removed]){

@@ -1,3 +1,4 @@
+import {publicationResearchWorkspace} from './publication-pin.js';
 import {workspaceReferenceNamespaceMatches} from './research-reference-namespace.js';
 import {revisionId} from './web/revision-model.js';
 import {AppError} from './errors.js';
@@ -25,7 +26,8 @@ export function revisionPageId(workspaceId,id,revision){
  return h.slice(0,8)+'-'+h.slice(8,12)+'-4'+h.slice(13,16)+'-8'+h.slice(17,20)+'-'+h.slice(20,32);
 }
 export async function exactPublicationRecord(workspace,target){
- if(!await workspaceReferenceNamespaceMatches(workspace,target))throw new AppError('WORKSPACE_CHANGED');
+ workspace=publicationResearchWorkspace(workspace);
+ if(!await workspaceReferenceNamespaceMatches(publicationResearchWorkspace(workspace),target))throw new AppError('WORKSPACE_CHANGED');
  const materials=new ResearchMaterials(workspace);
  let record;
  try{record=await materials.read(target);}catch(error){
@@ -58,7 +60,7 @@ export async function publicationReferences(workspace,{source,recordId,revision,
   const refs=editionReferences(selectEditionRecord(selected[0],choice)),items=[];
   for(const target of refs.slice(offset,offset+20)){
    signal?.throwIfAborted();let record=null;
-   if(target.kind==='record'&&target.revision&&await workspaceReferenceNamespaceMatches(workspace,target)){try{record=await exactPublicationRecord(workspace,target);}catch(error){if(!['MATERIAL_MISSING'].includes(error.code))throw error;}}
+   if(target.kind==='record'&&target.revision&&await workspaceReferenceNamespaceMatches(publicationResearchWorkspace(workspace),target)){try{record=await exactPublicationRecord(workspace,target);}catch(error){if(!['MATERIAL_MISSING'].includes(error.code))throw error;}}
    const item={target,available:!!record};
    if(record){item.record={...editionRecordInventory(record,metadata),pageId:revisionPageId(metadata.id,record.id,target.revision)};item.preview={body:proseText(record.body),sections:record.sections.map(s=>({title:s.title,body:proseText(s.body)})),fields:(record.template?.fields??[]).map(f=>({title:customFieldLabel(f),value:String(record.template.values[f.key]??'')}))};}
    items.push(item);
@@ -71,7 +73,7 @@ export async function retainSelectedRevisions(workspace,metadata,edition,records
  // Traverse only explicitly approved revisions. References grant no implicit
 // publication consent; cycles terminate because each choice is consumed once.
  for(let i=0;i<records.length;i++)for(const target of [...records[i].relations.map(r=>r.target),...records[i].references]){
-  const key=editionRevisionKey(target),choice=pending.get(key);if(!choice||!await workspaceReferenceNamespaceMatches(workspace,target))continue;
+  const key=editionRevisionKey(target),choice=pending.get(key);if(!choice||!await workspaceReferenceNamespaceMatches(publicationResearchWorkspace(workspace),target))continue;
   if(records.some(r=>r.historical&&r.recordId===target.id&&r.revision===target.revision)){pending.delete(key);continue;}
   const original=await exactPublicationRecord(workspace,target);validateEditionRecord(original,choice);
   if(!metadata.notebooks.some(n=>n.id===original.notebookId&&metadata.projects.some(p=>p.id===n.projectId&&p.share)))throw new AppError('INVALID');

@@ -2,34 +2,40 @@ import {workspaceReader} from './workspace-reader.js';
 import {websiteDirectoryUI} from './website-directory-ui.js';
 import {researchContext} from './project-context.js';
 import {t} from './i18n/index.js';
-import {websiteRouteId,websitePages} from './website-context.js';
+import {activeWebsite,websiteRouteId,websiteRoute,websitePages} from './website-context.js';
 const tr=key=>t('websiteSites',key);
 
 // Owns website navigation and the research/presentation boundary. The editor
 // receives one website draft; the navigation keeps the full project hierarchy.
 export function websiteSitesUI({state,api,esc,field,showDialog,render,rootSnapshot,adopt,selection,ready,access=operation=>operation(),enterOwner}){
  let base=null,owner=null,generation=0;
- const directory=websiteDirectoryUI({state,api,esc,access,open:async item=>{await enter(null);await enterOwner(item.projectId,item.labBookId);await show(item.siteId);}});
- const sync=()=>{if(owner!==researchContext(state)){owner=researchContext(state);base=null;state.websiteId=null;state.website=null;}};
+ const directory=websiteDirectoryUI({state,api,esc,access,open:async item=>{await exit();await enterOwner(item.projectId,item.labBookId);await show(item.siteId);}});
+ const sync=()=>{if(owner!==researchContext(state)){owner=researchContext(state);base=null;state.websiteId=null;state.websitePin=null;state.website=null;}};
  const root=()=>{sync();return base?.book??state.book;};
  const button=(key,action,extra='')=>`<button type="button" class="button" data-action="${action}" ${extra}>${esc(tr(key))}</button>`;
  async function enter(id){
-  sync();const request=++generation;if((state.websiteId??null)===(id??null))return;
+  sync();const request=++generation;if(activeWebsite(state)&&(state.websiteId??null)===(id??null))return;
   const context=owner;
   const original=await rootSnapshot();
-  const result=id?await api('/api/websites/open',{id},{adopt:false}):original;
+  const result=await api('/api/websites/open',{id:id??null},{adopt:false});
   if(context!==researchContext(state)||request!==generation)throw {name:'AbortError'};
-  base=id?original:null;state.websiteId=id??null;state.website=result.site??null;state.preview=null;state.publishing=null;
+  base=original;state.websiteId=id??null;state.website=result.site??null;state.preview=null;state.publishing=null;
   selection.reset();adopt(result);if(result.site)selection.load(result.site.selection,result.selectionProjects);
+ }
+ async function exit(){
+  sync();const request=++generation;if(!activeWebsite(state))return;
+  const context=owner,result=await rootSnapshot();
+  if(context!==researchContext(state)||request!==generation)throw {name:'AbortError'};
+  base=null;state.websiteId=null;state.websitePin=null;state.website=null;state.preview=null;state.publishing=null;selection.reset();adopt(result);
  }
  async function show(id,page='website'){
   await enter(id);Object.assign(state,{page,project:null,notebook:'all',selected:null});await ready(page);render();
  }
- async function manager(){await enter(null);await enterOwner(null);sync();state.page='websites';state.project=null;render();}
+ async function manager(){await exit();await enterOwner(null);sync();state.page='websites';state.project=null;render();}
  function header(){
   if(!websitePages.has(state.page))return '';
   const site=state.website;
-  return `<section class="panel website-site-context"><div class="inline-actions"><strong>${esc(site?.name??tr('workspace'))}</strong>${site?`<span class="muted">${esc(root().projects.find(p=>p.id===site.projectId)?.title??'')}</span>`:''}${button('title','site-list')}${site?button('rename','site-rename'):''}</div><div class="inline-actions">${['editor','publishing','destination'].map((key,i)=>button(key,'site-view',`data-page="${['website','publishing','integrations'][i]}" ${state.page===['website','publishing','integrations'][i]?'disabled':''}`)).join('')}</div></section>`;
+  return `<section class="panel website-site-context"><div class="inline-actions"><strong>${esc(state.websiteId?site?.name:tr('workspace'))}</strong>${site?`<span class="muted">${esc(root().projects.find(p=>p.id===site.projectId)?.title??'')}</span>`:''}${button('title','site-list')}${state.websiteId?button('rename','site-rename'):''}</div><div class="inline-actions">${['editor','publishing','destination'].map((key,i)=>button(key,'site-view',`data-page="${['website','publishing','integrations'][i]}" ${state.page===['website','publishing','integrations'][i]?'disabled':''}`)).join('')}<button type="button" class="button" data-action="site-view" data-page="appearance" ${state.page==='appearance'?'disabled':''}>${esc(t('appearance','title'))}</button></div></section>`;
  }
  function view(){
   return '<div class="page-heading"><div><h1>'+esc(tr('title'))+'</h1><p>'+esc(tr('help'))+'</p></div>'+button('new','site-create')+'</div>'+directory.view(null);
@@ -39,8 +45,8 @@ export function websiteSitesUI({state,api,esc,field,showDialog,render,rootSnapsh
  }
 
  return {root,header,view,enter,bind:directory.bind,input:element=>directory.input(element),
-  async restore(hash){if(hash==='#/websites')await enterOwner(null);await enter(websiteRouteId(hash));},
-  async exit(){await enter(null);},
+  async restore(hash){if(hash==='#/websites')await enterOwner(null);if(websiteRoute(hash))await enter(websiteRouteId(hash));else await exit();},
+  exit,
   async action(el){if(await directory.action(el))return true;const name=el.dataset.action;
    if(name==='site-list'){await manager();return true;}
    if(name==='site-open'){await show(el.dataset.id||null);return true;}
@@ -55,9 +61,9 @@ export function websiteSitesUI({state,api,esc,field,showDialog,render,rootSnapsh
     const destination=id?state.projectOwner?.labBookId?{projectId:state.projectOwner.projectId,labBookId:state.projectOwner.labBookId}:state.projectOwner?.projectId??null:null;
     const read=()=>workspaceReader((route,body,options)=>api(route,body,{...options,adopt:false,owner:destination})).read({metadataOnly:true,requireOutline:true});
     const snapshot=id?{book:state.book,etag:state.etag}:await access(read);if(context!==researchContext(state))throw {name:'AbortError'};
-    const result=await api('/api/websites/change',{workspaceId:snapshot.book.id,etag:snapshot.etag,operation:id?'rename':'create',...(id?{id}:{}),name},{adopt:false,owner:destination});
+    const result=await api('/api/websites/change',{workspaceId:snapshot.book.id,etag:snapshot.etag,operation:id?'rename':'create',...(id?{id,websitePin:state.websitePin}:{}),name},{adopt:false,owner:destination});
     if(context!==researchContext(state))return true;
-    await enter(null);await enterOwner(typeof destination==='object'&&destination!==null?destination.projectId:destination,destination?.labBookId??null);
+    await exit();await enterOwner(typeof destination==='object'&&destination!==null?destination.projectId:destination,destination?.labBookId??null);
     state.websiteId=null;base=null;await show(result.id);document.querySelector('#dialog').close();
    }catch(error){
     if(!form.isConnected&&context===researchContext(state)&&!id){presentForm(false,name);}

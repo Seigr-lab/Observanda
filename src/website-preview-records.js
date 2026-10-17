@@ -11,7 +11,7 @@ import {publicationCard} from './web/publication-card.js';
 import {readingJourney} from './web/book-journeys.js';
 export class WebsitePreviewRecords{
  constructor(store,snapshot,metadata,command,{signal,websiteId=null}={}){
-  Object.assign(this,{store,snapshot,metadata,command,signal,websiteId});
+  Object.assign(this,{store,snapshot,metadata,command,signal,websiteId,websitePin:snapshot.websitePin});
   this.index=new SnapshotIndex(store);this.reading=new RecordReadingIndex(store);
   this.deleted=new Set(command.removed.map(c=>c.id));this.changed=new Map(command.changes.map(c=>[c.id,structuredClone(c.record)]));
   this.originals=new Map(this.changed);this.rows=new Map();this.documents=new Map();this.descriptors=new Map();

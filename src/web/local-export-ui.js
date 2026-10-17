@@ -6,7 +6,7 @@ import {folderPickerUI} from './folder-picker-ui.js';
 
 export function localExportUI({state,api,esc,field,showDialog,notify}){
  const message=(key,values)=>t('localExport',key,values),text=(key,values)=>esc(message(key,values));
- const call=(operation,data)=>api('/api/local-export/'+operation,data,{adopt:false});
+ const call=(operation,data)=>api('/api/local-export/'+operation,data,{adopt:false,websitePin:state.preview?.websitePin});
  let generation=0,context=null,route=null,plan=null,offset=0,files=[],next=null,directory='',busy=false,error='',choosing=false;
  const active=token=>token===generation&&context===websiteContext(state)&&route===location.hash&&document.querySelector('#dialog[open] #local-export');
  const button=(key,action,extra='')=>`<button class="button" type="button" data-action="local-export-${action}" ${extra}>${text(key)}</button>`;

@@ -9,6 +9,7 @@ export async function intakeCommand(workspace,queue,action,command,options={}){
  const {version,...input}=command;void version;
  const service=new LocalIntake(workspace,queue);
  if(action==='readiness'){const readiness=new RunReadiness(workspace);return withComparisonInputs(readiness.materials,options,inputs=>readiness.view(input,{...options,inputs}));}
+ if(action==='receipt-websites')return new RunReadiness(workspace).websites(input,options);
  if(action==='receipt-editions')return new RunReadiness(workspace).editions(input,options);
  if(action==='link-receipt')return new RunReadiness(workspace).link(input);
  if(action==='policy')return new RunReadiness(workspace).setPolicy(input);
@@ -17,7 +18,7 @@ export async function intakeCommand(workspace,queue,action,command,options={}){
  throw new AppError('NOT_FOUND');
 }
 
-const readActions=new Set(['readiness','receipt-editions','preview','status','list']);
+const readActions=new Set(['readiness','receipt-websites','receipt-editions','preview','status','list']);
 const writeActions=new Set(['link-receipt','policy','stage','apply','cancel','resume']);
 export function intakeRequest(route){
  const prefix='/api/v1/intake/';if(!route.startsWith(prefix))return null;const action=route.slice(prefix.length);

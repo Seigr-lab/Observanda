@@ -7,7 +7,7 @@ import {createHash} from 'node:crypto';
 import {AppError} from './errors.js';
 import {encrypted} from './encryption.js';
 import {cataloguePayloadRows} from './catalogue-payload-rows.js';
-import {catalogueFormat,catalogueRequiresDomains,requireRecordBlocks,requireRecordQueryBlocks,requireMemberCollections,requireSelectedValueDrafts,requireRetainedRecordDocuments,requireRunReceiptStore,requireDraftEdits,requireAttemptIndexes,requireCurrentAttemptIndexes,requireRecordTypeDrafts,requireRecordMethodIndexes,requireFigureCopyDrafts,requireSearchVocabulary,requireJoinedQueryText,requireKeyedQueryArrays,requireReferenceQueries,requireAttemptQueries,requireStarterDocuments,requireProjectDomains,requireRetiredProjectRecords,requireWorkspaceDomains,requireWorkspaceSettings,requireRecordResultIndexes} from './catalogue-format.js';
+import {catalogueFormat,catalogueRequiresDomains,requireRecordBlocks,requireRecordQueryBlocks,requireMemberCollections,requireSelectedValueDrafts,requireRetainedRecordDocuments,requireRunReceiptStore,requireDraftEdits,requireAttemptIndexes,requireCurrentAttemptIndexes,requireRecordTypeDrafts,requireRecordMethodIndexes,requireFigureCopyDrafts,requireSearchVocabulary,requireJoinedQueryText,requireKeyedQueryArrays,requireReferenceQueries,requireAttemptQueries,requireStarterDocuments,requireProjectDomains,requireRetiredProjectRecords,requireWorkspaceDomains,requireWorkspaceSettings,requireRecordResultIndexes,requireWebsiteDocuments} from './catalogue-format.js';
 import {operationStage,operationAdvance,operationWork,operationTotal} from './operation-progress.js';
 const CHUNK=1024*1024,MAX_LINE=32*1024*1024;
 // Includes the JSON-escaped envelope around any admitted 64 MiB module or
@@ -34,9 +34,9 @@ export async function writeCatalogueArchive(db,handle,tables,{observe=true,stage
  const scoped=observe?operationStage:(_stage,_options,run)=>run();
  return scoped(stage,{unit:'rows'},async()=>{
  const format=await catalogueFormat(db),domains=await projectDomainSchemas(db),session=databaseSchemaSession(db);
- if(catalogueRequiresDomains(format)&&!domains.length||(format<22||format===26)&&domains.length)fail();
+ if(catalogueRequiresDomains(format)&&!domains.length||(format<22||[26,29].includes(format))&&domains.length)fail();
  try{
- await handle.writeFile(JSON.stringify({format:'observanda-postgresql-archive',version:format>=26?8:format>=25?7:format>=24?6:format>=23?5:format>=22?4:format>=4?3:2,...(format>=4?{catalogueVersion:format}:{}),...(format>=22?{domains}:{})})+'\n');
+ await handle.writeFile(JSON.stringify({format:'observanda-postgresql-archive',version:format>=29?9:format>=26?8:format>=25?7:format>=24?6:format>=23?5:format>=22?4:format>=4?3:2,...(format>=4?{catalogueVersion:format}:{}),...(format>=22?{domains}:{})})+'\n');
  let rows=0,parts=[],buffered=0;const digest=createHash('sha256');
  const flush=async()=>{if(parts.length)await handle.writeFile(parts.join(''));parts=[];buffered=0;};
  const write=async value=>{
@@ -93,11 +93,11 @@ export async function readCatalogueStream(stream,db,tables,{archiveSize,totalRow
  for await(const line of lines(stream,{countBytes:!direct})){
   if(finished)fail();let value;try{value=JSON.parse(line);}catch{fail();}
   if(version===null){
-   if(value?.format!=='observanda-postgresql-archive'||![1,2,3,4,5,6,7,8].includes(value.version))fail();
+   if(value?.format!=='observanda-postgresql-archive'||![1,2,3,4,5,6,7,8,9].includes(value.version))fail();
    if(value.version>=3){if(value.version>=4){
-    if(!keys(value,'catalogueVersion,domains,format,version')||(value.version===8?![26,27,28].includes(value.catalogueVersion):value.catalogueVersion!==({4:22,5:23,6:24,7:25}[value.version]))||!Array.isArray(value.domains)||catalogueRequiresDomains(value.catalogueVersion)&&!value.domains.length||value.catalogueVersion===26&&value.domains.length||new Set(value.domains).size!==value.domains.length||!value.domains.every(domain=>moduleDomains.includes(domain))||[...value.domains].sort().join()!==value.domains.join())fail();
+    if(!keys(value,'catalogueVersion,domains,format,version')||(value.version===9?![29,30,31].includes(value.catalogueVersion):value.version===8?![26,27,28].includes(value.catalogueVersion):value.catalogueVersion!==({4:22,5:23,6:24,7:25}[value.version]))||!Array.isArray(value.domains)||catalogueRequiresDomains(value.catalogueVersion)&&!value.domains.length||[26,29].includes(value.catalogueVersion)&&value.domains.length||new Set(value.domains).size!==value.domains.length||!value.domains.every(domain=>moduleDomains.includes(domain))||[...value.domains].sort().join()!==value.domains.join())fail();
     domains=value.domains;for(const domain of domains)await createProjectDomainSchema(selected(domain));
-   }else if(!keys(value,'catalogueVersion,format,version')||![4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21].includes(value.catalogueVersion))fail();await ({4:requireRecordBlocks,5:requireRecordQueryBlocks,6:requireMemberCollections,7:requireSelectedValueDrafts,8:requireRetainedRecordDocuments,9:requireRunReceiptStore,10:requireDraftEdits,11:requireAttemptIndexes,12:requireCurrentAttemptIndexes,13:requireRecordTypeDrafts,14:requireRecordMethodIndexes,15:requireFigureCopyDrafts,16:requireSearchVocabulary,17:requireJoinedQueryText,18:requireKeyedQueryArrays,19:requireReferenceQueries,20:requireAttemptQueries,21:requireStarterDocuments,22:requireProjectDomains,23:requireRetiredProjectRecords,24:requireWorkspaceDomains,25:requireWorkspaceSettings,26:requireRecordResultIndexes,27:async db=>{await requireWorkspaceDomains(db);await requireRecordResultIndexes(db);},28:async db=>{await requireWorkspaceSettings(db);await requireRecordResultIndexes(db);}}[value.catalogueVersion])(selected(null));}
+   }else if(!keys(value,'catalogueVersion,format,version')||![4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21].includes(value.catalogueVersion))fail();await ({4:requireRecordBlocks,5:requireRecordQueryBlocks,6:requireMemberCollections,7:requireSelectedValueDrafts,8:requireRetainedRecordDocuments,9:requireRunReceiptStore,10:requireDraftEdits,11:requireAttemptIndexes,12:requireCurrentAttemptIndexes,13:requireRecordTypeDrafts,14:requireRecordMethodIndexes,15:requireFigureCopyDrafts,16:requireSearchVocabulary,17:requireJoinedQueryText,18:requireKeyedQueryArrays,19:requireReferenceQueries,20:requireAttemptQueries,21:requireStarterDocuments,22:requireProjectDomains,23:requireRetiredProjectRecords,24:requireWorkspaceDomains,25:requireWorkspaceSettings,26:requireRecordResultIndexes,27:async db=>{await requireWorkspaceDomains(db);await requireRecordResultIndexes(db);},28:async db=>{await requireWorkspaceSettings(db);await requireRecordResultIndexes(db);},29:requireWebsiteDocuments,30:async db=>{await requireWorkspaceDomains(db);await requireWebsiteDocuments(db);},31:async db=>{await requireWorkspaceSettings(db);await requireWebsiteDocuments(db);}}[value.catalogueVersion])(selected(null));}
    else if(!keys(value,'format,version'))fail();
    version=value.version;continue;
   }

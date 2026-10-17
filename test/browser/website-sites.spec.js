@@ -52,19 +52,23 @@ test('create two independent websites, edit and publish their own saved content 
   }finally{await published.close();}
   await navigate(page,'Website editor');await expect(page.locator('.website-site-context')).toContainText('Workspace website');await expect(page.frameLocator('#website-draft-preview').locator('body')).toContainText(project.title);await page.screenshot({path:info.outputPath('project-website.png'),fullPage:false});
   await page.setViewportSize({width:390,height:844});await expect(page.locator('.website-site-context')).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:info.outputPath('project-website-narrow.png'),fullPage:false});
-  const after=await f.workspace.read();expect(after.book.entries).toEqual(original.book.entries);expect(after.book.website).toEqual(original.book.website);expect(after.book.websites).toHaveLength(2);expect(errors).toEqual([]);
+  const after=await f.workspace.read();expect(after.book.entries).toEqual(original.book.entries);expect(after.book.website).toEqual(original.book.website);expect((await new WebsiteSites(f.workspace).list()).sites.filter(site=>site.id!==null)).toHaveLength(2);expect(errors).toEqual([]);
  }finally{await page.close();await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
 
-test('two open website editors save their own changes without reloading each other',async({page})=>{
+test('default and named website editors save independently and refresh their own revision without changing research',async({page})=>{
  test.setTimeout(90000);
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-site-tabs-'));let fixture,app,second;
  try{
   const book=createNotebook('Publishing workspace');fixture=await encryptedFixture(directory,book);const sites=new WebsiteSites(fixture.workspace),ids=[];
   for(const name of ['Field journal','Course website'])ids.push((await sites.change({workspaceId:book.id,etag:(await fixture.workspace.outline()).etag,operation:'create',name})).id);
   app=await startServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(directory,'preferences.json'),port:0});
-  await page.goto(app.url);await navigate(page,'Website editor');second=await page.context().newPage();
+  await page.goto(app.url);await navigate(page,'Website editor');
+  const research=await fixture.workspace.outline(),defaultBefore=await sites.read(null);await task(page,'Site');await page.getByLabel('Website title',{exact:true}).fill('Default website title');
+  const defaultSave=page.waitForRequest(request=>new URL(request.url()).pathname==='/api/websites/save');await page.getByRole('button',{name:'Save website',exact:true}).click();
+  const defaultCommand=(await defaultSave).postDataJSON();expect(defaultCommand.id).toBeNull();expect(defaultCommand.command.websitePin).toEqual(defaultBefore.websitePin);await expect(page.locator('#save-status')).toHaveText('Saved');
+  expect((await sites.read(null)).book.website.title).toBe('Default website title');expect((await fixture.workspace.outline()).etag).toBe(research.etag);second=await page.context().newPage();
   const pages=[page,second],titles=['Field journal title','Course website title'];
   for(const [index,editor] of pages.entries()){
    await editor.goto(new URL('/#/websites/'+ids[index]+'/editor',app.url).href);await expect(editor.locator('.website-site-context')).toContainText(index?'Course website':'Field journal');
@@ -76,5 +80,17 @@ test('two open website editors save their own changes without reloading each oth
    await editor.reload();await task(editor,'Site');await expect(editor.getByLabel('Website title',{exact:true})).toHaveValue(titles[index]);
    expect((await sites.read(ids[index])).book.website.title).toBe(titles[index]);
   }
+  expect((await fixture.workspace.outline()).etag).toBe(research.etag);const before=await sites.read(ids[0]);
+  const changed=await sites.save(ids[0],{workspaceId:book.id,baseEtag:before.etag,websitePin:before.websitePin,metadata:{website:{...before.book.website,title:'Externally saved journal'}},projects:[],changes:[],removed:[],selection:before.site.selection});
+  expect(changed.etag).toBe(before.etag);expect(changed.websitePin.websiteRevision).not.toBe(before.websitePin.websiteRevision);
+  let documents=0;page.on('request',request=>{if(request.isNavigationRequest()&&request.frame()===page.mainFrame())documents++;});const route=page.url();
+  await page.getByRole('link',{name:/refresh saved workspace/}).click();await expect(page.getByLabel('Website title',{exact:true})).toHaveValue('Externally saved journal');expect(page.url()).toBe(route);expect(documents).toBe(0);
+  await expect(second.getByLabel('Website title',{exact:true})).toHaveValue(titles[1]);
+  await page.getByLabel('Website title',{exact:true}).fill('Continued after refresh');await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
+  expect((await sites.read(ids[0])).book.website.title).toBe('Continued after refresh');expect((await sites.read(null)).book.website.title).toBe('Default website title');expect((await fixture.workspace.outline()).etag).toBe(research.etag);
+  await page.locator('.website-site-context').getByRole('button',{name:'Appearance',exact:true}).click();await expect(page).toHaveURL(new RegExp('/websites/'+ids[0]+'/appearance'));
+  await page.getByLabel('Accent',{exact:true}).fill('#334455');await expect(page.frameLocator('#design-preview').locator('body')).toHaveCSS('--accent','#334455');
+  await page.getByRole('button',{name:'Save appearance',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');expect((await sites.read(ids[0])).book.appearance.accent).toBe('#334455');
+  expect((await sites.read(null)).book.appearance).toEqual(defaultBefore.book.appearance);expect((await fixture.workspace.outline()).etag).toBe(research.etag);
  }finally{await second?.close();await page.close();await app?.close();if(fixture)clearVault(fixture.vault);expect(path.dirname(directory)).toBe(path.resolve(os.tmpdir()));await rm(directory,{recursive:true,force:true});}
 });

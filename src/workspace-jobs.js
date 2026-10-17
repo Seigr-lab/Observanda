@@ -11,13 +11,13 @@ import {mediaJobDefinitions} from './media-imports.js';
 import {intakeJobDefinitions} from './intake/jobs.js';
 import {websiteWorkspace,websiteJobQueue} from './website-workspace.js';
 export function websitePublisher(publisher,workspace){
- if(!workspace.websiteId)return publisher;
+ if(publisher.workspace===workspace)return publisher;
  const scoped=new Publisher(workspace.root,{workspace,request:publisher.request,ssh:publisher.ssh,connection:publisher.connection},workspace.vault);
  Object.defineProperty(scoped,'token',{get:()=>publisher.token,set:value=>{publisher.token=value;}});return scoped;
 }
 function publicationDefinitions(workspace,publisher,current,services){
  const definitions=(w,p,q)=>({...publicationJobDefinitions(w,q),...deploymentJobDefinitions(w,p,q,services),...repositoryJobDefinitions(w,p,q),...publicationVerificationDefinitions(w,p,q)});
- const normal=definitions(workspace,publisher,current),result={};
+ const defaultWorkspace=websiteWorkspace(workspace,null),normal=definitions(defaultWorkspace,websitePublisher(publisher,defaultWorkspace),()=>websiteJobQueue(current(),null)),result={};
  for(const [type,definition] of Object.entries(normal))result[type]=Object.fromEntries(Object.keys(definition).map(method=>[method,(job,...args)=>{
   if(!job.input.websiteId)return definition[method](job,...args);
   const scoped=websiteWorkspace(workspace,job.input.websiteId),services=definitions(scoped,websitePublisher(publisher,scoped),()=>websiteJobQueue(current(),job.input.websiteId));

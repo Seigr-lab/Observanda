@@ -13,7 +13,7 @@ import {digest,serialize} from './storage-format.js';
 // each request reauthorizes their pinned snapshots; no source key is cached.
 export class AppearancePreviewSources{
  constructor(local,reader,{snapshots=new Map(),mediaOrigins=new Map()}={}){
-  Object.assign(this,{local,reader,snapshots,mediaOrigins,store:local.store,signal:local.signal,websiteId:local.websiteId,selection:local.selection});
+  Object.assign(this,{local,reader,snapshots,mediaOrigins,store:local.store,signal:local.signal,websiteId:local.websiteId,websitePin:local.websitePin,selection:local.selection});
   this.metadata=structuredClone(local.metadata);this.identities=new PublicationOwnerIdentities(this.metadata.id);
   this.owners=[];this.members=new Map();this.descriptors=new Map();
  }

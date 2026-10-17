@@ -1,3 +1,4 @@
+import {publicationWorkspace} from './publication-pin.js';
 import {publicationRevisionCurrent} from './publication-freshness.js';
 import path from 'node:path';
 import os from 'node:os';
@@ -34,7 +35,7 @@ function checkMembers(files,changes=false){
 }
 
 export class LocalExport {
- constructor(workspace,{checkpoint=async()=>{},sourceReader}={}){this.workspace=workspace;this.sourceReader=sourceReader;this.checkpoint=checkpoint;this.manifest=new LocalExportManifest(workspace);}
+ constructor(workspace,{checkpoint=async()=>{},sourceReader}={}){workspace=publicationWorkspace(workspace);this.workspace=workspace;this.sourceReader=sourceReader;this.checkpoint=checkpoint;this.manifest=new LocalExportManifest(workspace);}
  async read(file){const raw=await this.workspace.readMetadata(file,limit);if(raw===null)return null;try{return JSON.parse(raw);}catch{throw new AppError('LOCAL_EXPORT_DAMAGED');}}
  async save(plan,owner){
   if(Buffer.byteLength(serialize(plan))>(plan.version===2?16384:limit))throw new AppError('LIMIT');
@@ -59,7 +60,7 @@ export class LocalExport {
  async candidate(id,{fresh=false}={}){
   const candidate=await new PublicationJobs(this.workspace).read(id);if(!candidate)throw new AppError('NOT_FOUND');
   verifyPublication(candidate);await new AnalysisPublicationReview(this.workspace,{sourceReader:this.sourceReader}).assert(candidate);
-  if(fresh&&!await publicationRevisionCurrent(this.workspace,candidate.etag))throw new AppError('PUBLISH_STALE');
+  if(fresh&&!await publicationRevisionCurrent(this.workspace,candidate))throw new AppError('PUBLISH_STALE');
   return candidate;
  }
  async plan({reviewId,directory}){

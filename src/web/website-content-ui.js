@@ -1,3 +1,4 @@
+import {websiteSnapshot} from './website-context.js';
 import {t} from './i18n/index.js';
 import {recordLabel} from './record-types.js';
 import {inventoryWindow,contentProjects,contentRecords,PROJECT_WINDOW,CONTENT_WINDOW} from './website-inventory.js';
@@ -9,7 +10,7 @@ export function websiteContentUI({state,esc,field,option,render}){
  let context=null,query='',projectOffset=0,recordOffsets=new Map(),openMedia=null;
  const button=(key,extra='')=>`<button type="button" class="button" data-action="website-content-page" ${extra}>${esc(tr(key))}</button>`;
  const pager=(page,projectId=null)=>`<div class="inline-actions inventory-pager">${button(projectId?'previousRecords':'previousProjects',`data-project-page="${projectId??''}" data-offset="${page.previous??0}" ${page.previous===null?'disabled':''}`)}<span role="status">${page.total?esc(tr(projectId?'recordRange':'projectRange',{first:page.offset+1,last:page.offset+page.items.length,total:page.total})):''}</span>${button(projectId?'nextRecords':'nextProjects',`data-project-page="${projectId??''}" data-offset="${page.next??0}" ${page.next===null?'disabled':''}`)}</div>`;
- function sync(){const next=JSON.stringify([state.book?.id,state.storage?.contextId]);if(next!==context){context=next;query='';projectOffset=0;recordOffsets.clear();openMedia=null;}}
+ function sync(){const next=JSON.stringify([state.book?.id,websiteSnapshot(state)]);if(next!==context){context=next;query='';projectOffset=0;recordOffsets.clear();openMedia=null;}}
  function mediaFields(record,project){const b=state.book,e=record,cover=b.website.presentation.covers.find(c=>c.entryId===e.id);return `${field(tr('cover'),`<select data-record-cover="${e.id}">${option('auto',tr('autoCover'),cover?cover.attachmentId??'':'auto')}${option('',tr('noCover'),cover?cover.attachmentId??'':'auto')}${e.attachments.filter(a=>a.kind==='image').map(a=>option(a.id,a.caption||a.alt||tr('image'),cover?.attachmentId)).join('')}</select>`)}${e.attachments.map(a=>`<label class="checkbox"><input type="checkbox" data-website-media="${a.id}" data-record="${e.id}" ${a.share?'checked':''}><span>${esc(a.caption||a.alt||a.kind)}<small>${esc(a.kind)}${!e.share||!project.share?' / '+esc(tr('mediaExcluded')):''}</small></span></label>`).join('')}`;}
  function view(){sync();const b=state.book,page=inventoryWindow(contentProjects(b,query),{offset:projectOffset,limit:PROJECT_WINDOW});projectOffset=page.offset;
   const visible=new Set(page.items.map(item=>item.project.id));for(const id of recordOffsets.keys())if(!visible.has(id))recordOffsets.delete(id);

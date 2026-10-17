@@ -20,7 +20,7 @@ function activeKeys(book,target){
 export class WebsiteCollectionNavigation{
  constructor(api){this.api=api;this.key=null;this.queries=new Map();this.documents=new WeakMap();this.pending=null;this.focus=null;}
  prepare(context,target,source,book){
-  const draft=source.draft,key=JSON.stringify([context,target,draft?.baseEtag,draft?.changes,draft?.removed]);
+  const draft=source.draft,key=JSON.stringify([context,target,source.websitePin,draft?.baseEtag,draft?.changes,draft?.removed]);
   if(key!==this.key){this.key=key;this.queries.clear();this.pending=null;this.focus=null;}
   const active=activeKeys(book,target);for(const key of this.queries.keys())if(!active.has(key))this.queries.delete(key);
   return {key,context:JSON.parse(context)[0],collections:[...this.queries.values()]};
