@@ -111,9 +111,17 @@ export class RecordOwnerTransfer{
   };
   return writerLeaseHeld(lease)?finish():withWriterLease(lease,finish);
  }
- async perform(id,{signal,check=async()=>{},progress=async()=>{},checkpoint=async()=>{}}={}){
-  let value=await this.read(id);if(value.phase==='complete')return recordOwnerTransferStatus(value);if(value.phase==='cancelled')return this.finishCancellation(value,{signal,check,checkpoint});
-  const checked=async()=>{signal?.throwIfAborted();await check();const live=await this.read(id);if(live.phase==='cancelled')throw new AppError('RECORD_TRANSFER_CANCELLED');return live;};
+ async perform(id,options={}){
+  // Selected originals are fenced against edits. Read their immutable content
+  // through one consistent snapshot, while cancellation and checkpoints use a
+  // separate live connection so a long copy never hides a stop request.
+  const db=await this.source.openCatalogue();
+  try{const control=this.source.catalogueStore(db);return await this.source.catalogue(()=>this.performWithSourceReader(id,options,()=>readRecordOwnerTransfer(control,id)));}
+  finally{await db.close();}
+ }
+ async performWithSourceReader(id,{signal,check=async()=>{},progress=async()=>{},checkpoint=async()=>{}}={},read){
+  let value=await read();if(value.phase==='complete')return recordOwnerTransferStatus(value);if(value.phase==='cancelled')return this.finishCancellation(value,{signal,check,checkpoint});
+  const checked=async()=>{signal?.throwIfAborted();await check();const live=await read();if(live.phase==='cancelled')throw new AppError('RECORD_TRANSFER_CANCELLED');return live;};
   const save=async patch=>{
    value=await this.source.withLock(()=>this.source.catalogue(async store=>{const current=await readRecordOwnerTransfer(store,id);if(!current||current.fingerprint!==value.fingerprint||current.phase==='cancelled')throw new AppError('CONFLICT');const next={...current,...patch,updatedAt:now()};await writeRecordOwnerTransfer(store,next);return next;}));
    await progress({stage:'record-transfer-'+value.phase,completed:value.progress.history,done:value.progress.history,unit:'revisions'});return value;
@@ -151,9 +159,9 @@ export class RecordOwnerTransfer{
    const {initializeRecordOwnerReclamation}=await import('./record-owner-resources.js');await withRecordOwnerTransferWrite(store,value,()=>initializeRecordOwnerReclamation(store,value));
   }));
   if(value.phase==='copying'){
-   await this.copyHistory(value,{write,signal,checkpoint,save});value=await this.read(id);
+   await this.copyHistory(value,{write,signal,checkpoint,save});value=await read();
    const {prepareRecordOwnerEvidence}=await import('./record-owner-evidence.js');
-   const evidence=await prepareRecordOwnerEvidence(this.source,this.target,value,{write,signal,check:checked,checkpoint,saveProgress:async evidence=>{await save({progress:{...value.progress,evidence}});value=await this.read(id);}});
+   const evidence=await prepareRecordOwnerEvidence(this.source,this.target,value,{write,signal,check:checked,checkpoint,saveProgress:async evidence=>{await save({progress:{...value.progress,evidence}});value=await read();}});
    await save({progress:{...value.progress,evidence}});
    const {prepareRecordOwnerDrafts}=await import('./record-owner-drafts.js');
    const drafts=await prepareRecordOwnerDrafts(this.source,this.target,value,{write,signal,checkpoint});await save({progress:{...value.progress,drafts}});
