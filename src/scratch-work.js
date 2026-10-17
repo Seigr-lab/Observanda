@@ -36,7 +36,7 @@ export function withScratch(operation,options={}){return withScratchConnections(
 async function scratchWork(operation,{signal,keySalt}={}){
  signal?.throwIfAborted();
  const stored=sessions.getStore(),session=stored?.owner===scratchConnectionOwner()?stored:null,storage=session?.active&&session.idle.pop()||await createStorage(signal),{db,name}=storage,secret=randomBytes(32),keys=new EncryptionKeyContext(),cipherKey=()=>keys.get(secret),table='pg_temp.'+name;
- let size=0,active=true,completed=false,consumedThrough=0n,failure;
+ let size=0,active=true,completed=false,consumedThrough=0n,failure,insertAttempted=false;
  const check=()=>{if(!active)throw new AppError('INVALID');signal?.throwIfAborted();};
  const key=id=>createHash('sha256').update(keySalt??name).update('\0').update(id).digest('hex');
  // Consumed entries retain deduplication identities for this audit.
@@ -60,12 +60,12 @@ async function scratchWork(operation,{signal,keySalt}={}){
     if(!entries.length)return;const values=[];
     for(const [id,value] of entries){const idKey=key(id);values.push(idKey,seal(Buffer.from(JSON.stringify(value)),cipherKey(),name+idKey));}
     const tuples=entries.map((_,i)=>'($'+(i*2+1)+',$'+(i*2+2)+')');
-    const rows=await db.all('INSERT INTO '+table+' (key,payload) VALUES '+tuples.join(',')+' ON CONFLICT(key) DO UPDATE SET payload=excluded.payload,pending=true RETURNING (xmax=0) AS created,ordinal',...values);
+    insertAttempted=true;const rows=await db.all('INSERT INTO '+table+' (key,payload) VALUES '+tuples.join(',')+' ON CONFLICT(key) DO UPDATE SET payload=excluded.payload,pending=true RETURNING (xmax=0) AS created,ordinal',...values);
     size+=rows.filter(row=>row.created).length;for(const row of rows)revisit(row.ordinal);
    },
    async put(id,value){
     check();const idKey=key(id),payload=seal(Buffer.from(JSON.stringify(value)),cipherKey(),name+idKey);
-    const result=await db.get('INSERT INTO '+table+' (key,payload) VALUES ($1,$2) ON CONFLICT(key) DO UPDATE SET payload=excluded.payload,pending=true RETURNING (xmax=0) AS created,ordinal',idKey,payload);
+    insertAttempted=true;const result=await db.get('INSERT INTO '+table+' (key,payload) VALUES ($1,$2) ON CONFLICT(key) DO UPDATE SET payload=excluded.payload,pending=true RETURNING (xmax=0) AS created,ordinal',idKey,payload);
     if(result.created)size++;revisit(result.ordinal);
    },
    async putGrouped(group,id,value){
@@ -73,12 +73,12 @@ async function scratchWork(operation,{signal,keySalt}={}){
     // Opaque prefixes make a group's rows contiguous without persisting sort
     // keys, identities or values in plaintext. Read through items(), not get().
     const idKey=key(group)+':'+key(id),payload=seal(Buffer.from(JSON.stringify(value)),cipherKey(),name+idKey);
-    const result=await db.get('INSERT INTO '+table+' (key,payload) VALUES ($1,$2) ON CONFLICT(key) DO UPDATE SET payload=excluded.payload,pending=true RETURNING (xmax=0) AS created,ordinal',idKey,payload);
+    insertAttempted=true;const result=await db.get('INSERT INTO '+table+' (key,payload) VALUES ($1,$2) ON CONFLICT(key) DO UPDATE SET payload=excluded.payload,pending=true RETURNING (xmax=0) AS created,ordinal',idKey,payload);
     if(result.created)size++;revisit(result.ordinal);
    },
    async add(id,value=null){
     check();const idKey=key(id),payload=seal(Buffer.from(JSON.stringify(value)),cipherKey(),name+idKey);
-    const row=await db.get('INSERT INTO '+table+' (key,payload) VALUES ($1,$2) ON CONFLICT(key) DO NOTHING RETURNING key',idKey,payload);
+    insertAttempted=true;const row=await db.get('INSERT INTO '+table+' (key,payload) VALUES ($1,$2) ON CONFLICT(key) DO NOTHING RETURNING key',idKey,payload);
     if(row)size++;return !!row;
    },
    async take(){
@@ -109,7 +109,9 @@ async function scratchWork(operation,{signal,keySalt}={}){
   try{
   if(completed&&!signal?.aborted&&session?.active&&session.idle.length<2){
    try{
-    await db.run('TRUNCATE '+table+' RESTART IDENTITY');
+    // Even a failed or conflicting insert can advance BIGSERIAL; a queued
+    // insertion may not have updated size yet. Only untouched storage is clean.
+    if(insertAttempted)await db.run('TRUNCATE '+table+' RESTART IDENTITY');
     if(session.active&&session.idle.length<2)session.idle.push(storage);else await storage.close();
    }
    catch(error){await storage.close();throw error;}

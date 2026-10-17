@@ -132,3 +132,75 @@ test('deep, shared and cyclic material dependencies use constant in-process trav
   await walk.walk([ref(0)],async()=>{count++;});assert.equal(walk.size,1);assert.equal(count,6501);
  });
 });
+
+
+test('untouched pooled scratch work reuses nested storage without resetting its sequence',async t=>{
+ const observer=await scratchDatabase(),prototype=Object.getPrototypeOf(observer),run=prototype.run;let created=0,resets=0;
+ const spy=t.mock.method(prototype,'run',function(sql,...values){if(sql.startsWith('CREATE TEMP TABLE obs_work_'))created++;if(sql.startsWith('TRUNCATE pg_temp.obs_work_'))resets++;return run.call(this,sql,...values);});
+ try{
+  await withScratchSession(async()=>{
+   for(let i=0;i<3;i++)await withScratch(async work=>{
+    assert.equal(work.size,0);assert.equal(await work.has('missing'),false);assert.equal(await work.get('missing'),undefined);
+    assert.equal(await work.take(),undefined);assert.deepEqual(await Array.fromAsync(work.items()),[]);
+    assert.equal(await work.remove('missing'),false);await work.removeMany(['missing']);await work.putMany([]);
+    await assert.rejects(work.putMany([['duplicate',{}],['duplicate',{}]]),{code:'INVALID'});
+    await withScratchSession(()=>withScratch(async nested=>{assert.equal(await nested.take(),undefined);await nested.putMany([]);}));
+   });
+   assert.equal(created,2);assert.equal(resets,0);
+   await withScratch(work=>work.add('written',{value:1}));assert.equal(resets,1);
+   await withScratch(async work=>{assert.equal(work.size,0);assert.equal(await work.has('written'),false);});assert.equal(resets,1);
+  });
+ }finally{spy.mock.restore();await observer.close();}
+});
+
+test('pooled scratch writes reset consumed identities and sequences after removal or explicit clear',async t=>{
+ const observer=await scratchDatabase(),prototype=Object.getPrototypeOf(observer),run=prototype.run;let resets=0,firstOrdinal;
+ const spy=t.mock.method(prototype,'run',async function(sql,...values){
+  if(sql.startsWith('TRUNCATE pg_temp.obs_work_'))resets++;
+  const result=await run.call(this,sql,...values);
+  if(sql.startsWith('INSERT INTO pg_temp.obs_work_'))firstOrdinal=(await run.call(this,'SELECT ordinal FROM '+sql.split(' ')[2]+' ORDER BY ordinal LIMIT 1')).rows[0]?.ordinal;
+  return result;
+ });
+ const cases=[
+  [async work=>{await work.add('one');assert.equal(await work.add('one'),false);await work.remove('one');assert.equal(work.size,0);},0],
+  [async work=>{await work.put('one',{});await work.remove('one');assert.equal(work.size,0);},0],
+  [async work=>{await work.putGrouped('group','one',{});await work.clear();assert.equal(work.size,0);},1],
+  [async work=>{await work.putMany([['one',{}],['two',{}]]);await work.removeMany(['one','two']);assert.equal(work.size,0);},0],
+  [async work=>{await work.add('one',{value:1});assert.deepEqual(await work.take(),{value:1});assert.equal(work.size,1);},0],
+  [async work=>{await work.add('one');await work.clear();assert.equal(work.size,0);},1]
+ ];
+ try{
+  await withScratchSession(async()=>{
+   for(const [write,explicit]of cases){
+    const before=resets;await withScratch(write);assert.equal(resets,before+explicit+1);
+    await withScratch(async work=>{
+     assert.equal(work.size,0);assert.equal(await work.has('one'),false);assert.equal(await work.take(),undefined);
+     await work.add('fresh');assert.equal(String(firstOrdinal),'1','Every reused table restarts its insertion sequence');
+    });
+   }
+  });
+ }finally{spy.mock.restore();await observer.close();}
+});
+
+test('pooled scratch resets after queued insertions and caught insertion failures',async t=>{
+ const observer=await scratchDatabase(),prototype=Object.getPrototypeOf(observer),run=prototype.run;let delayed,fail=false,firstOrdinal,resets=0;
+ const spy=t.mock.method(prototype,'run',async function(sql,...values){
+  if(sql.startsWith('TRUNCATE pg_temp.obs_work_'))resets++;
+  if(sql.startsWith('INSERT INTO pg_temp.obs_work_')){
+   if(delayed){const waiting=delayed;delayed=null;await waiting;}
+   if(fail){fail=false;return run.call(this,sql,null,...values.slice(1));}
+  }
+  const result=await run.call(this,sql,...values);
+  if(sql.startsWith('INSERT INTO pg_temp.obs_work_'))firstOrdinal=(await run.call(this,'SELECT ordinal FROM '+sql.split(' ')[2]+' ORDER BY ordinal LIMIT 1')).rows[0]?.ordinal;
+  return result;
+ });
+ try{
+  await withScratchSession(async()=>{
+   let release,pending;delayed=new Promise(resolve=>release=resolve);
+   await withScratch(work=>{pending=work.add('queued');setImmediate(release);});await pending;assert.equal(resets,1);
+   await withScratch(async work=>{assert.equal(await work.has('queued'),false);await work.add('fresh');assert.equal(String(firstOrdinal),'1');});
+   fail=true;await withScratch(async work=>{await assert.rejects(work.add('failed'),{code:'23502'});assert.equal(work.size,0);});assert.equal(resets,3);
+   await withScratch(async work=>{await work.add('fresh');assert.equal(String(firstOrdinal),'1');});
+  });
+ }finally{spy.mock.restore();await observer.close();}
+});
