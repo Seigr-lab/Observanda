@@ -101,3 +101,31 @@ test('late result source admission and complete publication use originals indepe
  const exported=await f.workspace.read();assert.deepEqual(exported.book.entries[0].results,expected);
  await f.workspace.catalogue(store=>store.verifySnapshot(undefined,f.book.id));
 });
+
+
+test('selected result validation reuses admitted owners while rejecting duplicate and invalid changed statements',async t=>{
+ const f=await fixture(t);
+ await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{
+  const snapshot=await store.snapshot(),row=await store.member(snapshot,f.record.id);
+  await withRecordDocument(store,row.id,row.revision,async original=>{
+   const statements=f.record.results.statements;
+   original.items=async function*(){throw Error('Rescanned admitted source collection');};
+   const check=async document=>{
+    document.items=async function*(){throw Error('Rescanned unchanged record collection');};
+    const header=await validateRecordDocument(document,snapshot.metadata,{admitted:original});assert.deepEqual(header.results,{version:1,statements:[]});
+   };
+   let changed=await original.replace(['results','statements','96'],{...statements[96],text:'Selected corrected interpretation'});
+   await check(changed);
+   const added={id:randomUUID(),kind:'conclusion',basis:'authored',source:null,title:'New conclusion',text:'Later finding',limitations:'Retained limitations'};
+   await check(await original.splice(['results','statements'],97,0,[added]));
+   await assert.rejects(check(await original.replace(['results','statements','96'],{...statements[96],id:statements[0].id})),{code:'INVALID'});
+   await assert.rejects(check(await original.replace(['results','statements','96'],{...statements[96],kind:'unsupported'})),{code:'INVALID'});
+   changed=await original.replace(['results','statements','95'],statements[96]);changed=await changed.replace(['results','statements','96'],statements[95]);await check(changed);
+   changed=await original.splice(['results','statements'],97,0,[added,added]);await assert.rejects(check(changed),{code:'INVALID'});
+   // A changed unrelated collection cannot borrow the result-only proof.
+   changed=await original.replace(['sections','0','body'],'Changed writing');
+   await assert.rejects(check(changed),/Rescanned unchanged record collection/);
+  },{mutable:true});
+ }));
+ assert.deepEqual((await f.workspace.read()).book.entries[0].results,f.record.results);
+});

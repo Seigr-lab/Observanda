@@ -4,6 +4,7 @@ import {AppError} from './errors.js';
 import {withScratch} from './scratch-work.js';
 import {validResultStatement} from './web/result-statements.js';
 import {RecordResultIndex} from './record-result-index.js';
+import {collectionChanges} from './record-projection-dependency.js';
 import {jsonFitsBytes} from './web/json-chunks.js';
 const path=['results','statements'];
 const invalid=()=>{throw new AppError('INVALID',[{field:'analysis results'}]);};
@@ -22,10 +23,22 @@ export async function* resultDocumentStatements(document,{signal,fields}={}){
   const value={};for(const name of fields){signal?.throwIfAborted();value[name]=(await document.tree.selected(item.value,[name])).value;}yield value;
  }
 }
-export async function validateResultDocument(document,{signal,draft=false}={}){
+export async function validateResultDocument(document,{signal,draft=false,admitted=null}={}){
  const header=await resultDocumentHeader(document,{signal});if(!header)return undefined;
+ const prior=admitted?await RecordResultIndex.open(admitted,{signal}):null,changes=prior?await collectionChanges(document,admitted,path,{signal}):null;
+ if(changes?.unchanged)return header;
  return withScratch(async ids=>{
-  for await(const item of resultDocumentStatements(document,{signal}))if(!validResultStatement(item,{draft})||!await ids.add(item.id))invalid();
+  if(changes){
+   for await(const position of changes.positions()){
+    signal?.throwIfAborted();if(position>=changes.total)continue;
+    const item=(await document.field([...path,String(position)],{signal})).value;
+    if(!validResultStatement(item,{draft})||!await ids.add(item.id))invalid();
+    const previous=await prior.statement(item.id,{signal});
+    // An identity may move only if its old position no longer retains it.
+    // Changed peers are also checked against one another in scratch storage.
+    if(previous&&previous.position!==position&&previous.position<changes.total&&(await document.field([...path,String(previous.position),'id'],{signal})).value===item.id)invalid();
+   }
+  }else for await(const item of resultDocumentStatements(document,{signal}))if(!validResultStatement(item,{draft})||!await ids.add(item.id))invalid();
   signal?.throwIfAborted();return header;
  },{signal});
 }

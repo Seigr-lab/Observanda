@@ -14,25 +14,26 @@ import {resultDocumentHeader,validateResultDocument} from './record-result-docum
 const collections=['sections','contributors','relations','figures','attachments','tags'];
 const ordinaryDetails=new Set(['title','status','outcome','occurredOn','share','updatedAt']);
 const invalid=(field,recordId)=>{throw new AppError('INVALID',[{field,recordId}]);};
-// The writer supplies only the original admitted to its current snapshot, never
-// an arbitrary checkpoint. Restrict reuse to ordinary detail edits: changing
-// ownership, type, prose, schemas, results or a collection repeats full admission.
-async function detailsOnly(document,admitted,names,{signal}={}){
- if(!admitted)return false;
- const before=await admitted.tree.propertyNames(admitted.root),owners=new Set([...names,...before]);
+// Only the admitted current original can prove unchanged owners. Detail and
+// result edits preserve other collections; changed results receive independent
+// admission against their source-pinned identity index.
+async function reusableOwners(document,admitted,names,{signal}={}){
+ if(!admitted)return null;
+ const before=await admitted.tree.propertyNames(admitted.root),owners=new Set([...names,...before]);let resultsChanged=false;
  for(const name of owners){
   signal?.throwIfAborted();if(ordinaryDetails.has(name))continue;
-  if(await document.reference([name],{signal})!==await admitted.reference([name],{signal}))return false;
+  if(await document.reference([name],{signal})===await admitted.reference([name],{signal}))continue;
+  if(name==='results')resultsChanged=true;else return null;
  }
- return true;
+ return {resultsChanged};
 }
 export async function validateRecordDocument(document,metadata,{signal,summaries=[],admitted=null}={}){
  if(metadata.formatVersion!==21)throw new AppError('FORMAT');
  const header={},names=await document.tree.propertyNames(document.root);
- const reuse=await detailsOnly(document,admitted,names,{signal});
+ const reuse=await reusableOwners(document,admitted,names,{signal});
  for(const name of names){
   signal?.throwIfAborted();
-  Object.defineProperty(header,name,{value:collections.includes(name)?[]:name==='attempt'?await (reuse?attemptDocumentHeader:validateAttemptDocument)(document,{signal}):name==='results'?await (reuse?resultDocumentHeader:validateResultDocument)(document,{signal}):name==='template'?await recordTemplateHeader(document,{signal}):(await document.field([name],{signal})).value,enumerable:true,writable:true});
+  Object.defineProperty(header,name,{value:collections.includes(name)?[]:name==='attempt'?await (reuse?attemptDocumentHeader:validateAttemptDocument)(document,{signal}):name==='results'?await (reuse&&!reuse.resultsChanged?resultDocumentHeader:validateResultDocument)(document,{signal,admitted:reuse?admitted:null}):name==='template'?await recordTemplateHeader(document,{signal}):(await document.field([name],{signal})).value,enumerable:true,writable:true});
  }
  if(!reuse)await validateRecordTemplate(document,header.template,{signal});
  validateRecordChanges(metadata,[header],summaries,{capacity:false});
