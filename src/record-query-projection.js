@@ -7,7 +7,7 @@ import {researchCardSources} from './web/research-card-items.js';
 import {recordPublicationSummary} from './web/record-publication-summary.js';
 import {publicationCard} from './web/publication-card.js';
 import {recordEditionInventory} from './web/publication-inventory.js';
-import {publicationDescriptor} from './publication-record-descriptor.js';
+import {publicationDescriptorDetails} from './publication-record-descriptor.js';
 import {bookSelectors,placedFigures} from './web/book-selectors.js';
 import {proseText,proseReferences} from './web/prose-model.js';
 import {attemptDocumentHeader,attemptDocumentReferences,attemptDocumentSearchParts} from './record-attempt-document.js';
@@ -57,7 +57,7 @@ export async function retainedQueryProjection(document,revision,{signal,previous
   for await(const item of items('figures',['id']))if(placed.has(item.id))figureContext.figures.push(item);
   for await(const item of items('attachments',['id','kind','caption','alt','share']))if(placed.has(item.id))figureContext.attachments.push(item);
  }
- plain.publicationDescriptor=publicationDescriptor(figureContext);
+ plain.publicationDescriptor=publicationDescriptorDetails(figureContext);
  async function* searchParts(){
   yield header.title;yield proseText(header.body);yield header.outcome??'';yield* items('tags');
   for await(const item of items('sections',['title','body'])){yield item.title;yield proseText(item.body);}

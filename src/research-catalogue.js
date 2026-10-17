@@ -54,6 +54,7 @@ import {RECORD_BLOCK_PREFIX,rekeyRecordBlock} from './record-block-store.js';
 import {catalogueFormat,requireRecordBlocks,requireRecordQueryBlocks,requireMemberCollections,requireSelectedValueDrafts,requireRetainedRecordDocuments,requireRunReceiptStore,requireDraftEdits,requireAttemptIndexes,requireCurrentAttemptIndexes,requireRecordTypeDrafts,requireRecordMethodIndexes,requireFigureCopyDrafts,requireSearchVocabulary,requireJoinedQueryText,requireKeyedQueryArrays,requireReferenceQueries,requireAttemptQueries,requireStarterDocuments,requireProjectDomains,requireRetiredProjectRecords,requireWorkspaceDomains,requireWorkspaceSettings,requireRecordResultIndexes} from './catalogue-format.js';
 import {catalogueObjectPrefixCount} from './postgres-indexes.js';
 import {recordEncoding} from './record-encoding.js';
+import {withRecordWriteEncoding,recordWriteEncoding} from './record-write-encoding.js';
 import {sameJSONData} from './web/json-data-equality.js';
 import {verifyRecordDocument,verifyRecordVocabulary} from './record-document-verification.js';
 import {RecordMemberCollections} from './record-member-collections.js';
@@ -145,7 +146,7 @@ export class ResearchCatalogue{
  }
  recordAAD(id,version,scopeId,generation){return this.aad('record',id+'/'+version+'/'+scopeId+'/'+generation);}
  async putRecord(record){
-  const version=recordEncoding(record).revision;
+  const version=(recordWriteEncoding(this,record)?.encoding??recordEncoding(record)).revision;
   if((await this.db.get('SELECT 1 FROM records WHERE id=$1 AND revision=$2',record.id,version)))return false;
   await retainStoredRecord(this,record,version);return true;
  }
@@ -189,18 +190,20 @@ export class ResearchCatalogue{
  // Call within the caller's PostgreSQL transaction. Unchanged records are retained
  // byte for byte; one head update atomically makes metadata and revisions visible.
  async put(book,{etag=hash(book)}={}){
-  const metadata={...book,entries:[]},records=[],newRecords=new Set(),fresh=new Map(),ordinal=(await this.db.get('SELECT COALESCE(MAX(ordinal),-1)+1 AS n FROM snapshots')).n;
+  const metadata={...book,entries:[]},records=[],history=[],ordinal=(await this.db.get('SELECT COALESCE(MAX(ordinal),-1)+1 AS n FROM snapshots')).n;
   if((await this.db.get('SELECT id FROM snapshots WHERE id=$1',etag)))throw new AppError('CONFLICT');
   const beforeHead=await this.db.get("SELECT payload FROM state WHERE slot='head'");
   const beforeSnapshot=beforeHead?await this.snapshot(this.decode('state','head',beforeHead.payload).id):null;
   for(const record of book.entries){
-   const prior=beforeSnapshot?await this.member(beforeSnapshot,record.id):null;
-   if(beforeSnapshot&&(record.attempt||prior?.hasAttempt))await validateAttemptChange(this.workspace,metadata.id,prior?await this.record(prior.id,prior.revision):null,record);
-   if(record.results)await validateResultSources(this.workspace,record);
-   await validateFigureSources(this.workspace,record);
-   const encoded=recordEncoding(record);records.push(await new RecordMemberCollections(this).retain({...summary(record,encoded),...await this.putQuery(record,metadata)}));
-   if(!(await this.db.get('SELECT 1 FROM records WHERE id=$1 LIMIT 1',record.id)))newRecords.add(record.id);
-   fresh.set(record.id,await this.putRecord(record));
+   await withRecordWriteEncoding(this,record,metadata,async (prepared,record)=>{
+    const prior=beforeSnapshot?await this.member(beforeSnapshot,record.id):null;
+    if(beforeSnapshot&&(record.attempt||prior?.hasAttempt))await validateAttemptChange(this.workspace,metadata.id,prior?await this.record(prior.id,prior.revision):null,record);
+    if(record.results)await validateResultSources(this.workspace,record);
+    await validateFigureSources(this.workspace,record);
+    records.push(await new RecordMemberCollections(this).retain({...summary(record,prepared.encoding),...await this.putQuery(record,metadata)}));
+    const initialize=!(await this.db.get('SELECT 1 FROM records WHERE id=$1 LIMIT 1',record.id)),fresh=await this.putRecord(record);
+    history.push(Object.freeze({id:record.id,initialize,fresh,item:Object.freeze({revision:prepared.encoding.revision,snapshotId:etag,view:prepared.view})}));
+   });
   }
   const oldHead=await this.db.get("SELECT payload FROM state WHERE slot='head'");
   const current=oldHead?await this.indexed(await this.snapshot(this.decode('state','head',oldHead.payload).id)):null,index=new SnapshotIndex(this);
@@ -226,7 +229,7 @@ export class ResearchCatalogue{
   snapshot.publicationIndex=current?.publicationIndex?.version===3?await publication.replace(current.publicationIndex,before,after):await publication.build(snapshot);
   await this.db.run('INSERT INTO snapshots VALUES ($1,$2,$3)',etag,ordinal,this.encode('snapshot',etag,snapshot));
 
-  for(const record of book.entries)await this.rememberHistory(record,metadata,etag,newRecords.has(record.id),fresh.get(record.id));
+  for(const {id,item,initialize,fresh} of history)await this.historyIndex(id).append(item,{initialize,fresh});
   (await this.db.run("INSERT INTO state VALUES ('head',$1) ON CONFLICT(slot) DO UPDATE SET payload=excluded.payload",this.encode('state','head',{id:etag})));
   return {book,etag};
  }
@@ -315,21 +318,22 @@ export class ResearchCatalogue{
    await operationStage('write-records',{...(Array.isArray(modified)?{total:modified.length}:{}),unit:'records'},async()=>{
    for await(const record of modified){
     operationItem(record.title);
-    const encoded=recordEncoding(record);
-    admitResearchBytes('record',encoded.bytes,{recordId:record.id});
-    if(removedIds.has(record.id)||changedIds.has(record.id))throw new AppError('INVALID');
-    changedIds.add(record.id);
-    const prior=await index.get(current.membership,record.id);
-    await replacementCompletion(this,prior,record,metadata);
-    await validateReplacementAttempt(this,prior,record,metadata);
-    if(record.results)await validateResultSources(this.workspace,record);
-    await validateFigureSources(this.workspace,record);
-    const row=await new RecordMemberCollections(this).retain({...summary(record,encoded),...await this.putQuery(record,metadata),position:prior?.position??nextPosition++});
-    if(prior){before.push(prior);bytes-=prior.bytes;}else count++;
-    after.push(row);bytes+=row.bytes;
-    const initialize=!(await this.db.get('SELECT 1 FROM records WHERE id=$1 LIMIT 1',record.id));
-    const fresh=await this.putRecord(record);
-    await this.rememberHistory(record,metadata,etag,initialize,fresh);
+    await withRecordWriteEncoding(this,record,metadata,async (prepared,record)=>{
+     admitResearchBytes('record',prepared.encoding.bytes,{recordId:record.id});
+     if(removedIds.has(record.id)||changedIds.has(record.id))throw new AppError('INVALID');
+     changedIds.add(record.id);
+     const prior=await index.get(current.membership,record.id);
+     await replacementCompletion(this,prior,record,metadata);
+     await validateReplacementAttempt(this,prior,record,metadata);
+     if(record.results)await validateResultSources(this.workspace,record);
+     await validateFigureSources(this.workspace,record);
+     const row=await new RecordMemberCollections(this).retain({...summary(record,prepared.encoding),...await this.putQuery(record,metadata),position:prior?.position??nextPosition++});
+     if(prior){before.push(prior);bytes-=prior.bytes;}else count++;
+     after.push(row);bytes+=row.bytes;
+     const initialize=!(await this.db.get('SELECT 1 FROM records WHERE id=$1 LIMIT 1',record.id));
+     const fresh=await this.putRecord(record);
+     await this.rememberHistory(record,metadata,etag,initialize,fresh);
+    });
     operationAdvance();
    }
    });
@@ -416,6 +420,8 @@ export class ResearchCatalogue{
  }
  async snapshots(){return (await this.db.all('SELECT id FROM snapshots ORDER BY ordinal DESC')).map(r=>r.id);}
  async rememberHistory(record,metadata,snapshotId,initialize=false,fresh=false){
+  const prepared=recordWriteEncoding(this,record,metadata);
+  if(prepared)return this.historyIndex(record.id).append({revision:prepared.encoding.revision,snapshotId,view:prepared.view},{initialize,fresh});
   const display=historicalRecordValue(metadata,record);
   return this.historyIndex(record.id).append({revision:recordEncoding(record).revision,snapshotId,view:{revision:recordRevision(display),title:display.title,status:display.status,updatedAt:display.updatedAt}},{initialize,fresh});
  }

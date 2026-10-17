@@ -8,7 +8,8 @@ import {recordQueryDocument} from './web/record-query.js';
 import {recordPublicationSummary} from './web/record-publication-summary.js';
 import {publicationCard} from './web/publication-card.js';
 import {recordEditionInventory} from './web/publication-inventory.js';
-import {publicationDescriptor} from './publication-record-descriptor.js';
+import {publicationDescriptorDetails} from './publication-record-descriptor.js';
+import {recordWriteEncoding,recordWriteDisplay} from './record-write-encoding.js';
 import {retainQueryValue,readQueryValue,withQueryValue} from './record-query-storage.js';
 import {retainedQueryProjection} from './record-query-projection.js';
 import {RecordBlockStore} from './record-block-store.js';
@@ -27,7 +28,7 @@ function retainedBrowseDocument(document){
 export class RecordQueryDocuments{
  constructor(store){this.store=store;}
  async retain(record,metadata){
-  const display=historicalRecordValue(metadata,record),revision=recordRevision(display);
+  const prepared=recordWriteEncoding(this.store,record,metadata),display=recordWriteDisplay(this.store,record,metadata)??historicalRecordValue(metadata,record),revision=prepared?.contentRevision??recordRevision(display);
   if(!jsonFitsBytes(display,65535,{pretty:true})){
    const generation=1,key=await this.store.scopeKey(display.notebookId,generation,{create:true});
    try{
@@ -35,7 +36,7 @@ export class RecordQueryDocuments{
     return await this.retainDocument(new RecordDocument(blocks,root),revision);
    }finally{key.fill(0);}
   }
-  const document={...recordQueryDocument(display),publication:recordPublicationSummary(display),publicationCard:publicationCard(display),publicationDescriptor:publicationDescriptor(display),editionInventory:recordEditionInventory(display,revision),recordRevision:revision};
+  const document={...recordQueryDocument(display),publication:recordPublicationSummary(display),publicationCard:publicationCard(display),publicationDescriptor:{...publicationDescriptorDetails(display),revision},editionInventory:recordEditionInventory(display,revision),recordRevision:revision};
   return this.retainValues(record.id,document,retainedBrowseDocument(document));
  }
  async retainDocument(document,revision,options={}){
@@ -89,7 +90,7 @@ export class RecordQueryDocuments{
     }
     if(!source||!stored&&missing(value)){
      const display=historicalRecordValue(metadata,await owner.store.record(row.id,row.revision));
-     const revision=recordRevision(display);value={...recordQueryDocument(display),publication:recordPublicationSummary(display),publicationCard:publicationCard(display),publicationDescriptor:publicationDescriptor(display),editionInventory:recordEditionInventory(display,revision),recordRevision:revision};
+     const revision=recordRevision(display);value={...recordQueryDocument(display),publication:recordPublicationSummary(display),publicationCard:publicationCard(display),publicationDescriptor:{...publicationDescriptorDetails(display),revision},editionInventory:recordEditionInventory(display,revision),recordRevision:revision};
      if(matching&&!value.searchText.includes(matching))continue;
     }
     const {recordRevision:displayRevision,...document}=search?value:browseDocument(value);
