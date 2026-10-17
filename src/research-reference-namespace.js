@@ -30,3 +30,11 @@ export async function recordReferenceNamespaces(store,reference){
  const names=new Set(prior&&prior!==current&&await referenceNamespaceMatches(store,{...ref,workspaceId:prior})?[current,prior]:[current]);
  for await(const origin of recordOrigins(store,'record',ref.id))names.add(origin.sourceNamespace);return [...names];
 }
+
+// Carry every authenticated former owner of this identity when its content
+// moves again. A project-level witness never grants aliases to other identities.
+export async function* referenceSourceOwners(store,ref){
+ for await(const origin of recordOrigins(store,ref.kind,ref.id))yield origin.sourceOwner;
+ const receipt=store.workspace.projectId?await store.object('project:research-migration'):null,prior=receipt?.sourceNamespace;
+ if(prior&&await referenceNamespaceMatches(store,{...ref,workspaceId:prior}))yield {projectId:null,labBookId:null,workspaceId:prior};
+}

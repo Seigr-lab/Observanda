@@ -95,20 +95,29 @@ test('selected owner move retains exact evidence, unavailable sibling provenance
 
 test('project record move preserves authenticated former namespaces for external evidence',{timeout:180000},async t=>{
  const f=await projectTreeFixture(t),project=f.projects[0],[original,to]=f.books,source=new ProjectStorage(project.root,project.projectId,project.key),target=new LabBookStorage(to.root,to.labBookId,to.key),materials=new ResearchMaterials(source);
+ await new LabBookDirectory(f.registry).register(to.projectId,to);
  const record={...structuredClone(original.before.book.entries[0]),id:randomUUID()},sibling={...structuredClone(record),id:randomUUID(),title:'Retained sibling'};
  await source.update(book=>{book.notebooks=[structuredClone(original.before.book.notebooks[0])];book.entries=[record,sibling];return book;});
- const namespace=(await source.outline()).metadata.id,artifact=await upload(materials,sibling.id,'sibling.txt',Buffer.from('Original sibling evidence')),priorNamespace=randomUUID(),qualified={...artifact,workspaceId:priorNamespace};
+ const savedRecord=(await source.read()).book.entries.find(item=>item.id===record.id);
+ const namespace=(await source.outline()).metadata.id,artifact=await upload(materials,sibling.id,'sibling.txt',Buffer.from('Original sibling evidence')),owned=await upload(materials,record.id,'owned.txt',Buffer.from('Original owned evidence')),priorNamespace=randomUUID(),qualified={...artifact,workspaceId:priorNamespace},qualifiedOwned={...owned,workspaceId:priorNamespace},qualifiedRecord={kind:'record',id:record.id,revision:recordRevision(savedRecord),workspaceId:priorNamespace};
  await source.withLock(()=>source.catalogue(async store=>{
   await store.putObject('project:research-migration',{version:1,projectId:project.projectId,namespaceId:namespace,sourceNamespace:priorNamespace});
-  await store.putObject(referenceOriginKey(qualified),{version:1,projectId:project.projectId,namespaceId:namespace,sourceNamespace:priorNamespace,kind:artifact.kind,id:artifact.id});
+  for(const ref of [qualified,qualifiedOwned,qualifiedRecord])await store.putObject(referenceOriginKey(ref),{version:1,projectId:project.projectId,namespaceId:namespace,sourceNamespace:priorNamespace,kind:ref.kind,id:ref.id});
   assert.equal(await referenceNamespaceMatches(store,qualified),true);
   assert.equal(await referenceNamespaceMatches(store,{...qualified,id:randomUUID()}),false);
  }));
- const analysis=await materials.analysis({recordId:record.id,title:'References retain their addresses',tool:'Synthetic',version:'1',parameters:'',inputs:[artifact,qualified],outputs:[]}),expected=await materials.read(analysis);
+ const analysis=await materials.analysis({recordId:record.id,title:'References retain their addresses',tool:'Synthetic',version:'1',parameters:'',inputs:[artifact,qualified,qualifiedOwned,qualifiedRecord],outputs:[]}),expected=await materials.read(analysis);
  const sourceOwner={projectId:project.projectId,labBookId:null,workspaceId:namespace},targetOwner={projectId:to.projectId,labBookId:to.labBookId,workspaceId:to.namespaceId};
  const member=await source.catalogue(async store=>store.member(await store.snapshot(),record.id)),engine=new RecordOwnerTransfer(source,target,{registry:f.registry,sourceOwner,targetOwner});
- const result=await engine.start({id:randomUUID(),workspaceId:namespace,recordId:record.id,sourceNotebookId:record.notebookId,expectedStorageRevision:member.revision,targetWorkspaceId:to.namespaceId,targetNotebookId:to.labBookId});assert.equal(result.phase,'complete');
+ const command={id:randomUUID(),workspaceId:namespace,recordId:record.id,sourceNotebookId:record.notebookId,expectedStorageRevision:member.revision,targetWorkspaceId:to.namespaceId,targetNotebookId:to.labBookId};
+ // Resume an already-prepared transfer whose former identity witnesses were
+ // not retained by the writer that prepared it.
+ const prepare=engine.prepareCurrent;engine.prepareCurrent=async function(...args){const result=await prepare.apply(this,args);await target.withLock(()=>target.catalogue(async store=>{for(const ref of [qualifiedOwned,qualifiedRecord])await store.deleteObject('record:reference-origin:'+ref.kind+':'+ref.id+':'+priorNamespace);}));throw Error('Interrupted prepared transfer');};
+ await assert.rejects(engine.start(command),/Interrupted prepared transfer/);engine.prepareCurrent=prepare;
+ const result=await engine.start(command);assert.equal(result.phase,'complete');
  const incoming=new ResearchMaterials(target);assert.deepEqual(await incoming.read(analysis),expected);
+ assert.deepEqual(await incoming.read(qualifiedOwned),await materials.read(owned));assert.deepEqual(await incoming.read(qualifiedRecord),savedRecord);
+ const redirect=await f.registry.reference({workspaceId:priorNamespace,kind:'record',id:record.id});assert.equal(redirect.labBookId,to.labBookId);
  assert.deepEqual(await incoming.referenceAddress(artifact),{...artifact,workspaceId:namespace});
  assert.deepEqual(await incoming.referenceAddress(qualified),qualified);await assert.rejects(incoming.read(qualified),{code:'MATERIAL_INVALID'});
  assert.deepEqual(await materials.read(qualified),await materials.read(artifact));

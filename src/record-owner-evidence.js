@@ -14,8 +14,8 @@ import {withScratch} from './scratch-work.js';
 import {withRecordDocument} from './record-document.js';
 import {recordReferenceLocation} from './record-reference-location.js';
 import {RetainedRecordDocuments,retainedRecordPointer} from './retained-record-documents.js';
-import {retainRecordOrigin,recordOrigin,recordOrigins,retainRecordOwnerExternalReference} from './record-owner-provenance.js';
-import {referenceNamespaceMatches} from './research-reference-namespace.js';
+import {retainRecordOrigin,recordOrigin,retainRecordOwnerExternalReference} from './record-owner-provenance.js';
+import {referenceNamespaceMatches,referenceSourceOwners} from './research-reference-namespace.js';
 import {validMaterialReference,materialReference} from './web/material-reference.js';
 import {researchId} from './web/research-reference.js';
 import {schemaReferences,measurementReferences} from './web/measurement-model.js';
@@ -45,7 +45,15 @@ export async function prepareRecordOwnerEvidence(source,target,receipt,{write,si
  const recordId=receipt.command.recordId,materials=new ResearchMaterials(source),incoming=new ResearchMaterials(target);
  let state=await target.catalogue(store=>store.object(stateKey(receipt.id)));
  if(!state)state={version:1,segmentId:receipt.progress.segmentId,recordId,createdAt:receipt.createdAt,sequences:Object.fromEntries(kinds.map(kind=>[kind,empty('references')])),revisions:empty('references'),files:empty('files'),audit:empty('files'),headsAfter:null,ready:false};
- if(state.version!==1||state.recordId!==recordId||state.segmentId!==receipt.progress.segmentId)damaged();if(state.ready)return state;
+ if(state.version!==1||state.recordId!==recordId||state.segmentId!==receipt.progress.segmentId)damaged();
+ const origin=async ref=>write(async store=>{
+  await retainRecordOrigin(store,{...ref,sourceOwner:receipt.sourceOwner,transferId:receipt.id});
+  await source.catalogue(async from=>{for await(const sourceOwner of referenceSourceOwners(from,ref))await retainRecordOrigin(store,{...ref,sourceOwner,transferId:receipt.id});});
+ });
+ await origin({kind:'record',id:recordId});
+ // A prepared receipt can predate retained former identities. Reconcile only
+ // its selected identities before verification; immutable evidence is reused.
+ if(state.ready){const seen=boundedSet();for await(const ref of incoming.sequences.items(state.revisions)){signal?.throwIfAborted();const key=ref.kind+':'+ref.id;if(!seen.has(key)){await origin(ref);seen.add(key);}}return state;}
  const persist=async store=>{await store.putObject(stateKey(receipt.id),state);};
  const retainAudit=async(name,text)=>write(async store=>{
   const key=recordOwnerAuditPathKey(name),prior=await store.object(key),entry={name,sha256:digest(text),bytes:Buffer.byteLength(text)},part={version:1,transferId:receipt.id,recordId,relative:name,text};
@@ -97,10 +105,6 @@ export async function prepareRecordOwnerEvidence(source,target,receipt,{write,si
   await emit({kind:'metadata',name:'.observanda/fonts/'+id+'.json',content:sourceText});
   await write(async store=>{const library=new WorkspaceFonts(target),list=await library.list(),prior=list.find(value=>value.id===id);if(prior)return;if(list.length>=64)throw new AppError('FONT_LIMIT');const key='metadata:.observanda/fonts/'+id+'.json',retained=await store.object(key);await journalRecordOwnerMutation(store,receipt,{kind:'font',key:id},null,entry,{dependencies:[{kind:'object',key,revision:digest(serialize(retained))}]});await target.writeMetadata('.observanda/fonts/library.json',JSON.stringify([...list,entry]));});
  };
- const origin=async ref=>write(async store=>{
-  await retainRecordOrigin(store,{...ref,sourceOwner:receipt.sourceOwner,transferId:receipt.id});
-  await source.catalogue(async from=>{for await(const prior of recordOrigins(from,ref.kind,ref.id))await retainRecordOrigin(store,{...ref,sourceOwner:prior.sourceOwner,transferId:receipt.id});});
- });
  const external=async ref=>{
   const local=await source.catalogue(store=>referenceNamespaceMatches(store,ref));
   if(ref.workspaceId===receipt.targetOwner.workspaceId){await incoming.read(ref);return;}
