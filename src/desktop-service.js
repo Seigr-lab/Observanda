@@ -1,3 +1,5 @@
+import {pdfRenderBridge} from './pdf-render-bridge.js';
+import {installPdfRenderer} from './pdf-render-service.js';
 // The desktop window runs the existing HTTP app in a bundled Node process.
 // There is no renderer-to-Node bridge or separate desktop workspace model.
 import path from 'node:path';
@@ -7,11 +9,12 @@ import {readPreference} from './locations.js';
 import {DeviceStore} from './security/device-store.js';
 import {AppError,safeError} from './errors.js';
 let runtime,server,starting=false,stopping=false,closed;const startup=new AbortController(),pending=new Map();let sequence=0;
+const pdfBridge=pdfRenderBridge(process),removePdfRenderer=installPdfRenderer((input,options)=>pdfBridge.render(input,options));
 const send=message=>{if(process.connected)process.send(message);};
 const protector={available:()=>true,protect:bytes=>transform('encrypt',bytes.toString('base64')).then(value=>Buffer.from(value,'base64')),unprotect:bytes=>transform('decrypt',bytes.toString('base64')).then(value=>Buffer.from(value,'base64'))};
 function transform(operation,value){return new Promise((resolve,reject)=>{const id=++sequence,timer=setTimeout(()=>{pending.delete(id);reject(new AppError('DEVICE_UNAVAILABLE'));},15000);pending.set(id,{resolve,reject,timer});send({type:'protect',id,operation,value});});}
 async function stop(){
- stopping=true;startup.abort();if(starting)return;
+ stopping=true;startup.abort();removePdfRenderer();pdfBridge.close();if(starting)return;
  return closed??=(async()=>{
   let failure;
   try{await server?.close();}catch(error){failure=error;}

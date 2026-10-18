@@ -1,0 +1,37 @@
+import {test,expect} from '@playwright/test';
+import {mkdtemp,rm} from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import {encryptedFixture} from './encrypted-fixture.js';
+import {sampleNotebook} from '../../src/sample.js';
+import {startServer} from '../../src/server.js';
+import {clearVault} from '../../src/encryption.js';
+import {PdfDocuments} from '../../src/pdf-documents.js';
+import {installPdfRenderer} from '../../src/pdf-render-service.js';
+import {navigate} from './preferences-helper.js';
+
+test('PDF editor saves independent documents, lays out sections, restores history and downloads its preview',async({page,browser})=>{
+ test.setTimeout(120000);page.setDefaultTimeout(15000);
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-pdf-ui-')),f=await encryptedFixture(directory,{...sampleNotebook(),title:'workspace'}),errors=[];
+ const removeRenderer=installPdfRenderer(async input=>{const render=await browser.newPage();try{await render.route('**/*',route=>route.abort());await render.setContent(input.html);await render.evaluate(()=>document.fonts.ready);return {bytes:await render.pdf({preferCSSPageSize:true,printBackground:true})};}finally{await render.close();}});
+ const app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore}),documents=new PdfDocuments(f.workspace,(await f.workspace.outline()).metadata.id);
+ const initiallyAvailable=await documents.available();page.on('pageerror',e=>errors.push(e.message));
+ try{
+  await page.goto(app.url);await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();await navigate(page,'PDF editor');
+  const ui=page.locator('[data-pdf-editor]');await expect(ui.getByRole('heading',{name:'PDF documents',exact:true})).toBeVisible();expect(await documents.available()).toBe(initiallyAvailable);
+  await ui.getByRole('button',{name:'New document',exact:true}).click();await expect(page).toHaveURL(/#\/modules\/pdf-editor\/[a-f0-9-]{36}$/);const id=new URL(page.url()).hash.split('/').at(-1);
+  await ui.locator('summary').filter({hasText:/^Document$/}).click();await ui.getByLabel('Document name',{exact:true}).fill('Observation report');
+  await ui.getByLabel('Section title',{exact:true}).fill('First observation');await ui.getByRole('textbox',{name:'Content',exact:true}).fill('Exact integer 9007199254740993.');
+  await expect(ui.locator('[data-pdf-status]')).toHaveText('Saved');await expect.poll(async()=>((await documents.read('open',{id})).header.name)).toBe('Observation report');
+  await ui.locator('summary').filter({hasText:/^Document layout$/}).click();await ui.getByLabel('Page width (mm)',{exact:true}).fill('180');await ui.getByLabel('Page height (mm)',{exact:true}).fill('250');await ui.getByLabel('Page header',{exact:true}).fill('Observations');await expect(ui.locator('[data-pdf-status]')).toHaveText('Saved');
+  await ui.getByRole('button',{name:'Add section',exact:true}).click();await expect(ui.getByLabel('Section title',{exact:true})).toHaveValue('');await expect(ui).toHaveAttribute('aria-busy','false');await ui.getByLabel('Section title',{exact:true}).fill('Second observation');await ui.getByRole('textbox',{name:'Content',exact:true}).fill('Second retained value.');await expect(ui.locator('[data-pdf-status]')).toHaveText('Saved');
+  expect((await documents.read('sections',{id})).items.at(-1).title).toBe('Second observation');await ui.getByRole('button',{name:'Move section up',exact:true}).click();await expect(ui.getByRole('navigation',{name:'Sections'}).getByRole('button').first()).toHaveText('Second observation');
+  await page.reload();await expect(ui.getByRole('heading',{name:'Observation report',exact:true})).toBeVisible();await expect(ui.getByLabel('Section title',{exact:true})).toHaveValue('Second observation');expect((await documents.read('open',{id})).header.layout.widthMm).toBe(180);
+  await ui.getByRole('button',{name:'History',exact:true}).click();await ui.getByRole('button',{name:'Restore this edition',exact:true}).first().click();await expect(ui.getByRole('navigation',{name:'Sections'}).getByRole('button').first()).toHaveText('First observation');
+  await ui.getByRole('button',{name:'Preview PDF',exact:true}).click();await expect(ui.getByTitle('PDF preview',{exact:true})).toBeVisible();const download=page.waitForEvent('download');await ui.getByRole('button',{name:'Download PDF',exact:true}).click();const artifact=await download;expect(artifact.suggestedFilename()).toBe('Observation report.pdf');await artifact.saveAs(test.info().outputPath('editor-document.pdf'));
+  await ui.getByRole('button',{name:'Close preview',exact:true}).click();await ui.getByRole('button',{name:'Documents',exact:true}).click();await ui.getByRole('button',{name:'New document',exact:true}).click();await expect.poll(async()=>(await documents.read('list')).items.length).toBe(2);
+  await ui.getByRole('button',{name:'Documents',exact:true}).click();await ui.getByRole('button',{name:'Observation report',exact:true}).click();await expect(ui.getByRole('heading',{name:'Observation report',exact:true})).toBeVisible();await expect(ui).toHaveAttribute('aria-busy','false');
+  await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:test.info().outputPath('pdf-editor-mobile.png'),fullPage:true});
+  await page.setViewportSize({width:1440,height:1000});await page.screenshot({path:test.info().outputPath('pdf-editor.png'),fullPage:true});expect(errors).toEqual([]);
+ }finally{await app.close();removeRenderer();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+});

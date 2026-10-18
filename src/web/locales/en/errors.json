@@ -317,5 +317,20 @@
   "LAB_BOOK_IMPORT_ACCESS": "The lab book could not be unlocked. Check its password or recovery key.",
   "PROJECT_IMPORT_ACCESS": "Unlock the selected project or lab book to continue importing.",
   "PUBLICATION_IDENTITY": "The selected sources contain conflicting publication identities.",
-  "PROJECT_MOVE_DESTINATION_ACCESS": "Unlock the destination workspace to continue this move."
+  "PROJECT_MOVE_DESTINATION_ACCESS": "Unlock the destination workspace to continue this move.",
+  "PDF_DESKTOP": "PDF rendering is available in the desktop application. Your document can still be edited and saved here.",
+  "PDF_BUSY": "A PDF is being rendered. Wait for it to finish before starting another.",
+  "PDF_CANCELLED": "PDF rendering was cancelled.",
+  "PDF_TIMEOUT": "The PDF could not be rendered within the available time.",
+  "PDF_CAPACITY": "This document exceeds the current PDF rendering limit.",
+  "PDF_INPUT": "The PDF document could not be prepared.",
+  "PDF_OUTPUT": "The PDF renderer could not finish the document.",
+  "PDF_LAYOUT": "Check the page dimensions, margins and text settings.",
+  "PDF_SECTION": "A section could not be prepared for PDF.",
+  "PDF_EMPTY": "Add at least one section before exporting.",
+  "PDF_FONT": "Select an available bundled font for the document.",
+  "PDF_GLYPH": "A selected font cannot display some characters. Choose a font that includes them.",
+  "PDF_UNRESOLVED_FIGURE": "This document contains a figure that has not been included in the PDF.",
+  "PDF_UNRESOLVED_REFERENCE": "This document contains an internal reference that needs a PDF destination.",
+  "PDF_UNSUPPORTED_CONTENT": "This document contains content that the PDF renderer does not support yet."
 }

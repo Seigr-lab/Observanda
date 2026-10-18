@@ -1,3 +1,4 @@
+import {pdfDocumentRequest,executePdfRequest} from './pdf-document-requests.js';
 import {configurationSourceAccess} from './configuration-source-access.js';
 import {recordOwnerTransferCompletionError} from './record-owner-transfer-application.js';
 import {verifyPublicationCandidate} from './retained-publication-files.js';
@@ -338,7 +339,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('Cache-Control', 'no-store');
-    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'self'");
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'self'");
     const json = (value, status = 200) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(value)); };
     let countedWrite=false,ownsGithubMutation=false,releaseRead;const request={};pending.add(request);
     try {
@@ -466,8 +467,8 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       const selectedProject=projectRequest(url.pathname,req.method);
       if(selectedProject&&(req.method==='POST'||(selectedProject.material||selectedProject.publication||selectedProject.asset||selectedProject.sampleAnalysis)&&req.method==='GET')){
         if(!workspace||req.method==='POST'&&req.headers['x-observanda-workspace']!==selectedContext.id)throw new AppError('WORKSPACE_CHANGED');
-        if(selectedProject.publication||selectedProject.asset||selectedProject.starter||selectedProject.sampleAnalysis){
-          const check=req.checkWriter;await check();if(selectedProject.write){activeWrites++;countedWrite=true;}else req.operationActivity=null;
+        if(selectedProject.pdf||selectedProject.publication||selectedProject.asset||selectedProject.starter||selectedProject.sampleAnalysis){
+          const check=req.checkWriter;await check();if(selectedProject.pdf)req.operationActivity=null;if(selectedProject.write){activeWrites++;countedWrite=true;}else req.operationActivity=null;
           return await projectContentHttp(req,res,selectedProject,{body,json,mime,headless,contextId:context.id,execute:(data,options)=>historyProjects.run(client,selectedProject,data,{...options,check,setCheck:next=>{req.checkWriter=next;}})});
         }
         if(selectedProject.material){
@@ -840,6 +841,8 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         }finally{changing=false;startJobs(context);}
       }
       if(!workspace)throw new AppError('MISSING');
+      const pdf=pdfDocumentRequest(url.pathname,req.method);
+      if(pdf){req.operationActivity=null;return await projectContentHttp(req,res,pdf,{body,json,mime,headless,contextId:context.id,execute:(data,options)=>executePdfRequest(workspace,pdf,data,{...options,check:req.checkWriter})});}
       const starter=recordStarterRequest(url.pathname,req.method);
       if(starter){
         if(!starter.write)req.operationActivity=null;

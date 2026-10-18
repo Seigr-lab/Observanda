@@ -1,3 +1,4 @@
+import {pdfDocumentRequest,executePdfRequest} from './pdf-document-requests.js';
 import {configurationSourceAccess} from './configuration-source-access.js';
 import {locateResearchReference,resolveResearchReference} from './research-owner-reference.js';
 import {RecordOwnerTransferApplication,recordOwnerTransferRequest} from './record-owner-transfer-application.js';
@@ -100,7 +101,7 @@ export function projectRequest(route,method){
  if(match[2]==='settings/save')return {projectId:match[1],operation:match[2],write:true,limit:MAX_BYTES};
  if(match[2]==='directory/reparent')return {projectId:match[1],operation:match[2],write:true,limit:16384};
  if(['storage/details','storage/copy','storage/copy/resume','storage/copy/cancel','storage/export','storage/export/resume','storage/export/cancel','storage/move','storage/move/resume','storage/move/cancel','storage/move/status','storage/delete','storage/delete/resume','storage/delete/status'].includes(match[2]))return {projectId:match[1],operation:match[2],write:!['storage/details','storage/move/status','storage/delete/status'].includes(match[2]),limit:16384};
- const command=recordOwnerTransferRequest('/api/'+match[2],method)??sampleAnalysisRequest('/api/'+match[2],method)??reviewRequest('/api/'+match[2],method)??recordStarterRequest('/api/'+match[2],method)??projectAssetRequest('/api/'+match[2],method)??projectPublicationRequest('/api/'+match[2])??intakeRequest('/api/'+match[2])??materialRequest('/api/'+match[2])??researchRequest('/api/'+match[2])??projectModuleRequest('/api/'+match[2])??projectCalendarRequest('/api/'+match[2]);
+ const command=pdfDocumentRequest('/api/'+match[2],method)??recordOwnerTransferRequest('/api/'+match[2],method)??sampleAnalysisRequest('/api/'+match[2],method)??reviewRequest('/api/'+match[2],method)??recordStarterRequest('/api/'+match[2],method)??projectAssetRequest('/api/'+match[2],method)??projectPublicationRequest('/api/'+match[2])??intakeRequest('/api/'+match[2])??materialRequest('/api/'+match[2])??researchRequest('/api/'+match[2])??projectModuleRequest('/api/'+match[2])??projectCalendarRequest('/api/'+match[2]);
  if(command)return {projectId:match[1],route:'/api/'+match[2],...command};
  if(['access/details','access/password'].includes(match[2]))return {projectId:match[1],operation:match[2],write:match[2]==='access/password',limit:16384};
  if(['access/unlock','access/lock','reference'].includes(match[2]))return {projectId:match[1],operation:match[2],write:false,limit:16384};
@@ -298,6 +299,7 @@ export class ProjectApplication{
       const roots=[this.workspace.root,...(await registry.read()).value.projects.map(entry=>entry.root)];if(roots.some(root=>within(root,destination)||within(destination,root)))throw new AppError('STORAGE_PATH');
       return copyOwner(selected.operation==='storage/export'?archives:copies,{id:data.id,path:destination,onProgress});
      }
+     if(selected.pdf)return executePdfRequest(storage,selected,data,{signal,check:assertCurrent,binary});
      if(selected.sampleAnalysis)return executeSampleAnalysisRequest(storage,selected,data,{signal,check:assertCurrent,query,binary});
      if(selected.review)return executeReviewRequest(storage,this.deviceStore,selected.review,data);
      if(selected.starter)return executeRecordStarterRequest(storage,selected,data,{signal,binary});

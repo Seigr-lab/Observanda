@@ -1,3 +1,4 @@
+import pdfEditor from '../locales/en/pdfEditor.json' with {type:'json'};
 import configurationEditor from '../locales/en/configurationEditor.json' with {type:'json'};
 import bomStock from '../locales/en/bomStock.json' with {type:'json'};
 import taskPrerequisites from '../locales/en/taskPrerequisites.json' with {type:'json'};
@@ -178,6 +179,7 @@ english.figureComposition=figureComposition;
 english.recordLinks=recordLinks;
 english.recordReading=recordReading;
 english.recordContent=recordContent;
+english.pdfEditor=pdfEditor;
 english.configurationEditor=configurationEditor;
 english.recordWriting=recordWriting;
 english.recordValues=recordValues;

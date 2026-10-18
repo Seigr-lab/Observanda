@@ -11,7 +11,7 @@ export function projectApiRoute(route,owner){
  if(labBookId!==undefined&&labBookId!==null&&!researchId(labBookId))throw new TypeError('Invalid lab-book owner');
  if(projectId===null||projectId===undefined)return route;
  if(!researchId(projectId))throw new TypeError('Invalid project owner');
- return /^\/api\/(?:research\/|reviews\/|v1\/intake\/|workspace\/(?:read\/|structure$|notebook$|save$)|modules\/|laboratory(?:\/|$)|calendars\/|fonts(?:\/|$)|media(?:\/|-imports\/|-policy$)|websites\/|website\/|publishing(?:\/|$)|publication-|deployment-jobs\/|repository-setup\/|github-connection\/|local-export\/|preview$|design-preview$|appearance-preview(?:\/|$)|export(?:\/|$))/.test(route)?'/api/projects/'+projectId+(labBookId?'/lab-books/'+labBookId:'')+route.slice(4):route;
+ return /^\/api\/(?:research\/|pdf\/|reviews\/|v1\/intake\/|workspace\/(?:read\/|structure$|notebook$|save$)|modules\/|laboratory(?:\/|$)|calendars\/|fonts(?:\/|$)|media(?:\/|-imports\/|-policy$)|websites\/|website\/|publishing(?:\/|$)|publication-|deployment-jobs\/|repository-setup\/|github-connection\/|local-export\/|preview$|design-preview$|appearance-preview(?:\/|$)|export(?:\/|$))/.test(route)?'/api/projects/'+projectId+(labBookId?'/lab-books/'+labBookId:'')+route.slice(4):route;
 }
 export function projectRoute(hash){
  const match=/^#\/owners\/([a-f0-9-]{36})(?:\/books\/([a-f0-9-]{36}))?(\/.*)$/.exec(hash);
