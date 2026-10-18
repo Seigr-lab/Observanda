@@ -1,0 +1,74 @@
+import {parentPort,workerData} from 'node:worker_threads';
+import {createHash} from 'node:crypto';
+import {inflateSync} from 'node:zlib';
+import {PDFDocument,PDFName,PDFDict,PDFArray,PDFRawStream,PDFHexString,PDFRef,getDefaultSRGBProfile} from '@cantoo/pdf-lib';
+import {inspectPdfIcc} from './pdf-print-icc.js';
+import {validPdfPrintCondition} from './web/pdf-print-condition-model.js';
+const name=PDFName.of,hash=value=>createHash('sha256').update(value).digest('hex'),fail=(code='PDF_PRINT_COLOR')=>{throw Object.assign(new Error(code),{code});};
+const intents={'relative-colorimetric':'RelativeColorimetric',perceptual:'Perceptual',saturation:'Saturation','absolute-colorimetric':'AbsoluteColorimetric'};
+const operators=new Set('b B b* B* BDC BI BMC BT BX c cm CS cs d d0 d1 Do DP EMC ET EX f F f* G g gs h i ID EI j J K k l m M MP n q Q re RG rg ri s S SC sc SCN scn sh T* Tc Td TD Tf Tj TJ TL Tm Tr Ts Tw Tz v w W W* y'.split(' ').concat(["'",'"']));
+// Lexical operators only. Names, strings, arrays and dictionaries cannot be
+// mistaken for colour commands. Inline images are outside our emitted subset.
+function contentText(source,{intent,target,mask,change,emptyResources=false}){
+ let at=0,operands=[];const replacements=[],space=c=>c!==undefined&&/[\x00\t\n\f\r ]/.test(c),delimiter=c=>c===undefined||space(c)||/[()[\]<>/%]/.test(c);
+ function skip(){while(at<source.length){if(space(source[at]))at++;else if(source[at]==='%'){while(at<source.length&&!/[\r\n]/.test(source[at]))at++;}else break;}}
+ function token(depth=0){if(depth>64)fail();skip();const start=at,c=source[at++];if(c==='('){let n=1;while(at<source.length&&n){const c=source[at++];if(c==='\\')at++;else if(c==='(')n++;else if(c===')')n--;}if(n)fail();return {start,end:at,type:'value'};}
+  if(c==='['||c==='<'&&source[at]==='<'){const end=c==='['?']':'>>';if(c==='<')at++;while(true){skip();if(source.startsWith(end,at)){at+=end.length;break;}if(at>=source.length)fail();token(depth+1);}return {start,end:at,type:'value'};}
+  if(c==='<'){while(at<source.length&&source[at]!=='>')at++;if(at>=source.length)fail();at++;return {start,end:at,type:'value'};}
+  if(c==='/'){while(!delimiter(source[at]))at++;return {start,end:at,type:'name',value:source.slice(start+1,at).replace(/#([\da-f]{2})/gi,(_,hex)=>String.fromCharCode(parseInt(hex,16)))};}
+  if(/[\]>)]/.test(c??''))fail();while(!delimiter(source[at]))at++;const value=source.slice(start,at);return {start,end:at,type:/^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(value)?'number':['true','false','null'].includes(value)?'value':'operator',value};
+ }
+ while(at<source.length){skip();if(at>=source.length)break;const t=token();if(t.type!=='operator'){operands.push(t);if(operands.length>128000)fail();continue;}if(!operators.has(t.value)||['BI','ID','EI'].includes(t.value))fail();
+  if(emptyResources&&(['Do','Tf','gs','sh'].includes(t.value)||['cs','CS'].includes(t.value)&&!['DeviceRGB','DeviceGray','DeviceCMYK'].includes(operands[0]?.value)))fail();
+  if(!mask&&['cs','CS'].includes(t.value)&&((operands[0]?.value==='DeviceGray'&&target==='RGB')||(operands[0]?.value==='DeviceCMYK'&&target!=='CMYK')))fail();
+  if(t.value==='ri'){if(operands.length!==1||operands[0].type!=='name'||!Object.values(intents).includes(operands[0].value))fail();if(change)replacements.push([operands[0].start,t.end,'/'+intent+' ri']);else if(operands[0].value!==intent)fail();}
+  if(['g','G'].includes(t.value)&&target==='RGB'&&!mask){if(operands.length!==1||operands[0].type!=='number'||Number(operands[0].value)<0||Number(operands[0].value)>1)fail();if(!change)fail();const v=operands[0].value;replacements.push([operands[0].start,t.end,[v,v,v,t.value==='g'?'rg':'RG'].join(' ')]);}
+  if(['k','K'].includes(t.value)&&target!=='CMYK'&&!mask)fail();operands=[];
+ }
+ if(operands.length)fail();for(const [start,end,value]of replacements.reverse())source=source.slice(0,start)+value+source.slice(end);return source;
+}
+function colourPass(document,{condition,iccProfile,maxBytes,change}){
+ const context=document.context,intent=intents[condition.renderingIntent],output=inspectPdfIcc(iccProfile),srgb=Buffer.from(getDefaultSRGBProfile()),sourceInfo=inspectPdfIcc(srgb,{output:false});if(output.sha256!==condition.profile.sha256)fail('PDF_PRINT_PROFILE');
+ let decodedBytes=0,visits=0;const seenResources=new Map(),seenStreams=new Map(),seenObjects=new Map(),seenProfiles=new Map(),counts={pages:document.getPageCount(),resources:0,images:0,transparencyGroups:0};
+ const budget=()=>{if(++visits>200000)fail('PDF_CAPACITY');},lookup=value=>context.lookup(value),dict=value=>{const d=lookup(value);if(!(d instanceof PDFDict))fail();return d;};
+ function decoded(stream){if(!(stream instanceof PDFRawStream))fail();const f=stream.dict.get(name('Filter'));let b;if(f===undefined)b=Buffer.from(stream.contents);else if(String(f)==='/FlateDecode'&&!stream.dict.has(name('DecodeParms')))b=inflateSync(stream.contents,{maxOutputLength:Math.max(1,maxBytes-decodedBytes)});else fail();decodedBytes+=b.length;if(decodedBytes>maxBytes)fail('PDF_CAPACITY');return b;}
+ let sourceRef;
+ if(change)sourceRef=context.register(context.flateStream(srgb,{N:3}));
+ const sourceSpace=()=>context.obj([name('ICCBased'),sourceRef]);
+ function profile(value,n){const stream=lookup(value);if(!(stream instanceof PDFRawStream))fail();let info=seenProfiles.get(stream);if(!info){info=inspectPdfIcc(decoded(stream),{output:false});seenProfiles.set(stream,info);}if(info.channels!==n)fail();return info;}
+ function space(value,{mask=false}={},depth=0){budget();if(depth>32)fail();const v=lookup(value),label=String(v);if(label==='/DeviceRGB'){if(change)return sourceSpace();fail();}if(label==='/DeviceGray'){if(!mask&&output.colorSpace==='RGB')fail();return v;}if(label==='/DeviceCMYK'){if(mask||output.colorSpace!=='CMYK')fail();return v;}
+  if(!(v instanceof PDFArray)||v.size()<2)fail();const kind=String(v.get(0));if(kind==='/ICCBased'){if(v.size()!==2)fail();const stream=lookup(v.get(1)),n=stream?.dict?.lookup(name('N'))?.asNumber?.();if(![1,3,4].includes(n))fail();profile(v.get(1),n);return v;}
+  if(kind==='/Indexed'){if(v.size()!==4)fail();const base=space(v.get(1),{mask},depth+1);if(change)v.set(1,base);return v;}
+  if(kind==='/Pattern'&&v.size()===2){const base=space(v.get(1),{mask},depth+1);if(change)v.set(1,base);return v;}fail();
+ }
+ function group(d,mask,required=false,parentSrgb=false){let raw=d.get(name('Group'));if(!raw){if(!required)return parentSrgb;if(!change)fail();raw=context.obj({Type:'Group',S:'Transparency',CS:sourceSpace()});d.set(name('Group'),raw);}const g=dict(raw);if(String(g.get(name('S')))!=='/Transparency')fail();counts.transparencyGroups++;let cs=g.get(name('CS'));if(cs){const replacement=space(cs,{mask});if(change)g.set(name('CS'),replacement);cs=replacement;}else{if(!required&&!parentSrgb||!change)fail();cs=sourceSpace();g.set(name('CS'),cs);}const resolved=lookup(cs);return resolved instanceof PDFArray&&String(resolved.get(0))==='/ICCBased'&&lookup(resolved.get(1))?.dict?.lookup(name('N'))?.asNumber?.()===3&&profile(resolved.get(1),3).sha256===sourceInfo.sha256;}
+ function streamContent(ref,mask,prefix=true,emptyResources=false){const stream=lookup(ref);if(!(stream instanceof PDFRawStream))fail();const prior=seenStreams.get(stream);if(prior!==undefined){if(prior.mask!==mask||prior.prefix!==prefix||prior.emptyResources!==emptyResources)fail();return prior.ref;}const before=decoded(stream).toString('latin1'),after=contentText(before,{intent,target:output.colorSpace,mask,change,emptyResources});if(!change){seenStreams.set(stream,{mask,prefix,emptyResources,ref});return ref;}const replacement=context.flateStream(Buffer.from((prefix?'/'+intent+' ri\n':'')+after,'latin1')),next=context.register(replacement);seenStreams.set(stream,{mask,prefix,emptyResources,ref:next});return next;}
+ function xobject(ref,mask=false,parentSrgb=false){budget();const object=lookup(ref);if(!(object instanceof PDFRawStream))fail();const d=object.dict,type=String(d.get(name('Subtype'))),identity=ref instanceof PDFRef?ref.toString():object;if(seenObjects.has(identity)){const prior=seenObjects.get(identity);if(prior.mask!==mask||type==='/Form'&&prior.parentSrgb!==parentSrgb)fail();return;}seenObjects.set(identity,{mask,parentSrgb});
+  if(type==='/Image'){counts.images++;const imageMask=String(d.get(name('ImageMask')))==='true';if(!imageMask){const replacement=space(d.get(name('ColorSpace')),{mask});if(change)d.set(name('ColorSpace'),replacement);}const sm=d.get(name('SMask'));if(sm)xobject(sm,true);const m=lookup(d.get(name('Mask')));if(m instanceof PDFRawStream)xobject(d.get(name('Mask')),true);if(change)d.set(name('Intent'),name(intent));else if(String(d.get(name('Intent')))!=='/'+intent)fail();return;}
+  if(type!=='/Form')fail();const blendSrgb=group(d,mask,false,parentSrgb);resources(d.get(name('Resources')),mask,blendSrgb);const before=decoded(object).toString('latin1'),after=contentText(before,{intent,target:output.colorSpace,mask,change});if(change){const replacement=context.flateStream(Buffer.from('/'+intent+' ri\n'+after,'latin1'));for(const [key,value]of d.entries())if(!['Length','Filter','DecodeParms'].includes(key.decodeText()))replacement.dict.set(key,value);context.assign(ref,replacement);}
+ }
+ function resources(ref,mask=false,parentSrgb=false){budget();const r=dict(ref);if(seenResources.has(r)){const prior=seenResources.get(r);if(prior.mask!==mask||prior.parentSrgb!==parentSrgb)fail();return;}seenResources.set(r,{mask,parentSrgb});counts.resources++;let cs=r.lookupMaybe(name('ColorSpace'),PDFDict);if(!cs&&change){cs=context.obj({});r.set(name('ColorSpace'),cs);}if(!cs)fail();
+  const existing=cs.get(name('DefaultRGB'));if(existing){const checked=space(existing,{mask});if(!(checked instanceof PDFArray)||String(checked.get(0))!=='/ICCBased'||profile(checked.get(1),3).sha256!==sourceInfo.sha256)fail();}else if(change)cs.set(name('DefaultRGB'),sourceSpace());else fail();
+  for(const [key,value]of cs.entries()){if(key.decodeText()==='DefaultRGB')continue;const replacement=space(value,{mask});if(change)cs.set(key,replacement);}
+  const xo=r.lookupMaybe(name('XObject'),PDFDict);if(xo)for(const [,value]of xo.entries())xobject(value,mask,parentSrgb);
+  const gs=r.lookupMaybe(name('ExtGState'),PDFDict);if(gs)for(const [,value]of gs.entries()){const g=dict(value);for(const key of ['TR','TR2'])if(g.has(name(key))&&!['/Identity','/Default'].includes(String(g.get(name(key)))))fail();for(const key of ['BG','BG2','UCR','UCR2','HT'])if(g.has(name(key)))fail();if(g.has(name('RI'))){if(change)g.set(name('RI'),name(intent));else if(String(g.get(name('RI')))!=='/'+intent)fail();}const sm=lookup(g.get(name('SMask')));if(sm&&String(sm)!=='/None'){const m=dict(sm);if(!['/Alpha','/Luminosity'].includes(String(m.get(name('S')))))fail();xobject(m.get(name('G')),true,parentSrgb);}}
+  const sh=r.lookupMaybe(name('Shading'),PDFDict);if(sh)for(const [,value]of sh.entries())shading(value,mask);
+  const patterns=r.lookupMaybe(name('Pattern'),PDFDict);if(patterns)for(const [,value]of patterns.entries()){const p=lookup(value),d=p instanceof PDFRawStream?p.dict:dict(p),type=d.lookup(name('PatternType'))?.asNumber?.();if(type===2)shading(d.get(name('Shading')),mask);else fail();}
+  const fonts=r.lookupMaybe(name('Font'),PDFDict);if(fonts)for(const [,value]of fonts.entries()){const f=dict(value);if(String(f.get(name('Subtype')))!=='/Type3')continue;let fontResources=f.get(name('Resources'));const missing=fontResources===undefined;if(missing){if(!change)fail();fontResources=context.obj({});f.set(name('Resources'),fontResources);}resources(fontResources,mask,parentSrgb);const glyphs=dict(f.get(name('CharProcs')));for(const [key,value]of glyphs.entries()){const replacement=streamContent(value,mask,false,missing);if(change)glyphs.set(key,replacement);}}
+ }
+ function shading(ref,mask){const raw=lookup(ref),d=raw instanceof PDFRawStream?raw.dict:dict(raw),type=d.lookup(name('ShadingType'))?.asNumber?.();if(![1,2,3,4,5,6,7].includes(type))fail();const replacement=space(d.get(name('ColorSpace')),{mask});if(change)d.set(name('ColorSpace'),replacement);}
+ if(!counts.pages||document.isEncrypted)fail();for(const page of document.getPages()){
+  const blendSrgb=group(page.node,false,true);resources(page.node.Resources(),false,blendSrgb);const raw=page.node.get(name('Contents')),v=lookup(raw),values=v instanceof PDFArray?v.asArray():raw?[raw]:[],next=values.map(ref=>streamContent(ref,false));if(change)page.node.set(name('Contents'),context.obj(next));
+ }
+ const outputIntents=document.catalog.lookupMaybe(name('OutputIntents'),PDFArray);
+ if(change){if(outputIntents)fail();const embedded=context.register(context.flateStream(iccProfile,{N:output.channels})),conditionValue=context.obj({Type:'OutputIntent',S:'GTS_PDFX',OutputConditionIdentifier:PDFHexString.fromText('Custom'),Info:PDFHexString.fromText(condition.label),OutputCondition:PDFHexString.fromText(condition.label),DestOutputProfile:embedded});document.catalog.set(name('OutputIntents'),context.obj([context.register(conditionValue)]));}
+ else{if(!outputIntents||outputIntents.size()!==1)fail();const oi=dict(outputIntents.get(0));if(String(oi.get(name('S')))!=='/GTS_PDFX'||oi.lookup(name('Info'))?.decodeText?.()!==condition.label||oi.lookup(name('OutputConditionIdentifier'))?.decodeText?.()!=='Custom')fail();const stream=lookup(oi.get(name('DestOutputProfile')));if(!(stream instanceof PDFRawStream)||stream.dict.lookup(name('N'))?.asNumber?.()!==output.channels||hash(decoded(stream))!==output.sha256)fail();}
+ return counts;
+}
+try{
+ const {bytes,printCondition,iccProfile,maxBytes}=workerData;if(!validPdfPrintCondition(printCondition)||!(bytes instanceof Uint8Array)||bytes.byteLength>maxBytes)fail('PDF_PRINT_PROFILE');
+ const document=await PDFDocument.load(bytes,{forIncrementalUpdate:true,updateMetadata:false,throwOnInvalidObject:true});colourPass(document,{condition:printCondition,iccProfile,maxBytes,change:true});
+ const output=await document.save({useObjectStreams:false,addDefaultPage:false,updateFieldAppearances:false});if(output.byteLength>maxBytes)fail('PDF_CAPACITY');if(output.byteLength<=bytes.byteLength||!Buffer.from(output.buffer,output.byteOffset,bytes.byteLength).equals(Buffer.from(bytes)))fail('PDF_PRINT_FAILED');
+ const reopened=await PDFDocument.load(output,{updateMetadata:false,throwOnInvalidObject:true}),checks=colourPass(reopened,{condition:printCondition,iccProfile,maxBytes,change:false});
+ const print={version:1,profile:'colour-managed-print',sha256:hash(output),iccSha256:hash(iccProfile),renderingIntent:printCondition.renderingIntent,checks};parentPort.postMessage({bytes:output,print},[output.buffer]);
+}catch(error){parentPort.postMessage({error:['PDF_PRINT_PROFILE','PDF_CAPACITY','PDF_PRINT_COLOR'].includes(error?.code)?error.code:'PDF_PRINT_FAILED'});}

@@ -42,10 +42,18 @@ test('new PDF fields acquire the owner marker before immutable writes, retain it
 });
 
 test('domain admission rejects malformed, future and non-PDF markers before a callback can mutate',async()=>{
- for(const [domain,pdfFormat,code] of [['pdf',null,'CATALOGUE_DAMAGED'],['pdf',1,'CATALOGUE_DAMAGED'],['pdf','2','CATALOGUE_DAMAGED'],['pdf',2.5,'CATALOGUE_DAMAGED'],['pdf',3,'ACCESS_UPGRADE'],['calculator',2,'CATALOGUE_DAMAGED']]){
+ for(const [domain,pdfFormat,code] of [['pdf',null,'CATALOGUE_DAMAGED'],['pdf',1,'CATALOGUE_DAMAGED'],['pdf','2','CATALOGUE_DAMAGED'],['pdf',2.5,'CATALOGUE_DAMAGED'],['pdf',4,'ACCESS_UPGRADE'],['calculator',2,'CATALOGUE_DAMAGED']]){
   const f=fixture({domain});f.values.set('owner',{...f.owner,pdfFormat});let called=false;await assert.rejects(f.run(async store=>{called=true;await store.putObject('must-not-exist',{});},{write:true}),{code});assert.equal(called,false);assert.equal(f.values.has('must-not-exist'),false);
  }
  const f=fixture();await assert.rejects(f.run(requirePdfDomainFormat),{code:'INVALID'});assert.deepEqual(f.values.get('owner'),f.owner);
  // The previous reader's exact owner-key contract rejects the new marker.
  assert.notEqual(Object.keys({...f.owner,pdfFormat:2}).sort().join(),['domain','namespaceId','projectId','vaultId','version'].sort().join());
+});
+
+
+test('format three is admitted, retained across older features and acquired for authored bleed',async()=>{
+ const f=fixture();await f.run(store=>requirePdfDomainFormat(store,3),{write:true});assert.equal(f.values.get('owner').pdfFormat,3);
+ await f.run(store=>requirePdfDomainFormat(store,2),{write:true});assert.equal(f.values.get('owner').pdfFormat,3);await f.run(async()=>{});
+ const fresh=fixture(),command=creation();command.operation.header.press={version:2,bleedMm:3,cropMarks:true,artwork:{background:'#ffffff',image:null,pages:'all'}};
+ await fresh.change(command);assert.equal(fresh.values.get('owner').pdfFormat,3);fresh.values.set('owner',{...fresh.owner,pdfFormat:2});await assert.rejects(fresh.run(store=>new PdfDocumentStore(store).open(command.id)),{code:'CATALOGUE_DAMAGED'});
 });

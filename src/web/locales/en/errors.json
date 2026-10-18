@@ -364,5 +364,9 @@
   "PDF_ARCHIVAL_UNAVAILABLE": "Archival PDF export is not available in this installation.",
   "PDF_ARCHIVAL_FAILED": "The PDF did not pass archival validation. Your document is unchanged.",
   "PDF_ACCESSIBILITY_FAILED": "The PDF did not pass its automated accessibility checks. Your document is unchanged.",
-  "PDF_ACCESSIBILITY_UNAVAILABLE": "PDF accessibility validation is not available in this installation."
+  "PDF_ACCESSIBILITY_UNAVAILABLE": "PDF accessibility validation is not available in this installation.",
+  "PDF_PRINT_PROFILE": "Choose a supported printer ICC profile. The file is incomplete, unsupported or invalid.",
+  "PDF_PRINT_CONFLICT": "Remove the printer colour condition before choosing archival output.",
+  "PDF_PRINT_FAILED": "The printer colour condition could not be applied. Your document is unchanged.",
+  "PDF_PRINT_COLOR": "This PDF contains a colour resource that cannot be safely characterized for the selected printer profile."
 }

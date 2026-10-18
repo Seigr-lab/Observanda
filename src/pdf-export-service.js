@@ -1,4 +1,6 @@
-﻿import {PdfDocuments} from './pdf-documents.js';
+import {preparePdfBleedImage} from './pdf-bleed-artwork.js';
+import {PdfPrintProfiles} from './pdf-print-profiles.js';
+import {PdfDocuments} from './pdf-documents.js';
 import {PdfDocumentStore} from './pdf-document-store.js';
 import {PdfDocumentImages} from './pdf-document-images.js';
 import {readPdfDocumentFont} from './pdf-document-fonts.js';
@@ -17,7 +19,9 @@ export async function prepareSavedPdf(documents,{documentId,revision},{signal,ch
   const compiled=await documents.domains.run(['pdf'],async get=>{
    const store=get('pdf'),owner=new PdfDocumentStore(store),selected=await owner.open(documentId,{revision});
    const compiled=await compilePdfDocument(selected.header,owner.content(documentId,revision,{signal}),{signal,readImage:asset=>new PdfDocumentImages(store,documentId).read(asset,{signal})}),customFonts=new Map();
+   const bleedImage=await preparePdfBleedImage(selected.header.press,asset=>new PdfDocumentImages(store,documentId).read(asset,{signal}),{signal});if(bleedImage)compiled.bleedImage=bleedImage;
    for(const pin of selected.header.fonts??[])if(compiled.fonts.includes(pin.id))customFonts.set(pin.id,await readPdfDocumentFont(store,documentId,pin,{signal}));
+   if(selected.header.printCondition){compiled.printCondition=structuredClone(selected.header.printCondition);compiled.iccProfile=(await new PdfPrintProfiles(store,documentId).read(selected.header.printCondition.profile,{signal})).toString('base64');}
    return embedPdfFonts(compiled,{signal,customFonts});
   },{signal,check});
   await progress('rendering');const result=await renderSavedPdf({...compiled,preflightOnly},{signal,wait:true});await check();signal?.throwIfAborted();return result;

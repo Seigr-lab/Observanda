@@ -57,7 +57,7 @@ test('durable PDF exports clean cancelled chunks transactionally and retain exac
  // Each subsequent public operation must refuse it before entering its callback.
  await documents.domains.initialize(['calculator']);
  const restoreOwner=async(domain,owner)=>{const connection=await f.storage.openCatalogue(),session=databaseSchemaSession(connection);let store;try{await connection.run('BEGIN');await projectDomainLock(connection,'Observanda/project-domain/'+connection.id+'/'+domain);store=new ProjectDomainCatalogue(f.storage,session.schema(projectDomainSchema(connection.id,domain)),domain,f.book.id,{writable:true});await store.putObject('owner',owner);await connection.run('COMMIT');}finally{store?.close();session.close();await connection.close();}};
- for(const [domain,pdfFormat,code] of [['pdf',null,'CATALOGUE_DAMAGED'],['pdf',3,'ACCESS_UPGRADE'],['calculator',2,'CATALOGUE_DAMAGED']]){
+ for(const [domain,pdfFormat,code] of [['pdf',null,'CATALOGUE_DAMAGED'],['pdf',4,'ACCESS_UPGRADE'],['calculator',2,'CATALOGUE_DAMAGED']]){
   const original=await documents.domains.run([domain],get=>get(domain).object('owner'));await documents.domains.run([domain],get=>get(domain).putObject('owner',{...original,pdfFormat}),{write:[domain]});
   try{let called=false;await assert.rejects(documents.domains.run([domain],async get=>{called=true;await get(domain).putObject('must-not-exist',{});},{write:[domain]}),{code});assert.equal(called,false);}finally{await restoreOwner(domain,original);}
   assert.equal(await documents.domains.run([domain],get=>get(domain).object('must-not-exist')),null);

@@ -1,3 +1,4 @@
+import {pdfBleedBackgroundCSS} from './web/pdf-bleed-model.js';
 import {pdfAccessibilityLayout} from './pdf-accessibility-layout.js';
 import {pdfCrossReferences} from './pdf-cross-references.js';
 import {PDF_CROSS_REFERENCE_PREFIX} from './web/pdf-cross-reference-model.js';
@@ -32,7 +33,7 @@ export async function compilePdfDocument(header,sections,{signal,maxBytes=PDF_IN
  if(!validPdfDocumentHeader(header)||!Number.isSafeInteger(maxBytes)||maxBytes<1||maxBytes>PDF_INPUT_BYTES)throw new PdfLayoutError('PDF_LAYOUT');
  const pageReferences=[],audience=pdfAudienceSelection(header),outline=pdfDocumentOutline(header,{pageReference}),ids=new Set(),fonts=new Set(),styles=new Set(),body=[],layouts=new Map(),glyphs=new Map();let size=0,count=0,equations=false,noteNumber=1,pageFootnoteCount=0;const endnotes=[];
  const retain=text=>{size+=Buffer.byteLength(text);if(size>maxBytes)throw new PdfLayoutError('PDF_CAPACITY');return text;};
- function layout(value,sectionTitle=''){const key=JSON.stringify([value,pdfPageMasterHasSection(value)?sectionTitle:'']);if(!layouts.has(key)){const name='pdf-layout-'+layouts.size;layouts.set(key,{name,value,sectionTitle});styles.add(retain(layoutCSS(value,name)+pdfPageMasterCSS(value,name,{sectionTitle})));}fonts.add(value.font);return layouts.get(key).name;}
+ function layout(value,sectionTitle=''){const key=JSON.stringify([value,pdfPageMasterHasSection(value)?sectionTitle:'']);if(!layouts.has(key)){const name='pdf-layout-'+layouts.size;layouts.set(key,{name,value,sectionTitle});styles.add(retain(layoutCSS(value,name)+pdfPageMasterCSS(value,name,{sectionTitle})+pdfBleedBackgroundCSS(header.press,name,value.background)));}fonts.add(value.font);return layouts.get(key).name;}
  function textGlyphs(font,text){let points=glyphs.get(font);if(!points){points=new Set();glyphs.set(font,points);}for(const char of text)if(!/[\s\p{Default_Ignorable_Code_Point}]/u.test(char))points.add(char.codePointAt(0));}
  function pageReference(target,settings){
   if(!header.structure?.pageReferences)return '';if(pageReferences.length>=12000)throw new PdfLayoutError('PDF_CAPACITY');
@@ -42,7 +43,7 @@ export async function compilePdfDocument(header,sections,{signal,maxBytes=PDF_IN
  const crossReferences=pdfCrossReferences(header,{textGlyphs,maxBytes,signal});
  const captions=pdfCaptionRenderer(header,{maxBytes,textGlyphs,pageReference,signal});
  const defaultLayout=layout(header.layout);textGlyphs(header.layout.font,header.layout.pageMaster?pdfPageMasterText(header.layout,''):[header.layout.header,header.layout.footer,...(header.layout.pageNumbers?['0123456789']:[])].join(' '));
- styles.add(layoutCSS(header.layout,'').split('\n .')[0]+pdfPageMasterCSS(header.layout,''));
+ styles.add(layoutCSS(header.layout,'').split('\n .')[0]+pdfPageMasterCSS(header.layout,'')+pdfBleedBackgroundCSS(header.press,'',header.layout.background));
  for await(const section of audience.sections(sections,{signal})){
   signal?.throwIfAborted();if(!validPdfSection(section)||ids.has(section.id))throw new PdfLayoutError('PDF_SECTION');ids.add(section.id);count++;
   const heading=outline.section(section),content=pdfSectionContent(section),settings=section.layout??header.layout,name=section.layout||pdfPageMasterHasSection(settings)?layout(settings,heading.title):defaultLayout,contentBox=pdfPageContentBox(settings);

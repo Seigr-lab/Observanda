@@ -1,4 +1,5 @@
-import {requiresPdfDomainFormat,requirePdfDomainFormat,assertPdfDomainFormat} from './pdf-domain-format.js';
+import {PdfPrintProfiles} from './pdf-print-profiles.js';
+import {requiredPdfDomainFormat,requiresPdfDomainFormat,requirePdfDomainFormat,assertPdfDomainFormat} from './pdf-domain-format.js';
 import {verifyPdfResearchImages} from './pdf-research-images.js';
 import {verifyPdfExportJobs} from './pdf-export-jobs.js';
 import {PdfDocumentImages,verifyPdfImages} from './pdf-document-images.js';
@@ -62,7 +63,7 @@ export class PdfDocumentStore{
   if(!researchId(id)||!revisionId(revision))invalid();
   const value=await this.store.object('pdf:revision:'+id+':'+revision);
   if(!exact(value,'version,header,sections,order,nextPosition'+(value?.version===2?',lifecycle':''))||![1,2].includes(value.version)||value.version===2&&(!exact(value.lifecycle,'previous,archived')||!revisionId(value.lifecycle.previous)||typeof value.lifecycle.archived!=='boolean')||hash(value)!==revision||!validPdfDocumentHeader(value.header)||value.header.id!==id||!validTableRef(value.sections)||!validTableRef(value.order)||(value.sections?.count??0)!==(value.order?.count??0)||!natural(value.nextPosition)||value.nextPosition<(value.order?.count??0))bad();
-  if(requiresPdfDomainFormat({header:value.header}))await assertPdfDomainFormat(this.store);return value;
+  if(requiresPdfDomainFormat({header:value.header}))await assertPdfDomainFormat(this.store,requiredPdfDomainFormat({header:value.header}));return value;
  }
  async head(id,{removed=false}={}){
   if(!researchId(id))invalid();const value=await this.store.object('pdf:head:'+id);if(!value)throw new AppError('NOT_FOUND');
@@ -142,7 +143,7 @@ export class PdfDocumentStore{
   let previous=null,current;
   if(expectedRevision===null){if(operation.type!=='create'||!exact(operation,'type,header,section')||!validPdfDocumentHeader(operation.header)||operation.header.id!==id||!validPdfSection(operation.section))invalid();if(await this.store.object('pdf:head:'+id))throw new AppError('EXISTS');current={version:1,header:operation.header,sections:null,order:null,nextPosition:0};}
   else{previous=await this.head(id,{removed:operation.type==='restore-document'});if(previous.revision!==expectedRevision)throw new AppError('CONFLICT');if(operation.type==='restore-document'&&!previous.removed)throw new AppError('CONFLICT');current=structuredClone(await this.revision(id,previous.revision));if(current.version===2&&current.lifecycle.archived!==previous.removed)bad();}
-  if(requiresPdfDomainFormat(operation))await requirePdfDomainFormat(this.store);
+  if(requiresPdfDomainFormat(operation))await requirePdfDomainFormat(this.store,requiredPdfDomainFormat(operation));
   const index=this.index(id),orderIndex=this.index(id),tree=new RecordValueTree(new PdfBlocks(this.store,id)),directory=await this.directory();
   const put=async(section,position)=>{for(const image of section.images??[])await new PdfDocumentImages(this.store,id).descriptor(image.asset);const revision=await tree.retain({section,position});current.sections=await index.change(current.sections,section.id,revision);current.order=await orderIndex.change(current.order,ordinal(position),revision);};
   const selected=async sectionId=>{if(!researchId(sectionId))invalid();const row=await index.find({root:current.sections},sectionId);if(!row)throw new AppError('NOT_FOUND');return this.sectionRow(id,row.revision,sectionId);};
@@ -190,7 +191,9 @@ export class PdfDocumentStore{
   }else invalid();
   if(!validPdfFontPins(fontPins))invalid();
   if(fontPins.length){current.header={...current.header,fonts:[...new Map([...(current.header.fonts??[]),...fontPins].map(pin=>[pin.id,pin])).values()]};if(!validPdfDocumentHeader(current.header))invalid();}
+  if(['create','header','restore'].includes(operation.type)&&current.header.printCondition)await new PdfPrintProfiles(this.store,id).read(current.header.printCondition.profile,{signal});
   if(['create','header'].includes(operation.type)||fontPins.length)for(const pin of current.header.fonts??[])await describePdfDocumentFont(this.store,id,pin,{signal});
+  if(current.header.press?.version===2&&current.header.press.artwork.image)await new PdfDocumentImages(this.store,id).descriptor(current.header.press.artwork.image.asset);
   await index.flush(current.sections);await orderIndex.flush(current.order);
   const revision=hash(current);
   if(previous?.revision===revision&&operation.type!=='remove'){
@@ -237,6 +240,8 @@ export class PdfDocumentStore{
     signal?.throwIfAborted();if(entry.id!==ordinal(count++))bad();const value=await this.revision(id,entry.revision);if((await index.find({root:head.versions},entry.revision))?.revision!==entry.revision)bad();currentFound=entry.revision===head.revision;
     if(value.version===2&&(await index.find({root:head.versions},value.lifecycle.previous))?.revision!==value.lifecycle.previous)bad();
     await verifyPdfDocumentFonts(this.store,value.header,{signal,once});
+    if(value.header.printCondition)await once(['pdf-print-profile',id,value.header.printCondition.profile.revision],()=>new PdfPrintProfiles(this.store,id).read(value.header.printCondition.profile,{signal}));
+    if(value.header.press?.version===2&&value.header.press.artwork.image)await once(['bleed-image',id,value.header.press.artwork.image.asset],async()=>{try{await new PdfDocumentImages(this.store,id).descriptor(value.header.press.artwork.image.asset);}catch(error){if(error.code==='NOT_FOUND')bad();throw error;}});
     const sectionRoot=value.sections;let sections=0;for await(const row of index.entries({root:value.order})){signal?.throwIfAborted();const value=await this.sectionRow(id,row.revision);if(row.id!==ordinal(value.position))bad();for(const image of value.section.images??[])try{await new PdfDocumentImages(this.store,id).descriptor(image.asset);}catch(error){if(error.code==='NOT_FOUND')bad();throw error;}const named=await index.find({root:sectionRoot},value.section.id);if(named?.revision!==row.revision)bad();sections++;}
     if(sections!==(value.sections?.count??0))bad();editions++;
    }

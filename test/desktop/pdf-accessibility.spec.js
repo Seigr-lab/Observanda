@@ -64,7 +64,7 @@ test('tagged PDF output preserves authored metadata and semantic reading structu
   expect(nodes.some(node=>node.role==='Link'&&node.text==='2 Positioned reading')).toBe(true);
   if(await pdfArchivalAvailable()){
    const checked=await app.evaluate(async(_electron,input)=>{const {renderPdfDocument}=await globalThis.pdfService,result=await renderPdfDocument({...input,outputProfile:'pdfua-1',press:{version:1,bleedMm:3,cropMarks:true}});return {bytes:result.bytes.toString('base64'),sha256:result.sha256,validation:result.validation,conformance:result.conformance,renderer:result.renderer};},input),finalBytes=Buffer.from(checked.bytes,'base64');
-   expect(validPdfAccessibilityReceipt(checked.validation)).toBe(true);expect(checked.validation.sha256).toBe(createHash('sha256').update(finalBytes).digest('hex'));expect(checked.sha256).toBe(checked.validation.sha256);expect(checked.validation.automatedOnly).toBe(true);expect(checked.conformance).toEqual([]);expect(checked.renderer.recipeVersion).toBe(2);expect(checked.validation.passedRules).toBe(106);await writeFile(info.outputPath('ua1-automated-observations.pdf'),finalBytes);
+   expect(validPdfAccessibilityReceipt(checked.validation)).toBe(true);expect(checked.validation.sha256).toBe(createHash('sha256').update(finalBytes).digest('hex'));expect(checked.sha256).toBe(checked.validation.sha256);expect(checked.validation.automatedOnly).toBe(true);expect(checked.conformance).toEqual([]);expect(checked.renderer.recipeVersion).toBe(3);expect(checked.validation.passedRules).toBe(106);await writeFile(info.outputPath('ua1-automated-observations.pdf'),finalBytes);
   }
 
  }finally{

@@ -5,14 +5,15 @@ import {createHash} from 'node:crypto';
 import path from 'node:path';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 // Recipe version tracks layout/finalization semantics independently of IPC.
-const PDF_RECIPE_VERSION=2;
+const PDF_RECIPE_VERSION=3;
 const fail=code=>Object.assign(new Error(code),{code});
-let active=false,partition,preflightModule,resolutionModule,referencesModule,footnoteModule,pressModule,archivalModule,accessibilityModule;
+let active=false,partition,preflightModule,resolutionModule,referencesModule,footnoteModule,pressModule,printModule,archivalModule,accessibilityModule;
 const preflight=()=>preflightModule??=import(app.isPackaged?pathToFileURL(path.join(process.resourcesPath,'service','src','pdf-preflight.js')).href:new URL('../src/pdf-preflight.js',import.meta.url).href);
 const resolution=()=>resolutionModule??=import(app.isPackaged?pathToFileURL(path.join(process.resourcesPath,'service','src','pdf-image-resolution.js')).href:new URL('../src/pdf-image-resolution.js',import.meta.url).href);
 const references=()=>referencesModule??=import(app.isPackaged?pathToFileURL(path.join(process.resourcesPath,'service','src','pdf-page-references.js')).href:new URL('../src/pdf-page-references.js',import.meta.url).href);
 const footnotes=()=>footnoteModule??=import(app.isPackaged?pathToFileURL(path.join(process.resourcesPath,'service','src','pdf-footnote-flow.js')).href:new URL('../src/pdf-footnote-flow.js',import.meta.url).href);
 const pressGeometry=()=>pressModule??=import(app.isPackaged?pathToFileURL(path.join(process.resourcesPath,'service','src','pdf-press-geometry.js')).href:new URL('../src/pdf-press-geometry.js',import.meta.url).href);
+const printer=()=>printModule??=import(app.isPackaged?pathToFileURL(path.join(process.resourcesPath,'service','src','pdf-print-output.js')).href:new URL('../src/pdf-print-output.js',import.meta.url).href);
 const archival=()=>archivalModule??=import(app.isPackaged?pathToFileURL(path.join(process.resourcesPath,'service','src','pdf-archival.js')).href:new URL('../src/pdf-archival.js',import.meta.url).href);
 const accessibility=()=>accessibilityModule??=import(app.isPackaged?pathToFileURL(path.join(process.resourcesPath,'service','src','pdf-accessibility-output.js')).href:new URL('../src/pdf-accessibility-output.js',import.meta.url).href);
 const validationRuntime=()=>({directory:app.isPackaged?path.join(process.resourcesPath,'pdf-validation'):fileURLToPath(new URL('../.local/pdf-validation/',import.meta.url))});
@@ -25,6 +26,11 @@ async function render(input,{signal:externalSignal,timeoutMs=120000,maxOutputByt
  const controller=new AbortController(),signal=externalSignal?AbortSignal.any([externalSignal,controller.signal]):controller.signal;
  signal.throwIfAborted();
  if(input?.version!==1||(input.outputProfile!==undefined&&!['pdfa-2u','pdfua-1'].includes(input.outputProfile))||(input.bookmarks!==undefined&&typeof input.bookmarks!=='boolean')||(input.preflightOnly!==undefined&&typeof input.preflightOnly!=='boolean')||typeof input.html!=='string'||Buffer.byteLength(input.html)>64*1024*1024||!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>300000||!Number.isSafeInteger(maxOutputBytes)||maxOutputBytes<1||maxOutputBytes>64*1024*1024)throw fail('PDF_INPUT');
+ let iccProfile;
+ if(input.printCondition!==undefined||input.iccProfile!==undefined){
+  if(input.outputProfile==='pdfa-2u'||typeof input.iccProfile!=='string'||input.iccProfile.length>4*Math.ceil(8*1024*1024/3))throw fail('PDF_INPUT');
+  iccProfile=Buffer.from(input.iccProfile,'base64');if(iccProfile.toString('base64')!==input.iccProfile||createHash('sha256').update(iccProfile).digest('hex')!==input.printCondition?.profile?.sha256)throw fail('PDF_PRINT_PROFILE');
+ }
  const referenceTools=await references(),pageReferences=input.pageReferences??[];if(!referenceTools.validPdfPageReferences(pageReferences))throw fail('PDF_INPUT');
  const footnoteTools=input.footnoteFlow===undefined?null:await footnotes();if(footnoteTools&&!footnoteTools.validPdfFootnoteFlow(input.footnoteFlow))throw fail('PDF_INPUT');
  const isolated=partition??=session.fromPartition('observanda-pdf-renderer',{cache:false}),documentURL='https://document.invalid/';
@@ -66,7 +72,8 @@ async function render(input,{signal:externalSignal,timeoutMs=120000,maxOutputByt
    if(input.preflightOnly||findings.status==='fatal')return output();
    let bytes=await print(input.bookmarks??true);
    if(input.outputProfile==='pdfua-1'){const {applyPdfAccessibilityOutput}=await accessibility();bytes=await applyPdfAccessibilityOutput(bytes,{accessibilityLayout:input.accessibilityLayout,identifyPdfUa:true,signal,maxBytes:maxOutputBytes});signal.throwIfAborted();}
-   if(input.press!==undefined){const {applyPdfPressGeometry}=await pressGeometry();bytes=await applyPdfPressGeometry(bytes,input.press,{signal,maxBytes:maxOutputBytes});signal.throwIfAborted();}
+   if(input.press!==undefined){const {applyPdfPressGeometry}=await pressGeometry();bytes=await applyPdfPressGeometry(bytes,input.press,{signal,maxBytes:maxOutputBytes,bleedImage:input.bleedImage});signal.throwIfAborted();}
+   if(iccProfile){const {applyPdfPrintOutput}=await printer(),result=await applyPdfPrintOutput(bytes,{printCondition:input.printCondition,iccProfile,signal,maxBytes:maxOutputBytes});bytes=result.bytes;signal.throwIfAborted();}
    let validation;
    if(input.outputProfile==='pdfa-2u'){const {applyPdfArchival}=await archival(),result=await applyPdfArchival(bytes,{runtime:validationRuntime(),signal,maxBytes:maxOutputBytes});bytes=result.bytes;validation=result.validation;signal.throwIfAborted();}
    if(input.outputProfile==='pdfua-1'){const {validatePdfAccessibilityOutput}=await accessibility(),report=await validatePdfAccessibilityOutput(bytes,{runtime:validationRuntime(),signal,maxBytes:maxOutputBytes});if(!report.compliant)throw fail('PDF_ACCESSIBILITY_FAILED');const {version,profile,sha256,validator,validatorVersion,validatorSha256,passedRules,passedChecks}=report;validation={version,profile,sha256,validator,validatorVersion,validatorSha256,passedRules,passedChecks,automatedOnly:true};signal.throwIfAborted();}

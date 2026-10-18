@@ -1,3 +1,4 @@
+import {retainPdfPrintProfile} from './pdf-print-profile-requests.js';
 import {pdfAudienceSummary} from './pdf-audience.js';
 import {readPdfResearchImages,retainPdfResearchImage} from './pdf-research-images.js';
 import {prepareSavedPdf} from './pdf-export-service.js';
@@ -18,10 +19,10 @@ import {pdfRendererAvailable,pdfRendererCapabilities} from './pdf-render-service
 import {PdfLayoutError} from './web/pdf-layout-model.js';
 import {revisionId} from './web/revision-model.js';
 import {AppError} from './errors.js';
-const methods=['list','archive','openArchived','open','sections','outline','section','history','change','capabilities','export','layouts','layout-change','source','source-retain','source-images','source-image-retain','selection','preflight','fonts','font-read','font-retain','image-import','image-read','exports','export-start','export-status','export-cancel','export-resume','export-download'];
+const methods=['print-profile-import','list','archive','openArchived','open','sections','outline','section','history','change','capabilities','export','layouts','layout-change','source','source-retain','source-images','source-image-retain','selection','preflight','fonts','font-read','font-retain','image-import','image-read','exports','export-start','export-status','export-cancel','export-resume','export-download'];
 export function pdfDocumentRequest(route,method='POST'){
  if(method!=='POST'||!route.startsWith('/api/pdf/'))return null;const pdf=route.slice(9);
- return methods.includes(pdf)?{pdf,method:'POST',write:['change','layout-change','source-retain','source-image-retain','font-retain','image-import','export-start','export-cancel','export-resume'].includes(pdf),binary:['export','image-read','font-read','export-download'].includes(pdf),limit:pdf==='image-import'?24*1024*1024:1024*1024}:null;
+ return methods.includes(pdf)?{pdf,method:'POST',write:['print-profile-import','change','layout-change','source-retain','source-image-retain','font-retain','image-import','export-start','export-cancel','export-resume'].includes(pdf),binary:['export','image-read','font-read','export-download'].includes(pdf),limit:pdf==='image-import'?24*1024*1024:pdf==='print-profile-import'?12*1024*1024:1024*1024}:null;
 }
 export async function executePdfRequest(storage,request,data,{signal,check=async()=>{},binary,sourceReader,exportService}={}){
  if(storage.labBookId)throw new AppError('INVALID');await check();signal?.throwIfAborted();
@@ -40,6 +41,7 @@ export async function executePdfRequest(storage,request,data,{signal,check=async
    if(request.pdf==='export-resume'){if(!exportService||!pdfRendererAvailable())throw new AppError('PDF_DESKTOP');const job=await jobs.resume(input.id,options);if(job.state==='queued')exportService.schedule(workspaceId,job.id,{check});return job;}
    const output=await jobs.download(input.id,options);return binary({name:'document.pdf',download:'document.pdf',mime:'application/pdf',content:output.bytes});
   }
+  if(request.pdf==='print-profile-import')return retainPdfPrintProfile(documents,input,{signal,check});
   if(request.pdf==='image-import'){
    if(Object.keys(input).sort().join()!=='bytes,id'||!researchId(input.id)||typeof input.bytes!=='string'||input.bytes.length>Math.ceil(PDF_IMAGE_MAX_BYTES/3)*4||!/^[A-Za-z0-9+/]*={0,2}$/.test(input.bytes)||!await documents.available())throw new AppError('INVALID');
    await documents.read('open',{id:input.id},{signal,check});const bytes=Buffer.from(input.bytes,'base64');if(bytes.toString('base64')!==input.bytes)throw new AppError('INVALID');const prepared=await preparePdfImage(bytes,{signal});await check();
