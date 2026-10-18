@@ -3,18 +3,18 @@ import {parseResearchReference} from './web/research-reference.js';
 import {PdfLayoutError} from './web/pdf-layout-model.js';
 const esc=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const key=target=>[target.workspaceId,target.id,target.revision??'',target.selector?.kind??'',target.selector?.id??''].join(':');
-export function pdfDocumentOutline(header){
+export function pdfDocumentOutline(header,{pageReference=()=>''}={}){
  const settings=header.structure??pdfStructureDefaults(),entries=[],counts=[0,0,0,0,0,0],destinations=new Map(),links=[];
  function destination(target,anchor){const id=key(target);if(!destinations.has(id))destinations.set(id,new Set());destinations.get(id).add(anchor);}
  function section(section){
   const level=section.level??1;counts[level-1]++;for(let i=level;i<counts.length;i++)counts[i]=0;
   const number=counts.slice(0,level).map(value=>value||1).join('.'),title=(settings.numberSections&&section.title?number+' ':'')+section.title;
-  if(section.title)entries.push({id:section.id,level,title});
+  if(section.title)entries.push({id:section.id,level,title,layout:section.layout??header.layout});
   const source=section.research;
   if(source){const base={workspaceId:source.workspaceId,id:source.recordId},anchor='pdf-section-'+section.id,selector=source.collection==='body'?null:{kind:source.collection==='figures'?'figure':'section',id:source.itemId};
    for(const revision of [undefined,source.recordRevision])destination({...base,revision,...(selector?{selector}:{})},anchor);
   }
-  return {level,title};
+  return {level,title,number};
  }
  function link(href,sectionId,layout){
   if(layout.links==='disabled')return null;
@@ -29,7 +29,7 @@ export function pdfDocumentOutline(header){
  }
  function contents(){
   if(!settings.contents)return '';
-  return '<nav class="pdf-contents" aria-label="'+esc(settings.contentsTitle)+'"><h1>'+esc(settings.contentsTitle)+'</h1><ol>'+entries.map(entry=>'<li style="margin-inline-start:'+((entry.level-1)*5)+'mm">'+(settings.internalLinks&&header.layout.links!=='disabled'?'<a href="#pdf-section-'+entry.id+'">'+esc(entry.title)+'</a>':esc(entry.title))+'</li>').join('')+'</ol></nav>';
+  return '<nav class="pdf-contents" aria-label="'+esc(settings.contentsTitle)+'"><h1>'+esc(settings.contentsTitle)+'</h1><ol>'+entries.map(entry=>'<li style="margin-inline-start:'+((entry.level-1)*5)+'mm">'+(settings.internalLinks&&header.layout.links!=='disabled'?'<a href="#pdf-section-'+entry.id+'">'+esc(entry.title)+'</a>':esc(entry.title))+pageReference('pdf-section-'+entry.id,entry.layout)+'</li>').join('')+'</ol></nav>';
  }
  return {settings,section,link,finish,contents,text:()=>[settings.contentsTitle,...entries.map(entry=>entry.title)].join(' ')};
 }

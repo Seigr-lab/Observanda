@@ -5,16 +5,19 @@ import {createHash} from 'node:crypto';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 const fail=code=>Object.assign(new Error(code),{code});
-let active=false,partition,preflightModule,resolutionModule;
+let active=false,partition,preflightModule,resolutionModule,referencesModule;
 const preflight=()=>preflightModule??=import(app.isPackaged?pathToFileURL(path.join(process.resourcesPath,'service','src','pdf-preflight.js')).href:new URL('../src/pdf-preflight.js',import.meta.url).href);
 const resolution=()=>resolutionModule??=import(app.isPackaged?pathToFileURL(path.join(process.resourcesPath,'service','src','pdf-image-resolution.js')).href:new URL('../src/pdf-image-resolution.js',import.meta.url).href);
+const references=()=>referencesModule??=import(app.isPackaged?pathToFileURL(path.join(process.resourcesPath,'service','src','pdf-page-references.js')).href:new URL('../src/pdf-page-references.js',import.meta.url).href);
 export async function renderPdfDocument(input,options={}){
  options.signal?.throwIfAborted();if(active)throw fail('PDF_BUSY');active=true;
  try{await app.whenReady();return await render(input,options);}finally{active=false;}
 }
-async function render(input,{signal,timeoutMs=120000,maxOutputBytes=64*1024*1024}={}){
- signal?.throwIfAborted();
+async function render(input,{signal:externalSignal,timeoutMs=120000,maxOutputBytes=64*1024*1024}={}){
+ const controller=new AbortController(),signal=externalSignal?AbortSignal.any([externalSignal,controller.signal]):controller.signal;
+ signal.throwIfAborted();
  if(input?.version!==1||(input.bookmarks!==undefined&&typeof input.bookmarks!=='boolean')||(input.preflightOnly!==undefined&&typeof input.preflightOnly!=='boolean')||typeof input.html!=='string'||Buffer.byteLength(input.html)>64*1024*1024||!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>300000||!Number.isSafeInteger(maxOutputBytes)||maxOutputBytes<1||maxOutputBytes>64*1024*1024)throw fail('PDF_INPUT');
+ const referenceTools=await references(),pageReferences=input.pageReferences??[];if(!referenceTools.validPdfPageReferences(pageReferences))throw fail('PDF_INPUT');
  const isolated=partition??=session.fromPartition('observanda-pdf-renderer',{cache:false}),documentURL='https://document.invalid/';
  let win,timer,abort,registered=false;const denyDownload=event=>event.preventDefault();
  try{
@@ -29,24 +32,33 @@ async function render(input,{signal,timeoutMs=120000,maxOutputBytes=64*1024*1024
   win.webContents.on('will-navigate',event=>event.preventDefault());
   win.webContents.on('will-redirect',event=>event.preventDefault());
   win.webContents.on('will-attach-webview',event=>event.preventDefault());
-  const cancelled=new Promise((_,reject)=>{abort=()=>{reject(signal?.reason??fail('PDF_CANCELLED'));if(!win.isDestroyed())win.destroy();};signal?.addEventListener('abort',abort,{once:true});timer=setTimeout(()=>{reject(fail('PDF_TIMEOUT'));if(!win.isDestroyed())win.destroy();},timeoutMs);});
+  const cancelled=new Promise((_,reject)=>{abort=()=>{reject(signal?.reason??fail('PDF_CANCELLED'));if(!win.isDestroyed())win.destroy();};signal?.addEventListener('abort',abort,{once:true});timer=setTimeout(()=>controller.abort(fail('PDF_TIMEOUT')),timeoutMs);});
   const operation=(async()=>{
    await win.loadURL(documentURL);
    win.webContents.debugger.attach('1.3');await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{media:'print'});
    const {pdfImageResolutionScript}=await resolution();await win.webContents.executeJavaScript(pdfImageResolutionScript);
-   const {pdfPreflightScript,validPdfPreflight}=await preflight(),findings=await win.webContents.executeJavaScript(pdfPreflightScript);
+   const {pdfPreflightScript,validPdfPreflight}=await preflight();let findings=await win.webContents.executeJavaScript(pdfPreflightScript);
    if(!validPdfPreflight(findings))throw fail('PDF_OUTPUT');
    signal?.throwIfAborted();
    const renderer={engine:'chromium',electron:process.versions.electron,chromium:process.versions.chrome,recipeVersion:input.version};
-   if(input.preflightOnly||findings.status==='fatal')return {bytes:null,sha256:null,renderer,conformance:[],preflight:findings};
-   const bytes=await win.webContents.printToPDF({printBackground:true,displayHeaderFooter:false,preferCSSPageSize:true,generateTaggedPDF:true,generateDocumentOutline:input.bookmarks??true,scale:1});
-   if(bytes.length>maxOutputBytes)throw fail('PDF_CAPACITY');
-   if(bytes.subarray(0,5).toString()!=='%PDF-')throw fail('PDF_OUTPUT');
+   const output=()=>({bytes:null,sha256:null,renderer,conformance:[],preflight:findings});
+   if(findings.status==='fatal')return output();
+   const print=async outline=>{signal.throwIfAborted();const bytes=await win.webContents.printToPDF({printBackground:true,displayHeaderFooter:false,preferCSSPageSize:true,generateTaggedPDF:true,generateDocumentOutline:outline,scale:1});signal.throwIfAborted();if(bytes.length>maxOutputBytes)throw fail('PDF_CAPACITY');if(bytes.subarray(0,5).toString()!=='%PDF-')throw fail('PDF_OUTPUT');return bytes;};
+   if(pageReferences.length){
+    try{
+     await win.webContents.executeJavaScript(referenceTools.pdfPageReferenceMeasurementScript(pageReferences));
+     const measured=await referenceTools.extractPdfPageReferences(await print(false),pageReferences,{signal,maxBytes:maxOutputBytes});
+     signal.throwIfAborted();await win.webContents.executeJavaScript(referenceTools.pdfPageReferenceApplyScript(pageReferences,measured));
+     findings=await win.webContents.executeJavaScript(pdfPreflightScript);if(!validPdfPreflight(findings))throw fail('PDF_OUTPUT');
+    }catch(error){signal.throwIfAborted();throw ['PDF_CAPACITY','PDF_OUTPUT'].includes(error?.code)?error:fail('PDF_PAGE_REFERENCES');}
+   }
+   if(input.preflightOnly||findings.status==='fatal')return output();
+   const bytes=await print(input.bookmarks??true);
    return {bytes,sha256:createHash('sha256').update(bytes).digest('hex'),renderer,conformance:[],preflight:findings};
   })();
   return await Promise.race([operation,cancelled]);
  }finally{
-  clearTimeout(timer);if(abort)signal?.removeEventListener('abort',abort);
+  clearTimeout(timer);controller.abort();if(abort)signal?.removeEventListener('abort',abort);
   if(win&&!win.isDestroyed())win.destroy();
   if(registered)isolated.protocol.unhandle('https');isolated.removeListener('will-download',denyDownload);
   await isolated.closeAllConnections();await isolated.clearStorageData();await isolated.clearCache();

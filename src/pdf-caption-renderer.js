@@ -16,10 +16,10 @@ function blockIdentity(node){
 }
 // Only completed, scoped section HTML is parsed. Source-offset insertions keep
 // authored caption markup, SVG references and asset URLs byte-for-byte intact.
-export function pdfCaptionRenderer(header,{maxBytes=16*1024*1024,textGlyphs=()=>{},signal}={}){
+export function pdfCaptionRenderer(header,{maxBytes=16*1024*1024,textGlyphs=()=>{},pageReference=()=>'',signal}={}){
  if(!Number.isSafeInteger(maxBytes)||maxBytes<1)throw new PdfLayoutError('PDF_LAYOUT');
  const settings=header.structure?.caption,active=!!settings&&['numberFigures','numberTables','listFigures','listTables'].some(key=>settings[key]),counts={figures:0,tables:0},entries={figures:[],tables:[]};let listBytes=0;
- function section(html,{sectionId,font=header.layout.font,links=header.layout.links}={}){
+ function section(html,{sectionId,font=header.layout.font,links=header.layout.links,layout=header.layout}={}){
   signal?.throwIfAborted();if(typeof html!=='string'||!researchId(sectionId))throw new PdfLayoutError('PDF_SECTION');
   const htmlBytes=Buffer.byteLength(html);if(htmlBytes>maxBytes)throw new PdfLayoutError('PDF_CAPACITY');
   if(!active)return {html,targets:[]};
@@ -49,7 +49,7 @@ export function pdfCaptionRenderer(header,{maxBytes=16*1024*1024,textGlyphs=()=>
     textGlyphs(font,prefix);
    }
    targets.push({kind,sectionId,blockId,anchor,number,text});
-   if(listed){const linked=header.structure?.internalLinks!==false&&header.layout.links!=='disabled'&&links!=='disabled',entry='<li>'+(linked?'<a href="#'+esc(anchor)+'">'+esc(text)+'</a>':esc(text))+'</li>';listBytes+=Buffer.byteLength(entry);if(listBytes>maxBytes)throw new PdfLayoutError('PDF_CAPACITY');entries[plural].push({html:entry,text});}
+   if(listed){const linked=header.structure?.internalLinks!==false&&header.layout.links!=='disabled'&&links!=='disabled',entry='<li>'+(linked?'<a href="#'+esc(anchor)+'">'+esc(text)+'</a>':esc(text))+pageReference(anchor,layout)+'</li>';listBytes+=Buffer.byteLength(entry);if(listBytes>maxBytes)throw new PdfLayoutError('PDF_CAPACITY');entries[plural].push({html:entry,text});}
   }
   insertions.sort((a,b)=>a.offset-b.offset||a.order-b.order);const result=[];let offset=0;for(const change of insertions){result.push(html.slice(offset,change.offset),change.value);offset=change.offset;}result.push(html.slice(offset));return {html:result.join(''),targets};
  }

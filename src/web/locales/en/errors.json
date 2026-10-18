@@ -353,5 +353,8 @@
   "PDF_COMPOSITION_COLUMNS": "Positioned pages require one column. Adjust the section layout.",
   "PDF_COMPOSITION_OVERLAP": "Positioned items overlap. Check the page composition.",
   "PDF_COMPOSITION_OVERFLOW": "Content extends beyond its assigned box. Enlarge the box or adjust its content.",
-  "PDF_IMAGE_RESOLUTION_FAILED": "The image could not be prepared at the chosen resolution."
+  "PDF_IMAGE_RESOLUTION_FAILED": "The image could not be prepared at the chosen resolution.",
+  "PDF_PAGE_REFERENCES": "Page numbers could not be matched to their destinations. Check the contents and references, then try again.",
+  "PDF_PAGINATION": "The paragraph pagination settings are invalid.",
+  "PDF_PAGINATION_STALE": "The content structure changed. Adjust its pagination rules before exporting."
 }
