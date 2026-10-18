@@ -58,13 +58,21 @@ const selected=(owner,domain,item)=>new ProjectDomains(owner.storage,owner.entry
 // Mounted owners need initial database provisioning before the measured workload.
 // The five-second foreground and three-minute edition assertions remain below.
 test('full publication and selected authoring remain isolated from unrelated growth during cross-owner stock and task writes',{timeout:process.env.OBSERVANDA_TEST_SECOND_VOLUME?1200000:600000},async t=>{
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-combined-owners-')),runtime=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:id(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(runtime),keys=[],scope=new AsyncLocalStorage();
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-combined-owners-')),runtime=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:id(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(runtime),keys=[],scope=new AsyncLocalStorage(),publicationTimings=new AsyncLocalStorage();
  const original=ResearchCatalogue.prototype.record,documents=ResearchCatalogue.prototype.queryDocuments;let application,releaseBusy,busy,placement;
- ResearchCatalogue.prototype.record=function(...args){const metrics=scope.getStore();if(metrics){metrics.originals++;assert.notEqual(this.workspace.root,metrics.unrelatedRoot);}return original.apply(this,args);};
+ ResearchCatalogue.prototype.record=function(...args){const timing=publicationTimings.getStore();if(timing)timing.originals++;const metrics=scope.getStore();if(metrics){metrics.originals++;assert.notEqual(this.workspace.root,metrics.unrelatedRoot);}return original.apply(this,args);};
  ResearchCatalogue.prototype.queryDocuments=async function*(...args){for await(const value of documents.apply(this,args)){const metrics=scope.getStore();if(metrics)metrics.derivatives++;yield value;}};
  try{
   placement=await workspaceDestinationFixture(directory);
   const host=createNotebook('Combined workload'),fixture=await encryptedFixture(placement.root,host,undefined,{deviceDirectory:directory});keys.push(fixture.vault);
+  // Measure host writer admission separately from its transaction work, without
+  // changing concurrency or recording private paths or SQL parameters.
+  const hostWriter=fixture.workspace.withLock.bind(fixture.workspace);
+  fixture.workspace.withLock=(operation,options)=>{
+   const timing=publicationTimings.getStore();if(!timing)return hostWriter(operation,options);
+   const start=performance.now();timing.writers++;
+   return hostWriter(async(...args)=>{const entered=performance.now();timing.admissionMs+=entered-start;try{return await operation(...args);}finally{timing.writeMs+=performance.now()-entered;}},options).finally(()=>{timing.writerMs+=performance.now()-start;});
+  };
   const registry=new ProjectRegistry(fixture.workspace,host.id),addresses=new LabBookDirectory(registry),metadata=createNotebook('Research project'),projectId=id();metadata.projects=[{id:projectId,title:metadata.title,description:'',share:false,logoId:null}];
   const access=await createWorkspaceAccess('','',fixture.deviceStore),vault=takeCreatedVault(access);keys.push(vault);
   const project=await initializeProjectLocation(path.join(fixture.workspace.root,metadata.title),projectId,metadata,access,vault);await registry.attach(project,{expected:(await registry.read()).revision});
@@ -106,7 +114,7 @@ test('full publication and selected authoring remain isolated from unrelated gro
    const captureReader=async opts=>{const reader=await base(opts);return {...reader,use:(sourceId,snapshotId,consume,readOptions)=>reader.use(sourceId,snapshotId,(...args)=>{captureEntered();return consume(...args);},readOptions)};};
    captureReader.materialAccess=base.materialAccess;
    const releases=new PublicationJobs(storages[0],{sourceReader:captureReader});
-   for(const method of ['pin','prepare']){const operation=releases[method].bind(releases);releases[method]=async(...args)=>{const at=performance.now();try{return await operation(...args);}finally{metrics[method+'Ms']=Math.round(performance.now()-at);process.stdout.write(JSON.stringify({phase:method,unrelatedRecords:count,elapsedMs:metrics[method+'Ms']})+'\n');}};}
+   for(const method of ['pin','prepare']){const operation=releases[method].bind(releases);releases[method]=async(...args)=>{const at=performance.now(),timing={writers:0,writerMs:0,admissionMs:0,writeMs:0,originals:0};try{return await publicationTimings.run(timing,()=>operation(...args));}finally{metrics[method+'Ms']=Math.round(performance.now()-at);process.stdout.write(JSON.stringify({phase:method,unrelatedRecords:count,elapsedMs:metrics[method+'Ms'],writers:timing.writers,writerMs:Math.round(timing.writerMs),admissionMs:Math.round(timing.admissionMs),writeMs:Math.round(timing.writeMs),originals:timing.originals})+'\n');}};}
    const started=performance.now(),preparing=request(()=>releases.inline({etag:journal.etag,websitePin:journal.websitePin},{signal:controller.signal}));
    preparing.finally(()=>{editionFinished=true;}).catch(()=>{});
    const measured=async(name,fn)=>{assert.equal(editionFinished,false);const at=performance.now(),value=await request(fn);metrics[name]=Math.round(performance.now()-at);assert.equal(editionFinished,false,'Foreground operation did not overlap publication');return value;};
