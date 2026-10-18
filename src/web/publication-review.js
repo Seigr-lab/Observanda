@@ -19,7 +19,7 @@ export function publicationReviewView(p,{esc,field,option,icon}){
   ${p.researchReview?.editedFigures?`<p class="material-review" role="status">${text('editedFigures',{count:p.researchReview.editedFigures})}</p>`:''}
   ${p.researchReview?.references?.count?`<section class="material-review"><p>${text('unresolvedReferences',{count:p.researchReview.references.count})}</p><div id="publication-reference-choices">${publicationReferenceChoices(p,{esc})}</div></section>`:''}
   ${analysisEditionReviewView(p,{esc,field})}
-  ${field(text('previewPage'),`<div id="publication-page-choices">${publicationPageChoices(p,{esc,option})}</div>`)}
+  <div class="field"><label for="preview-page">${text('previewPage')}</label><div id="publication-page-choices">${publicationPageChoices(p,{esc,option})}</div></div>
   ${repositoryReview}<label class="checkbox"><input type="checkbox" id="review-confirm"><span>${text('confirm')}</span></label><div class="review-actions">
   <button class="button primary" data-action="export" ${p.stale?'disabled':''}>${icon('export')}${text('download')}</button>
   ${!p.rollback?`<button class="button" data-action="local-export-open">${text('localExport')}</button>`:''}
