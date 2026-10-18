@@ -24,7 +24,25 @@ test('collection readers reuse only the live parent and recheck every previous b
  const reader=projectCollectionReader(app,client,async()=>{});readers.push(reader);
  const use=book=>reader.use({workspaceId:book.namespaceId,projectId:book.projectId??parent.projectId,labBookId:book.labBookId},undefined,(_store,snapshot)=>snapshot.metadata.id);
  assert.equal(await use(f.books[0]),f.books[0].namespaceId);const firstParent=parents[0],parentKey=firstParent.vault.key;
- assert.equal(await use(extra),extra.namespaceId);assert.equal(parents.length,1);assert.equal(firstParent.closed,undefined);
+ const firstTarget={workspaceId:f.books[0].namespaceId,projectId:parent.projectId,labBookId:f.books[0].labBookId};
+ let selectedDb,selectedCache,selectedStorage,connectionClosed=false;
+ await reader.use(firstTarget,undefined,async(store,_snapshot,{storage:book})=>{
+  selectedDb=store.db;selectedCache=store.readCache;selectedStorage=book;
+  const close=store.db.close.bind(store.db);store.db.close=async()=>{
+   assert.ok(bookKeys[0].some(value=>value!==0),'Selected connection closes before its book key is cleared');
+   try{return await close();}finally{connectionClosed=true;}
+  };
+  await assert.rejects(reader.use(firstTarget,undefined,()=>assert.fail('reentrant reader entered')),{code:'LOCKED'});
+  await assert.rejects(reader.verify(),{code:'LOCKED'});await assert.rejects(reader.close(),{code:'LOCKED'});
+  assert.equal(await store.object('collection-connection-test'),null);
+ });
+ await selectedStorage.withLock(()=>selectedStorage.catalogue(store=>store.putObject('collection-connection-test',{value:'Committed between selected reads'})));
+ await reader.use(firstTarget,undefined,async store=>{
+  assert.equal(store.db,selectedDb);assert.notEqual(store.readCache,selectedCache);
+  assert.deepEqual(await store.object('collection-connection-test'),{value:'Committed between selected reads'});
+ });
+ assert.equal(connectionClosed,false);assert.equal(bookKeys.length,1);
+ assert.equal(await use(extra),extra.namespaceId);assert.equal(parents.length,1);assert.equal(firstParent.closed,undefined);assert.equal(connectionClosed,true);
  assert.ok(bookKeys[0].every(value=>value===0));assert.ok(bookKeys[1].some(value=>value!==0));assert.ok(parentKey.some(value=>value!==0));
  await reader.verify();
  await call(parent.projectId+'/lab-books/'+f.books[0].labBookId+'/access/lock');

@@ -1,4 +1,5 @@
 import {readFile} from 'node:fs/promises';
+import {AsyncLocalStorage} from 'node:async_hooks';
 import {digest} from './storage-format.js';
 import {ProjectSessionOwner} from './project-session-owner.js';
 import {LabBookRegistry} from './lab-book-registry.js';
@@ -7,21 +8,35 @@ import {LabBookAccessSession} from './lab-book-access-session.js';
 import {readAccess} from './access.js';
 import {clearVault} from './encryption.js';
 import {AppError} from './errors.js';
+import {createCatalogueConnections} from './catalogue-connections.js';
 // At most one visible owner retains a credential here. Selection comes from
 // authenticated immutable query members, never from a supplied filesystem path.
 export function projectCollectionReader(application,client,check){
- let current=null;const guards=new Map();
- async function close(){const saved=current;current=null;clearVault(saved?.vault);await saved?.owner?.close();}
- return {
-  useStorage(target,consume){return this.use(target,null,consume,{storageOnly:true});},
-  async use(target,snapshotId,consume,{prepare,storageOnly=false}={}){
+ let current=null,tail=Promise.resolve();const guards=new Map(),active=new AsyncLocalStorage();
+ const ordered=operation=>{
+  // A callback cannot switch or close the owner that its own transaction uses.
+  // Reject reentrant requests explicitly instead of waiting behind ourselves.
+  if(active.getStore())return Promise.reject(new AppError('LOCKED'));
+  const result=tail.then(()=>active.run(true,operation));tail=result.then(()=>{},()=>{});return result;
+ };
+ async function release(saved,keepParent=false){
+  let failure;
+  try{await saved?.connections?.close();}catch(error){failure=error;}
+  finally{
+   clearVault(saved?.vault);
+   if(!keepParent||failure)try{await saved?.owner?.close();}catch(error){failure??=error;}
+  }
+  if(failure)throw failure;
+ }
+ async function close(){const saved=current;current=null;await release(saved);}
+ async function use(target,snapshotId,consume,{prepare,storageOnly=false}={}){
    await check();const identity=JSON.stringify(target);
    if(current?.identity!==identity){
     // Adjacent books can share the same authenticated project parent. Release
     // the previous book key while retaining only that request-owned parent;
     // its original grant and every book grant still participate in verification.
     const parent=current&&current.target.projectId===target.projectId?current.owner:null;
-    if(parent){clearVault(current.vault);current=null;}else await close();
+    if(parent){const previous=current;current=null;await release(previous,true);}else await close();
     const selected={identity,target,owner:parent,vault:null,storage:null};current=selected;
     try{
      if(!target.projectId){selected.storage=application.workspace;selected.verify=check;}
@@ -54,10 +69,13 @@ export function projectCollectionReader(application,client,check){
        }
       },{locationOnly:true});
      }
+     // Legacy unkeyed host storage keeps its original catalogue admission;
+     // only an authenticated native owner can retain a keyed connection scope.
+     if(Buffer.isBuffer(selected.storage.vault?.key))selected.connections=createCatalogueConnections(selected.storage);
     }catch(error){if(target.projectId&&['ACCESS_LOCKED','ACCESS_DENIED','ACCESS_WAIT','AUTH','DEVICE_UNKNOWN'].includes(error.code))error.projectId??=target.projectId;await close();throw error;}
    }
    const selected=current;
-   const result=await application.tracked(async()=>{await selected.verify();if(prepare){await prepare(selected.storage);await selected.verify();}
+   const read=async()=>{await selected.verify();if(prepare){await prepare(selected.storage);await selected.verify();}
     if(storageOnly){
      // Mutation callers acquire their own short domain transaction. Never
      // retain the reader transaction across an independently owned write.
@@ -67,9 +85,14 @@ export function projectCollectionReader(application,client,check){
     return selected.storage.catalogue(async store=>{
     const revision=snapshotId??await store.head(),snapshot=await store.snapshot(revision);if(snapshot.metadata.id!==target.workspaceId)throw new AppError('DATABASE_LOCATION');
     const value=await consume(store,snapshot,{snapshotId:revision,storage:selected.storage});await selected.verify();return value;
-   });},target.projectId,target.labBookId??undefined);
+   });};
+   const result=await application.tracked(()=>selected.connections?selected.connections.run(read):read(),target.projectId,target.labBookId??undefined);
    guards.set(identity,selected.verify);return result;
-  },
-  async verify(){for(const verify of guards.values())await verify();await check();},close
+ }
+ return {
+  useStorage(target,consume){return this.use(target,null,consume,{storageOnly:true});},
+  use:(...args)=>ordered(()=>use(...args)),
+  verify:()=>ordered(async()=>{for(const verify of guards.values())await verify();await check();}),
+  close:()=>ordered(close)
  };
 }

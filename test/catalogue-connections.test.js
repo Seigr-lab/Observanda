@@ -4,7 +4,7 @@ import {randomUUID} from 'node:crypto';
 import path from 'node:path';
 import {writeFile,unlink} from 'node:fs/promises';
 import {intakeFixture} from './fixtures/local-intake.js';
-import {catalogueConnection} from '../src/catalogue-connections.js';
+import {catalogueConnection,createCatalogueConnections} from '../src/catalogue-connections.js';
 import {DELETE_MARKER} from '../src/workspace-delete-state.js';
 import {MOVE_SOURCE} from '../src/workspace-move-state.js';
 import {RENAME_MARKER} from '../src/workspace-rename-state.js';
@@ -74,4 +74,39 @@ test('writers refuse lifecycle transitions that start during lock acquisition',{
   }
  };
  await check();await ws.withCatalogueConnections(check);
+});
+
+test('explicit catalogue owners reuse fresh snapshots, invalidate failures and drain accepted work',{timeout:60000},async t=>{
+ const {ws}=await intakeFixture(t),open=ws.openCatalogue.bind(ws),connections=[];
+ ws.openCatalogue=async options=>{
+  const db=await open(options),close=db.close.bind(db),entry={db,closed:false};connections.push(entry);
+  db.close=async()=>{try{return await close();}finally{entry.closed=true;}};return db;
+ };
+ const write=value=>ws.withLock(()=>ws.catalogue(store=>store.putObject('explicit-owner-test',{value})));
+ const read=()=>ws.catalogue(async store=>({db:store.db,cache:store.readCache,value:await store.object('explicit-owner-test')}));
+ const owner=createCatalogueConnections(ws),originalKey=Buffer.from(ws.vault.key);t.after(()=>owner.close());
+ await write(1);
+ const first=await owner.run(read);await write(2);const second=await owner.run(read);
+ assert.equal(first.db,second.db);assert.notEqual(first.cache,second.cache);
+ assert.deepEqual(first.value,{value:1});assert.deepEqual(second.value,{value:2});
+ assert.equal(connections.filter(item=>!item.closed).length,1);
+ // Self-close must refuse before starting a drain; a normal external close is
+ // still possible after this callback completes.
+ await owner.run(async()=>{await assert.rejects(owner.close(),{code:'LOCKED'});assert.deepEqual((await read()).value,{value:2});});
+ await assert.rejects(owner.run(()=>ws.catalogue(async store=>{assert.equal(store.db,first.db);throw Error('selected read failed');})),/selected read failed/);
+ assert.equal(connections.find(item=>item.db===first.db).closed,true);
+ const recovered=await owner.run(read);assert.notEqual(recovered.db,first.db);assert.deepEqual(recovered.value,{value:2});
+ const later=gate();let late;
+ await owner.run(async()=>{late=later.promise.then(read);});
+ // Closing must include an admitted callback still awaiting its access check,
+ // before that callback even enters the database queue.
+ const entered=gate(),release=gate();let finished=false;
+ const accepted=owner.run(async()=>{entered.resolve();await release.promise;return read();});
+ await entered.promise;const closing=owner.close().then(()=>{finished=true;});
+ await new Promise(resolve=>setImmediate(resolve));assert.equal(finished,false);
+ await assert.rejects(owner.run(read),{code:'ACCESS_LOCKED'});
+ release.resolve();assert.deepEqual((await accepted).value,{value:2});await closing;
+ assert.ok(connections.every(item=>item.closed));assert.deepEqual(ws.vault.key,originalKey);
+ const count=connections.length;later.resolve();await assert.rejects(late,{code:'ACCESS_LOCKED'});assert.equal(connections.length,count);
+ await assert.rejects(owner.run(read),{code:'ACCESS_LOCKED'});await owner.close();
 });
