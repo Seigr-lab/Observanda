@@ -1,3 +1,4 @@
+import {PdfExportService} from './pdf-export-service.js';
 import {ComparisonJobAccess} from './comparison-job-access.js';
 import {ProjectPublications} from './project-publications.js';
 import {PublicationSourceAccess} from './publication-source-access.js';
@@ -28,7 +29,7 @@ export class ProjectJobs{
  constructor({publisherOptions=()=>({})}={}){this.publisherOptions=publisherOptions;this.comparisonAccess=new ComparisonJobAccess();this.sessions=new WeakMap();this.entries=new Set();this.stopping=new Set();this.closed=false;}
  stop(entry){
   if(entry.stopped)return entry.stopped;entry.closed=true;entry.sourceAccess?.clear();entry.publications?.clear();this.entries.delete(entry);
-  const pending=entry.worker.stop().then(async()=>{entry.publisher.token=null;await entry.publisher.connection?.cancel();}).finally(()=>{clearVault(entry.storage.vault);entry.grant?.close();this.stopping.delete(pending);});
+  const pending=Promise.all([entry.worker.stop(),entry.pdfs?.close()]).then(async()=>{entry.publisher.token=null;await entry.publisher.connection?.cancel();}).finally(()=>{clearVault(entry.storage.vault);entry.grant?.close();this.stopping.delete(pending);});
   this.stopping.add(pending);entry.stopped=pending;return pending;
  }
  async forget(session,id){const owners=this.sessions.get(session);if(!owners)return;const pending=[];for(const [key,entry] of owners)if(entry.projectId===id){owners.delete(key);pending.push(this.stop(entry));}await Promise.all(pending);}
@@ -56,7 +57,7 @@ export class ProjectJobs{
    entry.queue=new AuthorizedJobs(owned,workspaceJobDefinitions(owned,entry.publisher,current,{sourceAccess:entry.sourceAccess,comparisonAccess:this.comparisonAccess}),async()=>{
     try{if(entry.closed||entry.expires<=Date.now())throw new AppError('ACCESS_LOCKED');await (entry.grant?.check??check)();}catch(error){if(['ACCESS_LOCKED','WORKSPACE_CHANGED','NOT_FOUND','STORAGE_DELETING','STORAGE_MOVING'].includes(error.code))void this.stop(entry).catch(()=>{});throw error;}
    });
-   entry.worker=new ProjectWorker(entry.queue);entry.publications=new ProjectPublications(entry);owners.set(key,entry);this.entries.add(entry);
+   entry.pdfs=new PdfExportService(owned,{check:()=>entry.queue.check()});entry.worker=new ProjectWorker(entry.queue);entry.publications=new ProjectPublications(entry);owners.set(key,entry);this.entries.add(entry);
    }catch(error){grant?.close();clearVault(owned.vault);throw error;}
   }
   entry.expires=Date.now()+8*60*60*1000;

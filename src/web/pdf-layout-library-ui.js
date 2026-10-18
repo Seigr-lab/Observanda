@@ -1,7 +1,8 @@
+import {customFontId} from './font-catalogue.js';
 import {t} from './i18n/index.js';
 import {pdfLayoutPreset} from './pdf-layout-model.js';
 const tr=key=>t('pdfEditor',key);
-export function pdfLayoutLibraryUI({post,esc,getLayout,applyLayout}){
+export function pdfLayoutLibraryUI({post,esc,getLayout,getFontSource,applyLayout}){
  let layouts={items:[],next:null},chosen='digital',draftName='',pending=null;
  const builtin=()=>['digital','print'].includes(chosen),selected=()=>layouts.items.find(item=>item.id===chosen);
  const button=(label,command,disabled=false)=>'<button type="button" class="button" data-action="module-command" data-module-id="pdf-editor" data-command="layout-'+command+'"'+(disabled?' disabled':'')+'>'+esc(tr(label))+'</button>';
@@ -17,9 +18,9 @@ export function pdfLayoutLibraryUI({post,esc,getLayout,applyLayout}){
  async function action(command){
   if(!command.startsWith('layout-'))return false;
   const operation=command.slice(7);
-  if(operation.startsWith('apply-')){const layout=builtin()?pdfLayoutPreset(chosen):selected()?.layout;if(!layout)throw new Error(tr('missingLayout'));applyLayout(operation.slice(6),structuredClone(layout));}
+  if(operation.startsWith('apply-')){const layout=builtin()?pdfLayoutPreset(chosen):selected()?.layout;if(!layout)throw new Error(tr('missingLayout'));await applyLayout(operation.slice(6),structuredClone(layout),builtin()?null:selected());}
   else if(operation.startsWith('save-')){
-   if(!pending){const layout=getLayout(operation.slice(5));if(!layout||!draftName.trim())throw new Error(tr('nameLayout'));pending={id:crypto.randomUUID(),commandId:crypto.randomUUID(),expectedRevision:null,operation:{type:'save',name:draftName.trim(),layout:structuredClone(layout)}};}
+   if(!pending){const layout=getLayout(operation.slice(5));if(!layout||!draftName.trim())throw new Error(tr('nameLayout'));pending={id:crypto.randomUUID(),commandId:crypto.randomUUID(),expectedRevision:null,operation:{type:'save',name:draftName.trim(),layout:structuredClone(layout),...(customFontId(layout.font)?{fontSource:getFontSource(layout.font)}:{})}};}
    const saved=await post('layout-change',pending),item={id:pending.id,revision:saved.revision,name:pending.operation.name,layout:pending.operation.layout};pending=null;draftName='';
    await load();if(!layouts.items.some(entry=>entry.id===item.id))layouts.items.push(item);chosen=item.id;
   }else if(operation==='remove'){

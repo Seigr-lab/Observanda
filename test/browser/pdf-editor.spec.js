@@ -1,3 +1,5 @@
+import {createHash} from 'node:crypto';
+import {measurePdfPreflight} from '../../src/pdf-preflight.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
 import path from 'node:path';
@@ -13,7 +15,7 @@ import {navigate} from './preferences-helper.js';
 test('PDF editor saves independent documents, lays out sections, restores history and downloads its preview',async({page,browser})=>{
  test.setTimeout(120000);page.setDefaultTimeout(15000);
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-pdf-ui-')),f=await encryptedFixture(directory,{...sampleNotebook(),title:'workspace'}),errors=[];
- const removeRenderer=installPdfRenderer(async input=>{const render=await browser.newPage();try{await render.route('**/*',route=>route.abort());await render.setContent(input.html);await render.evaluate(()=>document.fonts.ready);return {bytes:await render.pdf({preferCSSPageSize:true,printBackground:true})};}finally{await render.close();}});
+ const removeRenderer=installPdfRenderer(async input=>{const render=await browser.newPage();try{await render.route('**/*',route=>route.abort());await render.setContent(input.html);await render.evaluate(()=>document.fonts.ready);const preflight=await render.evaluate(measurePdfPreflight),bytes=await render.pdf({preferCSSPageSize:true,printBackground:true});return {bytes,preflight,sha256:createHash('sha256').update(bytes).digest('hex'),renderer:{engine:'chromium',electron:'test',chromium:browser.version(),recipeVersion:1}};}finally{await render.close();}});
  const app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore}),documents=new PdfDocuments(f.workspace,(await f.workspace.outline()).metadata.id);
  const initiallyAvailable=await documents.available();page.on('pageerror',e=>errors.push(e.message));
  try{

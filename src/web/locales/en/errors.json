@@ -328,7 +328,7 @@
   "PDF_LAYOUT": "Check the page dimensions, margins and text settings.",
   "PDF_SECTION": "A section could not be prepared for PDF.",
   "PDF_EMPTY": "Add at least one section before exporting.",
-  "PDF_FONT": "Select an available bundled font for the document.",
+  "PDF_FONT": "Select a bundled font or retain an embeddable font in this document.",
   "PDF_GLYPH": "A selected font cannot display some characters. Choose a font that includes them.",
   "PDF_UNRESOLVED_FIGURE": "This document contains a figure that has not been included in the PDF.",
   "PDF_UNRESOLVED_REFERENCE": "This document contains an internal reference that needs a PDF destination.",
@@ -345,5 +345,7 @@
   "PDF_CONTENT_CLIPPED": "Content is clipped by its container.",
   "PDF_BLOCK_TOO_TALL": "An unbroken block is taller than the printable page.",
   "PDF_ANCHOR_MISSING": "An internal link has no visible destination.",
-  "PDF_ANCHOR_AMBIGUOUS": "An internal link has more than one destination."
+  "PDF_ANCHOR_AMBIGUOUS": "An internal link has more than one destination.",
+  "PDF_AUDIENCE": "Choose a valid audience for this PDF edition.",
+  "PDF_PUBLIC_REVIEW": "Review or omit each section before preparing a public PDF. Content or document setting changes require a new review."
 }

@@ -1,3 +1,4 @@
+import {PdfExportService} from './pdf-export-service.js';
 import {pdfDocumentRequest,executePdfRequest} from './pdf-document-requests.js';
 import {configurationSourceAccess} from './configuration-source-access.js';
 import {recordOwnerTransferCompletionError} from './record-owner-transfer-application.js';
@@ -266,7 +267,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
     ctx.dashboardTask=task;dashboardTasks.add(task);
   };
   const startJobs=ctx=>{if(ctx.workspace&&ctx.vault.key&&!ctx.manualLock&&!shuttingDown&&!changing){ctx.publicationSourceAccess??=new PublicationSourceAccess();ctx.jobs??=workspaceJobs(ctx.workspace,ctx.publisher,{sourceAccess:ctx.publicationSourceAccess,observe:job=>activities.job(ctx.id,job)});ctx.jobs.worker.start();startDashboardEdits(ctx);}};
-  const stopWorkspaceJobs=async ctx=>{await ctx.live?.close();delete ctx.live;await ctx.jobs?.worker.stop();ctx.publicationSourceAccess?.clear();ctx.jobs?.comparisonAccess.clear();await ctx.publisher?.connection?.clear();};
+  const stopWorkspaceJobs=async ctx=>{await ctx.pdfs?.close();delete ctx.pdfs;await ctx.live?.close();delete ctx.live;await ctx.jobs?.worker.stop();ctx.publicationSourceAccess?.clear();ctx.jobs?.comparisonAccess.clear();await ctx.publisher?.connection?.clear();};
   const stopJobs=async ctx=>{await ctx.projects?.close();delete ctx.projects;await stopWorkspaceJobs(ctx);};
   const deletions=new WorkspaceDeletions((preferencesFile??deviceStore.file)+'.workspace-deletions');
   if(root&&(await workspaceDeletion(root)||(await deletions.list()).some(item=>item.source===root&&item.phase!=='prepared')))root=null;
@@ -842,7 +843,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       }
       if(!workspace)throw new AppError('MISSING');
       const pdf=pdfDocumentRequest(url.pathname,req.method);
-      if(pdf){req.operationActivity=null;return await projectContentHttp(req,res,pdf,{body,json,mime,headless,contextId:context.id,execute:(data,options)=>executePdfRequest(workspace,pdf,data,{...options,check:req.checkWriter,sourceReader})});}
+      if(pdf){req.operationActivity=null;const service=['export-start','export-resume'].includes(pdf.pdf)?selectedContext.pdfs??=new PdfExportService(workspace,{check:async()=>{if(shuttingDown||context!==selectedContext||selectedContext.manualLock||!selectedContext.vault.key)throw new AppError('ACCESS_LOCKED');}}):null;return await projectContentHttp(req,res,pdf,{body,json,mime,headless,contextId:context.id,execute:(data,options)=>executePdfRequest(workspace,pdf,data,{...options,check:req.checkWriter,sourceReader,exportService:service})});}
       const starter=recordStarterRequest(url.pathname,req.method);
       if(starter){
         if(!starter.write)req.operationActivity=null;

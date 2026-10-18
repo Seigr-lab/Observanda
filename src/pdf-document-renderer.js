@@ -1,56 +1,68 @@
+import {pdfAudienceSelection} from './pdf-audience.js';
+import {pdfPageMasterCSS,pdfPageMasterText,pdfPageContentBox,pdfPageMasterHasSection} from './pdf-page-master.js';
+import {renderPdfNotes,renderPdfEndnotes} from './pdf-note-renderer.js';
+import {proseDocument} from './web/prose-model.js';
+import {renderPdfImages} from './pdf-image-renderer.js';
+import {pdfDocumentOutline} from './pdf-document-outline.js';
 import {pdfFigureRenderer,scopePdfIds} from './pdf-figure-renderer.js';
 import {pdfBlockRenderer} from './pdf-content-blocks.js';
 import {renderRichText,richTextStyles,safeRichLink} from './web/rich-text-model.js';
 import {fontStack,BUNDLED_FONTS} from './web/font-catalogue.js';
-import {parseResearchReference} from './web/research-reference.js';
 import {PdfLayoutError,validPdfDocumentHeader,validPdfSection,pdfSectionContent} from './web/pdf-layout-model.js';
 const esc=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const cssText=value=>JSON.stringify(value).replace(/</g,'\\3c ').replace(/>/g,'\\3e ');
 export const PDF_RENDERER_VERSION=1;
 export const PDF_INPUT_BYTES=16*1024*1024;
 function layoutCSS(layout,name){
+ if(layout.pageMaster)layout={...layout,header:'',footer:'',pageNumbers:false};
  const {widthMm,heightMm,margins,font,fontSizePt,lineHeight,columns,columnGapMm,header,footer,pageNumbers,background,color}=layout;
  return `@page ${name}{size:${widthMm}mm ${heightMm}mm;margin:${margins.top}mm ${margins.right}mm ${margins.bottom}mm ${margins.left}mm;background:${background};@top-center{content:${cssText(header)};font:9pt ${fontStack(font)};color:${color}}@bottom-left{content:${cssText(footer)};font:9pt ${fontStack(font)};color:${color}}@bottom-right{content:${pageNumbers?'counter(page)':'none'};font:9pt ${fontStack(font)};color:${color}}}
  .${name}{page:${name};font-family:${fontStack(font)};font-size:${fontSizePt}pt;line-height:${lineHeight};color:${color};column-count:${columns};column-gap:${columnGapMm}mm}`;
 }
-const sheet=`*{box-sizing:border-box}html,body{margin:0;padding:0}body{overflow-wrap:anywhere;print-color-adjust:exact;-webkit-print-color-adjust:exact}p{margin:0 0 .8em;orphans:3;widows:3}h1,h2,h3,h4,h5,h6{break-after:avoid;margin:0 0 .6em;line-height:1.2}h1{font-size:2em}h2{font-size:1.5em}h3{font-size:1.2em}blockquote{margin:1em 0;padding-inline-start:1em;border-inline-start:2pt solid #ccd2dc}pre{white-space:pre-wrap;overflow-wrap:anywhere}a{color:inherit}table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{text-align:start;vertical-align:top;padding:2mm;border:.25mm solid #ccd2dc;overflow-wrap:anywhere}thead{display:table-header-group}tr{break-inside:avoid}caption{text-align:start;font-weight:bold;margin-block:2mm}figure{margin:1em 0;break-inside:avoid}svg,img{max-width:100%;height:auto}details,.book-table-linear{display:none}.book-table-scroll{overflow:visible}svg text{font-family:inherit}.book-equation{overflow:visible}.book-sketch svg{display:block;width:100%;height:auto}.pdf-section+.pdf-section{margin-top:1em}.pdf-section[data-start=page]{break-before:page}.pdf-section[data-start=recto]{break-before:recto}.pdf-section[data-start=verso]{break-before:verso}`;
+const sheet=`.rt-align-start{text-align:start}.rt-align-end{text-align:end}.rt-align-left{text-align:left}.rt-align-right{text-align:right}.rt-align-center{text-align:center}.rt-align-justify{text-align:justify}*{box-sizing:border-box}html,body{margin:0;padding:0}body{overflow-wrap:anywhere;print-color-adjust:exact;-webkit-print-color-adjust:exact}p{margin:0 0 .8em;orphans:3;widows:3}h1,h2,h3,h4,h5,h6{break-after:avoid;margin:0 0 .6em;line-height:1.2}h1{font-size:2em}h2{font-size:1.5em}h3{font-size:1.2em}blockquote{margin:1em 0;padding-inline-start:1em;border-inline-start:2pt solid #ccd2dc}pre{white-space:pre-wrap;overflow-wrap:anywhere}a{color:inherit}table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{text-align:start;vertical-align:top;padding:2mm;border:.25mm solid #ccd2dc;overflow-wrap:anywhere}thead{display:table-header-group}tr{break-inside:avoid}caption{text-align:start;font-weight:bold;margin-block:2mm}figure{margin:1em 0;break-inside:avoid}svg,img{max-width:100%;height:auto}details,.book-table-linear{display:none}.book-table-scroll{overflow:visible}svg text{font-family:inherit}.book-equation{overflow:visible}.book-sketch svg{display:block;width:100%;height:auto}.pdf-note-reference{margin-inline:.1em}.pdf-section-notes{margin-top:1em;border-top:.2mm solid #ccd2dc;padding-top:3mm}.pdf-endnotes{break-before:page}.pdf-contents{break-after:page}.pdf-contents ol{padding:0;list-style:none}.pdf-contents li{margin-block:2mm}.pdf-contents a{text-decoration:none}.pdf-section+.pdf-section{margin-top:1em}.pdf-section[data-start=page]{break-before:page}.pdf-section[data-start=recto]{break-before:recto}.pdf-section[data-start=verso]{break-before:verso}`;
 // Consume selected sections in order. Source authorization and revision pinning
 // belong to the document owner; this compiler never resolves current research.
-export async function compilePdfDocument(header,sections,{signal,maxBytes=PDF_INPUT_BYTES}={}){
+export async function compilePdfDocument(header,sections,{signal,maxBytes=PDF_INPUT_BYTES,readImage}={}){
  if(!validPdfDocumentHeader(header)||!Number.isSafeInteger(maxBytes)||maxBytes<1||maxBytes>PDF_INPUT_BYTES)throw new PdfLayoutError('PDF_LAYOUT');
- const ids=new Set(),fonts=new Set(),styles=new Set(),body=[],layouts=new Map(),glyphs=new Map();let size=0,count=0,equations=false;
+ const audience=pdfAudienceSelection(header),outline=pdfDocumentOutline(header),ids=new Set(),fonts=new Set(),styles=new Set(),body=[],layouts=new Map(),glyphs=new Map();let size=0,count=0,equations=false,noteNumber=1;const endnotes=[];
  const retain=text=>{size+=Buffer.byteLength(text);if(size>maxBytes)throw new PdfLayoutError('PDF_CAPACITY');return text;};
- function layout(value){const key=JSON.stringify(value);if(!layouts.has(key)){const name='pdf-layout-'+layouts.size;layouts.set(key,{name,value});styles.add(retain(layoutCSS(value,name)));}fonts.add(value.font);return layouts.get(key).name;}
+ function layout(value,sectionTitle=''){const key=JSON.stringify([value,pdfPageMasterHasSection(value)?sectionTitle:'']);if(!layouts.has(key)){const name='pdf-layout-'+layouts.size;layouts.set(key,{name,value});styles.add(retain(layoutCSS(value,name)+pdfPageMasterCSS(value,name,{sectionTitle})));}fonts.add(value.font);return layouts.get(key).name;}
  function textGlyphs(font,text){let points=glyphs.get(font);if(!points){points=new Set();glyphs.set(font,points);}for(const char of text)if(!/[\s\p{Default_Ignorable_Code_Point}]/u.test(char))points.add(char.codePointAt(0));}
- const defaultLayout=layout(header.layout);
- styles.add(layoutCSS(header.layout,'').split('\n .')[0]);
- for await(const section of sections){
+ const defaultLayout=layout(header.layout);textGlyphs(header.layout.font,header.layout.pageMaster?pdfPageMasterText(header.layout,''):[header.layout.header,header.layout.footer,...(header.layout.pageNumbers?['0123456789']:[])].join(' '));
+ styles.add(layoutCSS(header.layout,'').split('\n .')[0]+pdfPageMasterCSS(header.layout,''));
+ for await(const section of audience.sections(sections,{signal})){
   signal?.throwIfAborted();if(!validPdfSection(section)||ids.has(section.id))throw new PdfLayoutError('PDF_SECTION');ids.add(section.id);count++;
-  const content=pdfSectionContent(section),settings=section.layout??header.layout,name=section.layout?layout(settings):defaultLayout;
+  const heading=outline.section(section),content=pdfSectionContent(section),settings=section.layout??header.layout,name=section.layout||pdfPageMasterHasSection(settings)?layout(settings,heading.title):defaultLayout,contentBox=pdfPageContentBox(settings);
   function project(node){
    const result={...node};
 
-   if(node.type==='book_citation'&&settings.links==='disabled')result.attrs={...node.attrs,url:''};
+   if(node.type==='book_citation'&&(settings.links==='disabled'||!outline.settings.externalLinks))result.attrs={...node.attrs,url:''};
    if(node.type==='text')textGlyphs(node.marks?.find(mark=>mark.type==='font_family')?.attrs.font??settings.font,node.text);
    if(node.type==='book_table')textGlyphs(settings.font,[node.attrs.title,...node.attrs.headers,...node.attrs.rows.flat()].join(' '));
    if(node.type==='book_citation')textGlyphs(settings.font,[node.attrs.title,node.attrs.authors,node.attrs.issued,node.attrs.locator].join(' '));
    if(node.type==='book_preserved')textGlyphs(settings.font,[node.attrs.source,node.attrs.reason,node.attrs.format].join(' '));
-   if(node.content)result.content=node.content.map(project);
-   for(const mark of node.marks??[])if(settings.links!=='disabled'&&mark.type==='link'&&(parseResearchReference(mark.attrs.href)||! /^(?:https?:|mailto:|tel:)/.test(mark.attrs.href)))throw new PdfLayoutError('PDF_UNRESOLVED_REFERENCE',[section.id]);
+   if(node.content)result.content=node.content.flatMap(child=>{const projected=project(child),href=child.marks?.find(mark=>mark.type==='link')?.attrs.href;if(outline.settings.printUrls&&href&&/^(?:https?:|mailto:|tel:)/.test(href)){textGlyphs(settings.font,href);return [projected,{type:'text',text:' ('+href+')'}];}return [projected];});
+
    return result;
   }
-  textGlyphs(settings.font,[section.title,settings.header,settings.footer,...(settings.pageNumbers?['0123456789']:[])].join(' '));
+  textGlyphs(settings.font,pdfPageMasterText(settings,heading.title));
+  textGlyphs(settings.font,[heading.title,...(settings.pageMaster?[]:[settings.header,settings.footer,...(settings.pageNumbers?['0123456789']:[])])].join(' '));
   const projected=project(content),rich=richTextStyles([projected]);for(const font of rich.fonts)fonts.add(font);styles.add(retain(rich.css));
   const blocks=pdfBlockRenderer(settings,{textGlyphs,sectionId:section.id}),figure=pdfFigureRenderer(section,settings,textGlyphs);
-  const html=scopePdfIds(renderRichText(projected,{block:node=>figure(node)??blocks.render(node),resolveLink:href=>settings.links==='disabled'?null:safeRichLink(href)&&/^(?:https?:|mailto:|tel:)/.test(href)?href:null}),'pdf-section-'+section.id+'-');
+  const images=await renderPdfImages(section,readImage,{signal,textGlyphs,font:settings.font}),parts=projected.content??[],chunks=[],render=nodes=>renderRichText({type:'doc',content:nodes},{block:node=>figure(node)??blocks.render(node),resolveLink:href=>safeRichLink(href)?outline.link(href,section.id,settings):null});
+  const notes=await renderPdfNotes(section,{startNumber:noteNumber,signal,textGlyphs,font:settings.font,fontSizePt:settings.fontSizePt,lineHeight:settings.lineHeight,links:settings.links!=='disabled'&&outline.settings.internalLinks,renderContent:content=>{const note=project(proseDocument(content)),rich=richTextStyles([note]);for(const font of rich.fonts)fonts.add(font);styles.add(retain(rich.css));return render(note.content??[]);}});noteNumber=notes.nextNumber;for(const entry of notes.endnotes)endnotes.push(retain(entry));
+  for(let at=0;at<=parts.length;at++){for(const reference of notes.references)if(Math.min(reference.block,parts.length)===at)chunks.push(reference.html);for(const image of images)if(Math.min(image.block,parts.length)===at)chunks.push(image.html);if(at<parts.length)chunks.push(render([parts[at]]));}
+  const html=scopePdfIds(chunks.join('')+notes.sectionNotes,'pdf-section-'+section.id+'-');
   equations ||= blocks.equations;
-  body.push(retain(`<section id="pdf-section-${section.id}" class="pdf-section ${name}" data-pdf-width-mm="${settings.widthMm-settings.margins.left-settings.margins.right}" data-pdf-height-mm="${settings.heightMm-settings.margins.top-settings.margins.bottom}"${section.start?` data-start="${section.start}"`:''}>${section.title?`<h1>${esc(section.title)}</h1>`:''}${html}</section>`));
+  body.push(retain(`<section id="pdf-section-${section.id}" class="pdf-section ${name}" data-pdf-width-mm="${contentBox.widthMm}" data-pdf-height-mm="${contentBox.heightMm}"${section.start?` data-start="${section.start}"`:''}>${section.title?`<h${heading.level}>${esc(heading.title)}</h${heading.level}>`:''}${html}</section>`));
  }
+ const endnoteHTML=renderPdfEndnotes(endnotes,{textGlyphs,font:header.layout.font,layoutClass:defaultLayout});
  signal?.throwIfAborted();if(!count)throw new PdfLayoutError('PDF_EMPTY');
  // System/custom fallbacks are not reproducible. An asset adapter must qualify
 // those fonts before the compiler will accept them.
- for(const font of fonts)if(!BUNDLED_FONTS.some(item=>item.id===font))throw new PdfLayoutError('PDF_FONT',[font]);
- const html=`<!doctype html><html lang="${esc(header.language)}" dir="${header.direction}"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; font-src data:; img-src data:; base-uri 'none'; form-action 'none'"><title>${esc(header.name)}</title><style>${sheet}\n${[...styles].join('\n')}</style></head><body>${body.join('')}</body></html>`;
+ for(const font of fonts)if(!BUNDLED_FONTS.some(item=>item.id===font)&&!header.fonts?.some(pin=>pin.id===font))throw new PdfLayoutError('PDF_FONT',[font]);
+ const contents=outline.contents().replace('class="pdf-contents"','class="pdf-contents '+defaultLayout+'"');if(contents)textGlyphs(header.layout.font,outline.text());
+ const html=`<!doctype html><html lang="${esc(header.language)}" dir="${header.direction}"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; font-src data:; img-src data:; base-uri 'none'; form-action 'none'"><title>${esc(header.name)}</title><style>${sheet}\n${[...styles].join('\n')}</style></head><body>${contents}${outline.finish(body.join('')+endnoteHTML)}</body></html>`;
  if(Buffer.byteLength(html)>maxBytes)throw new PdfLayoutError('PDF_CAPACITY');
- return {version:PDF_RENDERER_VERSION,html,fonts:[...fonts],equations,glyphs:Object.fromEntries([...glyphs].map(([font,points])=>[font,[...points]])),sections:count};
+ return {version:PDF_RENDERER_VERSION,bookmarks:header.structure?.bookmarks??true,html,fonts:[...fonts],fontPins:header.fonts??[],equations,glyphs:Object.fromEntries([...glyphs].map(([font,points])=>[font,[...points]])),sections:count};
 }

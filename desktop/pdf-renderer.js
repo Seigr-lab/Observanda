@@ -13,7 +13,7 @@ export async function renderPdfDocument(input,options={}){
 }
 async function render(input,{signal,timeoutMs=120000,maxOutputBytes=64*1024*1024}={}){
  signal?.throwIfAborted();
- if(input?.version!==1||(input.preflightOnly!==undefined&&typeof input.preflightOnly!=='boolean')||typeof input.html!=='string'||Buffer.byteLength(input.html)>64*1024*1024||!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>300000||!Number.isSafeInteger(maxOutputBytes)||maxOutputBytes<1||maxOutputBytes>64*1024*1024)throw fail('PDF_INPUT');
+ if(input?.version!==1||(input.bookmarks!==undefined&&typeof input.bookmarks!=='boolean')||(input.preflightOnly!==undefined&&typeof input.preflightOnly!=='boolean')||typeof input.html!=='string'||Buffer.byteLength(input.html)>64*1024*1024||!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>300000||!Number.isSafeInteger(maxOutputBytes)||maxOutputBytes<1||maxOutputBytes>64*1024*1024)throw fail('PDF_INPUT');
  const isolated=partition??=session.fromPartition('observanda-pdf-renderer',{cache:false}),documentURL='https://document.invalid/';
  let win,timer,abort,registered=false;const denyDownload=event=>event.preventDefault();
  try{
@@ -37,7 +37,7 @@ async function render(input,{signal,timeoutMs=120000,maxOutputBytes=64*1024*1024
    signal?.throwIfAborted();
    const renderer={engine:'chromium',electron:process.versions.electron,chromium:process.versions.chrome,recipeVersion:input.version};
    if(input.preflightOnly||findings.status==='fatal')return {bytes:null,sha256:null,renderer,conformance:[],preflight:findings};
-   const bytes=await win.webContents.printToPDF({printBackground:true,displayHeaderFooter:false,preferCSSPageSize:true,generateTaggedPDF:true,generateDocumentOutline:true,scale:1});
+   const bytes=await win.webContents.printToPDF({printBackground:true,displayHeaderFooter:false,preferCSSPageSize:true,generateTaggedPDF:true,generateDocumentOutline:input.bookmarks??true,scale:1});
    if(bytes.length>maxOutputBytes)throw fail('PDF_CAPACITY');
    if(bytes.subarray(0,5).toString()!=='%PDF-')throw fail('PDF_OUTPUT');
    return {bytes,sha256:createHash('sha256').update(bytes).digest('hex'),renderer,conformance:[],preflight:findings};

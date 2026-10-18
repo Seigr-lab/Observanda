@@ -47,7 +47,8 @@ export async function readPdfResearch(sourceReader,input,{signal}={}){
     else if(collection==='sections'){const section=await selected('sections',input.itemId);title=section.title;content=section.body;}
     else {const figure=await selected('figures',input.itemId);title=figure.title;figures=[figure];content={type:'doc',content:[{type:'book_figure',attrs:{version:1,id:figure.id,figureId:figure.id,alternative:figure.title}}]};}
     if(collection!=='figures')for(const id of pdfReferencedFigures(content)){signal?.throwIfAborted();figures.push(await selected('figures',id));}
-    const value={version:1,workspaceId:input.sourceId,snapshotId:pinned.snapshotId,recordId:row.id,recordRevision:row.revision,collection,itemId:input.itemId,title,content,figures};
+    const [summary]=await Array.fromAsync(store.queryDocuments([row],snapshot.metadata,{signal,search:false,revisions:true}));
+    const value={version:1,workspaceId:input.sourceId,snapshotId:pinned.snapshotId,recordId:row.id,recordRevision:summary.revision,collection,itemId:input.itemId,title,content,figures};
     if(!validPdfResearch(value))throw new AppError('PDF_SOURCE_CONTENT');
     if(Buffer.byteLength(JSON.stringify(value))>384*1024)throw new AppError('PDF_CAPACITY');
     return value;

@@ -37,6 +37,13 @@ export class ProjectDomainCatalogue{
   await index.update(head,id,revision);
   await this.db.run('INSERT INTO objects VALUES ($1,$2)'+(expected?' ON CONFLICT(id) DO UPDATE SET payload=excluded.payload':''),id,this.encode('object',id,value));
  }
+ async deleteObject(id){
+  if(!this.writable)throw new AppError('INVALID');
+  const index=new ObjectIndex(this),head=await index.head(),expected=await index.find(head,id);
+  await this.objectValue(id,expected);if(!expected)return;
+  // update() invalidates any transaction read cache along with the index head.
+  await index.update(head,id,null);await this.db.run('DELETE FROM objects WHERE id=$1',id);
+ }
  async *objectIdEntries(prefix,{signal}={}){
   const index=new ObjectIndex(this),head=await index.head();
   for await(const entry of index.entries(head,prefix)){signal?.throwIfAborted();yield entry.id;}

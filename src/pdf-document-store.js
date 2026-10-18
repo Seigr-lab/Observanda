@@ -1,3 +1,7 @@
+import {verifyPdfResearchImages} from './pdf-research-images.js';
+import {verifyPdfExportJobs} from './pdf-export-jobs.js';
+import {PdfDocumentImages,verifyPdfImages} from './pdf-document-images.js';
+import {verifyPdfDocumentFonts,describePdfDocumentFont} from './pdf-document-fonts.js';
 import {PdfLayoutLibrary} from './pdf-layout-library.js';
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
@@ -83,7 +87,7 @@ export class PdfDocumentStore{
   if(!natural(offset)||!Number.isInteger(limit)||limit<1||limit>100)invalid();
   const current=await this.open(id,{revision}),value=await this.revision(id,current.revision),items=[],index=this.index(id);
   for(let i=offset;i<current.count&&items.length<limit;i++){
-   const row=await index.entryAt({root:value.order},i),section=await this.sectionRow(id,row.revision);if(row.id!==ordinal(section.position))bad();items.push({id:section.section.id,title:section.section.title,position:section.position});
+   const row=await index.entryAt({root:value.order},i),section=await this.sectionRow(id,row.revision);if(row.id!==ordinal(section.position))bad();items.push({id:section.section.id,title:section.section.title,position:section.position,level:section.section.level??1});
   }
   return {revision:current.revision,items,next:offset+items.length<current.count?offset+items.length:null,total:current.count};
  }
@@ -96,7 +100,7 @@ export class PdfDocumentStore{
   if(expectedRevision===null){if(operation.type!=='create'||!exact(operation,'type,header,section')||!validPdfDocumentHeader(operation.header)||operation.header.id!==id||!validPdfSection(operation.section))invalid();if(await this.store.object('pdf:head:'+id))throw new AppError('EXISTS');current={version:1,header:operation.header,sections:null,order:null,nextPosition:0};}
   else{previous=await this.head(id);if(previous.revision!==expectedRevision)throw new AppError('CONFLICT');current=structuredClone(await this.revision(id,previous.revision));}
   const index=this.index(id),orderIndex=this.index(id),tree=new RecordValueTree(new PdfBlocks(this.store,id)),directory=await this.directory();
-  const put=async(section,position)=>{const revision=await tree.retain({section,position});current.sections=await index.change(current.sections,section.id,revision);current.order=await orderIndex.change(current.order,ordinal(position),revision);};
+  const put=async(section,position)=>{for(const image of section.images??[])await new PdfDocumentImages(this.store,id).descriptor(image.asset);const revision=await tree.retain({section,position});current.sections=await index.change(current.sections,section.id,revision);current.order=await orderIndex.change(current.order,ordinal(position),revision);};
   const selected=async sectionId=>{if(!researchId(sectionId))invalid();const row=await index.find({root:current.sections},sectionId);if(!row)throw new AppError('NOT_FOUND');return this.sectionRow(id,row.revision,sectionId);};
   if(operation.type==='create')await put(operation.section,current.nextPosition++);
   else if(operation.type==='header'){
@@ -114,6 +118,7 @@ export class PdfDocumentStore{
    await this.open(id,{revision:operation.revision});current=structuredClone(await this.revision(id,operation.revision));
   }else if(operation.type==='remove'){if(!exact(operation,'type'))invalid();}
   else invalid();
+  if(['create','header'].includes(operation.type))for(const pin of current.header.fonts??[])await describePdfDocumentFont(this.store,id,pin,{signal});
   await index.flush(current.sections);await orderIndex.flush(current.order);
   const revision=hash(current);
   if(previous?.revision===revision&&operation.type!=='remove'){
@@ -138,7 +143,8 @@ export class PdfDocumentStore{
   for await(const row of index.entries({root:value.order})){signal?.throwIfAborted();const value=await this.sectionRow(id,row.revision);if(row.id!==ordinal(value.position))bad();yield value.section;}
  }
  async verify({signal}={}){
-  await new PdfLayoutLibrary(this.store).verify({signal});
+  await new PdfLayoutLibrary(this.store).verify({signal});await verifyPdfResearchImages(this.store,{signal});await verifyPdfImages(this.store,{signal});await verifyPdfExportJobs(this.store,{signal});
+  const verified=new Set(),once=async(key,check)=>{const token=JSON.stringify(key);if(!verified.has(token)){await check();verified.add(token);}};
   const directory=await this.directory(),directoryIndex=this.index('directory');let documents=0,editions=0;
   for await(const key of this.store.objectIdEntries('pdf:head:',{signal})){
    signal?.throwIfAborted();const id=key.slice('pdf:head:'.length),head=await this.head(id,{removed:true}),listed=await directoryIndex.find(directory,id);
@@ -146,7 +152,8 @@ export class PdfDocumentStore{
    const index=this.index(id);let count=0,currentFound=false;
    for await(const entry of index.entries({root:head.history})){
     signal?.throwIfAborted();if(entry.id!==ordinal(count++))bad();const value=await this.revision(id,entry.revision);if((await index.find({root:head.versions},entry.revision))?.revision!==entry.revision)bad();currentFound=entry.revision===head.revision;
-    const sectionRoot=value.sections;let sections=0;for await(const row of index.entries({root:value.order})){signal?.throwIfAborted();const value=await this.sectionRow(id,row.revision);if(row.id!==ordinal(value.position))bad();const named=await index.find({root:sectionRoot},value.section.id);if(named?.revision!==row.revision)bad();sections++;}
+    await verifyPdfDocumentFonts(this.store,value.header,{signal,once});
+    const sectionRoot=value.sections;let sections=0;for await(const row of index.entries({root:value.order})){signal?.throwIfAborted();const value=await this.sectionRow(id,row.revision);if(row.id!==ordinal(value.position))bad();for(const image of value.section.images??[])try{await new PdfDocumentImages(this.store,id).descriptor(image.asset);}catch(error){if(error.code==='NOT_FOUND')bad();throw error;}const named=await index.find({root:sectionRoot},value.section.id);if(named?.revision!==row.revision)bad();sections++;}
     if(sections!==(value.sections?.count??0))bad();editions++;
    }
    if(count!==head.sequence+1||!currentFound)bad();if(!head.removed)documents++;
