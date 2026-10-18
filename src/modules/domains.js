@@ -7,7 +7,7 @@ const owners={
  inventory:['category','resource','movement','reservation','stock-transfer','asset-transfer'],
  bom:['bom'],tasks:['task'],equipment:['booking'],
  calendars:['calendar','event','subscription','calendar-connection'],
- samples:[],
+ samples:[],pdf:[],
  laboratory:['lab-space','lab-entry']
 };
 export const moduleDomains=Object.freeze(Object.keys(owners).sort());

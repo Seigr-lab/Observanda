@@ -1,3 +1,4 @@
+import {PdfDocumentStore} from './pdf-document-store.js';
 import {verifyInventoryOperations} from './inventory-operation-verification.js';
 import {verifySampleAnalysisCatalogue} from './sample-analysis-catalogue.js';
 import {cataloguePrefixExists} from './postgres-indexes.js';
@@ -23,6 +24,7 @@ export async function verifyProjectDomains(research){
    for(const domain of registry.domains){
     const store=new ProjectDomainCatalogue(research.workspace,session.schema(projectDomainSchema(research.db.id,domain)),domain,registry.namespaceId);stores.push(store);await checkProjectDomainOwner(store);
     if(domain==='samples')await verifySampleAnalysisCatalogue(store);
+    if(domain==='pdf')await new PdfDocumentStore(store).verify();
     const catalogue=new ModuleCatalogue(store),head=await catalogue.head(registry.namespaceId);sources.set(domain,moduleConstraintSource(catalogue,head));
     await catalogue.verify(registry.namespaceId,{
      entity:entity=>{store.assertModuleType(entity.type);owner.validateEntity(entity);},
