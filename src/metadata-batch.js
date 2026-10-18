@@ -7,6 +7,7 @@ import {AppError} from './errors.js';
 import {hasCatalogue} from './postgres.js';
 import {writeCatalogueRows} from './catalogue-writes.js';
 import {CatalogueReadCache} from './catalogue-read-cache.js';
+import {withCatalogueCacheBoundary} from './catalogue-context.js';
 const batches=new AsyncLocalStorage();
 // Call inside the workspace's writer lock. Legacy file workspaces keep their
 // existing write path; only PostgreSQL has shared index branches to coalesce.
@@ -66,6 +67,7 @@ export async function withMetadataBatch(store,operation){
 // buffered rows and roots, suspend this cache while the owner commits, then
 // reload identities on subsequent writes instead of retaining pre-commit roots.
 export async function withFlushedMetadataBatch(store,operation){
- if(typeof operation!=='function')throw new AppError('INVALID');const batch=metadataBatchIndex(store);if(!batch)return operation();
- await batch.save();batch.clear();return batches.run(null,operation);
+ if(typeof operation!=='function')throw new AppError('INVALID');const batch=metadataBatchIndex(store);
+ if(batch){await batch.save();batch.clear();}
+ return withCatalogueCacheBoundary(store,()=>batch?batches.run(null,operation):operation());
 }

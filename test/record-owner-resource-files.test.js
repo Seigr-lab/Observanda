@@ -5,11 +5,12 @@ import {lstat} from 'node:fs/promises';
 import path from 'node:path';
 import {intakeFixture} from './fixtures/local-intake.js';
 import {digest,serialize} from '../src/storage-format.js';
-import {privateDirectory} from '../src/storage.js';
+import {privateDirectory,Workspace} from '../src/storage.js';
+import {withMetadataBatch,withFlushedMetadataBatch} from '../src/metadata-batch.js';
 import {FileContent} from '../src/file-content.js';
 import {checkpointedFileName} from '../src/checkpointed-file-copy.js';
 import {recordOwnerTransferFingerprint,writeRecordOwnerTransfer,setRecordOwnerFence,withRecordOwnerTransferWrite} from '../src/record-owner-transfer-state.js';
-import {initializeRecordOwnerReclamation,retainRecordOwnerResource,adoptRecordOwnerResource,reclaimRecordOwnerResources,readRecordOwnerReclamation,verifyRecordOwnerResources,commitRecordOwnerResources,compactRecordOwnerResources} from '../src/record-owner-resources.js';
+import {initializeRecordOwnerReclamation,retainRecordOwnerResource,adoptRecordOwnerResource,reclaimRecordOwnerResources,readRecordOwnerReclamation,verifyRecordOwnerResources,commitRecordOwnerResources,compactRecordOwnerResources,recordOwnerResourcesTracking} from '../src/record-owner-resources.js';
 const exists=file=>lstat(file).then(()=>true,error=>{if(error.code==='ENOENT')return false;throw error;});
 const state=value=>({kind:'state',key:'resource-test:'+digest(serialize(value)),revision:digest(serialize(value))});
 
@@ -74,4 +75,68 @@ test('cancellation reclaims interrupted original copies, preserves preexisting a
  assert.equal((await compactRecordOwnerResources(ws,published,{write:write(published),checkpoint:()=>{checkpoints++;}})).state,'retained');
  assert.ok(checkpoints<16,'Dependency compaction must use bounded batches instead of one commit per child');
  await ws.catalogue(async store=>{for(const {resource} of [...children,...branches])assert.ok(await store.db.get('SELECT 1 FROM state WHERE slot=$1',resource.key));assert.ok(await store.db.get('SELECT 1 FROM state WHERE slot=$1',kept.key));assert.equal((await store.db.get("SELECT COUNT(*)::text AS count FROM state WHERE starts_with(slot,'record-owner-resource:') OR starts_with(slot,'record-owner-resource-claim:') OR starts_with(slot,'record-owner-resource-chain:') OR starts_with(slot,'record-owner-resource-address:')")).count,'0');await verifyRecordOwnerResources(store);});
+});
+
+
+test('resource adoption follows transactions on reused connections and explicit commit boundaries',{timeout:90000},async t=>{
+ const f=await intakeFixture(t),ws=f.ws,other=new Workspace(ws.root,ws.vault),sourceOwner={projectId:null,labBookId:null,workspaceId:randomUUID()},targetOwner={projectId:null,labBookId:null,workspaceId:f.book.id},sourceSnapshotId=await ws.catalogue(store=>store.head()),createdAt='2026-01-01T00:00:00.000Z';
+ const receipt=()=>{const id=randomUUID(),command={id,workspaceId:sourceOwner.workspaceId,recordId:f.record.id,sourceNotebookId:randomUUID(),expectedStorageRevision:digest('synthetic retained source'),targetWorkspaceId:f.book.id,targetNotebookId:f.record.notebookId};return {version:1,id,command,sourceOwner,targetOwner,fingerprint:recordOwnerTransferFingerprint(command,sourceOwner,targetOwner),phase:'copying',sourceSnapshotId,createdAt,updatedAt:createdAt,progress:{},result:null};};
+ const write=value=>operation=>other.withLock(()=>other.catalogue(store=>withRecordOwnerTransferWrite(store,value,()=>operation(store))));
+ const install=(active,value)=>write(active)(async store=>{
+  await writeRecordOwnerTransfer(store,active);await setRecordOwnerFence(store,active,'incoming');await initializeRecordOwnerReclamation(store,active);
+  const resource=state(value);await retainRecordOwnerResource(store,resource,{present:false});await store.db.run('INSERT INTO state VALUES ($1,$2)',resource.key,store.encode('state',resource.key,value));
+ });
+ const cancel=async active=>{
+  active.phase='cancelled';active.progress.reclamation={version:1,state:'pending'};await write(active)(store=>writeRecordOwnerTransfer(store,active));
+  assert.equal((await reclaimRecordOwnerResources(other,active,{write:write(active)})).state,'complete');
+  active.progress.reclamation.state='complete';await write(active)(store=>writeRecordOwnerTransfer(store,active));
+ };
+ const assertRetained=value=>ws.catalogue(async store=>{
+  const resource=state(value),row=await store.db.get('SELECT payload FROM state WHERE slot=$1',resource.key);
+  assert.ok(row,'Cancellation removed an allocation adopted by an ordinary writer');assert.deepEqual(store.decode('state',resource.key,row.payload),value);
+  assert.equal(await recordOwnerResourcesTracking(store),false);await verifyRecordOwnerResources(store);
+ });
+ await ws.withCatalogueConnections(async()=>{
+  let readDb,writeDb;
+  await ws.withLock(()=>ws.catalogue(async store=>{writeDb=store.db;assert.equal(await recordOwnerResourcesTracking(store),false);}));
+  const active=receipt(),value={data:'adopted after another connection commits'},pinned=Promise.withResolvers(),changed=Promise.withResolvers();
+  const reading=ws.catalogue(async store=>{
+   readDb=store.db;assert.equal(await recordOwnerResourcesTracking(store),false);pinned.resolve();await changed.promise;
+   assert.equal(await recordOwnerResourcesTracking(store),false,'A fixed reader must retain its original snapshot');
+  });
+  await pinned.promise;
+  try{await install(active,value);}finally{changed.resolve();}
+  await reading;
+  await ws.catalogue(async store=>{assert.equal(store.db,readDb);assert.equal(await recordOwnerResourcesTracking(store),true,'The next read transaction must see committed allocations');});
+  await ws.withLock(()=>ws.catalogue(async store=>{assert.equal(store.db,writeDb);assert.equal(await adoptRecordOwnerResource(store,state(value)),true,'The next writer must protect adopted allocations');}));
+  await cancel(active);await assertRetained(value);
+  await ws.withLock(()=>ws.catalogue(async store=>{assert.equal(store.db,writeDb);assert.equal(await recordOwnerResourcesTracking(store),false);}));
+
+  // Durable batch owners may explicitly commit inside the same writer context.
+  // A failed boundary callback must invalidate both its former and inner proofs,
+  // including the path with no metadata buffer to flush.
+  for(const buffered of [false,true]){
+   const next=receipt(),kept={data:'adopted after explicit commit '+buffered},requested=Promise.withResolvers(),installed=Promise.withResolvers();
+   // Schedule the independent writer outside the held writer's async context.
+   const staging=requested.promise.then(()=>install(next,kept));staging.then(installed.resolve,installed.reject);
+   try{
+    await ws.withLock(()=>ws.catalogue(async store=>{
+     assert.equal(await recordOwnerResourcesTracking(store),false);
+     const operation=async()=>{
+      await assert.rejects(withFlushedMetadataBatch(store,async()=>{
+       await store.db.run('COMMIT');requested.resolve();await installed.promise;
+       await store.db.run('BEGIN');await store.db.lock();
+       assert.equal(await recordOwnerResourcesTracking(store),true,'A committed boundary must not reuse its prior inactive proof');
+       throw Error('Injected boundary callback failure');
+      }),/Injected boundary callback failure/);
+      assert.equal(await recordOwnerResourcesTracking(store),true,'A failed callback must not restore the former proof');
+      assert.equal(await adoptRecordOwnerResource(store,state(kept)),true);
+     };
+     if(buffered)await withMetadataBatch(store,operation);else await operation();
+    }));
+   }catch(error){requested.reject(error);throw error;}
+   finally{await staging;}
+   await cancel(next);await assertRetained(kept);
+  }
+ });
 });

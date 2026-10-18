@@ -2,6 +2,7 @@ import {lockRecordOwnerResource as lock} from './record-owner-resource-lock.js';
 // Prospective allocations for selected-record transfers. These independently keyed
 // authenticated rows never replace the catalogue's shared object-index root.
 import {withScratch} from './scratch-work.js';
+import {catalogueContext,catalogueCacheEpoch} from './catalogue-context.js';
 import {AsyncLocalStorage} from 'node:async_hooks';
 import path from 'node:path';
 import {lstat,open,unlink} from 'node:fs/promises';
@@ -35,14 +36,25 @@ async function put(store,slot,value){return mutation.run(store,()=>store.db.run(
 async function remove(store,slot){return mutation.run(store,()=>store.db.run('DELETE FROM state WHERE slot=$1',slot));}
 async function page(store,prefix,{reverse=false,limit=32}={}){return store.db.all('SELECT slot,payload FROM state WHERE slot COLLATE "C">=$1 AND slot COLLATE "C"<$2 ORDER BY slot COLLATE "C" '+(reverse?'DESC':'ASC')+' LIMIT '+limit,prefix,prefix+'~');}
 function authority(store){try{return assertRecordOwnerTransferAuthority(store)??null;}catch(error){if(error.code!=='RECORD_TRANSFER_BUSY')throw error;return null;}}
-function saveContext(store,value){const allowed=authority(store);contexts.set(store.db??store,{workspace:store.workspace,authorityId:allowed?.id??null,value});return value;}
+function contextLifetime(store){
+ const held=catalogueContext.getStore(),workspace=store.workspace;
+ // A connection can outlive many commits. Only the exact writer scope or a
+ // fixed reader's cache owns this proof; manually opened stores never cache it.
+ if(held?.db===store.db&&held.root===workspace.root&&held.vault===workspace.vault&&(held.projectId??null)===(workspace.projectId??null)&&(held.labBookId??null)===(workspace.labBookId??null))return held;
+ return store.readCache??null;
+}
+function saveContext(store,value,lifetime=contextLifetime(store),epoch=catalogueCacheEpoch(store.db)){
+ const allowed=authority(store);
+ if(lifetime&&epoch&&contextLifetime(store)===lifetime&&catalogueCacheEpoch(store.db)===epoch)contexts.set(lifetime,{workspace:store.workspace,authorityId:allowed?.id??null,epoch,value});return value;
+}
 async function context(store){
- const allowed=authority(store),cached=contexts.get(store.db??store);if(cached?.workspace===store.workspace&&cached.authorityId===(allowed?.id??null))return cached.value;
+ const allowed=authority(store),lifetime=contextLifetime(store),epoch=catalogueCacheEpoch(store.db),cached=lifetime&&epoch?contexts.get(lifetime):null;
+ if(cached?.workspace===store.workspace&&cached.authorityId===(allowed?.id??null)&&cached.epoch===epoch)return cached.value;
  let found;
  if(allowed){const receipt=await readRecordOwnerTransfer(store,allowed.id);if(!receipt||receipt.command.recordId!==allowed.recordId)fail();found={receipt,active:true};}
  else found={receipt:null,active:await recordOwnerResourcesPending(store)};
  if(found.receipt&&(await store.snapshot()).metadata.id!==found.receipt.targetOwner.workspaceId)found={receipt:null,active:false};
- return saveContext(store,found);
+ return saveContext(store,found,lifetime,epoch);
 }
 export async function recordOwnerResourcesPending(store){const value=await get(store,ACTIVE);if(value!==null&&(!exact(value,['version','pending'])||value.version!==1||!Number.isSafeInteger(value.pending)||value.pending<1))fail();return value!==null;}
 export async function recordOwnerResourcesTracking(store){return !suppression.getStore()&&(await context(store)).active;}

@@ -12,7 +12,7 @@ import {ProjectSourceAuthority} from './project-source-authority.js';
 import {rekeyProjectDomains} from './project-domain-rekey.js';
 // Transactional research storage. PostgreSQL sees encrypted payloads and opaque IDs,
 // never titles, prose or file paths. Workspace owns locking and key custody.
-import {AsyncLocalStorage} from 'node:async_hooks';
+import {catalogueContext} from './catalogue-context.js';
 import {reconcileWebsiteMembership,reconcileOwnedWebsiteMembership,websiteMembershipChange} from './website-membership.js';
 import {WebsiteDocumentStore} from './website-document-store.js';
 import {verifyWebsiteEditor} from './website-editor-store.js';
@@ -70,7 +70,7 @@ import {RecordMemberCollections} from './record-member-collections.js';
 import {recordReplacementBase,validateReplacementAttempt,replacementCompletion} from './record-replacement-bases.js';
 export {CATALOGUE_FILE,CATALOGUE_ARCHIVE,openCatalogue,hasCatalogue} from './postgres.js';
 
-export const catalogueContext=new AsyncLocalStorage();
+export {catalogueContext};
 export const catalogueDescriptor=book=>({format:'observanda-research-catalogue',version:2,workspaceId:book.id});
 export const isCatalogue=value=>value?.format==='observanda-research-catalogue';
 const fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
