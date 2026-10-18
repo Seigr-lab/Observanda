@@ -265,6 +265,7 @@
   "tablesTitle": "Table list title",
   "imageOutputDpi": "Export resolution (dpi; blank keeps original pixels)",
   "imageQualitySummary": "At the entered dimensions: {before} to {after} pixels; {beforeBytes} to {afterBytes} bytes; {dpi} dpi. Page composition can change the displayed size; Preview PDF shows the final layout. The retained original is unchanged.",
+  "printQrCodes": "Print QR codes and readable URLs after each section",
   "pageReferences": "Show page numbers in contents and lists",
   "paginationTitle": "Paragraph pagination",
   "paginationPositioned": "Flow pagination controls are unavailable on positioned pages. Switch to flowing layout to use the retained settings.",

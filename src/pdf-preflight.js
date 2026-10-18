@@ -1,7 +1,7 @@
 // Measurements describe the compiled document at its printable width. They
 // do not claim to reproduce Chromium's page-break decisions or font coverage.
 export const PDF_PREFLIGHT_LIMIT=256;
-const codes=new Set(['PDF_FOOTNOTE_LAYOUT','PDF_FOOTNOTE_OVERFLOW','PDF_COMPOSITION_OVERLAP','PDF_COMPOSITION_OVERFLOW','PDF_PAGE_GEOMETRY','PDF_SECTION_HIDDEN','PDF_FONT_FAILED','PDF_IMAGE_MISSING','PDF_IMAGE_RESOLUTION','PDF_CONTENT_OVERFLOW','PDF_CONTENT_CLIPPED','PDF_BLOCK_TOO_TALL','PDF_ANCHOR_MISSING','PDF_ANCHOR_AMBIGUOUS']);
+const codes=new Set(['PDF_LINK_CODE_LAYOUT','PDF_FOOTNOTE_LAYOUT','PDF_FOOTNOTE_OVERFLOW','PDF_COMPOSITION_OVERLAP','PDF_COMPOSITION_OVERFLOW','PDF_PAGE_GEOMETRY','PDF_SECTION_HIDDEN','PDF_FONT_FAILED','PDF_IMAGE_MISSING','PDF_IMAGE_RESOLUTION','PDF_CONTENT_OVERFLOW','PDF_CONTENT_CLIPPED','PDF_BLOCK_TOO_TALL','PDF_ANCHOR_MISSING','PDF_ANCHOR_AMBIGUOUS']);
 const metricKeys=new Set(['widthPx','heightPx','availableWidthPx','availableHeightPx','dpi','recommendedDpi','naturalWidth','naturalHeight','count','target']);
 const object=value=>value&&typeof value==='object'&&!Array.isArray(value);
 export function validPdfPreflight(value){

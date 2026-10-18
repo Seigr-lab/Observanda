@@ -5,6 +5,7 @@ import {PdfDocumentStore} from '../src/pdf-document-store.js';
 import {checkProjectDomainOwner} from '../src/project-domain-registry.js';
 import {requiresPdfDomainFormat,requirePdfDomainFormat} from '../src/pdf-domain-format.js';
 import {pdfLayoutPreset} from '../src/web/pdf-layout-model.js';
+import {pdfStructureDefaults} from '../src/web/pdf-structure-model.js';
 import {pdfPressDefaults} from '../src/web/pdf-press-model.js';
 
 // This adapter includes the real authenticated domain identity and transaction
@@ -42,7 +43,7 @@ test('new PDF fields acquire the owner marker before immutable writes, retain it
 });
 
 test('domain admission rejects malformed, future and non-PDF markers before a callback can mutate',async()=>{
- for(const [domain,pdfFormat,code] of [['pdf',null,'CATALOGUE_DAMAGED'],['pdf',1,'CATALOGUE_DAMAGED'],['pdf','2','CATALOGUE_DAMAGED'],['pdf',2.5,'CATALOGUE_DAMAGED'],['pdf',4,'ACCESS_UPGRADE'],['calculator',2,'CATALOGUE_DAMAGED']]){
+ for(const [domain,pdfFormat,code] of [['pdf',null,'CATALOGUE_DAMAGED'],['pdf',1,'CATALOGUE_DAMAGED'],['pdf','2','CATALOGUE_DAMAGED'],['pdf',2.5,'CATALOGUE_DAMAGED'],['pdf',99,'ACCESS_UPGRADE'],['calculator',2,'CATALOGUE_DAMAGED']]){
   const f=fixture({domain});f.values.set('owner',{...f.owner,pdfFormat});let called=false;await assert.rejects(f.run(async store=>{called=true;await store.putObject('must-not-exist',{});},{write:true}),{code});assert.equal(called,false);assert.equal(f.values.has('must-not-exist'),false);
  }
  const f=fixture();await assert.rejects(f.run(requirePdfDomainFormat),{code:'INVALID'});assert.deepEqual(f.values.get('owner'),f.owner);
@@ -56,4 +57,11 @@ test('format three is admitted, retained across older features and acquired for 
  await f.run(store=>requirePdfDomainFormat(store,2),{write:true});assert.equal(f.values.get('owner').pdfFormat,3);await f.run(async()=>{});
  const fresh=fixture(),command=creation();command.operation.header.press={version:2,bleedMm:3,cropMarks:true,artwork:{background:'#ffffff',image:null,pages:'all'}};
  await fresh.change(command);assert.equal(fresh.values.get('owner').pdfFormat,3);fresh.values.set('owner',{...fresh.owner,pdfFormat:2});await assert.rejects(fresh.run(store=>new PdfDocumentStore(store).open(command.id)),{code:'CATALOGUE_DAMAGED'});
+});
+
+test('printed QR settings acquire format four before writes and retain history after disabling',async()=>{
+ const f=fixture(),command=creation(),initial=await f.change(command);const header={...command.operation.header,structure:{...pdfStructureDefaults(),printQrCodes:true}},change={id:command.id,commandId:randomUUID(),expectedRevision:initial.revision,operation:{type:'header',header}};
+ f.writes.length=0;const saved=await f.change(change);assert.equal(f.writes[0],'owner');assert.equal(f.values.get('owner').pdfFormat,4);
+ await f.change({id:command.id,commandId:randomUUID(),expectedRevision:saved.revision,operation:{type:'header',header:{...header,structure:{...header.structure,printQrCodes:false}}}});assert.equal(f.values.get('owner').pdfFormat,4);assert.equal((await f.run(store=>new PdfDocumentStore(store).open(command.id,{revision:saved.revision}))).header.structure.printQrCodes,true);await f.run(store=>new PdfDocumentStore(store).verify());
+ f.values.set('owner',{...f.owner,pdfFormat:3});await assert.rejects(f.run(store=>new PdfDocumentStore(store).verify()),{code:'CATALOGUE_DAMAGED'});
 });

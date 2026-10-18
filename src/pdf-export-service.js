@@ -25,7 +25,7 @@ export async function prepareSavedPdf(documents,{documentId,revision},{signal,ch
    return embedPdfFonts(compiled,{signal,customFonts});
   },{signal,check});
   await progress('rendering');const result=await renderSavedPdf({...compiled,preflightOnly},{signal,wait:true});await check();signal?.throwIfAborted();return result;
- }catch(error){if(error instanceof PdfLayoutError)throw new AppError(error.code,error.details);throw error;}
+ }catch(error){if(preflightOnly&&error instanceof PdfLayoutError&&error.code==='PDF_LINK_CODE_LAYOUT'&&typeof error.details?.[0]==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(error.details[0])){await check();signal?.throwIfAborted();return {preflight:{version:1,status:'fatal',truncated:false,findings:[{code:error.code,severity:'fatal',sectionId:error.details[0],blockId:null,blockIndex:null,details:{}}]}};}if(error instanceof PdfLayoutError)throw new AppError(error.code,error.details);throw error;}
 }
 // The desktop renderer is intentionally single-owner. Queued exports compile
 // only when their turn begins instead of retaining many whole documents in RAM.
