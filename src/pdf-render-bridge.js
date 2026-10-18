@@ -11,6 +11,7 @@ export function pdfRenderBridge(channel){
   if(!['pdf-result','pdf-capabilities-result'].includes(message?.type))return;
   const entry=pending.get(message.id);if(!entry||message.type!==(entry.kind==='capabilities'?'pdf-capabilities-result':'pdf-result'))return;entry.finish();
   if(entry.kind==='capabilities'){entry.resolve({archival:message.archival===true});return;}
+  if(entry.cancelledError){entry.reject(entry.cancelledError);return;}
   if(message.error){entry.reject(new AppError(message.error));return;}
   const invalid=()=>entry.reject(new AppError('PDF_OUTPUT'));
   if(!validPdfPreflight(message.preflight))return invalid();
@@ -25,10 +26,23 @@ export function pdfRenderBridge(channel){
   signal?.throwIfAborted();if(closed||!channel.connected)return Promise.reject(new AppError('PDF_DESKTOP'));
   if(kind==='render'&&[...pending.values()].some(entry=>entry.kind==='render'))return Promise.reject(new AppError('PDF_BUSY'));
   return new Promise((resolve,reject)=>{
-   const id=++next,cancel=()=>{if(kind==='render')send({type:'pdf-cancel',id});},abort=()=>{cancel();finish();reject(signal.reason??new AppError('PDF_CANCELLED'));},timer=setTimeout(()=>{cancel();finish();reject(new AppError('PDF_TIMEOUT'));},kind==='render'?125000:30000),finish=()=>{clearTimeout(timer);signal?.removeEventListener('abort',abort);pending.delete(id);};
-   pending.set(id,{kind,resolve,reject,finish,preflightOnly:input?.preflightOnly===true,profile:input?.outputProfile});signal?.addEventListener('abort',abort,{once:true});
+   const id=++next;let timer;
+   const finish=()=>{clearTimeout(timer);signal?.removeEventListener('abort',abort);pending.delete(id);};
+   const cancel=error=>{
+    const entry=pending.get(id);if(!entry||entry.cancelledError)return;
+    if(kind!=='render'){finish();reject(error);return;}
+    // The caller's queue remains reserved until the desktop confirms that its
+    // worker/validator has stopped. A missing acknowledgment disables this
+    // bridge; it must never admit overlapping work after a cancellation timeout.
+    entry.cancelledError=error;clearTimeout(timer);signal?.removeEventListener('abort',abort);
+    timer=setTimeout(()=>close(new AppError('PDF_TIMEOUT')),10000);
+    try{send({type:'pdf-cancel',id});}catch{close(new AppError('PDF_DESKTOP'));}
+   },abort=()=>cancel(signal.reason??new AppError('PDF_CANCELLED'));
+   timer=setTimeout(()=>cancel(new AppError('PDF_TIMEOUT')),kind==='render'?125000:30000);
+   pending.set(id,{kind,resolve,reject,finish,preflightOnly:input?.preflightOnly===true,profile:input?.outputProfile,cancelledError:null});signal?.addEventListener('abort',abort,{once:true});
    try{send({type:kind==='render'?'pdf-render':'pdf-capabilities',id,...(kind==='render'?{input}:{})});}catch{finish();reject(new AppError('PDF_DESKTOP'));}
   });
  }
- return {render:(input,options)=>request('render',input,options),capabilities:options=>request('capabilities',null,options),close(){closed=true;channel.off('message',receive);for(const entry of pending.values()){entry.finish();entry.reject(new AppError('PDF_CANCELLED'));}}};
+ function close(error=new AppError('PDF_CANCELLED')){closed=true;channel.off('message',receive);for(const entry of pending.values()){entry.finish();entry.reject(entry.cancelledError??error);}}
+ return {render:(input,options)=>request('render',input,options),capabilities:options=>request('capabilities',null,options),close};
 }

@@ -25,3 +25,16 @@ test('accessible bridge preserves the automated-only boundary and rejects a diff
 test('capability queries do not reserve or cancel the renderer',async()=>{
  const f=fixture();try{const render=f.bridge.render({}),id=f.sent.at(-1).id,cap=f.bridge.capabilities();const capId=f.sent.at(-1).id;f.reply({type:'pdf-capabilities-result',id:capId,archival:true});assert.deepEqual(await cap,{archival:true});await assert.rejects(f.bridge.render({}),{code:'PDF_BUSY'});f.reply({id});assert.equal((await render).sha256,sha256);}finally{f.bridge.close();}
 });
+
+test('cancellation retains the render reservation until desktop cleanup is acknowledged',async()=>{
+ const f=fixture(),controller=new AbortController(),reason=new Error('selected render cancelled');let settled=false;
+ try{
+  const first=f.bridge.render({},{signal:controller.signal}),check=assert.rejects(first,error=>error===reason);void first.then(()=>{settled=true;},()=>{settled=true;});const id=f.sent.at(-1).id;
+  controller.abort(reason);await new Promise(resolve=>setImmediate(resolve));assert.equal(settled,false);assert.deepEqual(f.sent.at(-1),{type:'pdf-cancel',id});await assert.rejects(f.bridge.render({}),{code:'PDF_BUSY'});
+  f.reply({id,error:'PDF_CANCELLED'});await check;assert.equal(settled,true);const next=f.bridge.render({});f.reply({});assert.equal((await next).sha256,sha256);
+ }finally{f.bridge.close();}
+});
+test('missing cancellation acknowledgment closes the bridge instead of admitting another render',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});const f=fixture(),controller=new AbortController();
+ try{const first=f.bridge.render({},{signal:controller.signal}),check=assert.rejects(first,error=>error===controller.signal.reason);controller.abort();t.mock.timers.tick(10000);await check;await assert.rejects(f.bridge.render({}),{code:'PDF_DESKTOP'});}finally{f.bridge.close();}
+});
