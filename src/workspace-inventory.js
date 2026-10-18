@@ -1,7 +1,8 @@
 import {ownedStorageLeaseFile} from './owned-storage-control.js';
 import {workspaceTransferControl} from './workspace-transfer-controls.js';
-// Files are discovered and hashed one at a time. The review receipt retains
-// counts and a digest, never a complete file inventory in server/browser state.
+// Discovery stays ordered; independent hashes share a bounded adaptive budget.
+// Reviews retain counts and a digest, never a complete in-memory inventory.
+import {adaptiveReadMap} from './adaptive-reads.js';
 import path from 'node:path';
 import {opendir} from 'node:fs/promises';
 import {createReadStream} from 'node:fs';
@@ -13,13 +14,14 @@ import {AppError} from './errors.js';
 import {isStorageTemporary} from './storage-temporary.js';
 import {MOVE_RECEIPT,MOVE_SOURCE} from './workspace-move-state.js';
 import {operationStage,operationAdvance,operationWork} from './operation-progress.js';
-export async function hashWorkspaceFile(file){
+export async function hashWorkspaceFile(file,{signal,reportProgress=true}={}){
  const stat=await assertRegular(file);
- return operationStage('verify-file',{total:stat.size,unit:'bytes',item:path.basename(file)},async()=>{
-  const hash=createHash('sha256');for await(const chunk of createReadStream(file)){hash.update(chunk);operationAdvance(chunk.length);operationWork({bytes:chunk.length});}return hash.digest('hex');
- });
+ const run=async()=>{
+  signal?.throwIfAborted();const hash=createHash('sha256');for await(const chunk of createReadStream(file,{signal})){hash.update(chunk);if(reportProgress)operationAdvance(chunk.length);operationWork({bytes:chunk.length});}return hash.digest('hex');
+ };
+ return reportProgress?operationStage('verify-file',{total:stat.size,unit:'bytes',item:path.basename(file)},run):run();
 }
-export async function* workspaceFiles(root,{signal,includeDatabase=true,hashFiles=true,projectRoots=[]}={}){
+export async function* workspaceFiles(root,{signal,includeDatabase=true,hashFiles=true,projectRoots=[],readPool}={}){
  const excluded=new Set();
  for(const projectRoot of projectRoots){const relative=path.relative(root,projectRoot);if(!relative||relative==='.observanda'||relative==='..'||relative.startsWith('..'+path.sep)||path.isAbsolute(relative))throw new AppError('STORAGE_PATH');excluded.add(relative.split(path.sep).join('/'));}
  async function* walk(relative){
@@ -46,10 +48,12 @@ export async function* workspaceFiles(root,{signal,includeDatabase=true,hashFile
     yield* walk(path.posix.join(relative,item.name)+(item.isDirectory()?'/':''));
    }
   }else{
-   yield {path:relative,bytes:stat.size,...(hashFiles?{sha256:await hashWorkspaceFile(absolute)}:{}),...(includeDatabase&&relative===CATALOGUE_FILE?{database:await catalogueStamp(root)}:{})};
+   yield {path:relative,bytes:stat.size,...(includeDatabase&&relative===CATALOGUE_FILE?{database:await catalogueStamp(root)}:{})};
   }
  }
- yield* walk(path.basename(await workspaceFile(root)));yield* walk('.observanda');
+ async function* entries(){yield* walk(path.basename(await workspaceFile(root)));yield* walk('.observanda');}
+ if(!hashFiles){yield* entries();return;}
+ yield* adaptiveReadMap(entries(),async(file,signal)=>({path:file.path,bytes:file.bytes,sha256:await hashWorkspaceFile(path.join(root,file.path),{signal,reportProgress:false}),...(file.database?{database:file.database}:{})}),{signal,pool:readPool});
 }
 export function workspaceInventory(root,salt,{signal,visit,expected,expectedFiles,consume,projectRoots=[]}={}){
  if(typeof salt!=='string'||!/^[a-f0-9-]{36}$/.test(salt))throw new AppError('INVALID');

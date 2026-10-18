@@ -1,6 +1,7 @@
 // Selected evidence crosses owners as immutable originals and receipt-bound
 // heads. Each metadata group commits independently; publication is one segment.
 import path from 'node:path';
+import {adaptiveReadMap} from './adaptive-reads.js';
 import {retainRecordOwnerResource,recordOwnerMetadataDependencies,journalRecordOwnerMutation} from './record-owner-resources.js';
 import {lstat} from 'node:fs/promises';
 import {AppError} from './errors.js';
@@ -218,9 +219,11 @@ export async function activateRecordOwnerEvidence(target,receipt,descriptor,{sto
 export async function verifyRecordOwnerEvidence(target,receipt,descriptor,{signal,check}={}){
  if(!descriptor||descriptor.version!==1||descriptor.recordId!==receipt.command.recordId||descriptor.segmentId!==receipt.progress.segmentId)damaged();const materials=new ResearchMaterials(target);
  for(const kind of kinds)materials.sequences.validate(descriptor.sequences[kind]);
- for await(const entry of materials.sequences.items(descriptor.files)){
-  signal?.throwIfAborted();if(entry.kind==='original')await new FileContent(target,target.metadataPath(entry.name),entry.bytes,entry.sha256).verify({signal,...(check?{onProgress:check}:{})});else{const saved=await target.catalogue(store=>store.object(dataKey(receipt.id,entry.name))),text=saved?.text;if(saved?.version!==1||saved.transferId!==receipt.id||saved.recordId!==descriptor.recordId||saved.relative!==entry.name||typeof text!=='string'||Buffer.byteLength(text)!==entry.bytes||digest(text)!==entry.sha256)damaged();if(receipt.phase!=='complete'&&await target.readMetadata(entry.name,Math.max(entry.bytes+1,16*1024*1024))!==text)damaged();}
- }
+ // Lifecycle checks remain ordered even when independent originals overlap.
+ let checks=Promise.resolve();const onProgress=check?()=>{checks=checks.then(()=>check());return checks;}:undefined;
+ for await(const result of adaptiveReadMap(materials.sequences.items(descriptor.files),async(entry,signal)=>{
+  signal.throwIfAborted();if(entry.kind==='original')await new FileContent(target,target.metadataPath(entry.name),entry.bytes,entry.sha256).verify({signal,onProgress,reportProgress:false});else{const saved=await target.catalogue(store=>store.object(dataKey(receipt.id,entry.name))),text=saved?.text;if(saved?.version!==1||saved.transferId!==receipt.id||saved.recordId!==descriptor.recordId||saved.relative!==entry.name||typeof text!=='string'||Buffer.byteLength(text)!==entry.bytes||digest(text)!==entry.sha256)damaged();if(receipt.phase!=='complete'&&await target.readMetadata(entry.name,Math.max(entry.bytes+1,16*1024*1024))!==text)damaged();}
+ },{signal}))void result;
  for await(const ref of materials.sequences.items(descriptor.revisions)){signal?.throwIfAborted();const doc=await materials.readStored(ref);if(doc.recordId!==descriptor.recordId)damaged();}
  for await(const ref of materials.sequences.items(descriptor.sequences.all)){signal?.throwIfAborted();const doc=await materials.readStored(ref);if(doc.recordId!==descriptor.recordId||doc.kind!==ref.kind)damaged();if(receipt.phase!=='complete'){const head=await materials.current(ref.id,{includeStaged:true});if(!head||head.ownerTransfer!==receipt.id||head.revision!==ref.revision)damaged();}}
  return {revisions:descriptor.revisions.count,heads:descriptor.sequences.all.count,files:descriptor.files.count};

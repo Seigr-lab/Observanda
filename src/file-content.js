@@ -84,11 +84,11 @@ export class FileContent {
     }finally{await handle.close();}
   }
   stream(start=0,end=this.size-1){return Readable.from(this.read(start,end));}
-  async verify({signal,onProgress}={}){
-   return scopedFileVerification(this,()=>operationStage('verify-file',{total:this.size,unit:'bytes',item:path.basename(this.file)},async()=>{
+  async verify({signal,onProgress,reportProgress=true}={}){
+   return scopedFileVerification(this,()=>{const run=async()=>{
     signal?.throwIfAborted();let size=0;const hash=createHash('sha256');await this.workspace.requireStorageKey();const handle=await open(this.file,'r');
-    try{const stat=await handle.stat({bigint:true});if(!stat.isFile()||stat.nlink>1n)throw new AppError('UNSAFE');await onProgress?.(0,this.size);for await(const chunk of decoded(handle,this.workspace,this.file)){signal?.throwIfAborted();size+=chunk.length;hash.update(chunk);operationAdvance(chunk.length);await onProgress?.(size,this.size);}if(size!==this.size||hash.digest('hex')!==this.sha256||!sameFile(stat,await handle.stat({bigint:true})))throw new AppError('MEDIA_INVALID');}finally{await handle.close();}return this;
-   }),{signal,onProgress});
+    try{const stat=await handle.stat({bigint:true});if(!stat.isFile()||stat.nlink>1n)throw new AppError('UNSAFE');await onProgress?.(0,this.size);for await(const chunk of decoded(handle,this.workspace,this.file)){signal?.throwIfAborted();size+=chunk.length;hash.update(chunk);if(reportProgress)operationAdvance(chunk.length);await onProgress?.(size,this.size);}if(size!==this.size||hash.digest('hex')!==this.sha256||!sameFile(stat,await handle.stat({bigint:true})))throw new AppError('MEDIA_INVALID');}finally{await handle.close();}return this;
+   };return reportProgress?operationStage('verify-file',{total:this.size,unit:'bytes',item:path.basename(this.file)},run):run();},{signal,onProgress});
   }
 }
 export const contentSize=value=>value instanceof FileContent?value.size:Buffer.byteLength(value);
