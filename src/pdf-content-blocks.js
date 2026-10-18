@@ -15,7 +15,7 @@ export function pdfBlockRenderer(settings,{textGlyphs,sectionId}){
   }
   if(node.type==='book_sketch'){
    textGlyphs(settings.font,[a.title,a.description,...a.items.filter(item=>item.kind==='text').map(item=>item.text)].join(' '));
-   return '<figure class="book-sketch" id="record-block-'+a.id+'">'+renderSketch(a)+'<figcaption>'+esc(a.title)+'</figcaption><p>'+esc(a.description)+'</p></figure>';
+   return '<figure class="book-sketch" id="record-block-'+a.id+'">'+renderSketch(a).replace(/^(<svg\b[^>]*\baria-label=")[^"]*"/,(_,start)=>start+esc(a.title+' '+a.description)+'"')+'<figcaption>'+esc(a.title)+'</figcaption><p>'+esc(a.description)+'</p></figure>';
   }
   return undefined;
  }};
