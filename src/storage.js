@@ -9,6 +9,7 @@ import {AsyncLocalStorage} from 'node:async_hooks';
 import {requireDatabase} from './postgres.js';
 import {hasCatalogue,catalogueContext,openCatalogue,ResearchCatalogue,isCatalogue,catalogueDescriptor} from './research-catalogue.js';
 import {CatalogueReadCache} from './catalogue-read-cache.js';
+import {withCatalogueConnections,catalogueConnection} from './catalogue-connections.js';
 import {atomicReplace} from './atomic-replace.js';
 import {temporaryWriteName} from './storage-temporary.js';
 import {seal,unseal,encrypted,ENCRYPTION_OVERHEAD} from './encryption.js';
@@ -210,17 +211,20 @@ export class Workspace {
       options.onVerified?.(descriptor);
     }:undefined});
   }
+  withCatalogueConnections(operation){return withCatalogueConnections(this,operation);}
   async catalogue(operation) {
     await this.requireCatalogueKey();
     const held=ownedCatalogue(catalogueContext.getStore(),this);
     if(held?.root===this.root)return operation(this.catalogueStore(held.db));
     const reader=ownedCatalogue(catalogueReads.getStore(),this);if(reader?.root===this.root)return operation(this.catalogueStore(reader.db,{readCache:reader.cache}));
-    const db=await this.openCatalogue(),cache=new CatalogueReadCache();
-    try{
-      await db.run('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
-      const result=await db.scope(()=>catalogueReads.run({root:this.root,projectId:this.projectId,labBookId:this.labBookId,vault:this.vault,db,cache},()=>operation(this.catalogueStore(db,{readCache:cache}))));
-      await db.run('COMMIT');return result;
-    }finally{cache.clear();await db.close();}
+    return catalogueConnection(this,'read',{},async db=>{
+      const cache=new CatalogueReadCache();
+      try{
+        await db.run('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+        const result=await db.scope(()=>catalogueReads.run({root:this.root,projectId:this.projectId,labBookId:this.labBookId,vault:this.vault,db,cache},()=>operation(this.catalogueStore(db,{readCache:cache}))));
+        await db.run('COMMIT');return result;
+      }finally{cache.clear();}
+    });
   }
   // Verification already owns a fixed catalogue transaction, including before
   // a restored database has a published binding. Domain readers must inspect
@@ -292,16 +296,13 @@ export class Workspace {
     if(await hasCatalogue(this.root)){
       if(await legacyWriterLock(lock))throw new AppError('LEGACY_WRITE_LOCK');
       if(catalogueContext.getStore()?.root===this.root)throw new AppError('LOCKED');
-      return queuedWriter(this.root,async()=>{
-      const db=await this.openCatalogue({detached,moveId});
-      try{
+      return queuedWriter(this.root,()=>catalogueConnection(this,'write',{detached,moveId},async db=>{
         await db.run('BEGIN');await waitForWriter(()=>db.lock());
         await assertNotDeleting(this.root);await assertNotMoving(this.root,moveId);await assertNotRenaming(this.root);
         const afterCommit=[];
         const result=await db.scope(()=>catalogueContext.run({root:this.root,projectId:this.projectId,labBookId:this.labBookId,vault:this.vault,db,afterCommit},()=>withProjectSourceMetadataAuthority(this,db,()=>operation(internal))));
         await db.run('COMMIT');for(const cleanup of afterCommit)await cleanup();return result;
-      }finally{await db.close();}
-      });
+      }));
     }
     return withWriterLease(lock,async()=>{
       await assertNotDeleting(this.root);await assertNotMoving(this.root,moveId);await assertNotRenaming(this.root);

@@ -13,7 +13,7 @@ test('record transfer pins source reads while seeing current cancellation and cl
  await f.ws.withLock(()=>f.ws.catalogue(store=>writeRecordOwnerTransfer(store,receipt)));
  let active=0;const open=f.ws.openCatalogue.bind(f.ws);
  f.ws.openCatalogue=async()=>{const db=await open();active++;const close=db.close.bind(db);db.close=async()=>{try{return await close();}finally{active--;}};return db;};
- const context={source:f.ws,performWithSourceReader:async(selected,options,read)=>{
+ const context={source:f.ws,target:f.ws,performWithSourceReader:async(selected,options,read)=>{
   assert.equal(selected,id);assert.equal((await f.ws.catalogue(store=>readRecordOwnerTransfer(store,id))).phase,'copying');
   await f.ws.withLock(()=>f.ws.catalogue(store=>writeRecordOwnerTransfer(store,{...receipt,phase:'cancelled'})));
   assert.equal((await read()).phase,'cancelled');

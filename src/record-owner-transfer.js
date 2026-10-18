@@ -116,7 +116,7 @@ export class RecordOwnerTransfer{
   // through one consistent snapshot, while cancellation and checkpoints use a
   // separate live connection so a long copy never hides a stop request.
   const db=await this.source.openCatalogue();
-  try{const control=this.source.catalogueStore(db);return await this.source.catalogue(()=>this.performWithSourceReader(id,options,()=>readRecordOwnerTransfer(control,id)));}
+  try{const control=this.source.catalogueStore(db);return await this.target.withCatalogueConnections(()=>this.source.catalogue(()=>this.performWithSourceReader(id,options,()=>readRecordOwnerTransfer(control,id))));}
   finally{await db.close();}
  }
  async performWithSourceReader(id,{signal,check=async()=>{},progress=async()=>{},checkpoint=async()=>{}}={},read){
