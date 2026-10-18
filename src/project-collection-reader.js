@@ -36,11 +36,12 @@ export function projectCollectionReader(application,client,check){
          const router=new LabBookRouter(registry,{authorize:async()=>{await access.check();return true;},unlock:async(location,saved)=>{entry=location;root=entry.root;etag=saved.etag;return selected.vault=await access.key(root);}});
          await router.withLabBook(target.labBookId,storage=>{selected.storage=storage;});
          selected.verify=async()=>{
-          await owner.check();await access.check();const currentStamp=digest(await readFile(registry.file));
+          // The book check also revalidates this exact parent owner.
+          await access.check();const currentStamp=digest(await readFile(registry.file));
           if(currentStamp!==stamp){
            // Directory changes may concern a sibling. Reopen only the parent
            // with the original grants; previous reader keys may be cleared.
-           const fresh=new ProjectSessionOwner(application,client,target.projectId,{check:async()=>{await owner.check();await access.check();},recoverRenames:false});
+           const fresh=new ProjectSessionOwner(application,client,target.projectId,{check:()=>access.check(),recoverRenames:false});
            try{await fresh.use(async project=>{
             const current=await new LabBookRegistry(project).locate(target.labBookId);
             if(['root','vaultId','namespaceId'].some(key=>current[key]!==entry[key]))throw access.error(new AppError('ACCESS_LOCKED'));
@@ -56,7 +57,7 @@ export function projectCollectionReader(application,client,check){
     }catch(error){if(target.projectId&&['ACCESS_LOCKED','ACCESS_DENIED','ACCESS_WAIT','AUTH','DEVICE_UNKNOWN'].includes(error.code))error.projectId??=target.projectId;await close();throw error;}
    }
    const selected=current;
-   const result=await application.tracked(async()=>{await selected.verify();await prepare?.(selected.storage);await selected.verify();
+   const result=await application.tracked(async()=>{await selected.verify();if(prepare){await prepare(selected.storage);await selected.verify();}
     if(storageOnly){
      // Mutation callers acquire their own short domain transaction. Never
      // retain the reader transaction across an independently owned write.

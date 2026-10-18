@@ -48,6 +48,25 @@ test('collection readers reuse only the live parent and recheck every previous b
  await assert.rejects(next.verify(),error=>error.code==='ACCESS_LOCKED'&&error.labBookId===extra.labBookId);
  const restore=await directory.read();await directory.change(restore.revision,()=>selected.value);
  await next.verify();
- await app.lock(client,parent.projectId);await assert.rejects(next.verify(),{code:'ACCESS_LOCKED'});
+ // Preparation may revoke the grant after the initial use admission. The
+ // production lock starts immediately but waits for the tracked reader to end.
+ const target={workspaceId:extra.namespaceId,projectId:parent.projectId,labBookId:extra.labBookId};
+ const preparing=projectCollectionReader(app,client,async()=>{});readers.push(preparing);let bookLock,prepared=false;
+ await assert.rejects(preparing.use(target,undefined,()=>assert.fail('revoked preparation reached the reader'),{prepare:async()=>{
+  prepared=true;bookLock=new LabBookAccessSession(app,client,storage,extra.labBookId,async()=>{}).lock();
+  // Let the lock's asynchronous parent check finish; do not await its active-reader drain here.
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(app.session(client).get('book:'+parent.projectId+':'+extra.labBookId).locked,true);
+ }}),error=>error.code==='ACCESS_LOCKED'&&error.projectId===parent.projectId&&error.labBookId===extra.labBookId);
+ await bookLock;assert.equal(prepared,true);await preparing.close();
+ await call(parent.projectId+'/lab-books/'+extra.labBookId+'/access/unlock');
+ // A parent revoked inside the read callback must prevent its value escaping.
+ const consuming=projectCollectionReader(app,client,async()=>{});readers.push(consuming);let parentLock,consumed=false;
+ await assert.rejects(consuming.use(target,undefined,()=>{
+  consumed=true;parentLock=app.lock(client,parent.projectId);
+  assert.equal(app.session(client).get(parent.projectId).locked,true);return 'Must not be published';
+ }),error=>error.code==='ACCESS_LOCKED'&&error.projectId===parent.projectId);
+ await parentLock;assert.equal(consumed,true);await consuming.close();
+ await assert.rejects(next.verify(),{code:'ACCESS_LOCKED'});
  await next.close();assert.ok(bookKeys.every(value=>value.every(byte=>byte===0)));
 });
