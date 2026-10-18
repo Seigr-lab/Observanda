@@ -2,9 +2,7 @@
 // Separate read/write queues preserve fresh read snapshots and short writes.
 import {AsyncLocalStorage} from 'node:async_hooks';
 import {AppError} from './errors.js';
-import {assertNotDeleting} from './workspace-delete-state.js';
-import {assertNotMoving} from './workspace-move-state.js';
-import {assertNotRenaming} from './workspace-rename-state.js';
+import {assertWorkspaceAvailable} from './workspace-lifecycle-admission.js';
 const scopes=new AsyncLocalStorage();
 function validate(scope,workspace){
  if(scope.root!==workspace.root||scope.projectId!==(workspace.projectId??null)||scope.labBookId!==(workspace.labBookId??null))throw new AppError('DATABASE_LOCATION');
@@ -35,7 +33,7 @@ export async function catalogueConnection(workspace,kind,options,operation){
  if(!entry){entry={key,tail:Promise.resolve(),db:null};scope.entries.set(kind,entry);}
  const pending=entry.tail.then(async()=>{
   validate(scope,workspace);
-  await assertNotDeleting(workspace.root);await assertNotMoving(workspace.root,options.moveId);await assertNotRenaming(workspace.root);
+  await assertWorkspaceAvailable(workspace.root,{moveId:options.moveId});
   entry.db??=await workspace.openCatalogue(options);
   try{return await operation(entry.db);}
   catch(error){const db=entry.db;entry.db=null;await db.close().catch(()=>{});throw error;}

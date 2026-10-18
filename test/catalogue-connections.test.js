@@ -6,6 +6,8 @@ import {writeFile,unlink} from 'node:fs/promises';
 import {intakeFixture} from './fixtures/local-intake.js';
 import {catalogueConnection} from '../src/catalogue-connections.js';
 import {DELETE_MARKER} from '../src/workspace-delete-state.js';
+import {MOVE_SOURCE} from '../src/workspace-move-state.js';
+import {RENAME_MARKER} from '../src/workspace-rename-state.js';
 
 const gate=()=>Promise.withResolvers();
 test('scoped catalogue connections retain transaction isolation, rollback and owner fences',{timeout:60000},async t=>{
@@ -48,4 +50,28 @@ test('scoped catalogue connections retain transaction isolation, rollback and ow
  const scope=ws.withCatalogueConnections(async()=>{work=catalogueConnection(ws,'read',{},async db=>{entered.resolve();await release.promise;return (await db.get('SELECT 1 AS value')).value;});await entered.promise;}).then(()=>{finished=true;});
  await entered.promise;await new Promise(resolve=>setImmediate(resolve));assert.equal(finished,false);assert.equal(opened,closed+1);
  release.resolve();assert.equal(await work,1);await scope;assert.equal(opened,closed);
+});
+
+// A lifecycle transition can begin after initial admission, while the writer is
+// waiting. Both newly opened and reused connections must check after locking.
+test('writers refuse lifecycle transitions that start during lock acquisition',{timeout:60000},async t=>{
+ const {ws}=await intakeFixture(t),open=ws.openCatalogue.bind(ws);let transition,ran=false;
+ ws.openCatalogue=async options=>{const db=await open(options),lock=db.lock.bind(db);db.lock=async()=>{const result=await lock();if(transition)await writeFile(path.join(ws.root,transition.file),JSON.stringify(transition.value));return result;};return db;};
+ const destination=path.join(path.dirname(ws.root),'Moved owner'),id=randomUUID(),cases=[
+  {file:DELETE_MARKER,value:{version:1,id,source:ws.root},code:'STORAGE_DELETING'},
+  {file:MOVE_SOURCE,value:{id,destination},code:'STORAGE_MOVED'},
+  {file:RENAME_MARKER,value:{version:1,id,source:ws.root,destination},code:'STORAGE_RENAMING'}
+ ];
+ const write=value=>ws.withLock(()=>{ran=true;return ws.catalogue(store=>store.putObject('lifecycle-write',{value}));});
+ const check=async()=>{
+  transition=null;await write(1);
+  for(const item of cases){
+   transition=item;ran=false;
+   try{await assert.rejects(write(99),{code:item.code});assert.equal(ran,false,'Writer callback entered after a lifecycle transition');}
+   finally{transition=null;await unlink(path.join(ws.root,item.file));}
+   assert.deepEqual(await ws.catalogue(store=>store.object('lifecycle-write')),{value:1});
+   await write(1);
+  }
+ };
+ await check();await ws.withCatalogueConnections(check);
 });

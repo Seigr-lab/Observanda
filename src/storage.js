@@ -1,3 +1,4 @@
+import {assertWorkspaceAvailable} from './workspace-lifecycle-admission.js';
 import {projectDomainHandoff} from './project-domain-lock.js';
 import {websiteMetadataShell} from './website-owned-metadata.js';
 import {withProjectSourceMetadataAuthority} from './project-source-metadata-authority.js';
@@ -202,9 +203,7 @@ export class Workspace {
   }
   catalogueStore(db,options){return new ResearchCatalogue(this,db,options);}
   async openCatalogue(options={}) {
-    await assertNotDeleting(this.root,options.deleteId);
-    await assertNotMoving(this.root,options.moveId);
-    await assertNotRenaming(this.root);
+    await assertWorkspaceAvailable(this.root,options);
     return openCatalogue(this.root,{...options,vault:this.vault,validate:this.vault?.key?async db=>{
       const descriptor=JSON.parse(await this.readFile(await workspaceFile(this.root),'utf8'));
       await this.catalogueStore(db).verify(descriptor);
@@ -285,9 +284,7 @@ export class Workspace {
   withStorageHandoff(operation,options){return this.withLock(async internal=>{const held=catalogueContext.getStore();if(held?.root===this.root)await projectDomainHandoff(held.db);return operation(internal);},options);}
   async withLock(operation,{detached=false,moveId,existing=false}={}) {
     assertCatalogueWritable(this);
-    await assertNotDeleting(this.root);
-    await assertNotMoving(this.root,moveId);
-    await assertNotRenaming(this.root);
+    await assertWorkspaceAvailable(this.root,{moveId});
     if(existing)await assertRegular(this.root,{directory:true});else await mkdir(this.root, { recursive: true, mode: 0o700 });
     // Canonicalize the selected workspace before using its protected internal paths.
     this.root = await realpath(this.root);
@@ -298,14 +295,14 @@ export class Workspace {
       if(catalogueContext.getStore()?.root===this.root)throw new AppError('LOCKED');
       return queuedWriter(this.root,()=>catalogueConnection(this,'write',{detached,moveId},async db=>{
         await db.run('BEGIN');await waitForWriter(()=>db.lock());
-        await assertNotDeleting(this.root);await assertNotMoving(this.root,moveId);await assertNotRenaming(this.root);
+        await assertWorkspaceAvailable(this.root,{moveId});
         const afterCommit=[];
         const result=await db.scope(()=>catalogueContext.run({root:this.root,projectId:this.projectId,labBookId:this.labBookId,vault:this.vault,db,afterCommit},()=>withProjectSourceMetadataAuthority(this,db,()=>operation(internal))));
         await db.run('COMMIT');for(const cleanup of afterCommit)await cleanup();return result;
       }));
     }
     return withWriterLease(lock,async()=>{
-      await assertNotDeleting(this.root);await assertNotMoving(this.root,moveId);await assertNotRenaming(this.root);
+      await assertWorkspaceAvailable(this.root,{moveId});
       // Creation or encryption may have completed while this writer waited.
       if(await hasCatalogue(this.root))return this.withLock(operation,{detached,moveId,existing:true});
       return operation(internal);
