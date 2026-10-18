@@ -42,6 +42,10 @@ test('PDF editor saves independent documents, lays out sections, restores histor
   expect((await documents.read('open',{id})).header.layout.widthMm).toBe(180);expect((await documents.read('open',{id:secondId})).header.layout.widthMm).toBe(180);
 
   await ui.getByRole('button',{name:'Documents',exact:true}).click();await ui.getByRole('button',{name:'Observation report',exact:true}).click();await expect(ui.getByRole('heading',{name:'Observation report',exact:true})).toBeVisible();await expect(ui).toHaveAttribute('aria-busy','false');
+  await expect(ui.getByRole('textbox',{name:'Content',exact:true})).toHaveText('Exact integer 9007199254740993.');
+  await ui.getByRole('textbox',{name:'Content',exact:true}).fill('A newer edition of the same section.');await expect(ui.locator('[data-pdf-status]')).toHaveText('Saved');
+  await ui.getByRole('button',{name:'History',exact:true}).click();await ui.getByRole('button',{name:'Restore this edition',exact:true}).first().click();await expect(ui.getByRole('textbox',{name:'Content',exact:true})).toHaveText('Exact integer 9007199254740993.');
+  await ui.getByRole('textbox',{name:'Content',exact:true}).press('End');await ui.getByRole('textbox',{name:'Content',exact:true}).pressSequentially(' Retained after restoring.');await expect(ui.locator('[data-pdf-status]')).toHaveText('Saved');await page.reload();await expect(ui.getByRole('textbox',{name:'Content',exact:true})).toHaveText('Exact integer 9007199254740993. Retained after restoring.');
   await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:test.info().outputPath('pdf-editor-mobile.png'),fullPage:true});
   await page.setViewportSize({width:1440,height:1000});await page.screenshot({path:test.info().outputPath('pdf-editor.png'),fullPage:true});expect(errors).toEqual([]);
  }finally{await app.close();removeRenderer();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}

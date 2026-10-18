@@ -8,10 +8,10 @@ const tr=(key,values)=>t('pdfEditor',key,values),uuid=()=>crypto.randomUUID();
 export async function pdfEditorUI({state,api,esc,render,notify}){
  const workspaceId=state.book.id;
  if(!document.querySelector('link[data-pdf-style]')){const link=document.createElement('link');link.rel='stylesheet';link.href='/pdf-editor.css';link.dataset.pdfStyle='';document.head.append(link);}
- let selected=null,section=null,list={items:[],next:null},sections={items:[],next:null,total:0},offset=0,editions=null,canRender=false,disposed=false,timer=null,saving=null,retry=null,headerDirty=0,sectionDirty=0,serial=0,error='',busy=false,preview=null,previewRevision=null,previewVisible=false,rendering=null,loadedPath=null;
+ let selected=null,section=null,list={items:[],next:null},sections={items:[],next:null,total:0},offset=0,editions=null,canRender=false,disposed=false,timer=null,saving=null,retry=null,headerDirty=0,sectionDirty=0,serial=0,error='',busy=false,preview=null,previewRevision=null,previewVisible=false,rendering=null,loadedPath=null,contentEpoch=0;
  const root=()=>document.querySelector('[data-pdf-editor]'),active=()=>!disposed&&state.page==='module'&&state.moduleId==='pdf-editor';
  const draw=()=>{if(active())render();},post=(operation,data={},options={})=>api('/api/pdf/'+operation,{workspaceId,...data},{...options,adopt:false});
- const docs=documentEditors({context:()=>[selected?.header.id,section?.id].join(':'),onError:e=>notify(e.message??String(e))});
+ const docs=documentEditors({context:()=>[selected?.header.id,section?.id,contentEpoch].join(':'),onError:e=>notify(e.message??String(e))});
  const dirty=()=>!!(headerDirty||sectionDirty||retry),button=(label,command,attrs='')=>'<button type="button" class="button" data-action="module-command" data-module-id="pdf-editor" data-command="'+command+'" '+attrs+'>'+esc(tr(label))+'</button>';
  const status=()=>{const host=root();if(host){host.setAttribute('aria-busy',String(busy));host.inert=busy;if(selected)host.querySelector('h1').textContent=selected.header.name;}const node=root()?.querySelector('[data-pdf-status]');if(node)node.textContent=error||(dirty()||saving?tr('saving'):tr('saved'));const retryButton=root()?.querySelector('[data-command="retry"]');if(retryButton)retryButton.hidden=!error;};
  function change(kind){if(kind==='header')headerDirty=++serial;else sectionDirty=++serial;error='';status();clearTimeout(timer);timer=setTimeout(()=>void save().catch(()=>{}),600);}
@@ -30,7 +30,7 @@ export async function pdfEditorUI({state,api,esc,render,notify}){
  }
  function clearPreview(){if(preview)URL.revokeObjectURL(preview);preview=null;previewRevision=null;previewVisible=false;}
  async function load(id){
-  docs.release();loadedPath=id||'';editions=null;offset=0;error='';clearPreview();selected=null;section=null;sections={items:[],next:null,total:0};
+  contentEpoch++;docs.release();loadedPath=id||'';editions=null;offset=0;error='';clearPreview();selected=null;section=null;sections={items:[],next:null,total:0};
   if(!id){list=await post('list');return;}
   if(!researchId(id))throw new Error('Invalid document');selected=await post('open',{id});await sectionPage(0);
  }
