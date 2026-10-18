@@ -64,7 +64,7 @@
  "historyIntro": "Restoring an edition keeps later editions in the history.",
  "document": "Document",
  "sections": "Sections",
- "previewOld": "This preview shows an earlier saved edition. Update it to include your changes.",
+ "previewOld": "Updating the preview to the saved edition.",
  "layoutNote": "The document layout applies to every section unless a section uses its own layout.",
  "savedLayouts": "Saved layouts",
  "layoutCopy": "Apply a layout to copy its settings. Changing or removing a saved layout keeps existing documents unchanged.",
@@ -78,5 +78,6 @@
  "saveDocumentLayout": "Save document layout",
  "saveSectionLayout": "Save section layout",
  "nameLayout": "Enter a name for this layout.",
- "missingLayout": "Choose an available layout."
+ "missingLayout": "Choose an available layout.",
+ "previewSaving": "Waiting for your edits to finish saving."
 }
