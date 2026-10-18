@@ -2,15 +2,18 @@
 // This service renders in memory and never visits a website or app session.
 import {app,BrowserWindow,session} from 'electron';
 import {createHash} from 'node:crypto';
+import path from 'node:path';
+import {pathToFileURL} from 'node:url';
 const fail=code=>Object.assign(new Error(code),{code});
-let active=false,partition;
+let active=false,partition,preflightModule;
+const preflight=()=>preflightModule??=import(app.isPackaged?pathToFileURL(path.join(process.resourcesPath,'service','src','pdf-preflight.js')).href:new URL('../src/pdf-preflight.js',import.meta.url).href);
 export async function renderPdfDocument(input,options={}){
  options.signal?.throwIfAborted();if(active)throw fail('PDF_BUSY');active=true;
  try{await app.whenReady();return await render(input,options);}finally{active=false;}
 }
 async function render(input,{signal,timeoutMs=120000,maxOutputBytes=64*1024*1024}={}){
  signal?.throwIfAborted();
- if(input?.version!==1||typeof input.html!=='string'||Buffer.byteLength(input.html)>64*1024*1024||!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>300000||!Number.isSafeInteger(maxOutputBytes)||maxOutputBytes<1||maxOutputBytes>64*1024*1024)throw fail('PDF_INPUT');
+ if(input?.version!==1||(input.preflightOnly!==undefined&&typeof input.preflightOnly!=='boolean')||typeof input.html!=='string'||Buffer.byteLength(input.html)>64*1024*1024||!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>300000||!Number.isSafeInteger(maxOutputBytes)||maxOutputBytes<1||maxOutputBytes>64*1024*1024)throw fail('PDF_INPUT');
  const isolated=partition??=session.fromPartition('observanda-pdf-renderer',{cache:false}),documentURL='https://document.invalid/';
  let win,timer,abort,registered=false;const denyDownload=event=>event.preventDefault();
  try{
@@ -28,12 +31,16 @@ async function render(input,{signal,timeoutMs=120000,maxOutputBytes=64*1024*1024
   const cancelled=new Promise((_,reject)=>{abort=()=>{reject(signal?.reason??fail('PDF_CANCELLED'));if(!win.isDestroyed())win.destroy();};signal?.addEventListener('abort',abort,{once:true});timer=setTimeout(()=>{reject(fail('PDF_TIMEOUT'));if(!win.isDestroyed())win.destroy();},timeoutMs);});
   const operation=(async()=>{
    await win.loadURL(documentURL);
-   await win.webContents.executeJavaScript('document.fonts.ready.then(()=>true)');
+   win.webContents.debugger.attach('1.3');await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{media:'print'});
+   const {pdfPreflightScript,validPdfPreflight}=await preflight(),findings=await win.webContents.executeJavaScript(pdfPreflightScript);
+   if(!validPdfPreflight(findings))throw fail('PDF_OUTPUT');
    signal?.throwIfAborted();
+   const renderer={engine:'chromium',electron:process.versions.electron,chromium:process.versions.chrome,recipeVersion:input.version};
+   if(input.preflightOnly||findings.status==='fatal')return {bytes:null,sha256:null,renderer,conformance:[],preflight:findings};
    const bytes=await win.webContents.printToPDF({printBackground:true,displayHeaderFooter:false,preferCSSPageSize:true,generateTaggedPDF:true,generateDocumentOutline:true,scale:1});
    if(bytes.length>maxOutputBytes)throw fail('PDF_CAPACITY');
    if(bytes.subarray(0,5).toString()!=='%PDF-')throw fail('PDF_OUTPUT');
-   return {bytes,sha256:createHash('sha256').update(bytes).digest('hex'),renderer:{engine:'chromium',electron:process.versions.electron,chromium:process.versions.chrome,recipeVersion:input.version},conformance:[]};
+   return {bytes,sha256:createHash('sha256').update(bytes).digest('hex'),renderer,conformance:[],preflight:findings};
   })();
   return await Promise.race([operation,cancelled]);
  }finally{

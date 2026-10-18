@@ -1,3 +1,4 @@
+import {pdfFigureRenderer,scopePdfIds} from './pdf-figure-renderer.js';
 import {pdfBlockRenderer} from './pdf-content-blocks.js';
 import {renderRichText,richTextStyles,safeRichLink} from './web/rich-text-model.js';
 import {fontStack,BUNDLED_FONTS} from './web/font-catalogue.js';
@@ -28,22 +29,22 @@ export async function compilePdfDocument(header,sections,{signal,maxBytes=PDF_IN
   const content=pdfSectionContent(section),settings=section.layout??header.layout,name=section.layout?layout(settings):defaultLayout;
   function project(node){
    const result={...node};
-   if(node.type==='book_figure')throw new PdfLayoutError('PDF_UNRESOLVED_FIGURE',[section.id,node.attrs.figureId]);
+
    if(node.type==='book_citation'&&settings.links==='disabled')result.attrs={...node.attrs,url:''};
    if(node.type==='text')textGlyphs(node.marks?.find(mark=>mark.type==='font_family')?.attrs.font??settings.font,node.text);
    if(node.type==='book_table')textGlyphs(settings.font,[node.attrs.title,...node.attrs.headers,...node.attrs.rows.flat()].join(' '));
    if(node.type==='book_citation')textGlyphs(settings.font,[node.attrs.title,node.attrs.authors,node.attrs.issued,node.attrs.locator].join(' '));
    if(node.type==='book_preserved')textGlyphs(settings.font,[node.attrs.source,node.attrs.reason,node.attrs.format].join(' '));
    if(node.content)result.content=node.content.map(project);
-   for(const mark of node.marks??[])if(mark.type==='link'&&(parseResearchReference(mark.attrs.href)||! /^(?:https?:|mailto:|tel:)/.test(mark.attrs.href)))throw new PdfLayoutError('PDF_UNRESOLVED_REFERENCE',[section.id]);
+   for(const mark of node.marks??[])if(settings.links!=='disabled'&&mark.type==='link'&&(parseResearchReference(mark.attrs.href)||! /^(?:https?:|mailto:|tel:)/.test(mark.attrs.href)))throw new PdfLayoutError('PDF_UNRESOLVED_REFERENCE',[section.id]);
    return result;
   }
   textGlyphs(settings.font,[section.title,settings.header,settings.footer,...(settings.pageNumbers?['0123456789']:[])].join(' '));
   const projected=project(content),rich=richTextStyles([projected]);for(const font of rich.fonts)fonts.add(font);styles.add(retain(rich.css));
-  const blocks=pdfBlockRenderer(settings,{textGlyphs,sectionId:section.id});
-  const html=renderRichText(projected,{block:node=>blocks.render(node),resolveLink:href=>settings.links==='disabled'?null:safeRichLink(href)&&/^(?:https?:|mailto:|tel:)/.test(href)?href:null}).replace(/ id="/g,' id="pdf-section-'+section.id+'-');
+  const blocks=pdfBlockRenderer(settings,{textGlyphs,sectionId:section.id}),figure=pdfFigureRenderer(section,settings,textGlyphs);
+  const html=scopePdfIds(renderRichText(projected,{block:node=>figure(node)??blocks.render(node),resolveLink:href=>settings.links==='disabled'?null:safeRichLink(href)&&/^(?:https?:|mailto:|tel:)/.test(href)?href:null}),'pdf-section-'+section.id+'-');
   equations ||= blocks.equations;
-  body.push(retain(`<section id="pdf-section-${section.id}" class="pdf-section ${name}"${section.start?` data-start="${section.start}"`:''}>${section.title?`<h1>${esc(section.title)}</h1>`:''}${html}</section>`));
+  body.push(retain(`<section id="pdf-section-${section.id}" class="pdf-section ${name}" data-pdf-width-mm="${settings.widthMm-settings.margins.left-settings.margins.right}" data-pdf-height-mm="${settings.heightMm-settings.margins.top-settings.margins.bottom}"${section.start?` data-start="${section.start}"`:''}>${section.title?`<h1>${esc(section.title)}</h1>`:''}${html}</section>`));
  }
  signal?.throwIfAborted();if(!count)throw new PdfLayoutError('PDF_EMPTY');
  // System/custom fallbacks are not reproducible. An asset adapter must qualify

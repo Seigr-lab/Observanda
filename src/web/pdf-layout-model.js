@@ -1,3 +1,4 @@
+import {validPdfResearch,validPdfFigures} from './pdf-research-model.js';
 import {researchId} from './research-reference.js';
 import {validProse,proseDocument} from './prose-model.js';
 import {validFont} from './font-catalogue.js';
@@ -24,6 +25,6 @@ export function validPdfDocumentHeader(value){
  return exact(value,['version','id','name','language','direction','layout'])&&value.version===1&&researchId(value.id)&&text(value.name,240)&&!!value.name.trim()&&typeof value.language==='string'&&/^[a-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/.test(value.language)&&['ltr','rtl','auto'].includes(value.direction)&&validPdfLayout(value.layout);
 }
 export function validPdfSection(value){
- return exact(value,['id','title','content','layout','start'])&&researchId(value.id)&&text(value.title,240)&&validProse(value.content)&&[null,'page','recto','verso'].includes(value.start)&&(value.layout===null||validPdfLayout(value.layout));
+ return exact(value,['id','title','content','layout','start',...['research','figures'].filter(key=>Object.hasOwn(value??{},key))])&&(!Object.hasOwn(value,'research')||validPdfResearch(value.research))&&(!Object.hasOwn(value,'figures')||validPdfFigures(value.figures))&&researchId(value.id)&&text(value.title,240)&&validProse(value.content)&&[null,'page','recto','verso'].includes(value.start)&&(value.layout===null||validPdfLayout(value.layout));
 }
 export function pdfSectionContent(section){return proseDocument(section.content);}

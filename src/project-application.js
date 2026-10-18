@@ -299,7 +299,7 @@ export class ProjectApplication{
       const roots=[this.workspace.root,...(await registry.read()).value.projects.map(entry=>entry.root)];if(roots.some(root=>within(root,destination)||within(destination,root)))throw new AppError('STORAGE_PATH');
       return copyOwner(selected.operation==='storage/export'?archives:copies,{id:data.id,path:destination,onProgress});
      }
-     if(selected.pdf)return executePdfRequest(storage,selected,data,{signal,check:assertCurrent,binary});
+     if(selected.pdf)return executePdfRequest(storage,selected,data,{signal,check:assertCurrent,binary,sourceReader:publicationSourceFactory(this,client,storage,{scope:selected.projectId,check:assertCurrent})});
      if(selected.sampleAnalysis)return executeSampleAnalysisRequest(storage,selected,data,{signal,check:assertCurrent,query,binary});
      if(selected.review)return executeReviewRequest(storage,this.deviceStore,selected.review,data);
      if(selected.starter)return executeRecordStarterRequest(storage,selected,data,{signal,binary});

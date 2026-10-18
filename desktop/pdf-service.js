@@ -7,7 +7,7 @@ export function attachPdfService(child){
   if(message?.type!=='pdf-render'||!Number.isSafeInteger(message.id))return;
   if(active){send({type:'pdf-result',id:message.id,error:'PDF_BUSY'});return;}
   const request={id:message.id,controller:new AbortController()};active=request;
-  try{const result=await renderPdfDocument(message.input,{signal:request.controller.signal});send({type:'pdf-result',id:message.id,bytes:result.bytes.toString('base64'),renderer:result.renderer,sha256:result.sha256});}
+  try{const result=await renderPdfDocument(message.input,{signal:request.controller.signal});send({type:'pdf-result',id:message.id,bytes:result.bytes===null?null:result.bytes.toString('base64'),renderer:result.renderer,sha256:result.sha256,preflight:result.preflight});}
   catch(error){send({type:'pdf-result',id:message.id,error:request.controller.signal.aborted?'PDF_CANCELLED':['PDF_BUSY','PDF_TIMEOUT','PDF_CAPACITY','PDF_INPUT','PDF_OUTPUT'].includes(error.code)?error.code:'PDF_OUTPUT'});}
   finally{if(active===request)active=null;}
  };

@@ -842,7 +842,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       }
       if(!workspace)throw new AppError('MISSING');
       const pdf=pdfDocumentRequest(url.pathname,req.method);
-      if(pdf){req.operationActivity=null;return await projectContentHttp(req,res,pdf,{body,json,mime,headless,contextId:context.id,execute:(data,options)=>executePdfRequest(workspace,pdf,data,{...options,check:req.checkWriter})});}
+      if(pdf){req.operationActivity=null;return await projectContentHttp(req,res,pdf,{body,json,mime,headless,contextId:context.id,execute:(data,options)=>executePdfRequest(workspace,pdf,data,{...options,check:req.checkWriter,sourceReader})});}
       const starter=recordStarterRequest(url.pathname,req.method);
       if(starter){
         if(!starter.write)req.operationActivity=null;

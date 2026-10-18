@@ -333,5 +333,17 @@
   "PDF_UNRESOLVED_FIGURE": "This document contains a figure that has not been included in the PDF.",
   "PDF_UNRESOLVED_REFERENCE": "This document contains an internal reference that needs a PDF destination.",
   "PDF_UNSUPPORTED_CONTENT": "This document contains content that the PDF renderer does not support yet.",
-  "PDF_EQUATION": "An equation could not be typeset. Check its source before exporting."
+  "PDF_EQUATION": "An equation could not be typeset. Check its source before exporting.",
+  "PDF_SOURCE_CONTENT": "The selected research content cannot be included in this document.",
+  "PDF_PREFLIGHT": "The document has a missing asset or invalid printable layout. Use Check PDF layout to review it.",
+  "PDF_PAGE_GEOMETRY": "A section has no valid printable area.",
+  "PDF_SECTION_HIDDEN": "A section would be hidden in print.",
+  "PDF_FONT_FAILED": "A font could not be loaded.",
+  "PDF_IMAGE_MISSING": "An image could not be loaded.",
+  "PDF_IMAGE_RESOLUTION": "An image may look blurry at its printed size.",
+  "PDF_CONTENT_OVERFLOW": "Content extends beyond its printable width.",
+  "PDF_CONTENT_CLIPPED": "Content is clipped by its container.",
+  "PDF_BLOCK_TOO_TALL": "An unbroken block is taller than the printable page.",
+  "PDF_ANCHOR_MISSING": "An internal link has no visible destination.",
+  "PDF_ANCHOR_AMBIGUOUS": "An internal link has more than one destination."
 }
