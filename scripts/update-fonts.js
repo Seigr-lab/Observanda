@@ -4,7 +4,7 @@ import {readFile,writeFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {create} from 'fontkit';
 const revision='9710da1eacb3be272583c3224dcb70f9da6eadbb';
-const requested=[['poiret-one','poiretone'],['amatic-sc','amaticsc'],['averia-serif-libre','averiaseriflibre'],['reenie-beanie','reeniebeanie'],['rubik-dirt','rubikdirt'],['crimson-text','crimsontext'],['aref-ruqaa-ink','arefruqaaink'],['dm-sans','dmsans'],['sue-ellen-francisco','sueellenfrancisco'],['patua-one','patuaone']];
+const requested=[['poiret-one','poiretone'],['amatic-sc','amaticsc'],['averia-serif-libre','averiaseriflibre'],['reenie-beanie','reeniebeanie'],['rubik-dirt','rubikdirt'],['crimson-text','crimsontext'],['aref-ruqaa','arefruqaa'],['aref-ruqaa-ink','arefruqaaink'],['dm-sans','dmsans'],['sue-ellen-francisco','sueellenfrancisco'],['patua-one','patuaone']];
 const root=new URL('../src/fonts/',import.meta.url),provenance=JSON.parse(await readFile(new URL('provenance.json',root),'utf8'));
 const catalogue=[];
 function face(file,bytes){const font=create(bytes),axes=font.variationAxes;return {file,style:font.italicAngle?'italic':'normal',weight:axes.wght?[axes.wght.min,axes.wght.max]:[font['OS/2'].usWeightClass],axes};}

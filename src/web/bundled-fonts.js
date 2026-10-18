@@ -254,6 +254,29 @@ export const BUNDLED_FONTS = [
     "license": "crimson-text-OFL.txt"
   },
   {
+    "id": "aref-ruqaa",
+    "family": "Aref Ruqaa",
+    "faces": [
+      {
+        "file": "aref-ruqaa.ttf",
+        "style": "normal",
+        "weight": [
+          400
+        ],
+        "axes": {}
+      },
+      {
+        "file": "aref-ruqaa-1.ttf",
+        "style": "normal",
+        "weight": [
+          700
+        ],
+        "axes": {}
+      }
+    ],
+    "license": "aref-ruqaa-OFL.txt"
+  },
+  {
     "id": "aref-ruqaa-ink",
     "family": "Aref Ruqaa Ink",
     "faces": [

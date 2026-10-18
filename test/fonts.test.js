@@ -32,7 +32,7 @@ test('font metadata with private paths cannot enter an exported edition',async()
 test('bundled editions match original hashes and actual variable axes, weights and styles',async()=>{
  const provenance=JSON.parse(await readFile(new URL('../src/fonts/provenance.json',import.meta.url),'utf8'));
  for(const family of BUNDLED_FONTS){const files=new Map(),css=fontCSS([family.id],files);assert.ok(css.includes(family.family));assert.ok(files.has('fonts/'+family.license));for(const face of family.faces){const source=files.get('fonts/'+face.file),info=await inspectUploadedFont(source);assert.equal(createHash('sha256').update(source).digest('hex'),provenance.find(p=>p.file===face.file).sha256);assert.deepEqual(info.axes,face.axes);assert.deepEqual(info.weight,face.weight);assert.equal(info.style,face.style);}}
- assert.equal(BUNDLED_FONTS.length,13);assert.deepEqual(Object.keys(BUNDLED_FONTS.find(f=>f.id==='dm-sans').faces[0].axes),['opsz','wght']);
+ assert.equal(BUNDLED_FONTS.length,14);assert.deepEqual(BUNDLED_FONTS.find(f=>f.id==='aref-ruqaa').faces.map(face=>face.weight),[[400],[700]]);assert.ok(BUNDLED_FONTS.some(f=>f.id==='aref-ruqaa-ink'));assert.deepEqual(Object.keys(BUNDLED_FONTS.find(f=>f.id==='dm-sans').faces[0].axes),['opsz','wght']);
  assert.deepEqual(BUNDLED_FONTS.find(f=>f.id==='poiret-one').faces[0].weight,[400]);
  assert.equal(fontStack('url(https://remote.example/font)'),undefined);
 });

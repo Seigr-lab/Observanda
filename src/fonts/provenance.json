@@ -193,5 +193,20 @@
     "file": "patua-one-OFL.txt",
     "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/patuaone/OFL.txt",
     "sha256": "cd2dea62cd4b0c5fb335cf07ff04fd5c4bacb49b8d6c2bbbef9766c663d79b1c"
+  },
+  {
+    "file": "aref-ruqaa.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/arefruqaa/ArefRuqaa-Regular.ttf",
+    "sha256": "ceb786d83ba92f35e96efcd8623c2858d288e0c543c8761ba35b1020989464f9"
+  },
+  {
+    "file": "aref-ruqaa-1.ttf",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/arefruqaa/ArefRuqaa-Bold.ttf",
+    "sha256": "247071015b7eefd63f94d6e47949c5d10294ed31bd432f809ba9a219d93f91bb"
+  },
+  {
+    "file": "aref-ruqaa-OFL.txt",
+    "source": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/arefruqaa/OFL.txt",
+    "sha256": "41ac14451a624c69490e24b9aaaaa1f65dc9dc17c3f6f38172fc43d5ba654a1b"
   }
 ]
