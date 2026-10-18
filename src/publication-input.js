@@ -1,7 +1,7 @@
 import {retainPublicationInput as retainLegacyPublicationInput} from './publication-input-legacy.js';
 import {publicationResearchWorkspace} from './publication-pin.js';
 import {removePublicationMedia} from './publication-input-media.js';
-import {recordReferenceNamespaces} from './research-reference-namespace.js';
+import {withRecordReferenceNamespaces} from './research-reference-namespace.js';
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
 import {recordRevision} from './research.js';
@@ -28,18 +28,20 @@ export {finalizePublicationInput};
 // collision evidence live in the immutable owner rather than capture arrays.
 export async function retainPublicationInput(workspace,id,metadata,originals,{sourceEtag,recordHead,signal,sourceReader,edition=emptyEditionSelection(),deferFinalization=false,hasSources=false,websitePages,websiteCollections,websitePresentation,input=null,owner={workspaceId:metadata.id},destination=workspace,identities=null,snapshotId=null,onRecord}={}){
  if(await destination.storageKind()!=='catalogue')return retainLegacyPublicationInput(workspace,id,metadata,originals,{sourceEtag,recordHead,signal,sourceReader,edition,deferFinalization,websitePages,websitePresentation});
+ const research=publicationResearchWorkspace(workspace);
+ const capture=async referenceNamespaces=>{
  validateEditionSelection(edition);const choices=new Map(edition.records.map(row=>[row.id,row])),found=new Set(),fresh=!input;
  input??=createPublicationInput(destination,id,metadata,{signal});const state=publicationInputState(input),builder=state.builder;
  identities??=state.identities??=new PublicationCaptureIdentities(state.header.metadata.id,builder);if(fresh)state.header.hasSources=hasSources;
  await appendPublicationOwnerCollections(builder,metadata,owner,identities,{signal});
  if(fresh)await retainWebsitePublicationCollections(destination,builder,id,metadata,{websiteCollections,websitePages,websitePresentation,signal});
- const research=publicationResearchWorkspace(workspace),materials=new ResearchMaterials(research),review={retainedFigures:0,changedInputs:0,editedFigures:0};
+ const materials=new ResearchMaterials(research),review={retainedFigures:0,changedInputs:0,editedFigures:0};
  async function pin(original,choice,pageId=original.id){
   signal?.throwIfAborted();const saved=publicationOriginal(original),revision=recordRevision(saved),selection=choice??defaultEditionRecord(original,revision),record=selectEditionRecord(original,selection),raw=serialize(saved);
   const cover=metadata.id===state.header.metadata.id?await builder.get('covers',original.id):null,cardMetadata=cover?{...metadata,website:{...metadata.website,presentation:{...metadata.website.presentation,covers:[cover]}}}:metadata;
   let descriptor={...publicationDescriptor(record,cardMetadata),id:pageId,revision,sha256:digest(raw),selection};
   if(pageId!==original.id){descriptor.recordId=original.id;descriptor.historical=true;}
-  if(await research.storageKind()==='catalogue')descriptor.referenceNamespaces=await research.catalogue(store=>recordReferenceNamespaces(store,{workspaceId:metadata.id,id:original.id}));
+  if(referenceNamespaces)descriptor.referenceNamespaces=await referenceNamespaces({workspaceId:metadata.id,id:original.id});
   descriptor=await projectPublicationRecord(descriptor,owner,identities);
   await claimPublicationFile(builder,descriptor.id,'record',descriptor.id);await destination.writeMetadata(recordFile(id,descriptor.id),raw);
   const notebook=await builder.get('notebooks',descriptor.notebookId),position=builder.count('records');
@@ -72,6 +74,10 @@ export async function retainPublicationInput(workspace,id,metadata,originals,{so
  await builder.append('sourceGroups',metadata.id,{workspaceId:metadata.id,snapshotId,analysis});
  state.header.researchReview??={retainedFigures:0,changedInputs:0,editedFigures:0};for(const key of Object.keys(review))state.header.researchReview[key]+=review[key];
  return deferFinalization?input:finalizePublicationInput(destination,id,input,{signal});
+ };
+ return await research.storageKind()==='catalogue'
+  ?research.catalogue(store=>withRecordReferenceNamespaces(store,capture,{signal}))
+  :capture(null);
 }
 export async function readPublicationRecord(workspace,source,row){return (await readPinnedPublicationRecord(workspace,source,row)).record;}
 export async function readPinnedPublicationRecord(workspace,source,row){
