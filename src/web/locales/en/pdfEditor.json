@@ -299,6 +299,7 @@
   "pressMixedHint": "Sections with their own page dimensions keep their own trim size and receive the same bleed and marks.",
   "outputProfile": "Output format",
   "outputOrdinary": "PDF document",
+  "outputOrdinaryHint": "Exports your document with the selected layout and link settings.",
   "outputArchival": "Archival PDF/A-2u",
   "outputArchivalHint": "Archival exports are independently checked for PDF/A-2u before the file is saved. Linked external resources are not included.",
   "outputArchivalUnavailable": "Archival output requires a desktop installation with archival validation.",
