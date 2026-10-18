@@ -5,10 +5,11 @@ import path from 'node:path';
 import os from 'node:os';
 import {payloadFiles,verifyDesktopPayload} from '../scripts/desktop-payload.js';
 import {githubRuntimeFiles} from '../scripts/github-runtime.js';
+import {pdfValidationRuntimeFiles} from '../scripts/pdf-validation-runtime.js';
 test('desktop packaging rejects changed, extra or incomplete runtime payloads',async t=>{
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-payload-'));t.after(()=>rm(root,{recursive:true,force:true}));
  const suffix=process.platform==='win32'?'.exe':'';
- for(const file of [...githubRuntimeFiles(),'service/src/desktop-service.js','service/node_modules/pg/package.json',process.platform==='win32'?'runtime/node.exe':'runtime/bin/node','postgresql/bin/postgres'+suffix,'media/bin/ffmpeg'+suffix,'media/bin/ffprobe'+suffix,'media/LICENSE']){
+ for(const file of [...githubRuntimeFiles(),...pdfValidationRuntimeFiles(),'service/src/desktop-service.js','service/node_modules/pg/package.json',process.platform==='win32'?'runtime/node.exe':'runtime/bin/node','postgresql/bin/postgres'+suffix,'media/bin/ffmpeg'+suffix,'media/bin/ffprobe'+suffix,'media/LICENSE']){
   await mkdir(path.dirname(path.join(root,file)),{recursive:true});await writeFile(path.join(root,file),'Synthetic payload bytes');
  }
  const manifest={format:1,platform:process.platform,arch:process.arch,files:await payloadFiles(root)};
@@ -30,7 +31,7 @@ test('packaging refuses a valid but stale payload and mismatched application ver
  for(const [name,value] of Object.entries({'src/desktop-service.js':'Synthetic service','src/web/locales/en/test.json':'{"label":"Original"}','package.json':'{"version":"0.3.0"}','package-lock.json':'{}','desktop/icon_black.svg':'<svg/>','desktop/icon_white.svg':'<svg/>','desktop/package.json':'{"version":"0.3.0"}'}))await write(sourceRoot,name,value);
  await cp(sourceRoot,path.join(root,'service'),{recursive:true});
  const suffix=process.platform==='win32'?'.exe':'';
- for(const name of [...githubRuntimeFiles(),'service/node_modules/pg/package.json',process.platform==='win32'?'runtime/node.exe':'runtime/bin/node','postgresql/bin/postgres'+suffix,'media/bin/ffmpeg'+suffix,'media/bin/ffprobe'+suffix,'media/LICENSE'])await write(root,name,'Synthetic runtime');
+ for(const name of [...githubRuntimeFiles(),...pdfValidationRuntimeFiles(),'service/node_modules/pg/package.json',process.platform==='win32'?'runtime/node.exe':'runtime/bin/node','postgresql/bin/postgres'+suffix,'media/bin/ffmpeg'+suffix,'media/bin/ffprobe'+suffix,'media/LICENSE'])await write(root,name,'Synthetic runtime');
  await write(root,'payload.json',JSON.stringify({format:1,platform:process.platform,arch:process.arch,files:await payloadFiles(root)}));
  await verifyDesktopPayload(root,{sourceRoot});
  await write(sourceRoot,'desktop/icon_white.svg','<svg><!-- Updated artwork --></svg>');await assert.rejects(verifyDesktopPayload(root,{sourceRoot}),/stale/);

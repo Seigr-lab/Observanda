@@ -9,7 +9,7 @@ import {readPreference} from './locations.js';
 import {DeviceStore} from './security/device-store.js';
 import {AppError,safeError} from './errors.js';
 let runtime,server,starting=false,stopping=false,closed;const startup=new AbortController(),pending=new Map();let sequence=0;
-const pdfBridge=pdfRenderBridge(process),removePdfRenderer=installPdfRenderer((input,options)=>pdfBridge.render(input,options));
+const pdfBridge=pdfRenderBridge(process),removePdfRenderer=installPdfRenderer((input,options)=>pdfBridge.render(input,options),{capabilities:()=>pdfBridge.capabilities()});
 const send=message=>{if(process.connected)process.send(message);};
 const protector={available:()=>true,protect:bytes=>transform('encrypt',bytes.toString('base64')).then(value=>Buffer.from(value,'base64')),unprotect:bytes=>transform('decrypt',bytes.toString('base64')).then(value=>Buffer.from(value,'base64'))};
 function transform(operation,value){return new Promise((resolve,reject)=>{const id=++sequence,timer=setTimeout(()=>{pending.delete(id);reject(new AppError('DEVICE_UNAVAILABLE'));},15000);pending.set(id,{resolve,reject,timer});send({type:'protect',id,operation,value});});}

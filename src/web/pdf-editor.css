@@ -5,3 +5,5 @@
 .pdf-source-list{display:grid;gap:.5rem}.pdf-source-list .button{text-align:start}.pdf-source-diff{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem}.pdf-source-diff pre{white-space:pre-wrap;overflow-wrap:anywhere}.pdf-source-preview{max-height:28rem;overflow:auto}.pdf-source-preview svg{max-width:100%;height:auto}@media(max-width:850px){.pdf-source-diff{grid-template-columns:1fr}}
 
 .pdf-thumbnails{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.5rem}.pdf-thumbnails button{display:flex;align-items:center;flex-direction:column;gap:.3rem}.pdf-thumbnails canvas{max-width:100%;height:auto}.pdf-thumbnails [aria-current=page]{outline:2px solid currentColor}
+
+[data-pdf-finding-target]{outline:3px solid var(--accent,#3b55bb);outline-offset:4px;scroll-margin-block:3rem}

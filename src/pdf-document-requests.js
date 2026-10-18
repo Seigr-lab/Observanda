@@ -14,7 +14,7 @@ import {PdfDocuments} from './pdf-documents.js';
 import {PdfDocumentStore} from './pdf-document-store.js';
 
 
-import {pdfRendererAvailable} from './pdf-render-service.js';
+import {pdfRendererAvailable,pdfRendererCapabilities} from './pdf-render-service.js';
 import {PdfLayoutError} from './web/pdf-layout-model.js';
 import {revisionId} from './web/revision-model.js';
 import {AppError} from './errors.js';
@@ -26,7 +26,7 @@ export function pdfDocumentRequest(route,method='POST'){
 export async function executePdfRequest(storage,request,data,{signal,check=async()=>{},binary,sourceReader,exportService}={}){
  if(storage.labBookId)throw new AppError('INVALID');await check();signal?.throwIfAborted();
  const {workspaceId,...input}=data??{},documents=new PdfDocuments(storage,workspaceId);
- if(request.pdf==='capabilities'){await documents.available();return {render:pdfRendererAvailable()};}
+ if(request.pdf==='capabilities'){await documents.available();return pdfRendererCapabilities();}
  try{
   if(request.pdf==='exports'||request.pdf.startsWith('export-')){
    const jobs=new PdfExportJobs(documents),options={signal,check};

@@ -11,6 +11,7 @@ import {downloadRuntime,windowsRuntime} from '../src/postgres-runtime.js';
 import {payloadFiles,verifyDesktopPayload} from './desktop-payload.js';
 import {relocateMacLibraries} from './relocate-macos.js';
 import {prepareGithubRuntime} from './github-runtime.js';
+import {preparePdfValidationRuntime} from './pdf-validation-runtime.js';
 const root=path.resolve(fileURLToPath(new URL('..',import.meta.url))),out=path.join(root,'dist/desktop-resources'),cache=path.join(root,'dist/runtime-cache');
 const {values}=parseArgs({options:{media:{type:'string'},'git-runtime':{type:'string'}}});
 if(!values.media)throw Error('Supply --media with a redistributable FFmpeg folder containing bin/ffmpeg, bin/ffprobe and LICENSE. No incomplete installer is produced.');
@@ -45,6 +46,7 @@ if(process.platform==='win32'){
 }
 await cp(media,path.join(out,'media'),{recursive:true,filter:source=>!['.git','.DS_Store'].includes(path.basename(source))});
 await prepareGithubRuntime({out,download,run,gitRuntime:values['git-runtime']});
+await preparePdfValidationRuntime({out,cache,download,run});
 if(process.platform==='darwin'){await relocateMacLibraries(path.join(out,'postgresql'));await relocateMacLibraries(path.join(out,'media'));await relocateMacLibraries(path.join(out,'github/git'));}
 const service=path.join(out,'service');await mkdir(service);await cp(path.join(root,'src'),path.join(service,'src'),{recursive:true});
 await mkdir(path.join(service,'desktop'));

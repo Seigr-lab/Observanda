@@ -1,3 +1,4 @@
+import {requiresPdfDomainFormat,requirePdfDomainFormat,assertPdfDomainFormat} from './pdf-domain-format.js';
 import {verifyPdfResearchImages} from './pdf-research-images.js';
 import {verifyPdfExportJobs} from './pdf-export-jobs.js';
 import {PdfDocumentImages,verifyPdfImages} from './pdf-document-images.js';
@@ -60,7 +61,7 @@ export class PdfDocumentStore{
   if(!researchId(id)||!revisionId(revision))invalid();
   const value=await this.store.object('pdf:revision:'+id+':'+revision);
   if(!exact(value,'version,header,sections,order,nextPosition'+(value?.version===2?',lifecycle':''))||![1,2].includes(value.version)||value.version===2&&(!exact(value.lifecycle,'previous,archived')||!revisionId(value.lifecycle.previous)||typeof value.lifecycle.archived!=='boolean')||hash(value)!==revision||!validPdfDocumentHeader(value.header)||value.header.id!==id||!validTableRef(value.sections)||!validTableRef(value.order)||(value.sections?.count??0)!==(value.order?.count??0)||!natural(value.nextPosition)||value.nextPosition<(value.order?.count??0))bad();
-  return value;
+  if(requiresPdfDomainFormat({header:value.header}))await assertPdfDomainFormat(this.store);return value;
  }
  async head(id,{removed=false}={}){
   if(!researchId(id))invalid();const value=await this.store.object('pdf:head:'+id);if(!value)throw new AppError('NOT_FOUND');
@@ -97,13 +98,13 @@ export class PdfDocumentStore{
   }
   return {items,next:start+items.length<(directory.root?.count??0)?items.at(-1).id:null};
  }
- async section(id,sectionId,{revision=null}={}){
-  if(!researchId(sectionId))invalid();const current=await this.open(id,{revision}),value=await this.revision(id,current.revision),row=await this.index(id).find({root:value.sections},sectionId);
-  if(!row)throw new AppError('NOT_FOUND');return this.sectionRow(id,row.revision,sectionId);
+ async section(id,sectionId,{revision=null,locate=false}={}){
+  if(!researchId(sectionId)||typeof locate!=='boolean')invalid();const current=await this.open(id,{revision}),value=await this.revision(id,current.revision),row=await this.index(id).find({root:value.sections},sectionId);
+  if(!row)throw new AppError('NOT_FOUND');const selected=await this.sectionRow(id,row.revision,sectionId);return locate?{...selected,ordinal:await this.index(id).rank({root:value.order},ordinal(selected.position))}:selected;
  }
  async sectionRow(id,revision,sectionId=null){
   const value=await new RecordValueTree(new PdfBlocks(this.store,id)).read(revision);
-  if(!exact(value,'position,section')||!natural(value.position)||!validPdfSection(value.section)||sectionId!==null&&value.section.id!==sectionId)bad();return value;
+  if(!exact(value,'position,section')||!natural(value.position)||!validPdfSection(value.section)||sectionId!==null&&value.section.id!==sectionId)bad();if(requiresPdfDomainFormat({section:value.section}))await assertPdfDomainFormat(this.store);return value;
  }
  async sectionHeader(id,revision){
   const tree=new RecordValueTree(new PdfBlocks(this.store,id)),fields={};
@@ -140,6 +141,7 @@ export class PdfDocumentStore{
   let previous=null,current;
   if(expectedRevision===null){if(operation.type!=='create'||!exact(operation,'type,header,section')||!validPdfDocumentHeader(operation.header)||operation.header.id!==id||!validPdfSection(operation.section))invalid();if(await this.store.object('pdf:head:'+id))throw new AppError('EXISTS');current={version:1,header:operation.header,sections:null,order:null,nextPosition:0};}
   else{previous=await this.head(id,{removed:operation.type==='restore-document'});if(previous.revision!==expectedRevision)throw new AppError('CONFLICT');if(operation.type==='restore-document'&&!previous.removed)throw new AppError('CONFLICT');current=structuredClone(await this.revision(id,previous.revision));if(current.version===2&&current.lifecycle.archived!==previous.removed)bad();}
+  if(requiresPdfDomainFormat(operation))await requirePdfDomainFormat(this.store);
   const index=this.index(id),orderIndex=this.index(id),tree=new RecordValueTree(new PdfBlocks(this.store,id)),directory=await this.directory();
   const put=async(section,position)=>{for(const image of section.images??[])await new PdfDocumentImages(this.store,id).descriptor(image.asset);const revision=await tree.retain({section,position});current.sections=await index.change(current.sections,section.id,revision);current.order=await orderIndex.change(current.order,ordinal(position),revision);};
   const selected=async sectionId=>{if(!researchId(sectionId))invalid();const row=await index.find({root:current.sections},sectionId);if(!row)throw new AppError('NOT_FOUND');return this.sectionRow(id,row.revision,sectionId);};

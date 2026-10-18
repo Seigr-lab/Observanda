@@ -1,6 +1,8 @@
 import {test,expect,_electron as electron} from '@playwright/test';
 import {mkdtemp,rm,readFile,writeFile} from 'node:fs/promises';
-import {randomUUID} from 'node:crypto';
+import {randomUUID,createHash} from 'node:crypto';
+import {pdfArchivalAvailable} from '../../src/pdf-archival.js';
+import {validPdfAccessibilityReceipt} from '../../src/web/pdf-output-validation-model.js';
 import path from 'node:path';
 import os from 'node:os';
 import {getDocument} from 'pdfjs-dist/legacy/build/pdf.mjs';
@@ -60,6 +62,11 @@ test('tagged PDF output preserves authored metadata and semantic reading structu
   const internal=links.find(link=>link.dest==='pdf-section-'+second.id);expect(internal).toBeTruthy();
   const destination=await pdf.getDestination(internal.dest);expect(await pdf.getPageIndex(destination[0])).toBe(positioned.number-1);
   expect(nodes.some(node=>node.role==='Link'&&node.text==='2 Positioned reading')).toBe(true);
+  if(await pdfArchivalAvailable()){
+   const checked=await app.evaluate(async(_electron,input)=>{const {renderPdfDocument}=await globalThis.pdfService,result=await renderPdfDocument({...input,outputProfile:'pdfua-1',press:{version:1,bleedMm:3,cropMarks:true}});return {bytes:result.bytes.toString('base64'),sha256:result.sha256,validation:result.validation,conformance:result.conformance,renderer:result.renderer};},input),finalBytes=Buffer.from(checked.bytes,'base64');
+   expect(validPdfAccessibilityReceipt(checked.validation)).toBe(true);expect(checked.validation.sha256).toBe(createHash('sha256').update(finalBytes).digest('hex'));expect(checked.sha256).toBe(checked.validation.sha256);expect(checked.validation.automatedOnly).toBe(true);expect(checked.conformance).toEqual([]);expect(checked.renderer.recipeVersion).toBe(2);expect(checked.validation.passedRules).toBe(106);await writeFile(info.outputPath('ua1-automated-observations.pdf'),finalBytes);
+  }
+
  }finally{
   try{await pdf?.loadingTask.destroy();}finally{try{await app?.close();}finally{if(path.dirname(profile)!==parent||!path.basename(profile).startsWith('observanda-pdf-accessibility-'))throw Error('Unexpected test directory');await rm(profile,{recursive:true,force:true,maxRetries:5,retryDelay:100});}}
  }

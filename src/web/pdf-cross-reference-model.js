@@ -27,7 +27,7 @@ export function pdfCrossReferenceTargets(section,{documentId}={}){
   if(kind)add(kind,node.attrs.id,node.type==='book_figure'?figures.get(node.attrs.figureId)??node.attrs.alternative:node.attrs.title);
   for(const child of node.content??[])visit(child);
  }
- visit(proseDocument(section.content));for(const image of section.images??[])add('figure',image.id,image.caption||image.alt);
+ visit(proseDocument(section.content));for(const note of section.notes??[])visit(proseDocument(note.content));for(const image of section.images??[])add('figure',image.id,image.caption||image.alt);
  return rows.map(row=>({...row,ambiguous:counts.get(pdfCrossReference(row.target))!==1}));
 }
 export function appendPdfCrossReference(content,target,label){

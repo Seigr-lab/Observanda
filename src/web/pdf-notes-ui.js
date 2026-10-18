@@ -11,7 +11,7 @@ export function pdfNotesUI({esc,getDocument,getSection,changed,draw,field}){
  const label=(name,input)=>'<label class="field">'+esc(tr(name))+input+'</label>';
  function controls(value,id=''){
   const attr=id?' data-pdf-note-id="'+id+'"':' data-pdf-note-new';
-  return label('noteKind','<select'+attr+' data-pdf-note-field="kind">'+[['footnote','noteSection'],['endnote','noteEndnote']].map(([name,title])=>'<option value="'+name+'"'+(value.kind===name?' selected':'')+'>'+esc(tr(title))+'</option>').join('')+'</select>')+label('noteBlock','<input type="number"'+attr+' data-pdf-note-field="block" min="0" max="12000" step="1" value="'+value.block+'">');
+  return label('noteKind','<select'+attr+' data-pdf-note-field="kind">'+[['footnote','noteSection'],['page-footnote','notePageFootnote'],['endnote','noteEndnote']].map(([name,title])=>'<option value="'+name+'"'+(value.kind===name?' selected':'')+'>'+esc(tr(title))+'</option>').join('')+'</select>')+label('noteBlock','<input type="number"'+attr+' data-pdf-note-field="block" min="0" max="12000" step="1" value="'+value.block+'">');
  }
  function view(){
   if(context!==key())reset();const section=getSection();if(!section)return '';const selected=context;
@@ -23,7 +23,7 @@ export function pdfNotesUI({esc,getDocument,getSection,changed,draw,field}){
  function input(el){
   const name=el.dataset.pdfNoteField;if(!name)return false;if(context!==key())reset();
   const value=name==='block'?(el.value===''?NaN:Number(el.value)):el.value;
-  if(name==='block'&&(!Number.isInteger(value)||value<0||value>12000)||name==='kind'&&!['footnote','endnote'].includes(value)){el.setAttribute?.('aria-invalid','true');return true;}
+  if(name==='block'&&(!Number.isInteger(value)||value<0||value>12000)||name==='kind'&&!['footnote','page-footnote','endnote'].includes(value)){el.setAttribute?.('aria-invalid','true');return true;}
   if(!['block','kind'].includes(name))return false;el.removeAttribute?.('aria-invalid');
   if(!el.dataset.pdfNoteId){if(name==='block')block=value;else kind=value;return true;}
   const note=getSection()?.notes?.find(value=>value.id===el.dataset.pdfNoteId);if(note){note[name]=value;changed();}return true;

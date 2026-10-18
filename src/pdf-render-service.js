@@ -1,8 +1,9 @@
 ﻿import {AppError} from './errors.js';
-let renderer=null,active=null;
+let renderer=null,capabilityReader=null,active=null;
 // Only the trusted desktop process installs a renderer. HTTP clients supply a
 // saved document revision, never HTML or executable renderer configuration.
-export function installPdfRenderer(value){if(typeof value!=='function'||renderer)throw new AppError('INVALID');renderer=value;return ()=>{if(renderer===value)renderer=null;};}
+export function installPdfRenderer(value,{capabilities=null}={}){if(typeof value!=='function'||renderer||capabilities!==null&&typeof capabilities!=='function')throw new AppError('INVALID');renderer=value;capabilityReader=capabilities;return ()=>{if(renderer===value){renderer=null;capabilityReader=null;}};}
+export async function pdfRendererCapabilities(){const selected=renderer,read=capabilityReader;if(!selected)return {render:false,archival:false};let archival=false;try{archival=(await read?.())?.archival===true;}catch{}return {render:renderer===selected,archival:renderer===selected&&archival};}
 export const pdfRendererAvailable=()=>renderer!==null;
 function waitForRender(promise,signal){
  signal?.throwIfAborted();return new Promise((resolve,reject)=>{const aborted=()=>{clean();reject(signal.reason??new AppError('PDF_CANCELLED'));},clean=()=>signal?.removeEventListener('abort',aborted);signal?.addEventListener('abort',aborted,{once:true});promise.then(()=>{clean();resolve();},error=>{clean();reject(error);});});

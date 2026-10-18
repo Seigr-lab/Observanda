@@ -1,0 +1,22 @@
+import {AppError} from './errors.js';
+import {moduleDomainOwner} from './module-domain-owner.js';
+const bad=()=>{throw new AppError('CATALOGUE_DAMAGED');};
+// The authenticated owner is already copied by archive and rekey. An older
+// application refuses its additional required field before any domain write.
+export function pdfDomainFormat(owner,domain){
+ if(!Object.hasOwn(owner??{},'pdfFormat'))return 1;
+ if(domain!=='pdf'||!Number.isSafeInteger(owner.pdfFormat)||owner.pdfFormat<2)bad();
+ if(owner.pdfFormat>2)throw new AppError('ACCESS_UPGRADE');return 2;
+}
+export function requiresPdfDomainFormat({header,section}={}){
+ return !!(header&&(Object.hasOwn(header,'press')||Object.hasOwn(header,'outputProfile'))||section?.notes?.some(note=>note.kind==='page-footnote'));
+}
+async function ownerValue(store){
+ if(!store.workspace?.vault)bad();const owner=await store.object('owner'),expected=moduleDomainOwner(store.workspace,store.namespaceId);
+ if(!owner||store.domain!=='pdf'||Object.keys(owner).sort().join()!==['domain','namespaceId','projectId','vaultId','version',...(Object.hasOwn(owner,'pdfFormat')?['pdfFormat']:[])].sort().join()||owner.domain!==store.domain||owner.version!==expected.version||owner.projectId!==expected.projectId||owner.namespaceId!==store.namespaceId||owner.vaultId!==store.workspace.vault.id)bad();
+ return {owner,format:pdfDomainFormat(owner,store.domain)};
+}
+export async function requirePdfDomainFormat(store){
+ if(!store.writable)throw new AppError('INVALID');const {owner,format}=await ownerValue(store);if(format<2)await store.putObject('owner',{...owner,pdfFormat:2});
+}
+export async function assertPdfDomainFormat(store){if((await ownerValue(store)).format<2)bad();}

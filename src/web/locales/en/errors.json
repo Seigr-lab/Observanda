@@ -356,5 +356,13 @@
   "PDF_IMAGE_RESOLUTION_FAILED": "The image could not be prepared at the chosen resolution.",
   "PDF_PAGE_REFERENCES": "Page numbers could not be matched to their destinations. Check the contents and references, then try again.",
   "PDF_PAGINATION": "The paragraph pagination settings are invalid.",
-  "PDF_PAGINATION_STALE": "The content structure changed. Adjust its pagination rules before exporting."
+  "PDF_PAGINATION_STALE": "The content structure changed. Adjust its pagination rules before exporting.",
+  "PDF_FOOTNOTE_LAYOUT": "A page footnote cannot be placed with this content. Check its call and page layout.",
+  "PDF_FOOTNOTE_OVERFLOW": "A footnote or its referenced content cannot fit safely on the page. Adjust the content or page layout.",
+  "PDF_PRESS": "Check the trim, bleed and crop-mark settings.",
+  "PDF_PRESS_FAILED": "The PDF print boxes could not be prepared. Your document is unchanged.",
+  "PDF_ARCHIVAL_UNAVAILABLE": "Archival PDF export is not available in this installation.",
+  "PDF_ARCHIVAL_FAILED": "The PDF did not pass archival validation. Your document is unchanged.",
+  "PDF_ACCESSIBILITY_FAILED": "The PDF did not pass its automated accessibility checks. Your document is unchanged.",
+  "PDF_ACCESSIBILITY_UNAVAILABLE": "PDF accessibility validation is not available in this installation."
 }

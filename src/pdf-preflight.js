@@ -1,7 +1,7 @@
 // Measurements describe the compiled document at its printable width. They
 // do not claim to reproduce Chromium's page-break decisions or font coverage.
 export const PDF_PREFLIGHT_LIMIT=256;
-const codes=new Set(['PDF_COMPOSITION_OVERLAP','PDF_COMPOSITION_OVERFLOW','PDF_PAGE_GEOMETRY','PDF_SECTION_HIDDEN','PDF_FONT_FAILED','PDF_IMAGE_MISSING','PDF_IMAGE_RESOLUTION','PDF_CONTENT_OVERFLOW','PDF_CONTENT_CLIPPED','PDF_BLOCK_TOO_TALL','PDF_ANCHOR_MISSING','PDF_ANCHOR_AMBIGUOUS']);
+const codes=new Set(['PDF_FOOTNOTE_LAYOUT','PDF_FOOTNOTE_OVERFLOW','PDF_COMPOSITION_OVERLAP','PDF_COMPOSITION_OVERFLOW','PDF_PAGE_GEOMETRY','PDF_SECTION_HIDDEN','PDF_FONT_FAILED','PDF_IMAGE_MISSING','PDF_IMAGE_RESOLUTION','PDF_CONTENT_OVERFLOW','PDF_CONTENT_CLIPPED','PDF_BLOCK_TOO_TALL','PDF_ANCHOR_MISSING','PDF_ANCHOR_AMBIGUOUS']);
 const metricKeys=new Set(['widthPx','heightPx','availableWidthPx','availableHeightPx','dpi','recommendedDpi','naturalWidth','naturalHeight','count','target']);
 const object=value=>value&&typeof value==='object'&&!Array.isArray(value);
 export function validPdfPreflight(value){
@@ -23,8 +23,8 @@ export async function measurePdfPreflight(){
   let block=node?.closest?.('[data-pdf-block-id]');if(block===section)block=null;
   if(!block){let current=node;while(current&&current!==section){if(current.id){block=current;break;}current=current.parentElement;}}
   let top=node;while(top?.parentElement&&top.parentElement!==section&&top.parentElement!==document.body)top=top.parentElement;
-  const blockId=(block?.getAttribute('data-pdf-block-id')??block?.id??null);
-  return {sectionId,blockId:blockId?.slice(0,512)??null,blockIndex:section&&top?indices.get(top)??null:null};
+  const blockId=(block?.getAttribute('data-pdf-block-id')??block?.id??null),source=node?.closest?.('[data-pdf-source-block-index]'),sourceIndex=source?Number(source.dataset.pdfSourceBlockIndex):null;
+  return {sectionId,blockId:blockId?.slice(0,512)??null,blockIndex:Number.isSafeInteger(sourceIndex)&&sourceIndex>=0?sourceIndex:section&&top?indices.get(top)??null:null};
  };
  const add=(code,severity,node,details={})=>{
   const row={code,severity,...identity(node),details};
@@ -33,7 +33,7 @@ export async function measurePdfPreflight(){
  const number=value=>{const match=/^([0-9]+(?:\.[0-9]+)?)(mm|cm|in|pt|px)$/.exec(value.trim());if(!match)return NaN;return Number(match[1])*({mm:1,cm:10,in:25.4,pt:25.4/72,px:25.4/96}[match[2]]);};
  const pageRules=[];for(const sheet of document.styleSheets){try{for(const rule of sheet.cssRules)if(rule.type===CSSRule.PAGE_RULE)pageRules.push(rule);}catch{}}
  const geometry=section=>{
-  const width=section.getAttribute('data-pdf-width-mm'),height=section.getAttribute('data-pdf-height-mm');
+  const width=section.getAttribute('data-pdf-flow-width-mm')??section.getAttribute('data-pdf-width-mm'),height=section.getAttribute('data-pdf-flow-height-mm')??section.getAttribute('data-pdf-height-mm');
   if(width!==null||height!==null)return {width:Number(width),height:Number(height)};
   const page=getComputedStyle(section).page,rule=pageRules.find(value=>value.selectorText===page)??pageRules.find(value=>!value.selectorText),style=rule?.style,parts=style?.getPropertyValue('size').trim().split(/\s+/);
   if(!parts||parts.length!==2)return null;

@@ -1,3 +1,4 @@
+import {pdfDomainFormat} from './pdf-domain-format.js';
 // The encrypted root manifest makes a missing whole domain detectable.
 import {moduleDomainOwner} from './module-domain-owner.js';
 import {AppError} from './errors.js';
@@ -25,5 +26,6 @@ export async function checkProjectDomainSchemas(store,registry){
 export async function checkProjectDomainOwner(store){
  const versions=await store.db.all('SELECT version FROM domain_format');if(versions.length!==1||versions[0].version!==1)throw new AppError('CATALOGUE_DAMAGED');
  const owner=await store.object('owner'),expected=moduleDomainOwner(store.workspace,store.namespaceId);
- if(!owner||Object.keys(owner).sort().join()!=='domain,namespaceId,projectId,vaultId,version'||owner.version!==expected.version||owner.projectId!==expected.projectId||owner.namespaceId!==store.namespaceId||owner.domain!==store.domain||owner.vaultId!==store.workspace.vault.id)throw new AppError('CATALOGUE_DAMAGED');
+ if(!owner||Object.keys(owner).sort().join()!==['domain','namespaceId','projectId','vaultId','version',...(Object.hasOwn(owner,'pdfFormat')?['pdfFormat']:[])].sort().join()||owner.version!==expected.version||owner.projectId!==expected.projectId||owner.namespaceId!==store.namespaceId||owner.domain!==store.domain||owner.vaultId!==store.workspace.vault.id)throw new AppError('CATALOGUE_DAMAGED');
+ pdfDomainFormat(owner,store.domain);
 }

@@ -24,7 +24,7 @@ export function pdfCaptionRenderer(header,{maxBytes=16*1024*1024,textGlyphs=()=>
   const htmlBytes=Buffer.byteLength(html);if(htmlBytes>maxBytes)throw new PdfLayoutError('PDF_CAPACITY');
   if(!active)return {html,targets:[]};
   const tree=parseFragment(html,{sourceCodeLocationInfo:true}),ids=new Map(),pending=[tree],nodes=[];
-  while(pending.length){signal?.throwIfAborted();const node=pending.pop(),id=attr(node,'id');if(id)ids.set(id,(ids.get(id)??0)+1);nodes.push(node);for(let i=(node.childNodes?.length??0)-1;i>=0;i--)pending.push(node.childNodes[i]);}
+  while(pending.length){signal?.throwIfAborted();const node=pending.pop(),id=attr(node,'id');if(id)ids.set(id,(ids.get(id)??0)+1);nodes.push(node);if(node.tagName==='template'&&node.content)pending.push(node.content);for(let i=(node.childNodes?.length??0)-1;i>=0;i--)pending.push(node.childNodes[i]);}
   const insertions=[],targets=[],used=new Set(),ordinals={figure:0,table:0};let addedBytes=0;
   function insert(offset,value){if(!Number.isInteger(offset))throw new PdfLayoutError('PDF_SECTION',[sectionId]);addedBytes+=Buffer.byteLength(value);if(htmlBytes+addedBytes>maxBytes)throw new PdfLayoutError('PDF_CAPACITY');insertions.push({offset,value,order:insertions.length});}
   for(const node of nodes){

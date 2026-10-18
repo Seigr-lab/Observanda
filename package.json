@@ -34,9 +34,11 @@
     "prosemirror-keymap": "1.2.3",
     "prosemirror-schema-list": "1.5.1",
     "prosemirror-state": "1.4.4",
-    "prosemirror-view": "1.42.6"
+    "prosemirror-view": "1.42.6",
+    "fflate": "0.8.3"
   },
   "dependencies": {
+    "@cantoo/pdf-lib": "2.11.1",
     "@noble/hashes": "2.4.0",
     "@peculiar/x509": "2.1.0",
     "@resvg/resvg-wasm": "2.6.2",
