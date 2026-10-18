@@ -11,7 +11,6 @@ import {schemaReferences,measurementReferences} from '../web/measurement-model.j
 import {analysisMethodReferences} from '../web/analysis-model.js';
 import {MediaStore} from '../media.js';
 import {MediaImports} from '../media-imports.js';
-import {FileContent} from '../file-content.js';
 import {AppError} from '../errors.js';
 import {proseReferences} from '../web/prose-model.js';
 import {WorkspaceFonts} from '../workspace-fonts.js';
@@ -55,8 +54,10 @@ export class ResearchTransfer{
    const {version,workspaceId,name,size,kind,createdAt,source}=session;
    await this.metadata('.observanda/media-imports/'+id+'.json',{version,id,workspaceId,name,size,kind,createdAt,source});await this.metadata('.observanda/media-assets/'+id+'.json',metadata);
   }else{
-   await this.original('.observanda/media/'+id+'/asset.json',await this.jsonContent(path.join(directory,'asset.json')));
-   await this.original('.observanda/media/'+id+'/original',new FileContent(this.workspace,path.join(directory,'original'),metadata.originalBytes,metadata.originalSha256));
+   const descriptor='.observanda/media-assets/'+id+'.json',indexed=await this.workspace.readMetadata(descriptor,4096);
+   if(indexed!==null)await this.emit({kind:'metadata',name:descriptor,content:indexed});
+   else await this.original('.observanda/media/'+id+'/asset.json',await this.jsonContent(path.join(directory,'asset.json')));
+   await this.original('.observanda/media/'+id+'/original',await this.media.originalContent(id,{directory,metadata}));
   }
  }
  async jsonContent(file){const {describeContent}=await import('../file-content.js');return describeContent(this.workspace,file);}

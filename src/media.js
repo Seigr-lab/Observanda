@@ -1,7 +1,7 @@
 import {adoptRecordOwnerMedia} from './record-owner-resources.js';
 import {retiredMediaContent} from './project-media-content.js';
 import {validDownloadName,validDownloadInfo,downloadInfo} from './web/website-file.js';
-import {FileContent,writeContent,serveContent,contentBuffer} from './file-content.js';
+import {FileContent,writeContent,serveContent,contentBuffer,describeContent} from './file-content.js';
 import {MediaPolicy,defaultMediaPolicy} from './media-policy.js';
 import http from 'node:http';
 import {fileURLToPath} from 'node:url';
@@ -161,7 +161,7 @@ export class MediaStore {
     for (const part of ['.observanda', 'media', id]) { directory = path.join(directory, part); await assertRegular(directory, { directory: true, missing: indexed!==null }); }
     const metadataFile = path.join(directory, 'asset.json');
     if(indexed===null){const stat=await assertRegular(metadataFile);if(stat.size>4096)throw new AppError('MEDIA_INVALID');}
-    const metadata=JSON.parse(indexed??await this.workspace.readFile(metadataFile,'utf8'));
+    const metadata=JSON.parse(indexed??(await contentBuffer(await describeContent(this.workspace,metadataFile))).toString('utf8'));
     if(metadata.storageId!==undefined&&!safeId(metadata.storageId))throw new AppError('MEDIA_INVALID');
     const profile = metadata.kind==='file'?{extension:'bin',mime:'application/octet-stream'}:profiles[metadata.kind];
     if (!profile || metadata.id !== id || metadata.extension !== profile.extension || metadata.mime !== profile.mime || !Number.isSafeInteger(metadata.bytes) || metadata.bytes < 0 || metadata.bytes===0&&metadata.kind!=='file' || metadata.kind==='file'&&(!validDownloadInfo(downloadInfo(metadata))||metadata.originalBytes!==metadata.bytes||metadata.originalSha256!==metadata.sha256)) throw new AppError('MEDIA_INVALID');
@@ -181,7 +181,7 @@ export class MediaStore {
     const {directory,metadata}=await this.metadata(id),profile=profiles[metadata.kind];
     const file = path.join(directory,metadata.kind==='file'?metadata.storageId?metadata.storageId+'.original':'original':`${metadata.storageId?metadata.storageId+'.':''}public.${profile.extension}`);
     const relative=path.relative(this.root,file).split(path.sep).join('/');let content=await retiredMediaContent(this.workspace,relative,metadata.bytes,metadata.sha256);
-    if(!content){const output=await assertRegular(file);if(output.size!==metadata.bytes+(this.workspace.vault?.id?36:0))throw new AppError('MEDIA_INVALID');content=new FileContent(this.workspace,file,metadata.bytes,metadata.sha256);}
+    if(!content){await assertRegular(file);content=new FileContent(this.workspace,file,metadata.bytes,metadata.sha256);}
     await content.verify({signal});
     if(includeHeader&&metadata.kind!=='file'){const header=[];for await(const chunk of content.read(0,11,{signal}))header.push(chunk);content.header=Buffer.concat(header);}
     const bytes=streamed?content:await contentBuffer(content);

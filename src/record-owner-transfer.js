@@ -112,6 +112,9 @@ export class RecordOwnerTransfer{
   return writerLeaseHeld(lease)?finish():withWriterLease(lease,finish);
  }
  async perform(id,options={}){
+  await options.check?.();options.signal?.throwIfAborted();
+  // Initialize the evidence index before pinning the source snapshot.
+  await new ResearchMaterials(this.source).index.ensure();
   // Selected originals are fenced against edits. Read their immutable content
   // through one consistent snapshot, while cancellation and checkpoints use a
   // separate live connection so a long copy never hides a stop request.
