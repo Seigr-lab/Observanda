@@ -119,3 +119,56 @@ test('hot immutable nodes remain reusable during bounded cache eviction',async()
  }
  const first=[...workspace.files.keys()][1],reads=workspace.reads.length;await blocks.read('value',first.slice(first.lastIndexOf('/')+6,-5));assert.equal(workspace.reads.length,reads+1);
 });
+
+
+test('publication index batches retain all roots while avoiding intermediate durable pages',async t=>{
+ const indexes=Array.from({length:8},(_,i)=>'scope'+i),collections={records:{indexes},files:{indexes:[]}};
+ async function captured(eager){
+  const workspace=memory(),builder=new PublicationDocumentBuilder(workspace,{owner:owner(),collections});
+  let peakNodes=0,peakBytes=0;
+  for(let i=0;i<160;i++){
+   const id=String(i*73%160).padStart(3,'0'),value={id,title:'Exact '+id},keys=Object.fromEntries(indexes.map((name,n)=>[name,'group'+n+'/'+id]));
+   await builder.append('records',id,value,{indexes:keys});
+   await builder.append('files',id,{name:id+'.html'});
+   if(eager)await builder.flushIndexes();
+   peakNodes=Math.max(peakNodes,builder.index.pending.size);peakBytes=Math.max(peakBytes,builder.index.pendingBytes);
+  }
+  const descriptor=await builder.finish(),reader=await PublicationDocument.open(workspace,descriptor);
+  assert.deepEqual(await reader.verify(),{collections:2,items:320});
+  assert.equal(builder.index.pending.size,0);assert.equal(builder.index.pendingBytes,0);
+  assert.ok(peakNodes<512);assert.ok(peakBytes<4*1024*1024);
+  for(const name of indexes){const page=await reader.window('records',{index:name,prefix:'group'+indexes.indexOf(name)+'/',offset:159,limit:1});assert.equal(page.total,160);assert.equal(page.items[0].key,'159');}
+  return {writes:workspace.writes.filter(file=>file.includes('/pd-i-')).length,rows:await Array.fromAsync(reader.items('records')),peakNodes,peakBytes};
+ }
+ const eager=await captured(true),batched=await captured(false);assert.deepEqual(batched.rows,eager.rows);
+ assert.ok(batched.writes<eager.writes/3,'Bounded batches must avoid persisting each intermediate index path');
+ t.diagnostic(JSON.stringify({eagerIndexWrites:eager.writes,batchedIndexWrites:batched.writes,peakPendingNodes:batched.peakNodes,peakPendingBytes:batched.peakBytes}));
+});
+
+test('paused publication iterators retain their exact pending snapshot across batched upserts',async()=>{
+ const workspace=memory(),builder=new PublicationDocumentBuilder(workspace,{owner:owner(),collections:schema});
+ for(let i=0;i<13;i++){const id=String(i).padStart(3,'0');await builder.append('records',id,{id,title:'Before '+id},{indexes:{scopeDate:'before/'+id}});}
+ const iterator=builder.items('records',{index:'scopeDate',prefix:'before/'}),original=[(await iterator.next()).value];
+ for(let i=0;i<80;i++){const id=String(i).padStart(3,'0');await builder.upsert('records',id,{id,title:'After '+id},{indexes:{scopeDate:'after/'+id}});}
+ await builder.flushIndexes();builder.index.cache.clear();builder.index.cacheBytes=0;builder.blocks.cache.clear();builder.blocks.cacheBytes=0;
+ for await(const row of iterator)original.push(row);
+ assert.deepEqual(original.map(row=>row.value.title),Array.from({length:13},(_,i)=>'Before '+String(i).padStart(3,'0')));
+ assert.equal(builder.snapshots.size,0);assert.equal((await builder.get('records','012')).title,'After 012');
+ const descriptor=await builder.finish(),reader=await PublicationDocument.open(workspace,descriptor);
+ assert.equal((await reader.window('records',{index:'scopeDate',prefix:'before/'})).total,0);
+ assert.equal((await reader.window('records',{index:'scopeDate',prefix:'after/'})).total,80);await reader.verify();
+});
+
+test('an aborted multi-root checkpoint preserves the admitted rows and allows exact retry',async()=>{
+ const workspace=memory(),builder=new PublicationDocumentBuilder(workspace,{owner:owner(),collections:schema});
+ for(let i=0;i<31;i++)await builder.append('records',String(i),{id:String(i)},{indexes:{scopeDate:'book/'+String(i).padStart(3,'0'),original:String(i)}});
+ const abort=new AbortController(),write=workspace.writeMetadata;let writes=0;
+ workspace.writeMetadata=async(file,text)=>{await write(file,text);if(file.includes('/pd-i-')&&++writes===2)abort.abort();};
+ await assert.rejects(builder.append('records','retry',{id:'retry',title:'Unacknowledged'},{indexes:{scopeDate:'book/099'},signal:abort.signal}),{name:'AbortError'});
+ assert.equal(builder.count('records'),31);assert.equal(await builder.get('records','retry'),null);assert.equal((await builder.get('records','30')).id,'30');
+ assert.equal(builder.busy,false);assert.equal(builder.finished,false);assert.ok(builder.index.pending.size>0);
+ workspace.writeMetadata=write;
+ await builder.append('records','retry',{id:'retry',title:'Acknowledged'},{indexes:{scopeDate:'book/099'}});
+ const descriptor=await builder.finish(),reader=await PublicationDocument.open(workspace,descriptor);assert.equal((await reader.get('records','retry')).title,'Acknowledged');
+ assert.deepEqual(await reader.verify(),{collections:2,items:32});
+});

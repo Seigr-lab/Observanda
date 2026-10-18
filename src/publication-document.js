@@ -15,6 +15,7 @@ const fields=(value,keys)=>!!value&&typeof value==='object'&&!Array.isArray(valu
 const ownerIdentity=owner=>[owner.kind,owner.workspaceId,owner.websiteId,owner.jobId,owner.attemptId];
 const sameOwner=(a,b)=>validPublicationDocumentOwner(a)&&validPublicationDocumentOwner(b)&&same(ownerIdentity(a),ownerIdentity(b));
 const indexKey=(value,id)=>value+'\0'+id;
+const collectionRoots=collection=>[collection.keys,collection.order,...Object.values(collection.indexes)];
 async function boundedValue(tree,revision,limit,signal){
  let text='',bytes=0;for await(const chunk of tree.json(revision,{signal})){bytes+=Buffer.byteLength(chunk);if(bytes>limit)fail();text+=chunk;}
  try{return JSON.parse(text);}catch{fail();}
@@ -40,11 +41,13 @@ function collectionSchema(collections){
 }
 function rowsRoot(collection,index){if(index===null)return collection.order;if(index==='key')return collection.keys;if(!Object.hasOwn(collection.indexes,index))throw new AppError('INVALID');return collection.indexes[index];}
 class PublicationDocumentReader{
- constructor(blocks,collections,binding){this.blocks=blocks;this.tree=blocks.tree();this.index=new RetainedTableIndex(blocks,{namespace:'index',allowSparseBranches:true});this.collections=collections;this.binding=binding;}
+ constructor(blocks,collections,binding){this.blocks=blocks;this.tree=blocks.tree();this.index=new RetainedTableIndex(blocks,{namespace:'index',allowSparseBranches:true});this.collections=collections;this.binding=binding;this.snapshots=new Set();}
  collection(id){if(!name(id)||!Object.hasOwn(this.collections,id))throw new AppError('INVALID');return this.collections[id];}
  count(id){return this.collection(id).count;}
  collectionNames(){return Object.keys(this.collections);}
  check(signal){this.blocks.check();signal?.throwIfAborted();}
+ pinRoots(roots){const scope=roots.filter(Boolean);this.snapshots.add(scope);return ()=>this.snapshots.delete(scope);}
+ async useRoots(roots,operation){const release=this.pinRoots(roots);try{return await operation();}finally{release();}}
  async row(ref,collection,{signal}={}){
   this.check(signal);const row=await boundedValue(this.tree,ref,8192,signal);this.check(signal);
   if(!fields(row,'indexes,key,position,value')||!key(row.key)||!natural(row.position)||row.position>=collection.count||!publicationDocumentHash(row.value)||!row.indexes||typeof row.indexes!=='object'||Array.isArray(row.indexes)||Object.entries(row.indexes).some(([id,value])=>!Object.hasOwn(collection.indexes,id)||!key(value)))fail();
@@ -52,21 +55,26 @@ class PublicationDocumentReader{
  }
  get(id,identifier,{signal}={}){return this.blocks.withSignal(signal,()=>this.getValue(id,identifier,{signal}));}
  async getValue(id,identifier,{signal}={}){
-  if(!key(identifier))throw new AppError('INVALID');this.check(signal);const collection=this.collection(id),entry=await this.index.find({root:collection.keys},identifier);if(!entry){this.check(signal);return null;}
-  const row=await this.row(entry.revision,collection,{signal});if(row.key!==identifier)fail();const value=await this.tree.read(row.value);this.check(signal);return value;
+  if(!key(identifier))throw new AppError('INVALID');this.check(signal);const collection=this.collection(id);
+  return this.useRoots([collection.keys],async()=>{
+   const entry=await this.index.find({root:collection.keys},identifier);if(!entry){this.check(signal);return null;}
+   const row=await this.row(entry.revision,collection,{signal});if(row.key!==identifier)fail();const value=await this.tree.read(row.value);this.check(signal);return value;
+  });
  }
  async has(id,identifier,{signal}={}){
-  if(!key(identifier))throw new AppError('INVALID');this.check(signal);const entry=await this.blocks.withSignal(signal,()=>this.index.find({root:this.collection(id).keys},identifier));this.check(signal);return entry!==null;
+  if(!key(identifier))throw new AppError('INVALID');this.check(signal);const root=this.collection(id).keys;return this.useRoots([root],async()=>{const entry=await this.blocks.withSignal(signal,()=>this.index.find({root},identifier));this.check(signal);return entry!==null;});
  }
  async position(id,identifier,{index=null,prefix='',reverse=false,signal}={}){
   if(!key(identifier))throw new AppError('INVALID');
   return this.blocks.withSignal(signal,async()=>{
-   const query=this.query(id,this.snapshot(id),{index,prefix,reverse,signal}),entry=await this.index.find({root:query.collection.keys},identifier);if(!entry){this.check(signal);return null;}
+   const query=this.query(id,this.snapshot(id),{index,prefix,reverse,signal});return this.useRoots([query.root,query.collection.keys],async()=>{
+   const entry=await this.index.find({root:query.collection.keys},identifier);if(!entry){this.check(signal);return null;}
    const row=await this.row(entry.revision,query.collection,{signal});if(row.key!==identifier)fail();
    const ordered=index===null?ordinal(row.position):index==='key'?identifier:row.indexes[index]===undefined?null:indexKey(row.indexes[index],identifier);
    if(ordered===null||prefix&&!ordered.startsWith(prefix))return null;
    if((await this.index.find({root:query.root},ordered))?.revision!==entry.revision)fail();
    const {start,end}=await this.bounds(query),position=await this.index.rank({root:query.root},ordered);this.check(signal);return reverse?end-position-1:position-start;
+   });
   });
  }
  snapshot(id){const collection=this.collection(id);return {collection:structuredClone(collection),binding:this.binding??digest(serialize({owner:ownerIdentity(this.blocks.owner),id,collection}))};}
@@ -83,7 +91,7 @@ class PublicationDocumentReader{
  async bounds(query){
   const start=query.prefix?await this.index.rank({root:query.root},query.prefix):0,next=query.prefix?upper(query.prefix):null,end=next===null?(query.root?.count??0):await this.index.rank({root:query.root},next);return {start,end,total:end-start};
  }
- page(query){return this.blocks.withSignal(query.signal,()=>this.pageValues(query));}
+ page(query){return this.useRoots([query.root],()=>this.blocks.withSignal(query.signal,()=>this.pageValues(query)));}
  async rowAt(query,position){
   this.check(query.signal);const entry=await this.index.entryAt({root:query.root},position);if(!entry)fail();const row=await this.row(entry.revision,query.collection,{signal:query.signal});
   if(query.index===null?entry.id!==ordinal(row.position):query.index==='key'?entry.id!==row.key:entry.id!==indexKey(row.indexes[query.index],row.key))fail();
@@ -99,13 +107,16 @@ class PublicationDocumentReader{
  }
  async window(id,options={}){return this.page(this.query(id,this.snapshot(id),options));}
  async *iterate(id,options,values){
-  const query=this.query(id,this.snapshot(id),options),{start,end,total}=await this.blocks.withSignal(query.signal,()=>this.bounds(query));
-  for(let at=query.offset;at<total;at++){
-   const item=await this.blocks.withSignal(query.signal,async()=>{
-    const row=await this.rowAt(query,query.reverse?end-1-at:start+at);if(!values)return row.key;
-    const value=await this.tree.read(row.value);this.check(query.signal);return {key:row.key,value};
-   });this.check(query.signal);yield item;
-  }
+  const query=this.query(id,this.snapshot(id),options),release=this.pinRoots([query.root]);
+  try{
+   const {start,end,total}=await this.blocks.withSignal(query.signal,()=>this.bounds(query));
+   for(let at=query.offset;at<total;at++){
+    const item=await this.blocks.withSignal(query.signal,async()=>{
+     const row=await this.rowAt(query,query.reverse?end-1-at:start+at);if(!values)return row.key;
+     const value=await this.tree.read(row.value);this.check(query.signal);return {key:row.key,value};
+    });this.check(query.signal);yield item;
+   }
+  }finally{release();}
  }
  items(id,options={}){return this.iterate(id,options,true);}
  keys(id,options={}){return this.iterate(id,options,false);}
@@ -117,7 +128,14 @@ export class PublicationDocumentBuilder extends PublicationDocumentReader{
  }
  constructor(workspace,{owner,collections,write,signal,expectedOwner}={}){
   if(!validPublicationDocumentOwner(owner))throw new AppError('INVALID');bindWorkspace(workspace,owner,expectedOwner);
-  const blocks=new PublicationDocumentBlocks(workspace,owner,{write,signal});super(blocks,collectionSchema(ownPublicationJSON(collections)),null);this.finished=false;this.busy=false;
+  const blocks=new PublicationDocumentBlocks(workspace,owner,{write,signal});super(blocks,collectionSchema(ownPublicationJSON(collections)),null);this.finished=false;this.busy=false;this.pendingChanges=0;
+ }
+ async flushIndexes(extra=[],{signal}={}){
+  const roots=[...Object.values(this.collections).flatMap(collectionRoots),...extra,...[...this.snapshots].flat()];
+  await this.index.flushRoots(roots,{signal});this.pendingChanges=0;
+ }
+ async boundIndexes(next,signal){
+  if(this.index.pending.size>=512||this.index.pendingBytes>=4*1024*1024)await this.flushIndexes(collectionRoots(next),{signal});
  }
  change(id,identifier,value,{indexes={},signal}={},replace){return this.blocks.withSignal(signal,()=>this.changeValue(id,identifier,value,{indexes,signal},replace));}
  async changeValue(id,identifier,value,{indexes={},signal}={},replace){
@@ -131,14 +149,17 @@ export class PublicationDocumentBuilder extends PublicationDocumentReader{
    const position=previous?.position??collection.count;if(!natural(position+1))throw new AppError('LIMIT');
    const row={key:identifier,position,value:await this.tree.retain(owned),indexes:ownedIndexes},revision=await this.tree.retain(row),next=structuredClone(collection);
    next.count=collection.count+(previous?0:1);
-   next.keys=await this.index.change(collection.keys,identifier,revision);await this.index.flush(next.keys);
-   next.order=await this.index.change(collection.order,ordinal(position),revision);await this.index.flush(next.order);
+   next.keys=await this.index.change(collection.keys,identifier,revision);await this.boundIndexes(next,signal);
+   next.order=await this.index.change(collection.order,ordinal(position),revision);await this.boundIndexes(next,signal);
    for(const index of Object.keys(collection.indexes)){
     let root=collection.indexes[index];if(previous?.indexes[index]!==undefined)root=await this.index.remove(root,indexKey(previous.indexes[index],identifier));
     if(ownedIndexes[index]!==undefined)root=await this.index.change(root,indexKey(ownedIndexes[index],identifier),revision);
-    await this.index.flush(root);next.indexes[index]=root;
+    next.indexes[index]=root;await this.boundIndexes(next,signal);
    }
-   this.check(signal);this.collections[id]=next;return {key:identifier,position};
+   // Persist the new and previous frontiers together before acknowledging a
+   // checkpoint. A failed method leaves the previous collection readable.
+   const checkpoint=this.pendingChanges+1>=32;if(checkpoint)await this.flushIndexes(collectionRoots(next),{signal});
+   this.check(signal);this.collections[id]=next;if(!checkpoint)this.pendingChanges++;return {key:identifier,position};
   }finally{this.busy=false;}
  }
  append(id,key,value,options){return this.change(id,key,value,options,false);}
@@ -147,6 +168,7 @@ export class PublicationDocumentBuilder extends PublicationDocumentReader{
  async finishValue({header={},signal}={}){
   if(this.finished||this.busy)throw new AppError('INVALID');this.check(signal);const owned=ownPublicationJSON(header);this.busy=true;
   try{
+   await this.flushIndexes([],{signal});
    const root=new RecordContainerBuilder(this.blocks,'object');
    for(const [name,value] of [['owner',this.blocks.owner],['header',owned],['collections',this.collections]]){this.check(signal);await root.add({name,value:await this.tree.retain(value)});}
    const revision=await root.finish();this.check(signal);this.finished=true;

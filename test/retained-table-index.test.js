@@ -1,3 +1,4 @@
+import '../src/storage.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {RetainedTableIndex} from '../src/retained-table-index.js';
@@ -66,4 +67,18 @@ test('packed work tables delete across branches without changing retained checkp
  assert.equal((await Array.fromAsync(tree.entries({root:checkpoint}))).length,total);
  await assert.rejects(new ComparisonTableIndex(sequences).remove(checkpoint,key(0)),{code:'INVALID'});
  assert.ok([...objects.keys()].every(name=>name.includes('/table-nodes/')));
+});
+
+
+test('multi-root flush retains shared frontiers once and rejects corrupt duplicate references',async()=>{
+ const storage=memory(),put=storage.put,writes=[];storage.put=async(kind,value)=>{const revision=await put(kind,value);writes.push(revision);return revision;};
+ const tree=new RetainedTableIndex(storage,{allowSparseBranches:true});let first=null,other=null;
+ for(let i=0;i<70;i++){first=await tree.change(first,key(i),digest(key(i)));other=await tree.change(other,'other/'+key(i),digest(key(i)));}
+ const second=await tree.change(first,key(69),digest('changed'));
+ assert.ok(tree.pendingBytes>0);await tree.flushRoots([first,second,other]);assert.equal(new Set(writes).size,writes.length);assert.equal(tree.pendingBytes,0);
+ const reader=new RetainedTableIndex(storage,{allowSparseBranches:true});assert.equal((await reader.find({root:first},key(69))).revision,digest(key(69)));assert.equal((await reader.find({root:second},key(69))).revision,digest('changed'));assert.equal((await Array.fromAsync(reader.entries({root:other}))).length,70);
+ const changed=await tree.change(second,key(0),digest('next'));
+ await assert.rejects(tree.flushRoots([changed,{...changed,count:changed.count+1}]),{code:'MATERIAL_MISSING'});
+ assert.ok(tree.pending.size>0,'An unsuccessful multi-root flush must not discard any pending frontier');
+ await tree.flushRoots([changed]);assert.equal((await reader.find({root:changed},key(0))).revision,digest('next'));
 });

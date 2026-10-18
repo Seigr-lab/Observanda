@@ -16,7 +16,7 @@ const lower=(items,key,value)=>{let start=0,end=items.length;while(start<end){co
 // Counts support direct ordinal seeks; authenticated first/last keys bound
 // every child. Checkpoints retain roots without copying unchanged pages.
 export class RetainedTableIndex{
- constructor(sequences,{namespace='table-nodes',allowSparseBranches=false}={}){this.namespace=namespace;this.allowSparseBranches=allowSparseBranches;this.sequences=sequences;this.pending=new Map();this.cache=new Map();this.cacheBytes=0;}
+ constructor(sequences,{namespace='table-nodes',allowSparseBranches=false}={}){this.namespace=namespace;this.allowSparseBranches=allowSparseBranches;this.sequences=sequences;this.pending=new Map();this.pendingBytes=0;this.cache=new Map();this.cacheBytes=0;}
  keep(ref,node){
   if(this.cache.has(ref.hash))return;const bytes=Buffer.byteLength(serialize(node));
   while(this.cache.size>=256||this.cacheBytes+bytes>4*1024*1024){const first=this.cache.keys().next().value;if(first===undefined)return;this.cacheBytes-=this.cache.get(first).bytes;this.cache.delete(first);}
@@ -39,7 +39,7 @@ export class RetainedTableIndex{
   const node=this.validate(cached??await this.sequences.read(this.namespace,ref.hash),ref);
   if(!cached)this.keep(ref,node);return node;
  }
- make(node){const ref={hash:hash(node),...describe(node)};this.validate(node,ref);this.pending.set(ref.hash,node);return ref;}
+ make(node){const ref={hash:hash(node),...describe(node)};this.validate(node,ref);if(!this.pending.has(ref.hash))this.pendingBytes+=Buffer.byteLength(serialize(node));this.pending.set(ref.hash,node);return ref;}
  pack(key,items){if(items.length<=width)return [this.make({[key]:items})];const middle=Math.floor(items.length/2);return [this.make({[key]:items.slice(0,middle)}),this.make({[key]:items.slice(middle)})];}
  async change(root,id,revision){
   if(!validTableRef(root)||!identifier(id)||!digestValue(revision))throw new AppError('INVALID');
@@ -110,9 +110,19 @@ export class RetainedTableIndex{
   root=refs[0]??null;while(root?.height>1){const node=await this.node(root);if(node.children.length!==1)break;root=node.children[0];}
   return root;
  }
- async flush(root){
-  const visit=async ref=>{if(!ref||!this.pending.has(ref.hash))return;const node=await this.node(ref);if(node.children)for(const child of node.children)await visit(child);const stored=await this.sequences.put(this.namespace,node);if(stored!==ref.hash)fail();this.keep(ref,node);};
-  await visit(root);this.pending.clear();
+ async flush(root){return this.flushRoots([root]);}
+ // A caller maintaining several roots must retain every live frontier before
+ // pruning intermediate pages. Failed writes leave all pending nodes usable.
+ async flushRoots(roots,{signal}={}){
+  const visited=new Set();
+  const visit=async ref=>{
+   signal?.throwIfAborted();if(!ref||!this.pending.has(ref.hash))return;
+   const node=await this.node(ref);if(visited.has(ref.hash))return;
+   if(node.children)for(const child of node.children)await visit(child);
+   signal?.throwIfAborted();const stored=await this.sequences.put(this.namespace,node);if(stored!==ref.hash)fail();this.keep(ref,node);visited.add(ref.hash);
+  };
+  for(const root of roots)await visit(root);
+  signal?.throwIfAborted();this.pending.clear();this.pendingBytes=0;
  }
  async find({root},id){
   while(root){const node=await this.node(root);if(node.entries){const at=lower(node.entries,'id',id);return node.entries[at]?.id===id?node.entries[at]:null;}const at=lower(node.children,'last',id);root=node.children[at]??null;}return null;
