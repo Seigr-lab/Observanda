@@ -27,7 +27,7 @@ import {figureSourceEntries,withoutFigureSources} from './web/figure-provenance.
 import {createFigureMapper} from './web/figure-import-model.js';
 import {PagedMedian} from './paged-median.js';
 import {withMaterialTraversal} from './material-traversal.js';
-import {withScratch} from './scratch-work.js';
+import {withScratch,withScratchSession} from './scratch-work.js';
 import {MaterialUploadChunks} from './material-upload-chunks.js';
 import {withWorkspaceMetadataBatch,metadataBatchIndex} from './metadata-batch.js';
 import {MaterialIndex} from './material-index.js';
@@ -662,8 +662,8 @@ export class ResearchMaterials {
    return {...listing,items:statuses,imports:await Promise.all(pending.items.map(item=>this.uploads.summary(item))),importsNext:pending.next};
   });
  }
- async releaseSources(book,selectedIds,{sourceEtag,recordHead:resolveRecordHead}={}){
-  return this.readSnapshot(async store=>{
+ async releaseSources(book,selectedIds,{sourceEtag,recordHead:resolveRecordHead,signal}={}){
+  signal?.throwIfAborted();return this.readSnapshot(async store=>{
    const snapshot=sourceEtag&&store?await store.snapshot(sourceEtag):null;
    if(snapshot&&snapshot.metadata.id!==book.id)throw new AppError('WORKSPACE_CHANGED');
    const recordHead=async id=>{
@@ -680,9 +680,11 @@ export class ResearchMaterials {
     if(await materials.workspace.storageKind()!=='catalogue'){yield* materials.headEntries();return;}
     for(const recordId of selectedIds){let cursor=null;do{const page=await materials.list({recordId,kind:'analysis',cursor});yield* page.items;cursor=page.next;}while(cursor);}
    }
-   return withMaterialTraversal(async traversal=>{
-   const reviewInputs=async(doc,recordId,figureId)=>{
-    let changed=false;await traversal.reset();
+   // Empty scopes need no traversal table. Actual reviews reuse at most two
+   // emptied temporary tables, with a fresh encryption key for each review.
+   return withScratchSession(async()=>{
+   const reviewInputs=(doc,recordId,figureId)=>withMaterialTraversal(async traversal=>{
+    let changed=false;
     await traversal.walk(this.references(doc.content),async(input,enqueue)=>{
      if(await this.externalReference(input)){changed=true;return;}
      const current=input.kind==='record'?await recordHead(input.id):(await this.current(input.id))?.revision;
@@ -690,14 +692,15 @@ export class ResearchMaterials {
      if(input.kind!=='record')for await(const nested of this.index.iterInputs(input))await enqueue(nested);
     });
     if(changed)warnings.push({recordId,figureId,reason:'inputs'});
-   };
+   },{signal});
    for(const record of book.entries.filter(r=>selectedIds.includes(r.id)))for(const {figure,ref} of figureSourceEntries(record.figures)){
-    const doc=await this.read(ref);if(!doc.content.figure)fail('ANALYSIS_INVALID');
+    signal?.throwIfAborted();const doc=await this.read(ref);if(!doc.content.figure)fail('ANALYSIS_INVALID');
     sources.push({recordId:record.id,figureId:figure.id,label:figure.title,analysis:ref});
     if(!sameFigureCalculation(figure,doc.content.figure))warnings.push({recordId:record.id,figureId:figure.id,reason:'edited'});
     await reviewInputs(doc,record.id,figure.id);
    }
    for await(const head of heads()){
+    signal?.throwIfAborted();
     if(head.kind!=='analysis'||!head.figureId||!selectedIds.includes(head.recordId))continue;
     const record=book.entries.find(e=>e.id===head.recordId),figure=record?.figures.find(f=>f.id===head.figureId);if(!figure||figure.source)continue;
     let reference={kind:head.kind,id:head.id,revision:head.revision},doc;
@@ -709,6 +712,7 @@ export class ResearchMaterials {
     await reviewInputs(doc,record.id,figure.id);
    }
    for(const record of book.entries.filter(r=>selectedIds.includes(r.id))){
+    signal?.throwIfAborted();
     const preparations=new Map((record.attempt?.preparations??[]).map(preparation=>[preparation.id,preparation]));
     for(const result of record.results?.statements??[])if(result.source){
      const reference=materialReference(result.source),doc=await this.read(reference);sources.push({recordId:record.id,resultId:result.id,label:result.title,analysis:reference});

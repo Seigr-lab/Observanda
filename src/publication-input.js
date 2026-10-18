@@ -47,7 +47,7 @@ export async function retainPublicationInput(workspace,id,metadata,originals,{so
   await builder.append('records',descriptor.id,descriptor,{indexes:publicationRecordIndexes(descriptor,position,notebook.projectId)});
   await builder.append('recordPositions',descriptor.id,{position});await retainPublicationAliases(builder,'record',descriptor,metadata.id);
   if(proseReferences(record.body).length)await builder.append('linkedCards',descriptor.id,{id:descriptor.id});
-  const released=await materials.releaseSources({...metadata,entries:[record]},[record.id],{sourceEtag,recordHead});
+  const released=await materials.releaseSources({...metadata,entries:[record]},[record.id],{sourceEtag,recordHead,signal});
   for(const source of released.sources){const key=metadata.id+'/'+String(builder.count('sourceMaterials')).padStart(16,'0');await builder.append('sourceMaterials',key,{workspaceId:metadata.id,source},{indexes:{owner:metadata.id+'/'}});if(source.figureId)review.retainedFigures++;}
   for(const warning of released.warnings){if(warning.reason==='inputs')review.changedInputs++;if(warning.reason==='edited')review.editedFigures++;}
   await onRecord?.(descriptor);return descriptor;
