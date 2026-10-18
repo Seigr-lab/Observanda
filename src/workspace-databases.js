@@ -1,3 +1,4 @@
+import {startManagedPostgres} from './postgres-runtime.js';
 import {startScratchPostgres} from './scratch-postgres.js';
 import path from 'node:path';
 import {mkdir,readFile,realpath} from 'node:fs/promises';
@@ -30,6 +31,18 @@ export class WorkspaceDatabases{
   if(binding&&binding.placement!=='workspace')throw new AppError('ACCESS_UPGRADE');
   if(!vault?.key)return this.instances.cached(root);
   return this.instances.open(root,vault,{create:create||!binding});
+ }
+ // A deletion may address an installation-wide catalogue from an older
+ // version. Reopen that existing cluster only; never create its replacement.
+ async deletionEnvironment(root,{vault}={}){
+  if(this.closing)throw new AppError('DATABASE_CANCELLED');
+  const binding=await catalogueBinding(await realpath(root));
+  if(binding?.version!==1)return this.environment(root,{vault});
+  this.legacyStart??=(async()=>{
+   const env={...this.env},service=await startManagedPostgres({directory:this.directory,env,signal:this.signal,onProgress:this.onProgress,existingOnly:true});
+   return {env,service};
+  })().catch(error=>{this.legacyStart=null;throw error;});
+  return (await this.legacyStart).env;
  }
  async acquireEnvironment(root,options={}){
   if(this.closing)throw new AppError('DATABASE_CANCELLED');
@@ -81,6 +94,7 @@ export class WorkspaceDatabases{
     Promise.resolve().then(()=>this.projects.close()),
     Promise.resolve().then(()=>this.labBooks.close()),
     (async()=>{const owner=await this.scratchStart?.catch(()=>null);await owner?.service.close();})(),
+    (async()=>{const owner=await this.legacyStart?.catch(()=>null);await owner?.service.close();})(),
    ]);}finally{this.detach?.();}
    const failed=closed.find(result=>result.status==='rejected');if(failed)throw failed.reason;
   })();

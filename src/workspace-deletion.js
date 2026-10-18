@@ -1,3 +1,4 @@
+import {workspaceDeletionStorage,deletionDatabaseEnvironment} from './workspace-deletion-storage.js';
 import {assertInventoryObligationsSettled} from './inventory-obligation-lifecycle.js';
 import {assertRenameDatabaseOwners} from './workspace-rename-inventory.js';
 import {WorkspaceProjectDeletion} from './workspace-project-deletion.js';
@@ -58,12 +59,12 @@ export class WorkspaceDeletions extends OwnedStorageDeletions{
     this.owners=new WorkspaceProjectDeletion(workspace);await this.owners.prepare(options.withProject,options.withBook);
     if(this.owners.revision!==review.projectRegistryRevision||serialize(this.owners.projects.map(item=>item.relative).sort())!==serialize(review.projectDirectories))throw new AppError('CONFLICT');
    }
-   return await super.begin(workspace,review,options);
+   return await super.begin(await workspaceDeletionStorage(workspace),review,options);
   }finally{this.owners?.close();this.owners=null;}
  }
  finish(id,options){return this.command?super.finish(id,options):new WorkspaceDeletions(this.directory,{command:true}).finish(id,options);}
 
- async review(workspace,options){const plan=await super.review(workspace,options);return {...plan,title:workspaceFolderName(plan.source)};}
+ async review(workspace,options){const plan=await super.review(await workspaceDeletionStorage(workspace),options);return {...plan,title:workspaceFolderName(plan.source)};}
  binding(root){return catalogueBinding(root);}
  validBinding(value){return value===null||/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value?.id??'')&&[1,2].includes(value?.version);}
  ready(workspace,binding){return readyForDeletion(workspace,binding);}
@@ -78,7 +79,7 @@ export class WorkspaceDeletions extends OwnedStorageDeletions{
    try{const service=JSON.parse(bytes.toString());if(service.workspaceId!==vault.id||service.running!==false)throw new AppError('DATABASE_WORKSPACE_RUNNING');}finally{bytes.fill(0);}
   }finally{await databaseLease.close();}
  }else if(value.binding&&!value.databaseRemoved){
-  const env=databaseProvider()?await databaseProvider().environment(root,{vault}):undefined;
+  const env=await deletionDatabaseEnvironment(root,vault);
   let db;
   try{
    db=await openCatalogue(root,{detached:true,deleteId:id,env});

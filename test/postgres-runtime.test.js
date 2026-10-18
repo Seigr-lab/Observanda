@@ -134,3 +134,12 @@ test('managed readiness admits a slow initial handshake within its startup budge
  await verifyManagedApplication({port:proxy.address().port,appPassword:decodeURIComponent(url.password)},{signal:AbortSignal.timeout(15000)});
  assert.ok(performance.now()-started>=5500);
 });
+
+
+test('existing-only database access never initializes a missing cluster',async t=>{
+ const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-existing-runtime-')),directory=path.join(parent,'absent'),env=environment();
+ t.after(()=>rm(parent,{recursive:true,force:true}));
+ await assert.rejects(startManagedPostgres({directory,env,existingOnly:true}),{code:'ENOENT'});
+ await assert.rejects(readFile(path.join(directory,'service.observanda')),{code:'ENOENT'});
+ assert.equal(env.OBSERVANDA_DATABASE_URL,undefined);
+});

@@ -140,11 +140,12 @@ export function stopManagedPostgres(options){
  if(!options?.workspace||!/^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/.test(options.workspace.deleteId??options.workspace.renameId??options.workspace.moveId??''))throw new AppError('STORAGE_DELETE_STATE');
  return managePostgres({...options,stopOnly:true});
 }
-async function managePostgres({directory,env=process.env,signal,onProgress=()=>{},workspace=null,runtimeDirectory=null,stopOnly=false}){
+async function managePostgres({directory,env=process.env,signal,onProgress=()=>{},workspace=null,runtimeDirectory=null,stopOnly=false,existingOnly=false}){
  if(env.OBSERVANDA_DATABASE_URL){if(stopOnly)throw new AppError('DATABASE_LOCATION');return {managed:false,close:async()=>{}};}
  if(process.getuid?.()===0)throw new AppError('DATABASE_TOOLS');
  const sharedBuffers=stopOnly?64:managedSharedBuffers(env);
  directory=path.resolve(directory);
+ if(existingOnly){await assertRegular(directory,{directory:true});await assertRegular(path.join(directory,'service.observanda'));await assertRegular(path.join(directory,'data','PG_VERSION'));}
  if(workspace){
   const root=await realpath(workspace.root);await assertRegular(path.join(root,'.observanda'),{directory:true});
   if(directory!==path.join(root,'.observanda','postgresql')||!Buffer.isBuffer(workspace.vault?.key)||workspace.vault.key.length!==32||!/^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/.test(workspace.vault.id??'')||!/^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/.test(workspace.ownerId??''))throw new AppError('DATABASE_LOCATION');
@@ -178,7 +179,7 @@ async function managePostgres({directory,env=process.env,signal,onProgress=()=>{
    if(workspace&&config.running&&(config.ownerId!==workspace.ownerId||config.activeDirectory!==directory))throw new AppError('DATABASE_WORKSPACE_RUNNING');
    config.bin=await compatibleManagedRuntime(config,env.OBSERVANDA_POSTGRES_BIN,version);
   }else{
-   if(stopOnly||await assertRegular(data,{directory:true,missing:true}))throw new AppError('DATABASE_RUNTIME');
+   if(existingOnly||stopOnly||await assertRegular(data,{directory:true,missing:true}))throw new AppError('DATABASE_RUNTIME');
    let runtime;
    if(workspace){
     runtime=await findPostgres(env);
@@ -186,6 +187,7 @@ async function managePostgres({directory,env=process.env,signal,onProgress=()=>{
    }else runtime=await install(runtimeDirectory??directory,{env,signal,onProgress});
    config={format:1,...runtime,phase:'initializing',port:await freePort(),adminPassword:randomBytes(32).toString('hex'),appPassword:randomBytes(32).toString('hex'),...(workspace?{workspaceId:workspace.vault.id,ownerId:workspace.ownerId,running:false,activeDirectory:null}:{})};await save();
   }
+  if(existingOnly&&config.phase!=='ready')throw new AppError('DATABASE_RUNTIME');
   const stage=path.join(directory,'cluster-staging');
   if(!await assertRegular(data,{directory:true,missing:true})){
    if(stopOnly){
