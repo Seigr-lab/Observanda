@@ -23,6 +23,7 @@ import {recordDocumentSummary} from './record-document-summary.js';
 import {stageRecordOwnerRevision} from './record-owner-read-visibility.js';
 import {withScratch} from './scratch-work.js';
 import {ResearchMaterials} from './research-materials.js';
+import {withMetadataBatch} from './metadata-batch.js';
 import {reconcileWebsiteMembership} from './website-membership.js';
 const same=(a,b)=>serialize(a)===serialize(b),now=()=>new Date().toISOString();
 const terminal=value=>value.phase==='complete'||value.phase==='cancelled'&&value.progress.reclamation?.state!=='pending';
@@ -132,7 +133,7 @@ export class RecordOwnerTransfer{
   const write=async operation=>{
    await checked();return this.target.withLock(()=>this.target.catalogue(async store=>{
     const saved=await readRecordOwnerTransfer(store,id);if(!saved||saved.fingerprint!==value.fingerprint||saved.phase==='cancelled')throw new AppError('CONFLICT');
-    return withRecordOwnerTransferWrite(store,saved,()=>operation(store));
+    return withRecordOwnerTransferWrite(store,saved,()=>withMetadataBatch(store,()=>operation(store)));
    }));
   };
   await checked();
