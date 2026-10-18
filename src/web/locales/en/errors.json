@@ -332,5 +332,6 @@
   "PDF_GLYPH": "A selected font cannot display some characters. Choose a font that includes them.",
   "PDF_UNRESOLVED_FIGURE": "This document contains a figure that has not been included in the PDF.",
   "PDF_UNRESOLVED_REFERENCE": "This document contains an internal reference that needs a PDF destination.",
-  "PDF_UNSUPPORTED_CONTENT": "This document contains content that the PDF renderer does not support yet."
+  "PDF_UNSUPPORTED_CONTENT": "This document contains content that the PDF renderer does not support yet.",
+  "PDF_EQUATION": "An equation could not be typeset. Check its source before exporting."
 }

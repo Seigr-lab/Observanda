@@ -39,3 +39,12 @@ test('PDF font preflight rejects unsupported glyphs and accepts an explicit Arab
  const h=header();await assert.rejects(embedPdfFonts(await compilePdfDocument(h,[section('\u6587\u5b57')])),{code:'PDF_GLYPH'});
  h.layout.font='aref-ruqaa-ink';h.direction='rtl';h.language='ar';const arabic=section('\u0645\u0631\u062d\u0628\u0627 \u0628\u0627\u0644\u0639\u0627\u0644\u0645');arabic.title='';const output=await embedPdfFonts(await compilePdfDocument(h,[arabic]));assert.match(output.html,/dir="rtl"/);assert.ok(output.fontBytes>0);
 });
+
+
+test('PDF equations and sketches embed offline assets and reject unsafe or unsupported equation source',async()=>{
+ const math={type:'book_equation',attrs:{version:1,id:randomUUID(),source:String.raw`x = \frac{1}{2} + \sqrt{4}`,label:'A retained equation'}},sketch={type:'book_sketch',attrs:{version:1,id:randomUUID(),title:'Circuit',description:'A line from the measured point.',width:400,height:200,background:'#ffffff',items:[{id:randomUUID(),kind:'text',colour:'#172332',x:20,y:30,text:'9007199254740993',size:20}]}};
+ const compiled=await compilePdfDocument(header(),[section({type:'doc',content:[math,sketch]})]),embedded=await embedPdfFonts(compiled);
+ assert.equal(compiled.equations,true);assert.match(embedded.html,/data:font\/woff2;base64,/);assert.doesNotMatch(embedded.html,/url\(fonts\//);assert.match(embedded.html,/<svg/);assert.match(embedded.html,/9007199254740993/);assert.doesNotMatch(embedded.html,/figure-reading-control|katex-error/);
+ for(const source of [String.raw`\unknowncommand{1}`,String.raw`\href{https://example.org}{x}`])await assert.rejects(compilePdfDocument(header(),[section({type:'doc',content:[{...math,attrs:{...math.attrs,source}}]})]),{code:'PDF_EQUATION'});
+ await assert.rejects(embedPdfFonts(compiled,{maxFontBytes:100}),{code:'PDF_CAPACITY'});
+});

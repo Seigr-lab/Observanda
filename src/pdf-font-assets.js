@@ -1,3 +1,4 @@
+import {pdfEquationAssets} from './pdf-content-blocks.js';
 import {create} from 'fontkit';
 import {readFile} from 'node:fs/promises';
 import {BUNDLED_FONTS,faceCSS} from './web/font-catalogue.js';
@@ -19,5 +20,6 @@ export async function embedPdfFonts(compiled,{signal,maxFontBytes=32*1024*1024}=
   }
   const missing=(compiled.glyphs?.[id]??[]).filter(point=>!available.has(point));if(missing.length)throw new PdfLayoutError('PDF_GLYPH',[id,...missing.map(point=>'U+'+point.toString(16).toUpperCase())]);
  }
+ if(compiled.equations){const math=await pdfEquationAssets({signal,maxBytes:maxFontBytes-total});styles.push(math.css);total+=math.bytes;}
  signal?.throwIfAborted();return {...compiled,html:compiled.html.replace('</head>','<style>'+styles.join('\n')+'</style></head>'),fontBytes:total};
 }
