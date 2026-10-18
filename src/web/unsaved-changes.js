@@ -1,11 +1,20 @@
 // One decision before leaving an editing context. The original screen/form stays mounted.
-export function unsavedChanges({esc,changes,save,discard,busy,notify,prepare,defaultScope='all'}) {
+export function unsavedChanges({esc,changes,save,discard,busy,notify,flush,prepare,defaultScope='all'}) {
   const dialog=document.createElement('dialog');dialog.id='leave-dialog';dialog.setAttribute('aria-labelledby','leave-title');document.body.append(dialog);
   let active=false,work=null,generation=0,preparing=null;
   async function run(next,{scope=defaultScope}={}){
     if(active)return false;
     const request=++generation;
     if(busy()){notify('Wait for the current operation to finish before leaving.',true);return false;}
+    // Automatic editors commit their pending input before evaluating manual
+    // drafts. A failed save leaves the editor and its input in place.
+    if(flush){
+      preparing=request;
+      try{await flush(scope);}catch(error){if(request!==generation)return false;throw error;}
+      finally{if(preparing===request)preparing=null;}
+      if(request!==generation)return false;
+      if(busy()){notify('Wait for the current operation to finish before leaving.',true);return false;}
+    }
     // A draft without a durable checkpoint needs an immediate decision. Its
     // queued write must not hide Stay or Discard behind preparation. Already
     // retained drafts may prepare a return token without applying their edits.

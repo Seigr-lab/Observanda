@@ -87,6 +87,7 @@ export function moduleWorkbench(services){
   },
   input(element){return state.page==='module'&&available()&&active()?.input?.(element)||false;},
   async submit(form,data){if(state.page!=='module'||!form.hasAttribute('data-module-form'))return false;if(available())await active()?.submit?.(form,data);return true;},
+  async flushAutosave(){for(const instance of instances.values())await instance.flushAutosave?.();},
   needsNavigationGuard:()=>[...instances.values()].some(m=>m.needsNavigationGuard?.()??m.isDirty?.()),
   isDirty:()=>[...instances.values()].some(m=>m.isDirty?.()),
   async save(){for(const m of instances.values())if(m.isDirty?.())await m.save();},

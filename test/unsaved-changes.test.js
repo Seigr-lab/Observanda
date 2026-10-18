@@ -12,7 +12,7 @@ function fixture(t,options={}){
  const previous=globalThis.document;globalThis.document={createElement:()=>dialog,body:{append(){}}};t.after(()=>{globalThis.document=previous;});
  const state={labels:[],busy:false,navigations:[],messages:[],writes:[],preparations:[]};
  const guard=unsavedChanges({esc:value=>value,defaultScope:'navigation',changes:scope=>({labels:[...state.labels],forms:[scope],canSave:true}),busy:()=>state.busy,notify:message=>state.messages.push(message),
-  prepare:scope=>{state.preparations.push(scope);return options.prepare?.(scope);},
+  flush:options.flush,prepare:scope=>{state.preparations.push(scope);return options.prepare?.(scope);},
   save:async(...args)=>{state.writes.push('save');return options.save?.(...args);},discard:async(...args)=>{state.writes.push('discard');return options.discard?.(...args);}});
  const choose=choice=>{const button=buttons.get(choice);assert.ok(button);assert.equal(button.disabled,false);return dialog.onclick({target:{closest:()=>button}});};
  const escape=()=>dialog.oncancel({preventDefault(){}});
@@ -65,4 +65,22 @@ for(const choice of ['save','discard'])for(const exit of ['stay','escape'])test(
 test('a new busy operation cannot be bypassed by completed preparation',async t=>{
  const checkpoint=deferred(),f=fixture(t,{prepare:()=>checkpoint.promise}),leaving=f.run();f.state.busy=true;checkpoint.resolve();
  assert.equal(await leaving,false);assert.equal(f.dialog.open,false);assert.equal(f.state.messages.length,1);assert.deepEqual(f.state.navigations,[]);
+});
+
+
+test('automatic changes save before navigation without a manual confirmation',async t=>{
+ const write=deferred(),f=fixture(t,{flush:()=>write.promise});f.state.labels=['Automatic edits'];const leaving=f.run();
+ assert.equal(f.dialog.open,false);assert.equal(f.guard.canLeaveImmediately(),false);assert.deepEqual(f.state.navigations,[]);
+ f.state.labels=[];write.resolve();assert.equal(await leaving,true);assert.deepEqual(f.state.navigations,['next']);assert.equal(f.dialog.open,false);
+});
+
+test('a failed automatic save keeps the current screen and its unsaved input',async t=>{
+ const write=deferred(),f=fixture(t,{flush:()=>write.promise});f.state.labels=['Automatic edits'];const leaving=f.run(),failure=Error('Save unavailable');
+ const rejected=assert.rejects(leaving,error=>error===failure);write.reject(failure);await rejected;
+ assert.equal(f.dialog.open,false);assert.equal(f.guard.canLeaveImmediately(),false);assert.deepEqual(f.state.navigations,[]);assert.deepEqual(f.state.labels,['Automatic edits']);
+});
+
+test('only the latest navigation runs after a shared automatic save',async t=>{
+ const write=deferred(),f=fixture(t,{flush:()=>write.promise});f.state.labels=['Automatic edits'];const older=f.run('old'),newer=f.run('new');
+ f.state.labels=[];write.resolve();assert.equal(await older,false);assert.equal(await newer,true);assert.deepEqual(f.state.navigations,['new']);
 });

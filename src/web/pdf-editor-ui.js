@@ -84,5 +84,5 @@ export async function pdfEditorUI({state,api,esc,render,notify}){
   if(el.hasAttribute('data-pdf-custom')){section.layout=el.checked?structuredClone(selected.header.layout):null;change('section');draw();return true;}return false;
  }
  canRender=(await post('capabilities')).render;await activate();
- return {activate,view,action,input,bind:()=>{docs.bind(root()??document);status();},isDirty:()=>dirty()||saving!==null,needsNavigationGuard:()=>!!error&&dirty(),save,discard:async()=>{clearTimeout(timer);if(saving)await saving.catch(()=>{});retry=null;headerDirty=sectionDirty=0;await load(state.modulePath??'');draw();},deactivate(){docs.release();rendering?.abort();},dispose(){disposed=true;clearTimeout(timer);rendering?.abort();docs.release();clearPreview();if(dirty())void save().catch(()=>{});}};
+ return {activate,view,action,input,bind:()=>{docs.bind(root()??document);status();},isDirty:()=>dirty()||saving!==null,needsNavigationGuard:()=>dirty()||saving!==null,flushAutosave:save,save,discard:async()=>{clearTimeout(timer);if(saving)await saving.catch(()=>{});retry=null;headerDirty=sectionDirty=0;await load(state.modulePath??'');draw();},deactivate(){docs.release();rendering?.abort();},dispose(){disposed=true;clearTimeout(timer);rendering?.abort();docs.release();clearPreview();if(dirty())void save().catch(()=>{});}};
 }
