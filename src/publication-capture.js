@@ -19,6 +19,9 @@ import {withoutWriterWait} from './writer-wait.js';
 // Bound active captures before opening readers so a burst cannot occupy every
 // database admission slot and starve the writes needed to finish those reads.
 const admission=new DatabaseAdmission({limit:4});
+// Amortize durable commit cost while retaining the existing input byte bound.
+// Metadata rows retain their smaller SQL batches inside this transaction.
+const captureObjects=128,captureBytes=256*1024;
 const captures='.observanda/release-captures';
 const input=id=>'.observanda/release-inputs/'+id;
 const journal=id=>captures+'/'+id+'.json';
@@ -35,7 +38,7 @@ async function discard(workspace,id,write){
  // Each committed deletion advances the next bounded page. A failed cleanup
  // retains its journal so the next preparation can finish it after a restart.
  for(;;){const removed=await write(async()=>{
-  const names=[];for await(const name of workspace.metadataNames(input(id))){names.push(name);if(names.length===32)break;}
+  const names=[];for await(const name of workspace.metadataNames(input(id))){names.push(name);if(names.length===captureObjects)break;}
   for(const name of names){if(!isPublicationDocumentBlockName(name)&&(!/^[a-f0-9-]{36}\.json$/.test(name)||!researchId(name.slice(0,-5))))throw new AppError('JOB_DAMAGED');await workspace.removeMetadata(input(id)+'/'+name);}
   return names.length;
  });if(!removed)break;}
@@ -95,9 +98,9 @@ async function capture(workspace,operation,{signal,write=fn=>transaction(workspa
     // a later federated identity must never replace an already pinned input.
     const node=file.startsWith(prefix)&&isPublicationDocumentBlockName(file.slice(prefix.length));
     if(!await written.add(file,node?text:null))throw new AppError('PUBLICATION_IDENTITY');
-    const size=Buffer.byteLength(text);if(pending.size>=32||bytes+size>256*1024)await flush();
+    const size=Buffer.byteLength(text);if(pending.size>=captureObjects||bytes+size>captureBytes)await flush();
     bytes-=Buffer.byteLength(pending.get(file)??'');pending.set(file,text);bytes+=size;
-    if(bytes>=256*1024)await flush();
+    if(bytes>=captureBytes)await flush();
    };
    if(method==='readMetadata')return async(file,limit)=>{
     if(!retained(file))return target.readMetadata(file,limit);

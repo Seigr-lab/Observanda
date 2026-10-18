@@ -13,6 +13,8 @@ import {ResearchCatalogue} from '../src/research-catalogue.js';
 import {ResearchRecords,recordRevision} from '../src/research.js';
 import {MediaStore} from '../src/media.js';
 import {PublicationJobs} from '../src/publication-jobs.js';
+import {withPublicationCapture} from '../src/publication-capture.js';
+import {withWorkspaceMetadataBatch} from '../src/metadata-batch.js';
 import {openPublicationInput} from '../src/publication-input-reader.js';
 import {openPublicationOutput} from '../src/publication-output.js';
 import {readPublicationRecord} from '../src/publication-input.js';
@@ -46,6 +48,31 @@ function intercept(t,workspace,operation){
  ResearchCatalogue.prototype.record=async function(...args){const record=await original.apply(this,args);if(this.workspace.root===workspace.root)await operation(++count,record);return record;};
  t.after(()=>{ResearchCatalogue.prototype.record=original;});return ()=>{ResearchCatalogue.prototype.record=original;};
 }
+
+test('capture combines small objects into bounded durable batches and retains exact Unicode bodies',{timeout:120000},async t=>{
+ const f=await fixture(t),batches=[],expected=new Map(),writeMetadata=f.workspace.writeMetadata;let active;
+ f.workspace.writeMetadata=async function(file,text){if(active&&file.includes('/release-inputs/'))active.push(Buffer.byteLength(text));return writeMetadata.call(this,file,text);};
+ const write=operation=>f.workspace.withLock(()=>withWorkspaceMetadataBatch(f.workspace,async()=>{
+  active=[];try{const result=await operation();if(active.length)batches.push(active);return result;}finally{active=null;}
+ }));
+ let captureId;
+ try{await withPublicationCapture(f.storage,async(storage,id,commit)=>{
+  captureId=id;
+  for(let index=0;index<134;index++){
+   const file='.observanda/release-inputs/'+id+'/'+randomUUID()+'.json',text=JSON.stringify({text:index<130?'Small retained body '+index:'Observation \u00e6 \u03bb \ud83d\udd2c '.repeat(4000)});
+   expected.set(file,text);await storage.writeMetadata(file,text);assert.equal(await storage.readMetadata(file,256*1024),text);
+  }
+  await commit(async()=>{});
+ },{write});}finally{f.workspace.writeMetadata=writeMetadata;}
+ t.diagnostic(JSON.stringify({batches:batches.map(batch=>({objects:batch.length,bytes:batch.reduce((sum,size)=>sum+size,0)}))}));
+ assert.ok(batches.length<=4,'Small retained objects should share durable commits');
+ assert.equal(batches.reduce((sum,batch)=>sum+batch.length,0),expected.size);
+ for(const batch of batches){assert.ok(batch.length<=128);assert.ok(batch.reduce((sum,size)=>sum+size,0)<=256*1024);}
+ const reopened=websiteWorkspace(new Workspace(f.workspace.root,f.vault),f.ids[0]);
+ assert.equal((await reopened.listMetadata('.observanda/release-inputs/'+captureId)).length,expected.size);
+ for(const [file,text] of expected)assert.equal(await reopened.readMetadata(file,256*1024),text);
+ assert.deepEqual(await reopened.listMetadata('.observanda/release-captures'),[]);
+});
 
 test('publication capture permits authoring and another preparation while retaining a fixed source',{timeout:120000},async t=>{
  const f=await fixture(t);let arrive,resume,waiting=true;
