@@ -20,6 +20,21 @@ const generator='Observanda 0.3.0-dev';
 const freshBlocks=Symbol('fresh publication output blocks');
 const streamed=value=>value!==null&&typeof value==='object'&&typeof value[Symbol.asyncIterator]==='function'&&!(value instanceof FileContent);
 const stale=()=>{throw new AppError('STALE');};
+const htmlChunkBytes=64*1024;
+// Preserve fragment encoding while avoiding a filesystem write for every HTML
+// tag. A yielded buffer is never reused, and upstream is closed on cancellation.
+export async function* publicationOutputChunks(source,{signal}={}){
+ signal?.throwIfAborted();let buffer=null,used=0;
+ for await(const chunk of source){
+  signal?.throwIfAborted();const bytes=Buffer.from(chunk);
+  for(let offset=0;offset<bytes.length;){
+   signal?.throwIfAborted();buffer??=Buffer.allocUnsafe(htmlChunkBytes);
+   const count=Math.min(htmlChunkBytes-used,bytes.length-offset);bytes.copy(buffer,used,offset,offset+count);offset+=count;used+=count;
+   if(used===htmlChunkBytes){yield buffer;signal?.throwIfAborted();buffer=null;used=0;}
+  }
+ }
+ signal?.throwIfAborted();if(used)yield buffer.subarray(0,used);
+}
 export const publicationOutputOwner=(source,job)=>({kind:'output',workspaceId:source.workspaceId??source.metadata.id,websiteId:source.websiteId??null,jobId:job.id,attemptId:job.lease.token});
 export async function openPublicationOutput(workspace,stored,{signal}={}){
  const owner={kind:'output',workspaceId:stored.workspaceId,websiteId:stored.websiteId??null,jobId:stored.jobId,attemptId:stored.attempt};
@@ -30,7 +45,7 @@ export async function openPublicationOutput(workspace,stored,{signal}={}){
 // A new attempt owns an empty namespace. Its immutable node receipts live in
 // bounded encrypted scratch storage until preparation completes or fails.
 export function withPublicationOutputWriter(workspace,source,job,options,operation){
- return withScratch(async blocks=>{
+ return publicationResearchWorkspace(workspace).withCatalogueConnections(()=>withScratch(async blocks=>{
   const db=await publicationResearchWorkspace(workspace).openCatalogue({signal:options?.signal});let failure;
   try{
    await db.run('BEGIN');
@@ -39,7 +54,7 @@ export function withPublicationOutputWriter(workspace,source,job,options,operati
    return await operation(new PublicationOutputWriter(workspace,source,job,{...options,[freshBlocks]:blocks}));
   }catch(error){failure=error;throw error;}
   finally{try{await db.close();}catch(error){if(!failure)throw error;}}
- },{signal:options?.signal});
+ },{signal:options?.signal}));
 }
 export class PublicationOutputWriter{
  constructor(workspace,source,job,{directory,signal,blockedValues=[],[freshBlocks]:blocks}={}){
@@ -94,7 +109,8 @@ export class PublicationOutputWriter{
   if(this.pendingNames.has(name))throw new AppError('PUBLICATION_IDENTITY');this.pendingNames.add(name);
   const index=this.nextBlob++,file=path.join(this.directory,index+'.blob');
   try{
-   const saved=await writeContent(this.workspace,file,streaming?content:contentStream(content),{signal:this.signal});
+   const chunks=streaming?(name.endsWith('.html')?publicationOutputChunks(content,{signal:this.signal}):content):contentStream(content);
+   const saved=await writeContent(this.workspace,file,chunks,{signal:this.signal});
    if(!streaming&&(saved.size!==contentSize(content)||saved.sha256!==contentHash(content)))stale();
    if(streaming)await admitRetainedPublicFile(name,new FileContent(this.workspace,file,saved.size,saved.sha256),{type,blockedValues:this.blockedValues});
    const descriptor={name,index,...saved,type,...(type==='media'?{header:content.header.toString('hex')}: {})};

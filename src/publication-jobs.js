@@ -5,7 +5,7 @@ import {RetainedPublicationFiles} from './retained-publication-files.js';
 import {openPublicationInput} from './publication-input-reader.js';
 import {validatePublicationPresentation} from './publication-input-presentation.js';
 import {validatePublicationPages} from './publication-input-pages.js';
-import {publicationWorkspace,validWebsitePin,retainedWebsitePin} from './publication-pin.js';
+import {publicationWorkspace,publicationResearchWorkspace,validWebsitePin,retainedWebsitePin} from './publication-pin.js';
 import {withPublicationCapture} from './publication-capture.js';
 import {retainPublicationSources} from './publication-source-input.js';
 import {validPublicationSources} from './web/publication-sources-model.js';
@@ -62,7 +62,10 @@ export class PublicationJobs{
    const candidate=await this.prepare(job,{signal,progress:async()=>{}});signal.throwIfAborted();
    await this.workspace.withLock(async()=>{signal.throwIfAborted();await this.commit(job,candidate);});committed=true;
    return this.read(source.reviewId);
-  }finally{await this.clean(source.id,{only:job.lease.token});if(!committed)await this.workspace.withLock(()=>removePublicationInput(this.workspace,source.id));}
+  }finally{
+   const cleanup=async()=>{await this.clean(source.id,{only:job.lease.token});if(!committed)await this.workspace.withLock(()=>withWorkspaceMetadataBatch(this.workspace,()=>removePublicationInput(this.workspace,source.id)));};
+   if(await this.workspace.storageKind()==='catalogue')await publicationResearchWorkspace(this.workspace).withCatalogueConnections(cleanup);else await cleanup();
+  }
  }
  async source(id){
   // Validate the immutable source in one owned read snapshot. Reuse an

@@ -105,6 +105,19 @@ test('aborting capture removes its committed input batches and releases its life
  await f.workspace.withStorageHandoff(async()=>{});
 });
 
+test('aborting synchronous rendering removes retained inputs and partial outputs while preserving another website',{timeout:120000},async t=>{
+ const f=await fixture(t),controller=new AbortController(),prepare=f.releases.prepare.bind(f.releases),other=await f.sites.read(f.ids[1]);let jobId,pages=0;
+ f.releases.prepare=(job,options)=>{jobId=job.id;return prepare(job,{...options,progress:async()=>{pages++;controller.abort(new AppError('WRITE_CANCELLED'));}});};
+ await assert.rejects(f.releases.inline(await publicationCommand(f.storage),{signal:controller.signal}),{code:'WRITE_CANCELLED'});
+ assert.equal(pages,1);assert.ok(jobId);
+ assert.equal(await f.storage.readMetadata('.observanda/release-inputs/'+jobId+'.json',1024),null);
+ assert.deepEqual(await f.storage.listMetadata('.observanda/release-inputs/'+jobId),[]);
+ assert.deepEqual(await f.storage.listMetadata('.observanda/release-outputs/'+jobId),[]);
+ assert.deepEqual(await f.storage.listMetadata('.observanda/release-captures'),[]);
+ assert.deepEqual((await f.sites.read(f.ids[1])).book,other.book);
+ await f.workspace.withStorageHandoff(async()=>{});
+});
+
 test('a lost admission reply preserves the committed job and its retained input',{timeout:120000},async t=>{
  const f=await fixture(t),transaction=f.queue.transaction;let admitted;
  f.queue.transaction=async function(operation){

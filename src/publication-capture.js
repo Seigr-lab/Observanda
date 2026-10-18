@@ -57,7 +57,13 @@ async function recover(workspace,db,write){
 }
 export async function withPublicationCapture(workspace,operation,options={}){
  const ticket=await admission.acquire('publication-capture',{signal:options.signal});
- try{return await capture(workspace,operation,options);}finally{ticket.release();}
+ try{
+  const base=publicationResearchWorkspace(workspace);
+  // Reuse authentication across bounded commits, never their transactions.
+  return await base.storageKind()==='catalogue'
+   ?await base.withCatalogueConnections(()=>capture(workspace,operation,options))
+   :await capture(workspace,operation,options);
+ }finally{ticket.release();}
 }
 async function capture(workspace,operation,{signal,write=fn=>transaction(workspace,fn)}={}){
  if(await workspace.storageKind()!=='catalogue')return workspace.withLock(async()=>{
