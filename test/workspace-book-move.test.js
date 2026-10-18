@@ -1,3 +1,4 @@
+import {workspaceDestinationFixture} from './workspace-destination-fixture.js';
 import {LabBookLocationAccess} from '../src/lab-book-location-access.js';
 import {ProjectSessionOwner} from '../src/project-session-owner.js';
 import {test} from 'node:test';
@@ -23,9 +24,11 @@ import {ResearchRecords} from '../src/research.js';
 import {MediaStore} from '../src/media.js';
 import {withWorkspaceMoveSession} from '../src/workspace-move-session.js';
 
-test('workspace move carries an external project tree and protected book through activation and retires the source',{timeout:180000},async t=>{
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-workspace-book-move-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider),vaults=[],applications=[];
- t.after(async()=>{for(const app of applications)await app.close();await provider.close();detach();vaults.forEach(clearVault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-workspace-book-move-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+test('workspace move carries an external project tree and protected book through activation and retires the source',{timeout:process.env.OBSERVANDA_TEST_SECOND_VOLUME?600000:180000},async t=>{
+ const begun=performance.now();let lastPhase=begun;const phase=name=>{const now=performance.now();if(process.env.OBSERVANDA_TEST_SECOND_VOLUME)process.stdout.write(JSON.stringify({phase:name,elapsedMs:Math.round(now-begun),phaseMs:Math.round(now-lastPhase)})+'\n');lastPhase=now;};
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-workspace-book-move-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider),vaults=[],applications=[];let placement;
+ t.after(async()=>{for(const app of applications)await app.close();await provider.close();detach();vaults.forEach(clearVault);await placement?.cleanup();assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-workspace-book-move-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ placement=await workspaceDestinationFixture(directory);
  const f=await encryptedFixture(path.join(directory,'workspace'),createNotebook('Workspace 1'));vaults.push(f.vault);
  const parentMetadata=createNotebook('External Parent 1'),parentId=randomUUID();parentMetadata.projects=[{id:parentId,title:parentMetadata.title,parentId:null,description:'',share:false,logoId:null}];
  const parentAccess=await createWorkspaceAccess('','',f.deviceStore),parentVault=takeCreatedVault(parentAccess);vaults.push(parentVault);const parent=await initializeProjectLocation(path.join(directory,parentMetadata.title),parentId,parentMetadata,parentAccess,parentVault);
@@ -35,15 +38,17 @@ test('workspace move carries an external project tree and protected book through
  const siblingMetadata=sampleNotebook();siblingMetadata.title=siblingMetadata.projects[0].title='Unrelated Project';const siblingAccess=await createWorkspaceAccess('','',f.deviceStore),siblingVault=takeCreatedVault(siblingAccess);vaults.push(siblingVault);const sibling=await initializeProjectLocation(path.join(f.workspace.root,siblingMetadata.title),siblingMetadata.projects[0].id,siblingMetadata,siblingAccess,siblingVault);await registry.attach(sibling,{expected:(await registry.read()).revision});const siblingBefore=await sibling.read();
  const created=await new LabBookCreation(project,f.deviceStore).create({id:randomUUID(),username:'',password:'Book password',book:{id:randomUUID(),projectId,title:'Field book 1'}}),key=await verifyAccess(await readAccess(created.book.root),'','Book password',{deviceStore:f.deviceStore});vaults.push(key);
  const book=new LabBookStorage(created.book.root,created.book.labBookId,key),outline=await book.outline(),record={...sampleNotebook().entries[0],id:randomUUID(),notebookId:book.labBookId};await new ResearchRecords(book,new MediaStore(book)).save({workspaceId:outline.metadata.id,changes:[{id:record.id,expectedRevision:null,record}]});
- const app=new ProjectApplication(f.workspace,{deviceStore:f.deviceStore}),client={},other={},destination=path.join(directory,'Moved Workspace');applications.push(app);await app.unlock(client,projectId,{password:'Project password'});
+ phase('source owners ready');
+ const app=new ProjectApplication(f.workspace,{deviceStore:f.deviceStore}),client={},other={},destination=path.join(placement.root,'Moved Workspace');applications.push(app);await app.unlock(client,projectId,{password:'Project password'});
  const request=operation=>projectRequest('/api/projects/'+projectId+'/lab-books/'+book.labBookId+'/'+operation),target={workspaceId:outline.metadata.id,recordId:record.id,sectionId:null};
  await assert.rejects(withWorkspaceMoveSession(app,client,session=>session.move(destination,{activate:async()=>{assert.fail('Unauthorized workspace must not activate');}})),error=>['ACCESS_LOCKED','DEVICE_UNKNOWN'].includes(error.code)&&error.labBookId===book.labBookId);
+ phase('unauthorized refusal');
  await app.run(client,request('access/unlock'),{username:'',password:'Book password',recovery:''});
- let interrupted=false;await assert.rejects(withWorkspaceMoveSession(app,client,session=>session.move(destination,{activate:async()=>{assert.fail('Interrupted move must not activate');}}),{checkpoint:async(phase,owner)=>{if(phase==='project:adopted'&&owner.projectId===projectId&&!interrupted){interrupted=true;throw Error('Interrupted after selected owner publication');}}}),/Interrupted after selected owner publication/);assert.equal(interrupted,true);
+ let interrupted=false;await assert.rejects(withWorkspaceMoveSession(app,client,session=>session.move(destination,{activate:async()=>{assert.fail('Interrupted move must not activate');}}),{checkpoint:async(phase,owner)=>{if(phase==='project:adopted'&&owner.projectId===projectId&&!interrupted){interrupted=true;throw Error('Interrupted after selected owner publication');}}}),/Interrupted after selected owner publication/);assert.equal(interrupted,true);phase('first interrupted adoption');
  const siblingEntry=await registry.locate(sibling.projectId);assert.deepEqual(await new ProjectStorage(siblingEntry.root,sibling.projectId,siblingVault).read(),siblingBefore);
- let cleaned=false;await assert.rejects(withWorkspaceMoveSession(app,client,session=>session.move(destination,{activate:async()=>{assert.fail('Interrupted cleanup must not activate');}}),{checkpoint:async phase=>{if(phase==='project-container'&&!cleaned){cleaned=true;throw Error('Interrupted after empty original retirement');}}}),/Interrupted after empty original retirement/);assert.equal(cleaned,true);await assert.rejects(stat(parent.root),{code:'ENOENT'});
+ let cleaned=false;await assert.rejects(withWorkspaceMoveSession(app,client,session=>session.move(destination,{activate:async()=>{assert.fail('Interrupted cleanup must not activate');}}),{checkpoint:async phase=>{if(phase==='project-container'&&!cleaned){cleaned=true;throw Error('Interrupted after empty original retirement');}}}),/Interrupted after empty original retirement/);assert.equal(cleaned,true);await assert.rejects(stat(parent.root),{code:'ENOENT'});phase('container retirement');
  let copied;
- await withWorkspaceMoveSession(app,client,async session=>{const result=await session.move(destination,{activate:async()=>{copied=new ProjectApplication(new Workspace(destination,f.vault),{deviceStore:f.deviceStore});applications.push(copied);}});assert.equal(result.phase,'complete');await session.install(copied);});
+ await withWorkspaceMoveSession(app,client,async session=>{const result=await session.move(destination,{activate:async()=>{copied=new ProjectApplication(new Workspace(destination,f.vault),{deviceStore:f.deviceStore});applications.push(copied);}});assert.equal(result.phase,'complete');await session.install(copied);});phase('completed activation');
  const writing=await copied.run(client,request('research/records/writing/read'),target);assert.equal(writing.value.body,record.body);
  await assert.rejects(copied.run(other,request('research/records/writing/read'),target),error=>['ACCESS_LOCKED','DEVICE_UNKNOWN'].includes(error.code));
  const saved=copied.session(client).get('book:'+projectId+':'+book.labBookId);const locations=await (await copied.registry()).read(),copiedParent=locations.value.projects.find(entry=>entry.projectId===parentId),copiedProject=locations.value.projects.find(entry=>entry.projectId===projectId);assert.equal(copiedParent.root,path.join(destination,parentMetadata.title));assert.equal(path.dirname(copiedProject.root),copiedParent.root);assert.equal(path.basename(copiedProject.root),metadata.title);assert.equal(saved.root,path.join(copiedProject.root,created.book.directory));assert.notEqual(saved.vault,key);assert.ok(saved.vault.key);
@@ -57,5 +62,6 @@ test('workspace move carries an external project tree and protected book through
    try{await selectedParent.use(storage=>omitted.moved(storage,project.root,selectedParent));assert.equal(omitted.grants.size,0);}finally{session.set(grantId,originalGrant);omitted.close();}
   }
  }finally{recovered.close();await selectedParent.close();}
+ phase('final authoring and grants');
 
 });
