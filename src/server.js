@@ -1,3 +1,4 @@
+import {workspaceEncryptedCopyAccess} from './workspace-encrypted-copy.js';
 import {pdfPreviewAssets} from './pdf-preview-assets.js';
 import {PdfExportService} from './pdf-export-service.js';
 import {pdfDocumentRequest,executePdfRequest} from './pdf-document-requests.js';
@@ -135,7 +136,7 @@ import { validInterface } from './web/interface-ui.js';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {readAccess,verifyAccess,changeAccess,takeCreatedVault} from './access.js';
-import {resolveLocation,inspectLocation,probeLocation,browseFolders,createFolder,storageMap,initializeLocation,namedWorkspaceLocation,encryptedCopy,readPreferences,rememberInterface} from './locations.js';
+import {resolveLocation,inspectLocation,probeLocation,browseFolders,createFolder,storageMap,initializeLocation,namedWorkspaceLocation,readPreferences,rememberInterface} from './locations.js';
 import { buildDesignExamples } from './design-preview.js';
 import {appearancePreviewSource} from './appearance-preview.js';
 import {OperationActivity} from './operation-activity.js';
@@ -627,7 +628,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         changing=true;
         if(['/api/storage/delete','/api/storage/delete/finish'].includes(url.pathname))selectedContext.settingsClosed=true;
         try{
-          selectedContext.concurrentReads=['/api/storage/copy/preview','/api/storage/copy','/api/storage/portable/preview','/api/storage/portable','/api/storage/move'].includes(url.pathname);
+          selectedContext.concurrentReads=['/api/storage/copy/preview','/api/storage/copy','/api/storage/portable/preview','/api/storage/portable','/api/storage/move','/api/storage/encrypt'].includes(url.pathname);
           if(!selectedContext.concurrentReads)await selectedContext.readers.close();
           // Independent project workers and grants remain available while a
           // workspace snapshot is copied. Activation revokes the old context.
@@ -731,8 +732,16 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
           if(url.pathname==='/api/storage/encrypt'){
             const plan=plans.get(data.id);if(!plan||plan.portable||plan.expires<Date.now()||data.reviewed!==true)throw new AppError('STALE');
            return await storageResponse(req,res,async()=>{
-            const access=await createWorkspaceAccess(data.username??'',data.password??'',deviceStore),vault=takeCreatedVault(access);
-            try{return await workspaceDirectory.using(plan.destination,{},async()=>{const location=await encryptedCopy(plan,access,vault,context.vault);plans.delete(data.id);await activate(location,client,vault);return metadata();});}catch(error){clearVault(vault);throw error;}
+            return withWorkspaceCopySession(historyProjects,client,async copy=>{
+              const {access,vault}=await workspaceEncryptedCopyAccess(workspace,plan,{username:data.username??'',password:data.password??'',deviceStore});
+              let adopted=false;
+              try{return await workspaceDirectory.using(plan.destination,{},async()=>{
+                const location=await copy.encrypted(plan,access,vault);plans.delete(data.id);
+                await activate(location,client,vault);adopted=true;
+                await copy.install(context.projects??=new ProjectApplication(context.workspace,{deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})}));
+                return metadata();
+              });}catch(error){if(!adopted)clearVault(vault);throw error;}
+            });
            },json);
           }
           if(url.pathname==='/api/storage/copy'){

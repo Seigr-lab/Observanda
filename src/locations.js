@@ -1,3 +1,4 @@
+import {workspaceOwnerLeaseFile} from './owned-storage-control.js';
 import {assertRecordOwnerReclamationSettled} from './record-owner-transfer-state.js';
 import {assertInventoryObligationsSettled} from './inventory-obligation-lifecycle.js';
 import {initializeWorkspaceSettings} from './workspace-settings.js';
@@ -7,7 +8,7 @@ import {workspaceCreationPath,requireWorkspaceName,validateWorkspaceName} from '
 import {workspaceFiles,workspaceInventory,hashWorkspaceFile as fileHash} from './workspace-inventory.js';
 import {CATALOGUE_FILE,CATALOGUE_ARCHIVE,rekeyCatalogue,isCatalogue,verifyCatalogueArchive,openCatalogue} from './research-catalogue.js';
 import {backupCatalogue,hasCatalogue,requireDatabase} from './postgres.js';
-import {describeContent,writeContent} from './file-content.js';
+import {describeContent} from './file-content.js';
 import {clearVault} from './encryption.js';
 import path from 'node:path';
 import os from 'node:os';
@@ -217,30 +218,59 @@ export async function copyWorkspace(plan,{vault=null,onProgress,afterCopy,afterV
   }));
 }
 
-// Encrypt only into a new, marked destination. Source bytes are never replaced or deleted.
-export async function encryptedCopy(plan,access,vault,sourceVault=null,{onProgress}={}){
+// A fresh-key successor remains marked incomplete until its independently
+// authorized owners and relative registry have also been published.
+export async function encryptedCopy(plan,access,vault,sourceVault=null,{onProgress,recovery,beforeSnapshot,afterSnapshotVerified,beforePublish,afterVerified}={}){
   if(!isEncryptedAccess(access)||!vault?.key||vault.id!==access.vaultId)throw new AppError('ACCESS_LOCKED');
-  return withOperationProgress(onProgress,()=>operationStage('copy-workspace',{},()=>new Workspace(plan.source,sourceVault).withStorageHandoff(async()=>{
-    await assertInventoryObligationsSettled(new Workspace(plan.source,sourceVault));
-    await reviewedInventory(plan);
-    const {destination,marker}=await prepareCopyDestination(plan.destination);
-    const source=new Workspace(plan.source,sourceVault),target=new Workspace(destination,vault);
-    await atomicWrite(path.join(destination,'.observanda','access.json'),serialize(access));
-    const catalogue=await hasCatalogue(plan.source);
-    await reviewedInventory(plan,{visit:async file=>{
-      if(file.path==='.observanda/access.json'||[CATALOGUE_FILE,CATALOGUE_ARCHIVE].includes(file.path))return;
-      const relative=file.path==='observanda.json'&&access.formatVersion===3?WORKSPACE_FILE:file.path;const output=path.join(destination,relative);if(!within(destination,output))throw new AppError('UNSAFE');
-      await mkdir(path.dirname(output),{recursive:true,mode:0o700});
-      const content=await describeContent(source,path.join(plan.source,file.path));const written=await writeContent(target,output,content.stream());
-      const verified=await describeContent(target,output);if(written.size!==content.size||verified.size!==content.size||verified.sha256!==content.sha256)throw new AppError('STORAGE_COPY');
-    }});
-    await reviewedInventory(plan);
-    const copied=JSON.parse(await target.readFile(await workspaceFile(destination),'utf8'));
-    // Rekey verifies this descriptor and the target in its creation transaction.
-    // Nothing can open the destination until its copy marker is removed below.
-    if(catalogue)await rekeyCatalogue(source,target,copied);
-    else if(isCatalogue(copied))await verifyCatalogueArchive(target,copied);
-    else validateNotebook(copied);
-    await unlink(marker);return destination;
-  },{detached:true})));
+  return withOperationProgress(onProgress,()=>operationStage('copy-workspace',{},async()=>{
+    const source=new Workspace(plan.source,sourceVault),target=new Workspace(plan.destination,vault);
+    let publication;
+    if(recovery?.snapshotReady)publication={destination:plan.destination,marker:recovery.marker};
+    else await source.withStorageHandoff(async()=>{
+      await assertInventoryObligationsSettled(source);
+      if(beforeSnapshot)await beforeSnapshot();
+      const catalogue=await hasCatalogue(plan.source);
+      if(catalogue)await source.catalogue(store=>assertRecordOwnerReclamationSettled(store));
+      await workspaceInventory(plan.source,plan.inventorySalt,{projectRoots:plan.projectRoots??[],expected:plan.fingerprint?plan:undefined,consume:async(inventory,items)=>{
+        Object.assign(plan,inventory);
+        publication=recovery?await recovery.prepare(plan):await prepareCopyDestination(plan.destination);
+        const priorAccess=await readAccess(plan.destination);
+        if(priorAccess.etag!=='none'&&serialize(priorAccess.value)!==serialize(access))throw new AppError('CONFLICT');
+        if(priorAccess.etag==='none')await atomicWrite(path.join(plan.destination,'.observanda','access.json'),serialize(access));
+        operationTransfer({phase:'copying',files:0,bytes:0,totalFiles:inventory.transferFiles,totalBytes:inventory.fileBytes});
+        for await(const file of items()){
+          if(file.path==='.observanda/access.json'||workspaceOwnerLeaseFile(file.path)||[CATALOGUE_FILE,CATALOGUE_ARCHIVE].includes(file.path))continue;
+          const relative=file.path==='observanda.json'&&access.formatVersion===3?WORKSPACE_FILE:file.path,output=path.join(plan.destination,relative);
+          if(!within(plan.destination,output))throw new AppError('UNSAFE');
+          await mkdir(path.dirname(output),{recursive:true,mode:0o700});
+          const content=await describeContent(source,path.join(plan.source,file.path));
+          if(await assertRegular(output,{missing:true})){
+            const retained=await describeContent(target,output);
+            if(retained.size!==content.size||retained.sha256!==content.sha256)throw new AppError('STORAGE_COPY');
+            await retained.verify();
+          }else await content.copyTo(target,output,{resume:!!recovery});
+          if(recovery)await recovery.checkpoint('workspace-file',file.path);
+          operationTransferred({files:1,bytes:file.bytes});
+        }
+      }});
+      await reviewedInventory(plan);
+      operationTransfer({phase:'verifying'});
+      const copied=JSON.parse(await target.readFile(await workspaceFile(plan.destination),'utf8'));
+      if(catalogue){
+        // Rekey uses a detached creation transaction and atomically publishes
+        // its archive. A retry before this checkpoint can safely re-create it.
+        if(!recovery?.databaseReady)await rekeyCatalogue(source,target,copied);
+        if(recovery&&!recovery.databaseReady)await recovery.database();
+        await withRetiredRecordCopy(source,target,async()=>{const checked=await target.openCatalogue();await checked.close();});
+      }else if(isCatalogue(copied))await verifyCatalogueArchive(target,copied);
+      else validateNotebook(copied);
+      if(afterSnapshotVerified)await afterSnapshotVerified(plan.destination);
+      if(recovery)await recovery.snapshot();
+    },{detached:true,existing:true});
+    if(beforePublish)await beforePublish(target);
+    if(recovery)await recovery.published();
+    await unlink(publication.marker);
+    if(afterVerified)await afterVerified(publication.destination);
+    return publication.destination;
+  }));
 }

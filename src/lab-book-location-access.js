@@ -44,6 +44,23 @@ export class LabBookLocationAccess{
   await owner.access.check();const access=await readAccess(storage.root);if(access.etag!==owner.etag)throw new AppError('ACCESS_LOCKED');authenticateKeyring(access.value,owner.vault);
   const id=owner.access.id;clearVault(this.grants.get(id)?.vault);this.grants.set(id,{root:storage.root,namespaceId:receipt.namespaceId,etag:access.etag,vault:cloneVault(owner.vault),expires:Math.min(owner.access.expected?.expires??Infinity,owner.parent.sessionEntry?.expires??Infinity,Date.now()+8*60*60*1000)});
  }
+ // An interrupted move may have completed copying before this transfer session
+ // opened. Recover only its caller's live explicit grants, never recovery keys.
+ async moved(project,source,parent){
+  const registry=new LabBookRegistry(project),current=await registry.read(),session=this.application.session(this.client);
+  for(const book of current.value.books){
+   const id='book:'+project.projectId+':'+book.labBookId;if(this.grants.has(id))continue;
+   const saved=session.get(id),entry=registry.location(book),previous=path.join(source,book.directory);
+   if(!saved?.vault||saved.locked||saved.expires<=Date.now()||saved.vault.id!==book.vaultId||![previous,entry.root].includes(saved.root))continue;
+   const access=new LabBookAccessSession(this.application,this.client,project,book.labBookId,()=>parent.check());await access.check();
+   const keyring=await readAccess(entry.root);if(keyring.etag!==saved.etag)continue;authenticateKeyring(keyring.value,saved.vault);
+   const storage=new LabBookStorage(entry.root,book.labBookId,saved.vault),receipt=await labBookTransferReceipt(storage);
+   if(receipt?.phase!=='verified'||receipt.source!==previous||receipt.vaultId!==book.vaultId||receipt.namespaceId!==book.namespaceId)throw new AppError('STORAGE_MOVE_STATE');
+   await access.check();const owner={projectId:project.projectId,id:book.labBookId,parent,entry,access,etag:keyring.etag,vault:cloneVault(saved.vault)};
+   clearVault(this.owners.get(id)?.vault);this.owners.set(id,owner);
+   this.grants.set(id,{root:entry.root,namespaceId:book.namespaceId,etag:keyring.etag,vault:cloneVault(saved.vault),expires:Math.min(saved.expires,parent.sessionEntry?.expires??Infinity)});
+  }
+ }
  async renamed(receipt,source,destination){
   for(const [id,owner] of this.owners){
    if(!this.valid(owner))continue;const project=receipt.projects?.find(item=>item.projectId===owner.projectId),book=project?.books?.find(item=>item.labBookId===owner.id);

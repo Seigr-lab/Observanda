@@ -52,7 +52,7 @@ export class ProjectLocationAccess {
     const owner=this.#owners.get(storage.projectId);if(!owner||![source,storage.root].includes(owner.entry?.root))throw new AppError('ACCESS_DENIED');
     const receipt=await projectTransferReceipt(storage),access=await readAccess(storage.root);
     if(receipt?.phase!=='verified'||receipt.source!==source||receipt.projectId!==owner.projectId||receipt.namespaceId!==owner.entry.namespaceId||storage.vault.id!==owner.vault.id||latest.root!==storage.root)throw new AppError('STORAGE_MOVE_STATE');
-    authenticateKeyring(access.value,owner.vault);await owner.relocated(latest);this.books.relocateGrants();await owner.check();
+    authenticateKeyring(access.value,owner.vault);await owner.relocated(latest);await this.books.moved(storage,source,owner);this.books.relocateGrants();await owner.check();
     clearVault(this.#grants.get(storage.projectId)?.vault);
     this.#grants.set(storage.projectId,{root:storage.root,namespaceId:receipt.namespaceId,etag:access.etag,vault:cloneVault(owner.vault),expires:owner.sessionEntry?.expires??Date.now()+8*60*60*1000});
   }

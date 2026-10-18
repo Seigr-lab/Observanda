@@ -11,6 +11,7 @@ export async function withWorkspaceCopySession(application,client,operation,opti
     return await operation({
       plan:(input,options)=>bundle.plan(input,options),
       copy:async plan=>{const destination=await bundle.copy(plan,{activateCatalogue:true});await access.seal(destination);return destination;},
+      encrypted:async(plan,grant,vault)=>{const destination=await bundle.encrypted(plan,grant,vault);await access.seal(destination);return destination;},
       exportPortable:input=>bundle.exportPortable(input),
       portable:plan=>bundle.copy(plan,{activateCatalogue:false}),
       install:targetApplication=>access.install(targetApplication,client)

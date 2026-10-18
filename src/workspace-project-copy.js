@@ -1,3 +1,4 @@
+import {workspaceProjectPlacements,legacyWorkspaceProjectDestination} from './workspace-project-placement.js';
 import {assertInventoryObligationsSettled} from './inventory-obligation-lifecycle.js';
 import {assertProjectRelocationsSettled} from './project-membership.js';
 import {ProjectBookCopy} from './project-book-copy.js';
@@ -13,21 +14,22 @@ import {WorkspaceCopyRecovery} from './workspace-copy-recovery.js';
 import {ProjectRegistry} from './project-registry.js';
 import {copyProjectLocation,projectTransferReceipt} from './project-transfer.js';
 import {withProjectLifecycle} from './project-lifecycle.js';
-import {copyPlan,copyWorkspace,transferDestination,resolveLocation} from './locations.js';
+import {copyPlan,copyWorkspace,encryptedCopy,transferDestination,resolveLocation} from './locations.js';
 import {databaseProvider} from './workspace-database-context.js';
 import {privateDirectory,serialize,assertRegular} from './storage.js';
 import {operationStage,operationAdvance,operationItem,operationTransfer} from './operation-progress.js';
 import {AppError} from './errors.js';
 const within=(parent,child)=>{const relative=path.relative(parent,child);return relative===''||relative!=='..'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative);};
-const same=(a,b)=>['projectId','root','namespaceId','vaultId'].every(key=>a?.[key]===b?.[key]);
+const same=(a,b)=>['projectId','root','namespaceId','vaultId','parentId'].every(key=>a?.[key]===b?.[key]);
 
 export class WorkspaceProjectCopy {
   constructor(source,{withProject,withBook,onCopiedBook=async()=>{},onCopiedProject=async()=>{},check=async()=>{},checkpoint=async()=>{}}={}){this.source=source;this.withProject=withProject;this.withBook=withBook;this.onCopiedBook=onCopiedBook;this.onCopiedProject=onCopiedProject;this.check=check;this.checkpoint=checkpoint;}
-  async prepare(destination,{portable=false}={}) {
+  async prepare(destination,{portable=false,projectPlacement=2}={}) {
     await this.check();await assertInventoryObligationsSettled(this.source);
     const outline=await this.source.outline();this.sourceRevision=outline.etag;
     this.registry=new ProjectRegistry(this.source,outline.metadata.id);
     const original=await this.registry.read();
+    workspaceProjectPlacements(this.source.root,destination,original.value.projects,{version:projectPlacement});
     await assertProjectRelocationsSettled(this.registry,[null,...original.value.projects.map(entry=>entry.projectId)]);
     if(original.value.projects.length&&typeof this.withProject!=='function')throw new AppError('ACCESS_LOCKED');
     for(const entry of original.value.projects) {
@@ -36,7 +38,7 @@ export class WorkspaceProjectCopy {
         await this.check();
         if(portable){const access=await readAccess(storage.root);if(!access.value.password&&!access.value.recovery)throw new AppError('STORAGE_PORTABLE_PROJECT_ACCESS',[entry.summary?.title??path.basename(entry.root)]);}
         const metadata=(await storage.outline()).metadata;
-        if(!same(entry,{projectId:storage.projectId,root:storage.root,vaultId:storage.vault.id,namespaceId:metadata.id}))throw new AppError('CONFLICT');
+        if(!same(entry,{projectId:storage.projectId,root:storage.root,vaultId:storage.vault.id,namespaceId:metadata.id,parentId:entry.parentId}))throw new AppError('CONFLICT');
         const books=new ProjectBookCopy(storage);try{await books.prepare(typeof this.withBook==='function'?(id,use)=>this.withBook(storage,id,use):undefined,{portable});}finally{books.close();}
       });
     }
@@ -47,35 +49,51 @@ export class WorkspaceProjectCopy {
     this.directory=current;this.projectRoots=current.value.projects.map(entry=>entry.root).filter(root=>within(this.source.root,root));
     await this.check();return current;
   }
+  async placements(destination,entries,{retained=false,version=2}={}) {
+    const placements=workspaceProjectPlacements(this.source.root,destination,entries,{version});
+    if(retained&&version===1)for(const entry of placements){
+      const previous=legacyWorkspaceProjectDestination(this.source.root,destination,entry);
+      if(previous!==entry.destination&&await assertRegular(previous,{missing:true,directory:true}))throw new AppError('STORAGE_COPY');
+    }
+    return placements;
+  }
   async plan(input,{inspect=true,onProgress,portable=false}={}) {
     const destination=await resolveLocation(input),recovery=new WorkspaceCopyRecovery(this.source,destination),retained=await recovery.plan();
-    if(retained){if(!!retained.portable!==portable)throw new AppError('CONFLICT');await this.prepare(destination,{portable});return retained;}
+    if(retained){if(!!retained.portable!==portable)throw new AppError('CONFLICT');await this.prepare(destination,{portable,projectPlacement:retained.projectPlacement??1});return retained;}
     const emptyPreparation=await recovery.emptyPreparation(),location=emptyPreparation?{source:this.source.root,destination,inventorySalt:randomUUID()}:await transferDestination(this.source.root,input);await this.prepare(location.destination,{portable});
     const plan=inspect&&!emptyPreparation?await copyPlan(this.source.root,input,{vault:this.source.vault,onProgress,projectRoots:this.projectRoots}):location;
-    return {...plan,...(portable?{portable:true}:{}),projectRoots:this.projectRoots,projectRegistryRevision:this.directory.revision,sourceRevision:this.sourceRevision};
+    return {...plan,projectPlacement:2,...(portable?{portable:true}:{}),projectRoots:this.projectRoots,projectRegistryRevision:this.directory.revision,sourceRevision:this.sourceRevision};
   }
   async exportPortable(input) {
     const destination=await resolveLocation(input),recovery=new WorkspaceCopyRecovery(this.source,destination),retained=await recovery.read();
     if(retained?.phase==='published'&&retained.plan.portable===true){
+      await this.placements(destination,retained.directory.value.projects,{retained:true,version:retained.plan.projectPlacement??1});
       if(await assertRegular(recovery.marker,{missing:true}))throw new AppError('STORAGE_INCOMPLETE');return destination;
     }
     return this.copy(await this.plan(destination,{portable:true,inspect:false}));
   }
+  encrypted(plan,access,vault,options={}) {
+    return this.copy({...plan,encrypted:true},{...options,encryption:{access,vault},activateCatalogue:true});
+  }
   async copy(plan,options={}) {
     if(plan.source!==this.source.root)throw new AppError('WORKSPACE_CHANGED');
-    const portable=plan.portable===true;if(portable&&options.activateCatalogue)throw new AppError('INVALID');
-    await this.prepare(plan.destination,{portable});
-    const recovery=new WorkspaceCopyRecovery(this.source,plan.destination,{checkpoint:this.checkpoint}),retained=await recovery.read();
+    const portable=plan.portable===true,encryption=options.encryption;
+    if(portable&&(options.activateCatalogue||encryption)||!!plan.encrypted!==!!encryption)throw new AppError('INVALID');
+    await this.prepare(plan.destination,{portable,projectPlacement:plan.projectPlacement??1});
+    const recovery=new WorkspaceCopyRecovery(this.source,plan.destination,{checkpoint:this.checkpoint,encryptionAccess:encryption?.access}),retained=await recovery.read();
     if(!retained&&plan.sourceRevision!==undefined&&plan.sourceRevision!==this.sourceRevision)throw new AppError('CONFLICT');
     if(retained){
+      if(!!retained.plan.encrypted!==!!encryption)throw new AppError('CONFLICT');
       this.registry.validate(retained.directory.value);
       const entries=retained.directory.value.projects;
       if(entries.length!==this.directory.value.projects.length||entries.some(entry=>!same(entry,this.directory.value.projects.find(other=>other.projectId===entry.projectId))))throw new AppError('CONFLICT');
+      await this.placements(plan.destination,entries,{retained:true,version:retained.plan.projectPlacement??1});
       this.directory=retained.directory;this.projectRoots=retained.plan.projectRoots??[];
     }
     if(plan.projectRegistryRevision!==undefined&&plan.projectRegistryRevision!==this.directory.revision)throw new AppError('CONFLICT');
-    const {beforePublish,beforeSnapshot,afterSnapshotVerified,...rest}=options;
-    return recovery.run({...plan,projectRoots:this.projectRoots},this.directory,async checkpoint=>copyWorkspace({...checkpoint.state.plan,projectRoots:this.projectRoots},{
+    const {beforePublish,beforeSnapshot,afterSnapshotVerified,encryption:ignored,...rest}=options;
+    const copy=encryption?(retainedPlan,settings)=>encryptedCopy(retainedPlan,encryption.access,encryption.vault,this.source.vault,settings):copyWorkspace;
+    return recovery.run({...plan,projectRoots:this.projectRoots},this.directory,async checkpoint=>copy({...checkpoint.state.plan,projectRoots:this.projectRoots},{
       ...rest,recovery:checkpoint,vault:this.source.vault,
       beforeSnapshot:async()=>{await copyProjectAdoptions(this.source,this.directory);if(beforeSnapshot)await beforeSnapshot();},
       afterSnapshotVerified:async destination=>{
@@ -94,11 +112,12 @@ export class WorkspaceProjectCopy {
   async copyProjects(target,recovery,{portable=false}={}) {
     const copied=new ProjectRegistry(target,this.registry.workspaceId),initial=await copied.read();
     if(!this.directory.value.projects.length)return;
+    const placements=await this.placements(target.root,this.directory.value.projects,{retained:true,version:recovery.state.plan.projectPlacement??1});
     const locations=new Map();operationTransfer(null);
     await operationStage('copy-workspace-projects',{unit:'projects',total:this.directory.value.projects.length},async()=>{
-      for(const entry of [...this.directory.value.projects].sort((a,b)=>a.root.length-b.root.length)) {
+      for(const entry of placements) {
         await this.check();
-        const relative=within(this.source.root,entry.root)?path.relative(this.source.root,entry.root):path.join('projects',entry.projectId,path.basename(entry.root));
+        const relative=path.relative(target.root,entry.destination);
         if(!relative||relative==='.observanda')throw new AppError('STORAGE_PATH');
         const destination=path.resolve(target.root,relative);
         if(!within(target.root,destination)||destination===target.root)throw new AppError('STORAGE_PATH');
