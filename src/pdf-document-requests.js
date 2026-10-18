@@ -6,10 +6,10 @@ import {pdfRendererAvailable,renderSavedPdf} from './pdf-render-service.js';
 import {PdfLayoutError} from './web/pdf-layout-model.js';
 import {revisionId} from './web/revision-model.js';
 import {AppError} from './errors.js';
-const methods=['list','open','sections','section','history','change','capabilities','export'];
+const methods=['list','open','sections','section','history','change','capabilities','export','layouts','layout-change'];
 export function pdfDocumentRequest(route,method='POST'){
  if(method!=='POST'||!route.startsWith('/api/pdf/'))return null;const pdf=route.slice(9);
- return methods.includes(pdf)?{pdf,method:'POST',write:pdf==='change',binary:pdf==='export',limit:1024*1024}:null;
+ return methods.includes(pdf)?{pdf,method:'POST',write:pdf==='change'||pdf==='layout-change',binary:pdf==='export',limit:1024*1024}:null;
 }
 export async function executePdfRequest(storage,request,data,{signal,check=async()=>{},binary}={}){
  if(storage.labBookId)throw new AppError('INVALID');await check();signal?.throwIfAborted();
@@ -24,6 +24,6 @@ export async function executePdfRequest(storage,request,data,{signal,check=async
    const result=await renderSavedPdf(await embedPdfFonts(compiled,{signal}),{signal});await check();signal?.throwIfAborted();
    return binary({name:'document.pdf',download:'document.pdf',mime:'application/pdf',content:result.bytes});
   }
-  const result=request.pdf==='change'?await documents.change(input,{signal,check}):await documents.read(request.pdf,input,{signal,check});await check();return result;
+  const result=request.pdf==='layout-change'?await documents.changeLayout(input,{signal,check}):request.pdf==='change'?await documents.change(input,{signal,check}):await documents.read(request.pdf,input,{signal,check});await check();return result;
  }catch(error){if(error instanceof PdfLayoutError)throw new AppError(error.code,error.details);throw error;}
 }

@@ -1,3 +1,4 @@
+import {PdfLayoutLibrary} from './pdf-layout-library.js';
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
 import {RecordValueTree} from './record-value-tree.js';
@@ -137,6 +138,7 @@ export class PdfDocumentStore{
   for await(const row of index.entries({root:value.order})){signal?.throwIfAborted();const value=await this.sectionRow(id,row.revision);if(row.id!==ordinal(value.position))bad();yield value.section;}
  }
  async verify({signal}={}){
+  await new PdfLayoutLibrary(this.store).verify({signal});
   const directory=await this.directory(),directoryIndex=this.index('directory');let documents=0,editions=0;
   for await(const key of this.store.objectIdEntries('pdf:head:',{signal})){
    signal?.throwIfAborted();const id=key.slice('pdf:head:'.length),head=await this.head(id,{removed:true}),listed=await directoryIndex.find(directory,id);
