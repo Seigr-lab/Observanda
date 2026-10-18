@@ -663,7 +663,9 @@ export class ResearchMaterials {
   });
  }
  async releaseSources(book,selectedIds,{sourceEtag,recordHead:resolveRecordHead,signal}={}){
-  signal?.throwIfAborted();return this.readSnapshot(async store=>{
+  signal?.throwIfAborted();
+  const records=book.entries.filter(record=>selectedIds.includes(record.id)),unbound=records.filter(record=>record.figures.some(figure=>!figure.source));
+  return this.readSnapshot(async store=>{
    const snapshot=sourceEtag&&store?await store.snapshot(sourceEtag):null;
    if(snapshot&&snapshot.metadata.id!==book.id)throw new AppError('WORKSPACE_CHANGED');
    const recordHead=async id=>{
@@ -677,8 +679,11 @@ export class ResearchMaterials {
    };
    const sources=[],warnings=[],materials=this;
    async function* heads(){
+    // Explicit sources are checked below. Discovery only recovers older
+    // calculations for a selected top-level figure without its own source.
+    if(!unbound.length)return;
     if(await materials.workspace.storageKind()!=='catalogue'){yield* materials.headEntries();return;}
-    for(const recordId of selectedIds){let cursor=null;do{const page=await materials.list({recordId,kind:'analysis',cursor});yield* page.items;cursor=page.next;}while(cursor);}
+    for(const record of unbound){let cursor=null;do{signal?.throwIfAborted();const page=await materials.list({recordId:record.id,kind:'analysis',cursor,signal});yield* page.items;cursor=page.next;}while(cursor);}
    }
    // Empty scopes need no traversal table. Actual reviews reuse at most two
    // emptied temporary tables, with a fresh encryption key for each review.
@@ -693,7 +698,7 @@ export class ResearchMaterials {
     });
     if(changed)warnings.push({recordId,figureId,reason:'inputs'});
    },{signal});
-   for(const record of book.entries.filter(r=>selectedIds.includes(r.id)))for(const {figure,ref} of figureSourceEntries(record.figures)){
+   for(const record of records)for(const {figure,ref} of figureSourceEntries(record.figures)){
     signal?.throwIfAborted();const doc=await this.read(ref);if(!doc.content.figure)fail('ANALYSIS_INVALID');
     sources.push({recordId:record.id,figureId:figure.id,label:figure.title,analysis:ref});
     if(!sameFigureCalculation(figure,doc.content.figure))warnings.push({recordId:record.id,figureId:figure.id,reason:'edited'});
@@ -704,27 +709,27 @@ export class ResearchMaterials {
     if(head.kind!=='analysis'||!head.figureId||!selectedIds.includes(head.recordId))continue;
     const record=book.entries.find(e=>e.id===head.recordId),figure=record?.figures.find(f=>f.id===head.figureId);if(!figure||figure.source)continue;
     let reference={kind:head.kind,id:head.id,revision:head.revision},doc;
-    for(;;){doc=await this.read(reference);if(doc.content.figure&&figureFingerprint(doc.content.figure)===figureFingerprint(figure))break;
+    for(;;){signal?.throwIfAborted();doc=await this.read(reference);if(doc.content.figure&&figureFingerprint(doc.content.figure)===figureFingerprint(figure))break;
      if(!doc.previous){doc=null;break;}reference={...reference,revision:doc.previous};
     }
     if(!doc){warnings.push({recordId:record.id,figureId:figure.id,reason:'edited'});continue;}
     sources.push({recordId:record.id,figureId:figure.id,label:figure.title||doc.title,analysis:reference});
     await reviewInputs(doc,record.id,figure.id);
    }
-   for(const record of book.entries.filter(r=>selectedIds.includes(r.id))){
+   for(const record of records){
     signal?.throwIfAborted();
     const preparations=new Map((record.attempt?.preparations??[]).map(preparation=>[preparation.id,preparation]));
     for(const result of record.results?.statements??[])if(result.source){
-     const reference=materialReference(result.source),doc=await this.read(reference);sources.push({recordId:record.id,resultId:result.id,label:result.title,analysis:reference});
+     signal?.throwIfAborted();const reference=materialReference(result.source),doc=await this.read(reference);sources.push({recordId:record.id,resultId:result.id,label:result.title,analysis:reference});
      if(result.kind==='figure'&&doc.content.figure){const figure=record.figures.flatMap(f=>[f,...(f.kind==='panels'?figurePlots(f):[])]).find(f=>f.id===result.figureId);if(figure&&!sameFigureCalculation(figure,doc.content.figure))warnings.push({recordId:record.id,figureId:figure.id,reason:'edited'});}
     }
     for(const assessment of currentAttemptItems(record.attempt?.assessments??[]))for(const source of assessment.references.filter(r=>r.kind==='analysis')){
-     const reference=materialReference(source);await this.read(reference);
+     signal?.throwIfAborted();const reference=materialReference(source);await this.read(reference);
      const criterion=preparations.get(assessment.preparationId)?.criteria.find(c=>c.id===assessment.criterionId);
      sources.push({recordId:record.id,assessmentId:assessment.id,label:criterion?.label??source.label,analysis:reference});
     }
    }
-   return {sources,warnings:[...new Map(warnings.map(w=>[w.recordId+':'+w.figureId+':'+w.reason,w])).values()]};
+   signal?.throwIfAborted();return {sources,warnings:[...new Map(warnings.map(w=>[w.recordId+':'+w.figureId+':'+w.reason,w])).values()]};
    });
   });
  }

@@ -34,6 +34,9 @@ test('figures retain exact calculations independently of result statements, sour
  const pinned=withFigureSource(plot,original),compound=createComposition([pinned,pinned]);record.figures=[compound];record.share=true;await save(record);
  let snapshot=await f.workspace.read(),saved=snapshot.book.entries.find(r=>r.id===record.id);assert.equal(saved.results,undefined);assert.deepEqual(figureReferences(saved.figures),[original,original]);
  let review=await materials.releaseSources(snapshot.book,[record.id]);assert.equal(review.sources.length,2);assert.equal(review.warnings.length,0);
+ const bound=structuredClone(snapshot.book);bound.entries.find(entry=>entry.id===record.id).figures=[pinned];const page=materials.index.page;
+ materials.index.page=()=>{throw Error('Explicit figure source opened legacy discovery');};
+ try{const exact=await materials.releaseSources(bound,[record.id]);assert.deepEqual(exact.sources.map(source=>source.analysis),[original]);assert.deepEqual(exact.warnings,[]);}finally{materials.index.page=page;}
  const changedMethod={...method,title:'PRIVATE revised method'};await save(changedMethod);
  saved.figures[0].panels[1].figure.series[0].points[0].y=25;await save(saved);snapshot=await f.workspace.read();
  review=await materials.releaseSources(snapshot.book,[record.id]);assert.equal(review.warnings.filter(w=>w.reason==='inputs').length,2);assert.deepEqual(review.warnings.filter(w=>w.reason==='edited'),[{recordId:record.id,figureId:compound.panels[1].figure.id,reason:'edited'}]);

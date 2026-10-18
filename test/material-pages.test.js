@@ -120,6 +120,12 @@ test('first publication review initializes discovery before pinning its read and
  const write=ws.writeMetadata;ws.writeMetadata=()=>{throw Error('Empty material scope wrote metadata during a read');};
  try{
   assert.deepEqual(await m.releaseSources(saved.book,book.entries.map(r=>r.id),{sourceEtag:saved.etag}),{sources:[],warnings:[]});
+  const empty={...saved.book,entries:saved.book.entries.map(record=>({...record,figures:[]}))},page=m.index.page;
+  m.index.page=()=>{throw Error('Empty publication scope opened a material discovery page');};
+  try{
+   assert.deepEqual(await m.releaseSources(empty,empty.entries.map(record=>record.id),{sourceEtag:saved.etag}),{sources:[],warnings:[]});
+   await assert.rejects(m.releaseSources({...empty,id:'wrong-source-owner'},empty.entries.map(record=>record.id),{sourceEtag:saved.etag}),{code:'WORKSPACE_CHANGED'});
+  }finally{m.index.page=page;}
   assert.deepEqual((await m.overview(book.entries[0].id)).items,[]);
  }finally{ws.writeMetadata=write;}
 });
@@ -127,8 +133,19 @@ test('first publication review initializes discovery before pinning its read and
 
 test('empty publication analysis scopes need no temporary database and honour cancellation',async()=>{
  const workspace={root:path.join(os.tmpdir(),'observanda-empty-analysis'),storageKind:async()=> 'file'},materials=new ResearchMaterials(workspace);
- materials.readSnapshot=operation=>operation(null);materials.headEntries=async function*(){};
+ materials.readSnapshot=operation=>operation(null);materials.headEntries=async function*(){assert.fail('Empty publication scope scanned material heads');};
  const book={id:'empty-analysis',entries:Array.from({length:12},(_,index)=>({id:'record-'+index,figures:[]}))};
  assert.deepEqual(await materials.releaseSources(book,book.entries.map(record=>record.id)),{sources:[],warnings:[]});
  await assert.rejects(materials.releaseSources(book,book.entries.map(record=>record.id),{signal:AbortSignal.abort()}),{name:'AbortError'});
+});
+
+
+test('empty native publication scopes preserve snapshot admission without opening material pages',async()=>{
+ const snapshotId='a'.repeat(64),book={id:'native-analysis',entries:[{id:'selected-record',figures:[]},{id:'unselected-record',figures:[{id:'unbound-figure'}]}]},snapshots=[];
+ const workspace={root:path.join(os.tmpdir(),'observanda-empty-native-analysis'),storageKind:async()=> 'catalogue',catalogue:operation=>operation({snapshot:async id=>{snapshots.push(id);return {metadata:{id:book.id}};}})},materials=new ResearchMaterials(workspace);let admitted=0;
+ materials.index.ensure=async()=>{admitted++;};materials.index.page=()=>assert.fail('Empty native scope opened a material page');
+ materials.read=()=>assert.fail('Empty native scope opened a retained material');
+ assert.deepEqual(await materials.releaseSources(book,['selected-record'],{sourceEtag:snapshotId}),{sources:[],warnings:[]});assert.equal(admitted,1);assert.deepEqual(snapshots,[snapshotId]);
+ await assert.rejects(materials.releaseSources({...book,id:'another-owner'},['selected-record'],{sourceEtag:snapshotId}),{code:'WORKSPACE_CHANGED'});
+ const before=admitted;await assert.rejects(materials.releaseSources(book,['selected-record'],{sourceEtag:snapshotId,signal:AbortSignal.abort()}),{name:'AbortError'});assert.equal(admitted,before);
 });
