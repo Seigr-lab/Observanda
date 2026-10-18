@@ -8,7 +8,7 @@ import {editorLinkInspector} from './record-links-ui.js';
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 // Fields supply identity, content and a setter. The editor owns formatting,
 // linking, selection and undo; it has no knowledge of record or module storage.
-export function documentEditors({context,destinations,onOpenLink,onError,figures,book}){
+export function documentEditors({context,destinations,onOpenLink,onError,figures,book,fonts}){
  let owner=null;const fields=new Map(),mounted=new Map(),states=new Map(),inspectors=new Map();
  function release(){
   for(const inspector of inspectors.values())inspector.destroy();inspectors.clear();
@@ -26,7 +26,7 @@ export function documentEditors({context,destinations,onOpenLink,onError,figures
   for(const host of root.querySelectorAll('[data-document-key]')){
    const key=host.dataset.documentKey,field=fields.get(key);if(!field||mounted.has(key))continue;
    const toolbar=host.querySelector('.document-tools'),mount=host.querySelector('.document-content');
-   toolbar.innerHTML=textTools({compact:true});
+   toolbar.innerHTML=textTools({compact:true,fonts:typeof fonts==='function'?fonts():fonts});
    applyRichTextStyles(document,proseDocument(field.value));
    const editor=mountRichText({mount,toolbar,label:field.label,section:{richText:proseDocument(field.value)},initialState:states.get(key),
     onChange:value=>{field.value=value;applyRichTextStyles(document,value);field.set(value);},onOpenLink,onError,getFigures:figures,getDestinations:destinations,maxCharacters:field.maxCharacters});

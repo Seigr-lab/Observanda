@@ -18,10 +18,10 @@ import {pdfRendererAvailable,pdfRendererCapabilities} from './pdf-render-service
 import {PdfLayoutError} from './web/pdf-layout-model.js';
 import {revisionId} from './web/revision-model.js';
 import {AppError} from './errors.js';
-const methods=['list','archive','openArchived','open','sections','outline','section','history','change','capabilities','export','layouts','layout-change','source','source-retain','source-images','source-image-retain','selection','preflight','fonts','font-retain','image-import','image-read','exports','export-start','export-status','export-cancel','export-resume','export-download'];
+const methods=['list','archive','openArchived','open','sections','outline','section','history','change','capabilities','export','layouts','layout-change','source','source-retain','source-images','source-image-retain','selection','preflight','fonts','font-read','font-retain','image-import','image-read','exports','export-start','export-status','export-cancel','export-resume','export-download'];
 export function pdfDocumentRequest(route,method='POST'){
  if(method!=='POST'||!route.startsWith('/api/pdf/'))return null;const pdf=route.slice(9);
- return methods.includes(pdf)?{pdf,method:'POST',write:['change','layout-change','source-retain','source-image-retain','font-retain','image-import','export-start','export-cancel','export-resume'].includes(pdf),binary:['export','image-read','export-download'].includes(pdf),limit:pdf==='image-import'?24*1024*1024:1024*1024}:null;
+ return methods.includes(pdf)?{pdf,method:'POST',write:['change','layout-change','source-retain','source-image-retain','font-retain','image-import','export-start','export-cancel','export-resume'].includes(pdf),binary:['export','image-read','font-read','export-download'].includes(pdf),limit:pdf==='image-import'?24*1024*1024:1024*1024}:null;
 }
 export async function executePdfRequest(storage,request,data,{signal,check=async()=>{},binary,sourceReader,exportService}={}){
  if(storage.labBookId)throw new AppError('INVALID');await check();signal?.throwIfAborted();
@@ -48,6 +48,11 @@ export async function executePdfRequest(storage,request,data,{signal,check=async
   if(request.pdf==='image-read'){
    if(Object.keys(input).sort().join()!=='asset,id'||!researchId(input.id)||!revisionId(input.asset)||!await documents.available())throw new AppError('INVALID');
    const image=await documents.domains.run(['pdf'],async get=>{await new PdfDocumentStore(get('pdf')).open(input.id);return new PdfDocumentImages(get('pdf'),input.id).read(input.asset,{signal});},{signal,check});await check();return binary({name:'image.png',mime:'image/png',content:image.content});
+  }
+  if(request.pdf==='font-read'){
+   if(Object.keys(input).sort().join()!=='fontId,id,revision'||!researchId(input.id)||!revisionId(input.revision)||!customFontId(input.fontId)||!await documents.available())throw new AppError('INVALID');
+   const font=await documents.domains.run(['pdf'],async get=>{const store=get('pdf'),selected=await new PdfDocumentStore(store).open(input.id,{revision:input.revision}),pin=selected.header.fonts?.find(value=>value.id===input.fontId);if(!pin)throw new AppError('NOT_FOUND');return readPdfDocumentFont(store,input.id,pin,{signal});},{signal,check});
+   await check();signal?.throwIfAborted();const extension=font.faces[0].file.split('.').at(-1);return binary({name:font.faces[0].file,mime:'font/'+extension,content:font.bytes});
   }
   if(request.pdf==='fonts'){
 

@@ -6,7 +6,7 @@ import {recordStarterRequest} from './record-starter-requests.js';
 // catalogue, clearing its key, or retiring its folder.
 const get=new Set(['/api/dashboard','/api/notebook','/api/modules/data','/api/modules/version','/api/modules/history','/api/laboratory','/api/history','/api/media-policy','/api/fonts','/api/publishing']);
 const post=new Set([
- ...['list','archive','openArchived','open','sections','outline','section','history','capabilities','export','layouts','source','source-images','selection','preflight','fonts','image-read','exports','export-status','export-download'].map(name=>'/api/pdf/'+name),
+ ...['list','archive','openArchived','open','sections','outline','section','history','capabilities','export','layouts','source','source-images','selection','preflight','fonts','font-read','image-read','exports','export-status','export-download'].map(name=>'/api/pdf/'+name),
  ...['open','window','item'].map(name=>'/api/websites/editor/'+name),
  ...['version','start','page','changes','change-page','selection','labels','dashboard','dashboard-types','record-types','discovery','timeline','record-content','record-selectors'].map(name=>'/api/workspace/read/'+name),
  ...['items','item','labels','bom-source','inventory/dashboard','inventory/discovery','inventory/stock','inventory/ledger','planning/dashboard','planning/discovery','planning/readiness'].map(name=>'/api/modules/'+name),

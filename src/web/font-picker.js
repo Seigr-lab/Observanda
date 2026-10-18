@@ -5,8 +5,8 @@ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const text=key=>esc(message(key));
 let serial=0;
 export function checkFontInputs(){const invalid=[...document.querySelectorAll('[data-font-axis]')].find(el=>!el.checkValidity());if(invalid){invalid.closest('details').open=true;invalid.reportValidity();throw new Error(message('rangeError'));}}
-export function fontSelect(attributes,value,{first=[]}={}){
- const choices=[...first,...FONT_OPTIONS];if(value&&validFont(value)&&!choices.some(([id])=>id===value))choices.push([value,fontInfo(value)?.label??message('savedCustom')]);
+export function fontSelect(attributes,value,{first=[],fonts=FONT_OPTIONS}={}){
+ const choices=[...first,...fonts];if(value&&validFont(value)&&!choices.some(([id])=>id===value))choices.push([value,fontInfo(value)?.label??message('savedCustom')]);
  return `<font-picker><select ${attributes}>${choices.map(([id,label])=>`<option value="${esc(id)}" ${id===value?'selected':''} ${id==='mixed'?'disabled':''}>${esc(label)}</option>`).join('')}</select></font-picker>`;
 }
 export function axisControls(id,values={},attributes=''){

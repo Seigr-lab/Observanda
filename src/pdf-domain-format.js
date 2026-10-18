@@ -9,7 +9,7 @@ export function pdfDomainFormat(owner,domain){
  if(owner.pdfFormat>2)throw new AppError('ACCESS_UPGRADE');return 2;
 }
 export function requiresPdfDomainFormat({header,section}={}){
- return !!(header&&(Object.hasOwn(header,'press')||Object.hasOwn(header,'outputProfile'))||section?.notes?.some(note=>note.kind==='page-footnote'));
+ return !!(header&&(Object.hasOwn(header,'press')||Object.hasOwn(header,'outputProfile'))||section?.notes?.some(note=>note.kind==='page-footnote')||section?.research&&Object.hasOwn(section.research,'blockId'));
 }
 async function ownerValue(store){
  if(!store.workspace?.vault)bad();const owner=await store.object('owner'),expected=moduleDomainOwner(store.workspace,store.namespaceId);

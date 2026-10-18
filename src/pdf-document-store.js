@@ -3,6 +3,7 @@ import {verifyPdfResearchImages} from './pdf-research-images.js';
 import {verifyPdfExportJobs} from './pdf-export-jobs.js';
 import {PdfDocumentImages,verifyPdfImages} from './pdf-document-images.js';
 import {verifyPdfDocumentFonts,describePdfDocumentFont} from './pdf-document-fonts.js';
+import {validPdfFontPins} from './web/pdf-font-model.js';
 import {PdfLayoutLibrary} from './pdf-layout-library.js';
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
@@ -133,7 +134,7 @@ export class PdfDocumentStore{
   }
   return {revision:current.revision,items,next:offset+items.length<current.count?offset+items.length:null,total:current.count};
  }
- async change(command, {signal}={}){
+ async change(command, {signal,fontPins=[]}={}){
   const {id,commandId,expectedRevision,operation}=validatePdfCommand(command);
   if(!researchId(id)||!researchId(commandId)||expectedRevision!==null&&!revisionId(expectedRevision)||!operation||typeof operation!=='object')invalid();signal?.throwIfAborted();
   const receiptKey='pdf:command:'+id+':'+commandId,fingerprint=hash({id,expectedRevision,operation}),receipt=await this.store.object(receiptKey);
@@ -187,7 +188,9 @@ export class PdfDocumentStore{
    // after an archive/restore cycle returned to the same visible contents.
    current.version=2;current.lifecycle={previous:previous.revision,archived:operation.type==='remove'};
   }else invalid();
-  if(['create','header'].includes(operation.type))for(const pin of current.header.fonts??[])await describePdfDocumentFont(this.store,id,pin,{signal});
+  if(!validPdfFontPins(fontPins))invalid();
+  if(fontPins.length){current.header={...current.header,fonts:[...new Map([...(current.header.fonts??[]),...fontPins].map(pin=>[pin.id,pin])).values()]};if(!validPdfDocumentHeader(current.header))invalid();}
+  if(['create','header'].includes(operation.type)||fontPins.length)for(const pin of current.header.fonts??[])await describePdfDocumentFont(this.store,id,pin,{signal});
   await index.flush(current.sections);await orderIndex.flush(current.order);
   const revision=hash(current);
   if(previous?.revision===revision&&operation.type!=='remove'){
