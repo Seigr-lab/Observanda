@@ -12,6 +12,9 @@ export async function desktopFixture(prefix='observanda-desktop-test-'){
  const env={...process.env,OBSERVANDA_DESKTOP_TEST_HOME:directory,OBSERVANDA_DESKTOP_NODE:process.execPath,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN??path.resolve('.local/postgresql/runtime/pgsql/bin'),OBSERVANDA_DATABASE_URL:'',USERPROFILE:directory,HOME:directory,APPDATA:path.join(directory,'roaming'),LOCALAPPDATA:path.join(directory,'local')};
  delete env.ELECTRON_RUN_AS_NODE;
  async function close(app){
+  const child=app.process(),status=()=>({code:child.exitCode,signal:child.signalCode});
+  const checkExit=value=>{if(value.code!==0||value.signal)throw Error('Desktop exited unsuccessfully: '+JSON.stringify(value));};
+  if(child.exitCode!==null||child.signalCode!==null){checkExit(status());return;}
   // Preview preparation can still be finishing when a journey closes its
   // window. Make the native decision explicitly, keeping the real service
   // drain and window-close guard in use.
@@ -20,7 +23,17 @@ export async function desktopFixture(prefix='observanda-desktop-test-'){
    if(options.title!=='Work is still running')throw Error('Unexpected close dialog: '+options.title);
    return {response:1};
   };});
-  await app.close();
+  let onExit;
+  const exited=new Promise(resolve=>{onExit=(code,signal)=>resolve({kind:'exit',code,signal});child.once('exit',onExit);if(child.exitCode!==null||child.signalCode!==null)onExit(child.exitCode,child.signalCode);});
+  try{
+   // Electron can finish quitting before Playwright finishes dismissing its
+   // beforeunload protocol dialog. Its exact launched process is authoritative;
+   // never treat a merely closed renderer, timeout or nonzero exit as success.
+   const requested=app.close().then(()=>({kind:'closed'}),error=>({kind:'error',error}));
+   const first=await Promise.race([requested,exited]);
+   if(first.kind==='error'&&!/Page\.handleJavaScriptDialog.*session closed|Target page, context or browser has been closed/.test(first.error.message))throw first.error;
+   checkExit(first.kind==='exit'?first:await exited);
+  }finally{child.removeListener('exit',onExit);}
  }
  return {directory,env,packaged,
   close,
