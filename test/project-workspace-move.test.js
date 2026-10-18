@@ -23,10 +23,10 @@ import {catalogueBinding} from '../src/postgres-activation.js';
 async function fixture(t,{destinationParent}={}){
  const f=await projectTreeFixture(t);let receivingParent=f.directory;
  if(destinationParent){
-  const parent=await fs.realpath(destinationParent);receivingParent=await fs.mkdtemp(path.join(parent,'observanda-project-volume-'));
+  const parent=path.resolve(await fs.realpath(destinationParent));receivingParent=await fs.mkdtemp(path.join(parent,'observanda-project-volume-'));
   t.after(async()=>{assert.equal(path.dirname(receivingParent),parent);assert.ok(path.basename(receivingParent).startsWith('observanda-project-volume-'));await fs.rm(receivingParent,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  }
- const metadata=createNotebook('Receiving Workspace 2'),target=await encryptedFixture(path.join(receivingParent,metadata.title),metadata);t.after(()=>clearVault(target.vault));
+ const metadata=createNotebook('Receiving Workspace 2'),target=await encryptedFixture(path.join(receivingParent,metadata.title),metadata,undefined,destinationParent?{deviceDirectory:path.join(f.directory,'receiving-device')}:undefined);t.after(()=>clearVault(target.vault));
  const targetRegistry=new ProjectRegistry(target.workspace,metadata.id),selected=f.projects[0],source=new ProjectStorage(selected.root,selected.projectId,selected.key),moves=new ProjectWorkspaceMoves(f.registry,targetRegistry,selected.projectId),sibling=await destinationProject(f,t);
  const callbacks={withProject:async(id,use)=>use(new ProjectStorage((await f.registry.locate(id)).root,id,f.projects.find(project=>project.projectId===id).key)),withBook:async(parent,id,use)=>use(new LabBookStorage((await new LabBookRegistry(parent).locate(id)).root,id,f.books.find(book=>book.labBookId===id).key))};
  return {...f,targetRegistry,source,moves,sibling,options:{id:randomUUID(),parentId:null,expectedParentId:null,...callbacks},destination:path.join(target.workspace.root,path.basename(source.root))};
