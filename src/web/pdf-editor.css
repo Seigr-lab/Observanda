@@ -3,3 +3,5 @@
 .pdf-editor-surface.has-preview{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,.9fr);gap:1.25rem;align-items:start}.has-preview .pdf-workbench{grid-template-columns:minmax(0,1fr)}.pdf-preview-panel{position:sticky;top:1rem;min-width:0}.pdf-preview-panel iframe{height:70vh}@media(max-width:1100px){.pdf-editor-surface.has-preview{grid-template-columns:minmax(0,1fr)}.pdf-preview-panel{position:static}}
 
 .pdf-source-list{display:grid;gap:.5rem}.pdf-source-list .button{text-align:start}.pdf-source-diff{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem}.pdf-source-diff pre{white-space:pre-wrap;overflow-wrap:anywhere}.pdf-source-preview{max-height:28rem;overflow:auto}.pdf-source-preview svg{max-width:100%;height:auto}@media(max-width:850px){.pdf-source-diff{grid-template-columns:1fr}}
+
+.pdf-thumbnails{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.5rem}.pdf-thumbnails button{display:flex;align-items:center;flex-direction:column;gap:.3rem}.pdf-thumbnails canvas{max-width:100%;height:auto}.pdf-thumbnails [aria-current=page]{outline:2px solid currentColor}

@@ -1,3 +1,4 @@
+import {pdfPreviewAssets} from './pdf-preview-assets.js';
 import {PdfExportService} from './pdf-export-service.js';
 import {pdfDocumentRequest,executePdfRequest} from './pdf-document-requests.js';
 import {configurationSourceAccess} from './configuration-source-access.js';
@@ -177,6 +178,7 @@ async function browserAssets(directory=new URL('./web/',import.meta.url),prefix=
 }
 const assets=new Map(await browserAssets());
 startupAssets(assets);
+for(const [name,bytes] of await pdfPreviewAssets())assets.set(name,bytes);
 // The app and desktop package use the same source artwork.
 for(const variant of ['black','white'])assets.set('observanda-'+variant+'.svg',await readFile(new URL('../desktop/icon_'+variant+'.svg',import.meta.url)));
 assets.set('observanda.svg',assets.get('observanda-black.svg'));

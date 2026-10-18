@@ -5,8 +5,9 @@ import {createHash} from 'node:crypto';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 const fail=code=>Object.assign(new Error(code),{code});
-let active=false,partition,preflightModule;
+let active=false,partition,preflightModule,resolutionModule;
 const preflight=()=>preflightModule??=import(app.isPackaged?pathToFileURL(path.join(process.resourcesPath,'service','src','pdf-preflight.js')).href:new URL('../src/pdf-preflight.js',import.meta.url).href);
+const resolution=()=>resolutionModule??=import(app.isPackaged?pathToFileURL(path.join(process.resourcesPath,'service','src','pdf-image-resolution.js')).href:new URL('../src/pdf-image-resolution.js',import.meta.url).href);
 export async function renderPdfDocument(input,options={}){
  options.signal?.throwIfAborted();if(active)throw fail('PDF_BUSY');active=true;
  try{await app.whenReady();return await render(input,options);}finally{active=false;}
@@ -32,6 +33,7 @@ async function render(input,{signal,timeoutMs=120000,maxOutputBytes=64*1024*1024
   const operation=(async()=>{
    await win.loadURL(documentURL);
    win.webContents.debugger.attach('1.3');await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{media:'print'});
+   const {pdfImageResolutionScript}=await resolution();await win.webContents.executeJavaScript(pdfImageResolutionScript);
    const {pdfPreflightScript,validPdfPreflight}=await preflight(),findings=await win.webContents.executeJavaScript(pdfPreflightScript);
    if(!validPdfPreflight(findings))throw fail('PDF_OUTPUT');
    signal?.throwIfAborted();

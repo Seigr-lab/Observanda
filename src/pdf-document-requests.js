@@ -18,7 +18,7 @@ import {pdfRendererAvailable} from './pdf-render-service.js';
 import {PdfLayoutError} from './web/pdf-layout-model.js';
 import {revisionId} from './web/revision-model.js';
 import {AppError} from './errors.js';
-const methods=['list','open','sections','section','history','change','capabilities','export','layouts','layout-change','source','source-retain','source-images','source-image-retain','selection','preflight','fonts','font-retain','image-import','image-read','exports','export-start','export-status','export-cancel','export-resume','export-download'];
+const methods=['list','archive','openArchived','open','sections','outline','section','history','change','capabilities','export','layouts','layout-change','source','source-retain','source-images','source-image-retain','selection','preflight','fonts','font-retain','image-import','image-read','exports','export-start','export-status','export-cancel','export-resume','export-download'];
 export function pdfDocumentRequest(route,method='POST'){
  if(method!=='POST'||!route.startsWith('/api/pdf/'))return null;const pdf=route.slice(9);
  return methods.includes(pdf)?{pdf,method:'POST',write:['change','layout-change','source-retain','source-image-retain','font-retain','image-import','export-start','export-cancel','export-resume'].includes(pdf),binary:['export','image-read','export-download'].includes(pdf),limit:pdf==='image-import'?24*1024*1024:1024*1024}:null;

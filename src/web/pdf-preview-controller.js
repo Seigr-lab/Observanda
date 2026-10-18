@@ -11,7 +11,7 @@ export function pdfPreviewController({request,onChange=()=>{},delay=800,createUR
   cancel();error='';const epoch=generation,abort=new AbortController();controller=abort;
   const promise=Promise.resolve().then(()=>request(id,revision,abort.signal)).then(blob=>{
    if(epoch!==generation||abort.signal.aborted)throw new DOMException('Preview cancelled','AbortError');
-   const previous=current;current={id,revision,url:createURL(blob)};onChange();if(previous)revokeURL(previous.url);return current;
+   const previous=current;current={id,revision,blob,url:createURL(blob)};onChange();if(previous)revokeURL(previous.url);return current;
   }).catch(failure=>{if(epoch===generation&&!abort.signal.aborted)error=failure.message??String(failure);throw failure;}).finally(()=>{if(epoch===generation){pending=null;controller=null;onChange();}});
   pending={id,revision,promise};onChange();return promise;
  }

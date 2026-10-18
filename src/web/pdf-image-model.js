@@ -1,3 +1,4 @@
+import {validPdfImageOutputDpi} from './pdf-image-resolution-model.js';
 import {researchId} from './research-reference.js';
 import {revisionId} from './revision-model.js';
 const exact=(v,keys)=>v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).sort().join()===keys.split(',').sort().join();
@@ -6,7 +7,7 @@ const number=(v,min,max)=>Number.isFinite(v)&&v>=min&&v<=max;
 export const PDF_IMAGE_MAX_BYTES=16*1024*1024;
 export const PDF_IMAGE_MAX_PIXELS=64*1024*1024;
 export function validPdfImage(value){
- return exact(value,'id,asset,alt,caption,widthMm,heightMm,fit,crop,position')&&researchId(value.id)&&revisionId(value.asset)&&text(value.alt,2000,true)&&text(value.caption,2000)&&number(value.widthMm,1,1000)&&number(value.heightMm,1,1000)&&['contain','cover'].includes(value.fit)&&exact(value.crop,'x,y')&&number(value.crop.x,0,100)&&number(value.crop.y,0,100)&&exact(value.position,'block,align')&&Number.isInteger(value.position.block)&&number(value.position.block,0,12000)&&['left','center','right'].includes(value.position.align);
+ return exact(value,'id,asset,alt,caption,widthMm,heightMm,fit,crop,position'+(Object.hasOwn(value??{},'outputDpi')?',outputDpi':''))&&validPdfImageOutputDpi(value.outputDpi)&&researchId(value.id)&&revisionId(value.asset)&&text(value.alt,2000,true)&&text(value.caption,2000)&&number(value.widthMm,1,1000)&&number(value.heightMm,1,1000)&&['contain','cover'].includes(value.fit)&&exact(value.crop,'x,y')&&number(value.crop.x,0,100)&&number(value.crop.y,0,100)&&exact(value.position,'block,align')&&Number.isInteger(value.position.block)&&number(value.position.block,0,12000)&&['left','center','right'].includes(value.position.align);
 }
 export const validPdfImages=values=>Array.isArray(values)&&new Set(values.map(value=>value?.id)).size===values.length&&values.every(validPdfImage);
 export function pdfImagePlacement(asset,{id,alt,caption='',block=0,widthMm=100}={}){

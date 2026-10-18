@@ -1,7 +1,7 @@
 // Measurements describe the compiled document at its printable width. They
 // do not claim to reproduce Chromium's page-break decisions or font coverage.
 export const PDF_PREFLIGHT_LIMIT=256;
-const codes=new Set(['PDF_PAGE_GEOMETRY','PDF_SECTION_HIDDEN','PDF_FONT_FAILED','PDF_IMAGE_MISSING','PDF_IMAGE_RESOLUTION','PDF_CONTENT_OVERFLOW','PDF_CONTENT_CLIPPED','PDF_BLOCK_TOO_TALL','PDF_ANCHOR_MISSING','PDF_ANCHOR_AMBIGUOUS']);
+const codes=new Set(['PDF_COMPOSITION_OVERLAP','PDF_COMPOSITION_OVERFLOW','PDF_PAGE_GEOMETRY','PDF_SECTION_HIDDEN','PDF_FONT_FAILED','PDF_IMAGE_MISSING','PDF_IMAGE_RESOLUTION','PDF_CONTENT_OVERFLOW','PDF_CONTENT_CLIPPED','PDF_BLOCK_TOO_TALL','PDF_ANCHOR_MISSING','PDF_ANCHOR_AMBIGUOUS']);
 const metricKeys=new Set(['widthPx','heightPx','availableWidthPx','availableHeightPx','dpi','recommendedDpi','naturalWidth','naturalHeight','count','target']);
 const object=value=>value&&typeof value==='object'&&!Array.isArray(value);
 export function validPdfPreflight(value){
@@ -61,6 +61,10 @@ export async function measurePdfPreflight(){
    const rect=image.getBoundingClientRect();if(rect.width<=0||rect.height<=0)continue;
    const dpi=Math.min(image.naturalWidth/rect.width,image.naturalHeight/rect.height)*96;
    if(dpi<144)add('PDF_IMAGE_RESOLUTION','warning',image,{dpi:round(dpi),recommendedDpi:144,naturalWidth:image.naturalWidth,naturalHeight:image.naturalHeight,widthPx:round(rect.width),heightPx:round(rect.height)});
+  }
+  for(const item of document.querySelectorAll('[data-pdf-composition-key]')){
+   if(item.getAttribute('data-pdf-composition-overlap')==='true')add('PDF_COMPOSITION_OVERLAP','warning',item,{count:2});
+   if(item.scrollWidth>item.clientWidth+1||item.scrollHeight>item.clientHeight+1)add('PDF_COMPOSITION_OVERFLOW','warning',item,{widthPx:round(item.scrollWidth),heightPx:round(item.scrollHeight),availableWidthPx:round(item.clientWidth),availableHeightPx:round(item.clientHeight)});
   }
   const anchors=new Map();for(const element of document.querySelectorAll('[id],a[name]')){if(!rendered(element))continue;const key=element.id||element.getAttribute('name');if(key)anchors.set(key,(anchors.get(key)??0)+1);}
   for(const link of document.querySelectorAll('a[href]')){

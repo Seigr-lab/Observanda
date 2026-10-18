@@ -347,5 +347,11 @@
   "PDF_ANCHOR_MISSING": "An internal link has no visible destination.",
   "PDF_ANCHOR_AMBIGUOUS": "An internal link has more than one destination.",
   "PDF_AUDIENCE": "Choose a valid audience for this PDF edition.",
-  "PDF_PUBLIC_REVIEW": "Review or omit each section before preparing a public PDF. Content or document setting changes require a new review."
+  "PDF_PUBLIC_REVIEW": "Review or omit each section before preparing a public PDF. Content or document setting changes require a new review.",
+  "PDF_COMPOSITION_STALE": "The page composition no longer matches its content. Adjust the layout to include every item.",
+  "PDF_COMPOSITION_BOUNDS": "A positioned item extends outside the printable page. Adjust its position or size.",
+  "PDF_COMPOSITION_COLUMNS": "Positioned pages require one column. Adjust the section layout.",
+  "PDF_COMPOSITION_OVERLAP": "Positioned items overlap. Check the page composition.",
+  "PDF_COMPOSITION_OVERFLOW": "Content extends beyond its assigned box. Enlarge the box or adjust its content.",
+  "PDF_IMAGE_RESOLUTION_FAILED": "The image could not be prepared at the chosen resolution."
 }
