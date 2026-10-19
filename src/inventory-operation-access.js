@@ -1,3 +1,4 @@
+import {AsyncLocalStorage} from 'node:async_hooks';
 import {AppError} from './errors.js';
 import {ownerSourceHost} from './owner-source-host.js';
 import {projectCollectionReader} from './project-collection-reader.js';
@@ -8,7 +9,7 @@ import {researchId} from './web/research-reference.js';
 // selecting another. Credentials remain request-owned and are never journaled.
 export async function inventoryOperationAccess(application,client,workspaceId,{scope=null,labBookId=null,check=async()=>{},signal}={}){
  await check();signal?.throwIfAborted();
- const {registry}=await ownerSourceHost(application,{workspaceId,scope,labBookId}),reader=projectCollectionReader(application,client,check),readers=new Map(),owners=new Map();let closed=false;
+ const {registry}=await ownerSourceHost(application,{workspaceId,scope,labBookId}),reader=projectCollectionReader(application,client,check),readers=new Map(),owners=new Map(),visits=new AsyncLocalStorage();let closed=false;
  const active=()=>{signal?.throwIfAborted();if(closed)throw new AppError('WORKSPACE_CHANGED');};
  const same=(a,b)=>a.workspaceId===b.workspaceId&&a.projectId===b.projectId&&a.labBookId===b.labBookId;
  async function locateIn(registry,namespaceId){
@@ -36,10 +37,23 @@ export async function inventoryOperationAccess(application,client,workspaceId,{s
    if(selected.sourceWorkspaceId){sourceReader=readers.get(selected.sourceWorkspaceId);if(!sourceReader){sourceReader=projectCollectionReader(selected.application,client,selected.check);readers.set(selected.sourceWorkspaceId,sourceReader);}}
    try{return await sourceReader.useStorage(owner,async(storage,{check:verify})=>{
     const current=async()=>{active();await verify();await selected.check();await check();const latest=await locate(namespaceId);if(!same(owner,latest.owner)||selected.sourceWorkspaceId!==latest.sourceWorkspaceId)throw new AppError('WORKSPACE_CHANGED');};
-    await current();const value=await consume(storage,owner,{check:current});await current();owners.set(namespaceId,selected);return value;
+    const visit={active:true,namespaceId,selected,verify};
+    try{return await visits.run(visit,async()=>{await current();const value=await consume(storage,owner,{check:current});await current();owners.set(namespaceId,{...selected,verify});return value;});}
+    finally{visit.active=false;}
    });}catch(error){if(selected.sourceWorkspaceId)error.sourceWorkspaceId=selected.sourceWorkspaceId;throw error;}
   },
-  async verify(){active();await reader.verify();for(const saved of readers.values())await saved.verify();for(const [id,selected] of owners){const latest=await locate(id);if(!same(selected.owner,latest.owner)||selected.sourceWorkspaceId!==latest.sourceWorkspaceId)throw new AppError('WORKSPACE_CHANGED');}await check();},
+  async verify(){
+   active();const visit=visits.getStore();
+   if(visit?.active){
+    // Participant transaction checkpoints run inside useStorage. Recheck the
+    // exact grants directly instead of reentering its ordered reader queue.
+    for(const saved of owners.values())await saved.verify();
+    await visit.verify();
+   }else{await reader.verify();for(const saved of readers.values())await saved.verify();}
+   for(const [id,selected] of owners){const latest=await locate(id);if(!same(selected.owner,latest.owner)||selected.sourceWorkspaceId!==latest.sourceWorkspaceId)throw new AppError('WORKSPACE_CHANGED');}
+   if(visit?.active&&!owners.has(visit.namespaceId)){const latest=await locate(visit.namespaceId);if(!same(visit.selected.owner,latest.owner)||visit.selected.sourceWorkspaceId!==latest.sourceWorkspaceId)throw new AppError('WORKSPACE_CHANGED');}
+   await check();
+  },
   async close(){closed=true;owners.clear();const results=await Promise.allSettled([reader.close(),...[...readers.values()].map(saved=>saved.close())]);readers.clear();const failed=results.find(result=>result.status==='rejected');if(failed)throw failed.reason;}
  };
 }
