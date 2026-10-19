@@ -1,4 +1,5 @@
 export const activeWebsite=state=>state.websitePin!=null;
+export const explicitWebsite=state=>activeWebsite(state)&&(state.websiteId!=null||state.websiteDefaultRoute===true);
 export const websiteSnapshot=state=>JSON.stringify([websiteContext(state),state.etag,state.websitePin?[state.websitePin.researchSnapshotId,state.websitePin.websiteId,state.websitePin.websiteRevision]:null]);
 export const websiteContext=state=>JSON.stringify([state.storage?.contextId,state.projectOwner?.projectId??null,state.projectOwner?.labBookId??null,activeWebsite(state),state.websiteId??null]);
 export const websiteRequest=route=>/^\/api\/(?:website\/|publishing(?:\/|$)|publication-|deployment-jobs\/|repository-setup\/|local-export\/|preview$|design-preview$|appearance-preview(?:\/|$)|export(?:\/|$))/.test(route);
@@ -7,4 +8,4 @@ export const websitePages=new Set(['website','publishing','integrations','review
 
 export const publicationPreviewUrl=(state,id,file='')=>(state.projectOwner?'/api/projects/'+state.projectOwner.projectId+(state.projectOwner.labBookId?'/lab-books/'+state.projectOwner.labBookId:'')+'/publication-preview/':'/preview/')+id+'/'+file;
 
-export const websiteRoute=hash=>Boolean(websiteRouteId(hash))||/^#\/(?:website|publishing|appearance|review(?:\/.*)?|branding\/.*|preferences\/(?:appearance|integrations))$/.test(hash);
+export const websiteRoute=hash=>Boolean(websiteRouteId(hash))||/^#\/websites\/default\//.test(hash)||/^#\/(?:website|publishing|appearance|review(?:\/.*)?|branding\/.*|preferences\/(?:appearance|integrations))$/.test(hash);

@@ -8,7 +8,7 @@ import {createNotebook} from '../../src/model.js';
 import {navigate} from './preferences-helper.js';
 let app,root,errors;
 const canvas=p=>p.frameLocator('#website-draft-preview');
-const task=(p,name)=>p.getByRole('navigation',{name:'Editing tools',exact:true}).getByRole('button',{name:{Add:'Page',Content:'Public content'}[name]??name,exact:true}).click();
+const task=(p,name)=>p.getByRole('navigation',{name:'Editing tools',exact:true}).getByRole('button',{name:{Add:'Page',Content:'Content'}[name]??name,exact:true}).click();
 test.beforeEach(async({page})=>{errors=[];page.on('pageerror',e=>errors.push(e.message));root=await mkdtemp(path.join(os.tmpdir(),'observanda-canvas-'));await new Workspace(root).create(createNotebook('Field & form',''));app=await startServer({root,preferencesFile:path.join(root,'preferences.json'),port:0});await page.goto(app.url);await navigate(page,'Website editor');await page.getByRole('button',{name:'Create homepage',exact:true}).click();await expect(canvas(page).locator('main')).toBeVisible();});
 test.afterEach(async()=>app.close());
 async function drag(page,from,to,{x=.5,y=.5}={}){

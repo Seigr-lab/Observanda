@@ -1,4 +1,4 @@
-export const task=async(page,name)=>{if(await page.getByRole('button',{name:'Back to page',exact:true}).isVisible())await page.getByRole('button',{name:'Back to page',exact:true}).click();await page.getByRole('navigation',{name:'Editing tools',exact:true}).getByRole('button',{name:{Add:'Page',Content:'Public content'}[name]??name,exact:true}).click();};
+export const task=async(page,name)=>{if(await page.getByRole('button',{name:'Back to page',exact:true}).isVisible())await page.getByRole('button',{name:'Back to page',exact:true}).click();await page.getByRole('navigation',{name:'Editing tools',exact:true}).getByRole('button',{name:{Add:'Page',Content:'Content'}[name]??name,exact:true}).click();};
 export async function editorTab(page,name){
  if(await page.getByRole('button',{name:'Back to page',exact:true}).isVisible())await page.getByRole('button',{name:'Back to page',exact:true}).click();
  if(name==='Content'){await task(page,'Content');return;}
@@ -11,7 +11,7 @@ export async function openBlock(page,index){await task(page,'Page');await page.l
 export async function addSection(page,kind='text'){await task(page,'Add');await page.locator(`.insert-grid [data-kind="${kind}"]`).click();await task(page,'Page');await page.locator('#website-outline li').filter({has:page.locator('.section-select[aria-pressed=true]')}).getByRole('button',{name:/^Edit /}).click();}
 export async function openLayouts(page){await task(page,'Page');await page.getByRole('button',{name:'Page layouts',exact:true}).click();if(!await page.locator('.layout-library').evaluate(el=>el.open))await page.locator('.layout-library>summary').click();}
 export async function sectionTools(page,name){await page.getByRole('navigation',{name:'Section tools',exact:true}).getByRole('button',{name,exact:true}).click();}
-export async function typeTools(page,name){await page.getByRole('navigation',{name:'Typography tools',exact:true}).getByRole('button',{name:{Add:'Page',Content:'Public content'}[name]??name,exact:true}).click();}
+export async function typeTools(page,name){await page.getByRole('navigation',{name:'Typography tools',exact:true}).getByRole('button',{name:{Add:'Page',Content:'Content'}[name]??name,exact:true}).click();}
 
 export async function chooseWebsitePage(page,path){
  const select=page.getByLabel('Page',{exact:true});

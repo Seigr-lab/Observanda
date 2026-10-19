@@ -11,7 +11,7 @@
   "publishing": "Publishing",
   "destination": "Publishing destination",
   "empty": "No websites yet.",
-  "help": "Create websites with their own designs, selected lab books and publishing destinations.",
+  "help": "Create and reopen named websites in this workspace. Each website saves its own pages, design and publishing destination.",
   "private": "New websites start with no records selected for publication.",
   "choose": "Website",
   "changed": "The selected website changed. Reopen it before continuing.",

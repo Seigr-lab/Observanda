@@ -1,5 +1,5 @@
 import {task,editorTab,openPageSettings} from './composer-helper.js';
-import {navigate,preferences,editWorkspace} from './preferences-helper.js';
+import {navigate,preferences,editWorkspace,openDefaultWebsite} from './preferences-helper.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,readFile,rm} from 'node:fs/promises';
 import os from 'node:os';
@@ -21,7 +21,7 @@ test('leaving an editor offers Stay, Discard and Save without carrying mistakes 
   const original=book.entries.find(e=>e.title==='Watching a seed unfold').body;
   await page.getByLabel('Summary / context').fill('An unwanted change');await navigate(page,'Website editor');
   await expect(guard(page)).toBeVisible();await choose(page,'Stay here');await expect(page.getByLabel('Summary / context')).toHaveText('An unwanted change');expect(await readFile(path.join(root,'observanda.json'),'utf8')).toBe(raw);
-  await navigate(page,'Website editor');await choose(page,'Discard changes');await expect(page.getByRole('heading',{name:'Website',exact:true})).toBeVisible();
+  await navigate(page,'Website editor');await choose(page,'Discard changes');await expect(page.getByRole('heading',{name:'Websites',exact:true})).toBeVisible();await openDefaultWebsite(page);await expect(page.getByRole('heading',{name:'Website',exact:true})).toBeVisible();
   await task(page,'Page');await page.getByLabel('Editing area',{exact:true}).selectOption('footer');await page.getByLabel('Footer text').fill('Intended footer');await navigate(page,'Preferences');await choose(page,'Save and continue');await preferences(page,'Appearance');
   await expect(page.getByRole('heading',{name:'Appearance',exact:true})).toBeVisible();
   const saved=(await new Workspace(root).read()).book;expect(saved.website.footer).toBe('Intended footer');expect(saved.entries.find(e=>e.title==='Watching a seed unfold').body).toBe(original);

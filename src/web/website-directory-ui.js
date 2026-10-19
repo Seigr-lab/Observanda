@@ -10,7 +10,7 @@ export function websiteDirectoryUI({state,api,esc,access=operation=>operation(),
  function clear(){stop();identity='';page=null;search='';cursor=null;status='loading';}
  function paint(){
   const host=root();if(!host||!active())return;
-  host.querySelector('[data-website-directory-items]').innerHTML=(page?.items??[]).map(item=>'<section class="panel"><h2>'+esc(item.siteId?item.name:tr('ownerWebsite',{name:item.ownerLabel}))+'</h2>'+(item.siteId?'<p>'+esc(item.ownerLabel)+'</p>':'')+'<button type="button" class="button" data-action="site-owner-open" data-key="'+esc(item.key)+'">'+esc(tr('editor'))+'</button></section>').join('');
+  host.querySelector('[data-website-directory-items]').innerHTML=(page?.items??[]).map(item=>'<section class="panel" data-website-card="'+esc(item.key)+'"><h2>'+esc(item.name)+'</h2><p class="muted">'+esc(item.ownerLabel)+'</p><div class="inline-actions">'+[['editor','website'],['rename','rename'],['destination','integrations']].map(([label,view])=>'<button type="button" class="button" data-action="site-owner-open" data-view="'+view+'" data-key="'+esc(item.key)+'">'+esc(tr(label))+'</button>').join('')+'</div></section>').join('');
   const message=host.querySelector('[data-website-directory-status]');message.textContent=tr(status==='error'?'directoryFailed':status==='loading'?'directoryLoading':page.total?'directoryRange':'empty',page?{first:page.offset+1,last:page.offset+page.items.length,total:page.total}:{});message.setAttribute('role',status==='error'?'alert':'status');
   const retry=host.querySelector('[data-action=site-directory-retry]');retry.hidden=status!=='error';
   for(const direction of ['previous','next']){const button=host.querySelector('[data-action=site-directory-'+direction+']');button.hidden=!page?.previousCursor&&!page?.nextCursor;button.disabled=status==='loading'||!page?.[direction+'Cursor'];}
@@ -29,7 +29,7 @@ export function websiteDirectoryUI({state,api,esc,access=operation=>operation(),
  function bind(){if(!active()){clear();return;}const next=key();if(next!==identity){clear();identity=next;root().querySelector('[data-website-directory-search]').value='';void load();}else paint();}
  function input(element){if(!element.hasAttribute('data-website-directory-search')||!active())return false;stop();search=element.value;cursor=null;page=null;status='loading';paint();timer=setTimeout(()=>load(),180);return true;}
  async function action(element){
-  const name=element.dataset.action;if(name==='site-owner-open'){const item=page?.items.find(item=>item.key===element.dataset.key);if(item&&status==='ready'){stop();await open(item);}return true;}
+  const name=element.dataset.action;if(name==='site-owner-open'){const item=page?.items.find(item=>item.key===element.dataset.key);if(item&&status==='ready'){stop();await open(item,element.dataset.view??'website');}return true;}
   if(!name?.startsWith('site-directory-'))return false;const direction=name.slice('site-directory-'.length);
   if(direction==='previous'||direction==='next'){if(status!=='ready'||!page?.[direction+'Cursor'])return true;cursor=page[direction+'Cursor'];}else if(direction!=='retry')return false;
   await load(direction==='retry');root()?.querySelector('[data-website-directory-status]')?.focus();return true;

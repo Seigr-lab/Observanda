@@ -72,7 +72,7 @@ import {researchTargets,researchReference,parseResearchReference} from './record
 import {applicationShell} from './application-shell.js';
 import {workspaceNavigation} from './workspace-navigation.js';
 import {websiteSitesUI} from './website-sites-ui.js';
-import {activeWebsite,websiteContext,websiteRequest,websitePages} from './website-context.js';
+import {activeWebsite,explicitWebsite,websiteContext,websiteRequest,websitePages} from './website-context.js';
 import {moduleLinks} from './module-links.js';
 import {operationsUpdates} from './modules/live-updates.js';
 import {moduleWorkbench} from './module-workbench.js';
@@ -808,7 +808,7 @@ function renderPage(){
  if(['entries','editor','record-reader'].includes(state.page))content=structureUI.recordContext()+content;
  if(state.page==='project'||state.page==='entries'&&state.notebook!=='all')content+='<button class="button" data-action="research-copy-context">Copy '+(state.page==='project'?'project':'lab book')+' reference</button>';
  if(['workspace','entries','editor','record-reader'].includes(state.page))content=recordDrafts.banner()+content;
- content=sites.header()+content+sectionActions();if(state.websiteId)return content;if(state.page==='branding'&&(!state.brandReturn||state.brandReturn.startsWith('#/preferences')))return preferencesFrame('appearance',content,state.dashboardSettings);return preferencePage(state.page)?preferencesFrame(state.page,content,state.dashboardSettings):content;
+ content=sites.header()+content+sectionActions();if(explicitWebsite(state))return content;if(state.page==='branding'&&(!state.brandReturn||state.brandReturn.startsWith('#/preferences')))return preferencesFrame('appearance',content,state.dashboardSettings);return preferencePage(state.page)?preferencesFrame(state.page,content,state.dashboardSettings):content;
 }
 
 function renderEntries() {
@@ -902,6 +902,7 @@ async function rawAction(button) {
   if(navigationActions.has(button.dataset.action))ownerOperation.clear();
   if(help.action(button))return;
   const name = button.dataset.action;
+  if(name==='website'&&button.closest?.('#main-navigation')){await sites.manager();return;}
   if(state.page==='entries'&&state.bookReading&&name?.startsWith('material-')){await materials.action(button);return;}
   if(name==='laboratory-open-owned'){
     const {workspaceId,projectId,labBookId,kind,id}=button.dataset;
@@ -976,7 +977,7 @@ async function rawAction(button) {
   if((state.workspaceOutline||state.recordScope&&!scopedRecordAction(name))&&!readingAction&&!administrationAction&&!brandingAction&&!appearanceAction&&!publicationAction&&!name?.startsWith('edition-')&&!outlineModuleAction&&!recordCreationActions.has(name)&&!structureActions.has(name)&&!state.access?.locked&&!state.storageUnavailable&&!state.newWorkspace&&!['browse-record','edit-entry','open-issue','record-read-linked','storage-lock','workspace','entries','projects','open-project','project-records','project-recent-retry','project-recent-collection-retry','research-copy-context','filter-notebook','clear-record-filters','close-dialog','preferences','workspace-discard'].includes(name)&&!(state.page==='entries'&&name?.startsWith('record-type-'))&&!name?.startsWith('record-list-')&&!name?.startsWith('record-view')&&!name?.startsWith('starter-')&&!name?.startsWith('dashboard-')&&!name?.startsWith('module-settings-')){const route=location.hash;await ensureCompleteWorkspace();if(location.hash!==route){await restoreRoute();return;}}
   const module=moduleForPage(name);
   if(module&&!enabledModule(state.dashboardSettings,module.id)){notify('Enable '+module.label+' in Preferences > Modules & dashboard.');return;}
-  if((['website','publishing','integrations','appearance','branding','preview'].includes(name))&&!activeWebsite(state))await sites.enter(null);
+  if((['website','publishing','integrations','appearance','branding','preview'].includes(name))&&!activeWebsite(state))await sites.enter(null,{preferences:['appearance','integrations'].includes(name)&&Boolean(button.closest?.('.preferences-tabs')||button.dataset.preferences==='true')});
   if(name==='website'||name==='preview'&&state.page==='website')await website.load();
 
   if(name==='preferences'){state.page='preferences';render();return;}
@@ -1088,7 +1089,7 @@ document.addEventListener('input', event => {
   if(recordDestination.input(event.target)||recordCreation.input(event.target))return;
   if(bookStorage.input(event.target))return;
   if(editionSelection.input(event.target)||localExport.input(event.target)||languageControls.input(event.target)||help.input(event.target))return;
-  if(event.target.id==='preferences-section'){const next=event.target.value;event.target.value=state.page;action({dataset:{action:next}}).catch(report);return;}
+  if(event.target.id==='preferences-section'){const next=event.target.value;event.target.value=state.page;action({dataset:{action:next,preferences:'true'}}).catch(report);return;}
   if(structureUI.projectStorage.input(event.target))return;
   if(structureUI.notebooks.input(event.target))return;
   if(updateRecordDate(event.target,entry(),{field,option,esc})){dirtyRecord();return;}

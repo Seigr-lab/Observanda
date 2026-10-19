@@ -137,7 +137,7 @@ export function websiteDocumentClient({state,api,selection,onStatus=()=>{}}){
     const operations=pending?.operations??changes().slice(0,32);if(!operations.length){local=false;error='';status();return;}
     pending??={draftId:envelope.draft?.id??null,expectedRevision:envelope.draft?.revision??null,commandId:crypto.randomUUID(),operations};status();
     try{const result=await request('change',pending);acknowledge(pending.operations);pending=null;error='';adopt(result);local=changes().length>0;}
-    catch(reason){if(epoch===generation){if(['INVALID','LIMIT','CONFLICT','PRIVACY','NOT_FOUND'].includes(reason.code))pending=null;error=reason.message??t('websiteEditor','documentCheckpointFailed');status();}throw reason;}
+    catch(reason){if(epoch===generation){if(['INVALID','LIMIT','CONFLICT','PRIVACY','NOT_FOUND','WEBSITE_NAME_EXISTS'].includes(reason.code))pending=null;error=reason.message??t('websiteEditor','documentCheckpointFailed');status();}throw reason;}
    }
   });queue=task.catch(()=>{});return task;
  }
@@ -151,7 +151,7 @@ export function websiteDocumentClient({state,api,selection,onStatus=()=>{}}){
  function exclusive(operation){const task=queue.then(operation);queue=task.catch(()=>{});return task;}
  async function finishAction(){
   const command=actionPending;let result;
-  try{result=await request(command.operation,command.payload);}catch(reason){if(['INVALID','LIMIT','CONFLICT','PRIVACY','NOT_FOUND'].includes(reason.code))actionPending=null;local=changes().length>0;error=reason.message??t('websiteEditor','documentCheckpointFailed');status();throw reason;}
+  try{result=await request(command.operation,command.payload);}catch(reason){if(['INVALID','LIMIT','CONFLICT','PRIVACY','NOT_FOUND','WEBSITE_NAME_EXISTS'].includes(reason.code))actionPending=null;local=changes().length>0;error=reason.message??t('websiteEditor','documentCheckpointFailed');status();throw reason;}
   actionPending=null;error='';let page=null;const selectedKey=pageKey;
   if(selectedKey)try{page=await request('item',{websitePin:result.websitePin,...(result.draft?{draftId:result.draft.id,draftRevision:result.draft.revision}:{}),collection:'pages',key:selectedKey});}catch(reason){if(reason.name==='AbortError')throw reason;if(reason.code==='NOT_FOUND')pageKey=null;else error=reason.message;}
   const overrideRows=[];

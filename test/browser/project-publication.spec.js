@@ -50,7 +50,7 @@ test('a retained project website preserves editing preview and export through re
   await page.reload();await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible();
   await expect(page.getByText('The workspace or publishing destination has changed since this edition was prepared.',{exact:false})).not.toBeVisible();
   await page.locator('#review-confirm').check();const download=page.waitForEvent('download');await page.getByRole('button',{name:'Download website ZIP',exact:true}).click();expect((await download).suggestedFilename()).toBe('observanda-site.zip');
-  await db.close();db=null;await navigate(page,'Website editor');await expect(page.locator('.website-site-context')).toContainText('Workspace website');expect(page.url()).not.toContain('/owners/');
+  await db.close();db=null;await navigate(page,'Website editor');await expect(page.locator('.website-site-context')).toContainText((await new WebsiteSites(f.workspace).read(null)).site.name);expect(page.url()).not.toContain('/owners/');
   await page.locator('.website-site-context').getByRole('button',{name:'Websites',exact:true}).click();
   await page.getByRole('button',{name:'New website',exact:true}).click();await page.getByLabel('Website name',{exact:true}).fill('Second independent site');await expect(page.getByLabel('Project',{exact:true})).toHaveCount(0);await page.getByRole('button',{name:'Create website',exact:true}).click();await expect(page.locator('.website-site-context')).toContainText('Second independent site');expect(page.url()).not.toContain('/owners/');
   await page.goto(websiteUrl);await expect(page.locator('.website-site-context')).toContainText('Experiment journal');

@@ -51,6 +51,15 @@ test('dedicated preference routes retain old bookmarks and stable dashboard navi
  assert.equal(resolveRoute('#/appearance',book).page,'appearance');assert.equal(resolveRoute('#/storage',book).page,'storage');assert.equal(resolveRoute('#/preferences/unknown',book).page,'workspace');
 });
 
+test('default website routes remain distinct from application preferences and round-trip after reopening',()=>{
+ const book=sampleNotebook();
+ for(const [page,segment] of [['website','editor'],['integrations','settings'],['appearance','appearance'],['publishing','publishing']]){
+  const hash='#/websites/default/'+segment,state=resolveRoute(hash,book);
+  assert.equal(state.page,page);assert.equal(state.websiteId,null);assert.equal(state.websiteDefaultRoute,true);assert.equal(routeFor(state),hash);
+ }
+ for(const page of ['appearance','integrations']){const hash='#/preferences/'+page,state=resolveRoute(hash,book);assert.equal(state.websiteDefaultRoute,false);assert.equal(routeFor(state),hash);}
+});
+
 test('dashboard API enforces session, origin and conflict checks, survives restart and never edits the research manifest',async()=>{
  const root=await temp(),file=path.join(root,'preferences.json'),book=sampleNotebook();book.title=path.basename(root);await new Workspace(root).create(book);const original=await readFile(path.join(root,'observanda.json'),'utf8');let app=await startServer({root,preferencesFile:file,port:0});
  try{
