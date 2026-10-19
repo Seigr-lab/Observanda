@@ -78,16 +78,13 @@ test('output inventory binds nested retained blobs, selected choices and the exa
   if(name&&name!=='publication.json'&&args[0]==='wx'&&path.dirname(file)===directory){
    const sync=handle.sync;handle.sync=async function(){
     const gate=Promise.withResolvers(),finished=Promise.withResolvers();syncGates.push({name,gate,finished});syncing++;maxSyncing=Math.max(maxSyncing,syncing);
-    if(syncGates.length===3){reverse=(async()=>{for(const item of [...syncGates].reverse()){item.gate.resolve();await item.finished.promise;}})();reverse.then(reverseDone.resolve,reverseDone.reject);}else if(syncGates.length===4)gate.resolve();
+    if(syncGates.length===3){reverse=(async()=>{for(const item of [...syncGates].reverse()){item.gate.resolve();await item.finished.promise;}})();reverse.then(reverseDone.resolve,reverseDone.reject);}else if(syncGates.length===4)reverseDone.promise.then(gate.resolve,gate.reject);
     try{await gate.promise;await sync.call(this);syncCompleted.push(name);}finally{syncing--;finished.resolve();}
    };
   }
   if(args[0]==='r'&&path.dirname(file)===directory&&file.endsWith('.blob')){
    privacyReads++;privacyCount++;maxPrivacyReads=Math.max(maxPrivacyReads,privacyReads);const close=handle.close;
    handle.close=async function(){try{return await close.call(this);}finally{privacyReads--;}};
-   // Hold the first readback until the first three syncs finish. Other completed files
-   // must wait without opening a second whole-file plaintext reader.
-   if(privacyCount===1)await reverseDone.promise;
   }
   if(name==='publication.json'&&args[0]==='wx'&&path.dirname(file)===directory){
    const write=handle.write;handle.write=function(bytes,offset,length,position){if(position>=ENCRYPTION_OVERHEAD)manifestPayloads.add(bytes);return write.call(this,bytes,offset,length,position);};
@@ -106,7 +103,7 @@ test('output inventory binds nested retained blobs, selected choices and the exa
  for(const value of styles)await writer.addChoice('styles',digest(value.css),value);
  return writer.finish({defaultPage:'index.html'});
  });}finally{clearTimeout(releaseHeld);openHome.resolve();for(const item of syncGates)item.gate.resolve();await reverse?.catch(()=>{});fixture.workspace.openCatalogue=open;fixture.workspace.withLock=lock;fixture.workspace.writeMetadata=writeMetadata;fileMock.mock.restore();syncBuiltinESMExports();}
- assert.equal(nextPageOpenedWhileHomeWaits,true,'A buffered page must release rendering before its filesystem open completes');assert.equal(maxSyncing,3);assert.equal(syncGates.length,4);assert.deepEqual(syncCompleted,[syncGates[2],syncGates[1],syncGates[0],syncGates[3]].map(item=>item.name));assert.equal(syncing,0);assert.equal(maxPrivacyReads,1);assert.equal(privacyReads,0);assert.equal(privacyCount,4);
+ assert.equal(nextPageOpenedWhileHomeWaits,true,'A buffered page must release rendering before its filesystem open completes');assert.equal(maxSyncing,3);assert.equal(syncGates.length,4);assert.deepEqual(syncCompleted,[syncGates[2],syncGates[1],syncGates[0],syncGates[3]].map(item=>item.name));assert.equal(syncing,0);assert.equal(maxPrivacyReads,0);assert.equal(privacyReads,0);assert.equal(privacyCount,0);
  assert.ok(opened<=3,'Output repeatedly opened authenticated connections: '+opened);assert.equal(closed,opened,'Output retained a live connection after completion');
  const batchBytes=batch=>batch.reduce((sum,size)=>sum+size,0);
  assert.ok(batches.filter(batch=>batch.length===512).length>=2,'Tiny nodes must fill multiple durable 512-object batches');
@@ -147,8 +144,8 @@ test('output inventory binds nested retained blobs, selected choices and the exa
  assert.deepEqual(await contentBuffer(await files.get('index.html')),homeBytes);
  // Attempt failure must wait for every started durable write before its lease
  // closes and ordinary cleanup removes the attempt. The completed sibling stays.
- for(const phase of ['callback','sync','privacy','cancel']){
-  const attempt={id:job.id,lease:{token:randomUUID()}},attemptDirectory=await releases.directory(job.id,attempt.lease.token),attemptPrefix='.observanda/release-outputs/'+job.id+'/'+attempt.lease.token,controller=new AbortController(),reason=new Error('Refused output '+phase),ready=Promise.withResolvers(),gates=[],openFile=filesystem.open;let live=0,settled=false;
+ for(const phase of ['callback','sync','privacy','cancel','key-clear','key-inplace','key-replace','vault-replace']){
+  const attempt={id:job.id,lease:{token:randomUUID()}},attemptDirectory=await releases.directory(job.id,attempt.lease.token),attemptPrefix='.observanda/release-outputs/'+job.id+'/'+attempt.lease.token,controller=new AbortController(),reason=new Error('Refused output '+phase),ready=Promise.withResolvers(),gates=[],openFile=filesystem.open,vault=fixture.workspace.vault,keyReference=vault.key,keyBytes=Buffer.from(vault.key);let live=0,settled=false;
   const mock=t.mock.method(filesystem,'open',async function(file,...args){
    const handle=await openFile.call(this,file,...args);if(path.dirname(file)!==attemptDirectory)return handle;
    if(args[0]==='wx'){
@@ -160,14 +157,27 @@ test('output inventory binds nested retained blobs, selected choices and the exa
   let pending;const timeout=setTimeout(()=>{for(const gate of gates)gate.resolve();},10000);
   try{
    pending=withPublicationOutputWriter(workspace,source,attempt,{directory:attemptDirectory,signal:controller.signal,blockedValues:['private-observation-marker']},async writer=>{
-    await writer.retain('index.html',(async function*(){yield '<!doctype html><title>'+ (phase==='privacy'?'private-observation-marker':'Safe output')+'</title>';})());
-    await writer.retain('second.html',(async function*(){yield '<!doctype html><title>Second safe output</title>';})());
+    await writer.retain('index.html',(async function*(){yield '<!doctype html><title>'+ (phase==='privacy'?'private-observation-marker':'Safe output')+'</title>';if(phase==='privacy')yield Buffer.alloc(256*1024,0x20);})());
+    await writer.retain('pages/'+randomUUID()+'.html',(async function*(){yield '<!doctype html><title>Second safe output</title>';})());
     await writer.addChoice('pages','index.html',{path:'index.html',title:'Home'});if(phase==='callback')throw reason;return writer.finish({defaultPage:'index.html'});
    });pending.then(()=>{settled=true;},()=>{settled=true;});
-   await ready.promise;if(phase==='cancel')controller.abort(reason);if(phase==='sync')gates[0].reject(reason);else gates[0].resolve();await turn();assert.equal(settled,false);assert.ok(live>0,'The remaining durable write must still be owned');gates[1].resolve();
-   await assert.rejects(pending,error=>phase==='privacy'?error.code==='PRIVACY':error===reason);assert.equal(live,0);assert.ok((await readdir(attemptDirectory)).every(name=>name.endsWith('.blob')),'Failed writes must remove their temporary files');
-  }finally{clearTimeout(timeout);for(const gate of gates)gate.resolve();await pending?.catch(()=>{});mock.mock.restore();syncBuiltinESMExports();}
+   await ready.promise;if(phase==='cancel')controller.abort(reason);if(phase==='key-clear')clearVault(vault);if(phase==='key-inplace')vault.key.fill(0);if(phase==='key-replace')vault.key=Buffer.from(keyBytes);if(phase==='vault-replace')fixture.workspace.vault={...vault,key:Buffer.from(keyBytes)};if(phase==='sync')gates[0].reject(reason);else gates[0].resolve();await turn();assert.equal(settled,false);assert.ok(live>0,'The remaining durable write must still be owned');gates[1].resolve();
+   await assert.rejects(pending,error=>phase==='privacy'?error.code==='PRIVACY':phase.startsWith('key-')||phase==='vault-replace'?error.code==='ACCESS_LOCKED':error===reason);assert.equal(live,0);assert.ok((await readdir(attemptDirectory)).every(name=>name.endsWith('.blob')),'Failed writes must remove their temporary files');
+  }finally{clearTimeout(timeout);for(const gate of gates)gate.resolve();await pending?.catch(()=>{});if(fixture.workspace.vault!==vault)fixture.workspace.vault.key?.fill(0);fixture.workspace.vault=vault;if(vault.key!==keyReference)vault.key?.fill(0);keyBytes.copy(keyReference);vault.key=keyReference;keyBytes.fill(0);mock.mock.restore();syncBuiltinESMExports();}
   await releases.clean(job.id,{only:attempt.lease.token});assert.deepEqual(await workspace.listMetadata(attemptPrefix),[]);assert.deepEqual(await readdir(path.dirname(attemptDirectory)),[job.lease.token]);
+ }
+ // Complete small streams reject before a file is opened; large streams retain
+ // the same privacy and UTF-8 policy through their authenticated readback.
+ for(const large of [false,true])for(const problem of ['private','unsafe','utf8']){
+  const attempt={id:job.id,lease:{token:randomUUID()}},attemptDirectory=await releases.directory(job.id,attempt.lease.token),name=problem==='unsafe'?'unsafe.bin':'index.html',body=problem==='utf8'?Buffer.from([0xc3,0x28]):Buffer.from(problem==='private'?'private-observation-marker':'Valid text'),openFile=filesystem.open;let writes=0,reads=0,owned,ended=false;
+  const mock=t.mock.method(filesystem,'open',async function(file,...args){if(path.dirname(file)===attemptDirectory){if(args[0]==='wx')writes++;if(args[0]==='r')reads++;}return openFile.call(this,file,...args);});syncBuiltinESMExports();
+  try{
+   await assert.rejects(withPublicationOutputWriter(workspace,source,attempt,{directory:attemptDirectory,blockedValues:['private-observation-marker']},async writer=>{
+    owned=writer;async function* content(){try{yield body;if(large)yield Buffer.alloc(256*1024,0x20);}finally{ended=true;}}return writer.retain(name,content());
+   }),{code:problem==='private'?'PRIVACY':'UNSAFE'});
+   assert.equal(writes,large?1:0);assert.equal(reads,large?1:0);assert.equal(ended,true);assert.equal(owned.buffers.bytes,0);
+  }finally{mock.mock.restore();syncBuiltinESMExports();}
+  await releases.clean(job.id,{only:attempt.lease.token});assert.deepEqual(await readdir(path.dirname(attemptDirectory)),[job.lease.token]);
  }
  // Admission can fail after a producer completes but before its write starts.
  // Even that synchronous refusal must release its fully buffered bytes.
@@ -223,6 +233,12 @@ test('large output replay and cancelled probing close their producer and release
   if(phase==='probe')await assert.rejects(buffers.prepare(source(),{signal:controller.signal}),error=>error===reason);
   else{const pending=await buffers.prepare(source(),{signal:controller.signal}),iterator=pending.source[Symbol.asyncIterator]();assert.equal((await iterator.next()).value.length,64*1024);controller.abort(reason);await assert.rejects(iterator.next(),error=>error===reason);}
   assert.equal(ended,true);assert.equal(buffers.bytes,0);
+ }
+ for(const phase of ['reject','cancel']){
+  const controller=new AbortController(),reason=new Error('Validation '+phase);let ended=false,calls=0;
+  async function* content(){try{yield 'Bounded \u00c5 \u{1f41d}';}finally{ended=true;}}
+  await assert.rejects(buffers.prepare(content(),{signal:controller.signal,validate:bytes=>{calls++;assert.equal(bytes.toString(),'Bounded \u00c5 \u{1f41d}');assert.ok(bytes.length<=256*1024);if(phase==='reject')throw reason;controller.abort(reason);}}),error=>error===reason);
+  assert.equal(calls,1);assert.equal(ended,true);assert.equal(buffers.bytes,0);
  }
  const reason=new Error('Producer failed');let ended=false;async function* broken(){try{yield Buffer.alloc(8);throw reason;}finally{ended=true;}}
  await assert.rejects(buffers.prepare(broken()),error=>error===reason);assert.equal(ended,true);assert.equal(buffers.bytes,0);

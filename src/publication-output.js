@@ -12,7 +12,7 @@ import {PublicationDocument,PublicationDocumentBuilder,isPublicationDocumentBloc
 import {AppError} from './errors.js';
 import {serialize} from './storage-format.js';
 import {FileContent,writeContent,contentStream,contentHash,contentSize} from './file-content.js';
-import {assertPublicFiles,admitRetainedPublicFile} from './privacy.js';
+import {assertPublicFiles,assertPublicFileBytes,admitRetainedPublicFile} from './privacy.js';
 import {isDownloadPath} from './web/website-file.js';
 import {withWorkspaceMetadataBatch} from './metadata-batch.js';
 import {assertPublicationDocumentStorage} from './publication-document-storage.js';
@@ -119,8 +119,8 @@ export class PublicationOutputWriter{
   if(this.pendingNames.has(name))throw new AppError('PUBLICATION_IDENTITY');this.pendingNames.add(name);
   const index=this.nextBlob++,file=path.join(this.directory,index+'.blob');
   try{
-   const prepared=streaming?await this.buffers.prepare(publicationOutputChunks(content,{signal:this.signal}),{signal:this.signal}):null;
-   const chunks=prepared?.source??contentStream(content),expected=prepared?.buffered?Object.freeze({size:prepared.size,sha256:prepared.sha256}):streaming?null:{size:contentSize(content),sha256:contentHash(content)},workspace=this.workspace,signal=this.signal,blockedValues=this.blockedValues;let started=false,saved;
+   const prepared=streaming?await this.buffers.prepare(publicationOutputChunks(content,{signal:this.signal}),{signal:this.signal,validate:bytes=>assertPublicFileBytes(name,bytes,{type,blockedValues:this.blockedValues})}):null;
+   const chunks=prepared?.source??contentStream(content),expected=prepared?.buffered?Object.freeze({size:prepared.size,sha256:prepared.sha256}):streaming?null:{size:contentSize(content),sha256:contentHash(content)},workspace=this.workspace,signal=this.signal,blockedValues=this.blockedValues,vault=workspace.vault,vaultId=vault?.id,key=vault?.key,keyDigest=prepared?.buffered&&vaultId&&Buffer.isBuffer(key)?createHash('sha256').update(key).digest('hex'):null;let started=false,saved;
    try{saved=await this.finalization.write(async beforeCommit=>{
     started=true;try{
      if(prepared?.buffered)await beforeCommit(expected);
@@ -128,7 +128,14 @@ export class PublicationOutputWriter{
       if(expected&&(actual.size!==expected.size||actual.sha256!==expected.sha256))stale();if(!prepared?.buffered)return beforeCommit(actual);
      }});
     }finally{await prepared?.dispose();}
-   },streaming?saved=>admitRetainedPublicFile(name,new FileContent(workspace,file,saved.size,saved.sha256),{type,blockedValues}):undefined);
+   },streaming?async saved=>{
+    if(!prepared?.buffered)return admitRetainedPublicFile(name,new FileContent(workspace,file,saved.size,saved.sha256),{type,blockedValues});
+    // The bytes were checked before writing. Preserve lifecycle/key admission
+    // after durable completion without reopening the generated file. The transient
+    // digest also detects in-place key clearing without excluding valid key values.
+    await workspace.requireStorageKey();
+    if(prepared.buffered&&vaultId&&(workspace.vault!==vault||vault.id!==vaultId||vault.key!==key||!Buffer.isBuffer(key)||key.length!==32||createHash('sha256').update(key).digest('hex')!==keyDigest))throw new AppError('ACCESS_LOCKED');
+   }:undefined);
    }catch(error){if(!started)await prepared?.dispose();throw error;}
    const descriptor={name,index,...saved,type,...(type==='media'?{header:content.header.toString('hex')}: {})};
    await this.builder.append('files',name,descriptor);await this.builder.append('blobIndexes',String(index),{name});

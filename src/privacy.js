@@ -12,14 +12,19 @@ import {createHash} from 'node:crypto';
 const checkedFonts=new Map();
 const retainedChecks=new WeakMap();
 const retainedIdentity=(name,file,blockedValues)=>JSON.stringify([name,file.file,file.size,file.sha256,blockedValues]);
+// Buffered and retained outputs share the exact byte decoding and public policy.
+export function assertPublicFileBytes(name,bytes,{type,blockedValues=[]}){
+  if(!Buffer.isBuffer(bytes)||!['text','binary'].includes(type))throw new AppError('UNSAFE');
+  const content=type==='text'?bytes.toString('utf8'):bytes;
+  if(type==='text'&&!Buffer.from(content).equals(bytes))throw new AppError('UNSAFE');
+  assertPublicFiles(new Map([[name,content]]),blockedValues);
+}
 // Validate one retained output at a time, then keep only its authenticated file
 // handle. This admission is never deserialized from a candidate manifest.
 export async function admitRetainedPublicFile(name,file,{type,blockedValues=[]}){
   if(!(file instanceof FileContent)||!['text','binary'].includes(type))throw new AppError('UNSAFE');
   if(type==='binary'&&isDownloadPath(name)){await file.verify();assertPublicFiles(new Map([[name,file]]),blockedValues);return file;}
-  const bytes=await contentBuffer(file),content=type==='text'?bytes.toString('utf8'):bytes;
-  if(type==='text'&&!Buffer.from(content).equals(bytes))throw new AppError('UNSAFE');
-  assertPublicFiles(new Map([[name,content]]),blockedValues);
+  assertPublicFileBytes(name,await contentBuffer(file),{type,blockedValues});
   retainedChecks.set(file,{workspace:file.workspace,identity:retainedIdentity(name,file,blockedValues)});
   return file;
 }
