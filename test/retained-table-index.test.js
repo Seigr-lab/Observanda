@@ -75,7 +75,13 @@ test('multi-root flush retains shared frontiers once and rejects corrupt duplica
  const tree=new RetainedTableIndex(storage,{allowSparseBranches:true});let first=null,other=null;
  for(let i=0;i<70;i++){first=await tree.change(first,key(i),digest(key(i)));other=await tree.change(other,'other/'+key(i),digest(key(i)));}
  const second=await tree.change(first,key(69),digest('changed'));
- assert.ok(tree.pendingBytes>0);await tree.flushRoots([first,second,other]);assert.equal(new Set(writes).size,writes.length);assert.equal(tree.pendingBytes,0);
+ const pending=[...tree.pending],bytes=tree.pendingBytes;assert.ok(bytes>0);
+ assert.throws(()=>tree.pruneRoots([first,{...first,count:first.count+1}]),{code:'MATERIAL_MISSING'});
+ assert.deepEqual([...tree.pending],pending);assert.equal(tree.pendingBytes,bytes);
+ const cancelled=new AbortController();cancelled.abort();assert.throws(()=>tree.pruneRoots([first,second,other],{signal:cancelled.signal}),{name:'AbortError'});
+ assert.deepEqual([...tree.pending],pending);assert.equal(tree.pendingBytes,bytes);
+ tree.pruneRoots([first,second,other]);assert.ok(tree.pending.size<pending.length);assert.ok(tree.pendingBytes<bytes);assert.equal(writes.length,0);
+ await tree.flushRoots([first,second,other]);assert.equal(new Set(writes).size,writes.length);assert.equal(tree.pendingBytes,0);
  const reader=new RetainedTableIndex(storage,{allowSparseBranches:true});assert.equal((await reader.find({root:first},key(69))).revision,digest(key(69)));assert.equal((await reader.find({root:second},key(69))).revision,digest('changed'));assert.equal((await Array.fromAsync(reader.entries({root:other}))).length,70);
  const changed=await tree.change(second,key(0),digest('next'));
  await assert.rejects(tree.flushRoots([changed,{...changed,count:changed.count+1}]),{code:'MATERIAL_MISSING'});

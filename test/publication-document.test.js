@@ -164,11 +164,19 @@ test('an aborted multi-root checkpoint preserves the admitted rows and allows ex
  for(let i=0;i<31;i++)await builder.append('records',String(i),{id:String(i)},{indexes:{scopeDate:'book/'+String(i).padStart(3,'0'),original:String(i)}});
  const abort=new AbortController(),write=workspace.writeMetadata;let writes=0;
  workspace.writeMetadata=async(file,text)=>{await write(file,text);if(file.includes('/pd-i-')&&++writes===2)abort.abort();};
- await assert.rejects(builder.append('records','retry',{id:'retry',title:'Unacknowledged'},{indexes:{scopeDate:'book/099'},signal:abort.signal}),{name:'AbortError'});
- assert.equal(builder.count('records'),31);assert.equal(await builder.get('records','retry'),null);assert.equal((await builder.get('records','30')).id,'30');
+ // Grow through the unchanged production capacity bound instead of relying
+ // on an arbitrary number of appends to force an intermediate checkpoint.
+ let interrupted=null,admitted=0;
+ for(let i=31;i<4096;i++){
+  const id=String(i);admitted=builder.count('records');
+  try{await builder.append('records',id,{id,title:'Unacknowledged'},{indexes:{scopeDate:'book/'+id.padStart(3,'0'),original:id},signal:abort.signal});}
+  catch(error){assert.equal(error.name,'AbortError');interrupted=id;break;}
+ }
+ assert.notEqual(interrupted,null,'The actual index capacity must trigger a flush');assert.equal(writes,2);
+ assert.equal(builder.count('records'),admitted);assert.equal(await builder.get('records',interrupted),null);assert.equal((await builder.get('records','30')).id,'30');
  assert.equal(builder.busy,false);assert.equal(builder.finished,false);assert.ok(builder.index.pending.size>0);
  workspace.writeMetadata=write;
- await builder.append('records','retry',{id:'retry',title:'Acknowledged'},{indexes:{scopeDate:'book/099'}});
- const descriptor=await builder.finish(),reader=await PublicationDocument.open(workspace,descriptor);assert.equal((await reader.get('records','retry')).title,'Acknowledged');
- assert.deepEqual(await reader.verify(),{collections:2,items:32});
+ await builder.append('records',interrupted,{id:interrupted,title:'Acknowledged'},{indexes:{scopeDate:'book/'+interrupted.padStart(3,'0'),original:interrupted}});
+ const descriptor=await builder.finish(),reader=await PublicationDocument.open(workspace,descriptor);assert.equal((await reader.get('records',interrupted)).title,'Acknowledged');
+ assert.deepEqual(await reader.verify(),{collections:2,items:admitted+1});
 });

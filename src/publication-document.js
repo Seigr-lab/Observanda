@@ -128,14 +128,15 @@ export class PublicationDocumentBuilder extends PublicationDocumentReader{
  }
  constructor(workspace,{owner,collections,write,signal,expectedOwner}={}){
   if(!validPublicationDocumentOwner(owner))throw new AppError('INVALID');bindWorkspace(workspace,owner,expectedOwner);
-  const blocks=new PublicationDocumentBlocks(workspace,owner,{write,signal});super(blocks,collectionSchema(ownPublicationJSON(collections)),null);this.finished=false;this.busy=false;this.pendingChanges=0;
+  const blocks=new PublicationDocumentBlocks(workspace,owner,{write,signal});super(blocks,collectionSchema(ownPublicationJSON(collections)),null);this.finished=false;this.busy=false;
  }
- async flushIndexes(extra=[],{signal}={}){
-  const roots=[...Object.values(this.collections).flatMap(collectionRoots),...extra,...[...this.snapshots].flat()];
-  await this.index.flushRoots(roots,{signal});this.pendingChanges=0;
- }
+ indexRoots(extra=[]){return [...Object.values(this.collections).flatMap(collectionRoots),...extra,...[...this.snapshots].flat()];}
+ async flushIndexes(extra=[],{signal}={}){await this.index.flushRoots(this.indexRoots(extra),{signal});}
  async boundIndexes(next,signal){
-  if(this.index.pending.size>=512||this.index.pendingBytes>=4*1024*1024)await this.flushIndexes(collectionRoots(next),{signal});
+  if(this.index.pending.size<512&&this.index.pendingBytes<4*1024*1024)return;
+  const roots=this.indexRoots(collectionRoots(next));
+  this.index.pruneRoots(roots,{signal});
+  if(this.index.pending.size>=512||this.index.pendingBytes>=4*1024*1024)await this.index.flushRoots(roots,{signal});
  }
  change(id,identifier,value,{indexes={},signal}={},replace){return this.blocks.withSignal(signal,()=>this.changeValue(id,identifier,value,{indexes,signal},replace));}
  async changeValue(id,identifier,value,{indexes={},signal}={},replace){
@@ -156,10 +157,9 @@ export class PublicationDocumentBuilder extends PublicationDocumentReader{
     if(ownedIndexes[index]!==undefined)root=await this.index.change(root,indexKey(ownedIndexes[index],identifier),revision);
     next.indexes[index]=root;await this.boundIndexes(next,signal);
    }
-   // Persist the new and previous frontiers together before acknowledging a
-   // checkpoint. A failed method leaves the previous collection readable.
-   const checkpoint=this.pendingChanges+1>=32;if(checkpoint)await this.flushIndexes(collectionRoots(next),{signal});
-   this.check(signal);this.collections[id]=next;if(!checkpoint)this.pendingChanges++;return {key:identifier,position};
+   // Capacity flushes retain both admitted and next frontiers. Until finish()
+   // publishes a descriptor, smaller changes need no intermediate durable root.
+   this.check(signal);this.collections[id]=next;return {key:identifier,position};
   }finally{this.busy=false;}
  }
  append(id,key,value,options){return this.change(id,key,value,options,false);}

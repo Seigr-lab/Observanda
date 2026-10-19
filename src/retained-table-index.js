@@ -110,6 +110,22 @@ export class RetainedTableIndex{
   root=refs[0]??null;while(root?.height>1){const node=await this.node(root);if(node.children.length!==1)break;root=node.children[0];}
   return root;
  }
+ // Discard superseded in-memory pages without making an intermediate version
+ // durable. Every live root (including paused readers) must be supplied. A
+ // persisted parent cannot refer to a page that has never been persisted.
+ pruneRoots(roots,{signal}={}){
+  if(!Array.isArray(roots)||!roots.every(validTableRef))throw new AppError('INVALID');
+  const retained=new Set();let bytes=0;
+  const visit=ref=>{
+   signal?.throwIfAborted();if(!ref)return;const node=this.pending.get(ref.hash);if(!node)return;
+   this.validate(node,ref);if(retained.has(ref.hash))return;retained.add(ref.hash);
+   bytes+=Buffer.byteLength(serialize(node));if(node.children)for(const child of node.children)visit(child);
+  };
+  for(const root of roots)visit(root);signal?.throwIfAborted();
+  // Validation/cancellation must finish before changing the pending inventory.
+  for(const key of this.pending.keys())if(!retained.has(key))this.pending.delete(key);
+  this.pendingBytes=bytes;
+ }
  async flush(root){return this.flushRoots([root]);}
  // A caller maintaining several roots must retain every live frontier before
  // pruning intermediate pages. Failed writes leave all pending nodes usable.
