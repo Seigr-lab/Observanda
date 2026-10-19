@@ -84,14 +84,30 @@ export class SnapshotIndex extends ObjectIndex{
   return buildIndex(this.store,this,entries(),fail);
  }
  async replace(root,before,after){
-  // Replace values in place; only removed identities change the tree shape.
-  // A section identity can move between records in the same validated command.
-  return withScratch(async entries=>{
-   for(const row of after){const version=await this.retain(row);for await(const key of this.keys(row))if(!await entries.add(key,{key,version}))fail();}
+  // Ordinary edits change only a few identity keys. Keep that bounded set in
+  // memory; large commands spill the same iterator into encrypted scratch.
+  const index=this;
+  async function* changed(){for(const row of after){const version=await index.retain(row);for await(const key of index.keys(row))yield {key,version};}}
+  const source=changed(),memory=new Map();
+  const apply=async entries=>{
    for(const row of before)for await(const key of this.keys(row))if(!await entries.has(key)){root=await this.change(root,key,null);if(this.pending.size>=256)await this.flush(root);}
    for await(const {key,version} of entries.items()){root=await this.change(root,key,version);if(this.pending.size>=256)await this.flush(root);}
    await this.flush(root);return root;
-  });
+  };
+  try{
+   for(;;){
+    const item=await source.next();
+    if(item.done)return apply({has:key=>memory.has(key),items:()=>memory.values()});
+    if(memory.has(item.value.key))fail();
+    if(memory.size<256){memory.set(item.value.key,item.value);continue;}
+    return await withScratch(async entries=>{
+     for(const value of memory.values())if(!await entries.add(value.key,value))fail();memory.clear();
+     if(!await entries.add(item.value.key,item.value))fail();
+     for await(const value of source)if(!await entries.add(value.key,value))fail();
+     return apply(entries);
+    });
+   }
+  }finally{await source.return();}
  }
  async validationRows(root,records){
   const found=new Map(),changed=new Set(records.map(r=>r.id));

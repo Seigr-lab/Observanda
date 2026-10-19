@@ -121,6 +121,13 @@ test('point ownership, history and concurrent record saves avoid full membership
 
 test('indexed validation preserves global section identities and run parent rules atomically',async t=>{
  const f=await fixture(t),{ws,base}=f,a=base.book.entries[0],b=base.book.entries[1];
+ const replace=SnapshotIndex.prototype.replace;let scratchCreates=0;
+ SnapshotIndex.prototype.replace=async function(...args){
+  const prototype=Object.getPrototypeOf(this.store.db),run=prototype.run;
+  prototype.run=function(sql,...values){if(sql.startsWith('CREATE TEMP TABLE '))scratchCreates++;return run.call(this,sql,...values);};
+  try{return await replace.apply(this,args);}finally{prototype.run=run;}
+ };
+ t.after(()=>{SnapshotIndex.prototype.replace=replace;});
  await assert.rejects(save(f,base,[{...a,sections:[{...a.sections[0],id:b.sections[0].id}]}]),{code:'INVALID'});
  await assert.rejects(save(f,base,[{...a,sections:[{...a.sections[0],id:b.id}]}]),{code:'INVALID'});
  assert.equal((await ws.read()).etag,base.etag);
@@ -134,6 +141,18 @@ test('indexed validation preserves global section identities and run parent rule
  await save(f,withRun,[{...withRun.book.entries[0],type:'run'},{...withRun.book.entries.at(-1),type:'observation',relations:[]}]);
  assert.equal((await ws.read()).book.entries.at(-1).type,'observation');
  assert.ok(moved.recordPatch.records.some(r=>r.sections.some(section=>section.id===a.sections[0].id)));
+ assert.equal(scratchCreates,0,'Small membership edits must not create scratch tables');
+ const prior=await ws.read(),expanded={...prior.book.entries[1],sections:Array.from({length:260},(_,i)=>({id:randomUUID(),title:'Section '+i,body:'Retained finding'}))};
+ await save(f,prior,[expanded]);assert.ok(scratchCreates>0,'A larger identity set must spill instead of retaining unbounded memory');
+ const large=await ws.read();assert.deepEqual(large.book.entries[1].sections,expanded.sections);
+ const retained=await ws.catalogue(s=>s.read(prior.etag));assert.deepEqual(retained,prior);
+ await ws.withLock(()=>ws.catalogue(async store=>{
+  const snapshot=await store.snapshot(),row=await store.member(snapshot,expanded.id),memberIndex=new SnapshotIndex(store);
+  await assert.rejects(memberIndex.replace(snapshot.membership,[],[row,row]),{code:'CATALOGUE_DAMAGED'});
+  throw Object.assign(Error('Rollback duplicate member attempt'),{code:'TEST_ROLLBACK'});
+ })).then(()=>assert.fail('Expected rollback'),error=>assert.equal(error.code,'TEST_ROLLBACK'));
+ assert.deepEqual(await ws.read(),large);
+
  await ws.catalogue(s=>s.verify(catalogueDescriptor(base.book)));
 });
 
