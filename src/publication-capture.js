@@ -96,8 +96,7 @@ async function capture(workspace,operation,{signal,write=fn=>transaction(workspa
     if(!retained(file))throw new AppError('INVALID');signal?.throwIfAborted();
     // Record and custom-page inputs share the capture's flat namespace. Even
     // a later federated identity must never replace an already pinned input.
-    const node=file.startsWith(prefix)&&isPublicationDocumentBlockName(file.slice(prefix.length));
-    if(!await written.add(file,node?text:null))throw new AppError('PUBLICATION_IDENTITY');
+    if(!await written.add(file,text))throw new AppError('PUBLICATION_IDENTITY');
     const size=Buffer.byteLength(text);if(pending.size>=captureObjects||bytes+size>captureBytes)await flush();
     bytes-=Buffer.byteLength(pending.get(file)??'');pending.set(file,text);bytes+=size;
     if(bytes>=captureBytes)await flush();
@@ -108,12 +107,11 @@ async function capture(workspace,operation,{signal,write=fn=>transaction(workspa
     // This capture started empty. A node not authored here cannot exist, so
     // immutable-node admission needs no extra writer transaction for a miss.
     const receipt=await written.get(file);if(receipt===undefined)return null;
-    // Immutable nodes are small and already authenticated by their document
-    // reader. Reuse their encrypted scratch receipt after the write batch flushes.
-    if(receipt!==null){if(Buffer.byteLength(receipt)>limit)throw new AppError('LIMIT');return receipt;}
-    // Original record/page bodies stay only in their retained storage. The
-    // research reader intentionally predates these input commits.
-    return write(()=>target.readMetadata(file,limit));
+    // Reuse the exact captured bytes for nodes and original bodies. Scratch
+    // values remain encrypted on disk, with only one body live per read. This
+    // avoids a writer transaction per body while the host snapshot predates
+    // these commits. Final publication still requires every batch to commit.
+    if(Buffer.byteLength(receipt)>limit)throw new AppError('LIMIT');return receipt;
    };
    const value=target[method];return typeof value==='function'?value.bind(target):value;
   }});

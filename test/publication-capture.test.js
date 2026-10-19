@@ -59,10 +59,10 @@ function intercept(t,workspace,operation){
 }
 
 test('capture combines small objects into bounded durable batches and retains exact Unicode bodies',{timeout:120000},async t=>{
- const f=await fixture(t),batches=[],expected=new Map(),writeMetadata=f.workspace.writeMetadata;let active;
+ const f=await fixture(t),batches=[],expected=new Map(),writeMetadata=f.workspace.writeMetadata;let active,writes=0;
  f.workspace.writeMetadata=async function(file,text){if(active&&file.includes('/release-inputs/'))active.push(Buffer.byteLength(text));return writeMetadata.call(this,file,text);};
  const write=operation=>f.workspace.withLock(()=>withWorkspaceMetadataBatch(f.workspace,async()=>{
-  active=[];try{const result=await operation();if(active.length)batches.push(active);return result;}finally{active=null;}
+  writes++;active=[];try{const result=await operation();if(active.length)batches.push(active);return result;}finally{active=null;}
  }));
  let captureId;
  try{await withPublicationCapture(f.storage,async(storage,id,commit)=>{
@@ -71,6 +71,15 @@ test('capture combines small objects into bounded durable batches and retains ex
    const file='.observanda/release-inputs/'+id+'/'+randomUUID()+'.json',text=JSON.stringify({text:index<130?'Small retained body '+index:'Observation \u00e6 \u03bb \ud83d\udd2c '.repeat(4000)});
    expected.set(file,text);await storage.writeMetadata(file,text);assert.equal(await storage.readMetadata(file,256*1024),text);
   }
+  const beforeReads=writes;
+  // Revisit bodies that already crossed both count and byte flush boundaries.
+  // Those reads must use their encrypted receipts, not acquire another writer.
+  for(const [file,text] of expected)assert.equal(await storage.readMetadata(file,256*1024),text);
+  assert.equal(writes,beforeReads);
+  const [first]=expected.keys();await assert.rejects(storage.readMetadata(first,1),{code:'LIMIT'});
+  await assert.rejects(storage.writeMetadata(first,'changed body'),{code:'PUBLICATION_IDENTITY'});
+  assert.equal(await storage.readMetadata('.observanda/release-inputs/'+id+'/'+randomUUID()+'.json',1024),null);
+  assert.equal(writes,beforeReads);
   await commit(async()=>{});
  },{write});}finally{f.workspace.writeMetadata=writeMetadata;}
  t.diagnostic(JSON.stringify({batches:batches.map(batch=>({objects:batch.length,bytes:batch.reduce((sum,size)=>sum+size,0)}))}));
