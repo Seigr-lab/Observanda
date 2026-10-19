@@ -31,6 +31,17 @@ function ownedCatalogue(context,workspace){
  return context;
 }
 const activeCatalogue=workspace=>Boolean(ownedCatalogue(catalogueContext.getStore(),workspace)||ownedCatalogue(catalogueReads.getStore(),workspace));
+function inspectOwnedCatalogue(workspace,store,operation){
+ if(store.workspace!==workspace)throw new AppError('INVALID');
+ const held=ownedCatalogue(catalogueContext.getStore(),workspace);
+ const inspect=async()=>{
+  const cache=store.readCache??new CatalogueReadCache();
+  try{return await store.db.scope(()=>catalogueReads.run({root:workspace.root,projectId:workspace.projectId,labBookId:workspace.labBookId,vault:workspace.vault,db:store.db,cache},operation));}
+  finally{if(!store.readCache)cache.clear();}
+ };
+ if(held?.root===workspace.root&&held.db!==store.db)return inspectRecordedCatalogue(workspace,store,inspect);
+ return inspect();
+}
 
 export const WORKSPACE_FILE='workspace.observanda';
 export async function workspaceFile(root,{secure=false}={}){
@@ -230,15 +241,43 @@ export class Workspace {
   // that exact snapshot instead of opening/activating another database.
   async inspectCatalogue(store,operation){
     await this.requireStorageKey();
+    return inspectOwnedCatalogue(this,store,operation);
+  }
+  // Only this fixed, read-only transaction may reuse its admitted location.
+  // The caller remains outside the read context, so its writes stay current.
+  async withCatalogueInspection(store,operation,{signal}={}){
+    signal?.throwIfAborted();
     if(store.workspace!==this)throw new AppError('INVALID');
-    const held=ownedCatalogue(catalogueContext.getStore(),this);
-    const inspect=async()=>{
-      const cache=store.readCache??new CatalogueReadCache();
-      try{return await store.db.scope(()=>catalogueReads.run({root:this.root,projectId:this.projectId,labBookId:this.labBookId,vault:this.vault,db:store.db,cache},operation));}
-      finally{if(!store.readCache)cache.clear();}
+    if(!Buffer.isBuffer(this.vault?.key))throw new AppError('ACCESS_LOCKED');
+    const owner={root:this.root,projectId:this.projectId??null,labBookId:this.labBookId??null,vault:this.vault,id:this.vault.id,key:Buffer.from(this.vault.key)},db=store.db,pending=new Set();
+    let active=true,closing=false;
+    const check=()=>{
+      if(!active)throw new AppError('INVALID');signal?.throwIfAborted();
+      if(owner.root!==this.root||owner.projectId!==(this.projectId??null)||owner.labBookId!==(this.labBookId??null))throw new AppError('DATABASE_LOCATION');
+      if(!Buffer.isBuffer(this.vault?.key))throw new AppError('ACCESS_LOCKED');
+      if(this.vault!==owner.vault||this.vault.id!==owner.id||!owner.key.equals(this.vault.key))throw new AppError('ACCESS_DENIED');
+      if(store.workspace!==this||store.db!==db)throw new AppError('INVALID');
     };
-    if(held?.root===this.root&&held.db!==store.db)return inspectRecordedCatalogue(this,store,inspect);
-    return inspect();
+    try{
+      check();await this.requireStorageKey();check();
+      const transaction=await db.get("SELECT current_setting('transaction_isolation') AS isolation,current_setting('transaction_read_only') AS read_only");
+      if(!['repeatable read','serializable'].includes(transaction?.isolation)||transaction.read_only!=='on')throw new AppError('INVALID');
+      await projectDomainHandoff(db,{shared:true});
+      // A handoff may have started between the initial check and the lease.
+      check();await this.requireStorageKey();check();
+      const inspect=operation=>{
+        if(closing)return Promise.reject(new AppError('INVALID'));
+        const result=(async()=>{check();const value=await inspectOwnedCatalogue(this,store,operation);check();return value;})();
+        pending.add(result);const finished=()=>pending.delete(result);result.then(finished,finished);return result;
+      };
+      let result,failure,failedOperation=false;
+      try{result=await operation(inspect);}catch(error){failure=error;failedOperation=true;}
+      closing=true;
+      const settled=await Promise.allSettled([...pending]);
+      if(failedOperation)throw failure;
+      const failed=settled.find(value=>value.status==='rejected');if(failed)throw failed.reason;
+      check();return result;
+    }finally{closing=true;active=false;owner.key.fill(0);}
   }
   async updateRecords(command,apply,options){
     return this.withLock(()=>this.catalogue(store=>store.updateRecords(command,apply,options)));
