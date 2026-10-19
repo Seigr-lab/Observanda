@@ -31,7 +31,6 @@ export class ObjectIndex{
   this.write=write;this.store=store;this.cacheReads=cacheReads;this.scanAhead=scanAhead;this.cacheSize=cacheSize;this.nodeStorage=nodeStorage;this.namespace=namespace;this.immutable=immutable;this.cache=new Map();this.cachedVersions=new Map();this.pending=new Map();this.writes=new Map();
   this.cacheBytes=0;this.nodeBytes=new WeakMap();this.pendingBytes=0;
  }
- get readCache(){return this.store?.readCache;}
  forgetCached(version){
   const node=this.cache.get(version);if(!node)return;
   this.cache.delete(version);this.cacheBytes-=this.nodeBytes.get(node);
@@ -48,7 +47,7 @@ export class ObjectIndex{
   while(this.cache.size>=this.cacheSize||this.cacheBytes+bytes>16*1024*1024)this.forgetCached(this.cache.keys().next().value);
   if(!this.immutable)this.cachedVersions.set(ref.key,ref.hash);
   this.cache.set(ref.hash,node);this.cacheBytes+=bytes;
-  this.readCache?.keepNode(this.slot(ref),node,bytes);
+  this.store?.readCache?.keepNode(this.slot(ref),node,bytes);
  }
  authenticate(node,version){
   // Frozen node values cannot change after their hash has been checked. The
@@ -61,7 +60,7 @@ export class ObjectIndex{
  }
  slot(ref){return this.namespace+(this.immutable?ref.hash:ref.key);}
  async prefetch(ref){
-  const cache=this.readCache;
+  const cache=this.store.readCache;
   if(!this.immutable&&!this.scanAhead||this.nodeStorage||!cache?.readAhead||this.readingAhead||cache.rows.has(this.slot(ref)))return;
   this.readingAhead=true;
   try{
@@ -81,10 +80,10 @@ export class ObjectIndex{
   if(this.nodeStorage)return this.nodeStorage.read(ref);
   // The shared cache holds frozen values only within this fixed catalogue
   // audit. node() still authenticates the value and validates every new bound.
-  const cached=this.readCache?.node(this.slot(ref));if(cached)return cached;
+  const cached=this.store.readCache?.node(this.slot(ref));if(cached)return cached;
   await this.prefetch(ref);if(this.cache.has(ref.hash))return this.cache.get(ref.hash);
   const slot=this.slot(ref),load=()=>this.store.db.get('SELECT payload FROM state WHERE slot=$1',slot);
-  const row=this.readCache?await this.readCache.row(slot,load):await load();return row?this.store.decode('state',slot,row.payload):this.readMissingNode(ref);
+  const row=this.store.readCache?await this.store.readCache.row(slot,load):await load();return row?this.store.decode('state',slot,row.payload):this.readMissingNode(ref);
  }
  async persistWith(operation){return this.write?this.write(operation):operation(this.store);}
  async flush(root){return this.flushRoots([root]);}
@@ -129,7 +128,7 @@ export class ObjectIndex{
  }
  async head(){
   const load=()=>this.store.db.get("SELECT payload FROM state WHERE slot='objects'");
-  const row=this.readCache?await this.readCache.row('objects',load):await load();
+  const row=this.store.readCache?await this.store.readCache.row('objects',load):await load();
   if(!row){
    await this.assertEmpty();
    return {formatVersion:2,root:null};
@@ -154,7 +153,7 @@ export class ObjectIndex{
   // A frozen value's authenticated identity is independent of the index
   // instance. Weak receipts retain no nodes after their bounded caches close.
   if(proof.hash!==ref.hash||proof.key!==ref.key||proof.height!==ref.height||proof.count!==ref.count||lower!==null&&value.id<=lower||upper!==null&&value.id>=upper)fail();
-  if(loaded&&(this.immutable||this.cacheReads||this.readCache))this.cacheNode(ref,value);
+  if(loaded&&(this.immutable||this.cacheReads||this.store?.readCache))this.cacheNode(ref,value);
   return value;
  }
  make(id,revision,left=null,right=null){
@@ -315,7 +314,6 @@ export class ObjectIndex{
   // Ordinary writers have no shared read cache. If an audit owner explicitly
   // mutates its own transaction, invalidate its earlier head and node receipts.
   this.store.readCache?.clear();
-  if(this.readCache!==this.store.readCache)this.readCache?.clear();
   if(this.cacheReads)for(const node of this.writes.values())if(node)this.cacheNode({key:authenticatedNodes.get(node)?.key??digest(node.id),hash:authenticatedNodes.get(node)?.hash??hash(node)},node);
   this.pending.clear();this.pendingBytes=0;this.writes.clear();
  }

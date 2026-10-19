@@ -20,9 +20,8 @@ export function metadataBatchIndex(store){
  return batch?.store.db===store.db&&batch.store.workspace.root===store.workspace.root?batch:null;
 }
 class MetadataBatchIndex extends ObjectIndex{
- get readCache(){return this.branchReads;}
  encryptionKey(key){return this.objectReads.encryptionKey(key);}
- constructor(store){super(store,{cacheReads:true,scanAhead:true,cacheSize:16384});this.current=null;this.edits=0;this.objects=new Map();this.newObjects=new Set();this.objectBytes=0;this.objectReads=new CatalogueReadCache();this.branchReads=new CatalogueReadCache({readAhead:true});}
+ constructor(store){super(store,{cacheReads:true,cacheSize:16384});this.current=null;this.edits=0;this.objects=new Map();this.newObjects=new Set();this.objectBytes=0;this.objectReads=new CatalogueReadCache();}
  async objectRow(id){
   if(this.objects.has(id)){const payload=this.objects.get(id);return payload===null?undefined:{payload};}
   return this.objectReads.row(id,()=>this.store.db.get('SELECT payload FROM objects WHERE id=$1',id));
@@ -54,7 +53,7 @@ class MetadataBatchIndex extends ObjectIndex{
  }
  async save(){await this.flushObjects();if(this.edits){await this.persist(this.current.root);this.edits=0;}}
  async checkCounts(head){await this.save();return super.checkCounts(head);}
- clear(){this.current=null;this.cache.clear();this.cacheBytes=0;this.cachedVersions.clear();this.pending.clear();this.pendingBytes=0;this.writes.clear();this.objects.clear();this.newObjects.clear();this.objectBytes=0;this.objectReads.clear();this.branchReads.clear();}
+ clear(){this.current=null;this.cache.clear();this.cacheBytes=0;this.cachedVersions.clear();this.pending.clear();this.pendingBytes=0;this.writes.clear();this.objects.clear();this.newObjects.clear();this.objectBytes=0;this.objectReads.clear();}
 }
 export async function withMetadataBatch(store,operation){
  const prior=metadataBatchIndex(store);if(prior)return operation();
