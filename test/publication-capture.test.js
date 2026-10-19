@@ -7,6 +7,9 @@ import {randomUUID} from 'node:crypto';
 import {interruptWorkspace} from './fixtures/interrupt-workspace.js';
 import {setTimeout as delay} from 'node:timers/promises';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {workspaceDestinationFixture} from './workspace-destination-fixture.js';
+import {WorkspaceDatabases} from '../src/workspace-databases.js';
+import {installDatabaseProvider} from '../src/workspace-database-context.js';
 import {sampleNotebook} from '../src/sample.js';
 import {clearVault} from '../src/encryption.js';
 import {ResearchCatalogue} from '../src/research-catalogue.js';
@@ -35,8 +38,14 @@ async function publicationCommand(storage){const {etag,websitePin}=await storage
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-publication-capture-')),book=sampleNotebook();
  book.entries=Array.from({length:72},(_,index)=>({...structuredClone(book.entries[0]),id:randomUUID(),title:'Observation '+index,body:'Retained observation '+index,share:true,attachments:[],figures:[],sections:[],relations:[]}));
- const f=await encryptedFixture(directory,book),jobs=workspaceJobs(f.workspace),sites=new WebsiteSites(f.workspace);
- t.after(async()=>{await jobs.worker.stop();clearVault(f.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-publication-capture-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ let f,jobs,runtime,detach,placement;
+ t.after(async()=>{await jobs?.worker.stop();await runtime?.close();detach?.();if(f?.vault)clearVault(f.vault);await placement?.cleanup();assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-publication-capture-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ if(process.env.OBSERVANDA_TEST_SECOND_VOLUME){
+  placement=await workspaceDestinationFixture(directory);
+  runtime=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}});
+  detach=installDatabaseProvider(runtime);
+ }
+ f=await encryptedFixture(placement?.root??directory,book,undefined,{deviceDirectory:directory});jobs=workspaceJobs(f.workspace);const sites=new WebsiteSites(f.workspace);
  const ids=[];
  for(const name of ['Research journal','Public report'])ids.push((await sites.change({workspaceId:book.id,etag:(await f.workspace.outline()).etag,operation:'create',name})).id);
  const site=await sites.read(ids[0]),command=edit(site);command.selection.includeProjects=book.projects.filter(project=>project.share).map(project=>project.id);await sites.save(ids[0],command);
@@ -69,9 +78,11 @@ test('capture combines small objects into bounded durable batches and retains ex
  assert.equal(batches.reduce((sum,batch)=>sum+batch.length,0),expected.size);
  for(const batch of batches){assert.ok(batch.length<=128);assert.ok(batch.reduce((sum,size)=>sum+size,0)<=256*1024);}
  const reopened=websiteWorkspace(new Workspace(f.workspace.root,f.vault),f.ids[0]);
- assert.equal((await reopened.listMetadata('.observanda/release-inputs/'+captureId)).length,expected.size);
- for(const [file,text] of expected)assert.equal(await reopened.readMetadata(file,256*1024),text);
- assert.deepEqual(await reopened.listMetadata('.observanda/release-captures'),[]);
+ await reopened.catalogue(async()=>{
+  assert.equal((await reopened.listMetadata('.observanda/release-inputs/'+captureId)).length,expected.size);
+  for(const [file,text] of expected)assert.equal(await reopened.readMetadata(file,256*1024),text);
+  assert.deepEqual(await reopened.listMetadata('.observanda/release-captures'),[]);
+ });
 });
 
 test('publication capture permits authoring and another preparation while retaining a fixed source',{timeout:120000},async t=>{
