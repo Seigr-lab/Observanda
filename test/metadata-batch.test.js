@@ -6,7 +6,7 @@ import path from 'node:path';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {sampleNotebook} from '../src/sample.js';
 import {clearVault} from '../src/encryption.js';
-import {withMetadataBatch,metadataBatchIndex} from '../src/metadata-batch.js';
+import {withMetadataBatch,metadataBatchIndex,withFlushedMetadataBatch} from '../src/metadata-batch.js';
 import {CatalogueReadCache} from '../src/catalogue-read-cache.js';
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-metadata-transaction-')),f=await encryptedFixture(directory,sampleNotebook());
@@ -52,6 +52,40 @@ test('metadata batch reads its staged branches, flushes bounded edits and rolls 
  })));
  assert.ok(writes<1100);assert.ok(peakPending<8192);
  t.diagnostic(JSON.stringify({objects:256,indexWrites:writes,peakPending,peakObjectBytes}));
+ // Compare identical cold transactions. Only branch read-ahead changes;
+ // no cache or permission receipt may survive either transaction.
+ const profiles=[];
+ for(const ahead of [false,true]){
+  let batch;const profile={point:0,batches:0,slots:0};
+  await ws.withLock(()=>ws.catalogue(store=>withMetadataBatch(store,async()=>{
+   batch=metadataBatchIndex(store);batch.scanAhead=ahead;const original=store.readCache,run=store.db.run;
+   store.db.run=async function(sql,...args){
+    if(sql==='SELECT payload FROM state WHERE slot=$1'&&args[0]?.startsWith('object-index:'))profile.point++;
+    if(sql.startsWith('SELECT slot,payload FROM state WHERE slot=ANY')){profile.batches++;profile.slots+=args[0].length;assert.ok(args[0].length<=32);assert.match(sql,/octet_length\(payload\)<=8192$/);assert.ok(args[0].every(slot=>slot.startsWith('object-index:')));}
+    return run.call(this,sql,...args);
+   };
+   try{for(let i=0;i<256;i++){
+    assert.deepEqual(JSON.parse(await ws.readMetadata('.observanda/synthetic/'+i+'.json',1024)),{value:i});assert.equal(store.readCache,original);
+    assert.ok(batch.branchReads.rows.size<=128);assert.ok(batch.branchReads.bytes<=256*1024);assert.ok(batch.branchReads.nodes.size<=128);assert.ok(batch.branchReads.nodeBytes<=256*1024);
+   }}finally{store.db.run=run;}
+  })));
+  assert.equal(batch.branchReads.rows.size,0);assert.equal(batch.branchReads.nodes.size,0);assert.equal(batch.branchReads.bytes,0);assert.equal(batch.branchReads.nodeBytes,0);profiles.push(profile);
+ }
+ assert.ok(profiles[1].batches>0);assert.ok(profiles[1].point+profiles[1].batches<profiles[0].point,'Read-ahead must reduce index SQL calls for the same cold traversal');t.diagnostic(JSON.stringify({branchReads:profiles}));
+ // Internal saves invalidate both the ordinary store cache and the dedicated
+ // branch cache; an explicit boundary discards every remaining batch branch.
+ await ws.withLock(()=>ws.catalogue(async store=>{
+  const shared=store.readCache=new CatalogueReadCache();
+  try{await withMetadataBatch(store,async()=>{
+   const batch=metadataBatchIndex(store);assert.notEqual(batch.branchReads,shared);
+   for(const text of ['temporary',JSON.stringify({value:5})]){
+    await ws.readMetadata('.observanda/synthetic/5.json',1024);shared.replace('ordinary-head',Buffer.from('old'));batch.branchReads.proofs.set('old-checkpoint','receipt');
+    await ws.writeMetadata('.observanda/synthetic/5.json',text);await batch.save();assert.equal(shared.rows.size,0);assert.equal(shared.nodes.size,0);assert.equal(batch.branchReads.rows.size,0);assert.equal(batch.branchReads.proofs.size,0);assert.equal(await ws.readMetadata('.observanda/synthetic/5.json',1024),text);
+   }
+   await withFlushedMetadataBatch(store,async()=>{assert.equal(metadataBatchIndex(store),null);assert.equal(batch.branchReads.rows.size,0);assert.equal(batch.branchReads.nodes.size,0);});
+   assert.deepEqual(JSON.parse(await ws.readMetadata('.observanda/synthetic/5.json',1024)),{value:5});
+  });}finally{shared.clear();store.readCache=null;}
+ }));
  await ws.catalogue(async store=>{let count=0;for await(const object of store.verifiedObjects()){void object;count++;}assert.ok(count>=256);});
  await assert.rejects(ws.withLock(()=>ws.catalogue(store=>withMetadataBatch(store,async()=>{
   for(let i=0;i<130;i++)await ws.writeMetadata('.observanda/synthetic/'+i+'.json',JSON.stringify({changed:i}));
@@ -122,6 +156,7 @@ test('read caches are bounded, transaction-owned and never hide changes or corru
   await store.db.run('UPDATE state SET payload=$1 WHERE slot=$2',Buffer.from('damaged'),'object-index:'+head.root.key);
  }));
  await assert.rejects(ws.readMetadata('.observanda/synthetic/value.json',1024),{code:'ENCRYPTION_DAMAGED'});
+ await assert.rejects(ws.withLock(()=>ws.catalogue(store=>withMetadataBatch(store,()=>ws.readMetadata('.observanda/synthetic/value.json',1024)))),{code:'ENCRYPTION_DAMAGED'});
  const cache=new CatalogueReadCache();
  for(let i=0;i<500;i++)await cache.row(String(i),async()=>({payload:Buffer.alloc(8192,i%256)}));
  assert.ok(cache.rows.size<=32);assert.ok(cache.bytes<=256*1024);cache.clear();assert.equal(cache.bytes,0);
