@@ -44,20 +44,21 @@ export class WebsitePreviewSources{
   for(const [attachmentId,id] of Object.entries(descriptor.mediaIdentities??{}))this.mediaOrigins.set(id,{workspaceId:owner.source.workspaceId,snapshotId:owner.snapshotId,attachmentId});
   return descriptor;
  }
- async row(id){
+ async row(id,{describe=false}={}){
   if(this.rows.has(id))return this.rows.get(id);
   const local=await this.local.row(id);if(local){this.identities.identity(this.metadata.id,'record',id);this.rows.set(id,local);return local;}
   for(const owner of this.owners){
    const origin=this.identities.origins.get(id),recordId=origin?.startsWith(owner.source.workspaceId+'/record/')?origin.split('/')[2]:undefined;
-   const row=await owner.find(id,{recordId});if(row){this.rows.set(id,row);return row;}
+   if(describe){const value=await owner.resolve(id,{recordId});if(value){this.remember(value.row,{publicationCard:value.descriptor});return value.row;}}
+   else{const row=await owner.find(id,{recordId});if(row){this.rows.set(id,row);return row;}}
   }
   return null;
  }
  async get(id){
   if(this.descriptors.has(id))return this.descriptors.get(id);
-  const row=await this.row(id);if(!row)return null;
+  const row=await this.row(id,{describe:true});if(!row)return null;
   if(!row.workspaceId){const value=await this.local.get(id);this.descriptors.set(id,value);return value;}
-  return this.remember(row,await this.document(row));
+  return this.descriptors.get(id)??this.remember(row,await this.document(row));
  }
  async document(row,options){
   if(!row.workspaceId)return this.local.document(row,options);
@@ -91,7 +92,7 @@ export class WebsitePreviewSources{
   const row=await this.row(id);if(!row)return;
   if(!row.workspaceId){await this.local.neighbours(id);for(const [key,value] of this.local.descriptors)this.descriptors.set(key,value);return;}
   if(row.historical){await this.get(this.owner(row).id('record',row.recordId));return;}
-  for(const neighbour of await this.owner(row).neighbours(row)){this.rows.set(neighbour.id,neighbour);await this.get(neighbour.id);}
+  for(const value of await this.owner(row).neighbourDescriptors(row))this.remember(value.row,{publicationCard:value.descriptor});
  }
  async counts(){
   const result=await this.local.counts();

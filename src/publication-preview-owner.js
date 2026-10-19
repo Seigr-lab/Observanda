@@ -54,13 +54,23 @@ export class PublicationPreviewOwner{
   if(patch?.attachments.some(value=>!summary.publication.attachments.some(attachment=>attachment.id===value.id)))throw new AppError('INVALID');
   return {row,summary,patch};
  }
- async find(publicId,{recordId}={}){
+ async findCurrent(store,snapshot,publicId,{recordId}={}){
+  if(recordId){const item=await this.admit(store,snapshot,await store.member(snapshot,recordId));return item&&this.id('record',recordId)===publicId?this.projectedRow(item.row):null;}
+  if(snapshot.publicationIndex?.version===3){const item=await this.admit(store,snapshot,await new RecordPublicationIndex(store).record(snapshot,publicId));return item?this.projectedRow(item.row):null;}
+  for await(const {row} of selectedPublicationRows(store,snapshot,this.options()))if(this.included(row.id)&&this.id('record',row.id)===publicId)return this.projectedRow(row);
+  return null;
+ }
+ async find(publicId,options){
   if(this.history.has(publicId)){await this.describeHistory(publicId);return this.rows.get(publicId);}
+  return this.use((store,snapshot)=>this.findCurrent(store,snapshot,publicId,options));
+ }
+ // Resolve a card within one admitted read. The caller receives only its
+ // selected row and derivative; no store or permission proof is retained.
+ async resolve(publicId,options){
+  if(this.history.has(publicId))return {row:await this.find(publicId,options),descriptor:this.descriptors.get(publicId)};
   return this.use(async(store,snapshot)=>{
-   if(recordId){const item=await this.admit(store,snapshot,await store.member(snapshot,recordId));return item&&this.id('record',recordId)===publicId?this.projectedRow(item.row):null;}
-   if(snapshot.publicationIndex?.version===3){const item=await this.admit(store,snapshot,await new RecordPublicationIndex(store).record(snapshot,publicId));return item?this.projectedRow(item.row):null;}
-   for await(const {row} of selectedPublicationRows(store,snapshot,this.options()))if(this.included(row.id)&&this.id('record',row.id)===publicId)return this.projectedRow(row);
-   return null;
+   const row=await this.findCurrent(store,snapshot,publicId,options);
+   return row?{row,descriptor:await this.describeCurrent(store,snapshot,row)}:null;
   });
  }
  // Public identities change tie order. Keep just the next window in that exact
@@ -126,13 +136,19 @@ export class PublicationPreviewOwner{
   this.notebookCounts??=await this.use((store,snapshot)=>this.countValues(store,snapshot));
   return Object.fromEntries(this.projected.notebooks.map(book=>[book.id,this.notebookCounts[book.id]??0]));
  }
- async neighbours(row){
+ async neighbourRows(store,snapshot,row){
+  const selected=await store.member(snapshot,row.recordId);if(!selected)return [];
+  const result=[],reading=new RecordReadingIndex(store),notebooks=new Set([selected.notebookId]);
+  for(const backward of [true,false])for await(const candidate of reading.rows(snapshot,notebooks,{order:'position',after:selected,backward,signal:this.signal})){
+   if(await this.admit(store,snapshot,candidate)){result.push(this.projectedRow(candidate));break;}
+  }
+  return result;
+ }
+ async neighbours(row){return this.use((store,snapshot)=>this.neighbourRows(store,snapshot,row));}
+ async neighbourDescriptors(row){
   return this.use(async(store,snapshot)=>{
-   const selected=await store.member(snapshot,row.recordId);if(!selected)return [];
-   const result=[],reading=new RecordReadingIndex(store),notebooks=new Set([selected.notebookId]);
-   for(const backward of [true,false])for await(const candidate of reading.rows(snapshot,notebooks,{order:'position',after:selected,backward,signal:this.signal})){
-    if(await this.admit(store,snapshot,candidate)){result.push(this.projectedRow(candidate));break;}
-   }
+   const result=[];
+   for(const neighbour of await this.neighbourRows(store,snapshot,row))result.push({row:neighbour,descriptor:await this.describeCurrent(store,snapshot,neighbour)});
    return result;
   });
  }
@@ -158,27 +174,29 @@ export class PublicationPreviewOwner{
  async describe(row){
   if(row.historical)return this.describeHistory(row.id);
   if(this.descriptors.has(row.id))return this.descriptors.get(row.id);
-  return this.use(async(store,snapshot)=>{
-   // Recheck consent within the pinned owner, even for a supplied row.
-   const admitted=await this.admit(store,snapshot,await store.member(snapshot,row.recordId));
-   if(!admitted||!this.included(row.recordId)||this.id('record',row.recordId)!==row.id)throw new AppError('NOT_FOUND');
-   row=this.projectedRow(admitted.row);
-   let descriptor,selected;
-   if(this.choices.has(row.recordId)||admitted.patch?.attachments.length){
-    const value=await this.selected(store,snapshot,row);selected=value.selected;
-    descriptor={...publicationDescriptor(selected,this.metadata),revision:value.revision};
-   }else{
-    const [value]=await Array.fromAsync(store.queryDocuments([admitted.row],snapshot.metadata,{signal:this.signal,search:false,publicationDetails:true}));
-    descriptor=value.publicationDescriptor;
-   }
-   descriptor={...descriptor,referenceNamespaces:await recordReferenceNamespaces(store,{workspaceId:this.source.workspaceId,id:row.recordId})};
-   const projected=publicationOwnerProjection({metadata:this.metadata,records:[descriptor]},this.owner,this.identities).records[0];
-   Object.assign(projected,{position:row.position,referencesSelected:false});
-   this.rows.set(row.id,row);
-   this.descriptors.set(row.id,projected);
-   if(selected)this.originals.set(row.id,publicationPageRecord(selected,projected));
-   return projected;
-  });
+  return this.use((store,snapshot)=>this.describeCurrent(store,snapshot,row));
+ }
+ async describeCurrent(store,snapshot,row){
+  if(this.descriptors.has(row.id))return this.descriptors.get(row.id);
+  // Recheck consent within the pinned owner, even for a supplied row.
+  const admitted=await this.admit(store,snapshot,await store.member(snapshot,row.recordId));
+  if(!admitted||!this.included(row.recordId)||this.id('record',row.recordId)!==row.id)throw new AppError('NOT_FOUND');
+  row=this.projectedRow(admitted.row);
+  let descriptor,selected;
+  if(this.choices.has(row.recordId)||admitted.patch?.attachments.length){
+   const value=await this.selected(store,snapshot,row);selected=value.selected;
+   descriptor={...publicationDescriptor(selected,this.metadata),revision:value.revision};
+  }else{
+   const [value]=await Array.fromAsync(store.queryDocuments([admitted.row],snapshot.metadata,{signal:this.signal,search:false,publicationDetails:true}));
+   descriptor=value.publicationDescriptor;
+  }
+  descriptor={...descriptor,referenceNamespaces:await recordReferenceNamespaces(store,{workspaceId:this.source.workspaceId,id:row.recordId})};
+  const projected=publicationOwnerProjection({metadata:this.metadata,records:[descriptor]},this.owner,this.identities).records[0];
+  Object.assign(projected,{position:row.position,referencesSelected:false});
+  this.rows.set(row.id,row);
+  this.descriptors.set(row.id,projected);
+  if(selected)this.originals.set(row.id,publicationPageRecord(selected,projected));
+  return projected;
  }
  async describeHistory(id){
   if(this.descriptors.has(id))return this.descriptors.get(id);

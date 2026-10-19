@@ -24,6 +24,7 @@ import {recordRevisions} from '../src/research.js';
 import {newElement} from '../src/web/composition-tree.js';
 import {readingKey} from '../src/record-reading-index.js';
 import {SnapshotIndex} from '../src/snapshot-index.js';
+import {AppError} from '../src/errors.js';
 
 async function fixture(t,configure=()=>{},count=37){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-owner-preview-')),book=upgradeNotebook(sampleNotebook()),seed=book.entries[0];
@@ -62,22 +63,37 @@ test('owner preview pages rank projected identities without originals or retaine
  assert.deepEqual(await owner.window(notebooks,{limit:17,after:second[0],backward:true}),[...first].reverse());
  assert.equal(f.identities.origins.size,identityCount);assert.equal(owner.descriptors.size,0);assert.deepEqual(loaded,[]);
  const counts=await owner.counts();assert.equal(Object.values(counts).reduce((a,b)=>a+b,0),36);
- const row=first.find(row=>row.recordId!==f.book.entries[0].id),descriptor=await owner.describe(row);assert.equal(descriptor.id,row.id);assert.equal(descriptor.sourceWorkspaceId,f.book.id);assert.deepEqual(loaded,[]);
+ const row=first.find(row=>row.recordId!==f.book.entries[0].id),beforeResolve=f.opens,resolved=await owner.resolve(row.id,{recordId:row.recordId}),descriptor=resolved.descriptor;
+ assert.deepEqual(resolved.row,row);assert.equal(f.opens-beforeResolve,1);assert.equal(descriptor.id,row.id);assert.equal(descriptor.sourceWorkspaceId,f.book.id);assert.deepEqual(loaded,[]);
+ assert.equal(await owner.describe(row),descriptor);assert.equal(f.opens-beforeResolve,1,'The existing descriptor cache remains effective');
+ const neighbours=await owner.neighbours(row),expected=[];for(const neighbour of neighbours)expected.push({row:neighbour,descriptor:await owner.describe(neighbour)});
+ const compound=await new PublicationPreviewOwner(f.source,f.reader,f.identities).initialize(),beforeNeighbours=f.opens;
+ assert.deepEqual(await compound.neighbourDescriptors(row),expected);assert.equal(f.opens-beforeNeighbours,1);assert.deepEqual(loaded,[]);
  const original=await owner.original(row);assert.equal(original.body,f.book.entries.find(record=>record.id===row.recordId).body);assert.deepEqual(loaded,[row.recordId]);assert.equal(f.active,false);
  assert.equal(await owner.find(owner.id('record',f.book.entries[2].id),{recordId:f.book.entries[2].id}),null);
  assert.equal((await f.f.workspace.outline()).etag,owner.snapshotId);
+ // A compound callback still cannot return its derivative after the reader's
+ // final grant check refuses it, including revocation during hydration.
+ let permitted=true;
+ const guarded={use:(id,revision,consume)=>f.reader.use(id,revision,async(...args)=>{
+  if(!permitted)throw new AppError('ACCESS_LOCKED');const value=await consume(...args);
+  if(!permitted)throw new AppError('ACCESS_LOCKED');return value;
+ })},revoked=await new PublicationPreviewOwner(f.source,guarded,f.identities).initialize(),describe=revoked.describeCurrent.bind(revoked);
+ revoked.describeCurrent=async(...args)=>{const value=await describe(...args);permitted=false;return value;};
+ await assert.rejects(revoked.resolve(row.id,{recordId:row.recordId}),{code:'ACCESS_LOCKED'});assert.equal(f.active,false);
+ permitted=true;await assert.rejects(revoked.neighbourDescriptors(row),{code:'ACCESS_LOCKED'});assert.equal(f.active,false);
 });
 
 test('source preview applies section and attachment choices to derivatives and retains canonical revisions',async t=>{
  const f=await fixture(t),raw=f.book.entries[0],choice=defaultEditionRecord(raw,recordRevision(raw));choice.sections=[raw.sections[0].id];choice.attachments=[raw.attachments[1].id];
  f.source.edition={version:1,records:[choice]};f.source.selection.records=[{id:raw.id,share:true,attachments:[{id:raw.attachments[0].id,share:false},{id:raw.attachments[1].id,share:true}]}];
- const owner=await new PublicationPreviewOwner(f.source,f.reader,f.identities).initialize(),row=await owner.find(owner.id('record',raw.id),{recordId:raw.id});
- const descriptor=await owner.describe(row),record=await owner.original(row);
+ const owner=await new PublicationPreviewOwner(f.source,f.reader,f.identities).initialize(),before=f.opens,{row,descriptor}=await owner.resolve(owner.id('record',raw.id),{recordId:raw.id});
+ assert.equal(f.opens-before,1);const record=await owner.original(row);
  assert.equal(descriptor.revision,recordRevision(raw));assert.equal(record.id,descriptor.id);assert.equal(record.recordId,raw.id);
  assert.deepEqual(record.sections,raw.sections.slice(0,1));assert.deepEqual(record.attachments.map(attachment=>attachment.id),[owner.id('media',raw.attachments[1].id)]);
  assert.deepEqual(descriptor.media.map(media=>media.id),record.attachments.map(media=>media.id));assert.ok(!JSON.stringify(record).includes('Private details'));
  assert.deepEqual((await f.f.workspace.read()).book.entries[0],raw);
- const bad=structuredClone(f.source);bad.edition.records[0].revision='f'.repeat(64);const changed=await new PublicationPreviewOwner(bad,f.reader,f.identities).initialize();await assert.rejects(changed.describe(row),{code:'RECORD_CHANGED'});
+ const bad=structuredClone(f.source);bad.edition.records[0].revision='f'.repeat(64);const changed=await new PublicationPreviewOwner(bad,f.reader,f.identities).initialize();await assert.rejects(changed.resolve(row.id,{recordId:raw.id}),{code:'RECORD_CHANGED'});
 });
 
 
@@ -95,7 +111,8 @@ test('a combined canvas admits selected sources, follows cross-owner references 
  const read=ResearchCatalogue.prototype.record,loaded=[];ResearchCatalogue.prototype.record=function(id,...args){loaded.push({workspaceId:this.workspace?.id,id});return read.call(this,id,...args);};t.after(()=>{ResearchCatalogue.prototype.record=read;});
  const home=await websitePreviewSource(host.f.workspace,makeCommand(),{websitePin:host.websitePin,designTarget:'home',sourceReader});
  assert.equal(home.context.entries.length,0);assert.deepEqual(loaded,[]);assert.ok(home.context.recordCards.length<=24);assert.equal(readers,closed);assert.equal(readers,verified);
- const page=await websitePreviewSource(host.f.workspace,makeCommand(),{websitePin:host.websitePin,designTarget:'entry:'+foreignId,sourceReader});
+ const beforeEntry=source.opens,page=await websitePreviewSource(host.f.workspace,makeCommand(),{websitePin:host.websitePin,designTarget:'entry:'+foreignId,sourceReader});
+ assert.equal(source.opens-beforeEntry,6,'Entry hydration and neighbours each use one admitted source read');
  assert.equal(page.context.entries.length,1);assert.equal(page.context.entries[0].body,'Foreign original body');assert.equal(page.context.entries[0].relations[0].id,host.book.entries[0].id);
  assert.equal(loaded.length,1);assert.equal(readers,closed);
  assert.equal(page.editor.workspaceId,host.book.id);const editorRecord=page.editor.records.find(record=>record.id===foreignId);
@@ -167,7 +184,7 @@ test('an explicit record choice cannot disclose a project excluded from its sour
  },12),hidden=f.book.entries.at(-1);
  f.source.selection.records=[{id:hidden.id,share:true,attachments:[]}];
  const owner=await new PublicationPreviewOwner(f.source,f.reader,f.identities).initialize(),all=new Set(f.book.notebooks.map(book=>owner.id('notebook',book.id)));
- assert.equal((await owner.window(all)).some(row=>row.recordId===hidden.id),false);assert.equal(await owner.find(owner.id('record',hidden.id)),null);
+ assert.equal((await owner.window(all)).some(row=>row.recordId===hidden.id),false);assert.equal(await owner.find(owner.id('record',hidden.id)),null);assert.equal(await owner.resolve(owner.id('record',hidden.id)),null);
  assert.equal(Object.values(await owner.counts()).reduce((sum,value)=>sum+value,0),11);
 });
 
