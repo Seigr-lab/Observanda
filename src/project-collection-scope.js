@@ -13,5 +13,5 @@ export function projectCollectionScope(projects,{scope=null,selection}){
   ids.add(id);if(selection.includeDescendants)for(const project of available)if(below(project.projectId,id))ids.add(project.projectId);
  }
  if(!scope&&selection.includeWorkspace)ids.add(null);
- return {projectIds:ids,projectLabels:Object.fromEntries(selection.projectIds.map(id=>[id,entries.get(id)?.summary?.title??''])),notebookIds:selection.notebookMode==='selected'?new Set(selection.notebookIds):null};
+ return {projectIds:ids,projectOwners:new Map(available.map(project=>[project.projectId,project.namespaceId??null])),projectLabels:Object.fromEntries(selection.projectIds.map(id=>[id,entries.get(id)?.summary?.title??''])),notebookIds:selection.notebookMode==='selected'?new Set(selection.notebookIds):null};
 }

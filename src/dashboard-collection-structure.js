@@ -31,10 +31,14 @@ export async function dashboardCollectionStructure(pages,client,command,{scope=n
   if(owner.workspaceId===workspaceId)display=metadata;
   const books=metadata.notebooks.filter(book=>selected.projectIds.has(book.projectId??null)&&(!selected.notebookIds||selected.notebookIds.has(book.id)));for(const book of books)seenBooks.add(book.id);
   if(provider==='projects'){
-   const registered=storage.projectId?(await new LabBookRegistry(storage).read()).value.books:[];
-   const stamp=digest(JSON.stringify(registered)),stampKey='books:'+owner.workspaceId;if(session.snapshots&&session.snapshots[stampKey]!==stamp)throw new AppError('RECORD_QUERY_CURSOR');snapshots[stampKey]=stamp;
-   for(const project of metadata.projects.filter(project=>selected.projectIds.has(project.id))){
-    const local=metadata.notebooks.filter(book=>book.projectId===project.id),independent=storage.projectId===project.id?registered:[],notebooks=[...local.slice(0,12).map(book=>({id:book.id,title:book.title,route:{action:'research-open-owned',workspaceId:owner.workspaceId,kind:'notebook',id:book.id}})),...independent.slice(0,Math.max(0,12-local.length)).map(book=>({id:book.labBookId,title:book.directory,route:{action:'research-open-owned',workspaceId:book.namespaceId,kind:'notebook',id:book.labBookId}}))];
+   const directory=storage.projectId?(await new LabBookRegistry(storage).read()).value:{books:[],deleted:[],relocated:[]},registered=directory.books;
+   const retiredOrDedicated=new Set([...registered,...directory.deleted,...(directory.relocated??[])].map(book=>book.labBookId));
+   const stamp=digest(JSON.stringify(directory)),stampKey='books:'+owner.workspaceId;if(session.snapshots&&session.snapshots[stampKey]!==stamp)throw new AppError('RECORD_QUERY_CURSOR');snapshots[stampKey]=stamp;
+   // Membership identifies the authoritative owner, including retired projects.
+   // Retained source metadata must never create a second navigation target.
+   const projectOwner=owner.projectId?owner.workspaceId:null;
+   for(const project of metadata.projects.filter(project=>selected.projectIds.has(project.id)&&selected.projectOwners.get(project.id)===projectOwner)){
+    const local=metadata.notebooks.filter(book=>book.projectId===project.id&&!retiredOrDedicated.has(book.id)),independent=storage.projectId===project.id?registered:[],notebooks=[...local.slice(0,12).map(book=>({id:book.id,title:book.title,route:{action:'research-open-owned',workspaceId:owner.workspaceId,kind:'notebook',id:book.id}})),...independent.slice(0,Math.max(0,12-local.length)).map(book=>({id:book.labBookId,title:book.directory,route:{action:'research-open-owned',workspaceId:book.namespaceId,kind:'notebook',id:book.labBookId}}))];
     add({key:dashboardSourceKey(owner.workspaceId,project.id),title:project.title,owner:{...owner,projectTitle:project.title,notebookTitle:''},data:{...project,notebooks,notebookTotal:local.length+independent.length},action:action(owner,'project',project.id)});
    }
    return;
