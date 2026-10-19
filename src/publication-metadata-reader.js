@@ -7,7 +7,10 @@ import {AppError} from './errors.js';
 export async function withPublicationMetadataReader(workspace,operation,{signal}={}){
  signal?.throwIfAborted();
  if(await workspace.storageKind()!=='catalogue')return operation(workspace);
- const base=publicationResearchWorkspace(workspace),db=await base.openCatalogue({signal}),cache=new CatalogueReadCache();
+ // Edition traversal revisits authenticated index branches across many pages.
+ // Keep at most 4 MiB each of encrypted rows and checked nodes, confined to
+ // this immutable snapshot and cleared before its connection closes.
+ const base=publicationResearchWorkspace(workspace),db=await base.openCatalogue({signal}),cache=new CatalogueReadCache({maxRows:4096,maxBytes:4*1024*1024});
  let active=true,failure;
  const check=()=>{if(!active)throw new AppError('INVALID');signal?.throwIfAborted();};
  try{

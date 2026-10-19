@@ -86,7 +86,7 @@ export class PublicationOutputWriter{
    };
    if(method==='writeMetadata')return async(file,text)=>{
     signal?.throwIfAborted();if(!isPublicationDocumentBlockPath(scope.owner,file))throw new AppError('INVALID');
-    if(blocks){await scope.ready();const prior=await blocks.get(file);if(prior!==undefined&&prior!==text)stale();await blocks.put(file,text);}
+    if(blocks){await scope.ready();if(!await blocks.add(file,text)&&await blocks.get(file)!==text)stale();}
     const size=Buffer.byteLength(text);if(pending.size>=outputObjects||bytes+size>outputBytes)await scope.flush();
     if(pending.has(file)&&pending.get(file)!==text)stale();bytes-=Buffer.byteLength(pending.get(file)??'');pending.set(file,text);bytes+=size;
     if(bytes>=outputBytes)await scope.flush();
