@@ -200,7 +200,7 @@ export function projectSettings(services){
  async function submit(target){
   if(!['structure-project-form','project-template-form'].includes(target.id))return false;if(busy)return true;capture();
   if(!native()&&draft.labBookTemplate&&!validLabBookTemplate(draft.labBookTemplate)){error='Enter a template name and complete each record type and field. Choice fields need distinct choices.';draw('[data-project-error]');throw new Error(error);}
-  busy=true;error='';const value=structuredClone(draft);value.title=value.title.trim();value.kind=value.kind.trim();draw();
+  busy=true;error='';const refreshDirectory=Boolean(creation||state.projectOwner),value=structuredClone(draft);value.title=value.title.trim();value.kind=value.kind.trim();draw();
   try{
    let selectedConfiguration={};
    if(native()){
@@ -208,10 +208,11 @@ export function projectSettings(services){
     if(mode==='template')selectedConfiguration=draft.labBookTemplate?await configuration.checkpoint():{configurationSource:null};
     else if(configurationSource!==undefined)selectedConfiguration={configurationSource};
    }
-   if(creation){await api('/api/projects/create',{...creation,project:value,...selectedConfiguration},{adopt:false});if(creation.password)await api('/api/projects/'+value.id+'/access/unlock',{username:creation.username,password:creation.password,recovery:''},{adopt:false});await services.enterProject(value.id);await services.projectDirectory.refresh();}
-   else{const signature=JSON.stringify({etag,project:value,...selectedConfiguration});if(saveRequest?.signature!==signature)saveRequest={id:crypto.randomUUID(),signature};const result=state.projectOwner?await services.accessProject(()=>api('/api/projects/'+value.id+'/settings/save',{id:saveRequest.id,etag,project:value,...selectedConfiguration})):await api('/api/workspace/structure',{etag,change:{kind:'project',value},...selectedConfiguration});state.book=result.book;state.etag=result.etag;if(state.projectOwner)await services.projectDirectory.refresh();}
+   if(creation){await api('/api/projects/create',{...creation,project:value,...selectedConfiguration},{adopt:false});if(creation.password)await api('/api/projects/'+value.id+'/access/unlock',{username:creation.username,password:creation.password,recovery:''},{adopt:false});await services.enterProject(value.id);}
+   else{const signature=JSON.stringify({etag,project:value,...selectedConfiguration});if(saveRequest?.signature!==signature)saveRequest={id:crypto.randomUUID(),signature};const result=state.projectOwner?await services.accessProject(()=>api('/api/projects/'+value.id+'/settings/save',{id:saveRequest.id,etag,project:value,...selectedConfiguration})):await api('/api/workspace/structure',{etag,change:{kind:'project',value},...selectedConfiguration});state.book=result.book;state.etag=result.etag;}
    state.preview=null;state.project=value.id;state.notebook='all';state.page='project';
    form()?.removeAttribute('data-busy');form()?.removeAttribute('aria-busy');directoryChoices.reset();configuration.stop();sourceReader.stop();draft=base=creation=creationBase=null;document.querySelector('#dialog').close();render();notify(mode==='template'?'Template saved.':'Project saved.');
+   if(refreshDirectory)void services.projectDirectory.refresh().catch(error=>notify(error.message??'Could not refresh the project list.'));
   }catch(e){error=e.code==='CONFLICT'?'The workspace changed. Your edits are still here. Keep any edits you need, then cancel and reload the workspace before trying again.':e?.message??'Could not save. Your edits are still here.';busy=false;draw('[data-project-error]');if(e.code==='ACCESS_LOCKED')throw e;throw new Error(error,{cause:e});}
   finally{busy=false;}
   return true;
