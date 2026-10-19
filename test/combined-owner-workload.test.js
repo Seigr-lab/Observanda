@@ -1,7 +1,8 @@
 import {workspaceDestinationFixture} from './workspace-destination-fixture.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,rm} from 'node:fs/promises';
+import filesystem,{mkdtemp,rm} from 'node:fs/promises';
+import {syncBuiltinESMExports} from 'node:module';
 import {AsyncLocalStorage} from 'node:async_hooks';
 import {EventEmitter} from 'node:events';
 import os from 'node:os';
@@ -62,6 +63,23 @@ const selected=(owner,domain,item)=>new ProjectDomains(owner.storage,owner.entry
 test('full publication and selected authoring remain isolated from unrelated growth during cross-owner stock and task writes',{timeout:process.env.OBSERVANDA_TEST_SECOND_VOLUME?1200000:600000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-combined-owners-')),runtime=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:id(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(runtime),keys=[],scope=new AsyncLocalStorage(),publicationTimings=new AsyncLocalStorage(),authoringTimings=new AsyncLocalStorage();
  const original=ResearchCatalogue.prototype.record,documents=ResearchCatalogue.prototype.queryDocuments;let application,releaseBusy,busy,placement;
+ // Attribute storage latency to the publication phase without logging paths,
+ // contents or query parameters. Each file handle keeps its original owner.
+ // CPU includes foreground work; concurrent syscall times are not additive.
+ const filesystemMocks=[];
+ const timed=(name,operation)=>async function(...args){
+  const timing=publicationTimings.getStore();if(!timing)return operation.apply(this,args);
+  const started=performance.now();try{return await operation.apply(this,args);}finally{const value=timing.filesystem[name]??={count:0,ms:0};value.count++;value.ms+=performance.now()-started;}
+ };
+ const openFile=filesystem.open;
+ filesystemMocks.push(t.mock.method(filesystem,'open',timed('open',async function(...args){
+  const handle=await openFile.apply(this,args);
+  if(publicationTimings.getStore())for(const method of ['read','write','stat','sync','close'])handle[method]=timed(method,handle[method]);
+  return handle;
+ })));
+ for(const name of ['statfs','rename','unlink','readFile','writeFile','lstat','stat','mkdir','readdir'])filesystemMocks.push(t.mock.method(filesystem,name,timed(name,filesystem[name])));
+ syncBuiltinESMExports();
+
  const measuredIndexes=[[SnapshotIndex,'authoringMembershipMs'],[RecordSearchIndex,'authoringSearchMs']].map(([type,metric])=>{
   const replace=type.prototype.replace;
   type.prototype.replace=async function(...args){const timing=authoringTimings.getStore();if(!timing)return replace.apply(this,args);const started=performance.now();try{return await replace.apply(this,args);}finally{timing[metric]=(timing[metric]??0)+Math.round(performance.now()-started);}};
@@ -70,6 +88,7 @@ test('full publication and selected authoring remain isolated from unrelated gro
  ResearchCatalogue.prototype.record=function(...args){const timing=publicationTimings.getStore();if(timing)timing.originals++;const metrics=scope.getStore();if(metrics){metrics.originals++;assert.notEqual(this.workspace.root,metrics.unrelatedRoot);}return original.apply(this,args);};
  ResearchCatalogue.prototype.queryDocuments=async function*(...args){for await(const value of documents.apply(this,args)){const metrics=scope.getStore();if(metrics)metrics.derivatives++;yield value;}};
  try{
+  process.stdout.write(JSON.stringify({phase:'provisioning disposable owners'})+'\n');
   placement=await workspaceDestinationFixture(directory);
   const host=createNotebook('Combined workload'),fixture=await encryptedFixture(placement.root,host,undefined,{deviceDirectory:directory});keys.push(fixture.vault);
   // Measure host writer admission separately from its transaction work, without
@@ -96,7 +115,7 @@ test('full publication and selected authoring remain isolated from unrelated gro
     const entered=performance.now(),batch={objects:0,bytes:0};timing.admissionMs+=entered-start;timing.batch=batch;
     try{return await operation(...args);}finally{
      timing.writeMs+=performance.now()-entered;delete timing.batch;
-     if(batch.objects){timing.batches.count++;timing.batches.objects+=batch.objects;timing.batches.bytes+=batch.bytes;timing.batches.maximumObjects=Math.max(timing.batches.maximumObjects,batch.objects);timing.batches.maximumBytes=Math.max(timing.batches.maximumBytes,batch.bytes);if(batch.objects===128)timing.batches.fullObjectBatches++;}
+     if(batch.objects){timing.batches.count++;timing.batches.objects+=batch.objects;timing.batches.bytes+=batch.bytes;timing.batches.maximumObjects=Math.max(timing.batches.maximumObjects,batch.objects);timing.batches.maximumBytes=Math.max(timing.batches.maximumBytes,batch.bytes);if(batch.objects===512)timing.batches.fullObjectBatches++;}
     }
    },options).finally(()=>{timing.writerMs+=performance.now()-start;});
   };
@@ -125,17 +144,20 @@ test('full publication and selected authoring remain isolated from unrelated gro
    const added=Array.from({length:count-book.records.length},(_,index)=>({...structuredClone(sampleNotebook().entries[0]),id:id(),notebookId:book.entry.labBookId,title:book.title+' '+(book.records.length+index),body:'Observation text '.repeat(512),share:true,attachments:[],figures:[],relations:[],sections:[]}));
    if(added.length)await book.research.save({workspaceId:book.entry.namespaceId,changes:added.map(record=>({id:record.id,expectedRevision:null,record}))},{receipt:true});book.records.push(...added);
   }
+  process.stdout.write(JSON.stringify({phase:'creating selected records',records:720,owners:2})+'\n');
   for(const book of books.slice(0,2))await grow(book,360);
   for(const [index,siteId] of ids.entries()){
    const site=await sites.read(siteId),draft=edit(site),selectedSources=structuredClone(sources);
    if(index)for(const [owner,source] of selectedSources.entries())source.selection={defaultShare:false,includeProjects:[],records:[{id:books[owner].records[0].id,share:true,attachments:[]}]};
    draft.metadata.website={...site.book.website,researchSources:selectedSources,footer:index?'Independent report':'Complete journal',home:{...site.book.website.home,enabled:true,sections:[newElement('records',id)]}};await sites.save(siteId,{...draft,websitePin:site.websitePin});
   }
+  process.stdout.write(JSON.stringify({phase:'setting up concurrent workflows'})+'\n');
   const resourceId=id(),sourceTask=id();
   for(const owner of books.slice(0,2))await owner.commands.execute(command(owner,'resource.create',{id:resourceId,data:{projectId:null,placementId:null,name:'Exact material',code:resourceId,kind:'material',description:'',categoryId:null,schemaRevision:null,fieldSchema:[],values:{},location:'',unit:'items',capacity:1,status:'available',links:[]},openingStock:{quantity:'10',projectId:null}}));
   await books[1].commands.execute(command(books[1],'task.save',{id:sourceTask,expectedRevision:null,data:task([],'done')}));
   const sourceRef={workspaceId:books[1].entry.namespaceId,type:'task',id:sourceTask},sourceFact=await readPlanningTask(books[1].storage,sourceRef);
   for(const count of [80,800]){
+   process.stdout.write(JSON.stringify({phase:'growing unrelated owner',records:count})+'\n');
    await grow(books[2],count);
    const bomId=id(),foreign={workspaceId:books[1].entry.namespaceId,type:'resource',id:resourceId},lines=[{...bomLine(),value:'Local part',resourceId,quantity:'2'},{...bomLine(),value:'Foreign part',resourceId:foreign,quantity:'3'}];
    await books[0].commands.execute(command(books[0],'bom.save',{id:bomId,expectedRevision:null,data:{...blankBOM(),title:'Combined build '+count,recordId:books[0].records[0].id,lines}}),options(books[0]));
@@ -158,7 +180,7 @@ test('full publication and selected authoring remain isolated from unrelated gro
    for(const method of ['pin','prepare']){
     const operation=releases[method].bind(releases);
     releases[method]=async(...args)=>{
-     const at=performance.now(),timing={writers:0,writerMs:0,admissionMs:0,writeMs:0,originals:0,batches:{count:0,objects:0,bytes:0,maximumObjects:0,maximumBytes:0,fullObjectBatches:0},sql:Object.fromEntries(['begin','commit','work'].map(kind=>[kind,{count:0,ms:0}]))};let pages=null;
+     const at=performance.now(),cpu=process.cpuUsage(),timing={filesystem:{},writers:0,writerMs:0,admissionMs:0,writeMs:0,originals:0,batches:{count:0,objects:0,bytes:0,maximumObjects:0,maximumBytes:0,fullObjectBatches:0},sql:Object.fromEntries(['begin','commit','work'].map(kind=>[kind,{count:0,ms:0}]))};let pages=null;
      if(method==='prepare'){
       const options=args[1],progress=options.progress;
       args[1]={...options,progress:async value=>{pages={completed:value.done,total:value.total,elapsedMs:Math.round(performance.now()-at)};await progress(value);}};
@@ -166,7 +188,7 @@ test('full publication and selected authoring remain isolated from unrelated gro
      try{return await publicationTimings.run(timing,()=>operation(...args));}
      finally{
       metrics[method+'Ms']=Math.round(performance.now()-at);
-      process.stdout.write(JSON.stringify({phase:method,unrelatedRecords:count,elapsedMs:metrics[method+'Ms'],writers:timing.writers,writerMs:Math.round(timing.writerMs),admissionMs:Math.round(timing.admissionMs),writeMs:Math.round(timing.writeMs),originals:timing.originals,batches:timing.batches,sql:Object.fromEntries(Object.entries(timing.sql).map(([kind,value])=>[kind,{count:value.count,ms:Math.round(value.ms)}])),...(pages?{pages}:{})})+'\n');
+      process.stdout.write(JSON.stringify({phase:method,unrelatedRecords:count,elapsedMs:metrics[method+'Ms'],writers:timing.writers,writerMs:Math.round(timing.writerMs),admissionMs:Math.round(timing.admissionMs),writeMs:Math.round(timing.writeMs),originals:timing.originals,cpuMs:Math.round(Object.values(process.cpuUsage(cpu)).reduce((sum,value)=>sum+value,0)/1000),filesystem:Object.fromEntries(Object.entries(timing.filesystem).map(([kind,value])=>[kind,{count:value.count,ms:Math.round(value.ms)}])),batches:timing.batches,sql:Object.fromEntries(Object.entries(timing.sql).map(([kind,value])=>[kind,{count:value.count,ms:Math.round(value.ms)}])),...(pages?{pages}:{})})+'\n');
      }
     };
    }
@@ -199,5 +221,5 @@ test('full publication and selected authoring remain isolated from unrelated gro
    }finally{clearTimeout(timer);controller.abort();releaseBusy();await busy;busy=null;await preparing.catch(()=>{});}
   }
   assert.equal(measurements[1].sourceUses,measurements[0].sourceUses);assert.equal(measurements[1].originals,measurements[0].originals);assert.equal(measurements[1].derivatives,measurements[0].derivatives);assert.ok(measurements[1].queries<measurements[0].queries*2,'Unrelated growth increased selected read work');
- }finally{releaseBusy?.();await busy;ResearchCatalogue.prototype.record=original;ResearchCatalogue.prototype.queryDocuments=documents;for(const restore of measuredIndexes)restore();await application?.close();await runtime.close();detach();keys.forEach(clearVault);await placement?.cleanup();assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-combined-owners-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{for(const mock of filesystemMocks)mock.mock.restore();syncBuiltinESMExports();releaseBusy?.();await busy;ResearchCatalogue.prototype.record=original;ResearchCatalogue.prototype.queryDocuments=documents;for(const restore of measuredIndexes)restore();await application?.close();await runtime.close();detach();keys.forEach(clearVault);await placement?.cleanup();assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-combined-owners-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
