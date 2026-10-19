@@ -35,13 +35,13 @@ export async function writeContent(workspace,file,source,{maxBytes=0,reserveByte
   await workspace.requireStorageKey();const directory=path.dirname(file),temp=path.join(directory,temporaryStreamName());
   const key=workspace.vault?.key?Buffer.from(workspace.vault.key):null,nonce=randomBytes(12),cipher=key?createCipheriv('aes-256-gcm',key,nonce):null;
   if(cipher)cipher.setAAD(Buffer.from(workspace.fileAAD(file)));
-  let handle,size=0,position=cipher?ENCRYPTION_OVERHEAD:0;const hash=createHash('sha256');
+  let handle,moved=false,size=0,position=cipher?ENCRYPTION_OVERHEAD:0;const hash=createHash('sha256');
   try{
     handle=await open(temp,'wx',0o600);if(cipher)await writeAll(handle,Buffer.concat([ENVELOPE,nonce,Buffer.alloc(16)]),0);
     for await(const value of source){const bytes=Buffer.isBuffer(value)?value:Buffer.from(value);for(let offset=0;offset<bytes.length;offset+=BLOCK){signal?.throwIfAborted();const chunk=bytes.subarray(offset,offset+BLOCK);size+=chunk.length;if(!Number.isSafeInteger(size)||maxBytes&&size>maxBytes)throw new AppError('MEDIA_LIMIT');await diskSpace(directory,chunk.length,reserveBytes);hash.update(chunk);const output=cipher?cipher.update(chunk):chunk;await writeAll(handle,output,position);position+=output.length;operationAdvance(chunk.length);operationWork({bytes:chunk.length});}}
     if(cipher){const last=cipher.final();if(last.length)await writeAll(handle,last,position);await writeAll(handle,cipher.getAuthTag(),20);}
-    await handle.sync();await handle.close();handle=null;signal?.throwIfAborted();await atomicReplace(temp,file);return {size,sha256:hash.digest('hex')};
-  }catch(error){if(['ENOSPC','EDQUOT'].includes(error.code))throw new AppError('STORAGE_FULL');throw error;}finally{key?.fill(0);await handle?.close();await unlink(temp).catch(e=>{if(e.code!=='ENOENT')throw e;});}
+    await handle.sync();await handle.close();handle=null;signal?.throwIfAborted();await atomicReplace(temp,file);moved=true;return {size,sha256:hash.digest('hex')};
+  }catch(error){if(['ENOSPC','EDQUOT'].includes(error.code))throw new AppError('STORAGE_FULL');throw error;}finally{key?.fill(0);await handle?.close();if(!moved)await unlink(temp).catch(e=>{if(e.code!=='ENOENT')throw e;});}
  });
 }
 export class FileContent {
