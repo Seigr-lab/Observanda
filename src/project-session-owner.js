@@ -15,7 +15,14 @@ export class ProjectSessionOwner{
  async check(){
   const app=this.application;await this.checkRequest();
   if(app.closed||this.session.get(this.projectId)!==this.sessionEntry||this.sessionEntry?.locked||this.sessionEntry?.vault&&this.sessionEntry.expires<=Date.now())throw new AppError('ACCESS_LOCKED');
-  if(this.entry){const latest=await this.registry.locate(this.projectId);if(latest.root!==this.entry.root||latest.vaultId!==this.entry.vaultId||latest.namespaceId!==this.entry.namespaceId||(await readAccess(this.entry.root)).etag!==this.etag)throw new AppError('ACCESS_LOCKED');}
+  if(this.entry){
+   const entry=this.entry,[location,access]=await Promise.allSettled([this.registry.locate(this.projectId),readAccess(entry.root)]);
+   if(location.status==='rejected')throw location.reason;
+   const latest=location.value;
+   if(latest.root!==entry.root||latest.vaultId!==entry.vaultId||latest.namespaceId!==entry.namespaceId)throw new AppError('ACCESS_LOCKED');
+   if(access.status==='rejected')throw access.reason;
+   if(access.value.etag!==this.etag)throw new AppError('ACCESS_LOCKED');
+  }
  }
  async accessChanged(etag){
   const app=this.application;if(app.closed||this.session.get(this.projectId)!==this.sessionEntry)throw new AppError('ACCESS_LOCKED');

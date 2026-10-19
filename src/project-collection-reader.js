@@ -52,7 +52,10 @@ export function projectCollectionReader(application,client,check){
          await router.withLabBook(target.labBookId,storage=>{selected.storage=storage;});
          selected.verify=async()=>{
           // The book check also revalidates this exact parent owner.
-          await access.check();const currentStamp=digest(await readFile(registry.file));
+          await access.check();
+          const [directory,savedAccess]=await Promise.allSettled([readFile(registry.file).then(digest),readAccess(root)]);
+          if(directory.status==='rejected')throw directory.reason;
+          const currentStamp=directory.value;let currentAccess;
           if(currentStamp!==stamp){
            // Directory changes may concern a sibling. Reopen only the parent
            // with the original grants; previous reader keys may be cleared.
@@ -62,8 +65,12 @@ export function projectCollectionReader(application,client,check){
             if(['root','vaultId','namespaceId'].some(key=>current[key]!==entry[key]))throw access.error(new AppError('ACCESS_LOCKED'));
            },{locationOnly:true});}finally{await fresh.close();}
            stamp=currentStamp;
+           currentAccess=await readAccess(root);
+          }else{
+           if(savedAccess.status==='rejected')throw savedAccess.reason;
+           currentAccess=savedAccess.value;
           }
-          if((await readAccess(root)).etag!==etag)throw access.error(new AppError('ACCESS_LOCKED'));
+          if(currentAccess.etag!==etag)throw access.error(new AppError('ACCESS_LOCKED'));
          };
         }catch(error){throw access.error(error);}
        }
