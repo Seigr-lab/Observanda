@@ -3,6 +3,7 @@
 // streaming run outside that writer, including nested media retention.
 import path from 'node:path';
 import {PublicationOutputFinalization} from './publication-output-finalization.js';
+import {PublicationOutputBuffer} from './publication-output-buffer.js';
 import {readdir} from 'node:fs/promises';
 import {withScratch} from './scratch-work.js';
 import {publicationResearchWorkspace} from './publication-pin.js';
@@ -66,7 +67,7 @@ export function withPublicationOutputWriter(workspace,source,job,options,operati
 }
 export class PublicationOutputWriter{
  constructor(workspace,source,job,{directory,signal,blockedValues=[],[freshBlocks]:blocks}={}){
-  this.workspace=workspace;this.source=source;this.job=job;this.directory=directory;this.signal=signal;this.blockedValues=blockedValues;this.owner=publicationOutputOwner(source,job);this.nextBlob=0;this.pendingNames=new Set();this.finalization=new PublicationOutputFinalization({signal});
+  this.workspace=workspace;this.source=source;this.job=job;this.directory=directory;this.signal=signal;this.blockedValues=blockedValues;this.owner=publicationOutputOwner(source,job);this.nextBlob=0;this.pendingNames=new Set();this.finalization=new PublicationOutputFinalization({signal});this.buffers=new PublicationOutputBuffer();
   let admission;this.ready=()=>admission??=(blocks?workspace.withLock(async()=>{
    await assertPublicationDocumentStorage(workspace,{signal});signal?.throwIfAborted();
    if((await workspace.metadataPage(publicationDocumentPrefix(this.owner),{limit:1})).items.length||(await readdir(directory)).length)throw new AppError('PUBLICATION_IDENTITY');
@@ -118,11 +119,17 @@ export class PublicationOutputWriter{
   if(this.pendingNames.has(name))throw new AppError('PUBLICATION_IDENTITY');this.pendingNames.add(name);
   const index=this.nextBlob++,file=path.join(this.directory,index+'.blob');
   try{
-   const chunks=streaming?publicationOutputChunks(content,{signal:this.signal}):contentStream(content);
-   const expected=streaming?null:{size:contentSize(content),sha256:contentHash(content)},workspace=this.workspace,signal=this.signal,blockedValues=this.blockedValues;
-   const saved=await this.finalization.write(beforeCommit=>writeContent(workspace,file,chunks,{signal,beforeCommit:saved=>{
-    if(expected&&(saved.size!==expected.size||saved.sha256!==expected.sha256))stale();return beforeCommit(saved);
-   }}),streaming?saved=>admitRetainedPublicFile(name,new FileContent(workspace,file,saved.size,saved.sha256),{type,blockedValues}):undefined);
+   const prepared=streaming?await this.buffers.prepare(publicationOutputChunks(content,{signal:this.signal}),{signal:this.signal}):null;
+   const chunks=prepared?.source??contentStream(content),expected=prepared?.buffered?Object.freeze({size:prepared.size,sha256:prepared.sha256}):streaming?null:{size:contentSize(content),sha256:contentHash(content)},workspace=this.workspace,signal=this.signal,blockedValues=this.blockedValues;let started=false,saved;
+   try{saved=await this.finalization.write(async beforeCommit=>{
+    started=true;try{
+     if(prepared?.buffered)await beforeCommit(expected);
+     return await writeContent(workspace,file,chunks,{signal,beforeCommit:actual=>{
+      if(expected&&(actual.size!==expected.size||actual.sha256!==expected.sha256))stale();if(!prepared?.buffered)return beforeCommit(actual);
+     }});
+    }finally{await prepared?.dispose();}
+   },streaming?saved=>admitRetainedPublicFile(name,new FileContent(workspace,file,saved.size,saved.sha256),{type,blockedValues}):undefined);
+   }catch(error){if(!started)await prepared?.dispose();throw error;}
    const descriptor={name,index,...saved,type,...(type==='media'?{header:content.header.toString('hex')}: {})};
    await this.builder.append('files',name,descriptor);await this.builder.append('blobIndexes',String(index),{name});
    return {path:name,bytes:saved.size,sha256:saved.sha256};

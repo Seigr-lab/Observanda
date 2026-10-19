@@ -21,6 +21,7 @@ import {RetainedPublicationFiles,verifyPublicationCandidate} from '../src/retain
 import {publicationFileRows} from '../src/publication-files.js';
 import {contentBuffer} from '../src/file-content.js';
 import {PublicationOutputFinalization} from '../src/publication-output-finalization.js';
+import {PublicationOutputBuffer} from '../src/publication-output-buffer.js';
 import {digest} from '../src/storage-format.js';
 import {publicationWorkspace} from '../src/publication-pin.js';
 import {catalogueFormat,catalogueRequiresPublicationDocuments} from '../src/catalogue-format.js';
@@ -65,22 +66,26 @@ test('output inventory binds nested retained blobs, selected choices and the exa
  // Observe only this attempt's manifest payload buffers. Partial filesystem
  // writes may repeat a buffer; they do not represent extra source chunks.
  const retaining=new AsyncLocalStorage(),manifestPayloads=new Set(),openFile=filesystem.open;
- const syncGates=[],syncCompleted=[],reverseDone=Promise.withResolvers();let syncing=0,maxSyncing=0,privacyReads=0,maxPrivacyReads=0,privacyCount=0,reverse;
+ const syncGates=[],syncCompleted=[],reverseDone=Promise.withResolvers(),openHome=Promise.withResolvers();let homeWaiting=false,nextPageOpenedWhileHomeWaits=false,syncing=0,maxSyncing=0,privacyReads=0,maxPrivacyReads=0,privacyCount=0,reverse;
  reverseDone.promise.catch(()=>{});
  const fileMock=t.mock.method(filesystem,'open',async function(file,...args){
-  const handle=await openFile.call(this,file,...args);
   const name=retaining.getStore();
+  if(args[0]==='wx'&&path.dirname(file)===directory){
+   if(name==='index.html'){homeWaiting=true;await openHome.promise;homeWaiting=false;}
+   if(name==='pages/'+late+'.html'){nextPageOpenedWhileHomeWaits=homeWaiting;openHome.resolve();}
+  }
+  const handle=await openFile.call(this,file,...args);
   if(name&&name!=='publication.json'&&args[0]==='wx'&&path.dirname(file)===directory){
    const sync=handle.sync;handle.sync=async function(){
     const gate=Promise.withResolvers(),finished=Promise.withResolvers();syncGates.push({name,gate,finished});syncing++;maxSyncing=Math.max(maxSyncing,syncing);
-    if(syncGates.length%2===0){const pair=syncGates.slice(-2);reverse=(async()=>{for(const item of pair.reverse()){item.gate.resolve();await item.finished.promise;}})();if(syncGates.length===2)reverse.then(reverseDone.resolve,reverseDone.reject);}
+    if(syncGates.length===3){reverse=(async()=>{for(const item of [...syncGates].reverse()){item.gate.resolve();await item.finished.promise;}})();reverse.then(reverseDone.resolve,reverseDone.reject);}else if(syncGates.length===4)gate.resolve();
     try{await gate.promise;await sync.call(this);syncCompleted.push(name);}finally{syncing--;finished.resolve();}
    };
   }
   if(args[0]==='r'&&path.dirname(file)===directory&&file.endsWith('.blob')){
    privacyReads++;privacyCount++;maxPrivacyReads=Math.max(maxPrivacyReads,privacyReads);const close=handle.close;
    handle.close=async function(){try{return await close.call(this);}finally{privacyReads--;}};
-   // Hold the first readback until the first pair finishes. Other completed files
+   // Hold the first readback until the first three syncs finish. Other completed files
    // must wait without opening a second whole-file plaintext reader.
    if(privacyCount===1)await reverseDone.promise;
   }
@@ -89,7 +94,7 @@ test('output inventory binds nested retained blobs, selected choices and the exa
   }
   return handle;
  });syncBuiltinESMExports();
- const releaseHeld=setTimeout(()=>{for(const item of syncGates)item.gate.resolve();reverseDone.resolve();},15000);
+ const releaseHeld=setTimeout(()=>{openHome.resolve();for(const item of syncGates)item.gate.resolve();reverseDone.resolve();},15000);
  let saved;try{saved=await withPublicationOutputWriter(workspace,source,job,{directory},async writer=>{
  const retain=writer.retain;writer.retain=function(name,...args){return retaining.run(name,()=>retain.call(this,name,...args));};
  async function* home(){assert.equal(await workspace.catalogue(async store=>catalogueRequiresPublicationDocuments(await catalogueFormat(store.db))),true,'The first content is consumed only after older writers are excluded');yield homeParts[0];await writer.retain('.nojekyll','');for(const part of homeParts.slice(1))yield part;}
@@ -100,8 +105,8 @@ test('output inventory binds nested retained blobs, selected choices and the exa
  for(const value of entries)await writer.addChoice('entries',value.id,value);
  for(const value of styles)await writer.addChoice('styles',digest(value.css),value);
  return writer.finish({defaultPage:'index.html'});
- });}finally{clearTimeout(releaseHeld);for(const item of syncGates)item.gate.resolve();await reverse?.catch(()=>{});fixture.workspace.openCatalogue=open;fixture.workspace.withLock=lock;fixture.workspace.writeMetadata=writeMetadata;fileMock.mock.restore();syncBuiltinESMExports();}
- assert.equal(maxSyncing,2);assert.equal(syncGates.length,4);assert.deepEqual(syncCompleted,[syncGates[1],syncGates[0],syncGates[3],syncGates[2]].map(item=>item.name));assert.equal(syncing,0);assert.equal(maxPrivacyReads,1);assert.equal(privacyReads,0);assert.equal(privacyCount,4);
+ });}finally{clearTimeout(releaseHeld);openHome.resolve();for(const item of syncGates)item.gate.resolve();await reverse?.catch(()=>{});fixture.workspace.openCatalogue=open;fixture.workspace.withLock=lock;fixture.workspace.writeMetadata=writeMetadata;fileMock.mock.restore();syncBuiltinESMExports();}
+ assert.equal(nextPageOpenedWhileHomeWaits,true,'A buffered page must release rendering before its filesystem open completes');assert.equal(maxSyncing,3);assert.equal(syncGates.length,4);assert.deepEqual(syncCompleted,[syncGates[2],syncGates[1],syncGates[0],syncGates[3]].map(item=>item.name));assert.equal(syncing,0);assert.equal(maxPrivacyReads,1);assert.equal(privacyReads,0);assert.equal(privacyCount,4);
  assert.ok(opened<=3,'Output repeatedly opened authenticated connections: '+opened);assert.equal(closed,opened,'Output retained a live connection after completion');
  const batchBytes=batch=>batch.reduce((sum,size)=>sum+size,0);
  assert.ok(batches.filter(batch=>batch.length===512).length>=2,'Tiny nodes must fill multiple durable 512-object batches');
@@ -164,22 +169,63 @@ test('output inventory binds nested retained blobs, selected choices and the exa
   }finally{clearTimeout(timeout);for(const gate of gates)gate.resolve();await pending?.catch(()=>{});mock.mock.restore();syncBuiltinESMExports();}
   await releases.clean(job.id,{only:attempt.lease.token});assert.deepEqual(await workspace.listMetadata(attemptPrefix),[]);assert.deepEqual(await readdir(path.dirname(attemptDirectory)),[job.lease.token]);
  }
+ // Admission can fail after a producer completes but before its write starts.
+ // Even that synchronous refusal must release its fully buffered bytes.
+ const rejected={id:job.id,lease:{token:randomUUID()}},rejectedDirectory=await releases.directory(job.id,rejected.lease.token),refusal=new Error('Admission refused after producer completed');let ended=false;
+ await assert.rejects(withPublicationOutputWriter(workspace,source,rejected,{directory:rejectedDirectory},async writer=>{
+  async function* content(){try{yield '<!doctype html><title>Not admitted</title>';}finally{ended=true;writer.finalization.failure=refusal;}}
+  await assert.rejects(writer.retain('index.html',content()),error=>error===refusal);assert.equal(writer.buffers.bytes,0);assert.equal(ended,true);assert.deepEqual(await readdir(rejectedDirectory),[]);
+ }),error=>error===refusal);
+ await releases.clean(job.id,{only:rejected.lease.token});assert.deepEqual(await readdir(path.dirname(rejectedDirectory)),[job.lease.token]);
  assert.deepEqual(await contentBuffer(await files.get('index.html')),homeBytes);
 });
 
 test('output finalization bounds durable work and drains failures before releasing callers',async()=>{
  const saved={size:1,sha256:'a'.repeat(64)},signal=new AbortController(),finalization=new PublicationOutputFinalization({signal:signal.signal}),durable=[],privacyGate=Promise.withResolvers(),privacyStarted=Promise.withResolvers(),order=[];let active=0,maximum=0,consumed=0;
- function stage(index){const gate=Promise.withResolvers();durable[index]=gate;return finalization.write(async beforeCommit=>{consumed++;await beforeCommit(saved);await gate.promise;return saved;},async()=>{active++;maximum=Math.max(maximum,active);order.push(index);try{if(index===1){privacyStarted.resolve();await privacyGate.promise;}}finally{active--;}});}
- for(let index=0;index<2;index++)await stage(index);
- let thirdReady=false;const third=stage(2).then(()=>{thirdReady=true;});await turn();assert.equal(consumed,3);assert.equal(thirdReady,false);
- durable[1].resolve();await privacyStarted.promise;durable[0].resolve();await turn();
- assert.equal(thirdReady,false,'A slot stays occupied until privacy readback completes');privacyGate.resolve();await third;durable[2].resolve();await finalization.drain();assert.equal(maximum,1);assert.deepEqual(order,[1,0,2]);
+ function stage(index){const gate=Promise.withResolvers();durable[index]=gate;return finalization.write(async beforeCommit=>{consumed++;await beforeCommit(saved);await gate.promise;return saved;},async()=>{active++;maximum=Math.max(maximum,active);order.push(index);try{if(index===2){privacyStarted.resolve();await privacyGate.promise;}}finally{active--;}});}
+ for(let index=0;index<3;index++)await stage(index);
+ let fourthReady=false;const fourth=stage(3).then(()=>{fourthReady=true;});await turn();assert.equal(consumed,4);assert.equal(fourthReady,false);
+ durable[2].resolve();await privacyStarted.promise;for(const index of [1,0]){durable[index].resolve();await turn();}
+ assert.equal(fourthReady,false,'A slot stays occupied until privacy readback completes');privacyGate.resolve();await fourth;durable[3].resolve();await finalization.drain();assert.equal(maximum,1);assert.deepEqual(order,[2,1,0,3]);
  for(const phase of ['write','privacy','cancel']){
   const controller=new AbortController(),pending=new PublicationOutputFinalization({signal:controller.signal}),first=Promise.withResolvers(),second=Promise.withResolvers(),reason=new Error('Refused '+phase);let settled=false;
   await pending.write(async beforeCommit=>{await beforeCommit(saved);await first.promise;if(phase==='write')throw reason;return saved;},async()=>{if(phase==='privacy')throw reason;});
   await pending.write(async beforeCommit=>{await beforeCommit(saved);await second.promise;return saved;});
   const drained=pending.drain();drained.then(()=>{settled=true;},()=>{settled=true;});if(phase==='cancel')controller.abort(reason);first.resolve();await turn();assert.equal(settled,false,'Drain must retain the second in-flight finalization');second.resolve();await assert.rejects(drained,error=>error===reason);assert.throws(()=>pending.check(),error=>error===reason);
  }
+});
+
+test('small output buffers preserve owned bytes and bound aggregate nested prefixes',async()=>{
+ const buffers=new PublicationOutputBuffer(),chunk=Buffer.alloc(64*1024,0x61),full=Buffer.alloc(256*1024,0x61),held=[];
+ async function* chunks(count){for(let index=0;index<count;index++)yield chunk;}
+ for(let index=0;index<3;index++){const value=await buffers.prepare(chunks(4));assert.equal(value.buffered,true);assert.equal(value.size,full.length);assert.equal(value.sha256,digest(full));held.push(value);}
+ assert.equal(buffers.bytes,768*1024);let nested=false,maximum=buffers.bytes;
+ async function* outer(){
+  yield chunk;const inner=await buffers.prepare(chunks(4));nested=true;maximum=Math.max(maximum,buffers.bytes);assert.equal(inner.buffered,false,'Nested collection must fall back without waiting for occupied memory');
+  assert.deepEqual(Buffer.concat(await Array.fromAsync(inner.source)),full);assert.equal(buffers.bytes,832*1024);
+  for(let index=0;index<3;index++)yield chunk;
+ }
+ const value=await buffers.prepare(outer());assert.equal(nested,true);assert.equal(value.buffered,false);maximum=Math.max(maximum,buffers.bytes);assert.equal(maximum,1024*1024);assert.deepEqual(Buffer.concat(await Array.fromAsync(value.source)),full);assert.equal(buffers.bytes,768*1024);
+ // Producer buffers may be reused or changed after probing. Retained chunks
+ // belong to the writer and remain exact until actual write consumption ends.
+ chunk.fill(0x62);for(const value of held){assert.deepEqual(Buffer.concat(await Array.fromAsync(value.source)),full);await value.dispose();}assert.equal(buffers.bytes,0);
+ const unused=await buffers.prepare((async function*(){yield 'Not started';})());assert.equal(buffers.bytes,11);await unused.dispose();await unused.dispose();assert.equal(buffers.bytes,0);
+});
+
+test('large output replay and cancelled probing close their producer and release owned prefixes',async()=>{
+ const buffers=new PublicationOutputBuffer(),expected=Buffer.alloc(320*1024,0x63);let closed=false;
+ async function* large(){try{for(let offset=0;offset<expected.length;offset+=64*1024)yield expected.subarray(offset,offset+64*1024);}finally{closed=true;}}
+ const value=await buffers.prepare(large());assert.equal(value.buffered,false);assert.equal(buffers.bytes,256*1024);assert.equal(closed,false);assert.deepEqual(Buffer.concat(await Array.fromAsync(value.source)),expected);assert.equal(closed,true);assert.equal(buffers.bytes,0);
+ closed=false;const neverConsumed=await buffers.prepare(large());assert.equal(neverConsumed.buffered,false);assert.equal(closed,false);await neverConsumed.dispose();assert.equal(closed,true);assert.equal(buffers.bytes,0);
+ for(const phase of ['probe','replay']){
+  const controller=new AbortController(),reason=new Error('Cancel '+phase);let ended=false;
+  async function* source(){try{for(let index=0;index<6;index++){yield Buffer.alloc(64*1024,index);if(phase==='probe')controller.abort(reason);}}finally{ended=true;}}
+  if(phase==='probe')await assert.rejects(buffers.prepare(source(),{signal:controller.signal}),error=>error===reason);
+  else{const pending=await buffers.prepare(source(),{signal:controller.signal}),iterator=pending.source[Symbol.asyncIterator]();assert.equal((await iterator.next()).value.length,64*1024);controller.abort(reason);await assert.rejects(iterator.next(),error=>error===reason);}
+  assert.equal(ended,true);assert.equal(buffers.bytes,0);
+ }
+ const reason=new Error('Producer failed');let ended=false;async function* broken(){try{yield Buffer.alloc(8);throw reason;}finally{ended=true;}}
+ await assert.rejects(buffers.prepare(broken()),error=>error===reason);assert.equal(ended,true);assert.equal(buffers.bytes,0);
 });
 
 // Admission precedes both content consumption and indexed metadata writes.

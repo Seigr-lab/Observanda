@@ -1,7 +1,6 @@
-// Rendering and metadata insertion stay serial. Only fully consumed files may
-// overlap durable completion, and privacy readback admits one plaintext file.
-// Two finalizations leave filesystem workers available for serial rendering
-// and reads in Node's default four-worker pool.
+// Rendering and metadata insertion stay serial. Fully buffered generated files
+// may queue their complete write; streaming files admit after consumption.
+// Privacy readback admits one plaintext file.
 export class PublicationOutputFinalization{
  constructor({signal}={}){this.signal=signal;this.pending=new Set();this.active=new Set();this.failure=null;this.privacy=Promise.resolve();}
  check(){if(this.failure)throw this.failure;this.signal?.throwIfAborted();}
@@ -9,7 +8,7 @@ export class PublicationOutputFinalization{
   this.check();let expose,refuse;
   const ready=new Promise((resolve,reject)=>{expose=resolve;refuse=reject;});
   const completed=Promise.resolve().then(()=>operation(async saved=>{
-   this.check();while(this.active.size>=2){await Promise.race(this.active);this.check();}
+   this.check();while(this.active.size>=3){await Promise.race(this.active);this.check();}
    this.active.add(tracked);expose(saved);
   })).then(saved=>{
    const checked=this.privacy.then(async()=>{this.check();await validate(saved);});
