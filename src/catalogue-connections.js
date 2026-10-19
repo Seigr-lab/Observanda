@@ -58,8 +58,10 @@ export async function catalogueConnection(workspace,kind,options,operation){
  if(!entry){entry={key,tail:Promise.resolve(),db:null};scope.entries.set(kind,entry);}
  const pending=entry.tail.then(async()=>{
   validate(scope,workspace);
-  await assertWorkspaceAvailable(workspace.root,{moveId:options.moveId});
-  entry.db??=await workspace.openCatalogue(options);
+  // Fresh opens perform their own lifecycle admission; reused connections
+  // must recheck it before every transaction.
+  if(entry.db)await assertWorkspaceAvailable(workspace.root,{moveId:options.moveId});
+  else entry.db=await workspace.openCatalogue(options);
   try{return await operation(entry.db);}
   catch(error){const db=entry.db;entry.db=null;await db.close().catch(()=>{});throw error;}
  });
