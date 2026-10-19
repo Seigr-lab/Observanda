@@ -73,14 +73,14 @@ test('output inventory binds nested retained blobs, selected choices and the exa
   if(name&&name!=='publication.json'&&args[0]==='wx'&&path.dirname(file)===directory){
    const sync=handle.sync;handle.sync=async function(){
     const gate=Promise.withResolvers(),finished=Promise.withResolvers();syncGates.push({name,gate,finished});syncing++;maxSyncing=Math.max(maxSyncing,syncing);
-    if(syncGates.length===4){reverse=(async()=>{for(const item of [...syncGates].reverse()){item.gate.resolve();await item.finished.promise;}})();reverse.then(reverseDone.resolve,reverseDone.reject);}
+    if(syncGates.length%2===0){const pair=syncGates.slice(-2);reverse=(async()=>{for(const item of pair.reverse()){item.gate.resolve();await item.finished.promise;}})();if(syncGates.length===2)reverse.then(reverseDone.resolve,reverseDone.reject);}
     try{await gate.promise;await sync.call(this);syncCompleted.push(name);}finally{syncing--;finished.resolve();}
    };
   }
   if(args[0]==='r'&&path.dirname(file)===directory&&file.endsWith('.blob')){
    privacyReads++;privacyCount++;maxPrivacyReads=Math.max(maxPrivacyReads,privacyReads);const close=handle.close;
    handle.close=async function(){try{return await close.call(this);}finally{privacyReads--;}};
-   // Hold the first readback until all four syncs finish. Other completed files
+   // Hold the first readback until the first pair finishes. Other completed files
    // must wait without opening a second whole-file plaintext reader.
    if(privacyCount===1)await reverseDone.promise;
   }
@@ -101,7 +101,7 @@ test('output inventory binds nested retained blobs, selected choices and the exa
  for(const value of styles)await writer.addChoice('styles',digest(value.css),value);
  return writer.finish({defaultPage:'index.html'});
  });}finally{clearTimeout(releaseHeld);for(const item of syncGates)item.gate.resolve();await reverse?.catch(()=>{});fixture.workspace.openCatalogue=open;fixture.workspace.withLock=lock;fixture.workspace.writeMetadata=writeMetadata;fileMock.mock.restore();syncBuiltinESMExports();}
- assert.equal(maxSyncing,4);assert.deepEqual(syncCompleted,[...syncGates].reverse().map(item=>item.name));assert.equal(syncing,0);assert.equal(maxPrivacyReads,1);assert.equal(privacyReads,0);assert.equal(privacyCount,4);
+ assert.equal(maxSyncing,2);assert.equal(syncGates.length,4);assert.deepEqual(syncCompleted,[syncGates[1],syncGates[0],syncGates[3],syncGates[2]].map(item=>item.name));assert.equal(syncing,0);assert.equal(maxPrivacyReads,1);assert.equal(privacyReads,0);assert.equal(privacyCount,4);
  assert.ok(opened<=3,'Output repeatedly opened authenticated connections: '+opened);assert.equal(closed,opened,'Output retained a live connection after completion');
  const batchBytes=batch=>batch.reduce((sum,size)=>sum+size,0);
  assert.ok(batches.filter(batch=>batch.length===512).length>=2,'Tiny nodes must fill multiple durable 512-object batches');
@@ -169,11 +169,11 @@ test('output inventory binds nested retained blobs, selected choices and the exa
 
 test('output finalization bounds durable work and drains failures before releasing callers',async()=>{
  const saved={size:1,sha256:'a'.repeat(64)},signal=new AbortController(),finalization=new PublicationOutputFinalization({signal:signal.signal}),durable=[],privacyGate=Promise.withResolvers(),privacyStarted=Promise.withResolvers(),order=[];let active=0,maximum=0,consumed=0;
- function stage(index){const gate=Promise.withResolvers();durable[index]=gate;return finalization.write(async beforeCommit=>{consumed++;await beforeCommit(saved);await gate.promise;return saved;},async()=>{active++;maximum=Math.max(maximum,active);order.push(index);try{if(index===3){privacyStarted.resolve();await privacyGate.promise;}}finally{active--;}});}
- for(let index=0;index<4;index++)await stage(index);
- let fifthReady=false;const fifth=stage(4).then(()=>{fifthReady=true;});await turn();assert.equal(consumed,5);assert.equal(fifthReady,false);
- durable[3].resolve();await privacyStarted.promise;for(const index of [2,1,0]){durable[index].resolve();await turn();}
- assert.equal(fifthReady,false,'A slot stays occupied until privacy readback completes');privacyGate.resolve();await fifth;durable[4].resolve();await finalization.drain();assert.equal(maximum,1);assert.deepEqual(order,[3,2,1,0,4]);
+ function stage(index){const gate=Promise.withResolvers();durable[index]=gate;return finalization.write(async beforeCommit=>{consumed++;await beforeCommit(saved);await gate.promise;return saved;},async()=>{active++;maximum=Math.max(maximum,active);order.push(index);try{if(index===1){privacyStarted.resolve();await privacyGate.promise;}}finally{active--;}});}
+ for(let index=0;index<2;index++)await stage(index);
+ let thirdReady=false;const third=stage(2).then(()=>{thirdReady=true;});await turn();assert.equal(consumed,3);assert.equal(thirdReady,false);
+ durable[1].resolve();await privacyStarted.promise;durable[0].resolve();await turn();
+ assert.equal(thirdReady,false,'A slot stays occupied until privacy readback completes');privacyGate.resolve();await third;durable[2].resolve();await finalization.drain();assert.equal(maximum,1);assert.deepEqual(order,[1,0,2]);
  for(const phase of ['write','privacy','cancel']){
   const controller=new AbortController(),pending=new PublicationOutputFinalization({signal:controller.signal}),first=Promise.withResolvers(),second=Promise.withResolvers(),reason=new Error('Refused '+phase);let settled=false;
   await pending.write(async beforeCommit=>{await beforeCommit(saved);await first.promise;if(phase==='write')throw reason;return saved;},async()=>{if(phase==='privacy')throw reason;});
