@@ -24,8 +24,9 @@ const htmlChunkBytes=64*1024;
 // Durable metadata commits coalesce tiny nodes; the SQL writer independently
 // retains its 32-row batches and this writer keeps its 256 KiB byte bound.
 const outputObjects=128,outputBytes=256*1024;
-// Preserve fragment encoding while avoiding a filesystem write for every HTML
-// tag. A yielded buffer is never reused, and upstream is closed on cancellation.
+// Preserve fragment encoding while avoiding a filesystem write for every text
+// fragment, including manifest rows and stylesheet rules. Yielded buffers are
+// never reused, and upstream is closed on cancellation.
 export async function* publicationOutputChunks(source,{signal}={}){
  signal?.throwIfAborted();let buffer=null,used=0;
  for await(const chunk of source){
@@ -112,7 +113,7 @@ export class PublicationOutputWriter{
   if(this.pendingNames.has(name))throw new AppError('PUBLICATION_IDENTITY');this.pendingNames.add(name);
   const index=this.nextBlob++,file=path.join(this.directory,index+'.blob');
   try{
-   const chunks=streaming?(name.endsWith('.html')?publicationOutputChunks(content,{signal:this.signal}):content):contentStream(content);
+   const chunks=streaming?publicationOutputChunks(content,{signal:this.signal}):contentStream(content);
    const saved=await writeContent(this.workspace,file,chunks,{signal:this.signal});
    if(!streaming&&(saved.size!==contentSize(content)||saved.sha256!==contentHash(content)))stale();
    if(streaming)await admitRetainedPublicFile(name,new FileContent(this.workspace,file,saved.size,saved.sha256),{type,blockedValues:this.blockedValues});
