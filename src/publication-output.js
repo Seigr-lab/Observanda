@@ -21,6 +21,9 @@ const freshBlocks=Symbol('fresh publication output blocks');
 const streamed=value=>value!==null&&typeof value==='object'&&typeof value[Symbol.asyncIterator]==='function'&&!(value instanceof FileContent);
 const stale=()=>{throw new AppError('STALE');};
 const htmlChunkBytes=64*1024;
+// Durable metadata commits coalesce tiny nodes; the SQL writer independently
+// retains its 32-row batches and this writer keeps its 256 KiB byte bound.
+const outputObjects=128,outputBytes=256*1024;
 // Preserve fragment encoding while avoiding a filesystem write for every HTML
 // tag. A yielded buffer is never reused, and upstream is closed on cancellation.
 export async function* publicationOutputChunks(source,{signal}={}){
@@ -79,9 +82,9 @@ export class PublicationOutputWriter{
    if(method==='writeMetadata')return async(file,text)=>{
     signal?.throwIfAborted();if(!isPublicationDocumentBlockPath(scope.owner,file))throw new AppError('INVALID');
     if(blocks){await scope.ready();const prior=await blocks.get(file);if(prior!==undefined&&prior!==text)stale();await blocks.put(file,text);}
-    const size=Buffer.byteLength(text);if(pending.size>=32||bytes+size>256*1024)await scope.flush();
+    const size=Buffer.byteLength(text);if(pending.size>=outputObjects||bytes+size>outputBytes)await scope.flush();
     if(pending.has(file)&&pending.get(file)!==text)stale();bytes-=Buffer.byteLength(pending.get(file)??'');pending.set(file,text);bytes+=size;
-    if(bytes>=256*1024)await scope.flush();
+    if(bytes>=outputBytes)await scope.flush();
    };
    const value=target[method];return typeof value==='function'?value.bind(target):value;
   }});
