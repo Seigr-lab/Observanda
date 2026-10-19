@@ -369,5 +369,6 @@
   "PDF_PRINT_CONFLICT": "Remove the printer colour condition before choosing archival output.",
   "PDF_PRINT_FAILED": "The printer colour condition could not be applied. Your document is unchanged.",
   "PDF_LINK_CODE_LAYOUT": "A QR code cannot fit at a readable size. Widen this section or turn off printed QR codes.",
-  "PDF_PRINT_COLOR": "This PDF contains a colour resource that cannot be safely characterized for the selected printer profile."
+  "PDF_PRINT_COLOR": "This PDF contains a colour resource that cannot be safely characterized for the selected printer profile.",
+  "WEBSITE_NAME_EXISTS": "A website with this name already exists in this workspace. Choose a different name."
 }

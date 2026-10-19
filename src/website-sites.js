@@ -1,5 +1,6 @@
 import {ProjectSourceAuthority} from './project-source-authority.js';
 import {randomUUID} from 'node:crypto';
+import {validWebsiteName} from './web/website-name.js';
 import {AppError} from './errors.js';
 import {validateWorkspaceEditCommand,workspaceEditMetadata} from './workspace-edit-command.js';
 import {websiteDocument,websiteBook,WEBSITE_DOCUMENT_FIELDS,validWebsites} from './web/website-sites-model.js';
@@ -90,6 +91,7 @@ export class WebsiteSites{
  }
  async change({workspaceId,etag,operation,id=null,name,projectId=null,websitePin=null}){
   if(!revisionId(etag)||!researchId(workspaceId)||!['create','rename'].includes(operation)||!identifier(id)||operation==='create'&&(this.workspace.projectId||this.workspace.labBookId||projectId!==null))throw new AppError('INVALID');
+  if(!validWebsiteName(name))throw new AppError('INVALID');name=name.trim();
   const created=operation==='create';
   const result=await this.write(id,{registration:created},async(store,documents)=>{
    const head=await store.head(),snapshot=await store.snapshot(head);

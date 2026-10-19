@@ -1,0 +1,34 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,rm} from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import {randomUUID} from 'node:crypto';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {clearVault} from '../src/encryption.js';
+import {createNotebook} from '../src/model.js';
+import {WebsiteSites} from '../src/website-sites.js';
+import {WebsiteEditor} from '../src/website-editor.js';
+
+test('website names are unique across create and rename, including draft saves and competing requests',async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-website-names-')),book=createNotebook('Workspace website'),f=await encryptedFixture(directory,book),sites=new WebsiteSites(f.workspace);
+ t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ const etag=(await f.workspace.outline()).etag,create=name=>sites.change({workspaceId:book.id,etag,operation:'create',name});
+ const first=await create('Field journal');
+ await assert.rejects(create('  FIELD   JOURNAL  '),{code:'WEBSITE_NAME_EXISTS'});
+ await assert.rejects(create('workspace website'),{code:'WEBSITE_NAME_EXISTS'});
+ const second=await create('Public notes'),before=await sites.read(second.id);
+ await assert.rejects(sites.change({workspaceId:book.id,etag,operation:'rename',id:second.id,websitePin:before.websitePin,name:'field journal'}),{code:'WEBSITE_NAME_EXISTS'});
+ assert.equal((await sites.read(second.id)).site.name,'Public notes');
+ const editor=new WebsiteEditor(f.workspace),opened=await editor.execute('open',{websiteId:second.id});
+ const draft=await editor.execute('change',{websiteId:second.id,websitePin:opened.websitePin,commandId:randomUUID(),operations:[{type:'settings',path:['name'],value:'FIELD JOURNAL'}]});
+ await assert.rejects(editor.execute('save',{websiteId:second.id,draftId:draft.draft.id,expectedRevision:draft.draft.revision,commandId:randomUUID()}),{code:'WEBSITE_NAME_EXISTS'});
+ assert.equal((await sites.read(second.id)).websitePin.websiteRevision,before.websitePin.websiteRevision);
+ const revised=await editor.execute('change',{websiteId:second.id,websitePin:draft.websitePin,draftId:draft.draft.id,expectedRevision:draft.draft.revision,commandId:randomUUID(),operations:[{type:'settings',path:['name'],value:'Learning notes'}]});
+ await editor.execute('save',{websiteId:second.id,draftId:revised.draft.id,expectedRevision:revised.draft.revision,commandId:randomUUID()});
+ assert.equal((await sites.read(second.id)).site.name,'Learning notes');
+ const current=await sites.read(first.id);await sites.change({workspaceId:book.id,etag,operation:'rename',id:first.id,websitePin:current.websitePin,name:'FIELD JOURNAL'});
+ assert.equal((await sites.read(first.id)).site.name,'FIELD JOURNAL');
+ const competing=await Promise.allSettled([create('Shared name'),create('shared NAME')]);assert.equal(competing.filter(value=>value.status==='fulfilled').length,1);assert.ok(['LOCKED','WEBSITE_NAME_EXISTS'].includes(competing.find(value=>value.status==='rejected').reason.code));await assert.rejects(create('SHARED NAME'),{code:'WEBSITE_NAME_EXISTS'});
+ assert.equal((await f.workspace.outline()).etag,etag);
+});

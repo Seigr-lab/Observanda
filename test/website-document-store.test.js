@@ -148,3 +148,12 @@ test('one navigation append preserves explicit parents in either batch order and
  await assert.rejects(editor.change(null,{websitePin:initial.websitePin,draftId:null,expectedRevision:null,commandId:randomUUID(),operations:[{type:'append',collection:'pages',values:[pages[0]]},{type:'append',collection:'navigation',values:[duplicate,duplicate]}]}),{code:'INVALID'});
  assert.equal((await editor.open(null)).draft.dirty,false);
 });
+
+
+test('previously saved duplicate website names remain readable and unchanged edits remain writable',async t=>{
+ const f=fixture();t.after(f.close);const a=site(f.metadata,'Earlier journal'),b=site(f.metadata,'Earlier journal');f.metadata.websites=[a,b];const etag=f.advance({metadata:f.metadata}),owner=new WebsiteDocumentStore(f.store);
+ await owner.initialize(etag,await f.store.snapshot(),{defaultSelection:selection()});
+ const current=f.advance({metadata:{...f.metadata,websites:undefined},websiteDocuments:1});
+ for(const value of [a,b]){const before=await owner.read(value.id);value.document.website.footer='Authored footer';await owner.save(value.id,value,{researchSnapshotId:current,expectedRevision:before.websiteRevision});assert.equal((await owner.read(value.id)).site.name,'Earlier journal');}
+ await assert.rejects(owner.create(site(f.metadata,' earlier JOURNAL '),{researchSnapshotId:current}),{code:'WEBSITE_NAME_EXISTS'});
+});

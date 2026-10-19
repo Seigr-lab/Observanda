@@ -1,6 +1,8 @@
 // Independent current website heads and immutable retained document revisions.
 // Call mutation methods inside the declared website/membership transaction.
 import {randomUUID} from 'node:crypto';
+import {projectDomainLock} from './project-domain-lock.js';
+import {websiteNameKey,validWebsiteName} from './web/website-name.js';
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
 import {ObjectIndex,validIndexRef} from './object-index.js';
@@ -107,12 +109,21 @@ export class WebsiteDocumentStore{
   const head=await this.#retain(site,researchSnapshotId,registry,null),root=await directory.change(registry.root,site.id,head.revision);await directory.flush(root);
   await writeWebsiteDocumentRegistry(this.store,{...registry,root});return {researchSnapshotId,...this.summary(head,registry)};
  }
+ async assertNameAvailable(site,{previous,signal}={}){
+  if(!validWebsiteName(site?.name))invalid();if(previous?.name===site.name)return;
+  const key=websiteNameKey(site.name);
+  await projectDomainLock(this.store.db,'Observanda/website-name/'+this.store.db.id+'/'+hash(key));
+  // Read after acquiring the name lock: two sites cannot concurrently claim it.
+  const registry=await this.registry();
+  for await(const current of this.entries({signal}))if((current.websiteId??registry.defaultSiteId)!==site.id&&websiteNameKey(current.name)===key)throw new AppError('WEBSITE_NAME_EXISTS');
+ }
  async create(site,{researchSnapshotId}={}){
-  if(this.store.workspace.projectId||this.store.workspace.labBookId||site?.projectId!==null)invalid();return this.#register(site,researchSnapshotId);
+  if(this.store.workspace.projectId||this.store.workspace.labBookId||site?.projectId!==null)invalid();await this.assertNameAvailable(site);return this.#register(site,researchSnapshotId);
  }
  async save(websiteId,site,{researchSnapshotId,expectedRevision}={}){
   site=structuredClone(site);const registry=await this.registry();if(!registry)throw new AppError('ACCESS_UPGRADE');const id=await this.ownedId(websiteId,registry),head=await this.savedHead(id,registry);
   if(head.revision!==expectedRevision)throw new AppError('CONFLICT');if(site?.id!==id||site.projectId!==head.projectId||!revisionId(researchSnapshotId))invalid();
+  await this.assertNameAvailable(site,{previous:head});
   const next=await this.#retain(site,researchSnapshotId,registry,head);return {researchSnapshotId,...this.summary(next,registry)};
  }
  async saveDocument(websiteId,document,{researchSnapshotId,expectedRevision,collectionIndexes=null,navigationProjection=null,signal}={}){
@@ -121,6 +132,7 @@ export class WebsiteDocumentStore{
   const previous=await this.revision(id,head.revision,registry),priorDocument=new RecordDocument(new WebsiteDocumentBlockStore(this.store,id,{readOnly:true}),previous.root),previousSite=await websiteDocumentHeader(priorDocument,{signal});
   const snapshot=await this.store.snapshot(researchSnapshotId),{site}=await validateWebsiteDocument(this.store,snapshot,document,{signal,previous:previousSite});
   if(site.id!==id||site.projectId!==head.projectId||snapshot.metadata.id!==registry.workspaceId)invalid();
+  await this.assertNameAvailable(site,{previous:head,signal});
   if(previous.root===document.root)return {researchSnapshotId,...this.summary(head,registry)};
   collectionIndexes=await WebsiteCollectionIndex.retainAll(document,collectionIndexes??previous.collectionIndexes,{signal});
   navigationProjection=await WebsiteEditorNavigation.retain(this.store,snapshot,document,site,collectionIndexes,navigationProjection??previous.navigationProjection,{signal});
