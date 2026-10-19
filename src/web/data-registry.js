@@ -35,10 +35,11 @@ export function createDataSession(registry,{context,api,onChange,access=operatio
   if(!closed)onChange();
  });
  function load(p,ctx,options){
-  const key=keyFor(p,ctx),signature=JSON.stringify([ctx.projectOwner?.projectId??null,ctx.projectOwner?.labBookId??null,dynamic(p)?p.loadKey(ctx,options):null]),current=cache.get(key);
-  if(!p.load||current&&current.signature===signature||closed)return;
+  const key=keyFor(p,ctx),signature=JSON.stringify([ctx.contextId??null,ctx.book?.id??null,ctx.projectOwner?.projectId??null,ctx.projectOwner?.labBookId??null,dynamic(p)?p.loadKey(ctx,options):null]),current=cache.get(key);
+  if(!p.load||current&&current.signature===signature&&!current.stale||closed)return;
   current?.controller.abort();
-  const state={provider:p.id,slot:dynamic(p)?ctx.dataSlot??'default':null,signature,status:'loading',data:null,error:null,controller:new AbortController()};cache.set(key,state);
+  const retained=current?.signature===signature&&current.status==='ready';
+  const state={provider:p.id,slot:dynamic(p)?ctx.dataSlot??'default':null,signature,status:'loading',data:retained?current.data:null,retained,error:null,controller:new AbortController()};cache.set(key,state);
   state.execute=async authorize=>{
    if(closed||cache.get(key)!==state)return;
    const previousError=state.error;state.status='loading';state.error=null;
@@ -46,17 +47,26 @@ export function createDataSession(registry,{context,api,onChange,access=operatio
     const run=()=>{state.controller.signal.throwIfAborted();return p.load({api:projectContextAPI(api,ctx),context:ctx,options,signal:state.controller.signal});};
     const data=await (authorize?access(run):run());
     if(closed||cache.get(key)!==state)return;state.status='ready';state.data=data;
-   }catch(error){if(!closed&&cache.get(key)===state){state.status='error';state.error=error.name==='AbortError'&&previousError?previousError:error;}}
+   }catch(error){if(!closed&&cache.get(key)===state){state.status='error';state.retained=false;state.data=null;state.error=error.name==='AbortError'&&previousError?previousError:error;}}
    finally{if(!closed&&cache.get(key)===state)onChange();}
   };
   void Promise.resolve().then(()=>state.execute(false));
  }
- function invalidate(id){if(closed)return;if(id){const p=registry.get(id);for(const [key,value] of cache)if(dynamic(p??{})?value.provider===id:key===(p?.loadKey??id)){value.controller.abort();cache.delete(key);}}else{cache.forEach(v=>v.controller.abort());cache.clear();}onChange();}
+ function invalidate(id,{retainData=false}={}){
+  if(closed)return;const p=id?registry.get(id):null;
+  for(const [key,value] of cache){
+   if(id&&!(dynamic(p??{})?value.provider===id:key===(p?.loadKey??id)))continue;
+   // Refresh in place only within the identical workspace, owner and query.
+   // Repeated notifications must not restart an already pending refresh.
+   if(retainData){if(value.status!=='loading')value.stale=true;}else{value.controller.abort();cache.delete(key);}
+  }
+  onChange();
+ }
  return {
   read(id,ctx=context(),options={}){
    const p=registry.get(id);if(!p)return {status:'missing',items:[]};
    load(p,ctx,options);const loaded=cache.get(keyFor(p,ctx));
-   if(loaded&&loaded.status!=='ready')return {status:loaded.status,items:[],error:loaded.error};
+   if(loaded&&loaded.status!=='ready'&&!(loaded.status==='loading'&&loaded.retained))return {status:loaded.status,items:[],error:loaded.error};
    try{
     const items=p.items(ctx,loaded?.data,options);if(!Array.isArray(items))throw new TypeError('Provider items must be an array.');
     const keys=new Set();

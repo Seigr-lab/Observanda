@@ -25,7 +25,7 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,a
  const cardPages=new Map();
  let lastPage=null,session=null,dispose=()=>{};
  const copy=v=>structuredClone(v),equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
- const context=()=>({book:state.book,projectOwner:state.projectOwner,etag:state.etag,outline:Boolean(state.workspaceOutline),notebookCounts:state.workspaceOutline?.notebookCounts,moduleData:state.moduleData?.workspaceId===state.book?.id?state.moduleData:null,enabledModules:state.dashboardSettings?.enabledModules}),active=()=>draft.views.find(v=>v.id===viewId)??draft.views.find(v=>v.id===draft.defaultId);
+ const context=()=>({contextId:state.storage?.contextId,book:state.book,projectOwner:state.projectOwner,etag:state.etag,outline:Boolean(state.workspaceOutline),notebookCounts:state.workspaceOutline?.notebookCounts,moduleData:state.moduleData?.workspaceId===state.book?.id?state.moduleData:null,enabledModules:state.dashboardSettings?.enabledModules}),active=()=>draft.views.find(v=>v.id===viewId)??draft.views.find(v=>v.id===draft.defaultId);
  const isDirty=()=>Boolean(saved&&draft&&!equal(saved,draft));
  const reference=p=>p.source??{provider:p.tool,key:null};
  const provider=p=>workspaceData.get(reference(p).provider);
@@ -252,7 +252,7 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,a
   for(const id of cardPages.keys())if(!draft?.views.some(view=>view.panels.some(p=>p.id===id)))cardPages.delete(id);
   session?.retainSlots(new Set(['default',...(draft?active().panels.filter(p=>!p.hidden&&moduleVisible(p)).map(p=>'card:'+p.id):[]),...(draft?.shortcuts??[]).map(s=>'shortcut:'+s.id)]));
   settings.bind({refresh:['dashboard-settings','templates'].includes(state.page)&&lastPage!==state.page});
-  dispose();dispose=()=>{};disposeInspector();disposeInspector=()=>{};const returned=visible()&&!['workspace','dashboard-settings','templates'].includes(lastPage);lastPage=state.page;if(!visible()||!draft)return;if(returned)session.invalidate();
+  dispose();dispose=()=>{};disposeInspector();disposeInspector=()=>{};const returned=visible()&&!['workspace','dashboard-settings','templates'].includes(lastPage);lastPage=state.page;if(!visible()||!draft)return;if(returned)session.invalidate(undefined,{retainData:true});
   const root=document.querySelector('.desk-desktop'),sources=document.querySelector('.desk-workspace'),toolbar=document.querySelector('.desk-toolbar');
   if(sources)sources.onkeydown=event=>{
    if(event.key==='Escape'&&event.target.closest('.desk-inspector')){
@@ -366,5 +366,5 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,a
   return active().panels.filter(p=>!p.hidden&&moduleVisible(p)).every(p=>accepts(reference(p).provider))&&
    draft.shortcuts.every(s=>s.source.key===null||accepts(s.source.provider));
  }
- return {supportsOutline,releaseData:()=>{watchGeneration++;clearTimeout(watchTimer);choiceUI.close();library.close();session?.close();session=null;cardPages.clear();previews.release();},refreshData:()=>session?.invalidate(),load,flushAutosave:save,save:async()=>{await save();await settings.save();},discard:async()=>{await settings.discard();await discard();},isDirty:()=>isDirty()||settings.isDirty(),needsNavigationGuard:()=>settings.isDirty(),saveNavigation:()=>settings.save(),discardNavigation:()=>settings.discard(),view,preferences:()=>modulesView()+settingsStatus(),templates:()=>modulesView(true)+settingsStatus(),action,input,bind};
+ return {supportsOutline,releaseData:()=>{watchGeneration++;clearTimeout(watchTimer);choiceUI.close();library.close();session?.close();session=null;cardPages.clear();previews.release();},refreshData:()=>session?.invalidate(undefined,{retainData:true}),load,flushAutosave:save,save:async()=>{await save();await settings.save();},discard:async()=>{await settings.discard();await discard();},isDirty:()=>isDirty()||settings.isDirty(),needsNavigationGuard:()=>settings.isDirty(),saveNavigation:()=>settings.save(),discardNavigation:()=>settings.discard(),view,preferences:()=>modulesView()+settingsStatus(),templates:()=>modulesView(true)+settingsStatus(),action,input,bind};
 }

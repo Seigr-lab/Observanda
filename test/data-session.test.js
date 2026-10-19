@@ -50,3 +50,39 @@ test('protected sources prompt only on an explicit retry and late unlock results
  session.read('protected');await setImmediate();assert.equal(session.read('protected').status,'error');assert.equal(authorizations,0);
  const retry=session.retry('protected');await setImmediate();assert.equal(authorizations,1);session.close();const previous=changes;release();await retry;assert.equal(loads,1);assert.equal(changes,previous);
 });
+
+
+test('background refresh retains the same card data and coalesces repeated notifications',async()=>{
+ const f=fixture();f.session.read('records');await setImmediate();
+ f.requests[0].resolve([item('Existing project')]);await setImmediate();
+ f.session.invalidate(undefined,{retainData:true});
+ assert.deepEqual(f.session.read('records').items,[item('Existing project')]);await setImmediate();
+ f.session.invalidate(undefined,{retainData:true});assert.equal(f.session.read('records').status,'ready');await setImmediate();
+ assert.equal(f.requests.length,2);assert.equal(f.requests[1].signal.aborted,false);
+ f.requests[1].resolve([item('Updated project')]);await setImmediate();
+ assert.deepEqual(f.session.read('records').items,[item('Updated project')]);f.session.close();
+});
+
+test('refresh failures remove retained content and filter changes never show the previous query',async()=>{
+ const f=fixture(),ctx={etag:'first',dataSlot:'a'};f.session.read('records',ctx,{tag:'one'});await setImmediate();
+ f.requests[0].resolve([item('Private project')]);await setImmediate();f.session.invalidate(undefined,{retainData:true});
+ f.session.read('records',ctx,{tag:'one'});await setImmediate();
+ f.requests[1].reject(Object.assign(Error('Access revoked'),{code:'ACCESS_LOCKED'}));await setImmediate();
+ assert.equal(f.session.read('records',ctx,{tag:'one'}).status,'error');assert.deepEqual(f.session.read('records',ctx,{tag:'one'}).items,[]);
+ const retry=f.session.retry('records');await setImmediate();f.requests[2].resolve([item('Private project')]);await retry;
+ f.session.invalidate(undefined,{retainData:true});assert.equal(f.session.read('records',ctx,{tag:'two'}).status,'loading');
+ assert.deepEqual(f.session.read('records',ctx,{tag:'two'}).items,[]);await setImmediate();f.session.close();
+});
+
+test('shared providers discard cached and pending data when workspace identity or context changes',async()=>{
+ const registry=createDataRegistry(),requests=[];
+ registry.register({id:'projects',label:'Projects',loadKey:'shared',load:args=>new Promise(resolve=>requests.push({...args,resolve})),items:(_ctx,data)=>data});
+ let ctx={book:{id:'workspace-a'},contextId:'opening-a'};
+ const session=createDataSession(registry,{context:()=>ctx,api:()=>{},onChange:()=>{}});
+ session.read('projects');await setImmediate();requests[0].resolve([item('Workspace A project')]);await setImmediate();
+ session.invalidate(undefined,{retainData:true});session.read('projects');await setImmediate();
+ ctx={book:{id:'workspace-b'},contextId:'opening-b'};assert.equal(session.read('projects').status,'loading');assert.equal(requests[1].signal.aborted,true);await setImmediate();
+ requests[1].resolve([item('Deleted workspace project')]);await setImmediate();assert.deepEqual(session.read('projects').items,[]);
+ requests[2].resolve([item('Workspace B project')]);await setImmediate();assert.deepEqual(session.read('projects').items,[item('Workspace B project')]);
+ ctx={...ctx,contextId:'reopened-b'};assert.equal(session.read('projects').status,'loading');assert.deepEqual(session.read('projects').items,[]);await setImmediate();session.close();
+});
