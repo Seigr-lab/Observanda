@@ -107,7 +107,13 @@ test('full publication and selected authoring remain isolated from unrelated gro
    const resources=await Promise.all(books.slice(0,2).map(async(owner,index)=>({id:index?foreign:resourceId,revision:(await selected(owner,'inventory',resourceId)).revision})));
    const metrics={unrelatedRecords:count,selectedRecords:720,queries:0,sourceUses:0,originals:0,derivatives:0,unrelatedRoot:books[2].storage.root},storages=ids.map(siteId=>websiteWorkspace(fixture.workspace,siteId));
    const journal=await sites.read(ids[0]),report=await sites.read(ids[1]),base=publicationSourceFactory(application,client,storages[0]);
-   const sourceReader=async opts=>{const reader=await base(opts);return {...reader,use:async(sourceId,snapshotId,consume,readOptions)=>{assert.notEqual(sourceId,books[2].entry.namespaceId);metrics.sourceUses++;return reader.use(sourceId,snapshotId,async(store,...args)=>{const run=store.db.run;store.db.run=function(...args){metrics.queries++;return run.apply(this,args);};try{return await consume(store,...args);}finally{store.db.run=run;}},readOptions);}};};
+   const sourceReader=async opts=>{const reader=await base(opts);return {...reader,use:async(sourceId,snapshotId,consume,readOptions)=>{
+    assert.notEqual(sourceId,books[2].entry.namespaceId);metrics.sourceUses++;const started=performance.now();
+    try{return await reader.use(sourceId,snapshotId,async(store,...args)=>{
+     const entered=performance.now(),run=store.db.run;store.db.run=function(...args){metrics.queries++;return run.apply(this,args);};
+     try{return await consume(store,...args);}finally{store.db.run=run;metrics.sourceCallbackMs=(metrics.sourceCallbackMs??0)+Math.round(performance.now()-entered);}
+    },readOptions);}finally{metrics.sourceReadMs=(metrics.sourceReadMs??0)+Math.round(performance.now()-started);}
+   }};};
    let admitted;const entered=new Promise(resolve=>admitted=resolve),held=new Promise(resolve=>releaseBusy=resolve);busy=books[2].storage.withLock(async()=>{admitted();await held;});await entered;
    const controller=new AbortController(),timer=setTimeout(()=>{controller.abort();releaseBusy();},180000);timer.unref();let editionFinished=false;
    let captureEntered;const capturing=new Promise(resolve=>captureEntered=resolve);
