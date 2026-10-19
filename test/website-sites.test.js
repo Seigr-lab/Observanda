@@ -33,7 +33,7 @@ test('independent websites persist separate designs, selections, destinations an
  const a=(await create('Project journal')).id,b=(await create('Help website')).id;
  const read=await sites.read(a);assert.equal(read.book.projects[0].id,projectId);assert.ok(read.outline);
  const selected=book.entries.find(r=>read.book.notebooks.some(n=>n.id===r.notebookId));
- const edit={workspaceId:book.id,baseEtag:read.etag,websitePin:read.websitePin,metadata:{website:{...read.book.website,footer:'Journal footer'}},projects:[],changes:[],removed:[],selection:{defaultShare:false,includeProjects:[],records:[{id:selected.id,share:true,attachments:[]}]}};
+ const edit={workspaceId:book.id,baseEtag:read.etag,websitePin:read.websitePin,metadata:{website:{...read.book.website,footer:'Journal footer'}},projects:[{id:projectId,share:true,logoId:null}],changes:[],removed:[],selection:{defaultShare:false,includeProjects:[],records:[{id:selected.id,share:true,attachments:[]}]}};
  await sites.save(a,edit);
  const reopened=await sites.read(a),draft=websiteSelectionDraft();draft.load(reopened.site.selection,reopened.selectionProjects);assert.equal(draft.isDirty(),false);draft.includeProject(projectId);assert.deepEqual(draft.snapshot(),{defaultShare:false,includeProjects:[projectId],records:[]});
  await assert.rejects(sites.save(a,edit),{code:'CONFLICT'});
@@ -66,7 +66,7 @@ test('independent websites isolate selections and review IDs and deploy to pinne
  t.after(async()=>{if(app)await app.close();await jobs.worker.stop();clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const ids=[];for(const [i,p] of [book.projects[0],project].entries()){
   const created=await sites.change({workspaceId:book.id,etag:(await f.workspace.outline()).etag,operation:'create',name:'Site '+i});ids.push(created.id);
-  const current=await sites.read(created.id),command={workspaceId:book.id,baseEtag:current.etag,websitePin:current.websitePin,metadata:{},projects:[],changes:[],removed:[],selection:{defaultShare:false,includeProjects:[p.id],records:[]}};
+  const current=await sites.read(created.id),command={workspaceId:book.id,baseEtag:current.etag,websitePin:current.websitePin,metadata:{},projects:[{id:p.id,share:true,logoId:null}],changes:[],removed:[],selection:{defaultShare:false,includeProjects:[p.id],records:[]}};
   await sites.save(created.id,command);
   if(i===0){const etag=(await f.workspace.outline()).etag;await assert.rejects(sites.save(created.id,{...command,baseEtag:etag,websitePin:(await sites.read(created.id)).websitePin,selection:{defaultShare:false,includeProjects:[],records:[{id:randomUUID(),share:true,attachments:[]}]}}),{code:'INVALID'});assert.equal((await f.workspace.outline()).etag,etag);}
  }
@@ -125,7 +125,7 @@ test('one independent website combines lab books from different projects without
  const before=await f.workspace.read(),ids=[];
  for(const name of ['Combined website','Different website'])ids.push((await sites.change({workspaceId:book.id,etag:(await f.workspace.outline()).etag,operation:'create',name})).id);
  const original=book.entries[0],read=await sites.read(ids[0]);
- await sites.save(ids[0],{workspaceId:book.id,baseEtag:read.etag,websitePin:read.websitePin,metadata:{},projects:[],changes:[],removed:[],selection:{defaultShare:false,includeProjects:[],records:[original,record].map(({id})=>({id,share:true,attachments:[]}))}});
+ await sites.save(ids[0],{workspaceId:book.id,baseEtag:read.etag,websitePin:read.websitePin,metadata:{},projects:book.projects.map(({id})=>({id,share:true,logoId:null})),changes:[],removed:[],selection:{defaultShare:false,includeProjects:[],records:[original,record].map(({id})=>({id,share:true,attachments:[]}))}});
  const etag=(await f.workspace.outline()).etag,selected=await publicationSource(websiteWorkspace(f.workspace,ids[0]),await source(websiteWorkspace(f.workspace,ids[0])));
  assert.deepEqual(new Set(selected.entries.map(r=>r.id)),new Set([original.id,record.id]));
  assert.equal((await publicationSource(websiteWorkspace(f.workspace,ids[1]),await source(websiteWorkspace(f.workspace,ids[1])))).entries.length,0);

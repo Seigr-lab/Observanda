@@ -15,6 +15,7 @@
   "pageResults": "{count} matching pages",
   "empty": "No matching pages.",
   "noPages": "No pages yet",
+  "noPageSelected": "No page selected",
   "previous": "Previous",
   "next": "Next",
   "cancel": "Cancel",

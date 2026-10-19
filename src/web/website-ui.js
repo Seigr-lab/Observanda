@@ -25,7 +25,7 @@ import {websiteResearchClient} from './website-research-client.js';
 import {websiteResearchMedia} from './website-research-media.js';
 import {websiteLinkDestinations} from './website-link-destinations.js';
 import {websitePagePicker} from './website-page-picker.js';
-import {websitePageTarget,websitePageAtPath,websitePageTargets,websitePageChoices,websitePageWindow} from './website-page-targets.js';
+import {websitePageTarget,websitePageAtPath,websitePageTargets,websitePageChoices,websitePageWindow,websiteStartingPage} from './website-page-targets.js';
 import {WebsiteHistory} from './website-history.js';
 import {WebsitePageContexts} from './website-page-contexts.js';
 import {websiteRegionsUI} from './website-regions-ui.js';
@@ -66,7 +66,7 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
    let path=documents.selectedPage()?'pages/'+documents.selectedPage()+'.html':previewPage;if(fresh&&context!==websiteContext(state)){try{const stored=JSON.parse(sessionStorage.getItem('observanda.editor.'+state.book.id+'.'+(state.websiteId??'workspace'))??'null');path=stored?.path??'index.html';}catch{path='index.html';}}
    const id=/^pages[/]([a-f0-9-]{36})[.]html$/.exec(path)?.[1];if(id&&(!state.book.pages.some(page=>page.id===id)||documents.selectedPage()!==id))try{await documents.selectPage(id);}catch(reason){if(reason.code!=='NOT_FOUND')throw reason;}
    if(!hasHomepage(state.book)&&!state.book.pages.length&&pageLabels.length)await documents.selectPage(pageLabels[0].id);
-   const selected=documents.selectedPage();await ensureOverrides(websitePageAtPath(pageBook(),selected?'pages/'+selected+'.html':path)?.target??websitePageTargets(pageBook()).next().value?.target);
+   const selected=documents.selectedPage();await ensureOverrides(websitePageAtPath(pageBook(),selected?'pages/'+selected+'.html':path)?.target??websiteStartingPage(pageBook())?.target);
   }
   const recordPages=publicationPageClient({state,api,access,snapshots:()=>sourcePages.sources()});
   const linkDestinations=websiteLinkDestinations({state,api,pageBook,structurePages,recordPages,documents});
@@ -79,7 +79,7 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
   function releaseRichEditor(){if(richEditor){if(richContext===websiteContext(state)){richStates.set(richId,richEditor.state);if(richStates.size>100)richStates.delete(richStates.keys().next().value);}const value=richEditor.doc;richEditor.destroy();if(richMount?.node.isConnected){for(const attr of [...richMount.node.attributes])richMount.node.removeAttribute(attr.name);for(const [name,value] of richMount.attributes)richMount.node.setAttribute(name,value);richMount.node.innerHTML=renderRichText(value);}richMount=null;richEditor=null;}}
   let area='body',toolTrail=[];
   let inlineHeading=null,pendingScroll=null,canvasDragging=false,disposeDrag=()=>{},structureOpen=false,paletteQuery='';
-  let tool='page',sectionTab='content',typeTab='fonts',designTab='layout',selectedMedia=null,tab='home',context=null,timer,version=0,preview=null,previewPage='index.html',dispose=()=>{},disposeCanvas=()=>{},resizeObserver=null,surface=null,device='canvas',zoom='fit',inspector=true,expanded=false,editingPage=null,editingScope=null,inspectorWidth=380,openSection=null,historyRevision=null,historyBook=null,previewKey=null;
+  let tool='page',sectionTab='content',typeTab='fonts',designTab='layout',selectedMedia=null,tab='home',context=null,timer,version=0,preview=null,previewPage='index.html',pageChosen=false,dispose=()=>{},disposeCanvas=()=>{},resizeObserver=null,surface=null,device='canvas',zoom='fit',inspector=true,expanded=false,editingPage=null,editingScope=null,inspectorWidth=380,openSection=null,historyRevision=null,historyBook=null,previewKey=null;
   const button=(label,action,extra='')=>`<button class="button" data-action="${action}" ${extra}>${label}</button>`;
   const canvasIcons={
     'website-inspector':'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>',
@@ -155,11 +155,12 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
   function view(){
     research.sync();if(research.enabled()&&!research.totals()&&!research.error())research.refresh();
     syncHistory();
-    if(context!==websiteContext(state)){context=websiteContext(state);area='body';toolTrail=[];richStates.clear();documentContexts.clear();structureOpen=false;selectedMedia=null;tab='home';tool='page';preview=null;previewPage='index.html';openSection=null;selectedMedia=null;history.clear();
+    if(context!==websiteContext(state)){context=websiteContext(state);area='body';toolTrail=[];richStates.clear();documentContexts.clear();structureOpen=false;selectedMedia=null;tab='home';tool='page';preview=null;previewPage='index.html';pageChosen=false;openSection=null;selectedMedia=null;history.clear();
       try{
         const stored=sessionStorage.getItem('observanda.editor.'+state.book.id+'.'+(state.websiteId??'workspace')),remembered=stored&&stored.length<=65536?JSON.parse(stored):null;
         if(research.enabled()&&remembered?.recordPage&&/^entries\/[a-f0-9-]{36}\.html$/.test(remembered.path)&&remembered.path==='entries/'+remembered.recordPage.id+'.html'&&typeof remembered.recordPage.title==='string'&&remembered.recordPage.title.length<=180)research.choosePage({target:'entry:'+remembered.recordPage.id,title:remembered.recordPage.title});
-        if(remembered&&websitePageAtPath(pageBook(),remembered.path)){
+        if(remembered&&websiteStartingPage(pageBook(),remembered.path,{chosen:remembered.pageChosen===true})?.path===remembered.path){
+          pageChosen=remembered.pageChosen===true;
           documentContexts.restore(remembered.documents);
           documentContexts.set(remembered.path,{...remembered,scroll:documentContexts.get(remembered.path)?.scroll});
           const page=documentContexts.get(remembered.path);
@@ -195,7 +196,7 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
   }
   function insertPanel(){return `<section class="panel element-library"><h2>Elements</h2><label class="website-visually-hidden" for="element-search">Search elements</label><input id="element-search" type="search" placeholder="Search elements" value="${esc(paletteQuery)}"><div class="insert-grid">${ELEMENTS.map(e=>({...e,name:['link','contents','disclosure','popup','copy-text'].includes(e.kind)?tr(e.kind):e.name})).map(({kind,name,symbol})=>button(`<span class="element-symbol" aria-hidden="true">${symbol}</span><span>${name}</span>`,'website-add-section',`data-kind="${kind}" data-palette-kind="${kind}" aria-label="${name}" title="Drag onto the page, or click to insert" ${paletteQuery&&!name.toLowerCase().includes(paletteQuery.toLowerCase())?'hidden':''}`)).join('')}</div>${field('Upload image, audio or video',`<input type="file" data-upload="website" data-target="${area==='body'?scopeTarget():'region:'+regionUI.selected()?.id}" accept="image/*,audio/*,video/*">`)}</section>`;}
   function selectTarget(target,{section=null,showControls=true}={}){
-    const destination=websitePageTarget(pageBook(),target)??websitePageTargets(pageBook()).next().value;
+    const destination=websitePageTarget(pageBook(),target)??websiteStartingPage(pageBook());
     if(!destination){previewPage='';editingScope=null;editingPage=null;openSection=null;selectedMedia=null;return;}
     previewPage=destination.path;
     editingScope=!['home','page'].includes(destination.target.split(':')[0])?destination.target:null;
@@ -206,7 +207,6 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
   function typography(){const a=websiteTypography(state.book),overrides=state.book.website.typography;return `<section class="panel"><h2>Website typography</h2><nav class="inspector-subtabs" aria-label="Typography tools">${[['fonts','Fonts'],['size','Size'],['spacing','Spacing']].map(([key,label])=>button(label,'website-type-tab',`data-tab="${key}" aria-pressed="${typeTab===key}"`)).join('')}</nav>${typeTab==='fonts'?['font','headingFont'].map(key=>field(key==='font'?'Body font':'Heading font',fontSelect(`data-website-type="${key}"`,overrides[key]??'',{first:[['','Theme ('+(FONT_OPTIONS.find(([id])=>id===state.book.appearance[key])?.[1]??'Custom font')+')']]})+`<div data-website-axes="${key}">${axisControls(a[key],a[key+'Axes'],`data-website-axis="${key}"`)}</div>`)).join(''):Object.entries(TYPOGRAPHY_RANGES).filter(([key])=>typeTab==='size'?['fontSize','headingScale'].includes(key):!['fontSize','headingScale'].includes(key)).map(([key,[min,max,step]])=>field({fontSize:'Body text size (px)',lineHeight:'Line spacing',headingScale:'Heading scale',letterSpacing:'Letter spacing (px)',paragraphSpacing:'Paragraph spacing (em)'}[key],`<input type="number" data-website-type="${key}" min="${min}" max="${max}" step="${step}" value="${overrides[key]??''}" placeholder="${a[key]}">`)).join('')}${button('Reset website typography','website-type-reset')}</section>`;}
   function customPages(){
     if(!editingScope&&!state.book.pages.some(p=>p.id===editingPage))editingPage=state.book.pages[0]?.id??null;
-    if(!editingScope&&!editingPage)editingScope=websitePageTargets(pageBook(),{kind:'project'}).next().value?.target??websitePageTargets(pageBook(),{kind:'notebook'}).next().value?.target??websitePageTargets(pageBook(),{kind:'entry'}).next().value?.target??null;
     const p=pageModel();
     const target=scopeTarget(),generated=editingScope&&websitePageTarget(pageBook(),editingScope);
 
@@ -220,7 +220,7 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
   function previewPageOptions(){
     const {choices,more}=websitePageChoices(pageBook(),previewPage),text=key=>t('websitePages',key);
     if(!choices.length)return '<option value="">'+esc(selectedPublicationSources(state.book.website.researchSources).length?t('publicationSources','choosePage'):text('noPages'))+'</option>'+(state.book.website.researchSources?.length?'<option value="find">'+esc(text('find'))+'</option>':'');
-    return ['home','page','project','notebook','entry'].map(kind=>{
+    return (!previewTarget()?'<option value="" selected>'+esc(text('noPageSelected'))+'</option>':'')+['home','page','project','notebook','entry'].map(kind=>{
       const items=choices.filter(p=>p.target.split(':')[0]===kind),options=items.map(p=>option(p.path,kind==='home'?text('home'):p.title,previewPage)).join('');
       return kind==='home'?options:items.length?'<optgroup label="'+esc(text(kind))+'">'+options+'</optgroup>':'';
     }).join('')+(more||native()&&documents.count('pages')>pageLabels.length||state.book.website.researchSources?.length||research.enabled()&&state.workspaceOutline?.total>0?'<option value="find">'+esc(text('find'))+'</option>':'');
@@ -228,7 +228,7 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
   function previewTarget(){return websitePageAtPath(pageBook(),previewPage)?.target??null;}
   async function changePreviewPage(path){
    const request=++pageChange;storePageContext();releaseRichEditor();overrideController?.abort();overrideController=null;overrideError='';switchingPage=native();if(switchingPage)refreshTools();
-   try{if(native()){const id=/^pages[/]([a-f0-9-]{36})[.]html$/.exec(path)?.[1]??null;await documents.selectPage(id);if(request!==pageChange)return;}previewPage=path;await ensureOverrides(previewTarget());if(request!==pageChange)return;restorePageContext();}
+   try{if(native()){const id=/^pages[/]([a-f0-9-]{36})[.]html$/.exec(path)?.[1]??null;await documents.selectPage(id);if(request!==pageChange)return;}previewPage=path;pageChosen=true;await ensureOverrides(previewTarget());if(request!==pageChange)return;restorePageContext();}
    catch(error){if(request===pageChange)overrideError=error.message;throw error;}
    finally{if(request===pageChange){switchingPage=false;if(state.page==='website'){refreshTools();schedulePreview();document.querySelector('#website-preview-page')?.focus({preventScroll:true});}}}
   }
@@ -620,7 +620,7 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
     if(c){pendingScroll=c.scroll??0;tool=c.tool;sectionTab=c.sectionTab??'content';typeTab=c.typeTab??'fonts';designTab=c.designTab??'layout';selectedMedia=c.media??null;}
     if(openSection&&!sections().some(e=>e.id===openSection)){openSection=null;selectedMedia=null;tool='page';}
   }
-  function rememberContext(){try{storePageContext();sessionStorage.setItem('observanda.editor.'+state.book.id+'.'+(state.websiteId??'workspace'),JSON.stringify({path:previewPage,area,section:openSection,tool,documents:documentContexts,device,zoom,structureOpen,sectionTab,typeTab,designTab,media:selectedMedia,recordPage:research.labels()[0]??null}));}catch{}}
+  function rememberContext(){try{storePageContext();sessionStorage.setItem('observanda.editor.'+state.book.id+'.'+(state.websiteId??'workspace'),JSON.stringify({path:previewPage,pageChosen,area,section:openSection,tool,documents:documentContexts,device,zoom,structureOpen,sectionTab,typeTab,designTab,media:selectedMedia,recordPage:research.labels()[0]??null}));}catch{}}
   function bindStructure(){const details=document.querySelector('.composer-structure');details?.querySelector('summary').addEventListener('click',()=>{structureOpen=!details.open;rememberContext();});}
   function refreshTools(){
     if(state.page!=='website')return;

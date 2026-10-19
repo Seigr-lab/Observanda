@@ -41,3 +41,11 @@ export function websitePageWindow(book,{kind,search='',offset=0,limit=WEBSITE_PA
  }
  return {items,total,offset,previousCursor:offset?Math.max(0,offset-limit):null,nextCursor:offset+items.length<total?offset+limit:null};
 }
+
+// Opening an editor is not consent to generate a research page. Resume an
+// explicit choice or authored layout; otherwise start with an authored page.
+export function websiteStartingPage(book,path,{chosen=false}={}){
+ const remembered=websitePageAtPath(book,path);
+ if(remembered&&(chosen||['home','page'].includes(remembered.target.split(':')[0])||book.website.layouts?.some(layout=>layout.target===remembered.target)))return remembered;
+ return websitePageTargets(book,{kind:'site'}).next().value??null;
+}

@@ -4,10 +4,10 @@ import path from 'node:path';
 import os from 'node:os';
 import {sampleNotebook} from '../../src/sample.js';
 import {createNotebook} from '../../src/model.js';
+import {encryptedFixture} from './encrypted-fixture.js';
 import {WebsiteSites} from '../../src/website-sites.js';
 import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
-import {encryptedFixture} from './encrypted-fixture.js';
 import {navigate} from './preferences-helper.js';
 import {task,openPageSettings,chooseWebsitePage} from './composer-helper.js';
 
@@ -22,7 +22,7 @@ test('create two independent websites, edit and publish their own saved content 
  try{
   await page.goto(app.url);await navigate(page,'Website editor');await expect(page.locator('.website-site-context')).toBeVisible();await manager();await create('Research journal');
   await task(page,'Site');await page.getByLabel('Website title',{exact:true}).fill('Research journal title');
-  await task(page,'Content');await expect(page.locator('[data-publish-entry]')).not.toHaveCount(0);await expect(page.locator('[data-publish-entry="'+record.id+'"]').first()).not.toBeChecked();await page.locator('[data-publish-entry="'+record.id+'"]').check();
+  await task(page,'Content');await page.locator('[data-project-share="'+project.id+'"]').check();await expect(page.locator('[data-publish-entry]')).not.toHaveCount(0);await expect(page.locator('[data-publish-entry="'+record.id+'"]').first()).not.toBeChecked();await page.locator('[data-publish-entry="'+record.id+'"]').check();
   await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
   await chooseWebsitePage(page,'entries/'+record.id+'.html');await openPageSettings(page);await page.getByText('Page header',{exact:true}).click();
   await page.getByLabel('Display heading',{exact:true}).fill('Research journal record');

@@ -98,7 +98,7 @@ export class WebsiteSites{
     const document=websiteDocument(snapshot.metadata);
     document.website={...websiteDefaults(),title:name,description:'',home:emptyHomepage(),design:siteLayoutDefaults(),assets:[],layouts:[],templates:[],typography:{},presentation:presentationDefaults(),palette:{},logoId:null,logoAlt:'',footer:'',navigation:[]};
     document.pages=[];document.branding=[];id=randomUUID();
-    const site={id,name,projectId:null,document,projects:snapshot.metadata.projects.map(({id,logoId})=>({id,share:true,logoId})),selection:{defaultShare:false,includeProjects:[],records:[]}};
+    const site={id,name,projectId:null,document,projects:snapshot.metadata.projects.map(({id})=>({id,share:false,logoId:null})),selection:{defaultShare:false,includeProjects:[],records:[]}};
     await this.validate(store,snapshot,null,site);return documents.create(site,{researchSnapshotId:head});
    }
    if(websitePin?.websiteRevision){
