@@ -74,11 +74,31 @@ test('full publication and selected authoring remain isolated from unrelated gro
   const host=createNotebook('Combined workload'),fixture=await encryptedFixture(placement.root,host,undefined,{deviceDirectory:directory});keys.push(fixture.vault);
   // Measure host writer admission separately from its transaction work, without
   // changing concurrency or recording private paths or SQL parameters.
+  const openCatalogue=fixture.workspace.openCatalogue.bind(fixture.workspace);
+  fixture.workspace.openCatalogue=async(...args)=>{
+   const db=await openCatalogue(...args),run=db.run;
+   db.run=async function(sql,...values){
+    const timing=publicationTimings.getStore();if(!timing)return run.call(this,sql,...values);
+    const started=performance.now(),kind=/^COMMIT\b/i.test(sql)?'commit':/^BEGIN\b/i.test(sql)?'begin':'work';
+    try{return await run.call(this,sql,...values);}finally{timing.sql[kind].count++;timing.sql[kind].ms+=performance.now()-started;}
+   };
+   return db;
+  };
+  const writeMetadata=fixture.workspace.writeMetadata.bind(fixture.workspace);
+  fixture.workspace.writeMetadata=(file,text)=>{
+   const batch=publicationTimings.getStore()?.batch;if(batch){batch.objects++;batch.bytes+=Buffer.byteLength(text);}return writeMetadata(file,text);
+  };
   const hostWriter=fixture.workspace.withLock.bind(fixture.workspace);
   fixture.workspace.withLock=(operation,options)=>{
    const timing=publicationTimings.getStore();if(!timing)return hostWriter(operation,options);
    const start=performance.now();timing.writers++;
-   return hostWriter(async(...args)=>{const entered=performance.now();timing.admissionMs+=entered-start;try{return await operation(...args);}finally{timing.writeMs+=performance.now()-entered;}},options).finally(()=>{timing.writerMs+=performance.now()-start;});
+   return hostWriter(async(...args)=>{
+    const entered=performance.now(),batch={objects:0,bytes:0};timing.admissionMs+=entered-start;timing.batch=batch;
+    try{return await operation(...args);}finally{
+     timing.writeMs+=performance.now()-entered;delete timing.batch;
+     if(batch.objects){timing.batches.count++;timing.batches.objects+=batch.objects;timing.batches.bytes+=batch.bytes;timing.batches.maximumObjects=Math.max(timing.batches.maximumObjects,batch.objects);timing.batches.maximumBytes=Math.max(timing.batches.maximumBytes,batch.bytes);if(batch.objects===128)timing.batches.fullObjectBatches++;}
+    }
+   },options).finally(()=>{timing.writerMs+=performance.now()-start;});
   };
   const registry=new ProjectRegistry(fixture.workspace,host.id),addresses=new LabBookDirectory(registry),metadata=createNotebook('Research project'),projectId=id();metadata.projects=[{id:projectId,title:metadata.title,description:'',share:false,logoId:null}];
   const access=await createWorkspaceAccess('','',fixture.deviceStore),vault=takeCreatedVault(access);keys.push(vault);
@@ -135,7 +155,21 @@ test('full publication and selected authoring remain isolated from unrelated gro
    const captureReader=async opts=>{const reader=await base(opts);return {...reader,use:(sourceId,snapshotId,consume,readOptions)=>reader.use(sourceId,snapshotId,(...args)=>{captureEntered();return consume(...args);},readOptions)};};
    captureReader.materialAccess=base.materialAccess;
    const releases=new PublicationJobs(storages[0],{sourceReader:captureReader});
-   for(const method of ['pin','prepare']){const operation=releases[method].bind(releases);releases[method]=async(...args)=>{const at=performance.now(),timing={writers:0,writerMs:0,admissionMs:0,writeMs:0,originals:0};try{return await publicationTimings.run(timing,()=>operation(...args));}finally{metrics[method+'Ms']=Math.round(performance.now()-at);process.stdout.write(JSON.stringify({phase:method,unrelatedRecords:count,elapsedMs:metrics[method+'Ms'],writers:timing.writers,writerMs:Math.round(timing.writerMs),admissionMs:Math.round(timing.admissionMs),writeMs:Math.round(timing.writeMs),originals:timing.originals})+'\n');}};}
+   for(const method of ['pin','prepare']){
+    const operation=releases[method].bind(releases);
+    releases[method]=async(...args)=>{
+     const at=performance.now(),timing={writers:0,writerMs:0,admissionMs:0,writeMs:0,originals:0,batches:{count:0,objects:0,bytes:0,maximumObjects:0,maximumBytes:0,fullObjectBatches:0},sql:Object.fromEntries(['begin','commit','work'].map(kind=>[kind,{count:0,ms:0}]))};let pages=null;
+     if(method==='prepare'){
+      const options=args[1],progress=options.progress;
+      args[1]={...options,progress:async value=>{pages={completed:value.done,total:value.total,elapsedMs:Math.round(performance.now()-at)};await progress(value);}};
+     }
+     try{return await publicationTimings.run(timing,()=>operation(...args));}
+     finally{
+      metrics[method+'Ms']=Math.round(performance.now()-at);
+      process.stdout.write(JSON.stringify({phase:method,unrelatedRecords:count,elapsedMs:metrics[method+'Ms'],writers:timing.writers,writerMs:Math.round(timing.writerMs),admissionMs:Math.round(timing.admissionMs),writeMs:Math.round(timing.writeMs),originals:timing.originals,batches:timing.batches,sql:Object.fromEntries(Object.entries(timing.sql).map(([kind,value])=>[kind,{count:value.count,ms:Math.round(value.ms)}])),...(pages?{pages}:{})})+'\n');
+     }
+    };
+   }
    const started=performance.now(),preparing=request(()=>releases.inline({etag:journal.etag,websitePin:journal.websitePin},{signal:controller.signal}));
    preparing.finally(()=>{editionFinished=true;}).catch(()=>{});
    const measured=async(name,fn)=>{assert.equal(editionFinished,false);const at=performance.now(),value=await request(fn);metrics[name]=Math.round(performance.now()-at);assert.equal(editionFinished,false,'Foreground operation did not overlap publication');return value;};
