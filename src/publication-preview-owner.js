@@ -1,3 +1,4 @@
+import {publicationReferenceWindow} from './publication-reference-window.js';
 import {publicationOwnerId} from './publication-owner-identities.js';
 import {AppError} from './errors.js';
 import {RecordPublicationIndex} from './record-publication-index.js';
@@ -25,14 +26,35 @@ export class PublicationPreviewOwner{
   this.rows=new Map();this.descriptors=new Map();this.originals=new Map();this.choices=new Map((source.edition?.records??[]).map(choice=>[choice.id,choice]));
   this.history=new Map((source.edition?.history??[]).filter(choice=>choice.include).map(choice=>[this.id('record',revisionPageId(source.workspaceId,choice.id,choice.revision)),structuredClone(choice)]));
  }
- async initialize({counts=false,snapshotId}={}){
+ async initialize({counts=false,snapshotId,entryId=null}={}){
   const {value}=await this.reader.use(this.source.workspaceId,snapshotId,async(store,snapshot,pinned)=>{
    const context=publicationSourceContext(snapshot.metadata,this.source,pinned.owner);
-   return {...context,snapshotId:pinned.snapshotId,positionSpan:snapshot.nextPosition??snapshot.records.length,owner:{...pinned.owner,projectNamespaceId:pinned.projectNamespaceId},...(counts?{notebookCounts:await this.countValues(store,snapshot,context.metadata)}:{})};
+   const value={...context,snapshotId:pinned.snapshotId,positionSpan:snapshot.nextPosition??snapshot.records.length,owner:{...pinned.owner,projectNamespaceId:pinned.projectNamespaceId},...(counts?{notebookCounts:await this.countValues(store,snapshot,context.metadata)}:{})};
+   Object.assign(this,value);
+   if(entryId)await this.initializeEntry(store,snapshot,pinned,entryId);
+   return value;
   });
   Object.assign(this,value);
   this.projected=publicationOwnerProjection({metadata:this.metadata,records:[]},this.owner,this.identities).metadata;
   return this;
+ }
+ // Entry pages consume this exact bounded group. Hydrate it while the initial
+ // owner is admitted, before switching to another source for its counts.
+ async initializeEntry(store,snapshot,pinned,id){
+  let row;
+  if(this.history.has(id)){
+   await this.describeHistoryCurrent(store,snapshot,pinned,id);row=this.rows.get(id);
+   const current=await this.findCurrent(store,snapshot,this.id('record',row.recordId),{recordId:row.recordId});
+   if(current)await this.describeCurrent(store,snapshot,current);
+  }else{
+   row=await this.findCurrent(store,snapshot,id);if(!row)return;
+   await this.describeCurrent(store,snapshot,row);
+   for(const neighbour of await this.neighbourRows(store,snapshot,row))await this.describeCurrent(store,snapshot,neighbour);
+  }
+  await this.originalCurrent(store,snapshot,row);
+  const descriptor=this.descriptors.get(id),target={id:row.recordId,workspaceIds:descriptor.referenceNamespaces??[this.source.workspaceId]},anchor={after:null,backward:false};
+  this.initialReferences={key:this.referenceWindowKey(target,anchor),rows:await this.referenceWindowCurrent(store,snapshot,target,anchor)};
+  this.entryId=id;
  }
  async use(consume){
   this.signal?.throwIfAborted();
@@ -152,15 +174,22 @@ export class PublicationPreviewOwner{
    return result;
   });
  }
- async referenceRows(target,{after=null,backward=false,limit=257}={}){
-  return this.use(async(store,snapshot)=>{
-   const notebooks=new Set(this.metadata.notebooks.filter(book=>this.metadata.projects.some(project=>project.id===book.projectId&&project.share)).map(book=>book.id));
-   const reading=new RecordReadingIndex(store),rows=[];
-   for await(const candidate of recordReferenceCandidates({store,snapshot,notebooks,workspaceId:target.workspaceId,signal:this.signal,fallback:anchor=>reading.rows(snapshot,notebooks,{order:'position',signal:this.signal,after:anchor.after===null?null:{position:anchor.after},backward:anchor.backward})},target.id,{after,backward})){
-    rows.push(this.projectedRow(candidate));if(rows.length===limit)break;
-   }
-   return rows;
-  });
+ async referenceRowsCurrent(store,snapshot,target,{after=null,backward=false,limit=257}={}){
+  const notebooks=new Set(this.metadata.notebooks.filter(book=>this.metadata.projects.some(project=>project.id===book.projectId&&project.share)).map(book=>book.id));
+  const reading=new RecordReadingIndex(store),rows=[];
+  for await(const candidate of recordReferenceCandidates({store,snapshot,notebooks,workspaceId:target.workspaceId,signal:this.signal,fallback:anchor=>reading.rows(snapshot,notebooks,{order:'position',signal:this.signal,after:anchor.after===null?null:{position:anchor.after},backward:anchor.backward})},target.id,{after,backward})){
+   rows.push(this.projectedRow(candidate));if(rows.length===limit)break;
+  }
+  return rows;
+ }
+ async referenceRows(target,options){return this.use((store,snapshot)=>this.referenceRowsCurrent(store,snapshot,target,options));}
+ referenceWindowKey(target,{after=null,backward=false}={}){return JSON.stringify([target.id,target.workspaceIds,after,backward]);}
+ async referenceWindowCurrent(store,snapshot,target,anchor){
+  return publicationReferenceWindow(target.workspaceIds.map(workspaceId=>()=>this.referenceRowsCurrent(store,snapshot,{workspaceId,id:target.id},anchor)),{backward:anchor?.backward,signal:this.signal});
+ }
+ async referenceWindow(target,anchor){
+  if(this.initialReferences?.key===this.referenceWindowKey(target,anchor))return this.initialReferences.rows;
+  return this.use((store,snapshot)=>this.referenceWindowCurrent(store,snapshot,target,anchor));
  }
  async selected(store,snapshot,row){
   const raw=await store.record(row.recordId,row.revision),revision=recordRevision(raw),patch=this.source.selection.records.find(choice=>choice.id===raw.id);
@@ -200,8 +229,11 @@ export class PublicationPreviewOwner{
  }
  async describeHistory(id){
   if(this.descriptors.has(id))return this.descriptors.get(id);
+  return this.use((store,snapshot,pinned)=>this.describeHistoryCurrent(store,snapshot,pinned,id));
+ }
+ async describeHistoryCurrent(store,snapshot,pinned,id){
+  if(this.descriptors.has(id))return this.descriptors.get(id);
   const choice=this.history.get(id);if(!choice)throw new AppError('NOT_FOUND');
-  return this.use(async(store,snapshot,pinned)=>{
    const storage=new Proxy(pinned.storage,{get(target,key){if(key==='catalogue')return operation=>operation(store);const value=target[key];return typeof value==='function'?value.bind(target):value;}});
    const raw=await exactPublicationRecord(storage,{workspaceId:this.source.workspaceId,kind:'record',id:choice.id,revision:choice.revision});validateEditionRecord(raw,choice);
    if(!this.metadata.notebooks.some(book=>book.id===raw.notebookId&&this.metadata.projects.some(project=>project.id===book.projectId&&project.share)))throw new AppError('INVALID');
@@ -210,19 +242,22 @@ export class PublicationPreviewOwner{
    const projected=publicationOwnerProjection({metadata:this.metadata,records:[descriptor]},this.owner,this.identities).records[0],member=await store.member(snapshot,raw.id);
    const row={id,recordId:raw.id,workspaceId:this.source.workspaceId,notebookId:projected.notebookId,revision:choice.revision,occurredOn:raw.occurredOn,position:member?.position??snapshot.nextPosition??0,historical:true};
    Object.assign(projected,{position:row.position,referencesSelected:false});this.rows.set(id,row);this.descriptors.set(id,projected);this.originals.set(id,publicationPageRecord(selected,projected));return projected;
-  });
  }
  async historicalTarget(target){
   const choice=[...this.history.entries()].find(([,choice])=>choice.id===target.id&&choice.revision===target.revision);if(!choice)return null;
   const descriptor=await this.describeHistory(choice[0]);return descriptor.referenceNamespaces.includes(target.workspaceId)?this.rows.get(choice[0]):null;
  }
- async original(row){
-  const descriptor=await this.describe(row);
-  if(!this.originals.has(row.id))await this.use(async(store,snapshot)=>{
-   const {selected,revision}=await this.selected(store,snapshot,this.rows.get(row.id));
+ async originalCurrent(store,snapshot,row){
+  if(!this.originals.has(row.id)){
+   const descriptor=this.descriptors.get(row.id),{selected,revision}=await this.selected(store,snapshot,this.rows.get(row.id));
    if(revision!==descriptor.revision)throw new AppError('RECORD_CHANGED');
    this.originals.set(row.id,publicationPageRecord(selected,descriptor));
-  });
+  }
+  return this.originals.get(row.id);
+ }
+ async original(row){
+  await this.describe(row);
+  if(!this.originals.has(row.id))return this.use((store,snapshot)=>this.originalCurrent(store,snapshot,row));
   return this.originals.get(row.id);
  }
 }

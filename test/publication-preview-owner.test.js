@@ -82,6 +82,9 @@ test('owner preview pages rank projected identities without originals or retaine
  revoked.describeCurrent=async(...args)=>{const value=await describe(...args);permitted=false;return value;};
  await assert.rejects(revoked.resolve(row.id,{recordId:row.recordId}),{code:'ACCESS_LOCKED'});assert.equal(f.active,false);
  permitted=true;await assert.rejects(revoked.neighbourDescriptors(row),{code:'ACCESS_LOCKED'});assert.equal(f.active,false);
+ permitted=true;const initial=new PublicationPreviewOwner(f.source,guarded,f.identities),initialDescribe=initial.describeCurrent.bind(initial);
+ initial.describeCurrent=async(...args)=>{const value=await initialDescribe(...args);permitted=false;return value;};
+ await assert.rejects(initial.initialize({counts:true,entryId:row.id}),{code:'ACCESS_LOCKED'});assert.equal(f.active,false);
 });
 
 test('source preview applies section and attachment choices to derivatives and retains canonical revisions',async t=>{
@@ -112,7 +115,7 @@ test('a combined canvas admits selected sources, follows cross-owner references 
  const home=await websitePreviewSource(host.f.workspace,makeCommand(),{websitePin:host.websitePin,designTarget:'home',sourceReader});
  assert.equal(home.context.entries.length,0);assert.deepEqual(loaded,[]);assert.ok(home.context.recordCards.length<=24);assert.equal(readers,closed);assert.equal(readers,verified);
  const beforeEntry=source.opens,page=await websitePreviewSource(host.f.workspace,makeCommand(),{websitePin:host.websitePin,designTarget:'entry:'+foreignId,sourceReader});
- assert.equal(source.opens-beforeEntry,6,'Entry hydration and neighbours each use one admitted source read');
+ assert.equal(source.opens-beforeEntry,2,'The selected entry and its reference window share initial admission; only its outbound lookup reopens the source');
  assert.equal(page.context.entries.length,1);assert.equal(page.context.entries[0].body,'Foreign original body');assert.equal(page.context.entries[0].relations[0].id,host.book.entries[0].id);
  assert.equal(loaded.length,1);assert.equal(readers,closed);
  assert.equal(page.editor.workspaceId,host.book.id);const editorRecord=page.editor.records.find(record=>record.id===foreignId);
@@ -209,4 +212,11 @@ test('canvas initialization captures selected counts without reopening its immut
  const owner=await new PublicationPreviewOwner(f.source,f.reader,f.identities).initialize({counts:true}),opens=f.opens;
  assert.equal(Object.values(await owner.counts()).reduce((total,count)=>total+count,0),36);
  assert.equal(f.opens,opens);assert.equal(owner.originals.size,0);assert.equal(owner.descriptors.size,0);
+ const entryId=owner.id('record',f.book.entries[1].id),before=f.opens,entry=await new PublicationPreviewOwner(f.source,f.reader,f.identities).initialize({counts:true,entryId});
+ assert.equal(f.opens-before,1);assert.equal(entry.entryId,entryId);assert.equal(entry.originals.size,1);assert.ok(entry.descriptors.size<=3);
+ const row=entry.rows.get(entryId),descriptor=entry.descriptors.get(entryId),target={id:row.recordId,workspaceIds:descriptor.referenceNamespaces};
+ assert.equal((await entry.original(row)).body,f.book.entries[1].body);assert.deepEqual(await entry.counts(),await owner.counts());
+ const window=await entry.referenceWindow(target,{after:null,backward:false});assert.ok(window.length<=257);assert.equal(f.opens-before,1);
+ await entry.referenceWindow(target,{after:row.position,backward:false});assert.equal(f.opens-before,2,'A different cursor requires its own admitted callback');
+ await entry.referenceWindow({...target,id:f.book.entries[0].id},{after:null,backward:false});assert.equal(f.opens-before,3,'A different target cannot reuse the selected entry window');
 });

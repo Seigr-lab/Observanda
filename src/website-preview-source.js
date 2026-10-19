@@ -37,7 +37,7 @@ export async function websitePreviewSource(workspace,command,{websitePin,designT
   if(!sources.length)return {...await websitePreviewPage(records,metadata,{designTarget,referenceCursor,collections,signal}),websitePin:snapshot.websitePin};
   const reader=await sourceReader?.({signal});if(!reader)throw new AppError('ACCESS_LOCKED');
   try{
-   const combined=await new WebsitePreviewSources(records,reader).initialize(sources);
+   const combined=await new WebsitePreviewSources(records,reader).initialize(sources,{entryId:designTarget.startsWith('entry:')?designTarget.slice(6):null});
    const page=await websitePreviewPage(combined,combined.metadata,{designTarget,referenceCursor,collections,signal});
    await reader.verify();return {...page,websitePin:snapshot.websitePin,editor:publicationEditorProjection(combined),media:publicationPreviewMedia(workspace,combined.mediaOrigins,sourceReader)};
   }finally{await reader.close();}
@@ -59,7 +59,7 @@ export async function websiteDocumentPreviewSource(workspace,{websitePin,website
   if(!sources.length)return {...await websitePreviewPage(records,metadata,{designTarget,referenceCursor,collections,signal}),websitePin};
   const reader=await sourceReader?.({signal});if(!reader)throw new AppError('ACCESS_LOCKED');
   try{
-   const combined=await new WebsitePreviewSources(records,reader).initialize(sources),presentation=await websiteEditorPresentation(projected.document,projected.collectionIndexes,combined.metadata,designTarget,{signal}),page=await websitePreviewPage(combined,presentation,{designTarget,referenceCursor,collections,signal});
+   const combined=await new WebsitePreviewSources(records,reader).initialize(sources,{entryId:designTarget.startsWith('entry:')?designTarget.slice(6):null}),presentation=await websiteEditorPresentation(projected.document,projected.collectionIndexes,combined.metadata,designTarget,{signal}),page=await websitePreviewPage(combined,presentation,{designTarget,referenceCursor,collections,signal});
    await reader.verify();return {...page,websitePin,editor:publicationEditorProjection(combined),media:publicationPreviewMedia(workspace,combined.mediaOrigins,sourceReader)};
   }finally{await reader.close();}
  });

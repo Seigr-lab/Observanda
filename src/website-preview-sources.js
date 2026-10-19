@@ -21,15 +21,17 @@ export class WebsitePreviewSources{
   this.metadata=structuredClone(local.metadata);this.identities=new PublicationOwnerIdentities(this.metadata.id);
   this.owners=[];this.rows=new Map();this.descriptors=new Map();this.mediaOrigins=new Map();
  }
- async initialize(sources){
+ async initialize(sources,{entryId=null}={}){
+  if(entryId&&await this.local.row(entryId))entryId=null;
   for(const kind of ['projects','notebooks'])for(const item of this.metadata[kind]){
    this.identities.identity(this.metadata.id,kind==='projects'?'project':'notebook',item.id);
    const namespace=this.metadata.id;
    item.sourceId=item.id;item.sourceWorkspaceId=namespace;item.referenceNamespaces=[...new Set([this.metadata.id,namespace])];
   }
   for(const source of sources){
-   const owner=await new PublicationPreviewOwner(source,this.reader,this.identities,{signal:this.signal}).initialize({counts:true});
+   const owner=await new PublicationPreviewOwner(source,this.reader,this.identities,{signal:this.signal}).initialize({counts:true,entryId});
    appendPublicationCollections(this.metadata,owner.projected);this.owners.push(owner);
+   if(owner.entryId){for(const [id,descriptor] of owner.descriptors)this.remember(owner.rows.get(id),{publicationCard:descriptor});entryId=null;}
   }
   this.binding=digest(serialize(this.owners.map(owner=>({source:owner.source,snapshotId:owner.snapshotId}))));
   return this;
@@ -91,6 +93,7 @@ export class WebsitePreviewSources{
  async neighbours(id){
   const row=await this.row(id);if(!row)return;
   if(!row.workspaceId){await this.local.neighbours(id);for(const [key,value] of this.local.descriptors)this.descriptors.set(key,value);return;}
+  if(this.owner(row).entryId===id)return;
   if(row.historical){await this.get(this.owner(row).id('record',row.recordId));return;}
   for(const value of await this.owner(row).neighbourDescriptors(row))this.remember(value.row,{publicationCard:value.descriptor});
  }
@@ -123,7 +126,7 @@ export class WebsitePreviewSources{
   const namespaces=selected.referenceNamespaces??[this.metadata.id],rawId=selected.recordId??id;
   outer:for(let index=anchor.owner;index>=0&&index<=this.owners.length;index+=anchor.backward?-1:1){
    const position=index===anchor.owner?anchor.position:null;
-   const rows=await publicationReferenceWindow(namespaces.map(namespace=>()=>index===0?websiteReferenceCandidates(this.local,rawId,{after:position,backward:anchor.backward},namespace):this.owners[index-1].referenceRows({workspaceId:namespace,id:rawId},{after:position,backward:anchor.backward})),{backward:anchor.backward,signal:this.signal});
+   const rows=index===0?await publicationReferenceWindow(namespaces.map(namespace=>()=>websiteReferenceCandidates(this.local,rawId,{after:position,backward:anchor.backward},namespace)),{backward:anchor.backward,signal:this.signal}):await this.owners[index-1].referenceWindow({workspaceIds:namespaces,id:rawId},{after:position,backward:anchor.backward});
    for(const row of rows){
     if(items.length===24||scanned===256){more=true;break outer;}
     const point={owner:index,position:row.position};first??=point;last=point;scanned++;
