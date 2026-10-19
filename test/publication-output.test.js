@@ -54,7 +54,7 @@ test('output inventory binds nested retained blobs, selected choices and the exa
  fixture=await encryptedFixture(placement?.root??root,book,undefined,{deviceDirectory:root});
  const workspace=publicationWorkspace(fixture.workspace),outline=await workspace.currentOutline(),releases=new PublicationJobs(workspace);
  const source=await withPublicationCapture(workspace,async(captured,id,finish)=>{const retained=await releases.pin({etag:outline.etag,websitePin:outline.websitePin},{workspace:captured,id});return finish(()=>retained);}),job={id:source.id,lease:{token:randomUUID()}},directory=await releases.directory(job.id,job.lease.token);
- const entries=Array.from({length:200},(_,index)=>({id:randomUUID(),title:'Selected \u00c5 \u03bb \u{1f41d} '+index})),styles=Array.from({length:4},(_,index)=>({kind:'blocks',css:Array.from({length:3000},(_,row)=>'.rule-'+index+'-'+row+'{--caption:"\u00c5 \u03bb \u8702 '+row+'";}').join('\n')}));
+ const entries=Array.from({length:600},(_,index)=>({id:randomUUID(),title:'Selected \u00c5 \u03bb \u{1f41d} '+index})),styles=Array.from({length:4},(_,index)=>({kind:'blocks',css:Array.from({length:3000},(_,row)=>'.rule-'+index+'-'+row+'{--caption:"\u00c5 \u03bb \u8702 '+row+'";}').join('\n')}));
  const homeParts=['<!doctype html><title>Home</title>','<main>Retained website<p>',...Array(5000).fill('\u00c5ngstr\u00f6m \u{1f41d} \u6f22\u5b57 '),'</p></main>'],homeBytes=Buffer.concat(homeParts.map(part=>Buffer.from(part)));
  const late=randomUUID(),open=fixture.workspace.openCatalogue,lock=fixture.workspace.withLock,writeMetadata=fixture.workspace.writeMetadata,batches=[],sqlBatches=[];let opened=0,closed=0,active;
  fixture.workspace.openCatalogue=async function(options){const db=await open.call(this,options),close=db.close,run=db.run;opened++;db.close=async function(){try{return await close.call(this);}finally{closed++;}};db.run=function(sql,...values){if(sql.startsWith('INSERT INTO objects '))sqlBatches.push({rows:values.length/2,bytes:values.filter((_,index)=>index%2===1).reduce((sum,value)=>sum+value.length,0)});return run.call(this,sql,...values);};return db;};
@@ -82,9 +82,9 @@ test('output inventory binds nested retained blobs, selected choices and the exa
  });}finally{fixture.workspace.openCatalogue=open;fixture.workspace.withLock=lock;fixture.workspace.writeMetadata=writeMetadata;fileMock.mock.restore();syncBuiltinESMExports();}
  assert.ok(opened<=3,'Output repeatedly opened authenticated connections: '+opened);assert.equal(closed,opened,'Output retained a live connection after completion');
  const batchBytes=batch=>batch.reduce((sum,size)=>sum+size,0);
- assert.ok(batches.filter(batch=>batch.length===128).length>=2,'Tiny nodes must fill multiple durable 128-object batches');
- assert.ok(batches.filter((batch,index)=>index+1<batches.length&&batch.length<128&&batchBytes(batch)+batches[index+1][0]>256*1024).length>=2,'Large Unicode nodes must cross multiple byte checkpoints');
- for(const batch of batches){assert.ok(batch.length<=128);assert.ok(batchBytes(batch)<=256*1024);}
+ assert.ok(batches.filter(batch=>batch.length===512).length>=2,'Tiny nodes must fill multiple durable 512-object batches');
+ assert.ok(batches.filter((batch,index)=>index+1<batches.length&&batch.length<512&&batchBytes(batch)+batches[index+1][0]>256*1024).length>=2,'Large Unicode nodes must cross multiple byte checkpoints');
+ for(const batch of batches){assert.ok(batch.length<=512);assert.ok(batchBytes(batch)<=256*1024);}
  assert.ok(sqlBatches.some(batch=>batch.rows===32));for(const batch of sqlBatches){assert.ok(batch.rows<=32);assert.ok(batch.bytes<=256*1024);}
  t.diagnostic(JSON.stringify({batches:batches.map(batch=>({objects:batch.length,bytes:batchBytes(batch)}))}));
  const stored={version:3,workspaceId:source.workspaceId,websiteId:null,websitePin:outline.websitePin,jobId:job.id,attempt:job.lease.token,reviewId:digest(job.id),etag:outline.etag,...saved,blockedValues:[]},files=await RetainedPublicationFiles.open(workspace,stored),candidate={...stored,files};

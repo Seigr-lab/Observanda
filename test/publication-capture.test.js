@@ -35,9 +35,9 @@ function request(operation){
 }
 const edit=site=>({workspaceId:site.book.id,baseEtag:site.etag,websitePin:site.websitePin,metadata:{},projects:[],changes:[],removed:[],selection:site.site.selection});
 async function publicationCommand(storage){const {etag,websitePin}=await storage.outline();return {etag,websitePin};}
-async function fixture(t){
+async function fixture(t,{durableCapture=false}={}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-publication-capture-')),book=sampleNotebook();
- book.entries=Array.from({length:72},(_,index)=>({...structuredClone(book.entries[0]),id:randomUUID(),title:'Observation '+index,body:'Retained observation '+index,share:true,attachments:[],figures:[],sections:[],relations:[]}));
+ book.entries=Array.from({length:72},(_,index)=>({...structuredClone(book.entries[0]),id:randomUUID(),title:'Observation '+index,body:durableCapture?('Retained observation '+index).padEnd(27000,' observation'):'Retained observation '+index,share:true,attachments:[],figures:[],sections:[],relations:[]}));
  let f,jobs,runtime,detach,placement;
  t.after(async()=>{await jobs?.worker.stop();await runtime?.close();detach?.();if(f?.vault)clearVault(f.vault);await placement?.cleanup();assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-publication-capture-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  if(process.env.OBSERVANDA_TEST_SECOND_VOLUME){
@@ -67,8 +67,8 @@ test('capture combines small objects into bounded durable batches and retains ex
  let captureId;
  try{await withPublicationCapture(f.storage,async(storage,id,commit)=>{
   captureId=id;
-  for(let index=0;index<134;index++){
-   const file='.observanda/release-inputs/'+id+'/'+randomUUID()+'.json',text=JSON.stringify({text:index<130?'Small retained body '+index:'Observation \u00e6 \u03bb \ud83d\udd2c '.repeat(4000)});
+  for(let index=0;index<1040;index++){
+   const file='.observanda/release-inputs/'+id+'/'+randomUUID()+'.json',text=JSON.stringify({text:index<1030?'Small retained body '+index:'Observation \u00e6 \u03bb \ud83d\udd2c '.repeat(10000)});
    expected.set(file,text);await storage.writeMetadata(file,text);assert.equal(await storage.readMetadata(file,256*1024),text);
   }
   const beforeReads=writes;
@@ -83,9 +83,12 @@ test('capture combines small objects into bounded durable batches and retains ex
   await commit(async()=>{});
  },{write});}finally{f.workspace.writeMetadata=writeMetadata;}
  t.diagnostic(JSON.stringify({batches:batches.map(batch=>({objects:batch.length,bytes:batch.reduce((sum,size)=>sum+size,0)}))}));
- assert.ok(batches.length<=4,'Small retained objects should share durable commits');
+ const batchBytes=batch=>batch.reduce((sum,size)=>sum+size,0);
+ assert.ok(batches.length<=5,'Small retained objects should share durable commits');
+ assert.ok(batches.filter(batch=>batch.length===512).length>=2,'Tiny inputs must fill multiple durable 512-object batches');
+ assert.ok(batches.filter((batch,index)=>index+1<batches.length&&batch.length<512&&batchBytes(batch)+batches[index+1][0]>1024*1024).length>=2,'Large Unicode inputs must cross multiple 1 MiB byte checkpoints');
  assert.equal(batches.reduce((sum,batch)=>sum+batch.length,0),expected.size);
- for(const batch of batches){assert.ok(batch.length<=128);assert.ok(batch.reduce((sum,size)=>sum+size,0)<=256*1024);}
+ for(const batch of batches){assert.ok(batch.length<=512);assert.ok(batchBytes(batch)<=1024*1024);}
  const reopened=websiteWorkspace(new Workspace(f.workspace.root,f.vault),f.ids[0]);
  await reopened.catalogue(async()=>{
   assert.equal((await reopened.listMetadata('.observanda/release-inputs/'+captureId)).length,expected.size);
@@ -95,7 +98,7 @@ test('capture combines small objects into bounded durable batches and retains ex
 });
 
 test('publication capture permits authoring and another preparation while retaining a fixed source',{timeout:120000},async t=>{
- const f=await fixture(t);let arrive,resume,waiting=true;
+ const f=await fixture(t,{durableCapture:true});let arrive,resume,waiting=true;
  const ready=new Promise(resolve=>arrive=resolve),held=new Promise(resolve=>resume=resolve);
  const restore=intercept(t,f.workspace,async count=>{if(waiting&&count===40){waiting=false;arrive();await held;}});
  const initial=await f.storage.outline(),pending=f.releases.start({etag:initial.etag,websitePin:initial.websitePin},f.queue);pending.catch(()=>{});
@@ -126,7 +129,7 @@ test('publication capture permits authoring and another preparation while retain
 });
 
 test('interrupted input cleanup is recovered before another preparation without publishing partial input',{timeout:120000},async t=>{
- const f=await fixture(t),remove=f.workspace.removeMetadata;
+ const f=await fixture(t,{durableCapture:true}),remove=f.workspace.removeMetadata;
  const restore=intercept(t,f.workspace,async count=>{if(count===40)throw new AppError('IO');});
  f.workspace.removeMetadata=async function(file){if(file.includes('/release-inputs/'))throw new AppError('STORAGE_FULL');return remove.call(this,file);};
  try{await assert.rejects(f.releases.start(await publicationCommand(f.storage),f.queue),{code:'IO'});}
@@ -135,17 +138,22 @@ test('interrupted input cleanup is recovered before another preparation without 
  const abandoned=journals[0].slice(0,-5);assert.ok((await f.storage.listMetadata('.observanda/release-inputs/'+abandoned)).length>=32);
  assert.equal(await f.queue.read(abandoned),null);await assert.rejects(f.releases.source(abandoned),{code:'NOT_FOUND'});
  const reopened=new Workspace(f.workspace.root,f.vault),storage=websiteWorkspace(reopened,f.ids[0]),jobs=workspaceJobs(reopened),queue=websiteJobQueue(jobs.queue,f.ids[0]),releases=new PublicationJobs(storage);
- const job=await releases.start(await publicationCommand(storage),queue);
+ const cleanup=[],lock=reopened.withLock,removeRecovered=reopened.removeMetadata;let removed=0,job;
+ reopened.withLock=function(operation,options){return lock.call(this,async(...args)=>{removed=0;try{return await operation(...args);}finally{if(removed)cleanup.push(removed);}},options);};
+ reopened.removeMetadata=function(file){if(file.includes('/release-inputs/'+abandoned+'/'))removed++;return removeRecovered.call(this,file);};
+ try{job=await releases.start(await publicationCommand(storage),queue);}finally{reopened.withLock=lock;reopened.removeMetadata=removeRecovered;}
+ assert.ok(cleanup.some(count=>count===128),'Recovery must still cross its smaller cleanup boundary');assert.ok(cleanup.every(count=>count<=128));
  assert.deepEqual(await storage.listMetadata('.observanda/release-inputs/'+abandoned),[]);
  assert.deepEqual(await storage.listMetadata('.observanda/release-captures'),[]);
  assert.equal(await (await openPublicationInput(storage,await releases.source(job.id))).recordCount(),72);assert.equal((await queue.read(job.id)).state,'queued');
 });
 
 test('aborting capture removes its committed input batches and releases its lifecycle lease',{timeout:120000},async t=>{
- const f=await fixture(t),controller=new AbortController();
- const restore=intercept(t,f.workspace,async count=>{if(count===40)controller.abort(new AppError('WRITE_CANCELLED'));});
+ const f=await fixture(t,{durableCapture:true}),controller=new AbortController(),writeMetadata=f.workspace.writeMetadata;let inputs=0;
+ f.workspace.writeMetadata=function(file,text){if(file.includes('/release-inputs/'))inputs++;return writeMetadata.call(this,file,text);};
+ const restore=intercept(t,f.workspace,async count=>{if(count===40){assert.ok(inputs>0,'Cancellation must follow a completed input flush');controller.abort(new AppError('WRITE_CANCELLED'));}});
  try{await assert.rejects(f.releases.inline(await publicationCommand(f.storage),{signal:controller.signal}),{code:'WRITE_CANCELLED'});}
- finally{restore();}
+ finally{restore();f.workspace.writeMetadata=writeMetadata;}
  assert.deepEqual(await f.storage.listMetadata('.observanda/release-captures'),[]);
  assert.deepEqual(await f.storage.listMetadata('.observanda/release-inputs'),[]);
  assert.equal(await f.queue.hasActive(),false);
@@ -190,7 +198,7 @@ test('a burst of preparations leaves database capacity for input commits',{timeo
 });
 
 test('a killed capture releases its lease and its partial input is removed on the next preparation',{timeout:120000},async t=>{
- const f=await fixture(t);await interruptWorkspace(f.workspace.root,f.vault,'publication-capture',{websiteId:f.ids[0]});
+ const f=await fixture(t,{durableCapture:true});await interruptWorkspace(f.workspace.root,f.vault,'publication-capture',{websiteId:f.ids[0]});
  const journals=await f.storage.listMetadata('.observanda/release-captures');assert.equal(journals.length,1);const abandoned=journals[0].slice(0,-5);
  assert.ok((await f.storage.listMetadata('.observanda/release-inputs/'+abandoned)).length>=32);assert.equal(await f.queue.read(abandoned),null);
  const job=await f.releases.start(await publicationCommand(f.storage),f.queue);

@@ -23,7 +23,7 @@ const stale=()=>{throw new AppError('STALE');};
 const htmlChunkBytes=64*1024;
 // Durable metadata commits coalesce tiny nodes; the SQL writer independently
 // retains its 32-row batches and this writer keeps its 256 KiB byte bound.
-const outputObjects=128,outputBytes=256*1024;
+const outputObjects=512,outputBytes=256*1024;
 // Preserve fragment encoding while avoiding a filesystem write for every text
 // fragment, including manifest rows and stylesheet rules. Yielded buffers are
 // never reused, and upstream is closed on cancellation.

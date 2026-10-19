@@ -19,9 +19,9 @@ import {withoutWriterWait} from './writer-wait.js';
 // Bound active captures before opening readers so a burst cannot occupy every
 // database admission slot and starve the writes needed to finish those reads.
 const admission=new DatabaseAdmission({limit:4});
-// Amortize durable commit cost while retaining the existing input byte bound.
+// Amortize durable commit cost with bounded input objects and bytes.
 // Metadata rows retain their smaller SQL batches inside this transaction.
-const captureObjects=128,captureBytes=256*1024;
+const captureObjects=512,captureBytes=1024*1024,discardObjects=128;
 const captures='.observanda/release-captures';
 const input=id=>'.observanda/release-inputs/'+id;
 const journal=id=>captures+'/'+id+'.json';
@@ -38,7 +38,7 @@ async function discard(workspace,id,write){
  // Each committed deletion advances the next bounded page. A failed cleanup
  // retains its journal so the next preparation can finish it after a restart.
  for(;;){const removed=await write(async()=>{
-  const names=[];for await(const name of workspace.metadataNames(input(id))){names.push(name);if(names.length===captureObjects)break;}
+  const names=[];for await(const name of workspace.metadataNames(input(id))){names.push(name);if(names.length===discardObjects)break;}
   for(const name of names){if(!isPublicationDocumentBlockName(name)&&(!/^[a-f0-9-]{36}\.json$/.test(name)||!researchId(name.slice(0,-5))))throw new AppError('JOB_DAMAGED');await workspace.removeMetadata(input(id)+'/'+name);}
   return names.length;
  });if(!removed)break;}
