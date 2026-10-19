@@ -39,8 +39,10 @@ export class LabBookRegistry{
   return value;
  }
  async read(){
-  await this.project.requireStorageKey();await assertRegular(path.dirname(this.file),{directory:true});
-  const stat=await assertRegular(this.file,{missing:true});if(!stat)return {value:{version:1,projectId:this.project.projectId,books:[],deleted:[]},revision:'new'};
+  await this.project.requireStorageKey();
+  const checks=await Promise.allSettled([assertRegular(path.dirname(this.file),{directory:true}),assertRegular(this.file,{missing:true})]);
+  for(const check of checks)if(check.status==='rejected')throw check.reason;
+  const stat=checks[1].value;if(!stat)return {value:{version:1,projectId:this.project.projectId,books:[],deleted:[]},revision:'new'};
   if(stat.size>16*1024*1024)throw new AppError('LIMIT');const raw=await this.project.readFile(this.file,'utf8');let value;
   try{value=JSON.parse(raw);}catch{throw new AppError('FORMAT');}
   return {value:this.validate(value),revision:digest(raw)};

@@ -17,7 +17,10 @@ export async function workspaceDeletion(root){
 export async function assertNotDeleting(root,id){
  // A parent fence closes admission to its dedicated descendants as well.
  for(let current=root;;){
-  const state=await workspaceDeletion(current);if(state&&state.id!==(id??scope.getStore()))throw new AppError('STORAGE_DELETING');
-  const parent=path.dirname(current);if(parent===current||!await assertRegular(path.join(parent,'.observanda'),{directory:true,missing:true}))return;current=parent;
+  const parent=path.dirname(current),checks=await Promise.allSettled([workspaceDeletion(current),parent===current?null:assertRegular(path.join(parent,'.observanda'),{directory:true,missing:true})]);
+  if(checks[0].status==='rejected')throw checks[0].reason;
+  const state=checks[0].value;if(state&&state.id!==(id??scope.getStore()))throw new AppError('STORAGE_DELETING');
+  if(checks[1].status==='rejected')throw checks[1].reason;
+  if(parent===current||!checks[1].value)return;current=parent;
  }
 }

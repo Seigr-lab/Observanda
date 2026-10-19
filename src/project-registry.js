@@ -53,8 +53,10 @@ export class ProjectRegistry{
   return value;
  }
  async read({metadata=null}={}){
-  await this.workspace.requireStorageKey();await assertRegular(path.dirname(this.file),{directory:true});
-  const stat=await assertRegular(this.file,{missing:true});if(!stat)return {value:{version:1,workspaceId:this.workspaceId,projects:[]},revision:'new'};
+  await this.workspace.requireStorageKey();
+  const checks=await Promise.allSettled([assertRegular(path.dirname(this.file),{directory:true}),assertRegular(this.file,{missing:true})]);
+  for(const check of checks)if(check.status==='rejected')throw check.reason;
+  const stat=checks[1].value;if(!stat)return {value:{version:1,workspaceId:this.workspaceId,projects:[]},revision:'new'};
   if(stat.size>16*1024*1024)throw new AppError('LIMIT');const raw=await this.workspace.readFile(this.file,'utf8');let value;
   try{value=JSON.parse(raw);}catch{throw new AppError('FORMAT');}if(metadata&&metadata.id!==this.workspaceId)throw new AppError('WORKSPACE_CHANGED');return {value:this.validate(decodeProjectRegistryLocations(value,this.workspace.root),{legacyProjects:metadata?.projects??null}),revision:digest(raw)};
  }

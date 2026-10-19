@@ -25,7 +25,10 @@ export async function assertNotRenaming(root){
  // A contained owner also observes its parents' handoff. This closes admission
  // through a second application while the parent freezes individual databases.
  for(let current=root;;){
-  const pending=await workspaceRename(current);if(pending&&scope.getStore()!==pending.id)throw new AppError('STORAGE_RENAMING');
-  const parent=path.dirname(current);if(parent===current||!await assertRegular(path.join(parent,'.observanda'),{directory:true,missing:true}))return;current=parent;
+  const parent=path.dirname(current),checks=await Promise.allSettled([workspaceRename(current),parent===current?null:assertRegular(path.join(parent,'.observanda'),{directory:true,missing:true})]);
+  if(checks[0].status==='rejected')throw checks[0].reason;
+  const pending=checks[0].value;if(pending&&scope.getStore()!==pending.id)throw new AppError('STORAGE_RENAMING');
+  if(checks[1].status==='rejected')throw checks[1].reason;
+  if(parent===current||!checks[1].value)return;current=parent;
  }
 }
