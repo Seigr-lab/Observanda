@@ -1,6 +1,6 @@
 {
   "name": "observanda",
-  "version": "0.3.0-dev.20261018.3",
+  "version": "0.3.0-dev.20261019.1",
   "private": true,
   "description": "An independent notebook for observation, experimentation, and sharing.",
   "type": "module",
