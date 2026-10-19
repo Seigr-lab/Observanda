@@ -21,6 +21,8 @@ import {createWorkspaceAccess,takeCreatedVault,readAccess,verifyAccess} from '..
 import {clearVault} from '../src/encryption.js';
 import {ResearchRecords,recordRevision} from '../src/research.js';
 import {ResearchCatalogue} from '../src/research-catalogue.js';
+import {SnapshotIndex} from '../src/snapshot-index.js';
+import {RecordSearchIndex} from '../src/record-search-index.js';
 import {MediaStore} from '../src/media.js';
 import {ProjectApplication} from '../src/project-application.js';
 import {publicationSourceFactory} from '../src/project-publication-sources.js';
@@ -60,6 +62,11 @@ const selected=(owner,domain,item)=>new ProjectDomains(owner.storage,owner.entry
 test('full publication and selected authoring remain isolated from unrelated growth during cross-owner stock and task writes',{timeout:process.env.OBSERVANDA_TEST_SECOND_VOLUME?1200000:600000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-combined-owners-')),runtime=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:id(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(runtime),keys=[],scope=new AsyncLocalStorage(),publicationTimings=new AsyncLocalStorage(),authoringTimings=new AsyncLocalStorage();
  const original=ResearchCatalogue.prototype.record,documents=ResearchCatalogue.prototype.queryDocuments;let application,releaseBusy,busy,placement;
+ const measuredIndexes=[[SnapshotIndex,'authoringMembershipMs'],[RecordSearchIndex,'authoringSearchMs']].map(([type,metric])=>{
+  const replace=type.prototype.replace;
+  type.prototype.replace=async function(...args){const timing=authoringTimings.getStore();if(!timing)return replace.apply(this,args);const started=performance.now();try{return await replace.apply(this,args);}finally{timing[metric]=(timing[metric]??0)+Math.round(performance.now()-started);}};
+  return ()=>{type.prototype.replace=replace;};
+ });
  ResearchCatalogue.prototype.record=function(...args){const timing=publicationTimings.getStore();if(timing)timing.originals++;const metrics=scope.getStore();if(metrics){metrics.originals++;assert.notEqual(this.workspace.root,metrics.unrelatedRoot);}return original.apply(this,args);};
  ResearchCatalogue.prototype.queryDocuments=async function*(...args){for await(const value of documents.apply(this,args)){const metrics=scope.getStore();if(metrics)metrics.derivatives++;yield value;}};
  try{
@@ -158,5 +165,5 @@ test('full publication and selected authoring remain isolated from unrelated gro
    }finally{clearTimeout(timer);controller.abort();releaseBusy();await busy;busy=null;await preparing.catch(()=>{});}
   }
   assert.equal(measurements[1].sourceUses,measurements[0].sourceUses);assert.equal(measurements[1].originals,measurements[0].originals);assert.equal(measurements[1].derivatives,measurements[0].derivatives);assert.ok(measurements[1].queries<measurements[0].queries*2,'Unrelated growth increased selected read work');
- }finally{releaseBusy?.();await busy;ResearchCatalogue.prototype.record=original;ResearchCatalogue.prototype.queryDocuments=documents;await application?.close();await runtime.close();detach();keys.forEach(clearVault);await placement?.cleanup();assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-combined-owners-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
+ }finally{releaseBusy?.();await busy;ResearchCatalogue.prototype.record=original;ResearchCatalogue.prototype.queryDocuments=documents;for(const restore of measuredIndexes)restore();await application?.close();await runtime.close();detach();keys.forEach(clearVault);await placement?.cleanup();assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-combined-owners-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
