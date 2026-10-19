@@ -94,7 +94,22 @@ export class FileContent {
 export const contentSize=value=>value instanceof FileContent?value.size:Buffer.byteLength(value);
 export const contentHash=value=>value instanceof FileContent?value.sha256:createHash('sha256').update(value).digest('hex');
 export const contentStream=value=>value instanceof FileContent?value.stream():Readable.from([Buffer.from(value)]);
-export async function contentBuffer(value){if(!(value instanceof FileContent))return Buffer.from(value);const chunks=[];for await(const chunk of value.stream())chunks.push(chunk);return Buffer.concat(chunks);}
+export async function contentBuffer(value){
+ if(!(value instanceof FileContent))return Buffer.from(value);
+ // Deferred owners and specialized streams retain their own admission/lease.
+ if(value.read!==FileContent.prototype.read||value.stream!==FileContent.prototype.stream){const chunks=[];for await(const chunk of value.stream())chunks.push(chunk);return Buffer.concat(chunks);}
+ // A whole-buffer consumer releases nothing until authentication completes;
+ // it needs one decode, unlike the authenticated-before-first-yield stream.
+ if(!Number.isSafeInteger(value.size)||value.size<0)throw new AppError('MEDIA_INVALID');
+ await value.workspace.requireStorageKey();const handle=await open(value.file,'r'),chunks=[];let size=0;
+ try{
+  const before=await handle.stat({bigint:true});if(!before.isFile()||before.nlink>1n)throw new AppError('UNSAFE');
+  const hash=createHash('sha256');
+  for await(const chunk of decoded(handle,value.workspace,value.file)){size+=chunk.length;if(size>value.size)throw new AppError('MEDIA_INVALID');hash.update(chunk);chunks.push(chunk);}
+  if(size!==value.size||hash.digest('hex')!==value.sha256||!sameFile(before,await handle.stat({bigint:true})))throw new AppError('MEDIA_INVALID');
+  return Buffer.concat(chunks,size);
+ }finally{await handle.close();}
+}
 export async function writePublicFile(file,value,{mode=0o600}={}){const handle=await open(file,'wx',mode);try{let size=0;const hash=createHash('sha256');for await(const chunk of contentStream(value)){await diskSpace(path.dirname(file),chunk.length);await writeAll(handle,chunk,size);size+=chunk.length;hash.update(chunk);}if(size!==contentSize(value)||hash.digest('hex')!==contentHash(value))throw new AppError('STALE');await handle.sync();}finally{await handle.close();}}
 export async function serveContent(req,res,content,type,{signal}={}){
   const size=contentSize(content);let start=0,end=size-1,status=200;
