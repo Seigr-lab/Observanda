@@ -32,7 +32,10 @@ async function* references(input,target,{signal}){
  do{signal?.throwIfAborted();const window=await input.references(target.slice(6),{offset,limit:24});yield {...window,page:offset/24};offset+=window.rows.length;if(!window.next)return;if(!window.rows.length)throw new AppError('JOB_DAMAGED');}while(true);
 }
 export function buildIndexedPublicationEdition(workspace,source,options={}){
- return withPublicationMetadataReader(workspace,reader=>renderIndexedPublicationEdition(reader,source,options),{signal:options.signal});
+ return withPublicationMetadataReader(workspace,async reader=>{
+  let failure;try{return await renderIndexedPublicationEdition(reader,source,options);}catch(error){failure=error;throw error;}
+  finally{try{await options.writer?.drain();}catch(error){if(!failure)throw error;}}
+ },{signal:options.signal});
 }
 async function renderIndexedPublicationEdition(workspace,source,{writer,blockedValues=[],signal,progress=async()=>{}}={}){
  if(!writer)throw new AppError('INVALID');signal??=new AbortController().signal;

@@ -2,6 +2,7 @@
 // Only bounded metadata batches hold the website writer; rendering and file
 // streaming run outside that writer, including nested media retention.
 import path from 'node:path';
+import {PublicationOutputFinalization} from './publication-output-finalization.js';
 import {readdir} from 'node:fs/promises';
 import {withScratch} from './scratch-work.js';
 import {publicationResearchWorkspace} from './publication-pin.js';
@@ -50,19 +51,22 @@ export async function openPublicationOutput(workspace,stored,{signal}={}){
 // bounded encrypted scratch storage until preparation completes or fails.
 export function withPublicationOutputWriter(workspace,source,job,options,operation){
  return publicationResearchWorkspace(workspace).withCatalogueConnections(()=>withScratch(async blocks=>{
-  const db=await publicationResearchWorkspace(workspace).openCatalogue({signal:options?.signal});let failure;
+  const db=await publicationResearchWorkspace(workspace).openCatalogue({signal:options?.signal});let failure,writer;
   try{
    await db.run('BEGIN');
    const key='Observanda/publication-output/'+db.id+'/'+JSON.stringify(publicationOutputOwner(source,job));
    if(!(await db.get('SELECT pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended($1,0)) AS locked',key)).locked)throw new AppError('LOCKED');
-   return await operation(new PublicationOutputWriter(workspace,source,job,{...options,[freshBlocks]:blocks}));
+   writer=new PublicationOutputWriter(workspace,source,job,{...options,[freshBlocks]:blocks});return await operation(writer);
   }catch(error){failure=error;throw error;}
-  finally{try{await db.close();}catch(error){if(!failure)throw error;}}
+  finally{
+   try{await writer?.drain();}catch(error){if(!failure){failure=error;throw error;}}
+   finally{try{await db.close();}catch(error){if(!failure)throw error;}}
+  }
  },{signal:options?.signal}));
 }
 export class PublicationOutputWriter{
  constructor(workspace,source,job,{directory,signal,blockedValues=[],[freshBlocks]:blocks}={}){
-  this.workspace=workspace;this.source=source;this.job=job;this.directory=directory;this.signal=signal;this.blockedValues=blockedValues;this.owner=publicationOutputOwner(source,job);this.nextBlob=0;this.pendingNames=new Set();
+  this.workspace=workspace;this.source=source;this.job=job;this.directory=directory;this.signal=signal;this.blockedValues=blockedValues;this.owner=publicationOutputOwner(source,job);this.nextBlob=0;this.pendingNames=new Set();this.finalization=new PublicationOutputFinalization({signal});
   let admission;this.ready=()=>admission??=(blocks?workspace.withLock(async()=>{
    await assertPublicationDocumentStorage(workspace,{signal});signal?.throwIfAborted();
    if((await workspace.metadataPage(publicationDocumentPrefix(this.owner),{limit:1})).items.length||(await readdir(directory)).length)throw new AppError('PUBLICATION_IDENTITY');
@@ -91,17 +95,18 @@ export class PublicationOutputWriter{
   }});
   this.builder=new PublicationDocumentBuilder(retained,{owner:this.owner,collections,signal});
  }
+ drain(){return this.finalization.drain();}
  count(kind='files'){return this.builder.count(kind);}
  async getFile(name){const value=await this.builder.get('files',name);return value?{path:value.name,bytes:value.size,sha256:value.sha256}:null;}
  async *files(){for await(const {value} of this.builder.items('files'))yield {path:value.name,bytes:value.size,sha256:value.sha256};}
  async *choices(kind){if(!choiceKinds.has(kind))throw new AppError('INVALID');for await(const {value} of this.builder.items(kind))yield value;}
  async addChoice(kind,key,value){
-  if(!choiceKinds.has(kind))throw new AppError('INVALID');await this.ready();this.signal?.throwIfAborted();const prior=await this.builder.get(kind,key);
+  this.finalization.check();if(!choiceKinds.has(kind))throw new AppError('INVALID');await this.ready();this.signal?.throwIfAborted();const prior=await this.builder.get(kind,key);
   if(prior!==null){if(serialize(prior)!==serialize(value))stale();return;}
   await this.builder.append(kind,key,value);
  }
  async retain(name,content){
-  await this.ready();this.signal?.throwIfAborted();const streaming=streamed(content),type=streaming?'text':content instanceof FileContent?(isDownloadPath(name)?'binary':'media'):typeof content==='string'?'text':'binary';
+  this.finalization.check();await this.ready();this.signal?.throwIfAborted();const streaming=streamed(content),type=streaming?'text':content instanceof FileContent?(isDownloadPath(name)?'binary':'media'):typeof content==='string'?'text':'binary';
   if(!streaming)assertPublicFiles(new Map([[name,content]]),this.blockedValues);
   const prior=await this.builder.get('files',name);
   if(prior!==null){
@@ -114,19 +119,20 @@ export class PublicationOutputWriter{
   const index=this.nextBlob++,file=path.join(this.directory,index+'.blob');
   try{
    const chunks=streaming?publicationOutputChunks(content,{signal:this.signal}):contentStream(content);
-   const saved=await writeContent(this.workspace,file,chunks,{signal:this.signal});
-   if(!streaming&&(saved.size!==contentSize(content)||saved.sha256!==contentHash(content)))stale();
-   if(streaming)await admitRetainedPublicFile(name,new FileContent(this.workspace,file,saved.size,saved.sha256),{type,blockedValues:this.blockedValues});
+   const expected=streaming?null:{size:contentSize(content),sha256:contentHash(content)},workspace=this.workspace,signal=this.signal,blockedValues=this.blockedValues;
+   const saved=await this.finalization.write(beforeCommit=>writeContent(workspace,file,chunks,{signal,beforeCommit:saved=>{
+    if(expected&&(saved.size!==expected.size||saved.sha256!==expected.sha256))stale();return beforeCommit(saved);
+   }}),streaming?saved=>admitRetainedPublicFile(name,new FileContent(workspace,file,saved.size,saved.sha256),{type,blockedValues}):undefined);
    const descriptor={name,index,...saved,type,...(type==='media'?{header:content.header.toString('hex')}: {})};
    await this.builder.append('files',name,descriptor);await this.builder.append('blobIndexes',String(index),{name});
    return {path:name,bytes:saved.size,sha256:saved.sha256};
   }finally{this.pendingNames.delete(name);}
  }
  async finish({defaultPage}){
-  await this.ready();
+  await this.ready();await this.drain();
   if(this.pendingNames.size||this.nextBlob!==this.count()||!await this.builder.get('files',defaultPage)||!await this.builder.get('pages',defaultPage))throw new AppError('JOB_DAMAGED');
   const hash=createHash('sha256');for await(const text of publicationReleaseIdentity(this))hash.update(text);const id=hash.digest('hex');
-  await this.retain('publication.json',publicationManifest(this,id));
+  await this.retain('publication.json',publicationManifest(this,id));await this.drain();
   const output=await this.builder.finish({header:{version:1,generator,releaseId:id,defaultPage}});await this.flush();return {id,defaultPage,output};
  }
 }

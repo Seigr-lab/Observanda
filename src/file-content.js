@@ -29,7 +29,7 @@ async function* decoded(handle,workspace,file){
   for(;;){const bytes=Buffer.allocUnsafe(BLOCK),r=await handle.read(bytes,0,BLOCK,position);if(!r.bytesRead)break;position+=r.bytesRead;operationWork({bytes:r.bytesRead});yield cipher?cipher.update(bytes.subarray(0,r.bytesRead)):bytes.subarray(0,r.bytesRead);}
   if(cipher){try{const last=cipher.final();if(last.length)yield last;}catch{throw new AppError('ENCRYPTION_DAMAGED');}}
 }
-export async function writeContent(workspace,file,source,{maxBytes=0,reserveBytes=0,signal}={}){
+export async function writeContent(workspace,file,source,{maxBytes=0,reserveBytes=0,signal,beforeCommit}={}){
  return operationStage('encrypt-file',{unit:'bytes',item:path.basename(file)},async()=>{
   // Same OBSENC01 envelope as Workspace.writeFile; no format migration.
   await workspace.requireStorageKey();const directory=path.dirname(file),temp=path.join(directory,temporaryStreamName());
@@ -40,7 +40,8 @@ export async function writeContent(workspace,file,source,{maxBytes=0,reserveByte
     handle=await open(temp,'wx',0o600);if(cipher)await writeAll(handle,Buffer.concat([ENVELOPE,nonce,Buffer.alloc(16)]),0);
     for await(const value of source){const bytes=Buffer.isBuffer(value)?value:Buffer.from(value);for(let offset=0;offset<bytes.length;offset+=BLOCK){signal?.throwIfAborted();const chunk=bytes.subarray(offset,offset+BLOCK);size+=chunk.length;if(!Number.isSafeInteger(size)||maxBytes&&size>maxBytes)throw new AppError('MEDIA_LIMIT');await diskSpace(directory,chunk.length,reserveBytes);hash.update(chunk);const output=cipher?cipher.update(chunk):chunk;await writeAll(handle,output,position);position+=output.length;operationAdvance(chunk.length);operationWork({bytes:chunk.length});}}
     if(cipher){const last=cipher.final();if(last.length)await writeAll(handle,last,position);await writeAll(handle,cipher.getAuthTag(),20);}
-    await handle.sync();await handle.close();handle=null;signal?.throwIfAborted();await atomicReplace(temp,file);moved=true;return {size,sha256:hash.digest('hex')};
+    const saved={size,sha256:hash.digest('hex')};signal?.throwIfAborted();await beforeCommit?.(Object.freeze({...saved}));signal?.throwIfAborted();
+    await handle.sync();await handle.close();handle=null;signal?.throwIfAborted();await atomicReplace(temp,file);moved=true;return saved;
   }catch(error){if(['ENOSPC','EDQUOT'].includes(error.code))throw new AppError('STORAGE_FULL');throw error;}finally{key?.fill(0);await handle?.close();if(!moved)await unlink(temp).catch(e=>{if(e.code!=='ENOENT')throw e;});}
  });
 }
