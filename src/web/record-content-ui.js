@@ -1,6 +1,9 @@
+import {bindReadingTables} from './record-reading-tables.js';
 import {ownedAssetURL} from './project-context.js';
 import {t} from './i18n/index.js';
 import {recordRevisionView,recordRevisionField} from './record-revision-view.js';
+import {attemptView} from './attempt-view.js';
+import {resultStatementsView} from './result-statements.js';
 import {renderProse} from './prose-model.js';
 import {recordFigureRenderer} from './book-reading.js';
 import {recordSectionActions} from './record-section-actions.js';
@@ -59,29 +62,35 @@ export function recordContentUI({state,api,esc,field,render,report,refresh,editW
  }
  const button=(key,action,disabled=false)=>'<button type="button" class="button" data-action="content-'+action+'" '+(disabled?'disabled':'')+'>'+esc(text(key))+'</button>';
  function navigation(){
-  const {total,offset,values}=reading.sections;if(!total)return '';
+  const {total,offset,values}=reading.sections;if(total<=4)return '';
   return '<nav class="record-section-navigation" aria-label="'+esc(text('navigation'))+'"><span role="status">'+esc(text('range',{first:offset+1,last:offset+values.length,total}))+'</span><div class="inline-actions">'+button('previous','previous',busy||offset===0)+button('next','next',busy||offset+values.length>=total)+'</div>'+field(esc(text('goTo')),'<input type="number" data-content-position min="1" max="'+total+'" required value="'+(offset+1)+'">')+button('go','go',busy)+'<div class="record-section-find">'+field(esc(text('findHeading')),'<input type="search" data-content-search value="'+esc(search)+'">')+button('findNext','find',busy)+'</div></nav>';
  }
  function view(){
-  const editing=state.recordReading===false,controls='<div class="record-toolbar"><button class="button" data-action="back-to-records">'+esc(text('back'))+'</button><button class="button" data-action="'+(editing?'record-read':'record-edit')+'">'+esc(text(editing?'read':'edit'))+'</button>'+tools()+'</div>';
+  const editing=state.recordReading===false,controls='<div class="record-toolbar"><button class="button" data-action="back-to-records">'+esc(text('back'))+'</button><button class="button" data-action="'+(editing?'record-read':'record-edit')+'">'+esc(text(editing?'read':'edit'))+'</button>'+tools({readonly:!editing})+'</div>';
   const status=(error?'<p role="alert">'+esc(error)+'</p>'+button('retry','retry',busy):'')+(busy?'<div class="inline-actions"><p role="status">'+esc(progress?text('searchProgress',progress):text('loading'))+'</p>'+button('cancel','cancel')+'</div>':'');
   if(!reading||owner!==identity())return controls+'<section aria-busy="'+busy+'">'+(status||'<p role="status">'+esc(text('loading'))+'</p>')+'</section>';
   const figureResults=figure=>figureResultLinks(figure,reading.resultFigures,esc);
-  const record={...reading.header,sections:reading.sections.values},inlineRecord={...record,figures:[...record.figures,...reading.inline?.figures??[]],attachments:[...record.attachments,...reading.inline?.attachments??[]]},figureActions=f=>'<div class="inline-actions">'+recordFigureAction(f,esc,busy)+figureCommands.controls(f)+'</div>',figure=recordFigureRenderer(inlineRecord,esc,{assetUrl,figureActions,figureResults});
+  const record={...reading.header,sections:reading.sections.values},inlineRecord={...record,figures:[...record.figures,...reading.inline?.figures??[]],attachments:[...record.attachments,...reading.inline?.attachments??[]]},figureActions=editing?f=>'<div class="inline-actions">'+recordFigureAction(f,esc,busy)+figureCommands.controls(f)+'</div>':undefined,figure=recordFigureRenderer(inlineRecord,esc,{assetUrl,figureActions,figureResults});
   const fieldsHtml={};for(const [name,page] of Object.entries(reading.collections??{}))if(!['relations','preparations','events','assessments','results'].includes(name)){
    const key=name==='fields'?'template':name;fieldsHtml[key]=page.total?recordHeaderControls(name,page,esc,busy)+recordRevisionField(key,record,esc,{assetUrl,figureActions,figureResults}):'';
   }
+  if(editing){
   fieldsHtml.contributors=recordHeaderControls('contributors',reading.collections?.contributors,esc,busy)+recordContributorControls(record,esc,busy);
   fieldsHtml.figures=figureCommands.add()+(fieldsHtml.figures??'');
   fieldsHtml.attempt=recordAttemptControls(record,esc,attemptReference,{window:reading.attemptWindow,navigation:name=>recordHeaderControls(name,reading.collections?.[name],esc,busy)});
   fieldsHtml.results=(resultFigure?'<div class="inline-actions"><p>'+esc(text('resultsForFigure'))+'</p>'+button('allResults','results-all',busy)+'</div>':'')+recordHeaderControls('results',reading.collections?.results,esc,busy)+recordResultControls(record,esc,resultReference);
   fieldsHtml.tags=recordHeaderControls('tags',reading.collections?.tags,esc,busy)+tags.view();
   fieldsHtml.attachments=mediaActions.add()+recordHeaderControls('attachments',reading.collections?.attachments,esc,busy)+recordMediaControls(record,esc,busy,mediaActions.controls,{assetUrl});
-  const sections=()=>'<section class="record-sections">'+(editing?'':'<h3>'+esc(text('sections'))+'</h3>')+navigation()+record.sections.map((s,i)=>'<section id="record-section-'+s.id+'" tabindex="-1"><div class="section-bar"><h'+(editing?'3':'2')+'>'+esc(s.title)+'</h'+(editing?'3':'2')+'><button type="button" class="button" data-action="writing-edit" data-section="'+s.id+'">'+esc(text('editSection'))+'</button></div>'+sectionActions.controls(s,reading.sections.offset+i,reading.sections.total)+renderProse(s.body,{figure})+'</section>').join('')+'</section>';
-  if(editing)return controls+recordEditingView({record,esc,status,busy,details:recordValueControls(record,esc,detailField),summary:'<button type="button" class="button" data-action="writing-edit">'+esc(text('editSummary'))+'</button><div class="prose">'+renderProse(record.body,{figure})+'</div>',sections:sectionActions.add()+sections(),fields:fieldsHtml,activity:before(),evidence:after(),relations:recordHeaderControls('relations',reading.collections?.relations,esc,busy)+links(record)});
-  return controls+'<article class="record-reader" aria-busy="'+busy+'"><h1>'+esc(record.title)+'</h1>'+status+recordValueControls(record,esc,detailField)+before()+'<div class="inline-actions"><button type="button" class="button" data-action="writing-edit">'+esc(text('editSummary'))+'</button>'+sectionActions.add()+'</div>'+recordRevisionView(record,esc,{relations:false,anchors:true,sectionsHtml:sections,fieldsHtml,inlineRecord,attemptReference,resultReference,figureActions,figureResults,assetUrl})+after()+recordHeaderControls('relations',reading.collections?.relations,esc,busy)+links(record)+'</article>';
+  }else{
+   fieldsHtml.attempt=attemptView(record.attempt,esc,{reference:attemptReference,window:reading.attemptWindow,navigation:name=>recordHeaderControls(name,reading.collections?.[name],esc,busy)});
+   fieldsHtml.results=(resultFigure?'<p>'+esc(text('resultsForFigure'))+'</p>'+button('allResults','results-all',busy):'')+recordHeaderControls('results',reading.collections?.results,esc,busy)+'<div class="record-result-values">'+resultStatementsView(record.results,esc,{reference:resultReference})+'</div>';
+  }
+  const sections=()=>'<section class="record-sections">'+navigation()+record.sections.map((s,i)=>'<section id="record-section-'+s.id+'" tabindex="-1"><div class="section-bar"><h'+(editing?'3':'2')+'>'+esc(s.title)+'</h'+(editing?'3':'2')+'>'+(editing?'<button type="button" class="button" data-action="writing-edit" data-section="'+s.id+'">'+esc(text('editSection'))+'</button>':'')+'</div>'+(editing?sectionActions.controls(s,reading.sections.offset+i,reading.sections.total):'')+renderProse(s.body,{figure})+'</section>').join('')+'</section>';
+  if(editing)return controls+recordEditingView({record,esc,status,busy,details:recordValueControls(record,esc,detailField),summary:'<button type="button" class="button" data-action="writing-edit">'+esc(text('editSummary'))+'</button><div class="prose">'+renderProse(record.body,{figure})+'</div>',sections:sectionActions.add()+sections(),fields:fieldsHtml,activity:before({readonly:false}),evidence:after({readonly:false}),relations:recordHeaderControls('relations',reading.collections?.relations,esc,busy)+links(record,{readonly:false})});
+  return controls+'<article class="record-reader" aria-busy="'+busy+'"><h1>'+esc(record.title)+'</h1>'+status+recordRevisionView(record,esc,{relations:false,anchors:true,sectionsHtml:sections,fieldsHtml,inlineRecord,attemptReference,resultReference,figureActions,figureResults,assetUrl})+before({readonly:true})+after({readonly:true})+recordHeaderControls('relations',reading.collections?.relations,esc,busy)+links(record,{readonly:true})+'</article>';
  }
  function bind(){
+  bindReadingTables();
   const key=identity();if(!key){clear();return;}
   if(key!==owner){
    const previous=owner&&JSON.parse(owner),current=JSON.parse(key),sameRecord=previous&&previous.slice(0,3).every((v,i)=>v===current[i]),anchor=state.recordSection??(sameRecord?reading?.sections.values[0]?.id:null);
@@ -90,7 +99,7 @@ export function recordContentUI({state,api,esc,field,render,report,refresh,editW
   if(state.recordSection&&state.recordSection!==lastAnchor){lastAnchor=state.recordSection;void load({anchor:lastAnchor,...(resultStatementAnchor(lastAnchor)?{resultFigure:null}:{})});render();return;}
   if(busy)return;
   if(collectionFocus){
-   const {name,action,first}=collectionFocus,nav=document.querySelector('[data-record-collection="'+name+'"]'),results=name==='results'?document.querySelector('.record-result-values'):null;
+   const {name,action,first}=collectionFocus,nav=document.querySelector('[data-record-collection="'+name+'"]'),results=name==='results'?document.querySelector('.record-result-values,.record-reader .result-statements'):null;
    const target=first?results?.querySelector('.result-statements>section')??results:nav?.querySelector('[data-action="'+action+'"]:not([disabled])')??nav?.querySelector('input')??results;
    if(target){if(!target.matches('button,input,select,a[href]'))target.tabIndex=-1;target.focus({preventScroll:true});target.scrollIntoView({block:'nearest'});}collectionFocus=null;return;
   }

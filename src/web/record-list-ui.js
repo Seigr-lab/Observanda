@@ -17,7 +17,7 @@ export function recordListUI({state,api,esc,table,showDialog,chooseType,render,d
  const types=recordTypeFilter({state,api,esc,showDialog,snapshot,choose:chooseType});
  const active=()=>state.page==='entries'&&state.book&&!state.access?.locked&&!state.newWorkspace;
  const reading=()=>state.notebook!=='all'&&state.bookReading===true;
- const bookWindows=bookReadingWindows({api,esc,records:()=>result?.readingRecords??[],active:()=>active()&&reading(),decorate,assetUrl:id=>ownedAssetURL(state,'/api/media/'+id)});
+ const bookWindows=bookReadingWindows({api,esc,records:()=>result?.readingRecords??[],active:()=>active()&&reading(),decorate,assetUrl:id=>ownedAssetURL(state,'/api/media/'+id),workspaceId:state.book?.id});
  const queryKey=()=>JSON.stringify([state.storage?.contextId,state.book?.id,reading()?null:state.etag,viewQuery(state),reading()]);
  const issue=()=>browseIssue(recordBrowse(state.recordBrowse));
  const button=(label,action,disabled=false)=>`<button class="button" type="button" data-action="record-list-${action}" ${disabled?'disabled':''}>${esc(text(label))}</button>`;
@@ -33,7 +33,7 @@ export function recordListUI({state,api,esc,table,showDialog,chooseType,render,d
   const status=`<p tabindex="-1" data-record-list-status>${esc(range)}</p>`;
   const controls=`<nav class="inline-actions record-list-pages" aria-label="${esc(text('pages'))}">${button('previous','previous',!result.previousCursor)}${button('next','next',!nextCursor)}${button('refresh','refresh')}</nav>`;
   const empty=(state.search||state.filter!=='all'||browseActive(b))?`<section class="workspace-empty"><h3>${esc(text('noMatches'))}</h3><p>${esc(text('adjust'))}</p><button class="button" data-action="clear-record-filters">${esc(text('clear'))}</button></section>`:table([]);
-  return `${changed?`<p role="status">${esc(text('changed'))}</p>`:''}${status}<p class="record-counts">${esc(text('experiments',{count:counts.experiments}))} &middot; ${esc(text('runs',{count:counts.runs}))} &middot; ${esc(text('other',{count:counts.other}))}</p>${total?(reading()?bookReadingView(result.readingRecords,esc,{assetUrl:id=>ownedAssetURL(state,'/api/media/'+id)}):table(records)):empty}${controls}`;
+  return `${changed?`<p role="status">${esc(text('changed'))}</p>`:''}${status}<p class="record-counts">${esc(text('experiments',{count:counts.experiments}))} &middot; ${esc(text('runs',{count:counts.runs}))} &middot; ${esc(text('other',{count:counts.other}))}</p>${total?(reading()?bookReadingView(result.readingRecords,esc,{assetUrl:id=>ownedAssetURL(state,'/api/media/'+id),workspaceId:state.book.id}):table(records)):empty}${controls}`;
  }
  function paint(){if(!active())return;const area=document.getElementById('entry-results'),badge=document.getElementById('record-count');if(area){area.innerHTML=view();scopeReadingAnchors(area);decorate(area);bookWindows.bind(area);}if(badge)badge.textContent=count();const domain=document.querySelector('[data-record-browse="domain"]');if(domain){const current=recordBrowse(state.recordBrowse).domain;domain.innerHTML=recordDomainChoices([...knownDomains],current).map(c=>'<option value="'+esc(c.value)+'"'+(c.value===current?' selected':'')+'>'+esc(c.label)+'</option>').join('');}}
  async function load(cursor=null,focus=false,unlock=false){

@@ -40,7 +40,7 @@ import {retainedRecordUI} from './retained-record-ui.js';
 
 export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty,render,revisions,create,getRecord=null,editRetainedFigure=null,refreshReader=null,access=run=>run()}){
  const retainedRecords=retainedRecordUI({state,api,esc,showDialog});
- let referenceContext=false,referenceOrigin=false,schemaDispose=null,referenceTrail=[],readerRefreshPending=false;
+ let referenceContext=false,referenceOrigin=false,readingOverview=false,schemaDispose=null,referenceTrail=[],readerRefreshPending=false;
  const previews=figurePreviews();document.getElementById('dialog')?.addEventListener('close',()=>{referenceContext=false;previews.release();stopWatching();uploader.pause();});
  const endpoint='/api/research/materials/',record=getRecord??(()=>state.book?.entries.find(e=>e.id===state.selected));
  let projectOwner=null,readNamespace=null;
@@ -61,7 +61,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
  const saved=()=>!!record()&&(state.page==='record-reader'||!!revisions()[record().id])&&!state.dirty;
  const frame=(title,body,actions=null)=>{
   stopWatching();previews.release();
-  actions??=referenceContext?(referenceTrail.length?button(esc(t('figureProvenance','back')),'reference-back'):'')+'<button type="button" class="button" data-action="close-dialog">'+esc(t('attempts','close'))+'</button>':button('Back to evidence','home');
+  actions??=referenceContext?(referenceTrail.length?button(esc(t('figureProvenance','back')),'reference-back'):readingOverview?button('Back to evidence','home'):'')+'<button type="button" class="button" data-action="close-dialog">'+esc(t('attempts','close'))+'</button>':button('Back to evidence','home');
   let n=0;body=body.replace(/<(input|select|textarea)\b(?![^>]*\bname=)/g,(_,tag)=>'<'+tag+' name="material-'+(++n)+'" ');
   showDialog(`<div class="material-workbench"><h2 id="dialog-title">${esc(title)}</h2><form id="material-form">${body}</form><div class="dialog-actions">${actions}</div></div>`);
   const form=document.getElementById('material-form'),reference=selectedRef;
@@ -97,8 +97,14 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
  const uploader=evidenceUploadUI({route,call,frame,esc,field,button,guard,context:()=>workspaceContext,owner:()=>owner,sourceMount,sources:()=>sourcePickers.parent.values(),watchJob});
  const reuse=evidenceReuseUI({route,call,frame,esc,button,guard,owner:()=>owner,context:()=>workspaceContext,sourceMount,sources:()=>sourcePickers.reuse.snapshot(),home,notify});
  const corrections=evidenceCorrectionsUI({state,api,call,frame,esc,field,button,guard,owner:()=>owner,inspect,notify,readOnly:()=>referenceContext});
- function view(subject=record()){return `<section class="research-links"><header><h3>Evidence &amp; analysis</h3>${button('Open evidence & analysis','open')}</header><p class="muted">Original files, datasets and analysis revisions stay private. Figures added to the record follow its sharing setting.</p>${subject?.type==='run'?button('Create another run or take','repeat'):''}</section>`;}
+ function view(subject=record(),{readonly=false}={}){return `<section class="research-links"><header><h3>Evidence &amp; analysis</h3>${button('Open evidence & analysis','open',readonly?'data-readonly="true"':'')}</header><p class="muted">${readonly?'Read original files, datasets and retained analyses associated with this record.':'Original files, datasets and analysis revisions stay private. Figures added to the record follow its sharing setting.'}</p>${!readonly&&subject?.type==='run'?button('Create another run or take','repeat'):''}</section>`;}
+ async function readingHome(){
+  const generation=++homeGeneration,data=await call('overview',{recordId:owner,cursor:materialCursor});guard();if(generation!==homeGeneration)return;
+  items=data.items;catalog=items;materialPage=data;
+  frame('Evidence & analysis',`<p>${esc(record()?.title??'')}</p>${items.length?'<ul class="material-list">'+items.map((item,index)=>'<li><div><strong>'+esc(item.title)+'</strong><p>'+esc(item.kind)+' &middot; '+esc(item.revision.slice(0,12))+'</p>'+materialFileSummary(item,{context:workspaceContext,esc,route})+'</div>'+button('Inspect','inspect','data-index="'+index+'"')+'</li>').join('')+'</ul>':'<p>No evidence is associated with this record.</p>'}<div class="inline-actions">${materialCursor?button('Latest evidence','heads-first'):''}${materialPage.next?button('Older evidence','heads-next'):''}</div>`,button('Close','close'));
+ }
  async function home({expectedView,fresh=false}={}){
+  if(readingOverview){if(fresh)materialCursor=null;return readingHome();}
   if(fresh){materialCursor=null;importCursor=null;draftCursor=null;}
   const generation=++homeGeneration,data=await call('overview',{recordId:owner,cursor:materialCursor,importCursor}),jobs=await call('dataset-jobs',{recordId:owner,cursor:datasetJobCursor}),drafts=await call('drafts',{recordId:owner,cursor:draftCursor}),pendingAssociations=await reuse.pending();guard();if(generation!==homeGeneration||expectedView!==undefined&&expectedView!==jobView)return;
   items=data.items;catalog=items;imports=data.imports;materialPage=data;importsNext=data.importsNext;datasetJobPage=jobs;draftPage=drafts;
@@ -394,7 +400,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
    frame('Compare retained and current record',recordRevisionComparison(historical.snapshot,current,esc,{assetUrl:id=>route('/api/media/'+id)}),button('Close','close'));return true;
   }
   if(act==='close'){stopWatching();document.getElementById('dialog').close();return true;}
-  if(act==='open'){referenceOrigin=false;referenceContext=false;readNamespace=state.book?.id;referenceTrail=[];if(!saved()){notify('Save the record before opening evidence and analysis.',true);return true;}if(owner!==record().id||workspaceContext!==state.storage?.contextId||!sameResearchOwner(projectOwner,researchOwner(state))){referenceIntent=null;referenceDraft=null;draftCursor=null;datasetJobCursor=null;materialCursor=null;importCursor=null;}owner=record().id;workspaceContext=state.storage?.contextId;projectOwner=researchOwner(state);await home();return true;}
+  if(act==='open'){referenceOrigin=control.dataset.readonly==='true';referenceContext=referenceOrigin;readingOverview=referenceOrigin;readNamespace=state.book?.id;referenceTrail=[];if(!saved()){notify('Save the record before opening evidence and analysis.',true);return true;}if(owner!==record().id||workspaceContext!==state.storage?.contextId||!sameResearchOwner(projectOwner,researchOwner(state))){referenceIntent=null;referenceDraft=null;draftCursor=null;datasetJobCursor=null;materialCursor=null;importCursor=null;}owner=record().id;workspaceContext=state.storage?.contextId;projectOwner=researchOwner(state);await home();return true;}
   if(act==='repeat'){
    if(!saved()){notify('Save this run first.',true);return true;}
    if(repeating)return true;
@@ -526,7 +532,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   return true;
  }
  async function openReference(target){
-  referenceOrigin=true;owner=record()?.id??null;workspaceContext=state.storage?.contextId;projectOwner=researchOwner(state);referenceContext=true;readNamespace=state.book?.id;referenceTrail=[];selectedRef=null;
+  referenceOrigin=true;readingOverview=false;owner=record()?.id??null;workspaceContext=state.storage?.contextId;projectOwner=researchOwner(state);referenceContext=true;readNamespace=state.book?.id;referenceTrail=[];selectedRef=null;
   if(target.kind==='record')return openRevision(target);
   return inspect(target);
  }

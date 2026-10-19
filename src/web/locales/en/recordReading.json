@@ -1,4 +1,6 @@
 {
+  "table": "Data table",
+  "tableOverflow": "Scroll sideways to see all columns. You can also focus the table and use the arrow keys.",
   "read": "Read lab book",
   "list": "Record list",
   "view": "Lab-book view",

@@ -18,7 +18,7 @@ test('record type edits recover and resolve conflicts without replacing research
  const open=async()=>{await page.locator('[data-record-detail-field]').selectOption('type');await page.getByRole('button',{name:'Edit selected detail',exact:true}).click();};
  const dialog=page.getByRole('dialog',{name:'Edit Record type',exact:true});
  try{
-  await page.goto(app.url);await page.goto(app.origin+'/#/records/'+record.id+'/read');await open();await expect(dialog.getByLabel('Record type',{exact:true})).toHaveValue('note');
+  await page.goto(app.url);await page.goto(app.origin+'/#/records/'+record.id+'/read');await page.getByRole('button',{name:'Edit record',exact:true}).click();await open();await expect(dialog.getByLabel('Record type',{exact:true})).toHaveValue('note');
   await dialog.getByLabel('Record type',{exact:true}).selectOption('observation');await dialog.getByRole('button',{name:'Keep recovery checkpoint and close',exact:true}).click();await expect(dialog).not.toBeVisible();await page.reload();
   await page.getByRole('button',{name:'Review drafts',exact:true}).click();await page.getByRole('dialog',{name:'Recoverable record drafts',exact:true}).getByRole('button',{name:'Review draft',exact:true}).click();await expect(dialog.getByLabel('Record type',{exact:true})).toHaveValue('observation');
   await dialog.getByLabel('Record type',{exact:true}).selectOption('observation');await expect(dialog.locator('[data-writing-status]')).toHaveText('Recovery checkpoint saved.');

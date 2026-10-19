@@ -22,7 +22,7 @@ test('reader details save and recover independently, preserve exact custom value
  const service=new RecordValues(f.workspace),target=field=>({workspaceId:book.id,recordId:record.id,field});
  const open=async field=>{await page.locator('[data-record-detail-field]').selectOption(field);await page.getByRole('button',{name:'Edit selected detail',exact:true}).click();};
  try{
-  await page.goto(app.url);await page.goto(app.origin+'/#/records/'+record.id+'/read');
+  await page.goto(app.url);await page.goto(app.origin+'/#/records/'+record.id+'/read');await page.getByRole('button',{name:'Edit record',exact:true}).click();
   await expect(page.locator('[data-record-detail-field] option[value="type"]')).toHaveCount(0);
   await open('title');let dialog=page.getByRole('dialog',{name:'Edit Record title',exact:true});
   await page.route('**/api/research/drafts/values/write',async route=>{await route.fetch();await route.abort('failed');},{times:1});

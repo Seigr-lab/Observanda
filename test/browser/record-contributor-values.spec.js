@@ -25,9 +25,9 @@ test('reader contributor authoring recovers additions and removals, reviews conf
  const recover=async()=>{await page.getByRole('button',{name:'Review drafts',exact:true}).click();await page.getByRole('dialog',{name:'Recoverable record drafts',exact:true}).getByRole('button',{name:'Review draft',exact:true}).click();};
  const tail=async()=>{await page.locator('[data-collection-position="contributors"]').fill('9');await page.locator('[data-action="content-collection-go"][data-collection="contributors"]').click();await expect(page.locator('[data-record-contributor="'+record.contributors[8].id+'"]')).toBeVisible();};
  try{
-  await page.goto(app.url);await page.goto(app.origin+'/#/records/'+record.id+'/read');
+  await page.goto(app.url);await page.goto(app.origin+'/#/records/'+record.id+'/read');await page.getByRole('button',{name:'Edit record',exact:true}).click();
   await page.getByRole('button',{name:'Add contributor',exact:true}).click();await dialog.getByLabel('Role or contribution',{exact:true}).fill('Field work');
-  await expect(dialog.locator('[data-writing-status]')).toHaveText('Recovery checkpoint saved.');await dialog.getByRole('button',{name:'Keep recovery checkpoint and close',exact:true}).click();await page.reload();await recover();
+  await expect(dialog.locator('[data-writing-status]')).toHaveText('Recovery checkpoint saved.');await dialog.getByRole('button',{name:'Keep recovery checkpoint and close',exact:true}).click();await expect(dialog).not.toBeVisible();await page.reload();await recover();
   await expect(dialog.getByLabel('Name',{exact:true})).toHaveValue('');await expect(dialog.getByLabel('Role or contribution',{exact:true})).toHaveValue('Field work');
   await save();await expect(dialog).toBeVisible();await dialog.getByLabel('Name',{exact:true}).fill('Recovered contributor');
   let dropped=false;await page.route('**/api/research/records/values/save',async route=>{if(dropped)return route.continue();dropped=true;await route.fetch();await route.abort('failed');});
@@ -42,7 +42,7 @@ test('reader contributor authoring recovers additions and removals, reviews conf
   const unrelated=await values.read(target(record.contributors[0].id));await values.save({...target(record.contributors[0].id),expectedRevision:unrelated.revision,value:{value:{name:'Another person corrected',role:'Independent work'}}});
   await save();await expect(dialog).not.toBeVisible();expect((await values.read(target(record.contributors[8].id))).value.value.role).toBe('Reviewed together');
   await page.getByRole('button',{name:'Edit contributor Recovered contributor',exact:true}).click();await dialog.getByLabel('Remove this contributor',{exact:true}).check();
-  await dialog.getByRole('button',{name:'Keep recovery checkpoint and close',exact:true}).click();await page.reload();await recover();
+  await dialog.getByRole('button',{name:'Keep recovery checkpoint and close',exact:true}).click();await expect(dialog).not.toBeVisible();await page.reload();await recover();
   await expect(dialog.getByLabel('Remove this contributor',{exact:true})).toBeChecked();await expect(dialog.getByLabel('Name',{exact:true})).toBeDisabled();await expect(dialog.getByLabel('Name',{exact:true})).toHaveValue('Recovered contributor');
   await dialog.getByLabel('Remove this contributor',{exact:true}).uncheck();await expect(dialog.getByLabel('Name',{exact:true})).toBeEnabled();await dialog.getByLabel('Remove this contributor',{exact:true}).check();
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='200%');
@@ -58,7 +58,7 @@ test('an empty reader offers contributor creation without entering the full reco
  const f=await encryptedFixture(directory,book),app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')});
  const read=ResearchCatalogue.prototype.record;ResearchCatalogue.prototype.record=()=>{throw Error('Empty contributor UI reconstructed a whole record');};
  try{
-  await page.goto(app.url);await page.goto(app.origin+'/#/records/'+record.id+'/read');await expect(page.locator('.record-contributor-values')).toContainText('No contributors listed.');
+  await page.goto(app.url);await page.goto(app.origin+'/#/records/'+record.id+'/read');await page.getByRole('button',{name:'Edit record',exact:true}).click();await expect(page.locator('.record-contributor-values')).toContainText('No contributors listed.');
   await page.getByRole('button',{name:'Add contributor',exact:true}).click();const dialog=page.getByRole('dialog',{name:'Edit Contributor',exact:true});
   await dialog.getByLabel('Name',{exact:true}).fill('First contributor');await dialog.getByRole('button',{name:'Save changes',exact:true}).click();await expect(dialog).not.toBeVisible();
   await expect(page.getByRole('button',{name:'Edit contributor First contributor',exact:true})).toBeVisible();

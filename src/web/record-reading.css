@@ -1,9 +1,24 @@
-.lab-book-reading{max-width:86ch;margin-inline:auto;min-width:0}
-.lab-book-reading-entry{padding:clamp(.8rem,3vw,2rem);margin-block:1rem 2rem;border:1px solid var(--ui-border);border-radius:var(--ui-radius);background:var(--ui-surface);overflow-wrap:anywhere;min-width:0}
+.record-reader,.lab-book-reading{width:100%;max-width:none;margin-inline:0;min-width:0}
+.lab-book-reading-entry{padding:clamp(.8rem,1.6vw,1.5rem);margin-block:1rem 2rem;border:1px solid var(--ui-border);border-radius:var(--ui-radius);background:var(--ui-surface);overflow-wrap:anywhere;min-width:0}
 .lab-book-reading-entry>header{border-bottom:1px solid var(--ui-border);margin-bottom:1rem}
 .lab-book-reading-entry>header h2{font-size:1.5rem}
 .lab-book-reading-entry>.record-revision{border-top:0;padding-top:0}
-.lab-book-reading-entry .prose{font-size:var(--app-font-size,17px);line-height:var(--app-line-height,1.6)}
+.record-reader .prose,.lab-book-reading-entry .prose{font-family:var(--ui-font,system-ui);font-size:var(--app-font-size,17px);line-height:var(--app-line-height,1.6)}
+:is(.record-reader,.lab-book-reading-entry) :is(.prose p,.prose blockquote,.result-statement-text){max-width:85ch}
+:is(.record-reader,.lab-book-reading-entry) :is(.record-revision,.prose,.result-statements,.result-statements>section,.attempt-details){min-width:0;max-width:100%}
+:is(.record-reader,.lab-book-reading-entry) :is(.book-table-scroll,.table-scroll){max-width:100%;overflow-x:auto;overscroll-behavior-inline:contain;scrollbar-gutter:stable;scrollbar-width:auto}
+:is(.record-reader,.lab-book-reading-entry) .book-table table{table-layout:auto;width:max-content;max-width:none}
+:is(.record-reader,.lab-book-reading-entry) .book-table :is(th,td){word-break:normal;overflow-wrap:break-word}
+:is(.record-reader,.lab-book-reading-entry) .book-table th{overflow-wrap:normal}
+.reading-table-hint{margin:.5rem 0;font-size:.9em;color:var(--ui-muted)}
+.reading-table-hint[hidden]{display:none}
+:is(.record-reader,.lab-book-reading-entry) .book-table-scroll:focus-visible{outline:2px solid var(--ui-accent);outline-offset:2px}
+:is(.record-reader,.lab-book-reading-entry) .book-table-linear{margin-top:.5rem}
+.record-reader .record-sections{border:0;padding-top:0;margin-top:1.5rem}
+.record-reader .record-sections .section-bar{display:block;border:0;padding:0;margin-block:1.5rem .75rem}
+.record-reader>.record-revision{border-top:0;padding-top:0}
+.record-toolbar{justify-content:flex-start;align-items:center;margin-bottom:1rem}
+.record-toolbar .button{min-height:2.5rem}
 .lab-book-reading-entry img,.lab-book-reading-entry video{max-width:100%}
 .lab-book-reading-entry pre{white-space:pre-wrap;overflow-wrap:anywhere}
 .lab-book-reading-entry nav ul{padding-inline-start:1.2rem}

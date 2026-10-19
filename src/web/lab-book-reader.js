@@ -1,4 +1,7 @@
+import {bindReadingTables} from './record-reading-tables.js';
 import {recordHeaderControls} from './record-header-controls.js';
+import {readingMaterialReference} from './record-reading-reference.js';
+import {resultStatementsView} from './result-statements.js';
 import {figureResultLinks,resultStatementAnchor} from './figure-result-links.js';
 import {attemptView} from './attempt-view.js';
 import {recordRevisionView,recordRevisionField} from './record-revision-view.js';
@@ -47,7 +50,7 @@ function sectionControls(page,esc,busy){
  return '<nav class="record-section-navigation" data-record-collection="sections" aria-label="'+esc(contentText('navigation'))+'"><span role="status">'+esc(contentText('range',{first:page.offset+1,last:page.offset+page.values.length,total:page.total}))+'</span><div class="inline-actions">'+windowButton('previous','previous',esc,busy||page.offset===0,'data-collection="sections"')+windowButton('next','next',esc,busy||page.offset+page.values.length>=page.total,'data-collection="sections"')+'</div><label>'+esc(contentText('goTo'))+' <input type="number" data-collection-position="sections" min="1" max="'+page.total+'" value="'+(page.offset+1)+'" required></label>'+windowButton('go','go',esc,busy,'data-collection="sections"')+'</nav>';
 }
 export function bookReadingEntry(value,esc,options={}){
- const record=selectedRecord(value),busy=!!value.loading,assetUrl=options.assetUrl,fieldsHtml={};
+ const record=selectedRecord(value),busy=!!value.loading,assetUrl=options.assetUrl,fieldsHtml={},reference=ref=>readingMaterialReference(ref,esc,{workspaceId:value.workspaceId??options.workspaceId});
  const controls=name=>recordHeaderControls(name,value.collections?.[name],esc,busy).replaceAll('data-action="content-','data-action="record-list-content-');
  const links=record.relations.map(link=>'<li><span>'+esc(link.type)+'</span> <a href="'+esc(researchReference(link.target))+'">'+esc(link.label||text('linkedRecord'))+'</a>'+(link.target.revision?' <small>'+esc(text('exactRevision',{revision:link.target.revision.slice(0,12)}))+'</small>':'')+'</li>').join('');
  let selectedOptions={};
@@ -56,24 +59,24 @@ export function bookReadingEntry(value,esc,options={}){
   for(const name of Object.keys(value.collections))if(!['relations','preparations','events','assessments','results'].includes(name)){
    const key=name==='fields'?'template':name;fieldsHtml[key]=value.collections[name].total?controls(name)+recordRevisionField(key,record,esc,{assetUrl,figureResults}):'';
   }
-  fieldsHtml.attempt=attemptView(record.attempt,esc,{window:value.attemptWindow,navigation:controls});
-  fieldsHtml.results=(value.resultWindow?.figureId?'<p>'+esc(contentText('resultsForFigure'))+'</p>'+windowButton('allResults','results-all',esc,busy):'')+controls('results')+recordRevisionField('results',record,esc);
+  fieldsHtml.attempt=attemptView(record.attempt,esc,{reference,window:value.attemptWindow,navigation:controls});
+  fieldsHtml.results=(value.resultWindow?.figureId?'<p>'+esc(contentText('resultsForFigure'))+'</p>'+windowButton('allResults','results-all',esc,busy):'')+controls('results')+resultStatementsView(record.results,esc,{reference});
   selectedOptions={inlineRecord,fieldsHtml,figureResults,attemptWindow:value.attemptWindow,sectionsHtml:figure=>sectionControls(value.sections,esc,busy)+recordRevisionField('sections',record,esc,{anchors:true,figure})};
  }
  const status=(value.error?'<p role="alert">'+esc(value.error)+'</p>'+windowButton('retry','retry',esc,busy):'')+(busy?'<p role="status">'+esc(contentText('loading'))+'</p>'+windowButton('cancel','cancel',esc):'');
- return '<section class="lab-book-reading-entry" data-reading-record="'+esc(record.id)+'" aria-busy="'+busy+'"><header><h2>'+esc(record.title)+'</h2><div class="inline-actions"><button class="button" data-action="browse-record" data-id="'+esc(record.id)+'">'+esc(text('details'))+'</button><button class="button" data-action="edit-entry" data-id="'+esc(record.id)+'">'+esc(text('edit'))+'</button></div></header>'+status+recordRevisionView(record,esc,{...options,relations:false,anchors:true,...selectedOptions})+((links||value.collections?.relations.total)?'<nav aria-label="'+esc(text('researchLinks'))+'"><h3>'+esc(text('researchLinks'))+'</h3>'+(value.readingProjection?controls('relations'):'')+'<ul>'+links+'</ul></nav>':'')+'</section>';
+ return '<section class="lab-book-reading-entry" data-reading-record="'+esc(record.id)+'" aria-busy="'+busy+'"><header><h2>'+esc(record.title)+'</h2><div class="inline-actions"><button class="button" data-action="browse-record" data-id="'+esc(record.id)+'">'+esc(text('details'))+'</button><button class="button" data-action="edit-entry" data-id="'+esc(record.id)+'">'+esc(text('edit'))+'</button></div></header>'+status+recordRevisionView(record,esc,{...options,attemptReference:reference,resultReference:reference,relations:false,anchors:true,...selectedOptions})+((links||value.collections?.relations.total)?'<nav aria-label="'+esc(text('researchLinks'))+'"><h3>'+esc(text('researchLinks'))+'</h3>'+(value.readingProjection?controls('relations'):'')+'<ul>'+links+'</ul></nav>':'')+'</section>';
 }
 export function bookReadingView(records,esc,options={}){return '<div class="lab-book-reading">'+records.map(record=>bookReadingEntry(record,esc,options)).join('')+'</div>';}
 
 // Paging mutates only the owning card. Inactive cards, input focus and the
 // enclosing record list keep their existing DOM and pinned navigation state.
-export function bookReadingWindows({api,esc,records,active,decorate,assetUrl}){
+export function bookReadingWindows({api,esc,records,active,decorate,assetUrl,workspaceId}){
  const requests=new Map(),node=id=>document.querySelector('[data-reading-record="'+id+'"]');
  const valid=item=>active()&&records().includes(item);
  const stop=()=>{for(const [item,request] of requests){request.abort();item.loading=false;item.error=contentText('cancelled');}requests.clear();};
  function paint(item){
   if(!valid(item))return;const root=node(item.recordId);if(!root)return;
-  root.outerHTML=bookReadingEntry(item,esc,{assetUrl});const next=node(item.recordId);scopeReadingAnchors(next);decorate(next.parentElement);styleReadingRecords([item],document);
+  root.outerHTML=bookReadingEntry(item,esc,{assetUrl,workspaceId});const next=node(item.recordId);scopeReadingAnchors(next);decorate(next.parentElement);styleReadingRecords([item],document);
  }
  async function load(item,command,{focus=null,anchor=null}={}){
   requests.get(item)?.abort();const request=new AbortController();requests.set(item,request);item.loading=true;item.error=null;paint(item);
@@ -119,6 +122,7 @@ export function bookReadingWindows({api,esc,records,active,decorate,assetUrl}){
 // Copied rich text can contain matching block IDs in independent records.
 // Keep native in-record anchors local to each rendered record on this page.
 export function scopeReadingAnchors(root){
+ bindReadingTables(root);
  for(const record of root.matches('[data-reading-record]')?[root]:root.querySelectorAll('[data-reading-record]')){
   const prefix='reading-'+record.dataset.readingRecord+'-',ids=new Set();
   for(const el of record.querySelectorAll('[id]')){if(el.id.startsWith(prefix))continue;ids.add(el.id);el.id=prefix+el.id;}
