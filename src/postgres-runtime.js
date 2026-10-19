@@ -213,7 +213,9 @@ async function managePostgres({directory,env=process.env,signal,onProgress=()=>{
   config.port=await freePort();if(workspace){config.ownerId=workspace.ownerId;config.running=true;config.activeDirectory=directory;}await save();
   onProgress({stage:'start'});
   // Foreground app owns lifecycle; recovery after app termination stops only this cluster.
-  await ctl(['-l',path.join(directory,'postgresql.log'),'-o','-h 127.0.0.1 -p '+config.port+' -c max_connections=32 -c shared_buffers='+sharedBuffers+'MB -c unix_socket_directories= -c password_encryption=scram-sha-256 -c log_statement=none','-w','-t','60','start'],{signal});
+  // WAL recovery on network storage can exceed a minute. Wait for readiness
+  // before treating a healthy recovering server as a failed startup.
+  await ctl(['-l',path.join(directory,'postgresql.log'),'-o','-h 127.0.0.1 -p '+config.port+' -c max_connections=32 -c shared_buffers='+sharedBuffers+'MB -c unix_socket_directories= -c password_encryption=scram-sha-256 -c log_statement=none','-w','-t','900','start'],{signal});
   const admin=new Client({host:'127.0.0.1',port:config.port,user:'observanda_admin',password:config.adminPassword,database:'template1',connectionTimeoutMillis:5000});admin.on('error',()=>{});
   try{
    await admin.connect();
