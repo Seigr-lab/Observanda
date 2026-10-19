@@ -49,7 +49,9 @@ export function projectCollectionReader(application,client,check){
         try{
          let stamp=digest(await readFile(registry.file));
          const router=new LabBookRouter(registry,{authorize:async()=>{await access.check();return true;},unlock:async(location,saved)=>{entry=location;root=entry.root;etag=saved.etag;return selected.vault=await access.key(root);}});
-         await router.withLabBook(target.labBookId,storage=>{selected.storage=storage;});
+         await router.withLabBook(target.labBookId,storage=>{selected.storage=storage;},{withStorage:(storage,admit)=>{
+          selected.connections=createCatalogueConnections(storage);return selected.connections.run(admit);
+         }});
          selected.verify=async()=>{
           // The book check also revalidates this exact parent owner.
           await access.check();
@@ -78,7 +80,7 @@ export function projectCollectionReader(application,client,check){
      }
      // Legacy unkeyed host storage keeps its original catalogue admission;
      // only an authenticated native owner can retain a keyed connection scope.
-     if(Buffer.isBuffer(selected.storage.vault?.key))selected.connections=createCatalogueConnections(selected.storage);
+     if(!selected.connections&&Buffer.isBuffer(selected.storage.vault?.key))selected.connections=createCatalogueConnections(selected.storage);
     }catch(error){if(target.projectId&&['ACCESS_LOCKED','ACCESS_DENIED','ACCESS_WAIT','AUTH','DEVICE_UNKNOWN'].includes(error.code))error.projectId??=target.projectId;await close();throw error;}
    }
    const selected=current;

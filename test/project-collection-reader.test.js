@@ -5,6 +5,7 @@ import {projectTreeFixture} from './project-tree-fixture.js';
 import {ProjectStorage} from '../src/project-storage.js';
 import {LabBookCreation} from '../src/lab-book-creation.js';
 import {LabBookRegistry} from '../src/lab-book-registry.js';
+import {LabBookStorage} from '../src/lab-book-storage.js';
 import {ProjectApplication,projectRequest} from '../src/project-application.js';
 import {ProjectSessionOwner} from '../src/project-session-owner.js';
 import {LabBookAccessSession} from '../src/lab-book-access-session.js';
@@ -21,9 +22,18 @@ test('collection readers reuse only the live parent and recheck every previous b
  const parents=[],bookKeys=[],router=ProjectSessionOwner.prototype.router,key=LabBookAccessSession.prototype.key;
  t.mock.method(ProjectSessionOwner.prototype,'router',async function(){const first=!this.selectedRouter,result=await router.call(this);if(first)parents.push(this);return result;});
  t.mock.method(LabBookAccessSession.prototype,'key',async function(root){const value=await key.call(this,root);bookKeys.push(value.key);return value;});
+ const opened=[],openCatalogue=LabBookStorage.prototype.openCatalogue,outline=LabBookStorage.prototype.outline;let invalidOutline=null;
+ t.mock.method(LabBookStorage.prototype,'openCatalogue',async function(options){
+  const db=await openCatalogue.call(this,options),entry={storage:this,db,key:this.vault.key,closed:false},close=db.close.bind(db);opened.push(entry);
+  db.close=async()=>{entry.keyIntactAtClose=this.vault.key.some(value=>value!==0);try{return await close();}finally{entry.closed=true;}};return db;
+ });
+ t.mock.method(LabBookStorage.prototype,'outline',async function(){
+  const result=await outline.call(this);if(invalidOutline){const changed=structuredClone(result);invalidOutline(changed.metadata);return changed;}return result;
+ });
  const reader=projectCollectionReader(app,client,async()=>{});readers.push(reader);
  const use=book=>reader.use({workspaceId:book.namespaceId,projectId:book.projectId??parent.projectId,labBookId:book.labBookId},undefined,(_store,snapshot)=>snapshot.metadata.id);
  assert.equal(await use(f.books[0]),f.books[0].namespaceId);const firstParent=parents[0],parentKey=firstParent.vault.key;
+ assert.equal(opened.length,1,'Outline admission and the first read share one selected connection');const initialOpening=opened[0];
  const firstTarget={workspaceId:f.books[0].namespaceId,projectId:parent.projectId,labBookId:f.books[0].labBookId};
  let selectedDb,selectedCache,selectedStorage,connectionClosed=false;
  await reader.use(firstTarget,undefined,async(store,_snapshot,{storage:book})=>{
@@ -42,12 +52,23 @@ test('collection readers reuse only the live parent and recheck every previous b
   assert.deepEqual(await store.object('collection-connection-test'),{value:'Committed between selected reads'});
  });
  assert.equal(connectionClosed,false);assert.equal(bookKeys.length,1);
+ assert.equal(selectedDb,initialOpening.db);assert.equal(selectedStorage,initialOpening.storage);
+ assert.equal(opened.filter(entry=>entry.storage===selectedStorage&&entry.db===selectedDb).length,1);
  assert.equal(await use(extra),extra.namespaceId);assert.equal(parents.length,1);assert.equal(firstParent.closed,undefined);assert.equal(connectionClosed,true);
  assert.ok(bookKeys[0].every(value=>value===0));assert.ok(bookKeys[1].some(value=>value!==0));assert.ok(parentKey.some(value=>value!==0));
  await reader.verify();
  await call(parent.projectId+'/lab-books/'+f.books[0].labBookId+'/access/lock');
  await assert.rejects(reader.verify(),error=>error.code==='ACCESS_LOCKED'&&error.labBookId===f.books[0].labBookId);
  await reader.close();assert.ok(parentKey.every(value=>value===0));assert.ok(bookKeys[1].every(value=>value===0));
+ // Retaining the admission connection must neither bypass an outline mismatch
+ // nor retain that failed owner's connections or key.
+ for(const change of [metadata=>{metadata.id=randomUUID();},metadata=>{metadata.notebooks[0].projectId=randomUUID();},metadata=>{metadata.notebooks[0].title='Different directory';}]){
+  const rejected=projectCollectionReader(app,client,async()=>{});readers.push(rejected);const start=opened.length;invalidOutline=change;
+  try{await assert.rejects(rejected.use({workspaceId:extra.namespaceId,projectId:parent.projectId,labBookId:extra.labBookId},undefined,()=>assert.fail('Invalid outline admitted')),{code:'DATABASE_LOCATION'});}
+  finally{invalidOutline=null;}
+  const failed=opened.slice(start);assert.equal(failed.length,1);assert.equal(failed[0].closed,true);assert.equal(failed[0].keyIntactAtClose,true);assert.equal(failed[0].storage.vault.key,null);assert.ok(failed[0].key.every(value=>value===0));
+  await rejected.close();
+ }
  const next=projectCollectionReader(app,client,async()=>{});readers.push(next);
  await next.use({workspaceId:extra.namespaceId,projectId:parent.projectId,labBookId:extra.labBookId},undefined,()=>{});
  const retained=parents.at(-1),retainedKey=retained.vault.key;
