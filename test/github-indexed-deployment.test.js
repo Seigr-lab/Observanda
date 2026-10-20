@@ -8,7 +8,7 @@ import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {sampleNotebook} from '../src/sample.js';
 import {clearVault} from '../src/encryption.js';
 import {GithubPlanIndex,githubPlanReader,verifyGithubPublishingPlans} from '../src/github-plan-index.js';
-import {indexedGithubFilePlan,githubPlanReview,admitGithubPlan,writeGithubOwnership,readGithubOwnership} from '../src/github-publication-plan.js';
+import {indexedGithubFilePlan,githubFilePlan,githubPlanReview,admitGithubPlan,writeGithubOwnership,readGithubOwnership} from '../src/github-publication-plan.js';
 import {Publisher,defaultPublishing} from '../src/publishing.js';
 import {deployGithub} from '../src/github-deployment.js';
 import {githubFixture} from './github-fixture.js';
@@ -45,4 +45,16 @@ test('indexed deployment resumes lost tree and activation replies, retains owner
  const altered=tree.map(row=>row.path==='site/page-9.txt'?{...row,sha:'f'.repeat(40)}:row),conflicting=await indexedGithubFilePlan(f.workspace,candidate,altered,owned,'site');assert.equal(conflicting.counts.conflicts,1);
  await verifyGithubPublishingPlans(f.workspace);
  const block=durable.document.collections.entries.hash;await f.workspace.withLock(()=>f.workspace.writeMetadata('.observanda/publishing-plan-blocks/index-'+block+'.json','{}'));await assert.rejects(verifyGithubPublishingPlans(f.workspace),{code:'PUBLISH_OWNERSHIP'});
+});
+
+test('an earlier inline database deployment journal resumes and its next review becomes indexed',async t=>{
+ const f=await fixture(t),remote=githubFixture({branch:'main',initialFiles:{'README.md':'Keep unrelated content'}}),publisher=new Publisher(f.workspace.root,{request:remote.request},f.vault),config=defaultPublishing();Object.assign(config.github,{owner:'example',repository:'notebook',pages:false,directory:'site'});await publisher.save(config,'new');await publisher.connect('synthetic_github_token_1234567890');
+ const candidate={id:'c'.repeat(64),files:new Map([['publication.json','{"public":true}'],['first.txt','First retained page'],['second.txt','Second retained page']])},parent=remote.head,baseTree=remote.commits.get(parent).tree,changes=await githubFilePlan(candidate,remote.trees.get(baseTree),null,'site'),saved={...plan(changes,parent,baseTree),version:1,configEtag:(await publisher.read()).etag};
+ let journal={entries:changes.entries,preservedEntries:changes.preservedEntries,removed:changes.removed,uploaded:[],baseTree,repositoryId:123,parent,createdAt:new Date().toISOString()},lost=false;
+ remote.setHook(async(call,phase)=>{if(!lost&&phase==='after'&&call.method==='PATCH'&&call.route.includes('/git/refs/heads/')){lost=true;throw Error('Synthetic lost reply');}});
+ const run=()=>deployGithub(publisher,candidate,config,{plan:saved,journal:structuredClone(journal),save:async value=>{journal=structuredClone(value);},guard:async()=>{}});
+ await assert.rejects(run(),{code:'PUBLISH_REMOTE'});assert.equal(lost,true);assert.equal(journal.pushAttempted,true);assert.equal(journal.uploaded.length,3);
+ const writes=remote.calls.filter(call=>call.method!=='GET').length,receipt=await run();assert.equal(remote.calls.filter(call=>call.method!=='GET').length,writes);assert.equal(receipt.status,'uploaded-repository-only');
+ await f.workspace.withLock(()=>writeGithubOwnership(f.workspace,publisher.destinationKey(config),journal));const owned=await readGithubOwnership(publisher,config,receipt);assert.equal(owned.version,1);
+ candidate.files.delete('first.txt');const indexed=await indexedGithubFilePlan(f.workspace,candidate,remote.trees.get(remote.commits.get(remote.head).tree),owned,'site');assert.equal(indexed.counts.removed,1);assert.equal(indexed.counts.preserved,1);assert.equal(indexed.counts.conflicts,0);assert.equal(githubPlanReader(f.workspace,indexed).count('entries'),2);
 });
