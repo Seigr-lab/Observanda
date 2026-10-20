@@ -12,7 +12,7 @@ import {ResearchMaterials} from '../../src/research-materials.js';
 
 // Only a synthetic fixture is passed over this private IPC channel. The parent
 // kills this process at an actual persistence boundary, without running cleanup.
-process.once('message',async({root,vault,point,upload,record,websiteId})=>{
+process.once('message',async({root,vault,point,upload,record,websiteId,intake})=>{
  try{
   let schema,catalogueClient;
   const pause=async()=>{process.send({type:'checkpoint',schema});await new Promise(()=>{});};
@@ -36,6 +36,15 @@ process.once('message',async({root,vault,point,upload,record,websiteId})=>{
    let count=0;const read=ResearchCatalogue.prototype.record,storage=websiteWorkspace(workspace,websiteId);
    ResearchCatalogue.prototype.record=async function(...args){const value=await read.apply(this,args);if(++count===40)await pause();return value;};
    const {etag,websitePin}=await storage.outline();await new PublicationJobs(storage).start({etag,websitePin},websiteJobQueue(workspaceJobs(workspace).queue,websiteId));
+  }else if(point==='evidence-intake-checkpoint'){
+   let receipts=0;const write=workspace.writeMetadata.bind(workspace),{worker}=workspaceJobs(workspace);
+   workspace.writeMetadata=async(file,value)=>{
+    const result=await write(file,value);
+    if(file.includes('/'+intake.id+'/prepared/')&&++receipts===intake.receiptAt)await pause();
+    return result;
+   };
+   worker.enabled=true;
+   await workspace.withCatalogueConnections(()=>worker.runOnce());
   }else if(point==='upload-stream'){
    async function* bytes(){yield Buffer.alloc(4096,0x5a);await pause();}
    await new ResearchMaterials(workspace).appendImport(upload.id,upload.index,bytes());
