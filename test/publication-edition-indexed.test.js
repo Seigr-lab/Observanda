@@ -21,6 +21,9 @@ import {feedFilePath} from '../src/publication-feeds.js';
 import {MediaStore} from '../src/media.js';
 import {RecordDocument} from '../src/record-document.js';
 import {WebsiteEditorStore} from '../src/website-editor-store.js';
+import {publicationDraftCommand} from './publication-fixture.js';
+import {PublicationFragments} from '../src/publication-edition-fragments.js';
+import {withPublicationOutputWriter} from '../src/publication-output.js';
 
 // One native source/edition journey covers late selected values and all public
 // continuation families. Existing owner fixtures supply encryption and storage.
@@ -52,4 +55,59 @@ test('indexed editions stream selected pages, menus, feeds and references after 
  const expected=buildPublication(expectedBook,{mediaFiles:await new MediaStore(fixture.workspace).publicFiles(expectedBook,{streamed:true})});let feedCount=0;
  for await(const name of edition.files.keys())if(feedFilePath(name)){feedCount++;assert.equal(await text(name),expected.files.get(name),name);}assert.equal(feedCount,8+5);
  const choices=await releases.pageChoices(edition,{path:'pages/'+late.id+'.html',limit:2});assert.equal(choices.items[0].path,'pages/'+late.id+'.html');assert.ok(choices.offset>24);assert.ok(choices.total>31);
+});
+
+
+test('lazy feed cards retain cover styles and replay unchanged fragments without changing fallback pages',{timeout:120000},async t=>{
+ const parent=await realpath(os.tmpdir()),directory=await mkdtemp(path.join(parent,'observanda-lazy-cards-')),book=upgradeNotebook(sampleNotebook()),seed=book.entries[0];
+ book.entries=Array.from({length:4},(_,index)=>({...structuredClone(seed),id:randomUUID(),title:'Selected cover '+index,share:true,body:'Retained observation '+index,sections:[],figures:[],attachments:[],relations:[]}));
+ book.notebooks=book.notebooks.filter(item=>item.id===seed.notebookId);book.projects=book.projects.filter(item=>item.id===book.notebooks[0].projectId);
+ const fixture=await encryptedFixture(directory,book);t.after(async()=>{clearVault(fixture.vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-lazy-cards-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const storage=websiteWorkspace(fixture.workspace,null),releases=new PublicationJobs(storage),media=new MediaStore(fixture.workspace),image=await media.import(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="blue"/></svg>'),'image');
+ for(const record of book.entries)record.attachments=[{...image,caption:'Retained cover',alt:'Blue observation',transcript:'',share:true}];
+ book.entries.push({...structuredClone(seed),id:randomUUID(),title:'WITHHELD_RESULT',body:'WITHHELD_BODY',share:false,sections:[],figures:[],attachments:[],relations:[]});
+ const section=(id,pageSize)=>({id,kind:'records',title:id,show:true,layout:'list',...(pageSize?{feed:{...defaultFeed('records'),pageSize,visitorFilters:true}}:{})});
+ book.website.home={enabled:true,title:'Retained covers',introduction:'Complete composition',showTitle:true,sections:[section('first-feed',1),section('second-feed',2),section('all-selected')]};
+ // No eager project/book card render may supply the streamed cover CSS.
+ book.website.layouts=['project:'+book.projects[0].id,'notebook:'+book.notebooks[0].id].map(target=>({target,showHeading:true,heading:'Selected collection',description:'',placement:'replace',sections:[{id:'intro',kind:'text',title:'Collection introduction',body:'Use the selected home feeds.',show:true}]}));
+ book.website.presentation={covers:[],media:book.entries.filter(record=>record.share).map((record,index)=>({scope:'cover:'+record.id,id:image.id,width:37+index,ratio:'square',fit:'cover',link:'',target:'_self'}))};
+ const command=await publicationDraftCommand(fixture.workspace,book),source=await withPublicationCapture(storage,async(workspace,id,finish)=>{const selected=await releases.pin(command,{workspace,id,signal:t.signal});return finish(()=>selected);},{signal:t.signal});
+ const expected=buildPublication(book,{mediaFiles:await media.publicFiles(book,{streamed:true})}),add=PublicationFragments.prototype.add,reads=[];
+ PublicationFragments.prototype.add=function(read){const item={calls:0};reads.push(item);return add.call(this,()=>{item.calls++;return read();});};
+ let candidate;const job={id:source.id,lease:{token:randomUUID()}};
+ try{candidate=await releases.prepare(job,{signal:t.signal,progress:async()=>{}});}finally{PublicationFragments.prototype.add=add;}
+ assert.ok(reads.length>3);assert.ok(reads.every(item=>item.calls<=1),'A sibling continuation rerendered an invariant fragment');
+ await storage.withLock(()=>releases.commit(job,candidate));const edition=await releases.read(candidate.reviewId),text=async name=>(await contentBuffer(await edition.files.get(name))).toString();
+ const css=await text('styles.css');
+ for(const [index,record] of book.entries.filter(record=>record.share).entries()){
+  const selector='[data-media-scope="cover:'+record.id+'"][data-media-id="'+image.id+'"]';
+  for(const rule of [selector+'{width:'+(37+index)+'%;margin-inline:auto}',selector+' img,'+selector+' video{aspect-ratio:1;object-fit:cover;width:100%}'])assert.equal(css.split(rule).length-1,1,'Missing or duplicated retained cover rule: '+rule);
+ }
+ let feeds=0;
+ for await(const name of edition.files.keys())if(name.endsWith('.html')){
+  const html=await text(name);if(name==='index.html'||feedFilePath(name))assert.equal(html,expected.files.get(name),name);assert.doesNotMatch(html,/WITHHELD_RESULT|WITHHELD_BODY/);if(feedFilePath(name))feeds++;
+  if(/^(projects|notebooks)\//.test(name)){assert.match(html,/Use the selected home feeds/);assert.doesNotMatch(html,/data-record-id=/);}
+ }
+ assert.equal(feeds,6);assert.ok(await edition.files.has('media/'+image.id+'.png'));
+ // An unfinished replay cannot become cached success; the same existing
+ // scratch owner cleans it before another page reuses the logical key.
+ const attempt={id:source.id,lease:{token:randomUUID()}},outputDirectory=await releases.directory(attempt.id,attempt.lease.token),failure=new Error('Interrupted fragment'),payload=Buffer.from('Exact selected fragment '.repeat(8000));let closed=false,escaped;
+ await withPublicationOutputWriter(storage,source,attempt,{directory:outputDirectory,signal:t.signal},async writer=>{
+  await assert.rejects(writer.withFragments(async replay=>{
+   escaped=replay;
+   async function* broken(){try{yield payload;throw failure;}finally{closed=true;}}
+   for await(const chunk of replay('same-key',broken))assert.ok(chunk.length<=64*1024);
+  }),error=>error===failure);assert.equal(closed,true);
+  await assert.rejects(escaped('same-key',async function*(){yield 'stale';}).next(),{code:'INVALID'});
+  await writer.withFragments(async replay=>{
+   let produced=0;async function* content(){produced++;yield payload;}
+   for(let pass=0;pass<2;pass++)assert.deepEqual(Buffer.concat(await Array.fromAsync(replay('same-key',content))),payload);
+   assert.equal(produced,1);
+  });assert.equal(writer.count(),0,'Scratch fragments leaked into retained public files');
+ });
+ const controller=new AbortController(),cancelled={id:source.id,lease:{token:randomUUID()}},cancelDirectory=await releases.directory(cancelled.id,cancelled.lease.token);closed=false;
+ await assert.rejects(withPublicationOutputWriter(storage,source,cancelled,{directory:cancelDirectory,signal:controller.signal},writer=>writer.withFragments(async replay=>{
+  async function* content(){try{yield payload;yield payload;}finally{closed=true;}}
+  const iterator=replay('cancelled',content);await iterator.next();controller.abort(failure);await iterator.next();
+ })),error=>error===failure);assert.equal(closed,true);
 });

@@ -44,12 +44,13 @@ async function renderIndexedPublicationEdition(workspace,source,{writer,blockedV
  const retainStyles=async styles=>{
   if(commonStyles!==null&&commonStyles!==styles.common)throw new AppError('JOB_DAMAGED');commonStyles=styles.common;
   for(const [kind,values] of [['fonts',styles.fonts.split('\n')],['rich',styles.rich.split('\n')],['blocks',styles.blocks]])for(const css of values)if(css)await writer.addChoice('styles',digest(kind+'\n'+css),{kind,css});
+  styles.blocks.length=0;
  };
- const render=async(plan,{bodyWindow=null,referenceWindow=null,browse=null,legacy=null}={})=>{
+ const render=async(plan,{bodyWindow=null,referenceWindow=null,browse=null,legacy=null}={})=>writer.withFragments(async replay=>{
   signal.throwIfAborted();const {context}=await publicationInputContext(input,plan,{bodyWindow,referenceWindow,browsePage:browse,signal}),prepared=publicationPage(context,plan.target),mediaFiles=new Map();
   for(const [id,kind] of prepared.media){const file=await media.get(id,{streamed:true});if(file.kind!==kind)throw new AppError('MEDIA_INVALID');mediaFiles.set(id,file);}
   if(legacy)context.legacyPages=[legacy];
-  const fontFiles=await fonts.files(prepared.fonts,{signal}),parts=await publicationEditionParts(input,plan,{writer,media,mediaFiles,context,esc:escapeHTML,blockedValues,signal,browse}),page=renderPublication(context,{blockedValues,mediaFiles,fontFiles,emitBrowse:false,editionParts:parts});parts.attach(page);await retainStyles(page.styles);
+  const fontFiles=await fonts.files(prepared.fonts,{signal}),parts=await publicationEditionParts(input,plan,{writer,media,mediaFiles,context,esc:escapeHTML,blockedValues,signal,browse,replay}),page=renderPublication(context,{blockedValues,mediaFiles,fontFiles,emitBrowse:false,editionParts:parts});parts.attach(page);parts.fragments.replay=parts.hasFeeds&&!referenceWindow?.next?replay:null;await retainStyles(page.styles);
   for(const [name,content] of [...page.files])if(!['styles.css','publication.json','.nojekyll'].includes(name)&&!name.endsWith('.html')){await writer.retain(name,content);page.files.delete(name);}
   for(const [name,html] of page.files){
    if(!name.endsWith('.html')||legacy&&name!==legacy.path)continue;
@@ -61,7 +62,7 @@ async function renderIndexedPublicationEdition(workspace,source,{writer,blockedV
    if(bodyWindow?.staticPage.page||referenceWindow?.page)continue;
    await writer.addChoice('pages',value.path,value);defaultPage??=value.path;
   }
- };
+ });
  for await(const item of input.items('targets')){
   signal.throwIfAborted();const target=item.target,plan=await publicationInputPlan(input,target,{signal});firstPlan??=plan;
   for await(const bodyWindow of publicationInputCollectionWindows(input,target,{replace:plan.layout?.placement==='replace',signal}))for await(const referenceWindow of references(input,target,{signal}))await render(plan,{bodyWindow,referenceWindow});

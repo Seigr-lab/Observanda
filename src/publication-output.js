@@ -7,7 +7,7 @@ import {PublicationOutputBuffer} from './publication-output-buffer.js';
 import {readdir} from 'node:fs/promises';
 import {withScratch} from './scratch-work.js';
 import {publicationResearchWorkspace} from './publication-pin.js';
-import {createHash} from 'node:crypto';
+import {createHash,randomUUID} from 'node:crypto';
 import {PublicationDocument,PublicationDocumentBuilder,isPublicationDocumentBlockPath,publicationDocumentPrefix} from './publication-document.js';
 import {AppError} from './errors.js';
 import {serialize} from './storage-format.js';
@@ -94,6 +94,45 @@ export class PublicationOutputWriter{
    };
    const value=target[method];return typeof value==='function'?value.bind(target):value;
   }});
+  // Fragment replay shares this attempt's encrypted scratch owner. It never
+  // enters the retained file inventory, and each page removes its own chunks.
+  this.withFragments=async operation=>{
+   this.finalization.check();if(!blocks)throw new AppError('INVALID');
+   const prefix='fragments/'+randomUUID()+'/',entries=new Map();let active=true,failure;
+   const check=()=>{if(!active)throw new AppError('INVALID');this.finalization.check();};
+   async function* replay(key,read){
+    check();let entry=entries.get(key);
+    if(entry){
+     if(!entry.complete)throw entry.failure??new AppError('INVALID');
+     for(let index=0;index<entry.chunks;index++){
+      check();const bytes=await blocks.get(entry.prefix+index);check();
+      if(typeof bytes!=='string')throw new AppError('JOB_DAMAGED');yield Buffer.from(bytes,'base64');
+     }
+     return;
+    }
+    entry={prefix:prefix+entries.size+'/',chunks:0,complete:false,failure:null};entries.set(key,entry);
+    try{
+     for await(const bytes of publicationOutputChunks(read(),{signal})){
+      check();const id=entry.prefix+entry.chunks++;await blocks.put(id,bytes.toString('base64'));check();yield bytes;
+     }
+     check();entry.complete=true;
+    }catch(error){entry.failure=error;throw error;}
+   }
+   try{return await operation(replay);}
+   catch(error){failure=error;throw error;}
+   finally{
+    active=false;
+    // An aborted owner rejects further scratch access; its enclosing finally
+    // drops the table and destroys the encryption key instead.
+    if(!signal?.aborted)try{
+     let pending=[];
+     for(const entry of entries.values())for(let index=0;index<entry.chunks;index++){
+      pending.push(entry.prefix+index);if(pending.length===32){await blocks.removeMany(pending);pending=[];}
+     }
+     if(pending.length)await blocks.removeMany(pending);
+    }catch(error){if(!failure)throw error;}
+   }
+  };
   this.builder=new PublicationDocumentBuilder(retained,{owner:this.owner,collections,signal});
  }
  drain(){return this.finalization.drain();}

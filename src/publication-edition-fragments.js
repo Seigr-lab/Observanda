@@ -11,14 +11,25 @@ import {bookText} from './web/book-messages.js';
 // Tokens are local rendering capabilities, never accepted from a saved source.
 // Their replacement streams are consumed while the output writer hashes bytes.
 export class PublicationFragments{
- constructor(){this.prefix='<!--observanda-'+randomUUID()+'-';this.parts=new Map();}
- add(read){const token=this.prefix+this.parts.size+'-->';this.parts.set(token,read);return token;}
+ constructor({replay}={}){this.prefix='<!--observanda-'+randomUUID()+'-';this.parts=new Map();this.replay=replay;this.compiled=null;}
+ add(read){const token=this.prefix+this.parts.size+'-->';this.parts.set(token,read);this.compiled=null;return token;}
+ compile(html){
+  if(this.compiled?.html===html)return this.compiled;
+  const segments=[];let at=0,scan=0;
+  while((scan=html.indexOf(this.prefix,scan))>=0){
+   const end=html.indexOf('-->',scan+this.prefix.length);if(end<0)break;
+   const token=html.slice(scan,end+3);
+   if(this.parts.has(token)){if(scan>at)segments.push({start:at,end:scan});segments.push({token});at=end+3;}
+   scan=end+3;
+  }
+  if(at<html.length)segments.push({start:at,end:html.length});
+  return this.compiled={html,segments};
+ }
  async *expand(html,overrides=new Map()){
-  let at=0;
-  while(at<html.length){
-   let next=html.length,chosen=null;for(const token of this.parts.keys()){const position=html.indexOf(token,at);if(position>=0&&position<next){next=position;chosen=token;}}
-   if(next>at)yield html.slice(at,next);if(!chosen)return;
-   yield* (overrides.get(chosen)??this.parts.get(chosen))();at=next+chosen.length;
+  for(const part of this.compile(html).segments){
+   if(!part.token){yield html.slice(part.start,part.end);continue;}
+   const override=overrides.get(part.token),read=this.parts.get(part.token);
+   yield* override?override():this.replay?this.replay(part.token,read):read();
   }
  }
 }
@@ -39,10 +50,16 @@ function projectedCard(kind,value){
  if(kind==='projects'){const {id,title,description}=value;return {id,title,description};}
  const {id,title,excerpt,hasBody}=value;return {id,title,excerpt,hasBody};
 }
-export async function publicationEditionParts(input,plan,{writer,media,mediaFiles,context,esc,blockedValues=[],signal,browse=null}){
- const fragments=new PublicationFragments(),feeds=new PublicationFeeds(new Map(),esc),plans=[];let output=null;
+export async function publicationEditionParts(input,plan,{writer,media,mediaFiles,context,esc,blockedValues=[],signal,browse=null,replay}){
+ const fragments=new PublicationFragments({replay}),feeds=new PublicationFeeds(new Map(),esc),plans=[];let output=null;
  const retainMedia=async(id,kind)=>{signal?.throwIfAborted();const value=await media.get(id,{streamed:true});if(value.kind!==kind)throw new AppError('MEDIA_INVALID');mediaFiles.set(id,value);return value;};
- const drain=async()=>{for(const [name,content] of output?.files??[]){if(/^(media|fonts|figures)\//.test(name)){await writer.retain(name,content);output.files.delete(name);}}};
+ const drain=async()=>{
+  for(const [name,content] of output?.files??[]){if(/^(media|fonts|figures)\//.test(name)){await writer.retain(name,content);output.files.delete(name);}}
+  // Lazy cards append presentation rules after the synchronous page render.
+  // Admit them immediately; repeated feed windows must not grow this array.
+  const rules=output?.styles.blocks;
+  if(rules){for(const css of rules)if(css)await writer.addChoice('styles',digest('blocks\n'+css),{kind:'blocks',css});rules.length=0;}
+ };
  const card=async(kind,value,render)=>{
   const item=projectedCard(kind,value),previousMedia=context.website.presentation.media,previousCovers=context.website.presentation.covers,lengths=new Map();
   const includeLink=async link=>{if(!link)return '';const target=link.split('#')[0],value=await input.target(target);if(!value)return '';if(target!=='home'){const [kind]=target.split(':'),key={entry:'entryDestinations',project:'projects',notebook:'notebooks',page:'pages'}[kind],items=context[key];if(!items)throw new AppError('JOB_DAMAGED');if(!lengths.has(key))lengths.set(key,items.length);if(!items.some(item=>item.id===value.id))items.push(value);}return link;};
