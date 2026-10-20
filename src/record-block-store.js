@@ -1,4 +1,3 @@
-import {withProjectRecordBlockOwner} from './project-retired-records.js';
 // Record blocks keep notebook-key isolation. The outer catalogue envelope
 // supports normal archive transport; its ciphertext contains a separately
 // authenticated notebook envelope. Rekeying must replace both envelopes.
@@ -7,11 +6,14 @@ import {seal,unseal} from './encryption.js';
 import {digest,serialize} from './storage-format.js';
 import {writeCatalogueRows} from './catalogue-writes.js';
 import {RecordValueTree} from './record-value-tree.js';
-import {retainRecordOwnerResource} from './record-owner-resources.js';
 import {operationStage,operationAdvance} from './operation-progress.js';
 import {validAttemptIndex} from './record-attempt-index.js';
 import {validMethodIndex} from './record-method-index.js';
 import {validResultIndex} from './record-result-index.js';
+
+// Ownership services reach the catalogue; resolve them only during asynchronous operations.
+async function withProjectRecordBlockOwner(...args){const owner=await import('./project-retired-records.js');return owner.withProjectRecordBlockOwner(...args);}
+async function retainRecordOwnerResource(...args){const owner=await import('./record-owner-resources.js');return owner.retainRecordOwnerResource(...args);}
 
 const fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 const hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
