@@ -116,10 +116,11 @@ export class RecordValues{
    });
   });
  }
- async save(command){
+ async save(command){return this.workspace.withLock(()=>this.saveLocked(command));}
+ async saveLocked(command){
   if(!exact(command,[...fields,'expectedRevision','value'])||!target(command)||!revisionId(command.expectedRevision)||!validRecordValue(command.value,command.field))throw new AppError('INVALID');
   if(recordValueCollection(command.field)?.kind==='relation'&&command.value.value!==null)command={...command,value:{value:canonicalRelationValue(command.value.value)}};
-  return this.workspace.withLock(()=>this.workspace.catalogue(async store=>{
+  return this.workspace.catalogue(async store=>{
    const {row,etag,snapshot,position}=await this.select(store,command);
    const receipt=command.value.copies?'.observanda/figure-copy-values/'+digest(revisionText(command))+'.json':null;
    if(receipt){const raw=await this.workspace.readMetadata(receipt,4096);if(raw!==null){let result;try{result=JSON.parse(raw);}catch{throw new AppError('CATALOGUE_DAMAGED');}if(!exact(result,['etag','revision','saved','position'])||!revisionId(result.etag)||!revisionId(result.revision)||result.saved!==true||!Number.isSafeInteger(result.position)||result.position<0)throw new AppError('CATALOGUE_DAMAGED');return result;}}
@@ -163,6 +164,6 @@ export class RecordValues{
     const result={etag:saved.etag,revision:digest(serialize({value:command.value.value})),saved:true,...(selected.collection?.kind==='figure'?{position:selected.position<0?memberCollectionCount(saved.member,'figures')-1:selected.position}:{})};
     if(receipt)await this.workspace.writeMetadata(receipt,serialize(result));return result;
    },{mutable:true});
-  }));
+  });
  }
 }

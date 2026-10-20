@@ -1,3 +1,4 @@
+import {LivePreparations,livePreparationOperations} from './live-preparations.js';
 import {ContentAccess} from './content-access.js';
 import {LiveDocuments} from './live-documents.js';
 import {identityHash} from './identity.js';
@@ -12,7 +13,7 @@ import {LiveRecordCreation} from './live-record-creation.js';
 import {LiveRelationships} from './live-relationships.js';
 import {LiveAttempts} from './live-attempts.js';
 import {LiveEvidence} from './live-evidence.js';
-import {authorizeLive,liveRecord} from './live-access.js';
+import {authorizeLive,liveRecord,liveRecordWithoutAttempt} from './live-access.js';
 import {auditLive} from './live-audit.js';
 
 const prefix='.observanda/collaboration/live/';
@@ -28,8 +29,8 @@ export class LiveResearch{
   return auditLive(this.workspace,access,recordId,operation,detail);
  }
  async dispatch(identity,scope,operation,data={}){
-  valid(['list','read','details','document','steps','fields','comments','comment','activity','evidence','evidence-read','evidence-page','evidence-uploads','evidence-upload','evidence-start','evidence-chunk','evidence-finish','creation','creationFields','creationChoices','create','link-targets','link-read','link-write','links','attempt','attempt-pin','attempt-read','attempt-page','attempt-append'].includes(operation));
-  const write=['steps','fields','comment','creation','creationFields','creationChoices','create','link-write','attempt-pin','attempt-append','evidence-start','evidence-chunk','evidence-finish'].includes(operation);
+  valid([...livePreparationOperations,'list','read','details','document','steps','fields','comments','comment','activity','evidence','evidence-read','evidence-page','evidence-uploads','evidence-upload','evidence-start','evidence-chunk','evidence-finish','creation','creationFields','creationChoices','create','link-targets','link-read','link-write','links','attempt','attempt-pin','attempt-read','attempt-page','attempt-append'].includes(operation));
+  const write=['preparation-rebase','preparation-change','preparation-save','preparation-remove','steps','fields','comment','creation','creationFields','creationChoices','create','link-write','attempt-pin','attempt-append','evidence-start','evidence-chunk','evidence-finish'].includes(operation);
   // Authorization and the actual access/mutation share a transaction, including
   // grants, current team membership and records moved out of the shared scope.
   return organizationTransaction(this.workspace,()=>this.workspace.catalogue(async store=>{
@@ -44,10 +45,13 @@ export class LiveResearch{
     valid(data.after===undefined||data.after===null||uuid(data.after));valid(data.notebookId===undefined||access.notebookIds.includes(data.notebookId),'COLLABORATION_DENIED');
     const snapshot=await store.snapshot(),rows=[];
     for await(const row of store.members(snapshot,{notebookIds:new Set(data.notebookId?[data.notebookId]:access.notebookIds)}))if(!data.after||row.id>data.after){rows.push(row);rows.sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0);if(rows.length>101)rows.pop();}
-    const page=rows.slice(0,100),records=[];for(const row of page){const record=await store.record(row.id,row.revision);records.push({id:row.id,notebookId:row.notebookId,title:record.title,status:record.status,revision:recordRevision(record)});}
+    const page=rows.slice(0,100),records=[];for(const row of page){const history=store.historyIndex(row.id),found=await history.lookup(await history.head(),'version',row.revision),display=await history.display(found.item);records.push({id:row.id,notebookId:row.notebookId,title:display.title,status:display.status,revision:display.revision});}
     return {role:access.grant.role,notebooks:snapshot.metadata.notebooks.filter(n=>access.notebookIds.includes(n.id)).map(({id,title})=>({id,title})),records,next:rows.length>100?page.at(-1).id:null};
    }
-   const record=await this.record(store,access,data.recordId),revision=recordRevision(record);
+   if(livePreparationOperations.includes(operation))return new LivePreparations(this.workspace,this.record.bind(this)).dispatch(store,access,scope,operation,data,this.audit.bind(this));
+   if(operation==='attempt-append'&&['event','assessment'].includes(data.kind))return new LivePreparations(this.workspace,this.record.bind(this)).append(store,access,scope,data,this.audit.bind(this));
+   valid(data.pagedAttempt===undefined||data.pagedAttempt===true&&['read','document','steps','comments'].includes(operation));
+   const partial=data.pagedAttempt===true?await liveRecordWithoutAttempt(store,access,data.recordId):null,record=partial?.record??await this.record(store,access,data.recordId),revision=partial?.revision??recordRevision(record);
    if(operation.startsWith('evidence-'))return new LiveEvidence(this.workspace).dispatch(store,identity,access,scope,record,operation,data);
    const relationships=new LiveRelationships(this.workspace,this.record.bind(this));
    if(operation==='links')return {relations:record.relations,revision,role:access.grant.role};
@@ -60,14 +64,14 @@ export class LiveResearch{
    if(operation==='attempt-read')return attempts.read(store,access,record,data.ref,data.trail);
    if(operation==='attempt-page')return attempts.page(store,access,record,data);
    if(operation==='attempt-append')return attempts.append(store,access,scope,record,data,this.audit.bind(this));
-   if(operation==='read')return {record,revision,role:access.grant.role};
+   if(operation==='read')return {record,revision,role:access.grant.role,workspaceId:scope.workspaceId,...(partial?{attemptRevision:partial.storageRevision}:{})};
    if(operation==='details')return {values:onlineDetails(record),revision,role:access.grant.role};
    if(operation==='document'||operation==='steps'){
     valid(operation==='steps'||data.steps===undefined);
-    const result=await this.documents.update(scope.workspaceId,record,data);
+    const result=await this.documents.update(scope.workspaceId,record,data,partial?{access,revision}:{});
     if(result.saved)await this.audit(access,record.id,'document',{field:data.field,before:revision,after:result.revision});
     const {saved,...response}=result;void saved;
-    return {...response,role:access.grant.role,details:onlineDetails(record),relations:record.relations,attempt:record.attempt??null,presence:await this.present(identity,scope,access,record.id,data.clientId)};
+    return {...response,role:access.grant.role,details:onlineDetails(record),relations:record.relations,...(partial?{attemptRevision:(await store.member(await store.snapshot(),record.id)).revision}:{attempt:record.attempt??null}),presence:await this.present(identity,scope,access,record.id,data.clientId)};
    }
    if(operation==='fields'){
     const editable=onlineDetailFieldsFor(record);

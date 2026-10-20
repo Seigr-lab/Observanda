@@ -37,9 +37,10 @@ export class RecordWriting{
    });
   });
  }
- async save(command){
+ async save(command){return this.workspace.withLock(()=>this.saveLocked(command));}
+ async saveLocked(command){
   if(!exact(command,[...fields,'expectedRevision','value'])||!target(command)||!revisionId(command.expectedRevision)||!validWritingValue(command.value,command.sectionId))throw new AppError('INVALID');
-  return this.workspace.withLock(()=>this.workspace.catalogue(async store=>{
+  return this.workspace.catalogue(async store=>{
    const {row,path,etag,snapshot}=await this.select(store,command);
    return withRecordDocument(store,row.id,row.revision,async original=>{
     const selected=(await original.field(path)).value;
@@ -53,6 +54,6 @@ export class RecordWriting{
     const saved=await commitRecordDocument(store,{etag,snapshot,row,document});
     return {etag:saved.etag,revision:digest(serialize(next)),saved:true};
    },{mutable:true});
-  }));
+  });
  }
 }

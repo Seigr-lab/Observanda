@@ -56,21 +56,22 @@ export function onlineRoom({call,connectionId,context,esc,notify}){
   try{
    const state=editor?.collaboration??{version:initial.version,steps:[],clientId},steps=onlineStepBatch(state.steps),detailRevision=details?.revision(),linkRevision=relationships?.revision(),attemptRevision=attempts?.revision();
    if(state.steps.length&&!steps.length)throw Object.assign(Error(tr('syncRejected')),{code:'LIMIT'});
-   const response=await remote(steps.length?'steps':'document',{recordId:record.id,field,epoch,version:state.version,clientId,...(steps.length?{steps}:{})});
+   const response=await remote(steps.length?'steps':'document',{recordId:record.id,pagedAttempt:true,field,epoch,version:state.version,clientId,...(steps.length?{steps}:{})});
    if(closed||current!==generation)return;connected=true;
    if(response.role!==initial.role){await deny();return;}
    if(response.details)details?.update(response.details,detailRevision);
    if(response.relations)relationships?.update(response.relations,linkRevision);
    if(Object.hasOwn(response,'attempt'))attempts?.update(response.attempt,response.relations??record.relations,attemptRevision);
+   if(response.attemptRevision)attempts?.updateRevision(response.attemptRevision);
    if(response.reset){
     if(pending()){recovery={document:editor.doc};retain(editor.doc);conflict=true;status('changed');root.querySelector('[data-live-reopen]').hidden=false;recoverView();return;}
     initial={...response,role:initial.role};epoch=response.epoch;mount();
    }else if(editor){editor.receive(response.steps,response.clients);if(pending()&&response.steps.length)retain(editor.doc);}
-   else if(response.steps.length){const next=await remote('document',{recordId:record.id,field,clientId});if(closed||current!==generation)return;initial={...next,role:initial.role};epoch=next.epoch;mount();}
+   else if(response.steps.length){const next=await remote('document',{recordId:record.id,pagedAttempt:true,field,clientId});if(closed||current!==generation)return;initial={...next,role:initial.role};epoch=next.epoch;mount();}
    if(!pending()&&!recovery){retain(null);await saveChain;}
    if(!draftFailure)status(pending()?'saving':'saved');
    const presence=root.querySelector('[data-live-presence]');if(presence)presence.textContent=tr('presence',{names:response.presence.join(', ')});
-   const discussion=await remote('comments',{recordId:record.id});if(closed||current!==generation)return;showComments(discussion);
+   const discussion=await remote('comments',{recordId:record.id,pagedAttempt:true});if(closed||current!==generation)return;showComments(discussion);
   }catch(error){if(!closed&&current===generation){if(error.code==='COLLABORATION_DENIED'){await deny();return;}connected=false;if(['LIMIT','COLLABORATION_INVALID','INVALID','NOT_FOUND'].includes(error.code)){if(pending()){recovery={document:editor.doc};retain(editor.doc);}conflict=true;root.querySelector('[data-live-reopen]').hidden=false;recoverView();await saveChain.catch(()=>{});status(draftFailure?'draftFailed':'syncRejected');}else status(draftFailure?'draftFailed':draftSaved<draftRequested?'offlinePending':'offline');}}
   finally{running=false;}
  }
@@ -85,8 +86,8 @@ export function onlineRoom({call,connectionId,context,esc,notify}){
  async function open(id,nextField='body'){
   if(details?.isDirty()||relationships?.isDirty()||attempts?.isDirty()||evidence?.isDirty()||pendingForms().length){notify(tr('finishForms'),true);return;}if(pending()||draftFailure||draftSaving){notify(tr('keepOpen'),true);return;}
   generation++;clearInterval(timer);editor?.destroy();editor=null;evidence?.dispose();evidence=null;conflict=false;accessLost=false;comments.clear();commentsBefore=null;const current=generation;
-  const value=await remote('read',{recordId:id});if(closed||current!==generation)return;record=value.record;field=nextField;
-  const [snapshot,saved]=await Promise.all([remote('document',{recordId:id,field,clientId}),draft()]);if(closed||current!==generation)return;
+  const value=await remote('read',{recordId:id,pagedAttempt:true});if(closed||current!==generation)return;record=value.record;field=nextField;
+  const [snapshot,saved]=await Promise.all([remote('document',{recordId:id,pagedAttempt:true,field,clientId}),draft()]);if(closed||current!==generation)return;
   initial={...snapshot,role:value.role};epoch=snapshot.epoch;recoveries=[...(saved.draft?[saved.draft]:[]),...(saved.others??[])];recovery=recoveries[0]??null;hasDraft=!!saved.draft;
   root.innerHTML='<section class="online-record"><h3>'+esc(record.title)+'</h3><label>'+esc(tr('field'))+'<select data-live-field>'+[{id:'body',title:tr('body')},...record.sections.map(s=>({id:'section:'+s.id,title:s.title}))].map(f=>'<option value="'+esc(f.id)+'" '+(f.id===field?'selected':'')+'>'+esc(f.title)+'</option>').join('')+'</select></label><p role="status" data-live-status></p><p class="muted" data-live-presence></p><div data-live-writing></div><div data-live-reopen hidden>'+btn('reopen','reopen')+'</div><div data-live-recovery></div><details data-live-read></details>'+'<section data-evidence-owner></section><section><h3>'+esc(tr('comments'))+'</h3><div data-live-comments></div>'+(value.role==='editor'?'<form data-live-comment><label>'+esc(tr('comment'))+'<textarea name="text" required maxlength="10000"></textarea></label><button class="button">'+esc(tr('sendComment'))+'</button></form>':'')+'</section></section>';
   const detailsHost=document.createElement('section');root.querySelector('[data-live-recovery]').after(detailsHost);details?.dispose();
@@ -105,7 +106,7 @@ export function onlineRoom({call,connectionId,context,esc,notify}){
    if(button.dataset.onlineRoom==='reopen'){const local=recovery;editor?.destroy();editor=null;await open(record.id,field);recovery=local;recoverView();}
    if(button.dataset.onlineRoom==='restore'&&editor&&recovery&&!conflict){const previous=recovery;editor.replaceDocument(previous.document);await saveChain;if(previous.clientId&&previous.clientId!==clientId)await draft({clientId:previous.clientId,document:null,expectedRevision:previous.revision});recoveries=recoveries.filter(d=>d!==previous);recovery=recoveries[0]??null;recoverView();}
    if(button.dataset.onlineRoom==='discard'){const previous=recovery;if(previous?.clientId&&previous.clientId!==clientId)await draft({clientId:previous.clientId,document:null,expectedRevision:previous.revision});else {retain(null);await saveChain;}recoveries=recoveries.filter(d=>d!==previous);recovery=recoveries[0]??null;recoverView();}
-   if(button.dataset.onlineRoom==='earlier'&&commentsBefore!==null){const current=generation;button.disabled=true;try{const page=await remote('comments',{recordId:record.id,before:commentsBefore});if(!closed&&current===generation)showComments(page);}finally{button.disabled=false;}}
+   if(button.dataset.onlineRoom==='earlier'&&commentsBefore!==null){const current=generation;button.disabled=true;try{const page=await remote('comments',{recordId:record.id,pagedAttempt:true,before:commentsBefore});if(!closed&&current===generation)showComments(page);}finally{button.disabled=false;}}
   }catch(error){notify(error.message,true);}
  }
  async function saveForm(form){

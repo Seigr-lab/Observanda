@@ -68,10 +68,11 @@ export class RecordPreparationDrafts{
   if(!exact(command,[...fields,'collection','offset'])||!preparationCollections.includes(command.collection))invalid();
   return this.workspace.catalogue(store=>this.source(store,command,async({document,reference})=>({workspaceId:command.workspaceId,recordId:command.recordId,selection:command.selection,draft:command.draft,collection:command.collection,...(reference?await preparationPage(document,reference,command.collection,{offset:command.offset,signal}):{items:[],total:0,offset:0,next:null})})));
  }
- async change(command,{signal}={}){
+ async change(command,options={}){return this.workspace.withLock(()=>this.changeLocked(command,options));}
+ async changeLocked(command,{signal}={}){
   if(!exact(command,[...fields,'id','commandId','operations'])||!target(command)||![command.id,command.commandId].every(researchId)||!Array.isArray(command.operations)||!command.operations.length||command.operations.length>20||command.draft&&command.draft.id!==command.id)invalid();
   const request=digest(serialize(command));
-  return this.workspace.withLock(()=>this.workspace.catalogue(async store=>{
+  return this.workspace.catalogue(async store=>{
    const previous=await this.drafts.read(command.id,{header:true});
    if(previous?.draft.preparationEdit?.commandId===command.commandId){if(previous.draft.preparationEdit.request!==request)throw new AppError('DRAFT_CHANGED');return this.source(store,{...command,draft:{id:command.id,revision:previous.revision}},source=>this.envelope(command,source,{signal}));}
    if((previous?.revision??null)!==(command.draft?.revision??null))throw new AppError('DRAFT_CHANGED');
@@ -110,11 +111,12 @@ export class RecordPreparationDrafts{
     await this.workspace.writeMetadata('.observanda/drafts/'+draft.id+'.json',raw);if(previous)await this.drafts.index.removeLocked(previous.draft);await this.drafts.index.putLocked(saved,digest(serialize({text:raw})));
     return this.envelope(command,{document,reference,saved},{signal});
    },{mutable:true});
-  }));
+  });
  }
- async save(command,{signal}={}){
+ async save(command,options={}){return this.workspace.withLock(()=>this.saveLocked(command,options));}
+ async saveLocked(command,{signal}={}){
   if(!exact(command,fields)||!command.draft||!target(command))invalid();
-  return this.workspace.withLock(()=>this.workspace.catalogue(store=>this.source(store,command,async source=>{
+  return this.workspace.catalogue(store=>this.source(store,command,async source=>{
    const {snapshot,row,etag}=await new RecordValues(this.workspace).select(store,command),header=await validatePreparationDocument(source.document,source.reference,{signal});if(source.saved.draft.preparationEdit)await new PreparationIdentityIndex(source.document,source.saved.draft.preparationEdit.identities).verify(source.reference,{signal});
    return withRecordDocument(store,row.id,row.revision,async original=>{
     const existing=await attemptFactPosition(original,'preparations',header.id,{signal});
@@ -129,7 +131,7 @@ export class RecordPreparationDrafts{
     if(links.length){document=await document.splice(['relations'],await document.tree.arrayLength(document.root,['relations']),0,links);member=await new RecordMemberCollections(store).changed(member,'relations',document);summaries=await new SnapshotIndex(store).validationRows(snapshot.membership,[{id:row.id,type:row.type,sections:[],relations:links}]);}
     const saved=await commitRecordDocument(store,{etag,snapshot,row,document,member,summaries});return {saved:true,etag:saved.etag,revision:saved.member.revision};
    },{mutable:true});
-  })));
+  }));
  }
 }
 export async function verifyPreparationDraft(store,draft){
