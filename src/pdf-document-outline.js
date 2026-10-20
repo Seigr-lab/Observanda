@@ -17,11 +17,11 @@ export function pdfDocumentOutline(header,{pageReference=()=>''}={}){
   return {level,title,number};
  }
  function link(href,sectionId,layout){
-  if(layout.links==='disabled')return null;
+  if(header.layout.links==='disabled'||layout.links==='disabled')return null;
   const target=parseResearchReference(href);
   if(target){if(!settings.internalLinks)return null;if(target.kind!=='record')throw new PdfLayoutError('PDF_UNRESOLVED_REFERENCE',[sectionId]);const token='pdf-destination-'+links.length;links.push({target,token,sectionId});return '#'+token;}
   if(!settings.externalLinks)return null;
-  if(!/^(?:https?:|mailto:|tel:)/.test(href))throw new PdfLayoutError('PDF_UNRESOLVED_REFERENCE',[sectionId]);return href;
+  if(!/^(?:https?:|mailto:|tel:)/i.test(href))throw new PdfLayoutError('PDF_UNRESOLVED_REFERENCE',[sectionId]);return href;
  }
  function finish(html){
   for(const {target,token,sectionId} of links){const choices=destinations.get(key(target));if(choices?.size!==1)throw new PdfLayoutError('PDF_UNRESOLVED_REFERENCE',[sectionId]);html=html.replaceAll('href="#'+token+'"','href="#'+[...choices][0]+'"');}

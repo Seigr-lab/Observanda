@@ -47,18 +47,18 @@ export async function compilePdfDocument(header,sections,{signal,maxBytes=PDF_IN
  styles.add(layoutCSS(header.layout,'').split('\n .')[0]+pdfPageMasterCSS(header.layout,'')+pdfBleedBackgroundCSS(header.press,'',header.layout.background));
  for await(const section of audience.sections(sections,{signal})){
   signal?.throwIfAborted();if(!validPdfSection(section)||ids.has(section.id))throw new PdfLayoutError('PDF_SECTION');ids.add(section.id);count++;
-  const heading=outline.section(section),content=pdfSectionContent(section),settings=section.layout??header.layout,name=section.layout||pdfPageMasterHasSection(settings)?layout(settings,heading.title):defaultLayout,contentBox=pdfPageContentBox(settings);
+  const heading=outline.section(section),content=pdfSectionContent(section),settings=section.layout??header.layout,name=section.layout||pdfPageMasterHasSection(settings)?layout(settings,heading.title):defaultLayout,contentBox=pdfPageContentBox(settings),linksEnabled=header.layout.links!=='disabled'&&settings.links!=='disabled';
   const linkCodes=pdfLinkCodes({enabled:header.structure?.printQrCodes===true,sectionId:section.id,columnWidthMm:contentBox.columnWidthMm,heightMm:contentBox.heightMm,maxBytes:maxBytes-size,signal,textGlyphs,font:settings.font});
   function project(node){
    linkCodes.observe(node);
    const result={...node};
 
-   if(node.type==='book_citation'&&(settings.links==='disabled'||!outline.settings.externalLinks))result.attrs={...node.attrs,url:''};
+   if(node.type==='book_citation'&&(!linksEnabled||!outline.settings.externalLinks))result.attrs={...node.attrs,url:''};
    if(node.type==='text'&&!node.marks?.some(mark=>mark.type==='link'&&mark.attrs.href.startsWith(PDF_CROSS_REFERENCE_PREFIX)))textGlyphs(node.marks?.find(mark=>mark.type==='font_family')?.attrs.font??settings.font,node.text);
    if(node.type==='book_table')textGlyphs(settings.font,[node.attrs.title,...node.attrs.headers,...node.attrs.rows.flat()].join(' '));
    if(node.type==='book_citation')textGlyphs(settings.font,[node.attrs.title,node.attrs.authors,node.attrs.issued,node.attrs.locator].join(' '));
    if(node.type==='book_preserved')textGlyphs(settings.font,[node.attrs.source,node.attrs.reason,node.attrs.format].join(' '));
-   if(node.content)result.content=node.content.flatMap(child=>{const projected=project(child),href=child.marks?.find(mark=>mark.type==='link')?.attrs.href;if(outline.settings.printUrls&&href&&/^(?:https?:|mailto:|tel:)/.test(href)){textGlyphs(settings.font,href);return [projected,{type:'text',text:' ('+href+')'}];}return [projected];});
+   if(node.content)result.content=node.content.flatMap(child=>{const projected=project(child),citation=child.type==='book_citation',href=citation?child.attrs.url:child.marks?.find(mark=>mark.type==='link')?.attrs.href;if(outline.settings.printUrls&&href&&/^(?:https?:|mailto:|tel:)/i.test(href)){textGlyphs(settings.font,href);const printed={type:'text',text:' ('+href+')'};return [projected,citation?{type:'paragraph',content:[printed]}:printed];}return [projected];});
 
    return result;
   }
@@ -67,7 +67,7 @@ export async function compilePdfDocument(header,sections,{signal,maxBytes=PDF_IN
   const projected=crossReferences.project(project(content),{sectionId:section.id,layout:settings}),rich=richTextStyles([projected]);for(const font of rich.fonts)fonts.add(font);styles.add(retain(rich.css));
   const blocks=pdfBlockRenderer(settings,{textGlyphs,sectionId:section.id}),figure=pdfFigureRenderer(section,settings,textGlyphs);
   const images=await renderPdfImages(section,readImage,{signal,textGlyphs,font:settings.font}),parts=projected.content??[],chunks=[],render=nodes=>renderRichText({type:'doc',content:nodes},{block:node=>figure(node)??blocks.render(node),resolveLink:href=>safeRichLink(href)?outline.link(href,section.id,settings):null});
-  const notes=await renderPdfNotes(section,{startNumber:noteNumber,signal,textGlyphs,font:settings.font,fontSizePt:settings.fontSizePt,lineHeight:settings.lineHeight,links:settings.links!=='disabled'&&outline.settings.internalLinks,renderContent:content=>{const note=crossReferences.project(project(proseDocument(content)),{sectionId:section.id,layout:settings}),rich=richTextStyles([note]);for(const font of rich.fonts)fonts.add(font);styles.add(retain(rich.css));return render(note.content??[]);}});noteNumber=notes.nextNumber;pageFootnoteCount+=notes.pageFootnotes.length;for(const entry of notes.endnotes)endnotes.push(retain(entry));
+  const notes=await renderPdfNotes(section,{startNumber:noteNumber,signal,textGlyphs,font:settings.font,fontSizePt:settings.fontSizePt,lineHeight:settings.lineHeight,links:linksEnabled&&outline.settings.internalLinks,renderContent:content=>{const note=crossReferences.project(project(proseDocument(content)),{sectionId:section.id,layout:settings}),rich=richTextStyles([note]);for(const font of rich.fonts)fonts.add(font);styles.add(retain(rich.css));return render(note.content??[]);}});noteNumber=notes.nextNumber;pageFootnoteCount+=notes.pageFootnotes.length;for(const entry of notes.endnotes)endnotes.push(retain(entry));
   const pagination=applyPdfPagination(section,parts.map(part=>render([part])),{signal}),blockHTML=pagination.blocks.map((html,index)=>html.replace(/^<([a-z][a-z0-9:-]*)(?=[\s>])/i,(_,tag)=>'<'+tag+' data-pdf-source-block-index="'+index+'"'));if(pagination.active)styles.add(retain(pagination.css));
   for(let at=0;at<=parts.length;at++){for(const reference of notes.references)if(Math.min(reference.block,parts.length)===at)chunks.push(reference.html);for(const image of images)if(Math.min(image.block,parts.length)===at)chunks.push(image.html);if(at<parts.length)chunks.push(blockHTML[at]);}
   const titleHTML=section.title?'<h'+heading.level+'>'+esc(heading.title)+'</h'+heading.level+'>':'',composition=section.composition?renderPdfComposition(section,settings,{blocks:blockHTML,images:images.map((image,index)=>({id:section.images[index].id,html:image.html})),titleHTML,notesHTML:notes.sectionNotes,references:notes.references,signal}):null;
