@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,rm} from 'node:fs/promises';
+import {mkdtemp,mkdir,copyFile,readFile,rm} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {selectionBook} from './publication-selection-fixture.js';
@@ -15,11 +15,16 @@ import {recordRevision} from '../src/research.js';
 import {buildPublication} from '../src/publication.js';
 import {publicationText} from './publication-fixture.js';
 import {copyPlan,copyWorkspace} from '../src/locations.js';
-import {Workspace} from '../src/storage.js';
+import {Workspace,workspaceFile,atomicWrite} from '../src/storage.js';
 import {exactPublicationRecord} from '../src/publication-revisions.js';
 import {MediaStore} from '../src/media.js';
 import {serialize} from '../src/storage-format.js';
 import {websitePreviewSource} from '../src/website-preview-source.js';
+import {catalogueFormat,catalogueRequiresSourcePublicationControls,catalogueRequiresWebsiteSourceSelections,requireSourcePublicationControls,requireWebsiteSourceSelections} from '../src/catalogue-format.js';
+import {rekeyCatalogue,verifyCatalogueArchive} from '../src/research-catalogue.js';
+import {backupCatalogue,CATALOGUE_ARCHIVE} from '../src/postgres.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
 
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-source-permissions-')),data=selectionBook();
@@ -112,4 +117,34 @@ test('native website drafts omit source-private writing and an old tab cannot re
  assert.ok(!text.includes(f.record.sections[1].title));assert.ok(!text.includes(f.record.sections[1].id));
  assert.ok(text.includes('Public steps for the method.'));
  await assert.rejects(websitePreviewSource(f.workspace,command(latest),{websitePin:latest.websitePin,designTarget:'entry:'+f.secret.id}),{code:'INVALID'});
+});
+
+
+test('paged website source admission rolls back atomically and survives portable copies, archived reopening and fresh-key recovery',{timeout:180000},async t=>{
+ const f=await fixture(t),format=workspace=>workspace.catalogue(store=>catalogueFormat(store.db)),before=await format(f.workspace),failure=Error('Rollback source-choice admission');
+ await assert.rejects(f.workspace.withLock(()=>f.workspace.catalogue(async store=>{await requireWebsiteSourceSelections(store.db);throw failure;})),error=>error===failure);
+ assert.equal(await format(f.workspace),before);
+ await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{await requireSourcePublicationControls(store.db);await requireWebsiteSourceSelections(store.db);}));
+ const generation=await format(f.workspace),expected=await f.workspace.read(),descriptorText=await f.workspace.readFile(await workspaceFile(f.workspace.root),'utf8'),descriptor=JSON.parse(descriptorText);
+ async function check(workspace){
+  const current=await format(workspace);assert.equal(current,generation);assert.equal(catalogueRequiresSourcePublicationControls(current),true);assert.equal(catalogueRequiresWebsiteSourceSelections(current),true);
+  assert.deepEqual(await workspace.read(),expected);await verifyCatalogueArchive(workspace,descriptor);
+ }
+ await check(new Workspace(f.workspace.root,f.vault));
+ const copied=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'Portable source choices')),{vault:f.vault});await check(new Workspace(copied,f.vault));
+ async function archive(name){
+  const root=path.join(f.directory,name);await mkdir(path.join(root,'.observanda'),{recursive:true});
+  for(const file of [path.basename(await workspaceFile(f.workspace.root)),'.observanda/access.json'])await copyFile(path.join(f.workspace.root,file),path.join(root,file));
+  const db=await f.workspace.openCatalogue();try{await backupCatalogue(f.workspace.root,root,{connection:db});}finally{await db.close();}
+  const header=JSON.parse((await readFile(path.join(root,CATALOGUE_ARCHIVE),'utf8')).split('\n')[0]);assert.equal(header.catalogueVersion,generation);
+  return new Workspace(root,f.vault);
+ }
+ await check(await archive('Archived source choices'));
+ async function rekey(source,name){
+  const access=await createWorkspaceAccess('','',new TestDeviceStore({file:path.join(f.directory,name+'-device')})),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+  const destination=new Workspace(path.join(f.directory,name),vault);await mkdir(path.join(destination.root,'.observanda'),{recursive:true});
+  await atomicWrite(path.join(destination.root,'.observanda/access.json'),serialize(access));await destination.writeFile(await workspaceFile(destination.root,{secure:true}),descriptorText);
+  await rekeyCatalogue(source,destination,descriptor);await check(destination);
+ }
+ await rekey(f.workspace,'Recovered live source choices');await rekey(await archive('Source choices for recovery'),'Recovered archived source choices');
 });
