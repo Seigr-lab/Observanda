@@ -58,7 +58,7 @@ export class LocalExport {
   finally{await db.close();}
  }
  async candidate(id,{fresh=false}={}){
-  const candidate=await new PublicationJobs(this.workspace).read(id);if(!candidate)throw new AppError('NOT_FOUND');
+  const candidate=await new PublicationJobs(this.workspace,{sourceReader:this.sourceReader}).read(id);if(!candidate)throw new AppError('NOT_FOUND');
   await verifyPublicationCandidate(candidate);await new AnalysisPublicationReview(this.workspace,{sourceReader:this.sourceReader}).assert(candidate);
   if(fresh&&!await publicationRevisionCurrent(this.workspace,candidate))throw new AppError('PUBLISH_STALE');
   return candidate;

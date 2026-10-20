@@ -22,7 +22,7 @@ export function publicationReviewView(p,{esc,field,option,icon}){
   <div class="field"><label for="preview-page">${text('previewPage')}</label><div id="publication-page-choices">${publicationPageChoices(p,{esc,option})}</div></div>
   ${repositoryReview}<label class="checkbox"><input type="checkbox" id="review-confirm"><span>${text('confirm')}</span></label><div class="review-actions">
   <button class="button primary" data-action="export" ${p.stale?'disabled':''}>${icon('export')}${text('download')}</button>
-  ${!p.rollback?`<button class="button" data-action="local-export-open">${text('localExport')}</button>`:''}
+  ${!p.rollback?`<button class="button" data-action="local-export-open" ${p.stale?'disabled':''}>${text('localExport')}</button>`:''}
   ${p.destination?.kind==='github'&&!plan?`<button class="button" data-action="publish-refresh-plan">${text('repositoryReview')}</button>`:''}
   ${p.destination?`<button class="button primary" data-action="publish-release" ${p.stale||plan?.conflicts.length?'disabled':''}>${text(p.destination.kind==='github'?(p.destination.github.pages===false?'publishGithub':'publishPages'):'publishSsh')}</button>`:`<button class="button" data-action="integrations">${text('configure')}</button>`}
   <a id="full-public-preview" class="button" href="${esc(p.url)}" target="_blank" rel="noopener">${text('openPreview')}</a></div></section>
