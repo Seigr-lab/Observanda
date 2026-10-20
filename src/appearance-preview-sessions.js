@@ -1,5 +1,5 @@
+import {assertPreviewPermissions} from './publication-preview-admission.js';
 import {publicationPreviewMedia} from './publication-preview-media.js';
-import {appearancePreviewSource} from './appearance-preview.js';
 import {randomBytes} from 'node:crypto';
 import {appearancePreviewChoices,appearancePreviewPage,appearancePreviewRequest} from './appearance-preview.js';
 import {DesignCandidates} from './design-candidates.js';
@@ -11,7 +11,7 @@ import {feedFilePath} from './publication-feeds.js';
 // Only active previews and a bounded cache live in memory. Evicting a rendered
 // page loses no work: its pinned snapshot and appearance regenerate it exactly.
 export class AppearancePreviewSessions{
- constructor({maxSessions=5,cache=new DesignCandidates()}={}){this.maxSessions=maxSessions;this.cache=cache;this.sessions=new Map();}
+ constructor({maxSessions=5,cache=new DesignCandidates()}={}){this.maxSessions=maxSessions;this.cache=cache;this.sessions=new Map();this.permissions=new WeakMap();}
  clear(){this.sessions.clear();this.cache.clear();}
  async create(workspace,command,{media,fonts,blockedValues=[],signal,sourceReader,client}={}){
   command=structuredClone(command);
@@ -29,12 +29,12 @@ export class AppearancePreviewSessions{
   signal?.throwIfAborted();
   const request=appearancePreviewRequest(path),session=this.get(id,client),key=id+':'+request.key,cached=this.cache.get(key);
   const {workspace,command,media,fonts,blockedValues,sourceReader,sourceSnapshots}=session;
-  if(cached){if(sourceSnapshots.size)await appearancePreviewSource(workspace,command,{signal,sourceReader,sourceSnapshots});return cached;}
-  const mediaOrigins=new Map(),context=await appearancePreviewPage(workspace,command,request.key,{signal,sourceReader,sourceSnapshots,mediaOrigins}),plan=publicationPage(context,request.target),mediaFiles=new Map(),sourceMedia=mediaOrigins.size?publicationPreviewMedia(workspace,mediaOrigins,sourceReader):media;
+  if(cached){await assertPreviewPermissions(workspace,this.permissions.get(cached),{signal,sourceReader});return cached;}
+  const permissionProof=[],mediaOrigins=new Map(),context=await appearancePreviewPage(workspace,command,request.key,{signal,sourceReader,sourceSnapshots,mediaOrigins,permissionProof}),plan=publicationPage(context,request.target),mediaFiles=new Map(),sourceMedia=mediaOrigins.size?publicationPreviewMedia(workspace,mediaOrigins,sourceReader):media;
   for(const [id,kind] of plan.media){signal?.throwIfAborted();const file=await sourceMedia.get(id,{streamed:true,signal});if(file.kind!==kind)throw new AppError('MEDIA_INVALID');mediaFiles.set(id,file);}
   const fontFiles=await fonts.files(plan.fonts,{preview:true,signal});signal?.throwIfAborted();
   const candidate=renderPublication(context,{blockedValues,mediaFiles,fontFiles,emitBrowse:false});
-  verifyPublicationManifest(candidate);
+  verifyPublicationManifest(candidate);this.permissions.set(candidate,permissionProof);
   if(this.sessions.get(id)!==session)throw new AppError('NOT_FOUND');
   signal?.throwIfAborted();try{this.cache.set(key,candidate);}catch(error){if(error.code!=='DESIGN_PREVIEW_LIMIT')throw error;}return candidate;
  }

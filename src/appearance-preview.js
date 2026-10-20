@@ -1,3 +1,4 @@
+import {capturePreviewPermissions} from './publication-preview-admission.js';
 import {publicationWorkspace,assertWebsitePin,sameWebsitePin} from './publication-pin.js';
 import {websiteEditorProjection,websiteEditorPresentation} from './website-editor-projection.js';
 import {validWebsiteDraftPin} from './web/website-draft-pin.js';
@@ -27,7 +28,7 @@ import {appearanceReferencePage,appearanceReferenceQuery} from './appearance-pre
 // immutable saved snapshot or durable draft, with sharing checked before any body.
 // The existing publisher still owns projection, assets, rendering and privacy.
 const sameDraft=(a,b)=>a==null&&b==null||validWebsiteDraftPin(a)&&validWebsiteDraftPin(b)&&a.id===b.id&&a.revision===b.revision;
-async function withSource(workspace,command,{signal,sourceReader,sourceSnapshots,mediaOrigins,designTarget}={},consume){
+async function withSource(workspace,command,{signal,sourceReader,sourceSnapshots,mediaOrigins,designTarget,permissionProof}={},consume){
  if(!command||Object.keys(command).filter(key=>!['websitePin','websiteDraft'].includes(key)).sort().join()!=='appearance,etag,mode,workspaceId'||
   !researchId(command.workspaceId)||!revisionId(command.etag)||!validAppearance(command.appearance)||
   !['auto','examples','website'].includes(command.mode)||command.websiteDraft!=null&&!validWebsiteDraftPin(command.websiteDraft))throw new AppError('INVALID');
@@ -53,7 +54,8 @@ async function withSource(workspace,command,{signal,sourceReader,sourceSnapshots
   if(!validPublicationSources(sources)||sources.some(source=>source.workspaceId===book.id))throw new AppError('INVALID');
   const consumeRecords=async(records,metadata=book)=>{
    if(designTarget!==undefined&&sources.length)metadata=await websiteEditorPresentation(projected.document,projected.collectionIndexes,metadata,designTarget,{signal});
-   return consume({book:metadata,source:command.mode==='auto'?(records.counts.total||metadata.pages.some(p=>p.share)?'website':'examples'):command.mode,snapshot,store,records});
+   const value=await consume({book:metadata,source:command.mode==='auto'?(records.counts.total||metadata.pages.some(p=>p.share)?'website':'examples'):command.mode,snapshot,store,records});
+   if(permissionProof)permissionProof.push(...capturePreviewPermissions(records));return value;
   };
   if(!sources.length)return consumeRecords(local);
   const reader=await sourceReader?.({signal});if(!reader)throw new AppError('ACCESS_LOCKED');

@@ -1064,7 +1064,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
           const owner=await selectedContext.workspace.readMetadata('.observanda/website-editions/'+id+'.json',4096);
           if(owner){workspace=websiteWorkspace(selectedContext.workspace,JSON.parse(owner).websiteId);publisher=websitePublisher(selectedContext.publisher,workspace);}
         }
-        if(candidates.has(id)){const candidate=candidates.get(id);return (candidate.websiteId??null)===(workspace.websiteId??null)?candidate:null;}
+        if(candidates.has(id)){const candidate=candidates.get(id);if((candidate.websiteId??null)!==(workspace.websiteId??null))return null;await new PublicationJobs(workspace,{sourceReader}).assertSourcePermissions(candidate);return candidate;}
         const candidate=await new PublicationJobs(workspace,{sourceReader}).read(id);if(!candidate)return null;
         // One verified immutable edition serves its page, stylesheet and assets.
         // This private cache is bounded and cleared with the workspace key.

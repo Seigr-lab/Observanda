@@ -15,7 +15,7 @@ function assertAllowed(retained,current,metadata){
 // A retained edition may survive ordinary text edits. Withdrawal of source
 // consent is different: every public entry point rechecks the involved owners.
 // Unchanged snapshots avoid record reads; only changed owners visit descriptors.
-export async function assertPublicationSourcePermissions(workspace,source,{sourceReader,signal}={}){
+export async function assertPublicationSourcePermissions(workspace,source,{sourceReader,signal,checkedSnapshots=new Map()}={}){
  if(source.sourcePermissionVersion!==SOURCE_PUBLICATION_VERSION)revoked();
  const host=publicationResearchWorkspace(workspace);if(await host.storageKind()!=='catalogue')throw new AppError('STORAGE_UPGRADE_REQUIRED');
  const input=await openPublicationInput(workspace,source,{signal});
@@ -29,8 +29,8 @@ export async function assertPublicationSourcePermissions(workspace,source,{sourc
   }
  };
  await host.catalogue(async store=>{
-  if(await store.head()===source.etag)return;
-  await checkCatalogue(store,await store.snapshot(),source.workspaceId);
+  const head=await store.head();if(head===source.etag||checkedSnapshots.get(source.workspaceId)===head)return;
+  await checkCatalogue(store,await store.snapshot(),source.workspaceId);checkedSnapshots.set(source.workspaceId,head);
  });
  const foreign=[];for await(const group of input.sourceGroups())if(group.workspaceId!==source.workspaceId)foreign.push(group);
  if(!foreign.length)return;
@@ -38,7 +38,7 @@ export async function assertPublicationSourcePermissions(workspace,source,{sourc
  const reader=await sourceReader({signal});
  try{
   for(const group of foreign)await reader.use(group.workspaceId,undefined,async(store,snapshot,pinned)=>{
-   if(pinned.snapshotId!==group.snapshotId)await checkCatalogue(store,snapshot,group.workspaceId);
+   if(pinned.snapshotId!==group.snapshotId&&checkedSnapshots.get(group.workspaceId)!==pinned.snapshotId){await checkCatalogue(store,snapshot,group.workspaceId);checkedSnapshots.set(group.workspaceId,pinned.snapshotId);}
   });
   await reader.verify();
  }finally{await reader.close();}

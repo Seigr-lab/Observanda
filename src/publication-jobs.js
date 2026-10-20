@@ -28,6 +28,7 @@ import {retainPublicationInput,publicationDescriptor,removePublicationInput} fro
 import {buildPublicationEdition} from './publication-edition.js';
 import {assertPublicFiles,admitRetainedPublicFile} from './privacy.js';
 import {FileContent,writeContent,contentStream,contentBuffer,contentSize,contentHash} from './file-content.js';
+const permissionHeads=new WeakMap();
 const hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const inputFile=id=>{if(!researchId(id))throw new AppError('INVALID');return '.observanda/release-inputs/'+id+'.json';};
 const candidateFile=id=>{if(!hash(id))throw new AppError('INVALID');return '.observanda/release-candidates/'+id+'.json';};
@@ -134,7 +135,8 @@ export class PublicationJobs{
  }
  async assertSourcePermissions(candidate,{signal}={}){
   if(candidate.sourcePermissionVersion!==SOURCE_PUBLICATION_VERSION)throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
-  await assertPublicationSourcePermissions(this.workspace,await this.source(candidate.jobId),{sourceReader:this.sourceReader,signal});
+  let checkedSnapshots=permissionHeads.get(candidate);if(!checkedSnapshots){checkedSnapshots=new Map();permissionHeads.set(candidate,checkedSnapshots);}
+  await assertPublicationSourcePermissions(this.workspace,await this.source(candidate.jobId),{sourceReader:this.sourceReader,signal,checkedSnapshots});
  }
  async read(id){
   const stored=await this.stored(id);if(!stored)return null;
