@@ -32,7 +32,7 @@ import {jobSummary} from './jobs.js';
 import {researchId} from './web/research-reference.js';
 import {AppError} from './errors.js';
 export class ProjectPublications{
- constructor(entry){this.entry=entry;this.candidates=new DesignCandidates();this.designs=new DesignCandidates();this.appearancePreviews=new AppearancePreviewSessions();}
+ constructor(entry){this.entry=entry;this.candidates=new Map();this.designs=new DesignCandidates();this.appearancePreviews=new AppearancePreviewSessions();}
  clear(){this.candidates.clear();this.designs.clear();this.appearancePreviews.clear();}
  previewUrl(id,file=''){return (this.entry.routePrefix??'/api/projects/'+this.entry.storage.projectId)+'/publication-preview/'+id+'/'+file;}
  appearanceUrl(id,file=''){return (this.entry.routePrefix??'/api/projects/'+this.entry.storage.projectId)+'/appearance-preview/'+id+'/'+file;}
@@ -45,9 +45,11 @@ export class ProjectPublications{
   if(request.id&&!websiteContext&&websiteId===null&&['file','export'].includes(operation)){const raw=await storage.readMetadata('.observanda/website-editions/'+request.id+'.json',4096);if(raw)websiteId=JSON.parse(raw).websiteId;}
   const workspace=websiteWorkspace(storage,websiteId,{websitePin});
   const publisher=websitePublisher(basePublisher,workspace),queue=websiteJobQueue(baseQueue,websiteId),releases=new PublicationJobs(workspace,{sourceReader,sourceAccess:this.entry.sourceAccess}),blockedValues=[storage.root,os.homedir(),os.hostname()],cacheKey=id=>(websiteId??'')+':'+id;
+  // Retained editions hold indexed file descriptors, not buffered design files.
+  const remember=value=>{this.candidates.set(cacheKey(value.reviewId),value);while(this.candidates.size>5)this.candidates.delete(this.candidates.keys().next().value);return value;};
   const candidate=async id=>{
    if(typeof id!=='string'||!/^[a-f0-9]{64}$/.test(id))throw new AppError('INVALID');
-   let value=this.candidates.get(cacheKey(id));if(!value){value=await releases.read(id);if(value)this.candidates.set(cacheKey(id),value);}else await releases.assertSourcePermissions(value,{signal});return value;
+   let value=this.candidates.get(cacheKey(id));if(!value){value=await releases.read(id);if(value)remember(value);}else await releases.assertSourcePermissions(value,{signal});return value;
   };
   const retained=async id=>{const value=await candidate(id);if(!value)throw new AppError('NOT_FOUND');return value;};
   const rollback=async value=>data.rollbackReview?new PublicationRollback(workspace,publisher,{sourceReader}).project(value,await new PublicationRollback(workspace,publisher,{sourceReader}).authorize(value,data.rollbackReview)):value;
@@ -78,12 +80,18 @@ export class ProjectPublications{
    const search=new URLSearchParams(query);for(const key of ['workspace','context'])search.delete(key);
    const file=await this.appearancePreviews.file(request.id,request.file+(search.size?'?'+search:''),{signal});await check();return binary(file);
   }
-  if(operation==='preview'){const value=await releases.inline({...data,blockedValues},{signal});this.candidates.set(cacheKey(value.reviewId),value);return this.summary(releases,value);}
+  if(operation==='preview'){const value=await releases.inline({...data,blockedValues},{signal});remember(value);return this.summary(releases,value);}
   if(operation==='file'){
-   const design=this.designs.get(request.id),value=design??await retained(request.id);if(!await value.files.has(request.file))throw new AppError('NOT_FOUND');if(design||value.version!==3)verifyPublication(value,{allowDesign:!!design});const content=await value.files.get(request.file);await check();return binary({name:request.file,content});
+   const content=await storage.catalogue(async()=>{
+    const design=this.designs.get(request.id),value=design??await retained(request.id);if(!await value.files.has(request.file))throw new AppError('NOT_FOUND');if(design||value.version!==3)verifyPublication(value,{allowDesign:!!design});return value.files.get(request.file);
+   });
+   await check();return binary({name:request.file,content});
   }
   if(operation==='export'){
-   const value=await rollback(await retained(request.id??data.id));if(!data.rollbackReview&&!await publicationRevisionCurrent(workspace,value))throw new AppError('STALE');await new AnalysisPublicationReview(workspace,{sourceReader}).assert(value);await verifyPublicationCandidate(value,{signal});await check();return binary({archive:value.files});
+   const value=await workspace.catalogue(async()=>{
+    const value=await rollback(await retained(request.id??data.id));if(!data.rollbackReview&&!await publicationRevisionCurrent(workspace,value))throw new AppError('STALE');await new AnalysisPublicationReview(workspace,{sourceReader}).assert(value);await verifyPublicationCandidate(value,{signal});return value;
+   });
+   await check();return binary({archive:value.files});
   }
   if(operation.startsWith('local-export/')){const result=await new LocalExport(workspace,{sourceReader})[operation.slice(13)](data),project=value=>value?.previewUrl?{...value,previewUrl:this.previewUrl(value.reviewId,value.previewUrl.split('/').slice(3).join('/'))}:value;return result?.plan?{...result,plan:project(result.plan)}:project(result);}
   if(operation.startsWith('publication-links/')){const links=new PublicationLinks(workspace);return operation.endsWith('/save')?links.save(data):links.read();}

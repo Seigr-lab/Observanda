@@ -1296,12 +1296,14 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         }finally{res.off('close',abort);}
       }
       if (req.method === 'POST' && url.pathname === '/api/export' || req.method==='GET' && /^\/api\/export\/[a-f0-9]{64}$/.test(url.pathname)) {
-        const data=req.method==='POST'?await body(req):{id:url.pathname.split('/').at(-1),rollbackReview:url.searchParams.get('rollbackReview')};let candidate=await retainedCandidate(data.id);
-        if(!candidate)throw new AppError('STALE');
-        if(data.rollbackReview){const rollback=new PublicationRollback(workspace,publisher,{sourceReader});candidate=rollback.project(candidate,await rollback.authorize(candidate,data.rollbackReview));}
-        else if(!await publicationRevisionCurrent(workspace,candidate))throw new AppError('STALE');
-        await new AnalysisPublicationReview(workspace,{sourceReader}).assert(candidate);
-        await verifyPublicationCandidate(candidate);
+        const data=req.method==='POST'?await body(req):{id:url.pathname.split('/').at(-1),rollbackReview:url.searchParams.get('rollbackReview')};
+        const candidate=await workspace.catalogue(async()=>{
+          let value=await retainedCandidate(data.id);if(!value)throw new AppError('STALE');
+          if(data.rollbackReview){const rollback=new PublicationRollback(workspace,publisher,{sourceReader});value=rollback.project(value,await rollback.authorize(value,data.rollbackReview));}
+          else if(!await publicationRevisionCurrent(workspace,value))throw new AppError('STALE');
+          await new AnalysisPublicationReview(workspace,{sourceReader}).assert(value);
+          await verifyPublicationCandidate(value);return value;
+        });
         res.writeHead(200,{'Content-Type':'application/zip','Content-Disposition':'attachment; filename="observanda-site.zip"'});
         await pipeline(Readable.from(zipStream(candidate.files)),res);return;
       }
@@ -1316,10 +1318,16 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       }
       const preview = /^\/preview\/([a-f0-9]{64})\/(.+)$/.exec(url.pathname);
       if (req.method === 'GET' && preview) {
-        const candidate = designCandidates.get(preview[1]) ?? await retainedCandidate(preview[1]);
-        if (!candidate || !await candidate.files.has(preview[2])) throw new AppError('NOT_FOUND');
-        if(candidate.version!==3)verifyPublication(candidate,{allowDesign:designCandidates.get(preview[1])===candidate});
-        return await serveContent(req, res, await candidate.files.get(preview[2]), mime(preview[2]));
+        // One selected file traverses several immutable metadata trees. Keep
+        // those reads and current permission admission in one owned snapshot;
+        // close it before streaming any response to the browser.
+        const content=await workspace.catalogue(async()=>{
+          const candidate = designCandidates.get(preview[1]) ?? await retainedCandidate(preview[1]);
+          if (!candidate || !await candidate.files.has(preview[2])) throw new AppError('NOT_FOUND');
+          if(candidate.version!==3)verifyPublication(candidate,{allowDesign:designCandidates.get(preview[1])===candidate});
+          return candidate.files.get(preview[2]);
+        });
+        return await serveContent(req, res, content, mime(preview[2]));
       }
       throw new AppError('NOT_FOUND');
       },{check:()=>req.checkWriter()});

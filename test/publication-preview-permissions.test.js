@@ -13,6 +13,7 @@ import {WorkspaceFonts} from '../src/workspace-fonts.js';
 import {PublicationJobs} from '../src/publication-jobs.js';
 import {AppearancePreviewSessions} from '../src/appearance-preview-sessions.js';
 import {ResearchCatalogue} from '../src/research-catalogue.js';
+import {Workspace} from '../src/storage.js';
 import {startServer} from '../src/server.js';
 import {capturePreviewPermissions,assertPreviewPermissions} from '../src/publication-preview-admission.js';
 
@@ -38,12 +39,20 @@ test('retained preview HTTP cache rechecks identical HTML and asset URLs after s
  const request=(route,data)=>fetch(app.origin+route,{method:data===undefined?'GET':'POST',headers:{Origin:app.origin,Cookie:cookie,'Content-Type':'application/json','X-Observanda-Workspace':context,'X-Observanda-Wait':'1'},...(data===undefined?{}:{body:JSON.stringify(data)})});
  const active=await f.jobs.workspace.outline(),prepared=await request('/api/preview',{workspaceId:f.book.id,etag:active.etag,websitePin:active.websitePin}),review=await prepared.json();assert.equal(prepared.status,200,JSON.stringify(review));
  const entry='/preview/'+review.id+'/entries/'+f.record.id+'.html',asset='/preview/'+review.id+'/media/'+f.asset.id+'.png';
- const original=await request(entry);assert.equal(original.status,200);const html=await original.text();assert.ok(html.includes('Retained procedure details.'));assert.equal((await request(asset)).status,200);
+ const open=Workspace.prototype.openCatalogue;let opened=0,html;
+ Workspace.prototype.openCatalogue=function(...args){if(this.root===f.workspace.root)opened++;return open.apply(this,args);};
+ try{
+  const original=await request(entry);assert.equal(original.status,200);html=await original.text();assert.ok(html.includes('Retained procedure details.'));
+  assert.ok(opened<=3,'A selected page uses bounded database admission, not one open per metadata node: '+opened);
+  opened=0;const image=await request(asset);assert.equal(image.status,200);await image.arrayBuffer();
+  assert.ok(opened<=3,'A selected asset uses bounded database admission: '+opened);
+ }finally{Workspace.prototype.openCatalogue=open;}
+ const archive=await request('/api/export/'+review.id);assert.equal(archive.status,200);const bytes=Buffer.from(await archive.arrayBuffer());assert.ok(bytes.includes(Buffer.from('Retained procedure details.')));assert.ok(!bytes.includes(Buffer.from(f.workspace.root)));
  const design=await request('/api/design-preview',{websitePin:active.websitePin,mode:'website',workspaceContent:true,designTarget:'page:'+f.page.id}),draft=await design.json();assert.equal(design.status,200,JSON.stringify(draft));assert.ok((await(await request(draft.url)).text()).includes('Unpublished authoring text.'));
  await f.change(book=>{book.entries[0].body='A newer public observation.';});assert.equal(await(await request(entry)).text(),html);assert.equal((await request(asset)).status,200);
  for(const [kind,withdraw] of withdrawals){
   await f.change(book=>withdraw(book,false));
-  for(const route of [entry,asset]){const response=await request(route),body=await response.json();assert.equal(response.status,422,kind);assert.equal(body.code,'PUBLICATION_PERMISSIONS_CHANGED',kind);}
+  for(const route of [entry,asset,'/api/export/'+review.id]){const response=await request(route),body=await response.json();assert.equal(response.status,422,kind);assert.equal(body.code,'PUBLICATION_PERMISSIONS_CHANGED',kind);}
   assert.equal((await request(draft.url)).status,200,'Authenticated private authoring remains available');
   await f.change(book=>withdraw(book,true));assert.equal((await request(entry)).status,200,kind+' restored');
  }

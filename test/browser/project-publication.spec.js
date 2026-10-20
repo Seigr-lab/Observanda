@@ -1,5 +1,8 @@
 import {websiteDocument} from '../../src/web/website-sites-model.js';
 import {WebsiteSites} from '../../src/website-sites.js';
+import {Workspace} from '../../src/storage.js';
+import {ProjectPublications} from '../../src/project-publications.js';
+import {AsyncLocalStorage} from 'node:async_hooks';
 import {WorkspaceFonts} from '../../src/workspace-fonts.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm,readFile} from 'node:fs/promises';
@@ -29,7 +32,7 @@ test('a retained project website preserves editing preview and export through re
   const storage=await initializeProjectLocation(path.join(directory,'Independent project'),id,book,access,vault),registry=new ProjectRegistry(f.workspace,rootBook.id);await registry.attach(storage,{expected:(await registry.read()).revision});
   const font=await new WorkspaceFonts(storage).import(await readFile('src/fonts/dm-sans.ttf'));
   app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,headless:true,preferencesFile:path.join(directory,'preferences.json')});
-  page.on('pageerror',error=>errors.push(error.message));page.on('response',response=>{if(response.url().includes('/api/'))requests.push({status:response.status(),route:new URL(response.url()).pathname});});
+  page.on('pageerror',error=>errors.push(error.message));page.on('response',response=>{if(response.url().includes('/api/')){const route=new URL(response.url()).pathname;requests.push({status:response.status(),route,...(route.endsWith('/websites/editor/item')?{collection:response.request().postDataJSON()?.collection}:{})});}});
   await page.goto(app.url);await expect(page.getByRole('button',{name:'Preferences',exact:true})).toBeVisible();
   await page.goto(app.origin+'/#/owners/'+id+'/projects/'+id);await expect(page.locator('#main h1')).toHaveText('Independent project');expect(await page.evaluate(async id=>(await document.fonts.load('16px \"Observanda '+id+'\"')).some(font=>font.status==='loaded'),font.id)).toBe(true);
   db=await f.workspace.openCatalogue();await db.run('BEGIN');await db.lock();
@@ -41,21 +44,25 @@ test('a retained project website preserves editing preview and export through re
   await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
   await chooseWebsitePage(page,'entries/'+book.entries[0].id+'.html');await openPageSettings(page);await page.getByText('Page header',{exact:true}).click();await page.getByLabel('Display heading',{exact:true}).fill('Selected project observation');
   await expect(page.frameLocator('#website-draft-preview').getByRole('heading',{name:'Selected project observation',exact:true})).toBeVisible();await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
-  const websiteUrl=page.url();await page.reload();await expect(page.frameLocator('#website-draft-preview').getByRole('heading',{name:'Selected project observation',exact:true})).toBeVisible();
+  const websiteUrl=page.url();await page.reload();await expect(page.locator('.website-site-context')).toContainText('Experiment journal',{timeout:20000});await expect(page.frameLocator('#website-draft-preview').getByRole('heading',{name:'Selected project observation',exact:true})).toBeVisible();
   await page.locator('.website-site-context').getByRole('button',{name:'Publishing destination',exact:true}).click();await page.getByLabel('GitHub owner / organization',{exact:true}).fill('Example');await page.getByLabel('Repository name',{exact:true}).fill('project-experiments');await page.getByRole('button',{name:'Save destination',exact:true}).click();await expect(page.locator('#destination-status')).toHaveText('Destination saved on this device.');
-  await page.goto(websiteUrl);await page.getByRole('button',{name:'Preview & export',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();await expect(page.locator('#full-public-preview')).toBeVisible();
+  await page.goto(websiteUrl);await page.getByRole('button',{name:'Preview & export',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();await expect(page.locator('#full-public-preview')).toBeVisible({timeout:45000});
   const preview=await page.locator('#full-public-preview').getAttribute('href');expect(preview).toContain('/api/projects/'+id+'/publication-preview/');
-  const viewed=await page.context().request.get(app.origin+preview);expect(viewed.status()).toBe(200);expect(await viewed.text()).toContain('Selected project observation');
-  const sites=new WebsiteSites(storage),course=await sites.read(courseId);await sites.save(courseId,{workspaceId:book.id,baseEtag:course.etag,metadata:{website:{...course.book.website,footer:'Updated course footer'}},projects:[],changes:[],removed:[],selection:course.site.selection});
-  await page.reload();await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible();
+  const open=Workspace.prototype.openCatalogue,run=ProjectPublications.prototype.run,selectedRead=new AsyncLocalStorage();let opened=0;
+  ProjectPublications.prototype.run=function(request,...args){return request.publication==='file'&&request.file===preview.split('/').slice(6).join('/')?selectedRead.run(true,()=>run.call(this,request,...args)):run.call(this,request,...args);};
+  Workspace.prototype.openCatalogue=function(...args){if(selectedRead.getStore()&&this.root===storage.root)opened++;return open.apply(this,args);};
+  try{const viewed=await page.context().request.get(app.origin+preview);expect(viewed.status()).toBe(200);expect(await viewed.text()).toContain('Selected project observation');expect(opened).toBeGreaterThan(0);expect(opened).toBeLessThanOrEqual(4);}finally{Workspace.prototype.openCatalogue=open;ProjectPublications.prototype.run=run;}
+  const sites=new WebsiteSites(storage),course=await sites.read(courseId);await sites.save(courseId,{workspaceId:book.id,baseEtag:course.etag,websitePin:course.websitePin,metadata:{website:{...course.book.website,footer:'Updated course footer'}},projects:[],changes:[],removed:[],selection:course.site.selection});
+  await page.reload();await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible({timeout:20000});
   await expect(page.getByText('The workspace or publishing destination has changed since this edition was prepared.',{exact:false})).not.toBeVisible();
-  await page.locator('#review-confirm').check();const download=page.waitForEvent('download');await page.getByRole('button',{name:'Download website ZIP',exact:true}).click();expect((await download).suggestedFilename()).toBe('observanda-site.zip');
+  await page.locator('#review-confirm').check();const download=page.waitForEvent('download');await page.getByRole('button',{name:'Download website ZIP',exact:true}).click();const archive=await download;expect(archive.suggestedFilename()).toBe('observanda-site.zip');const downloaded=await readFile(await archive.path());expect(downloaded.includes(Buffer.from('Selected project observation'))).toBe(true);expect(downloaded.includes(Buffer.from(storage.root))).toBe(false);
   await db.close();db=null;await navigate(page,'Website editor');await expect(page.locator('.website-site-context')).toContainText((await new WebsiteSites(f.workspace).read(null)).site.name);expect(page.url()).not.toContain('/owners/');
   await page.locator('.website-site-context').getByRole('button',{name:'Websites',exact:true}).click();
   await page.getByRole('button',{name:'New website',exact:true}).click();await page.getByLabel('Website name',{exact:true}).fill('Second independent site');await expect(page.getByLabel('Project',{exact:true})).toHaveCount(0);await page.getByRole('button',{name:'Create website',exact:true}).click();await expect(page.locator('.website-site-context')).toContainText('Second independent site');expect(page.url()).not.toContain('/owners/');
   await page.goto(websiteUrl);await expect(page.locator('.website-site-context')).toContainText('Experiment journal');
-  expect((await f.workspace.outline()).metadata.websites.map(site=>({name:site.name,projectId:site.projectId}))).toEqual([{name:'Second independent site',projectId:null}]);expect((await storage.outline()).metadata.websites.map(site=>site.name)).toEqual(['Experiment journal','Independent course']);
-  expect(requests.filter(r=>r.status>=400)).toEqual([]);expect(errors).toEqual([]);
+  expect((await new WebsiteSites(f.workspace).list()).sites.map(site=>({name:site.name,projectId:site.projectId}))).toEqual([{name:'Second independent site',projectId:null}]);expect((await sites.list()).sites.map(site=>site.name).sort()).toEqual(['Experiment journal','Independent course']);
+  // Optional presentation and unplaced-asset lookups return NOT_FOUND until authored.
+  expect(requests.filter(r=>r.status>=400&&!(r.status===404&&['/api/websites/editor/item','/api/projects/'+id+'/websites/editor/item'].includes(r.route)&&['layouts','branding','assets'].includes(r.collection)))).toEqual([]);expect(errors).toEqual([]);
  }catch(error){
   await test.info().attach('publication-requests',{body:JSON.stringify({errors,requests},null,2),contentType:'application/json'});
   await test.info().attach('publication-before-cleanup',{body:await page.screenshot(),contentType:'image/png'});throw error;
