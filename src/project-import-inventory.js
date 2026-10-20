@@ -25,8 +25,8 @@ export const importOwnerStorage=(root,entry,vault)=>entry.kind==='project'?new P
 export class ProjectImportInventory{
  constructor(deviceStore,credentials){this.deviceStore=deviceStore;this.credentials=credentials;this.keys=new Map();}
  async unlock(root,relative,expected){
-  const access=await readAccess(root),credential=this.credentials.find(item=>item.relative===relative)??{username:'',password:'',recovery:''};let vault;
-  try{vault=await verifyAccess(access,credential.username,credential.password,{deviceStore:this.deviceStore,recovery:credential.recovery});}
+  const access=await readAccess(root),credential=Array.isArray(this.credentials)?this.credentials.find(item=>item.relative===relative)??{username:'',password:'',recovery:''}:null;let vault;
+  try{vault=credential?await verifyAccess(access,credential.username,credential.password,{deviceStore:this.deviceStore,recovery:credential.recovery}):await this.credentials.unlock(root,relative,access,expected);}
   catch(error){if(['ACCESS_LOCKED','ACCESS_DENIED','DEVICE_UNKNOWN','AUTH'].includes(error.code)){const failure=new AppError('PROJECT_IMPORT_ACCESS',[relative,path.basename(root)]);failure.operationNotStarted=true;throw failure;}throw error;}
   if(expected&&(vault.id!==expected.vaultId||typeof expected.accessEtag==='string'&&access.etag!==expected.accessEtag)){clearVault(vault);throw new AppError('CONFLICT');}
   clearVault(this.keys.get(relative));this.keys.set(relative,vault);return {access,vault};
@@ -35,13 +35,13 @@ export class ProjectImportInventory{
   validateStorageName(path.basename(root));await assertNotDeleting(root);await assertNotMoving(root);
   if(await realpath(root)!==root)throw new AppError('UNSAFE');
   if(await assertRegular(path.join(root,'.observanda/copy-in-progress'),{missing:true}))throw new AppError('STORAGE_INCOMPLETE');
-  const {access,vault}=await this.unlock(root,relative),binding=await catalogueBinding(root),identity=binding??await (kind==='project'?readProjectArchiveIdentity:readLabBookArchiveIdentity)(root,vault,{verify:false});
+  const {access,vault}=await this.unlock(root,relative,expected),binding=await catalogueBinding(root),identity=binding??await (kind==='project'?readProjectArchiveIdentity:readLabBookArchiveIdentity)(root,vault,{verify:false});
   if(binding&&binding.placement!==kind)throw new AppError('DATABASE_LOCATION');
   const ownerId=kind==='project'?'projectId':'labBookId',storage=importOwnerStorage(root,{kind,[ownerId]:identity[ownerId]},vault);
-  const namespaceId=binding?(await storage.outline()).metadata.id:identity.namespaceId;
-  const entry={kind,relative,[ownerId]:identity[ownerId],namespaceId,vaultId:vault.id,accessEtag:access.etag,archiveDigest:binding?null:identity.archiveDigest};
-  if(expected&&['namespaceId','vaultId',ownerId].some(key=>entry[key]!==expected[key]))throw new AppError('DATABASE_LOCATION');
-  return {entry,storage};
+  const metadata=binding?(await storage.outline()).metadata:null,namespaceId=metadata?.id??identity.namespaceId,projectId=kind==='lab-book'?(metadata?.notebooks.find(book=>book.id===identity.labBookId)?.projectId??expected?.projectId):identity.projectId;
+  const entry={kind,relative,[ownerId]:identity[ownerId],...(projectId?{projectId}:{}),namespaceId,vaultId:vault.id,accessEtag:access.etag,archiveDigest:binding?null:identity.archiveDigest};
+  if(expected&&['namespaceId','vaultId',ownerId,...(expected.projectId?['projectId']:[])].some(key=>entry[key]!==expected[key]))throw new AppError('DATABASE_LOCATION');
+  await this.credentials.verify?.(entry);return {entry,storage};
  }
  async inspect(root){
   const first=await this.owner(root,'','project'),owners=[first.entry],projects=[],queue=[{...first,parentId:null}],namespaces=new Set([first.entry.namespaceId]),ids=new Set([first.entry.projectId]);
@@ -50,7 +50,7 @@ export class ProjectImportInventory{
    const current=queue[index],relative=current.entry.relative,registry=new LabBookRegistry(current.storage);
    const inspect=operation=>current.entry.archiveDigest?inspectArchivedOwnerDirectory(registry,current.entry.archiveDigest,operation):registry.inspect(operation);
    await inspect(async listed=>{
-   for await(const {entry:book} of listed.entries()){const childRelative=[relative,book.directory].filter(Boolean).join('/'),bookOwner=await this.owner(path.join(current.storage.root,book.directory),childRelative,'lab-book',book);bookOwner.entry.projectId=current.entry.projectId;admit(bookOwner.entry);}
+   for await(const {entry:book} of listed.entries()){const childRelative=[relative,book.directory].filter(Boolean).join('/'),bookOwner=await this.owner(path.join(current.storage.root,book.directory),childRelative,'lab-book',{...book,projectId:current.entry.projectId});bookOwner.entry.projectId=current.entry.projectId;admit(bookOwner.entry);}
    for(const folder of (await readdir(current.storage.root,{withFileTypes:true})).sort((a,b)=>a.name.localeCompare(b.name))){
     if(folder.name==='.observanda'||(await listed.get(listed.nameKey(folder.name),{index:'location'}))?.state==='active')continue;
     if(!folder.isDirectory()&&!folder.isSymbolicLink())continue;
@@ -78,7 +78,7 @@ export class ProjectImportInventory{
    const currentRoot=path.join(root,...pending.entry.relative.split('/')),{vault}=await this.unlock(currentRoot,pending.entry.relative,pending.entry),storage=importOwnerStorage(currentRoot,pending.entry,vault),registry=new LabBookRegistry(storage),inspect=operation=>pending.entry.archiveDigest?inspectArchivedOwnerDirectory(registry,pending.entry.archiveDigest,operation):registry.inspect(operation);
    try{await inspect(async listed=>{
     for await(const {entry:book} of listed.entries()){
-     const relative=[pending.entry.relative,book.directory].filter(Boolean).join('/');try{const found=await this.owner(path.join(currentRoot,book.directory),relative,'lab-book',book);await add({...found.entry,projectId:pending.entry.projectId});}finally{this.forget(relative);}
+     const relative=[pending.entry.relative,book.directory].filter(Boolean).join('/');try{const found=await this.owner(path.join(currentRoot,book.directory),relative,'lab-book',{...book,projectId:pending.entry.projectId});await add({...found.entry,projectId:pending.entry.projectId});}finally{this.forget(relative);}
     }
     // opendir bounds physical enumeration independently of tree size.
     const {opendir}=await import('node:fs/promises');for await(const folder of await opendir(currentRoot)){

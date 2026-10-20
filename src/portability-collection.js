@@ -92,7 +92,10 @@ export function portabilityCollection(storage,ref){
  const read=operation=>storage.catalogue(async store=>{const collection=new NativePortabilityCollection(store,ref.id);await collection.checked(ref);return operation(collection);});
  return {get count(){return ref.count;},
   async *entries(options={}){let offset=0;do{const page=await read(collection=>collection.page(ref,{...options,offset}));yield* page.items;offset=page.next;}while(offset!==null);},
+  page:options=>read(collection=>collection.page(ref,options)),
   get:relative=>read(collection=>collection.find(ref,'relative',relative)),find:(index,key)=>read(collection=>collection.find(ref,index,key)),
+  async append(value){return this.appendAll([value]);},
+  async appendAll(values){const next=await write(storage,async store=>{const collection=new NativePortabilityCollection(store,ref.id);await collection.checked(ref);let result=structuredClone(ref),count=0;for await(const value of values){result=await collection.put(result,value);if(++count%64===0)await collection.flush(result);}return collection.publish(result);});Object.assign(ref,next);return ref;},
   async update(relative,patch){const next=await write(storage,async store=>{const collection=new NativePortabilityCollection(store,ref.id);await collection.checked(ref);const before=await collection.find(ref,'relative',relative);if(!before)throw new AppError('NOT_FOUND');return collection.publish(await collection.put(ref,{...before,...patch},{replace:true}));});Object.assign(ref,next);return this.get(relative);},
   verify:()=>read(collection=>collection.verify(ref))
  };

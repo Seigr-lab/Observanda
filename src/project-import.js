@@ -46,7 +46,8 @@ const credentials=command=>{
 export class ProjectImports{
  constructor(registry,deviceStore){this.registry=registry;this.workspace=registry.workspace;this.deviceStore=deviceStore;}
  read(id){return readProjectImport(this.registry,id);}
- async pending({after=null,limit=20}={}){if(after!==null&&!researchId(after)||!Number.isSafeInteger(limit)||limit<1||limit>50)throw new AppError('INVALID');const list=[];for await(const value of pendingProjectImports(this.registry)){if(after!==null&&value.id<=after)continue;list.push(value);list.sort((a,b)=>a.id.localeCompare(b.id));if(list.length>limit+1)list.pop();}const more=list.length>limit;if(more)list.pop();const registered=await this.registry.inspect(async view=>{const ids=new Set();for(const value of list)if((await view.get(value.manifest.projectId))?.state==='active')ids.add(value.manifest.projectId);return ids;});return {items:list.map(value=>({id:value.id,name:path.basename(value.destination),parentId:value.parentId,phase:value.phase,inPlace:value.source===value.destination,cancellable:!['registered','complete'].includes(value.phase)&&!registered.has(value.manifest.projectId),running:projectTransferRunning(projectImportFile(this.registry,value.id))})),next:more?list.at(-1).id:null};}
+ header(id){return readProjectImport(this.registry,id,{metadataOnly:true});}
+ async pending({after=null,limit=20}={}){if(after!==null&&!researchId(after)||!Number.isSafeInteger(limit)||limit<1||limit>50)throw new AppError('INVALID');const list=[];for await(const value of pendingProjectImports(this.registry,{metadataOnly:true})){if(after!==null&&value.id<=after)continue;list.push(value);list.sort((a,b)=>a.id.localeCompare(b.id));if(list.length>limit+1)list.pop();}const more=list.length>limit;if(more)list.pop();const registered=await this.registry.inspect(async view=>{const ids=new Set();for(const value of list)if((await view.get(value.manifest.projectId))?.state==='active')ids.add(value.manifest.projectId);return ids;});return {items:list.map(value=>({id:value.id,name:path.basename(value.destination),parentId:value.parentId,phase:value.phase,inPlace:value.source===value.destination,cancellable:!['registered','complete'].includes(value.phase)&&!registered.has(value.manifest.projectId),running:projectTransferRunning(projectImportFile(this.registry,value.id))})),next:more?list.at(-1).id:null};}
  async parent(parentId){return parentId===null?await realpath(this.workspace.root):(await this.registry.locate(parentId)).root;}
  async admit(value,{fresh=false}={}){
   if(storageCreationPath(await this.parent(value.parentId),path.basename(value.destination))!==value.destination)throw new AppError('CONFLICT');
@@ -66,9 +67,9 @@ export class ProjectImports{
   for await(const pending of pendingProjectImports(this.registry)){if(pending.id===value.id)continue;if(within(pending.destination,value.destination)||within(value.destination,pending.destination))throw new AppError('STORAGE_PROJECT_BUSY');for await(const entry of projectImportOwners(this.registry,pending).entries())if(await owners.find('namespace',entry.namespaceId)||await owners.find('vault',entry.vaultId))throw new AppError('STORAGE_PROJECT_BUSY');}
   if(!projectCount)throw new AppError('STORAGE_COPY');
  }
- async run(command,{resume=false,check=async()=>{},checkpoint=async()=>{},opened=async()=>{},onProgress}={}){
-  const validated=credentials(command),current=await this.read(command.id);if(!current||current.version===2)return new NativeProjectImport(this).run(command,{resume,check,checkpoint,opened,onProgress},validated);
-  const supplied=credentials(command),inventory=new ProjectImportInventory(this.deviceStore,supplied),directory=await privateDirectory(this.workspace.root,'.observanda/project-imports');
+ async run(command,{resume=false,check=async()=>{},checkpoint=async()=>{},opened=async()=>{},onProgress,credentialSource}={}){
+  const validated=credentialSource??credentials(command),current=await this.read(command.id);if(!current||current.version===2)return new NativeProjectImport(this).run(command,{resume,check,checkpoint,opened,onProgress},validated);
+  const supplied=credentialSource??credentials(command),inventory=new ProjectImportInventory(this.deviceStore,supplied),directory=await privateDirectory(this.workspace.root,'.observanda/project-imports');
   try{return await trackProjectTransfer(projectImportFile(this.registry,command.id),()=>withWriterLease(path.join(directory,command.id+'.lock'),async()=>{
    await check();let value=await this.read(command.id);const fresh=!value;if(value?.phase==='cancelled')return this.cancelled(value);if(value?.phase==='cancelling')throw new AppError('STORAGE_INCOMPLETE');if(resume&&!value)throw new AppError('NOT_FOUND');
    if(!value){
@@ -127,12 +128,13 @@ export class ProjectImports{
    };return take(0);
   }));}finally{inventory.close();}
  }
- async cancelled(value){await releaseProjectImport(this.registry,value);return {id:value.id,cancelled:true};}
- async cancel(command,{check=async()=>{},checkpoint=async()=>{},onProgress}={}){
-  const supplied=credentials(command);if(command.path!==undefined||command.parentId!==undefined)throw new AppError('INVALID');
+ async cancelled(value){if(value.access)await saveProjectImport(this.registry,value);await releaseProjectImport(this.registry,value);return {id:value.id,cancelled:true};}
+ async cancel(command,{check=async()=>{},checkpoint=async()=>{},onProgress,credentialSource}={}){
+  const supplied=credentialSource??credentials(command);if(command.path!==undefined||command.parentId!==undefined)throw new AppError('INVALID');
   const inventory=new ProjectImportInventory(this.deviceStore,supplied),directory=await privateDirectory(this.workspace.root,'.observanda/project-imports');
   try{return await trackProjectTransfer(projectImportFile(this.registry,command.id),()=>withWriterLease(path.join(directory,command.id+'.lock'),async()=>{
    await check();const value=await this.read(command.id);if(!value)throw new AppError('NOT_FOUND');if(value.phase==='cancelled')return this.cancelled(value);
+   if(value.accessOnly){await check();value.phase='cancelled';await saveProjectImport(this.registry,value);return this.cancelled(value);}
    if(['registered','complete'].includes(value.phase))throw new AppError('CONFLICT');
    return withProjectMembership(this.registry,[value.parentId],async()=>{
     if(storageCreationPath(await this.parent(value.parentId),path.basename(value.destination))!==value.destination)throw new AppError('CONFLICT');
@@ -157,10 +159,12 @@ export class ProjectImports{
   await reconcileProjectFiles(source,target,{id:entry.transferId,filesVersion:1},{controls:new Set([CATALOGUE_FILE,CATALOGUE_ACTIVATION,'.observanda/'+prefix+'-transfer.observanda','.observanda/'+prefix+'-transfer.lock']),receiptDirectory:'.observanda/'+prefix+'-transfer-files',checkpoint:(stage,file)=>checkpoint('owner-'+stage,{relative:entry.relative,file})});
  }
  async complete(value,inventory,opened){
+  // Grants remain available through opened callbacks; the authenticated receipt
+  // owns their cleanup until the caller has finished using them.
   await unlink(projectImportFile(this.registry,value.id)).catch(error=>{if(error.code!=='ENOENT')throw error;});await releaseProjectImport(this.registry,value);const projects=value.version===1?[]:null;let project=null,projectCount=0;
-  for await(const item of projectImportOwners(this.registry,value).entries()){
+  try{for await(const item of projectImportOwners(this.registry,value).entries()){
    const root=ownerRoot(value.destination,item),vault=inventory.keys.get(item.relative)??(await inventory.unlock(root,item.relative,{vaultId:item.vaultId})).vault,access=await readAccess(root);
    try{authenticateKeyring(access.value,vault);if(item.kind==='project'){const entry=await this.registry.locate(item.projectId);if(entry.root!==root||entry.namespaceId!==item.namespaceId||entry.vaultId!==item.vaultId)throw new AppError('CONFLICT');projectCount++;if(item.relative==='')project=entry;projects?.push(entry);await opened(entry,access,vault);}else await opened({...item,root},access,vault);}finally{if(value.version===2)inventory.forget(item.relative);}
-  }return {id:value.id,project,...(projects?{projects}:{projectCount}),complete:true};
+  }}finally{if(value.access){value.access.erasing=true;await saveProjectImport(this.registry,value);}}return {id:value.id,project,...(projects?{projects}:{projectCount}),complete:true};
  }
 }

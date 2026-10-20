@@ -1,3 +1,4 @@
+import {ProjectImportAccess} from './project-import-access.js';
 import {assertProjectTransferDestination} from './project-registry-locations.js';
 import {pdfDocumentRequest,executePdfRequest} from './pdf-document-requests.js';
 import {configurationSourceAccess} from './configuration-source-access.js';
@@ -87,6 +88,7 @@ export function projectRequest(route,method){
  if(['/api/projects/record-collection/query','/api/projects/record-collection/types','/api/projects/dashboard-collection/records','/api/projects/dashboard-collection/discovery','/api/projects/dashboard-collection/types','/api/projects/dashboard-collection/structure','/api/projects/dashboard-collection/choices','/api/projects/dashboard-collection/modules','/api/projects/dashboard-collection/calendar','/api/projects/dashboard-collection/samples'].includes(route))return {operation:route.slice('/api/projects/'.length),write:false,limit:16384};
  const addressed=projectMaterialReferenceRequest(route);if(addressed)return addressed;
  if(route==='/api/projects/delete/pending')return {operation:'delete/pending',write:false,limit:16384};
+ if(['/api/projects/open/access/start','/api/projects/open/access/page','/api/projects/open/access/submit','/api/projects/open/access/finish','/api/projects/open/access/release'].includes(route))return {operation:route.slice('/api/projects/'.length),write:!route.endsWith('/page'),limit:32768};
  if(['/api/projects/open','/api/projects/open/resume','/api/projects/open/cancel','/api/projects/open/pending'].includes(route))return {operation:route.slice('/api/projects/'.length),write:!route.endsWith('/pending'),limit:2*1024*1024};
  if(['/api/projects/reference','/api/projects/reference-location'].includes(route))return {operation:route.endsWith('-location')?'research-reference-location':'research-reference',write:false,limit:16384};
  if(['/api/projects/create/pending','/api/projects/create/resume'].includes(route))return {operation:route.slice('/api/projects/'.length),write:route.endsWith('/resume'),limit:16384};
@@ -111,7 +113,7 @@ export function projectRequest(route,method){
 export class ProjectApplication{
  constructor(workspace,{deviceStore,authenticate,publisherOptions,workspaceLocations}={}){
   this.workspace=workspace;this.deviceStore=deviceStore;this.authenticate=authenticate??((root,access,username,password,recovery)=>verifyAccess(access,username,password,{deviceStore,recovery}));
-  this.recordTransfers=new RecordOwnerTransferApplication(this);this.inventoryConnections=new InventoryWorkspaceConnections(this,workspaceLocations);this.moveTargets=new ProjectWorkspaceTargets(this,workspaceLocations);this.workspaceMoves=new ProjectWorkspaceMoveApplication(this);this.renames=new ProjectRenameApplication(this);this.bookPlacements=new LabBookReparentApplication(this);this.sessions=new WeakMap();this.calendars=new ProjectCalendars();this.jobs=new ProjectJobs({publisherOptions});this.credentials=new Set();this.active=new Map();this.closed=false;this.recordCollections=new RecordCollectionPages();this.dashboardCollections=new RecordCollectionPages({max:256,maxBytes:16*1024*1024,reuse:true});
+  this.importAccess=new ProjectImportAccess(this);this.recordTransfers=new RecordOwnerTransferApplication(this);this.inventoryConnections=new InventoryWorkspaceConnections(this,workspaceLocations);this.moveTargets=new ProjectWorkspaceTargets(this,workspaceLocations);this.workspaceMoves=new ProjectWorkspaceMoveApplication(this);this.renames=new ProjectRenameApplication(this);this.bookPlacements=new LabBookReparentApplication(this);this.sessions=new WeakMap();this.calendars=new ProjectCalendars();this.jobs=new ProjectJobs({publisherOptions});this.credentials=new Set();this.active=new Map();this.closed=false;this.recordCollections=new RecordCollectionPages();this.dashboardCollections=new RecordCollectionPages({max:256,maxBytes:16*1024*1024,reuse:true});
  }
  async recoverProjectRename(client,projectId,options){return this.renames.recover(client,projectId,options);}
  async registry(){
@@ -129,8 +131,8 @@ export class ProjectApplication{
   if(this.closed)throw new AppError('ACCESS_LOCKED');let release;const active=new Promise(resolve=>release=resolve);this.active.set(active,{projectId,labBookId});
   try{return await operation();}finally{this.active.delete(active);release();}
  }
- expire(now=Date.now()){this.inventoryConnections.expire();this.moveTargets.expire();this.recordCollections.expire();this.dashboardCollections.expire();this.jobs.expire(now);this.calendars.expire(now);for(const entry of this.credentials)if(entry.expires<=now){clearVault(entry.vault);this.credentials.delete(entry);}}
- async close(){this.closed=true;this.recordCollections.clear();this.dashboardCollections.clear();this.calendars.clear();const jobs=this.jobs.close();await Promise.all(this.active.keys());await jobs;await this.inventoryConnections.close();await this.moveTargets.close();this.calendars.clear();for(const entry of this.credentials)clearVault(entry.vault);this.credentials.clear();this.sessions=new WeakMap();}
+ expire(now=Date.now()){this.importAccess.expire();this.inventoryConnections.expire();this.moveTargets.expire();this.recordCollections.expire();this.dashboardCollections.expire();this.jobs.expire(now);this.calendars.expire(now);for(const entry of this.credentials)if(entry.expires<=now){clearVault(entry.vault);this.credentials.delete(entry);}}
+ async close(){this.closed=true;this.recordCollections.clear();this.dashboardCollections.clear();this.calendars.clear();const jobs=this.jobs.close();await Promise.all(this.active.keys());await jobs;await this.inventoryConnections.close();await this.moveTargets.close();await this.importAccess.close();this.calendars.clear();for(const entry of this.credentials)clearVault(entry.vault);this.credentials.clear();this.sessions=new WeakMap();}
  async unlock(client,projectId,data,{check=async()=>{}}={}){
   const recovery=await this.workspaceMoves.unlockRecovery(client,projectId,data,{check});if(recovery)return recovery;
   if(!data||Object.keys(data).some(key=>!['username','password','recovery'].includes(key))||Object.values(data).some(value=>typeof value!=='string'||value.length>1024))throw new AppError('INVALID');
@@ -239,10 +241,10 @@ export class ProjectApplication{
    const result=await this.run(client,{projectId:entry.projectId,operation:entry.labBookId?'lab-books/'+operation:operation,write:false,...(entry.labBookId?{labBookId:entry.labBookId,bookOperation:'reference',bookIdentity:{namespaceId:entry.namespaceId,vaultId:entry.bookVaultId}}:{})},entry.labBookId?data:{...reference,domain:'research'},{signal,check,setCheck});
    return {...result,registered:true,target:structuredClone(data),projectId:entry.projectId,...(entry.labBookId?{labBookId:entry.labBookId}:{}),namespaceId:entry.namespaceId};
   }
-  if(['list','choices','open','open/resume','open/cancel','open/pending','create','create/pending','create/resume'].includes(selected.operation))return this.tracked(async()=>{
+  if(['list','choices','open','open/resume','open/cancel','open/pending','open/access/start','open/access/page','open/access/submit','open/access/finish','open/access/release','create','create/pending','create/resume'].includes(selected.operation))return this.tracked(async()=>{
    await check();const registry=await this.registry();let result;
    if(selected.operation==='open/pending'){if(!data||Object.keys(data).some(key=>!['after','limit'].includes(key)))throw new AppError('INVALID');result=await new ProjectImports(registry,this.deviceStore).pending(data);}
-   else if(['open','open/resume','open/cancel'].includes(selected.operation)){
+   else if(['open','open/resume','open/cancel'].includes(selected.operation)||selected.operation.startsWith('open/access/')){
     const session=this.session(client),expected=new Map();
     const openingCheck=async()=>{await check();if(this.closed||[...expected].some(([id,saved])=>session.get(id)!==saved))throw new AppError('ACCESS_LOCKED');};
     const options={check:openingCheck,onProgress,identified:id=>expected.set(id,session.get(id)),opened:async(entry,access,vault)=>{
@@ -250,9 +252,13 @@ export class ProjectApplication{
      if(entry.labBookId){const parent=await registry.locate(entry.projectId),grant=session.get(entry.projectId);if(!grant?.vault)throw new AppError('ACCESS_LOCKED');new LabBookAccessSession(this,client,new ProjectStorage(parent.root,parent.projectId,grant.vault),entry.labBookId,openingCheck).save(entry.root,access.etag,vault);return;}
      this.forget(session,entry.projectId);const saved={root:entry.root,etag:access.etag,vault:cloneVault(vault),expires:Date.now()+8*60*60*1000};session.set(entry.projectId,saved);this.credentials.add(saved);expected.set(entry.projectId,saved);
     }};
-    const imports=new ProjectImports(registry,this.deviceStore),parentId=selected.operation!=='open'?(await imports.read(data?.id))?.parentId:data?.parentId??null;
+    const imports=new ProjectImports(registry,this.deviceStore),accessOperation=selected.operation.startsWith('open/access/')?selected.operation.slice('open/access/'.length):null,stored=selected.operation==='open'?null:accessOperation?await imports.header(data?.id):await imports.read(data?.id),parentId=stored?.parentId??(selected.operation==='open'||accessOperation==='start'?data?.parentId??null:stored?.parentId);
     if(parentId===undefined)throw new AppError('NOT_FOUND');
-    result=await this.renames.withParent(client,parentId,openingCheck,current=>selected.operation==='open/cancel'?imports.cancel(data,{...options,check:current}):selected.operation==='open/resume'?imports.run(data,{...options,check:current,resume:true}):new ProjectOpening(registry,this.deviceStore).open(data,{...options,check:current}));
+    result=await this.renames.withParent(client,parentId,openingCheck,async current=>{
+     const scoped={...options,check:current};
+     if(accessOperation)return this.importAccess[accessOperation](client,data,scoped);
+     if(selected.operation==='open/cancel'){try{return await imports.cancel(data,scoped);}finally{await this.importAccess.settled(data.id);}}return selected.operation==='open/resume'?imports.run(data,{...scoped,resume:true}):new ProjectOpening(registry,this.deviceStore).open(data,scoped);
+    });
    }
    else if(selected.operation==='choices')result=await projectDirectoryChoices(registry,data,{signal});
    else if(selected.operation==='create')result=await new ProjectCreation(registry,this.deviceStore,{withConfigurationSource:configurationSourceAccess(this,client,{check})}).create(data,{check});

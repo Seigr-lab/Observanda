@@ -39,11 +39,13 @@ export class NativeProjectImport{
  async perform(command,{resume=false,check=async()=>{},checkpoint=async()=>{},opened=async()=>{},onProgress}={},supplied){
   const owner=this.owner,inventory=new ProjectImportInventory(owner.deviceStore,supplied),directory=await privateDirectory(this.workspace.root,'.observanda/project-imports');
   try{return await trackProjectTransfer(projectImportFile(this.registry,command.id),()=>withWriterLease(path.join(directory,command.id+'.lock'),async()=>{
-   await check();let value=await owner.read(command.id);const fresh=!value;if(value?.phase==='cancelled')return owner.cancelled(value);if(value?.phase==='cancelling')throw new AppError('STORAGE_INCOMPLETE');if(resume&&!value)throw new AppError('NOT_FOUND');
-   if(!value){
+   await check();let value=await owner.read(command.id);const fresh=!value||value.accessOnly===true;if(value?.phase==='cancelled')return owner.cancelled(value);if(value?.phase==='cancelling')throw new AppError('STORAGE_INCOMPLETE');if(resume&&!value)throw new AppError('NOT_FOUND');
+   if(fresh){
+    const authorization=value?.access,prior=value;
+    if(prior){command={...command,path:prior.source,parentId:prior.parentId};if(serialize(identity(await assertRegular(prior.source,{directory:true})))!==serialize(prior.sourceIdentity))throw new AppError('CONFLICT');}
     if(typeof command.path!=='string')throw new AppError('INVALID');const source=await resolveLocation(command.path);if(inside(source,this.workspace.root))throw new AppError('STORAGE_PATH');
     const parentId=command.parentId??null,destination=storageCreationPath(await owner.parent(parentId),storageFolderName(source));if(source!==destination&&(inside(this.workspace.root,source)||inside(source,destination)||inside(destination,source)))throw new AppError('STORAGE_PATH');
-    const inspected=await inventory.inspectNative(source,this.workspace,{id:command.id});value={version:2,id:command.id,source,destination,parentId,sourceIdentity:identity(await assertRegular(source,{directory:true})),destinationIdentity:null,manifest:inspected.manifest,owners:inspected.owners,phase:'prepared'};
+    const inspected=await inventory.inspectNative(source,this.workspace,{id:command.id});value={version:2,id:command.id,source,destination,parentId,sourceIdentity:identity(await assertRegular(source,{directory:true})),destinationIdentity:null,manifest:inspected.manifest,owners:inspected.owners,phase:'prepared',...(authorization?{access:authorization}:{})};
    }else if(command.path!==undefined&&await resolveLocation(command.path)!==value.source||command.parentId!==undefined&&command.parentId!==value.parentId)throw new AppError('CONFLICT');
    const owners=projectImportOwners(this.registry,value);
    // Authenticate the complete command before admitting any destination writes;

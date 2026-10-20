@@ -2,7 +2,7 @@ import {hasProjectDirectory} from './project-directory-capability.js';
 import {localizedText} from './i18n/index.js';
 const text=localizedText('projectOpening');
 // Folder selection, independent-owner credentials and restart recovery stay in
-// the Projects section. Secrets are held only for the current import attempt.
+// the Projects section. Only the currently submitted owner's secret is held.
 export function projectOpeningUI({state,api,esc,field,refreshDirectory,enterProject,render}){
  let context=null,storageKind=null,generation=0,visible=false,loading=false,items=[],next=null,prompt=null,pending=false,error='',complete=false;
  const current=token=>token===generation&&context===state.storage?.contextId;
@@ -17,7 +17,7 @@ export function projectOpeningUI({state,api,esc,field,refreshDirectory,enterProj
    let card=list.querySelector('[data-import-id="'+item.id+'"]');if(!card){card=document.createElement('article');card.className='panel';card.dataset.importId=item.id;list.append(card);}
    const running=item.running||pending,cancelling=item.phase==='cancelling',button=(action,label)=>'<button class="button" data-action="project-opening-'+action+'" data-id="'+item.id+'">'+esc(text(label))+'</button>';
    const controls=running?'':cancelling?button('cancel','finishCancellation'):button('resume','resume')+(item.cancellable?button('cancel','cancelImport'):'');
-   const content='<div data-owned-operation="/api/projects/open" data-operation-id="'+item.id+'"><div data-owned-operation="/api/projects/open/resume" data-operation-id="'+item.id+'"><div data-owned-operation="/api/projects/open/cancel" data-operation-id="'+item.id+'"><h2>'+esc(text(cancelling?'cancellingImport':'importing',{name:item.name}))+'</h2>'+controls+'</div></div></div>';if(card.dataset.content!==content){card.dataset.content=content;card.innerHTML=content;}
+   const content='<div data-owned-operation="/api/projects/open" data-operation-id="'+item.id+'"><div data-owned-operation="/api/projects/open/access/finish" data-operation-id="'+item.id+'"><div data-owned-operation="/api/projects/open/cancel" data-operation-id="'+item.id+'"><h2>'+esc(text(cancelling?'cancellingImport':'importing',{name:item.name}))+'</h2>'+controls+'</div></div></div>';if(card.dataset.content!==content){card.dataset.content=content;card.innerHTML=content;}
   }
   host.querySelector('[data-opening-more]').hidden=!next;
  }
@@ -30,28 +30,65 @@ export function projectOpeningUI({state,api,esc,field,refreshDirectory,enterProj
  document.addEventListener('input',event=>{if(!prompt||!event.target.closest?.('#project-opening-form'))return;const field=event.target.name;if(field==='path')prompt.path=event.target.value;else if(['username','password','recovery'].includes(field)){prompt.draft??={};prompt.draft[field]=event.target.value;}});
  setInterval(()=>{sync();if(visible&&!pending&&items.some(item=>item.running))void load();},1500);
  async function execute(attempt){
-  const token=generation,view=location.hash;let succeeded=false;
-   const root=attempt.credentials.get('')??{username:'',password:'',recovery:''},command={id:attempt.id,username:root.username,password:root.password,recovery:root.recovery,owners:[...attempt.credentials.values()].filter(item=>item.relative),...(!attempt.resume?{path:attempt.path,parentId:null}:{})};pending=true;prompt=null;error='';paint();
-   try{const result=await api('/api/projects/open'+(attempt.cancel?'/cancel':attempt.resume?'/resume':''),command,{adopt:false,view});if(current(token)){succeeded=result.cancelled?'cancelled':true;attempt.credentials.clear();await refreshDirectory();}}
-   catch(e){if(current(token)&&e.name!=='AbortError'){
-    error=e.message??text('failed');prompt=attempt;prompt.draft={};
-    if(e.code==='PROJECT_IMPORT_ACCESS'&&Array.isArray(e.details)){prompt.relative=e.details[0];prompt.name=e.details[1];prompt.credentials.delete(prompt.relative);}
-    else{prompt.credentials.clear();prompt.relative='';}
-   }}finally{command.password='';command.recovery='';command.owners=[];if(current(token)){pending=false;await load();complete=succeeded;if(prompt&&items.some(item=>item.id===attempt.id)){if(items.find(item=>item.id===attempt.id).phase==='cancelling')prompt=null;else prompt.resume=true;}paint();}}
+  const token=generation,view=location.hash;let succeeded=false,command;
+  pending=true;prompt=null;error='';paint();
+  try{
+   if(attempt.cancel&&['cancelling','authorizing'].includes(attempt.phase)){
+    command={id:attempt.id,username:'',password:'',recovery:''};
+    const result=await api('/api/projects/open/cancel',command,{adopt:false,view});succeeded=result.cancelled?'cancelled':true;
+   }else{
+    const secret=attempt.secret??{username:'',password:'',recovery:''};
+    command=attempt.admission?{id:attempt.id,session:attempt.admission.session,revision:attempt.admission.revision,relative:attempt.relative,...secret}:{id:attempt.id,...secret,intent:attempt.cancel?'cancel':'import',...(!attempt.resume?{path:attempt.path,parentId:null}:{})};
+    const request=async(command,method)=>{
+     let response;
+     try{response=await api('/api/projects/open/access/'+method,command,{adopt:false,view});}
+     catch(error){
+      if(method!=='submit'||!['CONFLICT',undefined].includes(error.code)||error.name==='AbortError')throw error;
+      // Acceptance can precede a lost response; the client-bound cursor tells
+      // us which owner comes next without retaining earlier passwords.
+      response=await api('/api/projects/open/access/page',{id:attempt.id,session:command.session},{adopt:false,view});
+      if(response.revision===command.revision)throw error;
+     }
+     if(response.session)attempt.admission={session:response.session,revision:response.revision};return response;
+    };
+    let response=await request(command,attempt.admission?'submit':'start');
+    command.password='';command.recovery='';command.username='';if(attempt.secret){attempt.secret.password='';attempt.secret.recovery='';attempt.secret.username='';delete attempt.secret;}
+    while(current(token)&&response.automatic){const owner=response.items[0];response=await request({id:attempt.id,...attempt.admission,relative:owner.relative,username:'',password:'',recovery:''},'submit');}
+    if(!current(token))return;
+    if(response.session){
+     attempt.admission={session:response.session,revision:response.revision};
+     if(response.ready){
+      const result=await api('/api/projects/open/access/finish',{id:attempt.id,...attempt.admission},{adopt:false,view});
+      if(current(token))succeeded=result.cancelled?'cancelled':true;
+     }else{
+      const owner=response.items[0];if(!owner)throw Error(text('failed'));
+      prompt={...attempt,relative:owner.relative,name:owner.name,draft:{}};delete prompt.secret;
+     }
+    }else succeeded=true;
+   }
+   if(succeeded&&current(token))await refreshDirectory();
+  }catch(e){if(current(token)&&e.name!=='AbortError'){
+   error=e.message??text('failed');prompt={...attempt,draft:{}};delete prompt.secret;
+   if(e.code==='CONFLICT'||e.code==='ACCESS_LOCKED'||e.code==='PROJECT_IMPORT_ACCESS'&&attempt.admission&&e.details?.[0]!==attempt.relative){prompt.admission=null;prompt.relative='';}
+  }}finally{
+   if(command){command.password='';command.recovery='';command.username='';}if(attempt.secret){attempt.secret.password='';attempt.secret.recovery='';attempt.secret.username='';delete attempt.secret;}
+   if(current(token)){pending=false;await load();complete=succeeded;if(prompt&&items.some(item=>item.id===attempt.id)){const saved=items.find(item=>item.id===attempt.id);if(saved.phase==='cancelling')prompt=null;else{prompt.resume=true;prompt.phase=saved.phase;}}paint();}
+  }
  }
+
  return {
   view:()=>'<section data-project-opening><p role="alert" hidden></p><p data-import-complete role="status" hidden>'+esc(text('imported'))+'</p><div data-opening-form></div><div data-opening-pending></div><button class="button" data-opening-more data-action="project-opening-more" hidden>'+esc(text('more'))+'</button></section>',
   button:()=>'<button class="button" data-action="project-open-folder">'+esc(text('open'))+'</button>',
   bind(){sync();const shown=hasProjectDirectory(state)&&state.page==='projects',entered=shown&&!visible;visible=shown;paint();if(entered)void load();},
   async action(node){sync();const action=node.dataset.action;if(action!=='project-open-folder'&&!action?.startsWith('project-opening-'))return false;
-   if(action==='project-opening-dismiss'){prompt=null;error='';}
+   if(action==='project-opening-dismiss'){const dismissed=prompt;prompt=null;error='';if(dismissed?.admission){try{await api('/api/projects/open/access/release',{id:dismissed.id,session:dismissed.admission.session},{adopt:false});await load();}catch(e){error=e.message??text('failed');}}}
    else if(action==='project-opening-more'){await load(true);return true;}
-   else{error='';complete=false;const item=items.find(item=>item.id===node.dataset.id);if(action==='project-opening-cancel'&&item?.phase==='cancelling'){await execute({id:item.id,resume:true,cancel:true,relative:'',credentials:new Map()});return true;}prompt={id:item?.id??crypto.randomUUID(),resume:!!item,cancel:action==='project-opening-cancel',inPlace:item?.inPlace,name:item?.name,relative:'',path:'',credentials:new Map()};}
+   else{error='';complete=false;const item=items.find(item=>item.id===node.dataset.id);if(action==='project-opening-cancel'&&item?.phase==='cancelling'){await execute({id:item.id,resume:true,cancel:true,phase:item.phase,relative:''});return true;}prompt={id:item?.id??crypto.randomUUID(),resume:!!item,cancel:action==='project-opening-cancel',inPlace:item?.inPlace,name:item?.name,relative:'',path:'',phase:item?.phase,admission:null};}
    paint();document.querySelector('#project-opening-form input')?.focus();return true;
   },
   async submit(form){
    if(form.id!=='project-opening-form'||!prompt)return false;if(pending)return true;const attempt=prompt;
-   if(form.elements.path)attempt.path=form.elements.path.value;attempt.credentials.set(attempt.relative,{relative:attempt.relative,username:form.elements.username.value,password:form.elements.password.value,recovery:form.elements.recovery.value});
+   if(form.elements.path)attempt.path=form.elements.path.value;attempt.secret={username:form.elements.username.value,password:form.elements.password.value,recovery:form.elements.recovery.value};attempt.draft={};form.elements.password.value='';form.elements.recovery.value='';
    await execute(attempt);
    return true;
   }
