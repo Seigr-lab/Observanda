@@ -12,8 +12,8 @@ const sha=value=>typeof value==='string'&&/^[a-f0-9]{40}$/.test(value);
 // content-addressed blobs, trees and explicitly dated commits are reusable.
 export async function deployGithub(publisher,candidate,config,{plan=null,journal,save,guard,progress=async()=>{},signal,pushed=async()=>{}}){
  const c=config.github,base=`/repos/${c.owner}/${c.repository}`;
- const call=async(route,method='GET',data,missing=false)=>{signal?.throwIfAborted();await guard();return publisher.github(base+route,method,data,missing,signal);};
- const checkpoint=async()=>{await guard();await save(journal);};
+ const call=async(route,method='GET',data,missing=false)=>{signal?.throwIfAborted();await guard(method==='GET'?{phase:'read'}:undefined);return publisher.github(base+route,method,data,missing,signal);};
+ const checkpoint=async()=>{await guard(journal.receipt?{phase:'receipt'}:undefined);await save(journal);};
  if(!journal.entries){
   await guard();await publisher.check({plan});
   const reviewed=admitGithubPlan(plan??await publisher.buildDestinationPlan(candidate,(await publisher.read()).etag,{signal}));
@@ -70,8 +70,10 @@ export async function deployGithub(publisher,candidate,config,{plan=null,journal
  if(pages&&!matches(pages)&&(!plan||JSON.stringify(pagesSource(pages))!==JSON.stringify(plan.pages)))throw new AppError('PUBLISH_PAGES');
  journal.receipt.status='uploaded-awaiting-pages';
  if(!matches(pages)){
+  // Keep authorization errors outside the provider's optional Pages fallback.
+  await guard();signal?.throwIfAborted();
   try{
-   await call('/pages',pages?'PUT':'POST',{source:{branch:c.branch,path:'/'},build_type:'legacy'});
+   await publisher.github(base+'/pages',pages?'PUT':'POST',{source:{branch:c.branch,path:'/'},build_type:'legacy'},false,signal);
    if(!matches(await call('/pages')))throw new AppError('PUBLISH_PAGES');
   }catch(error){signal?.throwIfAborted();if(['JOB_LEASE','JOB_CANCELLED','PUBLISH_STALE'].includes(error.code))throw error;journal.receipt.status='uploaded-pages-setup-required';}
  }

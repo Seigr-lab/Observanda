@@ -48,7 +48,7 @@ export class DeploymentJobs{
  async control(id,action){
   const job=await this.queue.read(id);if(!job||job.type!=='publication.deploy')throw new AppError('NOT_FOUND');await this.queue.authorize(job);
   let revoke;
-  try{if(action==='retry'){const d=await this.read(id),candidate=await this.releases.read(d.intent.reviewId);if(!candidate)throw new AppError('JOB_DAMAGED');if((candidate.hasSources||candidate.sourceGroups))revoke=this.sourceAccess?.bind(id,this.sourceReader);}
+  try{if(action==='retry'){const d=await this.read(id),candidate=await (d.journal.pushAttempted?this.releases.readForDeploymentRecovery(id):this.releases.read(d.intent.reviewId));if(!candidate)throw new AppError('JOB_DAMAGED');if((candidate.hasSources||candidate.sourceGroups)&&typeof this.sourceReader==='function')revoke=this.sourceAccess?.bind(id,this.sourceReader);}
    const next=await this.queue.control(id,action);if(action==='cancel')this.sourceAccess?.forget(id);return next;
   }catch(error){revoke?.();throw error;}
  }
@@ -59,12 +59,14 @@ export class DeploymentJobs{
   if(active.id!==job.id)throw new AppError('PUBLISH_STALE');return d;
  }
  async prepare(job,{signal,progress}){
-  const d=await this.read(job.id);let candidate=await this.releases.read(d.intent.reviewId);if(!candidate||candidate.id!==d.intent.releaseId)throw new AppError('JOB_DAMAGED');
+  const d=await this.read(job.id),sourceReader=this.sourceReader??this.sourceAccess?.take(job.id),releases=new PublicationJobs(this.workspace,{sourceReader});
+  let candidate=await (d.journal.pushAttempted?releases.readForDeploymentRecovery(job.id):releases.read(d.intent.reviewId));if(!candidate||candidate.id!==d.intent.releaseId)throw new AppError('JOB_DAMAGED');
   if(d.intent.rollbackReview)candidate={...candidate,...(d.intent.sourceSnapshots?{sourceSnapshots:d.intent.sourceSnapshots}:{}),analysisReviewId:d.intent.analysisReviewId,...(d.intent.analysisDocument?{analysisDocument:d.intent.analysisDocument}:{}),researchReview:{...candidate.researchReview,analysis:d.intent.analysis}};
-  const sourceReader=this.sourceReader??this.sourceAccess?.take(job.id);
   if(!d.journal.pushAttempted)await new AnalysisPublicationReview(this.workspace,{sourceReader}).assert(candidate,{signal});
   await enforcePublishingLimits(candidate,d.intent.config);
-  const guard=async()=>{signal.throwIfAborted();await this.workspace.catalogue(async()=>{await this.held(job);if((await this.publisher.read()).etag!==d.intent.configEtag)throw new AppError('PUBLISH_STALE');if(d.journal.liveInventory)await assertDeploymentInventory(this.workspace,d.intent.key,d.journal.liveInventory,d.journal.receipt);});};
+  // Remote reads and receipts can reconcile an activation that already happened.
+  // Every content write and activation still requires today's source consent.
+  const guard=async({phase}={})=>{signal.throwIfAborted();if(!['read','receipt','reconcile'].includes(phase))await releases.assertSourcePermissions(candidate,{signal});await this.workspace.catalogue(async()=>{await this.held(job);if((await this.publisher.read()).etag!==d.intent.configEtag)throw new AppError('PUBLISH_STALE');if(d.journal.liveInventory)await assertDeploymentInventory(this.workspace,d.intent.key,d.journal.liveInventory,d.journal.receipt);});};
   if(!d.journal.liveInventory){
    const removed=d.intent.config.kind==='github'?(d.journal.removed??d.intent.plan?.removed??[]).map(p=>d.intent.config.github.directory?p.slice(d.intent.config.github.directory.length+1):p):[];
    const prepared=await prepareDeploymentInventory(this.workspace,d.intent.key,candidate.files.keys(),{removed,guard,signal,write:operation=>this.queue.transaction(operation)});

@@ -140,7 +140,28 @@ export class PublicationJobs{
  }
  async read(id){
   const stored=await this.stored(id);if(!stored)return null;
-  await this.assertSourcePermissions(stored);
+  await this.assertSourcePermissions(stored);return this.#readCandidate(stored);
+ }
+ // Only a persisted, still-active deployment with an uncertain activation can
+ // inspect its retained edition for remote reconciliation. No review ID is
+ // accepted here, and adapters must admit source consent before any new write.
+ async readForDeploymentRecovery(deploymentId){
+  if(!researchId(deploymentId))throw new AppError('INVALID');
+  const read=async(file,limit)=>{const raw=await this.workspace.readMetadata(file,limit);if(raw===null)throw new AppError('JOB_DAMAGED');try{return JSON.parse(raw);}catch{throw new AppError('JOB_DAMAGED');}};
+  const deployment=await read('.observanda/deployments/'+deploymentId+'.json',16*1024*1024),intent=deployment?.intent,journal=deployment?.journal;
+  if(deployment?.version!==1||deployment.id!==deploymentId||!researchId(deployment.scope)||!hash(intent?.reviewId)||!hash(intent?.releaseId)||!hash(intent?.key)||journal?.pushAttempted!==true||!['github','ssh'].includes(intent?.config?.kind))throw new AppError('JOB_DAMAGED');
+  if(intent.config.kind==='github'?!/^[a-f0-9]{40}$/.test(journal.commit??''):journal.commit!==intent.releaseId)throw new AppError('JOB_DAMAGED');
+  const job=await read('.observanda/jobs/'+deploymentId+'.json',16*1024*1024),active=await read('.observanda/deployment-active/'+intent.key+'.json',4096);
+  if(job?.format!==1||job.id!==deploymentId||job.type!=='publication.deploy'||job.scope!==deployment.scope||job.input?.revision!==digest(serialize(intent))||active?.id!==deploymentId)throw new AppError('JOB_CHANGED');
+  if((await this.workspace.currentOutline()).metadata.id!==deployment.scope)throw new AppError('WORKSPACE_CHANGED');
+  const stored=await this.stored(intent.reviewId);
+  if(!stored||stored.id!==intent.releaseId)throw new AppError('JOB_DAMAGED');
+  // Older retained database editions bind their owner through captured input.
+  const scope=stored.workspaceId??(stored.version<3?(await this.source(stored.jobId)).workspaceId:undefined);
+  if(scope!==deployment.scope)throw new AppError('JOB_DAMAGED');
+  return this.#readCandidate(stored);
+ }
+ async #readCandidate(stored){
   const files=new Map(),blockedValues=[...stored.blockedValues,this.workspace.root,os.homedir(),os.hostname()];
   if(stored.version===3)return {...stored,files:await RetainedPublicationFiles.open(this.workspace,stored,{blockedValues}),blockedValues};
   for await(const {file:f,content} of this.contents(stored)){
