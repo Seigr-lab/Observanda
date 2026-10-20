@@ -1,3 +1,4 @@
+import {publicationSourceRevision} from './publication-source-context.js';
 import {websiteSnapshot} from './website-context.js';
 import {t} from './i18n/index.js';
 import {WEBSITE_PAGE_LIMIT,websiteRecordPages} from './website-page-query.js';
@@ -10,7 +11,7 @@ export function websiteLinkDestinations({state,api,documents,pageBook=()=>state.
  return async({query='',cursor=null,signal}={})=>{
   signal?.throwIfAborted();if(documents?.enabled())await documents.flush();
   const documentSnapshot=documents?.enabled()?documents.snapshot():null;
-  const {book,etag}=state,contextId=websiteSnapshot(state),consent=JSON.stringify(state.book.website.researchSources??[]),search=query.trim().toLocaleLowerCase();
+  const {book,etag}=state,contextId=websiteSnapshot(state),consent=publicationSourceRevision(state),search=query.trim().toLocaleLowerCase();
   const anchor={workspaceId:book.id,etag,contextId,consent,search,documentSnapshot},limit=WEBSITE_PAGE_LIMIT;
   if(cursor&&(Object.entries(anchor).some(([key,value])=>cursor[key]!==value)||!['structure','records'].includes(cursor.phase)||!Number.isSafeInteger(cursor.offset)||cursor.offset<0||cursor.offset%limit))throw Error(t('websitePages','invalid'));
   const token=(phase,offset,recordCursor=null)=>({...anchor,phase,offset,recordCursor});
@@ -23,7 +24,7 @@ export function websiteLinkDestinations({state,api,documents,pageBook=()=>state.
   }else{
    const records=await recordPages({search,cursor:cursor?.phase==='records'?cursor.recordCursor:null,signal});
    signal?.throwIfAborted();
-   if(documents?.enabled()&&documents.snapshot()!==documentSnapshot||state.book?.id!==book.id||state.etag!==etag||websiteSnapshot(state)!==contextId||JSON.stringify(state.book.website.researchSources??[])!==consent)throw new DOMException('Link destination context changed','AbortError');
+   if(documents?.enabled()&&documents.snapshot()!==documentSnapshot||state.book?.id!==book.id||state.etag!==etag||websiteSnapshot(state)!==contextId||publicationSourceRevision(state)!==consent)throw new DOMException('Link destination context changed','AbortError');
    items=cursor?.phase==='records'?records.items:[...structure.items,...records.items];
    previousCursor=records.offset>limit?token('records',lastStructure,records.previousCursor):records.offset?token('structure',lastStructure):offset?token('structure',offset-limit):null;
    nextCursor=records.nextCursor!==null?token('records',lastStructure,records.nextCursor):null;

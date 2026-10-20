@@ -1,5 +1,5 @@
+import {sourceRecordIncluded,sourceSelectionRevision} from './website-source-selections.js';
 import {publicationSourceCandidates} from './publication-source-candidates.js';
-import {websiteRecordShare} from './web/website-selection.js';
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
 import {validPublicationSources} from './web/publication-sources-model.js';
@@ -14,7 +14,7 @@ const cursorError=()=>{throw new AppError('PUBLICATION_SELECTION_CURSOR');};
 export async function publicationSourcePages(store,snapshot,pinned,host,query,{signal}={}){
  const {source,search,cursor,backward=false}=query;
  if(Object.keys(query).sort().join()!=='backward,cursor,search,snapshotId,source,workspaceId'||!validPublicationSources([source])||source.workspaceId!==snapshot.metadata.id||typeof search!=='string'||search.length>512||typeof backward!=='boolean'||cursor!==null&&(typeof cursor!=='string'||!cursor.length||cursor.length>4096))invalid();
- const identity=digest(serialize({host:host.workspaceId,snapshotId:pinned.snapshotId,source,search})),namespace=source.workspaceId;
+ const identity=digest(serialize({host:host.workspaceId,snapshotId:pinned.snapshotId,source:sourceSelectionRevision(source),search})),namespace=source.workspaceId;
  const decode=value=>{try{return store.decode('publication-source-pages',namespace,Buffer.from(value,'base64url'));}catch{cursorError();}};
  const anchor=cursor?decode(cursor):{identity,after:null,backward};
  if(anchor?.identity!==identity||typeof anchor.backward!=='boolean'||anchor.after!==null&&(!Number.isSafeInteger(anchor.after)||anchor.after<0))cursorError();
@@ -34,7 +34,7 @@ export async function publicationSourcePages(store,snapshot,pinned,host,query,{s
    owner.originals.delete(candidate.historical);owner.descriptors.delete(candidate.historical);owner.rows.delete(candidate.historical);
   }else{
    const [summary]=await Array.fromAsync(store.queryDocuments([candidate.row],snapshot.metadata,{signal,search:false,publication:true}));
-   if(!notebooks.has(summary.notebookId)||!websiteRecordShare(owner.source.selection,summary,metadata.notebooks.find(book=>book.id===summary.notebookId)?.projectId))continue;
+   if(!notebooks.has(summary.notebookId)||!await sourceRecordIncluded(owner.source.selection,summary,metadata.notebooks.find(book=>book.id===summary.notebookId)?.projectId))continue;
    page=publicationSourcePage(host,{...pinned.owner,projectNamespaceId:pinned.projectNamespaceId},metadata,{...summary,attachments:[]});page.context=page.notebook.title;
   }
   if(needle&&!page.title.toLocaleLowerCase().includes(needle))continue;

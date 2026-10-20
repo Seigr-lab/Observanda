@@ -1,3 +1,4 @@
+import {preserveSourceSelection,sourceEditionReader} from './website-source-selections.js';
 import {retainPublicationSources as retainLegacyPublicationSources} from './publication-source-input-legacy.js';
 import {ResearchMaterials} from './research-materials.js';
 import {AppError} from './errors.js';
@@ -13,19 +14,21 @@ import {MediaStore} from './media.js';
 export async function retainPublicationSources(workspace,jobId,local,sources,reader,{signal,sourceReader}={}){
  if(await workspace.storageKind()!=='catalogue')return retainLegacyPublicationSources(workspace,jobId,local,sources,reader,{signal,sourceReader});
  const state=publicationInputState(local),namespace=state.header.metadata.id,builder=state.builder;
- if(!validPublicationSources(sources)||sources.some(source=>source.workspaceId===namespace))throw new AppError('INVALID');
- if(!sources.length)return finalizePublicationInput(workspace,jobId,local,{signal});
+ const indexed=!Array.isArray(sources);
+ if(indexed?(!Number.isSafeInteger(sources?.count)||sources.count<0||typeof sources.get!=='function'||typeof sources.items!=='function'||await sources.get(namespace)):(!validPublicationSources(sources)||sources.some(source=>source.workspaceId===namespace)))throw new AppError('INVALID');
+ if(!(indexed?sources.count:sources.length))return finalizePublicationInput(workspace,jobId,local,{signal});
  if(!reader)throw new AppError('ACCESS_LOCKED');state.header.hasSources=true;
  try{
-  for(const source of sources){
+  for await(const source of indexed?sources.items():sources){
    signal?.throwIfAborted();
    await reader.use(source.workspaceId,undefined,async(store,snapshot,pinned)=>{
     const {source:consent,metadata}=publicationSourceContext(snapshot.metadata,source,pinned.owner),owner={...pinned.owner,projectNamespaceId:pinned.projectNamespaceId};
+    preserveSourceSelection(source,consent);
     const storage=new Proxy(pinned.storage,{get(target,key){if(key==='catalogue')return operation=>operation(store);const value=target[key];return typeof value==='function'?value.bind(target):value;}});
     const media=new MediaStore(pinned.storage);
     await retainPublicationInput(storage,jobId,metadata,selectedPublicationRecords(store,snapshot,{metadata,selection:consent.selection,signal}),{
      sourceEtag:pinned.snapshotId,snapshotId:pinned.snapshotId,recordHead:async id=>(await store.member(snapshot,id))?.revision??null,signal,sourceReader,
-     deferFinalization:true,edition:source.edition,input:local,owner,destination:workspace,identities:state.identities,
+     deferFinalization:true,edition:source.edition,editionChoices:sourceEditionReader(source),input:local,owner,destination:workspace,identities:state.identities,
      onRecord:async record=>{
       for(const [id,publicId] of Object.entries(record.mediaIdentities)){
        signal?.throwIfAborted();if(await builder.get('retainedMedia',publicId))continue;

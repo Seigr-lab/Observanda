@@ -1,8 +1,8 @@
+import {sourceRecordIncluded,sourceRecordChoice,sourceSelectionRevision} from './website-source-selections.js';
 import {memberCollectionCount} from './record-member-collections.js';
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
 import {validPublicationSources} from './web/publication-sources-model.js';
-import {websiteRecordShare} from './web/website-selection.js';
 import {PublicationPreviewOwner} from './publication-preview-owner.js';
 import {PublicationOwnerIdentities} from './publication-owner-identities.js';
 import {publicationSourceCandidates} from './publication-source-candidates.js';
@@ -14,7 +14,7 @@ const invalid=()=>{throw new AppError('INVALID');},cursorError=()=>{throw new Ap
 export async function publicationSourceMedia(store,snapshot,pinned,host,query,{signal}={}){
  const {source,search,cursor,backward}=query;
  if(Object.keys(query).sort().join()!=='backward,cursor,search,snapshotId,source,workspaceId'||!validPublicationSources([source])||source.workspaceId!==snapshot.metadata.id||typeof search!=='string'||search.length>512||typeof backward!=='boolean'||cursor!==null&&(typeof cursor!=='string'||!cursor.length||cursor.length>4096))invalid();
- const namespace=source.workspaceId,identity=digest(serialize({version:1,host:host.workspaceId,snapshotId:pinned.snapshotId,source,search}));
+ const namespace=source.workspaceId,identity=digest(serialize({version:1,host:host.workspaceId,snapshotId:pinned.snapshotId,source:sourceSelectionRevision(source),search}));
  let anchor={identity,point:null,backward};if(cursor){try{anchor=store.decode('publication-source-media',namespace,Buffer.from(cursor,'base64url'));}catch{cursorError();}}
  if(anchor?.identity!==identity||typeof anchor.backward!=='boolean'||anchor.point!==null&&(!Number.isSafeInteger(anchor.point?.record)||anchor.point.record<0||!Number.isSafeInteger(anchor.point?.attachment)||anchor.point.attachment< -1))cursorError();
  const encode=(point,backward)=>store.encode('publication-source-media',namespace,{identity,point,backward}).toString('base64url');
@@ -24,16 +24,16 @@ export async function publicationSourceMedia(store,snapshot,pinned,host,query,{s
  let first=null,last=null,records=0,attachments=0,more=false;
  for await(const candidate of publicationSourceCandidates(store,snapshot,owner,{after,backward:reverse,signal})){
   signal?.throwIfAborted();if(records===128||attachments===256||items.length===12){more=true;break;}records++;
-  const patch=owner.source.selection.records.find(choice=>choice.id===candidate.row?.id);
+  const patch=await sourceRecordChoice(owner.source.selection,candidate.row?.id);
   let recordId,title,notebookId,selected=null;
   if(candidate.historical){
    const descriptor=await owner.describeHistory(candidate.historical);selected=owner.originals.get(candidate.historical);recordId=descriptor.id;title=descriptor.title;notebookId=descriptor.notebookId;
   }else{
    const [summary]=await Array.fromAsync(store.queryDocuments([candidate.row],snapshot.metadata,{signal,search:false,publication:true}));
    const book=owner.metadata.notebooks.find(book=>book.id===summary.notebookId),project=owner.metadata.projects.find(project=>project.id===book?.projectId);
-   if(!project?.share||!websiteRecordShare(owner.source.selection,summary,project.id)){first??={record:candidate.key,attachment:0};last={record:candidate.key,attachment:0};continue;}
+   if(!project?.share||!await sourceRecordIncluded(owner.source.selection,summary,project.id)){first??={record:candidate.key,attachment:0};last={record:candidate.key,attachment:0};continue;}
    recordId=owner.id('record',summary.id);title=summary.title;notebookId=owner.id('notebook',summary.notebookId);
-   if(owner.choices.has(summary.id))selected=(await owner.selected(store,snapshot,owner.projectedRow(candidate.row))).selected;
+   if(await owner.choices.has(summary.id))selected=(await owner.selected(store,snapshot,owner.projectedRow(candidate.row))).selected;
   }
   const visit=async(count,read)=>{
    let index=anchor.point?.record===candidate.key?anchor.point.attachment+(reverse?-1:1):reverse?count-1:0;

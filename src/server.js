@@ -801,7 +801,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         if(operation.startsWith('editor/')){
           const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
           try{
-            const result=await new WebsiteEditor(workspace).execute(operation.slice(7),data,{signal:controller.signal});
+            const result=await new WebsiteEditor(workspace,{sourceReader}).execute(operation.slice(7),data,{signal:controller.signal});
             if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');if((await status(client)).locked)throw new AppError('ACCESS_LOCKED');
             return json(result);
           }finally{res.off('close',abort);}

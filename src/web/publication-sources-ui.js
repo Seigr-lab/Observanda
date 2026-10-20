@@ -8,15 +8,17 @@ const text=(key,args)=>t('publicationSources',key,args);
 
 // The editor narrows source permissions with website-owned choices. Opening, searching and paging
 // are reads; an independently owned source never becomes an authoring draft.
-export function publicationSourcesUI({state,api,esc,access,checkpoint,changed,notify,onOpenPage}){
+export function publicationSourcesUI({state,api,esc,access,checkpoint,changed,notify,onOpenPage,documents}){
  const client=publicationSourceClient({state,api,access});
  let context=null,version=0,controller=null,timer=null,projectId=null,offset=0,revision=null,search='',page=null,owner=null,head=null,recordProject=null,records=null,recordSearch='',cursor=null,details=null,error=false,loading=false;
+ let selectedSource=null,includedSources=new Set(),selectionRevision=null;
+ const native=()=>documents?.enabled();
  const root=()=>document.querySelector('[data-publication-sources]');
  const identity=()=>JSON.stringify([websiteSnapshot(state),state.book?.id,state.etag]);
  const active=()=>state.page==='website'&&!state.access?.locked&&!state.storageUnavailable&&!!root();
  function stop(){version++;controller?.abort();controller=null;clearTimeout(timer);timer=null;}
- function close(){stop();client.close();context=null;page=null;head=null;owner=null;records=null;details=null;projectId=null;offset=0;revision=null;search='';recordSearch='';cursor=null;loading=false;error=false;}
- function source(){const row=(state.book.website.researchSources??[]).find(source=>source.workspaceId===owner?.workspaceId);return row?.labBookId&&head?resolvePublicationSource({...head,id:head.workspaceId},row,owner):row;}
+ function close(){stop();client.close();selectedSource=null;includedSources.clear();selectionRevision=null;context=null;page=null;head=null;owner=null;records=null;details=null;projectId=null;offset=0;revision=null;search='';recordSearch='';cursor=null;loading=false;error=false;}
+ function source(){const row=native()?(selectedSource?.workspaceId===owner?.workspaceId?selectedSource:null):(state.book.website.researchSources??[]).find(source=>source.workspaceId===owner?.workspaceId);return row?.labBookId&&head?resolvePublicationSource({...head,id:head.workspaceId},row,owner):row;}
  function change(edit){
   if(!active()||context!==identity()||!owner||!head)return;
   const sources=structuredClone(state.book.website.researchSources??[]);let row=sources.find(source=>source.workspaceId===owner.workspaceId);
@@ -25,6 +27,7 @@ export function publicationSourcesUI({state,api,esc,access,checkpoint,changed,no
   if(!validPublicationSources(sources)){notify(text('limit'),true);paint();return;}
   checkpoint('publication-sources');state.book.website.researchSources=sources;changed();paint();
  }
+ async function nativeChange(operation){await run(async signal=>{await documents.perform([{type:'source-selection',workspaceId:owner.workspaceId,...(owner.labBookId?{labBookId:owner.labBookId}:{}),...operation}]);return documents.sources({sourceId:owner.workspaceId,recordIds:records?.items.map(item=>item.id)??[]},{signal});},value=>{selectedSource=value.source;selectionRevision=value.summary.revision;changed();});}
  const available=record=>record.share===true&&head?.notebooks.find(book=>book.id===record.notebookId)?.share!==false;
  const projectAvailable=()=>head?.notebooks.some(book=>book.projectId===recordProject&&book.share!==false);
  function selected(record){const selection=source()?.selection??emptyPublicationSource(owner.workspaceId).selection;return available(record)&&websiteRecordShare(selection,record,recordProject);}
@@ -44,7 +47,7 @@ export function publicationSourcesUI({state,api,esc,access,checkpoint,changed,no
     (records?'<div class="inline-actions">'+button('previous','records-previous',loading||!records.previousCursor?'disabled':'')+'<span>'+esc(records.total?text('range',{first:records.offset+1,last:records.offset+records.items.length,total:records.total}):text('noRecords'))+'</span>'+button('next','records-next',loading||!records.nextCursor?'disabled':'')+'</div>':'');
   }else{
    container.innerHTML=(projectId?button('back','back'):'')+'<label class="field">'+esc(text('search'))+'<input type="search" data-source-search maxlength="160" value="'+esc(search)+'"></label>'+
-    (!loading&&page?page.items.map((item,index)=>'<section class="website-record"><p>'+esc([...item.ancestors,item.label].join(' / '))+'</p>'+button(item.kind==='project'?'books':'open','open','data-index="'+index+'"')+((state.book.website.researchSources??[]).some(s=>s.workspaceId===item.workspaceId)?'<span>'+esc(text('included'))+'</span>':'')+'</section>').join('')+(page.items.length?'':'<p>'+esc(text('empty'))+'</p>'):'')+
+    (!loading&&page?page.items.map((item,index)=>'<section class="website-record"><p>'+esc([...item.ancestors,item.label].join(' / '))+'</p>'+button(item.kind==='project'?'books':'open','open','data-index="'+index+'"')+((native()?includedSources.has(item.workspaceId):(state.book.website.researchSources??[]).some(s=>s.workspaceId===item.workspaceId))?'<span>'+esc(text('included'))+'</span>':'')+'</section>').join('')+(page.items.length?'':'<p>'+esc(text('empty'))+'</p>'):'')+
     (page?'<div class="inline-actions">'+button('previous','directory-previous',loading||!offset?'disabled':'')+button('next','directory-next',loading||offset+page.items.length>=page.total?'disabled':'')+'</div>':'');
   }
  }
@@ -55,21 +58,22 @@ export function publicationSourcesUI({state,api,esc,access,checkpoint,changed,no
   catch(reason){if(valid()&&reason.name!=='AbortError')error=true;}
   finally{if(valid()){loading=false;controller=null;paint();}}
  }
- const loadDirectory=()=>run(signal=>client.directory({projectId,search,offset,limit:10,revision},{signal,unlock:true}),value=>{page=value;revision=value.revision;});
+ const loadDirectory=()=>run(async signal=>{const value=await client.directory({projectId,search,offset,limit:10,revision},{signal,unlock:true});if(native()){const selected=await documents.sources({sourceIds:value.items.map(item=>item.workspaceId).filter(researchId)},{signal});includedSources=new Set(selected.sources.map(source=>source.workspaceId));selectionRevision=selected.summary.revision;}return value;},value=>{page=value;revision=value.revision;});
  function loadRecords(){if(!recordProject){records=null;paint();return;}
-  return run(signal=>client.query('content',{projectId:recordProject,search:recordSearch,cursor},{signal}),value=>{
+  return run(signal=>client.query('content',{projectId:recordProject,search:recordSearch,cursor},{signal}),async value=>{
    if(!Array.isArray(value.items)||value.items.length>10||!Number.isSafeInteger(value.total)||value.total<0||!Number.isSafeInteger(value.offset)||value.offset<0||value.items.some(row=>!researchId(row.id)||typeof row.title!=='string'||!head.notebooks.some(n=>n.id===row.notebookId&&n.projectId===recordProject)||typeof row.share!=='boolean'||!Number.isSafeInteger(row.attachmentCount)||row.attachmentCount<0)||new Set(value.items.map(row=>row.id)).size!==value.items.length||![value.previousCursor,value.nextCursor].every(c=>c===null||typeof c==='string'&&!!c))throw Error('PUBLICATION_SOURCE_RESPONSE');
-   records=value;
+   if(native()){const selected=await documents.sources({sourceId:owner.workspaceId,recordIds:value.items.map(item=>item.id)});selectedSource=selected.source;selectionRevision=selected.summary.revision;}records=value;
   });
  }
  async function openSource(item){
-  await run(signal=>client.open(item,{signal,unlock:true}),value=>{owner=value.owner;head=value.head;recordProject=head.projects[0]?.id??null;records=null;details=null;recordSearch='';cursor=null;});
+  selectedSource=null;await run(signal=>client.open(item,{signal,unlock:true}),value=>{owner=value.owner;head=value.head;recordProject=head.projects[0]?.id??null;records=null;details=null;recordSearch='';cursor=null;});
   if(head&&!error&&active())await loadRecords();
  }
  function view(){return '<section class="panel" data-publication-sources><h2>'+esc(text('title'))+'</h2><p data-source-status role="status"></p><button type="button" class="button" data-source-action="retry" data-source-retry hidden>'+esc(text('retry'))+'</button><div data-source-body></div></section>';}
  function bind(){
   if(!active()){close();return;}
   if(context!==identity()){close();context=identity();void loadDirectory();}
+  else if(native()&&!loading&&selectionRevision!==state.websiteEditor.sources.revision){if(head)void loadRecords();else void loadDirectory();}
   const host=root();if(host.dataset.bound==='true'){paint();return;}host.dataset.bound='true';
   host.addEventListener('click',event=>{
    const control=event.target.closest('[data-source-action]');if(!control||!host.contains(control))return;event.preventDefault();event.stopPropagation();if(!active()||context!==identity()||loading)return;
@@ -79,7 +83,7 @@ export function publicationSourcesUI({state,api,esc,access,checkpoint,changed,no
    if(action.startsWith('directory-')){offset=Math.max(0,offset+(action.endsWith('previous')?-10:10));void loadDirectory();return;}
    if(action==='open'){const item=page?.items[Number(control.dataset.index)];if(!item)return;if(item.kind==='project'){projectId=item.projectId;offset=0;revision=null;search='';void loadDirectory();}else void openSource(item);return;}
    if(action.startsWith('records-')){const next=records?.[action.endsWith('previous')?'previousCursor':'nextCursor'];if(next){cursor=next;details=null;void loadRecords();}return;}
-   if(action==='remove'){change((_row,rows)=>rows.splice(rows.findIndex(row=>row.workspaceId===owner.workspaceId),1));return;}
+   if(action==='remove'){if(native()){void nativeChange({kind:'remove'});return;}change((_row,rows)=>rows.splice(rows.findIndex(row=>row.workspaceId===owner.workspaceId),1));return;}
    if(action==='page'){const record=records?.items.find(record=>record.id===control.dataset.id);if(!record||!selected(record))return;void run(signal=>client.query('record',{recordId:record.id},{signal}),async value=>{if(value.record?.id!==record.id||value.page?.owner?.workspaceId!==owner.workspaceId)throw Error('PUBLICATION_SOURCE_RESPONSE');await onOpenPage?.(value.page);});return;}
    if(action==='media'){const record=records?.items.find(record=>record.id===control.dataset.id);if(!record)return;void run(signal=>client.query('record',{recordId:record.id},{signal}),value=>{if(value.record?.id!==record.id||value.record.notebookId!==record.notebookId||!Array.isArray(value.record.attachments))throw Error('PUBLICATION_SOURCE_RESPONSE');details=value.record;});}
   });
@@ -91,6 +95,7 @@ export function publicationSourcesUI({state,api,esc,access,checkpoint,changed,no
    if(el.hasAttribute('data-source-project')){if(!head.projects.some(p=>p.id===el.value))return;recordProject=el.value;cursor=null;recordSearch='';records=null;details=null;void loadRecords();return;}
    if(el.hasAttribute('data-source-all')){
     if(!projectAvailable()){paint();return;}
+    if(native()){void nativeChange({kind:'project',projectId:recordProject,share:el.checked});return;}
     const include=el.checked,selection=structuredClone(source()?.selection??emptyPublicationSource(owner.workspaceId).selection),chosenProject=recordProject;
     void run(signal=>client.query('summary',{selection,search:''},{signal}),value=>{
      const membership=value.selectionProjects;
@@ -105,6 +110,7 @@ export function publicationSourcesUI({state,api,esc,access,checkpoint,changed,no
    }
    const record=records?.items.find(record=>record.id===(el.dataset.sourceRecord??el.dataset.record));if(!record||!available(record)){paint();return;}
    if(el.hasAttribute('data-source-attachment')&&!details?.attachments.some(a=>a.id===el.dataset.sourceAttachment&&a.share)){paint();return;}
+   if(native()){void nativeChange({kind:el.hasAttribute('data-source-record')?'record':'attachment',projectId:recordProject,recordId:record.id,...(el.hasAttribute('data-source-attachment')?{attachmentId:el.dataset.sourceAttachment}:{}),share:el.checked});return;}
    change(row=>{if(el.checked&&!row.projectIds.includes(recordProject))row.projectIds.push(recordProject);let choice=row.selection.records.find(r=>r.id===record.id);if(!choice){choice={id:record.id,share:null,attachments:[]};row.selection.records.push(choice);}
     if(el.hasAttribute('data-source-record'))choice.share=el.checked;
     else{const id=el.dataset.sourceAttachment;if(!details?.attachments.some(a=>a.id===id))return;const prior=choice.attachments.find(a=>a.id===id);if(prior)prior.share=el.checked;else choice.attachments.push({id,share:el.checked});}

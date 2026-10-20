@@ -1,3 +1,4 @@
+import {sourceSelectionReader,sourceRecordChoice,sourceRecordIncluded} from './website-source-selections.js';
 import {websitePublicationMetadata,websitePublicationPages,websitePublicationCollections} from './publication-website-input.js';
 import {websiteEditorProjection} from './website-editor-projection.js';
 import {validateWebsiteDocument,websiteDocumentHeader} from './website-document-validation.js';
@@ -40,6 +41,18 @@ export async function selectedPublicationBook(store,snapshot,{signal,metadata=sn
  return {...metadata,entries};
 }
 export async function* selectedPublicationRows(store,snapshot,{signal,metadata=snapshot.metadata,selection=emptyWebsiteSelection(),page,inventory=false}={}){
+ if(sourceSelectionReader(selection)){
+  const notebooks=new Set(metadata.notebooks.filter(n=>n.share!==false&&metadata.projects.some(p=>p.id===n.projectId&&p.share)).map(n=>n.id)),owners=new Map(metadata.notebooks.map(n=>[n.id,n.projectId]));
+  let position=0;
+  for await(const row of publicationRecords(store,snapshot,{metadata,selection,overrides:new Map(),notebooks,after:page?.after??null,recordId:page?.recordId??null,signal})){
+   if(page?.recordId&&row.id!==page.recordId)continue;
+   const [summary]=await Array.fromAsync(store.queryDocuments([row],snapshot.metadata,{signal,search:false,publication:true,inventory,inventoryFallback:false}));
+   if(!notebooks.has(summary.notebookId)||!await sourceRecordIncluded(selection,summary,owners.get(summary.notebookId)))continue;
+   const index=position++;if(page&&(index<page.offset||index>=page.offset+page.limit))continue;
+   yield {row,summary,patch:await sourceRecordChoice(selection,row.id)};if(page&&position>=page.offset+page.limit)return;
+  }
+  return;
+ }
  const book=metadata,selected=new Map(selection.records.map(r=>[r.id,r])),saved=new Map((snapshot.websiteSelection?.records??[]).map(r=>[r.id,r])),overrides=new Map();
  if(selection.includeProjects.some(id=>!metadata.projects.some(p=>p.id===id)))throw new AppError('INVALID');
  const projects=new Set(book.projects.filter(p=>p.share).map(p=>p.id));
@@ -157,6 +170,6 @@ async function websiteDocumentPublicationSource(workspace,{etag,websitePin,websi
   const metadata=retained?await websitePublicationMetadata(projected,{signal}):page||inventory?projected.metadata:websiteBook(raw.metadata,site),selection=site.selection;
   const snapshot={...raw,metadata,websiteSelection:selection,websitePin};
   const paging=publicationSelectionPage(store,{snapshotId:etag,websiteId:id,websitePin,websiteDraft,metadata,selection},page),options={signal,metadata,selection,page:paging.page};
-  return consume?consume(metadata,(inventory?selectedPublicationInventories:selectedPublicationRecords)(store,snapshot,options),{sourceEtag:etag,websitePin,nextCursor:paging.nextCursor,...(retained?{websitePages:websitePublicationPages(projected,{signal}),websiteCollections:await websitePublicationCollections(projected,{signal})}:{})}):selectedPublicationBook(store,snapshot,options);
+  return consume?consume(metadata,(inventory?selectedPublicationInventories:selectedPublicationRecords)(store,snapshot,options),{sourceEtag:etag,websitePin,nextCursor:paging.nextCursor,...(retained?{websitePages:websitePublicationPages(projected,{signal}),websiteCollections:await websitePublicationCollections(projected,{signal}),websiteSourcesDocument:projected.document}:{})}):selectedPublicationBook(store,snapshot,options);
  });
 }

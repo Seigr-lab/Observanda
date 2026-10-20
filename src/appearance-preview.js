@@ -1,9 +1,9 @@
+import {withWebsiteSourceSelections} from './website-source-selections.js';
 import {capturePreviewPermissions} from './publication-preview-admission.js';
 import {publicationWorkspace,assertWebsitePin,sameWebsitePin} from './publication-pin.js';
 import {websiteEditorProjection,websiteEditorPresentation} from './website-editor-projection.js';
 import {validWebsiteDraftPin} from './web/website-draft-pin.js';
 import {AppearancePreviewSources} from './appearance-preview-sources.js';
-import {validPublicationSources} from './web/publication-sources-model.js';
 import {referenceNamespaceMatches} from './research-reference-namespace.js';
 import {AppError} from './errors.js';
 import {validAppearance} from './web/themes.js';
@@ -50,19 +50,19 @@ async function withSource(workspace,command,{signal,sourceReader,sourceSnapshots
   const book={...snapshot.metadata,entries:[],appearance:structuredClone(command.appearance)};
   if(command.mode==='examples')return consume({book,source:'examples',snapshot,store,records:null});
   const local=await new AppearancePreviewRecords(store,snapshot,{signal,snapshotId:command.etag,websiteId:workspace.websiteId??null}).initialize();
-  const sources=book.website.researchSources??[];
-  if(!validPublicationSources(sources)||sources.some(source=>source.workspaceId===book.id))throw new AppError('INVALID');
+  return withWebsiteSourceSelections(projected.document,async sources=>{
   const consumeRecords=async(records,metadata=book)=>{
-   if(designTarget!==undefined&&sources.length)metadata=await websiteEditorPresentation(projected.document,projected.collectionIndexes,metadata,designTarget,{signal});
+   if(designTarget!==undefined&&sources.count)metadata=await websiteEditorPresentation(projected.document,projected.collectionIndexes,metadata,designTarget,{signal});
    const value=await consume({book:metadata,source:command.mode==='auto'?(records.counts.total||metadata.pages.some(p=>p.share)?'website':'examples'):command.mode,snapshot,store,records});
    if(permissionProof)permissionProof.push(...capturePreviewPermissions(records));return value;
   };
-  if(!sources.length)return consumeRecords(local);
+  if(!sources.count)return consumeRecords(local);
   const reader=await sourceReader?.({signal});if(!reader)throw new AppError('ACCESS_LOCKED');
   try{
    const records=await new AppearancePreviewSources(local,reader,{snapshots:sourceSnapshots,mediaOrigins}).initialize(sources);
    const value=await consumeRecords(records,{...records.metadata,entries:[],appearance:book.appearance});await reader.verify();return value;
   }finally{await reader.close();}
+  },{signal});
  });
 }
 export const appearancePreviewSource=(workspace,command,options)=>withSource(workspace,command,options,({book,source,snapshot})=>({book,source,websitePin:snapshot.websitePin,...(snapshot.websiteDraft?{websiteDraft:snapshot.websiteDraft}:{})}));

@@ -1,3 +1,4 @@
+import {publicationSourceRevision} from './publication-source-context.js';
 import {sameWebsitePin} from './website-pin.js';
 import {websiteSnapshot} from './website-context.js';
 import {websiteSectionWindow} from './website-section-links.js';
@@ -7,7 +8,7 @@ const tr=(key,values)=>t('websitePages',key,values);
 
 export function websiteSectionPicker({state,api,esc,showDialog,pagePicker,previewTarget,onChoose,pageBook=()=>state.book,documents,recordSections}){
  let session=null,controller=null,generation=0;
- const identity=()=>JSON.stringify([websiteSnapshot(state),state.book?.id,state.etag,state.book?.website.researchSources,documents?.enabled()?documents.viewKey():null]);
+ const identity=()=>JSON.stringify([websiteSnapshot(state),state.book?.id,state.etag,publicationSourceRevision(state),documents?.enabled()?documents.viewKey():null]);
  const valid=s=>s===session&&s.identity===identity()&&state.page==='website'&&!state.access?.locked&&!state.storageUnavailable&&s.root.isConnected&&s.dialog.open;
  function stop(){controller?.abort();controller=null;generation++;const s=session;session=null;s?.unbind();return s;}
  function close(){const s=stop();if(s?.dialog.open)s.dialog.close();document.querySelector(s?.selector??'#website-preview-page')?.focus({preventScroll:true});}

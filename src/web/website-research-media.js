@@ -1,10 +1,11 @@
+import {publicationSourceRevision} from './publication-source-context.js';
 import {websiteSnapshot} from './website-context.js';
 import {ownedAssetURL,projectApiRoute} from './project-context.js';
 import {t} from './i18n/index.js';
 const text=(key,args)=>t('websiteMedia',key,args);
 export function websiteResearchMedia({state,research,esc,field,showDialog,notify,query=({signal,...data})=>research.query('media',data,{signal})}){
  let session=null;
- const identity=()=>JSON.stringify([websiteSnapshot(state),state.book?.id,state.etag,state.book?.website.researchSources]);
+ const identity=()=>JSON.stringify([websiteSnapshot(state),state.book?.id,state.etag,publicationSourceRevision(state)]);
  function close(){const s=session;session=null;s?.controller?.abort();clearTimeout(s?.timer);s?.unbind();if(s?.dialog.open)s.dialog.close();document.querySelector(s?.focus??'#website-preview-page')?.focus({preventScroll:true});}
  const valid=s=>s===session&&s.identity===identity()&&state.page==='website'&&s.dialog.open&&!state.access?.locked&&!state.storageUnavailable;
  function open({focus='#website-preview-page',choose}){

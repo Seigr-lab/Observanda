@@ -22,7 +22,7 @@ export class AppearancePreviewSources{
    item.sourceId=item.id;item.sourceWorkspaceId=this.metadata.id;item.referenceNamespaces=[this.metadata.id];
   }
   let offset=this.local.snapshot.nextPosition??this.local.snapshot.records.length;
-  for(const source of sources){
+  for await(const source of Array.isArray(sources)?sources:sources.items()){
    const owner=await new PublicationPreviewOwner(source,this.reader,this.identities,{signal:this.signal}).initialize({counts:true,snapshotId:this.snapshots.get(source.workspaceId)});
    owner.offset=offset;offset+=owner.positionSpan;
    if(!Number.isSafeInteger(offset)||offset<0)throw new AppError('LIMIT');

@@ -1,3 +1,6 @@
+import {readWebsiteSources,changeWebsiteSources,websiteSourceCommandLookup} from './website-source-commands.js';
+import {websiteSourceSummary} from './website-source-selections.js';
+import {requireWebsiteSourceSelections} from './catalogue-format.js';
 // Durable selected website edits retain complete immutable roots. Transport
 // projections omit growing owners; no caller can supply a replacement root.
 import {randomUUID,createHash} from 'node:crypto';
@@ -29,7 +32,7 @@ const pinOf=value=>({researchSnapshotId:value.researchSnapshotId,websiteId:value
 const validHead=value=>value&&Object.keys(value).sort().join()==='base,generation,history,id,position,tip,version,websiteId,workspaceId'&&value.version===1&&researchId(value.workspaceId)&&researchId(value.websiteId)&&researchId(value.id)&&value.base&&Object.keys(value.base).sort().join()==='researchSnapshotId,websiteRevision'&&revisionId(value.base.researchSnapshotId)&&revisionId(value.base.websiteRevision)&&natural(value.generation)&&natural(value.position)&&natural(value.tip)&&value.position<=value.tip&&value.tip<=value.generation&&validIndexRef(value.history)&&value.history&&value.history.count>=value.tip+1;
 const validCheckpoint=value=>value&&Object.keys(value).sort().join()==='collectionIndexes,navigationProjection,root,version'&&[1,2].includes(value.version)&&revisionId(value.root)&&validWebsiteCollectionIndexes(value.collectionIndexes,{version:value.version})&&validWebsiteNavigationProjection(value.navigationProjection);
 export class WebsiteEditorStore{
- constructor(store){this.store=store;this.documents=new WebsiteDocumentStore(store);}
+ constructor(store,{sourceReader}={}){this.store=store;this.sourceReader=sourceReader;this.documents=new WebsiteDocumentStore(store);}
  history(id){return new ObjectIndex(this.store,{namespace:prefix+'history:'+id+':',immutable:true});}
  async owner(websiteId){const registry=await this.documents.registry();if(!registry)throw new AppError('ACCESS_UPGRADE');return {registry,id:await this.documents.ownedId(websiteId,registry)};}
  async readSlot(slot){const row=await this.store.db.get('SELECT payload FROM state WHERE slot=$1',slot);return row?this.store.decode('state',slot,row.payload):null;}
@@ -61,9 +64,10 @@ export class WebsiteEditorStore{
   const navigation=await this.navigation(context,site,{signal});collections.navigation.count=navigation.value?.count??await navigation.total();
   if(!site.selection)site.selection=await defaultWebsiteSelection(this.store,await this.store.snapshot(context.websitePin.researchSnapshotId),{signal});delete site.document.pages;delete site.document.website.navigation;delete site.document.website.assets;delete site.document.website.layouts;delete site.document.branding;site.id=context.websitePin.websiteId;
   let draft=null;if(context.head){const initial=await this.checkpoint(context.head,0);draft={id:context.head.id,revision:hash(context.head),generation:context.head.generation,dirty:context.document.root!==initial.root,canUndo:context.head.position>0,canRedo:context.head.position<context.head.tip};}
-  return {websitePin:context.websitePin,site,collections,draft};
+  return {websitePin:context.websitePin,site,collections,draft,sources:await websiteSourceSummary(context.document)};
  }
  async open(websiteId,options={}){return this.envelope(await this.context(websiteId,{...options,active:true}),options);}
+ async sources(websiteId,options={}){const context=await this.context(websiteId,options);return {...await readWebsiteSources(context.document,options),websitePin:context.websitePin};}
  async sourceItem(context,collection,key,{signal}={}){
   if(!websiteCollectionName(collection)||!validWebsiteCollectionKey(collection,key))invalid();const path=WEBSITE_COLLECTION_PATHS[collection],descriptor=context.checkpoint.collectionIndexes?.[collection];let position=null;
   if(descriptor){const index=await WebsiteCollectionIndex.open(context.document,collection,descriptor,{signal});if(!index)damaged();position=(await index.item(key,{signal}))?.position??null;}
@@ -141,6 +145,13 @@ export class WebsiteEditorStore{
  }
  async apply(context,operation,{signal}={}){
   const snapshot=await this.store.snapshot(context.websitePin.researchSnapshotId),site=await websiteDocumentHeader(context.document,{signal});
+  if(operation.type==='source-selection'){
+   if(operation.workspaceId===snapshot.metadata.id)invalid();await requireWebsiteSourceSelections(this.store.db);
+   let reader;try{
+    const recordProject=async(workspaceId,id)=>{reader??=await this.sourceReader?.({signal});if(!reader)throw new AppError('ACCESS_LOCKED');const result=await reader.use(workspaceId,undefined,async(store,snapshot)=>{const row=await store.member(snapshot,id);if(!row)throw new AppError('RECORD_CHANGED');return snapshot.metadata.notebooks.find(book=>book.id===row.notebookId)?.projectId;});return result.value;};
+    context.document=await changeWebsiteSources(context.document,operation,{signal,recordProject,lookup:context.sourceCommandLookup});if(reader)await reader.verify();
+   }finally{await reader?.close();}return;
+  }
   if(operation.type==='home-remove'){context.document=await context.document.replace(['document','website','home'],emptyHomepage(),{signal});await this.removeTarget(context,'home',{signal});return;}
   if(operation.type==='settings'){const path=operation.path.slice(0,-1),name=operation.path.at(-1);context.document=await context.document.property(path,name,structuredClone(operation.value),{remove:operation.remove===true,signal});const next=await validateWebsiteDocumentHeader(this.store,snapshot,context.document,{signal,draft:true});
    if(['selection','projects'].includes(operation.path[0])){const original=await this.documents.document(context.websitePin.websiteId,context.websitePin),previous=await websiteDocumentHeader(original.document,{signal});await validateWebsiteDocumentSelection(this.store,snapshot,next,{signal,previous});}
@@ -195,7 +206,8 @@ export class WebsiteEditorStore{
  async change(websiteId,{draftId=null,expectedRevision=null,websitePin,commandId,operations,signal}={}){
   if(!Array.isArray(operations)||!operations.length||operations.length>32||!operations.every(validWebsiteEditorOperation))invalid();operations=structuredClone(operations);websitePin=structuredClone(websitePin);const {id}=await this.owner(websiteId),receipt=await this.receipt(id,commandId,'change',{draftId,expectedRevision,websitePin,operations});if(receipt.prior)return this.result(websiteId,receipt.prior.result,{signal});
   await requireWebsitePresentation(this.store.db);const context=await this.editing(websiteId,{draftId,expectedRevision,websitePin,signal});
-  for(const operation of operations){signal?.throwIfAborted();await this.apply(context,operation,{signal});context.checkpoint=await this.prepare(context,{signal});}
+  context.sourceCommandLookup=websiteSourceCommandLookup(operations);
+  for(let at=0;at<operations.length;at++){const operation=operations[at];signal?.throwIfAborted();await this.apply(context,operation,{signal});if(operation.type!=='source-selection'||operations[at+1]?.type!=='source-selection')context.checkpoint=await this.prepare(context,{signal});}
   const checkpointRevision=hash(context.checkpoint);await this.immutable(prefix+'checkpoint:'+id+':'+checkpointRevision,context.checkpoint);const history=this.history(id),position=context.head.position+1,root=await history.change(context.head.history,ordinal(position),checkpointRevision);await history.flush(root);
   context.head={...context.head,generation:context.head.generation+1,position,tip:position,history:root};await this.retainHead(context.head);return this.acknowledge(receipt,context,{signal});
  }

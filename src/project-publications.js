@@ -57,7 +57,7 @@ export class ProjectPublications{
   const control=async(type,kind)=>{const job=await queue.read(data.id);if(!job||job.type!==type)throw new AppError('NOT_FOUND');await queue.authorize(job);if(kind==='status')return jobSummary(job);const next=await (type==='publication.deploy'?new DeploymentJobs(workspace,publisher,queue,{sourceReader,sourceAccess:this.entry.sourceAccess}).control(job.id,kind):type==='publication.prepare'?releases.control(queue,job.id,kind):queue.control(job.id,kind));if(kind==='cancel')worker.cancel(job.id);else worker.wake();return jobSummary(next);};
   if(operation.startsWith('websites/')){
    const sites=new WebsiteSites(storage),method=operation.slice(9);
-   if(method.startsWith('editor/')){const result=await new WebsiteEditor(storage).execute(method.slice(7),data,{signal});await check();return result;}
+   if(method.startsWith('editor/')){const result=await new WebsiteEditor(storage,{sourceReader}).execute(method.slice(7),data,{signal});await check();return result;}
    if(method==='list')return sites.list(data);if(method==='open')return sites.read(data.id,{signal,websitePin:data.websitePin});if(method==='version')return sites.version(data.id,{websitePin:data.websitePin});if(method==='change')return sites.change(data);return sites.save(data.id,data.command);
   }
   if(operation==='workspace/save')return new WorkspaceEdits(storage,new MediaStore(storage)).save(data);

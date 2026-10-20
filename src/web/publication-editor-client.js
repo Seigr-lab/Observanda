@@ -1,3 +1,4 @@
+import {publicationSourceCount,publicationSourceRevision} from './publication-source-context.js';
 import {websiteSnapshot} from './website-context.js';
 import {researchId} from './research-reference.js';
 import {revisionId} from './revision-model.js';
@@ -7,22 +8,22 @@ import {revisionId} from './revision-model.js';
 export function publicationEditorClient({state}){
  let context=null,consent=null,projection=null,selected=null;
  const identity=()=>JSON.stringify([websiteSnapshot(state),state.book?.id]);
- const selection=()=>JSON.stringify(state.book?.website.researchSources??[]);
+ const selection=()=>publicationSourceRevision(state);
  function close(){context=null;consent=null;projection=null;selected=null;}
  function sync(){const next=identity(),choices=selection();if(context!==next||consent!==choices){projection=null;selected=null;context=next;consent=choices;}if(state.access?.locked||state.storageUnavailable||state.page!=='website')close();}
  function accept(value){
   sync();if(value===undefined){projection=null;return;}
-  const sources=state.book.website.researchSources??[],ids=new Set(sources.map(source=>source.workspaceId));
+  const sources=state.book.website.researchSources??[],ids=new Set(sources.map(source=>source.workspaceId)),count=publicationSourceCount(state);
   const invalid=()=>{throw Error('PUBLICATION_EDITOR_RESPONSE');};
   if(value?.workspaceId!==state.book.id||!Number.isSafeInteger(value.recordCount)||value.recordCount<0||!['sources','projects','notebooks','records'].every(key=>Array.isArray(value[key])))invalid();
-  if(value.sources.length!==ids.size||new Set(value.sources.map(source=>source.workspaceId)).size!==ids.size||value.sources.some(source=>!ids.has(source.workspaceId)||!revisionId(source.snapshotId)||![source.projectId,source.labBookId].every(id=>id===null||researchId(id))))invalid();
+  if(value.sources.length!==count||new Set(value.sources.map(source=>source.workspaceId)).size!==count||value.sources.some(source=>(state.websiteEditor?!researchId(source.workspaceId):!ids.has(source.workspaceId))||!revisionId(source.snapshotId)||![source.projectId,source.labBookId].every(id=>id===null||researchId(id))))invalid();
   for(const key of ['projects','notebooks','records'])if(new Set(value[key].map(item=>item.id)).size!==value[key].length||value[key].some(item=>!researchId(item.id)||typeof item.title!=='string'||item.title.length>(key==='records'?180:160)))invalid();
   if(value.notebooks.some(book=>!value.projects.some(project=>project.id===book.projectId))||value.records.some(record=>!value.notebooks.some(book=>book.id===record.notebookId)||!Array.isArray(record.attachments)||record.attachments.some(item=>!researchId(item.id)||!['image','audio','video','file'].includes(item.kind)||item.share!==true||typeof item.caption!=='string'||typeof item.alt!=='string')))invalid();
   for(const key of ['projects','notebooks'])if(value[key].some(item=>state.book[key].some(local=>local.id===item.id)))invalid();
   projection={recordCount:value.recordCount,sources:structuredClone(value.sources),projects:value.projects.map(({id,title,parentId})=>({id,title,parentId:parentId??null,share:true,logoId:null,description:''})),notebooks:value.notebooks.map(({id,title,projectId})=>({id,title,projectId})),records:value.records.map(({id,title,notebookId,type,attachments})=>({id,title,notebookId,type,share:true,attachments:attachments.map(({id,kind,caption,alt})=>({id,kind,caption,alt,share:true}))}))};
  }
  function remember(page){
-  sync();if(!page||!state.book.website.researchSources?.some(source=>source.workspaceId===page.owner?.workspaceId)||page.target!=='entry:'+page.record?.id||!researchId(page.record.id)||typeof page.title!=='string')throw Error('PUBLICATION_EDITOR_RESPONSE');
+  sync();if(!page||!(state.websiteEditor?researchId(page.owner?.workspaceId):state.book.website.researchSources?.some(source=>source.workspaceId===page.owner?.workspaceId))||page.target!=='entry:'+page.record?.id||!researchId(page.record.id)||typeof page.title!=='string')throw Error('PUBLICATION_EDITOR_RESPONSE');
   selected={id:page.record.id,title:page.title,notebookId:page.record.notebookId};
  }
  return {accept,remember,sync,close,

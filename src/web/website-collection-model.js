@@ -1,3 +1,4 @@
+import {validWebsiteSourceOperation} from './website-source-selection.js';
 import {researchId} from './research-reference.js';
 import {revisionId} from './revision-model.js';
 export {validWebsitePage,validWebsiteNavigationItem,validWebsiteAsset,validWebsiteLayout,validWebsiteBranding} from './website-item-validation.js';
@@ -10,11 +11,12 @@ export function websiteSettingPath(path){
  if(path.length===1)return ['name','projects','selection'].includes(path[0]);
  if(path[0]!=='document')return false;
  if(['appearance','themes','activeThemeId'].includes(path[1]))return true;
- return path[1]==='website'&&path.length>=3&&!['navigation','assets','layouts'].includes(path[2]);
+ return path[1]==='website'&&path.length>=3&&!['navigation','assets','layouts','researchSources'].includes(path[2]);
 }
 export function validWebsiteEditorOperation(value){
  if(!value||typeof value!=='object'||Array.isArray(value))return false;
  const exact=keys=>Object.keys(value).every(key=>keys.includes(key));
+ if(value.type==='source-selection')return validWebsiteSourceOperation(value);
  if(value.type==='settings')return exact(['type','path','value','remove'])&&websiteSettingPath(value.path)&&(value.remove===true?!Object.hasOwn(value,'value'):value.remove===undefined&&Object.hasOwn(value,'value'));
  if(value.type==='replace')return exact(['type','collection','key','position','expectedItemRevision','value'])&&websiteCollectionName(value.collection)&&validWebsiteCollectionKey(value.collection,value.key)&&(value.position===undefined||Number.isSafeInteger(value.position)&&value.position>=0)&&(value.expectedItemRevision===undefined||revisionId(value.expectedItemRevision))&&Object.hasOwn(value,'value')&&websiteCollectionKey(value.collection,value.value)===value.key;
  if(value.type==='append')return exact(['type','collection','values'])&&websiteCollectionName(value.collection)&&Array.isArray(value.values)&&value.values.length>0&&value.values.length<=32;

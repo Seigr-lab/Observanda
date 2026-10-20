@@ -1,6 +1,6 @@
+import {publicationSourceCount} from './publication-source-context.js';
 import {sameWebsitePin} from './website-pin.js';
 import {websiteDocumentPages} from './website-document-pages.js';
-import {selectedPublicationSources} from './publication-sources-model.js';
 import {publicationMediaClient} from './publication-media-client.js';
 import {publicationPageClient,publicationPageSections} from './publication-page-client.js';
 import {publicationSourcesUI} from './publication-sources-ui.js';
@@ -103,7 +103,7 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
   const legacyContent=websiteContentUI({state,esc,field,option,selection,render:refreshTools});
   const contentPages=websiteContentPages({state,esc,field,option,render:refreshTools,research,selection});
   const contentUI=Object.fromEntries(['view','input','action','bind','sync'].map(key=>[key,(...args)=>(research.enabled()?contentPages:legacyContent)[key](...args)]));
-  const sourceUI=publicationSourcesUI({state,api,esc,access,checkpoint,changed,notify,onOpenPage:async page=>{sourcePages.remember(page);research.choosePage(page);await changePreviewPage(page.path);tool='page';refreshTools();}});
+  const sourceUI=publicationSourcesUI({state,api,documents,esc,access,checkpoint,changed,notify,onOpenPage:async page=>{sourcePages.remember(page);research.choosePage(page);await changePreviewPage(page.path);tool='page';refreshTools();}});
   const compositionKind=()=>area!=='body'?area:previewTarget()==='home'?'home':previewTarget()?.startsWith('page:')?'page':'layout';
   const activeRoot=doc=>doc?.querySelector('[data-composition="'+compositionKind()+'"]');
   function goTool(next){if(tool!==next)toolTrail.push({tool,scroll:window.scrollY});tool=next;inspector=true;refreshTools();}
@@ -115,7 +115,7 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
     if(totals)result.notebooks=display.notebooks.filter(n=>(!state.book.notebooks.some(local=>local.id===n.id)||totals.notebookIds.includes(n.id))&&display.projects.some(p=>p.id===n.projectId&&p.share));
     return result;
   };
-  const summary=()=>{const result=selectedSummary();if(native())result.canPublish ||= documents.descriptor().collections.pages.sharedCount>0;return result;};
+  const summary=()=>{const result=selectedSummary();if(native()){result.sourceCount=publicationSourceCount(state);result.canPublish ||= result.sourceCount>0||documents.descriptor().collections.pages.sharedCount>0;}return result;};
   function counts(){
     if(native())return tr('documentMediaCounts',{pages:documents.descriptor().collections.pages.sharedCount});
     const s=summary(),totals=research.totals(),groups=totals?.projects.filter(group=>s.projects.some(p=>p.id===group.id));
@@ -219,11 +219,11 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
   const sectionName=s=>s.title||({download:t('websiteMedia','downloadElement'),popup:tr('popup'),'copy-text':tr('copy-text'),disclosure:tr('disclosure'),contents:tr('contents'),container:'Container',heading:'Heading',hero:'Introduction',gallery:'Gallery',text:'Text',callout:'Callout',media:'Research media',link:'Link',divider:'Divider',asset:'Media',projects:'Projects',records:'Records',pages:'Pages'}[s.kind]??s.kind);
   function previewPageOptions(){
     const {choices,more}=websitePageChoices(pageBook(),previewPage),text=key=>t('websitePages',key);
-    if(!choices.length)return '<option value="">'+esc(selectedPublicationSources(state.book.website.researchSources).length?t('publicationSources','choosePage'):text('noPages'))+'</option>'+(state.book.website.researchSources?.length?'<option value="find">'+esc(text('find'))+'</option>':'');
+    if(!choices.length)return '<option value="">'+esc(publicationSourceCount(state)?t('publicationSources','choosePage'):text('noPages'))+'</option>'+(publicationSourceCount(state)?'<option value="find">'+esc(text('find'))+'</option>':'');
     return (!previewTarget()?'<option value="" selected>'+esc(text('noPageSelected'))+'</option>':'')+['home','page','project','notebook','entry'].map(kind=>{
       const items=choices.filter(p=>p.target.split(':')[0]===kind),options=items.map(p=>option(p.path,kind==='home'?text('home'):p.title,previewPage)).join('');
       return kind==='home'?options:items.length?'<optgroup label="'+esc(text(kind))+'">'+options+'</optgroup>':'';
-    }).join('')+(more||native()&&documents.count('pages')>pageLabels.length||state.book.website.researchSources?.length||research.enabled()&&state.workspaceOutline?.total>0?'<option value="find">'+esc(text('find'))+'</option>':'');
+    }).join('')+(more||native()&&documents.count('pages')>pageLabels.length||publicationSourceCount(state)||research.enabled()&&state.workspaceOutline?.total>0?'<option value="find">'+esc(text('find'))+'</option>':'');
   }
   function previewTarget(){return websitePageAtPath(pageBook(),previewPage)?.target??null;}
   async function changePreviewPage(path){
@@ -245,8 +245,8 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
     richMount={node:mount,attributes:[...mount.attributes].map(a=>[a.name,a.value])};richId=selected.id;richContext=websiteContext(state);richEditor=mountRichText({mount,toolbar,section:selected,getDestinations:linkDestinations,revealSelection:view=>{surface?.measure();const tools=document.querySelector(".website-preview-tools"),top=Math.max(document.querySelector(".topbar")?.getBoundingClientRect().bottom??0,getComputedStyle(tools).position==="sticky"?tools.getBoundingClientRect().bottom:0);surface?.reveal(view.coordsAtPos(view.state.selection.head),top);return true;},initialState:richStates.get(selected.id),onError:message=>notify(message,true),onChange:value=>{checkpoint('rich:'+selected.id);const current=previewSections().find(s=>s.id===selected.id);if(!current)return;current.richText=value;current.format='rich';current.body=richTextPlain(value);refreshRichStyles(doc,value);dirty();refreshSummary();previewKey=null;schedulePreview();updateHistoryControls();}});
   }
 
-  function emptyPageDetail(){return selectedPublicationSources(state.book.website.researchSources).length?esc(t('publicationSources','choosePageDetail')):'Use Add page or Create homepage above the canvas. A homepage is optional.';}
-  function emptyPage(){return `<section class="panel"><h2>${selectedPublicationSources(state.book.website.researchSources).length?esc(t('publicationSources','choosePage')):'Create a page'}</h2><p>${emptyPageDetail()}</p></section>`;}
+  function emptyPageDetail(){return publicationSourceCount(state)?esc(t('publicationSources','choosePageDetail')):'Use Add page or Create homepage above the canvas. A homepage is optional.';}
+  function emptyPage(){return `<section class="panel"><h2>${publicationSourceCount(state)?esc(t('publicationSources','choosePage')):'Create a page'}</h2><p>${emptyPageDetail()}</p></section>`;}
   function siteFields(){const b=state.book,identity=siteIdentity(b);return `${field('Website title',`<input data-site="title" value="${esc(identity.title)}" maxlength="160" aria-describedby="website-title-help">`)}<p id="website-title-help" class="muted">${esc(tr('titleHelp'))}</p>${field('Website description',`<textarea data-site="description" rows="3" maxlength="1500">${esc(identity.description)}</textarea>`)}`;}
   function home(){
     const b=state.book,h=b.website.home;
@@ -693,5 +693,5 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
     if(button){button.title=expanded?'Exit full screen':'Full screen';button.setAttribute('aria-label',button.title);}
     fitPreview();
   });
-  return {load,view,input,action,bind,summary,acceptAsset,validate,focusEmpty:()=>{const hasResearch=state.book.projects.length>0||Boolean(state.book.website.researchSources?.length);tool=hasResearch?'content':'insert';inspector=true;refreshTools();document.querySelector(hasResearch?'[data-project-share]':'#element-search')?.focus();notify(hasResearch?'Choose the logbook content to publish.':'Add content to the page before previewing.');},currentPath:()=>previewPage,saved:()=>{syncHistory();updateHistoryControls();previewKey=null;schedulePreview();}};
+  return {load,view,input,action,bind,summary,acceptAsset,validate,focusEmpty:()=>{const hasResearch=state.book.projects.length>0||Boolean(publicationSourceCount(state));tool=hasResearch?'content':'insert';inspector=true;refreshTools();document.querySelector(hasResearch?'[data-project-share]':'#element-search')?.focus();notify(hasResearch?'Choose the logbook content to publish.':'Add content to the page before previewing.');},currentPath:()=>previewPage,saved:()=>{syncHistory();updateHistoryControls();previewKey=null;schedulePreview();}};
 }

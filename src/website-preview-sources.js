@@ -1,3 +1,4 @@
+import {sourceSelectionRevision} from './website-source-selections.js';
 import {publicationReferenceWindow} from './publication-reference-window.js';
 import {AppError} from './errors.js';
 import {PublicationPreviewOwner} from './publication-preview-owner.js';
@@ -28,12 +29,12 @@ export class WebsitePreviewSources{
    const namespace=this.metadata.id;
    item.sourceId=item.id;item.sourceWorkspaceId=namespace;item.referenceNamespaces=[...new Set([this.metadata.id,namespace])];
   }
-  for(const source of sources){
+  for await(const source of Array.isArray(sources)?sources:sources.items()){
    const owner=await new PublicationPreviewOwner(source,this.reader,this.identities,{signal:this.signal}).initialize({counts:true,entryId});
    appendPublicationCollections(this.metadata,owner.projected);this.owners.push(owner);
    if(owner.entryId){for(const [id,descriptor] of owner.descriptors)this.remember(owner.rows.get(id),{publicationCard:descriptor});entryId=null;}
   }
-  this.binding=digest(serialize(this.owners.map(owner=>({source:owner.source,snapshotId:owner.snapshotId}))));
+  this.binding=digest(serialize(this.owners.map(owner=>({source:sourceSelectionRevision(owner.source),snapshotId:owner.snapshotId}))));
   return this;
  }
  owner(row){return this.owners.find(owner=>owner.source.workspaceId===row.workspaceId);}

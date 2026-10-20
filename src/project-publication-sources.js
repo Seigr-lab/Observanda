@@ -11,6 +11,10 @@ import {researchId} from './web/research-reference.js';
 import {LabBookDirectory} from './lab-book-directory.js';
 import {projectCollectionReader} from './project-collection-reader.js';
 import {WebsiteResearch} from './website-research.js';
+import {WebsiteEditorStore} from './website-editor-store.js';
+import {withWebsiteSourceSelections} from './website-source-selections.js';
+import {validWebsitePin,sameWebsitePin} from './web/website-pin.js';
+import {validWebsiteDraftPin} from './web/website-draft-pin.js';
 
 // One request owns source credentials; a saved website owns only namespace
 // references and consent. The registry resolves each namespace when it is used.
@@ -39,9 +43,15 @@ export async function projectPublicationSource(application,client,command,{scope
  if(!command||Object.keys(command).sort().join()!=='operation,query,sourceId,workspaceId'||!researchId(command.workspaceId)||!researchId(command.sourceId)||!['head','summary','content','record','sections','media','pages','page-sections','source-media'].includes(command.operation)||!command.query||typeof command.query!=='object'||Array.isArray(command.query))throw new AppError('INVALID');
  const {workspaceId,sourceId,operation,query}=command;
  if(operation==='head'?(Object.keys(query).some(key=>key!=='snapshotId')||query.snapshotId!==undefined&&!revisionId(query.snapshotId)):query.workspaceId!==sourceId||!(['pages','source-media'].includes(operation)&&query.snapshotId===null)&&!revisionId(query.snapshotId))throw new AppError('INVALID');
+ const retained=Object.hasOwn(query,'sourceSelection');
+ if(retained){
+  const value=query.sourceSelection;
+  if(!['pages','source-media','page-sections'].includes(operation)||Object.hasOwn(query,'source')||!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).some(key=>!['websitePin','websiteDraft'].includes(key))||!validWebsitePin(value.websitePin)||value.websiteDraft!==undefined&&!validWebsiteDraftPin(value.websiteDraft))throw new AppError('INVALID');
+ }
  const reader=await publicationSourceReader(application,client,{workspaceId,scope,labBookId,signal,check});
+ const hostReader=retained?projectCollectionReader(application,client,check):null;
  try{
-  const result=await reader.use(sourceId,query.snapshotId??undefined,async(store,snapshot,pinned)=>{
+  const read=query=>reader.use(sourceId,query.snapshotId??undefined,async(store,snapshot,pinned)=>{
    if(operation==='source-media')return publicationSourceMedia(store,snapshot,pinned,reader.host,query,{signal});
    if(operation==='page-sections')return publicationSourceSections(store,snapshot,pinned,reader.host,query,{signal});
    if(operation==='pages')return publicationSourcePages(store,snapshot,pinned,reader.host,query,{signal});
@@ -52,8 +62,17 @@ export async function projectPublicationSource(application,client,command,{scope
    const value=await new WebsiteResearch({storageKind:async()=>'catalogue',catalogue:fn=>fn(store)}).run(operation,query,{signal});
    return operation==='record'?{...value,page:publicationSourcePage(reader.host,{...pinned.owner,projectNamespaceId:pinned.projectNamespaceId},snapshot.metadata,value.record)}:value;
   });
-  await reader.verify();return result;
- }finally{await reader.close();}
+  const result=retained?await hostReader.use({workspaceId,projectId:scope,labBookId},undefined,async store=>{
+   const {sourceSelection,...request}=query,{websitePin,websiteDraft}=sourceSelection;
+   const selected=await new WebsiteEditorStore(store).document(websitePin.websiteId,{websitePin,...(websiteDraft?{draftId:websiteDraft.id,draftRevision:websiteDraft.revision}:{}),signal});
+   if(!sameWebsitePin(websitePin,selected.websitePin))throw new AppError('CONFLICT');
+   return withWebsiteSourceSelections(selected.document,async choices=>{
+    const source=await choices.get(sourceId);if(!source)throw new AppError('NOT_FOUND');
+    return read({...request,source});
+   },{signal});
+  }):await read(query);
+  await reader.verify();await hostReader?.verify();return result;
+ }finally{try{await reader.close();}finally{await hostReader?.close();}}
 }
 
 // The host is the job-owned storage instance, whose key outlives its HTTP reply.

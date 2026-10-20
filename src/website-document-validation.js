@@ -1,3 +1,4 @@
+import {withWebsiteSourceSelections} from './website-source-selections.js';
 // A complete website remains one immutable document. Validate its growing
 // collections one item at a time; the empty header collections below are only
 // internal sentinels and never stand for a replacement authoring document.
@@ -25,7 +26,7 @@ async function headerObject(document,path,omitted,nested,{signal}={}){
  return value;
 }
 export function websiteDocumentHeader(document,{signal}={}){
- const website=()=>headerObject(document,['document','website'],['navigation','assets','layouts'],{},{signal});
+ const website=()=>headerObject(document,['document','website'],['navigation','assets','layouts','researchSources'],{},{signal});
  const content=()=>headerObject(document,['document'],['pages','branding'],{website},{signal});
  return headerObject(document,[],[],{document:content},{signal});
 }
@@ -103,6 +104,7 @@ export async function validateWebsiteDocument(store,snapshot,document,{signal,dr
   for await(const {value:item} of collection(document,paths.branding,{signal})){
    signal?.throwIfAborted();if(!validWebsiteBranding(item)||!await targetExists(item.target))invalid('branding');await unique('branding:'+item.target,'branding');
   }
+  await withWebsiteSourceSelections(document,async sources=>{for await(const source of sources.items())if(source.workspaceId===snapshot.metadata.id)invalid('website sources');},{signal});
   await validateWebsiteDocumentSelection(store,snapshot,site,{signal,previous});
   signal?.throwIfAborted();return {site,counts};
  },{signal});

@@ -1,3 +1,4 @@
+import {publicationSourceRevision} from './publication-source-context.js';
 import {websiteSnapshot} from './website-context.js';
 import {t} from './i18n/index.js';
 import {websiteRecordPages,WEBSITE_PAGE_LIMIT} from './website-page-query.js';
@@ -8,7 +9,7 @@ const text=(key,values)=>t('websitePages',key,values),limit=WEBSITE_PAGE_LIMIT;
 // workspace snapshot or reads originals. Selection callbacks own draft changes.
 export function websitePagePicker({state,api,esc,field,showDialog,onChoose,documents,active=()=>state.page==='website',kinds=['site','project','notebook','entry'],pageBook=()=>state.book,structurePages=options=>websitePageWindow(pageBook(),options),recordPages=options=>websiteRecordPages({state,api,...options})}){
  let session=null,controller=null,timer=null,generation=0;
- const identity=()=>JSON.stringify([websiteSnapshot(state),state.book?.id,state.etag,state.book?.website.researchSources,documents?.enabled()?documents.viewKey():null]);
+ const identity=()=>JSON.stringify([websiteSnapshot(state),state.book?.id,state.etag,publicationSourceRevision(state),documents?.enabled()?documents.viewKey():null]);
  const valid=s=>s&&s===session&&s.identity===identity()&&active()&&!state.access?.locked&&!state.storageUnavailable&&s.root.isConnected&&s.dialog.open;
  const button=(key,extra='')=>`<button type="button" class="button" data-page-picker="${key}" ${extra}>${esc(text(key))}</button>`;
  function cancel(){controller?.abort();controller=null;clearTimeout(timer);timer=null;generation++;}

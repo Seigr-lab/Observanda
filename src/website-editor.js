@@ -7,10 +7,10 @@ import {WEBSITE_DOCUMENT_FIELDS,siteProjectIds} from './web/website-sites-model.
 import {SnapshotIndex} from './snapshot-index.js';
 import {ProjectSourceAuthority} from './project-source-authority.js';
 import {researchId} from './web/research-reference.js';
-const reads=new Set(['open','window','item']);
+const reads=new Set(['open','window','item','sources']);
 const mutations=new Set(['change','undo','redo','discard','save']);
 export class WebsiteEditor{
- constructor(workspace){this.workspace=workspace;this.sites=new WebsiteSites(workspace);}
+ constructor(workspace,{sourceReader}={}){this.workspace=workspace;this.sourceReader=sourceReader;this.sites=new WebsiteSites(workspace);}
  async response(store,result,{signal}={}){
   if(!result.site)return result;
   const pin=result.websitePin,snapshot=await store.snapshot(pin.researchSnapshotId),metadata=structuredClone(snapshot.metadata),site=result.site;
@@ -33,7 +33,7 @@ export class WebsiteEditor{
   if(!data||typeof data!=='object'||Array.isArray(data))throw new AppError('INVALID');
   const {websiteId,workspaceId,...options}=data;if(websiteId!==null&&!researchId(websiteId)||workspaceId!==undefined&&!researchId(workspaceId))throw new AppError('INVALID');
   const run=async store=>{
-   signal?.throwIfAborted();if(workspaceId!==undefined&&(await store.snapshot()).metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');const editor=new WebsiteEditorStore(store);
+   signal?.throwIfAborted();if(workspaceId!==undefined&&(await store.snapshot()).metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');const editor=new WebsiteEditorStore(store,{sourceReader:this.sourceReader});
    if(mutations.has(operation)){
     const current=await editor.open(websiteId,{signal});await new ProjectSourceAuthority(store).writable(current.site.projectId);
    }
