@@ -14,7 +14,10 @@ export function publicationSelectionUI({state,api,esc,showDialog}){
   session.open=new Set([...document.querySelectorAll('[data-edition-record][open]')].map(el=>el.dataset.editionRecord));
   for(const box of document.querySelectorAll('[data-edition-record]')){
    const item=session.items.find(r=>r.id===box.dataset.editionRecord);
-   session.choices.set(item.id,readPublicationChoice(box,item));
+   const choice=readPublicationChoice(box,item);
+   // Paging is a read. Keep only deliberate deviations from this pinned inventory.
+   if(JSON.stringify(choice)===JSON.stringify(item.choice))session.choices.delete(item.id);
+   else session.choices.set(item.id,choice);
   }
   for(const box of document.querySelectorAll('[data-edition-history]')){
    const item=[...session.references.values()].flatMap(v=>v.items).find(r=>r.record&&editionRevisionKey(r.target)===box.dataset.editionHistory);
