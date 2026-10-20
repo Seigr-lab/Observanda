@@ -5,8 +5,21 @@ import path from 'node:path';
 import {opendir} from 'node:fs/promises';
 import {assertRegular} from './storage.js';
 import {operationStage,operationAdvance,operationItem} from './operation-progress.js';
+import {withScratch} from './scratch-work.js';
 import {AppError} from './errors.js';
 export async function assertRenameDatabaseOwners(root,projectRoots,{stage='rename-check-owners',errorCode='STORAGE_RENAME_PROJECTS',skipRoots=[]}={}){
+ if(!Array.isArray(projectRoots)){
+  if(typeof projectRoots?.has!=='function')throw new AppError('INVALID');
+  return operationStage(stage,{unit:'folders'},()=>withScratch(async pending=>{
+   await pending.add('',{relative:''});for(let item;(item=await pending.take())!==undefined;){const directory=path.resolve(root,...item.relative.split('/'));await assertRegular(directory,{directory:true});operationItem(item.relative);
+    for await(const entry of await opendir(directory)){
+     if(entry.isSymbolicLink())throw new AppError('UNSAFE');if(!entry.isDirectory())continue;const child=path.join(directory,entry.name);await assertRegular(child,{directory:true});
+     if(path.basename(directory).toLowerCase()==='.observanda'&&entry.name.toLowerCase()==='postgresql'){if(path.basename(directory)!=='.observanda'||entry.name!=='postgresql'||!await projectRoots.has(path.dirname(directory)))throw new AppError(errorCode);continue;}
+     if(!skipRoots.includes(child)){const relative=path.posix.join(item.relative,entry.name);await pending.add(relative,{relative});}
+    }operationAdvance();
+   }
+  }));
+ }
  const allowed=new Set([root,...projectRoots]);
  return operationStage(stage,{unit:'folders'},async()=>{
   const pending=[root],running=new Set();let failure;

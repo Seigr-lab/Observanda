@@ -11,6 +11,7 @@ import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {sampleNotebook} from '../src/sample.js';
 import {clearVault} from '../src/encryption.js';
 import {Workspace} from '../src/storage.js';
+import {WorkspaceDirectory} from '../src/workspace-directory.js';
 import {WorkspaceRenames} from '../src/workspace-rename.js';
 import {workspaceRename} from '../src/workspace-rename-state.js';
 import {workspaceRenameRecovery,resumeWorkspaceRename} from '../src/workspace-rename-recovery.js';
@@ -53,4 +54,18 @@ test('completed rename fences remain recoverable and changed destination identit
  await renames.save(receipt);const result=await resumeWorkspaceRename(renames,source,descriptor.id,f.vault);assert.equal(result.destination,destination);assert.equal(await workspaceRename(destination),null);
  // A final activation can still follow the receipt after its marker is removed.
  assert.equal((await workspaceRenameRecovery(renames,source)).id,descriptor.id);assert.equal(await workspaceRenameRecovery(renames,destination),null);
+});
+
+
+test('HTTP startup and explicit opening discard unfenced native preparation without registering its proposed destination',{timeout:120000},async t=>{
+ const f=await fixture(t),preferencesFile=path.join(f.parent,'unfenced-preferences.json'),renames=new WorkspaceRenames(preferencesFile+'.workspace-renames'),directory=new WorkspaceDirectory(preferencesFile+'.workspace-directory.json');let app;
+ t.after(()=>app?.close());
+ const interrupt=async name=>{
+  const discard=renames.discard;renames.discard=async()=>{throw Error('Deferred cleanup');};
+  try{await assert.rejects(renames.begin(f.workspace,name,{checkpoint:async stage=>{if(stage==='owner-journal')throw Error('Interrupted before owner capture');}}),/Interrupted before owner capture/);}
+  finally{renames.discard=discard;}
+  assert.equal((await renames.pending(f.workspace.root)).phase,'preparing');assert.equal(await workspaceRename(f.workspace.root),null);
+ };
+ await interrupt('Uncreated startup destination');app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile});const a=await client(app),opened=await a.call('/api/storage');assert.equal(opened.status,200,JSON.stringify(opened));assert.equal(opened.value.root,f.workspace.root);assert.equal(await renames.pending(f.workspace.root),null);assert.deepEqual((await directory.list()).map(item=>item.path),[f.workspace.root]);
+ await interrupt('Uncreated explicit destination');const selected=await a.call('/api/storage/open',{path:f.workspace.root,username:'',password:'',recovery:''});assert.equal(selected.status,200,JSON.stringify(selected));assert.equal(selected.value.root,f.workspace.root);assert.equal(await renames.pending(f.workspace.root),null);assert.deepEqual((await directory.list()).map(item=>item.path),[f.workspace.root]);
 });

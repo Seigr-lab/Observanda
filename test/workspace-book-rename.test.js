@@ -49,7 +49,7 @@ test('parent rename recovers nested dedicated books without replacing their data
    await assert.rejects(new LabBookCreation(project,f.deviceStore).create({id:randomUUID(),username:'',password:'',book:{id:randomUUID(),projectId:f.projectId,title:'Blocked during handoff'}}),{code:'STORAGE_RENAMING'});
   }
   const restart=new WorkspaceRenames(path.join(f.directory,'rename-journals')),located=await restart.resolvedRoot(source);
-  if(boundary==='complete')await restart.clearCompleted(target);else await restart.resume(located,f.vault);
+  if(boundary==='complete')await restart.clearCompleted(target,f.vault);else await restart.resume(located,f.vault);
   const moved=await assertBooks(f,target);assert.equal(await workspaceRename(target),null);assert.equal(await workspaceRename(moved.root),null);await assert.rejects(readdir(source),{code:'ENOENT'});await assert.rejects(readFile(path.join(moved.root,'.observanda/rename-project-keys.observanda')),{code:'ENOENT'});source=target;
  }
 });

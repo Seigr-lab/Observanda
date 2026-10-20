@@ -20,6 +20,6 @@ export async function workspaceRenameRecovery(renames,root){
 export async function resumeWorkspaceRename(renames,root,id,vault,options={}){
  const recovery=await renames.recovery(root);if(!recovery||recovery.value.id!==id)throw new AppError('STORAGE_RENAME_STATE');
  const {value}=recovery;
- if(value.phase==='complete'){await renames.clearCompleted(recovery.root);return {id,source:value.source,destination:value.destination,complete:true};}
+ if(value.phase==='complete'){await renames.clearCompleted(recovery.root,vault,options);return {id,source:value.source,destination:value.destination,complete:true};}
  return renames.resume(recovery.root,vault,options);
 }

@@ -220,9 +220,9 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
   const ensureWorkspaceIdentity=async ctx=>{
    if(!ctx.workspace)return;
    ctx.identityPrepared??=(async()=>{
-    await renames.clearCompleted(ctx.root).catch(async error=>{if(error.code!=='STORAGE_RENAME_STATE'||!await renames.pending(ctx.root))throw error;});
+    await renames.clearCompleted(ctx.root,ctx.vault).catch(async error=>{if(error.code!=='STORAGE_RENAME_STATE'||!await renames.pending(ctx.root))throw error;});
     let pending=await renames.pending(ctx.root);
-    if(pending?.phase==='prepared'&&!await workspaceRename(pending.source)){await renames.resume(ctx.root,ctx.vault);pending=null;}
+    if(['preparing','prepared'].includes(pending?.phase)&&!await workspaceRename(pending.source)){await renames.resume(ctx.root,ctx.vault);pending=null;}
     if(pending){
      const result=await workspaceDirectory.using(pending.destination,{replacing:pending.source},()=>renames.resume(ctx.root,ctx.vault));
      if(result.destination!==ctx.root)Object.assign(ctx,makeContext(result.destination,true,ctx.vault));
@@ -684,7 +684,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
             const vault=await authenticate(info.root,await readAccess(info.root),data.username??'',data.password??'',data.recovery??'');
             const moved=context.root?await moveSource(context.root):null,receipt=moved?.destination===info.root?await readMoveReceipt(info.root):null;
             const movingFrom=receipt?.id===moved?.id&&receipt?.source===context.root?context.root:undefined;
-            try{let pending=await renames.pending(info.root);if(pending?.phase==='prepared'&&!await workspaceRename(pending.source)){await renames.resume(info.root,vault);pending=null;}await workspaceDirectory.using(pending?.destination??info.root,{replacing:pending?.source??movingFrom??null,allowExisting:true},async()=>{const result=await renames.resume(info.root,vault);await activate(result.destination,client,vault,{movingFrom:pending?.source??movingFrom,followSettings:!!movingFrom});});}catch(error){clearVault(vault);throw error;};return metadata();
+            try{let pending=await renames.pending(info.root);if(['preparing','prepared'].includes(pending?.phase)&&!await workspaceRename(pending.source)){await renames.resume(info.root,vault);pending=null;}await workspaceDirectory.using(pending?.destination??info.root,{replacing:pending?.source??movingFrom??null,allowExisting:true},async()=>{const result=await renames.resume(info.root,vault);await activate(result.destination,client,vault,{movingFrom:pending?.source??movingFrom,followSettings:!!movingFrom});});}catch(error){clearVault(vault);throw error;};return metadata();
            },json);
           }
           if(!workspace)throw new AppError('MISSING');
