@@ -15,7 +15,7 @@ const failure=key=>Error(t('websiteEditor',key));
 // selected values enter the rendering book; this owner alone submits changes.
 export function websiteDocumentClient({state,api,selection,onStatus=()=>{}}){
  let envelope=null,outline=null,context=null,generation=0,timer=null,queue=Promise.resolve(),pending=null,actionPending=null,lastActionResult=null,error='',local=false,editVersion=0,viewVersion=0;
- let settings=null,pageKey=null,pageSelection=0;const activeOverrides=new Map();const selected=new Map(collections.map(name=>[name,new Map()]));
+ let settings=null,pageKey=null,pageSelection=0,discardRequests=0;const activeOverrides=new Map();const selected=new Map(collections.map(name=>[name,new Map()]));
  const owner=()=>JSON.stringify([researchContext(state),state.book?.id]);
  const enabled=()=>Boolean(envelope&&context===owner()&&state.websiteEditor);
  const snapshot=()=>enabled()?JSON.stringify([context,envelope.websitePin,envelope.draft?.id??null,envelope.draft?.revision??null,editVersion]):null;
@@ -27,7 +27,7 @@ export function websiteDocumentClient({state,api,selection,onStatus=()=>{}}){
  }
  const common=()=>({workspaceId:outline.book.id,websiteId:envelope.websitePin.websiteId,websitePin:envelope.websitePin});
  const readTarget=()=>({...common(),...(envelope.draft?{draftId:envelope.draft.id,draftRevision:envelope.draft.revision}:{})});
- function stop(){clearTimeout(timer);timer=null;generation++;pending=null;actionPending=null;queue=Promise.resolve();envelope=outline=settings=null;context=null;local=false;error='';pageKey=null;pageSelection++;activeOverrides.clear();for(const map of selected.values())map.clear();}
+ function stop(){clearTimeout(timer);timer=null;generation++;pending=null;actionPending=null;queue=Promise.resolve();envelope=outline=settings=null;context=null;local=false;discardRequests=0;error='';pageKey=null;pageSelection++;activeOverrides.clear();for(const map of selected.values())map.clear();}
  function compact(book=state.book){
   const {assets,navigation,layouts,...website}=book.website;void assets;void navigation;void layouts;
   return {document:{website,...Object.fromEntries(['appearance','themes','activeThemeId'].map(key=>[key,book[key]]))},projects:book.projects.map(({id,share,logoId})=>({id,share,logoId})),selection:selection.snapshot()};
@@ -132,7 +132,7 @@ export function websiteDocumentClient({state,api,selection,onStatus=()=>{}}){
  function flush(){
   clearTimeout(timer);timer=null;const epoch=generation;
   const task=queue.then(async()=>{
-   while(enabled()&&epoch===generation){
+   while(enabled()&&epoch===generation&&!discardRequests){
     if(actionPending)await finishAction();
     const operations=pending?.operations??changes().slice(0,32);if(!operations.length){local=false;error='';status();return;}
     pending??={draftId:envelope.draft?.id??null,expectedRevision:envelope.draft?.revision??null,commandId:crypto.randomUUID(),operations};status();
@@ -162,7 +162,7 @@ export function websiteDocumentClient({state,api,selection,onStatus=()=>{}}){
   // Typing during an acknowledged save belongs to the next checkpoint.
   const later=command.discard?[]:changes(),bases=new Map([...selected].map(([name,map])=>[name,new Map(map)]));
   local=false;adopt(result,{replace:true});if(page)remember('pages',page);for(const {collection,key,item} of overrideRows)if(item)remember(collection,item);else rememberMissing(collection,key);restoreEdits(later,bases);
-  lastActionResult=['save','discard'].includes(command.operation)?{...receipt(),book:state.book}:result;return lastActionResult;
+  lastActionResult=['save','discard'].includes(command.operation)?{...receipt(),book:state.book,...(result.saveCompleted?{saveCompleted:true}:{})}:result;return lastActionResult;
  }
  async function transition(operation,operations){
   const retrying=actionPending?.operation===operation&&sameJSONData(actionPending.payload.operations,operations);
@@ -176,11 +176,16 @@ export function websiteDocumentClient({state,api,selection,onStatus=()=>{}}){
  const history=direction=>transition(direction);
  const save=()=>transition('save');
  async function discard(){
-  clearTimeout(timer);timer=null;
+  // Record the user's decision before previously queued checkpoint work runs.
+  const epoch=generation;discardRequests++;clearTimeout(timer);timer=null;
   return exclusive(async()=>{
-   if(actionPending){const previous=actionPending.operation,result=await finishAction();if(previous==='discard')return result;}
+   if(epoch!==generation)throw new DOMException('Website editor changed','AbortError');
+   try{
+   const uncertainSave=actionPending?.operation==='save'?actionPending.payload:null;
+   if(actionPending&&!uncertainSave){const previous=actionPending.operation,result=await finishAction();if(previous==='discard')return result;}
    pending=null;local=false;
-   actionPending={operation:'discard',discard:true,payload:{draftId:envelope.draft?.id??null,expectedRevision:envelope.draft?.revision??null,commandId:crypto.randomUUID()}};status();return finishAction();
+   actionPending={operation:'discard',discard:true,payload:{draftId:uncertainSave?.draftId??envelope.draft?.id??null,expectedRevision:uncertainSave?.expectedRevision??envelope.draft?.revision??null,commandId:crypto.randomUUID(),...(uncertainSave?{pendingSaveCommandId:uncertainSave.commandId}:{})}};status();return await finishAction();
+   }finally{if(epoch===generation)discardRequests--;}
   });
  }
  async function stageAsset(value){

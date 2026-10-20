@@ -205,8 +205,23 @@ export class WebsiteEditorStore{
  }
  undo(websiteId,options){return this.move(websiteId,'undo',options);}
  redo(websiteId,options){return this.move(websiteId,'redo',options);}
- async discard(websiteId,{draftId,expectedRevision,commandId,signal}={}){
-  const {id}=await this.owner(websiteId),receipt=await this.receipt(id,commandId,'discard',{draftId,expectedRevision});if(receipt.prior)return this.result(websiteId,receipt.prior.result,{signal});const head=await this.head(id);if(!head&&draftId===null&&expectedRevision===null)return this.acknowledge(receipt,await this.context(websiteId,{signal}),{signal});if(!head||head.id!==draftId||hash(head)!==expectedRevision)conflict();await this.store.db.run('DELETE FROM state WHERE slot=$1',prefix+'head:'+id);return this.acknowledge(receipt,await this.context(websiteId,{signal}),{signal});
+ async discard(websiteId,{draftId,expectedRevision,commandId,pendingSaveCommandId,signal}={}){
+  // Resolve an uncertain save from its receipt. Discard must never execute it.
+  if(pendingSaveCommandId!==undefined&&(!researchId(pendingSaveCommandId)||pendingSaveCommandId===commandId))invalid();
+  const {id}=await this.owner(websiteId),args={draftId,expectedRevision,...(pendingSaveCommandId===undefined?{}:{pendingSaveCommandId})},receipt=await this.receipt(id,commandId,'discard',args);
+  const save=pendingSaveCommandId===undefined?null:await this.receipt(id,pendingSaveCommandId,'commit',{draftId,expectedRevision}),saveCompleted=Boolean(save?.prior);
+  const respond=result=>saveCompleted?{...result,saveCompleted:true}:result;
+  if(receipt.prior)return respond(await this.result(websiteId,receipt.prior.result,{signal}));
+  const head=await this.head(id);
+  if(saveCompleted){
+   // A later draft belongs to another editing decision; do not discard it.
+   if(head)conflict();
+   return respond(await this.acknowledge(receipt,await this.context(websiteId,{signal}),{signal}));
+  }
+  if(!head&&draftId===null&&expectedRevision===null)return this.acknowledge(receipt,await this.context(websiteId,{signal}),{signal});
+  if(!head||head.id!==draftId||hash(head)!==expectedRevision)conflict();
+  await this.store.db.run('DELETE FROM state WHERE slot=$1',prefix+'head:'+id);
+  return this.acknowledge(receipt,await this.context(websiteId,{signal}),{signal});
  }
  async commit(websiteId,{draftId,expectedRevision,commandId,researchSnapshotId,signal}={}){
   const {id}=await this.owner(websiteId),receipt=await this.receipt(id,commandId,'commit',{draftId,expectedRevision});if(receipt.prior)return this.result(websiteId,receipt.prior.result,{signal});const head=await this.head(id);if(!head||head.id!==draftId||hash(head)!==expectedRevision)conflict();

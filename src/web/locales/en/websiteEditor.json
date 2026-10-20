@@ -152,6 +152,7 @@
   "action_dotted": "Dotted",
   "action_double": "Double",
   "documentInvalid": "The selected website document could not be verified. Reopen the website to try again.",
+  "documentSaveAlreadyCompleted": "The previous save had already completed. The saved website is shown.",
   "documentCheckpointFailed": "The website draft could not be retained. Retry before leaving this page.",
   "documentDraftSaved": "Unsaved website draft retained.",
   "documentSaved": "Website saved.",

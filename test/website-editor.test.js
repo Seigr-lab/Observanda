@@ -129,3 +129,41 @@ test('editor client rejects a superseded missing-override response', {timeout:12
  // The superseded absence must not replace the selected row's acknowledged base.
  client.changed();await client.flush();assert.equal(client.draft().revision,changed.draft.revision);assert.deepEqual(client.editableOverride('branding','home',()=>assert.fail('Existing override was lost')),override);
 });
+
+
+test('discard resolves failed and lost save responses without submitting the save again', {timeout:120000},async t=>{
+ const f=await fixture(t),state={book:f.book,page:'website',storage:{contextId:'disposable'}},selection=websiteSelectionDraft(),calls=[];let failure=null;
+ const client=websiteDocumentClient({state,selection,api:async(route,data)=>{
+  const operation=route.split('/').at(-1);calls.push({operation,data:structuredClone(data)});
+  if(operation==='save'&&failure==='before')throw Object.assign(Error('Save was rejected'),{code:'IO'});
+  const result=await f.editor.execute(operation,data);
+  if(operation==='save'&&failure==='after')throw new TypeError('Save reply was lost');
+  return structuredClone(result);
+ }});t.after(()=>client.stop());
+ const opened=await client.open({websiteId:f.websiteId,base:{book:f.book}});Object.assign(state,opened);selection.load(opened.site.selection);client.installed();
+ const initial=state.book.website.title;
+ state.book.website.title='Unwanted failed title';client.changed();await client.flush();failure='before';
+ await assert.rejects(client.save(),/Save was rejected/);const rejected=calls.findLast(call=>call.operation==='save');
+ const queuedCheckpoint=client.flush(),discarded=await client.discard();await queuedCheckpoint;assert.equal(discarded.saveCompleted,undefined);assert.equal(client.isDirty(),false);assert.equal(state.book.website.title,initial);
+ assert.equal(calls.filter(call=>call.operation==='save').length,1);assert.equal((await f.sites.read(f.websiteId)).book.website.title,initial);
+ // An original request arriving after Discard cannot resurrect the discarded draft.
+ await assert.rejects(f.editor.execute('save',rejected.data),{code:'CONFLICT'});
+ state.book.website.title='Save completed before response loss';client.changed();await client.flush();failure='after';
+ await assert.rejects(client.save(),/Save reply was lost/);
+ const reconciled=await client.discard();assert.equal(reconciled.saveCompleted,true);assert.equal(client.isDirty(),false);assert.equal(state.book.website.title,'Save completed before response loss');
+ assert.equal(calls.filter(call=>call.operation==='save').length,2);assert.equal((await f.sites.read(f.websiteId)).book.website.title,state.book.website.title);
+ await f.workspace.catalogue(store=>verifyWebsiteEditor(store));
+});
+
+test('uncertain-save discard validates its receipt and preserves a later draft', {timeout:120000},async t=>{
+ const f=await fixture(t),initial=await f.execute('open'),draft=await f.execute('change',f.edit(initial,[{type:'settings',path:['document','website','title'],value:'Committed title'}])),command=f.transition(draft),saved=await f.execute('save',command);
+ const next=await f.execute('change',f.edit(saved,[{type:'settings',path:['document','website','title'],value:'Later independent draft'}])),discard={...command,commandId:randomUUID(),pendingSaveCommandId:command.commandId};
+ await assert.rejects(f.execute('discard',discard),{code:'CONFLICT'});
+ assert.equal((await f.execute('open')).draft.revision,next.draft.revision);
+ await assert.rejects(f.execute('discard',{...discard,expectedRevision:'a'.repeat(64)}),{code:'CONFLICT'});
+ await assert.rejects(f.execute('discard',{...discard,pendingSaveCommandId:discard.commandId}),{code:'INVALID'});
+ await f.execute('discard',f.transition(next));
+ const resolved=await f.execute('discard',discard);assert.equal(resolved.saveCompleted,true);assert.equal(resolved.draft,null);assert.equal(resolved.site.document.website.title,'Committed title');
+ assert.deepEqual(await f.execute('discard',discard),resolved);
+ await f.workspace.catalogue(store=>verifyWebsiteEditor(store));
+});
