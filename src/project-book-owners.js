@@ -34,19 +34,25 @@ export class ProjectBookOwners{
   }
  }
  async prepare(withBook){
-  await this.ready({renames:false});const current=await this.registry.read(),books=[];
-  if(current.value.books.length&&typeof withBook!=='function')throw new AppError(this.missingAccessCode);
-  for(const initial of current.value.books){
-   await withBook(initial.labBookId,async storage=>{
-    const {root,...entry}=await this.registry.locate(initial.labBookId);
-    if(entry.vaultId!==initial.vaultId||entry.namespaceId!==initial.namespaceId)throw new AppError('CONFLICT');
-    if(storage.root!==root||storage.labBookId!==entry.labBookId||storage.vault?.id!==entry.vaultId||await realpath(root)!==root)throw new AppError('DATABASE_LOCATION');
-    authenticateKeyring((await readAccess(root)).value,storage.vault);const binding=await catalogueBinding(root),metadata=(await storage.outline()).metadata;
-    if(binding?.placement!=='lab-book'||binding.labBookId!==entry.labBookId||metadata.id!==entry.namespaceId||metadata.notebooks[0].projectId!==this.project.projectId)throw new AppError('DATABASE_LOCATION');
-    books.push({...entry,identity:identity(await assertRegular(root,{directory:true})),accessHash:await hash(path.join(root,'.observanda/access.json'))});this.keys.set(entry.labBookId,cloneVault(storage.vault));
-   });
-  }
-  await this.ready();const latest=await this.registry.read(),described=books.map(({identity,accessHash,...entry})=>entry);if(serialize(latest.value.books)!==serialize(described))throw new AppError('CONFLICT');this.revision=latest.revision;this.books=validateRenameBooks(books);return this.books;
+  await this.ready({renames:false});const books=[];let revision;
+  await this.registry.inspect(async current=>{
+   revision=current.revision;if(current.count&&typeof withBook!=='function')throw new AppError(this.missingAccessCode);
+   for await(const {entry:initial} of current.entries()){
+    await withBook(initial.labBookId,async storage=>{
+     const {root,...entry}=await this.registry.locate(initial.labBookId);
+     if(entry.vaultId!==initial.vaultId||entry.namespaceId!==initial.namespaceId)throw new AppError('CONFLICT');
+     if(storage.root!==root||storage.labBookId!==entry.labBookId||storage.vault?.id!==entry.vaultId||await realpath(root)!==root)throw new AppError('DATABASE_LOCATION');
+     authenticateKeyring((await readAccess(root)).value,storage.vault);const binding=await catalogueBinding(root),metadata=(await storage.outline()).metadata;
+     if(binding?.placement!=='lab-book'||binding.labBookId!==entry.labBookId||metadata.id!==entry.namespaceId||metadata.notebooks[0].projectId!==this.project.projectId)throw new AppError('DATABASE_LOCATION');
+     books.push({...entry,identity:identity(await assertRegular(root,{directory:true})),accessHash:await hash(path.join(root,'.observanda/access.json'))});this.keys.set(entry.labBookId,cloneVault(storage.vault));
+    });
+   }
+  });
+  await this.ready();await this.registry.inspect(async current=>{
+   if(current.count!==books.length)throw new AppError('CONFLICT');let index=0;
+   for await(const {entry} of current.entries()){const selected=books[index++];if(!selected||['labBookId','directory','namespaceId','vaultId'].some(key=>selected[key]!==entry[key]))throw new AppError('CONFLICT');}
+   revision=current.revision;
+  });this.revision=revision;this.books=validateRenameBooks(books);return this.books;
  }
  async withStorageHandoff(operation,{checkOwner}={}){
   const entries=[...this.books].sort((a,b)=>a.labBookId.localeCompare(b.labBookId));

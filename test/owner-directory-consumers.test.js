@@ -1,0 +1,45 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,rm} from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import {randomUUID} from 'node:crypto';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {createNotebook} from '../src/model.js';
+import {WorkspaceDatabases} from '../src/workspace-databases.js';
+import {installDatabaseProvider} from '../src/workspace-database-context.js';
+import {ProjectRegistry} from '../src/project-registry.js';
+import {ProjectCreation} from '../src/project-creation.js';
+import {ProjectStorage} from '../src/project-storage.js';
+import {ProjectApplication} from '../src/project-application.js';
+import {LabBookCreation} from '../src/lab-book-creation.js';
+import {LabBookRegistry} from '../src/lab-book-registry.js';
+import {LabBookDirectory} from '../src/lab-book-directory.js';
+import {ownerSourceDirectory} from '../src/owner-source-directory.js';
+import {ownerSourceHost} from '../src/owner-source-host.js';
+import {dashboardCollectionChoices} from '../src/dashboard-collection-choices.js';
+import {RecordCollectionPages} from '../src/record-collection-pages.js';
+import {defaultPanelConfig} from '../src/web/dashboard-model.js';
+import {readAccess,verifyAccess} from '../src/access.js';
+import {clearVault} from '../src/encryption.js';
+
+test('native source pages and dashboard choices preserve ownership, exclusions and bounded inline labels without whole directory reads',{timeout:150000},async t=>{
+ const parent=path.resolve(os.tmpdir()),directory=await mkdtemp(path.join(parent,'observanda-directory-consumers-')),runtime=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(runtime),vaults=[],pages=new RecordCollectionPages(),readProject=ProjectRegistry.prototype.read,readBooks=LabBookRegistry.prototype.read;let application;
+ t.after(async()=>{ProjectRegistry.prototype.read=readProject;LabBookRegistry.prototype.read=readBooks;pages.clear();await application?.close();await runtime.close();detach();for(const key of vaults)clearVault(key);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-directory-consumers-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const book=createNotebook('Workspace',''),legacy={id:randomUUID(),parentId:null,title:'Earlier inline project',description:'',share:false,logoId:null};book.projects.push(legacy);
+ const f=await encryptedFixture(directory,book);vaults.push(f.vault);const registry=new ProjectRegistry(f.workspace,book.id),creation=new ProjectCreation(registry,f.deviceStore),client={};
+ async function create(title,parentId=null){const project={id:randomUUID(),title,description:'',parentId,share:false,logoId:null},entry=(await creation.create({id:randomUUID(),project,username:'',password:''})).project,key=await verifyAccess(await readAccess(entry.root),'','',{deviceStore:f.deviceStore});vaults.push(key);return {entry,storage:new ProjectStorage(entry.root,entry.projectId,key)};}
+ const main=await create('Research'),child=await create('Child',main.entry.projectId),other=await create('Other'),books=[],bookCreation=new LabBookCreation(main.storage,f.deviceStore,{publish:entry=>new LabBookDirectory(registry).register(main.entry.projectId,entry)});
+ for(const title of ['A notes','Research supplement','Z notes'])books.push((await bookCreation.create({id:randomUUID(),username:'',password:'',book:{id:randomUUID(),projectId:main.entry.projectId,title}})).book);
+ application=new ProjectApplication(f.workspace,{deviceStore:f.deviceStore});ProjectRegistry.prototype.read=()=>{throw Error('Consumer loaded all project rows');};LabBookRegistry.prototype.read=()=>{throw Error('Consumer loaded all book rows');};
+ const command={workspaceId:book.id,projectId:null,search:'',offset:0,limit:2,revision:null},projectPage=await ownerSourceDirectory(application,client,command);assert.equal(projectPage.total,3);assert.equal(projectPage.items.length,2);
+ const bookCommand={...command,projectId:main.entry.projectId,limit:1},all=[];for(let offset=0;offset<4;offset++)all.push(...(await ownerSourceDirectory(application,client,{...bookCommand,offset})).items);assert.equal(all.length,4);assert.equal(new Set(all.map(row=>row.workspaceId)).size,4);assert.equal(all[1].kind,'content');
+ const hostBook=books[1],fromBook={...bookCommand,workspaceId:hostBook.namespaceId},options={scope:main.entry.projectId,labBookId:hostBook.labBookId},others=[];for(let offset=0;offset<3;offset++)others.push(...(await ownerSourceDirectory(application,client,{...fromBook,offset},options)).items);assert.equal(others.length,3);assert.equal(others.some(row=>row.workspaceId===hostBook.namespaceId),false);
+ assert.equal((await ownerSourceHost(application,{workspaceId:child.entry.namespaceId,scope:child.entry.projectId})).directory.revision,await registry.version());
+ const choiceCommand={workspaceId:book.id,etag:(await f.workspace.outline()).etag,config:defaultPanelConfig(),options:{scopeMode:'all',projectIds:[child.entry.projectId],includeWorkspace:false,includeDescendants:true},kind:'projects',search:'',limit:2,cursor:null},choose=data=>dashboardCollectionChoices(pages,client,{...choiceCommand,...data},{registry,check:async()=>{},visit(){throw Error('Project selector opened record storage');}});
+ const first=await choose({}),next=await choose({cursor:first.nextCursor});assert.equal(first.total,4);assert.equal(first.selected[0].label,'Research / Child');assert.deepEqual((await choose({cursor:next.previousCursor})).items,first.items);assert.deepEqual(new Set([...first.items,...next.items].map(row=>row.value)),new Set([legacy.id,main.entry.projectId,child.entry.projectId,other.entry.projectId]));
+ assert.equal((await choose({search:'Research / Child'})).items[0].value,child.entry.projectId);
+ const retired=await registry.state(other.entry.projectId);await registry.apply(retired.revision,[{state:'deleted',entry:{projectId:other.entry.projectId,namespaceId:other.entry.namespaceId,vaultId:other.entry.vaultId,operationId:randomUUID()}}]);
+ await assert.rejects(choose({cursor:first.nextCursor}),{code:'RECORD_QUERY_CURSOR'});await assert.rejects(ownerSourceDirectory(application,client,{...command,revision:projectPage.revision}),{code:'CONFLICT'});await assert.rejects(ownerSourceHost(application,{workspaceId:other.entry.namespaceId,scope:other.entry.projectId}),{code:'NOT_FOUND'});
+ application.session(client).set(main.entry.projectId,{locked:true});await assert.rejects(ownerSourceDirectory(application,client,bookCommand),{code:'ACCESS_LOCKED'});
+});

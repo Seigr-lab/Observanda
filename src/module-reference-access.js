@@ -58,7 +58,7 @@ export async function moduleReferenceAccess(application,client,workspaceId,{scop
    return useReference(data.target,(_storage,_canonical,{owner,summary})=>({workspaceId,reference:data.target,owner,type:data.target.type,id:data.target.id,...summary}));
   },
   async validate(reference){await useReference(reference,()=>true);return true;},useReference,
-  async verify(){await reader.verify();if((await registry.read()).revision!==directory.revision)throw new AppError('CONFLICT');signal?.throwIfAborted();},
+  async verify(){await reader.verify();if(await registry.version()!==directory.revision)throw new AppError('CONFLICT');signal?.throwIfAborted();},
   close:()=>reader.close()
  };
  return service;

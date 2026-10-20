@@ -18,14 +18,14 @@ export class WorkspaceProjectDeletion extends WorkspaceProjectOwners{
  constructor(workspace,options={}){super(workspace,{...options,missingAccessCode:'ACCESS_LOCKED'});}
  bookOwner(storage){return new ProjectBookDeletion(storage);}
  async persist(value){
-  if((await this.registry.read()).revision!==this.revision)throw new AppError('CONFLICT');
+  if(await this.registry.version()!==this.revision)throw new AppError('CONFLICT');
   if(!this.projects.length)return;
   for(const item of this.projects)await this.bookOwners.get(item.projectId).persist(value.id,item);
   value.projectRegistryRevision=this.revision;value.projectKeysHash=await saveOwnerKeys(this.workspace,value.id,this.keys,DELETE_PROJECT_KEYS_FILE);value.projects=this.projects;
  }
  async load(value){
   this.projects=validateRenameProjects(value.projects??[]);if(!this.projects.length)return;
-  this.registry=new ProjectRegistry(this.workspace,value.workspaceId);if((await this.registry.read()).revision!==value.projectRegistryRevision)throw new AppError('STORAGE_DELETE_STATE');
+  this.registry=new ProjectRegistry(this.workspace,value.workspaceId);if(await this.registry.version()!==value.projectRegistryRevision)throw new AppError('STORAGE_DELETE_STATE');
   this.keys=await loadOwnerKeys(this.workspace,value.id,value.projectKeysHash,DELETE_PROJECT_KEYS_FILE);
   if(this.keys.size!==this.projects.length||this.projects.some(item=>this.keys.get(item.projectId)?.id!==item.vaultId))throw new AppError('STORAGE_DELETE_STATE');
   for(const item of this.projects){const owner=new ProjectBookDeletion(await this.checked(item));this.bookOwners.set(item.projectId,owner);await owner.load({...item,id:value.id});}

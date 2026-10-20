@@ -1,3 +1,5 @@
+import {validWorkspaceCopyDirectory} from './workspace-copy-directory.js';
+import {withWorkspaceMoveDirectory} from './workspace-move-directory.js';
 import {ownedStorageLeaseFile} from './owned-storage-control.js';
 import {workspaceTransferControl} from './workspace-transfer-controls.js';
 import {withRetiredRecordCopy} from './project-retired-records.js';
@@ -24,7 +26,7 @@ const uuid=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
 const retired=receipt=>path.join(path.dirname(receipt.source),'.observanda-move-'+receipt.id);
 const within=(a,b)=>{const relative=path.relative(a,b);return relative===''||!relative.startsWith('..'+path.sep)&&relative!=='..'&&!path.isAbsolute(relative);};
 async function save(receipt){await atomicWrite(path.join(receipt.destination,MOVE_RECEIPT),serialize(receipt));}
-async function ownedFolder(root,projectRoots=[]){
+async function ownedFolder(root,projectRoots=[],moveDirectory){
  const descriptor=path.basename(await workspaceFile(root));
  const relativeRoots=projectRoots.map(project=>{if(!within(root,project)||project===root)throw new AppError('STORAGE_MOVE_STATE');return path.relative(root,project).split(path.sep).join('/');});
  async function empty(directory){await assertRegular(directory,{directory:true});for await(const item of await opendir(directory)){if(!item.isDirectory())throw new AppError('STORAGE_MOVE_CONTENTS');await empty(path.join(directory,item.name));}}
@@ -32,14 +34,15 @@ async function ownedFolder(root,projectRoots=[]){
  // moved. Only empty directories can be claimed by the workspace cleanup.
  for(const project of projectRoots)if(await assertRegular(project,{directory:true,missing:true}))await empty(project);
  for(const name of await readdir(root))if(!['.observanda',descriptor].includes(name)){
-  if(!relativeRoots.some(relative=>relative===name||relative.startsWith(name+'/')))throw new AppError('STORAGE_MOVE_CONTENTS');await empty(path.join(root,name));
+  if(moveDirectory?!await moveDirectory.sourceContainer(path.join(root,name)):!relativeRoots.some(relative=>relative===name||relative.startsWith(name+'/')))throw new AppError('STORAGE_MOVE_CONTENTS');await empty(path.join(root,name));
  }
 }
 export async function readMoveReceipt(root){
  const file=path.join(root,MOVE_RECEIPT),stat=await assertRegular(file,{missing:true});if(!stat)return null;
  if(stat.size>16384)throw new AppError('STORAGE_MOVE_STATE');
  let value;try{value=JSON.parse(await readFile(file,'utf8'));}catch{throw new AppError('STORAGE_MOVE_STATE');}
- if(value?.version!==1||!uuid.test(value.id)||value.destination!==root||!path.isAbsolute(value.source??'')||path.resolve(value.source)!==value.source||value.source===path.parse(value.source).root||within(root,value.source)||within(value.source,root)||!['verified','cleanup','complete'].includes(value.phase)||!uuid.test(value.inventorySalt)||![value.fingerprint,value.fingerprintFiles].every(hash=>/^[a-f0-9]{64}$/.test(hash))||!['fileCount','bytes','transferFiles','fileBytes'].every(key=>Number.isSafeInteger(value[key])&&value[key]>=0)||value.retired!==undefined&&value.retired!==true)throw new AppError('STORAGE_MOVE_STATE');
+ if(![1,2].includes(value?.version)||!uuid.test(value.id)||value.destination!==root||!path.isAbsolute(value.source??'')||path.resolve(value.source)!==value.source||value.source===path.parse(value.source).root||within(root,value.source)||within(value.source,root)||!['verified','cleanup','complete'].includes(value.phase)||!uuid.test(value.inventorySalt)||![value.fingerprint,value.fingerprintFiles].every(hash=>/^[a-f0-9]{64}$/.test(hash))||!['fileCount','bytes','transferFiles','fileBytes'].every(key=>Number.isSafeInteger(value[key])&&value[key]>=0)||value.retired!==undefined&&value.retired!==true)throw new AppError('STORAGE_MOVE_STATE');
+ if(value.version===2&&(!validWorkspaceCopyDirectory(value.directory)||value.projectRoots!==undefined||value.ownedDatabase!==true)||value.version===1&&value.directory!==undefined)throw new AppError('STORAGE_MOVE_STATE');
  if(value.ownedDatabase!==undefined&&(value.ownedDatabase!==true||!validDatabaseRetention(value.databaseRetention)))throw new AppError('STORAGE_MOVE_STATE');
  return value;
 }
@@ -86,20 +89,21 @@ async function removeRetired(receipt,{verifyDestination=false}={}){
  for await(const entry of await opendir(root))await remove(entry.name+(entry.isDirectory()?'/':''));
  await unlink(path.join(root,MOVE_SOURCE));await rmdir(path.join(root,'.observanda'));await rmdir(root);
 }
-async function retireSource(receipt){
+async function retireSource(receipt,moveDirectory){
  const target=retired(receipt);
  if(await assertRegular(target,{directory:true,missing:true}))return;
  if(!await assertRegular(receipt.source,{directory:true,missing:true}))throw new AppError('STORAGE_MOVE_STATE');
  if(await realpath(receipt.source)!==receipt.source)throw new AppError('UNSAFE');
- await ownedFolder(receipt.source,receipt.projectRoots??[]);
- await workspaceInventory(receipt.source,receipt.inventorySalt,{expectedFiles:receipt,projectRoots:receipt.projectRoots??[]});
+ await ownedFolder(receipt.source,receipt.projectRoots??[],moveDirectory);
+ await workspaceInventory(receipt.source,receipt.inventorySalt,{expectedFiles:receipt,projectRoots:receipt.projectRoots??[],excludeProject:moveDirectory?.source});
  const marker=await moveSource(receipt.source);
  if(marker&&(marker.id!==receipt.id||marker.destination!==receipt.destination))throw new AppError('STORAGE_MOVE_STATE');
  await atomicWrite(path.join(receipt.source,MOVE_SOURCE),serialize({id:receipt.id,destination:receipt.destination}));
   await releaseWriterLease(path.join(receipt.source,'.observanda','write.lock'));
  await rename(receipt.source,target);
 }
-async function cleanup(receipt,{locked=false,vault,verified=false}={}){
+async function cleanup(receipt,{locked=false,vault,verified=false,moveDirectory}={}){
+ if(receipt.directory&&!moveDirectory)return withWorkspaceMoveDirectory(new Workspace(receipt.destination,vault),receipt,directory=>cleanup(receipt,{locked,vault,verified,moveDirectory:directory}));
  operationTransfer({phase:'cleanup'});
  try{
   receipt.phase='cleanup';delete receipt.error;await save(receipt);
@@ -119,8 +123,8 @@ async function cleanup(receipt,{locked=false,vault,verified=false}={}){
   }
   await operationStage('remove-original',{unit:'files'},async()=>{
    if(!receipt.retired){
-    if(locked||receipt.ownedDatabase)await retireSource(receipt);
-    else if(!await assertRegular(retired(receipt),{directory:true,missing:true}))await new Workspace(receipt.source).withLock(()=>retireSource(receipt),{detached:true,moveId:receipt.id,existing:true});
+    if(locked||receipt.ownedDatabase)await retireSource(receipt,moveDirectory);
+    else if(!await assertRegular(retired(receipt),{directory:true,missing:true}))await new Workspace(receipt.source).withLock(()=>retireSource(receipt,moveDirectory),{detached:true,moveId:receipt.id,existing:true});
     receipt.retired=true;await save(receipt);
    }
    await removeRetired(receipt,{verifyDestination:!locked});
@@ -129,11 +133,11 @@ async function cleanup(receipt,{locked=false,vault,verified=false}={}){
  }catch(error){receipt.phase='cleanup';receipt.error=safeError(error);await save(receipt);}
  return {id:receipt.id,source:receipt.source,destination:receipt.destination,phase:receipt.phase,error:receipt.error??null};
 }
-export async function moveWorkspace(plan,{vault,onProgress,activate,recovery}={}){
+export async function moveWorkspace(plan,{vault,onProgress,activate,recovery,moveDirectory}={}){
  if(typeof activate!=='function')throw new AppError('INVALID');
  return withOperationProgress(onProgress,async()=>{
   if(plan.ownedDatabase||(await catalogueBinding(plan.source))?.placement==='workspace'){
-   const retainedVault=cloneVault(vault);try{return await withRetiredRecordCopy(new Workspace(plan.source,vault),new Workspace(plan.source,retainedVault),()=>moveOwnedWorkspace(plan,{vault:retainedVault,activate,recovery}));}finally{clearVault(retainedVault);}
+   const retainedVault=cloneVault(vault);try{return await withRetiredRecordCopy(new Workspace(plan.source,vault),new Workspace(plan.source,retainedVault),()=>moveOwnedWorkspace(plan,{vault:retainedVault,activate,recovery,moveDirectory}));}finally{clearVault(retainedVault);}
   }
   let receipt;
   const freeze=async destination=>{
@@ -166,12 +170,13 @@ export async function finishWorkspaceMove(root,{onProgress,vault}={}){
  });
 }
 
-async function moveOwnedWorkspace(plan,{vault,activate,recovery}){
+async function moveOwnedWorkspace(plan,{vault,activate,recovery,moveDirectory}){
+ if(plan.directory&&!moveDirectory)return withWorkspaceMoveDirectory(new Workspace(plan.resume?plan.destination:plan.source,vault),{...plan,version:2},directory=>moveOwnedWorkspace(plan,{vault,activate,recovery,moveDirectory:directory}));
  let receipt;
  const freeze=async destination=>{
   const workspace=new Workspace(plan.source,vault),proof=await workspace.catalogue(store=>databaseRetention(store.db));
   await verifyDatabaseRetention(new Workspace(destination,vault),proof,{verify:false});
-  receipt={...plan,version:1,destination,phase:'verified',ownedDatabase:true,databaseRetention:proof};delete receipt.resume;
+  receipt={...plan,version:plan.directory?2:1,destination,phase:'verified',ownedDatabase:true,databaseRetention:proof};delete receipt.resume;
   await save(receipt);
   await atomicWrite(path.join(plan.source,MOVE_SOURCE),serialize({id:receipt.id,destination}));
  };
@@ -180,11 +185,11 @@ async function moveOwnedWorkspace(plan,{vault,activate,recovery}){
   // The marker was persisted while the source writer lock was held. Recheck
   // only the files here: its database is deliberately stopped and frozen.
   const marker=await moveSource(plan.source);if(marker?.id!==plan.id)throw new AppError('STORAGE_MOVE_STATE');
-  await workspaceInventory(plan.source,plan.inventorySalt,{expectedFiles:plan,projectRoots:plan.projectRoots??[]});
-  await workspaceInventory(plan.destination,plan.inventorySalt,{expectedFiles:plan,projectRoots:(plan.projectRoots??[]).map(root=>path.resolve(plan.destination,path.relative(plan.source,root)))});
+  await workspaceInventory(plan.source,plan.inventorySalt,{expectedFiles:plan,projectRoots:plan.projectRoots??[],excludeProject:moveDirectory?.source});
+  await workspaceInventory(plan.destination,plan.inventorySalt,{expectedFiles:plan,projectRoots:(plan.projectRoots??[]).map(root=>path.resolve(plan.destination,path.relative(plan.source,root))),excludeProject:moveDirectory?.destination});
   await verifyDatabaseRetention(new Workspace(plan.destination,vault),plan.databaseRetention);
- }else await copyWorkspace(plan,{vault,relocation:true,activateCatalogue:true,...(recovery?{recovery,afterSnapshotVerified:freeze}:{afterVerified:freeze})});
+ }else await copyWorkspace(plan,{vault,relocation:true,activateCatalogue:true,excludeProject:moveDirectory?.source,...(recovery?{recovery,afterSnapshotVerified:freeze}:{afterVerified:freeze})});
  await databaseProvider()?.closeWorkspace(plan.source);
  operationTransfer({phase:'opening'});await activate(plan.destination,plan.source);
- return cleanup(receipt,{vault,verified:true});
+ return cleanup(receipt,{vault,verified:true,moveDirectory});
 }

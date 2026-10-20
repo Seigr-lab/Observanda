@@ -27,8 +27,8 @@ export class LabBookCopies{
  async cancel(storage,{id,check=async()=>{}}){
   if(!researchId(id))throw new AppError('INVALID');return this.locked(async()=>{await check();const value=await this.state.read();if(!value||value.id!==id)throw new AppError('NOT_FOUND');await this.current(storage,value);if(value.phase==='complete')throw new AppError('CONFLICT');await check();value.phase='cancelled';await this.state.save(value);return value;});
  }
- async run(storage,{id,parent,resume=false,forbiddenRoots=[],onProgress,checkpoint,check=async()=>{}}={}){
-  if(!researchId(id)||!Array.isArray(forbiddenRoots)||forbiddenRoots.some(root=>typeof root!=='string'||!path.isAbsolute(root)))throw new AppError('INVALID');
+ async run(storage,{id,parent,resume=false,forbiddenRoots=[],checkDestination=async()=>{},onProgress,checkpoint,check=async()=>{}}={}){
+  if(!researchId(id)||typeof checkDestination!=='function'||!Array.isArray(forbiddenRoots)||forbiddenRoots.some(root=>typeof root!=='string'||!path.isAbsolute(root)))throw new AppError('INVALID');
   return this.locked(async()=>{
    await check();await assertBookPlacementAvailable(this.project,this.labBookId);await assertBookTransfersComplete(this.project,this.labBookId,{except:this.kind});
    if(await new LabBookRenames(this.project).pending(this.labBookId))throw new AppError('STORAGE_RENAMING');
@@ -41,6 +41,7 @@ export class LabBookCopies{
     if([this.project.root,...forbiddenRoots].some(root=>within(root,destination)||within(destination,root)))throw new AppError('STORAGE_PATH');
     value={version:1,id,kind:this.kind,projectId:this.project.projectId,labBookId:this.labBookId,namespaceId:entry.namespaceId,vaultId:entry.vaultId,source:entry.root,destination,phase:'copying'};
    }
+   await checkDestination(value.destination);
    if(this.kind==='export'){const access=await readAccess(storage.root);if(!access.value.password&&!access.value.recovery)throw new AppError('STORAGE_PORTABLE_BOOK_ACCESS');}
    await check();await this.state.save(value);
    try{await copyLabBookLocation(storage,value.destination,{id,portable:this.kind==='export',onProgress,checkpoint});}

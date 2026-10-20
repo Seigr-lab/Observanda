@@ -31,15 +31,17 @@ export async function dashboardCollectionStructure(pages,client,command,{scope=n
   if(owner.workspaceId===workspaceId)display=metadata;
   const books=metadata.notebooks.filter(book=>selected.projectIds.has(book.projectId??null)&&(!selected.notebookIds||selected.notebookIds.has(book.id)));for(const book of books)seenBooks.add(book.id);
   if(provider==='projects'){
-   const directory=storage.projectId?(await new LabBookRegistry(storage).read()).value:{books:[],deleted:[],relocated:[]},registered=directory.books;
-   const retiredOrDedicated=new Set([...registered,...directory.deleted,...(directory.relocated??[])].map(book=>book.labBookId));
-   const stamp=digest(JSON.stringify(directory)),stampKey='books:'+owner.workspaceId;if(session.snapshots&&session.snapshots[stampKey]!==stamp)throw new AppError('RECORD_QUERY_CURSOR');snapshots[stampKey]=stamp;
+   const directory=storage.projectId?await new LabBookRegistry(storage).inspect(async view=>{
+    const masked=new Set();for(const book of metadata.notebooks)if(await view.get(book.id))masked.add(book.id);
+    return {revision:view.revision,total:view.count,books:(await view.page({limit:12,signal})).items.map(row=>row.entry),masked};
+   }):{revision:'empty',total:0,books:[],masked:new Set()},registered=directory.books,retiredOrDedicated=directory.masked;
+   const stamp=directory.revision,stampKey='books:'+owner.workspaceId;if(session.snapshots&&session.snapshots[stampKey]!==stamp)throw new AppError('RECORD_QUERY_CURSOR');snapshots[stampKey]=stamp;
    // Membership identifies the authoritative owner, including retired projects.
    // Retained source metadata must never create a second navigation target.
    const projectOwner=owner.projectId?owner.workspaceId:null;
    for(const project of metadata.projects.filter(project=>selected.projectIds.has(project.id)&&selected.projectOwners.get(project.id)===projectOwner)){
     const local=metadata.notebooks.filter(book=>book.projectId===project.id&&!retiredOrDedicated.has(book.id)),independent=storage.projectId===project.id?registered:[],notebooks=[...local.slice(0,12).map(book=>({id:book.id,title:book.title,route:{action:'research-open-owned',workspaceId:owner.workspaceId,kind:'notebook',id:book.id}})),...independent.slice(0,Math.max(0,12-local.length)).map(book=>({id:book.labBookId,title:book.directory,route:{action:'research-open-owned',workspaceId:book.namespaceId,kind:'notebook',id:book.labBookId}}))];
-    add({key:dashboardSourceKey(owner.workspaceId,project.id),title:project.title,owner:{...owner,projectTitle:project.title,notebookTitle:''},data:{...project,notebooks,notebookTotal:local.length+independent.length},action:action(owner,'project',project.id)});
+    add({key:dashboardSourceKey(owner.workspaceId,project.id),title:project.title,owner:{...owner,projectTitle:project.title,notebookTitle:''},data:{...project,notebooks,notebookTotal:local.length+(storage.projectId===project.id?directory.total:0)},action:action(owner,'project',project.id)});
    }
    return;
   }

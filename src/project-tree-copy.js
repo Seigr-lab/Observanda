@@ -5,7 +5,7 @@ import {randomUUID} from 'node:crypto';
 import {ProjectBookCopy} from './project-book-copy.js';
 import {copyProjectLocation} from './project-transfer.js';
 import {projectCopyRoots} from './project-copy-boundaries.js';
-import {selectProjectTree,writeProjectTree} from './project-tree-manifest.js';
+import {readProjectTreeDirectory,writeProjectTree} from './project-tree-manifest.js';
 import {withProjectLifecycle} from './project-lifecycle.js';
 import {withProjectMembership,assertProjectCreationSettled,assertProjectRelocationsSettled} from './project-membership.js';
 import {databaseProvider} from './workspace-database-context.js';
@@ -17,7 +17,7 @@ import {AppError} from './errors.js';
 export class ProjectTreeCopy{
  constructor(registry,storage,{withProject,withProjectBook,portable=false}={}){this.registry=registry;this.storage=storage;this.withProject=withProject;this.withBook=withProjectBook;this.portable=portable;}
  async prepare(){
-  const entries=(await this.registry.read()).value.projects;this.tree=selectProjectTree(this.storage,entries);
+  this.tree=await readProjectTreeDirectory(this.registry,this.storage);
   if(this.tree.entries.length&&typeof this.withProject!=='function')throw new AppError('ACCESS_LOCKED');
   for(const entry of this.tree.entries)await this.withProject(entry.projectId,async storage=>{
    await withProjectLifecycle(this.registry,entry.projectId,'open',async()=>{}, {wait:false});
@@ -27,7 +27,7 @@ export class ProjectTreeCopy{
   });
   await this.current();return this.tree;
  }
- async current(){const current=selectProjectTree(this.storage,(await this.registry.read()).value.projects);if(serialize(current.manifest)!==serialize(this.tree.manifest)||current.entries.some((entry,index)=>entry.root!==this.tree.entries[index].root))throw new AppError('CONFLICT');return current;}
+ async current(){const current=await readProjectTreeDirectory(this.registry,this.storage);if(serialize(current.manifest)!==serialize(this.tree.manifest)||current.entries.some((entry,index)=>entry.root!==this.tree.entries[index].root))throw new AppError('CONFLICT');return current;}
  async using(operation){
   const parents=[this.storage.projectId,...this.tree.entries.map(entry=>entry.projectId)];
   return withProjectMembership(this.registry,parents,async()=>{

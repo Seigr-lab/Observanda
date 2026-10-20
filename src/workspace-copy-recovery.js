@@ -1,3 +1,4 @@
+import {validWorkspaceCopyDirectory,workspaceCopyTransferId} from './workspace-copy-directory.js';
 import {validateKeyring} from './security/keyring.js';
 import {validProjectSourceAuthority} from './project-source-authority.js';
 import {WORKSPACE_COPY_RECEIPT,WORKSPACE_COPY_LEASE} from './workspace-transfer-controls.js';
@@ -30,15 +31,16 @@ export class WorkspaceCopyRecovery {
   if(!await assertRegular(path.join(this.target.root,'.observanda'),{missing:true,directory:true}))return null;
   const stat=await assertRegular(this.file,{missing:true});if(!stat)return null;if(stat.size>MAX_RECEIPT)throw new AppError('STORAGE_COPY');
   let value;try{if(!this.source.vault?.id)await this.source.requireStorageKey();value=JSON.parse(this.source.vault?.id?await this.target.readFile(this.file,'utf8'):await readFile(this.file,'utf8'));}catch{throw new AppError('STORAGE_COPY');}
-  if(![1,2,3].includes(value?.version)||!researchId(value.id)||value.vaultId!==(this.source.vault?.id??null)||!['files','database','snapshot','published'].includes(value.phase)||value.plan?.portable!==undefined&&value.plan.portable!==true||value.plan?.source!==this.source.root||value.plan?.destination!==this.target.root||value.plan?.inventorySalt!==value.id||!value.directory||!Array.isArray(value.directory.value?.projects)||!value.transfers||typeof value.transfers!=='object')throw new AppError('STORAGE_COPY');
+  if(![1,2,3,4].includes(value?.version)||!researchId(value.id)||value.vaultId!==(this.source.vault?.id??null)||!['files','database','snapshot','published'].includes(value.phase)||value.plan?.portable!==undefined&&value.plan.portable!==true||value.plan?.source!==this.source.root||value.plan?.destination!==this.target.root||value.plan?.inventorySalt!==value.id||!value.directory||(value.version===4?!validWorkspaceCopyDirectory(value.directory)||value.transfers!==undefined:!Array.isArray(value.directory.value?.projects)||!value.transfers||typeof value.transfers!=='object'))throw new AppError('STORAGE_COPY');
   if(value.plan.projectPlacement!==undefined&&value.plan.projectPlacement!==2)throw new AppError('STORAGE_COPY');
-  if(value.version===1&&value.plan.projectPlacement!==undefined||value.version===3&&value.plan.projectPlacement!==2)throw new AppError('STORAGE_COPY');
+  if(value.version===1&&value.plan.projectPlacement!==undefined||value.version>=3&&value.plan.projectPlacement!==2)throw new AppError('STORAGE_COPY');
   if(value.plan.encrypted===true){
    if(value.version===1||value.plan.portable===true)throw new AppError('STORAGE_COPY');
    try{validateKeyring(value.encryptionAccess);}catch{throw new AppError('STORAGE_COPY');}
   }else if(value.version===2||value.plan.encrypted!==undefined||value.encryptionAccess!==undefined)throw new AppError('STORAGE_COPY');
   if(value.adoptions!==undefined&&(!Array.isArray(value.adoptions)||value.adoptions.some(item=>!validProjectSourceAuthority(item))))throw new AppError('STORAGE_COPY');
-  for(const entry of value.directory.value.projects)if(!researchId(value.transfers[entry.projectId]))throw new AppError('STORAGE_COPY');
+  if(value.version!==4)for(const entry of value.directory.value.projects)if(!researchId(value.transfers[entry.projectId]))throw new AppError('STORAGE_COPY');
+  if(value.version===4&&(value.plan.projectRoots!==undefined||value.adoptions!==undefined||value.plan.projectRegistryRevision!==value.directory.revision))throw new AppError('STORAGE_COPY');
   return value;
  }
  async emptyPreparation(){
@@ -66,7 +68,8 @@ export class WorkspaceCopyRecovery {
    state=await this.read();
    if(state){if(!await assertRegular(this.marker,{missing:true})||state.id!==plan.inventorySalt||!!state.plan.encrypted!==!!plan.encrypted||plan.encrypted&&serialize(state.encryptionAccess)!==serialize(this.encryptionAccess))throw new AppError('CONFLICT');}
    else {if(plan.encrypted){validateKeyring(this.encryptionAccess);if(plan.portable)throw new AppError('INVALID');}
-    state={version:plan.projectPlacement===2?3:plan.encrypted?2:1,...(plan.encrypted?{encryptionAccess:structuredClone(this.encryptionAccess)}:{}),id:plan.inventorySalt,vaultId:this.source.vault?.id??null,phase:'files',plan:savedPlan(plan),directory:structuredClone(directory),transfers:Object.fromEntries(directory.value.projects.map(entry=>[entry.projectId,randomUUID()]))};await this.save(state);
+    const native=validWorkspaceCopyDirectory(directory);if(native&&(plan.projectPlacement!==2||plan.projectRoots!==undefined))throw new AppError('INVALID');
+    state={version:native?4:plan.projectPlacement===2?3:plan.encrypted?2:1,...(plan.encrypted?{encryptionAccess:structuredClone(this.encryptionAccess)}:{}),id:plan.inventorySalt,vaultId:this.source.vault?.id??null,phase:'files',plan:savedPlan(plan),directory:structuredClone(directory),...(native?{}:{transfers:Object.fromEntries(directory.value.projects.map(entry=>[entry.projectId,randomUUID()]))})};await this.save(state);
     for(const name of await readdir(path.dirname(this.file)))if(abandonedReceipt(name)){const file=path.join(path.dirname(this.file),name);await assertRegular(file);await unlink(file);}
    }
    this.state=state;
@@ -98,5 +101,5 @@ export class WorkspaceCopyRecovery {
  async database(){this.state.phase='database';await this.save();await this.checkpoint('workspace-database');}
  async snapshot(){this.state.binding=await catalogueBinding(this.target.root);this.state.descriptor=await hashWorkspaceFile(await workspaceFile(this.target.root));this.state.phase='snapshot';await this.save();await this.checkpoint('workspace-snapshot');}
  async published(){this.state.phase='published';await this.save();await this.checkpoint('workspace-published');}
- transferId(projectId){const id=this.state.transfers[projectId];if(!researchId(id))throw new AppError('STORAGE_COPY');return id;}
+ transferId(projectId){if(!researchId(projectId))throw new AppError('STORAGE_COPY');const id=this.state.version===4?workspaceCopyTransferId(this.state.id,projectId):this.state.transfers[projectId];if(!researchId(id))throw new AppError('STORAGE_COPY');return id;}
 }

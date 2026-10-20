@@ -1,0 +1,46 @@
+import '../src/storage.js';
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,rm,access} from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import {randomUUID} from 'node:crypto';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {createNotebook} from '../src/model.js';
+import {WorkspaceDatabases} from '../src/workspace-databases.js';
+import {installDatabaseProvider} from '../src/workspace-database-context.js';
+import {ProjectRegistry} from '../src/project-registry.js';
+import {captureWorkspaceCopyDirectory} from '../src/workspace-copy-directory.js';
+import {validateNativeCopyAdoptions,reconcileNativeCopiedProjectConversions} from '../src/workspace-project-conversion-copy.js';
+import {clearVault} from '../src/encryption.js';
+import {privateDirectory,digest,serialize} from '../src/storage.js';
+test('native copy reconciles adoption authority from pinned rows without aggregate registry or proof lists',{timeout:120000},async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-copy-adoption-directory-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider);let vault;
+ t.after(async()=>{await provider.close();detach();clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-copy-adoption-directory-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const f=await encryptedFixture(path.join(directory,'source'),createNotebook('Source workspace'));vault=f.vault;const owner=f.workspace,outline=await owner.outline(),workspaceId=outline.metadata.id,registry=new ProjectRegistry(owner,workspaceId);
+ const entry={projectId:randomUUID(),namespaceId:randomUUID(),vaultId:randomUUID(),root:path.join(owner.root,'Adopted project'),parentId:null,summary:null};
+ await registry.apply(await registry.version(),[{state:'active',entry}]);const pin=await captureWorkspaceCopyDirectory(registry);
+ const receipt={version:1,operationId:randomUUID(),projectId:entry.projectId,sourceNamespace:workspaceId,namespaceId:entry.namespaceId,vaultId:entry.vaultId,sourceHead:outline.etag},saved={version:1,entry,receipt,aliases:null};
+ const put=async(relative,value)=>{await privateDirectory(owner.root,path.posix.dirname(relative));await owner.writeFile(path.join(owner.root,relative),serialize(value));};
+ const state=async value=>owner.withLock(()=>owner.catalogue(store=>store.db.run('INSERT INTO state VALUES ($1,$2) ON CONFLICT(slot) DO UPDATE SET payload=excluded.payload','project-source-authority:project:'+value.projectId,store.encode('state','project-source-authority:project:'+value.projectId,value))));
+ await state(receipt);await put('.observanda/project-adoptions/'+receipt.operationId+'.obsv',saved);
+ await assert.rejects(validateNativeCopyAdoptions(owner,pin,{current:true}),{code:'STORAGE_PROJECT_BUSY'});
+ await owner.withLock(()=>owner.writeMetadata('.observanda/project-adopted/'+receipt.operationId+'.json',serialize({version:1,fingerprint:digest(serialize(saved))})));
+ await put('.observanda/project-adoption-operations/'+entry.projectId+'.obsv',{version:1,id:receipt.operationId,projectId:entry.projectId,phase:'adopting'});
+ const cleanup={version:1,id:receipt.operationId,projectId:entry.projectId,namespaceId:entry.namespaceId,vaultId:entry.vaultId,sourceNamespace:workspaceId,fingerprint:'a'.repeat(64),phase:'adopted'};
+ await put('.observanda/project-conversions/'+cleanup.id+'.obsv',cleanup);
+ const prepared={version:2,id:randomUUID(),projectId:randomUUID(),namespaceId:randomUUID(),vaultId:randomUUID(),sourceNamespace:workspaceId,fingerprint:'b'.repeat(64),phase:'prepared',root:path.join(owner.root,'Unpublished project')};prepared.access={formatVersion:3,vaultId:prepared.vaultId};
+ await put('.observanda/project-conversions/'+prepared.id+'.obsv',prepared);await put('.observanda/project-conversions/project-'+prepared.projectId+'.obsv',{id:prepared.id});
+ const oldRead=ProjectRegistry.prototype.read,oldChange=ProjectRegistry.prototype.change;ProjectRegistry.prototype.read=ProjectRegistry.prototype.change=()=>{throw Error('Native copy must use pinned indexed rows');};
+ try{
+  await validateNativeCopyAdoptions(owner,pin,{current:true});
+  await registry.apply(await registry.version(),[{state:'active',entry:{...entry,root:path.join(owner.root,'Copied project')}}]);
+  await assert.rejects(validateNativeCopyAdoptions(owner,pin,{current:true}),{code:'CONFLICT'});
+  const copyId=randomUUID();await reconcileNativeCopiedProjectConversions(owner,pin,copyId);await reconcileNativeCopiedProjectConversions(owner,pin,copyId);
+  assert.equal(JSON.parse(await owner.readFile(path.join(owner.root,'.observanda/project-adoption-operations',entry.projectId+'.obsv'),'utf8')).phase,'complete');
+  const reconciled=JSON.parse(await owner.readFile(path.join(owner.root,'.observanda/project-conversions',cleanup.id+'.obsv'),'utf8'));assert.equal(reconciled.version,4);assert.equal(reconciled.phase,'cleanup');
+  await assert.rejects(access(path.join(owner.root,'.observanda/project-conversions',prepared.id+'.obsv')),{code:'ENOENT'});
+  assert.equal(await owner.readFile(path.join(owner.root,'.observanda/project-command-history',copyId,'adoption/project-conversions',prepared.id+'.obsv'),'utf8'),serialize(prepared));
+  await state({...receipt,projectId:randomUUID()});await assert.rejects(validateNativeCopyAdoptions(owner,pin),{code:'STORAGE_PROJECT_BUSY'});
+ }finally{ProjectRegistry.prototype.read=oldRead;ProjectRegistry.prototype.change=oldChange;}
+});

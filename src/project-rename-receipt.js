@@ -42,7 +42,7 @@ export async function locateProjectRename(registry,value){
 }
 
 export async function pendingProjectRename(registry,projectId,projects){
- projects??=(await registry.read()).value.projects;const seen=new Set();
+ if(projects===undefined)return registry.inspect(async view=>{const row=await view.get(projectId);if(!row||row.state!=='active')return null;return pendingProjectRename(registry,projectId,await view.ancestors(projectId));});const seen=new Set();
  for(let id=projectId;id!==null;){
   if(seen.has(id))throw new AppError('FORMAT');seen.add(id);const entry=projects.find(p=>p.projectId===id);if(!entry)return null;
   const value=await readProjectRename(registry,id);

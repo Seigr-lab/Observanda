@@ -1,4 +1,5 @@
 import {ProjectRegistry} from './project-registry.js';
+import {projectRegistryDescendantPrefix} from './project-registry-locations.js';
 import {WorkspaceProjectOwners} from './workspace-project-owners.js';
 import {validateRenameProjects} from './rename-owner-receipts.js';
 export {validateRenameProjects} from './rename-owner-receipts.js';
@@ -20,7 +21,6 @@ import {nestedRenameRoot} from './workspace-rename-paths.js';
 import {AppError} from './errors.js';
 const hash=async file=>digest(await readFile(file));
 const identity=stat=>({dev:String(stat.dev),ino:String(stat.ino)});
-const inside=(parent,child)=>{const relative=path.relative(parent,child);return relative!==''&&relative!=='..'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative);};
 export class WorkspaceProjectRename extends WorkspaceProjectOwners {
  bookOwner(storage){return new ProjectBookRename(storage);}
 
@@ -28,19 +28,24 @@ export class WorkspaceProjectRename extends WorkspaceProjectOwners {
 
 
  async persist(value){
-  if((await this.registry.read()).revision!==this.revision)throw new AppError('CONFLICT');
+  if(await this.registry.version()!==this.revision)throw new AppError('CONFLICT');
   if(!this.projects.length)return;
   for(const item of this.projects)await this.bookOwners.get(item.projectId).persist(value.id,item);
   value.projectRegistryRevision=this.revision;value.projectKeysHash=await saveRenameKeys(this.workspace,value.id,this.keys);value.projects=this.projects;
  }
  async load(value){
   if(!value.projects?.length)return;
-  this.registry??=new ProjectRegistry(this.workspace,value.workspaceId);const current=await this.registry.read();
-  if(!this.externalRegistry&&current.revision!==value.projectRegistryRevision)throw new AppError('STORAGE_RENAME_STATE');
-  if(this.externalRegistry){
-   const nested=current.value.projects.filter(entry=>inside(value.source,entry.root)||inside(value.destination,entry.root));
-   if(nested.length!==value.projects.length||value.projects.some(item=>!nested.some(entry=>entry.projectId===item.projectId&&entry.namespaceId===item.namespaceId&&entry.vaultId===item.vaultId&&[nestedRenameRoot(value.source,item.relative),nestedRenameRoot(value.destination,item.relative)].includes(entry.root))))throw new AppError('STORAGE_RENAME_STATE');
-  }
+  this.registry??=new ProjectRegistry(this.workspace,value.workspaceId);
+  await this.registry.inspect(async view=>{
+   if(!this.externalRegistry&&view.revision!==value.projectRegistryRevision)throw new AppError('STORAGE_RENAME_STATE');
+   if(this.externalRegistry){
+    const expected=new Map(value.projects.map(item=>[item.projectId,item])),seen=new Set();
+    for(const root of [value.source,value.destination])for await(const {entry} of view.entries({index:'location',prefix:projectRegistryDescendantPrefix(root,this.registry.workspace.root)})){
+     const item=expected.get(entry.projectId);if(!item||entry.namespaceId!==item.namespaceId||entry.vaultId!==item.vaultId||![nestedRenameRoot(value.source,item.relative),nestedRenameRoot(value.destination,item.relative)].includes(entry.root))throw new AppError('STORAGE_RENAME_STATE');seen.add(entry.projectId);
+    }
+    if(seen.size!==expected.size)throw new AppError('STORAGE_RENAME_STATE');
+   }
+  });
   this.keys=await loadRenameKeys(this.workspace,value.id,value.projectKeysHash);
   if(this.keys.size!==value.projects.length||value.projects.some(item=>this.keys.get(item.projectId)?.id!==item.vaultId))throw new AppError('STORAGE_RENAME_STATE');
   this.projects=value.projects;

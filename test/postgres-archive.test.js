@@ -6,7 +6,7 @@ import path from 'node:path';
 import os from 'node:os';
 import {randomBytes,createHash} from 'node:crypto';
 import {seal} from '../src/encryption.js';
-import {writeCatalogueArchive,readCatalogueArchive} from '../src/postgres-archive.js';
+import {writeCatalogueArchive,readCatalogueArchive,inspectCatalogueArchive} from '../src/postgres-archive.js';
 import {withOperationProgress} from '../src/operation-progress.js';
 import {cataloguePayloadRows} from '../src/catalogue-payload-rows.js';
 const hash=value=>createHash('sha256').update(value).digest('hex'),tables={state:['slot','payload']};
@@ -89,4 +89,17 @@ test('archive and comparison stream rows once without a preliminary count scan',
  }
  assert.equal(outputs[0],outputs[1]);assert.equal(outputs[0],outputs[2]);
  assert.equal(JSON.parse(outputs[0].trimEnd().split('\n').at(-1)).rows,rows.length);
+});
+
+test('read-only archive inspection requires exact file identity and complete validated framing',async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-archive-inspect-'));t.after(()=>rm(directory,{recursive:true,force:true}));
+ const file=path.join(directory,'archive'),payload=seal(Buffer.from('Synthetic state'),randomBytes(32),'test');
+ const body=JSON.stringify({table:'state',values:['head',payload.toString('base64')]})+'\n';
+ const raw=JSON.stringify({format:'observanda-postgresql-archive',version:1})+'\n'+body+JSON.stringify({end:true,rows:1,digest:hash(body)})+'\n';
+ await writeFile(file,raw);const found=[];await inspectCatalogueArchive(file,tables,{row:(domain,table,values)=>found.push({domain,table,values})},{expectedDigest:hash(raw)});
+ assert.deepEqual(found,[{domain:null,table:'state',values:['head',payload]}]);assert.equal(await readFile(file,'utf8'),raw);
+ await assert.rejects(inspectCatalogueArchive(file,tables,{row(){}},{expectedDigest:'0'.repeat(64)}),{code:'CATALOGUE_DAMAGED'});
+ for(const bad of [raw.slice(0,-1),raw.replace('"rows":1','"rows":2'),raw.replace('"head"','"other"')]){
+  await writeFile(file,bad);await assert.rejects(inspectCatalogueArchive(file,tables,{row(){}},{expectedDigest:hash(bad)}),{code:'CATALOGUE_DAMAGED'});
+ }
 });

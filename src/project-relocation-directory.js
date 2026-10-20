@@ -2,6 +2,8 @@
 // new workspace without storing a machine path or granting access to it.
 import {researchId} from './web/research-reference.js';
 import {selectProjectTree} from './project-tree-manifest.js';
+import {projectRegistryLocationKey} from './project-registry-locations.js';
+import path from 'node:path';
 import {AppError} from './errors.js';
 const same=(a,b,keys)=>keys.every(key=>a?.[key]===b?.[key]);
 const identity=['projectId','namespaceId','vaultId'];
@@ -23,19 +25,17 @@ export async function recordProjectDeparture(registry,entries,{workspaceId,opera
  if(entries.some(entry=>!entry||!identity.every(key=>researchId(entry[key]))))throw new AppError('INVALID');
  const ids=new Set(entries.map(entry=>entry.projectId));if(ids.size!==entries.length)throw new AppError('INVALID');
  for(let attempt=0;;attempt++){
-  const current=await registry.read(),active=current.value.projects.filter(entry=>ids.has(entry.projectId));
-  if(!active.length){
-   const departures=new Map((current.value.relocated??[]).map(entry=>[entry.projectId,entry]));
-   if(entries.every(entry=>{const moved=departures.get(entry.projectId);return same(moved,entry,identity)&&moved.operationId===operationId&&moved.workspaceId===workspaceId;}))return current;
-   throw new AppError('CONFLICT');
-  }
-  const byId=new Map(active.map(entry=>[entry.projectId,entry]));
-  if(active.length!==entries.length||entries.some(entry=>!same(byId.get(entry.projectId),entry,[...identity,'root','parentId'])))throw new AppError('CONFLICT');
-  const {entries:selected}=selectProjectTree({...entries[0],vault:{id:entries[0].vaultId}},current.value.projects);
-  if(selected.length+1!==entries.length||selected.some(entry=>!ids.has(entry.projectId)))throw new AppError('CONFLICT');
-  try{return await registry.change(current.revision,value=>{
-   value.projects=value.projects.filter(entry=>!ids.has(entry.projectId));value.relocated??=[];
-   value.relocated.push(...entries.map(entry=>({...Object.fromEntries(identity.map(key=>[key,entry[key]])),workspaceId,operationId})));return value;
-  });}catch(error){if(error.code!=='CONFLICT'||attempt>=7)throw error;}
+  const current=await registry.inspect(async view=>{
+   const rows=[];for(const entry of entries)rows.push(await view.get(entry.projectId));
+   if(rows.every(row=>row?.state==='relocated')&&rows.every((row,index)=>same(row.entry,entries[index],identity)&&row.entry.operationId===operationId&&row.entry.workspaceId===workspaceId))return {revision:view.revision,complete:true};
+   if(rows.some((row,index)=>row?.state!=='active'||!same(row.entry,entries[index],[...identity,'root','parentId'])))throw new AppError('CONFLICT');
+   const selected=rows.map(row=>row.entry);selectProjectTree({...entries[0],vault:{id:entries[0].vaultId}},selected);
+   for(const entry of entries)for await(const child of view.entries({index:'parent',prefix:entry.projectId+':'}))if(!ids.has(child.entry.projectId))throw new AppError('CONFLICT');
+   const root=projectRegistryLocationKey(entries[0].root,registry.workspace.root);
+   for await(const child of view.entries({index:'location',prefix:root+(root.startsWith('relative:')?'/':path.sep)}))if(!ids.has(child.entry.projectId))throw new AppError('STORAGE_PATH');
+   return {revision:view.revision,complete:false};
+  });
+  if(current.complete)return current;
+  try{return await registry.apply(current.revision,entries.map(entry=>({state:'relocated',entry:{...Object.fromEntries(identity.map(key=>[key,entry[key]])),workspaceId,operationId}})));}catch(error){if(error.code!=='CONFLICT'||attempt>=7)throw error;}
  }
 }

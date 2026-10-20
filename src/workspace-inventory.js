@@ -21,14 +21,14 @@ export async function hashWorkspaceFile(file,{signal,reportProgress=true}={}){
  };
  return reportProgress?operationStage('verify-file',{total:stat.size,unit:'bytes',item:path.basename(file)},run):run();
 }
-export async function* workspaceFiles(root,{signal,includeDatabase=true,hashFiles=true,projectRoots=[],readPool}={}){
+export async function* workspaceFiles(root,{signal,includeDatabase=true,hashFiles=true,projectRoots=[],excludeProject,readPool}={}){
  const excluded=new Set();
  for(const projectRoot of projectRoots){const relative=path.relative(root,projectRoot);if(!relative||relative==='.observanda'||relative==='..'||relative.startsWith('..'+path.sep)||path.isAbsolute(relative))throw new AppError('STORAGE_PATH');excluded.add(relative.split(path.sep).join('/'));}
  async function* walk(relative){
   signal?.throwIfAborted();
   const absolute=path.join(root,relative),stat=await assertRegular(absolute,{missing:relative==='.observanda',directory:relative==='.observanda'||relative.endsWith('/')});
   if(!stat)return;
-  if(excluded.has(relative.replace(/\/$/,''))){if(!stat.isDirectory())throw new AppError('UNSAFE');return;}
+  if(excluded.has(relative.replace(/\/$/,''))||stat.isDirectory()&&excludeProject&&await excludeProject(absolute)){if(!stat.isDirectory())throw new AppError('UNSAFE');return;}
   if(stat.isDirectory()){
    for await(const item of await opendir(absolute)){
     signal?.throwIfAborted();
@@ -55,11 +55,11 @@ export async function* workspaceFiles(root,{signal,includeDatabase=true,hashFile
  if(!hashFiles){yield* entries();return;}
  yield* adaptiveReadMap(entries(),async(file,signal)=>({path:file.path,bytes:file.bytes,sha256:await hashWorkspaceFile(path.join(root,file.path),{signal,reportProgress:false}),...(file.database?{database:file.database}:{})}),{signal,pool:readPool});
 }
-export function workspaceInventory(root,salt,{signal,visit,expected,expectedFiles,consume,projectRoots=[]}={}){
+export function workspaceInventory(root,salt,{signal,visit,expected,expectedFiles,consume,projectRoots=[],excludeProject}={}){
  if(typeof salt!=='string'||!/^[a-f0-9-]{36}$/.test(salt))throw new AppError('INVALID');
  return operationStage('inventory',{unit:'files'},()=>withScratch(async work=>{
   let bytes=0,fileBytes=0,transferFiles=0,databaseBytes=0;
-  for await(const file of workspaceFiles(root,{signal,includeDatabase:!expectedFiles,projectRoots})){
+  for await(const file of workspaceFiles(root,{signal,includeDatabase:!expectedFiles,projectRoots,excludeProject})){
    if(!await work.add(file.path,file))throw new AppError('UNSAFE');
    bytes+=file.bytes+(file.database?.bytes??0);
    databaseBytes+=file.database?.bytes??0;

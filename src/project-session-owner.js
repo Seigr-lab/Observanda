@@ -9,8 +9,8 @@ import {authenticateKeyring} from './security/keyring.js';
 import {cloneVault,clearVault} from './encryption.js';
 import {AppError} from './errors.js';
 export class ProjectSessionOwner{
- constructor(application,client,projectId,{check=async()=>{},recoverRenames=true,deferPreparedRename=false,skipRenameId=null}={}){
-  this.application=application;this.client=client;this.recoverRenames=recoverRenames;this.deferPreparedRename=deferPreparedRename;this.skipRenameId=skipRenameId;this.projectId=projectId;this.session=application.session(client);this.sessionEntry=this.session.get(projectId);this.checkRequest=check;
+ constructor(application,client,projectId,{check=async()=>{},recoverRenames=true,deferPreparedRename=false,skipRenameId=null,registry=()=>application.registry()}={}){
+  this.application=application;this.registrySource=registry;this.client=client;this.recoverRenames=recoverRenames;this.deferPreparedRename=deferPreparedRename;this.skipRenameId=skipRenameId;this.projectId=projectId;this.session=application.session(client);this.sessionEntry=this.session.get(projectId);this.checkRequest=check;
  }
  async check(){
   const app=this.application;await this.checkRequest();
@@ -51,7 +51,7 @@ export class ProjectSessionOwner{
    }
   }
   await this.check();if(this.selectedRouter)return this.selectedRouter;
-  this.registry=await this.application.registry();const moves=new ProjectMoves(this.registry);
+  this.registry=await this.registrySource();const moves=new ProjectMoves(this.registry);
   return this.selectedRouter=new ProjectRouter(this.registry,{
    recover:async(entry,key)=>{const marker=await moveSource(entry.root);if(marker)await moves.run(entry.projectId,key,{id:marker.id,resume:true,adoptOnly:true,onAdopt:latest=>this.relocated(latest)});},
    authorize:async({projectId})=>{if(projectId!==this.projectId)throw new AppError('ACCESS_DENIED');await this.check();return true;},

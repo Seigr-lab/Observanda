@@ -72,12 +72,12 @@ export class LabBookCreation{
    try{
     if(intent){
      if(intent.labBookId!==command.book.id||!resume&&intent.fingerprint!==fingerprint)throw new AppError('CONFLICT');
-     const registered=(await this.registry.read()).value.books.some(entry=>entry.labBookId===intent.labBookId);
+     const registered=(await this.registry.state(intent.labBookId)).state==='active';
      if(registered||intent.phase==='attached')return this.acknowledge(command.id,intent);
      vault=await verifyAccess({value:intent.access},command.username,password,{deviceStore:this.deviceStore});
     }else{
      if(resume)throw new AppError('NOT_FOUND');
-     const current=await this.registry.read();if(current.value.relocated?.some(entry=>entry.labBookId===command.book.id)||current.value.deleted.some(entry=>entry.labBookId===command.book.id)||current.value.books.some(entry=>entry.labBookId===command.book.id||nameKey(entry.directory)===nameKey(command.book.title)))throw new AppError('EXISTS');
+     await this.registry.inspect(async view=>{if(await view.get(command.book.id)||await view.get(view.nameKey(command.book.title),{index:'location'}))throw new AppError('EXISTS');});
      const root=storageCreationPath(this.project.root,command.book.title);if(await assertRegular(root,{directory:true,missing:true})&&(await readdir(root)).length)throw new AppError('EXISTS');
      const {metadata}=await this.project.outline(),parent=metadata.projects.find(entry=>entry.id===this.project.projectId);if(!parent)throw new AppError('DATABASE_LOCATION');
      const book=createNotebook(command.book.title);book.projects=[projectSummaryForBook(parent)];book.notebooks=[structuredClone(command.book)];if(hasConfigurationCreation(command))delete book.notebooks[0].configuration;validateNotebook(book);
@@ -90,8 +90,8 @@ export class LabBookCreation{
     await check();await this.project.requireStorageKey();const root=storageCreationPath(this.project.root,intent.directory),storage=await initializeLabBookLocation(root,intent.labBookId,intent.book,intent.access,vault,intent.configuration?{populateId:'configuration-v1:'+digest(serialize(intent.configuration)),populate:storage=>populateCreationConfiguration(storage,this.project,intent.configuration,{commandId:command.id,projectId:this.project.projectId,notebookId:intent.labBookId,slot:'configuration',withConfigurationSource:this.withConfigurationSource,check})}:{});
     await check();
     for(let attempt=0;;attempt++){
-     const current=await this.registry.read();
-     if(current.value.books.some(entry=>entry.labBookId===intent.labBookId))return this.acknowledge(command.id,intent);
+     const current=await this.registry.state(intent.labBookId);
+     if(current.state==='active')return this.acknowledge(command.id,intent);
      try{await this.registry.attach(storage,{expected:current.revision});break;}catch(error){if(error.code!=='CONFLICT'||attempt>=7)throw error;}
     }
     return this.acknowledge(command.id,intent);

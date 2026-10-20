@@ -1,5 +1,4 @@
 import {createComparisonSourceAccess} from './comparison-source-access.js';
-import {assertProjectPresent} from './project-relocation-directory.js';
 import {publicationSourceMedia} from './publication-source-media.js';
 import {publicationSourceSections} from './publication-source-sections.js';
 import {publicationSourcePages} from './publication-source-pages.js';
@@ -20,19 +19,21 @@ import {validWebsiteDraftPin} from './web/website-draft-pin.js';
 // references and consent. The registry resolves each namespace when it is used.
 export async function publicationSourceReader(application,client,{workspaceId,scope=null,labBookId=null,signal,check=async()=>{}}){
  const {registry,directory}=await publicationSourceHost(application,{workspaceId,scope,labBookId});
- const reader=projectCollectionReader(application,client,check);
+ const reader=projectCollectionReader(application,client,check),host=scope?await registry.state(scope):null;
+ if(scope&&(host.state!=='active'||host.revision!==directory.revision))throw new AppError('RECORD_QUERY_CURSOR');
  return {
-  host:{workspaceId,projectId:scope,labBookId,projectNamespaceId:scope?directory.value.projects.find(project=>project.projectId===scope).namespaceId:null},
+  host:{workspaceId,projectId:scope,labBookId,projectNamespaceId:host?.entry?.namespaceId??null},
   async use(sourceId,snapshotId,consume,{prepare}={}){
    if(!researchId(sourceId)||snapshotId!==undefined&&!revisionId(snapshotId))throw new AppError('INVALID');signal?.throwIfAborted();
-   assertProjectPresent(directory.value,{namespaceId:sourceId});
-   const entry=directory.value.projects.find(project=>project.namespaceId===sourceId)??(sourceId!==registry.workspaceId?await new LabBookDirectory(registry).locate(sourceId):null);
+   const selected=await registry.state(sourceId,{index:'namespace'});if(selected.revision!==directory.revision)throw new AppError('RECORD_QUERY_CURSOR');registry.assertState(selected.state?selected:null);
+   const entry=selected.state==='active'?selected.entry:sourceId!==registry.workspaceId?await new LabBookDirectory(registry).locate(sourceId):null;
+   const parent=entry?await registry.state(entry.projectId):null;if(parent&&(parent.revision!==directory.revision||parent.state!=='active'))throw new AppError('RECORD_QUERY_CURSOR');
    if(!entry&&sourceId!==registry.workspaceId)throw new AppError('NOT_FOUND');
    const target={workspaceId:sourceId,projectId:entry?.projectId??null,labBookId:entry?.labBookId??null};
-   const value=await reader.use(target,snapshotId,(store,snapshot,pinned)=>consume(store,snapshot,{...pinned,owner:target,projectNamespaceId:entry?directory.value.projects.find(project=>project.projectId===entry.projectId)?.namespaceId:null}),{prepare});
+   const value=await reader.use(target,snapshotId,(store,snapshot,pinned)=>consume(store,snapshot,{...pinned,owner:target,projectNamespaceId:parent?.entry?.namespaceId??null}),{prepare});
    signal?.throwIfAborted();return {owner:target,value};
   },
-  async verify(){await reader.verify();if((await registry.read()).revision!==directory.revision)throw new AppError('RECORD_QUERY_CURSOR');signal?.throwIfAborted();},
+  async verify(){await reader.verify();if(await registry.version()!==directory.revision)throw new AppError('RECORD_QUERY_CURSOR');signal?.throwIfAborted();},
   close:()=>reader.close()
  };
 }

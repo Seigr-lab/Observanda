@@ -19,13 +19,16 @@ export async function locateWorkspaceProjectMove(registry,value){
  throw new AppError('STORAGE_MOVE_STATE');
 }
 export async function pendingWorkspaceProjectMove(registry,projectId,projects){
- projects??=(await registry.read()).value.projects;const entries=new Map(projects.map(entry=>[entry.projectId,entry])),seen=new Set();
- for(let id=projectId;id!==null;){
-  if(seen.has(id))throw new AppError('FORMAT');seen.add(id);const value=await readProjectWorkspaceMove(registry,id);
-  if(value&&!['complete','cancelled'].includes(value.phase))return value;
-  const entry=entries.get(id);if(!entry)return null;id=entry.parentId;
- }
- return null;
+ const walk=async get=>{
+  const seen=new Set();for(let id=projectId;id!==null;){
+   if(seen.has(id))throw new AppError('FORMAT');seen.add(id);const value=await readProjectWorkspaceMove(registry,id);
+   if(value&&!['complete','cancelled'].includes(value.phase))return value;
+   const entry=await get(id);if(!entry)return null;id=entry.parentId;
+  }
+  return null;
+ };
+ if(projects===undefined)return registry.inspect(view=>walk(async id=>{const row=await view.get(id);return row?.state==='active'?row.entry:null;}));
+ const entries=new Map(projects.map(entry=>[entry.projectId,entry]));return walk(id=>entries.get(id));
 }
 export async function workspaceProjectMoveLocation(registry,entry,projects){
  const value=await pendingWorkspaceProjectMove(registry,entry.projectId,projects);if(!value)return entry;

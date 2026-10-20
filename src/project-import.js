@@ -45,19 +45,23 @@ const credentials=command=>{
 export class ProjectImports{
  constructor(registry,deviceStore){this.registry=registry;this.workspace=registry.workspace;this.deviceStore=deviceStore;}
  read(id){return readProjectImport(this.registry,id);}
- async pending({after=null,limit=20}={}){if(after!==null&&!researchId(after)||!Number.isSafeInteger(limit)||limit<1||limit>50)throw new AppError('INVALID');const list=[];for await(const value of pendingProjectImports(this.registry)){if(after!==null&&value.id<=after)continue;list.push(value);list.sort((a,b)=>a.id.localeCompare(b.id));if(list.length>limit+1)list.pop();}const more=list.length>limit;if(more)list.pop();const registered=new Set((await this.registry.read()).value.projects.map(entry=>entry.projectId));return {items:list.map(value=>({id:value.id,name:path.basename(value.destination),parentId:value.parentId,phase:value.phase,inPlace:value.source===value.destination,cancellable:!['registered','complete'].includes(value.phase)&&!registered.has(value.manifest.projectId),running:projectTransferRunning(projectImportFile(this.registry,value.id))})),next:more?list.at(-1).id:null};}
+ async pending({after=null,limit=20}={}){if(after!==null&&!researchId(after)||!Number.isSafeInteger(limit)||limit<1||limit>50)throw new AppError('INVALID');const list=[];for await(const value of pendingProjectImports(this.registry)){if(after!==null&&value.id<=after)continue;list.push(value);list.sort((a,b)=>a.id.localeCompare(b.id));if(list.length>limit+1)list.pop();}const more=list.length>limit;if(more)list.pop();const registered=await this.registry.inspect(async view=>{const ids=new Set();for(const value of list)if((await view.get(value.manifest.projectId))?.state==='active')ids.add(value.manifest.projectId);return ids;});return {items:list.map(value=>({id:value.id,name:path.basename(value.destination),parentId:value.parentId,phase:value.phase,inPlace:value.source===value.destination,cancellable:!['registered','complete'].includes(value.phase)&&!registered.has(value.manifest.projectId),running:projectTransferRunning(projectImportFile(this.registry,value.id))})),next:more?list.at(-1).id:null};}
  async parent(parentId){return parentId===null?await realpath(this.workspace.root):(await this.registry.locate(parentId)).root;}
  async admit(value,{fresh=false}={}){
   if(storageCreationPath(await this.parent(value.parentId),path.basename(value.destination))!==value.destination)throw new AppError('CONFLICT');
   await assertIncomingProjectMovesSettled(this.registry,[value.parentId]);await assertIncomingProjectAddresses(this.registry,value.owners);
-  const listed=(await this.registry.read()).value,projectOwners=value.owners.filter(owner=>owner.kind==='project');
-  for(const owner of value.owners){const root=ownerRoot(value.destination,owner),existing=listed.projects.find(entry=>entry.projectId===owner.projectId);
+  const projectOwners=value.owners.filter(owner=>owner.kind==='project');
+  await this.registry.inspect(async view=>{for(const owner of value.owners){
+   const root=ownerRoot(value.destination,owner),selected=await view.get(owner.projectId),existing=selected?.state==='active'?selected.entry:null;
    if(owner.kind==='project'&&await incomingProjectMove(this.registry,owner.projectId))throw new AppError('STORAGE_PROJECT_BUSY');
-   if(owner.kind==='project')acceptRelocatedProject(structuredClone(listed),owner);
+   if(owner.kind==='project')acceptRelocatedProject({relocated:selected?.state==='relocated'?[selected.entry]:[]},owner);
    if(owner.kind==='project'&&existing&&(fresh||existing.root!==root||existing.namespaceId!==owner.namespaceId||existing.vaultId!==owner.vaultId))throw new AppError('PROJECT_LOCATION_EXISTS');
-   if(listed.projects.some(entry=>entry.projectId!==owner.projectId&&(entry.namespaceId===owner.namespaceId||entry.vaultId===owner.vaultId||entry.root===root))||(listed.deleted??[]).some(entry=>entry.projectId===owner.projectId||entry.namespaceId===owner.namespaceId||entry.vaultId===owner.vaultId))throw new AppError('DATABASE_LOCATION');
+   if(selected?.state==='deleted')throw new AppError('DATABASE_LOCATION');
+   for(const [index,id] of [['namespace',owner.namespaceId],['vault',owner.vaultId],['location',this.registry.locationKey(root)]]){
+    const row=await view.get(id,{index});if(row&&(row.state==='deleted'&&index!=='location'||row.state==='active'&&row.entry.projectId!==owner.projectId))throw new AppError('DATABASE_LOCATION');
+   }
    const book=await new LabBookDirectory(this.registry).read(owner.namespaceId);if(book&&(owner.kind!=='lab-book'||book.projectId!==owner.projectId||book.labBookId!==owner.labBookId||book.vaultId!==owner.vaultId))throw new AppError('DATABASE_LOCATION');
-  }
+  }});
   for await(const pending of pendingProjectImports(this.registry)){if(pending.id===value.id)continue;if(within(pending.destination,value.destination)||within(value.destination,pending.destination)||pending.owners.some(owner=>value.owners.some(other=>other.namespaceId===owner.namespaceId||other.vaultId===owner.vaultId)))throw new AppError('STORAGE_PROJECT_BUSY');}
   if(!projectOwners.length)throw new AppError('STORAGE_COPY');
  }
@@ -110,8 +114,8 @@ export class ProjectImports{
      for(const item of value.owners.filter(item=>item.kind==='lab-book')){const parent=entries.find(entry=>entry.projectId===item.projectId),storage=new ProjectStorage(parent.root,parent.projectId,inventory.keys.get(value.owners.find(owner=>owner.kind==='project'&&owner.projectId===parent.projectId).relative));await new LabBookRegistry(storage).describe(importOwnerStorage(ownerRoot(value.destination,item),item,inventory.keys.get(item.relative)),{staged:true});}
      const rootStorage=new ProjectStorage(value.destination,value.manifest.projectId,inventory.keys.get(''));await writeProjectTree(rootStorage,value.manifest);
      await withProjectMembership(this.registry,[value.parentId],async()=>{for(let attempt=0;;attempt++){
-      const current=await this.registry.read();let references=current.value.aliases??null;for(const bundle of portable)if(bundle)references=await aliases.prepare(references,bundle.owner,bundle.targets());await this.admit(value);await check();
-      try{await this.registry.change(current.revision,data=>{for(const entry of entries){const prior=data.projects.find(project=>project.projectId===entry.projectId);if(prior){if(['root','parentId','vaultId','namespaceId'].some(key=>prior[key]!==entry[key]))throw new AppError('CONFLICT');}else{acceptRelocatedProject(data,entry);data.projects.push(entry);}}data.aliases=references;return data;});break;}catch(error){if(error.code!=='CONFLICT'||attempt>=7)throw error;}
+      const current=await this.registry.inspect(view=>({revision:view.revision,aliases:view.aliases}));let references=current.aliases??null;for(const bundle of portable)if(bundle)references=await aliases.prepare(references,bundle.owner,bundle.targets());await this.admit(value);await check();
+      try{await this.registry.applyBatch(current.revision,(async function*(){for(const entry of entries)yield {state:'active',entry};})(),{aliases:references,check:async(directory,head)=>{for(const entry of entries){const row=await directory.find(head,entry.projectId);if(row?.state==='deleted')throw new AppError('DATABASE_LOCATION');if(row?.state==='active'&&['root','parentId','vaultId','namespaceId'].some(key=>row.entry[key]!==entry[key]))throw new AppError('CONFLICT');acceptRelocatedProject({relocated:row?.state==='relocated'?[row.entry]:[]},entry);}}});break;}catch(error){if(error.code!=='CONFLICT'||attempt>=7)throw error;}
      }});value.phase='registered';await saveProjectImport(this.registry,value);await checkpoint('registered',value);
      for(const item of value.owners.filter(item=>item.kind==='lab-book'))await new LabBookDirectory(this.registry).register(item.projectId,item);await checkpoint('addressed',value);
      for(const item of value.owners)await unlink(path.join(ownerRoot(value.destination,item),'.observanda/copy-in-progress')).catch(error=>{if(error.code!=='ENOENT')throw error;});
@@ -130,8 +134,7 @@ export class ProjectImports{
    if(['registered','complete'].includes(value.phase))throw new AppError('CONFLICT');
    return withProjectMembership(this.registry,[value.parentId],async()=>{
     if(storageCreationPath(await this.parent(value.parentId),path.basename(value.destination))!==value.destination)throw new AppError('CONFLICT');
-    const registered=(await this.registry.read()).value.projects;
-    if(value.owners.some(owner=>registered.some(entry=>entry.projectId===owner.projectId||entry.root===ownerRoot(value.destination,owner))))throw new AppError('CONFLICT');
+    await this.registry.inspect(async view=>{for(const owner of value.owners){if((await view.get(owner.projectId))?.state==='active'||(await view.get(this.registry.locationKey(ownerRoot(value.destination,owner)),{index:'location'}))?.state==='active')throw new AppError('CONFLICT');}});
     const discard=new ImportDiscard(this.workspace,value.id);
     if(value.source!==value.destination&&value.destinationIdentity){
      if(await discard.needsKeys()){

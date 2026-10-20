@@ -1,3 +1,5 @@
+import {readCopiedWorkspaceDirectory,publishCopiedWorkspaceDirectory,sameCopiedWorkspaceDirectory} from './workspace-copy-legacy-directory.js';
+import {NativeWorkspaceProjectCopy} from './native-workspace-project-copy.js';
 import {workspaceProjectPlacements,legacyWorkspaceProjectDestination} from './workspace-project-placement.js';
 import {assertInventoryObligationsSettled} from './inventory-obligation-lifecycle.js';
 import {assertProjectRelocationsSettled} from './project-membership.js';
@@ -23,7 +25,7 @@ const within=(parent,child)=>{const relative=path.relative(parent,child);return 
 const same=(a,b)=>['projectId','root','namespaceId','vaultId','parentId'].every(key=>a?.[key]===b?.[key]);
 
 export class WorkspaceProjectCopy {
-  constructor(source,{withProject,withBook,onCopiedBook=async()=>{},onCopiedProject=async()=>{},check=async()=>{},checkpoint=async()=>{}}={}){this.source=source;this.withProject=withProject;this.withBook=withBook;this.onCopiedBook=onCopiedBook;this.onCopiedProject=onCopiedProject;this.check=check;this.checkpoint=checkpoint;}
+  constructor(source,{withProject,withBook,onCopiedBook=async()=>{},onCopiedProject=async()=>{},check=async()=>{},checkpoint=async()=>{}}={}){this.source=source;this.withProject=withProject;this.withBook=withBook;this.onCopiedBook=onCopiedBook;this.onCopiedProject=onCopiedProject;this.check=check;this.checkpoint=checkpoint;this.native=new NativeWorkspaceProjectCopy(this);}
   async prepare(destination,{portable=false,projectPlacement=2}={}) {
     await this.check();await assertInventoryObligationsSettled(this.source);
     const outline=await this.source.outline();this.sourceRevision=outline.etag;
@@ -58,14 +60,14 @@ export class WorkspaceProjectCopy {
     return placements;
   }
   async plan(input,{inspect=true,onProgress,portable=false}={}) {
-    const destination=await resolveLocation(input),recovery=new WorkspaceCopyRecovery(this.source,destination),retained=await recovery.plan();
+    const destination=await resolveLocation(input),recovery=new WorkspaceCopyRecovery(this.source,destination),saved=await recovery.read();if(saved?.version===4||!saved&&await this.source.storageKind()==='catalogue')return this.native.plan(input,{inspect,onProgress,portable});const retained=await recovery.plan();
     if(retained){if(!!retained.portable!==portable)throw new AppError('CONFLICT');await this.prepare(destination,{portable,projectPlacement:retained.projectPlacement??1});return retained;}
     const emptyPreparation=await recovery.emptyPreparation(),location=emptyPreparation?{source:this.source.root,destination,inventorySalt:randomUUID()}:await transferDestination(this.source.root,input);await this.prepare(location.destination,{portable});
     const plan=inspect&&!emptyPreparation?await copyPlan(this.source.root,input,{vault:this.source.vault,onProgress,projectRoots:this.projectRoots}):location;
     return {...plan,projectPlacement:2,...(portable?{portable:true}:{}),projectRoots:this.projectRoots,projectRegistryRevision:this.directory.revision,sourceRevision:this.sourceRevision};
   }
   async exportPortable(input) {
-    const destination=await resolveLocation(input),recovery=new WorkspaceCopyRecovery(this.source,destination),retained=await recovery.read();
+    const destination=await resolveLocation(input),recovery=new WorkspaceCopyRecovery(this.source,destination),retained=await recovery.read();if(retained?.version===4||!retained&&await this.source.storageKind()==='catalogue')return this.native.exportPortable(input);
     if(retained?.phase==='published'&&retained.plan.portable===true){
       await this.placements(destination,retained.directory.value.projects,{retained:true,version:retained.plan.projectPlacement??1});
       if(await assertRegular(recovery.marker,{missing:true}))throw new AppError('STORAGE_INCOMPLETE');return destination;
@@ -77,6 +79,7 @@ export class WorkspaceProjectCopy {
   }
   async copy(plan,options={}) {
     if(plan.source!==this.source.root)throw new AppError('WORKSPACE_CHANGED');
+    const saved=await new WorkspaceCopyRecovery(this.source,plan.destination).read();if(saved?.version===4||!saved&&await this.source.storageKind()==='catalogue')return this.native.copy(plan,options);
     const portable=plan.portable===true,encryption=options.encryption;
     if(portable&&(options.activateCatalogue||encryption)||!!plan.encrypted!==!!encryption)throw new AppError('INVALID');
     await this.prepare(plan.destination,{portable,projectPlacement:plan.projectPlacement??1});
@@ -101,17 +104,18 @@ export class WorkspaceProjectCopy {
         if(afterSnapshotVerified)await afterSnapshotVerified(destination);
       },
       beforePublish:async target=>{
-        await this.copyProjects(target,checkpoint,{portable});
-        const adoptions=checkpoint.state.adoptions??await copyProjectAdoptions(this.source,this.directory);
-        await reconcileCopiedProjectConversions(target,this.registry.workspaceId,adoptions,checkpoint.state.id,{checkpoint:this.checkpoint});
-        await retainCopiedProjectCommands(target,checkpoint.state.id,{checkpoint:this.checkpoint});
+        await this.copyProjects(target,checkpoint,{portable,finish:async()=>{
+          const adoptions=checkpoint.state.adoptions??await copyProjectAdoptions(this.source,this.directory);
+          await reconcileCopiedProjectConversions(target,this.registry.workspaceId,adoptions,checkpoint.state.id,{checkpoint:this.checkpoint});
+          await retainCopiedProjectCommands(target,checkpoint.state.id,{checkpoint:this.checkpoint});
+        }});
         if(beforePublish)await beforePublish(target);
       }
     }));
   }
-  async copyProjects(target,recovery,{portable=false}={}) {
-    const copied=new ProjectRegistry(target,this.registry.workspaceId),initial=await copied.read();
-    if(!this.directory.value.projects.length)return;
+  async copyProjects(target,recovery,{portable=false,finish=async()=>{}}={}) {
+    const copied=new ProjectRegistry(target,this.registry.workspaceId),initial=await readCopiedWorkspaceDirectory(copied);
+    if(!this.directory.value.projects.length){await publishCopiedWorkspaceDirectory(copied,initial,initial.value,finish);return;}
     const placements=await this.placements(target.root,this.directory.value.projects,{retained:true,version:recovery.state.plan.projectPlacement??1});
     const locations=new Map();operationTransfer(null);
     await operationStage('copy-workspace-projects',{unit:'projects',total:this.directory.value.projects.length},async()=>{
@@ -145,14 +149,13 @@ export class WorkspaceProjectCopy {
     for(const entry of expected.projects){entry.summary??=null;entry.root=locations.get(entry.projectId);}
     // Publishing the registry and recording the bundle checkpoint are separate
     // atomic writes. Accept the exact already-published registry on recovery.
-    if(serialize(initial.value)===serialize(expected))return;
-    if(initial.revision!==this.directory.revision)throw new AppError('CONFLICT');
-    const next=await copied.change(initial.revision,()=>expected);
+    if(!sameCopiedWorkspaceDirectory(initial.value,expected)&&initial.revision!==this.directory.revision)throw new AppError('CONFLICT');
+    if(expected.projects.some(entry=>!within(target.root,entry.root)))throw new AppError('STORAGE_COPY');
+    await publishCopiedWorkspaceDirectory(copied,initial,expected,finish);
     await this.checkpoint('workspace-registry');
-    if(next.value.projects.some(entry=>!within(target.root,entry.root)))throw new AppError('STORAGE_COPY');
     // Every source identity and parent remains the same; only its physical
     // destination changes. The registry encodes these destinations relatively.
-    const withoutRoots=value=>value.projects.map(({root,...entry})=>entry);
-    if(serialize(withoutRoots(next.value))!==serialize(withoutRoots(initial.value)))throw new AppError('STORAGE_COPY');
+    const withoutRoots=value=>value.projects.map(({root,...entry})=>entry).sort((a,b)=>a.projectId<b.projectId?-1:a.projectId>b.projectId?1:0);
+    if(serialize(withoutRoots(expected))!==serialize(withoutRoots(initial.value)))throw new AppError('STORAGE_COPY');
   }
 }

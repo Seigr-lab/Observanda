@@ -1,7 +1,7 @@
 import {discardConfigurationCheckpoint} from './configuration-commands.js';
 import {ProjectPlacementTransfer} from './project-placement-transfer.js';
 import {trackProjectTransfer} from './project-transfer-tasks.js';
-import {projectPlacementLocation,checkPlacementParent} from './project-placement.js';
+import {selectedProjectPlacement,checkPlacementParent} from './project-placement.js';
 import {validateIndexedMetadata} from './catalogue-metadata.js';
 import {operationStage} from './operation-progress.js';
 // A project rename carries its existing nested owners. Only names, registry
@@ -44,9 +44,9 @@ export class ProjectRenames{
    if(prior?.phase==='cancelled'){if(prior.id===id&&prior.cancelReason==='volume')throw new AppError('STORAGE_RENAME_VOLUME');prior=null;}
    if(prior?.id===id&&!fresh){if(path.posix.basename(prior.source)!==expectedName||path.posix.basename(prior.destination)!==name||serialize(prior.settings??null)!==serialize(settings)||serialize(prior.placement??null)!==serialize(placement))throw new AppError('CONFLICT');return this.finish(prior,storage.vault,{check,checkpoint});}
    if(prior&&!fresh&&prior.phase!=='complete')throw new AppError('STORAGE_RENAMING');
-   const current=await this.registry.read(),entry=current.value.projects.find(p=>p.projectId===this.projectId);
+   const current=await this.registry.state(this.projectId),entry=current.state==='active'?current.entry:null;
    if(!entry||entry.root!==storage.root||entry.vaultId!==storage.vault?.id||path.basename(entry.root)!==expectedName)throw new AppError('CONFLICT');
-   const source=await realpath(storage.root),location=projectPlacementLocation(this.registry,current.value,entry,name,placement),destination=location.destination,parent=entry.parentId===null?this.registry.workspace.root:current.value.projects.find(p=>p.projectId===entry.parentId)?.root;
+   const source=await realpath(storage.root),location=await selectedProjectPlacement(this.registry,entry,name,placement),destination=location.destination,parent=entry.parentId===null?this.registry.workspace.root:(await this.registry.state(entry.parentId)).entry?.root;
    if(source!==storage.root||path.dirname(source)!==parent)throw new AppError('STORAGE_PATH');
    if(source===destination)return {project:entry,complete:true};
    const existing=await assertRegular(destination,{directory:true,missing:true});if(existing&&await realpath(destination)!==source)throw new AppError('EXISTS');
@@ -55,7 +55,7 @@ export class ProjectRenames{
     await projects.prepare(withProject,withBook);await books.prepare(typeof withBook==='function'?(bookId,use)=>withBook(storage,bookId,use):undefined);
     await assertRenameDatabaseOwners(source,[...books.books.map(book=>path.join(source,book.directory)),...projects.projects.flatMap(item=>{const root=nestedRenameRoot(source,item.relative);return [root,...projects.bookOwners.get(item.projectId).books.map(book=>path.join(root,book.directory))];})]);
     await projects.withStorageHandoff(()=>books.withStorageHandoff(()=>storage.withStorageHandoff(()=>projects.withDirectoryHandoff(()=>withWriterLease(path.join(source,'.observanda/lab-books.lock'),()=>withWriterLease(path.join(this.registry.workspace.root,'.observanda/project-registry.lock'),async()=>{
-     await check();const latest=await this.registry.read();if(projectPlacementLocation(this.registry,latest.value,entry,name,placement).destination!==destination)throw new AppError('CONFLICT');if(latest.revision!==projects.revision)throw new AppError('CONFLICT');const {metadata,etag}=await storage.outline();if(settings){if(settings.etag!==etag)throw new AppError('CONFLICT');await storage.catalogue(async store=>validateIndexedMetadata(store,await store.snapshot(etag),{...metadata,title:name,projects:[settings.project],entries:[]}));}
+     await check();const latest=await selectedProjectPlacement(this.registry,entry,name,placement);if(latest.destination!==destination)throw new AppError('CONFLICT');if(latest.revision!==projects.revision)throw new AppError('CONFLICT');const {metadata,etag}=await storage.outline();if(settings){if(settings.etag!==etag)throw new AppError('CONFLICT');await storage.catalogue(async store=>validateIndexedMetadata(store,await store.snapshot(etag),{...metadata,title:name,projects:[settings.project],entries:[]}));}
      if(metadata.id!==entry.namespaceId||metadata.projects[0].title!==expectedName)throw new AppError('CONFLICT');authenticateKeyring((await readAccess(source)).value,storage.vault);
      value={version:1,id,projectId:this.projectId,namespaceId:entry.namespaceId,vaultId:entry.vaultId,parentId:entry.parentId,...(placement?{placement,placementParent:{relative:relative(this.registry.workspace.root,location.parent),...directoryIdentity(await assertRegular(location.parent,{directory:true}))}}:{}),source:relative(this.registry.workspace.root,source),destination:relative(this.registry.workspace.root,destination),identity:directoryIdentity(await assertRegular(source,{directory:true})),accessHash:await fingerprint(path.join(source,'.observanda/access.json')),descriptorHash:await fingerprint(await workspaceFile(source)),phase:'prepared',settings,rootBooks:{}};
      if(fresh)await this.discardPrepared(prior,storage.vault);
@@ -130,9 +130,11 @@ export class ProjectRenames{
     const current=await store.indexed(snapshot),metadata={...current.metadata,title:name,projects:value.settings?[value.settings.project]:current.metadata.projects.map(project=>({...project,title:name}))};await store.validateMetadata(current,metadata,{records:[]});await store.commitChanges(head,current,metadata,[],{now:new Date().toISOString()});if(value.settings?.checkpoint)await discardConfigurationCheckpoint(store,{workspaceId:metadata.id,projectId:this.projectId,notebookId:null,slot:'labBookTemplate'},value.settings.checkpoint);
    })));await checkpoint('metadata',value);
    for(let attempt=0;;attempt++){
-    const current=await this.registry.read(),entries=[{projectId:this.projectId,namespaceId:value.namespaceId,vaultId:value.vaultId,relative:''},...(value.projects??[])];
-    for(const item of entries){const entry=current.value.projects.find(p=>p.projectId===item.projectId),suffix=item.relative?item.relative.split('/'):[];if(!entry||entry.namespaceId!==item.namespaceId||entry.vaultId!==item.vaultId||![path.join(scope.source,...suffix),path.join(scope.destination,...suffix)].includes(entry.root))throw new AppError('CONFLICT');}
-    try{await this.registry.change(current.revision,data=>{for(const item of entries){const entry=data.projects.find(p=>p.projectId===item.projectId);entry.root=path.join(scope.destination,...(item.relative?item.relative.split('/'):[]));if(item.projectId===this.projectId){if(value.placement){if(![value.parentId,value.placement.parentId].includes(entry.parentId))throw new AppError('CONFLICT');entry.parentId=value.placement.parentId;}if(entry.summary)entry.summary.title=name;}}return data;});break;}catch(error){if(error.code!=='CONFLICT'||attempt>=7)throw error;}
+    const entries=[{projectId:this.projectId,namespaceId:value.namespaceId,vaultId:value.vaultId,relative:''},...(value.projects??[])];
+    try{await this.registry.inspect(async view=>{
+     const changes=async function*(){for(const item of entries){const selected=await view.get(item.projectId),entry=selected?.state==='active'?selected.entry:null,suffix=item.relative?item.relative.split('/'):[];if(!entry||entry.namespaceId!==item.namespaceId||entry.vaultId!==item.vaultId||![path.join(scope.source,...suffix),path.join(scope.destination,...suffix)].includes(entry.root))throw new AppError('CONFLICT');entry.root=path.join(scope.destination,...suffix);if(item.projectId===value.projectId){if(value.placement){if(![value.parentId,value.placement.parentId].includes(entry.parentId))throw new AppError('CONFLICT');entry.parentId=value.placement.parentId;}if(entry.summary)entry.summary.title=name;}yield {state:'active',entry};}};
+     await this.registry.applyBatch(view.revision,changes());
+    });break;}catch(error){if(error.code!=='CONFLICT'||attempt>=7)throw error;}
    }
    if(value.version===2){value.phase='registered';await this.save(value);}
    await checkpoint('registered',value);if(value.version===2)await transfer.retire();value.phase='complete';await this.save(value);await checkpoint('complete',value);await this.clear(root,value);return {id:value.id,project:await this.registry.locate(this.projectId),complete:true};
@@ -141,8 +143,8 @@ export class ProjectRenames{
  async cancelFrozen(value,vault,{check=async()=>{},checkpoint=async()=>{}}={}){
   const scope=this.scope(value),root=await locateProjectRename(this.registry,value);if(root!==scope.source||value.cancelReason!=='volume')throw new AppError('STORAGE_RENAME_STATE');
   authenticateKeyring((await readAccess(root)).value,vault);await check();
-  const current=await this.registry.read(),owners=[{projectId:this.projectId,namespaceId:value.namespaceId,vaultId:value.vaultId,relative:''},...(value.projects??[])];
-  for(const item of owners){const entry=current.value.projects.find(p=>p.projectId===item.projectId);if(!entry||entry.root!==path.join(root,...(item.relative?item.relative.split('/'):[]))||entry.namespaceId!==item.namespaceId||entry.vaultId!==item.vaultId||item.projectId===this.projectId&&entry.parentId!==value.parentId)throw new AppError('STORAGE_RENAME_STATE');}
+  const owners=[{projectId:this.projectId,namespaceId:value.namespaceId,vaultId:value.vaultId,relative:''},...(value.projects??[])];
+  await this.registry.inspect(async view=>{for(const item of owners){const selected=await view.get(item.projectId),entry=selected?.state==='active'?selected.entry:null;if(!entry||entry.root!==path.join(root,...(item.relative?item.relative.split('/'):[]))||entry.namespaceId!==item.namespaceId||entry.vaultId!==item.vaultId||item.projectId===this.projectId&&entry.parentId!==value.parentId)throw new AppError('STORAGE_RENAME_STATE');}});
   await clearRenamedProjects(root,scope,{atSource:true});await checkpoint('cancel-projects-cleared',value);
   await clearRenamedBooks(root,{...value.rootBooks,projectId:this.projectId},scope,RENAME_BOOK_KEYS_FILE);await checkpoint('cancel-books-cleared',value);
   const marker=await workspaceRename(root);if(marker){if(marker.id!==value.id||marker.source!==root||marker.destination!==scope.destination)throw new AppError('STORAGE_RENAME_STATE');await unlink(path.join(root,RENAME_MARKER));}await checkpoint('cancel-unfrozen',value);

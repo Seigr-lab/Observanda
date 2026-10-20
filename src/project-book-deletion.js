@@ -14,13 +14,13 @@ import {AppError} from './errors.js';
 export class ProjectBookDeletion extends ProjectBookOwners{
  constructor(project){super(project,{busyCode:'STORAGE_DELETE_BUSY',missingAccessCode:'ACCESS_LOCKED'});}
  async persist(id,value){
-  await this.ready();if((await this.registry.read()).revision!==this.revision)throw new AppError('CONFLICT');
+  await this.ready();if(await this.registry.version()!==this.revision)throw new AppError('CONFLICT');
   if(!this.books.length)return;value.books=this.books;value.bookRegistryRevision=this.revision;
   if(this.books.length)value.bookKeysHash=await saveOwnerKeys(this.project,id,this.keys,DELETE_BOOK_KEYS_FILE);
  }
  async load(value){
   this.books=validateRenameBooks(value.books??[]);if(!this.books.length)return;
-  if((await this.registry.read()).revision!==value.bookRegistryRevision)throw new AppError('STORAGE_DELETE_STATE');
+  if(await this.registry.version()!==value.bookRegistryRevision)throw new AppError('STORAGE_DELETE_STATE');
   this.keys=await loadOwnerKeys(this.project,value.id,value.bookKeysHash,DELETE_BOOK_KEYS_FILE);
   if(this.keys.size!==this.books.length||this.books.some(book=>this.keys.get(book.labBookId)?.id!==book.vaultId))throw new AppError('STORAGE_DELETE_STATE');
  }

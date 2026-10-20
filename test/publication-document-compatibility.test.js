@@ -37,7 +37,7 @@ function expected(features){return {domains:features.owners>=1,settings:features
 
 test('publication admission and every existing feature transition preserve all 24 owner combinations',async()=>{
  const transitions=[[formats.requireWorkspaceDomains,{owners:1}],[formats.requireProjectDomains,{owners:1}],[formats.requireWorkspaceSettings,{owners:2}],[formats.requireWebsiteDocuments,{website:1}],[formats.requireWebsiteEditor,{website:2}],[formats.requireWebsitePresentation,{website:3}],[formats.requireStagedEvidence,{staged:true}]];
- const olderAdmissions=Object.entries(formats).filter(([name])=>name.startsWith('require')&&!transitions.some(([admit])=>admit===formats[name])&&!['requirePublicationDocuments','requireRecordOwnerTransfers','requireConfigurationDocuments','requireSourcePublicationControls','requireWebsiteSourceSelections','requireNestedAttemptCollections'].includes(name)).map(([,admit])=>admit);
+ const olderAdmissions=Object.entries(formats).filter(([name])=>name.startsWith('require')&&!transitions.some(([admit])=>admit===formats[name])&&!['requirePublicationDocuments','requireRecordOwnerTransfers','requireConfigurationDocuments','requireSourcePublicationControls','requireWebsiteSourceSelections','requireNestedAttemptCollections','requireOwnerDirectories'].includes(name)).map(([,admit])=>admit);
  const generations=new Set();
  for(const features of combinations){
   const generation=formats.publicationCatalogueGeneration(features);generations.add(generation);
@@ -139,8 +139,8 @@ test('configuration documents preserve all 96 capability combinations in either 
   await formats.requireConfigurationDocuments(db);assert.deepEqual(requirements(db.version),before);assert.equal(formats.catalogueRequiresPublicationDocuments(db.version),publication);assert.equal(formats.catalogueRequiresRecordOwnerTransfers(db.version),transfers);
  }
  const oldProject=database(23,{optionalDomains:true});await formats.requireConfigurationDocuments(oldProject);assert.equal(formats.catalogueRequiresDomains(oldProject.version),true);
- for(const invalid of [121,890,122.5,null]){assert.equal(formats.catalogueRequiresConfigurationDocuments(invalid),false);await assert.rejects(formats.restoreConfigurationCatalogueFormat(database(3),invalid),{code:'CATALOGUE_DAMAGED'});}
- await assert.rejects(formats.catalogueFormat(database(890)),{code:'CATALOGUE_DAMAGED'});
+ for(const invalid of [121,1658,122.5,null]){assert.equal(formats.catalogueRequiresConfigurationDocuments(invalid),false);await assert.rejects(formats.restoreConfigurationCatalogueFormat(database(3),invalid),{code:'CATALOGUE_DAMAGED'});}
+ await assert.rejects(formats.catalogueFormat(database(1658)),{code:'CATALOGUE_DAMAGED'});
 });
 
 test('archive 15 restores every configuration capability combination and rejects header downgrades',async()=>{
@@ -150,7 +150,7 @@ test('archive 15 restores every configuration capability combination and rejects
   await writeCatalogueArchive(database(version,{payload,domains}),{writeFile:async text=>parts.push(text)},tables,{observe:false});
   const raw=parts.join(''),lines=raw.trimEnd().split('\n'),header=JSON.parse(lines[0]);assert.equal(header.version,15);assert.equal(header.catalogueVersion,version);assert.deepEqual(header.domains,domains);
   const restored=database(3);await readCatalogueStream(Readable.from([Buffer.from(raw)]),restored,tables);assert.equal(restored.version,version);assert.deepEqual(restored.inserted,[['head',payload]]);
-  for(const change of [{version:14},{version:13},{catalogueVersion:121},{catalogueVersion:890},{domains:ordinary.owners?[]:['tasks']}]){
+  for(const change of [{version:14},{version:13},{catalogueVersion:121},{catalogueVersion:1658},{domains:ordinary.owners?[]:['tasks']}]){
    const damaged=JSON.stringify({...header,...change})+'\n'+lines.slice(1).join('\n')+'\n';await assert.rejects(readCatalogueStream(Readable.from([Buffer.from(damaged)]),database(3),tables),{code:'CATALOGUE_DAMAGED'});
   }
  }
@@ -183,7 +183,7 @@ test('paged website choices preserve all 192 prior capability combinations throu
   }
  }
  assert.deepEqual([...seen],Array.from({length:192},(_,i)=>314+i));
- const invalid=database(890);await assert.rejects(formats.catalogueFormat(invalid),{code:'CATALOGUE_DAMAGED'});
+ const invalid=database(1658);await assert.rejects(formats.catalogueFormat(invalid),{code:'CATALOGUE_DAMAGED'});
 });
 
 
@@ -216,5 +216,38 @@ test('nested preparation admission preserves all 384 prior combinations through 
  }
  assert.deepEqual([...seen],Array.from({length:384},(_,i)=>506+i));
  for(const nestedAttempts of [null,1,'true',{}])assert.throws(()=>formats.configurationCatalogueGeneration({...formats.configurationCatalogueFeatures(122),nestedAttempts}),{code:'INVALID'});
- for(const invalid of [890,506.5,null])await assert.rejects(formats.catalogueFormat(database(invalid)),{code:'CATALOGUE_DAMAGED'});
+ for(const invalid of [1658,506.5,null])await assert.rejects(formats.catalogueFormat(database(invalid)),{code:'CATALOGUE_DAMAGED'});
+});
+
+test('native directory admission preserves all 768 prior combinations through owner upgrades and archive restoration',async()=>{
+ const transitions=[[formats.requireWorkspaceDomains,{owners:1}],[formats.requireProjectDomains,{owners:1}],[formats.requireWorkspaceSettings,{owners:2}],[formats.requireWebsiteDocuments,{website:1}],[formats.requireWebsiteEditor,{website:2}],[formats.requireWebsitePresentation,{website:3}],[formats.requireStagedEvidence,{staged:true}],[formats.requirePublicationDocuments,{publication:true}],[formats.requireRecordOwnerTransfers,{transfers:true}],[formats.requireSourcePublicationControls,{permissions:true}],[formats.requireWebsiteSourceSelections,{sourceSelections:true}],[formats.requireNestedAttemptCollections,{nestedAttempts:true}]];
+ const payload=seal(Buffer.from('Retained native directory and adoption receipt'),randomBytes(32),'test'),tables={state:['slot','payload']},seen=new Set();
+ for(let previous=122;previous<=889;previous++){
+  const features=formats.configurationCatalogueFeatures(previous),db=database(previous),next={...features,ownerDirectories:true};
+  assert.equal(formats.catalogueRequiresOwnerDirectories(previous),false);
+  await formats.requireOwnerDirectories(db);const generation=db.version;seen.add(generation);
+  assert.equal(generation,previous+768);assert.deepEqual(formats.configurationCatalogueFeatures(generation),next);
+  assert.deepEqual(requirements(generation),requirements(previous));
+  assert.equal(formats.catalogueRequiresSourcePublicationControls(generation),features.permissions===true);
+  assert.equal(formats.catalogueRequiresWebsiteSourceSelections(generation),features.sourceSelections===true);
+  assert.equal(formats.catalogueRequiresNestedAttemptCollections(generation),features.nestedAttempts===true);
+  await formats.requireOwnerDirectories(db);assert.equal(db.version,generation);
+  for(const [admit,change] of transitions){
+   const changing=database(generation);await admit(changing);
+   const expected={...next,...change,website:Math.max(next.website,change.website??0),owners:Math.max(next.owners,change.owners??0)};
+   assert.deepEqual(formats.configurationCatalogueFeatures(changing.version),expected);await admit(changing);assert.equal(changing.version,formats.configurationCatalogueGeneration(expected));
+   const reverse=database(previous);await admit(reverse);await formats.requireOwnerDirectories(reverse);assert.equal(reverse.version,changing.version);
+  }
+  const domains=features.owners?['tasks']:[],parts=[];
+  await writeCatalogueArchive(database(generation,{payload,domains}),{writeFile:async text=>parts.push(text)},tables,{observe:false});
+  const raw=parts.join(''),header=JSON.parse(raw.split('\n')[0]);assert.equal(header.version,15);assert.equal(header.catalogueVersion,generation);
+  const restored=database(3);await readCatalogueStream(Readable.from([Buffer.from(raw)]),restored,tables);
+  assert.equal(restored.version,generation);assert.deepEqual(restored.inserted,[['head',payload]]);
+  for(const restore of [formats.restoreConfigurationCatalogueFormat,...(features.publication?[formats.restorePublicationCatalogueFormat]:[]),...(features.transfers?[formats.restoreRecordOwnerTransferCatalogueFormat]:[])]){
+   const target=database(3);await restore(target,generation);assert.equal(target.version,generation);
+  }
+ }
+ assert.deepEqual([...seen],Array.from({length:768},(_,i)=>890+i));
+ for(const ownerDirectories of [null,1,'true',{}])assert.throws(()=>formats.configurationCatalogueGeneration({...formats.configurationCatalogueFeatures(122),ownerDirectories}),{code:'INVALID'});
+ for(const invalid of [1658,506.5,null])await assert.rejects(formats.catalogueFormat(database(invalid)),{code:'CATALOGUE_DAMAGED'});
 });

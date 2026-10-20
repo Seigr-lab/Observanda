@@ -47,10 +47,10 @@ export class LabBookLocationAccess{
  // An interrupted move may have completed copying before this transfer session
  // opened. Recover only its caller's live explicit grants, never recovery keys.
  async moved(project,source,parent){
-  const registry=new LabBookRegistry(project),current=await registry.read(),session=this.application.session(this.client);
-  for(const book of current.value.books){
-   const id='book:'+project.projectId+':'+book.labBookId;if(this.grants.has(id))continue;
-   const saved=session.get(id),entry=registry.location(book),previous=path.join(source,book.directory);
+  const registry=new LabBookRegistry(project),session=this.application.session(this.client),prefix='book:'+project.projectId+':';
+  await registry.inspect(async view=>{for(const [id,saved] of session){
+   if(!id.startsWith(prefix)||this.grants.has(id)||!saved?.vault||saved.locked||saved.expires<=Date.now())continue;
+   const row=await view.get(id.slice(prefix.length));if(row?.state!=='active')continue;const book=row.entry,entry=registry.location(book),previous=path.join(source,book.directory);
    if(!saved?.vault||saved.locked||saved.expires<=Date.now()||saved.vault.id!==book.vaultId||![previous,entry.root].includes(saved.root))continue;
    const access=new LabBookAccessSession(this.application,this.client,project,book.labBookId,()=>parent.check());await access.check();
    const keyring=await readAccess(entry.root);if(keyring.etag!==saved.etag)continue;authenticateKeyring(keyring.value,saved.vault);
@@ -59,7 +59,7 @@ export class LabBookLocationAccess{
    await access.check();const owner={projectId:project.projectId,id:book.labBookId,parent,entry,access,etag:keyring.etag,vault:cloneVault(saved.vault)};
    clearVault(this.owners.get(id)?.vault);this.owners.set(id,owner);
    this.grants.set(id,{root:entry.root,namespaceId:book.namespaceId,etag:keyring.etag,vault:cloneVault(saved.vault),expires:Math.min(saved.expires,parent.sessionEntry?.expires??Infinity)});
-  }
+  }});
  }
  async renamed(receipt,source,destination){
   for(const [id,owner] of this.owners){

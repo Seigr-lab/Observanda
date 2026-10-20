@@ -93,7 +93,7 @@ export async function requireFigureCopyDrafts(db){return requireCatalogueFormat(
 async function requireCatalogueFormat(db,version){
  if(await catalogueFormat(db)>=version)return;
  await db.run('ALTER TABLE catalogue_format DROP CONSTRAINT catalogue_format_version_check');
- await db.run('ALTER TABLE catalogue_format ADD CONSTRAINT catalogue_format_version_check CHECK(version BETWEEN 3 AND 889)');
+ await db.run('ALTER TABLE catalogue_format ADD CONSTRAINT catalogue_format_version_check CHECK(version BETWEEN 3 AND 1657)');
  await db.run('UPDATE catalogue_format SET version=$1 WHERE version<$1',version);
 }
 
@@ -173,13 +173,13 @@ export async function restoreRecordOwnerTransferCatalogueFormat(db,format){
 // additionally require publication permissions, paged website source choices
 // and nested preparation collections before an older app can open the catalogue.
 export function configurationCatalogueFeatures(format){
- if(!Number.isInteger(format)||format<122||format>889)return null;
- const value=(format-122)%24;return {website:Math.floor(value/6),staged:value%6>=3,owners:value%3,publication:(format-122)%48>=24,transfers:(format-122)%96>=48,...((format-122)%192>=96?{permissions:true}:{}),...((format-122)%384>=192?{sourceSelections:true}:{}),...(format>=506?{nestedAttempts:true}:{})};
+ if(!Number.isInteger(format)||format<122||format>1657)return null;
+ const value=(format-122)%24;return {website:Math.floor(value/6),staged:value%6>=3,owners:value%3,publication:(format-122)%48>=24,transfers:(format-122)%96>=48,...((format-122)%192>=96?{permissions:true}:{}),...((format-122)%384>=192?{sourceSelections:true}:{}),...((format-122)%768>=384?{nestedAttempts:true}:{}),...(format>=890?{ownerDirectories:true}:{})};
 }
 export const catalogueRequiresConfigurationDocuments=format=>configurationCatalogueFeatures(format)!==null;
-export function configurationCatalogueGeneration({website,staged,owners,publication,transfers,permissions=false,sourceSelections=false,nestedAttempts=false}){
- if(typeof publication!=='boolean'||typeof transfers!=='boolean'||typeof permissions!=='boolean'||typeof sourceSelections!=='boolean'||typeof nestedAttempts!=='boolean')throw new AppError('INVALID');
- return publicationCatalogueGeneration({website,staged,owners})+72+(publication?24:0)+(transfers?48:0)+(permissions?96:0)+(sourceSelections?192:0)+(nestedAttempts?384:0);
+export function configurationCatalogueGeneration({website,staged,owners,publication,transfers,permissions=false,sourceSelections=false,nestedAttempts=false,ownerDirectories=false}){
+ if(typeof publication!=='boolean'||typeof transfers!=='boolean'||typeof permissions!=='boolean'||typeof sourceSelections!=='boolean'||typeof nestedAttempts!=='boolean'||typeof ownerDirectories!=='boolean')throw new AppError('INVALID');
+ return publicationCatalogueGeneration({website,staged,owners})+72+(publication?24:0)+(transfers?48:0)+(permissions?96:0)+(sourceSelections?192:0)+(nestedAttempts?384:0)+(ownerDirectories?768:0);
 }
 export async function requireConfigurationDocuments(db){
  const previous=await catalogueFormat(db);if(catalogueRequiresConfigurationDocuments(previous))return;
@@ -191,7 +191,7 @@ export async function restoreConfigurationCatalogueFormat(db,format){
  const features=configurationCatalogueFeatures(format);if(!features)throw new AppError('CATALOGUE_DAMAGED');
  if(features.owners===2)await requireWorkspaceSettings(db);else if(features.owners===1)await requireWorkspaceDomains(db);
  if(features.website===3)await requireWebsitePresentation(db);else if(features.website===2)await requireWebsiteEditor(db);else if(features.website===1)await requireWebsiteDocuments(db);
- if(features.staged)await requireStagedEvidence(db);if(features.publication)await requirePublicationDocuments(db);if(features.transfers)await requireRecordOwnerTransfers(db);await requireConfigurationDocuments(db);if(features.permissions)await requireSourcePublicationControls(db);if(features.sourceSelections)await requireWebsiteSourceSelections(db);if(features.nestedAttempts)await requireNestedAttemptCollections(db);
+ if(features.staged)await requireStagedEvidence(db);if(features.publication)await requirePublicationDocuments(db);if(features.transfers)await requireRecordOwnerTransfers(db);await requireConfigurationDocuments(db);if(features.permissions)await requireSourcePublicationControls(db);if(features.sourceSelections)await requireWebsiteSourceSelections(db);if(features.nestedAttempts)await requireNestedAttemptCollections(db);if(features.ownerDirectories)await requireOwnerDirectories(db);
  if(await catalogueFormat(db)!==format)throw new AppError('CATALOGUE_DAMAGED');
 }
 
@@ -215,4 +215,12 @@ export const catalogueRequiresNestedAttemptCollections=format=>configurationCata
 export async function requireNestedAttemptCollections(db){
  await requireConfigurationDocuments(db);const features=configurationCatalogueFeatures(await catalogueFormat(db));
  if(!features.nestedAttempts)await requireCatalogueFormat(db,configurationCatalogueGeneration({...features,nestedAttempts:true}));
+}
+
+// Native owner directories authenticate indexed membership and adoption receipts
+// in the existing catalogue. The marker and verifier must agree before use.
+export const catalogueRequiresOwnerDirectories=format=>configurationCatalogueFeatures(format)?.ownerDirectories===true;
+export async function requireOwnerDirectories(db){
+ await requireConfigurationDocuments(db);const features=configurationCatalogueFeatures(await catalogueFormat(db));
+ if(!features.ownerDirectories)await requireCatalogueFormat(db,configurationCatalogueGeneration({...features,ownerDirectories:true}));
 }

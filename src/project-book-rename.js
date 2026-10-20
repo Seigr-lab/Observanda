@@ -19,12 +19,12 @@ const hash=async file=>digest(await readFile(file));
 export class ProjectBookRename extends ProjectBookOwners{
  constructor(project,{keyFile=RENAME_KEYS_FILE}={}){super(project);this.keyFile=keyFile;}
  async persist(id,item){
-  await this.ready();if((await this.registry.read()).revision!==this.revision)throw new AppError('CONFLICT');
+  await this.ready();if(await this.registry.version()!==this.revision)throw new AppError('CONFLICT');
   if(!this.books.length)return;item.books=this.books;item.bookRegistryRevision=this.revision;item.bookKeysHash=await saveRenameKeys(this.project,id,this.keys,this.keyFile);
  }
  async load(id,item){
   this.books=item.books??[];if(!this.books.length)return;
-  validateRenameBooks(this.books);if((await this.registry.read()).revision!==item.bookRegistryRevision)throw new AppError('STORAGE_RENAME_STATE');
+  validateRenameBooks(this.books);if(await this.registry.version()!==item.bookRegistryRevision)throw new AppError('STORAGE_RENAME_STATE');
   this.keys=await loadRenameKeys(this.project,id,item.bookKeysHash,this.keyFile);
   if(this.keys.size!==this.books.length||this.books.some(book=>this.keys.get(book.labBookId)?.id!==book.vaultId))throw new AppError('STORAGE_RENAME_STATE');
  }

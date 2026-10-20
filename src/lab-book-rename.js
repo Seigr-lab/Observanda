@@ -114,10 +114,10 @@ export class LabBookRenames{
     if(value.settings?.checkpoint)await discardConfigurationCheckpoint(store,{workspaceId:metadata.id,projectId:value.projectId,notebookId:value.labBookId,slot:'configuration'},value.settings.checkpoint);
    }));await checkpoint('metadata',value);
    for(let attempt=0;;attempt++){
-    const current=await this.registry.read(),entry=current.value.books.find(book=>book.labBookId===value.labBookId);
+    const current=await this.registry.state(value.labBookId),entry=current.state==='active'?current.entry:null;
     if(!entry||entry.namespaceId!==value.namespaceId||entry.vaultId!==value.vaultId||![value.source,value.destination].includes(entry.directory))throw new AppError('CONFLICT');
     if(entry.directory===value.destination)break;
-    try{await this.registry.change(current.revision,data=>({...data,books:data.books.map(book=>book.labBookId===value.labBookId?{...book,directory:value.destination}:book)}));break;}catch(error){if(error.code!=='CONFLICT'||attempt>=7)throw error;}
+    try{await this.registry.apply(current.revision,[{state:'active',entry:{...entry,directory:value.destination}}]);break;}catch(error){if(error.code!=='CONFLICT'||attempt>=7)throw error;}
    }
    await checkpoint('registered',value);value.phase='complete';await this.save(value);await checkpoint('complete',value);
    if((await workspaceRename(root))?.id!==value.id)throw new AppError('STORAGE_RENAME_STATE');await unlink(path.join(root,RENAME_MARKER));await this.clearPointer(value);

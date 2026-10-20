@@ -17,7 +17,7 @@ import {createNotebook} from '../src/model.js';
 import {sampleNotebook} from '../src/sample.js';
 import {createWorkspaceAccess,takeCreatedVault,readAccess,verifyAccess} from '../src/access.js';
 import {clearVault} from '../src/encryption.js';
-import {Workspace,workspaceFile} from '../src/storage.js';
+import {Workspace,workspaceFile,serialize} from '../src/storage.js';
 import {initializeProjectLocation} from '../src/project-storage.js';
 import {LabBookStorage} from '../src/lab-book-storage.js';
 import {ProjectRegistry} from '../src/project-registry.js';
@@ -83,7 +83,7 @@ test('fresh-key HTTP copy resumes exact credentials and includes contained and e
  const plan=await api.call('/api/storage/copy/preview',{path:destination});
  const first=await api.result('/api/storage/encrypt',{id:plan.id,reviewed:true,password:newPassword});assert.notEqual(first.status,200);assert.equal(interrupted,true,JSON.stringify(first));fault.mock.restore();
  await assert.rejects(inspectLocation(destination),{code:'STORAGE_INCOMPLETE'});
- const pending=await new WorkspaceCopyRecovery(f.workspace,destination).read(),retainedAccess=await readAccess(destination);assert.equal(pending.version,3);assert.equal(pending.plan.encrypted,true);assert.notEqual(retainedAccess.value.vaultId,f.vault.id);
+ const pending=await new WorkspaceCopyRecovery(f.workspace,destination).read(),retainedAccess=await readAccess(destination);assert.equal(pending.version,4);assert.equal(pending.transfers,undefined);assert.equal(pending.plan.projectRoots,undefined);assert.ok(Buffer.byteLength(serialize(pending))<16384);assert.equal(pending.plan.encrypted,true);assert.notEqual(retainedAccess.value.vaultId,f.vault.id);
  await server.close();server=null;api=await open(f.workspace.root);
  for(const owner of projects)await api.call(projectRoute(owner.projectId)+'/access/unlock',{username:'',password});
  for(const book of books)await api.call(bookRoute(book)+'/access/unlock',{username:'',password});

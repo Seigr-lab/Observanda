@@ -65,9 +65,10 @@ export class LabBookDeletions extends OwnedStorageDeletions{
    }else if(value&&value.phase!=='complete')throw new AppError('STORAGE_DELETE_BUSY');
    const entry=await this.registry.locate(this.labBookId);if(entry.directory!==expectedName)throw new AppError('CONFLICT');
    if(await new LabBookRenames(this.project).pending(this.labBookId))throw new AppError('STORAGE_RENAMING');
-   const storage=new LabBookStorage(entry.root,this.labBookId,vault),siblings=(await this.registry.read()).value.books.filter(book=>book.labBookId!==this.labBookId).map(book=>this.registry.location(book).root);
+   // Registry names are unique direct children; ready() rechecks that exact placement.
+   const storage=new LabBookStorage(entry.root,this.labBookId,vault);
    await this.ready(storage,await this.binding(entry.root));
-   const review={...await this.review(storage,{protectedPaths:[this.project.root,...siblings]}),projectId:this.project.projectId,labBookId:this.labBookId,namespaceId:entry.namespaceId,vaultId:entry.vaultId,directory:entry.directory};
+   const review={...await this.review(storage,{protectedPaths:[this.project.root]}),projectId:this.project.projectId,labBookId:this.labBookId,namespaceId:entry.namespaceId,vaultId:entry.vaultId,directory:entry.directory};
    await check();return {...await this.begin(storage,review,{id,checkpoint,onProgress}),labBookId:this.labBookId};
   }));
  }

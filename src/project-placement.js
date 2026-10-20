@@ -16,9 +16,15 @@ export function projectPlacementLocation(registry,directory,entry,name,placement
  if(placement&&destination!==entry.root&&(relative===''||relative!=='..'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative)))throw new AppError('STORAGE_PATH');
  return {parentId,parent,destination};
 }
+export function selectedProjectPlacement(registry,entry,name,placement){
+ return registry.inspect(async view=>{
+  const parentId=placement?.parentId??(placement?null:entry.parentId),projects=parentId===null?[]:await view.ancestors(parentId);
+  return {...projectPlacementLocation(registry,{projects},entry,name,placement),revision:view.revision};
+ });
+}
 export async function checkPlacementParent(registry,value){
  if(!value.placement)return;
- const directory=(await registry.read()).value,parent=value.placement.parentId===null?registry.workspace.root:directory.projects.find(item=>item.projectId===value.placement.parentId)?.root;
+ const selected=value.placement.parentId===null?null:await registry.state(value.placement.parentId),parent=value.placement.parentId===null?registry.workspace.root:selected?.state==='active'?selected.entry.root:null;
  if(!parent||path.relative(registry.workspace.root,parent).split(path.sep).join('/')!==value.placementParent.relative)throw new AppError('STORAGE_RENAME_STATE');
  const stat=await assertRegular(parent,{directory:true});if(String(stat.dev)!==value.placementParent.dev||String(stat.ino)!==value.placementParent.ino)throw new AppError('STORAGE_RENAME_STATE');
 }

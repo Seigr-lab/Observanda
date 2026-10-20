@@ -1,3 +1,4 @@
+import {inspectArchivedOwnerDirectory} from './owner-directory-archive.js';
 // Discover the selected physical tree through owner descriptors and encrypted
 // membership. No workspace database or unrelated project payload is consulted.
 import path from 'node:path';
@@ -42,16 +43,19 @@ export class ProjectImportInventory{
   const first=await this.owner(root,'','project'),owners=[first.entry],projects=[],queue=[{...first,parentId:null}],namespaces=new Set([first.entry.namespaceId]),ids=new Set([first.entry.projectId]);
   const admit=entry=>{if(owners.length>=8192||namespaces.has(entry.namespaceId)||ids.has(entry.kind==='project'?entry.projectId:entry.labBookId))throw new AppError('STORAGE_COPY');namespaces.add(entry.namespaceId);ids.add(entry.kind==='project'?entry.projectId:entry.labBookId);owners.push(entry);};
   for(let index=0;index<queue.length;index++){
-   const current=queue[index],relative=current.entry.relative,listed=(await new LabBookRegistry(current.storage).read()).value.books;
-   for(const book of listed){const childRelative=[relative,book.directory].filter(Boolean).join('/'),bookOwner=await this.owner(path.join(current.storage.root,book.directory),childRelative,'lab-book',book);bookOwner.entry.projectId=current.entry.projectId;admit(bookOwner.entry);}
+   const current=queue[index],relative=current.entry.relative,registry=new LabBookRegistry(current.storage);
+   const inspect=operation=>current.entry.archiveDigest?inspectArchivedOwnerDirectory(registry,current.entry.archiveDigest,operation):registry.inspect(operation);
+   await inspect(async listed=>{
+   for await(const {entry:book} of listed.entries()){const childRelative=[relative,book.directory].filter(Boolean).join('/'),bookOwner=await this.owner(path.join(current.storage.root,book.directory),childRelative,'lab-book',book);bookOwner.entry.projectId=current.entry.projectId;admit(bookOwner.entry);}
    for(const folder of (await readdir(current.storage.root,{withFileTypes:true})).sort((a,b)=>a.name.localeCompare(b.name))){
-    if(folder.name==='.observanda'||listed.some(book=>book.directory===folder.name))continue;
+    if(folder.name==='.observanda'||(await listed.get(listed.nameKey(folder.name),{index:'location'}))?.state==='active')continue;
     if(!folder.isDirectory()&&!folder.isSymbolicLink())continue;
     const childRoot=path.join(current.storage.root,folder.name);await assertRegular(childRoot,{directory:true});
     if(!await assertRegular(path.join(childRoot,'.observanda/access.json'),{missing:true}))continue;
     if(queue.length>=4096)throw new AppError('LIMIT');const childRelative=[relative,folder.name].filter(Boolean).join('/'),child=await this.owner(childRoot,childRelative,'project');admit(child.entry);child.parentId=current.entry.projectId;queue.push(child);
     projects.push({projectId:child.entry.projectId,namespaceId:child.entry.namespaceId,vaultId:child.entry.vaultId,parentId:child.parentId,relative:childRelative});
    }
+   });
   }
   const manifest=validateProjectTree({version:1,projectId:first.entry.projectId,namespaceId:first.entry.namespaceId,vaultId:first.entry.vaultId,projects}),retained=first.entry.archiveDigest?await readProjectTree(first.storage,first.entry):null;
   if(retained&&serialize(retained)!==serialize(manifest))throw new AppError('STORAGE_COPY');return {manifest,owners};

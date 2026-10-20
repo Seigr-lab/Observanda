@@ -1,3 +1,4 @@
+import {projectRegistryDescendantPrefix} from './project-registry-locations.js';
 import {ProjectBookCopy} from './project-book-copy.js';
 import {ProjectBookMove,validateMoveBooks,clearMoveBookKeys} from './project-book-move.js';
 import {requireStorageName,storageFolderName} from './storage-names.js';
@@ -59,7 +60,7 @@ export class ProjectMoves{
     if(workspaceMoveId!==undefined&&value.workspaceMoveId===undefined){value.workspaceMoveId=workspaceMoveId;await this.save(value);}
    }else{
     if(resume||adoptOnly)throw new AppError('NOT_FOUND');
-    const destination=await resolveLocation(input),source=await realpath(entry.root),members=(await this.registry.read()).value.projects;
+    const destination=await resolveLocation(input),source=await realpath(entry.root),members=await this.registry.inspect(async view=>{const selected=new Map([[entry.projectId,entry]]);for await(const row of view.entries({index:'location',prefix:projectRegistryDescendantPrefix(source,this.workspace.root)}))selected.set(row.entry.projectId,row.entry);for(const row of (await view.page({index:'location',prefix:projectRegistryDescendantPrefix(destination,this.workspace.root),limit:1})).items)selected.set(row.entry.projectId,row.entry);for(let parent=destination;;parent=path.dirname(parent)){const row=await view.get(this.registry.locationKey(parent),{index:'location'});if(row)selected.set(row.entry.projectId,row.entry);if(parent===path.dirname(parent))break;}for(const parent of destinationParents){const row=await view.get(this.registry.locationKey(parent),{index:'location'});if(row)selected.set(row.entry.projectId,row.entry);}return [...selected.values()];});
     if(within(source,destination)||within(destination,source)||within(this.workspace.root,destination)||within(destination,this.workspace.root)||members.some(item=>item.projectId!==projectId&&(within(destination,item.root)||within(item.root,destination)&&!destinationParents.includes(item.root))))throw new AppError('STORAGE_PATH');
     for(const parent of destinationParents){if(!members.some(item=>item.root===parent)||!within(parent,destination)||parent===destination||['.observanda/postgresql','.observanda/database-transition'].some(relative=>within(path.join(parent,relative),destination)))throw new AppError('STORAGE_PATH');}
     const boundaries=projectCopyBoundaries(source,projectCopyRoots(source,members)),books=new ProjectBookCopy(new ProjectStorage(source,projectId,vault));
@@ -76,7 +77,7 @@ export class ProjectMoves{
    const adopt=async()=>operationStage('activate-destination',{},async()=>{
     await checkTarget();
     for(let attempt=0;;attempt++){
-     const current=await this.registry.read(),registered=current.value.projects.find(item=>item.projectId===projectId);
+     const current=await this.registry.state(projectId),registered=current.state==='active'?current.entry:null;
      if(registered?.vaultId!==value.vaultId||registered.namespaceId!==value.namespaceId)throw new AppError('CONFLICT');
      if(registered.root===value.destination)break;if(registered.root!==value.source)throw new AppError('CONFLICT');
      try{await this.registry.relocate(target,{from:value.source,expected:current.revision});break;}catch(error){if(error.code!=='CONFLICT'||attempt>=7)throw error;}

@@ -12,6 +12,9 @@ import path from 'node:path';import os from 'node:os';import {randomUUID} from '
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {ProjectStorage,initializeProjectLocation} from '../src/project-storage.js';
 import {Workspace,atomicWrite,serialize} from '../src/storage.js';
+import {inspectArchivedOwnerDirectory} from '../src/owner-directory-archive.js';
+import {hashWorkspaceFile} from '../src/workspace-inventory.js';
+import {WorkspaceCopyRecovery} from '../src/workspace-copy-recovery.js';
 import {WorkspaceProjectCopy} from '../src/workspace-project-copy.js';
 import {ProjectRegistry} from '../src/project-registry.js';
 import {WorkspaceDatabases} from '../src/workspace-databases.js';
@@ -38,10 +41,12 @@ test('portable workspace archives include external and nested projects with inde
  const plan=await bundle().plan(destination,{portable:true,inspect:false});assert.equal(plan.portable,true);assert.equal(plan.projectPlacement,2);
  await assert.rejects(bundle().copy(plan),/Portable export interrupted/);await assert.rejects(bundle().plan(destination,{inspect:false}),{code:'CONFLICT'});
  await bundle().copy(await bundle().plan(destination,{portable:true,inspect:false}));
- const exported=new Workspace(destination,f.vault),saved=new ProjectRegistry(exported,registry.workspaceId),locations=(await saved.read()).value.projects;
+ const exported=new Workspace(destination,f.vault),saved=new ProjectRegistry(exported,registry.workspaceId),locations=await inspectArchivedOwnerDirectory(saved,await hashWorkspaceFile(path.join(destination,CATALOGUE_ARCHIVE),{reportProgress:false}),async view=>(await Array.fromAsync(view.entries())).map(row=>row.entry));
+ const receipt=await new WorkspaceCopyRecovery(f.workspace,destination).read();assert.equal(receipt.version,4);assert.equal(receipt.directory.revision,receipt.plan.projectRegistryRevision);assert.equal(receipt.transfers,undefined);assert.equal(receipt.adoptions,undefined);assert.equal(receipt.plan.projectRoots,undefined);assert.ok(Buffer.byteLength(serialize(receipt))<16384);
  for(const root of [destination,...locations.map(entry=>entry.root)]){assert.equal(await catalogueBinding(root),null);await access(path.join(root,CATALOGUE_ARCHIVE));await assert.rejects(access(path.join(root,'.observanda/postgresql')),{code:'ENOENT'});}
- const registryBytes=JSON.parse(await exported.readFile(saved.file,'utf8'));assert.ok(registryBytes.projects.every(entry=>typeof entry.root.relative==='string'));assert.deepEqual(await f.workspace.read(),sourceBefore);
+ const registryBytes=JSON.parse(await exported.readFile(saved.file,'utf8'));assert.equal(registryBytes.version,8);assert.equal(registryBytes.projects,undefined);assert.equal(serialize(registryBytes).includes(f.workspace.root),false);assert.deepEqual(await f.workspace.read(),sourceBefore);
  await provider.closeLabBook(bookOwner.root);await provider.closeProject(child.root);await provider.closeProject(parent.root);await provider.closeProject(externalChild.root);await provider.closeProject(external.root);await provider.closeWorkspace(f.workspace.root);await rename(f.workspace.root,path.join(directory,'source unavailable'));await rename(external.root,path.join(directory,'external unavailable'));
+ assert.equal(await bundle().exportPortable(destination),destination);assert.equal(await catalogueBinding(destination),null);
  const moved=path.join(placement.root,'Another Computer Workspace');await rename(destination,moved);const stranger=new TestDeviceStore({file:path.join(directory,'another-device')});await stranger.identity();
  const key=await verifyAccess(await readAccess(moved),'','',{deviceStore:stranger,recovery:kit.recovery});vaults.push(key);const restored=new Workspace(moved,key);assert.deepEqual(await restored.read(),sourceBefore);
  app=new ProjectApplication(restored,{deviceStore:stranger});const client={};const restoredRegistry=new ProjectRegistry(restored,registry.workspaceId);for(const entry of (await restoredRegistry.read()).value.projects){await assert.rejects(verifyAccess(await readAccess(entry.root),'','',{deviceStore:stranger}),{code:'DEVICE_UNKNOWN'});await app.unlock(client,entry.projectId,{password});const expected=before.get(entry.projectId).book;const writing=await app.run(client,projectRequest('/api/projects/'+entry.projectId+'/research/records/writing/read'),{workspaceId:expected.id,recordId:expected.entries[0].id,sectionId:null});assert.equal(writing.value.body,expected.entries[0].body);const projectKey=await verifyAccess(await readAccess(entry.root),'',password,{deviceStore:stranger});vaults.push(projectKey);assert.deepEqual(await new ProjectStorage(entry.root,entry.projectId,projectKey).read(),before.get(entry.projectId));assert.equal((await catalogueBinding(entry.root)).placement,'project');}

@@ -5,6 +5,7 @@ import {assertRegular,serialize} from './storage.js';
 import {researchId} from './web/research-reference.js';
 import {validateStorageName} from './storage-names.js';
 import {AppError} from './errors.js';
+import {projectRegistryDescendantPrefix} from './project-registry-locations.js';
 export const PROJECT_TREE_FILE='.observanda/project-tree.obsv';
 const folderKey=value=>['win32','darwin'].includes(process.platform)?value.normalize('NFC').toLowerCase():value;
 const keys=(value,fields)=>value&&Object.keys(value).sort().join()===fields.split(',').sort().join();
@@ -36,4 +37,18 @@ export function selectProjectTree(root,entries){
  if(physical.length!==result.length||physical.some(entry=>!seen.has(entry.projectId)))throw new AppError('STORAGE_PATH');
  const manifest=validateProjectTree({version:1,projectId:selected.projectId,namespaceId:selected.namespaceId,vaultId:selected.vaultId,projects:result.map(({projectId,namespaceId,vaultId,parentId,root:folder})=>({projectId,namespaceId,vaultId,parentId,relative:path.relative(root.root,folder).split(path.sep).join('/')}))});
  return {entries:result,manifest};
+}
+
+// Read only the selected physical tree, then prove that its logical children
+// agree. An unrelated project does not enlarge this inventory or its checks.
+export function readProjectTreeDirectory(registry,storage){
+ return registry.inspect(async view=>{
+  const root=await view.get(storage.projectId);if(root?.state!=='active')throw new AppError('CONFLICT');
+  const entries=[root.entry];for await(const row of view.entries({index:'location',prefix:projectRegistryDescendantPrefix(storage.root,registry.workspace.root)})){
+   entries.push(row.entry);if(entries.length>4097)throw new AppError('LIMIT');
+  }
+  const tree=selectProjectTree(storage,entries),ids=new Set(entries.map(entry=>entry.projectId));
+  for(const entry of entries)for await(const child of view.entries({index:'parent',prefix:entry.projectId+':'}))if(!ids.has(child.entry.projectId))throw new AppError('STORAGE_PATH');
+  return tree;
+ });
 }

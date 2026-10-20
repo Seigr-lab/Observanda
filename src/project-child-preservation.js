@@ -13,6 +13,7 @@ import {researchId} from './web/research-reference.js';
 import {validateStorageName} from './storage-names.js';
 import {operationStage,operationAdvance,operationItem} from './operation-progress.js';
 import {AppError} from './errors.js';
+import {projectRegistryDescendantPrefix} from './project-registry-locations.js';
 export const insideProject=(root,child)=>{const relative=path.relative(root,child);return relative!==''&&relative!=='..'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative);};
 const hash=async root=>digest(await readFile(path.join(root,'.observanda/access.json')));
 export function validatePreservedChildren(value,source,workspace){
@@ -27,7 +28,7 @@ export function validatePreservedChildren(value,source,workspace){
 export class ProjectChildPreservation{
  constructor(registry,project){this.registry=registry;this.project=project;this.children=[];}
  async prepare(prior,{withProject,withBook}){
-  const entries=(await this.registry.read()).value.projects,nested=entries.filter(entry=>insideProject(this.project.root,entry.root)),direct=nested.filter(entry=>entry.parentId===this.project.projectId);
+  const nested=await physicalProjectDescendants(this.registry,this.project.root),direct=nested.filter(entry=>entry.parentId===this.project.projectId);
   this.children=prior??direct.map(entry=>({id:randomUUID(),projectId:entry.projectId,namespaceId:entry.namespaceId,vaultId:entry.vaultId,directory:path.basename(entry.root)}));
   if(!this.children.length)return [];
   if(typeof withProject!=='function')throw new AppError('ACCESS_LOCKED');
@@ -69,3 +70,5 @@ export class ProjectChildPreservation{
   });
  }
 }
+
+export async function physicalProjectDescendants(registry,root){return registry.inspect(async view=>{const entries=[];for await(const row of view.entries({index:'location',prefix:projectRegistryDescendantPrefix(root,registry.workspace.root)}))entries.push(row.entry);return entries;});}

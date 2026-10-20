@@ -8,7 +8,7 @@ import {AppError} from './errors.js';
 export async function workspaceEncryptedCopyAccess(source,plan,{username='',password='',deviceStore}={}){
  const retained=await new WorkspaceCopyRecovery(source,plan.destination).read();
  if(!retained){const access=await createWorkspaceAccess(username,password,deviceStore);return {access,vault:takeCreatedVault(access)};}
- if(![2,3].includes(retained.version)||retained.plan.encrypted!==true||retained.id!==plan.inventorySalt)throw new AppError('CONFLICT');
+ if(![2,3,4].includes(retained.version)||retained.plan.encrypted!==true||retained.id!==plan.inventorySalt)throw new AppError('CONFLICT');
  const access=retained.encryptionAccess,vault=await verifyAccess({value:access},username,password,{deviceStore});
  try{
   const existing=await readAccess(plan.destination);

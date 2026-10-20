@@ -8,7 +8,9 @@ import {projectDomainSchemas} from './project-domain-schema.js';
 export const projectDomainRegistrySlot='project-domains';
 export async function readProjectDomainRegistry(store){
  const row=await store.db.get('SELECT payload FROM state WHERE slot=$1',projectDomainRegistrySlot),format=await catalogueFormat(store.db);
- if(!row){if(format>=22&&(store.workspace.projectId||catalogueRequiresDomains(format)))throw new AppError('CATALOGUE_DAMAGED');return null;}
+ // Feature generations can add a directory without creating module domains.
+ // Retain the earlier project-generation contract, then use its explicit flag.
+ if(!row){if(catalogueRequiresDomains(format)||store.workspace.projectId&&format>=22&&format<50)throw new AppError('CATALOGUE_DAMAGED');return null;}
  const value=store.decode('state',projectDomainRegistrySlot,row.payload),owner=moduleDomainOwner(store.workspace,(await store.snapshot()).metadata.id);
  if(format<22||!value||Object.keys(value).sort().join()!==['version','projectId','namespaceId','domains',...(value.commandVersion===1?['commandVersion']:[]),...(value.authoringVersion===1?['authoringVersion']:[])].sort().join()||value.authoringVersion===1&&value.commandVersion!==1||value.version!==owner.version||value.projectId!==owner.projectId||owner.version===2&&format<24||!Array.isArray(value.domains)||!value.domains.length||!value.domains.every(validModuleDomain)||new Set(value.domains).size!==value.domains.length||[...value.domains].sort().join()!==value.domains.join()||owner.namespaceId!==value.namespaceId)throw new AppError('CATALOGUE_DAMAGED');
  return value;

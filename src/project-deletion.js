@@ -1,8 +1,7 @@
 import {assertInventoryObligationsSettled} from './inventory-obligation-lifecycle.js';
 import {assertRenameDatabaseOwners} from './workspace-rename-inventory.js';
-import {ProjectChildPreservation,validatePreservedChildren,insideProject} from './project-child-preservation.js';
+import {ProjectChildPreservation,validatePreservedChildren,insideProject,physicalProjectDescendants} from './project-child-preservation.js';
 import {directoryIdentity,sameDirectory} from './project-rename-receipt.js';
-import {assertProjectRoot} from './project-root-boundaries.js';
 import {isStorageTemporary} from './storage-temporary.js';
 // One portable project owns this deletion. The workspace holds only an
 // encrypted recovery receipt and a stable deleted-identity reference.
@@ -72,7 +71,7 @@ export class ProjectDeletions extends OwnedStorageDeletions{
   const entry=await this.registry.locate(this.projectId);if(storage.projectId!==this.projectId||!this.validBinding(binding)||entry.root!==storage.root||entry.vaultId!==storage.vault?.id)throw new AppError('DATABASE_LOCATION');
   // Containing owners are expected in the physical hierarchy. Descendants
   // still require their own lifecycle before this owner can be removed.
-  assertProjectRoot(this.workspace.root,storage.root,(await this.registry.read()).value.projects.filter(entry=>!this.preservation?.children.some(child=>entry.projectId===child.projectId||insideProject(path.join(storage.root,child.directory),entry.root))),{existing:true});
+  await this.registry.assertRoot(storage.root,{existing:true,excludeRoots:(this.preservation?.children??[]).map(child=>path.join(storage.root,child.directory))});
   authenticateKeyring((await readAccess(storage.root)).value,storage.vault);
  }
  async frozen(value){await this.registry.retire({projectId:this.projectId,root:value.source,vaultId:value.vaultId,namespaceId:value.namespaceId},value.id);}
@@ -103,14 +102,14 @@ export class ProjectDeletions extends OwnedStorageDeletions{
     await this.bookOwners.prepare(typeof withBook==='function'?(bookId,use)=>withBook(storage,bookId,use):undefined);
     const children=await this.preservation.prepare(value?.preserveChildren,{withProject,withBook});
     const review=async()=>{
-     const members=(await this.registry.read()).value.projects,retained=this.preservation?.children??[];
+     const members=await physicalProjectDescendants(this.registry,storage.root),retained=this.preservation?.children??[];
      return {...await this.review(storage,{exceptId:id,protectedPaths:[this.workspace.root,...members.filter(p=>p.projectId!==this.projectId&&!retained.some(child=>p.projectId===child.projectId||insideProject(path.join(storage.root,child.directory),p.root))).map(p=>p.root)]}),projectId:this.projectId,namespaceId:entry.namespaceId,vaultId:entry.vaultId};
     };
     if(children.length){
      const initial=await review();if(value&&initial.accessHash!==value.accessHash)throw new AppError('CONFLICT');
      await check();await withProjectMembership(this.registry,[this.projectId],async()=>{
       await assertProjectCreationSettled(this.registry,[this.projectId]);await assertProjectRelocationsSettled(this.registry,[this.projectId]);
-      const current=(await this.registry.read()).value.projects.filter(p=>p.parentId===this.projectId&&insideProject(storage.root,p.root));
+      const current=await this.registry.inspect(async view=>{const entries=[];for await(const row of view.entries({index:'parent',prefix:this.projectId+':'}))if(insideProject(storage.root,row.entry.root))entries.push(row.entry);return entries;});
       if(current.some(p=>!children.some(child=>child.projectId===p.projectId&&path.join(storage.root,child.directory)===p.root)))throw new AppError('CONFLICT');
       await this.save({...initial,title:'',version:1,id,phase:'preserving',databaseRemoved:false,identity:directoryIdentity(await assertRegular(storage.root,{directory:true})),preserveChildren:children});
      });await checkpoint('preserving',children);

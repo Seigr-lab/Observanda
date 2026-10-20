@@ -129,9 +129,9 @@ export async function transferDestination(root,input){
   if(await assertRegular(destination,{missing:true,directory:true})&&(await readdir(destination)).length)throw new AppError('EXISTS');
   return {source,destination,inventorySalt:randomUUID()};
 }
-export async function copyPlan(root,input,{onProgress,vault=null,projectRoots=[]}={}){
+export async function copyPlan(root,input,{onProgress,vault=null,projectRoots=[],excludeProject}={}){
  return withOperationProgress(onProgress,async()=>{
-  const plan=await transferDestination(root,input),inventory=await operationStage('review-workspace',{},()=>new Workspace(plan.source,vault).withStorageHandoff(()=>workspaceInventory(plan.source,plan.inventorySalt,{projectRoots}),{detached:true,existing:true}));
+  const plan=await transferDestination(root,input),inventory=await operationStage('review-workspace',{},()=>new Workspace(plan.source,vault).withStorageHandoff(()=>workspaceInventory(plan.source,plan.inventorySalt,{projectRoots,excludeProject}),{detached:true,existing:true}));
   return {...plan,...inventory,...(projectRoots.length?{projectRoots}: {})};
  });
 }
@@ -151,7 +151,7 @@ export async function prepareCopyDestination(expected){
   if((await readdir(destination)).some(name=>name!=='.observanda'))throw new AppError('EXISTS');
   return {destination,marker};
 }
-export async function copyWorkspace(plan,{vault=null,onProgress,afterCopy,afterVerified,reuseCatalogue=false,activateCatalogue=false,beforePublish,recovery,beforeSnapshot,afterSnapshotVerified,relocation=false}={}){
+export async function copyWorkspace(plan,{vault=null,onProgress,afterCopy,afterVerified,reuseCatalogue=false,activateCatalogue=false,beforePublish,recovery,beforeSnapshot,afterSnapshotVerified,relocation=false,excludeProject}={}){
   if(typeof relocation!=='boolean')throw new AppError('INVALID');
   if(reuseCatalogue&&(activateCatalogue||beforePublish||recovery))throw new AppError('INVALID');
   return withOperationProgress(onProgress,()=>operationStage('copy-workspace',{},async()=>{
@@ -163,7 +163,7 @@ export async function copyWorkspace(plan,{vault=null,onProgress,afterCopy,afterV
     let destination,marker;
     const catalogue=await hasCatalogue(plan.source);
     if(catalogue)await new Workspace(plan.source,vault).catalogue(store=>assertRecordOwnerReclamationSettled(store));
-    await workspaceInventory(plan.source,plan.inventorySalt,{projectRoots:plan.projectRoots??[],expected:plan.fingerprint?plan:undefined,consume:async(inventory,items)=>{
+    await workspaceInventory(plan.source,plan.inventorySalt,{projectRoots:plan.projectRoots??[],excludeProject,expected:plan.fingerprint?plan:undefined,consume:async(inventory,items)=>{
      Object.assign(plan,inventory);
      ({destination,marker}=recovery?await recovery.prepare(plan):await prepareCopyDestination(plan.destination));
      operationTransfer({phase:'copying',totalFiles:inventory.transferFiles,totalBytes:inventory.fileBytes});
@@ -181,7 +181,7 @@ export async function copyWorkspace(plan,{vault=null,onProgress,afterCopy,afterV
      }});
     }});
     operationTransfer({phase:'verifying'});
-    await reviewedInventory(plan);
+    await reviewedInventory(plan,{excludeProject});
     if(catalogue&&reuseCatalogue){
       // A move keeps the installation's database. Verify that database against
       // the copied files below while the destination is still marked incomplete.
@@ -220,7 +220,7 @@ export async function copyWorkspace(plan,{vault=null,onProgress,afterCopy,afterV
 
 // A fresh-key successor remains marked incomplete until its independently
 // authorized owners and relative registry have also been published.
-export async function encryptedCopy(plan,access,vault,sourceVault=null,{onProgress,recovery,beforeSnapshot,afterSnapshotVerified,beforePublish,afterVerified}={}){
+export async function encryptedCopy(plan,access,vault,sourceVault=null,{onProgress,recovery,beforeSnapshot,afterSnapshotVerified,beforePublish,afterVerified,excludeProject}={}){
   if(!isEncryptedAccess(access)||!vault?.key||vault.id!==access.vaultId)throw new AppError('ACCESS_LOCKED');
   return withOperationProgress(onProgress,()=>operationStage('copy-workspace',{},async()=>{
     const source=new Workspace(plan.source,sourceVault),target=new Workspace(plan.destination,vault);
@@ -231,7 +231,7 @@ export async function encryptedCopy(plan,access,vault,sourceVault=null,{onProgre
       if(beforeSnapshot)await beforeSnapshot();
       const catalogue=await hasCatalogue(plan.source);
       if(catalogue)await source.catalogue(store=>assertRecordOwnerReclamationSettled(store));
-      await workspaceInventory(plan.source,plan.inventorySalt,{projectRoots:plan.projectRoots??[],expected:plan.fingerprint?plan:undefined,consume:async(inventory,items)=>{
+      await workspaceInventory(plan.source,plan.inventorySalt,{projectRoots:plan.projectRoots??[],excludeProject,expected:plan.fingerprint?plan:undefined,consume:async(inventory,items)=>{
         Object.assign(plan,inventory);
         publication=recovery?await recovery.prepare(plan):await prepareCopyDestination(plan.destination);
         const priorAccess=await readAccess(plan.destination);
@@ -253,7 +253,7 @@ export async function encryptedCopy(plan,access,vault,sourceVault=null,{onProgre
           operationTransferred({files:1,bytes:file.bytes});
         }
       }});
-      await reviewedInventory(plan);
+      await reviewedInventory(plan,{excludeProject});
       operationTransfer({phase:'verifying'});
       const copied=JSON.parse(await target.readFile(await workspaceFile(plan.destination),'utf8'));
       if(catalogue){

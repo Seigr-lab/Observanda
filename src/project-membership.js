@@ -34,14 +34,14 @@ export async function withProjectMembership(registry,parents,operation,{wait=tru
 }
 export async function assertProjectCreationSettled(registry,parents){
  await assertProjectImportsSettled(registry,parents);
- const ids=new Set(parents),registered=new Set((await registry.read()).value.projects.map(p=>p.projectId)),directory=path.join(registry.workspace.root,'.observanda/project-creation');
+ const ids=new Set(parents),directory=path.join(registry.workspace.root,'.observanda/project-creation');
  if(!await assertRegular(directory,{directory:true,missing:true}))return;
  for await(const entry of await opendir(directory)){
   if(!entry.name.endsWith('.obsv')||!researchId(entry.name.slice(0,-5)))continue;
   const file=path.join(directory,entry.name),stat=await assertRegular(file);if(stat.size>16*1024*1024)throw new AppError('STORAGE_PROJECT_BUSY');
   let value;try{value=JSON.parse(await registry.workspace.readFile(file,'utf8'));}catch{throw new AppError('STORAGE_PROJECT_BUSY');}
   if(value.version!==1||!researchId(value.projectId))throw new AppError('STORAGE_PROJECT_BUSY');
-  if(value.phase==='prepared'&&!registered.has(value.projectId)&&ids.has(value.parentId??null))throw new AppError('STORAGE_PROJECT_BUSY');
+  if(value.phase==='prepared'&&ids.has(value.parentId??null)&&(await registry.state(value.projectId)).state!=='active')throw new AppError('STORAGE_PROJECT_BUSY');
  }
 }
 

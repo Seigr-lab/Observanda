@@ -4,6 +4,7 @@ import path from 'node:path';
 import {readFile,realpath} from 'node:fs/promises';
 import {withProjectLifecycle} from './project-lifecycle.js';
 import {ProjectRegistry} from './project-registry.js';
+import {projectRegistryDescendantPrefix} from './project-registry-locations.js';
 import {ProjectStorage} from './project-storage.js';
 import {ProjectBookOwners} from './project-book-owners.js';
 import {validateRenameProjects} from './rename-owner-receipts.js';
@@ -18,14 +19,13 @@ import {nestedRenameRoot} from './workspace-rename-paths.js';
 import {AppError} from './errors.js';
 const hash=async file=>digest(await readFile(file));
 const identity=stat=>({dev:String(stat.dev),ino:String(stat.ino)});
-const inside=(parent,child)=>{const relative=path.relative(parent,child);return relative!==''&&relative!=='..'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative);};
 export class WorkspaceProjectOwners {
  bookOwner(storage){return new ProjectBookOwners(storage);}
  constructor(workspace,{registry=null,missingAccessCode='STORAGE_RENAME_PROJECTS'}={}){this.workspace=workspace;this.missingAccessCode=missingAccessCode;this.registry=registry;this.externalRegistry=Boolean(registry);this.keys=new Map();this.bookOwners=new Map();}
  async prepare(withProject,withBook){
   const metadata=(await this.workspace.outline()).metadata;
-  this.registry??=new ProjectRegistry(this.workspace,metadata.id);let directory=await this.registry.read();
-  const nested=directory.value.projects.filter(entry=>inside(this.workspace.root,entry.root)).sort((a,b)=>a.root.length-b.root.length||a.projectId.localeCompare(b.projectId));
+  this.registry??=new ProjectRegistry(this.workspace,metadata.id);const prefix=projectRegistryDescendantPrefix(this.workspace.root,this.registry.workspace.root);
+  const nested=await this.registry.inspect(async view=>{const items=[];for await(const row of view.entries({index:'location',prefix}))items.push(row.entry);return items;});nested.sort((a,b)=>a.root.length-b.root.length||a.projectId.localeCompare(b.projectId));
   if(nested.length&&typeof withProject!=='function')throw new AppError(this.missingAccessCode);
   const projects=[],capturedParents=new Map();
   for(const selected of nested){
@@ -42,10 +42,14 @@ export class WorkspaceProjectOwners {
     const books=this.bookOwner(new ProjectStorage(storage.root,storage.projectId,this.keys.get(entry.projectId)));this.bookOwners.set(entry.projectId,books);await books.prepare(typeof withBook==='function'?(id,use)=>withBook(storage,id,use):undefined);
    });
   }
-  const current=await this.registry.read(),owners=value=>serialize(value.projects.map(({summary,...entry})=>entry));
-  const captured=new Map(projects.map(item=>[item.projectId,nestedRenameRoot(this.workspace.root,item.relative)])),expected={...directory.value,projects:directory.value.projects.map(entry=>({...entry,root:captured.get(entry.projectId)??entry.root,parentId:capturedParents.has(entry.projectId)?capturedParents.get(entry.projectId):entry.parentId}))};
-  if(owners(current.value)!==owners(expected))throw new AppError('CONFLICT');directory=current;
-  if(projects.length&&directory.value.version<7)directory=await this.registry.change(directory.revision,value=>value);
+  const captured=new Map(projects.map(item=>[item.projectId,nestedRenameRoot(this.workspace.root,item.relative)])),expected=new Map(nested.map(entry=>[entry.projectId,{...entry,root:captured.get(entry.projectId),parentId:capturedParents.get(entry.projectId)}]));
+  let directory=await this.registry.inspect(async view=>{
+   let count=0;for await(const {entry} of view.entries({index:'location',prefix})){
+    const saved=expected.get(entry.projectId);if(!saved||['projectId','root','namespaceId','vaultId','parentId'].some(key=>saved[key]!==entry[key]))throw new AppError('CONFLICT');count++;
+   }
+   if(count!==nested.length)throw new AppError('CONFLICT');return {revision:view.revision,native:view.native};
+  });
+  if(projects.length&&!directory.native)directory=await this.registry.apply(directory.revision,[]);
   this.revision=directory.revision;this.projects=validateRenameProjects(projects);return this.projects;
  }
  async withStorageHandoff(operation,{checkOwner}={}){

@@ -1,3 +1,4 @@
+import {assertProjectTransferDestination} from './project-registry-locations.js';
 import {pdfDocumentRequest,executePdfRequest} from './pdf-document-requests.js';
 import {configurationSourceAccess} from './configuration-source-access.js';
 import {locateResearchReference,resolveResearchReference} from './research-owner-reference.js';
@@ -59,7 +60,7 @@ import {withDatabaseRequest} from './database-request-context.js';
 import {ProjectCalendars,projectCalendarRequest} from './project-calendar.js';
 import {projectModuleRequest} from './project-module-requests.js';
 import {ProjectRegistry} from './project-registry.js';
-import {projectDirectoryChoices} from './project-directory-query.js';
+import {projectDirectoryChoices,projectDirectoryPage} from './project-directory-query.js';
 import path from 'node:path';
 import {resolveLocation} from './locations.js';
 import {ProjectMoves} from './project-move.js';
@@ -149,7 +150,12 @@ export class ProjectApplication{
  async lock(client,projectId){if(!researchId(projectId))throw new AppError('INVALID');const session=this.session(client);const stopped=this.jobs.forget(session,projectId);this.forget(session,projectId);session.set(projectId,{locked:true});await stopped;await Promise.all([...this.active].filter(([,owner])=>owner.projectId===projectId).map(([pending])=>pending));return {projectId,locked:true};}
  withSourceHistory(client,operation,options){return withProjectHistoryAccess(this,client,operation,options);}
  async run(client,selected,data,options={}){
-  try{return await withDatabaseRequest(options.signal,()=>this.execute(client,selected,data,options));}
+  try{return await withDatabaseRequest(options.signal,()=>{
+   const execute=()=>this.execute(client,selected,data,options);
+   // A book request rechecks native parent membership throughout admission.
+   // Reuse connections for that request, with a new transaction for every read.
+   return selected.bookOperation==='research'&&Buffer.isBuffer(this.workspace.vault?.key)?this.workspace.withCatalogueConnections(execute):execute();
+  });}
   catch(error){if(selected.projectId&&['ACCESS_LOCKED','ACCESS_DENIED','ACCESS_WAIT','AUTH','DEVICE_UNKNOWN'].includes(error.code))error.projectId??=selected.projectId;throw error;}
  }
  async deletion(client,selected,data,{check=async()=>{},onProgress}={}){
@@ -248,17 +254,14 @@ export class ProjectApplication{
     if(parentId===undefined)throw new AppError('NOT_FOUND');
     result=await this.renames.withParent(client,parentId,openingCheck,current=>selected.operation==='open/cancel'?imports.cancel(data,{...options,check:current}):selected.operation==='open/resume'?imports.run(data,{...options,check:current,resume:true}):new ProjectOpening(registry,this.deviceStore).open(data,{...options,check:current}));
    }
-   else if(selected.operation==='choices')result=await projectDirectoryChoices(registry,data);
+   else if(selected.operation==='choices')result=await projectDirectoryChoices(registry,data,{signal});
    else if(selected.operation==='create')result=await new ProjectCreation(registry,this.deviceStore,{withConfigurationSource:configurationSourceAccess(this,client,{check})}).create(data,{check});
    else if(selected.operation==='create/resume')result=await new ProjectCreation(registry,this.deviceStore,{withConfigurationSource:configurationSourceAccess(this,client,{check})}).resume(data,{check});
    else if(selected.operation==='create/pending'){if(!data||Object.keys(data).sort().join()!=='after,limit')throw new AppError('INVALID');result=await new ProjectCreation(registry,this.deviceStore,{withConfigurationSource:configurationSourceAccess(this,client,{check})}).pending(data);}
    else{
     if(!data||!['limit,offset,revision','limit,offset,parentId,revision'].includes(Object.keys(data).sort().join())||!Number.isSafeInteger(data.offset)||data.offset<0||!Number.isSafeInteger(data.limit)||data.limit<1||data.limit>100||data.revision!==null&&typeof data.revision!=='string')throw new AppError('INVALID');
     if(data.parentId!==undefined&&data.parentId!==null&&!researchId(data.parentId))throw new AppError('INVALID');
-    const current=await registry.directory();if(data.revision!==null&&data.revision!==current.revision)throw new AppError('CONFLICT');
-    const all=current.projects,projects=data.parentId===undefined?current.value.projects:current.value.projects.filter(entry=>entry.parentId===data.parentId),ancestors=[];
-    for(let id=data.parentId;id;){const entry=all.find(item=>item.projectId===id);if(!entry)throw new AppError('NOT_FOUND');ancestors.unshift(entry);id=entry.parentId;}
-    result={revision:current.revision,total:projects.length,projects:projects.slice(data.offset,data.offset+data.limit),...(data.parentId===undefined?{}:{ancestors})};
+    result=await projectDirectoryPage(registry,data,{signal});
    }
    await check();return result;
   },selected.operation==='create'?data?.project?.id:undefined);
@@ -274,6 +277,7 @@ export class ProjectApplication{
     setCheck(assertCurrent);
     if(['reference','reference-location'].includes(selected.operation)&&data.projectId!==undefined&&data.projectId!==selected.projectId)throw new AppError('INVALID');
     const result=['reference','reference-location'].includes(selected.operation)?await new ProjectReferences(router)[selected.operation==='reference-location'?'locate':'resolve']({...data,projectId:selected.projectId}):await router.withProject(selected.projectId,async storage=>{
+     const execute=async()=>{
      if(selected.bookOperation==='import'){
       const imports=new LabBookImports(storage,registry,this.deviceStore);
       if(selected.operation.endsWith('/pending')){if(!data||Object.keys(data).some(key=>!['after','limit'].includes(key)))throw new AppError('INVALID');return imports.pending(data);}
@@ -281,7 +285,7 @@ export class ProjectApplication{
       return imports.run(data,{resume:selected.operation.endsWith('/resume'),check:assertCurrent,onProgress,opened:async(entry,vault)=>{await assertCurrent();new LabBookAccessSession(this,client,storage,entry.labBookId,assertCurrent).save(entry.root,(await readAccess(entry.root)).etag,vault);}});
      }
      if(selected.bookOperation==='placements'){if(!data||Object.keys(data).some(key=>!['after','limit'].includes(key)))throw new AppError('INVALID');return this.bookPlacements.pending(storage,data);}
-     if(selected.bookOperation)return executeLabBookRequest(storage,selected,data,{withConfigurationSource:configurationSourceAccess(this,client,{check:assertCurrent}),deviceStore:this.deviceStore,calendar:(book,etag,method,command)=>this.calendars.run(session,book,etag,method,command,{signal,authenticate:this.authenticate,ownerId:'book:'+selected.projectId+':'+selected.labBookId,projectId:selected.projectId}),reconcileModules:entities=>this.calendars.reconcile(session,'book:'+selected.projectId+':'+selected.labBookId,entities),placementStatus:()=>this.bookPlacements.status(storage,selected.labBookId),placementRoot:()=>this.bookPlacements.root(storage,selected.labBookId),publishBook:async entry=>{await assertCurrent();await new LabBookDirectory(registry).register(selected.projectId,entry);},access:new LabBookAccessSession(this,client,storage,selected.labBookId,assertCurrent),transferRoots:async()=>[this.workspace.root,...(await registry.read()).value.projects.map(entry=>entry.root)],check:assertCurrent,signal,onProgress,download,stream,websiteId,websitePin,websiteContext,binary,headless,query,contentLength,stopJobs:()=>{this.calendars.invalidateBook(selected.projectId,selected.labBookId);return this.jobs.invalidateBook(selected.projectId,selected.labBookId);},sourceAccess:comparisonSourceFactory(this,client,{check}),sourceDiscovery:(host,operation,input,options)=>comparisonSourceDiscovery(this,client,host,operation,input,{...options,scope:selected.projectId,labBookId:selected.labBookId,check}),referenceAccess:moduleReferenceFactory(this,client,{scope:selected.projectId,labBookId:selected.labBookId,check:assertCurrent}),taskSourceAccess:planningTaskAccessFactory(this,client,{scope:selected.projectId,labBookId:selected.labBookId,check:assertCurrent}),inventorySourceAccess:inventoryOperationAccessFactory(this,client,{scope:selected.projectId,labBookId:selected.labBookId,check:assertCurrent}),publicationSources:host=>publicationSourceFactory(this,client,host,{scope:selected.projectId,labBookId:selected.labBookId,check}),jobs:(book,etag,current,retain)=>this.jobs.owner(session,book,etag,current,{projectId:selected.projectId,retain})});
+     if(selected.bookOperation)return executeLabBookRequest(storage,selected,data,{withConfigurationSource:configurationSourceAccess(this,client,{check:assertCurrent}),deviceStore:this.deviceStore,calendar:(book,etag,method,command)=>this.calendars.run(session,book,etag,method,command,{signal,authenticate:this.authenticate,ownerId:'book:'+selected.projectId+':'+selected.labBookId,projectId:selected.projectId}),reconcileModules:entities=>this.calendars.reconcile(session,'book:'+selected.projectId+':'+selected.labBookId,entities),placementStatus:()=>this.bookPlacements.status(storage,selected.labBookId),placementRoot:()=>this.bookPlacements.root(storage,selected.labBookId),publishBook:async entry=>{await assertCurrent();await new LabBookDirectory(registry).register(selected.projectId,entry);},access:new LabBookAccessSession(this,client,storage,selected.labBookId,assertCurrent),checkTransferDestination:destination=>assertProjectTransferDestination(registry,destination),check:assertCurrent,signal,onProgress,download,stream,websiteId,websitePin,websiteContext,binary,headless,query,contentLength,stopJobs:()=>{this.calendars.invalidateBook(selected.projectId,selected.labBookId);return this.jobs.invalidateBook(selected.projectId,selected.labBookId);},sourceAccess:comparisonSourceFactory(this,client,{check}),sourceDiscovery:(host,operation,input,options)=>comparisonSourceDiscovery(this,client,host,operation,input,{...options,scope:selected.projectId,labBookId:selected.labBookId,check}),referenceAccess:moduleReferenceFactory(this,client,{scope:selected.projectId,labBookId:selected.labBookId,check:assertCurrent}),taskSourceAccess:planningTaskAccessFactory(this,client,{scope:selected.projectId,labBookId:selected.labBookId,check:assertCurrent}),inventorySourceAccess:inventoryOperationAccessFactory(this,client,{scope:selected.projectId,labBookId:selected.labBookId,check:assertCurrent}),publicationSources:host=>publicationSourceFactory(this,client,host,{scope:selected.projectId,labBookId:selected.labBookId,check}),jobs:(book,etag,current,retain)=>this.jobs.owner(session,book,etag,current,{projectId:selected.projectId,retain})});
      if(selected.operation==='access/details'){if(!data||Object.keys(data).length)throw new AppError('INVALID');return new ProjectAccessSettings(storage).details();}
      if(selected.operation==='access/password'){await this.jobs.invalidateProject(selected.projectId);return new ProjectAccessSettings(storage).password(data,{deviceStore:this.deviceStore,check:assertCurrent,changed:etag=>owner.accessChanged(etag)});}
      if(selected.operation?.startsWith('storage/')){
@@ -295,8 +299,7 @@ export class ProjectApplication{
       if(selected.operation==='storage/move/resume'){if(!data||Object.keys(data).join()!=='id'||!researchId(data.id))throw new AppError('INVALID');return moveOwner({id:data.id,resume:true,onProgress});}
       if(data&&Object.keys(data).sort().join()==='id,parent'&&['storage/copy','storage/export'].includes(selected.operation)){if(typeof data.parent!=='string')throw new AppError('INVALID');data={id:data.id,path:storageCreationPath(data.parent,path.basename(storage.root))};}
       if(!data||Object.keys(data).sort().join()!=='id,path'||!researchId(data.id)||typeof data.path!=='string')throw new AppError('INVALID');
-      const destination=await resolveLocation(data.path),within=(a,b)=>{const relative=path.relative(a,b);return relative===''||relative!=='..'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative);};
-      const roots=[this.workspace.root,...(await registry.read()).value.projects.map(entry=>entry.root)];if(roots.some(root=>within(root,destination)||within(destination,root)))throw new AppError('STORAGE_PATH');
+      const destination=await resolveLocation(data.path);await assertProjectTransferDestination(registry,destination);
       return copyOwner(selected.operation==='storage/export'?archives:copies,{id:data.id,path:destination,onProgress});
      }
      if(selected.pdf){const service=['export-start','export-resume'].includes(selected.pdf)?(await this.jobs.owner(session,storage,owner.etag,assertCurrent)).pdfs:null;return executePdfRequest(storage,selected,data,{signal,check:assertCurrent,binary,exportService:service,sourceReader:publicationSourceFactory(this,client,storage,{scope:selected.projectId,check:assertCurrent})});}
@@ -312,6 +315,7 @@ export class ProjectApplication{
      if(selected.route==='/api/modules/command'&&response.entities)this.calendars.reconcile(session,storage.projectId,response.entities);
      if(selected.route==='/api/workspace/structure'&&data.change?.kind==='project')await registry.refreshSummary(storage.projectId,(await storage.outline()).metadata);
      return response;
+     };return selected.bookOperation==='research'?storage.withCatalogueConnections(execute):execute();
     },{action:selected.write?'write':'read',locationOnly:selected.bookOperation==='list'||['storage/details','storage/move/status'].includes(selected.operation)});
     await assertCurrent();return result;
    }finally{setCheck(check);await owner.close();}

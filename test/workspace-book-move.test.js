@@ -22,6 +22,8 @@ import {LabBookCreation} from '../src/lab-book-creation.js';
 import {LabBookStorage} from '../src/lab-book-storage.js';
 import {ResearchRecords} from '../src/research.js';
 import {MediaStore} from '../src/media.js';
+import {readMoveReceipt} from '../src/workspace-move.js';
+import {WORKSPACE_BUNDLE_MOVE} from '../src/workspace-project-move.js';
 import {withWorkspaceMoveSession} from '../src/workspace-move-session.js';
 
 test('workspace move carries an external project tree and protected book through activation and retires the source',{timeout:process.env.OBSERVANDA_TEST_SECOND_VOLUME?600000:180000},async t=>{
@@ -39,16 +41,21 @@ test('workspace move carries an external project tree and protected book through
  const created=await new LabBookCreation(project,f.deviceStore).create({id:randomUUID(),username:'',password:'Book password',book:{id:randomUUID(),projectId,title:'Field book 1'}}),key=await verifyAccess(await readAccess(created.book.root),'','Book password',{deviceStore:f.deviceStore});vaults.push(key);
  const book=new LabBookStorage(created.book.root,created.book.labBookId,key),outline=await book.outline(),record={...sampleNotebook().entries[0],id:randomUUID(),notebookId:book.labBookId};await new ResearchRecords(book,new MediaStore(book)).save({workspaceId:outline.metadata.id,changes:[{id:record.id,expectedRevision:null,record}]});
  phase('source owners ready');
+ const oldRead=ProjectRegistry.prototype.read,oldChange=ProjectRegistry.prototype.change;ProjectRegistry.prototype.read=ProjectRegistry.prototype.change=()=>{throw Error('Workspace move must use indexed directory reads');};t.after(()=>{ProjectRegistry.prototype.read=oldRead;ProjectRegistry.prototype.change=oldChange;});
  const app=new ProjectApplication(f.workspace,{deviceStore:f.deviceStore}),client={},other={},destination=path.join(placement.root,'Moved Workspace');applications.push(app);await app.unlock(client,projectId,{password:'Project password'});
  const request=operation=>projectRequest('/api/projects/'+projectId+'/lab-books/'+book.labBookId+'/'+operation),target={workspaceId:outline.metadata.id,recordId:record.id,sectionId:null};
  await assert.rejects(withWorkspaceMoveSession(app,client,session=>session.move(destination,{activate:async()=>{assert.fail('Unauthorized workspace must not activate');}})),error=>['ACCESS_LOCKED','DEVICE_UNKNOWN'].includes(error.code)&&error.labBookId===book.labBookId);
  phase('unauthorized refusal');
  await app.run(client,request('access/unlock'),{username:'',password:'Book password',recovery:''});
  let interrupted=false;await assert.rejects(withWorkspaceMoveSession(app,client,session=>session.move(destination,{activate:async()=>{assert.fail('Interrupted move must not activate');}}),{checkpoint:async(phase,owner)=>{if(phase==='project:adopted'&&owner.projectId===projectId&&!interrupted){interrupted=true;throw Error('Interrupted after selected owner publication');}}}),/Interrupted after selected owner publication/);assert.equal(interrupted,true);phase('first interrupted adoption');
+ const bundled=new Workspace(destination,f.vault),pending=JSON.parse(await bundled.readFile(path.join(destination,WORKSPACE_BUNDLE_MOVE),'utf8'));assert.equal(pending.version,2);assert.equal(pending.projects,undefined);assert.equal(pending.directory.head.roots.active.count,3);assert.ok(Buffer.byteLength(JSON.stringify(pending))<16384);
  const siblingEntry=await registry.locate(sibling.projectId);assert.deepEqual(await new ProjectStorage(siblingEntry.root,sibling.projectId,siblingVault).read(),siblingBefore);
  let cleaned=false;await assert.rejects(withWorkspaceMoveSession(app,client,session=>session.move(destination,{activate:async()=>{assert.fail('Interrupted cleanup must not activate');}}),{checkpoint:async phase=>{if(phase==='project-container'&&!cleaned){cleaned=true;throw Error('Interrupted after empty original retirement');}}}),/Interrupted after empty original retirement/);assert.equal(cleaned,true);await assert.rejects(stat(parent.root),{code:'ENOENT'});phase('container retirement');
+ await assert.rejects(withWorkspaceMoveSession(app,client,session=>session.move(destination,{activate:async()=>{throw Error('Interrupted before workspace activation');}})),/Interrupted before workspace activation/);
+ const frozen=await readMoveReceipt(destination);assert.equal(frozen.version,2);assert.equal(frozen.projectRoots,undefined);assert.deepEqual(frozen.directory,pending.directory);assert.equal(frozen.phase,'verified');
  let copied;
  await withWorkspaceMoveSession(app,client,async session=>{const result=await session.move(destination,{activate:async()=>{copied=new ProjectApplication(new Workspace(destination,f.vault),{deviceStore:f.deviceStore});applications.push(copied);}});assert.equal(result.phase,'complete');await session.install(copied);});phase('completed activation');
+ ProjectRegistry.prototype.read=oldRead;ProjectRegistry.prototype.change=oldChange;
  const writing=await copied.run(client,request('research/records/writing/read'),target);assert.equal(writing.value.body,record.body);
  await assert.rejects(copied.run(other,request('research/records/writing/read'),target),error=>['ACCESS_LOCKED','DEVICE_UNKNOWN'].includes(error.code));
  const saved=copied.session(client).get('book:'+projectId+':'+book.labBookId);const locations=await (await copied.registry()).read(),copiedParent=locations.value.projects.find(entry=>entry.projectId===parentId),copiedProject=locations.value.projects.find(entry=>entry.projectId===projectId);assert.equal(copiedParent.root,path.join(destination,parentMetadata.title));assert.equal(path.dirname(copiedProject.root),copiedParent.root);assert.equal(path.basename(copiedProject.root),metadata.title);assert.equal(saved.root,path.join(copiedProject.root,created.book.directory));assert.notEqual(saved.vault,key);assert.ok(saved.vault.key);

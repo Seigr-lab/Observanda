@@ -2,7 +2,6 @@ import {configurationCreationOptions,hasConfigurationCreation,validCreationConfi
 import {incomingProjectMove} from './project-incoming-moves.js';
 import {withProjectMembership} from './project-membership.js';
 import {validateStorageName,requireStorageName,storageCreationPath} from './storage-names.js';
-import {assertProjectRoot} from './project-root-boundaries.js';
 // A creation request survives both service restart and a lost HTTP reply.
 // Its workspace journal owns only the request and wrapped access grants; all
 // project content, originals and database files belong to the selected root.
@@ -52,9 +51,9 @@ export class ProjectCreation{
   if(after!==null&&!researchId(after)||!Number.isSafeInteger(limit)||limit<1||limit>50)throw new AppError('INVALID');
   const directory=path.join(this.workspace.root,'.observanda/project-creation');if(!await assertRegular(directory,{directory:true,missing:true}))return {items:[],next:null};
   const ids=(await readdir(directory)).filter(name=>name.endsWith('.obsv')&&researchId(name.slice(0,-5))).map(name=>name.slice(0,-5)).filter(id=>after===null||id>after).sort();
-  const items=[],registered=(await this.registry.read()).value.projects;let next=null;
+  const items=[];let next=null;
   for(const [index,id] of ids.entries()){
-   let saved=await this.read(id);const adopted=saved?.intent.phase==='prepared'&&registered.some(entry=>entry.projectId===saved.intent.projectId);
+   let saved=await this.read(id);const adopted=saved?.intent.phase==='prepared'&&(await this.registry.state(saved.intent.projectId)).state==='active';
    if(saved&&!active.has(this.file(id))&&(adopted||saved.intent.phase==='attached')){
     try{await withWriterLease(path.join(directory,id+'.lock'),async()=>{
      // A retry may have completed while discovery waited for its short lease.
@@ -95,7 +94,7 @@ export class ProjectCreation{
      // Registry attachment is already the adoption boundary. If the service
      // stopped before recording its reply, acknowledge the owner's current
      // location and edits; never initialize the old folder again.
-     const existing=(await this.registry.read()).value.projects.find(entry=>entry.projectId===intent.projectId);
+     const existing=(await this.registry.state(intent.projectId)).state==='active';
      if(existing){const result=await this.acknowledge(command.id,intent);await this.finish(command.id,intent,file);return result;}
      vault=await verifyAccess({value:intent.access},command.username,password,{deviceStore:this.deviceStore});
     }else{
@@ -103,13 +102,13 @@ export class ProjectCreation{
      const selected=await prepareCreationConfiguration(this.workspace,command,{projectId:command.project.id,notebookId:null,slot:'labBookTemplate'},{withConfigurationSource:this.withConfigurationSource,check});
      if(selected&&Object.hasOwn(selected,'inline')&&selected.inline)draft.projects[0].labBookTemplate=selected.inline;validateNotebook(draft);
      await withProjectMembership(this.registry,[parentId],async()=>{
-     const current=await this.registry.read();
+     const current=await this.registry.state(command.project.id);
      if(await incomingProjectMove(this.registry,command.project.id))throw new AppError('STORAGE_PROJECT_BUSY');
-     if([...current.value.projects,...(current.value.deleted??[]),...(current.value.relocated??[])].some(entry=>entry.projectId===command.project.id))throw new AppError('EXISTS');
-     const parent=parentId===null?this.workspace.root:current.value.projects.find(entry=>entry.projectId===parentId)?.root;
+     if(current.state!==null)throw new AppError('EXISTS');
+     const parent=parentId===null?this.workspace.root:(await this.registry.state(parentId)).entry?.root;
      if(!parent)throw new AppError('NOT_FOUND');
      const derived=storageCreationPath(parent,command.project.title),root=command.path===undefined?derived:await resolveLocation(command.path);
-     assertProjectRoot(this.workspace.root,root,current.value.projects,{parentId});
+     await this.registry.assertRoot(root,{parentId});
      requireStorageName(root,command.project.title);
      if(root!==derived)throw new AppError('STORAGE_PATH');
      const access=await createWorkspaceAccess(command.username,password,this.deviceStore);vault=takeCreatedVault(access);
@@ -125,7 +124,7 @@ export class ProjectCreation{
     // Only registry membership serializes here. Unrelated project creation and
     // authoring already completed against their independent owners.
     for(let attempt=0;;attempt++){
-     const current=await this.registry.read(),existing=current.value.projects.find(item=>item.projectId===intent.projectId);
+     const current=await this.registry.state(intent.projectId),existing=current.state==='active'?current.entry:null;
      if(existing){if(revisionText(existing)!==revisionText(entry))throw new AppError('CONFLICT');break;}
      try{await this.registry.attach(project,{parentId:intent.parentId,expected:current.revision});break;}
      catch(error){if(error.code!=='CONFLICT'||attempt>=7)throw error;await check();}

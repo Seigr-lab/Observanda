@@ -1,6 +1,6 @@
 import {clearRenamedBooks} from './project-book-rename.js';
 import {assertRenameDatabaseOwners} from './workspace-rename-inventory.js';
-import {decodeProjectRegistryLocations} from './project-registry-locations.js';
+import {ProjectRegistry} from './project-registry.js';
 import {WorkspaceProjectRename,validateRenameProjects,clearRenamedProjects} from './workspace-project-rename.js';
 import {RENAME_KEYS_FILE} from './workspace-rename-keys.js';
 import {operationStage} from './operation-progress.js';
@@ -91,12 +91,8 @@ export class WorkspaceRenames{
    if(source===destination){await synchronizeWorkspaceName(workspace);return {source,destination,complete:true};}
    if(source!==workspace.root||[this.directory,...protectedPaths].filter(Boolean).some(p=>inside(source,path.resolve(p))))throw new AppError('STORAGE_PATH');
    if(typeof withProject!=='function'){
-    const file=path.join(source,'.observanda/project-registry.observanda');
-    if(await assertRegular(file,{missing:true})){
-     const registry=decodeProjectRegistryLocations(JSON.parse(await workspace.readFile(file,'utf8')),source);
-     if(!Array.isArray(registry.projects))throw new AppError('FORMAT');
-     if(registry.projects.some(entry=>typeof entry.root!=='string'||inside(source,entry.root)))throw new AppError('STORAGE_RENAME_PROJECTS');
-    }
+    const metadata=(await workspace.outline()).metadata;
+    await new ProjectRegistry(workspace,metadata.id).inspect(async view=>{for await(const {entry} of view.entries())if(inside(source,entry.root))throw new AppError('STORAGE_RENAME_PROJECTS');});
    }
    const existing=await assertRegular(destination,{directory:true,missing:true});
    if(existing&&await realpath(destination)!==source)throw new AppError('EXISTS');

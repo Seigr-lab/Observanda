@@ -11,10 +11,13 @@ import {readAccess} from './access.js';
 import {authenticateKeyring} from './security/keyring.js';
 import {cloneVault,clearVault} from './encryption.js';
 import {AppError} from './errors.js';
-import {assertRegular} from './storage.js';
+import {Workspace,assertRegular} from './storage.js';
+import {ProjectRegistry} from './project-registry.js';
+import {moveSource} from './workspace-move-state.js';
+import {resolveLocation} from './locations.js';
 const inside=(parent,child)=>{const relative=path.relative(parent,child);return relative!==''&&relative!=='..'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative);};
 export class ProjectLocationAccess {
-  #owners=new Map();#grants=new Map();#destination=null;#installed=false;#closed=false;#rename=false;
+  #moveRegistry=null;#owners=new Map();#grants=new Map();#destination=null;#installed=false;#closed=false;#rename=false;
   constructor(application,client,{check=async()=>{},recoverRenames=true,skipRenameId=null}={}){this.application=application;this.client=client;this.check=check;this.recoverRenames=recoverRenames;this.skipRenameId=skipRenameId;this.books=new LabBookLocationAccess(application,client);}
   captureRename(receipt){
     if(this.#closed||this.#destination||this.#owners.size||![receipt.source,receipt.destination].includes(this.application.workspace.root))throw new AppError('ACCESS_LOCKED');
@@ -33,8 +36,8 @@ export class ProjectLocationAccess {
   async withProject(id,operation) {
     if(this.#closed||this.#destination)throw new AppError('ACCESS_LOCKED');
     return this.application.tracked(async()=>{
-      let owner=this.#owners.get(id);if(!owner){owner=new ProjectSessionOwner(this.application,this.client,id,{check:this.check,recoverRenames:typeof this.recoverRenames==='function'?this.recoverRenames(id):this.recoverRenames,skipRenameId:this.skipRenameId});this.#owners.set(id,owner);}
-      try{return await owner.use(operation);}catch(error){if(['ACCESS_LOCKED','ACCESS_DENIED','ACCESS_WAIT','AUTH','DEVICE_UNKNOWN'].includes(error.code)){error.projectId??=id;if(error.projectId===id)error.projectName=path.basename((await (await this.application.registry()).locate(id)).root);}throw error;}
+      let owner=this.#owners.get(id);if(!owner){owner=new ProjectSessionOwner(this.application,this.client,id,{check:this.check,recoverRenames:this.#moveRegistry?false:typeof this.recoverRenames==='function'?this.recoverRenames(id):this.recoverRenames,skipRenameId:this.skipRenameId,registry:async()=>this.#moveRegistry??await this.application.registry()});this.#owners.set(id,owner);}
+      try{return await owner.use(operation);}catch(error){if(['ACCESS_LOCKED','ACCESS_DENIED','ACCESS_WAIT','AUTH','DEVICE_UNKNOWN'].includes(error.code)){error.projectId??=id;if(error.projectId===id)error.projectName=path.basename((await (this.#moveRegistry??await this.application.registry()).locate(id)).root);}throw error;}
     },id);
   }
   async withBook(project,id,operation){const parent=this.#owners.get(project.projectId);if(this.#closed||this.#destination||!parent)throw new AppError('ACCESS_DENIED');return this.books.use(project,id,parent,operation);}
@@ -79,8 +82,7 @@ export class ProjectLocationAccess {
     if(receipt.phase!=='complete'||root!==scope.destination||await workspaceRename(root))throw new AppError('STORAGE_RENAME_STATE');
     const owners=[{projectId:receipt.projectId,namespaceId:receipt.namespaceId,vaultId:receipt.vaultId,relative:'',...receipt.rootBooks},...(receipt.projects??[])];
     await this.renamed({read:async()=>({...scope,projects:owners}),completedSource:async()=>scope.source},receipt.id,scope.source,scope.destination,{includeRoot:true});
-    const entries=(await renames.registry.read()).value.projects;
-    for(const [id,grant] of this.#grants){const entry=entries.find(p=>p.projectId===id);if(!entry||entry.root!==grant.root||entry.namespaceId!==grant.namespaceId||entry.vaultId!==grant.vault.id)throw new AppError('DATABASE_LOCATION');}
+    await renames.registry.inspect(async view=>{for(const [id,grant] of this.#grants){const row=await view.get(id),entry=row?.entry;if(row?.state!=='active'||entry.root!==grant.root||entry.namespaceId!==grant.namespaceId||entry.vaultId!==grant.vault.id)throw new AppError('DATABASE_LOCATION');}});
     await this.check();if(this.application.closed)throw new AppError('ACCESS_LOCKED');
     // Apply only this client's still-valid grants. No await separates checking
     // these references from relocating them; revoked sessions stay revoked.
@@ -92,8 +94,20 @@ export class ProjectLocationAccess {
     }
     this.books.relocateGrants();this.#installed=true;
   }
+  async prepareMove(input){
+    const marker=await moveSource(this.application.workspace.root);if(!marker)return;
+    const destination=await resolveLocation(input),{readMoveReceipt}=await import('./workspace-move.js'),receipt=await readMoveReceipt(destination);
+    if(marker.destination!==destination||receipt?.id!==marker.id||receipt.source!==this.application.workspace.root)throw new AppError('STORAGE_MOVE_STATE');
+    const original=await this.application.registry(),workspace=new Workspace(destination,this.application.workspace.vault),outline=await workspace.outline();
+    if(outline.metadata.id!==original.workspaceId)throw new AppError('STORAGE_MOVE_STATE');
+    // Only the verified handoff uses the destination directory. Every owner
+    // continues checking its original session, expiry and current access etag.
+    this.#moveRegistry=new ProjectRegistry(workspace,original.workspaceId);
+    for(const owner of this.#owners.values())owner.registry=this.#moveRegistry;
+  }
   async seal(destination) {
     if(this.#closed||this.#destination||this.#grants.size!==this.#owners.size)throw new AppError('CONFLICT');
+    await this.prepareMove(destination);
     for(const [id,owner] of this.#owners){await owner.check();if(!inside(destination,this.#grants.get(id).root))throw new AppError('STORAGE_PATH');}
     await assertRegular(destination,{directory:true});
     if(await assertRegular(path.join(destination,'.observanda','copy-in-progress'),{missing:true}))throw new AppError('STORAGE_INCOMPLETE');
@@ -102,18 +116,18 @@ export class ProjectLocationAccess {
   async install(application,client) {
     if(client!==this.client||this.#closed||this.#installed||!this.#destination||application.closed||application.workspace.root!==this.#destination)throw new AppError('ACCESS_DENIED');
     if(!this.#grants.size){await this.books.install(application,client);this.#installed=true;return;}
-    const registry=await application.registry(),listed=await registry.read(),session=application.session(client),prepared=[];
+    const registry=await application.registry(),revision=await registry.version(),session=application.session(client),prepared=[];
     try {
       for(const [id,grant] of this.#grants) {
         const owner=this.#owners.get(id);
         if(owner.session.get(id)!==owner.sessionEntry||owner.sessionEntry?.locked||grant.expires<=Date.now()){if(this.#rename)continue;throw new AppError('ACCESS_LOCKED');}
         if(session.has(id))throw new AppError('CONFLICT');
-        const entry=listed.value.projects.find(entry=>entry.projectId===id);if(!entry)throw new AppError('DATABASE_LOCATION');const access=await readAccess(entry.root);
+        const row=await registry.state(id),entry=row.entry;if(row.state!=='active'||row.revision!==revision)throw new AppError('DATABASE_LOCATION');const access=await readAccess(entry.root);
         if(entry.root!==grant.root||entry.namespaceId!==grant.namespaceId||entry.vaultId!==grant.vault.id||access.etag!==grant.etag)throw new AppError('DATABASE_LOCATION');
         authenticateKeyring(access.value,grant.vault);
         prepared.push([id,{root:entry.root,etag:access.etag,vault:cloneVault(grant.vault),expires:grant.expires}]);
       }
-      if((await registry.read()).revision!==listed.revision)throw new AppError('CONFLICT');
+      if(await registry.version()!==revision)throw new AppError('CONFLICT');
       if(application.closed)throw new AppError('ACCESS_LOCKED');
       for(let index=prepared.length-1;index>=0;index--){
         const [id,value]=prepared[index],owner=this.#owners.get(id);

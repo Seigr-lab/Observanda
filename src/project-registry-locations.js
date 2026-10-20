@@ -34,3 +34,19 @@ export function decodeProjectRegistryLocations(value,root,paths=path) {
   }
   return resolved;
 }
+
+export function projectRegistryLocationKey(location,root) {
+  const stored=encodeProjectRegistryLocations({version:7,projects:[{root:location}]},root).projects[0].root;
+  return typeof stored==='string'?'absolute:'+stored:'relative:'+stored.relative;
+}
+
+export function projectRegistryDescendantPrefix(location,root) {
+  if(location===root)return 'relative:';
+  const key=projectRegistryLocationKey(location,root);return key+(key.startsWith('relative:')?'/':path.sep);
+}
+
+export async function assertProjectTransferDestination(registry,destination){
+  const overlaps=(root,child)=>{const relative=path.relative(root,child);return relative===''||relative!=='..'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative);};
+  if(overlaps(registry.workspace.root,destination)||overlaps(destination,registry.workspace.root))throw new AppError('STORAGE_PATH');
+  await registry.assertRoot(destination);
+}

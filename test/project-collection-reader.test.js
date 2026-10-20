@@ -78,7 +78,7 @@ test('collection readers reuse only the live parent and recheck every previous b
  // An unrelated sibling directory change does not revoke this exact book.
  const sibling=(await new LabBookCreation(storage,f.deviceStore).create({id:randomUUID(),username:'',password:'',book:{id:randomUUID(),projectId:parent.projectId,title:'Later independent book'}})).book;
  const parentCount=parents.length;await next.verify();assert.equal(parents.length,parentCount+1);assert.equal(parents.at(-1).closed,true);
- const unchangedCount=parents.length;await next.verify();assert.equal(parents.length,unchangedCount);
+ const unchangedCount=parents.length;await next.verify();assert.equal(parents.length,unchangedCount+1,'A released parent is reopened to read its current native directory head');assert.equal(parents.at(-1).closed,true);
  const directory=new LabBookRegistry(storage),before=await directory.read();
  await directory.change(before.revision,value=>({...value,books:value.books.map(book=>book.labBookId===sibling.labBookId?{...book,directory:'Renamed independent book'}:book)}));
  await next.verify();

@@ -106,7 +106,7 @@ export async function executeLabBookRequest(project,selected,data,{deviceStore,a
     const command=selected.operation.includes('/export')?archive:copy,resume=selected.operation.endsWith('/resume'),cancel=selected.operation.endsWith('/cancel');
     if(!data||Object.keys(data).sort().join()!==(resume||cancel?'id':'id,parent'))throw new AppError('INVALID');
     if(cancel)return command.cancel(storage,{...data,check:()=>current()});
-    return command.run(storage,{...data,resume,onProgress:options.onProgress,check:()=>current(),forbiddenRoots:options.transferRoots?await options.transferRoots():[project.root]});
+    return command.run(storage,{...data,resume,onProgress:options.onProgress,check:()=>current(),checkDestination:options.checkTransferDestination,forbiddenRoots:options.transferRoots?await options.transferRoots():[project.root]});
    }
 
    if(selected.bookOperation==='access'){

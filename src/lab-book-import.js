@@ -55,7 +55,7 @@ export class LabBookImports{
    const bookId=entry.name.slice(0,-8);if(!entry.name.endsWith('.pointer')||!researchId(bookId))continue;
    const pending=await bookPlacementPending(this.project,bookId);if(pending?.kind!=='import'||after!==null&&pending.id<=after)continue;ids.push(pending.id);ids.sort();if(ids.length>limit+1)ids.pop();
   }
-  const more=ids.length>limit;if(more)ids.pop();const registered=new Set((await this.registry.read()).value.books.map(book=>book.labBookId)),items=[];for(const id of ids){const value=await this.read(id);if(!value)throw new AppError('STORAGE_COPY');items.push({id,labBookId:value.labBookId,name:value.directory,phase:value.phase,inPlace:value.source===this.destination(value),cancellable:!['attached','complete'].includes(value.phase)&&!registered.has(value.labBookId),running:projectTransferRunning(this.file(id))});}return {items,next:more?ids.at(-1):null};
+  const more=ids.length>limit;if(more)ids.pop();return this.registry.inspect(async view=>{const items=[];for(const id of ids){const value=await this.read(id);if(!value)throw new AppError('STORAGE_COPY');const registered=(await view.get(value.labBookId))?.state==='active';items.push({id,labBookId:value.labBookId,name:value.directory,phase:value.phase,inPlace:value.source===this.destination(value),cancellable:!['attached','complete'].includes(value.phase)&&!registered,running:projectTransferRunning(this.file(id))});}return {items,next:more?ids.at(-1):null};});
  }
  async current(){const entry=await this.workspaceRegistry.locate(this.project.projectId);if(entry.root!==this.project.root||entry.vaultId!==this.project.vault?.id||await realpath(entry.root)!==entry.root)throw new AppError('DATABASE_LOCATION');await this.project.requireStorageKey();authenticateKeyring((await readAccess(entry.root)).value,this.project.vault);}
  async source(root,vault){
@@ -87,13 +87,13 @@ export class LabBookImports{
   }));
  }
  async perform(value,vault,{check,checkpoint,opened,onProgress}){
-  await check();await this.current();const destination=this.destination(value),existing=await this.read(value.id),registered=(await this.registry.read()).value;
+  await check();await this.current();const destination=this.destination(value),existing=await this.read(value.id),registered=await this.registry.inspect(async view=>({identity:await view.get(value.labBookId),location:await view.get(view.nameKey(value.directory),{index:'location'})}));
   if(terminal(value))return this.complete(value,vault,opened);
   await assertIncomingProjectAddresses(this.workspaceRegistry,[value]);
   await assertBookPlacementAvailable(this.project,value.labBookId,value.directory,{except:value.id});
   const address=await this.addresses.read(value.namespaceId);if(address&&(address.projectId!==this.project.projectId||!same(address,value)))throw new AppError('DATABASE_LOCATION');
-  const prior=registered.books.find(book=>book.labBookId===value.labBookId);
-  if(registered.deleted.some(book=>book.labBookId===value.labBookId)||registered.relocated?.some(book=>book.labBookId===value.labBookId)||registered.books.some(book=>book.labBookId!==value.labBookId&&nameKey(book.directory)===nameKey(value.directory))||prior&&(!same(prior,value)||prior.directory!==value.directory))throw new AppError('EXISTS');
+  const prior=registered.identity?.state==='active'?registered.identity.entry:null;
+  if(registered.identity&&registered.identity.state!=='active'||registered.location&&registered.location.entry.labBookId!==value.labBookId||prior&&(!same(prior,value)||prior.directory!==value.directory))throw new AppError('EXISTS');
   if(!existing&&prior)throw new AppError('EXISTS');
   if(!existing&&destination!==value.source&&await assertRegular(destination,{directory:true,missing:true}))throw new AppError('EXISTS');
   await withWriterLease(path.join(this.project.root,'.observanda/lab-books.lock'),async()=>{await check();await this.current();if(!existing)await this.save(value);await reserveBookPlacement(this.project,value);});
@@ -126,8 +126,8 @@ export class LabBookImports{
      if(value.archiveDigest)await assertInventoryObligationsSettled(target);
      const entry=await this.registry.describe(target,{staged:true});if(!same(entry,value)||entry.directory!==value.directory)throw new AppError('DATABASE_LOCATION');
      for(let attempt=0;;attempt++){
-      const current=await this.registry.read(),prior=current.value.books.find(book=>book.labBookId===value.labBookId);if(prior){if(!same(prior,entry)||prior.directory!==entry.directory)throw new AppError('CONFLICT');break;}
-      try{await this.registry.change(current.revision,data=>({...data,books:[...data.books,entry]}));break;}catch(error){if(error.code!=='CONFLICT'||attempt>=7)throw error;}
+      const current=await this.registry.state(value.labBookId);if(current.state&&current.state!=='active')throw new AppError('EXISTS');const prior=current.entry;if(prior){if(!same(prior,entry)||prior.directory!==entry.directory)throw new AppError('CONFLICT');break;}
+      try{await this.registry.apply(current.revision,[{state:'active',entry}]);break;}catch(error){if(error.code!=='CONFLICT'||attempt>=7)throw error;}
      }
      await checkpoint('attached',value);await this.addresses.register(this.project.projectId,entry);value.phase='attached';await this.save(value);await checkpoint('addressed',value);await unlink(path.join(destination,'.observanda/copy-in-progress')).catch(error=>{if(error.code!=='ENOENT')throw error;});
      value.phase='complete';await this.save(value);await checkpoint('complete',value);
@@ -140,7 +140,7 @@ export class LabBookImports{
   const directory=await privateDirectory(this.project.root,'.observanda/lab-book-imports');
   return trackProjectTransfer(this.file(command.id),()=>withWriterLease(path.join(directory,command.id+'.lock'),async()=>{
    await check();await this.current();const value=await this.read(command.id);if(!value)throw new AppError('NOT_FOUND');if(value.phase==='cancelled')return this.cancelled(value);
-   if(['attached','complete'].includes(value.phase)||(await this.registry.read()).value.books.some(book=>book.labBookId===value.labBookId))throw new AppError('CONFLICT');
+   if(['attached','complete'].includes(value.phase)||(await this.registry.state(value.labBookId)).state==='active')throw new AppError('CONFLICT');
    const destination=this.destination(value),discard=new ImportDiscard(this.project,value.id);let vault;
    try{
     if(value.source!==destination&&value.destinationIdentity){

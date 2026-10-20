@@ -1,3 +1,4 @@
+import {catalogueArchiveTables as tables} from './postgres-archive-tables.js';
 import {readCatalogueStamp} from './catalogue-stamp.js';
 import {dropProjectDomainSchemas} from './project-domain-schema.js';
 import {databaseRequestSignal} from './database-request-context.js';
@@ -22,15 +23,7 @@ import {CATALOGUE_FILE,CATALOGUE_ARCHIVE,CATALOGUE_ACTIVATION,catalogueBinding,c
 import {databaseScope,databaseProvider,acquireWorkspaceDatabaseEnvironment,scratchDatabaseEnvironment} from './workspace-database-context.js';
 
 export {CATALOGUE_FILE,CATALOGUE_ARCHIVE} from './postgres-activation.js';
-const tables=Object.freeze({
- scope_keys:['scope_id','generation','payload'],
- records:['id','revision','scope_id','generation','payload'],
- snapshots:['id','ordinal','payload'],
- state:['slot','payload'],
- module_entities:['id','revision','payload'],
- module_events:['command_id','ordinal','payload'],
- objects:['id','payload']
-});
+
 const uuid=value=>typeof value==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value);
 const schemaFor=id=>{if(!uuid(id))throw new AppError('CATALOGUE_DAMAGED');return 'obs_'+id.replaceAll('-','');};
 const fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};

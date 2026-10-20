@@ -30,13 +30,15 @@ export class WorkspaceDeletions extends OwnedStorageDeletions{
  async lease(source){const directory=path.join(this.directory,'owners',digest(path.resolve(source)));await mkdir(directory,{recursive:true,mode:0o700});await assertRegular(directory,{directory:true});return workspaceDatabaseLease(directory);}
  async inventory(workspace){
   if((await this.binding(workspace.root))?.placement!=='workspace')return {};
-  const metadata=(await workspace.outline()).metadata,registry=new ProjectRegistry(workspace,metadata.id),directory=await registry.read(),roots=new Map(directory.value.projects.map(item=>[item.projectId,item.root])),projectDirectories=[];
-  for(const entry of directory.value.projects){
-   const relative=path.relative(workspace.root,entry.root);if(!relative||relative==='..'||relative.startsWith('..'+path.sep)||path.isAbsolute(relative))continue;
-   const parent=entry.parentId===null?workspace.root:roots.get(entry.parentId);if(path.dirname(entry.root)!==parent)throw new AppError('STORAGE_DELETE_CONTENTS');
-   projectDirectories.push(relative.split(path.sep).join('/'));
-  }
-  return {workspaceId:metadata.id,projectRegistryRevision:directory.revision,projectDirectories:projectDirectories.sort()};
+  const metadata=(await workspace.outline()).metadata,registry=new ProjectRegistry(workspace,metadata.id);
+  return registry.inspect(async view=>{
+   const projectDirectories=[];
+   for await(const {entry} of view.entries({index:'location',prefix:'relative:'})){
+    const parent=entry.parentId===null?workspace.root:(await view.get(entry.parentId))?.entry.root;if(path.dirname(entry.root)!==parent)throw new AppError('STORAGE_DELETE_CONTENTS');
+    projectDirectories.push(path.relative(workspace.root,entry.root).split(path.sep).join('/'));
+   }
+   return {workspaceId:metadata.id,projectRegistryRevision:view.revision,projectDirectories:projectDirectories.sort()};
+  });
  }
  validReceipt(value){
   if(value.projectDirectories!==undefined){if(!researchId(value.workspaceId)||typeof value.projectRegistryRevision!=='string'||!Array.isArray(value.projectDirectories)||value.projectDirectories.length>50000||new Set(value.projectDirectories).size!==value.projectDirectories.length)return false;for(const relative of value.projectDirectories)nestedRenameRoot(value.source,relative);}
