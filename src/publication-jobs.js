@@ -164,7 +164,7 @@ export class PublicationJobs{
   if(!researchId(deploymentId))throw new AppError('INVALID');
   const read=async(file,limit)=>{const raw=await this.workspace.readMetadata(file,limit);if(raw===null)throw new AppError('JOB_DAMAGED');try{return JSON.parse(raw);}catch{throw new AppError('JOB_DAMAGED');}};
   const deployment=await read('.observanda/deployments/'+deploymentId+'.json',16*1024*1024),intent=deployment?.intent,journal=deployment?.journal;
-  if(deployment?.version!==1||deployment.id!==deploymentId||!researchId(deployment.scope)||!hash(intent?.reviewId)||!hash(intent?.releaseId)||!hash(intent?.key)||journal?.pushAttempted!==true||!['github','ssh'].includes(intent?.config?.kind))throw new AppError('JOB_DAMAGED');
+  if(![1,2].includes(deployment?.version)||deployment.id!==deploymentId||!researchId(deployment.scope)||!hash(intent?.reviewId)||!hash(intent?.releaseId)||!hash(intent?.key)||journal?.pushAttempted!==true||!['github','ssh'].includes(intent?.config?.kind))throw new AppError('JOB_DAMAGED');
   if(intent.config.kind==='github'?!/^[a-f0-9]{40}$/.test(journal.commit??''):journal.commit!==intent.releaseId)throw new AppError('JOB_DAMAGED');
   const job=await read('.observanda/jobs/'+deploymentId+'.json',16*1024*1024),active=await read('.observanda/deployment-active/'+intent.key+'.json',4096);
   if(job?.format!==1||job.id!==deploymentId||job.type!=='publication.deploy'||job.scope!==deployment.scope||job.input?.revision!==digest(serialize(intent))||active?.id!==deploymentId)throw new AppError('JOB_CHANGED');

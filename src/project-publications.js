@@ -143,6 +143,7 @@ export class ProjectPublications{
   if(method==='connect'){await githubIdle();await publisher.connection?.cancel();return publisher.connect(data.token);}
   if(method==='disconnect'){await githubIdle();publisher.token=null;return publisher.read();}
   if(method==='check')return publisher.check({reviewExisting:true});
+  if(method==='plan-page')return publisher.destinationPlanPage(data);
   if(method==='plan'){const value=await retained(data.id);if(data.rollbackReview)await new PublicationRollback(workspace,publisher,{sourceReader}).authorize(value,data.rollbackReview);else if(value.configEtag!==data.configEtag||!await publicationRevisionCurrent(workspace,value))throw new AppError('PUBLISH_STALE');return publisher.reviewDestination(value,data.configEtag,{signal});}
   if(['verify','verification','verification-cancel','verification-retry'].includes(method)){
    const checks=new PublicationVerificationJobs(workspace,publisher,queue);

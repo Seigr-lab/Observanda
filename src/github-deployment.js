@@ -1,3 +1,4 @@
+import {githubPlanReader,requireGithubPlanCollections} from './github-plan-index.js';
 import {contentHash} from './file-content.js';
 import {contentBuffer} from './file-content.js';
 import {buildGithubTree,verifyRemoteGithubTree} from './github-trees.js';
@@ -14,31 +15,34 @@ export async function deployGithub(publisher,candidate,config,{plan=null,journal
  const c=config.github,base=`/repos/${c.owner}/${c.repository}`;
  const call=async(route,method='GET',data,missing=false)=>{signal?.throwIfAborted();await guard(method==='GET'?{phase:'read'}:undefined);return publisher.github(base+route,method,data,missing,signal);};
  const checkpoint=async()=>{await guard(journal.receipt?{phase:'receipt'}:undefined);await save(journal);};
- if(!journal.entries){
+ if(!journal.entries&&!journal.document){
   await guard();await publisher.check({plan});
   const reviewed=admitGithubPlan(plan??await publisher.buildDestinationPlan(candidate,(await publisher.read()).etag,{signal}));
-  if(reviewed.conflicts.length)throw new AppError('PUBLISH_CONFLICT');
+  if(githubPlanReader(publisher.workspace,reviewed).count('conflicts'))throw new AppError('PUBLISH_CONFLICT');
   if(!plan&&reviewed.requiresReview)throw new AppError('PUBLISH_OWNERSHIP');
   // Recheck after hashing and tree inspection, before the first network write.
   await publisher.check({plan:reviewed});
-  Object.assign(journal,{entries:reviewed.entries,preservedEntries:reviewed.preservedEntries,removed:reviewed.removed,baseTree:reviewed.baseTree,repositoryId:reviewed.repositoryId,parent:reviewed.head,uploaded:[],createdAt:journal.createdAt??new Date().toISOString()});await checkpoint();
+  Object.assign(journal,{...(reviewed.document?{document:reviewed.document,uploadedCount:0}:{entries:reviewed.entries,preservedEntries:reviewed.preservedEntries,removed:reviewed.removed,uploaded:[]}),baseTree:reviewed.baseTree,repositoryId:reviewed.repositoryId,parent:reviewed.head,createdAt:journal.createdAt??new Date().toISOString()});await checkpoint();
  }
- if(!journal.preservedEntries||!Number.isSafeInteger(journal.repositoryId))throw new AppError('PUBLISH_STALE');
- const uploaded=new Set(journal.uploaded),total=new Set(journal.entries.map(entry=>entry.sha)).size;
- const report=stage=>progress({stage,done:uploaded.size,total});
+ if(!journal.document&&!journal.preservedEntries||!Number.isSafeInteger(journal.repositoryId))throw new AppError('PUBLISH_STALE');
+ if(journal.document)requireGithubPlanCollections(journal.document);
+ const reader=githubPlanReader(publisher.workspace,journal,{signal}),uploaded=journal.document?null:new Set(journal.uploaded),total=reader.count('uploads');
+ if(journal.document&&(!Number.isSafeInteger(journal.uploadedCount)||journal.uploadedCount<0||journal.uploadedCount>total))throw new AppError('PUBLISH_STALE');
+ journal.total=total;const report=stage=>progress({stage,done:journal.uploadedCount??uploaded.size,total});
+ const expected={count:reader.count('entries')+reader.count('preservedEntries'),get:async path=>await reader.get('entries',path)??await reader.get('preservedEntries',path)};
  const repo=await call('');if(repo.id!==journal.repositoryId||!repo.permissions?.push)throw new AppError('PUBLISH_STALE');
  const head=await call(`/git/ref/heads/${c.branch}`,'GET',undefined,true),current=head?.object?.sha??null;
  if(current!==journal.parent&&(!journal.commit||current!==journal.commit))throw new AppError('PUBLISH_OWNERSHIP');
  if(!journal.commit||current!==journal.commit){
-  for(const entry of journal.entries){
-   if(uploaded.has(entry.sha))continue;
+  for await(const entry of reader.values('uploads',{offset:journal.document?journal.uploadedCount:0})){
+   if(uploaded?.has(entry.sha))continue;
    await report(messages.uploading);
    const source=c.directory?entry.path.slice(c.directory.length+1):entry.path;
    const blob=await call('/git/blobs','POST',{content:(await contentBuffer(await candidate.files.get(source))).toString('base64'),encoding:'base64'});
-   if(blob.sha!==entry.sha)throw new AppError('PUBLISH_REMOTE');journal.uploaded.push(entry.sha);uploaded.add(entry.sha);await checkpoint();
+   if(blob.sha!==entry.sha)throw new AppError('PUBLISH_REMOTE');if(journal.document)journal.uploadedCount++;else{journal.uploaded.push(entry.sha);uploaded.add(entry.sha);}await checkpoint();
   }
-  await buildGithubTree(call,journal,{checkpoint,signal,onProgress:(done,total)=>progress({stage:messages.buildingTree,done,total})});
-  await verifyRemoteGithubTree(call,journal.tree,[...journal.preservedEntries,...journal.entries],{signal});
+  await buildGithubTree(call,journal,{reader,checkpoint,signal,onProgress:(done,total)=>progress({stage:messages.buildingTree,done,total})});
+  await verifyRemoteGithubTree(call,journal.tree,expected,{signal});
   await report(messages.committing);
   if(!journal.commit){
    const identity={name:'Observanda Publisher',email:'publisher@observanda.invalid',date:journal.createdAt};
@@ -61,7 +65,7 @@ export async function deployGithub(publisher,candidate,config,{plan=null,journal
  journal.receipt??={releaseId:candidate.id,commit:journal.commit,at:new Date().toISOString(),status:'uploaded',manifestHash:contentHash(await candidate.files.get('publication.json'))};
  await checkpoint();await pushed(journal.receipt,journal);
  await report(messages.verifying);
- await verifyRemoteGithubTree(call,journal.tree,[...journal.preservedEntries,...journal.entries],{signal});
+ await verifyRemoteGithubTree(call,journal.tree,expected,{signal});
  if(c.pages===false){
   journal.receipt.status='uploaded-repository-only';await checkpoint();await pushed(journal.receipt,journal);
   await report(messages.repositoryVerified);return journal.receipt;

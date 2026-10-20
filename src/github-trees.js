@@ -40,6 +40,9 @@ export async function* githubTreeRecords(call,root,{signal}={}){
 }
 
 export async function verifyRemoteGithubTree(call,root,expected,{signal}={}){
+ if(expected&&typeof expected.get==='function'){
+  let count=0;for await(const entry of githubTreeRecords(call,root,{signal})){const wanted=await expected.get(entry.path);if(!wanted||wanted.sha!==entry.sha||wanted.mode!==entry.mode||wanted.type!==entry.type)fail();count++;}if(count!==expected.count)fail();return;
+ }
  const remaining=new Map();
  for(const entry of expected){if(remaining.has(entry.path))fail();remaining.set(entry.path,entry);}
  for await(const entry of githubTreeRecords(call,root,{signal})){
@@ -54,9 +57,9 @@ export async function verifyRemoteGithubTree(call,root,expected,{signal}={}){
 // Every acknowledged batch has its own content-addressed tree and durable
 // cursor. A lost response replays the same batch on the same immutable base.
 const TREE_BATCH_ENTRIES=256,TREE_BATCH_BYTES=128*1024;
-export async function buildGithubTree(call,journal,{checkpoint,signal,onProgress=async()=>{}}){
- const total=journal.entries.length+journal.removed.length;
- const at=index=>index<journal.entries.length?journal.entries[index]:{path:journal.removed[index-journal.entries.length],mode:'100644',type:'blob',sha:null};
+export async function buildGithubTree(call,journal,{reader,checkpoint,signal,onProgress=async()=>{}}){
+ const entries=reader?reader.count('entries'):journal.entries.length,removed=reader?reader.count('removed'):journal.removed.length,total=entries+removed;
+ const at=async index=>index<entries?(reader?reader.at('entries',index):journal.entries[index]):{path:reader?(await reader.at('removed',index-entries)).path:journal.removed[index-entries],mode:'100644',type:'blob',sha:null};
  let state=journal.treeBuild;
  if(state&&(state.version!==1||state.baseTree!==journal.baseTree||state.total!==total||!Number.isSafeInteger(state.applied)||state.applied<0||state.applied>total||!validSha(state.tree)))throw new AppError('PUBLISH_STALE');
  if(journal.tree){if(!validSha(journal.tree)||state&&(state.applied!==total||state.tree!==journal.tree))throw new AppError('PUBLISH_STALE');return journal.tree;}
@@ -64,7 +67,7 @@ export async function buildGithubTree(call,journal,{checkpoint,signal,onProgress
  do{
   signal?.throwIfAborted();const start=state?.applied??0,batch=[];let bytes=128;
   while(start+batch.length<total&&batch.length<TREE_BATCH_ENTRIES){
-   const entry=at(start+batch.length),size=Buffer.byteLength(JSON.stringify(entry))+1;
+   const entry=await at(start+batch.length),size=Buffer.byteLength(JSON.stringify(entry))+1;
    if(batch.length&&bytes+size>TREE_BATCH_BYTES)break;
    if(size+128>TREE_BATCH_BYTES)fail();batch.push(entry);bytes+=size;
   }

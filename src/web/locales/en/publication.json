@@ -219,7 +219,10 @@
   "copyFallback": "Automatic copying is unavailable. Select and copy the text above.",
   "previousChoices": "Previous pages",
   "nextChoices": "Next pages",
-  "choicesPosition": "Pages {start}?{end} of {total}",
+  "choicesPosition": "Pages {start} to {end} of {total}",
   "choosePreviewPage": "Choose a page",
-  "referencesPosition": "References {start}?{end} of {total}"
+  "referencesPosition": "References {start} to {end} of {total}",
+  "previousRepositoryFiles": "Previous files",
+  "nextRepositoryFiles": "Next files",
+  "repositoryFilesPosition": "Files {start} to {end} of {total}"
 }

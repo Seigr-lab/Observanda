@@ -1,3 +1,4 @@
+import {verifyGithubPublishingPlans} from './github-plan-index.js';
 import {verifyRetainedPublicationRollback} from './publication-rollback.js';
 import {AnalysisPublicationReview} from './analysis-publication-review.js';
 import {openPublicationInput} from './publication-input-reader.js';
@@ -37,6 +38,7 @@ export async function verifyPublicationStorage(workspace){
   }
   await verifyLocalExports(scoped);
   await verifyDeploymentInventories(scoped);
+  await verifyGithubPublishingPlans(scoped);
  };
  await check(workspace);
  // Also retain editions of removed sites. Current website selection must not

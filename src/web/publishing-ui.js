@@ -4,7 +4,7 @@ import {verificationStatus,verificationActions} from './publication-verification
 import {deploymentView as renderDeployments} from './deployment-view.js';
 import {publicationLinksUI} from './publication-links-ui.js';
 import {t} from './i18n/index.js';
-import {publicationText} from './publication-review.js';
+import {publicationText,destinationPlanRows,destinationConflictCount} from './publication-review.js';
 import {requireAnalysisEditionReview} from './analysis-review-ui.js';
 export function publishingUI({state,api,esc,field,option,render,notify,showDialog,onChange}) {
   const legacyLinks=publicationLinksUI({state,api,esc,field,showDialog});
@@ -13,6 +13,7 @@ export function publishingUI({state,api,esc,field,option,render,notify,showDialo
   let saved=null,version=0,pending=null,deployments=null,cursor=null,previous=[],timer=null,loadId=0,workspaceContext=null,repositoryMode='existing',visibility='private',setupJob=null,setupTimer=null;
   const setupText=(key,values)=>t('repositorySetup',key,values);
   let emptyReview=null;
+  const planPageRequests=new WeakMap();
   function initializationReview(){
     if(!emptyReview||emptyReview.configEtag!==state.publishing?.etag||state.publishing.dirty||setupJob&&['queued','running'].includes(setupJob.state))return '';
     return `<section id="repository-initialize-review" class="panel"><h3>${esc(setupText('emptyTitle'))}</h3><p>${esc(setupText('emptyGuidance',{repository:emptyReview.name,branch:emptyReview.branch}))}</p><button class="button primary" data-action="publish-initialize-repository">${esc(setupText('initialize'))}</button></section>`;
@@ -130,9 +131,24 @@ export function publishingUI({state,api,esc,field,option,render,notify,showDialo
       if(name==='publish-setup-retry'||name==='publish-setup-cancel'){
         setupJob=(await api('/api/repository-setup/'+(name==='publish-setup-retry'?'retry':'cancel'),{id:setupJob.id})).job;render();scheduleSetup();return true;
       }
+      if(name==='publish-plan-page'){
+        const preview=state.preview,plan=preview?.destinationPlan,kind=button.dataset.kind,context=websiteContext(state),route=location.hash;
+        if(!plan)return true;
+        let requests=planPageRequests.get(plan);if(!requests){requests=new Map();planPageRequests.set(plan,requests);}const version=(requests.get(kind)??0)+1;requests.set(kind,version);
+        const page=await api('/api/publishing/plan-page',{id:plan.id,configEtag:plan.configEtag,kind,offset:Number(button.dataset.offset)},{adopt:false,websitePin:preview.websitePin});
+        if(requests.get(kind)===version&&preview===state.preview&&plan===preview.destinationPlan&&context===websiteContext(state)&&route===location.hash){plan[kind]=page.items;plan.windows[kind]={offset:page.offset,next:page.next};const host=document.querySelector(`[data-plan-rows="${kind}"]`);if(host)host.innerHTML=destinationPlanRows(plan,kind,{esc});}
+        return true;
+      }
       if(name==='publish-refresh-plan'){
-        const preview=state.preview,plan=await api('/api/publishing/plan',{id:preview.id,configEtag:preview.configEtag,...(preview.rollback?{rollbackReview:preview.rollback.id}:{})},{websitePin:preview.websitePin});
-        if(state.preview===preview){preview.destinationPlan=plan;render();}return true;
+        const preview=state.preview,context=websiteContext(state),route=location.hash;
+        const approvals=['review-confirm','rollback-confirm'].map(id=>[id,!!document.getElementById(id)?.checked]);
+        const plan=await api('/api/publishing/plan',{id:preview.id,configEtag:preview.configEtag,...(preview.rollback?{rollbackReview:preview.rollback.id}:{})},{websitePin:preview.websitePin});
+        if(state.preview===preview&&context===websiteContext(state)&&route===location.hash){
+          preview.destinationPlan=plan;render();
+          // Refreshing repository changes does not change the edition already
+          // reviewed. Repository approval itself must be given for the new plan.
+          for(const [id,checked] of approvals){const input=document.getElementById(id);if(input)input.checked=checked;}
+        }return true;
       }
       if(name==='publish-job-cancel'||name==='publish-job-retry'){await deploymentCall(name==='publish-job-cancel'?'cancel':'retry',{id:button.dataset.id});await refreshDeployments();return true;}
       if(name.startsWith('publish-jobs-')){if(name==='publish-jobs-next'&&deployments?.next){previous.push(cursor);cursor=deployments.next;}if(name==='publish-jobs-previous'&&previous.length)cursor=previous.pop();await refreshDeployments();return true;}
@@ -167,7 +183,7 @@ export function publishingUI({state,api,esc,field,option,render,notify,showDialo
           preview.destinationPlan=plan;
           if(plan.requiresReview){render();document.querySelector('#review-confirm').checked=true;if(preview.rollback)document.querySelector('#rollback-confirm').checked=true;document.querySelector('#destination-review')?.scrollIntoView({block:'center'});return true;}
         }
-        if(state.preview.destinationPlan?.conflicts.length){notify(publicationText('conflictGuidance'),true);return true;}
+        if(destinationConflictCount(state.preview.destinationPlan)){notify(publicationText('conflictGuidance'),true);return true;}
         const plan=state.preview.destinationPlan,destinationReviewed=!!document.querySelector('#destination-confirm')?.checked;
         if(plan?.requiresReview&&!destinationReviewed){notify('Review and confirm the changes to this website repository.',true);return true;}
         const result=await api('/api/publishing/deploy',{id:state.preview.id,configEtag:state.preview.configEtag,reviewed:true,...(state.preview.rollback?{rollbackReview:state.preview.rollback.id,rollbackConfirmed:true}:{}),...(plan?{destinationReview:plan.id,destinationReviewed}: {})},{websitePin:state.preview.websitePin});

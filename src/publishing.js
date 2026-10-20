@@ -1,3 +1,4 @@
+import {githubPlanReader,githubReviewKinds,githubRemovedPaths} from './github-plan-index.js';
 import {contentHash} from './file-content.js';
 import {verifyPublicationCandidate} from './retained-publication-files.js';
 import {publicationWorkspace} from './publication-pin.js';
@@ -5,7 +6,7 @@ import {publicationRevisionCurrent} from './publication-freshness.js';
 import {deploymentInventory,recordDeploymentInventory,prepareDeploymentInventory,assertDeploymentInventory,deploymentInventoryPaths,verifyLiveFiles,LiveVerificationError} from './publication-live.js';
 import {publicationText} from './web/publication-messages.js';
 import {deploymentUncertain} from './publication-deployment-state.js';
-import {admitGithubPlan,githubDirectory,githubFilePlan,readGithubOwnership,writeGithubOwnership} from './github-publication-plan.js';
+import {indexedGithubFilePlan,githubPlanReview,admitGithubPlan,githubDirectory,readGithubOwnership,writeGithubOwnership} from './github-publication-plan.js';
 import {githubTreeRecords} from './github-trees.js';
 import {deployGithub} from './github-deployment.js';
 import {contentSize} from './file-content.js';
@@ -101,7 +102,7 @@ export class Publisher {
     let files=[],baseTree=null;
     if(head){
       const commit=await remote(base+'/git/commits/'+head);baseTree=commit.tree?.sha;
-      for await(const entry of githubTreeRecords(route=>remote(base+route),baseTree,{signal}))files.push(entry);
+      files=githubTreeRecords(route=>remote(base+route),baseTree,{signal});
     }else{
       const initial=await remote(base+'/git/ref/heads/'+encodeURIComponent(repo.default_branch),true);
       if(!initial)throw new AppError('PUBLISH_EMPTY_REPO');
@@ -116,8 +117,8 @@ export class Publisher {
     }
     const ownership=await readGithubOwnership(this,saved.config,previous);
     if(ownership&&ownership.repositoryId!==repo.id)throw new AppError('PUBLISH_OWNERSHIP');
-    const changes=await githubFilePlan(candidate,files,ownership,c.directory??'',{signal});
-    return admitGithubPlan({version:1,id:randomUUID(),releaseId:candidate.id,configEtag,repositoryId:repo.id,baseTree,head,pages,requiresReview:!!head&&head!==previous?.commit&&!initialized||!!pages&&(pages.build_type!=='legacy'||pages.branch!==c.branch||pages.path!=='/')||changes.conflicts.length>0||changes.removed.length>0,...changes});
+    const changes=await indexedGithubFilePlan(this.workspace,candidate,files,ownership,c.directory??'',{signal});
+    return admitGithubPlan({version:2,id:randomUUID(),releaseId:candidate.id,configEtag,repositoryId:repo.id,baseTree,head,pages,requiresReview:!!head&&head!==previous?.commit&&!initialized||!!pages&&(pages.build_type!=='legacy'||pages.branch!==c.branch||pages.path!=='/')||changes.counts.conflicts>0||changes.counts.removed>0,...changes});
   }
   async reviewDestination(candidate,configEtag,{signal}={}){
     const plan=await this.buildDestinationPlan(candidate,configEtag,{signal}),saved=await this.read();
@@ -127,14 +128,20 @@ export class Publisher {
       signal?.throwIfAborted();
       await this.workspace.writeMetadata('.observanda/publishing-plan/'+this.destinationKey(saved.config)+'.json',serialize(plan));
     });
-    const {entries,preservedEntries,...review}=plan;return review;
+    return githubPlanReview(this.workspace,plan);
   }
   async readDestinationPlan(candidate,configEtag,{destinationReview,destinationReviewed}={}) {
     if(destinationReview===undefined)return null;
     const saved=await this.read(),plan=await this.readFile(path.join(this.workspace.root,'.observanda/publishing-plan/'+this.destinationKey(saved.config)+'.json'),null,16*1024*1024);
-    if(!plan||plan.version!==1||!Array.isArray(plan.entries)||!Array.isArray(plan.preservedEntries)||plan.id!==destinationReview||plan.configEtag!==configEtag||saved.etag!==configEtag||plan.releaseId!==candidate.id||plan.requiresReview&&destinationReviewed!==true)throw new AppError('PUBLISH_STALE');
-    if(plan.conflicts?.length)throw new AppError('PUBLISH_CONFLICT');
+    if(!plan||![1,2].includes(plan.version)||plan.version===1&&(!Array.isArray(plan.entries)||!Array.isArray(plan.preservedEntries))||plan.id!==destinationReview||plan.configEtag!==configEtag||saved.etag!==configEtag||plan.releaseId!==candidate.id||plan.requiresReview&&destinationReviewed!==true)throw new AppError('PUBLISH_STALE');
+    if(githubPlanReader(this.workspace,plan).count('conflicts'))throw new AppError('PUBLISH_CONFLICT');
     return admitGithubPlan(plan);
+  }
+  async destinationPlanPage({id,configEtag,kind,offset=0}){
+    if(!githubReviewKinds.includes(kind))throw new AppError('INVALID');
+    const saved=await this.read(),plan=await this.readFile(path.join(this.workspace.root,'.observanda/publishing-plan/'+this.destinationKey(saved.config)+'.json'),null,16*1024*1024);
+    if(!plan||plan.id!==id||saved.etag!==configEtag||plan.configEtag!==configEtag)throw new AppError('PUBLISH_STALE');
+    const page=await githubPlanReader(this.workspace,admitGithubPlan(plan)).page(kind,{offset});return {...page,items:page.items.map(row=>row.path)};
   }
   async check({plan=null,reviewExisting=false}={}) {
     const saved = await this.read(); if (!saved.configured) throw new AppError('PUBLISH_CONFIG');
@@ -190,9 +197,10 @@ export class Publisher {
     const saved = await this.read();
     if (!saved.configured || saved.etag !== expectedConfigEtag) throw new AppError('PUBLISH_STALE');
     const config = saved.config;
-    const plan=await this.readDestinationPlan(candidate,expectedConfigEtag,review);
+    let plan=await this.readDestinationPlan(candidate,expectedConfigEtag,review);
+    if(!plan&&config.kind==='github'){plan=await this.buildDestinationPlan(candidate,expectedConfigEtag);if(plan.requiresReview)throw new AppError('PUBLISH_OWNERSHIP');}
     await enforcePublishingLimits(candidate,config);
-    const inventoryKey=this.destinationKey(config),preparedInventory=await prepareDeploymentInventory(this.workspace,inventoryKey,candidate.files.keys(),{removed:(plan?.removed??[]).map(p=>config.github.directory?p.slice(config.github.directory.length+1):p)});
+    const inventoryKey=this.destinationKey(config),preparedInventory=await prepareDeploymentInventory(this.workspace,inventoryKey,candidate.files.keys(),{removed:githubRemovedPaths(this.workspace,plan,config.github?.directory)});
     // Hold the workspace lock through publication so another writer cannot invalidate the review.
     return this.workspace.withLock(async () => {
       await publicationWorkspace(this.workspace).lockWebsite();

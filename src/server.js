@@ -1159,6 +1159,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         if (url.pathname === '/api/publishing/connect') {await assertGithubIdle();await publisher.connection?.cancel();return json(await publisher.connect(data.token));}
         if (url.pathname === '/api/publishing/disconnect') {await assertGithubIdle();publisher.token = null;return json(await publisher.read());}
         if (url.pathname === '/api/publishing/check') return json(await publisher.check({reviewExisting:true}));
+        if (url.pathname === '/api/publishing/plan-page') return json(await publisher.destinationPlanPage(data));
         if (url.pathname === '/api/publishing/plan') {
           const candidate=await retainedCandidate(data.id);
           if(!candidate)throw new AppError('PUBLISH_STALE');
