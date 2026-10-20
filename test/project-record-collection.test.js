@@ -24,12 +24,15 @@ import {MediaStore} from '../src/media.js';
 import {createWorkspaceAccess,takeCreatedVault,readAccess,verifyAccess} from '../src/access.js';
 import {clearVault} from '../src/encryption.js';
 import {viewQuery} from '../src/web/record-view-model.js';
+import {WebsiteSites} from '../src/website-sites.js';
 test('project collection reads nested owners, authenticates each book and keeps pinned pages across writes',async()=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-record-collection-')),runtime=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(runtime),keys=[];let application;const originalRecord=ResearchCatalogue.prototype.record;
  try{
   const root=sampleNotebook(),f=await encryptedFixture(directory,root);keys.push(f.vault);const registry=new ProjectRegistry(f.workspace,root.id);
   const create=async(name,parent=null)=>{const book=sampleNotebook();book.title=book.projects[0].title=name;const access=await createWorkspaceAccess('','',f.deviceStore),vault=takeCreatedVault(access);keys.push(vault);const storage=await initializeProjectLocation(path.join(parent?.root??f.workspace.root,name),book.projects[0].id,book,access,vault);await registry.attach(storage,{expected:(await registry.read()).revision,parentId:parent?.projectId??null});return {book,storage};};
   const project=await create('Research Project'),child=await create('Nested Project',project.storage),sibling=await create('Other Project');
+  const websites=new WebsiteSites(f.workspace),websiteIds=[];for(const name of ['Field website','Learning website'])websiteIds.push((await websites.change({workspaceId:root.id,etag:(await f.workspace.outline()).etag,operation:'create',name})).id);
+  await assert.rejects(new WebsiteSites(project.storage).change({workspaceId:project.book.id,etag:(await project.storage.outline()).etag,operation:'create',name:'Unowned project website'}),{code:'INVALID'});
   const section={id:randomUUID(),profileId:null,key:'field-template',label:'Field template',description:'',fields:[],enabled:true};
   const created=await new LabBookCreation(project.storage,f.deviceStore,{publish:entry=>new LabBookDirectory(registry).register(project.storage.projectId,entry)}).create({id:randomUUID(),username:'',password:'Independent book password',book:{id:randomUUID(),projectId:project.storage.projectId,title:'Observations Book',configuration:{profiles:[],sections:[section]}}}),key=await verifyAccess(await readAccess(created.book.root),'','Independent book password',{deviceStore:f.deviceStore});keys.push(key);
   const storage=new LabBookStorage(created.book.root,created.book.labBookId,key),metadata=(await storage.outline()).metadata,record={...sampleNotebook().entries[0],id:randomUUID(),notebookId:storage.labBookId,title:'Dedicated observation',sections:[{id:randomUUID(),title:'Measured conditions',body:'Retained conditions'}],template:templateFrom(section),updatedAt:'2026-10-15T12:00:00.000Z'};
@@ -73,7 +76,9 @@ test('project collection reads nested owners, authenticates each book and keeps 
 
   await assert.rejects(publicationSource(metadata.id,'content',{workspaceId:sibling.book.id,snapshotId:publicationHead.value.snapshotId,projectId:project.storage.projectId,search:'',cursor:null}),{code:'INVALID'});
   const siteCommand={workspaceId:root.id,projectId:null,search:'',limit:2,cursor:null},sites=data=>application.run(client,projectRequest('/api/projects/publication-sites','POST'),{...siteCommand,...data});
-  const sitePage=await sites({});assert.equal(sitePage.total,5);const siteRows=[...sitePage.items];let siteNext=sitePage;while(siteNext.nextCursor){siteNext=await sites({cursor:siteNext.nextCursor});siteRows.push(...siteNext.items);}assert.ok(siteRows.some(row=>row.workspaceId===metadata.id&&row.labBookId===storage.labBookId));
+  const sitePage=await sites({});assert.equal(sitePage.total,3);assert.ok(sitePage.nextCursor);const siteRows=[...sitePage.items];let siteNext=sitePage;while(siteNext.nextCursor){siteNext=await sites({cursor:siteNext.nextCursor});siteRows.push(...siteNext.items);}
+  assert.deepEqual(new Set(siteRows.map(row=>row.siteId)),new Set([null,...websiteIds]));assert.ok(siteRows.every(row=>row.workspaceId===root.id&&row.projectId===null&&row.labBookId===null));
+  assert.deepEqual((await sites({cursor:siteNext.previousCursor})).items,sitePage.items);assert.deepEqual((await sites({search:'Learning website'})).items.map(row=>row.siteId),[websiteIds[1]]);
   const projectSites=await application.run(client,projectRequest('/api/projects/'+project.storage.projectId+'/publication-sites','POST'),{...siteCommand,workspaceId:project.book.id,projectId:project.storage.projectId,limit:25});assert.equal(projectSites.total,3);assert.ok(projectSites.items.every(row=>row.projectId!==sibling.storage.projectId));
   const timelineCommand={workspaceId:root.id,query:timelineQuery(timelineDefaults()),cursor:null,limit:4};
   const timeline=data=>application.run(client,projectRequest('/api/projects/timeline-collection/query','POST'),{...timelineCommand,...data});
@@ -87,7 +92,8 @@ test('project collection reads nested owners, authenticates each book and keeps 
   const location=await application.run(client,projectRequest('/api/projects/reference-location','POST'),{workspaceId:metadata.id,kind:'record',id:record.id});assert.equal(location.labBookId,storage.labBookId);
   await application.run(client,projectRequest('/api/projects/'+project.storage.projectId+'/lab-books/'+storage.labBookId+'/access/lock','POST'),{});await assert.rejects(read({...command,cursor:first.nextCursor}),error=>error.code==='ACCESS_LOCKED'&&error.labBookId===storage.labBookId);
   await assert.rejects(timeline({cursor:firstTimeline.nextCursor}),error=>error.code==='ACCESS_LOCKED'&&error.labBookId===storage.labBookId);
-  await assert.rejects(sites({cursor:sitePage.nextCursor}),error=>error.code==='ACCESS_LOCKED'&&error.labBookId===storage.labBookId);
+  assert.deepEqual((await sites({cursor:sitePage.nextCursor})).items,siteNext.items); // A source book lock does not lock workspace-owned websites.
+  await assert.rejects(application.run(client,projectRequest('/api/projects/'+project.storage.projectId+'/publication-sites','POST'),{...siteCommand,workspaceId:project.book.id,projectId:project.storage.projectId,limit:25}),error=>error.code==='ACCESS_LOCKED'&&error.labBookId===storage.labBookId);
   await assert.rejects(publicationSource(metadata.id),error=>error.code==='ACCESS_LOCKED'&&error.labBookId===storage.labBookId);assert.equal((await publicationSource(sibling.book.id)).owner.projectId,sibling.storage.projectId);
   const unrelated=await timeline({query:{...timelineCommand.query,projects:[sibling.book.id+'/'+sibling.storage.projectId]}});assert.equal(unrelated.total,3);
   await assert.rejects(application.run({},selected,command),error=>['ACCESS_LOCKED','DEVICE_UNKNOWN'].includes(error.code));
