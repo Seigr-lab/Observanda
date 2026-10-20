@@ -21,6 +21,7 @@ export function acceptRelocatedProject(value,entry){
 // Only the already verified destination handoff calls this publication step.
 // One registry write removes the whole selected hierarchy, including its root.
 export async function recordProjectDeparture(registry,entries,{workspaceId,operationId}){
+ if(!Array.isArray(entries))return recordNativeProjectDeparture(registry,entries,{workspaceId,operationId});
  if(!researchId(workspaceId)||workspaceId===registry.workspaceId||!researchId(operationId)||!Array.isArray(entries)||!entries.length||entries.length>4097)throw new AppError('INVALID');
  if(entries.some(entry=>!entry||!identity.every(key=>researchId(entry[key]))))throw new AppError('INVALID');
  const ids=new Set(entries.map(entry=>entry.projectId));if(ids.size!==entries.length)throw new AppError('INVALID');
@@ -37,5 +38,27 @@ export async function recordProjectDeparture(registry,entries,{workspaceId,opera
   });
   if(current.complete)return current;
   try{return await registry.apply(current.revision,entries.map(entry=>({state:'relocated',entry:{...Object.fromEntries(identity.map(key=>[key,entry[key]])),workspaceId,operationId}})));}catch(error){if(error.code!=='CONFLICT'||attempt>=7)throw error;}
+ }
+}
+
+async function recordNativeProjectDeparture(registry,owners,{workspaceId,operationId}){
+ if(!researchId(workspaceId)||workspaceId===registry.workspaceId||!researchId(operationId)||!owners?.entries||!owners.find||!owners.get)throw new AppError('INVALID');
+ const root=await owners.get('');if(!root||root.kind!=='project')throw new AppError('INVALID');
+ for(let attempt=0;;attempt++){
+  const current=await registry.inspect(async view=>{
+   let active=0,relocated=0;
+   for await(const entry of owners.entries({index:'project'})){
+    if(!identity.every(key=>researchId(entry[key])))throw new AppError('INVALID');const row=await view.get(entry.projectId);
+    if(row?.state==='relocated'&&same(row.entry,entry,identity)&&row.entry.operationId===operationId&&row.entry.workspaceId===workspaceId){relocated++;continue;}
+    if(row?.state!=='active'||!same(row.entry,entry,[...identity,'root','parentId']))throw new AppError('CONFLICT');active++;
+    if(entry.relative){const parent=await owners.find('project',entry.parentId);if(!parent||path.dirname(entry.root)!==parent.root)throw new AppError('STORAGE_PATH');}
+    for await(const child of view.entries({index:'parent',prefix:entry.projectId+':'}))if(!await owners.find('project',child.entry.projectId))throw new AppError('CONFLICT');
+   }
+   if(active&&relocated)throw new AppError('CONFLICT');if(!active&&!relocated)throw new AppError('INVALID');
+   if(active){const location=projectRegistryLocationKey(root.root,registry.workspace.root);for await(const child of view.entries({index:'location',prefix:location+(location.startsWith('relative:')?'/':path.sep)}))if(!await owners.find('project',child.entry.projectId))throw new AppError('STORAGE_PATH');}
+   return {revision:view.revision,complete:!active};
+  });if(current.complete)return current;
+  const changes=async function*(){for await(const entry of owners.entries({index:'project'}))yield {state:'relocated',entry:{...Object.fromEntries(identity.map(key=>[key,entry[key]])),workspaceId,operationId}};};
+  try{return await registry.applyBatch(current.revision,changes());}catch(error){if(error.code!=='CONFLICT'||attempt>=7)throw error;}
  }
 }

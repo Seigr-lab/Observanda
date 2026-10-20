@@ -14,8 +14,8 @@ import {AppError} from './errors.js';
 const inside=(root,file)=>{const relative=path.relative(root,file);return relative!==''&&relative!=='..'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative);};
 export const removeRetiredProject=(value,options)=>removeRetiredOwner(value,options);
 export const removeRetiredLabBook=(value,options)=>removeRetiredOwner(value,{...options,labBook:true});
-async function removeRetiredOwner(value,{verify,checkpoint,labBook=false,ownerDirectories=[]}){
- const boundaries=value.boundaries??[],nested=!!boundaries.length,root=nested?value.source:path.join(path.dirname(value.source),'.observanda-'+(labBook?'lab-book':'project')+'-move-'+value.id);
+async function removeRetiredOwner(value,{verify,checkpoint,labBook=false,ownerDirectories=[],ownerRelative=null,boundaryState=null}){
+ const boundaries=value.boundaries??[],nested=boundaryState?boundaryState.count>0:!!boundaries.length,contains=relative=>boundaryState?boundaryState.contains(relative):boundaries.includes(relative),protects=relative=>boundaryState?boundaryState.protects(relative):protectsDirectory(boundaries,relative),root=nested?value.source:path.join(path.dirname(value.source),'.observanda-'+(labBook?'lab-book':'project')+'-move-'+value.id);
  if(!await assertRegular(root,{directory:true,missing:true})){if(nested)throw new AppError('STORAGE_MOVE_STATE');return;}
  if(await realpath(path.dirname(root))!==path.dirname(root))throw new AppError('UNSAFE');
  if(nested||labBook||value.sourceDirectory)await assertProjectMoveDirectory(root,value.sourceDirectory);
@@ -25,29 +25,30 @@ async function removeRetiredOwner(value,{verify,checkpoint,labBook=false,ownerDi
  const ownedRelative=relative=>{const owner=ownerRoots.find(prefix=>relative.startsWith(prefix+'/'));return owner?relative.slice(owner.length+1):relative;};
  if(marker&&(marker.id!==value.id||marker.destination!==value.destination))throw new AppError('STORAGE_MOVE_STATE');
  async function remove(relative,directory){
-  const own=ownedRelative(relative),file=path.join(root,relative);if(!inside(root,file))throw new AppError('UNSAFE');
+  const own=ownerRelative?await ownerRelative(relative):ownedRelative(relative),file=path.join(root,relative);if(!inside(root,file))throw new AppError('UNSAFE');
   const stat=await assertRegular(file,{directory,missing:true});if(!stat)return;
-  if(boundaries.includes(relative)){if(!stat.isDirectory())throw new AppError('UNSAFE');return;}
+  if(await contains(relative)){if(!stat.isDirectory())throw new AppError('UNSAFE');return;}
   if(stat.isDirectory()){
    // An undeclared directory added after the snapshot cannot become move-owned.
-   if(nested&&marker&&!protectsDirectory(boundaries,relative)&&!own.startsWith('.observanda/postgresql/')&&own!=='.observanda/postgresql'&&!await assertRegular(path.join(value.destination,relative),{directory:true,missing:true})){
+   if(nested&&marker&&!await protects(relative)&&!own.startsWith('.observanda/postgresql/')&&own!=='.observanda/postgresql'&&!await assertRegular(path.join(value.destination,relative),{directory:true,missing:true})){
     // Empty directories and lease-only directories carry no retained data.
     // Any untransferred content still prevents retirement.
     for await(const child of await opendir(file))if(!ownedStorageLeaseFile(path.posix.join(own,child.name)))throw new AppError('STORAGE_MOVE_CONTENTS');
    }
    for await(const child of await opendir(file)){const next=path.posix.join(relative,child.name);if(next!==MOVE_SOURCE)await remove(next,child.isDirectory());}
-   if(relative!=='.observanda'&&!protectsDirectory(boundaries,relative))await rmdir(file);
+   if(relative!=='.observanda'&&!await protects(relative))await rmdir(file);
   }else{
    // Without the marker only empty container directories may remain. This also
    // handles a crash between marker removal and the completed receipt.
    if(!marker)throw new AppError('STORAGE_MOVE_STATE');
-   const internal=ownedStorageLeaseFile(own)||own.startsWith('.observanda/project-transfer-files/')||own.startsWith('.observanda/lab-book-transfer-files/')||own.startsWith('.observanda/postgresql/')||[PROJECT_ARCHIVE_IDENTITY,LAB_BOOK_ARCHIVE_IDENTITY,'.observanda/lab-book-transfer.lock','.observanda/lab-book-transfer.observanda','.observanda/lab-book-initialization.lock','.observanda/research.observanda','.observanda/write.lock','.observanda/project-retention.lock','.observanda/project-transfer.lock','.observanda/project-transfer.observanda','.observanda/project-initialization.lock'].includes(own)||isStorageTemporary(path.basename(relative));
+   if(own===MOVE_SOURCE){const owner=relative.slice(0,-own.length).replace(/\/$/,''),fence=await moveSource(path.join(root,owner));if(fence?.id!==value.id||fence.destination!==path.join(value.destination,owner))throw new AppError('STORAGE_MOVE_STATE');}
+   const internal=own===MOVE_SOURCE||ownedStorageLeaseFile(own)||own.startsWith('.observanda/project-transfer-files/')||own.startsWith('.observanda/lab-book-transfer-files/')||own.startsWith('.observanda/postgresql/')||[PROJECT_ARCHIVE_IDENTITY,LAB_BOOK_ARCHIVE_IDENTITY,'.observanda/lab-book-transfer.lock','.observanda/lab-book-transfer.observanda','.observanda/lab-book-initialization.lock','.observanda/research.observanda','.observanda/write.lock','.observanda/project-retention.lock','.observanda/project-transfer.lock','.observanda/project-transfer.observanda','.observanda/project-initialization.lock'].includes(own)||isStorageTemporary(path.basename(relative));
    if((verify||nested)&&!internal&&await hashWorkspaceFile(file)!==await hashWorkspaceFile(path.join(value.destination,relative)))throw new AppError('STORAGE_COPY');
    operationItem(relative);await unlink(file);operationAdvance();await checkpoint('removed',relative);
   }
  }
  for await(const child of await opendir(root))await remove(child.name,child.isDirectory());
  if(marker){await unlink(path.join(root,MOVE_SOURCE));await checkpoint('marker-removed');}
- if(!protectsDirectory(boundaries,'.observanda'))await rmdir(path.join(root,'.observanda')).catch(error=>{if(error.code!=='ENOENT')throw error;});
+ if(!await protects('.observanda'))await rmdir(path.join(root,'.observanda')).catch(error=>{if(error.code!=='ENOENT')throw error;});
  if(!nested)await rmdir(root);
 }

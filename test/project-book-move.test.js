@@ -55,10 +55,10 @@ test('nested book moves recover every handoff boundary and retain later writes w
    await assert.rejects(moves.run(projectId,vault,{id,path:destination,withBook,checkpoint:async point=>{if(point===stage&&!reached){reached=true;throw Error('Stopped '+stage);}}}),new RegExp('Stopped '+stage));assert.ok(reached);
   }
   if(stage==='verified'){
-   const book=books[0],writing=new RecordWriting(book.storage),current=await writing.read(book.target);await writing.save({...book.target,expectedRevision:current.revision,value:{body:'Written before source freeze'}});book.before=await book.storage.read();
+   for(const book of books)await assert.rejects(book.storage.withLock(()=>{}),{code:'STORAGE_MOVED'});
   }
   if(stage==='frozen'){
-   assert.equal((await moveSource(source)).books.length,2);
+   assert.equal((await moveSource(source)).id,id);for(const book of books)assert.deepEqual(await moveSource(book.storage.root),{id,destination:path.join(destination,book.directory)});
    for(const book of books)await assert.rejects(book.storage.withLock(()=>{}),{code:'STORAGE_MOVED'});
    // Restart recovery must not need fresh child credentials to stop the old
    // databases; new destination edits still belong to their independent owner.

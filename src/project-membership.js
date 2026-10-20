@@ -1,3 +1,4 @@
+import {nativeRelocationOwners} from './native-relocation-state.js';
 import {assertIncomingProjectMovesSettled} from './project-incoming-moves.js';
 import {readProjectWorkspaceMove} from './project-workspace-move-state.js';
 import {readProjectRename} from './project-rename-receipt.js';
@@ -53,7 +54,7 @@ export async function assertProjectRelocationsSettled(registry,parents,{except=n
  if(await assertRegular(outgoing,{directory:true,missing:true}))for await(const entry of await opendir(outgoing)){
   if(!entry.name.endsWith('.obsv')||!researchId(entry.name.slice(0,-5))||entry.name===except+'.obsv')continue;
   const value=await readProjectWorkspaceMove(registry,entry.name.slice(0,-5));
-  if(value&&!['complete','cancelled'].includes(value.phase)&&(ids.has(value.parentId)||value.entries.some(owner=>ids.has(owner.projectId))))throw new AppError('STORAGE_PROJECT_BUSY');
+  if(value&&!['complete','cancelled'].includes(value.phase)){if(ids.has(value.parentId)||ids.has(value.projectId))throw new AppError('STORAGE_PROJECT_BUSY');if(value.ownerDirectoryVersion===2){if(value.phase!=='preparing')for(const id of ids)if(id!==null&&await nativeRelocationOwners(registry,value).find('project',id))throw new AppError('STORAGE_PROJECT_BUSY');}else if(value.entries.some(owner=>ids.has(owner.projectId)))throw new AppError('STORAGE_PROJECT_BUSY');}
  }
  const directory=path.join(registry.workspace.root,'.observanda/project-renames');if(!await assertRegular(directory,{directory:true,missing:true}))return;
  for await(const entry of await opendir(directory)){

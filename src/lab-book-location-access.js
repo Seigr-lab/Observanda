@@ -24,15 +24,14 @@ export class LabBookLocationAccess{
    this.owners.set(id,{projectId:project.projectId,id:item.labBookId,parent,entry:{root:source,namespaceId:item.namespaceId,vaultId:item.vaultId},access,etag:saved.etag,vault:cloneVault(saved.vault)});
   }
  }
- async use(project,id,parent,operation){
+ async use(project,id,parent,operation,{retain=true,onOwner}={}){
   return this.application.tracked(async()=>{
    const access=new LabBookAccessSession(this.application,this.client,project,id,()=>parent.check()),registry=new LabBookRegistry(project),renames=new LabBookRenames(project);let entry=await registry.locate(id),vault;
    try{
     const pending=await renames.pending(id),root=pending&&pending.phase!=='complete'?await renames.locate(pending):entry.root;
     vault=await access.key(root);await access.check();if(vault.id!==entry.vaultId)throw new AppError('DATABASE_LOCATION');
     if(pending){await this.application.jobs.invalidateBook(project.projectId,id);await renames.resume(id,vault,{check:()=>access.check()});entry=await registry.locate(id);}
-    const previous=this.owners.get(access.id);clearVault(previous?.vault);
-    this.owners.set(access.id,{projectId:project.projectId,id,parent,entry,access,etag:(await readAccess(entry.root)).etag,vault:cloneVault(vault)});
+    const etag=(await readAccess(entry.root)).etag;if(retain){const previous=this.owners.get(access.id);clearVault(previous?.vault);this.owners.set(access.id,{projectId:project.projectId,id,parent,entry,access,etag,vault:cloneVault(vault)});}if(onOwner)await onOwner({projectId:project.projectId,id,parent,entry,access,etag,vault});
     const result=await new LabBookRouter(registry,{authorize:async()=>true,unlock:async()=>vault}).withLabBook(id,operation);await access.check();return result;
    }catch(error){access.error(error);if(error.labBookId)error.labBookName=entry.directory;throw error;}finally{clearVault(vault);}
   },project.projectId,id);
@@ -63,7 +62,7 @@ export class LabBookLocationAccess{
  }
  async renamed(receipt,source,destination){
   for(const [id,owner] of this.owners){
-   if(!this.valid(owner))continue;const project=receipt.projects?.find(item=>item.projectId===owner.projectId),book=project?.books?.find(item=>item.labBookId===owner.id);
+   if(!this.valid(owner))continue;const project=receipt.nativeOwners?await receipt.nativeOwners.find('project',owner.projectId):receipt.projects?.find(item=>item.projectId===owner.projectId),selected=receipt.nativeOwners?await receipt.nativeOwners.find('identity',owner.id):null,book=receipt.nativeOwners?(selected?.kind==='lab-book'&&selected.projectId===owner.projectId?{...selected,directory:path.posix.basename(selected.relative)}:null):project?.books?.find(item=>item.labBookId===owner.id);
    if(!book||book.vaultId!==owner.vault.id||book.namespaceId!==owner.entry.namespaceId||path.resolve(source,...project.relative.split('/'),book.directory)!==owner.entry.root)throw new AppError('STORAGE_RENAME_STATE');
    const root=path.resolve(destination,...project.relative.split('/'),book.directory),access=await readAccess(root);if(access.etag!==owner.etag)throw new AppError('ACCESS_LOCKED');authenticateKeyring(access.value,owner.vault);
    const storage=new LabBookStorage(root,owner.id,owner.vault);if((await storage.outline()).metadata.id!==book.namespaceId)throw new AppError('DATABASE_LOCATION');

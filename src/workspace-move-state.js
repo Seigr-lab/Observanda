@@ -1,5 +1,18 @@
 import {validateStorageName} from './storage-names.js';
 import path from 'node:path';
+import {AsyncLocalStorage} from 'node:async_hooks';
+import {researchId} from './web/research-reference.js';
+const admissions=new AsyncLocalStorage();
+// Only the server-owned command supplies this exact journal scope. Every
+// admission still rereads the marker; a stale or foreign fence never matches.
+export function ownedMoveScope(value,operation){
+ if(!researchId(value?.id)||![value.source,value.destination].every(root=>typeof root==='string'&&path.isAbsolute(root)&&path.resolve(root)===root))throw new AppError('STORAGE_MOVE_STATE');
+ return admissions.run({id:value.id,source:value.source,destination:value.destination},operation);
+}
+function admittedMove(root,marker){
+ const scope=admissions.getStore();if(!scope||marker.id!==scope.id)return false;const relative=path.relative(scope.source,root);
+ return relative!=='..'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative)&&marker.destination===path.join(scope.destination,relative);
+}
 import {readFile} from 'node:fs/promises';
 import {assertRegular} from './storage.js';
 import {AppError} from './errors.js';
@@ -20,4 +33,4 @@ export async function ownedMoveSource(root){
  const parent=path.dirname(root);if(parent===root)return null;const owner=await moveSource(parent);
  return owner?.books?.includes(path.basename(root))?{id:owner.id,destination:path.join(owner.destination,path.basename(root))}:null;
 }
-export async function assertNotMoving(root,moveId){const value=await ownedMoveSource(root);if(value&&value.id!==moveId)throw new AppError('STORAGE_MOVED',[value.destination]);}
+export async function assertNotMoving(root,moveId){const value=await ownedMoveSource(root);if(value&&value.id!==moveId&&!admittedMove(root,value))throw new AppError('STORAGE_MOVED',[value.destination]);}

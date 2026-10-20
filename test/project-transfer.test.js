@@ -78,8 +78,11 @@ test('move recovery finishes adoption and cleanup without deleting a reused sour
   if(['renamed','removed'].includes(stage))assert.equal(await readFile(path.join(source,'unrelated.txt'),'utf8'),'Keep this replacement folder');
  }
 });
+async function legacyPendingMove(f,moves,id,destination){
+ await mkdir(path.dirname(moves.file(f.id)),{recursive:true});const sourceId=(await catalogueBinding(f.source.root)).id;await moves.save({version:2,boundaries:[],id,projectId:f.id,source:f.source.root,destination,vaultId:f.vault.id,namespaceId:(await f.source.outline()).metadata.id,sourceId,phase:'copying'});
+}
 test('a changed original refreshes the unpublished destination before move retirement',async t=>{
- const f=await fixture(t),registry=await registryFor(f),moves=new ProjectMoves(registry),id=randomUUID(),destination=await destinationFor(f,'stale');
+ const f=await fixture(t),registry=await registryFor(f),moves=new ProjectMoves(registry),id=randomUUID(),destination=await destinationFor(f,'stale');await legacyPendingMove(f,moves,id,destination);
  await assert.rejects(moves.run(f.id,f.vault,{id,path:destination,checkpoint:async stage=>{if(stage==='verified')throw Error('Stop before freezing');}}),/Stop before freezing/);
  // A draft/settings object does not change the research head.
  const before=(await f.source.outline()).etag;
@@ -130,7 +133,7 @@ test('an interrupted file batch reconciles newer files and writing without repea
 });
 
 test('changed-source recovery preserves independently edited destination data',async t=>{
- const f=await fixture(t),registry=await registryFor(f),moves=new ProjectMoves(registry),id=randomUUID(),destination=await destinationFor(f,'edited destination');
+ const f=await fixture(t),registry=await registryFor(f),moves=new ProjectMoves(registry),id=randomUUID(),destination=await destinationFor(f,'edited destination');await legacyPendingMove(f,moves,id,destination);
  await assert.rejects(moves.run(f.id,f.vault,{id,path:destination,checkpoint:async stage=>{if(stage==='verified')throw Error('Before adoption');}}),/Before adoption/);
  const target=new ProjectStorage(destination,f.id,f.vault),writing=new RecordWriting(target),before=await writing.read(f.target);await writing.save({...f.target,expectedRevision:before.revision,value:{body:'Independent destination observation'}});
  await assert.rejects(moves.run(f.id,f.vault,{id,resume:true}),{code:'CONFLICT'});

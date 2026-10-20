@@ -1,3 +1,5 @@
+import {NativeProjectRelocation,locateNativeRelocation} from './native-project-relocation.js';
+import {NativeRelocationOwners} from './native-relocation-owners.js';
 // Cross-workspace placement publishes verified destination ownership before
 // retiring the source. Each project's and book's access remains independent.
 import path from 'node:path';
@@ -59,6 +61,7 @@ export class ProjectWorkspaceMoves{
   if(relative(target.root,parent)!==target.parentRelative)throw new AppError('CONFLICT');await assertProjectMoveDirectory(parent,target.parentIdentity);
  }
  async locate(value){
+  if(value.ownerDirectoryVersion===2)return locateNativeRelocation(this,value);
   const scope=this.scope(value),owner=value.transfer?.owners.find(item=>item.relative==='');
   for(const root of value.version===2?[value.phase==='copying'?scope.source:scope.destination]:[scope.destination,scope.source]){
    const stat=await assertRegular(root,{directory:true,missing:true});if(!stat)continue;
@@ -69,6 +72,7 @@ export class ProjectWorkspaceMoves{
  }
  async run(storage,{id,parentId=null,expectedParentId,withProject,withBook,withParent,check=async()=>{},checkpoint=async()=>{}}){
   if(storage?.projectId!==this.projectId||!researchId(id)||parentId!==null&&!researchId(parentId)||expectedParentId!==null&&!researchId(expectedParentId))throw new AppError('INVALID');
+  const previous=await this.read();if(previous?.ownerDirectoryVersion===2||!previous||['complete','cancelled'].includes(previous.phase)&&previous.id!==id)return new NativeProjectRelocation(this).run(storage,{id,parentId,expectedParentId,withProject,withBook,withParent,check,checkpoint});
   await this.authorizeParent(parentId,withParent);
   return trackProjectTransfer(projectWorkspaceMoveFile(this.registry,this.projectId),()=>withProjectLifecycle(this.registry,this.projectId,'workspace-move',async()=>{
    await check();const prior=await this.read(),fresh=prior?.phase==='prepared'&&!await workspaceRename(this.scope(prior).source);
@@ -97,6 +101,7 @@ export class ProjectWorkspaceMoves{
   }));
  }
  async discardPrepared(value,vault){
+  if(value.ownerDirectoryVersion===2){await new NativeRelocationOwners(this,value,vault).discardPrepared();return releaseIncomingProjectMove(this.targetRegistry,value);}
   const root=this.scope(value).source,stat=await assertRegular(root,{directory:true});if(!sameDirectory(directoryIdentity(stat),value.identity)||await realpath(root)!==root||await workspaceRename(root))throw new AppError('STORAGE_MOVE_STATE');authenticateKeyring((await readAccess(root)).value,vault);
   for(const [owner,name,expected] of [[root,RENAME_KEYS_FILE,value.projectKeysHash],[root,RENAME_BOOK_KEYS_FILE,value.rootBooks.bookKeysHash],...(value.projects??[]).map(item=>[nestedRenameRoot(root,item.relative),RENAME_KEYS_FILE,item.bookKeysHash])]){
    if(!expected)continue;const file=path.join(owner,name);if(await assertRegular(file,{missing:true})){if(await fingerprint(file)!==expected)throw new AppError('STORAGE_MOVE_STATE');await unlink(file);}
@@ -105,6 +110,7 @@ export class ProjectWorkspaceMoves{
  }
  async resume(vault,options={}){
   const value=await this.read();if(!value||value.phase==='cancelled')return null;
+  if(value.ownerDirectoryVersion===2)return new NativeProjectRelocation(this).resume(vault,options);
   if(value.phase==='prepared'&&!await workspaceRename(this.scope(value).source))return this.run(new ProjectStorage(this.scope(value).source,this.projectId,vault),{...options,id:value.id,parentId:value.placement.parentId,expectedParentId:value.parentId});
   await this.authorizeParent(value.placement.parentId,options.withParent);
   return trackProjectTransfer(projectWorkspaceMoveFile(this.registry,this.projectId),()=>withProjectLifecycle(this.registry,this.projectId,'workspace-move',async()=>{const latest=await this.read();return latest?this.finish(latest,vault,options):null;}));
@@ -114,6 +120,7 @@ export class ProjectWorkspaceMoves{
   try{await projects.load(this.scope(value));await books.load(value.id,value.rootBooks);if((await storage.outline()).metadata.id!==value.namespaceId)throw new AppError('DATABASE_LOCATION');await projects.verify();await books.verify();}finally{projects.close();books.close();}
  }
  async finish(value,vault,{check=async()=>{},checkpoint=async()=>{}}={}){
+  if(value.ownerDirectoryVersion===2)return new NativeProjectRelocation(this).finish(value,vault,{check,checkpoint});
   if(vault?.id!==value.vaultId)throw new AppError('ACCESS_DENIED');
   return renameScope(value.id,async()=>{
    await check();await this.checkTarget(value);

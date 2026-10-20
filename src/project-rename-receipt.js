@@ -1,3 +1,4 @@
+import {validNativeRelocation,nativeRelocationOwners} from './native-relocation-state.js';
 import {workspaceProjectMoveLocation} from './project-workspace-move-location.js';
 import {validProjectPlacementTransfer} from './project-placement-transfer-state.js';
 import {projectMoveDirectory} from './project-move-boundaries.js';
@@ -19,12 +20,13 @@ export function projectRenameFile(registry,id){if(!researchId(id))throw new AppE
 export async function readProjectRename(registry,projectId){
  const file=projectRenameFile(registry,projectId),stat=await assertRegular(file,{missing:true});if(!stat)return null;if(stat.size>16*1024*1024)throw new AppError('STORAGE_RENAME_STATE');
  let value;try{value=JSON.parse(await registry.workspace.readFile(file,'utf8'));}catch{throw new AppError('STORAGE_RENAME_STATE');}
- if(![1,2].includes(value?.version)||value.projectId!==projectId||![value.id,value.projectId,value.namespaceId,value.vaultId].every(researchId)||!['prepared','frozen','copying','moved','registered','retiring','retired','complete','cancelling','cancelled'].includes(value.phase)||!['dev','ino'].every(k=>typeof value.identity?.[k]==='string')||![value.accessHash,value.descriptorHash].every(hash)||value.parentId!==null&&!researchId(value.parentId))throw new AppError('STORAGE_RENAME_STATE');
+ if(![1,2].includes(value?.version)||value.projectId!==projectId||![value.id,value.projectId,value.namespaceId,value.vaultId].every(researchId)||!['preparing','prepared','frozen','copying','moved','registered','retiring','retired','complete','cancelling','cancelled'].includes(value.phase)||!['dev','ino'].every(k=>typeof value.identity?.[k]==='string')||![value.accessHash,value.descriptorHash].every(hash)||value.parentId!==null&&!researchId(value.parentId))throw new AppError('STORAGE_RENAME_STATE');
  if(value.cancelReason!==undefined&&(value.cancelReason!=='volume'||!['cancelling','cancelled'].includes(value.phase)))throw new AppError('STORAGE_RENAME_STATE');
  const source=nestedRenameRoot(registry.workspace.root,value.source),destination=nestedRenameRoot(registry.workspace.root,value.destination);
  if(value.settings!==undefined&&value.settings!==null&&(!validProjectRenameSettings(value.settings)||value.settings.project?.id!==projectId||value.settings.project.title!==path.basename(destination)||value.settings.project.parentId!=null))throw new AppError('STORAGE_RENAME_STATE');
  if(value.placement!==undefined&&(!validProjectPlacement(value.placement)||value.placement.expectedParentId!==value.parentId||typeof value.placementParent?.relative!=='string'||Object.keys(value.placementParent).sort().join()!=='dev,ino,relative'||path.dirname(destination)!==(value.placementParent.relative?nestedRenameRoot(registry.workspace.root,value.placementParent.relative):registry.workspace.root)||!['dev','ino'].every(key=>typeof value.placementParent?.[key]==='string')||path.basename(source)!==path.basename(destination)))throw new AppError('STORAGE_RENAME_STATE');
  if(source===destination||destination.startsWith(source+path.sep)||source.startsWith(destination+path.sep)||!value.placement&&path.dirname(source)!==path.dirname(destination))throw new AppError('STORAGE_RENAME_STATE');
+ if(value.ownerDirectoryVersion!==undefined){if(!validNativeRelocation(value)||['projects','rootBooks','transfer','projectKeysHash'].some(key=>value[key]!==undefined))throw new AppError('STORAGE_RENAME_STATE');return value;}
  validateRenameProjects(value.projects??[]);if(value.projects?.length&&(!hash(value.projectKeysHash)||!hash(value.projectRegistryRevision)))throw new AppError('STORAGE_RENAME_STATE');
  if(!value.rootBooks||typeof value.rootBooks!=='object')throw new AppError('STORAGE_RENAME_STATE');
  if(value.rootBooks.books!==undefined){validateRenameBooks(value.rootBooks.books);if(!hash(value.rootBooks.bookKeysHash)||!hash(value.rootBooks.bookRegistryRevision))throw new AppError('STORAGE_RENAME_STATE');}
@@ -32,11 +34,11 @@ export async function readProjectRename(registry,projectId){
  return value;
 }
 export async function locateProjectRename(registry,value){
- const transferred=value.version===2,owner=transferred?value.transfer.owners.find(item=>item.relative===''):null;
+ const native=value.ownerDirectoryVersion===2,transferred=native?value.copied===true:value.version===2,owner=transferred?(native?await nativeRelocationOwners(registry,value).get(''):value.transfer.owners.find(item=>item.relative==='')):null;
  for(const relative of transferred?[value.phase==='copying'?value.source:value.destination]:[value.destination,value.source]){
   const root=nestedRenameRoot(registry.workspace.root,relative),stat=await assertRegular(root,{directory:true,missing:true});
-  if(!stat||!sameDirectory(transferred?await projectMoveDirectory(root):directoryIdentity(stat),transferred?(relative===value.source?owner.sourceIdentity:owner.destinationIdentity):value.identity)||await realpath(root)!==root)continue;
-  if(digest(await readFile(path.join(root,'.observanda/access.json')))!==value.accessHash&&!(value.phase==='prepared'&&relative===value.source&&!await workspaceRename(root)))throw new AppError('STORAGE_RENAME_STATE');return root;
+  if(!stat||!sameDirectory(transferred||native?await projectMoveDirectory(root):directoryIdentity(stat),transferred?(relative===value.source?(native?owner.identity:owner.sourceIdentity):owner.destinationIdentity):value.identity)||await realpath(root)!==root)continue;
+  if(digest(await readFile(path.join(root,'.observanda/access.json')))!==value.accessHash&&!(['preparing','prepared'].includes(value.phase)&&relative===value.source&&!await workspaceRename(root)))throw new AppError('STORAGE_RENAME_STATE');return root;
  }
  throw new AppError('STORAGE_RENAME_STATE');
 }

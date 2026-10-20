@@ -1,3 +1,5 @@
+import {NativeProjectRelocation} from './native-project-relocation.js';
+import {NativeRelocationOwners} from './native-relocation-owners.js';
 import {discardConfigurationCheckpoint} from './configuration-commands.js';
 import {ProjectPlacementTransfer} from './project-placement-transfer.js';
 import {trackProjectTransfer} from './project-transfer-tasks.js';
@@ -38,6 +40,7 @@ export class ProjectRenames{
  async run(storage,{id,name,expectedName,settings=null,placement=null,withProject,withBook,check=async()=>{},checkpoint=async()=>{}}){
   if(settings!==null&&(!validProjectRenameSettings(settings)||settings.project?.id!==this.projectId||settings.project.title!==name||settings.project.parentId!=null))throw new AppError('INVALID');
   if(storage?.projectId!==this.projectId||!researchId(id))throw new AppError('INVALID');validateStorageName(name);validateStorageName(expectedName);if(placement&&name!==expectedName)throw new AppError('INVALID');
+  const previous=await this.read();if(previous?.ownerDirectoryVersion===2||!previous||['complete','cancelled'].includes(previous.phase)&&previous.id!==id)return new NativeProjectRelocation(this).run(storage,{id,name,expectedName,settings,placement,withProject,withBook,check,checkpoint});
   return trackProjectTransfer(projectRenameFile(this.registry,this.projectId),()=>withProjectLifecycle(this.registry,this.projectId,'rename',async()=>{
    await check();let prior=await this.read();
    const fresh=prior?.phase==='prepared'&&!await workspaceRename(this.scope(prior).source);
@@ -66,8 +69,9 @@ export class ProjectRenames{
    }finally{projects.close();books.close();}
   }));
  }
- async cancelPrepared(vault,{check=async()=>{}}={}){return withProjectLifecycle(this.registry,this.projectId,'rename',async()=>{await check();const value=await this.read();if(!value||value.phase==='cancelled')return;if(value.phase!=='prepared')throw new AppError('STORAGE_RENAMING');await this.discardPrepared(value,vault);});}
+ async cancelPrepared(vault,{check=async()=>{}}={}){return withProjectLifecycle(this.registry,this.projectId,'rename',async()=>{await check();const value=await this.read();if(!value||value.phase==='cancelled')return;if(!['preparing','prepared'].includes(value.phase))throw new AppError('STORAGE_RENAMING');await this.discardPrepared(value,vault);});}
  async discardPrepared(value,vault){
+  if(value.ownerDirectoryVersion===2)return new NativeRelocationOwners(this,value,vault).discardPrepared();
   const root=this.scope(value).source,stat=await assertRegular(root,{directory:true});if(!sameDirectory(directoryIdentity(stat),value.identity)||await realpath(root)!==root||await workspaceRename(root))throw new AppError('STORAGE_RENAME_STATE');authenticateKeyring((await readAccess(root)).value,vault);
   const files=[[root,RENAME_KEYS_FILE,value.projectKeysHash],[root,RENAME_BOOK_KEYS_FILE,value.rootBooks.bookKeysHash],...(value.projects??[]).map(item=>[nestedRenameRoot(root,item.relative),RENAME_KEYS_FILE,item.bookKeysHash])];
   for(const [owner,name,expected] of files){if(!expected)continue;const file=path.join(owner,name);if(await assertRegular(file,{missing:true})&&await fingerprint(file)===expected)await unlink(file);}
@@ -75,6 +79,7 @@ export class ProjectRenames{
  }
  async resume(vault,options={}){
   const value=await this.read();if(!value||value.phase==='cancelled')return null;
+  if(value.ownerDirectoryVersion===2)return new NativeProjectRelocation(this).resume(vault,options);
   if(value.phase==='prepared'&&!await workspaceRename(this.scope(value).source)){
    if(options.withProject&&options.withBook)return this.run(new ProjectStorage(this.scope(value).source,this.projectId,vault),{...options,id:value.id,name:path.posix.basename(value.destination),expectedName:path.posix.basename(value.source),settings:value.settings??null,placement:value.placement??null});
    // Nothing was fenced: reconstruct admission from current metadata. Old
@@ -88,6 +93,7 @@ export class ProjectRenames{
   return trackProjectTransfer(projectRenameFile(this.registry,this.projectId),()=>withProjectLifecycle(this.registry,this.projectId,'rename',async()=>{const latest=await this.read();return latest?this.finish(latest,vault,options):null;}));
  }
  async finish(value,vault,{check=async()=>{},checkpoint=async()=>{}}={}){
+  if(value.ownerDirectoryVersion===2)return new NativeProjectRelocation(this).finish(value,vault,{check,checkpoint});
   if(vault?.id!==value.vaultId)throw new AppError('ACCESS_DENIED');
   return renameScope(value.id,async()=>{
    if(value.phase==='cancelling')return this.cancelFrozen(value,vault,{check,checkpoint});

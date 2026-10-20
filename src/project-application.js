@@ -1,3 +1,4 @@
+import {ScopedLocationAccess} from './scoped-location-access.js';
 import {ProjectImportAccess} from './project-import-access.js';
 import {assertProjectTransferDestination} from './project-registry-locations.js';
 import {pdfDocumentRequest,executePdfRequest} from './pdf-document-requests.js';
@@ -276,7 +277,7 @@ export class ProjectApplication{
   if(selected.operation==='storage/move/resume'){const resumed=await this.tracked(()=>this.renames.resumeMove(client,selected.projectId,data,{check}),selected.projectId);if(resumed)return resumed;}
   if(selected.operation==='settings/save')return this.tracked(()=>this.renames.save(client,selected.projectId,data,{check}),selected.projectId);
   return this.tracked(async()=>{
-   await check();signal?.throwIfAborted();const registry=await this.registry(),session=this.session(client),owner=new ProjectSessionOwner(this,client,selected.projectId,{check,recoverRenames:!['storage/details','storage/move/status'].includes(selected.operation),deferPreparedRename:['lab-books/access/unlock','lab-books/access/lock'].includes(selected.operation)});
+   await check();signal?.throwIfAborted();const registry=await this.registry(),session=this.session(client),owner=new ProjectSessionOwner(this,client,selected.projectId,{check,recoverRenames:!['storage/details','storage/move/status','storage/move/resume','storage/move/cancel'].includes(selected.operation),deferPreparedRename:['lab-books/access/unlock','lab-books/access/lock'].includes(selected.operation)});
    const assertCurrent=()=>owner.check(),acceptRelocation=latest=>owner.relocated(latest),moves=new ProjectMoves(registry),copies=new ProjectCopies(registry),archives=new ProjectArchives(registry);
    try{
     const router=await owner.router();
@@ -296,7 +297,10 @@ export class ProjectApplication{
      if(selected.operation==='access/password'){await this.jobs.invalidateProject(selected.projectId);return new ProjectAccessSettings(storage).password(data,{deviceStore:this.deviceStore,check:assertCurrent,changed:etag=>owner.accessChanged(etag)});}
      if(selected.operation?.startsWith('storage/')){
       const copyOwner=async(command,options)=>{const books=new LabBookLocationAccess(this,client),projects=new ProjectLocationAccess(this,client,{check:assertCurrent});try{return await command.run(storage,{...options,withBook:(id,use)=>books.use(storage,id,owner,use),withProject:(id,use)=>projects.withProject(id,use),withProjectBook:(project,id,use)=>projects.withBook(project,id,use)});}finally{books.close();await projects.close();}};
-      const moveOwner=async options=>{const books=new LabBookLocationAccess(this,client);try{return await moves.run(selected.projectId,owner.vault,{...options,withBook:(id,use)=>books.use(storage,id,owner,use),onCopiedBook:book=>books.copied(book),onAdopt:async latest=>{await acceptRelocation(latest);books.relocateGrants();}});}finally{books.close();}};
+      const moveOwner=options=>ScopedLocationAccess.run(this,client,{check,parent:id=>id===selected.projectId?owner:null},async access=>{
+       await access.remember(selected.projectId,owner.sessionEntry);
+       return moves.run(selected.projectId,owner.vault,{...options,withBook:(id,use)=>access.withBook(storage,id,use),checkpoint:(stage,bookId)=>access.check(['prepared','owners-frozen','verified','registry','adopted','retired','releasing','complete'].includes(stage)?undefined:{projectId:selected.projectId,...((stage.startsWith('book-')||stage.startsWith('copy:book'))&&researchId(bookId)?{labBookId:bookId}:{})}),onCopiedBook:book=>access.check({projectId:selected.projectId,labBookId:book.labBookId}),onAdopt:async latest=>{await acceptRelocation(latest);const value=await moves.read(selected.projectId);await access.renamed(moves.ownerDirectory(value),value.source,value.destination);await access.install();}});
+      });
       if(selected.write&&!selected.operation.startsWith('storage/export')&&!selected.operation.endsWith('/cancel'))await this.jobs.invalidateProject(selected.projectId);
       if(selected.operation==='storage/details'){if(!data||Object.keys(data).length)throw new AppError('INVALID');return {path:storage.root,projectId:storage.projectId,parentId:(await registry.locate(storage.projectId)).parentId,move:await this.renames.moveStatus(selected.projectId,await moves.status(selected.projectId),storage.root),copy:await copies.status(selected.projectId),export:await archives.status(selected.projectId)};}
       if(['storage/copy/cancel','storage/export/cancel','storage/move/cancel'].includes(selected.operation)){if(!data||Object.keys(data).join()!=='id'||!researchId(data.id))throw new AppError('INVALID');return ({copy:copies,export:archives,move:moves}[selected.operation.split('/')[1]]).cancel(storage,{id:data.id});}
@@ -322,7 +326,7 @@ export class ProjectApplication{
      if(selected.route==='/api/workspace/structure'&&data.change?.kind==='project')await registry.refreshSummary(storage.projectId,(await storage.outline()).metadata);
      return response;
      };return selected.bookOperation==='research'?storage.withCatalogueConnections(execute):execute();
-    },{action:selected.write?'write':'read',locationOnly:selected.bookOperation==='list'||['storage/details','storage/move/status'].includes(selected.operation)});
+    },{action:selected.write&&!['storage/move/resume','storage/move/cancel'].includes(selected.operation)?'write':'read',locationOnly:selected.bookOperation==='list'||['storage/details','storage/move/status','storage/move/resume','storage/move/cancel'].includes(selected.operation)});
     await assertCurrent();return result;
    }finally{setCheck(check);await owner.close();}
   },selected.projectId,selected.operation==='lab-books/access/lock'?undefined:selected.labBookId);

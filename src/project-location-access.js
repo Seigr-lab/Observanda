@@ -1,3 +1,5 @@
+import {ScopedLocationAccess} from './scoped-location-access.js';
+import {nativeRelocationOwners} from './native-relocation-state.js';
 import {locateProjectRename} from './project-rename-receipt.js';
 import {LabBookLocationAccess} from './lab-book-location-access.js';
 import {ProjectStorage} from './project-storage.js';
@@ -33,6 +35,7 @@ export class ProjectLocationAccess {
       this.#owners.set(item.projectId,owner);this.books.captureRename(item,receipt,owner);
     }
   }
+  withScopedAccess(operation){return ScopedLocationAccess.run(this.application,this.client,{check:this.check,parent:id=>this.#owners.get(id),recoverRenames:this.recoverRenames,skipRenameId:this.skipRenameId},async scoped=>{for(const [id,owner] of this.#owners)await scoped.remember(id,owner.sessionEntry);return operation(scoped);});}
   async withProject(id,operation) {
     if(this.#closed||this.#destination)throw new AppError('ACCESS_LOCKED');
     return this.application.tracked(async()=>{
@@ -68,7 +71,7 @@ export class ProjectLocationAccess {
       // Revocation cannot undo a completed physical rename. Omit that grant;
       // normal project access will require authentication in the new context.
       if(owner.session.get(projectId)!==owner.sessionEntry||owner.sessionEntry?.locked||owner.sessionEntry?.vault&&owner.sessionEntry.expires<=Date.now())continue;
-      const entry=receipt.projects?.find(entry=>entry.projectId===projectId);
+      const entry=receipt.nativeOwners?await receipt.nativeOwners.find('project',projectId):receipt.projects?.find(entry=>entry.projectId===projectId);
       if(!entry||entry.namespaceId!==owner.entry.namespaceId||entry.vaultId!==owner.vault.id||path.resolve(source,...entry.relative.split('/'))!==owner.entry.root)throw new AppError('STORAGE_RENAME_STATE');
       const root=path.resolve(destination,...entry.relative.split('/')),access=await readAccess(root);
       if(!(inside(destination,root)||includeRoot&&root===destination)||access.etag!==owner.etag)throw new AppError('ACCESS_LOCKED');authenticateKeyring(access.value,owner.vault);
@@ -80,8 +83,8 @@ export class ProjectLocationAccess {
   async adoptProjectRename(renames){
     const receipt=await renames.read(),scope=renames.scope(receipt),root=await locateProjectRename(renames.registry,receipt);
     if(receipt.phase!=='complete'||root!==scope.destination||await workspaceRename(root))throw new AppError('STORAGE_RENAME_STATE');
-    const owners=[{projectId:receipt.projectId,namespaceId:receipt.namespaceId,vaultId:receipt.vaultId,relative:'',...receipt.rootBooks},...(receipt.projects??[])];
-    await this.renamed({read:async()=>({...scope,projects:owners}),completedSource:async()=>scope.source},receipt.id,scope.source,scope.destination,{includeRoot:true});
+    const owners=receipt.ownerDirectoryVersion===2?{nativeOwners:nativeRelocationOwners(renames.registry,receipt)}:{projects:[{projectId:receipt.projectId,namespaceId:receipt.namespaceId,vaultId:receipt.vaultId,relative:'',...receipt.rootBooks},...(receipt.projects??[])]};
+    await this.renamed({read:async()=>({...scope,...owners}),completedSource:async()=>scope.source},receipt.id,scope.source,scope.destination,{includeRoot:true});
     await renames.registry.inspect(async view=>{for(const [id,grant] of this.#grants){const row=await view.get(id),entry=row?.entry;if(row?.state!=='active'||entry.root!==grant.root||entry.namespaceId!==grant.namespaceId||entry.vaultId!==grant.vault.id)throw new AppError('DATABASE_LOCATION');}});
     await this.check();if(this.application.closed)throw new AppError('ACCESS_LOCKED');
     // Apply only this client's still-valid grants. No await separates checking

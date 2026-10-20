@@ -1,0 +1,28 @@
+import '../src/storage.js';
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import os from 'node:os';
+import {mkdtemp,rm} from 'node:fs/promises';
+import {randomUUID,randomBytes} from 'node:crypto';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {createNotebook} from '../src/model.js';
+import {WorkspaceDatabases} from '../src/workspace-databases.js';
+import {installDatabaseProvider} from '../src/workspace-database-context.js';
+import {clearVault} from '../src/encryption.js';
+import {createPortabilityCollection,portabilityCollection} from '../src/portability-collection.js';
+import {verifyNativeRelocationOwners} from '../src/native-relocation-state.js';
+const uuid=(type,n)=>type+'0000000-0000-4000-8000-'+String(n).padStart(12,'0'),hash='a'.repeat(64);
+test('native relocation inventories and recovery-key indexes exceed former project, owner and aggregate-byte admission',{timeout:360000},async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-relocation-growth-')),runtime=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(runtime);let vault;
+ t.after(async()=>{await runtime.close();detach();clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-relocation-growth-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const fixture=await encryptedFixture(path.join(directory,'Synthetic Index Workspace'),createNotebook('Synthetic Index Workspace')),workspace=fixture.workspace;vault=fixture.vault;
+ const count=8205,rootId=uuid('1',0),summary={title:'T'.repeat(160),description:'D'.repeat(1500),kind:'K'.repeat(80),templateName:'N'.repeat(160)};let bytes=0;
+ const row=n=>({kind:'project',relative:n?('Owner '+String(n).padStart(6,'0')+' ').padEnd(140,'x'):'',projectId:uuid('1',n),namespaceId:uuid('2',n),vaultId:uuid('3',n),parentId:n?rootId:null,summary,bookRevision:hash,identity:{dev:'1',ino:String(n+1)},accessHash:hash,descriptorHash:hash,sourceId:uuid('4',n)});
+ const owners=await createPortabilityCollection(workspace,(async function*(){for(let n=0;n<count;n++){const item=row(n);bytes+=Buffer.byteLength(JSON.stringify(item));yield item;}})());
+ const ownerKeys=await createPortabilityCollection(workspace,(async function*(){for(let n=1;n<count;n++){const {kind,relative,projectId,namespaceId,vaultId}=row(n);yield {kind,relative,projectId,namespaceId,vaultId,key:randomBytes(32).toString('base64')};}})());
+ const value={ownerDirectoryVersion:2,owners,ownerKeys,projectRegistryRevision:hash,phase:'prepared',projectId:rootId,namespaceId:uuid('2',0),vaultId:uuid('3',0),parentId:null};assert.equal(owners.count,count);assert.equal(ownerKeys.count,count-1);assert.ok(bytes>16*1024*1024);assert.ok(JSON.stringify(value).length<8192);
+ await verifyNativeRelocationOwners({workspace},value);const selected=portabilityCollection(workspace,owners),last=row(count-1),before=structuredClone(owners);assert.equal((await selected.find('project',last.projectId)).relative,last.relative);assert.equal((await portabilityCollection(workspace,ownerKeys).find('vault',last.vaultId)).projectId,last.projectId);
+ await selected.update(last.relative,{parentId:randomUUID()});await assert.rejects(verifyNativeRelocationOwners({workspace},value),{code:'STORAGE_RENAME_STATE'});await verifyNativeRelocationOwners({workspace},{...value,owners:before});
+ await workspace.catalogue(async store=>{const totals=await store.db.get("SELECT count(*)::text AS rows,sum(octet_length(payload))::text AS bytes FROM state WHERE slot LIKE 'portability:%'");t.diagnostic(JSON.stringify({owners:count,keys:count-1,aggregateOwnerBytes:bytes,controlBytes:Buffer.byteLength(JSON.stringify(value)),stateRows:Number(totals.rows),stateBytes:Number(totals.bytes)}));});
+});

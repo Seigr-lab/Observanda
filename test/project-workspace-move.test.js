@@ -103,7 +103,7 @@ test('actual cross-volume workspace handoff resumes after publication with indep
  const f=await fixture(t,{destinationParent:process.env.OBSERVANDA_TEST_SECOND_VOLUME});
  assert.notEqual((await fs.stat(f.source.root)).dev,(await fs.stat(f.targetRegistry.workspace.root)).dev,'The destination must be a different mounted volume');
  await assert.rejects(f.moves.run(f.source,{...f.options,checkpoint:stage=>{if(stage==='registered')throw Error('Interrupted after destination publication');}}),/Interrupted after destination publication/);
- assert.equal((await f.moves.read()).version,2);
+ assert.equal((await f.moves.read()).ownerDirectoryVersion,2);
  await f.stopProvider();f.restartProvider();
  assert.equal((await f.moves.resume(f.source.vault)).complete,true);
  await tree(f,true);

@@ -42,14 +42,14 @@ export class ProjectWorkspaceMoveApplication{
    };
    try{
     if(prior&&prior.id===data.id&&(prior.target.workspaceId!==target.registry.workspaceId||prior.parentId!==data.expectedParentId||prior.placement.parentId!==data.parentId))throw new AppError('CONFLICT');
-    const continuing=prior?.id===data.id&&!['cancelled'].includes(prior.phase)&&!(prior.phase==='prepared'&&!await workspaceRename(command.scope(prior).source));
+    const continuing=prior?.id===data.id&&!['cancelled'].includes(prior.phase)&&!(['preparing','prepared'].includes(prior.phase)&&!await workspaceRename(command.scope(prior).source));
     if(continuing){
      const root=await locateWorkspaceProjectMove(registry,prior),access=await readAccess(root);await current();
      vault=saved?.vault&&saved.etag===access.etag&&saved.vault.id===prior.vaultId?cloneVault(saved.vault):await app.authenticate(root,access,'','','');authenticateKeyring(access.value,vault);
      return await command.resume(vault,{check:current,withParent});
     }
     owners=new ProjectLocationAccess(app,client,{check:checkTarget});const storage=await owners.withProject(projectId,storage=>storage);saved=session.get(projectId);
-    await app.jobs.invalidateProject(projectId);return await command.run(storage,{...data,check:current,withParent,withProject:(id,use)=>owners.withProject(id,use),withBook:(parent,id,use)=>owners.withBook(parent,id,use)});
+    await app.jobs.invalidateProject(projectId);return await owners.withScopedAccess(scoped=>command.run(storage,{...data,check:async owner=>{await current();await scoped.check(owner);},withParent,withProject:(id,use)=>scoped.withProject(id,use),withBook:(parent,id,use)=>scoped.withBook(parent,id,use)}));
    }catch(error){if(accessCodes.includes(error.code)){error.projectId??=projectId;error.projectName??=prior?path.posix.basename(prior.source):path.basename((await registry.locate(projectId)).root);}throw error;}
    finally{if(owners)await owners.close();await parentOwner?.close();clearVault(vault);}
   },{check}).catch(async error=>{const receipt=await readProjectWorkspaceMove(registry,projectId).catch(()=>undefined);if(receipt===null||receipt&&receipt.id!==data.id)error.operationNotStarted=true;throw error;});

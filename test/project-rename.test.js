@@ -15,6 +15,7 @@ import {ProjectStorage} from '../src/project-storage.js';
 import {LabBookCreation} from '../src/lab-book-creation.js';
 import {LabBookStorage} from '../src/lab-book-storage.js';
 import {LabBookRegistry} from '../src/lab-book-registry.js';
+import {LabBookRenames} from '../src/lab-book-rename.js';
 import {ProjectRenames} from '../src/project-rename.js';
 import {WorkspaceRenames} from '../src/workspace-rename.js';
 import {workspaceRename} from '../src/workspace-rename-state.js';
@@ -42,7 +43,9 @@ async function client(app){
  context=(await call('/api/storage')).value.contextId;return call;
 }
 test('project settings rename authenticates nested books and HTTP reads recover interrupted relocation',{timeout:240000},async t=>{
- const f=await fixture(t),options={root:f.root,deviceStore:f.deviceStore,port:0,headless:true,preferencesFile:path.join(f.directory,'preferences.json')};let app=await startServer(options);t.after(()=>app.close());
+ const f=await fixture(t),options={root:f.root,deviceStore:f.deviceStore,port:0,headless:true,preferencesFile:path.join(f.directory,'preferences.json')};
+ const pendingBook=f.books[1],pendingParent=f.projects.find(item=>item.projectId===pendingBook.projectId);await assert.rejects(new LabBookRenames(new ProjectStorage(pendingParent.root,pendingParent.projectId,pendingParent.key)).run(new LabBookStorage(pendingBook.root,pendingBook.labBookId,pendingBook.key),{id:randomUUID(),name:'Recovered Nested Observations',expectedName:path.basename(pendingBook.root),checkpoint:async stage=>{if(stage==='renamed')throw Error('Interrupted independent book rename');}}),/Interrupted independent book rename/);
+ let app=await startServer(options);t.after(()=>app.close());
  const a=await client(app),b=await client(app),selected=f.projects[0],prefix='/api/projects/'+selected.projectId,opened=await a(prefix+'/workspace/read/start',{});assert.equal(opened.status,200,JSON.stringify(opened));
  const deniedTitle=await a(prefix+'/workspace/structure',{etag:opened.value.etag,change:{kind:'project',value:{...opened.value.metadata.projects[0],title:'Metadata only name'}},response:'outline'});assert.equal(deniedTitle.value.code,'STORAGE_NAME_MISMATCH');assert.equal((await a(prefix+'/workspace/read/start',{})).value.etag,opened.value.etag);
  const command={id:randomUUID(),etag:opened.value.etag,project:{...opened.value.metadata.projects[0],title:'Renamed Field Project',description:'Retained project settings'}};
@@ -155,7 +158,7 @@ test('workspace rename resolves a prepared project placement and retains its new
 test('legacy volume cancellation restores the entire project tree through interrupted cleanup',{timeout:240000},async t=>{
  const f=await fixture(t),target=await destinationProject(f,t),selected=f.projects[0],renames=new ProjectRenames(f.registry,selected.projectId),source=new ProjectStorage(selected.root,selected.projectId,selected.key);
  const callbacks={withProject:async(id,use)=>use(new ProjectStorage((await f.registry.locate(id)).root,id,f.projects.find(p=>p.projectId===id).key)),withBook:async(parent,id,use)=>use(new LabBookStorage((await new LabBookRegistry(parent).locate(id)).root,id,f.books.find(book=>book.labBookId===id).key))};
- for(const boundary of ['cancelling','cancel-projects-cleared','cancel-books-cleared','cancel-unfrozen','cancelled']){
+ for(const boundary of ['cancelling','cancel-projects-cleared','cancel-books-cleared','keys-erased','cancel-unfrozen','cancelled']){
   const command={id:randomUUID(),name:path.basename(source.root),expectedName:path.basename(source.root),placement:{parentId:target.projectId,expectedParentId:null},...callbacks};
   await assert.rejects(renames.run(source,{...command,checkpoint:async(stage,value)=>{if(stage==='stopped'){value.phase='cancelling';value.cancelReason='volume';await renames.save(value);throw Error('Legacy cancellation');}}}),/Legacy cancellation/);
   if(boundary!=='cancelling')await assert.rejects(renames.run(source,{...command,checkpoint:async stage=>{if(stage===boundary)throw Error('Interrupted '+boundary);}}),new RegExp('Interrupted '+boundary));

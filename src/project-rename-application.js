@@ -35,23 +35,23 @@ export class ProjectRenameApplication{
   const app=this.application,registry=await app.registry(),value=await pendingProjectRename(registry,projectId);if(!value||value.id===skipId)return;
   if(projectTransferRunning(projectRenameFile(registry,value.projectId))){const error=new AppError('STORAGE_RENAMING');error.projectId=value.projectId;throw error;}
   const renames=new ProjectRenames(registry,value.projectId),session=app.session(client),saved=session.get(value.projectId),root=await locateProjectRename(registry,value),access=await readAccess(root);let vault;
-  if(deferPrepared&&value.phase==='prepared'&&!await workspaceRename(root))return;
+  if(deferPrepared&&['preparing','prepared'].includes(value.phase)&&!await workspaceRename(root))return;
   try{
    await check();if(app.closed||saved?.locked)throw new AppError('ACCESS_LOCKED');
    if(saved?.vault&&saved.etag===access.etag&&saved.vault.id===value.vaultId&&saved.expires>Date.now())vault=cloneVault(saved.vault);
    else vault=await app.authenticate(root,access,'','','');authenticateKeyring(access.value,vault);
    const current=async()=>{await check();if(app.closed||session.get(value.projectId)!==saved||saved?.locked||saved?.vault&&saved.expires<=Date.now())throw new AppError('ACCESS_LOCKED');};
    await current();await app.jobs.invalidateProject(value.projectId);
-   if(value.phase==='prepared'&&!await workspaceRename(root)){
+   if(['preparing','prepared'].includes(value.phase)&&!await workspaceRename(root)){
     const owners=new ProjectLocationAccess(app,client,{check:current,skipRenameId:value.id});
     try{
      const storage=await owners.withProject(value.projectId,storage=>storage);
      if(value.settings&&(await storage.outline()).etag!==value.settings.etag){await renames.cancelPrepared(vault,{check:current});return;}
-     await this.withParent(client,value.placement?.parentId??null,current,check=>renames.run(storage,{id:value.id,name:path.posix.basename(value.destination),expectedName:path.posix.basename(value.source),settings:value.settings??null,placement:value.placement??null,check,...this.callbacks(owners)}),value.id);await owners.adoptProjectRename(renames);
+     await owners.withScopedAccess(async scoped=>{await this.withParent(client,value.placement?.parentId??null,current,check=>renames.run(storage,{id:value.id,name:path.posix.basename(value.destination),expectedName:path.posix.basename(value.source),settings:value.settings??null,placement:value.placement??null,check:async owner=>{await check();await scoped.check(owner);},...this.callbacks(scoped)}),value.id);await scoped.adoptProjectRename(renames);});
     }catch(error){
      if(error.code!=='CONFLICT')throw error;const latest=await renames.read();
      if(latest?.phase==='cancelled')return;
-     if(latest?.phase==='prepared'&&!await workspaceRename(root)&&latest.settings&&(await new ProjectStorage(root,value.projectId,vault).outline()).etag!==latest.settings.etag){await renames.cancelPrepared(vault,{check:current});return;}
+     if(latest&&['preparing','prepared'].includes(latest.phase)&&!await workspaceRename(root)&&latest.settings&&(await new ProjectStorage(root,value.projectId,vault).outline()).etag!==latest.settings.etag){await renames.cancelPrepared(vault,{check:current});return;}
      throw error;
     }finally{await owners.close();}
    }else{
@@ -69,13 +69,12 @@ export class ProjectRenameApplication{
  async reparent(client,projectId,data,{check=async()=>{}}={}){
   if(!data||Object.keys(data).sort().join()!=='expectedParentId,id,parentId'||!researchId(data.id))throw new AppError('INVALID');
   const placement={parentId:data.parentId,expectedParentId:data.expectedParentId};if(!validProjectPlacement(placement))throw new AppError('INVALID');
-  const app=this.application;await this.recover(client,projectId,{check});const registry=await app.registry(),owners=new ProjectLocationAccess(app,client,{check});
+  const app=this.application;await this.recover(client,projectId,{check});const registry=await app.registry(),owners=new ProjectLocationAccess(app,client,{check,skipRenameId:data.id});
   try{
    const storage=await owners.withProject(projectId,storage=>storage),entry=await registry.locate(projectId),renames=new ProjectRenames(registry,projectId),prior=await renames.read();
    if(prior?.id===data.id){if(!prior.placement||prior.placement.parentId!==placement.parentId||prior.placement.expectedParentId!==placement.expectedParentId)throw new AppError('CONFLICT');if(prior.phase==='complete')return {project:entry};}
    if(entry.parentId!==placement.expectedParentId)throw new AppError('CONFLICT');if(entry.parentId===placement.parentId)return {project:entry};
-   await this.withParent(client,placement.parentId,check,async current=>{await app.jobs.invalidateProject(projectId);await renames.run(storage,{id:data.id,name:path.basename(storage.root),expectedName:path.basename(storage.root),placement,check:current,...this.callbacks(owners)});});
-   await owners.adoptProjectRename(renames);return {project:await registry.locate(projectId)};
+   await owners.withScopedAccess(async scoped=>{await this.withParent(client,placement.parentId,check,async current=>{await app.jobs.invalidateProject(projectId);await renames.run(storage,{id:data.id,name:path.basename(storage.root),expectedName:path.basename(storage.root),placement,check:async owner=>{await current();await scoped.check(owner);},...this.callbacks(scoped)});});await scoped.adoptProjectRename(renames);});return {project:await registry.locate(projectId)};
   }catch(error){
    const receipt=await new ProjectRenames(registry,projectId).read().catch(()=>undefined);
    if(receipt===null||receipt&&receipt.id!==data.id)error.operationNotStarted=true;throw error;
@@ -84,7 +83,7 @@ export class ProjectRenameApplication{
  callbacks(owners){return {withProject:(id,use)=>owners.withProject(id,async storage=>{await this.application.jobs.invalidateProject(id);return use(storage);}),withBook:(project,id,use)=>owners.withBook(project,id,use)};}
  async save(client,projectId,data,{check=async()=>{}}={}){
   if(!data||Object.keys(data).some(key=>!['etag','id','project','configurationDraft','configurationPin'].includes(key))||!researchId(data.id)||typeof data.etag!=='string'||data.project?.id!==projectId||data.project.parentId!=null)throw new AppError('INVALID');
-  const app=this.application,selected=data.configurationDraft!==undefined||data.configurationPin!==undefined;await this.recover(client,projectId,{check});const registry=await app.registry(),owners=new ProjectLocationAccess(app,client,{check});
+  const app=this.application,selected=data.configurationDraft!==undefined||data.configurationPin!==undefined;await this.recover(client,projectId,{check});const registry=await app.registry(),owners=new ProjectLocationAccess(app,client,{check,skipRenameId:data.id});
   try{
    const storage=await owners.withProject(projectId,storage=>storage),renames=new ProjectRenames(registry,projectId),prior=await renames.read();let settings={etag:data.etag,project:data.project};
    if(selected&&prior?.id===data.id){const input=digest(serialize({etag:data.etag,project:data.project,draft:data.configurationDraft,pin:data.configurationPin}));if(prior.settings?.input!==input)throw new AppError('CONFLICT');settings=prior.settings;}
@@ -98,7 +97,7 @@ export class ProjectRenameApplication{
      const project={...data.project};if(checkpoint.absent)delete project.labBookTemplate;else project.labBookTemplate={name:checkpoint.name,configuration:checkpoint.configuration};
      settings={etag:data.etag,project,...(checkpoint.draft?{checkpoint:data.configurationDraft}:{}),input:digest(serialize({etag:data.etag,project:data.project,draft:data.configurationDraft,pin:data.configurationPin}))};
     }
-    await app.jobs.invalidateProject(projectId);await renames.run(storage,{id:data.id,name:data.project.title,expectedName:path.basename(storage.root),settings,check,...this.callbacks(owners)});await owners.adoptProjectRename(renames);
+    await app.jobs.invalidateProject(projectId);await owners.withScopedAccess(async scoped=>{await renames.run(storage,{id:data.id,name:data.project.title,expectedName:path.basename(storage.root),settings,check:owner=>scoped.check(owner),...this.callbacks(scoped)});await scoped.adoptProjectRename(renames);});
    }
    const entry=await registry.locate(projectId),opened=new ProjectStorage(entry.root,projectId,storage.vault);
    const result=await opened.catalogue(store=>store.recordOutline());await registry.refreshSummary(projectId,result.book);return result;
