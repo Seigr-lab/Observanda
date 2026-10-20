@@ -47,7 +47,7 @@ export class ProjectPublications{
   const publisher=websitePublisher(basePublisher,workspace),queue=websiteJobQueue(baseQueue,websiteId),releases=new PublicationJobs(workspace,{sourceReader}),blockedValues=[storage.root,os.homedir(),os.hostname()],cacheKey=id=>(websiteId??'')+':'+id;
   const candidate=async id=>{
    if(typeof id!=='string'||!/^[a-f0-9]{64}$/.test(id))throw new AppError('INVALID');
-   let value=this.candidates.get(cacheKey(id));if(!value){value=await releases.read(id);if(value)this.candidates.set(cacheKey(id),value);}return value;
+   let value=this.candidates.get(cacheKey(id));if(!value){value=await releases.read(id);if(value)this.candidates.set(cacheKey(id),value);}else await releases.assertSourcePermissions(value,{signal});return value;
   };
   const retained=async id=>{const value=await candidate(id);if(!value)throw new AppError('NOT_FOUND');return value;};
   const rollback=async value=>data.rollbackReview?new PublicationRollback(workspace,publisher,{sourceReader}).project(value,await new PublicationRollback(workspace,publisher,{sourceReader}).authorize(value,data.rollbackReview)):value;

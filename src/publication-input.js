@@ -37,7 +37,7 @@ export async function retainPublicationInput(workspace,id,metadata,originals,{so
  if(fresh)await retainWebsitePublicationCollections(destination,builder,id,metadata,{websiteCollections,websitePages,websitePresentation,signal});
  const materials=new ResearchMaterials(research),review={retainedFigures:0,changedInputs:0,editedFigures:0};
  async function pin(original,choice,pageId=original.id){
-  signal?.throwIfAborted();const saved=publicationOriginal(original),revision=recordRevision(saved),selection=choice??defaultEditionRecord(original,revision),record=selectEditionRecord(original,selection),raw=serialize(saved);
+  signal?.throwIfAborted();const saved=publicationOriginal(original),revision=recordRevision(saved),requested=choice??defaultEditionRecord(original,revision),record=selectEditionRecord(original,requested),selection={...requested,include:record.share,sections:record.sections.map(section=>section.id),attachments:record.attachments.map(item=>item.id)},raw=serialize(saved);
   const cover=metadata.id===state.header.metadata.id?await builder.get('covers',original.id):null,cardMetadata=cover?{...metadata,website:{...metadata.website,presentation:{...metadata.website.presentation,covers:[cover]}}}:metadata;
   let descriptor={...publicationDescriptor(record,cardMetadata),id:pageId,revision,sha256:digest(raw),selection};
   if(pageId!==original.id){descriptor.recordId=original.id;descriptor.historical=true;}
@@ -56,7 +56,7 @@ export async function retainPublicationInput(workspace,id,metadata,originals,{so
  }
  const start=builder.count('records');
  for await(const original of originals){
-  signal?.throwIfAborted();if(!original.share||!metadata.notebooks.some(notebook=>notebook.id===original.notebookId&&metadata.projects.some(project=>project.id===notebook.projectId&&project.share)))continue;
+  signal?.throwIfAborted();if(!original.share||!metadata.notebooks.some(notebook=>notebook.id===original.notebookId&&notebook.share!==false&&metadata.projects.some(project=>project.id===notebook.projectId&&project.share)))continue;
   const choice=choices.get(original.id);if(choice){found.add(original.id);validateEditionRecord(original,choice);if(!choice.include)continue;}await pin(original,choice);
  }
  if(found.size!==choices.size)throw new AppError('RECORD_CHANGED');

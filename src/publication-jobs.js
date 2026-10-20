@@ -18,6 +18,8 @@ import {AppError} from './errors.js';
 import {MetadataFeed} from './metadata-feed.js';
 import {digest,serialize,privateDirectory,assertRegular} from './storage.js';
 import {publicationSource} from './publication-source.js';
+import {assertPublicationSourcePermissions} from './publication-permission-admission.js';
+import {SOURCE_PUBLICATION_VERSION} from './web/source-publication-permissions.js';
 import {selectedContent} from './web/website-model.js';
 import {researchId} from './web/research-reference.js';
 import {Publisher} from './publishing.js';
@@ -35,7 +37,7 @@ export class PublicationJobs{
    let capturedPin;
    const input=await publicationSource(workspace,{etag,websitePin,websiteDraft,book,workspaceId,draft:command},{signal,consume:async(metadata,records,options)=>{capturedPin=options.websitePin;const sources=this.sources??metadata.website.researchSources??[];if(!validPublicationSources(sources))throw new AppError('INVALID');const input=await retainPublicationInput(workspace,id,metadata,records,{...options,signal,sourceReader:this.sourceReader,edition,hasSources:!!sources.length,deferFinalization:!!sources.length});return sources.length?retainPublicationSources(workspace,id,input,sources,await this.sourceReader?.({signal}),{signal,sourceReader:this.sourceReader}):input;}});
    const destination=await new Publisher(workspace.root,{workspace},workspace.vault).read();
-   const source={version:input.document?6:input.layoutInputs?5:input.pageInputs?4:3,id,reviewId:digest(id),workspaceId:input.metadata.id,websiteId:capturedPin.websiteId,websitePin:capturedPin,createdAt:new Date().toISOString(),etag:capturedPin.researchSnapshotId,...input,blockedValues,
+   const source={sourcePermissionVersion:SOURCE_PUBLICATION_VERSION,version:input.document?6:input.layoutInputs?5:input.pageInputs?4:3,id,reviewId:digest(id),workspaceId:input.metadata.id,websiteId:capturedPin.websiteId,websitePin:capturedPin,createdAt:new Date().toISOString(),etag:capturedPin.researchSnapshotId,...input,blockedValues,
     configEtag:destination.etag,destination:destination.configured?destination.config:null};
    signal?.throwIfAborted();
    await workspace.writeMetadata(inputFile(id),serialize(source));
@@ -76,7 +78,8 @@ export class PublicationJobs{
  async authorize(job){await this.workspace.requireStorageKey();const s=await this.source(job.id);if(job.scope!==s.workspaceId||job.input.revision!==digest(serialize(s)))throw new AppError('JOB_CHANGED');}
  async directory(id,attempt){if(!researchId(id)||attempt!==undefined&&!researchId(attempt))throw new AppError('INVALID');return privateDirectory(this.workspace.root,'.observanda/releases/'+id+(attempt?'/'+attempt:''));}
  async prepare(job,{signal,progress}){
-  const source=await this.source(job.id),blockedValues=[...source.blockedValues,this.workspace.root,os.homedir(),os.hostname()].filter(Boolean);
+  const source=await this.source(job.id);await assertPublicationSourcePermissions(this.workspace,source,{sourceReader:this.sourceReader,signal});
+  const blockedValues=[...source.blockedValues,this.workspace.root,os.homedir(),os.hostname()].filter(Boolean);
   if(source.version===1){const {entries,...metadata}=source.book;void entries;source.metadata=metadata;source.records=selectedContent(source.book).entries.map(record=>publicationDescriptor(record,metadata));}
   const websitePin=await retainedWebsitePin(this.workspace,source);
   const directory=await this.directory(job.id,job.lease.token),files=[];
@@ -84,7 +87,7 @@ export class PublicationJobs{
    return withPublicationOutputWriter(this.workspace,source,job,{directory,signal,blockedValues},async writer=>{
    const rendered=await buildPublicationEdition(this.workspace,source,{writer,blockedValues,signal,progress});
    const candidate=await writer.finish({defaultPage:rendered.defaultPage});
-   return {version:3,workspaceId:source.workspaceId,jobId:job.id,attempt:job.lease.token,reviewId:source.reviewId,websiteId:websitePin.websiteId,websitePin,...candidate,etag:source.etag,createdAt:source.createdAt,
+   return {sourcePermissionVersion:SOURCE_PUBLICATION_VERSION,version:3,workspaceId:source.workspaceId,jobId:job.id,attempt:job.lease.token,reviewId:source.reviewId,websiteId:websitePin.websiteId,websitePin,...candidate,etag:source.etag,createdAt:source.createdAt,
     source:{jobId:source.id,document:source.document},hasSources:!!source.hasSources,blockedValues,summary:source.summary,researchReview:source.researchReview,configEtag:source.configEtag,destination:source.destination};
    });
   }
@@ -95,7 +98,7 @@ export class PublicationJobs{
    if(saved.size!==contentSize(content)||saved.sha256!==contentHash(content))throw new AppError('STALE');
    files.push({name,index,...saved,type,...(type==='media'?{header:content.header.toString('hex')}: {})});
   }});
-  return {version:2,jobId:job.id,attempt:job.lease.token,reviewId:source.reviewId,websiteId:websitePin.websiteId,websitePin,id:candidate.id,etag:source.etag,createdAt:source.createdAt,
+  return {sourcePermissionVersion:SOURCE_PUBLICATION_VERSION,version:2,jobId:job.id,attempt:job.lease.token,reviewId:source.reviewId,websiteId:websitePin.websiteId,websitePin,id:candidate.id,etag:source.etag,createdAt:source.createdAt,
    files,pages:candidate.pages,entries:candidate.entries,projects:candidate.projects,defaultPage:candidate.defaultPage,blockedValues,
    sourceRevisions:source.sourceRevisions,sourceMaterials:source.sourceMaterials,...(source.sourceGroups?{workspaceId:source.workspaceId,sourceGroups:source.sourceGroups,sourceSnapshots:source.sourceSnapshots}:{}),summary:source.summary,researchReview:source.researchReview,configEtag:source.configEtag,destination:source.destination};
  }
@@ -129,8 +132,13 @@ export class PublicationJobs{
   verifyPublicationManifest({...stored,files});
   }catch(error){if(error.code==='ENOENT')throw new AppError('JOB_DAMAGED');throw error;}
  }
+ async assertSourcePermissions(candidate,{signal}={}){
+  if(candidate.sourcePermissionVersion!==SOURCE_PUBLICATION_VERSION)throw new AppError('PUBLICATION_PERMISSIONS_CHANGED');
+  await assertPublicationSourcePermissions(this.workspace,await this.source(candidate.jobId),{sourceReader:this.sourceReader,signal});
+ }
  async read(id){
   const stored=await this.stored(id);if(!stored)return null;
+  await this.assertSourcePermissions(stored);
   const files=new Map(),blockedValues=[...stored.blockedValues,this.workspace.root,os.homedir(),os.hostname()];
   if(stored.version===3)return {...stored,files:await RetainedPublicationFiles.open(this.workspace,stored,{blockedValues}),blockedValues};
   for await(const {file:f,content} of this.contents(stored)){

@@ -4,12 +4,12 @@
   "invalid": "The publication content response was incomplete.",
   "retry": "Retry",
   "mediaCount": "Media ({total})",
-  "title": "Publication content",
-  "help": "Select what visitors can see. Projects and records populate the website automatically.",
+  "title": "Website content",
+  "help": "Choose the lab-book content to include in this website. Publication permissions are set in each lab book and record section.",
   "search": "Find projects or records",
   "empty": "No matching projects or records.",
   "includeProject": "Include project",
-  "includeAll": "Include all entries",
+  "includeAll": "Include available records",
   "included": "{included} of {total} records included",
   "projectExcluded": "Project excluded; its records and media will not be published.",
   "recordExcluded": "Excluded by project",
@@ -26,5 +26,6 @@
   "nextRecords": "Next records",
   "projectRange": "Projects {first}–{last} of {total}",
   "recordRange": "Records {first}–{last} of {total}",
-  "counts": "{projects} projects / {notebooks} lab books / {records} records / {pages} pages / {media} media files"
+  "counts": "{projects} projects / {notebooks} lab books / {records} records / {pages} pages / {media} media files",
+  "sourcePrivate": "Private in the lab book"
 }

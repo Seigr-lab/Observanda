@@ -790,6 +790,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       // An unavailable prior location blocks operations on it, but must not block an
       // explicit request to create a workspace in a folder selected by the user.
       if(requiredWorkspaceMissing&&!(req.method==='POST'&&url.pathname==='/api/notebook/create'))throw new AppError('STORAGE_UNAVAILABLE');
+      if((websiteRequest(url.pathname)||url.pathname.startsWith('/api/websites/'))&&await workspace.storageKind()!=='catalogue')throw new AppError('STORAGE_UPGRADE_REQUIRED');
       if(websiteRequest(url.pathname)){
         const {websiteId,websitePin}=websiteRequestContext(req.headers);
         workspace=websiteWorkspace(workspace,websiteId,{websitePin});publisher=websitePublisher(publisher,workspace);

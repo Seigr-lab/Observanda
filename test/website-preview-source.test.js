@@ -18,15 +18,16 @@ import {workspaceSaveRequest} from '../src/web/workspace-edits.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {clearVault} from '../src/encryption.js';
 import {MediaStore} from '../src/media.js';
+import {PublicationJobs} from '../src/publication-jobs.js';
 
 async function fixture(t,configure=()=>{}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-preview-draft-')),book=upgradeNotebook(sampleNotebook());
  book.website.home.sections=[];
  const seed=book.entries[0];book.entries=Array.from({length:42},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'Record '+i,body:'Original '+i,attachments:[],figures:[],relations:[]}));
  configure(book);
- const f=await encryptedFixture(directory,book),etag=(await f.workspace.outline()).etag;
+ const f=await encryptedFixture(directory,book),{etag,websitePin}=await new PublicationJobs(f.workspace).workspace.outline();
  t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
- return {...f,book,etag,request:draft=>({...workspaceSaveRequest(book,draft,recordRevisions(book)),baseEtag:etag})};
+ return {...f,book,etag,websitePin,saved:await f.workspace.read(),request:draft=>({...workspaceSaveRequest(book,draft,recordRevisions(book)),baseEtag:etag})};
 }
 
 const options=designTarget=>({designTarget,workspaceContent:true,singlePage:true});
@@ -39,7 +40,7 @@ async function tracedSource(f,command,target,allowed){
  const record=ResearchCatalogue.prototype.record,read=ResearchCatalogue.prototype.read,loaded=[];
  ResearchCatalogue.prototype.record=async function(id,...args){assert.ok(allowed.includes(id),'Unexpected original read '+id);loaded.push(id);return record.call(this,id,...args);};
  ResearchCatalogue.prototype.read=()=>{throw Error('Canvas loaded the complete workspace');};
- try{return {loaded,...await websitePreviewSource(f.workspace,command,{designTarget:target})};}
+ try{return {loaded,...await websitePreviewSource(f.workspace,command,{websitePin:f.websitePin,designTarget:target})};}
  finally{ResearchCatalogue.prototype.record=record;ResearchCatalogue.prototype.read=read;}
 }
 
@@ -50,7 +51,7 @@ test('empty home edits load no originals; a selected record loads only its origi
  draft.entries[0].share=false;const target='entry:'+draft.entries[1].id;
  result=await tracedSource(f,f.request(draft),target,[draft.entries[0].id,draft.entries[1].id]);comparePage(result.context,draft,target);
  assert.deepEqual(result.context.entries.map(e=>e.id),[draft.entries[1].id]);
- assert.deepEqual((await f.workspace.read()).book,f.book);assert.equal((await f.workspace.outline()).etag,f.etag);
+ assert.deepEqual(await f.workspace.read(),f.saved);assert.equal((await f.workspace.outline()).etag,f.etag);
 });
 
 test('concurrent saves do not substitute new originals into an older unsaved website draft',async t=>{

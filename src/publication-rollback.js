@@ -15,11 +15,11 @@ const receiptIdentity=r=>r?{deploymentId:r.deploymentId??null,releaseId:r.releas
 export class PublicationRollback{
  constructor(workspace,publisher,{sourceReader}={}){this.workspace=publicationWorkspace(workspace);this.publisher=publisher;this.sourceReader=sourceReader;}
  async review({id}){
-  const candidate=await new PublicationJobs(this.workspace).read(id);if(!candidate)throw new AppError('NOT_FOUND');
+  const candidate=await new PublicationJobs(this.workspace,{sourceReader:this.sourceReader}).read(id);if(!candidate)throw new AppError('NOT_FOUND');
   return this.workspace.withLock(async()=>{
    await this.workspace.lockWebsite();
    const saved=await this.publisher.read(),current=await this.workspace.currentOutline();if(!saved.configured)throw new AppError('PUBLISH_CONFIG');
-   const source=await new PublicationJobs(this.workspace).source(candidate.jobId);if(source.workspaceId!==current.metadata.id)throw new AppError('WORKSPACE_CHANGED');
+   const source=await new PublicationJobs(this.workspace,{sourceReader:this.sourceReader}).source(candidate.jobId);if(source.workspaceId!==current.metadata.id)throw new AppError('WORKSPACE_CHANGED');
    const websitePin=await retainedWebsitePin(this.workspace,{etag:current.etag,websitePin:current.websitePin});
    const review={version:2,id:randomUUID(),workspaceId:current.metadata.id,workspaceEtag:current.etag,websitePin,reviewId:id,releaseId:candidate.id,configEtag:saved.etag,destinationKey:this.publisher.destinationKey(saved.config),previous:receiptIdentity(saved.receipt),createdAt:new Date().toISOString()};
    if(nativePublicationCandidate(candidate)){

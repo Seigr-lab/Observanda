@@ -27,7 +27,7 @@ export async function websiteReferencePage(records,id,cursor=null){
  const {store,metadata,command,signal}=records;
  if(cursor!==null&&(typeof cursor!=='string'||!cursor||cursor.length>4096))throw new AppError('INVALID');
  const selected=await records.get(id),original=await records.original(id);if(!selected||!original)throw new AppError('NOT_FOUND');
- selected.revision=recordRevision(original);selected.selectors=bookSelectors(original);
+ selected.revision=records.revision?records.revision(original):recordRevision(original);selected.selectors=bookSelectors(original);
  const binding=digest(serialize({workspaceId:metadata.id,websiteId:records.websiteId,websitePin:records.websitePin,snapshot:command.baseEtag,changes:command.changes,removed:command.removed,id}));
  let anchor={after:null,backward:false};
  if(cursor){
@@ -39,6 +39,7 @@ export async function websiteReferencePage(records,id,cursor=null){
  for await(const row of websiteReferenceCandidates(records,id,anchor)){
   if(items.length===24||scanned===256){more=true;break;}
   signal?.throwIfAborted();first??=row.position;last=row.position;scanned++;
+  if(!await records.visible(row))continue;
   const value=await records.document(row);if(!matches(value))continue;
   const details=records.changed.has(row.id)?publicationDescriptor(records.changed.get(row.id)):(await Array.fromAsync(store.queryDocuments([row],metadata,{signal,search:false,publicationDetails:true})))[0].publicationDescriptor;
   if(!details.relations.some(link=>link.target.kind==='record'&&link.target.id===id&&resolve(researchReference(link.target))))continue;

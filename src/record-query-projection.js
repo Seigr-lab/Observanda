@@ -1,5 +1,6 @@
 // Derive query content from a pinned original one owned value at a time. Large
 // collections are retained as references, never accumulated into another record.
+import {SOURCE_PUBLICATION_VERSION} from './web/source-publication-permissions.js';
 import {RecordContainerBuilder} from './record-tree-values.js';
 import {retainRecordText} from './record-text-retention.js';
 import {recordQueryDocument,recordReferenceTargets} from './web/record-query.js';
@@ -23,6 +24,7 @@ import {attemptReferenceGroups} from './record-attempt-query.js';
 const collections=['sections','contributors','relations','figures','attachments','tags'];
 const depends=(collection,...fields)=>({collection:Array.isArray(collection)?collection:[collection],fields});
 export async function retainedQueryProjection(document,revision,{signal,previous,searchText:retainedText,referenceTargets:retainedReferences}={}){
+ if(previous&&(await previous.tree.selected(previous.root,['publicationDescriptor','sourcePermissionVersion'])).value!==SOURCE_PUBLICATION_VERSION)previous=null;
  const {tree,blocks}=document,header={},reuse=recordProjectionReuse(document,previous,{signal});
  for(const name of await tree.propertyNames(document.root)){
   signal?.throwIfAborted();
@@ -89,18 +91,18 @@ export async function retainedQueryProjection(document,revision,{signal,previous
  const images=await filtered(['publicationCard','attachments'],'attachments',['id','kind','caption','alt','share'],item=>item.kind==='image',item=>item);
  const sharedImages=await filtered(['publicationDescriptor','attachments'],'attachments',['id','kind','caption','alt','share'],item=>item.kind==='image'&&item.share,item=>item);
  const grouped=(path,owners,groups)=>reuse(path,owners,()=>groupRecordProjection(document,previous,{path,groups},{signal}));
- const selectors=()=>grouped(['publicationDescriptor','selectors'],[depends('sections','id','title','body'),depends('figures','id','title'),depends('attachments','id','kind','caption','alt','share'),['body']],[
-  {collection:['sections'],fields:['id','title'],project:item=>[{version:1,kind:'section',id:item.id,label:item.title}]},
+ const selectors=()=>grouped(['publicationDescriptor','selectors'],[depends('sections','id','title','body','share'),depends('figures','id','title'),depends('attachments','id','kind','caption','alt','share'),['body']],[
+  {collection:['sections'],fields:['id','title','share'],project:item=>item.share===false?[]:[{version:1,kind:'section',id:item.id,label:item.title}]},
   {collection:['figures'],fields:['id','title'],project:item=>[{version:1,kind:'figure',id:item.id,label:item.title}]},
   {collection:['attachments'],fields:['id','kind','caption','alt','share'],project:item=>item.kind==='image'&&item.share?[{version:1,kind:'figure',id:item.id,label:item.caption||item.alt}]:[]},
   {field:['body'],project:body=>bookSelectors({body})},
-  {collection:['sections'],fields:['body'],project:item=>bookSelectors({body:item.body})}
+  {collection:['sections'],fields:['body','share'],project:item=>item.share===false?[]:bookSelectors({body:item.body})}
  ]);
  const mentions=body=>proseReferences(body).map(target=>({role:'mention',target}));
- const relations=()=>grouped(['publicationDescriptor','relations'],[depends('relations','role','target'),depends('sections','body'),['body']],[
+ const relations=()=>grouped(['publicationDescriptor','relations'],[depends('relations','role','target'),depends('sections','body','share'),['body']],[
   {collection:['relations'],fields:['role','target'],project:item=>[{role:item.role??'related',target:item.target}]},
   {field:['body'],project:mentions},
-  {collection:['sections'],fields:['body'],project:item=>mentions(item.body)}
+  {collection:['sections'],fields:['body','share'],project:item=>item.share===false?[]:mentions(item.body)}
  ]);
  const tags=await document.reference(['tags'],{signal});
  const descriptor=await object({...plain.publicationDescriptor,revision},{
@@ -113,13 +115,13 @@ export async function retainedQueryProjection(document,revision,{signal,previous
  const inventoryRoot=await object(inventory,{
   choice:await object(choice,{
    fields:header.template?await mapped(['editionInventory','choice','fields'],['template','fields'],['key'],item=>item.key):await tree.retain([]),
-   sections:await mapped(['editionInventory','choice','sections'],'sections',['id'],item=>item.id),
+   sections:await filtered(['editionInventory','choice','sections'],'sections',['id','share'],item=>item.share!==false,item=>item.id),
    attachments:await filtered(['editionInventory','choice','attachments'],'attachments',['id','share'],item=>item.share,item=>item.id),
    figures:await mapped(['editionInventory','choice','figures'],'figures',['id'],item=>({id:item.id,data:false}))
   }),
-  sections:await mapped(['editionInventory','sections'],'sections',['id','title'],item=>item),
+  sections:await filtered(['editionInventory','sections'],'sections',['id','title','share'],item=>item.share!==false,({id,title})=>({id,title})),
   fields:header.template?await mapped(['editionInventory','fields'],['template','fields'],['key','label'],item=>({id:item.key,title:item.label})):await tree.retain([]),
-  attachments:await mapped(['editionInventory','attachments'],'attachments',['id','kind','caption','alt'],item=>({id:item.id,kind:item.kind,title:item.caption||item.alt||''})),
+  attachments:await filtered(['editionInventory','attachments'],'attachments',['id','kind','caption','alt','share'],item=>item.share===true,item=>({id:item.id,kind:item.kind,title:item.caption||item.alt||''})),
   figures:await mapped(['editionInventory','figures'],'figures',['id','title'],item=>item)
  });
  const root=await object(plain,{

@@ -29,6 +29,7 @@ const sameSite=(a,b)=>{const {id:ai,...av}=a,{id:bi,...bv}=b;void ai;void bi;ret
 export class WebsiteSites{
  constructor(workspace){this.workspace=workspace;}
  async initialize(){
+  if(await this.workspace.storageKind()!=='catalogue')throw new AppError('STORAGE_UPGRADE_REQUIRED');
   if(await this.workspace.catalogue(readWebsiteDocumentRegistry))return;
   await this.workspace.withLock(()=>this.workspace.catalogue(async store=>{
    await store.initializeWebsiteDocuments();
@@ -45,6 +46,7 @@ export class WebsiteSites{
   }finally{await db.close();}
  }
  async list({after=null,limit=20}={}){
+  if(await this.workspace.storageKind()!=='catalogue')throw new AppError('STORAGE_UPGRADE_REQUIRED');
   return this.workspace.catalogue(async store=>{
    const etag=await store.head(),snapshot=await store.snapshot(etag),documents=new WebsiteDocumentStore(store);
    if(await readWebsiteDocumentRegistry(store)){
@@ -57,6 +59,7 @@ export class WebsiteSites{
   });
  }
  async version(id,{websitePin=null}={}){
+  if(await this.workspace.storageKind()!=='catalogue')throw new AppError('STORAGE_UPGRADE_REQUIRED');
   if(!identifier(id)||websitePin!==null&&(!validWebsitePin(websitePin)||websitePin.websiteId!==id))throw new AppError('INVALID');
   return this.workspace.catalogue(async store=>{
    const researchSnapshotId=await store.head(),value={...await new WebsiteDocumentStore(store).head(id),researchSnapshotId},snapshot=await store.snapshot(researchSnapshotId);
@@ -64,6 +67,7 @@ export class WebsiteSites{
   });
  }
  async read(id,{signal,websitePin=null}={}){
+  if(await this.workspace.storageKind()!=='catalogue')throw new AppError('STORAGE_UPGRADE_REQUIRED');
   if(!identifier(id)||websitePin!==null&&(!validWebsitePin(websitePin)||websitePin.websiteId!==id))throw new AppError('INVALID');
   return this.workspace.catalogue(async store=>{
    signal?.throwIfAborted();
@@ -90,6 +94,7 @@ export class WebsiteSites{
   for await(const summary of store.queryDocuments(rows(),snapshot.metadata,{search:false,publication:true}))projectWebsiteAttachmentChoices(selected.get(summary.id).attachments,summary.publication.attachments,saved.get(summary.id)?.attachments);
  }
  async change({workspaceId,etag,operation,id=null,name,projectId=null,websitePin=null}){
+  if(await this.workspace.storageKind()!=='catalogue')throw new AppError('STORAGE_UPGRADE_REQUIRED');
   if(!revisionId(etag)||!researchId(workspaceId)||!['create','rename'].includes(operation)||!identifier(id)||operation==='create'&&(this.workspace.projectId||this.workspace.labBookId||projectId!==null))throw new AppError('INVALID');
   if(!validWebsiteName(name))throw new AppError('INVALID');name=name.trim();
   const created=operation==='create';
@@ -129,6 +134,7 @@ export class WebsiteSites{
   return current.websiteRevision;
  }
  async save(id,command){
+  if(await this.workspace.storageKind()!=='catalogue')throw new AppError('STORAGE_UPGRADE_REQUIRED');
   if(!identifier(id))throw new AppError('INVALID');
   const {response,websitePin,...edit}=command;void response;validateWorkspaceEditCommand(edit);
   if(edit.changes.length||edit.removed.length||Object.keys(edit.metadata).some(k=>!WEBSITE_DOCUMENT_FIELDS.includes(k)))throw new AppError('INVALID');

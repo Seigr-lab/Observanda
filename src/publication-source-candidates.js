@@ -4,7 +4,7 @@ import {publicationRecords} from './publication-records.js';
 // Ordered owner-local candidates, shared by page and media discovery. Search
 // continuations seek index positions and keep one frontier per selected book.
 export async function* publicationSourceCandidates(store,snapshot,owner,{after=null,backward=false,search='',signal}={}){
- const metadata=owner.metadata,notebooks=new Set(metadata.notebooks.filter(book=>metadata.projects.some(project=>project.id===book.projectId&&project.share)).map(book=>book.id));
+ const metadata=owner.metadata,notebooks=new Set(metadata.notebooks.filter(book=>book.share!==false&&metadata.projects.some(project=>project.id===book.projectId&&project.share)).map(book=>book.id));
  const history=[...owner.history.keys()],boundary=after,reverse=backward,needle=search.trim().toLocaleLowerCase(),historyBase=snapshot.nextPosition;
  async function* current(){
   if(!reverse&&boundary!==null&&boundary>=historyBase)return;

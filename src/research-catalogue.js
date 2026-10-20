@@ -677,8 +677,8 @@ export class ResearchCatalogue{
     if(!Object.hasOwn(query,'cardSources'))delete expectedQuery.cardSources;
     if(!Object.hasOwn(query,'publication'))delete expectedQuery.publication;
     if(!Object.hasOwn(query,'publicationCard'))delete expectedQuery.publicationCard;
-    if(Object.hasOwn(query,'publicationDescriptor'))expectedQuery.publicationDescriptor=publicationDescriptor(display);
-    if(Object.hasOwn(query,'editionInventory'))expectedQuery.editionInventory=recordEditionInventory(display,recordRevision(display));
+    if(Object.hasOwn(query,'publicationDescriptor'))expectedQuery.publicationDescriptor=publicationDescriptor(display,undefined,{legacy:query.publicationDescriptor.sourcePermissionVersion!==1});
+    if(Object.hasOwn(query,'editionInventory'))expectedQuery.editionInventory=recordEditionInventory(display,recordRevision(display),{legacy:query.editionInventory.sourcePermissionVersion!==1});
     if(hash(query)!==hash(expectedQuery))fail();
    }
    });

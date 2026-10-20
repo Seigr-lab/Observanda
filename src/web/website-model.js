@@ -52,7 +52,7 @@ export function validWebsiteComposition(site,extended=true,composed=true,rich=tr
 }
 export function selectedContent(book){
   const projects=book.projects.filter(p=>p.share),projectIds=new Set(projects.map(p=>p.id));
-  const eligible=book.notebooks.filter(n=>projectIds.has(n.projectId)),notebookIds=new Set(eligible.map(n=>n.id));
+  const eligible=book.notebooks.filter(n=>n.share!==false&&projectIds.has(n.projectId)),notebookIds=new Set(eligible.map(n=>n.id));
   const entries=book.entries.filter(e=>e.share&&notebookIds.has(e.notebookId));
   const includedNotebooks=new Set(entries.map(e=>e.notebookId));
   return {homeEnabled:hasHomepage(book),projects,entries,assets:book.website.assets??[],notebooks:eligible.filter(n=>includedNotebooks.has(n.id)),pages:book.pages.filter(p=>p.share),blockedEntries:book.entries.filter(e=>e.share&&!notebookIds.has(e.notebookId))};

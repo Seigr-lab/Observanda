@@ -1,3 +1,4 @@
+import {sourcePublicationRecord} from './web/source-publication-permissions.js';
 import {upgradeNotebook} from './model.js';
 import {withoutFigureSources} from './web/figure-provenance.js';
 import {AppError} from './errors.js';
@@ -27,7 +28,7 @@ export function publicProjection(source, options={}) {
   if(designTarget!==null&&(typeof designTarget!=='string'||! /^(home|(?:page|project|notebook|entry):[a-f0-9-]{36})$/.test(designTarget)))throw new AppError('INVALID');
   if(designTarget&&designTarget!=='home'){
     const [kind,id]=designTarget.split(':'),key={project:'projects',notebook:'notebooks',entry:'entries',page:'pages'}[kind],item=book[key]?.find(v=>v.id===id);
-    if(!item)throw new AppError('INVALID');
+    if(!item||kind==='entry'&&(!item.share||book.notebooks.find(n=>n.id===item.notebookId)?.share===false)||kind==='notebook'&&item.share===false)throw new AppError('INVALID');
     const include=(key,item)=>{if(item&&!selection[key].some(v=>v.id===item.id))selection[key]=[...selection[key],item];};
     include(key,item);
     const notebook=kind==='entry'?book.notebooks.find(n=>n.id===item.notebookId):kind==='notebook'?item:null;
@@ -37,7 +38,9 @@ export function publicProjection(source, options={}) {
   // not yet selected for publication. This never changes their sharing flags.
   if(workspaceContent){
     if(!designTarget)throw new AppError('INVALID');
-    for(const key of ['projects','notebooks','entries','pages'])selection[key]=book[key];
+    selection.projects=book.projects;selection.pages=book.pages;
+    selection.notebooks=book.notebooks.filter(n=>n.share!==false);
+    selection.entries=book.entries.filter(e=>e.share===true&&selection.notebooks.some(n=>n.id===e.notebookId));
   }
   if(options.edition){
     if(workspaceContent||designTarget||designPageId)throw new AppError('INVALID');
@@ -61,6 +64,7 @@ export function projectPublication(book,selection,{designPageId=null,designTarge
   if(publicationTarget&&(workspaceContent||singlePage||designTarget||designPageId||!entryDestinations))throw new AppError('INVALID');
   if(entryDestinations&&!publicationTarget&&(!workspaceContent||!singlePage||!designTarget))throw new AppError('INVALID');
   if(selection.recordCards&&!publicationTarget&&(!entryDestinations||!workspaceContent||!singlePage))throw new AppError('INVALID');
+  selection={...selection,notebooks:selection.notebooks.filter(n=>n.share!==false),entries:selection.entries.filter(e=>e.share===true&&selection.notebooks.some(n=>n.id===e.notebookId&&n.share!==false)).map(sourcePublicationRecord)};
   const pageTarget=publicationTarget??designTarget,paged=singlePage||!!publicationTarget;
   const destinations=entryDestinations??selection.entries;
   const links={...selection,entries:destinations};
@@ -85,7 +89,7 @@ export function projectPublication(book,selection,{designPageId=null,designTarge
     }),
     logos: logosFor(book, 'entry:' + e.id), tags: [...e.tags], occurredOn: structuredClone(e.occurredOn), status: e.status, outcome:e.outcome??'',
     sections: [...(e.template?.fields??[]).map(f=>({id:'field-'+f.key,title:customFieldLabel(f),body:String(e.template.values[f.key]??'')})),...e.sections.map(s => ({ id:s.id,title: s.title, body: recordText(s.body,e) }))],
-    attachments: e.attachments.filter(a => workspaceContent || a.share).map(a => ({ id: a.id, kind: a.kind, caption: a.caption, alt: a.alt, transcript: a.transcript })),
+    attachments: e.attachments.filter(a => a.share===true).map(a => ({ id: a.id, kind: a.kind, caption: a.caption, alt: a.alt, transcript: a.transcript })),
     figures: e.figures.map(withoutFigureSources),
     figureDownloads:edition?.records.find(r=>r.id===e.id)?.figures.filter(f=>f.data).map(f=>f.id)??[],
     ...(e.results?{results:projectResults(e.results)}:{}),

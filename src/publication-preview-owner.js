@@ -1,9 +1,9 @@
+import {assertPublicationPreviewPermissions} from './publication-permission-admission.js';
 import {publicationReferenceWindow} from './publication-reference-window.js';
 import {publicationOwnerId} from './publication-owner-identities.js';
 import {AppError} from './errors.js';
 import {RecordPublicationIndex} from './record-publication-index.js';
 import {publicationRecords} from './publication-records.js';
-import {SnapshotIndex} from './snapshot-index.js';
 import {selectedPublicationRows} from './publication-source.js';
 import {publicationSourceContext} from './web/publication-sources-model.js';
 import {publicationOwnerProjection,publicationPageRecord} from './publication-owner-projection.js';
@@ -29,6 +29,7 @@ export class PublicationPreviewOwner{
  async initialize({counts=false,snapshotId,entryId=null}={}){
   const {value}=await this.reader.use(this.source.workspaceId,snapshotId,async(store,snapshot,pinned)=>{
    const context=publicationSourceContext(snapshot.metadata,this.source,pinned.owner);
+   await assertPublicationPreviewPermissions(store,pinned.snapshotId,context.metadata,null,{signal:this.signal});
    const value={...context,snapshotId:pinned.snapshotId,positionSpan:snapshot.nextPosition??snapshot.records.length,owner:{...pinned.owner,projectNamespaceId:pinned.projectNamespaceId},...(counts?{notebookCounts:await this.countValues(store,snapshot,context.metadata)}:{})};
    Object.assign(this,value);
    if(entryId)await this.initializeEntry(store,snapshot,pinned,entryId);
@@ -70,7 +71,8 @@ export class PublicationPreviewOwner{
  async admit(store,snapshot,row){
   if(!row||!this.included(row.id))return null;
   const [summary]=await Array.fromAsync(store.queryDocuments([row],snapshot.metadata,{signal:this.signal,search:false,publication:true}));
-  const project=this.metadata.notebooks.find(book=>book.id===summary.notebookId)?.projectId;
+  const notebook=this.metadata.notebooks.find(book=>book.id===summary.notebookId),project=notebook?.projectId;
+  if(notebook?.share===false)return null;
   if(!this.metadata.projects.some(value=>value.id===project&&value.share)||!websiteRecordShare(this.source.selection,summary,project))return null;
   const patch=this.source.selection.records.find(value=>value.id===row.id);
   if(patch?.attachments.some(value=>!summary.publication.attachments.some(attachment=>attachment.id===value.id)))throw new AppError('INVALID');
@@ -101,7 +103,7 @@ export class PublicationPreviewOwner{
   if(!Number.isInteger(limit)||limit<1||limit>257)throw new AppError('INVALID');
   return this.use(async(store,snapshot)=>{
    if(snapshot.publicationIndex?.version===3){
-    const selected=new Set(this.metadata.notebooks.filter(book=>this.metadata.projects.some(project=>project.id===book.projectId&&project.share)&&notebooks.has(this.id('notebook',book.id))).map(book=>book.id)),values=[];
+    const selected=new Set(this.metadata.notebooks.filter(book=>book.share!==false&&this.metadata.projects.some(project=>project.id===book.projectId&&project.share)&&notebooks.has(this.id('notebook',book.id))).map(book=>book.id)),values=[];
     for await(const row of publicationRecords(store,snapshot,{...this.options(),notebooks:selected,overrides:await this.overrides(store,snapshot),order:'publication',after,backward})){
      if(this.included(row.id))values.push(this.projectedRow(row));if(values.length===limit)break;
     }
@@ -123,7 +125,7 @@ export class PublicationPreviewOwner{
  async positionWindow({after=null,backward=false,limit=128}={}){
   if(!Number.isInteger(limit)||limit<1||limit>257)throw new AppError('INVALID');
   return this.use(async(store,snapshot)=>{
-   const notebooks=new Set(this.metadata.notebooks.filter(book=>this.metadata.projects.some(project=>project.id===book.projectId&&project.share)).map(book=>book.id)),values=[];
+   const notebooks=new Set(this.metadata.notebooks.filter(book=>book.share!==false&&this.metadata.projects.some(project=>project.id===book.projectId&&project.share)).map(book=>book.id)),values=[];
    for await(const row of publicationRecords(store,snapshot,{...this.options(),notebooks,overrides:await this.overrides(store,snapshot),after,backward})){
     if(this.included(row.id)&&await this.admit(store,snapshot,row))values.push(this.projectedRow(row));if(values.length===limit)break;
    }
@@ -144,13 +146,19 @@ export class PublicationPreviewOwner{
  // A canvas always displays counts. Capture them during its initial owner
  // admission, while selectors that do not need counts remain lazy.
  async countValues(store,snapshot,metadata=this.metadata){
-  const counts={},index=new SnapshotIndex(store),all=new Set(this.source.selection.includeProjects),books=new Map(metadata.notebooks.map(book=>[book.id,book]));
-  for(const book of metadata.notebooks)if(metadata.projects.some(project=>project.id===book.projectId&&project.share))counts[this.id('notebook',book.id)]=all.has(book.projectId)?await index.scopedCount(snapshot.membership,book.id):0;
-  const overrides=await this.overrides(store,snapshot),ids=new Set([...overrides.keys(),...this.choices.keys()]);
-  for(const id of ids){
-   const row=overrides.get(id)?.row??await store.member(snapshot,id);if(!row)throw new AppError('RECORD_CHANGED');
-   const book=books.get(row.notebookId),mapped=book&&this.id('notebook',book.id);if(!Object.hasOwn(counts,mapped))continue;
-   const before=all.has(book.projectId),share=overrides.get(id)?.patch.share??before,after=share&&this.included(id);counts[mapped]+=Number(after)-Number(before);
+  const counts={},books=new Map(metadata.notebooks.filter(book=>book.share!==false&&metadata.projects.some(project=>project.id===book.projectId&&project.share)).map(book=>[book.id,book]));
+  if(snapshot.publicationIndex){
+   const index=new RecordPublicationIndex(store),all=book=>this.source.selection.includeProjects.includes(book.projectId)||this.source.selection.defaultShare!==false;
+   for(const book of books.values())counts[this.id('notebook',book.id)]=all(book)?await index.sharedCount(snapshot,book.id):0;
+   const overrides=await this.overrides(store,snapshot);
+   for(const id of new Set([...overrides.keys(),...this.choices.keys()])){
+    const member=overrides.get(id)?.row??await store.member(snapshot,id);if(!member)throw new AppError('RECORD_CHANGED');
+    const row=await index.describe(member),book=books.get(row.notebookId);if(!book||row.share!==true)continue;
+    const before=all(book),after=(overrides.get(id)?.patch.share??before)&&this.included(id);counts[this.id('notebook',book.id)]+=Number(after)-Number(before);
+   }
+  }else{
+   for(const book of books.values())counts[this.id('notebook',book.id)]=0;
+   for await(const {row,summary} of selectedPublicationRows(store,snapshot,this.options({metadata})))if(this.included(row.id))counts[this.id('notebook',summary.notebookId)]++;
   }
   return counts;
  }
@@ -175,7 +183,7 @@ export class PublicationPreviewOwner{
   });
  }
  async referenceRowsCurrent(store,snapshot,target,{after=null,backward=false,limit=257}={}){
-  const notebooks=new Set(this.metadata.notebooks.filter(book=>this.metadata.projects.some(project=>project.id===book.projectId&&project.share)).map(book=>book.id));
+  const notebooks=new Set(this.metadata.notebooks.filter(book=>book.share!==false&&this.metadata.projects.some(project=>project.id===book.projectId&&project.share)).map(book=>book.id));
   const reading=new RecordReadingIndex(store),rows=[];
   for await(const candidate of recordReferenceCandidates({store,snapshot,notebooks,workspaceId:target.workspaceId,signal:this.signal,fallback:anchor=>reading.rows(snapshot,notebooks,{order:'position',signal:this.signal,after:anchor.after===null?null:{position:anchor.after},backward:anchor.backward})},target.id,{after,backward})){
    rows.push(this.projectedRow(candidate));if(rows.length===limit)break;
@@ -195,7 +203,7 @@ export class PublicationPreviewOwner{
   const raw=await store.record(row.recordId,row.revision),revision=recordRevision(raw),patch=this.source.selection.records.find(choice=>choice.id===raw.id);
   if(raw.id!==row.recordId||raw.notebookId!==this.metadata.notebooks.find(book=>this.id('notebook',book.id)===row.notebookId)?.id)throw new AppError('CATALOGUE_DAMAGED');
   const choice=this.choices.get(raw.id);validateEditionRecord(raw,choice);
-  const shared={...raw,share:true,attachments:raw.attachments.map(attachment=>({...attachment,share:patch?.attachments.find(value=>value.id===attachment.id)?.share??attachment.share}))};
+  const shared={...raw,attachments:raw.attachments.map(attachment=>({...attachment,share:attachment.share===true&&(patch?.attachments.find(value=>value.id===attachment.id)?.share??attachment.share)}))};
   const selected=selectEditionRecord(shared,choice??defaultEditionRecord(shared,revision));
   if(!selected.share)throw new AppError('NOT_FOUND');
   return {selected,revision};
@@ -219,6 +227,7 @@ export class PublicationPreviewOwner{
    const [value]=await Array.fromAsync(store.queryDocuments([admitted.row],snapshot.metadata,{signal:this.signal,search:false,publicationDetails:true}));
    descriptor=value.publicationDescriptor;
   }
+  await assertPublicationPreviewPermissions(store,this.snapshotId,this.metadata,descriptor,{signal:this.signal});
   descriptor={...descriptor,referenceNamespaces:await recordReferenceNamespaces(store,{workspaceId:this.source.workspaceId,id:row.recordId})};
   const projected=publicationOwnerProjection({metadata:this.metadata,records:[descriptor]},this.owner,this.identities).records[0];
   Object.assign(projected,{position:row.position,referencesSelected:false});
@@ -236,7 +245,7 @@ export class PublicationPreviewOwner{
   const choice=this.history.get(id);if(!choice)throw new AppError('NOT_FOUND');
    const storage=new Proxy(pinned.storage,{get(target,key){if(key==='catalogue')return operation=>operation(store);const value=target[key];return typeof value==='function'?value.bind(target):value;}});
    const raw=await exactPublicationRecord(storage,{workspaceId:this.source.workspaceId,kind:'record',id:choice.id,revision:choice.revision});validateEditionRecord(raw,choice);
-   if(!this.metadata.notebooks.some(book=>book.id===raw.notebookId&&this.metadata.projects.some(project=>project.id===book.projectId&&project.share)))throw new AppError('INVALID');
+   if(!this.metadata.notebooks.some(book=>book.id===raw.notebookId&&book.share!==false&&this.metadata.projects.some(project=>project.id===book.projectId&&project.share)))throw new AppError('INVALID');
    const selected=selectEditionRecord(raw,choice),pageId=revisionPageId(this.source.workspaceId,raw.id,choice.revision),namespaces=await recordReferenceNamespaces(store,{workspaceId:this.source.workspaceId,id:raw.id});
    const descriptor={...publicationDescriptor(selected,this.metadata),id:pageId,recordId:raw.id,revision:choice.revision,historical:true,referenceNamespaces:namespaces};
    const projected=publicationOwnerProjection({metadata:this.metadata,records:[descriptor]},this.owner,this.identities).records[0],member=await store.member(snapshot,raw.id);

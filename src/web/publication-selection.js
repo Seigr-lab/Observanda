@@ -1,3 +1,4 @@
+import {publicRecordSections,sourcePublicationRecord} from './source-publication-permissions.js';
 import {researchId,validTarget,researchReference} from './research-reference.js';
 import {revisionId} from './revision-model.js';
 
@@ -16,14 +17,14 @@ export function validEditionSelection(value){
  return Array.isArray(value.records)&&Array.isArray(notes)&&notes.length<=10000&&notes.every(r=>exact(r,['recordId','target','statement'])&&researchId(r.recordId)&&validTarget(r.target)&&typeof r.statement==='string'&&r.statement.trim().length>0&&r.statement.length<=2000)&&new Set(notes.map(editionAvailabilityKey)).size===notes.length;
 }
 export function defaultEditionRecord(record,revision){
- return {id:record.id,revision,include:true,body:true,sections:record.sections.map(s=>s.id),fields:(record.template?.fields??[]).map(f=>f.key),attachments:record.attachments.filter(a=>a.share).map(a=>a.id),figures:record.figures.map(f=>({id:f.id,data:false}))};
+ return {id:record.id,revision,include:record.share===true,body:true,sections:publicRecordSections(record).map(s=>s.id),fields:(record.template?.fields??[]).map(f=>f.key),attachments:record.attachments.filter(a=>a.share).map(a=>a.id),figures:record.figures.map(f=>({id:f.id,data:false}))};
 }
 // Work on an edition derivative only. The original and its revision remain
 // intact in encrypted storage. CSV/table consent is separate from chart consent.
 export function selectEditionRecord(record,choice){
- const selected=structuredClone(record);
+ const selected=structuredClone(sourcePublicationRecord(record));
  if(!choice)return selected;
- selected.share=choice.include;
+ selected.share=record.share===true&&choice.include;
  selected.body=choice.body?selected.body:'';
  selected.sections=selected.sections.filter(s=>choice.sections.includes(s.id));
  selected.attachments=selected.attachments.filter(a=>choice.attachments.includes(a.id)).map(a=>({...a,share:true}));

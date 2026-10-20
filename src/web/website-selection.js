@@ -10,6 +10,7 @@ export function validWebsiteSelection(value){
    exact(item,['id','share','attachments'])&&researchId(item.id)&&(item.share===null||typeof item.share==='boolean')&&Array.isArray(item.attachments)&&new Set(item.attachments.map(a=>a?.id)).size===item.attachments.length&&item.attachments.every(a=>exact(a,['id','share'])&&researchId(a.id)&&typeof a.share==='boolean'));
 }
 export function websiteRecordShare(selection,record,projectId){
+ if(record.share!==true)return false;
  return selection.records.find(item=>item.id===record.id)?.share??(selection.includeProjects.includes(projectId)?true:selection.defaultShare??record.share);
 }
 export function websiteSelectionDraft(){
@@ -23,7 +24,7 @@ export function websiteSelectionDraft(){
   share(id,share,projectId){if(projectId)projects.set(id,projectId);record(id).share=share;},
   media(id,attachmentId,share){const item=record(id),attachment=item.attachments.find(a=>a.id===attachmentId);if(attachment)attachment.share=share;else item.attachments.push({id:attachmentId,share});},
   projectRecordShare(record,projectId){return websiteRecordShare(value,record,projectId);},
-  attachmentShare(recordId,attachment){return value.records.find(r=>r.id===recordId)?.attachments.find(a=>a.id===attachment.id)?.share??attachment.share;},
+  attachmentShare(recordId,attachment){return attachment.share===true&&(value.records.find(r=>r.id===recordId)?.attachments.find(a=>a.id===attachment.id)?.share??attachment.share);},
   acknowledge(sent){
    value.includeProjects=value.includeProjects.filter(id=>!sent.includeProjects.includes(id));
    value.records=value.records.map(item=>{const saved=sent.records.find(r=>r.id===item.id);if(!saved)return item;return {...item,share:item.share===saved.share?null:item.share,attachments:item.attachments.filter(a=>!saved.attachments.some(s=>s.id===a.id&&s.share===a.share))};}).filter(item=>item.share!==null||item.attachments.length);

@@ -83,6 +83,11 @@ export class RecordPublicationIndex extends ObjectIndex{
    if(!chosen)return;yield chosen.row;chosen.at+=backward?-1:1;await next(chosen);
   }
  }
+ async sharedCount(snapshot,notebookId){
+  if(!RecordPublicationIndex.valid(snapshot.publicationIndex)||!researchId(notebookId))fail();
+  const start=prefix(notebookId,true),head=snapshot.publicationIndex;
+  return await this.rank(head,start+'\uffff')-await this.rank(head,start);
+ }
  async verify(snapshot){
   if(!RecordPublicationIndex.valid(snapshot.publicationIndex)||snapshot.publicationIndex.version===3&&snapshot.publicationIndex.workspaceId!==snapshot.metadata.id)fail();
   let count=0;

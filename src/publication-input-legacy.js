@@ -27,10 +27,10 @@ export {publicationDescriptor} from './publication-record-descriptor.js';
 // page renderer retain descriptors, never a second in-memory corpus of prose.
 export async function retainPublicationInput(workspace,id,metadata,originals,{sourceEtag,recordHead,signal,sourceReader,edition=emptyEditionSelection(),deferFinalization=false,websitePages,websitePresentation}={}){
  validateEditionSelection(edition);const choices=new Map(edition.records.map(r=>[r.id,r])),found=new Set();
- const projects=new Set(metadata.projects.filter(p=>p.share).map(p=>p.id)),notebooks=new Set(metadata.notebooks.filter(n=>projects.has(n.projectId)).map(n=>n.id));
+ const projects=new Set(metadata.projects.filter(p=>p.share).map(p=>p.id)),notebooks=new Set(metadata.notebooks.filter(n=>n.share!==false&&projects.has(n.projectId)).map(n=>n.id));
  const records=[],sourceRevisions={},sourceMaterials=[],warnings=[],linkedCards=new Set(),research=publicationResearchWorkspace(workspace),materials=new ResearchMaterials(research);
  async function pin(original,choice,pageId=original.id){
-  const saved=publicationOriginal(original),revision=recordRevision(saved),selection=choice??defaultEditionRecord(original,revision),record=selectEditionRecord(original,selection),raw=serialize(saved);
+  const saved=publicationOriginal(original),revision=recordRevision(saved),requested=choice??defaultEditionRecord(original,revision),record=selectEditionRecord(original,requested),selection={...requested,include:record.share,sections:record.sections.map(section=>section.id),attachments:record.attachments.map(item=>item.id)},raw=serialize(saved);
   await workspace.writeMetadata(recordFile(id,pageId),raw);
   const descriptor={...publicationDescriptor(record,metadata),id:pageId,revision,sha256:digest(raw),selection};
   if(pageId!==original.id){descriptor.recordId=original.id;descriptor.historical=true;}

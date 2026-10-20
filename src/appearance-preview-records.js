@@ -1,3 +1,4 @@
+import {assertPublicationPreviewPermissions} from './publication-permission-admission.js';
 import {recordReferenceNamespaces} from './research-reference-namespace.js';
 import {projectWebsiteAttachmentChoices} from './website-selection-admission.js';
 import {AppError} from './errors.js';
@@ -14,7 +15,7 @@ export class AppearancePreviewRecords{
   Object.assign(this,{store,snapshot,signal,snapshotId,websiteId,websitePin:snapshot.websitePin});this.metadata=snapshot.metadata;
   this.selection=snapshot.websiteSelection??emptyWebsiteSelection();this.overrides=new Map();
   this.owners=new Map(this.metadata.notebooks.map(n=>[n.id,n.projectId]));
-  this.notebooks=new Set(this.metadata.notebooks.filter(n=>this.metadata.projects.some(p=>p.id===n.projectId&&p.share)).map(n=>n.id));
+  this.notebooks=new Set(this.metadata.notebooks.filter(n=>n.share!==false&&this.metadata.projects.some(p=>p.id===n.projectId&&p.share)).map(n=>n.id));
   this.descriptors=new Map();this.originals=new Map();this.members=new Map();
  }
  async summary(row,options={}){return (await Array.fromAsync(this.store.queryDocuments([row],this.metadata,{search:false,signal:this.signal,...options})))[0];}
@@ -23,6 +24,7 @@ export class AppearancePreviewRecords{
   return row&&!this.snapshot.indexVersion?{...row,position:this.snapshot.records.findIndex(value=>value.id===id)}:row;
  }
  async initialize(){
+  await assertPublicationPreviewPermissions(this.store,this.snapshotId,this.metadata,null,{signal:this.signal});
   for(const patch of this.selection.records){
    this.signal?.throwIfAborted();const row=await this.member(patch.id);
    if(!row)throw new AppError('RECORD_CHANGED');
@@ -35,14 +37,10 @@ export class AppearancePreviewRecords{
    const index=new RecordPublicationIndex(this.store);
    for(const id of this.notebooks){
     this.signal?.throwIfAborted();const all=this.selection.includeProjects.includes(this.owners.get(id))||this.selection.defaultShare===true;
-    counts[id]=0;
-    for(const shared of all?[false,true]:this.selection.defaultShare===false?[]:[true]){
-     const prefix='book:'+id+':share:'+Number(shared)+':';
-     counts[id]+=await index.rank(this.snapshot.publicationIndex,prefix+'\uffff')-await index.rank(this.snapshot.publicationIndex,prefix);
-    }
+    counts[id]=all||this.selection.defaultShare!==false?await index.sharedCount(this.snapshot,id):0;
    }
    for(const {row,patch} of this.overrides.values()){
-    const value=await index.describe(row);if(!this.notebooks.has(value.notebookId)||patch.share===null)continue;
+    const value=await index.describe(row);if(!this.notebooks.has(value.notebookId)||value.share!==true||patch.share===null)continue;
     const before=this.selection.includeProjects.includes(this.owners.get(value.notebookId))?true:this.selection.defaultShare??value.share;
     counts[value.notebookId]+=Number(patch.share)-Number(before);
    }
@@ -67,7 +65,7 @@ export class AppearancePreviewRecords{
    const original=historicalBook(this.metadata,await this.store.record(id,row.revision)).entries[0];
    if(row.share!==undefined&&original.share!==row.share||row.notebookId!==undefined&&original.notebookId!==row.notebookId)throw new AppError('CATALOGUE_DAMAGED');
    const patch=this.overrides.get(id)?.patch;
-   this.originals.set(id,{...original,share:true,attachments:original.attachments.map(a=>({...a,share:patch?.attachments.find(v=>v.id===a.id)?.share??a.share}))});
+   this.originals.set(id,{...original,attachments:original.attachments.map(a=>({...a,share:a.share===true&&(patch?.attachments.find(v=>v.id===a.id)?.share??a.share)}))});
   }
   return this.originals.get(id);
  }
@@ -77,6 +75,7 @@ export class AppearancePreviewRecords{
   this.members.set(id,row);
   const [summary]=details?[details]:await Array.fromAsync(this.store.queryDocuments([row],this.metadata,{search:false,publicationDetails:true,signal:this.signal}));
   const descriptor=this.overrides.get(id)?.patch.attachments.length?publicationDescriptor(await this.original(id)):summary.publicationDescriptor;
+  await assertPublicationPreviewPermissions(this.store,this.snapshotId,this.metadata,descriptor,{signal:this.signal});
   const result={...descriptor,position:row.position,referenceNamespaces:await recordReferenceNamespaces(this.store,{workspaceId:this.metadata.id,id})};this.descriptors.set(id,result);return result;
  }
  async neighbours(id){

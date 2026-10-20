@@ -16,7 +16,7 @@ import {PublicationRollback} from './publication-rollback.js';
 import {deploymentUncertain} from './publication-deployment-state.js';
 const file=id=>{if(!researchId(id))throw new AppError('INVALID');return '.observanda/deployments/'+id+'.json';};
 export class DeploymentJobs{
- constructor(workspace,publisher,queue,{sourceReader,sourceAccess}={}){workspace=publicationWorkspace(workspace);this.workspace=workspace;this.publisher=publisher;this.queue=queue;this.sourceReader=sourceReader;this.sourceAccess=sourceAccess;this.releases=new PublicationJobs(workspace);this.feed=new MetadataFeed(workspace,'.observanda/deployment-list');}
+ constructor(workspace,publisher,queue,{sourceReader,sourceAccess}={}){workspace=publicationWorkspace(workspace);this.workspace=workspace;this.publisher=publisher;this.queue=queue;this.sourceReader=sourceReader;this.sourceAccess=sourceAccess;this.releases=new PublicationJobs(workspace,{sourceReader});this.feed=new MetadataFeed(workspace,'.observanda/deployment-list');}
  async read(id){const raw=await this.workspace.readMetadata(file(id),16*1024*1024);if(raw===null)throw new AppError('NOT_FOUND');const d=JSON.parse(raw);if(d.version!==1||d.id!==id||!researchId(d.scope)||!d.intent||!d.journal||!['github','ssh'].includes(d.intent.config.kind))throw new AppError('JOB_DAMAGED');return d;}
  async start({id:reviewId,configEtag,reviewed,destinationReview,destinationReviewed,rollbackReview,rollbackConfirmed}){
   return this.queue.transaction(async()=>{

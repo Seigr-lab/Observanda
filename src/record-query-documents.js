@@ -1,6 +1,7 @@
 // Query text and browse summaries have separate immutable encrypted payloads.
 // A filter, label lookup or dependency check never needs the original prose or
 // its full search-text derivative. Snapshot membership authenticates both.
+import {SOURCE_PUBLICATION_VERSION} from './web/source-publication-permissions.js';
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
 import {historicalRecordValue,recordRevision} from './research.js';
@@ -94,7 +95,7 @@ export class RecordQueryDocuments{
      value=await readQueryValue(owner.store,owner.store.decode('state',source.slot,found.get(source.slot)),source,row,options);
      if(value===null)continue;
     }
-    if(!source||!stored&&missing(value)){
+    if(!source||!stored&&(missing(value)||publicationDetails&&value.publicationDescriptor?.sourcePermissionVersion!==SOURCE_PUBLICATION_VERSION||inventory&&inventoryFallback&&value.editionInventory?.sourcePermissionVersion!==SOURCE_PUBLICATION_VERSION)){
      const display=historicalRecordValue(metadata,await owner.store.record(row.id,row.revision));
      const revision=recordRevision(display);value={...recordQueryDocument(display),publication:recordPublicationSummary(display),publicationCard:publicationCard(display),publicationDescriptor:{...publicationDescriptorDetails(display),revision},editionInventory:recordEditionInventory(display,revision),recordRevision:revision};
      if(matching&&!value.searchText.includes(matching))continue;
@@ -104,7 +105,7 @@ export class RecordQueryDocuments{
     if(!cardSources&&!stored)delete document.cardSources;
     if(!publication)delete document.publication;
     if(!cards)delete document.publicationCard;
-    if(!inventory)delete document.editionInventory;
+    if(!inventory||!stored&&document.editionInventory?.sourcePermissionVersion!==SOURCE_PUBLICATION_VERSION)delete document.editionInventory;
     if(!publicationDetails)delete document.publicationDescriptor;
     yield revisions?{...document,revision:displayRevision??null,storageRevision:row.revision}:document;
    }

@@ -35,13 +35,13 @@ export function publicationLinkResolver(workspaceId,selection,{workspaceContent=
   if(target.kind==='workspace')return target.workspaceId===workspaceId&&target.id===workspaceId&&selection.homeEnabled?'home':null;
   let item=target.kind==='record'?publicationRecordDestination(selection.entries,target,workspaceId):publicationCollectionDestination(selection,target,workspaceId);if(!item)return null;
   if(target.revision&&(item.revision??digest(revisionText(item)))!==target.revision)return null;
-  if(target.kind==='record'&&!item.selectors)item={...item,attachments:item.attachments.filter(a=>workspaceContent||a.share)};
+  if(target.kind==='record'&&!item.selectors)item={...item,attachments:item.attachments.filter(a=>a.share===true)};
   const selector=publicationTargetSelector(item,target.selector);
   return !target.selector||selector?(target.kind==='record'?'entry':target.kind)+':'+item.id+(selector?'#'+selectorAnchor(selector):''):null;
  };
 }
 export function publicationRecordText(value,record,resolve,{workspaceContent=false}={}){
  const doc=projectProse(value,resolve);if(typeof doc!=='object')return doc;
- const allowed=new Set([...record.figures.map(f=>f.id),...record.attachments.filter(a=>workspaceContent||a.share).map(a=>a.id)]);
+ const allowed=new Set([...record.figures.map(f=>f.id),...record.attachments.filter(a=>a.share===true).map(a=>a.id)]);
  const visit=n=>{if(n.type==='book_figure'&&!allowed.has(n.attrs.figureId)){n.type='paragraph';n.content=[{type:'text',text:bookText('privateFigure')}];delete n.attrs;}for(const c of n.content??[])visit(c);};visit(doc);return doc;
 }

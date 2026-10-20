@@ -32,7 +32,7 @@ import {websiteRegionsUI} from './website-regions-ui.js';
 import {websiteNavigationFields,websiteNavigationUI} from './website-navigation-ui.js';
 import {resolveRegion,regionsOf} from './website-regions.js';
 import {t} from './i18n/index.js';
-import {draftWorkspace,editableRecord} from './workspace-snapshot.js';
+import {draftWorkspace} from './workspace-snapshot.js';
 import {applyRichTextStyles as refreshRichStyles} from './document-editor.js';
 import {textTools} from './text-tools.js';
 import {reconcileCanvas} from './canvas-document.js';
@@ -100,7 +100,7 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
   const actionUI=websiteActionUI({state,esc,field,sections,checkpoint,changed});
   const mediaUI=websiteMediaUI({state,esc,field,option,showDialog,render:refreshTools,sections,checkpoint,changed,notify,research,researchMedia,documents});
   const navigationUI=websiteNavigationUI({state,documents,esc,field,option,showDialog,render:refreshTools,changed,notify});
-  const legacyContent=websiteContentUI({state,esc,field,option,render:refreshTools});
+  const legacyContent=websiteContentUI({state,esc,field,option,selection,render:refreshTools});
   const contentPages=websiteContentPages({state,esc,field,option,render:refreshTools,research,selection});
   const contentUI=Object.fromEntries(['view','input','action','bind','sync'].map(key=>[key,(...args)=>(research.enabled()?contentPages:legacyContent)[key](...args)]));
   const sourceUI=publicationSourcesUI({state,api,esc,access,checkpoint,changed,notify,onOpenPage:page=>{sourcePages.remember(page);research.choosePage(page);changePreviewPage(page.path);tool='page';refreshTools();}});
@@ -316,13 +316,12 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
     area='body';editingPage=page?.id??null;editingScope=!page&&target!=='home'?target:null;tab=target==='home'?'home':'pages';previewPage=destination.path;setSections([...list,section]);openSection=section.id;sectionTab='content';selectedMedia=null;previewPage=destination.path;
   }
 
-  function capture(){return {editor:{path:previewPage,area,section:openSection,media:structuredClone(selectedMedia),tool,sectionTab},branding:structuredClone(state.book.branding),website:structuredClone(state.book.website),pages:structuredClone(state.book.pages),selection:{projects:state.book.projects.map(p=>({id:p.id,share:p.share})),entries:state.book.entries.map(e=>({id:e.id,share:e.share,attachments:e.attachments.map(a=>({id:a.id,share:a.share}))})),...(research.enabled()?{draft:selection.snapshot()}: {})}};}
+  function capture(){return {editor:{path:previewPage,area,section:openSection,media:structuredClone(selectedMedia),tool,sectionTab},branding:structuredClone(state.book.branding),website:structuredClone(state.book.website),pages:structuredClone(state.book.pages),selection:{projects:state.book.projects.map(p=>({id:p.id,share:p.share})),entries:[],draft:selection.snapshot()}};}
   function restore(value){
     state.book.branding=value.branding;state.book.website=value.website;state.book.pages=value.pages;
     if(value.editor){area=value.editor.area??'body';previewPage=value.editor.path;selectTarget(previewTarget(),{section:value.editor.section});selectedMedia=value.editor.media;tool=value.editor.tool;sectionTab=value.editor.sectionTab;}
     for(const p of value.selection.projects){const item=state.book.projects.find(v=>v.id===p.id);if(item)item.share=p.share;}
     if(value.selection.draft){selection.restore(value.selection.draft);research.invalidate();contentPages.refresh();}
-    for(const e of value.selection.entries){const current=state.book.entries.find(v=>v.id===e.id);if(current&&(current.share!==e.share||e.attachments.some(a=>current.attachments.find(v=>v.id===a.id)?.share!==a.share))){const item=editableRecord(state.book,e.id);item.share=e.share;for(const a of e.attachments){const attachment=item.attachments.find(v=>v.id===a.id);if(attachment)attachment.share=a.share;}}}
   }
   function syncHistory(){if(historyRevision!==state.book.revision||historyBook!==state.book){historyBook=state.book;history.clear();historyRevision=state.book.revision;}}
   function checkpoint(key=null){if(native())return;syncHistory();history.checkpoint(capture,key);}
@@ -375,9 +374,9 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
     }
     if(el.dataset.menu!==undefined){const items=navigationItems(pageBook(),summary());items[Number(el.dataset.menu)][el.dataset.column]=el.type==='checkbox'?el.checked:el.dataset.column==='parent'?el.value||null:el.value;state.book.website.navigation=storedNavigation(items);changed(el.dataset.column==='parent');return true;}
     if(el.dataset.projectShare){state.book.projects.find(p=>p.id===el.dataset.projectShare).share=el.checked;changed(true);return true;}
-    if(el.dataset.publishEntry){if(research.enabled()){selection.share(el.dataset.publishEntry,el.checked,el.closest('[data-project]')?.dataset.project);research.invalidate();contentPages.refresh();}else editableRecord(state.book,el.dataset.publishEntry).share=el.checked;changed(true);return true;}
+    if(el.dataset.publishEntry){selection.share(el.dataset.publishEntry,el.checked,el.closest('[data-project]')?.dataset.project);if(research.enabled()){research.invalidate();contentPages.refresh();}changed(true);return true;}
     if(el.dataset.pageShare){state.book.pages.find(p=>p.id===el.dataset.pageShare).share=el.checked;changed();return true;}
-    if(el.dataset.websiteMedia){if(research.enabled()){selection.media(el.dataset.record,el.dataset.websiteMedia,el.checked);research.invalidate();contentPages.refresh();}else editableRecord(state.book,el.dataset.record).attachments.find(a=>a.id===el.dataset.websiteMedia).share=el.checked;const record=el.closest('.website-record'),details=record?.querySelector('details'),isOpen=details?.open;changed(true);if(isOpen)document.querySelector(`[data-record-cover="${el.dataset.record}"]`)?.closest('details').setAttribute('open','');return true;}
+    if(el.dataset.websiteMedia){selection.media(el.dataset.record,el.dataset.websiteMedia,el.checked);if(research.enabled()){research.invalidate();contentPages.refresh();}const record=el.closest('.website-record'),details=record?.querySelector('details'),isOpen=details?.open;changed(true);if(isOpen)document.querySelector(`[data-record-cover="${el.dataset.record}"]`)?.closest('details').setAttribute('open','');return true;}
     return false;
   }
   function reorder(kind,from,to,key){
@@ -463,8 +462,7 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
     if(name==='menu-up'||name==='menu-down'){reorder('menu',index,index+(name==='menu-up'?-1:1),navigationItems(pageBook(),summary())[index].target);return true;}
     if(name==='include-project-entries'){
       state.book.projects.find(p=>p.id===buttonEl.dataset.id).share=true;
-      if(research.enabled()){selection.includeProject(buttonEl.dataset.id);research.invalidate();contentPages.refresh();changed(true);return true;}
-      const ids=new Set(state.book.notebooks.filter(n=>n.projectId===buttonEl.dataset.id).map(n=>n.id));state.book.entries.filter(e=>ids.has(e.notebookId)).forEach(e=>{if(!e.share)editableRecord(state.book,e.id).share=true;});changed(true);return true;
+      selection.includeProject(buttonEl.dataset.id);if(research.enabled()){research.invalidate();contentPages.refresh();}changed(true);return true;
     }
     return false;
   }
