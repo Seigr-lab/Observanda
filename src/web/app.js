@@ -551,7 +551,7 @@ const website=lazyFeatureUI({enabled:()=>enabledModule(state.dashboardSettings,'
   return {websitePin:state.websitePin,...(command?{draft:{...command,baseEtag:state.etag,...(websiteSelection.isDirty()?{selection:websiteSelection.snapshot()}: {})}}:{book})};
  }}))});
 const connectedWork=moduleLinks({state,api,esc});
-const sites=websiteSitesUI({state,api,esc,field,showDialog,render,selection:websiteSelection,documents:websiteDocuments,access:operation=>withProjectAccess(operation),enterOwner:(id,bookId)=>projectOwners.enter(id,bookId),
+const sites=websiteSitesUI({state,api,esc,field,showDialog,render,selection:websiteSelection,documents:websiteDocuments,beforeRename:operation=>leave.run(operation,{scope:'navigation'}),access:operation=>withProjectAccess(operation),enterOwner:(id,bookId)=>projectOwners.enter(id,bookId),
  rootSnapshot:()=>newWorkspaceReader().read({metadataOnly:true}),
  adopt:result=>{adoptSnapshot(result);state.book=result.book;state.etag=result.etag;state.dirty=Boolean(result.websiteEditor?.draft?.dirty);},
  ready:async page=>{if(page==='website')await website.load();if(['publishing','integrations'].includes(page))await publishUI.load();}

@@ -7,9 +7,9 @@ const tr=key=>t('websiteSites',key);
 
 // Owns website navigation and the research/presentation boundary. The editor
 // receives one website draft; the navigation keeps the full project hierarchy.
-export function websiteSitesUI({state,api,esc,field,showDialog,render,rootSnapshot,adopt,selection,ready,documents,access=operation=>operation(),enterOwner}){
+export function websiteSitesUI({state,api,esc,field,showDialog,render,rootSnapshot,adopt,selection,ready,documents,beforeRename,access=operation=>operation(),enterOwner}){
  let base=null,owner=null,generation=0;
- const directory=websiteDirectoryUI({state,api,esc,access,open:async(item,page)=>{await exit();await enterOwner(item.projectId,item.labBookId);await show(item.siteId,page==='integrations'?'integrations':'website');if(page==='rename')presentForm(true);}});
+ const directory=websiteDirectoryUI({state,api,esc,access,open:async(item,page)=>{await exit();await enterOwner(item.projectId,item.labBookId);await show(item.siteId,page==='integrations'?'integrations':'website');if(page==='rename')await beforeRename(()=>presentForm(true));}});
  const sync=()=>{if(owner!==researchContext(state)){owner=researchContext(state);base=null;state.websiteId=null;state.websiteDefaultRoute=false;state.websitePin=null;state.website=null;state.websiteEditor=null;documents.stop();}};
  const root=()=>{sync();return base?.book??state.book;};
  const button=(key,action,extra='')=>`<button type="button" class="button" data-action="${action}" ${extra}>${esc(tr(key))}</button>`;
