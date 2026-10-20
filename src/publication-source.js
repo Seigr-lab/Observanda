@@ -1,4 +1,4 @@
-import {sourceSelectionReader,sourceRecordChoice,sourceRecordIncluded} from './website-source-selections.js';
+import {sourceSelectionReader,sourceRecordChoice,sourceRecordIncluded,projectSourceAttachmentChoices} from './website-source-selections.js';
 import {websitePublicationMetadata,websitePublicationPages,websitePublicationCollections} from './publication-website-input.js';
 import {websiteEditorProjection} from './website-editor-projection.js';
 import {validateWebsiteDocument,websiteDocumentHeader} from './website-document-validation.js';
@@ -8,7 +8,6 @@ import {serialize} from './storage-format.js';
 import {validWebsitePin} from './web/website-pin.js';
 import {validWebsiteDraftPin} from './web/website-draft-pin.js';
 import {publicationWorkspace,publicationSnapshot} from './publication-pin.js';
-import {projectWebsiteAttachmentChoices} from './website-selection-admission.js';
 import {publicationRevisionCurrent} from './publication-freshness.js';
 import {AppError} from './errors.js';
 import {upgradeNotebook} from './model.js';
@@ -64,11 +63,11 @@ export async function* selectedPublicationRows(store,snapshot,{signal,metadata=s
  async function* overrideRows(){
   for(const id of selected.keys()){
    signal?.throwIfAborted();const row=await store.member(snapshot,id);
-   if(!row)throw new AppError('RECORD_CHANGED');overrides.set(id,{row,patch:selected.get(id)});yield row;
+   if(!row){if(selected.get(id).share===false)continue;throw new AppError('RECORD_CHANGED');}overrides.set(id,{row,patch:selected.get(id)});yield row;
   }
  }
  for await(const summary of store.queryDocuments(overrideRows(),snapshot.metadata,{signal,search:false,publication:true})){
-  const patch=selected.get(summary.id),projected={...patch,attachments:projectWebsiteAttachmentChoices(patch.attachments,summary.publication.attachments,saved.get(summary.id)?.attachments)};
+  const patch=selected.get(summary.id),projected={...patch,attachments:projectSourceAttachmentChoices(patch.attachments,summary.publication.attachments,saved.get(summary.id)?.attachments)};
   selected.set(summary.id,projected);overrides.get(summary.id).patch=projected;
  }
  async function* rows(){

@@ -57,6 +57,7 @@ export function withWebsiteSourceSelections(document,operation,{signal}={}){
      const valid=kind==='records'?validWebsiteSelection({defaultShare:false,includeProjects:[],records:[value]}):validEditionSelection({version:1,records:kind==='editionRecords'?[value]:[],...(kind==='history'?{history:[value]}:kind==='availability'?{availability:[value]}:{})});
      if(!valid)invalid();const key=identity(kind,value);if(!await proof.add('unique:'+prefix+kind+':'+key))invalid();
      if(kind==='history'&&!value.include)continue;
+     if(kind==='editionRecords'||kind==='history')await proof.add(prefix+'required-record:'+value.id);
      batch.push([prefix+kind+':'+key,value]);counts[kind]++;if(batch.length===32)await flush();
     }
    }
@@ -68,7 +69,7 @@ export function withWebsiteSourceSelections(document,operation,{signal}={}){
     const path=pathFor(row.position,...kindPath[kind]);if(!await document.tree.select(document.root,path))return;
     const count=await document.tree.arrayLength(document.root,path);for(let at=backward?count-1:0;backward?at>=0:at<count;at+=backward?-1:1){signal?.throwIfAborted();const value=(await document.field([...path,String(at)],{signal})).value;if(kind!=='history'||value.include)yield value;}
    }});
-   const records=readKind('records'),orders=new WeakMap();
+   const records={...readKind('records'),required:id=>proof.has(prefix+'required-record:'+id)},orders=new WeakMap();
    records.order=async(snapshot,rows,{order='position',keyOf=row=>String(row.position).padStart(16,'0')}={})=>{
     const blocks={async put(kind,value){const revision=digest(serialize(value));await proof.put(prefix+'order:'+kind+':'+revision,value);return revision;},async read(kind,revision){const value=await proof.get(prefix+'order:'+kind+':'+revision);if(!value||digest(serialize(value))!==revision)throw new AppError('CATALOGUE_DAMAGED');return value;}};
     const retained=orders.get(snapshot)??new Map();orders.set(snapshot,retained);let root=retained.get(order);
@@ -103,14 +104,21 @@ export async function sourceRecordIncluded(selection,record,projectId){
 }
 export async function* sourceRecordChoices(selection){const reader=sourceSelectionReader(selection);if(reader)yield* reader.items();else yield* selection.records;}
 
+// An excluded attachment remains excluded if its source is later restored.
+// Its absent negative choice is not a request to publish unavailable material.
+export function projectSourceAttachmentChoices(choices,available,savedChoices=[]){
+ const present=new Set(available.map(value=>value.id));
+ return projectWebsiteAttachmentChoices(choices.filter(value=>value.share!==false||present.has(value.id)),available,savedChoices);
+}
+
 export function sourceRecordOrder(selection,store,snapshot,{order='position',signal}={}){
  const reader=sourceSelectionReader(selection);if(!reader)throw new AppError('INVALID');
  const index=new RecordPublicationIndex(store),keyOf=row=>order==='publication'?publicationReadingKey(row,snapshot.metadata.id):readingKey(row,order);
  return reader.order(snapshot,async function*(){
   for await(const choice of reader.items()){
-   signal?.throwIfAborted();const row=await store.member(snapshot,choice.id);if(!row)throw new AppError('RECORD_CHANGED');
+   signal?.throwIfAborted();const row=await store.member(snapshot,choice.id);if(!row){if(choice.share===false&&!await reader.required(choice.id))continue;throw new AppError('RECORD_CHANGED');}
    const [summary]=await Array.fromAsync(store.queryDocuments([row],snapshot.metadata,{signal,search:false,publication:true}));
-   projectWebsiteAttachmentChoices(choice.attachments,summary.publication.attachments);
+   projectSourceAttachmentChoices(choice.attachments,summary.publication.attachments);
    if(choice.share===true){
     const member=row.position===undefined&&Array.isArray(snapshot.records)?{...row,position:snapshot.records.findIndex(value=>value.id===row.id)}:row;
     yield await index.describe(member,order!=='position');

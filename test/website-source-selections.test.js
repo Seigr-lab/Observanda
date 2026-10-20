@@ -4,7 +4,10 @@ import {randomUUID} from 'node:crypto';
 import {RecordDocument} from '../src/record-document.js';
 import {RecordValueTree} from '../src/record-value-tree.js';
 import {digest,serialize} from '../src/storage-format.js';
-import {selectedPublicationRows} from '../src/publication-source.js';
+import {selectedPublicationRows,selectedPublicationRecords} from '../src/publication-source.js';
+import {PublicationPreviewOwner} from '../src/publication-preview-owner.js';
+import {PublicationOwnerIdentities} from '../src/publication-owner-identities.js';
+import {projectSourceAttachmentChoices} from '../src/website-source-selections.js';
 import {publicationRecords} from '../src/publication-records.js';
 import {readingKey} from '../src/record-reading-index.js';
 import {publicationReadingKey} from '../src/record-publication-index.js';
@@ -138,4 +141,38 @@ test('prior native snapshots preserve sparse and included-book source order in b
  }
  const missing=emptyPublicationSource(workspaceId);missing.projectIds=[projects[0].id];missing.selection.records=[{id:uuid(999),share:true,attachments:[]}];const {result}=await document([missing]);
  await withWebsiteSourceSelections(result,async sources=>{const source=await sources.get(workspaceId);await assert.rejects(Array.fromAsync(publicationRecords({member:async()=>null},{metadata:{id:workspaceId},records:[]},{metadata:{id:workspaceId,notebooks},selection:source.selection,notebooks:new Set(notebooks.map(book=>book.id)),overrides:new Map()})),{code:'RECORD_CHANGED'});});
+});
+
+
+function removedChoiceFixture(){
+ const projectId=randomUUID(),notebookId=randomUUID(),removed=randomUUID(),attachmentId=randomUUID(),source=emptyPublicationSource(randomUUID());source.projectIds=[projectId];
+ const record={id:randomUUID(),position:1,notebookId,share:true,attachments:[],publication:{attachments:[]}},metadata={id:source.workspaceId,projects:[{id:projectId,share:true}],notebooks:[{id:notebookId,projectId,share:true}]};
+ source.selection.records=[{id:removed,share:false,attachments:[]},{id:record.id,share:true,attachments:[{id:attachmentId,share:false}]}];
+ const originalRecords=new Map([[record.id,record]]),store={async member(snapshot,id){return snapshot.records.find(row=>row.id===id);},async *queryDocuments(rows){yield* rows;},async record(id){return originalRecords.get(id);}};
+ return {source,record,removed,attachmentId,metadata,store,originalRecords,snapshot:{metadata,records:[record]}};
+}
+
+test('excluded deleted records and attachments do not trap preview or preparation and remain excluded after restoration',async()=>{
+ const f=removedChoiceFixture(),before=serialize(f.source),{result}=await document([f.source]);
+ const check=async source=>{
+  const options={metadata:f.metadata,selection:source.selection};assert.deepEqual((await Array.fromAsync(selectedPublicationRows(f.store,f.snapshot,options))).map(value=>value.row.id),[f.record.id]);
+  const owner=new PublicationPreviewOwner(source,null,new PublicationOwnerIdentities(randomUUID()));owner.metadata=f.metadata;
+  await owner.overrides(f.store,f.snapshot);assert.deepEqual((await owner.admit(f.store,f.snapshot,f.record)).patch.attachments,[]);assert.deepEqual(Object.values(await owner.countValues(f.store,f.snapshot)),[1]);
+  const restored={...f.record,attachments:[{id:f.attachmentId,share:true}],publication:{attachments:[{id:f.attachmentId,share:true}]}},excluded={...f.record,id:f.removed,position:0};f.originalRecords.set(restored.id,restored);f.originalRecords.set(excluded.id,excluded);
+  const snapshot={metadata:f.metadata,records:[excluded,restored]},records=await Array.fromAsync(selectedPublicationRecords(f.store,snapshot,options));assert.deepEqual(records.map(row=>row.id),[f.record.id]);assert.equal(records[0].attachments[0].share,false);
+ };
+ await check(f.source);await withWebsiteSourceSelections(result,async reader=>check(await reader.get(f.source.workspaceId)));assert.equal(serialize(f.source),before);
+});
+
+test('missing positive, inherited and revision-pinned source choices continue to refuse publication',async()=>{
+ const f=removedChoiceFixture(),run=async source=>{const {result}=await document([source]);await withWebsiteSourceSelections(result,async reader=>{const value=await reader.get(source.workspaceId);await assert.rejects(Array.fromAsync(selectedPublicationRows(f.store,f.snapshot,{metadata:f.metadata,selection:value.selection})),{code:'RECORD_CHANGED'});});};
+ for(const share of [true,null]){const source=structuredClone(f.source);source.selection.records[0].share=share;await run(source);await assert.rejects(Array.fromAsync(selectedPublicationRows(f.store,f.snapshot,{metadata:f.metadata,selection:source.selection})),{code:'RECORD_CHANGED'});}
+ const pin={...edition(),id:f.removed};
+ for(const collection of ['records','history']){const source=structuredClone(f.source);source.edition={version:1,records:collection==='records'?[pin]:[],...(collection==='history'?{history:[pin]}:{})};await run(source);const owner=new PublicationPreviewOwner(source,null,new PublicationOwnerIdentities(randomUUID()));await assert.rejects(owner.overrides(f.store,f.snapshot),{code:'RECORD_CHANGED'});}
+ const source=structuredClone(f.source);source.selection.records[1].attachments[0].share=true;const {result}=await document([source]);await withWebsiteSourceSelections(result,async reader=>{const value=await reader.get(source.workspaceId);await assert.rejects(Array.fromAsync(selectedPublicationRows(f.store,f.snapshot,{metadata:f.metadata,selection:value.selection})),{code:'INVALID'});const owner=new PublicationPreviewOwner(value,null,new PublicationOwnerIdentities(randomUUID()));owner.metadata=f.metadata;await assert.rejects(owner.admit(f.store,f.snapshot,f.record),{code:'INVALID'});});
+});
+
+test('negative attachment projection preserves the existing saved-positive host admission policy',()=>{
+ const id=randomUUID(),negative={id,share:false},positive={id,share:true};assert.deepEqual(projectSourceAttachmentChoices([negative],[]),[]);assert.deepEqual(negative,{id,share:false});
+ assert.throws(()=>projectSourceAttachmentChoices([positive],[]),{code:'INVALID'});assert.throws(()=>projectSourceAttachmentChoices([positive],[],[negative]),{code:'INVALID'});assert.deepEqual(projectSourceAttachmentChoices([positive],[],[positive]),[]);assert.deepEqual(projectSourceAttachmentChoices([negative],[{id}]),[negative]);
 });

@@ -1,4 +1,4 @@
-import {sourceSelectionReader,sourceEditionReader,preserveSourceSelection,sourceRecordIncluded,sourceRecordChoice,sourceRecordOrder} from './website-source-selections.js';
+import {sourceSelectionReader,sourceEditionReader,preserveSourceSelection,sourceRecordIncluded,sourceRecordChoice,sourceRecordOrder,projectSourceAttachmentChoices} from './website-source-selections.js';
 import {assertPublicationPreviewPermissions} from './publication-permission-admission.js';
 import {publicationReferenceWindow} from './publication-reference-window.js';
 import {publicationOwnerId} from './publication-owner-identities.js';
@@ -75,8 +75,7 @@ export class PublicationPreviewOwner{
   const notebook=this.metadata.notebooks.find(book=>book.id===summary.notebookId),project=notebook?.projectId;
   if(notebook?.share===false)return null;
   if(!this.metadata.projects.some(value=>value.id===project&&value.share)||!await sourceRecordIncluded(this.source.selection,summary,project))return null;
-  const patch=await sourceRecordChoice(this.source.selection,row.id);
-  if(patch?.attachments.some(value=>!summary.publication.attachments.some(attachment=>attachment.id===value.id)))throw new AppError('INVALID');
+  const selected=await sourceRecordChoice(this.source.selection,row.id),patch=selected?{...selected,attachments:projectSourceAttachmentChoices(selected.attachments,summary.publication.attachments)}:selected;
   return {row,summary,patch};
  }
  async findCurrent(store,snapshot,publicId,{recordId}={}){
@@ -138,10 +137,9 @@ export class PublicationPreviewOwner{
   if(this.selectedOverrides)return this.selectedOverrides;
   const values=new Map();
   for(const patch of this.source.selection.records){
-   this.signal?.throwIfAborted();const row=await store.member(snapshot,patch.id);if(!row)throw new AppError('RECORD_CHANGED');
+   this.signal?.throwIfAborted();const row=await store.member(snapshot,patch.id);if(!row){if(patch.share===false&&!this.choices.has(patch.id)&&![...this.history.values()].some(choice=>choice.id===patch.id))continue;throw new AppError('RECORD_CHANGED');}
    const [summary]=await Array.fromAsync(store.queryDocuments([row],snapshot.metadata,{signal:this.signal,search:false,publication:true}));
-   if(patch.attachments.some(value=>!summary.publication.attachments.some(attachment=>attachment.id===value.id)))throw new AppError('INVALID');
-   values.set(row.id,{row,patch});
+   values.set(row.id,{row,patch:{...patch,attachments:projectSourceAttachmentChoices(patch.attachments,summary.publication.attachments)}});
   }
   this.selectedOverrides=values;return values;
  }
