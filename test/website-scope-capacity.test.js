@@ -23,7 +23,7 @@ async function fixture(t,count=8){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-site-scope-')),book=sampleNotebook(),seed=book.entries[0];
  book.projects.push({...structuredClone(book.projects[0]),id:randomUUID(),title:'Unrelated project'});
  book.notebooks.push({...structuredClone(book.notebooks[0]),id:randomUUID(),projectId:book.projects[1].id,title:'Unrelated book'});
- book.entries=Array.from({length:count},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'Private record '+i,body:'Original body '+i,share:false,sections:[{id:randomUUID(),title:'Exact section',body:'Section content'}],relations:[],figures:[],attachments:[],contributors:[],tags:[],notebookId:book.notebooks[i%2].id}));
+ book.entries=Array.from({length:count},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:(i===0?'Selected record ':'Private record ')+i,body:'Original body '+i,share:i===0,sections:[{id:randomUUID(),title:'Exact section',body:'Section content'}],relations:[],figures:[],attachments:[],contributors:[],tags:[],notebookId:book.notebooks[i%2].id}));
  const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const sites=new WebsiteSites(f.workspace),site=await sites.change({workspaceId:book.id,etag:(await f.workspace.outline()).etag,operation:'create',name:'Independent website'});
  return {...f,book,directory,sites,id:site.id,scoped:websiteWorkspace(f.workspace,site.id)};
@@ -39,11 +39,14 @@ test('opening, saving and previewing an independent site use indexed counts and 
   try{
    const initial=await f.sites.read(f.id);assert.equal(initial.total,count);assert.deepEqual(initial.notebookCounts,Object.fromEntries(f.book.notebooks.map(n=>[n.id,count/2])));assert.equal(reads,0);
    const edit=command(initial);edit.metadata.website={...initial.book.website,footer:'Scoped footer',home:{...initial.book.website.home,enabled:true,sections:[]}};
-   edit.selection={defaultShare:false,includeProjects:[],records:[{id:f.book.entries[0].id,share:true,attachments:[]}]};
-   const saved=await f.sites.save(f.id,edit);assert.equal(saved.total,count);assert.deepEqual(saved.selectionProjects,{[f.book.entries[0].id]:f.book.projects[0].id});assert.ok(reads<12);
+   edit.projects=[{id:f.book.projects[0].id,share:true,logoId:null}];edit.selection={defaultShare:false,includeProjects:[],records:[{id:f.book.entries[0].id,share:true,attachments:[]}]};
+   const saved=await f.sites.save(f.id,{...edit,websitePin:initial.websitePin});assert.equal(saved.total,count);assert.deepEqual(saved.selectionProjects,{[f.book.entries[0].id]:f.book.projects[0].id});assert.ok(reads<12);
    reads=0;const draft=command(saved);draft.metadata.website={...saved.book.website,footer:'Unsaved scoped footer'};
-   const choices=await publicationSelection(f.scoped,{source:{etag:saved.etag,draft}});assert.deepEqual(choices.items.map(r=>r.id),[f.book.entries[0].id]);assert.ok(reads<=4);
-   await websitePreviewSource(f.scoped,draft,{designTarget:'home'});
+   const choices=await publicationSelection(f.scoped,{source:{etag:saved.etag,websitePin:saved.websitePin,draft}});assert.deepEqual(choices.items.map(r=>r.id),[f.book.entries[0].id]);assert.ok(reads<=4);
+   const privateRecord=f.book.entries[2],attempt=structuredClone(draft);attempt.selection.records.push({id:privateRecord.id,share:true,attachments:[]});
+   assert.equal(privateRecord.share,false);
+   const narrowed=await publicationSelection(f.scoped,{source:{etag:saved.etag,websitePin:saved.websitePin,draft:attempt}});assert.deepEqual(narrowed.items.map(r=>r.id),[f.book.entries[0].id]);
+   await websitePreviewSource(f.scoped,draft,{websitePin:saved.websitePin,designTarget:'home'});
    assert.equal((await f.sites.read(f.id)).book.website.footer,'Scoped footer');
    const controller=new AbortController();controller.abort();await assert.rejects(f.sites.read(f.id,{signal:controller.signal}),{name:'AbortError'});
    t.diagnostic(JSON.stringify({count,siteRecords:saved.total,originalBodies:0,corpusIterations:0}));
@@ -53,31 +56,31 @@ test('opening, saving and previewing an independent site use indexed counts and 
 
 test('site-specific record layouts save, preview, publish and restore while foreign targets and identity collisions fail',async t=>{
  const f=await fixture(t),initial=await f.sites.read(f.id),record=f.book.entries[0],foreign=f.book.entries[1],target='entry:'+record.id,edit=command(initial);
- edit.metadata.website={...initial.book.website,layouts:[{...defaultPageLayout(target),heading:'Dedicated entry heading'}]};
- edit.selection={defaultShare:false,includeProjects:[],records:[{id:record.id,share:true,attachments:[]}]};
- let saved=await f.sites.save(f.id,edit);assert.equal(saved.book.website.layouts[0].heading,'Dedicated entry heading');
- const {context}=await websitePreviewSource(f.scoped,command(saved),{designTarget:target}),rendered=renderPublication(context,{designTarget:target,workspaceContent:true,singlePage:true});
+ edit.metadata.website={...initial.book.website,layouts:[{...defaultPageLayout(target),heading:'Dedicated entry heading'}]};edit.projects=[{id:f.book.projects[0].id,share:true,logoId:null}];
+ edit.selection={defaultShare:false,includeProjects:[],records:[{id:record.id,share:true,attachments:[]},{id:f.book.entries[2].id,share:true,attachments:[]}]};
+ let saved=await f.sites.save(f.id,{...edit,websitePin:initial.websitePin});assert.equal(saved.book.website.layouts[0].heading,'Dedicated entry heading');
+ const {context}=await websitePreviewSource(f.scoped,command(saved),{websitePin:saved.websitePin,designTarget:target}),rendered=renderPublication(context,{designTarget:target,workspaceContent:true,singlePage:true});
  assert.ok([...rendered.files.values()].some(v=>typeof v==='string'&&v.includes('Dedicated entry heading')));
- const candidate=await new PublicationJobs(f.scoped).inline({etag:saved.etag});const text=await publicationText(candidate);
- assert.match(text,/Dedicated entry heading/);assert.ok(!text.includes(foreign.body));
+ const candidate=await new PublicationJobs(f.scoped).inline({etag:saved.etag,websitePin:saved.websitePin});const text=await publicationText(candidate);
+ assert.match(text,/Dedicated entry heading/);assert.ok(!text.includes(foreign.body));assert.ok(!text.includes(f.book.entries[2].body));assert.ok(!text.includes(f.book.entries[2].title));
  for(const patch of [
   {website:{...saved.book.website,layouts:[defaultPageLayout('entry:'+randomUUID())]}},
   {pages:[{id:foreign.id,title:'Identity collision',body:'',share:true,sections:[]}]},
   {pages:[{id:record.sections[0].id,title:'Section collision',body:'',share:true,sections:[]}]}
  ]){
   const invalid={...command(saved),metadata:patch};
-  await assert.rejects(f.sites.save(f.id,invalid),{code:'INVALID'});
-  await assert.rejects(websitePreviewSource(f.scoped,invalid,{designTarget:'home'}),{code:'INVALID'});
+  await assert.rejects(f.sites.save(f.id,{...invalid,websitePin:saved.websitePin}),{code:'INVALID'});
+  await assert.rejects(websitePreviewSource(f.scoped,invalid,{websitePin:saved.websitePin,designTarget:'home'}),{code:'INVALID'});
   assert.equal((await f.workspace.outline()).etag,saved.etag);
  }
  const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'copy')),{vault:f.vault}),restored=new Workspace(copy,f.vault);
  assert.deepEqual((await new WebsiteSites(restored).read(f.id)).book,saved.book);
- assert.match(await publicationText(await new PublicationJobs(websiteWorkspace(restored,f.id)).inline({etag:saved.etag})),/Dedicated entry heading/);
+ assert.match(await publicationText(await new PublicationJobs(websiteWorkspace(restored,f.id)).inline({etag:saved.etag,websitePin:saved.websitePin})),/Dedicated entry heading/);
 });
 
 test('legacy ownership fallback preserves site counts and selected project identities without rewriting history',async t=>{
  const f=await fixture(t),initial=await f.sites.read(f.id),edit=command(initial);edit.selection.records=[{id:f.book.entries[0].id,share:true,attachments:[]}];
- const saved=await f.sites.save(f.id,edit);
+ const saved=await f.sites.save(f.id,{...edit,websitePin:initial.websitePin});
  await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{
   const manifest=await store.manifest(saved.etag);manifest.records=manifest.records.map(({notebookId,queryRevision,summaryRevision,...row})=>row);
   await store.db.run('UPDATE snapshots SET payload=$1 WHERE id=$2',store.encode('snapshot',saved.etag,manifest),saved.etag);

@@ -29,7 +29,7 @@ import {AppError} from '../src/errors.js';
 async function fixture(t,configure=()=>{},count=37){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-owner-preview-')),book=upgradeNotebook(sampleNotebook()),seed=book.entries[0];
  book.id=randomUUID();
- book.entries=Array.from({length:count},(_,index)=>({...structuredClone(seed),id:randomUUID(),title:'Selected '+index,body:'Body '+index,share:false,attachments:[],figures:[],relations:[]}));
+ book.entries=Array.from({length:count},(_,index)=>({...structuredClone(seed),id:randomUUID(),title:'Selected '+index,body:'Body '+index,share:true,attachments:[],figures:[],relations:[]}));
  const selected=book.entries[0],visible=randomUUID(),hidden=randomUUID();
  selected.sections=[{id:visible,title:'Selected section',body:'Visible details'},{id:hidden,title:'Private section',body:'Private details'}];
  selected.attachments=[{id:randomUUID(),kind:'image',share:true,caption:'Original cover',alt:'Original',transcript:''},{id:randomUUID(),kind:'image',share:false,caption:'Chosen cover',alt:'Chosen',transcript:''}];
@@ -88,13 +88,17 @@ test('owner preview pages rank projected identities without originals or retaine
 });
 
 test('source preview applies section and attachment choices to derivatives and retains canonical revisions',async t=>{
- const f=await fixture(t),raw=f.book.entries[0],choice=defaultEditionRecord(raw,recordRevision(raw));choice.sections=[raw.sections[0].id];choice.attachments=[raw.attachments[1].id];
- f.source.edition={version:1,records:[choice]};f.source.selection.records=[{id:raw.id,share:true,attachments:[{id:raw.attachments[0].id,share:false},{id:raw.attachments[1].id,share:true}]}];
+ const f=await fixture(t,book=>{
+  const record=book.entries[0];record.attachments[1].share=true;
+  record.attachments.push({id:randomUUID(),kind:'image',share:false,caption:'Private attachment sentinel',alt:'Private attachment',transcript:''});
+ }),raw=f.book.entries[0],choice=defaultEditionRecord(raw,recordRevision(raw));choice.sections=[raw.sections[0].id];choice.attachments=[raw.attachments[1].id,raw.attachments[2].id];
+ f.source.edition={version:1,records:[choice]};f.source.selection.records=[{id:raw.id,share:true,attachments:[{id:raw.attachments[0].id,share:false},{id:raw.attachments[1].id,share:true},{id:raw.attachments[2].id,share:true}]}];
  const owner=await new PublicationPreviewOwner(f.source,f.reader,f.identities).initialize(),before=f.opens,{row,descriptor}=await owner.resolve(owner.id('record',raw.id),{recordId:raw.id});
  assert.equal(f.opens-before,1);const record=await owner.original(row);
  assert.equal(descriptor.revision,recordRevision(raw));assert.equal(record.id,descriptor.id);assert.equal(record.recordId,raw.id);
  assert.deepEqual(record.sections,raw.sections.slice(0,1));assert.deepEqual(record.attachments.map(attachment=>attachment.id),[owner.id('media',raw.attachments[1].id)]);
  assert.deepEqual(descriptor.media.map(media=>media.id),record.attachments.map(media=>media.id));assert.ok(!JSON.stringify(record).includes('Private details'));
+ assert.equal(raw.attachments[2].share,false);assert.ok(!JSON.stringify(record).includes('Private attachment sentinel'));assert.ok(!JSON.stringify(descriptor).includes(owner.id('media',raw.attachments[2].id)));
  assert.deepEqual((await f.f.workspace.read()).book.entries[0],raw);
  const bad=structuredClone(f.source);bad.edition.records[0].revision='f'.repeat(64);const changed=await new PublicationPreviewOwner(bad,f.reader,f.identities).initialize();await assert.rejects(changed.resolve(row.id,{recordId:raw.id}),{code:'RECORD_CHANGED'});
 });
@@ -107,7 +111,7 @@ test('a combined canvas admits selected sources, follows cross-owner references 
  });
  source.source.selection={defaultShare:false,includeProjects:[],records:[{id:source.book.entries[0].id,share:true,attachments:[]}]};
  const draft=structuredClone(host.book);draft.website.researchSources=[source.source];draft.website.home.sections=[newElement('records',randomUUID)];
- const request=await host.f.workspace.outline();const makeCommand=()=>({...workspaceSaveRequest(host.book,draft,recordRevisions(host.book)),baseEtag:request.etag});
+ const request=await host.f.workspace.outline();const makeCommand=(includeHost=true)=>({...workspaceSaveRequest(host.book,draft,recordRevisions(host.book)),baseEtag:request.etag,selection:{defaultShare:false,includeProjects:includeHost?[host.book.projects[0].id]:[],records:[]}});
  let readers=0,closed=0,verified=0;
  const sourceReader=async()=>{readers++;return {...source.reader,verify:async()=>{verified++;},close:async()=>{closed++;}};};
  const identities=new PublicationOwnerIdentities(host.book.id),foreignId=identities.identity(source.book.id,'record',source.book.entries[0].id);
@@ -130,6 +134,7 @@ test('a combined canvas admits selected sources, follows cross-owner references 
  const collections=[{key:first.key,definition:first.definition,query:new URLSearchParams({collection:first.key,cards:first.nextCursor}).toString()}];
  const second=await websitePreviewSource(host.f.workspace,makeCommand(),{websitePin:host.websitePin,designTarget:'home',sourceReader,collections});
  assert.equal(second.context.collectionPages[0].recordIds.some(id=>first.recordIds.includes(id)),false);
+ const unselected=await websitePreviewSource(host.f.workspace,makeCommand(false),{websitePin:host.websitePin,designTarget:'entry:'+foreignId,sourceReader});assert.deepEqual(unselected.context.entries[0].relations,[]);
  draft.website.researchSources=structuredClone([source.source]);draft.website.researchSources[0].selection.records[0].share=false;
  await assert.rejects(websitePreviewSource(host.f.workspace,makeCommand(),{websitePin:host.websitePin,designTarget:'home',sourceReader,collections}),{code:'INVALID'});
  draft.website.researchSources=[];await assert.rejects(websitePreviewSource(host.f.workspace,makeCommand(),{websitePin:host.websitePin,designTarget:'entry:'+foreignId,sourceReader}),{code:'INVALID'});
@@ -162,8 +167,8 @@ test('owner preview counts and forward and reverse windows stay bounded at tenfo
  ResearchCatalogue.prototype.decode=function(...args){if(measuring)decoded++;return decode.apply(this,args);};
  t.after(()=>{SnapshotIndex.prototype.member=member;ResearchCatalogue.prototype.record=record;ResearchCatalogue.prototype.decode=decode;});
  for(const count of [65,650]){
-  const f=await fixture(t,book=>{for(const [i,row] of book.entries.entries())row.occurredOn='2026-09-'+String(i%4+1).padStart(2,'0');},count);
-  f.source.selection.records=[{id:f.book.entries[2].id,share:false,attachments:[]}];
+  const f=await fixture(t,book=>{for(const [i,row] of book.entries.entries())row.occurredOn='2026-09-'+String(i%4+1).padStart(2,'0');book.entries[2].share=false;},count);
+  assert.equal(f.book.entries[2].share,false);f.source.selection.records=[{id:f.book.entries[2].id,share:true,attachments:[]}];
   const owner=await new PublicationPreviewOwner(f.source,f.reader,f.identities).initialize(),notebooks=new Set(owner.projected.notebooks.map(book=>book.id)),identities=f.identities.origins.size;
   const expected=f.book.entries.filter(row=>row.id!==f.book.entries[2].id).map(row=>({...row,id:owner.id('record',row.id)})).sort((a,b)=>readingKey(a,'date')<readingKey(b,'date')?-1:1);
   members=0;originals=0;decoded=0;measuring=true;
