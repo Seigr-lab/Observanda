@@ -12,7 +12,7 @@ import {Workspace,workspaceFile,atomicWrite,serialize} from '../src/storage.js';
 import {clearVault} from '../src/encryption.js';
 import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
 import {ConfigurationDocuments} from '../src/configuration-documents.js';
-import {catalogueFormat,catalogueRequiresConfigurationDocuments} from '../src/catalogue-format.js';
+import {catalogueFormat,catalogueRequiresConfigurationDocuments,catalogueRequiresNestedAttemptCollections,requireNestedAttemptCollections} from '../src/catalogue-format.js';
 import {rekeyCatalogue,verifyCatalogueArchive} from '../src/research-catalogue.js';
 import {backupCatalogue,transferCatalogue,CATALOGUE_ARCHIVE} from '../src/postgres.js';
 import {catalogueBinding} from '../src/postgres-activation.js';
@@ -55,7 +55,7 @@ test('configuration references retain historical owners through cancellation, tr
  t.after(async()=>{vaults.forEach(clearVault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-configuration-compatibility-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const legacySnapshot=await source.catalogue(store=>store.head()),before=await format(source),failure=Error('Deliberate configuration rollback'),sectionId=randomUUID();
  await assert.rejects(source.withLock(()=>source.catalogue(async store=>{
-  const metadata=(await store.snapshot()).metadata,notebook=metadata.notebooks.find(value=>value.id===notebookId);await new ConfigurationDocuments(store).retainInline(ownerFor(metadata,notebook),schema(sectionId,'Rolled back',1));throw failure;
+  const metadata=(await store.snapshot()).metadata,notebook=metadata.notebooks.find(value=>value.id===notebookId);await new ConfigurationDocuments(store).retainInline(ownerFor(metadata,notebook),schema(sectionId,'Rolled back',1));await requireNestedAttemptCollections(store.db);throw failure;
  })),error=>error===failure);
  assert.equal(await format(source),before);assert.equal(await blockCount(source),0);
  const first=await configure(source,notebookId,schema(sectionId,'Earlier schema',33));first.recordSnapshot=await saveRecord(source,book.id,recordId,'Observation under earlier schema');
@@ -73,9 +73,10 @@ test('configuration references retain historical owners through cancellation, tr
  await assert.rejects(engine.start(command,{checkpoint:async stage=>{if(stage==='history'&&await blockCount(target)>retainedBlocks){copiedConfiguration=true;throw Error('Pause after configuration copy');}}}),/Pause after configuration copy/);
  assert.equal(copiedConfiguration,true);assert.equal((await engine.cancel(request(command.id))).progress.reclamation.state,'complete');assert.equal(await blockCount(target),retainedBlocks);
  const moved=await engine.start({...command,id:randomUUID()});assert.equal(moved.phase,'complete');
+ await target.withLock(()=>target.catalogue(store=>requireNestedAttemptCollections(store.db)));
  const generation=await format(target),descriptorText=await target.readFile(await workspaceFile(target.root),'utf8'),descriptor=JSON.parse(descriptorText),expectedPointers=new Map([[first.recordSnapshot,first],[second.recordSnapshot,second]]);
  async function check(workspace){
-  assert.equal(await format(workspace),generation);
+  assert.equal(await format(workspace),generation);assert.equal(catalogueRequiresNestedAttemptCollections(generation),true);
   await workspace.catalogue(async store=>{
    const snapshot=await store.snapshot(),notebook=snapshot.metadata.notebooks.find(value=>value.id===notebookId);assert.deepEqual(notebook.configuration,targetConfig.notebook);
    const documents=new ConfigurationDocuments(store),selected=await documents.open(ownerFor(snapshot.metadata,notebook),notebook.configuration);assert.equal((await selected.window({collection:'choices',sectionId:(await selected.window({collection:'sections'})).rows[0].key,fieldKey:'condition'})).total,2);
