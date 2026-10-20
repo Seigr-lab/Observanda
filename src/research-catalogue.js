@@ -1,3 +1,4 @@
+import {requireSourcePublicationControls} from './catalogue-format.js';
 import {assertConfigurationMetadata,admitConfigurationMetadata,configurationReferences} from './configuration-metadata.js';
 import {assertRecordOwnerObjectWritable,assertRecordOwnerRowsWritable} from './record-owner-write-authority.js';
 import {readRecordOwnerHistory} from './record-owner-history.js';
@@ -261,7 +262,7 @@ export class ResearchCatalogue{
   snapshot.readingIndex=current?.readingIndex?await reading.replace(current.readingIndex,before,after):await reading.build(snapshot);
   const publication=new RecordPublicationIndex(this);
   snapshot.publicationIndex=current?.publicationIndex?.version===3?await publication.replace(current.publicationIndex,before,after):await publication.build(snapshot);
-  await admitConfigurationMetadata(this,metadata);
+  await admitConfigurationMetadata(this,metadata);if(metadata.notebooks.some(book=>Object.hasOwn(book,'share')))await requireSourcePublicationControls(this.db);
   await this.db.run('INSERT INTO snapshots VALUES ($1,$2,$3)',etag,ordinal,this.encode('snapshot',etag,snapshot));
   if(websiteDocuments&&current){const present=new Set(after.map(row=>row.id)),removed=before.filter(row=>!present.has(row.id)).map(row=>row.id);await reconcileOwnedWebsiteMembership(this,etag,snapshot,websiteMembershipChange(current.metadata,metadata,before,after,{removed}));}
 
@@ -421,7 +422,7 @@ export class ResearchCatalogue{
    const publication=new RecordPublicationIndex(this);
    snapshot.publicationIndex=current.publicationIndex?.version===3?await publication.replace(current.publicationIndex,before,after):await publication.build(snapshot);
    operationAdvance();
-   await admitConfigurationMetadata(this,metadata);
+   await admitConfigurationMetadata(this,metadata);if(metadata.notebooks.some(book=>Object.hasOwn(book,'share')))await requireSourcePublicationControls(this.db);
   await this.db.run('INSERT INTO snapshots VALUES ($1,$2,$3)',etag,ordinal,this.encode('snapshot',etag,snapshot));
    if(websiteDocuments)await reconcileOwnedWebsiteMembership(this,etag,snapshot,websiteChange);
    await this.db.run("UPDATE state SET payload=$1 WHERE slot='head'",this.encode('state','head',{id:etag}));

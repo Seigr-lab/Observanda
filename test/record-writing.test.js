@@ -21,6 +21,7 @@ import {Workspace} from '../src/storage.js';
 import {createAccess,takeCreatedVault} from '../src/access.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 import {serialize} from '../src/storage-format.js';
+import {catalogueFormat,catalogueRequiresSourcePublicationControls} from '../src/catalogue-format.js';
 
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-record-writing-')),book=sampleNotebook(),record=book.entries[0];
@@ -61,7 +62,7 @@ test('a selected edit can cross the old record envelope budget and survive verif
  assert.ok(Buffer.byteLength(serialize(record))<2*1024*1024);
  const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const writing=new RecordWriting(f.workspace),target={workspaceId:book.id,recordId:record.id,sectionId:record.sections[38].id},base=await writing.read(target);
- const drafts=new RecordWritingDrafts(f.workspace),command={id:randomUUID(),workspaceId:book.id,recordId:record.id,expectedRevision:null,writing:{sectionId:target.sectionId,revision:base.revision,storageRevision:base.storageRevision},value:{title:'Beyond the old envelope',body:'v'.repeat(60000)}};
+ const drafts=new RecordWritingDrafts(f.workspace),command={id:randomUUID(),workspaceId:book.id,recordId:record.id,expectedRevision:null,writing:{sectionId:target.sectionId,revision:base.revision,storageRevision:base.storageRevision},value:{title:'Beyond the old envelope',body:'v'.repeat(60000),share:false}};
  t.mock.method(ResearchCatalogue.prototype,'record',()=>{throw Error('Capacity or recovery assembled a whole original');});
  const checkpoint=await drafts.write(command),saved=await writing.save({...target,expectedRevision:base.revision,value:command.value});
  const size=await f.workspace.catalogue(async store=>(await store.member(await store.snapshot(),record.id)).bytes);assert.ok(size>2*1024*1024,size+' retained bytes');
@@ -71,6 +72,7 @@ test('a selected edit can cross the old record envelope budget and survive verif
  for(const workspace of [restored,fresh]){
   const result=await new RecordWriting(workspace).read(target);assert.deepEqual(result.value,command.value);assert.equal(result.revision,saved.revision);
   const recovered=await new RecordWritingDrafts(workspace).read({id:command.id,workspaceId:book.id,expectedRevision:checkpoint.revision});assert.deepEqual(recovered.value,command.value);
+  assert.equal(await workspace.catalogue(async store=>catalogueRequiresSourcePublicationControls(await catalogueFormat(store.db))),true);
   await workspace.catalogue(store=>store.verifyRecordHistory(record.id));
  }
  t.diagnostic(JSON.stringify({recordBytes:size,writeRequestBytes:Buffer.byteLength(JSON.stringify({...target,expectedRevision:base.revision,value:command.value})),wholeRecordReads:0}));
@@ -98,7 +100,7 @@ test('selected writing checkpoints preserve their exact base and reject unselect
 
 test('a failed selected-writing commit keeps the saved head and history intact and the checkpoint recoverable',async t=>{
  const f=await fixture(t),base=await f.writing.read(f.target(39)),drafts=new RecordWritingDrafts(f.workspace);
- const value={title:'Recovered after interruption',body:'An unpublished result'};
+ const value={title:'Recovered after interruption',body:'An unpublished result',share:false};
  const command={id:randomUUID(),workspaceId:f.book.id,recordId:f.record.id,expectedRevision:null,writing:{sectionId:base.sectionId,revision:base.revision,storageRevision:base.storageRevision},value};
  const receipt=await drafts.write(command),before=await f.workspace.catalogue(async store=>({head:await store.head(),history:await store.historyIndex(f.record.id).head()}));
  t.mock.method(ResearchCatalogue.prototype,'finishRecordChanges',()=>{throw new Error('Synthetic index failure after retained writing');});

@@ -93,7 +93,7 @@ export async function requireFigureCopyDrafts(db){return requireCatalogueFormat(
 async function requireCatalogueFormat(db,version){
  if(await catalogueFormat(db)>=version)return;
  await db.run('ALTER TABLE catalogue_format DROP CONSTRAINT catalogue_format_version_check');
- await db.run('ALTER TABLE catalogue_format ADD CONSTRAINT catalogue_format_version_check CHECK(version IN (3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,131,132,133,134,135,136,137,138,139,140,141,142,143,144,145,146,147,148,149,150,151,152,153,154,155,156,157,158,159,160,161,162,163,164,165,166,167,168,169,170,171,172,173,174,175,176,177,178,179,180,181,182,183,184,185,186,187,188,189,190,191,192,193,194,195,196,197,198,199,200,201,202,203,204,205,206,207,208,209,210,211,212,213,214,215,216,217))');
+ await db.run('ALTER TABLE catalogue_format ADD CONSTRAINT catalogue_format_version_check CHECK(version BETWEEN 3 AND 313)');
  await db.run('UPDATE catalogue_format SET version=$1 WHERE version<$1',version);
 }
 
@@ -169,15 +169,16 @@ export async function restoreRecordOwnerTransferCatalogueFormat(db,format){
 }
 
 // Immutable notebook configurations and project templates are snapshot-owned.
-// These 96 combinations preserve every independently required representation.
+// Each 96-generation family preserves independent owners. The second family
+// also requires source-owned publication permissions before an older app opens it.
 export function configurationCatalogueFeatures(format){
- if(!Number.isInteger(format)||format<122||format>217)return null;
- const value=(format-122)%24;return {website:Math.floor(value/6),staged:value%6>=3,owners:value%3,publication:(format-122)%48>=24,transfers:format>=170};
+ if(!Number.isInteger(format)||format<122||format>313)return null;
+ const value=(format-122)%24;return {website:Math.floor(value/6),staged:value%6>=3,owners:value%3,publication:(format-122)%48>=24,transfers:(format-122)%96>=48,...(format>=218?{permissions:true}:{})};
 }
 export const catalogueRequiresConfigurationDocuments=format=>configurationCatalogueFeatures(format)!==null;
-export function configurationCatalogueGeneration({website,staged,owners,publication,transfers}){
- if(typeof publication!=='boolean'||typeof transfers!=='boolean')throw new AppError('INVALID');
- return publicationCatalogueGeneration({website,staged,owners})+72+(publication?24:0)+(transfers?48:0);
+export function configurationCatalogueGeneration({website,staged,owners,publication,transfers,permissions=false}){
+ if(typeof publication!=='boolean'||typeof transfers!=='boolean'||typeof permissions!=='boolean')throw new AppError('INVALID');
+ return publicationCatalogueGeneration({website,staged,owners})+72+(publication?24:0)+(transfers?48:0)+(permissions?96:0);
 }
 export async function requireConfigurationDocuments(db){
  const previous=await catalogueFormat(db);if(catalogueRequiresConfigurationDocuments(previous))return;
@@ -189,6 +190,12 @@ export async function restoreConfigurationCatalogueFormat(db,format){
  const features=configurationCatalogueFeatures(format);if(!features)throw new AppError('CATALOGUE_DAMAGED');
  if(features.owners===2)await requireWorkspaceSettings(db);else if(features.owners===1)await requireWorkspaceDomains(db);
  if(features.website===3)await requireWebsitePresentation(db);else if(features.website===2)await requireWebsiteEditor(db);else if(features.website===1)await requireWebsiteDocuments(db);
- if(features.staged)await requireStagedEvidence(db);if(features.publication)await requirePublicationDocuments(db);if(features.transfers)await requireRecordOwnerTransfers(db);await requireConfigurationDocuments(db);
+ if(features.staged)await requireStagedEvidence(db);if(features.publication)await requirePublicationDocuments(db);if(features.transfers)await requireRecordOwnerTransfers(db);await requireConfigurationDocuments(db);if(features.permissions)await requireSourcePublicationControls(db);
  if(await catalogueFormat(db)!==format)throw new AppError('CATALOGUE_DAMAGED');
+}
+
+export const catalogueRequiresSourcePublicationControls=format=>configurationCatalogueFeatures(format)?.permissions===true;
+export async function requireSourcePublicationControls(db){
+ await requireConfigurationDocuments(db);const features=configurationCatalogueFeatures(await catalogueFormat(db));
+ if(!features.permissions)await requireCatalogueFormat(db,configurationCatalogueGeneration({...features,permissions:true}));
 }

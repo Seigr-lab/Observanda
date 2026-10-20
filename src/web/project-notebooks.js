@@ -39,6 +39,7 @@ export function projectNotebooksUI(services){
  function capture(){
   const form=active();if(!form)return;
   editing.title=form.elements.title.value;
+  if(Object.hasOwn(editing,'share')||form.elements.publication.checked!==true)editing.share=form.elements.publication.checked;
   const owner=form.elements.projectId.value,changed=owner!==editing.projectId;editing.projectId=owner;
   if(creating&&changed&&followProjectDefault)useProjectDefault();
  }
@@ -68,6 +69,7 @@ export function projectNotebooksUI(services){
   showDialog(`<form id="notebook-config-form" class="notebook-config-form ${creating?'notebook-create-form':''}"><h2 id="dialog-title" tabindex="-1">${creating?'New lab book':'Lab book settings'}</h2>
    <div class="notebook-config-scroll"><div class="form-grid">${field('Lab book name',`<input name="title" required maxlength="160" value="${esc(editing.title)}">`)}
    ${field('Project',`<select name="projectId" data-notebook-owner required>${state.book.projects.map(p=>option(p.id,locationName(state.book,p.id),editing.projectId)).join('')}</select>`)}</div>
+   <label class="checkbox"><input name="publication" type="checkbox" ${editing.share!==false?'checked':''}>${esc(t('recordWriting','bookPublication'))}</label><p class="muted">${esc(t('recordWriting','bookPublicationHint'))}</p>
    ${creating&&projectTemplate&&!available(projectTemplate)?'<p class="muted">'+esc(t('templatePreferences','defaultUnavailable',{preferences:t('preferences','title'),templates:t('preferences','templates')}))+'</p>':''}${creating?templatePicker():native()?configuration.view():`<fieldset class="notebook-profile-choices"><legend>Lab-book types</legend>
     ${profiles.map(p=>`<label class="checkbox"><input type="checkbox" data-notebook-profile="${p.id}" ${c.profiles.some(ch=>ch.id===p.id&&ch.enabled)?'checked':''}>${esc(p.label)}</label>`).join('')||'<p>'+esc(t('templatePreferences','enableTypes',{preferences:t('preferences','title'),templates:t('preferences','templates')}))+'</p>'}
    </fieldset>

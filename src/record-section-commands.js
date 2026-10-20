@@ -1,3 +1,4 @@
+import {writingSectionValue,validWritingValue} from './web/record-writing-model.js';
 import {AppError} from './errors.js';
 import {researchId} from './web/research-reference.js';
 import {revisionId} from './web/revision-model.js';
@@ -9,13 +10,13 @@ import {commitRecordDocument} from './record-document-commit.js';
 import {sameJSONData} from './web/json-data-equality.js';
 
 const exact=(v,keys)=>v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).sort().join()===keys.sort().join();
-export const writingValueRevision=section=>digest(serialize({title:section.title,body:section.body}));
+export const writingValueRevision=section=>digest(serialize(writingSectionValue(section)));
 export class RecordSectionCommands{
  constructor(workspace){this.workspace=workspace;}
  async run(command){
   const fields=['workspaceId','recordId','action','sectionId','expectedStructureRevision'];
   const extra={insert:['beforeId','value'],remove:['expectedValueRevision'],move:['position']}[command?.action];
-  if(!extra||!exact(command,[...fields,...extra])||![command.workspaceId,command.recordId,command.sectionId].every(researchId)||!revisionId(command.expectedStructureRevision)||command.action==='insert'&&(command.beforeId!==null&&!researchId(command.beforeId)||!exact(command.value,['title','body']))||command.action==='remove'&&!revisionId(command.expectedValueRevision)||command.action==='move'&&(!Number.isSafeInteger(command.position)||command.position<0))throw new AppError('INVALID');
+  if(!extra||!exact(command,[...fields,...extra])||![command.workspaceId,command.recordId,command.sectionId].every(researchId)||!revisionId(command.expectedStructureRevision)||command.action==='insert'&&(command.beforeId!==null&&!researchId(command.beforeId)||!validWritingValue(command.value,command.sectionId))||command.action==='remove'&&!revisionId(command.expectedValueRevision)||command.action==='move'&&(!Number.isSafeInteger(command.position)||command.position<0))throw new AppError('INVALID');
   return this.workspace.withLock(()=>this.workspace.catalogue(async store=>{
    const etag=await store.head(),snapshot=await store.snapshot(etag);
    if(snapshot.metadata.id!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
@@ -28,7 +29,7 @@ export class RecordSectionCommands{
     const section=index<0?null:(await original.field(['sections',String(index)])).value;
     if(section&&section.id!==command.sectionId)throw new AppError('CATALOGUE_DAMAGED');
     if(command.action==='insert'&&section){
-     if(sameJSONData({title:section.title,body:section.body},command.value))return receipt(etag,row);
+     if(sameJSONData(writingSectionValue(section),command.value))return receipt(etag,row);
      throw new AppError('RECORD_CHANGED');
     }
     if(command.action!=='insert'&&index<0)throw new AppError('MISSING');

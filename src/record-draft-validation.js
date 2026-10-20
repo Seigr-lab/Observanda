@@ -19,7 +19,7 @@ const fields={
 };
 const collections={
  tags:text,
- sections:value=>keys(value,['id','title','body'])&&researchId(value.id)&&text(value.title)&&validProse(value.body),
+ sections:value=>keys(value,['id','title','body',...(Object.hasOwn(value??{},'share')?['share']:[])])&&(!Object.hasOwn(value,'share')||typeof value.share==='boolean')&&researchId(value.id)&&text(value.title)&&validProse(value.body),
  attachments:value=>keys(value,['id','kind','caption','alt','transcript','share'])&&researchId(value.id)&&['image','audio','video'].includes(value.kind)&&['caption','alt','transcript'].every(key=>text(value[key]))&&typeof value.share==='boolean',
  figures:value=>validFigure(value,{draft:true}),
  contributors:value=>validContributors([value],{draft:true}),relations:value=>validRelations([value])

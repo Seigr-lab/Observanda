@@ -6,7 +6,7 @@ import {AppError} from './errors.js';
 import {seal,unseal} from './encryption.js';
 import {digest,serialize} from './storage-format.js';
 import {RecordBlockStore,blockedRecord,validBlockedRecord,recordBlockResource} from './record-block-store.js';
-import {catalogueFormat,requireRecordBlocks,requireAttemptIndexes,requireCurrentAttemptIndexes,requireRecordMethodIndexes,requireRecordResultIndexes} from './catalogue-format.js';
+import {catalogueFormat,catalogueRequiresSourcePublicationControls,requireSourcePublicationControls,requireRecordBlocks,requireAttemptIndexes,requireCurrentAttemptIndexes,requireRecordMethodIndexes,requireRecordResultIndexes} from './catalogue-format.js';
 import {jsonFitsBytes} from './web/json-chunks.js';
 import {recordEncoding} from './record-encoding.js';
 import {retainRecordOwnerResource} from './record-owner-resources.js';
@@ -46,6 +46,7 @@ export async function withStoredRecord(store,id,revision,consume){
  });
 }
 export async function retainStoredRecord(store,record,revision){
+ if(record.sections?.some(section=>Object.hasOwn(section,'share')))await requireSourcePublicationControls(store.db);
  const scopeId=record.notebookId,generation=1,key=await store.scopeKey(scopeId,generation,{create:true});
  try{
   let retained,dependencies=[];
@@ -76,6 +77,11 @@ export async function retainStoredDocument(store,document,encoding){
  const revision=encoding.revision;
  const present=!!await store.db.get('SELECT 1 FROM records WHERE id=$1 AND revision=$2',id,revision);
  if(present){await retainRecordOwnerResource(store,{kind:'record',id,revision},{present:true});return false;}
+ // Only inspect permission fields until this owner requires the new reader.
+ // Large section bodies remain referenced; subsequent saves skip this pass.
+ if(!catalogueRequiresSourcePublicationControls(await catalogueFormat(store.db)))for await(const section of document.items(['sections'])){
+  if((await document.tree.selected(section.value,['share'])).found){await requireSourcePublicationControls(store.db);break;}
+ }
  await requireRecordBlocks(store.db);const attemptIndex=await RecordAttemptIndex.retain(document);if(attemptIndex)await requireIndexFormat(store.db,attemptIndex);
  const methodIndex=await RecordMethodIndex.retain(document);if(methodIndex)await requireRecordMethodIndexes(store.db);
  const resultIndex=await RecordResultIndex.retain(document);if(resultIndex)await requireRecordResultIndexes(store.db);await blocks.flush();

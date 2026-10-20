@@ -7,12 +7,13 @@ import {sameJSONData} from './web/json-data-equality.js';
 import {digest,serialize} from './storage-format.js';
 import {withRecordDocument} from './record-document.js';
 import {RecordMemberCollections} from './record-member-collections.js';
+import {writingSectionValue,validWritingValue} from './web/record-writing-model.js';
 import {commitRecordDocument} from './record-document-commit.js';
 
 const exact=(value,keys)=>value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).sort().join()===keys.sort().join();
 const target=command=>researchId(command.workspaceId)&&researchId(command.recordId)&&(command.sectionId===null||researchId(command.sectionId));
 const fields=['workspaceId','recordId','sectionId'];
-const content=(sectionId,value)=>sectionId===null?{body:value}:{title:value.title,body:value.body};
+const content=(sectionId,value)=>sectionId===null?{body:value}:writingSectionValue(value);
 export class RecordWriting{
  constructor(workspace){this.workspace=workspace;}
  async select(store,command){
@@ -37,13 +38,13 @@ export class RecordWriting{
   });
  }
  async save(command){
-  if(!exact(command,[...fields,'expectedRevision','value'])||!target(command)||!revisionId(command.expectedRevision)||!exact(command.value,command.sectionId===null?['body']:['title','body']))throw new AppError('INVALID');
+  if(!exact(command,[...fields,'expectedRevision','value'])||!target(command)||!revisionId(command.expectedRevision)||!validWritingValue(command.value,command.sectionId))throw new AppError('INVALID');
   return this.workspace.withLock(()=>this.workspace.catalogue(async store=>{
    const {row,path,etag,snapshot}=await this.select(store,command);
    return withRecordDocument(store,row.id,row.revision,async original=>{
     const selected=(await original.field(path)).value;
     if(command.sectionId!==null&&selected?.id!==command.sectionId)throw new AppError('CATALOGUE_DAMAGED');
-    const previous=content(command.sectionId,selected),next=command.value;
+    const previous=content(command.sectionId,selected),next=command.sectionId===null?command.value:writingSectionValue({...selected,...command.value});
     // Exact retries are safe after an unknown response. A competing change to
     // this value is never overwritten; edits to other sections can coexist.
     if(sameJSONData(previous,next))return {etag,revision:digest(serialize(previous)),saved:true};

@@ -25,5 +25,9 @@
  "useSaved":"Use saved writing",
  "keepMine":"Keep my edit after review",
  "failed":"This writing could not be opened. Try again.",
- "changedWorkspace":"The workspace changed. The retained checkpoint remains available in its original workspace."
+ "changedWorkspace":"The workspace changed. The retained checkpoint remains available in its original workspace.",
+ "publication":"Allow this section on websites",
+ "publicationHint":"This section can appear only when its lab book and record also allow web publishing.",
+ "bookPublication":"Allow web publishing from this lab book",
+ "bookPublicationHint":"Websites can use only records and writing sections that also allow publishing. Turning this off keeps the entire lab book private."
 }
