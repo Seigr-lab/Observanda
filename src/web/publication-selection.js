@@ -4,6 +4,7 @@ import {revisionId} from './revision-model.js';
 
 const exact=(value,keys)=>value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).sort().join()===keys.sort().join();
 const ids=(value,valid=researchId)=>Array.isArray(value)&&value.length<=1000&&value.every(valid)&&new Set(value).size===value.length;
+export const validRetainedEditionSelection=value=>exact(value,['version','id','revision','source'])&&value.version===2&&researchId(value.id)&&revisionId(value.revision)&&revisionId(value.source);
 export const emptyEditionSelection=()=>({version:1,records:[]});
 export const editionRevisionKey=r=>r.id+':'+r.revision;
 export const editionAvailabilityKey=r=>r.recordId+':'+researchReference(r.target);

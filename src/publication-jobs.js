@@ -1,3 +1,4 @@
+import {publicationEditionChoices} from './publication-edition-selections.js';
 import {isPublicationDocumentBlockName} from './publication-document.js';
 import {withWorkspaceMetadataBatch} from './metadata-batch.js';
 import {withPublicationOutputWriter} from './publication-output.js';
@@ -35,8 +36,9 @@ const candidateFile=id=>{if(!hash(id))throw new AppError('INVALID');return '.obs
 export class PublicationJobs{
  constructor(workspace,{sources,sourceReader,sourceAccess}={}){workspace=publicationWorkspace(workspace);if(sources!==undefined&&!validPublicationSources(sources))throw new AppError('INVALID');this.workspace=workspace;this.sources=sources===undefined?undefined:structuredClone(sources);this.sourceReader=sourceReader;this.sourceAccess=sourceAccess;this.feed=new MetadataFeed(workspace,'.observanda/release-list');}
  async pin({etag,websitePin,websiteDraft,book,workspaceId,draft:command,edition,blockedValues=[]},{signal,workspace=this.workspace,id=randomUUID()}={}){
+   const editionChoices=await publicationEditionChoices(workspace,edition,{source:{workspaceId,etag,websitePin,...(websiteDraft===undefined?{}:{websiteDraft})},signal});
    let capturedPin;
-   const input=await publicationSource(workspace,{etag,websitePin,websiteDraft,book,workspaceId,draft:command},{signal,consume:async(metadata,records,options)=>{capturedPin=options.websitePin;const sources=this.sources??metadata.website.researchSources??[];if(!validPublicationSources(sources))throw new AppError('INVALID');const input=await retainPublicationInput(workspace,id,metadata,records,{...options,signal,sourceReader:this.sourceReader,edition,hasSources:!!sources.length,deferFinalization:!!sources.length});return sources.length?retainPublicationSources(workspace,id,input,sources,await this.sourceReader?.({signal}),{signal,sourceReader:this.sourceReader}):input;}});
+   const input=await publicationSource(workspace,{etag,websitePin,websiteDraft,book,workspaceId,draft:command},{signal,consume:async(metadata,records,options)=>{capturedPin=options.websitePin;const sources=this.sources??metadata.website.researchSources??[];if(!validPublicationSources(sources))throw new AppError('INVALID');const input=await retainPublicationInput(workspace,id,metadata,records,{...options,signal,sourceReader:this.sourceReader,edition,editionChoices,hasSources:!!sources.length,deferFinalization:!!sources.length});return sources.length?retainPublicationSources(workspace,id,input,sources,await this.sourceReader?.({signal}),{signal,sourceReader:this.sourceReader}):input;}});
    const destination=await new Publisher(workspace.root,{workspace},workspace.vault).read();
    const source={sourcePermissionVersion:SOURCE_PUBLICATION_VERSION,version:input.document?6:input.layoutInputs?5:input.pageInputs?4:3,id,reviewId:digest(id),workspaceId:input.metadata.id,websiteId:capturedPin.websiteId,websitePin:capturedPin,createdAt:new Date().toISOString(),etag:capturedPin.researchSnapshotId,...input,blockedValues,
     configEtag:destination.etag,destination:destination.configured?destination.config:null};

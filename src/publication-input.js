@@ -1,3 +1,4 @@
+import {publicationEditionChoices} from './publication-edition-selections.js';
 import {retainPublicationInput as retainLegacyPublicationInput} from './publication-input-legacy.js';
 import {publicationResearchWorkspace} from './publication-pin.js';
 import {removePublicationMedia} from './publication-input-media.js';
@@ -10,7 +11,7 @@ import {ResearchMaterials} from './research-materials.js';
 import {publicationDependencyState} from './publication-analysis-inputs.js';
 import {proseReferences} from './web/prose-model.js';
 import {emptyEditionSelection,defaultEditionRecord,selectEditionRecord} from './web/publication-selection.js';
-import {validateEditionSelection,validateEditionRecord} from './publication-selection.js';
+import {validateEditionRecord} from './publication-selection.js';
 import {publicationDescriptor} from './publication-record-descriptor.js';
 import {retainSelectedRevisionRows} from './publication-revisions.js';
 import {publicationOriginal} from './publication-source.js';
@@ -26,11 +27,11 @@ export {finalizePublicationInput};
 
 // Each selected original is consumed once. Corpus membership, provenance and
 // collision evidence live in the immutable owner rather than capture arrays.
-export async function retainPublicationInput(workspace,id,metadata,originals,{sourceEtag,recordHead,signal,sourceReader,edition=emptyEditionSelection(),deferFinalization=false,hasSources=false,websitePages,websiteCollections,websitePresentation,input=null,owner={workspaceId:metadata.id},destination=workspace,identities=null,snapshotId=null,onRecord}={}){
+export async function retainPublicationInput(workspace,id,metadata,originals,{sourceEtag,recordHead,signal,sourceReader,edition=emptyEditionSelection(),editionChoices=null,deferFinalization=false,hasSources=false,websitePages,websiteCollections,websitePresentation,input=null,owner={workspaceId:metadata.id},destination=workspace,identities=null,snapshotId=null,onRecord}={}){
  if(await destination.storageKind()!=='catalogue')return retainLegacyPublicationInput(workspace,id,metadata,originals,{sourceEtag,recordHead,signal,sourceReader,edition,deferFinalization,websitePages,websitePresentation});
  const research=publicationResearchWorkspace(workspace);
  const capture=async referenceNamespaces=>{
- validateEditionSelection(edition);const choices=new Map(edition.records.map(row=>[row.id,row])),found=new Set(),fresh=!input;
+ const choices=editionChoices??await publicationEditionChoices(workspace,edition,{signal});let found=0;const fresh=!input;
  input??=createPublicationInput(destination,id,metadata,{signal});const state=publicationInputState(input),builder=state.builder;
  identities??=state.identities??=new PublicationCaptureIdentities(state.header.metadata.id,builder);if(fresh)state.header.hasSources=hasSources;
  await appendPublicationOwnerCollections(builder,metadata,owner,identities,{signal});
@@ -57,11 +58,12 @@ export async function retainPublicationInput(workspace,id,metadata,originals,{so
  const start=builder.count('records');
  for await(const original of originals){
   signal?.throwIfAborted();if(!original.share||!metadata.notebooks.some(notebook=>notebook.id===original.notebookId&&notebook.share!==false&&metadata.projects.some(project=>project.id===notebook.projectId&&project.share)))continue;
-  const choice=choices.get(original.id);if(choice){found.add(original.id);validateEditionRecord(original,choice);if(!choice.include)continue;}await pin(original,choice);
+  const choice=await choices.get('records',original.id);if(choice){found++;validateEditionRecord(original,choice);if(!choice.include)continue;}await pin(original,choice);
  }
- if(found.size!==choices.size)throw new AppError('RECORD_CHANGED');
- await retainSelectedRevisionRows(workspace,metadata,edition,async position=>(await builder.window('records',{offset:position,limit:1})).items[0]?.value,()=>builder.count('records'),pin,{signal,start});
- for(const note of edition.availability??[]){
+ if(found!==choices.count('records'))throw new AppError('RECORD_CHANGED');
+ await retainSelectedRevisionRows(workspace,metadata,choices,async position=>(await builder.window('records',{offset:position,limit:1})).items[0]?.value,()=>builder.count('records'),pin,{signal,start});
+ for await(const note of choices.items('availability')){
+  if((await choices.get('records',note.recordId))?.include===false)continue;
   const publicId=await identities.identity(metadata.id,'record',note.recordId),row=await builder.get('records',publicId),href=researchReference(note.target);
   if(!row||![...row.relations.map(link=>link.target),...row.references].some(value=>researchReference(value)===href))throw new AppError('INVALID');
   await builder.append('availability',publicId+'/'+digest(serialize(note.target)),{...note,recordId:publicId},{indexes:{record:publicId+'/'}});

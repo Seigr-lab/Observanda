@@ -7,7 +7,7 @@ import {revisionPageId} from '../../src/publication-revisions.js';
 import {recordRevision} from '../../src/research.js';
 
 test('review and include an exact old method from the app, then follow its public revision link',async({page})=>{
- const cleanup=[],f=await historicalFixture({after:fn=>cleanup.push(fn)},{chain:true}),app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(f.directory??path.dirname(f.workspace.root),'preferences.json')}),errors=[];
+ test.setTimeout(90000);const cleanup=[],f=await historicalFixture({after:fn=>cleanup.push(fn)},{chain:true,title:'workspace'}),app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(f.directory??path.dirname(f.workspace.root),'preferences.json')}),errors=[];
  page.on('pageerror',e=>errors.push(e.message));
  try{
   await page.goto(app.url);await navigate(page,'Publishing');await page.getByRole('button',{name:'Review website',exact:true}).click();

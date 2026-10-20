@@ -1,3 +1,4 @@
+import {PublicationEditionSelections} from './publication-edition-selections.js';
 import {workspaceEncryptedCopyAccess} from './workspace-encrypted-copy.js';
 import {pdfPreviewAssets} from './pdf-preview-assets.js';
 import {PdfExportService} from './pdf-export-service.js';
@@ -1082,6 +1083,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       if(req.method==='POST'&&['/api/publication-links/read','/api/publication-links/save'].includes(url.pathname)){
         const links=new PublicationLinks(workspace),data=await body(req);return json(url.pathname.endsWith('/save')?await links.save(data):await links.read());
       }
+      if(req.method==='POST'&&url.pathname.startsWith('/api/publication-selections/'))return json(await new PublicationEditionSelections(workspace).operate(url.pathname.slice(28),await body(req)));
       if(req.method==='POST'&&['/api/publication-selection','/api/publication-references'].includes(url.pathname)){
         const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
         try{return json(await (url.pathname==='/api/publication-references'?publicationReferences:publicationSelection)(workspace,await body(req),{signal:controller.signal}));}finally{res.removeListener('close',abort);}

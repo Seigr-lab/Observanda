@@ -1,3 +1,4 @@
+import {withScratch} from './scratch-work.js';
 import {publicationResearchWorkspace} from './publication-pin.js';
 import {workspaceReferenceNamespaceMatches} from './research-reference-namespace.js';
 import {revisionId} from './web/revision-model.js';
@@ -87,16 +88,21 @@ export async function retainSelectedRevisions(workspace,metadata,edition,records
 }
 // A forward cursor over the growing immutable record collection also visits
 // newly admitted history. Explicit consent bounds pending history choices.
-export async function retainSelectedRevisionRows(workspace,metadata,edition,at,count,pin,{signal,start=0}={}){
- const pending=new Map((edition.history??[]).filter(choice=>choice.include).map(choice=>[editionRevisionKey(choice),choice]));
+export async function retainSelectedRevisionRows(workspace,metadata,choices,at,count,pin,{signal,start=0}={}){
+ if(!choices.count('history'))return;
+ return withScratch(async consumed=>{
+ let completed=0;
  for(let position=start;position<count();position++){
   const row=await at(position);if(!row)throw new AppError('JOB_DAMAGED');
   for(const target of [...row.relations.map(relation=>relation.target),...row.references]){
-   const key=editionRevisionKey(target),choice=pending.get(key);if(!choice||!await workspaceReferenceNamespaceMatches(publicationResearchWorkspace(workspace),target))continue;
+   if(!target.revision||target.kind!=='record')continue;
+   const key=editionRevisionKey(target);if(await consumed.has(key))continue;
+   const choice=await choices.get('history',key);if(!choice||!await workspaceReferenceNamespaceMatches(publicationResearchWorkspace(workspace),target))continue;
    const original=await exactPublicationRecord(workspace,target);validateEditionRecord(original,choice);
    if(!metadata.notebooks.some(notebook=>notebook.id===original.notebookId&&notebook.share!==false&&metadata.projects.some(project=>project.id===notebook.projectId&&project.share)))throw new AppError('INVALID');
-   signal?.throwIfAborted();pending.delete(key);await pin(original,choice,revisionPageId(metadata.id,original.id,choice.revision));
+   signal?.throwIfAborted();await consumed.add(key);completed++;await pin(original,choice,revisionPageId(metadata.id,original.id,choice.revision));
   }
  }
- if(pending.size)throw new AppError('INVALID');
+ if(completed!==choices.count('history'))throw new AppError('INVALID');
+ },{signal});
 }

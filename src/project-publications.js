@@ -1,3 +1,4 @@
+import {PublicationEditionSelections} from './publication-edition-selections.js';
 import {AppearancePreviewSessions} from './appearance-preview-sessions.js';
 import {appearancePreviewSource} from './appearance-preview.js';
 import {WorkspaceFonts} from './workspace-fonts.js';
@@ -95,6 +96,7 @@ export class ProjectPublications{
   }
   if(operation.startsWith('local-export/')){const result=await new LocalExport(workspace,{sourceReader})[operation.slice(13)](data),project=value=>value?.previewUrl?{...value,previewUrl:this.previewUrl(value.reviewId,value.previewUrl.split('/').slice(3).join('/'))}:value;return result?.plan?{...result,plan:project(result.plan)}:project(result);}
   if(operation.startsWith('publication-links/')){const links=new PublicationLinks(workspace);return operation.endsWith('/save')?links.save(data):links.read();}
+  if(operation.startsWith('publication-selections/'))return new PublicationEditionSelections(workspace).operate(operation.slice(23),data,{signal});
   if(operation==='publication-selection'||operation==='publication-references')return (operation==='publication-selection'?publicationSelection:publicationReferences)(workspace,data,{signal});
   if(operation.startsWith('publication-jobs/')){
    const method=operation.slice(17);
