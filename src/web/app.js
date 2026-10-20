@@ -1,3 +1,4 @@
+import {websiteEditingGuard} from './website-editing-guard.js';
 import {configurationRecordCreation} from './configuration-record-creation.js';
 import {publicationReviewChoicesUI} from './publication-review-choices.js';
 import {moduleReferenceNavigation,availableOwnedModule} from './module-reference-navigation.js';
@@ -166,7 +167,7 @@ const mark = applicationMark;
 const navigation=workspaceNavigation({state:new Proxy(state,{get:(target,key)=>key==='book'?labBookDirectoryUI.navigation(projectDirectoryUI.navigation(state.projectOwner?projectOwners.navigation():sites.root())):target[key]}),icon,logosFor});
 
 const websiteSelection=websiteSelectionDraft();
-const websiteDocuments=websiteDocumentClient({state,api,selection:websiteSelection,onStatus:({dirty,error,busy})=>{if(state.websiteEditor){state.dirty=dirty;updateSaveStatus();const status=document.querySelector('[data-website-draft-status]');if(status)status.textContent=error||t('websiteEditor',busy?'documentBusy':dirty?'documentDraftSaved':'documentSaved');const retry=document.querySelector('[data-action=website-draft-retry]');if(retry)retry.hidden=!error;}}});
+const websiteDocuments=websiteDocumentClient({state,api,selection:websiteSelection,onStatus:({dirty,error,busy,structuralBusy=false})=>{websiteEditingGuard(document,structuralBusy);if(state.websiteEditor){state.dirty=dirty;updateSaveStatus();const status=document.querySelector('[data-website-draft-status]');if(status)status.textContent=error||t('websiteEditor',busy?'documentBusy':dirty?'documentDraftSaved':'documentSaved');const retry=document.querySelector('[data-action=website-draft-retry]');if(retry)retry.hidden=!error;}}});
 function adoptSnapshot(result){
   if(result.websitePin&&(!validWebsitePin(result.websitePin)||result.websitePin.researchSnapshotId!==result.etag)||result.site&&(!result.websitePin||result.websitePin.websiteId!==result.site.id))throw {code:'WORKSPACE_READ_INVALID',message:t('workspaceRead','invalid')};
   state.websitePin=result.websitePin??null;state.websiteId=result.websitePin?.websiteId??null;state.website=result.site??null;state.websiteEditor=result.websiteEditor??null;
@@ -227,7 +228,7 @@ async function api(route, data, {adopt=true,signal,onProgress,metadataOnly=false
    const body=data===undefined?undefined:JSON.stringify(data);
    const response=await fetch(projectApiRoute(route,owner),data===undefined?{headers,signal}:{signal,method:'POST',headers:{...headers,...(structureStream||operationStream?{Accept:'application/x-ndjson'}:{}),'Content-Type':'application/json'},body});
    if(!response.ok){const error=await response.json();const explicitProject=/^\/api\/projects\/([a-f0-9-]{36})\//.exec(route);if(explicitProject||projectApiRoute(route,owner)!==route)error.projectId??=explicitProject?.[1]??(typeof owner==='object'?owner?.projectId:owner);throw error;}
-   if(response.headers.get('content-type')?.startsWith('font/')||['application/pdf','application/zip','application/vnd.observanda.template','image/png'].some(type=>response.headers.get('content-type')?.includes(type))){const blob=await response.blob();if(requestContext!==state.storage?.contextId||requestResearch!==researchContext(state))throw {code:'WORKSPACE_CHANGED',message:t('recordDrafts','workspaceChanged')};return blob;}
+   if(response.headers.get('content-type')?.startsWith('font/')||['application/pdf','application/zip','application/vnd.observanda.template','application/vnd.observanda.website-theme','image/png'].some(type=>response.headers.get('content-type')?.includes(type))){const blob=await response.blob();if(requestContext!==state.storage?.contextId||requestResearch!==researchContext(state))throw {code:'WORKSPACE_CHANGED',message:t('recordDrafts','workspaceChanged')};return blob;}
    result=onProgress||response.headers.get('content-type')?.includes('application/x-ndjson')?await readProgressStream(response,onProgress??progress?.update??(()=>{})):await response.json();
   }catch(error){const explicitProject=/^\/api\/projects\/([a-f0-9-]{36})\//.exec(route);if(explicitProject||projectApiRoute(route,owner)!==route)error.projectId??=explicitProject?.[1]??(typeof owner==='object'?owner?.projectId:owner);if(stop?.signal.aborted)throw {code:'STRUCTURE_CANCELLED',message:t('structureProgress','stopped')};const message=researchCapacityMessage(error);if(message)throw {...error,message};throw error;}
   finally{progress?.close();}
@@ -545,7 +546,7 @@ const setupControls=setupUI({state,esc,field,option,mark,storageControls,notify}
 const textControls=interfaceUI({api,field,showDialog,notify,onChange:updateSaveStatus});
 const shellMenu=shellNavigation();
 const appShell=applicationShell({root:$('#app'),mark,navigation,applyLayout:textControls.applyLayout});
-const website=lazyFeatureUI({enabled:()=>enabledModule(state.dashboardSettings,'publishing'),handles:name=>name==='website'||name.startsWith('website-'),load:()=>import('./website-ui.js').then(m=>m.websiteUI({state,api,esc,field,option,icon,dirty,render,notify,showDialog,selection:websiteSelection,documents:websiteDocuments,access:operation=>withProjectAccess(operation),bindMedia:()=>mediaImports.bind(),previewDraft:async book=>{
+const website=lazyFeatureUI({enabled:()=>enabledModule(state.dashboardSettings,'publishing'),handles:name=>name==='website'||name.startsWith('website-'),load:()=>import('./website-ui.js').then(m=>m.websiteUI({state,api,esc,field,option,icon,dirty,render,notify,showDialog,selection:websiteSelection,documents:websiteDocuments,access:operation=>withProjectAccess(operation),bindMedia:()=>mediaImports.bind(),refreshFonts:()=>fontLibrary.load(),previewDraft:async book=>{
   if(websiteDocuments.enabled())return websiteDocuments.preview();
   const command=state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion===21?workspaceSaveRequest(savedBook,book,savedRecordRevisions):null;
   return {websitePin:state.websitePin,...(command?{draft:{...command,baseEtag:state.etag,...(websiteSelection.isDirty()?{selection:websiteSelection.snapshot()}: {})}}:{book})};

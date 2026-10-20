@@ -1,3 +1,5 @@
+import {validWebsiteTemplateOperation} from './website-template-command.js';
+import {validWebsiteThemeOperation} from './website-theme-model.js';
 import {validWebsiteSourceOperation} from './website-source-selection.js';
 import {researchId} from './research-reference.js';
 import {revisionId} from './revision-model.js';
@@ -16,6 +18,8 @@ export function websiteSettingPath(path){
 export function validWebsiteEditorOperation(value){
  if(!value||typeof value!=='object'||Array.isArray(value))return false;
  const exact=keys=>Object.keys(value).every(key=>keys.includes(key));
+ if(value.type?.startsWith('template-'))return validWebsiteTemplateOperation(value);
+ if(value.type==='theme-apply')return validWebsiteThemeOperation(value);
  if(value.type==='source-selection')return validWebsiteSourceOperation(value);
  if(value.type==='settings')return exact(['type','path','value','remove'])&&websiteSettingPath(value.path)&&(value.remove===true?!Object.hasOwn(value,'value'):value.remove===undefined&&Object.hasOwn(value,'value'));
  if(value.type==='replace')return exact(['type','collection','key','position','expectedItemRevision','value'])&&websiteCollectionName(value.collection)&&validWebsiteCollectionKey(value.collection,value.key)&&(value.position===undefined||Number.isSafeInteger(value.position)&&value.position>=0)&&(value.expectedItemRevision===undefined||revisionId(value.expectedItemRevision))&&Object.hasOwn(value,'value')&&websiteCollectionKey(value.collection,value.value)===value.key;

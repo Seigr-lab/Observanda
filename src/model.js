@@ -1,3 +1,4 @@
+import {validTemplateLink} from './web/website-template-inheritance.js';
 import {isConfigurationReference,validConfigurationReference} from './web/configuration-reference.js';
 import {publicationPresentationTarget} from './web/publication-presentation-target.js';
 import {validWebsitePage,validWebsiteNavigationItem,validWebsiteAsset,validWebsiteLayout,validWebsiteBranding} from './web/website-item-validation.js';
@@ -159,7 +160,7 @@ function validateBook(book,{reservedIds=[],entryTargets=[],websiteContexts,confi
     if (book.formatVersion >= 8) {
       const targets=new Set(issues.length?[]:[...layoutTargets(book).map(t=>t.target),...entryTargets]);
       check(Array.isArray(site.layouts)&&site.layouts.length<=1700&&new Set(site.layouts.map(l=>l?.target)).size===site.layouts.length&&site.layouts.every(l=>validWebsiteLayout(l,{formatVersion:book.formatVersion})&&(targets.has(l.target)||publicationPresentationTarget(site,l.target))), 'page layouts');
-      check(Array.isArray(site.templates)&&site.templates.length<=100&&site.templates.every(t=>keys(t,['id','name','sections'])&&id(t.id)&&text(t.name,80,true)&&validSections(t.sections,true,true,book.formatVersion>=9,book.formatVersion>=10,book.formatVersion>=12))&&new Set(site.templates.map(t=>t.id)).size===site.templates.length, 'page templates');
+      check(Array.isArray(site.templates)&&site.templates.length<=100&&site.templates.every(t=>keys(t,['id','name','sections',...(Object.hasOwn(t??{},'templateLink')?['templateLink']:[])])&&(!Object.hasOwn(t,'templateLink')||validTemplateLink(t.templateLink))&&id(t.id)&&text(t.name,80,true)&&validSections(t.sections,true,true,book.formatVersion>=9,book.formatVersion>=10,book.formatVersion>=12))&&new Set(site.templates.map(t=>t.id)).size===site.templates.length, 'page templates');
     }
     if (!issues.length) {
       const targets = new Set(['home', ...book.projects.map(p => 'project:' + p.id), ...book.notebooks.map(n => 'notebook:' + n.id), ...book.pages.map(p => 'page:' + p.id)]);

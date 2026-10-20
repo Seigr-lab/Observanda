@@ -1,3 +1,5 @@
+import {reviewWebsiteTemplate,changeWebsiteTemplate,assertWebsiteTemplateDefinitions,validateWebsiteTemplateBinding,assertUnchangedWebsiteTemplateLinks,assertNewWebsiteTemplateTarget} from './website-template-inheritance.js';
+import {applyWebsiteTheme} from './website-theme-exchange.js';
 import {readWebsiteSources,changeWebsiteSources,websiteSourceCommandLookup} from './website-source-commands.js';
 import {websiteSourceSummary} from './website-source-selections.js';
 import {requireWebsiteSourceSelections} from './catalogue-format.js';
@@ -67,6 +69,7 @@ export class WebsiteEditorStore{
   return {websitePin:context.websitePin,site,collections,draft,sources:await websiteSourceSummary(context.document)};
  }
  async open(websiteId,options={}){return this.envelope(await this.context(websiteId,{...options,active:true}),options);}
+ async templateReview(websiteId,{target,decisions={},...options}={}){const context=await this.context(websiteId,options);return {...await reviewWebsiteTemplate(context,target,{...options,decisions}),websitePin:context.websitePin};}
  async sources(websiteId,options={}){const context=await this.context(websiteId,options);return {...await readWebsiteSources(context.document,options),websitePin:context.websitePin};}
  async sourceItem(context,collection,key,{signal}={}){
   if(!websiteCollectionName(collection)||!validWebsiteCollectionKey(collection,key))invalid();const path=WEBSITE_COLLECTION_PATHS[collection],descriptor=context.checkpoint.collectionIndexes?.[collection];let position=null;
@@ -145,6 +148,14 @@ export class WebsiteEditorStore{
  }
  async apply(context,operation,{signal}={}){
   const snapshot=await this.store.snapshot(context.websitePin.researchSnapshotId),site=await websiteDocumentHeader(context.document,{signal});
+  if(operation.type.startsWith('template-')){
+   if(operation.type==='template-link'&&/^(project|notebook|entry):/.test(operation.target)&&!await this.sourceItem(context,'layouts',operation.target,{signal})){
+    await assertNewWebsiteTemplateTarget(context,operation.target,{store:this.store,sourceReader:this.sourceReader,site,snapshot,signal});
+    await this.apply(context,{type:'replace',collection:'layouts',key:operation.target,value:{target:operation.target,showHeading:true,heading:'',description:'',placement:'before',sections:[]}},{signal});context.checkpoint=await this.prepare(context,{signal});
+   }
+   await changeWebsiteTemplate(context,operation,{signal});return;
+  }
+  if(operation.type==='theme-apply'){await applyWebsiteTheme(context,operation,{store:this.store,signal});await assertWebsiteTemplateDefinitions(context.document,site.document.website.templates,{signal});return;}
   if(operation.type==='source-selection'){
    if(operation.workspaceId===snapshot.metadata.id)invalid();await requireWebsiteSourceSelections(this.store.db);
    let reader;try{
@@ -155,6 +166,7 @@ export class WebsiteEditorStore{
   if(operation.type==='home-remove'){context.document=await context.document.replace(['document','website','home'],emptyHomepage(),{signal});await this.removeTarget(context,'home',{signal});return;}
   if(operation.type==='settings'){const path=operation.path.slice(0,-1),name=operation.path.at(-1);context.document=await context.document.property(path,name,structuredClone(operation.value),{remove:operation.remove===true,signal});const next=await validateWebsiteDocumentHeader(this.store,snapshot,context.document,{signal,draft:true});
    if(['selection','projects'].includes(operation.path[0])){const original=await this.documents.document(context.websitePin.websiteId,context.websitePin),previous=await websiteDocumentHeader(original.document,{signal});await validateWebsiteDocumentSelection(this.store,snapshot,next,{signal,previous});}
+   if(operation.path[0]==='document'&&operation.path[1]==='website'){assertUnchangedWebsiteTemplateLinks(site.document.website,next.document.website);await assertWebsiteTemplateDefinitions(context.document,site.document.website.templates,{signal});}
    if(operation.path[0]==='document'&&operation.path[1]==='themes')for(const theme of next.document.themes)if(await this.sourceItem(context,'pages',theme.id,{signal}))invalid();return;}
   // A command's bounded explicit batch is authoritative while validating
   // ancestry. Do not materialize an implicit parent that the same append
@@ -163,6 +175,7 @@ export class WebsiteEditorStore{
   if(navigationBatch&&navigationBatch.size!==operation.values.length)invalid();
   const admit=async(collection,value)=>{
    if(!(collection==='pages'?validWebsitePage(value,{draft:true}):collection==='navigation'?validWebsiteNavigationItem(value):collection==='layouts'?validWebsiteLayout(value):collection==='branding'?validWebsiteBranding(value):validWebsiteAsset(value)))invalid();
+   if(['pages','layouts'].includes(collection)){const previous=await this.sourceItem(context,collection,websiteCollectionKey(collection,value),{signal});if(JSON.stringify(previous?.value.templateLink)!==JSON.stringify(value.templateLink))invalid();await validateWebsiteTemplateBinding(context.document,value,{signal,writing:true});if(value.templateLink&&!site.document.website.templates.some(template=>template.id===value.templateLink.templateId))invalid();}
    if(collection==='pages'){
     const id=value.id;if([site.id,snapshot.metadata.id,...snapshot.metadata.projects.map(p=>p.id),...snapshot.metadata.notebooks.map(p=>p.id),...site.document.themes.map(t=>t.id)].includes(id))invalid();
     if(snapshot.indexVersion&&await new SnapshotIndex(this.store).find({root:snapshot.membership},'identity:'+id))invalid();

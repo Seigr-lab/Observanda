@@ -1,3 +1,4 @@
+import {validTemplateLink} from './website-template-inheritance.js';
 import {validActionStyle,validAction,ACTION_KINDS} from './website-action-style.js';
 import {validPublicationSources,selectedPublicationSources} from './publication-sources-model.js';
 import {websiteLink,safeWebsiteLink} from './website-links.js';
@@ -48,7 +49,7 @@ export function validWebsiteComposition(site,extended=true,composed=true,rich=tr
   if(!object(site)||site.researchSources!==undefined&&!validPublicationSources(site.researchSources))return false;
   if(!(site.title===null||text(site.title,160))||!(site.description===null||text(site.description,1500)))return false;
   const h=site.home;
-  return keys(h,['title','showTitle','sections',...(optionalHome?['enabled','introduction'].filter(k=>Object.hasOwn(h??{},k)):[])])&&(h.enabled===undefined||typeof h.enabled==='boolean')&&(h.introduction===undefined||text(h.introduction,1500))&&(h.title===null||text(h.title,160))&&typeof h.showTitle==='boolean'&&validSections(h.sections,extended,composed,rich,extendedText,tree);
+  return keys(h,['title','showTitle','sections',...(optionalHome?['enabled','introduction','templateLink'].filter(k=>Object.hasOwn(h??{},k)):[])])&&(!Object.hasOwn(h,'templateLink')||validTemplateLink(h.templateLink))&&(h.enabled===undefined||typeof h.enabled==='boolean')&&(h.introduction===undefined||text(h.introduction,1500))&&(h.title===null||text(h.title,160))&&typeof h.showTitle==='boolean'&&validSections(h.sections,extended,composed,rich,extendedText,tree);
 }
 export function selectedContent(book){
   const projects=book.projects.filter(p=>p.share),projectIds=new Set(projects.map(p=>p.id));

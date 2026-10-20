@@ -1,3 +1,4 @@
+import {verifyWebsiteTemplateBindings} from './website-template-inheritance.js';
 // Independent current website heads and immutable retained document revisions.
 // Call mutation methods inside the declared website/membership transaction.
 import {randomUUID} from 'node:crypto';
@@ -151,6 +152,7 @@ export class WebsiteDocumentStore{
  async #retain(site,researchSnapshotId,registry,previous){
   const snapshot=await this.store.snapshot(researchSnapshotId);if(snapshot.metadata.id!==registry.workspaceId||!validWebsites([site],snapshot.metadata))invalid();
   const blocks=new WebsiteDocumentBlockStore(this.store,site.id),root=await blocks.tree().retain(site);
+  await verifyWebsiteTemplateBindings(this.store,new RecordDocument(blocks,root),{writing:true});
   if(previous&&(await this.revision(site.id,previous.revision,registry)).root===root)return previous;
   let value={version:1,workspaceId:registry.workspaceId,websiteId:site.id,researchSnapshotId,root};
   if(catalogueRequiresWebsiteEditor(await catalogueFormat(this.store.db))){

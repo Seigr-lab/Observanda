@@ -1,3 +1,4 @@
+import {verifyWebsiteTemplateBindings} from './website-template-inheritance.js';
 import {withWebsiteSourceSelections} from './website-source-selections.js';
 // A complete website remains one immutable document. Validate its growing
 // collections one item at a time; the empty header collections below are only
@@ -105,6 +106,7 @@ export async function validateWebsiteDocument(store,snapshot,document,{signal,dr
    signal?.throwIfAborted();if(!validWebsiteBranding(item)||!await targetExists(item.target))invalid('branding');await unique('branding:'+item.target,'branding');
   }
   await withWebsiteSourceSelections(document,async sources=>{for await(const source of sources.items())if(source.workspaceId===snapshot.metadata.id)invalid('website sources');},{signal});
+  await verifyWebsiteTemplateBindings(store,document,{signal});
   await validateWebsiteDocumentSelection(store,snapshot,site,{signal,previous});
   signal?.throwIfAborted();return {site,counts};
  },{signal});

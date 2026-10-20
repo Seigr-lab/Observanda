@@ -1,3 +1,4 @@
+import {websiteDocumentLocks} from './website-document-registry.js';
 // Website editing coordinates only the selected site's owner. Research is
 // read at an immutable snapshot and remains available during draft writes.
 import {AppError} from './errors.js';
@@ -7,7 +8,7 @@ import {WEBSITE_DOCUMENT_FIELDS,siteProjectIds} from './web/website-sites-model.
 import {SnapshotIndex} from './snapshot-index.js';
 import {ProjectSourceAuthority} from './project-source-authority.js';
 import {researchId} from './web/research-reference.js';
-const reads=new Set(['open','window','item','sources']);
+const reads=new Set(['open','window','item','sources','template-review']);
 const mutations=new Set(['change','undo','redo','discard','save']);
 export class WebsiteEditor{
  constructor(workspace,{sourceReader}={}){this.workspace=workspace;this.sourceReader=sourceReader;this.sites=new WebsiteSites(workspace);}
@@ -37,9 +38,10 @@ export class WebsiteEditor{
    if(mutations.has(operation)){
     const current=await editor.open(websiteId,{signal});await new ProjectSourceAuthority(store).writable(current.site.projectId);
    }
-   const result=await editor[operation==='save'?'commit':operation](websiteId,{...options,signal});
+   const result=await editor[operation==='save'?'commit':operation==='template-review'?'templateReview':operation](websiteId,{...options,signal});
    signal?.throwIfAborted();return this.response(store,result,{signal});
   };
+  if(operation==='change'&&Array.isArray(options.operations)&&options.operations.some(value=>value?.type==='theme-apply')){await this.sites.initialize();return this.workspace.withLock(()=>this.workspace.catalogue(async store=>{await websiteDocumentLocks(store,{websiteIds:[websiteId]});return run(store);}));}
   return reads.has(operation)?this.workspace.catalogue(run):this.sites.write(websiteId,{},run);
  }
 }

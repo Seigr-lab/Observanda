@@ -1,3 +1,4 @@
+import {websiteThemeRequest} from './website-theme-requests.js';
 import {PublicationEditionSelections} from './publication-edition-selections.js';
 import {workspaceEncryptedCopyAccess} from './workspace-encrypted-copy.js';
 import {pdfPreviewAssets} from './pdf-preview-assets.js';
@@ -796,6 +797,11 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         const {websiteId,websitePin}=websiteRequestContext(req.headers);
         workspace=websiteWorkspace(workspace,websiteId,{websitePin});publisher=websitePublisher(publisher,workspace);
       }
+      if(await websiteThemeRequest(req,res,{workspace,url,body:()=>body(req),json,blockedValues,check:async()=>{
+        if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');
+        if((await status(client)).locked)throw new AppError('ACCESS_LOCKED');
+        if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');
+      }}))return;
       if(req.method==='POST'&&url.pathname.startsWith('/api/websites/')){
         const data=await body(req);if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');const sites=new WebsiteSites(workspace),operation=url.pathname.slice('/api/websites/'.length);
         if(operation.startsWith('editor/')){
