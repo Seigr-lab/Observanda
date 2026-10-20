@@ -1,3 +1,4 @@
+import {preparationProjection,preparationPage,preparationRowById} from './record-preparation-document.js';
 // Authoring reads one fact and its exact preparation context. Preparation
 // choices are summaries in independent windows, never a copy of run history.
 import {AppError} from './errors.js';
@@ -5,7 +6,7 @@ import {emptyAttempt} from './web/attempt-model.js';
 import {attemptValueField} from './web/record-attempt-value.js';
 import {researchId} from './web/research-reference.js';
 import {RecordAttemptIndex} from './record-attempt-index.js';
-export const validAttemptContext=c=>!!attemptValueField(c.field)&&(c.prior===null||researchId(c.prior))&&(c.preparationId===null||researchId(c.preparationId))&&Number.isSafeInteger(c.offset)&&c.offset>=0;
+export const validAttemptContext=c=>!!attemptValueField(c.field)&&(c.prior===null||researchId(c.prior))&&(c.preparationId===null||researchId(c.preparationId))&&Number.isSafeInteger(c.offset)&&c.offset>=0&&(c.criterionId===undefined||c.criterionId===null||researchId(c.criterionId))&&(c.criterionOffset===undefined||Number.isSafeInteger(c.criterionOffset)&&c.criterionOffset>=0);
 export async function attemptFactPosition(document,group,id,{signal}={}){
  if(!id||!await document.reference(['attempt'],{signal}))return -1;
  const index=await RecordAttemptIndex.open(document,{signal});if(index)return (await index.fact(id,group))?.position??-1;
@@ -18,19 +19,19 @@ export async function attemptSuccessor(document,group,id,{signal}={}){
  for await(const item of document.items(['attempt',group],{signal}))if((await document.tree.selected(item.value,['supersedes'])).value===latest)latest=(await document.tree.selected(item.value,['id'])).value;
  return latest;
 }
-export async function attemptValueContext(document,field,{prior=null,preparationId=null,offset=0,signal,selected=null}={}){
+export async function attemptValueContext(document,field,{prior=null,preparationId=null,offset=0,criterionOffset=0,criterionId=null,signal,selected=null}={}){
  const fact=attemptValueField(field);if(!fact)throw new AppError('INVALID');
  const attempt=emptyAttempt(),positions={},totals={preparations:0,events:0,assessments:0},page={offset:0,total:0,next:null,items:[]};
  const definition={kind:'attempt',factKind:fact.kind,attempt,methods:[],positions,totals,preparations:page,latestPreparationId:null,correctionId:null};
  if(!await document.reference(['attempt'],{signal})){if(prior||preparationId)throw new AppError('MISSING');return definition;}
  for(const group of Object.keys(totals))totals[group]=await document.tree.arrayLength(document.root,['attempt',group]);
- const read=async(group,index)=>(await document.field(['attempt',group,String(index)],{signal})).value;
+ const read=async(group,index)=>group==='preparations'?(await preparationProjection(document,await document.reference(['attempt',group,String(index)],{signal}),{signal})).value:(await document.field(['attempt',group,String(index)],{signal})).value;
  const add=async(group,index)=>{if(index<0)return null;const value=await read(group,index);if(!attempt[group].some(p=>p.id===value.id))attempt[group].push(value);if(group==='preparations')positions[value.id]=index;return value;};
  if(selected){attempt[fact.group].push(selected);if(fact.group==='preparations')positions[selected.id]=await attemptFactPosition(document,fact.group,selected.id,{signal});}
- prior??=selected?.supersedes??null;preparationId??=selected?.preparationId??null;
+ prior??=selected?.supersedes??null;preparationId??=selected?.preparationId??null;criterionId??=selected?.criterionId??null;
  if(prior){
   const position=await attemptFactPosition(document,fact.group,prior,{signal});if(position<0)throw new AppError('MISSING');
-  const previous=await add(fact.group,position);preparationId??=previous.preparationId??null;
+  const previous=await add(fact.group,position);preparationId??=previous.preparationId??null;criterionId??=previous.criterionId??null;
   definition.correctionId=await attemptSuccessor(document,fact.group,prior,{signal});
   if(definition.correctionId!==prior)await add(fact.group,await attemptFactPosition(document,fact.group,definition.correctionId,{signal}));
  }
@@ -50,6 +51,15 @@ export async function attemptValueContext(document,field,{prior=null,preparation
  // Corrected facts can refer to a different preparation from their predecessor.
  for(const item of [...attempt.events,...attempt.assessments])if(item.preparationId&&!attempt.preparations.some(p=>p.id===item.preparationId))await add('preparations',await attemptFactPosition(document,'preparations',item.preparationId,{signal}));
  attempt.preparations.sort((a,b)=>positions[a.id]-positions[b.id]);
+ const selectedPreparation=attempt.preparations.find(p=>p.id===preparationId)??attempt.preparations.at(-1);
+ if(selectedPreparation){
+  const ref=await document.reference(['attempt','preparations',String(positions[selectedPreparation.id])],{signal}),criteria=await preparationPage(document,ref,'criteria',{offset:criterionOffset,signal});definition.criteria={...criteria,preparationId:selectedPreparation.id};
+  selectedPreparation.criteria=criteria.items.map(row=>row.value);
+  if(criterionId&&!selectedPreparation.criteria.some(row=>row.id===criterionId)){
+   const index=await RecordAttemptIndex.open(document,{signal}),found=await index?.nested(selectedPreparation.id,'criteria',criterionId),row=found?{value:await document.tree.read(found.reference)}:await preparationRowById(document,ref,'criteria',criterionId,{signal});if(!row)throw new AppError('MISSING');selectedPreparation.criteria.push(row.value);
+  }
+ }
+
  page.total=totals.preparations;page.offset=Math.min(offset,Math.max(0,page.total-1));page.next=page.offset+4<page.total?page.offset+4:null;
  for await(const item of document.items(['attempt','preparations'],{offset:page.offset,limit:4,signal})){
   const prop=async key=>(await document.tree.selected(item.value,[key])).value;

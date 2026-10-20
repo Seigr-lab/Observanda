@@ -1,3 +1,5 @@
+import {catalogueFormat,catalogueRequiresNestedAttemptCollections,requireNestedAttemptCollections} from './catalogue-format.js';
+import {RetainedTableIndex} from './retained-table-index.js';
 // Selected checkpoint portability keeps original identities separate from the
 // destination recovery envelope. Staged work is visible only after activation.
 import {AppError} from './errors.js';
@@ -166,6 +168,7 @@ export async function prepareRecordOwnerDrafts(source,target,receipt,{write,sign
  const manifestId='record-owner-drafts:'+receipt.id,retained=await target.catalogue(store=>store.object(manifestId));if(retained)return retained;
  await write(()=>targetDrafts.index.ensureLocked(receipt.command.targetWorkspaceId));let count=0;
  await source.catalogue(async from=>{
+  if(catalogueRequiresNestedAttemptCollections(await catalogueFormat(from.db)))await write(store=>requireNestedAttemptCollections(store.db));
   await copyCorrections(from,target,receipt,options);
   for await(const name of source.metadataNames('.observanda/drafts',{signal})){
    signal?.throwIfAborted();const id=name.slice(0,-5);if(!researchId(id)||name!==id+'.json')fail();
@@ -181,12 +184,17 @@ export async function prepareRecordOwnerDrafts(source,target,receipt,{write,sign
     if(existing!==null&&(!prior||prior.transferId!==receipt.id&&(await authorized(store,prior)).phase!=='cancelled'||prior.recordId!==recordId||digest(existing)!==prior.revision))throw new AppError('RECORD_DRAFT_EXISTS');
    });
    if(draft.document)await withRecordBlockStore(from,draft.document.notebookId,draft.document.generation,async blocks=>{if((await copyRecordOwnerValue(new RecordDocument(blocks,draft.document.root),target,options)).root!==draft.document.root)fail();});
+   if(draft.preparationEdit?.identities.root)await withRecordBlockStore(from,draft.document.notebookId,draft.document.generation,async blocks=>{
+    const index=new RetainedTableIndex(blocks,{namespace:'index',allowSparseBranches:true});let batch=[];const flush=async()=>{if(!batch.length)return;await write(store=>withRecordBlockStore(store,draft.document.notebookId,draft.document.generation,async destination=>{for(const {ref,node} of batch)if(await destination.put('index',node)!==ref.hash)fail();await destination.flush();}));batch=[];};
+    const visit=async ref=>{signal?.throwIfAborted();const node=await index.node(ref);for(const child of node.children??[])await visit(child);for(const entry of node.entries??[])if((await copyRecordOwnerValue(new RecordDocument(blocks,entry.revision),target,options)).root!==entry.revision)fail();batch.push({ref,node});if(batch.length===32)await flush();};await visit(draft.preparationEdit.identities.root);await flush();
+   });
    if(draft.content)await copyChunks(source,target,id,draft.content,options);
    await write(async store=>{
     const pointer={version:1,transferId:receipt.id,revision:hash(origin)},result={draft:projected,revision:projectedRevision},summary=targetDrafts.index.summary(result,hash({text:projectedRaw}));
     const values=[[originKey(id),pointer],['metadata:'+draftPath(id),{text:projectedRaw}],['metadata:'+targetDrafts.index.path(summary),{text:serialize(summary)}]],changes=[];
     for(const [key,after] of values)changes.push({address:{kind:'object',key},before:await store.object(key),after});
     const dependencies=[];if(draft.document)dependencies.push(recordBlockResource(draft.document.notebookId,draft.document.generation,'value',draft.document.root));
+    if(draft.preparationEdit?.identities.root)dependencies.push(recordBlockResource(draft.document.notebookId,draft.document.generation,'index',draft.preparationEdit.identities.root.hash));
     if(draft.content?.root){const key='metadata:.observanda/record-draft-blocks/'+id+'/nodes/'+draft.content.root.hash+'.json',value=await store.object(key);if(!value)fail();dependencies.push({kind:'object',key,revision:hash(value)});}
     const archiveId=originArchive(receipt.id,id);await putExact(store,archiveId,origin,{dependencies});
     await journalRecordOwnerMutations(store,receipt,changes,{dependencies:[{kind:'object',key:archiveId,revision:hash(origin)},...dependencies]});

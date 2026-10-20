@@ -16,18 +16,31 @@ const text=(v,max=2000,required=false)=>typeof v==='string'&&v.length<=max&&(!re
 const stamp=v=>typeof v==='string'&&/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(v)&&Number.isFinite(Date.parse(v))&&new Date(v).toISOString()===v;
 const unique=rows=>new Set(rows.map(r=>r?.id)).size===rows.length;
 const facts=(rows,check)=>Array.isArray(rows)&&unique(rows)&&rows.every(check);
-const list=(rows,max,check)=>Array.isArray(rows)&&rows.length<=max&&facts(rows,check);
+
 export const attemptReference=ref=>keys(ref,['workspaceId','kind','id','revision','label'])&&researchId(ref.workspaceId)&&researchId(ref.id)&&revisionId(ref.revision)&&['record','artifact','dataset','analysis','collection'].includes(ref.kind)&&text(ref.label,300,true);
 const optionalRef=ref=>ref===null||attemptReference(ref);
 const refs=values=>Array.isArray(values)&&values.length<=20&&values.every(attemptReference)&&new Set(values.map(r=>revisionText(r))).size===values.length;
 export const validAttemptTime=value=>keys(value,['meaning','value'])&&TIME_MEANINGS.includes(value.meaning)&&text(value.value,300)&&((value.meaning==='unknown')===!value.value.trim());
 const base=(row,draft=false)=>researchId(row.id)&&(row.supersedes===null||researchId(row.supersedes))&&stamp(row.recordedAt)&&text(row.reason,2000,!draft&&!!row.supersedes);
+export const preparationCollections=['conditions','inputs','observations','criteria'];
+// Older readers admitted at most 64 rows in each preparation collection.
+export const hasNestedPreparationContinuations=value=>preparationCollections.some(name=>value?.[name]?.length>64);
+export const hasNestedAttemptContinuations=value=>value?.preparations?.some(hasNestedPreparationContinuations)??false;
+export const preparationHeaderFields=['id','supersedes','recordedAt','reason','applicability','basedOn','protocols'];
+export function validPreparationHeader(p,{draft=false}={}){
+ return keys(p,preparationHeaderFields)&&base(p,draft)&&text(p.applicability,2000,!draft)&&optionalRef(p.basedOn)&&refs(p.protocols)&&p.protocols.every(r=>r.kind==='record');
+}
+export function validPreparationRow(group,c,{draft=false}={}){
+ if(group==='conditions')return keys(c,['id','name','value','unit','basis','reference','reason'])&&researchId(c.id)&&text(c.name,160,!draft)&&text(c.value)&&text(c.unit,80)&&CONDITION_BASES.includes(c.basis)&&optionalRef(c.reference)&&text(c.reason)&&(draft||c.basis!=='inherited'||!!c.reference);
+ if(group==='inputs')return keys(c,['id','label','kind','algorithm','hash','reference'])&&researchId(c.id)&&text(c.label,160,!draft)&&INPUT_KINDS.includes(c.kind)&&['sha256','sha512'].includes(c.algorithm)&&(draft?text(c.hash,128):typeof c.hash==='string'&&new RegExp('^[a-f0-9]{'+(c.algorithm==='sha256'?64:128)+'}$','i').test(c.hash))&&optionalRef(c.reference);
+ if(group==='observations')return keys(c,['id','label'])&&researchId(c.id)&&text(c.label,2000,!draft);
+ if(group==='criteria')return keys(c,['id','label','expected','comparator','denominator','scope','reason'])&&researchId(c.id)&&text(c.label,160,!draft)&&text(c.expected)&&text(c.comparator,160,!draft)&&text(c.denominator,500)&&['prospective','exploratory'].includes(c.scope)&&text(c.reason,2000,!draft&&c.scope==='exploratory');
+ return false;
+}
 export function validPreparation(p,{draft=false}={}){
- return keys(p,['id','supersedes','recordedAt','reason','applicability','basedOn','protocols','conditions','inputs','observations','criteria'])&&base(p,draft)&&text(p.applicability,2000,!draft)&&optionalRef(p.basedOn)&&refs(p.protocols)&&p.protocols.every(r=>r.kind==='record')&&
-  list(p.conditions,64,c=>keys(c,['id','name','value','unit','basis','reference','reason'])&&researchId(c.id)&&text(c.name,160,!draft)&&text(c.value)&&text(c.unit,80)&&CONDITION_BASES.includes(c.basis)&&optionalRef(c.reference)&&text(c.reason)&&(draft||c.basis!=='inherited'||!!c.reference))&&
-  list(p.inputs,64,i=>keys(i,['id','label','kind','algorithm','hash','reference'])&&researchId(i.id)&&text(i.label,160,!draft)&&INPUT_KINDS.includes(i.kind)&&['sha256','sha512'].includes(i.algorithm)&&(draft?text(i.hash,128):typeof i.hash==='string'&&new RegExp('^[a-f0-9]{'+(i.algorithm==='sha256'?64:128)+'}$','i').test(i.hash))&&optionalRef(i.reference))&&
-  list(p.observations,64,o=>keys(o,['id','label'])&&researchId(o.id)&&text(o.label,2000,!draft))&&
-  list(p.criteria,64,c=>keys(c,['id','label','expected','comparator','denominator','scope','reason'])&&researchId(c.id)&&text(c.label,160,!draft)&&text(c.expected)&&text(c.comparator,160,!draft)&&text(c.denominator,500)&&['prospective','exploratory'].includes(c.scope)&&text(c.reason,2000,!draft&&c.scope==='exploratory'));
+ if(!keys(p,[...preparationHeaderFields,...preparationCollections]))return false;
+ const header=Object.fromEntries(preparationHeaderFields.map(name=>[name,p[name]]));
+ return validPreparationHeader(header,{draft})&&preparationCollections.every(group=>facts(p[group],row=>validPreparationRow(group,row,{draft})));
 }
 export const attemptGroup=kind=>kind==='preparation'?'preparations':kind==='event'?'events':kind==='assessment'?'assessments':null;
 // A checkpoint accepts unfinished form text but never arbitrary fields or

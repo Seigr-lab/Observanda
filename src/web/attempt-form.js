@@ -2,7 +2,7 @@ import {CONDITION_BASES,INPUT_KINDS,EVENT_KINDS,EVENT_EXTENTS,EVENT_CONTEXTS,TIM
 
 // Form structure belongs to the attempt editor. Text, persistence and source
 // discovery are supplied by their own owners.
-export function attemptForm({kind,draft,attempt,esc,message,actions=true,preparationControl=null}){
+export function attemptForm({kind,draft,attempt,esc,message,actions=true,preparationControl=null,collectionControl=null,criterionControl=''}){
  const t=key=>esc(message(key)),name=(path,key)=>path?path+'.'+key:key;
  const field=(path,key,label=key,{options=null,required=false,max=2000,area=false}={})=>{
   const value=path?path.split('.').reduce((v,k)=>v[k],draft)[key]:draft[key],n=name(path,key);
@@ -14,7 +14,7 @@ export function attemptForm({kind,draft,attempt,esc,message,actions=true,prepara
  const select=(path,key,values,label=key)=>field(path,key,label,{options:choices(values)});
  const button=(key,action,data='')=>'<button type="button" class="button" data-attempt-form="'+action+'" '+data+'>'+t(key)+'</button>';
  const reference=(path,values,{multiple=false,recordsOnly=false,label='reference'}={})=>'<fieldset><legend>'+t(label)+'</legend><ul>'+values.filter(Boolean).map((r,i)=>'<li>'+esc(r.label)+' · '+esc(r.revision.slice(0,12))+' '+button('removeReference','remove-ref','data-path="'+path+'" data-index="'+i+'" data-multiple="'+multiple+'"')+'</li>').join('')+'</ul>'+button('chooseRecord','reference','data-path="'+path+'" data-multiple="'+multiple+'" data-kind="record"')+(recordsOnly?'':button('chooseMaterial','reference','data-path="'+path+'" data-multiple="'+multiple+'" data-kind="material"'))+'</fieldset>';
- const repeat=(key,fields,add)=>'<fieldset><legend>'+t(key)+'</legend>'+draft[key].map((row,i)=>'<section class="attempt-form-row" data-row="'+key+'.'+i+'">'+fields(key+'.'+i,row)+button('remove','remove-row','data-group="'+key+'" data-index="'+i+'"')+'</section>').join('')+button(add,'add-row','data-group="'+key+'"')+'</fieldset>';
+ const repeat=(key,fields,add)=>'<fieldset data-preparation-collection="'+key+'"><legend>'+t(key)+'</legend>'+(collectionControl?.(key)??'')+draft[key].map((row,i)=>'<section class="attempt-form-row" data-row="'+key+'.'+i+'">'+fields(key+'.'+i,row)+button('remove','remove-row','data-group="'+key+'" data-index="'+i+'"')+'</section>').join('')+button(add,'add-row','data-group="'+key+'"')+'</fieldset>';
  const reason=field('','reason','reason',{required:kind==='assessment'||!!draft.supersedes,area:true});
  let body;
  if(kind==='preparation')body=field('','applicability','applicability',{required:true,area:true})+'<p>'+t('applicabilityHelp')+'</p>'+reason+
@@ -27,7 +27,7 @@ export function attemptForm({kind,draft,attempt,esc,message,actions=true,prepara
   const options=attempt.preparations.map((p,i)=>[p.id,message('preparation')+' '+(i+1)+' — '+p.applicability.slice(0,100)]).filter(([id])=>kind!=='assessment'||!draft.supersedes||id===draft.preparationId);
   if(kind==='event')options.unshift(['',message('noPreparation')]);
   body=(preparationControl??field('','preparationId','selectPreparation',{options}))+(kind==='event'?'<p>'+t('eventHelp')+'</p>'+select('','kind',EVENT_KINDS)+field('','label','label',{max:160})+select('','extent',EVENT_EXTENTS)+select('','context',EVENT_CONTEXTS)+field('','circumstances','circumstances',{area:true}):
-   '<p>'+t('assessmentHelp')+'</p>'+field('','criterionId','criterion',{options:(attempt.preparations.find(p=>p.id===draft.preparationId)?.criteria??[]).filter(c=>!draft.supersedes||c.id===draft.criterionId).map(c=>[c.id,c.label])})+
+   '<p>'+t('assessmentHelp')+'</p>'+criterionControl+field('','criterionId','criterion',{options:(attempt.preparations.find(p=>p.id===draft.preparationId)?.criteria??[]).filter(c=>!draft.supersedes||c.id===draft.criterionId).map(c=>[c.id,c.label])})+
    select('','outcome',ASSESSMENT_OUTCOMES)+field('','domainOutcome','domainOutcome',{max:500})+field('','observed','observed',{area:true})+field('','denominator','denominator',{max:500}));
   body+=field('','actor','actor',{max:160})+field('','source','source',{max:500})+select('time','meaning',TIME_MEANINGS,'timeMeaning')+field('time','value','timeValue',{max:300})+reason+reference('references',draft.references,{multiple:true});
  }

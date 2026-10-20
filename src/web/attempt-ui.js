@@ -9,7 +9,7 @@ import {t} from './i18n/index.js';
 import {preparationMethodLinks} from './attempt-workflow.js';
 import {attemptDraft,attemptDraftRow} from './attempt-draft.js';
 
-export function attemptUI({state,api,esc,field,showDialog,notify,dirty,render,revisions,openReference,requestClose,getRecord=null}){
+export function attemptUI({state,api,esc,field,showDialog,notify,dirty,render,revisions,openReference,requestClose,getRecord=null,editPreparation}){
  const message=(key,args)=>t('attempts',key,args),text=key=>esc(message(key));
  const record=getRecord??(()=>state.book?.entries.find(r=>r.id===state.selected));
  const button=(key,action,data='')=>'<button type="button" class="button" data-action="attempt-'+action+'" '+data+'>'+text(key)+'</button>';
@@ -74,6 +74,7 @@ export function attemptUI({state,api,esc,field,showDialog,notify,dirty,render,re
   const name=control.dataset.action.slice(8),r=record();if(!r)return true;
   if(name==='open-ref'){const ref=attemptReferences(r.attempt)[Number(control.dataset.index)];if(ref)await openReference(ref);return true;}
   if(!revisions()[r.id]){notify(t('recordWorkflow','saveFirst'),true);return true;}
+  if(name==='preparation'&&editPreparation)return editPreparation(r.id);
   const a=structuredClone(r.attempt??emptyAttempt()),prior=name==='preparation'?a.preparations.at(-1):a[name==='event'?'events':'assessments'].find(v=>v.id===control.dataset.id),draft=attemptDraft(name,a,r.relations,prior);
   stop();session={identity:identity(),kind:name,attempt:a,draft,initial:revisionText(draft),base:revisionText(r.attempt??null)};renderForm();return true;
  }

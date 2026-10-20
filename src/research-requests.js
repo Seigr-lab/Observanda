@@ -1,3 +1,4 @@
+import {RecordPreparationDrafts} from './record-preparation-drafts.js';
 import {RecordConfigurationSeed} from './record-configuration-seed.js';
 import {ConfigurationCommands} from './configuration-commands.js';
 import {recordDraftRequest} from './record-draft-requests.js';
@@ -42,6 +43,7 @@ for(const [name,Owner,method] of [
  ['writing/read',RecordWriting,'read'],['values/read',RecordValues,'read'],['values/figures',RecordValues,'figureChoices'],['values/attempt-context',RecordValues,'attemptContext'],
  ['runs',RecordRuns,'list'],['runs/comparison',RecordRuns,'comparison'],['runs/prepare',RecordRunCreation,'prepare']
 ])define('research/records/'+name,Owner,method,{media:Owner===RecordHistory});
+for(const method of ['open','window','change','save'])define('research/records/preparation/'+method,RecordPreparationDrafts,method,{write:['change','save'].includes(method)});
 define('research/records/values/choices',RecordValues,'choices');
 define('research/materials/record',RetainedRecordDocuments,'read');
 define('workspace/read/record-content',RecordContent,'read');define('workspace/read/record-selectors',RecordSelectors,'read');

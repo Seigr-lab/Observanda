@@ -92,6 +92,13 @@ export class RecordDocument{
   const child=await retainRecordContainer(this.blocks,'array',children(),{signal});
   return this.#derived(await this.replaceReference(this.root,path,child,{signal}),derived);
  }
+ async appendReference(path,reference,{signal}={}){
+  if(!this.mutable)invalid();signal?.throwIfAborted();const length=await this.tree.arrayLength(this.root,path),selected=await this.tree.select(this.root,path),node=selected.inline?null:await this.tree.node(selected.revision);let child;
+  if(node?.type==='array'){
+   const item=await this.blocks.put('value',{type:'item',value:reference}),root=await this.tree.index.change(node.root,String(length).padStart(16,'0'),item);await this.tree.index.flush(root);child=await this.blocks.put('value',{type:'array',root});
+  }else{const document=this;async function* items(){yield* document.items(path,{signal});yield {value:reference};}child=await retainRecordContainer(this.blocks,'array',items(),{signal});}
+  return this.#derived(await this.replaceReference(this.root,path,child,{signal}),{attemptChanged:path[0]==='attempt',append:path.length===2&&path[0]==='attempt'&&['preparations','events','assessments'].includes(path[1]),signal});
+ }
  async replaceReference(root,path,reference,{signal}={}){
   if(!this.mutable||!Array.isArray(path)||path.some(v=>typeof v!=='string'))invalid();signal?.throwIfAborted();if(!path.length)return reference;
   const node=await this.tree.node(root),[part,...rest]=path;

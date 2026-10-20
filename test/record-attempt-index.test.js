@@ -104,11 +104,11 @@ test('current-fact indexes reject omitted and superseded entries and retain vers
  }
  // Rebuild the original version-one key set, with no counted-current entries.
  const legacy=new RecordAttemptIndex(document,{...attemptIndex,version:1,root:null});
- for await(const entry of index.index.entries(index.value))if(!entry.id.startsWith('current:'))legacy.value.root=await legacy.index.change(legacy.value.root,entry.id,entry.revision);
+ for await(const entry of index.index.entries(index.value))if(!entry.id.startsWith('current:')&&!entry.id.startsWith('nested:'))legacy.value.root=await legacy.index.change(legacy.value.root,entry.id,entry.revision);
  await legacy.index.flush(legacy.value.root);await legacy.verify();
  const old=new RecordDocument(document.blocks,document.root,{mutable:true,attemptIndex:legacy.value});assert.deepEqual(await RecordAttemptIndex.retain(old),legacy.value);
  assert.equal((await (await RecordAttemptIndex.open(old)).fact(current.id,'events')).position,1);
- const changed=await old.splice(['attempt','events'],record.attempt.events.length,0,[event(record.attempt.preparations[1])]),upgraded=await RecordAttemptIndex.retain(changed);assert.equal(upgraded.version,2);await new RecordAttemptIndex(changed,upgraded).verify();
+ const changed=await old.splice(['attempt','events'],record.attempt.events.length,0,[event(record.attempt.preparations[1])]),upgraded=await RecordAttemptIndex.retain(changed);assert.equal(upgraded.version,3);await new RecordAttemptIndex(changed,upgraded).verify();
  assert.equal((await new RecordAttemptIndex(changed,upgraded).currentWindow('events')).total,97);
 });
 

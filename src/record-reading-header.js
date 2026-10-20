@@ -1,3 +1,4 @@
+import {isPreparationWindow} from './record-preparation-document.js';
 import {recordTemplateFieldWindow} from './record-template-document.js';
 // The reader's growing header collections are separate counted windows. Values
 // needed by visible prose are resolved by identity, independently of those windows.
@@ -9,7 +10,7 @@ import {resultDocumentWindow,resultFigureCount} from './record-result-document.j
 import {figureTargets} from './web/figure-composition.js';
 const attemptCollections=['preparations','events','assessments'];
 export const recordHeaderCollections=['contributors','relations','figures','attachments','tags','fields','results',...attemptCollections];
-export const validHeaderWindows=value=>value&&typeof value==='object'&&!Array.isArray(value)&&Object.entries(value).every(([name,offset])=>recordHeaderCollections.includes(name)&&Number.isSafeInteger(offset)&&offset>=0);
+export const validHeaderWindows=value=>value&&typeof value==='object'&&!Array.isArray(value)&&Object.entries(value).every(([name,offset])=>(recordHeaderCollections.includes(name)||isPreparationWindow(name))&&Number.isSafeInteger(offset)&&offset>=0);
 export async function recordReadingHeader(store,row,document,sections,{windows={},anchor,resultFigure,signal}={}){
  const header={},pages={},inline={figures:[],attachments:[]},contextRelations=[],membership=new RecordMemberCollections(store);
  const selected=async path=>(await document.field(path,{signal})).value;

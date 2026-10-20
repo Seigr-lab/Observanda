@@ -128,5 +128,11 @@
  "preparationRange":"{first}–{last} of {total} preparation revisions",
  "usePreparation":"Use this preparation",
  "previousPreparations":"Previous preparations",
- "nextPreparations":"Next preparations"
+ "nextPreparations":"Next preparations",
+ "nestedRange":"Showing {first}-{last} of {total} items",
+ "nestedPrevious":"Previous items",
+ "nestedNext":"Next items",
+ "previousCriteria":"Previous criteria",
+ "nextCriteria":"Next criteria",
+ "outsideConditionWindow":"Not matched in the displayed condition window"
 }

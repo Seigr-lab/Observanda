@@ -1,3 +1,5 @@
+import {hasNestedPreparationContinuations} from './web/attempt-model.js';
+import {attemptValueField} from './web/record-attempt-value.js';
 import {recordOwnerDraftArchived} from './record-owner-drafts.js';
 // Corrections belong to the original checkpoint, independently of whichever
 // saved revision is currently being reviewed. Immutable edit receipts make
@@ -11,7 +13,7 @@ import {withRecordBlockStore} from './record-block-store.js';
 import {copyRecordValue} from './record-document-copy.js';
 import {withRecordProjectionScratch} from './record-projection-scratch.js';
 import {selectDraftEdit,replaceDraftEdit,validDraftEdit} from './record-draft-edit-values.js';
-import {catalogueFormat,requireDraftEdits,requireRecordTypeDrafts} from './catalogue-format.js';
+import {catalogueFormat,catalogueRequiresNestedAttemptCollections,requireNestedAttemptCollections,requireDraftEdits,requireRecordTypeDrafts} from './catalogue-format.js';
 const headPrefix='record-draft-edit-head:',nodePrefix='record-draft-edit:',operationPrefix='record-draft-edit-operation:';
 const hash=value=>digest(serialize(value)),fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 const owner=plan=>({workspaceId:plan.workspaceId,recordId:plan.recordId,draftId:plan.draftId,draftRevision:plan.draftRevision,position:plan.sourcePosition??0});
@@ -38,10 +40,10 @@ export class RecordDraftEdits{
   return this.mine(plan,document,async(mine,previous)=>{
    if(command.editRevision!==previous)throw new AppError('DRAFT_CHANGED');
    const selected=await selectDraftEdit(mine,command.field);if(selected.revision!==command.valueRevision)throw new AppError('DRAFT_CHANGED');
+   await (attemptValueField(command.field)?.kind==='preparation'&&hasNestedPreparationContinuations(command.value?.value)?requireNestedAttemptCollections:command.field==='type'?requireRecordTypeDrafts:requireDraftEdits)(this.store.db);
    const next=await replaceDraftEdit(mine,command.field,command.value,selected);await next.blocks.flush();
    const node={owner:owner(plan),operationId:command.operationId,requestHash:hash(command),planId:plan.id,previous,notebookId:next.blocks.scopeId,generation:next.blocks.generation,before:mine.root,root:next.root,field:command.field,value:await next.tree.retain(command.value)};
    await next.blocks.flush();const revision=hash(node);
-   await (command.field==='type'?requireRecordTypeDrafts:requireDraftEdits)(this.store.db);
    await this.store.putObject(nodePrefix+revision,node);
    await this.store.putObject(headPrefix+hash(node.owner),{owner:node.owner,revision});
    await this.store.putObject(operationPrefix+command.operationId,{revision});
@@ -76,6 +78,7 @@ export async function verifyRecordDraftEdit(store,node,{signal}={}){
    const expected=base.notebookId===node.notebookId&&base.generation===node.generation?base.root:await edits.document(base,doc=>copyRecordValue(doc,document,doc.root,{signal}));
    if(expected!==node.before)fail();
    const before=new RecordDocument(document.blocks,node.before,{mutable:true}),value=await document.tree.read(node.value),selected=await selectDraftEdit(before,node.field,{signal});
+   if(attemptValueField(node.field)?.kind==='preparation'&&hasNestedPreparationContinuations(value?.value)&&!catalogueRequiresNestedAttemptCollections(await catalogueFormat(store.db)))fail();
    if(!validDraftEdit(node.field,value)||(await replaceDraftEdit(before,node.field,value,selected)).root!==node.root)fail();
    if((await document.field(['id'])).value!==node.owner.recordId)fail();
   },{signal}));

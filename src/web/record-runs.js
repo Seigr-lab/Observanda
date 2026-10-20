@@ -8,11 +8,11 @@ export const RUN_PAGE_SIZE=10;
 export const RUN_DETAIL_PAGE_SIZE=4;
 const natural=value=>Number.isSafeInteger(value)&&value>=0;
 const text=value=>typeof value==='string';
-export const validRunDetailWindows=value=>value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).every(key=>['methods','events','assessments'].includes(key)&&natural(value[key]));
+export const validRunDetailWindows=value=>value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).every(key=>['conditions','methods','events','assessments'].includes(key)&&natural(value[key]));
 export function validRunConditions(value){
  const preparationNumber=n=>Number.isSafeInteger(n)&&n>=1;
  const attempt=v=>v===null||v&&((v.preparationId===null&&v.preparationNumber===0)||(researchId(v.preparationId)&&preparationNumber(v.preparationNumber)))&&text(v.applicability)&&Array.isArray(v.conditions)&&v.conditions.every(c=>researchId(c.id)&&text(c.name)&&text(c.value)&&text(c.unit)&&CONDITION_BASES.includes(c.basis))&&Array.isArray(v.assessments)&&v.assessments.every(a=>researchId(a.preparationId)&&preparationNumber(a.preparationNumber)&&['criterion','expected','comparator','observed','denominator','domainOutcome'].every(key=>text(a[key]))&&['prospective','exploratory'].includes(a.scope)&&ASSESSMENT_OUTCOMES.includes(a.outcome))&&Array.isArray(v.events)&&v.events.every(e=>EVENT_KINDS.includes(e.kind)&&EVENT_EXTENTS.includes(e.extent)&&EVENT_CONTEXTS.includes(e.context)&&text(e.label));
- if(!value||!['parameters','changes','deviations'].every(key=>text(value[key]))||!Array.isArray(value.methods)||!value.methods.every(method=>text(method.label)&&revisionId(method.revision))||!attempt(value.attempt)||!value.windows||Object.keys(value.windows).sort().join()!=='assessments,events,methods')return false;
+ if(!value||!['parameters','changes','deviations'].every(key=>text(value[key]))||!Array.isArray(value.methods)||!value.methods.every(method=>text(method.label)&&revisionId(method.revision))||!attempt(value.attempt)||!value.windows||Object.keys(value.windows).sort().join()!=='assessments,conditions,events,methods')return false;
  return Object.entries(value.windows).every(([name,page])=>{
   const items=name==='methods'?value.methods:value.attempt?.[name]??[];
   return page&&Object.keys(page).sort().join()==='count,offset,total'&&[page.offset,page.total,page.count].every(natural)&&page.count===items.length&&page.count<=RUN_DETAIL_PAGE_SIZE&&page.offset+page.count<=page.total&&(page.total===0?page.offset===0:page.count>0);

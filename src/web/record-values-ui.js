@@ -1,3 +1,4 @@
+import {recordPreparationUI} from './record-preparation-ui.js';
 import {customFieldChoices} from './custom-field-choices-ui.js';
 import {recordValueEditor} from './record-value-editor.js';
 import {recordValueFields,contributorValueId,relationValueId,mediaValueId,figureValueId} from './record-value-model.js';
@@ -24,7 +25,8 @@ export function recordValueControls(record,esc,selected='title'){
  return '<div class="inline-actions"><label class="field">'+esc(text('choose'))+'<select data-record-detail-field>'+recordValueFields.filter(name=>name!=='type'||!record.template).map(name=>option(name,label(name))).join('')+(record.template?.fields??[]).map(f=>option('template:'+f.key,templateFieldLabel(f))).join('')+'</select></label><button type="button" class="button" data-action="record-value-edit">'+esc(text('edit'))+'</button></div>';
 }
 export function recordValuesUI(options){
- return recordValueEditor({...options,adapter:{route:'values',baseName:'selection',messages:'recordValues',conflictCodes:['ATTEMPT_CONFLICT'],target:value=>({field:value.field}),view:lifecycle=>recordValuesView(options,lifecycle)}});
+ const preparation=recordPreparationUI(options),ordinary=recordValueEditor({...options,adapter:{route:'values',baseName:'selection',messages:'recordValues',conflictCodes:['ATTEMPT_CONFLICT'],target:value=>({field:value.field}),view:lifecycle=>recordValuesView(options,lifecycle)}});
+ return {open:input=>attemptValueField(input.field)?.kind==='preparation'?preparation.open(input):ordinary.open(input),recover:header=>attemptValueField(header.draft.selection?.field)?.kind==='preparation'?preparation.recover(header):ordinary.recover(header),locked(){preparation.locked();ordinary.locked();}};
 }
 export function recordValuesView(options,lifecycle){
  const {esc,field}=options,option=(value,name,current)=>'<option value="'+esc(value)+'"'+(value===current?' selected':'')+'>'+esc(name)+'</option>',helpers={esc,field,option};

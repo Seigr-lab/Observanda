@@ -1,11 +1,13 @@
 // Immutable run-fact lookup is stored under the same notebook key as its
 // original. The descriptor pins the exact attempt tree, never a moving record.
 import {RetainedTableIndex,validTableRef} from './retained-table-index.js';
+import {preparationCollections} from './web/attempt-model.js';
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
 const groups=['preparations','events','assessments'],hash=v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v),natural=v=>Number.isSafeInteger(v)&&v>=0;
 const fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
-export const validAttemptIndex=v=>v&&Object.keys(v).sort().join()==='assessments,events,preparations,root,source,version'&&[1,2].includes(v.version)&&hash(v.source)&&validTableRef(v.root)&&groups.every(group=>natural(v[group]));
+export const validAttemptIndex=v=>v&&Object.keys(v).sort().join()==='assessments,events,preparations,root,source,version'&&[1,2,3].includes(v.version)&&hash(v.source)&&validTableRef(v.root)&&groups.every(group=>natural(v[group]));
+const nestedKey=(preparationId,collection,id)=>'nested:'+preparationId+':'+collection+':'+id;
 const criterionKey=position=>'criteria:'+String(position).padStart(16,'0');
 const currentPrefix=group=>'current:'+group+':',currentKey=row=>currentPrefix(row.group)+String(row.position).padStart(16,'0');
 const keys=row=>['id:'+row.id,...(row.supersedes?['correction:'+row.supersedes]:[]),...(row.hasCriteria?[criterionKey(row.position)]:[])];
@@ -21,6 +23,14 @@ export class RecordAttemptIndex{
   if(!row||Object.keys(row).sort().join()!=='group,hasCriteria,id,position,supersedes'||!groups.includes(row.group)||!natural(row.position)||row.position>=this.value[row.group]||![...keys(row),...(this.value.version>=2?[currentKey(row)]:[])].includes(entry.id))fail();
   if(entry.id===currentKey(row)&&await this.index.find(this.value,'correction:'+row.id))fail();
   const expected=await factRow(this.document,row.group,row.position);if(Object.keys(expected).some(key=>expected[key]!==row[key]))fail();return row;
+ }
+ async nested(preparationId,collection,id){
+  if(this.value.version<3)return null;if(!preparationCollections.includes(collection))throw new AppError('INVALID');
+  const entry=await this.index.find(this.value,nestedKey(preparationId,collection,id));if(!entry)return null;
+  const value=await this.document.tree.read(entry.revision),preparation=await this.fact(preparationId,'preparations');
+  if(!value||Object.keys(value).sort().join()!=='collection,id,position,preparationId'||value.preparationId!==preparationId||value.collection!==collection||value.id!==id||!natural(value.position)||!preparation)fail();
+  const path=['attempt','preparations',String(preparation.position),collection,String(value.position)],reference=await this.document.reference(path);if(!reference||(await this.document.tree.selected(reference,['id'])).value!==id)fail();
+  return {...value,reference};
  }
  async fact(id,group){const row=await this.row(await this.index.find(this.value,'id:'+id));return row&&(group===undefined||row.group===group)?row:null;}
  async correction(id){return this.row(await this.index.find(this.value,'correction:'+id));}
@@ -43,10 +53,13 @@ export class RecordAttemptIndex{
     const row=await factRow(this.document,group,item.index),revision=digest(serialize({type:'inline',value:row}));
     const expected=keys(row);if(this.value.version>=2&&!await this.index.find(this.value,'correction:'+row.id))expected.push(currentKey(row));
     for(const id of expected){if((await this.index.find(this.value,id))?.revision!==revision)fail();count++;}
+    if(this.value.version>=3&&group==='preparations')for(const collection of preparationCollections)for await(const nested of this.document.items(['attempt',group,String(item.index),collection],{signal})){
+     const id=(await this.document.tree.selected(nested.value,['id'])).value,found=await this.nested(row.id,collection,id);if(found?.position!==nested.index)fail();count++;
+    }
    }
   }
   if(count!==(this.value.root?.count??0))fail();
-  for await(const entry of this.index.entries(this.value)){signal?.throwIfAborted();await this.row(entry);}
+  for await(const entry of this.index.entries(this.value)){signal?.throwIfAborted();if(entry.id.startsWith('nested:')){if(this.value.version<3)fail();const [,id,collection,key]=entry.id.split(':');if(entry.id!==nestedKey(id,collection,key)||!await this.nested(id,collection,key))fail();}else await this.row(entry);}
  }
  static async open(document,{signal}={}){
   signal?.throwIfAborted();const value=document.attemptIndex;if(!value)return null;
@@ -64,14 +77,18 @@ export class RecordAttemptIndex{
   const appended=document.attemptAppendBase?.()??null;if(appended&&!validAttemptIndex(appended))fail();
   // Old version-one indexes remain readable. The first changed history builds
   // its counted current-fact keys once; subsequent appends extend that root.
-  const base=appended?.version===2?appended:null;
-  const value={version:2,source,root:base?.root??null,preparations:0,events:0,assessments:0},index=new RetainedTableIndex(document.blocks,{namespace:'index',allowSparseBranches:true});let pending=0;
+  const base=appended?.version===3?appended:null;
+  const value={version:3,source,root:base?.root??null,preparations:0,events:0,assessments:0},index=new RetainedTableIndex(document.blocks,{namespace:'index',allowSparseBranches:true});let pending=0;
   for(const group of groups){
    value[group]=await document.tree.arrayLength(document.root,['attempt',group]);
    const offset=base?.[group]??0;if(offset>value[group])fail();
    for await(const item of document.items(['attempt',group],{offset,signal})){
     const row=await factRow(document,group,item.index),revision=await document.tree.retain(row);
     for(const id of keys(row)){if(await index.find(value,id))fail();value.root=await index.change(value.root,id,revision);}
+    if(group==='preparations')for(const collection of preparationCollections)for await(const nested of document.items(['attempt',group,String(item.index),collection],{signal})){
+     const id=(await document.tree.selected(nested.value,['id'])).value,key=nestedKey(row.id,collection,id);if(await index.find(value,key))fail();
+     value.root=await index.change(value.root,key,await document.tree.retain({preparationId:row.id,collection,id,position:nested.index}));if(++pending===32){await index.flush(value.root);pending=0;}
+    }
     if(row.supersedes){
      const prior=await index.find(value,'id:'+row.supersedes);if(!prior)fail();const previous=await document.tree.read(prior.revision);
      if(previous.group!==group||previous.position>=row.position||(await index.find(value,currentKey(previous)))?.revision!==prior.revision)fail();

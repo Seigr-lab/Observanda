@@ -32,10 +32,11 @@ export class SelectedRecordDrafts{
    if(previous&&previous.draft.workspaceId!==command.workspaceId)throw new AppError('WORKSPACE_CHANGED');
    return this.retainedBase(store,command.workspaceId,command.recordId,selection,async({document,selected,baseRevision})=>{
     await spec.validateExtras?.(this.workspace,command.value,command.workspaceId,command.recordId);
+    await spec.requireFormat(store.db,selection,command.value);
     const changed=await selected.replace(document,command.value),descriptor={notebookId:document.blocks.scopeId,generation:document.blocks.generation,root:changed.root},extra=spec.extras?.(command.value)??{};
     if(previous?.draft.formatVersion===spec.version&&previous.draft.workspaceId===command.workspaceId&&previous.draft.base.recordId===command.recordId&&serialize(previous.draft[spec.name])===serialize(selection)&&serialize(previous.draft.document)===serialize(descriptor)&&serialize(spec.savedExtras?.(previous.draft)??{})===serialize(extra))return {revision:previous.revision,updatedAt:previous.draft.updatedAt};
     if((previous?.revision??null)!==command.expectedRevision)throw new AppError('DRAFT_CHANGED');
-    await spec.requireFormat(store.db,selection,command.value);await changed.blocks.flush();
+    await changed.blocks.flush();
     const draft={formatVersion:spec.version,id:command.id,workspaceId:command.workspaceId,updatedAt:new Date().toISOString(),count:1,titles:[(await document.field(['title'])).value.slice(0,160)],base:{recordId:command.recordId,revision:baseRevision},[spec.name]:selection,document:descriptor,...extra};
     const raw=serialize(draft);await this.workspace.writeMetadata('.observanda/drafts/'+command.id+'.json',raw);
     if(previous)await this.drafts.index.removeLocked(previous.draft);await this.drafts.index.putLocked({draft,revision:digest(raw)},digest(serialize({text:raw})));

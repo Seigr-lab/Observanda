@@ -68,7 +68,7 @@ test('selected run facts preserve methods, independent additions, immutable hist
 
 test('unfinished run facts on heavy records recover with a new key and prove their exact edit scope',async t=>{
  const f=await figureValueFixture({large:true});t.after(f.close);assert.ok(Buffer.byteLength(JSON.stringify(f.record))>2*1024*1024);forbid(t,f);
- const p=attemptDraft('preparation',emptyAttempt(),[]);p.inputs.push({...attemptDraftRow('inputs'),label:'Awaiting digest',hash:'partial'});
+ const p=attemptDraft('preparation',emptyAttempt(),[]);p.inputs=Array.from({length:65},()=>({...attemptDraftRow('inputs'),label:'Awaiting digest',hash:'partial'}));
  const base=await f.values.read(target(f,'preparation',p.id)),drafts=new RecordValueDrafts(f.workspace),command={id:randomUUID(),workspaceId:f.book.id,recordId:f.record.id,expectedRevision:null,selection:{field:base.field,revision:base.revision,storageRevision:base.storageRevision},value:{value:p}};
  const receipt=await drafts.write(command),lookup={workspaceId:f.book.id,id:command.id,expectedRevision:receipt.revision};assert.deepEqual(await drafts.write(command),receipt);assert.deepEqual((await drafts.read(lookup)).value,command.value);await assert.rejects(save(f,base,p),{code:'INVALID'});
  const retained=await new ResearchDrafts(f.workspace).read(command.id,{header:true});await f.workspace.withLock(()=>f.workspace.catalogue(store=>withDraftDocument(store,retained.draft,async doc=>{
@@ -77,7 +77,7 @@ test('unfinished run facts on heavy records recover with a new key and prove the
   }
  })));
  const access=await createAccess('','synthetic attempt recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));const root=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'recovered')),access,vault,f.vault),workspace=new Workspace(root,vault),recovered=await new RecordValueDrafts(workspace).read(lookup);
- assert.deepEqual(recovered.value,command.value);recovered.value.value.applicability='Later acquisition';recovered.value.value.inputs[0].hash='a'.repeat(64);
+ assert.deepEqual(recovered.value,command.value);recovered.value.value.applicability='Later acquisition';for(const input of recovered.value.value.inputs)input.hash='a'.repeat(64);
  await new RecordValues(workspace).save({...target(f,'preparation',p.id),expectedRevision:base.revision,value:recovered.value});await workspace.catalogue(store=>store.verifySnapshot(undefined,f.book.id));assert.equal(await read(f,['attempt']),undefined);
 });
 

@@ -21,7 +21,7 @@ export function recordAttemptView({state,api,esc,field},lifecycle){
  const valid=s=>s&&current===s&&s.context===lifecycle.context()&&s.dialog?.open&&state.book?.id===s.base.workspaceId&&!state.access?.locked;
  function guard(s){if(!valid(s))throw Error(text('changed'));}
  function stopPicker(){picker?.stop();materials?.dispose();picker=materials=null;choosing=false;lifecycle.refresh();}
- const context=(base,{prior=null,preparationId=null,offset=0}={},signal)=>api('/api/research/records/values/attempt-context',{workspaceId:base.workspaceId,recordId:base.recordId,storageRevision:base.storageRevision,field:base.field,prior,preparationId,offset},{adopt:false,signal});
+ const context=(base,{prior=null,preparationId=null,offset=0,criterionId=null,criterionOffset=0}={},signal)=>api('/api/research/records/values/attempt-context',{workspaceId:base.workspaceId,recordId:base.recordId,storageRevision:base.storageRevision,field:base.field,prior,preparationId,offset,criterionId,criterionOffset},{adopt:false,signal});
  const contextButton=(label,name,data='',disabled=false)=>'<button type="button" class="button" data-attempt-form="'+name+'" '+data+(disabled?' disabled':'')+'>'+esc(label)+'</button>';
  function preparationControl(){
   const s=current,item=s.value.value,definition=s.base.definition,selected=definition.attempt.preparations.find(p=>p.id===item.preparationId),page=definition.preparations;
@@ -32,7 +32,8 @@ export function recordAttemptView({state,api,esc,field},lifecycle){
   if(preparationOpen)html+='<div data-attempt-preparation-choices><p role="status">'+esc(text('preparationRange',{first:page.total?page.offset+1:0,last:page.offset+page.items.length,total:page.total}))+'</p>'+page.items.map(p=>'<section><p>'+esc(label(p))+'</p>'+contextButton(text('usePreparation'),'preparation-select','data-id="'+p.id+'"',s.kind==='assessment'&&!p.hasCriteria)+'</section>').join('')+'<div class="inline-actions">'+contextButton(text('previousPreparations'),'preparation-page','data-offset="'+Math.max(0,page.offset-4)+'"',page.offset===0)+contextButton(text('nextPreparations'),'preparation-page','data-offset="'+(page.next??page.offset)+'"',page.next===null)+'</div>'+(s.kind==='event'?contextButton(text('noPreparation'),'preparation-clear'):'')+'</div>';
   return html+'</fieldset>';
  }
- function markup(){const s=current;return s.value.value?'<div class="attempt-form">'+attemptForm({kind:s.kind,draft:s.value.value,attempt:s.base.definition.attempt,esc,message,actions:false,preparationControl:s.kind==='preparation'?null:preparationControl()})+'</div>':'<p>'+esc(t('recordValues','attemptAbsent'))+'</p>';}
+ function criterionControl(){const page=current.base.definition.criteria;if(!page||current.value.value.supersedes)return '';return '<p>'+esc(text('nestedRange',{first:page.total?page.offset+1:0,last:page.offset+page.items.length,total:page.total}))+'</p><div class="inline-actions">'+contextButton(text('previousCriteria'),'criterion-page','data-offset="'+Math.max(0,page.offset-4)+'"',page.offset===0)+contextButton(text('nextCriteria'),'criterion-page','data-offset="'+(page.next??page.offset)+'"',page.next===null)+'</div>'; }
+ function markup(){const s=current;return s.value.value?'<div class="attempt-form">'+attemptForm({kind:s.kind,draft:s.value.value,attempt:s.base.definition.attempt,esc,message,actions:false,criterionControl:s.kind==='assessment'?criterionControl():'',preparationControl:s.kind==='preparation'?null:preparationControl()})+'</div>':'<p>'+esc(t('recordValues','attemptAbsent'))+'</p>';}
  function redraw(){stopPicker();current.dialog.querySelector('[data-writing-fields]').innerHTML=markup();}
  function changed(){current.changed();}
  function read(){const form=current?.dialog?.querySelector('#attempt-form');if(form){readAttemptForm(form,current.value.value);if(current.kind==='event'&&!current.value.value.preparationId)current.value.value.preparationId=null;}}
@@ -41,11 +42,11 @@ export function recordAttemptView({state,api,esc,field},lifecycle){
   const s=current;guard(s);if(choosing||contextLoading)return;read();const item=s.value.value,name=control.dataset.attemptForm;
   if(name==='preparation-toggle'){preparationOpen=!preparationOpen;redraw();return;}
   if(name==='preparation-clear'){item.preparationId=null;preparationOpen=false;changed();redraw();return;}
-  if(name==='preparation-page'||name==='preparation-select'){
+  if(name==='preparation-page'||name==='preparation-select'||name==='criterion-page'){
    contextLoading=true;request?.abort();const controller=new AbortController();request=controller;
    s.dialog.querySelector('#attempt-form').querySelectorAll('button,input,textarea,select').forEach(el=>el.disabled=true);lifecycle.refresh();
    try{
-    const definition=await context(s.base,{prior:item.supersedes,preparationId:name==='preparation-select'?control.dataset.id:item.preparationId,offset:name==='preparation-page'?Number(control.dataset.offset):s.base.definition.preparations.offset},controller.signal);
+    const definition=await context(s.base,{prior:item.supersedes,preparationId:name==='preparation-select'?control.dataset.id:item.preparationId,offset:name==='preparation-page'?Number(control.dataset.offset):s.base.definition.preparations.offset,criterionId:name==='preparation-select'?null:item.criterionId??null,criterionOffset:name==='criterion-page'?Number(control.dataset.offset):0},controller.signal);
     guard(s);s.base.definition=definition;
     if(name==='preparation-select'){item.preparationId=control.dataset.id;if(s.kind==='assessment')item.criterionId=definition.attempt.preparations.find(p=>p.id===item.preparationId)?.criteria[0]?.id??'';preparationOpen=false;changed();}
    }finally{if(current===s&&request===controller){contextLoading=false;request=null;redraw();}}
@@ -80,7 +81,7 @@ export function recordAttemptView({state,api,esc,field},lifecycle){
   }catch(error){if(valid(s)){redraw();feedback(s,error);}}
  }
  return {
-  async prepare(base,value,input){base.definition=await context(base,{prior:input.prior||value.value?.supersedes||null,preparationId:value.value?.preparationId||null});},
+  async prepare(base,value,input){base.definition=await context(base,{prior:input.prior||value.value?.supersedes||null,preparationId:value.value?.preparationId||null,criterionId:value.value?.criterionId||null});},
   initialize(base,value,input,changed){
    if(value.value!==null)return;const {kind,group,id}=attemptValueField(base.field),attempt=base.definition.attempt;
    const prior=kind==='preparation'?attempt.preparations.at(-1):attempt[group].find(item=>item.id===input.prior);

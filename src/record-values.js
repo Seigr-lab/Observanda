@@ -82,7 +82,7 @@ export class RecordValues{
   });
  }
  async attemptContext(command,{signal}={}){
-  if(!exact(command,['workspaceId','recordId','storageRevision','field','prior','preparationId','offset'])||!target(command)||!revisionId(command.storageRevision)||!validAttemptContext(command))throw new AppError('INVALID');
+  if(!exact(command,['workspaceId','recordId','storageRevision','field','prior','preparationId','offset',...(Object.hasOwn(command,'criterionId')?['criterionId']:[]),...(Object.hasOwn(command,'criterionOffset')?['criterionOffset']:[])])||!target(command)||!revisionId(command.storageRevision)||!validAttemptContext(command))throw new AppError('INVALID');
   return this.workspace.catalogue(async store=>{
    await this.select(store,command);
    const history=store.historyIndex(command.recordId);await history.lookup(await history.head(),'version',command.storageRevision);

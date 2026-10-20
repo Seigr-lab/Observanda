@@ -1,3 +1,4 @@
+import {preparationHeader,preparationPage,preparationRowById} from './record-preparation-document.js';
 // A comparison reads its three narrative fields and independently paged
 // methods/current facts. It never reconstructs the selected record bodies.
 import {AppError} from './errors.js';
@@ -30,17 +31,17 @@ async function read(document,index,windows,signal){
  }
  const methodIndex=await RecordMethodIndex.open(document,{signal}),methods=methodIndex?await methodIndex.window({offset:windows.methods??0,limit:RUN_DETAIL_PAGE_SIZE,signal}):await windowOf(document,['relations'],windows.methods??0,async item=>(await document.tree.selected(item.value,['role'])).value==='uses-method',async item=>({label:(await document.tree.selected(item.value,['label'])).value,revision:(await document.tree.selected(item.value,['target','revision'])).value}),{signal});
  result.methods=methods.values;result.windows.methods=methods.page;
- for(const group of ['events','assessments'])result.windows[group]={offset:0,total:0,count:0};
+ for(const group of ['conditions','events','assessments'])result.windows[group]={offset:0,total:0,count:0};
  if(!index)return result;
- const total=index.value.preparations,preparation=total?(await document.field(['attempt','preparations',String(total-1)],{signal})).value:null;
- result.attempt={preparationId:preparation?.id??null,preparationNumber:total,applicability:preparation?.applicability??'',conditions:preparation?.conditions.map(({id,name,value,unit,basis})=>({id,name,value,unit,basis}))??[],events:[],assessments:[]};
+ const total=index.value.preparations,reference=total?await document.reference(['attempt','preparations',String(total-1)],{signal}):null,preparation=reference?await preparationHeader(document,reference,{signal}):null,conditions=reference?await preparationPage(document,reference,'conditions',{offset:windows.conditions??0,signal}):{items:[],offset:0,total:0};result.windows.conditions={offset:conditions.offset,total:conditions.total,count:conditions.items.length};
+ result.attempt={preparationId:preparation?.id??null,preparationNumber:total,applicability:preparation?.applicability??'',conditions:conditions.items.map(({value:{id,name,value,unit,basis}})=>({id,name,value,unit,basis})),events:[],assessments:[]};
  for(const group of ['events','assessments']){
   const current=async item=>!await index.correction((await document.tree.selected(item.value,['id'])).value);
   const project=async item=>{
    const value=await document.tree.read(item.value);
    if(group==='events'){const {kind,label,extent,context}=value;return {kind,label,extent,context};}
    const row=await index.fact(value.preparationId,'preparations');if(!row)fail();
-   const p=(await document.field(['attempt','preparations',String(row.position)],{signal})).value,c=p.criteria.find(c=>c.id===value.criterionId);if(!c)fail();
+   const found=await index.nested(value.preparationId,'criteria',value.criterionId),c=found?await document.tree.read(found.reference):(await preparationRowById(document,await document.reference(['attempt','preparations',String(row.position)],{signal}),'criteria',value.criterionId,{signal}))?.value;if(!c)fail();
    return {criterion:c.label,preparationId:value.preparationId,preparationNumber:row.position+1,expected:c.expected,comparator:c.comparator,scope:c.scope,outcome:value.outcome,domainOutcome:value.domainOutcome,observed:value.observed,denominator:value.denominator};
   };
   if(index.value.version>=2){

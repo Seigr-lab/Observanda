@@ -21,7 +21,7 @@ export async function replaceAttemptValue(document,value,selected){
 // and relationships stay as references; preparation methods are linked atomically.
 export async function prepareAttemptValue(workspace,store,{command,selected,original,row,snapshot}){
  if(selected.value.value!==null)throw new AppError('ATTEMPT_IMMUTABLE');
- const item=command.value.value,group=selected.fact.group,context=await attemptValueContext(original,command.field,{prior:item.supersedes,preparationId:item.preparationId??null});
+ const item=command.value.value,group=selected.fact.group,context=await attemptValueContext(original,command.field,{prior:item.supersedes,preparationId:item.preparationId??null,criterionId:item.criterionId??null});
  if(group==='preparations'&&context.latestPreparationId!==item.supersedes||item.supersedes&&context.correctionId!==item.supersedes)throw new AppError('ATTEMPT_CONFLICT');
  if(!validAttemptFact(selected.fact.kind,item,{preparations:context.attempt.preparations}))throw new AppError('INVALID');
  const materials=new ResearchMaterials(workspace);

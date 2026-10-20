@@ -56,7 +56,7 @@ export function bookReadingEntry(value,esc,options={}){
  let selectedOptions={};
  if(value.readingProjection){
   const inlineRecord={...record,figures:[...record.figures,...value.inline?.figures??[]],attachments:[...record.attachments,...value.inline?.attachments??[]]},figureResults=figure=>figureResultLinks(figure,value.resultFigures,esc,{action:'record-list-content-results-figure'});
-  for(const name of Object.keys(value.collections))if(!['relations','preparations','events','assessments','results'].includes(name)){
+  for(const name of Object.keys(value.collections))if(!name.startsWith('preparation:')&&!['relations','preparations','events','assessments','results'].includes(name)){
    const key=name==='fields'?'template':name;fieldsHtml[key]=value.collections[name].total?controls(name)+recordRevisionField(key,record,esc,{assetUrl,figureResults}):'';
   }
   fieldsHtml.attempt=attemptView(record.attempt,esc,{reference,window:value.attemptWindow,navigation:controls});

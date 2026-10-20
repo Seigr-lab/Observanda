@@ -1,0 +1,32 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {projectTreeFixture} from './project-tree-fixture.js';
+import {preparationCheckpoint} from './record-preparation-fixture.js';
+import {LabBookStorage} from '../src/lab-book-storage.js';
+import {RecordValues} from '../src/record-values.js';
+import {ResearchDrafts} from '../src/research-drafts.js';
+import {RecordValueDrafts} from '../src/record-value-drafts.js';
+import {RecordPreparationDrafts} from '../src/record-preparation-drafts.js';
+import {RecordOwnerTransfer} from '../src/record-owner-transfer.js';
+import {verifyResearchDrafts} from '../src/research-draft-verification.js';
+import {RecordBlockStore} from '../src/record-block-store.js';
+import {AppError} from '../src/errors.js';
+
+test('a nested preparation checkpoint resumes owner transfer with its exact keyed rows and remains independently editable',{timeout:180000},async t=>{
+ const f=await projectTreeFixture(t),[from,to]=f.books,source=new LabBookStorage(from.root,from.labBookId,from.key),target=new LabBookStorage(to.root,to.labBookId,to.key),record=from.before.book.entries[0];
+ const checkpoint=await preparationCheckpoint({workspace:source,book:{id:from.namespaceId},record,values:new RecordValues(source)},{count:8});
+ for(let offset=8;offset<70;offset+=20)await checkpoint.change(Array.from({length:Math.min(20,70-offset)},(_,i)=>({type:'append',collection:'observations',value:{id:randomUUID(),label:'Retained observation '+(offset+i)}})));
+ const raw=await source.readMetadata('.observanda/drafts/'+checkpoint.id+'.json',32768),sourceOwner={projectId:from.projectId,labBookId:from.labBookId,workspaceId:from.namespaceId},targetOwner={projectId:to.projectId,labBookId:to.labBookId,workspaceId:to.namespaceId},transfer=new RecordOwnerTransfer(source,target,{registry:f.registry,sourceOwner,targetOwner}),command={id:randomUUID(),workspaceId:from.namespaceId,recordId:record.id,sourceNotebookId:from.labBookId,expectedStorageRevision:checkpoint.command.selection.storageRevision,targetWorkspaceId:to.namespaceId,targetNotebookId:to.labBookId},status={workspaceId:from.namespaceId,recordId:record.id,id:command.id};
+ await assert.rejects(transfer.start(command,{checkpoint:async stage=>{if(stage==='verified')throw Error('Interrupt before activation');}}),/Interrupt before activation/);
+ assert.equal((await transfer.status(status)).phase,'verified');assert.equal(await new ResearchDrafts(target).read(checkpoint.id,{header:true}),null);
+ assert.equal((await transfer.resume(status)).phase,'complete');
+ const reopened=new LabBookStorage(to.root,to.labBookId,to.key),retained=await new ResearchDrafts(reopened).read(checkpoint.id,{header:true});assert.deepEqual(retained.draft.preparationEdit,JSON.parse(raw).preparationEdit);
+ const recovered=await new RecordValueDrafts(reopened).read({workspaceId:to.namespaceId,id:checkpoint.id,expectedRevision:retained.revision});assert.equal(recovered.definition.paged,true);
+ const owner=new RecordPreparationDrafts(reopened),selected={workspaceId:to.namespaceId,recordId:record.id,selection:retained.draft.selection,draft:{id:checkpoint.id,revision:retained.revision}},page=await owner.window({...selected,collection:'observations',offset:68});assert.deepEqual(page.items.map(row=>row.value.label),['Retained observation 68','Retained observation 69']);
+ await reopened.catalogue(store=>verifyResearchDrafts(store));
+ const read=RecordBlockStore.prototype.read;t.mock.method(RecordBlockStore.prototype,'read',function(kind,revision){if(kind==='index'&&revision===retained.draft.preparationEdit.identities.root.hash)throw new AppError('CATALOGUE_DAMAGED');return read.call(this,kind,revision);});
+ await assert.rejects(new RecordValueDrafts(reopened).read({workspaceId:to.namespaceId,id:checkpoint.id,expectedRevision:retained.revision}),{code:'CATALOGUE_DAMAGED'});RecordBlockStore.prototype.read.mock.restore();
+ const row=page.items[1],changed=await owner.change({...selected,id:checkpoint.id,commandId:randomUUID(),operations:[{type:'replace',collection:'observations',position:row.position,id:row.value.id,revision:row.revision,value:{...row.value,label:'Continued after transfer'}}]});
+ const saved=await owner.save({...selected,draft:changed.draft});assert.equal(saved.saved,true);await reopened.catalogue(store=>store.verifySnapshot(undefined,to.namespaceId));
+});

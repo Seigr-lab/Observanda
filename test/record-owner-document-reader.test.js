@@ -1,3 +1,5 @@
+import {attemptFixture} from './fixtures/attempts.js';
+import {catalogueFormat,catalogueRequiresNestedAttemptCollections} from '../src/catalogue-format.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
@@ -7,12 +9,13 @@ import {RecordDocument} from '../src/record-document.js';
 import {copyRecordOwnerDocument,withRecordOwnerDocument} from '../src/record-owner-document.js';
 
 test('document transfer reuses one reader across committed batches and closes it on interruption',{timeout:90000},async t=>{
- const source=await intakeFixture(t),target=await intakeFixture(t),record={...source.record,sections:Array.from({length:160},(_,i)=>({id:randomUUID(),title:'Section '+i,body:'Observation '+i}))};
+ const source=await intakeFixture(t),target=await intakeFixture(t),record={...source.record,attempt:attemptFixture(),sections:Array.from({length:160},(_,i)=>({id:randomUUID(),title:'Section '+i,body:'Observation '+i}))};
  const scope=source.record.notebookId,destination=target.record.notebookId;
  let root;
  await source.ws.withLock(()=>source.ws.catalogue(async store=>{
   const key=await store.scopeKey(scope,1,{create:true});try{const blocks=new RecordBlockStore(store,scope,1,key);root=await blocks.tree().retain(record);await blocks.flush();}finally{key.fill(0);}
  }));
+ assert.equal(await target.ws.catalogue(async store=>catalogueRequiresNestedAttemptCollections(await catalogueFormat(store.db))),false);
  let writing=false,readers=0,closed=0;
  const open=target.ws.openCatalogue.bind(target.ws);
  target.ws.openCatalogue=async()=>{const db=await open();if(!writing){readers++;const close=db.close.bind(db);db.close=async()=>{closed++;return close();};}return db;};
@@ -20,8 +23,9 @@ test('document transfer reuses one reader across committed batches and closes it
  const copy=async options=>source.ws.catalogue(async store=>{
   const key=await store.scopeKey(scope,1);try{return await copyRecordOwnerDocument(new RecordDocument(new RecordBlockStore(store,scope,1,key),root),target.ws,{write,notebookId:destination,transform:doc=>doc.replace(['notebookId'],destination),...options});}finally{key.fill(0);}
  });
- const descriptor=await copy();assert.equal(readers,1);assert.equal(closed,1);
+ const descriptor=await copy();assert.equal(descriptor.attemptIndex.version,3);assert.equal(readers,1);assert.equal(closed,1);
  target.ws.openCatalogue=open;
+ assert.equal(await target.ws.catalogue(async store=>catalogueRequiresNestedAttemptCollections(await catalogueFormat(store.db))),true);
  await target.ws.catalogue(store=>withRecordOwnerDocument(store,descriptor,async doc=>assert.deepEqual(await doc.tree.read(doc.root),{...record,notebookId:destination})));
  target.ws.openCatalogue=async()=>{const db=await open();if(!writing){readers++;const close=db.close.bind(db);db.close=async()=>{closed++;return close();};}return db;};
  const abort=new AbortController(),reason=new Error('Interrupted document copy');let writes=0;

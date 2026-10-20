@@ -1,3 +1,5 @@
+import {hasNestedAttemptContinuations} from './web/attempt-model.js';
+import {catalogueFormat,catalogueRequiresNestedAttemptCollections} from './catalogue-format.js';
 import {DraftTemplateComparison} from './record-draft-template.js';
 // A backup must prove both checkpoint representations agree. Authentication of
 // individual envelopes alone cannot establish that their selected fields match.
@@ -19,6 +21,7 @@ export async function verifyRetainedDraft(store,draft,{signal}={}){
   const fields=new Set();let collection=null,count=0,template=null;
   const close=async()=>{if(document&&collection!==null&&await document.tree.arrayLength(document.root,[collection])!==count)fail();collection=null;count=0;};
   const inspected=await inspectTransferredDraft(store.workspace,draft.id,draft.content,{signal,ownership:true,part:async(part,{templateScratch}={})=>{
+   if(part.kind==='field'&&part.name==='attempt'&&hasNestedAttemptContinuations(part.value)&&!catalogueRequiresNestedAttemptCollections(await catalogueFormat(store.db)))fail();
    if(part.kind!=='item')await close();
    if(part.kind==='change')return;
    if(part.kind==='template'){

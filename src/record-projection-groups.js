@@ -31,7 +31,8 @@ export async function groupRecordProjection(document,previous,{path,groups,previ
    if(position<total){
     if(group.collection){
      value={};const ref=await document.reference([...group.collection,String(position)],{signal});
-     for(const name of group.fields){const item=await tree.selected(ref,[name]);if(item.found)Object.defineProperty(value,name,{value:item.value,enumerable:true});}
+     if(group.read)value=await group.read(document,{reference:ref,position,signal});
+     else for(const name of group.fields){const item=await tree.selected(ref,[name]);if(item.found)Object.defineProperty(value,name,{value:item.value,enumerable:true});}
     }else value=group.read?await group.read(document,{signal}):(await document.field(group.field,{signal})).value;
    }
    let sourceRank=before?await tree.index.rank({root:before},prefix):0,output=0,old=before?await tree.index.entryAt({root:before},sourceRank):null;
