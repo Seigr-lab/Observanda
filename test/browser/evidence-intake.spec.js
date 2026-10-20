@@ -75,7 +75,7 @@ test('file sets resume after lost upload replies and reload, then attach togethe
   await dialog.getByLabel('Provenance / acquisition notes').fill('Private path E:\\private\\recordings');
   await dialog.getByLabel('Original files',{exact:true}).setInputFiles(files);
   let lost=false;
-  await page.route('**/api/research/materials/chunk/*/*',async route=>{
+  await page.route('**/api/research/materials/chunks',async route=>{
    if(!lost){lost=true;await route.fetch();await route.abort('failed');}else await route.continue();
   });
   await dialog.getByRole('button',{name:'Upload file set',exact:true}).click();
@@ -117,27 +117,30 @@ test('single originals resume after a lost chunk reply, reject a changed prefix,
  test.setTimeout(120000);
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-original-resume-')),f=await encryptedFixture(directory,sampleNotebook()),materials=new ResearchMaterials(f.workspace),owner=(await f.workspace.read()).book.entries[0].id;
  const app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')});
- const buffer=Buffer.alloc(2*1024*1024+47,0x71),file={name:'capture.raw',mimeType:'application/octet-stream',buffer},sizes=[];
+ const buffer=Buffer.alloc(9*1024*1024+47,0x71),file={name:'capture.raw',mimeType:'application/octet-stream',buffer},sizes=[];
  try{
   await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,owner);
   await page.getByRole('button',{name:'Open evidence & analysis'}).click();const dialog=page.locator('#dialog');
   await dialog.getByRole('button',{name:'Import original file',exact:true}).click();
   await dialog.getByLabel('Original file',{exact:true}).setInputFiles(file);
   let lost=false;
-  await page.route('**/api/research/materials/chunk/*/*',async route=>{
-   if(!lost){lost=true;const response=await route.fetch();const json=await response.json();sizes.push(JSON.stringify(json).length);expect(json.chunks).toBeUndefined();await route.abort('failed');}
+  await page.route('**/api/research/materials/chunks',async route=>{
+   if(!lost){lost=true;const response=await route.fetch();const json=await response.json();sizes.push(JSON.stringify(json).length);expect(json.sessions).toHaveLength(8);expect(json.sessions.every(session=>session.chunks===undefined)).toBe(true);await route.abort('failed');}
    else await route.continue();
   });
   await dialog.getByRole('button',{name:'Import original',exact:true}).click();
   await expect(dialog.locator('#material-progress')).toContainText('fetch');
-  const pending=(await materials.overview(owner)).imports[0];expect(pending.receivedChunks).toBe(1);expect(pending.receivedBytes).toBe(1024*1024);expect(sizes[0]).toBeLessThan(1024);
+  const pending=(await materials.overview(owner)).imports[0];expect(pending.receivedChunks).toBe(8);expect(pending.receivedBytes).toBe(8*1024*1024);expect(sizes[0]).toBeLessThan(8192);
+  const changed=Buffer.from(buffer);changed[0]^=1;
+  await dialog.getByLabel('Original file',{exact:true}).setInputFiles({...file,buffer:changed});
+  await dialog.getByRole('button',{name:'Import original',exact:true}).click();
+  await expect(dialog.locator('#material-progress')).toContainText('differs from the interrupted original');
   await page.reload();await page.getByRole('button',{name:'Open evidence & analysis'}).click();
   await dialog.getByRole('button',{name:'Resume upload',exact:true}).click();
-  const changed=Buffer.from(buffer);changed[0]^=1;
   await dialog.getByLabel('Select the same original file').setInputFiles({...file,buffer:changed});
   await dialog.getByRole('button',{name:'Resume import',exact:true}).click();
   await expect(dialog.locator('#material-progress')).toContainText('differs from the interrupted original');
-  expect(materials.uploads.count(await materials.importState(pending.id))).toBe(1);
+  expect(materials.uploads.count(await materials.importState(pending.id))).toBe(8);
   await dialog.getByLabel('Select the same original file').setInputFiles(file);
   await dialog.getByRole('button',{name:'Resume import',exact:true}).click();
   await expect(dialog.getByRole('heading',{name:'Evidence & analysis',exact:true})).toBeVisible({timeout:30000});

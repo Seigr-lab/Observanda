@@ -1,3 +1,4 @@
+import {uploadEvidenceChunks} from './evidence-upload-batch.js';
 import {evidenceIntakeProgress} from './evidence-intake-progress.js';
 import {updateText,updateProperty} from './progress-dom.js';
 import {FILE_CHUNK} from './evidence-fingerprint.js';
@@ -79,25 +80,28 @@ export function evidenceIntakeUI({route=value=>value,call,frame,esc,field,guard,
     document.getElementById('material-form')?.setAttribute('data-no-draft','');
    }
    if(batch.registered<batch.count)batch=await registerFileManifest(scopedCall,batch,source,{signal,checking:()=>status(tr('saving'))});
-   const choices=selectedFiles(scopedCall,source,selected,{signal})[Symbol.asyncIterator]();let chosen=await choices.next(),at=0;
-   do{
-    const saved=await scopedCall('intake-page',{id:batch.id,offset:at},{signal});
-    for(const [i,f] of saved.items.entries()){
-     signal.throwIfAborted();const compared=chosen.done?1:compareEvidenceFiles(chosen.value,f);
-     if(compared<0)throw Error(tr('differentFiles'));
-     const file=compared===0?chosen.value.file:null;
-     if(file)chosen=await choices.next();
-     if(f.reused||f.received===f.size||!file)continue; // Partial reselection can resume a saved manifest.
-     let session=await scopedCall('intake-session',{id:f.id},{signal});
-     for(let chunk=session.receivedChunks;chunk<Math.ceil(file.size/FILE_CHUNK);chunk++){
-      signal.throwIfAborted();guard();status(tr('uploading',{name:file.name,number:at+i+1,count:batch.count}));
-      const response=await fetch(route('/api/research/materials/chunk/'+f.id+'/'+chunk),{method:'POST',headers:{'Content-Type':'application/octet-stream','X-Observanda-Workspace':context()},body:file.slice(chunk*FILE_CHUNK,(chunk+1)*FILE_CHUNK),signal});
-      if(!response.ok)throw await response.json();session=await response.json();guard();meter(Math.min(file.size,(chunk+1)*FILE_CHUNK),file.size);
+   async function* chunks(){
+    const choices=selectedFiles(scopedCall,source,selected,{signal})[Symbol.asyncIterator]();let chosen=await choices.next(),at=0;
+    try{do{
+     const saved=await scopedCall('intake-page',{id:batch.id,offset:at},{signal});
+     for(const [i,f] of saved.items.entries()){
+      signal.throwIfAborted();const compared=chosen.done?1:compareEvidenceFiles(chosen.value,f);
+      if(compared<0)throw Error(tr('differentFiles'));
+      const file=compared===0?chosen.value.file:null;
+      if(file)chosen=await choices.next();
+      if(f.reused||f.received===f.size||!file)continue;
+      // The page already authenticates the received byte checkpoint. The
+      // chunk writer rechecks that exact index before accepting each frame.
+      for(let index=f.received/FILE_CHUNK;index<Math.ceil(file.size/FILE_CHUNK);index++){
+       signal.throwIfAborted();guard();status(tr('uploading',{name:file.name,number:at+i+1,count:batch.count}));
+       yield {id:f.id,index,blob:file.slice(index*FILE_CHUNK,(index+1)*FILE_CHUNK),total:file.size};
+      }
      }
-    }
-    at=saved.next;
-   }while(at!==null);
-   if(!chosen.done)throw Error(tr('differentFiles'));
+     at=saved.next;
+    }while(at!==null);if(!chosen.done)throw Error(tr('differentFiles'));}
+    finally{await choices.return?.();}
+   }
+   await uploadEvidenceChunks(chunks(),{route,context:context(),signal,check:guard,uploaded:(frame,session)=>meter(session.receivedBytes,frame.total)});
   }catch(error){failure=error.name==='AbortError'?tr('paused'):(error.message??tr('interrupted'));}
   finally{
    controller=null;

@@ -1,3 +1,4 @@
+import {uploadEvidenceChunks} from './evidence-upload-batch.js';
 import {matchingUploadPrefix} from './evidence-fingerprint.js';
 import {t} from './i18n/index.js';
 export const uploadText=(key,args)=>t('evidenceUpload',key,args);
@@ -27,17 +28,14 @@ export function evidenceUploadUI({route=value=>value,call,frame,esc,field,button
   const start=document.querySelector('[data-action="material-upload"]'),pause=document.querySelector('[data-action="material-pause"]');
   start.disabled=true;pause.disabled=false;
   try{
-   if(!session)session=await call('start',{recordId:currentOwner,name:file.name,size:file.size,provenance:document.getElementById('material-provenance').value,derivesFrom:sources()},{signal});
+   if(session)session=await call('upload-session',{id:session.id},{signal});
+   else session=await call('start',{recordId:currentOwner,name:file.name,size:file.size,provenance:document.getElementById('material-provenance').value,derivesFrom:sources()},{signal});
    live();progress(uploadText('checking'));
    if(!await matchingUploadPrefix(file,session,{signal,progress:n=>meter(file.size?n/file.size:1)}))throw Error(uploadText('different'));
-   for(let index=session.receivedChunks;index<Math.ceil(file.size/session.chunkSize);index++){
-    signal.throwIfAborted();live();
-    const response=await fetch(route('/api/research/materials/chunk/'+session.id+'/'+index),{method:'POST',
-     headers:{'Content-Type':'application/octet-stream','X-Observanda-Workspace':currentContext},
-     body:file.slice(index*session.chunkSize,(index+1)*session.chunkSize),signal});
-    if(!response.ok)throw await response.json();session=await response.json();live();
-    progress(uploadText('received',{received:session.receivedBytes.toLocaleString(),total:file.size.toLocaleString()}));meter(file.size?session.receivedBytes/file.size:1);
-   }
+   async function* chunks(){for(let index=session.receivedChunks;index<Math.ceil(file.size/session.chunkSize);index++)yield {id:session.id,index,blob:file.slice(index*session.chunkSize,(index+1)*session.chunkSize)};}
+   await uploadEvidenceChunks(chunks(),{route,context:currentContext,signal,check:live,uploaded:(_chunk,saved)=>{
+    session=saved;progress(uploadText('received',{received:session.receivedBytes.toLocaleString(),total:file.size.toLocaleString()}));meter(file.size?session.receivedBytes/file.size:1);
+   }});
    live();progress(uploadText('queueing'));const result=await call('finish',{id:session.id},{signal});live();await watchJob(result.job);
   }catch(error){
    progress(error.name==='AbortError'?uploadText('paused'):error.message??uploadText('interrupted'));

@@ -1,3 +1,4 @@
+import {appendMaterialUploadBatch} from './material-upload-batch.js';
 import {comparisonDependencyReview} from './comparison-dependency-review.js';
 import {withComparisonInputs} from './comparison-request-inputs.js';
 import {retryComparison} from './comparison-job-admission.js';
@@ -16,13 +17,14 @@ import {jobSummary} from './jobs.js';
 import {MAX_BYTES} from './model.js';
 import {researchId} from './web/research-reference.js';
 import {AppError} from './errors.js';
-const reads=new Set(['source-owners','source-items','source-resolve','overview','list','references','reference-addresses','correction-preview','correction-status','correction-history','association-read','association-list','figure-sources','selection-page','intakes','intake-selection-page','intake-page','intake-session','drafts','draft-read','draft-references','current','schema','measurement-inspect','measurement-seed','current-record','record','read','analysis-status','job','retained-table','calculation-schema','dataset-preview','dataset-jobs','rows','comparison-page','verify','download']);
+const reads=new Set(['source-owners','source-items','source-resolve','overview','list','references','reference-addresses','correction-preview','correction-status','correction-history','association-read','association-list','figure-sources','selection-page','intakes','intake-selection-page','intake-page','intake-session','upload-session','drafts','draft-read','draft-references','current','schema','measurement-inspect','measurement-seed','current-record','record','read','analysis-status','job','retained-table','calculation-schema','dataset-preview','dataset-jobs','rows','comparison-page','verify','download']);
 const writes=new Set(['associate-original','correction-apply','association-start','association-step','association-cancel','selection-change','intake-start','intake-selection-append','intake-append','intake-finish','draft-start','draft-append','draft-finish','draft-cancel','measurement-save','pin','start','finish','cancel-job','retry-job','dataset','collection','analysis','comparison','reuse','plot']);
 const accepted=new Set(['intake-finish','finish','dataset','comparison','plot']);
 export function materialRequest(route){
  const prefix='/api/research/materials/';if(!route.startsWith(prefix))return null;const operation=route.slice(prefix.length);
  const original=/^original\/([a-f0-9-]{36})\/([a-f0-9]{64})$/.exec(operation);
  if(original&&researchId(original[1]))return {material:'download',method:'GET',write:false,download:true,ref:{kind:'artifact',id:original[1],revision:original[2]}};
+ if(operation==='chunks')return {material:'chunks',method:'POST',write:true,input:'stream'};
  const chunk=/^chunk\/([a-f0-9-]{36})\/(\d+)$/.exec(operation);
  if(chunk&&researchId(chunk[1])&&Number.isSafeInteger(Number(chunk[2])))return {material:'chunk',method:'POST',write:true,input:'stream',id:chunk[1],index:Number(chunk[2])};
  if(!reads.has(operation)&&!writes.has(operation))return null;
@@ -34,6 +36,7 @@ export async function executeMaterialRequest(storage,request,data,{signal,jobs,d
  const jobService=async()=>{const result=await jobs?.();if(!result)throw new AppError('ACCESS_LOCKED');return result;};
  switch(operation){
  case 'source-owners':case 'source-items':case 'source-resolve':{if(!sourceDiscovery)throw new AppError('ACCESS_LOCKED');return sourceDiscovery(storage,operation,data,{signal});}
+ case 'chunks':return appendMaterialUploadBatch(storage,stream,{signal});
  case 'chunk':return materials.uploads.summary(await materials.appendImport(request.id,request.index,stream,{signal}));
  case 'download':{if(typeof download!=='function')throw new AppError('INVALID');return download(await materials.artifact(request.ref??data.ref));}
  case 'overview':{const result=await materials.overview(data.recordId,{cursor:data.cursor,importCursor:data.importCursor,limit:data.limit,signal,dependencyReview:sourceAccess?head=>comparisonDependencyReview(materials,head,{sourceAccess,signal}):undefined});if(result.imports.length){const {queue}=await jobService();for(const session of result.imports)session.job=jobSummary(await queue.read(session.id));}return result;}
@@ -59,6 +62,7 @@ export async function executeMaterialRequest(storage,request,data,{signal,jobs,d
  case 'intake-selection-page':return materials.intakes.choices.page(data);
  case 'intake-append':return materials.intakes.append(data);
  case 'intake-page':return materials.intakes.page(data);
+ case 'upload-session':{const session=await materials.importState(data.id);await materials.assertOwner(session.recordId);return materials.uploads.summary(session);}
  case 'intake-session':{const session=await materials.importState(data.id);if(!session.batchId)throw new AppError('INVALID');await materials.intakes.authorized(session.batchId);return materials.uploads.summary(session);}
  case 'intake-finish':{const {queue,worker}=await jobService(),job=await materials.intakes.enqueue(data.id,queue);worker.wake();return {job:jobSummary(job)};}
  case 'drafts':return materials.drafts.list(data.recordId,{cursor:data.cursor,limit:data.limit});

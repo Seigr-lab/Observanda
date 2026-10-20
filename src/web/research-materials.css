@@ -27,9 +27,9 @@ dialog:has(> .material-workbench) { position:fixed; inset:1rem; margin:auto; max
 .material-workbench > h2,.material-workbench > .dialog-actions { flex:none; }
 .material-workbench > h2 { margin-top:0; }
 .material-workbench > .dialog-actions .button { white-space:normal; }
-/* Let reading and actions share the scroll surface when enlarged text or a
-   small screen would leave only a few lines between a fixed title and footer. */
-@media(max-width:600px),(max-height:500px){
+/* Keep actions visible on narrow screens; only short viewports need the
+   reading area and actions to share one scroll surface. */
+@media(max-height:500px){
  .material-workbench { overflow:auto; }
  .material-workbench > form { flex:none; overflow:visible; }
 }
