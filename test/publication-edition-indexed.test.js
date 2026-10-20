@@ -24,6 +24,7 @@ import {WebsiteEditorStore} from '../src/website-editor-store.js';
 import {publicationDraftCommand} from './publication-fixture.js';
 import {PublicationFragments} from '../src/publication-edition-fragments.js';
 import {withPublicationOutputWriter} from '../src/publication-output.js';
+import {PublicationOutputBuffer} from '../src/publication-output-buffer.js';
 import {createRegion,assignRegion} from '../src/web/website-regions.js';
 import {digest} from '../src/storage-format.js';
 
@@ -141,4 +142,70 @@ test('static feed continuations preserve each owning backlink window and single-
   const ordinary=await read('entries/'+single.id+'.html');assert.equal(feedId(ordinary),digest('entry:'+single.id+'#footer:related-feed'),'A one-window feed path changed');
  }
  let feedCount=0;for await(const name of edition.files.keys())if(feedFilePath(name))feedCount++;assert.equal(feedCount,6);
+});
+
+
+test('composed static editions preserve complete large fallback pages with bounded replay at two scales',{timeout:180000},async t=>{
+ const identities=new Set(),measurements=[];
+ for(const [scale,shape] of [{records:8,feeds:3,targets:1,texts:5,characters:54000},{records:12,feeds:4,targets:2,texts:6,characters:48000}].entries()){
+  const phaseTimes={},started=performance.now();let phaseStarted=started;const phase=name=>{const now=performance.now();phaseTimes[name]=Math.round(now-phaseStarted);phaseStarted=now;console.log(JSON.stringify({scale,phase:name,milliseconds:phaseTimes[name],elapsedMs:Math.round(now-started)}));};
+  const parent=await realpath(os.tmpdir()),directory=await mkdtemp(path.join(parent,'observanda-composed-output-')),book=upgradeNotebook(sampleNotebook()),seed=book.entries[0],marker='COMPOSED_SCALE_'+scale;
+  book.notebooks=book.notebooks.filter(item=>item.id===seed.notebookId);book.projects=book.projects.filter(item=>item.id===book.notebooks[0].projectId);
+  book.entries=Array.from({length:shape.records},(_,index)=>({...structuredClone(seed),id:randomUUID(),title:marker+' result '+String(index).padStart(2,'0'),body:'Exact selected observation '+index,share:true,sections:[{id:randomUUID(),title:'PRIVATE_SECTION_ONLY',body:'PRIVATE_SECTION_BODY',share:false}],attachments:[],figures:[],relations:[]}));
+  const withheld={...structuredClone(seed),id:randomUUID(),title:'PRIVATE_RECORD_ONLY',body:'PRIVATE_RECORD_BODY',share:false,sections:[],attachments:[],figures:[],relations:[]},excluded={...withheld,id:randomUUID(),title:'SITE_EXCLUDED_RECORD',body:'SITE_EXCLUDED_BODY',share:true};book.entries.push(withheld,excluded);
+  const feeds=Array.from({length:shape.feeds},(_,index)=>({id:'feed-'+index,kind:'records',title:'Independent feed '+index,show:true,layout:'list',feed:{...defaultFeed('records'),order:index%2?'oldest':'newest',pageSize:index+2,visitorFilters:true,visitorOrder:true}}));
+  const texts=Array.from({length:shape.texts},(_,index)=>({id:'invariant-'+index,kind:'text',title:marker+' invariant '+index,show:true,body:(marker+' exact invariant text '+index+'. ').repeat(Math.ceil(shape.characters/40)).slice(0,shape.characters).trim()})),sections=[...texts,...feeds,{id:'all-selected',kind:'records',title:'Every selected observation',show:true,layout:'list'}];
+  book.website.home={enabled:true,title:marker+' home',introduction:'Complete no-script composition',showTitle:true,sections};book.website.navigation=[];book.website.layouts=[];
+  const pages=Array.from({length:shape.targets-1},(_,index)=>({id:randomUUID(),title:marker+' page '+index,body:'Exact independent page body',share:true,sections:structuredClone(sections)})),privatePage={id:randomUUID(),title:'PRIVATE_PAGE_ONLY',body:'PRIVATE_PAGE_BODY',share:false,sections:[]};book.pages=[...pages,privatePage];
+  const fixture=await encryptedFixture(directory,book);t.after(async()=>{clearVault(fixture.vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-composed-output-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});phase('fixture');
+  const storage=websiteWorkspace(fixture.workspace,null),releases=new PublicationJobs(storage),base=await publicationDraftCommand(fixture.workspace,book),editor=new WebsiteEditor(fixture.workspace),state=await editor.execute('change',{workspaceId:book.id,websiteId:null,websitePin:base.websitePin,draftId:base.websiteDraft.id,expectedRevision:base.websiteDraft.revision,commandId:randomUUID(),operations:[{type:'settings',path:['selection'],value:{defaultShare:false,includeProjects:[],records:book.entries.map(record=>({id:record.id,share:record.share&&record.id!==excluded.id,attachments:[]}))}}]});
+  phase('authoring');
+  const command={etag:state.websitePin.researchSnapshotId,websitePin:state.websitePin,websiteDraft:{id:state.draft.id,revision:state.draft.revision}},source=await withPublicationCapture(storage,async(workspace,id,finish)=>{const value=await releases.pin(command,{workspace,id,signal:t.signal});return finish(()=>value);},{signal:t.signal});
+  phase('capture');
+  assert.equal(source.version,6);assert.equal(source.etag,command.etag);assert.deepEqual(source.websitePin,command.websitePin);assert.equal(identities.has(source.id),false);identities.add(source.id);
+  const input=await openPublicationInput(storage,source);assert.equal(await input.recordCount(),shape.records);assert.equal(await input.count('pages',{shared:true}),pages.length);
+  const expectedBook=structuredClone(book);expectedBook.entries.find(record=>record.id===excluded.id).share=false;const expected=buildPublication(expectedBook),targets=new Map([['home','index.html'],...pages.map(page=>['page:'+page.id,'pages/'+page.id+'.html'])]);
+  phase('source-and-synchronous-oracle');
+  const owners=new Map(),buffers=new Set(),stats={defaultCards:0,activeCards:0,activeProducers:0,maximumBuffer:0,maximumChunk:0,streamedFiles:0,bufferedFiles:0},add=PublicationFragments.prototype.add,expand=PublicationFragments.prototype.expand,prepare=PublicationOutputBuffer.prototype.prepare;
+  const owner=fragments=>{let value=owners.get(fragments);if(!value){value={target:null,parts:[],expansions:0,defaultCards:0,activeCards:0,activeProducers:0};owners.set(fragments,value);}return value;};
+  const cardCount=chunk=>(String(chunk).match(/data-record-id=/g)??[]).length;
+  PublicationFragments.prototype.add=function(read){const value=owner(this),part={calls:0};value.parts.push(part);return add.call(this,async function*(){part.calls++;for await(const chunk of read()){const count=cardCount(chunk);value.defaultCards+=count;stats.defaultCards+=count;yield chunk;}});};
+  PublicationFragments.prototype.expand=function(html,overrides=new Map()){
+   const value=owner(this),target=/data-page="([^"]+)"/.exec(html)?.[1];if(value.target!==null)assert.equal(target,value.target);value.target=target;value.expansions++;
+   const measured=new Map([...overrides].map(([token,read])=>[token,async function*(){value.activeProducers++;stats.activeProducers++;for await(const chunk of read()){const count=cardCount(chunk);value.activeCards+=count;stats.activeCards+=count;yield chunk;}}]));return expand.call(this,html,measured);
+  };
+  PublicationOutputBuffer.prototype.prepare=async function(content,options){
+   if(!buffers.has(this)){buffers.add(this);let held=this.bytes;Object.defineProperty(this,'bytes',{configurable:true,get:()=>held,set:value=>{held=value;stats.maximumBuffer=Math.max(stats.maximumBuffer,value);assert.ok(value>=0&&value<=1024*1024,'Output buffering exceeded its shared one-MiB bound');}});}
+   const measured=(async function*(){for await(const chunk of content){stats.maximumChunk=Math.max(stats.maximumChunk,Buffer.byteLength(chunk));yield chunk;}})(),result=await prepare.call(this,measured,options);stats[result.buffered?'bufferedFiles':'streamedFiles']++;return result;
+  };
+  const job={id:source.id,lease:{token:randomUUID()}};let candidate;
+  try{candidate=await releases.prepare(job,{signal:t.signal,progress:async value=>{console.log(JSON.stringify({scale,phase:'prepare-progress',...value,elapsedMs:Math.round(performance.now()-phaseStarted)}));}});}finally{PublicationFragments.prototype.add=add;PublicationFragments.prototype.expand=expand;PublicationOutputBuffer.prototype.prepare=prepare;}
+  phase('prepare');
+  assert.ok(buffers.size);assert.ok([...buffers].every(value=>value.bytes===0),'Completed output retained buffered chunks');assert.ok(stats.maximumBuffer>=256*1024&&stats.maximumBuffer<=1024*1024);assert.ok(stats.maximumChunk<=64*1024);
+  const fallbackPerTarget=feeds.reduce((sum,section)=>sum+Math.ceil(shape.records/section.feed.pageSize),0),defaultCards=shape.records+feeds.reduce((sum,section)=>sum+Math.min(shape.records,section.feed.pageSize),0);
+  for(const target of targets.keys()){
+   const values=[...owners.values()].filter(value=>value.target===target);assert.equal(values.length,1,'A composed target acquired multiple replay owners');const value=values[0];
+   assert.equal(value.expansions,1+fallbackPerTarget);assert.equal(value.defaultCards,defaultCards);assert.equal(value.activeCards,shape.records*shape.feeds);assert.equal(value.activeProducers,fallbackPerTarget);
+   assert.equal(value.parts.filter(part=>part.calls===1).length,shape.feeds+2);assert.ok(value.parts.every(part=>part.calls<=1),'A sibling feed reran an invariant producer');
+  }
+  assert.equal(stats.defaultCards,shape.targets*defaultCards);assert.equal(stats.activeCards,shape.targets*shape.records*shape.feeds);assert.ok(stats.streamedFiles>=shape.targets*(fallbackPerTarget+1),'Large HTML did not take the streaming output path');
+  await storage.withLock(()=>releases.commit(job,candidate));const edition=await releases.read(candidate.reviewId);assert.deepEqual(edition.websitePin,source.websitePin);assert.equal(edition.etag,source.etag);assert.equal(edition.source.jobId,source.id);assert.deepEqual(edition.source.document,source.document);assert.deepEqual((await releases.source(source.id)).document,source.document);
+  phase('commit-and-reopen');
+  const htmlPaths=[],feedPaths=[],selectedIds=book.entries.filter(record=>record.share&&record.id!==excluded.id).map(record=>record.id).sort();let outputBytes=0,minimumComposedBytes=Infinity,maximumComposedBytes=0;
+  for await(const [name,content] of edition.files)if(name.endsWith('.html')){
+   const bytes=await contentBuffer(content),html=bytes.toString();htmlPaths.push(name);outputBytes+=bytes.length;assert.doesNotMatch(html,/PRIVATE_RECORD_ONLY|PRIVATE_RECORD_BODY|PRIVATE_SECTION_ONLY|PRIVATE_SECTION_BODY|PRIVATE_PAGE_ONLY|PRIVATE_PAGE_BODY|SITE_EXCLUDED_RECORD|SITE_EXCLUDED_BODY/);
+   if(scale)assert.doesNotMatch(html,/COMPOSED_SCALE_0/,'A previous source identity leaked into another retained edition');
+   if(targets.has(/data-page="([^"]+)"/.exec(html)?.[1])){
+    assert.ok(bytes.length>256*1024,name+' must exceed the complete-file buffering threshold');minimumComposedBytes=Math.min(minimumComposedBytes,bytes.length);maximumComposedBytes=Math.max(maximumComposedBytes,bytes.length);
+    assert.equal(html,expected.files.get(name),name+' lost or changed its complete no-script composition');
+    for(const section of texts)assert.ok(html.includes(section.body),'Invariant authored text was truncated');
+    const unpaged=html.slice(html.indexOf('data-section-id="all-selected"'));assert.deepEqual([...unpaged.matchAll(/data-record-id="([a-f0-9-]+)"/g)].map(match=>match[1]).sort(),selectedIds,'The unpaged collection lost selected records');
+   }
+   if(feedFilePath(name))feedPaths.push(name);
+  }
+  assert.equal(feedPaths.length,shape.targets*fallbackPerTarget);assert.deepEqual(feedPaths.sort(),[...expected.files.keys()].filter(feedFilePath).sort());assert.equal(await edition.files.has('pages/'+privatePage.id+'.html'),false);
+  phase('verify-output');
+  const measurement={scale,selectedRecords:shape.records,feeds:shape.feeds,composedTargets:shape.targets,htmlFiles:htmlPaths.length,feedFiles:feedPaths.length,outputBytes,minimumComposedBytes,maximumComposedBytes,...stats,phaseTimes};measurements.push(measurement);t.diagnostic(JSON.stringify(measurement));
+ }
+ assert.equal(identities.size,2);assert.ok(measurements[1].outputBytes>measurements[0].outputBytes);assert.ok(measurements[1].activeCards>measurements[0].activeCards);
 });
