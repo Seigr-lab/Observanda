@@ -37,7 +37,6 @@ import {ProjectStorage} from './project-storage.js';
 import {LabBookImports} from './lab-book-import.js';
 import {LabBookReparentApplication} from './lab-book-reparent-application.js';
 import {LabBookDirectory} from './lab-book-directory.js';
-import {LabBookLocationAccess} from './lab-book-location-access.js';
 import {storageCreationPath} from './storage-names.js';
 import {ProjectLocationAccess} from './project-location-access.js';
 import {ProjectRenameApplication} from './project-rename-application.js';
@@ -296,7 +295,10 @@ export class ProjectApplication{
      if(selected.operation==='access/details'){if(!data||Object.keys(data).length)throw new AppError('INVALID');return new ProjectAccessSettings(storage).details();}
      if(selected.operation==='access/password'){await this.jobs.invalidateProject(selected.projectId);return new ProjectAccessSettings(storage).password(data,{deviceStore:this.deviceStore,check:assertCurrent,changed:etag=>owner.accessChanged(etag)});}
      if(selected.operation?.startsWith('storage/')){
-      const copyOwner=async(command,options)=>{const books=new LabBookLocationAccess(this,client),projects=new ProjectLocationAccess(this,client,{check:assertCurrent});try{return await command.run(storage,{...options,withBook:(id,use)=>books.use(storage,id,owner,use),withProject:(id,use)=>projects.withProject(id,use),withProjectBook:(project,id,use)=>projects.withBook(project,id,use)});}finally{books.close();await projects.close();}};
+      const copyOwner=(command,options)=>ScopedLocationAccess.run(this,client,{check:assertCurrent,parent:id=>id===selected.projectId?owner:null},async access=>{
+       await access.remember(selected.projectId,owner.sessionEntry);
+       return command.run(storage,{...options,withBook:(id,use)=>access.withBook(storage,id,use),withProject:(id,use)=>access.withProject(id,use),withProjectBook:(project,id,use)=>access.withBook(project,id,use),checkpoint:async(stage,item)=>{const projectId=item?.projectId??(stage==='project'&&researchId(item)?item:selected.projectId),labBookId=item?.labBookId??item?.file?.labBookId??(stage==='book'&&researchId(item)?item:undefined);await access.check(['files','database','database-committed','verified','project-tree'].includes(stage)?undefined:{projectId,...(labBookId?{labBookId}:{})});if(options.checkpoint)await options.checkpoint(stage,item);}});
+      });
       const moveOwner=options=>ScopedLocationAccess.run(this,client,{check,parent:id=>id===selected.projectId?owner:null},async access=>{
        await access.remember(selected.projectId,owner.sessionEntry);
        return moves.run(selected.projectId,owner.vault,{...options,withBook:(id,use)=>access.withBook(storage,id,use),checkpoint:(stage,bookId)=>access.check(['prepared','owners-frozen','verified','registry','adopted','retired','releasing','complete'].includes(stage)?undefined:{projectId:selected.projectId,...((stage.startsWith('book-')||stage.startsWith('copy:book'))&&researchId(bookId)?{labBookId:bookId}:{})}),onCopiedBook:book=>access.check({projectId:selected.projectId,labBookId:book.labBookId}),onAdopt:async latest=>{await acceptRelocation(latest);const value=await moves.read(selected.projectId);await access.renamed(moves.ownerDirectory(value),value.source,value.destination);await access.install();}});

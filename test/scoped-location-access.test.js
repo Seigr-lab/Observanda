@@ -1,3 +1,4 @@
+import {ProjectMoves} from '../src/project-move.js';
 import '../src/storage.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -52,4 +53,16 @@ test('scoped installation binds replacement applications to the staged workspace
  await assert.rejects(scoped.install(replacement),{code:'ACCESS_DENIED'});assert.equal(reads,0);
  replacement.workspace.root=destination;await scoped.install(replacement);assert.equal(reads,1);
  await scoped.install();assert.equal(reads,2);
+});
+
+test('project grant relocation lookup cannot revive or forget a concurrently revoked grant',async t=>{
+ const projectId=randomUUID(),vaultId=randomUUID(),source=path.resolve('Original Project'),destination=path.resolve('Moved Project');
+ for(const change of ['replace','expire','lock']){
+  const saved={root:source,etag:'same-access',vault:{id:vaultId,key:randomBytes(32)},expires:Date.now()+60000},replacement={...saved,vault:{id:vaultId,key:randomBytes(32)}},session=new Map([[projectId,saved]]),registry={};let forgotten=0;
+  const application={closed:false,session:()=>session,registry:async()=>registry,forget:()=>{forgotten++;}};
+  const owner=new ProjectSessionOwner(application,{},projectId,{recoverRenames:false}),router=await owner.router();
+  const lookup=t.mock.method(ProjectMoves.prototype,'read',async()=>{await Promise.resolve();if(change==='replace')session.set(projectId,replacement);else if(change==='expire')saved.expires=Date.now()-1;else saved.locked=true;return null;});
+  try{await assert.rejects(router.unlock({projectId,root:destination,namespaceId:randomUUID(),vaultId},{etag:saved.etag}),{code:'ACCESS_LOCKED'});assert.equal(forgotten,0);assert.equal(saved.root,source);assert.equal(session.get(projectId),change==='replace'?replacement:saved);assert.ok(saved.vault.key);assert.ok(replacement.vault.key);}
+  finally{lookup.mock.restore();await owner.close();clearVault(saved.vault);clearVault(replacement.vault);}
+ }
 });

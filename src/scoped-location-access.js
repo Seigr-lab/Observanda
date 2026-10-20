@@ -1,5 +1,6 @@
-// Temporary admissions retain session identity proofs and transfer only the
-// client's existing grants. Keys are borrowed for one awaited owner at a time.
+import {ScopedCopyGrants} from './scoped-copy-grants.js';
+// Temporary admissions retain session identity proofs. Renames retain existing
+// grants; copies retain authenticated grants. Keys are borrowed per owner.
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {AsyncLocalStorage} from 'node:async_hooks';
@@ -22,9 +23,9 @@ const identity=value=>{if(!value)return null;let id=identities.get(value);if(!id
 const live=value=>!value?.locked&&(!value?.vault||value.expires>Date.now());
 export class ScopedLocationAccess{
  static run(application,client,options,operation){return withScratch(proofs=>withScratch(grants=>{const access=new ScopedLocationAccess(application,client,options,proofs,grants);return access.start(operation);}));}
- constructor(application,client,{check=async()=>{},parent=()=>null,recoverRenames=true,skipRenameId=null}={},proofs,grants){Object.assign(this,{application,client,baseCheck:check,parent,recoverRenames,skipRenameId,proofs,grants});this.session=application.session(client);this.parents=new AsyncLocalStorage();}
+ constructor(application,client,{check=async()=>{},parent=()=>null,recoverRenames=true,skipRenameId=null,copy=false}={},proofs,grants){Object.assign(this,{application,client,baseCheck:check,parent,recoverRenames,skipRenameId,proofs,grants});this.session=application.session(client);this.parents=new AsyncLocalStorage();if(copy)this.copy=new ScopedCopyGrants(this,{identity,live});}
  async start(operation){for(const [id,saved] of this.session)if(saved?.vault&&live(saved))await this.proofs.add(id,{id,token:identity(saved),admitted:false});try{return await operation(this);}finally{this.closed=true;}}
- async remember(id,expected){const prior=await this.proofs.get(id),token=identity(expected);if(prior?.admitted&&prior.token!==token)throw new AppError('ACCESS_LOCKED');await this.proofs.put(id,{id,token,admitted:true});}
+ async remember(id,expected){const prior=await this.proofs.get(id),token=identity(expected);if(prior?.admitted&&prior.token!==token)throw new AppError('ACCESS_LOCKED');await this.proofs.put(id,{...(prior?.admitted?prior:{}),id,token,admitted:true});}
  valid(proof){const saved=this.session.get(proof.id);return identity(saved)===proof.token&&live(saved);}
  async check(owner){
   await this.baseCheck();if(this.closed||this.application.closed)throw new AppError('ACCESS_LOCKED');
@@ -33,15 +34,17 @@ export class ScopedLocationAccess{
   else for await(const proof of this.proofs.items())check(proof);
  }
  async withProject(id,operation){
-  const owner=new ProjectSessionOwner(this.application,this.client,id,{check:this.baseCheck,recoverRenames:this.recoverRenames,skipRenameId:this.skipRenameId});
-  try{return await this.parents.run(owner,()=>this.application.tracked(()=>owner.use(async storage=>{await this.remember(id,owner.sessionEntry);return operation(storage);}),id));}
+  if(this.copy?.sealed)throw new AppError('ACCESS_LOCKED');
+  const owner=new ProjectSessionOwner(this.application,this.client,id,{check:this.baseCheck,recoverRenames:this.copy?.registry?false:this.recoverRenames,skipRenameId:this.skipRenameId,registry:()=>this.copy?.registry??this.application.registry()});
+  try{return await this.parents.run(owner,()=>this.application.tracked(()=>owner.use(async storage=>{await this.remember(id,owner.sessionEntry);await this.copy?.admitProject(owner);return operation(storage);}),id));}
   catch(error){if(['ACCESS_LOCKED','ACCESS_DENIED','ACCESS_WAIT','AUTH','DEVICE_UNKNOWN'].includes(error.code))error.projectId??=id;throw error;}
   finally{await owner.close();}
  }
  async withBook(project,id,operation){
+  if(this.copy?.sealed)throw new AppError('ACCESS_LOCKED');
   const parent=this.parents.getStore()??this.parent(project.projectId);if(!parent||parent.projectId!==project.projectId)throw new AppError('ACCESS_DENIED');
   await this.remember(project.projectId,parent.sessionEntry);const books=new LabBookLocationAccess(this.application,this.client);
-  try{return await books.use(project,id,parent,operation,{retain:false,onOwner:owner=>this.remember(owner.access.id,owner.access.expected)});}finally{books.close();}
+  try{return await books.use(project,id,parent,operation,{retain:false,onOwner:async owner=>{await this.remember(owner.access.id,owner.access.expected);await this.copy?.admitBook(owner);}});}finally{books.close();}
  }
  async renamed(owners,source,destination){
   await this.check();this.owners=owners;this.source=source;this.destination=destination;
@@ -64,8 +67,9 @@ export class ScopedLocationAccess{
  }
  async install(application=this.application,client=this.client){
   if(client!==this.client||this.closed||application.closed||!this.destination||application!==this.application&&application.workspace.root!==this.destination)throw new AppError('ACCESS_DENIED');const session=application.session(client),registry=await application.registry();
-  for(const kind of ['project','lab-book'])for await(const grant of this.grants.items()){
-   if(grant.kind!==kind)continue;const proof={id:grant.id,token:grant.token},book=kind==='lab-book';if(!this.valid(proof)||grant.expires<=Date.now()||book&&(identity(this.session.get(grant.projectId))!==grant.parentToken||!live(this.session.get(grant.projectId))))continue;
+  await this.copy?.beginInstall(application,client,registry);
+  try{for(const kind of ['project','lab-book'])for await(const grant of this.grants.items()){
+   if(grant.kind!==kind)continue;this.copy?.assertGrant(grant);const proof={id:grant.id,token:grant.token},book=kind==='lab-book';if(!this.valid(proof)||grant.expires<=Date.now()||book&&(identity(this.session.get(grant.projectId))!==grant.parentToken||!live(this.session.get(grant.projectId))))continue;
    let entry;const vault={id:grant.vaultId,key:Buffer.from(grant.key,'base64')};
    try{
     if(book){const parent=new ProjectSessionOwner(application,client,grant.projectId,{recoverRenames:false});try{entry=await parent.use(storage=>new LabBookRegistry(storage).locate(grant.ownerId));}catch(error){if(['ACCESS_LOCKED','ACCESS_DENIED','DEVICE_UNKNOWN'].includes(error.code))continue;throw error;}finally{await parent.close();}}
@@ -73,8 +77,9 @@ export class ScopedLocationAccess{
     const access=await readAccess(entry.root);if(entry.root!==grant.root||entry.namespaceId!==grant.namespaceId||entry.vaultId!==grant.vaultId||access.etag!==grant.etag)throw new AppError('DATABASE_LOCATION');authenticateKeyring(access.value,vault);
     if(application.closed||!this.valid(proof)||grant.expires<=Date.now()||book&&(identity(this.session.get(grant.projectId))!==grant.parentToken||!live(this.session.get(grant.projectId))))continue;
     const current=session.get(grant.id);if(application===this.application){if(current!==this.session.get(grant.id)||!current?.vault)continue;current.root=grant.root;current.etag=grant.etag;current.expires=Math.min(current.expires,grant.expires);}
-    else{if(current)throw new AppError('CONFLICT');const saved={root:grant.root,etag:grant.etag,vault:{id:vault.id,key:Buffer.from(vault.key)},expires:grant.expires};session.set(grant.id,saved);application.credentials.add(saved);}
+    else{if(current)throw new AppError('CONFLICT');const saved={root:grant.root,etag:grant.etag,vault:{id:vault.id,key:Buffer.from(vault.key)},expires:grant.expires};if(this.copy)await this.copy.installGrant(application,grant,saved);else{session.set(grant.id,saved);application.credentials.add(saved);}}
    }finally{clearVault(vault);}
-  }
+  }await this.copy?.finishInstall(application,registry);}
+  catch(error){await this.copy?.rollbackInstall(application);throw error;}
  }
 }

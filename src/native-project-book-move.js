@@ -35,6 +35,17 @@ export function validateNativeMoveBook(item,projectId){
 const hash=async root=>digest(await readFile(path.join(root,'.observanda/access.json')));
 export class NativeProjectMoveBooks{
  constructor(command,value,vault){this.command=command;this.value=value;this.vault=vault;this.source=new ProjectStorage(value.source,value.projectId,vault);this.registry=new LabBookRegistry(this.source);this.owners=portabilityCollection(command.workspace,value.bookOwners);}
+ // Preflight borrows each credential without retaining keys or a directory
+ // snapshot across a callback that can finish an interrupted book rename.
+ static async authorize(project,withBook){
+  const registry=new LabBookRegistry(project),owners=new ProjectBookOwners(project);await owners.ready({renames:false});let after=null;
+  do{const page=await registry.list({after,limit:32});if(page.items.length&&typeof withBook!=='function')throw new AppError('ACCESS_LOCKED');
+   for(const initial of page.items)await withBook(initial.labBookId,async storage=>{
+    const entry=await registry.locate(initial.labBookId),binding=await catalogueBinding(entry.root),metadata=(await storage.outline()).metadata;
+    if(['vaultId','namespaceId'].some(key=>entry[key]!==initial[key])||storage.root!==entry.root||storage.labBookId!==entry.labBookId||storage.vault?.id!==entry.vaultId||await realpath(entry.root)!==entry.root||binding?.placement!=='lab-book'||binding.labBookId!==entry.labBookId||metadata.id!==entry.namespaceId||metadata.notebooks[0].projectId!==project.projectId)throw new AppError('DATABASE_LOCATION');authenticateKeyring((await readAccess(entry.root)).value,storage.vault);
+   });after=page.next;
+  }while(after);await owners.ready();
+ }
  static async prepare(command,value,vault,withBook){
   const source=new ProjectStorage(value.source,value.projectId,vault),registry=new LabBookRegistry(source);await new ProjectBookOwners(source).ready();value.bookDirectory=await captureProjectBookCopyDirectory(registry);
   value.bookOwners=new NativePortabilityCollection(null,randomUUID()).empty();value.bookKeys=new NativePortabilityCollection(null,randomUUID()).empty();await command.save(value);

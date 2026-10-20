@@ -1,8 +1,8 @@
 import {assertProjectMoveDirectory} from './project-move-boundaries.js';
-import {workspaceProjectPlacements} from './workspace-project-placement.js';
-import {captureWorkspaceCopyDirectory,validWorkspaceCopyDirectory} from './workspace-copy-directory.js';
+import {captureWorkspaceCopyDirectory} from './workspace-copy-directory.js';
 import {withWorkspaceMoveDirectory} from './workspace-move-directory.js';
-import {ProjectBookCopy} from './project-book-copy.js';
+import {NativeProjectMoveBooks} from './native-project-book-move.js';
+import {readWorkspaceProjectMove as read,saveWorkspaceProjectMove as save} from './workspace-project-move-state.js';
 import {WORKSPACE_BUNDLE_MOVE,WORKSPACE_BUNDLE_MOVE_LEASE} from './workspace-transfer-controls.js';
 export {WORKSPACE_BUNDLE_MOVE} from './workspace-transfer-controls.js';
 import {withRetiredRecordCopy} from './project-retired-records.js';
@@ -20,28 +20,13 @@ import {resolveLocation,prepareCopyDestination,probeLocation} from './locations.
 import {moveWorkspace,readMoveReceipt,finishWorkspaceMove} from './workspace-move.js';
 import {moveSource} from './workspace-move-state.js';
 import {withWriterLease} from './writer-lease.js';
-import {researchId} from './web/research-reference.js';
 import {operationStage,operationAdvance,operationItem} from './operation-progress.js';
 import {AppError} from './errors.js';
 import {isStorageTemporary} from './storage-temporary.js';
 import {cloneVault,clearVault} from './encryption.js';
-const lease=WORKSPACE_BUNDLE_MOVE_LEASE,limit=32*1024*1024;
+const lease=WORKSPACE_BUNDLE_MOVE_LEASE;
 const inside=(parent,child)=>{const r=path.relative(parent,child);return r!==''&&r!=='..'&&!r.startsWith('..'+path.sep)&&!path.isAbsolute(r);};
 const same=(a,b)=>['projectId','namespaceId','vaultId','parentId'].every(key=>a[key]===b[key]);
-async function read(target){
- if(!await assertRegular(target.root,{missing:true,directory:true})||!await assertRegular(path.join(target.root,'.observanda'),{missing:true,directory:true}))return null;
- const file=path.join(target.root,WORKSPACE_BUNDLE_MOVE),stat=await assertRegular(file,{missing:true});if(!stat)return null;if(stat.size>limit)throw new AppError('STORAGE_MOVE_STATE');
- let value;try{value=JSON.parse(await target.readFile(file,'utf8'));}catch{throw new AppError('STORAGE_MOVE_STATE');}
- if(![1,2].includes(value?.version)||value.projectPlacement!==undefined&&value.projectPlacement!==2||!researchId(value.id)||!researchId(value.workspaceId)||value.vaultId!==target.vault?.id||value.destination!==target.root||typeof value.source!=='string'||!path.isAbsolute(value.source)||path.resolve(value.source)!==value.source||value.source===value.destination||inside(value.source,value.destination)||inside(value.destination,value.source)||!['projects','workspace','complete'].includes(value.phase)||(value.version===1?!Array.isArray(value.projects):value.projects!==undefined||value.projectPlacement!==2||!validWorkspaceCopyDirectory(value.directory)||value.directory.head.ownerId!==value.workspaceId))throw new AppError('STORAGE_MOVE_STATE');
- if(value.version===2)return value;
- const ids=new Set(),destinations=new Set();for(const entry of value.projects){
-  if(!['projectId','namespaceId','vaultId','transferId'].every(key=>researchId(entry?.[key]))||typeof entry.root!=='string'||!path.isAbsolute(entry.root)||path.resolve(entry.root)!==entry.root||typeof entry.destination!=='string'||!path.isAbsolute(entry.destination)||path.resolve(entry.destination)!==entry.destination||!inside(value.destination,entry.destination)||ids.has(entry.projectId)||destinations.has(entry.destination))throw new AppError('STORAGE_MOVE_STATE');
-  ids.add(entry.projectId);destinations.add(entry.destination);
- }
- workspaceProjectPlacements(value.source,value.destination,value.projects,{version:value.projectPlacement??1});
- return value;
-}
-async function save(target,value){const raw=serialize(value);if(Buffer.byteLength(raw)>limit-128)throw new AppError('LIMIT');await target.writeFile(path.join(target.root,WORKSPACE_BUNDLE_MOVE),raw);}
 async function assertMoveRegistry(registry,directory,{complete=false}={}){
  return registry.inspect(async view=>{
   if(view.count!==directory.count)throw new AppError('CONFLICT');
@@ -82,7 +67,7 @@ export class WorkspaceProjectMove{
    if(directory.count&&typeof this.withProject!=='function')throw new AppError('ACCESS_LOCKED');
    for await(const entry of directory.entries()){
     if(entry.root===destination||inside(entry.root,destination)||inside(destination,entry.root))throw new AppError('STORAGE_PATH');
-    await this.withProject(entry.projectId,async owner=>{if(owner.root!==entry.root||owner.vault.id!==entry.vaultId||(await owner.outline()).metadata.id!==entry.namespaceId)throw new AppError('CONFLICT');const books=new ProjectBookCopy(owner);try{await books.prepare(this.withBook?((id,use)=>this.withBook(owner,id,use)):undefined,{relocation:true});}finally{books.close();}});
+    await this.withProject(entry.projectId,async owner=>{if(owner.root!==entry.root||owner.vault.id!==entry.vaultId||(await owner.outline()).metadata.id!==entry.namespaceId)throw new AppError('CONFLICT');await NativeProjectMoveBooks.authorize(owner,this.withBook?((id,use)=>this.withBook(owner,id,use)):undefined);});
    }
    await assertMoveRegistry(registry,directory);await this.check();
   });
@@ -106,7 +91,7 @@ export class WorkspaceProjectMove{
       await this.check();operationItem(entry.summary?.title??path.basename(entry.root));const parents=await directory.parents(entry);
       if(path.dirname(entry.destination)!==target.root)await privateDirectory(target.root,path.relative(target.root,path.dirname(entry.destination)).split(path.sep).join('/'));
       await this.beforeMove(entry.projectId);await this.withProject(entry.projectId,async owner=>{
-       await moves.run(entry.projectId,owner.vault,{id:entry.transferId,path:entry.destination,workspaceMoveId:value.id,destinationParents:parents,withBook:this.withBook?((id,use)=>this.withBook(owner,id,use)):undefined,onCopiedBook:this.onCopiedBook,checkpoint:(stage,...args)=>this.checkpoint('project:'+stage,{projectId:entry.projectId,args}),onAdopt:async latest=>this.onMovedProject(new ProjectStorage(latest.root,latest.projectId,owner.vault),entry.root,latest)});
+       await moves.run(entry.projectId,owner.vault,{id:entry.transferId,path:entry.destination,workspaceMoveId:value.id,destinationParents:parents,...(value.version===2?{workspaceMove:{value,directory}}:{}),withBook:this.withBook?((id,use)=>this.withBook(owner,id,use)):undefined,onCopiedBook:this.onCopiedBook,checkpoint:(stage,...args)=>this.checkpoint('project:'+stage,{projectId:entry.projectId,args}),onAdopt:async latest=>this.onMovedProject(new ProjectStorage(latest.root,latest.projectId,owner.vault),entry.root,latest)});
        await this.onMovedProject(new ProjectStorage(entry.destination,entry.projectId,owner.vault),entry.root,await registry.locate(entry.projectId));
       });
       await this.checkpoint('project',entry.projectId);operationAdvance();
@@ -116,7 +101,7 @@ export class WorkspaceProjectMove{
     for await(const entry of directory.entries({reverse:true})){
      if(inside(value.source,entry.root)||!await directory.hasChildren(entry.projectId))continue;
      const receipt=await moves.read(entry.projectId);
-     if(receipt?.phase!=='complete'||receipt.id!==entry.transferId||receipt.workspaceMoveId!==value.id||receipt.source!==entry.root||receipt.destination!==entry.destination||receipt.vaultId!==entry.vaultId||receipt.namespaceId!==entry.namespaceId||!receipt.boundaries?.length||!receipt.sourceDirectory)throw new AppError('STORAGE_MOVE_STATE');
+     if(receipt?.phase!=='complete'||receipt.id!==entry.transferId||receipt.workspaceMoveId!==value.id||receipt.source!==entry.root||receipt.destination!==entry.destination||receipt.vaultId!==entry.vaultId||receipt.namespaceId!==entry.namespaceId||!(receipt.version===3?receipt.retainedCount:receipt.boundaries?.length)||!receipt.sourceDirectory)throw new AppError('STORAGE_MOVE_STATE');
      if(!await assertRegular(entry.root,{missing:true,directory:true}))continue;
      await assertProjectMoveDirectory(entry.root,receipt.sourceDirectory);
      try{await rmdir(entry.root);}catch(error){if(error.code==='ENOENT')continue;if(['ENOTEMPTY','EEXIST'].includes(error.code))throw new AppError('STORAGE_MOVE_CONTENTS');throw error;}

@@ -1,11 +1,13 @@
+import {changeKeyringPassword} from '../src/security/keyring.js';
+import {ScopedCopyGrants} from '../src/scoped-copy-grants.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,rm} from 'node:fs/promises';
+import {mkdtemp,rm,readFile} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {randomUUID} from 'node:crypto';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
-import {Workspace} from '../src/storage.js';
+import {Workspace,atomicWrite,serialize} from '../src/storage.js';
 import {WorkspaceDatabases} from '../src/workspace-databases.js';
 import {installDatabaseProvider} from '../src/workspace-database-context.js';
 import {createWorkspaceAccess,takeCreatedVault,readAccess,verifyAccess} from '../src/access.js';
@@ -34,8 +36,16 @@ test('workspace copy hands protected project and book access to the requesting c
  const request=operation=>projectRequest('/api/projects/'+projectId+'/lab-books/'+book.labBookId+'/'+operation),target={workspaceId:outline.metadata.id,recordId:record.id,sectionId:null};
  await assert.rejects(withWorkspaceCopySession(app,client,session=>session.plan(destination,{inspect:false})),error=>['ACCESS_LOCKED','DEVICE_UNKNOWN'].includes(error.code)&&error.labBookId===book.labBookId);
  await app.run(client,request('access/unlock'),{username:'',password:'Book password',recovery:''});
+ const deviceMetadata=createNotebook('Device Project'),deviceProjectId=randomUUID();deviceMetadata.projects=[{id:deviceProjectId,title:deviceMetadata.title,parentId:null,description:'',share:false,logoId:null}];const deviceAccess=await createWorkspaceAccess('','',f.deviceStore),deviceKey=takeCreatedVault(deviceAccess);vaults.push(deviceKey);const deviceProject=await initializeProjectLocation(path.join(f.workspace.root,deviceMetadata.title),deviceProjectId,deviceMetadata,deviceAccess,deviceKey);await registry.attach(deviceProject,{expected:await registry.version()});
+ const deviceBook=(await new LabBookCreation(deviceProject,f.deviceStore).create({id:randomUUID(),username:'',password:'',book:{id:randomUUID(),projectId:deviceProjectId,title:'Device Book'}})).book;
+ assert.equal(app.session(client).has(deviceProjectId),false);assert.equal(app.session(client).has('book:'+deviceProjectId+':'+deviceBook.labBookId),false);
  let copied;
- await withWorkspaceCopySession(app,client,async session=>{const plan=await session.plan(destination,{inspect:false});await session.copy(plan);copied=new ProjectApplication(new Workspace(destination,f.vault),{deviceStore:f.deviceStore});applications.push(copied);await session.install(copied);});
+ await withWorkspaceCopySession(app,client,async session=>{
+  const plan=await session.plan(destination,{inspect:false}),seal=ScopedCopyGrants.prototype.seal;let changedBookRefused=false;const sealFault=t.mock.method(ScopedCopyGrants.prototype,'seal',async function(target){const file=path.join(book.root,'.observanda/access.json'),raw=await readFile(file),current=await readAccess(book.root);await atomicWrite(file,serialize(await changeKeyringPassword(current.value,key,{username:'',password:'Changed book password',deviceStore:f.deviceStore}))); try{await assert.rejects(seal.call(this,target),{code:'ACCESS_LOCKED'});changedBookRefused=true;}finally{await atomicWrite(file,raw);}return seal.call(this,target);});await session.copy(plan);sealFault.mock.restore();assert.equal(changedBookRefused,true);copied=new ProjectApplication(new Workspace(destination,f.vault),{deviceStore:f.deviceStore});applications.push(copied);
+  const installed=[],install=ScopedCopyGrants.prototype.installGrant;let interrupted=false;const fault=t.mock.method(ScopedCopyGrants.prototype,'installGrant',async function(application,grant,saved){await install.call(this,application,grant,saved);installed.push(saved.vault);if(grant.kind==='lab-book'&&!interrupted){interrupted=true;throw Error('Interrupted grant installation');}});
+  await assert.rejects(session.install(copied),/Interrupted grant installation/);fault.mock.restore();assert.equal(interrupted,true);assert.equal(copied.session(client).size,0);assert.equal(copied.credentials.size,0);assert.ok(installed.length>=3);assert.ok(installed.every(vault=>vault.key===null));await session.install(copied);
+ });
+ const deviceProjectGrant=copied.session(client).get(deviceProjectId),deviceBookGrant=copied.session(client).get('book:'+deviceProjectId+':'+deviceBook.labBookId);assert.ok(deviceProjectGrant?.vault?.key);assert.ok(deviceBookGrant?.vault?.key);assert.equal(deviceProjectGrant.root,path.join(destination,deviceMetadata.title));assert.equal(deviceBookGrant.root,path.join(destination,deviceMetadata.title,deviceBook.directory));assert.ok(deviceProjectGrant.expires>Date.now());assert.ok(deviceBookGrant.expires<=deviceProjectGrant.expires);assert.equal(app.session(client).has(deviceProjectId),false);assert.equal(app.session(client).has('book:'+deviceProjectId+':'+deviceBook.labBookId),false);
  const writing=await copied.run(client,request('research/records/writing/read'),target);assert.equal(writing.value.body,record.body);
  await assert.rejects(copied.run(other,request('research/records/writing/read'),target),error=>['ACCESS_LOCKED','DEVICE_UNKNOWN'].includes(error.code));
  const saved=copied.session(client).get('book:'+projectId+':'+book.labBookId);assert.equal(saved.root,path.join(destination,metadata.title,created.book.directory));assert.notEqual(saved.vault,key);assert.ok(saved.vault.key);

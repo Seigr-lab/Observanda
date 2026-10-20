@@ -1,3 +1,4 @@
+import {projectGrantRelocation} from './project-grant-relocation.js';
 import {CatalogueReadCache} from './catalogue-read-cache.js';
 // A selected project's credentials live only for the authorized operation.
 // Source-history readers can reuse this owner without reopening it per record.
@@ -57,6 +58,10 @@ export class ProjectSessionOwner{
    authorize:async({projectId})=>{if(projectId!==this.projectId)throw new AppError('ACCESS_DENIED');await this.check();return true;},
    unlock:async(entry,access)=>{
     const saved=this.session.get(entry.projectId);if(saved?.locked)throw new AppError('ACCESS_LOCKED');
+    if(saved?.vault&&saved.root!==entry.root){
+     const relocated=await projectGrantRelocation(this.registry,entry,access,saved);
+     if(this.application.closed||this.session.get(entry.projectId)!==saved||this.sessionEntry!==saved||saved.locked||saved.expires<=Date.now())throw new AppError('ACCESS_LOCKED');if(relocated)saved.root=entry.root;
+    }
     clearVault(this.vault);this.vault=null;
     if(saved?.vault&&saved.root===entry.root&&saved.etag===access.etag&&saved.expires>Date.now())this.vault=cloneVault(saved.vault);
     else{if(saved)this.application.forget(this.session,entry.projectId);this.sessionEntry=undefined;this.vault=await verifyAccess(access,'','',{deviceStore:this.application.deviceStore});}

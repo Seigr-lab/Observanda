@@ -17,6 +17,8 @@ import {Workspace,privateDirectory,serialize} from '../src/storage.js';
 import {WorkspaceProjectMove,WORKSPACE_BUNDLE_MOVE} from '../src/workspace-project-move.js';
 import {readMoveReceipt} from '../src/workspace-move.js';
 import {ProjectLocationAccess} from '../src/project-location-access.js';
+import {assertWorkspaceProjectMoveOwner} from '../src/workspace-project-move-owner.js';
+import {saveWorkspaceProjectMove} from '../src/workspace-project-move-state.js';
 import {databaseRetention} from '../src/workspace-database-retention.js';
 import {MOVE_SOURCE,MOVE_RECEIPT} from '../src/workspace-move-state.js';
 import {clearVault} from '../src/encryption.js';
@@ -32,6 +34,7 @@ test('native move worklist retains exact order and boundaries beyond the old agg
  await registry.applyBatch(await registry.version(),(async function*(){for(const entry of rows)yield {state:'active',entry};})());
  const pin=await captureWorkspaceCopyDirectory(registry),value={version:2,projectPlacement:2,id:randomUUID(),workspaceId:registry.workspaceId,source:owner.root,destination,directory:pin};
  assert.ok(Buffer.byteLength(JSON.stringify(value))<16384);
+ const authorized=new Workspace(destination,vault),bundle={...value,vaultId:vault.id,phase:'projects'};await mkdir(destination);await privateDirectory(destination,'.observanda');await saveWorkspaceProjectMove(authorized,bundle);
  const oldRead=ProjectRegistry.prototype.read,oldChange=ProjectRegistry.prototype.change;ProjectRegistry.prototype.read=ProjectRegistry.prototype.change=()=>{throw Error('No aggregate registry reads');};
  try{
   await withWorkspaceMoveDirectory(owner,value,async work=>{
@@ -39,10 +42,21 @@ test('native move worklist retains exact order and boundaries beyond the old agg
    for await(const entry of work.entries()){if(entry.projectId===parent.projectId)parentPosition=count;if(entry.projectId===child.projectId)childPosition=count;assert.equal(entry.transferId,workspaceCopyTransferId(value.id,entry.projectId));assert.equal((await work.get(entry.projectId)).root,entry.root);count++;}
    assert.equal(count,rows.length);assert.ok(parentPosition<childPosition);assert.deepEqual(await work.parents(await work.get(child.projectId)),[path.join(destination,'External parent')]);assert.equal(await work.hasChildren(parent.projectId),true);assert.equal(await work.hasChildren(child.projectId),false);
    assert.equal(await work.source(internal.root),true);assert.equal(await work.source(parent.root),false);assert.equal(await work.sourceContainer(path.join(owner.root,'Nested folder')),true);assert.equal(await work.sourceContainer(path.join(owner.root,'Unrelated')),false);assert.equal(await work.destination(path.join(destination,'External parent','Child')),true);assert.equal(await work.destinationContainer(path.join(destination,'Nested folder')),true);assert.equal(await work.destinationContainer(path.join(directory,'Other')),false);
+   const selected=await work.get(internal.projectId),proof={...selected,source:selected.root,id:selected.transferId,phase:'preparing',workspaceMoveId:bundle.id,workspaceMoveDestination:destination,workspaceMoveRevision:pin.revision},context={value:bundle,directory:work};
+   await assertWorkspaceProjectMoveOwner(registry,proof,context);
+   for(const changed of [{id:randomUUID()},{workspaceMoveId:randomUUID()},{workspaceMoveRevision:'f'.repeat(64)},{namespaceId:randomUUID()},{vaultId:randomUUID()},{destination:path.join(destination,'Other')}])await assert.rejects(assertWorkspaceProjectMoveOwner(registry,{...proof,...changed},context),{code:'STORAGE_MOVE_STATE'});
+   // A real changed selected registration cannot be accepted from an old pin.
+   await registry.apply(await registry.version(),[{state:'active',entry:{...internal,namespaceId:randomUUID()}}]);await assert.rejects(assertWorkspaceProjectMoveOwner(registry,proof,context),{code:'CONFLICT'});await registry.apply(await registry.version(),[{state:'active',entry:internal}]);
+   const childPlacement=await work.get(child.projectId),childProof={...childPlacement,source:childPlacement.root,id:childPlacement.transferId,phase:'preparing',workspaceMoveId:bundle.id,workspaceMoveDestination:destination,workspaceMoveRevision:pin.revision};
+   await assert.rejects(assertWorkspaceProjectMoveOwner(registry,childProof,context),{code:'STORAGE_PATH'});
+   await registry.apply(await registry.version(),[{state:'active',entry:{...parent,root:path.join(destination,'External parent')}}]);await assertWorkspaceProjectMoveOwner(registry,childProof,context);await assertWorkspaceProjectMoveOwner(registry,childProof);
+   const inspect=registry.inspect.bind(registry);registry.inspect=use=>inspect(view=>use({...view,get:async(key,options)=>{const row=await view.get(key,options);return options?.index==='location'&&row?.entry.projectId===parent.projectId?{...row,entry:{...row.entry,projectId:randomUUID()}}:row;}}));
+   try{await assert.rejects(assertWorkspaceProjectMoveOwner(registry,childProof,context),{code:'STORAGE_PATH'});}finally{registry.inspect=inspect;}
+   await registry.apply(await registry.version(),[{state:'active',entry:parent}]);
    let reverse=rows.length-1;for await(const entry of work.entries({reverse:true})){if(entry.projectId===parent.projectId)assert.equal(reverse,parentPosition);if(entry.projectId===child.projectId)assert.equal(reverse,childPosition);reverse--;}assert.equal(reverse,-1);
   });
   const extra=make(path.join(owner.root,'Added while pending'));await registry.apply(await registry.version(),[{state:'active',entry:extra}]);
-  const target=new Workspace(destination,vault);await mkdir(destination);await privateDirectory(destination,'.observanda');await target.writeFile(path.join(destination,WORKSPACE_BUNDLE_MOVE),serialize({...value,vaultId:vault.id,phase:'workspace'}));
+  const target=new Workspace(destination,vault);await privateDirectory(destination,'.observanda');await target.writeFile(path.join(destination,WORKSPACE_BUNDLE_MOVE),serialize({...value,vaultId:vault.id,phase:'workspace'}));
   await assert.rejects(new WorkspaceProjectMove(owner,{withProject:async()=>assert.fail('Changed pending membership must refuse before owner access')}).run(destination,{activate:async()=>assert.fail('Changed pending membership must not activate')}),{code:'CONFLICT'});
   await registry.apply(await registry.version(),[{state:'active',entry:{...internal,root:path.join(destination,'Changed current location')}}]);
   await withWorkspaceMoveDirectory(owner,value,async work=>assert.equal((await work.get(internal.projectId)).root,internal.root));

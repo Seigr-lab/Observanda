@@ -5,6 +5,7 @@ import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {readFile,realpath,rename,unlink,opendir} from 'node:fs/promises';
 import {NativeProjectMoveBooks} from './native-project-book-move.js';
+import {assertWorkspaceProjectMoveOwner} from './workspace-project-move-owner.js';
 import {NativePortabilityCollection,createPortabilityCollection,portabilityCollection,releasePortabilityCollection,validPortabilityCollection} from './portability-collection.js';
 import {ProjectStorage} from './project-storage.js';
 import {LabBookRegistry} from './lab-book-registry.js';
@@ -39,6 +40,7 @@ const identity=value=>value&&Object.keys(value).sort().join()==='dev,ino'&&['dev
 const terminal=value=>['complete','cancelled'].includes(value.phase);
 export function validateNativeProjectMove(value){
  if(value?.version!==3||![value.id,value.projectId,value.namespaceId,value.vaultId,value.sourceId].every(researchId)||!['preparing','prepared','frozen','copying','verified','adopted','retired','releasing','complete','cancelled','cancelling','cancel-releasing'].includes(value.phase)||![value.source,value.destination].every(root=>typeof root==='string'&&path.isAbsolute(root)&&path.resolve(root)===root&&root!==path.parse(root).root)||value.source===value.destination||inside(value.source,value.destination)||inside(value.destination,value.source)||!identity(value.sourceDirectory)||!hash(value.accessHash)||value.parentId!==null&&!researchId(value.parentId)||!Number.isSafeInteger(value.retainedCount)||value.retainedCount<0||!validPortabilityCollection(value.retained))throw new AppError('STORAGE_MOVE_STATE');
+ if(value.workspaceMoveId!==undefined&&(!researchId(value.workspaceMoveId)||typeof value.workspaceMoveDestination!=='string'||!path.isAbsolute(value.workspaceMoveDestination)||path.resolve(value.workspaceMoveDestination)!==value.workspaceMoveDestination||!inside(value.workspaceMoveDestination,value.destination)||!hash(value.workspaceMoveRevision))||value.workspaceMoveId===undefined&&(value.workspaceMoveDestination!==undefined||value.workspaceMoveRevision!==undefined))throw new AppError('STORAGE_MOVE_STATE');
  if(value.bookOwners!==undefined&&!validPortabilityCollection(value.bookOwners)||value.bookKeys!==undefined&&!validPortabilityCollection(value.bookKeys))throw new AppError('STORAGE_MOVE_STATE');
  if(!['preparing','cancelled','cancelling','cancel-releasing'].includes(value.phase)&&(!validPortabilityCollection(value.bookOwners)||!validPortabilityCollection(value.bookKeys)||value.bookOwners.count!==value.bookKeys.count||value.bookDirectory?.version!==1||!validOwnerDirectoryHead(value.bookDirectory.head)||value.bookDirectory.revision!==digest(serialize(value.bookDirectory.head))||value.bookDirectory.head?.kind!=='books'||value.bookDirectory.head.ownerId!==value.projectId||(value.bookDirectory.head.roots?.active?.count??0)!==value.bookOwners.count))throw new AppError('STORAGE_MOVE_STATE');
  if(['verified','adopted','retired','releasing','complete'].includes(value.phase)&&(!researchId(value.destinationId)||!identity(value.destinationDirectory)||!validDatabaseRetention(value.retention)))throw new AppError('STORAGE_MOVE_STATE');
@@ -74,7 +76,7 @@ export async function assertProjectMoveDatabases(root,boundaries,books){
 export class NativeProjectMove{
  constructor(command){this.command=command;this.registry=command.registry;this.workspace=command.workspace;}
  async cancel(storage,{id,checkpoint=async()=>{}}){
-  const value=await this.command.read(storage.projectId);if(value?.version!==3||value.id!==id)throw new AppError('NOT_FOUND');if(value.phase==='cancelled')return value;if(!['preparing','prepared','frozen','copying','verified','cancelling','cancel-releasing'].includes(value.phase))throw new AppError('STORAGE_PROJECT_BUSY');
+  const value=await this.command.read(storage.projectId);if(value?.version!==3||value.id!==id)throw new AppError('NOT_FOUND');if(value.workspaceMoveId)throw new AppError('STORAGE_PROJECT_BUSY');if(value.phase==='cancelled')return value;if(!['preparing','prepared','frozen','copying','verified','cancelling','cancel-releasing'].includes(value.phase))throw new AppError('STORAGE_PROJECT_BUSY');
   const entry=await this.registry.locate(storage.projectId);if(entry.root!==value.source||storage.root!==value.source||storage.vault?.id!==value.vaultId)throw new AppError('CONFLICT');
   return ownedMoveScope(value,async()=>{
    await this.source(value,storage.vault);const rootMarker=await moveSource(value.source),expected={id:value.id,destination:value.destination};if(rootMarker&&serialize(rootMarker)!==serialize(expected))throw new AppError('STORAGE_MOVE_STATE');
@@ -109,11 +111,11 @@ export class NativeProjectMove{
    await checkpoint('cancel-keys-erased');const marker=await moveSource(value.source);if(marker){if(serialize(marker)!==serialize(expected))throw new AppError('STORAGE_MOVE_STATE');await unlink(path.join(value.source,MOVE_SOURCE));}await checkpoint('cancel-unfrozen');value.keysReleased=true;value.phase='cancelled';await this.command.save(value);return value;
   });
  }
- async initial(projectId,vault,{id,path:input,withBook}){
-  const entry=await this.registry.locate(projectId),source=await realpath(entry.root),destination=await resolveLocation(input);await assertProjectTransferDestination(this.registry,destination);if(inside(source,destination)||inside(destination,source)||source===destination)throw new AppError('STORAGE_PATH');requireStorageName(destination,storageFolderName(source));
+ async initial(projectId,vault,{id,path:input,withBook,workspaceMoveId,workspaceMove}){
+  const entry=await this.registry.locate(projectId),source=await realpath(entry.root),destination=await resolveLocation(input);if(workspaceMoveId===undefined)await assertProjectTransferDestination(this.registry,destination);else if(!workspaceMove||workspaceMove.value.id!==workspaceMoveId)throw new AppError('STORAGE_MOVE_STATE');if(inside(source,destination)||inside(destination,source)||source===destination)throw new AppError('STORAGE_PATH');requireStorageName(destination,storageFolderName(source));
   const storage=new ProjectStorage(source,projectId,vault);await new ProjectBookOwners(storage).ready();const pin=await captureProjectBookCopyDirectory(new LabBookRegistry(storage));if((pin.head.roots.active?.count??0)&&typeof withBook!=='function'){const error=new AppError('ACCESS_LOCKED');error.operationNotStarted=true;throw error;}
   const access=await readAccess(source),binding=await catalogueBinding(source);authenticateKeyring(access.value,vault);if(entry.vaultId!==vault.id||binding?.placement!=='project'||binding.projectId!==projectId)throw new AppError('DATABASE_LOCATION');
-  const value={version:3,id,projectId,source,destination,vaultId:vault.id,namespaceId:entry.namespaceId,parentId:entry.parentId,sourceId:binding.id,sourceDirectory:await projectMoveDirectory(source),accessHash:digest(await readFile(path.join(source,'.observanda/access.json'))),retained:new NativePortabilityCollection(null,randomUUID()).empty(),retainedCount:0,phase:'preparing'};await this.command.save(value);return value;
+  const value={version:3,id,projectId,source,destination,vaultId:vault.id,namespaceId:entry.namespaceId,parentId:entry.parentId,sourceId:binding.id,sourceDirectory:await projectMoveDirectory(source),accessHash:digest(await readFile(path.join(source,'.observanda/access.json'))),retained:new NativePortabilityCollection(null,randomUUID()).empty(),retainedCount:0,phase:'preparing',...(workspaceMoveId?{workspaceMoveId,workspaceMoveDestination:workspaceMove.value.destination,workspaceMoveRevision:workspaceMove.value.directory.revision}:{})};if(workspaceMoveId)await assertWorkspaceProjectMoveOwner(this.registry,value,workspaceMove);await this.command.save(value);return value;
  }
  async currentBoundaries(value,boundaries){
   let count=0;await this.registry.inspect(async view=>{let previous=null;for await(const {entry} of view.entries({index:'location',prefix:projectRegistryDescendantPrefix(value.source,this.workspace.root)})){
@@ -125,6 +127,7 @@ export class NativeProjectMove{
  async run(projectId,vault,options,prior){
   const {id,resume=false,checkpoint=async()=>{},onAdopt=async()=>{},onCopiedBook,adoptOnly=false,withBook}=options;let value=prior;
   if(!value||value.id!==id){if(value&&!terminal(value))throw new AppError('CONFLICT');if(resume||adoptOnly)throw new AppError('NOT_FOUND');value=await this.initial(projectId,vault,options);}
+  if(options.workspaceMoveId!==undefined&&options.workspaceMoveId!==value.workspaceMoveId)throw new AppError('CONFLICT');if(value.workspaceMoveId)await assertWorkspaceProjectMoveOwner(this.registry,value,options.workspaceMove);
   if(value.vaultId!==vault.id||options.path!==undefined&&await resolveLocation(options.path)!==value.destination)throw new AppError('CONFLICT');if(terminal(value)){if(value.phase==='complete'){await this.target(value,vault);await onAdopt(await this.registry.locate(projectId));}return value;}
   if(['cancelling','cancel-releasing'].includes(value.phase))return this.cancel(new ProjectStorage(value.source,projectId,vault),{id,checkpoint});
   return ownedMoveScope(value,async()=>{
@@ -142,7 +145,7 @@ export class NativeProjectMove{
    if(['prepared','frozen'].includes(value.phase)){
     if(adoptOnly)return value;const source=await this.source(value,vault);await privateDirectory(source.root,'.observanda/lab-book-creation');
     await withWriterLease(path.join(source.root,'.observanda/lab-books.lock'),()=>source.withStorageHandoff(()=>withProjectMembership(this.registry,[value.parentId,value.projectId],async()=>{
-     await assertProjectCreationSettled(this.registry,[value.projectId]);await assertProjectRelocationsSettled(this.registry,[value.projectId],{except:projectId});await books.current();await this.currentBoundaries(value,boundaries);await ownedProjectFolderPaged(source.root,{boundaries,books:books.owners});await assertProjectMoveDatabases(source.root,boundaries,books.owners);
+     if(value.workspaceMoveId)await assertWorkspaceProjectMoveOwner(this.registry,value,options.workspaceMove);await assertProjectCreationSettled(this.registry,[value.projectId]);await assertProjectRelocationsSettled(this.registry,[value.projectId],{except:projectId});await books.current();await this.currentBoundaries(value,boundaries);await ownedProjectFolderPaged(source.root,{boundaries,books:books.owners});await assertProjectMoveDatabases(source.root,boundaries,books.owners);
      const marker=await moveSource(source.root),expected={id,destination:value.destination};if(marker&&serialize(marker)!==serialize(expected))throw new AppError('STORAGE_MOVE_STATE');if(!marker)await atomicWrite(path.join(source.root,MOVE_SOURCE),serialize(expected));value.phase='frozen';await this.command.save(value);await checkpoint('root-frozen');await books.freeze(checkpoint);await books.current();value.phase='copying';await this.command.save(value);await checkpoint('owners-frozen');
     }),{existing:true,moveId:id}));
    }
@@ -158,6 +161,7 @@ export class NativeProjectMove{
    const target=await this.target(value,vault);await books.verify({retention:!fresh,onCopiedBook});if(!fresh)await verifyDatabaseRetention(target,value.retention);
    if(value.phase==='verified'){
     for(let attempt=0;;attempt++){const current=await this.registry.state(projectId),entry=current.state==='active'?current.entry:null;if(entry?.vaultId!==value.vaultId||entry.namespaceId!==value.namespaceId||![value.source,value.destination].includes(entry.root))throw new AppError('CONFLICT');if(entry.root===value.destination)break;try{await this.registry.relocate(target,{from:value.source,expected:current.revision});break;}catch(error){if(error.code!=='CONFLICT'||attempt>=7)throw error;}}
+    await onAdopt(await this.registry.locate(projectId));
     for await(const book of books.owners.entries())await new LabBookDirectory(this.registry).register(projectId,book);await checkpoint('registry');value.phase='adopted';await this.command.save(value);await checkpoint('adopted');
    }
    await onAdopt(await this.registry.locate(projectId));if(adoptOnly)return value;if((await this.registry.locate(projectId)).root!==value.destination)throw new AppError('CONFLICT');

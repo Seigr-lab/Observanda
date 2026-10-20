@@ -764,8 +764,8 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
           }
           if(url.pathname==='/api/storage/move'){
             if(data.confirmed!==true||data.id!==undefined)throw new AppError('INVALID');
-            return await storageResponse(req,res,async()=>{return workspaceDirectory.using(await resolveLocation(data.path),{replacing:context.root},async()=>{const projects=await (await historyProjects.registry()).read();
-              if(projects.value.projects.length)await withWorkspaceMoveSession(historyProjects,client,async move=>{
+            return await storageResponse(req,res,async()=>{return workspaceDirectory.using(await resolveLocation(data.path),{replacing:context.root},async()=>{const projectCount=await (await historyProjects.registry()).inspect(view=>view.count);
+              if(projectCount)await withWorkspaceMoveSession(historyProjects,client,async move=>{
                 await move.move(data.path,{activate:async(destination,movingFrom)=>{await activate(destination,client,cloneVault(context.vault),{movingFrom,followSettings:true});await move.install(context.projects??=new ProjectApplication(context.workspace,{deviceStore,authenticate,workspaceLocations:()=>workspaceDirectory.list(),publisherOptions:storage=>({...publishingOptions,connection:github?.forWorkspace(storage.root)})}));}});
               });else await moveWorkspaceTo(context.root,data.path,{vault:context.vault,activate:(destination,movingFrom)=>activate(destination,client,cloneVault(context.vault),{movingFrom,followSettings:true})});return metadata();});},json);
           }
