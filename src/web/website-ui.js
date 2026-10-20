@@ -469,7 +469,7 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
   async function showPreview(result,iframe,revision,signal,command,collectionRequest){
     canvasRequests.set(iframe,{command,request:collectionRequest});
     const doc=iframe.contentDocument,url=result.baseUrl+previewPage;
-    if(!doc?.querySelector('main')||doc.body.dataset.page!==previewTarget()){iframe.src=url;return;}
+    if(!doc?.querySelector('main')||doc.body.dataset.page!==previewTarget()){iframe.contentWindow.location.replace(url);return;}
     const response=await fetch(url,{signal});if(!response.ok)throw new Error(tr('pageLoadFailed'));
     const html=await response.text();if(revision!==version||state.page!=='website'||!iframe.isConnected)return;
     const parsed=new DOMParser().parseFromString(html,'text/html'),body=doc.importNode(parsed.body,true),base=new URL(url,location.href);
@@ -514,7 +514,7 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
         referenceNavigation.accept(referenceRequest);iframe.hidden=false;status.textContent=privatePage?tr('previewPrivate'):'';fitPreview();updateHistoryControls();
       }catch(error){if(controller.signal.aborted||!current())return;
         if(referenceRequest)referenceNavigation.reject(referenceRequest);if(collectionRequest)collectionNavigation.reject(collectionRequest);
-        preview=null;previewKey=null;document.querySelector('#website-preview-retry').hidden=false;if(!iframe.contentDocument?.querySelector('main')){iframe.hidden=true;iframe.removeAttribute('src');}status.textContent=error.code==='PRIVACY'?tr('previewPrivacy'):error.message??tr('previewFailed');
+        preview=null;previewKey=null;document.querySelector('#website-preview-retry').hidden=false;if(!iframe.contentDocument?.querySelector('main')){iframe.hidden=true;iframe.contentWindow.location.replace('about:blank');}status.textContent=error.code==='PRIVACY'?tr('previewPrivacy'):error.message??tr('previewFailed');
       }finally{if(previewController===controller)previewController=null;}
     },iframe.contentDocument?.body?.dataset.page===designTarget?200:0);
   }

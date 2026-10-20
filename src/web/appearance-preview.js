@@ -37,7 +37,7 @@ export function appearancePreview({state,api,option,documents}){
   if(!frame||!selector||!note)return;
   const version=generation,context=websiteSnapshot(state),workspace=state.book.id,request=new AbortController();controller=request;
   const current=()=>version===generation&&context===websiteSnapshot(state)&&workspace===state.book?.id&&active()&&frame.isConnected;
-  frame.removeAttribute('src');selector.disabled=true;selector.innerHTML=option('',t('appearance','loadingPage'),'');note.textContent=t('appearance','loadingPreview');
+  frame.contentWindow.location.replace('about:blank');selector.disabled=true;selector.innerHTML=option('',t('appearance','loadingPage'),'');note.textContent=t('appearance','loadingPreview');
   const retry=document.querySelector('[data-action="theme-preview-retry"]');if(retry)retry.hidden=true;
   try{
    const indexed=documents?.enabled()||state.storage.researchStorage==='catalogue'&&state.storage.researchFormatVersion===21,source=documents?.enabled()?await documents.preview():{websitePin:state.websitePin};
@@ -55,7 +55,7 @@ export function appearancePreview({state,api,option,documents}){
    choices(result,selected);
    document.querySelector('#design-source').value=result.source;
    note.textContent=t('appearance',result.source==='examples'?'examplesNote':'websiteNote');
-   frame.src=result.baseUrl+state.designPage;
+   frame.contentWindow.location.replace(result.baseUrl+state.designPage);
    frame.onload=async()=>{if(!current())return;try{
     enhanceAppearanceReading(frame);
     const currentURL=new URL(frame.contentWindow.location.href),path=currentURL.pathname;if(!path.startsWith(result.baseUrl))return;

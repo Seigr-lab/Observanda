@@ -102,7 +102,7 @@ export function appearanceUI({ fontLibrary, textControls, state, esc, field, opt
     sync();
     if(el.dataset.appearanceAxis){if(!el.checkValidity())return true;remember();const key=el.dataset.appearanceAxis+'Axes',axes=state.book.appearance[key]??={},tag=el.dataset.fontAxis;if(el.value==='')delete axes[tag];else axes[tag]=Number(el.value);dirty();refresh();preview();return true;}
     if(el.id==='design-source'){state.designSource=el.value;state.designPage=null;preview();return true;}
-    if(el.id==='design-page'){state.designPage=el.value;const result=state.designResult;if(result)document.querySelector('#design-preview').src=result.baseUrl+el.value;return true;}
+    if(el.id==='design-page'){state.designPage=el.value;const result=state.designResult;if(result)document.querySelector('#design-preview').contentWindow.location.replace(result.baseUrl+el.value);return true;}
     if (!el.dataset.appearance) return false;
     remember(); const key = el.dataset.appearance;
     state.book.appearance[key] = ['width','fontSize','lineHeight','radius'].includes(key) ? Number(el.value) : el.value;

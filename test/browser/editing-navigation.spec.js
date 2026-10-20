@@ -1,59 +1,60 @@
-import {task,editorTab,openPageSettings} from './composer-helper.js';
+import {task} from './composer-helper.js';
 import {navigate,preferences,editWorkspace,openDefaultWebsite} from './preferences-helper.js';
 import {test,expect} from '@playwright/test';
-import {mkdtemp,readFile,rm} from 'node:fs/promises';
+import {mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {startServer} from '../../src/server.js';
-import {Workspace} from '../../src/storage.js';
+import {testServer} from '../device-fixture.js';
+import {encryptedFixture} from './encrypted-fixture.js';
+import {clearVault} from '../../src/encryption.js';
+import {WebsiteSites} from '../../src/website-sites.js';
 import {sampleNotebook} from '../../src/sample.js';
-import {proseText} from '../../src/web/prose-model.js';
-let app,root,parent,book;
-test.beforeEach(async({page})=>{parent=await mkdtemp(path.join(os.tmpdir(),'observanda-editing-'));root=path.join(parent,'book');book={...sampleNotebook(),title:'book'};await new Workspace(root).create(book);app=await startServer({root,port:0,preferencesFile:path.join(parent,'preferences.json')});await page.goto(app.url);});
-test.afterEach(async()=>{await app.close();if(path.dirname(parent)===path.resolve(os.tmpdir()))await rm(parent,{recursive:true,force:true,maxRetries:5,retryDelay:100});});
+let app,parent,book,fixture;
+test.beforeEach(async({page})=>{test.setTimeout(90000);page.setDefaultTimeout(10000);parent=await mkdtemp(path.join(os.tmpdir(),'observanda-editing-'));const seed=sampleNotebook();seed.title='workspace';fixture=await encryptedFixture(parent,seed);book=(await fixture.workspace.read()).book;app=await testServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,port:0,preferencesFile:path.join(parent,'preferences.json')});await page.goto(app.url);});
+test.afterEach(async()=>{await app?.close();clearVault(fixture?.vault);if(parent&&path.dirname(parent)===path.resolve(os.tmpdir()))await rm(parent,{recursive:true,force:true,maxRetries:5,retryDelay:100});});
 const guard=page=>page.getByRole('dialog',{name:'Unsaved changes',exact:true});
 const choose=(page,name)=>guard(page).getByRole('button',{name,exact:true}).click();
-async function editRecord(page){await navigate(page,'All records');await page.getByRole('button',{name:'Watching a seed unfold',exact:true}).click();await page.getByRole('button',{name:'Edit record',exact:true}).click();await expect(page).toHaveURL(/#\/records\/[a-f0-9-]+$/);}
+async function editWebsite(page){await navigate(page,'Website editor');await page.getByRole('button',{name:'Add page',exact:true}).click();await page.getByLabel('Page title',{exact:true}).fill('Navigation page');await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');}
 async function range(control,value){await control.evaluate((el,value)=>{el.value=String(value);el.dispatchEvent(new Event('input',{bubbles:true}));},value);}
 
 test('leaving an editor offers Stay, Discard and Save without carrying mistakes into other sections',async({page})=>{
-  const raw=await readFile(path.join(root,'observanda.json'),'utf8');await editRecord(page);
-  const original=book.entries.find(e=>e.title==='Watching a seed unfold').body;
-  await page.getByLabel('Summary / context').fill('An unwanted change');await navigate(page,'Website editor');
-  await expect(guard(page)).toBeVisible();await choose(page,'Stay here');await expect(page.getByLabel('Summary / context')).toHaveText('An unwanted change');expect(await readFile(path.join(root,'observanda.json'),'utf8')).toBe(raw);
-  await navigate(page,'Website editor');await choose(page,'Discard changes');await expect(page.getByRole('heading',{name:'Websites',exact:true})).toBeVisible();await openDefaultWebsite(page);await expect(page.getByRole('heading',{name:'Website',exact:true})).toBeVisible();
+  const raw=(await fixture.workspace.outline()).etag;await editWebsite(page);
+  await page.getByLabel('Page title',{exact:true}).fill('An unwanted change');await navigate(page,'Preferences');
+  await expect(guard(page)).toBeVisible();await choose(page,'Stay here');await expect(page.getByLabel('Page title',{exact:true})).toHaveValue('An unwanted change');expect((await fixture.workspace.outline()).etag).toBe(raw);
+  await navigate(page,'Preferences');await choose(page,'Discard changes');await navigate(page,'Website editor');
+  await expect(page.getByLabel('Page title',{exact:true})).toHaveValue('Navigation page');
   await task(page,'Page');await page.getByLabel('Editing area',{exact:true}).selectOption('footer');await page.getByLabel('Footer text').fill('Intended footer');await navigate(page,'Preferences');await choose(page,'Save and continue');await preferences(page,'Appearance');
   await expect(page.getByRole('heading',{name:'Appearance',exact:true})).toBeVisible();
-  const saved=(await new Workspace(root).read()).book;expect(saved.website.footer).toBe('Intended footer');expect(saved.entries.find(e=>e.title==='Watching a seed unfold').body).toBe(original);
+  expect((await new WebsiteSites(fixture.workspace).read(null)).book.website.footer).toBe('Intended footer');expect((await fixture.workspace.outline()).etag).toBe(raw);
   await page.getByRole('button',{name:/Studio/}).click();await navigate(page,'Projects');await choose(page,'Discard changes');
   await expect(page.locator('html')).toHaveAttribute('data-theme','research');
 });
 
 test('failed saves keep the decision open and preserve the draft for correction or retry',async({page})=>{
-  await editRecord(page);await page.getByLabel('Record title').fill('Keep this draft');
-  await page.route('**/api/research/records/save',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'IO',message:'Synthetic write failure'})}));
+  await editWebsite(page);await page.getByLabel('Page title',{exact:true}).fill('Keep this draft');
+  await page.route('**/api/websites/editor/save',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'IO',message:'Synthetic write failure'})}));
   await navigate(page,'Projects');await choose(page,'Save and continue');
-  await expect(guard(page).getByRole('alert')).toHaveText('Synthetic write failure');await expect(page.getByLabel('Record title')).toHaveValue('Keep this draft');
-  await page.unroute('**/api/research/records/save');await choose(page,'Save and continue');await expect(page.getByRole('heading',{name:'Projects',exact:true})).toBeVisible();
-  expect((await new Workspace(root).read()).book.entries.some(e=>e.title==='Keep this draft')).toBe(true);
+  await expect(guard(page).getByRole('alert')).toHaveText('Synthetic write failure');await expect(page.getByLabel('Page title',{exact:true})).toHaveValue('Keep this draft');
+  await page.unroute('**/api/websites/editor/save');await choose(page,'Save and continue');await expect(page.getByRole('heading',{name:'Projects',exact:true})).toBeVisible();
+  expect((await new WebsiteSites(fixture.workspace).read(null)).book.pages[0].title).toBe('Keep this draft');
 });
 
 test('Back, Forward and direct hash navigation preserve routes when staying and resolve drafts before leaving',async({page})=>{
-  await editRecord(page);const recordURL=page.url();await page.getByLabel('Summary / context').fill('Back draft');
-  await page.evaluate(()=>history.back());await expect(guard(page)).toBeVisible();await choose(page,'Stay here');await expect(page).toHaveURL(recordURL);await expect(page.getByLabel('Summary / context')).toHaveText('Back draft');
-  await page.evaluate(()=>history.back());await choose(page,'Discard changes');await expect(page).toHaveURL(/#\/records\/[a-f0-9-]+\/read$/);
-  await page.evaluate(()=>history.forward());await expect(page).toHaveURL(recordURL);await expect(page.getByLabel('Summary / context')).not.toHaveText('Back draft');
-  await page.getByLabel('Summary / context').fill('Hash draft');await page.evaluate(()=>{location.hash='#/appearance';});await choose(page,'Stay here');await expect(page).toHaveURL(recordURL);
-  await page.evaluate(()=>{location.hash='#/appearance';});await choose(page,'Save and continue');await expect(page).toHaveURL(/#\/appearance$/);expect(proseText((await new Workspace(root).read()).book.entries.find(e=>e.title==='Watching a seed unfold').body)).toBe('Hash draft');
+  await editWebsite(page);await page.getByRole('button',{name:'Websites',exact:true}).click();await openDefaultWebsite(page);const editorURL=page.url();await page.getByLabel('Page title',{exact:true}).fill('Back draft');
+  await page.evaluate(()=>history.back());await expect(guard(page)).toBeVisible();await choose(page,'Stay here');await expect(page).toHaveURL(editorURL);await expect(page.getByLabel('Page title',{exact:true})).toHaveValue('Back draft');
+  await page.evaluate(()=>history.back());await choose(page,'Discard changes');await expect(page.getByRole('heading',{name:'Websites',exact:true})).toBeVisible();
+  await page.evaluate(()=>history.forward());await expect(page).toHaveURL(editorURL);await expect(page.getByLabel('Page title',{exact:true})).toHaveValue('Navigation page');
+  await page.getByLabel('Page title',{exact:true}).fill('Hash draft');await page.evaluate(()=>{location.hash='#/projects';});await choose(page,'Stay here');await expect(page).toHaveURL(editorURL);
+  await page.evaluate(()=>{location.hash='#/projects';});await choose(page,'Save and continue');await expect(page).toHaveURL(/#\/projects$/);expect((await new WebsiteSites(fixture.workspace).read(null)).book.pages[0].title).toBe('Hash draft');
 });
 
 test('publishing and local access forms cannot silently lose or carry unsaved fields',async({page})=>{
   await preferences(page,'Integrations');await page.getByLabel('GitHub owner / organization').fill('discard-me');
   await navigate(page,'Projects');await choose(page,'Stay here');await expect(page.getByLabel('GitHub owner / organization')).toHaveValue('discard-me');
   await navigate(page,'Projects');await choose(page,'Discard changes');await preferences(page,'Integrations');await expect(page.getByLabel('GitHub owner / organization')).toHaveValue('');
-  await preferences(page,'Storage & access');await page.getByRole('button',{name:'Create encrypted copy',exact:true}).click();await page.getByLabel('Workspace folder').fill('Unsubmitted location');
-  await page.keyboard.press('Escape');await choose(page,'Stay here');await expect(page.getByLabel('Workspace folder')).toHaveValue('Unsubmitted location');
-  await page.keyboard.press('Escape');await choose(page,'Discard changes');await page.getByRole('button',{name:'Create encrypted copy',exact:true}).click();await expect(page.getByLabel('Workspace folder')).toHaveValue('');
+  await preferences(page,'Storage & access');await page.getByLabel('Username (optional)').fill('Unsubmitted account');
+  await navigate(page,'Projects');await choose(page,'Stay here');await expect(page.getByLabel('Username (optional)')).toHaveValue('Unsubmitted account');
+  await navigate(page,'Projects');await choose(page,'Discard changes');await preferences(page,'Storage & access');await expect(page.getByLabel('Username (optional)')).toHaveValue('');
 });
 
 test('inline workspace details protect edits and invalid forms cannot be saved by navigating away',async({page})=>{
@@ -65,9 +66,9 @@ test('inline workspace details protect edits and invalid forms cannot be saved b
 });
 
 test('workspace switching asks before saving and does not implicitly persist the active draft',async({page})=>{
-  const before=await readFile(path.join(root,'observanda.json'),'utf8');await editRecord(page);await page.getByLabel('Summary / context').fill('Do not persist on switching');
-  await page.getByRole('button',{name:'Workspaces',exact:true}).click();await choose(page,'Stay here');await expect(page.getByLabel('Summary / context')).toHaveText('Do not persist on switching');
-  await page.getByRole('button',{name:'Workspaces',exact:true}).click();await choose(page,'Discard changes');await expect(page.getByRole('heading',{name:'Workspaces',exact:true})).toBeVisible();expect(await readFile(path.join(root,'observanda.json'),'utf8')).toBe(before);
+  const before=(await fixture.workspace.outline()).etag;await editWebsite(page);await page.getByLabel('Page title',{exact:true}).fill('Do not persist on switching');
+  await page.getByRole('button',{name:'Workspaces',exact:true}).click();await choose(page,'Stay here');await expect(page.getByLabel('Page title',{exact:true})).toHaveValue('Do not persist on switching');
+  await page.getByRole('button',{name:'Workspaces',exact:true}).click();await choose(page,'Discard changes');await expect(page.getByRole('heading',{name:'Workspaces',exact:true})).toBeVisible();expect((await fixture.workspace.outline()).etag).toBe(before);expect((await new WebsiteSites(fixture.workspace).read(null)).book.pages[0].title).toBe('Navigation page');
 });
 
 test('menu placement, size, visibility and ordering are previewable, discardable and persist only when saved',async({page})=>{
@@ -78,10 +79,10 @@ test('menu placement, size, visibility and ordering are previewable, discardable
   await expect(page.locator('html')).toHaveAttribute('data-navigation','right');expect(await page.locator('html').evaluate(el=>el.style.getPropertyValue('--app-navigation-width'))).toBe('330px');
   expect(await page.locator('#workspace-navigation > [data-nav-section]').evaluateAll(els=>els.map(el=>el.dataset.navSection))).toEqual(['website','projects','workspace']);
   await layout.getByRole('button',{name:'Done',exact:true}).click();await choose(page,'Discard changes');await expect(page.locator('html')).toHaveAttribute('data-navigation','left');
-  await preferences(page,'Appearance');await page.getByRole('button',{name:'App layout',exact:true}).click();await layout.getByLabel('Menu position').selectOption('top');await layout.getByRole('button',{name:'Move Website earlier',exact:true}).click();await layout.getByRole('button',{name:'Save app settings',exact:true}).click();await layout.getByRole('button',{name:'Done',exact:true}).click();
+  await preferences(page,'Appearance');await page.getByRole('button',{name:'App layout',exact:true}).click();await layout.getByLabel('Menu position').selectOption('top');await layout.getByRole('button',{name:'Move Website earlier',exact:true}).click();await layout.getByRole('button',{name:'Save app settings',exact:true}).click();await expect(layout.locator('[data-interface-status]')).not.toContainText(/Saving|Unsaved/);await layout.getByRole('button',{name:'Done',exact:true}).click();
   await page.reload();await expect(page.locator('html')).toHaveAttribute('data-navigation','top');await expect(page.locator('#workspace-navigation > [data-nav-section]')).toHaveCount(3);expect(await page.locator('#workspace-navigation > [data-nav-section]').evaluateAll(els=>els.map(el=>el.dataset.navSection))).toEqual(['website','projects','workspace']);
   await page.screenshot({path:test.info().outputPath('menu-top.png'),fullPage:true});
-  await page.getByRole('button',{name:'App layout',exact:true}).click();await layout.getByLabel('Hide the menu until I need it').check();await layout.getByRole('button',{name:'Save app settings',exact:true}).click();await layout.getByRole('button',{name:'Done',exact:true}).click();await expect(page.locator('.sidebar')).toBeHidden();await page.getByRole('button',{name:'Menu',exact:true}).click();await expect(page.locator('.sidebar')).toBeVisible();
+  await page.getByRole('button',{name:'App layout',exact:true}).click();await layout.getByLabel('Hide the menu until I need it').check();await layout.getByRole('button',{name:'Save app settings',exact:true}).click();await expect(layout.locator('[data-interface-status]')).not.toContainText(/Saving|Unsaved/);await layout.getByRole('button',{name:'Done',exact:true}).click();await expect(page.locator('.sidebar')).toBeHidden();await page.getByRole('button',{name:'Menu',exact:true}).click();await expect(page.locator('.sidebar')).toBeVisible();
   await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.getByRole('button',{name:'Menu',exact:true}).click();await expect(page.getByRole('button',{name:'Projects',exact:true})).toBeVisible();expect(errors).toEqual([]);
 });
 
@@ -89,13 +90,36 @@ test('menu placement, size, visibility and ordering are previewable, discardable
 test('failed website saves retain page drafts; repeated saves never duplicate a page and discard removes failed edits',async({page})=>{
   await navigate(page,'Website editor');await page.getByRole('button',{name:'Add page',exact:true}).click();
   await page.getByLabel('Page title',{exact:true}).fill('One saved page');await page.getByLabel('Page introduction',{exact:true}).fill('Original content');
-  let release;const waiting=new Promise(resolve=>{release=resolve;});await page.route('**/api/notebook/save',async route=>{await waiting;await route.continue();});
+  let release;const waiting=new Promise(resolve=>{release=resolve;});await page.route('**/api/websites/editor/save',async route=>{await waiting;await route.continue();});
   await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.getByRole('button',{name:'Save website',exact:true})).toBeDisabled();release();
-  await expect(page.locator('#save-status')).toHaveText('Saved');await page.unroute('**/api/notebook/save');
-  let saved=(await new Workspace(root).read()).book;expect(saved.pages).toHaveLength(1);
+  await expect(page.locator('#save-status')).toHaveText('Saved');await page.unroute('**/api/websites/editor/save');
+  let saved=(await new WebsiteSites(fixture.workspace).read(null)).book;expect(saved.pages).toHaveLength(1);
   await page.getByLabel('Page title',{exact:true}).fill('Unwanted failed edit');
-  await page.route('**/api/notebook/save',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'IO',message:'Synthetic form write failure'})}));
+  await page.route('**/api/websites/editor/save',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'IO',message:'Synthetic form write failure'})}));
   await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#notice')).toContainText('Synthetic form write failure');await expect(page.getByLabel('Page title',{exact:true})).toHaveValue('Unwanted failed edit');
-  await page.getByRole('button',{name:'Discard changes',exact:true}).click();await page.unroute('**/api/notebook/save');
-  await task(page,'Page');await page.getByLabel('Editing area',{exact:true}).selectOption('footer');await page.getByLabel('Footer text').fill('A separate intended change');await page.locator('.section-save [data-action=save]').click();await expect(page.locator('#save-status')).toHaveText('Saved');saved=(await new Workspace(root).read()).book;expect(saved.pages).toHaveLength(1);expect(saved.pages[0].title).toBe('One saved page');
+  await page.getByRole('button',{name:'Discard changes',exact:true}).click();await expect(page.getByLabel('Page title',{exact:true})).toHaveValue('One saved page');await page.unroute('**/api/websites/editor/save');
+  await task(page,'Page');await page.getByLabel('Editing area',{exact:true}).selectOption('footer');await page.getByLabel('Footer text').fill('A separate intended change');await page.locator('.section-save [data-action=save]').click();await expect(page.locator('#save-status')).toHaveText('Saved');saved=(await new WebsiteSites(fixture.workspace).read(null)).book;expect(saved.pages).toHaveLength(1);expect(saved.pages[0].title).toBe('One saved page');
+});
+
+
+test('automatic website previews and appearance choices do not add browser history entries',async({page})=>{
+  await editWebsite(page);
+  const editorURL=page.url();await page.locator('.website-site-context').getByRole('button',{name:'Appearance',exact:true}).click();
+  const frame=page.locator('#design-preview'),selector=page.getByLabel('Preview content',{exact:true});
+  await expect(frame.contentFrame().locator('main')).toBeVisible();await expect(selector).toBeEnabled();
+  const historyLength=await page.evaluate(()=>history.length);
+  for(const mode of ['examples','website']){
+    const pending=page.waitForResponse(response=>response.url().includes('/api/appearance-preview')&&response.request().method()==='POST');
+    await selector.selectOption(mode);const result=await (await pending).json();
+    await expect.poll(()=>frame.evaluate(el=>el.contentWindow.location.pathname)).toContain(result.baseUrl);
+    await expect(frame.contentFrame().locator('main')).toBeVisible();
+    expect(await page.evaluate(()=>history.length)).toBe(historyLength);
+    if(mode==='examples'){
+      const pages=page.getByLabel('Preview page',{exact:true}),current=await pages.inputValue(),choices=await pages.locator('option').evaluateAll(options=>options.map(option=>option.value));
+      expect(choices.length).toBeGreaterThan(1);const next=choices.find(value=>value!==current);await pages.selectOption(next);
+      await expect.poll(()=>frame.evaluate(el=>el.contentWindow.location.pathname)).toBe(result.baseUrl+next);
+      expect(await page.evaluate(()=>history.length)).toBe(historyLength);
+    }
+  }
+  await page.evaluate(()=>history.back());await expect(page).toHaveURL(editorURL);await expect(page.getByRole('heading',{name:'Website',exact:true})).toBeVisible();
 });
