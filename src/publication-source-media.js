@@ -41,7 +41,7 @@ export async function publicationSourceMedia(store,snapshot,pinned,host,query,{s
    for(;index>=0&&index<count;index+=reverse?-1:1){
     signal?.throwIfAborted();if(attachments===256||items.length===12){more=true;break;}attachments++;
     const point={record:candidate.key,attachment:index};first??=point;last=point;
-    const attachment=await read(index),shared=selected?attachment.share:patch?.attachments.find(choice=>choice.id===attachment.id)?.share??attachment.share;
+    const attachment=await read(index),shared=attachment.share===true&&(selected?true:patch?.attachments.find(choice=>choice.id===attachment.id)?.share??true);
     if(!shared)continue;
     const publicId=candidate.historical?attachment.id:owner.id('media',attachment.id),sourceId=candidate.historical?Object.entries(owner.descriptors.get(candidate.historical).mediaIdentities).find(([,value])=>value===publicId)?.[0]:attachment.id;
     if(!sourceId)throw new AppError('CATALOGUE_DAMAGED');
