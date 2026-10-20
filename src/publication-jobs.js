@@ -33,7 +33,7 @@ const hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const inputFile=id=>{if(!researchId(id))throw new AppError('INVALID');return '.observanda/release-inputs/'+id+'.json';};
 const candidateFile=id=>{if(!hash(id))throw new AppError('INVALID');return '.observanda/release-candidates/'+id+'.json';};
 export class PublicationJobs{
- constructor(workspace,{sources,sourceReader}={}){workspace=publicationWorkspace(workspace);if(sources!==undefined&&!validPublicationSources(sources))throw new AppError('INVALID');this.workspace=workspace;this.sources=sources===undefined?undefined:structuredClone(sources);this.sourceReader=sourceReader;this.feed=new MetadataFeed(workspace,'.observanda/release-list');}
+ constructor(workspace,{sources,sourceReader,sourceAccess}={}){workspace=publicationWorkspace(workspace);if(sources!==undefined&&!validPublicationSources(sources))throw new AppError('INVALID');this.workspace=workspace;this.sources=sources===undefined?undefined:structuredClone(sources);this.sourceReader=sourceReader;this.sourceAccess=sourceAccess;this.feed=new MetadataFeed(workspace,'.observanda/release-list');}
  async pin({etag,websitePin,websiteDraft,book,workspaceId,draft:command,edition,blockedValues=[]},{signal,workspace=this.workspace,id=randomUUID()}={}){
    let capturedPin;
    const input=await publicationSource(workspace,{etag,websitePin,websiteDraft,book,workspaceId,draft:command},{signal,consume:async(metadata,records,options)=>{capturedPin=options.websitePin;const sources=this.sources??metadata.website.researchSources??[];if(!validPublicationSources(sources))throw new AppError('INVALID');const input=await retainPublicationInput(workspace,id,metadata,records,{...options,signal,sourceReader:this.sourceReader,edition,hasSources:!!sources.length,deferFinalization:!!sources.length});return sources.length?retainPublicationSources(workspace,id,input,sources,await this.sourceReader?.({signal}),{signal,sourceReader:this.sourceReader}):input;}});
@@ -45,15 +45,30 @@ export class PublicationJobs{
    return source;
  }
  async start(command,queue){
-  return withPublicationCapture(this.workspace,async(workspace,id,finish)=>{
+  let revoke;
+  try{return await withPublicationCapture(this.workspace,async(workspace,id,finish)=>{
    const source=await this.pin(command,{workspace,id});
    return finish(async()=>{
     await this.feed.ensureLocked();
     await this.workspace.writeMetadata('.observanda/release-list/'+id+'.json',serialize({id,reviewId:source.reviewId,createdAt:source.createdAt,summary:source.summary}));
     await this.feed.putLocked(source);
+    if(source.hasSources||source.sourceGroups)revoke=this.sourceAccess?.bind(id,this.sourceReader);
     return queue.enqueueLocked({id,type:'publication.prepare',scope:source.workspaceId,input:{revision:digest(serialize(source))}});
    });
-  },{write:fn=>queue.transaction(fn)});
+  },{write:fn=>queue.transaction(fn)});}catch(error){revoke?.();throw error;}
+ }
+ async control(queue,id,action){
+  const job=await queue.read(id);if(!job||job.type!=='publication.prepare')throw new AppError('NOT_FOUND');await queue.authorize(job);
+  if(!['cancel','retry'].includes(action))throw new AppError('INVALID');
+  if(action==='retry'&&!['failed','cancelled'].includes(job.state))throw new AppError('JOB_CHANGED');
+  let revoke;this.sourceAccess?.forget(id);
+  try{
+   if(action==='retry'){
+    const source=await this.source(id);await assertPublicationSourcePermissions(this.workspace,source,{sourceReader:this.sourceReader});
+    if(source.hasSources||source.sourceGroups)revoke=this.sourceAccess?.bind(id,this.sourceReader);
+   }
+   return await queue.control(id,action);
+  }catch(error){revoke?.();throw error;}
  }
  // Compatibility callers wait for their reply, but use the same pinned input,
  // page renderer and retained-file reader as durable background preparations.
@@ -219,8 +234,8 @@ export class PublicationJobs{
  }
 
 }
-export function publicationJobDefinitions(workspace,queue){const releases=new PublicationJobs(workspace);return {'publication.prepare':{
+export function publicationJobDefinitions(workspace,queue,{sourceAccess}={}){const releases=new PublicationJobs(workspace);return {'publication.prepare':{
  authorize:job=>releases.authorize(job),
- prepare:async(job,options)=>{await releases.clean(job.id,{write:operation=>queue().transaction(async()=>{await queue().held(job.id,job.lease.token);return withWorkspaceMetadataBatch(workspace,operation);})});return releases.prepare(job,options);},
+ prepare:async(job,options)=>{const sourceReader=sourceAccess?.take(job.id),prepared=new PublicationJobs(workspace,{sourceReader});await releases.clean(job.id,{write:operation=>queue().transaction(async()=>{await queue().held(job.id,job.lease.token);return withWorkspaceMetadataBatch(workspace,operation);})});return prepared.prepare(job,options);},
  commit:(job,candidate)=>releases.commit(job,candidate),discard:job=>releases.clean(job.id,{only:job.lease.token})
 }};}

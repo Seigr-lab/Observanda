@@ -16,7 +16,7 @@ export function websitePublisher(publisher,workspace){
  Object.defineProperty(scoped,'token',{get:()=>publisher.token,set:value=>{publisher.token=value;}});return scoped;
 }
 function publicationDefinitions(workspace,publisher,current,services){
- const definitions=(w,p,q)=>({...publicationJobDefinitions(w,q),...deploymentJobDefinitions(w,p,q,services),...repositoryJobDefinitions(w,p,q),...publicationVerificationDefinitions(w,p,q)});
+ const definitions=(w,p,q)=>({...publicationJobDefinitions(w,q,services),...deploymentJobDefinitions(w,p,q,services),...repositoryJobDefinitions(w,p,q),...publicationVerificationDefinitions(w,p,q)});
  const defaultWorkspace=websiteWorkspace(workspace,null),normal=definitions(defaultWorkspace,websitePublisher(publisher,defaultWorkspace),()=>websiteJobQueue(current(),null)),result={};
  for(const [type,definition] of Object.entries(normal))result[type]=Object.fromEntries(Object.keys(definition).map(method=>[method,(job,...args)=>{
   if(!job.input.websiteId)return definition[method](job,...args);

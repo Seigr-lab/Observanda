@@ -1,6 +1,6 @@
 import {AppError} from './errors.js';
 import {researchId} from './web/research-reference.js';
-// A queued deployment retains only its initiating session's source resolver.
+// A queued publication job retains only its initiating session's source resolver.
 // Credentials are neither serialized into jobs nor shared between jobs.
 export class PublicationSourceAccess {
  constructor(){this.pending=new Map();}

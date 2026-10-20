@@ -44,14 +44,14 @@ export class ProjectPublications{
   // Resolve its saved website owner only within this authorized project.
   if(request.id&&!websiteContext&&websiteId===null&&['file','export'].includes(operation)){const raw=await storage.readMetadata('.observanda/website-editions/'+request.id+'.json',4096);if(raw)websiteId=JSON.parse(raw).websiteId;}
   const workspace=websiteWorkspace(storage,websiteId,{websitePin});
-  const publisher=websitePublisher(basePublisher,workspace),queue=websiteJobQueue(baseQueue,websiteId),releases=new PublicationJobs(workspace,{sourceReader}),blockedValues=[storage.root,os.homedir(),os.hostname()],cacheKey=id=>(websiteId??'')+':'+id;
+  const publisher=websitePublisher(basePublisher,workspace),queue=websiteJobQueue(baseQueue,websiteId),releases=new PublicationJobs(workspace,{sourceReader,sourceAccess:this.entry.sourceAccess}),blockedValues=[storage.root,os.homedir(),os.hostname()],cacheKey=id=>(websiteId??'')+':'+id;
   const candidate=async id=>{
    if(typeof id!=='string'||!/^[a-f0-9]{64}$/.test(id))throw new AppError('INVALID');
    let value=this.candidates.get(cacheKey(id));if(!value){value=await releases.read(id);if(value)this.candidates.set(cacheKey(id),value);}else await releases.assertSourcePermissions(value,{signal});return value;
   };
   const retained=async id=>{const value=await candidate(id);if(!value)throw new AppError('NOT_FOUND');return value;};
   const rollback=async value=>data.rollbackReview?new PublicationRollback(workspace,publisher,{sourceReader}).project(value,await new PublicationRollback(workspace,publisher,{sourceReader}).authorize(value,data.rollbackReview)):value;
-  const control=async(type,kind)=>{const job=await queue.read(data.id);if(!job||job.type!==type)throw new AppError('NOT_FOUND');await queue.authorize(job);if(kind==='status')return jobSummary(job);const next=await (type==='publication.deploy'?new DeploymentJobs(workspace,publisher,queue,{sourceReader,sourceAccess:this.entry.sourceAccess}).control(job.id,kind):queue.control(job.id,kind));if(kind==='cancel')worker.cancel(job.id);else worker.wake();return jobSummary(next);};
+  const control=async(type,kind)=>{const job=await queue.read(data.id);if(!job||job.type!==type)throw new AppError('NOT_FOUND');await queue.authorize(job);if(kind==='status')return jobSummary(job);const next=await (type==='publication.deploy'?new DeploymentJobs(workspace,publisher,queue,{sourceReader,sourceAccess:this.entry.sourceAccess}).control(job.id,kind):type==='publication.prepare'?releases.control(queue,job.id,kind):queue.control(job.id,kind));if(kind==='cancel')worker.cancel(job.id);else worker.wake();return jobSummary(next);};
   if(operation.startsWith('websites/')){
    const sites=new WebsiteSites(storage),method=operation.slice(9);
    if(method.startsWith('editor/')){const result=await new WebsiteEditor(storage).execute(method.slice(7),data,{signal});await check();return result;}

@@ -1088,7 +1088,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       }
       if(req.method==='POST'&&url.pathname.startsWith('/api/publication-jobs/')){
         if(!workspace.vault?.key)throw new AppError('ACCESS_LOCKED');
-        startJobs(context);const releases=new PublicationJobs(workspace,{sourceReader}),queue=publicationQueue(),data=await body(req),operation=url.pathname.slice('/api/publication-jobs/'.length);
+        startJobs(context);const releases=new PublicationJobs(workspace,{sourceReader,sourceAccess:context.publicationSourceAccess}),queue=publicationQueue(),data=await body(req),operation=url.pathname.slice('/api/publication-jobs/'.length);
         if(operation==='start'){const job=await releases.start({...data,blockedValues},queue);context.jobs.worker.wake();return json({job:jobSummary(job)},202);}
         if(operation==='list'){const page=await releases.page(queue,data);return json({...page,items:page.items.map(item=>({...item,job:jobSummary(item.job)}))});}
         if(['pages','references','analysis-review-window'].includes(operation)){
@@ -1112,7 +1112,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         if(operation==='analysis-review'){let candidate=await retainedCandidate(data.id);if(!candidate)throw new AppError('NOT_FOUND');if(data.rollbackReview){const rollback=new PublicationRollback(workspace,publisher,{sourceReader});candidate=rollback.project(candidate,await rollback.authorize(candidate,data.rollbackReview));}return json(await new AnalysisPublicationReview(workspace,{sourceReader}).save(candidate,data.decisions));}
         const job=await queue.read(data.id);if(!job||job.type!=='publication.prepare')throw new AppError('NOT_FOUND');await queue.authorize(job);
         if(operation==='status')return json({job:jobSummary(job)});
-        if(['cancel','retry'].includes(operation)){const next=await queue.control(job.id,operation);if(operation==='cancel')context.jobs.worker.cancel(job.id);else context.jobs.worker.wake();return json({job:jobSummary(next)});}
+        if(['cancel','retry'].includes(operation)){const next=await releases.control(queue,job.id,operation);if(operation==='cancel')context.jobs.worker.cancel(job.id);else context.jobs.worker.wake();return json({job:jobSummary(next)});}
         throw new AppError('INVALID');
       }
       if(req.method==='POST'&&url.pathname.startsWith('/api/deployment-jobs/')){
