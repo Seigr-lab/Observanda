@@ -257,6 +257,7 @@
   "DASHBOARD_PENDING": "Save or discard pending module and dashboard changes before deleting this workspace. Open Preferences > Modules to review them.",
   "WRITE_CANCELLED": "The pending write was cancelled before it started.",
   "UNSAFE": "A protected file location is unsafe. No files were changed.",
+  "PRIVACY_TEXT_COMPLEXITY": "This output contains an uninterrupted Unicode normalization sequence longer than 65,536 code units. Split that sequence before publishing; no output has been admitted.",
   "PRIVACY": "Export blocked: selected content contains a local path or potentially private information. Edit or deselect the affected item.",
   "EMPTY": "Include at least one project in Website before building your site.",
   "AUTH": "This browser session is not authorized. Reopen the launch link printed by Observanda.",

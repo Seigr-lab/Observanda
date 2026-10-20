@@ -1,3 +1,6 @@
+import {hasPrivateText} from './privacy-text.js';
+import {hasPrivateTextStream} from './privacy-text-stream.js';
+export {hasPrivateText} from './privacy-text.js';
 import {isDownloadPath} from './web/website-file.js';
 import {PUBLIC_POPUPS_SCRIPT} from './publication-popups.js';
 import {PUBLIC_GALLERY_SCRIPT} from './publication-gallery.js';
@@ -9,6 +12,10 @@ import { isBundledFont } from './fonts.js';
 import { AppError } from './errors.js';
 import {inspectFont} from './font-inspector.js';
 import {createHash} from 'node:crypto';
+const uuid = '[0-9a-f-]{36}';
+const textName = new RegExp(`^(?:index\\.html|styles\\.css|publication\\.json|\\.nojekyll|figures/${uuid}(?:-${uuid})?\\.(?:svg|csv)|(?:projects|notebooks|entries|pages)/${uuid}\\.html)$`);
+const mediaName = new RegExp(`^media/${uuid}\\.(png|wav|mp4)$`);
+const publicTextFile=name=>name==='browse.html'||feedFilePath(name)||textName.test(name)||legacyPagePath(name);
 const checkedFonts=new Map();
 const retainedChecks=new WeakMap();
 const retainedIdentity=(name,file,blockedValues)=>JSON.stringify([name,file.file,file.size,file.sha256,blockedValues]);
@@ -24,7 +31,11 @@ export function assertPublicFileBytes(name,bytes,{type,blockedValues=[]}){
 export async function admitRetainedPublicFile(name,file,{type,blockedValues=[]}){
   if(!(file instanceof FileContent)||!['text','binary'].includes(type))throw new AppError('UNSAFE');
   if(type==='binary'&&isDownloadPath(name)){await file.verify();assertPublicFiles(new Map([[name,file]]),blockedValues);return file;}
-  assertPublicFileBytes(name,await contentBuffer(file),{type,blockedValues});
+  if(type==='text'&&publicTextFile(name)){
+    const vault=file.workspace.vault;
+    if(await hasPrivateTextStream(()=>file.stream(),blockedValues))throw new AppError('PRIVACY',[{field:'generated output'}]);
+    await file.workspace.requireStorageKey();if(vault?.id&&(file.workspace.vault!==vault||!vault.key))throw new AppError('ACCESS_LOCKED');
+  }else assertPublicFileBytes(name,await contentBuffer(file),{type,blockedValues});
   retainedChecks.set(file,{workspace:file.workspace,identity:retainedIdentity(name,file,blockedValues)});
   return file;
 }
@@ -38,47 +49,6 @@ function assertCustomFont(name,bytes,blockedValues){
   if(info.extraMetadata||hasPrivateText(info.metadata,blockedValues))throw new AppError('PRIVACY',[{field:'font metadata'}]);
 }
 
-// Detection supplements strict output schemas. It cannot identify all confidential meaning.
-const patterns = [
-  /\b[a-z]:[\\/]/i,
-  /\\\\[^\s\\/]+[\\/]/,
-  /\bfile\s*:/i,
-  /(?:^|[\s"'(<>=])~[\\/]/,
-  /(?:^|[\s"'(<>=])\/(?:users|home|root|private|tmp|var|mnt|media|volumes|workspace|workspaces|srv|opt|etc|usr)(?:\/|\b)/i,
-  /\b(?:gh[pousr]_[a-z0-9]{16,}|github_pat_[a-z0-9_]{20,}|sk-(?:proj-)?[a-z0-9_-]{20,}|AKIA[A-Z0-9]{16})\b/i,
-  /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
-  /\bBearer\s+[a-z0-9._~+\/-]{16,}/i,
-  /https?:\/\/[^\s/:]+:[^\s/@]+@/i,
-  /\b(?:api[_ -]?key|access[_ -]?token|client[_ -]?secret|password)\s*[:=]\s*["']?[^\s"']{8,}/i
-];
-
-function normalize(value) {
-  let result = value.normalize('NFKC').replace(/[\u200b-\u200f\ufeff]/g, '');
-  for (let i = 0; i < 4; i++) {
-    const before = result;
-    result = result.replace(/\\u([0-9a-f]{4})/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
-      .replace(/\\x([0-9a-f]{2})/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
-      .replace(/&#(?:x([0-9a-f]+)|(\d+));?/gi, (_, hex, dec) => {
-        const cp = parseInt(hex ?? dec, hex ? 16 : 10);
-        return cp <= 0x10ffff ? String.fromCodePoint(cp) : '';
-      }).replace(/&(?:colon|sol|bsol|amp);/gi, entity => ({ '&colon;': ':', '&sol;': '/', '&bsol;': '\\', '&amp;': '&' })[entity.toLowerCase()])
-      .replace(/\\\//g, '/');
-    try { result = decodeURIComponent(result); } catch { result = result.replace(/%([0-9a-f]{2})/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16))); }
-    if (before === result) break;
-  }
-  return result;
-}
-
-export function hasPrivateText(value, blockedValues = []) {
-  const candidates = [normalize(value)];
-  // Inspect bounded base64 strings found in pasted logs or embedded text.
-  for (const match of value.matchAll(/[A-Za-z0-9+/_-]{24,}={0,2}/g)) {
-    if (match[0].length > 200000) return true;
-    candidates.push(normalize(Buffer.from(match[0], 'base64').toString('utf8')));
-  }
-  return candidates.some(candidate => patterns.some(pattern => pattern.test(candidate)) || blockedValues.some(blocked => blocked.length >= 4 && candidate.toLowerCase().includes(normalize(blocked).toLowerCase())));
-}
-
 export function assertPublicFields(fields, blockedValues = []) {
   // Inspect authored values, not JSON escapes introduced by serialization (for
   // example a TeX command is not a UNC path). Keys can also contain private text.
@@ -88,9 +58,6 @@ export function assertPublicFields(fields, blockedValues = []) {
 }
 
 export function assertPublicFiles(files, blockedValues = []) {
-  const uuid = '[0-9a-f-]{36}';
-  const textName = new RegExp(`^(?:index\\.html|styles\\.css|publication\\.json|\\.nojekyll|figures/${uuid}(?:-${uuid})?\\.(?:svg|csv)|(?:projects|notebooks|entries|pages)/${uuid}\\.html)$`);
-  const mediaName = new RegExp(`^media/${uuid}\\.(png|wav|mp4)$`);
   for (const [name, value] of files) {
     const checked=retainedChecks.get(value);
     if(checked&&checked.workspace===value.workspace&&checked.identity===retainedIdentity(name,value,blockedValues))continue;
@@ -108,7 +75,7 @@ export function assertPublicFiles(files, blockedValues = []) {
       if(content!==PUBLIC_GALLERY_SCRIPT)throw new AppError('UNSAFE');
     } else if(name==='public-feeds.js'){
       if(content!==PUBLIC_FEEDS_SCRIPT)throw new AppError('UNSAFE');
-    } else if (name==='browse.html'||feedFilePath(name)||textName.test(name)||legacyPagePath(name)) {
+    } else if (publicTextFile(name)) {
       if (typeof content !== 'string') throw new AppError('UNSAFE');
       if (hasPrivateText(content, blockedValues)) throw new AppError('PRIVACY', [{ field: 'generated output' }]);
     } else {
