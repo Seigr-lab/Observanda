@@ -1,3 +1,4 @@
+import {sourceRecordAllowed} from './web/source-publication-permissions.js';
 import {publicationWorkspace,publicationSnapshot,assertWebsitePin} from './publication-pin.js';
 import {websiteEditorProjection} from './website-editor-projection.js';
 import {websiteRecordSections} from './website-record-sections.js';
@@ -64,10 +65,10 @@ export class WebsiteResearch{
      signal?.throwIfAborted();const projectId=projectIds.get(record.notebookId),group=projects.get(projectId);if(!group)throw new AppError('CATALOGUE_DAMAGED');
      group.total++;group.media+=record.cardSources.files.length;if(overrides.has(record.id))selectionProjects[record.id]=projectId;
      if(needle&&record.title.toLocaleLowerCase().includes(needle))group.matches=true;
-     if(websiteRecordShare(command.selection,record,projectId)){
+     if(sourceRecordAllowed(record,metadata)&&websiteRecordShare(command.selection,record,projectId)){
       group.included++;selectedNotebooks.add(record.notebookId);entries++;
       const choices=command.selection.records.find(r=>r.id===record.id)?.attachments??[];
-      const includedMedia=record.publication.attachments.filter(a=>choices.find(choice=>choice.id===a.id)?.share??a.share).length;
+      const includedMedia=record.publication.attachments.filter(a=>a.share===true&&(choices.find(choice=>choice.id===a.id)?.share??true)).length;
       media+=includedMedia;group.includedMedia+=includedMedia;
      }
     }

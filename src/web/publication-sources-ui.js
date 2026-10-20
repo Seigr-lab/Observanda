@@ -6,7 +6,7 @@ import {researchId} from './research-reference.js';
 import {t} from './i18n/index.js';
 const text=(key,args)=>t('publicationSources',key,args);
 
-// The editor changes website-owned consent only. Opening, searching and paging
+// The editor narrows source permissions with website-owned choices. Opening, searching and paging
 // are reads; an independently owned source never becomes an authoring draft.
 export function publicationSourcesUI({state,api,esc,access,checkpoint,changed,notify,onOpenPage}){
  const client=publicationSourceClient({state,api,access});
@@ -25,7 +25,9 @@ export function publicationSourcesUI({state,api,esc,access,checkpoint,changed,no
   if(!validPublicationSources(sources)){notify(text('limit'),true);paint();return;}
   checkpoint('publication-sources');state.book.website.researchSources=sources;changed();paint();
  }
- function selected(record){const selection=source()?.selection??emptyPublicationSource(owner.workspaceId).selection;return websiteRecordShare(selection,record,recordProject);}
+ const available=record=>record.share===true&&head?.notebooks.find(book=>book.id===record.notebookId)?.share!==false;
+ const projectAvailable=()=>head?.notebooks.some(book=>book.projectId===recordProject&&book.share!==false);
+ function selected(record){const selection=source()?.selection??emptyPublicationSource(owner.workspaceId).selection;return available(record)&&websiteRecordShare(selection,record,recordProject);}
  const button=(label,action,extra='')=>'<button type="button" class="button" data-source-action="'+action+'" '+extra+'>'+esc(text(label))+'</button>';
  function paint(){
   const host=root();if(!host||!active())return;
@@ -37,8 +39,8 @@ export function publicationSourcesUI({state,api,esc,access,checkpoint,changed,no
    const row=source(),included=row?.selection.includeProjects.includes(recordProject),selectedProject=head.projects.find(p=>p.id===recordProject);
    container.innerHTML='<h3>'+esc(head.title)+'</h3>'+button('browse','browse')+(row?button('remove','remove'):'')+
     (head.projects.length>1?'<label class="field">'+esc(text('project'))+'<select data-source-project '+(loading?'disabled':'')+'>'+head.projects.map(p=>'<option value="'+p.id+'" '+(p.id===recordProject?'selected':'')+'>'+esc(p.title)+'</option>').join('')+'</select></label>':'')+
-    (selectedProject?'<label class="checkbox"><input type="checkbox" data-source-all '+(loading?'disabled ':'')+(included?'checked':'')+'><span>'+esc(text(owner?.labBookId?'includeBook':'includeAll'))+'</span></label><label class="field">'+esc(text('searchRecords'))+'<input type="search" data-source-record-search maxlength="512" value="'+esc(recordSearch)+'"></label>':'')+
-    (!loading&&records?records.items.map(record=>'<section class="website-record"><label class="checkbox"><input type="checkbox" data-source-record="'+record.id+'" '+(selected(record)?'checked':'')+'><span>'+esc(record.title)+'</span></label>'+(onOpenPage&&selected(record)?button('openPage','page','data-id="'+record.id+'"'):'')+(record.attachmentCount?button('attachments','media','data-id="'+record.id+'"'):'')+(details?.id===record.id?details.attachments.map(a=>'<label class="checkbox"><input type="checkbox" data-source-attachment="'+a.id+'" data-record="'+record.id+'" '+((row?.selection.records.find(r=>r.id===record.id)?.attachments.find(v=>v.id===a.id)?.share??a.share)?'checked':'')+'><span>'+esc(a.caption||a.alt||a.kind)+'</span></label>').join(''):'')+'</section>').join('')+(records.items.length?'':'<p>'+esc(text('noRecords'))+'</p>'):'')+
+    (selectedProject?'<label class="checkbox"><input type="checkbox" data-source-all '+(loading||!projectAvailable()?'disabled ':'')+(included&&projectAvailable()?'checked':'')+'><span>'+esc(text(owner?.labBookId?'includeBook':'includeAll'))+'</span></label>'+(!projectAvailable()?'<p>'+esc(text('sourcePrivate'))+'</p>':'')+'<label class="field">'+esc(text('searchRecords'))+'<input type="search" data-source-record-search maxlength="512" value="'+esc(recordSearch)+'"></label>':'')+
+    (!loading&&records?records.items.map(record=>'<section class="website-record"><label class="checkbox"><input type="checkbox" data-source-record="'+record.id+'" '+(selected(record)?'checked':'')+' '+(available(record)?'':'disabled')+'><span>'+esc(record.title)+(!available(record)?'<small>'+esc(text('sourcePrivate'))+'</small>':'')+'</span></label>'+(onOpenPage&&selected(record)?button('openPage','page','data-id="'+record.id+'"'):'')+(record.attachmentCount?button('attachments','media','data-id="'+record.id+'"'):'')+(details?.id===record.id?details.attachments.map(a=>'<label class="checkbox"><input type="checkbox" data-source-attachment="'+a.id+'" data-record="'+record.id+'" '+(available(record)&&a.share&&(row?.selection.records.find(r=>r.id===record.id)?.attachments.find(v=>v.id===a.id)?.share??a.share)?'checked':'')+' '+(available(record)&&a.share?'':'disabled')+'><span>'+esc(a.caption||a.alt||a.kind)+(!available(record)||!a.share?'<small>'+esc(text('sourcePrivate'))+'</small>':'')+'</span></label>').join(''):'')+'</section>').join('')+(records.items.length?'':'<p>'+esc(text('noRecords'))+'</p>'):'')+
     (records?'<div class="inline-actions">'+button('previous','records-previous',loading||!records.previousCursor?'disabled':'')+'<span>'+esc(records.total?text('range',{first:records.offset+1,last:records.offset+records.items.length,total:records.total}):text('noRecords'))+'</span>'+button('next','records-next',loading||!records.nextCursor?'disabled':'')+'</div>':'');
   }else{
    container.innerHTML=(projectId?button('back','back'):'')+'<label class="field">'+esc(text('search'))+'<input type="search" data-source-search maxlength="160" value="'+esc(search)+'"></label>'+
@@ -49,7 +51,7 @@ export function publicationSourcesUI({state,api,esc,access,checkpoint,changed,no
  async function run(operation,accept){
   stop();if(!active())return;controller=new AbortController();const signal=controller.signal,stamp=context,request=version;loading=true;error=false;paint();
   const valid=()=>active()&&!signal.aborted&&request===version&&stamp===identity();
-  try{const value=await operation(signal);if(valid())accept(value);}
+  try{const value=await operation(signal);if(valid())await accept(value);}
   catch(reason){if(valid()&&reason.name!=='AbortError')error=true;}
   finally{if(valid()){loading=false;controller=null;paint();}}
  }
@@ -78,7 +80,7 @@ export function publicationSourcesUI({state,api,esc,access,checkpoint,changed,no
    if(action==='open'){const item=page?.items[Number(control.dataset.index)];if(!item)return;if(item.kind==='project'){projectId=item.projectId;offset=0;revision=null;search='';void loadDirectory();}else void openSource(item);return;}
    if(action.startsWith('records-')){const next=records?.[action.endsWith('previous')?'previousCursor':'nextCursor'];if(next){cursor=next;details=null;void loadRecords();}return;}
    if(action==='remove'){change((_row,rows)=>rows.splice(rows.findIndex(row=>row.workspaceId===owner.workspaceId),1));return;}
-   if(action==='page'){const record=records?.items.find(record=>record.id===control.dataset.id);if(!record||!selected(record))return;void run(signal=>client.query('record',{recordId:record.id},{signal}),value=>{if(value.record?.id!==record.id||value.page?.owner?.workspaceId!==owner.workspaceId)throw Error('PUBLICATION_SOURCE_RESPONSE');onOpenPage?.(value.page);});return;}
+   if(action==='page'){const record=records?.items.find(record=>record.id===control.dataset.id);if(!record||!selected(record))return;void run(signal=>client.query('record',{recordId:record.id},{signal}),async value=>{if(value.record?.id!==record.id||value.page?.owner?.workspaceId!==owner.workspaceId)throw Error('PUBLICATION_SOURCE_RESPONSE');await onOpenPage?.(value.page);});return;}
    if(action==='media'){const record=records?.items.find(record=>record.id===control.dataset.id);if(!record)return;void run(signal=>client.query('record',{recordId:record.id},{signal}),value=>{if(value.record?.id!==record.id||value.record.notebookId!==record.notebookId||!Array.isArray(value.record.attachments))throw Error('PUBLICATION_SOURCE_RESPONSE');details=value.record;});}
   });
   host.addEventListener('input',event=>{
@@ -88,6 +90,7 @@ export function publicationSourcesUI({state,api,esc,access,checkpoint,changed,no
    const el=event.target;if(!el.matches('[data-source-project],[data-source-all],[data-source-record],[data-source-attachment]'))return;event.stopPropagation();if(!active()||context!==identity()||loading)return;
    if(el.hasAttribute('data-source-project')){if(!head.projects.some(p=>p.id===el.value))return;recordProject=el.value;cursor=null;recordSearch='';records=null;details=null;void loadRecords();return;}
    if(el.hasAttribute('data-source-all')){
+    if(!projectAvailable()){paint();return;}
     const include=el.checked,selection=structuredClone(source()?.selection??emptyPublicationSource(owner.workspaceId).selection),chosenProject=recordProject;
     void run(signal=>client.query('summary',{selection,search:''},{signal}),value=>{
      const membership=value.selectionProjects;
@@ -100,7 +103,8 @@ export function publicationSourcesUI({state,api,esc,access,checkpoint,changed,no
      });
     });return;
    }
-   const record=records?.items.find(record=>record.id===(el.dataset.sourceRecord??el.dataset.record));if(!record)return;
+   const record=records?.items.find(record=>record.id===(el.dataset.sourceRecord??el.dataset.record));if(!record||!available(record)){paint();return;}
+   if(el.hasAttribute('data-source-attachment')&&!details?.attachments.some(a=>a.id===el.dataset.sourceAttachment&&a.share)){paint();return;}
    change(row=>{if(el.checked&&!row.projectIds.includes(recordProject))row.projectIds.push(recordProject);let choice=row.selection.records.find(r=>r.id===record.id);if(!choice){choice={id:record.id,share:null,attachments:[]};row.selection.records.push(choice);}
     if(el.hasAttribute('data-source-record'))choice.share=el.checked;
     else{const id=el.dataset.sourceAttachment;if(!details?.attachments.some(a=>a.id===id))return;const prior=choice.attachments.find(a=>a.id===id);if(prior)prior.share=el.checked;else choice.attachments.push({id,share:el.checked});}

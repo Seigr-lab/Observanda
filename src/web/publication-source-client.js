@@ -9,7 +9,7 @@ const ownerValid=owner=>owner&&researchId(owner.workspaceId)&&nullableId(owner.p
 const sameOwner=(a,b)=>a.workspaceId===b.workspaceId&&a.projectId===b.projectId&&a.labBookId===b.labBookId;
 const headValid=value=>value&&revisionId(value.snapshotId)&&typeof value.title==='string'&&Array.isArray(value.projects)&&Array.isArray(value.notebooks)&&
  value.projects.every(p=>researchId(p.id)&&typeof p.title==='string'&&nullableId(p.parentId)&&typeof p.share==='boolean')&&new Set(value.projects.map(p=>p.id)).size===value.projects.length&&
- value.notebooks.every(n=>researchId(n.id)&&typeof n.title==='string'&&value.projects.some(p=>p.id===n.projectId))&&new Set(value.notebooks.map(n=>n.id)).size===value.notebooks.length;
+ value.notebooks.every(n=>researchId(n.id)&&typeof n.title==='string'&&(n.share===undefined||typeof n.share==='boolean')&&value.projects.some(p=>p.id===n.projectId))&&new Set(value.notebooks.map(n=>n.id)).size===value.notebooks.length;
 
 // One selected source owns one immutable head. Source replies never replace
 // the website owner's document, and a context change cancels every pending read.

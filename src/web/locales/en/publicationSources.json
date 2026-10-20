@@ -10,8 +10,8 @@
   "search": "Search sources",
   "searchRecords": "Search records",
   "project": "Project",
-  "includeAll": "Include all records in this project",
-  "includeBook": "Include all records in this lab book",
+  "includeAll": "Include available records in this project",
+  "includeBook": "Include available records in this lab book",
   "included": "Included",
   "remove": "Remove source",
   "previous": "Previous",
@@ -26,5 +26,6 @@
   "limit": "This selection exceeds the supported publication selection size.",
   "selectionReady": "{sources} research sources selected ? {pages} pages",
   "choosePage": "Choose a research page",
-  "choosePageDetail": "Use Page to find a selected research page, or add your own page. A homepage is optional."
+  "choosePageDetail": "Use Page to find a selected research page, or add your own page. A homepage is optional.",
+  "sourcePrivate": "Private in the lab book"
 }

@@ -47,7 +47,7 @@ export async function projectPublicationSource(application,client,command,{scope
    if(operation==='pages')return publicationSourcePages(store,snapshot,pinned,reader.host,query,{signal});
    if(operation==='head'){
     const metadata=snapshot.metadata;
-    return {workspaceId:sourceId,snapshotId:pinned.snapshotId,title:metadata.title,projects:metadata.projects.map(({id,title,parentId,share})=>({id,title,parentId:parentId??null,share})),notebooks:metadata.notebooks.map(({id,projectId,title})=>({id,projectId,title}))};
+    return {workspaceId:sourceId,snapshotId:pinned.snapshotId,title:metadata.title,projects:metadata.projects.map(({id,title,parentId,share})=>({id,title,parentId:parentId??null,share})),notebooks:metadata.notebooks.map(({id,projectId,title,share})=>({id,projectId,title,...(share===undefined?{}:{share})}))};
    }
    const value=await new WebsiteResearch({storageKind:async()=>'catalogue',catalogue:fn=>fn(store)}).run(operation,query,{signal});
    return operation==='record'?{...value,page:publicationSourcePage(reader.host,{...pinned.owner,projectNamespaceId:pinned.projectNamespaceId},snapshot.metadata,value.record)}:value;

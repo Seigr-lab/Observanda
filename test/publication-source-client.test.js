@@ -54,10 +54,17 @@ test('an unlock retry cannot outlive the source or editor that requested it',asy
  const opening=client.open(source,{unlock:true}),rejected=assert.rejects(opening,{name:'AbortError'});client.close();permission.resolve();await rejected;assert.equal(calls,0);
 });
 
-
 test('canvas metadata reads pin their original snapshot and reject a substituted head',async()=>{
  const state=setup(),source=owner(),snapshotId='c'.repeat(64),calls=[];let substitute=false;
  const client=publicationSourceClient({state,api:async(_route,body)=>{calls.push(body);return head(source,substitute?'d'.repeat(64):snapshotId);}});
  await client.open(source,{snapshotId});assert.equal(calls[0].query.snapshotId,snapshotId);assert.equal(client.current().head.snapshotId,snapshotId);
  substitute=true;await assert.rejects(client.open(source,{snapshotId}),/PUBLICATION_SOURCE_RESPONSE/);assert.equal(client.current(),null);
+});
+
+test('source heads retain optional lab-book publication permissions and reject nonboolean values',async()=>{
+ const state=setup(),source=owner(),response=head(source);response.value.notebooks=[{id:id(),projectId:source.projectId,title:'Restricted research',share:false}];
+ const client=publicationSourceClient({state,api:async()=>structuredClone(response)});
+ assert.equal((await client.open(source)).head.notebooks[0].share,false);assert.equal(client.current().head.notebooks[0].share,false);
+ response.value.notebooks[0].share='false';await assert.rejects(client.open(source),/PUBLICATION_SOURCE_RESPONSE/);assert.equal(client.current(),null);
+ delete response.value.notebooks[0].share;assert.equal(Object.hasOwn((await client.open(source)).head.notebooks[0],'share'),false);
 });
