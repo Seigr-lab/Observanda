@@ -15,7 +15,8 @@ const receiptIdentity=r=>r?{deploymentId:r.deploymentId??null,releaseId:r.releas
 export class PublicationRollback{
  constructor(workspace,publisher,{sourceReader}={}){this.workspace=publicationWorkspace(workspace);this.publisher=publisher;this.sourceReader=sourceReader;}
  async review({id}){
-  const candidate=await new PublicationJobs(this.workspace,{sourceReader:this.sourceReader}).read(id);if(!candidate)throw new AppError('NOT_FOUND');
+  const read=()=>new PublicationJobs(this.workspace,{sourceReader:this.sourceReader}).read(id);
+  const candidate=await this.workspace.storageKind()==='catalogue'?await this.workspace.catalogue(read):await read();if(!candidate)throw new AppError('NOT_FOUND');
   return this.workspace.withLock(async()=>{
    await this.workspace.lockWebsite();
    const saved=await this.publisher.read(),current=await this.workspace.currentOutline();if(!saved.configured)throw new AppError('PUBLISH_CONFIG');

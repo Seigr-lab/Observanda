@@ -97,7 +97,12 @@ export class ProjectPublications{
     const review=await workspace.storageKind()==='catalogue'?await workspace.catalogue(read):await read();
     return {...review,stale:review.stale||review.configEtag!==(await publisher.read()).etag};
    }
-   if(method==='rollback-review'){const value=await retained(data.id),owner=new PublicationRollback(workspace,publisher,{sourceReader}),approval=await owner.review(data),reviewed=owner.project(value,approval.review);return {...await this.summary(releases,reviewed),destination:approval.destination,configEtag:approval.configEtag,rollback:approval.review,analysisReview:await new AnalysisPublicationReview(workspace,{sourceReader}).status(reviewed),stale:false};}
+   if(method==='rollback-review'){
+    const read=()=>retained(data.id),value=await workspace.storageKind()==='catalogue'?await workspace.catalogue(read):await read();
+    const owner=new PublicationRollback(workspace,publisher,{sourceReader}),approval=await owner.review(data),reviewed=owner.project(value,approval.review);
+    const summarize=async()=>({...await this.summary(releases,reviewed),destination:approval.destination,configEtag:approval.configEtag,rollback:approval.review,analysisReview:await new AnalysisPublicationReview(workspace,{sourceReader}).status(reviewed),stale:false});
+    return await workspace.storageKind()==='catalogue'?workspace.catalogue(summarize):summarize();
+   }
    if(method==='pages')return releases.pageChoices(await retained(data.id),{...data,signal});
    if(method==='references')return releases.referenceChoices(await retained(data.id),{...data,signal});
    if(method==='analysis-review-window')return new AnalysisPublicationReview(workspace,{sourceReader}).window(await rollback(await retained(data.id)),{...data,signal});

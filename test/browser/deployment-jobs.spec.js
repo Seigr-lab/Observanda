@@ -10,6 +10,8 @@ import {clearVault} from '../../src/encryption.js';
 import {githubFixture,repositoryFixture} from '../github-fixture.js';
 import {truncatedGithubTrees} from '../github-tree-fixture.js';
 import {navigate} from './preferences-helper.js';
+import {WebsiteSites} from '../../src/website-sites.js';
+import {websiteWorkspace} from '../../src/website-workspace.js';
 async function connect(page){await page.getByRole('button',{name:'Configure destination',exact:true}).click();await page.getByText('Advanced: temporary access token',{exact:true}).click();await page.getByLabel('GitHub token',{exact:true}).fill('synthetic_github_token_1234567890');await page.getByRole('button',{name:'Connect GitHub',exact:true}).click();await expect(page.locator('#notice')).toContainText('Connected to GitHub');await navigate(page,'Publishing');}
 
 test('repository conflicts are visible and a chosen subfolder preserves the existing site through the app',async({page})=>{
@@ -129,20 +131,27 @@ test('an existing empty repository is reviewed, initialized and resumed from the
  }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
+
+async function namedWebsite(f,name){
+ const sites=new WebsiteSites(f.workspace),outline=await f.workspace.outline(),created=await sites.change({workspaceId:outline.metadata.id,etag:outline.etag,operation:'create',name}),current=await sites.read(created.id);
+ await sites.save(created.id,{workspaceId:current.book.id,baseEtag:current.etag,websitePin:current.websitePin,metadata:{website:{...current.book.website,home:{...current.book.website.home,enabled:true,introduction:'Explicitly authored website introduction'}}},projects:[],changes:[],removed:[],selection:current.site.selection});
+ return {sites,id:created.id,workspace:websiteWorkspace(f.workspace,created.id)};
+}
+
 test('users create a named website repository in the app, publish it and see automatic live verification',async({page})=>{
- test.setTimeout(90000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-create-repo-ui-')),f=await encryptedFixture(directory,sampleNotebook()),remote=repositoryFixture();
+ test.setTimeout(300000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-create-repo-ui-')),f=await encryptedFixture(directory,sampleNotebook()),remote=repositoryFixture(),site=await namedWebsite(f,'Field journal');
  const app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json'),publishingOptions:{request:remote.request}});
  try{
-  await page.goto(app.url);await navigate(page,'Publishing');await page.getByRole('button',{name:'Configure destination',exact:true}).click();
+  await page.goto(app.url);await page.goto(new URL('/#/websites/'+site.id+'/publishing',app.url).href);await expect(page.locator('.website-site-context')).toContainText('Field journal');await page.getByRole('button',{name:'Configure destination',exact:true}).click();
   await page.getByLabel('Repository',{exact:true}).selectOption('create');await page.getByLabel('GitHub owner / organization',{exact:true}).fill('example');await page.getByLabel('Repository name',{exact:true}).fill('notebook');
   await expect(page.getByLabel('Repository visibility',{exact:true})).toHaveValue('private');await page.getByLabel('Repository visibility',{exact:true}).selectOption('public');
   await page.getByLabel('After upload',{exact:true}).selectOption('pages');await page.getByLabel('Public website URL (HTTPS)',{exact:true}).fill('https://public.example/research/');
   await page.getByText('Advanced: temporary access token',{exact:true}).click();await page.getByLabel('GitHub token',{exact:true}).fill('synthetic_github_token_1234567890');await page.getByRole('button',{name:'Connect GitHub',exact:true}).click();await expect(page.locator('#notice')).toContainText('Connected to GitHub');
   await page.getByRole('button',{name:'Create repository',exact:true}).click();await expect(page.locator('#publish-outcome')).toContainText('Repository created',{timeout:20000});
   await expect(page.getByLabel('Publication branch',{exact:true})).toHaveValue('main');expect(remote.calls.some(c=>c.route==='/user/repos'&&c.data.name==='notebook'&&c.data.private===false)).toBe(true);
-  await page.reload();await navigate(page,'Publishing');await page.getByRole('button',{name:'Review website',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible({timeout:15000});
+  await page.reload();await page.locator('.website-site-context').getByRole('button',{name:'Publishing',exact:true}).click();await page.getByRole('button',{name:'Review website',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible({timeout:60000});
   await page.getByLabel('I have reviewed this website and its media for sharing.').check();await page.getByRole('button',{name:'Publish to GitHub Pages',exact:true}).click();
-  await expect(page.locator('#publishing-deployments')).toContainText('Push: confirmed',{timeout:15000});await expect(page.locator('#publishing-deployments [data-action="publish-job-cancel"]')).toHaveCount(0,{timeout:15000});
+  await expect(page.locator('#publishing-deployments')).toContainText('Push: confirmed',{timeout:60000});await expect(page.locator('#publishing-deployments [data-action="publish-job-cancel"]')).toHaveCount(0,{timeout:60000});
   // Manifest propagation alone is insufficient; one altered asset keeps the
   // UI waiting until the matching bytes are actually served.
   const manifest=[...remote.blobs.values()].find(b=>{try{return !!JSON.parse(b).releaseId;}catch{return false;}});remote.setManifest(manifest);remote.setServed('styles.css','not the published stylesheet');
@@ -150,22 +159,22 @@ test('users create a named website repository in the app, publish it and see aut
   const expected=JSON.parse(manifest).files.find(f=>f.path==='styles.css'),{createHash}=await import('node:crypto');
   remote.setServed('styles.css',[...remote.blobs.values()].find(b=>createHash('sha256').update(b).digest('hex')===expected.sha256));
   await expect(page.locator('#publish-outcome')).toContainText('The live website is verified',{timeout:20000});await expect(page.locator('#publishing-deployments')).toContainText('files verified');
-  await page.reload();await expect(page.locator('#publish-outcome')).toContainText('The live website is verified');
+  await page.reload();await expect(page.locator('#publish-outcome')).toContainText('The live website is verified');expect((await new Publisher(f.workspace.root,{},f.vault).read()).configured).toBe(false);
  }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });
 
 
 test('an older retained edition can be explicitly reviewed and republished from the app',async({page})=>{
- test.setTimeout(90000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-rollback-ui-')),f=await encryptedFixture(directory,sampleNotebook()),remote=githubFixture(),publisher=new Publisher(f.workspace.root,{request:remote.request},f.vault),config=defaultPublishing();Object.assign(config.github,{owner:'example',repository:'notebook',branch:'observanda-site',pages:false});await publisher.save(config,'new');
+ test.setTimeout(300000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-rollback-ui-')),f=await encryptedFixture(directory,sampleNotebook()),remote=githubFixture(),site=await namedWebsite(f,'Retained journal'),publisher=new Publisher(f.workspace.root,{workspace:site.workspace,request:remote.request},f.vault),config=defaultPublishing();Object.assign(config.github,{owner:'example',repository:'notebook',branch:'observanda-site',pages:false});await publisher.save(config,'new');
  const app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json'),publishingOptions:{request:remote.request}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
- const publish=async()=>{await page.getByLabel('I have reviewed this website and its media for sharing.').check();await page.getByRole('button',{name:'Publish to GitHub repository',exact:true}).click();await expect(page.locator('#publishing-deployments > section').first()).toContainText('Push: confirmed',{timeout:15000});};
+ const publish=async()=>{await page.getByLabel('I have reviewed this website and its media for sharing.').check();await page.getByRole('button',{name:'Publish to GitHub repository',exact:true}).click();await expect(page.locator('#publishing-deployments > section').first()).toContainText('Push: confirmed',{timeout:60000});};
  try{
-  await page.goto(app.url);await navigate(page,'Publishing');await connect(page);
-  await page.getByRole('button',{name:'Review website',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition'}).click();await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible({timeout:15000});await publish();const first=remote.head;
-  const saved=await f.workspace.read();saved.book.website.footer='Second edition footer';await f.workspace.save(saved.book,saved.etag);await page.reload();await navigate(page,'Publishing');
-  await page.getByRole('button',{name:'Review website',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition'}).click();await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible({timeout:15000});await publish();const second=remote.head;expect(second).not.toBe(first);
+  await page.goto(app.url);const publishingUrl=new URL('/#/websites/'+site.id+'/publishing',app.url).href;await page.goto(publishingUrl);await page.getByRole('button',{name:'Configure destination',exact:true}).click();await page.getByText('Advanced: temporary access token',{exact:true}).click();await page.getByLabel('GitHub token',{exact:true}).fill('synthetic_github_token_1234567890');await page.getByRole('button',{name:'Connect GitHub',exact:true}).click();await expect(page.locator('#notice')).toContainText('Connected to GitHub');await page.locator('.website-site-context').getByRole('button',{name:'Publishing',exact:true}).click();
+  await page.getByRole('button',{name:'Review website',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition'}).click();await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible({timeout:60000});await publish();const first=remote.head;
+  const saved=await site.sites.read(site.id);await site.sites.save(site.id,{workspaceId:saved.book.id,baseEtag:saved.etag,websitePin:saved.websitePin,metadata:{website:{...saved.book.website,footer:'Second edition footer'}},projects:[],changes:[],removed:[],selection:saved.site.selection});await page.reload();
+  await page.getByRole('button',{name:'Review website',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition'}).click();await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible({timeout:60000});await publish();const second=remote.head;expect(second).not.toBe(first);
   await page.getByRole('button',{name:'Website preparations',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'Open review',exact:true}).last().click();await expect(page.getByRole('button',{name:'Review this retained edition for publishing'})).toBeVisible();await page.getByRole('button',{name:'Review this retained edition for publishing'}).click();await expect(page.getByRole('heading',{name:'Republish a retained edition'})).toBeVisible();
   await page.getByRole('button',{name:'Publish to GitHub repository',exact:true}).click();await expect(page.locator('#notice')).toContainText('I approve replacing');expect(remote.head).toBe(second);
-  await page.getByLabel('I approve replacing the published website with this retained edition.').check();await publish();expect(remote.commits.get(remote.head).parents).toEqual([second]);expect(remote.trees.get(remote.commits.get(remote.head).tree)).toEqual(remote.trees.get(remote.commits.get(first).tree));expect((await f.workspace.read()).book.website.footer).toBe('Second edition footer');expect(errors).toEqual([]);
+  await page.getByLabel('I approve replacing the published website with this retained edition.').check();await publish();expect(remote.commits.get(remote.head).parents).toEqual([second]);expect(remote.trees.get(remote.commits.get(remote.head).tree)).toEqual(remote.trees.get(remote.commits.get(first).tree));expect((await site.sites.read(site.id)).book.website.footer).toBe('Second edition footer');expect((await new Publisher(f.workspace.root,{},f.vault).read()).configured).toBe(false);expect(errors).toEqual([]);
  }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

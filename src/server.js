@@ -1104,10 +1104,13 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
           return json({...review,stale:review.stale||review.configEtag!==(await publisher.read()).etag});
         }
         if(operation==='rollback-review'){
-          const candidate=await retainedCandidate(data.id);if(!candidate)throw new AppError('NOT_FOUND');
+          const read=()=>retainedCandidate(data.id),candidate=await workspace.storageKind()==='catalogue'?await workspace.catalogue(read):await read();if(!candidate)throw new AppError('NOT_FOUND');
+          // Keep retained-tree reads in owned snapshots, with the approval
+          // mutation admitted separately by its existing write transaction.
           const approval=await new PublicationRollback(workspace,publisher,{sourceReader}).review(data);
           const reviewed=new PublicationRollback(workspace,publisher,{sourceReader}).project(candidate,approval.review);
-          return json({...await releases.summary(reviewed),destination:approval.destination,configEtag:approval.configEtag,rollback:approval.review,analysisReview:await new AnalysisPublicationReview(workspace,{sourceReader}).status(reviewed),stale:false});
+          const summarize=async()=>({...await releases.summary(reviewed),destination:approval.destination,configEtag:approval.configEtag,rollback:approval.review,analysisReview:await new AnalysisPublicationReview(workspace,{sourceReader}).status(reviewed),stale:false});
+          return json(await workspace.storageKind()==='catalogue'?await workspace.catalogue(summarize):await summarize());
         }
         if(operation==='analysis-review'){let candidate=await retainedCandidate(data.id);if(!candidate)throw new AppError('NOT_FOUND');if(data.rollbackReview){const rollback=new PublicationRollback(workspace,publisher,{sourceReader});candidate=rollback.project(candidate,await rollback.authorize(candidate,data.rollbackReview));}return json(await new AnalysisPublicationReview(workspace,{sourceReader}).save(candidate,data.decisions));}
         const job=await queue.read(data.id);if(!job||job.type!=='publication.prepare')throw new AppError('NOT_FOUND');await queue.authorize(job);
