@@ -24,6 +24,8 @@ import {WebsiteEditorStore} from '../src/website-editor-store.js';
 import {publicationDraftCommand} from './publication-fixture.js';
 import {PublicationFragments} from '../src/publication-edition-fragments.js';
 import {withPublicationOutputWriter} from '../src/publication-output.js';
+import {createRegion,assignRegion} from '../src/web/website-regions.js';
+import {digest} from '../src/storage-format.js';
 
 // One native source/edition journey covers late selected values and all public
 // continuation families. Existing owner fixtures supply encryption and storage.
@@ -110,4 +112,33 @@ test('lazy feed cards retain cover styles and replay unchanged fragments without
   async function* content(){try{yield payload;yield payload;}finally{closed=true;}}
   const iterator=replay('cancelled',content);await iterator.next();controller.abort(failure);await iterator.next();
  })),error=>error===failure);assert.equal(closed,true);
+});
+
+
+test('static feed continuations preserve each owning backlink window and single-window identities',{timeout:120000},async t=>{
+ const parent=await realpath(os.tmpdir()),directory=await mkdtemp(path.join(parent,'observanda-reference-feeds-')),book=upgradeNotebook(sampleNotebook()),seed=book.entries[0];
+ book.entries=Array.from({length:26},(_,index)=>({...structuredClone(seed),id:randomUUID(),title:'Referenced observation '+String(index).padStart(2,'0'),share:true,body:'Exact authored observation '+index,sections:[],figures:[],attachments:[],relations:[]}));
+ const target=book.entries[0],single=book.entries[1];
+ for(const record of book.entries.slice(1))record.relations=[{id:randomUUID(),type:'References',target:{workspaceId:book.id,kind:'record',id:target.id},label:target.title}];
+ const fixture=await encryptedFixture(directory,book);t.after(async()=>{clearVault(fixture.vault);assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-reference-feeds-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const footer=createRegion(book.website,'footer','More observations',{makeId:randomUUID});footer.sections=[{id:'related-feed',kind:'records',title:'More observations',show:true,layout:'list',filter:{projectId:null,tag:'',limit:2},feed:{...defaultFeed('records'),pageSize:1}}];
+ for(const record of [target,single])assignRegion(book.website,'entry:'+record.id,'footer',footer.id);
+ const command=await publicationDraftCommand(fixture.workspace,book),storage=websiteWorkspace(fixture.workspace,null),releases=new PublicationJobs(storage),source=await withPublicationCapture(storage,async(workspace,id,finish)=>{const selected=await releases.pin(command,{workspace,id,signal:t.signal});return finish(()=>selected);},{signal:t.signal});
+ const job={id:source.id,lease:{token:randomUUID()}},candidate=await releases.prepare(job,{signal:t.signal,progress:async()=>{}});await storage.withLock(()=>releases.commit(job,candidate));const edition=await releases.read(candidate.reviewId),expected=buildPublication(book);
+ const references=html=>/<div id="record-references">[\s\S]*?<\/nav><\/div>/.exec(html)?.[0],feedId=html=>/data-public-feed="([a-f0-9]+)"/.exec(html)?.[1];
+ for(const [label,read] of [['retained',async name=>(await contentBuffer(await edition.files.get(name))).toString()],['synchronous',async name=>expected.files.get(name)]]){
+  const ids=[],seen=new Set();
+  for(let window=0;window<2;window++){
+   const name='entries/'+(window?'references-'+target.id+'-'+window:target.id)+'.html',html=await read(name),context=references(html);assert.ok(context,label+' '+name);
+   const backlinks=[...context.matchAll(/href="\.\.\/entries\/([a-f0-9-]+)\.html"/g)].map(match=>match[1]);assert.equal(backlinks.length,window?1:24);for(const id of backlinks)seen.add(id);
+   const id=feedId(html);assert.ok(id);ids.push(id);
+   const next=/<a data-feed-next href="([^"]+)"/.exec(html)[1],nextName=path.posix.join('entries',next.split('#')[0]),continued=await read(nextName);
+   assert.equal(references(continued),context,label+' Next feed changed the owning backlink window');assert.equal(feedId(continued),id);assert.match(continued,/Exact authored observation 0/);
+   const previous=/<a data-feed-previous href="([^"]+)"/.exec(continued)[1],first=await read(path.posix.join('entries',previous.split('#')[0]));assert.equal(references(first),context,label+' Previous feed changed backlink context');
+   assert.notEqual(/data-feed-id="([^"]+)"/.exec(html)[1],/data-feed-id="([^"]+)"/.exec(continued)[1]);
+  }
+  assert.equal(new Set(ids).size,2);assert.deepEqual(seen,new Set(book.entries.slice(1).map(record=>record.id)));
+  const ordinary=await read('entries/'+single.id+'.html');assert.equal(feedId(ordinary),digest('entry:'+single.id+'#footer:related-feed'),'A one-window feed path changed');
+ }
+ let feedCount=0;for await(const name of edition.files.keys())if(feedFilePath(name))feedCount++;assert.equal(feedCount,6);
 });
