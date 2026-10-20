@@ -705,7 +705,7 @@ export class ResearchCatalogue{
    });
    const {workspaceModules}=await import('./modules/index.js');
    await operationStage('verify-modules',{},async()=>{await workspaceModules(this.workspace).verifyCatalogue(this,descriptor.workspaceId);});
-   await operationStage('verify-objects',{},async()=>{const {verifyConfigurationBlocks}=await import('./configuration-documents.js');await verifyConfigurationBlocks(this);const {verifyOwnerDirectories}=await import('./owner-directory.js');await verifyOwnerDirectories(this);await verifyWorkspaceSettings(this);await new WebsiteDocumentStore(this).verify({onDocument:document=>media.websiteDocument(document)});await verifyWebsiteEditor(this,{onDocument:document=>media.websiteDocument(document)});for await(const object of this.verifiedObjects())void object;});
+   await operationStage('verify-objects',{},async()=>{const {verifyConfigurationBlocks}=await import('./configuration-documents.js');await verifyConfigurationBlocks(this);const {verifyOwnerDirectories}=await import('./owner-directory.js');await verifyOwnerDirectories(this);const {verifyPortabilityCollections}=await import('./portability-collection.js');await verifyPortabilityCollections(this);await verifyWorkspaceSettings(this);await new WebsiteDocumentStore(this).verify({onDocument:document=>media.websiteDocument(document)});await verifyWebsiteEditor(this,{onDocument:document=>media.websiteDocument(document)});for await(const object of this.verifiedObjects())void object;});
    const {verifySampleAnalysisCatalogue}=await import('./sample-analysis-catalogue.js');
    await operationStage('verify-analysis',{},()=>verifySampleAnalysisCatalogue(this));
    await operationStage('verify-reviews',{},()=>new ReviewScopeIndex(this).verify());

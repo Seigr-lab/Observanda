@@ -20,7 +20,7 @@ export class ProjectCopies{
  get kind(){return 'copy';}
  get portable(){return false;}
  async prepare(storage,{withBook,portable=false}={}){const books=new ProjectBookCopy(storage);try{await books.prepare(withBook,{portable});}finally{books.close();}}
- transfer(storage,value,options){return copyProjectLocation(storage,value.destination,{...options,id:value.id,projectRoots:projectCopyRoots(storage.root,options.projects)});}
+ transfer(storage,value,options){return copyProjectLocation(storage,value.destination,{...options,id:value.id,projectRoots:options.projects?projectCopyRoots(storage.root,options.projects):[]});}
  file(projectId){if(!researchId(projectId))throw new AppError('INVALID');return path.join(this.workspace.root,this.directory,projectId+'.obsv');}
  async read(projectId){
   const file=this.file(projectId),stat=await assertRegular(file,{missing:true});if(!stat)return null;if(stat.size>8192)throw new AppError('STORAGE_COPY');
@@ -42,7 +42,7 @@ export class ProjectCopies{
    }
    const tree=new ProjectTreeCopy(this.registry,storage,{withProject,withProjectBook,portable:this.portable});
    try{requireStorageName(value.destination,storageFolderName(storage.root));await this.prepare(storage,{withBook});await tree.prepare();}catch(error){if(created)error.operationNotStarted=true;throw error;}if(created)await this.workspace.writeFile(this.file(storage.projectId),serialize(value));
-   await tree.using(()=>this.transfer(storage,value,{onProgress,checkpoint,withBook,onCopiedBook,projects:tree.tree.entries,beforeVerified:(target,receipt,save)=>tree.copy(target,receipt,save,{checkpoint})}));value.phase='complete';await this.workspace.writeFile(this.file(storage.projectId),serialize(value));return value;
+   await tree.using(()=>this.transfer(storage,value,{onProgress,checkpoint,withBook,onCopiedBook,excludeProject:tree.exclude(storage.root),boundaryRevision:tree.boundary(storage.root),legacyProjectRoots:()=>tree.legacyRoots(storage.root),beforeVerified:(target,receipt,save)=>tree.copy(target,receipt,save,{checkpoint})}));value.phase='complete';await this.workspace.writeFile(this.file(storage.projectId),serialize(value));return value;
   });
  }
 }

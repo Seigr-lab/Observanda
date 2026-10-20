@@ -13,7 +13,7 @@ import {ProjectRegistry} from '../src/project-registry.js';
 import {ProjectCopies} from '../src/project-copy.js';
 import {ProjectArchives} from '../src/project-archives.js';
 import {ProjectRenames} from '../src/project-rename.js';
-import {readProjectTree,validateProjectTree} from '../src/project-tree-manifest.js';
+import {readProjectTree,validateProjectTree,projectTreeCollection} from '../src/project-tree-manifest.js';
 import {LabBookCreation} from '../src/lab-book-creation.js';
 import {LabBookRegistry} from '../src/lab-book-registry.js';
 import {LabBookStorage} from '../src/lab-book-storage.js';
@@ -39,9 +39,9 @@ test('selected project copy and export retain the complete independent subtree',
  const copies=new ProjectCopies(registry),copyParent=path.join(directory,'Copies');await mkdir(copyParent);const copyPath=path.join(copyParent,path.basename(root.root)),id=randomUUID();
  await assert.rejects(copies.run(root,{id,path:copyPath,withBook:callbacks.withBook}),{code:'ACCESS_LOCKED'});assert.equal(await copies.read(root.projectId),null);await assert.rejects(access(copyPath),{code:'ENOENT'});
  let interrupted=false;await assert.rejects(copies.run(root,{id,path:copyPath,...callbacks,checkpoint:async phase=>{if(phase==='project'&&!interrupted){interrupted=true;const before=await sibling.read();before.book.description='Independent writer during export';await sibling.save(before.book,before.etag);throw Error('Child transfer interrupted');}}}),/Child transfer interrupted/);
- await assert.rejects(access(path.join(copyPath,'.observanda/project-tree.obsv')),{code:'ENOENT'});assert.equal((await copies.run(root,{id,resume:true,...callbacks})).phase,'complete');
- const target=new ProjectStorage(copyPath,root.projectId,root.vault),tree=await readProjectTree(target);assert.deepEqual(tree.projects.map(item=>item.relative),['Child Project','Child Project/Grandchild Project']);assert.ok(!serialize(tree).includes(directory));
- assert.throws(()=>validateProjectTree({...tree,projects:[{...tree.projects[0],relative:'../outside'}]}),{code:'STORAGE_COPY'});assert.throws(()=>validateProjectTree({...tree,projects:[{...tree.projects[0],parentId:grand.projectId}]}),{code:'STORAGE_COPY'});
+ assert.equal((await readProjectTree(new ProjectStorage(copyPath,root.projectId,root.vault))).version,2);assert.equal((await copies.run(root,{id,resume:true,...callbacks})).phase,'complete');
+ const target=new ProjectStorage(copyPath,root.projectId,root.vault),tree=await readProjectTree(target);const treeRows=[];for await(const row of projectTreeCollection(target,tree).entries())if(row.relative)treeRows.push(row);assert.deepEqual(treeRows.map(item=>item.relative),['Child Project','Child Project/Grandchild Project']);assert.ok(Buffer.byteLength(serialize(tree))<4096);assert.ok(!serialize(tree).includes(directory));
+ const legacy={version:1,projectId:tree.projectId,namespaceId:tree.namespaceId,vaultId:tree.vaultId,projects:treeRows.map(({kind,...row})=>row)};assert.throws(()=>validateProjectTree({...legacy,projects:[{...legacy.projects[0],relative:'../outside'}]}),{code:'STORAGE_COPY'});assert.throws(()=>validateProjectTree({...legacy,projects:[{...legacy.projects[0],parentId:grand.projectId}]}),{code:'STORAGE_COPY'});
  for(const source of [root,child,grand]){const copied=new ProjectStorage(path.join(copyPath,path.relative(root.root,source.root)),source.projectId,source.vault);assert.deepEqual(await copied.read(),await source.read());}
  const exportParent=path.join(directory,'Exports');await mkdir(exportParent);const exported=path.join(exportParent,path.basename(root.root)),archives=new ProjectArchives(registry),exportId=randomUUID();
  await archives.run(root,{id:exportId,path:exported,...callbacks});
@@ -64,7 +64,7 @@ test('selected project copy and export retain the complete independent subtree',
  }
 
  await assert.rejects(imports.cancel({id:importId,username:'',password,recovery:'',owners:request.owners}),{code:'CONFLICT'});
- const restoredTree=await readProjectTree(new ProjectStorage(imported.project.root,root.projectId,root.vault));assert.deepEqual(restoredTree,tree);
+ const restoredStorage=new ProjectStorage(imported.project.root,root.projectId,root.vault),restoredTree=await readProjectTree(restoredStorage),restoredRows=[];for await(const row of projectTreeCollection(restoredStorage,restoredTree).entries())if(row.relative)restoredRows.push(row);assert.deepEqual(restoredRows,treeRows);
  const laterGrant=await grant(),laterData=createNotebook('Later Child'),laterId=randomUUID();laterData.projects=[{id:laterId,title:laterData.title,parentId:null,description:'',share:false,logoId:null}];const later=await initializeProjectLocation(path.join(imported.project.root,laterData.title),laterId,laterData,laterGrant.access,laterGrant.vault);await receiverRegistry.attach(later,{parentId:root.projectId,expected:await receiverRegistry.version()});
  const inspectLater=new ProjectImportInventory(device,[...supplied,{relative:'Later Child',username:'',password,recovery:''}]);try{assert.equal((await inspectLater.inspect(imported.project.root)).manifest.projects.length,3);}finally{inspectLater.close();}
  await imports.run({id:importId,username:'',password,recovery:'',owners:request.owners},{resume:true});assert.equal((await receiverRegistry.locate(laterId)).root,later.root);

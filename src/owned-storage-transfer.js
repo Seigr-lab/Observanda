@@ -28,18 +28,19 @@ async function intent(storage){
  const file=path.join(storage.root,intentName),stat=await assertRegular(file,{missing:true});if(!stat)return null;if(stat.size>16*1024*1024)throw new AppError('STORAGE_COPY');
  let value;try{value=JSON.parse(await storage.readFile(file,'utf8'));}catch{throw new AppError('STORAGE_COPY');}
  if(![1,2].includes(value?.version)||!researchId(value.id)||value[ownerId]!==storage[ownerId]||value.vaultId!==storage.vault.id||!researchId(value.sourceId)||!researchId(value.namespaceId)||!['files','database','verified'].includes(value.phase)||!path.isAbsolute(value.source??'')||value.source!==path.resolve(value.source)||value.destination!==storage.root||!/^[a-f0-9]{64}$/.test(value.head??'')||value.portable!==undefined&&value.portable!==true||value.relocation!==undefined&&typeof value.relocation!=='boolean'||value.filesVersion!==undefined&&value.filesVersion!==1||[value.archiveDigest,value.nextDigest].some(hash=>hash!==undefined&&!/^[a-f0-9]{64}$/.test(hash)))throw new AppError('STORAGE_COPY');
- retainedCopyRoots(value);return value;
+ if(value.boundaryRevision!==undefined&&!/^[a-f0-9]{64}$/.test(value.boundaryRevision))throw new AppError('STORAGE_COPY');retainedCopyRoots(value);return value;
 }
 
 async function save(storage,value){const raw=serialize(value);if(Buffer.byteLength(raw)>16*1024*1024-128)throw new AppError('LIMIT');await storage.writeFile(path.join(storage.root,intentName),raw);}
-async function copy(source,input,{id,onProgress,checkpoint=async()=>{},afterVerified,beforeVerified,onVerified,sourceHandoff,projectRoots=[],portable=false,retainIncomplete=false,relocation=false}={}){
+async function copy(source,input,{id,onProgress,checkpoint=async()=>{},afterVerified,beforeVerified,onVerified,sourceHandoff,projectRoots=[],excludeProject,boundaryRevision,legacyProjectRoots,portable=false,retainIncomplete=false,relocation=false}={}){
  if(!(source instanceof Storage)||!researchId(id)||typeof checkpoint!=='function'||afterVerified!==undefined&&typeof afterVerified!=='function'||beforeVerified!==undefined&&typeof beforeVerified!=='function'||onVerified!==undefined&&typeof onVerified!=='function'||sourceHandoff!==undefined&&typeof sourceHandoff!=='function'||typeof portable!=='boolean'||typeof retainIncomplete!=='boolean'||typeof relocation!=='boolean'||portable&&relocation||portable&&afterVerified!==undefined)throw new AppError('INVALID');
+ if(boundaryRevision!==undefined&&(!/^[a-f0-9]{64}$/.test(boundaryRevision)||typeof excludeProject!=='function'))throw new AppError('INVALID');
  await source.catalogue(store=>assertRecordOwnerReclamationSettled(store));
  if(!relocation)await assertInventoryObligationsSettled(source);
  const sourceRoot=await realpath(source.root),destination=await resolveLocation(input);
  if(within(sourceRoot,destination)||within(destination,sourceRoot))throw new AppError('STORAGE_PATH');
  requireStorageName(destination,storageFolderName(sourceRoot));
- const boundaries=projectCopyBoundaries(sourceRoot,projectRoots);
+ let boundaries=projectCopyBoundaries(sourceRoot,projectRoots);
  const access=await readAccess(sourceRoot);if(access.value.formatVersion!==3)throw new AppError('ACCESS_FORMAT');authenticateKeyring(access.value,source.vault);
  const target=new Storage(destination,source[ownerId],source.vault),marker=path.join(destination,markerName);
  return withOperationProgress(onProgress,()=>operationSequence('copy-'+placement,['copy-files',placement+'-database-import'],async()=>{
@@ -51,7 +52,8 @@ async function copy(source,input,{id,onProgress,checkpoint=async()=>{},afterVeri
   return withWriterLease(path.join(destination,leaseName),async()=>{
    let receipt=await intent(target);
    if(receipt){
-    if(!!receipt.portable!==portable||receipt.relocation!==undefined&&receipt.relocation!==relocation||receipt.id!==id||receipt.source!==sourceRoot||serialize(receipt.boundaries??[])!==serialize(boundaries))throw new AppError('CONFLICT');
+    if(receipt.boundaryRevision===undefined&&boundaryRevision!==undefined&&typeof legacyProjectRoots==='function'){boundaries=projectCopyBoundaries(sourceRoot,await legacyProjectRoots());boundaryRevision=undefined;}
+    if(!!receipt.portable!==portable||receipt.relocation!==undefined&&receipt.relocation!==relocation||receipt.id!==id||receipt.source!==sourceRoot||receipt.boundaryRevision!==boundaryRevision||serialize(receipt.boundaries??[])!==serialize(boundaries))throw new AppError('CONFLICT');
     const targetAccess=await readAccess(destination);if(targetAccess.etag==='none'&&receipt.phase==='files')await atomicWrite(path.join(destination,'.observanda/access.json'),serialize(access.value));else authenticateKeyring(targetAccess.value,source.vault);
     if(receipt.phase==='verified'&&!afterVerified){
      const binding=await catalogueBinding(destination);
@@ -72,7 +74,7 @@ async function copy(source,input,{id,onProgress,checkpoint=async()=>{},afterVeri
     if(binding?.placement!==placement||binding[ownerId]!==source[ownerId])throw new AppError('DATABASE_LOCATION');
     if(receipt&&(receipt.sourceId!==binding.id||receipt.namespaceId!==outline.metadata.id))throw new AppError('CONFLICT');
     if(!receipt){
-     receipt={version:2,filesVersion:1,relocation,boundaries,...(portable?{portable:true}:{}),id,source:sourceRoot,destination,sourceId:binding.id,[ownerId]:source[ownerId],vaultId:source.vault.id,namespaceId:outline.metadata.id,head:outline.etag,phase:'files'};
+     receipt={version:2,filesVersion:1,relocation,boundaries,...(boundaryRevision?{boundaryRevision}:{}),...(portable?{portable:true}:{}),id,source:sourceRoot,destination,sourceId:binding.id,[ownerId]:source[ownerId],vaultId:source.vault.id,namespaceId:outline.metadata.id,head:outline.etag,phase:'files'};
      await save(target,receipt);await atomicWrite(path.join(destination,'.observanda/access.json'),serialize(access.value));
     }
     const original=await source.openCatalogue({detached:true});let copied;
@@ -88,7 +90,7 @@ async function copy(source,input,{id,onProgress,checkpoint=async()=>{},afterVeri
       }
       receipt.head=outline.etag;receipt.phase='files';await save(target,receipt);await atomicWrite(marker,'copying '+placement+'\n');
       operationTransfer({phase:'copying',files:0,bytes:0});
-      await operationStage('copy-files',{unit:'files'},()=>reconcileProjectFiles(source,target,receipt,{controls,receiptDirectory,projectRoots:retainedCopyRoots(receipt),checkpoint}));
+      await operationStage('copy-files',{unit:'files'},()=>reconcileProjectFiles(source,target,receipt,{controls,receiptDirectory,projectRoots:retainedCopyRoots(receipt),excludeProject,checkpoint}));
       receipt.phase='database';await save(target,receipt);await checkpoint('files');operationTransfer({phase:'verifying'});
       const descriptor=JSON.parse(await target.readFile(await workspaceFile(destination),'utf8'));
       const validate=db=>operationStage('verify-'+placement+'-database',{},()=>target.catalogueStore(db).verify(descriptor));

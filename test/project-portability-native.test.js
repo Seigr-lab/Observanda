@@ -1,0 +1,41 @@
+import '../src/storage.js';
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,mkdir,rm,copyFile} from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import {randomUUID} from 'node:crypto';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {sampleNotebook} from '../src/sample.js';
+import {Workspace,atomicWrite,workspaceFile} from '../src/storage.js';
+import {WorkspaceDatabases} from '../src/workspace-databases.js';
+import {installDatabaseProvider} from '../src/workspace-database-context.js';
+import {createPortabilityCollection,portabilityCollection,NativePortabilityCollection,verifyPortabilityCollections,withArchivedPortabilityCollection} from '../src/portability-collection.js';
+import {OwnerDirectoryBlocks} from '../src/owner-directory-blocks.js';
+import {validateNativeProjectTree} from '../src/project-tree-manifest.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {clearVault} from '../src/encryption.js';
+import {serialize} from '../src/storage-format.js';
+import {backupCatalogue} from '../src/postgres.js';
+import {rekeyCatalogue} from '../src/research-catalogue.js';
+const uuid=(kind,n)=>kind+'0000000-0000-4000-8000-'+String(n).padStart(12,'0');
+const empty=()=>{const book=sampleNotebook();book.projects=[];book.notebooks=[];book.entries=[];return book;};
+test('native portability grows past both prior aggregate limits and recovers an older control root from ordinary and fresh-key archives',{timeout:300000},async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-native-portability-')),runtime=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(runtime),vaults=[];
+ t.after(async()=>{await runtime.close();detach();for(const vault of vaults)clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-native-portability-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const fixture=await encryptedFixture(path.join(directory,'source'),empty()),source=fixture.workspace;vaults.push(fixture.vault);let bytes=0;
+ const parts=Array.from({length:4},(_,i)=>('Ancestor '+i+' ').padEnd(150,'x')),root={kind:'project',relative:'',projectId:uuid('1',0),namespaceId:uuid('2',0),vaultId:uuid('3',0),parentId:null};
+ const values=async function*(){yield root;for(let n=1;n<=4;n++)yield {...root,relative:parts.slice(0,n).join('/'),projectId:uuid('1',n),namespaceId:uuid('2',n),vaultId:uuid('3',n),parentId:uuid('1',n-1)};for(let n=5;n<8205;n++){const row={...root,relative:[...parts,('Project '+String(n).padStart(5,'0')+' ').padEnd(150,'y')].join('/'),projectId:uuid('1',n),namespaceId:uuid('2',n),vaultId:uuid('3',n),parentId:uuid('1',4)};bytes+=Buffer.byteLength(serialize(row));yield row;}};
+ const ref=await createPortabilityCollection(source,values());assert.equal(ref.count,8205);assert.ok(bytes>4*1024*1024);assert.ok(Buffer.byteLength(serialize(ref))<4096);const selected=portabilityCollection(source,ref);
+ await source.catalogue(async store=>{const native=new NativePortabilityCollection(store,ref.id);await native.checked(ref);await native.verify(ref);const view={count:ref.count,entries:async function*(){for await(const entry of native.index.entries({root:ref.roots.order}))yield (await native.row(entry.revision)).value;},find:(index,key)=>native.find(ref,index,key),get:relative=>native.find(ref,'relative',relative)};await validateNativeProjectTree(view,{projectId:root.projectId,namespaceId:root.namespaceId,vaultId:root.vaultId});});
+ const last=await source.withCatalogueConnections(()=>selected.find('project',uuid('1',8204)));let reads=0;const original=OwnerDirectoryBlocks.prototype.read;OwnerDirectoryBlocks.prototype.read=async function(...args){reads++;return original.apply(this,args);};
+ try{assert.equal((await selected.get(last.relative)).projectId,last.projectId);assert.ok(reads<60,'Bounded point reads: '+reads);}finally{OwnerDirectoryBlocks.prototype.read=original;}
+ const before=structuredClone(ref);await source.writeFile(path.join(source.root,'.observanda/portability-test.obsv'),serialize(before));await selected.update(last.relative,{copied:true});assert.equal(await selected.get(last.relative).then(row=>row.copied),true);
+ await source.catalogue(async store=>{const heads=await store.db.get("SELECT count(*)::text AS total FROM state WHERE slot LIKE 'portability:%:head'");assert.equal(Number(heads.total),1);await verifyPortabilityCollections(store);const state=await store.db.get("SELECT count(*)::text AS rows,coalesce(sum(octet_length(payload)),0)::text AS bytes FROM state WHERE slot LIKE 'portability:%'");t.diagnostic(JSON.stringify({owners:ref.count,projectBytes:bytes,pointReads:reads,stateRows:Number(state.rows),stateBytes:Number(state.bytes)}));});
+ const descriptorText=await source.readFile(await workspaceFile(source.root),'utf8'),descriptor=JSON.parse(descriptorText),archive=new Workspace(path.join(directory,'archive'),fixture.vault);await mkdir(path.join(archive.root,'.observanda'),{recursive:true});await copyFile(path.join(source.root,'.observanda/access.json'),path.join(archive.root,'.observanda/access.json'));await archive.writeFile(await workspaceFile(archive.root,{secure:true}),descriptorText);await archive.writeFile(path.join(archive.root,'.observanda/portability-test.obsv'),serialize(before));
+ const db=await source.openCatalogue();let archiveDigest;try{archiveDigest=await backupCatalogue(source.root,archive.root,{connection:db});}finally{await db.close();}
+ await withArchivedPortabilityCollection(archive,archiveDigest,before,async old=>{assert.equal((await old.get(last.relative)).copied,undefined);assert.equal(old.count,8205);});assert.equal((await portabilityCollection(archive,before).get(last.relative)).copied,undefined);
+ const access=await createWorkspaceAccess('','',fixture.deviceStore),vault=takeCreatedVault(access);vaults.push(vault);const fresh=new Workspace(path.join(directory,'fresh-key'),vault);await mkdir(path.join(fresh.root,'.observanda'),{recursive:true});await atomicWrite(path.join(fresh.root,'.observanda/access.json'),serialize(access));await fresh.writeFile(await workspaceFile(fresh.root,{secure:true}),descriptorText);await fresh.writeFile(path.join(fresh.root,'.observanda/portability-test.obsv'),serialize(before));await rekeyCatalogue(source,fresh,descriptor);
+ const saved=JSON.parse(await fresh.readFile(path.join(fresh.root,'.observanda/portability-test.obsv'),'utf8'));assert.equal((await portabilityCollection(fresh,saved).get(last.relative)).copied,undefined);assert.equal((await portabilityCollection(fresh,ref).get(last.relative)).copied,true);
+ t.diagnostic('Older encrypted control root recovered after native head publication, ordinary archive restore and fresh-key restore.');
+});

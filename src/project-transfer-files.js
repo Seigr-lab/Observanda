@@ -17,7 +17,7 @@ const fingerprint=value=>value===null||value&&Number.isSafeInteger(value.bytes)&
 const same=(a,b)=>a===null?b===null:b!==null&&a.bytes===b.bytes&&a.sha256===b.sha256;
 const relative=value=>typeof value==='string'&&value.length<=32768&&!value.includes('\\')&&!value.includes('\0')&&!path.isAbsolute(value)&&!path.posix.isAbsolute(value)&&path.posix.normalize(value)===value&&!value.split('/').some(part=>['..','.',''].includes(part));
 async function measured(file){const stat=await assertRegular(file,{missing:true});return stat?{bytes:stat.size,sha256:await hashWorkspaceFile(file)}:null;}
-export async function reconcileProjectFiles(source,target,receipt,{controls,receiptDirectory=PROJECT_TRANSFER_FILES,projectRoots,checkpoint=async()=>{}}){
+export async function reconcileProjectFiles(source,target,receipt,{controls,receiptDirectory=PROJECT_TRANSFER_FILES,projectRoots,excludeProject,checkpoint=async()=>{}}){
  const directory=await privateDirectory(target.root,receiptDirectory),staging=await privateDirectory(target.root,receiptDirectory+'/staging');
  return withScratch(async work=>{
   let page=0;
@@ -48,7 +48,7 @@ export async function reconcileProjectFiles(source,target,receipt,{controls,rece
    }
    batch=[];
   }
-  for await(const file of workspaceFiles(source.root,{includeDatabase:false,hashFiles:false,projectRoots})){
+  for await(const file of workspaceFiles(source.root,{includeDatabase:false,hashFiles:false,projectRoots,excludeProject})){
    if(controls.has(file.path))continue;
    const output=await outputFor(file.path);
    const prior=await work.get(file.path),before=await measured(output);

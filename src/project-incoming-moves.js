@@ -5,7 +5,7 @@ import path from 'node:path';
 import {opendir,unlink} from 'node:fs/promises';
 import {assertRegular,privateDirectory,serialize} from './storage.js';
 import {withWriterLease} from './writer-lease.js';
-import {pendingProjectImports} from './project-import-state.js';
+import {pendingProjectImports,projectImportOwners} from './project-import-state.js';
 import {researchId} from './web/research-reference.js';
 import {AppError} from './errors.js';
 const file=(registry,id,owner=false)=>{if(!researchId(id))throw new AppError('INVALID');return path.join(registry.workspace.root,'.observanda',owner?'project-incoming-owners':'project-incoming-moves',id+'.obsv');};
@@ -26,8 +26,8 @@ async function* pending(registry){
 }
 export function incomingProjectMove(registry,projectId){return read(registry,projectId,true);}
 export async function assertIncomingProjectAddresses(registry,owners,{except=null}={}){
- const namespaces=new Set(owners.map(owner=>owner.namespaceId)),vaults=new Set(owners.map(owner=>owner.vaultId));
- for await(const value of pending(registry))if(value.id!==except&&value.addresses.some(address=>namespaces.has(address.namespaceId)||vaults.has(address.vaultId)))throw new AppError('STORAGE_PROJECT_BUSY');
+ const selected=Array.isArray(owners)?projectImportOwners(registry,{owners}):owners;
+ for await(const value of pending(registry))if(value.id!==except)for(const address of value.addresses)if(await selected.find('namespace',address.namespaceId)||await selected.find('vault',address.vaultId))throw new AppError('STORAGE_PROJECT_BUSY');
 }
 export async function reserveIncomingProjectMove(registry,value){
  const owners=[...value.entries.map(entry=>({...entry,kind:'project'})),...(value.rootBooks.books??[]).map(entry=>({...entry,kind:'lab-book'})),...(value.projects??[]).flatMap(project=>(project.books??[]).map(entry=>({...entry,kind:'lab-book'})))];
@@ -40,7 +40,7 @@ export async function reserveIncomingProjectMove(registry,value){
   if(index<locks.length)return withWriterLease(locks[index],()=>next(index+1),{wait:false});
   await assertIncomingProjectAddresses(registry,owners,{except:incoming.id});
   const projectIds=new Set(incoming.projects),namespaces=new Set(incoming.addresses.map(address=>address.namespaceId)),vaults=new Set(incoming.addresses.map(address=>address.vaultId));
-  for await(const importing of pendingProjectImports(registry))if(importing.owners.some(owner=>projectIds.has(owner.projectId)||namespaces.has(owner.namespaceId)||vaults.has(owner.vaultId)))throw new AppError('STORAGE_PROJECT_BUSY');
+  for await(const importing of pendingProjectImports(registry))for await(const owner of projectImportOwners(registry,importing).entries())if(projectIds.has(owner.projectId)||namespaces.has(owner.namespaceId)||vaults.has(owner.vaultId))throw new AppError('STORAGE_PROJECT_BUSY');
   for(const id of incoming.projects){const previous=await read(registry,id,true);if(previous&&(previous.id!==incoming.id||previous.sourceWorkspaceId!==incoming.sourceWorkspaceId))throw new AppError('STORAGE_PROJECT_BUSY');}
   const previous=await read(registry,incoming.id);if(previous&&serialize(previous)!==raw)throw new AppError('CONFLICT');
   await registry.workspace.writeFile(file(registry,incoming.id),raw);
