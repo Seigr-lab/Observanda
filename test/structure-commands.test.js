@@ -23,7 +23,6 @@ import {defaultPageLayout} from '../src/web/website-layouts.js';
 import {starterTemplate} from '../src/web/project-templates.js';
 import {validateWorkspaceOutline} from '../src/web/workspace-reader.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
-import {MediaStore} from '../src/media.js';
 
 async function fixture(t,count=12){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-structure-index-'));
@@ -35,9 +34,6 @@ async function fixture(t,count=12){
  book.website.layouts=[defaultPageLayout('entry:'+book.entries.at(-1).id),defaultPageLayout('entry:'+book.entries[0].id)];
  const {workspace:ws,vault}=await encryptedFixture(directory,book);
  t.after(async()=>{clearVault(vault);await rm(directory,{recursive:true,force:true});});
- const asset=await new MediaStore(ws.root,vault).import(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="black"/></svg>'),'image');
- book.branding=[{target:'entry:'+book.entries.at(-1).id,logos:[{id:asset.id,alt:'Private mark'}]}];
- await ws.save(book,(await ws.outline()).etag);
  return {directory,ws,vault,base:await ws.read(),service:new StructureCommands(ws)};
 }
 const command=(f,base,kind,value)=>f.service.execute('structure',{etag:base.etag,change:{kind,value}});
@@ -83,8 +79,8 @@ test('project, template, tool and lab-book metadata commands retain roots and lo
    ['project',{...base.book.projects[0],title:'Renamed research',labBookTemplate:starterTemplate('research-development')}],
    ['project-tools',{moduleId:'planning',projectIds:[base.book.projects[0].id]}],
    ['notebook',{...base.book.notebooks[0],title:'Measured notes'}],
-   ['notebook',{id:randomUUID(),title:'New lab book',projectId:base.book.projects[0].id}],
-   ['project',{id:randomUUID(),title:'New project',description:'',share:false,logoId:null}]
+   ['notebook',{...base.book.notebooks[1],title:'Updated second lab book'}],
+   ['project',{...base.book.projects[1],title:'Updated second project'}]
   ];
   await bounded(new Set(),new Set(),async()=>{
    for(const [kind,value] of changes){
@@ -231,13 +227,19 @@ test('pre-index catalogues validate structure and upgrade membership without cha
  await f.ws.catalogue(s=>s.verify(catalogueDescriptor(f.base.book)));
 });
 
-test('creating and removing empty lab books needs no body reads even when the corpus is empty',async t=>{
+test('empty retained lab books remain editable while new inline identities are refused',async t=>{
  const f=await fixture(t,3),source=f.base.book.notebooks[0];
  const removed=await command(f,f.base,'delete-notebook',{id:source.id,records:'delete',destinationId:null,confirmed:true}),base=patch(f.base,removed);
  assert.equal(base.book.entries.length,0);
- const id=randomUUID(),value={id,title:'Fresh start',projectId:base.book.projects[0].id};
+ const id=base.book.notebooks[1].id,value={...base.book.notebooks[1],title:'Fresh start'};
+ await assert.rejects(command(f,base,'notebook',{...value,id:randomUUID()}),{code:'INVALID'});
+ await assert.rejects(command(f,base,'project',{id:randomUUID(),title:'New inline project',description:'',share:false,logoId:null}),{code:'INVALID'});
+ const reorganize={workspaceTitle:base.book.title,workspaceDescription:'',projectId:'new',copyLogos:false};
+ await assert.rejects(f.service.execute('reorganize',{etag:base.etag,change:reorganize},{preview:true}),{code:'INVALID'});
+ await assert.rejects(f.service.execute('reorganize',{etag:base.etag,change:reorganize,reviewed:true}),{code:'INVALID'});
+ assert.equal((await f.ws.outline()).etag,base.etag);
  const {result}=await bounded(new Set([id]),new Set(),async()=>{
-  const created=await command(f,base,'notebook',value),latest=patch(base,created);
+  const edited=await command(f,base,'notebook',value),latest=patch(base,edited);
   return command(f,latest,'delete-notebook',{id,records:'empty',destinationId:null,confirmed:true});
  });
  assert.equal(result.recordPatch.count,0);

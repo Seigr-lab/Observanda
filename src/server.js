@@ -145,7 +145,7 @@ import {reviewWriterRecovery,recoverWriter} from './writer-recovery.js';
 import {DashboardEdits} from './dashboard-edits.js';
 import {requestWriterWait,waitForWriter,withoutWriterWait} from './writer-wait.js';
 import {WorkspaceReadAdmission,workspaceSnapshotRequest} from './workspace-read-admission.js';
-import {StructureCommands} from './structure-commands.js';
+import {StructureCommands,assertExistingNativeStructure} from './structure-commands.js';
 import {WorkspaceEdits} from './workspace-edits.js';
 import {WebsiteResearch} from './website-research.js';
 import { Laboratory } from './laboratory.js';
@@ -1039,7 +1039,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       }
       if (req.method === 'POST' && url.pathname === '/api/notebook/save') {
         const data = await body(req);
-        requireCurrentWorkspaceName(workspace,data.book?.title);return json(responseBook(await workspace.save(data.book, data.etag)));
+        requireCurrentWorkspaceName(workspace,data.book?.title);await assertExistingNativeStructure(workspace,data.book,data.etag);return json(responseBook(await workspace.save(data.book, data.etag)));
       }
       if(req.method==='POST'&&['/api/workspace/structure','/api/workspace/reorganize/preview','/api/workspace/reorganize','/api/workspace/notebook'].includes(url.pathname)){
         const kind=url.pathname.split('/')[3],preview=url.pathname.endsWith('/preview');

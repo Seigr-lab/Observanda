@@ -15,6 +15,21 @@ import {legacyStructurePreview} from './structure-preview.js';
 const actions={structure:saveStructure,notebook:editNotebook,reorganize:reorganizeWorkspace};
 const extras=result=>({...(result.projectId?{projectId:result.projectId}:{}),moved:result.moved??false});
 
+// Public complete-document saves may edit retained identities, but owner
+// creation is handled by the dedicated project and lab-book workflows.
+// The subsequent save repeats the etag check before writing, so a concurrent
+// hierarchy change cannot turn this read admission into stale authority.
+export async function assertExistingNativeStructure(workspace,book,etag){
+ if(await workspace.storageKind()!=='catalogue')return;
+ const current=await workspace.outline();if(current.metadata.formatVersion!==21)return;
+ if(current.etag!==etag)throw new AppError('CONFLICT');
+ if(book?.id!==current.metadata.id)throw new AppError('WORKSPACE_CHANGED');
+ for(const key of ['projects','notebooks']){
+  const known=new Set(current.metadata[key].map(value=>value.id));
+  if(!Array.isArray(book[key])||book[key].some(value=>!known.has(value?.id)))throw new AppError('INVALID');
+ }
+}
+
 export class StructureCommands{
  constructor(workspace){this.workspace=workspace;}
  async execute(kind,data,{preview=false,signal,onProgress=()=>{}}={}){
@@ -57,6 +72,10 @@ export class StructureCommands{
   const etag=await store.head();if(etag!==data.etag)throw new AppError('CONFLICT');
   const source=await store.snapshot(etag);
   if(source.metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
+  // New identities belong to dedicated owners. This adapter edits retained
+  // inline identities only; it must not recreate the old aggregate hierarchy.
+  const collection=kind==='structure'&&['project','notebook'].includes(data.change?.kind)?data.change.kind==='project'?'projects':'notebooks':null;
+  if((collection&&!source.metadata[collection].some(value=>value.id===data.change.value?.id))||(kind==='reorganize'&&data.change.projectId==='new'))throw new AppError('INVALID');
   const complete=await hasSnapshotOwnership(store,source);
   if(preview&&!complete)return legacyStructurePreview(store,source,data.change,etag,{signal});
   if(!complete)onProgress?.({stage:'indexing'});

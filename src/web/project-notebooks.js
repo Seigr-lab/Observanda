@@ -137,7 +137,7 @@ export function projectNotebooksUI(services){
    else {const result=sectionAction(editing.configuration,a.command,a);if(result?.added)selected=result.added;}
    draw();return true;
   }
-  if(['new-project','edit-project'].includes(a.action)){await projects.open(a.action==='edit-project'?a.id:null,a.action==='new-project'?a.id:null);return true;}
+  if(['new-project','edit-project'].includes(a.action)){await projects.open(a.action==='edit-project'?a.id:null,a.action==='new-project'?a.id:null,false,a.action==='new-project'&&Object.hasOwn(a,'copyWorkspaceDetails')?{title:state.book.title,description:state.book.description}:null);return true;}
   if(['new-notebook','edit-notebook','rename-notebook','configure-lab-notebook','specialize-notebook'].includes(a.action)){
    if(!state.book.projects.length){notify('Create a project for this lab book first.');return true;}
    await openNotebook(a.action==='new-notebook'?null:a.id,a.action==='new-notebook'?a.id:null);return true;

@@ -103,14 +103,14 @@ export function projectSettings(services){
   form().querySelector('.project-config-scroll').scrollTop=scroll;directoryChoices.paint(form(),'parents');directoryChoices.paint(form(),'templates');
   if(focus)form().querySelector(focus)?.focus({preventScroll:true});
  }
- async function open(id,parentId,editingTemplate=false){
+ async function open(id,parentId,editingTemplate=false,details=null){
   const current=state.book.projects.find(p=>p.id===id);if(editingTemplate&&!current)return;
   if(!current&&parentId&&!services.projectDirectory.entries().some(entry=>entry.projectId===parentId))throw new Error(projectText('legacyParent'));
   configuration.stop();sourceReader.stop();configurationSource=undefined;
   directoryChoices.reset();saveRequest=null;remoteTemplates=new Map();creation=current?null:{id:crypto.randomUUID(),username:'',password:''};creationBase=structuredClone(creation);
   placementParent=current&&state.projectOwner?services.projectDirectory.entries().find(entry=>entry.projectId===current.id)?.parentId??null:null;
   mode=editingTemplate?'template':'project';
-  const initial=current??{id:crypto.randomUUID(),title:'',description:'',share:false,logoId:null,parentId:parentId??null,kind:'Project'};
+  const initial=current??{id:crypto.randomUUID(),title:details?.title??'',description:details?.description??'',share:false,logoId:null,parentId:parentId??null,kind:'Project'};
   if(native()){const {labBookTemplate,...header}=initial;draft=structuredClone(header);if(labBookTemplate)draft.labBookTemplate={name:labBookTemplate.name};}else draft=structuredClone(initial);
   draft.tools??=[];draft.kind??='Project';
   if(editingTemplate&&!draft.labBookTemplate)draft.labBookTemplate=native()?{name:''}:{name:'',configuration:emptyConfiguration()};
