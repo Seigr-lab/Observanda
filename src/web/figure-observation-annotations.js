@@ -1,3 +1,4 @@
+import {figureCoordinateNumber} from './figure-number-labels.js';
 import messages from './locales/en/figureObservations.json' with {type:'json'};
 import {figureStyle} from './figure-style.js';import {wrapAnnotationText} from './figure-annotation-layout.js';
 export const observationAnnotation=a=>['region','callout'].includes(a.kind);
@@ -14,8 +15,8 @@ export function observationAnnotationIssues(a,f,xValue,{draft=false}={}){
 }
 export function createObservationAnnotation(kind,f){return {id:crypto.randomUUID(),kind,label:'',color:'#92549f',opacity:.15,...(kind==='region'?{xLower:null,xUpper:null,yLower:null,yUpper:null}:{seriesId:f.series[0].id,pointIndex:0,dx:24,dy:-36})};}
 export function observationPosition(a,f){
- if(a.kind==='region')return `${f.x.label||'X'}: ${a.xLower} – ${a.xUpper}; ${f.y.label||'Y'}: ${a.yLower} – ${a.yUpper}`;
- const s=f.series.find(s=>s.id===a.seriesId),p=s?.points[a.pointIndex];return `${s?.name??a.seriesId} · ${messages.observation} ${a.pointIndex+1}: (${p?.x??''}, ${p?.y??''})`;
+ if(a.kind==='region')return `${f.x.label||'X'}: ${figureCoordinateNumber(f,'x',a.xLower)} – ${figureCoordinateNumber(f,'x',a.xUpper)}; ${f.y.label||'Y'}: ${figureCoordinateNumber(f,'y',a.yLower)} – ${figureCoordinateNumber(f,'y',a.yUpper)}`;
+ const s=f.series.find(s=>s.id===a.seriesId),p=s?.points[a.pointIndex];return `${s?.name??a.seriesId} · ${messages.observation} ${a.pointIndex+1}: (${figureCoordinateNumber(f,'x',p?.x)}, ${figureCoordinateNumber(f,'y',p?.y)})`;
 }
 export function renderObservationAnnotations(f,{left,top,plotW,plotH,horizontal,cx,cy,vx,vy,clip,esc}){
  let background='',foreground='';const key=[],style=figureStyle(f),size=style.fontSize,boxes=[];

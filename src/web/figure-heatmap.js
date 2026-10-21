@@ -13,4 +13,4 @@ export function heatmapIssues(figure,{draft=false}={}){
  return columns.size>100?[messages.matrixInvalid]:[];
 }
 export function heatmapBand(value,settings){return settings.thresholds.find(b=>b.max===null||value<=b.max);}
-export const heatmapThresholdText=(settings,i)=>{const b=settings.thresholds[i],prior=settings.thresholds[i-1];return b.max===null?(prior?'> '+prior.max:messages.allValues):(prior?'> '+prior.max+'; ':'')+'≤ '+b.max;};
+export const heatmapThresholdText=(settings,i,format=value=>value)=>{const b=settings.thresholds[i],prior=settings.thresholds[i-1];return b.max===null?(prior?'> '+format(prior.max):messages.allValues):(prior?'> '+format(prior.max)+'; ':'')+'≤ '+format(b.max);};

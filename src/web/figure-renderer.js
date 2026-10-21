@@ -1,3 +1,4 @@
+import {figureNumeralHelp} from './figure-radix-labels.js';
 import {axisFraction,explicitAxisTicks,axisTickValues,customTickLayout,verticalTickHeight,renderCustomAxis,axisControlTable} from './figure-axis-controls.js';
 import {areaMarker,markerAreaLegend} from './figure-marker-area.js';
 import markerMessages from './locales/en/figureMarkerArea.json' with {type:'json'};
@@ -9,7 +10,7 @@ import {xValue} from './figure-model.js';
 import {figureStyle,seriesStyle,FONT_FAMILIES} from './figure-style.js';
 import {renderAnnotations,renderAnnotationKey,annotationTable} from './figure-annotations.js';
 import {linkedPanelPlots} from './figure-composition.js';
-import {formatFigureNumber,figureTickLabels} from './figure-number-labels.js';
+import {formatFigureNumber,figureTickLabels,figureDataNumber,figureCoordinateNumber} from './figure-number-labels.js';
 import {figureDomain as domain,figureTicks as ticks,figureFraction as transform} from './figure-scales.js';
 import {wrapFigureText,figureLegendLayout} from './figure-text-layout.js';
 export {formatFigureNumber} from './figure-number-labels.js';
@@ -165,7 +166,7 @@ export function renderFigure(figure,{width,height,idPrefix='figure'}={}){
   });
  }
  if(customY)graphic+=renderCustomAxis(customY,{position:horizontal?vx:vy,left,top,plotW,plotH,horizontal,style,grid:style.grid!=='none',cls:'figure-value-tick',esc});
- if(customX)graphic+=renderCustomAxis(customX,{position:v=>(horizontal?cy:cx)(figure.x.kind==='date'?new Date(v).toISOString():v),left,top,plotW,plotH,horizontal:!horizontal,style,grid:style.grid==='both',cls:'figure-coordinate-tick',esc});
+ if(customX)graphic+=renderCustomAxis(customX,{position:v=>(horizontal?cy:cx)(figure.x.kind==='date'?new Date(v).toISOString():v),left,top,plotW,plotH,horizontal:!horizontal,style,grid:style.grid==='both',cls:'figure-coordinate-tick',esc,labelValue:value=>figureCoordinateNumber(figure,'x',value)});
  const clip=idPrefix+'-plot-'+figure.id;
  graphic+=`<defs><clipPath id="${clip}"><rect x="${left}" y="${top}" width="${plotW}" height="${plotH}"/></clipPath></defs>`;
  const annotations=renderAnnotations(figure,{left,top,plotW,plotH,horizontal,cx,cy,vx,vy,clip,esc});
@@ -188,7 +189,7 @@ export function renderFigure(figure,{width,height,idPrefix='figure'}={}){
   }
   for(const p of s.points.filter(valid)){
    let px=horizontal?vx(p.y):cx(p.x),py=horizontal?cy(p.x):vy(p.y);
-   const hint=esc(s.name+': '+p.x+' → '+p.y+(p.error!==null?' ± '+p.error:'')+' '+intervalHint(p)+(figure.markerArea?' '+figure.markerArea.label+': '+p.count:''));
+   const pointNumber=value=>figureDataNumber(value,style),hint=esc(s.name+': '+(figure.x.kind==='number'?pointNumber(p.x):p.x)+' → '+pointNumber(p.y)+(p.error!==null?' ± '+pointNumber(p.error):'')+' '+intervalHint(p,(value,key)=>key[0]==='x'&&figure.x.kind!=='number'?value:pointNumber(value))+(figure.markerArea?' '+figure.markerArea.label+': '+(p.count==null?'—':pointNumber(p.count)):''));
    if(bars){
     const barW=Math.max(1,Math.min(80,slot*.75/Math.max(1,series.length))),offset=barW*(index-(series.length-1)/2);
     if(horizontal)py+=offset;else px+=offset;
@@ -217,13 +218,14 @@ export function renderFigure(figure,{width,height,idPrefix='figure'}={}){
  graphic+=svgText(horizontal?figure.y.label:figure.x.label,left+plotW/2,axisY,{size:fontSize+2,width:plotW,cls:'figure-axis-label'});
  graphic+=`<text class="figure-axis-label" transform="translate(18 ${top+plotH/2}) rotate(-90)" text-anchor="middle" font-size="${fontSize+2}">${esc(horizontal?figure.x.label:figure.y.label)}</text>`;
  const key=renderAnnotationKey(figure,annotations.key,{width,y:height,esc}),sizes=markerAreaLegend(figure,{width,y:height+key.height,esc});
- return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${numeric(height+key.height+sizes.height)}" width="${width}" height="${numeric(height+key.height+sizes.height)}" role="img" aria-label="${esc(figure.title)}"><title>${esc(figure.title)}</title><desc>${esc(figure.kind+' plot. '+series.length+' visible series. '+figureSummary(figure)+' '+intervalMessages.description)}</desc><rect width="100%" height="100%" fill="${style.background}"/><g font-family="${FONT_FAMILIES[style.font]}" font-size="${fontSize}" fill="${style.textColor}">${graphic}${key.svg}${sizes.svg}</g></svg>`;
+ return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${numeric(height+key.height+sizes.height)}" width="${width}" height="${numeric(height+key.height+sizes.height)}" role="img" aria-label="${esc(figure.title)}"><title>${esc(figure.title)}</title><desc>${esc(figure.kind+' plot. '+series.length+' visible series. '+figureSummary(figure)+' '+intervalMessages.description+' '+figureNumeralHelp(style))}</desc><rect width="100%" height="100%" fill="${style.background}"/><g font-family="${FONT_FAMILIES[style.font]}" font-size="${fontSize}" fill="${style.textColor}">${graphic}${key.svg}${sizes.svg}</g></svg>`;
 }
 export function figureTable(figure){
  if(figure.kind==='panels')return figure.panels.map(p=>'<section class="figure-panel-data"><h4>'+esc(p.label+' · '+p.figure.title)+'</h4>'+figureTable(p.figure)+'</section>').join('');
+ const style=figureStyle(figure),value=v=>figureDataNumber(v,style),coordinate=v=>figure.x.kind==='number'?value(v):v;
  const counted=figure.series.some(s=>s.points.some(p=>p.count!=null));
  const extra=figure.series.some(s=>s.points.some(p=>INTERVAL_FIELDS.some(k=>p[k]!=null)))?INTERVAL_FIELDS:[];
- return `${figure.markerArea?'<p>'+esc(figure.markerArea.label+' · '+markerMessages.legendRule.replace('{area}',String(figure.markerArea.unitArea)))+'</p>':''}<table>${figure.summary?'<caption>'+esc(figureSummary(figure))+'</caption>':''}<thead><tr><th>Series</th><th>${esc(figure.x.label||'X')}</th><th>${esc(figure.y.label||'Value')}</th><th>Uncertainty (±)</th>${extra.map(k=>'<th>'+esc(intervalMessages[k])+'</th>').join('')}${counted?'<th>'+esc(markerMessages.count)+'</th>':''}</tr></thead><tbody>${figure.series.flatMap(s=>s.points.map(p=>`<tr><th scope="row">${esc(s.name)}</th><td>${esc(p.x)}</td><td>${p.y===null?'Gap':esc(p.y)}</td><td>${p.error===null?'—':esc(p.error)}</td>${extra.map(k=>'<td>'+esc(p[k]??'—')+'</td>').join('')}${counted?'<td>'+esc(p.count??'—')+'</td>':''}</tr>`)).join('')}</tbody></table>`+annotationTable(figure,esc)+heatmapThresholdTable(figure,esc)+axisControlTable(figure,esc);
+ return `${style.numberFormat==='radix'?'<p>'+esc(figureNumeralHelp(style))+'</p>':''}${figure.markerArea?'<p>'+esc(figure.markerArea.label+' · '+markerMessages.legendRule.replace('{area}',value(figure.markerArea.unitArea)))+'</p>':''}<table>${figure.summary?'<caption>'+esc(figureSummary(figure))+'</caption>':''}<thead><tr><th>Series</th><th>${esc(figure.x.label||'X')}</th><th>${esc(figure.y.label||'Value')}</th><th>Uncertainty (±)</th>${extra.map(k=>'<th>'+esc(intervalMessages[k])+'</th>').join('')}${counted?'<th>'+esc(markerMessages.count)+'</th>':''}</tr></thead><tbody>${figure.series.flatMap(s=>s.points.map(p=>`<tr><th scope="row">${esc(s.name)}</th><td>${esc(coordinate(p.x))}</td><td>${p.y===null?'Gap':esc(value(p.y))}</td><td>${p.error===null?'—':esc(value(p.error))}</td>${extra.map(k=>'<td>'+esc(p[k]==null?'—':k[0]==='x'?coordinate(p[k]):value(p[k]))+'</td>').join('')}${counted?'<td>'+esc(p.count==null?'—':value(p.count))+'</td>':''}</tr>`)).join('')}</tbody></table>`+annotationTable(figure,esc)+heatmapThresholdTable(figure,esc)+axisControlTable(figure,esc);
 }
 export function renderFigureView(figure,options={}){
  if(figure.kind!=='panels')return renderFigure(figure,options);

@@ -24,4 +24,4 @@ export function renderIntervals(p,{px,py,horizontal,cx,cy,vx,vy,numeric:n}){
   svg+=`<path class="figure-measurement-interval figure-interval-${axis}" d="${d}" fill="none" stroke-width="1.4"/>`;
  }return svg;
 }
-export const intervalHint=p=>INTERVAL_FIELDS.filter(k=>p[k]!==undefined&&p[k]!==null).map(k=>messages[k]+': '+p[k]).join('; ');
+export const intervalHint=(p,format=value=>value)=>INTERVAL_FIELDS.filter(k=>p[k]!==undefined&&p[k]!==null).map(k=>messages[k]+': '+format(p[k],k)).join('; ');

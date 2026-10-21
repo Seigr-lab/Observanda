@@ -1,3 +1,4 @@
+import {figureCoordinateNumber} from './figure-number-labels.js';
 import {observationAnnotation,observationAnnotationIssues,renderObservationAnnotations,observationPosition,observationAnnotationName} from './figure-observation-annotations.js';
 import observationMessages from './locales/en/figureObservations.json' with {type:'json'};
 import messages from './locales/en/figureComposition.json' with {type:'json'};
@@ -31,7 +32,7 @@ export function renderAnnotations(figure,{left,top,plotW,plotH,horizontal,cx,cy,
   if(!Number.isFinite(start)||!Number.isFinite(end))continue;
   const low=Math.min(start,end),high=Math.max(start,end),min=vertical?left:top,max=min+(vertical?plotW:plotH);
   if(high<min||low>max)continue;
-  const title='<title>'+esc(a.label+': '+a.start+(a.kind==='interval'?' – '+a.end:''))+'</title>',attr='stroke="'+a.color+'" stroke-width="1.5" stroke-dasharray="6 4"';
+  const title='<title>'+esc(a.label+': '+figureCoordinateNumber(figure,a.axis,a.start)+(a.kind==='interval'?' – '+figureCoordinateNumber(figure,a.axis,a.end):''))+'</title>',attr='stroke="'+a.color+'" stroke-width="1.5" stroke-dasharray="6 4"';
   const line=p=>vertical?`<line x1="${p}" x2="${p}" y1="${top}" y2="${top+plotH}" ${attr}/>`:`<line x1="${left}" x2="${left+plotW}" y1="${p}" y2="${p}" ${attr}/>`;
   if(a.kind==='interval')background+=`<g class="figure-interval" clip-path="url(#${clip})">${title}<rect x="${vertical?low:left}" y="${vertical?top:low}" width="${vertical?high-low:plotW}" height="${vertical?plotH:high-low}" fill="${a.color}" fill-opacity="${a.opacity}"/></g>`;
   items.push({annotation:a,index,start,vertical});
@@ -55,7 +56,7 @@ export function renderAnnotationKey(figure,annotations,{width,y,esc}){
   let rowHeight=0;
   for(let col=0;col<columns&&index+col<annotations.length;col++){
    const a=annotations[index+col],x=20+col*columnWidth,axis=figure[a.axis]?.label||messages[a.axis==='x'?'coordinate':'value'];
-   const label=wrapAnnotationText((a.kind==='callout'?(figure.annotations.indexOf(a)+1)+'. ':'')+a.label,columnWidth-38,size),position=wrapAnnotationText(observationAnnotation(a)?observationPosition(a,figure):axis+': '+a.start+(a.kind==='interval'?' – '+a.end:''),columnWidth-38,size);
+   const label=wrapAnnotationText((a.kind==='callout'?(figure.annotations.indexOf(a)+1)+'. ':'')+a.label,columnWidth-38,size),position=wrapAnnotationText(observationAnnotation(a)?observationPosition(a,figure):axis+': '+figureCoordinateNumber(figure,a.axis,a.start)+(a.kind==='interval'?' – '+figureCoordinateNumber(figure,a.axis,a.end):''),columnWidth-38,size);
    const text=(lines,top,cls,weight='normal')=>`<text class="${cls}" x="${x+26}" y="${top}" font-size="${size}" font-weight="${weight}">${lines.map((line,i)=>`<tspan x="${x+26}" dy="${i?size*1.3:0}">${esc(line)}</tspan>`).join('')}</text>`;
    svg+=`<g class="figure-annotation-key-item" data-annotation-id="${a.id}"><title>${esc(observationAnnotation(a)?observationAnnotationName(a.kind):messages[a.kind])}</title>`;
    if(a.kind==='interval')svg+=`<rect x="${x}" y="${cursor-size+2}" width="18" height="${size}" fill="${a.color}" fill-opacity="${a.opacity}"/>`;
@@ -71,5 +72,5 @@ export function annotationTable(figure,esc){
  const all=figure.annotations??[],rows=all.filter(a=>!observationAnnotation(a)),advanced=all.filter(observationAnnotation);if(!all.length)return '';
  const detail=advanced.length?'<table class="figure-observation-annotations-table"><caption>'+esc(messages.annotations)+'</caption><thead><tr><th>'+esc(messages.annotationLabel)+'</th><th>'+esc(observationMessages.position)+'</th></tr></thead><tbody>'+advanced.map(a=>'<tr><th scope="row">'+esc(a.label)+'</th><td>'+esc(observationPosition(a,figure))+'</td></tr>').join('')+'</tbody></table>':'';
  if(!rows.length)return detail;
- return '<table class="figure-annotations-table"><caption>'+esc(messages.annotations)+'</caption><thead><tr>'+['annotationLabel','dataKind','axis','start','end'].map(k=>'<th scope="col">'+esc(messages[k])+'</th>').join('')+'</tr></thead><tbody>'+rows.map(a=>'<tr><th scope="row">'+esc(a.label)+'</th><td>'+esc(messages[a.kind])+'</td><td>'+esc(messages[a.axis==='x'?'coordinate':'value'])+'</td><td>'+esc(a.start)+'</td><td>'+esc(a.end??'')+'</td></tr>').join('')+'</tbody></table>'+detail;
+ return '<table class="figure-annotations-table"><caption>'+esc(messages.annotations)+'</caption><thead><tr>'+['annotationLabel','dataKind','axis','start','end'].map(k=>'<th scope="col">'+esc(messages[k])+'</th>').join('')+'</tr></thead><tbody>'+rows.map(a=>'<tr><th scope="row">'+esc(a.label)+'</th><td>'+esc(messages[a.kind])+'</td><td>'+esc(messages[a.axis==='x'?'coordinate':'value'])+'</td><td>'+esc(figureCoordinateNumber(figure,a.axis,a.start))+'</td><td>'+esc(figureCoordinateNumber(figure,a.axis,a.end))+'</td></tr>').join('')+'</tbody></table>'+detail;
 }

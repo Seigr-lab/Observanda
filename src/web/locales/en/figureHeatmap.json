@@ -35,6 +35,9 @@
  "decimal":"Decimal",
  "scientific":"Scientific",
  "percent":"Percentage",
+ "radix":"Numeral base",
+ "numeralBase":"Numeral base (2–36)",
+ "radixHelp":"Choose Numeral base as the number format to use this base for axes, values and reading tables. Each value carries a base# prefix. Exponents and exact fractions use the same base. ≈ marks rounded labels. Decimal places applies to the decimal formats; source measurements do not change.",
  "decimals":"Decimal places · blank is automatic",
  "rowVisible":"Show row",
  "rowName":"Row label"

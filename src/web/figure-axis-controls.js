@@ -1,3 +1,4 @@
+import {figureDataNumber,figureCoordinateNumber} from './figure-number-labels.js';
 import messages from './locales/en/figureAxes.json' with {type:'json'};
 import {wrapFigureText} from './figure-text-layout.js';
 export function axisControlIssues(axis,{draft=false,kind='number'}={}){
@@ -20,13 +21,13 @@ export function customTickLayout(ticks,{position,start,end,size,horizontal,label
  return {items,height:0};
 }
 export const verticalTickHeight=(ticks,width,size)=>ticks.reduce((n,t)=>n+wrapFigureText(t.label,width,size).length*size*1.3+8,0);
-export function renderCustomAxis(ticks,{position,left,top,plotW,plotH,horizontal,style,grid,cls,esc}){
+export function renderCustomAxis(ticks,{position,left,top,plotW,plotH,horizontal,style,grid,cls,esc,labelValue=value=>figureDataNumber(value,style)}){
  const size=style.fontSize,layout=customTickLayout(ticks,{position,start:horizontal?left:top,end:horizontal?left+plotW:top+plotH,size,horizontal,labelWidth:horizontal?Math.min(220,plotW):left-28});let svg='';
  for(const item of layout.items){const p=item.target;if(p<(horizontal?left:top)-.001||p>(horizontal?left+plotW:top+plotH)+.001)continue;
   if(grid)svg+=horizontal?`<line x1="${p}" x2="${p}" y1="${top}" y2="${top+plotH}" stroke="${style.gridColor}"/>`:`<line x1="${left}" x2="${left+plotW}" y1="${p}" y2="${p}" stroke="${style.gridColor}"/>`;
   const x=horizontal?item.center:left-12,y=horizontal?top+plotH+size*1.6+item.offset:item.center-(item.lines.length-1)*size*.65+size*.35;
   const path=horizontal?`M${p},${top+plotH} V${top+plotH+4} L${x},${y-size}`:`M${left},${p} H${left-4} L${left-9},${item.center}`;
-  svg+=`<g class="figure-custom-tick" data-value="${item.value}"><path d="${path}" fill="none" stroke="${style.axisColor}"/><text class="${cls}" x="${x}" y="${y}" text-anchor="${horizontal?'middle':'end'}" font-size="${size}"><title>${esc(item.value+': '+item.label)}</title>${item.lines.map((line,i)=>`<tspan x="${x}" dy="${i?size*1.3:0}">${esc(line)}</tspan>`).join('')}</text></g>`;
+  svg+=`<g class="figure-custom-tick" data-value="${item.value}"><path d="${path}" fill="none" stroke="${style.axisColor}"/><text class="${cls}" x="${x}" y="${y}" text-anchor="${horizontal?'middle':'end'}" font-size="${size}"><title>${esc(labelValue(item.value)+': '+item.label)}</title>${item.lines.map((line,i)=>`<tspan x="${x}" dy="${i?size*1.3:0}">${esc(line)}</tspan>`).join('')}</text></g>`;
  }return svg;
 }
-export function axisControlTable(f,esc){return ['x','y'].filter(k=>f[k].ticks?.length||f[k].reversed).map(k=>'<table class="figure-axis-settings-table"><caption>'+esc(f[k].label||messages[k])+' · '+esc(messages.direction)+': '+esc(messages[f[k].reversed?'reversed':'normal'])+'</caption><thead><tr><th>'+esc(messages.value)+'</th><th>'+esc(messages.label)+'</th></tr></thead><tbody>'+(f[k].ticks??[]).map(t=>'<tr><td>'+esc(t.value)+'</td><td>'+esc(t.label)+'</td></tr>').join('')+'</tbody></table>').join('');}
+export function axisControlTable(f,esc){return ['x','y'].filter(k=>f[k].ticks?.length||f[k].reversed).map(k=>'<table class="figure-axis-settings-table"><caption>'+esc(f[k].label||messages[k])+' · '+esc(messages.direction)+': '+esc(messages[f[k].reversed?'reversed':'normal'])+'</caption><thead><tr><th>'+esc(messages.value)+'</th><th>'+esc(messages.label)+'</th></tr></thead><tbody>'+(f[k].ticks??[]).map(t=>'<tr><td>'+esc(figureCoordinateNumber(f,k,t.value))+'</td><td>'+esc(t.label)+'</td></tr>').join('')+'</tbody></table>').join('');}

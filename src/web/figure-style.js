@@ -5,7 +5,7 @@ export const figureStyleDefaults = () => ({
   font:'sans',fontSize:12,titleSize:18,legendSize:12,textColor:'#344155',
   background:'#ffffff',gridColor:'#dde3ed',axisColor:'#8997aa',
   grid:'y',showTitle:true,legendPosition:'top',labelRotation:'auto',
-  labelStep:0,numberFormat:'auto',decimals:null,dateFormat:'date',annotationLabels:'auto',
+  labelStep:0,numberFormat:'auto',radix:10,decimals:null,dateFormat:'date',annotationLabels:'auto',
   width:840,height:460
 });
 export const seriesStyleDefaults = () => ({lineWidth:2.3,dash:'solid',marker:'circle',radius:3.5,visible:true});
@@ -20,7 +20,8 @@ const schema = {
   legendPosition:v=>['top','bottom','right'].includes(v),
   labelRotation:v=>['auto','0','-45','-90'].includes(v),
   labelStep:v=>Number.isInteger(v)&&within(v,0,1000),
-  numberFormat:v=>['auto','decimal','scientific','percent'].includes(v),
+  numberFormat:v=>['auto','decimal','scientific','percent','radix'].includes(v),
+  radix:v=>Number.isInteger(v)&&within(v,2,36),
   decimals:v=>v===null||Number.isInteger(v)&&within(v,0,8),
   dateFormat:v=>['date','month','year','datetime'].includes(v),
   annotationLabels:v=>['auto','key','hidden'].includes(v),
