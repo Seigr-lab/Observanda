@@ -23,6 +23,9 @@ export class WorkspacePostgres{
  async open(root,vault,{create=false}={}){
   if(this.stopping)throw new AppError('DATABASE_CANCELLED');
   root=await realpath(root);await assertNotDeleting(root);await assertNotMoving(root);await assertNotRenaming(root);
+  // Shutdown may drain the owner while those filesystem checks are pending.
+  // No awaited work separates this second admission from registering startup.
+  if(this.stopping)throw new AppError('DATABASE_CANCELLED');
   const identity=keyIdentity(vault),prior=this.instances.get(root);
   if(prior){if(prior.identity!==identity)throw new AppError('ACCESS_DENIED');if(prior.closing)throw new AppError('DATABASE_RUNNING');return (await prior.pending).env;}
   const directory=path.join(root,WORKSPACE_DATABASE_DIRECTORY);

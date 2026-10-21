@@ -1,3 +1,4 @@
+import {spawn} from 'node:child_process';
 import {Client} from 'pg';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -73,4 +74,47 @@ test('failed database connections release their reservation before the next oper
   const db=await scratchDatabase();try{assert.equal((await db.get('SELECT 17 AS value')).value,17);}finally{await db.close();}
  }finally{spy.mock.restore();}
  assert.equal(databaseCapacity().active,0);assert.equal(databaseCapacity().owners,0);
+});
+
+
+test('external process saturation refuses safely and recovers without leaked catalogue reservations',{timeout:60000},async t=>{
+ // The runner owns this disposable server. A separate ordinary-role client
+ // represents other processes sharing an external PostgreSQL endpoint.
+ const observer=await scratchDatabase();let settings;
+ try{settings=await observer.get("SELECT current_setting('max_connections')::int AS maximum,current_setting('superuser_reserved_connections')::int AS reserved,current_setting('reserved_connections',true)::int AS extra");}finally{await observer.close();}
+ assert.ok(settings.maximum<=512,'This bounded qualification requires an isolated server with at most 512 slots');
+ const script=`import {Client} from 'pg';
+ const clients=[];let handling=false;
+ process.on('message',async message=>{
+  if(handling)return;handling=true;
+  try{
+   if(message.action==='fill'){
+    let code=null;
+    for(let index=0;index<=message.maximum;index++){
+     const client=new Client({connectionString:message.url,connectionTimeoutMillis:5000,application_name:'Observanda isolated capacity test'});client.on('error',()=>{});
+     try{await client.connect();clients.push(client);}catch(error){code=error.code;await client.end().catch(()=>{});break;}
+    }
+    process.send({phase:'full',count:clients.length,code});
+   }else if(message.action==='release'){await clients.pop().end();process.send({phase:'released',count:clients.length});}
+   else if(message.action==='close'){await Promise.all(clients.splice(0).map(client=>client.end()));process.send({phase:'closed'});process.disconnect();}
+  }catch(error){process.send({phase:'failed',code:error.code??'unexpected'});}
+  finally{handling=false;}
+ });`;
+ const child=spawn(process.execPath,['--input-type=module','-e',script],{cwd:process.cwd(),windowsHide:true,stdio:['ignore','ignore','pipe','ipc']}),exited=new Promise(resolve=>child.once('exit',resolve));let db;
+ child.stderr.resume();
+ const receive=phase=>new Promise((resolve,reject)=>{
+  const finish=(error,value)=>{clearTimeout(timer);child.off('message',message);child.off('error',failed);child.off('exit',ended);error?reject(error):resolve(value);};
+  const message=value=>value.phase===phase?finish(null,value):finish(Error('Unexpected isolated worker phase: '+value.phase)),failed=error=>finish(error),ended=()=>finish(Error('Isolated worker exited before '+phase));
+  const timer=setTimeout(()=>finish(Error('Isolated worker timed out at '+phase)),15000);child.on('message',message);child.once('error',failed);child.once('exit',ended);
+ });
+ t.after(async()=>{await db?.close();if(child.exitCode===null&&child.signalCode===null){child.kill('SIGKILL');await exited;}});
+ const ready=receive('full');child.send({action:'fill',url:process.env.OBSERVANDA_DATABASE_URL,maximum:settings.maximum});const full=await ready;
+ assert.equal(full.code,'53300');assert.equal(full.count,settings.maximum-settings.reserved-(settings.extra??0));
+ await assert.rejects(scratchDatabase(),{code:'DATABASE_UNAVAILABLE'});assert.deepEqual(databaseCapacity(),{active:0,limit:12,owners:0,admitted:0,queued:0});
+ const released=receive('released');child.send({action:'release'});assert.equal((await released).count,full.count-1);
+ db=await scratchDatabase();assert.equal((await db.get('SELECT 37 AS value')).value,37);assert.equal(databaseCapacity().active,1);
+ await db.close();db=null;
+ const closed=receive('closed');child.send({action:'close'});await closed;assert.equal(await exited,0);
+ assert.deepEqual(databaseCapacity(),{active:0,limit:12,owners:0,admitted:0,queued:0});
+ t.diagnostic(JSON.stringify({serverSlots:settings.maximum,ordinarySlots:full.count,refusal:'53300',recovered:true}));
 });

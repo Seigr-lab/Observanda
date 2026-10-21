@@ -81,3 +81,15 @@ test('lifecycle cancellation can stop a database interrupted before initializati
  const state=JSON.parse(unseal(await readFile(path.join(directory,'service.observanda')),workspace.vault.key,'Observanda/workspace-postgresql/v1/'+workspace.vault.id));assert.equal(state.phase,'initializing');assert.equal(state.running,false);await assert.rejects(readFile(path.join(directory,'data/postmaster.pid')),{code:'ENOENT'});
  await unlink(marker);const resumed=await f.start(workspace);assert.equal((await query(resumed.env,'SELECT 1 AS intact'))[0].intact,1);
 });
+
+
+test('shutdown during workspace admission cannot start a runtime after close returns',async t=>{
+ const manager=new WorkspacePostgres({ownerId:randomUUID(),env:environment()});t.after(()=>manager.close());
+ const f=await fixture(t),workspace=await f.create('closing admission');
+ // open yields at realpath before it owns an entry. close must exclude that
+ // admitted filesystem work as well as entries already starting PostgreSQL.
+ const opening=manager.open(workspace.root,workspace.vault,{create:true}),refused=assert.rejects(opening,{code:'DATABASE_CANCELLED'});
+ await manager.close();await refused;assert.equal(manager.instances.size,0);
+ await assert.rejects(readFile(path.join(workspace.root,'.observanda/postgresql/service.observanda')),{code:'ENOENT'});
+ await assert.rejects(manager.open(workspace.root,workspace.vault,{create:true}),{code:'DATABASE_CANCELLED'});
+});

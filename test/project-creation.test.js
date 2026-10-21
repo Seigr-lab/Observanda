@@ -12,6 +12,9 @@ import {installDatabaseProvider} from '../src/workspace-database-context.js';
 import {ProjectRegistry} from '../src/project-registry.js';
 import {ProjectCreation} from '../src/project-creation.js';
 import {ProjectStorage} from '../src/project-storage.js';
+import {Workspace} from '../src/storage.js';
+import {ResearchCatalogue} from '../src/research-catalogue.js';
+import {databaseCapacity} from '../src/postgres.js';
 import {readAccess,verifyAccess} from '../src/access.js';
 import {clearVault} from '../src/encryption.js';
 
@@ -135,4 +138,37 @@ test('project creation derives literal child folders when no path is supplied',a
  await f.owner.closeProject(second.project.root);
  const opened=await new ProjectOpening(f.registry,f.deviceStore).open({id:randomUUID(),path:second.project.root,username:'',password:'',recovery:''});assert.equal(opened.project.parentId,first.project.projectId);
  const rejected=f.command('Elsewhere');rejected.path=path.join(f.directory,'Elsewhere');await assert.rejects(f.creation.create(rejected),{code:'STORAGE_PATH'});
+});
+
+
+test('selected project creation remains bounded as unrelated retained records grow tenfold',{timeout:240000},async t=>{
+ const f=await fixture(t),record=ResearchCatalogue.prototype.record,read=ResearchCatalogue.prototype.read,open=Workspace.prototype.openCatalogue,acquire=f.owner.acquireEnvironment.bind(f.owner),measurements=[];let measuring=null;
+ const opened=t.mock.method(Workspace.prototype,'openCatalogue',async function(...args){
+  const metric=measuring,db=await open.apply(this,args);if(!metric)return db;
+  metric.opened++;metric.active++;metric.peakConnections=Math.max(metric.peakConnections,metric.active);const close=db.close,run=db.run;let closed=false;
+  db.run=function(...values){metric.queries++;return run.apply(this,values);};
+  db.close=async function(){try{return await close.call(this);}finally{if(!closed){closed=true;metric.closed++;metric.active--;}}};return db;
+ });
+ const records=t.mock.method(ResearchCatalogue.prototype,'record',function(...args){if(measuring&&this.workspace.root===f.workspace.root){measuring.unrelatedReads++;assert.fail('Creation hydrated an unrelated retained record');}return record.apply(this,args);});
+ const whole=t.mock.method(ResearchCatalogue.prototype,'read',function(...args){if(measuring&&this.workspace.root===f.workspace.root)assert.fail('Creation hydrated the containing workspace');return read.apply(this,args);});
+ f.owner.acquireEnvironment=async(root,options)=>{if(measuring)assert.ok(root===f.workspace.root||root===measuring.destination,'Creation opened an unrelated physical owner');return acquire(root,options);};
+ try{
+  for(const count of [80,800]){
+   await f.workspace.update(book=>{
+    const base={...book.entries[2],relations:[],sections:[],figures:[],attachments:[],body:'Unrelated retained observation. '.repeat(40)};
+    while(book.entries.length<count){const index=book.entries.length;book.entries.push({...structuredClone(base),id:randomUUID(),title:'Unrelated observation '+index});}return book;
+   });
+   const before=await f.workspace.outline(),command=f.command('Selected Project '+count),metric={unrelatedRecords:count,destination:command.path,opened:0,closed:0,active:0,peakConnections:0,queries:0,unrelatedReads:0};
+   measuring=metric;const started=performance.now();let result;
+   try{result=await f.creation.create(command);}finally{metric.elapsedMs=Math.round(performance.now()-started);measuring=null;}
+   assert.ok(metric.elapsedMs<30000,'Selected creation exceeded its 30-second local request budget');assert.equal(metric.unrelatedReads,0);assert.equal(metric.opened,metric.closed);assert.equal(metric.active,0);assert.ok(metric.opened<=64);assert.ok(metric.peakConnections<=4);assert.equal(databaseCapacity().active,0);
+   assert.equal((await f.workspace.outline()).etag,before.etag,'Creation changed unrelated research history');
+   const project=await f.open(result.project),current=await project.outline();assert.equal(current.metadata.projects.length,1);assert.equal(current.metadata.projects[0].id,command.project.id);assert.equal(current.metadata.notebooks.length,0);assert.ok(Buffer.byteLength(JSON.stringify(current.metadata))<4096);
+   await f.owner.closeProject(result.project.root);assert.equal((await project.outline()).etag,current.etag,'The independently restarted project lost its initial snapshot');await f.owner.closeProject(result.project.root);
+   assert.deepEqual(await f.creation.create(command),result,'Exact creation replay changed the owner');
+   const {destination,...publicMetric}=metric;measurements.push(publicMetric);t.diagnostic(JSON.stringify(publicMetric));
+  }
+  assert.ok(measurements[1].queries<=Math.ceil(measurements[0].queries*1.5)+64,'Unrelated record growth amplified creation catalogue work');
+  assert.equal(f.owner.projects.stats().references,0);assert.equal(f.owner.projects.stats().open,0);
+ }finally{measuring=null;f.owner.acquireEnvironment=acquire;opened.mock.restore();records.mock.restore();whole.mock.restore();}
 });
