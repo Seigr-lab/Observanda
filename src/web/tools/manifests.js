@@ -1,6 +1,6 @@
 import {timelineModule} from './timeline-manifest.js';
 export const toolSpecs=[
- ['scientific-calculator','Scientific calculator','Scientific expressions, units, statistics and exact integer base conversion.','calculation','calculation','Calculations'],
+ ['scientific-calculator','Scientific calculator','Exact arithmetic, scientific expressions, units, statistics and fractional base conversion.','calculation','calculation','Calculations'],
  ['stoichiometry','Stoichiometry','Molar masses, solutions, limiting reagents and reaction yields.','reaction','reaction','Reactions'],
  ['spreadsheet','Spreadsheet','Tables, formulas and delimited-file import with original values retained.','sheet','spreadsheet','Spreadsheets'],
  ['chemical-import','Chemical structures','Import CDXML drawings and SMILES structures, retaining original files.','chemical','chemical import','Chemical imports']

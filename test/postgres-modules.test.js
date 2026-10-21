@@ -93,3 +93,22 @@ test('metadata listings detect missing rows and a missing authenticated index be
   assert.equal(await db.get('SELECT 1 FROM objects WHERE id=$1','metadata:.observanda/replacement.json'),undefined);
  }finally{await db.close();}
 });
+
+test('calculation engine revisions remain reproducible after exact upgrade, copy and fresh-key recovery',async t=>{
+ const {ModuleHistory}=await import('../src/modules/history.js'),{calculate,spreadsheet}=await import('../src/tools/math.js');
+ const f=await fixture(t),id=randomUUID(),legacy={name:'Pinned arithmetic',links:[],engine:1,mode:'expression',angle:'rad',expression:'1/3',digits:'',fromBase:10,toBase:6};
+ const first=f.command('calculation.save',{id,expectedRevision:null,data:legacy});await f.store.execute(first);
+ const second=f.command('calculation.save',{id,expectedRevision:1,data:{...legacy,engine:2}});await f.store.execute(second);
+ const sheet=f.command('sheet.save',{id:randomUUID(),expectedRevision:null,data:{name:'Dependent exact values',links:[],engine:2,cells:[['=1/3','=A1*3'],['=1e100+1','=A2-1e100']],original:null}});await f.store.execute(sheet);
+ const backup=await copyWorkspace(await copyPlan(f.root,path.join(f.parent,'copy')),{vault:f.vault});
+ const access=await createAccess('','separate synthetic arithmetic password'),key=takeCreatedVault(access);t.after(()=>clearVault(key));
+ const rekeyed=await encryptedCopy(await copyPlan(f.root,path.join(f.parent,'rekeyed')),access,key,f.vault);
+ for(const [root,vault] of [[f.root,f.vault],[backup,f.vault],[rekeyed,key]]){
+  const ws=new Workspace(root,vault),store=workspaceModules(ws),history=new ModuleHistory(ws);
+  const previous=(await history.read({id,revision:1})).entity.data,current=(await history.read({id,revision:2})).entity.data;
+  assert.deepEqual(previous,legacy);assert.deepEqual(current,{...legacy,engine:2});
+  assert.equal(calculate(previous.expression,previous),'0.33333333333333333333333333333333');assert.equal(calculate(current.expression,current),'1/3');
+  const restored=(await new ModuleHistory(ws).read({id:sheet.payload.id,revision:1})).entity.data,result=spreadsheet(restored.cells,restored);
+  assert.equal(result[0][1].value,'1');assert.equal(result[1][1].value,'1');assert.equal((await store.execute(second)).replayed,true);
+ }
+});
