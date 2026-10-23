@@ -42,6 +42,9 @@ export function recordValueEditor({state,api,esc,notify,onSaved,onClosed,adapter
    for(;;){
    if(!dirty||!base||!value||!writer||currentOwner!==owner)return true;
    if(!validContext())throw Error(text('changedWorkspace'));
+   try{await view.checkpoint?.();}
+   catch(failure){if(currentOwner===owner){checkpointError=true;error=failure.message||text('checkpointFailed');status='';paint();}throw failure;}
+   if(currentOwner!==owner||!validContext())return false;
    const selected=selection(base);
    const identity=JSON.stringify({selected,value});if(!pending&&identity===last){status=text('checkpointed');paint();return true;}
    pending??={id:writer.id,workspaceId:base.workspaceId,recordId:base.recordId,expectedRevision:writer.revision,[adapter.baseName]:selected,value:structuredClone(value)};

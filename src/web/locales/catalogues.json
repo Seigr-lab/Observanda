@@ -1,5 +1,6 @@
 {
   "measurementTransform": ["en"],
+  "retainedFigureEditor": ["en"],
   "retainedFigureReader": ["en"],
   "retainedFigureData": ["en"],
   "pdfEditor": ["en"],

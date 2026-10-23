@@ -1,0 +1,28 @@
+import {test,expect} from '@playwright/test';
+import {readFile} from 'node:fs/promises';
+async function fixture(page){
+ await page.route('https://figure-annotations.test/**',async route=>{const pathname=new URL(route.request().url()).pathname;await route.fulfill({contentType:pathname==='/'?'text/html':pathname.endsWith('.json')?'application/json':'text/javascript',body:pathname==='/'?'<main></main>':await readFile(new URL('../../src/web'+pathname,import.meta.url),'utf8')});});
+ await page.goto('https://figure-annotations.test/');await page.evaluate(async()=>{
+  window.helpers=await import('/retained-figure-annotation-ui.js');window.header={id:crypto.randomUUID(),kind:'line',title:'Log measurements',x:{kind:'number',scale:'linear',label:'X'},y:{scale:'log',label:'Y'},legend:true};window.id=crypto.randomUUID();window.seriesId=crypto.randomUUID();window.calls=[];window.root=document.querySelector('main');
+  window.call=async(operation,{selection})=>{calls.push({operation,selection});return {items:selection.collection==='series'?[{id:seriesId,plotId:header.id,position:selection.offset,value:{name:'Measured series'}}]:[{id:crypto.randomUUID(),plotId:header.id,seriesId,position:selection.offset,value:{x:2,y:4,error:null}}]};};
+  window.create=kind=>{root.innerHTML=helpers.retainedAnnotationCreation(header);root.querySelector('[data-fe-key="kind"]').value=kind;helpers.updateRetainedAnnotationCreation(root,header);};
+  window.read=()=>helpers.readRetainedAnnotation(root,{id,header,plotId:header.id,call});
+ });
+}
+const fill=async(page,key,value)=>page.locator('[data-fe-key="'+key+'"]').fill(String(value));
+test('annotation creation validates log bounds and retains interval/date/region values and identities',async({page})=>{
+ await fixture(page);await page.evaluate(()=>create('boundary'));await fill(page,'label','Positive boundary');await fill(page,'start',0);expect(await page.evaluate(()=>read().then(()=>null,error=>error.message))).toContain('positive');await fill(page,'start',2);expect(await page.evaluate(()=>read())).toMatchObject({id:await page.evaluate(()=>id),kind:'boundary',axis:'y',start:2,end:null});
+ await page.evaluate(()=>{header.x.kind='date';create('interval');root.querySelector('[data-fe-key="axis"]').value='x';helpers.updateRetainedAnnotationCreation(root,header);});await fill(page,'label','Sampling interval');await fill(page,'start','2026-10-01');await fill(page,'end','2026-10-03');expect(await page.evaluate(()=>read())).toMatchObject({kind:'interval',axis:'x',start:'2026-10-01',end:'2026-10-03'});
+ await page.evaluate(()=>{header.x.kind='number';create('region');});for(const [key,value]of Object.entries({label:'Accepted range',xLower:1,xUpper:3,yLower:2,yUpper:9}))await fill(page,key,value);expect(await page.evaluate(()=>read())).toMatchObject({kind:'region',xLower:1,xUpper:3,yLower:2,yUpper:9});
+});
+test('callout creation and retargeting resolve exact bounded series and point positions',async({page})=>{
+ await fixture(page);await page.evaluate(()=>create('callout'));await fill(page,'label','Observed peak');await fill(page,'seriesPosition',1201);await fill(page,'pointPosition',50001);const result=await page.evaluate(()=>read());expect(result).toMatchObject({kind:'callout',seriesId:await page.evaluate(()=>seriesId),pointIndex:50000,dx:24,dy:-36});expect(await page.evaluate(()=>calls.map(call=>call.selection))).toEqual([{collection:'series',plotId:await page.evaluate(()=>header.id),offset:1200,limit:1},{collection:'points',plotId:await page.evaluate(()=>header.id),seriesId:result.seriesId,offset:50000,limit:1}]);
+ await page.evaluate(()=>{root.innerHTML=helpers.retainedCalloutTargetControls({seriesPosition:1200,pointPosition:50000});});await fill(page,'pointPosition',3);expect(await page.evaluate(()=>helpers.readRetainedCalloutTarget(root,{plotId:header.id,call}))).toMatchObject({seriesId:result.seriesId,pointIndex:2});await page.evaluate(()=>window.call=async()=>({items:[]}));expect(await page.evaluate(()=>helpers.readRetainedCalloutTarget(root,{plotId:header.id,call}).then(()=>null,error=>error.message))).toContain('existing measured observation');
+});
+test('selected heatmap scalar edits preserve descriptor labels and reject invalid ordering or count',async({page})=>{
+ await fixture(page);await page.evaluate(()=>{header={...header,kind:'heatmap',x:{kind:'category',scale:'linear'},y:{scale:'linear'},heatmap:{valueLabel:{format:'figure-text',version:1,characters:20000,preview:'Magnitude'},showValues:true,missingColor:'#eeeeee',thresholds:Array.from({length:32},(_,index)=>({max:index===31?null:index,color:'#123456',label:{format:'figure-text',version:1,characters:10000,preview:'Band '+index}}))}};});
+ expect(await page.evaluate(()=>helpers.retainedThresholdProperties(header,15))).toContainEqual({path:'label',type:'text',label:'label'});
+ expect(await page.evaluate(()=>helpers.retainedThresholdScalar(header,15,'max',15.5))).toMatchObject({type:'threshold',collection:'header',index:15,patch:{max:15.5}});expect(await page.evaluate(()=>helpers.retainedThresholdScalar(header,15,'color','#abcdef'))).toMatchObject({patch:{color:'#abcdef'}});
+ expect(await page.evaluate(()=>header.heatmap.thresholds[15].label)).toMatchObject({format:'figure-text',characters:10000});
+ expect(await page.evaluate(()=>{try{return helpers.retainedThresholdScalar(header,15,'max',17);}catch(error){return error.message;}})).toContain('increasing');expect(await page.evaluate(()=>{header.heatmap.thresholds.push({max:null,color:'#123456',label:'Overflow'});try{return helpers.retainedThresholdProperties(header,15);}catch(error){return error.message;}})).toContain('increasing');
+});

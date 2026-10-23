@@ -1,3 +1,4 @@
+import retainedFigureEditor from '../locales/en/retainedFigureEditor.json' with {type:'json'};
 import retainedFigureReader from '../locales/en/retainedFigureReader.json' with {type:'json'};
 import retainedFigureData from '../locales/en/retainedFigureData.json' with {type:'json'};
 import measurementTransform from '../locales/en/measurementTransform.json' with {type:'json'};
@@ -201,6 +202,7 @@ english.labBookDirectory=labBookDirectory;
 english.publicationSources=publicationSources;
 english.retainedFigureData=retainedFigureData;
 english.retainedFigureReader=retainedFigureReader;
+english.retainedFigureEditor=retainedFigureEditor;
 export const MESSAGE_NAMESPACES=Object.freeze(Object.keys(english));
 export const catalogueLanguages=namespace=>catalogues[namespace]??[];
 export const messageLanguage=namespace=>catalogueLanguages(namespace).includes(current)?current:'en';

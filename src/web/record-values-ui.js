@@ -35,6 +35,7 @@ export function recordValuesView(options,lifecycle){
  const relations=recordRelationView(options,lifecycle),figures=recordFigureView(options,lifecycle),attempts=recordAttemptView(options,lifecycle),results=recordResultView(options,lifecycle);return {
   prepare:(base,value,input)=>attemptValueField(base.field)?attempts.prepare(base,value,input):undefined,
   initialize(base,value,input,changed){if(resultValueId(base.field))results.initialize(base,value,input,changed);else if(attemptValueField(base.field))attempts.initialize(base,value,input,changed);else if(figureValueId(base.field))figures.initialize(base,value,input,changed);},
+  checkpoint:()=>figures.checkpoint(),
   rebase(base,value){if(attemptValueField(base.field))attempts.rebase(base,value);},
   bind:dialog=>{choices.bind(dialog);relations.bind(dialog);figures.bind(dialog);attempts.bind(dialog);results.bind(dialog);},release:()=>{choices.release();relations.release();figures.release();attempts.release();results.release();},busy:()=>relations.busy()||figures.busy()||attempts.busy()||results.busy(),
   heading:base=>base?text('heading',{field:label(base.field,base.definition)}):text('edit'),focus:'[data-writing-fields] input,[data-writing-fields] select,[data-writing-fields] textarea',
