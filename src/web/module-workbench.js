@@ -33,7 +33,7 @@ export function moduleWorkbench(services){
   const entry={context,valid:true},current=()=>entry.valid&&context===researchContext(state)&&enabledModule(state.dashboardSettings,id);
   entry.operation=(async()=>{
    try{
-    const value=await module.createUI({...services,api:moduleOwnerApi(services,id)});reconcile();
+    const value=await module.createUI({...services,researchApi:services.api,api:moduleOwnerApi(services,id)});reconcile();
     if(!current()){value.dispose?.();return null;}
     instances.set(id,value);return value;
    }catch(error){reconcile();if(!current())return null;throw error;}

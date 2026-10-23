@@ -1,3 +1,6 @@
+import {CalculatorResults} from './calculator-results.js';
+import {calculatorResultMaterial} from './web/calculator-result-model.js';
+import {assertCalculatorResultFormat} from './calculator-result-format.js';
 import {assertPlotResourcePolicy,plotNumericalMetadata} from './plot-resource-policy.js';
 import {intervalUncertaintyMaterial,intervalFormatCheck} from './interval-uncertainty-format.js';
 import {clockDerivationMaterial} from './clock-derivation-format.js';
@@ -181,6 +184,7 @@ export class ResearchMaterials {
   const doc=await this.json(this.metadataFile((ref.kind==='record'?'records/':'objects/')+ref.id+'/'+ref.revision+'.json'));
   if((ref.kind==='record'?recordRevision(doc):digest(revisionText(doc)))!==ref.revision)fail('MATERIAL_MISSING');
   if(ref.kind!=='record'&&(doc.format!==1||doc.kind!==ref.kind||doc.id!==ref.id))fail('MATERIAL_MISSING');
+  if(calculatorResultMaterial(doc))await assertCalculatorResultFormat(this.workspace);
   return doc;
  }
  async assertReferenceWorkspace(ref){
@@ -330,6 +334,7 @@ export class ResearchMaterials {
   return {doc,content};
  }
  async previewDataset(command,{signal}={}){
+  if(command.calculatorResult)return new CalculatorResults(this).preview(command,{signal});
   if(command.aggregation)return new DatasetAggregation(this).preview(command,{signal});
   if(command.calculation)return new DatasetCalculations(this).preview(command,{signal});
   await this.validateDataset(command);const source=await this.artifact(command.artifact,{signal}),rows=[],columns=[],columnOffset=command.columnOffset??0;let columnCount=0;
@@ -342,6 +347,7 @@ export class ResearchMaterials {
   return {columns,columnOffset,columnCount,nextColumn:columnOffset+columns.length<columnCount?columnOffset+columns.length:null,rows};
  }
  async validateDataset(command){
+  if(command.calculatorResult)return new CalculatorResults(this).validate(command);
   if(command.aggregation)return new DatasetAggregation(this).validate(command);
   if(command.calculation)return new DatasetCalculations(this).validate(command);
   const {artifact,recordId,title,id,expectedRevision}=command;
@@ -350,7 +356,7 @@ export class ResearchMaterials {
   if(command.nativeMapping!==undefined){if(!validNativeMapping(command.nativeMapping))fail();await this.read(command.nativeMapping.artifact);}
   if(command.baseDataset){
    if(command.baseDataset.kind!=='dataset'||!materialRef(command.baseDataset)||command.baseDataset.id!==id||command.baseDataset.revision!==expectedRevision)fail();
-   const base=await this.read(command.baseDataset);
+   const base=await this.read(command.baseDataset);if(base.content.calculatorResult)fail('CALCULATOR_RESULT_INVALID');
    if(revisionText(base.content.inputs[0])!==revisionText(artifact)||base.recordId!==recordId)fail();
    if(command.sourceMapping){
     let mapping=base.content.calculation||base.content.aggregation||base.content.datasetFormat===3&&command.sourceMapping.fieldsInSchema?command.sourceMapping:datasetMapping(command.sourceMapping);
@@ -366,6 +372,7 @@ export class ResearchMaterials {
   for(const column of [...command.columns??[],...(command.columnChanges??[]).map(c=>c.column)])for(const ref of schemaReferences(column))await this.checkReference(ref);
  }
  async prepareDataset(command,{signal,progress=async()=>{},writePage,jobId=null}={}){
+  if(command.calculatorResult)return new CalculatorResults(this).prepare(command,{signal,progress,writePage});
   if(command.aggregation)return new DatasetAggregation(this).prepare(command,{signal,progress,writePage,jobId});
   if(command.calculation)return new DatasetCalculations(this).prepare(command,{signal,progress,writePage});
   await this.validateDataset(command);
@@ -700,6 +707,7 @@ export class ResearchMaterials {
      }else await this.checkReference(ref);return;
     }
     const doc=await this.read(ref);
+    if(calculatorResultMaterial(doc)){await assertCalculatorResultFormat(this.workspace);await new CalculatorResults(this).verify(doc);}
     const checkIntervalFormat=intervalFormatCheck(this.workspace);if(intervalUncertaintyMaterial(doc,{opaqueCompatible:true}))await checkIntervalFormat();
     const checkNumericalFormat=async()=>{if(await this.workspace.storageKind()==='catalogue')await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresNativeNumericalModels}=await import('./catalogue-format.js');if(!catalogueRequiresNativeNumericalModels(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});};
     if(nativeNumericalMaterial(doc))await checkNumericalFormat();

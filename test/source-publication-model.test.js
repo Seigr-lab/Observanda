@@ -28,6 +28,6 @@ test('publication-permission generations preserve every older independent storag
   assert.equal(next,old+96);assert.deepEqual(configurationCatalogueFeatures(next),{...features,permissions:true});
   assert.equal(configurationCatalogueGeneration(features),old);assert.equal(catalogueRequiresSourcePublicationControls(old),false);assert.equal(catalogueRequiresSourcePublicationControls(next),true);
  }
- for(const value of [121,100663418,218.5,NaN])assert.equal(configurationCatalogueFeatures(value),null);
- await assert.rejects(catalogueFormat({all:async()=>[{version:100663418}]}),{code:'CATALOGUE_DAMAGED'});
+ for(const value of [121,201326714,218.5,NaN])assert.equal(configurationCatalogueFeatures(value),null);
+ await assert.rejects(catalogueFormat({all:async()=>[{version:201326714}]}),{code:'CATALOGUE_DAMAGED'});
 });

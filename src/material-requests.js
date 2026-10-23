@@ -1,3 +1,4 @@
+import {calculatorResultRequest} from './calculator-result-request.js';
 import {plotJobSettings} from './plot-job-settings.js';
 import {changeRetainedFigureRequest} from './retained-figure-presentation.js';
 import {retainedFigureRequest} from './retained-figures.js';
@@ -23,8 +24,8 @@ import {MAX_BYTES} from './model.js';
 import {researchId} from './web/research-reference.js';
 import {AppError} from './errors.js';
 const reads=new Set(['retained-figure','retained-figure-export','calculation-graph-page','source-owners','source-items','source-resolve','overview','list','references','reference-addresses','correction-preview','correction-status','correction-history','association-read','association-list','figure-sources','plot-points','plot-point','selection-page','intakes','intake-selection-page','intake-page','intake-session','upload-session','drafts','draft-read','draft-references','current','schema','measurement-inspect','measurement-seed','current-record','record','read','analysis-status','job','plot-job-settings','retained-table','calculation-schema','dataset-preview','dataset-jobs','rows','comparison-page','verify','download']);
-const writes=new Set(['retained-figure-change','calculation-graph-create','calculation-graph-change','associate-original','correction-apply','association-start','association-step','association-cancel','selection-change','intake-start','intake-selection-append','intake-append','intake-finish','draft-start','draft-append','draft-finish','draft-cancel','measurement-save','pin','start','finish','cancel-job','retry-job','dataset','collection','analysis','comparison','reuse','plot']);
-const accepted=new Set(['intake-finish','finish','dataset','comparison','plot']);
+const writes=new Set(['calculator-retain','calculator-repeat','calculator-resume','retained-figure-change','calculation-graph-create','calculation-graph-change','associate-original','correction-apply','association-start','association-step','association-cancel','selection-change','intake-start','intake-selection-append','intake-append','intake-finish','draft-start','draft-append','draft-finish','draft-cancel','measurement-save','pin','start','finish','cancel-job','retry-job','dataset','collection','analysis','comparison','reuse','plot']);
+const accepted=new Set(['calculator-retain','calculator-repeat','calculator-resume','intake-finish','finish','dataset','comparison','plot']);
 export function materialRequest(route){
  const prefix='/api/research/materials/';if(!route.startsWith(prefix))return null;const operation=route.slice(prefix.length);
  const original=/^original\/([a-f0-9-]{36})\/([a-f0-9]{64})$/.exec(operation);
@@ -36,11 +37,12 @@ export function materialRequest(route){
  if(!reads.has(operation)&&!writes.has(operation))return null;
  return {material:operation,method:'POST',write:writes.has(operation),limit:MAX_BYTES,status:accepted.has(operation)?202:200,download:operation==='download'||operation==='retained-figure-export'};
 }
-export async function executeMaterialRequest(storage,request,data,{signal,jobs,download,stream,sourceAccess,sourceDiscovery,check}={}){
+export async function executeMaterialRequest(storage,request,data,{signal,jobs,download,stream,sourceAccess,sourceDiscovery,referenceAccess,check}={}){
  const materials=new ResearchMaterials(storage),operation=request.material;
  const summary=job=>({...jobSummary(job),...(job?.type==='analysis.compare'?{sources:materials.comparisons.references(job.input.command.method,job.input.command.comparison)}:{})});
  const jobService=async()=>{const result=await jobs?.();if(!result)throw new AppError('ACCESS_LOCKED');return result;};
  switch(operation){
+ case 'calculator-retain':case 'calculator-repeat':case 'calculator-resume':return calculatorResultRequest(materials,operation,data,{jobs,referenceAccess,check,signal});
  case 'source-owners':case 'source-items':case 'source-resolve':{if(!sourceDiscovery)throw new AppError('ACCESS_LOCKED');return sourceDiscovery(storage,operation,data,{signal});}
  case 'chunks':return appendMaterialUploadBatch(storage,stream,{signal});
  case 'chunk':return materials.uploads.summary(await materials.appendImport(request.id,request.index,stream,{signal}));

@@ -1,4 +1,7 @@
 {
+  "calculatorResults": [
+    "en"
+  ],
   "datasetWindows": ["en"],
   "datasetResources": ["en"],
   "measurementTransform": ["en"],

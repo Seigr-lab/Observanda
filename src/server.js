@@ -1063,7 +1063,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         const {events,...data}=result.data;selectedContext.calendarSources.reconcile(data.entities);return json({...result,data});
       }
       const material=materialRequest(url.pathname);
-      if(material&&req.method===material.method)return await materialHttp(req,res,material,{contextId:context.id,body,json,execute:(data,options)=>executeMaterialRequest(workspace,material,data,{...options,check:req.checkWriter,sourceAccess:comparisonSources,sourceDiscovery:(host,operation,input,options)=>comparisonSourceDiscovery(historyProjects,client,host,operation,input,{...options,check:req.checkWriter}),jobs:()=>{startJobs(context);return context.jobs;}})});
+      if(material&&req.method===material.method)return await materialHttp(req,res,material,{contextId:context.id,body,json,execute:(data,options)=>executeMaterialRequest(workspace,material,data,{...options,check:req.checkWriter,referenceAccess:moduleReferenceFactory(historyProjects,client,{check:req.checkWriter}),sourceAccess:comparisonSources,sourceDiscovery:(host,operation,input,options)=>comparisonSourceDiscovery(historyProjects,client,host,operation,input,{...options,check:req.checkWriter}),jobs:()=>{startJobs(context);return context.jobs;}})});
       const research=researchRequest(url.pathname);
       if(req.method==='POST'&&research){
         const data=await body(req,research.limit,research.capacity);
