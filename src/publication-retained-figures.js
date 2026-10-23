@@ -7,7 +7,6 @@ import {validRetainedFigure} from './web/retained-figure-model.js';
 import {researchId} from './web/research-reference.js';
 import {hasRetainedFigure} from './record-retained-figures.js';
 import {allFigurePlots} from './web/figure-provenance.js';
-import {RetainedFigureAuthoring} from './retained-figure-authoring.js';
 import {figureCalculationFingerprint} from './record-figure-calculation.js';
 const fail=()=>{throw new AppError('JOB_DAMAGED');};
 const key=(recordId,figureId)=>recordId+'/'+figureId;
@@ -25,6 +24,7 @@ export async function retainPublicationFigures(builder,materials,record,recordId
     async readMetadata(relative){const match=/^\.observanda\/materials\/figures\/(value|index)\/([a-f0-9]{64})\.json$/.exec(relative);if(!match)fail();const prior=await builder.get('figureBlocks',match[1]+'/'+match[2],{signal});return prior===null||prior===undefined?materials.workspace.readMetadata(relative,65536):serialize(prior);},
     async writeMetadata(relative,text){signal?.throwIfAborted();const match=/^\.observanda\/materials\/figures\/(value|index)\/([a-f0-9]{64})\.json$/.exec(relative);if(!match||digest(text)!==match[2])fail();const node=JSON.parse(text),id=match[1]+'/'+match[2],prior=await builder.get('figureBlocks',id,{signal});if(prior!==null&&prior!==undefined){if(serialize(prior)!==text)fail();}else await builder.append('figureBlocks',id,node,{signal});}
    };
+   const {RetainedFigureAuthoring}=await import('./retained-figure-authoring.js');
    const authoring=new RetainedFigureAuthoring(storage,{signal});renderedFigure=await authoring.finish(await authoring.start(figure));reader=await new RetainedFigureDocuments(storage,{readOnly:true,signal}).open(renderedFigure);
    for(const panel of figure.panels)if(await figureCalculationFingerprint(storage,panel.figure,{signal})!==await figureCalculationFingerprint(storage,renderedFigure,{plotId:panel.figure.id,signal}))fail();
   }

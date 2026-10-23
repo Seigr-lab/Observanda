@@ -38,7 +38,7 @@ export function prepareRetainedPlot(materials,doc,command,selection,{write,signa
    await work.put('series:'+position,{header,column:value.column,group,count:0});await work.put(key,position);return position;
   }
   for(let page=0;page<materials.datasetPageCount(doc);page++){
-   signal?.throwIfAborted();const retained=await materials.retainedDatasetPage(doc,page,selection.indices?{columns:selection.indices}:undefined);
+   signal?.throwIfAborted();const retained=await materials.readSnapshot(()=>materials.retainedDatasetPage(doc,page,selection.indices?{columns:selection.indices}:undefined));
    for(const [rowIndex,row]of retained.rows.entries()){
     signal?.throwIfAborted();denominator.rows++;if(row.excluded){denominator.excludedCount++;continue;}denominator.included++;assertDatasetScalars(row);
     const cells=row.cells.map((raw,index)=>{if(['null','absent'].includes(row.valueKinds?.[index])||columns[index].missing.some(value=>value.value===raw)){denominator.missing[index].count++;return '';}return raw;});

@@ -91,8 +91,8 @@ test('figure jobs fence retries, cancel partial sorting and atomically retain an
 });
 
 test('plot preparation bounds owner connections and closes them on cancellation while preserving fresh transactions',{timeout:60000},async t=>{
- const f=await fixture(t,129),open=f.workspace.openCatalogue.bind(f.workspace),entries=[];
- f.workspace.openCatalogue=async options=>{const db=await open(options),close=db.close.bind(db),entry={closed:false};entries.push(entry);db.close=async()=>{try{return await close();}finally{entry.closed=true;}};return db;};
+ const f=await fixture(t,129),open=f.workspace.openCatalogue.bind(f.workspace),entries=[];let readTransactions=0;
+ f.workspace.openCatalogue=async options=>{const db=await open(options),close=db.close.bind(db),run=db.run.bind(db),entry={closed:false};db.run=async(...args)=>{if(args[0]==='BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY')readTransactions++;return run(...args);};entries.push(entry);db.close=async()=>{try{return await close();}finally{entry.closed=true;}};return db;};
  t.after(()=>{f.workspace.openCatalogue=open;});
  const marker='.observanda/plot-connection-test.json',controller=new AbortController();let progressed=false;
  await assert.rejects(f.materials.preparePlot(f.command,{signal:controller.signal,progress:async p=>{
@@ -105,7 +105,8 @@ test('plot preparation bounds owner connections and closes them on cancellation 
  }}),{code:'JOB_CANCELLED'});
  assert.equal(progressed,true);assert.ok(entries.length<=3,'cancelled producer reuses bounded owner handles');assert.ok(entries.every(entry=>entry.closed),'cancelled preparation drains and closes every handle');
  entries.length=0;
- const prepared=await f.materials.preparePlot(f.command,{signal:t.signal});
+ const pageReads=[],prepared=await f.materials.preparePlot(f.command,{signal:t.signal,progress:async p=>{if(p.stage==='calculating dataset rows')pageReads.push({done:p.done,reads:readTransactions});}});
+ assert.deepEqual(pageReads.map(p=>p.done),[64,128,129]);for(let i=1;i<pageReads.length;i++)assert.equal(pageReads[i].reads-pageReads[i-1].reads,2,'one discovery check and one bounded source-page snapshot');
  assert.equal(prepared.content.denominator.rows,129);assert.equal(prepared.content.figure.document.counts.points,3);
  assert.ok(entries.length<=3,'complete producer reuses bounded owner handles');assert.ok(entries.every(entry=>entry.closed),'successful preparation also closes every handle');
  f.workspace.openCatalogue=open;

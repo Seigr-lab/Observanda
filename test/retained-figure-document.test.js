@@ -104,3 +104,16 @@ test('edited string nodes expose short titles inline across reopen and the long-
  assert.equal((await json(await documents.open(original))).title,figure.title);
  assert.equal(validRetainedFigure({...current,title:{format:'figure-text',version:1,preview:'Short',characters:5}}),false);
 });
+
+test('coordinate summaries use bounded read-only snapshots and stop between batches without changing retained identities',async()=>{
+ const f=fixture(),documents=new RetainedFigureDocuments(f.workspace),figure=createFigure();figure.series[0].points=Array.from({length:65},(_,i)=>({x:i*2+2,y:i+1,error:null}));figure.series.push({...createSeries('Hidden',1),style:{visible:false},points:[{x:3,y:500,error:null},{x:5,y:600,error:null}]});
+ const builder=documents.builder(figure),snapshot=documents.blocks.readSnapshot.bind(documents.blocks),entryAt=builder.data.index.entryAt.bind(builder.data.index),write=f.workspace.writeMetadata.bind(f.workspace),batches=[];let active=false,entries=0;
+ documents.blocks.readSnapshot=async operation=>{assert.equal(active,false);active=true;entries=0;try{return await snapshot(operation);}finally{batches.push(entries);active=false;}};
+ builder.data.index.entryAt=async(...args)=>{if(active)entries++;return entryAt(...args);};
+ f.workspace.writeMetadata=async(...args)=>{assert.equal(active,false,'summary snapshot never invokes the persistent writer');return write(...args);};
+ await builder.addPlot(figure);for(const series of figure.series){await builder.addSeries(series);for(const point of series.points)await builder.addPoint(point);}const saved=await builder.finish();assert.deepEqual(batches,[32,32,3]);
+ const reader=await documents.open(saved);assert.equal((await reader.header()).domains.minimumXGap,2);assert.equal((await reader.header()).domains.visibleSeriesCount,1);await reader.verify();assert.deepEqual(await json(reader),figure);
+ const controller=new AbortController(),cancelled=new RetainedFigureDocuments(f.workspace,{signal:controller.signal}),partial=cancelled.builder(figure);await partial.addPlot(figure);await partial.addSeries(figure.series[0]);for(const point of figure.series[0].points)await partial.addPoint(point);
+ const read=cancelled.blocks.readSnapshot.bind(cancelled.blocks);let begun=0;cancelled.blocks.readSnapshot=operation=>{if(++begun===2)controller.abort(new DOMException('Cancelled','AbortError'));return read(operation);};
+ await assert.rejects(partial.finish(),{name:'AbortError'});assert.equal(begun,2);assert.deepEqual(await json(await documents.open(saved)),figure);
+});

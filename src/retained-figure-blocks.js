@@ -31,6 +31,7 @@ export function retainedFigureBlockChildren(kind,node){
 export class RetainedFigureBlocks{
  constructor(workspace,{write,signal,readOnly=false}={}){this.workspace=workspace;this.write=write??(operation=>operation());this.signal=signal;this.readOnly=readOnly;this.cache=new Map();this.bytes=0;this.pending=new Map();this.pendingBytes=0;}
  tree(){return new RecordValueTree(this);}
+ async readSnapshot(operation){this.check();const read=async()=>{const result=await operation();this.check();return result;};return typeof this.workspace.catalogue==='function'?this.workspace.catalogue(read):read();}
  check(){this.signal?.throwIfAborted();}
  decode(text,revision){if(typeof text!=='string'||Buffer.byteLength(text)>65536||digest(text)!==revision)fail();let node;try{node=JSON.parse(text);}catch{fail();}if(serialize(node)!==text)fail();return node;}
  keep(key,text){if(this.cache.has(key))return;const size=Buffer.byteLength(text);while(this.cache.size>=1024||this.bytes+size>1048576){const first=this.cache.keys().next().value;if(first===undefined)break;this.bytes-=Buffer.byteLength(this.cache.get(first));this.cache.delete(first);}this.cache.set(key,text);this.bytes+=size;}
