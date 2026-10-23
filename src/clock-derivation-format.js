@@ -1,0 +1,4 @@
+// Only declared graph/recipe and provenance shapes require this generation.
+export const clockDerivationCommand=command=>command?.calculation?.version===6;
+export const clockDerivationMaterial=value=>value?.content?.graphVersion===3&&value.content.tool==='Observanda calculation graph'||value?.content?.calculation?.version===6;
+export function clockDerivationMetadata(relative,value){if(relative.startsWith('.observanda/jobs/')&&value?.type==='dataset.prepare')return clockDerivationCommand(value.input?.command);if(!relative.startsWith('.observanda/materials/'))return false;if(relative.startsWith('.observanda/materials/sequences/chunks/'))return value?.kind==='calculation-nodes'&&value.items?.some(node=>node.kind==='clock')||value?.kind==='calculation-lineage'&&value.items?.some(leaf=>leaf.relativeRow===-1);return clockDerivationMaterial(value);}

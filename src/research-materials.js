@@ -1,3 +1,4 @@
+import {clockDerivationMaterial} from './clock-derivation-format.js';
 import {nativeDomainMaterial} from './native-domain-format.js';
 import {domainValueReference,validateDomainValue} from './measurement-domain-storage.js';
 import {prepareRetainedPlot} from './retained-figure-plot.js';
@@ -697,11 +698,12 @@ export class ResearchMaterials {
     if(nativeNumericalMaterial(doc))await checkNumericalFormat();
     const checkClockFormat=async()=>{if(await this.workspace.storageKind()==='catalogue')await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresNativeClockModels}=await import('./catalogue-format.js');if(!catalogueRequiresNativeClockModels(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});};
     if(nativeClockMaterial(doc))await checkClockFormat();
+    if(clockDerivationMaterial(doc)&&await this.workspace.storageKind()==='catalogue')await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresClockDerivations}=await import('./catalogue-format.js');if(!catalogueRequiresClockDerivations(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
     const checkDomainFormat=async()=>{if(await this.workspace.storageKind()==='catalogue')await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresNativeDomainValues}=await import('./catalogue-format.js');if(!catalogueRequiresNativeDomainValues(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});};
     if(nativeDomainMaterial(doc))await checkDomainFormat();
     if(revisionText(await this.index.inputSet(ref))!==revisionText(this.referenceSet(doc.content)))fail('CATALOGUE_DAMAGED');
     if(doc.previous)await enqueue({...ref,revision:doc.previous});
-    if(doc.content.tool==='Observanda calculation graph'||[4,5].includes(doc.content.calculation?.version))await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresReferencedCalculations}=await import('./catalogue-format.js');if(!catalogueRequiresReferencedCalculations(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
+    if(doc.content.tool==='Observanda calculation graph'||[4,5,6].includes(doc.content.calculation?.version))await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresReferencedCalculations}=await import('./catalogue-format.js');if(!catalogueRequiresReferencedCalculations(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
     if(doc.content.tool==='Observanda calculation graph'){const {CalculationGraphs}=await import('./calculation-graphs.js');await new CalculationGraphs(this).verify(doc);}
     const comparison=doc.content.comparison?.version===2;
     if(comparison){
