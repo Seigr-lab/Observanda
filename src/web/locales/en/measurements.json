@@ -194,5 +194,17 @@
   "transition-status-missing-control": "Wrap or reset control missing",
   "transition-status-invalid-control": "Wrap or reset control invalid",
   "transition-status-reset": "Explicit reset; interval unavailable",
-  "transition-status-ambiguous-decrease": "Decrease is not explained by the declared wrap count"
+  "transition-status-ambiguous-decrease": "Decrease is not explained by the declared wrap count",
+  "intervalDeclared": "Declared closed interval",
+  "intervalEnclosure": "Derived enclosure",
+  "intervalMethod": "Interval method",
+  "intervalMethodVersion": "Method version",
+  "intervalMethodReference": "Pinned interval method reference",
+  "intervalCoverage": "Declared statistical coverage",
+  "intervalCoverageLevel": "Exact coverage level",
+  "intervalNoCoverage": "No statistical coverage declared",
+  "intervalLower": "Lower bound",
+  "intervalUpper": "Upper bound",
+  "intervalHelp": "Bounds describe a closed set. Name the method explicitly. Statistical coverage is optional and is never inferred or carried through arithmetic.",
+  "intervalInvalid": "Declare an interval method and a valid exact coverage level between zero and one."
 }

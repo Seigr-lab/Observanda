@@ -1,4 +1,4 @@
-import {clockScalarText} from './dataset-scalar-text.js';
+import {clockScalarText,intervalScalarText} from './dataset-scalar-text.js';
 import {retainDomainValue,domainValueReference,validateDomainValue} from './measurement-domain-storage.js';
 import {DATASET_ROWS_PER_PAGE} from './dataset-row-position.js';
 import {withDatasetPreparationWrites} from './dataset-preparation-writes.js';
@@ -54,7 +54,7 @@ export async function preparePagedDataset(materials,command,{source,base=null,si
    if(column.representation==='domain'&&!['null','absent'].includes(cell.kind)&&!column.missing.some(m=>m.value===cell.value))cell={...cell,value:await retainDomainValue(materials,cell,column.domain,save,{signal})};
    if(!['null','absent'].includes(cell.kind)){
     if(domainValueReference(cell.value)){if(column.representation!=='domain')fail();validateDomainValue(materials,cell.value,column.domain);}
-    else if(datasetCellReference(cell.value)){if(!['text','unsupported'].includes(column.representation)&&!await clockScalarText(materials,cell.value,column,command.calculation??base?.content.calculation,cell.lineage,{signal}))fail();}
+    else if(datasetCellReference(cell.value)){if(!['text','unsupported'].includes(column.representation)&&!await clockScalarText(materials,cell.value,column,command.calculation??base?.content.calculation,cell.lineage,{signal})&&!await intervalScalarText(materials,cell.value,column,command.calculation??base?.content.calculation,cell.lineage,{signal}))fail();}
     else if(!column.missing.some(m=>m.value===cell.value)&&!supportedValue(cell.value,column.representation,column.radix))fail();
    }
    const nativeIndex=nativeColumns.indexOf(index);if(nativeIndex>=0){native.cells[nativeIndex]=cell.value;native.valueKinds[nativeIndex]=cell.kind;}

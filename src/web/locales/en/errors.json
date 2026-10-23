@@ -379,5 +379,6 @@
   "MEASUREMENT_DOMAIN_UNSUPPORTED": "This domain codec or version is preserved, but its meaning is not supported. The original value remains available.",
   "MEASUREMENT_DOMAIN_INCOMPATIBLE": "These values have different declared domains, shapes, or coordinate namespaces.",
   "MEASUREMENT_DOMAIN_COMPONENT_LIMIT": "A component exceeds the exact scalar processing budget. Its source is preserved; no shortened value was used.",
-  "MEASUREMENT_CLOCK_TRANSITION": "The declared counter transition cannot determine a valid interval. Inspect the endpoints, explicit wrap counts and reset markers."
+  "MEASUREMENT_CLOCK_TRANSITION": "The declared counter transition cannot determine a valid interval. Inspect the endpoints, explicit wrap counts and reset markers.",
+  "MEASUREMENT_INTERVAL_INVALID": "Declare compatible closed bounds, units, and an interval method. Interval division cannot include zero in the divisor."
 }

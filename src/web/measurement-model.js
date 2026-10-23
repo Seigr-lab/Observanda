@@ -1,3 +1,4 @@
+import {validIntervalUncertainty} from './measurement-interval-model.js';
 // Scientific values remain strings. Arithmetic here only constructs exact rational
 // identities; no unit conversion or clock unwrapping is inferred.
 import {validDomainDefinition} from './measurement-domain-model.js';
@@ -29,7 +30,7 @@ export function rationalIdentity(value){
  return {numerator:String(rational.numerator),denominator:String(rational.denominator)};
 }
 export const blankQuantity=()=>({origin:'unspecified',conversion:null,calibration:null});
-export function validQuantity(q,unit){return keys(q,['origin','conversion','calibration','unitDefinition'])&&QUANTITY_ORIGINS.includes(q.origin)&&optionalRef(q.conversion)&&optionalRef(q.calibration)&&(q.unitDefinition===undefined||validUnitDefinition(q.unitDefinition))&&(q.origin!=='raw-code'||unit===''&&q.unitDefinition===undefined);}
+export function validQuantity(q,unit){return keys(q,['origin','conversion','calibration','unitDefinition','uncertainty'])&&QUANTITY_ORIGINS.includes(q.origin)&&optionalRef(q.conversion)&&optionalRef(q.calibration)&&(q.unitDefinition===undefined||validUnitDefinition(q.unitDefinition))&&(q.uncertainty===undefined||validIntervalUncertainty(q.uncertainty))&&(q.origin!=='raw-code'||unit===''&&q.unitDefinition===undefined&&q.uncertainty===undefined);}
 export const blankClock=()=>({width:null,frequency:'',ordering:'unknown',wrap:'unknown',reset:'unknown',epoch:'',model:null,referenceData:null});
 export function validTime(time){
  if(!keys(time,['kind','reference','resolution','uncertainty','clock'])||!TIME_KINDS.includes(time.kind)||!['reference','resolution','uncertainty'].every(k=>text(time[k],500)))return false;
@@ -39,7 +40,7 @@ export function validTime(time){
  if(c.frequency){try{if(exactRational(c.frequency).numerator<=0n)return false;}catch{return false;}}
  return time.kind!=='external'||!!c.model&&!!c.referenceData;
 }
-export function schemaReferences(column){return [column.quantity?.conversion,column.quantity?.calibration,column.time?.clock?.model,column.time?.clock?.referenceData].filter(Boolean);}
+export function schemaReferences(column){return [column.quantity?.conversion,column.quantity?.calibration,column.quantity?.uncertainty?.method?.reference,column.time?.clock?.model,column.time?.clock?.referenceData].filter(Boolean);}
 export function validLocator(source){
  if(!keys(source,['ref','selector'])||!measurementRef(source.ref))return false;const s=source.selector;
  if(!s)return false;

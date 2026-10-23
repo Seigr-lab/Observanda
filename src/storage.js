@@ -143,6 +143,7 @@ export class Workspace {
           if(nativeClockMetadata(relative,value)){const {requireNativeClockModels}=await import('./catalogue-format.js');await requireNativeClockModels(store.db);}
           const {nativeDomainMetadata}=await import('./native-domain-format.js');if(nativeDomainMetadata(relative,value)){const {requireNativeDomainValues}=await import('./catalogue-format.js');await requireNativeDomainValues(store.db);}
           const {clockDerivationMetadata}=await import('./clock-derivation-format.js');if(clockDerivationMetadata(relative,value)){const {requireClockDerivations}=await import('./catalogue-format.js');await requireClockDerivations(store.db);}
+          const {intervalUncertaintyMetadata}=await import('./interval-uncertainty-format.js');if(intervalUncertaintyMetadata(relative,value)){const {requireIntervalUncertainty}=await import('./catalogue-format.js');await requireIntervalUncertainty(store.db);}
         }
         if(/^\.observanda\/module-drafts\/[a-f0-9-]{36}\.json$/.test(relative)){
           const {checkpointHasCalculationPolicy}=await import('./web/tools/calculation-policy.js');if(checkpointHasCalculationPolicy(JSON.parse(text))){const {requireCalculationPolicies}=await import('./catalogue-format.js');await requireCalculationPolicies(store.db);}

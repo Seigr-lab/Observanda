@@ -1,3 +1,4 @@
+import {intervalUncertaintyMaterial,intervalFormatCheck} from './interval-uncertainty-format.js';
 import {clockDerivationMaterial} from './clock-derivation-format.js';
 import {nativeDomainMaterial} from './native-domain-format.js';
 import {domainValueReference,validateDomainValue} from './measurement-domain-storage.js';
@@ -405,7 +406,7 @@ export class ResearchMaterials {
  iterateDatasetCells(doc,row){return storedDatasetCells(this,doc,row);}
  readDatasetCell(value,options){return readDatasetCell(this,value,options);}
  async *datasetCellSequences(doc,row){if(doc.content.datasetFormat!==3)return;yield row.cellIndex;for await(const cell of this.iterateDatasetCells(doc,row))for(const descriptor of [cell.value?.parts,cell.value?.components,cell.value?.original?.parts])if(descriptor)yield descriptor;}
- async verifyDatasetRow(doc,row,options){let count=0,columns=[];for await(const cell of this.iterateDatasetCells(doc,row)){if(doc.content.datasetFormat===3){if(doc.content.domainValues===1){if(count%16===0)columns=(await this.retainedSchemaPage(doc,{offset:count,limit:16})).items;const column=columns[count%16];if(domainValueReference(cell.value)){if(column?.representation!=='domain')fail('MATERIAL_MISSING');validateDomainValue(this,cell.value,column.domain);}else if(column?.representation==='domain'&&!['absent','null'].includes(cell.kind)&&!column.missing.some(m=>m.value===cell.value))fail('MATERIAL_MISSING');}else if(domainValueReference(cell.value))fail('MATERIAL_MISSING');await verifyDatasetCell(this,cell,options);}else if(typeof cell.value!=='string')fail('MATERIAL_MISSING');count++;}if(count!==(doc.content.schemaIndex?.count??doc.content.columns.length))fail('MATERIAL_MISSING');}
+ async verifyDatasetRow(doc,row,options){const checkInterval=options?.checkIntervalFormat??intervalFormatCheck(this.workspace);let count=0,columns=[];for await(const cell of this.iterateDatasetCells(doc,row)){if(doc.content.datasetFormat===3){if(doc.content.domainValues===1){if(count%16===0)columns=(await this.retainedSchemaPage(doc,{offset:count,limit:16})).items;const column=columns[count%16];if(domainValueReference(cell.value)){if(column?.representation!=='domain')fail('MATERIAL_MISSING');validateDomainValue(this,cell.value,column.domain);if(cell.value.version===2)await checkInterval();}else if(column?.representation==='domain'&&!['absent','null'].includes(cell.kind)&&!column.missing.some(m=>m.value===cell.value))fail('MATERIAL_MISSING');}else if(domainValueReference(cell.value))fail('MATERIAL_MISSING');await verifyDatasetCell(this,cell,options);}else if(typeof cell.value!=='string')fail('MATERIAL_MISSING');count++;}if(count!==(doc.content.schemaIndex?.count??doc.content.columns.length))fail('MATERIAL_MISSING');}
  async datasetPage(ref,page=0,{columnOffset=null,columnLimit=16}={}){
   if(ref?.kind!=='dataset'||!Number.isSafeInteger(page)||page<0)fail();const doc=await this.read(ref);
   if(columnOffset===null)return {...await this.retainedDatasetPage(doc,page),columns:await this.datasetColumns(doc)};
@@ -694,6 +695,7 @@ export class ResearchMaterials {
      }else await this.checkReference(ref);return;
     }
     const doc=await this.read(ref);
+    const checkIntervalFormat=intervalFormatCheck(this.workspace);if(intervalUncertaintyMaterial(doc,{opaqueCompatible:true}))await checkIntervalFormat();
     const checkNumericalFormat=async()=>{if(await this.workspace.storageKind()==='catalogue')await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresNativeNumericalModels}=await import('./catalogue-format.js');if(!catalogueRequiresNativeNumericalModels(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});};
     if(nativeNumericalMaterial(doc))await checkNumericalFormat();
     const checkClockFormat=async()=>{if(await this.workspace.storageKind()==='catalogue')await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresNativeClockModels}=await import('./catalogue-format.js');if(!catalogueRequiresNativeClockModels(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});};
@@ -703,7 +705,7 @@ export class ResearchMaterials {
     if(nativeDomainMaterial(doc))await checkDomainFormat();
     if(revisionText(await this.index.inputSet(ref))!==revisionText(this.referenceSet(doc.content)))fail('CATALOGUE_DAMAGED');
     if(doc.previous)await enqueue({...ref,revision:doc.previous});
-    if(doc.content.tool==='Observanda calculation graph'||[4,5,6].includes(doc.content.calculation?.version))await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresReferencedCalculations}=await import('./catalogue-format.js');if(!catalogueRequiresReferencedCalculations(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
+    if(doc.content.tool==='Observanda calculation graph'||[4,5,6,7].includes(doc.content.calculation?.version))await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresReferencedCalculations}=await import('./catalogue-format.js');if(!catalogueRequiresReferencedCalculations(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
     if(doc.content.tool==='Observanda calculation graph'){const {CalculationGraphs}=await import('./calculation-graphs.js');await new CalculationGraphs(this).verify(doc);}
     const comparison=doc.content.comparison?.version===2;
     if(comparison){
@@ -720,12 +722,12 @@ export class ResearchMaterials {
     if(ref.kind==='dataset'){
      await verifyRetainedCalculation(this,doc);
      if(doc.content.datasetFormat===3)await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresPagedResearchTables}=await import('./catalogue-format.js');if(!catalogueRequiresPagedResearchTables(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
-     let checkedUnitFormat=false,checkedClockFormat=false,hasDomains=false;for await(const column of this.iterateDatasetColumns(doc)){if(!validColumns([column],1))fail('MATERIAL_MISSING');if(column.representation==='domain'&&!hasDomains){await checkDomainFormat();hasDomains=true;}if(column.quantity?.unitDefinition!==undefined){if(!validQuantity(column.quantity,column.unit))fail('MATERIAL_MISSING');if(!checkedUnitFormat){await checkNumericalFormat();checkedUnitFormat=true;}}if(column.time?.clock?.definition!==undefined){if(!validTime(column.time))fail('MATERIAL_MISSING');if(!checkedClockFormat){await checkClockFormat();checkedClockFormat=true;}}for(const r of schemaReferences(column))await enqueue(r);}
+     let checkedUnitFormat=false,checkedClockFormat=false,hasDomains=false;for await(const column of this.iterateDatasetColumns(doc)){if(!validColumns([column],1))fail('MATERIAL_MISSING');if(column.representation==='domain'&&!hasDomains){await checkDomainFormat();hasDomains=true;}if(column.quantity?.unitDefinition!==undefined){if(!validQuantity(column.quantity,column.unit))fail('MATERIAL_MISSING');if(!checkedUnitFormat){await checkNumericalFormat();checkedUnitFormat=true;}}if(column.time?.clock?.definition!==undefined){if(!validTime(column.time))fail('MATERIAL_MISSING');if(!checkedClockFormat){await checkClockFormat();checkedClockFormat=true;}}if(column.quantity?.uncertainty!==undefined)await checkIntervalFormat();for(const r of schemaReferences(column))await enqueue(r);}
      if(hasDomains!==(doc.content.domainValues===1)||doc.content.domainValues!==undefined&&doc.content.domainValues!==1)fail('MATERIAL_MISSING');
      if(doc.content.aggregationMembersIndex&&!doc.content.aggregation)fail('MATERIAL_MISSING');
      const aggregationContext=doc.content.aggregationMembersIndex?await aggregationMemberContext(this,doc):null;let memberOffset=0;
      for await(const row of this.iterateDataset(ref,{metadataOnly:true})){
-      await this.verifyDatasetRow(doc,row);
+      await this.verifyDatasetRow(doc,row,{checkIntervalFormat});
       if(aggregationContext){
        if(row.aggregationMembers?.offset!==memberOffset)fail('MATERIAL_MISSING');
        for await(const member of aggregationMemberRows(this,aggregationContext,row)){void member;}

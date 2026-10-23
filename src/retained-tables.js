@@ -66,7 +66,7 @@ async function* tableRows(materials,source,selection,indices,{offset=0,limit=Inf
  }
 }
 function presence(row,columns){return row.cells.map((cell,i)=>['null','absent'].includes(row.valueKinds[i])?row.valueKinds[i]:typeof cell==='string'&&columns[i].missing.some(m=>m.value===cell)?'missing':'value');}
-function tableBlock(columns,rows,selection){return {version:2,selection:{includeExcluded:selection.includeExcluded},headers:columns.map(c=>c.name+(c.unit?' ['+c.unit+']':'')),formats:columns.map(c=>({representation:c.representation,radix:c.radix,...(c.domain?{domain:c.domain}:{})})),rows:rows.map(row=>({...row,presence:presence(row,columns)}))};}
+function tableBlock(columns,rows,selection){return {version:2,selection:{includeExcluded:selection.includeExcluded},headers:columns.map(c=>c.name+(c.unit?' ['+c.unit+']':'')),formats:columns.map(c=>({representation:c.representation,radix:c.radix,...(c.domain?{domain:c.domain}:{}),...(c.quantity?.uncertainty?{uncertainty:c.quantity.uncertainty}:{})})),rows:rows.map(row=>({...row,presence:presence(row,columns)}))};}
 export const retainedTablePage=(materials,command,options)=>tableReads(materials,()=>readTablePage(materials,command,options));
 async function readTablePage(materials,{ref,table,offset,cursor,limit=16,columnOffset=0,columnLimit=8},{signal}={}){
  if(!validRetainedTable(table)||table.version!==3||offset!==undefined&&!natural(offset)||!Number.isInteger(limit)||limit<1||limit>32)throw new AppError('DATASET_TABLE');
