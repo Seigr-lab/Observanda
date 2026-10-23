@@ -1,3 +1,4 @@
+import {sameAxisProjection} from './figure-projection-display.js';
 import messages from './locales/en/figureComposition.json' with {type:'json'};
 
 const uuid=v=>typeof v==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(v);
@@ -27,7 +28,7 @@ export function compositionIssues(figure,validatePlot,{draft=false}={}){
  if(issues.length)return issues;
  const plots=figurePlots(figure),first=plots[0];
  for(const axis of ['x','y'])if(figure.layout[axis==='x'?'linkX':'linkY']){
-  if(plots.some(f=>f.kind==='heatmap')||axis==='x'&&first.x.kind==='category'||plots.some(f=>f[axis].kind!==first[axis].kind||f[axis].scale!==first[axis].scale||!!f[axis].reversed!==!!first[axis].reversed||JSON.stringify([...(f[axis].ticks??[])].sort((a,b)=>a.value-b.value).map(t=>[t.value,t.label]))!==JSON.stringify([...(first[axis].ticks??[])].sort((a,b)=>a.value-b.value).map(t=>[t.value,t.label]))||f[axis].label!==first[axis].label||(f.kind==='bar-horizontal')!==(first.kind==='bar-horizontal')))return [messages.incompatible];
+  if(plots.some(f=>f.kind==='heatmap')||axis==='x'&&first.x.kind==='category'||plots.some(f=>!sameAxisProjection(f,first,axis)||f[axis].kind!==first[axis].kind||f[axis].scale!==first[axis].scale||!!f[axis].reversed!==!!first[axis].reversed||JSON.stringify([...(f[axis].ticks??[])].sort((a,b)=>a.value-b.value).map(t=>[t.value,t.label]))!==JSON.stringify([...(first[axis].ticks??[])].sort((a,b)=>a.value-b.value).map(t=>[t.value,t.label]))||f[axis].label!==first[axis].label||(f.kind==='bar-horizontal')!==(first.kind==='bar-horizontal')))return [messages.incompatible];
  }
  return [];
 }

@@ -114,7 +114,7 @@ export class ResearchTransfer{
     for await(const r of materials.references(doc.content))await enqueue(r);
     for await(const r of materials.references(doc.content,'outputs'))await enqueue(r);
     if(doc.content.acquisition)await enqueue(doc.content.acquisition);
-    for(const slot of ['pageIndex','schemaIndex','inputsIndex','outputsIndex','aggregationMembersIndex','schemaInputsIndex'])await owner.sequence(doc.content[slot]);
+    for(const slot of ['pageIndex','schemaIndex','inputsIndex','outputsIndex','aggregationMembersIndex','schemaInputsIndex','plotPointsIndex','plotMembersIndex'])await owner.sequence(doc.content[slot]);
     if(doc.content.comparison&&doc.content.summary?.version===2)for await(const part of materials.comparisons.index(doc.content.summary).metadata())await owner.metadata(part.name,part.value);
     if(doc.kind==='dataset'){
      for await(const column of materials.iterateDatasetColumns(doc))for(const r of schemaReferences(column))await enqueue(r);

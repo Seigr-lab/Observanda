@@ -1,0 +1,55 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,rm} from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {sampleNotebook} from '../src/sample.js';
+import {upgradeNotebook} from '../src/model.js';
+import {clearVault} from '../src/encryption.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {ResearchMaterials} from '../src/research-materials.js';
+import {blankQuantity} from '../src/web/measurement-model.js';
+import {blankUnitDefinition,exactUnitScalar} from '../src/web/measurement-unit-model.js';
+import {Workspace} from '../src/storage.js';
+import {copyWorkspace,copyPlan,encryptedCopy} from '../src/locations.js';
+import {contentBuffer} from '../src/file-content.js';
+import {catalogueFormat,catalogueRequiresNativeNumericalModels} from '../src/catalogue-format.js';
+import {nativeNumericalMetadata,nativeNumericalCommand} from '../src/numerical-material-format.js';
+const column=name=>({name,representation:'radix-fraction',radix:6,unit:'custom ticks',missing:[],time:{kind:'none',reference:'',resolution:'',uncertainty:''}});
+const definition={...blankUnitDefinition(),kind:'absolute',dimensions:[{axis:'custom.counter',exponent:1}],scale:exactUnitScalar('0.1','radix-fraction',6),offset:exactUnitScalar('15.3','radix-fraction',6)};
+test('scientific metadata admission examines only declared bounded content and queued commands',()=>{
+ const typed={...column('A'),quantity:{...blankQuantity(),unitDefinition:definition}},command={columnChanges:[{index:17,column:typed}]};
+ assert.equal(nativeNumericalCommand(command),true);assert.equal(nativeNumericalMetadata('.observanda/jobs/id.json',{type:'dataset.prepare',input:{command}}),true);
+ assert.equal(nativeNumericalMetadata('.observanda/materials/sequences/chunks/id.json',{kind:'columns',items:[typed]}),true);
+ assert.equal(nativeNumericalMetadata('.observanda/materials/objects/id/revision.json',{content:{measurement:{quantity:typed.quantity}}}),true);
+ assert.equal(nativeNumericalMetadata('.observanda/materials/objects/id/revision.json',{content:{tool:'Observanda table mapping',version:'8'}}),true);
+ assert.equal(nativeNumericalCommand({calculation:{version:3}}),true);assert.equal(nativeNumericalCommand({mapping:{projection:{version:1}}}),true);
+ assert.equal(nativeNumericalMetadata('.observanda/custom/id.json',{content:{measurement:{quantity:typed.quantity}}}),false);
+ assert.equal(nativeNumericalMetadata('.observanda/jobs/id.json',{type:'unrelated',input:{command}}),false);
+ assert.equal(nativeNumericalCommand({note:JSON.stringify(command)}),false);assert.equal(nativeNumericalMetadata('.observanda/materials/sequences/chunks/id.json',{kind:'cells',items:[typed]}),false);
+});
+test('typed schemas, exact source contexts and pinned methods survive revisions, inspection, ordinary copy and fresh-key recovery',async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-unit-retention-')),book=upgradeNotebook(sampleNotebook()),f=await encryptedFixture(directory,book),m=new ResearchMaterials(f.workspace),recordId=book.entries[0].id,keys=[f.vault];
+ t.after(async()=>{for(const key of keys)clearVault(key);await rm(directory,{recursive:true,force:true});});
+ const upload=async(name,bytes)=>{const s=await m.startImport({recordId,name,size:bytes.length});await m.appendImport(s.id,0,[bytes]);return m.finishImport(s.id);};
+ const original=Buffer.from(Array.from({length:18},(_,i)=>'C'+i).join(',')+'\n'+Array.from({length:18},()=> '15.3').join(',')),artifact=await upload('exact.csv',original),method=await upload('method.txt',Buffer.from('Declared reference; no accuracy claim'));
+ const columns=Array.from({length:18},(_,i)=>column('C'+i)),old=await m.dataset({recordId,title:'Exact columns',artifact,columns});
+ assert.equal(await f.workspace.catalogue(async store=>catalogueRequiresNativeNumericalModels(await catalogueFormat(store.db))),false);
+ const quantity={origin:'measured',conversion:method,calibration:method,unitDefinition:definition},typed={...columns[17],quantity};
+ const current=await m.dataset({recordId,title:'Exact columns',id:old.id,expectedRevision:old.revision,artifact,baseDataset:old,columnChanges:[{index:17,column:typed}]});
+ assert.deepEqual((await m.schemaPage(current,{offset:16})).items[1],typed);assert.equal((await m.schemaPage(old,{offset:16})).items[1].quantity,undefined);
+ assert.equal(await f.workspace.catalogue(async store=>catalogueRequiresNativeNumericalModels(await catalogueFormat(store.db))),true);
+ const source={ref:current,selector:{kind:'cell',page:0,row:0,column:17}},seed=await m.measurements.seed(source);
+ const measurement={version:1,...seed,references:{decoder:null,schema:method},decoderVersion:'',integrity:'not-checked',completion:'complete',note:'Declared conversion, unchanged source.'};
+ const retained=await m.measurements.save({recordId,title:'Typed observation',measurement});assert.deepEqual((await m.read(retained)).content.measurement.quantity,quantity);
+ const changed=await m.dataset({recordId,title:'Exact columns',id:old.id,expectedRevision:current.revision,artifact,baseDataset:current,columnChanges:[{index:17,column:{...typed,quantity:{...quantity,unitDefinition:{...definition,scale:exactUnitScalar('1/6','rational')}}}}]});
+ assert.equal((await m.read(changed)).previous,current.revision);assert.deepEqual((await m.read(retained)).content.measurement.quantity.unitDefinition.scale,definition.scale);
+ await assert.rejects(m.dataset({recordId,title:'Bad unit',artifact,columns:[{...columns[0],quantity:{...quantity,unitDefinition:{...definition,scale:exactUnitScalar('0')}}}]}),{code:'MATERIAL_INVALID'});
+ await m.verify();
+ const ordinary=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'ordinary')),{vault:f.vault});
+ const access=await createWorkspaceAccess('','',f.deviceStore),freshVault=takeCreatedVault(access);keys.push(freshVault);const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'fresh')),access,freshVault,f.vault);
+ for(const [root,vault] of [[ordinary,f.vault],[fresh,freshVault]]){
+  const restored=new ResearchMaterials(new Workspace(root,vault));await restored.verify();assert.deepEqual((await restored.schemaPage(current,{offset:16})).items[1],typed);assert.deepEqual((await restored.read(retained)).content.measurement,measurement);assert.equal((await restored.retainedDatasetPage(await restored.read(current),0,{columns:[17]})).rows[0].cells[0],'15.3');assert.deepEqual(await contentBuffer((await restored.artifact(artifact)).content),original);assert.deepEqual((await restored.read(method)).content,(await m.read(method)).content);
+ }
+});

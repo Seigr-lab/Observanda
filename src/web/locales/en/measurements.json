@@ -138,5 +138,22 @@
     "sourceValue":  "Source spelling",
     "notPresent":  "This cell has no observed numeric value.",
     "nativeBoundary":  "Native range or structured field",
-    "edit":  "Retain revised interpretation"
+    "edit":  "Retain revised interpretation",
+    "unitDeclare": "Declare quantity dimensions and conversion",
+    "unitKind": "Quantity kind",
+    "unit-difference": "Difference / linear quantity",
+    "unit-absolute": "Absolute value",
+    "unitHelp": "Dimension identifiers are your explicit declaration. Labels do not imply dimensions. Leave the list empty only for a declared dimensionless quantity.",
+    "dimensions": "Declared dimensions",
+    "dimensionless": "Dimensionless",
+    "dimensionAxis": "Dimension identifier",
+    "dimensionExponent": "Dimension exponent",
+    "addDimension": "Add dimension",
+    "removeDimension": "Remove dimension",
+    "unitScale": "Exact scale",
+    "unitOffset": "Exact offset",
+    "unitFormula": "Canonical value = source value * scale + offset. Scale must be positive; differences have zero offset. This declaration does not establish calibration or accuracy.",
+    "unitDeclared": "Retained unit definition",
+    "unitInvalid": "Use distinct dimension identifiers, nonzero integer exponents from -32 to 32, a positive exact scale and a valid offset. Differences require zero offset.",
+    "unitLimits": "Up to 16 dimension identifiers; integer exponents from -32 to 32, excluding zero. Exact scale and offset spellings support up to 8,192 characters."
 }

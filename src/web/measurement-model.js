@@ -2,6 +2,9 @@
 // identities; no unit conversion or clock unwrapping is inferred.
 import {researchId} from './research-reference.js';
 import {revisionId} from './revision-model.js';
+import {exactRational} from './measurement-rational.js';
+import {validUnitDefinition} from './measurement-unit-model.js';
+export {exactRational} from './measurement-rational.js';
 export const REPRESENTATIONS=['text','decimal','integer','radix','radix-fraction','rational','unsupported'];
 export const QUANTITY_ORIGINS=['unspecified','requested','measured','derived','raw-code'];
 export const TIME_KINDS=['none','unknown','acquisition-order','counter','wall-clock','elapsed','powered-duration','inferred-elapsed','external'];
@@ -11,27 +14,6 @@ const keys=(v,list)=>v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).e
 export const measurementRef=r=>keys(r,['kind','id','revision','workspaceId','label'])&&['artifact','dataset','analysis','collection','record'].includes(r.kind)&&researchId(r.id)&&revisionId(r.revision)&&(r.workspaceId===undefined||researchId(r.workspaceId))&&(r.label===undefined||text(r.label,300));
 const optionalRef=r=>r===null||measurementRef(r);
 const uint=v=>Number.isSafeInteger(v)&&v>=0;
-export function exactRational(value,representation='decimal',radix=10){
- if(representation==='rational'){
-  if(!text(value,8192)||!/^[-+]?\d+\/[1-9]\d*$/.test(value))throw Error('value');
-  let [n,d]=value.split('/').map(BigInt),a=n<0n?-n:n,b=d;while(b)[a,b]=[b,a%b];a||=1n;return {numerator:n/a,denominator:d/a};
- }
- if(!text(value,8192)||!['decimal','integer','radix','radix-fraction'].includes(representation))throw Error('representation');
- let sign=1n,source=value;if(source[0]==='-'){sign=-1n;source=source.slice(1);}else if(source[0]==='+')source=source.slice(1);
- let exponent=0;
- if(representation==='decimal'){
-  if(!/^(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(source))throw Error('value');
-  const parts=source.toLowerCase().split('e');source=parts[0];exponent=Number(parts[1]??0);
-  if(!Number.isSafeInteger(exponent)||Math.abs(exponent)>8192)throw Error('exponent');radix=10;
- }else if(representation==='integer')radix=10;
- if(!Number.isInteger(radix)||radix<2||radix>36||!(/^(?:[0-9a-z]+\.?[0-9a-z]*|\.[0-9a-z]+)$/i.test(source))||['integer','radix'].includes(representation)&&source.includes('.'))throw Error('value');
- const [whole,fraction='']=source.toLowerCase().split('.');let numerator=0n;
- for(const digit of whole+fraction){const n=parseInt(digit,36);if(n>=radix)throw Error('digit');numerator=numerator*BigInt(radix)+BigInt(n);}
- let denominator=BigInt(radix)**BigInt(fraction.length);
- if(exponent>0)numerator*=10n**BigInt(exponent);else if(exponent<0)denominator*=10n**BigInt(-exponent);
- let a=numerator,b=denominator;while(b){[a,b]=[b,a%b];}const divisor=a||1n;
- return {numerator:sign*numerator/divisor,denominator:denominator/divisor};
-}
 export function supportedValue(value,representation,radix){
  if(['text','unsupported'].includes(representation))return text(value,262144);
  try{exactRational(value,representation,radix);return true;}catch{return false;}
@@ -42,7 +24,7 @@ export function rationalIdentity(value){
  return {numerator:String(rational.numerator),denominator:String(rational.denominator)};
 }
 export const blankQuantity=()=>({origin:'unspecified',conversion:null,calibration:null});
-export function validQuantity(q,unit){return keys(q,['origin','conversion','calibration'])&&QUANTITY_ORIGINS.includes(q.origin)&&optionalRef(q.conversion)&&optionalRef(q.calibration)&&(q.origin!=='raw-code'||unit==='');}
+export function validQuantity(q,unit){return keys(q,['origin','conversion','calibration','unitDefinition'])&&QUANTITY_ORIGINS.includes(q.origin)&&optionalRef(q.conversion)&&optionalRef(q.calibration)&&(q.unitDefinition===undefined||validUnitDefinition(q.unitDefinition))&&(q.origin!=='raw-code'||unit===''&&q.unitDefinition===undefined);}
 export const blankClock=()=>({width:null,frequency:'',ordering:'unknown',wrap:'unknown',reset:'unknown',epoch:'',model:null,referenceData:null});
 export function validTime(time){
  if(!keys(time,['kind','reference','resolution','uncertainty','clock'])||!TIME_KINDS.includes(time.kind)||!['reference','resolution','uncertainty'].every(k=>text(time[k],500)))return false;

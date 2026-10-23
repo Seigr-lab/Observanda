@@ -8,18 +8,19 @@ import {AppError} from './errors.js';
 const prefix='.observanda/materials/sequences';
 const hash=value=>digest(serialize(value));
 const fail=()=>{throw new AppError('MATERIAL_MISSING');};
+const chunkSizeFor=kind=>kind==='plot-points'?1:['columns','cells','cell-text'].includes(kind)?16:64;
 const key=page=>'chunk:'+String(page).padStart(16,'0');
 export class MaterialSequence{
  constructor(workspace){this.workspace=workspace;}
  async read(kind,id,limit=1048576){const raw=await this.workspace.readMetadata(prefix+'/'+kind+'/'+id+'.json',limit);if(raw===null)return null;let value;try{value=JSON.parse(raw);}catch{fail();}if(hash(value)!==id)fail();return value;}
- async put(kind,value){const id=hash(value),prior=await this.read(kind,id),relative=prefix+'/'+kind+'/'+id+'.json',text=serialize(value);if(catalogueContext.getStore()&&(typeof this.workspace.catalogue==='function'||this.workspace.root!==undefined)){if(typeof this.workspace.catalogue!=='function')throw new AppError('INVALID');await this.workspace.catalogue(async store=>{if(!await recordOwnerResourcesTracking(store))return;const dependencies=await recordOwnerMetadataDependencies(store,relative,text);await retainRecordOwnerResource(store,{kind:'object',key:'metadata:'+relative,revision:hash({text})},{present:prior!==null,dependencies});});}if(prior===null)await this.workspace.writeMetadata(relative,text);return id;}
+ async put(kind,value){if(kind==='chunks'&&['plot-points','plot-members'].includes(value.kind)&&typeof this.workspace.catalogue==='function')await this.workspace.catalogue(async store=>{const {requireNativeNumericalModels}=await import('./catalogue-format.js');await requireNativeNumericalModels(store.db);});const id=hash(value),prior=await this.read(kind,id),relative=prefix+'/'+kind+'/'+id+'.json',text=serialize(value);if(catalogueContext.getStore()&&(typeof this.workspace.catalogue==='function'||this.workspace.root!==undefined)){if(typeof this.workspace.catalogue!=='function')throw new AppError('INVALID');await this.workspace.catalogue(async store=>{if(!await recordOwnerResourcesTracking(store))return;const dependencies=await recordOwnerMetadataDependencies(store,relative,text);await retainRecordOwnerResource(store,{kind:'object',key:'metadata:'+relative,revision:hash({text})},{present:prior!==null,dependencies});});}if(prior===null)await this.workspace.writeMetadata(relative,text);return id;}
  tree(){return new ObjectIndex(null,{immutable:true,nodeStorage:{read:ref=>this.read('nodes',ref.hash,8192),write:(ref,node)=>this.put('nodes',node)}});}
  validate(value){
-  if(!value||value.format!==1||!['pages','columns','references','files','upload-chunks','aggregation-members','cells','cell-text'].includes(value.kind)||!Number.isSafeInteger(value.count)||value.count<0||value.chunkSize!==(['columns','cells','cell-text'].includes(value.kind)?16:64)||!validIndexRef(value.root)||(value.root?.count??0)!==Math.ceil(value.count/value.chunkSize))fail();
+  if(!value||value.format!==1||!['pages','columns','references','files','upload-chunks','aggregation-members','cells','cell-text','plot-points','plot-members'].includes(value.kind)||!Number.isSafeInteger(value.count)||value.count<0||value.chunkSize!==chunkSizeFor(value.kind)||!validIndexRef(value.root)||(value.root?.count??0)!==Math.ceil(value.count/value.chunkSize))fail();
   return value;
  }
  builder(kind,write){
-  let root=null,count=0,buffer=[];const owner=this,chunkSize=['columns','cells','cell-text'].includes(kind)?16:64;
+  let root=null,count=0,buffer=[];const owner=this,chunkSize=chunkSizeFor(kind);
   const flush=async()=>{
    if(!buffer.length)return;
    const chunk={kind,offset:count-buffer.length,items:buffer},index=Math.floor(chunk.offset/chunkSize);

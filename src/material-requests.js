@@ -8,6 +8,7 @@ import {ResearchMaterials} from './research-materials.js';
 import {EvidenceCorrections} from './evidence-corrections.js';
 import {RetainedRecordDocuments} from './retained-record-documents.js';
 import {DatasetCalculations} from './dataset-calculations.js';
+import {plotPointPage,inspectPlotPoint} from './dataset-plot-provenance.js';
 import {retainedTable,retainedTablePage,retainedTableCell} from './retained-tables.js';
 import {enqueueDataset,enqueuePlot,enqueueComparison,datasetJobs} from './dataset-jobs.js';
 import {analysisDependencyState} from './analysis-dependencies.js';
@@ -17,7 +18,7 @@ import {jobSummary} from './jobs.js';
 import {MAX_BYTES} from './model.js';
 import {researchId} from './web/research-reference.js';
 import {AppError} from './errors.js';
-const reads=new Set(['source-owners','source-items','source-resolve','overview','list','references','reference-addresses','correction-preview','correction-status','correction-history','association-read','association-list','figure-sources','selection-page','intakes','intake-selection-page','intake-page','intake-session','upload-session','drafts','draft-read','draft-references','current','schema','measurement-inspect','measurement-seed','current-record','record','read','analysis-status','job','retained-table','calculation-schema','dataset-preview','dataset-jobs','rows','comparison-page','verify','download']);
+const reads=new Set(['source-owners','source-items','source-resolve','overview','list','references','reference-addresses','correction-preview','correction-status','correction-history','association-read','association-list','figure-sources','plot-points','plot-point','selection-page','intakes','intake-selection-page','intake-page','intake-session','upload-session','drafts','draft-read','draft-references','current','schema','measurement-inspect','measurement-seed','current-record','record','read','analysis-status','job','retained-table','calculation-schema','dataset-preview','dataset-jobs','rows','comparison-page','verify','download']);
 const writes=new Set(['associate-original','correction-apply','association-start','association-step','association-cancel','selection-change','intake-start','intake-selection-append','intake-append','intake-finish','draft-start','draft-append','draft-finish','draft-cancel','measurement-save','pin','start','finish','cancel-job','retry-job','dataset','collection','analysis','comparison','reuse','plot']);
 const accepted=new Set(['intake-finish','finish','dataset','comparison','plot']);
 export function materialRequest(route){
@@ -54,6 +55,8 @@ export async function executeMaterialRequest(storage,request,data,{signal,jobs,d
  case 'association-cancel':return materials.associations.cancel(data.id);
  case 'association-list':return materials.associations.list(data);
  case 'figure-sources':return resolveFigureSources(materials,data);
+ case 'plot-points':return plotPointPage(materials,data.ref,{offset:data.offset,limit:data.limit,signal});
+ case 'plot-point':return inspectPlotPoint(materials,data.ref,data.index,{offset:data.offset,signal});
  case 'selection-change':return materials.choices.change(data);
  case 'selection-page':return materials.choices.page(data);
  case 'intakes':return materials.intakes.list(data.recordId,{cursor:data.cursor,limit:data.limit});

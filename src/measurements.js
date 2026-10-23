@@ -15,7 +15,7 @@ export class Measurements {
   for(const source of value.sources){
    const doc=await this.materials.read(source.ref),s=source.selector;
    if(s.kind==='bytes'&&s.offset+s.length>doc.content.size)fail();
-   if(s.kind==='cell'){const cell=await this.cell(source);if(cell.quantity.origin==='raw-code'&&value.value.unit&&!(value.quantity.origin==='derived'&&value.quantity.conversion))fail();}
+   if(s.kind==='cell'){const cell=await this.cell(source);if(cell.quantity.origin==='raw-code'&&(value.value.unit||value.quantity.unitDefinition)&&!(value.quantity.origin==='derived'&&value.quantity.conversion))fail();}
    if(s.kind==='json-pointer')await this.inspect(source,{signal});
   }
  }

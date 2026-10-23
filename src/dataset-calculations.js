@@ -1,14 +1,17 @@
+import {ArithmeticBudget} from './tools/exact-arithmetic.js';
+import {calculateExactStep,exactCalculationCondition,exactCalculationKey,validateExactCondition,validateExactStep,validateExactComparison} from './dataset-exact-calculation.js';
 import {selectedDatasetColumns,assertDatasetScalars} from './dataset-selected-columns.js';
 import {randomUUID} from 'node:crypto';
 import {AppError} from './errors.js';
 import {scratchIterator} from './scratch-iterator.js';
 import {defaultColumn} from './web/dataset-schema.js';
 import {numericalKey} from './web/measurement-keys.js';
+import {sameUnitDefinition} from './web/measurement-unit-model.js';
 import {resultContext} from './web/numeral-context.js';
 import {ExactFormatError} from './web/measurement-format.js';
-import {validCalculation,validCalculationProjection,validOperand,validCondition,calculateStep,calculationCondition,rationalText} from './web/dataset-calculation-model.js';
+import {validCalculation,validCalculationProjection,validOperand,validCondition,calculateStep,calculationCondition,calculationQuantities,rationalText} from './web/dataset-calculation-model.js';
 import {researchId} from './web/research-reference.js';
-import {revisionId} from './web/revision-model.js';
+import {revisionId,revisionText} from './web/revision-model.js';
 import messages from './web/locales/en/datasetCalculations.json' with {type:'json'};
 const fail=code=>{throw new AppError(code??'DATASET_CALCULATION');};
 const column=(name,representation='text',unit='')=>({...defaultColumn({label:name}),representation,unit});
@@ -18,13 +21,13 @@ const contextColumns=()=>[...contextKeys.map(k=>column(messages[k+'Name'])),...[
 const contextValues=o=>[...contextKeys.map(k=>o[k]??''),...['run','investigation','calibration'].flatMap(k=>[o[k]?.id??'',o[k]?.revision??''])];
 export class DatasetCalculations{
  constructor(materials){this.materials=materials;}
- async schema(source,view='observations',{columns:selection}={}){
+ async schema(source,view='observations',{columns:selection,version=1}={}){
   if(selection!==undefined&&!validCalculationProjection(selection))fail();
   const doc=await this.materials.read(source);if(source.kind==='dataset')return selection===undefined?this.materials.datasetColumns(doc):(await selectedDatasetColumns(this.materials,doc,selection)).columns;
   const selected=columns=>{if(selection===undefined)return columns;if(selection.some(i=>i>=columns.length))fail();return selection.map(i=>columns[i]);};
   if(source.kind!=='analysis'||!doc.content.comparison)fail();
-  const units=new Set();for(const source of doc.content.comparison.sources){const column=await this.materials.datasetColumn(await this.materials.read(source.dataset),source.columns.value);units.add(column.unit);}
-  if(units.size!==1)fail();const valueColumn={...numeric(messages.valueName),unit:[...units][0]};
+  const units=new Set();let unitDefinition,first=true;for(const source of doc.content.comparison.sources){const column=await this.materials.datasetColumn(await this.materials.read(source.dataset),source.columns.value);units.add(column.unit);if(version===3&&view!=='transitions'){const next=column.quantity?.unitDefinition;if(!first&&(!!unitDefinition!==!!next||next&&!sameUnitDefinition(unitDefinition,next)))fail();if(first)unitDefinition=next;first=false;}}
+  if(units.size!==1)fail();const valueColumn={...numeric(messages.valueName),unit:[...units][0],...(unitDefinition?{quantity:{origin:'derived',conversion:null,calibration:null,unitDefinition}}:{})};
   if(view==='distribution')return selected([valueColumn,column(messages.spellingName),column(messages.categoryName),column(messages.countName,'integer'),...contextColumns()]);
   if(view==='transitions')return selected([column(messages.fromName),column(messages.toName),column(messages.countName,'integer'),...contextColumns()]);
   if(view!=='observations')fail();
@@ -35,14 +38,18 @@ export class DatasetCalculations{
   if(source.kind==='dataset'){const {items,...page}=await this.materials.retainedSchemaPage(await this.materials.read(source),{offset,limit});return {...page,columns:items};}
   const columns=await this.schema(source,view);return {columns:columns.slice(offset,offset+limit),offset,total:columns.length,next:offset+limit<columns.length?offset+limit:null};
  }
+ async recipeColumns(c){
+  let columns=[...await this.schema(c.source,c.view,{columns:c.projection,version:c.version})];
+  for(const j of c.joins){const right=await this.schema(j.dataset,undefined,{columns:j.projection});if(j.keys.some(k=>k.left>=columns.length||k.right>=right.length)||j.where&&!validCondition(j.where,right.length,c.version))fail();if(j.keys.some(k=>k.semantics==='numeric'&&[columns[k.left],right[k.right]].some(c=>['text','unsupported'].includes(c.representation))))fail();if(c.version===3){try{validateExactCondition(j.where,right);for(const k of j.keys)if(k.semantics==='numeric')validateExactComparison({...columns[k.left],numeric:true},{...right[k.right],numeric:true});}catch{fail();}}columns.push(...right);}
+  if(c.where&&!validCondition(c.where,columns.length,c.version))fail();if(c.version===3){try{validateExactCondition(c.where,columns);}catch{fail();}}
+  const names=new Set(columns.map(c=>c.name));
+  for(const s of c.steps){if(!validOperand(s.left,columns.length,c.version)||s.right&&!validOperand(s.right,columns.length,c.version)||s.condition&&!validCondition(s.condition,columns.length,c.version)||names.has(s.name))fail();if(c.version===3){try{validateExactStep(s,columns);}catch{fail();}}names.add(s.name);const {representation,radix}=resultContext(s.output);columns.push({...numeric(s.name),representation,radix,unit:s.unit,quantity:s.quantity??{origin:'derived',conversion:null,calibration:c.calibration}});}
+  if(columns.length>256)fail();for(const ref of calculationReferences(c))await this.materials.read(ref);
+  return columns;
+ }
  async validate(command){
   const c=command.calculation;if(!validCalculation(c)||typeof command.title!=='string'||!command.title.trim()||command.title.length>300||command.id!==undefined&&!researchId(command.id)||command.expectedRevision!==undefined&&command.expectedRevision!==null&&!revisionId(command.expectedRevision)||command.baseDataset||command.columns||command.exclusions||command.columnChanges)fail();
-  await this.materials.assertOwner(command.recordId);let columns=[...await this.schema(c.source,c.view,{columns:c.projection})];
-  for(const j of c.joins){const right=await this.schema(j.dataset,undefined,{columns:j.projection});if(j.keys.some(k=>k.left>=columns.length||k.right>=right.length)||j.where&&!validCondition(j.where,right.length))fail();if(j.keys.some(k=>k.semantics==='numeric'&&[columns[k.left],right[k.right]].some(c=>['text','unsupported'].includes(c.representation))))fail();columns.push(...right);}
-  if(c.where&&!validCondition(c.where,columns.length))fail();
-  const names=new Set(columns.map(c=>c.name));
-  for(const s of c.steps){if(!validOperand(s.left,columns.length)||s.right&&!validOperand(s.right,columns.length)||s.condition&&!validCondition(s.condition,columns.length)||names.has(s.name))fail();names.add(s.name);const {representation,radix}=resultContext(s.output);columns.push({...numeric(s.name),representation,radix,unit:s.unit,quantity:{origin:'derived',conversion:null,calibration:c.calibration}});}
-  if(columns.length>256)fail();if(c.calibration)await this.materials.read(c.calibration);
+  await this.materials.assertOwner(command.recordId);const columns=await this.recipeColumns(c);
   if(command.id){const head=await this.materials.current(command.id);if((head?.revision??null)!==(command.expectedRevision??null)||head&&(head.recordId!==command.recordId||head.kind!=='dataset'))fail('MATERIAL_CHANGED');}
   return columns;
  }
@@ -68,21 +75,21 @@ export class DatasetCalculations{
   }
  }
  rows(command,columns,options={}){
-  const self=this,c=command.calculation;
+  const self=this,c=command.calculation,condition=c.version===3?exactCalculationCondition:calculationCondition,calculate=c.version===3?calculateExactStep:calculateStep;
   return scratchIterator(async function*(store){
-   const baseSchema=await self.schema(c.source,c.view,{columns:c.projection});
+   const baseSchema=await self.schema(c.source,c.view,{columns:c.projection,version:c.version});
    const joinSchemas=[],key=(row,cols,keys,side)=>{
-    const values=keys.map(k=>{const i=k[side];return ['absent','null'].includes(row.valueKinds?.[i])||cols[i].missing.some(m=>m.value===row.cells[i])?null:k.semantics==='numeric'?numericalKey(row.cells[i],cols[i]):[row.cells[i],cols[i].representation,cols[i].radix];});
+    const values=keys.map(k=>{const i=k[side];return ['absent','null'].includes(row.valueKinds?.[i])||cols[i].missing.some(m=>m.value===row.cells[i])?null:k.semantics==='numeric'?(c.version===3?exactCalculationKey:numericalKey)(row.cells[i],cols[i]):[row.cells[i],cols[i].representation,cols[i].radix];});
     return values.includes(null)?null:JSON.stringify(values);
    };
    for(const [index,j] of c.joins.entries()){
     const right=await self.schema(j.dataset,undefined,{columns:j.projection});joinSchemas.push(right);
     for await(const row of self.sourceRows(j.dataset,'observations',{...options,columns:j.projection})){
-     if(row.excluded||j.where&&!calculationCondition(j.where,row,right))continue;
+     if(row.excluded||j.where&&!condition(j.where,row,right))continue;
      const k=key(row,right,j.keys,'right');if(k===null)fail('DATASET_JOIN_KEY');if(!await store.add(index+':'+k,row))fail('DATASET_JOIN_DUPLICATE');
     }
    }
-   yield {columns:columns.map(c=>c.name),sourceMapping:{format:'calculated',version:1}};
+   yield {columns:columns.map(c=>c.name),sourceMapping:{format:'calculated',version:c.version===3?2:1}};
    let order=0;
    for await(const original of self.sourceRows(c.source,c.view,{...options,columns:c.projection})){
     options.signal?.throwIfAborted();const {id:originalId,line:originalLine,aggregation:sourceAggregation,aggregationMembers:sourceMembers,...values}=original;let row={...values,cells:[...original.cells],valueKinds:[...(original.valueKinds??original.cells.map(()=> 'string'))],cellSources:[...original.cellSources]},used=[...baseSchema];
@@ -91,8 +98,9 @@ export class DatasetCalculations{
      if(!match&&!row.excluded&&j.unmatched==='error')fail('DATASET_JOIN_MISSING');
      row.cells.push(...(match?.cells??right.map(()=>'')));row.valueKinds.push(...(match?.valueKinds??right.map(()=>match?'string':'absent')));row.cellSources.push(...(match?.cellSources??right.map(()=>[])));used.push(...right);
     }
-    if(!row.excluded&&c.where&&!calculationCondition(c.where,row,used))row.excluded=c.selectionReason;
-    for(const step of c.steps){const value=row.excluded?{value:'',kind:'absent',sources:[]}:calculateStep(step,row,used);row.cells.push(value.value);row.valueKinds.push(value.kind);row.cellSources.push(value.sources);used.push(columns[used.length]);}
+    const budget=c.version===3?new ArithmeticBudget():undefined;
+    if(!row.excluded&&c.where&&!condition(c.where,row,used,budget))row.excluded=c.selectionReason;
+    for(const step of c.steps){const value=row.excluded?{value:'',kind:'absent',sources:[]}:calculate(step,row,used,budget);row.cells.push(value.value);row.valueKinds.push(value.kind);row.cellSources.push(value.sources);used.push(columns[used.length]);}
     if(row.cellSources.some(s=>s.length>32))fail();
     yield {...row,order:++order,locator:{format:'calculated',order}};
     if(order%256===0)await options.progress?.({stage:'Calculating retained rows',done:order,total:order});
@@ -101,7 +109,7 @@ export class DatasetCalculations{
  }
  async prepare(command,options={}){
   const columns=await this.validate(command),id=command.id??randomUUID(),c=command.calculation;
-  try{return await this.materials.prepareDatasetRows(command,{...options,source:{doc:{id}},rows:this.rows(command,columns,options),calculatedColumns:columns,inputReferences:[c.source,...c.joins.map(j=>j.dataset),...(c.calibration?[c.calibration]:[])]});}
+  try{return await this.materials.prepareDatasetRows(command,{...options,source:{doc:{id}},rows:this.rows(command,columns,options),calculatedColumns:columns,inputReferences:calculationReferences(c)});}
   catch(error){if(options.signal?.aborted)throw options.signal.reason;if(error instanceof AppError)throw error;if(error instanceof ExactFormatError)fail(error.code);fail();}
  }
  async preview(command,options={}){
@@ -109,4 +117,16 @@ export class DatasetCalculations{
   try{for await(const row of this.rows(command,columns,options)){if(row.columns)continue;rows.push(row);if(rows.length===5)break;}}
   catch(error){if(options.signal?.aborted)throw options.signal.reason;if(error instanceof AppError)throw error;if(error instanceof ExactFormatError)fail(error.code);fail();}return {columns:columns.map(c=>c.name),rows};
  }
+}
+
+export function calculationReferences(c){
+ return [...new Map([c.source,...c.joins.map(j=>j.dataset),c.calibration,...[...calculationQuantities(c)].flatMap(q=>[q.conversion,q.calibration])].filter(Boolean).map(ref=>[revisionText(ref),ref])).values()];
+}
+
+export async function verifyRetainedCalculation(materials,doc){
+ const calculation=doc.content.calculation;if(!calculation)return;
+ if(!validCalculation(calculation)||doc.content.algorithm!=='observanda-retained-calculations'||doc.content.algorithmVersion!==(calculation.version===3?2:1))fail('CATALOGUE_DAMAGED');
+ if(calculation.version!==3)return;
+ try{await new DatasetCalculations(materials).recipeColumns(calculation);}catch{fail('CATALOGUE_DAMAGED');}
+ const required=new Set(calculationReferences(calculation).map(ref=>revisionText(ref)));for await(const ref of materials.references(doc.content))required.delete(revisionText(ref));if(required.size)fail('CATALOGUE_DAMAGED');
 }

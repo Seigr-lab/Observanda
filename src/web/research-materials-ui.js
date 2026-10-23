@@ -1,3 +1,4 @@
+import {measurementTransformControls,readMeasurementTransform,wireMeasurementTransforms,measurementTransformDescription} from './measurement-transform-ui.js';
 import {datasetColumnPageOffset,loadDatasetColumnWindow,datasetColumnPager} from './dataset-column-picker.js';
 import {INTERVAL_FIELDS} from './figure-intervals.js';
 import {retainedSourceClient} from './retained-source-client.js';
@@ -75,6 +76,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   if(busy)sourceBusy.add(id);else sourceBusy.delete(id);
   document.querySelectorAll('[data-action="material-analysis-save"],[data-action="material-draft-save-selection"]').forEach(control=>control.disabled=sourceBusy.size>0);
  },...options});sourcePickers[id]=picker;return picker.ready;};
+ const transformText=key=>t('measurementTransform',key),numberText=key=>t('measurementOutput',key);
  const titleField=title=>field('Title',`<input id="material-title" maxlength="300" value="${esc(title)}">`);
  const guard=()=>{if(!sameResearchOwner(projectOwner,researchOwner(state))||workspaceContext!==state.storage?.contextId||owner!==(record()?.id??null))throw Error('The workspace or record changed. Reopen evidence.');};
  const sources=retainedSourceClient({state,api,access,identity:()=>[jobView,owner],active:()=>!!document.getElementById('dialog')?.open});
@@ -299,6 +301,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
    ${c.figure?`<div class="material-figure" id="material-figure"></div>${denominatorView(c)}${c.warnings?.length?`<ul>${c.warnings.map(w=>`<li>${esc(w)}</li>`).join('')}</ul>`:''}${referenceContext?'':button('Add retained figure to record','attach')+(c.mapping?button('Recalculate with latest dataset','recalculate'):'')}`:''}
    ${c.mapping?`<details class="material-more"><summary>Calculation definition</summary><p>${esc(c.tool)} · ${esc(c.version)}</p><pre>${esc(c.parameters)}</pre></details>`:''}
    ${c.numericTransform?'<p>'+esc(measurementText('plotPolicy',{policy:measurementText(c.numericTransform.policy==='approximate'?'approximatePolicy':'safe')}))+'</p>':''}
+   ${c.plotPointsIndex?button(esc(transformText('points')),'plot-points'):''}
    ${c.numericTransform?.reduction?'<p>'+esc(measurementText('plotReduction'))+'</p>':''}
    ${c.intake&&!referenceContext?button('Inspect imported file set','intake-open',`data-id="${esc(c.intake.id)}"`):''}
    ${c.acquisition?'Recorded with '+referenceList([c.acquisition]):''}<h3>Exact inputs</h3>${c.inputsIndex?'<div id="material-input-references"></div>':referenceList(c.inputs??[])}${inputCount(c,'outputs')?`<h3>Outputs</h3>${c.outputsIndex?'<div id="material-output-references"></div>':referenceList(c.outputs)}`:''}
@@ -306,6 +309,15 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   if(c.inputsIndex)await mountReferences(document.getElementById('material-input-references'),{reference:selectedRef});
   if(c.outputsIndex&&inputCount(c,'outputs'))await mountReferences(document.getElementById('material-output-references'),{reference:selectedRef,slot:'outputs'});
   if(c.figure)previews.mount(document.getElementById('material-figure'),c.figure,'material');
+ }
+ async function plotPoints(offset=0){
+  const reference=selectedRef;frame(transformText('points'),'<p role="status">Loading...</p>');const generation=jobView,data=await call('plot-points',{ref:reference,offset});currentView(generation);
+  frame(transformText('points'),'<div class="material-table"><table><thead><tr><th>'+esc(transformText('series'))+'</th><th>'+esc(transformText('point'))+'</th><th>X</th><th>'+esc(transformText('projected'))+'</th><th></th></tr></thead><tbody>'+data.items.map(item=>'<tr><td>'+esc(item.seriesName)+'</td><td>'+(item.point+1)+'</td><td>'+esc(item.x)+'</td><td>'+esc(item.y??'Gap')+'</td><td>'+button(esc(transformText('openPoint')),'plot-point','data-index="'+item.index+'"')+'</td></tr>').join('')+'</tbody></table></div>'+(offset?button(esc(transformText('previous')),'plot-points','data-offset="'+Math.max(0,offset-16)+'"'):'')+(data.next!==null?button(esc(transformText('next')),'plot-points','data-offset="'+data.next+'"'):''),button(esc(transformText('back')),'plot-back'));
+ }
+ async function plotPoint(index,offset=0){
+  const reference=selectedRef;frame(transformText('point'),'<p role="status">Loading...</p>');const generation=jobView,data=await call('plot-point',{ref:reference,index,offset});currentView(generation);
+  const fraction=value=>value.numerator+' / '+value.denominator,coordinateLabel=field=>field==='error'?transformText('uncertaintyWidth'):['x','y'].includes(field)?transformText(field):t('figureIntervals',field);
+  frame(transformText('point'),'<h3>'+esc(data.seriesName)+' - '+(data.point+1)+'</h3>'+measurementTransformDescription(data.projection,{esc,text:transformText,numberText})+'<div class="material-fields measurement-details">'+Object.entries(data.coordinates).map(([field,item])=>'<section><h4>'+esc(coordinateLabel(field))+'</h4><dl><dt>'+esc(transformText('projected'))+'</dt><dd>'+esc(data.coordinate[field])+'</dd><dt>'+esc(transformText('exactValue'))+'</dt><dd><code class="material-hash">'+esc(item.exact)+'</code></dd><dt>'+esc(transformText('error'))+'</dt><dd><code class="material-hash">'+esc(fraction(item.error))+'</code></dd></dl></section>').join('')+'</div><h3>'+esc(transformText(data.operation==='raw'?'sources':'members'))+'</h3><p>'+data.total.toLocaleString()+'</p>'+data.members.map(member=>'<div><p>Page '+(member.position.page+1)+', row '+(member.position.row+1)+'</p>'+member.cells.map(cell=>button(esc(cell.field)+' - column '+(cell.source.selector.column+1),'measurement-inspect','data-source="'+esc(JSON.stringify(cell.source))+'"')).join('')+'</div>').join('')+(data.previous!==null?button(esc(transformText('previous')),'plot-point','data-index="'+index+'" data-offset="'+data.previous+'"'):'')+(data.next!==null?button(esc(transformText('next')),'plot-point','data-index="'+index+'" data-offset="'+data.next+'"'):''),button(esc(transformText('points')),'plot-points')+button(esc(transformText('back')),'plot-back'));
  }
  const referenceList=refs=>`<ul>${refs.map(r=>`<li>${button(esc(catalog.find(m=>m.id===r.id&&m.revision===r.revision)?.title??analysisText(r.kind==='record'?'retainedRecord':'retainedInput')),'reference',`data-ref="${esc(JSON.stringify(r))}"`)} · ${esc(r.kind)} · ${r.revision.slice(0,12)}</li>`).join('')}</ul>`;
  async function datasetView(){
@@ -349,9 +361,10 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   }
   schemaExclusions=[...document.querySelectorAll('.material-exclusion')].map(node=>({row:node.querySelector('[data-exclusion="row"]').value,reason:node.querySelector('[data-exclusion="reason"]').value}));
  }
- function capturePlot(){
+ function capturePlot({validate=false}={}){
    const mapping={numericPolicy:document.getElementById('material-approximate').checked?'approximate':'safe',x:Number(value('x')),xKind:value('x-kind'),values:[...document.querySelectorAll('[data-material-value]:checked')].map(el=>({column:Number(el.dataset.materialValue),...readIntervalMapping(document.querySelector('[data-material-intervals="'+el.dataset.materialValue+'"]')),count:(v=>v===''?null:Number(v))(document.querySelector('[data-material-intervals="'+el.dataset.materialValue+'"] [data-marker-count-column]').value)})),group:value('group')===''?null:Number(value('group')),operation:value('operation'),order:'source',kind:value('chart'),decimal:'.',mode:'replace'},base=plotBase;base.title=value('title');if(mapping.kind==='heatmap')base.heatmap=heatmapSettings.read();if(mapping.values.some(v=>v.count!=null)){const root=document.querySelector('[data-retained-marker]');base.markerArea={...defaultMarkerArea(),label:root.querySelector('[data-marker-area="label"]').value,unitArea:Number(root.querySelector('[data-marker-area="unitArea"]').value)};}
   const retainedOrder=plotDraft?.mapping.values.map(value=>value.column)??[],chosen=new Map(mapping.values.map(value=>[value.column,value]));mapping.values=[...retainedOrder.filter(index=>chosen.has(index)),...mapping.values.map(value=>value.column).filter(index=>!retainedOrder.includes(index))].map(index=>chosen.get(index));
+  const projection=readMeasurementTransform(document.getElementById('material-form'),{xKind:mapping.xKind,validate,text:transformText});if(projection)mapping.projection=projection;
   plotDraft={title:value('title'),mapping};return {recordId:owner,title:plotDraft.title,dataset:selectedRef,mapping,base};
  }
  async function plotForm({offset=0,restore=false}={}){
@@ -364,11 +377,12 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
    <p>Source revision ${selectedRef.revision.slice(0,12)}. Plot coordinates are approximate decimal values; exact source values remain in the dataset. Explicit-base integers can be labels.</p>
    ${datasetColumnPager(data,{esc})}<div class="material-fields">${choose('Horizontal column','x',c.columns.map(col=>[col.index,col.name]),mapping.x)}${choose('Horizontal representation','x-kind',[['category','Labels (preserve spelling)'],['number','Numeric'],['date','ISO calendar dates']],mapping.xKind)}${choose('Chart type','chart',FIGURE_TYPES,mapping.kind)}${choose('Transformation','operation',FIGURE_OPERATIONS,mapping.operation)}${choose('Split series by','group',[['','No grouping'],...c.columns.map(col=>[col.index,col.name])],mapping.group??'')}</div>
    <fieldset><legend>Numeric value columns</legend>${c.columns.map(col=>{const i=col.index,v=mapping.values.find(v=>v.column===i);return `<label class="material-choice"><input type="checkbox" data-material-value="${i}"${v?' checked':''}${['integer','decimal','radix','radix-fraction','rational'].includes(col.representation)?'':' disabled'}>${esc(col.name)} · ${esc(col.representation)}</label><div data-material-intervals="${i}"${v?'':' hidden'}>${intervalMappingControls(c.columns,{esc,values:v??{}})}${markerMapping(c.columns,esc,v?.count??null)}</div>`;}).join('')}</fieldset>
-   <p>Declare numeric columns in “Edit schema &amp; exclusions” first. Count rows also works with text categories. Calculations read retained pages; figures can contain up to 10,000 points and 256 series. Larger results need a summary or fewer series.</p>${field(esc(measurementText('approximate')),'<input id="material-approximate" type="checkbox"'+(mapping.numericPolicy==='approximate'?' checked':'')+'>')}<p>${esc(measurementText('approximateHelp'))}</p><div data-retained-marker>${markerControls(plotBase,esc)}</div><div data-retained-heatmap hidden></div>${button('Calculate & retain figure','plot')}`);
+   <p>Declare numeric columns in “Edit schema &amp; exclusions” first. Count rows also works with text categories. Calculations read retained pages; figures can contain up to 10,000 points and 256 series. Larger results need a summary or fewer series.</p>${field(esc(measurementText('approximate')),'<input id="material-approximate" type="checkbox"'+(mapping.numericPolicy==='approximate'?' checked':'')+'>')}<p>${esc(measurementText('approximateHelp'))}</p>${measurementTransformControls(mapping.projection,{esc,field,xKind:mapping.xKind,text:transformText,numberText})}<div data-retained-marker>${markerControls(plotBase,esc)}</div><div data-retained-heatmap hidden></div>${button('Calculate & retain figure','plot')}`);
   for(const control of document.querySelectorAll('[data-column-window]'))control.onclick=async()=>{control.disabled=true;try{const next=datasetColumnPageOffset(control);capturePlot();await plotForm({offset:next,restore:true});}catch(error){notify(error.message,true);}finally{if(control.isConnected)control.disabled=false;}};
+  const transforms=wireMeasurementTransforms(document.getElementById('material-form'),{xKind:()=>value('x-kind')});document.getElementById('material-x-kind').addEventListener('change',transforms.refresh);
   document.querySelector('[data-retained-marker] [data-marker-area="enabled"]').closest('label').remove();
   for(const el of document.querySelectorAll('[data-material-value]'))el.addEventListener('change',()=>document.querySelector('[data-material-intervals="'+el.dataset.materialValue+'"]').hidden=!el.checked);
-  const heatmapHost=document.querySelector('[data-retained-heatmap]');heatmapSettings=mountHeatmap(heatmapHost,{esc,notify,...(plotBase.heatmap?{initial:plotBase.heatmap}:{})});heatmapHost.hidden=mapping.kind!=='heatmap';document.getElementById('material-chart').addEventListener('change',event=>{heatmapHost.hidden=event.target.value!=='heatmap';if(!heatmapHost.hidden)document.getElementById('material-x-kind').value='category';});
+  const heatmapHost=document.querySelector('[data-retained-heatmap]');heatmapSettings=mountHeatmap(heatmapHost,{esc,notify,...(plotBase.heatmap?{initial:plotBase.heatmap}:{})});heatmapHost.hidden=mapping.kind!=='heatmap';document.getElementById('material-chart').addEventListener('change',event=>{heatmapHost.hidden=event.target.value!=='heatmap';if(!heatmapHost.hidden)document.getElementById('material-x-kind').value='category';transforms.refresh();});
  }
  async function addFigure(figure){
   if(state.page==='record-reader'&&editRetainedFigure){guard();document.getElementById('dialog').close();await editRetainedFigure({recordId:owner,figure});return;}
@@ -390,6 +404,9 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   const name=control.dataset.action;if(!name?.startsWith('material-'))return false;const act=name.slice(9);
   if(act.startsWith('correction-'))return corrections.action(act,control);
   if(corrections.isBusy())return true;
+  if(act==='plot-points'){await plotPoints(Number(control.dataset.offset??0));return true;}
+  if(act==='plot-point'){await plotPoint(Number(control.dataset.index),Number(control.dataset.offset??0));return true;}
+  if(act==='plot-back'){await inspect(selectedRef);return true;}
   if(act==='figure-source'){await openReference(JSON.parse(control.dataset.ref));return true;}
   if(act.startsWith('measurement-')){if(act==='measurement-inspect')await authorizeSource(JSON.parse(control.dataset.source).ref);if(act==='measurement-from-artifact')await authorizeSource(JSON.parse(control.dataset.ref));return measurements.action(act,control);}
   if(act.startsWith('comparison-'))return comparisons.action(act,control);
@@ -523,7 +540,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   if(act==='columns-prev'||act==='columns-next'){columnOffset+=act==='columns-next'?16:-16;await datasetView();}
   if(act==='schema-prev'||act==='schema-next'){captureSchema();await schemaForm(schemaOffset+(act==='schema-next'?16:-16));}
   if(act==='plot-form')await plotForm();
-  if(act==='plot'){await submitPlot(()=>capturePlot());}
+  if(act==='plot'){await submitPlot(()=>capturePlot({validate:true}));}
   if(act==='attach'){const retained=opened.recordId===owner?{ref:selectedRef,figure:opened.content.figure}:await call('reuse',{recordId:owner,analysis:selectedRef});await addFigure(withFigureSource(retained.figure,retained.ref));}
   if(act==='recalculate'){
    const previous=opened,revision=selectedRef.revision;

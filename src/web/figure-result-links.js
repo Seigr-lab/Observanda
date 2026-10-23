@@ -8,7 +8,7 @@ export function figureHasResults(figure,results){const ids=new Set(figureTargets
 // Identity and presentation changes do not turn a retained calculation into a
 // new calculation. Data, coordinate meanings, summaries and ranges do.
 export function sameFigureCalculation(a,b){
- const projection=f=>f.kind==='panels'?{kind:f.kind,layout:f.layout,panels:f.panels.map(p=>projection(p.figure))}:{kind:f.kind,x:f.x,y:f.y,summary:f.summary??null,heatmap:f.heatmap??null,markerArea:f.markerArea??null,series:f.series.map(s=>({name:s.name,points:s.points}))};
+ const projection=f=>f.kind==='panels'?{kind:f.kind,layout:f.layout,panels:f.panels.map(p=>projection(p.figure))}:{kind:f.kind,x:f.x,y:f.y,summary:f.summary??null,heatmap:f.heatmap??null,markerArea:f.markerArea??null,projection:f.projection??null,series:f.series.map(s=>({name:s.name,points:s.points}))};
  return revisionText(projection(a))===revisionText(projection(b));
 }
 // A copied panel keeps explicit analysis references and interpretation limits.

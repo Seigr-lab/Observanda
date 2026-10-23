@@ -1,8 +1,10 @@
+import {nativeNumericalMaterial} from './numerical-material-format.js';
 import {datasetRowPosition,datasetPageInfo} from './dataset-row-position.js';
 import {datasetColumns as storedDatasetColumns,storedDatasetCells,preparePagedDataset,projectDatasetRows} from './dataset-storage.js';
 import {readDatasetCell,verifyDatasetCell} from './dataset-cell-storage.js';
 import {readPagedDataset} from './dataset-paged-reader.js';
 import {datasetPlotSelection,verifySelectedPlot} from './dataset-plot-selection.js';
+import {assertPlotProjectionUnits,withPlotProvenance,verifyPlotProjection} from './dataset-plot-provenance.js';
 import {assertDatasetScalars} from './dataset-selected-columns.js';
 import {assertRecordOwnerRevisionVisible} from './record-owner-read-visibility.js';
 import {readRecordOwnerMetadata} from './record-owner-audit-metadata.js';
@@ -54,7 +56,7 @@ import {validNativeMapping} from './native-mapping.js';
 import {exactRational} from './web/measurement-model.js';
 import {compareRationalText,sumRationalText} from './web/measurement-reduction.js';
 import {defaultColumn} from './web/dataset-schema.js';
-import {DatasetCalculations} from './dataset-calculations.js';
+import {DatasetCalculations,verifyRetainedCalculation} from './dataset-calculations.js';
 import {DatasetAggregation,clearAggregationWork} from './dataset-aggregation.js';
 import {aggregationMemberContext,aggregationMemberRows} from './dataset-aggregation-members.js';
 import {RetainedRecordDocuments} from './retained-record-documents.js';
@@ -498,7 +500,8 @@ export class ResearchMaterials {
   await this.assertOwner(recordId);const doc=await this.read(dataset);
   if(id){const current=await this.current(id);if((current?.revision??null)!==(expectedRevision??null)||current&&(current.kind!=='analysis'||current.recordId!==recordId))fail('MATERIAL_CHANGED');}
   if(base&&(base.kind==='panels'||figureIssues({...base,series:createFigure().series},{draft:true}).length))fail();
-  const selection=await datasetPlotSelection(this,doc,mapping),cols=selection.columns,local=selection.mapping;for(const v of local.values)for(const k of ['error',...INTERVAL_FIELDS])if(v[k]!=null&&cols[v[k]]?.unit!==cols[k[0]==='x'?local.x:v.column]?.unit)fail();
+  const selection=await datasetPlotSelection(this,doc,mapping),cols=selection.columns,local=selection.mapping;if(!mapping.projection)for(const v of local.values)for(const k of ['error',...INTERVAL_FIELDS])if(v[k]!=null&&cols[v[k]]?.unit!==cols[k[0]==='x'?local.x:v.column]?.unit)fail();
+  assertPlotProjectionUnits(local,cols);
   const mapper=createFigureMapper({columns:cols.map((c,index)=>({index,label:c.name,heading:c.name}))},{...local,mode:'replace',decimal:'.'},base??createFigure());
   if(mapper.invalid)fail();
   return doc;
@@ -527,20 +530,21 @@ export class ResearchMaterials {
  async preparePlot(command,{signal,progress=async()=>{},writePage,attempt=randomUUID(),jobId=command.id??randomUUID()}={}){
   const doc=await this.validatePlot(command),{mapping,dataset}=command,selection=await datasetPlotSelection(this,doc,mapping),columns=selection.columns,operation=mapping.operation??'raw';
   const write=writePage??(fn=>this.workspace.withLock(fn)),prefix=this.plotWork(jobId,attempt);
+  const prepare=async provenance=>{
   const median=mapping.operation==='median'?new PagedMedian({
    signal,progress,compareValues:compareRationalText,midpoint:(a,b)=>sumRationalText(a,b,2n),pageBytes:512*1024,
    read:name=>this.workspace.readMetadata(prefix+'/'+name,1024*1024),
    write:(name,text)=>write(async()=>{signal?.throwIfAborted();await this.workspace.writeMetadata(prefix+'/'+name,text);}),
    remove:async names=>{for(let i=0;i<names.length;i+=50)await write(async()=>{signal?.throwIfAborted();for(const name of names.slice(i,i+50))await this.workspace.removeMetadata(prefix+'/'+name);});}
   }):null;
-  const mapper=createFigureMapper({columns:columns.map((c,index)=>({index,label:c.name+(c.unit?' ('+c.unit+')':''),heading:c.name}))},{...selection.mapping,mode:'replace',decimal:'.'},command.base??createFigure(),{median,limits:{series:256,points:10000,characters:262144},parseNumber:(raw,index)=>{
+  const mapper=createFigureMapper({columns:columns.map((c,index)=>({index,label:c.name+(c.unit?' ('+c.unit+')':''),heading:c.name}))},{...selection.mapping,mode:'replace',decimal:'.'},command.base??createFigure(),{median,provenance:provenance?.callbacks,limits:{series:256,points:10000,characters:262144},parseNumber:(raw,index)=>{
    const column=columns[index];try{return exactRational(raw,column.representation,column.radix);}catch{fail('MATERIAL_PRECISION');}
   }});
   const denominator={format:selection.indices?3:2,dataset,...(selection.indices?{columnIndices:selection.indices}:{}),rows:0,included:0,excludedCount:0,missing:columns.map((c,column)=>({column:selection.indices?.[column]??column,name:c.name,count:0}))};
   try{
    for(let page=0;page<this.datasetPageCount(doc);page++){
     signal?.throwIfAborted();
-    for(const row of (await this.retainedDatasetPage(doc,page,selection.indices?{columns:selection.indices}:undefined)).rows){
+    for(const [rowIndex,row] of (await this.retainedDatasetPage(doc,page,selection.indices?{columns:selection.indices}:undefined)).rows.entries()){
      signal?.throwIfAborted();denominator.rows++;
      if(row.excluded){denominator.excludedCount++;continue;}
      denominator.included++;assertDatasetScalars(row);
@@ -549,7 +553,7 @@ export class ResearchMaterials {
       if(['null','absent'].includes(row.valueKinds?.[i])||col.missing.some(m=>m.value===raw)){denominator.missing[i].count++;return '';}
       return raw;
      });
-     mapper.add({line:row.line,cells});
+     mapper.add({line:row.line,cells,...(provenance?{source:{page,row:rowIndex}}:{})});await provenance?.flush();
      if(mapper.invalid){const result=mapper.finish();fail(result.limited?'MATERIAL_ANALYSIS_LIMIT':result.precision?'MATERIAL_PRECISION':'MATERIAL_INVALID');}
      await median?.flush();
     }
@@ -557,10 +561,13 @@ export class ResearchMaterials {
    }
    if(denominator.rows!==doc.content.rowCount)fail('MATERIAL_MISSING');
    await median?.finish();signal?.throwIfAborted();
+   if(provenance)for(const point of mapper.finishPoints()){void point;signal?.throwIfAborted();await provenance.flush();}
    const result=mapper.finish();if(result.issues.length)fail(result.limited?'MATERIAL_ANALYSIS_LIMIT':result.precision?'MATERIAL_PRECISION':'MATERIAL_INVALID');
-   return {commandHash:digest(revisionText(command)),content:{inputs:[dataset],tool:'Observanda table mapping',version:selection.indices?'7':'6',parameters:JSON.stringify(mapping),mapping,numericTransform:{algorithm:'exact-rational-to-binary64',version:2,policy:mapping.numericPolicy??'safe',significantDigits:17,...(operation!=='raw'?{reduction:{algorithm:'exact-rational-reduction',version:1,operation,grouping:'exact-coordinate',projection:'after-reduction'}}:{})},figure:withoutFigureSources(result.figure),denominator,warnings:result.warnings}};
+   return {commandHash:digest(revisionText(command)),content:{inputs:[dataset],tool:'Observanda table mapping',version:provenance?'8':selection.indices?'7':'6',parameters:JSON.stringify(mapping),mapping,numericTransform:{...(provenance?{algorithm:'exact-affine-rational-to-binary64',version:1,projection:mapping.projection,errorUnits:'source'}:{algorithm:'exact-rational-to-binary64',version:2}),policy:mapping.numericPolicy??'safe',significantDigits:17,...(operation!=='raw'?{reduction:{algorithm:'exact-rational-reduction',version:1,operation,grouping:'exact-coordinate',projection:'after-reduction'}}:{})},figure:withoutFigureSources(result.figure),denominator,warnings:result.warnings,...(provenance?await provenance.finish(result.pointOrder):{})}};
   }catch(error){if(error.message==='precision')fail('MATERIAL_PRECISION');throw error;}
   finally{if(median)await this.cleanPlotWork(jobId,attempt);}
+  };
+  return mapping.projection?withPlotProvenance(this,selection,operation,prepare,{write,signal}):prepare(null);
  }
  async commitPlot(command,prepared){
   if(prepared.commandHash!==digest(revisionText(command)))fail('MATERIAL_CHANGED');
@@ -715,6 +722,8 @@ export class ResearchMaterials {
      }else await this.checkReference(ref);return;
     }
     const doc=await this.read(ref);
+    const checkNumericalFormat=async()=>{if(await this.workspace.storageKind()==='catalogue')await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresNativeNumericalModels}=await import('./catalogue-format.js');if(!catalogueRequiresNativeNumericalModels(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});};
+    if(nativeNumericalMaterial(doc))await checkNumericalFormat();
     if(revisionText(await this.index.inputSet(ref))!==revisionText(this.referenceSet(doc.content)))fail('CATALOGUE_DAMAGED');
     if(doc.previous)await enqueue({...ref,revision:doc.previous});
     const comparison=doc.content.comparison?.version===2;
@@ -730,8 +739,9 @@ export class ResearchMaterials {
     for await(const output of this.references(doc.content,'outputs'))await enqueue(output);
     if(doc.content.acquisition)await enqueue(doc.content.acquisition);
     if(ref.kind==='dataset'){
+     await verifyRetainedCalculation(this,doc);
      if(doc.content.datasetFormat===3)await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresPagedResearchTables}=await import('./catalogue-format.js');if(!catalogueRequiresPagedResearchTables(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
-     for await(const column of this.iterateDatasetColumns(doc))for(const r of schemaReferences(column))await enqueue(r);
+     let checkedUnitFormat=false;for await(const column of this.iterateDatasetColumns(doc)){if(column.quantity?.unitDefinition!==undefined){if(!validQuantity(column.quantity,column.unit))fail('MATERIAL_MISSING');if(!checkedUnitFormat){await checkNumericalFormat();checkedUnitFormat=true;}}for(const r of schemaReferences(column))await enqueue(r);}
      if(doc.content.aggregationMembersIndex&&!doc.content.aggregation)fail('MATERIAL_MISSING');
      const aggregationContext=doc.content.aggregationMembersIndex?await aggregationMemberContext(this,doc):null;let memberOffset=0;
      for await(const row of this.iterateDataset(ref,{metadataOnly:true})){
@@ -744,7 +754,7 @@ export class ResearchMaterials {
      }
      if(aggregationContext&&memberOffset!==aggregationContext.index.count)fail('MATERIAL_MISSING');
     }
-    await verifySelectedPlot(this,doc);
+    await verifySelectedPlot(this,doc);await verifyPlotProjection(this,doc);
     if(doc.content.measurement)await this.measurements.validate(doc.content.measurement);
     if(doc.content.method&&!comparison){if(!validAnalysisMethod(doc.content.method))fail('CATALOGUE_DAMAGED');for(const r of analysisMethodReferences(doc.content.method))await enqueue(r);}
     if(doc.content.comparison&&!comparison){const c=doc.content;await this.comparisons.verify({recordId:doc.recordId,title:doc.title,tool:c.tool,version:c.version,method:c.method,comparison:c.comparison},c.summary);}

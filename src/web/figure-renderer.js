@@ -1,3 +1,4 @@
+import {appendProjectionDescription,projectionTableDescription,projectionAxisLabel} from './figure-projection-display.js';
 import {figureNumeralHelp} from './figure-radix-labels.js';
 import {axisFraction,explicitAxisTicks,axisTickValues,customTickLayout,verticalTickHeight,renderCustomAxis,axisControlTable} from './figure-axis-controls.js';
 import {areaMarker,markerAreaLegend} from './figure-marker-area.js';
@@ -97,9 +98,12 @@ function renderPanels(figure,{width=1000,idPrefix='figure'}={}){
  }
  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${y}" width="${width}" height="${y}" role="img" aria-label="${esc(figure.title)}"><title>${esc(figure.title)}</title><desc>${esc(figureSummary(figure))}</desc><g fill="${figureStyle(plots[0]).textColor}" font-family="${FONT_FAMILIES[figureStyle(plots[0]).font]}">${svgText(figure.title,width/2,26,{size:22,parts:titleLines,weight:'600',cls:'figure-composition-title'})}${graphic}</g></svg>`;
 }
-export function renderFigure(figure,{width,height,idPrefix='figure'}={}){
+export function renderFigure(figure,options={}){
+ return appendProjectionDescription(renderPlotFigure(figure,options),figure);
+}
+function renderPlotFigure(figure,{width,height,idPrefix='figure'}={}){
  if(figure.kind==='panels')return renderPanels(figure,{width,idPrefix});
- if(figure.kind==='heatmap')return renderHeatmap(figure,{width});
+ if(figure.kind==='heatmap')return renderHeatmap({...figure,heatmap:{...figure.heatmap,valueLabel:projectionAxisLabel(figure,'y')}},{width});
  const style=figureStyle(figure),fontSize=style.fontSize;
  width=Math.max(figure.markerArea?352:280,width??style.width);
  height=height??Math.max(260,width*style.height/style.width);
@@ -215,8 +219,8 @@ export function renderFigure(figure,{width,height,idPrefix='figure'}={}){
  }
  graphic+=`<path d="M${left},${top} V${top+plotH} H${left+plotW}" fill="none" stroke="${style.axisColor}"/>`;
  const axisY=height-(figure.legend&&legendPosition==='bottom'?legendHeight+20:0)-12;
- graphic+=svgText(horizontal?figure.y.label:figure.x.label,left+plotW/2,axisY,{size:fontSize+2,width:plotW,cls:'figure-axis-label'});
- graphic+=`<text class="figure-axis-label" transform="translate(18 ${top+plotH/2}) rotate(-90)" text-anchor="middle" font-size="${fontSize+2}">${esc(horizontal?figure.x.label:figure.y.label)}</text>`;
+ graphic+=svgText(horizontal?projectionAxisLabel(figure,'y'):projectionAxisLabel(figure,'x'),left+plotW/2,axisY,{size:fontSize+2,width:plotW,cls:'figure-axis-label'});
+ graphic+=`<text class="figure-axis-label" transform="translate(18 ${top+plotH/2}) rotate(-90)" text-anchor="middle" font-size="${fontSize+2}">${esc(horizontal?projectionAxisLabel(figure,'x'):projectionAxisLabel(figure,'y'))}</text>`;
  const key=renderAnnotationKey(figure,annotations.key,{width,y:height,esc}),sizes=markerAreaLegend(figure,{width,y:height+key.height,esc});
  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${numeric(height+key.height+sizes.height)}" width="${width}" height="${numeric(height+key.height+sizes.height)}" role="img" aria-label="${esc(figure.title)}"><title>${esc(figure.title)}</title><desc>${esc(figure.kind+' plot. '+series.length+' visible series. '+figureSummary(figure)+' '+intervalMessages.description+' '+figureNumeralHelp(style))}</desc><rect width="100%" height="100%" fill="${style.background}"/><g font-family="${FONT_FAMILIES[style.font]}" font-size="${fontSize}" fill="${style.textColor}">${graphic}${key.svg}${sizes.svg}</g></svg>`;
 }
@@ -225,7 +229,7 @@ export function figureTable(figure){
  const style=figureStyle(figure),value=v=>figureDataNumber(v,style),coordinate=v=>figure.x.kind==='number'?value(v):v;
  const counted=figure.series.some(s=>s.points.some(p=>p.count!=null));
  const extra=figure.series.some(s=>s.points.some(p=>INTERVAL_FIELDS.some(k=>p[k]!=null)))?INTERVAL_FIELDS:[];
- return `${style.numberFormat==='radix'?'<p>'+esc(figureNumeralHelp(style))+'</p>':''}${figure.markerArea?'<p>'+esc(figure.markerArea.label+' · '+markerMessages.legendRule.replace('{area}',value(figure.markerArea.unitArea)))+'</p>':''}<table>${figure.summary?'<caption>'+esc(figureSummary(figure))+'</caption>':''}<thead><tr><th>Series</th><th>${esc(figure.x.label||'X')}</th><th>${esc(figure.y.label||'Value')}</th><th>Uncertainty (±)</th>${extra.map(k=>'<th>'+esc(intervalMessages[k])+'</th>').join('')}${counted?'<th>'+esc(markerMessages.count)+'</th>':''}</tr></thead><tbody>${figure.series.flatMap(s=>s.points.map(p=>`<tr><th scope="row">${esc(s.name)}</th><td>${esc(coordinate(p.x))}</td><td>${p.y===null?'Gap':esc(value(p.y))}</td><td>${p.error===null?'—':esc(value(p.error))}</td>${extra.map(k=>'<td>'+esc(p[k]==null?'—':k[0]==='x'?coordinate(p[k]):value(p[k]))+'</td>').join('')}${counted?'<td>'+esc(p.count==null?'—':value(p.count))+'</td>':''}</tr>`)).join('')}</tbody></table>`+annotationTable(figure,esc)+heatmapThresholdTable(figure,esc)+axisControlTable(figure,esc);
+ return `${projectionTableDescription(figure)}${style.numberFormat==='radix'?'<p>'+esc(figureNumeralHelp(style))+'</p>':''}${figure.markerArea?'<p>'+esc(figure.markerArea.label+' · '+markerMessages.legendRule.replace('{area}',value(figure.markerArea.unitArea)))+'</p>':''}<table>${figure.summary?'<caption>'+esc(figureSummary(figure))+'</caption>':''}<thead><tr><th>Series</th><th>${esc(projectionAxisLabel(figure,'x')||'X')}</th><th>${esc(projectionAxisLabel(figure,'y')||'Value')}</th><th>Uncertainty (±)</th>${extra.map(k=>'<th>'+esc(intervalMessages[k])+'</th>').join('')}${counted?'<th>'+esc(markerMessages.count)+'</th>':''}</tr></thead><tbody>${figure.series.flatMap(s=>s.points.map(p=>`<tr><th scope="row">${esc(s.name)}</th><td>${esc(coordinate(p.x))}</td><td>${p.y===null?'Gap':esc(value(p.y))}</td><td>${p.error===null?'—':esc(value(p.error))}</td>${extra.map(k=>'<td>'+esc(p[k]==null?'—':k[0]==='x'?coordinate(p[k]):value(p[k]))+'</td>').join('')}${counted?'<td>'+esc(p.count==null?'—':value(p.count))+'</td>':''}</tr>`)).join('')}</tbody></table>`+annotationTable(figure,esc)+heatmapThresholdTable(figure,esc)+axisControlTable(figure,esc);
 }
 export function renderFigureView(figure,options={}){
  if(figure.kind!=='panels')return renderFigure(figure,options);

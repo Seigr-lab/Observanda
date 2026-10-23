@@ -1,3 +1,5 @@
+import {hasRecordProjection,projectedFigureDocument} from './record-numerical-models.js';
+import {requireNativeNumericalModels,catalogueRequiresNativeNumericalModels} from './catalogue-format.js';
 import {retiredProjectRecord,withRetiredProjectRecord} from './project-retired-records.js';
 // One owner for legacy originals and immutable record-block manifests. Public
 // record IDs, storage digests and logical revision identities do not change.
@@ -48,6 +50,7 @@ export async function withStoredRecord(store,id,revision,consume){
  });
 }
 export async function retainStoredRecord(store,record,revision){
+ if(hasRecordProjection(record))await requireNativeNumericalModels(store.db);
  if(record.results?.statements.some(statement=>statement.table?.version===3))await requirePagedResearchTables(store.db);
  if(record.sections?.some(section=>Object.hasOwn(section,'share')))await requireSourcePublicationControls(store.db);
  const scopeId=record.notebookId,generation=1,key=await store.scopeKey(scopeId,generation,{create:true});
@@ -78,6 +81,7 @@ export async function retainStoredDocument(store,document,encoding){
  const id=(await document.field(['id'])).value,scopeId=(await document.field(['notebookId'])).value,{blocks}=document;
  if(blocks.store!==store||scopeId!==blocks.scopeId)throw new AppError('INVALID');
  const revision=encoding.revision;
+ if(!catalogueRequiresNativeNumericalModels(await catalogueFormat(store.db))&&await projectedFigureDocument(document))await requireNativeNumericalModels(store.db);
  const present=!!await store.db.get('SELECT 1 FROM records WHERE id=$1 AND revision=$2',id,revision);
  if(present){await retainRecordOwnerResource(store,{kind:'record',id,revision},{present:true});return false;}
  // Only inspect permission fields until this owner requires the new reader.
@@ -99,6 +103,7 @@ export async function verifyStoredRecord(store,id,revision,{signal}={}){
  signal?.throwIfAborted();
  const indexed=await withStoredRecord(store,id,revision,async({value,blocks})=>{
   if(blocks){const hash=createHash('sha256');for await(const text of blocks.tree().json(value.root,{signal}))hash.update(text);hash.update('\n');if(hash.digest('hex')!==revision)fail();}
+  if(!catalogueRequiresNativeNumericalModels(await catalogueFormat(store.db))&&(blocks?await projectedFigureDocument(new RecordDocument(blocks,value.root),{signal}):hasRecordProjection(value)))fail();
   return {attempt:!!value.attemptIndex,methods:!!value.methodIndex,results:!!value.resultIndex};
  });
  if(indexed.attempt||indexed.methods||indexed.results)await withRecordDocument(store,id,revision,async document=>{

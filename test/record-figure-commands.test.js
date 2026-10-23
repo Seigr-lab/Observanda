@@ -1,3 +1,4 @@
+import {catalogueFormat,catalogueRequiresNativeNumericalModels} from '../src/catalogue-format.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
@@ -37,11 +38,11 @@ test('figure copies retain exact sources and results, keep separate identities, 
 });
 
 test('new figure checkpoints and completed command receipts survive fresh-key recovery on heavy records',async t=>{
- const f=await figureValueFixture({large:true});t.after(f.close);forbidRecord(t);const figure=createFigure(),base=await f.values.read(f.target(figure.id));figure.title='New captured observations';figure.series[0].points=[{x:1,y:5,error:null}];
+ const f=await figureValueFixture({large:true});t.after(f.close);forbidRecord(t);const figure=createFigure(),base=await f.values.read(f.target(figure.id));figure.title='New captured observations';figure.series[0].points=[{x:1,y:5,error:null}];figure.projection={version:1,x:{origin:{spelling:'1000000000000000000000000000000',representation:'decimal',radix:10},scale:{spelling:'0.001',representation:'decimal',radix:10}}};
  const drafts=new RecordValueDrafts(f.workspace),checkpoint={id:randomUUID(),workspaceId:f.book.id,recordId:f.record.id,expectedRevision:null,selection:{field:base.field,revision:base.revision,storageRevision:base.storageRevision},value:{value:figure}},receipt=await drafts.write(checkpoint),lookup={id:checkpoint.id,workspaceId:f.book.id,expectedRevision:receipt.revision};assert.deepEqual((await drafts.read(lookup)).value,checkpoint.value);
  const commands=new RecordFigureCommands(f.workspace),copyCommand=command(f,await f.values.read(f.target(f.record.figures[0].id)),'duplicate'),copied=await commands.run(copyCommand);
  const access=await createAccess('','synthetic figure collection recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));const root=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'recovered')),access,vault,f.vault),workspace=new Workspace(root,vault),recovered=await new RecordValueDrafts(workspace).read(lookup);
- assert.deepEqual(recovered.value,checkpoint.value);await new RecordValues(workspace).save({...f.target(figure.id),expectedRevision:base.revision,value:recovered.value});assert.deepEqual(await new RecordFigureCommands(workspace).run(copyCommand),copied);
+ assert.deepEqual(recovered.value,checkpoint.value);assert.equal(await workspace.catalogue(async store=>catalogueRequiresNativeNumericalModels(await catalogueFormat(store.db))),true);await new RecordValues(workspace).save({...f.target(figure.id),expectedRevision:base.revision,value:recovered.value});assert.deepEqual(await new RecordFigureCommands(workspace).run(copyCommand),copied);
  await workspace.catalogue(async store=>{const row=await store.member(await store.snapshot(),f.record.id);await withRecordDocument(store,row.id,row.revision,async doc=>{assert.equal(await doc.tree.arrayLength(doc.root,['figures']),11);assert.deepEqual((await doc.field(['figures','10'])).value,figure);assert.deepEqual((await doc.field(['sections','72'])).value,f.record.sections[72]);});await store.verifySnapshot(undefined,f.book.id);});
 });
 

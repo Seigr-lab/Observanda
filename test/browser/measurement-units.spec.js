@@ -1,0 +1,38 @@
+import {test,expect} from '@playwright/test';
+import {mkdtemp,rm} from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import {encryptedFixture} from './encrypted-fixture.js';
+import {sampleNotebook} from '../../src/sample.js';
+import {ResearchMaterials} from '../../src/research-materials.js';
+import {defaultColumn} from '../../src/web/dataset-schema.js';
+import {startServer} from '../../src/server.js';
+import {clearVault} from '../../src/encryption.js';
+import {exactUnitScalar} from '../../src/web/measurement-unit-model.js';
+
+test('author explicit unit dimensions and native-base conversions across schema pages, retry a failed save and retain the same interpretation',async({page},testInfo)=>{
+ test.setTimeout(150000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-unit-ui-')),f=await encryptedFixture(directory,sampleNotebook()),m=new ResearchMaterials(f.workspace),record=(await f.workspace.read()).book.entries[0];
+ const upload=async(name,bytes)=>{const s=await m.startImport({recordId:record.id,name,size:bytes.length});await m.appendImport(s.id,0,[bytes]);return m.finishImport(s.id);};
+ const original=Buffer.from(Array.from({length:18},(_,i)=>'Value '+i).join(',')+'\n'+Array.from({length:18},()=> '15.3').join(',')),artifact=await upload('native-values.csv',original),method=await upload('conversion-method.txt',Buffer.from('Exact declared conversion and independent calibration reference.'));
+ const old=await m.dataset({recordId:record.id,title:'Native readings',artifact,columns:Array.from({length:18},(_,i)=>({...defaultColumn({label:'Value '+i}),representation:'radix-fraction',radix:6}))});
+ const app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json'),headless:true}),dialog=page.locator('#dialog'),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const open=async()=>{await page.getByRole('button',{name:'Open evidence & analysis'}).click();await dialog.locator('.material-list li').filter({hasText:'Native readings'}).getByRole('button',{name:'Inspect',exact:true}).click();};
+ try{
+  await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,record.id);await open();await dialog.getByRole('button',{name:'Edit schema & exclusions'}).click();await dialog.getByRole('button',{name:'Next schema columns'}).click();
+  let column=dialog.locator('[data-material-column="17"]');await column.locator('..').locator('summary').first().click();await column.getByLabel('Unit',{exact:true}).fill('ticks');await column.locator('summary').filter({hasText:'Quantity provenance'}).click();
+  await column.getByLabel('Quantity origin',{exact:true}).selectOption('measured');await column.getByLabel('Declare quantity dimensions and conversion').check();await column.getByLabel('Quantity kind').selectOption('absolute');await column.getByRole('button',{name:'Add dimension',exact:true}).click();await column.getByLabel('Dimension identifier').fill('custom.counter');
+  const scalar=key=>column.locator('[data-unit-scalar="'+key+'"]');
+  for(const [key,spelling] of [['scale','0.1'],['offset','15.3']]){await scalar(key).getByLabel('Representation',{exact:true}).selectOption('radix-fraction');await scalar(key).getByLabel('Base (for explicit base)',{exact:true}).fill('6');await scalar(key).getByLabel('Exact source value',{exact:true}).fill(spelling);}
+  for(const role of ['conversion','calibration']){const region=column.locator('[data-provenance-reference="'+role+'"]');await region.getByRole('button',{name:'Choose retained revision'}).click();await region.locator('[data-choices] select').selectOption('artifact:'+method.id+':'+method.revision);await region.getByRole('button',{name:'Use selected revision'}).click();}
+  await dialog.getByRole('button',{name:'Previous schema columns'}).click();await dialog.getByRole('button',{name:'Next schema columns'}).click();column=dialog.locator('[data-material-column="17"]');await column.locator('..').locator('summary').first().click();await column.locator('summary').filter({hasText:'Quantity provenance'}).click();
+  await expect(column.locator('[data-unit-enabled]')).toBeChecked();await expect(scalar('scale').locator('[data-unit-spelling]')).toHaveValue('0.1');await expect(scalar('offset').locator('[data-unit-radix]')).toHaveValue('6');await expect(column.locator('[data-provenance="ref-calibration"]')).toHaveValue(JSON.stringify({...method,label:'conversion-method.txt'}));
+  await page.screenshot({path:testInfo.outputPath('measurement-unit-schema-desktop.png')});await page.setViewportSize({width:390,height:844});await column.locator('[data-unit-axis]').scrollIntoViewIfNeeded();expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBeTruthy();await page.screenshot({path:testInfo.outputPath('measurement-unit-schema-phone.png')});
+  let interrupted=false;await page.route('**/api/research/materials/dataset',async route=>{if(!interrupted){interrupted=true;await route.abort('failed');}else await route.continue();});
+  await dialog.getByRole('button',{name:'Save dataset revision'}).click();await expect.poll(()=>interrupted).toBe(true);await expect(column.locator('[data-unit-axis]')).toHaveValue('custom.counter');await expect(scalar('scale').locator('[data-unit-spelling]')).toHaveValue('0.1');await expect(dialog.getByRole('button',{name:'Save dataset revision'})).toBeEnabled();
+  await dialog.getByRole('button',{name:'Save dataset revision'}).click();await expect(dialog.getByRole('region',{name:'Dataset values'})).toBeVisible({timeout:30000});
+  const current=await m.current(old.id),expected={version:1,kind:'absolute',dimensions:[{axis:'custom.counter',exponent:1}],scale:exactUnitScalar('0.1','radix-fraction',6),offset:exactUnitScalar('15.3','radix-fraction',6)};expect((await m.schemaPage(current,{offset:17})).items[0].quantity.unitDefinition).toEqual(expected);expect((await m.schemaPage(old,{offset:17})).items[0].quantity).toBeUndefined();
+  await dialog.getByRole('button',{name:'Next columns',exact:true}).click();await dialog.getByRole('button',{name:/Inspect value: Value 17/}).click();await expect(dialog.locator('[data-retained-unit]')).toContainText('custom.counter^1');await expect(dialog.locator('[data-retained-unit]')).toContainText('0.1');await dialog.getByRole('button',{name:'Retain measurement or diagnostic'}).click();await dialog.getByLabel('Title',{exact:true}).fill('Typed native observation');await dialog.getByRole('button',{name:'Save retained measurement'}).click();await expect(dialog.getByRole('heading',{name:'Typed native observation',exact:true})).toBeVisible();await expect(dialog.locator('[data-retained-unit]')).toContainText('custom.counter^1');
+  await page.reload();await page.getByRole('button',{name:'Open evidence & analysis'}).click();await dialog.locator('.material-list li').filter({hasText:'Typed native observation'}).getByRole('button',{name:'Inspect',exact:true}).click();await expect(dialog.locator('[data-retained-unit]')).toContainText('0.1');await expect(dialog).toContainText('15.3');
+  const retained=(await m.heads()).find(v=>v.title==='Typed native observation'),doc=await m.read(retained);expect(doc.content.measurement.quantity.unitDefinition).toEqual(expected);expect(doc.content.measurement.quantity.conversion.revision).toBe(method.revision);expect(doc.content.measurement.quantity.calibration.revision).toBe(method.revision);expect(doc.content.measurement.value.spelling).toBe('15.3');expect(errors).toEqual([]);
+ }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
+});

@@ -136,7 +136,10 @@ export class Workspace {
     if(activeCatalogue(this)||await hasCatalogue(this.root)){
       if(catalogueContext.getStore()?.root!==this.root)throw new AppError('LOCKED');
       return this.catalogue(async store=>{
-        if(relative.startsWith('.observanda/materials/')){const value=JSON.parse(text);if(value.content?.datasetFormat===3||relative.startsWith('.observanda/materials/sequences/chunks/')&&['cells','cell-text'].includes(value.kind)){const {requirePagedResearchTables}=await import('./catalogue-format.js');await requirePagedResearchTables(store.db);}}
+        if(relative.startsWith('.observanda/materials/')||relative.startsWith('.observanda/jobs/')){
+          const value=JSON.parse(text);if(value.content?.datasetFormat===3||relative.startsWith('.observanda/materials/sequences/chunks/')&&['cells','cell-text'].includes(value.kind)){const {requirePagedResearchTables}=await import('./catalogue-format.js');await requirePagedResearchTables(store.db);}
+          const {nativeNumericalMetadata}=await import('./numerical-material-format.js');if(nativeNumericalMetadata(relative,value)){const {requireNativeNumericalModels}=await import('./catalogue-format.js');await requireNativeNumericalModels(store.db);}
+        }
         return store.putObject('metadata:'+relative,{text});
       });
     }

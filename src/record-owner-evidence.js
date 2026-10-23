@@ -183,7 +183,7 @@ export async function prepareRecordOwnerEvidence(source,target,receipt,{write,si
    await write(store=>stageRecordOwnerMaterialIdentity(target,receipt,ref,doc,{store}));
    if(!await materials.current(ref.id))await write(()=>stageMaterialReturnRetirement(incoming,receipt,ref));
    if(doc.previous)await enqueue({...ref,revision:doc.previous});for await(const input of materials.references(doc.content))await enqueue(input);for await(const output of materials.references(doc.content,'outputs'))await enqueue(output);if(doc.content.acquisition)await enqueue(doc.content.acquisition);
-   for(const slot of ['pageIndex','schemaIndex','inputsIndex','outputsIndex','aggregationMembersIndex','schemaInputsIndex'])await transfer.sequence(doc.content[slot]);
+   for(const slot of ['pageIndex','schemaIndex','inputsIndex','outputsIndex','aggregationMembersIndex','schemaInputsIndex','plotPointsIndex','plotMembersIndex'])await transfer.sequence(doc.content[slot]);
    if(doc.content.comparison&&doc.content.summary?.version===2)for await(const part of materials.comparisons.index(doc.content.summary).metadata())await emit({kind:'metadata',name:part.name,content:JSON.stringify(part.value)});
    if(doc.kind==='dataset'){
     for await(const column of materials.iterateDatasetColumns(doc))for(const input of schemaReferences(column))await enqueue(input);

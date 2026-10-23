@@ -1,0 +1,27 @@
+import {t} from './i18n/index.js';
+import {NUMBER_REPRESENTATIONS,numeralUsesRadix} from './numeral-context.js';
+import {blankUnitDefinition,validUnitDefinition,UNIT_KINDS} from './measurement-unit-model.js';
+const text=(key,args)=>t('measurements',key,args);
+const get=(root,key)=>root.querySelector('[data-unit-'+key+']');
+function dimensionRow(value,{esc,field}){return '<div data-unit-dimension class="material-fields">'+field(esc(text('dimensionAxis')),'<input data-unit-axis maxlength="100" spellcheck="false" value="'+esc(value.axis)+'">')+field(esc(text('dimensionExponent')),'<input data-unit-exponent type="number" min="-32" max="32" step="1" value="'+esc(value.exponent)+'">')+'<button type="button" class="button" data-unit-remove>'+esc(text('removeDimension'))+'</button></div>';}
+export function measurementUnitControls(definition,{esc,field}){
+ const value=definition??blankUnitDefinition(),scalar=key=>{const q=value[key];return '<fieldset data-unit-scalar="'+key+'"><legend>'+esc(text('unit'+key[0].toUpperCase()+key.slice(1)))+'</legend><div class="material-fields">'+field(esc(text('spelling')),'<input data-unit-spelling maxlength="8192" spellcheck="false" value="'+esc(q.spelling)+'">')+field(esc(text('representation')),'<select data-unit-representation>'+NUMBER_REPRESENTATIONS.map(r=>'<option value="'+r+'"'+(r===q.representation?' selected':'')+'>'+esc(text(r==='radix'?'radixLabel':r))+'</option>').join('')+'</select>')+'<div data-unit-base'+(numeralUsesRadix(q.representation)?'':' hidden')+'>'+field(esc(text('radix')),'<input data-unit-radix type="number" min="2" max="36" value="'+esc(q.radix)+'">')+'</div></div></fieldset>';};
+ return '<div data-measurement-unit><label><input data-unit-enabled type="checkbox"'+(definition?' checked':'')+'> '+esc(text('unitDeclare'))+'</label><fieldset data-unit-values'+(definition?'':' hidden disabled')+'>'+field(esc(text('unitKind')),'<select data-unit-kind>'+UNIT_KINDS.map(kind=>'<option value="'+kind+'"'+(kind===value.kind?' selected':'')+'>'+esc(text('unit-'+kind))+'</option>').join('')+'</select>')+'<p>'+esc(text('unitHelp'))+'</p><div data-unit-dimensions>'+value.dimensions.map(d=>dimensionRow(d,{esc,field})).join('')+'</div><button type="button" class="button" data-unit-add'+(value.dimensions.length>=16?' disabled':'')+'>'+esc(text('addDimension'))+'</button>'+'<small>'+esc(text('unitLimits'))+'</small>'+scalar('scale')+scalar('offset')+'<p>'+esc(text('unitFormula'))+'</p></fieldset></div>';
+}
+export function readMeasurementUnit(root,{validate=false}={}){
+ const node=root.querySelector('[data-measurement-unit]');if(!node||!get(node,'enabled').checked)return undefined;
+ const dimensions=[...node.querySelectorAll('[data-unit-dimension]')].map(row=>({axis:get(row,'axis').value,exponent:get(row,'exponent').value===''?'':Number(get(row,'exponent').value)})).sort((a,b)=>a.axis<b.axis?-1:a.axis>b.axis?1:0);
+ const scalars=Object.fromEntries(['scale','offset'].map(key=>{const q=node.querySelector('[data-unit-scalar="'+key+'"]'),representation=get(q,'representation').value;return [key,{spelling:get(q,'spelling').value,representation,radix:numeralUsesRadix(representation)?Number(get(q,'radix').value):10}];}));
+ const value={version:1,kind:get(node,'kind').value,dimensions,...scalars};if(validate&&!validUnitDefinition(value))throw RangeError(text('unitInvalid'));return value;
+}
+export function wireMeasurementUnits(root,{esc,field}){
+ const controller=new AbortController(),refresh=node=>{const enabled=get(node,'enabled').checked,values=get(node,'values');values.hidden=!enabled;values.disabled=!enabled;get(node,'add').disabled=node.querySelectorAll('[data-unit-dimension]').length>=16;for(const q of node.querySelectorAll('[data-unit-scalar]'))get(q,'base').hidden=!numeralUsesRadix(get(q,'representation').value);};
+ root.addEventListener('change',event=>{const node=event.target.closest('[data-measurement-unit]');if(node)refresh(node);},{signal:controller.signal});
+ root.addEventListener('click',event=>{const add=event.target.closest('[data-unit-add]'),remove=event.target.closest('[data-unit-remove]');if(!add&&!remove)return;const node=event.target.closest('[data-measurement-unit]');if(add&&node.querySelectorAll('[data-unit-dimension]').length<16)get(node,'dimensions').insertAdjacentHTML('beforeend',dimensionRow({axis:'',exponent:1},{esc,field}));if(remove)remove.closest('[data-unit-dimension]').remove();refresh(node);get(node,'enabled').dispatchEvent(new Event('input',{bubbles:true}));},{signal:controller.signal});
+ for(const node of root.querySelectorAll('[data-measurement-unit]'))refresh(node);return ()=>controller.abort();
+}
+export function measurementUnitDescription(definition,{esc}){
+ if(!validUnitDefinition(definition))return '';
+ const scalar=key=>{const q=definition[key];return esc(q.spelling)+' ('+esc(text(q.representation==='radix'?'radixLabel':q.representation))+(numeralUsesRadix(q.representation)?', '+esc(text('radix'))+' '+q.radix:'')+')';};
+ return '<div data-retained-unit><strong>'+esc(text('unitDeclared'))+'</strong><dl><dt>'+esc(text('unitKind'))+'</dt><dd>'+esc(text('unit-'+definition.kind))+'</dd><dt>'+esc(text('dimensions'))+'</dt><dd>'+esc(definition.dimensions.map(d=>d.axis+'^'+d.exponent).join(' * ')||text('dimensionless'))+'</dd><dt>'+esc(text('unitScale'))+'</dt><dd>'+scalar('scale')+'</dd><dt>'+esc(text('unitOffset'))+'</dt><dd>'+scalar('offset')+'</dd></dl></div>';
+}

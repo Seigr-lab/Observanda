@@ -1,3 +1,4 @@
+import measurementTransform from '../locales/en/measurementTransform.json' with {type:'json'};
 import pdfEditor from '../locales/en/pdfEditor.json' with {type:'json'};
 import configurationEditor from '../locales/en/configurationEditor.json' with {type:'json'};
 import bomStock from '../locales/en/bomStock.json' with {type:'json'};
@@ -152,6 +153,7 @@ english.operationProgress=operationProgress;
 english.recordSaveProgress=recordSaveProgress;
 english.recordSections=recordSections;
 english.measurementOutput=measurementOutput;
+english.measurementTransform=measurementTransform;
 english.customFields=customFields;
 english.recordHistory=recordHistory;
 english.websiteFeeds=websiteFeeds;

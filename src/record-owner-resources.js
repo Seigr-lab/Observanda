@@ -295,7 +295,7 @@ export async function recordOwnerMetadataDependencies(store,relative,text){
  }else if(relative.startsWith('.observanda/materials/tables/')&&Array.isArray(value)){
   for(const row of value)if(row.cellIndex?.root)await object('.observanda/materials/sequences/nodes/'+row.cellIndex.root.hash+'.json');
  }else if(relative.startsWith('.observanda/materials/objects/')&&value.content?.datasetFormat===3){
-  for(const slot of ['schemaIndex','pageIndex','schemaInputsIndex','inputsIndex','outputsIndex','aggregationMembersIndex'])if(value.content[slot]?.root)await object('.observanda/materials/sequences/nodes/'+value.content[slot].root.hash+'.json');
+  for(const slot of ['schemaIndex','pageIndex','schemaInputsIndex','inputsIndex','outputsIndex','aggregationMembersIndex','plotPointsIndex','plotMembersIndex'])if(value.content[slot]?.root)await object('.observanda/materials/sequences/nodes/'+value.content[slot].root.hash+'.json');
  }else if(relative.startsWith('.observanda/media-assets/')){
   const base='.observanda/media/'+value.id+'/';file(base+(value.kind==='file'?(value.storageId?value.storageId+'.original':'original'):(value.storageId?value.storageId+'.':'')+'public.'+value.extension),value.bytes,value.sha256);
   file(base+(value.storageId?value.storageId+'.original':'original'),value.originalBytes,value.originalSha256);if(value.storageId)await object('.observanda/media-imports/'+value.id+'.json');
