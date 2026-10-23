@@ -27,7 +27,7 @@ export function sharedReviewFigure(review,data,{signal,download,exporting=false}
   let reader;
   if(data.version==='current'){
    const {reader:opened,source}=await validateRetainedFigureSource(new ResearchMaterials(review.workspace),figure,{signal});
-   const member=await store.member(await store.snapshot(),source.recordId),owner=member?await store.record(source.recordId,member.revision):null;
+   const member=source?await store.member(await store.snapshot(),source.recordId):null,owner=source?(member?await store.record(source.recordId,member.revision):null):record;
    const books=[...selection.metadata.notebooks,...(selection.kind==='offer'?(await packageSelection(base)).metadata.notebooks:[])];
    valid(owner&&books.some(book=>book.id===owner.notebookId));reader=opened;
   }else{

@@ -15,14 +15,14 @@ const countKeys=Object.freeze(['panels','series','points','annotations','ticks']
 export const RETAINED_FIGURE_COLLECTIONS=Object.freeze([...countKeys,'categories']);
 export const isRetainedFigure=value=>value?.kind==='retained';
 export const validRetainedFigureTextValue=value=>typeof value==='string'?text(value):exact(value,['format','version','preview','characters'])&&value.format==='figure-text'&&value.version===1&&text(value.preview)&&value.preview.length<=512&&Number.isSafeInteger(value.characters)&&value.characters>1024;
-export function validRetainedFigureCounts(value){
- return exact(value,countKeys)&&countKeys.every(key=>natural(value[key]))&&value.panels>0&&value.series>0;
+export function validRetainedFigureCounts(value,{draft=false}={}){
+ return exact(value,countKeys)&&countKeys.every(key=>natural(value[key]))&&(draft||value.panels>0&&value.series>0);
 }
-export function validRetainedFigureDocument(value){
- return exact(value,['format','version','data','presentation','counts'])&&value.format==='figure-document'&&value.version===1&&root(value.data)&&root(value.presentation)&&validRetainedFigureCounts(value.counts);
+export function validRetainedFigureDocument(value,{draft=false}={}){
+ return exact(value,['format','version','data','presentation','counts'])&&(value.format==='figure-document'||draft&&value.format==='figure-authoring')&&value.version===1&&root(value.data)&&root(value.presentation)&&validRetainedFigureCounts(value.counts,{draft:draft&&value.format==='figure-authoring'});
 }
 export function validRetainedFigure(value,{draft=false}={}){
- return exact(value,['id','title','kind','version','document',...(Object.hasOwn(value??{},'source')?['source']:[])])&&researchId(value.id)&&validRetainedFigureTextValue(value.title)&&(draft||typeof value.title!=='string'||!!value.title.trim())&&value.kind==='retained'&&value.version===1&&validRetainedFigureDocument(value.document)&&(!Object.hasOwn(value,'source')||validFigureSource(value.source));
+ return exact(value,['id','title','kind','version','document',...(Object.hasOwn(value??{},'source')?['source']:[])])&&researchId(value.id)&&validRetainedFigureTextValue(value.title)&&(draft||typeof value.title!=='string'||!!value.title.trim())&&value.kind==='retained'&&value.version===1&&validRetainedFigureDocument(value.document,{draft})&&(!Object.hasOwn(value,'source')||validFigureSource(value.source));
 }
 export function validRetainedFigureWindow(value){
  if(!object(value)||Object.keys(value).some(key=>!['collection','plotId','seriesId','offset','limit'].includes(key))||!RETAINED_FIGURE_COLLECTIONS.includes(value.collection))return false;

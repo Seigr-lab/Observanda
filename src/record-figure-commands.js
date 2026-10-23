@@ -4,6 +4,9 @@ import {researchId} from './web/research-reference.js';
 import {revisionId,revisionText} from './web/revision-model.js';
 import {placedFigures} from './web/book-selectors.js';
 import {cloneFigure} from './web/figure-composition.js';
+import {hasRetainedFigure} from './record-retained-figures.js';
+import {RetainedFigureAuthoring} from './retained-figure-authoring.js';
+import {withScratch} from './scratch-work.js';
 import {allFigurePlots} from './web/figure-provenance.js';
 import {copyFigureDocumentResults} from './record-figure-copy-values.js';
 import {resolveFigureSources} from './figure-provenance.js';
@@ -49,7 +52,7 @@ export class RecordFigureCommands{
     const selected=await selectedRecordValue(original,'figure:'+command.figureId,{position:index});if(selected.revision!==command.expectedRevision)throw new AppError('RECORD_CHANGED');
     let document,figureId=command.figureId,position=index;
     if(command.action==='remove'){
-     if(selected.definition.linkedFigureIds.length)throw new AppError('FIGURE_RESULTS');
+     if(selected.definition.hasLinkedResults||selected.definition.linkedFigureIds.length)throw new AppError('FIGURE_RESULTS');
      const inUse=body=>placedFigures({body}).has(command.figureId);
      if(inUse((await original.field(['body'])).value))throw new AppError('FIGURE_IN_USE');
      for await(const item of original.items(['sections']))if(inUse((await original.tree.selected(item.value,['body'])).value))throw new AppError('FIGURE_IN_USE');
@@ -58,9 +61,16 @@ export class RecordFigureCommands{
      if(await members.position(row,'figures',command.id)>=0)throw new AppError('RECORD_CHANGED');
      const source=structuredClone(selected.value.value),byId=new Map(prepared.map(item=>[item.figureId,item.ref]));
      for(const plot of allFigurePlots([source]))if(byId.has(plot.id))plot.source=byId.get(plot.id);
-     let first=true;const copy=cloneFigure(source,()=>{if(first){first=false;return command.id;}return randomUUID();});
-     position=memberCollectionCount(row,'figures');figureId=copy.id;document=await original.splice(['figures'],position,0,[copy]);
-     document=await copyFigureDocumentResults(original,document,[[source,copy]]);
+     position=memberCollectionCount(row,'figures');figureId=command.id;
+     if(hasRetainedFigure(source))document=await withScratch(async mapping=>{
+      const authoring=new RetainedFigureAuthoring(this.workspace),retained=source.kind==='retained'?source:await authoring.finish(await authoring.start(source));
+      const copy=await authoring.duplicate(retained,{id:command.id,onMapped:async({sourceId,targetId})=>{if(!await mapping.add(sourceId,targetId))throw new AppError('MATERIAL_INVALID');}});
+      const changed=await original.splice(['figures'],position,0,[copy]);return copyFigureDocumentResults(original,changed,[],{mapTarget:id=>mapping.get(id)});
+     });
+     else{
+      let first=true;const copy=cloneFigure(source,()=>{if(first){first=false;return command.id;}return randomUUID();});
+      document=await original.splice(['figures'],position,0,[copy]);document=await copyFigureDocumentResults(original,document,[[source,copy]]);
+     }
     }
     const member=await members.changed(row,'figures',document),saved=await commitRecordDocument(store,{etag,snapshot,row,document,member}),result={etag:saved.etag,saved:true,figureId,position};
     await this.workspace.writeMetadata(file,serialize({version:1,request,result}));return result;

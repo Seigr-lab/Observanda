@@ -1,3 +1,4 @@
+import {hasRetainedFigure} from './record-retained-figures.js';
 import {retainedTableView} from './web/retained-table-model.js';
 import {downloadPath,validDownloadInfo} from './web/website-file.js';
 import {actionClasses,actionArrow,actionFonts,actionStyleRules,sectionActionRules} from './web/website-action-style.js';
@@ -258,7 +259,7 @@ export function renderPublication(context, { blockedValues = [], mediaFiles = ne
     const n = context.notebooks.find(n => n.id === e.notebookId), p = context.projects.find(p => p.id === n.projectId);
     let figure = '';const inline=placedFigures(e),renderedFigures=new Map();
     for(const plot of e.figures){
-      if(plot.kind==='retained'){
+      if(hasRetainedFigure(plot)){
         if(!editionParts?.retainedFigure)throw new AppError('INVALID');
         const markup='<figure id="record-figure-'+plot.id+'" tabindex="-1">'+editionParts.retainedFigure(e.id,plot.id,{data:e.figureDownloads?.includes(plot.id)??false,results:e.results})+'</figure>';
         renderedFigures.set(plot.id,markup);if(!inline.has(plot.id))figure+=markup;continue;

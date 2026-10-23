@@ -1,3 +1,5 @@
+import {authoredFigureDocument,hasAuthoredFigure} from './figure-authoring-format.js';
+import {requireFigureAuthoring,catalogueRequiresFigureAuthoring} from './catalogue-format.js';
 import {hasRetainedFigure,retainedFigureDocument} from './record-retained-figures.js';
 import {requireRetainedFigures,catalogueRequiresRetainedFigures} from './catalogue-format.js';
 import {hasFigureProjection,projectedFigureDocument} from './record-numerical-models.js';
@@ -26,8 +28,9 @@ export async function retainDraftDocument(workspace,id,content,expected,{signal}
    const blocks=new RecordBlockStore(store,expected.notebookId,generation,key),tree=blocks.tree(),record=new RecordContainerBuilder(blocks,'object');let collection=null,template=null;
    const close=async()=>{if(collection){await record.add({name:collection.name,value:await collection.builder.finish()});collection=null;}};
    const inspected=await inspectTransferredDraft(workspace,id,content,{signal,ownership:true,part:async part=>{
+    if(part.name==='figures'&&(part.kind==='item'&&hasAuthoredFigure(part.value)||part.kind==='field'&&part.value?.some(hasAuthoredFigure)))await requireFigureAuthoring(store.db);
     if(part.name==='figures'&&(part.kind==='item'&&hasFigureProjection(part.value)||part.kind==='field'&&part.value?.some(hasFigureProjection)))await requireNativeNumericalModels(store.db);
- if(part.name==='figures'&&(part.kind==='item'&&hasRetainedFigure(part.value)||part.kind==='field'&&part.value?.some(hasRetainedFigure)))await requireRetainedFigures(store.db);
+    if(part.name==='figures'&&(part.kind==='item'&&hasRetainedFigure(part.value)||part.kind==='field'&&part.value?.some(hasRetainedFigure)))await requireRetainedFigures(store.db);
     if(part.kind==='field'&&part.name==='results'&&hasPagedResultTables(part.value))await requirePagedResearchTables(store.db);
     if(part.kind==='field'&&part.name==='attempt'&&hasNestedAttemptContinuations(part.value))await requireNestedAttemptCollections(store.db);
     if(part.kind!=='item')await close();
@@ -56,6 +59,7 @@ export async function withDraftDocument(store,draft,consume){
   if(!catalogueRequiresPagedResearchTables(await catalogueFormat(store.db))&&await pagedTableDocument(document))throw new AppError('CATALOGUE_DAMAGED');
   if(!catalogueRequiresNativeNumericalModels(await catalogueFormat(store.db))&&await projectedFigureDocument(document))throw new AppError('CATALOGUE_DAMAGED');
  if(!catalogueRequiresRetainedFigures(await catalogueFormat(store.db))&&await retainedFigureDocument(document))throw new AppError('CATALOGUE_DAMAGED');
+  if(!catalogueRequiresFigureAuthoring(await catalogueFormat(store.db))&&await authoredFigureDocument(document))throw new AppError('CATALOGUE_DAMAGED');
   return await consume(document);
  });
 }

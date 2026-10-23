@@ -140,8 +140,8 @@ test('configuration documents preserve all 96 capability combinations in either 
   await formats.requireConfigurationDocuments(db);assert.deepEqual(requirements(db.version),before);assert.equal(formats.catalogueRequiresPublicationDocuments(db.version),publication);assert.equal(formats.catalogueRequiresRecordOwnerTransfers(db.version),transfers);
  }
  const oldProject=database(23,{optionalDomains:true});await formats.requireConfigurationDocuments(oldProject);assert.equal(formats.catalogueRequiresDomains(oldProject.version),true);
- for(const invalid of [121,3145850,122.5,null]){assert.equal(formats.catalogueRequiresConfigurationDocuments(invalid),false);await assert.rejects(formats.restoreConfigurationCatalogueFormat(database(3),invalid),{code:'CATALOGUE_DAMAGED'});}
- await assert.rejects(formats.catalogueFormat(database(3145850)),{code:'CATALOGUE_DAMAGED'});
+ for(const invalid of [121,6291578,122.5,null]){assert.equal(formats.catalogueRequiresConfigurationDocuments(invalid),false);await assert.rejects(formats.restoreConfigurationCatalogueFormat(database(3),invalid),{code:'CATALOGUE_DAMAGED'});}
+ await assert.rejects(formats.catalogueFormat(database(6291578)),{code:'CATALOGUE_DAMAGED'});
 });
 
 test('archive 15 restores every configuration capability combination and rejects header downgrades',async()=>{
@@ -151,7 +151,7 @@ test('archive 15 restores every configuration capability combination and rejects
   await writeCatalogueArchive(database(version,{payload,domains}),{writeFile:async text=>parts.push(text)},tables,{observe:false});
   const raw=parts.join(''),lines=raw.trimEnd().split('\n'),header=JSON.parse(lines[0]);assert.equal(header.version,15);assert.equal(header.catalogueVersion,version);assert.deepEqual(header.domains,domains);
   const restored=database(3);await readCatalogueStream(Readable.from([Buffer.from(raw)]),restored,tables);assert.equal(restored.version,version);assert.deepEqual(restored.inserted,[['head',payload]]);
-  for(const change of [{version:14},{version:13},{catalogueVersion:121},{catalogueVersion:3145850},{domains:ordinary.owners?[]:['tasks']}]){
+  for(const change of [{version:14},{version:13},{catalogueVersion:121},{catalogueVersion:6291578},{domains:ordinary.owners?[]:['tasks']}]){
    const damaged=JSON.stringify({...header,...change})+'\n'+lines.slice(1).join('\n')+'\n';await assert.rejects(readCatalogueStream(Readable.from([Buffer.from(damaged)]),database(3),tables),{code:'CATALOGUE_DAMAGED'});
   }
  }
@@ -184,7 +184,7 @@ test('paged website choices preserve all 192 prior capability combinations throu
   }
  }
  assert.deepEqual([...seen],Array.from({length:192},(_,i)=>314+i));
- const invalid=database(3145850);await assert.rejects(formats.catalogueFormat(invalid),{code:'CATALOGUE_DAMAGED'});
+ const invalid=database(6291578);await assert.rejects(formats.catalogueFormat(invalid),{code:'CATALOGUE_DAMAGED'});
 });
 
 
@@ -217,7 +217,7 @@ test('nested preparation admission preserves all 384 prior combinations through 
  }
  assert.deepEqual([...seen],Array.from({length:384},(_,i)=>506+i));
  for(const nestedAttempts of [null,1,'true',{}])assert.throws(()=>formats.configurationCatalogueGeneration({...formats.configurationCatalogueFeatures(122),nestedAttempts}),{code:'INVALID'});
- for(const invalid of [3145850,506.5,null])await assert.rejects(formats.catalogueFormat(database(invalid)),{code:'CATALOGUE_DAMAGED'});
+ for(const invalid of [6291578,506.5,null])await assert.rejects(formats.catalogueFormat(database(invalid)),{code:'CATALOGUE_DAMAGED'});
 });
 
 test('native directory admission preserves all 768 prior combinations through owner upgrades and archive restoration',async()=>{
@@ -250,7 +250,7 @@ test('native directory admission preserves all 768 prior combinations through ow
  }
  assert.deepEqual([...seen],Array.from({length:768},(_,i)=>890+i));
  for(const ownerDirectories of [null,1,'true',{}])assert.throws(()=>formats.configurationCatalogueGeneration({...formats.configurationCatalogueFeatures(122),ownerDirectories}),{code:'INVALID'});
- for(const invalid of [3145850,506.5,null])await assert.rejects(formats.catalogueFormat(database(invalid)),{code:'CATALOGUE_DAMAGED'});
+ for(const invalid of [6291578,506.5,null])await assert.rejects(formats.catalogueFormat(database(invalid)),{code:'CATALOGUE_DAMAGED'});
 });
 
 test('native portability generations preserve all prior feature and restore combinations',async()=>{
@@ -271,7 +271,7 @@ test('paged research admission restores every existing feature without manufactu
   await formats.requirePagedResearchTables(db);assert.equal(db.version,restored.version);
  }
  for(const value of [null,1,'true',{}])assert.throws(()=>formats.configurationCatalogueGeneration({...formats.configurationCatalogueFeatures(122),pagedResearchTables:value}),{code:'INVALID'});
- await assert.rejects(formats.catalogueFormat(database(3145850)),{code:'CATALOGUE_DAMAGED'});
+ await assert.rejects(formats.catalogueFormat(database(6291578)),{code:'CATALOGUE_DAMAGED'});
 });
 
 
@@ -285,7 +285,7 @@ test('native numerical models preserve all prior owner and storage requirements 
   await formats.requireNativeNumericalModels(db);assert.equal(db.version,restored.version);
  }
  for(const nativeNumericalModels of [null,1,'true',{}])assert.throws(()=>formats.configurationCatalogueGeneration({...formats.configurationCatalogueFeatures(122),nativeNumericalModels}),{code:'INVALID'});
- await assert.rejects(formats.catalogueFormat(database(3145850)),{code:'CATALOGUE_DAMAGED'});
+ await assert.rejects(formats.catalogueFormat(database(6291578)),{code:'CATALOGUE_DAMAGED'});
 });
 
 test('declared clock models restore independently of every prior numerical and owner feature',async()=>{
@@ -298,7 +298,7 @@ test('declared clock models restore independently of every prior numerical and o
   await formats.requireNativeClockModels(db);assert.equal(db.version,restored.version);
  }
  for(const nativeClockModels of [null,1,'true',{}])assert.throws(()=>formats.configurationCatalogueGeneration({...formats.configurationCatalogueFeatures(122),nativeClockModels}),{code:'INVALID'});
- await assert.rejects(formats.catalogueFormat(database(3145850)),{code:'CATALOGUE_DAMAGED'});
+ await assert.rejects(formats.catalogueFormat(database(6291578)),{code:'CATALOGUE_DAMAGED'});
 });
 
 for(const [feature,suffix,bit] of [['retainedFigures','RetainedFigures',49152],['referencedCalculations','ReferencedCalculations',98304]])test(feature+' restores every prior storage feature independently',async()=>{
@@ -334,7 +334,7 @@ test('figure review packets preserve independent requirements through admission 
  await writeCatalogueArchive(source,{writeFile:async text=>chunks.push(text)},{state:['slot','payload']},{observe:false});
  const restored=database(3);await readCatalogueStream(Readable.from([Buffer.from(chunks.join(''))]),restored,{state:['slot','payload']});
  assert.equal(restored.version,196730);assert.equal(formats.catalogueRequiresReferencedCalculations(restored.version),false);assert.equal(formats.catalogueRequiresRetainedFigures(restored.version),false);
- await assert.rejects(formats.catalogueFormat(database(3145850)),{code:'CATALOGUE_DAMAGED'});
+ await assert.rejects(formats.catalogueFormat(database(6291578)),{code:'CATALOGUE_DAMAGED'});
 });
 
 
@@ -357,7 +357,7 @@ test('native domain values preserve every prior requirement without implying rev
  await writeCatalogueArchive(source,{writeFile:async text=>chunks.push(text)},{state:['slot','payload']},{observe:false});
  const restored=database(3);await readCatalogueStream(Readable.from([Buffer.from(chunks.join(''))]),restored,{state:['slot','payload']});
  assert.equal(restored.version,393338);assert.equal(formats.catalogueRequiresReviewFigurePackages(restored.version),false);assert.equal(formats.catalogueRequiresReferencedCalculations(restored.version),false);
- await assert.rejects(formats.catalogueFormat(database(3145850)),{code:'CATALOGUE_DAMAGED'});
+ await assert.rejects(formats.catalogueFormat(database(6291578)),{code:'CATALOGUE_DAMAGED'});
 });
 
 
@@ -380,7 +380,7 @@ test('calculation policies preserve every prior flag and exact archive restorati
  await writeCatalogueArchive(source,{writeFile:async text=>chunks.push(text)},{state:['slot','payload']},{observe:false});
  const restored=database(3);await readCatalogueStream(Readable.from([Buffer.from(chunks.join(''))]),restored,{state:['slot','payload']});
  assert.equal(restored.version,786554);assert.equal(formats.catalogueRequiresNativeDomainValues(restored.version),false);assert.equal(formats.catalogueRequiresReviewFigurePackages(restored.version),false);
- await assert.rejects(formats.catalogueFormat(database(3145850)),{code:'CATALOGUE_DAMAGED'});
+ await assert.rejects(formats.catalogueFormat(database(6291578)),{code:'CATALOGUE_DAMAGED'});
 });
 
 
@@ -411,5 +411,21 @@ test('clock derivations preserve every prior flag and exact archive restoration'
  await writeCatalogueArchive(source,{writeFile:async text=>chunks.push(text)},{state:['slot','payload']},{observe:false});
  const restored=database(3);await readCatalogueStream(Readable.from([Buffer.from(chunks.join(''))]),restored,{state:['slot','payload']});
  assert.equal(restored.version,1572986);assert.equal(formats.catalogueRequiresCalculationPolicies(restored.version),false);assert.equal(formats.catalogueRequiresNativeDomainValues(restored.version),false);
- await assert.rejects(formats.catalogueFormat(database(3145850)),{code:'CATALOGUE_DAMAGED'});
+ await assert.rejects(formats.catalogueFormat(database(6291578)),{code:'CATALOGUE_DAMAGED'});
+});
+
+
+test('manual figure draft admission preserves prior features and archives independently',async()=>{
+ const bit=3145728,flags=['publication','transfers','permissions','sourceSelections','nestedAttempts','ownerDirectories','portability','templateInheritance','pagedResearchTables','nativeNumericalModels','nativeClockModels','retainedFigures','referencedCalculations','reviewFigurePackages','nativeDomainValues','calculationPolicies','clockDerivations'];
+ for(const owner of combinations)for(const flag of [null,...flags,'all']){
+  const features={...owner,publication:false,transfers:false};for(const name of flags)features[name]=flag==='all'||name===flag;
+  const prior=formats.configurationCatalogueGeneration(features),db=database(prior),before=formats.configurationCatalogueFeatures(prior);
+  await formats.requireFigureAuthoring(db);assert.equal(db.version,prior+bit);assert.deepEqual(formats.configurationCatalogueFeatures(db.version),{...before,figureAuthoring:true});
+  await formats.requireFigureAuthoring(db);assert.equal(db.version,prior+bit);const restored=database(3);await formats.restoreConfigurationCatalogueFormat(restored,db.version);assert.equal(restored.version,db.version);
+ }
+ for(const figureAuthoring of [null,1,'true',{}])assert.throws(()=>formats.configurationCatalogueGeneration({...formats.configurationCatalogueFeatures(122),figureAuthoring}),{code:'INVALID'});
+ const payload=seal(Buffer.from('Incomplete retained figure checkpoint'),randomBytes(32),'test'),source=database(bit+122,{payload}),chunks=[];
+ await writeCatalogueArchive(source,{writeFile:async text=>chunks.push(text)},{state:['slot','payload']},{observe:false});
+ const restored=database(3);await readCatalogueStream(Readable.from([Buffer.from(chunks.join(''))]),restored,{state:['slot','payload']});assert.equal(restored.version,source.version);assert.equal(formats.catalogueRequiresClockDerivations(restored.version),false);
+ await assert.rejects(formats.catalogueFormat(database(6291578)),{code:'CATALOGUE_DAMAGED'});
 });

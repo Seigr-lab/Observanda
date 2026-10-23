@@ -9,6 +9,7 @@ import {recordRevision,historicalBook} from '../research.js';
 import {attemptReferences} from '../web/attempt-model.js';
 import {resultReferences} from '../web/result-statements.js';
 import {figureReferences,allFigurePlots} from '../web/figure-provenance.js';
+import {validAuthoredPointOrigin} from '../web/retained-figure-authoring-model.js';
 import {schemaReferences,measurementReferences} from '../web/measurement-model.js';
 import {analysisMethodReferences} from '../web/analysis-model.js';
 import {MediaStore} from '../media.js';
@@ -31,7 +32,7 @@ export class ResearchTransfer{
   if(!this.recordIds.has(record.id)||!this.notebookIds.has(record.notebookId))dependency();
   const workspaceId=await this.workspace.catalogue(async store=>(await store.snapshot()).metadata.id);
   await this.metadata('.observanda/materials/records/'+record.id+'/'+recordRevision(record)+'.json',record);
-  for(const figure of allFigurePlots(record.figures))if(figure.kind==='retained'){const {validateRetainedFigureSource}=await import('../retained-figures.js');const {reader}=await validateRetainedFigureSource(this.materials,figure);for await(const part of reader.blocks())await this.metadata(part.path,part.node);}
+  for(const figure of allFigurePlots(record.figures))if(figure.kind==='retained'){const {validateRetainedFigureSource}=await import('../retained-figures.js');const {reader}=await validateRetainedFigureSource(this.materials,figure);await this.figure(reader,enqueue,workspaceId);}
   for(const ref of [...attemptReferences(record.attempt),...resultReferences(record.results),...figureReferences(record.figures)]){
    if(ref.workspaceId&&workspaceId!==ref.workspaceId)dependency();await enqueue(ref);
   }
@@ -46,6 +47,16 @@ export class ResearchTransfer{
   for(const [id,font] of await new WorkspaceFonts(this.workspace).files(record)){
    if(font.restricted||!font.embed)throw new AppError('FONT_EMBED');
    if(!this.fonts.has(id)){const {bytes,...entry}=font;this.fonts.set(id,entry);await this.metadata('.observanda/fonts/'+id+'.json',{bytes:bytes.toString('base64')});}
+  }
+ }
+ async figure(reader,enqueue,workspaceId=null){
+  for await(const part of reader.blocks())await this.metadata(part.path,part.node);
+  for await(const point of reader.items({collection:'points'})){
+   const origin=point.value.source?.origin;if(!origin)continue;if(!validAuthoredPointOrigin(origin))dependency();
+   workspaceId??=await this.workspace.catalogue(async store=>(await store.snapshot()).metadata.id);
+   // Provenance never widens a packet's selected ownership or namespace. The
+   // existing traversal checks the referenced analysis's owning record too.
+   if(origin.ref.workspaceId&&origin.ref.workspaceId!==workspaceId)dependency();await enqueue(origin.ref);
   }
  }
  async asset(id){
@@ -121,7 +132,7 @@ export class ResearchTransfer{
     for await(const r of materials.references(doc.content,'outputs'))await enqueue(r);
     if(doc.content.acquisition)await enqueue(doc.content.acquisition);
     for(const slot of ['pageIndex','schemaIndex','inputsIndex','outputsIndex','aggregationMembersIndex','schemaInputsIndex','plotPointsIndex','plotMembersIndex','graphBindingsIndex','graphNodesIndex','graphOutputsIndex'])await owner.sequence(doc.content[slot]);
-    if(doc.content.figure?.kind==='retained'){const {RetainedFigureDocuments}=await import('../retained-figure-document.js');const figure=await new RetainedFigureDocuments(owner.workspace,{readOnly:true}).open(doc.content.figure);for await(const part of figure.blocks())await owner.metadata(part.path,part.node);}
+    if(doc.content.figure?.kind==='retained'){const {RetainedFigureDocuments}=await import('../retained-figure-document.js');const figure=await new RetainedFigureDocuments(owner.workspace,{readOnly:true}).open(doc.content.figure);await owner.figure(figure,enqueue);}
     if(doc.content.comparison&&doc.content.summary?.version===2)for await(const part of materials.comparisons.index(doc.content.summary).metadata())await owner.metadata(part.name,part.value);
     if(doc.kind==='dataset'){
      for await(const column of materials.iterateDatasetColumns(doc))for(const r of schemaReferences(column))await enqueue(r);

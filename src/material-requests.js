@@ -45,7 +45,7 @@ export async function executeMaterialRequest(storage,request,data,{signal,jobs,d
  case 'chunk':return materials.uploads.summary(await materials.appendImport(request.id,request.index,stream,{signal}));
  case 'download':{if(typeof download!=='function')throw new AppError('INVALID');return download(await materials.artifact(request.ref??data.ref));}
  case 'overview':{const result=await materials.overview(data.recordId,{cursor:data.cursor,importCursor:data.importCursor,limit:data.limit,signal,dependencyReview:sourceAccess?head=>comparisonDependencyReview(materials,head,{sourceAccess,signal}):undefined});if(result.imports.length){const {queue}=await jobService();for(const session of result.imports)session.job=jobSummary(await queue.read(session.id));}return result;}
- case 'list':{const page=await materials.list({...data,pending:false,signal});return {...page,items:page.items.map(({kind,id,revision,recordId,title,createdAt})=>({kind,id,revision,recordId,title,createdAt}))};}
+ case 'list':{const page=await materials.list({...data,pending:false,signal});return {...page,items:page.items.map(({kind,id,revision,recordId,title,createdAt,figureId})=>({kind,id,revision,recordId,title,createdAt,hasFigure:!!figureId}))};}
  case 'reference-addresses':return materials.referenceAddresses(data.ref,data.items);
  case 'references':return materials.referencePage(data.ref,data);
  case 'associate-original':return {ref:await associateOriginal(materials,data)};

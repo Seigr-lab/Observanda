@@ -1,3 +1,4 @@
+import {catalogueRequiresRetainedFigures,requireRetainedFigures,catalogueRequiresFigureAuthoring,requireFigureAuthoring} from './catalogue-format.js';
 import {catalogueFormat,catalogueRequiresNestedAttemptCollections,requireNestedAttemptCollections} from './catalogue-format.js';
 import {RetainedTableIndex} from './retained-table-index.js';
 // Selected checkpoint portability keeps original identities separate from the
@@ -168,6 +169,8 @@ export async function prepareRecordOwnerDrafts(source,target,receipt,{write,sign
  const manifestId='record-owner-drafts:'+receipt.id,retained=await target.catalogue(store=>store.object(manifestId));if(retained)return retained;
  await write(()=>targetDrafts.index.ensureLocked(receipt.command.targetWorkspaceId));let count=0;
  await source.catalogue(async from=>{
+  if(catalogueRequiresRetainedFigures(await catalogueFormat(from.db)))await write(store=>requireRetainedFigures(store.db));
+  if(catalogueRequiresFigureAuthoring(await catalogueFormat(from.db)))await write(store=>requireFigureAuthoring(store.db));
   if(catalogueRequiresNestedAttemptCollections(await catalogueFormat(from.db)))await write(store=>requireNestedAttemptCollections(store.db));
   await copyCorrections(from,target,receipt,options);
   for await(const name of source.metadataNames('.observanda/drafts',{signal})){

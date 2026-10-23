@@ -9,6 +9,7 @@ import {sameJSONData} from './web/json-data-equality.js';
 import {validRecordValueField,validRecordValue,recordValueCollection} from './web/record-value-model.js';
 import {relationValue,relationFromValue,canonicalRelationValue} from './web/record-relation-value.js';
 import {mediaDetails} from './web/record-media-value.js';
+import {retainedFigureTargets,hasRetainedFigureTarget} from './retained-figure-targets.js';
 import {figureTargets} from './web/figure-composition.js';
 import {validateFigureSources} from './figure-provenance.js';
 import {digest,serialize} from './storage-format.js';
@@ -21,7 +22,7 @@ import {attemptValueField} from './web/record-attempt-value.js';
 import {selectedAttemptValue,replaceAttemptValue,prepareAttemptValue} from './record-attempt-values.js';
 import {attemptValueContext,validAttemptContext} from './record-attempt-context.js';
 import {resultValueId} from './web/record-result-value.js';
-import {selectedResultValue,replaceResultValue,validateSelectedResult,resultFigureTargets} from './record-result-values.js';
+import {selectedResultValue,replaceResultValue,validateSelectedResult,resultFigureRootTarget,resultFigureTargetPage} from './record-result-values.js';
 import {applyFigureCopies} from './record-figure-copy-values.js';
 const exact=(v,keys)=>v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).sort().join()===keys.sort().join();
 const fields=['workspaceId','recordId','field'];
@@ -30,7 +31,7 @@ export async function recordTypeEditable(document,{signal}={}){
  const template=await document.reference(['template'],{signal}),node=template?await document.tree.node(template):null;
  return !node||node.type==='inline'&&node.value===null;
 }
-export async function selectedRecordValue(document,field,{position,signal}={}){
+export async function selectedRecordValue(document,field,{position,signal,inspectResults=true}={}){
  if(!validRecordValueField(field))throw new AppError('INVALID');
  if(field==='type'&&!await recordTypeEditable(document,{signal}))throw new AppError('INVALID',[{field:'The record type belongs to its saved template.'}]);
  if(attemptValueField(field))return selectedAttemptValue(document,field,{signal});
@@ -46,9 +47,13 @@ export async function selectedRecordValue(document,field,{position,signal}={}){
   if(path&&selected?.id!==collection.id)throw new AppError('CATALOGUE_DAMAGED');
   if(collection.kind==='media'&&!selected)throw new AppError('MISSING');
   if(collection.kind==='figure'){
-   const value={value:selected},ids=new Set(selected?figureTargets([selected]).map(f=>f.id):[]),linkedFigureIds=new Set();
-   for(const id of ids)if(await resultFigureCount(document,id,{signal}))linkedFigureIds.add(id);
-   return {path,position,collection,definition:{kind:'figure',existing:!!selected,linkedFigureIds:[...linkedFigureIds]},value,revision:digest(serialize(value))};
+   const value={value:selected},linkedFigureIds=new Set();let hasLinkedResults=false;
+   if(inspectResults&&selected?.kind==='retained'&&await document.reference(['results'],{signal})&&await document.tree.arrayLength(document.root,['results','statements'])){
+    // A retained composition can have arbitrarily many children. The selected
+    // response needs only presence; individual targets are inspected by page.
+    for await(const figure of retainedFigureTargets(document.blocks,selected,{signal,draft:true}))if(await resultFigureCount(document,figure.id,{signal})){hasLinkedResults=true;break;}
+   }else for(const figure of inspectResults&&selected?figureTargets([selected]):[])if(await resultFigureCount(document,figure.id,{signal})){linkedFigureIds.add(figure.id);hasLinkedResults=true;}
+   return {path,position,collection,definition:{kind:'figure',existing:!!selected,linkedFigureIds:[...linkedFigureIds],hasLinkedResults},value,revision:digest(serialize(value))};
   }
   const value={value:selected?(collection.kind==='media'?mediaDetails(selected):collection.kind==='relation'?relationValue(selected):{name:selected.name,role:selected.role}):null};
   return {path,position,collection,definition:{kind:collection.kind,original:value.value,...(collection.kind==='media'?{mediaKind:selected.kind}:{}),...(collection.kind==='relation'?{recordType:(await document.field(['type'])).value}:{})},value,revision:digest(serialize(value))};
@@ -59,7 +64,7 @@ export async function selectedRecordValue(document,field,{position,signal}={}){
  return {path,definition,value,revision:digest(serialize(value))};
 }
 export async function replaceRecordValue(document,field,value,selected=null){
- selected??=await selectedRecordValue(document,field);const path=selected.path;
+ selected??=await selectedRecordValue(document,field,{inspectResults:false});const path=selected.path;
  if(selected.fact)return replaceAttemptValue(document,value,selected);
  if(selected.resultId)return replaceResultValue(document,value,selected);
  if(selected.collection?.kind==='figure')return selected.position<0?document.splice(['figures'],await document.tree.arrayLength(document.root,['figures']),0,[value.value]):document.replace(path,value.value);
@@ -90,13 +95,19 @@ export class RecordValues{
   });
  }
  async figureChoices(command,{signal}={}){
-  if(!exact(command,['workspaceId','recordId','offset'])||!researchId(command.workspaceId)||!researchId(command.recordId)||!Number.isSafeInteger(command.offset)||command.offset<0)throw new AppError('INVALID');
+  const child=Object.hasOwn(command,'figureId');
+  if(!exact(command,['workspaceId','recordId','offset',...(child?['figureId']:[])])||!researchId(command.workspaceId)||!researchId(command.recordId)||!Number.isSafeInteger(command.offset)||command.offset<0||child&&!researchId(command.figureId))throw new AppError('INVALID');
   return this.workspace.catalogue(async store=>{
    const {row}=await this.select(store,command);
    return withRecordDocument(store,row.id,row.revision,async document=>{
+    if(child){
+     const position=await new RecordMemberCollections(store).position(row,'figures',command.figureId);if(position<0)throw new AppError('MISSING');
+     const page=await resultFigureTargetPage(document,position,{offset:command.offset,limit:4,signal});
+     return {workspaceId:command.workspaceId,recordId:row.id,storageRevision:row.revision,figureId:command.figureId,offset:page.offset,total:page.total,nextOffset:page.next,items:page.items};
+    }
     const total=await document.tree.arrayLength(document.root,['figures']),offset=Math.min(command.offset,Math.max(0,total-1)),items=[];
-    for(let i=offset;i<Math.min(offset+4,total);i++){signal?.throwIfAborted();items.push(...await resultFigureTargets(document,i,{signal}));}
-    return {workspaceId:command.workspaceId,recordId:row.id,storageRevision:row.revision,offset,total,nextOffset:offset+4<total?offset+4:null,items};
+    for(let i=offset;i<Math.min(offset+4,total);i++){signal?.throwIfAborted();const target=await resultFigureRootTarget(document,i,{signal});if(!target)throw new AppError('CATALOGUE_DAMAGED');items.push(target);}
+    return {workspaceId:command.workspaceId,recordId:row.id,storageRevision:row.revision,figureId:null,offset,total,nextOffset:offset+4<total?offset+4:null,items};
    });
   });
  }
@@ -135,8 +146,7 @@ export class RecordValues{
     }
     if(selected.resultId)await validateSelectedResult(this.workspace,original,command.value);
     if(selected.collection?.kind==='figure'){
-     const ids=new Set(figureTargets([command.value.value]).map(f=>f.id));
-     if(selected.definition.linkedFigureIds.some(id=>!ids.has(id)))throw new AppError('INVALID',[{field:'A figure with an attached result cannot be removed. Review its result first.',recordId:row.id}]);
+     if(selected.value.value)for await(const target of retainedFigureTargets(this.workspace,selected.value.value))if(await resultFigureCount(original,target.id)&&!await hasRetainedFigureTarget(this.workspace,command.value.value,target.id))throw new AppError('INVALID',[{field:'A figure with an attached result cannot be removed. Review its result first.',recordId:row.id}]);
      await validateFigureSources(this.workspace,{figures:[command.value.value]});
     }
     if(selected.collection?.kind==='relation'&&command.value.value!==null){

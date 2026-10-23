@@ -27,8 +27,8 @@ export function liveFigure(research,identity,scope,data,{signal,download,exporti
   valid(selected.revision===data.revision,'RECORD_CHANGED');
   const figure=selected.record?allFigurePlots(selected.record.figures).find(f=>f.id===data.figureId):selected.document?.content?.figure;
   valid(figure?.id===data.figureId&&validRetainedFigure(figure),'COLLABORATION_DENIED');
-  if(selected.record){
-   valid(figure.source,'COLLABORATION_DENIED');const original=await new LiveMaterialReading(research.workspace,readRecord).resolve(store,access,figure.source);
+  if(selected.record&&figure.source){
+   const original=await new LiveMaterialReading(research.workspace,readRecord).resolve(store,access,figure.source);
    valid(validRetainedFigure(original.content?.figure)&&revisionText(original.content.figure.document.data)===revisionText(figure.document.data),'COLLABORATION_DENIED');
   }
   const reader=await new RetainedFigureDocuments(research.workspace,{readOnly:true,signal}).open(figure);

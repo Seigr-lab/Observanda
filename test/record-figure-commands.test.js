@@ -5,6 +5,7 @@ import {randomUUID} from 'node:crypto';
 import path from 'node:path';
 import {figureValueFixture} from './record-figure-values-fixture.js';
 import {RecordFigureCommands} from '../src/record-figure-commands.js';
+import {RetainedFigureDocuments} from '../src/retained-figure-document.js';
 import {RecordValues} from '../src/record-values.js';
 import {RecordValueDrafts} from '../src/record-value-drafts.js';
 import {RecordWriting} from '../src/record-writing.js';
@@ -34,6 +35,15 @@ test('figure copies retain exact sources and results, keep separate identities, 
  const empty=await f.values.read(f.target(copy.figureId));await f.save(empty,changed);await commands.run(remove);assert.equal((await f.values.read(f.target(copy.figureId))).value.value.title,changed.title);
  const late=await new RecordContent(f.workspace).read({workspaceId:f.book.id,recordId:f.record.id,snapshotId:prior,pagedHeader:true,windows:{figures:9}});assert.equal(late.header.figures[0].title,changed.title);assert.deepEqual((await f.materials.read(f.analysis)).content.figure.series[0].points,base.value.value.series[0].points);
  await assert.rejects(commands.run({...copyCommand,action:'remove'}),{code:'RECORD_CHANGED'});await assert.rejects(commands.run({...copyCommand,id:randomUUID(),workspaceId:randomUUID()}),{code:'WORKSPACE_CHANGED'});await assert.rejects(commands.run({...copyCommand,action:'__proto__'}),{code:'INVALID'});
+ // Native retained compositions must remap every child target, not only the
+ // wrapper, while copying root/child result statements in their original order.
+ const retained=await f.workspace.withLock(()=>new RetainedFigureDocuments(f.workspace).retain(panelBase.value.value)),source=await f.workspace.withLock(()=>f.materials.commit({kind:'analysis',recordId:f.record.id,title:'Retained comparison',content:{inputs:[],outputs:[],tool:'Synthetic retained comparison',version:'1',parameters:'Exact retained observations',figure:retained}}));await f.save(panelBase,{...retained,source});
+ await assert.rejects(commands.run(command(f,await f.values.read(f.target(retained.id)),'remove')),{code:'FIGURE_RESULTS'});
+ const rootStatement={...f.record.results.statements[0],id:randomUUID(),figureId:retained.id,title:'Whole comparison'},resultTarget={workspaceId:f.book.id,recordId:f.record.id,field:'result:'+rootStatement.id},resultBase=await f.values.read(resultTarget);await f.values.save({...resultTarget,expectedRevision:resultBase.revision,value:{value:rootStatement}});
+ const retainedBase=await f.values.read(f.target(retained.id)),retainedCommand=command(f,retainedBase,'duplicate'),retainedResult=await commands.run(retainedCommand);assert.deepEqual(await commands.run(retainedCommand),retainedResult);const retainedCopy=(await f.values.read(f.target(retainedResult.figureId))).value.value,documents=new RetainedFigureDocuments(f.workspace,{readOnly:true}),reader=await documents.open(retainedCopy),priorReader=await documents.open(retainedBase.value.value);await reader.verify();
+ const sourcePanels=(await priorReader.window({collection:'panels',limit:128})).items,copyPanels=(await reader.window({collection:'panels',limit:128})).items;assert.equal(copyPanels.length,sourcePanels.length);
+ for(let i=0;i<sourcePanels.length;i++){assert.notEqual(copyPanels[i].id,sourcePanels[i].id);assert.notEqual(copyPanels[i].plotId,sourcePanels[i].plotId);assert.equal(copyPanels[i].value.label,sourcePanels[i].value.label);const a=(await priorReader.window({collection:'points',plotId:sourcePanels[i].plotId,limit:128})).items,b=(await reader.window({collection:'points',plotId:copyPanels[i].plotId,limit:128})).items;assert.equal(a.length,b.length);for(let at=0;at<a.length;at++){assert.deepEqual(b[at].value.source.origin,{ref:source,seriesId:a[at].seriesId,pointId:a[at].id});assert.deepEqual({...b[at].value,source:undefined},{...a[at].value,source:undefined});}}
+ const allResults=(await inspect(f,async doc=>(await doc.field(['results'])).value)).statements,tail=allResults.slice(-2);assert.deepEqual(tail.map(item=>item.figureId),[copyPanels[0].plotId,retainedCopy.id]);assert.deepEqual(tail.map(item=>item.title),[f.record.results.statements[0].title,rootStatement.title]);assert.deepEqual((await f.values.read(f.target(retained.id))).value.value,retainedBase.value.value);
  await f.workspace.catalogue(store=>store.verifySnapshot(undefined,f.book.id));
 });
 

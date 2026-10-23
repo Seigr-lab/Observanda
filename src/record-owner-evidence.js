@@ -13,6 +13,7 @@ import {FileContent} from './file-content.js';
 import {withMaterialTraversal} from './material-traversal.js';
 import {withScratch} from './scratch-work.js';
 import {withRecordDocument} from './record-document.js';
+import {withDraftDocument} from './record-draft-document.js';
 import {recordReferenceLocation} from './record-reference-location.js';
 import {RetainedRecordDocuments,retainedRecordPointer} from './retained-record-documents.js';
 import {retainRecordOrigin,recordOrigin,retainRecordOwnerExternalReference} from './record-owner-provenance.js';
@@ -130,7 +131,7 @@ export async function prepareRecordOwnerEvidence(source,target,receipt,{write,si
   };
   const inspect=async(value,enqueue)=>{
    await choice(value,enqueue);
-   if(value.kind==='retained'&&value.document?.format==='figure-document'&&await inspected.add('figure:'+digest(serialize(value.document)))){const {RetainedFigureDocuments}=await import('./retained-figure-document.js');const reader=await new RetainedFigureDocuments(source,{readOnly:true,signal}).open(value);for await(const part of reader.blocks())await emit({kind:'metadata',name:part.path,content:JSON.stringify(part.node,null,2)+'\n'});}
+   if(value.kind==='retained'&&['figure-document','figure-authoring'].includes(value.document?.format)&&await inspected.add('figure:'+digest(serialize(value.document)))){const {RetainedFigureDocuments}=await import('./retained-figure-document.js');const reader=await new RetainedFigureDocuments(source,{readOnly:true,signal}).open(value,{draft:value.document.format==='figure-authoring'});for await(const part of reader.blocks())await emit({kind:'metadata',name:part.path,content:JSON.stringify(part.node,null,2)+'\n'});for await(const point of reader.items({collection:'points'}))if(point.value.source?.origin)await enqueue(point.value.source.origin.ref);}
    if(validMaterialReference(value))await enqueue(materialReference(value));
    if(value.format===1&&['pages','columns','references','files','upload-chunks','aggregation-members','cells','cell-text','domain-components','calculation-bindings','calculation-nodes','calculation-outputs','calculation-edges','calculation-lineage','calculation-row-bindings','calculation-source-locators'].includes(value.kind)&&Object.hasOwn(value,'root')&&Object.hasOwn(value,'count'))await transfer.sequence(value);
    for(const key of ['font','headingFont'])if(customFontId(value[key])&&await inspected.add('font:'+value[key]))await font(value[key]);
@@ -164,6 +165,16 @@ export async function prepareRecordOwnerEvidence(source,target,receipt,{write,si
      await visitTree(document,document.root,value=>inspect(value,ref=>inspected.put('seed:'+JSON.stringify(ref),ref)),{signal});
      const attachments=await document.tree.select(document.root,['attachments']);if(attachments)for await(const item of document.items(['attachments'],{signal})){const id=(await document.tree.selected(item.value,['id'])).value;if(!researchId(id))damaged();await transfer.asset(id);}
     }));after=row.revision;}
+   }
+   // A checkpoint can introduce figure blocks and evidence references that do
+   // not occur in any saved revision. Retain that selected closure before the
+   // evidence manifest becomes ready, with the same cancellation dependencies.
+   const {ResearchDrafts}=await import('./research-drafts.js'),drafts=new ResearchDrafts(source);
+   for await(const name of source.metadataNames('.observanda/drafts',{signal})){
+    signal?.throwIfAborted();const id=name.slice(0,-5);if(!researchId(id)||name!==id+'.json')damaged();
+    const saved=await drafts.read(id,{header:true,expand:false,raw:true}),draft=saved?.draft;if(!draft)continue;
+    if(draft.document&&draft.base?.recordId===recordId)await source.catalogue(store=>withDraftDocument(store,draft,document=>visitTree(document,document.root,value=>inspect(value,ref=>inspected.put('seed:'+JSON.stringify(ref),ref)),{signal})));
+    else for(const change of draft.changes??[])if(change.record?.id===recordId)await visitValue(change.record,value=>inspect(value,ref=>inspected.put('seed:'+JSON.stringify(ref),ref)));
    }
    for await(const value of inspected.items())if(validMaterialReference(value))yield value;
    for await(const name of source.metadataNames('.observanda/materials/records/'+recordId,{signal}))if(/^[a-f0-9]{64}\.json$/.test(name))yield {kind:'record',id:recordId,revision:name.slice(0,-5)};

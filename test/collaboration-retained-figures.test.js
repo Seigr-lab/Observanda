@@ -17,6 +17,10 @@ import {Workspace} from '../src/storage.js';
 import {ExchangeParts} from '../src/collaboration/exchange-parts.js';
 import {contentBuffer} from '../src/file-content.js';
 import {digest} from '../src/storage-format.js';
+import {ResearchTransfer} from '../src/collaboration/research-transfer.js';
+import {RetainedFigureAuthoring} from '../src/retained-figure-authoring.js';
+import {RetainedFigureDocuments} from '../src/retained-figure-document.js';
+import {RecordValues} from '../src/record-values.js';
 const gate=()=>{let release;const promise=new Promise(resolve=>release=resolve);return {promise,release};};
 async function bounded(operation){let timer;try{return await Promise.race([operation,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('A stalled figure download blocked an authoring or access change')),8000);})]);}finally{clearTimeout(timer);}}
 const text=async chunks=>{let value='';for await(const chunk of chunks)value+=typeof chunk==='string'?chunk:chunk.toString('utf8');return value;};
@@ -98,4 +102,17 @@ test('shared change reviews read exact base incoming and current figure closures
  for(const selector of Object.values(selectors))await assert.rejects(sharedReviewFigure(reviewer,{...selector,operation:'header'}),{code:'COLLABORATION_DENIED'});
  const revoked=await fetch(url,{headers:http.headers});assert.notEqual(revoked.status,200);assert.equal((await revoked.json()).code,'COLLABORATION_DENIED');
  assert.equal((await f.author.workspace.read()).book.entries.find(row=>row.id===recordId).title,f.book.entries[0].title,'Reading a returned proposal does not apply it');
+});
+
+
+test('shared research closure follows authored point origins without widening selected ownership',{timeout:120000},async t=>{
+ const f=await collaborationFixture(t),workspace=f.author.workspace,recordId=f.book.entries[0].id,stored=await retainedCollaborationFigure(workspace,f.book.id,recordId,{points:2}),authoring=new RetainedFigureAuthoring(workspace,{write:operation=>workspace.withLock(operation)}),authored=await authoring.finish(await authoring.start(stored.retained)),values=new RecordValues(workspace),selection={workspaceId:f.book.id,recordId,field:'figure:'+authored.id},base=await values.read(selection);
+ await values.save({...selection,expectedRevision:base.revision,value:{value:authored}});assert.equal(authored.source,undefined);
+ const record=(await workspace.read()).book.entries.find(value=>value.id===recordId),collect=async(records,heads)=>{const parts=new Map(),transfer=new ResearchTransfer(workspace,new Set([recordId]),[record.notebookId],async part=>{assert.equal(part.kind,'metadata');const previous=parts.get(part.name);if(previous!==undefined)assert.equal(previous,part.content);parts.set(part.name,part.content);});await transfer.copy(records,heads);return parts;},sourcePath='.observanda/materials/objects/'+stored.source.id+'/'+stored.source.revision+'.json';
+ const recordParts=await collect([record],[]);assert.deepEqual(JSON.parse(recordParts.get(sourcePath)),await stored.materials.read(stored.source));const reopened=await new RetainedFigureDocuments({readMetadata:async name=>recordParts.get(name)??null},{readOnly:true}).open(authored);await reopened.verify();const first=(await reopened.window({collection:'points',limit:1})).items[0];assert.deepEqual(first.value.source.origin.ref,stored.source);
+ // A material can carry the same immutable authored figure without an inputs
+ // array mentioning its original point evidence. That branch needs closure too.
+ const derived=await workspace.withLock(()=>stored.materials.commit({kind:'analysis',recordId,title:'Authored material',content:{inputs:[],outputs:[],tool:'Synthetic authored observations',version:'1',parameters:'Retained exact points',figure:authored}}));let head;for await(const value of stored.materials.headEntries())if(value.id===derived.id)head=value;assert.ok(head);const materialParts=await collect([],[head]);assert.deepEqual(JSON.parse(materialParts.get(sourcePath)),await stored.materials.read(stored.source));
+ const hidden=await retainedCollaborationFigure(workspace,f.book.id,f.book.entries[2].id,{points:1,title:'Unselected origin'}),imported=await authoring.finish(await authoring.start(hidden.retained,{id:authored.id})),current=await values.read(selection);await values.save({...selection,expectedRevision:current.revision,value:{value:imported}});const denied=(await workspace.read()).book.entries.find(value=>value.id===recordId);await assert.rejects(collect([denied],[]),{code:'COLLABORATION_DEPENDENCY'});
+ const forbidden={...first.value.source.origin,ref:{...stored.source,workspaceId:randomUUID()}},reader={async *blocks(){},async *items(){yield {value:{source:{origin:forbidden}}};}},transfer=new ResearchTransfer(workspace,new Set([recordId]),[record.notebookId],async()=>{});await assert.rejects(transfer.figure(reader,async()=>assert.fail('Foreign origin must not be enqueued'),f.book.id),{code:'COLLABORATION_DEPENDENCY'});
 });

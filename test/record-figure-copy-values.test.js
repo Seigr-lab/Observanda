@@ -18,22 +18,25 @@ import {Workspace} from '../src/storage.js';
 test('saved plot choices retain exact source windows and result ownership without reconstructing records',async t=>{
  const f=await figureValueFixture({large:true});t.after(f.close);t.mock.method(ResearchCatalogue.prototype,'record',()=>{throw Error('Plot copy reconstructed a record');});
  const target={workspaceId:f.book.id,recordId:f.record.id},page=await figureCopyChoices(f.workspace,{...target,source:null,offset:8});
- assert.equal(page.total,9);assert.equal(page.items.length,3);assert.equal(page.nextOffset,null);assert.equal(page.items[0].plotId,f.record.figures[8].panels[0].figure.id);
+ assert.equal(page.total,9);assert.equal(page.items.length,1);assert.equal(page.nextOffset,null);assert.equal(page.items[0].type,'panels');assert.equal(page.items[0].plotId,null);
+ const children=await figureCopyChoices(f.workspace,{...target,source:page.source,figureId:page.items[0].figureId,offset:0});assert.equal(children.total,3);assert.equal(children.items[0].plotId,f.record.figures[8].panels[0].figure.id);
  const base=await f.values.read(f.target(f.record.figures[8].id)),edited=structuredClone(base.value.value);edited.panels[0].figure.title='Later source title';edited.panels[0].figure.series[0].points[0].y=2.25;await f.save(base,edited);
- const choice=page.items[0],request={...target,source:page.source,figureId:choice.figureId,plotId:choice.plotId},source=await figureCopySource(f.workspace,request);
+ const choice=children.items[0],request={...target,source:page.source,figureId:choice.figureId,plotId:choice.plotId},source=await figureCopySource(f.workspace,request);
  assert.equal(source.statementCount,1);assert.deepEqual(source.figure,f.record.figures[8].panels[0].figure);
  const old=await figureCopyChoices(f.workspace,{...target,source:page.source,offset:0});assert.equal(old.total,9);assert.equal(old.items.length,4);assert.equal(old.nextOffset,4);
  const calculated=await figureCopySource(f.workspace,{...target,source:page.source,figureId:old.items[0].figureId,plotId:old.items[0].plotId});assert.deepEqual(calculated.figure.source,f.analysis);
+ await assert.rejects(figureCopySource(f.workspace,{...request,source:{...request.source,workspaceId:randomUUID()}}),{code:'WORKSPACE_CHANGED'});
  for(const patch of [{workspaceId:randomUUID()},{recordId:randomUUID()},{plotId:randomUUID()},{figureId:randomUUID()}])await assert.rejects(figureCopySource(f.workspace,{...request,...patch}));
  await assert.rejects(figureCopyChoices(f.workspace,{...target,source:page.source,offset:0},{signal:AbortSignal.abort()}),{name:'AbortError'});
 });
 
 test('panel copy drafts recover with fresh keys and commit retained results atomically with retry receipts',async t=>{
  const f=await figureValueFixture();t.after(f.close);t.mock.method(ResearchCatalogue.prototype,'record',()=>{throw Error('Plot copy reconstructed a record');});
- const target={workspaceId:f.book.id,recordId:f.record.id},page=await figureCopyChoices(f.workspace,{...target,source:null,offset:8}),choice=page.items[0],source=await figureCopySource(f.workspace,{...target,source:page.source,figureId:choice.figureId,plotId:choice.plotId});
+ const target={workspaceId:f.book.id,recordId:f.record.id},page=await figureCopyChoices(f.workspace,{...target,source:null,offset:8}),children=await figureCopyChoices(f.workspace,{...target,source:page.source,figureId:page.items[0].figureId,offset:0}),choice=children.items[0],source=await figureCopySource(f.workspace,{...target,source:page.source,figureId:choice.figureId,plotId:choice.plotId});
  const figure=createComposition([source.figure,source.figure]),base=await f.values.read(f.target(figure.id)),value={value:figure,copies:figure.panels.map(panel=>({source:page.source,figureId:choice.figureId,plotId:choice.plotId,targetId:panel.figure.id}))};
+ const priorFormat=await f.workspace.catalogue(store=>catalogueFormat(store.db));
  const selection={field:base.field,revision:base.revision,storageRevision:base.storageRevision},drafts=new RecordValueDrafts(f.workspace),draft={...target,id:randomUUID(),expectedRevision:null,selection,value},checkpoint=await drafts.write(draft);
- assert.equal(await f.workspace.catalogue(store=>catalogueFormat(store.db)),15);
+ assert.equal(await f.workspace.catalogue(store=>catalogueFormat(store.db)),Math.max(15,priorFormat));
  assert.deepEqual((await drafts.read({workspaceId:f.book.id,id:draft.id,expectedRevision:checkpoint.revision})).value,value);
  await assert.rejects(f.workspace.withLock(()=>f.workspace.catalogue(async store=>{await store.db.run('UPDATE catalogue_format SET version=14');await new ResearchDrafts(f.workspace).read(draft.id,{header:true});})),{code:'CATALOGUE_DAMAGED'});
  const access=await createAccess('','Synthetic copied panel recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));

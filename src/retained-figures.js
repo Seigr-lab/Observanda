@@ -5,13 +5,16 @@ import {RecordValues,selectedRecordValue} from './record-values.js';
 import {RecordMemberCollections} from './record-member-collections.js';
 import {validRetainedFigure,validRetainedFigureText} from './web/retained-figure-model.js';
 import {validMaterialReference} from './web/material-reference.js';
+import {validAuthoredPointOrigin} from './web/retained-figure-authoring-model.js';
 import {researchId} from './web/research-reference.js';
 import {revisionId,revisionText} from './web/revision-model.js';
 import {retainedFigureSVG} from './web/retained-figure-svg.js';
 import {retainedFigureTable,retainedFigureCSV} from './web/retained-figure-data.js';
 const fail=()=>{throw new AppError('ANALYSIS_INVALID');};
 export async function validateRetainedFigureSource(materials,figure,{signal,verify=false}={}){
- if(!validRetainedFigure(figure)||!figure.source)fail();signal?.throwIfAborted();const source=await materials.read(figure.source),stored=source.content.figure;
+ if(!validRetainedFigure(figure))fail();signal?.throwIfAborted();
+ if(!figure.source){const reader=await new RetainedFigureDocuments(materials.workspace,{readOnly:true,signal}).open(figure);if(verify)await reader.verify({signal});return {reader,source:null};}
+ const source=await materials.read(figure.source),stored=source.content.figure;
  if(!validRetainedFigure(stored)||revisionText(stored.document.data)!==revisionText(figure.document.data))fail();
  const reader=await new RetainedFigureDocuments(materials.workspace,{readOnly:true,signal}).open(figure);if(verify)await reader.verify({signal});return {reader,source};
 }
@@ -64,6 +67,13 @@ export async function dispatchRetainedFigure(reader,revision,command,{signal,dow
    case 'cells':return {...await reader.cells(selection),revision};
    case 'window':return {...await reader.window(selection),revision};
    case 'item':return {item:await reader.item(selection),revision};
+   case 'source':{
+    if(Object.keys(selection).sort().join()!=='plotId,pointId,seriesId'||!Object.values(selection).every(researchId))throw new AppError('INVALID');
+    const item=await reader.item({collection:'points',plotId:selection.plotId,seriesId:selection.seriesId,id:selection.pointId});if(!item)throw new AppError('INVALID');
+    let origin=item.value.source?.origin??null;
+    const ref=reader.figure?.source??(command.ref?.kind==='analysis'?command.ref:null);if(!origin&&ref)origin={ref,seriesId:item.seriesId,pointId:item.id};
+    if(origin&&!validAuthoredPointOrigin(origin))fail();return {origin,revision};
+   }
    case 'text':if(!validRetainedFigureText(selection))throw new AppError('INVALID');return {...await reader.text(selection),revision};
    case 'svg':{
     const window=command.window;if(!window||Object.keys(window).some(key=>!['plotId','seriesOffset','seriesLimit','pointOffset','pointLimit'].includes(key))||!researchId(window.plotId)||!['seriesOffset','pointOffset'].every(key=>Number.isSafeInteger(window[key]??0)&&(window[key]??0)>=0)||!Number.isInteger(window.seriesLimit)||window.seriesLimit<1||window.seriesLimit>16||!Number.isInteger(window.pointLimit)||window.pointLimit<1||window.pointLimit>128)throw new AppError('INVALID');

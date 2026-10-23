@@ -1,3 +1,4 @@
+import {retainedFigureAuthoringUI} from './retained-figure-authoring-ui.js';
 import {projectApiRoute,researchOwner} from './project-context.js';
 import {materialReferenceReader} from './material-reference-requests.js';
 import {isRetainedFigure} from './retained-figure-model.js';
@@ -13,9 +14,15 @@ export const recordFigureAction=(figure,esc,busy=false)=>'<button type="button" 
 
 // Reuse the scientific editor with a selected-value draft and DOM owner.
 export function recordFigureView({state,api,esc,notify},lifecycle){
- let editor=null,dialog=null,listener=null,picker=null,retained=null,selected=null;
+ let editor=null,dialog=null,listener=null,picker=null,retained=null,selected=null,activateManual=null,manualActive=false;
+ const manualText=key=>t('retainedFigureEditor',key);
  const feedback=(message,error=false)=>{const status=dialog?.querySelector('[data-figure-message]');if(status){status.textContent=message;status.classList.toggle('error',error);}else notify(message,error);};
  return {
+  async prepare(base,value,input){
+   if(input.retainedFigure)return;
+   if(value.value?.document?.format==='figure-authoring')return;
+   if(value.value===null&&['plot','panels'].includes(input.create)||value.value&&(!isRetainedFigure(value.value)||!value.value.source))await lifecycle.draftChange('start',{create:value.value===null?input.create:null});
+  },
   initialize(base,value,input,changed){
    if(input.retainedFigure){value.value=structuredClone(input.retainedFigure);value.value.id=base.field.slice(7);changed();return;}
    if(value.value!==null||!['plot','panels'].includes(input.create))return;
@@ -36,8 +43,15 @@ export function recordFigureView({state,api,esc,notify},lifecycle){
   bind(host){
    if(selected){
     dialog=host;const {base,value,changed}=selected;
+    const root=host.querySelector('[data-retained-figure-editor]'),manual=()=>{retained?.release();manualActive=true;retained=retainedFigureAuthoringUI({root,state,api,base,value,lifecycle,changed});};
+    activateManual=manual;if(value.value.document.format==='figure-authoring'||!value.value.source){manual();return;}
+    root.innerHTML='<button type="button" class="button" data-edit-measurements>'+esc(manualText('editMeasurements'))+'</button><p>'+esc(manualText('authoredCopy'))+'</p><div data-source-presentation></div>';
+    const converting=root.querySelector('[data-edit-measurements]');converting.onclick=async()=>{if(converting.disabled)return;const token=lifecycle.context();converting.disabled=true;
+     try{await retained.checkpoint();await lifecycle.draftChange('start',{create:null},{checkpoint:true});if(token===lifecycle.context()&&root.isConnected)manual();}
+     catch(error){if(token===lifecycle.context()&&root.isConnected&&error.name!=='AbortError'){feedback(error.message,true);converting.disabled=false;}}
+    };
     const owner=researchOwner(state),read=materialReferenceReader({api,local:(name,body,options)=>api('/api/research/materials/'+name,body,{...options,owner,adopt:false})}),request=(body,options)=>read('retained-figure',body,options);
-    retained=retainedFigureEditor({root:host.querySelector('[data-retained-figure-editor]'),figure:value.value,request,context:lifecycle.context,busyChanged:lifecycle.refresh,notifyPending:pending=>{if(pending)changed();},
+    retained=retainedFigureEditor({root:root.querySelector('[data-source-presentation]'),figure:value.value,request,context:lifecycle.context,busyChanged:lifecycle.refresh,notifyPending:pending=>{if(pending)changed();},
      change:(body,options)=>api('/api/research/materials/retained-figure-change',{recordId:base.recordId,...body},{...options,owner,adopt:false}),
      downloadURL:(ref,format,expectedRevision)=>(ref.workspaceId?'/api/projects/material-reference/retained-figure-export':projectApiRoute('/api/research/materials/retained-figure-export',owner))+'?context='+encodeURIComponent(state.storage.contextId)+'&selection='+encodeURIComponent(JSON.stringify({ref,expectedRevision,format})),
      adopt:figure=>{value.value=figure;changed();}});return;
@@ -53,9 +67,9 @@ export function recordFigureView({state,api,esc,notify},lifecycle){
   },
   input:element=>{editor?.input(element);return false;},
   busy:()=>Boolean(retained?.isBusy()||picker?.busy()||editor?.isBusy()),
-  checkpoint:()=>retained?.checkpoint(),
+  async checkpoint(options){if(selected?.value.value?.document?.format==='figure-authoring'&&!manualActive){activateManual?.();await retained?.ready;}return retained?.checkpoint(options);},
   validate(){if(retained)return retained.validate();if(!editor)return false;editor.validate();return true;},
   preview:base=>base.value.value?'<p>'+esc(typeof base.value.value.title==='string'?base.value.value.title:base.value.value.title.preview)+'</p>'+renderFigureView(base.value.value,{idPrefix:'saved-figure-conflict'}):'<p>'+esc(text('figureAbsent'))+'</p>',
-  release(){retained?.release();retained=null;selected=null;picker?.destroy();picker=null;if(dialog){dialog.removeEventListener('click',listener);dialog.classList.remove('record-figure-writing');}editor?.release();editor=null;dialog=null;listener=null;}
+  release(){retained?.release();retained=null;selected=null;activateManual=null;manualActive=false;picker?.destroy();picker=null;if(dialog){dialog.removeEventListener('click',listener);dialog.classList.remove('record-figure-writing');}editor?.release();editor=null;dialog=null;listener=null;}
  };
 }

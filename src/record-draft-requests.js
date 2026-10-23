@@ -1,3 +1,4 @@
+import {RecordFigureDrafts} from './record-figure-drafts.js';
 // Draft transport and recovery commands run against their authenticated owner.
 // Workspace and project HTTP routes use this same admission contract.
 import {ResearchDrafts} from './research-drafts.js';
@@ -17,6 +18,7 @@ function define(name,Owner,method,{write=false,large=false,cancellable=false,run
 }
 for(const method of ['list','write','remove'])define(method,ResearchDrafts,method,{write:method!=='list',large:method==='write'});
 for(const [name,Owner] of [['writing',RecordWritingDrafts],['values',RecordValueDrafts]])for(const method of ['read','write'])define(name+'/'+method,Owner,method,{write:method==='write',large:method==='write'});
+for(const method of ['start','change','read','finish','import'])define('figures/'+method,RecordFigureDrafts,method,{write:method!=='read',cancellable:true});
 define('content',ResearchDraftContent,'read');
 define('read',null,null,{run:async(storage,data)=>{
  if(!data||Object.keys(data).some(key=>!['id','summary'].includes(key))||data.summary!==undefined&&typeof data.summary!=='boolean')throw new AppError('INVALID');

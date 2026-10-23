@@ -45,7 +45,7 @@ import {evidenceCorrectionsUI} from './evidence-corrections-ui.js';
 import {allFigurePlots,withFigureSource} from './figure-provenance.js';
 import {retainedRecordUI} from './retained-record-ui.js';
 
-export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty,render,revisions,create,getRecord=null,editRetainedFigure=null,refreshReader=null,access=run=>run()}){
+export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty,render,revisions,create,getRecord=null,editRetainedFigure=null,refreshReader=null,showFigureResults=null,currentRecordRevision=()=>null,access=run=>run()}){
  const retainedRecords=retainedRecordUI({state,api,esc,showDialog});
  let figureReader=null,referenceContext=false,referenceOrigin=false,readingOverview=false,schemaDispose=null,referenceTrail=[],readerRefreshPending=false;
  const previews=figurePreviews();document.getElementById('dialog')?.addEventListener('close',()=>{referenceContext=false;previews.release();stopWatching();uploader.pause();});
@@ -288,9 +288,9 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   const dataset=d.dataset??(c.inputs?.[0]?.kind==='dataset'?c.inputs[0]:null);
   return `<p>${d.rows.toLocaleString()} rows; ${d.included.toLocaleString()} included. ${(d.excludedCount??d.excluded?.length??0).toLocaleString()} excluded.</p><details class="material-more"><summary>Calculation coverage</summary><p>Missing values among included rows:</p><ul>${(d.missing??[]).map(m=>`<li>${esc(m.name??('Column '+(m.column+1)))}: ${(m.count??m.rows?.length??0).toLocaleString()}</li>`).join('')}</ul>${dataset?button('Inspect source rows & exclusions','reference',`data-ref="${esc(JSON.stringify(dataset))}"`):''}</details>`;
  }
- async function inspect(reference,{atPage=0,comparisonView=null}={}){
+ async function inspect(reference,{atPage=0,comparisonView=null,retainedDocument=null}={}){
   frame('Loading evidence','<p role="status">Opening the retained revision...</p>');
-  const generation=jobView,requested=ref(inheritMaterialNamespace(reference,state.book?.id)),doc=await call('read',{ref:requested});guard();
+  const generation=jobView,requested=ref(inheritMaterialNamespace(reference,state.book?.id)),doc=retainedDocument??await call('read',{ref:requested});guard();
   if(generation!==jobView||!document.getElementById('dialog')?.open)return;
   selectedRef=requested;opened=doc;page=Math.min(atPage,Math.max(0,(opened.content.pageIndex?.count??opened.content.pages?.length??1)-1));columnOffset=0;
   if(opened.kind==='dataset')return datasetView();
@@ -316,8 +316,11 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   if(c.figure){if(isRetainedFigure(c.figure))await mountRetainedFigure(document.getElementById('material-figure'),{ref:selectedRef});else previews.mount(document.getElementById('material-figure'),c.figure,'material');}
  }
  async function mountRetainedFigure(root,selector,source=selector.ref?.kind==='analysis'?selector.ref:null){
+  const generation=jobView,target=selector.ref??{kind:'record',workspaceId:selector.workspaceId,id:selector.recordId,revision:currentRecordRevision()};
+  const currentTarget=()=>state.page==='record-reader'&&target.kind==='record'&&target.workspaceId===state.book?.id&&target.id===record()?.id&&typeof target.revision==='string'&&target.revision===currentRecordRevision();
+  const inspectResults=showFigureResults&&currentTarget()?async plotId=>{currentView(generation);if(!currentTarget())throw new DOMException('Record figure view changed','AbortError');document.getElementById('dialog').close();await showFigureResults(plotId);}:null;
   const downloadURL=(format,revision)=>{guard();const path=selector.ref?.workspaceId?'/api/projects/material-reference/retained-figure-export':route(endpoint+'retained-figure-export');return path+'?context='+encodeURIComponent(workspaceContext)+'&selection='+encodeURIComponent(JSON.stringify({...selector,expectedRevision:revision,format}));};
-  figureReader=retainedFigureReader({root,request:(command,options)=>{guard();return call('retained-figure',{...selector,...command},options);},downloadURL,inspectSource:source?async({pointId,seriesId})=>{await authorizeSource(source);selectedRef=source;await plotPoint({pointId,seriesId});}:null});
+  figureReader=retainedFigureReader({root,request:(command,options)=>{guard();return call('retained-figure',{...selector,...command},options);},downloadURL,inspectResults,inspectSource:async(selection,expectedRevision)=>{const {origin}=await call('retained-figure',{...selector,expectedRevision,operation:'source',selection});if(!origin)return;await authorizeSource(origin.ref);const sourceDocument=await call('read',{ref:origin.ref});guard();selectedRef=origin.ref;if(sourceDocument.content.tool!=='Observanda table mapping'||!['8','9'].includes(sourceDocument.content.version))return inspect(origin.ref,{retainedDocument:sourceDocument});await plotPoint(Number.isSafeInteger(origin.index)?origin.index:{pointId:origin.pointId,seriesId:origin.seriesId});}});
   await figureReader.ready;
  }
  async function openRetainedFigure(control){

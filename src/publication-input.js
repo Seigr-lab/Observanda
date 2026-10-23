@@ -1,3 +1,5 @@
+import {hasRetainedFigure} from './record-retained-figures.js';
+import {hasAuthoredFigures} from './figure-authoring-format.js';
 import {retainPublicationFigures} from './publication-retained-figures.js';
 import {retainPublicationTables} from './publication-retained-tables.js';
 import {publicationEditionChoices} from './publication-edition-selections.js';
@@ -48,7 +50,7 @@ export async function retainPublicationInput(workspace,id,metadata,originals,{so
   descriptor=await projectPublicationRecord(descriptor,owner,identities);
   await claimPublicationFile(builder,descriptor.id,'record',descriptor.id);await destination.writeMetadata(recordFile(id,descriptor.id),raw);
   await retainPublicationTables(builder,materials,record,descriptor.id,{signal});
-  if(await retainPublicationFigures(builder,materials,record,descriptor.id,{signal})){state.header.figureDocuments=1;if(typeof destination.catalogue==='function')await destination.catalogue(async store=>{const {requireRetainedFigures}=await import('./catalogue-format.js');await requireRetainedFigures(store.db);});}
+  if(await retainPublicationFigures(builder,materials,record,descriptor.id,{signal})){state.header.figureDocuments=1;if(typeof destination.catalogue==='function')await destination.catalogue(async store=>{const {requireRetainedFigures,requireFigureAuthoring}=await import('./catalogue-format.js');await requireRetainedFigures(store.db);if(hasAuthoredFigures(record)||record.figures.some(figure=>figure.kind==='panels'&&hasRetainedFigure(figure)))await requireFigureAuthoring(store.db);});}
   const notebook=await builder.get('notebooks',descriptor.notebookId),position=builder.count('records');
   if(!notebook)throw new AppError('PUBLICATION_IDENTITY');
   await builder.append('records',descriptor.id,descriptor,{indexes:publicationRecordIndexes(descriptor,position,notebook.projectId)});

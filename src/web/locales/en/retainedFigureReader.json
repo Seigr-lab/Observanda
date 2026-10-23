@@ -29,5 +29,6 @@
   "invalidRange": "Enter a position within the retained range.",
   "hidden": "This series is hidden in the retained presentation. Its observations remain readable.",
   "offset": "Text character",
-  "source": "Inspect source measurements"
+  "source": "Inspect source measurements",
+  "results": "Results for {title}"
 }

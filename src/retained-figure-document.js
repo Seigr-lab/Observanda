@@ -1,4 +1,6 @@
 import {createHash,randomUUID} from 'node:crypto';
+import {validAuthoredPointOrigin} from './web/retained-figure-authoring-model.js';
+import {RecordDocument} from './record-document.js';
 import {recordTextJSON} from './record-string-stream.js';
 import {sameAxisProjection} from './web/figure-projection-display.js';
 import {AppError} from './errors.js';
@@ -22,11 +24,12 @@ const emptyExtent=()=>({min:null,max:null,positiveMin:null,positiveMax:null});
 const extent=(target,value)=>{if(typeof value!=='number'||!Number.isFinite(value))return;target.min=target.min===null?value:Math.min(target.min,value);target.max=target.max===null?value:Math.max(target.max,value);if(value>0){target.positiveMin=target.positiveMin===null?value:Math.min(target.positiveMin,value);target.positiveMax=target.positiveMax===null?value:Math.max(target.positiveMax,value);}};
 const numericKey=value=>{const bytes=Buffer.alloc(8);bytes.writeDoubleBE(Object.is(value,-0)?0:value);if(bytes[0]&128)for(let i=0;i<8;i++)bytes[i]^=255;else bytes[0]^=128;return bytes.toString('hex');};
 
+export const figureValidationValue=value=>value?.format==='figure-text'?'Retained text':Array.isArray(value)?value.map(figureValidationValue):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).map(([key,child])=>[key,figureValidationValue(child)])):value;
 const invalid=()=>{throw new AppError('MATERIAL_INVALID');};
 const sample=header=>({x:header.x?.kind==='number'?1:header.x?.kind==='date'?'2000-01-01':'Category',y:1,error:null,...(header.markerArea?{count:1}:{})});
-function validateHeader(header){
- if(header.kind==='panels'){if(!researchId(header.id)||typeof header.title!=='string'||!header.title.trim()||!header.layout||Object.keys(header.layout).sort().join()!=='columns,linkX,linkY'||!Number.isInteger(header.layout.columns)||header.layout.columns<1||header.layout.columns>3||typeof header.layout.linkX!=='boolean'||typeof header.layout.linkY!=='boolean'||Object.keys(header).some(key=>!['id','title','kind','layout'].includes(key)))invalid();return;}
- const series={id:header.id,name:'Validation',color:'#123456',points:[sample(header)]};if(figureIssues({...header,series:[series]},{retained:true}).length)invalid();
+function validateHeader(header,{draft=false}={}){
+ if(header.kind==='panels'){if(!researchId(header.id)||typeof header.title!=='string'||!draft&&!header.title.trim()||!header.layout||Object.keys(header.layout).sort().join()!=='columns,linkX,linkY'||!Number.isInteger(header.layout.columns)||header.layout.columns<1||header.layout.columns>3||typeof header.layout.linkX!=='boolean'||typeof header.layout.linkY!=='boolean'||Object.keys(header).some(key=>!['id','title','kind','layout'].includes(key)))invalid();return;}
+ const series={id:header.id,name:'Validation',color:'#123456',points:[sample(header)]};if(figureIssues({...header,series:[series]},{retained:true,draft}).length)invalid();
 }
 export function validateRetainedFigurePoint(point,header){
  if(!point||typeof point!=='object'||Array.isArray(point))invalid();
@@ -36,16 +39,16 @@ export function validateRetainedFigurePoint(point,header){
  if(header.x.scale==='log'&&xValue(point.x,header.x.kind)<=0||header.y.scale==='log'&&point.y!==null&&point.y-(point.error??0)<=0||header.kind==='heatmap'&&point.error!==null||header.markerArea&&point.y!==null&&(point.count==null||point.count*header.markerArea.unitArea>65536))invalid();
 }
 
-class Collections{
+export class RetainedFigureCollections{
  constructor(blocks){this.blocks=blocks;this.tree=blocks.tree();this.index=new RetainedTableIndex(blocks,{namespace:'index',allowSparseBranches:true});this.collections={};this.indexes={};}
  collection(name){return this.collections[name]??={count:0,root:null};}
  indexesFor(name){return this.indexes[name]??={keys:null,plots:null,series:null,lookup:null,coordinates:null};}
  roots(){return [...Object.values(this.collections).map(value=>value.root),...Object.values(this.indexes).flatMap(value=>Object.values(value))];}
  async checkpoint(){await this.index.flushRoots(this.roots());}
  async find(name,key,slot='keys'){return this.index.find({root:this.indexesFor(name)[slot]},key);}
- async add(name,{id,plotId=null,seriesId=null,position,body,lookup=null,coordinate=null,categoryId=null,visiblePosition=null}){
+ async add(name,{id,plotId=null,seriesId=null,position,body,lookup=null,coordinate=null,categoryId=null,visiblePosition=null,bodyRoot=null,texts=null}){
   this.blocks.check();const collection=this.collection(name),indexes=this.indexesFor(name);if(await this.find(name,id))throw new AppError('MATERIAL_INVALID');
-  const item={format:'figure-member',version:1,collection:name,id,plotId,seriesId,position:position??collection.count,ordinal:collection.count,...(categoryId?{categoryId}:{}),...(visiblePosition!==null?{visiblePosition}:{}),body:await this.tree.retain(body),texts:lengths(body)};
+  const item={format:'figure-member',version:1,collection:name,id,plotId,seriesId,position:position??collection.count,ordinal:collection.count,...(categoryId?{categoryId}:{}),...(visiblePosition!==null?{visiblePosition}:{}),body:bodyRoot??await this.tree.retain(body),texts:texts??lengths(body)};
   const revision=await this.tree.retain(item);collection.root=await this.index.change(collection.root,ordinal(collection.count++),revision);
   indexes.keys=await this.index.change(indexes.keys,id,revision);
   if(plotId)indexes.plots=await this.index.change(indexes.plots,plotId+':'+ordinal(item.ordinal),revision);
@@ -57,33 +60,33 @@ class Collections{
  async manifests(){await this.checkpoint();return {collections:this.collections,index:await this.tree.retain({format:'figure-index',version:1,collections:this.indexes})};}
 }
 export class RetainedFigureBuilder{
- constructor(owner,header){this.owner=owner;this.blocks=owner.blocks;this.tree=this.blocks.tree();this.header=scalarHeader(header);validateHeader(this.header);this.source=header.source?structuredClone(header.source):null;this.data=new Collections(this.blocks);this.presentation=new Collections(this.blocks);this.plot=null;this.series=null;this.done=false;}
- async addPlot(figure,{id=figure.id,label=figure.title}={}){
-  if(this.done)throw new AppError('INVALID');await this.finishPlot();validateHeader(scalarHeader(figure));
-  this.plot={id:figure.id,panelId:id,label,header:scalarHeader(figure),slots:{annotations:Object.hasOwn(figure,'annotations'),xTicks:Object.hasOwn(figure.x??{},'ticks'),yTicks:Object.hasOwn(figure.y??{},'ticks')},domains:{x:emptyExtent(),y:emptyExtent(),minimumXGap:null,minimumLogXGap:null,categoryCount:0,visibleSeriesCount:0,maximumCategoryLength:0,maximumSeriesNameLength:0},series:0,points:0};
+ constructor(owner,header,{draft=false,retained=null}={}){this.draft=draft;this.retained=retained;this.owner=owner;this.blocks=owner.blocks;this.tree=this.blocks.tree();this.header=scalarHeader(header);validateHeader(this.header,{draft});this.source=header.source?structuredClone(header.source):null;this.data=new RetainedFigureCollections(this.blocks);this.presentation=new RetainedFigureCollections(this.blocks);this.plot=null;this.series=null;this.done=false;}
+ async addPlot(figure,{id=figure.id,label=figure.title,retained=null}={}){
+  if(this.done)throw new AppError('INVALID');await this.finishPlot();validateHeader(scalarHeader(figure),{draft:this.draft});
+  this.plot={id:figure.id,panelId:id,label,retained,header:scalarHeader(figure),slots:{annotations:Object.hasOwn(figure,'annotations'),xTicks:Object.hasOwn(figure.x??{},'ticks'),yTicks:Object.hasOwn(figure.y??{},'ticks')},domains:{x:emptyExtent(),y:emptyExtent(),minimumXGap:null,minimumLogXGap:null,categoryCount:0,visibleSeriesCount:0,maximumCategoryLength:0,maximumSeriesNameLength:0},series:0,points:0};
   for(const axis of ['x','y'])for(const [position,tick] of (figure[axis]?.ticks??[]).entries()){if(axisControlIssues({...figure[axis],ticks:[tick]},{kind:figure[axis].kind??'number',retained:true}).length)invalid();const tickKey=figure.id+':'+axis+':'+numericKey(tick.value);if(await this.presentation.find('ticks',tickKey,'lookup'))invalid();await this.presentation.add('ticks',{lookup:tickKey,id:identity(figure.id,axis,position),plotId:figure.id,position,body:{axis,...tick}});extent(this.plot.domains[axis],tick.value);}
   for(const [position,annotation] of (figure.annotations??[]).entries())await this.presentation.add('annotations',{id:annotation.id,plotId:figure.id,position,body:annotation});
  }
- async addSeries(series){
+ async addSeries(series,{retained=null}={}){
   if(!this.plot||this.done)throw new AppError('INVALID');await this.finishSeries();
-  const {points,...body}=series;if(figureIssues({...this.plot.header,series:[{...body,points:[sample(this.plot.header)]}]},{retained:true}).length)invalid();const nameKey=this.plot.id+':'+digest(serialize(body.name));if(await this.presentation.find('series',nameKey,'lookup'))invalid();this.series={id:series.id,position:this.plot.series++,visible:seriesStyle(series).visible,points:0,complete:0,domains:{x:emptyExtent(),y:emptyExtent()}};
-  if(this.series.visible){this.series.visiblePosition=this.plot.domains.visibleSeriesCount++;this.plot.domains.maximumSeriesNameLength=Math.max(this.plot.domains.maximumSeriesNameLength,series.name.length);}
-  await this.presentation.add('series',{id:series.id,plotId:this.plot.id,position:this.series.position,visiblePosition:this.series.visiblePosition??null,body,lookup:nameKey});
+  const {points,...body}=series;if(figureIssues({...this.plot.header,series:[{...body,points:[sample(this.plot.header)]}]},{retained:true,draft:this.draft}).length)invalid();const nameKey=this.draft?null:this.plot.id+':'+(retained?.nameHash??digest(serialize(body.name)));if(nameKey!==null&&await this.presentation.find('series',nameKey,'lookup'))invalid();this.series={id:series.id,position:this.plot.series++,visible:seriesStyle(series).visible,points:0,complete:0,domains:{x:emptyExtent(),y:emptyExtent()}};
+  if(this.series.visible){this.series.visiblePosition=this.plot.domains.visibleSeriesCount++;this.plot.domains.maximumSeriesNameLength=Math.max(this.plot.domains.maximumSeriesNameLength,retained?.texts.name??series.name.length);}
+  await this.presentation.add('series',{id:series.id,plotId:this.plot.id,position:this.series.position,visiblePosition:this.series.visiblePosition??null,body,lookup:nameKey,...(retained?{bodyRoot:retained.root,texts:retained.texts}:{})});
  }
- async addPoint(point,{id=randomUUID(),source=null}={}){
-  if(!this.series||this.done)throw new AppError('INVALID');const plot=this.plot,series=this.series;validateRetainedFigurePoint(point,plot.header);if(point.y!==null)series.complete++;const coordinate=xValue(point.x,plot.header.x.kind);
-  if(coordinate===null||point.y!==null&&(!Number.isFinite(point.y)||Math.abs(point.y)>1e100))throw new AppError('MATERIAL_INVALID');
-  const categoryId=identity(plot.id,point.x),lookup=plot.id+':'+series.id+':'+categoryId;if(plot.header.kind==='heatmap'&&await this.data.find('points',lookup,'lookup'))invalid();
-  const member=await this.data.add('points',{id,plotId:plot.id,seriesId:series.id,position:series.points++,categoryId,body:{...point,...(source?{source}:{} )},lookup,coordinate:typeof coordinate==='number'?coordinate:null});plot.points++;
+ async addPoint(point,{id=randomUUID(),source=null,retained=null}={}){
+  if(!this.series||this.done)throw new AppError('INVALID');const plot=this.plot,series=this.series;if(this.draft){if(figureIssues({...plot.header,series:[{id:series.id,name:'Draft',color:'#123456',points:[point]}]},{retained:true,draft:true}).length)invalid();}else validateRetainedFigurePoint(point,plot.header);if(point.y!==null)series.complete++;const coordinate=xValue(point.x,plot.header.x.kind);
+  if(!this.draft&&coordinate===null||point.y!==null&&(!Number.isFinite(point.y)||Math.abs(point.y)>1e100))throw new AppError('MATERIAL_INVALID');
+  const categoryId=retained?.categoryId??identity(plot.id,point.x),lookup=plot.id+':'+series.id+':'+categoryId;if(!this.draft&&plot.header.kind==='heatmap'&&await this.data.find('points',lookup,'lookup'))invalid();
+  const member=await this.data.add('points',{id,plotId:plot.id,seriesId:series.id,position:series.points++,categoryId,body:{...point,...(source?{source}:{} )},...(retained?{bodyRoot:retained.root,texts:retained.texts}:{}),lookup,coordinate:typeof coordinate==='number'?coordinate:null});plot.points++;
   const intervals=pointIntervals(point);for(const value of intervals.x){const x=xValue(value,plot.header.x.kind);extent(series.domains.x,x);if(series.visible)extent(plot.domains.x,x);}
   if(point.y!==null)for(const y of intervals.y){extent(series.domains.y,y);if(series.visible)extent(plot.domains.y,y);}
-  if(series.visible&&plot.header.x.kind==='category'){
-   const key=plot.id+':'+digest(serialize(point.x)),found=await this.presentation.find('categories',key,'lookup');
-   if(!found)await this.presentation.add('categories',{id:identity(plot.id,point.x),plotId:plot.id,position:plot.domains.categoryCount++,body:point.x,lookup:key});
-   plot.domains.maximumCategoryLength=Math.max(plot.domains.maximumCategoryLength,point.x.length);
+  if(series.visible&&plot.header.x.kind==='category'&&typeof point.x==='string'){
+   const key=plot.id+':'+(retained?.xHash??digest(serialize(point.x))),found=await this.presentation.find('categories',key,'lookup');
+   if(!found)await this.presentation.add('categories',{id:categoryId,plotId:plot.id,position:plot.domains.categoryCount++,body:point.x,lookup:key,...(retained?.xRoot?{bodyRoot:retained.xRoot,texts:{'':retained.texts.x}}:{})});
+   plot.domains.maximumCategoryLength=Math.max(plot.domains.maximumCategoryLength,retained?.texts.x??point.x.length);
   }return member;
  }
- async finishSeries(){if(!this.series)return;if(!this.series.complete&&this.plot.header.kind!=='heatmap')invalid();await this.data.add('series',{id:this.series.id,plotId:this.plot.id,position:this.series.position,body:{points:this.series.points,domains:this.series.domains}});this.series=null;}
+ async finishSeries(){if(!this.series)return;if(!this.draft&&!this.series.complete&&this.plot.header.kind!=='heatmap')invalid();await this.data.add('series',{id:this.series.id,plotId:this.plot.id,position:this.series.position,body:{points:this.series.points,domains:this.series.domains}});this.series=null;}
  async finishPlot(){
   if(!this.plot)return;await this.finishSeries();const plot=this.plot;
   if(plot.header.x.kind!=='category'){
@@ -91,34 +94,38 @@ export class RetainedFigureBuilder{
    for(let at=start;at<end;at++){this.blocks.check();const entry=await index.entryAt({root},at),member=await this.tree.read(entry.revision),present=await this.presentation.find('series',member.seriesId);if(!present)fail();const presentation=await this.tree.read(present.revision),visible=await this.tree.selected(presentation.body,['style','visible']);if(visible.found&&visible.value===false)continue;const value=await this.tree.read(member.body),x=xValue(value.x,plot.header.x.kind);if(previous!==null&&x>previous)plot.domains.minimumXGap=plot.domains.minimumXGap===null?x-previous:Math.min(plot.domains.minimumXGap,x-previous);previous=x;if(x>0){if(positive!==null&&x>positive){const gap=Math.log(x)-Math.log(positive);plot.domains.minimumLogXGap=plot.domains.minimumLogXGap===null?gap:Math.min(plot.domains.minimumLogXGap,gap);}positive=x;}}
   }
   const annotations=this.presentation.collection('annotations'),aRoot=this.presentation.indexesFor('annotations').plots,aStart=await this.presentation.index.rank({root:aRoot},plot.id+':'),aEnd=await this.presentation.index.rank({root:aRoot},plot.id+':\uffff');
-  for(let at=aStart;at<aEnd;at++){
-   const entry=await this.presentation.index.entryAt({root:aRoot},at),member=await this.tree.read(entry.revision),annotation=await this.tree.read(member.body);let check=annotation,series=[];
-   if(annotation.kind==='callout'){const selected=await this.data.index.find({root:this.data.indexesFor('points').series},annotation.seriesId+':'+ordinal(annotation.pointIndex));if(!selected)invalid();const point=await this.tree.read(selected.revision);if(point.plotId!==plot.id)invalid();series=[{id:annotation.seriesId,points:[await this.tree.read(point.body)]}];check={...annotation,pointIndex:0};}
+  for(let at=aStart;!this.draft&&at<aEnd;at++){
+   const entry=await this.presentation.index.entryAt({root:aRoot},at),member=await this.tree.read(entry.revision),annotation=figureValidationValue(await this.owner.bounded(member.body,member.texts));let check=annotation,series=[];
+   if(annotation.kind==='callout'){const selected=await this.data.index.find({root:this.data.indexesFor('points').series},annotation.seriesId+':'+ordinal(annotation.pointIndex));if(!selected)invalid();const point=await this.tree.read(selected.revision);if(point.plotId!==plot.id)invalid();series=[{id:annotation.seriesId,points:[figureValidationValue(await this.owner.bounded(point.body,point.texts))]}];check={...annotation,pointIndex:0};}
    if(annotationIssues({...plot.header,series,annotations:[check]},xValue,{retained:true}).length)invalid();
   }
   void annotations;
   await this.data.add('plots',{id:plot.id,plotId:plot.id,body:{series:plot.series,points:plot.points,xKind:plot.header.x.kind}});
-  await this.presentation.add('panels',{id:plot.panelId,plotId:plot.id,body:{plotId:plot.id,label:plot.label,header:plot.header,slots:plot.slots,domains:plot.domains}});this.plot=null;
+  let body={plotId:plot.id,label:plot.label,header:plot.header,slots:plot.slots,domains:plot.domains},bodyRoot=null,texts=null;
+  if(plot.retained){bodyRoot=await this.tree.retain(body);const edit=new RecordDocument(this.blocks,bodyRoot,{mutable:true});for(const key of ['header','label']){const selected=await this.tree.select(plot.retained.root,[key]);bodyRoot=await edit.replaceReference(bodyRoot,[key],selected.inline?await this.tree.retain(selected.value):selected.revision);}texts={...plot.retained.texts};}
+  await this.presentation.add('panels',{id:plot.panelId,plotId:plot.id,body,bodyRoot,texts});this.plot=null;
  }
  async finish(){
   if(this.done)throw new AppError('INVALID');await this.finishPlot();this.done=true;
   const data=await this.data.manifests(),dataRoot=await this.tree.retain({format:'figure-data',version:1,collections:data.collections});
-  const presentation=await this.presentation.manifests(),header=await this.tree.retain(this.header),presentationRoot=await this.tree.retain({format:'figure-presentation',version:1,data:dataRoot,header,headerTexts:lengths(this.header),collections:presentation.collections});
+  const presentation=await this.presentation.manifests(),header=this.retained?.root??await this.tree.retain(this.header),presentationRoot=await this.tree.retain({format:'figure-presentation',version:1,data:dataRoot,header,headerTexts:this.retained?.texts??lengths(this.header),collections:presentation.collections});
   const count=name=>(name==='points'?data.collections:presentation.collections)[name]?.count??0;
-  const document={format:'figure-document',version:1,data:{root:dataRoot,index:data.index},presentation:{root:presentationRoot,index:presentation.index},counts:Object.fromEntries(['panels','series','points','annotations','ticks'].map(name=>[name,count(name)]))};
-  if(!validRetainedFigureDocument(document))throw new AppError('MATERIAL_INVALID');await this.blocks.flush();const figure={id:this.header.id,title:this.header.title.length>1024?{format:'figure-text',version:1,preview:this.header.title.slice(0,512),characters:this.header.title.length}:this.header.title,kind:'retained',version:1,document,...(this.source?{source:this.source}:{})};
-  if(this.header.kind==='panels')await (await this.owner.open(figure)).validateLinkedAxes();return figure;
+  const document={format:this.draft?'figure-authoring':'figure-document',version:1,data:{root:dataRoot,index:data.index},presentation:{root:presentationRoot,index:presentation.index},counts:Object.fromEntries(['panels','series','points','annotations','ticks'].map(name=>[name,count(name)]))};
+  if(!validRetainedFigureDocument(document,{draft:this.draft}))throw new AppError('MATERIAL_INVALID');await this.blocks.flush();const figure={id:this.header.id,title:this.header.title.length>1024?{format:'figure-text',version:1,preview:this.header.title.slice(0,512),characters:this.header.title.length}:this.header.title,kind:'retained',version:1,document,...(this.source?{source:this.source}:{})};
+  figure.title=(await this.owner.bounded(header,this.retained?.texts??lengths(this.header))).title;
+  if(!this.draft&&this.header.kind==='panels')await (await this.owner.open(figure)).validateLinkedAxes();return figure;
  }
 }
 export class RetainedFigureDocuments{
  constructor(workspace,options={}){this.blocks=new RetainedFigureBlocks(workspace,options);}
- builder(header){return new RetainedFigureBuilder(this,header);}
+ builder(header,options){return new RetainedFigureBuilder(this,header,options);}
+ async bounded(root,texts){return new RetainedFigureReader(this.blocks,null,null).bounded(root,texts);}
  async retain(figure){
   if(figureIssues(figure,{retained:true}).length)throw new AppError('MATERIAL_INVALID');const builder=this.builder(figure),plots=figure.kind==='panels'?figure.panels:[{id:figure.id,label:figure.title,figure}];
   for(const panel of plots){await builder.addPlot(panel.figure,{id:panel.id,label:panel.label});for(const series of panel.figure.series){await builder.addSeries(series);for(const point of series.points)await builder.addPoint(point);}}
   return builder.finish();
  }
- async open(value){const figure=value?.document?value:null,document=figure?.document??value;if(figure&&!validRetainedFigure(figure)||!validRetainedFigureDocument(document))throw new AppError('MATERIAL_INVALID');const reader=new RetainedFigureReader(this.blocks,document,figure);await reader.load();return reader;}
+ async open(value,{draft=false}={}){const figure=value?.document?value:null,document=figure?.document??value;if(figure&&!validRetainedFigure(figure,{draft})||!validRetainedFigureDocument(document,{draft}))throw new AppError('MATERIAL_INVALID');const reader=new RetainedFigureReader(this.blocks,document,figure);await reader.load();return reader;}
 }
 export class RetainedFigureReader{
  constructor(blocks,document,figure){this.storage=blocks;this.tree=blocks.tree();this.index=new RetainedTableIndex(blocks,{namespace:'index',allowSparseBranches:true});this.document=structuredClone(document);this.figure=figure;this.categoryCache=new Map();}
@@ -153,7 +160,7 @@ export class RetainedFigureReader{
  async expose(item){const {format,version,collection,ordinal,body,texts,...result}=item;result.value=await this.bounded(body,texts);if(collection==='points')result.globalOrdinal=ordinal;if(collection==='series'){const {root,start,total}=await this.scope({collection:'points',seriesId:item.id});void root;void start;result.points=total;}if(collection==='points'&&item.categoryId){result.categoryPosition=await this.categoryPosition({plotId:item.plotId,categoryId:item.categoryId});}return result;}
  async header({plotId}={}){
   if(plotId){const scope=await this.scope({collection:'panels',plotId});if(scope.total!==1)fail();const entry=await this.index.entryAt({root:scope.root},scope.start),member=await this.member(entry.revision,'panels'),body=await this.bounded(member.body,member.texts);const title=this.figure&&(await this.tree.selected(this.presentation.header,['kind'])).value!=='panels'?this.figure.title:body.header.title;return {header:{...body.header,title,plotId},counts:{...this.document.counts,series:(await this.scope({collection:'series',plotId})).total,points:(await this.scope({collection:'points',plotId})).total},document:this.document,domains:body.domains};}
-  const header=await this.bounded(this.presentation.header,this.presentation.headerTexts);if(this.figure?.source)header.source=structuredClone(this.figure.source);if(header.kind!=='panels'){const panels=await this.window({collection:'panels',limit:1});if(panels.items.length!==1)fail();const result=await this.header({plotId:panels.items[0].plotId});if(this.figure?.source)result.header.source=structuredClone(this.figure.source);if(this.figure){result.header.id=this.figure.id;result.header.title=this.figure.title;}return result;}if(this.figure){header.id=this.figure.id;header.title=this.figure.title;}return {header,counts:this.document.counts,document:this.document};
+  const header=await this.bounded(this.presentation.header,this.presentation.headerTexts);if(this.figure?.source)header.source=structuredClone(this.figure.source);if(header.kind!=='panels'){const panels=await this.window({collection:'panels',limit:1});if(!panels.items.length&&this.document.format==='figure-authoring')return {header,counts:this.document.counts,document:this.document};if(panels.items.length!==1)fail();const result=await this.header({plotId:panels.items[0].plotId});if(this.figure?.source)result.header.source=structuredClone(this.figure.source);if(this.figure){result.header.id=this.figure.id;result.header.title=this.figure.title;}return result;}if(this.figure){header.id=this.figure.id;header.title=this.figure.title;}return {header,counts:this.document.counts,document:this.document};
  }
  async window(selection){
   if(!validRetainedFigureWindow(selection))throw new AppError('INVALID');const {offset=0,limit=16}=selection,scope=await this.scope(selection);if(offset>scope.total)throw new AppError('INVALID');const items=[];
@@ -207,6 +214,7 @@ export class RetainedFigureReader{
   return [['id',[JSON.stringify(this.figure.id)]],['title',typeof this.figure.title==='string'?[JSON.stringify(this.figure.title)]:this.valueJSON(this.presentation.header,['title'])],...(this.figure.source?[['source',[JSON.stringify(this.figure.source)]]]:[])];
  }
  async *plotJSON(plotId,{wrapper=false}={}){
+  if(this.document.format!=='figure-document')throw new AppError('MATERIAL_INVALID');
   const panel=await this.panelMember(plotId),slots=(await this.tree.selected(panel.body,['slots'])).value,owner=this,extra=[];
   for(const axis of ['x','y']){const parts=async function*(){const ticks=async function*(){yield '[';let count=0;for await(const member of owner.memberRows({collection:'ticks',plotId})){if((await owner.tree.selected(member.body,['axis'])).value!==axis)continue;if(count++)yield ',';yield* owner.jsonObject(member.body,{skip:['axis']});}yield ']';};yield* owner.jsonObject(panel.body,{path:['header',axis],extra:slots[axis+'Ticks']?[['ticks',ticks()]]:[]});};extra.push([axis,parts()]);}
   const series=async function*(){yield* owner.jsonArray({collection:'series',plotId},member=>owner.jsonObject(member.body,{extra:[['points',owner.jsonArray({collection:'points',plotId,seriesId:member.id},point=>owner.jsonObject(point.body,{skip:['source']}))]]}));};extra.push(['series',series()]);
@@ -214,6 +222,7 @@ export class RetainedFigureReader{
   yield* this.jsonObject(panel.body,{path:['header'],skip:['x','y',...(wrapper&&this.figure?['id','title','source']:[])],extra:[...extra,...(wrapper?this.wrapperJSON():[])]});
  }
  async *json(){
+  if(this.document.format!=='figure-document')throw new AppError('MATERIAL_INVALID');
   const kind=(await this.tree.selected(this.presentation.header,['kind'])).value;
   if(kind!=='panels'){const first=await this.window({collection:'panels',limit:1});yield* this.plotJSON(first.items[0].plotId,{wrapper:true});return;}
   const owner=this,panels=async function*(){yield '[';let count=0;for await(const member of owner.memberRows({collection:'panels'})){if(count++)yield ',';yield '{"id":'+JSON.stringify(member.id)+',"label":';yield* owner.valueJSON(member.body,['label']);yield ',"figure":';yield* owner.plotJSON(member.plotId);yield '}';}yield ']';};
@@ -284,7 +293,7 @@ export class RetainedFigureReader{
     const visible=seriesStyle(value).visible;if(visible){if(series.visiblePosition!==domains.visibleSeriesCount++)fail();domains.maximumSeriesNameLength=Math.max(domains.maximumSeriesNameLength,value.name.length);}else if(series.visiblePosition!==undefined)fail();
     const local={x:emptyExtent(),y:emptyExtent()};let count=0,complete=0;
     for await(const member of this.memberRows({collection:'points',plotId:panel.plotId,seriesId:series.id})){
-     check();const {source,...point}=await this.tree.read(member.body);void source;validateRetainedFigurePoint(point,header);if(member.plotId!==panel.plotId||member.position!==count++||member.categoryId!==identity(panel.plotId,point.x))fail();if(point.y!==null)complete++;
+     check();const {source,...point}=await this.tree.read(member.body);if(source&&Object.hasOwn(source,'origin')&&!validAuthoredPointOrigin(source.origin))fail();validateRetainedFigurePoint(point,header);if(member.plotId!==panel.plotId||member.position!==count++||member.categoryId!==identity(panel.plotId,point.x))fail();if(point.y!==null)complete++;
      const intervals=pointIntervals(point);for(const x of intervals.x){extent(local.x,xValue(x,header.x.kind));if(visible)extent(domains.x,xValue(x,header.x.kind));}if(point.y!==null)for(const y of intervals.y){extent(local.y,y);if(visible)extent(domains.y,y);}
      if(visible&&header.x.kind==='category'){if(await this.categoryPosition({plotId:panel.plotId,categoryId:member.categoryId})===null)fail();domains.maximumCategoryLength=Math.max(domains.maximumCategoryLength,point.x.length);}
     }

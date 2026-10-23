@@ -5,7 +5,7 @@ import {validateRecordChanges} from './model.js';
 import {validateAttemptDocumentChange} from './record-attempt-document.js';
 import {validateResultSources} from './result-statements.js';
 import {validateFigureSources} from './figure-provenance.js';
-import {figureTargets} from './web/figure-composition.js';
+import {retainedFigureTargets} from './retained-figure-targets.js';
 import {resultDocumentStatements} from './record-result-document.js';
 import {withScratch} from './scratch-work.js';
 import {AppError} from './errors.js';
@@ -21,7 +21,7 @@ export async function validateDocumentSources(store,snapshot,document,header,pre
  const evidence=async targets=>{
   for await(const ref of document.items(['figures'],{signal})){
    const figure=await document.tree.read(ref.value);await validateFigureSources(store.workspace,{figures:[figure]});
-   if(targets)for(const target of figureTargets([figure]))await targets.add(target.id);
+   if(targets)for await(const target of retainedFigureTargets(store.workspace,figure,{signal}))await targets.add(target.id);
   }
   for await(const ref of document.items(['attachments'],{signal})){
    const attachment=await document.tree.read(ref.value),file=await media.get(attachment.id,{streamed:true});

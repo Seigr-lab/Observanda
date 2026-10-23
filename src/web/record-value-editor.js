@@ -7,13 +7,51 @@ import {revisionId} from './revision-model.js';
 export function recordValueEditor({state,api,esc,notify,onSaved,onClosed,adapter}){
  const text=key=>t(adapter.messages,key);
  const dialog=document.createElement('dialog');dialog.className='record-writing';dialog.setAttribute('aria-labelledby',adapter.route+'-value-title');document.body.append(dialog);
- let owner=null,editorEpoch=0,base=null,value=null,writer=null,dirty=false,busy=false,loading=false,checkpointError=false,error='',status='',conflict=null,timer=null,queue=Promise.resolve(),pending=null,last='',resolveClose=null,focusBefore=null;
+ let owner=null,editorEpoch=0,base=null,value=null,writer=null,dirty=false,busy=false,loading=false,checkpointError=false,error='',status='',conflict=null,timer=null,queue=Promise.resolve(),pending=null,last='',resolveClose=null,focusBefore=null,draftMutation=null,openingInput=null,lastDraftMutation=null;
  const context=()=>state.access?.locked?null:JSON.stringify([state.storage?.contextId,state.book?.id]);
- const view=adapter.view({context:()=>owner?owner.id+':'+editorEpoch:null,refresh:()=>paint(),close:async()=>{if(busy||loading)return false;await close();return !dialog.open;}});
+ const view=adapter.view({context:()=>owner?owner.id+':'+editorEpoch:null,refresh:()=>paint(),draftRead,draftChange,draftState:()=>writer?{id:writer.id,revision:writer.revision}:null,close:async()=>{if(busy||loading)return false;await close();return !dialog.open;}});
  const target=base=>({workspaceId:base.workspaceId,recordId:base.recordId,...adapter.target(base)});
  const selection=base=>({...adapter.target(base),revision:base.revision,storageRevision:base.storageRevision});
  const button=(label,action,primary=false)=>'<button type="button" class="button'+(primary?' primary':'')+'" data-writing="'+action+'">'+esc(text(label))+'</button>';
  const validContext=()=>owner?.context===context();
+ function draftCurrent(captured){
+  if(captured!==owner||!validContext())throw new DOMException('Selected draft changed','AbortError');
+ }
+ async function draftRead(body,options={}){
+  const captured=owner,currentWriter=writer,revision=currentWriter?.revision;draftCurrent(captured);
+  if(!revision)throw Error(text('invalidCheckpoint'));
+  const result=await api('/api/research/drafts/figures/read',{...body,selection:body.selection??{},id:currentWriter.id,workspaceId:base.workspaceId,expectedRevision:revision},{...options,adopt:false});
+  draftCurrent(captured);if(writer!==currentWriter||writer.revision!==revision)throw new DOMException('Selected draft changed','AbortError');if(result?.revision!==revision)throw Error(text('invalidRead'));return result;
+ }
+ async function writeDraftChange(action,body={},{mutationId=null,...options}={}){
+  const captured=owner,currentWriter=writer;draftCurrent(captured);
+  if(!['start','change','finish','import'].includes(action)||!base.field?.startsWith('figure:'))throw Error(text('invalidCheckpoint'));
+  if(pending)throw Error(text('checkpointFailed'));
+  const path='/api/research/drafts/figures/'+action,intent=JSON.stringify({action,body});
+  if(mutationId&&lastDraftMutation?.mutationId===mutationId){if(lastDraftMutation.intent!==intent)throw Error(text('invalidCheckpoint'));return lastDraftMutation.result;}
+  if(draftMutation&&(draftMutation.intent!==intent||mutationId&&draftMutation.mutationId!==mutationId))throw Error(text('checkpointFailed'));
+  draftMutation??={intent,path,action,mutationId,body:structuredClone(body),request:{...structuredClone(body),id:currentWriter.id,workspaceId:base.workspaceId,recordId:base.recordId,selection:selection(base),expectedRevision:currentWriter.revision,operationId:mutationId??crypto.randomUUID()}};
+  const operation=draftMutation;dirty=true;
+  try{
+   const result=await api(operation.path,operation.request,{...options,adopt:false});
+   if(!revisionId(result?.revision)||!result.value||typeof result.value!=='object'||Array.isArray(result.value)||!Object.hasOwn(result.value,'value'))throw Error(text('invalidCheckpoint'));
+   currentWriter.revision=result.revision;draftCurrent(captured);
+   if(writer!==currentWriter)throw new DOMException('Selected draft changed','AbortError');
+   for(const key of Object.keys(value))delete value[key];Object.assign(value,structuredClone(result.value));
+   lastDraftMutation={...operation,result};draftMutation=null;pending=null;dirty=true;last=JSON.stringify({selected:selection(base),value});checkpointError=false;error='';status=text('checkpointed');paint();return result;
+  }catch(failure){
+   if(captured===owner){
+    if(['INVALID','FORMAT','DRAFT_CHANGED','RECORD_CHANGED','FIGURE_INVALID','MATERIAL_INVALID','MATERIAL_CHANGED'].includes(failure.code))draftMutation=null;
+    checkpointError=true;error=failure.message||text('checkpointFailed');status='';paint();
+   }
+   throw failure;
+  }
+ }
+ async function draftChange(action,body={},{checkpoint=action!=='start',...options}={}){
+  const captured=owner;
+  if(checkpoint)await flush();
+  const task=queue.then(async()=>{draftCurrent(captured);return writeDraftChange(action,body,options);});queue=task.catch(()=>{});return task;
+ }
  function readReply(result,expected){
   if(!result||Object.entries(expected).some(([key,value])=>result[key]!==value)||!revisionId(result.revision)||!revisionId(result.storageRevision)||!revisionId(result.etag)||typeof result.recordTitle!=='string'||!result.value||typeof result.value!=='object'||Array.isArray(result.value))throw Error(text('invalidRead'));
   return result;
@@ -42,7 +80,7 @@ export function recordValueEditor({state,api,esc,notify,onSaved,onClosed,adapter
    for(;;){
    if(!dirty||!base||!value||!writer||currentOwner!==owner)return true;
    if(!validContext())throw Error(text('changedWorkspace'));
-   try{await view.checkpoint?.();}
+   try{if(draftMutation)await writeDraftChange(draftMutation.action,draftMutation.body,{mutationId:draftMutation.mutationId});await view.checkpoint?.({change:writeDraftChange});}
    catch(failure){if(currentOwner===owner){checkpointError=true;error=failure.message||text('checkpointFailed');status='';paint();}throw failure;}
    if(currentOwner!==owner||!validContext())return false;
    const selected=selection(base);
@@ -76,7 +114,7 @@ export function recordValueEditor({state,api,esc,notify,onSaved,onClosed,adapter
  }
  function finish(){
   clearTimeout(timer);timer=null;dialog.close();owner=null;view.release?.();dialog.innerHTML='';
-  base=value=writer=pending=conflict=null;dirty=busy=loading=checkpointError=false;last=error=status='';
+  base=value=writer=pending=conflict=draftMutation=openingInput=lastDraftMutation=null;dirty=busy=loading=checkpointError=false;last=error=status='';
   if(focusBefore?.isConnected)focusBefore.focus({preventScroll:true});resolveClose?.();resolveClose=null;void onClosed?.();
  }
  async function save(){
@@ -122,7 +160,7 @@ export function recordValueEditor({state,api,esc,notify,onSaved,onClosed,adapter
   try{
    const action=control.dataset.writing;
    if(action==='save')await save();
-   else if(action==='retry')await flush();
+   else if(action==='retry'){await flush();if(owner===actionOwner&&openingInput&&base&&value){await view.prepare?.(base,value,openingInput);if(owner===actionOwner){openingInput=null;draw();}}}
    else if(action==='close')await close();
    else if(action==='discard'){
     if(control.dataset.confirm!=='true'){control.dataset.confirm='true';control.textContent=text('confirmDiscard');return;}
@@ -135,7 +173,7 @@ export function recordValueEditor({state,api,esc,notify,onSaved,onClosed,adapter
   }catch(failure){if(owner===actionOwner){error=failure.message||text('failed');busy=false;paint();}}
  });
  async function open(input,retained=null){
-  if(dialog.open)return;owner={context:context(),id:crypto.randomUUID()};const loadingOwner=owner;focusBefore=document.activeElement;loading=true;status=text('loading');draw();dialog.showModal();
+  if(dialog.open)return;openingInput=input;owner={context:context(),id:crypto.randomUUID()};const loadingOwner=owner;focusBefore=document.activeElement;loading=true;status=text('loading');draw();dialog.showModal();
   try{
    if(retained){
     const result=await api('/api/research/drafts/'+adapter.route+'/read',{workspaceId:retained.draft.workspaceId,id:retained.draft.id,expectedRevision:retained.revision},{adopt:false});
@@ -146,11 +184,11 @@ export function recordValueEditor({state,api,esc,notify,onSaved,onClosed,adapter
     const expected={workspaceId:state.book.id,recordId:input.recordId,...adapter.target(input)},result=await api('/api/research/records/'+adapter.route+'/read',expected,{adopt:false});if(owner!==loadingOwner)return;readReply(result,expected);
     base=result;value=structuredClone(base.value);writer={id:crypto.randomUUID(),revision:null};status='';
    }
-   if(!validContext())throw Error(text('changedWorkspace'));await view.prepare?.(base,value,input);if(owner!==loadingOwner||!validContext())return;loading=false;if(!retained)view.initialize?.(base,value,input,changed);draw();dialog.querySelector(view.focus)?.focus();
+   if(!validContext())throw Error(text('changedWorkspace'));await view.prepare?.(base,value,input);if(owner!==loadingOwner||!validContext())return;loading=false;if(!retained)view.initialize?.(base,value,input,changed);openingInput=null;draw();dialog.querySelector(view.focus)?.focus();
   }catch(failure){if(owner!==loadingOwner)return;loading=false;error=failure.message||text('failed');status='';paint();}
   return new Promise(resolve=>{resolveClose=resolve;});
  }
- window.addEventListener('beforeunload',event=>{if(dirty||pending){event.preventDefault();event.returnValue='';}});
+ window.addEventListener('beforeunload',event=>{if(dirty||pending||draftMutation){event.preventDefault();event.returnValue='';}});
  document.addEventListener('visibilitychange',()=>{if(document.hidden&&dirty)void flush().catch(()=>{});});
  return {open,recover:header=>open({},header),locked(){if(dialog.open){owner=null;finish();}}};
 }

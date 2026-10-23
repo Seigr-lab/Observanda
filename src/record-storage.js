@@ -1,3 +1,5 @@
+import {hasAuthoredFigures,authoredFigureDocument} from './figure-authoring-format.js';
+import {requireFigureAuthoring,catalogueRequiresFigureAuthoring} from './catalogue-format.js';
 import {hasRetainedFigures,retainedFigureDocument} from './record-retained-figures.js';
 import {requireRetainedFigures,catalogueRequiresRetainedFigures} from './catalogue-format.js';
 import {hasRecordProjection,projectedFigureDocument} from './record-numerical-models.js';
@@ -53,6 +55,7 @@ export async function withStoredRecord(store,id,revision,consume){
 }
 export async function retainStoredRecord(store,record,revision){
  if(hasRecordProjection(record))await requireNativeNumericalModels(store.db);
+ if(hasAuthoredFigures(record))await requireFigureAuthoring(store.db);
  if(hasRetainedFigures(record))await requireRetainedFigures(store.db);
  if(record.results?.statements.some(statement=>statement.table?.version===3))await requirePagedResearchTables(store.db);
  if(record.sections?.some(section=>Object.hasOwn(section,'share')))await requireSourcePublicationControls(store.db);
@@ -85,6 +88,7 @@ export async function retainStoredDocument(store,document,encoding){
  if(blocks.store!==store||scopeId!==blocks.scopeId)throw new AppError('INVALID');
  const revision=encoding.revision;
  if(!catalogueRequiresNativeNumericalModels(await catalogueFormat(store.db))&&await projectedFigureDocument(document))await requireNativeNumericalModels(store.db);
+ if(!catalogueRequiresFigureAuthoring(await catalogueFormat(store.db))&&await authoredFigureDocument(document))await requireFigureAuthoring(store.db);
  if(!catalogueRequiresRetainedFigures(await catalogueFormat(store.db))&&await retainedFigureDocument(document))await requireRetainedFigures(store.db);
  const present=!!await store.db.get('SELECT 1 FROM records WHERE id=$1 AND revision=$2',id,revision);
  if(present){await retainRecordOwnerResource(store,{kind:'record',id,revision},{present:true});return false;}
@@ -108,6 +112,7 @@ export async function verifyStoredRecord(store,id,revision,{signal}={}){
  const indexed=await withStoredRecord(store,id,revision,async({value,blocks})=>{
   if(blocks){const hash=createHash('sha256');for await(const text of blocks.tree().json(value.root,{signal}))hash.update(text);hash.update('\n');if(hash.digest('hex')!==revision)fail();}
   if(!catalogueRequiresNativeNumericalModels(await catalogueFormat(store.db))&&(blocks?await projectedFigureDocument(new RecordDocument(blocks,value.root),{signal}):hasRecordProjection(value)))fail();
+ if(!catalogueRequiresFigureAuthoring(await catalogueFormat(store.db))&&(blocks?await authoredFigureDocument(new RecordDocument(blocks,value.root),{signal}):hasAuthoredFigures(value)))fail();
  if(!catalogueRequiresRetainedFigures(await catalogueFormat(store.db))&&(blocks?await retainedFigureDocument(new RecordDocument(blocks,value.root),{signal}):hasRetainedFigures(value)))fail();
   return {attempt:!!value.attemptIndex,methods:!!value.methodIndex,results:!!value.resultIndex};
  });

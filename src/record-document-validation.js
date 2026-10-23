@@ -3,7 +3,7 @@
 // encrypted scratch storage rather than sets proportional to record length.
 import {validateDetachedRecords,validateRecordChanges} from './model.js';
 import {bookSelectors} from './web/book-selectors.js';
-import {figureTargets} from './web/figure-composition.js';
+import {retainedFigureTargets} from './retained-figure-targets.js';
 import {workflowIssues} from './web/record-workflow.js';
 import {withScratch} from './scratch-work.js';
 import {AppError} from './errors.js';
@@ -49,7 +49,7 @@ export async function validateRecordDocument(document,metadata,{signal,summaries
     validateDetachedRecords([part]);
     if(name==='sections')await unique('identity',item.id,'sections');
     if(['contributors','relations','attachments'].includes(name))await unique(name,item.id,name);
-    if(name==='figures')for(const figure of figureTargets([item]))await unique('figures',figure.id,'figures');
+    if(name==='figures')for await(const figure of retainedFigureTargets(document.blocks,item,{signal}))await unique('figures',figure.id,'figures');
     for(const selector of bookSelectors(part))await unique('selector:'+selector.kind,selector.id,'duplicate book content identity');
     if(name==='relations'){
      validateRecordChanges(metadata,[part],summaries,{capacity:false});

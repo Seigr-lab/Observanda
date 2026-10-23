@@ -7,7 +7,7 @@ export function validFigureCopies(copies,figure){
  if(!Array.isArray(copies)||!copies.length)return false;
  const targets=new Set(figure?figurePlots(figure).map(plot=>plot.id):[]),seen=new Set();
  return copies.every(copy=>{
-  if(!keys(copy,'figureId,plotId,source,targetId')||!validFigureCopySource(copy.source)||![copy.figureId,copy.plotId,copy.targetId].every(researchId)||seen.has(copy.targetId)||figure&&!targets.has(copy.targetId))return false;
+  if(!keys(copy,'figureId,plotId,source,targetId')||!validFigureCopySource(copy.source)||![copy.figureId,copy.plotId,copy.targetId].every(researchId)||seen.has(copy.targetId)||figure&&figure.kind!=='retained'&&!targets.has(copy.targetId))return false;
   seen.add(copy.targetId);return true;
  });
 }

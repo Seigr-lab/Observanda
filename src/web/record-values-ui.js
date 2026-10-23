@@ -33,9 +33,9 @@ export function recordValuesView(options,lifecycle){
  let retainedContributor=null;const media=recordMediaView(options),choices=customFieldChoices({api:options.api,esc,lifecycle});
  const display=base=>base.field==='type'?recordLabel(base.value.value):base.field==='occurredOn'?recordDateLabel(base.value.value):base.field==='status'?text('status_'+base.value.value):base.value.value===null?text('empty'):typeof base.value.value==='boolean'?text(base.value.value?'yes':'no'):base.value.value;
  const relations=recordRelationView(options,lifecycle),figures=recordFigureView(options,lifecycle),attempts=recordAttemptView(options,lifecycle),results=recordResultView(options,lifecycle);return {
-  prepare:(base,value,input)=>attemptValueField(base.field)?attempts.prepare(base,value,input):undefined,
+  prepare:(base,value,input)=>attemptValueField(base.field)?attempts.prepare(base,value,input):figureValueId(base.field)?figures.prepare(base,value,input):undefined,
   initialize(base,value,input,changed){if(resultValueId(base.field))results.initialize(base,value,input,changed);else if(attemptValueField(base.field))attempts.initialize(base,value,input,changed);else if(figureValueId(base.field))figures.initialize(base,value,input,changed);},
-  checkpoint:()=>figures.checkpoint(),
+  checkpoint:options=>figures.checkpoint(options),
   rebase(base,value){if(attemptValueField(base.field))attempts.rebase(base,value);},
   bind:dialog=>{choices.bind(dialog);relations.bind(dialog);figures.bind(dialog);attempts.bind(dialog);results.bind(dialog);},release:()=>{choices.release();relations.release();figures.release();attempts.release();results.release();},busy:()=>relations.busy()||figures.busy()||attempts.busy()||results.busy(),
   heading:base=>base?text('heading',{field:label(base.field,base.definition)}):text('edit'),focus:'[data-writing-fields] input,[data-writing-fields] select,[data-writing-fields] textarea',
