@@ -1,0 +1,55 @@
+import {ModuleCatalogue} from '../src/modules/catalogue.js';
+import {projectModuleDraftContext} from '../src/project-module-draft-context.js';
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {mkdir,copyFile} from 'node:fs/promises';
+import path from 'node:path';
+import {fixture,calculation} from './project-domain-fixture.js';
+import {ProjectModuleCommands} from '../src/project-module-commands.js';
+import {ProjectModuleDrafts} from '../src/project-module-drafts.js';
+import {ProjectModuleHistory} from '../src/project-module-history.js';
+import {ProjectModuleReader} from '../src/project-module-reader.js';
+import {defaultCalculationPolicy} from '../src/web/tools/calculation-policy.js';
+import {calculateDetailed} from '../src/tools/math.js';
+import {catalogueFormat,catalogueRequiresCalculationPolicies} from '../src/catalogue-format.js';
+import {workspaceFile,atomicWrite} from '../src/storage.js';
+import {backupCatalogue} from '../src/postgres.js';
+import {verifyCatalogueArchive,rekeyCatalogue} from '../src/research-catalogue.js';
+import {ProjectStorage} from '../src/project-storage.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
+import {clearVault} from '../src/encryption.js';
+import {serialize} from '../src/storage-format.js';
+test('dedicated calculation policies and unfinished policy drafts survive replay, history and fresh-key recovery',{timeout:180000},async t=>{
+ const f=await fixture(t),commands=new ProjectModuleCommands(f.storage,f.book.id);await commands.initialize();
+ const old=calculation(f);old.payload.data.engine=2;old.payload.data.expression='sqrt(2)';await commands.execute(old);
+ const before=await f.storage.catalogue(store=>catalogueFormat(store.db));assert.equal(catalogueRequiresCalculationPolicies(before),false);
+ const policy=defaultCalculationPolicy();policy.workingDigits=80;policy.displayDigits=7;policy.rounding='ceiling';
+ const command={...old,commandId:randomUUID(),payload:{...old.payload,expectedRevision:1,data:{...old.payload.data,engine:3,policy}}},receipt=await commands.execute(command);
+ const replay=await commands.execute(command);assert.equal(replay.replayed,true);assert.deepEqual(replay.entities,receipt.entities);assert.deepEqual(replay.revisions,receipt.revisions);await assert.rejects(commands.execute({...command,payload:{...command.payload,data:{...command.payload.data,policy:{...policy,displayDigits:6}}}}),{code:'MODULE_REPLAY'});
+ assert.equal(catalogueRequiresCalculationPolicies(await f.storage.catalogue(store=>catalogueFormat(store.db))),true);
+ await assert.rejects(f.domains.run(['calculator'],async get=>{const store=get('calculator');await store.catalogueDb.run('UPDATE catalogue_format SET version=$1',before);const catalogue=new ModuleCatalogue(store);await catalogue.selected(await catalogue.head(f.book.id),command.payload.id);},{write:['calculator']}),{code:'CATALOGUE_DAMAGED'});
+ const history=new ProjectModuleHistory(f.storage,f.book.id);
+ assert.equal((await history.read({workspaceId:f.book.id,id:command.payload.id,revision:1})).entity.data.engine,2);
+ assert.deepEqual((await history.read({workspaceId:f.book.id,id:command.payload.id,revision:2})).entity.data.policy,policy);
+ const drafts=new ProjectModuleDrafts(f.storage,f.book.id),checkpoint={workspaceId:f.book.id,moduleId:'scientific-calculator',id:randomUUID(),etag:null,drafts:[{id:command.payload.id,type:'calculation',expectedRevision:2,baseRevision:2,data:{...command.payload.data,policy:{...policy,displayDigits:null}}}]},scope={workspaceId:f.book.id,moduleId:checkpoint.moduleId,id:checkpoint.id};
+ const saved=await drafts.write(checkpoint);
+ await assert.rejects(f.domains.run(['calculator'],async(_get,context)=>{const {store,drafts:owned}=await projectModuleDraftContext(context,checkpoint.moduleId,{writable:true});await store.catalogueDb.run('UPDATE catalogue_format SET version=$1',before);await owned.read(checkpoint.id);},{authoring:[checkpoint.moduleId]}),{code:'CATALOGUE_DAMAGED'});await f.runtime.closeProject(f.storage.root);
+ assert.equal((await drafts.read(scope)).draft.drafts[0].data.policy.displayDigits,null);
+ assert.deepEqual((await drafts.read(scope)).draft.drafts[0].base.policy,policy);
+ const descriptor={format:'observanda-research-catalogue',version:2,workspaceId:f.book.id};await f.storage.catalogue(store=>store.verify(descriptor));
+ const original=await f.storage.readFile(await workspaceFile(f.storage.root),'utf8'),copyRoot=path.join(f.root,'archive');await mkdir(path.join(copyRoot,'.observanda'),{recursive:true});
+ for(const file of [path.basename(await workspaceFile(f.storage.root)),'.observanda/access.json'])await copyFile(path.join(f.storage.root,file),path.join(copyRoot,file));
+ const db=await f.storage.openCatalogue();try{await backupCatalogue(f.storage.root,copyRoot,{connection:db});}finally{await db.close();}
+ const copied=new ProjectStorage(copyRoot,f.projectId,f.vault);await verifyCatalogueArchive(copied,JSON.parse(original));
+ assert.equal((await new ProjectModuleDrafts(copied,f.book.id).read(scope)).etag,saved.etag);
+ const access=await createWorkspaceAccess('','',new TestDeviceStore({file:path.join(f.root,'replacement-device')})),vault=takeCreatedVault(access);
+ try{
+  const recovered=new ProjectStorage(path.join(f.root,'recovered'),f.projectId,vault);await mkdir(path.join(recovered.root,'.observanda'),{recursive:true});await atomicWrite(path.join(recovered.root,'.observanda/access.json'),serialize(access));await recovered.writeFile(await workspaceFile(recovered.root,{secure:true}),original);
+  await rekeyCatalogue(f.storage,recovered,JSON.parse(original));await verifyCatalogueArchive(recovered,JSON.parse(original));
+  assert.equal((await new ProjectModuleDrafts(recovered,f.book.id).read(scope)).etag,saved.etag);
+  const item=(await new ProjectModuleReader(recovered,f.book.id).selected({workspaceId:f.book.id,id:command.payload.id})).entity;
+  assert.deepEqual(item.data.policy,policy);assert.equal(calculateDetailed(item.data.expression,item.data).result,'1.414214');
+ }finally{clearVault(vault);}
+});

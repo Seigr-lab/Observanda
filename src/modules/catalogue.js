@@ -1,3 +1,5 @@
+import {catalogueFormat,catalogueRequiresCalculationPolicies,requireCalculationPolicies} from '../catalogue-format.js';
+import {hasCalculationPolicy} from '../web/tools/calculation-policy.js';
 import {resolveModuleEvent,resolveModuleEntity} from '../project-retired-modules.js';
 import {assertProjectSourceModuleWrite} from '../project-source-module-authority.js';
 // Current module entities and retained command receipts have separate read
@@ -26,6 +28,7 @@ export const moduleCurrentBytes=(workspaceId,revision,members)=>{
 };
 export class ModuleCatalogue{
  constructor(store){this.store=store;this.currentSizes=new WeakMap();this.membersIndex=new ModuleMemberIndex(store);}
+ async checkPolicy(entity){if(hasCalculationPolicy(entity?.type,entity?.data)&&!catalogueRequiresCalculationPolicies(await catalogueFormat(this.store.catalogueDb??this.store.db)))damaged();}
  async head(workspaceId){
   const s=this.store,row=await s.db.get("SELECT payload FROM state WHERE slot='modules'");
   const counts=await s.db.get('SELECT (SELECT count(*) FROM module_entities)::text AS entities,count(*)::text AS events,COALESCE(max(ordinal),0)::text AS last FROM module_events');
@@ -58,7 +61,7 @@ export class ModuleCatalogue{
   const row=stored??await this.store.db.get('SELECT id,revision,payload FROM module_entities WHERE id=$1',id);if(row&&row.id!==id)damaged();
   if(!member){if(row)damaged();return null;}
   if(!row||row.revision!==member.revision)damaged();
-  const entity=await resolveModuleEntity(this.store,row,this.store.decode('module-entity',id+'/'+row.revision,row.payload));this.store.assertModuleType?.(entity.type);
+  const entity=await resolveModuleEntity(this.store,row,this.store.decode('module-entity',id+'/'+row.revision,row.payload));this.store.assertModuleType?.(entity.type);await this.checkPolicy(entity);
   if(entity.id!==id||entity.revision!==member.revision||hash(entity)!==member.hash)damaged();
   if(head.currentVersion===1&&(moduleEntityBytes(entity)!==member.bytes||hash(moduleConstraint(entity))!==member.constraintHash))damaged();
   if(head.viewVersion===1&&(entity.type!==member.type||hash(moduleView(entity))!==member.viewHash||hash(moduleSearch(entity))!==member.searchHash))damaged();
@@ -110,7 +113,7 @@ export class ModuleCatalogue{
   const entities=[];
   for await(const row of s.db.rows('SELECT id,revision,payload FROM module_entities ORDER BY id',[],{batchSize:16})){
    const entity=await resolveModuleEntity(s,row,s.decode('module-entity',row.id+'/'+row.revision,row.payload)),member=await this.member(head,row.id);
-   if(!member||entity.id!==row.id||entity.revision!==row.revision||member.revision!==row.revision||member.hash!==hash(entity))damaged();
+   await this.checkPolicy(entity);if(!member||entity.id!==row.id||entity.revision!==row.revision||member.revision!==row.revision||member.hash!==hash(entity))damaged();
    if(head.currentVersion===1&&(moduleEntityBytes(entity)!==member.bytes||hash(moduleConstraint(entity))!==member.constraintHash))damaged();
    if(head.viewVersion===1&&(entity.type!==member.type||hash(moduleView(entity))!==member.viewHash||hash(moduleSearch(entity))!==member.searchHash))damaged();
    if(member.referencesHash&&hash(moduleReferences(entity))!==member.referencesHash)damaged();
@@ -127,7 +130,7 @@ export class ModuleCatalogue{
   }
   return data;
  }
- async event(row){const event=await resolveModuleEvent(this.store,row,this.store.decode('module-event',row.command_id+'/'+row.ordinal,row.payload));if(event.commandId!==row.command_id)damaged();return event;}
+ async event(row){const event=await resolveModuleEvent(this.store,row,this.store.decode('module-event',row.command_id+'/'+row.ordinal,row.payload));if(event.commandId!==row.command_id)damaged();if(Array.isArray(event.changes))for(const entity of event.changes)await this.checkPolicy(entity);return event;}
  async receipt(commandId,revision){
   const row=await this.store.db.get('SELECT command_id,ordinal,payload FROM module_events WHERE command_id=$1',commandId);
   if(!row)return null;if(row.ordinal>revision)damaged();return this.event(row);
@@ -171,6 +174,7 @@ export class ModuleCatalogue{
  async writeChanges(previous,entities,event){
   await this.store.assertModuleWrite?.(entities,event);
   await assertProjectSourceModuleWrite(this,previous,entities);
+  if(entities.some(entity=>hasCalculationPolicy(entity.type,entity.data)))await requireCalculationPolicies(this.store.catalogueDb??this.store.db);
   const s=this.store,empty=(previous.memberVersion===1?previous.root?.count??0:previous.entities.length)===0;
   let root=previous.root??null,{bytes:totalBytes}=await this.currentSize(previous);
   if(previous.memberVersion!==1)for await(const member of this.members(previous))root=await this.membersIndex.put(root,{...member,historyFrom:previous.historyVersion===1?member.historyFrom:member.revision});

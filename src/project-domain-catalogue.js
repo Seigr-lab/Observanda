@@ -9,9 +9,9 @@ import {digest,serialize} from './storage-format.js';
 import {AppError} from './errors.js';
 import {validModuleDomain,moduleDomain} from './modules/domains.js';
 export class ProjectDomainCatalogue{
- constructor(workspace,db,domain,namespaceId,{writable=false}={}){
+ constructor(workspace,db,domain,namespaceId,{writable=false,catalogueDb=null}={}){
   if(!workspace.vault?.key||!validModuleDomain(domain))throw new AppError('INVALID');
-  this.workspace=workspace;this.db=db;this.domain=domain;this.namespaceId=namespaceId;this.writable=writable;
+  this.workspace=workspace;this.db=db;this.catalogueDb=catalogueDb;this.domain=domain;this.namespaceId=namespaceId;this.writable=writable;
   this.scope=moduleDomainKeyScope(workspace,namespaceId);
   this.key=Buffer.from(hkdfSync('sha256',workspace.vault.key,this.scope.salt,this.scope.label+'/'+workspace.vault.id+'/'+domain,32));
  }

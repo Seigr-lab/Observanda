@@ -143,6 +143,9 @@ export class Workspace {
           if(nativeClockMetadata(relative,value)){const {requireNativeClockModels}=await import('./catalogue-format.js');await requireNativeClockModels(store.db);}
           const {nativeDomainMetadata}=await import('./native-domain-format.js');if(nativeDomainMetadata(relative,value)){const {requireNativeDomainValues}=await import('./catalogue-format.js');await requireNativeDomainValues(store.db);}
         }
+        if(/^\.observanda\/module-drafts\/[a-f0-9-]{36}\.json$/.test(relative)){
+          const {checkpointHasCalculationPolicy}=await import('./web/tools/calculation-policy.js');if(checkpointHasCalculationPolicy(JSON.parse(text))){const {requireCalculationPolicies}=await import('./catalogue-format.js');await requireCalculationPolicies(store.db);}
+        }
         if(relative.startsWith('.observanda/reviews/parts/')||/^\.observanda\/reviews\/[a-f0-9-]{36}\.json$/.test(relative)&&JSON.parse(text)?.request?.value?.version===2){
           const {requireReviewFigurePackages}=await import('./catalogue-format.js');await requireReviewFigurePackages(store.db);
         }

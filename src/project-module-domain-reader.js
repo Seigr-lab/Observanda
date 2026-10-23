@@ -11,7 +11,7 @@ export async function projectModuleDomainReader(research){
   const session=databaseSchemaSession(research.db),stores=new Map(),root=research.workspace.catalogueStore(session.schema(research.db.schema));
   const inspect=async domain=>{
    if(!registry.domains.includes(domain))throw new AppError('INVALID');
-   if(!stores.has(domain)){const store=new ProjectDomainCatalogue(research.workspace,session.schema(projectDomainSchema(research.db.id,domain)),domain,registry.namespaceId);stores.set(domain,store);await checkProjectDomainOwner(store);}return stores.get(domain);
+   if(!stores.has(domain)){const store=new ProjectDomainCatalogue(research.workspace,session.schema(projectDomainSchema(research.db.id,domain)),domain,registry.namespaceId,{catalogueDb:root.db});stores.set(domain,store);await checkProjectDomainOwner(store);}return stores.get(domain);
   };
   try{return await operation({research:root,registry,inspect,identities:new ProjectModuleIdentities(root,registry,inspect)});}
   finally{session.close();for(const store of stores.values())store.close();await research.db.run('SET LOCAL search_path TO "'+research.db.schema+'", pg_catalog').catch(error=>{if(error.code!=='25P02')throw error;});}

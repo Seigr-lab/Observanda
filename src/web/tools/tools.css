@@ -7,3 +7,6 @@
 .review-workflow small{overflow-wrap:anywhere}.tool-reaction output{font-size:.85rem;align-self:center;overflow-wrap:anywhere}
 .review-workflow .module-actions{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-block:.75rem}.review-workflow .module-item{overflow-wrap:anywhere}
 @media(max-width:600px){.tool-timeline{flex-direction:column;overflow-x:visible}.tool-timeline .tool-branch{flex:0 0 auto;width:100%;min-width:0;max-width:none}}
+
+.calculation-policy-fields>.field{margin:0;min-width:0}.calculation-policy-fields input,.calculation-policy-fields select{min-width:0;width:100%}@media(max-width:600px){.calculation-policy-fields{grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem}.calculation-policy-fields>.field:nth-child(3),.calculation-policy-fields>.field:nth-child(6){grid-column:1/-1}}
+[data-calculation-policy-panel]{scroll-margin-top:5rem}

@@ -21,6 +21,7 @@ function database(version,{optionalDomains=false,payload=null,domains=[]}={}){
   async get(sql,slot){if(sql==="SELECT 1 FROM state WHERE slot='head'")return this.inserted.some(values=>values[0]==='head')?{found:1}:null;assert.equal(sql,'SELECT 1 FROM state WHERE slot=$1');assert.equal(slot,'project-domains');return optionalDomains?{found:1}:null;},
   async *rows(){if(this.schema===schema&&payload)yield {slot:'head',payload_bytes:payload.length};},
   async run(sql,...values){
+   if(sql==='LOCK TABLE catalogue_format IN ACCESS EXCLUSIVE MODE NOWAIT')return;
    if(sql.startsWith('SET LOCAL search_path TO ')){selected=sql.split('"')[1];return;}
    if(sql.startsWith('UPDATE catalogue_format')){this.version=Math.max(this.version,values[0]);return;}
    if(sql.startsWith('CREATE INDEX records_scope_revision')){assert.equal(this.retiredIndex,false);this.retiredIndex=true;return;}
@@ -37,7 +38,7 @@ function expected(features){return {domains:features.owners>=1,settings:features
 
 test('publication admission and every existing feature transition preserve all 24 owner combinations',async()=>{
  const transitions=[[formats.requireWorkspaceDomains,{owners:1}],[formats.requireProjectDomains,{owners:1}],[formats.requireWorkspaceSettings,{owners:2}],[formats.requireWebsiteDocuments,{website:1}],[formats.requireWebsiteEditor,{website:2}],[formats.requireWebsitePresentation,{website:3}],[formats.requireStagedEvidence,{staged:true}]];
- const olderAdmissions=Object.entries(formats).filter(([name])=>name.startsWith('require')&&!transitions.some(([admit])=>admit===formats[name])&&!['requirePublicationDocuments','requireRecordOwnerTransfers','requireConfigurationDocuments','requireSourcePublicationControls','requireWebsiteSourceSelections','requireNestedAttemptCollections','requireOwnerDirectories','requirePortabilityCollections','requireWebsiteTemplateInheritance','requirePagedResearchTables','requireNativeNumericalModels','requireNativeClockModels','requireRetainedFigures','requireReferencedCalculations','requireReviewFigurePackages','requireNativeDomainValues'].includes(name)).map(([,admit])=>admit);
+ const olderAdmissions=Object.entries(formats).filter(([name])=>name.startsWith('require')&&!transitions.some(([admit])=>admit===formats[name])&&!['requirePublicationDocuments','requireRecordOwnerTransfers','requireConfigurationDocuments','requireSourcePublicationControls','requireWebsiteSourceSelections','requireNestedAttemptCollections','requireOwnerDirectories','requirePortabilityCollections','requireWebsiteTemplateInheritance','requirePagedResearchTables','requireNativeNumericalModels','requireNativeClockModels','requireRetainedFigures','requireReferencedCalculations','requireReviewFigurePackages','requireNativeDomainValues','requireCalculationPolicies'].includes(name)).map(([,admit])=>admit);
  const generations=new Set();
  for(const features of combinations){
   const generation=formats.publicationCatalogueGeneration(features);generations.add(generation);
@@ -139,8 +140,8 @@ test('configuration documents preserve all 96 capability combinations in either 
   await formats.requireConfigurationDocuments(db);assert.deepEqual(requirements(db.version),before);assert.equal(formats.catalogueRequiresPublicationDocuments(db.version),publication);assert.equal(formats.catalogueRequiresRecordOwnerTransfers(db.version),transfers);
  }
  const oldProject=database(23,{optionalDomains:true});await formats.requireConfigurationDocuments(oldProject);assert.equal(formats.catalogueRequiresDomains(oldProject.version),true);
- for(const invalid of [121,786554,122.5,null]){assert.equal(formats.catalogueRequiresConfigurationDocuments(invalid),false);await assert.rejects(formats.restoreConfigurationCatalogueFormat(database(3),invalid),{code:'CATALOGUE_DAMAGED'});}
- await assert.rejects(formats.catalogueFormat(database(786554)),{code:'CATALOGUE_DAMAGED'});
+ for(const invalid of [121,1572986,122.5,null]){assert.equal(formats.catalogueRequiresConfigurationDocuments(invalid),false);await assert.rejects(formats.restoreConfigurationCatalogueFormat(database(3),invalid),{code:'CATALOGUE_DAMAGED'});}
+ await assert.rejects(formats.catalogueFormat(database(1572986)),{code:'CATALOGUE_DAMAGED'});
 });
 
 test('archive 15 restores every configuration capability combination and rejects header downgrades',async()=>{
@@ -150,7 +151,7 @@ test('archive 15 restores every configuration capability combination and rejects
   await writeCatalogueArchive(database(version,{payload,domains}),{writeFile:async text=>parts.push(text)},tables,{observe:false});
   const raw=parts.join(''),lines=raw.trimEnd().split('\n'),header=JSON.parse(lines[0]);assert.equal(header.version,15);assert.equal(header.catalogueVersion,version);assert.deepEqual(header.domains,domains);
   const restored=database(3);await readCatalogueStream(Readable.from([Buffer.from(raw)]),restored,tables);assert.equal(restored.version,version);assert.deepEqual(restored.inserted,[['head',payload]]);
-  for(const change of [{version:14},{version:13},{catalogueVersion:121},{catalogueVersion:786554},{domains:ordinary.owners?[]:['tasks']}]){
+  for(const change of [{version:14},{version:13},{catalogueVersion:121},{catalogueVersion:1572986},{domains:ordinary.owners?[]:['tasks']}]){
    const damaged=JSON.stringify({...header,...change})+'\n'+lines.slice(1).join('\n')+'\n';await assert.rejects(readCatalogueStream(Readable.from([Buffer.from(damaged)]),database(3),tables),{code:'CATALOGUE_DAMAGED'});
   }
  }
@@ -183,7 +184,7 @@ test('paged website choices preserve all 192 prior capability combinations throu
   }
  }
  assert.deepEqual([...seen],Array.from({length:192},(_,i)=>314+i));
- const invalid=database(786554);await assert.rejects(formats.catalogueFormat(invalid),{code:'CATALOGUE_DAMAGED'});
+ const invalid=database(1572986);await assert.rejects(formats.catalogueFormat(invalid),{code:'CATALOGUE_DAMAGED'});
 });
 
 
@@ -216,7 +217,7 @@ test('nested preparation admission preserves all 384 prior combinations through 
  }
  assert.deepEqual([...seen],Array.from({length:384},(_,i)=>506+i));
  for(const nestedAttempts of [null,1,'true',{}])assert.throws(()=>formats.configurationCatalogueGeneration({...formats.configurationCatalogueFeatures(122),nestedAttempts}),{code:'INVALID'});
- for(const invalid of [786554,506.5,null])await assert.rejects(formats.catalogueFormat(database(invalid)),{code:'CATALOGUE_DAMAGED'});
+ for(const invalid of [1572986,506.5,null])await assert.rejects(formats.catalogueFormat(database(invalid)),{code:'CATALOGUE_DAMAGED'});
 });
 
 test('native directory admission preserves all 768 prior combinations through owner upgrades and archive restoration',async()=>{
@@ -249,7 +250,7 @@ test('native directory admission preserves all 768 prior combinations through ow
  }
  assert.deepEqual([...seen],Array.from({length:768},(_,i)=>890+i));
  for(const ownerDirectories of [null,1,'true',{}])assert.throws(()=>formats.configurationCatalogueGeneration({...formats.configurationCatalogueFeatures(122),ownerDirectories}),{code:'INVALID'});
- for(const invalid of [786554,506.5,null])await assert.rejects(formats.catalogueFormat(database(invalid)),{code:'CATALOGUE_DAMAGED'});
+ for(const invalid of [1572986,506.5,null])await assert.rejects(formats.catalogueFormat(database(invalid)),{code:'CATALOGUE_DAMAGED'});
 });
 
 test('native portability generations preserve all prior feature and restore combinations',async()=>{
@@ -270,7 +271,7 @@ test('paged research admission restores every existing feature without manufactu
   await formats.requirePagedResearchTables(db);assert.equal(db.version,restored.version);
  }
  for(const value of [null,1,'true',{}])assert.throws(()=>formats.configurationCatalogueGeneration({...formats.configurationCatalogueFeatures(122),pagedResearchTables:value}),{code:'INVALID'});
- await assert.rejects(formats.catalogueFormat(database(786554)),{code:'CATALOGUE_DAMAGED'});
+ await assert.rejects(formats.catalogueFormat(database(1572986)),{code:'CATALOGUE_DAMAGED'});
 });
 
 
@@ -284,7 +285,7 @@ test('native numerical models preserve all prior owner and storage requirements 
   await formats.requireNativeNumericalModels(db);assert.equal(db.version,restored.version);
  }
  for(const nativeNumericalModels of [null,1,'true',{}])assert.throws(()=>formats.configurationCatalogueGeneration({...formats.configurationCatalogueFeatures(122),nativeNumericalModels}),{code:'INVALID'});
- await assert.rejects(formats.catalogueFormat(database(786554)),{code:'CATALOGUE_DAMAGED'});
+ await assert.rejects(formats.catalogueFormat(database(1572986)),{code:'CATALOGUE_DAMAGED'});
 });
 
 test('declared clock models restore independently of every prior numerical and owner feature',async()=>{
@@ -297,7 +298,7 @@ test('declared clock models restore independently of every prior numerical and o
   await formats.requireNativeClockModels(db);assert.equal(db.version,restored.version);
  }
  for(const nativeClockModels of [null,1,'true',{}])assert.throws(()=>formats.configurationCatalogueGeneration({...formats.configurationCatalogueFeatures(122),nativeClockModels}),{code:'INVALID'});
- await assert.rejects(formats.catalogueFormat(database(786554)),{code:'CATALOGUE_DAMAGED'});
+ await assert.rejects(formats.catalogueFormat(database(1572986)),{code:'CATALOGUE_DAMAGED'});
 });
 
 for(const [feature,suffix,bit] of [['retainedFigures','RetainedFigures',49152],['referencedCalculations','ReferencedCalculations',98304]])test(feature+' restores every prior storage feature independently',async()=>{
@@ -333,7 +334,7 @@ test('figure review packets preserve independent requirements through admission 
  await writeCatalogueArchive(source,{writeFile:async text=>chunks.push(text)},{state:['slot','payload']},{observe:false});
  const restored=database(3);await readCatalogueStream(Readable.from([Buffer.from(chunks.join(''))]),restored,{state:['slot','payload']});
  assert.equal(restored.version,196730);assert.equal(formats.catalogueRequiresReferencedCalculations(restored.version),false);assert.equal(formats.catalogueRequiresRetainedFigures(restored.version),false);
- await assert.rejects(formats.catalogueFormat(database(786554)),{code:'CATALOGUE_DAMAGED'});
+ await assert.rejects(formats.catalogueFormat(database(1572986)),{code:'CATALOGUE_DAMAGED'});
 });
 
 
@@ -356,5 +357,36 @@ test('native domain values preserve every prior requirement without implying rev
  await writeCatalogueArchive(source,{writeFile:async text=>chunks.push(text)},{state:['slot','payload']},{observe:false});
  const restored=database(3);await readCatalogueStream(Readable.from([Buffer.from(chunks.join(''))]),restored,{state:['slot','payload']});
  assert.equal(restored.version,393338);assert.equal(formats.catalogueRequiresReviewFigurePackages(restored.version),false);assert.equal(formats.catalogueRequiresReferencedCalculations(restored.version),false);
- await assert.rejects(formats.catalogueFormat(database(786554)),{code:'CATALOGUE_DAMAGED'});
+ await assert.rejects(formats.catalogueFormat(database(1572986)),{code:'CATALOGUE_DAMAGED'});
+});
+
+
+test('calculation policies preserve every prior flag and exact archive restoration',async()=>{
+ const bit=786432;
+ for(let prior=122;prior<122+bit;prior++){
+  const previous=formats.configurationCatalogueFeatures(prior),next=formats.configurationCatalogueFeatures(prior+bit);
+  assert.deepEqual(next,{...previous,calculationPolicies:true});assert.equal(formats.configurationCatalogueGeneration(next),prior+bit);
+  assert.equal(formats.catalogueRequiresCalculationPolicies(prior),false);
+ }
+ const bits=[24,48,96,192,384,768,1536,3072,6144,12288,24576,49152,98304,196608,393216];
+ for(const base of combinations)for(const offset of [0,...bits,bit-24]){
+  const prior=formats.configurationCatalogueGeneration({...base,publication:false,transfers:false})+offset,db=database(prior);
+  await formats.requireCalculationPolicies(db);assert.equal(db.version,prior+bit);
+  await formats.requireCalculationPolicies(db);assert.equal(db.version,prior+bit);
+  const restored=database(3);await formats.restoreConfigurationCatalogueFormat(restored,db.version);assert.equal(restored.version,db.version);
+ }
+ for(const calculationPolicies of [null,1,'true',{}])assert.throws(()=>formats.configurationCatalogueGeneration({...formats.configurationCatalogueFeatures(122),calculationPolicies}),{code:'INVALID'});
+ const payload=seal(Buffer.from('Retained calculation policies'),randomBytes(32),'test'),source=database(786554,{payload}),chunks=[];
+ await writeCatalogueArchive(source,{writeFile:async text=>chunks.push(text)},{state:['slot','payload']},{observe:false});
+ const restored=database(3);await readCatalogueStream(Readable.from([Buffer.from(chunks.join(''))]),restored,{state:['slot','payload']});
+ assert.equal(restored.version,786554);assert.equal(formats.catalogueRequiresNativeDomainValues(restored.version),false);assert.equal(formats.catalogueRequiresReviewFigurePackages(restored.version),false);
+ await assert.rejects(formats.catalogueFormat(database(1572986)),{code:'CATALOGUE_DAMAGED'});
+});
+
+
+test('first policy admission refuses a contended format lock before any upgrade',async()=>{
+ const db=database(122),run=db.run.bind(db);let changes=0;
+ db.run=async(sql,...values)=>{if(sql==='LOCK TABLE catalogue_format IN ACCESS EXCLUSIVE MODE NOWAIT')throw Object.assign(new Error('busy'),{code:'55P03'});changes++;return run(sql,...values);};
+ await assert.rejects(formats.requireCalculationPolicies(db),{code:'LOCKED'});assert.equal(db.version,122);assert.equal(changes,0);
+ const admitted=database(786554);admitted.run=()=>assert.fail('An admitted policy must not take a new upgrade lock');await formats.requireCalculationPolicies(admitted);
 });

@@ -10,7 +10,7 @@ export async function rekeyProjectDomains(from,to){
  const sourceSession=databaseSchemaSession(from.db),targetSession=databaseSchemaSession(to.db),stores=[];
  try{
   for(const domain of registry.domains){
-   const source=new ProjectDomainCatalogue(from.workspace,sourceSession.schema(projectDomainSchema(from.db.id,domain)),domain,registry.namespaceId),target=new ProjectDomainCatalogue(to.workspace,targetSession.schema(projectDomainSchema(to.db.id,domain)),domain,registry.namespaceId,{writable:true});stores.push(source,target);
+   const source=new ProjectDomainCatalogue(from.workspace,sourceSession.schema(projectDomainSchema(from.db.id,domain)),domain,registry.namespaceId,{catalogueDb:sourceSession.schema(from.db.schema)}),target=new ProjectDomainCatalogue(to.workspace,targetSession.schema(projectDomainSchema(to.db.id,domain)),domain,registry.namespaceId,{writable:true,catalogueDb:targetSession.schema(to.db.schema)});stores.push(source,target);
    await createProjectDomainSchema(target.db);
    for(const [table,columns] of Object.entries(projectDomainTables))for await(const row of cataloguePayloadRows(source.db,table,columns)){
     const [kind,id]=table==='state'?['state',row.slot]:table==='objects'?['object',row.id]:table==='module_entities'?['module-entity',row.id+'/'+row.revision]:['module-event',row.command_id+'/'+row.ordinal];

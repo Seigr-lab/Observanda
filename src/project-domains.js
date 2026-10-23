@@ -38,7 +38,7 @@ export class ProjectDomains{
    const research=this.storage.catalogueStore(session.schema(db.schema)),registry=await readProjectDomainRegistry(research);await checkProjectDomainSchemas(research,registry);
    const owned=new Set(registry?.domains??[]);
    for(const domain of domains){
-    const connection=session.schema(projectDomainSchema(db.id,domain)),store=new ProjectDomainCatalogue(this.storage,connection,domain,this.namespaceId,{writable:true});stores.push(store);
+    const connection=session.schema(projectDomainSchema(db.id,domain)),store=new ProjectDomainCatalogue(this.storage,connection,domain,this.namespaceId,{writable:true,catalogueDb:research.db});stores.push(store);
     if(!owned.has(domain)){if(domain==='samples'&&await research.object('laboratory'))throw new AppError('ACCESS_UPGRADE');await createProjectDomainSchema(connection);await store.putObject('owner',{...moduleDomainOwner(this.storage,this.namespaceId),domain,vaultId:this.storage.vault.id});owned.add(domain);}
     await checkProjectDomainOwner(store);
    }
@@ -46,7 +46,7 @@ export class ProjectDomains{
     // Existing shared/domain history requires its explicit migration owner.
     if((await new ModuleCatalogue(research).head(this.namespaceId)).revision)throw new AppError('ACCESS_UPGRADE');
     for(const domain of owned){
-     const store=new ProjectDomainCatalogue(this.storage,session.schema(projectDomainSchema(db.id,domain)),domain,this.namespaceId);stores.push(store);
+     const store=new ProjectDomainCatalogue(this.storage,session.schema(projectDomainSchema(db.id,domain)),domain,this.namespaceId,{catalogueDb:research.db});stores.push(store);
      if((await new ModuleCatalogue(store).head(this.namespaceId)).revision)throw new AppError('ACCESS_UPGRADE');
     }
    }
@@ -73,7 +73,7 @@ export class ProjectDomains{
    if(authoring.length&&registry?.authoringVersion!==1)throw new AppError('ACCESS_UPGRADE');
    if(domains.some(domain=>!registry?.domains.includes(domain)))throw new AppError('CATALOGUE_UNAVAILABLE');
    for(const domain of domains){
-    const connection=session.schema(projectDomainSchema(db.id,domain)),store=new ProjectDomainCatalogue(this.storage,connection,domain,this.namespaceId,{writable:write.includes(domain)});stores.set(domain,store);await checkProjectDomainOwner(store);
+    const connection=session.schema(projectDomainSchema(db.id,domain)),store=new ProjectDomainCatalogue(this.storage,connection,domain,this.namespaceId,{writable:write.includes(domain),catalogueDb:research.db});stores.set(domain,store);await checkProjectDomainOwner(store);
    }
    const get=domain=>{const store=stores.get(domain);if(!store)throw new AppError('INVALID');return store;};
    // inspect is an internal, read-only identity lookup in the same snapshot;
@@ -81,7 +81,7 @@ export class ProjectDomains{
    const inspect=async domain=>{
     if(!registry?.domains.includes(domain))throw new AppError('INVALID');
     if(!stores.has(domain)){
-     const store=new ProjectDomainCatalogue(this.storage,session.schema(projectDomainSchema(db.id,domain)),domain,this.namespaceId);stores.set(domain,store);await checkProjectDomainOwner(store);
+     const store=new ProjectDomainCatalogue(this.storage,session.schema(projectDomainSchema(db.id,domain)),domain,this.namespaceId,{catalogueDb:research.db});stores.set(domain,store);await checkProjectDomainOwner(store);
     }
     return stores.get(domain);
    };

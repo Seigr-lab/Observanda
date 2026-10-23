@@ -13,7 +13,7 @@ export async function assertInventoryObligationsSettled(storage){
   const session=databaseSchemaSession(research.db),stores=[];
   try{
    for(const domain of ['bom','inventory'])if(registry.domains.includes(domain)){
-    const store=new ProjectDomainCatalogue(storage,session.schema(projectDomainSchema(research.db.id,domain)),domain,registry.namespaceId);stores.push(store);await checkProjectDomainOwner(store);
+    const store=new ProjectDomainCatalogue(storage,session.schema(projectDomainSchema(research.db.id,domain)),domain,registry.namespaceId,{catalogueDb:session.schema(research.db.schema)});stores.push(store);await checkProjectDomainOwner(store);
     if(await hasInventoryObligations(store))throw new AppError('INVENTORY_OBLIGATIONS');
    }
   }finally{session.close();for(const store of stores)store.close();await research.db.run('SET LOCAL search_path TO "'+research.db.schema+'", pg_catalog').catch(error=>{if(error.code!=='25P02')throw error;});}

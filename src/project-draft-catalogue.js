@@ -25,7 +25,7 @@ class DraftObjectIndex extends ObjectIndex{
 export class ProjectDraftCatalogue{
  constructor(domain,research,moduleId,{writable=false}={}){
   if(domain.domain!==moduleDraftDomain(moduleId))throw new AppError('INVALID');
-  this.owner=domain;this.research=research;this.db=domain.db;this.moduleId=moduleId;this.writable=writable;
+  this.owner=domain;this.research=research;this.db=domain.db;this.catalogueDb=domain.catalogueDb;this.moduleId=moduleId;this.writable=writable;
   this.headSlot='module-drafts:'+moduleId;this.nodePrefix=this.headSlot+':index:';this.valuePrefix=this.headSlot+':value:';
  }
  encode(...args){return this.owner.encode(...args);}

@@ -1,3 +1,5 @@
+import {catalogueFormat,catalogueRequiresCalculationPolicies,requireCalculationPolicies} from '../catalogue-format.js';
+import {checkpointHasCalculationPolicy} from '../web/tools/calculation-policy.js';
 import path from 'node:path';
 import {digest,serialize} from '../storage.js';
 import {AppError} from '../errors.js';
@@ -18,6 +20,7 @@ export class ModuleDrafts{
   try{draft=JSON.parse(bytes);}catch{throw new AppError('MODULE_FORMAT');}
   if(![1,2].includes(draft.formatVersion)||draft.id!==id||!moduleIdValid(draft.moduleId)||!validCheckpointTime(draft.updatedAt)||!Array.isArray(draft.drafts)||draft.formatVersion===2&&(draft.drafts.length>1||!draft.drafts.every(d=>Object.hasOwn(d,'baseRevision')&&d.baseRevision===d.expectedRevision&&!Object.hasOwn(d,'base')&&(d.baseRevision===null||Number.isSafeInteger(d.baseRevision)&&d.baseRevision>0))))throw new AppError('MODULE_FORMAT');
   if(draft.workspaceId!==(await this.workspace.outline()).metadata.id)throw new AppError('WORKSPACE_CHANGED');
+  if(checkpointHasCalculationPolicy(draft)&&await this.workspace.storageKind()==='catalogue')await this.workspace.catalogue(async store=>{if(!catalogueRequiresCalculationPolicies(await catalogueFormat(store.catalogueDb??store.db)))throw new AppError('CATALOGUE_DAMAGED');});
   const result={draft,etag:digest(bytes)};if(indexed)await this.index.verifySelected(result,digest(serialize({text:bytes})));
   if(expand&&draft.formatVersion===2)result.draft={...draft,drafts:await Promise.all(draft.drafts.map(d=>expandDraftBase(this.workspace,d)))};
   return result;
@@ -71,6 +74,7 @@ export class ModuleDrafts{
    const draft={formatVersion:compact?2:1,workspaceId:command.workspaceId,id:command.id,moduleId:command.moduleId,updatedAt:new Date().toISOString(),drafts:command.drafts};
    const bytes=serialize(draft);
    if(Buffer.byteLength(bytes)>(compact?limit:MODULE_CHECKPOINT_BYTES))throw new AppError('LIMIT');
+   if(indexed&&checkpointHasCalculationPolicy(draft))await this.workspace.catalogue(store=>requireCalculationPolicies(store.catalogueDb??store.db));
    await this.workspace.writeMetadata('.observanda/module-drafts/'+command.id+'.json',bytes);
    if(indexed){if(current)await this.index.removeLocked(current.draft);await this.index.putLocked({draft,etag:digest(bytes)},digest(serialize({text:bytes})));}
    return {draft,etag:digest(bytes)};

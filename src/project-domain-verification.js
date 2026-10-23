@@ -22,7 +22,7 @@ export async function verifyProjectDomains(research){
   if(registry.domains.includes('samples')&&await research.object('laboratory'))throw new AppError('CATALOGUE_DAMAGED');
   await withScratch(async identities=>{
    for(const domain of registry.domains){
-    const store=new ProjectDomainCatalogue(research.workspace,session.schema(projectDomainSchema(research.db.id,domain)),domain,registry.namespaceId);stores.push(store);await checkProjectDomainOwner(store);
+    const store=new ProjectDomainCatalogue(research.workspace,session.schema(projectDomainSchema(research.db.id,domain)),domain,registry.namespaceId,{catalogueDb:session.schema(research.db.schema)});stores.push(store);await checkProjectDomainOwner(store);
     if(domain==='samples')await verifySampleAnalysisCatalogue(store);
     if(domain==='pdf')await new PdfDocumentStore(store).verify();
     const catalogue=new ModuleCatalogue(store),head=await catalogue.head(registry.namespaceId);sources.set(domain,moduleConstraintSource(catalogue,head));
