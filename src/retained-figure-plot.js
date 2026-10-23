@@ -1,4 +1,4 @@
-import {plotOperation,plotScalarValue,plotComputationFailure} from './plot-resource-policy.js';
+import {plotOperation,plotScalarOperation,plotComputationFailure} from './plot-resource-policy.js';
 // Retained dataset plots keep only one row, reduction, and selected series in
 // memory. Group/order/median state uses the existing encrypted scratch owner.
 import {randomUUID} from 'node:crypto';
@@ -8,8 +8,9 @@ import {PagedMedian} from './paged-median.js';
 import {RetainedFigureDocuments} from './retained-figure-document.js';
 import {createFigure,createSeries,xValue} from './web/figure-model.js';
 import {FIGURE_OPERATIONS,figureMappingValueName,figureMappingPresentation} from './web/figure-import-model.js';
-import {exactFigureValue,projectFigureValue} from './web/figure-mapping-values.js';
-import {exactRational} from './web/measurement-model.js';
+import {projectFigureValue} from './web/figure-mapping-values.js';
+import {plotRationalText} from './web/plot-resource-policy.js';
+import {rationalText} from './web/dataset-calculation-model.js';
 import {compareRationalText,sumRationalText,divideRationalText} from './web/measurement-reduction.js';
 import {INTERVAL_FIELDS} from './web/figure-intervals.js';
 import {assertDatasetScalars} from './dataset-selected-columns.js';
@@ -28,7 +29,7 @@ export function prepareRetainedPlot(materials,doc,command,selection,{write,signa
    state:{read:name=>work.get(prefix+':state:'+name),write:(name,value)=>work.put(prefix+':state:'+name,value)}});
   const compare=(a,b)=>plotOperation(mapping,budget=>compareRationalText(a,b,budget)),sum=(a,b,divisor=1n)=>plotOperation(mapping,budget=>sumRationalText(a,b,divisor,budget)),divide=(a,b)=>plotOperation(mapping,budget=>divideRationalText(a,b,budget));
   const median=operation==='median'?makeRuns('median',compare,(a,b)=>sum(a,b,2n)):null;
-  const exact=async(raw,index)=>{const text=await plotScalarValue(materials,raw,mapping,{signal});try{return plotOperation(mapping,budget=>exactFigureValue(text,index,{budget,parseNumber:(value,i)=>exactRational(value,columns[i].representation,columns[i].radix,budget)}));}catch(error){plotComputationFailure(error);}};
+  const exact=async(raw,index)=>{try{return await plotScalarOperation(materials,raw,columns[index],mapping,(value,budget)=>budget?plotRationalText(value,budget):rationalText(value),{signal});}catch(error){plotComputationFailure(error);}};
   const scalar=value=>{if(typeof value!=='string')fail('DATASET_CELL_SCALAR_REQUIRED');return value;};
   const project=(value,field,coordinates,{forceSafe=false}={})=>{
    try{const result=projectFigureValue(value,mapping,{axis:field[0]==='x'?'x':'y',delta:field==='error',forceSafe,transformed:field!=='count'});rounded ||= result.rounded;if(mapping.projection&&value!==null&&field!=='count')coordinates[field]={exact:value,error:result.error};return result.coordinate;}catch(error){plotComputationFailure(error);}

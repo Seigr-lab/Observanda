@@ -1,4 +1,6 @@
 // Optional declared units. Axis identities are authored, never inferred from labels.
+import {validDatasetResourcePolicy} from './dataset-resource-policy.js';
+import {validPolicyScalar,validatePolicyScalar,withScalarPolicy} from './measurement-scalar-policy.js';
 import {exactRational} from './measurement-rational.js';
 import {validNumeralContext} from './numeral-context.js';
 const keys=(value,list)=>value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).length===list.length&&list.every(key=>Object.hasOwn(value,key));
@@ -6,27 +8,34 @@ const axis=value=>typeof value==='string'&&/^[A-Za-z][A-Za-z0-9_.:/-]{0,99}$/.te
 export const UNIT_KINDS=['difference','absolute'];
 export const exactUnitScalar=(spelling='0',representation='integer',radix=10)=>({spelling,representation,radix});
 export const blankUnitDefinition=()=>({version:1,kind:'difference',dimensions:[],scale:exactUnitScalar('1'),offset:exactUnitScalar('0')});
-export function unitScalar(value,budget){
+export function unitScalar(value,budget,policy){
+ if(policy)return validatePolicyScalar(value,policy,{budget});
  if(!keys(value,['spelling','representation','radix'])||typeof value.spelling!=='string'||value.spelling.length>8192||!validNumeralContext({version:1,representation:value.representation,radix:value.radix}))throw RangeError('Invalid exact unit scalar');
  return exactRational(value.spelling,value.representation,value.radix,budget);
 }
 export function validUnitDefinition(value){
- if(!keys(value,['version','kind','dimensions','scale','offset'])||value.version!==1||!UNIT_KINDS.includes(value.kind)||!Array.isArray(value.dimensions)||value.dimensions.length>16)return false;
+ if(!keys(value,['version','kind','dimensions','scale','offset',...(value?.version===2?['resourcePolicy']:[])])||![1,2].includes(value.version)||!UNIT_KINDS.includes(value.kind)||!Array.isArray(value.dimensions)||value.dimensions.length>16)return false;
  if(!value.dimensions.every((d,i)=>keys(d,['axis','exponent'])&&axis(d.axis)&&Number.isInteger(d.exponent)&&d.exponent!==0&&Math.abs(d.exponent)<=32&&(i===0||value.dimensions[i-1].axis<d.axis)))return false;
+ if(value.version===2)return validDatasetResourcePolicy(value.resourcePolicy)&&validPolicyScalar(value.scale,value.resourcePolicy)&&validPolicyScalar(value.offset,value.resourcePolicy);
  try{return unitScalar(value.scale).numerator>0n&&(value.kind==='absolute'||unitScalar(value.offset).numerator===0n)&&!!unitScalar(value.offset);}catch{return false;}
 }
-function definition(value){if(!validUnitDefinition(value))throw RangeError('Invalid unit definition');return value;}
+function parsedDefinition(value,budget){if(!validUnitDefinition(value))throw RangeError('Invalid unit definition');const scale=unitScalar(value.scale,budget,value.resourcePolicy),offset=unitScalar(value.offset,budget,value.resourcePolicy);if(scale.numerator<=0n||value.kind==='difference'&&offset.numerator!==0n)throw RangeError('Invalid unit definition');return {scale,offset};}
+export function validateUnitDefinition(value,{budget}={}){if(value?.version===2)parsedDefinition(value,budget);else if(!validUnitDefinition(value))throw RangeError('Invalid unit definition');return value;}
+const definition=(value,budget)=>validateUnitDefinition(value,{budget});
 export function sameUnitDimensions(a,b){return !!a&&!!b&&a.dimensions.length===b.dimensions.length&&a.dimensions.every((d,i)=>d.axis===b.dimensions[i].axis&&d.exponent===b.dimensions[i].exponent);}
-export function sameUnitDefinition(a,b){if(!validUnitDefinition(a)||!validUnitDefinition(b)||a.kind!==b.kind||!sameUnitDimensions(a,b))return false;return ['scale','offset'].every(key=>{const left=unitScalar(a[key]),right=unitScalar(b[key]);return left.numerator===right.numerator&&left.denominator===right.denominator;});}
-const reduce=({numerator:n,denominator:d})=>{if(d===0n)throw RangeError('Zero unit denominator');if(d<0n){n=-n;d=-d;}let a=n<0n?-n:n,b=d;while(b)[a,b]=[b,a%b];const g=a||1n;return {numerator:n/g,denominator:d/g};};
-const add=(a,b)=>reduce({numerator:a.numerator*b.denominator+b.numerator*a.denominator,denominator:a.denominator*b.denominator});
-const multiply=(a,b)=>reduce({numerator:a.numerator*b.numerator,denominator:a.denominator*b.denominator});
-export function canonicalUnitValue(exact,unit){definition(unit);return add(multiply(exact,unitScalar(unit.scale)),unitScalar(unit.offset));}
-export function fromCanonicalUnitValue(exact,unit){definition(unit);const scale=unitScalar(unit.scale),offset=unitScalar(unit.offset);return multiply(add(exact,{...offset,numerator:-offset.numerator}),{numerator:scale.denominator,denominator:scale.numerator});}
-export function convertUnitValue(exact,from,to){definition(from);definition(to);if(from.kind!==to.kind||!sameUnitDimensions(from,to))throw RangeError('Incompatible declared units');return fromCanonicalUnitValue(canonicalUnitValue(exact,from),to);}
+export function sameUnitDefinition(a,b,budget){if(!validUnitDefinition(a)||!validUnitDefinition(b)||a.kind!==b.kind||!sameUnitDimensions(a,b))return false;const left=parsedDefinition(a,budget),right=parsedDefinition(b,budget);return ['scale','offset'].every(key=>left[key].numerator===right[key].numerator&&left[key].denominator===right[key].denominator);}
+export function reduceUnitRational({numerator:n,denominator:d},budget){if(d===0n)throw RangeError('Zero unit denominator');budget?.size(n,d);if(d<0n){n=-n;d=-d;}let a=n<0n?-n:n,b=d;while(b){budget?.step();[a,b]=[b,a%b];}const g=a||1n;return {numerator:n/g,denominator:d/g};}
+const product=(a,b,budget)=>budget?budget.product(a,b):a*b;
+export const addUnitRational=(a,b,budget)=>reduceUnitRational({numerator:product(a.numerator,b.denominator,budget)+product(b.numerator,a.denominator,budget),denominator:product(a.denominator,b.denominator,budget)},budget);
+export const multiplyUnitRational=(a,b,budget)=>reduceUnitRational({numerator:product(a.numerator,b.numerator,budget),denominator:product(a.denominator,b.denominator,budget)},budget);
+export const divideUnitRational=(a,b,budget)=>multiplyUnitRational(a,{numerator:b.denominator,denominator:b.numerator},budget);
+function unitOperation(unit,budget,operation){const run=b=>operation(parsedDefinition(unit,b),b);return unit.version===2?withScalarPolicy(unit.resourcePolicy,budget,run):run(budget);}
+export function canonicalUnitValue(exact,unit,budget){return unitOperation(unit,budget,({scale,offset},b)=>addUnitRational(multiplyUnitRational(exact,scale,b),offset,b));}
+export function fromCanonicalUnitValue(exact,unit,budget){return unitOperation(unit,budget,({scale,offset},b)=>multiplyUnitRational(addUnitRational(exact,{...offset,numerator:-offset.numerator},b),{numerator:scale.denominator,denominator:scale.numerator},b));}
+export function convertUnitValue(exact,from,to,budget){if(!validUnitDefinition(from)||!validUnitDefinition(to)||from.kind!==to.kind||!sameUnitDimensions(from,to))throw RangeError('Incompatible declared units');return fromCanonicalUnitValue(canonicalUnitValue(exact,from,budget),to,budget);}
 const expected=(kind,dimensions)=>({kind,dimensions:dimensions.map(d=>({...d}))});
-export function unitOperationDimensions(operation,left,right=null,exponent=null){
- definition(left);if(right)definition(right);
+export function unitOperationDimensions(operation,left,right=null,exponent=null,budget){
+ definition(left,budget);if(right)definition(right,budget);
  const same=()=>{if(!right||!sameUnitDimensions(left,right))throw RangeError('Incompatible declared dimensions');};
  const difference=()=>{if(left.kind!=='difference'||right&&right.kind!=='difference')throw RangeError('Absolute quantities cannot be multiplied or divided');};
  if(['copy','floor','ceiling'].includes(operation))return expected(left.kind,left.dimensions);
@@ -51,6 +60,6 @@ export function unitOperationDimensions(operation,left,right=null,exponent=null)
  }
  throw RangeError('Unsupported unit operation');
 }
-export function assertUnitOperation(operation,left,right,output,exponent=null){
- const result=unitOperationDimensions(operation,left,right,exponent);definition(output);if(output.kind!==result.kind||!sameUnitDimensions(result,output))throw RangeError('Output unit does not match the declared operation');return result;
+export function assertUnitOperation(operation,left,right,output,exponent=null,budget){
+ const result=unitOperationDimensions(operation,left,right,exponent,budget);definition(output,budget);if(output.kind!==result.kind||!sameUnitDimensions(result,output))throw RangeError('Output unit does not match the declared operation');return result;
 }

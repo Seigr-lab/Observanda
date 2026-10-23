@@ -5,6 +5,6 @@ export function nativeDomainMaterial(value){const c=value?.content;return !!c&&(
 export function nativeDomainMetadata(relative,value){
  if(relative.startsWith('.observanda/jobs/')&&['dataset.prepare','figure.calculate'].includes(value?.type))return nativeDomainCommand(value.input?.command);
  if(!relative.startsWith('.observanda/materials/'))return false;
- if(relative.startsWith('.observanda/materials/sequences/chunks/'))return value?.kind==='domain-components'||value?.kind==='columns'&&value.items?.some(column)||value?.kind==='cells'&&value.items?.some(cell=>cell.value?.format==='domain-value')||value?.kind==='calculation-nodes'&&value.items?.some(node=>node.kind==='domain')||value?.kind==='calculation-edges'&&value.items?.some(edge=>edge.semantics==='domain');
+ if(relative.startsWith('.observanda/materials/sequences/chunks/'))return value?.kind==='domain-components'||['columns','columns-policy'].includes(value?.kind)&&value.items?.some(column)||value?.kind==='cells'&&value.items?.some(cell=>cell.value?.format==='domain-value')||value?.kind==='calculation-nodes'&&value.items?.some(node=>node.kind==='domain')||value?.kind==='calculation-edges'&&value.items?.some(edge=>edge.semantics==='domain');
  return nativeDomainMaterial(value);
 }

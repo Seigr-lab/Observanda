@@ -1,3 +1,5 @@
+import {resolveScalarDefinitions} from './measurement-scalar-storage.js';
+import {resolveComparisonRow} from './analysis-scalar-policy.js';
 import {AppError} from './errors.js';
 import {ResearchMaterials} from './research-materials.js';
 import {RetainedRecordDocuments} from './retained-record-documents.js';
@@ -44,6 +46,8 @@ export function createComparisonInputReader(localMaterials,{workspaceId,access,s
   datasetColumns(doc){return use(source(doc),materials=>materials.datasetColumns(doc));},
   datasetColumn(doc,index){return use(source(doc),materials=>materials.datasetColumn(doc,index));},
   async *iterateDatasetColumns(doc){for(let offset=0;;){const page=await use(source(doc),materials=>materials.retainedSchemaPage(doc,{offset,limit:64}));yield* page.items;if(page.next===null)return;offset=page.next;}},
+  comparisonColumn(doc,column,options){return use(source(doc),materials=>resolveScalarDefinitions(materials,column,options));},
+  comparisonRow(doc,row,columns,comparison,options){return use(source(doc),materials=>resolveComparisonRow(materials,row,columns,comparison,options));},
   retainedDatasetPage(doc,page,options){return use(source(doc),materials=>materials.retainedDatasetPage(doc,page,options));},
   async *iterateDataset(reference,options){
    if(reference?.kind!=='dataset')throw new AppError('MATERIAL_INVALID');

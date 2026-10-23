@@ -1,3 +1,5 @@
+import {scalarDefinitionSequences} from './measurement-scalar-storage.js';
+import {scalarTextReference} from './web/measurement-scalar-policy.js';
 import {lockRecordOwnerResource as lock} from './record-owner-resource-lock.js';
 // Prospective allocations for selected-record transfers. These independently keyed
 // authenticated rows never replace the catalogue's shared object-index root.
@@ -293,11 +295,14 @@ export async function recordOwnerMetadataDependencies(store,relative,text){
  }else if(relative.startsWith('.observanda/materials/sequences/nodes/')){
   if(value.left)await object('.observanda/materials/sequences/nodes/'+value.left.hash+'.json');if(value.right)await object('.observanda/materials/sequences/nodes/'+value.right.hash+'.json');await object('.observanda/materials/sequences/chunks/'+value.revision+'.json');
  }else if(relative.startsWith('.observanda/materials/sequences/chunks/')&&Array.isArray(value.items)){
+  if(['columns','columns-policy','calculation-nodes'].includes(value.kind))for(const item of value.items)for(const descriptor of scalarDefinitionSequences(item))if(descriptor.root)await object('.observanda/materials/sequences/nodes/'+descriptor.root.hash+'.json');
+  if(value.kind==='domain-components')for(const item of value.items)if(scalarTextReference(item.spelling)&&item.spelling.parts.root)await object('.observanda/materials/sequences/nodes/'+item.spelling.parts.root.hash+'.json');
   for(const item of value.items){for(const descriptor of [item.lineage?.leaves,item.sourcesIndex,item.match?.keysIndex,item.location?.cellsIndex,item.value?.components,item.value?.original?.parts])if(descriptor?.root)await object('.observanda/materials/sequences/nodes/'+descriptor.root.hash+'.json');if(value.kind==='files'&&item.kind==='original')file(item.name,item.bytes,item.sha256);else if(value.kind==='files'&&item.kind==='metadata')await object(item.name);else if(value.kind==='pages'&&revision(item.hash))await object('.observanda/materials/tables/'+item.hash+'.json');else if(value.kind==='cells'&&item.value?.parts?.root)await object('.observanda/materials/sequences/nodes/'+item.value.parts.root.hash+'.json');}
  }else if(relative.startsWith('.observanda/materials/tables/')&&Array.isArray(value)){
   for(const row of value){if(row.cellIndex?.root)await object('.observanda/materials/sequences/nodes/'+row.cellIndex.root.hash+'.json');if(row.calculationLineage?.bindingsIndex?.root)await object('.observanda/materials/sequences/nodes/'+row.calculationLineage.bindingsIndex.root.hash+'.json');}
- }else if(relative.startsWith('.observanda/materials/objects/')&&(value.content?.datasetFormat===3||value.content?.tool==='Observanda calculation graph'||value.content?.figure?.kind==='retained')){
+ }else if(relative.startsWith('.observanda/materials/objects/')&&(value.content?.datasetFormat===3||value.content?.tool==='Observanda calculation graph'||value.content?.figure?.kind==='retained'||value.content?.measurement)){
   for(const slot of ['schemaIndex','pageIndex','schemaInputsIndex','inputsIndex','outputsIndex','aggregationMembersIndex','plotPointsIndex','plotMembersIndex','graphBindingsIndex','graphNodesIndex','graphOutputsIndex'])if(value.content[slot]?.root)await object('.observanda/materials/sequences/nodes/'+value.content[slot].root.hash+'.json');
+  if(value.content.measurement)for(const descriptor of scalarDefinitionSequences(value.content.measurement))if(descriptor.root)await object('.observanda/materials/sequences/nodes/'+descriptor.root.hash+'.json');
   if(value.content.figure?.kind==='retained')for(const part of ['data','presentation'])for(const slot of ['root','index'])await object('.observanda/materials/figures/value/'+value.content.figure.document[part][slot]+'.json');
  }else if(relative.startsWith('.observanda/media-assets/')){
   const base='.observanda/media/'+value.id+'/';file(base+(value.kind==='file'?(value.storageId?value.storageId+'.original':'original'):(value.storageId?value.storageId+'.':'')+'public.'+value.extension),value.bytes,value.sha256);

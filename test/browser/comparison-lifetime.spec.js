@@ -13,7 +13,7 @@ async function fixture(page,options={}){
    if(name==='read')return documentFor(data.ref);
    if(name==='analysis-status'){if(mode==='held-status'&&data.ref.id===refs.first.id)await new Promise(resolve=>release=resolve);return {items:[]};}
    if(name==='comparison-page')return {items:[],total:0,offset:0,next:null};
-   if(name==='schema'){if(mode.startsWith('held-schema')){const fail=mode==='held-schema-failure';await new Promise(resolve=>release=resolve);if(fail)throw {code:'ACCESS_LOCKED',message:'Old source locked'};}if(mode==='failed-schema'&&data.ref.id===replacement.id)throw Error('Synthetic schema failure');return {items:data.ref.id===replacement.id?[{name:'State'},{name:'Value'}]:[{name:'Value'},{name:'State'}],next:null};}if(name==='comparison'){commands.push(data);return {job:{id:data.jobId}};}throw Error('Unexpected '+name);
+   if(name==='calculation-schema'){if(mode.startsWith('held-schema')){const fail=mode==='held-schema-failure';await new Promise(resolve=>release=resolve);if(fail)throw {code:'ACCESS_LOCKED',message:'Old source locked'};}if(mode==='failed-schema'&&data.ref.id===replacement.id)throw Error('Synthetic schema failure');const columns=data.ref.id===replacement.id?[{name:'State'},{name:'Value'}]:[{name:'Value'},{name:'State'}];return {columns:data.columns?data.columns.map(index=>columns[index]):columns,offset:data.offset??0,total:columns.length,next:null};}if(name==='comparison'){commands.push(data);return {job:{id:data.jobId}};}throw Error('Unexpected '+name);
   }});
   await ui.open(refs.first);
  },options);
@@ -48,4 +48,36 @@ test('removing sources preserves the fixture source identity or requires an expl
 
 test('reselecting the same immutable dataset preserves its valid mappings',async({page})=>{
  await fixture(page,{expected:true});await page.evaluate(async()=>{await ui.action('comparison-edit',{});replacement=dataset;});const source=page.locator('[data-analysis-source="0"]'),expected=page.locator('details[data-expected]');await replaceDataset(page,source);await expect(source.locator('[data-column="value"]')).toHaveValue('0');await expect(source.locator('[data-column="status"]')).toHaveValue('1');await expect(expected.locator('[data-expected="actualKey"]')).toHaveValue('2');await page.evaluate(()=>replacement=expectedDataset);await expected.locator('summary').click();await replaceDataset(page,expected);await expect(expected.locator('[data-expected="value"]')).toHaveValue('1');await expect(expected.locator('[data-expected="key"]')).toHaveValue('2');await expect(expected.locator('[data-analysis="rationale"]')).toHaveValue('Authored matching rule');
+});
+
+
+test('comparison limits require an explicit legacy upgrade and retain incomplete edits across source changes',async({page})=>{
+ await fixture(page);await page.evaluate(()=>ui.action('comparison-edit',{}));
+ await expect(page.locator('[data-dataset-resource-policy]')).toHaveCount(0);
+ await page.evaluate(()=>ui.action('comparison-save',{disabled:false}));
+ expect(await page.evaluate(()=>commands[0].comparison.version)).toBe(2);
+ await page.evaluate(async()=>{await ui.open(refs.first);await ui.action('comparison-edit',{});await ui.action('comparison-enable-policy',{});});
+ const policy=page.locator('[data-comparison-policy]');await policy.locator('summary').click();
+ await page.locator('[data-dataset-resource="maxScalarCharacters"]').fill('');
+ await page.evaluate(()=>ui.action('comparison-add',{}));
+ await expect(page.locator('[data-dataset-resource="maxScalarCharacters"]')).toHaveValue('');
+ await page.evaluate(()=>ui.action('comparison-remove',{dataset:{index:'1'}}));
+ await expect(page.locator('[data-dataset-resource="maxScalarCharacters"]')).toHaveValue('');
+ const error=await page.evaluate(async()=>{try{await ui.action('comparison-save',{disabled:false});return null;}catch(error){return error.message;}});
+ expect(error).toContain('whole number');expect(await page.evaluate(()=>commands.length)).toBe(1);
+ await page.locator('[data-comparison-policy] summary').click();
+ await page.locator('[data-dataset-resource="maxScalarCharacters"]').fill('12000');
+ await page.locator('[data-dataset-resource="maxExponent"]').fill('12000');
+ await page.evaluate(()=>ui.action('comparison-save',{disabled:false}));
+ expect(await page.evaluate(()=>commands[1].comparison)).toEqual(expect.objectContaining({version:3,resourcePolicy:expect.objectContaining({resources:expect.objectContaining({maxScalarCharacters:12000,maxExponent:12000})}),sources:expect.arrayContaining([expect.objectContaining({dataset:expect.objectContaining({workspaceId:await page.evaluate(()=>state.book.id)})})])}));
+ await page.evaluate(()=>ui.open(refs.first));await page.evaluate(()=>ui.action('comparison-edit',{}));
+ await expect(page.locator('[data-dataset-resource-policy]')).toHaveCount(0);
+});
+
+test('new comparisons expose collapsed operation limits without changing source selection',async({page})=>{
+ await fixture(page);await page.evaluate(()=>ui.action('comparison-new',{}));
+ await expect(page.locator('[data-comparison-policy]')).toHaveCount(1);
+ await expect(page.locator('[data-comparison-policy]')).not.toHaveAttribute('open','');
+ await expect(page.locator('[data-analysis-source]')).toHaveCount(1);
+ expect(await page.locator('[data-analysis-source] [data-ref-value]').first().inputValue()).toBe('null');
 });

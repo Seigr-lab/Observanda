@@ -12,7 +12,7 @@ export function researchJobDefinitions(workspace,queue,{comparisonAccess}={}){
   prepare:async(job,options)=>{
    const workspaceId=(await workspace.outline()).metadata.id,command=job.input.command,refs=materials.comparisons.references(command.method,command.comparison);
    let comparisons=materials.comparisons;
-   if(command.comparison.version===2||refs.some(ref=>ref.workspaceId&&ref.workspaceId!==workspaceId)){
+   if(command.comparison.version>=2||refs.some(ref=>ref.workspaceId&&ref.workspaceId!==workspaceId)){
     if(!comparisonAccess)throw new AppError('ANALYSIS_SOURCE_ACCESS');
     const open=comparisonAccess.take(workspaceId,job),access=await open(workspace,options),inputs=createComparisonInputReader(materials,{workspaceId,access,signal:options.signal});
     comparisons=new AnalysisComparisons(materials,{inputs});attempts.set(job.lease.token,comparisons);
@@ -20,7 +20,7 @@ export function researchJobDefinitions(workspace,queue,{comparisonAccess}={}){
    return comparisons.prepare(command,{...options,jobId:job.id,writePage:fn=>queue().transaction(async()=>{await queue().held(job.id,job.lease.token);return fn();})});
   },
   discard:async job=>{const saved=attempts.get(job.lease.token);attempts.delete(job.lease.token);await saved?.inputs.close();},
-  commit:(job,prepared)=>{const comparisons=attempts.get(job.lease.token);if(job.input.command.comparison.version===2&&!comparisons)throw new AppError('ANALYSIS_SOURCE_ACCESS');return (comparisons??materials.comparisons).commit(job.input.command,prepared);}
+  commit:(job,prepared)=>{const comparisons=attempts.get(job.lease.token);if(job.input.command.comparison.version>=2&&!comparisons)throw new AppError('ANALYSIS_SOURCE_ACCESS');return (comparisons??materials.comparisons).commit(job.input.command,prepared);}
  },'figure.calculate':{
   authorize:async job=>{if(job.scope!==job.input.command?.recordId)throw new AppError('JOB_CHANGED');await materials.assertOwner(job.scope);},
   prepare:async(job,options)=>{

@@ -1,3 +1,4 @@
+import {scalarPolicyControls,readScalarPolicy,wireScalarPolicies} from './measurement-scalar-ui.js';
 import {calculatorRecipeView,calculatorResultActions} from './calculator-result-view.js';
 import {defaultDatasetResourcePolicy} from './dataset-resource-policy.js';
 import {datasetResourcePolicyControls,readDatasetResourcePolicy,datasetResourcePolicyDescription} from './dataset-resource-policy-ui.js';
@@ -33,7 +34,7 @@ import {analysisFormView,analysisMethodPicker,analysisText} from './material-ana
 import {t} from './i18n/index.js';
 import {measurementUI} from './measurement-ui.js';
 import {measurementText,provenanceFields,readProvenance,wireProvenance} from './measurement-schema-ui.js';
-import {REPRESENTATIONS} from './measurement-model.js';
+import {REPRESENTATIONS,isScalarRepresentation} from './measurement-model.js';
 import {analysisComparisonUI} from './analysis-comparison-ui.js';
 import {atext,analysisMethodFields,readAnalysisMethod,wireAnalysisFields,assertAnalysisFieldsReady,analysisChangesView} from './analysis-fields-ui.js';
 import {blankAnalysisMethod,validAnalysisMethod} from './analysis-model.js';
@@ -312,10 +313,11 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
    ${c.numericTransform?'<p>'+esc(measurementText('plotPolicy',{policy:measurementText(c.numericTransform.policy==='approximate'?'approximatePolicy':'safe')}))+'</p>':''}
    ${c.plotPointsIndex||c.tool==='Observanda table mapping'&&['9','10'].includes(c.version)&&c.figure?.kind==='retained'?button(esc(transformText('points')),'plot-points'):''}
    ${c.numericTransform?.reduction?'<p>'+esc(measurementText('plotReduction'))+'</p>':''}
-   ${[1,2,3,4,5,6].includes(c.graphVersion)&&!referenceContext?button('Edit calculation graph','calculation-graph-open',`data-ref="${esc(JSON.stringify(selectedRef))}" data-existing="true"`):''}
+   ${[1,2,3,4,5,6,7].includes(c.graphVersion)&&!referenceContext?button('Edit calculation graph','calculation-graph-open',`data-ref="${esc(JSON.stringify(selectedRef))}" data-existing="true"`):''}
    ${c.intake&&!referenceContext?button('Inspect imported file set','intake-open',`data-id="${esc(c.intake.id)}"`):''}
    ${c.acquisition?'Recorded with '+referenceList([c.acquisition]):''}<h3>Exact inputs</h3>${c.inputsIndex?'<div id="material-input-references"></div>':referenceList(c.inputs??[])}${inputCount(c,'outputs')?`<h3>Outputs</h3>${c.outputsIndex?'<div id="material-output-references"></div>':referenceList(c.outputs)}`:''}
    <details><summary>Private manifest</summary><pre>${esc(JSON.stringify(opened,null,2))}</pre></details>`);
+  if(c.measurement)schemaDispose=measurements.wireView(document.getElementById('material-form'),selectedRef);
   if(c.inputsIndex)await mountReferences(document.getElementById('material-input-references'),{reference:selectedRef});
   if(c.outputsIndex&&inputCount(c,'outputs'))await mountReferences(document.getElementById('material-output-references'),{reference:selectedRef,slot:'outputs'});
   if(c.figure){if(isRetainedFigure(c.figure))await mountRetainedFigure(document.getElementById('material-figure'),{ref:selectedRef});else previews.mount(document.getElementById('material-figure'),c.figure,'material');}
@@ -367,24 +369,26 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   if(generation!==jobView||!document.getElementById('dialog')?.open)return;
   schemaOffset=targetOffset;schemaOriginal=data.items;schemaTotal=data.total;
   const columns=data.items.map((col,i)=>schemaDraft.get(schemaOffset+i)??col);frame('Dataset schema & exclusions',`<p>Saving creates a revision. Earlier analyses keep their original inputs. Values are never rewritten.</p>
-   ${columns.map((col,i)=>`<details class="material-schema-column"${i===0?' open':''}><summary>${esc(col.name)}</summary><div data-material-column="${schemaOffset+i}" class="material-fields">
+   ${columns.map((col,i)=>`<details class="material-schema-column"${i===0?' open':''}><summary>${esc(col.name)}</summary><div data-material-column="${schemaOffset+i}" data-scalar-policy-owner="column" class="material-fields">
     ${field('Name',`<input data-schema="name" value="${esc(col.name)}">`)}
     ${field(esc(measurementText('representation')),`<select data-schema="representation">${REPRESENTATIONS.map(v=>option(v,measurementText(v==='radix'?'radixLabel':v),col.representation)).join('')}</select>`)}
     ${measurementDomainControls(col.domain,{esc,field,active:col.representation==='domain'})}
     ${field('Base (for explicit base)',`<input data-schema="radix" type="number" min="2" max="36" value="${col.radix}">`)}
     ${field('Unit',`<input data-schema="unit" value="${esc(col.unit)}">`)}
+    <div data-column-policy${isScalarRepresentation(col)?'':' hidden'}>${scalarPolicyControls(col.resourcePolicy,{esc,field,kind:'column'})}</div>
     <div class="material-missing-group"><strong>Missing-value meanings</strong><div data-missing-list>${col.missing.map(m=>missingRow(m)).join('')}</div>${button('Add missing value','missing-add')}</div>
     ${provenanceFields(col,{esc,field})}
    </div></details>`).join('')}
    <input type="hidden" id="material-schema-structure" value="0"><fieldset><legend>Excluded observations</legend><p>Exclusions on this page only. Row numbers refer to this page; other pages keep their exclusions. Original values remain available.</p><div id="material-exclusions">${schemaExclusions.map(r=>exclusionRow(r.row,r.reason)).join('')}</div>${button('Exclude an observation','exclusion-add')}</fieldset>`,`<div class="material-schema-pagination">${button('Previous','schema-prev','aria-label="Previous schema columns" '+(schemaOffset?'':'disabled'))}<span>${schemaOffset+1}–${schemaOffset+columns.length} of ${schemaTotal} columns</span>${button('Next','schema-next','aria-label="Next schema columns" '+(schemaOffset+columns.length<schemaTotal?'':'disabled'))}</div>`+button('Save dataset revision','schema-save')+button('Back to evidence','home'));
   if(schemaDraft.size||JSON.stringify(schemaExclusions)!==schemaInitialExclusions)document.getElementById('material-schema-structure').value='1';
-  {const element=document.getElementById('material-form'),provenance=wireProvenance(element,{call,esc,field,recordId:owner,guard}),domains=wireMeasurementDomains(element);schemaDispose=()=>{provenance();domains();};}
+  {const element=document.getElementById('material-form'),reference=structuredClone(selectedRef),provenance=wireProvenance(element,{call,esc,field,recordId:owner,guard,available:()=>element.dataset.busy!=='true',reference:node=>({ref:reference,column:Number(node.closest('[data-material-column]').dataset.materialColumn)})}),domains=wireMeasurementDomains(element),policies=wireScalarPolicies(element,'column'),refresh=event=>{if(event.target.matches('[data-schema=representation]'))event.target.closest('[data-material-column]').querySelector('[data-column-policy]').hidden=!isScalarRepresentation(event.target.value);};element.addEventListener('change',refresh);schemaDispose=()=>{provenance();domains();policies();element.removeEventListener('change',refresh);};schemaDispose.ready=()=>provenance.ready();}
   }finally{delete form.dataset.busy;form.removeAttribute('aria-busy');for(const {el,disabled} of controls)if(el.isConnected)el.disabled=disabled;}
  }
- function captureSchema(){
+ function captureSchema({validate=false}={}){
   for(const node of document.querySelectorAll('[data-material-column]')){
    const index=Number(node.dataset.materialColumn),get=k=>node.querySelector('[data-schema="'+k+'"]').value;
-   const column={name:get('name'),representation:get('representation'),...(get('representation')==='domain'?{domain:readMeasurementDomain(node)}:{}),radix:Number(get('radix')),unit:get('unit'),missing:[...node.querySelectorAll('.material-missing')].map(row=>({value:row.querySelector('[data-missing="value"]').value,meaning:row.querySelector('[data-missing="meaning"]').value})),...readProvenance(node,schemaOriginal[index-schemaOffset])};
+   const resourcePolicy=isScalarRepresentation(get('representation'))?readScalarPolicy(node,'column',{validate}):undefined;
+   const column={...(resourcePolicy?{resourcePolicy}:{}),name:get('name'),representation:get('representation'),...(get('representation')==='domain'?{domain:readMeasurementDomain(node,{validate})}:{}),radix:Number(get('radix')),unit:get('unit'),missing:[...node.querySelectorAll('.material-missing')].map(row=>({value:row.querySelector('[data-missing="value"]').value,meaning:row.querySelector('[data-missing="meaning"]').value})),...readProvenance(node,schemaOriginal[index-schemaOffset],{validate})};
    if(JSON.stringify(column)===JSON.stringify(schemaOriginal[index-schemaOffset]))schemaDraft.delete(index);else schemaDraft.set(index,column);
   }
   schemaExclusions=[...document.querySelectorAll('.material-exclusion')].map(node=>({row:node.querySelector('[data-exclusion="row"]').value,reason:node.querySelector('[data-exclusion="reason"]').value}));
@@ -578,13 +582,13 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
    if(act==='exclusion-remove')control.closest('.material-exclusion').remove();
   }
   if(act==='schema-save'){
-   captureSchema();const columnChanges=[...schemaDraft].map(([index,column])=>({index,column}));
+   const current=document.getElementById('material-form'),selection=selectedRef;await schemaDispose?.ready?.();guard();if(current!==document.getElementById('material-form')||!current.isConnected||selection!==selectedRef)throw new DOMException('Dataset schema changed','AbortError');captureSchema({validate:true});const columnChanges=[...schemaDraft].map(([index,column])=>({index,column}));
    const exclusions={...Object.fromEntries(schemaRows.map(r=>[r.id,null]))};
    const seen=new Set();for(const item of schemaExclusions){const row=Number(item.row);if(!Number.isInteger(row)||!schemaRows[row-1]||!item.reason.trim()||seen.has(row))throw Error('Choose a distinct acquisition row and explain its exclusion.');seen.add(row);exclusions[schemaRows[row-1].id]=item.reason;}
    await watchJob((await queueDataset({recordId:owner,title:opened.title,id:opened.id,expectedRevision:selectedRef.revision,artifact:opened.content.inputs[0],baseDataset:selectedRef,sourceMapping:opened.content.sourceMapping,columnChanges,exclusions})).job);
   }
   if(act==='columns-prev'||act==='columns-next'){columnOffset+=act==='columns-next'?16:-16;await datasetView();}
-  if(act==='schema-prev'||act==='schema-next'){captureSchema();await schemaForm(schemaOffset+(act==='schema-next'?16:-16));}
+  if(act==='schema-prev'||act==='schema-next'){const current=document.getElementById('material-form'),selection=selectedRef;await schemaDispose?.ready?.();guard();if(current!==document.getElementById('material-form')||!current.isConnected||selection!==selectedRef)throw new DOMException('Dataset schema changed','AbortError');captureSchema();await schemaForm(schemaOffset+(act==='schema-next'?16:-16));}
   if(act==='plot-form')await plotForm();
   if(act==='plot'){await submitPlot(()=>capturePlot({validate:true}));}
   if(act==='attach'){const retained=opened.recordId===owner?{ref:selectedRef,figure:opened.content.figure}:await call('reuse',{recordId:owner,analysis:selectedRef});await addFigure(withFigureSource(retained.figure,retained.ref));}

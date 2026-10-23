@@ -1,5 +1,7 @@
 import {AppError} from './errors.js';
 import {graphScalarCell} from './dataset-resource-values.js';
+import {resolveScalarOperand} from './measurement-scalar-storage.js';
+import {exactRational} from './web/measurement-rational.js';
 import {DatasetResourceBudget,numericalOperation} from './dataset-resource-budget.js';
 import {validDatasetResourcePolicy} from './web/dataset-resource-policy.js';
 import {validateMeasurementProjection} from './web/measurement-transform.js';
@@ -13,14 +15,24 @@ export function assertPlotResourcePolicy(mapping,{version}={}){
 }
 export function plotComputationFailure(error,code='MATERIAL_PRECISION'){
  if(error?.code==='DATASET_CALCULATION_RESOURCE')throw error instanceof AppError?error:new AppError('DATASET_CALCULATION_RESOURCE');
- if(error?.name==='AbortError'||['JOB_CANCELLED','ACCESS_LOCKED','WORKSPACE_CHANGED'].includes(error?.code))throw error;
+ if(error instanceof AppError||error?.name==='AbortError'||['JOB_CANCELLED','ACCESS_LOCKED','WORKSPACE_CHANGED'].includes(error?.code))throw error;
  throw new AppError(code);
 }
-export function plotOperation(mapping,fn){return mapping.resourcePolicy?numericalOperation(new DatasetResourceBudget(mapping.resourcePolicy),fn):fn();}
-export async function plotScalarValue(materials,value,mapping,{signal}={}){
- signal?.throwIfAborted();if(typeof value==='string')return value;
+export function plotOperation(mapping,fn,budget){return mapping.resourcePolicy?numericalOperation(budget??new DatasetResourceBudget(mapping.resourcePolicy),fn):fn();}
+export async function plotScalarValue(materials,value,mapping,{signal,column,budget}={}){
+ signal?.throwIfAborted();if(column?.resourcePolicy&&!(typeof value==='string'&&!value.trim()))value=(await resolveScalarOperand(materials,{value,kind:'string'},column,{signal,budget,policy:mapping.resourcePolicy})).value;
+ if(typeof value==='string')return value;
  if(!mapping.resourcePolicy)throw new AppError('DATASET_CELL_SCALAR_REQUIRED');
  const cell=await graphScalarCell(materials,{value,kind:'string'},mapping.resourcePolicy,{signal});signal?.throwIfAborted();return cell.value;
+}
+
+// The source owns numeral interpretation; the mapping owns the subsequent operation.
+// Keep one caller budget across source validation, parsing and result formatting.
+export async function plotScalarOperation(materials,value,column,mapping,operation,{signal}={}){
+ const budget=mapping.resourcePolicy?new DatasetResourceBudget(mapping.resourcePolicy):undefined;
+ const text=await plotScalarValue(materials,value,mapping,{signal,column,budget});signal?.throwIfAborted();
+ if(typeof text!=='string')throw new AppError('DATASET_CELL_SCALAR_REQUIRED');if(!text.trim())return null;
+ return plotOperation(mapping,b=>operation(exactRational(text,column.representation,column.radix,b),b),budget);
 }
 
 export function plotNumericalMetadata(mapping){

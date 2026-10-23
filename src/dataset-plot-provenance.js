@@ -1,4 +1,4 @@
-import {retainedPlotVersion,assertPlotResourcePolicy,plotOperation,plotScalarValue,plotNumericalMetadata} from './plot-resource-policy.js';
+import {retainedPlotVersion,assertPlotResourcePolicy,plotOperation,plotScalarOperation,plotNumericalMetadata} from './plot-resource-policy.js';
 import {plotRational} from './web/plot-resource-policy.js';
 import {projectFigureValue} from './web/figure-mapping-values.js';
 import {RetainedFigureDocuments} from './retained-figure-document.js';
@@ -25,21 +25,21 @@ const refColumns=(mapping,column)=>{
  if(value)for(const field of ['error',...INTERVAL_FIELDS,'count'])if(value[field]!=null)fields[field]=value[field];
  return fields;
 };
-function compatibleUnits(coordinate,value,{delta=false}={}){
+function compatibleUnits(coordinate,value,{delta=false,budget}={}){
  if(!coordinate||!value)return false;const a=coordinate.quantity?.unitDefinition,b=value.quantity?.unitDefinition;
  if(!a&&!b)return coordinate.unit===value.unit;if(!a||!b)return false;
- if(!delta)return sameUnitDefinition(a,b);
+ if(!delta)return sameUnitDefinition(a,b,budget);
  if(!validUnitDefinition(a)||!validUnitDefinition(b)||b.kind!=='difference'||!sameUnitDimensions(a,b))return false;
- const left=unitScalar(a.scale),right=unitScalar(b.scale);return left.numerator===right.numerator&&left.denominator===right.denominator;
+ const left=unitScalar(a.scale,budget,a.resourcePolicy),right=unitScalar(b.scale,budget,b.resourcePolicy);return left.numerator===right.numerator&&left.denominator===right.denominator;
 }
 export function assertPlotProjectionUnits(mapping,columns){
  if(mapping.projection===undefined)return;
  if(!validMeasurementProjection(mapping.projection,{resourceErrors:true})||mapping.projection.x&&mapping.xKind!=='number')fail('MATERIAL_INVALID');
  if(new Set(mapping.values.map(value=>value.column)).size!==mapping.values.length)fail('MATERIAL_INVALID');
  if(mapping.projection.y&&(mapping.operation??'raw')!=='count'){
-  const definitions=mapping.values.map(value=>columns[value.column]);if(definitions.some(value=>!compatibleUnits(definitions[0],value)))fail('MATERIAL_INVALID');
+  const definitions=mapping.values.map(value=>columns[value.column]);if(definitions.slice(1).some(value=>!plotOperation(mapping,budget=>compatibleUnits(definitions[0],value,{budget}))))fail('MATERIAL_INVALID');
  }
- for(const value of mapping.values)for(const field of ['error',...INTERVAL_FIELDS])if(value[field]!=null&&!compatibleUnits(columns[field[0]==='x'?mapping.x:value.column],columns[value[field]],{delta:field==='error'}))fail('MATERIAL_INVALID');
+ for(const value of mapping.values)for(const field of ['error',...INTERVAL_FIELDS])if(value[field]!=null&&!plotOperation(mapping,budget=>compatibleUnits(columns[field[0]==='x'?mapping.x:value.column],columns[value[field]],{delta:field==='error',budget})))fail('MATERIAL_INVALID');
 }
 export function withPlotProvenance(materials,selection,operation,run,{write,signal}={}){
  return withScratch(async work=>{
@@ -105,7 +105,7 @@ async function rowAt(materials,ctx,position){
 async function checkSource(materials,ctx,receipt,row,point=selectedPoint(ctx.content,receipt),signal){
  const mapping=ctx.content.mapping,at=column=>ctx.selection.indices?ctx.selection.indices.indexOf(column):column;
  const raw=column=>row.cells[at(column)],missing=column=>['null','absent'].includes(row.valueKinds?.[at(column)])||ctx.selection.columns[at(column)].missing.some(item=>item.value===raw(column))||typeof raw(column)==='string'&&raw(column).trim()==='';
- const parsed=async(index)=>{const column=ctx.selection.columns[at(index)],value=await plotScalarValue(materials,raw(index),mapping,{signal});return plotOperation(mapping,budget=>exactRational(value,column.representation,column.radix,budget));};
+ const parsed=async(index)=>plotScalarOperation(materials,raw(index),ctx.selection.columns[at(index)],mapping,value=>value,{signal});
  const projected=(exact,options)=>plotOperation(mapping,budget=>projectFigureValue(exact.numerator+'/'+exact.denominator,mapping,{...options,budget}));
  const stored=value=>plotOperation(mapping,budget=>rational(value,budget));
  if(mapping.group===null?receipt.group!==null:raw(mapping.group).trim()!==receipt.group)fail();

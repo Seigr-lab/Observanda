@@ -133,7 +133,7 @@ export async function prepareRecordOwnerEvidence(source,target,receipt,{write,si
    await choice(value,enqueue);
    if(value.kind==='retained'&&['figure-document','figure-authoring'].includes(value.document?.format)&&await inspected.add('figure:'+digest(serialize(value.document)))){const {RetainedFigureDocuments}=await import('./retained-figure-document.js');const reader=await new RetainedFigureDocuments(source,{readOnly:true,signal}).open(value,{draft:value.document.format==='figure-authoring'});for await(const part of reader.blocks())await emit({kind:'metadata',name:part.path,content:JSON.stringify(part.node,null,2)+'\n'});for await(const point of reader.items({collection:'points'}))if(point.value.source?.origin)await enqueue(point.value.source.origin.ref);}
    if(validMaterialReference(value))await enqueue(materialReference(value));
-   if(value.format===1&&['pages','columns','references','files','upload-chunks','aggregation-members','cells','cell-text','domain-components','calculation-bindings','calculation-nodes','calculation-outputs','calculation-edges','calculation-lineage','calculation-row-bindings','calculation-source-locators'].includes(value.kind)&&Object.hasOwn(value,'root')&&Object.hasOwn(value,'count'))await transfer.sequence(value);
+   if(value.format===1&&['pages','columns','columns-policy','references','files','upload-chunks','aggregation-members','cells','cell-text','domain-components','calculation-bindings','calculation-nodes','calculation-outputs','calculation-edges','calculation-lineage','calculation-row-bindings','calculation-source-locators'].includes(value.kind)&&Object.hasOwn(value,'root')&&Object.hasOwn(value,'count'))await transfer.sequence(value);
    for(const key of ['font','headingFont'])if(customFontId(value[key])&&await inspected.add('font:'+value[key]))await font(value[key]);
   };
   const audit=async name=>{
@@ -196,6 +196,7 @@ export async function prepareRecordOwnerEvidence(source,target,receipt,{write,si
    if(!await materials.current(ref.id))await write(()=>stageMaterialReturnRetirement(incoming,receipt,ref));
    if(doc.previous)await enqueue({...ref,revision:doc.previous});for await(const input of materials.references(doc.content))await enqueue(input);for await(const output of materials.references(doc.content,'outputs'))await enqueue(output);if(doc.content.acquisition)await enqueue(doc.content.acquisition);
    for(const slot of ['pageIndex','schemaIndex','inputsIndex','outputsIndex','aggregationMembersIndex','schemaInputsIndex','plotPointsIndex','plotMembersIndex','graphBindingsIndex','graphNodesIndex','graphOutputsIndex'])await transfer.sequence(doc.content[slot]);
+   if(doc.content.measurement)await transfer.declaration(doc.content.measurement);
    if(doc.content.figure?.kind==='retained'){const {RetainedFigureDocuments}=await import('./retained-figure-document.js');const figure=await new RetainedFigureDocuments(source,{readOnly:true,signal}).open(doc.content.figure);for await(const part of figure.blocks())await emit({kind:'metadata',name:part.path,content:JSON.stringify(part.node,null,2)+'\n'});}
    if(doc.content.comparison&&doc.content.summary?.version===2)for await(const part of materials.comparisons.index(doc.content.summary).metadata())await emit({kind:'metadata',name:part.name,content:JSON.stringify(part.value)});
    if(doc.kind==='dataset'){

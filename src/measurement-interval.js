@@ -24,11 +24,11 @@ export function parseIntervalBounds(values,context,{budget=new ArithmeticBudget(
 }
 function canonical(value,unit,budget){
  if(!validUnitDefinition(unit))throw new IntervalError('A valid declared interval unit is required.');
- const scale=unitScalar(unit.scale,budget),offset=unitScalar(unit.offset,budget);return calculate('add',[calculate('multiply',[value,scale],budget),offset],budget);
+ const scale=unitScalar(unit.scale,budget,unit.resourcePolicy),offset=unitScalar(unit.offset,budget,unit.resourcePolicy);return calculate('add',[calculate('multiply',[value,scale],budget),offset],budget);
 }
 function fromCanonical(value,unit,budget){
  if(!validUnitDefinition(unit))throw new IntervalError('A valid declared interval unit is required.');
- return calculate('divide',[calculate('subtract',[value,unitScalar(unit.offset)],budget),unitScalar(unit.scale)],budget);
+ return calculate('divide',[calculate('subtract',[value,unitScalar(unit.offset,budget,unit.resourcePolicy)],budget),unitScalar(unit.scale,budget,unit.resourcePolicy)],budget);
 }
 const map=(value,operation)=>({lower:operation(value.lower),upper:operation(value.upper)});
 export function convertIntervalBounds(value,from,to,{budget=new ArithmeticBudget()}={}){
@@ -40,7 +40,7 @@ export function calculateIntervalBounds(operation,left,right,{leftUnit=null,righ
  let a=bounds(left,budget),b=bounds(right,budget);const typed=[leftUnit,rightUnit,outputUnit];
  if(typed.some(Boolean)){
   if(!typed.every(Boolean))throw new IntervalError('Declared and undeclared interval units cannot be mixed.');
-  assertUnitOperation(operation,leftUnit,rightUnit,outputUnit);a=map(a,value=>canonical(value,leftUnit,budget));b=map(b,value=>canonical(value,rightUnit,budget));
+  assertUnitOperation(operation,leftUnit,rightUnit,outputUnit,null,budget);a=map(a,value=>canonical(value,leftUnit,budget));b=map(b,value=>canonical(value,rightUnit,budget));
  }
  let result;
  if(operation==='add')result={lower:calculate('add',[a.lower,b.lower],budget),upper:calculate('add',[a.upper,b.upper],budget)};
@@ -54,6 +54,6 @@ export function calculateIntervalBounds(operation,left,right,{leftUnit=null,righ
 }
 // Stored domain components use the existing exact-scalar admission limit.
 // Refuse a result that could not subsequently reopen; never trim or round it.
-export function intervalComponents(value,{budget=new ArithmeticBudget()}={}){
- const checked=bounds(value,budget);return [checked.lower,checked.upper].map(endpoint=>{const text=String(endpoint.numerator)+'/'+String(endpoint.denominator);if(text.length>8192)throw new IntervalError('Exact interval component exceeds the retained scalar capacity.','MEASUREMENT_DOMAIN_COMPONENT_LIMIT');return text;});
+export function intervalComponents(value,{budget=new ArithmeticBudget(),policy}={}){
+ const checked=bounds(value,budget);return [checked.lower,checked.upper].map(endpoint=>{const text=String(endpoint.numerator)+'/'+String(endpoint.denominator);if(text.length>(policy?.resources.maxScalarCharacters??8192))throw new IntervalError(policy?'Exact interval component exceeds its retained interpretation policy.':'Exact interval component exceeds its retained scalar capacity.',policy?'DATASET_CALCULATION_RESOURCE':'MEASUREMENT_DOMAIN_COMPONENT_LIMIT');return text;});
 }

@@ -1,4 +1,6 @@
-import {validIntervalUncertainty} from './measurement-interval-model.js';
+import {validDatasetResourcePolicy} from './dataset-resource-policy.js';
+import {validPolicyScalar,validatePolicyScalar} from './measurement-scalar-policy.js';
+import {validIntervalUncertainty,validateIntervalUncertainty} from './measurement-interval-model.js';
 // Scientific values remain strings. Arithmetic here only constructs exact rational
 // identities; no unit conversion or clock unwrapping is inferred.
 import {validDomainDefinition} from './measurement-domain-model.js';
@@ -6,8 +8,8 @@ import {NUMBER_REPRESENTATIONS} from './numeral-context.js';
 import {researchId} from './research-reference.js';
 import {revisionId} from './revision-model.js';
 import {exactRational} from './measurement-rational.js';
-import {validClockDefinition} from './measurement-clock-model.js';
-import {validUnitDefinition} from './measurement-unit-model.js';
+import {validClockDefinition,validateClockDefinition} from './measurement-clock-model.js';
+import {validUnitDefinition,validateUnitDefinition} from './measurement-unit-model.js';
 export {exactRational} from './measurement-rational.js';
 export const REPRESENTATIONS=['text','decimal','integer','radix','radix-fraction','rational','unsupported','domain'];
 export const isScalarRepresentation=value=>NUMBER_REPRESENTATIONS.includes(typeof value==='string'?value:value?.representation);
@@ -52,9 +54,20 @@ export function validLocator(source){
  return keys(s,['kind','nativeId'])&&s.kind==='native-record'&&text(s.nativeId,500)&&!!s.nativeId.trim();
 }
 export function validMeasurement(m){
- if(!keys(m,['version','value','quantity','time','sources','references','decoderVersion','integrity','completion','note'])||m.version!==1)return false;
+ if(!keys(m,['version','value','quantity','time','sources','references','decoderVersion','integrity','completion','note','resourcePolicy'])||![1,2].includes(m.version)||(m.version===2?!validDatasetResourcePolicy(m.resourcePolicy):m.resourcePolicy!==undefined))return false;
  const v=m.value;
- return keys(v,['spelling','representation','radix','unit','presence'])&&text(v.spelling,8192)&&REPRESENTATIONS.includes(v.representation)&&v.representation!=='domain'&&Number.isInteger(v.radix)&&v.radix>=2&&v.radix<=36&&text(v.unit,100)&&['value','missing','null','absent','unknown'].includes(v.presence)&&(v.presence!=='value'||supportedValue(v.spelling,v.representation,v.radix))&&
+ return keys(v,['spelling','representation','radix','unit','presence'])&&(m.version===2?validPolicyScalar({spelling:v.spelling,representation:v.representation,radix:v.radix},m.resourcePolicy):text(v.spelling,8192))&&REPRESENTATIONS.includes(v.representation)&&v.representation!=='domain'&&Number.isInteger(v.radix)&&v.radix>=2&&v.radix<=36&&text(v.unit,100)&&['value','missing','null','absent','unknown'].includes(v.presence)&&(v.presence!=='value'||m.version===2||supportedValue(v.spelling,v.representation,v.radix))&&
  validQuantity(m.quantity,v.unit)&&validTime(m.time)&&Array.isArray(m.sources)&&m.sources.length>0&&m.sources.length<=32&&m.sources.every(validLocator)&&keys(m.references,MEASUREMENT_ROLES)&&MEASUREMENT_ROLES.every(k=>optionalRef(m.references[k]))&&text(m.decoderVersion,300)&&(!m.references.decoder||!!m.decoderVersion.trim())&&['unknown','verified','failed','not-checked'].includes(m.integrity)&&['unknown','complete','partial'].includes(m.completion)&&text(m.note,10000);
 }
 export function measurementReferences(m){return [...m.sources.map(s=>s.ref),...Object.values(m.references),...schemaReferences(m)].filter(Boolean);}
+
+// Structural readers do not fetch retained text. Submission and authenticated
+// selected readers call this only after resolving the declared scalar fields.
+export function validateMeasurementDeclaration(value,{budget}={}){
+ if(value?.quantity?.unitDefinition)validateUnitDefinition(value.quantity.unitDefinition,{budget});
+ if(value?.quantity?.uncertainty)validateIntervalUncertainty(value.quantity.uncertainty,{budget});
+ if(value?.time?.clock?.definition)validateClockDefinition(value.time.clock.definition,{budget});
+ if(value?.value&&value.version===2){if(!validMeasurement(value))throw RangeError('Invalid measurement declaration');if(value.value.presence==='value')validatePolicyScalar({spelling:value.value.spelling,representation:value.value.representation,radix:value.value.radix},value.resourcePolicy,{budget});}
+ else if(value?.resourcePolicy!==undefined&&!validDatasetResourcePolicy(value.resourcePolicy))throw RangeError('Invalid scalar interpretation policy');
+ return value;
+}

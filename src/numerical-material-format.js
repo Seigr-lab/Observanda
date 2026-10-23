@@ -12,7 +12,7 @@ export function nativeNumericalMaterial(value){
 export function nativeNumericalMetadata(relative,value){
  if(relative.startsWith('.observanda/jobs/')&&['dataset.prepare','figure.calculate'].includes(value?.type))return nativeNumericalCommand(value.input?.command);
  if(!relative.startsWith('.observanda/materials/'))return false;
- if(relative.startsWith('.observanda/materials/sequences/chunks/')&&value?.kind==='columns')return Array.isArray(value.items)&&value.items.some(typedColumn);
+ if(relative.startsWith('.observanda/materials/sequences/chunks/')&&['columns','columns-policy'].includes(value?.kind))return Array.isArray(value.items)&&value.items.some(typedColumn);
  return nativeNumericalMaterial(value);
 }
 
@@ -26,6 +26,6 @@ export function nativeClockMaterial(value){
 export function nativeClockMetadata(relative,value){
  if(relative.startsWith('.observanda/jobs/')&&value?.type==='dataset.prepare')return nativeClockCommand(value.input?.command);
  if(!relative.startsWith('.observanda/materials/'))return false;
- if(relative.startsWith('.observanda/materials/sequences/chunks/')&&value?.kind==='columns')return Array.isArray(value.items)&&value.items.some(clockColumn);
+ if(relative.startsWith('.observanda/materials/sequences/chunks/')&&['columns','columns-policy'].includes(value?.kind))return Array.isArray(value.items)&&value.items.some(clockColumn);
  return nativeClockMaterial(value);
 }

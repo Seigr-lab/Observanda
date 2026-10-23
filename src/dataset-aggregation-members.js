@@ -1,7 +1,7 @@
-import {domainAggregationKey} from './dataset-aggregation.js';
+import {aggregationSourceKey} from './dataset-aggregation.js';
 // Each retained group pins a sequence of source positions. Later inspection
 // seeks that sequence directly; it never rescans preceding source rows.
-import {datasetColumnCount,selectedDatasetColumns,assertDatasetScalars} from './dataset-selected-columns.js';
+import {datasetColumnCount,selectedDatasetColumns} from './dataset-selected-columns.js';
 import {AppError} from './errors.js';
 import {validAggregation,aggregationKey} from './web/dataset-aggregation-model.js';
 const fail=()=>{throw new AppError('MATERIAL_MISSING');};
@@ -33,7 +33,7 @@ export async function* aggregationMemberRows(materials,context,row,{offset=0,lim
    if(at++<offset)continue;
    if(context.cachedPage!==position.page){context.cachedData=await materials.retainedDatasetPage(context.source,position.page,{columns:context.indices});context.cachedPage=position.page;}
    const value=context.cachedData.rows[position.row];
-   if(!value||domainAggregationKey(materials,context.recipe.version===2?value:assertDatasetScalars(value),context.columns,context.recipe.keys,context.recipe.keySemantics,context.recipe.version)!==row.locator.key)fail();
+   if(!value||await aggregationSourceKey(materials,value,context.columns,context.recipe,{signal})!==row.locator.key)fail();
    yield {...position,value};
   }
  }

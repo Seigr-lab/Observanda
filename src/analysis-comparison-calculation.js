@@ -13,13 +13,13 @@ import {researchId} from './web/research-reference.js';
 import messages from './web/locales/en/analyses.json' with {type:'json'};
 
 const counts=()=>Object.fromEntries(ANALYSIS_CATEGORIES.map(k=>[k,0]));
-const algorithmVersion=comparison=>comparison.version===2?'3':'2';
+const algorithmVersion=comparison=>comparison.version===3?'4':comparison.version===2?'3':'2';
 const blank=comparison=>({version:2,algorithm:'observanda-exception-comparison',algorithmVersion:algorithmVersion(comparison),ordering:comparison.ordering,rows:0,raw:counts(),aggregate:counts(),runs:0,unknownRunRows:0,counts:{groups:0,distribution:0,transitions:0,observations:0},verification:null});
 const natural=value=>Number.isSafeInteger(value)&&value>=0;
 function validateCheckpoint(state,command,sourceRows,sourceIdentities){
  const s=state?.summary,last=state?.last,total=sourceRows.reduce((a,b)=>a+b,0);
  if(!sourceRows.every(natural)||!natural(total))throw new AppError('ANALYSIS_LIMIT');
- if(command.comparison.version===2&&(JSON.stringify(s?.sourceRows)!==JSON.stringify(sourceRows)||revisionText(s?.sourceIdentities)!==revisionText(sourceIdentities)))throw new AppError('MATERIAL_MISSING');
+ if(command.comparison.version>=2&&(JSON.stringify(s?.sourceRows)!==JSON.stringify(sourceRows)||revisionText(s?.sourceIdentities)!==revisionText(sourceIdentities)))throw new AppError('MATERIAL_MISSING');
  const validCounts=value=>value&&Object.keys(value).length===ANALYSIS_CATEGORIES.length&&ANALYSIS_CATEGORIES.every(k=>natural(value[k]));
  if(state?.version!==1||typeof state.complete!=='boolean'||!validTableRef(state.root)||s?.version!==2||s.algorithm!=='observanda-exception-comparison'||s.algorithmVersion!==algorithmVersion(command.comparison)||s.ordering!==command.comparison.ordering||!natural(s.rows)||s.rows>total||!validCounts(s.raw)||!validCounts(s.aggregate)||Object.values(s.raw).reduce((a,b)=>a+b,0)+Object.values(s.aggregate).reduce((a,b)=>a+b,0)!==s.rows||!natural(s.runs)||!natural(s.unknownRunRows)||s.runs+s.unknownRunRows>s.rows||!s.counts||!['groups','distribution','transitions','observations'].every(k=>natural(s.counts[k])&&s.counts[k]<=s.rows)||s.counts.observations!==s.rows||Boolean(state.root)!==Boolean(s.rows)||state.complete&&s.rows!==total)throw new AppError('MATERIAL_MISSING');
  if(s.rows===0){if(last!==null)throw new AppError('MATERIAL_MISSING');return;}
@@ -37,7 +37,7 @@ export async function calculateComparison(owner,command,{signal,progress=async()
  let resumed=false,state={version:1,commandHash,root:null,last:null,summary:blank(command.comparison),complete:false};
  if(file){const raw=await workspace.readMetadata(file,1048576);if(raw!==null){resumed=true;try{state=JSON.parse(raw);}catch{throw new AppError('MATERIAL_MISSING');}if(state?.commandHash!==commandHash)throw new AppError('MATERIAL_CHANGED');}}
  const sourceRows=[];for(const source of command.comparison.sources)sourceRows.push((await owner.inputs.read(source.dataset)).content.rowCount);
- if(command.comparison.version===2){validateComparisonSourceIdentities(command.comparison,sourceIdentities,'ANALYSIS_INVALID');if(!resumed){state.summary.sourceRows=sourceRows;state.summary.sourceIdentities=sourceIdentities;}}
+ if(command.comparison.version>=2){validateComparisonSourceIdentities(command.comparison,sourceIdentities,'ANALYSIS_INVALID');if(!resumed){state.summary.sourceRows=sourceRows;state.summary.sourceIdentities=sourceIdentities;}}
  validateCheckpoint(state,command,sourceRows,sourceIdentities);
  const index=new ComparisonIndex(sequences,state.root),total=sourceRows.reduce((a,b)=>a+b,0);
  const append=comparisonAccumulator(index,state,command.comparison);

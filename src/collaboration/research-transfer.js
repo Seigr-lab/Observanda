@@ -1,3 +1,5 @@
+import {scalarDefinitionSequences} from '../measurement-scalar-storage.js';
+import {scalarTextReference} from '../web/measurement-scalar-policy.js';
 import {configurationPartName} from './configuration-transfer.js';
 import {serialize} from '../storage-format.js';
 import path from 'node:path';
@@ -76,12 +78,15 @@ export class ResearchTransfer{
  }
  async jsonContent(file){const {describeContent}=await import('../file-content.js');return describeContent(this.workspace,file);}
  relative(file){return path.relative(this.workspace.root,file).split(path.sep).join('/');}
+ async declaration(value){for(const sequence of scalarDefinitionSequences(value))await this.sequence(sequence);}
  async sequence(value){
   if(!value)return;this.materials.sequences.validate(value);const tree=this.materials.sequences.tree(),owner=this;
   async function visit(ref){
    if(!ref||await owner.sequenceNodes.has(ref.hash))return;const node=await tree.node(ref);await owner.sequenceNodes.add(ref.hash);await visit(node.left);await visit(node.right);
    const chunk=await owner.materials.sequences.read('chunks',node.revision);if(!chunk)throw new AppError('MATERIAL_MISSING');
    if(chunk.kind==='cells')for(const cell of chunk.items){if(cell.value?.parts)await owner.sequence(cell.value.parts);if(cell.value?.components)await owner.sequence(cell.value.components);if(cell.value?.original?.parts)await owner.sequence(cell.value.original.parts);if(cell.lineage?.leaves)await owner.sequence(cell.lineage.leaves);if(cell.sourcesIndex)await owner.sequence(cell.sourcesIndex);}
+   if(['columns','columns-policy','calculation-nodes'].includes(chunk.kind))for(const value of chunk.items)await owner.declaration(value);
+   if(chunk.kind==='domain-components')for(const component of chunk.items)if(scalarTextReference(component.spelling))await owner.sequence(component.spelling.parts);
    if(chunk.kind==='calculation-bindings')for(const binding of chunk.items)if(binding.match?.keysIndex)await owner.sequence(binding.match.keysIndex);
    if(chunk.kind==='calculation-row-bindings')for(const binding of chunk.items)if(binding.location?.cellsIndex)await owner.sequence(binding.location.cellsIndex);
    if(chunk.kind==='pages')for(const page of chunk.items){const rows=await owner.materials.json(owner.materials.metadataFile('tables/'+page.hash+'.json'));for(const row of rows){if(row.cellIndex)await owner.sequence(row.cellIndex);if(row.calculationLineage?.bindingsIndex)await owner.sequence(row.calculationLineage.bindingsIndex);}await owner.metadata('.observanda/materials/tables/'+page.hash+'.json',rows);}
@@ -132,6 +137,7 @@ export class ResearchTransfer{
     for await(const r of materials.references(doc.content,'outputs'))await enqueue(r);
     if(doc.content.acquisition)await enqueue(doc.content.acquisition);
     for(const slot of ['pageIndex','schemaIndex','inputsIndex','outputsIndex','aggregationMembersIndex','schemaInputsIndex','plotPointsIndex','plotMembersIndex','graphBindingsIndex','graphNodesIndex','graphOutputsIndex'])await owner.sequence(doc.content[slot]);
+    if(doc.content.measurement)await owner.declaration(doc.content.measurement);
     if(doc.content.figure?.kind==='retained'){const {RetainedFigureDocuments}=await import('../retained-figure-document.js');const figure=await new RetainedFigureDocuments(owner.workspace,{readOnly:true}).open(doc.content.figure);await owner.figure(figure,enqueue);}
     if(doc.content.comparison&&doc.content.summary?.version===2)for await(const part of materials.comparisons.index(doc.content.summary).metadata())await owner.metadata(part.name,part.value);
     if(doc.kind==='dataset'){

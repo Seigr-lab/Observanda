@@ -1,10 +1,12 @@
+import {comparisonColumns,comparisonBudget,comparisonOperation} from './analysis-scalar-policy.js';
+import {verifyPolicyExpected} from './analysis-policy-expected.js';
 import {datasetColumnCount,selectedDatasetColumns,assertDatasetScalars} from './dataset-selected-columns.js';
 import {datasetColumnPosition,datasetCell} from './web/dataset-column-selection.js';
 import {materialReference,materialReferenceKey} from './web/material-reference.js';
 import {AppError} from './errors.js';
 import {digest} from './storage-format.js';
 import {revisionText} from './web/revision-model.js';
-import {validAnalysisMethod,validComparison,analysisMethodReferences,analysisSourceReferences,analysisIdentity,ANALYSIS_CATEGORIES,analysisTextValue,analysisRational,rationalCompare} from './web/analysis-model.js';
+import {validAnalysisMethod,validComparison,analysisMethodReferences,analysisSourceReferences,analysisIdentity,ANALYSIS_CATEGORIES,analysisTextValue,analysisRational,rationalCompare,sameAnalysisUnitDeclaration} from './web/analysis-model.js';
 import {analysisObservation,analysisObservations,analysisSelectedColumns} from './analysis-observations.js';
 import messages from './web/locales/en/analyses.json' with {type:'json'};
 import {ComparisonIndex} from './analysis-comparison-index.js';
@@ -34,22 +36,29 @@ export class AnalysisComparisons{
  references(method,comparison){return [...new Map([...analysisMethodReferences(method),...comparison.sources.flatMap(analysisSourceReferences),...(comparison.expected?[comparison.expected.dataset]:[])].map(r=>[materialReferenceKey(r),ref(r)])).values()];}
  async validateOutput(command,{retained=false}={}){
   if(!analysisTextValue(command.title,300,true)||!analysisTextValue(command.tool,200,true)||!analysisTextValue(command.version,200,true)||!validAnalysisMethod(command.method)||!validComparison(command.comparison))fail();
-  if(command.comparison.version===2&&!this.references(command.method,command.comparison).every(r=>researchId(r.workspaceId)))fail();
+  if(command.comparison.version>=2&&!this.references(command.method,command.comparison).every(r=>researchId(r.workspaceId)))fail();
   if(!retained)await this.materials.assertOwner(command.recordId);
   if(command.id){const head=await this.materials.current(command.id);if((head?.revision??null)!==(command.expectedRevision??null)||head&&(head.recordId!==command.recordId||head.kind!=='analysis'))fail('MATERIAL_CHANGED');}
  }
  async validate(command,options={}){
   await this.validateOutput(command,options);
-  const addressed=command.comparison.version===2,resolved=new Map(),namespace=addressed&&this.inputs===this.materials?(await this.materials.workspace.outline()).metadata.id:null;
+  const addressed=command.comparison.version>=2,resolved=new Map(),namespace=addressed&&this.inputs===this.materials?(await this.materials.workspace.outline()).metadata.id:null;
   for(const r of this.references(command.method,command.comparison)){const doc=await this.inputs.read(r);if(addressed)resolved.set(materialReferenceKey(r),this.inputs===this.materials?{...r,workspaceId:namespace}:this.inputs.reference(doc));}
   const identities=addressed?comparisonSourceIdentities(command.comparison,r=>resolved.get(materialReferenceKey(r))):null;
-  const expected=command.comparison.expected;
+  const expected=command.comparison.expected,values=[],labels=new Map();
+  const sameUnits=(a,b)=>{const budget=comparisonBudget(command.comparison);return comparisonOperation(budget,()=>{if(!sameAnalysisUnitDeclaration(a,b,budget))fail('ANALYSIS_MAPPING');});};
+
   for(const [index,s] of command.comparison.sources.entries()){
    const doc=await this.inputs.read(s.dataset),count=datasetColumnCount(doc);
    if(Object.values(s.columns).some(i=>i!==null&&i>=count))fail();
    if(expected?.source===index&&expected.actualKey>=count)fail();
+   const selected=await comparisonColumns(this.inputs,doc,[...new Set([...analysisSelectedColumns(s),...(expected?.source===index?[expected.actualKey]:[])])],command.comparison,options),value=selected.columns[selected.indices.indexOf(s.columns.value)];values.push(value);
+   if(command.comparison.version===3){
+    if(labels.has(value.unit))sameUnits(labels.get(value.unit),value);else labels.set(value.unit,value);
+    for(const key of ['lower','upper'])if(s.columns[key]!==null){const bound=selected.columns[selected.indices.indexOf(s.columns[key])];if(bound.unit!==value.unit)fail('ANALYSIS_MAPPING');sameUnits(value,bound);}
+   }
   }
-  if(expected){const count=datasetColumnCount(await this.inputs.read(expected.dataset));if(expected.value>=count||expected.key>=count)fail();}
+  if(expected){const doc=await this.inputs.read(expected.dataset),count=datasetColumnCount(doc);if(expected.value>=count||expected.key>=count)fail();const selected=await comparisonColumns(this.inputs,doc,[...new Set([expected.key,expected.value])],command.comparison,options);if(command.comparison.version===3)sameUnits(values[expected.source],selected.columns[selected.indices.indexOf(expected.value)]);}
   await this.verifyInputs();return identities;
  }
  async prepare(command,options={}){
@@ -90,6 +99,7 @@ export class AnalysisComparisons{
   return {commandHash:digest(revisionText(command)),content};
  }
  async verifyExpected(comparison,{signal}={}){
+  if(comparison.version===3)return verifyPolicyExpected(this.inputs,comparison,{signal});
   const e=comparison.expected,s=comparison.sources[e.source],actualDoc=await this.inputs.read(s.dataset),expectedDoc=await this.inputs.read(e.dataset),actual=await selectedDatasetColumns(this.inputs,actualDoc,[...new Set([...analysisSelectedColumns(s),e.actualKey])]),expected=await selectedDatasetColumns(this.inputs,expectedDoc,[...new Set([e.key,e.value])]),ac=actual.columns,ec=expected.columns;
   const av=ac[actual.indices.indexOf(s.columns.value)],ev=ec[expected.indices.indexOf(e.value)];
   const ai=this.inputs.iterateDataset(s.dataset,{columns:actual.indices})[Symbol.asyncIterator](),ei=this.inputs.iterateDataset(e.dataset,{columns:expected.indices})[Symbol.asyncIterator](),out={algorithm:'ordered-exact-fixture-comparison',version:'1',correct:0,mismatched:0,unavailable:0,excluded:0,unmatched:0,rows:0,examples:[],expected:e.dataset,rationale:e.rationale};
@@ -116,7 +126,7 @@ export class AnalysisComparisons{
  index(summary){if(summary.version!==2||summary.index?.version!==1)fail('MATERIAL_MISSING');return new ComparisonIndex(this.materials.sequences,summary.index.root);}
  async verifyIntegrity(doc,options={}){return this.snapshot(()=>verifyComparisonIntegrity(this,doc,options));}
  async verify(command,summary){
-  if(summary.algorithm!=='observanda-exception-comparison'||(summary.version===1?summary.algorithmVersion!=='1'||command.comparison?.version!==1:summary.version!==2||summary.algorithmVersion!==(command.comparison?.version===2?'3':'2')))fail('CATALOGUE_DAMAGED');
+  if(summary.algorithm!=='observanda-exception-comparison'||(summary.version===1?summary.algorithmVersion!=='1'||command.comparison?.version!==1:summary.version!==2||summary.algorithmVersion!==(command.comparison?.version===3?'4':command.comparison?.version===2?'3':'2')))fail('CATALOGUE_DAMAGED');
   return this.snapshot(async()=>{
   const prepared=await (summary.version===1?this.prepareLegacy(command,{retained:true}):this.prepare(command,{retained:true}));
   if(revisionText(prepared.content.summary)!==revisionText(summary))fail('CATALOGUE_DAMAGED');

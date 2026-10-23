@@ -161,5 +161,12 @@
   "reviewRequired":"Resolve the analysis review decisions before exporting or publishing this edition.",
   "reviewReason":"Changed dependency review",
   "repeat":"Earlier revision",
-  "observationsHidden":"No observations match this view."
+  "observationsHidden":"No observations match this view.",
+  "resourcePolicy":"Comparison resource limits",
+  "resourceHelp":"Each observation and expected-value comparison uses these saved limits for exact interpretation, boundary checks and margins. Input declarations also keep their own limits. Exceeding either limit stops preparation without replacing earlier results.",
+  "resourceLegacy":"This comparison keeps its earlier interpretation. Enable declared limits to use sources with their own scalar policies in a new revision.",
+  "resourceEnable":"Enable declaration resource limits",
+  "valuePreview":"Value preview: {value}...",
+  "valueComplete":"Show complete value ({count} characters)",
+  "valueCompleteLabel":"Complete retained value"
 }

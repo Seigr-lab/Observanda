@@ -1,4 +1,5 @@
-import {intervalUncertaintyControls,readIntervalUncertainty} from './measurement-interval-ui.js';
+import {wireScalarFields} from './measurement-scalar-ui.js';
+import {intervalUncertaintyControls,readIntervalUncertainty,wireIntervalUncertainty} from './measurement-interval-ui.js';
 import {measurementClockControls,readMeasurementClock,wireMeasurementClocks} from './measurement-clock-ui.js';
 import {t} from './i18n/index.js';
 import {measurementUnitControls,readMeasurementUnit,wireMeasurementUnits} from './measurement-unit-ui.js';
@@ -14,15 +15,15 @@ export function provenanceFields(column,{esc,field,extra=false}){
  <details><summary>${esc(m('time'))}</summary><p>${esc(m('clockHelp'))}</p>${select('time-kind',time.kind,TIME_KINDS)}${['reference','resolution','uncertainty'].map(k=>input('time-'+k,time[k])).join('')}${input('width',c.width??'')}${input('frequency',c.frequency)}${measurementClockControls(c.definition,{esc,field})}${select('ordering',c.ordering,['unknown','source','monotonic','unordered'])}${select('wrap',c.wrap,['unknown','none','modulo','observed'])}${select('reset',c.reset,['unknown','none','observed'])}${input('epoch',c.epoch)}${reference('model',c.model)}${reference('referenceData',c.referenceData)}</details>
  ${extra?`<details><summary>${esc(m('references'))}</summary>${reference('decoder',column.references.decoder)}${input('decoderVersion',column.decoderVersion)}${reference('schema',column.references.schema)}</details>`:''}`;
 }
-export function readProvenance(root,original){
+export function readProvenance(root,original,{validate=false}={}){
  const get=k=>root.querySelector('[data-provenance="'+k+'"]').value,ref=k=>JSON.parse(get('ref-'+k));
- const uncertainty=readIntervalUncertainty(root),definition=readMeasurementClock(root),unitDefinition=readMeasurementUnit(root),quantity={origin:get('origin'),conversion:ref('conversion'),calibration:ref('calibration'),...(unitDefinition?{unitDefinition}:{}),...(uncertainty?{uncertainty}:{})},clock={width:get('width')===''?null:Number(get('width')),frequency:get('frequency'),ordering:get('ordering'),wrap:get('wrap'),reset:get('reset'),epoch:get('epoch'),model:ref('model'),referenceData:ref('referenceData'),...(definition?{definition}:{})};
+ const uncertainty=readIntervalUncertainty(root,{validate}),definition=readMeasurementClock(root,{validate}),unitDefinition=readMeasurementUnit(root,{validate}),quantity={origin:get('origin'),conversion:ref('conversion'),calibration:ref('calibration'),...(unitDefinition?{unitDefinition}:{}),...(uncertainty?{uncertainty}:{})},clock={width:get('width')===''?null:Number(get('width')),frequency:get('frequency'),ordering:get('ordering'),wrap:get('wrap'),reset:get('reset'),epoch:get('epoch'),model:ref('model'),referenceData:ref('referenceData'),...(definition?{definition}:{})};
  const time={kind:get('time-kind'),reference:get('time-reference'),resolution:get('time-resolution'),uncertainty:get('time-uncertainty')};
  if(original.time.clock!==undefined||JSON.stringify(clock)!==JSON.stringify(blankClock()))time.clock=clock;
  return {...(original.quantity!==undefined||JSON.stringify(quantity)!==JSON.stringify(blankQuantity())?{quantity}:{}),time};
 }
-export function wireProvenance(root,{call,esc,field,recordId,guard}){
- const pickers=new Set(),controller=new AbortController(),disposeUnits=wireMeasurementUnits(root,{esc,field}),disposeClocks=wireMeasurementClocks(root);
+export function wireProvenance(root,{call,esc,field,recordId,guard,reference,available}){
+ const pickers=new Set(),controller=new AbortController(),disposeUnits=wireMeasurementUnits(root,{esc,field}),disposeClocks=wireMeasurementClocks(root),disposeIntervals=wireIntervalUncertainty(root),scalars=reference?wireScalarFields(root,{call,reference,guard,available,esc}):null;
  root.addEventListener('click',async event=>{
   const button=event.target.closest('[data-provenance-choose],[data-provenance-clear]');if(!button)return;
   const region=button.closest('[data-provenance-reference]'),input=region.querySelector('input'),label=region.querySelector('[data-ref-label]'),container=region.querySelector('[data-ref-picker]');
@@ -34,5 +35,5 @@ export function wireProvenance(root,{call,esc,field,recordId,guard}){
   container.querySelector('[data-use]').onclick=()=>{try{const value=picker.values()[0]??null;if(value){const title=container.querySelector('[data-choices] select').selectedOptions[0].textContent;value.label=title.slice(0,-13).slice(0,300);}input.value=JSON.stringify(value);label.textContent=value?value.label+' · '+value.revision.slice(0,12):measurementText('noReference');input.dispatchEvent(new Event('input',{bubbles:true}));close();}catch(error){label.textContent=error.message;}};
   await picker.ready;
  },{signal:controller.signal});
- return ()=>{controller.abort();disposeUnits();disposeClocks();for(const p of pickers)p.dispose();};
+ const dispose=()=>{controller.abort();disposeUnits();disposeClocks();disposeIntervals();scalars?.();for(const p of pickers)p.dispose();};dispose.ready=()=>scalars?.ready();return dispose;
 }

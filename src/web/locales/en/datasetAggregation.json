@@ -1,4 +1,11 @@
 {
+  "incompleteValue": "... (preview only; retain the result to inspect the complete value)",
+  "retainedValue": "Complete retained source value: {count} characters. Inspect its reading to page the exact spelling.",
+  "retainedUnknown": "Inspect the retained source value.",
+  "resourcePolicy": "Exact aggregation resource limits",
+  "resourceHelp": "These operation limits are saved with this aggregation. Each source keeps its own declared limits; increasing an operation limit cannot enlarge a source declaration. Review the complete input spelling and exact output requirements before saving.",
+  "legacyPolicy": "This retained recipe keeps its earlier resource rules. Explicitly upgrade it to use declared source and operation limits; the previous revision stays unchanged.",
+  "upgradePolicy": "Upgrade to declared aggregation limits",
   "groupingStage": "Grouping retained rows",
   "retainingGroupsStage": "Retaining grouped values",
   "retainingMembersStage": "Retaining source positions",

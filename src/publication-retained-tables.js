@@ -19,7 +19,13 @@ export async function* retainedTableHTML(materials,statement,{signal}={}){
  for await(const block of retainedTableBlocks(materials,{ref:statement.source,table:statement.table},{signal})){
   const table=block.table;
   yield '<section class="book-table retained-result-table"><p>'+esc('Rows '+(block.offset+1)+'-'+(block.offset+table.rows.length)+'; columns '+(block.columnOffset+1)+'-'+(block.columnOffset+table.headers.length))+'</p><div class="book-table-scroll" tabindex="0" role="region" aria-label="'+esc(messages.table)+'"><table><thead><tr>';
-  for(let i=0;i<table.headers.length;i++){const format=table.formats[i];yield '<th scope="col">'+esc(table.headers[i]+(format.domain?' ('+domainDescription(format.domain)+')':'')+(format.uncertainty?' [Interval method: '+format.uncertainty.method.name+'; version '+format.uncertainty.method.version+(format.uncertainty.method.reference?'; reference '+format.uncertainty.method.reference.revision:'')+(format.uncertainty.coverage?'; '+format.uncertainty.coverage.kind+' '+format.uncertainty.coverage.level.spelling+' ('+format.uncertainty.coverage.level.representation+' base '+format.uncertainty.coverage.level.radix+')':'; no statistical coverage declared')+']':'')+(['radix','radix-fraction'].includes(format.representation)?' ('+messages.base.replace('{radix}',format.radix)+')':''))+'</th>';}
+  for(let i=0;i<table.headers.length;i++){
+   const format=table.formats[i],uncertainty=format.uncertainty;yield '<th scope="col">'+esc(table.headers[i]+(format.domain?' ('+domainDescription(format.domain)+')':''));
+   if(uncertainty){yield esc(' [Interval method: '+uncertainty.method.name+'; version '+uncertainty.method.version+(uncertainty.method.reference?'; reference '+uncertainty.method.reference.revision:''));
+    if(uncertainty.coverage){const level=uncertainty.coverage.level;yield esc('; '+uncertainty.coverage.kind+' ');for await(const text of cellText(materials,level.spelling,{signal}))yield esc(text);yield esc(' ('+level.representation+' base '+level.radix+')');}else yield esc('; no statistical coverage declared');yield ']';
+   }
+   if(['radix','radix-fraction'].includes(format.representation))yield esc(' ('+messages.base.replace('{radix}',format.radix)+')');yield '</th>';
+  }
   if(table.selection.includeExcluded)yield '<th scope="col">'+esc(messages.exclusion)+'</th>';yield '</tr></thead><tbody>';
   for(const row of table.rows){
    signal?.throwIfAborted();yield '<tr>';

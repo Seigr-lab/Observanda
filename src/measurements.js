@@ -1,3 +1,5 @@
+import {retainScalarDefinitions,resolveScalarDefinitions,scalarDefinitionEntries,measurementScalarPolicies} from './measurement-scalar-storage.js';
+import {isScalarRepresentation} from './web/measurement-model.js';
 import {materialReferenceKey} from './web/material-reference.js';
 import {AppError} from './errors.js';
 import {validMeasurement,measurementReferences,validLocator,blankQuantity} from './web/measurement-model.js';
@@ -9,8 +11,9 @@ const fail=()=>{throw new AppError('MEASUREMENT_INVALID');};
 // traversal, dependency review, backup and A4 criterion links use that same owner.
 export class Measurements {
  constructor(materials){this.materials=materials;}
- async validate(value,{signal}={}){
+ async validate(value,{signal,semantic=true}={}){
   if(!validMeasurement(value))fail();
+  if(semantic&&measurementScalarPolicies(value))await resolveScalarDefinitions(this.materials,value,{signal});
   for(const ref of measurementReferences(value)){signal?.throwIfAborted();await this.materials.read(ref);}
   for(const source of value.sources){
    const doc=await this.materials.read(source.ref),s=source.selector;
@@ -21,7 +24,13 @@ export class Measurements {
  }
  async save({recordId,title,id,expectedRevision,measurement},{signal}={}){
   return this.materials.workspace.withLock(async()=>{
-   await this.materials.assertOwner(recordId);await this.validate(measurement,{signal});signal?.throwIfAborted();
+   await this.materials.assertOwner(recordId);await this.validate(measurement,{signal,semantic:false});signal?.throwIfAborted();
+   const m=this.materials,previous=id&&expectedRevision?(await m.read({kind:'analysis',id,revision:expectedRevision})):null;
+   if(previous&&previous.recordId!==recordId)fail();
+   const selected=(value,path)=>path.reduce((v,key)=>v?.[key],value),entries=scalarDefinitionEntries(measurement),bases=[previous?.content.measurement];
+   if(entries.some(entry=>typeof entry.scalar.spelling!=='string'))for(const source of measurement.sources)if(source.ref.kind==='dataset')bases.push(await this.seed(source));
+   for(const entry of entries)if(typeof entry.scalar.spelling!=='string'&&!bases.some(base=>revisionText(selected(base,entry.path))===revisionText(entry.scalar.spelling)))fail();
+   measurement=await retainScalarDefinitions(m,measurement,fn=>fn(),{signal,base:measurement});
    if(id){const current=await this.materials.current(id);if(current&&current.kind==='analysis'&&current.recordId===recordId&&current.title===title){const doc=await this.materials.read(current);if(doc.content.measurement&&doc.previous===(expectedRevision??null)&&revisionText(doc.content.measurement)===revisionText(measurement))return {kind:current.kind,id:current.id,revision:current.revision};}}
    const inputs=[...new Map(measurementReferences(measurement).map(r=>[materialReferenceKey(r),r])).values()];
    return this.materials.commit({kind:'analysis',recordId,title,id,expectedRevision,content:{inputs,tool:'Observanda measurement provenance',version:'1',parameters:'',measurement}});
@@ -39,7 +48,7 @@ export class Measurements {
  async seed(source){
   if(!validLocator(source))fail();
   if(source.ref.kind==='dataset'){
-   const c=await this.cell(source);if(c.cellReference)throw new AppError('DATASET_CELL_SCALAR_REQUIRED');return {value:c.value,quantity:c.quantity,time:c.time,sources:[source]};
+   const c=await this.cell(source);if(c.cellReference&&(!c.column.resourcePolicy||!isScalarRepresentation(c.value)))throw new AppError('DATASET_CELL_SCALAR_REQUIRED');return {...(c.column.resourcePolicy?{version:2,resourcePolicy:c.column.resourcePolicy}:{}),value:{...c.value,...(c.cellReference?{spelling:c.cellReference}:{})},quantity:c.quantity,time:c.time,sources:[source]};
   }
   await this.materials.read(source.ref);
   return {value:{spelling:'',representation:'unsupported',radix:10,unit:'',presence:'unknown'},quantity:blankQuantity(),time:{kind:'unknown',reference:'',resolution:'',uncertainty:''},sources:[source]};

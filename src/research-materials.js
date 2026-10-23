@@ -1,3 +1,6 @@
+import {validDatasetResourcePolicy} from './web/dataset-resource-policy.js';
+import {measurementScalarPolicies,resolveScalarDefinitions,resolveScalarOperand,scalarDefinitionSequences} from './measurement-scalar-storage.js';
+import {measurementScalarMaterial,assertMeasurementScalarFormat} from './measurement-scalar-format.js';
 import {CalculatorResults} from './calculator-results.js';
 import {calculatorResultMaterial} from './web/calculator-result-model.js';
 import {assertCalculatorResultFormat} from './calculator-result-format.js';
@@ -67,7 +70,7 @@ import {exactRational} from './web/measurement-model.js';
 import {compareRationalText,sumRationalText} from './web/measurement-reduction.js';
 import {defaultColumn} from './web/dataset-schema.js';
 import {DatasetCalculations,verifyRetainedCalculation} from './dataset-calculations.js';
-import {DatasetAggregation,clearAggregationWork} from './dataset-aggregation.js';
+import {DatasetAggregation,clearAggregationWork,verifyAggregationPolicy} from './dataset-aggregation.js';
 import {aggregationMemberContext,aggregationMemberRows} from './dataset-aggregation-members.js';
 import {RetainedRecordDocuments} from './retained-record-documents.js';
 
@@ -93,7 +96,7 @@ export function validColumns(columns,width){
   c&&required(c.name,200)&&REPRESENTATIONS.includes(c.representation)&&validColumnDomain(c)&&
   Number.isInteger(c.radix)&&c.radix>=2&&c.radix<=36&&text(c.unit,100)&&Array.isArray(c.missing)&&c.missing.length<=30&&
   c.missing.every(m=>m&&text(m.value,100)&&required(m.meaning,200))&&
-  validTime(c.time)&&(c.quantity===undefined||validQuantity(c.quantity,c.unit)));
+  (c.resourcePolicy===undefined||['decimal','integer','radix','radix-fraction','rational'].includes(c.representation)&&validDatasetResourcePolicy(c.resourcePolicy))&&validTime(c.time)&&(c.quantity===undefined||validQuantity(c.quantity,c.unit)));
 }
 const figureFingerprint=figure=>digest(revisionText(withoutFigureSources(figure)));
 
@@ -398,7 +401,7 @@ export class ResearchMaterials {
  }
  datasetPageCount(doc){
   if(doc.kind!=='dataset')fail();
-  if([2,3].includes(doc.content.datasetFormat)){this.sequences.validate(doc.content.pageIndex);this.sequences.validate(doc.content.schemaIndex);if(doc.content.pageIndex.kind!=='pages'||doc.content.schemaIndex.kind!=='columns'||doc.content.schemaIndex.count<1)fail('MATERIAL_MISSING');return doc.content.pageIndex.count;}
+  if([2,3].includes(doc.content.datasetFormat)){this.sequences.validate(doc.content.pageIndex);this.sequences.validate(doc.content.schemaIndex);if(doc.content.pageIndex.kind!=='pages'||doc.content.schemaIndex.kind!==(doc.content.scalarPolicies===1?'columns-policy':'columns')||doc.content.schemaIndex.count<1)fail('MATERIAL_MISSING');return doc.content.pageIndex.count;}
   if(doc.content.datasetFormat!==undefined||!Array.isArray(doc.content.pages)||!Array.isArray(doc.content.columns))fail('MATERIAL_MISSING');return doc.content.pages.length;
  }
  async schemaPage(ref,{offset=0,limit=16}={}){if(ref?.kind!=='dataset')fail();return this.retainedSchemaPage(await this.read(ref),{offset,limit});}
@@ -413,8 +416,8 @@ export class ResearchMaterials {
  async datasetColumns(doc){const count=doc.content.schemaIndex?.count??doc.content.columns?.length;if(count>256)fail('MATERIAL_DATASET_LIMIT');const result=[];for await(const column of this.iterateDatasetColumns(doc))result.push(column);return result;}
  iterateDatasetCells(doc,row){return storedDatasetCells(this,doc,row);}
  readDatasetCell(value,options){return readDatasetCell(this,value,options);}
- async *datasetCellSequences(doc,row){if(doc.content.datasetFormat!==3)return;yield row.cellIndex;for await(const cell of this.iterateDatasetCells(doc,row))for(const descriptor of [cell.value?.parts,cell.value?.components,cell.value?.original?.parts])if(descriptor)yield descriptor;}
- async verifyDatasetRow(doc,row,options){const checkInterval=options?.checkIntervalFormat??intervalFormatCheck(this.workspace);let count=0,columns=[];for await(const cell of this.iterateDatasetCells(doc,row)){if(doc.content.datasetFormat===3){if(doc.content.domainValues===1){if(count%16===0)columns=(await this.retainedSchemaPage(doc,{offset:count,limit:16})).items;const column=columns[count%16];if(domainValueReference(cell.value)){if(column?.representation!=='domain')fail('MATERIAL_MISSING');validateDomainValue(this,cell.value,column.domain);if(cell.value.version===2)await checkInterval();}else if(column?.representation==='domain'&&!['absent','null'].includes(cell.kind)&&!column.missing.some(m=>m.value===cell.value))fail('MATERIAL_MISSING');}else if(domainValueReference(cell.value))fail('MATERIAL_MISSING');await verifyDatasetCell(this,cell,options);}else if(typeof cell.value!=='string')fail('MATERIAL_MISSING');count++;}if(count!==(doc.content.schemaIndex?.count??doc.content.columns.length))fail('MATERIAL_MISSING');}
+ async *datasetCellSequences(doc,row){if(doc.content.datasetFormat!==3)return;yield row.cellIndex;for await(const cell of this.iterateDatasetCells(doc,row)){for(const descriptor of [cell.value?.parts,cell.value?.components,cell.value?.original?.parts])if(descriptor)yield descriptor;if(cell.value?.version===3&&cell.value.components)for await(const component of this.sequences.items(cell.value.components))if(component.spelling?.parts)yield component.spelling.parts;}}
+ async verifyDatasetRow(doc,row,options){const checkInterval=options?.checkIntervalFormat??intervalFormatCheck(this.workspace);let count=0,columns=[];for await(const cell of this.iterateDatasetCells(doc,row)){if(doc.content.datasetFormat===3){if(doc.content.domainValues===1){if(count%16===0)columns=(await this.retainedSchemaPage(doc,{offset:count,limit:16})).items;const column=columns[count%16];if(domainValueReference(cell.value)){if(column?.representation!=='domain')fail('MATERIAL_MISSING');validateDomainValue(this,cell.value,column.domain);if(cell.value.version===2||cell.value.version===3&&cell.value.definition.codec==='observanda.interval')await checkInterval();if(cell.value.version===3)await assertMeasurementScalarFormat(this.workspace);}else if(column?.representation==='domain'&&!['absent','null'].includes(cell.kind)&&!column.missing.some(m=>m.value===cell.value))fail('MATERIAL_MISSING');}else if(domainValueReference(cell.value))fail('MATERIAL_MISSING');if(doc.content.scalarPolicies===1){const selected=await this.datasetColumn(doc,count);if(selected.resourcePolicy)await resolveScalarOperand(this,cell,selected,options);}await verifyDatasetCell(this,cell,options);}else if(typeof cell.value!=='string')fail('MATERIAL_MISSING');count++;}if(count!==(doc.content.schemaIndex?.count??doc.content.columns.length))fail('MATERIAL_MISSING');}
  async datasetPage(ref,page=0,{columnOffset=null,columnLimit=16}={}){
   if(ref?.kind!=='dataset'||!Number.isSafeInteger(page)||page<0)fail();const doc=await this.read(ref);
   if(columnOffset===null)return {...await this.retainedDatasetPage(doc,page),columns:await this.datasetColumns(doc)};
@@ -694,7 +697,7 @@ export class ResearchMaterials {
  }
  // The caller pins the catalogue snapshot (or holds the writer lock). A
  // detached restore audit must never create derived indexes or activate itself.
- async verifySnapshot({readOnly=false}={}){
+ async verifySnapshot({readOnly=false,signal}={}){
   try{return await withScratch(references=>withMaterialTraversal(async traversal=>{
    const originals=new Set();let bytes=0,externalReferences=0;
    const check=ref=>traversal.walk([ref],async(ref,enqueue)=>{
@@ -718,11 +721,11 @@ export class ResearchMaterials {
     if(nativeDomainMaterial(doc))await checkDomainFormat();
     if(revisionText(await this.index.inputSet(ref))!==revisionText(this.referenceSet(doc.content)))fail('CATALOGUE_DAMAGED');
     if(doc.previous)await enqueue({...ref,revision:doc.previous});
-    if(doc.content.graphVersion===6&&doc.content.tool==='Observanda calculation graph'||doc.content.calculation?.version===9)await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresWindowCalculations}=await import('./catalogue-format.js');if(!catalogueRequiresWindowCalculations(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
-    if(doc.content.graphVersion>=5&&doc.content.tool==='Observanda calculation graph'||[8,9].includes(doc.content.calculation?.version))await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresDatasetResourcePolicies}=await import('./catalogue-format.js');if(!catalogueRequiresDatasetResourcePolicies(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
-    if(doc.content.tool==='Observanda calculation graph'||[4,5,6,7,8,9].includes(doc.content.calculation?.version))await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresReferencedCalculations}=await import('./catalogue-format.js');if(!catalogueRequiresReferencedCalculations(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
+    if(doc.content.graphVersion>=6&&doc.content.tool==='Observanda calculation graph'||[9,10].includes(doc.content.calculation?.version))await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresWindowCalculations}=await import('./catalogue-format.js');if(!catalogueRequiresWindowCalculations(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
+    if(doc.content.graphVersion>=5&&doc.content.tool==='Observanda calculation graph'||[8,9,10].includes(doc.content.calculation?.version))await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresDatasetResourcePolicies}=await import('./catalogue-format.js');if(!catalogueRequiresDatasetResourcePolicies(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
+    if(doc.content.tool==='Observanda calculation graph'||[4,5,6,7,8,9,10].includes(doc.content.calculation?.version))await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresReferencedCalculations}=await import('./catalogue-format.js');if(!catalogueRequiresReferencedCalculations(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
     if(doc.content.tool==='Observanda calculation graph'){const {CalculationGraphs}=await import('./calculation-graphs.js');await new CalculationGraphs(this).verify(doc);}
-    const comparison=doc.content.comparison?.version===2;
+    const comparison=[2,3].includes(doc.content.comparison?.version);
     if(comparison){
      if(doc.kind!=='analysis')fail('CATALOGUE_DAMAGED');
      const retained=await this.comparisons.verifyIntegrity(doc);
@@ -734,10 +737,11 @@ export class ResearchMaterials {
     }else for await(const input of this.references(doc.content))await enqueue(input);
     for await(const output of this.references(doc.content,'outputs'))await enqueue(output);
     if(doc.content.acquisition)await enqueue(doc.content.acquisition);
+    if(measurementScalarMaterial(doc))await assertMeasurementScalarFormat(this.workspace);
     if(ref.kind==='dataset'){
      await verifyRetainedCalculation(this,doc);
      if(doc.content.datasetFormat===3)await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresPagedResearchTables}=await import('./catalogue-format.js');if(!catalogueRequiresPagedResearchTables(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
-     let checkedUnitFormat=false,checkedClockFormat=false,hasDomains=false;for await(const column of this.iterateDatasetColumns(doc)){if(!validColumns([column],1))fail('MATERIAL_MISSING');if(column.representation==='domain'&&!hasDomains){await checkDomainFormat();hasDomains=true;}if(column.quantity?.unitDefinition!==undefined){if(!validQuantity(column.quantity,column.unit))fail('MATERIAL_MISSING');if(!checkedUnitFormat){await checkNumericalFormat();checkedUnitFormat=true;}}if(column.time?.clock?.definition!==undefined){if(!validTime(column.time))fail('MATERIAL_MISSING');if(!checkedClockFormat){await checkClockFormat();checkedClockFormat=true;}}if(column.quantity?.uncertainty!==undefined)await checkIntervalFormat();for(const r of schemaReferences(column))await enqueue(r);}
+     let checkedUnitFormat=false,checkedClockFormat=false,hasDomains=false;for await(const column of this.iterateDatasetColumns(doc)){if(!validColumns([column],1))fail('MATERIAL_MISSING');if(measurementScalarPolicies(column)){if(doc.content.scalarPolicies!==1)fail('MATERIAL_MISSING');await assertMeasurementScalarFormat(this.workspace);await resolveScalarDefinitions(this,column,{signal});}if(column.representation==='domain'&&!hasDomains){await checkDomainFormat();hasDomains=true;}if(column.quantity?.unitDefinition!==undefined){if(!validQuantity(column.quantity,column.unit))fail('MATERIAL_MISSING');if(!checkedUnitFormat){await checkNumericalFormat();checkedUnitFormat=true;}}if(column.time?.clock?.definition!==undefined){if(!validTime(column.time))fail('MATERIAL_MISSING');if(!checkedClockFormat){await checkClockFormat();checkedClockFormat=true;}}if(column.quantity?.uncertainty!==undefined)await checkIntervalFormat();for(const r of schemaReferences(column))await enqueue(r);}
      if(hasDomains!==(doc.content.domainValues===1)||doc.content.domainValues!==undefined&&doc.content.domainValues!==1)fail('MATERIAL_MISSING');
      if(doc.content.aggregationMembersIndex&&!doc.content.aggregation)fail('MATERIAL_MISSING');
      const aggregationContext=doc.content.aggregationMembersIndex?await aggregationMemberContext(this,doc):null;let memberOffset=0;
@@ -745,15 +749,16 @@ export class ResearchMaterials {
       await this.verifyDatasetRow(doc,row,{checkIntervalFormat});
       if(aggregationContext){
        if(row.aggregationMembers?.offset!==memberOffset)fail('MATERIAL_MISSING');
-       for await(const member of aggregationMemberRows(this,aggregationContext,row)){void member;}
+       for await(const member of aggregationMemberRows(this,aggregationContext,row,{signal})){void member;}
        memberOffset+=row.aggregationMembers.count;
       }else if(row.aggregationMembers)fail('MATERIAL_MISSING');
      }
      if(aggregationContext&&memberOffset!==aggregationContext.index.count)fail('MATERIAL_MISSING');
+     await verifyAggregationPolicy(this,doc,{signal});
     }
     if(doc.content.figure?.kind==='retained'){await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresRetainedFigures}=await import('./catalogue-format.js');if(!catalogueRequiresRetainedFigures(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});await (await new RetainedFigureDocuments(this.workspace,{readOnly:true}).open(doc.content.figure)).verify();}
     await verifySelectedPlot(this,doc);await verifyPlotProjection(this,doc);
-    if(doc.content.measurement)await this.measurements.validate(doc.content.measurement);
+    if(doc.content.measurement)await this.measurements.validate(doc.content.measurement,{signal});
     if(doc.content.method&&!comparison){if(!validAnalysisMethod(doc.content.method))fail('CATALOGUE_DAMAGED');for(const r of analysisMethodReferences(doc.content.method))await enqueue(r);}
     if(doc.content.comparison&&!comparison){const c=doc.content;await this.comparisons.verify({recordId:doc.recordId,title:doc.title,tool:c.tool,version:c.version,method:c.method,comparison:c.comparison},c.summary);}
     if(ref.kind==='artifact'){

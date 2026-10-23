@@ -34,3 +34,12 @@ test('displayed embedded evidence resolves exact origin addresses in bounded pag
  assert.equal(JSON.parse(buttons[0].dataset.ref).workspaceId,origin);assert.deepEqual(JSON.parse(measurement.dataset.source),{...source,ref:{...source.ref,workspaceId:origin}});
  const malformed={dataset:{ref:JSON.stringify(refs[0])},disabled:false};await assert.rejects(materialReferenceElements({querySelectorAll:selector=>selector.includes('measurement-inspect')?[]:[malformed]},workspaceId,{resolve:async()=>({items:[{...refs[1],workspaceId:origin}]})}),/Invalid retained reference/);assert.equal(malformed.disabled,true);
 });
+
+
+test('selected scalar and component reads keep the exact retained owner and cancellation signal',async()=>{
+ const ref={kind:'dataset',id:randomUUID(),revision:'c'.repeat(64),workspaceId:randomUUID()},controller=new AbortController(),calls=[];
+ const read=materialReferenceReader({api:async(route,data,options)=>{calls.push({route,data,options});return {value:{text:'0010',offset:0,total:4,next:null,previous:null}};},local:()=>assert.fail('A retained declaration must resolve its own owner')});
+ for(const [name,selection] of [['measurement-scalar',{column:17,field:'quantity.unitDefinition.scale.spelling'}],['measurement-component',{selector:{kind:'cell',page:1,row:2,column:17},component:9}]]){
+  const data={ref,...selection,offset:0,limit:4096};await read(name,data,{signal:controller.signal,adopt:true});const call=calls.at(-1);assert.equal(call.route,'/api/projects/material-reference/'+name);assert.deepEqual(call.data,data);assert.equal(call.options.signal,controller.signal);assert.equal(call.options.adopt,false);
+ }
+});

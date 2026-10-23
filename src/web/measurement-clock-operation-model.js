@@ -1,4 +1,4 @@
-import {validClockDefinition} from './measurement-clock-model.js';
+import {validClockDefinition,validateClockDefinition} from './measurement-clock-model.js';
 import {isScalarRepresentation,validTime,validQuantity} from './measurement-model.js';
 import {unitScalar} from './measurement-unit-model.js';
 import {defaultColumn} from './dataset-schema.js';
@@ -12,13 +12,14 @@ export const CLOCK_STATUSES=['ready','no-predecessor','unmatched-row','excluded-
 export const validClockControl=value=>keys(value,['kind'])&&value.kind==='none'||keys(value,['kind','column'])&&value.kind==='column'&&index(value.column);
 export const validClockTransition=value=>keys(value,['version','wraps','resets','ambiguity'])&&value.version===1&&validClockControl(value.wraps)&&validClockControl(value.resets)&&['absent','error'].includes(value.ambiguity);
 export const defaultClockTransition=()=>({version:1,wraps:{kind:'none'},resets:{kind:'none'},ambiguity:'absent'});
-export function assertCounterColumn(column){
+export function assertCounterColumn(column,{budget}={}){
  if(!column||!isScalarRepresentation(column)||!validTime(column.time)||column.time.kind!=='counter'||!validClockDefinition(column.time.clock?.definition)||column.quantity&&!validQuantity(column.quantity,column.unit))throw invalid();
- const unit=column.quantity?.unitDefinition;if(unit){const scale=unitScalar(unit.scale),offset=unitScalar(unit.offset);if(unit.kind!=='difference'||unit.dimensions.length||scale.numerator!==scale.denominator||offset.numerator!==0n)throw invalid();}
+ if(column.time.clock.definition.version===2)validateClockDefinition(column.time.clock.definition,{budget});
+ const unit=column.quantity?.unitDefinition;if(unit){const scale=unitScalar(unit.scale,budget,unit.resourcePolicy),offset=unitScalar(unit.offset,budget,unit.resourcePolicy);if(unit.kind!=='difference'||unit.dimensions.length||scale.numerator!==scale.denominator||offset.numerator!==0n)throw invalid();}
  if(column.quantity?.origin==='requested')throw invalid();return column;
 }
-export function clockOperationColumn(node,column,controls=[]){
- assertCounterColumn(column);if(!CLOCK_OPERATIONS.includes(node.operation)||!validClockTransition(node.transition))throw invalid();const definition=column.time.clock.definition;
+export function clockOperationColumn(node,column,controls=[],{budget}={}){
+ assertCounterColumn(column,{budget});if(!CLOCK_OPERATIONS.includes(node.operation)||!validClockTransition(node.transition))throw invalid();const definition=column.time.clock.definition;
  if(node.transition.wraps.kind==='column'&&!definition.modulus)throw invalid();for(const control of controls){if(!isScalarRepresentation(control)||control.unit||control.quantity?.unitDefinition||!['none','unknown','acquisition-order'].includes(control.time.kind))throw invalid();}
  const output=defaultColumn({label:'Clock '+node.operation});output.missing=[];
  if(node.operation==='status')return {...output,representation:'domain',domain:{...defaultDomain('symbol'),namespace:CLOCK_STATUS_NAMESPACE}};

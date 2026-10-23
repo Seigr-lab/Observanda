@@ -1,3 +1,4 @@
+import {validatePolicyScalar} from './web/measurement-scalar-policy.js';
 import {domainValueReference,domainValuePage} from './measurement-domain-storage.js';
 import {graphCellSources} from './calculation-graph-lineage.js';
 import {AppError} from './errors.js';
@@ -29,7 +30,7 @@ export async function inspectMeasurementSource(service,source,{offset=0,lineageO
   const textPage=cell.cellReference?await store.readDatasetCell(cell.cellReference,{offset,limit:4096,signal}):null;
   const domain=domainValueReference(cell.cellReference)?await domainValuePage(store,cell.cellReference,{offset:componentOffset,limit:32,signal}):null;
   const aggregation=cell.doc.content.aggregation?await inspectAggregation(store,cell,s,{offset,signal}):null;
-  return {kind:'cell',...cell,doc:undefined,...(domain?{domain}:{}),...(textPage?{textPage,previous:textPage.previous,next:textPage.next}:{}),exact:cell.cellReference?null:rationalIdentity(cell.value),surrounding,original:aggregation||lineage?null:derivedSources?.[0]??original,...(derivedSources?{derivedSources,calculation:cell.doc.content.calculation}:{}),...(aggregation?{aggregation,previous:aggregation.previous,next:aggregation.next}:{}),...(lineage?{lineage,calculation:cell.doc.content.calculation}:{}),native:cell.row.nativeSelector?{ref:cell.doc.content.nativeMapping.artifact,selector:cell.row.nativeSelector}:null};
+  return {kind:'cell',...cell,doc:undefined,...(domain?{domain}:{}),...(textPage?{textPage,previous:textPage.previous,next:textPage.next}:{}),exact:cell.cellReference?null:cell.column.resourcePolicy&&cell.value.presence==='value'?(()=>{const exact=validatePolicyScalar({spelling:cell.value.spelling,representation:cell.value.representation,radix:cell.value.radix},cell.column.resourcePolicy);return {numerator:String(exact.numerator),denominator:String(exact.denominator)};})():rationalIdentity(cell.value),surrounding,original:aggregation||lineage?null:derivedSources?.[0]??original,...(derivedSources?{derivedSources,calculation:cell.doc.content.calculation}:{}),...(aggregation?{aggregation,previous:aggregation.previous,next:aggregation.next}:{}),...(lineage?{lineage,calculation:cell.doc.content.calculation}:{}),native:cell.row.nativeSelector?{ref:cell.doc.content.nativeMapping.artifact,selector:cell.row.nativeSelector}:null};
  }
  const doc=await store.read(source.ref);
  if(source.ref.kind!=='artifact')return {kind:'reference',title:doc.title,ref:source.ref};

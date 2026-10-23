@@ -1,0 +1,11 @@
+import {measurementScalarPolicies} from './measurement-scalar-storage.js';
+import {AppError} from './errors.js';
+export const measurementScalarMaterial=value=>{const c=value?.content;return !!c&&(c.scalarPolicies===1||c.aggregation?.version===3||c.comparison?.version===3||c.graphVersion===7&&c.tool==='Observanda calculation graph'||c.calculation?.version===10||c.measurement?.version===2||measurementScalarPolicies(c.measurement));};
+export function measurementScalarCommand(value){return !!value&&(value.calculation?.version===10||value.aggregation?.version===3||value.comparison?.version===3||value.graphVersion===7||value.measurement?.version===2||measurementScalarPolicies(value.measurement)||value.columns?.some(measurementScalarPolicies)||value.columnChanges?.some(change=>measurementScalarPolicies(change.column)));}
+export function measurementScalarMetadata(relative,value){
+ if(relative.startsWith('.observanda/jobs/'))return measurementScalarCommand(value?.input?.command);
+ if(!relative.startsWith('.observanda/materials/'))return false;
+ if(relative.startsWith('.observanda/materials/sequences/chunks/'))return value?.kind==='columns-policy'||['columns','calculation-nodes'].includes(value?.kind)&&value.items?.some(measurementScalarPolicies)||value?.kind==='cells'&&value.items?.some(cell=>cell.value?.format==='domain-value'&&cell.value.version===3)||value?.kind==='domain-components'&&value.items?.some(item=>item.spelling?.format==='dataset-cell');
+ return measurementScalarMaterial(value);
+}
+export async function assertMeasurementScalarFormat(workspace){if(typeof workspace.storageKind!=='function')return;await workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresMeasurementScalarPolicies}=await import('./catalogue-format.js');if(!catalogueRequiresMeasurementScalarPolicies(await catalogueFormat(store.catalogueDb??store.db)))throw new AppError('CATALOGUE_DAMAGED');});}

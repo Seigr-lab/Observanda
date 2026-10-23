@@ -76,3 +76,6 @@ dialog:has(> .material-workbench) { position:fixed; inset:1rem; margin:auto; max
 [data-measurement-clock] .material-fields { gap:.6rem; }
 [data-measurement-clock] .field { min-width:0; margin-block-end:.5rem; }
 [data-measurement-clock] input:not([type=checkbox]), [data-measurement-clock] select { width:100%; min-width:0; }
+
+.comparison-retained-value { inline-size:min(24rem,calc(100vw - 8rem)); min-inline-size:8rem; white-space:normal; overflow-wrap:anywhere; }
+.comparison-retained-value pre { max-block-size:12rem; overflow:auto; }

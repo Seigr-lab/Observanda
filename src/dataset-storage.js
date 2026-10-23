@@ -1,3 +1,4 @@
+import {retainScalarDefinitions,measurementScalarPolicies,resolveScalarOperand} from './measurement-scalar-storage.js';
 import {calculatorResultScalar} from './calculator-results.js';
 import {policyScalarText} from './dataset-resource-values.js';
 import {clockScalarText,intervalScalarText} from './dataset-scalar-text.js';
@@ -26,24 +27,24 @@ export async function* storedDatasetCells(materials,doc,row){
 }
 export async function preparePagedDataset(materials,command,{source,base=null,signal,progress=async()=>{},writePage,columnDefaults=defaultColumn,nativeSize:declaredNativeSize,rows:preparedRows,calculatedColumns,inputReferences,validColumns,preparedWrites=false}={}){
  const prepare=materials=>withScratch(async scratch=>{
- const save=fn=>fn(),schema=materials.sequences.builder('columns',save),pages=materials.sequences.builder('pages',save),schemaInputs=materials.sequences.builder('references',save);
+ const save=fn=>fn(),pages=materials.sequences.builder('pages',save),schemaInputs=materials.sequences.builder('references',save);
  const nativeMapping=command.nativeMapping??base?.content.nativeMapping,nativeSize=nativeMapping?(declaredNativeSize??(await materials.read(nativeMapping.artifact)).content.size):null;
  const nativeColumns=nativeMapping?[...new Set(['offsetColumn','lengthColumn','pointerColumn','idColumn'].map(k=>nativeMapping[k]).filter(v=>v!==null))]:[];
  const changes=new Map((command.columnChanges??[]).map(c=>[c.index,c.column])),exclusions=command.exclusions??{},seen=new Set();let schemaIndex,width=0,count=0,included=0,pageIncluded=0,page=[],sourceMapping,aggregationMembersIndex=base?.content.aggregationMembersIndex;
  const flush=async()=>{if(!page.length)return;const hash=digest(revisionText(page)),rows=page;await save(()=>materials.put(materials.metadataFile('tables/'+hash+'.json'),rows));await pages.append({hash,count:rows.length,start:count-rows.length,includedStart:included-pageIncluded,included:pageIncluded});page=[];pageIncluded=0;};
  async function* retained(){yield {columnCount:base.content.schemaIndex?.count??base.content.columns.length,columns:()=>datasetColumns(materials,base),sourceMapping:base.content.sourceMapping,retained:true};
   let order=0;for(let index=0;index<materials.datasetPageCount(base);index++){const data=await materials.retainedDatasetPage(base,index,{metadataOnly:true});for(const row of data.rows){signal?.throwIfAborted();yield {...row,order:++order,cells:()=>storedDatasetCells(materials,base,row)};}await progress({stage:'validating dataset rows',done:order,total:base.content.rowCount});}}
- let hasDomains=false;
+ let hasDomains=false,hasScalarPolicies=false;
  const input=preparedRows??(base?retained():readPagedDataset(source.content.read(0,source.content.size-1,{signal}),command.sourceMapping,{signal,progress,size:source.content.size}));
  for await(const item of input){
   signal?.throwIfAborted();
   if(item.columnCount!==undefined||Array.isArray(item.columns)){
    if(schemaIndex)fail();width=item.columnCount??item.columns.length;if(!Number.isSafeInteger(width)||width<1)fail();
    const definitions=typeof item.columns==='function'?item.columns():item.columns.map(name=>({name}));let index=0;
-   for await(const definition of definitions){const column=changes.get(index)??calculatedColumns?.[index]??command.columns?.[index]??(item.retained?definition:columnDefaults({label:definition.name}));if(!validColumns([column],1))fail();if(column.representation==='domain')hasDomains=true;await schema.append({...column,...(definition.sourceField?{sourceField:definition.sourceField}:{})});
+   for await(const definition of definitions){const column=changes.get(index)??calculatedColumns?.[index]??command.columns?.[index]??(item.retained?definition:columnDefaults({label:definition.name}));if(!validColumns([column],1))fail();if(column.representation==='domain')hasDomains=true;const declared=measurementScalarPolicies(column),authored=changes.has(index)||command.columns?.[index]!==undefined,retainedColumn=declared?await retainScalarDefinitions(materials,column,save,{signal,base:item.retained?definition:undefined,allowRetained:!authored&&(item.retained||!!preparedRows)}):column;hasScalarPolicies||=declared;await scratch.put('schema-column:'+index,{...retainedColumn,...(definition.sourceField?{sourceField:definition.sourceField}:{})});
     for(const ref of schemaReferences(column))if(await scratch.add('schema-ref:'+materialReferenceKey(ref)))await schemaInputs.append(ref);index++;
    }
-   if(index!==width||command.columns&&command.columns.length!==width||[...changes.keys()].some(i=>i>=width))fail();schemaIndex=await schema.finish();if(nativeMapping&&!await scratch.has('schema-ref:'+materialReferenceKey(nativeMapping.artifact)))await schemaInputs.append(nativeMapping.artifact);
+   if(index!==width||command.columns&&command.columns.length!==width||[...changes.keys()].some(i=>i>=width))fail();const schema=materials.sequences.builder(hasScalarPolicies?'columns-policy':'columns',save);for(let at=0;at<width;at++){signal?.throwIfAborted();await schema.append(await scratch.get('schema-column:'+at));await scratch.remove('schema-column:'+at);}schemaIndex=await schema.finish();if(nativeMapping&&!await scratch.has('schema-ref:'+materialReferenceKey(nativeMapping.artifact)))await schemaInputs.append(nativeMapping.artifact);
    const {fields,...mapping}=item.sourceMapping??{};sourceMapping={...mapping,...(fields||base?.content.sourceMapping?.fieldsInSchema?{fieldsInSchema:true}:{})};aggregationMembersIndex=item.aggregationMembersIndex??aggregationMembersIndex;continue;
   }
   if(!schemaIndex)fail();const order=item.order??count+1,id=item.id??source.doc.id+':'+(item.locator.format==='delimited'?item.line:order),excluded=Object.hasOwn(exclusions,id)?exclusions[id]:item.excluded??null;
@@ -56,6 +57,7 @@ export async function preparePagedDataset(materials,command,{source,base=null,si
    if(column.representation==='domain'&&!['null','absent'].includes(cell.kind)&&!column.missing.some(m=>m.value===cell.value))cell={...cell,value:await retainDomainValue(materials,cell,column.domain,save,{signal})};
    if(!['null','absent'].includes(cell.kind)){
     if(domainValueReference(cell.value)){if(column.representation!=='domain')fail();validateDomainValue(materials,cell.value,column.domain);}
+    else if(column.resourcePolicy&&!column.missing.some(m=>m.value===cell.value))await resolveScalarOperand(materials,cell,column,{signal});
     else if(datasetCellReference(cell.value)){if(!['text','unsupported'].includes(column.representation)&&!await policyScalarText(materials,cell.value,column,command.calculation??base?.content.calculation,cell.lineage,{signal})&&!await clockScalarText(materials,cell.value,column,command.calculation??base?.content.calculation,cell.lineage,{signal})&&!await intervalScalarText(materials,cell.value,column,command.calculation??base?.content.calculation,cell.lineage,{signal})&&!await calculatorResultScalar(materials,cell.value,column,command.calculatorResult,{signal}))fail();}
     else if(!column.missing.some(m=>m.value===cell.value)&&!supportedValue(cell.value,column.representation,column.radix)&&!await policyScalarText(materials,cell.value,column,command.calculation??base?.content.calculation,cell.lineage,{signal})&&!await calculatorResultScalar(materials,cell.value,column,command.calculatorResult,{signal}))fail();
    }
@@ -68,7 +70,7 @@ export async function preparePagedDataset(materials,command,{source,base=null,si
  }
  await flush();if(!schemaIndex||Object.keys(exclusions).length!==seen.size)fail();signal?.throwIfAborted();
  const calculation=command.calculation??base?.content.calculation,aggregation=command.aggregation??base?.content.aggregation;
- return {commandHash:digest(revisionText(command)),content:{datasetFormat:3,...(hasDomains?{domainValues:1}:{}),inputs:inputReferences??base?.content.inputs??[command.artifact],schemaInputsIndex:await schemaInputs.finish(),schemaIndex,pageIndex:await pages.finish(),rowCount:count,includedRowCount:included,sourceMapping,...(calculation?{calculation,algorithm:'observanda-retained-calculations',algorithmVersion:calculation.version>=4?calculation.version-1:calculation.version===3?2:1}:{}),...(aggregation?{aggregation,algorithm:'observanda-retained-aggregation',algorithmVersion:1}:{}),...(aggregationMembersIndex?{aggregationMembersIndex}:{}),...(nativeMapping?{nativeMapping}:{}),delimiter:sourceMapping.delimiter??null,encoding:'UTF-8',order:aggregation?'first-group-occurrence':'acquisition'}};
+ return {commandHash:digest(revisionText(command)),content:{datasetFormat:3,...(hasScalarPolicies?{scalarPolicies:1}:{}),...(hasDomains?{domainValues:1}:{}),inputs:inputReferences??base?.content.inputs??[command.artifact],schemaInputsIndex:await schemaInputs.finish(),schemaIndex,pageIndex:await pages.finish(),rowCount:count,includedRowCount:included,sourceMapping,...(calculation?{calculation,algorithm:'observanda-retained-calculations',algorithmVersion:calculation.version>=4?calculation.version-1:calculation.version===3?2:1}:{}),...(aggregation?{aggregation,algorithm:'observanda-retained-aggregation',algorithmVersion:1}:{}),...(aggregationMembersIndex?{aggregationMembersIndex}:{}),...(nativeMapping?{nativeMapping}:{}),delimiter:sourceMapping.delimiter??null,encoding:'UTF-8',order:aggregation?'first-group-occurrence':'acquisition'}};
  },{signal});return preparedWrites?prepare(materials):withDatasetPreparationWrites(materials,{writePage,signal},prepare);
 }
 export async function projectDatasetRows(materials,doc,rows,columns){

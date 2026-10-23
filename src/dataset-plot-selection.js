@@ -1,3 +1,4 @@
+import {measurementScalarPolicies,resolveScalarDefinitions} from './measurement-scalar-storage.js';
 import {assertPlotResourcePolicy} from './plot-resource-policy.js';
 import {AppError} from './errors.js';
 import {datasetColumnCount,selectedDatasetColumns} from './dataset-selected-columns.js';
@@ -9,10 +10,11 @@ export function plotColumnIndices(mapping){
  const indices=[...new Set([mapping.x,mapping.group,...mapping.values.flatMap(v=>[v.column,v.error,...INTERVAL_FIELDS.map(k=>v[k]),v.count])].filter(i=>i!==null&&i!==undefined))];
  if(!indices.length||indices.length>256||indices.some(i=>!Number.isSafeInteger(i)||i<0))fail();return indices;
 }
-export async function datasetPlotSelection(materials,doc,mapping){
- if(doc.content.datasetFormat!==3||datasetColumnCount(doc)<=256)return {columns:await materials.datasetColumns(doc),mapping,indices:null};
+export async function datasetPlotSelection(materials,doc,mapping,{signal}={}){
+ const resolve=async(columns,indices)=>{for(const index of indices){signal?.throwIfAborted();if(measurementScalarPolicies(columns[index]))columns[index]=await resolveScalarDefinitions(materials,columns[index],{signal});}return columns;};
+ if(doc.content.datasetFormat!==3||datasetColumnCount(doc)<=256)return {columns:await resolve(await materials.datasetColumns(doc),plotColumnIndices(mapping)),mapping,indices:null};
  const {indices,columns}=await selectedDatasetColumns(materials,doc,plotColumnIndices(mapping)),at=i=>i===null||i===undefined?i:indices.indexOf(i);
- return {columns,indices,mapping:{...mapping,x:at(mapping.x),group:at(mapping.group),values:mapping.values.map(v=>({...v,column:at(v.column),error:at(v.error),...Object.fromEntries([...INTERVAL_FIELDS,'count'].filter(k=>Object.hasOwn(v,k)).map(k=>[k,at(v[k])]))}))}};
+ return {columns:await resolve(columns,columns.map((_,i)=>i)),indices,mapping:{...mapping,x:at(mapping.x),group:at(mapping.group),values:mapping.values.map(v=>({...v,column:at(v.column),error:at(v.error),...Object.fromEntries([...INTERVAL_FIELDS,'count'].filter(k=>Object.hasOwn(v,k)).map(k=>[k,at(v[k])]))}))}};
 }
 export async function verifySelectedPlot(materials,doc){
  const c=doc.content;if(c.tool!=='Observanda table mapping'||!['7','8','9','10'].includes(c.version))return;

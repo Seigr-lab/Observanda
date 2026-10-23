@@ -13,8 +13,8 @@ function operation(name,values,budget){
  const result=exactExpression({type:'FunctionNode',name,args:values.map((_,i)=>({type:'SymbolNode',name:'v'+i}))},variables,budget);
  if(!result)throw Error('An exact integer exponent is required');return exact(result);
 }
-function canonical(value,budget){const input=checked(value.exact,budget);if(!definition(value))return input;if(budget.scalarPolicy)return operation('add',[operation('multiply',[input,unitScalar(definition(value).scale,budget)],budget),unitScalar(definition(value).offset,budget)],budget);return checked(canonicalUnitValue(input,definition(value)),budget);}
-function output(value,step,budget){if(!definition(step))return value;if(budget.scalarPolicy)return operation('divide',[operation('subtract',[value,unitScalar(definition(step).offset,budget)],budget),unitScalar(definition(step).scale,budget)],budget);return checked(fromCanonicalUnitValue(value,definition(step)),budget);}
+function canonical(value,budget){const input=checked(value.exact,budget);if(!definition(value))return input;if(budget.scalarPolicy)return operation('add',[operation('multiply',[input,unitScalar(definition(value).scale,budget,definition(value).resourcePolicy)],budget),unitScalar(definition(value).offset,budget,definition(value).resourcePolicy)],budget);return checked(canonicalUnitValue(input,definition(value)),budget);}
+function output(value,step,budget){if(!definition(step))return value;if(budget.scalarPolicy)return operation('divide',[operation('subtract',[value,unitScalar(definition(step).offset,budget,definition(step).resourcePolicy)],budget),unitScalar(definition(step).scale,budget,definition(step).resourcePolicy)],budget);return checked(fromCanonicalUnitValue(value,definition(step)),budget);}
 function typed(...values){const declared=values.map(definition);if(declared.some(Boolean)&&!declared.every(Boolean))throw Error('Declared and undeclared quantities cannot be mixed');return declared.every(Boolean);}
 export function exactCalculationCondition(condition,row,columns,budget=new ArithmeticBudget()){
  budget.step();
@@ -25,7 +25,7 @@ export function exactCalculationCondition(condition,row,columns,budget=new Arith
  }
  const a=operandValue(condition.left,row,columns,budget),b=operandValue(condition.right,row,columns,budget);if(!a.present||!b.present)return null;
  let order;
- if(a.exact&&b.exact){if(typed(a,b))unitOperationDimensions('compare',definition(a),definition(b));else if(a.unit!==b.unit)throw Error('unit');const difference=operation('subtract',[canonical(a,budget),canonical(b,budget)],budget);order=difference.numerator<0n?-1:difference.numerator>0n?1:0;}
+ if(a.exact&&b.exact){if(typed(a,b))unitOperationDimensions('compare',definition(a),definition(b),null,budget);else if(a.unit!==b.unit)throw Error('unit');const difference=operation('subtract',[canonical(a,budget),canonical(b,budget)],budget);order=difference.numerator<0n?-1:difference.numerator>0n?1:0;}
  else{if(!!a.exact!==!!b.exact||definition(a)||definition(b)||!['eq','ne'].includes(condition.operator))throw Error('numeric');order=a.raw===b.raw?0:1;}
  return {eq:order===0,ne:order!==0,lt:order<0,lte:order<=0,gt:order>0,gte:order>=0}[condition.operator];
 }
@@ -36,8 +36,8 @@ export function calculateExactStep(step,row,columns,budget=new ArithmeticBudget(
  if(condition===null||!selected.present||!['copy','choose','floor','ceiling'].includes(step.operation)&&!b.present)return {value:'',kind:'absent',sources};
  const declared=typed(a,...(b?[b]:[]),step);let value;
  if(declared){
-  const exponent=step.operation==='power'?canonical(b,budget):null;assertUnitOperation(step.operation,definition(a),definition(b),definition(step),exponent);
-  if(['floor','ceiling'].includes(step.operation)&&(!sameUnitDefinition(definition(a),definition(step))||a.unit!==step.unit))throw Error('Rounding preserves the authored unit');
+  const exponent=step.operation==='power'?canonical(b,budget):null;assertUnitOperation(step.operation,definition(a),definition(b),definition(step),exponent,budget);
+  if(['floor','ceiling'].includes(step.operation)&&(!sameUnitDefinition(definition(a),definition(step),budget)||a.unit!==step.unit))throw Error('Rounding preserves the authored unit');
  }else{
   if(['copy','choose','add','subtract','floor','ceiling','remainder'].includes(step.operation)&&(a.unit!==step.unit||b&&b.unit!==step.unit))throw Error('unit');
   if(step.operation==='quotient'&&(a.unit!==b.unit||step.unit!==''))throw Error('unit');

@@ -20,7 +20,7 @@ export function datasetCalculationUI({state,api,call,frame,esc,field,guard,owner
  const reference=(key,value,label,kind=null)=>analysisReferenceField(key,value,{esc,kind}).replace(/<legend>.*?<\/legend>/,'<legend>'+esc(text(label))+'</legend>');
  const ref=(root,key)=>JSON.parse(root.querySelector('[data-analysis-ref="'+key+'"] [data-ref-value]').value);
  const labels=cols=>cols.map((c,i)=>[i,(i+1)+'. '+c.name+(c.unit?' ['+c.unit+']':'')]);
- const quantity=(key,value)=>draft.version===3?'<details data-calc-quantity="'+key+'" data-quantity="'+esc(JSON.stringify(value??null))+'"><summary>'+esc(text('declaredUnit'))+'</summary>'+measurementUnitControls(value?.unitDefinition,{esc,field})+'</details>':'';
+ const quantity=(key,value)=>draft.version===3?'<details data-calc-quantity="'+key+'" data-quantity="'+esc(JSON.stringify(value??null))+'"><summary>'+esc(text('declaredUnit'))+'</summary>'+measurementUnitControls(value?.unitDefinition,{esc,field,allowPolicy:false})+'</details>':'';
  const readQuantity=(root,key)=>{const node=root.querySelector('[data-calc-quantity="'+key+'"]');if(!node)return undefined;const prior=JSON.parse(node.dataset.quantity),definition=readMeasurementUnit(node);if(!prior&&!definition)return undefined;const {unitDefinition,...value}=prior??{origin:'derived',conversion:null,calibration:null};return {...value,...(definition?{unitDefinition:definition}:{})};};
  const operand=(key,value,cols)=>{
   const representation=value?.constant!==undefined?(value.representation??'automatic'):'decimal';

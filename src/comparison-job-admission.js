@@ -5,7 +5,7 @@ export async function prepareComparisonAdmission(materials,command,{sourceAccess
  await check();await materials.comparisons.validateOutput(command);
  const workspaceId=(await materials.workspace.outline()).metadata.id;
  const references=materials.comparisons.references(command.method,command.comparison);
- const required=command.comparison.version===2||references.some(ref=>ref.workspaceId&&ref.workspaceId!==workspaceId);
+ const required=command.comparison.version>=2||references.some(ref=>ref.workspaceId&&ref.workspaceId!==workspaceId);
  if(!required){await materials.comparisons.validate(command);return {workspaceId,verify:async()=>{},validateOutput:()=>materials.comparisons.validateOutput(command),close:async()=>{}};}
  if(typeof sourceAccess!=='function')throw new AppError('ANALYSIS_SOURCE_ACCESS');
  const access=await sourceAccess(materials.workspace,{signal}),inputs=createComparisonInputReader(materials,{workspaceId,access,signal}),comparisons=new AnalysisComparisons(materials,{inputs});

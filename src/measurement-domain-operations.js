@@ -22,7 +22,7 @@ export function compareDomainCells(materials,a,b,columns,operator){assertDomainC
 export async function calculateDomainNode(materials,node,cells,columns,{budget}={}){
  domainOperationColumn(node,columns);let selected=0;if(node.operation==='choose'){const condition=cells[2];if(!condition)fail();if(['absent','null'].includes(condition.kind))selected=null;else{if(condition.kind!=='string'||!['0','1'].includes(condition.value))fail();selected=condition.value==='1'?0:1;}}if(selected===null||!present(cells[selected],columns[selected]))return absent;
  const value=validateDomainValue(materials,cells[selected].value,columns[selected].domain);if(!domainValueSupported(value))fail('MEASUREMENT_DOMAIN_UNSUPPORTED');if(node.operation!=='extract')return {...cells[selected]};
- const index=domainComponentIndex(columns[0].domain,node.component),page=await domainValuePage(materials,value,{offset:index,limit:1}),component=page.items[0];if(component.presence==='null')return {value:'',kind:'null'};
+ const index=domainComponentIndex(columns[0].domain,node.component),page=await domainValuePage(materials,value,{offset:index,limit:1,resolve:true,budget}),component=page.items[0];if(component.presence==='null')return {value:'',kind:'null'};
  const context=value.definition.component;return {value:numericalOperation(budget,b=>formatExactResult(exactRational(component.spelling,context.representation,context.radix,b),{version:1,representation:'rational',radix:10},b)),kind:'string'};
 }
 export function domainColumnKey(materials,cell,column){assertDomainColumn(column);if(!present(cell,column))return null;return domainValueKey(materials,cell.value,column.domain);}
