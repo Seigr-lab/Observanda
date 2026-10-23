@@ -1,3 +1,4 @@
+import {domainAlgebraMaterial,assertDomainAlgebraFormat} from './domain-algebra-format.js';
 import {validDatasetResourcePolicy} from './web/dataset-resource-policy.js';
 import {measurementScalarPolicies,resolveScalarDefinitions,resolveScalarOperand,scalarDefinitionSequences} from './measurement-scalar-storage.js';
 import {measurementScalarMaterial,assertMeasurementScalarFormat} from './measurement-scalar-format.js';
@@ -721,9 +722,9 @@ export class ResearchMaterials {
     if(nativeDomainMaterial(doc))await checkDomainFormat();
     if(revisionText(await this.index.inputSet(ref))!==revisionText(this.referenceSet(doc.content)))fail('CATALOGUE_DAMAGED');
     if(doc.previous)await enqueue({...ref,revision:doc.previous});
-    if(doc.content.graphVersion>=6&&doc.content.tool==='Observanda calculation graph'||[9,10].includes(doc.content.calculation?.version))await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresWindowCalculations}=await import('./catalogue-format.js');if(!catalogueRequiresWindowCalculations(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
-    if(doc.content.graphVersion>=5&&doc.content.tool==='Observanda calculation graph'||[8,9,10].includes(doc.content.calculation?.version))await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresDatasetResourcePolicies}=await import('./catalogue-format.js');if(!catalogueRequiresDatasetResourcePolicies(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
-    if(doc.content.tool==='Observanda calculation graph'||[4,5,6,7,8,9,10].includes(doc.content.calculation?.version))await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresReferencedCalculations}=await import('./catalogue-format.js');if(!catalogueRequiresReferencedCalculations(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
+    if(doc.content.graphVersion>=6&&doc.content.tool==='Observanda calculation graph'||[9,10,11].includes(doc.content.calculation?.version))await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresWindowCalculations}=await import('./catalogue-format.js');if(!catalogueRequiresWindowCalculations(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
+    if(doc.content.graphVersion>=5&&doc.content.tool==='Observanda calculation graph'||[8,9,10,11].includes(doc.content.calculation?.version))await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresDatasetResourcePolicies}=await import('./catalogue-format.js');if(!catalogueRequiresDatasetResourcePolicies(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
+    if(doc.content.tool==='Observanda calculation graph'||[4,5,6,7,8,9,10,11].includes(doc.content.calculation?.version))await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresReferencedCalculations}=await import('./catalogue-format.js');if(!catalogueRequiresReferencedCalculations(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
     if(doc.content.tool==='Observanda calculation graph'){const {CalculationGraphs}=await import('./calculation-graphs.js');await new CalculationGraphs(this).verify(doc);}
     const comparison=[2,3].includes(doc.content.comparison?.version);
     if(comparison){
@@ -737,6 +738,7 @@ export class ResearchMaterials {
     }else for await(const input of this.references(doc.content))await enqueue(input);
     for await(const output of this.references(doc.content,'outputs'))await enqueue(output);
     if(doc.content.acquisition)await enqueue(doc.content.acquisition);
+    if(domainAlgebraMaterial(doc))await assertDomainAlgebraFormat(this.workspace);
     if(measurementScalarMaterial(doc))await assertMeasurementScalarFormat(this.workspace);
     if(ref.kind==='dataset'){
      await verifyRetainedCalculation(this,doc);

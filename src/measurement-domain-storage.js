@@ -75,3 +75,27 @@ export async function verifyDomainValue(materials,value,{signal}={}){
  else for await(const chunk of originalChunks(materials,value.original,{signal}))digest.update(Buffer.from(chunk,'utf16le'));
  if(digest.digest('hex')!==value.identity||complete!==value.complete)fail('MATERIAL_MISSING');
 }
+
+
+// Derived algebra uses the same original-text and component sequences as intake.
+// The producer yields one exact scalar at a time; its optional budget continues
+// through final output validation. Neither a vector nor matrix is materialized.
+export async function retainDomainComponents(materials,definition,source,save,{signal}={}){
+ if(!validDomainDefinition(definition)||definition.version!==2||!['vector','matrix','complex'].includes(domainCodec(definition)))fail();
+ const components=materials.sequences.builder('domain-components',save),digest=createHash('sha256').update(semanticHeader(definition)).update('\n'),expected=domainComponentCount(definition);let count=0,complete=true;
+ async function* chunks(){
+  yield '[';
+  for await(const component of source){
+   signal?.throwIfAborted();if(count>=expected||!component||component.spelling!==null&&typeof component.spelling!=='string')fail();
+   const spelling=component.spelling,canonical=componentIdentity(spelling,definition,component.budget);digest.update(canonical+'\n');complete&&=spelling!==null;
+   const item=typeof spelling==='string'&&spelling.length>4096?{spelling:(await retainDatasetCell(materials,{kind:'string',value:spelling},save)).value}:{spelling};await components.append(item);
+   if(definition.shape.length===2){if(count%definition.shape[1]===0)yield (count?',':'')+'[';else yield ',';}
+   else if(count)yield ',';
+   yield JSON.stringify(spelling);count++;
+   if(definition.shape.length===2&&count%definition.shape[1]===0)yield ']';
+  }
+  if(count!==expected)fail();yield ']';
+ }
+ const original=(await retainDatasetCell(materials,{kind:'string',read:chunks},save)).value;signal?.throwIfAborted();
+ return {format:'domain-value',version:3,definition:structuredClone(definition),original,components:await components.finish(),identity:digest.digest('hex'),complete};
+}

@@ -120,5 +120,22 @@
  "condition-not": "Negate condition",
  "addCondition": "Add condition",
  "removeCondition": "Remove condition",
- "conditionBudget": "Keep conditions within 8 nested levels and 64 nodes, with 2 to 16 conditions per group. This change was not applied."
+ "conditionBudget": "Keep conditions within 8 nested levels and 64 nodes, with 2 to 16 conditions per group. This change was not applied.",
+ "algebraUpgrade": "Enable exact domain algebra",
+ "algebraUpgradeHelp": "This creates a new graph revision using exact domain algebra. Earlier graph revisions keep their original interpretation. Review the saved operation limits before enabling it; each input also keeps its own declared limits.",
+ "algebraAdd": "Add exact domain algebra",
+ "algebraTitle": "Edit exact domain algebra",
+ "algebraOperation": "Exact domain operation",
+ "algebraLeft": "Choose left domain operand",
+ "algebraRight": "Choose right domain operand",
+ "algebraHelp": "Choose two earlier nodes with supported numerical domain declarations. Their declared namespace must match; labels do not define a field or coordinate system. No broadcasting or shape inference is performed. Source spellings and source references remain unchanged.",
+ "algebraShapes": "Add and subtract require matching vector, matrix or complex shapes. Dot product requires equal-length vectors. Matrix product requires the left column count to equal the right row count. Multiply and divide apply to complex values; division by a zero complex value is refused.",
+ "algebraUnits": "Uses declared unit definitions; units are never inferred from labels. Addition and subtraction convert compatible scales and offsets exactly, using the left unit (or the right absolute unit when adding a difference to an absolute value). Products compose dimensions canonically and require difference quantities. Without declared units, addition and subtraction require matching labels; products require empty labels. Incompatible shapes or units are refused without saving the edit.",
+ "algebraOperands": "Choose two existing nodes that occur before this node, and a supported exact domain operation.",
+ "algebra-add": "Add components",
+ "algebra-subtract": "Subtract components",
+ "algebra-dot": "Vector dot product",
+ "algebra-matmul": "Matrix product",
+ "algebra-multiply": "Complex multiply",
+ "algebra-divide": "Complex divide"
 }

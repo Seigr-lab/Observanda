@@ -1,0 +1,19 @@
+import {validDomainDefinition,knownDomain,domainCodec,domainComponentCount} from './measurement-domain-model.js';
+export const DOMAIN_ALGEBRA_OPERATIONS=['add','subtract','dot','matmul','multiply','divide'];
+export const validDomainAlgebraOperation=operation=>DOMAIN_ALGEBRA_OPERATIONS.includes(operation);
+export class DomainAlgebraError extends Error{constructor(code='MEASUREMENT_DOMAIN_INCOMPATIBLE'){super(code);this.code=code;}}
+const fail=(code)=>{throw new DomainAlgebraError(code);};
+// Shapes and codec namespaces are declarations. Component radix can differ;
+// each exact component is interpreted under its own pinned context.
+export function domainAlgebraShape(operation,left,right){
+ if(!validDomainAlgebraOperation(operation))fail();
+ for(const domain of [left,right])if(!validDomainDefinition(domain)||!knownDomain(domain)||!['vector','matrix','complex'].includes(domainCodec(domain)))fail('MEASUREMENT_DOMAIN_UNSUPPORTED');
+ const codec=domainCodec(left);if(left.codec!==right.codec||left.codecVersion!==right.codecVersion||left.namespace!==right.namespace)fail();
+ const same=left.shape.length===right.shape.length&&left.shape.every((n,i)=>n===right.shape[i]);
+ if(['add','subtract'].includes(operation)){if(!same)fail();return {codec,shape:[...left.shape]};}
+ if(operation==='dot'){if(codec!=='vector'||!same)fail();return {codec:null,shape:[]};}
+ if(operation==='matmul'){
+  if(codec!=='matrix'||left.shape[1]!==right.shape[0])fail();const shape=[left.shape[0],right.shape[1]];domainComponentCount({shape});return {codec:'matrix',shape};
+ }
+ if(codec!=='complex'||!same)fail();return {codec:'complex',shape:[2]};
+}

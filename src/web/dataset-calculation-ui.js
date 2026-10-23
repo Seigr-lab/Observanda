@@ -1,3 +1,4 @@
+import {validGraphCalculation} from './dataset-calculation-graph-model.js';
 import {numeralClipboardControls,wireNumeralClipboard} from './numeral-clipboard-ui.js';
 import {datasetCalculationGraphUI} from './dataset-calculation-graph-ui.js';
 import {datasetColumnPageOffset,loadDatasetColumnWindow,datasetProjectionFields} from './dataset-column-picker.js';
@@ -94,7 +95,7 @@ export function datasetCalculationUI({state,api,call,frame,esc,field,guard,owner
  async function action(act,control){
   if(act.startsWith('calculation-graph-'))return graph.action(act,control);
   if(act==='calculation-open'){clean();await graph.open(JSON.parse(control.dataset.ref));return true;}
-  if(act==='calculation-repeat'){const value=JSON.parse(control.dataset.ref),doc=await call('read',{ref:value});guard();if([4,5,6,7,8,9].includes(doc.content.calculation?.version)){clean();await graph.open(doc.content.calculation.graph,{existing:true});return true;}}
+  if(act==='calculation-repeat'){const value=JSON.parse(control.dataset.ref),doc=await call('read',{ref:value});guard();if(validGraphCalculation(doc.content.calculation)){clean();await graph.open(doc.content.calculation.graph,{existing:true});return true;}}
   if(!act.startsWith('calculation-'))return false;guard();if(saving)return true;const key=act.slice(12);
   if(key==='open'||key==='repeat'){await open(JSON.parse(control.dataset.ref),key==='repeat');return true;}
   if(key==='cancel'){clean();await inspect(source);return true;}
