@@ -1,3 +1,5 @@
+import {nativeDomainMaterial} from './native-domain-format.js';
+import {domainValueReference,validateDomainValue} from './measurement-domain-storage.js';
 import {prepareRetainedPlot} from './retained-figure-plot.js';
 import {RetainedFigureDocuments} from './retained-figure-document.js';
 import {nativeNumericalMaterial,nativeClockMaterial} from './numerical-material-format.js';
@@ -49,7 +51,7 @@ import {EvidenceIntake} from './evidence-intake.js';
 import {EvidenceAssociationBatches} from './evidence-association-batches.js';
 import {EvidenceCorrections} from './evidence-corrections.js';
 import {fileFingerprint} from './web/evidence-fingerprint.js';
-import {REPRESENTATIONS,validQuantity,validTime,schemaReferences} from './web/measurement-model.js';
+import {REPRESENTATIONS,validQuantity,validTime,schemaReferences,validColumnDomain} from './web/measurement-model.js';
 import {Measurements} from './measurements.js';
 import {AnalysisComparisons} from './analysis-comparisons.js';
 import {currentAttemptItems} from './web/attempt-model.js';
@@ -82,7 +84,7 @@ export function exactInteger(value,radix=10){
 }
 export function validColumns(columns,width){
  return Array.isArray(columns)&&columns.length===width&&columns.every(c=>
-  c&&required(c.name,200)&&REPRESENTATIONS.includes(c.representation)&&
+  c&&required(c.name,200)&&REPRESENTATIONS.includes(c.representation)&&validColumnDomain(c)&&
   Number.isInteger(c.radix)&&c.radix>=2&&c.radix<=36&&text(c.unit,100)&&Array.isArray(c.missing)&&c.missing.length<=30&&
   c.missing.every(m=>m&&text(m.value,100)&&required(m.meaning,200))&&
   validTime(c.time)&&(c.quantity===undefined||validQuantity(c.quantity,c.unit)));
@@ -401,8 +403,8 @@ export class ResearchMaterials {
  async datasetColumns(doc){const count=doc.content.schemaIndex?.count??doc.content.columns?.length;if(count>256)fail('MATERIAL_DATASET_LIMIT');const result=[];for await(const column of this.iterateDatasetColumns(doc))result.push(column);return result;}
  iterateDatasetCells(doc,row){return storedDatasetCells(this,doc,row);}
  readDatasetCell(value,options){return readDatasetCell(this,value,options);}
- async *datasetCellSequences(doc,row){if(doc.content.datasetFormat!==3)return;yield row.cellIndex;for await(const cell of this.iterateDatasetCells(doc,row))if(cell.value?.parts)yield cell.value.parts;}
- async verifyDatasetRow(doc,row,options){let count=0;for await(const cell of this.iterateDatasetCells(doc,row)){if(doc.content.datasetFormat===3)await verifyDatasetCell(this,cell,options);else if(typeof cell.value!=='string')fail('MATERIAL_MISSING');count++;}if(count!==(doc.content.schemaIndex?.count??doc.content.columns.length))fail('MATERIAL_MISSING');}
+ async *datasetCellSequences(doc,row){if(doc.content.datasetFormat!==3)return;yield row.cellIndex;for await(const cell of this.iterateDatasetCells(doc,row))for(const descriptor of [cell.value?.parts,cell.value?.components,cell.value?.original?.parts])if(descriptor)yield descriptor;}
+ async verifyDatasetRow(doc,row,options){let count=0,columns=[];for await(const cell of this.iterateDatasetCells(doc,row)){if(doc.content.datasetFormat===3){if(doc.content.domainValues===1){if(count%16===0)columns=(await this.retainedSchemaPage(doc,{offset:count,limit:16})).items;const column=columns[count%16];if(domainValueReference(cell.value)){if(column?.representation!=='domain')fail('MATERIAL_MISSING');validateDomainValue(this,cell.value,column.domain);}else if(column?.representation==='domain'&&!['absent','null'].includes(cell.kind)&&!column.missing.some(m=>m.value===cell.value))fail('MATERIAL_MISSING');}else if(domainValueReference(cell.value))fail('MATERIAL_MISSING');await verifyDatasetCell(this,cell,options);}else if(typeof cell.value!=='string')fail('MATERIAL_MISSING');count++;}if(count!==(doc.content.schemaIndex?.count??doc.content.columns.length))fail('MATERIAL_MISSING');}
  async datasetPage(ref,page=0,{columnOffset=null,columnLimit=16}={}){
   if(ref?.kind!=='dataset'||!Number.isSafeInteger(page)||page<0)fail();const doc=await this.read(ref);
   if(columnOffset===null)return {...await this.retainedDatasetPage(doc,page),columns:await this.datasetColumns(doc)};
@@ -695,9 +697,11 @@ export class ResearchMaterials {
     if(nativeNumericalMaterial(doc))await checkNumericalFormat();
     const checkClockFormat=async()=>{if(await this.workspace.storageKind()==='catalogue')await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresNativeClockModels}=await import('./catalogue-format.js');if(!catalogueRequiresNativeClockModels(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});};
     if(nativeClockMaterial(doc))await checkClockFormat();
+    const checkDomainFormat=async()=>{if(await this.workspace.storageKind()==='catalogue')await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresNativeDomainValues}=await import('./catalogue-format.js');if(!catalogueRequiresNativeDomainValues(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});};
+    if(nativeDomainMaterial(doc))await checkDomainFormat();
     if(revisionText(await this.index.inputSet(ref))!==revisionText(this.referenceSet(doc.content)))fail('CATALOGUE_DAMAGED');
     if(doc.previous)await enqueue({...ref,revision:doc.previous});
-    if(doc.content.tool==='Observanda calculation graph'||doc.content.calculation?.version===4)await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresReferencedCalculations}=await import('./catalogue-format.js');if(!catalogueRequiresReferencedCalculations(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
+    if(doc.content.tool==='Observanda calculation graph'||[4,5].includes(doc.content.calculation?.version))await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresReferencedCalculations}=await import('./catalogue-format.js');if(!catalogueRequiresReferencedCalculations(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
     if(doc.content.tool==='Observanda calculation graph'){const {CalculationGraphs}=await import('./calculation-graphs.js');await new CalculationGraphs(this).verify(doc);}
     const comparison=doc.content.comparison?.version===2;
     if(comparison){
@@ -714,7 +718,8 @@ export class ResearchMaterials {
     if(ref.kind==='dataset'){
      await verifyRetainedCalculation(this,doc);
      if(doc.content.datasetFormat===3)await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresPagedResearchTables}=await import('./catalogue-format.js');if(!catalogueRequiresPagedResearchTables(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
-     let checkedUnitFormat=false,checkedClockFormat=false;for await(const column of this.iterateDatasetColumns(doc)){if(column.quantity?.unitDefinition!==undefined){if(!validQuantity(column.quantity,column.unit))fail('MATERIAL_MISSING');if(!checkedUnitFormat){await checkNumericalFormat();checkedUnitFormat=true;}}if(column.time?.clock?.definition!==undefined){if(!validTime(column.time))fail('MATERIAL_MISSING');if(!checkedClockFormat){await checkClockFormat();checkedClockFormat=true;}}for(const r of schemaReferences(column))await enqueue(r);}
+     let checkedUnitFormat=false,checkedClockFormat=false,hasDomains=false;for await(const column of this.iterateDatasetColumns(doc)){if(!validColumns([column],1))fail('MATERIAL_MISSING');if(column.representation==='domain'&&!hasDomains){await checkDomainFormat();hasDomains=true;}if(column.quantity?.unitDefinition!==undefined){if(!validQuantity(column.quantity,column.unit))fail('MATERIAL_MISSING');if(!checkedUnitFormat){await checkNumericalFormat();checkedUnitFormat=true;}}if(column.time?.clock?.definition!==undefined){if(!validTime(column.time))fail('MATERIAL_MISSING');if(!checkedClockFormat){await checkClockFormat();checkedClockFormat=true;}}for(const r of schemaReferences(column))await enqueue(r);}
+     if(hasDomains!==(doc.content.domainValues===1)||doc.content.domainValues!==undefined&&doc.content.domainValues!==1)fail('MATERIAL_MISSING');
      if(doc.content.aggregationMembersIndex&&!doc.content.aggregation)fail('MATERIAL_MISSING');
      const aggregationContext=doc.content.aggregationMembersIndex?await aggregationMemberContext(this,doc):null;let memberOffset=0;
      for await(const row of this.iterateDataset(ref,{metadataOnly:true})){

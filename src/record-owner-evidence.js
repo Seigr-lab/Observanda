@@ -132,7 +132,7 @@ export async function prepareRecordOwnerEvidence(source,target,receipt,{write,si
    await choice(value,enqueue);
    if(value.kind==='retained'&&value.document?.format==='figure-document'&&await inspected.add('figure:'+digest(serialize(value.document)))){const {RetainedFigureDocuments}=await import('./retained-figure-document.js');const reader=await new RetainedFigureDocuments(source,{readOnly:true,signal}).open(value);for await(const part of reader.blocks())await emit({kind:'metadata',name:part.path,content:JSON.stringify(part.node,null,2)+'\n'});}
    if(validMaterialReference(value))await enqueue(materialReference(value));
-   if(value.format===1&&['pages','columns','references','files','upload-chunks','aggregation-members','cells','cell-text','calculation-bindings','calculation-nodes','calculation-outputs','calculation-edges','calculation-lineage','calculation-row-bindings','calculation-source-locators'].includes(value.kind)&&Object.hasOwn(value,'root')&&Object.hasOwn(value,'count'))await transfer.sequence(value);
+   if(value.format===1&&['pages','columns','references','files','upload-chunks','aggregation-members','cells','cell-text','domain-components','calculation-bindings','calculation-nodes','calculation-outputs','calculation-edges','calculation-lineage','calculation-row-bindings','calculation-source-locators'].includes(value.kind)&&Object.hasOwn(value,'root')&&Object.hasOwn(value,'count'))await transfer.sequence(value);
    for(const key of ['font','headingFont'])if(customFontId(value[key])&&await inspected.add('font:'+value[key]))await font(value[key]);
   };
   const audit=async name=>{

@@ -141,6 +141,7 @@ export class Workspace {
           const {referencedCalculationMetadata}=await import('./calculation-graph-format.js');if(referencedCalculationMetadata(relative,value)){const {requireReferencedCalculations}=await import('./catalogue-format.js');await requireReferencedCalculations(store.db);}
           const {nativeNumericalMetadata,nativeClockMetadata}=await import('./numerical-material-format.js');if(nativeNumericalMetadata(relative,value)){const {requireNativeNumericalModels}=await import('./catalogue-format.js');await requireNativeNumericalModels(store.db);}
           if(nativeClockMetadata(relative,value)){const {requireNativeClockModels}=await import('./catalogue-format.js');await requireNativeClockModels(store.db);}
+          const {nativeDomainMetadata}=await import('./native-domain-format.js');if(nativeDomainMetadata(relative,value)){const {requireNativeDomainValues}=await import('./catalogue-format.js');await requireNativeDomainValues(store.db);}
         }
         if(relative.startsWith('.observanda/reviews/parts/')||/^\.observanda\/reviews\/[a-f0-9-]{36}\.json$/.test(relative)&&JSON.parse(text)?.request?.value?.version===2){
           const {requireReviewFigurePackages}=await import('./catalogue-format.js');await requireReviewFigurePackages(store.db);

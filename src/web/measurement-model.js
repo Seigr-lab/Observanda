@@ -1,12 +1,16 @@
 // Scientific values remain strings. Arithmetic here only constructs exact rational
 // identities; no unit conversion or clock unwrapping is inferred.
+import {validDomainDefinition} from './measurement-domain-model.js';
+import {NUMBER_REPRESENTATIONS} from './numeral-context.js';
 import {researchId} from './research-reference.js';
 import {revisionId} from './revision-model.js';
 import {exactRational} from './measurement-rational.js';
 import {validClockDefinition} from './measurement-clock-model.js';
 import {validUnitDefinition} from './measurement-unit-model.js';
 export {exactRational} from './measurement-rational.js';
-export const REPRESENTATIONS=['text','decimal','integer','radix','radix-fraction','rational','unsupported'];
+export const REPRESENTATIONS=['text','decimal','integer','radix','radix-fraction','rational','unsupported','domain'];
+export const isScalarRepresentation=value=>NUMBER_REPRESENTATIONS.includes(typeof value==='string'?value:value?.representation);
+export const validColumnDomain=column=>column.representation==='domain'?validDomainDefinition(column.domain):column.domain===undefined;
 export const QUANTITY_ORIGINS=['unspecified','requested','measured','derived','raw-code'];
 export const TIME_KINDS=['none','unknown','acquisition-order','counter','wall-clock','elapsed','powered-duration','inferred-elapsed','external'];
 export const MEASUREMENT_ROLES=['decoder','schema'];
@@ -20,7 +24,7 @@ export function supportedValue(value,representation,radix){
  try{exactRational(value,representation,radix);return true;}catch{return false;}
 }
 export function rationalIdentity(value){
- if(value.presence!=='value'||['text','unsupported'].includes(value.representation))return null;
+ if(value.presence!=='value'||!isScalarRepresentation(value.representation))return null;
  const rational=exactRational(value.spelling,value.representation,value.radix);
  return {numerator:String(rational.numerator),denominator:String(rational.denominator)};
 }
@@ -49,7 +53,7 @@ export function validLocator(source){
 export function validMeasurement(m){
  if(!keys(m,['version','value','quantity','time','sources','references','decoderVersion','integrity','completion','note'])||m.version!==1)return false;
  const v=m.value;
- return keys(v,['spelling','representation','radix','unit','presence'])&&text(v.spelling,8192)&&REPRESENTATIONS.includes(v.representation)&&Number.isInteger(v.radix)&&v.radix>=2&&v.radix<=36&&text(v.unit,100)&&['value','missing','null','absent','unknown'].includes(v.presence)&&(v.presence!=='value'||supportedValue(v.spelling,v.representation,v.radix))&&
+ return keys(v,['spelling','representation','radix','unit','presence'])&&text(v.spelling,8192)&&REPRESENTATIONS.includes(v.representation)&&v.representation!=='domain'&&Number.isInteger(v.radix)&&v.radix>=2&&v.radix<=36&&text(v.unit,100)&&['value','missing','null','absent','unknown'].includes(v.presence)&&(v.presence!=='value'||supportedValue(v.spelling,v.representation,v.radix))&&
  validQuantity(m.quantity,v.unit)&&validTime(m.time)&&Array.isArray(m.sources)&&m.sources.length>0&&m.sources.length<=32&&m.sources.every(validLocator)&&keys(m.references,MEASUREMENT_ROLES)&&MEASUREMENT_ROLES.every(k=>optionalRef(m.references[k]))&&text(m.decoderVersion,300)&&(!m.references.decoder||!!m.decoderVersion.trim())&&['unknown','verified','failed','not-checked'].includes(m.integrity)&&['unknown','complete','partial'].includes(m.completion)&&text(m.note,10000);
 }
 export function measurementReferences(m){return [...m.sources.map(s=>s.ref),...Object.values(m.references),...schemaReferences(m)].filter(Boolean);}

@@ -85,7 +85,7 @@ export async function executeMaterialRequest(storage,request,data,{signal,jobs,d
  case 'schema':return materials.schemaPage(data.ref,{offset:data.offset??0,limit:data.limit??16});
  case 'measurement-save':return {ref:await materials.measurements.save(data,{signal})};
  case 'measurement-seed':return materials.measurements.seed(data.source);
- case 'measurement-inspect':return materials.measurements.inspect(data.source,{offset:data.offset??0,lineageOffset:data.lineageOffset??0,lineageLimit:data.lineageLimit??16,sourceOffset:data.sourceOffset??0,signal});
+ case 'measurement-inspect':return materials.measurements.inspect(data.source,{offset:data.offset??0,lineageOffset:data.lineageOffset??0,lineageLimit:data.lineageLimit??16,sourceOffset:data.sourceOffset??0,componentOffset:data.componentOffset??0,signal});
  case 'current-record':try{const current=await materials.owner(data.id);return {record:current.entries.find(e=>e.id===data.id)};}catch(error){if(error.code!=='MATERIAL_INVALID')throw error;return {record:null};}
  case 'pin':return materials.pinRecord(data.id,data.expectedRevision);
  case 'record':return new RetainedRecordDocuments(storage).read(data,{signal});

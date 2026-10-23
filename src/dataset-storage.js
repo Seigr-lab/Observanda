@@ -1,3 +1,4 @@
+import {retainDomainValue,domainValueReference,validateDomainValue} from './measurement-domain-storage.js';
 import {DATASET_ROWS_PER_PAGE} from './dataset-row-position.js';
 import {withDatasetPreparationWrites} from './dataset-preparation-writes.js';
 // Current retained datasets separate schema, row identities and cell values.
@@ -29,13 +30,14 @@ export async function preparePagedDataset(materials,command,{source,base=null,si
  const flush=async()=>{if(!page.length)return;const hash=digest(revisionText(page)),rows=page;await save(()=>materials.put(materials.metadataFile('tables/'+hash+'.json'),rows));await pages.append({hash,count:rows.length,start:count-rows.length,includedStart:included-pageIncluded,included:pageIncluded});page=[];pageIncluded=0;};
  async function* retained(){yield {columnCount:base.content.schemaIndex?.count??base.content.columns.length,columns:()=>datasetColumns(materials,base),sourceMapping:base.content.sourceMapping,retained:true};
   let order=0;for(let index=0;index<materials.datasetPageCount(base);index++){const data=await materials.retainedDatasetPage(base,index,{metadataOnly:true});for(const row of data.rows){signal?.throwIfAborted();yield {...row,order:++order,cells:()=>storedDatasetCells(materials,base,row)};}await progress({stage:'validating dataset rows',done:order,total:base.content.rowCount});}}
+ let hasDomains=false;
  const input=preparedRows??(base?retained():readPagedDataset(source.content.read(0,source.content.size-1,{signal}),command.sourceMapping,{signal,progress,size:source.content.size}));
  for await(const item of input){
   signal?.throwIfAborted();
   if(item.columnCount!==undefined||Array.isArray(item.columns)){
    if(schemaIndex)fail();width=item.columnCount??item.columns.length;if(!Number.isSafeInteger(width)||width<1)fail();
    const definitions=typeof item.columns==='function'?item.columns():item.columns.map(name=>({name}));let index=0;
-   for await(const definition of definitions){const column=changes.get(index)??calculatedColumns?.[index]??command.columns?.[index]??(item.retained?definition:columnDefaults({label:definition.name}));if(!validColumns([column],1))fail();await schema.append({...column,...(definition.sourceField?{sourceField:definition.sourceField}:{})});
+   for await(const definition of definitions){const column=changes.get(index)??calculatedColumns?.[index]??command.columns?.[index]??(item.retained?definition:columnDefaults({label:definition.name}));if(!validColumns([column],1))fail();if(column.representation==='domain')hasDomains=true;await schema.append({...column,...(definition.sourceField?{sourceField:definition.sourceField}:{})});
     for(const ref of schemaReferences(column))if(await scratch.add('schema-ref:'+materialReferenceKey(ref)))await schemaInputs.append(ref);index++;
    }
    if(index!==width||command.columns&&command.columns.length!==width||[...changes.keys()].some(i=>i>=width))fail();schemaIndex=await schema.finish();if(nativeMapping&&!await scratch.has('schema-ref:'+materialReferenceKey(nativeMapping.artifact)))await schemaInputs.append(nativeMapping.artifact);
@@ -47,9 +49,11 @@ export async function preparePagedDataset(materials,command,{source,base=null,si
   async function* supplied(){if(typeof item.cells==='function')yield* item.cells();else for(let i=0;i<item.cells.length;i++)yield {value:item.cells[i],kind:item.valueKinds?.[i]??'string',...(item.cellPointers?{pointer:item.cellPointers[i]}:{}),...(item.cellSources?.[i]?{sources:item.cellSources[i]}:{})};}
   for await(const raw of supplied()){
    if(index>=width)fail();if(index%16===0){cachedOffset=index;cached=(await materials.sequences.page(schemaIndex,{offset:index,limit:16})).items;}
-   const cell=await retainDatasetCell(materials,raw,save),column=cached[index-cachedOffset];
+   const column=cached[index-cachedOffset],supplied=domainValueReference(raw.value)&&(column.representation!=='domain'||revisionText(raw.value.definition)!==revisionText(column.domain))?{...raw,value:raw.value.original}:raw;let cell=await retainDatasetCell(materials,supplied,save);
+   if(column.representation==='domain'&&!['null','absent'].includes(cell.kind)&&!column.missing.some(m=>m.value===cell.value))cell={...cell,value:await retainDomainValue(materials,cell,column.domain,save,{signal})};
    if(!['null','absent'].includes(cell.kind)){
-    if(datasetCellReference(cell.value)){if(!['text','unsupported'].includes(column.representation))fail();}
+    if(domainValueReference(cell.value)){if(column.representation!=='domain')fail();validateDomainValue(materials,cell.value,column.domain);}
+    else if(datasetCellReference(cell.value)){if(!['text','unsupported'].includes(column.representation))fail();}
     else if(!column.missing.some(m=>m.value===cell.value)&&!supportedValue(cell.value,column.representation,column.radix))fail();
    }
    const nativeIndex=nativeColumns.indexOf(index);if(nativeIndex>=0){native.cells[nativeIndex]=cell.value;native.valueKinds[nativeIndex]=cell.kind;}
@@ -61,7 +65,7 @@ export async function preparePagedDataset(materials,command,{source,base=null,si
  }
  await flush();if(!schemaIndex||Object.keys(exclusions).length!==seen.size)fail();signal?.throwIfAborted();
  const calculation=command.calculation??base?.content.calculation,aggregation=command.aggregation??base?.content.aggregation;
- return {commandHash:digest(revisionText(command)),content:{datasetFormat:3,inputs:inputReferences??base?.content.inputs??[command.artifact],schemaInputsIndex:await schemaInputs.finish(),schemaIndex,pageIndex:await pages.finish(),rowCount:count,includedRowCount:included,sourceMapping,...(calculation?{calculation,algorithm:'observanda-retained-calculations',algorithmVersion:calculation.version===4?3:calculation.version===3?2:1}:{}),...(aggregation?{aggregation,algorithm:'observanda-retained-aggregation',algorithmVersion:1}:{}),...(aggregationMembersIndex?{aggregationMembersIndex}:{}),...(nativeMapping?{nativeMapping}:{}),delimiter:sourceMapping.delimiter??null,encoding:'UTF-8',order:aggregation?'first-group-occurrence':'acquisition'}};
+ return {commandHash:digest(revisionText(command)),content:{datasetFormat:3,...(hasDomains?{domainValues:1}:{}),inputs:inputReferences??base?.content.inputs??[command.artifact],schemaInputsIndex:await schemaInputs.finish(),schemaIndex,pageIndex:await pages.finish(),rowCount:count,includedRowCount:included,sourceMapping,...(calculation?{calculation,algorithm:'observanda-retained-calculations',algorithmVersion:calculation.version===5?4:calculation.version===4?3:calculation.version===3?2:1}:{}),...(aggregation?{aggregation,algorithm:'observanda-retained-aggregation',algorithmVersion:1}:{}),...(aggregationMembersIndex?{aggregationMembersIndex}:{}),...(nativeMapping?{nativeMapping}:{}),delimiter:sourceMapping.delimiter??null,encoding:'UTF-8',order:aggregation?'first-group-occurrence':'acquisition'}};
  },{signal});return preparedWrites?prepare(materials):withDatasetPreparationWrites(materials,{writePage,signal},prepare);
 }
 export async function projectDatasetRows(materials,doc,rows,columns){

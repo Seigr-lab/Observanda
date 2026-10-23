@@ -1,4 +1,4 @@
-import {exactRational,measurementRef,validQuantity} from './measurement-model.js';
+import {exactRational,measurementRef,validQuantity,isScalarRepresentation} from './measurement-model.js';
 import {validConstantType,constantExact} from './calculation-operands.js';
 import {KEY_SEMANTICS} from './measurement-keys.js';
 import {validNumeralContext} from './numeral-context.js';
@@ -46,7 +46,8 @@ export function operandValue(operand,row,columns){
  }
  const i=operand.column,c=columns[i],raw=row.cells[i];
  const present=!['absent','null'].includes(row.valueKinds?.[i])&&!c.missing.some(m=>m.value===raw);let exact=null;
- if(present&&!['text','unsupported'].includes(c.representation))exact=exactRational(raw,c.representation,c.radix);
+ if(c.representation==='domain')throw Error('Domain values require a domain graph operation');
+ if(present&&isScalarRepresentation(c))exact=exactRational(raw,c.representation,c.radix);
  return {raw,exact,unit:c.unit,quantity:c.quantity,present,sources:row.cellSources?.[i]??[]};
 }
 export function calculationCondition(c,row,columns){

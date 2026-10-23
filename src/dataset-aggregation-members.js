@@ -1,3 +1,4 @@
+import {domainAggregationKey} from './dataset-aggregation.js';
 // Each retained group pins a sequence of source positions. Later inspection
 // seeks that sequence directly; it never rescans preceding source rows.
 import {datasetColumnCount,selectedDatasetColumns,assertDatasetScalars} from './dataset-selected-columns.js';
@@ -32,7 +33,7 @@ export async function* aggregationMemberRows(materials,context,row,{offset=0,lim
    if(at++<offset)continue;
    if(context.cachedPage!==position.page){context.cachedData=await materials.retainedDatasetPage(context.source,position.page,{columns:context.indices});context.cachedPage=position.page;}
    const value=context.cachedData.rows[position.row];
-   if(!value||aggregationKey(assertDatasetScalars(value),context.columns,context.recipe.keys,context.recipe.keySemantics)!==row.locator.key)fail();
+   if(!value||domainAggregationKey(materials,context.recipe.version===2?value:assertDatasetScalars(value),context.columns,context.recipe.keys,context.recipe.keySemantics,context.recipe.version)!==row.locator.key)fail();
    yield {...position,value};
   }
  }

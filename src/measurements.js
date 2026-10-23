@@ -33,7 +33,7 @@ export class Measurements {
   const schema=await this.materials.retainedSchemaPage(doc,{offset:column,limit:1});
   if(!selected||schema.items.length!==1)fail();
   const col=schema.items[0],kind=selected.valueKinds?.[0],presence=['null','absent'].includes(kind)?kind:col.missing.some(m=>m.value===selected.cells[0])?'missing':'value';
-  return {doc,pageRows:data.rows.length,row:selected,column:col,...(typeof selected.cells[0]==='string'?{}:{cellReference:selected.cells[0]}),value:{spelling:typeof selected.cells[0]==='string'?selected.cells[0]:'',representation:col.representation,radix:col.radix,unit:col.unit,presence},quantity:col.quantity??blankQuantity(),time:col.time};
+  return {doc,pageRows:data.rows.length,row:selected,column:col,...(typeof selected.cells[0]==='string'?{}:{cellReference:selected.cells[0]}),value:{spelling:typeof selected.cells[0]==='string'?selected.cells[0]:'',representation:col.representation,...(col.domain?{domain:col.domain}:{}),radix:col.radix,unit:col.unit,presence},quantity:col.quantity??blankQuantity(),time:col.time};
  }
  inspect(source,options={}){return inspectMeasurementSource(this,source,options);}
  async seed(source){

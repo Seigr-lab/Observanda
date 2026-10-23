@@ -1,3 +1,4 @@
+import {isScalarRepresentation} from './web/measurement-model.js';
 // Version 3 retained scalar calculations reuse the calculator's bounded exact engine.
 import {ArithmeticBudget,ExactNumber,exactExpression} from './tools/exact-arithmetic.js';
 import {operandValue,conditionOperands} from './web/dataset-calculation-model.js';
@@ -55,9 +56,10 @@ export function exactCalculationKey(value,column){
 
 function operandSchema(operand,columns){
  if(Object.hasOwn(operand,'constant'))return {...operand,exact:constantExact(operand),numeric:constantExact(operand)!==null};
- const column=columns[operand.column];return {...column,numeric:!['text','unsupported'].includes(column.representation)};
+ const column=columns[operand.column];return {...column,numeric:isScalarRepresentation(column)};
 }
 export function validateExactComparison(a,b){
+ if(a.representation==='domain'||b.representation==='domain')throw Error('Domain values require declared domain comparison');
  if(a.numeric!==b.numeric)throw Error('Numeric values and text symbols are distinct');
  if(definition(a)||definition(b)){typed(a,b);if(!a.numeric||!b.numeric)throw Error('Declared quantities require numeric operands');unitOperationDimensions('compare',definition(a),definition(b));}
  else if(a.numeric&&b.numeric&&a.unit!==b.unit)throw Error('unit');

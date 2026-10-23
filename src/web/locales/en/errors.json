@@ -374,5 +374,9 @@
   "PDF_PRINT_FAILED": "The printer colour condition could not be applied. Your document is unchanged.",
   "PDF_LINK_CODE_LAYOUT": "A QR code cannot fit at a readable size. Widen this section or turn off printed QR codes.",
   "PDF_PRINT_COLOR": "This PDF contains a colour resource that cannot be safely characterized for the selected printer profile.",
-  "WEBSITE_NAME_EXISTS": "A website with this name already exists in this workspace. Choose a different name."
+  "WEBSITE_NAME_EXISTS": "A website with this name already exists in this workspace. Choose a different name.",
+  "MEASUREMENT_DOMAIN_INVALID": "The value does not match its declared domain shape and exact component representation.",
+  "MEASUREMENT_DOMAIN_UNSUPPORTED": "This domain codec or version is preserved, but its meaning is not supported. The original value remains available.",
+  "MEASUREMENT_DOMAIN_INCOMPATIBLE": "These values have different declared domains, shapes, or coordinate namespaces.",
+  "MEASUREMENT_DOMAIN_COMPONENT_LIMIT": "A component exceeds the exact scalar processing budget. Its source is preserved; no shortened value was used."
 }

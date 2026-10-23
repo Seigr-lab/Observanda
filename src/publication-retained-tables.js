@@ -1,3 +1,4 @@
+import {domainDescription} from './web/measurement-domain-ui.js';
 import {createHash} from 'node:crypto';
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
@@ -18,7 +19,7 @@ export async function* retainedTableHTML(materials,statement,{signal}={}){
  for await(const block of retainedTableBlocks(materials,{ref:statement.source,table:statement.table},{signal})){
   const table=block.table;
   yield '<section class="book-table retained-result-table"><p>'+esc('Rows '+(block.offset+1)+'-'+(block.offset+table.rows.length)+'; columns '+(block.columnOffset+1)+'-'+(block.columnOffset+table.headers.length))+'</p><div class="book-table-scroll" tabindex="0" role="region" aria-label="'+esc(messages.table)+'"><table><thead><tr>';
-  for(let i=0;i<table.headers.length;i++){const format=table.formats[i];yield '<th scope="col">'+esc(table.headers[i]+(['radix','radix-fraction'].includes(format.representation)?' ('+messages.base.replace('{radix}',format.radix)+')':''))+'</th>';}
+  for(let i=0;i<table.headers.length;i++){const format=table.formats[i];yield '<th scope="col">'+esc(table.headers[i]+(format.domain?' ('+domainDescription(format.domain)+')':'')+(['radix','radix-fraction'].includes(format.representation)?' ('+messages.base.replace('{radix}',format.radix)+')':''))+'</th>';}
   if(table.selection.includeExcluded)yield '<th scope="col">'+esc(messages.exclusion)+'</th>';yield '</tr></thead><tbody>';
   for(const row of table.rows){
    signal?.throwIfAborted();yield '<tr>';

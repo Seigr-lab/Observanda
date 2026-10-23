@@ -70,7 +70,7 @@ export class ResearchTransfer{
   async function visit(ref){
    if(!ref||await owner.sequenceNodes.has(ref.hash))return;const node=await tree.node(ref);await owner.sequenceNodes.add(ref.hash);await visit(node.left);await visit(node.right);
    const chunk=await owner.materials.sequences.read('chunks',node.revision);if(!chunk)throw new AppError('MATERIAL_MISSING');
-   if(chunk.kind==='cells')for(const cell of chunk.items){if(cell.value?.parts)await owner.sequence(cell.value.parts);if(cell.lineage?.leaves)await owner.sequence(cell.lineage.leaves);if(cell.sourcesIndex)await owner.sequence(cell.sourcesIndex);}
+   if(chunk.kind==='cells')for(const cell of chunk.items){if(cell.value?.parts)await owner.sequence(cell.value.parts);if(cell.value?.components)await owner.sequence(cell.value.components);if(cell.value?.original?.parts)await owner.sequence(cell.value.original.parts);if(cell.lineage?.leaves)await owner.sequence(cell.lineage.leaves);if(cell.sourcesIndex)await owner.sequence(cell.sourcesIndex);}
    if(chunk.kind==='calculation-bindings')for(const binding of chunk.items)if(binding.match?.keysIndex)await owner.sequence(binding.match.keysIndex);
    if(chunk.kind==='calculation-row-bindings')for(const binding of chunk.items)if(binding.location?.cellsIndex)await owner.sequence(binding.location.cellsIndex);
    if(chunk.kind==='pages')for(const page of chunk.items){const rows=await owner.materials.json(owner.materials.metadataFile('tables/'+page.hash+'.json'));for(const row of rows){if(row.cellIndex)await owner.sequence(row.cellIndex);if(row.calculationLineage?.bindingsIndex)await owner.sequence(row.calculationLineage.bindingsIndex);}await owner.metadata('.observanda/materials/tables/'+page.hash+'.json',rows);}

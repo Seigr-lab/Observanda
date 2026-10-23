@@ -1,3 +1,4 @@
+import {isScalarRepresentation} from './measurement-model.js';
 import {measurementRef,exactRational} from './measurement-model.js';
 import {researchId} from './research-reference.js';
 import {materialReference} from './material-reference.js';
@@ -18,7 +19,7 @@ export const analysisSourceReferences=s=>[s.dataset,s.run,s.investigation,s.cali
 export function validComparison(c){return obj(c,['version','sources','ordering','expected'])&&[1,2].includes(c.version)&&Array.isArray(c.sources)&&c.sources.length>0&&c.sources.length<=32&&c.sources.every(validAnalysisSource)&&new Set(c.sources.map(s=>analysisIdentity(s.dataset,c.version))).size===c.sources.length&&(c.version===1||[...c.sources.flatMap(analysisSourceReferences),...(c.expected?[c.expected.dataset]:[])].every(r=>researchId(r?.workspaceId)))&&['unknown','source'].includes(c.ordering)&&(c.expected===null||obj(c.expected,['dataset','value','key','actualKey','source','rationale'])&&measurementRef(c.expected.dataset)&&c.expected.dataset.kind==='dataset'&&['value','key','actualKey','source'].every(k=>Number.isSafeInteger(c.expected[k])&&c.expected[k]>=0)&&c.expected.source<c.sources.length&&analysisTextValue(c.expected.rationale,2000,true));}
 export function rationalCompare(a,b){const n=a.numerator*b.denominator-b.numerator*a.denominator;return n<0n?-1:n>0n?1:0;}
 export function rationalDifference(a,b){let n=a.numerator*b.denominator-b.numerator*a.denominator,d=a.denominator*b.denominator,x=n<0n?-n:n,y=d;while(y)[x,y]=[y,x%y];x||=1n;return {numerator:String(n/x),denominator:String(d/x)};}
-export function analysisRational(raw,column){if(['text','unsupported'].includes(column.representation))return null;try{return exactRational(raw,column.representation,column.radix);}catch{return null;}}
+export function analysisRational(raw,column){if(!isScalarRepresentation(column))return null;try{return exactRational(raw,column.representation,column.radix);}catch{return null;}}
 // Version 1 identities are retained for historical comparison verification.
 export const analysisIdentity=(r,version=1)=>r?(version===2?r.workspaceId+':':'')+r.kind+':'+r.id+':'+r.revision:'';
 export function addressedComparisonInputs({method,comparison},workspaceId){
