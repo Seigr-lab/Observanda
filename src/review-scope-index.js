@@ -36,7 +36,13 @@ export class ReviewScopeIndex{
  }
  async verify(){
   const head=await this.state();
-  if(!head){if(await cataloguePrefixExists(this.store.db,'state',namespace))fail();return;}
+  if(!head){
+   if(await cataloguePrefixExists(this.store.db,'state',namespace))fail();
+   // Old v1 reviews may predate the derived scope index. A committed v2 packet
+   // always publishes it atomically; only unfinished staging may lack it.
+   for await(const name of this.store.workspace.metadataNames('.observanda/reviews'))if(/^[a-f0-9-]{36}\.json$/.test(name)){const raw=await this.store.workspace.readMetadata('.observanda/reviews/'+name,1800000);let packet;try{packet=JSON.parse(raw);}catch{fail();}if(packet?.request?.value?.version===2)fail();}
+   for await(const id of this.store.workspace.metadataNames('.observanda/reviews/parts'))if(await this.store.workspace.readMetadata('.observanda/reviews/parts/'+id+'/head.json',8192)!==null)fail();return;
+  }
   const source=await this.store.object('metadata:.observanda/reviews/index.json');let index;
   try{index=JSON.parse(source?.text);}catch{fail();}
   if(!Array.isArray(index?.ids)||index.ids.length>500||!index.ids.every(uuid)||!unique(index.ids)||head.indexHash!==reviewHash(index.ids))fail();
@@ -52,6 +58,10 @@ export class ReviewScopeIndex{
    }
   }
   if((head.root?.count??0)!==count)fail();
+  const {Reviews}=await import('./reviews.js'),{ExchangeParts}=await import('./collaboration/exchange-parts.js'),{verifyReviewFigurePacket}=await import('./review-figures.js'),{catalogueFormat,catalogueRequiresReviewFigurePackages}=await import('./catalogue-format.js'),reviews=new Reviews(this.store.workspace),partsIds=new Set();
+  for(const id of index.ids){const packet=await reviews.packet(id);if(packet.request.value.version!==2)continue;if(!catalogueRequiresReviewFigurePackages(await catalogueFormat(this.store.db)))fail();if(partsIds.has(packet.parts))fail();partsIds.add(packet.parts);await verifyReviewFigurePacket(new ExchangeParts(this.store.workspace,packet.parts,{scope:'reviews'}),packet);}
+  for await(const id of this.store.workspace.metadataNames('.observanda/reviews/parts'))if(!partsIds.has(id)&&await this.store.workspace.readMetadata('.observanda/reviews/parts/'+id+'/head.json',8192)!==null)fail();
+
  }
  async append(index,summary,readSummary){
   if(index.ids.at(-1)!==summary.id)fail();

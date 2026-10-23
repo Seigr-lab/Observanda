@@ -11,7 +11,7 @@ const groups={preparation:'preparations',event:'events',assessment:'assessments'
 const tr=(key,values)=>t('online',key,values);
 const message=(key,values)=>['save','draftHelp'].includes(key)?tr(key==='save'?'attemptSave':'attemptDraftHelp'):t('attempts',key,values);
 
-export function onlineAttempts({remote,commands,esc,notify,fileUrl}){
+export function onlineAttempts({remote,commands,esc,notify,fileUrl,figureURL}){
  let host,record,readOnly=false,disposed=false,busy=false,session=null,request=null,picker=null,referenceView=null,stale=false,recoveryFailed=false,latestKey='',generation=0,snapshot=null,windows={},preparationEditor=null,readGeneration=0,refreshing=false;
  const button=(key,action,id='')=>'<button type="button" class="button" data-online-attempt="'+action+'" data-fact-id="'+esc(id)+'">'+esc(message(key))+'</button>';
  const attempt=()=>record.attempt??emptyAttempt();
@@ -97,7 +97,7 @@ export function onlineAttempts({remote,commands,esc,notify,fileUrl}){
  }
  async function readReference(index){
   if(busy||request||picker)return;const ref=attemptReferences(record.attempt)[index];if(!ref)return;referenceView?.dispose();
-  referenceView=onlineAttemptReference({host:host.querySelector('[data-attempt-reference-view]'),recordId:record.id,rootRef:ref,remote,esc,fileUrl,onBusy:value=>{busy=value;controls();}});await referenceView.open();
+  referenceView=onlineAttemptReference({host:host.querySelector('[data-attempt-reference-view]'),recordId:record.id,rootRef:ref,remote,esc,fileUrl,figureURL,onBusy:value=>{busy=value;controls();}});await referenceView.open();
  }
  async function rebase(){
   if(!session||!stale||busy||request||readOnly)return;readForm();busy=true;controls();

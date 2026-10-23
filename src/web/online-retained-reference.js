@@ -1,3 +1,5 @@
+import {sharedFigureControls,mountSharedFigures} from './shared-figure-reader.js';
+import {isRetainedFigure} from './retained-figure-model.js';
 import {t} from './i18n/index.js';
 import {recordRevisionView} from './record-revision-view.js';
 import {applyRichTextStyles} from './rich-text-stylesheet.js';
@@ -9,8 +11,8 @@ const tr=(key,values)=>t('online',key,values);
 
 // Read retained facts through their original reference chain. Every page and
 // download is authorized again by the host; browsing never changes a dataset.
-export function onlineRetainedReference({host,recordId,rootRef,remote,esc,fileUrl,onBusy,operations={read:'attempt-read',page:'attempt-page'}}){
- let disposed=false,busy=false,blocked=false,trail=[],rowsCursor={page:0,rowOffset:0},previous=[],columnOffset=0,rows=null;
+export function onlineRetainedReference({host,recordId,rootRef,remote,esc,fileUrl,figureURL,onBusy,operations={read:'attempt-read',page:'attempt-page'}}){
+ let disposed=false,busy=false,blocked=false,trail=[],rowsCursor={page:0,rowOffset:0},previous=[],columnOffset=0,rows=null,figures=null;
  const button=(key,attrs='')=>'<button type="button" class="button" '+attrs+'>'+esc(tr(key))+'</button>';
  const request=(operation,data={})=>remote(operation,{recordId,ref:rootRef,trail,...data});
  const manifest=(value,key='retainedMetadata')=>'<details><summary>'+esc(tr(key))+'</summary><pre>'+esc(JSON.stringify(value,null,2))+'</pre></details>';
@@ -28,14 +30,14 @@ export function onlineRetainedReference({host,recordId,rootRef,remote,esc,fileUr
   controls();
  }
  async function open(nextTrail=[]){
-  trail=nextTrail;host.innerHTML='<p role="status" data-reference-status>'+esc(tr('busy'))+'</p>';
+  figures?.dispose();figures=null;trail=nextTrail;host.innerHTML='<p role="status" data-reference-status>'+esc(tr('busy'))+'</p>';
   const result=await request(operations.read);if(disposed)return;
   host.innerHTML='<p role="status" data-reference-status></p>'+(trail.length?button('retainedBack','data-reference-back'):'')+'<h4>'+esc(result.record?.title??result.document.title)+'</h4><code>'+esc(result.revision)+'</code><div data-reference-content></div>';
-  const body=host.querySelector('[data-reference-content]'),url=(kind,id)=>fileUrl(kind,id,rootRef,trail);
-  if(result.record){body.innerHTML=recordRevisionView(result.record,esc,{figureSources:false,assetUrl:id=>url('media',id)});applyRichTextStyles(document,result.record);return;}
+  const body=host.querySelector('[data-reference-content]'),url=(kind,id)=>fileUrl(kind,id,rootRef,trail),figureSelector={recordId,revision:result.revision,via:{kind:operations.read.startsWith('evidence')?'evidence':'attempt',ref:structuredClone(rootRef),trail:structuredClone(trail)}},mountFigures=()=>{figures=mountSharedFigures(body,{selector:figureSelector,request:data=>remote('figure',data),downloadURL:figureURL});};
+  if(result.record){body.innerHTML=recordRevisionView(result.record,esc,{figureSources:false,retainedFigureAction:sharedFigureControls(esc),assetUrl:id=>url('media',id)});mountFigures();applyRichTextStyles(document,result.record);return;}
   const doc=result.document,c=doc.content;
   body.innerHTML='<p>'+esc(tr('attemptKind_'+doc.kind))+' · '+esc(doc.createdAt)+'</p>'+(doc.kind==='artifact'?materialFileSummary({...result.reference,file:c},{esc,downloadUrl:url('artifact',doc.id)})+(c.provenance?'<p class="online-comment">'+esc(c.provenance)+'</p>':''):'')+(c.tool?'<dl><dt>'+esc(t('materialAnalysis','tool'))+'</dt><dd>'+esc(c.tool)+'</dd><dt>'+esc(t('materialAnalysis','version'))+'</dt><dd>'+esc(c.version)+'</dd><dt>'+esc(t('materialAnalysis','procedure'))+'</dt><dd class="online-comment">'+esc(c.parameters)+'</dd></dl>':'')+(c.figure?'<div class="material-figure" data-reference-figure></div>':'')+(doc.kind==='dataset'?'<div data-reference-rows></div>':'')+'<div data-reference-slot="inputs"></div><div data-reference-slot="outputs"></div>'+manifest(doc);
-  controls();if(c.figure)body.querySelector('[data-reference-figure]').innerHTML=figureReadingView(renderFigureView(c.figure,{idPrefix:'shared-retained-'+crypto.randomUUID()}),c.figure.title)+'<details><summary>'+esc(bookText('tableReading'))+'</summary>'+figureTable(c.figure)+'</details>';
+  controls();if(isRetainedFigure(c.figure)){body.querySelector('[data-reference-figure]').innerHTML=sharedFigureControls(esc)(c.figure);mountFigures();}else if(c.figure)body.querySelector('[data-reference-figure]').innerHTML=figureReadingView(renderFigureView(c.figure,{idPrefix:'shared-retained-'+crypto.randomUUID()}),c.figure.title)+'<details><summary>'+esc(bookText('tableReading'))+'</summary>'+figureTable(c.figure)+'</details>';
   if(doc.kind==='dataset'){rowsCursor={page:0,rowOffset:0};previous=[];columnOffset=0;await loadRows();}
   for(const slot of ['inputs','outputs'])if((c[slot]?.length??c[slot+'Index']?.count??0)>0)await loadReferences(slot);
  }
@@ -47,5 +49,5 @@ export function onlineRetainedReference({host,recordId,rootRef,remote,esc,fileUr
   if(action==='next'){previous.push(rowsCursor);rowsCursor=rows.next;}else if(action==='previous')rowsCursor=previous.pop();else{columnOffset+=action==='columns-next'?16:-16;rowsCursor={page:0,rowOffset:0};previous=[];}
   try{await loadRows();}catch(error){({rowsCursor,previous,columnOffset}=prior);throw error;}
  });};host.addEventListener('click',click);
- return {open:()=>run(()=>open()),setBlocked(value){blocked=value;controls();},dispose(){disposed=true;host.removeEventListener('click',click);}};
+ return {open:()=>run(()=>open()),setBlocked(value){blocked=value;controls();},dispose(){disposed=true;figures?.dispose();host.removeEventListener('click',click);}};
 }

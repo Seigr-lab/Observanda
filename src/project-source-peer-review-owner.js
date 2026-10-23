@@ -1,3 +1,4 @@
+import {readReviewStage} from './review-staging.js';
 import {projectSourceOwnerOrderChanges} from './project-source-owner-order.js';
 import {Reviews} from './reviews.js';
 import {readReviewSummary,reviewSummary} from './review-summaries.js';
@@ -26,7 +27,11 @@ function reader(store,inventory,record,{signal}={}){
 }
 export function projectSourcePeerReviewOwner(store,inventory,record,{signal}={}){
  const source=reader(store,inventory,record,{signal});
- return async id=>{const match=/^metadata:\.observanda\/reviews\/(?:summaries\/)?([a-f0-9-]{36})\.json$/.exec(id);return match?source.owner(match[1]):null;};
+ return async id=>{
+  const match=/^metadata:\.observanda\/reviews\/(?:summaries\/)?([a-f0-9-]{36})\.json$/.exec(id);if(match)return source.owner(match[1]);
+  const part=/^metadata:\.observanda\/reviews\/parts\/([a-f0-9-]{36})\//.exec(id);if(!part)return null;
+  return store.workspace.inspectCatalogue(store,async()=>{const raw=await store.workspace.readMetadata('.observanda/reviews/parts/'+part[1]+'/head.json',8192);if(raw===null){const stage=await readReviewStage(store.workspace,part[1]);if(!stage)damaged();if(stage.requestId!==null){const text=await store.workspace.readMetadata('.observanda/reviews/'+stage.requestId+'.json',1800000);if(text!==null){let packet;try{packet=JSON.parse(text);}catch{damaged();}if(packet?.parts===part[1])damaged();}}return {kind:'derived'};}let head;try{head=JSON.parse(raw);}catch{damaged();}const packet=await new Reviews(store.workspace).packet(head.requestId);if(packet.parts!==part[1]||head.selectionHash!==reviewHash(packet.request)||head.direction!==packet.direction)damaged();return source.owner(head.requestId);});
+ };
 }
 // The legacy review index is capped at 500 requests and 200 contacts. Request
 // additions do not require re-reading all signed packet bodies. A changed trust

@@ -1,4 +1,5 @@
 import {configurationPartName} from './configuration-transfer.js';
+import {serialize} from '../storage-format.js';
 import path from 'node:path';
 import {ResearchMaterials} from '../research-materials.js';
 import {materialHeadVisible} from '../material-visibility.js';
@@ -7,7 +8,7 @@ import {withMaterialTraversal} from '../material-traversal.js';
 import {recordRevision,historicalBook} from '../research.js';
 import {attemptReferences} from '../web/attempt-model.js';
 import {resultReferences} from '../web/result-statements.js';
-import {figureReferences} from '../web/figure-provenance.js';
+import {figureReferences,allFigurePlots} from '../web/figure-provenance.js';
 import {schemaReferences,measurementReferences} from '../web/measurement-model.js';
 import {analysisMethodReferences} from '../web/analysis-model.js';
 import {MediaStore} from '../media.js';
@@ -24,13 +25,13 @@ const dependency=()=>{throw new AppError('COLLABORATION_DEPENDENCY');};
 // sequences and exact values; no recalculation or text conversion is involved.
 export class ResearchTransfer{
  constructor(workspace,recordIds,notebookIds,emit){this.workspace=workspace;this.materials=new ResearchMaterials(workspace);this.recordIds=recordIds;this.notebookIds=new Set(notebookIds);this.emit=emit;this.media=new MediaStore(workspace);this.mediaIds=new Set();this.sequenceNodes=new Set();this.fonts=new Map();}
- metadata(name,value){return this.emit({kind:'metadata',name,content:json(value)});}
+ metadata(name,value){return this.emit({kind:'metadata',name,content:/^\.observanda\/materials\/figures\/(?:value|index)\/[a-f0-9]{64}\.json$/.test(name)?serialize(value):json(value)});}
  async original(name,content){await content.verify();return this.emit({kind:'original',name,content});}
  async record(record,enqueue){
   if(!this.recordIds.has(record.id)||!this.notebookIds.has(record.notebookId))dependency();
   const workspaceId=await this.workspace.catalogue(async store=>(await store.snapshot()).metadata.id);
   await this.metadata('.observanda/materials/records/'+record.id+'/'+recordRevision(record)+'.json',record);
-  for(const figure of record.figures??[])if(figure.kind==='retained'){const {validateRetainedFigureSource}=await import('../retained-figures.js');const {reader}=await validateRetainedFigureSource(this.materials,figure);for await(const part of reader.blocks())await this.metadata(part.path,part.node);}
+  for(const figure of allFigurePlots(record.figures))if(figure.kind==='retained'){const {validateRetainedFigureSource}=await import('../retained-figures.js');const {reader}=await validateRetainedFigureSource(this.materials,figure);for await(const part of reader.blocks())await this.metadata(part.path,part.node);}
   for(const ref of [...attemptReferences(record.attempt),...resultReferences(record.results),...figureReferences(record.figures)]){
    if(ref.workspaceId&&workspaceId!==ref.workspaceId)dependency();await enqueue(ref);
   }

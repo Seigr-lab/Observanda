@@ -1,0 +1,90 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,rm,readFile,writeFile,access} from 'node:fs/promises';
+import path from 'node:path';
+import {spawn} from 'node:child_process';
+import {setTimeout as delay} from 'node:timers/promises';
+import {ReviewStaging,reviewStageFile,reviewStageLease} from '../src/review-staging.js';
+import os from 'node:os';
+import {randomUUID,createHash} from 'node:crypto';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {sampleNotebook} from '../src/sample.js';
+import {clearVault} from '../src/encryption.js';
+import {ReviewScopeIndex} from '../src/review-scope-index.js';
+import {Reviews} from '../src/reviews.js';
+import {ReviewIdentity,reviewHash,reviewText,reviewExchangeKeys} from '../src/security/review-exchange.js';
+import {RetainedFigureDocuments} from '../src/retained-figure-document.js';
+import {ResearchMaterials} from '../src/research-materials.js';
+import {RecordValues} from '../src/record-values.js';
+import {createFigure} from '../src/web/figure-model.js';
+import {ExchangeParts} from '../src/collaboration/exchange-parts.js';
+import {writeExchange,manifestEntry} from '../src/collaboration/exchange-stream.js';
+import {verifyReviewFigurePacket} from '../src/review-figures.js';
+import {contentBuffer} from '../src/file-content.js';
+import {serialize,digest} from '../src/storage-format.js';
+import {copyPlan,encryptedCopy} from '../src/locations.js';
+import {createAccess,takeCreatedVault} from '../src/access.js';
+import {Workspace,privateDirectory} from '../src/storage.js';
+import {projectSourcePeerReviewOwner} from '../src/project-source-peer-review-owner.js';
+import {workspaceFiles} from '../src/workspace-inventory.js';
+const collect=async chunks=>{const result=[];for await(const bytes of chunks)result.push(Buffer.from(bytes));return Buffer.concat(result);};
+const source=bytes=>(async function*(){for(let at=0;at<bytes.length;at+=8192)yield bytes.subarray(at,at+8192);})();
+
+test('signed peer reviews freeze complete figure closure, refuse unrelated blocks and preserve exact reads after fresh-key recovery',{timeout:240000},async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-review-figures-')),book=sampleNotebook();book.entries=book.entries.slice(0,1);book.entries[0].figures=[];const a=await encryptedFixture(path.join(directory,'author'),book),b=await encryptedFixture(path.join(directory,'reviewer'),sampleNotebook());let recoveredVault;
+ t.after(async()=>{clearVault(a.vault);clearVault(b.vault);if(recoveredVault)clearVault(recoveredVault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-review-figures-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const materials=new ResearchMaterials(a.workspace),figure=createFigure();figure.title='Complete exact observations';figure.series[0].name='Unicode '+('???'.repeat(60000));figure.series[0].points=Array.from({length:33},(_,x)=>({x,y:x%11,error:null}));
+ const retained=await a.workspace.withLock(()=>new RetainedFigureDocuments(a.workspace).retain(figure)),ref=await a.workspace.withLock(()=>materials.commit({kind:'analysis',recordId:book.entries[0].id,title:figure.title,content:{inputs:[],outputs:[],tool:'Retained review fixture',version:'1',parameters:'Exact synthetic observations',figure:retained}})),values=new RecordValues(a.workspace),target={workspaceId:book.id,recordId:book.entries[0].id,field:'figure:'+figure.id},base=await values.read(target);await values.save({...target,expectedRevision:base.revision,value:{value:{...retained,source:ref}}});
+ const author=new Reviews(a.workspace,a.deviceStore),reviewer=new Reviews(b.workspace,b.deviceStore),other=(await b.workspace.outline()).book??(await b.workspace.outline()).metadata,otherId=other.id;
+ const A=(operation,data={},options={})=>author.run(operation,{workspaceId:book.id,...data},options),B=(operation,data={},options={})=>reviewer.run(operation,{workspaceId:otherId,...data},options),ac=(await A('identity')).contact,bc=(await B('identity')).contact;
+ await A('contact',{name:'Reviewer',contact:bc,verified:true});const plan=await A('plan',{scope:{kind:'record',id:target.recordId}}),id=randomUUID(),command={id,recipient:reviewHash(bc),message:'Review every observation.',records:plan.records.map(({id,revision})=>({id,revision}))};
+ const created=await A('create',command);assert.deepEqual(created,{download:{id}});assert.deepEqual(await A('create',command),created);await assert.rejects(A('create',{...command,message:'Different intent'}));
+ const packet=(await A('read',{id})).packet,parts=await author.parts(packet),entries=[];let blockCount=0;for await(const entry of parts.items())if(entry.kind==='metadata'){assert.ok(entry.size<=262144);const bytes=await contentBuffer(parts.content(entry)),value=JSON.parse(bytes);assert.equal(bytes.toString(),serialize(value));assert.ok(value.items.length<=32);blockCount+=value.items.length;entries.push({kind:entry.kind,name:entry.name,content:bytes});}assert.equal(blockCount,packet.request.value.figureParts.blocks);assert.ok(blockCount>32);
+ const files=[];for await(const file of workspaceFiles(a.workspace.root,{includeDatabase:false,hashFiles:false}))if(file.path.startsWith(parts.prefix+'/'))files.push(file.path);assert.equal(files.filter(name=>name.endsWith('.blob')).length,parts.count);
+ await a.workspace.catalogue(async store=>{const projectId=book.projects[0].id,owner=projectSourcePeerReviewOwner(store,{namespaceId:book.id,projectId},async()=>({projectId}));const fact=await owner('metadata:'+parts.prefix+'/head.json');assert.deepEqual(fact,{kind:'projects',projectIds:[projectId]});const page=await a.workspace.metadataPage(parts.prefix+'/blocks',{limit:1});assert.ok(page.items.length);assert.deepEqual(await owner('metadata:'+parts.prefix+'/blocks/'+page.items[0].name),fact);});
+ const bytes=await A('download',{id},{download:({chunks})=>collect(chunks)});assert.equal(bytes.includes(Buffer.from(figure.title)),false);await assert.rejects(B('receive',{}, {stream:source(bytes)}));await B('contact',{name:'Author',contact:ac,verified:true});
+ const damaged=Buffer.from(bytes);damaged[damaged.length-20]^=1;await assert.rejects(B('receive',{}, {stream:source(damaged)}));assert.equal((await B('list')).total,0);
+ const controller=new AbortController();controller.abort();await assert.rejects(B('receive',{}, {stream:source(bytes),signal:controller.signal}));assert.equal((await B('list')).total,0);
+ let heldResolve,continueResolve;const held=new Promise(resolve=>heldResolve=resolve),continued=new Promise(resolve=>continueResolve=resolve);let prefix=14+bytes.readUInt32BE(10);for(let frame=0;frame<3;frame++)prefix+=4+bytes.readUInt32BE(prefix);async function* stalled(){yield bytes.subarray(0,prefix);heldResolve();await continued;yield bytes.subarray(prefix);}const pending=B('receive',{}, {stream:stalled()});const rejected=assert.rejects(pending);await held;await B('untrust',{fingerprint:reviewHash(ac)});continueResolve();await rejected;assert.equal((await B('list')).total,0);await B('contact',{name:'Author',contact:ac,verified:true});
+ assert.deepEqual(await B('receive',{}, {stream:source(bytes)}),{id});assert.deepEqual(await B('receive',{}, {stream:source(bytes)}),{id,replayed:true});
+ const received=(await B('read',{id})).packet,selector={id,recordId:target.recordId,recordRevision:command.records[0].revision,figureId:figure.id};const open=await B('figure',selector);assert.equal(open.revision,selector.recordRevision);assert.equal(open.counts.points,33);
+ const tail=await B('figure',{...selector,operation:'window',selection:{collection:'points',plotId:figure.id,seriesId:figure.series[0].id,offset:31,limit:2}});assert.deepEqual(tail.items.map(row=>row.value),figure.series[0].points.slice(31));
+ for(const changed of [{recordId:randomUUID()},{recordRevision:'0'.repeat(64)},{figureId:randomUUID()},{root:retained.document.data.root},{ref}])await assert.rejects(B('figure',{...selector,...changed}));
+ const json=await B('figure-export',{...selector,format:'json'},{download:async({chunks})=>JSON.parse((await collect(chunks)).toString())});assert.deepEqual(json.series,figure.series);const csv=await B('figure-export',{...selector,format:'csv'},{download:async({chunks})=>(await collect(chunks)).toString()});assert.equal((csv.match(/^"measurement",/gm)??[]).length,33);assert.ok(csv.includes(figure.series[0].name));
+ const signedExtra={kind:'value',revision:digest(serialize({type:'inline',value:'not selected'})),node:{type:'inline',value:'not selected'}},extraContent=serialize({format:'review-figure-blocks',version:1,items:[signedExtra]}),extra={kind:'metadata',name:'.observanda/reviews/figure-chunks/'+digest(extraContent)+'.json',content:extraContent},more=[...entries,extra],manifest=createHash('sha256');let total=0;for(const e of more){const size=Buffer.byteLength(e.content),sha256=digest(e.content);manifest.update(manifestEntry({...e,size,sha256}));total+=size;}
+ const forgedValue={...packet.request.value,id:randomUUID(),figureParts:{...packet.request.value.figureParts,parts:more.length,blocks:blockCount+1,bytes:total,manifestHash:manifest.digest('hex')}},identity=new ReviewIdentity(a.deviceStore),signed=await identity.sign(forgedValue),forged=await collect(writeExchange(identity.streamIdentity(),bc,[{kind:'description',name:'selection',content:reviewText(signed)},...more],{id:forgedValue.id,keyAdapter:reviewExchangeKeys}));await assert.rejects(B('receive',{}, {stream:source(forged)}));assert.equal((await B('list')).total,1);assert.deepEqual(await b.workspace.listMetadata('.observanda/reviews/parts'),[received.parts]);
+ const missing=await collect(writeExchange(identity.streamIdentity(),bc,[{kind:'description',name:'selection',content:reviewText(packet.request)},...entries.slice(1)],{id,keyAdapter:reviewExchangeKeys}));await assert.rejects(B('receive',{}, {stream:source(missing)}));
+ await B('untrust',{fingerprint:reviewHash(ac)});await assert.rejects(B('figure',selector));await assert.rejects(B('figure-export',{...selector,format:'json'},{download:({chunks})=>collect(chunks)}));await B('contact',{name:'Author',contact:ac,verified:true});
+ // A blocked consumer cannot turn a once-admitted stream into authority after withdrawal.
+ await assert.rejects(B('figure-export',{...selector,format:'json'},{download:async({chunks})=>{const iterator=chunks[Symbol.asyncIterator]();await iterator.next();await B('untrust',{fingerprint:reviewHash(ac)});try{await iterator.next();}finally{await iterator.return();}}}));await B('contact',{name:'Author',contact:ac,verified:true});
+ await author.recover();await reviewer.recover();assert.deepEqual((await A('read',{id})).packet,packet);assert.deepEqual((await B('read',{id})).packet,received);const retainedParts=await reviewer.parts(received);await b.workspace.catalogue(()=>verifyReviewFigurePacket(retainedParts,received));const access=await createAccess('','synthetic review recovery');recoveredVault=takeCreatedVault(access);const destination=await encryptedCopy(await copyPlan(b.workspace.root,path.join(directory,'recovered')),access,recoveredVault,b.vault),restored=new Reviews(new Workspace(destination,recoveredVault),b.deviceStore);
+ assert.deepEqual(await restored.run('figure-export',{workspaceId:otherId,...selector,format:'json'},{download:async({chunks})=>JSON.parse((await collect(chunks)).toString())}),json);await restored.workspace.catalogue(store=>store.verify({format:'observanda-research-catalogue',version:2,workspaceId:otherId}));
+ const scope=await b.workspace.catalogue(store=>store.db.get('SELECT payload FROM state WHERE slot=$1','review-scopes'));await b.workspace.withLock(()=>b.workspace.catalogue(store=>store.db.run('DELETE FROM state WHERE slot=$1','review-scopes')));try{await assert.rejects(b.workspace.catalogue(store=>new ReviewScopeIndex(store).verify()),{code:'CATALOGUE_DAMAGED'});}finally{await b.workspace.withLock(()=>b.workspace.catalogue(store=>store.db.run('INSERT INTO state VALUES ($1,$2)','review-scopes',scope.payload)));}
+ const selectedEntry=(await retainedParts.descriptor('metadata',entries[0].name)),file=retainedParts.content(selectedEntry).file;assert.ok(file);const original=await readFile(file),altered=Buffer.from(original);altered[altered.length-1]^=1;await writeFile(file,altered);await assert.rejects(b.workspace.catalogue(()=>verifyReviewFigurePacket(retainedParts,received)));await writeFile(file,original);
+});
+
+
+test('peer review staging recovery excludes live leases and resumes exact crash cleanup without deleting finalized packets',{timeout:120000},async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-review-stage-')),fixture=await encryptedFixture(directory,sampleNotebook()),workspace=fixture.workspace,stages=new ReviewStaging(workspace),reviews=new Reviews(workspace);let child;
+ t.after(async()=>{if(child&&child.exitCode===null&&child.signalCode===null){const ended=new Promise(resolve=>child.once('exit',resolve));child.kill('SIGKILL');await ended;}clearVault(fixture.vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-review-stage-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ let ready,release;const entered=new Promise(resolve=>ready=resolve),held=new Promise(resolve=>release=resolve);
+ const active=stages.run(async parts=>{await parts.add({kind:'description',name:'selection',content:'active encrypted stage'});ready(parts);await held;});
+ const activeParts=await entered;try{await new Reviews(new Workspace(workspace.root,fixture.vault)).recover();assert.ok(await workspace.readMetadata(reviewStageFile(activeParts.id),1024));assert.equal((await contentBuffer(activeParts.content(await activeParts.descriptor('description','selection')))).toString(),'active encrypted stage');await workspace.catalogue(async store=>{const owner=projectSourcePeerReviewOwner(store,{namespaceId:(await workspace.outline()).metadata.id,projectId:null},()=>{throw Error('unfinished stage has no record ownership');});assert.deepEqual(await owner('metadata:'+reviewStageFile(activeParts.id)),{kind:'derived'});});}finally{release();await active;}
+ assert.equal(await workspace.readMetadata(reviewStageFile(activeParts.id),1024),null);
+ const create=async(requestId=null)=>{const id=randomUUID(),parts=stages.parts(id);await workspace.withLock(()=>workspace.writeMetadata(reviewStageFile(id),JSON.stringify({version:1,id,requestId})));await parts.add({kind:'description',name:'selection',content:'abandoned encrypted bytes'});return parts;};
+ const crashed=await create();await privateDirectory(workspace.root,'.observanda/reviews/leases');
+ const source=String.raw`import {withWriterLease} from ${JSON.stringify(new URL('../src/writer-lease.js',import.meta.url).href)};await withWriterLease(process.argv[1],async()=>{process.stdout.write('held\n');await new Promise(()=>{});});`;
+ child=spawn(process.execPath,['--input-type=module','-e',source,reviewStageLease(workspace,crashed.id)],{windowsHide:true,stdio:['ignore','pipe','pipe']});let stderr='';child.stderr.on('data',bytes=>stderr+=bytes);
+ await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('Stage lease not acquired: '+stderr)),15000);child.stdout.once('data',()=>{clearTimeout(timer);resolve();});child.once('error',error=>{clearTimeout(timer);reject(error);});child.once('exit',()=>{clearTimeout(timer);reject(Error('Stage child exited before holding lease'));});});
+ await reviews.recover();assert.ok(await workspace.readMetadata(reviewStageFile(crashed.id),1024));const ended=new Promise(resolve=>child.once('exit',resolve));child.kill('SIGKILL');await ended;
+ const deadline=Date.now()+5000;do{await reviews.recover();if(await workspace.readMetadata(reviewStageFile(crashed.id),1024)===null)break;await delay(50);}while(Date.now()<deadline);
+ assert.equal(await workspace.readMetadata(reviewStageFile(crashed.id),1024),null);await assert.rejects(access(path.join(workspace.root,crashed.prefix)),{code:'ENOENT'});
+ const interrupted=await create();await workspace.withLock(async()=>{for(let i=0;i<40;i++)await workspace.writeMetadata(interrupted.prefix+'/blocks/value/'+String(i).padStart(64,'0')+'.json','{}');});
+ const remove=workspace.removeMetadata.bind(workspace);let removed=0;workspace.removeMetadata=async file=>{if(file!==reviewStageFile(interrupted.id)&&++removed===34)throw Error('interrupted stage cleanup');return remove(file);};
+ try{await assert.rejects(reviews.recover(),/interrupted stage cleanup/);}finally{workspace.removeMetadata=remove;}
+ assert.ok(await workspace.readMetadata(reviewStageFile(interrupted.id),1024));assert.ok((await workspace.metadataPage(interrupted.prefix,{limit:32})).items.length<32);await assert.rejects(access(path.join(workspace.root,interrupted.prefix)),{code:'ENOENT'});
+ await new Reviews(new Workspace(workspace.root,fixture.vault)).recover();assert.equal(await workspace.readMetadata(reviewStageFile(interrupted.id),1024),null);assert.deepEqual(await workspace.listMetadata(interrupted.prefix),[]);
+ // A head or directly bound packet is never interpreted as abandoned data.
+ const completed=await create(randomUUID());await workspace.withLock(()=>completed.finish({requestId:randomUUID(),direction:'incoming',selectionHash:'a'.repeat(64)},{write:operation=>operation()}));await reviews.recover();assert.ok(await workspace.readMetadata(completed.prefix+'/head.json',8192));await access(path.join(workspace.root,completed.prefix));
+ const requestId=randomUUID(),missingHead=await create(requestId);await workspace.withLock(()=>workspace.writeMetadata('.observanda/reviews/'+requestId+'.json',JSON.stringify({parts:missingHead.id})));await assert.rejects(reviews.recover(),{code:'CATALOGUE_DAMAGED'});await access(path.join(workspace.root,missingHead.prefix));assert.ok(await workspace.readMetadata(reviewStageFile(missingHead.id),1024));
+});

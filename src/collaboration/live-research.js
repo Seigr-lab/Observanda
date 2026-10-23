@@ -1,3 +1,4 @@
+import {liveFigure} from './live-figures.js';
 import {LivePreparations,livePreparationOperations} from './live-preparations.js';
 import {ContentAccess} from './content-access.js';
 import {LiveDocuments} from './live-documents.js';
@@ -28,7 +29,9 @@ export class LiveResearch{
  async audit(access,recordId,operation,detail){
   return auditLive(this.workspace,access,recordId,operation,detail);
  }
+ figure(identity,scope,data,options={}){return liveFigure(this,identity,scope,data,options);}
  async dispatch(identity,scope,operation,data={}){
+  if(operation==='figure')return this.figure(identity,scope,data);
   valid([...livePreparationOperations,'list','read','details','document','steps','fields','comments','comment','activity','evidence','evidence-read','evidence-page','evidence-uploads','evidence-upload','evidence-start','evidence-chunk','evidence-finish','creation','creationFields','creationChoices','create','link-targets','link-read','link-write','links','attempt','attempt-pin','attempt-read','attempt-page','attempt-append'].includes(operation));
   const write=['preparation-rebase','preparation-change','preparation-save','preparation-remove','steps','fields','comment','creation','creationFields','creationChoices','create','link-write','attempt-pin','attempt-append','evidence-start','evidence-chunk','evidence-finish'].includes(operation);
   // Authorization and the actual access/mutation share a transaction, including

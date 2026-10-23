@@ -1,3 +1,4 @@
+import {sharedFigureControls,mountSharedFigures} from './shared-figure-reader.js';
 import {t} from './i18n/index.js';
 import {recordRevisionView} from './record-revision-view.js';
 import {sharingFonts} from './sharing-fonts.js';
@@ -6,15 +7,17 @@ import {sharingConfigurationUI} from './sharing-configuration-ui.js';
 const tr=(key,values)=>t('sharing',key,values);
 
 export async function sharingUI({state,api,esc,field,showDialog,notify,render,onUpdated=async()=>{}}){
- let snapshot,organizations,busy=false,edited=false,disposed=false,review=null,refreshGeneration=0;const previewFonts=sharingFonts();
+ let snapshot,organizations,busy=false,edited=false,disposed=false,review=null,refreshGeneration=0;const previewFonts=sharingFonts();let figureReaders=[];
+ const clearFigures=()=>{for(const reader of figureReaders)reader.dispose();figureReaders=[];};
+ const dialogElement=document.querySelector('#dialog');dialogElement?.addEventListener('close',clearFigures);
  const context=state.storage.contextId,workspaceId=state.book.id,current=()=>!disposed&&state.storage?.contextId===context&&state.book?.id===workspaceId;
  const call=async(operation,data={},options={})=>{if(!current())throw Error(tr('workspaceChanged'));const result=await api('/api/sharing/'+operation,{workspaceId,...data},options);if(!current())throw Error(tr('workspaceChanged'));return result;};
  const configurations=sharingConfigurationUI({esc,current,load:(data,options)=>call('configuration',data,{...options,adopt:false})});
  const button=(key,action,attrs='')=>'<button type="button" class="button" data-action="module-command" data-command="sharing-'+action+'" '+attrs+'>'+esc(tr(key))+'</button>';
- const close=()=>{configurations.stop();previewFonts.clear();const dialog=document.querySelector('#dialog');if(dialog?.querySelector('[data-sharing-form],[data-sharing-comparison]'))dialog.close();edited=false;};
+ const close=()=>{clearFigures();configurations.stop();previewFonts.clear();const dialog=document.querySelector('#dialog');if(dialog?.querySelector('[data-sharing-form],[data-sharing-comparison]'))dialog.close();edited=false;};
  async function refresh(){const generation=++refreshGeneration,values=await Promise.all([call('state'),api('/api/organizations/state',{workspaceId})]);if(current()&&generation===refreshGeneration)[snapshot,organizations]=values;}
  function form(kind,title,body,submitKey,attrs=''){
-  configurations.stop();edited=false;showDialog('<form data-module-form data-sharing-form="'+kind+'" '+attrs+'><h2 id="dialog-title">'+esc(tr(title))+'</h2>'+body+'<p role="alert" data-sharing-error></p><div class="dialog-actions">'+button('cancel','close')+(submitKey?'<button class="button primary" type="submit">'+esc(tr(submitKey))+'</button>':'')+'</div></form>');
+  clearFigures();configurations.stop();edited=false;showDialog('<form data-module-form data-sharing-form="'+kind+'" '+attrs+'><h2 id="dialog-title">'+esc(tr(title))+'</h2>'+body+'<p role="alert" data-sharing-error></p><div class="dialog-actions">'+button('cancel','close')+(submitKey?'<button class="button primary" type="submit">'+esc(tr(submitKey))+'</button>':'')+'</div></form>');
  }
  function files(direction){const items=snapshot.packages.filter(p=>p.direction===direction);return items.length?'<section><h3>'+esc(tr(direction==='outgoing'?'outgoing':'incomingFiles'))+'</h3><ul>'+items.map(p=>{
   let action=direction==='outgoing'?'<a class="button" href="/api/sharing/download/'+p.id+'?context='+encodeURIComponent(context)+'" download>'+esc(tr('download'))+'</a>':button(p.update?'reviewUpdate':p.kind==='offer'?'copy':'review',p.update||p.kind==='changes'?'review':'copy','data-id="'+p.id+'"');
@@ -63,7 +66,8 @@ export async function sharingUI({state,api,esc,field,showDialog,notify,render,on
     const versions=await Promise.all(['base','incoming','current'].map(version=>call('record',{reviewId:review.id,recordId:id,version})));
     const fileUrl=(version,kind,item)=>'/api/sharing/reviews/'+review.id+'/'+version+'/'+id+'/'+kind+'/'+item+'?context='+encodeURIComponent(context);
     previewFonts.clear();for(const [i,version] of versions.entries())await previewFonts.add(version.fonts,item=>fileUrl(['base','incoming','current'][i],'font',item));if(!current())return;
-    configurations.stop();showDialog('<section data-sharing-comparison><h2 id="dialog-title">'+esc(tr('compare'))+'</h2>'+versions.map(({record,materials},i)=>{const version=['base','incoming','current'][i];return '<details '+(i===1?'open':'')+'><summary>'+esc(tr(['base','incomingVersion','currentVersion'][i]))+'</summary>'+(record?'<h3>'+esc(record.title)+'</h3>'+recordRevisionView(record,esc,{assetUrl:item=>fileUrl(version,'media',item),figureSources:false}):'<p>'+esc(tr('absent'))+'</p>')+'<ul>'+materials.map(m=>'<li><strong>'+esc(m.title)+'</strong>'+ (m.kind==='artifact'?'<p>'+esc(m.sourcePath??m.name)+' · '+m.size+' B</p><code>'+esc(m.sha256)+'</code><p><a class="button" href="'+fileUrl(version,'artifact',m.id)+'" download>'+esc(tr('downloadEvidence'))+'</a></p>':'<p><code>'+esc(m.revision)+'</code></p>')+'</li>').join('')+'</ul></details>';}).join('')+'<div class="dialog-actions">'+button('back','back')+'</div></section>');return;
+    clearFigures();configurations.stop();showDialog('<section data-sharing-comparison><h2 id="dialog-title">'+esc(tr('compare'))+'</h2>'+versions.map(({record,materials},i)=>{const version=['base','incoming','current'][i];return '<details data-sharing-figure-version="'+version+'" '+(i===1?'open':'')+'><summary>'+esc(tr(['base','incomingVersion','currentVersion'][i]))+'</summary>'+(record?'<h3>'+esc(record.title)+'</h3>'+recordRevisionView(record,esc,{assetUrl:item=>fileUrl(version,'media',item),figureSources:false,retainedFigureAction:sharedFigureControls(esc)}):'<p>'+esc(tr('absent'))+'</p>')+'<ul>'+materials.map(m=>'<li><strong>'+esc(m.title)+'</strong>'+ (m.kind==='artifact'?'<p>'+esc(m.sourcePath??m.name)+' · '+m.size+' B</p><code>'+esc(m.sha256)+'</code><p><a class="button" href="'+fileUrl(version,'artifact',m.id)+'" download>'+esc(tr('downloadEvidence'))+'</a></p>':'<p><code>'+esc(m.revision)+'</code></p>')+'</li>').join('')+'</ul></details>';}).join('')+'<div class="dialog-actions">'+button('back','back')+'</div></section>');
+    for(const [i,value]of versions.entries())if(value.record){const version=['base','incoming','current'][i],selector={reviewId:review.id,recordId:id,version,revision:value.revision},host=document.querySelector('[data-sharing-figure-version="'+version+'"]');figureReaders.push(mountSharedFigures(host,{selector,request:(data,options)=>call('figure',data,{...options,adopt:false}),downloadURL:data=>'/api/sharing/figures/'+data.reviewId+'/'+data.version+'/'+data.recordId+'/'+data.figureId+'?context='+encodeURIComponent(context)+'&revision='+data.revision+'&expectedRevision='+data.expectedRevision+'&format='+data.format}));}return;
    }
   }catch(e){error(e);}finally{busy=false;}
  }
@@ -80,5 +84,5 @@ export async function sharingUI({state,api,esc,field,showDialog,notify,render,on
    try{await refresh();if(kind==='grant')await onUpdated();busy=false;close();render();notify(tr(message));}catch{busy=false;close();notify(tr('savedRefreshFailed'),true);}
   }catch(e){error(e);}finally{busy=false;delete formElement.dataset.busy;controls.forEach(([el,disabled])=>el.disabled=disabled);}
  }
- await refresh();return {view,action,input,submit,isDirty:()=>edited,activate:async()=>{if(!busy&&!edited)await refresh();},deactivate:close,dispose(){disposed=true;close();},discard:close,async save(){const f=document.querySelector('[data-sharing-form]');if(f?.reportValidity())await submit(f,new FormData(f));}};
+ await refresh();return {view,action,input,submit,isDirty:()=>edited,activate:async()=>{if(!busy&&!edited)await refresh();},deactivate:close,dispose(){disposed=true;dialogElement?.removeEventListener('close',clearFigures);close();},discard:close,async save(){const f=document.querySelector('[data-sharing-form]');if(f?.reportValidity())await submit(f,new FormData(f));}};
 }

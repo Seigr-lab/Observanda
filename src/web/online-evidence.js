@@ -7,7 +7,7 @@ const base64=buffer=>{const bytes=new Uint8Array(buffer);let value='';for(let i=
 
 // Evidence has its own mounted form. Text collaboration never replaces a file
 // selection, and the host's durable upload checkpoints survive browser restart.
-export function onlineEvidence({remote,esc,notify,fileUrl,retainedFileUrl}){
+export function onlineEvidence({remote,esc,notify,fileUrl,retainedFileUrl,figureURL}){
  let host,recordId,readOnly=false,disposed=false,busy=false,reading=false,loading=false,controller=null,current=null,intent=null,uncertain=false,timer=null,next=null,pendingNext=null,reference=null;
  const pending=new Map(),items=new Map();
  const request=(operation,data={})=>remote(operation,{recordId,...data});
@@ -82,7 +82,7 @@ export function onlineEvidence({remote,esc,notify,fileUrl,retainedFileUrl}){
    if(action==='inspect'){
     const item=items.get(el.dataset.materialId);if(!item)return;reference?.dispose();
     const panel=host.querySelector('[data-evidence-inspection-panel]');panel.hidden=false;
-    reference=onlineRetainedReference({host:panel.querySelector('[data-evidence-inspection]'),recordId,rootRef:{kind:item.kind,id:item.id,revision:item.revision},remote,esc,fileUrl:retainedFileUrl,operations:{read:'evidence-read',page:'evidence-page'},onBusy:value=>{reading=value;controls();}});
+    reference=onlineRetainedReference({host:panel.querySelector('[data-evidence-inspection]'),recordId,rootRef:{kind:item.kind,id:item.id,revision:item.revision},remote,esc,fileUrl:retainedFileUrl,figureURL,operations:{read:'evidence-read',page:'evidence-page'},onBusy:value=>{reading=value;controls();}});
     await reference.open();panel.scrollIntoView({block:'nearest'});
    }
    if(action==='close-inspection'){reference?.dispose();reference=null;host.querySelector('[data-evidence-inspection-panel]').hidden=true;}

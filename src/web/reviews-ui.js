@@ -1,4 +1,5 @@
-import {researchContext} from './project-context.js';
+import {sharedFigureControls,mountSharedFigures} from './shared-figure-reader.js';
+import {researchOwner,projectApiRoute,researchContext} from './project-context.js';
 import {recordRevisionView} from './record-revision-view.js';
 import {enabledModule} from './feature-modules.js';
 import {revisionText} from './revision-model.js';
@@ -10,14 +11,17 @@ function download(value,name){const url=URL.createObjectURL(new Blob([JSON.strin
 const empty=()=>({contacts:[],items:[],offset:0,total:0,previousCursor:null,nextCursor:null});
 
 export function reviewsUI({state,api,esc,showDialog,notify,render,getRecord}){
+ let upload=null,figureViews=[];const abortUpload=()=>{upload?.abort();upload=null;};const disposeFigures=()=>{for(const view of figureViews)view.dispose();figureViews=[];};
+ const url=(op,selection)=>projectApiRoute('/api/reviews/'+op,researchOwner(state))+'?context='+encodeURIComponent(state.storage.contextId)+'&selection='+encodeURIComponent(JSON.stringify(selection));
+ const downloadResult=(value,name)=>{if(value.download){const a=document.createElement('a');a.href=url('download',{workspaceId:state.book.id,id:value.download.id});a.download=name;a.click();}else download(value.file,name);};
  let list=empty(),owner=null,packet=null,contact=null,context=null,busy=false,plan=null,listError='',operationRoute=null,reading=0;
- const call=async(op,values={})=>{
-  const workspaceId=state.book.id,ctx=researchContext(state),result=await api('/api/reviews/'+op,{workspaceId,...values});
+ const call=async(op,values={},options={})=>{
+  const workspaceId=state.book.id,ctx=researchContext(state),result=await api('/api/reviews/'+op,{workspaceId,...values},options);
   if(workspaceId!==state.book?.id||ctx!==researchContext(state))throw Error(tr('workspaceChanged'));return result;
  };
  const button=(key,action,attrs='')=>'<button type="button" class="button" data-action="review-'+action+'" '+attrs+'>'+esc(tr(key))+'</button>';
- const close=()=>document.getElementById('dialog').close();
- const frame=(key,html)=>{if(operationRoute!==location.hash)return;showDialog('<section class="review-workflow" lang="'+messageLanguage('reviews')+'"><h2 id="dialog-title">'+esc(tr(key))+'</h2>'+html+'<div class="dialog-actions"><button type="button" class="button" data-action="close-dialog">'+esc(tr('close'))+'</button></div></section>');};
+ const close=()=>{abortUpload();disposeFigures();document.getElementById('dialog').close();};
+ const frame=(key,html)=>{if(operationRoute!==location.hash)return;disposeFigures();showDialog('<section class="review-workflow" lang="'+messageLanguage('reviews')+'"><h2 id="dialog-title">'+esc(tr(key))+'</h2>'+html+'<div class="dialog-actions"><button type="button" class="button" data-action="close-dialog">'+esc(tr('close'))+'</button></div></section>');document.getElementById?.('dialog')?.addEventListener('close',()=>{abortUpload();disposeFigures();},{once:true});};
  const message=e=>e.code==='CONFLICT'?tr('pageChanged'):[e.message,...(e.details??[]).map(d=>d.field)].join(' ');
  const error=e=>{if(e.name==='AbortError'||operationRoute!==location.hash)return;const node=document.querySelector('[data-review-error]');if(node)node.textContent=message(e);else notify(message(e),true);};
  async function refresh(cursor=null){
@@ -64,9 +68,10 @@ export function reviewsUI({state,api,esc,showDialog,notify,render,getRecord}){
    }
    else if(op==='open'){
     const {packet:p}=await call('read',{id:node.dataset.id});packet=p;const q=p.request.value;
-    frame('readTitle','<p>'+esc(q.message)+'</p><p>'+esc(tr('readHelp'))+'</p><form id="review-response-form" data-request-id="'+q.id+'">'+q.records.map((r,i)=>'<fieldset><legend>'+esc(r.record.title)+'</legend><code class="tool-hash">'+esc(tr('revision',{revision:r.revision}))+'</code><div class="review-readable">'+recordRevisionView(r.record,esc)+'</div><details><summary>'+esc(tr('inspect'))+'</summary><pre class="review-snapshot">'+esc(JSON.stringify(r.record,null,2))+'</pre></details>'+(p.direction==='incoming'&&!p.response?'<label>'+esc(tr('decision'))+'<select name="decision-'+i+'" aria-label="'+esc(tr('decision'))+'">'+decisions.map(k=>'<option value="'+k+'">'+esc(tr(k))+'</option>').join('')+'</select></label><label>'+esc(tr('comments'))+'<textarea name="comment-'+i+'" maxlength="8000" rows="3"></textarea></label>':'<p>'+esc(p.response?.value.decisions.find(d=>d.id===r.id)?.comment??tr('awaiting'))+'</p>')+'</fieldset>').join('')+(p.direction==='incoming'&&!p.response?'<label class="checkbox"><input type="checkbox" name="confirm" required>'+esc(tr('confirm'))+'</label><p>'+esc(tr('timeHelp'))+'</p><p role="alert" data-review-error></p><button class="button primary" type="submit">'+esc(tr('sign'))+'</button>':'')+'</form>');
+    frame('readTitle','<p>'+esc(q.message)+'</p><p>'+esc(tr('readHelp'))+'</p><form id="review-response-form" data-request-id="'+q.id+'">'+q.records.map((r,i)=>'<fieldset data-review-record="'+r.id+'"><legend>'+esc(r.record.title)+'</legend><code class="tool-hash">'+esc(tr('revision',{revision:r.revision}))+'</code><div class="review-readable">'+recordRevisionView(r.record,esc,{figureSources:false,retainedFigureAction:sharedFigureControls(esc)})+'</div><details><summary>'+esc(tr('inspect'))+'</summary><pre class="review-snapshot">'+esc(JSON.stringify(r.record,null,2))+'</pre></details>'+(p.direction==='incoming'&&!p.response?'<label>'+esc(tr('decision'))+'<select name="decision-'+i+'" aria-label="'+esc(tr('decision'))+'">'+decisions.map(k=>'<option value="'+k+'">'+esc(tr(k))+'</option>').join('')+'</select></label><label>'+esc(tr('comments'))+'<textarea name="comment-'+i+'" maxlength="8000" rows="3"></textarea></label>':'<p>'+esc(p.response?.value.decisions.find(d=>d.id===r.id)?.comment??tr('awaiting'))+'</p>')+'</fieldset>').join('')+(p.direction==='incoming'&&!p.response?'<label class="checkbox"><input type="checkbox" name="confirm" required>'+esc(tr('confirm'))+'</label><p>'+esc(tr('timeHelp'))+'</p><p role="alert" data-review-error></p><button class="button primary" type="submit">'+esc(tr('sign'))+'</button>':'')+'</form>');
+    const dialog=document.getElementById('dialog');for(const selected of q.records){const host=dialog.querySelector('[data-review-record="'+selected.id+'"]');if(host)figureViews.push(mountSharedFigures(host,{selector:{workspaceId:state.book.id,id:q.id,recordId:selected.id,recordRevision:selected.revision},request:(fields,options)=>call('figure',fields,options),downloadURL:fields=>url('figure-export',fields)}));}dialog.addEventListener('close',disposeFigures,{once:true});
    }
-   else if(op==='export'){const result=await call('export',{id:node.dataset.id});download(result.file,'review-'+node.dataset.id+'.observanda-review');}
+   else if(op==='export'){const result=await call('export',{id:node.dataset.id});downloadResult(result,'review-'+node.dataset.id+'.observanda-review');}
    else if(op==='untrust'){await call('untrust',{fingerprint:node.dataset.fingerprint});await refresh();render();}
    else if(['refresh','previous','next'].includes(op)){
     await refresh(op==='previous'?list.previousCursor:op==='next'?list.nextCursor:null);
@@ -88,10 +93,14 @@ export function reviewsUI({state,api,esc,showDialog,notify,render,getRecord}){
   try{
    const d=new FormData(form);
    if(form.id==='review-contact-form'){if(!contact)throw Error(tr('inspectFirst'));await call('contact',{contact,name:d.get('name'),verified:d.has('verified')});}
-   if(form.id==='review-import-form')await call('import',{file:await readFile(d.get('file'))});
+   if(form.id==='review-import-form'){
+    const file=d.get('file');if(!file?.size)throw Error(tr('fileSize'));if((await file.slice(0,10).text())==='OBSSHARE1\n'){
+     const ctx=researchContext(state),controller=upload=new AbortController(),response=await fetch(url('receive',{workspaceId:state.book.id}),{method:'POST',headers:{'Content-Type':'application/octet-stream','X-Observanda-Workspace':state.storage.contextId},body:file,signal:controller.signal});const value=await response.json();if(!response.ok)throw Object.assign(Error(value.message??tr('importHelp')),value);if(ctx!==researchContext(state))throw Error(tr('workspaceChanged'));
+    }else await call('import',{file:await readFile(file)});
+   }
    if(form.id==='review-request-form'){
     if(state.dirty)throw Error(tr('saveFirst'));if(!plan||d.get('scope')!==plan.scope.kind+':'+plan.scope.id)throw Error(tr('previewFirst'));
-    const result=await call('create',{id:form.dataset.requestId,recipient:d.get('recipient'),message:d.get('message'),scope:plan.scope,records:plan.records.map(({id,revision})=>({id,revision}))});download(result.file,'request-'+form.dataset.requestId+'.observanda-review');
+    const result=await call('create',{id:form.dataset.requestId,recipient:d.get('recipient'),message:d.get('message'),scope:plan.scope,records:plan.records.map(({id,revision})=>({id,revision}))});downloadResult(result,'request-'+form.dataset.requestId+'.observanda-review');
    }
    if(form.id==='review-response-form'){
     if(!d.has('confirm'))throw Error(tr('confirmFirst'));
@@ -105,9 +114,9 @@ export function reviewsUI({state,api,esc,showDialog,notify,render,getRecord}){
    busy=false;close();
    if(state.page==='module')render();else if(['editor','record-reader'].includes(state.page)){owner=state.selected;witnessFrame();}
    if(!listError)notify(tr('saved'));
-  }catch(e){error(e);}finally{busy=false;delete form.dataset.busy;}return true;
+  }catch(e){error(e);}finally{upload=null;busy=false;delete form.dataset.busy;}return true;
  }
  async function activate(){owner=null;packet=null;plan=null;context=researchContext(state);try{await refresh();}catch(e){if(e.name!=='AbortError'){list=empty();listError=message(e);}}}
- function release(){if(state.access?.locked||context!==researchContext(state)||!['editor','record-reader'].includes(state.page)&&!(state.page==='module'&&state.moduleId==='collaboration')){reading++;list=empty();owner=null;packet=null;plan=null;contact=null;}}
+ function release(){if(state.access?.locked||context!==researchContext(state)||!['editor','record-reader'].includes(state.page)&&!(state.page==='module'&&state.moduleId==='collaboration')){abortUpload();disposeFigures();reading++;list=empty();owner=null;packet=null;plan=null;contact=null;}}
  return {action,input,submit,release,isBusy:()=>busy,button:()=>button('witnesses','witnesses'),async moduleUI(){await activate();return {view,activate};}};
 }

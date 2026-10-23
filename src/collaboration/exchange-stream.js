@@ -18,8 +18,8 @@ function framed(bytes){const size=Buffer.alloc(4);size.writeUInt32BE(bytes.lengt
 // digest authenticates the sender, complete ordered content and recipient.
 // Consumers must stage incoming entries until this generator finishes; a valid
 // prefix is never an accepted package. No workspace key is put in the archive.
-export async function* writeExchange(identity,recipient,entries,{id=randomUUID(),signal}={}){
- const key=randomBytes(32),header={format:'observanda-collaboration',version:1,id,recipient:exchangeContact(recipient).id,key:wrapExchangeKey(recipient,id,key)},headerBytes=json(header),headerHash=hash(headerBytes),chain=createHash('sha256'),manifest=createHash('sha256');let index=0,count=0;
+export async function* writeExchange(identity,recipient,entries,{id=randomUUID(),signal,keyAdapter}={}){
+ const key=randomBytes(32),header={format:'observanda-collaboration',version:1,id,recipient:(keyAdapter?keyAdapter.recipient(recipient):exchangeContact(recipient)).id,key:keyAdapter?keyAdapter.wrap(recipient,id,key):wrapExchangeKey(recipient,id,key)},headerBytes=json(header),headerHash=hash(headerBytes),chain=createHash('sha256'),manifest=createHash('sha256');let index=0,count=0;
  const frame=plain=>{signal?.throwIfAborted();const encrypted=seal(plain,key,headerHash+'/'+index++);return framed(encrypted);};
  const send=plain=>{chain.update(plain);return frame(plain);};
  try{

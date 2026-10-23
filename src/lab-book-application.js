@@ -124,7 +124,7 @@ export async function executeLabBookRequest(project,selected,data,{deviceStore,a
    if(selected.sampleAnalysis)return executeSampleAnalysisRequest(storage,selected,data,{...options,check:()=>current()});
    if(selected.asset)return executeProjectAsset(storage,selected,data,{...options,jobs:background});
    if(selected.material)return executeMaterialRequest(storage,selected,data,{...options,jobs:background});
-   if(selected.review)return executeReviewRequest(storage,deviceStore,selected.review,data);
+   if(selected.review)return executeReviewRequest(storage,deviceStore,selected.review,data,{...options,check:()=>current()});
    if(selected.starter)return executeRecordStarterRequest(storage,selected,data,options);
    if(selected.publication){const owner=await background();return owner.publications.run(selected,data,{...options,sourceReader:options.publicationSources?.(owner.storage),check:()=>current()});}
    if(selected.intake){const owner=await background(),response=await intakeCommand(storage,owner.queue,selected.intake,data,options);owner.worker.wake();return response;}

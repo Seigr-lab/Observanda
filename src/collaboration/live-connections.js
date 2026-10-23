@@ -59,7 +59,7 @@ export class LiveConnections{
   if(operation==='disconnect'){
    valid(uuid(data.connectionId));await this.workspace.withLock(async()=>{const file=prefix+data.connectionId+'.json',raw=await this.workspace.readMetadata(file,32768);valid(raw,'NOT_FOUND');await this.workspace.writeMetadata(file,JSON.stringify({...JSON.parse(raw),active:false}));});this.clients.get(data.connectionId)?.close();this.clients.delete(data.connectionId);return {ok:true};
   }
-  if(operation==='request'){valid(!['file'].includes(data.operation));return (await this.client(data.connectionId)).call(data.operation,data.data);}
+  if(operation==='request'){valid(!['file','figure-export'].includes(data.operation));return (await this.client(data.connectionId)).call(data.operation,data.data);}
   valid(false);
  }
 }

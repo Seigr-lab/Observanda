@@ -15,14 +15,14 @@ const post=new Set([
  ...['source-owners','source-items','source-resolve','overview','list','references','figure-sources','current','schema','current-record','record','read','rows','retained-table','comparison-page','analysis-status'].map(name=>'/api/research/materials/'+name),
  ...['summary','content','record','sections','media'].map(name=>'/api/website/research/'+name),
  ...['owners','query','labels','resolve','incoming'].map(name=>'/api/modules/references/'+name),
- '/api/calendars/page','/api/calendars/event','/api/sharing/configuration',
+ '/api/calendars/page','/api/calendars/event','/api/sharing/configuration','/api/sharing/figure',
  '/api/github-connection/status','/api/deployment-jobs/list','/api/deployment-jobs/status',
  '/api/repository-setup/current','/api/repository-setup/status','/api/publishing/verification',
  '/api/design-preview','/api/appearance-preview','/api/websites/list','/api/websites/open','/api/websites/version','/api/modules/drafts/read',
  '/api/laboratory/read/query','/api/laboratory/read/selected','/api/research/drafts/list','/api/modules/drafts/list'
 ]);
 export const workspaceSnapshotRequest=(method,route)=>{
- if(method==='GET')return get.has(route)||/^\/api\/fonts\/custom-[a-f0-9]{64}$/.test(route)||/^\/(?:appearance-preview|preview)\/[a-f0-9]{64}\/.+/.test(route)||/^\/api\/appearance-preview\/[a-f0-9]{64}\/pages$/.test(route);
+ if(method==='GET')return Boolean(reviewRequest(route,method)&&!reviewRequest(route,method).write)||/^\/api\/live\/figures\/(?:[a-f0-9-]{36}\/){2}[a-f0-9-]{36}$/.test(route)||/^\/api\/sharing\/figures\/[a-f0-9-]{36}\/(?:base|incoming|current)\/[a-f0-9-]{36}\/[a-f0-9-]{36}$/.test(route)||get.has(route)||/^\/api\/fonts\/custom-[a-f0-9]{64}$/.test(route)||/^\/(?:appearance-preview|preview)\/[a-f0-9]{64}\/.+/.test(route)||/^\/api\/appearance-preview\/[a-f0-9]{64}\/pages$/.test(route);
  if(method!=='POST')return false;const command=recordStarterRequest(route)??researchRequest(route)??reviewRequest(route);return post.has(route)||route==='/api/research/views/list'||Boolean(command&&!command.write);
 };
 export class WorkspaceReadAdmission{

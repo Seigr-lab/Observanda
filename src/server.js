@@ -51,6 +51,7 @@ import {identitySession} from './collaboration/identity-sessions.js';
 import {sharingCommand} from './collaboration/commands.js';
 import {ResearchExchange} from './collaboration/research-exchange.js';
 import {ChangeReview} from './collaboration/change-review.js';
+import {sharedReviewFigure} from './collaboration/review-figures.js';
 import {httpDrain} from './http-drain.js';
 import {storageResponse} from './storage-response.js';
 import {moveWorkspaceTo,workspaceMoveStatus,readMoveReceipt} from './workspace-move.js';
@@ -70,7 +71,8 @@ import {AnalysisPublicationReview} from './analysis-publication-review.js';
 import {inspectSource} from './migration/runner.js';
 import {MigrationImport} from './migration/import-service.js';
 import {intakeCommand} from './intake/commands.js';
-import {executeReviewRequest} from './review-requests.js';
+import {executeReviewRequest,reviewRequest} from './review-requests.js';
+import {reviewHttp} from './review-http.js';
 import {DeploymentJobs} from './deployment-jobs.js';
 import {PublicationJobs} from './publication-jobs.js';
 import {PublicationRollback} from './publication-rollback.js';
@@ -471,11 +473,15 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       const sourceReader=publicationSourceFactory(historyProjects,client,selectedContext.workspace,{check:req.checkWriter}),comparisonSources=comparisonSourceFactory(historyProjects,client,{check:req.checkWriter});
       return await historyProjects.withSourceHistory(client,async()=>{
       const selectedProject=projectRequest(url.pathname,req.method);
-      if(selectedProject&&(req.method==='POST'||(selectedProject.material||selectedProject.publication||selectedProject.asset||selectedProject.sampleAnalysis)&&req.method==='GET')){
+      if(selectedProject&&(req.method==='POST'||(selectedProject.material||selectedProject.publication||selectedProject.asset||selectedProject.sampleAnalysis||selectedProject.review)&&req.method==='GET')){
         if(!workspace||req.method==='POST'&&req.headers['x-observanda-workspace']!==selectedContext.id)throw new AppError('WORKSPACE_CHANGED');
         if(selectedProject.pdf||selectedProject.publication||selectedProject.asset||selectedProject.starter||selectedProject.sampleAnalysis){
           const check=req.checkWriter;await check();if(selectedProject.pdf)req.operationActivity=null;if(selectedProject.write){activeWrites++;countedWrite=true;}else req.operationActivity=null;
           return await projectContentHttp(req,res,selectedProject,{body,json,mime,headless,contextId:context.id,execute:(data,options)=>historyProjects.run(client,selectedProject,data,{...options,check,setCheck:next=>{req.checkWriter=next;}})});
+        }
+        if(selectedProject.review){
+          const check=req.checkWriter;await check();if(selectedProject.write){activeWrites++;countedWrite=true;}else req.operationActivity=null;
+          return await reviewHttp(req,res,selectedProject,{contextId:context.id,body,json,execute:(data,options)=>historyProjects.run(client,selectedProject,data,{...options,check,setCheck:next=>{req.checkWriter=next;}})});
         }
         if(selectedProject.material){
           const check=req.checkWriter;await check();
@@ -956,6 +962,20 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         const manager=selectedContext.live??=new LiveConnections(workspace,deviceStore),result=await manager.command(url.pathname.slice('/api/live/'.length),data);
         if(context!==selectedContext||(await status(client)).locked)throw new AppError('ACCESS_LOCKED');return json(result);
       }
+      const liveFigure=/^\/api\/live\/figures\/([a-f0-9-]{36})\/([a-f0-9-]{36})\/([a-f0-9-]{36})$/.exec(url.pathname);
+      if(req.method==='GET'&&liveFigure){
+        if(url.searchParams.get('context')!==context.id)throw new AppError('WORKSPACE_CHANGED');
+        const selection=url.searchParams.get('selection');if(url.searchParams.getAll('selection').length!==1||!selection||selection.length>4096)throw new AppError('INVALID');
+        let data;try{data=JSON.parse(selection);}catch{throw new AppError('INVALID');}
+        if(data?.recordId!==liveFigure[2]||data?.figureId!==liveFigure[3])throw new AppError('INVALID');
+        const manager=selectedContext.live??=new LiveConnections(workspace,deviceStore),controller=new AbortController(),abort=()=>controller.abort();res.once('close',abort);
+        try{
+          const remote=await(await manager.client(liveFigure[1])).call('figure-export',data,{stream:true,signal:controller.signal});
+          if(context!==selectedContext||(await status(client)).locked){remote.destroy();throw new AppError('ACCESS_LOCKED');}
+          res.writeHead(200,{'Content-Type':remote.headers['content-type'],'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Disposition':remote.headers['content-disposition']});
+          await pipeline(remote,res);
+        }finally{res.off('close',abort);}return;
+      }
       const liveFile=/^\/api\/live\/files\/([a-f0-9-]{36})\/([a-f0-9-]{36})\/(media|artifact)\/([a-f0-9-]{36})$/.exec(url.pathname);
       if(req.method==='GET'&&liveFile){
         if(url.searchParams.get('context')!==context.id)throw new AppError('WORKSPACE_CHANGED');activeWrites++;countedWrite=true;
@@ -967,6 +987,18 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         const data=await body(req,100000),operation=url.pathname.slice('/api/organizations/'.length);
         const result=await organizationCommand(workspace,deviceStore,operation,data);
         if(context!==selectedContext||(await status(client)).locked)throw new AppError('ACCESS_LOCKED');return json(result);
+      }
+      const sharedFigure=/^\/api\/sharing\/figures\/([a-f0-9-]{36})\/(base|incoming|current)\/([a-f0-9-]{36})\/([a-f0-9-]{36})$/.exec(url.pathname);
+      if(req.method==='GET'&&sharedFigure){
+        if(url.searchParams.get('context')!==context.id)throw new AppError('WORKSPACE_CHANGED');
+        const {metadata}=await workspace.outline(),controller=new AbortController(),abort=()=>controller.abort();res.once('close',abort);
+        try{
+          await sharedReviewFigure(new ChangeReview(new ResearchExchange(workspace,deviceStore)),{workspaceId:metadata.id,reviewId:sharedFigure[1],version:sharedFigure[2],recordId:sharedFigure[3],figureId:sharedFigure[4],revision:url.searchParams.get('revision'),expectedRevision:url.searchParams.get('expectedRevision'),format:url.searchParams.get('format')},{signal:controller.signal,exporting:true,download:async({name,contentType,chunks})=>{
+            if(context!==selectedContext||(await status(client)).locked)throw new AppError('ACCESS_LOCKED');
+            res.writeHead(200,{'Content-Type':contentType,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Disposition':"attachment; filename*=UTF-8''"+encodeURIComponent(name)});
+            await pipeline(Readable.from(chunks),res);
+          }});
+        }finally{res.off('close',abort);}return;
       }
       const sharedDownload=/^\/api\/sharing\/download\/([a-f0-9-]{36})$/.exec(url.pathname);
       const sharedFile=/^\/api\/sharing\/reviews\/([a-f0-9-]{36})\/(base|incoming|current)\/([a-f0-9-]{36})\/(media|artifact|font)\/([a-f0-9-]{36}|custom-[a-f0-9]{64})$/.exec(url.pathname);
@@ -996,9 +1028,10 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         const data=await body(req,16*1024*1024),operation=url.pathname.slice('/api/sharing/'.length);
         return await storageResponse(req,res,async()=>{const result=await sharingCommand(workspace,deviceStore,operation,data);if(context!==selectedContext||(await status(client)).locked)throw new AppError('ACCESS_LOCKED');return result;},json);
       }
-      if(req.method==='POST'&&url.pathname.startsWith('/api/reviews/')){
-        const data=await body(req),operation=url.pathname.slice('/api/reviews/'.length);
-        const result=await executeReviewRequest(workspace,deviceStore,operation,data);if(context!==selectedContext||(await status(client)).locked)throw new AppError('ACCESS_LOCKED');return json(result);
+      const selectedReview=reviewRequest(url.pathname,req.method);
+      if(selectedReview){
+        const check=async()=>{if(context!==selectedContext||(await status(client)).locked)throw new AppError('ACCESS_LOCKED');};await check();if(selectedReview.write&&!countedWrite){activeWrites++;countedWrite=true;}else if(!selectedReview.write)req.operationActivity=null;
+        return await reviewHttp(req,res,selectedReview,{contextId:context.id,body,json,execute:(data,options)=>executeReviewRequest(workspace,deviceStore,selectedReview.review,data,{...options,check})});
       }
       if(req.method==='GET'&&url.pathname==='/api/modules/data'){
         return json({data:await workspaceModules(workspace).current()});

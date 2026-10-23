@@ -35,3 +35,15 @@
 [data-evidence-inspection]{min-width:0;overflow-wrap:anywhere}
 [data-evidence-inspection] pre{white-space:pre-wrap;overflow-wrap:anywhere}
 [data-evidence-inspection] table small{display:block;font-weight:normal}
+
+/* Intrinsic figure/table widths must not expand a review fieldset or dialog. */
+.review-workflow,.review-workflow form,.review-workflow fieldset,.review-readable,[data-shared-figure-view]{min-width:0;max-width:100%}
+.review-workflow legend{max-width:100%;overflow-wrap:anywhere}
+[data-shared-figure-view]{overflow-wrap:anywhere;container-type:inline-size}
+[data-shared-figure-view] .retained-figure-display{min-width:0;max-width:100%}
+[data-shared-figure-view] .retained-figure-display>svg{display:block;width:100%;max-width:100%;height:auto}
+[data-shared-figure-view] .material-table{min-width:0;max-width:100%;overflow:auto;overscroll-behavior-inline:contain}
+[data-shared-figure-view] .material-table:focus-visible{outline:2px solid var(--ui-accent);outline-offset:-2px}
+[data-shared-figure-view] .inline-actions>*{min-width:0;max-width:100%}
+[data-shared-figure-view] .button{white-space:normal;overflow-wrap:anywhere}
+[data-shared-figure-view] .material-table .button{max-width:calc(100cqi - 1.2rem - 4px)}

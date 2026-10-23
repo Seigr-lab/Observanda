@@ -316,7 +316,7 @@ export class ProjectApplication{
      }
      if(selected.pdf){const service=['export-start','export-resume'].includes(selected.pdf)?(await this.jobs.owner(session,storage,owner.etag,assertCurrent)).pdfs:null;return executePdfRequest(storage,selected,data,{signal,check:assertCurrent,binary,exportService:service,sourceReader:publicationSourceFactory(this,client,storage,{scope:selected.projectId,check:assertCurrent})});}
      if(selected.sampleAnalysis)return executeSampleAnalysisRequest(storage,selected,data,{signal,check:assertCurrent,query,binary});
-     if(selected.review)return executeReviewRequest(storage,this.deviceStore,selected.review,data);
+     if(selected.review)return executeReviewRequest(storage,this.deviceStore,selected.review,data,{signal,download,stream,check:assertCurrent});
      if(selected.starter)return executeRecordStarterRequest(storage,selected,data,{signal,binary});
      if(selected.asset)return executeProjectAsset(storage,selected,data,{signal,stream,query,contentLength,binary,jobs:()=>this.jobs.owner(session,storage,owner.etag,assertCurrent)});
      if(selected.publication){const jobs=await this.jobs.owner(session,storage,owner.etag,assertCurrent);return jobs.publications.run(selected,data,{websiteId,websitePin,websiteContext,binary,headless,query,signal,check:assertCurrent,sourceReader:publicationSourceFactory(this,client,jobs.storage,{scope:selected.projectId,check})});}

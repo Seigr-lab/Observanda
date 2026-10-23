@@ -1,3 +1,4 @@
+import {sharedFigureControls,mountSharedFigures} from './shared-figure-reader.js';
 import {t} from './i18n/index.js';
 import {RELATION_TYPES} from './record-model.js';
 import {WORKFLOW_ROLES} from './record-workflow.js';
@@ -9,8 +10,8 @@ const same=(a,b)=>revisionText(a)===revisionText(b);
 
 // One bounded picker and one link draft stay in the shared record view. The
 // text editor and detail form keep their selections and unfinished changes.
-export function onlineRelationships({remote,esc,notify,mediaUrl}){
- let host,record,relations=[],readOnly=false,busy=false,disposed=false,draft=null,request=null,choices=new Map(),after=null,viewGeneration=0,generation=0;
+export function onlineRelationships({remote,esc,notify,mediaUrl,figureURL}){
+ let host,record,relations=[],readOnly=false,busy=false,disposed=false,draft=null,request=null,choices=new Map(),after=null,viewGeneration=0,generation=0,figures=null;
  const button=(key,action,id='')=>'<button type="button" class="button" data-link-action="'+action+'" data-link-id="'+esc(id)+'">'+esc(tr(key))+'</button>';
  const typeName=type=>tr('linkType'+RELATION_TYPES.indexOf(type));
  const current=()=>relations.find(r=>r.id===draft?.id)??null;
@@ -54,13 +55,13 @@ export function onlineRelationships({remote,esc,notify,mediaUrl}){
  function cancel(){draft=null;request=null;host.querySelector('form').hidden=true;controls();}
  async function read(linkId=null){
   if(busy||request)return;const selected=draft?.target;if(!linkId&&!selected)return;
-  const generation=++viewGeneration;busy=true;controls();const view=host.querySelector('[data-link-view]');view.textContent=tr('busy');
+  const generation=++viewGeneration;busy=true;controls();const view=host.querySelector('[data-link-view]');figures?.dispose();figures=null;view.textContent=tr('busy');
   try{
    const result=await remote(linkId?'link-read':'read',linkId?{recordId:record.id,linkId}:{recordId:selected.id});if(disposed||generation!==viewGeneration)return;
    // Inspecting the selected current record explicitly adopts its displayed
    // revision. Saving still checks it did not change after this inspection.
    if(!linkId&&draft){draft.target={id:result.record.id,title:result.record.title,revision:result.revision};setChoices();}
-   view.innerHTML='<h4>'+esc(result.record.title)+'</h4><p>'+esc(tr(linkId?'linkReadingSaved':'linkReadingCurrent'))+'</p><code>'+esc(result.revision)+'</code>'+recordRevisionView(result.record,esc,{figureSources:false,assetUrl:id=>mediaUrl(linkId?record.id:result.record.id,id,linkId?{linkId,revision:result.revision}:null)});applyRichTextStyles(document,result.record);
+   view.innerHTML='<h4>'+esc(result.record.title)+'</h4><p>'+esc(tr(linkId?'linkReadingSaved':'linkReadingCurrent'))+'</p><code>'+esc(result.revision)+'</code>'+recordRevisionView(result.record,esc,{figureSources:false,retainedFigureAction:sharedFigureControls(esc),assetUrl:id=>mediaUrl(linkId?record.id:result.record.id,id,linkId?{linkId,revision:result.revision}:null)});figures=mountSharedFigures(view,{selector:{recordId:linkId?record.id:result.record.id,revision:result.revision,...(linkId?{via:{kind:'link',id:linkId}}:{})},request:data=>remote('figure',data),downloadURL:figureURL});applyRichTextStyles(document,result.record);
   }catch(error){view.textContent=error.message;throw error;}finally{busy=false;controls();}
  }
  async function save(){
@@ -103,5 +104,5 @@ export function onlineRelationships({remote,esc,notify,mediaUrl}){
    })().catch(e=>notify(e.message,true));
   });
  }
- return {mount,update,save,revision:()=>generation,isDirty:()=>!!draft||busy||!!request,isBusy:()=>busy,setReadOnly(){readOnly=true;controls();},dispose(){disposed=true;viewGeneration++;generation++;}};
+ return {mount,update,save,revision:()=>generation,isDirty:()=>!!draft||busy||!!request,isBusy:()=>busy,setReadOnly(){readOnly=true;controls();},dispose(){disposed=true;figures?.dispose();viewGeneration++;generation++;}};
 }

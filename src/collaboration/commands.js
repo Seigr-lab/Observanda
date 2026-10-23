@@ -1,3 +1,5 @@
+import {sharedReviewFigure} from './review-figures.js';
+import {recordRevision} from '../research.js';
 import {ResearchExchange} from './research-exchange.js';
 import {ChangeReview} from './change-review.js';
 import {ExchangeParts} from './exchange-parts.js';
@@ -31,7 +33,8 @@ export async function sharingCommand(workspace,device,operation,data){
  const review=new ChangeReview(exchange);
  if(operation==='review')return review.review(data.id);
  if(operation==='configuration')return review.configuration(data);
- if(operation==='record')return {record:await review.record(data.reviewId,data.recordId,data.version),materials:await review.materials(data.reviewId,data.recordId,data.version),fonts:await review.fonts(data.reviewId,data.recordId,data.version)};
+ if(operation==='figure')return sharedReviewFigure(review,data);
+ if(operation==='record'){const record=await review.record(data.reviewId,data.recordId,data.version);return {record,revision:record?recordRevision(record):null,materials:await review.materials(data.reviewId,data.recordId,data.version),fonts:await review.fonts(data.reviewId,data.recordId,data.version)};}
  if(operation==='apply')return review.apply({reviewId:data.reviewId,choices:data.choices});
  throw new AppError('INVALID');
 }

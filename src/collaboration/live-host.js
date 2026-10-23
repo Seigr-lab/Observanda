@@ -28,6 +28,10 @@ export async function startLiveHost(workspace,device,{host='0.0.0.0',port=0,adve
    valid(req.url==='/request','NOT_FOUND');const signed=await liveJSON(req),command=verifyOrganizationCommand(signed);
    valid(exact(command,['kind','instance','nonce','scope','operation','data'])&&command.kind==='observanda.live.request.v1'&&command.instance===instance,'COLLABORATION_SIGNATURE');
    const expiry=challenges.get(command.nonce);challenges.delete(command.nonce);valid(expiry&&expiry>=Date.now(),'COLLABORATION_EXPIRED');
+   if(command.operation==='figure-export'){
+    const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
+    try{return await research.figure(signed.identity,command.scope,command.data,{signal:controller.signal,exporting:true,download:async({name,contentType,chunks})=>{res.writeHead(200,{'Content-Type':contentType,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Disposition':"attachment; filename*=UTF-8''"+encodeURIComponent(name)});await pipeline(Readable.from(chunks),res);}});}finally{res.off('close',abort);}
+   }
    if(command.operation==='file'){
     const file=await research.file(signed.identity,command.scope,command.data);res.writeHead(200,{'Content-Type':file.mime,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Length':contentSize(file.content),'Content-Disposition':"attachment; filename*=UTF-8''"+encodeURIComponent(file.name)});await pipeline(Readable.from(contentStream(file.content)),res);return;
    }
