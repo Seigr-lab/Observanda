@@ -1,3 +1,4 @@
+import numeralClipboard from '../locales/en/numeralClipboard.json' with {type:'json'};
 import retainedFigureEditor from '../locales/en/retainedFigureEditor.json' with {type:'json'};
 import retainedFigureReader from '../locales/en/retainedFigureReader.json' with {type:'json'};
 import retainedFigureData from '../locales/en/retainedFigureData.json' with {type:'json'};
@@ -172,6 +173,7 @@ english.recordStarters=recordStarters;
 english.sketch=sketch;
 english.datasetPreparation=datasetPreparation;
 english.datasetCalculations=datasetCalculations;
+english.numeralClipboard=numeralClipboard;
 english.datasetAggregation=datasetAggregation;
 english.retainedTables=retainedTables;
 english.figureHeatmap=figureHeatmap;

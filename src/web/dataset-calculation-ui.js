@@ -1,3 +1,4 @@
+import {numeralClipboardControls,wireNumeralClipboard} from './numeral-clipboard-ui.js';
 import {datasetCalculationGraphUI} from './dataset-calculation-graph-ui.js';
 import {datasetColumnPageOffset,loadDatasetColumnWindow,datasetProjectionFields} from './dataset-column-picker.js';
 import {t} from './i18n/index.js';
@@ -23,7 +24,7 @@ export function datasetCalculationUI({state,api,call,frame,esc,field,guard,owner
  const readQuantity=(root,key)=>{const node=root.querySelector('[data-calc-quantity="'+key+'"]');if(!node)return undefined;const prior=JSON.parse(node.dataset.quantity),definition=readMeasurementUnit(node);if(!prior&&!definition)return undefined;const {unitDefinition,...value}=prior??{origin:'derived',conversion:null,calibration:null};return {...value,...(definition?{unitDefinition:definition}:{})};};
  const operand=(key,value,cols)=>{
   const representation=value?.constant!==undefined?(value.representation??'automatic'):'decimal';
-  return `<fieldset data-operand="${key}"><legend>${esc(text(key))}</legend>${select('operand',value?.column??'constant',[...labels(cols),['constant',text('constant')]])}<div data-constant${value?.column!==undefined?' hidden':''}>${input('constantValue',value?.constant??'',8192)}${select('constantRepresentation',representation,['automatic',...CONSTANT_REPRESENTATIONS].map(v=>[v,text('constant-'+v)]))}<div data-constant-radix${['radix','radix-fraction'].includes(representation)?'':' hidden'}>${field(esc(text('constantRadix')),`<input data-calc="constantRadix" type="number" min="2" max="36" step="1" value="${value?.radix??10}">`)}</div>${input('constantUnit',value?.unit??'',100)}${quantity('constant',value?.quantity)}</div></fieldset>`;
+  return `<fieldset data-operand="${key}"><legend>${esc(text(key))}</legend>${select('operand',value?.column??'constant',[...labels(cols),['constant',text('constant')]])}<div data-constant${value?.column!==undefined?' hidden':''}>${input('constantValue',value?.constant??'',8192)}${select('constantRepresentation',representation,['automatic',...CONSTANT_REPRESENTATIONS].map(v=>[v,text('constant-'+v)]))}<div data-constant-radix${['radix','radix-fraction'].includes(representation)?'':' hidden'}>${field(esc(text('constantRadix')),`<input data-calc="constantRadix" type="number" min="2" max="36" step="1" value="${value?.radix??10}">`)}</div>${input('constantUnit',value?.unit??'',100)}${quantity('constant',value?.quantity)}${numeralClipboardControls({esc})}</div></fieldset>`;
  };
  const readOperand=(root,key)=>{
   const el=root.querySelector('[data-operand="'+key+'"]'),v=get(el,'operand');if(v!=='constant')return {column:Number(v)};
@@ -78,7 +79,8 @@ export function datasetCalculationUI({state,api,call,frame,esc,field,guard,owner
   };
 
   const stopReferences=wireAnalysisFields(root,{state,api,call,esc,field,guard,recordId:owner(),onReference:async()=>{capture();if(draft.source&&await load())form();}});
-  dispose=()=>{stopUnits();stopConditions();stopReferences?.();};
+  const stopClipboard=wireNumeralClipboard(root,{guard,available:()=>!saving,fields:control=>{const node=control.closest('[data-constant]');return node?{spelling:node.querySelector('[data-calc=constantValue]'),representation:node.querySelector('[data-calc=constantRepresentation]'),radix:node.querySelector('[data-calc=constantRadix]')}:null;}});
+  dispose=()=>{stopClipboard();stopUnits();stopConditions();stopReferences?.();};
   root.addEventListener('change',event=>{const el=event.target;if(el.matches('[data-calc="operand"]'))el.closest('[data-operand]').querySelector('[data-constant]').hidden=el.value!=='constant';if(el.matches('[data-calc="constantRepresentation"]'))el.closest('[data-operand]').querySelector('[data-constant-radix]').hidden=!['radix','radix-fraction'].includes(el.value);});
   root.querySelectorAll('[data-calc="constantRepresentation"]').forEach(el=>el.onchange=()=>el.closest('[data-operand]').querySelector('[data-constant-radix]').hidden=!['radix','radix-fraction'].includes(el.value));
   root.querySelectorAll('[data-condition-enabled]').forEach(el=>el.onchange=()=>el.closest('[data-condition]').querySelector('[data-condition-fields]').hidden=!el.checked);

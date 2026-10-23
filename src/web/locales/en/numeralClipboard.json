@@ -1,0 +1,13 @@
+{
+  "copy": "Copy spelling and interpretation",
+  "paste": "Paste spelling and interpretation",
+  "scope": "Transfers spelling and numeral interpretation only. Units and evidence references stay unchanged.",
+  "copied": "Spelling and interpretation copied.",
+  "pasted": "Spelling and explicit interpretation pasted.",
+  "plain": "Plain text pasted; the selected interpretation is unchanged.",
+  "invalid": "This copied value has an unsupported or invalid spelling or interpretation. Choose an explicit interpretation before copying.",
+  "changed": "The value changed while reading the clipboard. Your edit was kept; paste again to replace it.",
+  "length": "The complete copied value exceeds this editor's supported length. Nothing was pasted.",
+  "lines": "This value contains line breaks that this field cannot retain. Nothing was pasted.",
+  "unavailable": "Clipboard access is unavailable. Use the browser's copy and paste controls."
+}

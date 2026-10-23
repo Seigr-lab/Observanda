@@ -1,6 +1,6 @@
-import {REPRESENTATIONS,exactRational,supportedValue} from './measurement-model.js';
+import {isScalarRepresentation,REPRESENTATIONS,exactRational,supportedValue} from './measurement-model.js';
 
-export const CONSTANT_REPRESENTATIONS=REPRESENTATIONS.filter(value=>value!=='unsupported');
+export const CONSTANT_REPRESENTATIONS=REPRESENTATIONS.filter(value=>value==='text'||isScalarRepresentation(value));
 // Unannotated recipes retain their original text-or-decimal interpretation.
 // New typed constants use exactly the same parser as retained measurements.
 export function validConstantType(value){
