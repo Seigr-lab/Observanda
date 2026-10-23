@@ -1,0 +1,15 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {defaultStructuredCalculationPolicy,defaultCalculationPolicy} from '../src/web/tools/calculation-policy.js';
+import {validStructuredResult} from '../src/web/tools/structured-calculation-model.js';
+import {structuredExpression,upgradeCalculatorEngine} from '../src/web/tools/calculator-model.js';
+let response;globalThis.self={postMessage:value=>{response=value;}};await import('../src/tools/worker.js');
+const run=(expression,policy=defaultStructuredCalculationPolicy(),engine=4)=>{response=null;self.onmessage({data:{kind:'calculator-sheet',value:{engine,policy,mode:'expression',angle:'rad',expression,digits:'',fromBase:10,toBase:6}}});return response;};
+test('actual worker keeps complete exact structured values and previews with engine4 while preserving engine3',()=>{
+ const result=run('[1/3,2]+[2/3,3]\nsqrt(-1)\ndot([1,2],[3,4])').result;assert.equal(result[0].result,'[1,5]');assert.equal(result[1].result,'(0)+(1)*i');assert.equal(result[2].result,'11');for(const answer of result.slice(0,2)){assert.ok(validStructuredResult(answer.structured));assert.equal(typeof answer.tex,'string');assert.ok(answer.tex.length);assert.doesNotThrow(()=>JSON.stringify(answer));assert.equal(answer.approximation,undefined);}assert.equal(run('sqrt(-1)',defaultCalculationPolicy(),3).result[0].errorCode,'CALCULATION_REAL_RESULT');
+ const components=defaultStructuredCalculationPolicy();components.resources.maxComponents=1;const componentFailure=run('[1,2]',components).result[0];assert.equal(componentFailure.errorCode,'CALCULATION_STRUCTURED_RESOURCE');assert.equal(componentFailure.result,undefined);const characters=defaultStructuredCalculationPolicy();characters.resources.maxResultCharacters=32;const textFailure=run('[10^100,2]',characters).result[0];assert.equal(textFailure.errorCode,'CALCULATION_STRUCTURED_RESOURCE');assert.equal(textFailure.result,undefined);
+});
+test('structured builders preserve exact component text and refuse rather than truncate, and upgrade retains prior policy',()=>{
+ assert.equal(structuredExpression('vector','1/3, 9007199254740993'),'[1/3, 9007199254740993]');assert.equal(structuredExpression('matrix','1/3, sqrt(4)\n-2, 5/7'),'[[1/3, sqrt(4)], [-2, 5/7]]');assert.equal(structuredExpression('vector','1\n2'),null);assert.equal(structuredExpression('matrix','1,2\n\n3,4'),null);assert.equal(structuredExpression('vector','1'.repeat(2000)),null);
+ const policy=defaultCalculationPolicy();policy.workingDigits=99;policy.displayDigits=15;policy.rounding='floor';policy.resources.maxOperations=null;const source={engine:3,policy,expression:'1/3',angle:'deg'},original=structuredClone(source),next=upgradeCalculatorEngine(source);assert.deepEqual(source,original);assert.equal(next.engine,4);assert.equal(next.policy.version,2);assert.equal(next.policy.workingDigits,99);assert.equal(next.policy.displayDigits,15);assert.equal(next.policy.rounding,'floor');assert.equal(next.policy.resources.maxOperations,null);assert.equal(next.policy.resources.maxComponents,256);assert.equal(next.expression,'1/3');
+});

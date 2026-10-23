@@ -1,3 +1,6 @@
+import {defaultStructuredCalculationPolicy} from '../src/web/tools/calculation-policy.js';
+import {validCalculatorRecipe} from '../src/web/calculator-result-model.js';
+import {validateTool} from '../src/modules/tools.js';
 import {CalculatorResults} from '../src/calculator-results.js';
 import {digest} from '../src/storage-format.js';
 import {revisionText} from '../src/web/revision-model.js';
@@ -88,4 +91,14 @@ test('captured result admission and resume reject altered public dataset intents
   f.jobs.set(f.command.jobId,{id:f.command.jobId,type:'dataset.prepare',scope:f.command.recordId,state:'queued',input:{command}});await assert.rejects(f.service.resume(f.queue,{workspaceId:f.command.workspaceId,ref:recipe}),{code:'MODULE_REPLAY'});
  }
  f.jobs.set(f.command.jobId,{id:f.command.jobId,type:'dataset.prepare',scope:id(),state:'queued',input:{command:input}});await assert.rejects(f.service.resume(f.queue,{workspaceId:f.command.workspaceId,ref:recipe}),{code:'MODULE_REPLAY'});
+});
+
+
+test('recipe2 captures only exact structured values under its own engine and policy while old recipes stay scalar',async()=>{
+ const e=entity('[1/3,9007199254740993+1]');e.data.engine=4;e.data.policy=defaultStructuredCalculationPolicy();const recipe=captureCalculatorRecipe(source(e),e,0),result=evaluateCalculatorRecipe(recipe);assert.equal(recipe.version,2);assert.deepEqual(recipe.structuredEngine,{name:'observanda-exact-structured',version:1});assert.deepEqual(result.structured,{version:1,codec:'vector',shape:[2],components:[{numerator:'1',denominator:'3'},{numerator:'9007199254740994',denominator:'1'}]});
+ assert.ok(validCalculatorRecipe(recipe));for(const altered of [{version:1},{engine:3},{policy:defaultCalculationPolicy()},{structuredEngine:{name:'observanda-exact-structured',version:2}}])assert.ok(!validCalculatorRecipe({...recipe,...altered}));
+ assert.throws(()=>validateTool('calculation',{...e.data,engine:3}));assert.throws(()=>validateTool('calculation',{...e.data,policy:defaultCalculationPolicy()}));assert.throws(()=>validateTool('sheet',{name:'No implicit sheet upgrade',links:[],engine:4,policy:e.data.policy,cells:[['1']],original:null}));
+ for(const expression of ['sqrt(2)','2 cm to m']){const other={...e,data:{...e.data,expression}};assert.throws(()=>evaluateCalculatorRecipe(captureCalculatorRecipe(source(other),other,0)),{code:'CALCULATOR_RESULT_EXACT'});}
+ const limited=structuredClone(recipe);limited.policy.resources.maxComponents=1;assert.throws(()=>evaluateCalculatorRecipe(limited),{code:'CALCULATOR_RESULT_RESOURCE'});
+ const f=serviceFixture();f.e.data={...e.data};f.interrupt=true;await assert.rejects(f.service.retain(f.queue,f.command,{readSource:f.readSource}),{code:'LOCKED'});const ref=f.heads.get(f.command.recipeId);f.interrupt=false;f.sourceRevoked=true;await f.service.resume(f.queue,{workspaceId:f.command.workspaceId,ref});assert.equal(f.jobs.get(f.command.jobId).input.command.calculatorResult.version,2);assert.equal(f.readCount,1);assert.deepEqual(evaluateCalculatorRecipe((await f.materials.read(ref)).content.recipe).structured,result.structured);
 });

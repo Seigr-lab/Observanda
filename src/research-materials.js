@@ -188,7 +188,7 @@ export class ResearchMaterials {
   const doc=await this.json(this.metadataFile((ref.kind==='record'?'records/':'objects/')+ref.id+'/'+ref.revision+'.json'));
   if((ref.kind==='record'?recordRevision(doc):digest(revisionText(doc)))!==ref.revision)fail('MATERIAL_MISSING');
   if(ref.kind!=='record'&&(doc.format!==1||doc.kind!==ref.kind||doc.id!==ref.id))fail('MATERIAL_MISSING');
-  if(calculatorResultMaterial(doc))await assertCalculatorResultFormat(this.workspace);
+  if(calculatorResultMaterial(doc))await assertCalculatorResultFormat(this.workspace,doc);
   return doc;
  }
  async assertReferenceWorkspace(ref){
@@ -711,7 +711,7 @@ export class ResearchMaterials {
      }else await this.checkReference(ref);return;
     }
     const doc=await this.read(ref);
-    if(calculatorResultMaterial(doc)){await assertCalculatorResultFormat(this.workspace);await new CalculatorResults(this).verify(doc);}
+    if(calculatorResultMaterial(doc)){await assertCalculatorResultFormat(this.workspace,doc);await new CalculatorResults(this).verify(doc);}
     const checkIntervalFormat=intervalFormatCheck(this.workspace);if(intervalUncertaintyMaterial(doc,{opaqueCompatible:true}))await checkIntervalFormat();
     const checkNumericalFormat=async()=>{if(await this.workspace.storageKind()==='catalogue')await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresNativeNumericalModels}=await import('./catalogue-format.js');if(!catalogueRequiresNativeNumericalModels(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});};
     if(nativeNumericalMaterial(doc))await checkNumericalFormat();

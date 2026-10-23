@@ -148,10 +148,12 @@ export class Workspace {
           const {plotResourceMetadata}=await import('./plot-resource-format.js');if(plotResourceMetadata(relative,value)){const {requireFigureProjectionPolicies}=await import('./catalogue-format.js');await requireFigureProjectionPolicies(store.db);}
           const {domainAlgebraMetadata}=await import('./domain-algebra-format.js');if(domainAlgebraMetadata(relative,value)){const {requireDomainAlgebra}=await import('./catalogue-format.js');await requireDomainAlgebra(store.db);}
           const {measurementScalarMetadata}=await import('./measurement-scalar-format.js');if(measurementScalarMetadata(relative,value)){const {requireMeasurementScalarPolicies}=await import('./catalogue-format.js');await requireMeasurementScalarPolicies(store.db);}
+          const {structuredCalculatorMetadata}=await import('./structured-calculator-format.js');if(structuredCalculatorMetadata(relative,value)){const {requireStructuredCalculator}=await import('./catalogue-format.js');await requireStructuredCalculator(store.db);}
           const {calculatorResultMetadata}=await import('./web/calculator-result-model.js');if(calculatorResultMetadata(relative,value)){const {requireCalculatorDatasetResults}=await import('./catalogue-format.js');await requireCalculatorDatasetResults(store.db);}
           const {datasetResourceMetadata}=await import('./dataset-resource-format.js');if(datasetResourceMetadata(relative,value)){const {requireDatasetResourcePolicies}=await import('./catalogue-format.js');await requireDatasetResourcePolicies(store.db);}
         }
         if(/^\.observanda\/module-drafts\/[a-f0-9-]{36}\.json$/.test(relative)){
+          const {checkpointHasStructuredCalculator}=await import('./structured-calculator-format.js');if(checkpointHasStructuredCalculator(JSON.parse(text))){const {requireStructuredCalculator}=await import('./catalogue-format.js');await requireStructuredCalculator(store.db);}
           const {checkpointHasCalculationPolicy}=await import('./web/tools/calculation-policy.js');if(checkpointHasCalculationPolicy(JSON.parse(text))){const {requireCalculationPolicies}=await import('./catalogue-format.js');await requireCalculationPolicies(store.db);}
         }
         if(relative.startsWith('.observanda/reviews/parts/')||/^\.observanda\/reviews\/[a-f0-9-]{36}\.json$/.test(relative)&&JSON.parse(text)?.request?.value?.version===2){

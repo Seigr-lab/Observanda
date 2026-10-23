@@ -14,7 +14,7 @@ export function calculatorResultClient({state,researchApi,current,access=run=>ru
  const available=()=>active()&&!state.access?.locked&&!state.storageUnavailable;
  function cancel(){generation++;for(const request of requests)request.abort();requests.clear();}
  function capture(expressionIndex){
-  const draft=current();if(!available()||!savedCalculator(draft)||![2,3].includes(draft.data.engine)||draft.data.mode!=='expression'||!Number.isSafeInteger(expressionIndex)||expressionIndex<0||expressionIndex>=draft.data.expression.split(/\r?\n/).length)throw Error('CALCULATOR_RESULT_SAVED');
+  const draft=current();if(!available()||!savedCalculator(draft)||![2,3,4].includes(draft.data.engine)||draft.data.mode!=='expression'||!Number.isSafeInteger(expressionIndex)||expressionIndex<0||expressionIndex>=draft.data.expression.split(/\r?\n/).length)throw Error('CALCULATOR_RESULT_SAVED');
   const stamp=identity(),epoch=generation,source={workspaceId:state.book.id,type:'calculation',id:draft.id,revision:draft.expectedRevision};
   return {source,expressionIndex,current:()=>epoch===generation&&stamp===identity()&&available()};
  }

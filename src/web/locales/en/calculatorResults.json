@@ -3,7 +3,7 @@
   "choose": "Retain exact result in a record",
   "record": "Record",
   "saved": "Save this calculation before retaining an exact result.",
-  "unsupported": "Only independent exact scalar expressions from engines 2 and 3 can be retained here.",
+  "unsupported": "Retain a saved independent exact scalar expression from engines 2 or 3, or an exact scalar, vector, matrix or complex expression from engine 4. Approximate results cannot be retained here.",
   "scope": "The selected saved expression is evaluated with its pinned engine and policy. The retained value is exact; the displayed decimal is not used.",
   "working": "Retain calculator result",
   "title": "{name} - expression {number}",
@@ -32,5 +32,6 @@
   "selected": "Selected expression {number}",
   "library": "Library",
   "exact": "Exact scalar result",
-  "repeatHelp": "Repeat evaluates this captured expression and policy again. It creates new immutable recipe and dataset revisions; it does not read newer calculator edits."
+  "repeatHelp": "Repeat evaluates this captured expression and policy again. It creates new immutable recipe and dataset revisions; it does not read newer calculator edits.",
+  "structuredEngine": "Exact structured engine"
 }

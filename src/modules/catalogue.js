@@ -1,4 +1,5 @@
-import {catalogueFormat,catalogueRequiresCalculationPolicies,requireCalculationPolicies} from '../catalogue-format.js';
+import {hasStructuredCalculator} from '../structured-calculator-format.js';
+import {catalogueFormat,catalogueRequiresCalculationPolicies,requireCalculationPolicies,catalogueRequiresStructuredCalculator,requireStructuredCalculator} from '../catalogue-format.js';
 import {hasCalculationPolicy} from '../web/tools/calculation-policy.js';
 import {resolveModuleEvent,resolveModuleEntity} from '../project-retired-modules.js';
 import {assertProjectSourceModuleWrite} from '../project-source-module-authority.js';
@@ -28,7 +29,7 @@ export const moduleCurrentBytes=(workspaceId,revision,members)=>{
 };
 export class ModuleCatalogue{
  constructor(store){this.store=store;this.currentSizes=new WeakMap();this.membersIndex=new ModuleMemberIndex(store);}
- async checkPolicy(entity){if(hasCalculationPolicy(entity?.type,entity?.data)&&!catalogueRequiresCalculationPolicies(await catalogueFormat(this.store.catalogueDb??this.store.db)))damaged();}
+ async checkPolicy(entity){if(hasStructuredCalculator(entity?.type,entity?.data)&&!catalogueRequiresStructuredCalculator(await catalogueFormat(this.store.catalogueDb??this.store.db)))damaged();if(hasCalculationPolicy(entity?.type,entity?.data)&&!catalogueRequiresCalculationPolicies(await catalogueFormat(this.store.catalogueDb??this.store.db)))damaged();}
  async head(workspaceId){
   const s=this.store,row=await s.db.get("SELECT payload FROM state WHERE slot='modules'");
   const counts=await s.db.get('SELECT (SELECT count(*) FROM module_entities)::text AS entities,count(*)::text AS events,COALESCE(max(ordinal),0)::text AS last FROM module_events');
@@ -174,6 +175,7 @@ export class ModuleCatalogue{
  async writeChanges(previous,entities,event){
   await this.store.assertModuleWrite?.(entities,event);
   await assertProjectSourceModuleWrite(this,previous,entities);
+  if(entities.some(entity=>hasStructuredCalculator(entity.type,entity.data)))await requireStructuredCalculator(this.store.catalogueDb??this.store.db);
   if(entities.some(entity=>hasCalculationPolicy(entity.type,entity.data)))await requireCalculationPolicies(this.store.catalogueDb??this.store.db);
   const s=this.store,empty=(previous.memberVersion===1?previous.root?.count??0:previous.entities.length)===0;
   let root=previous.root??null,{bytes:totalBytes}=await this.currentSize(previous);

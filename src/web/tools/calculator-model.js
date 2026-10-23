@@ -1,3 +1,4 @@
+import {defaultStructuredCalculationPolicy} from './calculation-policy.js';
 // Editing commands retain the same plain expression format used by saved worksheets.
 export const expressionLimits=Object.freeze({rows:100,row:2000,total:20000});
 export const expressionRows=value=>String(value??'').split(/\r?\n/);
@@ -23,3 +24,15 @@ export function statisticExpression(name,value){
  return name+'('+numbers.join(', ')+')';
 }
 export function nextArgument(value,start){for(let i=start;i<value.length;i++)if(value[i]==='('&&value[i+1]===')')return i+1;return value.length;}
+
+// Upgrade only by explicit author action; keep authored precision and even incomplete edits.
+export function upgradeCalculatorEngine(data){
+ const policy=defaultStructuredCalculationPolicy(),prior=data.engine>=3?data.policy:null;
+ return {...data,engine:4,policy:prior?{...policy,...structuredClone(prior),version:2,resources:{...policy.resources,...structuredClone(prior.resources)}}:policy};
+}
+export function structuredExpression(kind,value){
+ const source=String(value).trim();if(!source)return null;
+ const rows=source.split(/\r?\n/);if(rows.some(row=>!row.trim())||kind==='vector'&&rows.length!==1||!['vector','matrix'].includes(kind))return null;
+ const expression=kind==='vector'?'['+source+']':'['+rows.map(row=>'['+row.trim()+']').join(', ')+']';
+ return validWorksheet([expression])?expression:null;
+}

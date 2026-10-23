@@ -74,6 +74,11 @@ export function exactExpression(node,variables={},budget=new ArithmeticBudget())
  }
  const result=evaluate(node);return result===unsupported?null:result;
 }
+// Reuse the historical rational primitives without changing their interpretation.
+export function exactOperation(name,values,budget=new ArithmeticBudget()){
+ const variables=Object.fromEntries(values.map((value,index)=>['operand'+index,value]));
+ return exactExpression({type:'FunctionNode',name,args:values.map((_,index)=>({type:'SymbolNode',name:'operand'+index}))},variables,budget);
+}
 // A finite radix expansion is printed exactly; recurring expansions remain a ratio
 // in the requested base. Both forms can be pasted back into base conversion.
 export function exactRadixText(value,radix=10,budget=new ArithmeticBudget()){

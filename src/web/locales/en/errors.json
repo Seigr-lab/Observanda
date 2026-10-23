@@ -388,7 +388,7 @@
   "DATASET_WINDOW_INVALID": "Choose a valid retained-row window and compatible source. Sum and mean require scalar difference quantities. Source row positions are never inferred from timestamps.",
   "DATASET_WINDOW_VALUE": "A source row is outside the frame rules or contains a missing value that this window refuses. Inspect the pinned source rows or save a new graph revision with explicit boundary and missing-value rules.",
   "CALCULATOR_RESULT_INVALID": "Choose a saved calculation and an authorized destination record. The retained recipe or result does not match that selection.",
-  "CALCULATOR_RESULT_EXACT": "This bridge retains independent exact scalar expressions only. Approximate values, units, assignments and unresolved named inputs are not converted into exact measurements. The saved calculation is unchanged.",
+  "CALCULATOR_RESULT_EXACT": "Retain an independent exact scalar, vector, matrix or complex expression. Approximate values, unit expressions, assignments and unresolved named inputs cannot be captured as exact results. The saved calculation is unchanged.",
   "CALCULATOR_RESULT_LIBRARY": "The library version pinned by this calculation is unavailable. Keep the retained recipe, or save a new calculation with an available engine.",
   "CALCULATOR_RESULT_RESOURCE": "The selected expression exceeds its saved resource policy. No approximate or partial result was retained. Save a new calculation revision with an appropriate policy and try again.",
   "ANALYSIS_SCALAR_POLICY": "Edit this comparison and choose Enable declaration resource limits before using sources with saved scalar limits. Earlier results remain available."
