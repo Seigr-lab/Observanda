@@ -1,3 +1,4 @@
+import {plotJobSettings} from './plot-job-settings.js';
 import {changeRetainedFigureRequest} from './retained-figure-presentation.js';
 import {retainedFigureRequest} from './retained-figures.js';
 import {CalculationGraphs} from './calculation-graphs.js';
@@ -21,7 +22,7 @@ import {jobSummary} from './jobs.js';
 import {MAX_BYTES} from './model.js';
 import {researchId} from './web/research-reference.js';
 import {AppError} from './errors.js';
-const reads=new Set(['retained-figure','retained-figure-export','calculation-graph-page','source-owners','source-items','source-resolve','overview','list','references','reference-addresses','correction-preview','correction-status','correction-history','association-read','association-list','figure-sources','plot-points','plot-point','selection-page','intakes','intake-selection-page','intake-page','intake-session','upload-session','drafts','draft-read','draft-references','current','schema','measurement-inspect','measurement-seed','current-record','record','read','analysis-status','job','retained-table','calculation-schema','dataset-preview','dataset-jobs','rows','comparison-page','verify','download']);
+const reads=new Set(['retained-figure','retained-figure-export','calculation-graph-page','source-owners','source-items','source-resolve','overview','list','references','reference-addresses','correction-preview','correction-status','correction-history','association-read','association-list','figure-sources','plot-points','plot-point','selection-page','intakes','intake-selection-page','intake-page','intake-session','upload-session','drafts','draft-read','draft-references','current','schema','measurement-inspect','measurement-seed','current-record','record','read','analysis-status','job','plot-job-settings','retained-table','calculation-schema','dataset-preview','dataset-jobs','rows','comparison-page','verify','download']);
 const writes=new Set(['retained-figure-change','calculation-graph-create','calculation-graph-change','associate-original','correction-apply','association-start','association-step','association-cancel','selection-change','intake-start','intake-selection-append','intake-append','intake-finish','draft-start','draft-append','draft-finish','draft-cancel','measurement-save','pin','start','finish','cancel-job','retry-job','dataset','collection','analysis','comparison','reuse','plot']);
 const accepted=new Set(['intake-finish','finish','dataset','comparison','plot']);
 export function materialRequest(route){
@@ -35,7 +36,7 @@ export function materialRequest(route){
  if(!reads.has(operation)&&!writes.has(operation))return null;
  return {material:operation,method:'POST',write:writes.has(operation),limit:MAX_BYTES,status:accepted.has(operation)?202:200,download:operation==='download'||operation==='retained-figure-export'};
 }
-export async function executeMaterialRequest(storage,request,data,{signal,jobs,download,stream,sourceAccess,sourceDiscovery}={}){
+export async function executeMaterialRequest(storage,request,data,{signal,jobs,download,stream,sourceAccess,sourceDiscovery,check}={}){
  const materials=new ResearchMaterials(storage),operation=request.material;
  const summary=job=>({...jobSummary(job),...(job?.type==='analysis.compare'?{sources:materials.comparisons.references(job.input.command.method,job.input.command.comparison)}:{})});
  const jobService=async()=>{const result=await jobs?.();if(!result)throw new AppError('ACCESS_LOCKED');return result;};
@@ -93,6 +94,7 @@ export async function executeMaterialRequest(storage,request,data,{signal,jobs,d
  case 'analysis-status':{const doc=await materials.read(data.ref);if(doc.kind!=='analysis')throw new AppError('ANALYSIS_INVALID');return withComparisonInputs(materials,{sourceAccess,signal},inputs=>analysisDependencyState(materials,[{recordId:doc.recordId,analysis:data.ref}],{inputs,signal}));}
  case 'start':return materials.uploads.summary(await materials.startImport(data));
  case 'finish':{if(!storage.vault.key)throw new AppError('ACCESS_LOCKED');const session=await materials.importState(data.id);if(session.batchId)throw new AppError('MATERIAL_CHANGED');await materials.assertOwner(session.recordId);if(materials.uploads.bytes(session)!==session.size)throw new AppError('MATERIAL_INCOMPLETE');const {queue,worker}=await jobService(),job=await queue.enqueue({id:session.id,type:'evidence.finalize',scope:session.recordId,input:{importId:session.id,size:session.size}});worker.wake();return {job:jobSummary(job)};}
+ case 'plot-job-settings':{const {queue}=await jobService();return plotJobSettings(materials,queue,data,{signal,check});}
  case 'job':case 'cancel-job':case 'retry-job':{const service=await jobService(),{queue,worker}=service,job=await queue.read(data.id);if(!job)throw new AppError('NOT_FOUND');await queue.authorize(job);if(operation==='job')return {job:summary(job)};const result=operation==='retry-job'&&job.type==='analysis.compare'?await retryComparison(materials,service,job,{sourceAccess,signal}):await queue.control(data.id,operation==='cancel-job'?'cancel':'retry');if(operation==='cancel-job'){worker.cancel(data.id);service.comparisonAccess?.forget((await storage.outline()).metadata.id,data.id);}else worker.wake();return {job:summary(result)};}
  case 'retained-table':return data.cell?retainedTableCell(materials,{ref:data.ref,table:data.table,rowOffset:data.cell.rowOffset,cursor:data.cell.cursor,columnOffset:data.cell.columnOffset,offset:data.cell.offset,limit:data.cell.limit},{signal}):data.table?retainedTablePage(materials,data,{signal}):retainedTable(materials,data);
  case 'calculation-graph-create':return {ref:await new CalculationGraphs(materials).create(data)};

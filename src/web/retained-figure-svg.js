@@ -9,12 +9,13 @@ import {figureDataNumber,figureCoordinateNumber,figureTickLabels} from './figure
 import {renderIntervals,intervalHint} from './figure-intervals.js';
 import {areaMarker} from './figure-marker-area.js';
 import {renderAnnotations} from './figure-annotations.js';
-import {projectionDescription,projectionAxisLabel} from './figure-projection-display.js';
+import {projectionAxisLabel} from './figure-projection-display.js';
 import {figureNumeralHelp} from './figure-radix-labels.js';
 import {heatmapBand,heatmapThresholdText} from './figure-heatmap.js';
 import heatmapMessages from './locales/en/figureHeatmap.json' with {type:'json'};
 import markerMessages from './locales/en/figureMarkerArea.json' with {type:'json'};
 import {escapeFigureText as esc,figureTextChunks,figureTextHeight,figureSVGText,retainedFigureText,composeFigureText} from './retained-figure-text.js';
+import {retainedProjectionLines} from './retained-figure-projection.js';
 const n=value=>{if(!Number.isFinite(value))throw new Error('Non-finite retained figure geometry');return Number(value.toFixed(3));};
 const check=signal=>signal?.throwIfAborted();
 const selection=(collection,id,field,plotId)=>({collection,id,field,...(plotId?{plotId}:{})});
@@ -30,10 +31,7 @@ function axisName(f,axis){
  if(f.projection?.[axis]){const marker='__RETAINED_AXIS__',example={...f,[axis]:{...f[axis],label:marker},...(f.kind==='heatmap'&&axis==='y'?{heatmap:{...f.heatmap,valueLabel:marker}}:{})},text=projectionAxisLabel(example,axis),at=text.indexOf(marker);parts.unshift({value:text.slice(0,at)});parts.push({value:text.slice(at+marker.length)});}
  return composeFigureText(parts);
 }
-function projectionLines(f){
- const example={...f,x:{...f.x,label:'__RETAINED_X__'},y:{...f.y,label:'__RETAINED_Y__'},...(f.kind==='heatmap'?{heatmap:{...f.heatmap,valueLabel:'__RETAINED_Y__'}}:{})};
- return projectionDescription(example).map(text=>{const match=text.match(/__RETAINED_([XY])__/);if(!match)return text;const axis=match[1].toLowerCase(),field=f.kind==='heatmap'&&axis==='y'?'heatmap.valueLabel':axis+'.label',value=f.kind==='heatmap'&&axis==='y'?f.heatmap.valueLabel:f[axis].label;return composeFigureText([{value:text.slice(0,match.index)},{value:value||(axis==='x'?'X':'Value'),selection:headerText(f,field)},{value:text.slice(match.index+match[0].length)}]);});
-}
+function projectionLines(f){return retainedProjectionLines(f,{axisName:axis=>axisName(f,axis),selection:field=>headerText(f,field)});}
 async function* legends(reader,g){
  const {f,plotId,width,style,domains}=g,position=g.legendPosition;
  if(!f.legend)return;

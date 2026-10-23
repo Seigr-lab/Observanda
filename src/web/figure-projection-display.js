@@ -17,7 +17,7 @@ export function projectionDescription(figure){
  });
 }
 export function sameAxisProjection(a,b,axis){
- const canonical=f=>{const t=projectionTransform(f.projection?.[axis]);return [String(t.origin.numerator),String(t.origin.denominator),String(t.scale.numerator),String(t.scale.denominator)];};
+ const canonical=f=>{const t=projectionTransform(f.projection?.[axis],{resourcePolicy:f.projection?.resourcePolicy});return [String(t.origin.numerator),String(t.origin.denominator),String(t.scale.numerator),String(t.scale.denominator)];};
  return JSON.stringify(canonical(a))===JSON.stringify(canonical(b));
 }
 export function projectionTableDescription(figure){

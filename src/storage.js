@@ -145,6 +145,7 @@ export class Workspace {
           const {clockDerivationMetadata}=await import('./clock-derivation-format.js');if(clockDerivationMetadata(relative,value)){const {requireClockDerivations}=await import('./catalogue-format.js');await requireClockDerivations(store.db);}
           const {intervalUncertaintyMetadata}=await import('./interval-uncertainty-format.js');if(intervalUncertaintyMetadata(relative,value)){const {requireIntervalUncertainty}=await import('./catalogue-format.js');await requireIntervalUncertainty(store.db);}
           const {windowCalculationMetadata}=await import('./dataset-window-format.js');if(windowCalculationMetadata(relative,value)){const {requireWindowCalculations}=await import('./catalogue-format.js');await requireWindowCalculations(store.db);}
+          const {plotResourceMetadata}=await import('./plot-resource-format.js');if(plotResourceMetadata(relative,value)){const {requireFigureProjectionPolicies}=await import('./catalogue-format.js');await requireFigureProjectionPolicies(store.db);}
           const {datasetResourceMetadata}=await import('./dataset-resource-format.js');if(datasetResourceMetadata(relative,value)){const {requireDatasetResourcePolicies}=await import('./catalogue-format.js');await requireDatasetResourcePolicies(store.db);}
         }
         if(/^\.observanda\/module-drafts\/[a-f0-9-]{36}\.json$/.test(relative)){

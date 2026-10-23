@@ -48,7 +48,7 @@ function structuralHeader(value){
  // A draft can intentionally contain axes/values incompatible with a changed
  // plot type. Check its fields now; strict finish checks their relationship.
  const normalized={...header,kind:'line',x:{...header.x,kind:'number'},series:[{id:header.id,name:'Draft',color:'#123456',points:[]}]};delete normalized.heatmap;delete normalized.projection;
- if(figureIssues(normalized,{draft:true,retained:true}).length)missing();
+ if(figureIssues(normalized,{draft:true,retained:true,resourceErrors:true}).length)missing();
 }
 function structuralMember(member,value){
  const body=figureValidationValue(value),finite=value=>typeof value==='number'&&Number.isFinite(value)&&Math.abs(value)<=1e100;
@@ -273,10 +273,10 @@ export class RetainedFigureAuthoring{
  }
  async finish(figure){
   this.check();const reader=await this.open(figure);await this.verify(figure);
-  const rootHeader=figureValidationValue(await validateTextMap(reader,reader.presentation.header,reader.presentation.headerTexts,{required:['title']})),builder=this.documents.builder(rootHeader,{retained:{root:reader.presentation.header,texts:reader.presentation.headerTexts}});
+  const rootHeader=await reader.validationHeader({value:await validateTextMap(reader,reader.presentation.header,reader.presentation.headerTexts,{required:['title']})}),builder=this.documents.builder(rootHeader,{retained:{root:reader.presentation.header,texts:reader.presentation.headerTexts}});
   if(rootHeader.kind==='panels'?figure.document.counts.panels<2:figure.document.counts.panels!==1)invalid();
   for await(const panel of reader.memberRows({collection:'panels'})){
-   this.signal?.throwIfAborted();const body=figureValidationValue(await validateTextMap(reader,panel.body,panel.texts,{required:['label','header.title']}));
+   this.signal?.throwIfAborted();const bounded=await validateTextMap(reader,panel.body,panel.texts,{required:['label','header.title']}),body=figureValidationValue(bounded);body.header=await reader.validationHeader({root:panel.body,texts:panel.texts,path:['header'],value:bounded});
    await builder.addPlot(body.header,{id:panel.id,label:body.label,retained:{root:panel.body,texts:panel.texts}});let seriesCount=0;
    for await(const series of reader.memberRows({collection:'series',plotId:panel.plotId})){
     seriesCount++;const value=figureValidationValue(await validateTextMap(reader,series.body,series.texts,{required:['name']})),nameHash=(await textHashes(reader,series.body,['name'],series.texts.name,{required:true})).hash;
@@ -303,7 +303,7 @@ export class RetainedFigureAuthoring{
  }
  async duplicate(figure,{id=randomUUID(),onMapped}={}){
   this.check();if(!researchId(id)||!validRetainedFigure(figure))invalid();
-  const from=await this.documents.open(figure),header=figureValidationValue(await from.bounded(from.presentation.header,from.presentation.headerTexts));
+  const from=await this.documents.open(figure),header=await from.validationHeader();
   if(header.kind!=='panels'){const result={...figure,id};await onMapped?.({sourceId:figure.id,targetId:id});return result;}
   const empty=await this.documents.builder({...header,id},{draft:true,retained:{root:from.presentation.header,texts:from.presentation.headerTexts}}).finish(),reader=await this.open(empty),edit=await new DraftEdit(this,reader).initialize();
   reader.presentation.header=await edit.property(from.presentation.header,[],'id',id);reader.presentation.headerTexts={...from.presentation.headerTexts,id:id.length};
@@ -315,7 +315,7 @@ export class RetainedFigureAuthoring{
   const from=await this.documents.open(figure),single=(await from.tree.selected(from.presentation.header,['kind'])).value!=='panels';
   if(plotId===figure.id&&single)plotId=(await from.window({collection:'panels',limit:1})).items[0]?.plotId;
   if((await from.scope({collection:'panels',plotId})).total!==1)invalid();const selected=await from.panelMember(plotId);
-  const sourceRoot=single?from.presentation.header:await readRef(from.tree,selected.body,['header']),texts=single?{...from.presentation.headerTexts}:Object.fromEntries(Object.entries(selected.texts).filter(([key])=>key.startsWith('header.')).map(([key,value])=>[key.slice(7),value])),header=figureValidationValue(await from.bounded(sourceRoot,texts));
+  const sourceRoot=single?from.presentation.header:await readRef(from.tree,selected.body,['header']),texts=single?{...from.presentation.headerTexts}:Object.fromEntries(Object.entries(selected.texts).filter(([key])=>key.startsWith('header.')).map(([key,value])=>[key.slice(7),value])),header=await from.validationHeader({root:sourceRoot,texts});
   const empty=await this.documents.builder({...header,id},{draft:true,retained:{root:sourceRoot,texts}}).finish(),reader=await this.open(empty),edit=await new DraftEdit(this,reader).initialize();
   reader.presentation.header=await edit.property(sourceRoot,[],'id',id);reader.presentation.headerTexts.id=id.length;
   if(single&&typeof figure.title==='string'){reader.presentation.header=await edit.property(reader.presentation.header,[],'title',figure.title);reader.presentation.headerTexts.title=figure.title.length;}
@@ -338,7 +338,7 @@ export class RetainedFigureAuthoring{
   if(mode==='append'){if(!researchId(plotId))invalid();await target.panelMember(plotId);}
   for await(const panel of from.memberRows({collection:'panels'})){
    let targetPlot=plotId;
-   if(mode==='append'){const a=(await target.header({plotId})).header,b=(await from.header({plotId:panel.plotId})).header;if(a.x.kind!==b.x.kind||!sameAxisProjection(a,b,'x')||!sameAxisProjection(a,b,'y'))invalid();}
+   if(mode==='append'){const a=await target.validationHeader({plotId}),b=await from.validationHeader({plotId:panel.plotId});if(a.x.kind!==b.x.kind||!sameAxisProjection(a,b,'x')||!sameAxisProjection(a,b,'y'))invalid();}
    if(mode==='panel'){
     targetPlot=panelIdentity?.plotId??randomUUID();let body=panel.body,texts={...panel.texts};body=await edit.property(body,[],'plotId',targetPlot);body=await edit.property(body,['header'],'id',targetPlot);
     if(panelIdentity){body=await edit.property(body,[],'label',panelIdentity.label);texts.label=panelIdentity.label.length;}

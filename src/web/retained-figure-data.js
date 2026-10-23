@@ -1,6 +1,7 @@
 // Complete exports traverse authenticated retained collections to exhaustion.
 // Labels are streamed independently: a short preview is never exported as data.
-import {figureTextChunks,retainedFigureText,escapeFigureText as esc} from './retained-figure-text.js';
+import {figureTextChunks,retainedFigureText,composeFigureText,escapeFigureText as esc} from './retained-figure-text.js';
+import {retainedProjectionLines} from './retained-figure-projection.js';
 import {figureStyle} from './figure-style.js';
 import {figureDataNumber} from './figure-number-labels.js';
 import {figureNumeralHelp} from './figure-radix-labels.js';
@@ -37,9 +38,13 @@ async function* axisLabel(reader,plot,axis,selection,signal){
  yield* htmlText(reader,value||messages[axis==='x'?'coordinate':'value'],at(selection,path),signal);if(projected)yield esc(parts[1]);
 }
 async function* projection(reader,plot,selection,signal){
- if(!plot.projection)return;const scalar=q=>q.representation==='radix'||q.representation==='radix-fraction'?q.radix+'#('+q.spelling+')':q.spelling;
+ if(!plot.projection)return;
+ const axisName=axis=>{
+  const field=axis==='y'&&plot.kind==='heatmap'?'heatmap.valueLabel':axis+'.label',value=axis==='y'&&plot.kind==='heatmap'?plot.heatmap.valueLabel:plot[axis].label;
+  return composeFigureText(projectionMessages.projectedAxis.split(/(\{label\})/).map(part=>part==='{label}'?{value:value||messages[axis==='x'?'coordinate':'value'],selection:at(selection,field)}:{value:part}));
+ };
  yield '<aside class="figure-projection-description"><h4>'+esc(projectionMessages.retained)+'</h4>';
- for(const axis of ['x','y'])if(plot.projection[axis]){const q=plot.projection[axis];yield '<p>';const formula=projectionMessages.formula.split('{axis}');yield esc(formula[0]);yield* axisLabel(reader,plot,axis,selection,signal);yield esc(formula[1].replace('{origin}',()=>scalar(q.origin)).replace('{scale}',()=>scalar(q.scale)));yield '</p>';}
+ for(const line of retainedProjectionLines(plot,{axisName,selection:field=>at(selection,field)})){yield '<p>';yield* htmlText(reader,line,null,signal);yield '</p>';}
  yield '<p>'+esc(projectionMessages.coordinateValues)+'</p></aside>';
 }
 function totals(){return {panels:0,series:0,points:0,annotations:0,ticks:0};}

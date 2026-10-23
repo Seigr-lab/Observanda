@@ -1,3 +1,4 @@
+import {validDatasetResourcePolicy} from './dataset-resource-policy.js';
 import {exactFigureValue,projectFigureValue} from './figure-mapping-values.js';
 import {defaultMarkerArea} from './figure-marker-area.js';
 import markerMessages from './locales/en/figureMarkerArea.json' with {type:'json'};
@@ -60,7 +61,7 @@ export function figureMappingPresentation(table,mapping,figure,{seriesCount,rows
 }
 
 // The same mapper serves small file previews and paged retained-dataset jobs.
-export function createFigureMapper(table, mapping, figure, {limits={}, median=null,parseNumber=null,provenance=null}={}) {
+export function createFigureMapper(table, mapping, figure, {limits={}, median=null,parseNumber=null,provenance=null,resourceErrors=false}={}) {
   let rowCount=0,pointCount=0,textSize=0,limited=false;
   const reserve=(size=0)=>{
     if(++pointCount>(limits.points??Infinity)||(textSize+=size)>(limits.characters??Infinity)){
@@ -81,7 +82,8 @@ export function createFigureMapper(table, mapping, figure, {limits={}, median=nu
     if(INTERVAL_FIELDS.some(k=>value[k]!=null&&(!validColumn(value[k])||operation!=='raw')))report(null,null,intervalMessages.mapping);
     if (!validColumn(value.column) || value.error !== null && !validColumn(value.error)) report(null, null, 'Choose valid value and uncertainty columns.');
   }
-  if(mapping.projection!==undefined&&(!validMeasurementProjection(mapping.projection)||mapping.projection.x&&mapping.xKind!=='number'))report(null,null,'Choose valid exact origin and positive scale settings; horizontal transforms require numeric coordinates.');
+  if(mapping.resourcePolicy!==undefined&&!validDatasetResourcePolicy(mapping.resourcePolicy))report(null,null,'Choose a valid exact resource policy.');
+  if(mapping.projection!==undefined&&(!validMeasurementProjection(mapping.projection,{resourceErrors})||mapping.projection.x&&mapping.xKind!=='number'))report(null,null,'Choose valid exact origin and positive scale settings; horizontal transforms require numeric coordinates.');
   if(mapping.mode==='append'&&(mapping.projection||figure.projection))report(null,null,'A transformed import replaces the figure so every coordinate has the same meaning.');
   if (issues.length) return {add(){},finish:()=>({figure:null,issues,warnings}),get invalid(){return true;}};
   const values=operation==='count'?[{column:null,error:null}]:mapping.values;
@@ -215,7 +217,7 @@ export function createFigureMapper(table, mapping, figure, {limits={}, median=nu
   if (['bar', 'bar-horizontal', 'area'].includes(next.kind)) next.y.scale = 'linear';
   next.legend = next.series.length > 1 || figure.legend;
   }else next={...figureMappingPresentation(table,mapping,figure,{seriesCount:series.length,rows:rowCount,missing}),series};
-  if (!issues.length) for (const message of figureIssues(next)) report(null, null, message);
+  if (!issues.length) for (const message of figureIssues(next,{resourceErrors})) report(null, null, message);
   let repeats = 0, backwards = false, gaps = 0;
   for (const item of series) {
     const seen = new Set();

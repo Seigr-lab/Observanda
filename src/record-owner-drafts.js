@@ -1,3 +1,4 @@
+import {catalogueRequiresFigureProjectionPolicies,requireFigureProjectionPolicies} from './catalogue-format.js';
 import {catalogueRequiresRetainedFigures,requireRetainedFigures,catalogueRequiresFigureAuthoring,requireFigureAuthoring} from './catalogue-format.js';
 import {catalogueFormat,catalogueRequiresNestedAttemptCollections,requireNestedAttemptCollections} from './catalogue-format.js';
 import {RetainedTableIndex} from './retained-table-index.js';
@@ -171,6 +172,7 @@ export async function prepareRecordOwnerDrafts(source,target,receipt,{write,sign
  await source.catalogue(async from=>{
   if(catalogueRequiresRetainedFigures(await catalogueFormat(from.db)))await write(store=>requireRetainedFigures(store.db));
   if(catalogueRequiresFigureAuthoring(await catalogueFormat(from.db)))await write(store=>requireFigureAuthoring(store.db));
+  if(catalogueRequiresFigureProjectionPolicies(await catalogueFormat(from.db)))await write(store=>requireFigureProjectionPolicies(store.db));
   if(catalogueRequiresNestedAttemptCollections(await catalogueFormat(from.db)))await write(store=>requireNestedAttemptCollections(store.db));
   await copyCorrections(from,target,receipt,options);
   for await(const name of source.metadataNames('.observanda/drafts',{signal})){

@@ -117,3 +117,21 @@ test('coordinate summaries use bounded read-only snapshots and stop between batc
  const read=cancelled.blocks.readSnapshot.bind(cancelled.blocks);let begun=0;cancelled.blocks.readSnapshot=operation=>{if(++begun===2)controller.abort(new DOMException('Cancelled','AbortError'));return read(operation);};
  await assert.rejects(partial.finish(),{name:'AbortError'});assert.equal(begun,2);assert.deepEqual(await json(await documents.open(saved)),figure);
 });
+
+
+import {defaultDatasetResourcePolicy} from '../src/web/dataset-resource-policy.js';
+test('retained header policy verification preserves elapsed resource refusal and can resume without rewriting evidence',async t=>{
+ const f=fixture(),documents=new RetainedFigureDocuments(f.workspace),figure=createFigure(),policy=defaultDatasetResourcePolicy();policy.resources.maxMilliseconds=100;
+ const quantity=spelling=>({spelling,representation:'decimal',radix:10});figure.projection={version:2,resourcePolicy:policy,y:{origin:quantity('1000'),scale:quantity('0.1')}};figure.series[0].points=[{x:1,y:2,error:null}];const saved=await documents.retain(figure),reader=await documents.open(saved);await reader.verify();const writes=f.writes;
+ let now=0;t.mock.method(Date,'now',()=>now+=1000);await assert.rejects(reader.verify(),{code:'DATASET_CALCULATION_RESOURCE'});assert.equal(f.writes,writes);t.mock.restoreAll();await reader.verify();assert.deepEqual((await json(reader)).projection,figure.projection);
+});
+
+
+import {RetainedFigureAuthoring} from '../src/retained-figure-authoring.js';
+test('long projection spellings survive selected presentation and manual conversion without replacing exact metadata',async()=>{
+ const f=fixture(),documents=new RetainedFigureDocuments(f.workspace),figure=createFigure(),policy=defaultDatasetResourcePolicy();Object.assign(policy.resources,{maxScalarCharacters:12000,maxExponent:12000,maxOperations:200000});const quantity=spelling=>({spelling,representation:'decimal',radix:10});
+ figure.title='Long policy formula';figure.projection={version:2,resourcePolicy:policy,y:{origin:quantity('1'+'0'.repeat(9000)),scale:quantity('1.'+'0'.repeat(2200))}};figure.series[0].points=[{x:1,y:2,error:null}];const saved=await documents.retain(figure),changed=await changeRetainedFigure(documents,saved,{type:'text',collection:'header',field:'title',offset:0,remove:figure.title.length,text:'Retitled exact projection'});
+ assert.deepEqual(changed.document.data,saved.document.data);const renamed=await documents.open(changed);assert.deepEqual((await json(renamed)).projection,figure.projection);await renamed.verify();
+ const authoring=new RetainedFigureAuthoring(f.workspace),draft=await authoring.start(changed),finished=await authoring.finish(draft),complete=await documents.open(finished);await complete.verify();assert.deepEqual((await json(complete)).projection,figure.projection);assert.equal((await json(complete)).title,'Retitled exact projection');
+ const extracted=await authoring.extract(finished,finished.id);assert.deepEqual((await json(await documents.open(extracted))).projection,figure.projection);
+});

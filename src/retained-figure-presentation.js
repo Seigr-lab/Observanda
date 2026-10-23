@@ -107,11 +107,11 @@ export class RetainedFigurePresentation{
  async validateMember(member){
   const value=substitute(await this.reader.bounded(member.body,member.texts));
   if(member.collection==='panels'){
-   const header=value.header;if(typeof value.label!=='string'||!value.label.trim())invalid();await this.validateHeader(header,member.plotId);return;
+   const header=await this.reader.validationHeader({root:member.body,texts:member.texts,path:['header']});if(typeof value.label!=='string'||!value.label.trim())invalid();await this.validateHeader(header,member.plotId);return;
   }
   if(member.collection==='categories')return;
-  const {plotId:ignoredPlot,source:ignoredSource,...header}=substitute((await this.reader.header({plotId:member.plotId})).header),point={x:header.x.kind==='number'?1:header.x.kind==='date'?'2000-01-01':'Category',y:1,error:null,...(header.markerArea?{count:1}:{})};
-  if(member.collection==='series'){if(figureIssues({...header,series:[{...value,points:[point]}]},{retained:true}).length)invalid();return;}
+  const header=await this.reader.validationHeader({plotId:member.plotId}),point={x:header.x.kind==='number'?1:header.x.kind==='date'?'2000-01-01':'Category',y:1,error:null,...(header.markerArea?{count:1}:{})};
+  if(member.collection==='series'){if(figureIssues({...header,series:[{...value,points:[point]}]},{retained:true,resourceErrors:true}).length)invalid();return;}
   if(member.collection==='ticks'){if(header.kind==='heatmap'||!['x','y'].includes(value.axis)||axisControlIssues({...header[value.axis],ticks:[{value:value.value,label:value.label}]},{kind:header[value.axis].kind??'number',retained:true}).length)invalid();return;}
   if(member.collection==='annotations'){
    if(header.kind==='heatmap')invalid();let annotation=value,series=[];if(value.kind==='callout'){const entry=await this.index.find({root:this.reader.dataIndex.collections.points.series},value.seriesId+':'+ordinal(value.pointIndex));if(!entry)invalid();const pointMember=await this.reader.member(entry.revision,'points');if(pointMember.plotId!==member.plotId)invalid();const measured=substitute(await this.reader.bounded(pointMember.body,pointMember.texts));series=[{id:value.seriesId,points:[measured]}];annotation={...value,pointIndex:0};}
@@ -120,7 +120,7 @@ export class RetainedFigurePresentation{
  }
  async validateHeader(header,plotId){
   if(header.kind==='panels'){if(!header.title.trim()||!header.layout||Object.keys(header.layout).sort().join()!=='columns,linkX,linkY'||!Number.isInteger(header.layout.columns)||header.layout.columns<1||header.layout.columns>3||typeof header.layout.linkX!=='boolean'||typeof header.layout.linkY!=='boolean')invalid();return;}
-  const point={x:header.x.kind==='number'?1:header.x.kind==='date'?'2000-01-01':'Category',y:1,error:null,...(header.markerArea?{count:1}:{})};if(figureIssues({...header,series:[{id:header.id,name:'Validation',color:'#123456',points:[point]}]},{retained:true}).length)invalid();
+  const point={x:header.x.kind==='number'?1:header.x.kind==='date'?'2000-01-01':'Category',y:1,error:null,...(header.markerArea?{count:1}:{})};if(figureIssues({...header,series:[{id:header.id,name:'Validation',color:'#123456',points:[point]}]},{retained:true,resourceErrors:true}).length)invalid();
   const panel=await this.reader.panelMember(plotId),domains=(await this.tree.selected(panel.body,['domains'])).value;
   for(const axis of ['x','y'])if(header[axis].scale==='log'&&domains[axis].min!==null&&domains[axis].min<=0)invalid();
  }
@@ -190,7 +190,7 @@ export class RetainedFigurePresentation{
    }
    if(target.member){const member={...target.member,body:root,texts};await this.validateMember(member);await this.setMember(member,target.member);this.changedPlots.add(member.plotId);if(operation.collection==='series'&&operation.type==='patch'&&Object.hasOwn(operation.patch,'style')&&Object.hasOwn(operation.patch.style,'visible'))this.rebuildCategories=true;
     if(target.global){const selected=await this.tree.select(root,['header']);this.reader.presentation.header=selected.inline?await this.tree.retain(selected.value):selected.revision;this.reader.presentation.headerTexts=Object.fromEntries(Object.entries(texts).filter(([key])=>key.startsWith('header.')).map(([key,value])=>[key.slice(7),value]));}
-   }else{await this.validateHeader(substitute(await this.reader.bounded(root,texts)));this.reader.presentation.header=root;this.reader.presentation.headerTexts=texts;}
+   }else{await this.validateHeader(await this.reader.validationHeader({root,texts}));this.reader.presentation.header=root;this.reader.presentation.headerTexts=texts;}
   }
   if(this.rebuildCategories){await this.categories();for await(const panel of this.reader.memberRows({collection:'panels'}))await this.refresh(panel.plotId);}else for(const plotId of this.changedPlots)await this.refresh(plotId);
   if(operation.collection==='header'&&operation.type==='patch'&&['x','y','markerArea','heatmap'].some(key=>Object.hasOwn(operation.patch,key)))for(const plotId of this.changedPlots)await this.validatePlotConstraints(plotId,{points:true});

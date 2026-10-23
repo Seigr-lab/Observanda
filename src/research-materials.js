@@ -1,3 +1,4 @@
+import {assertPlotResourcePolicy,plotNumericalMetadata} from './plot-resource-policy.js';
 import {intervalUncertaintyMaterial,intervalFormatCheck} from './interval-uncertainty-format.js';
 import {clockDerivationMaterial} from './clock-derivation-format.js';
 import {nativeDomainMaterial} from './native-domain-format.js';
@@ -500,15 +501,15 @@ export class ResearchMaterials {
    return {...identity,kind:'analysis',content:{inputsIndex,tool,version,parameters,outputsIndex,...(method?{method}:{}),...(toolSha256?{toolSha256}:{})}};
  }
  async validatePlot(command){
-  const {recordId,title,id,expectedRevision,dataset,mapping,base}=command;
+  const {recordId,title,id,expectedRevision,dataset,mapping,base}=command;assertPlotResourcePolicy(mapping);
   if(mapping?.numericPolicy!==undefined&&!['safe','approximate'].includes(mapping.numericPolicy))fail();
   if(!required(title,300)||id!==undefined&&!researchId(id)||expectedRevision!==undefined&&expectedRevision!==null&&!revisionId(expectedRevision)||dataset?.kind!=='dataset'||!materialRef(dataset)||!mapping||!Array.isArray(mapping.values)||mapping.values.length>50||mapping.values.some(v=>!v||!Number.isInteger(v.column)||v.error!==null&&!Number.isInteger(v.error)||[...INTERVAL_FIELDS,'count'].some(k=>v[k]!=null&&!Number.isInteger(v[k]))))fail();
   await this.assertOwner(recordId);const doc=await this.read(dataset);
   if(id){const current=await this.current(id);if((current?.revision??null)!==(expectedRevision??null)||current&&(current.kind!=='analysis'||current.recordId!==recordId))fail('MATERIAL_CHANGED');}
-  if(base&&(base.kind==='panels'||figureIssues({...base,series:createFigure().series},{draft:true}).length))fail();
+  if(base&&(base.kind==='panels'||figureIssues({...base,series:createFigure().series},{draft:true,resourceErrors:true}).length))fail();
   const selection=await datasetPlotSelection(this,doc,mapping),cols=selection.columns,local=selection.mapping;if(!mapping.projection)for(const v of local.values)for(const k of ['error',...INTERVAL_FIELDS])if(v[k]!=null&&cols[v[k]]?.unit!==cols[k[0]==='x'?local.x:v.column]?.unit)fail();
   assertPlotProjectionUnits(local,cols);
-  const mapper=createFigureMapper({columns:cols.map((c,index)=>({index,label:c.name,heading:c.name}))},{...local,mode:'replace',decimal:'.'},base??createFigure());
+  const mapper=createFigureMapper({columns:cols.map((c,index)=>({index,label:c.name,heading:c.name}))},{...local,mode:'replace',decimal:'.'},base??createFigure(),{resourceErrors:true});
   if(mapper.invalid)fail();
   return doc;
  }
@@ -540,9 +541,9 @@ export class ResearchMaterials {
   const doc=await this.validatePlot(command),{mapping,dataset}=command,selection=await datasetPlotSelection(this,doc,mapping),columns=selection.columns,operation=mapping.operation??'raw';
   const write=writePage??(fn=>this.workspace.withLock(fn)),prefix=this.plotWork(jobId,attempt);
   void prefix;
-  const retainedWrite=operation=>write(async()=>{if(typeof this.workspace.catalogue==='function')await this.workspace.catalogue(async store=>{const {requireRetainedFigures,requireNativeNumericalModels}=await import('./catalogue-format.js');await requireRetainedFigures(store.db);if(mapping.projection)await requireNativeNumericalModels(store.db);});return operation();});
+  const retainedWrite=operation=>write(async()=>{if(typeof this.workspace.catalogue==='function')await this.workspace.catalogue(async store=>{const {requireRetainedFigures,requireNativeNumericalModels,requireFigureProjectionPolicies}=await import('./catalogue-format.js');await requireRetainedFigures(store.db);if(mapping.projection)await requireNativeNumericalModels(store.db);if(mapping.resourcePolicy)await requireFigureProjectionPolicies(store.db);});return operation();});
   const result=await prepareRetainedPlot(this,doc,command,selection,{write:retainedWrite,signal,progress});
-  return {commandHash:digest(revisionText(command)),content:{inputs:[dataset],tool:'Observanda table mapping',version:'9',parameters:JSON.stringify(mapping),mapping,numericTransform:{...(mapping.projection?{algorithm:'exact-affine-rational-to-binary64',version:1,projection:mapping.projection,errorUnits:'source'}:{algorithm:'exact-rational-to-binary64',version:2}),policy:mapping.numericPolicy??'safe',significantDigits:17,...(operation!=='raw'?{reduction:{algorithm:'exact-rational-reduction',version:1,operation,grouping:'exact-coordinate',projection:'after-reduction'}}:{})},...result}};
+  return {commandHash:digest(revisionText(command)),content:{inputs:[dataset],tool:'Observanda table mapping',version:mapping.resourcePolicy?'10':'9',parameters:JSON.stringify(mapping),mapping,numericTransform:plotNumericalMetadata(mapping),...result}};
   });
  }
 

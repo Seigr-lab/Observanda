@@ -1,3 +1,4 @@
+import {validDatasetResourcePolicy} from './web/dataset-resource-policy.js';
 import {createHash,randomUUID} from 'node:crypto';
 import {validAuthoredPointOrigin} from './web/retained-figure-authoring-model.js';
 import {RecordDocument} from './record-document.js';
@@ -29,7 +30,7 @@ const invalid=()=>{throw new AppError('MATERIAL_INVALID');};
 const sample=header=>({x:header.x?.kind==='number'?1:header.x?.kind==='date'?'2000-01-01':'Category',y:1,error:null,...(header.markerArea?{count:1}:{})});
 function validateHeader(header,{draft=false}={}){
  if(header.kind==='panels'){if(!researchId(header.id)||typeof header.title!=='string'||!draft&&!header.title.trim()||!header.layout||Object.keys(header.layout).sort().join()!=='columns,linkX,linkY'||!Number.isInteger(header.layout.columns)||header.layout.columns<1||header.layout.columns>3||typeof header.layout.linkX!=='boolean'||typeof header.layout.linkY!=='boolean'||Object.keys(header).some(key=>!['id','title','kind','layout'].includes(key)))invalid();return;}
- const series={id:header.id,name:'Validation',color:'#123456',points:[sample(header)]};if(figureIssues({...header,series:[series]},{retained:true,draft}).length)invalid();
+ const series={id:header.id,name:'Validation',color:'#123456',points:[sample(header)]};if(figureIssues({...header,series:[series]},{retained:true,draft,resourceErrors:true}).length)invalid();
 }
 export function validateRetainedFigurePoint(point,header){
  if(!point||typeof point!=='object'||Array.isArray(point))invalid();
@@ -69,12 +70,12 @@ export class RetainedFigureBuilder{
  }
  async addSeries(series,{retained=null}={}){
   if(!this.plot||this.done)throw new AppError('INVALID');await this.finishSeries();
-  const {points,...body}=series;if(figureIssues({...this.plot.header,series:[{...body,points:[sample(this.plot.header)]}]},{retained:true,draft:this.draft}).length)invalid();const nameKey=this.draft?null:this.plot.id+':'+(retained?.nameHash??digest(serialize(body.name)));if(nameKey!==null&&await this.presentation.find('series',nameKey,'lookup'))invalid();this.series={id:series.id,position:this.plot.series++,visible:seriesStyle(series).visible,points:0,complete:0,domains:{x:emptyExtent(),y:emptyExtent()}};
+  const {points,...body}=series;if(figureIssues({...this.plot.header,series:[{...body,points:[sample(this.plot.header)]}]},{retained:true,draft:this.draft,resourceErrors:true}).length)invalid();const nameKey=this.draft?null:this.plot.id+':'+(retained?.nameHash??digest(serialize(body.name)));if(nameKey!==null&&await this.presentation.find('series',nameKey,'lookup'))invalid();this.series={id:series.id,position:this.plot.series++,visible:seriesStyle(series).visible,points:0,complete:0,domains:{x:emptyExtent(),y:emptyExtent()}};
   if(this.series.visible){this.series.visiblePosition=this.plot.domains.visibleSeriesCount++;this.plot.domains.maximumSeriesNameLength=Math.max(this.plot.domains.maximumSeriesNameLength,retained?.texts.name??series.name.length);}
   await this.presentation.add('series',{id:series.id,plotId:this.plot.id,position:this.series.position,visiblePosition:this.series.visiblePosition??null,body,lookup:nameKey,...(retained?{bodyRoot:retained.root,texts:retained.texts}:{})});
  }
  async addPoint(point,{id=randomUUID(),source=null,retained=null}={}){
-  if(!this.series||this.done)throw new AppError('INVALID');const plot=this.plot,series=this.series;if(this.draft){if(figureIssues({...plot.header,series:[{id:series.id,name:'Draft',color:'#123456',points:[point]}]},{retained:true,draft:true}).length)invalid();}else validateRetainedFigurePoint(point,plot.header);if(point.y!==null)series.complete++;const coordinate=xValue(point.x,plot.header.x.kind);
+  if(!this.series||this.done)throw new AppError('INVALID');const plot=this.plot,series=this.series;if(this.draft){if(figureIssues({...plot.header,series:[{id:series.id,name:'Draft',color:'#123456',points:[point]}]},{retained:true,draft:true,resourceErrors:true}).length)invalid();}else validateRetainedFigurePoint(point,plot.header);if(point.y!==null)series.complete++;const coordinate=xValue(point.x,plot.header.x.kind);
   if(!this.draft&&coordinate===null||point.y!==null&&(!Number.isFinite(point.y)||Math.abs(point.y)>1e100))throw new AppError('MATERIAL_INVALID');
   const categoryId=retained?.categoryId??identity(plot.id,point.x),lookup=plot.id+':'+series.id+':'+categoryId;if(!this.draft&&plot.header.kind==='heatmap'&&await this.data.find('points',lookup,'lookup'))invalid();
   const member=await this.data.add('points',{id,plotId:plot.id,seriesId:series.id,position:series.points++,categoryId,body:{...point,...(source?{source}:{} )},...(retained?{bodyRoot:retained.root,texts:retained.texts}:{}),lookup,coordinate:typeof coordinate==='number'?coordinate:null});plot.points++;
@@ -123,7 +124,7 @@ export class RetainedFigureDocuments{
  builder(header,options){return new RetainedFigureBuilder(this,header,options);}
  async bounded(root,texts){return new RetainedFigureReader(this.blocks,null,null).bounded(root,texts);}
  async retain(figure){
-  if(figureIssues(figure,{retained:true}).length)throw new AppError('MATERIAL_INVALID');const builder=this.builder(figure),plots=figure.kind==='panels'?figure.panels:[{id:figure.id,label:figure.title,figure}];
+  if(figureIssues(figure,{retained:true,resourceErrors:true}).length)throw new AppError('MATERIAL_INVALID');const builder=this.builder(figure),plots=figure.kind==='panels'?figure.panels:[{id:figure.id,label:figure.title,figure}];
   for(const panel of plots){await builder.addPlot(panel.figure,{id:panel.id,label:panel.label});for(const series of panel.figure.series){await builder.addSeries(series);for(const point of series.points)await builder.addPoint(point);}}
   return builder.finish();
  }
@@ -158,6 +159,18 @@ export class RetainedFigureReader{
   }
   if(node.type==='object'){const result={};for await(const property of this.tree.children(node)){if(property.type!=='property')fail();result[property.name]=await this.bounded(property.value,texts,path?path+'.'+property.name:property.name);}return result;}
   if(node.type==='array'){const result=[];for await(const child of this.tree.children(node)){if(child.type!=='item')fail();result.push(await this.bounded(child.value,texts,path?path+'.'+result.length:String(result.length)));if(result.length>128)fail();}return result;}fail();
+ }
+ async validationHeader({plotId,root=this.presentation.header,texts=this.presentation.headerTexts,path=[],value}={}){
+  if(plotId){const member=await this.panelMember(plotId);root=member.body;texts=member.texts;path=['header'];}
+  const bounded=value??await this.bounded(root,texts),selected=path.reduce((node,key)=>node?.[key],bounded),header=figureValidationValue(selected),projection=selected?.projection;
+  if(projection)for(const axis of ['x','y'])for(const quantity of ['origin','scale']){
+   const spelling=projection[axis]?.[quantity]?.spelling;if(spelling?.format!=='figure-text')continue;
+   const limit=projection.version===2?(validDatasetResourcePolicy(projection.resourcePolicy)?projection.resourcePolicy.resources.maxScalarCharacters:null):8192;
+   if(limit===null)throw new AppError('MATERIAL_INVALID');if(!Number.isSafeInteger(spelling.characters)||spelling.characters<0||spelling.characters>limit)throw new AppError('DATASET_CALCULATION_RESOURCE');
+   let exact='';for await(const chunk of this.tree.text(root,[...path,'projection',axis,quantity,'spelling'],{signal:this.storage.signal})){if(exact.length+chunk.length>limit)throw new AppError('DATASET_CALCULATION_RESOURCE');exact+=chunk;}
+   if(exact.length!==spelling.characters)fail();header.projection[axis][quantity].spelling=exact;
+  }
+  return header;
  }
  async expose(item){const {format,version,collection,ordinal,body,texts,...result}=item;result.value=await this.bounded(body,texts);if(collection==='points')result.globalOrdinal=ordinal;if(collection==='series'){const {root,start,total}=await this.scope({collection:'points',seriesId:item.id});void root;void start;result.points=total;}if(collection==='points'&&item.categoryId){result.categoryPosition=await this.categoryPosition({plotId:item.plotId,categoryId:item.categoryId});}return result;}
  async header({plotId}={}){
@@ -253,7 +266,8 @@ export class RetainedFigureReader{
  }
  async verify({signal=this.storage.signal}={}){
   const same=(a,b)=>revisionText(a)===revisionText(b),check=()=>signal?.throwIfAborted();
-  const rootHeader=await this.tree.read(this.presentation.header);validateHeader(rootHeader);await this.validateLinkedAxes({signal});
+  const requirePolicy=async header=>{if(header.projection?.version===2&&typeof this.storage.workspace.storageKind==='function'&&await this.storage.workspace.storageKind()==='catalogue'){const {catalogueFormat,catalogueRequiresFigureProjectionPolicies}=await import('./catalogue-format.js');await this.storage.workspace.catalogue(async store=>{if(!catalogueRequiresFigureProjectionPolicies(await catalogueFormat(store.db)))throw new AppError('CATALOGUE_DAMAGED');});}};
+  const rootHeader=await this.tree.read(this.presentation.header);validateHeader(rootHeader);await requirePolicy(rootHeader);await this.validateLinkedAxes({signal});
   const allowedData=['plots','series','points'],allowedPresentation=['panels','series','annotations','ticks','categories'];
   if(!same(this.presentation.headerTexts,lengths(rootHeader))||rootHeader.kind!=='panels'&&this.document.counts.panels!==1||rootHeader.kind==='panels'&&this.document.counts.panels<2)fail();
   for(const [body,indices,allowed,data]of [[this.data,this.dataIndex,allowedData,true],[this.presentation,this.presentationIndex,allowedPresentation,false]]){
@@ -288,10 +302,10 @@ export class RetainedFigureReader{
    }
   }
   for await(const panel of this.memberRows({collection:'panels'})){
-   check();const body=await this.tree.read(panel.body),header=body.header;validateHeader(header);if(header.id!==panel.plotId||!researchId(panel.id)||typeof body.label!=='string'||!body.label.trim()||Object.keys(body.slots??{}).sort().join()!=='annotations,xTicks,yTicks'||Object.values(body.slots).some(value=>typeof value!=='boolean'))fail();
+   check();const body=await this.tree.read(panel.body),header=body.header;validateHeader(header);await requirePolicy(header);if(header.id!==panel.plotId||!researchId(panel.id)||typeof body.label!=='string'||!body.label.trim()||Object.keys(body.slots??{}).sort().join()!=='annotations,xTicks,yTicks'||Object.values(body.slots).some(value=>typeof value!=='boolean'))fail();
    const domains={x:emptyExtent(),y:emptyExtent(),minimumXGap:null,minimumLogXGap:null,categoryCount:(await this.scope({collection:'categories',plotId:panel.plotId})).total,visibleSeriesCount:0,maximumCategoryLength:0,maximumSeriesNameLength:0};let pointCount=0,seriesCount=0;
    for await(const series of this.memberRows({collection:'series',plotId:panel.plotId})){
-    const value=await this.tree.read(series.body);if(figureIssues({...header,series:[{...value,points:[sample(header)]}]},{retained:true}).length||series.position!==seriesCount++)fail();
+    const value=await this.tree.read(series.body);if(figureIssues({...header,series:[{...value,points:[sample(header)]}]},{retained:true,resourceErrors:true}).length||series.position!==seriesCount++)fail();
     const visible=seriesStyle(value).visible;if(visible){if(series.visiblePosition!==domains.visibleSeriesCount++)fail();domains.maximumSeriesNameLength=Math.max(domains.maximumSeriesNameLength,value.name.length);}else if(series.visiblePosition!==undefined)fail();
     const local={x:emptyExtent(),y:emptyExtent()};let count=0,complete=0;
     for await(const member of this.memberRows({collection:'points',plotId:panel.plotId,seriesId:series.id})){

@@ -43,3 +43,17 @@ test('date coordinates stay chronological while retained numerical magnitudes us
  const documents=new RetainedFigureDocuments(memory()),reader=await documents.open(await documents.retain(f)),html=await collect(retainedFigureTable(reader));assert.ok(html.text.includes('<td>'+stamp+'</td>'));assert.match(html.text,/>6#14<\/td>/);assert.match(html.text,/2025-01-02/);
  const csv=await collect(retainedFigureCSV(reader)),rows=readDelimitedTable(csv.text).rows.map(row=>row.cells);assert.deepEqual(JSON.parse(rows[0].at(-1)).header.source,source);assert.ok(html.text.includes(source.id));
 });
+
+test('long projection formulas stream complete spellings and labels into SVG, HTML and CSV',async()=>{
+ const {retainedFigureSVG}=await import('../src/web/retained-figure-svg.js'),{defaultDatasetResourcePolicy}=await import('../src/web/dataset-resource-policy.js');
+ const f=createFigure(),policy=defaultDatasetResourcePolicy();policy.resources.maxScalarCharacters=10000;
+ f.x.label='Exact axis '+('label '.repeat(220))+'END-AXIS';
+ const origin='0'.repeat(8999)+'1',scale='0'.repeat(2199)+'1';
+ f.projection={version:2,resourcePolicy:policy,x:{origin:exactUnitScalar(origin),scale:exactUnitScalar(scale,'radix',6)}};
+ f.series[0].points=[{x:0,y:1,error:null}];
+ const documents=new RetainedFigureDocuments(memory()),reader=await documents.open(await documents.retain(f)),svg=await collect(retainedFigureSVG(reader)),html=await collect(retainedFigureTable(reader)),csv=await collect(retainedFigureCSV(reader));
+ const formula='Projected '+f.x.label+': coordinate = (source value - '+origin+') / 6#('+scale+')';
+ assert.ok(svg.text.includes('<title>'+formula+'</title>'));assert.ok(html.text.includes('<p>'+formula+'</p>'));
+ const rows=readDelimitedTable(csv.text).rows.map(row=>row.cells),plot=JSON.parse(rows.find(row=>row[0]==='plot settings').at(-1));assert.deepEqual(plot.projection,f.projection);
+ for(const result of [svg,html,csv]){assert.ok(result.maximum<=65536);assert.doesNotMatch(result.text,/\[object Object\]|undefined/);}
+});

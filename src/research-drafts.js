@@ -1,3 +1,5 @@
+import {hasPlotResourceFigure,hasPlotResourceFigures,plotResourceFigureDocument} from './plot-resource-format.js';
+import {requireFigureProjectionPolicies,catalogueRequiresFigureProjectionPolicies} from './catalogue-format.js';
 import {validFigureEdit,hasAuthoredFigures} from './figure-authoring-format.js';
 import {catalogueRequiresFigureAuthoring,requireFigureAuthoring} from './catalogue-format.js';
 import {hasRetainedFigures} from './record-retained-figures.js';
@@ -66,6 +68,7 @@ export class ResearchDrafts {
     if(draft.changes?.some(change=>hasPagedResultTables(change.record?.results)||hasPagedResultTables(change.base?.results))&&(await this.workspace.storageKind()!=='catalogue'||!await this.workspace.catalogue(async store=>catalogueRequiresPagedResearchTables(await catalogueFormat(store.db)))))throw new AppError('CATALOGUE_DAMAGED');
     if(draft.changes?.some(change=>hasNestedAttemptContinuations(change.record?.attempt)||hasNestedAttemptContinuations(change.base?.attempt))&&!await this.workspace.catalogue(async store=>catalogueRequiresNestedAttemptCollections(await catalogueFormat(store.db))))throw new AppError('CATALOGUE_DAMAGED');
     if(draft.changes?.some(change=>hasRecordProjection(change.record)||hasRecordProjection(change.base))&&(await this.workspace.storageKind()!=='catalogue'||!await this.workspace.catalogue(async store=>catalogueRequiresNativeNumericalModels(await catalogueFormat(store.db)))))throw new AppError('CATALOGUE_DAMAGED');
+    if(draft.changes?.some(change=>hasPlotResourceFigures(change.record)||hasPlotResourceFigures(change.base))&&(await this.workspace.storageKind()!=='catalogue'||!await this.workspace.catalogue(async store=>catalogueRequiresFigureProjectionPolicies(await catalogueFormat(store.db)))))throw new AppError('CATALOGUE_DAMAGED');
      if(draft.changes?.some(change=>hasAuthoredFigures(change.record)||hasAuthoredFigures(change.base))&&!await this.workspace.catalogue(async store=>catalogueRequiresFigureAuthoring(await catalogueFormat(store.db))))throw new AppError('CATALOGUE_DAMAGED');
      if(draft.changes?.some(change=>hasRetainedFigures(change.record)||hasRetainedFigures(change.base))&&(await this.workspace.storageKind()!=='catalogue'||!await this.workspace.catalogue(async store=>catalogueRequiresRetainedFigures(await catalogueFormat(store.db)))))throw new AppError('CATALOGUE_DAMAGED');
     let result={draft,revision:digest(raw)};
@@ -129,6 +132,7 @@ export class ResearchDrafts {
       if(indexed)await this.workspace.catalogue(store=>(command.changes.some(change=>hasNestedAttemptContinuations(change.record?.attempt)||hasNestedAttemptContinuations(change.base?.attempt))?requireNestedAttemptCollections:requireDraftEdits)(store.db));
       if(command.changes.some(change=>hasPagedResultTables(change.record?.results)||hasPagedResultTables(change.base?.results))){if(!indexed)throw new AppError('FORMAT');await this.workspace.catalogue(store=>requirePagedResearchTables(store.db));}
       if(command.changes.some(change=>hasRecordProjection(change.record)||hasRecordProjection(change.base))){if(!indexed)throw new AppError('FORMAT');await this.workspace.catalogue(store=>requireNativeNumericalModels(store.db));}
+      if(command.changes.some(change=>hasPlotResourceFigures(change.record)||hasPlotResourceFigures(change.base))){if(!indexed)throw new AppError('FORMAT');await this.workspace.catalogue(store=>requireFigureProjectionPolicies(store.db));}
        if(command.changes.some(change=>hasAuthoredFigures(change.record)||hasAuthoredFigures(change.base))){if(!indexed)throw new AppError('FORMAT');await this.workspace.catalogue(store=>requireFigureAuthoring(store.db));}
        if(command.changes.some(change=>hasRetainedFigures(change.record)||hasRetainedFigures(change.base))){if(!indexed)throw new AppError('FORMAT');await this.workspace.catalogue(store=>requireRetainedFigures(store.db));}
       await this.workspace.writeMetadata('.observanda/drafts/'+command.id+'.json',raw);

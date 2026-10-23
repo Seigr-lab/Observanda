@@ -39,14 +39,14 @@ export function xValue(value,kind){
  if(!Number.isFinite(day)||new Date(day).toISOString().slice(0,10)!==date)return null;
  const stamp=Date.parse(value);return Number.isFinite(stamp)?stamp:null;
 }
-export function figureIssues(figure,{draft=false,retained=false}={}){
+export function figureIssues(figure,{draft=false,retained=false,resourceErrors=false}={}){
  if(isRetainedFigure(figure))return validRetainedFigure(figure,{draft})?[]:['Invalid retained figure.'];
  if(Object.hasOwn(figure??{},'source')&&!validFigureSource(figure.source))return [provenanceMessages.invalid];
- if(figure?.kind==='panels')return compositionIssues(figure,figureIssues,{draft,retained});
+ if(figure?.kind==='panels')return compositionIssues(figure,figureIssues,{draft,retained,resourceErrors});
  const errors=[];
  const fail=message=>errors.push(message);
  if(!keys(figure,['id','title','kind','x','y','legend','series',...['style','summary','annotations','source','heatmap','markerArea','projection'].filter(k=>Object.hasOwn(figure??{},k))]))return ['Invalid figure structure.'];
- if(Object.hasOwn(figure,'projection')&&(!validMeasurementProjection(figure.projection)||figure.projection?.x&&figure.x?.kind!=='number'))fail(projectionMessages.invalid);
+ if(Object.hasOwn(figure,'projection')&&(!validMeasurementProjection(figure.projection,{resourceErrors})||figure.projection?.x&&figure.x?.kind!=='number'))fail(projectionMessages.invalid);
  if(Object.hasOwn(figure,'style')&&!validFigureStyle(figure.style))fail('Invalid figure presentation.');
  if(Object.hasOwn(figure,'summary')&&(!keys(figure.summary,['operation','rows','category','group','missing'])||!['count','sum','mean','median','min','max'].includes(figure.summary.operation)||!Number.isInteger(figure.summary.rows)||figure.summary.rows<1||!text(figure.summary.category)||!text(figure.summary.group)||!Number.isInteger(figure.summary.missing)||figure.summary.missing<0))fail('Invalid summary description.');
  if(!id(figure.id)||!text(figure.title)||!draft&&!figure.title.trim())fail('Give the figure a title.');

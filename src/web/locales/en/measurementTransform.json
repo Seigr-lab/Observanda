@@ -29,5 +29,11 @@
  "previous": "Previous",
  "next": "Next",
  "back": "Back to retained figure",
- "openPoint": "Inspect point"
+ "openPoint": "Inspect point",
+ "resourcesTitle": "Figure calculation resources",
+ "resourcesHelp": "These saved limits apply to exact parsing, reductions, comparisons and coordinate projection. Source and storage waits do not consume arithmetic time. Reaching a limit stops preparation; it does not change the measurements.",
+ "resourcesNotes": "Approximation remains a separate choice below. Retained source values and earlier figures keep their original interpretation.",
+ "resourcesSaved": "Saved figure calculation resources",
+ "editSettings": "Change figure settings",
+ "revisedSettings": "These settings come from the stopped calculation. Saving creates a separate calculation; the stopped job and earlier results stay unchanged."
 }

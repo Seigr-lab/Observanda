@@ -1,0 +1,16 @@
+import {test,expect} from '@playwright/test';
+import {readFile} from 'node:fs/promises';
+
+test('plot controls preserve incomplete limits and complete long transform spellings until explicit validation',async({page})=>{
+ await page.route('https://plot-policy.test/**',async route=>{const p=new URL(route.request().url()).pathname;await route.fulfill({contentType:p==='/'?'text/html':p.endsWith('.json')?'application/json':'text/javascript',body:p==='/'?'<main id="host"></main>':await readFile(new URL('../../src/web'+p,import.meta.url),'utf8')});});await page.goto('https://plot-policy.test/');
+ await page.evaluate(async()=>{
+  const controls=await import('/dataset-resource-policy-ui.js'),transform=await import('/measurement-transform-ui.js'),{defaultDatasetResourcePolicy}=await import('/dataset-resource-policy.js');
+  const esc=value=>String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;'),field=(label,html)=>'<label>'+label+html+'</label>';window.policy=defaultDatasetResourcePolicy();window.api={controls,transform};window.paint=(policy,projection)=>{document.getElementById('host').innerHTML=controls.datasetResourcePolicyControls(policy,{esc,field,help:'Saved projection limits',legacy:'',footer:''})+transform.measurementTransformControls(projection,{esc,field,resourcePolicy:policy});transform.wireMeasurementTransforms(document.getElementById('host'));};paint(policy);
+ });
+ const exponent=page.locator('[data-dataset-resource=maxExponent]');await exponent.fill('');expect(await page.evaluate(()=>{try{api.controls.readDatasetResourcePolicy(document.getElementById('host'));return false;}catch{return true;}})).toBe(true);
+ await page.evaluate(()=>{const draft=api.controls.readDatasetResourcePolicy(document.getElementById('host'),{validate:false});paint(draft);});await expect(exponent).toHaveValue('');await exponent.fill('8192');await page.locator('[data-dataset-resource=maxScalarCharacters]').fill('10000');
+ const axis=page.locator('[data-projection-axis=x]'),origin=axis.locator('[data-projection-quantity=origin] [data-projection-spelling]');await axis.locator('[data-projection-enabled]').check();await expect(origin).toHaveAttribute('maxlength','65536');const spelling='0'.repeat(9000)+'1';await origin.fill(spelling);
+ const retained=await page.evaluate(()=>api.transform.readMeasurementTransform(document.getElementById('host'),{resourcePolicy:api.controls.readDatasetResourcePolicy(document.getElementById('host'))}));expect(retained.version).toBe(2);expect(retained.x.origin.spelling).toBe(spelling);expect(retained.resourcePolicy.resources.maxScalarCharacters).toBe(10000);
+ await page.locator('[data-dataset-resource=maxScalarCharacters]').fill('8192');expect(await page.evaluate(()=>{try{api.transform.readMeasurementTransform(document.getElementById('host'),{resourcePolicy:api.controls.readDatasetResourcePolicy(document.getElementById('host'))});return null;}catch(error){return error.code;}})).toBe('DATASET_CALCULATION_RESOURCE');await expect(origin).toHaveValue(spelling);
+ await page.evaluate(()=>{const root=document.getElementById('host'),policy=api.controls.readDatasetResourcePolicy(root,{validate:false}),projection=api.transform.readMeasurementTransform(root,{resourcePolicy:policy,validate:false});paint(policy,projection);});await expect(origin).toHaveValue(spelling);
+});
