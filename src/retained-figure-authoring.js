@@ -1,3 +1,4 @@
+import {derivedComputation} from './web/measurement-computation.js';
 // Immutable manual figure drafts share the retained figure's counted indexes.
 // The authoring format is intentionally unreadable by ordinary exporters.
 import {randomUUID,createHash} from 'node:crypto';
@@ -338,7 +339,15 @@ export class RetainedFigureAuthoring{
   if(mode==='append'){if(!researchId(plotId))invalid();await target.panelMember(plotId);}
   for await(const panel of from.memberRows({collection:'panels'})){
    let targetPlot=plotId;
-   if(mode==='append'){const a=await target.validationHeader({plotId}),b=await from.validationHeader({plotId:panel.plotId});if(a.x.kind!==b.x.kind||!sameAxisProjection(a,b,'x')||!sameAxisProjection(a,b,'y'))invalid();}
+   if(mode==='append'){
+    const a=await target.validationHeader({plotId}),b=await from.validationHeader({plotId:panel.plotId});if(a.x.kind!==b.x.kind||!sameAxisProjection(a,b,'x')||!sameAxisProjection(a,b,'y'))invalid();
+    const computation=derivedComputation(a,b).computation;
+    if(computation&&!a.computation){
+     const header=await edit.target({collection:'header',plotId}),body=await edit.property(header.root,header.path,'computation',computation),texts={...header.texts,...lengths(computation,[...header.path,'computation'].join('.'))};
+     await edit.setMember({...header.member,body,texts});
+     if(header.global){target.presentation.header=await edit.property(await readRef(edit.tree,body,['header']),[],'id',target.figure.id);target.presentation.headerTexts={...Object.fromEntries(Object.entries(texts).filter(([key])=>key.startsWith('header.')).map(([key,value])=>[key.slice(7),value])),id:target.figure.id.length};}
+    }
+   }
    if(mode==='panel'){
     targetPlot=panelIdentity?.plotId??randomUUID();let body=panel.body,texts={...panel.texts};body=await edit.property(body,[],'plotId',targetPlot);body=await edit.property(body,['header'],'id',targetPlot);
     if(panelIdentity){body=await edit.property(body,[],'label',panelIdentity.label);texts.label=panelIdentity.label.length;}

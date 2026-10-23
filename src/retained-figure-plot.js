@@ -1,3 +1,4 @@
+import {plotComputationHeader} from './dataset-plot-selection.js';
 import {plotOperation,plotScalarOperation,plotComputationFailure} from './plot-resource-policy.js';
 // Retained dataset plots keep only one row, reduction, and selected series in
 // memory. Group/order/median state uses the existing encrypted scratch owner.
@@ -69,7 +70,7 @@ export function prepareRetainedPlot(materials,doc,command,selection,{write,signa
    await progress({stage:'calculating dataset rows',done:denominator.rows,total:doc.content.rowCount});
   }
   if(denominator.rows!==doc.content.rowCount)fail('MATERIAL_MISSING');await median?.finish();signal?.throwIfAborted();
-  const header=figureMappingPresentation(table,mapping,command.base??createFigure(),{seriesCount,rows:denominator.included,missing});
+  const header=plotComputationHeader(figureMappingPresentation(table,mapping,command.base??createFigure(),{seriesCount,rows:denominator.included,missing}),selection);
   const builder=new RetainedFigureDocuments(materials.workspace,{write,signal}).builder(header);await builder.addPlot(header);
   const members=operation==='raw'?null:materials.sequences.builder('plot-members',write);
   async function* entries(series,state){

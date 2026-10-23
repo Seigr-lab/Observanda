@@ -11,7 +11,7 @@ import {exactRational} from './web/measurement-model.js';
 import {projectTransformedValue,validMeasurementProjection} from './web/measurement-transform.js';
 import {INTERVAL_FIELDS} from './web/figure-intervals.js';
 import {sameUnitDefinition,sameUnitDimensions,validUnitDefinition,unitScalar} from './web/measurement-unit-model.js';
-import {datasetPlotSelection} from './dataset-plot-selection.js';
+import {datasetPlotSelection,plotComputation} from './dataset-plot-selection.js';
 import {assertDatasetScalars} from './dataset-selected-columns.js';
 const fail=(code='MATERIAL_MISSING')=>{throw new AppError(code);};
 const natural=value=>Number.isSafeInteger(value)&&value>=0;
@@ -92,10 +92,12 @@ async function context(materials,doc){
  if(retained&&!content.mapping.projection&&(content.numericTransform?.algorithm!=='exact-rational-to-binary64'||content.numericTransform.version!==(content.version==='10'?3:2)))fail();
  if(content.version==='10'&&!same(content.numericTransform,plotNumericalMetadata(content.mapping)))fail();
  const source=await materials.read(content.inputs[0]),selection=await datasetPlotSelection(materials,source,content.mapping);assertPlotProjectionUnits(selection.mapping,selection.columns);
+ const computation=retained?(await reader.tree.selected(reader.presentation.header,['computation'])).value:content.figure?.computation;
+ if(!same(computation,plotComputation(selection).computation))fail();
  const points=retained?{count:content.figure.document.counts.points}:materials.sequences.validate(content.plotPointsIndex),count=retained?points.count:content.figure.series.reduce((n,s)=>n+s.points.length,0);
  if(!retained&&(points.kind!=='plot-points'||points.count!==count||count>10000))fail();
  const members=content.plotMembersIndex;if((content.mapping.operation??'raw')==='raw'){if(members!==undefined)fail();}else{materials.sequences.validate(members);if(members.kind!=='plot-members'||members.count>source.content.rowCount*Math.max(1,content.mapping.values.length))fail();}
- return {content,source,selection,points,members,reader,cachedPage:null,cachedData:null};
+ return {content,source,selection,points,members,reader,...(computation?{computation}:{}),cachedPage:null,cachedData:null};
 }
 async function rowAt(materials,ctx,position){
  if(!position||Object.keys(position).sort().join()!=='page,row'||!natural(position.page)||!natural(position.row)||position.page>=materials.datasetPageCount(ctx.source))fail();
@@ -161,6 +163,6 @@ export async function inspectPlotPoint(materials,ref,index,{offset=0,signal,poin
   const positions=receipt.source?(offset?fail('INVALID'):[receipt.source]):offset===receipt.members.count?[]:(await materials.sequences.page(ctx.members,{offset:receipt.members.offset+offset,limit:Math.min(limit,receipt.members.count-offset)})).items;
   for(const position of positions){signal?.throwIfAborted();const row=await rowAt(materials,ctx,position);await checkSource(materials,ctx,receipt,row,point,signal);members.push({position,cells:Object.entries(fields).map(([field,column])=>({field,source:{ref:ctx.content.inputs[0],selector:{kind:'cell',...position,column}}}))});}
   const total=receipt.members?.count??1;
-  return {index:selected?.member.ordinal??index,...(selected?{seriesId:selected.member.seriesId,pointId:selected.member.id}:{}),seriesName:selected?(await ctx.reader.item({collection:'series',id:selected.member.seriesId})).value.name:ctx.content.figure.series[receipt.series].name,point:selected?.member.position??receipt.point,coordinate:point,coordinates:receipt.coordinates,projection:ctx.content.mapping.projection,...(ctx.content.mapping.resourcePolicy?{resourcePolicy:ctx.content.mapping.resourcePolicy}:{}),operation:ctx.content.mapping.operation??'raw',members,offset,total,previous:offset?Math.max(0,offset-limit):null,next:offset+positions.length<total?offset+positions.length:null};
+  return {index:selected?.member.ordinal??index,...(selected?{seriesId:selected.member.seriesId,pointId:selected.member.id}:{}),seriesName:selected?(await ctx.reader.item({collection:'series',id:selected.member.seriesId})).value.name:ctx.content.figure.series[receipt.series].name,point:selected?.member.position??receipt.point,coordinate:point,coordinates:receipt.coordinates,...(ctx.computation?{computation:ctx.computation}:{}),projection:ctx.content.mapping.projection,...(ctx.content.mapping.resourcePolicy?{resourcePolicy:ctx.content.mapping.resourcePolicy}:{}),operation:ctx.content.mapping.operation??'raw',members,offset,total,previous:offset?Math.max(0,offset-limit):null,next:offset+positions.length<total?offset+positions.length:null};
  });
 }

@@ -1,3 +1,4 @@
+import {derivedComputation} from './web/measurement-computation.js';
 import {createHash} from 'node:crypto';
 import {readDatasetCell} from './dataset-cell-storage.js';
 import {revisionText} from './web/revision-model.js';
@@ -77,7 +78,7 @@ export class DatasetAggregation{
   for(const value of a.values){
    const c=column(value.column);if(names.has(value.name)||value.operation!=='count'&&!isScalarRepresentation(c))fail();names.add(value.name);
    const {representation,radix}=resultContext(value.output,value.operation);
-   columns.push({...defaultColumn({label:value.name}),representation,radix,unit:value.operation==='count'?'':c.unit,quantity:{origin:'derived',conversion:null,calibration:c.quantity?.calibration??null,...(a.version===3&&value.operation!=='count'&&c.quantity?.unitDefinition?{unitDefinition:c.quantity.unitDefinition}:{})},...(a.version===3?{resourcePolicy:structuredClone(a.resourcePolicy)}:{})});
+   columns.push({...defaultColumn({label:value.name}),...derivedComputation(c,...a.keys.map(index=>column(index))),representation,radix,unit:value.operation==='count'?'':c.unit,quantity:{origin:'derived',conversion:null,calibration:c.quantity?.calibration??null,...(a.version===3&&value.operation!=='count'&&c.quantity?.unitDefinition?{unitDefinition:c.quantity.unitDefinition}:{})},...(a.version===3?{resourcePolicy:structuredClone(a.resourcePolicy)}:{})});
   }
   return {columns,source,indices:selection.indices};
  }
@@ -213,6 +214,7 @@ export async function verifyAggregationPolicy(materials,doc,{signal}={}){
  const engine=new DatasetAggregation(materials),schema=await engine.schema(aggregation,{signal});let source=false;
  for await(const ref of materials.references(doc.content))if(revisionText(ref)===revisionText(aggregation.source))source=true;
  if(!source||datasetColumnCount(doc)!==schema.columns.length)fail('MATERIAL_MISSING');
+ for(let index=0;index<schema.columns.length;index++){const actual=await materials.datasetColumn(doc,index);if(revisionText(actual.computation??null)!==revisionText(schema.columns[index].computation??null))fail('MATERIAL_MISSING');}
  const iterator=engine.rows({aggregation},schema,{signal})[Symbol.asyncIterator]();
  try{
   const header=await iterator.next();if(header.done||header.value.columns.length!==schema.columns.length)fail('MATERIAL_MISSING');let count=0;

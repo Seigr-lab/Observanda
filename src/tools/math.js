@@ -1,4 +1,5 @@
 import {create,all} from 'mathjs';
+import {validApproximateResult} from '../web/tools/approximate-calculation-model.js';
 import {calculationLibrary,validCalculationPolicy} from '../web/tools/calculation-policy.js';
 import {exactStructuredExpression,structuredEnvelope,exactScalarEnvelope} from './exact-structured.js';
 import {ArithmeticBudget,exactExpression,exactRadixText,exactBaseConversion,parseExact,isExact} from './exact-arithmetic.js';
@@ -50,7 +51,15 @@ function evaluateCalculation(expression,{angle='rad',variables={},engine=2,polic
  const value=node.evaluate(scope);if(engine>=3)budget.step();if(engine>=2&&!math.isBigNumber(value)&&!math.isUnit(value)&&typeof value!=='number')throw engine===4?policyError('CALCULATION_STRUCTURED_UNSUPPORTED','CALCULATION_STRUCTURED_UNSUPPORTED'):Error('The expression must produce a scalar number or quantity.');const result=math.format(value,{precision:engine>=3?runtime.policy.displayDigits:32});
  if(/NaN|Infinity/.test(result))throw engine===4?policyError('CALCULATION_STRUCTURED_UNSUPPORTED','CALCULATION_STRUCTURED_UNSUPPORTED'):engine>=3?policyError('CALCULATION_REAL_RESULT','The expression has no finite real scalar result. Complex-valued operations are not supported.'):Error('The expression has no finite result.');
  if(result.length>2000)throw Error('The result is too large to display.');
- const answer={result,...(engine>=3?{approximation:{engine,...structuredClone(runtime.policy)}}:engine===2?{approximation:{workingDigits:64,displayDigits:32}}:{})};if(engine===4&&JSON.stringify(answer).length>runtime.policy.resources.maxResultCharacters)throw policyError('CALCULATION_STRUCTURED_RESOURCE','CALCULATION_STRUCTURED_RESOURCE');return {...answer,numeric:math.isBigNumber(value)?value:null};
+ const answer={result,...(engine>=3?{approximation:{engine,...structuredClone(runtime.policy)}}:engine===2?{approximation:{workingDigits:64,displayDigits:32}}:{})};
+ if(engine===4){
+  if(math.isBigNumber(value)&&value.isFinite()){
+   const computation={version:1,kind:'approximate-real',spelling:value.valueOf(),representation:'decimal',radix:10};
+   if(!validApproximateResult(computation))throw policyError('CALCULATION_STRUCTURED_UNSUPPORTED','CALCULATION_STRUCTURED_UNSUPPORTED');answer.computation=computation;
+  }
+  if(JSON.stringify(answer).length>runtime.policy.resources.maxResultCharacters)throw policyError('CALCULATION_STRUCTURED_RESOURCE','CALCULATION_STRUCTURED_RESOURCE');budget.step();
+ }
+ return {...answer,numeric:math.isBigNumber(value)?value:null};
 }
 export function calculateDetailed(expression,options){const {numeric,...result}=evaluateCalculation(expression,options);return result;}
 export function calculate(expression,options){return calculateDetailed(expression,options).result;}

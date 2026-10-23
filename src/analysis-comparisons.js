@@ -1,3 +1,4 @@
+import {comparisonComputation} from './analysis-comparison-computation.js';
 import {comparisonColumns,comparisonBudget,comparisonOperation} from './analysis-scalar-policy.js';
 import {verifyPolicyExpected} from './analysis-policy-expected.js';
 import {datasetColumnCount,selectedDatasetColumns,assertDatasetScalars} from './dataset-selected-columns.js';
@@ -72,7 +73,7 @@ export class AnalysisComparisons{
  async prepareLegacy(command,{signal,progress=async()=>{},retained=false}={}){
   if(command.comparison?.version!==1)fail();
   await this.validate(command,{retained});const {comparison,method}=command,groups=new Map(),distribution=new Map(),transitions=new Map(),previous=new Map(),runs=new Set();let rows=0;
-  const summary={version:1,algorithm:'observanda-exception-comparison',algorithmVersion:'1',ordering:comparison.ordering,rows:0,raw:counts(),aggregate:counts(),runs:0,unknownRunRows:0,groups:[],distribution:[],transitions:[],verification:null};
+  const summary={...await comparisonComputation(this.inputs,comparison,{signal}),version:1,algorithm:'observanda-exception-comparison',algorithmVersion:'1',ordering:comparison.ordering,rows:0,raw:counts(),aggregate:counts(),runs:0,unknownRunRows:0,groups:[],distribution:[],transitions:[],verification:null};
   let total=0;for(const s of comparison.sources)total+=(await this.inputs.read(s.dataset)).content.rowCount;
   for await(const o of analysisObservations(this.inputs,comparison,{signal})){
    rows++;for(const k of ['condition','operation','profile','window'])if(o[k].length>300)fail('ANALYSIS_LIMIT');

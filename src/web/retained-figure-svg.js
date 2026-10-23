@@ -1,3 +1,4 @@
+import {computationLabel} from './measurement-computation.js';
 import {retainedFigureWindow} from './retained-figure-window.js';
 // Complete retained-figure SVG output. Iteration is bounded independently of
 // point, series, panel and annotation counts; consumers must drain the stream.
@@ -107,7 +108,7 @@ async function plotLayout(reader,options){
  g.y=options.shared?.y??figureDomain(summaryValue(domains.y,f.y.scale==='log'),f.y,bars);
  g.clip=(options.idPrefix??'retained')+'-'+plotId;
  g.keyHeight=await keyHeight(reader,g);
- g.footerLines=projectionLines(f);
+ g.footerLines=[...projectionLines(f),...([computationLabel(f)].filter(Boolean))];
  g.footerHeight=0;for(const line of g.footerLines)g.footerHeight+=await figureTextHeight(reader,line,null,width-40,style.fontSize)+8;
  if(f.markerArea){
   let minimum=Infinity,maximum=-Infinity;

@@ -1,3 +1,4 @@
+import {validComputation} from './measurement-computation.js';
 import {isRetainedFigure,validRetainedFigure} from './retained-figure-model.js';
 import {validMeasurementProjection} from './measurement-transform.js';
 import projectionMessages from './locales/en/measurementTransform.json' with {type:'json'};
@@ -45,7 +46,8 @@ export function figureIssues(figure,{draft=false,retained=false,resourceErrors=f
  if(figure?.kind==='panels')return compositionIssues(figure,figureIssues,{draft,retained,resourceErrors});
  const errors=[];
  const fail=message=>errors.push(message);
- if(!keys(figure,['id','title','kind','x','y','legend','series',...['style','summary','annotations','source','heatmap','markerArea','projection'].filter(k=>Object.hasOwn(figure??{},k))]))return ['Invalid figure structure.'];
+ if(!keys(figure,['id','title','kind','x','y','legend','series',...['style','summary','annotations','source','heatmap','markerArea','projection','computation'].filter(k=>Object.hasOwn(figure??{},k))]))return ['Invalid figure structure.'];
+ if(Object.hasOwn(figure,'computation')&&(!validComputation(figure.computation)||figure.computation.kind!=='approximate-inputs'))fail('Invalid figure structure.');
  if(Object.hasOwn(figure,'projection')&&(!validMeasurementProjection(figure.projection,{resourceErrors})||figure.projection?.x&&figure.x?.kind!=='number'))fail(projectionMessages.invalid);
  if(Object.hasOwn(figure,'style')&&!validFigureStyle(figure.style))fail('Invalid figure presentation.');
  if(Object.hasOwn(figure,'summary')&&(!keys(figure.summary,['operation','rows','category','group','missing'])||!['count','sum','mean','median','min','max'].includes(figure.summary.operation)||!Number.isInteger(figure.summary.rows)||figure.summary.rows<1||!text(figure.summary.category)||!text(figure.summary.group)||!Number.isInteger(figure.summary.missing)||figure.summary.missing<0))fail('Invalid summary description.');
@@ -119,7 +121,7 @@ export function parseFigureCSV(source,kind='number'){
  return {xLabel:header[0],series};
 }
 export function figureCSV(figure){
- if(figurePlots(figure).some(f=>f.projection||f.x.reversed||f.y.reversed||f.x.ticks?.length||f.y.ticks?.length||f.annotations?.some(a=>['region','callout'].includes(a.kind))))return richFigureCSV(figure);
+ if(figurePlots(figure).some(f=>f.computation||f.projection||f.x.reversed||f.y.reversed||f.x.ticks?.length||f.y.ticks?.length||f.annotations?.some(a=>['region','callout'].includes(a.kind))))return richFigureCSV(figure);
  if(figurePlots(figure).some(f=>f.kind==='heatmap'))return heatmapCSV(figure);
  const extra=figurePlots(figure).some(f=>f.series.some(s=>s.points.some(p=>INTERVAL_FIELDS.some(k=>p[k]!=null))))?INTERVAL_FIELDS:[];
  const counted=figurePlots(figure).some(f=>f.markerArea||f.series.some(s=>s.points.some(p=>p.count!=null))),countHeaders=counted?[markerMessages.count,markerMessages.unitArea,markerMessages.label]:[],countCells=(p,f)=>counted?[p.count??null,f.markerArea?.unitArea??null,f.markerArea?.label??'']:[];

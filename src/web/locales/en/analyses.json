@@ -168,5 +168,7 @@
   "resourceEnable":"Enable declaration resource limits",
   "valuePreview":"Value preview: {value}...",
   "valueComplete":"Show complete value ({count} characters)",
-  "valueCompleteLabel":"Complete retained value"
+  "valueCompleteLabel":"Complete retained value",
+  "approximateEncoding": "Exact encoding of value computed from approximate inputs",
+  "approximateEncodingHelp": "Exact fractions preserve stored values and computed differences; they do not make approximate inputs mathematically exact or establish an error bound."
 }

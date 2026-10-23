@@ -1,3 +1,4 @@
+import {computationLabel} from './measurement-computation.js';
 import {validMeasurementProjection,projectionTransform} from './measurement-transform.js';
 import {numeralUsesRadix} from './numeral-context.js';
 import {wrapFigureText} from './figure-text-layout.js';
@@ -21,15 +22,16 @@ export function sameAxisProjection(a,b,axis){
  return JSON.stringify(canonical(a))===JSON.stringify(canonical(b));
 }
 export function projectionTableDescription(figure){
- const lines=projectionDescription(figure);return lines.length?'<aside class="figure-projection-description"><h4>'+escape(messages.retained)+'</h4>'+lines.map(line=>'<p>'+escape(line)+'</p>').join('')+'<p>'+escape(messages.coordinateValues)+'</p></aside>':'';
+ const label=computationLabel(figure),interpretation=label?'<p class="figure-computation-description">'+escape(label)+'</p>':'';
+ const lines=projectionDescription(figure);return interpretation+(lines.length?'<aside class="figure-projection-description"><h4>'+escape(messages.retained)+'</h4>'+lines.map(line=>'<p>'+escape(line)+'</p>').join('')+'<p>'+escape(messages.coordinateValues)+'</p></aside>':'');
 }
 // The formula travels inside standalone SVG exports, including heatmaps. It is
 // wrapped completely rather than clipped to an axis title or a tooltip.
 export function appendProjectionDescription(svg,figure){
- const descriptions=projectionDescription(figure);if(!descriptions.length)return svg;
+ const descriptions=projectionDescription(figure),label=computationLabel(figure);if(!descriptions.length&&!label)return svg;
  const box=svg.match(/^<svg[^>]*viewBox="0 0 ([\d.]+) ([\d.]+)"/);if(!box)throw new Error('Missing figure view box');
  const width=Number(box[1]),height=Number(box[2]),style=figureStyle(figure),size=style.fontSize,lineHeight=size*1.3;
- const lines=[messages.retained,...descriptions,messages.coordinateValues].flatMap(line=>wrapFigureText(line,width-40,size)),extra=lines.length*lineHeight+32,total=height+extra;
+ const lines=[...(label?[label]:[]),...(descriptions.length?[messages.retained,...descriptions,messages.coordinateValues]:[])].flatMap(line=>wrapFigureText(line,width-40,size)),extra=lines.length*lineHeight+32,total=height+extra;
  const footer='<g class="figure-projection-description" fill="'+style.textColor+'" font-family="'+FONT_FAMILIES[style.font]+'" font-size="'+size+'"><rect x="0" y="'+height+'" width="'+width+'" height="'+extra+'" fill="'+style.background+'"/>'+lines.map((line,i)=>'<text x="20" y="'+(height+20+i*lineHeight)+'">'+escape(line)+'</text>').join('')+'</g>';
  return svg.replace(/^<svg[^>]*>/,tag=>tag.replace(/viewBox="[^"]+"/,'viewBox="0 0 '+width+' '+total+'"').replace(/ height="[^"]+"/,' height="'+total+'"')).replace(/<\/svg>$/,footer+'</svg>');
 }

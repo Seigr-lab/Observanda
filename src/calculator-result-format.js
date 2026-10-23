@@ -1,4 +1,5 @@
+import {approximateCalculatorMaterial,assertApproximateCalculatorFormat} from './approximate-calculator-format.js';
 import {structuredCalculatorMaterial,assertStructuredCalculatorFormat} from './structured-calculator-format.js';
 import {AppError} from './errors.js';
 import {catalogueFormat,catalogueRequiresCalculatorDatasetResults} from './catalogue-format.js';
-export async function assertCalculatorResultFormat(workspace,doc){if(structuredCalculatorMaterial(doc))await assertStructuredCalculatorFormat(workspace);if(await workspace.storageKind()!=='catalogue')throw new AppError('CATALOGUE_DAMAGED');await workspace.catalogue(async store=>{if(!catalogueRequiresCalculatorDatasetResults(await catalogueFormat(store.catalogueDb??store.db)))throw new AppError('CATALOGUE_DAMAGED');});}
+export async function assertCalculatorResultFormat(workspace,doc){if(approximateCalculatorMaterial(doc))await assertApproximateCalculatorFormat(workspace);if(structuredCalculatorMaterial(doc))await assertStructuredCalculatorFormat(workspace);if(await workspace.storageKind()!=='catalogue')throw new AppError('CATALOGUE_DAMAGED');await workspace.catalogue(async store=>{if(!catalogueRequiresCalculatorDatasetResults(await catalogueFormat(store.catalogueDb??store.db)))throw new AppError('CATALOGUE_DAMAGED');});}

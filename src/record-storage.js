@@ -1,5 +1,7 @@
 import {hasPlotResourceFigure,hasPlotResourceFigures,plotResourceFigureDocument} from './plot-resource-format.js';
+import {hasApproximateFigure,hasApproximateFigures,approximateFigureDocument} from './record-computation-format.js';
 import {requireFigureProjectionPolicies,catalogueRequiresFigureProjectionPolicies} from './catalogue-format.js';
+import {requireApproximateCalculator,catalogueRequiresApproximateCalculator} from './catalogue-format.js';
 import {hasAuthoredFigures,authoredFigureDocument} from './figure-authoring-format.js';
 import {requireFigureAuthoring,catalogueRequiresFigureAuthoring} from './catalogue-format.js';
 import {hasRetainedFigures,retainedFigureDocument} from './record-retained-figures.js';
@@ -58,6 +60,7 @@ export async function withStoredRecord(store,id,revision,consume){
 export async function retainStoredRecord(store,record,revision){
  if(hasRecordProjection(record))await requireNativeNumericalModels(store.db);
  if(hasPlotResourceFigures(record))await requireFigureProjectionPolicies(store.db);
+ if(hasApproximateFigures(record))await requireApproximateCalculator(store.db);
  if(hasAuthoredFigures(record))await requireFigureAuthoring(store.db);
  if(hasRetainedFigures(record))await requireRetainedFigures(store.db);
  if(record.results?.statements.some(statement=>statement.table?.version===3))await requirePagedResearchTables(store.db);
@@ -92,6 +95,7 @@ export async function retainStoredDocument(store,document,encoding){
  const revision=encoding.revision;
  if(!catalogueRequiresNativeNumericalModels(await catalogueFormat(store.db))&&await projectedFigureDocument(document))await requireNativeNumericalModels(store.db);
  if(!catalogueRequiresFigureProjectionPolicies(await catalogueFormat(store.db))&&await plotResourceFigureDocument(document))await requireFigureProjectionPolicies(store.db);
+ if(!catalogueRequiresApproximateCalculator(await catalogueFormat(store.db))&&await approximateFigureDocument(document))await requireApproximateCalculator(store.db);
  if(!catalogueRequiresFigureAuthoring(await catalogueFormat(store.db))&&await authoredFigureDocument(document))await requireFigureAuthoring(store.db);
  if(!catalogueRequiresRetainedFigures(await catalogueFormat(store.db))&&await retainedFigureDocument(document))await requireRetainedFigures(store.db);
  const present=!!await store.db.get('SELECT 1 FROM records WHERE id=$1 AND revision=$2',id,revision);
@@ -117,6 +121,7 @@ export async function verifyStoredRecord(store,id,revision,{signal}={}){
   if(blocks){const hash=createHash('sha256');for await(const text of blocks.tree().json(value.root,{signal}))hash.update(text);hash.update('\n');if(hash.digest('hex')!==revision)fail();}
   if(!catalogueRequiresNativeNumericalModels(await catalogueFormat(store.db))&&(blocks?await projectedFigureDocument(new RecordDocument(blocks,value.root),{signal}):hasRecordProjection(value)))fail();
   if(!catalogueRequiresFigureProjectionPolicies(await catalogueFormat(store.db))&&(blocks?await plotResourceFigureDocument(new RecordDocument(blocks,value.root),{signal}):hasPlotResourceFigures(value)))fail();
+  if(!catalogueRequiresApproximateCalculator(await catalogueFormat(store.db))&&(blocks?await approximateFigureDocument(new RecordDocument(blocks,value.root),{signal}):hasApproximateFigures(value)))fail();
  if(!catalogueRequiresFigureAuthoring(await catalogueFormat(store.db))&&(blocks?await authoredFigureDocument(new RecordDocument(blocks,value.root),{signal}):hasAuthoredFigures(value)))fail();
  if(!catalogueRequiresRetainedFigures(await catalogueFormat(store.db))&&(blocks?await retainedFigureDocument(new RecordDocument(blocks,value.root),{signal}):hasRetainedFigures(value)))fail();
   return {attempt:!!value.attemptIndex,methods:!!value.methodIndex,results:!!value.resultIndex};

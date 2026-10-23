@@ -3,6 +3,8 @@ import {validDatasetResourcePolicy} from './web/dataset-resource-policy.js';
 import {measurementScalarPolicies,resolveScalarDefinitions,resolveScalarOperand,scalarDefinitionSequences} from './measurement-scalar-storage.js';
 import {measurementScalarMaterial,assertMeasurementScalarFormat} from './measurement-scalar-format.js';
 import {CalculatorResults} from './calculator-results.js';
+import {validComputation} from './web/measurement-computation.js';
+import {approximateCalculatorMaterial,assertApproximateCalculatorFormat} from './approximate-calculator-format.js';
 import {calculatorResultMaterial} from './web/calculator-result-model.js';
 import {assertCalculatorResultFormat} from './calculator-result-format.js';
 import {assertPlotResourcePolicy,plotNumericalMetadata} from './plot-resource-policy.js';
@@ -94,7 +96,7 @@ export function exactInteger(value,radix=10){
 }
 export function validColumns(columns,width){
  return Array.isArray(columns)&&columns.length===width&&columns.every(c=>
-  c&&required(c.name,200)&&REPRESENTATIONS.includes(c.representation)&&validColumnDomain(c)&&
+  c&&(c.computation===undefined||validComputation(c.computation))&&required(c.name,200)&&REPRESENTATIONS.includes(c.representation)&&validColumnDomain(c)&&
   Number.isInteger(c.radix)&&c.radix>=2&&c.radix<=36&&text(c.unit,100)&&Array.isArray(c.missing)&&c.missing.length<=30&&
   c.missing.every(m=>m&&text(m.value,100)&&required(m.meaning,200))&&
   (c.resourcePolicy===undefined||['decimal','integer','radix','radix-fraction','rational'].includes(c.representation)&&validDatasetResourcePolicy(c.resourcePolicy))&&validTime(c.time)&&(c.quantity===undefined||validQuantity(c.quantity,c.unit)));
@@ -189,6 +191,7 @@ export class ResearchMaterials {
   if((ref.kind==='record'?recordRevision(doc):digest(revisionText(doc)))!==ref.revision)fail('MATERIAL_MISSING');
   if(ref.kind!=='record'&&(doc.format!==1||doc.kind!==ref.kind||doc.id!==ref.id))fail('MATERIAL_MISSING');
   if(calculatorResultMaterial(doc))await assertCalculatorResultFormat(this.workspace,doc);
+  if(approximateCalculatorMaterial(doc))await assertApproximateCalculatorFormat(this.workspace);
   return doc;
  }
  async assertReferenceWorkspace(ref){
@@ -711,6 +714,7 @@ export class ResearchMaterials {
      }else await this.checkReference(ref);return;
     }
     const doc=await this.read(ref);
+    if(approximateCalculatorMaterial(doc))await assertApproximateCalculatorFormat(this.workspace);
     if(calculatorResultMaterial(doc)){await assertCalculatorResultFormat(this.workspace,doc);await new CalculatorResults(this).verify(doc);}
     const checkIntervalFormat=intervalFormatCheck(this.workspace);if(intervalUncertaintyMaterial(doc,{opaqueCompatible:true}))await checkIntervalFormat();
     const checkNumericalFormat=async()=>{if(await this.workspace.storageKind()==='catalogue')await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresNativeNumericalModels}=await import('./catalogue-format.js');if(!catalogueRequiresNativeNumericalModels(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});};
@@ -743,7 +747,7 @@ export class ResearchMaterials {
     if(ref.kind==='dataset'){
      await verifyRetainedCalculation(this,doc);
      if(doc.content.datasetFormat===3)await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresPagedResearchTables}=await import('./catalogue-format.js');if(!catalogueRequiresPagedResearchTables(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
-     let checkedUnitFormat=false,checkedClockFormat=false,hasDomains=false;for await(const column of this.iterateDatasetColumns(doc)){if(!validColumns([column],1))fail('MATERIAL_MISSING');if(measurementScalarPolicies(column)){if(doc.content.scalarPolicies!==1)fail('MATERIAL_MISSING');await assertMeasurementScalarFormat(this.workspace);await resolveScalarDefinitions(this,column,{signal});}if(column.representation==='domain'&&!hasDomains){await checkDomainFormat();hasDomains=true;}if(column.quantity?.unitDefinition!==undefined){if(!validQuantity(column.quantity,column.unit))fail('MATERIAL_MISSING');if(!checkedUnitFormat){await checkNumericalFormat();checkedUnitFormat=true;}}if(column.time?.clock?.definition!==undefined){if(!validTime(column.time))fail('MATERIAL_MISSING');if(!checkedClockFormat){await checkClockFormat();checkedClockFormat=true;}}if(column.quantity?.uncertainty!==undefined)await checkIntervalFormat();for(const r of schemaReferences(column))await enqueue(r);}
+     let checkedUnitFormat=false,checkedClockFormat=false,hasDomains=false;for await(const column of this.iterateDatasetColumns(doc)){if(!validColumns([column],1))fail('MATERIAL_MISSING');if(column.computation&&doc.content.approximateComputations!==1)fail('MATERIAL_MISSING');if(measurementScalarPolicies(column)){if(doc.content.scalarPolicies!==1)fail('MATERIAL_MISSING');await assertMeasurementScalarFormat(this.workspace);await resolveScalarDefinitions(this,column,{signal});}if(column.representation==='domain'&&!hasDomains){await checkDomainFormat();hasDomains=true;}if(column.quantity?.unitDefinition!==undefined){if(!validQuantity(column.quantity,column.unit))fail('MATERIAL_MISSING');if(!checkedUnitFormat){await checkNumericalFormat();checkedUnitFormat=true;}}if(column.time?.clock?.definition!==undefined){if(!validTime(column.time))fail('MATERIAL_MISSING');if(!checkedClockFormat){await checkClockFormat();checkedClockFormat=true;}}if(column.quantity?.uncertainty!==undefined)await checkIntervalFormat();for(const r of schemaReferences(column))await enqueue(r);}
      if(hasDomains!==(doc.content.domainValues===1)||doc.content.domainValues!==undefined&&doc.content.domainValues!==1)fail('MATERIAL_MISSING');
      if(doc.content.aggregationMembersIndex&&!doc.content.aggregation)fail('MATERIAL_MISSING');
      const aggregationContext=doc.content.aggregationMembersIndex?await aggregationMemberContext(this,doc):null;let memberOffset=0;

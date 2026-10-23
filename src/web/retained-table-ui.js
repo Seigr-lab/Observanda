@@ -1,3 +1,4 @@
+import {computationLabel} from './measurement-computation.js';
 import {t} from './i18n/index.js';
 import {retainedTableView} from './retained-table-model.js';
 export const tableText=(k,args)=>t('retainedTables',k,args);
@@ -21,7 +22,7 @@ export function retainedTableUI({root,call,esc,field,guard,notify,onTable=()=>{}
  async function schema(offset){
   const request=generation,pending=++schemaRequest,data=await call('schema',{ref:source,offset,limit:16});guard();if(!root.isConnected||request!==generation||pending!==schemaRequest)return;
   schemaOffset=offset;const region=root.querySelector('[data-table-schema]');
-  region.innerHTML=data.items.map((c,i)=>'<label class="material-choice"><input type="checkbox" data-table-column="'+(offset+i)+'"'+(selection.columns==='all'||selection.columns.includes(offset+i)?' checked':'')+(selection.columns==='all'?' disabled':'')+'>'+esc(c.name+(c.unit?' ['+c.unit+']':''))+'</label>').join('')+button('previousColumns','data-schema-page="'+Math.max(0,offset-16)+'"',!offset)+button('nextColumns','data-schema-page="'+data.next+'"',data.next===null);
+  region.innerHTML=data.items.map((c,i)=>'<label class="material-choice"><input type="checkbox" data-table-column="'+(offset+i)+'"'+(selection.columns==='all'||selection.columns.includes(offset+i)?' checked':'')+(selection.columns==='all'?' disabled':'')+'>'+esc(c.name+(c.unit?' ['+c.unit+']':'')+(computationLabel(c)?' ['+computationLabel(c)+']':''))+'</label>').join('')+button('previousColumns','data-schema-page="'+Math.max(0,offset-16)+'"',!offset)+button('nextColumns','data-schema-page="'+data.next+'"',data.next===null);
   for(const control of region.querySelectorAll('[data-schema-page]'))control.onclick=()=>{selected();void schema(Number(control.dataset.schemaPage)).catch(error=>notify(error.message,true));};
  }
  async function load(ref,table,draftSelection){
@@ -50,7 +51,7 @@ export function retainedTableUI({root,call,esc,field,guard,notify,onTable=()=>{}
 async function paintCell(root,{call,ref,table,esc,guard,rowOffset,cursor,columnOffset,offset=0}){
  const identity=JSON.stringify([ref,table,rowOffset,cursor,columnOffset,offset]);root.dataset.cellRequest=identity;
  const value=await call('retained-table',{ref,table,cell:{rowOffset,cursor,columnOffset,offset}});guard();if(!root.isConnected||root.dataset.cellRequest!==identity)return;
- root.innerHTML='<p>'+esc(value.column.name)+' ('+(offset+1)+'-'+(offset+value.value.length)+' / '+value.total+')</p><pre></pre>'+button('previous','data-cell-offset="'+Math.max(0,offset-4096)+'"',!offset)+button('next','data-cell-offset="'+value.next+'"',value.next===null);
+ root.innerHTML='<p>'+esc(value.column.name+(computationLabel(value.column)?' ['+computationLabel(value.column)+']':''))+' ('+(offset+1)+'-'+(offset+value.value.length)+' / '+value.total+')</p><pre></pre>'+button('previous','data-cell-offset="'+Math.max(0,offset-4096)+'"',!offset)+button('next','data-cell-offset="'+value.next+'"',value.next===null);
  root.querySelector('pre').textContent=value.value;
  for(const control of root.querySelectorAll('[data-cell-offset]'))control.onclick=()=>{void paintCell(root,{call,ref,table,esc,guard,rowOffset,cursor:value.cursor,columnOffset,offset:Number(control.dataset.cellOffset)}).catch(error=>{if(root.isConnected)root.textContent=error.message;});};
 }

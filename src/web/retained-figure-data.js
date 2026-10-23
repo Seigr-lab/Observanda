@@ -1,5 +1,6 @@
 // Complete exports traverse authenticated retained collections to exhaustion.
 // Labels are streamed independently: a short preview is never exported as data.
+import {computationLabel} from './measurement-computation.js';
 import {figureTextChunks,retainedFigureText,composeFigureText,escapeFigureText as esc} from './retained-figure-text.js';
 import {retainedProjectionLines} from './retained-figure-projection.js';
 import {figureStyle} from './figure-style.js';
@@ -38,6 +39,7 @@ async function* axisLabel(reader,plot,axis,selection,signal){
  yield* htmlText(reader,value||messages[axis==='x'?'coordinate':'value'],at(selection,path),signal);if(projected)yield esc(parts[1]);
 }
 async function* projection(reader,plot,selection,signal){
+ const label=computationLabel(plot);if(label)yield '<p class="figure-computation-description">'+esc(label)+'</p>';
  if(!plot.projection)return;
  const axisName=axis=>{
   const field=axis==='y'&&plot.kind==='heatmap'?'heatmap.valueLabel':axis+'.label',value=axis==='y'&&plot.kind==='heatmap'?plot.heatmap.valueLabel:plot[axis].label;

@@ -1,3 +1,4 @@
+import {derivedComputation} from './web/measurement-computation.js';
 import {measurementScalarPolicies} from './measurement-scalar-storage.js';
 import {GraphCalculations} from './calculation-graph-evaluation.js';
 import {CalculationGraphs} from './calculation-graphs.js';
@@ -28,10 +29,10 @@ export class DatasetCalculations{
  async schema(source,view='observations',{columns:selection,version=1}={}){
   if(selection!==undefined&&!validCalculationProjection(selection))fail();
   const doc=await this.materials.read(source);if(source.kind==='dataset')return selection===undefined?this.materials.datasetColumns(doc):(await selectedDatasetColumns(this.materials,doc,selection)).columns;
-  const selected=columns=>{if(selection===undefined)return columns;if(selection.some(i=>i>=columns.length))fail();return selection.map(i=>columns[i]);};
+  const selected=columns=>{columns=columns.map(column=>({...column,...derivedComputation(doc.content.summary)}));if(selection===undefined)return columns;if(selection.some(i=>i>=columns.length))fail();return selection.map(i=>columns[i]);};
   if(source.kind!=='analysis'||!doc.content.comparison)fail();
-  const units=new Set();let unitDefinition,first=true;for(const source of doc.content.comparison.sources){const column=await this.materials.datasetColumn(await this.materials.read(source.dataset),source.columns.value);units.add(column.unit);if(version===3&&view!=='transitions'){const next=column.quantity?.unitDefinition;if(!first&&(!!unitDefinition!==!!next||next&&!sameUnitDefinition(unitDefinition,next)))fail();if(first)unitDefinition=next;first=false;}}
-  if(units.size!==1)fail();const valueColumn={...numeric(messages.valueName),unit:[...units][0],...(unitDefinition?{quantity:{origin:'derived',conversion:null,calibration:null,unitDefinition}}:{})};
+  const units=new Set();let computation={},unitDefinition,first=true;for(const source of doc.content.comparison.sources){const column=await this.materials.datasetColumn(await this.materials.read(source.dataset),source.columns.value);units.add(column.unit);computation={...computation,...derivedComputation(column)};if(version===3&&view!=='transitions'){const next=column.quantity?.unitDefinition;if(!first&&(!!unitDefinition!==!!next||next&&!sameUnitDefinition(unitDefinition,next)))fail();if(first)unitDefinition=next;first=false;}}
+  if(units.size!==1)fail();const valueColumn={...numeric(messages.valueName),...computation,unit:[...units][0],...(unitDefinition?{quantity:{origin:'derived',conversion:null,calibration:null,unitDefinition}}:{})};
   if(view==='distribution')return selected([valueColumn,column(messages.spellingName),column(messages.categoryName),column(messages.countName,'integer'),...contextColumns()]);
   if(view==='transitions')return selected([column(messages.fromName),column(messages.toName),column(messages.countName,'integer'),...contextColumns()]);
   if(view!=='observations')fail();
@@ -49,7 +50,7 @@ export class DatasetCalculations{
   if(columns.some(column=>column.representation==='domain'))fail();
   if(c.where&&!validCondition(c.where,columns.length,c.version))fail();if(c.version===3){try{validateExactCondition(c.where,columns);}catch{fail();}}
   const names=new Set(columns.map(c=>c.name));
-  for(const s of c.steps){if(!validOperand(s.left,columns.length,c.version)||s.right&&!validOperand(s.right,columns.length,c.version)||s.condition&&!validCondition(s.condition,columns.length,c.version)||names.has(s.name))fail();if(c.version===3){try{validateExactStep(s,columns);}catch{fail();}}names.add(s.name);const {representation,radix}=resultContext(s.output);columns.push({...numeric(s.name),representation,radix,unit:s.unit,quantity:s.quantity??{origin:'derived',conversion:null,calibration:c.calibration}});}
+  for(const s of c.steps){if(!validOperand(s.left,columns.length,c.version)||s.right&&!validOperand(s.right,columns.length,c.version)||s.condition&&!validCondition(s.condition,columns.length,c.version)||names.has(s.name))fail();if(c.version===3){try{validateExactStep(s,columns);}catch{fail();}}names.add(s.name);const {representation,radix}=resultContext(s.output);columns.push({...numeric(s.name),...derivedComputation(...[s.left,s.right,s.condition?.left,s.condition?.right].filter(value=>value?.column!==undefined).map(value=>columns[value.column])),representation,radix,unit:s.unit,quantity:s.quantity??{origin:'derived',conversion:null,calibration:c.calibration}});}
   if(columns.length>256)fail();for(const ref of calculationReferences(c))await this.materials.read(ref);
   return columns;
  }
@@ -137,6 +138,6 @@ export async function verifyRetainedCalculation(materials,doc){
  if([4,5,6,7,8,9,10,11].includes(calculation.version)){if(!validGraphCalculation(calculation)||doc.content.algorithm!=='observanda-retained-calculations'||doc.content.algorithmVersion!==(calculation.version-1))fail('CATALOGUE_DAMAGED');const graphs=new CalculationGraphs(materials),graph=await graphs.read(calculation.graph);if(calculation.version===11&&graph.content.graphVersion!==8)fail('CATALOGUE_DAMAGED');await graphs.verify(graph,{complete:true});let found=false;for await(const ref of materials.references(doc.content))if(revisionText(ref)===revisionText(calculation.graph))found=true;if(!found)fail('CATALOGUE_DAMAGED');const {verifyGraphDataset}=await import('./calculation-graph-lineage.js');await verifyGraphDataset(materials,doc);return;}
  if(!validCalculation(calculation)||doc.content.algorithm!=='observanda-retained-calculations'||doc.content.algorithmVersion!==(calculation.version===3?2:1))fail('CATALOGUE_DAMAGED');
  if(calculation.version!==3){const engine=new DatasetCalculations(materials);await engine.legacyPolicies(calculation,await engine.schema(calculation.source,calculation.view,{columns:calculation.projection,version:calculation.version}));for(const join of calculation.joins)await engine.legacyPolicies(calculation,await engine.schema(join.dataset,undefined,{columns:join.projection}));return;}
- try{await new DatasetCalculations(materials).recipeColumns(calculation);}catch{fail('CATALOGUE_DAMAGED');}
+ try{const columns=await new DatasetCalculations(materials).recipeColumns(calculation);for(let index=0;index<columns.length;index++){const actual=await materials.datasetColumn(doc,index);if(revisionText(actual.computation??null)!==revisionText(columns[index].computation??null))fail('CATALOGUE_DAMAGED');}}catch{fail('CATALOGUE_DAMAGED');}
  const required=new Set(calculationReferences(calculation).map(ref=>revisionText(ref)));for await(const ref of materials.references(doc.content))required.delete(revisionText(ref));if(required.size)fail('CATALOGUE_DAMAGED');
 }

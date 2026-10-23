@@ -1,3 +1,4 @@
+import {comparisonComputation} from './analysis-comparison-computation.js';
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
 import {revisionText} from './web/revision-model.js';
@@ -36,6 +37,8 @@ export async function calculateComparison(owner,command,{signal,progress=async()
  writePage??=fn=>workspace.withLock(()=>withWorkspaceMetadataBatch(workspace,fn));
  let resumed=false,state={version:1,commandHash,root:null,last:null,summary:blank(command.comparison),complete:false};
  if(file){const raw=await workspace.readMetadata(file,1048576);if(raw!==null){resumed=true;try{state=JSON.parse(raw);}catch{throw new AppError('MATERIAL_MISSING');}if(state?.commandHash!==commandHash)throw new AppError('MATERIAL_CHANGED');}}
+ const interpretation=await comparisonComputation(owner.inputs,command.comparison,{signal});
+ if(resumed){if(revisionText(state.summary?.computation)!==revisionText(interpretation.computation))throw new AppError('MATERIAL_MISSING');}else Object.assign(state.summary,interpretation);
  const sourceRows=[];for(const source of command.comparison.sources)sourceRows.push((await owner.inputs.read(source.dataset)).content.rowCount);
  if(command.comparison.version>=2){validateComparisonSourceIdentities(command.comparison,sourceIdentities,'ANALYSIS_INVALID');if(!resumed){state.summary.sourceRows=sourceRows;state.summary.sourceIdentities=sourceIdentities;}}
  validateCheckpoint(state,command,sourceRows,sourceIdentities);

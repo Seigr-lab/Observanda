@@ -204,7 +204,7 @@
   "structuredUnsupportedError": "This structured expression has no supported exact interpretation. Keep all components exact and use the supported vector, matrix or complex operations.",
   "structuredResourceError": "The complete exact structured calculation exceeds its saved limits. Review the component, result-character and arithmetic limits; the input is unchanged.",
   "structuredZeroDivisorError": "Exact structured division by zero is not defined. Check the scalar or complex divisor.",
-  "retainExactOnly": "Only a complete exact scalar, vector, matrix or complex result can be retained. Save the calculation first.",
+  "retainExactOnly": "Retain a complete exact result or a supported finite real approximation from engine 4. Save the calculation first.",
   "resultPreview": "Preview of {count} characters.",
   "completeResult": "Complete result ({count} characters)"
 }

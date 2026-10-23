@@ -1,3 +1,4 @@
+import {computationLabel} from './web/measurement-computation.js';
 import {AppError} from './errors.js';
 import {readTableCursor,tableCursors} from './retained-table-cursor.js';
 const tableReads=async(materials,operation)=>materials.workspace?.withCatalogueConnections&&await materials.workspace.storageKind?.()==='catalogue'?materials.workspace.withCatalogueConnections(operation):operation();
@@ -18,7 +19,7 @@ async function readRetainedTable(materials,{ref,selection,version=2}){
  if(!measurementRef(ref)||ref.kind!=='dataset'||!validTableSelection(selection)||![1,2].includes(version))throw new AppError('DATASET_TABLE');
  const doc=await materials.read(ref),columns=await materials.datasetColumns(doc);
  if(selection.columns.some(i=>i>=columns.length))throw new AppError('DATASET_TABLE');
- const table={version,selection,headers:selection.columns.map(i=>columns[i].name+(columns[i].unit?' ['+columns[i].unit+']':'')),rows:[],...(version===2?{formats:selection.columns.map(i=>({representation:columns[i].representation,radix:columns[i].radix,...(columns[i].domain?{domain:columns[i].domain}:{})}))}:{})};let count=0;
+ const table={version,selection,headers:selection.columns.map(i=>columns[i].name+(columns[i].unit?' ['+columns[i].unit+']':'')+(computationLabel(columns[i])?' ['+computationLabel(columns[i])+']':'')),rows:[],...(version===2?{formats:selection.columns.map(i=>({representation:columns[i].representation,radix:columns[i].radix,...(columns[i].domain?{domain:columns[i].domain}:{})}))}:{})};let count=0;
  for await(const row of materials.iterateDataset(ref)){
   if(row.excluded&&!selection.includeExcluded)continue;if(count++<selection.offset)continue;
   table.rows.push({cells:selection.columns.map(i=>row.cells[i]),presence:selection.columns.map(i=>['null','absent'].includes(row.valueKinds?.[i])?row.valueKinds[i]:columns[i].missing.some(m=>m.value===row.cells[i])?'missing':'value'),exclusion:row.excluded??null});
@@ -66,7 +67,7 @@ async function* tableRows(materials,source,selection,indices,{offset=0,limit=Inf
  }
 }
 function presence(row,columns){return row.cells.map((cell,i)=>['null','absent'].includes(row.valueKinds[i])?row.valueKinds[i]:typeof cell==='string'&&columns[i].missing.some(m=>m.value===cell)?'missing':'value');}
-function tableBlock(columns,rows,selection){return {version:2,selection:{includeExcluded:selection.includeExcluded},headers:columns.map(c=>c.name+(c.unit?' ['+c.unit+']':'')),formats:columns.map(c=>({representation:c.representation,radix:c.radix,...(c.domain?{domain:c.domain}:{}),...(c.quantity?.uncertainty?{uncertainty:c.quantity.uncertainty}:{})})),rows:rows.map(row=>({...row,presence:presence(row,columns)}))};}
+function tableBlock(columns,rows,selection){return {version:2,selection:{includeExcluded:selection.includeExcluded},headers:columns.map(c=>c.name+(c.unit?' ['+c.unit+']':'')),formats:columns.map(c=>({representation:c.representation,radix:c.radix,...(c.domain?{domain:c.domain}:{}),...(c.quantity?.uncertainty?{uncertainty:c.quantity.uncertainty}:{}),...(c.computation?{computation:c.computation}:{})})),rows:rows.map(row=>({...row,presence:presence(row,columns)}))};}
 export const retainedTablePage=(materials,command,options)=>tableReads(materials,()=>readTablePage(materials,command,options));
 async function readTablePage(materials,{ref,table,offset,cursor,limit=16,columnOffset=0,columnLimit=8},{signal}={}){
  if(!validRetainedTable(table)||table.version!==3||offset!==undefined&&!natural(offset)||!Number.isInteger(limit)||limit<1||limit>32)throw new AppError('DATASET_TABLE');

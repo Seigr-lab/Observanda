@@ -2,8 +2,8 @@
   "retain": "Retain exact result",
   "choose": "Retain exact result in a record",
   "record": "Record",
-  "saved": "Save this calculation before retaining an exact result.",
-  "unsupported": "Retain a saved independent exact scalar expression from engines 2 or 3, or an exact scalar, vector, matrix or complex expression from engine 4. Approximate results cannot be retained here.",
+  "saved": "Save this calculation before retaining its result.",
+  "unsupported": "Retain a saved independent exact result from engines 2, 3 or 4, or a finite real computational approximation from engine 4. Units and unsupported results are unavailable.",
   "scope": "The selected saved expression is evaluated with its pinned engine and policy. The retained value is exact; the displayed decimal is not used.",
   "working": "Retain calculator result",
   "title": "{name} - expression {number}",
@@ -33,5 +33,11 @@
   "library": "Library",
   "exact": "Exact scalar result",
   "repeatHelp": "Repeat evaluates this captured expression and policy again. It creates new immutable recipe and dataset revisions; it does not read newer calculator edits.",
-  "structuredEngine": "Exact structured engine"
+  "structuredEngine": "Exact structured engine",
+  "retainApproximate": "Retain approximate result",
+  "chooseApproximate": "Retain approximate result in a record",
+  "approximate": "Approximate computation",
+  "scopeApproximate": "The selected saved expression is evaluated with its pinned engine, working precision and rounding policy. The complete computational decimal is retained, not the display-rounded text. It remains an approximation; no error bound is inferred.",
+  "runningApproximate": "Preparing the stored approximation...",
+  "completedApproximate": "Approximate result retained with its computation label and pinned recipe."
 }

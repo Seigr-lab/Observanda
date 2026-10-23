@@ -38,7 +38,7 @@ function expected(features){return {domains:features.owners>=1,settings:features
 
 test('publication admission and every existing feature transition preserve all 24 owner combinations',async()=>{
  const transitions=[[formats.requireWorkspaceDomains,{owners:1}],[formats.requireProjectDomains,{owners:1}],[formats.requireWorkspaceSettings,{owners:2}],[formats.requireWebsiteDocuments,{website:1}],[formats.requireWebsiteEditor,{website:2}],[formats.requireWebsitePresentation,{website:3}],[formats.requireStagedEvidence,{staged:true}]];
- const olderAdmissions=Object.entries(formats).filter(([name])=>name.startsWith('require')&&!transitions.some(([admit])=>admit===formats[name])&&!['requirePublicationDocuments','requireRecordOwnerTransfers','requireConfigurationDocuments','requireSourcePublicationControls','requireWebsiteSourceSelections','requireNestedAttemptCollections','requireOwnerDirectories','requirePortabilityCollections','requireWebsiteTemplateInheritance','requirePagedResearchTables','requireNativeNumericalModels','requireNativeClockModels','requireRetainedFigures','requireReferencedCalculations','requireReviewFigurePackages','requireNativeDomainValues','requireCalculationPolicies','requireClockDerivations','requireFigureAuthoring','requireIntervalUncertainty','requireDatasetResourcePolicies','requireWindowCalculations','requireFigureProjectionPolicies','requireCalculatorDatasetResults','requireMeasurementScalarPolicies','requireDomainAlgebra','requireStructuredCalculator'].includes(name)).map(([,admit])=>admit);
+ const olderAdmissions=Object.entries(formats).filter(([name])=>name.startsWith('require')&&!transitions.some(([admit])=>admit===formats[name])&&!['requirePublicationDocuments','requireRecordOwnerTransfers','requireConfigurationDocuments','requireSourcePublicationControls','requireWebsiteSourceSelections','requireNestedAttemptCollections','requireOwnerDirectories','requirePortabilityCollections','requireWebsiteTemplateInheritance','requirePagedResearchTables','requireNativeNumericalModels','requireNativeClockModels','requireRetainedFigures','requireReferencedCalculations','requireReviewFigurePackages','requireNativeDomainValues','requireCalculationPolicies','requireClockDerivations','requireFigureAuthoring','requireIntervalUncertainty','requireDatasetResourcePolicies','requireWindowCalculations','requireFigureProjectionPolicies','requireCalculatorDatasetResults','requireMeasurementScalarPolicies','requireDomainAlgebra','requireStructuredCalculator','requireApproximateCalculator'].includes(name)).map(([,admit])=>admit);
  const generations=new Set();
  for(const features of combinations){
   const generation=formats.publicationCatalogueGeneration(features);generations.add(generation);
@@ -499,4 +499,35 @@ test('structured calculator policies preserve independent module and recipe reco
  for(const owner of combinations)for(const selected of [null,...flags,'all']){const features={...base,...owner};for(const flag of flags)features[flag]=selected==='all'||selected===flag;const prior=formats.configurationCatalogueGeneration(features),db=database(prior);await formats.requireStructuredCalculator(db);assert.equal(db.version,prior+bit);assert.deepEqual(formats.configurationCatalogueFeatures(db.version),{...formats.configurationCatalogueFeatures(prior),structuredCalculator:true});await formats.requireStructuredCalculator(db);assert.equal(db.version,prior+bit);const restored=database(3);await formats.restoreConfigurationCatalogueFormat(restored,db.version);assert.equal(restored.version,db.version);}
  for(const structuredCalculator of [null,1,'true',{}])assert.throws(()=>formats.configurationCatalogueGeneration({...base,structuredCalculator}),{code:'INVALID'});
  const payload=seal(Buffer.from('Structured calculator recipe and module history'),randomBytes(32),'test'),source=database(bit+122,{payload}),chunks=[];await writeCatalogueArchive(source,{writeFile:async text=>chunks.push(text)},{state:['slot','payload']},{observe:false});const restored=database(3);await readCatalogueStream(Readable.from([Buffer.from(chunks.join(''))]),restored,{state:['slot','payload']});assert.equal(restored.version,source.version);assert.equal(formats.catalogueRequiresMeasurementScalarPolicies(restored.version),false);assert.equal(formats.catalogueRequiresCalculatorDatasetResults(restored.version),false);await assert.rejects(formats.catalogueFormat(database(formats.CATALOGUE_MAX_GENERATION+1)),{code:'CATALOGUE_DAMAGED'});
+});
+
+
+test('physical bigint format text is normalized locally without weakening manifest generations',async()=>{
+ for(const generation of [3,49,50,73,74,121,122,formats.CATALOGUE_MAX_GENERATION]){
+  assert.equal(await formats.catalogueFormat(database(generation)),generation);
+  assert.equal(await formats.catalogueFormat(database(String(generation))),generation);
+ }
+ for(const invalid of [null,true,false,{},[],3n,NaN,Infinity,3.5,0,-3,'',' 3','3 ','+3','03','3.0','3e0','0x3','9007199254740992','9007199254740993',Number.MAX_SAFE_INTEGER+1,formats.CATALOGUE_MAX_GENERATION+1,String(formats.CATALOGUE_MAX_GENERATION+1)])await assert.rejects(formats.catalogueFormat(database(invalid)),{code:'CATALOGUE_DAMAGED'});
+ assert.equal(formats.configurationCatalogueFeatures('122'),null);
+ await assert.rejects(formats.restoreConfigurationCatalogueFormat(database(3),'122'),{code:'CATALOGUE_DAMAGED'});
+ const generation=formats.configurationCatalogueGeneration({...formats.configurationCatalogueFeatures(122),structuredCalculator:true}),payload=seal(Buffer.from('Canonical numeric archive generation'),randomBytes(32),'test'),source=database(String(generation),{payload}),chunks=[];
+ await writeCatalogueArchive(source,{writeFile:async text=>chunks.push(text)},{state:['slot','payload']},{observe:false});
+ const archive=chunks.join(''),header=JSON.parse(archive.slice(0,archive.indexOf('\n')));
+ assert.equal(header.catalogueVersion,generation);
+ const restored=database(3);await readCatalogueStream(Readable.from([Buffer.from(archive)]),restored,{state:['slot','payload']});assert.equal(restored.version,generation);
+ header.catalogueVersion=String(header.catalogueVersion);
+ await assert.rejects(readCatalogueStream(Readable.from([Buffer.from(JSON.stringify(header)+archive.slice(archive.indexOf('\n')))]),database(3),{state:['slot','payload']}),{code:'CATALOGUE_DAMAGED'});
+});
+
+
+test('approximate calculator generations preserve prior flags across int4 and archive boundaries',async()=>{
+ const bit=1610612736,base=formats.configurationCatalogueFeatures(122),flags=['publication','transfers','permissions','sourceSelections','nestedAttempts','ownerDirectories','portability','templateInheritance','pagedResearchTables','nativeNumericalModels','nativeClockModels','retainedFigures','referencedCalculations','reviewFigurePackages','nativeDomainValues','calculationPolicies','clockDerivations','figureAuthoring','intervalUncertainty','datasetResourcePolicies','windowCalculations','figureProjectionPolicies','calculatorDatasetResults','measurementScalarPolicies','domainAlgebra','structuredCalculator'];
+ for(const prior of [base,...flags.map(flag=>({...base,[flag]:true})),Object.fromEntries(Object.entries({...base,...Object.fromEntries(flags.map(flag=>[flag,true]))}))]){
+  const before=formats.configurationCatalogueGeneration(prior),db=database(before),statements=[],run=db.run.bind(db);db.run=async(sql,...args)=>{statements.push(sql);return run(sql,...args);};
+  await formats.requireApproximateCalculator(db);assert.equal(db.version,before+bit);assert.deepEqual(formats.configurationCatalogueFeatures(db.version),{...prior,approximateCalculator:true});
+  assert.equal(statements.includes('ALTER TABLE catalogue_format ALTER COLUMN version TYPE bigint'),db.version>2147483647);const restored=database(3);await formats.restoreConfigurationCatalogueFormat(restored,db.version);assert.equal(restored.version,db.version);
+ }
+ const low=database(3),statements=[],run=low.run.bind(low);low.run=async(sql,...args)=>{statements.push(sql);return run(sql,...args);};await formats.requireStructuredCalculator(low);assert.equal(statements.some(sql=>sql.includes('TYPE bigint')),false);
+ const generation=formats.configurationCatalogueGeneration({...base,structuredCalculator:true,approximateCalculator:true}),payload=seal(Buffer.from('Finite approximation with exact pinned recipe'),randomBytes(32),'test'),source=database(String(generation),{payload}),chunks=[];
+ await writeCatalogueArchive(source,{writeFile:async text=>chunks.push(text)},{state:['slot','payload']},{observe:false});const restored=database(3);await readCatalogueStream(Readable.from([Buffer.from(chunks.join(''))]),restored,{state:['slot','payload']});assert.equal(restored.version,generation);assert.ok(generation>2147483647);assert.equal(formats.catalogueRequiresMeasurementScalarPolicies(restored.version),false);assert.equal(formats.catalogueRequiresDomainAlgebra(restored.version),false);
 });

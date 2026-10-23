@@ -266,7 +266,11 @@ export class RetainedFigureReader{
  }
  async verify({signal=this.storage.signal}={}){
   const same=(a,b)=>revisionText(a)===revisionText(b),check=()=>signal?.throwIfAborted();
-  const requirePolicy=async header=>{if(header.projection?.version===2&&typeof this.storage.workspace.storageKind==='function'&&await this.storage.workspace.storageKind()==='catalogue'){const {catalogueFormat,catalogueRequiresFigureProjectionPolicies}=await import('./catalogue-format.js');await this.storage.workspace.catalogue(async store=>{if(!catalogueRequiresFigureProjectionPolicies(await catalogueFormat(store.db)))throw new AppError('CATALOGUE_DAMAGED');});}};
+  const requirePolicy=async header=>{
+   if(header.projection?.version!==2&&header.computation===undefined||typeof this.storage.workspace.storageKind!=='function'||await this.storage.workspace.storageKind()!=='catalogue')return;
+   if(header.projection?.version===2){const {catalogueFormat,catalogueRequiresFigureProjectionPolicies}=await import('./catalogue-format.js');await this.storage.workspace.catalogue(async store=>{if(!catalogueRequiresFigureProjectionPolicies(await catalogueFormat(store.db)))throw new AppError('CATALOGUE_DAMAGED');});}
+   if(header.computation!==undefined){const {assertApproximateCalculatorFormat}=await import('./approximate-calculator-format.js');await assertApproximateCalculatorFormat(this.storage.workspace);}
+  };
   const rootHeader=await this.tree.read(this.presentation.header);validateHeader(rootHeader);await requirePolicy(rootHeader);await this.validateLinkedAxes({signal});
   const allowedData=['plots','series','points'],allowedPresentation=['panels','series','annotations','ticks','categories'];
   if(!same(this.presentation.headerTexts,lengths(rootHeader))||rootHeader.kind!=='panels'&&this.document.counts.panels!==1||rootHeader.kind==='panels'&&this.document.counts.panels<2)fail();

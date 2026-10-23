@@ -10,7 +10,7 @@ export function richFigureCSV(figure){
  const rows=[[composition.panelData,composition.dataKind,composition.series,composition.x,composition.y,composition.uncertainty,intervals.xLower,intervals.xUpper,intervals.yLower,intervals.yUpper,markers.count,observations.encodingDetails]];
  for(const [i,f] of figurePlots(figure).entries()){
   const panel=figure.kind==='panels'?figure.panels[i].label:figure.title;
-  rows.push([panel,'plot settings','','','','','','','','','',JSON.stringify({title:f.title,kind:f.kind,x:f.x,y:f.y,markerArea:f.markerArea??null,heatmap:f.heatmap??null,...(f.projection?{projection:f.projection}:{})})]);
+  rows.push([panel,'plot settings','','','','','','','','','',JSON.stringify({title:f.title,kind:f.kind,x:f.x,y:f.y,markerArea:f.markerArea??null,heatmap:f.heatmap??null,...(f.projection?{projection:f.projection}:{}),...(f.computation?{computation:f.computation}:{})})]);
   for(const s of f.series)for(const [index,p] of s.points.entries())rows.push([panel,'measurement',s.name,p.x,p.y,p.error,p.xLower,p.xUpper,p.yLower,p.yUpper,p.count,JSON.stringify({seriesId:s.id,pointIndex:index})]);
   for(const a of f.annotations??[])rows.push([panel,a.kind,a.label,'','','','','','','','',JSON.stringify({...a,...(observationAnnotation(a)?{position:observationPosition(a,f)}:{})})]);
  }

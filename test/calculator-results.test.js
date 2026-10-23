@@ -1,3 +1,5 @@
+import {approximateCalculatorMetadata} from '../src/approximate-calculator-format.js';
+import {calculatorResultColumn} from '../src/calculator-result-values.js';
 import {defaultStructuredCalculationPolicy} from '../src/web/tools/calculation-policy.js';
 import {validCalculatorRecipe} from '../src/web/calculator-result-model.js';
 import {validateTool} from '../src/modules/tools.js';
@@ -8,7 +10,7 @@ import {AppError} from '../src/errors.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID as id} from 'node:crypto';
-import {captureCalculatorRecipe,evaluateCalculatorRecipe} from '../src/calculator-result-evaluation.js';
+import {captureCalculatorRecipe,captureCalculatorResultRecipe,evaluateCalculatorRecipe} from '../src/calculator-result-evaluation.js';
 import {calculatorResultClient} from '../src/web/calculator-result-client.js';
 import {defaultCalculationPolicy} from '../src/web/tools/calculation-policy.js';
 import {projectApiRoute} from '../src/web/project-context.js';
@@ -101,4 +103,31 @@ test('recipe2 captures only exact structured values under its own engine and pol
  for(const expression of ['sqrt(2)','2 cm to m']){const other={...e,data:{...e.data,expression}};assert.throws(()=>evaluateCalculatorRecipe(captureCalculatorRecipe(source(other),other,0)),{code:'CALCULATOR_RESULT_EXACT'});}
  const limited=structuredClone(recipe);limited.policy.resources.maxComponents=1;assert.throws(()=>evaluateCalculatorRecipe(limited),{code:'CALCULATOR_RESULT_RESOURCE'});
  const f=serviceFixture();f.e.data={...e.data};f.interrupt=true;await assert.rejects(f.service.retain(f.queue,f.command,{readSource:f.readSource}),{code:'LOCKED'});const ref=f.heads.get(f.command.recipeId);f.interrupt=false;f.sourceRevoked=true;await f.service.resume(f.queue,{workspaceId:f.command.workspaceId,ref});assert.equal(f.jobs.get(f.command.jobId).input.command.calculatorResult.version,2);assert.equal(f.readCount,1);assert.deepEqual(evaluateCalculatorRecipe((await f.materials.read(ref)).content.recipe).structured,result.structured);
+});
+
+
+test('recipe3 captures complete approximate decimals independently of display while historical recipes remain exact',()=>{
+ const e=entity('sqrt(2)');e.data.engine=4;e.data.policy=defaultStructuredCalculationPolicy();e.data.policy.displayDigits=3;
+ const recipe=captureCalculatorResultRecipe(source(e),e,0),value=evaluateCalculatorRecipe(recipe),pinned=ref('analysis');assert.equal(recipe.version,3);assert.equal(validCalculatorRecipe(recipe),true);assert.equal(value.spelling,'1.414213562373095048801688724209698078569671875376948073176679738');
+ const column=calculatorResultColumn(recipe,value,pinned);assert.equal(column.representation,'decimal');assert.deepEqual(column.computation,{version:1,kind:'approximate',recipe:pinned});assert.equal(column.resourcePolicy.resources.maxExponent,0);
+ e.data.policy.displayDigits=40;assert.equal(evaluateCalculatorRecipe(captureCalculatorResultRecipe(source(e),e,0)).spelling,value.spelling);assert.throws(()=>evaluateCalculatorRecipe({...recipe,version:2}),{code:'CALCULATOR_RESULT_EXACT'});
+ for(const expression of ['sin(-0)','exp(1000)']){e.data.expression=expression;const captured=captureCalculatorResultRecipe(source(e),e,0),result=evaluateCalculatorRecipe(captured),definition=calculatorResultColumn(captured,result,pinned);assert.equal(result.spelling,expression==='sin(-0)'?'-0':result.spelling);assert.equal(definition.resourcePolicy.resources.maxExponent,expression==='sin(-0)'?0:434);}
+ e.data.expression='1/3';assert.equal(captureCalculatorResultRecipe(source(e),e,0).version,2);assert.throws(()=>evaluateCalculatorRecipe({...recipe,expression:'1/3'}),{code:'CALCULATOR_RESULT_EXACT'});
+ for(const expression of ['2 cm to m','sqrt(-2)','exp(1e100)']){e.data.expression=expression;assert.throws(()=>captureCalculatorResultRecipe(source(e),e,0),{code:'CALCULATOR_RESULT_EXACT'});}
+ const old=entity('sqrt(2)');assert.throws(()=>captureCalculatorResultRecipe(source(old),old,0),{code:'CALCULATOR_RESULT_EXACT'});
+});
+
+test('approximate capture refuses its full representation budget before persisting and recovers pinned recipe3 without source grants',async()=>{
+ const f=serviceFixture();f.e.data.engine=4;f.e.data.policy=defaultStructuredCalculationPolicy();f.e.data.expression='sqrt(2)';f.e.data.policy.resources.maxResultCharacters=32;
+ await assert.rejects(f.service.retain(f.queue,f.command,{readSource:f.readSource}),{code:'CALCULATOR_RESULT_RESOURCE'});assert.equal(f.heads.size,0);assert.equal(f.jobs.size,0);
+ f.e.data.policy=defaultStructuredCalculationPolicy();f.e.data.policy.resources.maxBits=64;await assert.rejects(f.service.retain(f.queue,f.command,{readSource:f.readSource}),{code:'CALCULATOR_RESULT_RESOURCE'});assert.equal(f.heads.size,0);
+ f.e.data.policy=defaultStructuredCalculationPolicy();f.interrupt=true;await assert.rejects(f.service.retain(f.queue,f.command,{readSource:f.readSource}),{code:'LOCKED'});const recipe=f.heads.get(f.command.recipeId),saved=await f.materials.read(recipe);assert.equal(saved.content.recipe.version,3);const count=f.readCount;f.sourceRevoked=true;f.interrupt=false;f.e.data.expression='sin(0)';
+ await f.service.resume(f.queue,{workspaceId:f.command.workspaceId,ref:recipe});assert.equal(f.jobs.get(f.command.jobId).input.command.calculatorResult.version,3);assert.equal(f.readCount,count);assert.ok(evaluateCalculatorRecipe(saved.content.recipe).spelling.startsWith('1.414213562373095'));await f.service.verify(saved);
+});
+
+
+test('approximate admission follows only known bounded metadata carriers',()=>{
+ const marker={version:1,kind:'approximate-inputs'};
+ for(const [path,value]of [['.observanda/materials/objects/result/revision.json',{content:{approximateComputations:1}}],['.observanda/materials/objects/measurement/revision.json',{content:{measurement:{computation:marker}}}],['.observanda/materials/sequences/chunks/hash.json',{kind:'columns-policy',items:[{computation:marker}]}],['.observanda/materials/figures/value/hash.json',{type:'property',name:'computation',value:'hash'}],['.observanda/materials/figures/value/hash.json',{type:'inline',value:{computation:marker}}],['.observanda/materials/comparison-work/job.json',{summary:{computation:marker}}],['.observanda/jobs/job.json',{input:{command:{calculatorResult:{version:3}}}}]])assert.equal(approximateCalculatorMetadata(path,value),true,path);
+ for(const [path,value]of [['.observanda/materials/sequences/chunks/hash.json',{kind:'cell-text',items:[JSON.stringify({computation:marker})]}],['.observanda/materials/figures/value/hash.json',{type:'inline',value:'computation'}],['.observanda/materials/comparison-work/job.json',{note:{computation:marker}}],['arbitrary/private.json',{content:{approximateComputations:1}}]])assert.equal(approximateCalculatorMetadata(path,value),false,path);
 });

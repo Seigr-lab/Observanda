@@ -22,12 +22,12 @@ test('source publication permissions accept booleans without changing older writ
 });
 
 test('publication-permission generations preserve every older independent storage requirement',async()=>{
- const {configurationCatalogueFeatures,configurationCatalogueGeneration,catalogueRequiresSourcePublicationControls,catalogueFormat}=await import('../src/catalogue-format.js');
+ const {CATALOGUE_MAX_GENERATION,configurationCatalogueFeatures,configurationCatalogueGeneration,catalogueRequiresSourcePublicationControls,catalogueFormat}=await import('../src/catalogue-format.js');
  for(let old=122;old<=217;old++){
   const features=configurationCatalogueFeatures(old),next=configurationCatalogueGeneration({...features,permissions:true});
   assert.equal(next,old+96);assert.deepEqual(configurationCatalogueFeatures(next),{...features,permissions:true});
   assert.equal(configurationCatalogueGeneration(features),old);assert.equal(catalogueRequiresSourcePublicationControls(old),false);assert.equal(catalogueRequiresSourcePublicationControls(next),true);
  }
- for(const value of [121,1610612858,218.5,NaN])assert.equal(configurationCatalogueFeatures(value),null);
- await assert.rejects(catalogueFormat({all:async()=>[{version:1610612858}]}),{code:'CATALOGUE_DAMAGED'});
+ for(const value of [121,(CATALOGUE_MAX_GENERATION+1),218.5,NaN])assert.equal(configurationCatalogueFeatures(value),null);
+ await assert.rejects(catalogueFormat({all:async()=>[{version:(CATALOGUE_MAX_GENERATION+1)}]}),{code:'CATALOGUE_DAMAGED'});
 });

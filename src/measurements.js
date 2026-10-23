@@ -1,3 +1,4 @@
+import {derivedComputation} from './web/measurement-computation.js';
 import {retainScalarDefinitions,resolveScalarDefinitions,scalarDefinitionEntries,measurementScalarPolicies} from './measurement-scalar-storage.js';
 import {isScalarRepresentation} from './web/measurement-model.js';
 import {materialReferenceKey} from './web/material-reference.js';
@@ -18,13 +19,16 @@ export class Measurements {
   for(const source of value.sources){
    const doc=await this.materials.read(source.ref),s=source.selector;
    if(s.kind==='bytes'&&s.offset+s.length>doc.content.size)fail();
-   if(s.kind==='cell'){const cell=await this.cell(source);if(cell.quantity.origin==='raw-code'&&(value.value.unit||value.quantity.unitDefinition)&&!(value.quantity.origin==='derived'&&value.quantity.conversion))fail();}
+   if((doc.content?.measurement?.computation||doc.content?.summary?.computation)&&!value.computation)fail();
+   if(s.kind==='cell'){const cell=await this.cell(source);if(cell.column.computation&&!value.computation)fail();if(cell.quantity.origin==='raw-code'&&(value.value.unit||value.quantity.unitDefinition)&&!(value.quantity.origin==='derived'&&value.quantity.conversion))fail();}
    if(s.kind==='json-pointer')await this.inspect(source,{signal});
   }
  }
  async save({recordId,title,id,expectedRevision,measurement},{signal}={}){
   return this.materials.workspace.withLock(async()=>{
-   await this.materials.assertOwner(recordId);await this.validate(measurement,{signal,semantic:false});signal?.throwIfAborted();
+   await this.materials.assertOwner(recordId);if(!validMeasurement(measurement))fail();
+   for(const source of measurement.sources){const doc=source.ref.kind==='dataset'?await this.cell(source):await this.materials.read(source.ref),origin=doc.column??doc.content?.measurement??doc.content?.summary;measurement={...measurement,...derivedComputation(origin)};}
+   await this.validate(measurement,{signal,semantic:false});signal?.throwIfAborted();
    const m=this.materials,previous=id&&expectedRevision?(await m.read({kind:'analysis',id,revision:expectedRevision})):null;
    if(previous&&previous.recordId!==recordId)fail();
    const selected=(value,path)=>path.reduce((v,key)=>v?.[key],value),entries=scalarDefinitionEntries(measurement),bases=[previous?.content.measurement];
@@ -48,9 +52,9 @@ export class Measurements {
  async seed(source){
   if(!validLocator(source))fail();
   if(source.ref.kind==='dataset'){
-   const c=await this.cell(source);if(c.cellReference&&(!c.column.resourcePolicy||!isScalarRepresentation(c.value)))throw new AppError('DATASET_CELL_SCALAR_REQUIRED');return {...(c.column.resourcePolicy?{version:2,resourcePolicy:c.column.resourcePolicy}:{}),value:{...c.value,...(c.cellReference?{spelling:c.cellReference}:{})},quantity:c.quantity,time:c.time,sources:[source]};
+   const c=await this.cell(source);if(c.cellReference&&(!c.column.resourcePolicy||!isScalarRepresentation(c.value)))throw new AppError('DATASET_CELL_SCALAR_REQUIRED');return {...(c.column.resourcePolicy?{version:2,resourcePolicy:c.column.resourcePolicy}:{}),value:{...c.value,...(c.cellReference?{spelling:c.cellReference}:{})},quantity:c.quantity,time:c.time,...derivedComputation(c.column),sources:[source]};
   }
-  await this.materials.read(source.ref);
-  return {value:{spelling:'',representation:'unsupported',radix:10,unit:'',presence:'unknown'},quantity:blankQuantity(),time:{kind:'unknown',reference:'',resolution:'',uncertainty:''},sources:[source]};
+  const doc=await this.materials.read(source.ref);
+  return {...derivedComputation(doc.content?.measurement??doc.content?.summary),value:{spelling:'',representation:'unsupported',radix:10,unit:'',presence:'unknown'},quantity:blankQuantity(),time:{kind:'unknown',reference:'',resolution:'',uncertainty:''},sources:[source]};
  }
 }

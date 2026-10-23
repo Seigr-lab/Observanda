@@ -222,5 +222,12 @@
   "scalarCancelled": "Text loading cancelled; the retained value is unchanged.",
   "scalarUnavailable": "The selected retained text is unavailable or changed. Reopen this view.",
   "scalarLimit": "This value exceeds the declared scalar limit. The retained value is unchanged.",
-  "scalarRange": "Characters {first}-{last} of {total}"
+  "scalarRange": "Characters {first}-{last} of {total}",
+  "exactApproximation": "Exact encoding of stored approximation",
+  "exactApproximateInputs": "Exact encoding of value computed from approximate inputs",
+  "approximationHelp": "An exact encoding preserves the stored digits. It does not make the computation mathematically exact or establish an error bound.",
+  "computationApproximate": "Approximate computation",
+  "computationApproximateInputs": "Computed from approximate inputs",
+  "storedComputation": "Stored computational value",
+  "approximateRepresentation": "Exact encoding of the stored approximation"
 }

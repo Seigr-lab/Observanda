@@ -1,3 +1,4 @@
+import {computationLabel} from './web/measurement-computation.js';
 import {domainDescription} from './web/measurement-domain-ui.js';
 import {createHash} from 'node:crypto';
 import {AppError} from './errors.js';
@@ -20,7 +21,7 @@ export async function* retainedTableHTML(materials,statement,{signal}={}){
   const table=block.table;
   yield '<section class="book-table retained-result-table"><p>'+esc('Rows '+(block.offset+1)+'-'+(block.offset+table.rows.length)+'; columns '+(block.columnOffset+1)+'-'+(block.columnOffset+table.headers.length))+'</p><div class="book-table-scroll" tabindex="0" role="region" aria-label="'+esc(messages.table)+'"><table><thead><tr>';
   for(let i=0;i<table.headers.length;i++){
-   const format=table.formats[i],uncertainty=format.uncertainty;yield '<th scope="col">'+esc(table.headers[i]+(format.domain?' ('+domainDescription(format.domain)+')':''));
+   const format=table.formats[i],uncertainty=format.uncertainty;yield '<th scope="col">'+esc(table.headers[i]+(computationLabel(format)?' ['+computationLabel(format)+']':'')+(format.domain?' ('+domainDescription(format.domain)+')':''));
    if(uncertainty){yield esc(' [Interval method: '+uncertainty.method.name+'; version '+uncertainty.method.version+(uncertainty.method.reference?'; reference '+uncertainty.method.reference.revision:''));
     if(uncertainty.coverage){const level=uncertainty.coverage.level;yield esc('; '+uncertainty.coverage.kind+' ');for await(const text of cellText(materials,level.spelling,{signal}))yield esc(text);yield esc(' ('+level.representation+' base '+level.radix+')');}else yield esc('; no statistical coverage declared');yield ']';
    }

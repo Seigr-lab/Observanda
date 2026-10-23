@@ -1,3 +1,4 @@
+import {validComputation} from './web/measurement-computation.js';
 import {AppError} from './errors.js';
 import {revisionText} from './web/revision-model.js';
 import {ANALYSIS_CATEGORIES,ANALYSIS_MEMBERSHIPS,ANALYSIS_WINDOWS,analysisTextValue} from './web/analysis-model.js';
@@ -38,7 +39,8 @@ export async function verifyComparisonIntegrity(owner,doc,{signal}={}){
  if(![2,3].includes(comparison?.version)||!exact(content,['inputs','tool','version','parameters','method','comparison','summary'])||content.parameters!=='')fail();
  try{await owner.validateOutput(command,{retained:true});}catch(error){if(error.code!=='ANALYSIS_INVALID')throw error;fail();}
  if(!Array.isArray(content.inputs)||!same(content.inputs,owner.references(content.method,comparison)))fail();
- if(!exact(summary,['version','algorithm','algorithmVersion','ordering','rows','raw','aggregate','runs','unknownRunRows','counts','verification','sourceRows','sourceIdentities','index'])||summary.version!==2||summary.algorithm!=='observanda-exception-comparison'||summary.algorithmVersion!==(comparison.version===3?'4':'3')||summary.ordering!==comparison.ordering||!natural(summary.rows)||!validCounts(summary.raw)||!validCounts(summary.aggregate)||!natural(summary.runs)||!natural(summary.unknownRunRows)||!exact(summary.counts,['groups','distribution','transitions','observations'])||!Object.values(summary.counts).every(natural)||!Array.isArray(summary.sourceRows)||summary.sourceRows.length!==comparison.sources.length||!summary.sourceRows.every(natural)||summary.sourceRows.reduce((a,b)=>a+b,0)!==summary.rows)fail();
+ if(!exact(summary,['version','algorithm','algorithmVersion','ordering','rows','raw','aggregate','runs','unknownRunRows','counts','verification','sourceRows','sourceIdentities','index',...(Object.hasOwn(summary??{},'computation')?['computation']:[])])||summary.version!==2||summary.algorithm!=='observanda-exception-comparison'||summary.algorithmVersion!==(comparison.version===3?'4':'3')||summary.ordering!==comparison.ordering||!natural(summary.rows)||!validCounts(summary.raw)||!validCounts(summary.aggregate)||!natural(summary.runs)||!natural(summary.unknownRunRows)||!exact(summary.counts,['groups','distribution','transitions','observations'])||!Object.values(summary.counts).every(natural)||!Array.isArray(summary.sourceRows)||summary.sourceRows.length!==comparison.sources.length||!summary.sourceRows.every(natural)||summary.sourceRows.reduce((a,b)=>a+b,0)!==summary.rows)fail();
+ if(Object.hasOwn(summary,'computation')&&(!validComputation(summary.computation)||summary.computation.kind!=='approximate-inputs'))fail();
  validateComparisonSourceIdentities(comparison,summary.sourceIdentities);
  verification(summary.verification,comparison,summary.sourceRows);
  const retained=owner.index(summary),coverage=summary.sourceRows.map(()=>0);let previous=null,rows=0;
