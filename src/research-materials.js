@@ -1,4 +1,4 @@
-import {nativeNumericalMaterial} from './numerical-material-format.js';
+import {nativeNumericalMaterial,nativeClockMaterial} from './numerical-material-format.js';
 import {datasetRowPosition,datasetPageInfo} from './dataset-row-position.js';
 import {datasetColumns as storedDatasetColumns,storedDatasetCells,preparePagedDataset,projectDatasetRows} from './dataset-storage.js';
 import {readDatasetCell,verifyDatasetCell} from './dataset-cell-storage.js';
@@ -724,6 +724,8 @@ export class ResearchMaterials {
     const doc=await this.read(ref);
     const checkNumericalFormat=async()=>{if(await this.workspace.storageKind()==='catalogue')await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresNativeNumericalModels}=await import('./catalogue-format.js');if(!catalogueRequiresNativeNumericalModels(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});};
     if(nativeNumericalMaterial(doc))await checkNumericalFormat();
+    const checkClockFormat=async()=>{if(await this.workspace.storageKind()==='catalogue')await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresNativeClockModels}=await import('./catalogue-format.js');if(!catalogueRequiresNativeClockModels(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});};
+    if(nativeClockMaterial(doc))await checkClockFormat();
     if(revisionText(await this.index.inputSet(ref))!==revisionText(this.referenceSet(doc.content)))fail('CATALOGUE_DAMAGED');
     if(doc.previous)await enqueue({...ref,revision:doc.previous});
     const comparison=doc.content.comparison?.version===2;
@@ -741,7 +743,7 @@ export class ResearchMaterials {
     if(ref.kind==='dataset'){
      await verifyRetainedCalculation(this,doc);
      if(doc.content.datasetFormat===3)await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresPagedResearchTables}=await import('./catalogue-format.js');if(!catalogueRequiresPagedResearchTables(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
-     let checkedUnitFormat=false;for await(const column of this.iterateDatasetColumns(doc)){if(column.quantity?.unitDefinition!==undefined){if(!validQuantity(column.quantity,column.unit))fail('MATERIAL_MISSING');if(!checkedUnitFormat){await checkNumericalFormat();checkedUnitFormat=true;}}for(const r of schemaReferences(column))await enqueue(r);}
+     let checkedUnitFormat=false,checkedClockFormat=false;for await(const column of this.iterateDatasetColumns(doc)){if(column.quantity?.unitDefinition!==undefined){if(!validQuantity(column.quantity,column.unit))fail('MATERIAL_MISSING');if(!checkedUnitFormat){await checkNumericalFormat();checkedUnitFormat=true;}}if(column.time?.clock?.definition!==undefined){if(!validTime(column.time))fail('MATERIAL_MISSING');if(!checkedClockFormat){await checkClockFormat();checkedClockFormat=true;}}for(const r of schemaReferences(column))await enqueue(r);}
      if(doc.content.aggregationMembersIndex&&!doc.content.aggregation)fail('MATERIAL_MISSING');
      const aggregationContext=doc.content.aggregationMembersIndex?await aggregationMemberContext(this,doc):null;let memberOffset=0;
      for await(const row of this.iterateDataset(ref,{metadataOnly:true})){

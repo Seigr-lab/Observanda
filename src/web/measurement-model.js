@@ -3,6 +3,7 @@
 import {researchId} from './research-reference.js';
 import {revisionId} from './revision-model.js';
 import {exactRational} from './measurement-rational.js';
+import {validClockDefinition} from './measurement-clock-model.js';
 import {validUnitDefinition} from './measurement-unit-model.js';
 export {exactRational} from './measurement-rational.js';
 export const REPRESENTATIONS=['text','decimal','integer','radix','radix-fraction','rational','unsupported'];
@@ -29,7 +30,8 @@ export const blankClock=()=>({width:null,frequency:'',ordering:'unknown',wrap:'u
 export function validTime(time){
  if(!keys(time,['kind','reference','resolution','uncertainty','clock'])||!TIME_KINDS.includes(time.kind)||!['reference','resolution','uncertainty'].every(k=>text(time[k],500)))return false;
  if(time.clock===undefined)return time.kind!=='external';
- const c=time.clock;if(!keys(c,['width','frequency','ordering','wrap','reset','epoch','model','referenceData'])||!(c.width===null||Number.isInteger(c.width)&&c.width>=1&&c.width<=4096)||!text(c.frequency,200)||!['unknown','source','monotonic','unordered'].includes(c.ordering)||!['unknown','none','modulo','observed'].includes(c.wrap)||!['unknown','none','observed'].includes(c.reset)||!text(c.epoch,500)||!optionalRef(c.model)||!optionalRef(c.referenceData))return false;
+ const c=time.clock;if(!keys(c,['width','frequency','ordering','wrap','reset','epoch','model','referenceData','definition'])||!(c.width===null||Number.isInteger(c.width)&&c.width>=1&&c.width<=4096)||!text(c.frequency,200)||!['unknown','source','monotonic','unordered'].includes(c.ordering)||!['unknown','none','modulo','observed'].includes(c.wrap)||!['unknown','none','observed'].includes(c.reset)||!text(c.epoch,500)||!optionalRef(c.model)||!optionalRef(c.referenceData))return false;
+ if(c.definition!==undefined&&!validClockDefinition(c.definition))return false;
  if(c.frequency){try{if(exactRational(c.frequency).numerator<=0n)return false;}catch{return false;}}
  return time.kind!=='external'||!!c.model&&!!c.referenceData;
 }

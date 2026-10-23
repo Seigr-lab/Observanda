@@ -155,5 +155,15 @@
     "unitFormula": "Canonical value = source value * scale + offset. Scale must be positive; differences have zero offset. This declaration does not establish calibration or accuracy.",
     "unitDeclared": "Retained unit definition",
     "unitInvalid": "Use distinct dimension identifiers, nonzero integer exponents from -32 to 32, a positive exact scale and a valid offset. Differences require zero offset.",
-    "unitLimits": "Up to 16 dimension identifiers; integer exponents from -32 to 32, excluding zero. Exact scale and offset spellings support up to 8,192 characters."
+    "unitLimits": "Up to 16 dimension identifiers; integer exponents from -32 to 32, excluding zero. Exact scale and offset spellings support up to 8,192 characters.",
+    "clockDeclare":  "Declare exact counter modulus or rate",
+    "clockModulusDeclare":  "Declared modulus",
+    "clockRateDeclare":  "Declared rate",
+    "clock-modulus":  "Counter modulus (count range)",
+    "clock-counts":  "Counts per interval",
+    "clock-interval":  "Interval length",
+    "clockIntervalUnit":  "Interval unit",
+    "clockDeclared":  "Declared clock model",
+    "clockDefinitionHelp":  "A declared rate does not resolve resets or wraps, or establish synchronization. Hardware width and frequency remain separate facts.",
+    "clockInvalid":  "Declare a positive whole-number modulus or a positive exact rate. A typed interval must be a difference quantity."
 }

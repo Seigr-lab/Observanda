@@ -93,7 +93,7 @@ export async function requireFigureCopyDrafts(db){return requireCatalogueFormat(
 async function requireCatalogueFormat(db,version){
  if(await catalogueFormat(db)>=version)return;
  await db.run('ALTER TABLE catalogue_format DROP CONSTRAINT catalogue_format_version_check');
- await db.run('ALTER TABLE catalogue_format ADD CONSTRAINT catalogue_format_version_check CHECK(version BETWEEN 3 AND 24697)');
+ await db.run('ALTER TABLE catalogue_format ADD CONSTRAINT catalogue_format_version_check CHECK(version BETWEEN 3 AND 49273)');
  await db.run('UPDATE catalogue_format SET version=$1 WHERE version<$1',version);
 }
 
@@ -173,13 +173,13 @@ export async function restoreRecordOwnerTransferCatalogueFormat(db,format){
 // additionally require publication permissions, paged website source choices
 // and nested preparation collections before an older app can open the catalogue.
 export function configurationCatalogueFeatures(format){
- if(!Number.isInteger(format)||format<122||format>24697)return null;
- const value=(format-122)%24;return {website:Math.floor(value/6),staged:value%6>=3,owners:value%3,publication:(format-122)%48>=24,transfers:(format-122)%96>=48,...((format-122)%192>=96?{permissions:true}:{}),...((format-122)%384>=192?{sourceSelections:true}:{}),...((format-122)%768>=384?{nestedAttempts:true}:{}),...((format-122)%1536>=768?{ownerDirectories:true}:{}),...((format-122)%3072>=1536?{portability:true}:{}),...((format-122)%6144>=3072?{templateInheritance:true}:{}),...((format-122)%12288>=6144?{pagedResearchTables:true}:{}),...(format>=12410?{nativeNumericalModels:true}:{})};
+ if(!Number.isInteger(format)||format<122||format>49273)return null;
+ const value=(format-122)%24;return {website:Math.floor(value/6),staged:value%6>=3,owners:value%3,publication:(format-122)%48>=24,transfers:(format-122)%96>=48,...((format-122)%192>=96?{permissions:true}:{}),...((format-122)%384>=192?{sourceSelections:true}:{}),...((format-122)%768>=384?{nestedAttempts:true}:{}),...((format-122)%1536>=768?{ownerDirectories:true}:{}),...((format-122)%3072>=1536?{portability:true}:{}),...((format-122)%6144>=3072?{templateInheritance:true}:{}),...((format-122)%12288>=6144?{pagedResearchTables:true}:{}),...((format-122)%24576>=12288?{nativeNumericalModels:true}:{}),...(format>=24698?{nativeClockModels:true}:{})};
 }
 export const catalogueRequiresConfigurationDocuments=format=>configurationCatalogueFeatures(format)!==null;
-export function configurationCatalogueGeneration({website,staged,owners,publication,transfers,permissions=false,sourceSelections=false,nestedAttempts=false,ownerDirectories=false,portability=false,templateInheritance=false,pagedResearchTables=false,nativeNumericalModels=false}){
- if(typeof publication!=='boolean'||typeof transfers!=='boolean'||typeof permissions!=='boolean'||typeof sourceSelections!=='boolean'||typeof nestedAttempts!=='boolean'||typeof ownerDirectories!=='boolean'||typeof portability!=='boolean'||typeof templateInheritance!=='boolean'||typeof pagedResearchTables!=='boolean'||typeof nativeNumericalModels!=='boolean')throw new AppError('INVALID');
- return publicationCatalogueGeneration({website,staged,owners})+72+(publication?24:0)+(transfers?48:0)+(permissions?96:0)+(sourceSelections?192:0)+(nestedAttempts?384:0)+(ownerDirectories?768:0)+(portability?1536:0)+(templateInheritance?3072:0)+(pagedResearchTables?6144:0)+(nativeNumericalModels?12288:0);
+export function configurationCatalogueGeneration({website,staged,owners,publication,transfers,permissions=false,sourceSelections=false,nestedAttempts=false,ownerDirectories=false,portability=false,templateInheritance=false,pagedResearchTables=false,nativeNumericalModels=false,nativeClockModels=false}){
+ if(typeof publication!=='boolean'||typeof transfers!=='boolean'||typeof permissions!=='boolean'||typeof sourceSelections!=='boolean'||typeof nestedAttempts!=='boolean'||typeof ownerDirectories!=='boolean'||typeof portability!=='boolean'||typeof templateInheritance!=='boolean'||typeof pagedResearchTables!=='boolean'||typeof nativeNumericalModels!=='boolean'||typeof nativeClockModels!=='boolean')throw new AppError('INVALID');
+ return publicationCatalogueGeneration({website,staged,owners})+72+(publication?24:0)+(transfers?48:0)+(permissions?96:0)+(sourceSelections?192:0)+(nestedAttempts?384:0)+(ownerDirectories?768:0)+(portability?1536:0)+(templateInheritance?3072:0)+(pagedResearchTables?6144:0)+(nativeNumericalModels?12288:0)+(nativeClockModels?24576:0);
 }
 export async function requireConfigurationDocuments(db){
  const previous=await catalogueFormat(db);if(catalogueRequiresConfigurationDocuments(previous))return;
@@ -191,7 +191,7 @@ export async function restoreConfigurationCatalogueFormat(db,format){
  const features=configurationCatalogueFeatures(format);if(!features)throw new AppError('CATALOGUE_DAMAGED');
  if(features.owners===2)await requireWorkspaceSettings(db);else if(features.owners===1)await requireWorkspaceDomains(db);
  if(features.website===3)await requireWebsitePresentation(db);else if(features.website===2)await requireWebsiteEditor(db);else if(features.website===1)await requireWebsiteDocuments(db);
- if(features.staged)await requireStagedEvidence(db);if(features.publication)await requirePublicationDocuments(db);if(features.transfers)await requireRecordOwnerTransfers(db);await requireConfigurationDocuments(db);if(features.permissions)await requireSourcePublicationControls(db);if(features.sourceSelections)await requireWebsiteSourceSelections(db);if(features.nestedAttempts)await requireNestedAttemptCollections(db);if(features.ownerDirectories)await requireOwnerDirectories(db);if(features.portability)await requirePortabilityCollections(db);if(features.templateInheritance)await requireCatalogueFormat(db,configurationCatalogueGeneration({...configurationCatalogueFeatures(await catalogueFormat(db)),templateInheritance:true}));if(features.pagedResearchTables)await requirePagedResearchTables(db);if(features.nativeNumericalModels)await requireNativeNumericalModels(db);
+ if(features.staged)await requireStagedEvidence(db);if(features.publication)await requirePublicationDocuments(db);if(features.transfers)await requireRecordOwnerTransfers(db);await requireConfigurationDocuments(db);if(features.permissions)await requireSourcePublicationControls(db);if(features.sourceSelections)await requireWebsiteSourceSelections(db);if(features.nestedAttempts)await requireNestedAttemptCollections(db);if(features.ownerDirectories)await requireOwnerDirectories(db);if(features.portability)await requirePortabilityCollections(db);if(features.templateInheritance)await requireCatalogueFormat(db,configurationCatalogueGeneration({...configurationCatalogueFeatures(await catalogueFormat(db)),templateInheritance:true}));if(features.pagedResearchTables)await requirePagedResearchTables(db);if(features.nativeNumericalModels)await requireNativeNumericalModels(db);if(features.nativeClockModels)await requireNativeClockModels(db);
  if(await catalogueFormat(db)!==format)throw new AppError('CATALOGUE_DAMAGED');
 }
 
@@ -253,4 +253,11 @@ export const catalogueRequiresNativeNumericalModels=format=>configurationCatalog
 export async function requireNativeNumericalModels(db){
  await requireConfigurationDocuments(db);const features=configurationCatalogueFeatures(await catalogueFormat(db));
  if(!features.nativeNumericalModels)await requireCatalogueFormat(db,configurationCatalogueGeneration({...features,nativeNumericalModels:true}));
+}
+
+// Declared counter moduli and rates must not be discarded by earlier editors.
+export const catalogueRequiresNativeClockModels=format=>configurationCatalogueFeatures(format)?.nativeClockModels===true;
+export async function requireNativeClockModels(db){
+ await requireConfigurationDocuments(db);const features=configurationCatalogueFeatures(await catalogueFormat(db));
+ if(!features.nativeClockModels)await requireCatalogueFormat(db,configurationCatalogueGeneration({...features,nativeClockModels:true}));
 }

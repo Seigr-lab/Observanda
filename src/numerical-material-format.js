@@ -15,3 +15,17 @@ export function nativeNumericalMetadata(relative,value){
  if(relative.startsWith('.observanda/materials/sequences/chunks/')&&value?.kind==='columns')return Array.isArray(value.items)&&value.items.some(typedColumn);
  return nativeNumericalMaterial(value);
 }
+
+const clockColumn=column=>column?.time?.clock?.definition!==undefined;
+export function nativeClockCommand(command){
+ return !!command&&(clockColumn(command.measurement)||Array.isArray(command.columns)&&command.columns.some(clockColumn)||Array.isArray(command.columnChanges)&&command.columnChanges.some(change=>clockColumn(change.column)));
+}
+export function nativeClockMaterial(value){
+ const content=value?.content;return !!content&&(clockColumn(content.measurement)||Array.isArray(content.columns)&&content.columns.some(clockColumn));
+}
+export function nativeClockMetadata(relative,value){
+ if(relative.startsWith('.observanda/jobs/')&&value?.type==='dataset.prepare')return nativeClockCommand(value.input?.command);
+ if(!relative.startsWith('.observanda/materials/'))return false;
+ if(relative.startsWith('.observanda/materials/sequences/chunks/')&&value?.kind==='columns')return Array.isArray(value.items)&&value.items.some(clockColumn);
+ return nativeClockMaterial(value);
+}
