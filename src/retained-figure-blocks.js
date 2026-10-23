@@ -3,6 +3,7 @@ import {digest,serialize} from './storage-format.js';
 import {RecordValueTree} from './record-value-tree.js';
 import {validTableRef} from './retained-table-index.js';
 import {retainRecordOwnerMetadata} from './record-owner-resources.js';
+import {withWorkspaceMetadataBatch} from './metadata-batch.js';
 const prefix='.observanda/materials/figures';
 const hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const fail=()=>{throw new AppError('MATERIAL_MISSING');};
@@ -44,7 +45,8 @@ export class RetainedFigureBlocks{
  }
  async flush(){
   if(!this.pending.size)return;this.check();const batch=[...this.pending];
-  await this.write(async()=>{if(typeof this.workspace.catalogue==='function')await this.workspace.catalogue(async store=>{const {requireRetainedFigures}=await import('./catalogue-format.js');await requireRetainedFigures(store.db);});for(const [key,item] of batch){this.check();const prior=await this.workspace.readMetadata(key,65536);if(prior!==null&&prior!==undefined){this.decode(prior,item.revision);if(prior!==item.text)fail();}else{if(typeof this.workspace.catalogue==='function')await retainRecordOwnerMetadata(this.workspace,key,item.text,{dependencies:retainedFigureBlockChildren(item.kind,JSON.parse(item.text)).map(child=>retainedFigureBlockPath(child.kind,child.revision))});await this.workspace.writeMetadata(key,item.text);}}});
+  const flush=async()=>{if(typeof this.workspace.catalogue==='function')await this.workspace.catalogue(async store=>{const {requireRetainedFigures}=await import('./catalogue-format.js');await requireRetainedFigures(store.db);});for(const [key,item] of batch){this.check();const prior=await this.workspace.readMetadata(key,65536);if(prior!==null&&prior!==undefined){this.decode(prior,item.revision);if(prior!==item.text)fail();}else{if(typeof this.workspace.catalogue==='function')await retainRecordOwnerMetadata(this.workspace,key,item.text,{dependencies:retainedFigureBlockChildren(item.kind,JSON.parse(item.text)).map(child=>retainedFigureBlockPath(child.kind,child.revision))});await this.workspace.writeMetadata(key,item.text);}}};
+  await this.write(()=>typeof this.workspace.catalogue==='function'?withWorkspaceMetadataBatch(this.workspace,flush):flush());
   for(const [key,item] of batch){this.pending.delete(key);this.pendingBytes-=Buffer.byteLength(item.text);this.keep(key,item.text);}this.check();
  }
  async *closure(roots,{signal=this.signal}={}){
