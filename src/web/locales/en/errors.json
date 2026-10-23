@@ -131,7 +131,7 @@
   "MATERIAL_DUPLICATE": "This exact revision is already selected. Each input or output can appear once in a collection or analysis.",
   "MATERIAL_DRAFT_INCOMPLETE": "Some selected references have not been received. Resume this draft before completing it.",
   "MATERIAL_DATASET_LIMIT": "This dataset exceeds the supported exact index range. Its original and earlier revisions are unchanged.",
-  "MATERIAL_ANALYSIS_LIMIT": "This figure exceeds 10,000 output points, 256 series, 262,144 label characters or the median sorting capacity. Summarize rows or choose fewer series. Nothing was truncated; originals and previous results are unchanged.",
+  "MATERIAL_ANALYSIS_LIMIT": "This calculation exceeds a supported processing limit. Nothing was truncated; original data and previous results are unchanged.",
   "MATERIAL_PLOT_LIMIT": "This request exceeds the small-table reader budget. Read retained pages instead. Original values and revisions are unchanged.",
   "MATERIAL_TABLE": "Check the UTF-8 source and mapping: use consistent delimited columns, a JSON array, or one JSON value per line. Limits: 256 columns, 262,144 characters per row, 64 nesting levels and 4,096 keys per object. The original file has been kept.",
   "MATERIAL_INVALID": "Check the evidence or dataset fields. Nothing was replaced.",
