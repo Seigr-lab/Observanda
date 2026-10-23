@@ -381,5 +381,7 @@
   "MEASUREMENT_DOMAIN_COMPONENT_LIMIT": "A component exceeds the exact scalar processing budget. Its source is preserved; no shortened value was used.",
   "MEASUREMENT_CLOCK_TRANSITION": "The declared counter transition cannot determine a valid interval. Inspect the endpoints, explicit wrap counts and reset markers.",
   "MEASUREMENT_INTERVAL_INVALID": "Declare compatible closed bounds, units, and an interval method. Interval division cannot include zero in the divisor.",
-  "DATASET_CALCULATION_RESOURCE": "The exact operation exceeds its saved resource policy. No approximate or partial result was retained. Edit the graph resource policy and prepare a new result; the earlier graph, source values and results remain available."
+  "DATASET_CALCULATION_RESOURCE": "The exact operation exceeds its saved resource policy. No approximate or partial result was retained. Edit the graph resource policy and prepare a new result; the earlier graph, source values and results remain available.",
+  "DATASET_WINDOW_INVALID": "Choose a valid retained-row window and compatible source. Sum and mean require scalar difference quantities. Source row positions are never inferred from timestamps.",
+  "DATASET_WINDOW_VALUE": "A source row is outside the frame rules or contains a missing value that this window refuses. Inspect the pinned source rows or save a new graph revision with explicit boundary and missing-value rules."
 }

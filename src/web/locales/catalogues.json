@@ -1,4 +1,5 @@
 {
+  "datasetWindows": ["en"],
   "datasetResources": ["en"],
   "measurementTransform": ["en"],
   "retainedFigureEditor": ["en"],
