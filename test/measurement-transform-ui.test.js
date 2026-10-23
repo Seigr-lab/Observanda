@@ -55,10 +55,10 @@ test('invalid edits survive a draft read but actual submission refuses rather th
  assert.throws(()=>readMeasurementTransform(root,{xKind:'date'}),/numeric horizontal/);
  assert.deepEqual(readMeasurementTransform(root,{xKind:'date',validate:false}),{version:1,x:transform()});
  const scale=quantity(axis(root,'x'),'scale');item(scale,'spelling').value='0';
- assert.throws(()=>readMeasurementTransform(root),/positive scales/);
+ assert.throws(()=>readMeasurementTransform(root),{name:'RangeError',message:'Projection scale must be positive'});
  assert.equal(readMeasurementTransform(root,{validate:false}).x.scale.spelling,'0');
  item(scale,'spelling').value='1';item(scale,'representation').value='radix';item(scale,'radix').value='1';
- assert.throws(()=>readMeasurementTransform(root),/positive scales/);
+ assert.throws(()=>readMeasurementTransform(root),{name:'RangeError',message:'Invalid projection quantity'});
  item(axis(root,'x'),'enabled').checked=false;assert.equal(readMeasurementTransform(root,{xKind:'date'}),undefined);
 });
 
