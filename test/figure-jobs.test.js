@@ -89,3 +89,25 @@ test('figure jobs fence retries, cancel partial sorting and atomically retain an
  f.queue.write=write;const completed=await f.queue.complete(id,second.lease.token,prepared);assert.equal(completed.state,'completed');
  assert.equal((await f.materials.read(completed.result)).content.denominator.rows,5000);
 });
+
+test('plot preparation bounds owner connections and closes them on cancellation while preserving fresh transactions',{timeout:60000},async t=>{
+ const f=await fixture(t,129),open=f.workspace.openCatalogue.bind(f.workspace),entries=[];
+ f.workspace.openCatalogue=async options=>{const db=await open(options),close=db.close.bind(db),entry={closed:false};entries.push(entry);db.close=async()=>{try{return await close();}finally{entry.closed=true;}};return db;};
+ t.after(()=>{f.workspace.openCatalogue=open;});
+ const marker='.observanda/plot-connection-test.json',controller=new AbortController();let progressed=false;
+ await assert.rejects(f.materials.preparePlot(f.command,{signal:controller.signal,progress:async p=>{
+  if(p.stage!=='calculating dataset rows'||progressed)return;progressed=true;assert.equal(p.done,64);
+  assert.equal(await f.workspace.readMetadata(marker,1024),null);
+  // The producer holds no read transaction or writer lock across this callback.
+  await f.workspace.withLock(()=>f.workspace.writeMetadata(marker,'{"done":64}'));
+  assert.equal(await f.workspace.readMetadata(marker,1024),'{"done":64}');
+  controller.abort(new AppError('JOB_CANCELLED'));
+ }}),{code:'JOB_CANCELLED'});
+ assert.equal(progressed,true);assert.ok(entries.length<=3,'cancelled producer reuses bounded owner handles');assert.ok(entries.every(entry=>entry.closed),'cancelled preparation drains and closes every handle');
+ entries.length=0;
+ const prepared=await f.materials.preparePlot(f.command,{signal:t.signal});
+ assert.equal(prepared.content.denominator.rows,129);assert.equal(prepared.content.figure.document.counts.points,3);
+ assert.ok(entries.length<=3,'complete producer reuses bounded owner handles');assert.ok(entries.every(entry=>entry.closed),'successful preparation also closes every handle');
+ f.workspace.openCatalogue=open;
+ const ref=await f.workspace.withLock(()=>f.materials.commitPlot(f.command,prepared));assert.deepEqual((await f.materials.read(ref)).content.figure,prepared.content.figure);
+});

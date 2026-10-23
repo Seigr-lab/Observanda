@@ -534,12 +534,16 @@ export class ResearchMaterials {
   }
  }
  async preparePlot(command,{signal,progress=async()=>{},writePage,attempt=randomUUID(),jobId=command.id??randomUUID()}={}){
+  // Reuse owner-authenticated handles, while each selected read and retained
+  // block flush still opens its own fresh transaction. The scope drains on abort.
+  return this.workspace.withCatalogueConnections(async()=>{
   const doc=await this.validatePlot(command),{mapping,dataset}=command,selection=await datasetPlotSelection(this,doc,mapping),columns=selection.columns,operation=mapping.operation??'raw';
   const write=writePage??(fn=>this.workspace.withLock(fn)),prefix=this.plotWork(jobId,attempt);
   void prefix;
   const retainedWrite=operation=>write(async()=>{if(typeof this.workspace.catalogue==='function')await this.workspace.catalogue(async store=>{const {requireRetainedFigures,requireNativeNumericalModels}=await import('./catalogue-format.js');await requireRetainedFigures(store.db);if(mapping.projection)await requireNativeNumericalModels(store.db);});return operation();});
   const result=await prepareRetainedPlot(this,doc,command,selection,{write:retainedWrite,signal,progress});
   return {commandHash:digest(revisionText(command)),content:{inputs:[dataset],tool:'Observanda table mapping',version:'9',parameters:JSON.stringify(mapping),mapping,numericTransform:{...(mapping.projection?{algorithm:'exact-affine-rational-to-binary64',version:1,projection:mapping.projection,errorUnits:'source'}:{algorithm:'exact-rational-to-binary64',version:2}),policy:mapping.numericPolicy??'safe',significantDigits:17,...(operation!=='raw'?{reduction:{algorithm:'exact-rational-reduction',version:1,operation,grouping:'exact-coordinate',projection:'after-reduction'}}:{})},...result}};
+  });
  }
 
  async commitPlot(command,prepared){
