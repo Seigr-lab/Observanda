@@ -1,3 +1,4 @@
+import {noticeLayout} from './notice-layout.js';
 import {websiteEditingGuard} from './website-editing-guard.js';
 import {configurationRecordCreation} from './configuration-record-creation.js';
 import {publicationReviewChoicesUI} from './publication-review-choices.js';
@@ -129,6 +130,7 @@ import {applicationMark} from './app-brand.js';
 import {brandingUI} from './branding-ui.js';
 import { RECORD_TYPES, recordLabel } from './record-types.js';
 const $ = selector => document.querySelector(selector);
+const notices=noticeLayout($('#notice'));
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const types = RECORD_TYPES.map(type => type.id);
 const titleCase = text => text.charAt(0).toUpperCase() + text.slice(1);
@@ -298,9 +300,9 @@ async function ensureCompleteWorkspace(){
 }
 function notify(message, error = false) {
   clearTimeout(noticeTimer);
-  const notice = $('#notice'); notice.textContent = message; notice.className = `notice${error ? ' error' : ''}`; notice.hidden = false;
-  const close = document.createElement('button'); close.textContent = 'Dismiss'; close.onclick = () => { notice.hidden = true; }; notice.append(close);
-  if (!error) noticeTimer = setTimeout(() => { notice.hidden = true; }, 5000);
+  const notice = notices.node, text = document.createElement('span'); text.className = 'notice-message'; text.textContent = message; notice.replaceChildren(text); notice.className = `notice${error ? ' error' : ''}`;
+  const close = document.createElement('button'); close.type = 'button'; close.textContent = 'Dismiss'; close.onclick = () => notices.hide(); notice.append(close); notices.show();
+  if (!error) noticeTimer = setTimeout(() => notices.hide(), 5000);
 }
 function report(error) {
   if(error?.name==='AbortError')return;
@@ -761,7 +763,7 @@ function render() {
   document.documentElement.dataset.appMode=state.access?.locked||state.storageUnavailable&&!state.newWorkspace?'access':!state.book||state.newWorkspace?'setup':'workspace';
   designUI.applyToApp();
   if(document.documentElement.dataset.appMode!=='workspace')shellMenu.apply(null);
-  if(state.access?.locked){recordWriting.locked();recordValues.locked();dashboard.releaseData();recordList.stop({clear:true});fontLibrary.clear();recordSelectionLoading.close();recordUpdatesLoading.close();recordRecovery.close();recordDrafts.close();$('#dialog').close();$('#notice').hidden=true;renderAccess(storageControls.lockView());return;}
+  if(state.access?.locked){recordWriting.locked();recordValues.locked();dashboard.releaseData();recordList.stop({clear:true});fontLibrary.clear();recordSelectionLoading.close();recordUpdatesLoading.close();recordRecovery.close();recordDrafts.close();$('#dialog').close();notices.hide();renderAccess(storageControls.lockView());return;}
   if(state.page==='workspaces'&&!state.newWorkspace&&(state.storageUnavailable||!state.book)){renderAccess(storageControls.workspaces.view({standalone:true}));storageControls.workspaces.bind();syncRoute();return;}
   if(state.storageUnavailable&&!state.newWorkspace){renderAccess(storageControls.unavailable());return;}
   if (!state.book || state.newWorkspace) { renderOnboarding(); drafts.track(); return; }
