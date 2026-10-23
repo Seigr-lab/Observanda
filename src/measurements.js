@@ -35,7 +35,7 @@ export class Measurements {
   const col=schema.items[0],kind=selected.valueKinds?.[0],presence=['null','absent'].includes(kind)?kind:col.missing.some(m=>m.value===selected.cells[0])?'missing':'value';
   return {doc,pageRows:data.rows.length,row:selected,column:col,...(typeof selected.cells[0]==='string'?{}:{cellReference:selected.cells[0]}),value:{spelling:typeof selected.cells[0]==='string'?selected.cells[0]:'',representation:col.representation,...(col.domain?{domain:col.domain}:{}),radix:col.radix,unit:col.unit,presence},quantity:col.quantity??blankQuantity(),time:col.time};
  }
- inspect(source,options={}){return inspectMeasurementSource(this,source,options);}
+ inspect(source,options={}){const run=()=>inspectMeasurementSource(this,source,options),workspace=this.materials.workspace;return workspace.withCatalogueConnections?workspace.withCatalogueConnections(run):run();}
  async seed(source){
   if(!validLocator(source))fail();
   if(source.ref.kind==='dataset'){
