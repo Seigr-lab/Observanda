@@ -9,5 +9,6 @@
   "changed": "The value changed while reading the clipboard. Your edit was kept; paste again to replace it.",
   "length": "The complete copied value exceeds this editor's supported length. Nothing was pasted.",
   "lines": "This value contains line breaks that this field cannot retain. Nothing was pasted.",
-  "unavailable": "Clipboard access is unavailable. Use the browser's copy and paste controls."
+  "unavailable": "Clipboard access is unavailable. Use the browser's copy and paste controls.",
+  "contextMismatch": "This copied value uses a different numeral interpretation from the saved field. Nothing was pasted; change the field schema explicitly to use another interpretation."
 }
