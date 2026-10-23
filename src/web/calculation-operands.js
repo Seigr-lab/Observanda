@@ -7,8 +7,8 @@ export function validConstantType(value){
  if(value.representation===undefined&&value.radix===undefined)return true;
  return CONSTANT_REPRESENTATIONS.includes(value.representation)&&Number.isInteger(value.radix)&&value.radix>=2&&value.radix<=36&&(['radix','radix-fraction'].includes(value.representation)||value.radix===10)&&supportedValue(value.constant,value.representation,value.radix);
 }
-export function constantExact(value){
+export function constantExact(value,budget){
  if(value.representation==='text')return null;
- if(value.representation!==undefined)return exactRational(value.constant,value.representation,value.radix);
- try{return exactRational(value.constant);}catch{return null;}
+ if(value.representation!==undefined)return exactRational(value.constant,value.representation,value.radix,budget);
+ try{return exactRational(value.constant,'decimal',10,budget);}catch(error){if(budget?.scalarPolicy&&error.code)throw error;return null;}
 }

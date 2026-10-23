@@ -1,3 +1,4 @@
+import {numericalOperation} from './dataset-resource-budget.js';
 // Explicit interval operations reuse exact scalar/unit evaluation and retained domains.
 import {AppError} from './errors.js';
 import {ArithmeticBudget} from './tools/exact-arithmetic.js';
@@ -21,17 +22,17 @@ export function intervalOperationColumn(node,columns){
  else if(['bounds','add','subtract'].includes(node.operation)&&(left.unit!==right.unit||node.unit!==left.unit))fail();
  return {...defaultColumn({label:'Interval'}),representation:'domain',domain:intervalDomain({version:1,representation:'rational',radix:10}),unit:node.unit,missing:[],quantity:{...structuredClone(node.quantity),uncertainty:node.operation==='bounds'?structuredClone(node.quantity.uncertainty):enclosureUncertainty()}};
 }
-async function interval(materials,cell,column,signal){
- const value=validateDomainValue(materials,cell.value,column.domain);if(!domainValueSupported(value))fail();const page=await domainValuePage(materials,value,{limit:2,signal});if(page.items.length!==2||page.items.some(item=>item.presence!=='value'))fail();return parseIntervalBounds(page.items.map(item=>item.spelling),column.domain.component);
+async function interval(materials,cell,column,signal,budget){
+ const value=validateDomainValue(materials,cell.value,column.domain);if(!domainValueSupported(value))fail();const page=await domainValuePage(materials,value,{limit:2,signal});if(page.items.length!==2||page.items.some(item=>item.presence!=='value'))fail();return numericalOperation(budget,b=>parseIntervalBounds(page.items.map(item=>item.spelling),column.domain.component,{budget:b}));
 }
 async function calculateIntervalNodeInner(materials,node,cells,columns,{signal,write=fn=>fn(),budget}={}){
  const output=intervalOperationColumn(node,columns);signal?.throwIfAborted();if(cells.some((cell,index)=>!present(cell,columns[index])))return absent;
- const inputs=[];if(node.operation!=='bounds')for(let index=0;index<cells.length;index++)inputs.push(await interval(materials,cells[index],columns[index],signal));budget??=new ArithmeticBudget();
- if(['lower','upper'].includes(node.operation)){const value=intervalComponents(inputs[0],{budget});return {value:value[node.operation==='lower'?0:1],kind:'string'};}
- let value;
- if(node.operation==='bounds'){const points=cells.map((cell,index)=>{if(typeof cell.value!=='string')throw new AppError('MEASUREMENT_DOMAIN_COMPONENT_LIMIT');const exact=exactRational(cell.value,columns[index].representation,columns[index].radix);return {lower:exact,upper:exact};});if(unit(output))for(let index=0;index<2;index++)points[index]=convertIntervalBounds(points[index],unit(columns[index]),unit(output),{budget});value={lower:points[0].lower,upper:points[1].upper};}
+ budget??=new ArithmeticBudget();const inputs=[];if(node.operation!=='bounds')for(let index=0;index<cells.length;index++)inputs.push(await interval(materials,cells[index],columns[index],signal,budget));
+ if(['lower','upper'].includes(node.operation)){const value=numericalOperation(budget,budget=>intervalComponents(inputs[0],{budget}));return {value:value[node.operation==='lower'?0:1],kind:'string'};}
+ const components=numericalOperation(budget,budget=>{let value;
+ if(node.operation==='bounds'){const points=cells.map((cell,index)=>{if(typeof cell.value!=='string')throw new AppError('MEASUREMENT_DOMAIN_COMPONENT_LIMIT');const exact=exactRational(cell.value,columns[index].representation,columns[index].radix,budget);return {lower:exact,upper:exact};});if(unit(output))for(let index=0;index<2;index++)points[index]=convertIntervalBounds(points[index],unit(columns[index]),unit(output),{budget});value={lower:points[0].lower,upper:points[1].upper};}
  else value=calculateIntervalBounds(node.operation,inputs[0],inputs[1],{leftUnit:unit(columns[0]),rightUnit:unit(columns[1]),outputUnit:unit(output),budget});
- const components=intervalComponents(value,{budget});return {kind:'string',value:await retainDomainValue(materials,{kind:'string',value:JSON.stringify(components)},output.domain,write,{signal})};
+ return intervalComponents(value,{budget});});return {kind:'string',value:await retainDomainValue(materials,{kind:'string',value:JSON.stringify(components)},output.domain,write,{signal})};
 }
 
 export async function calculateIntervalNode(...args){try{return await calculateIntervalNodeInner(...args);}catch(error){if(error instanceof IntervalError)throw new AppError(error.code);throw error;}}

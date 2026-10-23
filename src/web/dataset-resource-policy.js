@@ -1,0 +1,6 @@
+// A retained graph revision declares exact computation resources, never evidence precision.
+export const datasetResourceLimits=Object.freeze({maxBits:[64,262144],maxOperations:[1,1000000],maxMilliseconds:[1,30000],maxScalarCharacters:[16,65536],maxExponent:[0,65536]});
+const exact=(v,keys)=>v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).length===keys.length&&keys.every(k=>Object.hasOwn(v,k));
+export function defaultDatasetResourcePolicy(){return {version:1,engine:'observanda-exact',engineVersion:1,scope:'scalar-operation',resources:{maxBits:65536,maxOperations:50000,maxMilliseconds:2500,maxScalarCharacters:8192,maxExponent:8192}};}
+export function validDatasetResourcePolicy(v){return exact(v,['version','engine','engineVersion','scope','resources'])&&v.version===1&&v.engine==='observanda-exact'&&v.engineVersion===1&&v.scope==='scalar-operation'&&exact(v.resources,Object.keys(datasetResourceLimits))&&Object.entries(datasetResourceLimits).every(([key,[min,max]])=>Number.isSafeInteger(v.resources[key])&&v.resources[key]>=min&&v.resources[key]<=max);}
+export class DatasetResourceError extends Error{constructor(){super('The exact operation exceeds its saved resource policy.');this.code='DATASET_CALCULATION_RESOURCE';}}

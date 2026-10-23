@@ -1,4 +1,5 @@
 {
+  "datasetResources": ["en"],
   "measurementTransform": ["en"],
   "retainedFigureEditor": ["en"],
   "retainedFigureReader": ["en"],

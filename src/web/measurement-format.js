@@ -1,3 +1,6 @@
+import {policyFormat} from './measurement-policy-format.js';
+import {ExactFormatError} from './measurement-format-error.js';
+export {ExactFormatError} from './measurement-format-error.js';
 import {validNumeralContext,resultContext} from './numeral-context.js';
 
 // Matches the current exact-value parser's resource envelope. This is not a
@@ -12,11 +15,10 @@ export function rationalText(value){
  const {numerator:n,denominator:d}=reduced(value),text=n+'/'+d;
  if(text.length>MAX_SPELLING)throw Error('precision');return text;
 }
-export class ExactFormatError extends Error{
- constructor(code){super(code);this.code=code;}
-}
+
 const fail=code=>{throw new ExactFormatError(code);};
-export function formatExactResult(value,context=resultContext()){
+export function formatExactResult(value,context=resultContext(),budget){
+ if(budget?.scalarPolicy)return policyFormat(value,context,budget);
  if(!validNumeralContext(context))throw Error('representation');
  const {numerator:n,denominator:d}=reduced(value);
  if(context.representation==='rational'){

@@ -1,6 +1,8 @@
+import {policyRational} from './measurement-policy-rational.js';
 // Parse an explicitly declared numeral context without changing its source spelling.
 const text=(v,max)=>typeof v==='string'&&v.length<=max&&!/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/u.test(v);
-export function exactRational(value,representation='decimal',radix=10){
+export function exactRational(value,representation='decimal',radix=10,budget){
+ if(budget?.scalarPolicy)return policyRational(value,representation,radix,budget);
  if(representation==='rational'){
   if(!text(value,8192)||!/^[-+]?\d+\/[1-9]\d*$/.test(value))throw Error('value');
   let [n,d]=value.split('/').map(BigInt),a=n<0n?-n:n,b=d;while(b)[a,b]=[b,a%b];a||=1n;return {numerator:n/a,denominator:d/a};

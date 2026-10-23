@@ -39,15 +39,15 @@ export function validCalculation(v){
  if(v.where&&!v.selectionReason.trim())return false;
  return v.joins.every(j=>keys(j,['dataset','keys','where','unmatched',...(v.version>=2?['projection']:[])])&&measurementRef(j.dataset)&&j.dataset.kind==='dataset'&&Array.isArray(j.keys)&&j.keys.length>0&&j.keys.length<=8&&j.keys.every(k=>keys(k,['left','right','semantics'])&&Number.isInteger(k.left)&&k.left>=0&&k.left<256&&Number.isInteger(k.right)&&k.right>=0&&k.right<256&&(k.semantics===undefined||KEY_SEMANTICS.includes(k.semantics)))&&(j.where===null||validCondition(j.where,256,v.version))&&['error','keep'].includes(j.unmatched))&&v.steps.every(s=>keys(s,['name','unit','operation','left','right','condition','output',...(v.version===3?['quantity']:[])])&&text(s.name,200)&&s.name.trim()&&text(s.unit,100)&&(s.output===undefined||validNumeralContext(s.output))&&(s.quantity===undefined||validQuantity(s.quantity,s.unit))&&calculationOperations(v.version).includes(s.operation)&&validOperand(s.left,256,v.version)&&(calculationUnary(s.operation)?s.right===null:validOperand(s.right,256,v.version))&&(s.operation==='choose'?validCondition(s.condition,256,v.version):s.condition===null));
 }
-export function operandValue(operand,row,columns){
+export function operandValue(operand,row,columns,budget){
  if(Object.hasOwn(operand,'constant')){
-  const exact=constantExact(operand);
+  const exact=constantExact(operand,budget);
   return {raw:operand.constant,exact,unit:operand.unit,quantity:operand.quantity,present:true,sources:[]};
  }
  const i=operand.column,c=columns[i],raw=row.cells[i];
  const present=!['absent','null'].includes(row.valueKinds?.[i])&&!c.missing.some(m=>m.value===raw);let exact=null;
  if(c.representation==='domain')throw Error('Domain values require a domain graph operation');
- if(present&&isScalarRepresentation(c))exact=exactRational(raw,c.representation,c.radix);
+ if(present&&isScalarRepresentation(c))exact=exactRational(raw,c.representation,c.radix,budget);
  return {raw,exact,unit:c.unit,quantity:c.quantity,present,sources:row.cellSources?.[i]??[]};
 }
 export function calculationCondition(c,row,columns){

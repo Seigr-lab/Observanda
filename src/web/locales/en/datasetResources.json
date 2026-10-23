@@ -1,0 +1,17 @@
+{
+  "title": "Exact calculation resources",
+  "action": "Resource policy",
+  "save": "Save resource policy",
+  "cancel": "Cancel",
+  "help": "Each scalar operation shares these limits across parsing, unit conversion, arithmetic and formatting. Source and storage waits do not consume arithmetic time. Results stay exact; a limit stops preparation without rounding.",
+  "legacy": "Saving a policy creates a new graph revision. Earlier revisions keep their original calculation behavior.",
+  "codec": "Declared domain codecs keep their own component capacities.",
+  "maxBits": "Integer and intermediate size (bits)",
+  "maxOperations": "Arithmetic operations",
+  "maxMilliseconds": "Arithmetic time (milliseconds)",
+  "maxScalarCharacters": "Scalar text (characters)",
+  "maxExponent": "Decimal exponent magnitude",
+  "bounds": "Allowed: {min} to {max}",
+  "invalid": "Choose a whole number within each displayed range.",
+  "incomplete": "Preview shows the first characters. Open the retained value to inspect or export it completely."
+}

@@ -1,3 +1,4 @@
+import {numericalOperation} from './dataset-resource-budget.js';
 // Domain operations retain exact components and require explicit declared capabilities.
 import {AppError} from './errors.js';
 import {domainCapabilities,sameDomainSpace,domainComponentIndex} from './web/measurement-domain-model.js';
@@ -18,10 +19,10 @@ export function domainOperationColumn(node,columns){
 const absent={value:'',kind:'absent'};
 const present=(cell,column)=>!['absent','null'].includes(cell.kind)&&!column.missing.some(item=>item.value===cell.value);
 export function compareDomainCells(materials,a,b,columns,operator){assertDomainComparison(columns[0],columns[1],operator);if(!present(a,columns[0])||!present(b,columns[1]))return null;validateDomainValue(materials,a.value,columns[0].domain);validateDomainValue(materials,b.value,columns[1].domain);const result=domainValuesEqual(materials,a.value,b.value);return result===null?null:operator==='eq'?result:!result;}
-export async function calculateDomainNode(materials,node,cells,columns){
+export async function calculateDomainNode(materials,node,cells,columns,{budget}={}){
  domainOperationColumn(node,columns);let selected=0;if(node.operation==='choose'){const condition=cells[2];if(!condition)fail();if(['absent','null'].includes(condition.kind))selected=null;else{if(condition.kind!=='string'||!['0','1'].includes(condition.value))fail();selected=condition.value==='1'?0:1;}}if(selected===null||!present(cells[selected],columns[selected]))return absent;
  const value=validateDomainValue(materials,cells[selected].value,columns[selected].domain);if(!domainValueSupported(value))fail('MEASUREMENT_DOMAIN_UNSUPPORTED');if(node.operation!=='extract')return {...cells[selected]};
  const index=domainComponentIndex(columns[0].domain,node.component),page=await domainValuePage(materials,value,{offset:index,limit:1}),component=page.items[0];if(component.presence==='null')return {value:'',kind:'null'};
- const context=value.definition.component;return {value:formatExactResult(exactRational(component.spelling,context.representation,context.radix),{version:1,representation:'rational',radix:10}),kind:'string'};
+ const context=value.definition.component;return {value:numericalOperation(budget,b=>formatExactResult(exactRational(component.spelling,context.representation,context.radix,b),{version:1,representation:'rational',radix:10},b)),kind:'string'};
 }
 export function domainColumnKey(materials,cell,column){assertDomainColumn(column);if(!present(cell,column))return null;return domainValueKey(materials,cell.value,column.domain);}

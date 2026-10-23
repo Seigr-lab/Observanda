@@ -52,7 +52,7 @@ export class DatasetCalculations{
   return columns;
  }
  async validate(command){
-  if([4,5,6,7].includes(command.calculation?.version))return new GraphCalculations(this.materials).validate(command);
+  if([4,5,6,7,8].includes(command.calculation?.version))return new GraphCalculations(this.materials).validate(command);
   const c=command.calculation;if(!validCalculation(c)||typeof command.title!=='string'||!command.title.trim()||command.title.length>300||command.id!==undefined&&!researchId(command.id)||command.expectedRevision!==undefined&&command.expectedRevision!==null&&!revisionId(command.expectedRevision)||command.baseDataset||command.columns||command.exclusions||command.columnChanges)fail();
   await this.materials.assertOwner(command.recordId);const columns=await this.recipeColumns(c);
   if(command.id){const head=await this.materials.current(command.id);if((head?.revision??null)!==(command.expectedRevision??null)||head&&(head.recordId!==command.recordId||head.kind!=='dataset'))fail('MATERIAL_CHANGED');}
@@ -113,13 +113,13 @@ export class DatasetCalculations{
   },options);
  }
  async prepare(command,options={}){
-  if([4,5,6,7].includes(command.calculation?.version))return new GraphCalculations(this.materials).prepare(command,options);
+  if([4,5,6,7,8].includes(command.calculation?.version))return new GraphCalculations(this.materials).prepare(command,options);
   const columns=await this.validate(command),id=command.id??randomUUID(),c=command.calculation;
   try{return await this.materials.prepareDatasetRows(command,{...options,source:{doc:{id}},rows:this.rows(command,columns,options),calculatedColumns:columns,inputReferences:calculationReferences(c)});}
   catch(error){if(options.signal?.aborted)throw options.signal.reason;if(error instanceof AppError)throw error;if(error instanceof ExactFormatError)fail(error.code);fail();}
  }
  async preview(command,options={}){
-  if([4,5,6,7].includes(command.calculation?.version))return new GraphCalculations(this.materials).preview(command,{...options,columnOffset:command.columnOffset??0});
+  if([4,5,6,7,8].includes(command.calculation?.version))return new GraphCalculations(this.materials).preview(command,{...options,columnOffset:command.columnOffset??0});
   const columns=await this.validate(command),rows=[];
   try{for await(const row of this.rows(command,columns,options)){if(row.columns)continue;rows.push(row);if(rows.length===5)break;}}
   catch(error){if(options.signal?.aborted)throw options.signal.reason;if(error instanceof AppError)throw error;if(error instanceof ExactFormatError)fail(error.code);fail();}return {columns:columns.map(c=>c.name),rows};
@@ -132,7 +132,7 @@ export function calculationReferences(c){
 
 export async function verifyRetainedCalculation(materials,doc){
  const calculation=doc.content.calculation;if(!calculation)return;
- if([4,5,6,7].includes(calculation.version)){if(!validGraphCalculation(calculation)||doc.content.algorithm!=='observanda-retained-calculations'||doc.content.algorithmVersion!==(calculation.version-1))fail('CATALOGUE_DAMAGED');const graphs=new CalculationGraphs(materials);await graphs.verify(await graphs.read(calculation.graph),{complete:true});let found=false;for await(const ref of materials.references(doc.content))if(revisionText(ref)===revisionText(calculation.graph))found=true;if(!found)fail('CATALOGUE_DAMAGED');const {verifyGraphDataset}=await import('./calculation-graph-lineage.js');await verifyGraphDataset(materials,doc);return;}
+ if([4,5,6,7,8].includes(calculation.version)){if(!validGraphCalculation(calculation)||doc.content.algorithm!=='observanda-retained-calculations'||doc.content.algorithmVersion!==(calculation.version-1))fail('CATALOGUE_DAMAGED');const graphs=new CalculationGraphs(materials);await graphs.verify(await graphs.read(calculation.graph),{complete:true});let found=false;for await(const ref of materials.references(doc.content))if(revisionText(ref)===revisionText(calculation.graph))found=true;if(!found)fail('CATALOGUE_DAMAGED');const {verifyGraphDataset}=await import('./calculation-graph-lineage.js');await verifyGraphDataset(materials,doc);return;}
  if(!validCalculation(calculation)||doc.content.algorithm!=='observanda-retained-calculations'||doc.content.algorithmVersion!==(calculation.version===3?2:1))fail('CATALOGUE_DAMAGED');
  if(calculation.version!==3)return;
  try{await new DatasetCalculations(materials).recipeColumns(calculation);}catch{fail('CATALOGUE_DAMAGED');}

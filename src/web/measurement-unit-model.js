@@ -6,9 +6,9 @@ const axis=value=>typeof value==='string'&&/^[A-Za-z][A-Za-z0-9_.:/-]{0,99}$/.te
 export const UNIT_KINDS=['difference','absolute'];
 export const exactUnitScalar=(spelling='0',representation='integer',radix=10)=>({spelling,representation,radix});
 export const blankUnitDefinition=()=>({version:1,kind:'difference',dimensions:[],scale:exactUnitScalar('1'),offset:exactUnitScalar('0')});
-export function unitScalar(value){
+export function unitScalar(value,budget){
  if(!keys(value,['spelling','representation','radix'])||typeof value.spelling!=='string'||value.spelling.length>8192||!validNumeralContext({version:1,representation:value.representation,radix:value.radix}))throw RangeError('Invalid exact unit scalar');
- return exactRational(value.spelling,value.representation,value.radix);
+ return exactRational(value.spelling,value.representation,value.radix,budget);
 }
 export function validUnitDefinition(value){
  if(!keys(value,['version','kind','dimensions','scale','offset'])||value.version!==1||!UNIT_KINDS.includes(value.kind)||!Array.isArray(value.dimensions)||value.dimensions.length>16)return false;

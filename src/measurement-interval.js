@@ -20,11 +20,11 @@ function bounds(value,budget){
 }
 export function parseIntervalBounds(values,context,{budget=new ArithmeticBudget()}={}){
  if(!Array.isArray(values)||values.length!==2||!values.every(value=>typeof value==='string')||!validNumeralContext(context))throw new IntervalError('Two scalar interval bounds with a declared numeral context are required.');
- const [lower,upper]=values.map(value=>exactRational(value,context.representation,context.radix));return bounds({lower,upper},budget);
+ const [lower,upper]=values.map(value=>exactRational(value,context.representation,context.radix,budget));return bounds({lower,upper},budget);
 }
 function canonical(value,unit,budget){
  if(!validUnitDefinition(unit))throw new IntervalError('A valid declared interval unit is required.');
- const scale=unitScalar(unit.scale),offset=unitScalar(unit.offset);return calculate('add',[calculate('multiply',[value,scale],budget),offset],budget);
+ const scale=unitScalar(unit.scale,budget),offset=unitScalar(unit.offset,budget);return calculate('add',[calculate('multiply',[value,scale],budget),offset],budget);
 }
 function fromCanonical(value,unit,budget){
  if(!validUnitDefinition(unit))throw new IntervalError('A valid declared interval unit is required.');

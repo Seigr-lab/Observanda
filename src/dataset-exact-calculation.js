@@ -4,7 +4,7 @@ import {ArithmeticBudget,ExactNumber,exactExpression} from './tools/exact-arithm
 import {operandValue,conditionOperands} from './web/dataset-calculation-model.js';
 import {constantExact} from './web/calculation-operands.js';
 import {formatExactResult} from './web/measurement-format.js';
-import {canonicalUnitValue,fromCanonicalUnitValue,assertUnitOperation,unitOperationDimensions,sameUnitDefinition} from './web/measurement-unit-model.js';
+import {canonicalUnitValue,fromCanonicalUnitValue,assertUnitOperation,unitOperationDimensions,sameUnitDefinition,unitScalar} from './web/measurement-unit-model.js';
 const exact=value=>({numerator:value.n,denominator:value.d});
 const definition=value=>value?.quantity?.unitDefinition;
 function checked(value,budget){if(!value)throw Error('numeric');return exact(new ExactNumber(value.numerator,value.denominator,budget));}
@@ -13,8 +13,8 @@ function operation(name,values,budget){
  const result=exactExpression({type:'FunctionNode',name,args:values.map((_,i)=>({type:'SymbolNode',name:'v'+i}))},variables,budget);
  if(!result)throw Error('An exact integer exponent is required');return exact(result);
 }
-function canonical(value,budget){const input=checked(value.exact,budget);return definition(value)?checked(canonicalUnitValue(input,definition(value)),budget):input;}
-function output(value,step,budget){return definition(step)?checked(fromCanonicalUnitValue(value,definition(step)),budget):value;}
+function canonical(value,budget){const input=checked(value.exact,budget);if(!definition(value))return input;if(budget.scalarPolicy)return operation('add',[operation('multiply',[input,unitScalar(definition(value).scale,budget)],budget),unitScalar(definition(value).offset,budget)],budget);return checked(canonicalUnitValue(input,definition(value)),budget);}
+function output(value,step,budget){if(!definition(step))return value;if(budget.scalarPolicy)return operation('divide',[operation('subtract',[value,unitScalar(definition(step).offset,budget)],budget),unitScalar(definition(step).scale,budget)],budget);return checked(fromCanonicalUnitValue(value,definition(step)),budget);}
 function typed(...values){const declared=values.map(definition);if(declared.some(Boolean)&&!declared.every(Boolean))throw Error('Declared and undeclared quantities cannot be mixed');return declared.every(Boolean);}
 export function exactCalculationCondition(condition,row,columns,budget=new ArithmeticBudget()){
  budget.step();
@@ -23,16 +23,16 @@ export function exactCalculationCondition(condition,row,columns,budget=new Arith
   let unknown=false;for(const child of condition.conditions){const value=exactCalculationCondition(child,row,columns,budget);if(value===null)unknown=true;else if(value===(condition.operator==='or'))return value;}
   return unknown?null:condition.operator==='and';
  }
- const a=operandValue(condition.left,row,columns),b=operandValue(condition.right,row,columns);if(!a.present||!b.present)return null;
+ const a=operandValue(condition.left,row,columns,budget),b=operandValue(condition.right,row,columns,budget);if(!a.present||!b.present)return null;
  let order;
  if(a.exact&&b.exact){if(typed(a,b))unitOperationDimensions('compare',definition(a),definition(b));else if(a.unit!==b.unit)throw Error('unit');const difference=operation('subtract',[canonical(a,budget),canonical(b,budget)],budget);order=difference.numerator<0n?-1:difference.numerator>0n?1:0;}
  else{if(!!a.exact!==!!b.exact||definition(a)||definition(b)||!['eq','ne'].includes(condition.operator))throw Error('numeric');order=a.raw===b.raw?0:1;}
  return {eq:order===0,ne:order!==0,lt:order<0,lte:order<=0,gt:order>0,gte:order>=0}[condition.operator];
 }
 export function calculateExactStep(step,row,columns,budget=new ArithmeticBudget()){
- const a=operandValue(step.left,row,columns),b=step.right?operandValue(step.right,row,columns):null,condition=step.condition?exactCalculationCondition(step.condition,row,columns,budget):true;
+ const a=operandValue(step.left,row,columns,budget),b=step.right?operandValue(step.right,row,columns,budget):null,condition=step.condition?exactCalculationCondition(step.condition,row,columns,budget):true;
  const selected=step.operation==='choose'?(condition?a:b):a;
- const sources=[...new Map([a,b,...[...conditionOperands(step.condition)].map(o=>operandValue(o,row,columns))].filter(Boolean).flatMap(o=>o.sources??[]).map(v=>[JSON.stringify(v),v])).values()];
+ const sources=[...new Map([a,b,...[...conditionOperands(step.condition)].map(o=>operandValue(o,row,columns,budget))].filter(Boolean).flatMap(o=>o.sources??[]).map(v=>[JSON.stringify(v),v])).values()];
  if(condition===null||!selected.present||!['copy','choose','floor','ceiling'].includes(step.operation)&&!b.present)return {value:'',kind:'absent',sources};
  const declared=typed(a,...(b?[b]:[]),step);let value;
  if(declared){
@@ -46,11 +46,11 @@ export function calculateExactStep(step,row,columns,budget=new ArithmeticBudget(
  if(['copy','choose'].includes(step.operation))value=output(canonical(selected,budget),step,budget);
  else if(['floor','ceiling'].includes(step.operation))value=operation(step.operation==='ceiling'?'ceil':'floor',[checked(a.exact,budget)],budget);
  else value=output(operation(step.operation==='power'?'pow':step.operation,[canonical(a,budget),canonical(b,budget)],budget),step,budget);
- return {value:formatExactResult(value,step.output),kind:'string',sources};
+ return {value:formatExactResult(value,step.output,budget),kind:'string',sources};
 }
 
-export function exactCalculationKey(value,column){
- const budget=new ArithmeticBudget(),operand=operandValue({column:0},{cells:[value]},[column]);if(!operand.exact)throw Error('numeric');const number=canonical(operand,budget),unit=definition(operand);
+export function exactCalculationKey(value,column,budget=new ArithmeticBudget()){
+ const operand=operandValue({column:0},{cells:[value]},[column],budget);if(!operand.exact)throw Error('numeric');const number=canonical(operand,budget),unit=definition(operand);
  return [number.numerator.toString(),number.denominator.toString(),unit?{kind:unit.kind,dimensions:unit.dimensions}:column.unit];
 }
 
