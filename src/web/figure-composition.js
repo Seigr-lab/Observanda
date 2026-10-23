@@ -2,11 +2,11 @@ import {sameAxisProjection} from './figure-projection-display.js';
 import messages from './locales/en/figureComposition.json' with {type:'json'};
 
 const uuid=v=>typeof v==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(v);
-const text=v=>typeof v==='string'&&v.length<=300&&!/[\u0000-\u001f]/.test(v);
+const text=(v,retained=false)=>typeof v==='string'&&(retained||v.length<=300)&&!/[\u0000-\u001f]/.test(v);
 export const figurePlots=figure=>figure.kind==='panels'?figure.panels.map(p=>p.figure):[figure];
 export const figureTargets=figures=>figures.flatMap(f=>[{id:f.id,title:f.title},...(f.kind==='panels'?f.panels.map(p=>({id:p.figure.id,title:f.title+' / '+p.label+' · '+p.figure.title})):[])]);
 export function cloneFigure(figure,uuid=()=>crypto.randomUUID()){
- const copy=structuredClone(figure);copy.id=uuid();
+ const copy=structuredClone(figure);copy.id=uuid();if(copy.kind==='retained')return copy;
  for(const plot of figurePlots(copy)){
   if(copy.kind==='panels')plot.id=uuid();
   const seriesIds=new Map();plot.series.forEach(s=>{const old=s.id;s.id=uuid();seriesIds.set(old,s.id);});plot.annotations?.forEach(a=>{a.id=uuid();if(a.kind==='callout')a.seriesId=seriesIds.get(a.seriesId)??a.seriesId;});
@@ -17,13 +17,13 @@ export function cloneFigure(figure,uuid=()=>crypto.randomUUID()){
 export function createComposition(plots){
  return {id:crypto.randomUUID(),title:messages.title,kind:'panels',layout:{columns:2,linkX:false,linkY:false},panels:plots.map((figure,i)=>({id:crypto.randomUUID(),label:String.fromCharCode(65+i),figure:cloneFigure(figure)}))};
 }
-export function compositionIssues(figure,validatePlot,{draft=false}={}){
- if(!figure||Object.keys(figure).sort().join()!==('source' in figure?'id,kind,layout,panels,source,title':'id,kind,layout,panels,title')||!uuid(figure.id)||!text(figure.title)||!draft&&!figure.title.trim()||!figure.layout||Object.keys(figure.layout).sort().join()!=='columns,linkX,linkY'||!['linkX','linkY'].every(k=>typeof figure.layout[k]==='boolean'))return [messages.structure];
- if(!Number.isInteger(figure.layout.columns)||figure.layout.columns<1||figure.layout.columns>3||!Array.isArray(figure.panels)||figure.panels.length<2||figure.panels.length>8)return [messages.limits];
+export function compositionIssues(figure,validatePlot,{draft=false,retained=false}={}){
+ if(!figure||Object.keys(figure).sort().join()!==('source' in figure?'id,kind,layout,panels,source,title':'id,kind,layout,panels,title')||!uuid(figure.id)||!text(figure.title,retained)||!draft&&!figure.title.trim()||!figure.layout||Object.keys(figure.layout).sort().join()!=='columns,linkX,linkY'||!['linkX','linkY'].every(k=>typeof figure.layout[k]==='boolean'))return [messages.structure];
+ if(!Number.isInteger(figure.layout.columns)||figure.layout.columns<1||figure.layout.columns>3||!Array.isArray(figure.panels)||figure.panels.length<2||!retained&&figure.panels.length>8)return [messages.limits];
  const ids=new Set([figure.id]),issues=[];
  for(const p of figure.panels){
-  if(!p||Object.keys(p).sort().join()!=='figure,id,label'||!uuid(p.id)||ids.has(p.id)||!text(p.label)||!draft&&!p.label.trim()||!p.figure||p.figure.kind==='panels'||!uuid(p.figure.id)||ids.has(p.figure.id)||p.id===p.figure.id)return [messages.invalidPanel];
-  ids.add(p.id);ids.add(p.figure.id);issues.push(...validatePlot(p.figure,{draft}));
+  if(!p||Object.keys(p).sort().join()!=='figure,id,label'||!uuid(p.id)||ids.has(p.id)||!text(p.label,retained)||!draft&&!p.label.trim()||!p.figure||p.figure.kind==='panels'||!uuid(p.figure.id)||ids.has(p.figure.id)||p.id===p.figure.id)return [messages.invalidPanel];
+  ids.add(p.id);ids.add(p.figure.id);issues.push(...validatePlot(p.figure,{draft,retained}));
  }
  if(issues.length)return issues;
  const plots=figurePlots(figure),first=plots[0];

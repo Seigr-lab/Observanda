@@ -2,6 +2,7 @@ import {configurationPartName} from './configuration-transfer.js';
 import path from 'node:path';
 import {ResearchMaterials} from '../research-materials.js';
 import {materialHeadVisible} from '../material-visibility.js';
+import {withScratch} from '../scratch-work.js';
 import {withMaterialTraversal} from '../material-traversal.js';
 import {recordRevision,historicalBook} from '../research.js';
 import {attemptReferences} from '../web/attempt-model.js';
@@ -29,6 +30,7 @@ export class ResearchTransfer{
   if(!this.recordIds.has(record.id)||!this.notebookIds.has(record.notebookId))dependency();
   const workspaceId=await this.workspace.catalogue(async store=>(await store.snapshot()).metadata.id);
   await this.metadata('.observanda/materials/records/'+record.id+'/'+recordRevision(record)+'.json',record);
+  for(const figure of record.figures??[])if(figure.kind==='retained'){const {validateRetainedFigureSource}=await import('../retained-figures.js');const {reader}=await validateRetainedFigureSource(this.materials,figure);for await(const part of reader.blocks())await this.metadata(part.path,part.node);}
   for(const ref of [...attemptReferences(record.attempt),...resultReferences(record.results),...figureReferences(record.figures)]){
    if(ref.workspaceId&&workspaceId!==ref.workspaceId)dependency();await enqueue(ref);
   }
@@ -65,15 +67,18 @@ export class ResearchTransfer{
  async sequence(value){
   if(!value)return;this.materials.sequences.validate(value);const tree=this.materials.sequences.tree(),owner=this;
   async function visit(ref){
-   if(!ref||owner.sequenceNodes.has(ref.hash))return;const node=await tree.node(ref);owner.sequenceNodes.add(ref.hash);await visit(node.left);await visit(node.right);
+   if(!ref||await owner.sequenceNodes.has(ref.hash))return;const node=await tree.node(ref);await owner.sequenceNodes.add(ref.hash);await visit(node.left);await visit(node.right);
    const chunk=await owner.materials.sequences.read('chunks',node.revision);if(!chunk)throw new AppError('MATERIAL_MISSING');
-   if(chunk.kind==='cells')for(const cell of chunk.items)if(cell.value?.parts)await owner.sequence(cell.value.parts);
-   if(chunk.kind==='pages')for(const page of chunk.items){const rows=await owner.materials.json(owner.materials.metadataFile('tables/'+page.hash+'.json'));for(const row of rows)if(row.cellIndex)await owner.sequence(row.cellIndex);await owner.metadata('.observanda/materials/tables/'+page.hash+'.json',rows);}
+   if(chunk.kind==='cells')for(const cell of chunk.items){if(cell.value?.parts)await owner.sequence(cell.value.parts);if(cell.lineage?.leaves)await owner.sequence(cell.lineage.leaves);if(cell.sourcesIndex)await owner.sequence(cell.sourcesIndex);}
+   if(chunk.kind==='calculation-bindings')for(const binding of chunk.items)if(binding.match?.keysIndex)await owner.sequence(binding.match.keysIndex);
+   if(chunk.kind==='calculation-row-bindings')for(const binding of chunk.items)if(binding.location?.cellsIndex)await owner.sequence(binding.location.cellsIndex);
+   if(chunk.kind==='pages')for(const page of chunk.items){const rows=await owner.materials.json(owner.materials.metadataFile('tables/'+page.hash+'.json'));for(const row of rows){if(row.cellIndex)await owner.sequence(row.cellIndex);if(row.calculationLineage?.bindingsIndex)await owner.sequence(row.calculationLineage.bindingsIndex);}await owner.metadata('.observanda/materials/tables/'+page.hash+'.json',rows);}
    await owner.metadata('.observanda/materials/sequences/chunks/'+node.revision+'.json',chunk);await owner.metadata('.observanda/materials/sequences/nodes/'+ref.hash+'.json',node);
   }
   await visit(value.root);
  }
- async copy(currentRecords,heads){
+ async copy(currentRecords,heads){const previous=this.sequenceNodes;return withScratch(async work=>{this.sequenceNodes={has:key=>work.has('sequence:'+key),add:key=>work.add('sequence:'+key)};try{return await this.copyScoped(currentRecords,heads);}finally{this.sequenceNodes=previous;}});}
+ async copyScoped(currentRecords,heads){
   const materials=this.materials,owner=this;
   await withMaterialTraversal(async traversal=>{
    async function* seeds(){
@@ -114,7 +119,8 @@ export class ResearchTransfer{
     for await(const r of materials.references(doc.content))await enqueue(r);
     for await(const r of materials.references(doc.content,'outputs'))await enqueue(r);
     if(doc.content.acquisition)await enqueue(doc.content.acquisition);
-    for(const slot of ['pageIndex','schemaIndex','inputsIndex','outputsIndex','aggregationMembersIndex','schemaInputsIndex','plotPointsIndex','plotMembersIndex'])await owner.sequence(doc.content[slot]);
+    for(const slot of ['pageIndex','schemaIndex','inputsIndex','outputsIndex','aggregationMembersIndex','schemaInputsIndex','plotPointsIndex','plotMembersIndex','graphBindingsIndex','graphNodesIndex','graphOutputsIndex'])await owner.sequence(doc.content[slot]);
+    if(doc.content.figure?.kind==='retained'){const {RetainedFigureDocuments}=await import('../retained-figure-document.js');const figure=await new RetainedFigureDocuments(owner.workspace,{readOnly:true}).open(doc.content.figure);for await(const part of figure.blocks())await owner.metadata(part.path,part.node);}
     if(doc.content.comparison&&doc.content.summary?.version===2)for await(const part of materials.comparisons.index(doc.content.summary).metadata())await owner.metadata(part.name,part.value);
     if(doc.kind==='dataset'){
      for await(const column of materials.iterateDatasetColumns(doc))for(const r of schemaReferences(column))await enqueue(r);
@@ -137,7 +143,7 @@ export class ResearchTransfer{
 // trusted collaborator cannot use a research packet to replace access keys,
 // organization authority, publishing settings or arbitrary local paths.
 const id='[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}',hash='[a-f0-9]{64}';
-const metadata=new RegExp('^(?:\\.observanda/materials/(?:records/'+id+'/'+hash+'\\.json|objects/'+id+'/(?:'+hash+'|head)\\.json|sequences/(?:nodes|chunks|comparison-nodes|comparison-values|comparison-state)/'+hash+'\\.json|tables/'+hash+'\\.json)|\\.observanda/media-(?:imports|assets)/'+id+'\\.json)$');
+const metadata=new RegExp('^(?:\\.observanda/materials/(?:records/'+id+'/'+hash+'\\.json|objects/'+id+'/(?:'+hash+'|head)\\.json|sequences/(?:nodes|chunks|comparison-nodes|comparison-values|comparison-state)/'+hash+'\\.json|figures/(?:value|index)/'+hash+'\\.json|tables/'+hash+'\\.json)|\\.observanda/media-(?:imports|assets)/'+id+'\\.json)$');
 const originals=new RegExp('^\\.observanda/(?:materials/originals/'+id+'/(?:original|'+id+'\\.original)|media/'+id+'/(?:asset\\.json|original|'+id+'\\.original|(?:'+id+'\\.)?public\\.(?:png|wav|mp4)))$');
 const fonts=new RegExp('^\\.observanda/fonts/(?:library|custom-'+hash+')\\.json$');
 export function validTransferPart(kind,name){return typeof name==='string'&&(kind==='metadata'?metadata.test(name)||fonts.test(name)||configurationPartName(name):kind==='original'?originals.test(name):kind==='record'?new RegExp('^'+id+'$').test(name):kind==='description'&&name==='selection');}

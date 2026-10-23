@@ -1,3 +1,5 @@
+import {prepareRetainedPlot} from './retained-figure-plot.js';
+import {RetainedFigureDocuments} from './retained-figure-document.js';
 import {nativeNumericalMaterial,nativeClockMaterial} from './numerical-material-format.js';
 import {datasetRowPosition,datasetPageInfo} from './dataset-row-position.js';
 import {datasetColumns as storedDatasetColumns,storedDatasetCells,preparePagedDataset,projectDatasetRows} from './dataset-storage.js';
@@ -530,45 +532,12 @@ export class ResearchMaterials {
  async preparePlot(command,{signal,progress=async()=>{},writePage,attempt=randomUUID(),jobId=command.id??randomUUID()}={}){
   const doc=await this.validatePlot(command),{mapping,dataset}=command,selection=await datasetPlotSelection(this,doc,mapping),columns=selection.columns,operation=mapping.operation??'raw';
   const write=writePage??(fn=>this.workspace.withLock(fn)),prefix=this.plotWork(jobId,attempt);
-  const prepare=async provenance=>{
-  const median=mapping.operation==='median'?new PagedMedian({
-   signal,progress,compareValues:compareRationalText,midpoint:(a,b)=>sumRationalText(a,b,2n),pageBytes:512*1024,
-   read:name=>this.workspace.readMetadata(prefix+'/'+name,1024*1024),
-   write:(name,text)=>write(async()=>{signal?.throwIfAborted();await this.workspace.writeMetadata(prefix+'/'+name,text);}),
-   remove:async names=>{for(let i=0;i<names.length;i+=50)await write(async()=>{signal?.throwIfAborted();for(const name of names.slice(i,i+50))await this.workspace.removeMetadata(prefix+'/'+name);});}
-  }):null;
-  const mapper=createFigureMapper({columns:columns.map((c,index)=>({index,label:c.name+(c.unit?' ('+c.unit+')':''),heading:c.name}))},{...selection.mapping,mode:'replace',decimal:'.'},command.base??createFigure(),{median,provenance:provenance?.callbacks,limits:{series:256,points:10000,characters:262144},parseNumber:(raw,index)=>{
-   const column=columns[index];try{return exactRational(raw,column.representation,column.radix);}catch{fail('MATERIAL_PRECISION');}
-  }});
-  const denominator={format:selection.indices?3:2,dataset,...(selection.indices?{columnIndices:selection.indices}:{}),rows:0,included:0,excludedCount:0,missing:columns.map((c,column)=>({column:selection.indices?.[column]??column,name:c.name,count:0}))};
-  try{
-   for(let page=0;page<this.datasetPageCount(doc);page++){
-    signal?.throwIfAborted();
-    for(const [rowIndex,row] of (await this.retainedDatasetPage(doc,page,selection.indices?{columns:selection.indices}:undefined)).rows.entries()){
-     signal?.throwIfAborted();denominator.rows++;
-     if(row.excluded){denominator.excludedCount++;continue;}
-     denominator.included++;assertDatasetScalars(row);
-     const cells=row.cells.map((raw,i)=>{
-      const col=columns[i];
-      if(['null','absent'].includes(row.valueKinds?.[i])||col.missing.some(m=>m.value===raw)){denominator.missing[i].count++;return '';}
-      return raw;
-     });
-     mapper.add({line:row.line,cells,...(provenance?{source:{page,row:rowIndex}}:{})});await provenance?.flush();
-     if(mapper.invalid){const result=mapper.finish();fail(result.limited?'MATERIAL_ANALYSIS_LIMIT':result.precision?'MATERIAL_PRECISION':'MATERIAL_INVALID');}
-     await median?.flush();
-    }
-    await progress({stage:'calculating dataset rows',done:denominator.rows,total:doc.content.rowCount});
-   }
-   if(denominator.rows!==doc.content.rowCount)fail('MATERIAL_MISSING');
-   await median?.finish();signal?.throwIfAborted();
-   if(provenance)for(const point of mapper.finishPoints()){void point;signal?.throwIfAborted();await provenance.flush();}
-   const result=mapper.finish();if(result.issues.length)fail(result.limited?'MATERIAL_ANALYSIS_LIMIT':result.precision?'MATERIAL_PRECISION':'MATERIAL_INVALID');
-   return {commandHash:digest(revisionText(command)),content:{inputs:[dataset],tool:'Observanda table mapping',version:provenance?'8':selection.indices?'7':'6',parameters:JSON.stringify(mapping),mapping,numericTransform:{...(provenance?{algorithm:'exact-affine-rational-to-binary64',version:1,projection:mapping.projection,errorUnits:'source'}:{algorithm:'exact-rational-to-binary64',version:2}),policy:mapping.numericPolicy??'safe',significantDigits:17,...(operation!=='raw'?{reduction:{algorithm:'exact-rational-reduction',version:1,operation,grouping:'exact-coordinate',projection:'after-reduction'}}:{})},figure:withoutFigureSources(result.figure),denominator,warnings:result.warnings,...(provenance?await provenance.finish(result.pointOrder):{})}};
-  }catch(error){if(error.message==='precision')fail('MATERIAL_PRECISION');throw error;}
-  finally{if(median)await this.cleanPlotWork(jobId,attempt);}
-  };
-  return mapping.projection?withPlotProvenance(this,selection,operation,prepare,{write,signal}):prepare(null);
+  void prefix;
+  const retainedWrite=operation=>write(async()=>{if(typeof this.workspace.catalogue==='function')await this.workspace.catalogue(async store=>{const {requireRetainedFigures,requireNativeNumericalModels}=await import('./catalogue-format.js');await requireRetainedFigures(store.db);if(mapping.projection)await requireNativeNumericalModels(store.db);});return operation();});
+  const result=await prepareRetainedPlot(this,doc,command,selection,{write:retainedWrite,signal,progress});
+  return {commandHash:digest(revisionText(command)),content:{inputs:[dataset],tool:'Observanda table mapping',version:'9',parameters:JSON.stringify(mapping),mapping,numericTransform:{...(mapping.projection?{algorithm:'exact-affine-rational-to-binary64',version:1,projection:mapping.projection,errorUnits:'source'}:{algorithm:'exact-rational-to-binary64',version:2}),policy:mapping.numericPolicy??'safe',significantDigits:17,...(operation!=='raw'?{reduction:{algorithm:'exact-rational-reduction',version:1,operation,grouping:'exact-coordinate',projection:'after-reduction'}}:{})},...result}};
  }
+
  async commitPlot(command,prepared){
   if(prepared.commandHash!==digest(revisionText(command)))fail('MATERIAL_CHANGED');
   await this.validatePlot(command);const {recordId,title,id,expectedRevision}=command;
@@ -728,6 +697,8 @@ export class ResearchMaterials {
     if(nativeClockMaterial(doc))await checkClockFormat();
     if(revisionText(await this.index.inputSet(ref))!==revisionText(this.referenceSet(doc.content)))fail('CATALOGUE_DAMAGED');
     if(doc.previous)await enqueue({...ref,revision:doc.previous});
+    if(doc.content.tool==='Observanda calculation graph'||doc.content.calculation?.version===4)await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresReferencedCalculations}=await import('./catalogue-format.js');if(!catalogueRequiresReferencedCalculations(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
+    if(doc.content.tool==='Observanda calculation graph'){const {CalculationGraphs}=await import('./calculation-graphs.js');await new CalculationGraphs(this).verify(doc);}
     const comparison=doc.content.comparison?.version===2;
     if(comparison){
      if(doc.kind!=='analysis')fail('CATALOGUE_DAMAGED');
@@ -756,6 +727,7 @@ export class ResearchMaterials {
      }
      if(aggregationContext&&memberOffset!==aggregationContext.index.count)fail('MATERIAL_MISSING');
     }
+    if(doc.content.figure?.kind==='retained'){await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresRetainedFigures}=await import('./catalogue-format.js');if(!catalogueRequiresRetainedFigures(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});await (await new RetainedFigureDocuments(this.workspace,{readOnly:true}).open(doc.content.figure)).verify();}
     await verifySelectedPlot(this,doc);await verifyPlotProjection(this,doc);
     if(doc.content.measurement)await this.measurements.validate(doc.content.measurement);
     if(doc.content.method&&!comparison){if(!validAnalysisMethod(doc.content.method))fail('CATALOGUE_DAMAGED');for(const r of analysisMethodReferences(doc.content.method))await enqueue(r);}
@@ -772,6 +744,7 @@ export class ResearchMaterials {
    for await(const id of this.names('imports')){if(!researchId(id))continue;const session=await this.importState(id);if(session.completed)continue;
     pendingImports++;await this.withUploadChunks(session,async chunks=>{for await(const part of chunks)receivedBytes+=part.receipt.size;});
    }
+   const {verifyFigurePresentationReceipts}=await import('./retained-figure-presentation.js');await verifyFigurePresentationReceipts(this);
    await this.drafts.verify(check);await this.intakes.verify(check,{verified:originals});
    const {verifyLocalIntakeFinalizations}=await import('./intake/finalization.js');await verifyLocalIntakeFinalizations(this.workspace,check);await this.associations.verify(check);await new EvidenceCorrections(this).verify(check);
    if(await this.workspace.storageKind()==='catalogue')await this.index.verify({initialize:!readOnly});

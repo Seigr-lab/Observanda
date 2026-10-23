@@ -1,3 +1,6 @@
+import {isRetainedFigure} from './retained-figure-model.js';
+import {escapeFigureText as esc} from './retained-figure-text.js';
+import {t} from './i18n/index.js';
 import {renderFigure} from './figure-renderer.js';
 import {figureStyle} from './figure-style.js';
 
@@ -13,6 +16,7 @@ export function figurePreviews(){
  });
  function draw(host,item,width){
   if(width<1)return;
+  if(isRetainedFigure(item.figure)){item.width=width;host.innerHTML=item.figure.source?'<button type="button" class="button" data-action="material-figure-source" data-ref="'+esc(JSON.stringify(item.figure.source))+'">'+esc(t('retainedFigureReader','open'))+'</button>':'<p>'+esc(t('retainedFigureReader','heading'))+'</p>';return;}
   const style=figureStyle(item.figure);
   item.width=width;host.innerHTML=renderFigure(item.figure,{width:Math.max(280,Math.floor(width)),height:Math.max(260,Math.min(style.height,width*style.height/style.width)),idPrefix:item.prefix});
   host.classList.toggle('is-tall-preview',host.getBoundingClientRect().height>window.innerHeight-180);

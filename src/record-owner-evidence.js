@@ -130,8 +130,9 @@ export async function prepareRecordOwnerEvidence(source,target,receipt,{write,si
   };
   const inspect=async(value,enqueue)=>{
    await choice(value,enqueue);
+   if(value.kind==='retained'&&value.document?.format==='figure-document'&&await inspected.add('figure:'+digest(serialize(value.document)))){const {RetainedFigureDocuments}=await import('./retained-figure-document.js');const reader=await new RetainedFigureDocuments(source,{readOnly:true,signal}).open(value);for await(const part of reader.blocks())await emit({kind:'metadata',name:part.path,content:JSON.stringify(part.node,null,2)+'\n'});}
    if(validMaterialReference(value))await enqueue(materialReference(value));
-   if(value.format===1&&['pages','columns','references','files','upload-chunks','aggregation-members','cells','cell-text'].includes(value.kind)&&Object.hasOwn(value,'root')&&Object.hasOwn(value,'count'))await transfer.sequence(value);
+   if(value.format===1&&['pages','columns','references','files','upload-chunks','aggregation-members','cells','cell-text','calculation-bindings','calculation-nodes','calculation-outputs','calculation-edges','calculation-lineage','calculation-row-bindings','calculation-source-locators'].includes(value.kind)&&Object.hasOwn(value,'root')&&Object.hasOwn(value,'count'))await transfer.sequence(value);
    for(const key of ['font','headingFont'])if(customFontId(value[key])&&await inspected.add('font:'+value[key]))await font(value[key]);
   };
   const audit=async name=>{
@@ -183,7 +184,8 @@ export async function prepareRecordOwnerEvidence(source,target,receipt,{write,si
    await write(store=>stageRecordOwnerMaterialIdentity(target,receipt,ref,doc,{store}));
    if(!await materials.current(ref.id))await write(()=>stageMaterialReturnRetirement(incoming,receipt,ref));
    if(doc.previous)await enqueue({...ref,revision:doc.previous});for await(const input of materials.references(doc.content))await enqueue(input);for await(const output of materials.references(doc.content,'outputs'))await enqueue(output);if(doc.content.acquisition)await enqueue(doc.content.acquisition);
-   for(const slot of ['pageIndex','schemaIndex','inputsIndex','outputsIndex','aggregationMembersIndex','schemaInputsIndex','plotPointsIndex','plotMembersIndex'])await transfer.sequence(doc.content[slot]);
+   for(const slot of ['pageIndex','schemaIndex','inputsIndex','outputsIndex','aggregationMembersIndex','schemaInputsIndex','plotPointsIndex','plotMembersIndex','graphBindingsIndex','graphNodesIndex','graphOutputsIndex'])await transfer.sequence(doc.content[slot]);
+   if(doc.content.figure?.kind==='retained'){const {RetainedFigureDocuments}=await import('./retained-figure-document.js');const figure=await new RetainedFigureDocuments(source,{readOnly:true,signal}).open(doc.content.figure);for await(const part of figure.blocks())await emit({kind:'metadata',name:part.path,content:JSON.stringify(part.node,null,2)+'\n'});}
    if(doc.content.comparison&&doc.content.summary?.version===2)for await(const part of materials.comparisons.index(doc.content.summary).metadata())await emit({kind:'metadata',name:part.name,content:JSON.stringify(part.value)});
    if(doc.kind==='dataset'){
     for await(const column of materials.iterateDatasetColumns(doc))for(const input of schemaReferences(column))await enqueue(input);
@@ -205,7 +207,7 @@ export async function prepareRecordOwnerEvidence(source,target,receipt,{write,si
  }cursor=page.next;}while(cursor);
  // Fixed record receipt roots contain no unrelated owner data. Their original
  // revision hashes and publication addresses remain unchanged after the move.
- for(const prefix of ['.observanda/run-readiness/records/'+recordId,'.observanda/run-readiness/completed/'+recordId,'.observanda/run-readiness/receipts/'+recordId]){
+ for(const prefix of ['.observanda/materials/figure-edits/'+recordId,'.observanda/run-readiness/records/'+recordId,'.observanda/run-readiness/completed/'+recordId,'.observanda/run-readiness/receipts/'+recordId]){
   const exact=await readRecordOwnerMetadata(source,prefix+'.json',16*1024*1024);if(exact!==null)await emit({kind:'metadata',name:prefix+'.json',content:exact});
   for await(const key of objectNames(source,'metadata:'+prefix+'/',{signal})){const name=key.slice(9),text=await readRecordOwnerMetadata(source,name,16*1024*1024);if(text===null)damaged();await emit({kind:'metadata',name,content:text});}
  }

@@ -1,3 +1,4 @@
+import {validGraphAddress} from './web/dataset-calculation-graph-model.js';
 import {createHash} from 'node:crypto';
 import {AppError} from './errors.js';
 import {revisionId} from './web/revision-model.js';
@@ -9,6 +10,7 @@ export function validateDatasetCell(materials,cell){
  if(!cell||!['string','number','boolean','null','absent','object','array'].includes(cell.kind)||cell.pointer!==undefined&&cell.pointer!==null&&(typeof cell.pointer!=='string'||cell.pointer.length>2048))fail();
  if(typeof cell.value==='string'){if(cell.value.length>DATASET_TEXT_CHARS)fail();}
  else{if(!datasetCellReference(cell.value))fail();materials.sequences.validate(cell.value.parts);if(cell.value.parts.count!==Math.ceil(cell.value.characters/DATASET_TEXT_CHARS))fail();}
+ if(cell.lineage!==undefined){if(cell.lineage?.version!==1||!validGraphAddress(cell.lineage.node)||cell.lineage.leaves?.kind!=='calculation-lineage')fail();materials.sequences.validate(cell.lineage.leaves);}
  if(['absent','null'].includes(cell.kind)&&cell.value!=='')fail();return cell;
 }
 export async function retainDatasetCell(materials,cell,save){
@@ -19,7 +21,7 @@ export async function retainDatasetCell(materials,cell,save){
  }
  let value=text;
  if(parts||count>DATASET_INLINE_CHARS){parts??=materials.sequences.builder('cell-text',save);if(text)await parts.append(text);value={format:'dataset-cell',version:1,characters:count,sha256:hash.digest('hex'),parts:await parts.finish()};}
- return validateDatasetCell(materials,{kind:cell.kind??'string',value,...(cell.pointer!==undefined?{pointer:cell.pointer}:{}),...(cell.sources?{sources:cell.sources}:{})});
+ return validateDatasetCell(materials,{kind:cell.kind??'string',value,...(cell.pointer!==undefined?{pointer:cell.pointer}:{}),...(cell.sources?{sources:cell.sources}:{}),...(cell.lineage?{lineage:cell.lineage}:{})});
 }
 export async function readDatasetCell(materials,value,{offset=0,limit=4096,signal}={}){
  if(!Number.isSafeInteger(offset)||offset<0||!Number.isSafeInteger(limit)||limit<1||limit>DATASET_TEXT_CHARS)throw new AppError('INVALID');

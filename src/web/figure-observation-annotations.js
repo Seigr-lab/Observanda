@@ -2,9 +2,9 @@ import {figureCoordinateNumber} from './figure-number-labels.js';
 import messages from './locales/en/figureObservations.json' with {type:'json'};
 import {figureStyle} from './figure-style.js';import {wrapAnnotationText} from './figure-annotation-layout.js';
 export const observationAnnotation=a=>['region','callout'].includes(a.kind);
-export function observationAnnotationIssues(a,f,xValue,{draft=false}={}){
+export function observationAnnotationIssues(a,f,xValue,{draft=false,retained=false}={}){
  const common=['id','kind','label','color','opacity'],fields=a.kind==='region'?['xLower','xUpper','yLower','yUpper']:['seriesId','pointIndex','dx','dy'];
- if(Object.keys(a).sort().join()!==[...common,...fields].sort().join()||typeof a.label!=='string'||a.label.length>300||/[\u0000-\u001f]/.test(a.label)||!draft&&!a.label.trim()||!/^#[0-9a-f]{6}$/i.test(a.color)||!Number.isFinite(a.opacity)||a.opacity<0||a.opacity>1)return [messages.invalid];
+ if(Object.keys(a).sort().join()!==[...common,...fields].sort().join()||typeof a.label!=='string'||!retained&&a.label.length>300||/[\u0000-\u001f]/.test(a.label)||!draft&&!a.label.trim()||!/^#[0-9a-f]{6}$/i.test(a.color)||!Number.isFinite(a.opacity)||a.opacity<0||a.opacity>1)return [messages.invalid];
  if(a.kind==='region'){
   if(f.x.kind==='category')return [messages.regionRange];
   for(const axis of ['x','y']){const kind=axis==='x'?f.x.kind:'number',raw=[a[axis+'Lower'],a[axis+'Upper']],values=raw.map(v=>xValue(v,kind));if(values.some((v,i)=>v===null&&(!draft||raw[i]!==null))||values.every(v=>v!==null)&&(values[0]>=values[1]||f[axis].scale==='log'&&values[0]<=0))return [messages.regionRange];}

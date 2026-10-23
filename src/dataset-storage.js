@@ -20,8 +20,8 @@ export async function* storedDatasetCells(materials,doc,row){
  if(doc.content.datasetFormat===3){materials.sequences.validate(row.cellIndex);if(row.cellIndex.kind!=='cells'||row.cellIndex.count!==doc.content.schemaIndex.count)fail('MATERIAL_MISSING');for await(const cell of materials.sequences.items(row.cellIndex))yield validateDatasetCell(materials,cell);}
  else for(let i=0;i<row.cells.length;i++)yield {value:row.cells[i],kind:row.valueKinds?.[i]??'string',...(row.cellPointers?{pointer:row.cellPointers[i]}:{}),...(row.cellSources?.[i]?{sources:row.cellSources[i]}:{})};
 }
-export async function preparePagedDataset(materials,command,{source,base=null,signal,progress=async()=>{},writePage,columnDefaults=defaultColumn,nativeSize:declaredNativeSize,rows:preparedRows,calculatedColumns,inputReferences,validColumns}={}){
- return withDatasetPreparationWrites(materials,{writePage,signal},materials=>withScratch(async scratch=>{
+export async function preparePagedDataset(materials,command,{source,base=null,signal,progress=async()=>{},writePage,columnDefaults=defaultColumn,nativeSize:declaredNativeSize,rows:preparedRows,calculatedColumns,inputReferences,validColumns,preparedWrites=false}={}){
+ const prepare=materials=>withScratch(async scratch=>{
  const save=fn=>fn(),schema=materials.sequences.builder('columns',save),pages=materials.sequences.builder('pages',save),schemaInputs=materials.sequences.builder('references',save);
  const nativeMapping=command.nativeMapping??base?.content.nativeMapping,nativeSize=nativeMapping?(declaredNativeSize??(await materials.read(nativeMapping.artifact)).content.size):null;
  const nativeColumns=nativeMapping?[...new Set(['offsetColumn','lengthColumn','pointerColumn','idColumn'].map(k=>nativeMapping[k]).filter(v=>v!==null))]:[];
@@ -56,26 +56,26 @@ export async function preparePagedDataset(materials,command,{source,base=null,si
    await builder.append(cell);index++;
   }
   if(index!==width)fail();
-  const row={id,line:item.line??order,excluded,order,locator:item.locator,cellIndex:await builder.finish(),...(item.aggregation?{aggregation:item.aggregation}:{}),...(item.aggregationMembers?{aggregationMembers:item.aggregationMembers}:{})};if(nativeMapping)row.nativeSelector=nativeRowLocator(nativeMapping,native,nativeSize).selector;
+  const row={id,line:item.line??order,excluded,order,locator:item.locator,cellIndex:await builder.finish(),...(item.calculationLineage?{calculationLineage:item.calculationLineage}:{}),...(item.aggregation?{aggregation:item.aggregation}:{}),...(item.aggregationMembers?{aggregationMembers:item.aggregationMembers}:{})};if(nativeMapping)row.nativeSelector=nativeRowLocator(nativeMapping,native,nativeSize).selector;
   page.push(row);count++;if(!row.excluded){included++;pageIncluded++;}if(!Number.isSafeInteger(count))fail('MATERIAL_DATASET_LIMIT');if(page.length===DATASET_ROWS_PER_PAGE)await flush();
  }
  await flush();if(!schemaIndex||Object.keys(exclusions).length!==seen.size)fail();signal?.throwIfAborted();
  const calculation=command.calculation??base?.content.calculation,aggregation=command.aggregation??base?.content.aggregation;
- return {commandHash:digest(revisionText(command)),content:{datasetFormat:3,inputs:inputReferences??base?.content.inputs??[command.artifact],schemaInputsIndex:await schemaInputs.finish(),schemaIndex,pageIndex:await pages.finish(),rowCount:count,includedRowCount:included,sourceMapping,...(calculation?{calculation,algorithm:'observanda-retained-calculations',algorithmVersion:calculation.version===3?2:1}:{}),...(aggregation?{aggregation,algorithm:'observanda-retained-aggregation',algorithmVersion:1}:{}),...(aggregationMembersIndex?{aggregationMembersIndex}:{}),...(nativeMapping?{nativeMapping}:{}),delimiter:sourceMapping.delimiter??null,encoding:'UTF-8',order:aggregation?'first-group-occurrence':'acquisition'}};
- },{signal}));
+ return {commandHash:digest(revisionText(command)),content:{datasetFormat:3,inputs:inputReferences??base?.content.inputs??[command.artifact],schemaInputsIndex:await schemaInputs.finish(),schemaIndex,pageIndex:await pages.finish(),rowCount:count,includedRowCount:included,sourceMapping,...(calculation?{calculation,algorithm:'observanda-retained-calculations',algorithmVersion:calculation.version===4?3:calculation.version===3?2:1}:{}),...(aggregation?{aggregation,algorithm:'observanda-retained-aggregation',algorithmVersion:1}:{}),...(aggregationMembersIndex?{aggregationMembersIndex}:{}),...(nativeMapping?{nativeMapping}:{}),delimiter:sourceMapping.delimiter??null,encoding:'UTF-8',order:aggregation?'first-group-occurrence':'acquisition'}};
+ },{signal});return preparedWrites?prepare(materials):withDatasetPreparationWrites(materials,{writePage,signal},prepare);
 }
 export async function projectDatasetRows(materials,doc,rows,columns){
  const width=doc.content.schemaIndex?.count??doc.content.columns.length;
  if(columns===undefined){if(width>256)throw new AppError('MATERIAL_DATASET_LIMIT');columns=Array.from({length:width},(_,i)=>i);}
  if(!Array.isArray(columns)||columns.length>256||new Set(columns).size!==columns.length||columns.some(i=>!Number.isSafeInteger(i)||i<0||i>=width))throw new AppError('INVALID');
  const result=[];
- for(const row of rows){const cells=[],valueKinds=[],cellPointers=[],cellSources=[];let cachedOffset=-1,cached=[];
+ for(const row of rows){const cells=[],valueKinds=[],cellPointers=[],cellSources=[],cellLineages=[];let cachedOffset=-1,cached=[];
   if(doc.content.datasetFormat===3){materials.sequences.validate(row.cellIndex);if(row.cellIndex.kind!=='cells'||row.cellIndex.count!==width)fail('MATERIAL_MISSING');}
   for(const index of columns){let cell;if(doc.content.datasetFormat===3){const start=index-index%16;if(start!==cachedOffset){cached=(await materials.sequences.page(row.cellIndex,{offset:start,limit:16})).items;cachedOffset=start;}cell=validateDatasetCell(materials,cached[index-start]);}
    else cell={value:row.cells[index],kind:row.valueKinds?.[index]??'string',pointer:row.cellPointers?.[index],sources:row.cellSources?.[index]};
-   cells.push(cell.value);valueKinds.push(cell.kind);cellPointers.push(cell.pointer??null);cellSources.push(cell.sources??null);
+   cells.push(cell.value);valueKinds.push(cell.kind);cellPointers.push(cell.pointer??null);cellSources.push(cell.sources??null);cellLineages.push(cell.lineage??null);
   }
-  const {cellIndex,...metadata}=row;result.push({...metadata,cells,valueKinds,cellPointers,cellSources,columnIndices:columns});
+  const {cellIndex,...metadata}=row;result.push({...metadata,cells,valueKinds,cellPointers,cellSources,cellLineages,columnIndices:columns});
  }
  return {rows:result,columnIndices:columns};
 }

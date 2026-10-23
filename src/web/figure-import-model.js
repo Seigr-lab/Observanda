@@ -1,3 +1,4 @@
+import {exactFigureValue,projectFigureValue} from './figure-mapping-values.js';
 import {defaultMarkerArea} from './figure-marker-area.js';
 import markerMessages from './locales/en/figureMarkerArea.json' with {type:'json'};
 import {INTERVAL_FIELDS} from './figure-intervals.js';
@@ -44,6 +45,20 @@ export function suggestFigureMapping(table, figure, decimal = '.') {
   };
 }
 
+export function figureMappingValueName(table,operation,value){return value.column===null?'Count':operation==='raw'?table.columns[value.column].label:FIGURE_OPERATIONS.find(([id])=>id===operation)[1]+' of '+table.columns[value.column].label;}
+export function figureMappingPresentation(table,mapping,figure,{seriesCount,rows,missing}){
+ const operation=mapping.operation??'raw',values=operation==='count'?[{column:null,error:null}]:mapping.values;
+ const next=structuredClone(Object.fromEntries(Object.entries(figure).filter(([key])=>!['series','source'].includes(key))));next.kind=mapping.kind;
+ if(mapping.projection)next.projection=structuredClone(mapping.projection);else delete next.projection;
+ if(mapping.values.some(v=>v.count!=null))next.markerArea??=defaultMarkerArea();else delete next.markerArea;
+ if(next.kind==='heatmap'){next.heatmap??=defaultHeatmap();next.x.scale='linear';next.y.scale='linear';}
+ next.x={...next.x,kind:mapping.xKind,label:table.columns[mapping.x].label,min:null,max:null};
+ next.y={...next.y,label:values.length===1?figureMappingValueName(table,operation,values[0]):'',min:null,max:null};
+ if(next.kind==='heatmap'){next.heatmap.valueLabel||=next.y.label;next.y.label=mapping.group===null?heatmapMessages.row:table.columns[mapping.group].label;}
+ if(operation==='raw')delete next.summary;else next.summary={operation,rows,category:table.columns[mapping.x].label,group:mapping.group===null?'':table.columns[mapping.group].label,missing};
+ if(mapping.xKind!=='number')next.x.scale='linear';if(['bar','bar-horizontal','area'].includes(next.kind))next.y.scale='linear';next.legend=seriesCount>1||figure.legend;return next;
+}
+
 // The same mapper serves small file previews and paged retained-dataset jobs.
 export function createFigureMapper(table, mapping, figure, {limits={}, median=null,parseNumber=null,provenance=null}={}) {
   let rowCount=0,pointCount=0,textSize=0,limited=false;
@@ -70,14 +85,14 @@ export function createFigureMapper(table, mapping, figure, {limits={}, median=nu
   if(mapping.mode==='append'&&(mapping.projection||figure.projection))report(null,null,'A transformed import replaces the figure so every coordinate has the same meaning.');
   if (issues.length) return {add(){},finish:()=>({figure:null,issues,warnings}),get invalid(){return true;}};
   const values=operation==='count'?[{column:null,error:null}]:mapping.values;
-  const nameFor=value=>value.column===null?'Count':operation==='raw'?table.columns[value.column].label:FIGURE_OPERATIONS.find(([id])=>id===operation)[1]+' of '+table.columns[value.column].label;
+  const nameFor=value=>figureMappingValueName(table,operation,value);
   const buckets=new Map();
   let missing=0,bucketCount=0,rounded=false,precision=false,collapsed=false;
   const projectedX=new Map(),exactXValues=new WeakMap(),pointIds=new WeakMap(),seriesInputs=new WeakMap();let nextPoint=0,reduced=false;
   function recordPoint(point,details){if(!provenance)return;const index=nextPoint++;pointIds.set(point,index);provenance.point(index,details);}
   function exactValue(raw,row,column){
     const value=String(raw??'').trim();if(!value)return null;
-    try{return rationalText(parseNumber?parseNumber(value,column):exactRational(mapping.decimal===','?value.replace(',','.'):value));}
+    try{return exactFigureValue(value,column,{parseNumber,decimal:mapping.decimal});}
     catch(error){if(error.code)throw error;if(error.message==='precision'){precision=true;report(row,column,measurementMessages.summaryPrecision);}else report(row,column,'Expected a number or an empty cell for a gap.');return null;}
   }
   function reduce(operation){
@@ -85,19 +100,8 @@ export function createFigureMapper(table, mapping, figure, {limits={}, median=nu
   }
   function project(value,row,column,forceSafe=false,details=null){
     if(value===null)return null;
-    const exact=exactRational(value,'rational');
-    if(mapping.projection&&details){
-     try{const result=projectTransformedValue(exact,mapping.projection[details.axis],{policy:forceSafe?'safe':mapping.numericPolicy??'safe',delta:details.delta??false});details.coordinates[details.field]={exact:value,error:result.error};
-      try{projectTransformedValue(exact,mapping.projection[details.axis],{policy:'safe',delta:details.delta??false});}catch{rounded=true;}return result.coordinate;
-     }catch{precision=true;report(row,column,measurementMessages.plotPrecision);return null;}
-    }
-    try{return safeRationalProjection(exact);}
-    catch{
-      if(!forceSafe&&mapping.numericPolicy==='approximate'){
-        try{const number=rationalProjection(exact);rounded=true;return number;}catch{}
-      }
-      precision=true;report(row,column,measurementMessages.plotPrecision);return null;
-    }
+    try{const result=projectFigureValue(value,mapping,{axis:details?.axis??'y',delta:details?.delta??false,forceSafe,transformed:!!details});if(mapping.projection&&details)details.coordinates[details.field]={exact:value,error:result.error};rounded ||= result.rounded;return result.coordinate;}
+    catch{precision=true;report(row,column,measurementMessages.plotPrecision);return null;}
   }
   const coordinate=(raw,row,column,forceSafe=false,details=null)=>project(exactValue(raw,row,column),row,column,forceSafe,details);
   function horizontal(value,row,coordinates){
@@ -187,7 +191,9 @@ export function createFigureMapper(table, mapping, figure, {limits={}, median=nu
   if (mapping.order === 'ascending' && mapping.xKind !== 'category') {
     for (const item of series) item.points.sort((a, b) => mapping.xKind==='number'?compareRationalText(exactXValues.get(a),exactXValues.get(b)):xValue(a.x,mapping.xKind)-xValue(b.x,mapping.xKind));
   }
-  const next = structuredClone(figure);
+  let next;
+  if(mapping.mode==='append'){
+  next = structuredClone(figure);
   next.kind = mapping.kind;
   if(mapping.projection)next.projection=structuredClone(mapping.projection);else if(mapping.mode!=='append')delete next.projection;
   if(mapping.values.some(v=>v.count!=null))next.markerArea??=defaultMarkerArea();else if(mapping.mode!=='append')delete next.markerArea;
@@ -208,6 +214,7 @@ export function createFigureMapper(table, mapping, figure, {limits={}, median=nu
   if (mapping.xKind !== 'number') next.x.scale = 'linear';
   if (['bar', 'bar-horizontal', 'area'].includes(next.kind)) next.y.scale = 'linear';
   next.legend = next.series.length > 1 || figure.legend;
+  }else next={...figureMappingPresentation(table,mapping,figure,{seriesCount:series.length,rows:rowCount,missing}),series};
   if (!issues.length) for (const message of figureIssues(next)) report(null, null, message);
   let repeats = 0, backwards = false, gaps = 0;
   for (const item of series) {

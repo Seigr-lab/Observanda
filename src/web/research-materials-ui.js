@@ -1,3 +1,5 @@
+import {retainedFigureReader} from './retained-figure-reader.js';
+import {isRetainedFigure} from './retained-figure-model.js';
 import {measurementTransformControls,readMeasurementTransform,wireMeasurementTransforms,measurementTransformDescription} from './measurement-transform-ui.js';
 import {datasetColumnPageOffset,loadDatasetColumnWindow,datasetColumnPager} from './dataset-column-picker.js';
 import {INTERVAL_FIELDS} from './figure-intervals.js';
@@ -43,7 +45,7 @@ import {retainedRecordUI} from './retained-record-ui.js';
 
 export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty,render,revisions,create,getRecord=null,editRetainedFigure=null,refreshReader=null,access=run=>run()}){
  const retainedRecords=retainedRecordUI({state,api,esc,showDialog});
- let referenceContext=false,referenceOrigin=false,readingOverview=false,schemaDispose=null,referenceTrail=[],readerRefreshPending=false;
+ let figureReader=null,referenceContext=false,referenceOrigin=false,readingOverview=false,schemaDispose=null,referenceTrail=[],readerRefreshPending=false;
  const previews=figurePreviews();document.getElementById('dialog')?.addEventListener('close',()=>{referenceContext=false;previews.release();stopWatching();uploader.pause();});
  const endpoint='/api/research/materials/',record=getRecord??(()=>state.book?.entries.find(e=>e.id===state.selected));
  let projectOwner=null,readNamespace=null;
@@ -60,7 +62,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
  let columnOffset=0,schemaOffset=0,schemaTotal=0,schemaOriginal=[],schemaDraft=new Map(),schemaExclusions=[],schemaInitialExclusions='[]';
  let referenceIntent=null,referenceDraft=null,draftCursor=null,draftPage={items:[],next:null};
  let sourcePickers={},materialCursor=null,materialPage={next:null},importCursor=null,importsNext=null,homeGeneration=0;
- const stopWatching=()=>{schemaDispose?.();schemaDispose=null;intake.stop();reuse.stop();for(const picker of Object.values(sourcePickers))picker.dispose();sourcePickers={};sourceBusy.clear();homeGeneration++;previewController?.abort();previewController=null;clearTimeout(jobTimer);jobTimer=null;jobView++;};
+ const stopWatching=()=>{figureReader?.dispose();figureReader=null;schemaDispose?.();schemaDispose=null;intake.stop();reuse.stop();for(const picker of Object.values(sourcePickers))picker.dispose();sourcePickers={};sourceBusy.clear();homeGeneration++;previewController?.abort();previewController=null;clearTimeout(jobTimer);jobTimer=null;jobView++;};
  const saved=()=>!!record()&&(state.page==='record-reader'||!!revisions()[record().id])&&!state.dirty;
  const frame=(title,body,actions=null)=>{
   stopWatching();previews.release();
@@ -303,21 +305,36 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
    ${c.numericTransform?'<p>'+esc(measurementText('plotPolicy',{policy:measurementText(c.numericTransform.policy==='approximate'?'approximatePolicy':'safe')}))+'</p>':''}
    ${c.plotPointsIndex?button(esc(transformText('points')),'plot-points'):''}
    ${c.numericTransform?.reduction?'<p>'+esc(measurementText('plotReduction'))+'</p>':''}
+   ${c.graphVersion===1&&!referenceContext?button('Edit calculation graph','calculation-graph-open',`data-ref="${esc(JSON.stringify(selectedRef))}" data-existing="true"`):''}
    ${c.intake&&!referenceContext?button('Inspect imported file set','intake-open',`data-id="${esc(c.intake.id)}"`):''}
    ${c.acquisition?'Recorded with '+referenceList([c.acquisition]):''}<h3>Exact inputs</h3>${c.inputsIndex?'<div id="material-input-references"></div>':referenceList(c.inputs??[])}${inputCount(c,'outputs')?`<h3>Outputs</h3>${c.outputsIndex?'<div id="material-output-references"></div>':referenceList(c.outputs)}`:''}
    <details><summary>Private manifest</summary><pre>${esc(JSON.stringify(opened,null,2))}</pre></details>`);
   if(c.inputsIndex)await mountReferences(document.getElementById('material-input-references'),{reference:selectedRef});
   if(c.outputsIndex&&inputCount(c,'outputs'))await mountReferences(document.getElementById('material-output-references'),{reference:selectedRef,slot:'outputs'});
-  if(c.figure)previews.mount(document.getElementById('material-figure'),c.figure,'material');
+  if(c.figure){if(isRetainedFigure(c.figure))await mountRetainedFigure(document.getElementById('material-figure'),{ref:selectedRef});else previews.mount(document.getElementById('material-figure'),c.figure,'material');}
+ }
+ async function mountRetainedFigure(root,selector,source=selector.ref?.kind==='analysis'?selector.ref:null){
+  const downloadURL=(format,revision)=>{guard();const path=selector.ref?.workspaceId?'/api/projects/material-reference/retained-figure-export':route(endpoint+'retained-figure-export');return path+'?context='+encodeURIComponent(workspaceContext)+'&selection='+encodeURIComponent(JSON.stringify({...selector,expectedRevision:revision,format}));};
+  figureReader=retainedFigureReader({root,request:(command,options)=>{guard();return call('retained-figure',{...selector,...command},options);},downloadURL,inspectSource:source?async({pointId,seriesId})=>{await authorizeSource(source);selectedRef=source;await plotPoint({pointId,seriesId});}:null});
+  await figureReader.ready;
+ }
+ async function openRetainedFigure(control){
+  owner=record()?.id??null;workspaceContext=state.storage?.contextId;projectOwner=researchOwner(state);referenceOrigin=true;referenceContext=true;readNamespace=state.book?.id;referenceTrail=[];
+  const selector=control.dataset.figureRef?{ref:JSON.parse(control.dataset.figureRef),figureId:control.dataset.figureId}:{workspaceId:state.book.id,recordId:control.dataset.recordId,figureId:control.dataset.figureId};
+  const source=control.dataset.figureSource?JSON.parse(control.dataset.figureSource):null;
+  frame(t('retainedFigureReader','heading'),'<div id="material-retained-figure"><p role="status">'+esc(t('retainedFigureReader','loading'))+'</p></div>',button('Close','close'));
+  const generation=jobView;if(selector.ref)await authorizeSource(selector.ref);currentView(generation);
+  await mountRetainedFigure(document.getElementById('material-retained-figure'),selector,source);
  }
  async function plotPoints(offset=0){
   const reference=selectedRef;frame(transformText('points'),'<p role="status">Loading...</p>');const generation=jobView,data=await call('plot-points',{ref:reference,offset});currentView(generation);
   frame(transformText('points'),'<div class="material-table"><table><thead><tr><th>'+esc(transformText('series'))+'</th><th>'+esc(transformText('point'))+'</th><th>X</th><th>'+esc(transformText('projected'))+'</th><th></th></tr></thead><tbody>'+data.items.map(item=>'<tr><td>'+esc(item.seriesName)+'</td><td>'+(item.point+1)+'</td><td>'+esc(item.x)+'</td><td>'+esc(item.y??'Gap')+'</td><td>'+button(esc(transformText('openPoint')),'plot-point','data-index="'+item.index+'"')+'</td></tr>').join('')+'</tbody></table></div>'+(offset?button(esc(transformText('previous')),'plot-points','data-offset="'+Math.max(0,offset-16)+'"'):'')+(data.next!==null?button(esc(transformText('next')),'plot-points','data-offset="'+data.next+'"'):''),button(esc(transformText('back')),'plot-back'));
  }
  async function plotPoint(index,offset=0){
-  const reference=selectedRef;frame(transformText('point'),'<p role="status">Loading...</p>');const generation=jobView,data=await call('plot-point',{ref:reference,index,offset});currentView(generation);
+  const pointSelection=typeof index==='object'?index:{index},pointAttributes=typeof index==='object'?'data-point-id="'+esc(index.pointId)+'" data-series-id="'+esc(index.seriesId)+'"':'data-index="'+index+'"';
+  const reference=selectedRef;frame(transformText('point'),'<p role="status">Loading...</p>');const generation=jobView,data=await call('plot-point',{ref:reference,...pointSelection,offset});currentView(generation);
   const fraction=value=>value.numerator+' / '+value.denominator,coordinateLabel=field=>field==='error'?transformText('uncertaintyWidth'):['x','y'].includes(field)?transformText(field):t('figureIntervals',field);
-  frame(transformText('point'),'<h3>'+esc(data.seriesName)+' - '+(data.point+1)+'</h3>'+measurementTransformDescription(data.projection,{esc,text:transformText,numberText})+'<div class="material-fields measurement-details">'+Object.entries(data.coordinates).map(([field,item])=>'<section><h4>'+esc(coordinateLabel(field))+'</h4><dl><dt>'+esc(transformText('projected'))+'</dt><dd>'+esc(data.coordinate[field])+'</dd><dt>'+esc(transformText('exactValue'))+'</dt><dd><code class="material-hash">'+esc(item.exact)+'</code></dd><dt>'+esc(transformText('error'))+'</dt><dd><code class="material-hash">'+esc(fraction(item.error))+'</code></dd></dl></section>').join('')+'</div><h3>'+esc(transformText(data.operation==='raw'?'sources':'members'))+'</h3><p>'+data.total.toLocaleString()+'</p>'+data.members.map(member=>'<div><p>Page '+(member.position.page+1)+', row '+(member.position.row+1)+'</p>'+member.cells.map(cell=>button(esc(cell.field)+' - column '+(cell.source.selector.column+1),'measurement-inspect','data-source="'+esc(JSON.stringify(cell.source))+'"')).join('')+'</div>').join('')+(data.previous!==null?button(esc(transformText('previous')),'plot-point','data-index="'+index+'" data-offset="'+data.previous+'"'):'')+(data.next!==null?button(esc(transformText('next')),'plot-point','data-index="'+index+'" data-offset="'+data.next+'"'):''),button(esc(transformText('points')),'plot-points')+button(esc(transformText('back')),'plot-back'));
+  frame(transformText('point'),'<h3>'+esc(data.seriesName)+' - '+(data.point+1)+'</h3>'+measurementTransformDescription(data.projection,{esc,text:transformText,numberText})+'<div class="material-fields measurement-details">'+Object.entries(data.coordinates).map(([field,item])=>'<section><h4>'+esc(coordinateLabel(field))+'</h4><dl><dt>'+esc(transformText('projected'))+'</dt><dd>'+esc(data.coordinate[field])+'</dd><dt>'+esc(transformText('exactValue'))+'</dt><dd><code class="material-hash">'+esc(item.exact)+'</code></dd><dt>'+esc(transformText('error'))+'</dt><dd><code class="material-hash">'+esc(fraction(item.error))+'</code></dd></dl></section>').join('')+'</div><h3>'+esc(transformText(data.operation==='raw'?'sources':'members'))+'</h3><p>'+data.total.toLocaleString()+'</p>'+data.members.map(member=>'<div><p>Page '+(member.position.page+1)+', row '+(member.position.row+1)+'</p>'+member.cells.map(cell=>button(esc(cell.field)+' - column '+(cell.source.selector.column+1),'measurement-inspect','data-source="'+esc(JSON.stringify(cell.source))+'"')).join('')+'</div>').join('')+(data.previous!==null?button(esc(transformText('previous')),'plot-point',pointAttributes+' data-offset="'+data.previous+'"'):'')+(data.next!==null?button(esc(transformText('next')),'plot-point',pointAttributes+' data-offset="'+data.next+'"'):''),button(esc(transformText('points')),'plot-points')+button(esc(transformText('back')),'plot-back'));
  }
  const referenceList=refs=>`<ul>${refs.map(r=>`<li>${button(esc(catalog.find(m=>m.id===r.id&&m.revision===r.revision)?.title??analysisText(r.kind==='record'?'retainedRecord':'retainedInput')),'reference',`data-ref="${esc(JSON.stringify(r))}"`)} · ${esc(r.kind)} · ${r.revision.slice(0,12)}</li>`).join('')}</ul>`;
  async function datasetView(){
@@ -397,7 +414,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   const generation=jobView,context=state.storage?.contextId,recordId=state.selected,{selector,...ref}=target,snapshot=await call('read',{ref});
   if(generation!==jobView||context!==state.storage?.contextId||recordId!==state.selected)return;
   historical={target,snapshot};
-  frame(snapshot.title,`<p>Retained revision &middot; ${target.revision}</p>${recordRevisionView(snapshot,esc,{anchors:true,assetUrl:id=>route('/api/media/'+id)})}`,button('Compare with current record','compare-record')+button('Close','close'));
+  frame(snapshot.title,`<p>Retained revision &middot; ${target.revision}</p>${recordRevisionView(snapshot,esc,{anchors:true,figureReference:target,assetUrl:id=>route('/api/media/'+id)})}`,button('Compare with current record','compare-record')+button('Close','close'));
   if(selector){const el=document.getElementById('dialog').querySelector('[id="'+selectorAnchor(selector)+'"]');if(el){el.tabIndex=-1;el.focus();el.scrollIntoView({block:'start'});}else notify(bookTranslate('book','unavailable'),true);}
  }
  async function action(control){
@@ -405,8 +422,9 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   if(act.startsWith('correction-'))return corrections.action(act,control);
   if(corrections.isBusy())return true;
   if(act==='plot-points'){await plotPoints(Number(control.dataset.offset??0));return true;}
-  if(act==='plot-point'){await plotPoint(Number(control.dataset.index),Number(control.dataset.offset??0));return true;}
+  if(act==='plot-point'){await plotPoint(control.dataset.pointId?{pointId:control.dataset.pointId,seriesId:control.dataset.seriesId}:Number(control.dataset.index),Number(control.dataset.offset??0));return true;}
   if(act==='plot-back'){await inspect(selectedRef);return true;}
+  if(act==='retained-figure'){await openRetainedFigure(control);return true;}
   if(act==='figure-source'){await openReference(JSON.parse(control.dataset.ref));return true;}
   if(act.startsWith('measurement-')){if(act==='measurement-inspect')await authorizeSource(JSON.parse(control.dataset.source).ref);if(act==='measurement-from-artifact')await authorizeSource(JSON.parse(control.dataset.ref));return measurements.action(act,control);}
   if(act.startsWith('comparison-'))return comparisons.action(act,control);
@@ -424,7 +442,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
    const {record:current}=await call('current-record',{id:revision.target.id});
    if(generation!==jobView||context!==state.storage?.contextId||recordId!==state.selected||historical!==revision)return true;
    if(!current){notify('The current record is unavailable. The retained revision remains readable.',true);return true;}
-   frame('Compare retained and current record',recordRevisionComparison(historical.snapshot,current,esc,{assetUrl:id=>route('/api/media/'+id)}),button('Close','close'));return true;
+   frame('Compare retained and current record',recordRevisionComparison(historical.snapshot,current,esc,{previousFigureReference:historical.target,assetUrl:id=>route('/api/media/'+id)}),button('Close','close'));return true;
   }
   if(act==='close'){stopWatching();document.getElementById('dialog').close();return true;}
   if(act==='open'){referenceOrigin=control.dataset.readonly==='true';referenceContext=referenceOrigin;readingOverview=referenceOrigin;readNamespace=state.book?.id;referenceTrail=[];if(!saved()){notify('Save the record before opening evidence and analysis.',true);return true;}if(owner!==record().id||workspaceContext!==state.storage?.contextId||!sameResearchOwner(projectOwner,researchOwner(state))){referenceIntent=null;referenceDraft=null;draftCursor=null;datasetJobCursor=null;materialCursor=null;importCursor=null;}owner=record().id;workspaceContext=state.storage?.contextId;projectOwner=researchOwner(state);await home();return true;}

@@ -1,11 +1,11 @@
 import {figureDataNumber,figureCoordinateNumber} from './figure-number-labels.js';
 import messages from './locales/en/figureAxes.json' with {type:'json'};
 import {wrapFigureText} from './figure-text-layout.js';
-export function axisControlIssues(axis,{draft=false,kind='number'}={}){
+export function axisControlIssues(axis,{draft=false,kind='number',retained=false}={}){
  if(axis.reversed!==undefined&&typeof axis.reversed!=='boolean')return [messages.invalid];
  if(axis.ticks===undefined)return [];
- if(!Array.isArray(axis.ticks)||kind==='category'&&axis.ticks.length||axis.ticks.length>100)return [messages.invalid];
- const seen=new Set();for(const tick of axis.ticks){if(!tick||Object.keys(tick).sort().join()!=='label,value'||!Number.isFinite(tick.value)||Math.abs(tick.value)>1e100||kind==='date'&&Math.abs(tick.value)>8.64e15||typeof tick.label!=='string'||tick.label.length>300||/[\u0000-\u001f]/.test(tick.label)||!draft&&(!tick.label.trim()||seen.has(tick.value)||axis.scale==='log'&&tick.value<=0||axis.min!==null&&tick.value<axis.min||axis.max!==null&&tick.value>axis.max))return [messages.invalid];seen.add(tick.value);}
+ if(!Array.isArray(axis.ticks)||kind==='category'&&axis.ticks.length||!retained&&axis.ticks.length>100)return [messages.invalid];
+ const seen=new Set();for(const tick of axis.ticks){if(!tick||Object.keys(tick).sort().join()!=='label,value'||!Number.isFinite(tick.value)||Math.abs(tick.value)>1e100||kind==='date'&&Math.abs(tick.value)>8.64e15||typeof tick.label!=='string'||!retained&&tick.label.length>300||/[\u0000-\u001f]/.test(tick.label)||!draft&&(!tick.label.trim()||seen.has(tick.value)||axis.scale==='log'&&tick.value<=0||axis.min!==null&&tick.value<axis.min||axis.max!==null&&tick.value>axis.max))return [messages.invalid];seen.add(tick.value);}
  return [];
 }
 export const axisFraction=(fraction,axis)=>axis.reversed?1-fraction:fraction;

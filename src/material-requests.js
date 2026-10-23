@@ -1,3 +1,6 @@
+import {changeRetainedFigureRequest} from './retained-figure-presentation.js';
+import {retainedFigureRequest} from './retained-figures.js';
+import {CalculationGraphs} from './calculation-graphs.js';
 import {appendMaterialUploadBatch} from './material-upload-batch.js';
 import {comparisonDependencyReview} from './comparison-dependency-review.js';
 import {withComparisonInputs} from './comparison-request-inputs.js';
@@ -18,18 +21,19 @@ import {jobSummary} from './jobs.js';
 import {MAX_BYTES} from './model.js';
 import {researchId} from './web/research-reference.js';
 import {AppError} from './errors.js';
-const reads=new Set(['source-owners','source-items','source-resolve','overview','list','references','reference-addresses','correction-preview','correction-status','correction-history','association-read','association-list','figure-sources','plot-points','plot-point','selection-page','intakes','intake-selection-page','intake-page','intake-session','upload-session','drafts','draft-read','draft-references','current','schema','measurement-inspect','measurement-seed','current-record','record','read','analysis-status','job','retained-table','calculation-schema','dataset-preview','dataset-jobs','rows','comparison-page','verify','download']);
-const writes=new Set(['associate-original','correction-apply','association-start','association-step','association-cancel','selection-change','intake-start','intake-selection-append','intake-append','intake-finish','draft-start','draft-append','draft-finish','draft-cancel','measurement-save','pin','start','finish','cancel-job','retry-job','dataset','collection','analysis','comparison','reuse','plot']);
+const reads=new Set(['retained-figure','retained-figure-export','calculation-graph-page','source-owners','source-items','source-resolve','overview','list','references','reference-addresses','correction-preview','correction-status','correction-history','association-read','association-list','figure-sources','plot-points','plot-point','selection-page','intakes','intake-selection-page','intake-page','intake-session','upload-session','drafts','draft-read','draft-references','current','schema','measurement-inspect','measurement-seed','current-record','record','read','analysis-status','job','retained-table','calculation-schema','dataset-preview','dataset-jobs','rows','comparison-page','verify','download']);
+const writes=new Set(['retained-figure-change','calculation-graph-create','calculation-graph-change','associate-original','correction-apply','association-start','association-step','association-cancel','selection-change','intake-start','intake-selection-append','intake-append','intake-finish','draft-start','draft-append','draft-finish','draft-cancel','measurement-save','pin','start','finish','cancel-job','retry-job','dataset','collection','analysis','comparison','reuse','plot']);
 const accepted=new Set(['intake-finish','finish','dataset','comparison','plot']);
 export function materialRequest(route){
  const prefix='/api/research/materials/';if(!route.startsWith(prefix))return null;const operation=route.slice(prefix.length);
  const original=/^original\/([a-f0-9-]{36})\/([a-f0-9]{64})$/.exec(operation);
  if(original&&researchId(original[1]))return {material:'download',method:'GET',write:false,download:true,ref:{kind:'artifact',id:original[1],revision:original[2]}};
+ if(operation==='retained-figure-export')return {material:operation,method:'GET',write:false,download:true,querySelection:true};
  if(operation==='chunks')return {material:'chunks',method:'POST',write:true,input:'stream'};
  const chunk=/^chunk\/([a-f0-9-]{36})\/(\d+)$/.exec(operation);
  if(chunk&&researchId(chunk[1])&&Number.isSafeInteger(Number(chunk[2])))return {material:'chunk',method:'POST',write:true,input:'stream',id:chunk[1],index:Number(chunk[2])};
  if(!reads.has(operation)&&!writes.has(operation))return null;
- return {material:operation,method:'POST',write:writes.has(operation),limit:MAX_BYTES,status:accepted.has(operation)?202:200,download:operation==='download'};
+ return {material:operation,method:'POST',write:writes.has(operation),limit:MAX_BYTES,status:accepted.has(operation)?202:200,download:operation==='download'||operation==='retained-figure-export'};
 }
 export async function executeMaterialRequest(storage,request,data,{signal,jobs,download,stream,sourceAccess,sourceDiscovery}={}){
  const materials=new ResearchMaterials(storage),operation=request.material;
@@ -54,9 +58,11 @@ export async function executeMaterialRequest(storage,request,data,{signal,jobs,d
  case 'association-step':return materials.associations.step(data.id);
  case 'association-cancel':return materials.associations.cancel(data.id);
  case 'association-list':return materials.associations.list(data);
+ case 'retained-figure':case 'retained-figure-export':return retainedFigureRequest(materials,data,{signal,download,exporting:operation==='retained-figure-export'});
+ case 'retained-figure-change':return changeRetainedFigureRequest(materials,data,{signal});
  case 'figure-sources':return resolveFigureSources(materials,data);
  case 'plot-points':return plotPointPage(materials,data.ref,{offset:data.offset,limit:data.limit,signal});
- case 'plot-point':return inspectPlotPoint(materials,data.ref,data.index,{offset:data.offset,signal});
+ case 'plot-point':return inspectPlotPoint(materials,data.ref,data.index,{offset:data.offset,signal,pointId:data.pointId,seriesId:data.seriesId});
  case 'selection-change':return materials.choices.change(data);
  case 'selection-page':return materials.choices.page(data);
  case 'intakes':return materials.intakes.list(data.recordId,{cursor:data.cursor,limit:data.limit});
@@ -79,7 +85,7 @@ export async function executeMaterialRequest(storage,request,data,{signal,jobs,d
  case 'schema':return materials.schemaPage(data.ref,{offset:data.offset??0,limit:data.limit??16});
  case 'measurement-save':return {ref:await materials.measurements.save(data,{signal})};
  case 'measurement-seed':return materials.measurements.seed(data.source);
- case 'measurement-inspect':return materials.measurements.inspect(data.source,{offset:data.offset??0,signal});
+ case 'measurement-inspect':return materials.measurements.inspect(data.source,{offset:data.offset??0,lineageOffset:data.lineageOffset??0,lineageLimit:data.lineageLimit??16,sourceOffset:data.sourceOffset??0,signal});
  case 'current-record':try{const current=await materials.owner(data.id);return {record:current.entries.find(e=>e.id===data.id)};}catch(error){if(error.code!=='MATERIAL_INVALID')throw error;return {record:null};}
  case 'pin':return materials.pinRecord(data.id,data.expectedRevision);
  case 'record':return new RetainedRecordDocuments(storage).read(data,{signal});
@@ -89,6 +95,9 @@ export async function executeMaterialRequest(storage,request,data,{signal,jobs,d
  case 'finish':{if(!storage.vault.key)throw new AppError('ACCESS_LOCKED');const session=await materials.importState(data.id);if(session.batchId)throw new AppError('MATERIAL_CHANGED');await materials.assertOwner(session.recordId);if(materials.uploads.bytes(session)!==session.size)throw new AppError('MATERIAL_INCOMPLETE');const {queue,worker}=await jobService(),job=await queue.enqueue({id:session.id,type:'evidence.finalize',scope:session.recordId,input:{importId:session.id,size:session.size}});worker.wake();return {job:jobSummary(job)};}
  case 'job':case 'cancel-job':case 'retry-job':{const service=await jobService(),{queue,worker}=service,job=await queue.read(data.id);if(!job)throw new AppError('NOT_FOUND');await queue.authorize(job);if(operation==='job')return {job:summary(job)};const result=operation==='retry-job'&&job.type==='analysis.compare'?await retryComparison(materials,service,job,{sourceAccess,signal}):await queue.control(data.id,operation==='cancel-job'?'cancel':'retry');if(operation==='cancel-job'){worker.cancel(data.id);service.comparisonAccess?.forget((await storage.outline()).metadata.id,data.id);}else worker.wake();return {job:summary(result)};}
  case 'retained-table':return data.cell?retainedTableCell(materials,{ref:data.ref,table:data.table,rowOffset:data.cell.rowOffset,cursor:data.cell.cursor,columnOffset:data.cell.columnOffset,offset:data.cell.offset,limit:data.cell.limit},{signal}):data.table?retainedTablePage(materials,data,{signal}):retainedTable(materials,data);
+ case 'calculation-graph-create':return {ref:await new CalculationGraphs(materials).create(data)};
+ case 'calculation-graph-change':return {ref:await new CalculationGraphs(materials).change(data)};
+ case 'calculation-graph-page':return new CalculationGraphs(materials).page(data);
  case 'calculation-schema':{const calculations=new DatasetCalculations(materials);if(data.columns!==undefined)return {columns:await calculations.schema(data.ref,data.view,{columns:data.columns}),columnIndices:data.columns};if(data.offset!==undefined||data.limit!==undefined)return calculations.schemaPage(data.ref,data.view,{offset:data.offset,limit:data.limit});return {columns:await calculations.schema(data.ref,data.view)};}
  case 'dataset-preview':return materials.previewDataset(data,{signal});
  case 'dataset':case 'comparison':case 'plot':{const {queue,worker,comparisonAccess}=await jobService(),{jobId,...command}=data,enqueue=operation==='dataset'?enqueueDataset:operation==='comparison'?enqueueComparison:enqueuePlot,job=await enqueue(materials,queue,command,jobId,{sourceAccess,comparisonAccess,signal});worker.wake();return {job};}

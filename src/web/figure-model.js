@@ -1,3 +1,4 @@
+import {isRetainedFigure,validRetainedFigure} from './retained-figure-model.js';
 import {validMeasurementProjection} from './measurement-transform.js';
 import projectionMessages from './locales/en/measurementTransform.json' with {type:'json'};
 import {axisControlIssues} from './figure-axis-controls.js';
@@ -38,9 +39,10 @@ export function xValue(value,kind){
  if(!Number.isFinite(day)||new Date(day).toISOString().slice(0,10)!==date)return null;
  const stamp=Date.parse(value);return Number.isFinite(stamp)?stamp:null;
 }
-export function figureIssues(figure,{draft=false}={}){
+export function figureIssues(figure,{draft=false,retained=false}={}){
+ if(isRetainedFigure(figure))return validRetainedFigure(figure,{draft})?[]:['Invalid retained figure.'];
  if(Object.hasOwn(figure??{},'source')&&!validFigureSource(figure.source))return [provenanceMessages.invalid];
- if(figure?.kind==='panels')return compositionIssues(figure,figureIssues,{draft});
+ if(figure?.kind==='panels')return compositionIssues(figure,figureIssues,{draft,retained});
  const errors=[];
  const fail=message=>errors.push(message);
  if(!keys(figure,['id','title','kind','x','y','legend','series',...['style','summary','annotations','source','heatmap','markerArea','projection'].filter(k=>Object.hasOwn(figure??{},k))]))return ['Invalid figure structure.'];
@@ -51,7 +53,7 @@ export function figureIssues(figure,{draft=false}={}){
  if(!FIGURE_TYPES.some(([kind])=>kind===figure.kind))fail('Choose a supported figure type.');
  for(const [name,axis] of [['Horizontal',figure.x],['Vertical',figure.y]]){
   if(!keys(axis,[...(name==='Horizontal'?['kind','label','scale','min','max']:['label','scale','min','max']),...['reversed','ticks'].filter(k=>Object.hasOwn(axis??{},k))])||!text(axis.label)||!['linear','log'].includes(axis.scale)||![axis.min,axis.max].every(v=>v===null||number(v)))return ['Invalid axis settings.'];
-  errors.push(...axisControlIssues(axis,{draft,kind:axis.kind??'number'}));
+  errors.push(...axisControlIssues(axis,{draft,retained,kind:axis.kind??'number'}));
   if(!draft&&axis.min!==null&&axis.max!==null&&axis.min>=axis.max)fail(name+' minimum must be less than its maximum.');
   if(!draft&&axis.scale==='log'&&[axis.min,axis.max].some(v=>v!==null&&v<=0))fail(name+' logarithmic bounds must be positive.');
  }
@@ -81,7 +83,7 @@ export function figureIssues(figure,{draft=false}={}){
   }
   if(!draft&&!complete&&figure.kind!=='heatmap')fail(series.name+': add at least one measured value.');
  }
- return [...new Set([...errors,...markerAreaIssues(figure,{draft}),...heatmapIssues(figure,{draft}),...annotationIssues(figure,xValue,{draft})])];
+ return [...new Set([...errors,...markerAreaIssues(figure,{draft,retained}),...heatmapIssues(figure,{draft,retained}),...annotationIssues(figure,xValue,{draft,retained})])];
 }
 export const validFigure=(figure,options)=>figureIssues(figure,options).length===0;
 export function parseFigureCSV(source,kind='number'){

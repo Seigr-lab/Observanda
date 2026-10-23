@@ -130,6 +130,11 @@ export class PublicationDocumentBuilder extends PublicationDocumentReader{
   if(!validPublicationDocumentOwner(owner))throw new AppError('INVALID');bindWorkspace(workspace,owner,expectedOwner);
   const blocks=new PublicationDocumentBlocks(workspace,owner,{write,signal});super(blocks,collectionSchema(ownPublicationJSON(collections)),null);this.finished=false;this.busy=false;
  }
+ ensureCollection(id,definition){
+  if(this.finished||this.busy)throw new AppError('INVALID');this.check();const value=collectionSchema({[id]:definition})[id];
+  if(Object.hasOwn(this.collections,id)){if(Object.keys(this.collections[id].indexes).sort().join()!==Object.keys(value.indexes).sort().join())throw new AppError('INVALID');return;}
+  if(Object.keys(this.collections).length>=64)throw new AppError('LIMIT');this.collections[id]=value;
+ }
  indexRoots(extra=[]){return [...Object.values(this.collections).flatMap(collectionRoots),...extra,...[...this.snapshots].flat()];}
  async flushIndexes(extra=[],{signal}={}){await this.index.flushRoots(this.indexRoots(extra),{signal});}
  async boundIndexes(next,signal){

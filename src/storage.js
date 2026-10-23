@@ -138,6 +138,7 @@ export class Workspace {
       return this.catalogue(async store=>{
         if(relative.startsWith('.observanda/materials/')||relative.startsWith('.observanda/jobs/')){
           const value=JSON.parse(text);if(value.content?.datasetFormat===3||relative.startsWith('.observanda/materials/sequences/chunks/')&&['cells','cell-text'].includes(value.kind)){const {requirePagedResearchTables}=await import('./catalogue-format.js');await requirePagedResearchTables(store.db);}
+          const {referencedCalculationMetadata}=await import('./calculation-graph-format.js');if(referencedCalculationMetadata(relative,value)){const {requireReferencedCalculations}=await import('./catalogue-format.js');await requireReferencedCalculations(store.db);}
           const {nativeNumericalMetadata,nativeClockMetadata}=await import('./numerical-material-format.js');if(nativeNumericalMetadata(relative,value)){const {requireNativeNumericalModels}=await import('./catalogue-format.js');await requireNativeNumericalModels(store.db);}
           if(nativeClockMetadata(relative,value)){const {requireNativeClockModels}=await import('./catalogue-format.js');await requireNativeClockModels(store.db);}
         }

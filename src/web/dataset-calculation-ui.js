@@ -1,3 +1,4 @@
+import {datasetCalculationGraphUI} from './dataset-calculation-graph-ui.js';
 import {datasetColumnPageOffset,loadDatasetColumnWindow,datasetProjectionFields} from './dataset-column-picker.js';
 import {t} from './i18n/index.js';
 import {calculationOperations,calculationUnary,validCalculation} from './dataset-calculation-model.js';
@@ -8,6 +9,7 @@ import {resultFormatControls,readResultFormat,wireResultFormats} from './measure
 import {analysisReferenceField,wireAnalysisFields,assertAnalysisFieldsReady} from './analysis-fields-ui.js';
 export const calculationText=(key,args)=>t('datasetCalculations',key,args);
 export function datasetCalculationUI({state,api,call,frame,esc,field,guard,owner,inspect,watchJob,notify}){
+ const graph=datasetCalculationGraphUI({call,frame,esc,field,guard,owner,inspect,watchJob});
  const text=calculationText;
  let draft=null,title='',identity=null,source=null,columns=[],joinColumns=[],sourcePage=null,joinPages=[],dispose=null,generation=0,saving=false;
  const button=(key,action,data='')=>`<button type="button" class="button" data-action="material-calculation-${action}" ${data}>${esc(text(key))}</button>`;
@@ -88,6 +90,9 @@ export function datasetCalculationUI({state,api,call,frame,esc,field,guard,owner
   title=repeat?doc.title:text('open');identity={id:repeat?ref.id:crypto.randomUUID(),expectedRevision:repeat?ref.revision:null,jobId:crypto.randomUUID()};if(await load())form();
  }
  async function action(act,control){
+  if(act.startsWith('calculation-graph-'))return graph.action(act,control);
+  if(act==='calculation-open'){clean();await graph.open(JSON.parse(control.dataset.ref));return true;}
+  if(act==='calculation-repeat'){const value=JSON.parse(control.dataset.ref),doc=await call('read',{ref:value});guard();if(doc.content.calculation?.version===4){clean();await graph.open(doc.content.calculation.graph,{existing:true});return true;}}
   if(!act.startsWith('calculation-'))return false;guard();if(saving)return true;const key=act.slice(12);
   if(key==='open'||key==='repeat'){await open(JSON.parse(control.dataset.ref),key==='repeat');return true;}
   if(key==='cancel'){clean();await inspect(source);return true;}
@@ -106,5 +111,5 @@ export function datasetCalculationUI({state,api,call,frame,esc,field,guard,owner
   }
   form();return true;
  }
- return {action,clean,isBusy:()=>saving};
+ return {action,clean:()=>{clean();graph.clean();},isBusy:()=>saving||graph.isBusy()};
 }

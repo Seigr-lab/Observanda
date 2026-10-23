@@ -258,6 +258,11 @@ export function renderPublication(context, { blockedValues = [], mediaFiles = ne
     const n = context.notebooks.find(n => n.id === e.notebookId), p = context.projects.find(p => p.id === n.projectId);
     let figure = '';const inline=placedFigures(e),renderedFigures=new Map();
     for(const plot of e.figures){
+      if(plot.kind==='retained'){
+        if(!editionParts?.retainedFigure)throw new AppError('INVALID');
+        const markup='<figure id="record-figure-'+plot.id+'" tabindex="-1">'+editionParts.retainedFigure(e.id,plot.id,{data:e.figureDownloads?.includes(plot.id)??false,results:e.results})+'</figure>';
+        renderedFigures.set(plot.id,markup);if(!inline.has(plot.id))figure+=markup;continue;
+      }
       const stem=e.id+'-'+plot.id;
       files.set(`figures/${stem}.svg`,renderFigure(plot));
       const data=e.figureDownloads?.includes(plot.id);

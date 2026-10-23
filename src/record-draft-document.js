@@ -1,3 +1,5 @@
+import {hasRetainedFigure,retainedFigureDocument} from './record-retained-figures.js';
+import {requireRetainedFigures,catalogueRequiresRetainedFigures} from './catalogue-format.js';
 import {hasFigureProjection,projectedFigureDocument} from './record-numerical-models.js';
 import {requireNativeNumericalModels,catalogueRequiresNativeNumericalModels} from './catalogue-format.js';
 import {hasPagedResultTables,pagedTableDocument} from './retained-tables.js';
@@ -25,6 +27,7 @@ export async function retainDraftDocument(workspace,id,content,expected,{signal}
    const close=async()=>{if(collection){await record.add({name:collection.name,value:await collection.builder.finish()});collection=null;}};
    const inspected=await inspectTransferredDraft(workspace,id,content,{signal,ownership:true,part:async part=>{
     if(part.name==='figures'&&(part.kind==='item'&&hasFigureProjection(part.value)||part.kind==='field'&&part.value?.some(hasFigureProjection)))await requireNativeNumericalModels(store.db);
+ if(part.name==='figures'&&(part.kind==='item'&&hasRetainedFigure(part.value)||part.kind==='field'&&part.value?.some(hasRetainedFigure)))await requireRetainedFigures(store.db);
     if(part.kind==='field'&&part.name==='results'&&hasPagedResultTables(part.value))await requirePagedResearchTables(store.db);
     if(part.kind==='field'&&part.name==='attempt'&&hasNestedAttemptContinuations(part.value))await requireNestedAttemptCollections(store.db);
     if(part.kind!=='item')await close();
@@ -52,6 +55,7 @@ export async function withDraftDocument(store,draft,consume){
   for(const [field,value] of [['id',draft.base.recordId],['notebookId',notebookId]])if((await document.field([field])).value!==value)throw new AppError('CATALOGUE_DAMAGED');
   if(!catalogueRequiresPagedResearchTables(await catalogueFormat(store.db))&&await pagedTableDocument(document))throw new AppError('CATALOGUE_DAMAGED');
   if(!catalogueRequiresNativeNumericalModels(await catalogueFormat(store.db))&&await projectedFigureDocument(document))throw new AppError('CATALOGUE_DAMAGED');
+ if(!catalogueRequiresRetainedFigures(await catalogueFormat(store.db))&&await retainedFigureDocument(document))throw new AppError('CATALOGUE_DAMAGED');
   return await consume(document);
  });
 }

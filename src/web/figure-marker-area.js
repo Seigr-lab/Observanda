@@ -3,11 +3,11 @@ import messages from './locales/en/figureMarkerArea.json' with {type:'json'};
 import {seriesStyle,figureStyle} from './figure-style.js';
 import {wrapFigureText} from './figure-text-layout.js';
 export const defaultMarkerArea=()=>({unitArea:24,label:messages.defaultLabel});
-export function markerAreaIssues(f,{draft=false}={}){
+export function markerAreaIssues(f,{draft=false,retained=false}={}){
  const a=f.markerArea,points=f.series?.flatMap(s=>s.points)??[];
  if(points.some(p=>p.count!=null&&(!Number.isSafeInteger(p.count)||p.count<0)))return [messages.countInvalid];
  if(a===undefined)return [];
- if(!a||Object.keys(a).sort().join()!=='label,unitArea'||typeof a.label!=='string'||a.label.length>300||/[\u0000-\u001f]/.test(a.label)||!Number.isFinite(a.unitArea)||a.unitArea<=0||a.unitArea>65536)return [messages.invalid];
+ if(!a||Object.keys(a).sort().join()!=='label,unitArea'||typeof a.label!=='string'||!retained&&a.label.length>300||/[\u0000-\u001f]/.test(a.label)||!Number.isFinite(a.unitArea)||a.unitArea<=0||a.unitArea>65536)return [messages.invalid];
  if(!draft&&(!['line','scatter'].includes(f.kind)||!a.label.trim()||points.some(p=>p.y!==null&&p.count==null)||points.some(p=>p.count*a.unitArea>65536)))return [messages.range];
  return [];
 }

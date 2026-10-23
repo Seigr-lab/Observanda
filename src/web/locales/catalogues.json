@@ -1,4 +1,7 @@
 {
+  "measurementTransform": ["en"],
+  "retainedFigureReader": ["en"],
+  "retainedFigureData": ["en"],
   "pdfEditor": ["en"],
   "configurationEditor": ["en"],
   "taskPrerequisites": ["en"],

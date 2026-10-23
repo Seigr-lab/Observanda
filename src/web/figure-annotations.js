@@ -7,13 +7,13 @@ import {placeAnnotationLabels,wrapAnnotationText} from './figure-annotation-layo
 
 const keys=(v,names)=>v&&Object.keys(v).sort().join()===names.sort().join();
 const uuid=v=>typeof v==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(v);
-export function annotationIssues(figure,xValue,{draft=false}={}){
+export function annotationIssues(figure,xValue,{draft=false,retained=false}={}){
  const annotations=figure.annotations;if(annotations===undefined)return [];
- if(!Array.isArray(annotations)||annotations.length>64)return [messages.annotationLimit];
+ if(!Array.isArray(annotations)||!retained&&annotations.length>64)return [messages.annotationLimit];
  const ids=new Set();
  for(const a of annotations){
-  if(a&&observationAnnotation(a)){if(!uuid(a.id)||ids.has(a.id))return [messages.annotationInvalid];ids.add(a.id);const errors=observationAnnotationIssues(a,figure,xValue,{draft});if(errors.length)return errors;continue;}
-  if(!keys(a,['id','kind','axis','start','end','label','color','opacity'])||!uuid(a.id)||ids.has(a.id)||!['boundary','interval'].includes(a.kind)||!['x','y'].includes(a.axis)||typeof a.label!=='string'||a.label.length>300||/[\u0000-\u001f]/.test(a.label)||!/^#[0-9a-f]{6}$/i.test(a.color)||!Number.isFinite(a.opacity)||a.opacity<0||a.opacity>1||a.kind==='boundary'&&a.end!==null)return [messages.annotationInvalid];
+  if(a&&observationAnnotation(a)){if(!uuid(a.id)||ids.has(a.id))return [messages.annotationInvalid];ids.add(a.id);const errors=observationAnnotationIssues(a,figure,xValue,{draft,retained});if(errors.length)return errors;continue;}
+  if(!keys(a,['id','kind','axis','start','end','label','color','opacity'])||!uuid(a.id)||ids.has(a.id)||!['boundary','interval'].includes(a.kind)||!['x','y'].includes(a.axis)||typeof a.label!=='string'||!retained&&a.label.length>300||/[\u0000-\u001f]/.test(a.label)||!/^#[0-9a-f]{6}$/i.test(a.color)||!Number.isFinite(a.opacity)||a.opacity<0||a.opacity>1||a.kind==='boundary'&&a.end!==null)return [messages.annotationInvalid];
   ids.add(a.id);
   const kind=a.axis==='x'?figure.x.kind:'number',start=xValue(a.start,kind),end=a.kind==='interval'?xValue(a.end,kind):start;
   if(kind==='category'||(!draft||a.start!==null)&&start===null||(!draft||a.end!==null)&&end===null||start!==null&&end!==null&&(a.kind==='interval'&&end<=start||figure[a.axis].scale==='log'&&(start<=0||end<=0)))return [messages.annotationRange];

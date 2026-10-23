@@ -6,6 +6,7 @@ import {sameFigureCalculation} from './web/figure-result-links.js';
 
 export async function validateFigureSources(workspace,record){
  const materials=new ResearchMaterials(workspace);
+ for(const figure of allFigurePlots(record.figures))if(figure.kind==='retained'){const {validateRetainedFigureSource}=await import('./retained-figures.js');await validateRetainedFigureSource(materials,figure,{verify:true});}
  for(const {ref} of figureSourceEntries(record.figures)){
   if(!validFigureSource(ref))throw new AppError('ANALYSIS_INVALID');
   if(!(await materials.read(ref)).content.figure)throw new AppError('ANALYSIS_INVALID');

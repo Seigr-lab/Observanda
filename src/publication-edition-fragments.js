@@ -1,3 +1,4 @@
+import {publicationFigureContents} from './publication-figure-renderer.js';
 import {publicationTableChunks} from './publication-retained-tables.js';
 import {randomUUID} from 'node:crypto';
 import {digest} from './storage-format.js';
@@ -95,6 +96,11 @@ export async function publicationEditionParts(input,plan,{writer,media,mediaFile
  const api={
   fragments,hasFeeds:plan.collections.some(value=>value.section.feed)||notebookCount>PUBLIC_COLLECTION_ROWS,browse,
   attach(value){output=value;},
+  retainedFigure(recordId,figureId,{data=false,results}={}){
+   const figure=plan.originals.get(recordId)?.figures.find(value=>value.id===figureId);
+   if(figure?.kind!=='retained')throw new AppError('JOB_DAMAGED');
+   return fragments.add(()=>publicationFigureContents(input,recordId,figure,{writer,data,results,signal}));
+  },
   retainedTable(recordId,resultId){
    const statement=plan.originals.get(recordId)?.results?.statements.find(value=>value.id===resultId);
    if(statement?.table?.version!==3)throw new AppError('JOB_DAMAGED');

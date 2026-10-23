@@ -36,10 +36,10 @@ export function measurementUI({call,frame,esc,field,guard,owner,inspect,notify,d
   const request=++generation,seed=await call('measurement-seed',{source:s});guard();if(request!==generation)return;
   back=()=>open(s,{returning:true});editing={id:crypto.randomUUID(),expectedRevision:null};draft={version:1,...seed,references:Object.fromEntries(MEASUREMENT_ROLES.map(k=>[k,null])),decoderVersion:'',integrity:'unknown',completion:'unknown',note:''};title=m('heading');renderForm();
  }
- async function open(s,{offset=0,returning=false}={}){
+ async function open(s,{offset=0,lineageOffset=0,lineageLimit=16,sourceOffset=0,returning=false}={}){
   if(!returning){if(document.querySelector('[data-measurement-inspection]')){trail.push({source,offset:byteOffset});if(trail.length>32)trail.shift();}else{trail=[];returnTarget=origin();}}
   clean();const request=generation;source=s;byteOffset=offset;frame(m('heading'),'<p role="status">'+esc(m('loading'))+'</p>');
-  const data=await call('measurement-inspect',{source:s,offset});guard();if(request!==generation||!document.getElementById('dialog')?.open)return;inspection=data;
+  const data=await call('measurement-inspect',{source:s,offset,lineageOffset,lineageLimit,sourceOffset});guard();if(request!==generation||!document.getElementById('dialog')?.open)return;inspection=data;
   let html='';
   if(data.kind==='cell')html=facts(data)+(data.exact?pairs([['exact',data.exact.numerator+' / '+data.exact.denominator]]):'')+pairs([['rowIdentity',data.row.id],['exclusion',data.row.excluded??'']])+`<h3>${esc(m('surrounding'))}</h3><div class="material-table"><table><thead><tr><th>${esc(m('row'))}</th><th>${esc(m('value'))}</th><th>${esc(m('exclusion'))}</th></tr></thead><tbody>${data.surrounding.map(r=>`<tr><td>${r.order}</td><td>${sourceButton({ref:s.ref,selector:{...s.selector,page:r.page,row:r.row}})} ${esc(r.presence!=='value'?m(r.presence):r.value)}</td><td>${esc(r.excluded??'')}</td></tr>`).join('')}</tbody></table></div>${data.original?sourceButton(data.original,'original'):''}${data.native?sourceButton(data.native,'native'):''}`;
   else if(data.kind==='bytes')html=`<p>${esc(m('bytesHelp'))}</p><p>${esc(m('range',{offset:data.offset,end:data.offset+data.length-1,total:data.total,context:data.contextOffset}))}</p><pre>${esc(data.hex)}</pre><pre>${esc(data.text)}</pre>${button('downloadSlice','download-slice')}${data.previous!==null?button('previous','previous'):''}${data.next!==null?button('next','next'):''}`;
@@ -48,6 +48,7 @@ export function measurementUI({call,frame,esc,field,guard,owner,inspect,notify,d
   else html=refButton(s.ref);
   if(data.textPage)html+='<pre>'+esc(data.textPage.text)+'</pre><p>'+String(data.textPage.offset+1)+' - '+String(data.textPage.offset+data.textPage.text.length)+' / '+String(data.textPage.total)+'</p>'+(data.previous!==null?button('previousValue','previous'):'')+(data.next!==null?button('nextValue','next'):'');
   if(data.aggregation)html+=aggregationInspection(data,{esc,sourceButton,button});
+  if(data.lineage){const page=data.lineage;html+='<h3>'+esc(m('sources'))+'</h3><p>'+esc(String(page.offset+1)+' ? '+String(page.offset+page.items.length)+' / '+String(page.total))+'</p><ol>'+page.items.map((item,index)=>'<li>'+esc('Input '+(item.binding.position+1)+', column '+(item.column+1))+(item.missing?'<p>Unmatched source row</p>':'<ul>'+item.sources.map(source=>'<li>'+esc(sourceDescription(source))+' '+sourceButton(source)+'</li>').join('')+'</ul>')+(item.sourcePage?.next!==null&&item.sourcePage?.next!==undefined?'<button type="button" class="button" data-action="material-measurement-lineage" data-offset="'+(page.offset+index)+'" data-limit="1" data-source-offset="'+item.sourcePage.next+'">More sources for this input</button>':'')+'</li>').join('')+'</ol>'+[page.previous,page.next].map((at,index)=>at===null?'':'<button type="button" class="button" data-action="material-measurement-lineage" data-offset="'+at+'">'+esc(m(index?'next':'previous'))+'</button>').join('');}
   if(data.derivedSources)html+='<h3>'+esc(m('sources'))+'</h3><ol>'+data.derivedSources.map(source=>'<li>'+esc(sourceDescription(source))+' '+sourceButton(source)+'</li>').join('')+'</ol>';
   frame(m('heading'),`<div class="measurement-details" data-measurement-inspection>${html}</div>`,(readOnly()||data.cellReference?'':button('retain','retain'))+(s.ref.kind==='artifact'?button('download','download'):'')+button('back','back-source'));
  }
@@ -63,8 +64,9 @@ export function measurementUI({call,frame,esc,field,guard,owner,inspect,notify,d
  async function action(act,control){
   if(!act.startsWith('measurement-'))return false;
   const key=act.slice(12);guard();
-  if(readOnly()&&!['inspect','from-artifact','back-source','previous','next','download','download-slice'].includes(key))return true;
+  if(readOnly()&&!['inspect','from-artifact','back-source','previous','next','lineage','download','download-slice'].includes(key))return true;
   if(saving)return true;
+  if(key==='lineage')await open(source,{offset:byteOffset,lineageOffset:Number(control.dataset.offset),lineageLimit:Number(control.dataset.limit??16),sourceOffset:Number(control.dataset.sourceOffset??0),returning:true});
   if(key==='inspect')await open(JSON.parse(control.dataset.source));
   if(key==='retain')await start(source);
   if(key==='from-artifact')await open({ref:JSON.parse(control.dataset.ref),selector:{kind:'whole'}});

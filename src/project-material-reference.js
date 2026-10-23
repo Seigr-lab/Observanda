@@ -15,7 +15,7 @@ export function projectMaterialReferenceRequest(route){
  const match=/^\/api\/projects\/material-reference\/([a-z-]+)$/.exec(route);
  if(!match||!addressedMaterialRead(match[1]))return null;
  const request=materialRequest('/api/research/materials/'+match[1]);
- if(!request||request.write||request.method!=='POST')throw new AppError('INVALID');
+ if(!request||request.write||request.method!=='POST'&&!(match[1]==='retained-figure-export'&&request.method==='GET'&&request.querySelection))throw new AppError('INVALID');
  return {...request,referenceOwner:true};
 }
 export function addressedMaterialReference(data,request={material:'read'}){
