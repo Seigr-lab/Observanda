@@ -291,7 +291,11 @@ export async function recordOwnerMetadataDependencies(store,relative,text){
  if(relative.startsWith('.observanda/materials/sequences/nodes/')){
   if(value.left)await object('.observanda/materials/sequences/nodes/'+value.left.hash+'.json');if(value.right)await object('.observanda/materials/sequences/nodes/'+value.right.hash+'.json');await object('.observanda/materials/sequences/chunks/'+value.revision+'.json');
  }else if(relative.startsWith('.observanda/materials/sequences/chunks/')&&Array.isArray(value.items)){
-  for(const item of value.items){if(value.kind==='files'&&item.kind==='original')file(item.name,item.bytes,item.sha256);else if(value.kind==='files'&&item.kind==='metadata')await object(item.name);else if(value.kind==='pages'&&revision(item.hash))await object('.observanda/materials/tables/'+item.hash+'.json');}
+  for(const item of value.items){if(value.kind==='files'&&item.kind==='original')file(item.name,item.bytes,item.sha256);else if(value.kind==='files'&&item.kind==='metadata')await object(item.name);else if(value.kind==='pages'&&revision(item.hash))await object('.observanda/materials/tables/'+item.hash+'.json');else if(value.kind==='cells'&&item.value?.parts?.root)await object('.observanda/materials/sequences/nodes/'+item.value.parts.root.hash+'.json');}
+ }else if(relative.startsWith('.observanda/materials/tables/')&&Array.isArray(value)){
+  for(const row of value)if(row.cellIndex?.root)await object('.observanda/materials/sequences/nodes/'+row.cellIndex.root.hash+'.json');
+ }else if(relative.startsWith('.observanda/materials/objects/')&&value.content?.datasetFormat===3){
+  for(const slot of ['schemaIndex','pageIndex','schemaInputsIndex','inputsIndex','outputsIndex','aggregationMembersIndex'])if(value.content[slot]?.root)await object('.observanda/materials/sequences/nodes/'+value.content[slot].root.hash+'.json');
  }else if(relative.startsWith('.observanda/media-assets/')){
   const base='.observanda/media/'+value.id+'/';file(base+(value.kind==='file'?(value.storageId?value.storageId+'.original':'original'):(value.storageId?value.storageId+'.':'')+'public.'+value.extension),value.bytes,value.sha256);
   file(base+(value.storageId?value.storageId+'.original':'original'),value.originalBytes,value.originalSha256);if(value.storageId)await object('.observanda/media-imports/'+value.id+'.json');

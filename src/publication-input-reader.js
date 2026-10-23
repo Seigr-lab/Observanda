@@ -1,3 +1,5 @@
+import {verifyRetainedTableEntry,verifyPublicationTables} from './publication-retained-tables.js';
+import {catalogueFormat,catalogueRequiresPagedResearchTables} from './catalogue-format.js';
 import {createHash} from 'node:crypto';
 import {validateEditionRecord} from './publication-selection.js';
 import {validWebsitePage,validWebsiteAsset,validWebsiteNavigationItem} from './web/website-item-validation.js';
@@ -25,7 +27,7 @@ export const PUBLICATION_INPUT_COLLECTIONS=Object.freeze(Object.fromEntries(Obje
  projects:['title'],notebooks:['project','projectTitle','included','title'],pages:['shared','title'],navigation:[],assets:['kind'],
  records:['date','currentDate','scopeDate','scopeCurrentDate','projectDate','projectCurrentDate','scopePosition','original'],
  pageInputs:[],layoutInputs:[],brandingInputs:[],retainedMedia:[],availability:['record'],sourceMaterials:['owner'],sourceGroups:[],legacyPages:[],analysisItems:['owner'],referenceReviews:[],aliases:['target'],identities:[],
- covers:[],presentationMedia:['scope'],targets:['kind'],menu:['parent'],backlinks:['target'],recordPositions:[],linkedCards:[],media:[],fileIds:[],reservedIds:[]
+ retainedTables:['result'],covers:[],presentationMedia:['scope'],targets:['kind'],menu:['parent'],backlinks:['target'],recordPositions:[],linkedCards:[],media:[],fileIds:[],reservedIds:[]
 }).map(([name,indexes])=>[name,Object.freeze({indexes:Object.freeze(indexes)})])));
 export function compactPublicationMetadata(metadata){
  return {...metadata,projects:[],notebooks:[],pages:[],branding:[],website:{...metadata.website,navigation:[],assets:[],layouts:[],presentation:{...metadata.website.presentation,media:[],covers:[]}}};
@@ -33,7 +35,7 @@ export function compactPublicationMetadata(metadata){
 export function createPublicationInput(workspace,id,metadata,{signal}={}){
  const owner={kind:'source',workspaceId:metadata.id,websiteId:workspace.websiteId??null,jobId:id,attemptId:null};
  const builder=new PublicationDocumentBuilder(workspace,{owner,collections:PUBLICATION_INPUT_COLLECTIONS,signal}),input={metadata:{id:metadata.id,formatVersion:metadata.formatVersion}};
- runtime.set(input,{workspace,builder,header:{metadata:compactPublicationMetadata(metadata)},id,signal});return input;
+ runtime.set(input,{workspace,builder,header:{metadata:compactPublicationMetadata(metadata),tableQueries:1},id,signal});return input;
 }
 export function publicationInputState(input){const state=runtime.get(input);if(!state)throw new AppError('INVALID');return state;}
 export async function finishPublicationInput(input,fields,{signal}={}){
@@ -58,8 +60,9 @@ export async function openPublicationInput(workspace,source,{signal}={}){
  const active=runtime.get(source);if(active)return new PublicationInput(workspace,source,active.builder,active.header,{signal});
  if(source?.version===6||source?.document){
   const document=await PublicationDocument.open(workspace,source.document,{owner:{kind:'source',workspaceId:source.metadata?.id??source.workspaceId,websiteId:source.websiteId??workspace.websiteId??null,jobId:source.id??source.document?.owner.jobId,attemptId:null},signal}),header=await document.header({signal});
-  if(!header?.metadata||header.metadata.id!==(source.metadata?.id??source.workspaceId)||document.collectionNames().sort().join()!==Object.keys(PUBLICATION_INPUT_COLLECTIONS).sort().join())fail();
-  for(const [name,schema] of Object.entries(PUBLICATION_INPUT_COLLECTIONS))if(Object.keys(document.collection(name).indexes).sort().join()!==[...schema.indexes].sort().join())fail();
+  if(!header?.metadata||header.tableQueries!==undefined&&header.tableQueries!==1||header.metadata.id!==(source.metadata?.id??source.workspaceId)||document.collectionNames().sort().join()!==Object.keys(PUBLICATION_INPUT_COLLECTIONS).filter(name=>name!=='retainedTables'||header.tableQueries===1).sort().join())fail();
+  for(const [name,schema] of Object.entries(PUBLICATION_INPUT_COLLECTIONS))if((name!=='retainedTables'||header.tableQueries===1)&&Object.keys(document.collection(name).indexes).sort().join()!==[...schema.indexes].sort().join())fail();
+  if(header.tableQueries===1&&typeof workspace.catalogue==='function'&&!await workspace.catalogue(async store=>catalogueRequiresPagedResearchTables(await catalogueFormat(store.db))))fail();
   const m=header.metadata;if(['projects','notebooks','pages','branding'].some(name=>!Array.isArray(m[name])||m[name].length)||['navigation','assets','layouts'].some(name=>!Array.isArray(m.website?.[name])||m.website[name].length)||['media','covers'].some(name=>!Array.isArray(m.website?.presentation?.[name])||m.website.presentation[name].length))fail();
   for(const key of ['summary','researchReview','hasSources']){if(Object.hasOwn(source,key)){if(serialize(source[key])!==serialize(header[key]))fail();}else if(source.reviewId!==undefined)fail();}
   if(source.metadata?.formatVersion!==undefined&&source.metadata.formatVersion!==header.metadata.formatVersion)fail();
@@ -221,13 +224,14 @@ class PublicationInput{
     if(!researchId(value.id)||value.id!==key||!hash(value.sha256)||!hash(value.revision)||!researchId(value.notebookId)||!researchId(value.recordId)||!researchId(value.sourceWorkspaceId))fail();
     const notebook=await document.get('notebooks',value.notebookId,{signal:this.signal}),position=await document.get('recordPositions',key,{signal:this.signal});
     if(!notebook||!position||!natural(position.position)||position.position!==await document.position('records',key,{signal:this.signal}))fail();
-    await claim(key,'record',key);const selected=await fresh.record(key);
+    await claim(key,'record',key);const selected=await fresh.record(key);await verifyPublicationTables(fresh,selected,{signal:this.signal});
     if(value.title!==selected.title||value.notebookId!==selected.notebookId||serialize(value.media)!==serialize(selected.attachments.filter(row=>row.share).map(({id,kind})=>({id,kind,share:true}))))fail();
     for(const [indexName,prefix] of Object.entries(publicationRecordIndexes(value,position.position,notebook.projectId)))await index(name,key,indexName,prefix);
     if(value.historical){await index(name,key,'currentDate','',false);await index(name,key,'scopeCurrentDate','',false);await index(name,key,'projectCurrentDate','',false);}
     const group=await document.get('sourceGroups',value.sourceWorkspaceId,{signal:this.signal});if(!group)fail();
     for(const media of value.media??[])if(value.sourceWorkspaceId!==metadata.id&&!await document.get('retainedMedia',media.id,{signal:this.signal}))fail();
    }
+   if(name==='retainedTables'){await verifyRetainedTableEntry(fresh,key,value,{signal:this.signal});await index(name,key,'result',value.recordId+'/'+value.resultId+'/');}
    if(name==='projects'){if(value.id!==key||!researchId(key)||value.share!==true)fail();await index(name,key,'title','');}
    if(name==='notebooks'){
     if(value.id!==key||!researchId(key)||!await document.get('projects',value.projectId,{signal:this.signal}))fail();const included=await fresh.recordCount({notebookId:key})>0;

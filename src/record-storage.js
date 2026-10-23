@@ -6,7 +6,7 @@ import {AppError} from './errors.js';
 import {seal,unseal} from './encryption.js';
 import {digest,serialize} from './storage-format.js';
 import {RecordBlockStore,blockedRecord,validBlockedRecord,recordBlockResource} from './record-block-store.js';
-import {catalogueFormat,catalogueRequiresNestedAttemptCollections,requireNestedAttemptCollections,catalogueRequiresSourcePublicationControls,requireSourcePublicationControls,requireRecordBlocks,requireAttemptIndexes,requireCurrentAttemptIndexes,requireRecordMethodIndexes,requireRecordResultIndexes} from './catalogue-format.js';
+import {catalogueFormat,catalogueRequiresNestedAttemptCollections,requireNestedAttemptCollections,catalogueRequiresSourcePublicationControls,requireSourcePublicationControls,requireRecordBlocks,requireAttemptIndexes,requireCurrentAttemptIndexes,requireRecordMethodIndexes,requireRecordResultIndexes,catalogueRequiresPagedResearchTables,requirePagedResearchTables} from './catalogue-format.js';
 import {jsonFitsBytes} from './web/json-chunks.js';
 import {recordEncoding} from './record-encoding.js';
 import {retainRecordOwnerResource} from './record-owner-resources.js';
@@ -14,6 +14,7 @@ import {RecordDocument,withRecordDocument} from './record-document.js';
 import {RecordAttemptIndex} from './record-attempt-index.js';
 import {RecordMethodIndex} from './record-method-index.js';
 import {RecordResultIndex} from './record-result-index.js';
+import {pagedTableDocument} from './retained-tables.js';
 const fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 const requireIndexFormat=(db,index)=>index.version>=3?requireNestedAttemptCollections(db):index.version>=2?requireCurrentAttemptIndexes(db):requireAttemptIndexes(db);
 function recordResources(value,generation){
@@ -47,6 +48,7 @@ export async function withStoredRecord(store,id,revision,consume){
  });
 }
 export async function retainStoredRecord(store,record,revision){
+ if(record.results?.statements.some(statement=>statement.table?.version===3))await requirePagedResearchTables(store.db);
  if(record.sections?.some(section=>Object.hasOwn(section,'share')))await requireSourcePublicationControls(store.db);
  const scopeId=record.notebookId,generation=1,key=await store.scopeKey(scopeId,generation,{create:true});
  try{
@@ -83,6 +85,7 @@ export async function retainStoredDocument(store,document,encoding){
  if(!catalogueRequiresSourcePublicationControls(await catalogueFormat(store.db)))for await(const section of document.items(['sections'])){
   if((await document.tree.selected(section.value,['share'])).found){await requireSourcePublicationControls(store.db);break;}
  }
+ if(!catalogueRequiresPagedResearchTables(await catalogueFormat(store.db))&&await pagedTableDocument(document))await requirePagedResearchTables(store.db);
  await requireRecordBlocks(store.db);if(await document.reference(['attempt'])&&document.attemptIndex?.source!==await document.reference(['attempt']))await requireNestedAttemptCollections(store.db);const attemptIndex=await RecordAttemptIndex.retain(document);if(attemptIndex)await requireIndexFormat(store.db,attemptIndex);
  const methodIndex=await RecordMethodIndex.retain(document);if(methodIndex)await requireRecordMethodIndexes(store.db);
  const resultIndex=await RecordResultIndex.retain(document);if(resultIndex)await requireRecordResultIndexes(store.db);await blocks.flush();
@@ -101,6 +104,9 @@ export async function verifyStoredRecord(store,id,revision,{signal}={}){
  if(indexed.attempt||indexed.methods||indexed.results)await withRecordDocument(store,id,revision,async document=>{
   if(indexed.attempt)await (await RecordAttemptIndex.open(document,{signal})).verify({signal});
   if(indexed.methods)await (await RecordMethodIndex.open(document,{signal})).verify({signal});
-  if(indexed.results)await (await RecordResultIndex.open(document,{signal})).verify({signal});
+  if(indexed.results){
+   if(!catalogueRequiresPagedResearchTables(await catalogueFormat(store.db))&&await pagedTableDocument(document))fail();
+   await (await RecordResultIndex.open(document,{signal})).verify({signal});
+  }
  });
 }

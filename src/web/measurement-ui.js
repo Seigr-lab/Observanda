@@ -41,12 +41,13 @@ export function measurementUI({call,frame,esc,field,guard,owner,inspect,notify,d
   let html='';
   if(data.kind==='cell')html=facts(data)+(data.exact?pairs([['exact',data.exact.numerator+' / '+data.exact.denominator]]):'')+pairs([['rowIdentity',data.row.id],['exclusion',data.row.excluded??'']])+`<h3>${esc(m('surrounding'))}</h3><div class="material-table"><table><thead><tr><th>${esc(m('row'))}</th><th>${esc(m('value'))}</th><th>${esc(m('exclusion'))}</th></tr></thead><tbody>${data.surrounding.map(r=>`<tr><td>${r.order}</td><td>${sourceButton({ref:s.ref,selector:{...s.selector,page:r.page,row:r.row}})} ${esc(r.presence!=='value'?m(r.presence):r.value)}</td><td>${esc(r.excluded??'')}</td></tr>`).join('')}</tbody></table></div>${data.original?sourceButton(data.original,'original'):''}${data.native?sourceButton(data.native,'native'):''}`;
   else if(data.kind==='bytes')html=`<p>${esc(m('bytesHelp'))}</p><p>${esc(m('range',{offset:data.offset,end:data.offset+data.length-1,total:data.total,context:data.contextOffset}))}</p><pre>${esc(data.hex)}</pre><pre>${esc(data.text)}</pre>${button('downloadSlice','download-slice')}${data.previous!==null?button('previous','previous'):''}${data.next!==null?button('next','next'):''}`;
-  else if(data.kind==='json-pointer')html=`<p>${esc(m('jsonHelp'))}</p><p>${esc(data.pointer)}</p><pre>${esc(data.text)}</pre>`;
+  else if(data.kind==='json-pointer')html=`<p>${esc(m('jsonHelp'))}</p><p>${esc(data.pointer)}</p>${data.textPage?'':'<pre>'+esc(data.text)+'</pre>'}`;
   else if(data.kind==='unresolved')html='<p>'+esc(m('unresolved'))+'</p><pre>'+esc(data.nativeId)+'</pre>';
   else html=refButton(s.ref);
+  if(data.textPage)html+='<pre>'+esc(data.textPage.text)+'</pre><p>'+String(data.textPage.offset+1)+' - '+String(data.textPage.offset+data.textPage.text.length)+' / '+String(data.textPage.total)+'</p>'+(data.previous!==null?button('previousValue','previous'):'')+(data.next!==null?button('nextValue','next'):'');
   if(data.aggregation)html+=aggregationInspection(data,{esc,sourceButton,button});
   if(data.derivedSources)html+='<h3>'+esc(m('sources'))+'</h3><ol>'+data.derivedSources.map(source=>'<li>'+esc(sourceDescription(source))+' '+sourceButton(source)+'</li>').join('')+'</ol>';
-  frame(m('heading'),`<div class="measurement-details" data-measurement-inspection>${html}</div>`,(readOnly()?'':button('retain','retain'))+(s.ref.kind==='artifact'?button('download','download'):'')+button('back','back-source'));
+  frame(m('heading'),`<div class="measurement-details" data-measurement-inspection>${html}</div>`,(readOnly()||data.cellReference?'':button('retain','retain'))+(s.ref.kind==='artifact'?button('download','download'):'')+button('back','back-source'));
  }
  async function addSource(){
   capture();if(draft.sources.length>=32)throw Error(m('tooMany'));

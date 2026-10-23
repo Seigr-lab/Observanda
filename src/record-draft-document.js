@@ -1,3 +1,4 @@
+import {hasPagedResultTables,pagedTableDocument} from './retained-tables.js';
 import {hasNestedAttemptContinuations} from './web/attempt-model.js';
 import {DraftTemplateBuilder} from './record-draft-template.js';
 // A recovery checkpoint retains addressable fields and collection items under
@@ -6,7 +7,7 @@ import {RecordBlockStore,withRecordBlockStore} from './record-block-store.js';
 import {RecordDocument} from './record-document.js';
 import {RecordContainerBuilder} from './record-tree-values.js';
 import {inspectTransferredDraft} from './record-draft-inspection.js';
-import {catalogueFormat,requireDraftEdits,requireNestedAttemptCollections} from './catalogue-format.js';
+import {catalogueFormat,requireDraftEdits,requireNestedAttemptCollections,requirePagedResearchTables,catalogueRequiresPagedResearchTables} from './catalogue-format.js';
 import {AppError} from './errors.js';
 import {researchId} from './web/research-reference.js';
 import {revisionId} from './web/revision-model.js';
@@ -21,6 +22,7 @@ export async function retainDraftDocument(workspace,id,content,expected,{signal}
    const blocks=new RecordBlockStore(store,expected.notebookId,generation,key),tree=blocks.tree(),record=new RecordContainerBuilder(blocks,'object');let collection=null,template=null;
    const close=async()=>{if(collection){await record.add({name:collection.name,value:await collection.builder.finish()});collection=null;}};
    const inspected=await inspectTransferredDraft(workspace,id,content,{signal,ownership:true,part:async part=>{
+    if(part.kind==='field'&&part.name==='results'&&hasPagedResultTables(part.value))await requirePagedResearchTables(store.db);
     if(part.kind==='field'&&part.name==='attempt'&&hasNestedAttemptContinuations(part.value))await requireNestedAttemptCollections(store.db);
     if(part.kind!=='item')await close();
     if(part.kind==='template'){
@@ -45,6 +47,7 @@ export async function withDraftDocument(store,draft,consume){
  return withRecordBlockStore(store,notebookId,generation,async blocks=>{
   const document=new RecordDocument(blocks,root);
   for(const [field,value] of [['id',draft.base.recordId],['notebookId',notebookId]])if((await document.field([field])).value!==value)throw new AppError('CATALOGUE_DAMAGED');
+  if(!catalogueRequiresPagedResearchTables(await catalogueFormat(store.db))&&await pagedTableDocument(document))throw new AppError('CATALOGUE_DAMAGED');
   return await consume(document);
  });
 }

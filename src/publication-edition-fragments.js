@@ -1,3 +1,4 @@
+import {publicationTableChunks} from './publication-retained-tables.js';
 import {randomUUID} from 'node:crypto';
 import {digest} from './storage-format.js';
 import {AppError} from './errors.js';
@@ -94,6 +95,11 @@ export async function publicationEditionParts(input,plan,{writer,media,mediaFile
  const api={
   fragments,hasFeeds:plan.collections.some(value=>value.section.feed)||notebookCount>PUBLIC_COLLECTION_ROWS,browse,
   attach(value){output=value;},
+  retainedTable(recordId,resultId){
+   const statement=plan.originals.get(recordId)?.results?.statements.find(value=>value.id===resultId);
+   if(statement?.table?.version!==3)throw new AppError('JOB_DAMAGED');
+   return fragments.add(()=>publicationTableChunks(input,recordId,statement,{signal}));
+  },
   navigation:({target,prefix})=>fragments.add(()=>publicationNavigation(input,{target,prefix,esc,blockedValues,signal})),
   collection({section,target,key,prefix,pageKey,card:render}){
    const collection=plan.collections.find(value=>value.key===key);if(!collection)return '';

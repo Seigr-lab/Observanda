@@ -1,3 +1,4 @@
+import {retainPublicationTables} from './publication-retained-tables.js';
 import {publicationEditionChoices} from './publication-edition-selections.js';
 import {retainPublicationInput as retainLegacyPublicationInput} from './publication-input-legacy.js';
 import {publicationResearchWorkspace} from './publication-pin.js';
@@ -45,6 +46,7 @@ export async function retainPublicationInput(workspace,id,metadata,originals,{so
   if(referenceNamespaces)descriptor.referenceNamespaces=await referenceNamespaces({workspaceId:metadata.id,id:original.id});
   descriptor=await projectPublicationRecord(descriptor,owner,identities);
   await claimPublicationFile(builder,descriptor.id,'record',descriptor.id);await destination.writeMetadata(recordFile(id,descriptor.id),raw);
+  await retainPublicationTables(builder,materials,record,descriptor.id,{signal});
   const notebook=await builder.get('notebooks',descriptor.notebookId),position=builder.count('records');
   if(!notebook)throw new AppError('PUBLICATION_IDENTITY');
   await builder.append('records',descriptor.id,descriptor,{indexes:publicationRecordIndexes(descriptor,position,notebook.projectId)});

@@ -65,10 +65,11 @@ export class ResearchTransfer{
  async sequence(value){
   if(!value)return;this.materials.sequences.validate(value);const tree=this.materials.sequences.tree(),owner=this;
   async function visit(ref){
-   if(!ref||owner.sequenceNodes.has(ref.hash))return;const node=await tree.node(ref);owner.sequenceNodes.add(ref.hash);
-   await owner.metadata('.observanda/materials/sequences/nodes/'+ref.hash+'.json',node);
+   if(!ref||owner.sequenceNodes.has(ref.hash))return;const node=await tree.node(ref);owner.sequenceNodes.add(ref.hash);await visit(node.left);await visit(node.right);
    const chunk=await owner.materials.sequences.read('chunks',node.revision);if(!chunk)throw new AppError('MATERIAL_MISSING');
-   await owner.metadata('.observanda/materials/sequences/chunks/'+node.revision+'.json',chunk);await visit(node.left);await visit(node.right);
+   if(chunk.kind==='cells')for(const cell of chunk.items)if(cell.value?.parts)await owner.sequence(cell.value.parts);
+   if(chunk.kind==='pages')for(const page of chunk.items){const rows=await owner.materials.json(owner.materials.metadataFile('tables/'+page.hash+'.json'));for(const row of rows)if(row.cellIndex)await owner.sequence(row.cellIndex);await owner.metadata('.observanda/materials/tables/'+page.hash+'.json',rows);}
+   await owner.metadata('.observanda/materials/sequences/chunks/'+node.revision+'.json',chunk);await owner.metadata('.observanda/materials/sequences/nodes/'+ref.hash+'.json',node);
   }
   await visit(value.root);
  }
@@ -109,20 +110,20 @@ export class ResearchTransfer{
      await owner.record(doc,enqueue);return;
     }
     doc=await materials.read(ref);if(!owner.recordIds.has(doc.recordId))dependency();
-    await owner.metadata('.observanda/materials/objects/'+doc.id+'/'+ref.revision+'.json',doc);
     if(doc.previous)await enqueue({...ref,revision:doc.previous});
     for await(const r of materials.references(doc.content))await enqueue(r);
     for await(const r of materials.references(doc.content,'outputs'))await enqueue(r);
     if(doc.content.acquisition)await enqueue(doc.content.acquisition);
-    for(const slot of ['pageIndex','schemaIndex','inputsIndex','outputsIndex','aggregationMembersIndex'])await owner.sequence(doc.content[slot]);
+    for(const slot of ['pageIndex','schemaIndex','inputsIndex','outputsIndex','aggregationMembersIndex','schemaInputsIndex'])await owner.sequence(doc.content[slot]);
     if(doc.content.comparison&&doc.content.summary?.version===2)for await(const part of materials.comparisons.index(doc.content.summary).metadata())await owner.metadata(part.name,part.value);
     if(doc.kind==='dataset'){
-     for(const column of await materials.datasetColumns(doc))for(const r of schemaReferences(column))await enqueue(r);
+     for await(const column of materials.iterateDatasetColumns(doc))for(const r of schemaReferences(column))await enqueue(r);
      for(let i=0;i<materials.datasetPageCount(doc);i++){
-      const info=doc.content.datasetFormat===2?await materials.sequences.item(doc.content.pageIndex,i):doc.content.pages[i];
-      const {rows}=await materials.retainedDatasetPage(doc,i);await owner.metadata('.observanda/materials/tables/'+info.hash+'.json',rows);
+      const info=[2,3].includes(doc.content.datasetFormat)?await materials.sequences.item(doc.content.pageIndex,i):doc.content.pages[i];
+      const {rows}=await materials.retainedDatasetPage(doc,i,{metadataOnly:true});await owner.metadata('.observanda/materials/tables/'+info.hash+'.json',rows);
      }
     }
+    await owner.metadata('.observanda/materials/objects/'+doc.id+'/'+ref.revision+'.json',doc);
     if(doc.content.measurement)for(const r of measurementReferences(doc.content.measurement))await enqueue(r);
     if(doc.content.method)for(const r of analysisMethodReferences(doc.content.method))await enqueue(r);
     if(doc.kind==='artifact'){const {content}=await materials.artifact(ref);await owner.original(owner.relative(content.file),content);}

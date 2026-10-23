@@ -6,7 +6,7 @@ export const jsonPointer=parts=>parts.length?'/'+parts.map(p=>String(p).replaceA
 export function nestedMapping(input){
  const bad=()=>{throw Error('Invalid nested mapping');},path=v=>{const p=jsonPointerParts(v);if(!p)bad();return p;};
  const rows=path(input.rowsPath),joins=input.joins??[];
- if(!Array.isArray(input.fields)||!input.fields.length||input.fields.length>256||!Array.isArray(joins)||joins.length>8)bad();
+ if(input.fields!=='all'&&(!Array.isArray(input.fields)||!input.fields.length)||!Array.isArray(joins)||joins.length>8)bad();
  const bound=p=>p.every((v,i)=>v!=='*'||rows[i]==='*'&&p.slice(0,i).every((s,j)=>s===rows[j]));
  const names=new Set(['row','context']);
  const normalizedJoins=joins.map(j=>{
@@ -19,6 +19,7 @@ export function nestedMapping(input){
   if(!j||typeof j.name!=='string'||!/^[a-zA-Z][a-zA-Z0-9_-]{0,39}$/.test(j.name)||names.has(j.name)||!bound(path(j.rowsPath))||path(j.leftPath).includes('*')||path(j.rightPath).includes('*')||!['error','keep'].includes(j.unmatched??'error'))bad();
   names.add(j.name);return {name:j.name,rowsPath:j.rowsPath,leftPath:j.leftPath,rightPath:j.rightPath,unmatched:j.unmatched??'error'};
  });
+ if(input.fields==='all')return {format:'json-nested',rowsPath:input.rowsPath,fields:'all',joins:normalizedJoins};
  const fields=input.fields.map(f=>{
   if(!f||typeof f.name!=='string'||!f.name.trim()||f.name.trim().length>200||!names.has(f.source??'row'))bad();
   const parts=path(f.path),source=f.source??'row';if(source==='context'?!bound(parts):parts.includes('*'))bad();

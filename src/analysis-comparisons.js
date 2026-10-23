@@ -1,9 +1,11 @@
+import {datasetColumnCount,selectedDatasetColumns,assertDatasetScalars} from './dataset-selected-columns.js';
+import {datasetColumnPosition,datasetCell} from './web/dataset-column-selection.js';
 import {materialReference,materialReferenceKey} from './web/material-reference.js';
 import {AppError} from './errors.js';
 import {digest} from './storage-format.js';
 import {revisionText} from './web/revision-model.js';
 import {validAnalysisMethod,validComparison,analysisMethodReferences,analysisSourceReferences,analysisIdentity,ANALYSIS_CATEGORIES,analysisTextValue,analysisRational,rationalCompare} from './web/analysis-model.js';
-import {analysisObservation,analysisObservations} from './analysis-observations.js';
+import {analysisObservation,analysisObservations,analysisSelectedColumns} from './analysis-observations.js';
 import messages from './web/locales/en/analyses.json' with {type:'json'};
 import {ComparisonIndex} from './analysis-comparison-index.js';
 import {calculateComparison} from './analysis-comparison-calculation.js';
@@ -43,11 +45,11 @@ export class AnalysisComparisons{
   const identities=addressed?comparisonSourceIdentities(command.comparison,r=>resolved.get(materialReferenceKey(r))):null;
   const expected=command.comparison.expected;
   for(const [index,s] of command.comparison.sources.entries()){
-   const doc=await this.inputs.read(s.dataset),columns=await this.inputs.datasetColumns(doc);
-   if(Object.values(s.columns).some(i=>i!==null&&i>=columns.length))fail();
-   if(expected?.source===index&&expected.actualKey>=columns.length)fail();
+   const doc=await this.inputs.read(s.dataset),count=datasetColumnCount(doc);
+   if(Object.values(s.columns).some(i=>i!==null&&i>=count))fail();
+   if(expected?.source===index&&expected.actualKey>=count)fail();
   }
-  if(expected){const columns=await this.inputs.datasetColumns(await this.inputs.read(expected.dataset));if(expected.value>=columns.length||expected.key>=columns.length)fail();}
+  if(expected){const count=datasetColumnCount(await this.inputs.read(expected.dataset));if(expected.value>=count||expected.key>=count)fail();}
   await this.verifyInputs();return identities;
  }
  async prepare(command,options={}){
@@ -88,14 +90,15 @@ export class AnalysisComparisons{
   return {commandHash:digest(revisionText(command)),content};
  }
  async verifyExpected(comparison,{signal}={}){
-  const e=comparison.expected,s=comparison.sources[e.source],actualDoc=await this.inputs.read(s.dataset),expectedDoc=await this.inputs.read(e.dataset),ac=await this.inputs.datasetColumns(actualDoc),ec=await this.inputs.datasetColumns(expectedDoc);
-  const ai=this.inputs.iterateDataset(s.dataset)[Symbol.asyncIterator](),ei=this.inputs.iterateDataset(e.dataset)[Symbol.asyncIterator](),out={algorithm:'ordered-exact-fixture-comparison',version:'1',correct:0,mismatched:0,unavailable:0,excluded:0,unmatched:0,rows:0,examples:[],expected:e.dataset,rationale:e.rationale};
-  const available=(r,i,c)=>!['null','absent'].includes(r.valueKinds?.[i])&&!c.missing.some(m=>m.value===r.cells[i]);
-  try{for(;;){signal?.throwIfAborted();const [a,b]=await Promise.all([ai.next(),ei.next()]);if(a.done&&b.done)break;out.rows++;let state;
-   if(a.done||b.done||a.value.cells[e.actualKey]!==b.value.cells[e.key])state='unmatched';
+  const e=comparison.expected,s=comparison.sources[e.source],actualDoc=await this.inputs.read(s.dataset),expectedDoc=await this.inputs.read(e.dataset),actual=await selectedDatasetColumns(this.inputs,actualDoc,[...new Set([...analysisSelectedColumns(s),e.actualKey])]),expected=await selectedDatasetColumns(this.inputs,expectedDoc,[...new Set([e.key,e.value])]),ac=actual.columns,ec=expected.columns;
+  const av=ac[actual.indices.indexOf(s.columns.value)],ev=ec[expected.indices.indexOf(e.value)];
+  const ai=this.inputs.iterateDataset(s.dataset,{columns:actual.indices})[Symbol.asyncIterator](),ei=this.inputs.iterateDataset(e.dataset,{columns:expected.indices})[Symbol.asyncIterator](),out={algorithm:'ordered-exact-fixture-comparison',version:'1',correct:0,mismatched:0,unavailable:0,excluded:0,unmatched:0,rows:0,examples:[],expected:e.dataset,rationale:e.rationale};
+  const available=(r,i,c)=>!['null','absent'].includes(r.valueKinds?.[datasetColumnPosition(r,i)])&&!c.missing.some(m=>m.value===datasetCell(r,i));
+  try{for(;;){signal?.throwIfAborted();const [a,b]=await Promise.all([ai.next(),ei.next()]);if(a.done&&b.done)break;if(!a.done)assertDatasetScalars(a.value);if(!b.done)assertDatasetScalars(b.value);out.rows++;let state;
+   if(a.done||b.done||datasetCell(a.value,e.actualKey)!==datasetCell(b.value,e.key))state='unmatched';
    else if(analysisObservation(a.value,ac,s,e.source,0,0).category==='excluded'||b.value.excluded)state='excluded';
-   else if(!available(a.value,s.columns.value,ac[s.columns.value])||!available(b.value,e.value,ec[e.value]))state='unavailable';
-   else{const x=a.value.cells[s.columns.value],y=b.value.cells[e.value],ar=analysisRational(x,ac[s.columns.value]),br=analysisRational(y,ec[e.value]);state=ac[s.columns.value].unit===ec[e.value].unit&&(ar&&br?rationalCompare(ar,br)===0:!ar&&!br&&x===y)?'correct':'mismatched';}
+   else if(!available(a.value,s.columns.value,av)||!available(b.value,e.value,ev))state='unavailable';
+   else{const x=datasetCell(a.value,s.columns.value),y=datasetCell(b.value,e.value),ar=analysisRational(x,av),br=analysisRational(y,ev);state=av.unit===ev.unit&&(ar&&br?rationalCompare(ar,br)===0:!ar&&!br&&x===y)?'correct':'mismatched';}
    out[state]++;if(state!=='correct'&&out.examples.length<20)out.examples.push({order:out.rows,state,actual:a.done?null:a.value.id,expected:b.done?null:b.value.id});
   }}finally{await ai.return?.();await ei.return?.();}return out;
  }

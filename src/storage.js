@@ -135,7 +135,10 @@ export class Workspace {
     const file=this.metadataPath(relative);
     if(activeCatalogue(this)||await hasCatalogue(this.root)){
       if(catalogueContext.getStore()?.root!==this.root)throw new AppError('LOCKED');
-      return this.catalogue(store=>store.putObject('metadata:'+relative,{text}));
+      return this.catalogue(async store=>{
+        if(relative.startsWith('.observanda/materials/')){const value=JSON.parse(text);if(value.content?.datasetFormat===3||relative.startsWith('.observanda/materials/sequences/chunks/')&&['cells','cell-text'].includes(value.kind)){const {requirePagedResearchTables}=await import('./catalogue-format.js');await requirePagedResearchTables(store.db);}}
+        return store.putObject('metadata:'+relative,{text});
+      });
     }
     await privateDirectory(this.root,relative.slice(0,relative.lastIndexOf('/')));return this.writeFile(file,text);
   }

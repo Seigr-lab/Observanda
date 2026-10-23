@@ -1,3 +1,9 @@
+import {datasetRowPosition,datasetPageInfo} from './dataset-row-position.js';
+import {datasetColumns as storedDatasetColumns,storedDatasetCells,preparePagedDataset,projectDatasetRows} from './dataset-storage.js';
+import {readDatasetCell,verifyDatasetCell} from './dataset-cell-storage.js';
+import {readPagedDataset} from './dataset-paged-reader.js';
+import {datasetPlotSelection,verifySelectedPlot} from './dataset-plot-selection.js';
+import {assertDatasetScalars} from './dataset-selected-columns.js';
 import {assertRecordOwnerRevisionVisible} from './record-owner-read-visibility.js';
 import {readRecordOwnerMetadata} from './record-owner-audit-metadata.js';
 import {artifactRelative,retiredArtifactContent} from './project-artifact-content.js';
@@ -19,7 +25,7 @@ import {withRecordDocument} from './record-document.js';
 import {RecordMemberCollections} from './record-member-collections.js';
 import {revisionText,revisionId} from './web/revision-model.js';
 import {researchId} from './web/research-reference.js';
-import {readDataset,datasetMapping,DATASET_LIMITS} from './dataset-reader.js';
+import {datasetMapping,DATASET_LIMITS} from './dataset-reader.js';
 import {createFigure,figureIssues} from './web/figure-model.js';
 import {figurePlots} from './web/figure-composition.js';
 import {sameFigureCalculation} from './web/figure-result-links.js';
@@ -39,12 +45,12 @@ import {EvidenceIntake} from './evidence-intake.js';
 import {EvidenceAssociationBatches} from './evidence-association-batches.js';
 import {EvidenceCorrections} from './evidence-corrections.js';
 import {fileFingerprint} from './web/evidence-fingerprint.js';
-import {REPRESENTATIONS,validQuantity,validTime,schemaReferences,supportedValue} from './web/measurement-model.js';
+import {REPRESENTATIONS,validQuantity,validTime,schemaReferences} from './web/measurement-model.js';
 import {Measurements} from './measurements.js';
 import {AnalysisComparisons} from './analysis-comparisons.js';
 import {currentAttemptItems} from './web/attempt-model.js';
 import {validAnalysisMethod,analysisMethodReferences} from './web/analysis-model.js';
-import {validNativeMapping,nativeRowLocator} from './native-mapping.js';
+import {validNativeMapping} from './native-mapping.js';
 import {exactRational} from './web/measurement-model.js';
 import {compareRationalText,sumRationalText} from './web/measurement-reduction.js';
 import {defaultColumn} from './web/dataset-schema.js';
@@ -317,12 +323,14 @@ export class ResearchMaterials {
  async previewDataset(command,{signal}={}){
   if(command.aggregation)return new DatasetAggregation(this).preview(command,{signal});
   if(command.calculation)return new DatasetCalculations(this).preview(command,{signal});
-  await this.validateDataset(command);const source=await this.artifact(command.artifact,{signal}),rows=[];let columns=[];
-  for await(const item of readDataset(source.content.read(0,source.content.size-1,{signal}),command.sourceMapping,{signal,size:source.content.size})){
-   if(item.columns)columns=item.columns;else rows.push(item);
+  await this.validateDataset(command);const source=await this.artifact(command.artifact,{signal}),rows=[],columns=[],columnOffset=command.columnOffset??0;let columnCount=0;
+  if(!Number.isSafeInteger(columnOffset)||columnOffset<0)fail();
+  for await(const item of readPagedDataset(source.content.read(0,source.content.size-1,{signal}),command.sourceMapping,{signal,size:source.content.size})){
+   if(item.columnCount!==undefined){columnCount=item.columnCount;if(columnOffset>=columnCount)fail();let i=0;for await(const col of item.columns()){if(i>=columnOffset&&i<columnOffset+16)columns.push(col.name);if(++i>=columnOffset+16)break;}}
+   else {const cells=[],truncated=[],valueKinds=[];let i=0;for await(const cell of item.cells()){if(i>=columnOffset&&i<columnOffset+16){let value='';for await(const part of cell.read()){value+=part.slice(0,4097-value.length);if(value.length>4096)break;}cells.push(value.slice(0,4096));truncated.push(value.length>4096);valueKinds.push(cell.kind);}if(++i>=columnOffset+16)break;}rows.push({line:item.line,order:item.order,locator:item.locator,cells,truncated,valueKinds});}
    if(rows.length===5)break;
   }
-  return {columns,rows};
+  return {columns,columnOffset,columnCount,nextColumn:columnOffset+columns.length<columnCount?columnOffset+columns.length:null,rows};
  }
  async validateDataset(command){
   if(command.aggregation)return new DatasetAggregation(this).validate(command);
@@ -335,12 +343,16 @@ export class ResearchMaterials {
    if(command.baseDataset.kind!=='dataset'||!materialRef(command.baseDataset)||command.baseDataset.id!==id||command.baseDataset.revision!==expectedRevision)fail();
    const base=await this.read(command.baseDataset);
    if(revisionText(base.content.inputs[0])!==revisionText(artifact)||base.recordId!==recordId)fail();
-   if(command.sourceMapping&&revisionText(base.content.calculation||base.content.aggregation?command.sourceMapping:datasetMapping(command.sourceMapping))!==revisionText(base.content.sourceMapping??{format:'delimited',delimiter:base.content.delimiter,header:true}))fail();
+   if(command.sourceMapping){
+    let mapping=base.content.calculation||base.content.aggregation||base.content.datasetFormat===3&&command.sourceMapping.fieldsInSchema?command.sourceMapping:datasetMapping(command.sourceMapping);
+    if(base.content.datasetFormat===3&&mapping.fields){const {fields,...rest}=mapping;mapping={...rest,fieldsInSchema:true};if(Array.isArray(fields)){let index=0;for await(const column of this.iterateDatasetColumns(base)){if(revisionText(column.sourceField)!==revisionText(fields[index++]))fail();}if(index!==fields.length)fail();}}
+    if(revisionText(mapping)!==revisionText(base.content.sourceMapping??{format:'delimited',delimiter:base.content.delimiter,header:true}))fail();
+   }
   }
   await this.assertOwner(recordId);await this.read(artifact);
   if(id){const current=await this.current(id);if((current?.revision??null)!==(expectedRevision??null)||current&&(current.kind!=='dataset'||current.recordId!==recordId))fail('MATERIAL_CHANGED');}
-  if(command.columns!==undefined&&(!Array.isArray(command.columns)||command.columns.length>DATASET_LIMITS.columns||!validColumns(command.columns,command.columns.length)))fail();
-  if(command.columnChanges!==undefined&&(!command.baseDataset||command.columns!==undefined||!Array.isArray(command.columnChanges)||command.columnChanges.length>DATASET_LIMITS.columns||new Set(command.columnChanges.map(c=>c?.index)).size!==command.columnChanges.length||command.columnChanges.some(c=>!c||!Number.isInteger(c.index)||c.index<0||!validColumns([c.column],1))))fail();
+  if(command.columns!==undefined&&(!Array.isArray(command.columns)||!validColumns(command.columns,command.columns.length)))fail();
+  if(command.columnChanges!==undefined&&(!command.baseDataset||command.columns!==undefined||!Array.isArray(command.columnChanges)||new Set(command.columnChanges.map(c=>c?.index)).size!==command.columnChanges.length||command.columnChanges.some(c=>!c||!Number.isSafeInteger(c.index)||c.index<0||!validColumns([c.column],1))))fail();
   if(command.exclusions!==undefined&&(!command.exclusions||typeof command.exclusions!=='object'||Array.isArray(command.exclusions)||Object.values(command.exclusions).some(v=>!(command.baseDataset&&v===null)&&!required(v,1000))))fail();
   for(const column of [...command.columns??[],...(command.columnChanges??[]).map(c=>c.column)])for(const ref of schemaReferences(column))await this.checkReference(ref);
  }
@@ -355,57 +367,7 @@ export class ResearchMaterials {
  // Shared bounded builder. Callers validate their ownership contract first:
  // ordinary evidence uses an existing owner; staged imports have not created
  // that owner yet and bind these immutable pages in their eventual transaction.
- async prepareDatasetRows(command,{source,base=null,signal,progress=async()=>{},writePage,columnDefaults=defaultColumn,nativeSize:declaredNativeSize,rows:preparedRows,calculatedColumns,inputReferences}={}){
-  const exclusions=command.exclusions??{},seen=new Set(),baseColumns=base?await this.datasetColumns(base):null;
-  const nativeMapping=command.nativeMapping??base?.content.nativeMapping,nativeSize=nativeMapping?(declaredNativeSize??(await this.read(nativeMapping.artifact)).content.size):null;
-  const self=this;
-  async function* retained(){
-   yield {columns:baseColumns.map(c=>c.name),sourceMapping:base.content.sourceMapping??{format:'delimited',delimiter:base.content.delimiter,header:true}};
-   let order=0;
-   for await(const row of self.iterateDataset(command.baseDataset)){
-    signal?.throwIfAborted();yield {...row,order:++order,locator:row.locator??{format:'delimited',line:row.line}};
-    await progress({stage:'validating dataset rows',done:order,total:base.content.rowCount});
-   }
-  }
-  let columns,page=[],pageBytes=3,count=0,sourceMapping,aggregationMembersIndex=base?.content.aggregationMembersIndex;
-  const save=writePage??(fn=>this.workspace.withLock(fn)),pages=this.sequences.builder('pages',save);
-  const flush=async()=>{
-   if(!page.length)return;
-   const hash=digest(revisionText(page)),file=this.metadataFile('tables/'+hash+'.json'),rows=page;
-   await save(async()=>{
-    signal?.throwIfAborted();
-    if(await this.present(file)){if(digest(revisionText(await this.json(file)))!==hash)fail('MATERIAL_MISSING');}
-    else await this.put(file,rows);
-   });
-   await pages.append({hash,count:rows.length});page=[];pageBytes=3;
-  };
-  for await(const item of preparedRows??(base?retained():readDataset(source.content.read(0,source.content.size-1,{signal}),command.sourceMapping,{signal,progress,size:source.content.size}))){
-   if(item.columns){
-    columns=calculatedColumns??command.columns??baseColumns??item.columns.map(label=>columnDefaults({label}));
-    for(const change of command.columnChanges??[]){if(change.index>=columns.length)fail();columns[change.index]=change.column;}
-    if(!validColumns(columns,item.columns.length))fail();sourceMapping=item.sourceMapping;aggregationMembersIndex=item.aggregationMembersIndex??aggregationMembersIndex;continue;
-   }
-   const id=item.id??source.doc.id+':'+(item.locator.format==='delimited'?item.line:item.order),excluded=Object.hasOwn(exclusions,id)?exclusions[id]:item.excluded??null;
-   if(Object.hasOwn(exclusions,id))seen.add(id);
-   const row={id:item.id??id,line:item.line??item.order,cells:item.cells,excluded,order:item.order,locator:item.locator,...(item.valueKinds?{valueKinds:item.valueKinds}:{}),...(item.cellPointers?{cellPointers:item.cellPointers}:{}),...(item.cellSources?{cellSources:item.cellSources}:{}),...(item.aggregation?{aggregation:item.aggregation}:{}),...(item.aggregationMembers?{aggregationMembers:item.aggregationMembers}:{})};
-   if(nativeMapping)row.nativeSelector=nativeRowLocator(nativeMapping,row,nativeSize).selector;
-   for(const [i,column] of columns.entries()){
-    const value=row.cells[i];if(['null','absent'].includes(row.valueKinds?.[i])||column.missing.some(m=>m.value===value))continue;
-    if(!supportedValue(value,column.representation,column.radix))fail();
-   }
-   const bytes=Buffer.byteLength(JSON.stringify(row));if(bytes+3>DATASET_LIMITS.pageBytes)fail('MATERIAL_TABLE');
-   if(page.length===DATASET_LIMITS.pageRows||pageBytes+bytes+(page.length?1:0)>DATASET_LIMITS.pageBytes)await flush();
-   pageBytes+=bytes+(page.length?1:0);page.push(row);count++;if(!Number.isSafeInteger(count))fail('MATERIAL_DATASET_LIMIT');
-  }
-  await flush();if(Object.keys(exclusions).length!==seen.size)fail();
-  signal?.throwIfAborted();
-  const schema=this.sequences.builder('columns',save);for(const column of columns)await schema.append(column);
-  const pageIndex=await pages.finish(),schemaIndex=await schema.finish();signal?.throwIfAborted();
-  const inputs=[...new Map([...(inputReferences??base?.content.inputs??[command.artifact]),...columns.flatMap(schemaReferences),...(nativeMapping?[nativeMapping.artifact]:[])].map(r=>[materialReferenceKey(r),r])).values()];
-  const calculation=command.calculation??base?.content.calculation;
-  const aggregation=command.aggregation??base?.content.aggregation;
-  return {commandHash:digest(revisionText(command)),content:{datasetFormat:2,inputs,schemaIndex,pageIndex,rowCount:count,sourceMapping,...(calculation?{calculation,algorithm:'observanda-retained-calculations',algorithmVersion:1}:{}),...(aggregation?{aggregation,algorithm:'observanda-retained-aggregation',algorithmVersion:1}:{}),...(aggregationMembersIndex?{aggregationMembersIndex}:{}),...(nativeMapping?{nativeMapping}:{}),delimiter:sourceMapping.delimiter??null,encoding:'UTF-8',order:aggregation?'first-group-occurrence':'acquisition'}};
- }
+ async prepareDatasetRows(command,options={}){return this.workspace.withCatalogueConnections(()=>preparePagedDataset(this,command,{...options,validColumns}));}
  async commitDataset(command,prepared){
   if(prepared.commandHash!==digest(revisionText(command)))fail('MATERIAL_CHANGED');
   await this.validateDataset(command);
@@ -420,45 +382,45 @@ export class ResearchMaterials {
  }
  datasetPageCount(doc){
   if(doc.kind!=='dataset')fail();
-  if(doc.content.datasetFormat===2){this.sequences.validate(doc.content.pageIndex);this.sequences.validate(doc.content.schemaIndex);if(doc.content.pageIndex.kind!=='pages'||doc.content.schemaIndex.kind!=='columns'||doc.content.schemaIndex.count>DATASET_LIMITS.columns)fail('MATERIAL_MISSING');return doc.content.pageIndex.count;}
+  if([2,3].includes(doc.content.datasetFormat)){this.sequences.validate(doc.content.pageIndex);this.sequences.validate(doc.content.schemaIndex);if(doc.content.pageIndex.kind!=='pages'||doc.content.schemaIndex.kind!=='columns'||doc.content.schemaIndex.count<1)fail('MATERIAL_MISSING');return doc.content.pageIndex.count;}
   if(doc.content.datasetFormat!==undefined||!Array.isArray(doc.content.pages)||!Array.isArray(doc.content.columns))fail('MATERIAL_MISSING');return doc.content.pages.length;
  }
- async schemaPage(ref,{offset=0,limit=16}={}){
-  if(ref?.kind!=='dataset')fail();return this.retainedSchemaPage(await this.read(ref),{offset,limit});
- }
+ async schemaPage(ref,{offset=0,limit=16}={}){if(ref?.kind!=='dataset')fail();return this.retainedSchemaPage(await this.read(ref),{offset,limit});}
  async retainedSchemaPage(doc,{offset=0,limit=16}={}){
   this.datasetPageCount(doc);
-  if(!Number.isInteger(offset)||offset<0||!Number.isInteger(limit)||limit<1||limit>DATASET_LIMITS.columns)fail();
-  const page=doc.content.datasetFormat===2?await this.sequences.page(doc.content.schemaIndex,{offset,limit}):{items:doc.content.columns.slice(offset,offset+limit),offset,total:doc.content.columns.length,next:offset+limit<doc.content.columns.length?offset+limit:null};
-  if(!validColumns(page.items,page.items.length))fail('MATERIAL_MISSING');return page;
+  if(!Number.isSafeInteger(offset)||offset<0||!Number.isSafeInteger(limit)||limit<1||limit>256)fail();
+  const page=[2,3].includes(doc.content.datasetFormat)?await this.sequences.page(doc.content.schemaIndex,{offset,limit}):{items:doc.content.columns.slice(offset,offset+limit),offset,total:doc.content.columns.length,next:offset+limit<doc.content.columns.length?offset+limit:null};
+  if(offset>page.total||!validColumns(page.items,page.items.length))fail('MATERIAL_MISSING');return page;
  }
- async datasetColumns(doc){
-  this.datasetPageCount(doc);if(doc.content.datasetFormat!==2)return doc.content.columns;
-  const result=await this.sequences.page(doc.content.schemaIndex,{limit:DATASET_LIMITS.columns});
-  if(!validColumns(result.items,result.total))fail('MATERIAL_MISSING');return result.items;
- }
+ async *iterateDatasetColumns(doc){this.datasetPageCount(doc);for await(const column of storedDatasetColumns(this,doc)){if(!validColumns([column],1))fail('MATERIAL_MISSING');yield column;}}
+ async datasetColumn(doc,index){if(!Number.isSafeInteger(index)||index<0)fail();const page=await this.retainedSchemaPage(doc,{offset:index,limit:1});if(page.items.length!==1)fail();return page.items[0];}
+ async datasetColumns(doc){const count=doc.content.schemaIndex?.count??doc.content.columns?.length;if(count>256)fail('MATERIAL_DATASET_LIMIT');const result=[];for await(const column of this.iterateDatasetColumns(doc))result.push(column);return result;}
+ iterateDatasetCells(doc,row){return storedDatasetCells(this,doc,row);}
+ readDatasetCell(value,options){return readDatasetCell(this,value,options);}
+ async *datasetCellSequences(doc,row){if(doc.content.datasetFormat!==3)return;yield row.cellIndex;for await(const cell of this.iterateDatasetCells(doc,row))if(cell.value?.parts)yield cell.value.parts;}
+ async verifyDatasetRow(doc,row,options){let count=0;for await(const cell of this.iterateDatasetCells(doc,row)){if(doc.content.datasetFormat===3)await verifyDatasetCell(this,cell,options);else if(typeof cell.value!=='string')fail('MATERIAL_MISSING');count++;}if(count!==(doc.content.schemaIndex?.count??doc.content.columns.length))fail('MATERIAL_MISSING');}
  async datasetPage(ref,page=0,{columnOffset=null,columnLimit=16}={}){
-  if(ref?.kind!=='dataset'||!Number.isInteger(page)||page<0)fail();
-  const doc=await this.read(ref),result=await this.retainedDatasetPage(doc,page);
-  if(columnOffset===null)return {...result,columns:await this.datasetColumns(doc)};
-  const schema=await this.retainedSchemaPage(doc,{offset:columnOffset,limit:columnLimit}),columns=schema.items;
-  if(!Number.isInteger(columnOffset)||columnOffset<0||columnOffset>=schema.total||!Number.isInteger(columnLimit)||columnLimit<1||columnLimit>32)fail();
-  return {...result,columns,columnOffset,columnCount:schema.total,
-   rows:result.rows.map(row=>({...row,cells:row.cells.slice(columnOffset,columnOffset+columnLimit),...(row.valueKinds?{valueKinds:row.valueKinds.slice(columnOffset,columnOffset+columnLimit)}:{})}))};
+  if(ref?.kind!=='dataset'||!Number.isSafeInteger(page)||page<0)fail();const doc=await this.read(ref);
+  if(columnOffset===null)return {...await this.retainedDatasetPage(doc,page),columns:await this.datasetColumns(doc)};
+  if(!Number.isSafeInteger(columnOffset)||columnOffset<0||!Number.isSafeInteger(columnLimit)||columnLimit<1||columnLimit>32)fail();
+  const schema=await this.retainedSchemaPage(doc,{offset:columnOffset,limit:columnLimit});if(columnOffset>=schema.total)fail();
+  return {...await this.retainedDatasetPage(doc,page,{columns:schema.items.map((_,i)=>columnOffset+i)}),columns:schema.items,columnOffset,columnCount:schema.total};
  }
- async retainedDatasetPage(doc,page){
-  const pages=this.datasetPageCount(doc);
-  if(!pages&&page===0&&doc.content.rowCount===0)return {rows:[],page,pages:0,rowCount:0};
-  const info=doc.content.datasetFormat===2?await this.sequences.item(doc.content.pageIndex,page):doc.content.pages[page];if(!info)fail();
+ datasetRowPosition(doc,options){return datasetRowPosition(this,doc,options);}
+ async retainedDatasetPage(doc,page,{columns,metadataOnly=false}={}){
+  const pages=this.datasetPageCount(doc);if(!Number.isSafeInteger(page)||page<0)fail();
+  if(!pages&&page===0&&doc.content.rowCount===0)return {rows:[],page,pages:0,rowCount:0};if(page>=pages)fail();
+  const info=[2,3].includes(doc.content.datasetFormat)?await this.sequences.item(doc.content.pageIndex,page):doc.content.pages[page];if(!info)fail();
   if(!revisionId(info.hash)||!Number.isSafeInteger(info.count)||info.count<1||info.count>DATASET_LIMITS.pageRows)fail('MATERIAL_MISSING');
+  datasetPageInfo(doc,page,info);
   const rows=await this.json(this.metadataFile('tables/'+info.hash+'.json'));
-  if(digest(revisionText(rows))!==info.hash||rows.length!==info.count)fail('MATERIAL_MISSING');
-  return {rows,page,pages,rowCount:doc.content.rowCount};
+  if(digest(revisionText(rows))!==info.hash||rows.length!==info.count||doc.content.datasetFormat===3&&doc.content.includedRowCount!==undefined&&rows.filter(row=>!row.excluded).length!==info.included)fail('MATERIAL_MISSING');
+  return {...(metadataOnly?{rows}:await projectDatasetRows(this,doc,rows,columns)),page,pages,rowCount:doc.content.rowCount,...(info.includedStart!==undefined?{includedStart:info.includedStart}: {})};
  }
- async *iterateDataset(ref){
+ async *iterateDataset(ref,options={}){
   if(ref?.kind!=='dataset')fail();const doc=await this.read(ref);let count=0;
-  for(let i=0;i<this.datasetPageCount(doc);i++)for(const row of (await this.retainedDatasetPage(doc,i)).rows){count++;yield row;}
-  if(count!==doc.content.rowCount)fail('MATERIAL_MISSING');
+  let included=0;for(let i=0;i<this.datasetPageCount(doc);i++){const page=await this.retainedDatasetPage(doc,i,options);if(doc.content.datasetFormat===3&&doc.content.includedRowCount!==undefined&&page.includedStart!==included)fail('MATERIAL_MISSING');for(const row of page.rows){count++;if(!row.excluded)included++;yield row;}}
+  if(count!==doc.content.rowCount||doc.content.includedRowCount!==undefined&&included!==doc.content.includedRowCount)fail('MATERIAL_MISSING');
  }
  // Bounded convenience reader for callers explicitly requesting a small table.
  async datasetRows(ref,{maxBytes=16*1024*1024}={}){const rows=[];let bytes=0;for await(const row of this.iterateDataset(ref)){bytes+=Buffer.byteLength(JSON.stringify(row));if(bytes>maxBytes)fail('MATERIAL_PLOT_LIMIT');rows.push(row);}return rows;}
@@ -466,7 +428,7 @@ export class ResearchMaterials {
   if(!['inputs','outputs'].includes(slot))fail();
   const provenance=slot==='inputs'?(content.method?analysisMethodReferences(content.method):content.provenanceInputs??[]):[];
   if(!Array.isArray(provenance)||!provenance.every(materialRef))fail('MATERIAL_MISSING');
-  const extra=provenance.length?{provenanceInputs:provenance}:{};
+  const extra=provenance.length?{provenanceInputs:provenance}:{};if(slot==='inputs'&&content.schemaInputsIndex){this.sequences.validate(content.schemaInputsIndex);if(content.schemaInputsIndex.kind!=='references')fail('MATERIAL_MISSING');extra.schemaInputsIndex=content.schemaInputsIndex;}
   const index=content[slot+'Index'];
   if(index!==undefined){this.sequences.validate(index);if(index.kind!=='references'||content[slot]!==undefined)fail('MATERIAL_MISSING');return {[slot+'Index']:index,...extra};}
   const items=content[slot]??[];if(!Array.isArray(items)||!items.every(materialRef))fail('MATERIAL_MISSING');return {[slot]:items,...extra};
@@ -474,8 +436,8 @@ export class ResearchMaterials {
  async *references(content,slot='inputs'){
   const set=this.referenceSet(content,slot),index=set[slot+'Index'];
   yield* set.provenanceInputs??[];
-  if(!index){yield* set[slot];return;}
-  for await(const item of this.sequences.items(index)){if(!materialRef(item))fail('MATERIAL_MISSING');yield item;}
+  if(index)for await(const item of this.sequences.items(index)){if(!materialRef(item))fail('MATERIAL_MISSING');yield item;}else yield* set[slot];
+  if(set.schemaInputsIndex)for await(const item of this.sequences.items(set.schemaInputsIndex)){if(!materialRef(item))fail('MATERIAL_MISSING');yield item;}
  }
  async readSnapshot(operation){
   if(await this.workspace.storageKind()!=='catalogue')return operation();
@@ -492,8 +454,10 @@ export class ResearchMaterials {
   if(!Number.isSafeInteger(offset)||offset<0||!Number.isSafeInteger(limit)||limit<1||limit>50)fail();
   const doc=await this.read(ref);if(ref.kind==='record')fail();
   const set=this.referenceSet(doc.content,slot),index=set[slot+'Index'];
-  if(!index&&offset>set[slot].length)fail();
-  const page=index?await this.sequences.page(index,{offset,limit}):{items:set[slot].slice(offset,offset+limit),offset,total:set[slot].length,next:offset+limit<set[slot].length?offset+limit:null};
+  const first=index?.count??set[slot].length,total=first+(set.schemaInputsIndex?.count??0),items=[];if(offset>total)fail();
+  if(offset<first)items.push(...(index?(await this.sequences.page(index,{offset,limit:Math.min(limit,first-offset)})).items:set[slot].slice(offset,offset+limit)));
+  if(set.schemaInputsIndex&&items.length<limit&&offset+items.length<total)items.push(...(await this.sequences.page(set.schemaInputsIndex,{offset:Math.max(0,offset-first),limit:limit-items.length})).items);
+  const page={items,offset,total,next:offset+items.length<total?offset+items.length:null};
   return this.describeReferences(page);
   });
  }
@@ -534,8 +498,8 @@ export class ResearchMaterials {
   await this.assertOwner(recordId);const doc=await this.read(dataset);
   if(id){const current=await this.current(id);if((current?.revision??null)!==(expectedRevision??null)||current&&(current.kind!=='analysis'||current.recordId!==recordId))fail('MATERIAL_CHANGED');}
   if(base&&(base.kind==='panels'||figureIssues({...base,series:createFigure().series},{draft:true}).length))fail();
-  const cols=await this.datasetColumns(doc);for(const v of mapping.values)for(const k of ['error',...INTERVAL_FIELDS])if(v[k]!=null&&cols[v[k]]?.unit!==cols[k[0]==='x'?mapping.x:v.column]?.unit)fail();
-  const mapper=createFigureMapper({columns:(await this.datasetColumns(doc)).map((c,index)=>({index,label:c.name,heading:c.name}))},{...mapping,mode:'replace',decimal:'.'},base??createFigure());
+  const selection=await datasetPlotSelection(this,doc,mapping),cols=selection.columns,local=selection.mapping;for(const v of local.values)for(const k of ['error',...INTERVAL_FIELDS])if(v[k]!=null&&cols[v[k]]?.unit!==cols[k[0]==='x'?local.x:v.column]?.unit)fail();
+  const mapper=createFigureMapper({columns:cols.map((c,index)=>({index,label:c.name,heading:c.name}))},{...local,mode:'replace',decimal:'.'},base??createFigure());
   if(mapper.invalid)fail();
   return doc;
  }
@@ -561,7 +525,7 @@ export class ResearchMaterials {
   }
  }
  async preparePlot(command,{signal,progress=async()=>{},writePage,attempt=randomUUID(),jobId=command.id??randomUUID()}={}){
-  const doc=await this.validatePlot(command),columns=await this.datasetColumns(doc),{mapping,dataset}=command,operation=mapping.operation??'raw';
+  const doc=await this.validatePlot(command),{mapping,dataset}=command,selection=await datasetPlotSelection(this,doc,mapping),columns=selection.columns,operation=mapping.operation??'raw';
   const write=writePage??(fn=>this.workspace.withLock(fn)),prefix=this.plotWork(jobId,attempt);
   const median=mapping.operation==='median'?new PagedMedian({
    signal,progress,compareValues:compareRationalText,midpoint:(a,b)=>sumRationalText(a,b,2n),pageBytes:512*1024,
@@ -569,17 +533,17 @@ export class ResearchMaterials {
    write:(name,text)=>write(async()=>{signal?.throwIfAborted();await this.workspace.writeMetadata(prefix+'/'+name,text);}),
    remove:async names=>{for(let i=0;i<names.length;i+=50)await write(async()=>{signal?.throwIfAborted();for(const name of names.slice(i,i+50))await this.workspace.removeMetadata(prefix+'/'+name);});}
   }):null;
-  const mapper=createFigureMapper({columns:columns.map((c,index)=>({index,label:c.name+(c.unit?' ('+c.unit+')':''),heading:c.name}))},{...mapping,mode:'replace',decimal:'.'},command.base??createFigure(),{median,limits:{series:256,points:10000,characters:262144},parseNumber:(raw,index)=>{
+  const mapper=createFigureMapper({columns:columns.map((c,index)=>({index,label:c.name+(c.unit?' ('+c.unit+')':''),heading:c.name}))},{...selection.mapping,mode:'replace',decimal:'.'},command.base??createFigure(),{median,limits:{series:256,points:10000,characters:262144},parseNumber:(raw,index)=>{
    const column=columns[index];try{return exactRational(raw,column.representation,column.radix);}catch{fail('MATERIAL_PRECISION');}
   }});
-  const denominator={format:2,dataset,rows:0,included:0,excludedCount:0,missing:columns.map((c,column)=>({column,name:c.name,count:0}))};
+  const denominator={format:selection.indices?3:2,dataset,...(selection.indices?{columnIndices:selection.indices}:{}),rows:0,included:0,excludedCount:0,missing:columns.map((c,column)=>({column:selection.indices?.[column]??column,name:c.name,count:0}))};
   try{
    for(let page=0;page<this.datasetPageCount(doc);page++){
     signal?.throwIfAborted();
-    for(const row of (await this.retainedDatasetPage(doc,page)).rows){
+    for(const row of (await this.retainedDatasetPage(doc,page,selection.indices?{columns:selection.indices}:undefined)).rows){
      signal?.throwIfAborted();denominator.rows++;
      if(row.excluded){denominator.excludedCount++;continue;}
-     denominator.included++;
+     denominator.included++;assertDatasetScalars(row);
      const cells=row.cells.map((raw,i)=>{
       const col=columns[i];
       if(['null','absent'].includes(row.valueKinds?.[i])||col.missing.some(m=>m.value===raw)){denominator.missing[i].count++;return '';}
@@ -594,7 +558,7 @@ export class ResearchMaterials {
    if(denominator.rows!==doc.content.rowCount)fail('MATERIAL_MISSING');
    await median?.finish();signal?.throwIfAborted();
    const result=mapper.finish();if(result.issues.length)fail(result.limited?'MATERIAL_ANALYSIS_LIMIT':result.precision?'MATERIAL_PRECISION':'MATERIAL_INVALID');
-   return {commandHash:digest(revisionText(command)),content:{inputs:[dataset],tool:'Observanda table mapping',version:'6',parameters:JSON.stringify(mapping),mapping,numericTransform:{algorithm:'exact-rational-to-binary64',version:2,policy:mapping.numericPolicy??'safe',significantDigits:17,...(operation!=='raw'?{reduction:{algorithm:'exact-rational-reduction',version:1,operation,grouping:'exact-coordinate',projection:'after-reduction'}}:{})},figure:withoutFigureSources(result.figure),denominator,warnings:result.warnings}};
+   return {commandHash:digest(revisionText(command)),content:{inputs:[dataset],tool:'Observanda table mapping',version:selection.indices?'7':'6',parameters:JSON.stringify(mapping),mapping,numericTransform:{algorithm:'exact-rational-to-binary64',version:2,policy:mapping.numericPolicy??'safe',significantDigits:17,...(operation!=='raw'?{reduction:{algorithm:'exact-rational-reduction',version:1,operation,grouping:'exact-coordinate',projection:'after-reduction'}}:{})},figure:withoutFigureSources(result.figure),denominator,warnings:result.warnings}};
   }catch(error){if(error.message==='precision')fail('MATERIAL_PRECISION');throw error;}
   finally{if(median)await this.cleanPlotWork(jobId,attempt);}
  }
@@ -766,10 +730,12 @@ export class ResearchMaterials {
     for await(const output of this.references(doc.content,'outputs'))await enqueue(output);
     if(doc.content.acquisition)await enqueue(doc.content.acquisition);
     if(ref.kind==='dataset'){
-     for(const column of await this.datasetColumns(doc))for(const r of schemaReferences(column))await enqueue(r);
+     if(doc.content.datasetFormat===3)await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresPagedResearchTables}=await import('./catalogue-format.js');if(!catalogueRequiresPagedResearchTables(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
+     for await(const column of this.iterateDatasetColumns(doc))for(const r of schemaReferences(column))await enqueue(r);
      if(doc.content.aggregationMembersIndex&&!doc.content.aggregation)fail('MATERIAL_MISSING');
      const aggregationContext=doc.content.aggregationMembersIndex?await aggregationMemberContext(this,doc):null;let memberOffset=0;
-     for await(const row of this.iterateDataset(ref)){
+     for await(const row of this.iterateDataset(ref,{metadataOnly:true})){
+      await this.verifyDatasetRow(doc,row);
       if(aggregationContext){
        if(row.aggregationMembers?.offset!==memberOffset)fail('MATERIAL_MISSING');
        for await(const member of aggregationMemberRows(this,aggregationContext,row)){void member;}
@@ -778,6 +744,7 @@ export class ResearchMaterials {
      }
      if(aggregationContext&&memberOffset!==aggregationContext.index.count)fail('MATERIAL_MISSING');
     }
+    await verifySelectedPlot(this,doc);
     if(doc.content.measurement)await this.measurements.validate(doc.content.measurement);
     if(doc.content.method&&!comparison){if(!validAnalysisMethod(doc.content.method))fail('CATALOGUE_DAMAGED');for(const r of analysisMethodReferences(doc.content.method))await enqueue(r);}
     if(doc.content.comparison&&!comparison){const c=doc.content;await this.comparisons.verify({recordId:doc.recordId,title:doc.title,tool:c.tool,version:c.version,method:c.method,comparison:c.comparison},c.summary);}

@@ -99,7 +99,6 @@ export async function prepareRecordOwnerEvidence(source,target,receipt,{write,si
   });
  };
  const transfer=new ResearchTransfer(source,new Set([recordId]),[receipt.command.sourceNotebookId],emit);transfer.mediaIds=boundedSet();transfer.sequenceNodes=boundedSet();
- transfer.sequence=async value=>{if(!value)return;materials.sequences.validate(value);const tree=materials.sequences.tree();async function visit(ref){if(!ref||transfer.sequenceNodes.has(ref.hash))return;const node=await tree.node(ref);transfer.sequenceNodes.add(ref.hash);await visit(node.left);await visit(node.right);const chunk=await materials.sequences.read('chunks',node.revision);if(!chunk)damaged();if(chunk.kind==='pages')for(const page of chunk.items){const text=await source.readMetadata('.observanda/materials/tables/'+page.hash+'.json',16*1024*1024);if(text===null)damaged();await emit({kind:'metadata',name:'.observanda/materials/tables/'+page.hash+'.json',content:text});}await emit({kind:'metadata',name:'.observanda/materials/sequences/chunks/'+node.revision+'.json',content:serialize(chunk)});await emit({kind:'metadata',name:'.observanda/materials/sequences/nodes/'+ref.hash+'.json',content:serialize(node)});}await visit(value.root);};
  const sourceFonts=new WorkspaceFonts(source);
  const font=async id=>{
   const value=await sourceFonts.get(id,{includeSource:true}),{bytes,sourceText,...entry}=value;void bytes;
@@ -132,7 +131,7 @@ export async function prepareRecordOwnerEvidence(source,target,receipt,{write,si
   const inspect=async(value,enqueue)=>{
    await choice(value,enqueue);
    if(validMaterialReference(value))await enqueue(materialReference(value));
-   if(value.format===1&&['pages','columns','references','files','upload-chunks','aggregation-members'].includes(value.kind)&&Object.hasOwn(value,'root')&&Object.hasOwn(value,'count'))await transfer.sequence(value);
+   if(value.format===1&&['pages','columns','references','files','upload-chunks','aggregation-members','cells','cell-text'].includes(value.kind)&&Object.hasOwn(value,'root')&&Object.hasOwn(value,'count'))await transfer.sequence(value);
    for(const key of ['font','headingFont'])if(customFontId(value[key])&&await inspected.add('font:'+value[key]))await font(value[key]);
   };
   const audit=async name=>{
@@ -182,15 +181,15 @@ export async function prepareRecordOwnerEvidence(source,target,receipt,{write,si
    const doc=await materials.read(ref);if(doc.recordId!==recordId){await external(ref);return;}
    await origin(ref);
    await write(store=>stageRecordOwnerMaterialIdentity(target,receipt,ref,doc,{store}));
-   await emit({kind:'metadata',name:'.observanda/materials/objects/'+doc.id+'/'+ref.revision+'.json',content:JSON.stringify(doc)+'\n'});
    if(!await materials.current(ref.id))await write(()=>stageMaterialReturnRetirement(incoming,receipt,ref));
    if(doc.previous)await enqueue({...ref,revision:doc.previous});for await(const input of materials.references(doc.content))await enqueue(input);for await(const output of materials.references(doc.content,'outputs'))await enqueue(output);if(doc.content.acquisition)await enqueue(doc.content.acquisition);
-   for(const slot of ['pageIndex','schemaIndex','inputsIndex','outputsIndex','aggregationMembersIndex'])await transfer.sequence(doc.content[slot]);
+   for(const slot of ['pageIndex','schemaIndex','inputsIndex','outputsIndex','aggregationMembersIndex','schemaInputsIndex'])await transfer.sequence(doc.content[slot]);
    if(doc.content.comparison&&doc.content.summary?.version===2)for await(const part of materials.comparisons.index(doc.content.summary).metadata())await emit({kind:'metadata',name:part.name,content:JSON.stringify(part.value)});
    if(doc.kind==='dataset'){
-    for(const column of await materials.datasetColumns(doc))for(const input of schemaReferences(column))await enqueue(input);
-    for(let index=0;index<materials.datasetPageCount(doc);index++){signal?.throwIfAborted();const info=doc.content.datasetFormat===2?await materials.sequences.item(doc.content.pageIndex,index):doc.content.pages[index],{rows}=await materials.retainedDatasetPage(doc,index);await emit({kind:'metadata',name:'.observanda/materials/tables/'+info.hash+'.json',content:JSON.stringify(rows)});}
+    for await(const column of materials.iterateDatasetColumns(doc))for(const input of schemaReferences(column))await enqueue(input);
+    for(let index=0;index<materials.datasetPageCount(doc);index++){signal?.throwIfAborted();const info=[2,3].includes(doc.content.datasetFormat)?await materials.sequences.item(doc.content.pageIndex,index):doc.content.pages[index],{rows}=await materials.retainedDatasetPage(doc,index,{metadataOnly:true});await emit({kind:'metadata',name:'.observanda/materials/tables/'+info.hash+'.json',content:JSON.stringify(rows)});}
    }
+   await emit({kind:'metadata',name:'.observanda/materials/objects/'+doc.id+'/'+ref.revision+'.json',content:JSON.stringify(doc)+'\n'});
    if(doc.content.measurement)for(const input of measurementReferences(doc.content.measurement))await enqueue(input);if(doc.content.method)for(const input of analysisMethodReferences(doc.content.method))await enqueue(input);
    if(doc.kind==='artifact'){const content=await materials.originalContent(doc);await emit({kind:'original',name:transfer.relative(content.file),content});}
    await write(async store=>{const identity='record-owner-evidence-revision:'+receipt.id+':'+ref.kind+':'+ref.id+':'+ref.revision;if(!await store.object(identity)){state.revisions=await incoming.sequences.append(state.revisions,[materialReference(ref)]);await store.putObject(identity,{version:1,ref:materialReference(ref)});await persist(store);}});

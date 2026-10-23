@@ -29,17 +29,17 @@ export class Measurements {
  }
  async cell(source){
   if(!validLocator(source)||source.ref.kind!=='dataset')fail();
-  const {page,row,column}=source.selector,doc=await this.materials.read(source.ref),data=await this.materials.retainedDatasetPage(doc,page),selected=data.rows[row];
+  const {page,row,column}=source.selector,doc=await this.materials.read(source.ref),data=await this.materials.retainedDatasetPage(doc,page,{columns:[column]}),selected=data.rows[row];
   const schema=await this.materials.retainedSchemaPage(doc,{offset:column,limit:1});
-  if(!selected||schema.items.length!==1||column>=selected.cells.length)fail();
-  const col=schema.items[0],kind=selected.valueKinds?.[column],presence=['null','absent'].includes(kind)?kind:col.missing.some(m=>m.value===selected.cells[column])?'missing':'value';
-  return {doc,pageRows:data.rows.length,row:selected,column:col,value:{spelling:selected.cells[column],representation:col.representation,radix:col.radix,unit:col.unit,presence},quantity:col.quantity??blankQuantity(),time:col.time};
+  if(!selected||schema.items.length!==1)fail();
+  const col=schema.items[0],kind=selected.valueKinds?.[0],presence=['null','absent'].includes(kind)?kind:col.missing.some(m=>m.value===selected.cells[0])?'missing':'value';
+  return {doc,pageRows:data.rows.length,row:selected,column:col,...(typeof selected.cells[0]==='string'?{}:{cellReference:selected.cells[0]}),value:{spelling:typeof selected.cells[0]==='string'?selected.cells[0]:'',representation:col.representation,radix:col.radix,unit:col.unit,presence},quantity:col.quantity??blankQuantity(),time:col.time};
  }
  inspect(source,options={}){return inspectMeasurementSource(this,source,options);}
  async seed(source){
   if(!validLocator(source))fail();
   if(source.ref.kind==='dataset'){
-   const c=await this.cell(source);return {value:c.value,quantity:c.quantity,time:c.time,sources:[source]};
+   const c=await this.cell(source);if(c.cellReference)throw new AppError('DATASET_CELL_SCALAR_REQUIRED');return {value:c.value,quantity:c.quantity,time:c.time,sources:[source]};
   }
   await this.materials.read(source.ref);
   return {value:{spelling:'',representation:'unsupported',radix:10,unit:'',presence:'unknown'},quantity:blankQuantity(),time:{kind:'unknown',reference:'',resolution:'',uncertainty:''},sources:[source]};

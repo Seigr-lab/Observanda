@@ -55,6 +55,8 @@
     "download":  "Download original",
     "downloadSlice":  "Download displayed byte slice",
     "previous":  "Previous bytes",
+    "previousValue": "Previous characters",
+    "nextValue": "Next characters",
     "next":  "Next bytes",
     "surrounding":  "Surrounding observations",
     "exact":  "Exact rational identity",

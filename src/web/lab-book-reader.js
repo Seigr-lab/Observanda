@@ -1,3 +1,4 @@
+import {retainedTableAction} from './retained-table-reader.js';
 import {bindReadingTables} from './record-reading-tables.js';
 import {recordHeaderControls} from './record-header-controls.js';
 import {readingMaterialReference} from './record-reading-reference.js';
@@ -60,7 +61,7 @@ export function bookReadingEntry(value,esc,options={}){
    const key=name==='fields'?'template':name;fieldsHtml[key]=value.collections[name].total?controls(name)+recordRevisionField(key,record,esc,{assetUrl,figureResults}):'';
   }
   fieldsHtml.attempt=attemptView(record.attempt,esc,{reference,window:value.attemptWindow,navigation:controls});
-  fieldsHtml.results=(value.resultWindow?.figureId?'<p>'+esc(contentText('resultsForFigure'))+'</p>'+windowButton('allResults','results-all',esc,busy):'')+controls('results')+resultStatementsView(record.results,esc,{reference});
+  fieldsHtml.results=(value.resultWindow?.figureId?'<p>'+esc(contentText('resultsForFigure'))+'</p>'+windowButton('allResults','results-all',esc,busy):'')+controls('results')+resultStatementsView(record.results,esc,{reference,workspaceId:value.workspaceId??options.workspaceId});
   selectedOptions={inlineRecord,fieldsHtml,figureResults,attemptWindow:value.attemptWindow,sectionsHtml:figure=>sectionControls(value.sections,esc,busy)+recordRevisionField('sections',record,esc,{anchors:true,figure})};
  }
  const status=(value.error?'<p role="alert">'+esc(value.error)+'</p>'+windowButton('retry','retry',esc,busy):'')+(busy?'<p role="status">'+esc(contentText('loading'))+'</p>'+windowButton('cancel','cancel',esc):'');
@@ -92,6 +93,7 @@ export function bookReadingWindows({api,esc,records,active,decorate,assetUrl,wor
  }
  function command(item,extra={}){return {workspaceId:item.workspaceId,recordId:item.recordId,snapshotId:item.etag,offset:item.sections.offset,pagedHeader:true,windows:Object.fromEntries(Object.entries(item.collections).map(([name,page])=>[name,page.offset])),...(item.resultWindow?.figureId?{resultFigure:item.resultWindow.figureId}:{}),...extra};}
  async function action(control){
+  if(await retainedTableAction(control,{api,esc}))return true;
   const name=control.dataset.action;if(!name?.startsWith('record-list-content-'))return false;
   const item=records().find(value=>value.readingProjection&&value.recordId===control.closest('[data-reading-record]')?.dataset.readingRecord);if(!item)return true;
   const operation=name.slice('record-list-content-'.length).replace(/^collection-/,'');

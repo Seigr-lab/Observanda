@@ -1,3 +1,4 @@
+import {retainedTableAction} from './retained-table-reader.js';
 import {retainedTableUI,tableText} from './retained-table-ui.js';
 import {RESULT_KINDS,validResults,resultStatementsView} from './result-statements.js';
 import {atext as a,analysisReferenceField,wireAnalysisFields,assertAnalysisFieldsReady} from './analysis-fields-ui.js';
@@ -28,6 +29,7 @@ export function resultStatementsUI({state,api,esc,field,showDialog,notify,dirty,
 
  }
  async function action(b){
+  if(await retainedTableAction(b,{api,esc}))return true;
   const name=b.dataset.action;if(!name?.startsWith('result-'))return false;if(saving)return true;
   if(name==='result-reference'){await openReference(JSON.parse(b.dataset.ref));return true;}
   if(name==='result-add'||name==='result-edit'){context=identity();draft=name==='result-add'?{id:crypto.randomUUID(),kind:'conclusion',title:'',text:'',basis:'authored',source:null,limitations:''}:structuredClone(record().results.statements.find(s=>s.id===b.dataset.id));form();}

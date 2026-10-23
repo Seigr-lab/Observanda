@@ -1,4 +1,4 @@
-import {requirePublicationDocuments} from './catalogue-format.js';
+import {requirePublicationDocuments,requirePagedResearchTables} from './catalogue-format.js';
 import {isPublicationDocumentBlockName} from './publication-document.js';
 import {withScratch} from './scratch-work.js';
 import {publicationResearchWorkspace} from './publication-pin.js';
@@ -82,7 +82,7 @@ async function capture(workspace,operation,{signal,write=fn=>transaction(workspa
    // Reserve an empty capture namespace before treating unseen blocks as absent.
    // A collision must never replace or clean up another retained input.
    if(await workspace.readMetadata(input(id)+'.json',16*1024*1024)!==null||await workspace.readMetadata(journal(id),1024)!==null||(await workspace.metadataPage(input(id),{limit:1})).items.length)throw new AppError('PUBLICATION_IDENTITY');
-   await requirePublicationDocuments(writer.db);await workspace.writeMetadata(journal(id),JSON.stringify({version:1,id}));
+   await requirePublicationDocuments(writer.db);await requirePagedResearchTables(writer.db);await workspace.writeMetadata(journal(id),JSON.stringify({version:1,id}));
   }));
   const retained=file=>file===input(id)+'.json'||typeof file==='string'&&file.startsWith(prefix)&&(isPublicationDocumentBlockName(file.slice(prefix.length))||researchId(file.slice(prefix.length,-5))&&file.endsWith('.json'));
   const flush=async()=>{

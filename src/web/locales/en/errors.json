@@ -57,6 +57,7 @@
   "COLLABORATION_ALREADY_MEMBER": "This invitation has already been accepted or the person is already a member. Manage the existing membership instead.",
   "COLLABORATION_INVITE_REQUIRED": "A removed member must accept a new invitation before rejoining.",
   "DATASET_JOIN_LENGTH": "Positional alignment requires an acquisition array and a lookup array of exactly the same length in every window. Check for missing arrays, missing entries or extra entries; no rows were accepted.",
+  "DATASET_CELL_SCALAR_REQUIRED": "This operation needs a complete scalar cell. Long retained values cannot be converted implicitly. Select another column or inspect the original value.",
   "DATASET_CALCULATION": "Check the calculation columns, numeric representations, units and rules. Division by zero, incompatible units and results beyond the exact-value limit stop calculation. Earlier datasets remain unchanged.",
   "DATASET_TABLE": "Choose a valid nonempty dataset table selection within the displayed limits.",
   "DATASET_JOIN_KEY": "A lookup row has a missing or null key. Choose a scalar key that identifies each control or configuration.",

@@ -1,3 +1,4 @@
+import {DATASET_ROWS_PER_PAGE} from '../src/dataset-row-position.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -43,11 +44,11 @@ test('large JSON evidence becomes exact, bounded pages through a durable job and
  const read=f.workspace.read;f.workspace.read=()=>{throw Error('Dataset operation assembled every record');};
  let completed;try{completed=await perform(f,id);}finally{f.workspace.read=read;}
  assert.equal(completed.state,'completed');
- const retained=await f.materials.read(completed.result);assert.equal(retained.content.rowCount,4344);assert.equal(retained.content.pageIndex.count,17);assert.deepEqual(retained.content.sourceMapping,mapping);
+ const retained=await f.materials.read(completed.result);assert.equal(retained.content.rowCount,4344);assert.equal(retained.content.pageIndex.count,Math.ceil(4344/DATASET_ROWS_PER_PAGE));const {fields,...sourceMapping}=mapping;assert.deepEqual(retained.content.sourceMapping,{...sourceMapping,fieldsInSchema:true});assert.deepEqual((await f.materials.datasetColumns(retained)).map(column=>column.sourceField),fields);
  let count=0;for await(const row of f.materials.iterateDataset(completed.result)){assert.equal(row.cells[0],'18446744073709551615');assert.equal(row.cells[1],'105');assert.ok(!JSON.stringify(row).includes('diagnostic'));count++;}
  await assert.rejects(f.materials.datasetRows(completed.result,{maxBytes:128}),{code:'MATERIAL_PLOT_LIMIT'});
  assert.equal((await f.materials.current(completed.result.id)).revision,completed.result.revision);
- assert.equal(count,4344);const last=await f.materials.datasetPage(completed.result,16);assert.equal(last.rows.at(-1).valueKinds[2],'null');
+ assert.equal(count,4344);const last=await f.materials.datasetPage(completed.result,retained.content.pageIndex.count-1);assert.equal(last.rows.at(-1).valueKinds[2],'null');
  assert.equal((await datasetJobs(f.materials,f.queue,f.recordId)).items[0].id,id);
  assert.equal((await enqueueDataset(f.materials,f.queue,command,id)).result.revision,completed.result.revision);
  const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'restored')),{vault:f.vault});
@@ -58,17 +59,17 @@ test('large JSON evidence becomes exact, bounded pages through a durable job and
 test('interrupted preparation reuses verified pages; a stale worker cannot attach a dataset',async t=>{
  const f=await fixture(t),bytes=Buffer.from('{"measurements":['+Array.from({length:900},(_,i)=>'{"counter":'+i+',"native":"15","reading":1}').join(',')+']}'),artifact=await upload(f,bytes);
  const command={recordId:f.recordId,title:'Retryable dataset',artifact,sourceMapping:mapping},id=randomUUID();await enqueueDataset(f.materials,f.queue,command,id);
- const first=await f.queue.claim();let pages=0;
+ const first=await f.queue.claim();let pages=0;const put=f.materials.put;f.materials.put=async function(file,value){await put.call(this,file,value);if(path.basename(path.dirname(file))==='tables')pages++;};
  await assert.rejects(f.materials.prepareDataset(first.input.command,{writePage:fn=>f.queue.transaction(async()=>{
-  await f.queue.held(first.id,first.lease.token);await fn();if(++pages===2)throw new AppError('STORAGE_FULL');
- })}),{code:'STORAGE_FULL'});
+  await f.queue.held(first.id,first.lease.token);await fn();if(pages>=2)throw new AppError('STORAGE_FULL');
+ })}),{code:'STORAGE_FULL'});f.materials.put=put;
  await f.queue.release(first.id,first.lease.token,{error:new AppError('STORAGE_FULL')});
  assert.equal((await f.materials.heads()).filter(h=>h.kind==='dataset').length,0);
  assert.equal((await Array.fromAsync(f.materials.names('tables'))).length,1);
  await f.queue.control(id,'retry');const claim=await f.queue.claim(),prepared=await f.queue.definition(claim).prepare(claim,{});
  await assert.rejects(f.queue.complete(id,first.lease.token,prepared),{code:'JOB_LEASE'});
  const done=await f.queue.complete(id,claim.lease.token,prepared);
- assert.equal((await Array.fromAsync(f.materials.names('tables'))).length,4);assert.equal((await f.materials.read(done.result)).content.rowCount,900);
+ assert.equal((await Array.fromAsync(f.materials.names('tables'))).length,Math.ceil(900/DATASET_ROWS_PER_PAGE));assert.equal((await f.materials.read(done.result)).content.rowCount,900);
  assert.equal((await f.materials.heads()).filter(h=>h.kind==='dataset').length,1);
 });
 test('schema edits reuse retained values and preserve exclusions on other pages and earlier revisions',async t=>{
@@ -77,7 +78,7 @@ test('schema edits reuse retained values and preserve exclusions on other pages 
  const doc=await f.materials.read(original),columns=await f.materials.datasetColumns(doc);columns[0].representation='integer';columns[1].representation='radix';columns[1].radix=6;
  const method=f.materials.artifact;f.materials.artifact=()=>{throw Error('Unchanged original was reparsed');};
  let next;try{next=await f.materials.dataset({recordId:f.recordId,title:'Values',artifact,id:original.id,expectedRevision:original.revision,baseDataset:original,columns,exclusions:{[artifact.id+':1']:'Partial acquisition'}});}finally{f.materials.artifact=method;}
- assert.equal((await f.materials.datasetPage(next,1)).rows[43].excluded,'Not acquired reliably');
+ assert.equal((await f.materials.datasetPage(next,Math.floor(299/DATASET_ROWS_PER_PAGE))).rows[299%DATASET_ROWS_PER_PAGE].excluded,'Not acquired reliably');
  assert.equal((await f.materials.datasetPage(next,0)).rows[0].excluded,'Partial acquisition');
  assert.equal((await f.materials.datasetPage(original,0)).rows[0].excluded,null);
  assert.equal((await f.materials.read(next)).previous,original.revision);
@@ -105,12 +106,12 @@ test('wide schemas page independently, edits span pages, and unchanged retained 
  const f=await fixture(t),names=Array.from({length:36},(_,i)=>'Field '+i),bytes=Buffer.from(names.join(',')+'\n'+Array.from({length:600},()=>names.map((_,i)=>i===0?'18446744073709551615':i===32?'105':String(i)).join(',')).join('\n'));
  const artifact=await upload(f,bytes),original=await f.materials.dataset({recordId:f.recordId,title:'Wide readings',artifact}),doc=await f.materials.read(original);
  assert.equal(doc.content.columns,undefined);assert.equal(doc.content.pages,undefined);
- assert.equal(doc.content.schemaIndex.count,36);assert.equal(doc.content.pageIndex.count,3);
+ assert.equal(doc.content.schemaIndex.count,36);assert.equal(doc.content.pageIndex.count,Math.ceil(600/DATASET_ROWS_PER_PAGE));
  const reads=[],read=f.workspace.readMetadata;f.workspace.readMetadata=function(key,...args){reads.push(key);return read.call(this,key,...args);};
  let last;try{last=await f.materials.schemaPage(original,{offset:32});}finally{f.workspace.readMetadata=read;}
  assert.equal(last.items.length,4);assert.equal(reads.filter(p=>p.includes('/sequences/chunks/')).length,1);
- const table=await f.materials.datasetPage(original,2,{columnOffset:32});
- assert.equal(table.columns.length,4);assert.equal(table.rows.length,88);assert.equal(table.rows[0].cells[0],'105');
+ const table=await f.materials.datasetPage(original,doc.content.pageIndex.count-1,{columnOffset:32});
+ assert.equal(table.columns.length,4);assert.equal(table.rows.length,600%DATASET_ROWS_PER_PAGE);assert.equal(table.rows[0].cells[0],'105');
  const first=(await f.materials.schemaPage(original)).items[0],changes=[{index:0,column:{...first,representation:'integer'}},{index:32,column:{...last.items[0],representation:'radix',radix:6}}];
  const command={recordId:f.recordId,title:doc.title,id:original.id,expectedRevision:original.revision,baseDataset:original,artifact,columnChanges:changes};
  const next=await f.materials.dataset(command),nextDoc=await f.materials.read(next);

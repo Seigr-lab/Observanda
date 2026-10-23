@@ -21,9 +21,10 @@ export function datasetMapping(input={}){
   if(!['auto',',','\t',';','|'].includes(delimiter)||typeof header!=='boolean')fail();
   return {format,delimiter,header};
  }
- if(!['json','jsonl'].includes(format)||!Array.isArray(input.fields)||!input.fields.length||input.fields.length>DATASET_LIMITS.columns)fail();
+ if(!['json','jsonl'].includes(format)||input.fields!=='all'&&(!Array.isArray(input.fields)||!input.fields.length))fail();
  const rowsPath=format==='json'?(input.rowsPath??''):'';
  pointer(rowsPath);
+ if(input.fields==='all')return {format,rowsPath,fields:'all'};
  const fields=input.fields.map(field=>{
   if(!field||typeof field.name!=='string'||!field.name.trim()||field.name.length>200)fail();
   pointer(field.path);return {name:field.name.trim(),path:field.path};
@@ -31,7 +32,7 @@ export function datasetMapping(input={}){
  if(new Set(fields.map(f=>f.name)).size!==fields.length||new Set(fields.map(f=>f.path)).size!==fields.length)fail();
  return {format,rowsPath,fields};
 }
-async function* texts(source,{signal,progress=async()=>{},size=0,keepBOM=false}={}){
+export async function* datasetTexts(source,{signal,progress=async()=>{},size=0,keepBOM=false}={}){
  const decoder=new TextDecoder('utf-8',{fatal:true,ignoreBOM:keepBOM});let done=0;
  for await(const bytes of source){
   for(let i=0;i<bytes.length;i+=DATASET_LIMITS.chunkBytes){
@@ -180,7 +181,7 @@ async function* mappedJSON(chunks,mapping,{signal}){
  }finally{stream.destroy();}
 }
 export async function* readDataset(source,input={},options={}){
- const mapping=datasetMapping(input),chunks=texts(source,{...options,keepBOM:mapping.format==='delimited'});
+ const mapping=datasetMapping(input),chunks=datasetTexts(source,{...options,keepBOM:mapping.format==='delimited'});
  try{yield* mapping.format==='delimited'?delimited(chunks,mapping):mapping.format==='json-nested'?nestedDataset(chunks,mapping,DATASET_LIMITS,options):mappedJSON(chunks,mapping,options);}
  catch(error){if(options.signal?.aborted)throw options.signal.reason;if(error instanceof AppError)throw error;fail();}
 }

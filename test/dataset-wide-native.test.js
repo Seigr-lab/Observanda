@@ -1,0 +1,38 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,rm} from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {sampleNotebook} from '../src/sample.js';
+import {ResearchMaterials,EVIDENCE_CHUNK} from '../src/research-materials.js';
+import {clearVault} from '../src/encryption.js';
+import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
+import {TestDeviceStore} from './device-fixture.js';
+import {Workspace} from '../src/storage.js';
+import {catalogueFormat,catalogueRequiresPagedResearchTables} from '../src/catalogue-format.js';
+import {ResearchTransfer} from '../src/collaboration/research-transfer.js';
+async function fixture(t){const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-wide-native-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),m=new ResearchMaterials(f.workspace),recordId=book.entries[0].id;t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ const upload=async(name,text)=>{const bytes=Buffer.from(text),s=await m.startImport({recordId,name,size:bytes.length});for(let at=0;at<bytes.length;at+=EVIDENCE_CHUNK)await m.appendImport(s.id,at/EVIDENCE_CHUNK,[bytes.subarray(at,at+EVIDENCE_CHUNK)]);return m.finishImport(s.id);};return {...f,book,m,recordId,directory,upload};}
+test('wide native datasets retain bounded schema and exact chunked cells through revisions, copy and packet traversal',async t=>{
+ const f=await fixture(t),{m,recordId}=f,long='\u{1f36f}'.repeat(160001),width=321;
+ const values=Object.fromEntries(Array.from({length:width},(_,i)=>['field'+i,i===300?long:i===301?null:i===302?'':i]));delete values.field303;
+ const artifact=await f.upload('wide.json',JSON.stringify([values,{...values,field303:'late'}]).replace('"field320":320','"field320":18446744073709551615'));
+ const command={recordId,title:'Wide source',artifact,sourceMapping:{format:'json',rowsPath:'',fields:'all'}},preview=await m.previewDataset(command);assert.equal(preview.columnCount,width);assert.equal(preview.columns.length,16);
+ const ref=await m.dataset(command),doc=await m.read(ref);assert.equal(doc.content.datasetFormat,3);assert.equal(doc.content.schemaIndex.count,width);assert.ok(JSON.stringify(doc).length<2500);
+ const schema=await m.retainedSchemaPage(doc,{offset:296,limit:25}),index=name=>296+schema.items.findIndex(c=>c.name===name),longIndex=index('field300'),nullIndex=index('field301'),blankIndex=index('field302'),exactIndex=index('field320'),lateIndex=index('field303');
+ const selected=await m.retainedDatasetPage(doc,0,{columns:[longIndex,nullIndex,blankIndex,exactIndex,lateIndex]});assert.equal(selected.rows[0].cells.length,5);assert.equal(selected.rows[0].cells[3],'18446744073709551615');assert.deepEqual(selected.rows[0].valueKinds.slice(1),['null','string','number','absent']);assert.deepEqual(selected.columnIndices,[longIndex,nullIndex,blankIndex,exactIndex,lateIndex]);
+ const value=selected.rows[0].cells[0];assert.equal(value.format,'dataset-cell');let text='',offset=0;do{const page=await m.readDatasetCell(value,{offset,limit:4096});text+=page.text;offset=page.next;}while(offset!==null);assert.equal(text,long);
+ const source={ref,selector:{kind:'cell',page:0,row:0,column:longIndex}},inspected=await m.measurements.inspect(source,{offset:16380});assert.equal(inspected.textPage.text,long.slice(16380,20476));assert.equal(inspected.original.selector.pointer,'/0/field300');const original=await m.measurements.inspect(inspected.original,{offset:12000});assert.equal(original.textPage.text,JSON.stringify(long).slice(12000,16096));assert.equal(original.textPage.total,JSON.stringify(long).length);await assert.rejects(m.measurements.seed(source),{code:'DATASET_CELL_SCALAR_REQUIRED'});
+ const column=await m.datasetColumn(doc,exactIndex),revised=await m.dataset({...command,id:ref.id,expectedRevision:ref.revision,baseDataset:ref,sourceMapping:doc.content.sourceMapping,columnChanges:[{index:exactIndex,column:{...column,representation:'integer'}}],exclusions:{[selected.rows[0].id]:'Instrument settling'}});assert.equal((await m.datasetColumn(await m.read(revised),exactIndex)).representation,'integer');assert.equal((await m.datasetColumn(doc,exactIndex)).representation,'text');const revisedDoc=await m.read(revised);assert.equal(doc.content.includedRowCount,2);assert.equal(revisedDoc.content.includedRowCount,1);assert.deepEqual(await m.datasetRowPosition(revisedDoc,{offset:0,includeExcluded:false}),{page:0,row:0,ordinal:0,offset:0});assert.equal((await m.sequences.item(revisedDoc.content.pageIndex,0)).included,1);
+ await m.verify();assert.equal(catalogueRequiresPagedResearchTables(await f.workspace.catalogue(store=>catalogueFormat(store.db))),true);
+ const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'copy')),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(copy,f.vault));await restored.verify();assert.deepEqual((await restored.retainedDatasetPage(await restored.read(revised),0,{columns:[exactIndex,longIndex]})).rows,(await m.retainedDatasetPage(await m.read(revised),0,{columns:[exactIndex,longIndex]})).rows);
+ const recoveredAccess=await createWorkspaceAccess('','',new TestDeviceStore({file:path.join(f.directory,'recovered-device')})),recoveredVault=takeCreatedVault(recoveredAccess);try{const recoveredRoot=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh-copy')),recoveredAccess,recoveredVault,f.vault),recovered=new ResearchMaterials(new Workspace(recoveredRoot,recoveredVault));await recovered.verify();const recoveredDoc=await recovered.read(revised);assert.equal(recoveredDoc.content.includedRowCount,1);assert.equal((await recovered.retainedDatasetPage(recoveredDoc,0,{columns:[longIndex]})).rows[0].cells[0].sha256,value.sha256);}finally{clearVault(recoveredVault);}
+ const parts=new Map(),transfer=new ResearchTransfer(f.workspace,new Set([recordId]),[],part=>{parts.set(part.name,part);});await transfer.sequence(doc.content.pageIndex);const raw=await m.retainedDatasetPage(doc,0,{metadataOnly:true});assert.ok(parts.has('.observanda/materials/sequences/nodes/'+raw.rows[0].cellIndex.root.hash+'.json'));assert.ok(parts.has('.observanda/materials/sequences/nodes/'+value.parts.root.hash+'.json'));assert.ok([...parts.values()].some(p=>p.kind==='metadata'&&p.name.includes('/tables/')));
+});
+test('tenfold wider native rows use selected column windows and preserve automatic long quoted separators',async t=>{
+ const f=await fixture(t),{m,recordId}=f,width=3210,artifact=await f.upload('wide.csv',Array.from({length:width},(_,i)=>'C'+i).join(',')+'\n'+Array.from({length:width},(_,i)=>String(i)).join(',')),ref=await m.dataset({recordId,title:'Tenfold width',artifact}),doc=await m.read(ref);
+ const page=await m.datasetPage(ref,0,{columnOffset:3194,columnLimit:16});assert.equal(page.columns.length,16);assert.equal(page.columnCount,width);assert.deepEqual(page.rows[0].cells,Array.from({length:16},(_,i)=>String(3194+i)));assert.ok(JSON.stringify(page).length<12000);assert.ok(JSON.stringify(doc).length<2500);
+ const long='x'.repeat(40000),quoted=await f.upload('quoted.tsv','"'+long+'"\tsecond\n'),other=await m.dataset({recordId,title:'Long first value',artifact:quoted,sourceMapping:{format:'delimited',delimiter:'auto',header:false}}),data=await m.datasetPage(other);assert.equal(data.columns.length,2);assert.equal(data.rows[0].cells[1],'second');assert.equal(data.rows[0].cells[0].characters,long.length);
+});

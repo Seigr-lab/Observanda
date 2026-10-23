@@ -8,7 +8,7 @@ import {ResearchMaterials} from './research-materials.js';
 import {EvidenceCorrections} from './evidence-corrections.js';
 import {RetainedRecordDocuments} from './retained-record-documents.js';
 import {DatasetCalculations} from './dataset-calculations.js';
-import {retainedTable} from './retained-tables.js';
+import {retainedTable,retainedTablePage,retainedTableCell} from './retained-tables.js';
 import {enqueueDataset,enqueuePlot,enqueueComparison,datasetJobs} from './dataset-jobs.js';
 import {analysisDependencyState} from './analysis-dependencies.js';
 import {associateOriginal} from './evidence-associations.js';
@@ -85,8 +85,8 @@ export async function executeMaterialRequest(storage,request,data,{signal,jobs,d
  case 'start':return materials.uploads.summary(await materials.startImport(data));
  case 'finish':{if(!storage.vault.key)throw new AppError('ACCESS_LOCKED');const session=await materials.importState(data.id);if(session.batchId)throw new AppError('MATERIAL_CHANGED');await materials.assertOwner(session.recordId);if(materials.uploads.bytes(session)!==session.size)throw new AppError('MATERIAL_INCOMPLETE');const {queue,worker}=await jobService(),job=await queue.enqueue({id:session.id,type:'evidence.finalize',scope:session.recordId,input:{importId:session.id,size:session.size}});worker.wake();return {job:jobSummary(job)};}
  case 'job':case 'cancel-job':case 'retry-job':{const service=await jobService(),{queue,worker}=service,job=await queue.read(data.id);if(!job)throw new AppError('NOT_FOUND');await queue.authorize(job);if(operation==='job')return {job:summary(job)};const result=operation==='retry-job'&&job.type==='analysis.compare'?await retryComparison(materials,service,job,{sourceAccess,signal}):await queue.control(data.id,operation==='cancel-job'?'cancel':'retry');if(operation==='cancel-job'){worker.cancel(data.id);service.comparisonAccess?.forget((await storage.outline()).metadata.id,data.id);}else worker.wake();return {job:summary(result)};}
- case 'retained-table':return retainedTable(materials,data);
- case 'calculation-schema':return {columns:await new DatasetCalculations(materials).schema(data.ref,data.view)};
+ case 'retained-table':return data.cell?retainedTableCell(materials,{ref:data.ref,table:data.table,rowOffset:data.cell.rowOffset,cursor:data.cell.cursor,columnOffset:data.cell.columnOffset,offset:data.cell.offset,limit:data.cell.limit},{signal}):data.table?retainedTablePage(materials,data,{signal}):retainedTable(materials,data);
+ case 'calculation-schema':{const calculations=new DatasetCalculations(materials);if(data.columns!==undefined)return {columns:await calculations.schema(data.ref,data.view,{columns:data.columns}),columnIndices:data.columns};if(data.offset!==undefined||data.limit!==undefined)return calculations.schemaPage(data.ref,data.view,{offset:data.offset,limit:data.limit});return {columns:await calculations.schema(data.ref,data.view)};}
  case 'dataset-preview':return materials.previewDataset(data,{signal});
  case 'dataset':case 'comparison':case 'plot':{const {queue,worker,comparisonAccess}=await jobService(),{jobId,...command}=data,enqueue=operation==='dataset'?enqueueDataset:operation==='comparison'?enqueueComparison:enqueuePlot,job=await enqueue(materials,queue,command,jobId,{sourceAccess,comparisonAccess,signal});worker.wake();return {job};}
  case 'dataset-jobs':{const {queue}=await jobService();return datasetJobs(materials,queue,data.recordId,{cursor:data.cursor??null});}

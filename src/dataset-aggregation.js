@@ -1,3 +1,5 @@
+import {datasetColumnCount,selectedDatasetColumns,assertDatasetScalars} from './dataset-selected-columns.js';
+import {datasetColumnPosition,datasetCell} from './web/dataset-column-selection.js';
 import {randomUUID} from 'node:crypto';
 import {AppError} from './errors.js';
 import {scratchIterator} from './scratch-iterator.js';
@@ -16,13 +18,13 @@ import {AggregationWork,aggregationWorkFile} from './dataset-aggregation-work.js
 import messages from './web/locales/en/datasetAggregation.json' with {type:'json'};
 const fail=(code='DATASET_AGGREGATION')=>{throw new AppError(code);};
 const rational=v=>exactRational(v,'rational');
-async function* sourceRows(m,ref,signal,start=null){
+async function* sourceRows(m,ref,signal,start=null,columns){
  const doc=await m.read(ref);
  if(start&&start.page>=m.datasetPageCount(doc))fail('MATERIAL_MISSING');
  for(let page=start?.page??0;page<m.datasetPageCount(doc);page++){
-  signal?.throwIfAborted();const data=await m.retainedDatasetPage(doc,page);
+  signal?.throwIfAborted();const data=await m.retainedDatasetPage(doc,page,{columns});
   if(start&&page===start.page&&start.row>=data.rows.length)fail('MATERIAL_MISSING');
-  for(let row=start&&page===start.page?start.row+1:0;row<data.rows.length;row++)yield {value:data.rows[row],page,row};
+  for(let row=start&&page===start.page?start.row+1:0;row<data.rows.length;row++)yield {value:assertDatasetScalars(data.rows[row]),page,row};
  }
 }
 export class DatasetAggregation{
@@ -30,16 +32,17 @@ export class DatasetAggregation{
  async validate(command){
   const a=command.aggregation;
   if(!validAggregation(a)||typeof command.title!=='string'||!command.title.trim()||command.title.length>300||command.id!==undefined&&!researchId(command.id)||command.expectedRevision!==undefined&&command.expectedRevision!==null&&!revisionId(command.expectedRevision)||['calculation','baseDataset','columns','exclusions','columnChanges','sourceMapping','nativeMapping','artifact'].some(k=>command[k]!==undefined))fail();
-  await this.materials.assertOwner(command.recordId);const source=await this.materials.datasetColumns(await this.materials.read(a.source));if(!validAggregation(a,source.length))fail();
-  const columns=a.keys.map(i=>source[i]),names=new Set(columns.map(c=>c.name));
-  if(a.keys.some((index,k)=>a.keySemantics?.[k]==='numeric'&&['text','unsupported'].includes(source[index].representation)))fail();
+  await this.materials.assertOwner(command.recordId);const doc=await this.materials.read(a.source);if(!validAggregation(a,datasetColumnCount(doc)))fail();
+  const selection=await selectedDatasetColumns(this.materials,doc,[...new Set([...a.keys,...a.values.map(v=>v.column)])]),source=selection.columns,column=i=>source[selection.indices.indexOf(i)];
+  const columns=a.keys.map(i=>column(i)),names=new Set(columns.map(c=>c.name));
+  if(a.keys.some((index,k)=>a.keySemantics?.[k]==='numeric'&&['text','unsupported'].includes(column(index).representation)))fail();
   for(const value of a.values){
-   const c=source[value.column];if(names.has(value.name)||value.operation!=='count'&&['text','unsupported'].includes(c.representation))fail();names.add(value.name);
+   const c=column(value.column);if(names.has(value.name)||value.operation!=='count'&&['text','unsupported'].includes(c.representation))fail();names.add(value.name);
    const {representation,radix}=resultContext(value.output,value.operation);
    columns.push({...defaultColumn({label:value.name}),representation,radix,unit:value.operation==='count'?'':c.unit,quantity:{origin:'derived',conversion:null,calibration:c.quantity?.calibration??null}});
   }
   if(command.id){const current=await this.materials.current(command.id);if((current?.revision??null)!==(command.expectedRevision??null)||current&&(current.recordId!==command.recordId||current.kind!=='dataset'))fail('MATERIAL_CHANGED');}
-  return {columns,source};
+  return {columns,source,indices:selection.indices};
  }
  rows(command,schema,options={}){
   const m=this.materials,a=command.aggregation;
@@ -52,10 +55,10 @@ export class DatasetAggregation{
     phase=next;
    };
    if(work.saved&&phase==='input')await options.progress?.({stage:messages.groupingStage,done:order,total:options.total});
-   if(phase==='input')for await(const {value:row,page, row:sourceRow}of sourceRows(m,a.source,options.signal,last)){
+   if(phase==='input')for await(const {value:row,page, row:sourceRow}of sourceRows(m,a.source,options.signal,last,schema.indices)){
     options.signal?.throwIfAborted();const key=aggregationKey(row,schema.source,a.keys,a.keySemantics);
     let index=await work.get('key:'+key),group;
-    if(index===undefined){if(!Number.isSafeInteger((groups+1)*a.values.length))fail('DATASET_AGGREGATION_LIMIT');index=groups++;await work.put('key:'+key,index);group={key,cells:a.keys.map(i=>row.cells[i]),valueKinds:a.keys.map(i=>row.valueKinds?.[i]??'string'),values:a.values.map(()=>({included:0,excluded:0,missing:0,total:0,value:null}))};}
+    if(index===undefined){if(!Number.isSafeInteger((groups+1)*a.values.length))fail('DATASET_AGGREGATION_LIMIT');index=groups++;await work.put('key:'+key,index);group={key,cells:a.keys.map(i=>datasetCell(row,i)),valueKinds:a.keys.map(i=>row.valueKinds?.[datasetColumnPosition(row,i)]??'string'),values:a.values.map(()=>({included:0,excluded:0,missing:0,total:0,value:null}))};}
     else group=await work.get('group:'+index);
     if(options.retainMembers){
      group.members??={count:0,buffer:[]};group.members.buffer.push({page,row:sourceRow});group.members.count++;
@@ -64,9 +67,9 @@ export class DatasetAggregation{
     for(const [i,s]of a.values.entries()){
      const state=group.values[i];state.total++;
      if(row.excluded){state.excluded++;continue;}
-     if(aggregationPresence(row,schema.source[s.column],s.column)!=='value'){state.missing++;if(a.missing==='error')fail('DATASET_AGGREGATION_MISSING');continue;}
+     if(aggregationPresence(row,schema.source[schema.indices.indexOf(s.column)],s.column)!=='value'){state.missing++;if(a.missing==='error')fail('DATASET_AGGREGATION_MISSING');continue;}
      state.included++;if(s.operation==='count')continue;
-     const column=schema.source[s.column],value=rationalText(exactRational(row.cells[s.column],column.representation,column.radix));
+     const column=schema.source[schema.indices.indexOf(s.column)],value=rationalText(exactRational(datasetCell(row,s.column),column.representation,column.radix));
      if(s.operation==='median'){median.add(index*a.values.length+i,value);await median.flush();}
      else if(state.value===null)state.value=value;
      else if(['mean','sum'].includes(s.operation))state.value=sum(state.value,value);
@@ -141,23 +144,24 @@ export async function clearAggregationWork(workspace,id){
 // Membership is reconstructed from the immutable source revision and retained
 // group keys, not today's data. Paging never truncates a group's provenance.
 export async function inspectAggregation(materials,cell,selector,{offset=0,signal}={}){
- const a=cell.doc.content.aggregation,source=await materials.datasetColumns(await materials.read(a.source));if(!validAggregation(a,source.length))fail('MATERIAL_MISSING');
+ const a=cell.doc.content.aggregation,doc=await materials.read(a.source);if(!validAggregation(a,datasetColumnCount(doc)))fail('MATERIAL_MISSING');
+ const selection=await selectedDatasetColumns(materials,doc,[...new Set([...a.keys,...a.values.map(v=>v.column)])]),source=selection.columns;
  const key=cell.row.locator?.key,metric=selector.column-a.keys.length,column=metric<0?a.keys[selector.column]:a.values[metric]?.column;
  if(typeof key!=='string')fail('MATERIAL_MISSING');
  if(column===undefined)fail();let matched=0;const members=[],limit=16;
  if(cell.row.aggregationMembers){
   const context=await aggregationMemberContext(materials,cell.doc);
   for await(const item of aggregationMemberRows(materials,context,cell.row,{offset,limit,signal})){
-   const row=item.value,presence=aggregationPresence(row,source[column],column);
-   members.push({source:{ref:a.source,selector:{kind:'cell',page:item.page,row:item.row,column}},value:row.cells[column],presence,status:row.excluded?'excluded':presence!=='value'?'missing':'included',reason:row.excluded??null});
+   const row=item.value,presence=aggregationPresence(row,source[selection.indices.indexOf(column)],column);
+   members.push({source:{ref:a.source,selector:{kind:'cell',page:item.page,row:item.row,column}},value:datasetCell(row,column),presence,status:row.excluded?'excluded':presence!=='value'?'missing':'included',reason:row.excluded??null});
   }
   return {source:a.source,operation:metric<0?'key':a.values[metric].operation,note:a.note,counts:metric<0?null:cell.row.aggregation?.[metric],members,offset,previous:offset?Math.max(0,offset-limit):null,next:offset+members.length<cell.row.aggregationMembers.count?offset+members.length:null};
  }
- for await(const item of sourceRows(materials,a.source,signal)){
+ for await(const item of sourceRows(materials,a.source,signal,null,selection.indices)){
   signal?.throwIfAborted();if(aggregationKey(item.value,source,a.keys,a.keySemantics)!==key)continue;
   if(matched++<offset)continue;if(members.length===limit)break;
-  const row=item.value,presence=aggregationPresence(row,source[column],column);
-  members.push({source:{ref:a.source,selector:{kind:'cell',page:item.page,row:item.row,column}},value:row.cells[column],presence,status:row.excluded?'excluded':presence!=='value'?'missing':'included',reason:row.excluded??null});
+  const row=item.value,presence=aggregationPresence(row,source[selection.indices.indexOf(column)],column);
+  members.push({source:{ref:a.source,selector:{kind:'cell',page:item.page,row:item.row,column}},value:datasetCell(row,column),presence,status:row.excluded?'excluded':presence!=='value'?'missing':'included',reason:row.excluded??null});
  }
  return {source:a.source,operation:metric<0?'key':a.values[metric].operation,note:a.note,counts:metric<0?null:cell.row.aggregation?.[metric],members,offset,previous:offset?Math.max(0,offset-limit):null,next:matched>offset+members.length?offset+members.length:null};
 }

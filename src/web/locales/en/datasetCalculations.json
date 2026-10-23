@@ -97,5 +97,14 @@
  "investigationId":"Investigation identity",
  "investigationRevision":"Investigation revision",
  "calibrationId":"Calibration identity",
- "calibrationRevision":"Calibration revision"
+ "calibrationRevision":"Calibration revision",
+ "columnWindow":"Columns {first}?{last} of {total}. Selected columns remain available.",
+ "previousColumns":"Previous columns",
+ "nextColumns":"Next columns",
+ "retainedColumns":"Input columns to retain",
+ "projectionHelp":"Choose the input columns included in this calculation. Up to 256 input and result columns can be retained per calculation. Other source columns remain unchanged.",
+ "projectionOrder":"Retained source column order: {columns}",
+ "firstColumn":"First column in page",
+ "goToColumns":"Go to columns",
+ "invalidColumn":"Choose a column number within this dataset."
 }

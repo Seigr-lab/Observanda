@@ -1,14 +1,16 @@
 // Each retained group pins a sequence of source positions. Later inspection
 // seeks that sequence directly; it never rescans preceding source rows.
+import {datasetColumnCount,selectedDatasetColumns,assertDatasetScalars} from './dataset-selected-columns.js';
 import {AppError} from './errors.js';
 import {validAggregation,aggregationKey} from './web/dataset-aggregation-model.js';
 const fail=()=>{throw new AppError('MATERIAL_MISSING');};
 export async function aggregationMemberContext(materials,doc){
- const recipe=doc.content.aggregation,source=await materials.read(recipe.source),columns=await materials.datasetColumns(source);
- if(!validAggregation(recipe,columns.length))fail();
+ const recipe=doc.content.aggregation,source=await materials.read(recipe.source);
+ if(!validAggregation(recipe,datasetColumnCount(source)))fail();
+ const selection=await selectedDatasetColumns(materials,source,[...new Set([...recipe.keys,...recipe.values.map(v=>v.column)])]),columns=selection.columns;
  const index=doc.content.aggregationMembersIndex;materials.sequences.validate(index);
  if(index.kind!=='aggregation-members'||index.count!==source.content.rowCount)fail();
- return {recipe,source,columns,index,cachedPage:null,cachedData:null,memberPage:null};
+ return {recipe,source,columns,indices:selection.indices,index,cachedPage:null,cachedData:null,memberPage:null};
 }
 export async function* aggregationMemberRows(materials,context,row,{offset=0,limit=null,signal}={}){
  const members=row.aggregationMembers;
@@ -28,9 +30,9 @@ export async function* aggregationMemberRows(materials,context,row,{offset=0,lim
     !Number.isSafeInteger(position.row)||position.row<0||previous&&(position.page<previous.page||position.page===previous.page&&position.row<=previous.row))fail();
    previous=position;
    if(at++<offset)continue;
-   if(context.cachedPage!==position.page){context.cachedData=await materials.retainedDatasetPage(context.source,position.page);context.cachedPage=position.page;}
+   if(context.cachedPage!==position.page){context.cachedData=await materials.retainedDatasetPage(context.source,position.page,{columns:context.indices});context.cachedPage=position.page;}
    const value=context.cachedData.rows[position.row];
-   if(!value||aggregationKey(value,context.columns,context.recipe.keys,context.recipe.keySemantics)!==row.locator.key)fail();
+   if(!value||aggregationKey(assertDatasetScalars(value),context.columns,context.recipe.keys,context.recipe.keySemantics)!==row.locator.key)fail();
    yield {...position,value};
   }
  }

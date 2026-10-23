@@ -55,7 +55,7 @@ export function schemaReferences(column){return [column.quantity?.conversion,col
 export function validLocator(source){
  if(!keys(source,['ref','selector'])||!measurementRef(source.ref))return false;const s=source.selector;
  if(!s)return false;
- if(source.ref.kind==='dataset')return keys(s,['kind','page','row','column'])&&s.kind==='cell'&&uint(s.page)&&uint(s.row)&&s.row<256&&uint(s.column)&&s.column<256;
+ if(source.ref.kind==='dataset')return keys(s,['kind','page','row','column'])&&s.kind==='cell'&&uint(s.page)&&uint(s.row)&&s.row<256&&uint(s.column);
  if(source.ref.kind!=='artifact')return keys(s,['kind'])&&s.kind==='whole';
  if(s.kind==='whole')return keys(s,['kind']);
  if(s.kind==='bytes')return keys(s,['kind','offset','length','nativeId'])&&uint(s.offset)&&uint(s.length)&&s.length>0&&uint(s.offset+s.length)&&(s.nativeId===undefined||text(s.nativeId,500));

@@ -119,10 +119,10 @@ test('decimal precision policy and single-step approximation retain the exact so
  assert.deepEqual((await restored.read(result.ref)).content,retained.content);
  assert.deepEqual((await restored.datasetRows(dataset)).map(r=>r.cells[1]),spellings);
 });
-test('context crosses byte-bounded dataset page edges without traversing unrelated pages',async t=>{
- const f=await fixture(t),m=f.materials,artifact=await f.upload('wide-records.csv',Buffer.from('Value,Payload\n'+Array.from({length:18},(_,i)=>i+','+'x'.repeat(140000)).join('\n'))),dataset=await m.dataset({recordId:f.recordId,title:'Large rows',artifact});
+test('context crosses dataset page edges without traversing unrelated pages',async t=>{
+ const f=await fixture(t),m=f.materials,artifact=await f.upload('wide-records.csv',Buffer.from('Value,Payload\n'+Array.from({length:66},(_,i)=>i+','+'x'.repeat(5000)).join('\n'))),dataset=await m.dataset({recordId:f.recordId,title:'Large rows',artifact});
  const doc=await m.read(dataset),first=await m.retainedDatasetPage(doc,0),reads=[],original=m.retainedDatasetPage;
- m.retainedDatasetPage=async function(d,p){reads.push(p);return original.call(this,d,p);};
+ m.retainedDatasetPage=async function(d,p,options){reads.push(p);return original.call(this,d,p,options);};
  const selected=await m.measurements.inspect({ref:dataset,selector:{kind:'cell',page:0,row:first.rows.length-1,column:0}});
  assert.ok(selected.surrounding.some(r=>r.page===1));assert.equal(selected.surrounding.length,5);assert.ok(reads.every(p=>p===0||p===1));
 });

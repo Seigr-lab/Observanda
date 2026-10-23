@@ -67,7 +67,7 @@ export class MigrationImport{
   const batch=await this.store.bound(command);if(command.index>=batch.count)throw new AppError('INVALID');
   const row=await this.store.object(batch.id,command.index);if(row.reviewEdit!==batch.edit)return {...row,prepared:null,problem:null};
   if(row.prepared?.dataset){
-   const doc={kind:'dataset',content:row.prepared.dataset.content},schema=await this.materials.retainedSchemaPage(doc,{limit:8}),page=await this.materials.retainedDatasetPage(doc,0);
+   const doc={kind:'dataset',content:row.prepared.dataset.content},schema=await this.materials.retainedSchemaPage(doc,{limit:8}),page=await this.materials.retainedDatasetPage(doc,0,{columns:schema.items.map((_,i)=>i)});
    row.datasetPreview={columns:schema.items,columnCount:schema.total,rowCount:page.rowCount,rows:page.rows.slice(0,20).map(r=>({order:r.order,cells:r.cells.slice(0,8),valueKinds:r.valueKinds?.slice(0,8)}))};
   }
   return row;

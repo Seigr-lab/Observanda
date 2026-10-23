@@ -1,4 +1,4 @@
-import {validRetainedTable,retainedTableView} from './retained-table-model.js';
+import {validRetainedTable,validTableSelection,retainedTableView} from './retained-table-model.js';
 import {researchId} from './research-reference.js';
 import {measurementRef} from './measurement-model.js';
 import {analysisTextValue} from './analysis-model.js';
@@ -9,7 +9,7 @@ export const RESULT_KINDS=['conclusion','number','table','comparison','figure'];
 export function validResultStatement(s,{draft=false}={}){
  if(!s)return false;const table=s.kind==='table'&&s.table!==undefined,selection=draft&&s.kind==='table'&&s.tableSelection!==undefined,keys=['basis','id','kind','limitations','source','text','title',...(s.kind==='figure'?['figureId']:[]),...(table?['table']:[]),...(selection?['tableSelection']:[])];
  if(Object.keys(s).sort().join()!==keys.sort().join()||!researchId(s.id)||(s.kind==='figure'&&!researchId(s.figureId)&&!(draft&&s.figureId===''))||!RESULT_KINDS.includes(s.kind)||!['authored','retained'].includes(s.basis)||!analysisTextValue(s.title,300,!draft)||!analysisTextValue(s.text,10000,!draft)||!analysisTextValue(s.limitations,10000,!draft))return false;
- if(selection){const v=s.tableSelection;if(!v||Object.keys(v).sort().join()!=='columns,count,includeExcluded,offset'||!Array.isArray(v.columns)||v.columns.some(c=>!Number.isSafeInteger(c)||c<0)||!Number.isSafeInteger(v.offset)||!Number.isSafeInteger(v.count)||typeof v.includeExcluded!=='boolean')return false;}
+ if(selection&&!validTableSelection(s.tableSelection,{paged:true}))return false;
  if(table&&(!validRetainedTable(s.table)||s.basis!=='retained'))return false;
  if(s.basis==='authored')return s.source===null&&!table&&!selection;
  if(draft&&s.source===null)return !table;
@@ -24,7 +24,7 @@ export function figureResultView(figure,results,esc){
  return links+missing.map(p=>'<p>'+esc(compositionMessages.missingPanelResult.replace('{panel}',()=>p.label))+'</p>').join('');
 }
 export const resultReferences=v=>(v?.statements??[]).flatMap(s=>s.source?[s.source]:[]);
-export function resultStatementsView(value,esc,{message=k=>messages[k],reference=null,edit=null}={}){
- if(!value?.statements.length)return '';return '<section class="result-statements"><h2>'+esc(message('results'))+'</h2>'+value.statements.map(s=>'<section id="result-'+esc(s.id)+'"><h3>'+esc(s.title)+'</h3><p>'+esc(message(s.kind))+' · '+esc(message(s.basis))+'</p><div class="result-statement-text">'+esc(s.text)+'</div>'+(s.table?retainedTableView(s.table,esc):'')+'<p>'+esc(s.limitations)+'</p>'+(s.source?(reference?reference(s.source):'<p>'+esc(message('sourcePrivate'))+'</p>'):'')+(edit?edit(s):'')+'</section>').join('')+'</section>';
+export function resultStatementsView(value,esc,{message=k=>messages[k],reference=null,edit=null,workspaceId,tableView=null}={}){
+ if(!value?.statements.length)return '';return '<section class="result-statements"><h2>'+esc(message('results'))+'</h2>'+value.statements.map(s=>'<section id="result-'+esc(s.id)+'"><h3>'+esc(s.title)+'</h3><p>'+esc(message(s.kind))+' · '+esc(message(s.basis))+'</p><div class="result-statement-text">'+esc(s.text)+'</div>'+(s.table?'<div data-result-table-id="'+esc(s.id)+'"'+(s.table.version===3&&s.source&&!s.source.withheld?' data-retained-ref="'+esc(JSON.stringify(s.source.workspaceId||!workspaceId?s.source:{...s.source,workspaceId}))+'" data-retained-table="'+esc(JSON.stringify(s.table))+'"':'')+'>'+(tableView?tableView(s):retainedTableView(s.table,esc))+'</div>':'')+'<p>'+esc(s.limitations)+'</p>'+(s.source?(reference?reference(s.source):'<p>'+esc(message('sourcePrivate'))+'</p>'):'')+(edit?edit(s):'')+'</section>').join('')+'</section>';
 }
-export function projectResults(value){if(!value)return undefined;return {...value,statements:value.statements.map(s=>({...s,source:s.source?{withheld:true}:null,...(s.table?{table:{...s.table,rows:s.table.rows.map(r=>({...r,cells:r.cells.map((v,i)=>r.presence[i]==='value'?v:'')})),selection:{includeExcluded:s.table.selection.includeExcluded}}}:{})}))};}
+export function projectResults(value){if(!value)return undefined;return {...value,statements:value.statements.map(s=>({...s,source:s.source?{withheld:true}:null,...(s.table?{table:s.table.version===3?{version:3,selection:{includeExcluded:s.table.selection.includeExcluded}}:{...s.table,rows:s.table.rows.map(r=>({...r,cells:r.cells.map((v,i)=>r.presence[i]==='value'?v:'')})),selection:{includeExcluded:s.table.selection.includeExcluded}}}:{})}))};}

@@ -1,3 +1,4 @@
+import {hasPagedResultTables} from './retained-tables.js';
 import {hasNestedAttemptContinuations} from './web/attempt-model.js';
 import {validPreparationEdit,attemptValueField} from './web/record-attempt-value.js';
 import {projectRecordOwnerDraft} from './record-owner-drafts.js';
@@ -15,7 +16,7 @@ import {transferredDraftChanges} from './record-draft-content.js';
 import {validDraftDocument} from './record-draft-document.js';
 import {validWritingBase} from './web/record-writing-model.js';
 import {validRecordValueBase} from './web/record-value-model.js';
-import {catalogueFormat,catalogueRequiresNestedAttemptCollections,requireNestedAttemptCollections,requireDraftEdits} from './catalogue-format.js';
+import {catalogueFormat,catalogueRequiresNestedAttemptCollections,requireNestedAttemptCollections,requireDraftEdits,requirePagedResearchTables,catalogueRequiresPagedResearchTables} from './catalogue-format.js';
 import {validFigureCopies} from './web/record-figure-copy-model.js';
 
 const id=value=>typeof value==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(value);
@@ -55,6 +56,7 @@ export class ResearchDrafts {
     }else if([3,4].includes(draft?.formatVersion)){
       if(!keys(draft,['formatVersion','id','workspaceId','updatedAt','count','titles','base','content',...(draft.formatVersion===4?['document']:[])])||draft.formatVersion===4&&!validDraftDocument(draft.document)||draft.id!==idValue||!id(draft.workspaceId)||!text(draft.updatedAt)||draft.count!==1||!Array.isArray(draft.titles)||draft.titles.length!==1||!text(draft.titles[0])||draft.titles[0].length>160||!keys(draft.base,['recordId','revision'])||!id(draft.base.recordId)||!revision(draft.base.revision)||!new RecordDraftChunks(this.workspace,idValue).valid(draft.content))throw new AppError('FORMAT');
     }else if(!keys(draft,['formatVersion','id','workspaceId','updatedAt','changes'])||![1,2].includes(draft.formatVersion)||draft.id!==idValue||!id(draft.workspaceId)||!text(draft.updatedAt)||!validChanges(draft.changes,draft.formatVersion===2))throw new AppError('FORMAT');
+    if(draft.changes?.some(change=>hasPagedResultTables(change.record?.results)||hasPagedResultTables(change.base?.results))&&(await this.workspace.storageKind()!=='catalogue'||!await this.workspace.catalogue(async store=>catalogueRequiresPagedResearchTables(await catalogueFormat(store.db)))))throw new AppError('CATALOGUE_DAMAGED');
     if(draft.changes?.some(change=>hasNestedAttemptContinuations(change.record?.attempt)||hasNestedAttemptContinuations(change.base?.attempt))&&!await this.workspace.catalogue(async store=>catalogueRequiresNestedAttemptCollections(await catalogueFormat(store.db))))throw new AppError('CATALOGUE_DAMAGED');
     let result={draft,revision:digest(raw)};
     if(indexed)await this.index.verifySelected(result,digest(serialize({text:raw})));
@@ -115,6 +117,7 @@ export class ResearchDrafts {
       if((previous?.revision??null)!==command.expectedRevision)throw new AppError('DRAFT_CHANGED');
       if(compact)await researchDraftBase(this.workspace,book.id,command.changes[0],{read:false});
       if(indexed)await this.workspace.catalogue(store=>(command.changes.some(change=>hasNestedAttemptContinuations(change.record?.attempt)||hasNestedAttemptContinuations(change.base?.attempt))?requireNestedAttemptCollections:requireDraftEdits)(store.db));
+      if(command.changes.some(change=>hasPagedResultTables(change.record?.results)||hasPagedResultTables(change.base?.results))){if(!indexed)throw new AppError('FORMAT');await this.workspace.catalogue(store=>requirePagedResearchTables(store.db));}
       await this.workspace.writeMetadata('.observanda/drafts/'+command.id+'.json',raw);
       if(indexed){if(previous)await this.index.removeLocked(previous.draft);await this.index.putLocked({draft,revision:digest(raw)},digest(serialize({text:raw})));}
       await new RecordDraftChunks(this.workspace,command.id).clear();

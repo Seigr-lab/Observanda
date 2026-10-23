@@ -1,0 +1,33 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,rm} from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {sampleNotebook} from '../src/sample.js';
+import {ResearchMaterials} from '../src/research-materials.js';
+import {Workspace} from '../src/storage.js';
+import {clearVault} from '../src/encryption.js';
+import {blankAnalysisMethod,blankAnalysisSource} from '../src/web/analysis-model.js';
+import {createFigure} from '../src/web/figure-model.js';
+import {selectedNumericalDataset} from './fixtures/selected-numerical-dataset.js';
+test('wide retained numerical selections survive calculation, aggregation, comparison, plots and reopen',{timeout:180000},async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-selected-numerical-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),m=new ResearchMaterials(f.workspace),recordId=book.entries[0].id;
+ t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ const {source}=await selectedNumericalDataset(m,recordId),doc=await m.read(source);assert.equal(doc.content.datasetFormat,3);assert.equal(doc.content.schemaIndex.count,300);
+ const originalColumns=m.datasetColumns.bind(m);m.datasetColumns=async value=>{assert.ok((value.content.schemaIndex?.count??value.content.columns?.length)<=256,'wide schema materialized');return originalColumns(value);};
+ const originalPage=m.retainedDatasetPage.bind(m);m.retainedDatasetPage=async(value,page,options)=>{if(value.id===doc.id)assert.ok(Array.isArray(options?.columns)||options?.metadataOnly,'whole wide row read');return originalPage(value,page,options);};
+ const calculation={version:2,source,projection:[0,299],view:'observations',joins:[{dataset:source,projection:[0,298],keys:[{left:0,right:0}],where:null,unmatched:'error'}],steps:[{name:'Difference',unit:'',operation:'subtract',left:{column:3},right:{column:1},condition:null}],where:null,selectionReason:'',calibration:null,note:''};
+ const derived=await m.dataset({recordId,title:'Projected difference',calculation}),derivedDoc=await m.read(derived),data=await m.retainedDatasetPage(derivedDoc,0,{columns:[4]});assert.deepEqual(data.rows.map(r=>r.cells),[['10/1'],['10/1']]);assert.deepEqual(derivedDoc.content.calculation,calculation);
+ const inspection=await m.measurements.inspect({ref:derived,selector:{kind:'cell',page:0,row:0,column:4}});assert.ok(inspection);
+ const sourceCells=(await m.retainedDatasetPage(derivedDoc,0,{columns:[1,3]})).rows[0].cellSources;assert.deepEqual(sourceCells.map(v=>v[0].selector.column),[299,298]);
+ await assert.rejects(()=>m.previewDataset({recordId,title:'Implicit long cell',calculation:{...calculation,projection:[1],joins:[],steps:[]}}),{code:'DATASET_CELL_SCALAR_REQUIRED'});
+ const aggregation={version:1,source,keys:[2],values:[{column:299,operation:'mean',name:'Mean'}],missing:'skip',note:''},grouped=await m.dataset({recordId,title:'Selected mean',aggregation}),groupedDoc=await m.read(grouped);
+ assert.deepEqual((await m.retainedDatasetPage(groupedDoc,0)).rows[0].cells,['group','3/1']);const membership=await m.measurements.inspect({ref:grouped,selector:{kind:'cell',page:0,row:0,column:1}});assert.equal(membership.aggregation.members[0].source.selector.column,299);
+ const input=blankAnalysisSource(source);input.columns.value=299;input.columns.condition=2;const comparison=await m.comparisons.save({recordId,title:'Wide comparison',tool:'Selected test',version:'1',method:{...blankAnalysisMethod(),unavailable:'Synthetic source',uncertainty:'Exact integers',limitations:'Disposable fixture'},comparison:{version:1,sources:[input],ordering:'source',expected:{dataset:source,source:0,key:0,actualKey:0,value:299,rationale:'Same exact retained input'}}});
+ const compared=await m.read(comparison);assert.equal(compared.content.summary.verification.correct,2);const observations=await m.comparisons.page({ref:comparison,view:'all'});assert.equal(observations.items[0].locator.selector.column,299);
+ const mapping={x:0,xKind:'category',group:null,values:[{column:299,error:null}],kind:'bar',operation:'raw',order:'source'},plotted=await m.plot({recordId,title:'Selected plot',dataset:source,mapping,base:createFigure()}),plot=await m.read(plotted.ref);assert.equal(plot.content.version,'7');assert.deepEqual(plot.content.denominator.columnIndices,[0,299]);
+ const reopened=new ResearchMaterials(new Workspace(f.workspace.root,f.vault));assert.deepEqual((await reopened.read(derived)).content.calculation,calculation);assert.deepEqual((await reopened.retainedDatasetPage(await reopened.read(source),0,{columns:[299]})).rows.map(r=>r.cells),[['2'],['4']]);await reopened.verify();
+ // The original v1 command still means all input columns for a bounded dataset.
+ const v1={version:1,source:derived,view:'observations',joins:[],steps:[],where:null,selectionReason:'',calibration:null,note:''},legacy=await reopened.dataset({recordId,title:'Legacy complete input',calculation:v1});assert.equal((await reopened.read(legacy)).content.schemaIndex.count,5);
+});

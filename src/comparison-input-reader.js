@@ -42,11 +42,13 @@ export function createComparisonInputReader(localMaterials,{workspaceId,access,s
   });},
   datasetPageCount(doc){source(doc);return localMaterials.datasetPageCount(doc);},
   datasetColumns(doc){return use(source(doc),materials=>materials.datasetColumns(doc));},
-  retainedDatasetPage(doc,page){return use(source(doc),materials=>materials.retainedDatasetPage(doc,page));},
-  async *iterateDataset(reference){
+  datasetColumn(doc,index){return use(source(doc),materials=>materials.datasetColumn(doc,index));},
+  async *iterateDatasetColumns(doc){for(let offset=0;;){const page=await use(source(doc),materials=>materials.retainedSchemaPage(doc,{offset,limit:64}));yield* page.items;if(page.next===null)return;offset=page.next;}},
+  retainedDatasetPage(doc,page,options){return use(source(doc),materials=>materials.retainedDatasetPage(doc,page,options));},
+  async *iterateDataset(reference,options){
    if(reference?.kind!=='dataset')throw new AppError('MATERIAL_INVALID');
    const doc=await reader.read(reference);let count=0;
-   for(let page=0;page<reader.datasetPageCount(doc);page++)for(const row of (await reader.retainedDatasetPage(doc,page)).rows){check();count++;yield row;}
+   for(let page=0;page<reader.datasetPageCount(doc);page++)for(const row of (await reader.retainedDatasetPage(doc,page,options)).rows){check();count++;yield row;}
    if(count!==doc.content.rowCount)throw new AppError('MATERIAL_MISSING');
   },
   current(reference,{recordHead}={}){return use(reference,async(materials,canonical)=>{

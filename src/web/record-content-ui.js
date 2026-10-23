@@ -1,3 +1,4 @@
+import {retainedTableAction} from './retained-table-reader.js';
 import {bindReadingTables} from './record-reading-tables.js';
 import {ownedAssetURL} from './project-context.js';
 import {t} from './i18n/index.js';
@@ -83,7 +84,7 @@ export function recordContentUI({state,api,esc,field,render,report,refresh,editW
   fieldsHtml.attachments=mediaActions.add()+recordHeaderControls('attachments',reading.collections?.attachments,esc,busy)+recordMediaControls(record,esc,busy,mediaActions.controls,{assetUrl});
   }else{
    fieldsHtml.attempt=attemptView(record.attempt,esc,{reference:attemptReference,window:reading.attemptWindow,navigation:name=>recordHeaderControls(name,reading.collections?.[name],esc,busy)});
-   fieldsHtml.results=(resultFigure?'<p>'+esc(text('resultsForFigure'))+'</p>'+button('allResults','results-all',busy):'')+recordHeaderControls('results',reading.collections?.results,esc,busy)+'<div class="record-result-values">'+resultStatementsView(record.results,esc,{reference:resultReference})+'</div>';
+   fieldsHtml.results=(resultFigure?'<p>'+esc(text('resultsForFigure'))+'</p>'+button('allResults','results-all',busy):'')+recordHeaderControls('results',reading.collections?.results,esc,busy)+'<div class="record-result-values">'+resultStatementsView(record.results,esc,{reference:resultReference,workspaceId:reading.workspaceId})+'</div>';
   }
   const sections=()=>'<section class="record-sections">'+navigation()+record.sections.map((s,i)=>'<section id="record-section-'+s.id+'" tabindex="-1"><div class="section-bar"><h'+(editing?'3':'2')+'>'+esc(s.title)+'</h'+(editing?'3':'2')+'>'+(editing?'<button type="button" class="button" data-action="writing-edit" data-section="'+s.id+'">'+esc(text('editSection'))+'</button>':'')+'</div>'+(editing?sectionActions.controls(s,reading.sections.offset+i,reading.sections.total):'')+renderProse(s.body,{figure})+'</section>').join('')+'</section>';
   if(editing)return controls+recordEditingView({record,esc,status,busy,details:recordValueControls(record,esc,detailField),summary:'<button type="button" class="button" data-action="writing-edit">'+esc(text('editSummary'))+'</button><div class="prose">'+renderProse(record.body,{figure})+'</div>',sections:sectionActions.add()+sections(),fields:fieldsHtml,activity:before({readonly:false}),evidence:after({readonly:false}),relations:recordHeaderControls('relations',reading.collections?.relations,esc,busy)+links(record,{readonly:false})});
@@ -107,6 +108,7 @@ export function recordContentUI({state,api,esc,field,render,report,refresh,editW
   else if(state.recordSection){const id=resultStatementAnchor(state.recordSection)??(state.recordSection.startsWith('record-')?state.recordSection:'record-section-'+state.recordSection),node=document.getElementById(id);if(node)node.tabIndex=-1;node?.focus({preventScroll:true});node?.scrollIntoView({block:'nearest'});}
  }
  async function action(control){
+  if(await retainedTableAction(control,{api,esc}))return true;
   if(control.dataset.action==='content-edit-area'){
    const area=[...document.querySelectorAll('[data-record-edit-area]')].find(node=>node.dataset.recordEditArea===control.dataset.area);
    if(area){state.recordSection=null;area.focus({preventScroll:true});area.scrollIntoView({block:'start'});}return true;
