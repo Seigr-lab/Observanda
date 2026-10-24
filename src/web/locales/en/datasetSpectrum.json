@@ -87,5 +87,10 @@
   "role-coefficient": "Complex coefficient",
   "role-normalized-squared-magnitude": "Normalized squared magnitude",
   "role-coefficient-real": "Real coefficient",
-  "role-coefficient-imaginary": "Imaginary coefficient"
+  "role-coefficient-imaginary": "Imaginary coefficient",
+  "executionUpgrade": "Upgrade to explicit numerical job limits",
+  "executionLegacy": "This saved recipe uses version 1 numerical resource accounting. Keep that interpretation, or explicitly upgrade this draft to version 2. Earlier results keep their saved recipe.",
+  "executionVersion": "Saved numerical accounting: recipe version {version}.",
+  "executionCalculationBounds": "Each slice must also fit the maximum operations and milliseconds in the saved calculation policy.",
+  "executionCalculationInvalid": "The numerical slice exceeds the saved calculation policy. Adjust its maximum operations or active milliseconds, or explicitly revise that calculation policy. Your entries are retained."
 }

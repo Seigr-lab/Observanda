@@ -1,3 +1,4 @@
+import {numericalExecutionMaterial,assertNumericalExecutionFormat} from './numerical-execution-format.js';
 import {DatasetSpectrumResults,SPECTRUM_TOOL} from './dataset-spectrum-results.js';
 import {spectrumMaterial,assertSpectrumFormat} from './dataset-spectrum-format.js';
 import {validSpectrumDescriptor} from './web/dataset-spectrum-model.js';
@@ -215,7 +216,7 @@ export class ResearchMaterials {
   if(axisPermutationMaterial(doc))await assertAxisPermutationFormat(this.workspace);
   if(quantileAggregationMaterial(doc))await assertQuantileAggregationFormat(this.workspace);
   if(tensorValuesMaterial(doc))await assertTensorValuesFormat(this.workspace);
-  if(spectrumMaterial(doc))await assertSpectrumFormat(this.workspace);if(computedCellMaterial(doc))await assertComputedCellFormat(this.workspace);if(coordinateFrameMaterial(doc))await assertCoordinateFrameFormat(this.workspace);if(clockSynchronizationMaterial(doc))await assertClockSynchronizationFormat(this.workspace);if(segmentedClockSynchronizationMaterial(doc))await assertSegmentedClockSynchronizationFormat(this.workspace);
+  if(numericalExecutionMaterial(doc))await assertNumericalExecutionFormat(this.workspace);if(spectrumMaterial(doc))await assertSpectrumFormat(this.workspace);if(computedCellMaterial(doc))await assertComputedCellFormat(this.workspace);if(coordinateFrameMaterial(doc))await assertCoordinateFrameFormat(this.workspace);if(clockSynchronizationMaterial(doc))await assertClockSynchronizationFormat(this.workspace);if(segmentedClockSynchronizationMaterial(doc))await assertSegmentedClockSynchronizationFormat(this.workspace);
   return doc;
  }
  async assertReferenceWorkspace(ref){
@@ -768,7 +769,7 @@ export class ResearchMaterials {
     if(doc.content.tool==='Observanda calculation graph'||[4,5,6,7,8,9,10,11,12,13,14,15].includes(doc.content.calculation?.version))await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresReferencedCalculations}=await import('./catalogue-format.js');if(!catalogueRequiresReferencedCalculations(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
     if(doc.content.spectrum||doc.content.tool===SPECTRUM_TOOL)await new DatasetSpectrumResults(this).verify(doc,{signal});
     if(doc.content.uncertainty||['Observanda uncertainty definition','Observanda statistical uncertainty'].includes(doc.content.tool))await new StatisticalUncertaintyResults(this).verify(doc,{signal});
-    if(doc.content.tool==='Observanda calculation graph'){const {CalculationGraphs}=await import('./calculation-graphs.js');await new CalculationGraphs(this).verify(doc);}
+    if(doc.content.tool==='Observanda calculation graph'){const {CalculationGraphs}=await import('./calculation-graphs.js');await new CalculationGraphs(this).verify(doc,{signal});}
     const comparison=[2,3].includes(doc.content.comparison?.version);
     if(comparison){
      if(doc.kind!=='analysis')fail('CATALOGUE_DAMAGED');
@@ -784,7 +785,7 @@ export class ResearchMaterials {
     if(domainAlgebraMaterial(doc))await assertDomainAlgebraFormat(this.workspace);
     if(measurementScalarMaterial(doc))await assertMeasurementScalarFormat(this.workspace);
     if(ref.kind==='dataset'){
-     await verifyRetainedCalculation(this,doc);
+     await verifyRetainedCalculation(this,doc,{signal});
      if(doc.content.datasetFormat===3)await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresPagedResearchTables}=await import('./catalogue-format.js');if(!catalogueRequiresPagedResearchTables(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
      let checkedUnitFormat=false,checkedClockFormat=false,hasDomains=false,hasTensors=false;for await(const column of this.iterateDatasetColumns(doc)){if(!validColumns([column],1))fail('MATERIAL_MISSING');if(column.coordinateFrame){if(doc.content.coordinateFrames!==1)fail('MATERIAL_MISSING');await assertCoordinateFrameFormat(this.workspace);await validateCoordinateFrameColumn(this,column,{signal,requireAxes:true});}if(column.spectrum){if(doc.content.spectra!==1)fail('MATERIAL_MISSING');await assertSpectrumFormat(this.workspace);}if(column.statisticalUncertainty){if(doc.content.statisticalUncertainties!==1)fail('MATERIAL_MISSING');await assertStatisticalUncertaintyFormat(this.workspace);}if(column.synchronization&&doc.content.clockSynchronization!==1)fail('MATERIAL_MISSING');if(column.synchronization?.version===2){if(doc.content.segmentedClockSynchronization!==1)fail('MATERIAL_MISSING');await assertSegmentedClockSynchronizationFormat(this.workspace);}if(column.computation&&doc.content.approximateComputations!==1)fail('MATERIAL_MISSING');if(measurementScalarPolicies(column)){if(doc.content.scalarPolicies!==1)fail('MATERIAL_MISSING');await assertMeasurementScalarFormat(this.workspace);await resolveScalarDefinitions(this,column,{signal});}if(column.domain?.version===3){hasTensors=true;if(doc.content.tensorValues!==1)fail('MATERIAL_MISSING');await assertTensorValuesFormat(this.workspace);}if(column.representation==='domain'&&!hasDomains){await checkDomainFormat();hasDomains=true;}if(column.quantity?.unitDefinition!==undefined){if(!validQuantity(column.quantity,column.unit))fail('MATERIAL_MISSING');if(!checkedUnitFormat){await checkNumericalFormat();checkedUnitFormat=true;}}if(column.time?.clock?.definition!==undefined){if(!validTime(column.time))fail('MATERIAL_MISSING');if(!checkedClockFormat){await checkClockFormat();checkedClockFormat=true;}}if(column.quantity?.uncertainty!==undefined)await checkIntervalFormat();for(const r of schemaReferences(column))await enqueue(r);}
      if(hasTensors!==(doc.content.tensorValues===1)||doc.content.tensorValues!==undefined&&doc.content.tensorValues!==1)fail('MATERIAL_MISSING');
@@ -792,7 +793,7 @@ export class ResearchMaterials {
      if(doc.content.aggregationMembersIndex&&!doc.content.aggregation)fail('MATERIAL_MISSING');
      const aggregationContext=doc.content.aggregationMembersIndex?await aggregationMemberContext(this,doc):null;let memberOffset=0;
      for await(const row of this.iterateDataset(ref,{metadataOnly:true})){
-      await this.verifyDatasetRow(doc,row,{checkIntervalFormat});
+      signal?.throwIfAborted();await this.verifyDatasetRow(doc,row,{checkIntervalFormat,signal});
       if(aggregationContext){
        if(row.aggregationMembers?.offset!==memberOffset)fail('MATERIAL_MISSING');
        for await(const member of aggregationMemberRows(this,aggregationContext,row,{signal})){void member;}

@@ -25,7 +25,7 @@ export function scalarDefinitionEntries(value){
  synchronization(value?.synchronization,['synchronization']);synchronization(value,[]);if(value?.version===1&&value.kind==='clock-sync-segment'){add(value,[],['validity','lower']);add(value,[],['validity','upper']);}
  if(value?.tool==='Observanda coordinate frame')unit(value.unitDefinition,['unitDefinition']);
  if(value?.tool==='Observanda clock synchronization'){quantity(value.target?.quantity,['target','quantity']);clock(value.target?.time?.clock?.definition,['target','time','clock','definition']);}
- const spectrum=(owner,prefix)=>{if(owner?.version===1&&owner.method==='radix2-fft-v1'){add(owner,prefix,['sampling','step']);add(owner,prefix,['sampling','origin']);unit(owner.sampling?.unitDefinition,[...prefix,'sampling','unitDefinition']);}};spectrum(value,[]);spectrum(value?.spectrum,['spectrum']);
+ const spectrum=(owner,prefix)=>{if([1,2].includes(owner?.version)&&owner.method==='radix2-fft-v1'){add(owner,prefix,['sampling','step']);add(owner,prefix,['sampling','origin']);unit(owner.sampling?.unitDefinition,[...prefix,'sampling','unitDefinition']);}};spectrum(value,[]);spectrum(value?.spectrum,['spectrum']);
  const aggregation=(owner,prefix)=>{if([4,5,6].includes(owner?.version)&&Array.isArray(owner.values))for(const [i,metric]of owner.values.entries())if(metric.operation==='quantile')add(owner,prefix,['values',i,'probability']);};
  aggregation(value,[]);aggregation(value?.aggregation,['aggregation']);
  if(value?.version===1&&value.method==='linear-n-minus-one-v1'&&value.weight)add(value,[],['weight']);

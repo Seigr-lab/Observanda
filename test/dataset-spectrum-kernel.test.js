@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {evaluateSpectrum} from '../src/dataset-spectrum-kernel.js';
+import {evaluateSpectrum,validSpectrumExecutionCursor} from '../src/dataset-spectrum-kernel.js';
+import {randomUUID} from 'node:crypto';
+import {NumericalExecutionBudget,createNumericalExecutionState,reserveNumericalExecution,settleNumericalExecution,recoverNumericalExecution} from '../src/numerical-execution-budget.js';
 import {DatasetResourceBudget} from '../src/dataset-resource-budget.js';
 import {defaultDatasetResourcePolicy} from '../src/web/dataset-resource-policy.js';
 import {defaultStructuredCalculationPolicy} from '../src/web/tools/calculation-policy.js';
@@ -83,4 +85,57 @@ test('dense 16 and 256 samples complete under unchanged defaults, all bins agree
 test('dense 1024 sample refusal reports the unchanged cumulative operation limit before any output',async()=>{
  const own=policy(),budget=new DatasetResourceBudget(own),count=1024,f=fixture(Array.from({length:count},(_,i)=>input((i*73+19)%257-128))),progress=[];
  await assert.rejects(f.run({resourcePolicy:own,calculationPolicy:defaultStructuredCalculationPolicy(),budget,progress:value=>progress.push(value)}),{code:'DATASET_CALCULATION_RESOURCE'});assert.equal(budget.operations,own.resources.maxOperations+1);assert.equal(f.reads.length,count);assert.equal(f.bins.length,0);assert.equal(progress.at(-1).phase,'transform');assert.ok(f.batches.every(([,size])=>size<=32));
+});
+
+
+const executionPolicy=(total=1000000,slice=50000)=>({version:1,scope:'numerical-job',total:{maxOperations:total,maxActiveMilliseconds:30000},slice:{maxOperations:slice,maxActiveMilliseconds:2500}});
+function resumableFixture(inputs,{execution:authored=executionPolicy(),fault,write,parseSource=false}={}){
+ const records=new Map(),reads=[],batches=[],commits=[];let cursor=null,ledger=createNumericalExecutionState('b'.repeat(64),authored),failed=false,currentOptions={};
+ const clone=value=>value===undefined?undefined:structuredClone(value);
+ const execution={get cursor(){return clone(cursor);},async slice(before,callback){
+  assert.deepEqual(before,cursor);const operations=Math.min(authored.slice.maxOperations,authored.total.maxOperations-ledger.consumed.operations),activeMilliseconds=Math.min(authored.slice.maxActiveMilliseconds,Math.floor(authored.total.maxActiveMilliseconds-ledger.consumed.activeMilliseconds));if(operations<1||activeMilliseconds<1)throw Object.assign(Error('No remaining execution allowance'),{code:'DATASET_CALCULATION_RESOURCE'});
+  ledger=reserveNumericalExecution(ledger,{id:randomUUID(),operations,activeMilliseconds});const budget=new NumericalExecutionBudget(ledger,{signal:currentOptions.signal}),staged=new Map();
+  const value=key=>staged.has(key)?staged.get(key):records.get(key),work={get:async key=>clone(value(key)),put:async(key,item)=>{staged.set(key,clone(item));assert.ok(staged.size<=32);},getMany:async keys=>{assert.ok(keys.length<=32);assert.equal(new Set(keys).size,keys.length);batches.push(['get',keys.length]);return new Map([...keys].reverse().filter(key=>value(key)!==undefined).map(key=>[key,clone(value(key))]));},putMany:async entries=>{assert.ok(entries.length<=32);assert.equal(new Set(entries.map(([key])=>key)).size,entries.length);batches.push(['put',entries.length]);for(const[key,item]of entries)staged.set(key,clone(item));assert.ok(staged.size<=32);}};
+  try{const next=await callback({budget,work});if(!failed&&fault?.(before,next,staged)){failed=true;throw Object.assign(Error('Lost process after work before checkpoint'),{simulatedCrash:true});}const settled=settleNumericalExecution(ledger,budget.finish());for(const[key,item]of staged){if(key.startsWith('output:'))assert.equal(records.has(key),false,'A committed output cannot be emitted twice');records.set(key,item);}ledger=settled;cursor=clone(next);commits.push({cursor:clone(cursor),usage:clone(ledger.consumed),staged:staged.size});return clone(next);}
+  catch(error){if(!error.simulatedCrash)ledger=settleNumericalExecution(ledger,budget.finish());throw error;}
+ }};
+ const args={count:inputs.length,read:async(index,{budget})=>{reads.push(index);if(parseSource)budget.run(()=>validatePolicyScalar(inputs[index].real,inputs[index].resourcePolicy,{budget}));return clone(inputs[index]);},write:async(bin,context)=>{assert.ok(context.budget instanceof DatasetResourceBudget);await write?.(bin,context);await context.work.put('output:'+bin.index,bin);}};
+ return {records,reads,batches,commits,args,execution,get cursor(){return clone(cursor);},get ledger(){return clone(ledger);},get bins(){return Array.from({length:inputs.length},(_,index)=>records.get('output:'+index)).filter(Boolean);},recover(){ledger=recoverNumericalExecution(clone(ledger));return clone(ledger);},async run(options={}){currentOptions=options;return evaluateSpectrum(args,{resourcePolicy:policy(),calculationPolicy:defaultStructuredCalculationPolicy(),executionPolicy:authored,execution,...options});}};
+}
+
+test('resumable v2 uses the same arithmetic and produces every v1 scalar and exactness flag',async()=>{
+ for(const count of [1,4,16,256]){const values=Array.from({length:count},(_,i)=>input((i*73+19)%257-128,undefined,policy(),i===count-1?{version:1,kind:'approximate-inputs'}:null)),old=fixture(values),current=resumableFixture(values,{parseSource:true});await old.run({calculationPolicy:defaultStructuredCalculationPolicy()});const summary=await current.run();assert.deepEqual(current.bins,old.bins);assert.equal(summary.version,2);assert.deepEqual(summary.executionPolicy,executionPolicy());assert.equal(summary.approximateInputs,true);assert.equal(summary.count,count);assert.equal(current.cursor.phase,'complete');assert.equal(current.ledger.reservation,null);assert.ok(current.ledger.consumed.operations>0);const used=current.ledger.consumed,committed=current.commits.length;assert.deepEqual(await current.run(),summary);assert.equal(current.commits.length,committed);assert.deepEqual(current.ledger.consumed,used);}
+ const values=[[1,2],[3,-1],[2,1],[0,0],[-1,2],[4,0],[1,-3],[2,1]].map(([real,imaginary])=>input(real,imaginary)),old=fixture(values),current=resumableFixture(values);await old.run({calculationPolicy:defaultStructuredCalculationPolicy()});await current.run();assert.deepEqual(current.bins,old.bins);
+});
+
+test('v2 dense 1024 and independent 4096 growth complete within authored job limits with all-bin DFT and Parseval checks',async()=>{
+ for(const count of [1024,4096]){
+  const samples=Array.from({length:count},(_,i)=>(i*73+19)%257-128),f=resumableFixture(samples.map(value=>input(value))),summary=await f.run();assert.equal(f.bins.length,count);assert.equal(summary.approximate,true);assert.ok(f.ledger.consumed.operations>50000);assert.ok(f.ledger.consumed.operations<=1000000);assert.ok(f.ledger.consumed.activeMilliseconds<=30000);assert.equal(f.commits.length,count/32*(Math.log2(count)+2));let energy=0,maxError=0;
+  for(const bin of f.bins){let real=0,imaginary=0;for(let i=0;i<count;i++){const angle=-2*Math.PI*i*bin.index/count;real+=samples[i]*Math.cos(angle);imaginary+=samples[i]*Math.sin(angle);}const a=number(bin.real),b=number(bin.imaginary);maxError=Math.max(maxError,Math.abs(a-real),Math.abs(b-imaginary));assert.ok(Math.abs(a-real)<1e-6);assert.ok(Math.abs(b-imaginary)<1e-6);const squared=number(bin.normalizedSquaredMagnitude);assert.ok(Math.abs(squared-(real*real+imaginary*imaginary)/(count*count))<1e-6);energy+=squared;}
+  assert.ok(Math.abs(energy-samples.reduce((sum,value)=>sum+value*value,0)/count)<1e-8);assert.ok(f.commits.every(item=>item.staged<=32));assert.ok(f.batches.every(([,size])=>size<=32));process.stdout.write('# spectrum v2 '+JSON.stringify({count,operations:f.ledger.consumed.operations,activeMilliseconds:f.ledger.consumed.activeMilliseconds,slices:f.commits.length,maxError})+'\n');
+ }
+});
+
+test('interruption in input, butterfly and output phases resumes only the last committed cursor without replenishing work',async()=>{
+ const values=Array.from({length:64},(_,i)=>input((i*73+19)%257-128,undefined,policy(),i===63?{version:1,kind:'approximate-inputs'}:null)),baseline=resumableFixture(values);const expected=await baseline.run();
+ for(const interrupted of ['input','transform','output']){
+  const f=resumableFixture(values,{fault:before=>interrupted==='input'?before?.phase==='input'&&before.offset===32:interrupted==='transform'?before?.phase==='transform'&&before.length===8&&before.position===2:before?.phase==='output'&&before.offset===32});await assert.rejects(f.run(),error=>error.simulatedCrash===true);const before=f.cursor,spent=f.ledger.consumed,reserved=f.ledger.reservation,outputCount=f.bins.length,reads=f.reads.length;assert.ok(reserved);f.recover();assert.equal(f.ledger.consumed.operations,spent.operations+reserved.operations);assert.equal(f.ledger.consumed.activeMilliseconds,spent.activeMilliseconds+reserved.activeMilliseconds);assert.deepEqual(f.cursor,before);assert.equal(f.bins.length,outputCount);const summary=await f.run();assert.deepEqual(summary,expected);assert.deepEqual(f.bins,baseline.bins);assert.ok(f.ledger.consumed.operations>baseline.ledger.consumed.operations);assert.equal(new Set(f.bins.map(bin=>bin.index)).size,64);if(interrupted!=='input')assert.equal(f.reads.length,reads);else assert.equal(f.reads.length,reads+32);
+ }
+});
+
+test('v2 whole-job, local slice and source limits refuse rather than restarting allowances',async()=>{
+ const dense=Array.from({length:1024},(_,i)=>input((i*73+19)%257-128)),limited=resumableFixture(dense,{execution:executionPolicy(50000,5000)});await assert.rejects(limited.run(),{code:'DATASET_CALCULATION_RESOURCE'});assert.ok(limited.ledger.consumed.operations<=50000);const spent=limited.ledger.consumed.operations;await assert.rejects(limited.run(),{code:'DATASET_CALCULATION_RESOURCE'});assert.ok(limited.ledger.consumed.operations>=spent);assert.equal(limited.cursor.phase,'transform');
+ const small=resumableFixture([input(3)],{execution:executionPolicy(100,1)});await assert.rejects(small.run(),{code:'DATASET_CALCULATION_RESOURCE'});assert.equal(small.cursor,null);assert.equal(small.ledger.consumed.operations,1);await assert.rejects(small.run(),{code:'DATASET_CALCULATION_RESOURCE'});assert.equal(small.ledger.consumed.operations,2);
+ const restricted=policy({maxBits:64}),source=resumableFixture([input(1n<<70n,undefined,restricted)]);await assert.rejects(source.run(),{code:'DATASET_CALCULATION_RESOURCE'});assert.equal(source.bins.length,0);assert.equal(source.cursor,null);
+});
+
+test('v2 cancellation commits no partial batch and resumes with actual-use accounting',async()=>{
+ const controller=new AbortController(),reason=Object.assign(Error('Stop selected output'),{code:'TEST_CANCEL'}),values=Array.from({length:64},(_,i)=>input(i+1));let cancelled=false;
+ const f=resumableFixture(values,{write:bin=>{if(bin.index===33&&!cancelled){cancelled=true;controller.abort(reason);}}});await assert.rejects(f.run({signal:controller.signal}),error=>error===reason);assert.equal(f.bins.length,32);assert.equal(f.cursor.phase,'output');assert.equal(f.cursor.offset,32);assert.equal(f.ledger.reservation,null);const spent=f.ledger.consumed.operations;await f.run();assert.equal(f.bins.length,64);assert.ok(f.ledger.consumed.operations>spent);assert.equal(new Set(f.bins.map(bin=>bin.index)).size,64);
+});
+
+test('v2 cursor admission refuses skipped or malformed batch boundaries and mismatched scope policies',async()=>{
+ const flags={version:1,approximate:false,approximateInputs:false};assert.equal(validSpectrumExecutionCursor(null,64),true);for(const cursor of [{...flags,phase:'input',offset:0},{...flags,phase:'input',offset:32},{...flags,phase:'transform',length:8,position:2,start:0},{...flags,phase:'output',offset:32},{...flags,phase:'complete',offset:64}])assert.equal(validSpectrumExecutionCursor(cursor,64),true);
+ for(const cursor of [{...flags,phase:'input',offset:1},{...flags,phase:'input',offset:0,approximateInputs:true},{...flags,phase:'transform',length:3,position:0,start:0},{...flags,phase:'transform',length:8,position:1,start:0},{...flags,phase:'output',offset:64},{...flags,phase:'complete',offset:63},{...flags,phase:'input',offset:0,extra:1}])assert.equal(validSpectrumExecutionCursor(cursor,64),false);
+ const f=resumableFixture([input(1)]);await assert.rejects(f.run({budget:new DatasetResourceBudget(policy())}),{code:'DATASET_SPECTRUM_INVALID'});const tooLarge=executionPolicy();tooLarge.slice.maxActiveMilliseconds=5000;await assert.rejects(f.run({executionPolicy:tooLarge}),{code:'DATASET_SPECTRUM_INVALID'});await assert.rejects(f.run({execution:{cursor:null,slice:async(_before,callback)=>callback({budget:new NumericalExecutionBudget(reserveNumericalExecution(createNumericalExecutionState('b'.repeat(64),executionPolicy(50000)),{id:randomUUID(),operations:50000,activeMilliseconds:2500})),work:{getMany(){},putMany(){}}})}}),{code:'DATASET_SPECTRUM_INVALID'});
 });

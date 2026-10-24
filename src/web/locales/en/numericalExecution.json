@@ -1,0 +1,12 @@
+{
+  "title": "Numerical job limits",
+  "help": "These limits cover the numerical job across its slices and retries. Active time measures numerical work, not elapsed waiting time.",
+  "total": "Whole numerical job",
+  "slice": "One numerical slice",
+  "maxOperations": "Maximum numerical operations",
+  "maxActiveMilliseconds": "Maximum active milliseconds",
+  "bounds": "Allowed range: {min} to {max}.",
+  "sliceHelp": "A slice cannot exceed the whole-job limits. Retrying resumes saved progress; an interrupted reservation remains fully charged. Completed slices charge their actual use.",
+  "invalid": "Enter whole-job and slice limits within the displayed ranges. A slice cannot exceed the whole job. Your entries are retained.",
+  "publicContext": "Numerical job limits: {operations} operations and {active} ms active work; each slice: {sliceOperations} operations and {sliceActive} ms active work. Retrying preserves charged work."
+}

@@ -1,2 +1,2 @@
 // Content-addressed material parts retain one immutable value for their key.
-export const materialPartKey=id=>typeof id==='string'&&/^metadata:\.observanda\/materials\/(?:tables\/[a-f0-9]{64}|sequences\/(?:nodes|chunks|aggregation-work-nodes|aggregation-work-values|aggregation-work-chunks|local-export-nodes|local-export-values|live-inventory-nodes)\/[a-f0-9]{64})\.json$/.test(id);
+export const materialPartKey=id=>typeof id==='string'&&/^metadata:\.observanda\/materials\/(?:tables\/[a-f0-9]{64}|sequences\/(?:nodes|chunks|aggregation-work-nodes|aggregation-work-values|aggregation-work-chunks|numerical-work-nodes|numerical-work-values|numerical-work-chunks|local-export-nodes|local-export-values|live-inventory-nodes)\/[a-f0-9]{64})\.json$/.test(id);

@@ -1,3 +1,4 @@
+import {defaultNumericalExecutionPolicy} from '../src/web/numerical-execution-policy.js';
 import {spectrumGraphColumn} from '../src/web/dataset-spectrum-schema.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -32,4 +33,15 @@ test('graph outputs preserve only mathematically applicable spectrum interpretat
  assert.equal(spectrumGraphColumn({kind:'domain',operation:'copy'},[source],source).spectrum.role,'coefficient');assert.ok(spectrumGraphColumn({kind:'domain',operation:'choose'},[source,structuredClone(source)],source).spectrum);assert.equal(spectrumGraphColumn({kind:'domain',operation:'choose'},[source,{...source,spectrum:{...spectrum,count:16}}],source).spectrum,undefined);
  for(const node of [{kind:'domain-arithmetic',operation:'add'},{kind:'scalar',operation:'multiply'},{kind:'window',operation:'sum'},{kind:'domain-reshape'}])assert.equal(spectrumGraphColumn(node,[source],scalar).spectrum,undefined);
  assert.equal(spectrumGraphColumn({kind:'window',operation:'lag'},[],source),source);assert.equal(spectrumGraphColumn({kind:'column'},[],source),source);
+});
+
+test('job-scoped spectral recipes preserve execution policy through schema, extraction and public context',()=>{
+ const old=recipe(),executionPolicy=defaultNumericalExecutionPolicy(),value={...old,version:2,executionPolicy};assert.equal(validSpectrumRecipe(old),true);assert.equal(validSpectrumRecipe(value),true);assert.equal(validSpectrumRecipe({...old,executionPolicy}),false);assert.equal(validSpectrumRecipe({...value,executionPolicy:undefined}),false);
+ for(const invalid of [null,{...executionPolicy,scope:'scalar-operation'},{...executionPolicy,total:{...executionPolicy.total,maxOperations:0}}])assert.equal(validSpectrumRecipe({...value,executionPolicy:invalid}),false);
+ const descriptor=spectrumColumnDescriptor(value,{...value.source,kind:'analysis'},'coefficient'),context=publicSpectrumContext(descriptor);assert.equal(descriptor.version,2);assert.equal(validSpectrumDescriptor(descriptor),true);assert.equal(validSpectrumContext(context),true);assert.deepEqual(context.executionPolicy,executionPolicy);assert.equal(validSpectrumContext({...context,version:1}),false);assert.equal(validSpectrumDescriptor({...descriptor,executionPolicy:undefined}),false);
+ const extracted=spectrumGraphColumn({kind:'domain',operation:'extract',component:[0]},[{spectrum:descriptor}],{representation:'rational'});assert.deepEqual(extracted.spectrum.executionPolicy,executionPolicy);executionPolicy.total.maxOperations=999;assert.notEqual(descriptor.executionPolicy.total.maxOperations,999);assert.equal(JSON.stringify(context).includes(value.source.id),false);
+});
+
+test('spectral job slices cannot bypass the retained calculator invocation limits',()=>{
+ const value={...recipe(),version:2,executionPolicy:defaultNumericalExecutionPolicy()};value.calculationPolicy.resources.maxOperations=100;assert.equal(validSpectrumRecipe(value),false);value.executionPolicy.slice.maxOperations=100;assert.equal(validSpectrumRecipe(value),true);value.calculationPolicy.resources.maxMilliseconds=100;assert.equal(validSpectrumRecipe(value),false);value.executionPolicy.slice.maxActiveMilliseconds=100;assert.equal(validSpectrumRecipe(value),true);const context=publicSpectrumContext(spectrumColumnDescriptor(value,{...value.source,kind:'analysis'},'frequency'));context.executionPolicy.slice.maxOperations=101;assert.equal(validSpectrumContext(context),false);
 });

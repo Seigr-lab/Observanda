@@ -406,5 +406,6 @@
   "numeralClipboard": [
     "en"
   ],
-  "datasetSpectrum": ["en"]
+  "datasetSpectrum": ["en"],
+  "numericalExecution": ["en"]
 }
