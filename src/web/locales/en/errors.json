@@ -400,5 +400,10 @@
   "STATISTICAL_UNCERTAINTY_UNITS": "Declare compatible units for the nominal value and input estimates. Sensitivities require output/input difference units and covariance entries require input/input product difference units.",
   "STATISTICAL_UNCERTAINTY_COVARIANCE": "The complete covariance matrix must be positive semidefinite. Check every diagonal and covariance entry; no negative variance is clamped and no omitted entry implies independence.",
   "STATISTICAL_UNCERTAINTY_INPUT": "A selected uncertainty input is missing, null, absent, excluded or not an admitted numerical value. Inspect the pinned source and choose a valid retained cell.",
-  "STATISTICAL_UNCERTAINTY_LIBRARY": "The approximation library saved with this uncertainty model is unavailable. The model and previous retained results are preserved."
+  "STATISTICAL_UNCERTAINTY_LIBRARY": "The approximation library saved with this uncertainty model is unavailable. The model and previous retained results are preserved.",
+  "COORDINATE_FRAME_INVALID": "Complete the explicit frame axes, units, pinned transform sources and rationale. Your draft and earlier retained results remain available.",
+  "COORDINATE_FRAME_INCOMPATIBLE": "Match the exact pinned frame revision, declared vector namespace and dimension. Choose compatible source and target frames; no axis order is inferred.",
+  "COORDINATE_FRAME_UNITS": "Declare compatible difference units with positive scales and zero offsets. The transformation matrix requires dimensionless coefficients.",
+  "COORDINATE_FRAME_INPUT": "Choose present, non-excluded matrix and translation cells with complete exact components. Inspect their pinned source values.",
+  "COORDINATE_FRAME_SINGULAR": "The declared transformation matrix is singular. Choose an explicitly nonsingular square matrix; your selections and rationale are retained."
 }

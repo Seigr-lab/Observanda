@@ -15,7 +15,7 @@ export const CALCULATION_GRAPH_TOOL='Observanda calculation graph';
 export const CALCULATION_GRAPH_COLLECTIONS=['bindings','nodes','outputs'];
 export const graphPosition=value=>Number.isSafeInteger(value)&&value>=0;
 export const validGraphAddress=value=>keys(value,['id','position'])&&researchId(value.id)&&graphPosition(value.position);
-export const validGraphCalculation=value=>keys(value,['version','graph'])&&[4,5,6,7,8,9,10,11,12,13,14,15].includes(value.version)&&validMaterialReference(value.graph)&&value.graph.kind==='analysis';
+export const validGraphCalculation=value=>keys(value,['version','graph'])&&[4,5,6,7,8,9,10,11,12,13,14,15,16].includes(value.version)&&validMaterialReference(value.graph)&&value.graph.kind==='analysis';
 export function validGraphBinding(value,{keysIndex}={}){
  return keys(value,['id','source','view','match'])&&researchId(value.id)&&validMaterialReference(value.source)&&['dataset','analysis'].includes(value.source.kind)&&['observations','distribution','transitions'].includes(value.view)&&(value.match===null||keys(value.match,['keysIndex','unmatched'])&&value.source.kind==='dataset'&&['error','keep'].includes(value.match.unmatched)&&!!keysIndex?.(value.match.keysIndex));
 }
@@ -24,6 +24,7 @@ export function validGraphNode(value,position=Infinity,version=1,policy){
  if(!value||!researchId(value.id))return false;const earlier=ref=>validGraphAddress(ref)&&ref.position<position;
  if(value.kind==='column')return keys(value,['id','kind','binding','column'])&&validGraphAddress(value.binding)&&graphPosition(value.column);
  if(value.kind==='window')return version>=6&&keys(value,['id','kind','binding','column','operation','window'])&&validGraphAddress(value.binding)&&graphPosition(value.column)&&validWindow(value.window,value.operation);
+ if(value.kind==='coordinate-transform')return version>=13&&keys(value,['id','kind','left','model'])&&earlier(value.left)&&validMaterialReference(value.model)&&value.model.kind==='analysis';
  if(value.kind==='clock-synchronize')return version>=9&&keys(value,['id','kind','binding','column','model','operation','outside'])&&validGraphAddress(value.binding)&&graphPosition(value.column)&&validMaterialReference(value.model)&&value.model.kind==='analysis'&&['value','status'].includes(value.operation)&&['absent','error'].includes(value.outside);
  if(value.kind==='clock')return version>=3&&keys(value,['id','kind','binding','column','operation','transition'])&&validGraphAddress(value.binding)&&graphPosition(value.column)&&CLOCK_OPERATIONS.includes(value.operation)&&validClockTransition(value.transition);
  if(value.kind==='interval')return version>=4&&keys(value,['id','kind','operation','left','right','unit','quantity'])&&INTERVAL_OPERATIONS.includes(value.operation)&&earlier(value.left)&&(['lower','upper'].includes(value.operation)?value.right===null&&value.unit===undefined&&value.quantity===undefined:earlier(value.right)&&text(value.unit,100)&&validQuantity(value.quantity,value.unit));

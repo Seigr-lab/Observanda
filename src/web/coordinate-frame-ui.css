@@ -1,0 +1,12 @@
+[data-coordinate-frames] > [data-coordinate-controls] { border: 0; margin: 0; padding: 0; min-width: 0; }
+[data-coordinate-frames] details { margin-block: .6rem; }
+[data-coordinate-frames] summary { cursor: pointer; overflow-wrap: anywhere; }
+[data-coordinate-frames] .inline-actions, [data-coordinate-frames] .material-actions { flex-wrap: wrap; }
+[data-coordinate-frames] [data-coordinate-axis] { margin-block: .7rem; overflow-wrap: anywhere; }
+[data-coordinate-frames] [data-coordinate-cell-table] table { width: 100%; table-layout: fixed; }
+[data-coordinate-frames] [data-coordinate-cell-table] th, [data-coordinate-frames] [data-coordinate-cell-table] td { padding: .4rem .35rem; overflow-wrap: anywhere; }
+[data-coordinate-frames] [data-coordinate-cell-table] th:first-child { width: 16%; }
+[data-coordinate-frames] [data-coordinate-cell-table] th:last-child { width: 30%; }
+[data-coordinate-frames] [data-coordinate-cell-table] .button { white-space: normal; max-width: 100%; padding-inline: .35rem; }
+[data-coordinate-frames] [data-coordinate-detail] { overflow-wrap: anywhere; }
+[data-coordinate-column-frame] { min-width: 0; overflow-wrap: anywhere; }

@@ -29,3 +29,12 @@ test('uncertainty definitions and receipts retain their referenced input, covari
  const receipt=await closure(f,{tool:'Observanda statistical uncertainty',version:1,inputsIndex:references,result:{resourcePolicy:policy,nominal:{scalar:scalar(cell.value)}}});for(const descriptor of [references,cell.value.parts])assert.ok(receipt.has(rootName(descriptor)));
  const unrelated=await closure(f,{note:'Observanda uncertainty definition',uncertaintyInputsIndex:inputs});assert.equal(unrelated.size,1);
 });
+
+test('a retained schema owns all ordered frame axes independently of private definition reads',async()=>{
+ const f=fixture(),axes=Array.from({length:19},(_,index)=>({id:'axis-'+index,name:'Axis '+(index+1)})),axesIndex=await sequence(f.materials,'coordinate-frame-axes',axes),columns=await sequence(f.materials,'columns',[{name:'Selected position',coordinateFrame:{version:1,axesIndex,frame:{kind:'analysis',id:'frame-definition'}}}]);
+ const found=await closure(f,{datasetFormat:3,schemaIndex:columns});assert.ok(found.has(rootName(axesIndex)));
+ const emitted=new Map(),transfer=Object.assign(Object.create(ResearchTransfer.prototype),{materials:f.materials,sequenceNodes:new Set(),emit:async part=>emitted.set(part.name,part.content)});await transfer.sequence(columns);
+ const restored={sequences:new MaterialSequence({readMetadata:async name=>emitted.get(name)??null})},column=await restored.sequences.item(columns,0),items=[];
+ for(let offset=0;offset<axes.length;offset+=16)items.push(...(await restored.sequences.page(column.coordinateFrame.axesIndex,{offset,limit:16})).items);
+ assert.deepEqual(items,axes);for(const name of emitted.keys())assert.ok(found.has(name),'Owner retention must cover every shared axis block');
+});

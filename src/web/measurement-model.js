@@ -45,7 +45,7 @@ export function validTime(time){
  if(c.frequency){try{if(exactRational(c.frequency).numerator<=0n)return false;}catch{return false;}}
  return time.kind!=='external'||!!c.model&&!!c.referenceData;
 }
-export function schemaReferences(column){return [column.quantity?.conversion,column.quantity?.calibration,column.quantity?.uncertainty?.method?.reference,column.time?.clock?.model,column.time?.clock?.referenceData,column.computation?.recipe,column.statisticalUncertainty?.definition,column.statisticalUncertainty?.analysis].filter(Boolean);}
+export function schemaReferences(column){return [column.quantity?.conversion,column.quantity?.calibration,column.quantity?.uncertainty?.method?.reference,column.time?.clock?.model,column.time?.clock?.referenceData,column.computation?.recipe,column.statisticalUncertainty?.definition,column.statisticalUncertainty?.analysis,column.coordinateFrame?.frame,column.coordinateFrame?.sourceFrame,column.coordinateFrame?.transform].filter(Boolean);}
 export function validLocator(source){
  if(!keys(source,['ref','selector'])||!measurementRef(source.ref))return false;const s=source.selector;
  if(!s)return false;

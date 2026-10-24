@@ -22,6 +22,7 @@ export function scalarDefinitionEntries(value){
  if(value?.version&&Object.hasOwn(value,'modulus'))clock(value,[]);
  if(value?.kind==='declared-interval'||value?.kind==='derived-enclosure')uncertainty(value,[]);
  synchronization(value?.synchronization,['synchronization']);synchronization(value,[]);if(value?.version===1&&value.kind==='clock-sync-segment'){add(value,[],['validity','lower']);add(value,[],['validity','upper']);}
+ if(value?.tool==='Observanda coordinate frame')unit(value.unitDefinition,['unitDefinition']);
  if(value?.tool==='Observanda clock synchronization'){quantity(value.target?.quantity,['target','quantity']);clock(value.target?.time?.clock?.definition,['target','time','clock','definition']);}
  const aggregation=(owner,prefix)=>{if([4,5].includes(owner?.version)&&Array.isArray(owner.values))for(const [i,metric]of owner.values.entries())if(metric.operation==='quantile')add(owner,prefix,['values',i,'probability']);};
  aggregation(value,[]);aggregation(value?.aggregation,['aggregation']);
@@ -35,7 +36,7 @@ export function scalarDefinitionEntries(value){
 }
 export function* scalarDefinitionSequences(value){for(const entry of scalarDefinitionEntries(value))if(scalarTextReference(entry.scalar.spelling))yield entry.scalar.spelling.parts;}
 export function measurementScalarPolicies(value){return !!value&&(value.resourcePolicy!==undefined||[2,3].includes(value.domain?.version)||scalarDefinitionEntries(value).length>0);}
-function semantic(value,budget){for(const entry of scalarDefinitionEntries(value))if(entry.path.includes('probability')||entry.path.includes('weight')){const rational=validatePolicyScalar(entry.scalar,entry.policy,{budget});if(rational.numerator<0n||rational.numerator>rational.denominator)throw RangeError('Probability outside the closed unit interval');}validateMeasurementDeclaration(value,{budget});if(value?.scale&&value?.offset)validateUnitDefinition(value,{budget});if(value?.version&&Object.hasOwn(value,'modulus'))validateClockDefinition(value,{budget});if(value?.kind==='declared-interval'||value?.kind==='derived-enclosure')validateIntervalUncertainty(value,{budget});if(value?.kind==='constant'&&value.value?.quantity)validateMeasurementDeclaration(value.value,{budget});}
+function semantic(value,budget){for(const entry of scalarDefinitionEntries(value))if(entry.path.includes('probability')||entry.path.includes('weight')){const rational=validatePolicyScalar(entry.scalar,entry.policy,{budget});if(rational.numerator<0n||rational.numerator>rational.denominator)throw RangeError('Probability outside the closed unit interval');}validateMeasurementDeclaration(value,{budget});if(value?.tool==='Observanda coordinate frame')validateUnitDefinition(value.unitDefinition,{budget});if(value?.scale&&value?.offset)validateUnitDefinition(value,{budget});if(value?.version&&Object.hasOwn(value,'modulus'))validateClockDefinition(value,{budget});if(value?.kind==='declared-interval'||value?.kind==='derived-enclosure')validateIntervalUncertainty(value,{budget});if(value?.kind==='constant'&&value.value?.quantity)validateMeasurementDeclaration(value.value,{budget});}
 export async function resolveScalarDefinitions(materials,value,{signal,budget}={}){
  const result=structuredClone(value),{graphScalarCell}=await import('./dataset-resource-values.js');
  for(const entry of scalarDefinitionEntries(result)){

@@ -1,3 +1,4 @@
+import {coordinateFrameContextText,coordinateFrameAxisPageParts} from './web/coordinate-frame-context.js';
 import {statisticalUncertaintyContextText} from './web/statistical-uncertainty-context.js';
 import {measurementUnitContextParts} from './web/measurement-unit-context.js';
 import {aggregationQuantileContextParts,aggregationPairContextText} from './web/dataset-aggregation-context.js';
@@ -31,6 +32,7 @@ export async function* retainedTableHTML(materials,statement,{signal}={}){
    }
    if(format.quantile){yield ' [';for(const part of aggregationQuantileContextParts(format.quantile)){if(typeof part==='string')yield esc(part);else for await(const text of cellText(materials,part.spelling,{signal}))yield esc(text);}yield ']';}
    if(format.unitDefinition){yield ' [';for(const part of measurementUnitContextParts(format.unitDefinition)){if(typeof part==='string')yield esc(part);else for await(const text of cellText(materials,part.spelling,{signal}))yield esc(text);}yield ']';}
+   if(format.coordinateFrame)yield esc(' ['+coordinateFrameContextText(format.coordinateFrame)+']');
    if(format.pairedStatistic)yield esc(' ['+aggregationPairContextText(format.pairedStatistic)+']');
    if(format.statisticalUncertainty)yield esc(' ['+statisticalUncertaintyContextText(format.statisticalUncertainty)+']');
    if(format.synchronization){yield ' [';for(const part of clockSynchronizationContextParts(format.synchronization)){if(typeof part==='string')yield esc(part);else for await(const text of cellText(materials,part.spelling,{signal}))yield esc(text);}yield ']';}
@@ -42,7 +44,22 @@ export async function* retainedTableHTML(materials,statement,{signal}={}){
    for(let i=0;i<row.cells.length;i++){yield '<td>';if(row.presence[i]!=='value')yield esc(messages[row.presence[i]]);else for await(const text of cellText(materials,row.cells[i],{signal}))yield esc(text);yield '</td>';}
    if(table.selection.includeExcluded)yield '<td>'+esc(row.exclusion??'')+'</td>';yield '</tr>';
   }
-  yield '</tbody></table></div></section>';
+  yield '</tbody></table></div>';
+  for(let i=0;i<table.formats.length;i++){
+   const format=table.formats[i],context=format.coordinateFrame,axes=format.coordinateFrameAxes;if(!context&&!axes)continue;
+   if(!context||!axes||axes.kind!=='coordinate-frame-axes'||axes.count!==context.dimension||!coordinateFrameContextText(context))fail();
+   // The retained column owns these axes. Publication never follows private
+   // frame/model documents to reconstruct the meaning of a selected result.
+   yield '<details class="retained-coordinate-axes"><summary>'+esc(table.headers[i]+' ['+coordinateFrameContextText(context)+']')+'</summary>';
+   for(let offset=0;offset<axes.count;offset+=16){
+    signal?.throwIfAborted();const page=await materials.sequences.page(axes,{offset,limit:16});
+    if(page.items.length!==Math.min(16,axes.count-offset))fail();
+    const parts=coordinateFrameAxisPageParts({...context,axes:{offset,total:axes.count,items:page.items.map(axis=>({name:axis.name}))}});if(parts.length!==page.items.length+1)fail();
+    yield '<p>'+esc(parts[0])+'</p><ol start="'+(offset+1)+'">';for(const part of parts.slice(1))yield '<li>'+esc(part)+'</li>';yield '</ol>';
+   }
+   yield '</details>';
+  }
+  yield '</section>';
  }
 }
 export async function retainPublicationTables(builder,materials,record,recordId,{signal}={}){

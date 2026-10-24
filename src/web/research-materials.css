@@ -1,3 +1,4 @@
+@import url('./coordinate-frame-ui.css');
 
 .material-workbench { min-width:0; max-width:100%; }
 .material-workbench p,.material-workbench dd { overflow-wrap:anywhere; }

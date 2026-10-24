@@ -78,7 +78,7 @@ export class ResearchTransfer{
  }
  async jsonContent(file){const {describeContent}=await import('../file-content.js');return describeContent(this.workspace,file);}
  relative(file){return path.relative(this.workspace.root,file).split(path.sep).join('/');}
- async declaration(value){for(const sequence of scalarDefinitionSequences(value))await this.sequence(sequence);}
+ async declaration(value){for(const sequence of scalarDefinitionSequences(value))await this.sequence(sequence);if(value?.coordinateFrame?.axesIndex)await this.sequence(value.coordinateFrame.axesIndex);}
  async sequence(value){
   if(!value)return;this.materials.sequences.validate(value);const tree=this.materials.sequences.tree(),owner=this;
   async function visit(ref){
@@ -137,8 +137,8 @@ export class ResearchTransfer{
     for await(const r of materials.references(doc.content))await enqueue(r);
     for await(const r of materials.references(doc.content,'outputs'))await enqueue(r);
     if(doc.content.acquisition)await enqueue(doc.content.acquisition);
-    for(const slot of ['pageIndex','schemaIndex','inputsIndex','outputsIndex','aggregationMembersIndex','schemaInputsIndex','plotPointsIndex','plotMembersIndex','graphBindingsIndex','graphNodesIndex','graphOutputsIndex','uncertaintyInputsIndex','uncertaintyCovarianceIndex','segmentsIndex'])await owner.sequence(doc.content[slot]);
-    if(doc.content.aggregation?.version>=4)await owner.declaration(doc.content);if(doc.content.measurement)await owner.declaration(doc.content.measurement);if(['Observanda clock synchronization','Observanda statistical uncertainty'].includes(doc.content.tool))await owner.declaration(doc.content);
+    for(const slot of ['pageIndex','schemaIndex','inputsIndex','outputsIndex','aggregationMembersIndex','schemaInputsIndex','plotPointsIndex','plotMembersIndex','graphBindingsIndex','graphNodesIndex','graphOutputsIndex','uncertaintyInputsIndex','uncertaintyCovarianceIndex','segmentsIndex','axesIndex'])await owner.sequence(doc.content[slot]);
+    if(doc.content.aggregation?.version>=4)await owner.declaration(doc.content);if(doc.content.measurement)await owner.declaration(doc.content.measurement);if(['Observanda clock synchronization','Observanda statistical uncertainty','Observanda coordinate frame'].includes(doc.content.tool))await owner.declaration(doc.content);
     if(doc.content.figure?.kind==='retained'){const {RetainedFigureDocuments}=await import('../retained-figure-document.js');const figure=await new RetainedFigureDocuments(owner.workspace,{readOnly:true}).open(doc.content.figure);await owner.figure(figure,enqueue);}
     if(doc.content.comparison&&doc.content.summary?.version===2)for await(const part of materials.comparisons.index(doc.content.summary).metadata())await owner.metadata(part.name,part.value);
     if(doc.kind==='dataset'){
@@ -150,7 +150,7 @@ export class ResearchTransfer{
     }
     await owner.metadata('.observanda/materials/objects/'+doc.id+'/'+ref.revision+'.json',doc);
     if(doc.content.measurement)for(const r of measurementReferences(doc.content.measurement))await enqueue(r);
-    if(doc.content.method&&doc.content.tool!=='Observanda clock synchronization')for(const r of analysisMethodReferences(doc.content.method))await enqueue(r);
+    if(doc.content.method&&!['Observanda clock synchronization','Observanda coordinate frame transform'].includes(doc.content.tool))for(const r of analysisMethodReferences(doc.content.method))await enqueue(r);
     if(doc.kind==='artifact'){const {content}=await materials.artifact(ref);await owner.original(owner.relative(content.file),content);}
    });
   });
