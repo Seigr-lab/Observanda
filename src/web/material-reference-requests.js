@@ -12,6 +12,6 @@ export function materialReferenceReader({api,local,onOwner=()=>{}}){
   const ref=materialReadReference(name,data);
   if(!addressedMaterialRead(name)||ref?.workspaceId===undefined)return local(name,data,options);
   const result=await api('/api/projects/material-reference/'+name,data,{...options,adopt:false});
-  onOwner(result,name,ref);return result.value;
+  if(options.adoptOwner!==false)onOwner(result,name,ref);return result.value;
  };
 }

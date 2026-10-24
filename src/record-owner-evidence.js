@@ -196,7 +196,7 @@ export async function prepareRecordOwnerEvidence(source,target,receipt,{write,si
    if(!await materials.current(ref.id))await write(()=>stageMaterialReturnRetirement(incoming,receipt,ref));
    if(doc.previous)await enqueue({...ref,revision:doc.previous});for await(const input of materials.references(doc.content))await enqueue(input);for await(const output of materials.references(doc.content,'outputs'))await enqueue(output);if(doc.content.acquisition)await enqueue(doc.content.acquisition);
    for(const slot of ['pageIndex','schemaIndex','inputsIndex','outputsIndex','aggregationMembersIndex','schemaInputsIndex','plotPointsIndex','plotMembersIndex','graphBindingsIndex','graphNodesIndex','graphOutputsIndex'])await transfer.sequence(doc.content[slot]);
-   if(doc.content.measurement)await transfer.declaration(doc.content.measurement);
+   if(doc.content.measurement)await transfer.declaration(doc.content.measurement);if(doc.content.tool==='Observanda clock synchronization')await transfer.declaration(doc.content);
    if(doc.content.figure?.kind==='retained'){const {RetainedFigureDocuments}=await import('./retained-figure-document.js');const figure=await new RetainedFigureDocuments(source,{readOnly:true,signal}).open(doc.content.figure);for await(const part of figure.blocks())await emit({kind:'metadata',name:part.path,content:JSON.stringify(part.node,null,2)+'\n'});}
    if(doc.content.comparison&&doc.content.summary?.version===2)for await(const part of materials.comparisons.index(doc.content.summary).metadata())await emit({kind:'metadata',name:part.name,content:JSON.stringify(part.value)});
    if(doc.kind==='dataset'){
@@ -204,7 +204,7 @@ export async function prepareRecordOwnerEvidence(source,target,receipt,{write,si
     for(let index=0;index<materials.datasetPageCount(doc);index++){signal?.throwIfAborted();const info=[2,3].includes(doc.content.datasetFormat)?await materials.sequences.item(doc.content.pageIndex,index):doc.content.pages[index],{rows}=await materials.retainedDatasetPage(doc,index,{metadataOnly:true});await emit({kind:'metadata',name:'.observanda/materials/tables/'+info.hash+'.json',content:JSON.stringify(rows)});}
    }
    await emit({kind:'metadata',name:'.observanda/materials/objects/'+doc.id+'/'+ref.revision+'.json',content:JSON.stringify(doc)+'\n'});
-   if(doc.content.measurement)for(const input of measurementReferences(doc.content.measurement))await enqueue(input);if(doc.content.method)for(const input of analysisMethodReferences(doc.content.method))await enqueue(input);
+   if(doc.content.measurement)for(const input of measurementReferences(doc.content.measurement))await enqueue(input);if(doc.content.method&&doc.content.tool!=='Observanda clock synchronization')for(const input of analysisMethodReferences(doc.content.method))await enqueue(input);
    if(doc.kind==='artifact'){const content=await materials.originalContent(doc);await emit({kind:'original',name:transfer.relative(content.file),content});}
    await write(async store=>{const identity='record-owner-evidence-revision:'+receipt.id+':'+ref.kind+':'+ref.id+':'+ref.revision;if(!await store.object(identity)){state.revisions=await incoming.sequences.append(state.revisions,[materialReference(ref)]);await store.putObject(identity,{version:1,ref:materialReference(ref)});await persist(store);}});
   });

@@ -43,3 +43,13 @@ test('selected scalar and component reads keep the exact retained owner and canc
   const data={ref,...selection,offset:0,limit:4096};await read(name,data,{signal:controller.signal,adopt:true});const call=calls.at(-1);assert.equal(call.route,'/api/projects/material-reference/'+name);assert.deepEqual(call.data,data);assert.equal(call.options.signal,controller.signal);assert.equal(call.options.adopt,false);
  }
 });
+
+
+test('selected cross-owner authoring previews retain the explicit destination without bypassing read authorization',async()=>{
+ const ref={kind:'dataset',id:randomUUID(),revision:'d'.repeat(64),workspaceId:randomUUID()},calls=[],adopted=[];
+ const reader=materialReferenceReader({api:async(route,data,options)=>{calls.push({route,data,options});return {projectId:'reference-owner',value:{kind:'cell'}};},local:async(name,data)=>({name,data}),onOwner:result=>adopted.push(result.projectId)});
+ await reader('measurement-inspect',{source:{ref,selector:{kind:'cell',page:0,row:0,column:0}}},{adoptOwner:false});
+ assert.equal(calls[0].route,'/api/projects/material-reference/measurement-inspect');assert.equal(calls[0].data.source.ref.workspaceId,ref.workspaceId);assert.equal(calls[0].options.adopt,false);assert.deepEqual(adopted,[]);
+ const command={recordId:randomUUID(),synchronization:{source:{ref}}};assert.deepEqual(await reader('clock-synchronization-save',command),{name:'clock-synchronization-save',data:command});
+ await reader('read',{ref});assert.deepEqual(adopted,['reference-owner']);
+});

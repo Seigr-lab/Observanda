@@ -15,11 +15,14 @@ export function scalarDefinitionEntries(value){
  const unit=(owner,prefix)=>{if(owner?.version===2){add(owner,prefix,['scale']);add(owner,prefix,['offset']);}};
  const uncertainty=(owner,prefix)=>{if(owner?.version===2&&owner.coverage)add(owner,prefix,['coverage','level']);};
  const clock=(owner,prefix)=>{if(!owner)return;if(owner.version===2){add(owner,prefix,['modulus']);if(owner.rate){add(owner,prefix,['rate','counts']);add(owner,prefix,['rate','interval']);}}unit(owner.rate?.unitDefinition,[...prefix,'rate','unitDefinition']);};
+ const synchronization=(owner,prefix)=>{if(owner?.version===1&&owner.method==='two-anchor-affine'){add(owner,prefix,['validity','lower']);add(owner,prefix,['validity','upper']);}};
  const quantity=(q,prefix)=>{unit(q?.unitDefinition,[...prefix,'unitDefinition']);uncertainty(q?.uncertainty,[...prefix,'uncertainty']);};
  if(value?.version===2&&value.value?.spelling!==undefined)add(value,[],['value']);
  if(value?.scale&&value?.offset)unit(value,[]);
  if(value?.version&&Object.hasOwn(value,'modulus'))clock(value,[]);
  if(value?.kind==='declared-interval'||value?.kind==='derived-enclosure')uncertainty(value,[]);
+ synchronization(value?.synchronization,['synchronization']);synchronization(value,[]);
+ if(value?.tool==='Observanda clock synchronization'){quantity(value.target?.quantity,['target','quantity']);clock(value.target?.time?.clock?.definition,['target','time','clock','definition']);}
  quantity(value?.quantity,['quantity']);clock(value?.time?.clock?.definition,['time','clock','definition']);
  if(value?.kind==='constant')quantity(value.value?.quantity,['value','quantity']);
  return result;

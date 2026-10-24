@@ -11,6 +11,6 @@ export async function measurementScalarRequest(materials,operation,data,{signal}
  let declaration;
  if(data.column!==undefined){if(data.node!==undefined||doc.kind!=='dataset'||!Number.isSafeInteger(data.column)||data.column<0)invalid();declaration=await materials.datasetColumn(doc,data.column);}
  else if(data.node!==undefined){const graph=new CalculationGraphs(materials);graph.shape(doc);declaration=await graph.at(doc.content,'nodes',data.node);}
- else{declaration=doc.content.measurement;if(!declaration)invalid();}
+ else{declaration=doc.content.tool==='Observanda clock synchronization'?doc.content:doc.content.measurement;if(!declaration)invalid();}
  return readScalarDefinition(materials,declaration,data.field,options);
 }

@@ -1,3 +1,4 @@
+import {clockSynchronizationRequest} from './clock-synchronization-requests.js';
 import {measurementScalarRequest} from './measurement-scalar-requests.js';
 import {calculatorResultRequest} from './calculator-result-request.js';
 import {plotJobSettings} from './plot-job-settings.js';
@@ -24,8 +25,8 @@ import {jobSummary} from './jobs.js';
 import {MAX_BYTES} from './model.js';
 import {researchId} from './web/research-reference.js';
 import {AppError} from './errors.js';
-const reads=new Set(['retained-figure','retained-figure-export','calculation-graph-page','source-owners','source-items','source-resolve','overview','list','references','reference-addresses','correction-preview','correction-status','correction-history','association-read','association-list','figure-sources','plot-points','plot-point','selection-page','intakes','intake-selection-page','intake-page','intake-session','upload-session','drafts','draft-read','draft-references','current','schema','measurement-scalar','measurement-component','measurement-inspect','measurement-seed','current-record','record','read','analysis-status','job','plot-job-settings','retained-table','calculation-schema','dataset-preview','dataset-jobs','rows','comparison-page','verify','download']);
-const writes=new Set(['calculator-retain','calculator-repeat','calculator-resume','retained-figure-change','calculation-graph-create','calculation-graph-change','associate-original','correction-apply','association-start','association-step','association-cancel','selection-change','intake-start','intake-selection-append','intake-append','intake-finish','draft-start','draft-append','draft-finish','draft-cancel','measurement-save','pin','start','finish','cancel-job','retry-job','dataset','collection','analysis','comparison','reuse','plot']);
+const reads=new Set(['clock-synchronization-read','retained-figure','retained-figure-export','calculation-graph-page','source-owners','source-items','source-resolve','overview','list','references','reference-addresses','correction-preview','correction-status','correction-history','association-read','association-list','figure-sources','plot-points','plot-point','selection-page','intakes','intake-selection-page','intake-page','intake-session','upload-session','drafts','draft-read','draft-references','current','schema','measurement-scalar','measurement-component','measurement-inspect','measurement-seed','current-record','record','read','analysis-status','job','plot-job-settings','retained-table','calculation-schema','dataset-preview','dataset-jobs','rows','comparison-page','verify','download']);
+const writes=new Set(['clock-synchronization-save','calculator-retain','calculator-repeat','calculator-resume','retained-figure-change','calculation-graph-create','calculation-graph-change','associate-original','correction-apply','association-start','association-step','association-cancel','selection-change','intake-start','intake-selection-append','intake-append','intake-finish','draft-start','draft-append','draft-finish','draft-cancel','measurement-save','pin','start','finish','cancel-job','retry-job','dataset','collection','analysis','comparison','reuse','plot']);
 const accepted=new Set(['calculator-retain','calculator-repeat','calculator-resume','intake-finish','finish','dataset','comparison','plot']);
 export function materialRequest(route){
  const prefix='/api/research/materials/';if(!route.startsWith(prefix))return null;const operation=route.slice(prefix.length);
@@ -88,6 +89,7 @@ export async function executeMaterialRequest(storage,request,data,{signal,jobs,d
  case 'current':return {item:await materials.current(data.id)};
  case 'schema':return materials.schemaPage(data.ref,{offset:data.offset??0,limit:data.limit??16});
  case 'measurement-scalar':case 'measurement-component':return measurementScalarRequest(materials,operation,data,{signal});
+ case 'clock-synchronization-save':case 'clock-synchronization-read':return clockSynchronizationRequest(materials,operation,data,{signal});
  case 'measurement-save':return {ref:await materials.measurements.save(data,{signal})};
  case 'measurement-seed':return materials.measurements.seed(data.source);
  case 'measurement-inspect':return materials.measurements.inspect(data.source,{offset:data.offset??0,lineageOffset:data.lineageOffset??0,lineageLimit:data.lineageLimit??16,sourceOffset:data.sourceOffset??0,componentOffset:data.componentOffset??0,signal});

@@ -1,3 +1,3 @@
 // Row-window semantics are pinned in graphs, results and recoverable queued commands.
-export const windowCalculationMaterial=value=>value?.content?.tool==='Observanda calculation graph'&&[6,7,8].includes(value.content.graphVersion)||[9,10,11].includes(value?.content?.calculation?.version);
-export const windowCalculationMetadata=(relative,value)=>windowCalculationMaterial(value)||relative.startsWith('.observanda/jobs/')&&[9,10,11].includes(value?.input?.command?.calculation?.version)||relative.startsWith('.observanda/materials/sequences/chunks/')&&value?.kind==='calculation-lineage'&&value.items?.some(item=>item.window);
+export const windowCalculationMaterial=value=>value?.content?.tool==='Observanda calculation graph'&&[6,7,8,9].includes(value.content.graphVersion)||[9,10,11,12].includes(value?.content?.calculation?.version);
+export const windowCalculationMetadata=(relative,value)=>windowCalculationMaterial(value)||relative.startsWith('.observanda/jobs/')&&[9,10,11,12].includes(value?.input?.command?.calculation?.version)||relative.startsWith('.observanda/materials/sequences/chunks/')&&value?.kind==='calculation-lineage'&&value.items?.some(item=>item.window);

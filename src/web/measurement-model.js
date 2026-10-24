@@ -1,3 +1,4 @@
+import {validClockSynchronizationDescriptor,validateClockSynchronizationDescriptor} from './measurement-clock-synchronization-model.js';
 import {validComputation} from './measurement-computation.js';
 import {validDatasetResourcePolicy} from './dataset-resource-policy.js';
 import {validPolicyScalar,validatePolicyScalar} from './measurement-scalar-policy.js';
@@ -55,16 +56,17 @@ export function validLocator(source){
  return keys(s,['kind','nativeId'])&&s.kind==='native-record'&&text(s.nativeId,500)&&!!s.nativeId.trim();
 }
 export function validMeasurement(m){
- if(!keys(m,['version','value','quantity','time','sources','references','decoderVersion','integrity','completion','note','resourcePolicy','computation'])||![1,2].includes(m.version)||(m.version===2?!validDatasetResourcePolicy(m.resourcePolicy):m.resourcePolicy!==undefined))return false;
+ if(!keys(m,['version','value','quantity','time','sources','references','decoderVersion','integrity','completion','note','resourcePolicy','computation','synchronization'])||![1,2].includes(m.version)||(m.version===2?!validDatasetResourcePolicy(m.resourcePolicy):m.resourcePolicy!==undefined))return false;
  const v=m.value;
  return keys(v,['spelling','representation','radix','unit','presence'])&&(m.version===2?validPolicyScalar({spelling:v.spelling,representation:v.representation,radix:v.radix},m.resourcePolicy):text(v.spelling,8192))&&REPRESENTATIONS.includes(v.representation)&&v.representation!=='domain'&&Number.isInteger(v.radix)&&v.radix>=2&&v.radix<=36&&text(v.unit,100)&&['value','missing','null','absent','unknown'].includes(v.presence)&&(v.presence!=='value'||m.version===2||supportedValue(v.spelling,v.representation,v.radix))&&
- (m.computation===undefined||validComputation(m.computation))&&validQuantity(m.quantity,v.unit)&&validTime(m.time)&&Array.isArray(m.sources)&&m.sources.length>0&&m.sources.length<=32&&m.sources.every(validLocator)&&keys(m.references,MEASUREMENT_ROLES)&&MEASUREMENT_ROLES.every(k=>optionalRef(m.references[k]))&&text(m.decoderVersion,300)&&(!m.references.decoder||!!m.decoderVersion.trim())&&['unknown','verified','failed','not-checked'].includes(m.integrity)&&['unknown','complete','partial'].includes(m.completion)&&text(m.note,10000);
+ (m.synchronization===undefined||validClockSynchronizationDescriptor(m.synchronization))&&(m.computation===undefined||validComputation(m.computation))&&validQuantity(m.quantity,v.unit)&&validTime(m.time)&&Array.isArray(m.sources)&&m.sources.length>0&&m.sources.length<=32&&m.sources.every(validLocator)&&keys(m.references,MEASUREMENT_ROLES)&&MEASUREMENT_ROLES.every(k=>optionalRef(m.references[k]))&&text(m.decoderVersion,300)&&(!m.references.decoder||!!m.decoderVersion.trim())&&['unknown','verified','failed','not-checked'].includes(m.integrity)&&['unknown','complete','partial'].includes(m.completion)&&text(m.note,10000);
 }
 export function measurementReferences(m){return [...m.sources.map(s=>s.ref),...Object.values(m.references),...schemaReferences(m)].filter(Boolean);}
 
 // Structural readers do not fetch retained text. Submission and authenticated
 // selected readers call this only after resolving the declared scalar fields.
 export function validateMeasurementDeclaration(value,{budget}={}){
+ if(value?.synchronization)validateClockSynchronizationDescriptor(value.synchronization,{budget});
  if(value?.quantity?.unitDefinition)validateUnitDefinition(value.quantity.unitDefinition,{budget});
  if(value?.quantity?.uncertainty)validateIntervalUncertainty(value.quantity.uncertainty,{budget});
  if(value?.time?.clock?.definition)validateClockDefinition(value.time.clock.definition,{budget});

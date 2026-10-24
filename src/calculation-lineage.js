@@ -2,8 +2,8 @@
 import {AppError} from './errors.js';
 import {validGraphAddress,graphPosition} from './web/dataset-calculation-graph-model.js';
 const fail=()=>{throw new AppError('MATERIAL_MISSING');};
-const leafKey=leaf=>'binding:'+String(leaf.binding.position).padStart(16,'0')+':column:'+String(leaf.column).padStart(16,'0')+(leaf.relativeRow===-1?':row:-1':leaf.window?':window:'+String(leaf.window.node.position).padStart(16,'0')+':'+leaf.window.node.id:'');
-export const validLineageLeaf=leaf=>leaf&&(Object.keys(leaf).sort().join()==='binding,column'||Object.keys(leaf).sort().join()==='binding,column,relativeRow'&&leaf.relativeRow===-1||Object.keys(leaf).sort().join()==='binding,column,window'&&Object.keys(leaf.window??{}).join()==='node'&&validGraphAddress(leaf.window.node))&&validGraphAddress(leaf.binding)&&graphPosition(leaf.column);
+const leafKey=leaf=>'binding:'+String(leaf.binding.position).padStart(16,'0')+':column:'+String(leaf.column).padStart(16,'0')+(leaf.relativeRow===-1?':row:-1':leaf.synchronization?':synchronization:'+String(leaf.synchronization.node.position).padStart(16,'0')+':'+leaf.synchronization.node.id:leaf.window?':window:'+String(leaf.window.node.position).padStart(16,'0')+':'+leaf.window.node.id:'');
+export const validLineageLeaf=leaf=>leaf&&(Object.keys(leaf).sort().join()==='binding,column'||Object.keys(leaf).sort().join()==='binding,column,relativeRow'&&leaf.relativeRow===-1||Object.keys(leaf).sort().join()==='binding,column,window'&&Object.keys(leaf.window??{}).join()==='node'&&validGraphAddress(leaf.window.node)||Object.keys(leaf).sort().join()==='binding,column,synchronization'&&Object.keys(leaf.synchronization??{}).join()==='node'&&validGraphAddress(leaf.synchronization.node))&&validGraphAddress(leaf.binding)&&graphPosition(leaf.column);
 export class CalculationLineage{
  constructor(sequences,write=fn=>fn()){this.sequences=sequences;this.write=write;}
  ref(root=null){return this.sequences.validate({format:1,kind:'calculation-lineage',root,count:root?.count??0,chunkSize:1});}

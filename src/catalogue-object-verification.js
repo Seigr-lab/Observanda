@@ -1,3 +1,5 @@
+import {clockSynchronizationMetadata} from './clock-synchronization-format.js';
+import {catalogueRequiresClockSynchronization} from './catalogue-format.js';
 import {approximateCalculatorMetadata} from './approximate-calculator-format.js';
 import {catalogueRequiresApproximateCalculator} from './catalogue-format.js';
 import {checkpointHasStructuredCalculator,structuredCalculatorMetadata} from './structured-calculator-format.js';
@@ -21,7 +23,7 @@ const fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 export async function* verifiedCatalogueObjects(store){
  const index=new ObjectIndex(store,{cacheReads:true,scanAhead:true}),head=await index.head();await index.checkCounts(head);
  operationTotal(head.legacy?.length??head.root?.count??0);
- const batch=[];let policyAdmission,resultAdmission,scalarAdmission,domainAlgebraAdmission,structuredAdmission,approximateAdmission;
+ const batch=[];let policyAdmission,resultAdmission,scalarAdmission,domainAlgebraAdmission,structuredAdmission,approximateAdmission,clockSynchronizationAdmission;
  async function* values(){
   const rows=new Map((await store.db.all('SELECT id,payload FROM objects WHERE id=ANY($1::text[]) AND octet_length(payload)<=16384',batch.map(entry=>entry.id))).map(row=>[row.id,row.payload]));
   for(const entry of batch){
@@ -34,7 +36,7 @@ export async function* verifiedCatalogueObjects(store){
     if(checkpointHasCalculationPolicy(checkpoint)){policyAdmission??=catalogueFormat(store.catalogueDb??store.db).then(catalogueRequiresCalculationPolicies);if(!await policyAdmission)fail();}
    }
    if(entry.id.startsWith('metadata:.observanda/materials/objects/')||entry.id.startsWith('metadata:.observanda/jobs/')){let metadata;try{metadata=JSON.parse(value.text);}catch{fail();}if(structuredCalculatorMetadata(entry.id.slice(9),metadata)){structuredAdmission??=catalogueFormat(store.catalogueDb??store.db).then(catalogueRequiresStructuredCalculator);if(!await structuredAdmission)fail();}if(calculatorResultMetadata(entry.id.slice(9),metadata)){resultAdmission??=catalogueFormat(store.catalogueDb??store.db).then(catalogueRequiresCalculatorDatasetResults);if(!await resultAdmission)fail();}}
-   if(entry.id.startsWith('metadata:.observanda/materials/')||entry.id.startsWith('metadata:.observanda/jobs/')){let metadata;try{metadata=JSON.parse(value.text);}catch{fail();}if(approximateCalculatorMetadata(entry.id.slice(9),metadata)){approximateAdmission??=catalogueFormat(store.catalogueDb??store.db).then(catalogueRequiresApproximateCalculator);if(!await approximateAdmission)fail();}if(domainAlgebraMetadata(entry.id.slice(9),metadata)){domainAlgebraAdmission??=catalogueFormat(store.catalogueDb??store.db).then(catalogueRequiresDomainAlgebra);if(!await domainAlgebraAdmission)fail();}if(measurementScalarMetadata(entry.id.slice(9),metadata)){scalarAdmission??=catalogueFormat(store.catalogueDb??store.db).then(catalogueRequiresMeasurementScalarPolicies);if(!await scalarAdmission)fail();}}
+   if(entry.id.startsWith('metadata:.observanda/materials/')||entry.id.startsWith('metadata:.observanda/jobs/')){let metadata;try{metadata=JSON.parse(value.text);}catch{fail();}if(clockSynchronizationMetadata(entry.id.slice(9),metadata)){clockSynchronizationAdmission??=catalogueFormat(store.catalogueDb??store.db).then(catalogueRequiresClockSynchronization);if(!await clockSynchronizationAdmission)fail();}if(approximateCalculatorMetadata(entry.id.slice(9),metadata)){approximateAdmission??=catalogueFormat(store.catalogueDb??store.db).then(catalogueRequiresApproximateCalculator);if(!await approximateAdmission)fail();}if(domainAlgebraMetadata(entry.id.slice(9),metadata)){domainAlgebraAdmission??=catalogueFormat(store.catalogueDb??store.db).then(catalogueRequiresDomainAlgebra);if(!await domainAlgebraAdmission)fail();}if(measurementScalarMetadata(entry.id.slice(9),metadata)){scalarAdmission??=catalogueFormat(store.catalogueDb??store.db).then(catalogueRequiresMeasurementScalarPolicies);if(!await scalarAdmission)fail();}}
    yield {id:entry.id,value};operationAdvance();
   }
   batch.length=0;

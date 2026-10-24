@@ -1,7 +1,7 @@
 import {measurementScalarPolicies} from './measurement-scalar-storage.js';
 import {AppError} from './errors.js';
-export const measurementScalarMaterial=value=>{const c=value?.content;return !!c&&(c.scalarPolicies===1||c.aggregation?.version===3||c.comparison?.version===3||[7,8].includes(c.graphVersion)&&c.tool==='Observanda calculation graph'||[10,11].includes(c.calculation?.version)||c.measurement?.version===2||measurementScalarPolicies(c.measurement));};
-export function measurementScalarCommand(value){return !!value&&([10,11].includes(value.calculation?.version)||value.aggregation?.version===3||value.comparison?.version===3||[7,8].includes(value.graphVersion)||value.measurement?.version===2||measurementScalarPolicies(value.measurement)||value.columns?.some(measurementScalarPolicies)||value.columnChanges?.some(change=>measurementScalarPolicies(change.column)));}
+export const measurementScalarMaterial=value=>{const c=value?.content;return !!c&&(c.tool==='Observanda clock synchronization'||c.scalarPolicies===1||c.aggregation?.version===3||c.comparison?.version===3||[7,8,9].includes(c.graphVersion)&&c.tool==='Observanda calculation graph'||[10,11,12].includes(c.calculation?.version)||c.measurement?.version===2||measurementScalarPolicies(c.measurement));};
+export function measurementScalarCommand(value){return !!value&&([10,11,12].includes(value.calculation?.version)||value.aggregation?.version===3||value.comparison?.version===3||[7,8,9].includes(value.graphVersion)||value.measurement?.version===2||measurementScalarPolicies(value.measurement)||value.columns?.some(measurementScalarPolicies)||value.columnChanges?.some(change=>measurementScalarPolicies(change.column)));}
 export function measurementScalarMetadata(relative,value){
  if(relative.startsWith('.observanda/jobs/'))return measurementScalarCommand(value?.input?.command);
  if(!relative.startsWith('.observanda/materials/'))return false;

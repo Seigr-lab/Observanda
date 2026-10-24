@@ -391,5 +391,8 @@
   "CALCULATOR_RESULT_EXACT": "Retain an independent exact scalar, vector, matrix or complex expression, or a finite real computational approximation from engine 4. Units, assignments, unresolved names and unsupported results cannot be retained.",
   "CALCULATOR_RESULT_LIBRARY": "The library version pinned by this calculation is unavailable. Keep the retained recipe, or save a new calculation with an available engine.",
   "CALCULATOR_RESULT_RESOURCE": "The saved calculation exceeds its declared resource limits. Review the saved policy before trying again; no result was retained.",
-  "ANALYSIS_SCALAR_POLICY": "Edit this comparison and choose Enable declaration resource limits before using sources with saved scalar limits. Earlier results remain available."
+  "ANALYSIS_SCALAR_POLICY": "Edit this comparison and choose Enable declaration resource limits before using sources with saved scalar limits. Earlier results remain available.",
+  "MEASUREMENT_CLOCK_SYNCHRONIZATION": "Choose compatible declared elapsed or external clock coordinates and a complete synchronization model. Counter wraps and resets must be resolved explicitly before synchronization.",
+  "MEASUREMENT_CLOCK_SYNCHRONIZATION_ANCHOR": "Choose two complete observation pairs from the pinned source and reference datasets. The source coordinates must differ and the declared mapping must have a positive rate.",
+  "MEASUREMENT_CLOCK_SYNCHRONIZATION_RANGE": "This value is outside the model's declared validity range. Inspect the pinned model or explicitly choose to retain absent values outside that range."
 }
