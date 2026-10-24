@@ -150,5 +150,16 @@
  "reshapeOperand": "Choose a supported vector, matrix or tensor node that occurs before this node.",
  "reshapeShapeInvalid": "Enter exactly one dimension for a vector, two for a matrix, or 3 to 16 for a tensor. Every dimension must be a positive whole number and the total must fit exact indexing capacity.",
  "reshapeLabel": "Reshape [{shape}]",
- "graphWorking": "Graph operation in progress. Please wait."
+ "graphWorking": "Graph operation in progress. Please wait.",
+ "permuteUpgrade": "Enable axis permutation",
+ "permuteUpgradeHelp": "Create a new graph revision that supports explicit axis permutation. Review the saved operation limits before enabling it. Earlier graph revisions and retained results keep their original interpretation.",
+ "permuteAdd": "Add axis permutation",
+ "permuteTitle": "Edit axis permutation",
+ "permuteHelp": "Choose one earlier supported vector, matrix or tensor node. Enter every source axis exactly once, in the desired output order. Source values, nulls, declared context and pinned references are preserved.",
+ "permuteSource": "Choose source domain value",
+ "permuteAxes": "Source axes in output order (starting at 1, comma-separated)",
+ "permuteOrder": "Each position in the list is an output axis; its number selects the source axis. For source shape [2, 3, 4], axes 3, 1, 2 give output shape [4, 2, 3]. Axes 1, 2, 3 keep that shape and component order unchanged. The rank and component count stay the same. No axis order or physical meaning is inferred.",
+ "permuteOperand": "Choose a supported vector, matrix or tensor node that occurs before this node.",
+ "permuteAxesInvalid": "List every source axis once, using whole numbers from 1 to the source rank, separated by commas. Include 1 to 16 axes without gaps, repeats or extra axes.",
+ "permuteLabel": "Permute axes [{axes}]"
 }

@@ -1,8 +1,8 @@
-// Explicit reshape preserves the source component ordinal, spelling and context.
+// Explicit shape and axis operations share a bounded indexed component reader.
 import {AppError} from './errors.js';
 import {DatasetResourceBudget,numericalOperation} from './dataset-resource-budget.js';
 import {validDatasetResourcePolicy,defaultDatasetResourcePolicy} from './web/dataset-resource-policy.js';
-import {DomainAlgebraError,domainReshapeShape} from './web/measurement-domain-algebra-model.js';
+import {DomainAlgebraError,domainReshapeShape,domainPermutationShape,domainPermutationIndex} from './web/measurement-domain-algebra-model.js';
 import {domainUsesResourcePolicy} from './web/measurement-domain-model.js';
 import {validatePolicyScalar,isScalarResourceFailure} from './web/measurement-scalar-policy.js';
 import {validateDomainValue,domainValueSupported,retainDomainComponents} from './measurement-domain-storage.js';
@@ -19,9 +19,22 @@ export function domainReshapeColumn(node,column,{policy}={}){
   return {...structuredClone(column),domain};
  }catch(error){handled(error);}
 }
-export async function calculateDomainReshapeNode(materials,node,cell,column,{policy,write=fn=>fn(),signal,check=async()=>{}}={}){
+export function domainPermuteColumn(node,column,{policy}={}){
  try{
-  const output=domainReshapeColumn(node,column,{policy}),current=async()=>{signal?.throwIfAborted();await check();signal?.throwIfAborted();};
+  if(column?.representation!=='domain'||policy!==undefined&&!validDatasetResourcePolicy(policy))fail();
+  const target=domainPermutationShape(column.domain,node.axes),output=structuredClone(column);output.domain.shape=target.shape;return output;
+ }catch(error){handled(error);}
+}
+export async function calculateDomainReshapeNode(materials,node,cell,column,options={}){
+ return calculateDomainReindex(materials,cell,column,domainReshapeColumn(node,column,options),null,options);
+}
+export async function calculateDomainPermuteNode(materials,node,cell,column,options={}){
+ const output=domainPermuteColumn(node,column,options),axes=[...node.axes],source=structuredClone(column.domain);
+ return calculateDomainReindex(materials,cell,column,output,(index,budget)=>domainPermutationIndex(source,axes,index,budget),options);
+}
+async function calculateDomainReindex(materials,cell,column,output,indexAt,{policy,write=fn=>fn(),signal,check=async()=>{}}={}){
+ try{
+  const current=async()=>{signal?.throwIfAborted();await check();signal?.throwIfAborted();};
   await current();if(!cell||cell.kind==='absent')return {kind:'absent',value:''};if(cell.kind==='null')return {kind:'null',value:''};if(typeof cell.value==='string'&&column.missing.some(item=>item.value===cell.value))return {kind:'absent',value:''};
   const value=validateDomainValue(materials,cell.value,column.domain);if(!domainValueSupported(value))fail('MEASUREMENT_DOMAIN_UNSUPPORTED');
   const definition=value.definition,owner=domainUsesResourcePolicy(definition)?definition.resourcePolicy:defaultDatasetResourcePolicy(),operationPolicy=policy??owner;
@@ -29,9 +42,9 @@ export async function calculateDomainReshapeNode(materials,node,cell,column,{pol
   async function* components(){
    let page=null;
    for(let index=0;index<value.components.count;index++){
-    await current();const offset=Math.floor(index/16)*16,budget=new DatasetResourceBudget(operationPolicy);
+    await current();const budget=new DatasetResourceBudget(operationPolicy),sourceIndex=indexAt?numericalOperation(budget,b=>indexAt(index,b)):index,offset=Math.floor(sourceIndex/16)*16;
     if(!page||page.offset!==offset){page=await materials.sequences.page(value.components,{offset,limit:16});await current();if(page.offset!==offset||page.items.length!==Math.min(16,value.components.count-offset))fail('MATERIAL_MISSING');}
-    const item=page.items[index-offset];if(!item||Object.keys(item).length!==1||!Object.hasOwn(item,'spelling')||item.spelling!==null&&typeof item.spelling!=='string'&&(![3,4].includes(value.version)||!datasetCellReference(item.spelling)))fail('MATERIAL_MISSING');
+    const item=page.items[sourceIndex-offset];if(!item||Object.keys(item).length!==1||!Object.hasOwn(item,'spelling')||item.spelling!==null&&typeof item.spelling!=='string'&&(![3,4].includes(value.version)||!datasetCellReference(item.spelling)))fail('MATERIAL_MISSING');
     numericalOperation(budget,b=>b.step());if(item.spelling===null){yield {spelling:null,budget};continue;}
     const selected=await resolveScalarOperand(materials,{kind:'string',value:item.spelling},scalarColumn,{policy:operationPolicy,signal,budget});
     numericalOperation(budget,b=>validatePolicyScalar({spelling:selected.value,representation:scalarColumn.representation,radix:scalarColumn.radix},owner,{budget:b}));

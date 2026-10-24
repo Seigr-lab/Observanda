@@ -1,4 +1,4 @@
-import {validDomainDefinition,knownDomain,domainCodec,domainComponentCount} from './measurement-domain-model.js';
+import {validDomainDefinition,knownDomain,domainCodec,domainComponentCount,domainComponentPosition,domainComponentIndex} from './measurement-domain-model.js';
 export const DOMAIN_ALGEBRA_OPERATIONS=['add','subtract','dot','matmul','multiply','divide'];
 export const validDomainAlgebraOperation=operation=>DOMAIN_ALGEBRA_OPERATIONS.includes(operation);
 export class DomainAlgebraError extends Error{constructor(code='MEASUREMENT_DOMAIN_INCOMPATIBLE'){super(code);this.code=code;}}
@@ -27,4 +27,20 @@ export function domainReshapeShape(source,shape){
  let count;try{count=domainComponentCount({shape});}catch{fail();}
  if(count!==domainComponentCount(source))fail();
  return {codec:shape.length===1?'vector':shape.length===2?'matrix':'tensor',shape:[...shape]};
+}
+
+// Destination axis j comes from source axis axes[j]. Repeated or omitted axes
+// are refused even when their lengths are equal or singleton.
+export function domainPermutationShape(source,axes){
+ if(!validDomainDefinition(source)||!knownDomain(source)||!['vector','matrix','tensor'].includes(domainCodec(source)))fail('MEASUREMENT_DOMAIN_UNSUPPORTED');
+ const rank=source.shape.length;
+ if(!Array.isArray(axes)||axes.length!==rank||!Array.from(axes).every(axis=>Number.isSafeInteger(axis)&&axis>=0&&axis<rank)||new Set(axes).size!==rank)fail();
+ return {codec:domainCodec(source),shape:axes.map(axis=>source.shape[axis])};
+}
+export function domainPermutationIndex(source,axes,index,budget){
+ const target=domainPermutationShape(source,axes);let destination;
+ try{destination=domainComponentPosition(target,index);}catch{fail();}
+ const position=Array(axes.length);
+ for(let axis=0;axis<axes.length;axis++){budget?.step();position[axes[axis]]=destination[axis];}
+ return domainComponentIndex(source,position);
 }

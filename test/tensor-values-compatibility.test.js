@@ -26,7 +26,7 @@ test('historical tensor codec labels remain opaque in both previous declaration 
 });
 test('reshape and tensor declarations require graph10 and exact positive target cardinality',async()=>{
  const node={id:randomUUID(),kind:'domain-reshape',left:{id:randomUUID(),position:0},shape:[2,2,2]};for(let version=1;version<10;version++)assert.equal(validGraphNode(node,1,version),false);assert.equal(validGraphNode(node,1,10),true);for(const shape of [[],[0],[-1],[1.5],Array(17).fill(1),[Number.MAX_SAFE_INTEGER,2]])assert.equal(validGraphNode({...node,shape},1,10),false);
- const ref={kind:'analysis',id:randomUUID(),revision:'a'.repeat(64)};assert.equal(validGraphCalculation({version:13,graph:ref}),true);assert.equal(validGraphCalculation({version:14,graph:ref}),false);const column={representation:'domain',domain:{...defaultDomain('tensor'),resourcePolicy:defaultDatasetResourcePolicy()}};
+ const ref={kind:'analysis',id:randomUUID(),revision:'a'.repeat(64)};assert.equal(validGraphCalculation({version:13,graph:ref}),true);assert.equal(validGraphCalculation({version:14,graph:ref}),true);assert.equal(validGraphCalculation({version:15,graph:ref}),false);const column={representation:'domain',domain:{...defaultDomain('tensor'),resourcePolicy:defaultDatasetResourcePolicy()}};
  for(let graphVersion=2;graphVersion<=9;graphVersion++)await assert.rejects(new CalculationGraphs({sequences:{}}).declaration(column,{graphVersion}),{code:'DATASET_CALCULATION'});
 });
 test('new metadata admits tensor generation without treating historical codec text as new evidence',()=>{

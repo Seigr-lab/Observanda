@@ -24,3 +24,14 @@ export function readDomainReshape(root,node,position){
  let shape;try{shape=readDomainShape(root.querySelector('[data-graph-field="shape"]').value,{minRank:kind==='tensor'?3:kind==='matrix'?2:1,maxRank:kind==='tensor'?16:kind==='matrix'?2:1});}catch{throw Error(domainAlgebraText('reshapeShapeInvalid'));}
  return {id:node.id,kind:'domain-reshape',left,shape};
 }
+
+export function domainPermutationControls(node,{esc,field,address}){
+ return '<p>'+esc(domainAlgebraText('permuteHelp'))+'</p>'+address('left',domainAlgebraText('permuteSource'),node.left)+field(esc(domainAlgebraText('permuteAxes')),'<input data-graph-field="axes" maxlength="100" aria-describedby="graph-permutation-order" value="'+esc((node.axes??[]).map(axis=>axis+1).join(', '))+'">')+'<p id="graph-permutation-order">'+esc(domainAlgebraText('permuteOrder'))+'</p>';
+}
+export function readDomainPermutation(root,node,position){
+ let left;try{left=JSON.parse(root.querySelector('[data-graph-field="left"]').value);}catch{}
+ if(!validGraphAddress(left)||left.position>=position)throw Error(domainAlgebraText('permuteOperand'));
+ const entries=root.querySelector('[data-graph-field="axes"]').value.split(',').map(value=>value.trim()),axes=entries.map(value=>Number(value)-1);
+ if(entries.length<1||entries.length>16||entries.some(value=>!/^[1-9][0-9]*$/.test(value))||axes.some(axis=>!Number.isSafeInteger(axis)||axis<0||axis>=axes.length)||new Set(axes).size!==axes.length)throw Error(domainAlgebraText('permuteAxesInvalid'));
+ return {id:node.id,kind:'domain-permute',left,axes};
+}

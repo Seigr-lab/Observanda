@@ -1,3 +1,4 @@
+import {axisPermutationMaterial,assertAxisPermutationFormat} from './axis-permutation-format.js';
 import {quantileAggregationMaterial,assertQuantileAggregationFormat} from './quantile-aggregation-format.js';
 import {validateAggregationReceipts,resolveAggregationReceipts} from './dataset-aggregation-quantiles.js';
 import {tensorValuesMaterial,assertTensorValuesFormat} from './tensor-values-format.js';
@@ -197,6 +198,7 @@ export class ResearchMaterials {
   if(ref.kind!=='record'&&(doc.format!==1||doc.kind!==ref.kind||doc.id!==ref.id))fail('MATERIAL_MISSING');
   if(calculatorResultMaterial(doc))await assertCalculatorResultFormat(this.workspace,doc);
   if(approximateCalculatorMaterial(doc))await assertApproximateCalculatorFormat(this.workspace);
+  if(axisPermutationMaterial(doc))await assertAxisPermutationFormat(this.workspace);
   if(quantileAggregationMaterial(doc))await assertQuantileAggregationFormat(this.workspace);
   if(tensorValuesMaterial(doc))await assertTensorValuesFormat(this.workspace);
   if(clockSynchronizationMaterial(doc))await assertClockSynchronizationFormat(this.workspace);
@@ -723,6 +725,7 @@ export class ResearchMaterials {
     }
     const doc=await this.read(ref);
     if(approximateCalculatorMaterial(doc))await assertApproximateCalculatorFormat(this.workspace);
+  if(axisPermutationMaterial(doc))await assertAxisPermutationFormat(this.workspace);
   if(quantileAggregationMaterial(doc))await assertQuantileAggregationFormat(this.workspace);
   if(tensorValuesMaterial(doc))await assertTensorValuesFormat(this.workspace);
   if(clockSynchronizationMaterial(doc))await assertClockSynchronizationFormat(this.workspace);
@@ -737,9 +740,9 @@ export class ResearchMaterials {
     if(nativeDomainMaterial(doc))await checkDomainFormat();
     if(revisionText(await this.index.inputSet(ref))!==revisionText(this.referenceSet(doc.content)))fail('CATALOGUE_DAMAGED');
     if(doc.previous)await enqueue({...ref,revision:doc.previous});
-    if(doc.content.graphVersion>=6&&doc.content.tool==='Observanda calculation graph'||[9,10,11,12,13].includes(doc.content.calculation?.version))await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresWindowCalculations}=await import('./catalogue-format.js');if(!catalogueRequiresWindowCalculations(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
-    if(doc.content.graphVersion>=5&&doc.content.tool==='Observanda calculation graph'||[8,9,10,11,12,13].includes(doc.content.calculation?.version))await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresDatasetResourcePolicies}=await import('./catalogue-format.js');if(!catalogueRequiresDatasetResourcePolicies(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
-    if(doc.content.tool==='Observanda calculation graph'||[4,5,6,7,8,9,10,11,12,13].includes(doc.content.calculation?.version))await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresReferencedCalculations}=await import('./catalogue-format.js');if(!catalogueRequiresReferencedCalculations(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
+    if(doc.content.graphVersion>=6&&doc.content.tool==='Observanda calculation graph'||[9,10,11,12,13,14].includes(doc.content.calculation?.version))await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresWindowCalculations}=await import('./catalogue-format.js');if(!catalogueRequiresWindowCalculations(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
+    if(doc.content.graphVersion>=5&&doc.content.tool==='Observanda calculation graph'||[8,9,10,11,12,13,14].includes(doc.content.calculation?.version))await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresDatasetResourcePolicies}=await import('./catalogue-format.js');if(!catalogueRequiresDatasetResourcePolicies(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
+    if(doc.content.tool==='Observanda calculation graph'||[4,5,6,7,8,9,10,11,12,13,14].includes(doc.content.calculation?.version))await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresReferencedCalculations}=await import('./catalogue-format.js');if(!catalogueRequiresReferencedCalculations(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
     if(doc.content.tool==='Observanda calculation graph'){const {CalculationGraphs}=await import('./calculation-graphs.js');await new CalculationGraphs(this).verify(doc);}
     const comparison=[2,3].includes(doc.content.comparison?.version);
     if(comparison){
