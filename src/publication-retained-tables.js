@@ -1,3 +1,4 @@
+import {cusumContextParts,cusumText} from './web/dataset-cusum-context.js';
 import {spectrumContextParts,spectrumText} from './web/dataset-spectrum-context.js';
 import {coordinateFrameContextText,coordinateFrameAxisPageParts} from './web/coordinate-frame-context.js';
 import {statisticalUncertaintyContextText} from './web/statistical-uncertainty-context.js';
@@ -36,6 +37,7 @@ export async function* retainedTableHTML(materials,statement,{signal}={}){
    if(format.coordinateFrame)yield esc(' ['+coordinateFrameContextText(format.coordinateFrame)+']');
    if(format.pairedStatistic)yield esc(' ['+aggregationPairContextText(format.pairedStatistic)+']');
    if(format.spectrum){yield '<details class="retained-spectrum-context"><summary>'+esc(spectrumText('methodDetails'))+'</summary><p>';for(const part of spectrumContextParts(format.spectrum)){if(typeof part==='string')yield esc(part);else for await(const text of cellText(materials,part.spelling,{signal}))yield esc(text);}yield '</p></details>';}
+   if(format.cusum){yield '<details class="retained-cusum-context"><summary>'+esc(cusumText('methodDetails'))+'</summary><p>';for(const part of cusumContextParts(format.cusum)){if(typeof part==='string')yield esc(part);else for await(const text of cellText(materials,part.spelling,{signal}))yield esc(text);}yield '</p></details>';}
    if(format.statisticalUncertainty)yield esc(' ['+statisticalUncertaintyContextText(format.statisticalUncertainty)+']');
    if(format.synchronization){yield ' [';for(const part of clockSynchronizationContextParts(format.synchronization)){if(typeof part==='string')yield esc(part);else for await(const text of cellText(materials,part.spelling,{signal}))yield esc(text);}yield ']';}
    if(['radix','radix-fraction'].includes(format.representation))yield esc(' ('+messages.base.replace('{radix}',format.radix)+')');yield '</th>';

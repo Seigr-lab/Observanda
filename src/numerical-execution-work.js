@@ -15,13 +15,14 @@ const fail=()=>{throw new AppError('MATERIAL_MISSING');};
 const exact=(value,keys)=>!!value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).length===keys.length&&keys.every(key=>Object.hasOwn(value,key));
 export const numericalExecutionWorkFile=id=>{if(!researchId(id))throw new AppError('INVALID');return '.observanda/materials/numerical-work/'+id+'.json';};
 export class NumericalExecutionWork{
- constructor(materials,command,{jobId,writePage,signal,check,validCursor,scratch}={}){
-  this.materials=materials;this.workspace=materials.workspace;this.sequences=materials.sequences;this.identity=digest(revisionText(command));this.policy=command.spectrum.executionPolicy;this.signal=signal;this.check=check;this.validCursor=validCursor;this.scratch=scratch;this.file=scratch?null:numericalExecutionWorkFile(jobId);this.write=writePage??(operation=>this.workspace.withLock(()=>withWorkspaceMetadataBatch(this.workspace,operation)));this.active=false;this.pending=null;this.cache=new Map();this.cacheBytes=0;
-  this.saved={version:1,kind:'spectrum',commandHash:this.identity,ledger:createNumericalExecutionState(this.identity,this.policy),cursor:null,root:null};this.exists=false;
+ constructor(materials,command,{kind='spectrum',jobId,writePage,signal,check,validCursor,scratch}={}){
+  if(!['spectrum','cusum'].includes(kind)||command?.[kind]?.version!==(kind==='spectrum'?2:1)||command[kind==='spectrum'?'cusum':'spectrum']!==undefined||typeof validCursor!=='function')throw new AppError('INVALID');this.kind=kind;
+  this.materials=materials;this.workspace=materials.workspace;this.sequences=materials.sequences;this.identity=digest(revisionText(command));this.policy=command[kind].executionPolicy;this.signal=signal;this.check=check;this.validCursor=validCursor;this.scratch=scratch;this.file=scratch?null:numericalExecutionWorkFile(jobId);this.write=writePage??(operation=>this.workspace.withLock(()=>withWorkspaceMetadataBatch(this.workspace,operation)));this.active=false;this.pending=null;this.cache=new Map();this.cacheBytes=0;
+  this.saved={version:1,kind,commandHash:this.identity,ledger:createNumericalExecutionState(this.identity,this.policy),cursor:null,root:null};this.exists=false;
   if(!scratch){this.tree=new RetainedTableIndex(this.sequences,{namespace:'numerical-work-nodes',allowSparseBranches:true});this.large=new RetainedJsonValue(this.sequences,operation=>operation(),{namespace:'numerical-work-chunks'});}
  }
  validate(value){
-  if(!exact(value,['version','kind','commandHash','ledger','cursor','root'])||value.version!==1||value.kind!=='spectrum'||!validTableRef(value.root)||!this.validCursor(value.cursor))fail();
+  if(!exact(value,['version','kind','commandHash','ledger','cursor','root'])||value.version!==1||value.kind!==this.kind||!validTableRef(value.root)||!this.validCursor(value.cursor))fail();
   if(value.commandHash!==this.identity)throw new AppError('MATERIAL_CHANGED');try{validateNumericalExecutionState(value.ledger,{identity:this.identity,policy:this.policy});}catch{fail();}return value;
  }
  async read(){const raw=await this.workspace.readMetadata(this.file,1048576);if(raw===null)return null;let value;try{value=JSON.parse(raw);}catch{fail();}return this.validate(value);}

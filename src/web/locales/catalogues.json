@@ -407,5 +407,6 @@
     "en"
   ],
   "datasetSpectrum": ["en"],
+  "datasetCusum": ["en"],
   "numericalExecution": ["en"]
 }

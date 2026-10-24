@@ -411,5 +411,10 @@
   "DATASET_SPECTRUM_INPUT": "Select present scalar values or a supported native complex column. Every selected value must have a valid declared interpretation.",
   "DATASET_SPECTRUM_UNITS": "Use a difference unit with zero offset for the signal and sampling grid, or an unlabelled signal with no unit declaration. A unit label alone does not define spectral units.",
   "DATASET_SPECTRUM_SAMPLING": "The positive sample step and optional coordinate column must describe the exact declared uniform grid from the selected origin. No sampling rate is inferred.",
-  "DATASET_SPECTRUM_MISSING": "The selected spectral range contains an excluded, missing, null or absent reading. Choose a complete range; samples are never silently removed or padded."
+  "DATASET_SPECTRUM_MISSING": "The selected spectral range contains an excluded, missing, null or absent reading. Choose a complete range; samples are never silently removed or padded.",
+  "DATASET_CUSUM_INVALID": "Choose a pinned scalar signal, a positive row count and complete CUSUM settings. Your current entries have been retained.",
+  "DATASET_CUSUM_PARAMETERS": "CUSUM requires an exact target, a nonnegative allowance and a threshold greater than zero, within the declared resource policy.",
+  "DATASET_CUSUM_INPUT": "A selected CUSUM input does not match its declared scalar interpretation or original row order.",
+  "DATASET_CUSUM_GAP": "The selected CUSUM range contains a missing or excluded row. Choose an explicit gap policy before calculating.",
+  "DATASET_CUSUM_UNITS": "CUSUM requires source and parameter difference units with matching dimensions, positive scales and zero offsets."
 }

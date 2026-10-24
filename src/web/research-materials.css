@@ -162,3 +162,10 @@ dialog:has(> .material-workbench) { position:fixed; inset:1rem; margin:auto; max
  [data-domain-components] .domain-component-label { display:block; margin-bottom:.3rem; font-weight:600; overflow-wrap:normal; }
  [data-domain-components] .button { max-width:100%; white-space:normal; }
 }
+
+.material-workbench fieldset[data-cusum-controls] { border:0; padding:0; margin:0; min-width:0; }
+[data-cusum-form],[data-cusum-review],[data-cusum-form] fieldset,[data-cusum-form] .field { min-width:0; }
+[data-cusum-form] input,[data-cusum-form] select { max-width:100%; }
+[data-cusum-input] { border-bottom:1px solid var(--border); padding-block:.5rem; overflow-wrap:anywhere; }
+[data-cusum-preview-table] th details { max-width:18rem; font-weight:400; white-space:normal; overflow-wrap:anywhere; }
+[data-cusum-preview-table] td { max-width:24rem; white-space:normal; overflow-wrap:anywhere; }

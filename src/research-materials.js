@@ -1,3 +1,6 @@
+import {DatasetCusumResults,CUSUM_TOOL} from './dataset-cusum-results.js';
+import {cusumMaterial,assertCusumFormat} from './dataset-cusum-format.js';
+import {validCusumDescriptor} from './web/dataset-cusum-model.js';
 import {numericalExecutionMaterial,assertNumericalExecutionFormat} from './numerical-execution-format.js';
 import {DatasetSpectrumResults,SPECTRUM_TOOL} from './dataset-spectrum-results.js';
 import {spectrumMaterial,assertSpectrumFormat} from './dataset-spectrum-format.js';
@@ -115,7 +118,7 @@ export function exactInteger(value,radix=10){
 }
 export function validColumns(columns,width){
  return Array.isArray(columns)&&columns.length===width&&columns.every(c=>
-  c&&(c.spectrum===undefined||validSpectrumDescriptor(c.spectrum))&&validColumnCoordinateFrame(c)&&(c.statisticalUncertainty===undefined||validStatisticalUncertaintyDescriptor(c.statisticalUncertainty))&&(c.synchronization===undefined||validClockSynchronizationDescriptor(c.synchronization))&&(c.computation===undefined||validComputation(c.computation))&&required(c.name,200)&&REPRESENTATIONS.includes(c.representation)&&validColumnDomain(c)&&
+  c&&(c.cusum===undefined||validCusumDescriptor(c.cusum))&&(c.spectrum===undefined||validSpectrumDescriptor(c.spectrum))&&validColumnCoordinateFrame(c)&&(c.statisticalUncertainty===undefined||validStatisticalUncertaintyDescriptor(c.statisticalUncertainty))&&(c.synchronization===undefined||validClockSynchronizationDescriptor(c.synchronization))&&(c.computation===undefined||validComputation(c.computation))&&required(c.name,200)&&REPRESENTATIONS.includes(c.representation)&&validColumnDomain(c)&&
   Number.isInteger(c.radix)&&c.radix>=2&&c.radix<=36&&text(c.unit,100)&&Array.isArray(c.missing)&&c.missing.length<=30&&
   c.missing.every(m=>m&&text(m.value,100)&&required(m.meaning,200))&&
   (c.resourcePolicy===undefined||['decimal','integer','radix','radix-fraction','rational'].includes(c.representation)&&validDatasetResourcePolicy(c.resourcePolicy))&&validTime(c.time)&&(c.quantity===undefined||validQuantity(c.quantity,c.unit)));
@@ -216,7 +219,7 @@ export class ResearchMaterials {
   if(axisPermutationMaterial(doc))await assertAxisPermutationFormat(this.workspace);
   if(quantileAggregationMaterial(doc))await assertQuantileAggregationFormat(this.workspace);
   if(tensorValuesMaterial(doc))await assertTensorValuesFormat(this.workspace);
-  if(numericalExecutionMaterial(doc))await assertNumericalExecutionFormat(this.workspace);if(spectrumMaterial(doc))await assertSpectrumFormat(this.workspace);if(computedCellMaterial(doc))await assertComputedCellFormat(this.workspace);if(coordinateFrameMaterial(doc))await assertCoordinateFrameFormat(this.workspace);if(clockSynchronizationMaterial(doc))await assertClockSynchronizationFormat(this.workspace);if(segmentedClockSynchronizationMaterial(doc))await assertSegmentedClockSynchronizationFormat(this.workspace);
+  if(numericalExecutionMaterial(doc))await assertNumericalExecutionFormat(this.workspace);if(cusumMaterial(doc))await assertCusumFormat(this.workspace);if(spectrumMaterial(doc))await assertSpectrumFormat(this.workspace);if(computedCellMaterial(doc))await assertComputedCellFormat(this.workspace);if(coordinateFrameMaterial(doc))await assertCoordinateFrameFormat(this.workspace);if(clockSynchronizationMaterial(doc))await assertClockSynchronizationFormat(this.workspace);if(segmentedClockSynchronizationMaterial(doc))await assertSegmentedClockSynchronizationFormat(this.workspace);
   return doc;
  }
  async assertReferenceWorkspace(ref){
@@ -366,6 +369,7 @@ export class ResearchMaterials {
   return {doc,content};
  }
  async previewDataset(command,{signal}={}){
+  if(command.cusum)return new DatasetCusumResults(this).preview(command,{signal});
   if(command.spectrum)return new DatasetSpectrumResults(this).preview(command,{signal});
   if(command.uncertainty)return new StatisticalUncertaintyResults(this).preview(command,{signal});
   if(command.calculatorResult)return new CalculatorResults(this).preview(command,{signal});
@@ -381,6 +385,7 @@ export class ResearchMaterials {
   return {columns,columnOffset,columnCount,nextColumn:columnOffset+columns.length<columnCount?columnOffset+columns.length:null,rows};
  }
  async validateDataset(command){
+  if(command.cusum)return new DatasetCusumResults(this).validate(command);
   if(command.spectrum)return new DatasetSpectrumResults(this).validate(command);
   if(command.uncertainty)return new StatisticalUncertaintyResults(this).validate(command);
   if(command.calculatorResult)return new CalculatorResults(this).validate(command);
@@ -392,7 +397,7 @@ export class ResearchMaterials {
   if(command.nativeMapping!==undefined){if(!validNativeMapping(command.nativeMapping))fail();await this.read(command.nativeMapping.artifact);}
   if(command.baseDataset){
    if(command.baseDataset.kind!=='dataset'||!materialRef(command.baseDataset)||command.baseDataset.id!==id||command.baseDataset.revision!==expectedRevision)fail();
-   const base=await this.read(command.baseDataset);if(base.content.calculatorResult)fail('CALCULATOR_RESULT_INVALID');if(base.content.uncertainty)fail('STATISTICAL_UNCERTAINTY_INVALID');if(base.content.spectrum)fail('DATASET_SPECTRUM_INVALID');
+   const base=await this.read(command.baseDataset);if(base.content.calculatorResult)fail('CALCULATOR_RESULT_INVALID');if(base.content.uncertainty)fail('STATISTICAL_UNCERTAINTY_INVALID');if(base.content.spectrum)fail('DATASET_SPECTRUM_INVALID');if(base.content.cusum)fail('DATASET_CUSUM_INVALID');
    if(revisionText(base.content.inputs[0])!==revisionText(artifact)||base.recordId!==recordId)fail();
    if(command.sourceMapping){
     let mapping=base.content.calculation||base.content.aggregation||base.content.datasetFormat===3&&command.sourceMapping.fieldsInSchema?command.sourceMapping:datasetMapping(command.sourceMapping);
@@ -409,6 +414,7 @@ export class ResearchMaterials {
   if(!command.baseDataset)for(const column of [...command.columns??[],...(command.columnChanges??[]).map(c=>c.column)])if(column.coordinateFrame)await validateCoordinateFrameColumn(this,column);
  }
  async prepareDataset(command,{signal,progress=async()=>{},writePage,jobId=null}={}){
+  if(command.cusum)return new DatasetCusumResults(this).prepare(command,{signal,progress,writePage,jobId});
   if(command.spectrum)return new DatasetSpectrumResults(this).prepare(command,{signal,progress,writePage,jobId});
   if(command.uncertainty)return new StatisticalUncertaintyResults(this).prepare(command,{signal,progress,writePage,jobId});
   if(command.calculatorResult)return new CalculatorResults(this).prepare(command,{signal,progress,writePage});
@@ -445,7 +451,7 @@ export class ResearchMaterials {
   this.datasetPageCount(doc);
   if(!Number.isSafeInteger(offset)||offset<0||!Number.isSafeInteger(limit)||limit<1||limit>256)fail();
   const page=[2,3].includes(doc.content.datasetFormat)?await this.sequences.page(doc.content.schemaIndex,{offset,limit}):{items:doc.content.columns.slice(offset,offset+limit),offset,total:doc.content.columns.length,next:offset+limit<doc.content.columns.length?offset+limit:null};
-  if(offset>page.total||!validColumns(page.items,page.items.length))fail('MATERIAL_MISSING');if(page.items.some(perCellComputation)){if(doc.content.cellComputations!==1)fail('MATERIAL_MISSING');await assertComputedCellFormat(this.workspace);}if(page.items.some(column=>column.coordinateFrame)){if(doc.content.coordinateFrames!==1||page.items.some(column=>column.coordinateFrame&&!column.coordinateFrame.axesIndex))fail('MATERIAL_MISSING');await assertCoordinateFrameFormat(this.workspace);}if(page.items.some(column=>column.spectrum)){if(doc.content.spectra!==1)fail('MATERIAL_MISSING');await assertSpectrumFormat(this.workspace);}if(page.items.some(column=>column.statisticalUncertainty))await assertStatisticalUncertaintyFormat(this.workspace);return page;
+  if(offset>page.total||!validColumns(page.items,page.items.length))fail('MATERIAL_MISSING');if(page.items.some(perCellComputation)){if(doc.content.cellComputations!==1)fail('MATERIAL_MISSING');await assertComputedCellFormat(this.workspace);}if(page.items.some(column=>column.coordinateFrame)){if(doc.content.coordinateFrames!==1||page.items.some(column=>column.coordinateFrame&&!column.coordinateFrame.axesIndex))fail('MATERIAL_MISSING');await assertCoordinateFrameFormat(this.workspace);}if(page.items.some(column=>column.cusum)){if(doc.content.cusums!==1)fail('MATERIAL_MISSING');await assertCusumFormat(this.workspace);}if(page.items.some(column=>column.spectrum)){if(doc.content.spectra!==1)fail('MATERIAL_MISSING');await assertSpectrumFormat(this.workspace);}if(page.items.some(column=>column.statisticalUncertainty))await assertStatisticalUncertaintyFormat(this.workspace);return page;
  }
  async *iterateDatasetColumns(doc){this.datasetPageCount(doc);for await(const column of storedDatasetColumns(this,doc)){if(!validColumns([column],1))fail('MATERIAL_MISSING');yield column;}}
  async datasetColumn(doc,index){if(!Number.isSafeInteger(index)||index<0)fail();const page=await this.retainedSchemaPage(doc,{offset:index,limit:1});if(page.items.length!==1)fail();return page.items[0];}
@@ -752,7 +758,7 @@ export class ResearchMaterials {
   if(axisPermutationMaterial(doc))await assertAxisPermutationFormat(this.workspace);
   if(quantileAggregationMaterial(doc))await assertQuantileAggregationFormat(this.workspace);
   if(tensorValuesMaterial(doc))await assertTensorValuesFormat(this.workspace);
-  if(spectrumMaterial(doc))await assertSpectrumFormat(this.workspace);if(computedCellMaterial(doc))await assertComputedCellFormat(this.workspace);if(coordinateFrameMaterial(doc))await assertCoordinateFrameFormat(this.workspace);if(clockSynchronizationMaterial(doc))await assertClockSynchronizationFormat(this.workspace);if(segmentedClockSynchronizationMaterial(doc))await assertSegmentedClockSynchronizationFormat(this.workspace);
+  if(cusumMaterial(doc))await assertCusumFormat(this.workspace);if(spectrumMaterial(doc))await assertSpectrumFormat(this.workspace);if(computedCellMaterial(doc))await assertComputedCellFormat(this.workspace);if(coordinateFrameMaterial(doc))await assertCoordinateFrameFormat(this.workspace);if(clockSynchronizationMaterial(doc))await assertClockSynchronizationFormat(this.workspace);if(segmentedClockSynchronizationMaterial(doc))await assertSegmentedClockSynchronizationFormat(this.workspace);
     if(calculatorResultMaterial(doc)){await assertCalculatorResultFormat(this.workspace,doc);await new CalculatorResults(this).verify(doc);}
     const checkIntervalFormat=intervalFormatCheck(this.workspace);if(intervalUncertaintyMaterial(doc,{opaqueCompatible:true}))await checkIntervalFormat();
     const checkNumericalFormat=async()=>{if(await this.workspace.storageKind()==='catalogue')await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresNativeNumericalModels}=await import('./catalogue-format.js');if(!catalogueRequiresNativeNumericalModels(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});};
@@ -767,6 +773,7 @@ export class ResearchMaterials {
     if(doc.content.graphVersion>=6&&doc.content.tool==='Observanda calculation graph'||[9,10,11,12,13,14,15].includes(doc.content.calculation?.version))await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresWindowCalculations}=await import('./catalogue-format.js');if(!catalogueRequiresWindowCalculations(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
     if(doc.content.graphVersion>=5&&doc.content.tool==='Observanda calculation graph'||[8,9,10,11,12,13,14,15].includes(doc.content.calculation?.version))await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresDatasetResourcePolicies}=await import('./catalogue-format.js');if(!catalogueRequiresDatasetResourcePolicies(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
     if(doc.content.tool==='Observanda calculation graph'||[4,5,6,7,8,9,10,11,12,13,14,15].includes(doc.content.calculation?.version))await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresReferencedCalculations}=await import('./catalogue-format.js');if(!catalogueRequiresReferencedCalculations(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
+    if(doc.content.cusum||doc.content.tool===CUSUM_TOOL)await new DatasetCusumResults(this).verify(doc,{signal});
     if(doc.content.spectrum||doc.content.tool===SPECTRUM_TOOL)await new DatasetSpectrumResults(this).verify(doc,{signal});
     if(doc.content.uncertainty||['Observanda uncertainty definition','Observanda statistical uncertainty'].includes(doc.content.tool))await new StatisticalUncertaintyResults(this).verify(doc,{signal});
     if(doc.content.tool==='Observanda calculation graph'){const {CalculationGraphs}=await import('./calculation-graphs.js');await new CalculationGraphs(this).verify(doc,{signal});}
@@ -787,7 +794,7 @@ export class ResearchMaterials {
     if(ref.kind==='dataset'){
      await verifyRetainedCalculation(this,doc,{signal});
      if(doc.content.datasetFormat===3)await this.workspace.catalogue(async store=>{const {catalogueFormat,catalogueRequiresPagedResearchTables}=await import('./catalogue-format.js');if(!catalogueRequiresPagedResearchTables(await catalogueFormat(store.db)))fail('CATALOGUE_DAMAGED');});
-     let checkedUnitFormat=false,checkedClockFormat=false,hasDomains=false,hasTensors=false;for await(const column of this.iterateDatasetColumns(doc)){if(!validColumns([column],1))fail('MATERIAL_MISSING');if(column.coordinateFrame){if(doc.content.coordinateFrames!==1)fail('MATERIAL_MISSING');await assertCoordinateFrameFormat(this.workspace);await validateCoordinateFrameColumn(this,column,{signal,requireAxes:true});}if(column.spectrum){if(doc.content.spectra!==1)fail('MATERIAL_MISSING');await assertSpectrumFormat(this.workspace);}if(column.statisticalUncertainty){if(doc.content.statisticalUncertainties!==1)fail('MATERIAL_MISSING');await assertStatisticalUncertaintyFormat(this.workspace);}if(column.synchronization&&doc.content.clockSynchronization!==1)fail('MATERIAL_MISSING');if(column.synchronization?.version===2){if(doc.content.segmentedClockSynchronization!==1)fail('MATERIAL_MISSING');await assertSegmentedClockSynchronizationFormat(this.workspace);}if(column.computation&&doc.content.approximateComputations!==1)fail('MATERIAL_MISSING');if(measurementScalarPolicies(column)){if(doc.content.scalarPolicies!==1)fail('MATERIAL_MISSING');await assertMeasurementScalarFormat(this.workspace);await resolveScalarDefinitions(this,column,{signal});}if(column.domain?.version===3){hasTensors=true;if(doc.content.tensorValues!==1)fail('MATERIAL_MISSING');await assertTensorValuesFormat(this.workspace);}if(column.representation==='domain'&&!hasDomains){await checkDomainFormat();hasDomains=true;}if(column.quantity?.unitDefinition!==undefined){if(!validQuantity(column.quantity,column.unit))fail('MATERIAL_MISSING');if(!checkedUnitFormat){await checkNumericalFormat();checkedUnitFormat=true;}}if(column.time?.clock?.definition!==undefined){if(!validTime(column.time))fail('MATERIAL_MISSING');if(!checkedClockFormat){await checkClockFormat();checkedClockFormat=true;}}if(column.quantity?.uncertainty!==undefined)await checkIntervalFormat();for(const r of schemaReferences(column))await enqueue(r);}
+     let checkedUnitFormat=false,checkedClockFormat=false,hasDomains=false,hasTensors=false;for await(const column of this.iterateDatasetColumns(doc)){if(!validColumns([column],1))fail('MATERIAL_MISSING');if(column.coordinateFrame){if(doc.content.coordinateFrames!==1)fail('MATERIAL_MISSING');await assertCoordinateFrameFormat(this.workspace);await validateCoordinateFrameColumn(this,column,{signal,requireAxes:true});}if(column.cusum){if(doc.content.cusums!==1)fail('MATERIAL_MISSING');await assertCusumFormat(this.workspace);}if(column.spectrum){if(doc.content.spectra!==1)fail('MATERIAL_MISSING');await assertSpectrumFormat(this.workspace);}if(column.statisticalUncertainty){if(doc.content.statisticalUncertainties!==1)fail('MATERIAL_MISSING');await assertStatisticalUncertaintyFormat(this.workspace);}if(column.synchronization&&doc.content.clockSynchronization!==1)fail('MATERIAL_MISSING');if(column.synchronization?.version===2){if(doc.content.segmentedClockSynchronization!==1)fail('MATERIAL_MISSING');await assertSegmentedClockSynchronizationFormat(this.workspace);}if(column.computation&&doc.content.approximateComputations!==1)fail('MATERIAL_MISSING');if(measurementScalarPolicies(column)){if(doc.content.scalarPolicies!==1)fail('MATERIAL_MISSING');await assertMeasurementScalarFormat(this.workspace);await resolveScalarDefinitions(this,column,{signal});}if(column.domain?.version===3){hasTensors=true;if(doc.content.tensorValues!==1)fail('MATERIAL_MISSING');await assertTensorValuesFormat(this.workspace);}if(column.representation==='domain'&&!hasDomains){await checkDomainFormat();hasDomains=true;}if(column.quantity?.unitDefinition!==undefined){if(!validQuantity(column.quantity,column.unit))fail('MATERIAL_MISSING');if(!checkedUnitFormat){await checkNumericalFormat();checkedUnitFormat=true;}}if(column.time?.clock?.definition!==undefined){if(!validTime(column.time))fail('MATERIAL_MISSING');if(!checkedClockFormat){await checkClockFormat();checkedClockFormat=true;}}if(column.quantity?.uncertainty!==undefined)await checkIntervalFormat();for(const r of schemaReferences(column))await enqueue(r);}
      if(hasTensors!==(doc.content.tensorValues===1)||doc.content.tensorValues!==undefined&&doc.content.tensorValues!==1)fail('MATERIAL_MISSING');
      if(hasDomains!==(doc.content.domainValues===1)||doc.content.domainValues!==undefined&&doc.content.domainValues!==1)fail('MATERIAL_MISSING');
      if(doc.content.aggregationMembersIndex&&!doc.content.aggregation)fail('MATERIAL_MISSING');

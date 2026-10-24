@@ -43,3 +43,7 @@ test('ephemeral FFT work preserves bounded getMany I/O and overlays only the cur
 test('cancellation while awaiting an injected batched reader refuses its returned values',async()=>{
  const f=fixture(),controller=new AbortController(),scratch={getMany:async()=>{controller.abort();return new Map([['value',1]]);},putMany:async()=>{}},owner=await f.owner({scratch,signal:controller.signal}).open();await assert.rejects(owner.getMany(['value']),{name:'AbortError'});
 });
+
+test('numerical work binds the declared method and refuses mixed recipes and mismatched checkpoint kinds',async()=>{
+ const f=fixture();f.command.cusum={...f.command.spectrum,version:1};assert.throws(()=>f.owner(),{code:'INVALID'});assert.throws(()=>f.owner({kind:'cusum'}),{code:'INVALID'});delete f.command.spectrum;assert.throws(()=>f.owner(),{code:'INVALID'});assert.throws(()=>f.owner({kind:'unknown'}),{code:'INVALID'});const owner=await f.owner({kind:'cusum'}).open();await owner.slice(null,async({budget,work})=>{budget.run(b=>b.step(3));await work.put('point:0','5/1');return cursor(1);});assert.equal(f.saved().kind,'cusum');assert.equal(await (await f.owner({kind:'cusum'}).open()).get('point:0'),'5/1');const corrupted=f.saved();corrupted.kind='spectrum';f.files.set(numericalExecutionWorkFile(f.jobId),JSON.stringify(corrupted));await assert.rejects(f.owner({kind:'cusum'}).open(),{code:'MATERIAL_MISSING'});
+});

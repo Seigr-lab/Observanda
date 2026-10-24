@@ -1,3 +1,4 @@
+import datasetCusum from '../locales/en/datasetCusum.json' with {type:'json'};
 import numericalExecution from '../locales/en/numericalExecution.json' with {type:'json'};
 import datasetSpectrum from '../locales/en/datasetSpectrum.json' with {type:'json'};
 import coordinateFrames from '../locales/en/coordinateFrames.json' with {type:'json'};
@@ -185,6 +186,7 @@ english.datasetAggregation=datasetAggregation;
 english.statisticalUncertainty=statisticalUncertainty;
 english.coordinateFrames=coordinateFrames;
 english.datasetSpectrum=datasetSpectrum;
+english.datasetCusum=datasetCusum;
 english.numericalExecution=numericalExecution;
 english.retainedTables=retainedTables;
 english.figureHeatmap=figureHeatmap;

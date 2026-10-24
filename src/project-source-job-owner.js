@@ -1,3 +1,5 @@
+import {validCusumExecutionCursor} from './dataset-cusum-kernel.js';
+import {validCusumRecipe} from './web/dataset-cusum-model.js';
 import {NumericalExecutionWork} from './numerical-execution-work.js';
 import {validSpectrumExecutionCursor} from './dataset-spectrum-kernel.js';
 import {validSpectrumRecipe} from './web/dataset-spectrum-model.js';
@@ -26,7 +28,7 @@ export function projectSourceJobOwner(store,inventory,record,{signal}={}){
   if(!id.startsWith(root)&&!aggregation&&!numerical)return null;
   return store.workspace.inspectCatalogue(store,async()=>{
    signal?.throwIfAborted();
-   if(numerical){const current=await queue.read(numerical[1]),recipe=current?.input?.command?.spectrum;if(current?.type!=='dataset.prepare'||recipe?.version!==2||!validSpectrumRecipe(recipe))damaged();const work=new NumericalExecutionWork(new ResearchMaterials(store.workspace),current.input.command,{jobId:current.id,signal,validCursor:value=>validSpectrumExecutionCursor(value,recipe.range.count)});if(!await work.read())damaged();return job(current.id);}
+   if(numerical){const current=await queue.read(numerical[1]),command=current?.input?.command,kind=command?.cusum===undefined?'spectrum':'cusum',recipe=command?.[kind];if(current?.type!=='dataset.prepare'||(kind==='cusum'?command.spectrum!==undefined||!validCusumRecipe(recipe):recipe?.version!==2||!validSpectrumRecipe(recipe)))damaged();const validCursor=kind==='cusum'?validCusumExecutionCursor:validSpectrumExecutionCursor,work=new NumericalExecutionWork(new ResearchMaterials(store.workspace),command,{kind,jobId:current.id,signal,validCursor:value=>validCursor(value,recipe.range.count)});if(!await work.read())damaged();return job(current.id);}
    if(aggregation){const current=await queue.read(aggregation[1]);if(current?.type!=='dataset.prepare'||!current.input.command?.aggregation)damaged();const materials=new ResearchMaterials(store.workspace),source=await materials.read(current.input.command.aggregation.source),work=await new AggregationWork(materials,current.input.command,{jobId:current.id,signal}).open(source.content.rowCount);if(!work.saved)damaged();return job(current.id);}
    const tail=id.slice(root.length);let match;
    if((match=/^([a-f0-9-]{36})\.json$/.exec(tail)))return job(match[1]);
