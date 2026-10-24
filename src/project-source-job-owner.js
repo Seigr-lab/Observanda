@@ -1,3 +1,4 @@
+import {assertSpectralMethodsFormat} from './spectral-methods-format.js';
 import {validCusumExecutionCursor} from './dataset-cusum-kernel.js';
 import {validCusumRecipe} from './web/dataset-cusum-model.js';
 import {NumericalExecutionWork} from './numerical-execution-work.js';
@@ -28,7 +29,7 @@ export function projectSourceJobOwner(store,inventory,record,{signal}={}){
   if(!id.startsWith(root)&&!aggregation&&!numerical)return null;
   return store.workspace.inspectCatalogue(store,async()=>{
    signal?.throwIfAborted();
-   if(numerical){const current=await queue.read(numerical[1]),command=current?.input?.command,kind=command?.cusum===undefined?'spectrum':'cusum',recipe=command?.[kind];if(current?.type!=='dataset.prepare'||(kind==='cusum'?command.spectrum!==undefined||!validCusumRecipe(recipe):recipe?.version!==2||!validSpectrumRecipe(recipe)))damaged();const validCursor=kind==='cusum'?validCusumExecutionCursor:validSpectrumExecutionCursor,work=new NumericalExecutionWork(new ResearchMaterials(store.workspace),command,{kind,jobId:current.id,signal,validCursor:value=>validCursor(value,recipe.range.count)});if(!await work.read())damaged();return job(current.id);}
+   if(numerical){const current=await queue.read(numerical[1]),command=current?.input?.command,kind=command?.cusum===undefined?'spectrum':'cusum',recipe=command?.[kind];if(current?.type!=='dataset.prepare'||(kind==='cusum'?command.spectrum!==undefined||!validCusumRecipe(recipe):![2,3].includes(recipe?.version)||!validSpectrumRecipe(recipe)))damaged();if(kind==='spectrum'&&recipe.version===3)await assertSpectralMethodsFormat(store.workspace);const validCursor=kind==='cusum'?validCusumExecutionCursor:validSpectrumExecutionCursor,work=new NumericalExecutionWork(new ResearchMaterials(store.workspace),command,{kind,jobId:current.id,signal,validCursor:value=>validCursor(value,recipe.range.count,kind==='spectrum'&&recipe.version===3?{version:3,method:recipe.method,window:recipe.window,frequencyCount:recipe.frequencyGrid?.count,missing:recipe.missing,excluded:recipe.excluded}:undefined)});if(!await work.read())damaged();return job(current.id);}
    if(aggregation){const current=await queue.read(aggregation[1]);if(current?.type!=='dataset.prepare'||!current.input.command?.aggregation)damaged();const materials=new ResearchMaterials(store.workspace),source=await materials.read(current.input.command.aggregation.source),work=await new AggregationWork(materials,current.input.command,{jobId:current.id,signal}).open(source.content.rowCount);if(!work.saved)damaged();return job(current.id);}
    const tail=id.slice(root.length);let match;
    if((match=/^([a-f0-9-]{36})\.json$/.exec(tail)))return job(match[1]);
