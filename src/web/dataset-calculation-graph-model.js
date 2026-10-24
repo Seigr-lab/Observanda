@@ -15,7 +15,7 @@ export const CALCULATION_GRAPH_TOOL='Observanda calculation graph';
 export const CALCULATION_GRAPH_COLLECTIONS=['bindings','nodes','outputs'];
 export const graphPosition=value=>Number.isSafeInteger(value)&&value>=0;
 export const validGraphAddress=value=>keys(value,['id','position'])&&researchId(value.id)&&graphPosition(value.position);
-export const validGraphCalculation=value=>keys(value,['version','graph'])&&[4,5,6,7,8,9,10,11,12,13,14].includes(value.version)&&validMaterialReference(value.graph)&&value.graph.kind==='analysis';
+export const validGraphCalculation=value=>keys(value,['version','graph'])&&[4,5,6,7,8,9,10,11,12,13,14,15].includes(value.version)&&validMaterialReference(value.graph)&&value.graph.kind==='analysis';
 export function validGraphBinding(value,{keysIndex}={}){
  return keys(value,['id','source','view','match'])&&researchId(value.id)&&validMaterialReference(value.source)&&['dataset','analysis'].includes(value.source.kind)&&['observations','distribution','transitions'].includes(value.view)&&(value.match===null||keys(value.match,['keysIndex','unmatched'])&&value.source.kind==='dataset'&&['error','keep'].includes(value.match.unmatched)&&!!keysIndex?.(value.match.keysIndex));
 }

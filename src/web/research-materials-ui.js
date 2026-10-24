@@ -1,3 +1,4 @@
+import {segmentedClockSynchronizationUI,segmentedClockText} from './clock-segmented-synchronization-ui.js';
 import {statisticalUncertaintyUI,uncertaintyText} from './statistical-uncertainty-ui.js';
 import {clockSynchronizationUI,clockSynchronizationView,clockSynchronizationStatusDisplay,synchronizationText} from './clock-synchronization-ui.js';
 import {wireScalarFields} from './measurement-scalar-ui.js';
@@ -101,6 +102,8 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
  const measurements=measurementUI({call,frame,esc,field,guard,owner:()=>owner,readOnly:()=>referenceContext,inspect,notify,origin:()=>({ref:selectedRef,page,comparisonView:opened?.content?.comparison?comparisons.snapshot():null}),download:r=>{guard();const a=document.createElement('a');a.href=originalRoute(r)+'?context='+encodeURIComponent(workspaceContext);a.download='';a.click();}});
  const uncertainty=statisticalUncertaintyUI({call,frame,esc,field,guard,owner:()=>owner,readOnly:()=>referenceContext,inspect,watchJob});
  document.getElementById('dialog')?.addEventListener('close',()=>uncertainty.clean());
+ const segmentedSynchronization=segmentedClockSynchronizationUI({call,frame,esc,field,guard,owner:()=>owner,readOnly:()=>referenceContext,inspect});
+ document.getElementById('dialog')?.addEventListener('close',()=>segmentedSynchronization.clean());
  const synchronization=clockSynchronizationUI({call,frame,esc,field,guard,owner:()=>owner,inspect});
  document.getElementById('dialog')?.addEventListener('close',()=>synchronization.clean());
  const comparisons=analysisComparisonUI({state,api,call,frame,esc,field,guard,owner:()=>owner,readOnly:()=>referenceContext,inspect:r=>r?inspect(r):referenceContext?document.getElementById('dialog').close():home(),watchJob,measurements,notify,access});
@@ -315,7 +318,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
    ${opened.kind==='artifact'&&!referenceContext?button(esc(measurementText('heading')),'measurement-from-artifact',`data-ref="${esc(JSON.stringify(selectedRef))}"`):''}
    ${calculatorRecipeView(c,esc,{button,readOnly:referenceContext})}${analysisChangesView(status,esc)}${c.method&&c.tool!=='Observanda clock synchronization'?comparisons.methodView(c.method):''}
    ${['Observanda uncertainty definition','Observanda statistical uncertainty'].includes(c.tool)?'<p>'+esc(uncertaintyText('method'))+'</p><p>'+esc(c.definition?.rationale??'')+'</p><p>'+esc(uncertaintyText('noCoverage'))+'</p>'+button(esc(uncertaintyText(c.tool==='Observanda uncertainty definition'?'edit':'review')),'uncertainty-open',`data-ref="${esc(JSON.stringify(selectedRef))}" ${c.tool==='Observanda uncertainty definition'?'data-existing="true"':'data-result="true"'}`):''}
-   ${c.tool==='Observanda clock synchronization'?clockSynchronizationView(c,{esc,button})+(referenceContext?'':button(esc(synchronizationText('revise')),'clock-sync-revise',`data-ref="${esc(JSON.stringify(selectedRef))}"`)):''}
+   ${c.tool==='Observanda clock synchronization'?clockSynchronizationView(c,{esc,button})+(c.version===2?button(esc(segmentedClockText('review')),'clock-segments-open',`data-ref="${esc(JSON.stringify(selectedRef))}" data-existing="true"`):referenceContext?'':button(esc(synchronizationText('revise')),'clock-sync-revise',`data-ref="${esc(JSON.stringify(selectedRef))}"`)):''}
    ${c.measurement?measurements.view(c.measurement)+(referenceContext?'':button(esc(measurementText('edit')),'measurement-revise',`data-ref="${esc(JSON.stringify(selectedRef))}"`)):''}
    ${c.tool&&!c.mapping&&!c.measurement&&!['Observanda clock synchronization','Observanda uncertainty definition','Observanda statistical uncertainty'].includes(c.tool)?`<dl><dt>Tool</dt><dd>${esc(c.tool)} · ${esc(c.version)}</dd><dt>Parameters</dt><dd><pre>${esc(c.parameters)}</pre></dd></dl>`:''}
    ${c.figure?`<div class="material-figure" id="material-figure"></div>${denominatorView(c)}${c.warnings?.length?`<ul>${c.warnings.map(w=>`<li>${esc(w)}</li>`).join('')}</ul>`:''}${referenceContext?'':button('Add retained figure to record','attach')+(c.mapping?button('Recalculate with latest dataset','recalculate'):'')}`:''}
@@ -323,7 +326,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
    ${c.numericTransform?'<p>'+esc(measurementText('plotPolicy',{policy:measurementText(c.numericTransform.policy==='approximate'?'approximatePolicy':'safe')}))+'</p>':''}
    ${c.plotPointsIndex||c.tool==='Observanda table mapping'&&['9','10'].includes(c.version)&&c.figure?.kind==='retained'?button(esc(transformText('points')),'plot-points'):''}
    ${c.numericTransform?.reduction?'<p>'+esc(measurementText('plotReduction'))+'</p>':''}
-   ${[1,2,3,4,5,6,7,8,9,10,11].includes(c.graphVersion)&&!referenceContext?button('Edit calculation graph','calculation-graph-open',`data-ref="${esc(JSON.stringify(selectedRef))}" data-existing="true"`):''}
+   ${[1,2,3,4,5,6,7,8,9,10,11,12].includes(c.graphVersion)&&!referenceContext?button('Edit calculation graph','calculation-graph-open',`data-ref="${esc(JSON.stringify(selectedRef))}" data-existing="true"`):''}
    ${c.intake&&!referenceContext?button('Inspect imported file set','intake-open',`data-id="${esc(c.intake.id)}"`):''}
    ${c.acquisition?'Recorded with '+referenceList([c.acquisition]):''}<h3>Exact inputs</h3>${c.inputsIndex?'<div id="material-input-references"></div>':referenceList(c.inputs??[])}${inputCount(c,'outputs')?`<h3>Outputs</h3>${c.outputsIndex?'<div id="material-output-references"></div>':referenceList(c.outputs)}`:''}
    <details><summary>Private manifest</summary><pre>${esc(JSON.stringify(opened,null,2))}</pre></details>`);
@@ -457,7 +460,8 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   if(act.startsWith('measurement-')){if(act==='measurement-inspect')await authorizeSource(JSON.parse(control.dataset.source).ref);if(act==='measurement-from-artifact')await authorizeSource(JSON.parse(control.dataset.ref));return measurements.action(act,control);}
   if(act.startsWith('comparison-'))return comparisons.action(act,control);
   if(act.startsWith('uncertainty-'))return uncertainty.action(act,control);
-  if(act.startsWith('clock-sync-'))return referenceContext?true:synchronization.action(act,control);
+  if(act.startsWith('clock-segments-')){if(act==='clock-segments-open')synchronization.clean();return segmentedSynchronization.action(act,control);}
+  if(act.startsWith('clock-sync-')){if(act==='clock-sync-open'||act==='clock-sync-revise')segmentedSynchronization.clean();return referenceContext?true:synchronization.action(act,control);}
   if(act.startsWith('calculation-'))return referenceContext?true:calculations.action(act,control);
   if(act.startsWith('aggregation-'))return referenceContext?true:aggregations.action(act,control);
   if(act==='calculator-repeat'||act==='calculator-resume'){

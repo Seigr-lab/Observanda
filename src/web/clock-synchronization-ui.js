@@ -1,3 +1,4 @@
+import {clockSynchronizationContextText} from './measurement-clock-context.js';
 import {t} from './i18n/index.js';
 import {materialSourcePicker} from './material-source-picker.js';
 import {materialReference} from './material-reference.js';
@@ -20,6 +21,11 @@ export function clockSynchronizationStatusDisplay(value,format){
  if(definition?.codec!=='observanda.symbol'||definition.codecVersion!==1||definition.namespace!==CLOCK_SYNCHRONIZATION_STATUS_NAMESPACE||!CLOCK_SYNCHRONIZATION_STATUSES.includes(code))return null;
  return text('status-'+code)+' ['+code+']';
 }
+export function clockSynchronizationLineageView(value,{esc}){
+ if(value?.version!==2||!CLOCK_SYNCHRONIZATION_STATUSES.includes(value.status))return '';const status=value.outputExcluded===true?text('piecewise-outputExcluded'):text('status-'+value.status),brackets=value.bracket??[],selected=value.segment;
+ const message=selected&&Number.isSafeInteger(selected.position)&&selected.position>=0?text('piecewise-lineageSegment',{segment:selected.position+1,bracket:brackets.length===2&&brackets.every(item=>Number.isSafeInteger(item.position)&&item.position>=0)?text('piecewise-lineageBracket',{lower:brackets[0].position+1,upper:brackets[1].position+1}):text('piecewise-lineageNoBracket'),status}):text('piecewise-lineageNoSegment',{status});
+ return '<p data-clock-synchronization-lineage>'+esc(message)+'</p>';
+}
 export function clockSynchronizationColumnEligible(column){return isScalarRepresentation(column)&&['elapsed','inferred-elapsed','external'].includes(column.time?.kind)&&(!column.time.clock||column.time.clock.wrap==='none'&&column.time.clock.reset==='none');}
 export function clockSynchronizationCellPreview(row,column,index=0){
  const value=row.cells[index],kind=row.valueKinds?.[index];
@@ -32,6 +38,7 @@ export function clockSynchronizationCellPreview(row,column,index=0){
 export function clockSynchronizationAnchorEligible(row,column,index=0){return clockSynchronizationColumnEligible(column)&&!row.excluded&&!['null','absent','missing'].includes(row.valueKinds?.[index])&&!column.missing?.some(item=>item.value===row.cells[index]);}
 export function clockSynchronizationDescription(value,{esc,prefix='synchronization.'}={}){
  if(!value)return '';
+ if(value.version===2)return '<section data-clock-synchronization-context><h3>'+esc(text('title'))+'</h3><p>'+esc(clockSynchronizationContextText(value))+'</p></section>';
  const scalar=key=>{const q=value.validity[key];return scalarSpellingView(q.spelling,{esc,field:prefix+'validity.'+key+'.spelling'})+' ('+esc(q.representation)+', '+esc(text('base'))+' '+q.radix+')';};
  return '<section data-clock-synchronization-context><h3>'+esc(text('title'))+'</h3><p>'+esc(text('publicMethod'))+'</p><dl><dt>'+esc(text('validity'))+'</dt><dd>'+scalar('lower')+' &ndash; '+scalar('upper')+'</dd>'+(value.epoch?'<dt>'+esc(text('targetEpoch'))+'</dt><dd>'+esc(value.epoch)+'</dd>':'')+'</dl></section>';
 }
@@ -41,6 +48,7 @@ function targetDescription(value,{esc,prefix=''}){
 }
 export function clockSynchronizationView(value,{esc,button}){
  if(!value)return '';
+ if(value.version===2)return '<section data-clock-synchronization-view><p>'+esc(text('publicSegmentedMethod'))+'</p><p>'+esc(value.rationale)+'</p></section>';
  return '<section data-clock-synchronization-view>'+(computationLabel(value)?'<p>'+esc(computationLabel(value))+'</p><p>'+esc(t('measurements','approximationHelp'))+'</p>':'')+clockSynchronizationDescription({...value,epoch:value.target.time.clock?.epoch},{esc,prefix:''})+'<p>'+esc(text('help'))+'</p>'+targetDescription(value.target,{esc,prefix:'target.'})+'<dl><dt>'+esc(text('rationale'))+'</dt><dd>'+esc(value.rationale)+'</dd></dl>'+'<ol>'+value.anchors.map((pair,index)=>'<li><strong>'+esc(text('anchor',{number:index+1}))+'</strong>'+['source','reference'].map(side=>'<p>'+esc(text(side))+': '+esc(location(pair[side]))+' '+button(esc(text('inspectCell')),'measurement-inspect','data-source="'+esc(JSON.stringify(pair[side]))+'"')+'</p>').join('')+'</li>').join('')+'</ol>'+datasetResourcePolicyDescription(value.resourcePolicy,{esc})+'</section>';
 }
 // Four pinned cell locators persist independently of browsing. Only the selected
@@ -85,6 +93,7 @@ export function clockSynchronizationUI({call,frame,esc,field,guard,owner,inspect
    if(model){for(const side of ['source','reference']){if(side==='reference')await schema(side,Math.floor(sides[side].column/16)*16);const state=sides[side],definition=state.schema.items[state.column-state.schema.offset];if(!definition)throw Error(text('chooseColumn'));state.definition=structuredClone(definition);await rows(side,model.anchors[0][side].selector.page);}target();}
   }finally{if(token===generation)setBusy(false);}
  }
+ function choose(reference){clean();source=materialReference(reference);const attrs='data-ref="'+esc(JSON.stringify(source))+'"';frame(text('methodChoice'),'<p>'+esc(text('methodChoiceHelp'))+'</p>',button('affineChoice','affine-open',attrs)+'<button type="button" class="button" data-action="material-clock-segments-open" '+attrs+'>'+esc(text('piecewiseChoice'))+'</button>');}
  async function revise(reference){
   const token=++generation;setBusy(true);try{const doc=await call('read',{ref:reference},{adopt:false,adoptOwner:false});guard();if(token!==generation)throw new DOMException('Clock synchronization view changed','AbortError');if(doc.content?.tool!=='Observanda clock synchronization')throw Error(text('graphModelInvalid'));await open(doc.content.source.ref,{model:doc.content,modelRef:reference,title:doc.title});}finally{if(token===generation)setBusy(false);}
  }
@@ -95,7 +104,7 @@ export function clockSynchronizationUI({call,frame,esc,field,guard,owner,inspect
   return {recordId:owner(),id,...(revision?{expectedRevision:revision.revision}:{}),title:get('title'),synchronization:{version:1,method:'two-anchor-affine',source:{ref:source,column:sides.source.column},anchors:structuredClone(selected),validity:{lower:bound('lower'),upper:bound('upper')},target:{unit:reference.unit,...(reference.quantity?{quantity:structuredClone(reference.quantity)}:{}),time:structuredClone(reference.time)},rationale:get('rationale'),resourcePolicy}};
  }
  async function action(act,control){
-  if(!act.startsWith('clock-sync-'))return false;guard();if(busy)return true;if(act==='clock-sync-open'){await open(JSON.parse(control.dataset.ref));return true;}if(act==='clock-sync-revise'){await revise(JSON.parse(control.dataset.ref));return true;}if(!active())return true;
+  if(!act.startsWith('clock-sync-'))return false;guard();if(busy)return true;if(act==='clock-sync-open'){choose(JSON.parse(control.dataset.ref));return true;}if(act==='clock-sync-affine-open'){await open(JSON.parse(control.dataset.ref));return true;}if(act==='clock-sync-revise'){await revise(JSON.parse(control.dataset.ref));return true;}if(!active())return true;
   const token=generation,side=control.dataset.side;if(act==='clock-sync-save'){await scalarDispose?.ready?.();current(token);}setBusy(true);
   try{
    if(act==='clock-sync-back'){const reference=revision??source;clean();await inspect(reference);return true;}

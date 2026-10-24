@@ -26,7 +26,7 @@ test('author paired clocks, correct invalid validity, retain explicit status and
  const option=async(id,title)=>{const select=dialog.locator('#'+id);await expect(select.locator('option').filter({hasText:title})).toHaveCount(1);await select.selectOption(await select.locator('option').filter({hasText:title}).getAttribute('value'));};
  const choose=async(key,index)=>{await dialog.locator('[data-action="material-calculation-graph-pick"][data-target="'+key+'"]').click();await dialog.locator('[data-graph-picker] [data-action="material-calculation-graph-choose"]').nth(index).click();};
  try{
-  await page.goto(app.url);await inspect('Source clock coordinates');await dialog.locator('[data-action="material-clock-sync-open"]').click();
+  await page.goto(app.url);await inspect('Source clock coordinates');await dialog.locator('[data-action="material-clock-sync-open"]').click();await dialog.locator('[data-action="material-clock-sync-affine-open"]').click();
   await dialog.locator('[data-sync="title"]').fill('Paired elapsed clocks');
   await dialog.locator('[data-sync-side="source"] [data-sync-column]').selectOption('0');await dialog.locator('[data-action="material-clock-sync-column"][data-side="source"]').click();
   for(const [anchor,row] of [[0,0],[1,2]])await dialog.locator('[data-action="material-clock-sync-anchor"][data-side="source"][data-anchor="'+anchor+'"][data-row="'+row+'"]').click();

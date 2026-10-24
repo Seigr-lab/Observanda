@@ -5,6 +5,10 @@ function parts(template,values){return template.split(/(\{\w+\})/).filter(Boolea
 // locators, encryption/storage references or resource-policy internals.
 export function clockSynchronizationContextParts(context,{text=message}={}){
  if(!context)return [];
+ if(context.version===2&&context.method==='segmented-piecewise-affine-v1'){
+  if(!Number.isSafeInteger(context.segmentCount)||context.segmentCount<1)throw RangeError('Invalid clock synchronization context');
+  return parts(text('publicSegmentedContext',{method:'{method}',count:'{count}',source:'{source}',epoch:'{epoch}'}),{method:text('publicSegmentedMethod'),count:String(context.segmentCount),source:context.sourceUnit?' ['+context.sourceUnit+']':'',epoch:context.epoch?text('publicEpoch',{epoch:context.epoch}):''});
+ }
  if(context.version!==1||context.method!=='two-anchor-affine'||!context.validity?.lower||!context.validity?.upper)throw RangeError('Invalid clock synchronization context');
  const scalar=value=>parts(text('publicScalar',{spelling:'{spelling}',representation:'{representation}',radix:'{radix}'}),{spelling:{spelling:value.spelling},representation:value.representation,radix:String(value.radix)});
  return parts(text('publicContext',{method:'{method}',lower:'{lower}',upper:'{upper}',source:'{source}',epoch:'{epoch}'}),{method:text('publicMethod'),lower:scalar(context.validity.lower),upper:scalar(context.validity.upper),source:context.sourceUnit?' ['+context.sourceUnit+']':'',epoch:context.epoch?text('publicEpoch',{epoch:context.epoch}):''});

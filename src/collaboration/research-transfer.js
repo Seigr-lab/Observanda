@@ -85,8 +85,9 @@ export class ResearchTransfer{
    if(!ref||await owner.sequenceNodes.has(ref.hash))return;const node=await tree.node(ref);await owner.sequenceNodes.add(ref.hash);await visit(node.left);await visit(node.right);
    const chunk=await owner.materials.sequences.read('chunks',node.revision);if(!chunk)throw new AppError('MATERIAL_MISSING');
    if(chunk.kind==='cells')for(const cell of chunk.items){if(cell.value?.parts)await owner.sequence(cell.value.parts);if(cell.value?.components)await owner.sequence(cell.value.components);if(cell.value?.original?.parts)await owner.sequence(cell.value.original.parts);if(cell.lineage?.leaves)await owner.sequence(cell.lineage.leaves);if(cell.sourcesIndex)await owner.sequence(cell.sourcesIndex);}
-   if(['columns','columns-policy','calculation-nodes','uncertainty-inputs','uncertainty-covariance'].includes(chunk.kind))for(const value of chunk.items)await owner.declaration(value);
+   if(['columns','columns-policy','calculation-nodes','uncertainty-inputs','uncertainty-covariance','clock-sync-segments','clock-sync-anchors'].includes(chunk.kind))for(const value of chunk.items)await owner.declaration(value);
    if(chunk.kind==='domain-components')for(const component of chunk.items)if(scalarTextReference(component.spelling))await owner.sequence(component.spelling.parts);
+   if(chunk.kind==='clock-sync-segments')for(const segment of chunk.items)await owner.sequence(segment.anchorsIndex);
    if(chunk.kind==='calculation-bindings')for(const binding of chunk.items)if(binding.match?.keysIndex)await owner.sequence(binding.match.keysIndex);
    if(chunk.kind==='calculation-row-bindings')for(const binding of chunk.items)if(binding.location?.cellsIndex)await owner.sequence(binding.location.cellsIndex);
    if(chunk.kind==='pages')for(const page of chunk.items){const rows=await owner.materials.json(owner.materials.metadataFile('tables/'+page.hash+'.json'));for(const row of rows){await owner.declaration(row);if(row.cellIndex)await owner.sequence(row.cellIndex);if(row.calculationLineage?.bindingsIndex)await owner.sequence(row.calculationLineage.bindingsIndex);}await owner.metadata('.observanda/materials/tables/'+page.hash+'.json',rows);}
@@ -136,7 +137,7 @@ export class ResearchTransfer{
     for await(const r of materials.references(doc.content))await enqueue(r);
     for await(const r of materials.references(doc.content,'outputs'))await enqueue(r);
     if(doc.content.acquisition)await enqueue(doc.content.acquisition);
-    for(const slot of ['pageIndex','schemaIndex','inputsIndex','outputsIndex','aggregationMembersIndex','schemaInputsIndex','plotPointsIndex','plotMembersIndex','graphBindingsIndex','graphNodesIndex','graphOutputsIndex','uncertaintyInputsIndex','uncertaintyCovarianceIndex'])await owner.sequence(doc.content[slot]);
+    for(const slot of ['pageIndex','schemaIndex','inputsIndex','outputsIndex','aggregationMembersIndex','schemaInputsIndex','plotPointsIndex','plotMembersIndex','graphBindingsIndex','graphNodesIndex','graphOutputsIndex','uncertaintyInputsIndex','uncertaintyCovarianceIndex','segmentsIndex'])await owner.sequence(doc.content[slot]);
     if(doc.content.aggregation?.version>=4)await owner.declaration(doc.content);if(doc.content.measurement)await owner.declaration(doc.content.measurement);if(['Observanda clock synchronization','Observanda statistical uncertainty'].includes(doc.content.tool))await owner.declaration(doc.content);
     if(doc.content.figure?.kind==='retained'){const {RetainedFigureDocuments}=await import('../retained-figure-document.js');const figure=await new RetainedFigureDocuments(owner.workspace,{readOnly:true}).open(doc.content.figure);await owner.figure(figure,enqueue);}
     if(doc.content.comparison&&doc.content.summary?.version===2)for await(const part of materials.comparisons.index(doc.content.summary).metadata())await owner.metadata(part.name,part.value);

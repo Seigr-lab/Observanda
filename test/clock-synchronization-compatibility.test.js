@@ -17,7 +17,7 @@ test('clock synchronization and approximation decode independently in either fea
 });
 test('graph9 and recipe12 preserve earlier node admission while new nodes require explicit upgrade',()=>{
  const ref={kind:'analysis',id:randomUUID(),revision:'a'.repeat(64)},node={id:randomUUID(),kind:'clock-synchronize',binding:{id:randomUUID(),position:0},column:17,model:ref,operation:'value',outside:'absent'};
- for(let version=1;version<=8;version++)assert.equal(validGraphNode(node,0,version),false);assert.equal(validGraphNode(node,0,9),true);assert.equal(validGraphNode({...node,model:{...ref,kind:'dataset'}},0,9),false);assert.equal(validGraphNode({...node,outside:'extrapolate'},0,9),false);assert.equal(validGraphCalculation({version:12,graph:ref}),true);assert.equal(validGraphCalculation({version:13,graph:ref}),false);
+ for(let version=1;version<=8;version++)assert.equal(validGraphNode(node,0,version),false);assert.equal(validGraphNode(node,0,9),true);assert.equal(validGraphNode({...node,model:{...ref,kind:'dataset'}},0,9),false);assert.equal(validGraphNode({...node,outside:'extrapolate'},0,9),false);for(const version of [12,13,14,15])assert.equal(validGraphCalculation({version,graph:ref}),true);assert.equal(validGraphCalculation({version:16,graph:ref}),false);
  assert.equal(materialRequest('/api/research/materials/clock-synchronization-save').write,true);assert.equal(materialRequest('/api/research/materials/clock-synchronization-read').write,false);
 });
 test('metadata admission covers direct models, inherited graph semantics, queued schemas and lineage without scanning arbitrary text',()=>{

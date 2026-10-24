@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {parseFragment,serialize} from 'parse5';
 import {randomUUID} from 'node:crypto';
-import {clockSynchronizationUI,clockSynchronizationView,clockSynchronizationDescription,clockSynchronizationCellPreview,clockSynchronizationAnchorEligible,clockSynchronizationStatusDisplay} from '../src/web/clock-synchronization-ui.js';
+import {clockSynchronizationUI,clockSynchronizationLineageView,clockSynchronizationView,clockSynchronizationDescription,clockSynchronizationCellPreview,clockSynchronizationAnchorEligible,clockSynchronizationStatusDisplay} from '../src/web/clock-synchronization-ui.js';
 import {defaultDatasetResourcePolicy} from '../src/web/dataset-resource-policy.js';
 import {defaultColumn} from '../src/web/dataset-schema.js';
 import {blankClock} from '../src/web/measurement-model.js';
@@ -98,4 +98,24 @@ test('graph upgrade and model selection preserve editable choices when saving is
  await action('add',{kind:'clock-synchronize'});await settle();dom.query('[data-graph-field="binding"]').value=JSON.stringify(binding);dom.query('[data-graph-field="column"]').value='18';dom.query('[data-graph-field="operation"]').value='status';dom.query('[data-graph-field="outside"]').value='error';
  const picker=dom.query('#graph-clock-sync-model');picker.value=picker.querySelectorAll('option')[1].value;picker.dispatchEvent({type:'change'});await assert.rejects(action('apply'),/not a retained two-anchor/);assert.equal(changes.length,1);assert.equal(dom.query('[data-graph-field="column"]').value,'18');
  picker.value=picker.querySelectorAll('option')[2].value;picker.dispatchEvent({type:'change'});await assert.rejects(action('apply'),/Resource policy refusal/);assert.equal(dom.query('[data-graph-field="outside"]').value,'error');assert.equal(ui.isBusy(),false);await action('apply');assert.deepEqual(changes[1],changes[2]);assert.deepEqual(changes[2].item.model,model);assert.deepEqual(changes[2].item.binding,binding);assert.equal(changes[2].item.column,17);assert.equal(changes[2].item.operation,'status');assert.equal(changes[2].item.outside,'error');assert.ok(calls.filter(call=>call.name==='read').every(call=>call.options.adoptOwner===false));
+});
+
+
+test('segmented clock models require explicit graph twelve and retain node choices on the older-version refusal',async t=>{
+ const dom=harness(t),graph=ref('analysis'),model=ref('analysis'),binding={id:randomUUID(),position:0},policy=defaultDatasetResourcePolicy(),changes=[];policy.resources.maxScalarCharacters=20000;let version=11;
+ const ui=datasetCalculationGraphUI({call:async(name,data)=>{if(name==='calculation-graph-page')return {title:'Historical graph',graphVersion:version,counts:{bindings:1,nodes:0,outputs:0},items:[],total:0,next:null,policy};if(name==='list')return {items:[{...model,title:'Segmented model'}],next:null};if(name==='read')return {content:{tool:'Observanda clock synchronization',version:2,method:'segmented-piecewise-affine-v1'}};if(name==='calculation-graph-change'){changes.push(structuredClone(data));if(data.collection==='version')version=data.graphVersion;return {ref:graph};}throw Error(name);},frame:dom.frame,esc,field,guard(){},owner:()=> 'record',inspect:async()=>{},watchJob:async()=>{}});t.after(()=>ui.clean());const action=(name,data={})=>ui.action('calculation-graph-'+name,control(name,data));await ui.open(graph,{existing:true});await action('add',{kind:'clock-synchronize'});await settle();dom.query('[data-graph-field="binding"]').value=JSON.stringify(binding);dom.query('[data-graph-field="column"]').value='19';dom.query('[data-graph-field="operation"]').value='status';const picker=dom.query('#graph-clock-sync-model');picker.value=picker.querySelectorAll('option')[1].value;picker.dispatchEvent({type:'change'});await assert.rejects(action('apply'),/Enable segmented clock synchronization/);assert.equal(changes.length,0);assert.equal(dom.query('[data-graph-field="column"]').value,'19');assert.equal(dom.query('[data-graph-field="operation"]').value,'status');await action('cancel-edit');await action('segmented-clock-upgrade');assert.equal(dom.query('[data-dataset-resource="maxScalarCharacters"]').value,'20000');await action('apply-segmented-clock-upgrade');assert.equal(changes[0].graphVersion,12);assert.deepEqual(changes[0].policy,policy);await action('add',{kind:'clock-synchronize'});await settle();dom.query('[data-graph-field="binding"]').value=JSON.stringify(binding);const selected=dom.query('#graph-clock-sync-model');selected.value=selected.querySelectorAll('option')[1].value;selected.dispatchEvent({type:'change'});await action('apply');assert.equal(changes[1].item.model.id,model.id);
+});
+
+test('new clock authoring offers simple and segmented methods before creating a model',async t=>{
+ const dom=harness(t),calls=[],ui=clockSynchronizationUI({call:async(name)=>{calls.push(name);throw Error(name);},frame:dom.frame,esc,field,guard(){},owner:()=> 'record',inspect:async()=>{}});t.after(()=>ui.clean());await perform(ui,'open',{ref:JSON.stringify(ref('dataset'))});assert.match(dom.html(),/Two-anchor affine model/);assert.match(dom.html(),/Segmented piecewise interpolation/);assert.ok(dom.query('[data-action="material-clock-sync-affine-open"]'));assert.ok(dom.query('[data-action="material-clock-segments-open"]'));assert.deepEqual(calls,[]);
+});
+
+
+test('segmented lineage names the selected segment and adjacent anchor positions without private identifiers',()=>{
+ const value={version:2,model:ref('analysis'),segment:{id:randomUUID(),position:1},bracket:[{position:2},{position:3}],status:'ready'},html=clockSynchronizationLineageView(value,{esc});assert.match(html,/Declared segment 2/);assert.match(html,/adjacent anchor pairs 3 and 4/);assert.doesNotMatch(html,new RegExp(value.segment.id));assert.doesNotMatch(html,new RegExp(value.model.id));assert.match(clockSynchronizationLineageView({...value,segment:null,bracket:[],status:'outside-validity'},{esc}),/No declared segment selected/);
+});
+
+
+test('segmented lineage distinguishes calculation row selection from an excluded source without changing stored status',()=>{
+ const value={version:2,model:ref('analysis'),segment:null,bracket:[],status:'excluded-input',outputExcluded:true},saved=structuredClone(value),html=clockSynchronizationLineageView(value,{esc});assert.match(html,/Excluded by the calculation.*row selection/);assert.doesNotMatch(html,/Source reading excluded/);assert.deepEqual(value,saved);for(const outputExcluded of [false,undefined,'true'])assert.match(clockSynchronizationLineageView({...value,outputExcluded},{esc}),/Source reading excluded/);
 });

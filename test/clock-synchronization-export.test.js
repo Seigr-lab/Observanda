@@ -31,3 +31,17 @@ test('paged export streams complete validity bounds and never emits private scal
  let html='';for await(const part of retainedTableHTML(materials,{source:ref,table}))html+=part;
  assert.ok(html.includes(upper+' (decimal, base 10) [source intervals]'));assert.match(html,/Reference &lt;origin&gt;/);assert.match(html,/<td>5\/2<\/td>/);assert.doesNotMatch(html,/do-not-publish-storage-identity|resourcePolicy|observanda-exact/);assert.equal(windows.length,3);assert.ok(windows.every(w=>w.limit<=4096));
 });
+
+
+test('segmented clock headers describe disjoint ranges without inventing a global clock interval',async()=>{
+ const descriptor={version:2,method:'segmented-piecewise-affine-v1',segmentCount:19,epoch:'Reference <origin>',sourceUnit:'source intervals',sourceReference:'Acquisition clock',resourcePolicy:defaultDatasetResourcePolicy()},materials=fixture(descriptor);
+ const description=clockSynchronizationContextText(descriptor);assert.match(description,/segmented piecewise-affine model/);assert.match(description,/19 declared segments/);assert.match(description,/no extrapolation or interpolation across resets/);assert.doesNotMatch(description,/source validity .* to /);
+ for(const version of [1,2,3]){
+  const table=await retainedTable(materials,{ref,selection:{columns:[0,1],offset:0,count:1,includeExcluded:false},version});assert.equal(validRetainedTable(table),true);
+  let html='';if(version===3)for await(const part of retainedTableHTML(materials,{source:ref,table}))html+=part;else html=retainedTableView(table,esc);
+  assert.match(html,/19 declared segments/);assert.match(html,/adjacent anchors/);assert.match(html,/Reference &lt;origin&gt;/);assert.match(html,/<td>5\/2<\/td>/);assert.doesNotMatch(html,/resourcePolicy|clock-sync-segments|observanda-exact/);
+ }
+ assert.throws(()=>clockSynchronizationContextText({...descriptor,segmentCount:0}),RangeError);
+ assert.throws(()=>clockSynchronizationContextText({...descriptor,segmentCount:1.5}),RangeError);
+ const decorated={...descriptor,segmentsIndex:{privateStorageId:'never-export-this-identity'},source:{privatePath:'never-export-private-path'}};assert.doesNotMatch(clockSynchronizationContextText(decorated),/never-export/);
+});

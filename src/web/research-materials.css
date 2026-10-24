@@ -114,3 +114,16 @@ dialog:has(> .material-workbench) { position:fixed; inset:1rem; margin:auto; max
 [data-uncertainty-preview] th,[data-uncertainty-preview] td { white-space:normal; overflow-wrap:anywhere; max-width:18rem; }
 [data-uncertainty-preview] th details { font-weight:400; text-align:start; }
 [data-uncertainty-preview] th dd { margin-inline-start:0; }
+
+.material-workbench fieldset[data-clock-segment-controls] { border:0; margin:0; padding:0; min-width:0; }
+[data-clock-segments] { min-width:0; overflow-wrap:anywhere; }
+[data-clock-segments] details { margin-block:.5rem; min-width:0; }
+[data-clock-segments] summary { cursor:pointer; }
+[data-clock-segments] [data-clock-segment-status]:empty { margin:0; }
+[data-clock-segments] ol { padding-inline-start:1.5rem; }
+[data-clock-segments] li { padding-block:.5rem; }
+[data-clock-segment-table] table { width:100%; table-layout:fixed; }
+[data-clock-segment-table] th,[data-clock-segment-table] td { min-width:0; padding:.4rem .35rem; white-space:normal; overflow-wrap:anywhere; vertical-align:top; }
+[data-clock-segment-table] thead th:first-child { width:16%; }
+[data-clock-segment-table] thead th:last-child { width:39%; }
+[data-clock-segment-table] .button { max-width:100%; white-space:normal; overflow-wrap:anywhere; }

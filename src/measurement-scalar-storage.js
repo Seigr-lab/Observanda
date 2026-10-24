@@ -21,7 +21,7 @@ export function scalarDefinitionEntries(value){
  if(value?.scale&&value?.offset)unit(value,[]);
  if(value?.version&&Object.hasOwn(value,'modulus'))clock(value,[]);
  if(value?.kind==='declared-interval'||value?.kind==='derived-enclosure')uncertainty(value,[]);
- synchronization(value?.synchronization,['synchronization']);synchronization(value,[]);
+ synchronization(value?.synchronization,['synchronization']);synchronization(value,[]);if(value?.version===1&&value.kind==='clock-sync-segment'){add(value,[],['validity','lower']);add(value,[],['validity','upper']);}
  if(value?.tool==='Observanda clock synchronization'){quantity(value.target?.quantity,['target','quantity']);clock(value.target?.time?.clock?.definition,['target','time','clock','definition']);}
  const aggregation=(owner,prefix)=>{if([4,5].includes(owner?.version)&&Array.isArray(owner.values))for(const [i,metric]of owner.values.entries())if(metric.operation==='quantile')add(owner,prefix,['values',i,'probability']);};
  aggregation(value,[]);aggregation(value?.aggregation,['aggregation']);

@@ -1,3 +1,4 @@
+import {projectDatasetRows} from './dataset-storage.js';
 import {derivedComputation} from './web/measurement-computation.js';
 import {retainScalarDefinitions,resolveScalarDefinitions,scalarDefinitionEntries,measurementScalarPolicies} from './measurement-scalar-storage.js';
 import {isScalarRepresentation} from './web/measurement-model.js';
@@ -42,7 +43,8 @@ export class Measurements {
  }
  async cell(source){
   if(!validLocator(source)||source.ref.kind!=='dataset')fail();
-  const {page,row,column}=source.selector,doc=await this.materials.read(source.ref),data=await this.materials.retainedDatasetPage(doc,page,{columns:[column]}),selected=data.rows[row];
+  const {page,row,column}=source.selector,doc=await this.materials.read(source.ref),indexed=doc.content.datasetFormat===3,data=await this.materials.retainedDatasetPage(doc,page,indexed?{metadataOnly:true}:{columns:[column]});
+  let selected=data.rows[row];if(!selected)fail();if(indexed)selected=(await projectDatasetRows(this.materials,doc,[selected],[column])).rows[0];
   const schema=await this.materials.retainedSchemaPage(doc,{offset:column,limit:1});
   if(!selected||schema.items.length!==1)fail();
   const col=schema.items[0],kind=selected.valueKinds?.[0],presence=['null','absent'].includes(kind)?kind:col.missing.some(m=>m.value===selected.cells[0])?'missing':'value';
