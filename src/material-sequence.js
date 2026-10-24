@@ -8,7 +8,7 @@ import {AppError} from './errors.js';
 const prefix='.observanda/materials/sequences';
 const hash=value=>digest(serialize(value));
 const fail=()=>{throw new AppError('MATERIAL_MISSING');};
-const chunkSizeFor=kind=>kind==='columns-policy'?4:['plot-points','calculation-lineage'].includes(kind)?1:kind==='calculation-nodes'?8:['columns','cells','cell-text','domain-components'].includes(kind)?16:64;
+const chunkSizeFor=kind=>kind==='columns-policy'?4:['plot-points','calculation-lineage','uncertainty-inputs','uncertainty-covariance'].includes(kind)?1:kind==='calculation-nodes'?8:['columns','cells','cell-text','domain-components'].includes(kind)?16:64;
 const key=page=>'chunk:'+String(page).padStart(16,'0');
 export class MaterialSequence{
  constructor(workspace){this.workspace=workspace;}
@@ -16,7 +16,7 @@ export class MaterialSequence{
  async put(kind,value){if(kind==='chunks'&&['plot-points','plot-members'].includes(value.kind)&&typeof this.workspace.catalogue==='function')await this.workspace.catalogue(async store=>{const {requireNativeNumericalModels}=await import('./catalogue-format.js');await requireNativeNumericalModels(store.db);});const id=hash(value),prior=await this.read(kind,id),relative=prefix+'/'+kind+'/'+id+'.json',text=serialize(value);if(catalogueContext.getStore()&&(typeof this.workspace.catalogue==='function'||this.workspace.root!==undefined)){if(typeof this.workspace.catalogue!=='function')throw new AppError('INVALID');await this.workspace.catalogue(async store=>{if(!await recordOwnerResourcesTracking(store))return;const dependencies=await recordOwnerMetadataDependencies(store,relative,text);await retainRecordOwnerResource(store,{kind:'object',key:'metadata:'+relative,revision:hash({text})},{present:prior!==null,dependencies});});}if(prior===null)await this.workspace.writeMetadata(relative,text);return id;}
  tree(){return new ObjectIndex(null,{immutable:true,nodeStorage:{read:ref=>this.read('nodes',ref.hash,8192),write:(ref,node)=>this.put('nodes',node)}});}
  validate(value){
-  if(!value||value.format!==1||!['pages','columns','columns-policy','references','files','upload-chunks','aggregation-members','cells','cell-text','domain-components','plot-points','plot-members','calculation-bindings','calculation-nodes','calculation-outputs','calculation-edges','calculation-lineage','calculation-row-bindings','calculation-source-locators'].includes(value.kind)||!Number.isSafeInteger(value.count)||value.count<0||value.chunkSize!==chunkSizeFor(value.kind)||!validIndexRef(value.root)||(value.root?.count??0)!==Math.ceil(value.count/value.chunkSize))fail();
+  if(!value||value.format!==1||!['pages','columns','columns-policy','references','files','upload-chunks','aggregation-members','cells','cell-text','domain-components','plot-points','plot-members','calculation-bindings','calculation-nodes','calculation-outputs','calculation-edges','calculation-lineage','calculation-row-bindings','calculation-source-locators','uncertainty-inputs','uncertainty-covariance'].includes(value.kind)||!Number.isSafeInteger(value.count)||value.count<0||value.chunkSize!==chunkSizeFor(value.kind)||!validIndexRef(value.root)||(value.root?.count??0)!==Math.ceil(value.count/value.chunkSize))fail();
   return value;
  }
  builder(kind,write){

@@ -1,3 +1,4 @@
+import statisticalUncertainty from '../locales/en/statisticalUncertainty.json' with {type:'json'};
 import calculatorResults from '../locales/en/calculatorResults.json' with {type:'json'};
 import datasetWindows from '../locales/en/datasetWindows.json' with {type:'json'};
 import datasetResources from '../locales/en/datasetResources.json' with {type:'json'};
@@ -178,6 +179,7 @@ english.datasetPreparation=datasetPreparation;
 english.datasetCalculations=datasetCalculations;
 english.numeralClipboard=numeralClipboard;
 english.datasetAggregation=datasetAggregation;
+english.statisticalUncertainty=statisticalUncertainty;
 english.retainedTables=retainedTables;
 english.figureHeatmap=figureHeatmap;
 english.figureIntervals=figureIntervals;

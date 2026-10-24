@@ -27,6 +27,8 @@ export function scalarDefinitionEntries(value){
  aggregation(value,[]);aggregation(value?.aggregation,['aggregation']);
  if(value?.version===1&&value.method==='linear-n-minus-one-v1'&&value.weight)add(value,[],['weight']);
  if(Array.isArray(value?.aggregation))for(const [i,metric]of value.aggregation.entries())if(metric.quantile?.weight)result.push({path:['aggregation',i,'quantile','weight','spelling'],scalar:metric.quantile.weight,policy:value.resourcePolicy});
+ if(['statistical-uncertainty-input','statistical-uncertainty-covariance'].includes(value?.kind)){const path=value.kind==='statistical-uncertainty-input'?['item','sensitivity']:['item','value'],operand=selected(value,path);if(operand?.kind==='declared'){add(value,[],[...path,'scalar']);unit(operand.unitDefinition,[...path,'unitDefinition']);}}
+ if(value?.tool==='Observanda statistical uncertainty'&&value.result){for(const key of ['nominal','variance','standardUncertainty']){add(value.result,['result'],[key,'scalar']);unit(value.result[key]?.unitDefinition,['result',key,'unitDefinition']);}}
  quantity(value?.quantity,['quantity']);clock(value?.time?.clock?.definition,['time','clock','definition']);
  if(value?.kind==='constant')quantity(value.value?.quantity,['value','quantity']);
  return result;

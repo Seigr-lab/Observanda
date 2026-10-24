@@ -93,3 +93,24 @@ dialog:has(> .material-workbench) { position:fixed; inset:1rem; margin:auto; max
 .material-workbench fieldset[data-graph-controls] { border:0; margin:0; padding:0; min-width:0; }
 .material-workbench [data-graph-actions] { display:flex; flex-wrap:wrap; gap:.5rem; }
 .material-workbench [data-graph-status] { flex-basis:100%; margin:0; text-align:start; }
+
+/* The uncertainty reader keeps the saved values ahead of explanatory details. */
+.material-workbench fieldset[data-uncertainty-controls] { border:0; margin:0; padding:0; min-width:0; }
+[data-statistical-uncertainty] { min-width:0; overflow-wrap:anywhere; }
+[data-statistical-uncertainty] [data-uncertainty-summary] { margin-block:0 .5rem; font-size:.9em; }
+[data-statistical-uncertainty] [data-uncertainty-actions] { justify-content:flex-start; margin-block:.5rem; }
+[data-statistical-uncertainty] details { min-width:0; margin-block:.5rem; }
+[data-statistical-uncertainty] summary { cursor:pointer; }
+[data-statistical-uncertainty] [data-uncertainty-result] h4 { margin-block:.75rem .3rem; }
+[data-statistical-uncertainty] [data-uncertainty-result] p { margin-block:.3rem; }
+[data-statistical-uncertainty] [data-uncertainty-status]:empty { margin:0; }
+
+[data-uncertainty-rows] table { width:100%; table-layout:fixed; }
+[data-uncertainty-rows] th,[data-uncertainty-rows] td { min-width:0; padding:.4rem .35rem; white-space:normal; overflow-wrap:anywhere; vertical-align:top; }
+[data-uncertainty-rows] thead th:first-child { width:16%; }
+[data-uncertainty-rows] thead th:last-child { width:39%; }
+[data-uncertainty-rows] .button { max-width:100%; white-space:normal; overflow-wrap:anywhere; }
+
+[data-uncertainty-preview] th,[data-uncertainty-preview] td { white-space:normal; overflow-wrap:anywhere; max-width:18rem; }
+[data-uncertainty-preview] th details { font-weight:400; text-align:start; }
+[data-uncertainty-preview] th dd { margin-inline-start:0; }

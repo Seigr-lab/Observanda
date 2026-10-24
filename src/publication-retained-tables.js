@@ -1,3 +1,4 @@
+import {statisticalUncertaintyContextText} from './web/statistical-uncertainty-context.js';
 import {measurementUnitContextParts} from './web/measurement-unit-context.js';
 import {aggregationQuantileContextParts,aggregationPairContextText} from './web/dataset-aggregation-context.js';
 import {clockSynchronizationContextParts} from './web/measurement-clock-context.js';
@@ -31,6 +32,7 @@ export async function* retainedTableHTML(materials,statement,{signal}={}){
    if(format.quantile){yield ' [';for(const part of aggregationQuantileContextParts(format.quantile)){if(typeof part==='string')yield esc(part);else for await(const text of cellText(materials,part.spelling,{signal}))yield esc(text);}yield ']';}
    if(format.unitDefinition){yield ' [';for(const part of measurementUnitContextParts(format.unitDefinition)){if(typeof part==='string')yield esc(part);else for await(const text of cellText(materials,part.spelling,{signal}))yield esc(text);}yield ']';}
    if(format.pairedStatistic)yield esc(' ['+aggregationPairContextText(format.pairedStatistic)+']');
+   if(format.statisticalUncertainty)yield esc(' ['+statisticalUncertaintyContextText(format.statisticalUncertainty)+']');
    if(format.synchronization){yield ' [';for(const part of clockSynchronizationContextParts(format.synchronization)){if(typeof part==='string')yield esc(part);else for await(const text of cellText(materials,part.spelling,{signal}))yield esc(text);}yield ']';}
    if(['radix','radix-fraction'].includes(format.representation))yield esc(' ('+messages.base.replace('{radix}',format.radix)+')');yield '</th>';
   }

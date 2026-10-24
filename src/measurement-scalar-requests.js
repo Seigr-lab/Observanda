@@ -13,6 +13,6 @@ export async function measurementScalarRequest(materials,operation,data,{signal}
  if(data.selector!==undefined){if(data.column!==undefined||data.node!==undefined||data.field!=='weight.spelling'||doc.kind!=='dataset')invalid();const cell=await materials.measurements.cell({ref:data.ref,selector:data.selector}),index=data.selector.column-doc.content.aggregation?.keys?.length,detail=await aggregationQuantileDetails(materials,doc,cell.row,index,{signal});if(!detail.quantile)invalid();const {lower,upper,...receipt}=detail.quantile;declaration={...receipt,lower:{rank:lower.rank,member:lower.member},upper:{rank:upper.rank,member:upper.member},resourcePolicy:doc.content.aggregation.resourcePolicy};}
  else if(data.column!==undefined){if(data.node!==undefined||doc.kind!=='dataset'||!Number.isSafeInteger(data.column)||data.column<0)invalid();declaration=await materials.datasetColumn(doc,data.column);}
  else if(data.node!==undefined){const graph=new CalculationGraphs(materials);graph.shape(doc);declaration=await graph.at(doc.content,'nodes',data.node);}
- else{declaration=doc.content.tool==='Observanda clock synchronization'||doc.content.aggregation?.version>=4?doc.content:doc.content.measurement;if(!declaration)invalid();}
+ else{declaration=['Observanda clock synchronization','Observanda statistical uncertainty'].includes(doc.content.tool)||doc.content.aggregation?.version>=4?doc.content:doc.content.measurement;if(!declaration)invalid();}
  return readScalarDefinition(materials,declaration,data.field,options);
 }
