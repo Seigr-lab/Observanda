@@ -416,5 +416,10 @@
   "DATASET_CUSUM_PARAMETERS": "CUSUM requires an exact target, a nonnegative allowance and a threshold greater than zero, within the declared resource policy.",
   "DATASET_CUSUM_INPUT": "A selected CUSUM input does not match its declared scalar interpretation or original row order.",
   "DATASET_CUSUM_GAP": "The selected CUSUM range contains a missing or excluded row. Choose an explicit gap policy before calculating.",
-  "DATASET_CUSUM_UNITS": "CUSUM requires source and parameter difference units with matching dimensions, positive scales and zero offsets."
+  "DATASET_CUSUM_UNITS": "CUSUM requires source and parameter difference units with matching dimensions, positive scales and zero offsets.",
+  "MEASUREMENT_SEQUENCE_INVALID": "Choose a valid sequence operation, declared element type and resource limits.",
+  "MEASUREMENT_SEQUENCE_INPUT": "The sequence contains an invalid element or retained value.",
+  "MEASUREMENT_SEQUENCE_INDEX": "The selected position or range lies outside this sequence.",
+  "MEASUREMENT_SEQUENCE_INCOMPATIBLE": "These sequences use different declared element spaces.",
+  "MEASUREMENT_SEQUENCE_UNITS": "Sequence operations require compatible declared units without an implicit conversion."
 }

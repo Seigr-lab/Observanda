@@ -344,7 +344,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
    ${c.numericTransform?.reduction?'<p>'+esc(measurementText('plotReduction'))+'</p>':''}
    ${c.tool==='Observanda dataset spectrum'?button(esc(spectrumText('review')),'spectrum-review',`data-ref="${esc(JSON.stringify(selectedRef))}"`):''}
    ${c.tool==='Observanda dataset CUSUM'?button(esc(cusumText('review')),'cusum-review',`data-ref="${esc(JSON.stringify(selectedRef))}"`):''}
-   ${[1,2,3,4,5,6,7,8,9,10,11,12,13,14].includes(c.graphVersion)&&!referenceContext?button('Edit calculation graph','calculation-graph-open',`data-ref="${esc(JSON.stringify(selectedRef))}" data-existing="true"`):''}
+   ${[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15].includes(c.graphVersion)&&!referenceContext?button('Edit calculation graph','calculation-graph-open',`data-ref="${esc(JSON.stringify(selectedRef))}" data-existing="true"`):''}
    ${c.intake&&!referenceContext?button('Inspect imported file set','intake-open',`data-id="${esc(c.intake.id)}"`):''}
    ${c.acquisition?'Recorded with '+referenceList([c.acquisition]):''}<h3>Exact inputs</h3>${c.inputsIndex?'<div id="material-input-references"></div>':referenceList(c.inputs??[])}${inputCount(c,'outputs')?`<h3>Outputs</h3>${c.outputsIndex?'<div id="material-output-references"></div>':referenceList(c.outputs)}`:''}
    <details><summary>Private manifest</summary><pre>${esc(JSON.stringify(opened,null,2))}</pre></details>`);

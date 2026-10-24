@@ -1,3 +1,3 @@
 // Policy admission travels with immutable graphs, retained recipes and queued commands.
-export const datasetResourceMaterial=value=>[4,5].includes(value?.content?.aggregation?.version)||value?.content?.tool==='Observanda calculation graph'&&value.content.graphVersion>=5||[8,9,10,11,12,13,14,15,16,17].includes(value?.content?.calculation?.version);
-export const datasetResourceMetadata=(relative,value)=>datasetResourceMaterial(value)||relative.startsWith('.observanda/jobs/')&&([4,5].includes(value?.input?.command?.aggregation?.version)||[8,9,10,11,12,13,14,15,16,17].includes(value?.input?.command?.calculation?.version));
+export const datasetResourceMaterial=value=>[4,5].includes(value?.content?.aggregation?.version)||value?.content?.tool==='Observanda calculation graph'&&value.content.graphVersion>=5||[8,9,10,11,12,13,14,15,16,17,18].includes(value?.content?.calculation?.version);
+export const datasetResourceMetadata=(relative,value)=>datasetResourceMaterial(value)||relative.startsWith('.observanda/jobs/')&&([4,5].includes(value?.input?.command?.aggregation?.version)||[8,9,10,11,12,13,14,15,16,17,18].includes(value?.input?.command?.calculation?.version));

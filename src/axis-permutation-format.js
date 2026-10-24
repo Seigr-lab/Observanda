@@ -1,7 +1,7 @@
 import {AppError} from './errors.js';
 // Axis mapping changes graph meaning without changing domain declarations or values.
-export const axisPermutationMaterial=value=>value?.content?.tool==='Observanda calculation graph'&&[11,12,13,14].includes(value.content.graphVersion)||[14,15,16,17].includes(value?.content?.calculation?.version);
-export const axisPermutationCommand=value=>[14,15,16,17].includes(value?.calculation?.version);
+export const axisPermutationMaterial=value=>value?.content?.tool==='Observanda calculation graph'&&[11,12,13,14,15].includes(value.content.graphVersion)||[14,15,16,17,18].includes(value?.content?.calculation?.version);
+export const axisPermutationCommand=value=>[14,15,16,17,18].includes(value?.calculation?.version);
 export function axisPermutationMetadata(relative,value){
  if(relative.startsWith('.observanda/jobs/'))return axisPermutationCommand(value?.input?.command);
  if(!relative.startsWith('.observanda/materials/'))return false;

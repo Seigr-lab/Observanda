@@ -3,7 +3,7 @@ import {resolveCellComputation,derivedCellComputation,hasApproximateComputation}
 // current result. An unselected choose branch never contributes approximation.
 export function graphCellComputation(node,cell,dependencies,column){
  if(node.kind==='column')return {computation:resolveCellComputation(column,cell)};
- if(node.kind==='constant')return {computation:null};
+ if(node.kind==='constant'||node.kind==='domain-sequence'&&node.operation.kind==='length')return {computation:null};
  if(!dependencies.length)return {computation:resolveCellComputation(column,cell)};
  if(node.operation==='choose'){
   const condition=dependencies[2];if(['absent','null'].includes(condition.kind))return derivedCellComputation(condition);

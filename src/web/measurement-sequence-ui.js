@@ -1,0 +1,5 @@
+import {t} from './i18n/index.js';
+export const sequenceText=(key,values)=>t('measurementSequences',key,values);
+export const sequenceDeclaration=domain=>domain?.version===4&&domain.codec==='observanda.sequence'&&domain.codecVersion===1;
+export function sequenceElementControls(element,{esc,field}){return field(esc(sequenceText('element')),'<select data-domain="element-kind">'+['numeric','symbol'].map(kind=>'<option value="'+kind+'"'+(kind===(element?.kind??'numeric')?' selected':'')+'>'+esc(sequenceText(kind))+'</option>').join('')+'</select>')+'<p>'+esc(sequenceText('namespaceHelp'))+'</p><p>'+esc(sequenceText('variableLength'))+'</p><p data-domain-sequence-numeric-help>'+esc(sequenceText('numericHelp'))+'</p><p data-domain-sequence-symbol-help>'+esc(sequenceText('symbolHelp'))+'</p>';}
+export function sequenceDescription(domain){return sequenceText('description',{element:sequenceText(domain.element?.kind==='symbol'?'symbol':'numeric'),namespace:domain.namespace||sequenceText('namespaceMissing')})+(domain.element?.kind==='numeric'?' \u00b7 '+domain.element.representation+' base '+domain.element.radix:'');}
