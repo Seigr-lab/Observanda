@@ -3,8 +3,8 @@
 import {AppError} from './errors.js';
 export const sequenceDeclaration=value=>value?.representation==='domain'&&value.domain?.version===4&&value.domain.codec==='observanda.sequence';
 const sequenceValue=value=>value?.format==='domain-value'&&value.version===5&&value.definition?.version===4&&value.definition.codec==='observanda.sequence';
-export const sequenceValuesMaterial=value=>value?.content?.sequenceValues===1||value?.content?.tool==='Observanda calculation graph'&&value.content.graphVersion===15||value?.content?.calculation?.version===18||value?.content?.columns?.some(sequenceDeclaration)===true||sequenceDeclaration(value?.content?.measurement?.value);
-export const sequenceValuesCommand=value=>value?.calculation?.version===18||value?.columns?.some(sequenceDeclaration)===true||value?.columnChanges?.some(change=>sequenceDeclaration(change.column))===true||sequenceDeclaration(value?.measurement?.value);
+export const sequenceValuesMaterial=value=>value?.content?.sequenceValues===1||value?.content?.tool==='Observanda calculation graph'&&[15,16].includes(value.content.graphVersion)||[18,19].includes(value?.content?.calculation?.version)||value?.content?.columns?.some(sequenceDeclaration)===true||sequenceDeclaration(value?.content?.measurement?.value);
+export const sequenceValuesCommand=value=>[18,19].includes(value?.calculation?.version)||value?.columns?.some(sequenceDeclaration)===true||value?.columnChanges?.some(change=>sequenceDeclaration(change.column))===true||sequenceDeclaration(value?.measurement?.value);
 export function sequenceValuesMetadata(relative,value){
  if(relative.startsWith('.observanda/jobs/'))return sequenceValuesCommand(value?.input?.command);
  if(!relative.startsWith('.observanda/materials/'))return false;

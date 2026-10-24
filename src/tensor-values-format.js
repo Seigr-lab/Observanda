@@ -1,8 +1,8 @@
 import {AppError} from './errors.js';
 // Declaration generation, never the codec name alone, admits tensor semantics.
 export const tensorDeclaration=value=>value?.representation==='domain'&&value.domain?.version===3;
-export const tensorValuesMaterial=value=>value?.content?.tensorValues===1||value?.content?.tool==='Observanda calculation graph'&&[10,11,12,13,14,15].includes(value.content.graphVersion)||[13,14,15,16,17,18].includes(value?.content?.calculation?.version)||value?.content?.columns?.some(tensorDeclaration)===true;
-export const tensorValuesCommand=value=>[13,14,15,16,17,18].includes(value?.calculation?.version)||value?.columns?.some(tensorDeclaration)===true||value?.columnChanges?.some(change=>tensorDeclaration(change.column))===true;
+export const tensorValuesMaterial=value=>value?.content?.tensorValues===1||value?.content?.tool==='Observanda calculation graph'&&[10,11,12,13,14,15,16].includes(value.content.graphVersion)||[13,14,15,16,17,18,19].includes(value?.content?.calculation?.version)||value?.content?.columns?.some(tensorDeclaration)===true;
+export const tensorValuesCommand=value=>[13,14,15,16,17,18,19].includes(value?.calculation?.version)||value?.columns?.some(tensorDeclaration)===true||value?.columnChanges?.some(change=>tensorDeclaration(change.column))===true;
 export function tensorValuesMetadata(relative,value){
  if(relative.startsWith('.observanda/jobs/'))return tensorValuesCommand(value?.input?.command);
  if(!relative.startsWith('.observanda/materials/'))return false;

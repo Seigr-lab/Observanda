@@ -31,5 +31,11 @@
   "rangeHelp": "Positions start at 1. A slice count may be 0; an empty slice may begin just after the last element. Out-of-range positions are refused without clamping or wrapping.",
   "concatenateHelp": "Concatenation requires matching declared namespaces and element interpretation. Numeric units must describe the same coordinates; there is no conversion or implicit alignment.",
   "operandInvalid": "Choose the required sequence nodes from before this node.",
-  "rangeInvalid": "Enter exact whole positions starting at 1 and a nonnegative whole count within supported indexing capacity."
+  "rangeInvalid": "Enter exact whole positions starting at 1 and a nonnegative whole count within supported indexing capacity.",
+  "position": "Element position",
+  "literal": "Exact literal text",
+  "symbolNull": "JSON null",
+  "symbolPageHelp": "Strings use quoted JSON text: spaces and escapes remain explicit, and an empty string is \"\". JSON null is distinct. Long symbols show one quoted fragment at a time; character ranges refer to the original text.",
+  "previousElements": "Previous elements",
+  "nextElements": "Next elements"
 }

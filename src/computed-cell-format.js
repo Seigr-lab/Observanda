@@ -1,7 +1,7 @@
 import {AppError} from './errors.js';
 const interpreted=value=>value?.computation?.version===2;
-export const computedCellCommand=value=>value?.aggregation?.version===6||[17,18].includes(value?.calculation?.version)||value?.columns?.some(interpreted)===true||value?.columnChanges?.some(change=>interpreted(change?.column))===true;
-export const computedCellMaterial=value=>computedCellCommand(value?.content)||value?.content?.cellComputations===1||value?.content?.tool==='Observanda calculation graph'&&[14,15].includes(value.content.graphVersion)||interpreted(value?.content?.measurement);
+export const computedCellCommand=value=>value?.aggregation?.version===6||[17,18,19].includes(value?.calculation?.version)||value?.columns?.some(interpreted)===true||value?.columnChanges?.some(change=>interpreted(change?.column))===true;
+export const computedCellMaterial=value=>computedCellCommand(value?.content)||value?.content?.cellComputations===1||value?.content?.tool==='Observanda calculation graph'&&[14,15,16].includes(value.content.graphVersion)||interpreted(value?.content?.measurement);
 export function computedCellMetadata(relative,value){
  if(relative.startsWith('.observanda/jobs/'))return computedCellCommand(value?.input?.command);
  if(!relative.startsWith('.observanda/materials/'))return false;

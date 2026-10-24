@@ -421,5 +421,14 @@
   "MEASUREMENT_SEQUENCE_INPUT": "The sequence contains an invalid element or retained value.",
   "MEASUREMENT_SEQUENCE_INDEX": "The selected position or range lies outside this sequence.",
   "MEASUREMENT_SEQUENCE_INCOMPATIBLE": "These sequences use different declared element spaces.",
-  "MEASUREMENT_SEQUENCE_UNITS": "Sequence operations require compatible declared units without an implicit conversion."
+  "MEASUREMENT_SEQUENCE_UNITS": "Sequence operations require compatible declared units without an implicit conversion.",
+  "MEASUREMENT_TOPOLOGY_INVALID": "Choose a valid topology operation, declared graph rules and resource limits.",
+  "MEASUREMENT_TOPOLOGY_INPUT": "The topology contains an invalid vertex, edge or retained value.",
+  "MEASUREMENT_TOPOLOGY_KEY": "The selected vertex key is not present in this topology.",
+  "MEASUREMENT_TOPOLOGY_INDEX": "The selected position lies outside this topology collection.",
+  "MEASUREMENT_TOPOLOGY_DIRECTION": "Choose a direction allowed by the declared topology. Undirected graphs use all connections.",
+  "MEASUREMENT_TOPOLOGY_DUPLICATE": "Each vertex key and each edge key must be unique within its collection.",
+  "MEASUREMENT_TOPOLOGY_ENDPOINT": "Every edge endpoint must name an existing vertex.",
+  "MEASUREMENT_TOPOLOGY_RULE": "The topology contains a loop or parallel edge forbidden by its declared rules.",
+  "MEASUREMENT_TOPOLOGY_UNITS": "Topology operations use discrete connectivity and cannot interpret numerical units."
 }

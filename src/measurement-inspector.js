@@ -7,7 +7,7 @@ import {inspectJSONValue} from './structured-inspection.js';
 import {inspectAggregation} from './dataset-aggregation.js';
 const fail=()=>{throw new AppError('MEASUREMENT_INVALID');};
 export const INSPECTION_BYTES=4096;
-export async function inspectMeasurementSource(service,source,{offset=0,lineageOffset=0,lineageLimit=16,sourceOffset=0,componentOffset=0,signal}={}){
+export async function inspectMeasurementSource(service,source,{offset=0,lineageOffset=0,lineageLimit=16,sourceOffset=0,componentOffset=0,topologyCollection='vertices',signal}={}){
  if(!validLocator(source)||!Number.isSafeInteger(offset)||offset<0)fail();
  signal?.throwIfAborted();const store=service.materials,s=source.selector;
  if(s.kind==='cell'){
@@ -28,7 +28,7 @@ export async function inspectMeasurementSource(service,source,{offset=0,lineageO
   if(!validLocator(original))original={ref:artifact,selector:{kind:'whole'}};
   const derivedSources=cell.row.cellSources?.[0],lineage=cell.row.cellLineages?.[0]?await graphCellSources(store,cell.doc,cell.row,{lineage:cell.row.cellLineages[0]},{offset:lineageOffset,limit:lineageLimit,sourceOffset,signal}):null;
   const textPage=cell.cellReference?await store.readDatasetCell(cell.cellReference,{offset,limit:4096,signal}):null;
-  const domain=domainValueReference(cell.cellReference)?await domainValuePage(store,cell.cellReference,{offset:componentOffset,limit:32,signal}):null;
+  const domain=domainValueReference(cell.cellReference)?await domainValuePage(store,cell.cellReference,{offset:componentOffset,limit:32,collection:topologyCollection,signal}):null;
   const aggregation=cell.doc.content.aggregation?await inspectAggregation(store,cell,s,{offset,signal}):null;
   return {kind:'cell',...cell,doc:undefined,...(domain?{domain}:{}),...(textPage?{textPage,previous:textPage.previous,next:textPage.next}:{}),exact:cell.cellReference?null:cell.column.resourcePolicy&&cell.value.presence==='value'?(()=>{const exact=validatePolicyScalar({spelling:cell.value.spelling,representation:cell.value.representation,radix:cell.value.radix},cell.column.resourcePolicy);return {numerator:String(exact.numerator),denominator:String(exact.denominator)};})():rationalIdentity(cell.value),surrounding,original:aggregation||lineage?null:derivedSources?.[0]??original,...(derivedSources?{derivedSources,calculation:cell.doc.content.calculation}:{}),...(aggregation?{aggregation,previous:aggregation.previous,next:aggregation.next}:{}),...(lineage?{lineage,calculation:cell.doc.content.calculation}:{}),native:cell.row.nativeSelector?{ref:cell.doc.content.nativeMapping.artifact,selector:cell.row.nativeSelector}:null};
  }

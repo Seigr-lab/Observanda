@@ -1,3 +1,4 @@
+import measurementTopology from '../locales/en/measurementTopology.json' with {type:'json'};
 import measurementSequences from '../locales/en/measurementSequences.json' with {type:'json'};
 import datasetCusum from '../locales/en/datasetCusum.json' with {type:'json'};
 import numericalExecution from '../locales/en/numericalExecution.json' with {type:'json'};
@@ -189,6 +190,7 @@ english.coordinateFrames=coordinateFrames;
 english.datasetSpectrum=datasetSpectrum;
 english.datasetCusum=datasetCusum;
 english.measurementSequences=measurementSequences;
+english.measurementTopology=measurementTopology;
 english.numericalExecution=numericalExecution;
 english.retainedTables=retainedTables;
 english.figureHeatmap=figureHeatmap;

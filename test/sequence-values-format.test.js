@@ -50,7 +50,7 @@ test('sequence capability preserves independent upgrades in both orders and rest
  assert.equal(configurationCatalogueFeatures(first-1).sequenceValues,undefined);
  assert.equal(configurationCatalogueFeatures(first).sequenceValues,true);
  assert.equal(configurationCatalogueFeatures(first).datasetCusum,undefined);
- assert.equal(CATALOGUE_MAX_GENERATION,26388279066745);
+ assert.ok(CATALOGUE_MAX_GENERATION>=26388279066745);assert.equal(configurationCatalogueFeatures(26388279066745).sequenceValues,true);
  assert.equal(configurationCatalogueGeneration(configurationCatalogueFeatures(CATALOGUE_MAX_GENERATION)),CATALOGUE_MAX_GENERATION);
  await assert.rejects(catalogueFormat(database(CATALOGUE_MAX_GENERATION+1).db),{code:'CATALOGUE_DAMAGED'});
  const locked=database();locked.db.run=async sql=>{if(sql.startsWith('LOCK TABLE'))throw Object.assign(Error('busy'),{code:'55P03'});};
