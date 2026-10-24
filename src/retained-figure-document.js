@@ -92,8 +92,17 @@ export class RetainedFigureBuilder{
   if(!this.plot)return;await this.finishSeries();const plot=this.plot;
   if(plot.header.x.kind!=='category'){
    const index=this.data.index,root=this.data.indexesFor('points').coordinates,prefix=plot.id+':',start=await index.rank({root},prefix),end=await index.rank({root},prefix+'\uffff');let previous=null,positive=null;
+   // This immutable presentation root belongs only to this finalization pass.
+   // Retain bounded visibility receipts, never series bodies or point values.
+   const seriesRoot=this.presentation.indexesFor('series').keys,visibility=new Map();
+   const isVisible=async id=>{
+    if(visibility.has(id))return visibility.get(id);
+    const present=await this.presentation.index.find({root:seriesRoot},id);if(!present)fail();
+    const presentation=await this.tree.read(present.revision),selected=await this.tree.selected(presentation.body,['style','visible']),visible=!(selected.found&&selected.value===false);
+    if(visibility.size===512)visibility.delete(visibility.keys().next().value);visibility.set(id,visible);return visible;
+   };
    for(let offset=start;offset<end;offset+=32)await this.blocks.readSnapshot(async()=>{
-   for(let at=offset;at<Math.min(end,offset+32);at++){this.blocks.check();const entry=await index.entryAt({root},at),member=await this.tree.read(entry.revision),present=await this.presentation.find('series',member.seriesId);if(!present)fail();const presentation=await this.tree.read(present.revision),visible=await this.tree.selected(presentation.body,['style','visible']);if(visible.found&&visible.value===false)continue;const value=await this.tree.read(member.body),x=xValue(value.x,plot.header.x.kind);if(previous!==null&&x>previous)plot.domains.minimumXGap=plot.domains.minimumXGap===null?x-previous:Math.min(plot.domains.minimumXGap,x-previous);previous=x;if(x>0){if(positive!==null&&x>positive){const gap=Math.log(x)-Math.log(positive);plot.domains.minimumLogXGap=plot.domains.minimumLogXGap===null?gap:Math.min(plot.domains.minimumLogXGap,gap);}positive=x;}}
+   for(let at=offset;at<Math.min(end,offset+32);at++){this.blocks.check();const entry=await index.entryAt({root},at),member=await this.tree.read(entry.revision);if(!await isVisible(member.seriesId))continue;const value=await this.tree.read(member.body),x=xValue(value.x,plot.header.x.kind);if(previous!==null&&x>previous)plot.domains.minimumXGap=plot.domains.minimumXGap===null?x-previous:Math.min(plot.domains.minimumXGap,x-previous);previous=x;if(x>0){if(positive!==null&&x>positive){const gap=Math.log(x)-Math.log(positive);plot.domains.minimumLogXGap=plot.domains.minimumLogXGap===null?gap:Math.min(plot.domains.minimumLogXGap,gap);}positive=x;}}
    });
   }
   const annotations=this.presentation.collection('annotations'),aRoot=this.presentation.indexesFor('annotations').plots,aStart=await this.presentation.index.rank({root:aRoot},plot.id+':'),aEnd=await this.presentation.index.rank({root:aRoot},plot.id+':\uffff');

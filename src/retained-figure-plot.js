@@ -1,7 +1,8 @@
 import {plotComputationHeader} from './dataset-plot-selection.js';
 import {plotOperation,plotScalarOperation,plotComputationFailure} from './plot-resource-policy.js';
-// Retained dataset plots keep only one row, reduction, and selected series in
-// memory. Group/order/median state uses the existing encrypted scratch owner.
+// Row/reduction processing selects one series at a time. Scratch point reads
+// stage at most 32 records: a count bound, not a byte bound on exact coordinates.
+// Group/order/median state uses the existing encrypted scratch owner.
 import {randomUUID} from 'node:crypto';
 import {AppError} from './errors.js';
 import {withScratch} from './scratch-work.js';
@@ -74,9 +75,12 @@ export function prepareRetainedPlot(materials,doc,command,selection,{write,signa
   const builder=new RetainedFigureDocuments(materials.workspace,{write,signal}).builder(header);await builder.addPlot(header);
   const members=operation==='raw'?null:materials.sequences.builder('plot-members',write);
   async function* entries(series,state){
-   if(mapping.order!=='ascending'||mapping.xKind==='category'){for(let at=0;at<state.count;at++){signal?.throwIfAborted();yield await work.get('point:'+series+':'+at);}return;}
-   const runs=makeRuns('order:'+series,(a,b)=>(mapping.xKind==='number'?compare(a.exactX,b.exactX):xValue(a.exactX,'date')-xValue(b.exactX,'date'))||a.position-b.position);
-   for(let at=0;at<state.count;at++){signal?.throwIfAborted();runs.add(0,await work.get('point:'+series+':'+at));await runs.flush();}await runs.flush(true);
+   const runs=mapping.order==='ascending'&&mapping.xKind!=='category'?makeRuns('order:'+series,(a,b)=>(mapping.xKind==='number'?compare(a.exactX,b.exactX):xValue(a.exactX,'date')-xValue(b.exactX,'date'))||a.position-b.position):null;
+   for(let at=0;at<state.count;at+=32){
+    signal?.throwIfAborted();const keys=Array.from({length:Math.min(32,state.count-at)},(_,i)=>'point:'+series+':'+(at+i)),batch=await work.getMany(keys);
+    for(const key of keys){signal?.throwIfAborted();const entry=batch.get(key);if(!entry)fail('MATERIAL_MISSING');if(runs){runs.add(0,entry);await runs.flush();}else yield entry;}
+   }
+   if(!runs)return;await runs.flush(true);
    let run=null;for(const part of runs.levels)if(part)run=run?await runs.merge(run,part):part;
    if(run){for await(const [,entry]of runs.values(run))yield entry;await runs.discard(run);}
   }
