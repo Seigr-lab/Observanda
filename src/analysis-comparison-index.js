@@ -21,14 +21,21 @@ export class ComparisonIndex{
   const item=await this.value(await this.tree.find({root:this.root},'lookup/'+table+'/'+digest(key)),table);
   if(item&&item.key!==key)fail();return item;
  }
- async put(table,key,value,count,filters=[]){
-  const previous=await this.get(table,key),at=previous?.ordinal??count;
-  if(!Number.isSafeInteger(at)||at<0)fail();
-  const item={table,key,ordinal:at,value},revision=await this.sequences.put('comparison-values',item);
-  this.root=await this.tree.change(this.root,'lookup/'+table+'/'+digest(key),revision);
-  this.root=await this.tree.change(this.root,'row/'+table+'/'+ordinal(at),revision);
-  for(const filter of new Set(filters))this.root=await this.tree.change(this.root,'filter/'+table+'/'+filter+'/'+ordinal(at),revision);
-  return !previous;
+ async put(table,key,value,count,filters=[]){return this.update(table,key,()=>value,count,filters);}
+ // The index authenticates the prior entry and owns its ordinal. Reusing that
+ // value inside this operation avoids a second lookup without trusting a
+ // caller-supplied prior revision or carrying values across transactions.
+ async update(table,key,change,count,filters=[]){
+  if(typeof change!=='function')throw new AppError('INVALID');
+  const root=this.root,previous=await this.get(table,key),at=previous?.ordinal??count;
+  const current=()=>{if(this.root!==root)throw new AppError('MATERIAL_CHANGED');};
+  current();if(!Number.isSafeInteger(at)||at<0)fail();
+  const value=await change(previous?.value??null);current();
+  const item={table,key,ordinal:at,value},revision=await this.sequences.put('comparison-values',item);current();
+  let next=await this.tree.change(root,'lookup/'+table+'/'+digest(key),revision);
+  next=await this.tree.change(next,'row/'+table+'/'+ordinal(at),revision);
+  for(const filter of new Set(filters))next=await this.tree.change(next,'filter/'+table+'/'+filter+'/'+ordinal(at),revision);
+  current();this.root=next;return !previous;
  }
  async state(table,key,value){
   const stored='state/'+table+'/'+digest(key);
