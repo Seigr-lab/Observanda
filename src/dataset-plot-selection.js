@@ -1,4 +1,4 @@
-import {derivedComputation} from './web/measurement-computation.js';
+import {derivedComputation,perCellComputation,effectiveCellColumn} from './web/measurement-computation.js';
 import {measurementScalarPolicies,resolveScalarDefinitions} from './measurement-scalar-storage.js';
 import {assertPlotResourcePolicy} from './plot-resource-policy.js';
 import {AppError} from './errors.js';
@@ -12,12 +12,20 @@ export function plotColumnIndices(mapping){
  if(!indices.length||indices.length>256||indices.some(i=>!Number.isSafeInteger(i)||i<0))fail();return indices;
 }
 // Only columns that contribute to the selected operation affect its interpretation.
-export function plotComputation({columns,mapping}){
+export function plotComputationIndices(mapping){
  const operation=mapping.operation??'raw',indices=[mapping.x,mapping.group,...(operation==='count'?[]:mapping.values.flatMap(value=>[value.column,...(operation==='raw'?[value.error,...INTERVAL_FIELDS.map(key=>value[key]),value.count]:[])]))];
- return derivedComputation(...[...new Set(indices.filter(index=>index!=null))].map(index=>columns[index]));
+ return [...new Set(indices.filter(index=>index!=null))];
 }
-export function plotComputationHeader(header,selection){
- const {computation,...rest}=header;void computation;return {...rest,...plotComputation(selection)};
+export function plotComputation({columns,mapping}){return derivedComputation(...plotComputationIndices(mapping).map(index=>columns[index]));}
+// The producer and verifier already visit each used source row. This constant-
+// size accumulator adds interpretation to that pass, with no source rereads.
+export function createPlotComputation(selection){
+ const {columns,mapping}=selection,indices=plotComputationIndices(mapping),dynamic=indices.some(index=>perCellComputation(columns[index]));let result=dynamic?{}:plotComputation(selection);
+ const column=(row,index)=>{if(!dynamic)return columns[index];const value={value:row.cells[index],kind:row.valueKinds?.[index]??'string',...(row.cellComputations?.[index]!==undefined?{computation:row.cellComputations[index]}:{})};return effectiveCellColumn(columns[index],value);};
+ return {dynamic,column,contribute(row,index,present=true){const selected=column(row,index);if(dynamic&&present)result=derivedComputation(result,selected);},result(){return {...result};}};
+}
+export function plotComputationHeader(header,selection,tracked){
+ const {computation,...rest}=header;void computation;return {...rest,...(tracked?tracked.result():plotComputation(selection))};
 }
 export async function datasetPlotSelection(materials,doc,mapping,{signal}={}){
  const resolve=async(columns,indices)=>{for(const index of indices){signal?.throwIfAborted();if(measurementScalarPolicies(columns[index]))columns[index]=await resolveScalarDefinitions(materials,columns[index],{signal});}return columns;};

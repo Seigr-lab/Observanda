@@ -1,5 +1,5 @@
 import {projectDatasetRows} from './dataset-storage.js';
-import {derivedComputation} from './web/measurement-computation.js';
+import {derivedComputation,effectiveCellColumn} from './web/measurement-computation.js';
 import {retainScalarDefinitions,resolveScalarDefinitions,scalarDefinitionEntries,measurementScalarPolicies} from './measurement-scalar-storage.js';
 import {isScalarRepresentation} from './web/measurement-model.js';
 import {materialReferenceKey} from './web/material-reference.js';
@@ -47,7 +47,7 @@ export class Measurements {
   let selected=data.rows[row];if(!selected)fail();if(indexed)selected=(await projectDatasetRows(this.materials,doc,[selected],[column])).rows[0];
   const schema=await this.materials.retainedSchemaPage(doc,{offset:column,limit:1});
   if(!selected||schema.items.length!==1)fail();
-  const col=schema.items[0],kind=selected.valueKinds?.[0],presence=['null','absent'].includes(kind)?kind:col.missing.some(m=>m.value===selected.cells[0])?'missing':'value';
+  const declaredColumn=schema.items[0],col=effectiveCellColumn(declaredColumn,{...(selected.cellComputations?.[0]!==undefined?{computation:selected.cellComputations[0]}:{})}),kind=selected.valueKinds?.[0],presence=['null','absent'].includes(kind)?kind:col.missing.some(m=>m.value===selected.cells[0])?'missing':'value';
   return {doc,pageRows:data.rows.length,row:selected,column:col,...(typeof selected.cells[0]==='string'?{}:{cellReference:selected.cells[0]}),value:{spelling:typeof selected.cells[0]==='string'?selected.cells[0]:'',representation:col.representation,...(col.domain?{domain:col.domain}:{}),radix:col.radix,unit:col.unit,presence},quantity:col.quantity??blankQuantity(),time:col.time,...(col.statisticalUncertainty?{statisticalUncertainty:col.statisticalUncertainty}:{}),...(col.synchronization?{synchronization:col.synchronization}:{})};
  }
  inspect(source,options={}){const run=()=>inspectMeasurementSource(this,source,options),workspace=this.materials.workspace;return workspace.withCatalogueConnections?workspace.withCatalogueConnections(run):run();}

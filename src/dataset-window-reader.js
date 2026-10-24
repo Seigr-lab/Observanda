@@ -16,7 +16,7 @@ export class DatasetWindowReader{
   return {doc,anchor,total:node.window.end-node.window.start+1,async at(index){
    signal?.throwIfAborted();if(!Number.isSafeInteger(index)||index<0||index>node.window.end-node.window.start)fail();const ordinal=start+index;if(!Number.isSafeInteger(ordinal))fail();if(ordinal<0||ordinal>=doc.content.rowCount)return {boundary:true,ordinal,value:'',kind:'absent',excluded:null};
    let address=doc.content.datasetFormat===3?{page:Math.floor(ordinal/DATASET_ROWS_PER_PAGE),row:ordinal%DATASET_ROWS_PER_PAGE}:null;if(!address){let left=ordinal;for(let p=0;p<m.datasetPageCount(doc);p++){const data=await page(p);if(left<data.rows.length){address={page:p,row:left};break;}left-=data.rows.length;}}
-   if(!address)fail();const row=(await page(address.page)).rows[address.row];if(!row)fail();return {value:row.cells[0],kind:row.valueKinds?.[0]??'string',excluded:row.excluded,ordinal,id:row.id,source:{ref:binding.source,selector:{kind:'cell',page:address.page,row:address.row,column:node.column}}};
+   if(!address)fail();const row=(await page(address.page)).rows[address.row];if(!row)fail();return {value:row.cells[0],kind:row.valueKinds?.[0]??'string',...(row.cellComputations?.[0]!==undefined?{computation:row.cellComputations[0]}:{}),excluded:row.excluded,ordinal,id:row.id,source:{ref:binding.source,selector:{kind:'cell',page:address.page,row:address.row,column:node.column}}};
   }};
  }
 }

@@ -1,4 +1,5 @@
 // Resolve only known scalar fields of one admitted declaration, never a schema.
+import {perCellComputation,resolveCellComputation} from './web/measurement-computation.js';
 import {createHash} from 'node:crypto';
 import {AppError} from './errors.js';
 import {validDatasetResourcePolicy} from './web/dataset-resource-policy.js';
@@ -24,7 +25,7 @@ export function scalarDefinitionEntries(value){
  synchronization(value?.synchronization,['synchronization']);synchronization(value,[]);if(value?.version===1&&value.kind==='clock-sync-segment'){add(value,[],['validity','lower']);add(value,[],['validity','upper']);}
  if(value?.tool==='Observanda coordinate frame')unit(value.unitDefinition,['unitDefinition']);
  if(value?.tool==='Observanda clock synchronization'){quantity(value.target?.quantity,['target','quantity']);clock(value.target?.time?.clock?.definition,['target','time','clock','definition']);}
- const aggregation=(owner,prefix)=>{if([4,5].includes(owner?.version)&&Array.isArray(owner.values))for(const [i,metric]of owner.values.entries())if(metric.operation==='quantile')add(owner,prefix,['values',i,'probability']);};
+ const aggregation=(owner,prefix)=>{if([4,5,6].includes(owner?.version)&&Array.isArray(owner.values))for(const [i,metric]of owner.values.entries())if(metric.operation==='quantile')add(owner,prefix,['values',i,'probability']);};
  aggregation(value,[]);aggregation(value?.aggregation,['aggregation']);
  if(value?.version===1&&value.method==='linear-n-minus-one-v1'&&value.weight)add(value,[],['weight']);
  if(Array.isArray(value?.aggregation))for(const [i,metric]of value.aggregation.entries())if(metric.quantile?.weight)result.push({path:['aggregation',i,'quantile','weight','spelling'],scalar:metric.quantile.weight,policy:value.resourcePolicy});
@@ -57,6 +58,7 @@ export async function readScalarDefinition(materials,value,field,{offset=0,limit
 }
 
 export async function resolveScalarOperand(materials,cell,column,{signal,budget,policy}={}){
+ if(perCellComputation(column))resolveCellComputation(column,cell);
  if(['absent','null'].includes(cell.kind)||typeof cell.value==='string'&&column.missing?.some(item=>item.value===cell.value))return cell;
  const interpretation=column.resourcePolicy??policy;if(!interpretation)return cell;
  const {graphScalarCell}=await import('./dataset-resource-values.js'),resolved=await graphScalarCell(materials,cell,interpretation,{signal});

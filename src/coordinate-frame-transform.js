@@ -10,7 +10,7 @@ import {knownDomain,domainCodec,domainUsesResourcePolicy} from './web/measuremen
 import {validUnitDefinition,unitScalar,sameUnitDimensions} from './web/measurement-unit-model.js';
 import {addPlotRational,multiplyPlotRational,dividePlotRational,plotRational,plotRationalText} from './web/plot-resource-policy.js';
 import {validatePolicyScalar,isScalarResourceFailure} from './web/measurement-scalar-policy.js';
-import {validComputation,derivedComputation} from './web/measurement-computation.js';
+import {validComputation,derivedComputation,effectiveCellColumn} from './web/measurement-computation.js';
 import {materialReference,materialReferenceKey,validMaterialReference} from './web/material-reference.js';
 import {revisionText} from './web/revision-model.js';
 import {defaultColumn} from './web/dataset-schema.js';
@@ -94,7 +94,7 @@ async function selectedDomain(materials,locator,options){
  const doc=await document(materials,locator.ref,options);let savedColumn,cell;
  if(doc.content?.datasetFormat===3){
   const {page,row,column}=locator.selector;await current(options);const metadata=await materials.retainedDatasetPage(doc,page,{metadataOnly:true}),selected=metadata.rows[row];await current(options);
-  if(!selected||selected.excluded)fail('COORDINATE_FRAME_INPUT');savedColumn=await materials.datasetColumn(doc,column);const projected=await projectDatasetRows(materials,doc,[selected],[column]);await current(options);const value=projected.rows[0];cell={kind:value.valueKinds[0],value:value.cells[0]};
+  if(!selected||selected.excluded)fail('COORDINATE_FRAME_INPUT');savedColumn=await materials.datasetColumn(doc,column);const projected=await projectDatasetRows(materials,doc,[selected],[column]);await current(options);const value=projected.rows[0];cell={kind:value.valueKinds[0],value:value.cells[0],...(value.cellComputations?.[0]!==undefined?{computation:value.cellComputations[0]}:{})};savedColumn=effectiveCellColumn(savedColumn,cell);
   if(!present(cell,savedColumn))fail('COORDINATE_FRAME_INPUT');
  }else{
   const selected=await materials.measurements.cell(locator);await current(options);if(selected.row.excluded||selected.value.presence!=='value')fail('COORDINATE_FRAME_INPUT');savedColumn=selected.column;cell={kind:'string',value:selected.cellReference??selected.value.spelling};

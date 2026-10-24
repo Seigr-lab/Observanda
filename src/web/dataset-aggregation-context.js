@@ -1,3 +1,4 @@
+import {validCalculationPolicy} from './tools/calculation-policy.js';
 import {t} from './i18n/index.js';
 const message=(key,args)=>t('datasetAggregation',key,args);
 export function aggregationQuantileContextParts(quantile,{text=message}={}){
@@ -14,6 +15,7 @@ export function aggregationPairContextText(descriptor,{text=message}={}){
  if(!descriptor)return '';
  const {operation,method,pairing,normalization,coefficient}=descriptor;
  if(pairing!=='complete-rows-v1')throw RangeError('Unsupported paired statistic context');
+ if(operation==='correlation'&&method==='pearson-centered-pairs-v1'&&normalization===undefined&&coefficient===undefined&&descriptor.calculationPolicy?.version===2&&validCalculationPolicy(descriptor.calculationPolicy)){const policy=descriptor.calculationPolicy;return text('correlationPublicContext')+'; '+text('correlationPrecision',{digits:policy.workingDigits,display:policy.displayDigits,rounding:t('calculator','rounding-'+policy.rounding),library:policy.library.name,version:policy.library.version});}
  if(operation==='covariance'&&method==='centered-pairs-v1'&&['sample','population'].includes(normalization)&&coefficient===undefined)return text('pairPublicCovariance',{denominator:normalization==='sample'?'n - 1':'n',normalization:text('pairPublic-'+normalization)});
  if(operation==='linear-fit'&&method==='ordinary-least-squares-intercept-v1'&&['slope','intercept'].includes(coefficient)&&normalization===undefined)return text('pairPublic-'+coefficient);
  throw RangeError('Unsupported paired statistic context');

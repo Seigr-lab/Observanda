@@ -1,3 +1,4 @@
+import {validCellComputation} from './web/measurement-computation.js';
 import {domainValueReference,validateDomainValue,verifyDomainValue} from './measurement-domain-storage.js';
 import {validGraphAddress} from './web/dataset-calculation-graph-model.js';
 import {createHash} from 'node:crypto';
@@ -12,6 +13,7 @@ export function validateDatasetCell(materials,cell){
  if(domainValueReference(cell.value))validateDomainValue(materials,cell.value);
  else if(typeof cell.value==='string'){if(cell.value.length>DATASET_TEXT_CHARS)fail();}
  else{if(!datasetCellReference(cell.value))fail();materials.sequences.validate(cell.value.parts);if(cell.value.parts.count!==Math.ceil(cell.value.characters/DATASET_TEXT_CHARS))fail();}
+ if(Object.hasOwn(cell,'computation')&&!validCellComputation(cell.computation))fail();
  if(cell.lineage!==undefined){if(cell.lineage?.version!==1||!validGraphAddress(cell.lineage.node)||cell.lineage.leaves?.kind!=='calculation-lineage')fail();materials.sequences.validate(cell.lineage.leaves);}
  if(['absent','null'].includes(cell.kind)&&cell.value!=='')fail();return cell;
 }
@@ -23,7 +25,7 @@ export async function retainDatasetCell(materials,cell,save){
  }
  let value=text;
  if(parts||count>DATASET_INLINE_CHARS){parts??=materials.sequences.builder('cell-text',save);if(text)await parts.append(text);value={format:'dataset-cell',version:1,characters:count,sha256:hash.digest('hex'),parts:await parts.finish()};}
- return validateDatasetCell(materials,{kind:cell.kind??'string',value,...(cell.pointer!==undefined?{pointer:cell.pointer}:{}),...(cell.sources?{sources:cell.sources}:{}),...(cell.lineage?{lineage:cell.lineage}:{})});
+ return validateDatasetCell(materials,{kind:cell.kind??'string',value,...(cell.pointer!==undefined?{pointer:cell.pointer}:{}),...(cell.sources?{sources:cell.sources}:{}),...(cell.lineage?{lineage:cell.lineage}:{}),...(Object.hasOwn(cell,'computation')?{computation:cell.computation}:{})});
 }
 export async function readDatasetCell(materials,value,{offset=0,limit=4096,signal}={}){
  if(!Number.isSafeInteger(offset)||offset<0||!Number.isSafeInteger(limit)||limit<1||limit>DATASET_TEXT_CHARS)throw new AppError('INVALID');

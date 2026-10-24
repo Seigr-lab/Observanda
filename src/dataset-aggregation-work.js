@@ -18,7 +18,7 @@ export const aggregationWorkFile=id=>{
 export class AggregationWork{
  constructor(materials,command,{jobId,writePage,signal}){
   this.workspace=materials.workspace;this.sequences=materials.sequences;this.file=aggregationWorkFile(jobId);
-  this.version=command.aggregation?.version===5?5:command.aggregation?.version===4?4:3;this.commandHash=digest(revisionText(command));this.signal=signal;
+  this.version=command.aggregation?.version===6?6:command.aggregation?.version===5?5:command.aggregation?.version===4?4:3;this.commandHash=digest(revisionText(command));this.signal=signal;
   this.write=writePage??(fn=>this.workspace.withLock(()=>withWorkspaceMetadataBatch(this.workspace,fn)));
   this.pending=new Map();this.bytes=0;this.edits=0;this.root=null;this.saved=null;this.cache=new Map();this.cacheBytes=0;
   this.values=new Map();this.valueBytes=0;

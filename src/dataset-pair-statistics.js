@@ -11,7 +11,7 @@ import {validDatasetResourcePolicy} from './web/dataset-resource-policy.js';
 import {validPairStatisticMetric} from './web/dataset-aggregation-model.js';
 import {isScalarRepresentation,blankQuantity} from './web/measurement-model.js';
 import {defaultColumn} from './web/dataset-schema.js';
-import {derivedComputation} from './web/measurement-computation.js';
+import {derivedComputation,derivedColumnComputation} from './web/measurement-computation.js';
 import {resultContext} from './web/numeral-context.js';
 import {validateUnitDefinition,unitScalar,unitOperationDimensions,exactUnitScalar} from './web/measurement-unit-model.js';
 const fail=(code='DATASET_AGGREGATION')=>{throw new AppError(code);};
@@ -44,7 +44,7 @@ export function updatePairMoments(state,x,y,{policy,budget}={}){
 }
 export function finishPairStatistic(state,metric,{policy,budget}={}){
  return operate(policy,budget,b=>{
-  if(!validPairStatisticMetric(metric))fail();const values=parsedMoments(state,b);
+  if(!validPairStatisticMetric(metric)||metric.operation==='correlation')fail();const values=parsedMoments(state,b);
   const receipt={version:1,method:metric.method,pairing:metric.pairing,status:'ready'};
   if(state.n===0)return {value:null,receipt:{...receipt,status:'no-pairs'}};
   if(state.n<2&&(metric.operation==='linear-fit'||metric.normalization==='sample'))return {value:null,receipt:{...receipt,status:'insufficient-pairs'}};
@@ -60,6 +60,7 @@ function pairUnits(metric,columns,policy,budget){
  if(!a||!b)fail('DATASET_AGGREGATION_UNITS');
  return checked(()=>{
   validateUnitDefinition(a,{budget});validateUnitDefinition(b,{budget});
+  if(metric.operation==='correlation')return {unit:'',unitDefinition:{version:2,kind:'difference',dimensions:[],scale:scalar('1/1'),offset:exactUnitScalar('0'),resourcePolicy:structuredClone(policy)}};
   if(metric.operation==='linear-fit'&&metric.coefficient==='intercept')return {unit:y.unit,unitDefinition:structuredClone(b)};
   // Centering makes deviations differences, including absolute source axes.
   // Keep scale ownership while removing their irrelevant coordinate offsets.
@@ -68,10 +69,10 @@ function pairUnits(metric,columns,policy,budget){
   return {unit:'',unitDefinition:{version:2,kind:'difference',dimensions,scale:scalar(formatExactResult(scale,rationalContext,budget)),offset:exactUnitScalar('0'),resourcePolicy:structuredClone(policy)}};
  },'DATASET_AGGREGATION_UNITS');
 }
-export function pairStatisticColumn(metric,columns,{policy,keys=[]}={}){
+export function pairStatisticColumn(metric,columns,{policy,keys=[],perCell=false}={}){
  return operate(policy,undefined,b=>{
   if(!validDatasetResourcePolicy(policy)||!validPairStatisticMetric(metric)||!Array.isArray(columns)||columns.length!==2||columns.some(column=>!isScalarRepresentation(column)))fail();
   const {unit,unitDefinition}=pairUnits(metric,columns,policy,b),context=resultContext(metric.output),quantity={...blankQuantity(),origin:'derived',...(unitDefinition?{unitDefinition}:{})};
-  return {...defaultColumn({label:metric.name}),representation:context.representation,radix:context.radix,unit,quantity,resourcePolicy:structuredClone(policy),...derivedComputation(...columns,...keys)};
+  return {...defaultColumn({label:metric.name}),representation:context.representation,radix:context.radix,unit,quantity,resourcePolicy:structuredClone(policy),...(metric.operation==='correlation'?{computation:{version:2,kind:'per-cell'}}:perCell?derivedColumnComputation(...columns,...keys):derivedComputation(...columns,...keys))};
  });
 }

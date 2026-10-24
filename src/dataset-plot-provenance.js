@@ -11,7 +11,7 @@ import {exactRational} from './web/measurement-model.js';
 import {projectTransformedValue,validMeasurementProjection} from './web/measurement-transform.js';
 import {INTERVAL_FIELDS} from './web/figure-intervals.js';
 import {sameUnitDefinition,sameUnitDimensions,validUnitDefinition,unitScalar} from './web/measurement-unit-model.js';
-import {datasetPlotSelection,plotComputation} from './dataset-plot-selection.js';
+import {datasetPlotSelection,createPlotComputation} from './dataset-plot-selection.js';
 import {assertDatasetScalars} from './dataset-selected-columns.js';
 const fail=(code='MATERIAL_MISSING')=>{throw new AppError(code);};
 const natural=value=>Number.isSafeInteger(value)&&value>=0;
@@ -93,11 +93,11 @@ async function context(materials,doc){
  if(content.version==='10'&&!same(content.numericTransform,plotNumericalMetadata(content.mapping)))fail();
  const source=await materials.read(content.inputs[0]),selection=await datasetPlotSelection(materials,source,content.mapping);assertPlotProjectionUnits(selection.mapping,selection.columns);
  const computation=retained?(await reader.tree.selected(reader.presentation.header,['computation'])).value:content.figure?.computation;
- if(!same(computation,plotComputation(selection).computation))fail();
+ const computationState=createPlotComputation(selection);if(computationState.dynamic){if(content.version!=='10'||computation!==undefined&&!same(computation,{version:1,kind:'approximate-inputs'}))fail();}else if(!same(computation,computationState.result().computation))fail();
  const points=retained?{count:content.figure.document.counts.points}:materials.sequences.validate(content.plotPointsIndex),count=retained?points.count:content.figure.series.reduce((n,s)=>n+s.points.length,0);
  if(!retained&&(points.kind!=='plot-points'||points.count!==count||count>10000))fail();
  const members=content.plotMembersIndex;if((content.mapping.operation??'raw')==='raw'){if(members!==undefined)fail();}else{materials.sequences.validate(members);if(members.kind!=='plot-members'||members.count>source.content.rowCount*Math.max(1,content.mapping.values.length))fail();}
- return {content,source,selection,points,members,reader,...(computation?{computation}:{}),cachedPage:null,cachedData:null};
+ return {content,source,selection,points,members,reader,computationState,...(computation?{computation}:{}),cachedPage:null,cachedData:null};
 }
 async function rowAt(materials,ctx,position){
  if(!position||Object.keys(position).sort().join()!=='page,row'||!natural(position.page)||!natural(position.row)||position.page>=materials.datasetPageCount(ctx.source))fail();
@@ -107,24 +107,24 @@ async function rowAt(materials,ctx,position){
 async function checkSource(materials,ctx,receipt,row,point=selectedPoint(ctx.content,receipt),signal){
  const mapping=ctx.content.mapping,at=column=>ctx.selection.indices?ctx.selection.indices.indexOf(column):column;
  const raw=column=>row.cells[at(column)],missing=column=>['null','absent'].includes(row.valueKinds?.[at(column)])||ctx.selection.columns[at(column)].missing.some(item=>item.value===raw(column))||typeof raw(column)==='string'&&raw(column).trim()==='';
- const parsed=async(index)=>plotScalarOperation(materials,raw(index),ctx.selection.columns[at(index)],mapping,value=>value,{signal});
+ const parsed=async(index)=>{const column=ctx.computationState.column(row,at(index)),value=await plotScalarOperation(materials,raw(index),column,mapping,value=>value,{signal});ctx.computationState.contribute(row,at(index),value!==null);return value;};
  const projected=(exact,options)=>plotOperation(mapping,budget=>projectFigureValue(exact.numerator+'/'+exact.denominator,mapping,{...options,budget}));
  const stored=value=>plotOperation(mapping,budget=>rational(value,budget));
- if(mapping.group===null?receipt.group!==null:raw(mapping.group).trim()!==receipt.group)fail();
+ if(mapping.group===null?receipt.group!==null:raw(mapping.group).trim()!==receipt.group)fail();if(mapping.group!==null)ctx.computationState.contribute(row,at(mapping.group));
  if(mapping.xKind==='number'){
   const exact=await parsed(mapping.x);
   if(ctx.reader&&!mapping.projection){if(projected(exact,{axis:'x'}).coordinate!==point.x)fail();}
   else if(!same({numerator:String(exact.numerator),denominator:String(exact.denominator)},(()=>{const value=stored(receipt.coordinates.x.exact);return {numerator:String(value.numerator),denominator:String(value.denominator)};})()))fail();
- }else if(raw(mapping.x).trim()!==point.x)fail();
- if((mapping.operation??'raw')!=='raw')return;
+ }else{if(raw(mapping.x).trim()!==point.x)fail();ctx.computationState.contribute(row,at(mapping.x));}
+ if((mapping.operation??'raw')!=='raw'){if(mapping.operation!=='count')ctx.computationState.contribute(row,at(receipt.column),!missing(receipt.column));return;}
  for(const [field,index]of Object.entries(refColumns(mapping,receipt.column))){
-  if(field==='group')continue;
+  if(field==='group')continue;ctx.computationState.contribute(row,at(index),false);
   if(field==='count'){
    if(missing(index)){if(point.count!=null)fail();continue;}
    const exact=await parsed(index);
    if(!Number.isSafeInteger(point.count)||point.count<0||exact.denominator!==1n||exact.numerator!==BigInt(point.count))fail();continue;
   }
-  if(field[0]==='x'&&mapping.xKind!=='number'){if((point[field]??null)!==(missing(index)?null:raw(index).trim()))fail();continue;}
+  if(field[0]==='x'&&mapping.xKind!=='number'){if((point[field]??null)!==(missing(index)?null:raw(index).trim()))fail();ctx.computationState.contribute(row,at(index),!missing(index));continue;}
   const coordinate=receipt.coordinates[field];if(ctx.reader&&!mapping.projection){if(missing(index)){if(point[field]!=null)fail();continue;}const exact=await parsed(index);if(projected(exact,{axis:field[0]==='x'?'x':'y',delta:field==='error'}).coordinate!==point[field])fail();continue;}if(missing(index)){if(coordinate)fail();continue;}if(!coordinate)fail();
   const exact=await parsed(index),retained=stored(coordinate.exact);if(exact.numerator!==retained.numerator||exact.denominator!==retained.denominator)fail();
  }
@@ -147,7 +147,7 @@ export async function verifyPlotProjection(materials,doc,{signal}={}){
    else{if(receipt.members.offset!==memberOffset||receipt.members.count>ctx.members.count-memberOffset)fail();let previous=null;for(let at=0;at<receipt.members.count;at+=64){signal?.throwIfAborted();const page=await materials.sequences.page(ctx.members,{offset:memberOffset+at,limit:Math.min(64,receipt.members.count-at)});for(const position of page.items){if(previous&&(position.page<previous.page||position.page===previous.page&&position.row<=previous.row))fail();await checkSource(materials,ctx,receipt,await rowAt(materials,ctx,position),undefined,signal);previous=position;}}memberOffset+=receipt.members.count;}
   }
   }
-  if(ctx.members&&memberOffset!==ctx.members.count)fail();
+  if(ctx.members&&memberOffset!==ctx.members.count)fail();if(ctx.computationState.dynamic&&!same(ctx.computation,ctx.computationState.result().computation))fail();
  }catch(error){if(['ACCESS_LOCKED','WORKSPACE_CHANGED','DATASET_CALCULATION_RESOURCE','JOB_CANCELLED'].includes(error.code)||error.name==='AbortError')throw error;fail('CATALOGUE_DAMAGED');}
 }
 export async function plotPointPage(materials,ref,{offset=0,limit=16,signal}={}){

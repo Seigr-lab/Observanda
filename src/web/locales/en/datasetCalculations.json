@@ -161,5 +161,7 @@
  "permuteOrder": "Each position in the list is an output axis; its number selects the source axis. For source shape [2, 3, 4], axes 3, 1, 2 give output shape [4, 2, 3]. Axes 1, 2, 3 keep that shape and component order unchanged. The rank and component count stay the same. No axis order or physical meaning is inferred.",
  "permuteOperand": "Choose a supported vector, matrix or tensor node that occurs before this node.",
  "permuteAxesInvalid": "List every source axis once, using whole numbers from 1 to the source rank, separated by commas. Include 1 to 16 axes without gaps, repeats or extra axes.",
- "permuteLabel": "Permute axes [{axes}]"
+ "permuteLabel": "Permute axes [{axes}]",
+ "perCellUpgrade": "Enable computation for each value",
+ "perCellUpgradeHelp": "Create a graph revision that preserves each value’s exact or approximate computation, including mixed Pearson results. Earlier graph revisions and retained results keep their original interpretation."
 }

@@ -48,7 +48,7 @@ export async function* aggregationMemberRows(materials,context,row,{offset=0,lim
 // Full sorted-rank proof remains the deterministic complete replay verifier.
 export async function aggregationQuantileDetails(materials,doc,row,metricIndex,{signal,context}={}){
  const recipe=doc.content.aggregation,metric=recipe?.values?.[metricIndex];
- if(![4,5].includes(recipe?.version)||metric?.operation!=='quantile')return {};
+ if(![4,5,6].includes(recipe?.version)||metric?.operation!=='quantile')return {};
  validateAggregationReceipts(recipe,row);
  const counts=row.aggregation[metricIndex],receipt=counts.quantile;
  const result={metricIndex,method:metric.method,probability:metric.probability,quantile:null};

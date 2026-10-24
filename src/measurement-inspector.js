@@ -18,7 +18,7 @@ export async function inspectMeasurementSource(service,source,{offset=0,lineageO
    for(const [i,r] of data.rows.entries()){
     const distance=p<s.page?i-data.rows.length-s.row:p>s.page?cell.pageRows-s.row+i:i-s.row;
     const kind=r.valueKinds?.[0],presence=['null','absent'].includes(kind)?kind:cell.column.missing.some(m=>m.value===r.cells[0])?'missing':'value';
-    if(Math.abs(distance)<=2)surrounding.push({page:p,row:i,id:r.id,order:r.order??r.line,value:typeof r.cells[0]==='string'?r.cells[0]:(await store.readDatasetCell(r.cells[0],{limit:128,signal})).text+'...',presence,excluded:r.excluded});
+    if(Math.abs(distance)<=2)surrounding.push({page:p,row:i,id:r.id,order:r.order??r.line,value:typeof r.cells[0]==='string'?r.cells[0]:(await store.readDatasetCell(r.cells[0],{limit:128,signal})).text+'...',presence,excluded:r.excluded,computation:r.cellComputations?.[0]!==undefined?r.cellComputations[0]:cell.column.computation??null});
    }
   }
   const artifact=cell.doc.content.inputs?.[0]??cell.doc.content.calculation?.graph,l=cell.row.locator;

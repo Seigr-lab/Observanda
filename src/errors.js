@@ -1,3 +1,4 @@
+import {CellComputationError} from './web/measurement-computation.js';
 import {CoordinateFrameError} from './web/coordinate-frame-model.js';
 import {DatasetResourceError} from './web/dataset-resource-policy.js';
 import messages from './web/locales/en/errors.json' with {type:'json'};
@@ -12,6 +13,7 @@ export class AppError extends Error {
 
 const ownerId=value=>typeof value==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value);
 export function safeError(error) {
+  if(error instanceof CellComputationError)error=new AppError(error.code);
   if(error instanceof CoordinateFrameError)error=new AppError(error.code);
   if(error instanceof DatasetResourceError)error=new AppError('DATASET_CALCULATION_RESOURCE');
   if(!(error instanceof AppError))return {code:'IO',message:messages.IO,details:[]};

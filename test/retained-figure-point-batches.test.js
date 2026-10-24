@@ -1,3 +1,7 @@
+import {defaultStructuredCalculationPolicy} from '../src/web/tools/calculation-policy.js';
+import {verifyPlotProjection} from '../src/dataset-plot-provenance.js';
+import {plotNumericalMetadata} from '../src/plot-resource-policy.js';
+import {CATALOGUE_MAX_GENERATION} from '../src/catalogue-format.js';
 import test,{after} from 'node:test';
 import assert from 'node:assert/strict';
 import {registerHooks} from 'node:module';
@@ -18,12 +22,12 @@ const hooks=registerHooks({resolve(specifier,context,next){return context.parent
 let prepareRetainedPlot;try{({prepareRetainedPlot}=await import(moduleURL));}finally{hooks.deregister();}
 after(()=>{delete globalThis[key];});
 
-function fixture(rows,{mapping={},policy,onBatch}={}){
- const files=new Map(),scratch=new Map(),batches=[],workspace={readMetadata:async name=>files.get(name)??null,writeMetadata:async(name,text)=>{files.set(name,text);}},sequences=new MaterialSequence(workspace),pages=Array.from({length:Math.ceil(rows.length/41)},(_,i)=>({rows:rows.slice(i*41,(i+1)*41).map(cells=>({cells}))}));
- const columns=rows[0].map((_,i)=>({...defaultColumn({label:'Column '+i}),representation:'decimal',...(policy?{resourcePolicy:policy}:{})})),indices=columns.map((_,i)=>i*3+4),selection={columns,indices,mapping:{x:0,xKind:'number',group:null,values:[{column:1,error:null}],kind:'scatter',operation:'raw',order:'source',...(policy?{resourcePolicy:policy}:{}),...mapping}};
+function fixture(rows,{mapping={},policy,onBatch,columnComputations=[],rowMetadata=[]}={}){
+ const files=new Map(),scratch=new Map(),batches=[],workspace={readMetadata:async name=>files.get(name)??null,writeMetadata:async(name,text)=>{files.set(name,text);}},sequences=new MaterialSequence(workspace),pages=Array.from({length:Math.ceil(rows.length/41)},(_,i)=>({rows:rows.slice(i*41,(i+1)*41).map((cells,row)=>({cells,...rowMetadata[i*41+row]}))}));
+ const columns=rows[0].map((_,i)=>({...defaultColumn({label:'Column '+i}),representation:'decimal',...(columnComputations[i]?{computation:columnComputations[i]}:{}),...(policy?{resourcePolicy:policy}:{})})),indices=columns.map((_,i)=>i*3+4),selection={columns,indices,mapping:{x:0,xKind:'number',group:null,values:[{column:1,error:null}],kind:'scatter',operation:'raw',order:'source',...(policy?{resourcePolicy:policy}:{}),...mapping}};
  const work={async get(id){assert.ok(!id.startsWith('point:'),'point reads must use the bounded batch contract');return structuredClone(scratch.get(id));},async getMany(ids){assert.ok(ids.length>0&&ids.length<=32);assert.equal(new Set(ids).size,ids.length);const values=new Map([...ids].reverse().filter(id=>scratch.has(id)).map(id=>[id,structuredClone(scratch.get(id))]));if(ids[0].startsWith('point:')){batches.push([...ids]);await onBatch?.(values,batches);}return values;},async put(id,value){scratch.set(id,structuredClone(value));},async add(id){if(scratch.has(id))return false;scratch.set(id,true);return true;},async removeMany(ids){for(const id of ids)scratch.delete(id);}};
- const materials={workspace,sequences,datasetPageCount:()=>pages.length,readSnapshot:fn=>fn(),retainedDatasetPage:async(doc,page,selected)=>{assert.deepEqual(selected.columns,indices);return pages[page];}};
- return {materials,batches,selection,async run(options={}){currentWork=work;const result=await prepareRetainedPlot(materials,{content:{rowCount:rows.length}},{dataset:{kind:'dataset',id:randomUUID(),revision:'a'.repeat(64)},base:createFigure()},selection,{write:fn=>fn(),...options}),reader=await new RetainedFigureDocuments(workspace,{readOnly:true}).open(result.figure),points=[];for(let at=0;at<result.figure.document.counts.points;at++)points.push((await reader.rawPoint({offset:at})).value);return {result,reader,points};}};
+ let sourceReads=0;const materials={workspace,sequences,datasetPageCount:()=>pages.length,readSnapshot:fn=>fn(),retainedDatasetPage:async(doc,page,selected)=>{sourceReads++;assert.deepEqual(selected.columns,indices);return pages[page];}};
+ return {materials,batches,selection,pages,sourceReads:()=>sourceReads,async run(options={}){currentWork=work;const result=await prepareRetainedPlot(materials,{content:{rowCount:rows.length}},{dataset:{kind:'dataset',id:randomUUID(),revision:'a'.repeat(64)},base:createFigure()},selection,{write:fn=>fn(),...options}),reader=await new RetainedFigureDocuments(workspace,{readOnly:true}).open(result.figure),points=[];for(let at=0;at<result.figure.document.counts.points;at++)points.push((await reader.rawPoint({offset:at})).value);return {result,reader,points};}};
 }
 const source=at=>({page:Math.floor(at/41),row:at%41});
 function assertBatches(f,count,series=1){assert.equal(f.batches.length,Math.ceil(count/32)*series);assert.deepEqual(f.batches.flat(),Array.from({length:series},(_,s)=>Array.from({length:count},(_,at)=>'point:'+s+':'+at)).flat());}
@@ -62,4 +66,25 @@ test('missing batch points fail closed and cancellation after a batch read stops
   const missing=fixture(rows,{mapping:{order},onBatch:(values,batches)=>{if(batches.length===2)values.delete('point:0:40');}});await assert.rejects(missing.run(),{code:'MATERIAL_MISSING'});assert.equal(missing.batches.length,2);
   const stopped=new AbortController(),cancelled=fixture(rows,{mapping:{order},onBatch:(values,batches)=>{if(batches.length===2)stopped.abort();}});await assert.rejects(cancelled.run({signal:stopped.signal}),{name:'AbortError'});assert.equal(cancelled.batches.length,2);
  }
+});
+
+const dynamic={version:2,kind:'per-cell'},approximateCell={version:2,kind:'approximate',method:'pearson-centered-pairs-v1',engine:4,policy:defaultStructuredCalculationPolicy()},approximateFigure={version:1,kind:'approximate-inputs'};
+test('mixed computed plots inspect contributing rows once and ignore excluded or unmapped approximations',async()=>{
+ const policy=defaultDatasetResourcePolicy(),rows=Array.from({length:65},(_,i)=>[String(i),'0.5','0.25']),metadata=rows.map(()=>({cellComputations:[null,null,approximateCell]}));metadata[64]={excluded:'Explicit exclusion',cellComputations:[null,approximateCell,approximateCell]};
+ for(const includedApproximate of [false,true]){const rowMetadata=structuredClone(metadata);if(includedApproximate)rowMetadata[42].cellComputations[1]=approximateCell;const f=fixture(rows,{policy,columnComputations:[null,dynamic,dynamic],rowMetadata}),{reader,result}=await f.run();assert.equal(f.sourceReads(),2,'source pages are not reread to classify computation');assert.equal(result.figure.document.counts.points,64);assert.deepEqual((await reader.header()).header.computation,includedApproximate?approximateFigure:undefined);}
+});
+test('plot reduction flags only included numeric contributors while count ignores unused value columns',async()=>{
+ const policy=defaultDatasetResourcePolicy(),rows=[['0','0.5'],['0',''],['0','0.25']],rowMetadata=[{cellComputations:[null,null]},{cellComputations:[null,approximateCell]},{excluded:'Skip',cellComputations:[null,approximateCell]}];
+ const reduced=fixture(rows,{policy,columnComputations:[null,dynamic],rowMetadata,mapping:{operation:'mean'}}),result=await reduced.run();assert.equal(result.points[0].y,0.5);assert.equal((await result.reader.header()).header.computation,undefined);
+ const count=fixture(rows,{policy,columnComputations:[null,dynamic],rowMetadata,mapping:{operation:'count'}}),counted=await count.run();assert.equal(counted.points[0].y,2);assert.equal((await counted.reader.header()).header.computation,undefined);
+ const bounds=fixture([['0','0.5','0.125']],{policy,columnComputations:[null,dynamic,dynamic],rowMetadata:[{cellComputations:[null,null,approximateCell]}],mapping:{values:[{column:1,error:2}]}}),bounded=await bounds.run();assert.equal(bounded.points[0].error,0.125);assert.deepEqual((await bounded.reader.header()).header.computation,approximateFigure);
+ const invalid=fixture([['0','0.5']],{policy,columnComputations:[null,dynamic],rowMetadata:[{cellComputations:[null,undefined]}]});await assert.rejects(invalid.run(),{code:'DATASET_CELL_COMPUTATION'});
+});
+test('retained plot receipt verification replays actual computation in the existing bounded source pass',async()=>{
+ const policy=defaultDatasetResourcePolicy(),f=fixture([['0','0.5'],['1','0.25']],{policy,columnComputations:[null,dynamic],rowMetadata:[{cellComputations:[null,approximateCell]},{cellComputations:[null,null]}]}),{result}=await f.run(),mapping={...f.selection.mapping,x:4,values:[{column:7,error:null}]},columns=Array.from({length:270},(_,i)=>({...defaultColumn({label:'Unselected '+i}),representation:'decimal'}));columns[4]=f.selection.columns[0];columns[7]=f.selection.columns[1];
+ const source={content:{datasetFormat:3,rowCount:2,columns}},document={content:{tool:'Observanda table mapping',version:'10',figure:result.figure,mapping,parameters:JSON.stringify(mapping),inputs:[result.denominator.dataset],denominator:result.denominator,numericTransform:plotNumericalMetadata(mapping)}};
+ f.materials.read=async()=>source;f.materials.datasetColumn=async(doc,index)=>doc.content.columns[index];f.materials.workspace.catalogue=async operation=>operation({db:{all:async()=>[{version:String(CATALOGUE_MAX_GENERATION)}]}});
+ const before=f.sourceReads();await verifyPlotProjection(f.materials,document);assert.equal(f.sourceReads()-before,1,'verification uses its existing one-page source cache');
+ f.pages[0].rows[0].cellComputations[1]=null;await assert.rejects(verifyPlotProjection(f.materials,document),{code:'CATALOGUE_DAMAGED'});
+ delete f.pages[0].rows[1].cellComputations[1];await assert.rejects(verifyPlotProjection(f.materials,document),{code:'CATALOGUE_DAMAGED'});
 });

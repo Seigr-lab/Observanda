@@ -1,4 +1,4 @@
-import {plotComputationHeader} from './dataset-plot-selection.js';
+import {plotComputationHeader,createPlotComputation} from './dataset-plot-selection.js';
 import {plotOperation,plotScalarOperation,plotComputationFailure} from './plot-resource-policy.js';
 // Row/reduction processing selects one series at a time. Scratch point reads
 // stage at most 32 records: a count bound, not a byte bound on exact coordinates.
@@ -21,6 +21,7 @@ const fail=(code='MATERIAL_INVALID')=>{throw new AppError(code);};
 const checkCount=value=>{if(!Number.isSafeInteger(value)||value<0)fail('MATERIAL_ANALYSIS_LIMIT');return value;};
 export function prepareRetainedPlot(materials,doc,command,selection,{write,signal,progress=async()=>{}}={}){
  return withScratch(async work=>{
+  const computation=createPlotComputation(selection);if(computation.dynamic&&!selection.mapping.resourcePolicy)fail();
   const mapping=selection.mapping,operation=mapping.operation??'raw',columns=selection.columns,values=operation==='count'?[{column:null,error:null}]:mapping.values;
   const table={columns:columns.map((column,index)=>({index,label:column.name+(column.unit?' ('+column.unit+')':''),heading:column.name}))};
   const absolute=index=>index===null?null:selection.indices?.[index]??index;
@@ -31,7 +32,7 @@ export function prepareRetainedPlot(materials,doc,command,selection,{write,signa
    state:{read:name=>work.get(prefix+':state:'+name),write:(name,value)=>work.put(prefix+':state:'+name,value)}});
   const compare=(a,b)=>plotOperation(mapping,budget=>compareRationalText(a,b,budget)),sum=(a,b,divisor=1n)=>plotOperation(mapping,budget=>sumRationalText(a,b,divisor,budget)),divide=(a,b)=>plotOperation(mapping,budget=>divideRationalText(a,b,budget));
   const median=operation==='median'?makeRuns('median',compare,(a,b)=>sum(a,b,2n)):null;
-  const exact=async(raw,index)=>{try{return await plotScalarOperation(materials,raw,columns[index],mapping,(value,budget)=>budget?plotRationalText(value,budget):rationalText(value),{signal});}catch(error){plotComputationFailure(error);}};
+  const exact=async(raw,index,row)=>{const column=computation.column(row,index);let result;try{result=await plotScalarOperation(materials,raw,column,mapping,(value,budget)=>budget?plotRationalText(value,budget):rationalText(value),{signal});}catch(error){plotComputationFailure(error);}computation.contribute(row,index,result!==null);return result;};
   const scalar=value=>{if(typeof value!=='string')fail('DATASET_CELL_SCALAR_REQUIRED');return value;};
   const project=(value,field,coordinates,{forceSafe=false}={})=>{
    try{const result=projectFigureValue(value,mapping,{axis:field[0]==='x'?'x':'y',delta:field==='error',forceSafe,transformed:field!=='count'});rounded ||= result.rounded;if(mapping.projection&&value!==null&&field!=='count')coordinates[field]={exact:value,error:result.error};return result.coordinate;}catch(error){plotComputationFailure(error);}
@@ -48,15 +49,15 @@ export function prepareRetainedPlot(materials,doc,command,selection,{write,signa
    for(const [rowIndex,row]of retained.rows.entries()){
     signal?.throwIfAborted();denominator.rows++;if(row.excluded){denominator.excludedCount++;continue;}denominator.included++;if(!mapping.resourcePolicy)assertDatasetScalars(row);
     const cells=row.cells.map((raw,index)=>{if(['null','absent'].includes(row.valueKinds?.[index])||columns[index].missing.some(value=>value.value===raw)){denominator.missing[index].count++;return '';}return raw;});
-    const horizontal=mapping.xKind==='number'?await exact(cells[mapping.x],mapping.x):scalar(cells[mapping.x]).trim(),group=mapping.group===null?null:scalar(cells[mapping.group]).trim(),source={page,row:rowIndex};
-    if(horizontal===null||mapping.xKind!=='number'&&xValue(horizontal,mapping.xKind)===null||group==='')fail();
+    const horizontal=mapping.xKind==='number'?await exact(cells[mapping.x],mapping.x,row):scalar(cells[mapping.x]).trim(),group=mapping.group===null?null:scalar(cells[mapping.group]).trim(),source={page,row:rowIndex};
+    if(horizontal===null||mapping.xKind!=='number'&&xValue(horizontal,mapping.xKind)===null||group==='')fail();if(mapping.xKind!=='number')computation.contribute(row,mapping.x);if(mapping.group!==null)computation.contribute(row,mapping.group);
     for(const value of values){
-     const series=await seriesFor(value,group),state=await work.get('series:'+series),y=operation==='count'?'1/1':await exact(cells[value.column],value.column);
+     const series=await seriesFor(value,group),state=await work.get('series:'+series),y=operation==='count'?'1/1':await exact(cells[value.column],value.column,row);
      if(operation==='raw'){
-      const coordinates={},point={x:mapping.xKind==='number'?project(horizontal,'x',coordinates):horizontal,y:project(y,'y',coordinates),error:value.error===null?null:project(await exact(cells[value.error],value.error),'error',coordinates)};
+      const coordinates={},point={x:mapping.xKind==='number'?project(horizontal,'x',coordinates):horizontal,y:project(y,'y',coordinates),error:value.error===null?null:project(await exact(cells[value.error],value.error,row),'error',coordinates)};
       if(point.y===null&&point.error!==null)fail();
-      for(const field of INTERVAL_FIELDS)if(value[field]!=null){const raw=cells[value[field]];point[field]=field[0]==='x'&&mapping.xKind==='date'?(scalar(raw).trim()||null):project(await exact(raw,value[field]),field,coordinates);}
-      if(value.count!=null)point.count=project(await exact(cells[value.count],value.count),'count',coordinates,{forceSafe:true});
+      for(const field of INTERVAL_FIELDS)if(value[field]!=null){const raw=cells[value[field]];point[field]=field[0]==='x'&&mapping.xKind==='date'?(scalar(raw).trim()||null):project(await exact(raw,value[field],row),field,coordinates);if(field[0]==='x'&&mapping.xKind==='date')computation.contribute(row,value[field],point[field]!==null);}
+      if(value.count!=null)point.count=project(await exact(cells[value.count],value.count,row),'count',coordinates,{forceSafe:true});
       await work.put('point:'+series+':'+state.count,{point,exactX:horizontal,position:state.count,source,coordinates});state.count=checkCount(state.count+1);
      }else{
       const key='bucket:'+series+':'+horizontal;let bucket=await work.get(key);
@@ -71,7 +72,7 @@ export function prepareRetainedPlot(materials,doc,command,selection,{write,signa
    await progress({stage:'calculating dataset rows',done:denominator.rows,total:doc.content.rowCount});
   }
   if(denominator.rows!==doc.content.rowCount)fail('MATERIAL_MISSING');await median?.finish();signal?.throwIfAborted();
-  const header=plotComputationHeader(figureMappingPresentation(table,mapping,command.base??createFigure(),{seriesCount,rows:denominator.included,missing}),selection);
+  const header=plotComputationHeader(figureMappingPresentation(table,mapping,command.base??createFigure(),{seriesCount,rows:denominator.included,missing}),selection,computation);
   const builder=new RetainedFigureDocuments(materials.workspace,{write,signal}).builder(header);await builder.addPlot(header);
   const members=operation==='raw'?null:materials.sequences.builder('plot-members',write);
   async function* entries(series,state){

@@ -425,5 +425,9 @@
   "sync-piecewise-lineageBracket": "adjacent anchor pairs {lower} and {upper}",
   "sync-piecewise-lineageNoBracket": "no anchor bracket used",
   "sync-piecewise-lineageNoSegment": "No declared segment selected; {status}",
-  "sync-piecewise-outputExcluded": "Excluded by the calculation's row selection."
+  "sync-piecewise-outputExcluded": "Excluded by the calculation's row selection.",
+  "computationPerCell": "Computation is recorded separately for each value",
+  "computationApproximateMethod": "Approximate Pearson correlation under the saved calculation policy",
+  "computationExact": "Exact computational value",
+  "computationScalarContext": "{representation}, base {radix}; unit: {unit}"
 }

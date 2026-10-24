@@ -5,7 +5,7 @@ import {aggregationQuantileContextText,aggregationPairContextText} from './web/d
 import {resolveScalarOperand} from './measurement-scalar-storage.js';
 import {resolveScalarDefinitions} from './measurement-scalar-storage.js';
 import {clockSynchronizationContextText} from './web/measurement-clock-context.js';
-import {computationLabel} from './web/measurement-computation.js';
+import {computationLabel,resolveCellComputation,perCellComputation,effectiveCellColumn} from './web/measurement-computation.js';
 import {AppError} from './errors.js';
 import {readTableCursor,tableCursors} from './retained-table-cursor.js';
 const tableReads=async(materials,operation)=>materials.workspace?.withCatalogueConnections&&await materials.workspace.storageKind?.()==='catalogue'?materials.workspace.withCatalogueConnections(operation):operation();
@@ -24,7 +24,7 @@ export const retainedTable=(materials,command)=>tableReads(materials,()=>readRet
 async function readRetainedTable(materials,{ref,selection,version=2}){
  if(version===3){await retainedTableSource(materials,ref,selection);return {version:3,selection:structuredClone(selection)};}
  if(!measurementRef(ref)||ref.kind!=='dataset'||!validTableSelection(selection)||![1,2].includes(version))throw new AppError('DATASET_TABLE');
- const doc=await materials.read(ref),columns=await materials.datasetColumns(doc);
+ const doc=await materials.read(ref),columns=await materials.datasetColumns(doc);if(selection.columns.some(index=>perCellComputation(columns[index])))throw new AppError('DATASET_TABLE');
  if(selection.columns.some(i=>i>=columns.length))throw new AppError('DATASET_TABLE');
  for(const index of selection.columns)if(columns[index].synchronization)columns[index]={...columns[index],...(await resolveScalarDefinitions(materials,{synchronization:columns[index].synchronization}))};
  for(const index of selection.columns)if(columns[index].quantity?.unitDefinition)columns[index]={...columns[index],...(await resolveScalarDefinitions(materials,{quantity:columns[index].quantity}))};
@@ -52,10 +52,10 @@ function quantileMetric(doc,index){
  return metric?.operation==='quantile'?{method:metric.method,probability:metric.probability}:null;
 }
 function pairedMetric(doc,index){
- const recipe=doc.content.aggregation,metric=recipe?.version===5?recipe.values[index-recipe.keys.length]:null;
- if(!metric||!['covariance','linear-fit'].includes(metric.operation))return null;
+ const recipe=doc.content.aggregation,metric=[5,6].includes(recipe?.version)?recipe.values[index-recipe.keys.length]:null;
+ if(!metric||!['covariance','linear-fit','correlation'].includes(metric.operation))return null;
  const {operation,method,pairing}=metric;
- return {operation,method,pairing,...(operation==='covariance'?{normalization:metric.normalization}:{coefficient:metric.coefficient})};
+ return {operation,method,pairing,...(operation==='correlation'?{calculationPolicy:metric.calculationPolicy}:operation==='covariance'?{normalization:metric.normalization}:{coefficient:metric.coefficient})};
 }
 async function legacyQuantileContext(materials,doc,index){
  const quantile=quantileMetric(doc,index);if(!quantile)return '';
@@ -86,13 +86,13 @@ async function* tableRows(materials,source,selection,indices,{offset=0,limit=Inf
    if(reverse?at<0:selection.count!==null&&at>=selection.count)return;
    if(!reverse&&at<offset)continue;
    const compact=Array.isArray(row.columnIndices)||Array.isArray(data.columnIndices),get=(values,i)=>values?.[compact?i:indices[i]];
-   yield {offset:at,ordinal,page,row:position,cells:indices.map((_,i)=>get(row.cells,i)),valueKinds:indices.map((_,i)=>get(row.valueKinds,i)),pointers:indices.map((_,i)=>get(row.cellPointers,i)??null),sources:indices.map((_,i)=>get(row.cellSources,i)??null),exclusion:row.excluded??null};
+   yield {offset:at,ordinal,page,row:position,cells:indices.map((_,i)=>get(row.cells,i)),valueKinds:indices.map((_,i)=>get(row.valueKinds,i)),pointers:indices.map((_,i)=>get(row.cellPointers,i)??null),sources:indices.map((_,i)=>get(row.cellSources,i)??null),computations:indices.map((_,i)=>get(row.cellComputations,i)),exclusion:row.excluded??null};
    if(++emitted>=limit)return;
   }
  }
 }
 function presence(row,columns){return row.cells.map((cell,i)=>['null','absent'].includes(row.valueKinds[i])?row.valueKinds[i]:typeof cell==='string'&&columns[i].missing.some(m=>m.value===cell)?'missing':'value');}
-function tableBlock(columns,rows,selection,quantiles=[],pairedStatistics=[]){return {version:2,selection:{includeExcluded:selection.includeExcluded},headers:columns.map(c=>c.name+(c.unit?' ['+c.unit+']':'')),formats:columns.map((c,index)=>({...(quantiles[index]?{quantile:quantiles[index]}:{}),...(pairedStatistics[index]?{pairedStatistic:pairedStatistics[index]}:{}),representation:c.representation,radix:c.radix,...(c.domain?{domain:c.domain}:{}),...(c.quantity?.uncertainty?{uncertainty:c.quantity.uncertainty}:{}),...(c.quantity?.unitDefinition?{unitDefinition:c.quantity.unitDefinition}:{}),...(c.computation?{computation:c.computation}:{}),...(c.synchronization?{synchronization:c.synchronization}:{}),...(c.statisticalUncertainty?{statisticalUncertainty:c.statisticalUncertainty}:{}),...(c.coordinateFrame?{coordinateFrame:publicCoordinateFrameContext(c),coordinateFrameAxes:c.coordinateFrame.axesIndex}:{})})),rows:rows.map(row=>({...row,presence:presence(row,columns)}))};}
+function tableBlock(columns,rows,selection,quantiles=[],pairedStatistics=[]){return {version:2,selection:{includeExcluded:selection.includeExcluded},headers:columns.map(c=>c.name+(c.unit?' ['+c.unit+']':'')),formats:columns.map((c,index)=>({...(quantiles[index]?{quantile:quantiles[index]}:{}),...(pairedStatistics[index]?{pairedStatistic:pairedStatistics[index]}:{}),representation:c.representation,radix:c.radix,...(c.domain?{domain:c.domain}:{}),...(c.quantity?.uncertainty?{uncertainty:c.quantity.uncertainty}:{}),...(c.quantity?.unitDefinition?{unitDefinition:c.quantity.unitDefinition}:{}),...(c.computation?{computation:c.computation}:{}),...(c.synchronization?{synchronization:c.synchronization}:{}),...(c.statisticalUncertainty?{statisticalUncertainty:c.statisticalUncertainty}:{}),...(c.coordinateFrame?{coordinateFrame:publicCoordinateFrameContext(c),coordinateFrameAxes:c.coordinateFrame.axesIndex}:{})})),rows:rows.map(row=>({...row,presence:presence(row,columns),computations:columns.map((column,index)=>resolveCellComputation(column,{...(row.computations?.[index]!==undefined?{computation:row.computations[index]}:{})}))}))};}
 export const retainedTablePage=(materials,command,options)=>tableReads(materials,()=>readTablePage(materials,command,options));
 async function readTablePage(materials,{ref,table,offset,cursor,limit=16,columnOffset=0,columnLimit=8},{signal}={}){
  if(!validRetainedTable(table)||table.version!==3||offset!==undefined&&!natural(offset)||!Number.isInteger(limit)||limit<1||limit>32)throw new AppError('DATASET_TABLE');
@@ -133,6 +133,6 @@ async function readTableCell(materials,{ref,table,rowOffset,cursor,columnOffset,
  const source=await retainedTableSource(materials,ref,table.selection),anchor=cursor===undefined?null:await readTableCursor(materials,ref,table,cursor,source,rowOffset);
  if(anchor&&anchor.direction!=='forward')throw new AppError('DATASET_TABLE');
  const {indices,columns}=await tableColumns(materials,source,table.selection,columnOffset,1);
- for await(const row of tableRows(materials,source,table.selection,indices,{offset:anchor?.offset??rowOffset,anchor,limit:1,signal}))return {...await retainedCellWindow(materials,row.cells[0],{offset,limit,signal}),cursor:(await tableCursors(materials,ref,table,[{...row,direction:'forward'}]))[0],column:columns[0],presence:presence(row,columns)[0],source:{ref,selector:{kind:'cell',page:row.page,row:row.row,column:indices[0]}},pointer:row.pointers[0],sources:row.sources[0],exclusion:row.exclusion};
+ for await(const row of tableRows(materials,source,table.selection,indices,{offset:anchor?.offset??rowOffset,anchor,limit:1,signal}))return {...await retainedCellWindow(materials,row.cells[0],{offset,limit,signal}),cursor:(await tableCursors(materials,ref,table,[{...row,direction:'forward'}]))[0],column:effectiveCellColumn(columns[0],{...(row.computations?.[0]!==undefined?{computation:row.computations[0]}:{})}),presence:presence(row,columns)[0],source:{ref,selector:{kind:'cell',page:row.page,row:row.row,column:indices[0]}},pointer:row.pointers[0],sources:row.sources[0],exclusion:row.exclusion};
  throw new AppError('DATASET_TABLE');
 }

@@ -3,7 +3,7 @@ import {statisticalUncertaintyContextText} from './web/statistical-uncertainty-c
 import {measurementUnitContextParts} from './web/measurement-unit-context.js';
 import {aggregationQuantileContextParts,aggregationPairContextText} from './web/dataset-aggregation-context.js';
 import {clockSynchronizationContextParts} from './web/measurement-clock-context.js';
-import {computationLabel} from './web/measurement-computation.js';
+import {computationLabel,cellComputationLabel} from './web/measurement-computation.js';
 import {domainDescription} from './web/measurement-domain-ui.js';
 import {createHash} from 'node:crypto';
 import {AppError} from './errors.js';
@@ -41,7 +41,7 @@ export async function* retainedTableHTML(materials,statement,{signal}={}){
   if(table.selection.includeExcluded)yield '<th scope="col">'+esc(messages.exclusion)+'</th>';yield '</tr></thead><tbody>';
   for(const row of table.rows){
    signal?.throwIfAborted();yield '<tr>';
-   for(let i=0;i<row.cells.length;i++){yield '<td>';if(row.presence[i]!=='value')yield esc(messages[row.presence[i]]);else for await(const text of cellText(materials,row.cells[i],{signal}))yield esc(text);yield '</td>';}
+   for(let i=0;i<row.cells.length;i++){yield '<td>';if(row.presence[i]!=='value')yield esc(messages[row.presence[i]]);else for await(const text of cellText(materials,row.cells[i],{signal}))yield esc(text);const computation=row.presence[i]==='value'?cellComputationLabel(table.formats[i],{computation:row.computations[i]}):'';if(row.presence[i]==='value'&&computation)yield '<small class="cell-computation">'+esc(computation)+'</small>';yield '</td>';}
    if(table.selection.includeExcluded)yield '<td>'+esc(row.exclusion??'')+'</td>';yield '</tr>';
   }
   yield '</tbody></table></div>';

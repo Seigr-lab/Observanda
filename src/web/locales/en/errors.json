@@ -405,5 +405,6 @@
   "COORDINATE_FRAME_INCOMPATIBLE": "Match the exact pinned frame revision, declared vector namespace and dimension. Choose compatible source and target frames; no axis order is inferred.",
   "COORDINATE_FRAME_UNITS": "Declare compatible difference units with positive scales and zero offsets. The transformation matrix requires dimensionless coefficients.",
   "COORDINATE_FRAME_INPUT": "Choose present, non-excluded matrix and translation cells with complete exact components. Inspect their pinned source values.",
-  "COORDINATE_FRAME_SINGULAR": "The declared transformation matrix is singular. Choose an explicitly nonsingular square matrix; your selections and rationale are retained."
+  "COORDINATE_FRAME_SINGULAR": "The declared transformation matrix is singular. Choose an explicitly nonsingular square matrix; your selections and rationale are retained.",
+  "DATASET_CELL_COMPUTATION": "This column records exact and approximate computation separately for each value. Use a current calculation graph or a reader that preserves the selected value’s computation. Earlier retained results remain available."
 }
