@@ -1,3 +1,4 @@
+import {validMeasurement,blankQuantity} from '../src/web/measurement-model.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {perCellComputation,validComputation,validCellComputation,hasApproximateComputation,resolveCellComputation,effectiveCellColumn,derivedComputation,derivedColumnComputation,derivedCellComputation} from '../src/web/measurement-computation.js';
@@ -24,4 +25,9 @@ test('native cell retention and selected projection preserve exact, rounded and 
  for(const cell of inputs)await builder.append(await retainDatasetCell(materials,cell,fn=>fn()));const cellIndex=await builder.finish(),doc={content:{datasetFormat:3,schemaIndex:{count:3}}},row={id:'retained',cellIndex};
  const selected=(await projectDatasetRows(materials,doc,[row],[2,0,1])).rows[0];assert.equal(selected.cellComputations[0],undefined);assert.equal(selected.cellComputations[1],null);assert.deepEqual(selected.cellComputations[2],inputs[1].computation);assert.equal(selected.cells[2].format,'dataset-cell');
  assert.throws(()=>validateDatasetCell(materials,{kind:'string',value:'1',computation:capability}),{code:'MATERIAL_MISSING'});
+});
+
+test('a standalone measurement requires actual provenance instead of a column capability',()=>{
+ const measurement={version:1,value:{spelling:'1/1',representation:'rational',radix:10,unit:'',presence:'value'},quantity:blankQuantity(),time:{kind:'unknown',reference:'',resolution:'',uncertainty:''},sources:[{ref:{kind:'artifact',id:'11111111-1111-4111-8111-111111111111',revision:'a'.repeat(64)},selector:{kind:'whole'}}],references:{decoder:null,schema:null},decoderVersion:'',integrity:'not-checked',completion:'complete',note:''};
+ assert.equal(validMeasurement(measurement),true);assert.equal(validMeasurement({...measurement,computation:rounded()}),true);assert.equal(validMeasurement({...measurement,computation:capability}),false);assert.equal(validMeasurement({...measurement,computation:null}),false);
 });

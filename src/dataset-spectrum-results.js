@@ -1,0 +1,134 @@
+// A whole retained range is transformed in encrypted scratch. Only a completed
+// transform can publish its immutable recipe and ordinary native dataset.
+import {createHash,randomUUID} from 'node:crypto';
+import {AppError} from './errors.js';
+import {DatasetResourceBudget,numericalOperation} from './dataset-resource-budget.js';
+import {withScratch} from './scratch-work.js';
+import {digest} from './storage-format.js';
+import {revisionId,revisionText} from './web/revision-model.js';
+import {researchId} from './web/research-reference.js';
+import {validMaterialReference,materialReference} from './web/material-reference.js';
+import {defaultColumn} from './web/dataset-schema.js';
+import {defaultDomain,domainCodec,knownDomain,domainUsesResourcePolicy} from './web/measurement-domain-model.js';
+import {isScalarRepresentation,blankQuantity} from './web/measurement-model.js';
+import {defaultDatasetResourcePolicy} from './web/dataset-resource-policy.js';
+import {resolveCellComputation,effectiveCellColumn,derivedCellComputation} from './web/measurement-computation.js';
+import {validatePolicyScalar,isScalarResourceFailure} from './web/measurement-scalar-policy.js';
+import {blankUnitDefinition,validateUnitDefinition,unitScalar,unitOperationDimensions,convertUnitValue,sameUnitDimensions} from './web/measurement-unit-model.js';
+import {plotRationalText,multiplyPlotRational,dividePlotRational,addPlotRational} from './web/plot-resource-policy.js';
+import {resolveScalarDefinitions,resolveScalarOperand,retainScalarDefinitions,scalarDefinitionEntries} from './measurement-scalar-storage.js';
+import {readDatasetCell} from './dataset-cell-storage.js';
+import {validateDomainValue,domainValuePage,retainDomainComponents} from './measurement-domain-storage.js';
+import {datasetColumnCount} from './dataset-selected-columns.js';
+import {datasetRowPosition} from './dataset-row-position.js';
+import {projectDatasetRows} from './dataset-storage.js';
+import {evaluateSpectrum,DatasetSpectrumError} from './dataset-spectrum-kernel.js';
+import {validSpectrumRecipe,signedSpectrumBin,SPECTRUM_ROLES,spectrumColumnDescriptor} from './web/dataset-spectrum-model.js';
+import messages from './web/locales/en/datasetSpectrum.json' with {type:'json'};
+export const SPECTRUM_TOOL='Observanda dataset spectrum';
+const fail=(code='DATASET_SPECTRUM_INVALID')=>{throw new AppError(code);};
+const exact=(value,keys)=>!!value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).length===keys.length&&keys.every(key=>Object.hasOwn(value,key));
+const identity=value=>{const h=digest(value);return h.slice(0,8)+'-'+h.slice(8,12)+'-4'+h.slice(13,16)+'-8'+h.slice(17,20)+'-'+h.slice(20,32);};
+const names=()=>[messages.columnBin,messages.columnFrequency,messages.columnCoefficient,messages.columnMagnitude];
+const scalar=spelling=>({spelling,representation:'rational',radix:10});
+const previewUnit=value=>({...value,scale:{...value.scale,spelling:bounded(value.scale.spelling)},offset:{...value.offset,spelling:bounded(value.offset.spelling)}});
+const bounded=value=>typeof value==='string'&&value.length>4096?{format:'scalar-preview',text:value.slice(0,4096),complete:false}:value;
+const marker=(bin,analysis)=>bin.approximate?{version:1,kind:'approximate',recipe:analysis}:bin.approximateInputs?{version:1,kind:'approximate-inputs'}:null;
+const parse=(value,policy,budget)=>numericalOperation(budget,b=>validatePolicyScalar(value,policy,{budget:b}));
+function handled(error){if(error instanceof AppError||isScalarResourceFailure(error)||error.name==='AbortError'||error.code==='CALCULATION_LIBRARY_UNAVAILABLE')throw error;if(error instanceof DatasetSpectrumError)fail(error.code);throw error;}
+function summaryShape(summary,recipe){return exact(summary,['version','method','count','engine','calculationPolicy','resourcePolicy','approximate','approximateInputs','outputDigest'])&&summary.version===1&&summary.method===recipe.method&&summary.count===recipe.range.count&&summary.engine===4&&revisionText(summary.calculationPolicy)===revisionText(recipe.calculationPolicy)&&revisionText(summary.resourcePolicy)===revisionText(recipe.resourcePolicy)&&typeof summary.approximate==='boolean'&&typeof summary.approximateInputs==='boolean'&&/^[a-f0-9]{64}$/.test(summary.outputDigest);}
+function analysisShape(doc){const c=doc.content;if(doc.kind!=='analysis'||!exact(c,['tool','version','spectrum','summary','inputs','capture'])||c.tool!==SPECTRUM_TOOL||c.version!==1||!validSpectrumRecipe(c.spectrum)||!summaryShape(c.summary,c.spectrum)||revisionText(c.inputs)!==revisionText([c.spectrum.source])||!exact(c.capture,['id','expectedRevision','title','columnNames'])||!researchId(c.capture.id)||c.capture.expectedRevision!==null&&!revisionId(c.capture.expectedRevision)||typeof c.capture.title!=='string'||!c.capture.title.trim()||c.capture.title.length>300||!Array.isArray(c.capture.columnNames)||c.capture.columnNames.length!==4||c.capture.columnNames.some(name=>typeof name!=='string'||!name.trim()||name.length>200))fail('MATERIAL_MISSING');}
+
+function outputUnits(source,recipe,budget){
+ try{return numericalOperation(budget,b=>{
+  const sampling=recipe.sampling.unitDefinition;validateUnitDefinition(sampling,{budget:b});if(sampling.kind!=='difference')fail('DATASET_SPECTRUM_UNITS');
+  const declared=source.quantity?.unitDefinition;if(!declared&&source.unit)fail('DATASET_SPECTRUM_UNITS');const amplitude=structuredClone(declared??blankUnitDefinition());validateUnitDefinition(amplitude,{budget:b});if(amplitude.kind!=='difference')fail('DATASET_SPECTRUM_UNITS');
+  const scale=unitScalar(amplitude.scale,b,amplitude.resourcePolicy),samplingScale=unitScalar(sampling.scale,b,sampling.resourcePolicy),unit=(dimensions,scale)=>({version:2,kind:'difference',dimensions,scale:scalar(plotRationalText(scale,b)),offset:scalar('0/1'),resourcePolicy:structuredClone(recipe.resourcePolicy)});
+  return {amplitude,frequency:unit(sampling.dimensions.map(({axis,exponent})=>({axis,exponent:-exponent})),dividePlotRational({numerator:1n,denominator:1n},samplingScale,b)),magnitude:unit(unitOperationDimensions('multiply',amplitude,amplitude,null,b).dimensions,multiplyPlotRational(scale,scale,b))};
+ });}catch(error){if(error instanceof AppError||isScalarResourceFailure(error))throw error;fail('DATASET_SPECTRUM_UNITS');}
+}
+export function spectrumColumns(context,analysis,columnNames=names()){
+ const {recipe,sourceColumn,units}=context,common={quantity:{...blankQuantity(),origin:'derived'}},domain={...defaultDomain('complex'),version:2,namespace:'observanda.spectrum.coefficient.v1',component:{version:1,representation:'rational',radix:10},resourcePolicy:structuredClone(recipe.resourcePolicy)};
+ return SPECTRUM_ROLES.map((role,index)=>({...defaultColumn({label:columnNames[index]}),...structuredClone(common),...(index===2?{}:{resourcePolicy:structuredClone(recipe.resourcePolicy)}),representation:index===2?'domain':index===0?'integer':'rational',radix:10,unit:index===2?sourceColumn.unit:'',...(index===2?{domain}:{}),...(index?{quantity:{...common.quantity,unitDefinition:structuredClone(index===1?units.frequency:index===2?units.amplitude:units.magnitude)}}:{}),spectrum:spectrumColumnDescriptor(recipe,analysis,role),...(index>=2?{computation:{version:2,kind:'per-cell'}}:{})}));
+}
+
+// Original row ranks never use filtered/included ranks. Metadata pages are
+// bounded; native cell projection reads only the selected row and columns.
+function selectedReader(materials,context){let cached=null,fallbackStart=0,fallbackPage=0;
+ return async(index,{signal}={})=>{
+  signal?.throwIfAborted();const absolute=context.recipe.range.start+index;if(!Number.isSafeInteger(index)||index<0||index>=context.recipe.range.count)fail();
+  let position=await datasetRowPosition(materials,context.doc,{offset:absolute,includeExcluded:true});
+  if(!position){if(!cached||absolute<fallbackStart){cached=null;fallbackStart=0;fallbackPage=0;}for(;;){if(!cached||cached.page!==fallbackPage)cached=await materials.retainedDatasetPage(context.doc,fallbackPage,{metadataOnly:true});if(absolute<fallbackStart+cached.rows.length){position={page:fallbackPage,row:absolute-fallbackStart};break;}fallbackStart+=cached.rows.length;fallbackPage++;if(fallbackPage>=materials.datasetPageCount(context.doc))fail('MATERIAL_MISSING');cached=null;}}
+  if(!cached||cached.page!==position.page)cached=await materials.retainedDatasetPage(context.doc,position.page,{metadataOnly:true});const row=cached.rows[position.row];if(!row)fail('MATERIAL_MISSING');
+  const projected=(await projectDatasetRows(materials,context.doc,[row],context.indices)).rows[0];if(!projected)fail('MATERIAL_MISSING');return {row:projected,page:position.page,position:position.row,index};
+ };
+}
+function selectedCell(row,index){const cell={value:row.cells[index],kind:row.valueKinds?.[index]??'string'};if(row.cellComputations?.[index]!==undefined)cell.computation=row.cellComputations[index];return cell;}
+function requiredCell(row,index,column){const cell=selectedCell(row,index);if(row.excluded||['null','absent'].includes(cell.kind)||column.missing.some(m=>m.value===cell.value))fail('DATASET_SPECTRUM_MISSING');return cell;}
+
+export async function prepareSpectrumScalars(materials,command,{write,signal,base,allowRetained=false}={}){
+ if(!command.spectrum)return command;if(!validSpectrumRecipe(command.spectrum))fail();await materials.assertOwner(command.recordId);
+ if(!base&&command.id&&command.expectedRevision){const doc=await materials.read({kind:'dataset',id:command.id,revision:command.expectedRevision});if(doc.recordId!==command.recordId||!doc.content.spectrum)fail();base=(await new DatasetSpectrumResults(materials).analysis(doc.content.spectrum.analysis)).content.spectrum;}
+ const prior=scalarDefinitionEntries(base).map(entry=>entry.scalar.spelling);for(const entry of scalarDefinitionEntries(command.spectrum))if(typeof entry.scalar.spelling!=='string'&&!allowRetained&&!prior.some(value=>revisionText(value)===revisionText(entry.scalar.spelling)))fail();
+ const spectrum=write?await retainScalarDefinitions(materials,command.spectrum,write,{signal,allowRetained:true}):await resolveScalarDefinitions(materials,command.spectrum,{signal});return {...command,spectrum};
+}
+export class DatasetSpectrumResults{
+ constructor(materials){this.materials=materials;}
+ scoped(operation){const workspace=this.materials.workspace;return workspace.withCatalogueConnections?workspace.withCatalogueConnections(operation):operation();}
+ async context(recipe,{signal,budget}={}){
+  if(!validSpectrumRecipe(recipe))fail();budget??=new DatasetResourceBudget(recipe.resourcePolicy);const m=this.materials,resolved=await resolveScalarDefinitions(m,recipe,{signal,budget}),doc=await m.read(recipe.source);if(recipe.column>=datasetColumnCount(doc)||recipe.sampling.coordinateColumn!==null&&recipe.sampling.coordinateColumn>=datasetColumnCount(doc)||recipe.range.start+recipe.range.count>doc.content.rowCount)fail();
+  const sourceDeclaration=await m.datasetColumn(doc,recipe.column),sourceColumn=await resolveScalarDefinitions(m,sourceDeclaration,{signal,budget});if(!isScalarRepresentation(sourceColumn)&&!(sourceColumn.representation==='domain'&&knownDomain(sourceColumn.domain)&&domainCodec(sourceColumn.domain)==='complex'))fail('DATASET_SPECTRUM_INPUT');
+  const step=parse(resolved.sampling.step,resolved.resourcePolicy,budget),origin=parse(resolved.sampling.origin,resolved.resourcePolicy,budget);if(step.numerator<=0n)fail('DATASET_SPECTRUM_SAMPLING');const units=outputUnits(sourceColumn,resolved,budget),coordinateColumn=recipe.sampling.coordinateColumn===null?null:await resolveScalarDefinitions(m,await m.datasetColumn(doc,recipe.sampling.coordinateColumn),{signal,budget});
+  if(coordinateColumn){if(!isScalarRepresentation(coordinateColumn)||!coordinateColumn.quantity?.unitDefinition)fail('DATASET_SPECTRUM_UNITS');try{numericalOperation(budget,b=>{const coordinateUnit=coordinateColumn.quantity.unitDefinition;validateUnitDefinition(coordinateUnit,{budget:b});if(coordinateUnit.kind!==resolved.sampling.unitDefinition.kind||!sameUnitDimensions(coordinateUnit,resolved.sampling.unitDefinition))fail('DATASET_SPECTRUM_UNITS');});}catch(error){if(isScalarResourceFailure(error))throw error;fail('DATASET_SPECTRUM_UNITS');}}
+  const context={recipe:resolved,doc,sourceDeclaration,sourceColumn,coordinateColumn,units,step,origin,budget,indices:[recipe.column,...(coordinateColumn?[recipe.sampling.coordinateColumn]:[])]};context.read=selectedReader(m,context);return context;
+ }
+ async validate(command,options={}){
+  if(!validSpectrumRecipe(command.spectrum)||!researchId(command.recordId)||!researchId(command.id)||command.expectedRevision!==null&&!revisionId(command.expectedRevision)||typeof command.title!=='string'||!command.title.trim()||command.title.length>300||['artifact','baseDataset','calculation','calculatorResult','aggregation','uncertainty','columns','columnChanges','sourceMapping','nativeMapping','exclusions'].some(key=>command[key]!==undefined))fail();
+  await this.materials.assertOwner(command.recordId);const current=await this.materials.current(command.id);if((current?.revision??null)!==command.expectedRevision||current&&(current.kind!=='dataset'||current.recordId!==command.recordId))fail('MATERIAL_CHANGED');return this.context(command.spectrum,options);
+ }
+ async operand(context,index,{signal,budget=context.budget}={}){
+  const m=this.materials,item=await context.read(index,{signal}),column=context.sourceColumn,cell=requiredCell(item.row,0,column),actual=effectiveCellColumn(column,cell);let computation=resolveCellComputation(column,cell);
+  if(context.coordinateColumn){const c=context.coordinateColumn,coordinate=requiredCell(item.row,1,c),effective=effectiveCellColumn(c,coordinate);computation=derivedCellComputation({computation},{computation:resolveCellComputation(c,coordinate)}).computation;const resolved=await resolveScalarOperand(m,coordinate,effective,{signal,budget,policy:context.recipe.resourcePolicy});try{numericalOperation(budget,b=>{const input=validatePolicyScalar({spelling:resolved.value,representation:c.representation,radix:c.radix},c.resourcePolicy??defaultDatasetResourcePolicy(),{budget:b}),converted=convertUnitValue(input,c.quantity.unitDefinition,context.recipe.sampling.unitDefinition,b),expected=addPlotRational(context.origin,multiplyPlotRational(context.step,{numerator:BigInt(index),denominator:1n},b),b);if(plotRationalText(converted,b)!==plotRationalText(expected,b))fail('DATASET_SPECTRUM_SAMPLING');});}catch(error){if(error instanceof AppError||isScalarResourceFailure(error))throw error;fail('DATASET_SPECTRUM_SAMPLING');}}
+  if(isScalarRepresentation(column)){const resolved=await resolveScalarOperand(m,cell,actual,{signal,budget,policy:context.recipe.resourcePolicy});return {real:{spelling:resolved.value,representation:column.representation,radix:column.radix},resourcePolicy:column.resourcePolicy??defaultDatasetResourcePolicy(),computation};}
+  const value=validateDomainValue(m,cell.value,column.domain);if(!value.complete)fail('DATASET_SPECTRUM_MISSING');const components=await domainValuePage(m,value,{offset:0,limit:2,resolve:true,signal,budget});if(components.items.length!==2||components.items.some(item=>item.presence!=='value'))fail('DATASET_SPECTRUM_MISSING');const component=column.domain.component;return {real:{spelling:components.items[0].spelling,representation:component.representation,radix:component.radix},imaginary:{spelling:components.items[1].spelling,representation:component.representation,radix:component.radix},resourcePolicy:domainUsesResourcePolicy(column.domain)?column.domain.resourcePolicy:defaultDatasetResourcePolicy(),computation};
+ }
+ async evaluate(context,work,{signal,check=async()=>{},progress=async()=>{}}={}){
+  let count=0;const hash=createHash('sha256'),recipe=context.recipe,budget=context.budget;
+  try{const summary=await evaluateSpectrum({count:recipe.range.count,read:(index,options)=>this.operand(context,index,options),work,write:async bin=>{
+   signal?.throwIfAborted();await check();if(bin.index!==count++||!exact(bin.rational,['real','imaginary','normalizedSquaredMagnitude'])||Object.values(bin.rational).some(value=>typeof value!=='string'))fail('MATERIAL_MISSING');const normalized={index:bin.index,signedBin:signedSpectrumBin(bin.index,recipe.range.count),...bin.rational,approximate:bin.approximate,approximateInputs:bin.approximateInputs};
+   normalized.frequency=numericalOperation(budget,b=>plotRationalText(dividePlotRational({numerator:BigInt(normalized.signedBin),denominator:BigInt(recipe.range.count)},context.step,b),b));hash.update(revisionText(normalized));hash.update('\n');await work.put('output:'+bin.index,normalized);
+  }},{resourcePolicy:recipe.resourcePolicy,calculationPolicy:recipe.calculationPolicy,budget,signal,check,progress:value=>progress({stage:value.phase==='input'?messages.progressInput:value.phase==='transform'?messages.progressTransform:messages.progressOutput,done:value.done,total:value.total})});if(count!==recipe.range.count)fail('MATERIAL_MISSING');return {...summary,outputDigest:hash.digest('hex')};}catch(error){handled(error);}
+ }
+ async analysis(ref){const doc=await this.materials.read(ref);analysisShape(doc);await this.materials.assertOwner(doc.recordId);return doc;}
+ async retainAnalysis(command,summary,{signal,writePage}={}){
+  const m=this.materials,write=writePage??(operation=>m.workspace.withLock(operation)),id=identity('dataset-spectrum:'+command.id+':'+command.expectedRevision);
+  return write(async()=>{signal?.throwIfAborted();await m.assertOwner(command.recordId,{write:true});await m.read(command.spectrum.source);const previous=await m.current(id),prior=previous?await this.analysis(previous):null,content=await retainScalarDefinitions(m,{tool:SPECTRUM_TOOL,version:1,spectrum:command.spectrum,summary,inputs:[command.spectrum.source],capture:{id:command.id,expectedRevision:command.expectedRevision,title:command.title,columnNames:prior?.content.capture.columnNames??names()}},fn=>fn(),{signal,allowRetained:true});if(previous){if(prior.recordId!==command.recordId||revisionText(prior.content)!==revisionText(content))fail('MATERIAL_CHANGED');return materialReference(previous);}return m.commit({kind:'analysis',recordId:command.recordId,title:messages.recipeTitle.replace('{title}',command.title.slice(0,260)),id,expectedRevision:null,content});});
+ }
+ async *rows(context,work,analysis,columns,{signal,writePage}={}){
+  const m=this.materials,save=writePage??(operation=>m.workspace.withLock(operation));yield {columns:columns.map(column=>column.name),sourceMapping:{format:'spectrum',version:1}};
+  for(let index=0;index<context.recipe.range.count;index++){signal?.throwIfAborted();const bin=await work.get('output:'+index);if(!bin||bin.index!==index)fail('MATERIAL_MISSING');async function* components(){yield {spelling:bin.real};yield {spelling:bin.imaginary};}const coefficient=await retainDomainComponents(m,columns[2].domain,components(),save,{signal}),computation=marker(bin,analysis);
+   yield {order:index+1,locator:{format:'spectrum',version:1,index},cells:[String(bin.signedBin),bin.frequency,coefficient,bin.normalizedSquaredMagnitude],valueKinds:['string','string','string','string'],cellComputations:[undefined,undefined,computation,computation],cellSources:columns.map(()=>[{ref:analysis,selector:{kind:'whole'}}]),spectrum:{version:1,index,approximate:bin.approximate,approximateInputs:bin.approximateInputs},excluded:null};
+  }
+ }
+ async prepare(command,options={}){return this.scoped(()=>withScratch(async work=>{
+  const commandHash=digest(revisionText(command));command=await prepareSpectrumScalars(this.materials,command,{...options,write:options.writePage??(fn=>this.materials.workspace.withLock(fn)),allowRetained:!!options.jobId});const context=await this.validate(command,options),summary=await this.evaluate(context,work,options),analysis=await this.retainAnalysis(command,summary,options),saved=await this.analysis(analysis),columns=spectrumColumns(context,analysis,saved.content.capture.columnNames),result=await this.materials.prepareDatasetRows(command,{...options,source:{doc:{id:command.id}},rows:this.rows(context,work,analysis,columns,options),calculatedColumns:columns,inputReferences:[command.spectrum.source,analysis]});return {...result,commandHash,content:{...result.content,spectrum:{version:1,analysis},algorithm:'observanda-dataset-spectrum',algorithmVersion:1}};
+ },options));}
+ async preview(command,options={}){return this.scoped(()=>withScratch(async work=>{
+  command=await prepareSpectrumScalars(this.materials,command,options);const context=await this.validate({...command,id:command.id??randomUUID(),expectedRevision:command.expectedRevision??null},options),summary=await this.evaluate(context,work,options),rows=[];
+  for(let index=0;index<Math.min(5,context.recipe.range.count);index++){const bin=await work.get('output:'+index);rows.push({cells:[String(bin.signedBin),bounded(bin.frequency),{format:'spectrum-complex-preview',real:bounded(bin.real),imaginary:bounded(bin.imaginary)},bounded(bin.normalizedSquaredMagnitude)],valueKinds:['string','string','domain','string'],approximate:bin.approximate,approximateInputs:bin.approximateInputs,excluded:null});}
+  return {columns:names(),rows,summary,spectrum:context.recipe,columnOffset:0,columnCount:4,nextColumn:null,contexts:[{representation:'integer',radix:10,unitDefinition:blankUnitDefinition()},{representation:'rational',radix:10,unitDefinition:previewUnit(context.units.frequency)},{representation:'domain',codec:'observanda.complex',component:{representation:'rational',radix:10},unitDefinition:previewUnit(context.units.amplitude)},{representation:'rational',radix:10,unitDefinition:previewUnit(context.units.magnitude)}]};
+ },options));}
+ async inputs({ref,offset=0,limit=16},{signal}={}){return this.scoped(async()=>{
+  let doc=await this.materials.read(ref);if(doc.kind==='dataset'){if(!doc.content.spectrum)fail();ref=doc.content.spectrum.analysis;}doc=await this.analysis(ref);const recipe=doc.content.spectrum;if(!Number.isSafeInteger(offset)||offset<0||offset>recipe.range.count||!Number.isSafeInteger(limit)||limit<1||limit>16)fail();const context=await this.context(recipe,{signal}),items=[];
+  for(let index=offset;index<Math.min(offset+limit,recipe.range.count);index++){signal?.throwIfAborted();const item=await context.read(index,{signal}),part=(at,column)=>{const cell=selectedCell(item.row,at);return {source:{ref:recipe.source,selector:{kind:'cell',page:item.page,row:item.position,column:at===0?recipe.column:recipe.sampling.coordinateColumn}},column,value:bounded(cell.value),kind:cell.kind,computation:resolveCellComputation(column,cell)};};items.push({index,...part(0,context.sourceDeclaration),coordinate:context.coordinateColumn?part(1,context.coordinateColumn):null});}
+  return {ref:materialReference(ref),title:doc.title,recordId:doc.recordId,spectrum:recipe,summary:doc.content.summary,items,offset,total:recipe.range.count,next:offset+items.length<recipe.range.count?offset+items.length:null};
+ });}
+ async verify(doc,{signal}={}){return this.scoped(()=>withScratch(async work=>{
+  const m=this.materials,analysis=doc.content.tool===SPECTRUM_TOOL?doc:doc.kind==='dataset'&&exact(doc.content.spectrum,['version','analysis'])&&doc.content.spectrum.version===1?await this.analysis(doc.content.spectrum.analysis):null;if(!analysis)fail('MATERIAL_MISSING');analysisShape(analysis);const saved=await resolveScalarDefinitions(m,analysis.content,{signal}),context=await this.context(saved.spectrum,{signal}),summary=await this.evaluate(context,work,{signal});if(revisionText(summary)!==revisionText(saved.summary))fail('MATERIAL_MISSING');if(doc===analysis)return;
+  const c=doc.content,ref=materialReference(doc.content.spectrum.analysis);if(c.algorithm!=='observanda-dataset-spectrum'||c.algorithmVersion!==1||c.rowCount!==context.recipe.range.count||c.includedRowCount!==c.rowCount||analysis.recordId!==doc.recordId||saved.capture.id!==doc.id||saved.capture.expectedRevision!==(doc.previous??null)||saved.capture.title!==doc.title||datasetColumnCount(doc)!==4)fail('MATERIAL_MISSING');const columns=spectrumColumns(context,ref,saved.capture.columnNames);for(let index=0;index<4;index++)if(revisionText(await resolveScalarDefinitions(m,await m.datasetColumn(doc,index),{signal}))!==revisionText(columns[index]))fail('MATERIAL_MISSING');let count=0;
+  for(let page=0;page<m.datasetPageCount(doc);page++)for(const row of (await m.retainedDatasetPage(doc,page,{columns:[0,1,2,3]})).rows){signal?.throwIfAborted();const bin=await work.get('output:'+count),expected=[String(bin?.signedBin),bin?.frequency,null,bin?.normalizedSquaredMagnitude],metadata=bin&&{version:1,index:count,approximate:bin.approximate,approximateInputs:bin.approximateInputs};if(!bin||row.order!==count+1||revisionText(row.locator)!==revisionText({format:'spectrum',version:1,index:count})||row.excluded||revisionText(row.spectrum)!==revisionText(metadata)||revisionText(row.valueKinds)!==revisionText(['string','string','string','string'])||revisionText(row.cellSources)!==revisionText(columns.map(()=>[{ref,selector:{kind:'whole'}}])))fail('MATERIAL_MISSING');
+   for(const index of [0,1,3]){let offset=0;do{const part=await readDatasetCell(m,row.cells[index],{offset,limit:4096,signal});if(part.total!==expected[index].length||part.text!==expected[index].slice(offset,offset+part.text.length))fail('MATERIAL_MISSING');offset=part.next;}while(offset!==null);}
+   const value=validateDomainValue(m,row.cells[2],columns[2].domain),components=await domainValuePage(m,value,{offset:0,limit:2,resolve:true,signal});if(revisionText(components.items.map(item=>item.spelling))!==revisionText([bin.real,bin.imaginary]))fail('MATERIAL_MISSING');for(const index of [2,3])if(revisionText(resolveCellComputation(columns[index],selectedCell(row,index)))!==revisionText(marker(bin,ref)))fail('MATERIAL_MISSING');count++;
+  }if(count!==c.rowCount)fail('MATERIAL_MISSING');
+ },{signal}));}
+}

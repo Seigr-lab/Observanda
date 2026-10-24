@@ -406,5 +406,10 @@
   "COORDINATE_FRAME_UNITS": "Declare compatible difference units with positive scales and zero offsets. The transformation matrix requires dimensionless coefficients.",
   "COORDINATE_FRAME_INPUT": "Choose present, non-excluded matrix and translation cells with complete exact components. Inspect their pinned source values.",
   "COORDINATE_FRAME_SINGULAR": "The declared transformation matrix is singular. Choose an explicitly nonsingular square matrix; your selections and rationale are retained.",
-  "DATASET_CELL_COMPUTATION": "This column records exact and approximate computation separately for each value. Use a current calculation graph or a reader that preserves the selected value’s computation. Earlier retained results remain available."
+  "DATASET_CELL_COMPUTATION": "This column records exact and approximate computation separately for each value. Use a current calculation graph or a reader that preserves the selected value’s computation. Earlier retained results remain available.",
+  "DATASET_SPECTRUM_INVALID": "Review the selected spectral column, explicit power-of-two row count, sampling declaration and saved calculation policy. No padding or detrending is applied.",
+  "DATASET_SPECTRUM_INPUT": "Select present scalar values or a supported native complex column. Every selected value must have a valid declared interpretation.",
+  "DATASET_SPECTRUM_UNITS": "Use a difference unit with zero offset for the signal and sampling grid, or an unlabelled signal with no unit declaration. A unit label alone does not define spectral units.",
+  "DATASET_SPECTRUM_SAMPLING": "The positive sample step and optional coordinate column must describe the exact declared uniform grid from the selected origin. No sampling rate is inferred.",
+  "DATASET_SPECTRUM_MISSING": "The selected spectral range contains an excluded, missing, null or absent reading. Choose a complete range; samples are never silently removed or padded."
 }

@@ -1,3 +1,4 @@
+import {spectrumGraphColumn} from './web/dataset-spectrum-schema.js';
 import {assertCoordinateFrameGraphVersion,assertCoordinateFrameComparison,coordinateFrameGraphColumn,compileCoordinateFrameNode,coordinateTransformLineage,coordinateComponentLineage,appendCoordinateFrameLineage} from './coordinate-frame-graph.js';
 import {validateCoordinateFrameColumn} from './coordinate-frame-transform.js';
 import {domainReshapeColumn,domainPermuteColumn} from './measurement-domain-reshape.js';
@@ -73,7 +74,7 @@ export class CalculationGraphs{
    else if(node.kind==='domain-arithmetic'){if(dependencies.some(value=>value.type!=='value'))fail();column=domainAlgebraColumn(node,dependencies.map(v=>compilationColumn(v.column)),{policy:content.policy});}
    else if(node.kind==='domain'){if(dependencies[0]?.type!=='value'||node.right&&dependencies[1]?.type!=='value'||node.condition&&dependencies.at(-1)?.type!=='condition')fail();column=domainOperationColumn(node,dependencies.map(v=>compilationColumn(v.column)));}
    else{if(dependencies[0]?.type!=='value'||node.right&&dependencies[1]?.type!=='value'||node.condition&&dependencies.at(-1)?.type!=='condition')fail();const columns=dependencies.map(v=>v.column);if(node.operation==='choose')columns[2]={...defaultColumn({label:'Condition'}),representation:'integer'};validateExactStep(graphStep(node),columns);const context=resultContext(node.output);column={...defaultColumn({label:'Result'}),representation:context.representation,radix:context.radix,unit:node.unit,quantity:node.quantity??{origin:'derived',conversion:null,calibration:null}};}
-   if(dependencies.length)column=coordinateFrameGraphColumn(node,dependencies.map(value=>value.column),column,{graphVersion:content.graphVersion});
+   if(dependencies.length)column=coordinateFrameGraphColumn(node,dependencies.map(value=>value.column),column,{graphVersion:content.graphVersion});column=spectrumGraphColumn(node,dependencies.map(value=>value.column),column);
    if(lineage&&node.kind==='domain'&&node.operation==='extract'&&dependencies[0].column.coordinateFrame)leafSet=await appendCoordinateFrameLineage(leaves,leafSet,'coordinateComponent',coordinateComponentLineage(node,position,dependencies[0].column),{signal});
    if(column.domain?.version===3&&content.graphVersion<10)fail();
    if(dependencies.length&&(content.graphVersion>=14||!['domain-reshape','domain-permute','coordinate-transform'].includes(node.kind)))column={...column,...derive(column,...dependencies.map(value=>value.column))};
