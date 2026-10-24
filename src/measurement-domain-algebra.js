@@ -3,7 +3,7 @@ import {AppError} from './errors.js';
 import {DatasetResourceBudget,numericalOperation} from './dataset-resource-budget.js';
 import {validDatasetResourcePolicy} from './web/dataset-resource-policy.js';
 import {DomainAlgebraError,domainAlgebraShape} from './web/measurement-domain-algebra-model.js';
-import {domainCodec,domainComponentCount} from './web/measurement-domain-model.js';
+import {domainCodec,domainComponentCount,domainUsesResourcePolicy} from './web/measurement-domain-model.js';
 import {defaultColumn} from './web/dataset-schema.js';
 import {blankQuantity} from './web/measurement-model.js';
 import {validatePolicyScalar,isScalarResourceFailure} from './web/measurement-scalar-policy.js';
@@ -35,7 +35,7 @@ export function domainAlgebraColumn(node,columns,{policy}={}){
  try{
   if(!validDatasetResourcePolicy(policy)||columns.length!==2||columns.some(column=>column?.representation!=='domain'))fail('MEASUREMENT_DOMAIN_UNSUPPORTED');
   const [left,right]=columns,shape=domainAlgebraShape(node.operation,left.domain,right.domain),budget=new DatasetResourceBudget(policy),units=numericalOperation(budget,b=>outputUnits(node.operation,left,right,policy,b));
-  return {...defaultColumn({label:left.name||'Value'}),...units,missing:[],representation:shape.codec?'domain':'rational',radix:10,...(shape.codec?{domain:{version:2,codec:'observanda.'+shape.codec,codecVersion:1,namespace:left.domain.namespace,shape:shape.shape,component:{...rationalContext},resourcePolicy:structuredClone(policy)}}:{resourcePolicy:structuredClone(policy)})};
+  return {...defaultColumn({label:left.name||'Value'}),...units,missing:[],representation:shape.codec?'domain':'rational',radix:10,...(shape.codec?{domain:{version:shape.codec==='tensor'?3:2,codec:'observanda.'+shape.codec,codecVersion:1,namespace:left.domain.namespace,shape:shape.shape,component:{...rationalContext},resourcePolicy:structuredClone(policy)}}:{resourcePolicy:structuredClone(policy)})};
  }catch(error){handled(error);}
 }
 // Raw cache only. Every use reparses its selected component against the same
@@ -51,10 +51,10 @@ class ComponentReader{
   const item=page.items[index-offset];if(!item||Object.keys(item).length!==1||!Object.hasOwn(item,'spelling'))fail('MATERIAL_MISSING');let spelling=item.spelling;
   numericalOperation(budget,b=>b.step());if(spelling===null)return null;
   if(typeof spelling!=='string'){
-   if(value.version!==3||!datasetCellReference(spelling))fail('MATERIAL_MISSING');const retained=spelling;spelling=(await graphScalarCell(this.materials,{kind:'string',value:retained},definition.resourcePolicy,{signal:this.signal})).value;await this.current();
+   if(![3,4].includes(value.version)||!datasetCellReference(spelling))fail('MATERIAL_MISSING');const retained=spelling;spelling=(await graphScalarCell(this.materials,{kind:'string',value:retained},definition.resourcePolicy,{signal:this.signal})).value;await this.current();
    if(createHash('sha256').update(spelling,'utf16le').digest('hex')!==retained.sha256)fail('MATERIAL_MISSING');
   }
-  if(definition.version===2)return validatePolicyScalar({spelling,representation:definition.component.representation,radix:definition.component.radix},definition.resourcePolicy,{budget});
+  if(domainUsesResourcePolicy(definition))return validatePolicyScalar({spelling,representation:definition.component.representation,radix:definition.component.radix},definition.resourcePolicy,{budget});
   if(spelling.length>8192)fail('MEASUREMENT_DOMAIN_COMPONENT_LIMIT');
   const scoped={scalarPolicy:{...this.policy,resources:{...this.policy.resources,maxScalarCharacters:Math.min(8192,this.policy.resources.maxScalarCharacters),maxExponent:Math.min(8192,this.policy.resources.maxExponent)}},maxBits:budget.maxBits,step:()=>budget.step(),size:(...v)=>budget.size(...v),product:(a,b)=>budget.product(a,b),power:(a,n)=>budget.power(a,n)};
   return numericalOperation(budget,()=>exactRational(spelling,definition.component.representation,definition.component.radix,scoped));

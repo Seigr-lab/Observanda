@@ -72,6 +72,7 @@ export class DatasetAggregation{
    const resolved=await resolveScalarDefinitions(this.materials,column(index),{signal,budget:new DatasetResourceBudget(a.resourcePolicy)});
    if(resolved.quantity?.unitDefinition?.kind==='absolute'&&a.values.some(value=>value.column===index&&value.operation==='sum'))fail();
   }
+  if(a.version<3&&source.some(column=>column.domain?.version===3))fail('DATASET_SCALAR_POLICY_VERSION');
   const columns=a.keys.map(i=>column(i)),names=new Set(columns.map(c=>c.name));
   if(a.version===1&&source.some(c=>c.representation==='domain'))fail();for(const c of source)if(c.representation==='domain')assertDomainColumn(c);
   for(const [k,index]of a.keys.entries()){const c=column(index),semantics=a.keySemantics?.[k]??'lexical';if(c.representation==='domain'&&semantics!=='domain'||semantics==='domain'&&c.representation!=='domain'||semantics==='numeric'&&!isScalarRepresentation(c))fail();}

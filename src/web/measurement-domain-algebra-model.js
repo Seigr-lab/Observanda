@@ -7,7 +7,7 @@ const fail=(code)=>{throw new DomainAlgebraError(code);};
 // each exact component is interpreted under its own pinned context.
 export function domainAlgebraShape(operation,left,right){
  if(!validDomainAlgebraOperation(operation))fail();
- for(const domain of [left,right])if(!validDomainDefinition(domain)||!knownDomain(domain)||!['vector','matrix','complex'].includes(domainCodec(domain)))fail('MEASUREMENT_DOMAIN_UNSUPPORTED');
+ for(const domain of [left,right])if(!validDomainDefinition(domain)||!knownDomain(domain)||!['vector','matrix','complex','tensor'].includes(domainCodec(domain)))fail('MEASUREMENT_DOMAIN_UNSUPPORTED');
  const codec=domainCodec(left);if(left.codec!==right.codec||left.codecVersion!==right.codecVersion||left.namespace!==right.namespace)fail();
  const same=left.shape.length===right.shape.length&&left.shape.every((n,i)=>n===right.shape[i]);
  if(['add','subtract'].includes(operation)){if(!same)fail();return {codec,shape:[...left.shape]};}
@@ -16,4 +16,15 @@ export function domainAlgebraShape(operation,left,right){
   if(codec!=='matrix'||left.shape[1]!==right.shape[0])fail();const shape=[left.shape[0],right.shape[1]];domainComponentCount({shape});return {codec:'matrix',shape};
  }
  if(codec!=='complex'||!same)fail();return {codec:'complex',shape:[2]};
+}
+
+
+// Reshape changes grouping only. The explicit shape fixes the destination codec
+// and the source's last-axis-fastest component ordinal is preserved unchanged.
+export function domainReshapeShape(source,shape){
+ if(!validDomainDefinition(source)||!knownDomain(source)||!['vector','matrix','tensor'].includes(domainCodec(source)))fail('MEASUREMENT_DOMAIN_UNSUPPORTED');
+ if(!Array.isArray(shape)||!shape.length||shape.length>16||!shape.every(n=>Number.isSafeInteger(n)&&n>0))fail();
+ let count;try{count=domainComponentCount({shape});}catch{fail();}
+ if(count!==domainComponentCount(source))fail();
+ return {codec:shape.length===1?'vector':shape.length===2?'matrix':'tensor',shape:[...shape]};
 }

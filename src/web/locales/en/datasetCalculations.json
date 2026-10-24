@@ -129,7 +129,7 @@
  "algebraLeft": "Choose left domain operand",
  "algebraRight": "Choose right domain operand",
  "algebraHelp": "Choose two earlier nodes with supported numerical domain declarations. Their declared namespace must match; labels do not define a field or coordinate system. No broadcasting or shape inference is performed. Source spellings and source references remain unchanged.",
- "algebraShapes": "Add and subtract require matching vector, matrix or complex shapes. Dot product requires equal-length vectors. Matrix product requires the left column count to equal the right row count. Multiply and divide apply to complex values; division by a zero complex value is refused.",
+ "algebraShapes": "Add and subtract require matching vector, matrix, complex or tensor shapes. Tensor addition and subtraction require explicit tensor support. Dot product requires equal-length vectors. Matrix product requires the left column count to equal the right row count. Multiply and divide apply to complex values; division by a zero complex value is refused.",
  "algebraUnits": "Uses declared unit definitions; units are never inferred from labels. Addition and subtraction convert compatible scales and offsets exactly, using the left unit (or the right absolute unit when adding a difference to an absolute value). Products compose dimensions canonically and require difference quantities. Without declared units, addition and subtraction require matching labels; products require empty labels. Incompatible shapes or units are refused without saving the edit.",
  "algebraOperands": "Choose two existing nodes that occur before this node, and a supported exact domain operation.",
  "algebra-add": "Add components",
@@ -137,5 +137,18 @@
  "algebra-dot": "Vector dot product",
  "algebra-matmul": "Matrix product",
  "algebra-multiply": "Complex multiply",
- "algebra-divide": "Complex divide"
+ "algebra-divide": "Complex divide",
+ "tensorUpgrade": "Enable tensors and reshape",
+ "tensorUpgradeHelp": "Save graph version 10 with explicit resource limits to use declared tensors and exact reshaping. Earlier graph revisions and results keep their original interpretation. Tensor arithmetic supports only addition and subtraction of equal shapes; no broadcasting or axis meaning is inferred.",
+ "reshapeAdd": "Add exact reshape",
+ "reshapeTitle": "Edit exact reshape",
+ "reshapeHelp": "Choose one earlier vector, matrix or tensor node and declare the complete target shape. The total component count must remain unchanged. Original source values and pinned references remain unchanged.",
+ "reshapeSource": "Choose source domain value",
+ "reshapeKind": "Target domain kind",
+ "reshapeShape": "Target shape (comma-separated positive whole dimensions)",
+ "reshapeOrder": "A vector has one dimension, a matrix two, and a tensor 3 to 16. Components retain their sequence with the last coordinate varying fastest. Reshaping does not transpose, reorder, broadcast or assign physical meaning to axes.",
+ "reshapeOperand": "Choose a supported vector, matrix or tensor node that occurs before this node.",
+ "reshapeShapeInvalid": "Enter exactly one dimension for a vector, two for a matrix, or 3 to 16 for a tensor. Every dimension must be a positive whole number and the total must fit exact indexing capacity.",
+ "reshapeLabel": "Reshape [{shape}]",
+ "graphWorking": "Graph operation in progress. Please wait."
 }

@@ -1,10 +1,47 @@
-import {scalarPolicyControls,readScalarPolicy,wireScalarPolicies} from './measurement-scalar-ui.js';
-import {defaultDomain,validDomainDefinition,knownDomain,domainCodec,DOMAIN_CODECS} from './measurement-domain-model.js';
+import {t} from './i18n/index.js';
+import {scalarPolicyControls,readScalarPolicy,wireScalarPolicies,scalarSpellingView} from './measurement-scalar-ui.js';
+import {readDatasetResourcePolicy} from './dataset-resource-policy-ui.js';
+import {defaultDomain,validDomainDefinition,knownDomain,domainCodec,domainComponentCount,DOMAIN_CODECS} from './measurement-domain-model.js';
 import {NUMBER_REPRESENTATIONS} from './numeral-context.js';
+const text=(key,args)=>t('measurements','domain-'+key,args);
 export function domainDescription(domain){if(!domain)return '';return domain.codec+' v'+domain.codecVersion+(knownDomain(domain)?'':' (preserved; semantic operations unavailable)')+(domain.shape.length?' ['+domain.shape.join(' \u00d7 ')+']':'')+(domain.component?' \u00b7 '+domain.component.representation+' base '+domain.component.radix:'')+(domain.namespace?' \u00b7 '+domain.namespace:'');}
-export function measurementDomainControls(domain,{esc,field,active=false}={}){
- const value=domain??defaultDomain(),select=(key,current,values)=>'<select data-domain="'+key+'">'+values.map(v=>'<option value="'+esc(v)+'"'+(v===current?' selected':'')+'>'+esc(v)+'</option>').join('')+'</select>',input=(key,value)=>'<input data-domain="'+key+'" value="'+esc(value)+'">';
- return '<div data-scalar-policy-owner="domain" data-domain-controls'+(active?'':' hidden')+' data-domain-original="'+esc(JSON.stringify(value))+'">'+(!knownDomain(value)?'<p>'+esc(domainDescription(value))+'</p><p>The unknown definition is preserved exactly. Choose a known codec explicitly to replace it.</p>':'')+field('Domain codec',select('codec',knownDomain(value)?domainCodec(value):'preserve',knownDomain(value)?DOMAIN_CODECS:['preserve',...DOMAIN_CODECS]))+field('Identity namespace',input('namespace',value.namespace))+field('Shape (comma-separated dimensions)',input('shape',value.shape.join(', ')))+field('Component interpretation',select('representation',value.component?.representation??'decimal',NUMBER_REPRESENTATIONS))+field('Component base',input('radix',value.component?.radix??10))+scalarPolicyControls(value.resourcePolicy,{esc,field,kind:'domain'})+'<p>Vector values use [a,b], matrices use [[a,b],[c,d]], complex values use [real,imaginary], and closed intervals use [lower,upper]. Declare the interval method separately; bounds do not imply statistical confidence. Quote non-decimal component spellings. Symbols preserve exact original text. Components are paged; no magnitude or ordering is inferred.</p></div>';
+export function readDomainShape(spelling,{minRank=1,maxRank=16,validate=true}={}){
+ const tokens=spelling.split(',').map(value=>value.trim()),shape=tokens.map(value=>/^[0-9]+$/.test(value)&&Number.isSafeInteger(Number(value))?Number(value):value);
+ if(validate){if(shape.length<minRank||shape.length>maxRank||!shape.every(value=>Number.isSafeInteger(value)&&value>0))throw Error(text('shapeInvalid'));try{domainComponentCount({shape});}catch{throw Error(text('shapeInvalid'));}}
+ return shape;
 }
-export function readMeasurementDomain(root,{validate=true}={}){const area=root.querySelector('[data-domain-controls]'),get=key=>area.querySelector('[data-domain="'+key+'"]').value,codec=get('codec');if(codec==='preserve')return JSON.parse(area.dataset.domainOriginal);const value=defaultDomain(codec);value.namespace=get('namespace');value.shape=codec==='symbol'?[]:['complex','interval'].includes(codec)?[2]:get('shape').split(',').map(v=>Number(v.trim()));if(value.component)value.component={version:1,representation:get('representation'),radix:['radix','radix-fraction'].includes(get('representation'))?Number(get('radix')):10};const resourcePolicy=readScalarPolicy(area,'domain',{validate});if(resourcePolicy){value.version=2;value.resourcePolicy=resourcePolicy;}if(validate&&!validDomainDefinition(value))throw Error('Declare a valid domain shape and exact component interpretation.');return value;}
-export function wireMeasurementDomains(root){const policyDispose=wireScalarPolicies(root,'domain'),controller=new AbortController();root.addEventListener('change',event=>{const column=event.target.closest('[data-material-column]');if(!column)return;const area=column.querySelector('[data-domain-controls]');if(event.target.matches('[data-schema="representation"]'))area.hidden=event.target.value!=='domain';if(event.target.matches('[data-domain="codec"]')&&event.target.value!=='preserve'){const value=defaultDomain(event.target.value);area.querySelector('[data-domain="shape"]').value=value.shape.join(', ');}}, {signal:controller.signal});return ()=>{controller.abort();policyDispose();};}
+export function measurementDomainControls(domain,{esc,field,active=false}={}){
+ const value=domain??defaultDomain(),known=knownDomain(value),codec=known?domainCodec(value):'preserve',select=(key,current,values)=>'<select data-domain="'+key+'">'+values.map(v=>'<option value="'+esc(v)+'"'+(v===current?' selected':'')+'>'+esc(v)+'</option>').join('')+'</select>',input=(key,value)=>'<input data-domain="'+key+'" value="'+esc(value)+'">';
+ return '<div data-scalar-policy-owner="domain" data-domain-controls'+(active?'':' hidden')+' data-domain-original="'+esc(JSON.stringify(value))+'">'+(!known?'<p>'+esc(domainDescription(value))+'</p><p>'+esc(text('preserve'))+'</p>':'')+field(esc(text('codec')),select('codec',codec,known?DOMAIN_CODECS:['preserve',...DOMAIN_CODECS]))+'<fieldset data-domain-fields'+(codec==='preserve'?' disabled':'')+'>'+field(esc(text('namespace')),input('namespace',value.namespace))+field(esc(text('shape')),input('shape',value.shape.join(', ')))+'<p data-domain-shape-summary role="status"></p>'+field(esc(text('component')),select('representation',value.component?.representation??'decimal',NUMBER_REPRESENTATIONS))+field(esc(text('base')),input('radix',value.component?.radix??10))+scalarPolicyControls(value.resourcePolicy,{esc,field,kind:'domain'})+'<p data-domain-policy-required'+(codec==='tensor'?'':' hidden')+'>'+esc(text('tensorPolicy'))+'</p></fieldset><p>'+esc(text('help'))+'</p><p data-domain-tensor-help'+(codec==='tensor'?'':' hidden')+'>'+esc(text('tensorHelp'))+'</p></div>';
+}
+export function readMeasurementDomain(root,{validate=true}={}){
+ const area=root.querySelector('[data-domain-controls]'),get=key=>area.querySelector('[data-domain="'+key+'"]').value,codec=get('codec');
+ if(codec==='preserve')return JSON.parse(area.dataset.domainOriginal);
+ const value=defaultDomain(codec);value.namespace=get('namespace');value.shape=codec==='symbol'?[]:['complex','interval'].includes(codec)?[2]:readDomainShape(get('shape'),{minRank:codec==='tensor'?3:codec==='matrix'?2:1,maxRank:codec==='tensor'?16:codec==='matrix'?2:1,validate});
+ if(value.component)value.component={version:1,representation:get('representation'),radix:['radix','radix-fraction'].includes(get('representation'))?Number(get('radix')):10};
+ const resourcePolicy=codec==='tensor'?readDatasetResourcePolicy(area.querySelector('[data-scalar-policy-for]'),{validate}):readScalarPolicy(area,'domain',{validate});
+ if(resourcePolicy){value.version=codec==='tensor'?3:2;value.resourcePolicy=resourcePolicy;}
+ if(validate&&!validDomainDefinition(value))throw Error(text('invalid'));return value;
+}
+export function wireMeasurementDomains(root){
+ const policyDispose=wireScalarPolicies(root,'domain'),controller=new AbortController();
+ function refresh(area){
+  const codec=area.querySelector('[data-domain="codec"]').value,tensor=codec==='tensor',preserve=codec==='preserve',enabled=area.querySelector('[data-scalar-policy-enabled]'),values=area.querySelector('[data-scalar-policy-values]');
+  area.querySelector('[data-domain-fields]').disabled=preserve;enabled.disabled=tensor;if(tensor)enabled.checked=true;values.hidden=!enabled.checked;values.disabled=!enabled.checked;
+  area.querySelector('[data-domain-policy-required]').hidden=!tensor;area.querySelector('[data-domain-tensor-help]').hidden=!tensor;
+  const summary=area.querySelector('[data-domain-shape-summary]');summary.textContent='';if(!preserve&&codec!=='symbol')try{const shape=['complex','interval'].includes(codec)?[2]:readDomainShape(area.querySelector('[data-domain="shape"]').value,{minRank:tensor?3:codec==='matrix'?2:1,maxRank:tensor?16:codec==='matrix'?2:1});summary.textContent=text('shapeSummary',{rank:shape.length,count:domainComponentCount({shape})});}catch{summary.textContent=text('shapeInvalid');}
+ }
+ root.addEventListener('change',event=>{
+  const column=event.target.closest('[data-material-column]'),area=event.target.closest('[data-domain-controls]')??column?.querySelector('[data-domain-controls]');if(!area)return;
+  if(event.target.matches('[data-schema="representation"]'))area.hidden=event.target.value!=='domain';
+  if(event.target.matches('[data-domain="codec"]')&&event.target.value!=='preserve'){const value=defaultDomain(event.target.value);area.querySelector('[data-domain="shape"]').value=value.shape.join(', ');}
+  refresh(area);
+ },{signal:controller.signal});
+ root.addEventListener('input',event=>{const area=event.target.closest('[data-domain-controls]');if(area&&event.target.matches('[data-domain="shape"]'))refresh(area);},{signal:controller.signal});
+ for(const area of root.querySelectorAll('[data-domain-controls]'))refresh(area);
+ return ()=>{controller.abort();policyDispose();};
+}
+export function domainComponentPageView(page,{esc}){
+ const range=text('componentRange',{first:page.items.length?page.offset+1:0,last:page.offset+page.items.length,total:page.total});
+ return '<section data-domain-components><p>'+esc(range)+'</p>'+(page.supported&&page.definition.codec==='observanda.tensor'&&knownDomain(page.definition)?'<p>'+esc(text('tensorOrder'))+'</p>':'')+'<table><caption>'+esc(text('coordinates'))+'</caption><thead><tr><th scope="col">'+esc(text('position'))+'</th><th scope="col">'+esc(text('spelling'))+'</th><th scope="col">'+esc(text('exact'))+'</th></tr></thead><tbody>'+page.items.map(item=>'<tr><th scope="row">'+esc(page.definition.codec==='observanda.interval'?t('measurements',item.index===0?'intervalLower':'intervalUpper'):item.position.map(i=>i+1).join(', '))+'</th><td>'+(item.spelling==null?esc(t('measurements','null')):scalarSpellingView(item.spelling,{esc,component:item.index}))+'</td><td>'+esc(item.exact??text('unavailable'))+'</td></tr>').join('')+'</tbody></table>'+[page.offset?Math.max(0,page.offset-32):null,page.next].map((at,index)=>at===null?'':'<button type="button" class="button" data-action="material-measurement-components" data-offset="'+at+'">'+esc(text(index?'nextComponents':'previousComponents'))+'</button>').join('')+'</section>';
+}

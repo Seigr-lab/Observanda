@@ -62,6 +62,13 @@ dialog:has(> .material-workbench) { position:fixed; inset:1rem; margin:auto; max
 .measurement-details pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:24rem; overflow:auto; }
 .measurement-details dd { margin-inline-start:0; margin-block-end:.6rem; }
 .measurement-details dt { font-weight:600; }
+/* Surrounding observations keep source controls reachable without horizontal scrolling. */
+.measurement-details .measurement-surrounding table { width:100%; table-layout:fixed; }
+.measurement-details .measurement-surrounding th,.measurement-details .measurement-surrounding td { min-width:0; padding:.4rem .35rem; white-space:normal; overflow-wrap:anywhere; vertical-align:top; }
+.measurement-details .measurement-surrounding thead th:first-child { width:16%; }
+.measurement-details .measurement-surrounding thead th:last-child { width:30%; }
+.measurement-surrounding-value { display:flex; flex-direction:column; align-items:flex-start; gap:.4rem; min-width:0; }
+.measurement-surrounding-value > span,.measurement-surrounding-value > .button { max-width:100%; min-width:0; white-space:normal; overflow-wrap:anywhere; }
 [data-provenance-reference] { border-top:1px solid var(--border); padding:.7rem 0; min-width:0; overflow-wrap:anywhere; }
 [data-provenance-reference] p { font-size:.85em; }
 .material-schema-column .material-fields > details { grid-column:1/-1; min-width:0; }
@@ -82,3 +89,7 @@ dialog:has(> .material-workbench) { position:fixed; inset:1rem; margin:auto; max
 
 .material-workbench fieldset[data-sync-controls] { border:0; margin:0; padding:0; }
 .material-workbench [data-sync-status] { flex-basis:100%; margin:0; text-align:start; }
+
+.material-workbench fieldset[data-graph-controls] { border:0; margin:0; padding:0; min-width:0; }
+.material-workbench [data-graph-actions] { display:flex; flex-wrap:wrap; gap:.5rem; }
+.material-workbench [data-graph-status] { flex-basis:100%; margin:0; text-align:start; }

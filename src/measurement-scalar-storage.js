@@ -28,7 +28,7 @@ export function scalarDefinitionEntries(value){
  return result;
 }
 export function* scalarDefinitionSequences(value){for(const entry of scalarDefinitionEntries(value))if(scalarTextReference(entry.scalar.spelling))yield entry.scalar.spelling.parts;}
-export function measurementScalarPolicies(value){return !!value&&(value.resourcePolicy!==undefined||value.domain?.version===2||scalarDefinitionEntries(value).length>0);}
+export function measurementScalarPolicies(value){return !!value&&(value.resourcePolicy!==undefined||[2,3].includes(value.domain?.version)||scalarDefinitionEntries(value).length>0);}
 function semantic(value,budget){validateMeasurementDeclaration(value,{budget});if(value?.scale&&value?.offset)validateUnitDefinition(value,{budget});if(value?.version&&Object.hasOwn(value,'modulus'))validateClockDefinition(value,{budget});if(value?.kind==='declared-interval'||value?.kind==='derived-enclosure')validateIntervalUncertainty(value,{budget});if(value?.kind==='constant'&&value.value?.quantity)validateMeasurementDeclaration(value.value,{budget});}
 export async function resolveScalarDefinitions(materials,value,{signal,budget}={}){
  const result=structuredClone(value),{graphScalarCell}=await import('./dataset-resource-values.js');
