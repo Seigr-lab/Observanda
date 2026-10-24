@@ -5,6 +5,7 @@ import os from 'node:os';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {sampleNotebook} from '../../src/sample.js';
 import {ResearchMaterials} from '../../src/research-materials.js';
+import {CalculationGraphs} from '../../src/calculation-graphs.js';
 import {defaultColumn} from '../../src/web/dataset-schema.js';
 import {defaultDomain} from '../../src/web/measurement-domain-model.js';
 import {domainValuePage} from '../../src/measurement-domain-storage.js';
@@ -18,14 +19,15 @@ test('author exact vector arithmetic, recover refused shapes and retain independ
  try{
   const values=[['10','0.3'],['1','0.3'],['1','2','3']],csv=value=>'"'+JSON.stringify(value).replaceAll('"','""')+'"',bytes=Buffer.from('Left,Right,Wrong shape\n'+values.map(csv).join(',')),pending=await m.startImport({recordId,name:'operands.csv',size:bytes.length});await m.appendImport(pending.id,0,[bytes]);
   const source=await m.dataset({recordId,title:'Algebra operands',artifact:await m.finishImport(pending.id),columns:values.map((value,index)=>({...defaultColumn({label:['Left','Right','Wrong shape'][index]}),representation:'domain',domain:{...defaultDomain('vector'),namespace:'declared-coordinate-space',shape:[value.length],component:{version:1,representation:'radix-fraction',radix:6}}}))});
+  const historicalGraph=await new CalculationGraphs(m).create({recordId,title:'Calculation graph',source,graphVersion:2});
   app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,headless:true,preferencesFile:path.join(directory,'preferences.json')});
   await page.goto(app.url);await expect(page.getByRole('button',{name:'Preferences',exact:true})).toBeVisible();await page.evaluate(id=>location.hash='#/records/'+id,recordId);await page.getByRole('button',{name:'Open evidence & analysis'}).click();const dialog=page.locator('#dialog');
-  await dialog.locator('.material-list li').filter({hasText:'Algebra operands'}).getByRole('button',{name:'Inspect',exact:true}).click();await dialog.getByRole('button',{name:'Calculate derived dataset',exact:true}).click();
+  await dialog.locator('.material-list li').filter({hasText:historicalGraph.revision.slice(0,12)}).getByRole('button',{name:'Inspect',exact:true}).click();await dialog.getByRole('button',{name:'Edit calculation graph',exact:true}).click();
   const choose=async(key,index)=>{await dialog.locator('[data-action="material-calculation-graph-pick"][data-target="'+key+'"]').click();await dialog.locator('[data-graph-picker] [data-action="material-calculation-graph-choose"]').nth(index).click();},save=()=>dialog.getByRole('button',{name:'Save edit',exact:true}).click();
   for(let index=0;index<3;index++){await dialog.getByRole('button',{name:'Add column',exact:true}).click();await choose('binding',0);await dialog.locator('[data-graph-field="column"]').fill(String(index+1));await save();}
   await dialog.locator('[data-action="material-calculation-graph-domain-algebra"]').click();await dialog.locator('[data-action="material-calculation-graph-apply-domain-algebra"]').click();await expect(dialog.locator('[data-action="material-calculation-graph-add"][data-kind="domain-arithmetic"]')).toBeVisible();
   const graphHead=async()=>{const items=(await m.list({recordId,kind:'analysis'})).items;return items.find(item=>item.title==='Calculation graph');};
-  const before=await graphHead();expect((await m.read(before)).content.graphVersion).toBe(8);
+  const before=await graphHead();expect((await m.read(before)).content.graphVersion).toBe(8);expect((await m.read(historicalGraph)).content.graphVersion).toBe(2);
   await dialog.locator('[data-action="material-calculation-graph-add"][data-kind="domain-arithmetic"]').click();await choose('left',0);await choose('right',2);await save();await expect(page.locator('#notice')).toContainText('different declared domains, shapes, or coordinate namespaces');await expect(dialog.locator('[data-graph-edit]')).toBeVisible();expect((await graphHead()).revision).toBe(before.revision);
   await choose('right',1);await save();await expect(dialog.getByRole('button',{name:'nodes (4)',exact:true})).toBeVisible();
   await dialog.locator('[data-action="material-calculation-graph-add"][data-kind="domain-arithmetic"]').click();await dialog.locator('[data-graph-field="operation"]').selectOption('dot');await choose('left',0);await choose('right',1);await save();
