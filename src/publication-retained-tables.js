@@ -1,3 +1,4 @@
+import {aggregationQuantileContextParts} from './web/dataset-aggregation-context.js';
 import {clockSynchronizationContextParts} from './web/measurement-clock-context.js';
 import {computationLabel} from './web/measurement-computation.js';
 import {domainDescription} from './web/measurement-domain-ui.js';
@@ -26,6 +27,7 @@ export async function* retainedTableHTML(materials,statement,{signal}={}){
    if(uncertainty){yield esc(' [Interval method: '+uncertainty.method.name+'; version '+uncertainty.method.version+(uncertainty.method.reference?'; reference '+uncertainty.method.reference.revision:''));
     if(uncertainty.coverage){const level=uncertainty.coverage.level;yield esc('; '+uncertainty.coverage.kind+' ');for await(const text of cellText(materials,level.spelling,{signal}))yield esc(text);yield esc(' ('+level.representation+' base '+level.radix+')');}else yield esc('; no statistical coverage declared');yield ']';
    }
+   if(format.quantile){yield ' [';for(const part of aggregationQuantileContextParts(format.quantile)){if(typeof part==='string')yield esc(part);else for await(const text of cellText(materials,part.spelling,{signal}))yield esc(text);}yield ']';}
    if(format.synchronization){yield ' [';for(const part of clockSynchronizationContextParts(format.synchronization)){if(typeof part==='string')yield esc(part);else for await(const text of cellText(materials,part.spelling,{signal}))yield esc(text);}yield ']';}
    if(['radix','radix-fraction'].includes(format.representation))yield esc(' ('+messages.base.replace('{radix}',format.radix)+')');yield '</th>';
   }

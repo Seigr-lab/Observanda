@@ -18,7 +18,7 @@ export const aggregationWorkFile=id=>{
 export class AggregationWork{
  constructor(materials,command,{jobId,writePage,signal}){
   this.workspace=materials.workspace;this.sequences=materials.sequences;this.file=aggregationWorkFile(jobId);
-  this.commandHash=digest(revisionText(command));this.signal=signal;
+  this.version=command.aggregation?.version===4?4:3;this.commandHash=digest(revisionText(command));this.signal=signal;
   this.write=writePage??(fn=>this.workspace.withLock(()=>withWorkspaceMetadataBatch(this.workspace,fn)));
   this.pending=new Map();this.bytes=0;this.edits=0;this.root=null;this.saved=null;this.cache=new Map();this.cacheBytes=0;
   this.values=new Map();this.valueBytes=0;
@@ -31,7 +31,7 @@ export class AggregationWork{
   if(raw===null)return this;
   let value;try{value=JSON.parse(raw);}catch{fail();}
   if(value?.commandHash!==this.commandHash)throw new AppError('MATERIAL_CHANGED');
-  if(value.version!==3||!validTableRef(value.root)||!['input','median','members','rows'].includes(value.phase)||
+  if(value.version!==this.version||!validTableRef(value.root)||!['input','median','members','rows'].includes(value.phase)||
    !natural(value.groups)||!natural(value.order)||value.groups>value.order||value.order>total||Boolean(value.groups)!==Boolean(value.order)||
    (value.phase!=='input'&&value.order!==total)||Boolean(value.order)!==Boolean(value.last)||Boolean(value.order)!==Boolean(value.root)||
    value.last&&(!natural(value.last.page)||!natural(value.last.row)))fail();
@@ -96,7 +96,7 @@ export class AggregationWork{
  }
  async save(state){
   await this.flush();this.signal?.throwIfAborted();
-  const value={version:3,commandHash:this.commandHash,root:this.root,...state};
+  const value={version:this.version,commandHash:this.commandHash,root:this.root,...state};
   await this.write(async()=>{this.signal?.throwIfAborted();await this.workspace.writeMetadata(this.file,serialize(value));});
   this.saved=value;
  }

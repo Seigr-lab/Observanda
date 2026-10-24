@@ -1,3 +1,5 @@
+import {aggregationQuantileContextText} from './web/dataset-aggregation-context.js';
+import {resolveScalarOperand} from './measurement-scalar-storage.js';
 import {resolveScalarDefinitions} from './measurement-scalar-storage.js';
 import {clockSynchronizationContextText} from './web/measurement-clock-context.js';
 import {computationLabel} from './web/measurement-computation.js';
@@ -22,7 +24,8 @@ async function readRetainedTable(materials,{ref,selection,version=2}){
  const doc=await materials.read(ref),columns=await materials.datasetColumns(doc);
  if(selection.columns.some(i=>i>=columns.length))throw new AppError('DATASET_TABLE');
  for(const index of selection.columns)if(columns[index].synchronization)columns[index]={...columns[index],...(await resolveScalarDefinitions(materials,{synchronization:columns[index].synchronization}))};
- const table={version,selection,headers:selection.columns.map(i=>columns[i].name+(columns[i].unit?' ['+columns[i].unit+']':'')+(computationLabel(columns[i])?' ['+computationLabel(columns[i])+']':'')+(columns[i].synchronization?' ['+clockSynchronizationContextText(columns[i].synchronization)+']':'')),rows:[],...(version===2?{formats:selection.columns.map(i=>({representation:columns[i].representation,radix:columns[i].radix,...(columns[i].domain?{domain:columns[i].domain}:{})}))}:{})};let count=0;
+ const quantileContexts=new Map();for(const index of selection.columns)quantileContexts.set(index,await legacyQuantileContext(materials,doc,index));
+ const table={version,selection,headers:selection.columns.map(i=>columns[i].name+(columns[i].unit?' ['+columns[i].unit+']':'')+(computationLabel(columns[i])?' ['+computationLabel(columns[i])+']':'')+(columns[i].synchronization?' ['+clockSynchronizationContextText(columns[i].synchronization)+']':'')+(quantileContexts.get(i)?' ['+quantileContexts.get(i)+']':'')),rows:[],...(version===2?{formats:selection.columns.map(i=>({representation:columns[i].representation,radix:columns[i].radix,...(columns[i].domain?{domain:columns[i].domain}:{})}))}:{})};let count=0;
  for await(const row of materials.iterateDataset(ref)){
   if(row.excluded&&!selection.includeExcluded)continue;if(count++<selection.offset)continue;
   table.rows.push({cells:selection.columns.map(i=>row.cells[i]),presence:selection.columns.map(i=>['null','absent'].includes(row.valueKinds?.[i])?row.valueKinds[i]:columns[i].missing.some(m=>m.value===row.cells[i])?'missing':'value'),exclusion:row.excluded??null});
@@ -40,12 +43,21 @@ export async function retainedTableSource(materials,ref,selection){
  if(!columnCount||selection.columns!=='all'&&selection.columns.some(i=>i>=columnCount)||selection.offset>=doc.content.rowCount)throw new AppError('DATASET_TABLE');
  return {doc,columnCount,selectedColumns:selection.columns==='all'?columnCount:selection.columns.length};
 }
+function quantileMetric(doc,index){
+ const recipe=doc.content.aggregation,metric=recipe?.version===4?recipe.values[index-recipe.keys.length]:null;
+ return metric?.operation==='quantile'?{method:metric.method,probability:metric.probability}:null;
+}
+async function legacyQuantileContext(materials,doc,index){
+ const quantile=quantileMetric(doc,index);if(!quantile)return '';
+ const probability=quantile.probability,policy=doc.content.aggregation.resourcePolicy,cell=await resolveScalarOperand(materials,{kind:'string',value:probability.spelling},{representation:probability.representation,radix:probability.radix,missing:[],resourcePolicy:policy},{policy});
+ return aggregationQuantileContextText({...quantile,probability:{...probability,spelling:cell.value}});
+}
 const natural=n=>Number.isSafeInteger(n)&&n>=0;
 async function tableColumns(materials,source,selection,offset,limit){
  if(!natural(offset)||offset>=source.selectedColumns||!Number.isInteger(limit)||limit<1||limit>16)throw new AppError('DATASET_TABLE');
  const indices=selection.columns==='all'?Array.from({length:Math.min(limit,source.selectedColumns-offset)},(_,i)=>offset+i):selection.columns.slice(offset,offset+limit),columns=[];
  for(const index of indices)columns.push((await materials.retainedSchemaPage(source.doc,{offset:index,limit:1})).items[0]);
- return {indices,columns};
+ return {indices,columns,quantiles:indices.map(index=>quantileMetric(source.doc,index))};
 }
 // Current datasets seek indexed ranks. Legacy filtered sources scan only the
 // first offset, then authenticated physical anchors continue without replay.
@@ -70,18 +82,18 @@ async function* tableRows(materials,source,selection,indices,{offset=0,limit=Inf
  }
 }
 function presence(row,columns){return row.cells.map((cell,i)=>['null','absent'].includes(row.valueKinds[i])?row.valueKinds[i]:typeof cell==='string'&&columns[i].missing.some(m=>m.value===cell)?'missing':'value');}
-function tableBlock(columns,rows,selection){return {version:2,selection:{includeExcluded:selection.includeExcluded},headers:columns.map(c=>c.name+(c.unit?' ['+c.unit+']':'')),formats:columns.map(c=>({representation:c.representation,radix:c.radix,...(c.domain?{domain:c.domain}:{}),...(c.quantity?.uncertainty?{uncertainty:c.quantity.uncertainty}:{}),...(c.computation?{computation:c.computation}:{}),...(c.synchronization?{synchronization:c.synchronization}:{})})),rows:rows.map(row=>({...row,presence:presence(row,columns)}))};}
+function tableBlock(columns,rows,selection,quantiles=[]){return {version:2,selection:{includeExcluded:selection.includeExcluded},headers:columns.map(c=>c.name+(c.unit?' ['+c.unit+']':'')),formats:columns.map((c,index)=>({...(quantiles[index]?{quantile:quantiles[index]}:{}),representation:c.representation,radix:c.radix,...(c.domain?{domain:c.domain}:{}),...(c.quantity?.uncertainty?{uncertainty:c.quantity.uncertainty}:{}),...(c.computation?{computation:c.computation}:{}),...(c.synchronization?{synchronization:c.synchronization}:{})})),rows:rows.map(row=>({...row,presence:presence(row,columns)}))};}
 export const retainedTablePage=(materials,command,options)=>tableReads(materials,()=>readTablePage(materials,command,options));
 async function readTablePage(materials,{ref,table,offset,cursor,limit=16,columnOffset=0,columnLimit=8},{signal}={}){
  if(!validRetainedTable(table)||table.version!==3||offset!==undefined&&!natural(offset)||!Number.isInteger(limit)||limit<1||limit>32)throw new AppError('DATASET_TABLE');
  const source=await retainedTableSource(materials,ref,table.selection),anchor=cursor===undefined?null:await readTableCursor(materials,ref,table,cursor,source,offset);
  offset=anchor?.offset??offset??0;
- const {indices,columns}=await tableColumns(materials,source,table.selection,columnOffset,columnLimit),rows=[],reverse=anchor?.direction==='backward';
+ const {indices,columns,quantiles}=await tableColumns(materials,source,table.selection,columnOffset,columnLimit),rows=[],reverse=anchor?.direction==='backward';
  for await(const row of tableRows(materials,source,table.selection,indices,{offset,anchor,limit:limit+1,signal}))rows.push(row);
  const extra=rows.length>limit?rows.pop():null;if(reverse)rows.reverse();
  const nextRow=reverse?anchor:extra,next=nextRow?.offset??null;offset=rows[0]?.offset??offset;
  const tokens=await tableCursors(materials,ref,table,[...rows.map(row=>({...row,direction:'forward'})),nextRow?{...nextRow,direction:'forward'}:null,offset&&rows.length?{...rows[0],direction:'backward'}:null]);
- const nextCursor=tokens[rows.length],previousCursor=tokens[rows.length+1],block=tableBlock(columns,rows,table.selection);
+ const nextCursor=tokens[rows.length],previousCursor=tokens[rows.length+1],block=tableBlock(columns,rows,table.selection,quantiles);
  for(let r=0;r<block.rows.length;r++){const row=block.rows[r];row.cursor=tokens[r];row.cellWindows=[];for(let i=0;i<row.cells.length;i++){const cell=await retainedCellWindow(materials,row.cells[i],{offset:0,limit:1024,signal});row.cells[i]=cell.value;row.cellWindows.push({next:cell.next,total:cell.total});}}
  return {table:block,columns,columnIndices:indices,offset,next,cursor:tokens[0]??null,nextCursor,previousCursor,columnOffset,columnCount:source.selectedColumns,columnNext:columnOffset+indices.length<source.selectedColumns?columnOffset+indices.length:null};
 }
@@ -91,11 +103,11 @@ export async function* retainedTableBlocks(materials,{ref,table},{signal}={}){
  if(!validRetainedTable(table)||table.version!==3)throw new AppError('DATASET_TABLE');
  const source=await retainedTableSource(materials,ref,table.selection);
  for(let columnOffset=0;columnOffset<source.selectedColumns;columnOffset+=8){
-  const {indices,columns}=await tableColumns(materials,source,table.selection,columnOffset,8);let rows=[],offset=0;
+  const {indices,columns,quantiles}=await tableColumns(materials,source,table.selection,columnOffset,8);let rows=[],offset=0;
   for await(const row of tableRows(materials,source,table.selection,indices,{signal})){
-   rows.push(row);if(rows.length===16){yield {offset,columnOffset,columnIndices:indices,table:tableBlock(columns,rows,table.selection)};offset+=rows.length;rows=[];}
+   rows.push(row);if(rows.length===16){yield {offset,columnOffset,columnIndices:indices,table:tableBlock(columns,rows,table.selection,quantiles)};offset+=rows.length;rows=[];}
   }
-  if(rows.length)yield {offset,columnOffset,columnIndices:indices,table:tableBlock(columns,rows,table.selection)};
+  if(rows.length)yield {offset,columnOffset,columnIndices:indices,table:tableBlock(columns,rows,table.selection,quantiles)};
  }
 }
 

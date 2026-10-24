@@ -1,0 +1,51 @@
+import {aggregationQuantileDetails} from '../src/dataset-aggregation-members.js';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {configurationCatalogueFeatures,configurationCatalogueGeneration,CATALOGUE_MAX_GENERATION,restoreConfigurationCatalogueFormat} from '../src/catalogue-format.js';
+import {quantileAggregationMetadata} from '../src/quantile-aggregation-format.js';
+import {measurementScalarMetadata} from '../src/measurement-scalar-format.js';
+import {datasetResourceMetadata} from '../src/dataset-resource-format.js';
+import {DatasetAggregation} from '../src/dataset-aggregation.js';
+import {validAggregation,validQuantileReceipt} from '../src/web/dataset-aggregation-model.js';
+import {prepareAggregationScalars,retainAggregationReceipts,resolveAggregationReceipts} from '../src/dataset-aggregation-quantiles.js';
+import {scalarDefinitionSequences,readScalarDefinition} from '../src/measurement-scalar-storage.js';
+import {defaultDatasetResourcePolicy} from '../src/web/dataset-resource-policy.js';
+import {defaultColumn} from '../src/web/dataset-schema.js';
+import {MaterialSequence} from '../src/material-sequence.js';
+const base={website:0,staged:false,owners:0,publication:false,transfers:false},source={kind:'dataset',id:randomUUID(),revision:'a'.repeat(64)},recordId=randomUUID(),scalar=spelling=>({spelling,representation:'rational',radix:10}),policy=()=>{const p=defaultDatasetResourcePolicy();Object.assign(p.resources,{maxScalarCharacters:65536,maxOperations:1000000,maxMilliseconds:30000});return p;};
+const recipe=(p=policy())=>({version:4,source,keys:[0],values:[{column:1,operation:'quantile',name:'Quarter',method:'linear-n-minus-one-v1',probability:scalar('1/4')}],missing:'skip',note:'Explicit quantile.',resourcePolicy:p});
+const memory=()=>{const values=new Map();return {get:async key=>structuredClone(values.get(key)),put:async(key,value)=>values.set(key,structuredClone(value)),removeMany:async keys=>keys.forEach(key=>values.delete(key))};};
+function fixture(rows=[]){const data=new Map(),workspace={readMetadata:async key=>data.get(key)??null,writeMetadata:async(key,text)=>data.set(key,text)},columns=[defaultColumn({label:'Group'}),{...defaultColumn({label:'Value'}),representation:'integer'}],doc={kind:'dataset',content:{columns,rowCount:rows.length}},materials={workspace,sequences:new MaterialSequence(workspace),assertOwner:async()=>{},read:async()=>doc,datasetColumn:async(doc,index)=>columns[index],datasetPageCount:()=>1,retainedDatasetPage:async(doc,page,{columns:indices})=>({rows:rows.map(row=>({...row,cells:indices.map(i=>row.cells[i]),valueKinds:indices.map(i=>row.valueKinds?.[i]??'string'),columnIndices:indices}))})};return {materials,columns,data,engine:new DatasetAggregation(materials)};}
+async function collect(f,a){const schema=await f.engine.schema(a),rows=[];for await(const row of f.engine.rows({aggregation:a},schema,{work:memory()}))if(!row.columns)rows.push(row);return rows;}
+test('quantile, tensor and clock capabilities remain independent through restore and inherited admission',async()=>{
+ for(const quantileAggregation of [false,true])for(const tensorValues of [false,true])for(const clockSynchronization of [false,true]){const features={...base,quantileAggregation,tensorValues,clockSynchronization},format=configurationCatalogueGeneration(features);assert.deepEqual(configurationCatalogueFeatures(format),{...base,...(clockSynchronization?{clockSynchronization:true}:{}),...(tensorValues?{tensorValues:true}:{}),...(quantileAggregation?{quantileAggregation:true}:{})});let stored=122;const db={all:async()=>[{version:String(stored)}],get:async()=>null,run:async(sql,...values)=>{if(sql.startsWith('UPDATE catalogue_format'))stored=values[0];}};await restoreConfigurationCatalogueFormat(db,format);assert.equal(stored,format);}
+ const all=Object.fromEntries(Object.keys(configurationCatalogueFeatures(CATALOGUE_MAX_GENERATION)).map(key=>[key,key==='website'?3:key==='owners'?2:true]));assert.equal(configurationCatalogueGeneration(all),CATALOGUE_MAX_GENERATION);
+ for(const [name,value]of [['.observanda/materials/objects/id/rev',{content:{aggregation:recipe()}}],['.observanda/jobs/id.json',{input:{command:{aggregation:recipe()}}}]])for(const classify of [quantileAggregationMetadata,measurementScalarMetadata,datasetResourceMetadata])assert.equal(classify(name,value),true);
+ assert.equal(quantileAggregationMetadata('.observanda/materials/aggregation-work/id',{version:4}),true);assert.equal(quantileAggregationMetadata('.observanda/materials/tables/hash',[{aggregation:[{quantile:null}]}]),true);assert.equal(quantileAggregationMetadata('.observanda/custom/id',{content:{aggregation:recipe()}}),false);
+});
+test('quantile uses exact interpolation, stable source order and explicit empty receipts without changing old median recipes',async()=>{
+ const f=fixture([{cells:['a','10']},{cells:['a','2']},{cells:['a','2']},{cells:['a','50'],excluded:'rejected'},{cells:['a','']},{cells:['b','']},{cells:['c','9']}]),a=recipe();a.values.push({column:1,operation:'median',name:'Median'});
+ assert.equal(validAggregation(a),true);for(const version of [1,2,3]){const old={...a,version};if(version<3)delete old.resourcePolicy;assert.equal(validAggregation(old),false);const median={...old,values:[a.values[1]]};assert.equal(validAggregation(median),true);assert.deepEqual((await collect(f,median)).map(row=>row.cells),[['a','2/1'],['b',''],['c','9/1']]);}
+ const rows=await collect(f,a);assert.deepEqual(rows.map(row=>row.cells),[['a','2/1','2/1'],['b','',''],['c','9/1','9/1']]);assert.deepEqual(rows[0].aggregation[0],{included:3,excluded:1,missing:1,total:5,quantile:{version:1,method:'linear-n-minus-one-v1',lower:{rank:0,member:1},upper:{rank:1,member:2},weight:scalar('1/2')}});assert.equal(rows[1].aggregation[0].quantile,null);assert.deepEqual(rows[2].aggregation[0].quantile.lower,{rank:0,member:0});assert.deepEqual(rows[2].aggregation[0].quantile.weight,scalar('0/1'));
+ for(const spelling of ['-1/4','5/4','1/0'])await assert.rejects(f.engine.schema({...a,values:[{...a.values[0],probability:scalar(spelling)}]}));assert.equal(validAggregation({...a,values:[{...a.values[1],probability:scalar('1/2')}]}),false);assert.equal(validQuantileReceipt(null,a.resourcePolicy,1,1),false);
+});
+test('long probability normalizes before durable queue persistence and retries preserve identity without a larger job cap',async()=>{
+ const f=fixture(),a=recipe(),long='0'.repeat(40000)+'1/2';a.values=Array.from({length:32},(_,i)=>({...a.values[0],name:'Q '+i,probability:scalar(long)}));const command={recordId,title:'Long probabilities',aggregation:a},id=randomUUID(),jobs=new Map();
+ const queue={read:async id=>jobs.get(id)??null,transaction:async fn=>fn(),enqueueLocked:async intent=>{const previous=jobs.get(intent.id);if(previous){assert.deepEqual(intent.input,previous.input);return previous;}const job={...intent,state:'queued',createdAt:new Date().toISOString()};jobs.set(intent.id,job);return job;}};
+ f.materials.validateDataset=async()=>{};f.materials.workspace.catalogue=async fn=>fn({object:async()=>null,putObject:async()=>{},objectIdPage:async()=>[]});f.materials.workspace.afterCommit=async fn=>fn();
+ // Exercise normalization used by enqueue independently of the feed's catalogue index.
+ const first=await prepareAggregationScalars(f.materials,{...command,id,expectedRevision:null},{write:fn=>queue.transaction(fn)}),second=await prepareAggregationScalars(f.materials,{...command,id,expectedRevision:null},{write:fn=>queue.transaction(fn),base:first.aggregation});assert.deepEqual(second,first);assert.ok(Buffer.byteLength(JSON.stringify({input:{command:first}}))<1048576);assert.ok(first.aggregation.values.every(v=>v.probability.spelling.format==='dataset-cell'));
+ assert.equal((await readScalarDefinition(f.materials,{aggregation:first.aggregation},'aggregation.values.31.probability.spelling',{offset:39996,limit:7})).text,'00001/2');
+ const moved={...first,aggregation:{...first.aggregation,values:[first.aggregation.values[31]]}};assert.deepEqual((await prepareAggregationScalars(f.materials,moved,{write:fn=>fn(),base:first.aggregation})).aggregation,moved.aggregation);await assert.rejects(prepareAggregationScalars(f.materials,moved,{write:fn=>fn()}),{code:'MATERIAL_INVALID'});
+ const receipt={included:2,excluded:0,missing:0,total:2,quantile:{version:1,method:'linear-n-minus-one-v1',lower:{rank:0,member:0},upper:{rank:1,member:1},weight:scalar('1/'+'9'.repeat(5000))}},retained=await retainAggregationReceipts(f.materials,[receipt],a.resourcePolicy,fn=>fn());assert.equal(retained[0].quantile.weight.spelling.format,'dataset-cell');assert.equal([...scalarDefinitionSequences({aggregation:retained})].length,1);assert.deepEqual(await resolveAggregationReceipts(f.materials,retained,a.resourcePolicy),[receipt]);
+ const damaged=structuredClone(retained);damaged[0].quantile.weight.spelling.sha256='0'.repeat(64);await assert.rejects(resolveAggregationReceipts(f.materials,damaged,a.resourcePolicy),{code:'MATERIAL_MISSING'});
+});
+
+test('selected receipt inspection resolves only its own retained probability',async()=>{
+ const f=fixture(),a=recipe();a.values=[{...a.values[0],probability:scalar('0'.repeat(9000)+'1/2')},{...a.values[0],name:'Other probability',probability:scalar('0'.repeat(9000)+'1/3')}];
+ const normalized=await prepareAggregationScalars(f.materials,{recordId,aggregation:a},{write:fn=>fn()}),other=normalized.aggregation.values[1].probability.spelling.parts.root.hash,read=f.materials.workspace.readMetadata;let selectedReads=0;
+ f.materials.workspace.readMetadata=async name=>{assert.ok(!name.includes(other),'A selected receipt must not hydrate another metric probability');selectedReads++;return read(name);};
+ const counts=()=>({included:0,excluded:0,missing:1,total:1,quantile:null}),detail=await aggregationQuantileDetails(f.materials,{content:{aggregation:normalized.aggregation}},{aggregation:[counts(),counts()],aggregationMembers:{offset:0,count:1}},0);
+ assert.equal(detail.metricIndex,0);assert.equal(detail.quantile,null);assert.deepEqual(detail.probability,normalized.aggregation.values[0].probability);assert.ok(selectedReads>0);
+});
