@@ -329,5 +329,8 @@
   "domain-tensorOrder": "The last coordinate varies fastest. Coordinates identify components within the declared shape; no physical axis meaning is inferred.",
   "domain-spelling": "Original spelling",
   "domain-nextComponents": "Next components",
-  "domain-previousComponents": "Previous components"
+  "domain-previousComponents": "Previous components",
+  "unitPublicContext": "Declared {kind}; dimensions {dimensions}; scale {scale}; offset {offset}. Canonical value = value * scale + offset.",
+  "unitPublicScalar": " ({representation}, base {radix})",
+  "unitPublicRetained": "retained scalar; inspect the source declaration"
 }

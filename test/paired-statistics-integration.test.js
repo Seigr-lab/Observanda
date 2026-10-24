@@ -1,0 +1,44 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {DatasetAggregation,inspectAggregation} from '../src/dataset-aggregation.js';
+import {validateAggregationReceipts,prepareAggregationScalars} from '../src/dataset-aggregation-quantiles.js';
+import {MaterialSequence} from '../src/material-sequence.js';
+import {defaultColumn} from '../src/web/dataset-schema.js';
+import {defaultDatasetResourcePolicy} from '../src/web/dataset-resource-policy.js';
+import {blankUnitDefinition} from '../src/web/measurement-unit-model.js';
+import {retainDatasetCell} from '../src/dataset-cell-storage.js';
+import {readScalarDefinition,resolveScalarDefinitions} from '../src/measurement-scalar-storage.js';
+const source={kind:'dataset',id:randomUUID(),revision:'a'.repeat(64)},recordId=randomUUID(),scalar=spelling=>({spelling,representation:'rational',radix:10});
+const policy=()=>{const value=defaultDatasetResourcePolicy();Object.assign(value.resources,{maxScalarCharacters:65536,maxOperations:1000000,maxMilliseconds:30000});return value;};
+const covariance=(normalization='sample')=>({column:1,pairedColumn:2,operation:'covariance',method:'centered-pairs-v1',pairing:'complete-rows-v1',normalization,name:normalization+' covariance'}),fit=coefficient=>({column:1,pairedColumn:2,operation:'linear-fit',method:'ordinary-least-squares-intercept-v1',pairing:'complete-rows-v1',coefficient,name:coefficient});
+const recipe=()=>({version:5,source,keys:[0],values:[covariance(),covariance('population'),fit('slope'),fit('intercept')],missing:'skip',note:'Explicit complete paired rows.',resourcePolicy:policy()});
+function memory(){const values=new Map();return {values,saved:null,get:async key=>structuredClone(values.get(key)),put:async(key,value)=>values.set(key,structuredClone(value)),removeMany:async keys=>keys.forEach(key=>values.delete(key)),save:async function(value){this.saved=structuredClone(value);}};}
+function fixture(rows){const data=new Map(),workspace={readMetadata:async key=>data.get(key)??null,writeMetadata:async(key,text)=>data.set(key,text)},columns=[defaultColumn({label:'Group'}),...['X','Y'].map(label=>({...defaultColumn({label}),representation:'integer'}))],doc={kind:'dataset',content:{columns,rowCount:rows.length}},materials={workspace,sequences:new MaterialSequence(workspace),assertOwner:async()=>{},read:async()=>doc,datasetColumn:async(doc,index)=>columns[index],datasetPageCount:()=>1,retainedDatasetPage:async(doc,page,{columns:indices})=>({rows:rows.map(row=>({...row,cells:indices.map(i=>row.cells[i]),valueKinds:indices.map(i=>row.valueKinds?.[i]??'string'),columnIndices:indices}))})};return {materials,columns,doc,rows,engine:new DatasetAggregation(materials)};}
+async function collect(f,a,{work=memory(),...options}={}){const schema=await f.engine.schema(a),result=[];for await(const row of f.engine.rows({aggregation:a},schema,{work,...options}))result.push(row);return {schema,header:result[0],rows:result.slice(1),work};}
+test('complete same-row pairs share moments, preserve mixed quantiles and expose both pinned source cells',async()=>{
+ const f=fixture([{cells:['a','1','3']},{cells:['a','2','5']},{cells:['a','3','7']},{cells:['a','999',''],excluded:'Rejected pair'},{cells:['a','4','']},{cells:['a','','9']},{cells:['single','4','9']},{cells:['flat','2','4']},{cells:['flat','2','8']},{cells:['empty','','9']}]),a=recipe();a.values.push({column:1,operation:'quantile',name:'Median X',method:'linear-n-minus-one-v1',probability:scalar('1/2')});
+ const retainMembers=async rows=>{const sequence=f.materials.sequences.builder('aggregation-members',fn=>fn());for await(const row of rows)await sequence.append(row);return sequence.finish();},result=await collect(f,a,{retainMembers});
+ assert.deepEqual(result.rows.map(row=>row.cells),[['a','2/1','4/3','2/1','1/1','5/2'],['single','','0/1','','','4/1'],['flat','0/1','0/1','','','2/1'],['empty','','','','','']]);
+ assert.deepEqual(result.rows[0].aggregation[0],{included:3,excluded:1,missing:2,total:6,pairedStatistic:{version:1,method:'centered-pairs-v1',pairing:'complete-rows-v1',status:'ready'}});
+ assert.equal(result.rows[1].aggregation[2].pairedStatistic.status,'insufficient-pairs');assert.equal(result.rows[2].aggregation[2].pairedStatistic.status,'zero-x-spread');assert.equal(result.rows[3].aggregation[2].pairedStatistic.status,'no-pairs');
+ const group=await result.work.get('group:0');assert.deepEqual(Object.keys(group.pairs),['1:2']);assert.equal(group.pairs['1:2'].n,3);
+ const doc={kind:'dataset',content:{aggregation:a,aggregationMembersIndex:result.header.aggregationMembersIndex}},detail=await inspectAggregation(f.materials,{doc,row:result.rows[0]},{kind:'cell',page:0,row:0,column:3});assert.equal(detail.pairedColumn,2);assert.equal(detail.coefficient,'slope');assert.equal(detail.pairedStatistic.status,'ready');assert.equal(detail.members[3].status,'excluded');assert.equal(detail.members[4].status,'missing');assert.equal(detail.members[5].status,'missing');assert.equal(detail.members[5].presence,'missing');assert.equal(detail.members[5].pairedValue,'9');
+ for(const [i,member]of detail.members.entries()){assert.deepEqual(member.source,{ref:source,selector:{kind:'cell',page:0,row:i,column:1}});assert.deepEqual(member.pairedSource,{ref:source,selector:{kind:'cell',page:0,row:i,column:2}});}
+ const broken=structuredClone(result.rows[1]);broken.aggregation[2].pairedStatistic.status='ready';assert.throws(()=>validateAggregationReceipts(a,broken),{code:'MATERIAL_MISSING'});await assert.rejects(collect(f,{...a,missing:'error'}),{code:'DATASET_AGGREGATION_MISSING'});
+ const swapped={...a,values:[{...fit('slope'),column:2,pairedColumn:1}]};assert.equal((await collect(f,swapped)).rows[0].cells[1],'1/2');
+});
+test('checkpoint continuation binds centered state to complete-pair count and preserves old median versions',async()=>{
+ const f=fixture(Array.from({length:257},(_,i)=>({cells:['bulk',String(i),String(2*i+1)]}))),a=recipe(),work=memory(),controller=new AbortController();
+ await assert.rejects(collect(f,a,{work,signal:controller.signal,progress:async p=>{if(p.done===128)controller.abort();}}),{name:'AbortError'});assert.equal(work.saved.order,128);assert.equal((await work.get('group:0')).pairs['1:2'].n,128);
+ const resumed=await collect(f,a,{work});assert.deepEqual(resumed.rows[0].cells,['bulk','11051/1','11008/1','2/1','1/1']);
+ const invalid=memory();for(const [key,value]of work.values)invalid.values.set(key,structuredClone(value));invalid.saved=structuredClone(work.saved);const damaged=await invalid.get('group:0');damaged.pairs['1:2'].n--;await invalid.put('group:0',damaged);await assert.rejects(collect(f,a,{work:invalid}),{code:'MATERIAL_MISSING'});
+ for(const version of [1,2,3,4]){const old={...a,version,values:[{column:1,operation:'median',name:'Median'}]};if(version<3)delete old.resourcePolicy;assert.deepEqual((await collect(f,old)).rows[0].cells,['bulk','128/1']);await assert.rejects(f.engine.schema({...old,values:[fit('slope')]}));}
+});
+test('selected pair operands and unit/probability scalars remain bounded and owned through retention',async()=>{
+ const f=fixture([{cells:['a','1','3']},{cells:['a','2','5']}]),a=recipe(),long='0'.repeat(9000)+'2';f.columns[1].resourcePolicy=policy();f.columns[2].resourcePolicy=policy();f.rows[1].cells[1]=(await retainDatasetCell(f.materials,{kind:'string',value:long},fn=>fn())).value;
+ const unit={...blankUnitDefinition(),version:2,resourcePolicy:policy(),dimensions:[{axis:'time',exponent:1}],scale:scalar('0'.repeat(9000)+'2/1')};for(const c of f.columns.slice(1)){c.unit='s';c.quantity={origin:'measured',calibration:null,conversion:null,unitDefinition:unit};}
+ const retained=await prepareAggregationScalars(f.materials,{recordId,aggregation:{...a,values:[...a.values,{column:1,operation:'quantile',name:'Q',method:'linear-n-minus-one-v1',probability:scalar('0'.repeat(9000)+'1/2')}]}},{write:fn=>fn()});assert.equal(retained.aggregation.values[4].probability.spelling.format,'dataset-cell');assert.equal((await readScalarDefinition(f.materials,{aggregation:retained.aggregation},'aggregation.values.4.probability.spelling',{offset:8999,limit:4})).text,'01/2');
+ const result=await collect(f,retained.aggregation);assert.equal(result.rows[0].cells[3],'2/1');assert.equal(result.schema.columns[1].quantity.unitDefinition.scale.spelling,'4/1');assert.equal(result.schema.columns[3].quantity.unitDefinition.scale.spelling,'1/1');assert.equal((await resolveScalarDefinitions(f.materials,result.schema.columns[4])).quantity.unitDefinition.scale.spelling,unit.scale.spelling);
+ f.columns[2].resourcePolicy.resources.maxBits=64;f.rows[1].cells[2]=String(1n<<70n);await assert.rejects(collect(f,a),error=>error.code==='DATASET_CALCULATION_RESOURCE');
+});

@@ -1,3 +1,4 @@
+import {createPairMoments,validatePairMoments,updatePairMoments,finishPairStatistic,pairStatisticColumn} from './dataset-pair-statistics.js';
 import {quantileSelection,interpolateQuantile} from './dataset-quantile.js';
 import {prepareAggregationScalars,retainAggregationReceipts,resolveAggregationReceipts,validateAggregationReceipts} from './dataset-aggregation-quantiles.js';
 import {derivedComputation} from './web/measurement-computation.js';
@@ -19,7 +20,7 @@ import {scratchIterator} from './scratch-iterator.js';
 import {PagedMedian} from './paged-median.js';
 import {aggregationMemberContext,aggregationMemberRows,aggregationQuantileDetails} from './dataset-aggregation-members.js';
 import {defaultColumn} from './web/dataset-schema.js';
-import {validAggregation,aggregationKey,aggregationPresence} from './web/dataset-aggregation-model.js';
+import {validAggregation,aggregationKey,aggregationPresence,isPairStatisticMetric} from './web/dataset-aggregation-model.js';
 import {exactRational,isScalarRepresentation} from './web/measurement-model.js';
 import {resultContext} from './web/numeral-context.js';
 import {ExactFormatError,formatExactResult} from './web/measurement-format.js';
@@ -68,12 +69,14 @@ export class DatasetAggregation{
   return schema;
  }
  async schema(a,{signal}={}){
-  if(a.version===4)a=await resolveScalarDefinitions(this.materials,a,{signal});
+  if(a.version>=4)a=await resolveScalarDefinitions(this.materials,a,{signal});
   const doc=await this.materials.read(a.source);if(!validAggregation(a,datasetColumnCount(doc)))fail();
-  const selection=await selectedDatasetColumns(this.materials,doc,[...new Set([...a.keys,...a.values.map(v=>v.column)])]),source=selection.columns,column=i=>source[selection.indices.indexOf(i)];
-  if(a.version<3&&[...a.keys.filter((index,k)=>a.keySemantics?.[k]==='numeric'),...a.values.filter(value=>value.operation!=='count').map(value=>value.column)].some(index=>measurementScalarPolicies(column(index))))fail('DATASET_SCALAR_POLICY_VERSION');
-  if(a.version>=3)for(const index of new Set([...a.keys.filter((index,k)=>a.keySemantics?.[k]==='numeric'),...a.values.filter(value=>value.operation!=='count').map(value=>value.column)])){
+  const selection=await selectedDatasetColumns(this.materials,doc,[...new Set([...a.keys,...a.values.flatMap(v=>isPairStatisticMetric(v)?[v.column,v.pairedColumn]:[v.column])])]),source=selection.columns,column=i=>source[selection.indices.indexOf(i)];
+  if(a.version<3&&[...a.keys.filter((index,k)=>a.keySemantics?.[k]==='numeric'),...a.values.filter(value=>value.operation!=='count').flatMap(value=>isPairStatisticMetric(value)?[value.column,value.pairedColumn]:[value.column])].some(index=>measurementScalarPolicies(column(index))))fail('DATASET_SCALAR_POLICY_VERSION');
+  const resolvedColumns=new Map();
+  if(a.version>=3)for(const index of new Set([...a.keys.filter((index,k)=>a.keySemantics?.[k]==='numeric'),...a.values.filter(value=>value.operation!=='count').flatMap(value=>isPairStatisticMetric(value)?[value.column,value.pairedColumn]:[value.column])])){
    const resolved=await resolveScalarDefinitions(this.materials,column(index),{signal,budget:new DatasetResourceBudget(a.resourcePolicy)});
+   resolvedColumns.set(index,resolved);
    if(resolved.quantity?.unitDefinition?.kind==='absolute'&&a.values.some(value=>value.column===index&&value.operation==='sum'))fail();
   }
   if(a.version<3&&source.some(column=>column.domain?.version===3))fail('DATASET_SCALAR_POLICY_VERSION');
@@ -82,22 +85,23 @@ export class DatasetAggregation{
   for(const [k,index]of a.keys.entries()){const c=column(index),semantics=a.keySemantics?.[k]??'lexical';if(c.representation==='domain'&&semantics!=='domain'||semantics==='domain'&&c.representation!=='domain'||semantics==='numeric'&&!isScalarRepresentation(c))fail();}
   for(const value of a.values){
    const c=column(value.column);if(names.has(value.name)||value.operation!=='count'&&!isScalarRepresentation(c))fail();names.add(value.name);
+   if(isPairStatisticMetric(value)){columns.push(pairStatisticColumn(value,[resolvedColumns.get(value.column),resolvedColumns.get(value.pairedColumn)],{policy:a.resourcePolicy,keys:a.keys.map(index=>column(index))}));continue;}
    const {representation,radix}=resultContext(value.output,value.operation);
-   columns.push({...defaultColumn({label:value.name}),...derivedComputation(c,...a.keys.map(index=>column(index))),representation,radix,unit:value.operation==='count'?'':c.unit,quantity:{origin:'derived',conversion:null,calibration:c.quantity?.calibration??null,...(a.version>=3&&value.operation!=='count'&&c.quantity?.unitDefinition?{unitDefinition:c.quantity.unitDefinition}:{})},...(a.version>=3?{resourcePolicy:structuredClone(a.resourcePolicy)}:{}),...(a.version===4&&value.operation==='quantile'&&c.time?{time:structuredClone(c.time)}:{})});
+   columns.push({...defaultColumn({label:value.name}),...derivedComputation(c,...a.keys.map(index=>column(index))),representation,radix,unit:value.operation==='count'?'':c.unit,quantity:{origin:'derived',conversion:null,calibration:c.quantity?.calibration??null,...(a.version>=3&&value.operation!=='count'&&c.quantity?.unitDefinition?{unitDefinition:c.quantity.unitDefinition}:{})},...(a.version>=3?{resourcePolicy:structuredClone(a.resourcePolicy)}:{}),...(a.version>=4&&value.operation==='quantile'&&c.time?{time:structuredClone(c.time)}:{})});
   }
-  return {columns,source,indices:selection.indices,...(a.version===4?{aggregation:a}:{})};
+  return {columns,source,indices:selection.indices,...(a.version>=4?{aggregation:a}:{})};
  }
  rows(command,schema,options={}){
   const m=this.materials,a=schema.aggregation??command.aggregation,operate=fn=>a.version>=3?numericalOperation(new DatasetResourceBudget(a.resourcePolicy),fn):fn(undefined),compareValues=(x,y)=>operate(b=>compare(x,y,b)),sumValues=(x,y,d=1n)=>operate(b=>sum(x,y,d,b));
   const calculate=async function*(work){
    let groups=work.saved?.groups??0,order=work.saved?.order??0,last=work.saved?.last??null,phase=work.saved?.phase??'input';
-   const selection=a.version===4?{
+   const selection=a.version>=4?{
     plan:(key,count)=>{const metric=a.values[key%a.values.length],context=quantileSelection(count,metric.operation==='quantile'?metric.probability:{spelling:'1/2',representation:'rational',radix:10},a.resourcePolicy);return {ranks:[...new Set([context.lower,context.upper])],context};},
     reduce:(key,count,plan,selected)=>{const metric=a.values[key%a.values.length],lower=selected[0],upper=selected.at(-1),value=interpolateQuantile(lower.value,upper.value,plan.context,{policy:a.resourcePolicy});return {value,detail:metric.operation==='quantile'?{version:1,method:metric.method,lower:{rank:lower.rank,member:lower.source.member},upper:{rank:upper.rank,member:upper.source.member},weight:plan.context.weight}:null};}
    }:undefined;
    const median=new PagedMedian({signal:options.signal,progress:options.progress,blockSize:128,compareValues,selection,check:options.check,midpoint:(x,y)=>sumValues(x,y,2n),state:{read:name=>work.get('median-state:'+name),write:(name,value)=>work.put('median-state:'+name,value)},read:name=>work.get('median:'+name),write:(name,value)=>work.put('median:'+name,value),remove:names=>work.removeMany(names.map(name=>'median:'+name))});
    if(work.saved)median.restore(work.saved.median);
-   if(a.version===4&&work.saved&&['members','rows'].includes(phase))await median.finish();
+   if(a.version>=4&&work.saved&&['members','rows'].includes(phase))await median.finish();
    const checkpoint=async(next,extra={})=>{
     if(work.save){await median.flush(true);await work.save({groups,order,last,phase:next,median:median.checkpoint(),...extra});}
     phase=next;
@@ -113,11 +117,21 @@ export class DatasetAggregation{
      group.members??={count:0,buffer:[]};group.members.buffer.push({page,row:sourceRow});group.members.count++;
      if(group.members.buffer.length===64){await work.put('members:'+index+':'+(group.members.count/64-1),group.members.buffer);group.members.buffer=[];}
     }
+    const updatedPairs=new Map();
     for(const [i,s]of a.values.entries()){
      const state=group.values[i];state.total++;
      if(row.excluded){state.excluded++;continue;}
-     if(aggregationPresence(row,schema.source[schema.indices.indexOf(s.column)],s.column)!=='value'){state.missing++;if(a.missing==='error')fail('DATASET_AGGREGATION_MISSING');continue;}
+     if(aggregationPresence(row,schema.source[schema.indices.indexOf(s.column)],s.column)!=='value'||isPairStatisticMetric(s)&&aggregationPresence(row,schema.source[schema.indices.indexOf(s.pairedColumn)],s.pairedColumn)!=='value'){state.missing++;if(a.missing==='error')fail('DATASET_AGGREGATION_MISSING');continue;}
      state.included++;if(s.operation==='count')continue;
+     if(isPairStatisticMetric(s)){
+      const pairKey=s.column+':'+s.pairedColumn;group.pairs??={};
+      if(!updatedPairs.has(pairKey)){
+       const budget=new DatasetResourceBudget(a.resourcePolicy),prior=group.pairs[pairKey]??createPairMoments();validatePairMoments(prior,{policy:a.resourcePolicy,budget,count:state.included-1});
+       const values=[];for(const index of [s.column,s.pairedColumn]){const column=schema.source[schema.indices.indexOf(index)],at=datasetColumnPosition(row,index),cell=await resolveScalarOperand(m,{value:row.cells[at],kind:row.valueKinds?.[at]??'string'},column,{signal:options.signal,budget,policy:a.resourcePolicy});values.push(numericalOperation(budget,b=>plotRationalText(exactRational(cell.value,column.representation,column.radix,b),b)));}
+       group.pairs[pairKey]=updatePairMoments(prior,...values,{policy:a.resourcePolicy,budget});updatedPairs.set(pairKey,true);
+      }
+      validatePairMoments(group.pairs[pairKey],{policy:a.resourcePolicy,count:state.included});continue;
+     }
      const column=schema.source[schema.indices.indexOf(s.column)];let value;if(a.version>=3){const budget=new DatasetResourceBudget(a.resourcePolicy),at=datasetColumnPosition(row,s.column),cell=await resolveScalarOperand(m,{value:row.cells[at],kind:row.valueKinds?.[at]??'string'},column,{signal:options.signal,budget,policy:a.resourcePolicy});value=numericalOperation(budget,b=>plotRationalText(exactRational(cell.value,column.representation,column.radix,b),b));}else{if(typeof datasetCell(row,s.column)!=='string')fail('DATASET_CELL_SCALAR_REQUIRED');value=rationalText(exactRational(datasetCell(row,s.column),column.representation,column.radix));}
      if(['median','quantile'].includes(s.operation)){median.add(index*a.values.length+i,value,...(selection?[{ordinal:order,member:state.total-1,page,row:sourceRow}]:[]));await median.flush();}
      else if(state.value===null)state.value=value;
@@ -148,12 +162,14 @@ export class DatasetAggregation{
     options.signal?.throwIfAborted();const group=await work.get('group:'+index),counts=[];
     for(const [i,s]of a.values.entries()){
      const state=group.values[i];let value=state.value;
-     if(s.operation==='count')value=String(state.included);
+     let pairedStatistic;
+     if(isPairStatisticMetric(s)){const moments=group.pairs?.[s.column+':'+s.pairedColumn]??createPairMoments();validatePairMoments(moments,{policy:a.resourcePolicy,count:state.included});const result=finishPairStatistic(moments,s,{policy:a.resourcePolicy});value=result.value;pairedStatistic=result.receipt;}
+     else if(s.operation==='count')value=String(state.included);
      else if(state.included&&['median','quantile'].includes(s.operation))value=await median.value(index*a.values.length+i);
      else if(state.included&&s.operation==='mean'){value=a.version>=3?operate(b=>divideRationalText(value,state.included,b)):(()=>{const r=rational(value);return rationalText({...r,denominator:r.denominator*BigInt(state.included)});})();}
      if(value!==null&&s.output)value=operate(b=>formatExactResult(exactRational(value,s.operation==='count'?'integer':'rational',10,b),s.output,b));
      if(a.version>=3&&value!==null&&value.length>a.resourcePolicy.resources.maxScalarCharacters)fail('DATASET_CALCULATION_RESOURCE');
-     group.cells.push(value??'');group.valueKinds.push(value===null?'absent':'string');const {value:unused,...count}=state;if(s.operation==='quantile')count.quantile=state.included?await median.detail(index*a.values.length+i):null;counts.push(count);
+     group.cells.push(value??'');group.valueKinds.push(value===null?'absent':'string');const {value:unused,...count}=state;if(pairedStatistic)count.pairedStatistic=pairedStatistic;if(s.operation==='quantile')count.quantile=state.included?await median.detail(index*a.values.length+i):null;counts.push(count);
     }
     let aggregationMembers;
     if(options.retainMembers){aggregationMembers={offset:memberOffset,count:group.members.count};memberOffset+=group.members.count;}
@@ -178,7 +194,7 @@ export class DatasetAggregation{
    for await(const row of rows){options.signal?.throwIfAborted();await sequence.append(row);if(sequence.count%256===0||sequence.count===total)await options.progress?.({stage:messages.retainingMembersStage,done:sequence.count,total});}return sequence.finish();
   };
   try{
-   const result=await this.materials.prepareDatasetRows(command,{...options,source:{doc:{id}},rows:this.rows(command,schema,{...options,work,total,retainMembers,...(command.aggregation.version===4?{retainReceipts:rows=>retainAggregationReceipts(this.materials,rows,command.aggregation.resourcePolicy,write,options)}:{})}),calculatedColumns:schema.columns,inputReferences:[command.aggregation.source]});
+   const result=await this.materials.prepareDatasetRows(command,{...options,source:{doc:{id}},rows:this.rows(command,schema,{...options,work,total,retainMembers,...(command.aggregation.version>=4?{retainReceipts:rows=>retainAggregationReceipts(this.materials,rows,command.aggregation.resourcePolicy,write,options)}:{})}),calculatedColumns:schema.columns,inputReferences:[command.aggregation.source]});
    return {...result,commandHash:originalHash,...(work?{aggregationWorkId:options.jobId}:{})};
   }
   catch(e){if(options.signal?.aborted)throw options.signal.reason;if(e instanceof AppError||isScalarResourceFailure(e))throw e;if(e instanceof ExactFormatError)fail(e.code);fail();}
@@ -196,44 +212,47 @@ export async function clearAggregationWork(workspace,id){
 
 // Membership is reconstructed from the immutable source revision and retained
 // group keys, not today's data. Paging never truncates a group's provenance.
+function inspectedAggregationMember(a,metric,column,selection,item){
+ const row=item.value,presence=aggregationPresence(row,selection.columns[selection.indices.indexOf(column)],column),paired=isPairStatisticMetric(metric),pairedPresence=paired?aggregationPresence(row,selection.columns[selection.indices.indexOf(metric.pairedColumn)],metric.pairedColumn):undefined;
+ const source=index=>({ref:a.source,selector:{kind:'cell',page:item.page,row:item.row,column:index}});
+ return {source:source(column),value:datasetCell(row,column),presence,...(paired?{pairedSource:source(metric.pairedColumn),pairedValue:datasetCell(row,metric.pairedColumn),pairedPresence}:{}),status:row.excluded?'excluded':presence!=='value'||paired&&pairedPresence!=='value'?'missing':'included',reason:row.excluded??null};
+}
 export async function inspectAggregation(materials,cell,selector,{offset=0,signal}={}){
  const a=cell.doc.content.aggregation,doc=await materials.read(a.source);if(!validAggregation(a,datasetColumnCount(doc)))fail('MATERIAL_MISSING');
- const selection=await selectedDatasetColumns(materials,doc,[...new Set([...a.keys,...a.values.map(v=>v.column)])]),source=selection.columns;
+ const selection=await selectedDatasetColumns(materials,doc,[...new Set([...a.keys,...a.values.flatMap(v=>isPairStatisticMetric(v)?[v.column,v.pairedColumn]:[v.column])])]),source=selection.columns;
  const key=cell.row.locator?.key,metric=selector.column-a.keys.length,column=metric<0?a.keys[selector.column]:a.values[metric]?.column;
  if(typeof key!=='string')fail('MATERIAL_MISSING');
- if(column===undefined)fail();const quantile=await aggregationQuantileDetails(materials,cell.doc,cell.row,metric,{signal});let matched=0;const members=[],limit=16;
+ if(column===undefined)fail();validateAggregationReceipts(a,cell.row);const metricDefinition=a.values[metric],paired=isPairStatisticMetric(metricDefinition)?{pairedColumn:metricDefinition.pairedColumn,method:metricDefinition.method,pairing:metricDefinition.pairing,...(metricDefinition.operation==='covariance'?{normalization:metricDefinition.normalization}:{coefficient:metricDefinition.coefficient}),pairedStatistic:cell.row.aggregation[metric].pairedStatistic}:{};const quantile=await aggregationQuantileDetails(materials,cell.doc,cell.row,metric,{signal});let matched=0;const members=[],limit=16;
  if(cell.row.aggregationMembers){
   const context=await aggregationMemberContext(materials,cell.doc);
   for await(const item of aggregationMemberRows(materials,context,cell.row,{offset,limit,signal})){
-   const row=item.value,presence=aggregationPresence(row,source[selection.indices.indexOf(column)],column);
-   members.push({source:{ref:a.source,selector:{kind:'cell',page:item.page,row:item.row,column}},value:datasetCell(row,column),presence,status:row.excluded?'excluded':presence!=='value'?'missing':'included',reason:row.excluded??null});
+   members.push(inspectedAggregationMember(a,metricDefinition,column,selection,item));
   }
-  return {...quantile,source:a.source,operation:metric<0?'key':a.values[metric].operation,note:a.note,counts:metric<0?null:cell.row.aggregation?.[metric],members,offset,previous:offset?Math.max(0,offset-limit):null,next:offset+members.length<cell.row.aggregationMembers.count?offset+members.length:null};
+  return {...quantile,...paired,source:a.source,operation:metric<0?'key':a.values[metric].operation,note:a.note,counts:metric<0?null:cell.row.aggregation?.[metric],members,offset,previous:offset?Math.max(0,offset-limit):null,next:offset+members.length<cell.row.aggregationMembers.count?offset+members.length:null};
  }
  for await(const item of sourceRows(materials,a.source,signal,null,selection.indices,a.version)){
   signal?.throwIfAborted();if(await aggregationSourceKey(materials,item.value,source,a,{signal})!==key)continue;
   if(matched++<offset)continue;if(members.length===limit)break;
-  const row=item.value,presence=aggregationPresence(row,source[selection.indices.indexOf(column)],column);
-  members.push({source:{ref:a.source,selector:{kind:'cell',page:item.page,row:item.row,column}},value:datasetCell(row,column),presence,status:row.excluded?'excluded':presence!=='value'?'missing':'included',reason:row.excluded??null});
+  members.push(inspectedAggregationMember(a,metricDefinition,column,selection,item));
  }
- return {...quantile,source:a.source,operation:metric<0?'key':a.values[metric].operation,note:a.note,counts:metric<0?null:cell.row.aggregation?.[metric],members,offset,previous:offset?Math.max(0,offset-limit):null,next:matched>offset+members.length?offset+members.length:null};
+ return {...quantile,...paired,source:a.source,operation:metric<0?'key':a.values[metric].operation,note:a.note,counts:metric<0?null:cell.row.aggregation?.[metric],members,offset,previous:offset?Math.max(0,offset-limit):null,next:matched>offset+members.length?offset+members.length:null};
 }
 
 // Policy-bearing revisions replay from their pinned source with scratch-only state.
 // The comparison streams long cells; neither a preview nor today's source is proof.
 export async function verifyAggregationPolicy(materials,doc,{signal}={}){
- const aggregation=doc.content.aggregation;if(![3,4].includes(aggregation?.version))return;
- if(doc.content.algorithm!=='observanda-retained-aggregation'||doc.content.algorithmVersion!==(aggregation.version===4?2:1)||!doc.content.aggregationMembersIndex)fail('MATERIAL_MISSING');
+ const aggregation=doc.content.aggregation;if(![3,4,5].includes(aggregation?.version))return;
+ if(doc.content.algorithm!=='observanda-retained-aggregation'||doc.content.algorithmVersion!==(aggregation.version===5?3:aggregation.version===4?2:1)||!doc.content.aggregationMembersIndex)fail('MATERIAL_MISSING');
  const engine=new DatasetAggregation(materials),schema=await engine.schema(aggregation,{signal});let source=false;
  for await(const ref of materials.references(doc.content))if(revisionText(ref)===revisionText(aggregation.source))source=true;
  if(!source||datasetColumnCount(doc)!==schema.columns.length)fail('MATERIAL_MISSING');
- for(let index=0;index<schema.columns.length;index++){const actual=await materials.datasetColumn(doc,index);if(revisionText(actual.computation??null)!==revisionText(schema.columns[index].computation??null))fail('MATERIAL_MISSING');if(aggregation.version===4&&aggregation.values[index-aggregation.keys.length]?.operation==='quantile')for(const key of ['representation','radix','unit','quantity','time','resourcePolicy'])if(revisionText(actual[key]??null)!==revisionText(schema.columns[index][key]??null))fail('MATERIAL_MISSING');}
+ for(let index=0;index<schema.columns.length;index++){const actual=await materials.datasetColumn(doc,index);if(revisionText(actual.computation??null)!==revisionText(schema.columns[index].computation??null))fail('MATERIAL_MISSING');if(aggregation.version>=4&&(aggregation.values[index-aggregation.keys.length]?.operation==='quantile'||isPairStatisticMetric(aggregation.values[index-aggregation.keys.length]))){const resolvedActual=await resolveScalarDefinitions(materials,actual,{signal}),resolvedExpected=await resolveScalarDefinitions(materials,schema.columns[index],{signal});for(const key of ['representation','radix','unit','quantity','time','resourcePolicy'])if(revisionText(resolvedActual[key]??null)!==revisionText(resolvedExpected[key]??null))fail('MATERIAL_MISSING');}}
  const iterator=engine.rows({aggregation},schema,{signal})[Symbol.asyncIterator]();
  try{
   const header=await iterator.next();if(header.done||header.value.columns.length!==schema.columns.length)fail('MATERIAL_MISSING');let count=0;
   for(let page=0;page<materials.datasetPageCount(doc);page++)for(const actual of (await materials.retainedDatasetPage(doc,page,{columns:schema.columns.map((_,i)=>i)})).rows){
    signal?.throwIfAborted();validateAggregationReceipts(aggregation,actual);const next=await iterator.next();if(next.done)fail('MATERIAL_MISSING');const expected=next.value;
-   if(actual.locator?.key!==expected.locator.key||actual.order!==expected.order||revisionText(aggregation.version===4?await resolveAggregationReceipts(materials,actual.aggregation,aggregation.resourcePolicy,{signal}):actual.aggregation)!==revisionText(expected.aggregation)||actual.cells.length!==expected.cells.length||revisionText(actual.valueKinds)!==revisionText(expected.valueKinds))fail('MATERIAL_MISSING');
+   if(actual.locator?.key!==expected.locator.key||actual.order!==expected.order||revisionText(aggregation.version>=4?await resolveAggregationReceipts(materials,actual.aggregation,aggregation.resourcePolicy,{signal}):actual.aggregation)!==revisionText(expected.aggregation)||actual.cells.length!==expected.cells.length||revisionText(actual.valueKinds)!==revisionText(expected.valueKinds))fail('MATERIAL_MISSING');
    for(let index=0;index<actual.cells.length;index++)for(let offset=0;offset!==null;){
     signal?.throwIfAborted();const a=await readDatasetCell(materials,actual.cells[index],{offset,limit:4096,signal}),b=await readDatasetCell(materials,expected.cells[index],{offset,limit:4096,signal});
     if(a.total!==b.total||a.text!==b.text||a.next!==b.next)fail('MATERIAL_MISSING');offset=a.next;

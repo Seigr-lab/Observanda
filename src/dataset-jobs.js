@@ -14,7 +14,7 @@ export const enqueueComparison=(materials,queue,command,id,options={})=>enqueueM
 async function enqueueMaterial(materials,queue,command,id=randomUUID(),type,options={}){
  if(!researchId(id))throw new AppError('INVALID');
  let input={...command,id:command.id??id,expectedRevision:command.expectedRevision??null};
- if(type==='dataset.prepare'&&input.aggregation?.version===4){const previous=await queue.read(id);input=await prepareAggregationScalars(materials,input,{base:previous?.input?.command?.aggregation,write:fn=>queue.transaction(fn)});}
+ if(type==='dataset.prepare'&&input.aggregation?.version>=4){const previous=await queue.read(id);input=await prepareAggregationScalars(materials,input,{base:previous?.input?.command?.aggregation,write:fn=>queue.transaction(fn)});}
  if(type==='figure.calculate')input.base={...(command.base??createFigure()),id:command.base?.id??input.id,series:[]};
  const admission=type==='analysis.compare'&&!await queue.read(id)?await prepareComparisonAdmission(materials,input,{...options,check:()=>queue.check?.()}):null;let rollback;
  try{return await queue.transaction(async()=>{

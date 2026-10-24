@@ -263,7 +263,7 @@
   "EMPTY": "Include at least one project in Website before building your site.",
   "AUTH": "This browser session is not authorized. Reopen the launch link printed by Observanda.",
   "ORIGIN": "This request did not come from the local Observanda application.",
-  "LIMIT": "This request exceeds the first releaseÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢s size limit.",
+  "LIMIT": "This request exceeds the supported request size.",
   "STALE": "The workspace changed after preview. Create a new preview before exporting.",
   "NOT_FOUND": "This item is unavailable. Create a new preview if needed.",
   "IO": "The operation could not be completed. Check access and available disk space; your existing workspace is preserved.",
@@ -394,5 +394,6 @@
   "ANALYSIS_SCALAR_POLICY": "Edit this comparison and choose Enable declaration resource limits before using sources with saved scalar limits. Earlier results remain available.",
   "MEASUREMENT_CLOCK_SYNCHRONIZATION": "Choose compatible declared elapsed or external clock coordinates and a complete synchronization model. Counter wraps and resets must be resolved explicitly before synchronization.",
   "MEASUREMENT_CLOCK_SYNCHRONIZATION_ANCHOR": "Choose two complete observation pairs from the pinned source and reference datasets. The source coordinates must differ and the declared mapping must have a positive rate.",
-  "MEASUREMENT_CLOCK_SYNCHRONIZATION_RANGE": "This value is outside the model's declared validity range. Inspect the pinned model or explicitly choose to retain absent values outside that range."
+  "MEASUREMENT_CLOCK_SYNCHRONIZATION_RANGE": "This value is outside the model's declared validity range. Inspect the pinned model or explicitly choose to retain absent values outside that range.",
+  "DATASET_AGGREGATION_UNITS": "Use declared unit definitions for both paired columns, or leave both unit labels empty. Covariance and slope use differences; the intercept uses the declared Y coordinate at X = 0."
 }

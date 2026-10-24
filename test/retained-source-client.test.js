@@ -31,3 +31,12 @@ test('late access failures are cancelled before the access surface can prompt',a
  const pendingRead=new Promise((_resolve,no)=>reject=no),client=retainedSourceClient({state,api:()=>pendingRead,access:async run=>{try{return await run();}catch(error){seen=error;if(error.code==='ACCESS_LOCKED')prompts++;throw error;}}});
  const pending=client.resolve(reference(),{unlock:true}),rejected=assert.rejects(pending,{name:'AbortError'});state.storage.contextId=id();reject({code:'ACCESS_LOCKED',message:'Old owner locked'});await rejected;assert.equal(seen.name,'AbortError');assert.equal(prompts,0);
 });
+
+
+test('pending source authorization cannot reopen a view after Back or dialog close',async()=>{
+ for(const phase of ['authorization','request'])for(const navigation of ['back','close']){
+  const state=setup(),ref=reference(),held=deferred();let view=1,open=true,calls=0,opened=0;
+  const client=retainedSourceClient({state,identity:()=>[view,state.projectOwner.labBookId],active:()=>open,access:async run=>{if(phase==='authorization')await held.promise;return run();},api:async()=>{calls++;if(phase==='request')await held.promise;return {workspaceId:state.book.id,reference:ref,owner:owner(ref),title:'Selected reading'};}});
+  const pending=client.resolve(ref,{unlock:true}).then(()=>opened++),rejected=assert.rejects(pending,{name:'AbortError'});if(navigation==='back')view++;else open=false;held.resolve();await rejected;assert.equal(opened,0);assert.equal(calls,phase==='authorization'?0:1);
+ }
+});

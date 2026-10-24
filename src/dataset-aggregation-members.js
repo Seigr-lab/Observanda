@@ -7,12 +7,12 @@ import {aggregationSourceKey} from './dataset-aggregation.js';
 // seeks that sequence directly; it never rescans preceding source rows.
 import {datasetColumnCount,selectedDatasetColumns} from './dataset-selected-columns.js';
 import {AppError} from './errors.js';
-import {validAggregation,aggregationKey,aggregationPresence} from './web/dataset-aggregation-model.js';
+import {validAggregation,aggregationKey,aggregationPresence,isPairStatisticMetric} from './web/dataset-aggregation-model.js';
 const fail=()=>{throw new AppError('MATERIAL_MISSING');};
 export async function aggregationMemberContext(materials,doc){
  const recipe=doc.content.aggregation,source=await materials.read(recipe.source);
  if(!validAggregation(recipe,datasetColumnCount(source)))fail();
- const selection=await selectedDatasetColumns(materials,source,[...new Set([...recipe.keys,...recipe.values.map(v=>v.column)])]),columns=selection.columns;
+ const selection=await selectedDatasetColumns(materials,source,[...new Set([...recipe.keys,...recipe.values.flatMap(v=>isPairStatisticMetric(v)?[v.column,v.pairedColumn]:[v.column])])]),columns=selection.columns;
  const index=doc.content.aggregationMembersIndex;materials.sequences.validate(index);
  if(index.kind!=='aggregation-members'||index.count!==source.content.rowCount)fail();
  return {recipe,source,columns,indices:selection.indices,index,cachedPage:null,cachedData:null,memberPage:null};
@@ -48,11 +48,11 @@ export async function* aggregationMemberRows(materials,context,row,{offset=0,lim
 // Full sorted-rank proof remains the deterministic complete replay verifier.
 export async function aggregationQuantileDetails(materials,doc,row,metricIndex,{signal,context}={}){
  const recipe=doc.content.aggregation,metric=recipe?.values?.[metricIndex];
- if(recipe?.version!==4||metric?.operation!=='quantile')return {};
+ if(![4,5].includes(recipe?.version)||metric?.operation!=='quantile')return {};
  validateAggregationReceipts(recipe,row);
  const counts=row.aggregation[metricIndex],receipt=counts.quantile;
  const result={metricIndex,method:metric.method,probability:metric.probability,quantile:null};
- const resolvedMetric=await resolveScalarDefinitions(materials,{version:4,resourcePolicy:recipe.resourcePolicy,values:[metric]},{signal}),selection=quantileSelection(counts.included,resolvedMetric.values[0].probability,recipe.resourcePolicy);
+ const resolvedMetric=await resolveScalarDefinitions(materials,{version:recipe.version,resourcePolicy:recipe.resourcePolicy,values:[metric]},{signal}),selection=quantileSelection(counts.included,resolvedMetric.values[0].probability,recipe.resourcePolicy);
  if(receipt===null){if(selection!==null)fail();return result;}
  const resolved=(await resolveAggregationReceipts(materials,[counts],recipe.resourcePolicy,{signal}))[0].quantile;
  if(resolved.lower.rank!==selection.lower||resolved.upper.rank!==selection.upper||revisionText(resolved.weight)!==revisionText(selection.weight))fail();

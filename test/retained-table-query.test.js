@@ -96,6 +96,6 @@ test('backward cursors cross excluded pages and changed page sizes stop at the s
 });
 
 test('legacy inline table reads do not require a native encrypted connection scope',async()=>{
- const column=defaultColumn({label:'Exact'}),m={workspace:{storageKind:async()=>'json',withCatalogueConnections(){assert.fail('Legacy reader entered native scope');}},read:async()=>({}),datasetColumns:async()=>[column],async *iterateDataset(){yield {cells:['0001.2300'],valueKinds:['number']};}};
+ const column=defaultColumn({label:'Exact'}),m={workspace:{storageKind:async()=>'json',withCatalogueConnections(){assert.fail('Legacy reader entered native scope');}},read:async()=>({content:{}}),datasetColumns:async()=>[column],async *iterateDataset(){yield {cells:['0001.2300'],valueKinds:['number']};}};
  const table=await retainedTable(m,{ref,selection:{columns:[0],offset:0,count:1,includeExcluded:false},version:1});assert.equal(table.rows[0].cells[0],'0001.2300');assert.equal(table.version,1);
 });

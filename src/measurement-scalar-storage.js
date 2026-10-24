@@ -23,7 +23,7 @@ export function scalarDefinitionEntries(value){
  if(value?.kind==='declared-interval'||value?.kind==='derived-enclosure')uncertainty(value,[]);
  synchronization(value?.synchronization,['synchronization']);synchronization(value,[]);
  if(value?.tool==='Observanda clock synchronization'){quantity(value.target?.quantity,['target','quantity']);clock(value.target?.time?.clock?.definition,['target','time','clock','definition']);}
- const aggregation=(owner,prefix)=>{if(owner?.version===4&&Array.isArray(owner.values))for(const [i,metric]of owner.values.entries())if(metric.operation==='quantile')add(owner,prefix,['values',i,'probability']);};
+ const aggregation=(owner,prefix)=>{if([4,5].includes(owner?.version)&&Array.isArray(owner.values))for(const [i,metric]of owner.values.entries())if(metric.operation==='quantile')add(owner,prefix,['values',i,'probability']);};
  aggregation(value,[]);aggregation(value?.aggregation,['aggregation']);
  if(value?.version===1&&value.method==='linear-n-minus-one-v1'&&value.weight)add(value,[],['weight']);
  if(Array.isArray(value?.aggregation))for(const [i,metric]of value.aggregation.entries())if(metric.quantile?.weight)result.push({path:['aggregation',i,'quantile','weight','spelling'],scalar:metric.quantile.weight,policy:value.resourcePolicy});
