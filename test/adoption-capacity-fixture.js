@@ -12,10 +12,10 @@ import {enqueueDataset,enqueuePlot} from '../src/dataset-jobs.js';
 import {fileFingerprint} from '../src/web/evidence-fingerprint.js';
 import {digest} from '../src/storage-format.js';
 
-export async function adoptionEvidenceFixture(f,directory,{copies=1,onStage=()=>{},exerciseRecovery=false}={}){
+export async function adoptionEvidenceFixture(f,directory,{copies=1,onStage=()=>{},exerciseRecovery=false,observeTiming=(name,elapsed,budget)=>assert.ok(elapsed<budget,name+' budget: '+elapsed)}={}){
  let materials=new ResearchMaterials(f.workspace);
  const recordId=f.first.id,jobs=workspaceJobs(f.workspace),metrics={},retained={},originals=new Map();
- const timed=async(name,budget,operation)=>{onStage(name);const started=performance.now(),result=await operation();metrics[name]=Math.round(performance.now()-started);assert.ok(metrics[name]<budget,name+' budget: '+metrics[name]);return result;};
+ const timed=async(name,budget,operation)=>{onStage(name);const started=performance.now(),result=await operation();metrics[name]=Math.round(performance.now()-started);observeTiming(name,metrics[name],budget);return result;};
  const perform=async id=>{
   jobs.worker.enabled=true;try{await jobs.worker.runOnce();}finally{jobs.worker.enabled=false;}
   const job=await jobs.queue.read(id);assert.equal(job.state,'completed',JSON.stringify(job));return job.result;

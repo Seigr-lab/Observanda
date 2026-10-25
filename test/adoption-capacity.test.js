@@ -21,15 +21,21 @@ import {PublicationJobs} from '../src/publication-jobs.js';
 import {contentBuffer} from '../src/file-content.js';
 import {WebsiteEditor} from '../src/website-editor.js';
 import {randomUUID} from 'node:crypto';
+import {sampleWorkloadCpu} from './workload-cpu-sample.js';
 
 test('A1-sized and tenfold authored work, physical evidence, datasets and recovery coexist within declared budgets',async t=>{
  t.diagnostic(JSON.stringify({platform:process.platform,arch:process.arch,node:process.version,cpu:os.cpus()[0].model,memoryGiB:Math.round(os.totalmem()/1024**3)}));
  for(const copies of [1,10])await t.test(copies+' combined corpus copies',{timeout:2400000},async t=>{
+  const cpu=sampleWorkloadCpu();t.after(()=>t.diagnostic(JSON.stringify({cpuObserved:cpu.stop()})));
+  // A timing overrun must remain a failure without hiding independent byte,
+  // privacy and recovery results later in this shared-machine workload.
+  const budgetFailures=[];
+  const observeTiming=(name,elapsedMs,budgetMs)=>{const measured={name,elapsedMs,budgetMs};process.stdout.write('A2 '+copies+'x '+JSON.stringify(measured)+'\n');if(elapsedMs>=budgetMs)budgetFailures.push(measured);};
   const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-adoption-capacity-'));let f,peak=0;
   const sampler=setInterval(()=>{peak=Math.max(peak,process.memoryUsage().heapUsed);},25);sampler.unref();
   t.after(async()=>{clearInterval(sampler);if(f)clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
   f=await authoringGrowthFixture(directory,{copies});
-  async function inspect(workspace){
+  async function inspect(workspace,phase){
    const measured={},read=ResearchCatalogue.prototype.record;let bodies=0;
    ResearchCatalogue.prototype.record=function(...args){bodies++;return read.apply(this,args);};
    try{
@@ -51,10 +57,10 @@ test('A1-sized and tenfold authored work, physical evidence, datasets and recove
      }finally{store.db.run=run;}
     });
    }finally{ResearchCatalogue.prototype.record=read;}
-   assert.ok(measured.openMs<5000);assert.ok(measured.searchMs<15000);assert.ok(measured.discoveryMs<15000);assert.ok(measured.selectedMs<5000);assert.ok(measured.responseBytes<256*1024);
+   for(const [name,budget] of [['openMs',5000],['searchMs',15000],['discoveryMs',15000],['selectedMs',5000]])observeTiming(phase+'.'+name,measured[name],budget);assert.ok(measured.responseBytes<256*1024);
    return measured;
   }
-  const before=await inspect(f.workspace),evidence=await adoptionEvidenceFixture(f,directory,{copies,exerciseRecovery:copies===1,onStage:stage=>process.stdout.write('A2 '+copies+'x '+stage+'\n')}),after=await inspect(f.workspace);
+  const before=await inspect(f.workspace,'before'),evidence=await adoptionEvidenceFixture(f,directory,{copies,exerciseRecovery:copies===1,onStage:stage=>process.stdout.write('A2 '+copies+'x '+stage+'\n'),observeTiming}),after=await inspect(f.workspace,'after');
   // Attached evidence must not add reads to plain discovery, navigation or the
   // selected authoring response. The actual artifact bytes live outside them.
   assert.equal(after.queries,before.queries);assert.equal(after.responseBytes,before.responseBytes);
@@ -62,7 +68,7 @@ test('A1-sized and tenfold authored work, physical evidence, datasets and recove
   const materials=new ResearchMaterials(f.workspace);
   const continued={...base,share:true,title:'Continuing after complete evidence intake',body:'Qualified synthetic observations; original evidence remains private.',figures:[{...structuredClone((await materials.read(evidence.retained.figure)).content.figure),source:evidence.retained.figure}]};
   const saved=await service.save({workspaceId:f.book.id,changes:[{id:base.id,expectedRevision:recordRevision(base),record:continued}]},{recordIds:[base.id]});f.expectedRecords.set(base.id,recordFingerprint({...continued,updatedAt:saved.book.entries[0].updatedAt}));
-  const editMs=Math.round(performance.now()-began);assert.ok(editMs<5000);assert.equal(saved.recordScope.total,113*copies);
+  const editMs=Math.round(performance.now()-began);observeTiming('editMs',editMs,5000);assert.equal(saved.recordScope.total,113*copies);
   const pinnedAnalysis=await materials.read(evidence.retained.analysis);assert.equal(pinnedAnalysis.content.tool,'Synthetic external analysis');
   const expected={records:f.expectedRecords,originals:evidence.originals,retained:evidence.retained,rows:evidence.metrics.rows};
   process.stdout.write('A10 '+copies+'x complete source reconciliation\n');
@@ -91,10 +97,10 @@ test('A1-sized and tenfold authored work, physical evidence, datasets and recove
   // Larger physical evidence has a separate, declared ten-minute copy budget;
   // record-only backup qualification retains its tighter three-minute budget.
   process.stdout.write('A2 '+copies+'x ordinary copy starts\n');
-  const ordinary=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'ordinary'),{vault:f.vault}),{vault:f.vault});recovery.ordinaryMs=Math.round(performance.now()-at);assert.ok(recovery.ordinaryMs<600000,JSON.stringify(recovery));
+  const ordinary=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'ordinary'),{vault:f.vault}),{vault:f.vault});recovery.ordinaryMs=Math.round(performance.now()-at);observeTiming('ordinaryMs',recovery.ordinaryMs,600000);
   process.stdout.write('A2 '+copies+'x '+JSON.stringify(recovery)+'\n');
   const access=await createWorkspaceAccess('','synthetic combined workload recovery',f.deviceStore),freshVault=takeCreatedVault(access);t.after(()=>clearVault(freshVault));at=performance.now();
-  const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'fresh'),{vault:f.vault}),access,freshVault,f.vault);recovery.freshKeyMs=Math.round(performance.now()-at);assert.ok(recovery.freshKeyMs<600000,JSON.stringify(recovery));
+  const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'fresh'),{vault:f.vault}),access,freshVault,f.vault);recovery.freshKeyMs=Math.round(performance.now()-at);observeTiming('freshKeyMs',recovery.freshKeyMs,600000);
   process.stdout.write('A2 '+copies+'x '+JSON.stringify(recovery)+'\n');
   for(const [root,vault] of [[ordinary,f.vault],[fresh,freshVault]]){
    const ws=new Workspace(root,vault),m=new ResearchMaterials(ws),opened=await new WorkspaceReader(ws).selection({workspaceId:f.book.id,ids:[base.id]});
@@ -110,5 +116,6 @@ test('A1-sized and tenfold authored work, physical evidence, datasets and recove
    for(const [name,bytes] of editionFiles)assert.deepEqual(await contentBuffer(await retainedEdition.files.get(name)),bytes);
   }
   t.diagnostic(JSON.stringify({copies,authoring:f.metrics,evidence:evidence.metrics,before,after,editMs,recovery,peakHeapMiB:Math.ceil(peak/1024/1024)}));assert.ok(peak<512*1024*1024);
+  assert.deepEqual(budgetFailures,[],'Elapsed budgets exceeded under observed machine load; integrity and recovery checks completed.');
  });
 });
