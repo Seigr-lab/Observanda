@@ -4,6 +4,25 @@ import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {githubRuntimeFiles} from './github-runtime.js';
 import {pdfValidationRuntimeFiles} from './pdf-validation-runtime.js';
+// Node's official v24.20.0/SHASUMS256.txt pins the complete target archive.
+export const desktopNodeVersion='24.20.0';
+export const desktopNodeHashes=Object.freeze({
+ 'darwin-x64':'9e5b2644cf107befb6aefca676b96d3296bc10138096f022ed378d6233ed81f4',
+ 'darwin-arm64':'40e5607e5ecb3db9192723776da2d75d966260fc74a7a9e731c1bd67dda96bc8',
+ 'linux-x64':'855d581f8a4eb1a8117e3426de25fe02770592febcfb31369aee1ffbfee9e8ec'
+});
+export function assertDesktopBuildTarget({platform=process.platform,arch=process.arch,osRelease=''}={}){
+ if(platform==='win32'&&arch==='x64'||platform==='darwin'&&['x64','arm64'].includes(arch))return;
+ if(platform==='linux'&&arch==='x64'&&/^ID=(?:ubuntu|"ubuntu")\r?$/m.test(osRelease)&&/^VERSION_ID=(?:24\.04|"24\.04")\r?$/m.test(osRelease))return;
+ throw Error('Supported build hosts: Windows x64; Ubuntu 24.04 x64; macOS x64 and arm64.');
+}
+export function linuxPostgresBuildLayout(directory){
+ // Only a generated, generic temporary path may enter compiler diagnostics or
+ // pg_config's recorded flags. Never configure with the private checkout path.
+ if(!/^\/tmp\/observanda-postgresql-[a-zA-Z0-9]+$/.test(directory))throw Error('Invalid Linux PostgreSQL build directory.');
+ const prefix='/usr/local/observanda/postgresql',source=directory+'/postgresql-17.11',stage=directory+'/install';
+ return {source,stage,installed:stage+prefix,environment:{PATH:'/usr/bin:/bin',HOME:directory,TMPDIR:directory,LANG:'C',LC_ALL:'C'},configure:['./configure','--prefix='+prefix,'--without-icu','--without-readline','--without-zlib','CFLAGS=-O2 -ffile-prefix-map='+directory+'=/usr/src/observanda'],install:['install','DESTDIR='+stage]};
+}
 export async function payloadFiles(root){
  const files=[],base=await realpath(root);async function walk(relative){for(const entry of await readdir(path.join(root,relative),{withFileTypes:true})){const name=path.posix.join(relative,entry.name),full=path.join(root,name),stat=await lstat(full);if(stat.isSymbolicLink()){const target=await readlink(full),resolved=await realpath(full);if(path.isAbsolute(target)||!resolved.startsWith(base+path.sep)||(await lstat(resolved)).isDirectory())throw Error('Unsafe payload symlink: '+name);files.push({path:name,target});}else if(stat.isDirectory())await walk(name);else if(stat.isFile()&&name!=='payload.json'){const hash=createHash('sha256');for await(const chunk of createReadStream(full))hash.update(chunk);files.push({path:name,bytes:stat.size,sha256:hash.digest('hex')});}else if(!stat.isFile())throw Error('Unsupported payload entry');}}await walk('');return files.sort((a,b)=>a.path.localeCompare(b.path,'en'));
 }

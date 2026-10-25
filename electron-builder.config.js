@@ -8,6 +8,13 @@ export default {
  },
  win:{target:[{target:'nsis',arch:['x64']}],icon:'desktop/icon.ico',requestedExecutionLevel:'asInvoker'},
  nsis:{oneClick:false,perMachine:false,allowElevation:false,allowToChangeInstallationDirectory:true,createDesktopShortcut:true,createStartMenuShortcut:true,shortcutName:'Observanda',deleteAppDataOnUninstall:false,runAfterFinish:false},
+ extraMetadata:{homepage:'https://github.com/Seigr-lab/Observanda'},
+ linux:{target:[{target:'deb',arch:['x64']}],icon:'desktop/icon.png',executableName:'observanda',category:'Education',maintainer:'Seigr Lab'},
+ // Preserve electron-builder 26.15.3's Debian defaults, then declare the OS
+ // dependencies of GCM's self-contained .NET 10 runtime on Ubuntu 24.04.
+ // https://learn.microsoft.com/en-us/dotnet/core/install/linux-ubuntu-install
+ deb:{depends:['libgtk-3-0','libnotify4','libnss3','libxss1','libxtst6','xdg-utils','libatspi2.0-0','libuuid1','libsecret-1-0',
+  'ca-certificates','libc6','libgcc-s1','libgssapi-krb5-2','libicu74','libssl3t64','libstdc++6','tzdata','zlib1g']},
  mac:{target:['dmg'],icon:'desktop/icon.png',category:'public.app-category.productivity',hardenedRuntime:true},
  dmg:{title:'Observanda',contents:[{x:140,y:180,type:'file'},{x:420,y:180,type:'link',path:'/Applications'}]},
  artifactName:'Observanda-${version}-${os}-${arch}.${ext}',publish:null
