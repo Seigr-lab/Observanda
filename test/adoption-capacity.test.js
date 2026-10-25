@@ -100,9 +100,11 @@ test('A1-sized and tenfold authored work, physical evidence, datasets and recove
   const ordinary=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'ordinary'),{vault:f.vault}),{vault:f.vault});recovery.ordinaryMs=Math.round(performance.now()-at);observeTiming('ordinaryMs',recovery.ordinaryMs,600000);
   process.stdout.write('A2 '+copies+'x '+JSON.stringify(recovery)+'\n');
   const access=await createWorkspaceAccess('','synthetic combined workload recovery',f.deviceStore),freshVault=takeCreatedVault(access);t.after(()=>clearVault(freshVault));at=performance.now();
+  process.stdout.write('A2 '+copies+'x fresh-key copy starts\n');
   const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'fresh'),{vault:f.vault}),access,freshVault,f.vault);recovery.freshKeyMs=Math.round(performance.now()-at);observeTiming('freshKeyMs',recovery.freshKeyMs,600000);
   process.stdout.write('A2 '+copies+'x '+JSON.stringify(recovery)+'\n');
-  for(const [root,vault] of [[ordinary,f.vault],[fresh,freshVault]]){
+  for(const [name,root,vault] of [['ordinary',ordinary,f.vault],['fresh-key',fresh,freshVault]]){
+   process.stdout.write('A10 '+copies+'x '+name+' copy reconciliation starts\n');
    const ws=new Workspace(root,vault),m=new ResearchMaterials(ws),opened=await new WorkspaceReader(ws).selection({workspaceId:f.book.id,ids:[base.id]});
    assert.equal(opened.etag,saved.etag);assert.deepEqual(opened.book.entries,saved.book.entries);
    assert.deepEqual(await m.read(evidence.retained.analysis),pinnedAnalysis);
@@ -114,6 +116,7 @@ test('A1-sized and tenfold authored work, physical evidence, datasets and recove
    assert.deepEqual(await reconcileResearch(ws,expected),reconciled);
    const retainedEdition=await new PublicationJobs(ws).read(edition.reviewId);assert.deepEqual(new Set(await Array.fromAsync(retainedEdition.files.keys())),new Set(editionFiles.keys()));
    for(const [name,bytes] of editionFiles)assert.deepEqual(await contentBuffer(await retainedEdition.files.get(name)),bytes);
+   process.stdout.write('A10 '+copies+'x '+name+' copy reconciled\n');
   }
   t.diagnostic(JSON.stringify({copies,authoring:f.metrics,evidence:evidence.metrics,before,after,editMs,recovery,peakHeapMiB:Math.ceil(peak/1024/1024)}));assert.ok(peak<512*1024*1024);
   assert.deepEqual(budgetFailures,[],'Elapsed budgets exceeded under observed machine load; integrity and recovery checks completed.');
