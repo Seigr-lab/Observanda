@@ -1,6 +1,6 @@
 // Preparation retains immutable metadata through the existing writer. Bounded
-// staging joins small cell roots into one authorized transaction; no reference
-// escapes until all children and the final roots have durably committed.
+// staging joins cell and plot-member roots into authorized transactions; no
+// reference escapes until all children and final roots have durably committed.
 import {MaterialSequence} from './material-sequence.js';
 import {withWorkspaceMetadataBatch} from './metadata-batch.js';
 import {digest,serialize} from './storage-format.js';
@@ -14,7 +14,7 @@ export async function withDatasetPreparationWrites(materials,{writePage,signal},
  const commit=entries=>{const batch=[...entries];return write(()=>withWorkspaceMetadataBatch(materials.workspace,async()=>{
   for(const entry of batch){signal?.throwIfAborted();if(entry.kind)await materials.sequences.put(entry.kind,entry.value);else await materials.put(entry.file,entry.value);}
  },{prefetchIds:batch.map(entry=>'metadata:'+(entry.kind?'.observanda/materials/sequences/'+entry.kind+'/'+entry.id+'.json':materials.relative(entry.file))),signal}));};
- const flush=async()=>{if(!pending.size)return;signal?.throwIfAborted();await commit(pending.values());pending.clear();bytes=0;};
+ const flush=async()=>{if(!pending.size)return;signal?.throwIfAborted();await commit(pending.values());signal?.throwIfAborted();pending.clear();bytes=0;};
  const stage=async(key,entry)=>{
   signal?.throwIfAborted();if(pending.has(key)||touch(key)?.staged)return;
   const size=Buffer.byteLength(serialize(entry.value));if(size>MAX_BYTES){await flush();await commit([entry]);return;}if(pending.size>=MAX_OBJECTS||bytes+size>MAX_BYTES)await flush();
@@ -36,6 +36,6 @@ export async function withDatasetPreparationWrites(materials,{writePage,signal},
  }
  const staged=Object.create(materials);staged.sequences=new PreparedSequences(materials.workspace);
  staged.put=async(file,value)=>{if(!file.includes('tables'))throw new AppError('INVALID');await stage('page:'+file,{file,value});};
- try{const result=await operation(staged);await flush();return result;}
+ try{const result=await operation(staged);await flush();signal?.throwIfAborted();return result;}
  finally{pending.clear();cached.clear();bytes=0;cacheBytes=0;}
 }

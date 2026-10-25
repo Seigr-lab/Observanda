@@ -6,6 +6,9 @@ import test,{after} from 'node:test';
 import assert from 'node:assert/strict';
 import {registerHooks} from 'node:module';
 import {randomUUID} from 'node:crypto';
+import path from 'node:path';
+import os from 'node:os';
+import {serialize} from '../src/storage-format.js';
 import {RetainedFigureDocuments} from '../src/retained-figure-document.js';
 import {MaterialSequence} from '../src/material-sequence.js';
 import {retainDatasetCell} from '../src/dataset-cell-storage.js';
@@ -23,11 +26,13 @@ let prepareRetainedPlot;try{({prepareRetainedPlot}=await import(moduleURL));}fin
 after(()=>{delete globalThis[key];});
 
 function fixture(rows,{mapping={},policy,onBatch,onGet,onWriteBatch,onWrittenBatch,columnComputations=[],rowMetadata=[]}={}){
- const files=new Map(),scratch=new Map(),batches=[],reads=new Map(),writes=[],writeBatches=[],writeBatchBytes=[],workspace={readMetadata:async name=>files.get(name)??null,writeMetadata:async(name,text)=>{files.set(name,text);}},sequences=new MaterialSequence(workspace),pages=Array.from({length:Math.ceil(rows.length/41)},(_,i)=>({rows:rows.slice(i*41,(i+1)*41).map((cells,row)=>({cells,...rowMetadata[i*41+row]}))}));
+ const files=new Map(),scratch=new Map(),batches=[],reads=new Map(),writes=[],writeBatches=[],writeBatchBytes=[],retainedBatches=[],retainedReads=[];let transaction=null,retainedFault=null;
+ const workspace={root:path.join(os.tmpdir(),'absent-plot-batch-'+randomUUID()),readMetadata:async(name,limit)=>{retainedReads.push({name,transaction:transaction!==null});const text=files.get(name)??null;if(text!==null&&Buffer.byteLength(text)>limit)throw Object.assign(Error('Metadata limit'),{code:'LIMIT'});return text;},writeMetadata:async(name,text)=>{transaction?.push({name,text});files.set(name,text);}},sequences=new MaterialSequence(workspace),pages=Array.from({length:Math.ceil(rows.length/41)},(_,i)=>({rows:rows.slice(i*41,(i+1)*41).map((cells,row)=>({cells,...rowMetadata[i*41+row]}))}));
+ const write=async operation=>{assert.equal(transaction,null,'retained writes cannot nest transactions');const before=new Map(files),batch=[];transaction=batch;let committed=false;try{const result=await operation();const fault=await retainedFault?.(batch);retainedBatches.push(batch);if(fault?.error){committed=!!fault.durable;throw fault.error;}committed=true;return result;}catch(error){if(!committed){files.clear();for(const [key,value]of before)files.set(key,value);}throw error;}finally{transaction=null;}};
  const columns=rows[0].map((_,i)=>({...defaultColumn({label:'Column '+i}),representation:'decimal',...(columnComputations[i]?{computation:columnComputations[i]}:{}),...(policy?{resourcePolicy:policy}:{})})),indices=columns.map((_,i)=>i*3+4),selection={columns,indices,mapping:{x:0,xKind:'number',group:null,values:[{column:1,error:null}],kind:'scatter',operation:'raw',order:'source',...(policy?{resourcePolicy:policy}:{}),...mapping}};
  const work={async get(id){assert.ok(!id.startsWith('point:'),'point reads must use the bounded batch contract');reads.set(id,(reads.get(id)??0)+1);const value=structuredClone(scratch.get(id));await onGet?.(id,value);return value;},async getMany(ids){assert.ok(ids.length>0&&ids.length<=32);assert.equal(new Set(ids).size,ids.length);const values=new Map([...ids].reverse().filter(id=>scratch.has(id)).map(id=>[id,structuredClone(scratch.get(id))]));if(ids[0].startsWith('point:')){batches.push([...ids]);await onBatch?.(values,batches);}return values;},async put(id,value){writes.push(id);scratch.set(id,structuredClone(value));},async putMany(entries){assert.ok(entries.length>0&&entries.length<=32);assert.equal(new Set(entries.map(([id])=>id)).size,entries.length);await onWriteBatch?.(entries,scratch);writeBatches.push(entries.map(([id])=>id));writeBatchBytes.push(entries.reduce((bytes,[id,value])=>bytes+Buffer.byteLength(id)+Buffer.byteLength(JSON.stringify(value)),0));for(const [id,value]of entries)scratch.set(id,structuredClone(value));await onWrittenBatch?.(entries,scratch);},async add(id){if(scratch.has(id))return false;scratch.set(id,true);return true;},async removeMany(ids){for(const id of ids)scratch.delete(id);}};
  let sourceReads=0;const materials={workspace,sequences,datasetPageCount:()=>pages.length,readSnapshot:fn=>fn(),retainedDatasetPage:async(doc,page,selected)=>{sourceReads++;assert.deepEqual(selected.columns,indices);return pages[page];}};
- return {materials,batches,selection,pages,reads,writes,writeBatches,writeBatchBytes,scratch,files,sourceReads:()=>sourceReads,async run(options={}){currentWork=work;const result=await prepareRetainedPlot(materials,{content:{rowCount:rows.length}},{dataset:{kind:'dataset',id:randomUUID(),revision:'a'.repeat(64)},base:createFigure()},selection,{write:fn=>fn(),...options}),reader=await new RetainedFigureDocuments(workspace,{readOnly:true}).open(result.figure),points=[];for(let at=0;at<result.figure.document.counts.points;at++)points.push((await reader.rawPoint({offset:at})).value);return {result,reader,points};}};
+ return {materials,batches,selection,pages,reads,writes,writeBatches,writeBatchBytes,scratch,files,retainedBatches,retainedReads,write,setRetainedFault:fn=>{retainedFault=fn;},sourceReads:()=>sourceReads,async run(options={}){scratch.clear();currentWork=work;const result=await prepareRetainedPlot(materials,{content:{rowCount:rows.length}},{dataset:{kind:'dataset',id:randomUUID(),revision:'a'.repeat(64)},base:createFigure()},selection,{write,...options}),reader=await new RetainedFigureDocuments(workspace,{readOnly:true}).open(result.figure),points=[];for(let at=0;at<result.figure.document.counts.points;at++)points.push((await reader.rawPoint({offset:at})).value);return {result,reader,points};}};
 }
 const source=at=>({page:Math.floor(at/41),row:at%41});
 function assertBatches(f,count,series=1){assert.equal(f.batches.length,Math.ceil(count/32)*series);assert.deepEqual(f.batches.flat(),Array.from({length:series},(_,s)=>Array.from({length:count},(_,at)=>'point:'+s+':'+at)).flat());}
@@ -149,4 +154,58 @@ test('grouping cache cancellation after scratch reads or row writes stops before
  await assert.rejects(written.run({signal:writing.signal}),error=>error===reason);const members=written.scratch.get('reduction:0').members;assert.ok(members>1&&members<65);assert.equal(written.scratch.has('member:0:'+members),false);assert.equal(written.writeBatches.length,1);assert.equal(written.files.size,0);
  const pending=new AbortController(),staged=fixture(Array.from({length:10},(_,i)=>['A',String(i)]),{mapping:{xKind:'category',kind:'bar',operation:'mean'}});
  await assert.rejects(staged.run({signal:pending.signal,progress:()=>pending.abort(reason)}),error=>error===reason);assert.equal(staged.writeBatches.length,0);assert.equal(staged.files.size,0);
+});
+
+const sequencePath='.observanda/materials/sequences/';
+const memberBatches=f=>f.retainedBatches.filter(batch=>batch.some(entry=>entry.name.startsWith(sequencePath)));
+const meanFixture=count=>fixture(Array.from({length:count},()=>['A','2']),{mapping:{xKind:'category',kind:'bar',operation:'mean'}});
+async function preserveEarlierMaterial(f){
+ const builder=f.materials.sequences.builder('plot-members',f.write),earlier=[{page:1000,row:0},{page:1000,row:1}];
+ for(const item of earlier)await builder.append(item);const root=await builder.finish();
+ await f.write(()=>f.materials.workspace.writeMetadata('.observanda/unrelated-material.json','{"retained":"unchanged"}'));
+ const original=new Map(f.files);f.retainedBatches.length=0;
+ return async()=>{for(const [key,text]of original)assert.equal(f.files.get(key),text,'earlier retained material must remain unchanged');assert.deepEqual(await Array.fromAsync(f.materials.sequences.items(root)),earlier);};
+}
+async function assertMembers(f,result,count){
+ assert.equal(result.plotMembersIndex.count,count);
+ assert.deepEqual(await Array.fromAsync(f.materials.sequences.items(result.plotMembersIndex)),Array.from({length:count},(_,i)=>source(i)));
+}
+
+test('plot member retention batches immutable children through the supplied writer before returning its final root',async t=>{
+ const count=2049,f=meanFixture(count),preserved=await preserveEarlierMaterial(f),before=new Set(f.files.keys()),sequences=f.materials.sequences,{result,points}=await f.run();
+ const batches=memberBatches(f);assert.ok(batches.length>1);assert.ok(batches.length<Math.ceil(count/64)/2,'member chunks must share bounded writer transactions');
+ for(const batch of batches){assert.ok(batch.length<=32);assert.ok(batch.every(entry=>entry.name.startsWith(sequencePath)),'figure blocks keep their original writer');assert.ok(batch.reduce((n,entry)=>n+Buffer.byteLength(entry.text),0)<=256*1024);}
+ const authorized=new Set(f.retainedBatches.flat().map(entry=>entry.name));for(const key of f.files.keys())if(!before.has(key))assert.ok(authorized.has(key),'every retained object must use the supplied writer');
+ assert.equal(f.materials.sequences,sequences,'staging must not replace the source owner');assert.equal(f.sourceReads(),Math.ceil(count/41));assert.equal(points.length,1);assert.equal(points[0].y,2);assert.deepEqual(points[0].source.members,{offset:0,count});
+ await assertMembers(f,result,count);await preserved();t.diagnostic(JSON.stringify({members:count,memberChunks:Math.ceil(count/64),retainedTransactions:batches.length}));
+});
+
+test('plot member commits authenticate existing chunks and nodes, including raw node size limits',async()=>{
+ for(const damaged of ['chunk','node','node-limit']){
+  const f=meanFixture(129),preserved=await preserveEarlierMaterial(f),{result}=await f.run();
+  const nodePath=sequencePath+'nodes/'+result.plotMembersIndex.root.hash+'.json',node=JSON.parse(f.files.get(nodePath)),name=damaged==='chunk'?sequencePath+'chunks/'+node.revision+'.json':nodePath,original=f.files.get(name);
+  const corrupt=damaged==='node-limit'?original+' '.repeat(8193-Buffer.byteLength(original)):serialize({corrupt:true});f.files.set(name,corrupt);let returned=false;
+  await assert.rejects(f.run().then(value=>{returned=true;return value;}),{code:damaged==='node-limit'?'LIMIT':'MATERIAL_MISSING'});assert.equal(returned,false);assert.equal(f.files.get(name),corrupt,'failed authentication must not replace existing bytes');await preserved();
+  f.files.set(name,original);const retried=await f.run();assert.deepEqual(retried.result.plotMembersIndex,result.plotMembersIndex);await assertMembers(f,retried.result,129);
+ }
+});
+
+test('middle and final plot member writes reject rollback and lost acknowledgements without exposing a result',async()=>{
+ const count=2049,baseline=meanFixture(count),expected=(await baseline.run()).result,total=memberBatches(baseline).length;assert.ok(total>2);
+ for(const at of [Math.floor(total/2),total])for(const durable of [false,true]){
+  const f=meanFixture(count),preserved=await preserveEarlierMaterial(f),reason=Error('Retained write interrupted');let writes=0,failed,returned=false;
+  f.setRetainedFault(batch=>{if(batch.some(entry=>entry.name.startsWith(sequencePath))&&++writes===at){failed=batch;return {error:reason,durable};}});
+  await assert.rejects(f.run().then(value=>{returned=true;return value;}),error=>error===reason);assert.equal(returned,false);assert.equal(writes,at);assert.ok(failed.length);
+  for(const entry of failed)assert.equal(f.files.has(entry.name),durable,'the fixture distinguishes rollback from a lost durable acknowledgement');await preserved();
+  f.setRetainedFault(null);const retried=await f.run();assert.deepEqual(retried.result.plotMembersIndex,expected.plotMembersIndex);assert.equal(retried.points[0].y,2);await assertMembers(f,retried.result,count);await preserved();
+ }
+});
+
+test('cancellation during middle or final member commits cannot return a prepared plot',async()=>{
+ for(const count of [129,2049]){
+  const f=meanFixture(count),preserved=await preserveEarlierMaterial(f),controller=new AbortController(),reason=Object.assign(Error('Cancel retained members'),{name:'AbortError'});let writes=0,returned=false;
+  f.setRetainedFault(batch=>{if(batch.some(entry=>entry.name.startsWith(sequencePath))&&++writes===1)controller.abort(reason);});
+  await assert.rejects(f.run({signal:controller.signal}).then(value=>{returned=true;return value;}),error=>error===reason);assert.equal(returned,false);assert.equal(writes,1);await preserved();
+  f.setRetainedFault(null);const retried=await f.run();await assertMembers(f,retried.result,count);await preserved();
+ }
 });

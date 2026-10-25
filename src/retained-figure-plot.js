@@ -8,6 +8,7 @@ import {AppError} from './errors.js';
 import {withScratch} from './scratch-work.js';
 import {PagedMedian} from './paged-median.js';
 import {RetainedFigureDocuments} from './retained-figure-document.js';
+import {withDatasetPreparationWrites} from './dataset-preparation-writes.js';
 import {createFigure,createSeries,xValue} from './web/figure-model.js';
 import {FIGURE_OPERATIONS,figureMappingValueName,figureMappingPresentation} from './web/figure-import-model.js';
 import {projectFigureValue} from './web/figure-mapping-values.js';
@@ -104,8 +105,11 @@ export function prepareRetainedPlot(materials,doc,command,selection,{write,signa
   }
   if(denominator.rows!==doc.content.rowCount)fail('MATERIAL_MISSING');await flush();await median?.finish();signal?.throwIfAborted();
   const header=plotComputationHeader(figureMappingPresentation(table,mapping,command.base??createFigure(),{seriesCount,rows:denominator.included,missing}),selection,computation);
+  const retain=async memberMaterials=>{
   const builder=new RetainedFigureDocuments(materials.workspace,{write,signal}).builder(header);await builder.addPlot(header);
-  const members=operation==='raw'?null:materials.sequences.builder('plot-members',write);
+  // Only member sequences share bounded immutable-write batches. Source reads
+  // and figure blocks keep their original owners and transaction boundaries.
+  const members=operation==='raw'?null:memberMaterials.sequences.builder('plot-members',fn=>fn());
   async function* entries(series,state){
    const runs=mapping.order==='ascending'&&mapping.xKind!=='category'?makeRuns('order:'+series,(a,b)=>(mapping.xKind==='number'?compare(a.exactX,b.exactX):xValue(a.exactX,'date')-xValue(b.exactX,'date'))||a.position-b.position):null;
    for(let at=0;at<state.count;at+=32){
@@ -140,5 +144,7 @@ export function prepareRetainedPlot(materials,doc,command,selection,{write,signa
   if(repeats&&operation==='raw')warnings.push(repeats+' repeated coordinates are retained as separate measurements.'+(['bar','bar-horizontal'].includes(header.kind)?' Bars at the same coordinate will overlap; use scatter to see individual observations.':''));
   if(backwards&&['line','area'].includes(header.kind))warnings.push('Coordinates go backwards in file order. Choose Sort by coordinate to connect them in ascending order, or use scatter.');if(gaps)warnings.push(gaps+' empty values will remain gaps.');
   return {figure,denominator,warnings,...(members?{plotMembersIndex:await members.finish()}:{})};
+  };
+  return operation==='raw'?retain(materials):withDatasetPreparationWrites(materials,{writePage:write,signal},retain);
  },{signal});
 }
