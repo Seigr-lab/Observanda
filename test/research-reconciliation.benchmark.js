@@ -10,6 +10,7 @@ import {reconcileResearch} from './fixtures/research-reconciliation.js';
 import {sampleWorkloadCpu} from './workload-cpu-sample.js';
 import {ResearchMaterials} from '../src/research-materials.js';
 import {ResearchCatalogue} from '../src/research-catalogue.js';
+import {MaterialSequence} from '../src/material-sequence.js';
 import {FileContent} from '../src/file-content.js';
 import {Workspace} from '../src/storage.js';
 import {copyPlan,copyWorkspace} from '../src/locations.js';
@@ -32,7 +33,16 @@ async function measuredReconciliation(workspace,expected,label,t){
   replace(db,'run',original=>async function(...args){const item=stats(context.getStore()?.name??'snapshot'),start=performance.now();item.sqlQueries++;try{return await original.apply(this,args);}finally{item.sqlMs+=performance.now()-start;}});
  };
  replace(workspace,'openCatalogue',original=>function(...args){return phase('catalogue-open',()=>original.apply(this,args));});
+ replace(workspace,'readMetadata',original=>function(...args){
+  const parent=context.getStore()?.name;
+  return this===workspace&&['sequence-node-read','sequence-chunk-read','sequence-other-read'].includes(parent)?phase(parent.replace(/-read$/,'-metadata'),()=>original.apply(this,args)):original.apply(this,args);
+ });
  replace(workspace,'catalogue',original=>function(operation,...args){return original.call(this,store=>{instrument(store);return operation(store);},...args);});
+ replace(MaterialSequence.prototype,'read',original=>function(...args){
+  if(this.workspace!==workspace)return original.apply(this,args);
+  const kind=args[0]==='nodes'?'node':args[0]==='chunks'?'chunk':'other';
+  return phase('sequence-'+kind+'-read',()=>original.apply(this,args));
+ });
  for(const [method,name] of [['verify','catalogue-verify'],['verifySnapshot','snapshot-verify']])replace(ResearchCatalogue.prototype,method,original=>function(...args){if(this.workspace!==workspace)return original.apply(this,args);instrument(this);return phase(name,()=>original.apply(this,args));});
  replace(ResearchMaterials.prototype,'verifySnapshot',original=>function(...args){return this.workspace===workspace?phase('materials-verify',()=>original.apply(this,args)):original.apply(this,args);});
  // These are verification attempts, not decoded bytes: a scoped verification
