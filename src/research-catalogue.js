@@ -14,6 +14,7 @@ import {rekeyProjectDomains} from './project-domain-rekey.js';
 // Transactional research storage. PostgreSQL sees encrypted payloads and opaque IDs,
 // never titles, prose or file paths. Workspace owns locking and key custody.
 import {catalogueContext} from './catalogue-context.js';
+import {cachedMaterialText,rememberMaterialText} from './catalogue-material-text-cache.js';
 import {reconcileWebsiteMembership,reconcileOwnedWebsiteMembership,websiteMembershipChange} from './website-membership.js';
 import {WebsiteDocumentStore} from './website-document-store.js';
 import {verifyWebsiteEditor} from './website-editor-store.js';
@@ -554,7 +555,10 @@ export class ResearchCatalogue{
  async objectValue(id,expected){
   const batch=metadataBatchIndex(this),load=()=>this.db.get('SELECT payload FROM objects WHERE id=$1',id),row=batch?await batch.objectRow(id):this.readCache?await this.readCache.row('object:'+id,load):await load();
   if(!!expected!==!!row)fail();if(!row)return null;
-  const value=await resolveMetadataValue(this,id,expected.revision,this.decode('object',id,row.payload));if(hash(value)!==expected.revision)fail();return value;
+  const cached=cachedMaterialText(this,id,expected.revision);if(cached)return cached;
+  const decoded=this.decode('object',id,row.payload),value=await resolveMetadataValue(this,id,expected.revision,decoded);
+  if(hash(value)!==expected.revision)fail();
+  rememberMaterialText(this,id,expected.revision,decoded);return value;
  }
  async object(id){
   const index=this.objectIndex(),head=await index.head();
