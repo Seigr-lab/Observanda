@@ -39,7 +39,7 @@ process.on('message',async message=>{
   try{
     runtime=await startWorkspaceDatabases({directory:path.join(path.dirname(message.preferencesFile),'postgresql'),signal:startup.signal,onProgress:({stage,percent})=>send({type:'progress',message:stage==='download'?'Preparing database: '+percent+'%':({install:'Preparing the database…',extract:'Checking the database runtime…',initialize:'Preparing your private database…',start:'Starting your database…'})[stage]??'Starting Observanda…'})});
     startup.signal.throwIfAborted();const root=await readPreference(message.preferencesFile);
-    const deviceStore=new DeviceStore({file:message.preferencesFile+'.device-key',...(process.platform==='darwin'&&message.deviceProtection?{protector}:{})});
+    const deviceStore=new DeviceStore({file:message.preferencesFile+'.device-key',...((process.platform==='darwin'||process.platform==='linux')&&message.deviceProtection===true?{protector}:{})});
     server=await startServer({root,port:0,preferencesFile:message.preferencesFile,expectedExisting:!!root,deviceStore});
     startup.signal.throwIfAborted();send({type:'ready',url:server.url});
   }catch(error){if(!stopping)send({type:'failed',message:safeError(error).message});stopping=true;process.exitCode=1;}

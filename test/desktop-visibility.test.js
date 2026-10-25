@@ -79,11 +79,12 @@ test('real desktop startup keeps disposable source and packaged windows hidden b
 
 test('a rejected visible launch is closed before the fixture returns its failure',async()=>{
  const key='__observandaVisibleFixture',previous=globalThis[key],screenshots=process.env.OBSERVANDA_DESKTOP_SCREENSHOTS;let closed=false,fixture;
- const app={async firstWindow(){return {};},async evaluate(run,value){return run({BrowserWindow:{getAllWindows:()=>[{webContents:{setBackgroundThrottling(){}},isVisible:()=>true}]},dialog:{}},value);},async close(){closed=true;}};
+ const launched=Object.assign(new EventEmitter(),{exitCode:null,signalCode:null});
+ const app={process:()=>launched,async firstWindow(){return {};},async evaluate(run,value){return run({BrowserWindow:{getAllWindows:()=>[{webContents:{setBackgroundThrottling(){}},isVisible:()=>true}]},dialog:{}},value);},async close(){closed=true;launched.exitCode=0;launched.emit('exit',0,null);}};
  globalThis[key]={async launch(){return app;}};process.env.OBSERVANDA_DESKTOP_SCREENSHOTS='0';
  const hooks=registerHooks({resolve(specifier,context,next){return specifier==='@playwright/test'?{url:'visibility:fixture',shortCircuit:true}:next(specifier,context);},load(url,context,next){return url==='visibility:fixture'?{format:'module',shortCircuit:true,source:'export const _electron=globalThis.'+key+';'}:next(url,context);}});
  try{
   const {desktopFixture}=await import('./desktop/fixture.js?visibility-cleanup');fixture=await desktopFixture('observanda-visibility-fixture-');
-  await assert.rejects(fixture.start('synthetic-executable'),/Desktop test launch unexpectedly showed a window/);assert.equal(closed,true);
+  await assert.rejects(fixture.start('synthetic-executable'),/Desktop test launch unexpectedly showed a window/);assert.equal(closed,true);assert.equal(launched.listenerCount('exit'),0);
  }finally{hooks.deregister();if(fixture)await fixture.dispose();if(previous===undefined)delete globalThis[key];else globalThis[key]=previous;if(screenshots===undefined)delete process.env.OBSERVANDA_DESKTOP_SCREENSHOTS;else process.env.OBSERVANDA_DESKTOP_SCREENSHOTS=screenshots;}
 });

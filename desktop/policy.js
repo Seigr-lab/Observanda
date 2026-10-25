@@ -1,4 +1,18 @@
 export const windowPreferences = Object.freeze({nodeIntegration:false,nodeIntegrationInWorker:false,nodeIntegrationInSubFrames:false,contextIsolation:true,sandbox:true,webSecurity:true,allowRunningInsecureContent:false,webviewTag:false,spellcheck:false});
+export function deviceProtectionAvailable(storage,platform=process.platform){
+  try{
+    if(platform!=='darwin'&&platform!=='linux'||storage.isEncryptionAvailable()!==true)return false;
+    // Linux's basic_text backend has no OS credential protection. Only admit
+    // known keyring backends, including on every request after startup.
+    return platform==='darwin'||['gnome_libsecret','kwallet','kwallet5','kwallet6'].includes(storage.getSelectedStorageBackend());
+  }catch{return false;}
+}
+export function protectDeviceValue(storage,message,platform=process.platform){
+  try{
+    if(typeof message.value!=='string'||message.value.length>32768||!['encrypt','decrypt'].includes(message.operation)||!deviceProtectionAvailable(storage,platform))return;
+    return message.operation==='encrypt'?storage.encryptString(message.value).toString('base64'):storage.decryptString(Buffer.from(message.value,'base64'));
+  }catch{}
+}
 export function localUrl(value,origin){
   try{const url=new URL(value);return !!origin&&url.origin===origin&&!url.username&&!url.password;}catch{return false;}
 }

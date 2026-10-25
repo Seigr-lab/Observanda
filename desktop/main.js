@@ -5,7 +5,7 @@ import {readFileSync} from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import {fileURLToPath} from 'node:url';
-import {windowPreferences,localUrl,externalUrl,launchUrl} from './policy.js';
+import {windowPreferences,localUrl,externalUrl,launchUrl,deviceProtectionAvailable,protectDeviceValue} from './policy.js';
 import {windowIcon,followWindowTheme} from './branding.js';
 import {closeGuard} from './close-guard.js';
 const closeText=JSON.parse(readFileSync(new URL('./locales/en/close.json',import.meta.url),'utf8'));
@@ -105,11 +105,11 @@ else{
     if(message.type==='ready'&&launchUrl(message.url)&&main&&!stopping){origin=new URL(message.url).origin;await main.loadURL(message.url);}
     if(message.type==='progress'&&typeof message.message==='string')showProgress(message.message.slice(0,500));
     if(message.type==='failed'&&typeof message.message==='string')void failed(message.message.slice(0,1000));
-    if(message.type==='protect'&&process.platform==='darwin'&&Number.isSafeInteger(message.id)){
-      let result;try{if(!safeStorage.isEncryptionAvailable()||typeof message.value!=='string'||message.value.length>32768)throw Error();result=message.operation==='encrypt'?safeStorage.encryptString(message.value).toString('base64'):message.operation==='decrypt'?safeStorage.decryptString(Buffer.from(message.value,'base64')):null;}catch{}
+    if(message.type==='protect'&&(process.platform==='darwin'||process.platform==='linux')&&Number.isSafeInteger(message.id)){
+      const result=protectDeviceValue(safeStorage,message);
       if(child.connected)child.send({type:'protected',id:message.id,...(typeof result==='string'?{value:result}:{error:true})});
     }
   });
-  child.send({type:'start',preferencesFile,deviceProtection:process.platform==='darwin'&&safeStorage.isEncryptionAvailable()});
+  child.send({type:'start',preferencesFile,deviceProtection:deviceProtectionAvailable(safeStorage)});
   }).catch(async()=>{await dialog.showMessageBox({type:'error',title:'Observanda could not start',message:'The desktop window could not initialize. Your saved work has not been changed.'});main?.destroy();await stopService();});
 }
