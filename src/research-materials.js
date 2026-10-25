@@ -607,7 +607,7 @@ export class ResearchMaterials {
   const doc=await this.validatePlot(command),{mapping,dataset}=command,selection=await datasetPlotSelection(this,doc,mapping),columns=selection.columns,operation=mapping.operation??'raw';
   const write=writePage??(fn=>this.workspace.withLock(fn)),prefix=this.plotWork(jobId,attempt);
   void prefix;
-  const retainedWrite=operation=>write(async()=>{if(typeof this.workspace.catalogue==='function')await this.workspace.catalogue(async store=>{const {requireRetainedFigures,requireNativeNumericalModels,requireFigureProjectionPolicies}=await import('./catalogue-format.js');await requireRetainedFigures(store.db);if(mapping.projection)await requireNativeNumericalModels(store.db);if(mapping.resourcePolicy)await requireFigureProjectionPolicies(store.db);});return operation();});
+  const retainedWrite=operation=>write(async()=>{if(typeof this.workspace.catalogue==='function')await this.workspace.catalogue(async store=>{const {requireRetainedFigures,requireNativeNumericalModels,requireFigureProjectionPolicies}=await import('./catalogue-format.js');await requireRetainedFigures(store.db);if(mapping.projection)await requireNativeNumericalModels(store.db);if(mapping.resourcePolicy)await requireFigureProjectionPolicies(store.db);});return withWorkspaceMetadataBatch(this.workspace,operation);});
   const result=await prepareRetainedPlot(this,doc,command,selection,{write:retainedWrite,signal,progress});
   return {commandHash:digest(revisionText(command)),content:{inputs:[dataset],tool:'Observanda table mapping',version:mapping.resourcePolicy?'10':'9',parameters:JSON.stringify(mapping),mapping,numericTransform:plotNumericalMetadata(mapping),...result}};
   });
