@@ -28,9 +28,10 @@ export function prepareRetainedPlot(materials,doc,command,selection,{write,signa
   const absolute=index=>index===null?null:selection.indices?.[index]??index;
   const denominator={format:selection.indices?3:2,dataset:command.dataset,...(selection.indices?{columnIndices:selection.indices}:{}),rows:0,included:0,excludedCount:0,missing:columns.map((column,index)=>({column:absolute(index),name:column.name,count:0}))};
   let seriesCount=0,bucketCount=0,missing=0,rounded=false,collapsed=false,repeats=0,gaps=0,backwards=false;
-  // This scratch owner is exclusive to the calculation. Reuse only its small
-  // grouping state; source rows, members, points and sort runs stay in scratch.
-  const metadata=new Map();let metadataBytes=0;
+  // This scratch owner is exclusive to the calculation. Only bounded grouping
+  // metadata and pending contributions stay in memory; output traversals read
+  // members, points and sort runs from encrypted scratch.
+  const metadata=new Map(),pending=new Map();let metadataBytes=0,pendingBytes=0;
   const isMetadata=key=>/^(group|series|bucket|reduction):/.test(key);
   const remember=(key,value)=>{
    const prior=metadata.get(key);if(prior){metadataBytes-=prior.bytes;metadata.delete(key);}
@@ -38,10 +39,23 @@ export function prepareRetainedPlot(materials,doc,command,selection,{write,signa
    while(metadata.size>=64||metadataBytes+bytes>256*1024){const first=metadata.keys().next().value;metadataBytes-=metadata.get(first).bytes;metadata.delete(first);}
    metadata.set(key,{value:structuredClone(value),bytes});metadataBytes+=bytes;
   };
-  const readMetadata=async key=>{signal?.throwIfAborted();const cached=metadata.get(key);if(cached){metadata.delete(key);metadata.set(key,cached);return structuredClone(cached.value);}
+  const readMetadata=async key=>{signal?.throwIfAborted();const staged=pending.get(key);if(staged)return structuredClone(staged.value);const cached=metadata.get(key);if(cached){metadata.delete(key);metadata.set(key,cached);return structuredClone(cached.value);}
    const value=await work.get(key);signal?.throwIfAborted();remember(key,value);return value;
   };
-  const saveEntries=async entries=>{signal?.throwIfAborted();await work.putMany(entries);signal?.throwIfAborted();for(const [key,value]of entries)if(isMetadata(key))remember(key,value);};
+  const writeEntries=async entries=>{signal?.throwIfAborted();await work.putMany(entries);signal?.throwIfAborted();for(const [key,value]of entries)if(isMetadata(key))remember(key,value);};
+  const flush=async()=>{signal?.throwIfAborted();if(!pending.size)return;await writeEntries([...pending].map(([key,entry])=>[key,entry.value]));pending.clear();pendingBytes=0;};
+  const saveEntries=async entries=>{
+   signal?.throwIfAborted();let count=pending.size,bytes=pendingBytes,total=0;
+   const sizes=entries.map(([key,value])=>{const size=Buffer.byteLength(key)+Buffer.byteLength(JSON.stringify(value)),prior=pending.get(key);total+=size;bytes+=size-(prior?.bytes??0);if(!prior)count++;return size;});
+   // Flush whole contributions: no batch can persist a member without the
+   // reduction that includes it. Oversized contributions keep direct writes.
+   if(total>256*1024){await flush();return writeEntries(entries);}
+   if(count>32||bytes>256*1024)await flush();
+   for(const [index,[key,value]]of entries.entries()){
+    pendingBytes-=pending.get(key)?.bytes??0;pending.set(key,{value:structuredClone(value),bytes:sizes[index]});pendingBytes+=sizes[index];
+   }
+   if(pending.size===32||pendingBytes===256*1024)await flush();
+  };
   const makeRuns=(prefix,compareValues,midpoint)=>new PagedMedian({signal,pageBytes:262144,blockSize:128,compareValues,midpoint,
    read:name=>work.get(prefix+':page:'+name),write:(name,text)=>work.put(prefix+':page:'+name,text),remove:names=>work.removeMany(names.map(name=>prefix+':page:'+name)),
    state:{read:name=>work.get(prefix+':state:'+name),write:(name,value)=>work.put(prefix+':state:'+name,value)}});
@@ -88,7 +102,7 @@ export function prepareRetainedPlot(materials,doc,command,selection,{write,signa
    }
    await progress({stage:'calculating dataset rows',done:denominator.rows,total:doc.content.rowCount});
   }
-  if(denominator.rows!==doc.content.rowCount)fail('MATERIAL_MISSING');await median?.finish();signal?.throwIfAborted();
+  if(denominator.rows!==doc.content.rowCount)fail('MATERIAL_MISSING');await flush();await median?.finish();signal?.throwIfAborted();
   const header=plotComputationHeader(figureMappingPresentation(table,mapping,command.base??createFigure(),{seriesCount,rows:denominator.included,missing}),selection,computation);
   const builder=new RetainedFigureDocuments(materials.workspace,{write,signal}).builder(header);await builder.addPlot(header);
   const members=operation==='raw'?null:materials.sequences.builder('plot-members',write);

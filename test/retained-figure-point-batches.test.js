@@ -23,11 +23,11 @@ let prepareRetainedPlot;try{({prepareRetainedPlot}=await import(moduleURL));}fin
 after(()=>{delete globalThis[key];});
 
 function fixture(rows,{mapping={},policy,onBatch,onGet,onWriteBatch,onWrittenBatch,columnComputations=[],rowMetadata=[]}={}){
- const files=new Map(),scratch=new Map(),batches=[],reads=new Map(),writes=[],writeBatches=[],workspace={readMetadata:async name=>files.get(name)??null,writeMetadata:async(name,text)=>{files.set(name,text);}},sequences=new MaterialSequence(workspace),pages=Array.from({length:Math.ceil(rows.length/41)},(_,i)=>({rows:rows.slice(i*41,(i+1)*41).map((cells,row)=>({cells,...rowMetadata[i*41+row]}))}));
+ const files=new Map(),scratch=new Map(),batches=[],reads=new Map(),writes=[],writeBatches=[],writeBatchBytes=[],workspace={readMetadata:async name=>files.get(name)??null,writeMetadata:async(name,text)=>{files.set(name,text);}},sequences=new MaterialSequence(workspace),pages=Array.from({length:Math.ceil(rows.length/41)},(_,i)=>({rows:rows.slice(i*41,(i+1)*41).map((cells,row)=>({cells,...rowMetadata[i*41+row]}))}));
  const columns=rows[0].map((_,i)=>({...defaultColumn({label:'Column '+i}),representation:'decimal',...(columnComputations[i]?{computation:columnComputations[i]}:{}),...(policy?{resourcePolicy:policy}:{})})),indices=columns.map((_,i)=>i*3+4),selection={columns,indices,mapping:{x:0,xKind:'number',group:null,values:[{column:1,error:null}],kind:'scatter',operation:'raw',order:'source',...(policy?{resourcePolicy:policy}:{}),...mapping}};
- const work={async get(id){assert.ok(!id.startsWith('point:'),'point reads must use the bounded batch contract');reads.set(id,(reads.get(id)??0)+1);const value=structuredClone(scratch.get(id));await onGet?.(id,value);return value;},async getMany(ids){assert.ok(ids.length>0&&ids.length<=32);assert.equal(new Set(ids).size,ids.length);const values=new Map([...ids].reverse().filter(id=>scratch.has(id)).map(id=>[id,structuredClone(scratch.get(id))]));if(ids[0].startsWith('point:')){batches.push([...ids]);await onBatch?.(values,batches);}return values;},async put(id,value){writes.push(id);scratch.set(id,structuredClone(value));},async putMany(entries){assert.ok(entries.length>0&&entries.length<=32);assert.equal(new Set(entries.map(([id])=>id)).size,entries.length);await onWriteBatch?.(entries,scratch);writeBatches.push(entries.map(([id])=>id));for(const [id,value]of entries)scratch.set(id,structuredClone(value));await onWrittenBatch?.(entries,scratch);},async add(id){if(scratch.has(id))return false;scratch.set(id,true);return true;},async removeMany(ids){for(const id of ids)scratch.delete(id);}};
+ const work={async get(id){assert.ok(!id.startsWith('point:'),'point reads must use the bounded batch contract');reads.set(id,(reads.get(id)??0)+1);const value=structuredClone(scratch.get(id));await onGet?.(id,value);return value;},async getMany(ids){assert.ok(ids.length>0&&ids.length<=32);assert.equal(new Set(ids).size,ids.length);const values=new Map([...ids].reverse().filter(id=>scratch.has(id)).map(id=>[id,structuredClone(scratch.get(id))]));if(ids[0].startsWith('point:')){batches.push([...ids]);await onBatch?.(values,batches);}return values;},async put(id,value){writes.push(id);scratch.set(id,structuredClone(value));},async putMany(entries){assert.ok(entries.length>0&&entries.length<=32);assert.equal(new Set(entries.map(([id])=>id)).size,entries.length);await onWriteBatch?.(entries,scratch);writeBatches.push(entries.map(([id])=>id));writeBatchBytes.push(entries.reduce((bytes,[id,value])=>bytes+Buffer.byteLength(id)+Buffer.byteLength(JSON.stringify(value)),0));for(const [id,value]of entries)scratch.set(id,structuredClone(value));await onWrittenBatch?.(entries,scratch);},async add(id){if(scratch.has(id))return false;scratch.set(id,true);return true;},async removeMany(ids){for(const id of ids)scratch.delete(id);}};
  let sourceReads=0;const materials={workspace,sequences,datasetPageCount:()=>pages.length,readSnapshot:fn=>fn(),retainedDatasetPage:async(doc,page,selected)=>{sourceReads++;assert.deepEqual(selected.columns,indices);return pages[page];}};
- return {materials,batches,selection,pages,reads,writes,writeBatches,scratch,files,sourceReads:()=>sourceReads,async run(options={}){currentWork=work;const result=await prepareRetainedPlot(materials,{content:{rowCount:rows.length}},{dataset:{kind:'dataset',id:randomUUID(),revision:'a'.repeat(64)},base:createFigure()},selection,{write:fn=>fn(),...options}),reader=await new RetainedFigureDocuments(workspace,{readOnly:true}).open(result.figure),points=[];for(let at=0;at<result.figure.document.counts.points;at++)points.push((await reader.rawPoint({offset:at})).value);return {result,reader,points};}};
+ return {materials,batches,selection,pages,reads,writes,writeBatches,writeBatchBytes,scratch,files,sourceReads:()=>sourceReads,async run(options={}){currentWork=work;const result=await prepareRetainedPlot(materials,{content:{rowCount:rows.length}},{dataset:{kind:'dataset',id:randomUUID(),revision:'a'.repeat(64)},base:createFigure()},selection,{write:fn=>fn(),...options}),reader=await new RetainedFigureDocuments(workspace,{readOnly:true}).open(result.figure),points=[];for(let at=0;at<result.figure.document.counts.points;at++)points.push((await reader.rawPoint({offset:at})).value);return {result,reader,points};}};
 }
 const source=at=>({page:Math.floor(at/41),row:at%41});
 function assertBatches(f,count,series=1){assert.equal(f.batches.length,Math.ceil(count/32)*series);assert.deepEqual(f.batches.flat(),Array.from({length:series},(_,s)=>Array.from({length:count},(_,at)=>'point:'+s+':'+at)).flat());}
@@ -89,14 +89,19 @@ test('retained plot receipt verification replays actual computation in the exist
  delete f.pages[0].rows[1].cellComputations[1];await assert.rejects(verifyPlotProjection(f.materials,document),{code:'CATALOGUE_DAMAGED'});
 });
 
-test('hot mean reductions batch complete row updates without rereading or rewriting unchanged series',async()=>{
+test('hot mean reductions stage complete contributions in bounded batches without losing ordered members',async t=>{
  const rows=Array.from({length:132},(_,i)=>['105',String(i%4)]),committed=[];
  const f=fixture(rows,{mapping:{xKind:'category',kind:'bar',operation:'mean'},onWrittenBatch:entries=>{const reduced=entries.find(([id])=>id==='reduction:0');if(reduced)committed.push(reduced[1]);}}),{points,result}=await f.run();
  assert.equal(points.length,1);assert.equal(points[0].x,'105');assert.equal(points[0].y,1.5);assert.equal(points[0].source.members.count,rows.length);assert.equal(result.denominator.included,rows.length);
  assert.equal(f.reads.get('group:[1,null]'),1);assert.equal(f.reads.get('bucket:0:105'),1);assert.equal(f.reads.get('series:0')??0,0);assert.equal(f.reads.get('reduction:0')??0,0);
- assert.equal(f.writeBatches.length,rows.length+1);assert.equal(f.writeBatches.flat().filter(id=>id==='series:0').length,2);assert.ok(f.writeBatches.slice(2).every(ids=>ids.length===2&&ids[0].startsWith('member:')&&ids[1]==='reduction:0'));
+ assert.ok(f.writeBatches.length<rows.length/8);assert.ok(f.writeBatchBytes.every(bytes=>bytes<=256*1024));assert.ok(f.writeBatches.flat().filter(id=>id==='series:0').length<=2);
+ let count=0;for(const [index,ids]of f.writeBatches.entries()){
+  const members=ids.filter(id=>id.startsWith('member:'));assert.deepEqual(members,Array.from({length:members.length},(_,at)=>'member:0:'+(count+at)));count+=members.length;
+  assert.ok(ids.includes('reduction:0'));assert.equal(committed[index].members,count);assert.equal(committed[index].n,count);
+  assert.equal(committed[index].sum,rows.slice(0,count).reduce((sum,row)=>sum+Number(row[1]),0)+'/1','later updates cannot mutate an earlier flushed reduction');
+ }
+ assert.equal(count,rows.length);t.diagnostic(JSON.stringify({rows:rows.length,writeBatches:f.writeBatches.length,maximumBatchBytes:Math.max(...f.writeBatchBytes)}));
  assert.equal(f.writes.some(id=>/^(group|series|bucket|reduction|member|point):/.test(id)),false);
- assert.deepEqual(committed.map(value=>value.members),Array.from({length:rows.length},(_,i)=>i+1),'later cache updates must not mutate earlier committed state');
  assert.deepEqual(await Array.fromAsync(f.materials.sequences.items(result.plotMembersIndex)),rows.map((_,i)=>source(i)));
 });
 
@@ -116,23 +121,32 @@ test('interleaved reduction groups survive count eviction with exact results and
 test('grouping cache byte eviction counts UTF-8 keys and oversized metadata falls back to scratch',async()=>{
  const categories=Array.from({length:10},(_,i)=>'観'.repeat(10000)+i),rows=categories.map(category=>[category,'1']);rows.push([categories[0],'3']);
  const f=fixture(rows,{mapping:{xKind:'category',kind:'bar',operation:'mean'}}),{points,result}=await f.run();
+ assert.ok(f.writeBatchBytes.every(bytes=>bytes<=256*1024),'UTF-8 key bytes bound staged contributions');assert.ok(f.writeBatches.length>1);
  assert.equal(points.length,categories.length);assert.equal(points[0].y,2);assert.equal(points[0].x,categories[0]);assert.equal(f.reads.get('bucket:0:'+categories[0]),2,'key bytes must evict before the 64-entry bound');assert.equal(result.plotMembersIndex.count,rows.length);
  // This producer accepts already selected scalar strings; oversized grouping
  // metadata must still use scratch instead of bypassing the cache byte bound.
  const group='界'.repeat(90000),large=fixture([['A','1',group],['A','3',group]],{mapping:{xKind:'category',kind:'bar',group:2,operation:'mean'}}),retained=await large.run();
+ assert.ok(large.writeBatchBytes.some(bytes=>bytes>256*1024),'oversized complete contributions go directly to scratch');
  assert.equal(retained.points[0].y,2);assert.equal(retained.points[0].source.group,group);assert.equal(large.reads.get('group:'+JSON.stringify([1,group])),2);assert.equal(large.reads.get('series:0'),3);
  assert.deepEqual(await Array.fromAsync(large.materials.sequences.items(retained.result.plotMembersIndex)),[source(0),source(1)]);
 });
 
-test('failed row batches preserve committed scratch state and expose no partial figure',async()=>{
- const reason=Error('failed reduction batch'),f=fixture([['A','1'],['A','3']],{mapping:{xKind:'category',kind:'bar',operation:'mean'},onWriteBatch:entries=>{if(entries.some(([id])=>id==='member:0:1'))throw reason;}});
- await assert.rejects(f.run(),error=>error===reason);assert.equal(f.scratch.get('reduction:0').sum,'1/1');assert.equal(f.scratch.get('reduction:0').members,1);assert.equal(f.scratch.has('member:0:1'),false);assert.equal(f.scratch.get('series:0').count,1);assert.equal(f.files.size,0);
+test('failed contribution batches preserve prior complete members and flush failures precede figure writes',async()=>{
+ for(const count of [40,65]){
+  const reason=Error('failed reduction batch');let attempted=0,prior;
+  const f=fixture(Array.from({length:count},(_,i)=>['A',String(i)]),{mapping:{xKind:'category',kind:'bar',operation:'mean'},onWriteBatch:(_entries,scratch)=>{if(++attempted===2){prior=structuredClone(scratch.get('reduction:0'));throw reason;}}});
+  await assert.rejects(f.run(),error=>error===reason);assert.deepEqual(f.scratch.get('reduction:0'),prior);assert.ok(prior.members>1&&prior.members<count);
+  for(let i=0;i<prior.members;i++)assert.deepEqual(f.scratch.get('member:0:'+i),source(i));assert.equal(f.scratch.has('member:0:'+prior.members),false);assert.equal(f.scratch.get('series:0').count,1);assert.equal(f.files.size,0);
+  if(count===40)assert.equal(f.sourceReads(),1,'the final partial batch can fail after all source rows were consumed');
+ }
 });
 
 test('grouping cache cancellation after scratch reads or row writes stops before publication',async()=>{
  const reason=Object.assign(Error('cancel reduction'),{name:'AbortError'});
  const reading=new AbortController(),read=fixture([['A','1']],{mapping:{xKind:'category',kind:'bar',operation:'mean'},onGet:id=>{if(id==='group:[1,null]')reading.abort(reason);}});
  await assert.rejects(read.run({signal:reading.signal}),error=>error===reason);assert.equal(read.writeBatches.length,0);assert.equal(read.files.size,0);
- const writing=new AbortController(),written=fixture([['A','1'],['A','3']],{mapping:{xKind:'category',kind:'bar',operation:'mean'},onWrittenBatch:entries=>{if(entries.some(([id])=>id==='member:0:0'))writing.abort(reason);}});
- await assert.rejects(written.run({signal:writing.signal}),error=>error===reason);assert.equal(written.scratch.get('reduction:0').members,1);assert.equal(written.scratch.has('member:0:1'),false);assert.equal(written.files.size,0);
+ const writing=new AbortController(),written=fixture(Array.from({length:65},(_,i)=>['A',String(i)]),{mapping:{xKind:'category',kind:'bar',operation:'mean'},onWrittenBatch:entries=>{if(entries.some(([id])=>id==='member:0:0'))writing.abort(reason);}});
+ await assert.rejects(written.run({signal:writing.signal}),error=>error===reason);const members=written.scratch.get('reduction:0').members;assert.ok(members>1&&members<65);assert.equal(written.scratch.has('member:0:'+members),false);assert.equal(written.writeBatches.length,1);assert.equal(written.files.size,0);
+ const pending=new AbortController(),staged=fixture(Array.from({length:10},(_,i)=>['A',String(i)]),{mapping:{xKind:'category',kind:'bar',operation:'mean'}});
+ await assert.rejects(staged.run({signal:pending.signal,progress:()=>pending.abort(reason)}),error=>error===reason);assert.equal(staged.writeBatches.length,0);assert.equal(staged.files.size,0);
 });
