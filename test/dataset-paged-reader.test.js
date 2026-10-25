@@ -69,11 +69,11 @@ globalThis[schemaKey]=async function*(create,{signal}={}){const work=currentSche
 const schemaHooks=registerHooks({resolve(specifier,context,next){return context.parentURL===schemaModule&&specifier==='./scratch-iterator.js'?{url:'schema-cache:scratch',shortCircuit:true}:next(specifier,context);},load(url,context,next){return url==='schema-cache:scratch'?{format:'module',shortCircuit:true,source:'export const scratchIterator=(create,options)=>globalThis['+JSON.stringify(schemaKey)+'](create,options);'}:next(url,context);}});
 let schemaReader;try{({readPagedDataset:schemaReader}=await import(schemaModule));}finally{schemaHooks.deregister();}
 after(()=>{delete globalThis[schemaKey];});
-function schemaFixture({onGet,onPut}={}){
- const stored=new Map(),reads=new Map(),writes=[];
- const work={closed:false,async get(key){reads.set(key,(reads.get(key)??0)+1);const value=structuredClone(stored.get(key));await onGet?.(key,value);return value;},async put(key,value){await onPut?.(key,value);writes.push(key);stored.set(key,structuredClone(value));},async add(key,value=true){if(stored.has(key))return false;stored.set(key,structuredClone(value));return true;}};
+function schemaFixture({onGet,onPut,onGetMany,onPutMany,onPutManyComplete}={}){
+ const stored=new Map(),reads=new Map(),writes=[],readBatches=[],writeBatches=[];
+ const work={closed:false,async get(key){reads.set(key,(reads.get(key)??0)+1);const value=structuredClone(stored.get(key));await onGet?.(key,value);return value;},async getMany(keys){assert.ok(keys.length>0&&keys.length<=32);assert.equal(new Set(keys).size,keys.length);readBatches.push([...keys]);for(const key of keys)reads.set(key,(reads.get(key)??0)+1);const result=new Map([...keys].reverse().filter(key=>stored.has(key)).map(key=>[key,structuredClone(stored.get(key))]));await onGetMany?.(result,keys);return result;},async put(key,value){await onPut?.(key,value);writes.push(key);stored.set(key,structuredClone(value));},async putMany(entries){assert.ok(entries.length>0&&entries.length<=32);assert.equal(new Set(entries.map(([key])=>key)).size,entries.length);const bytes=entries.reduce((n,[key,value])=>n+Buffer.byteLength(key)+Buffer.byteLength(JSON.stringify(value)),0);assert.ok(bytes<=256*1024);await onPutMany?.(entries);writeBatches.push({keys:entries.map(([key])=>key),bytes});for(const [key,value]of entries)stored.set(key,structuredClone(value));await onPutManyComplete?.(entries);},async add(key,value=true){if(stored.has(key))return false;stored.set(key,structuredClone(value));return true;}};
  const reader=(bytes,mapping,options)=>{currentSchemaWork=work;return schemaReader(bytes,mapping,options);};
- return {work,reads,writes,reader,collect:(text,mapping,options)=>collect(text,mapping,reader,options)};
+ return {work,stored,reads,writes,readBatches,writeBatches,reader,collect:(text,mapping,options)=>collect(text,mapping,reader,options)};
 }
 
 test('schema cache reuses metadata and misses across rows without retaining cell payloads',async()=>{
@@ -127,4 +127,47 @@ test('schema cache write failures stop aliases before exposing a partial dataset
  const f=schemaFixture({onPut:key=>{if(key==='field:row:/v'&&++aliases===2)throw reason;}});
  await assert.rejects(f.collect('{"rows":[{"v":1}]}',{format:'json-nested',rowsPath:'/rows',fields:[{name:'first',path:'/v'},{name:'second',path:'/v'}]}),error=>error===reason);
  assert.equal(f.writes.includes('column:1'),false);assert.equal(f.writes.some(key=>key.startsWith('row:')),false);assert.equal(f.work.closed,true);
+});
+
+test('scratch batching flushes all JSONL values before publishing schema and reads one cell window per row',async()=>{
+ const notes='Synthetic acquired detail. '.repeat(165),fields=['reading','counter','native','notes'].map(name=>({name,path:'/'+name})),rows=Array.from({length:67},(_,i)=>({reading:i%4,counter:'18446744073709551615',native:'105',notes})),f=schemaFixture(),iterator=f.reader(source(rows.map(row=>JSON.stringify(row)).join('\n')),{format:'jsonl',fields});
+ const {value:schema}=await iterator.next();assert.equal(schema.columnCount,4);assert.equal(f.stored.has('row:66'),true);assert.equal(f.stored.get('value:row:/66:field:3').value,notes);
+ assert.equal(f.writeBatches.length,Math.ceil((rows.length*5+2)/32));assert.ok(f.writeBatches.slice(0,-1).every(batch=>batch.keys.length===32));assert.equal(f.writes.some(key=>/^(row|value|text):/.test(key)),false);
+ let order=0;for await(const row of iterator){const cells=await Array.fromAsync(row.cells());assert.deepEqual(cells.map(cell=>cell.value),[String(order%4),'18446744073709551615','105',notes]);assert.deepEqual(row.locator,{format:'jsonl',line:++order});}
+ assert.equal(order,rows.length);assert.equal(f.readBatches.length,rows.length);assert.ok(f.readBatches.every(keys=>keys.length===4));assert.equal(f.work.closed,true);
+});
+
+test('scratch batching bounds UTF-8 write bytes while retaining long scalar and structured chunks',async()=>{
+ const fields=Array.from({length:20},(_,i)=>({name:'c'+i,path:'/c'+i})),row=Object.fromEntries(fields.map(field=>[field.name,'\u754c'.repeat(12000)]));row.c19={exact:'18446744073709551615',nested:[null,true,'\u{1f41d}'.repeat(40000)]};
+ const f=schemaFixture(),result=await f.collect(JSON.stringify({rows:[row]}),{format:'json',rowsPath:'/rows',fields});
+ assert.equal(result.rows.length,1);for(let i=0;i<19;i++)assert.equal(result.rows[0].cells[i].value,row['c'+i]);assert.deepEqual(JSON.parse(result.rows[0].cells[19].value),row.c19);assert.equal(result.rows[0].cells[19].kind,'object');
+ assert.ok(f.writeBatches.some(batch=>batch.keys.length<32&&batch.bytes>200000));assert.ok(f.writeBatches.flatMap(batch=>batch.keys).some(key=>key.startsWith('text:')));assert.equal(f.writes.some(key=>key.startsWith('text:')),false);assert.deepEqual(f.readBatches.map(keys=>keys.length),[20]);
+});
+
+test('scratch batching preserves wide cell order, missing values and duplicate context selections',async()=>{
+ const f=schemaFixture(),fields=Array.from({length:70},(_,i)=>({name:'c'+i,path:'/c'+i})),result=await f.collect('{"rows":[{"c0":0,"c32":null,"c69":{"values":[1,2]}},{}]}',{format:'json',rowsPath:'/rows',fields});
+ assert.deepEqual(f.readBatches.map(keys=>keys.length),[32,32,6,32,32,6]);assert.equal(result.rows[0].cells[0].value,'0');assert.equal(result.rows[0].cells[32].kind,'null');assert.equal(result.rows[0].cells[69].value,'{"values":[1,2]}');assert.ok(result.rows[1].cells.every(cell=>cell.kind==='absent'));
+ const nested=schemaFixture(),mapping={format:'json-nested',rowsPath:'/rows',fields:[{name:'note1',source:'context',path:'/note'},{name:'note2',source:'context',path:'/note'},{name:'looked up',source:'lookup',path:'/v'}],joins:[{name:'lookup',rowsPath:'/lookup',leftPath:'/id',rightPath:'/id',unmatched:'keep'}]},joined=await nested.collect('{"note":"kept","rows":[{"id":1},{"id":2}],"lookup":[{"id":1,"v":42}]}',mapping);
+ assert.deepEqual(joined.rows.map(row=>row.cells.map(cell=>cell.value)),[['kept','kept','42'],['kept','kept','']]);assert.equal(joined.rows[1].cells[2].kind,'absent');assert.deepEqual(nested.readBatches.map(keys=>keys.length),[2,1]);assert.equal(nested.reads.get('value:lookup:/lookup/0:key')??0,0,'join completion reads its pending key');
+});
+
+test('scratch batching leaves duplicate detection authoritative and discards pending values on parse or alignment failure',async()=>{
+ const fields=Array.from({length:70},(_,i)=>({name:'f'+i,path:'/f'+i})),text='{"rows":[{'+fields.map((field,i)=>JSON.stringify(field.name)+':'+i).join(',')+',"f69":0}]}',duplicate=schemaFixture();
+ await assert.rejects(duplicate.collect(text,{format:'json',rowsPath:'/rows',fields}),{code:'MATERIAL_TABLE'});assert.equal(duplicate.writeBatches.length,2);assert.equal(duplicate.stored.has('value:row:/rows/0:field:69'),false);assert.equal(duplicate.stored.has('row:0'),false);assert.equal(duplicate.work.closed,true);
+ const joined=schemaFixture(),mapping={format:'json-nested',rowsPath:'/rows',fields:[{name:'value',source:'lookup',path:'/v'}],joins:[{name:'lookup',rowsPath:'/lookup',leftPath:'/id',rightPath:'/id'}]};
+ await assert.rejects(joined.collect('{"rows":[{"id":1}],"lookup":[{"id":1,"v":10},{"id":1,"v":20}]}',mapping),{code:'DATASET_JOIN_DUPLICATE'});assert.equal(joined.writeBatches.length,0);assert.equal(joined.work.closed,true);
+ const alignment=schemaFixture();await assert.rejects(alignment.collect('{"rows":[{}],"lookup":[{},{}]}',{...mapping,joins:[{name:'lookup',rowsPath:'/lookup',mode:'position'}]}),{code:'DATASET_JOIN_LENGTH'});assert.equal(alignment.writeBatches.length,0);assert.equal(alignment.work.closed,true);
+});
+
+test('scratch batching write failures and cancellation expose no parsed dataset and never flush during cleanup',async()=>{
+ const fields=[{name:'v',path:'/v'}],text=Array.from({length:40},(_,i)=>'{"v":'+i+'}').join('\n'),reason=Error('scratch batch failed');let attempts=0;
+ const failed=schemaFixture({onPutMany:()=>{if(++attempts===2)throw reason;}}),iterator=failed.reader(source(text),{format:'jsonl',fields});
+ await assert.rejects(iterator.next(),error=>error===reason);assert.equal(attempts,2);assert.equal(failed.writeBatches.length,1);assert.equal(failed.stored.has('row:15'),true);assert.equal(failed.stored.has('row:16'),false);assert.equal(failed.work.closed,true);
+ const controller=new AbortController(),cancelled=schemaFixture({onPutManyComplete:()=>controller.abort(reason)}),stopped=cancelled.reader(source(text),{format:'jsonl',fields},{signal:controller.signal});
+ await assert.rejects(stopped.next(),error=>error===reason);assert.equal(cancelled.writeBatches.length,1);assert.equal(cancelled.work.closed,true);
+});
+
+test('scratch batching checks cancellation after a cell window read before yielding its values',async()=>{
+ const controller=new AbortController(),reason=Error('cancel cell window'),f=schemaFixture({onGetMany:()=>controller.abort(reason)}),iterator=f.reader(source('{"v":1}'),{format:'jsonl',fields:[{name:'v',path:'/v'}]},{signal:controller.signal});
+ try{await iterator.next();const {value:row}=await iterator.next();await assert.rejects(row.cells().next(),error=>error===reason);assert.equal(f.readBatches.length,1);}finally{await iterator.return();}assert.equal(f.work.closed,true);
 });

@@ -83,6 +83,20 @@ async function* framedLines(chunks){
 async function* json(work,chunks,mapping,{signal}={}){
  const nested=mapping.format==='json-nested',rowPattern=parts(mapping.rowsPath??''),joins=nested?mapping.joins:[],fields=Array.isArray(mapping.fields)?mapping.fields:[],discover=mapping.fields==='all';let fieldCount=0,hasContext=false;
  const definitions=[{name:'row',pattern:rowPattern},...joins.map(j=>({...j,pattern:parts(j.rowsPath)}))],byName=new Map(definitions.map(d=>[d.name,d]));
+ // Stage only replaceable values. Duplicate-object and join identities still
+ // use the scratch owner's atomic add operation immediately.
+ const pending=new Map();let pendingBytes=0;
+ const flush=async()=>{signal?.throwIfAborted();if(!pending.size)return;await work.putMany([...pending].map(([key,entry])=>[key,entry.value]));signal?.throwIfAborted();pending.clear();pendingBytes=0;};
+ const values={
+  async put(key,value){
+   signal?.throwIfAborted();const prior=pending.get(key);if(prior){pendingBytes-=prior.bytes;pending.delete(key);}
+   const bytes=Buffer.byteLength(key)+Buffer.byteLength(JSON.stringify(value));
+   if(bytes>256*1024){await flush();await work.put(key,value);signal?.throwIfAborted();return;}
+   if(pending.size>=32||pendingBytes+bytes>256*1024)await flush();
+   pending.set(key,{value:structuredClone(value),bytes});pendingBytes+=bytes;if(pending.size===32||pendingBytes===256*1024)await flush();
+  },
+  async get(key){signal?.throwIfAborted();if(pending.has(key))return structuredClone(pending.get(key).value);const value=await work.get(key);signal?.throwIfAborted();return value;}
+ };
  // Request descriptors are bounded by the HTTP command budget. The retained
  // schema and lookup state are paged independently from this command envelope.
  // Reuse only schema metadata, including misses; row, context and join payloads
@@ -102,6 +116,7 @@ async function* json(work,chunks,mapping,{signal}={}){
   const source=f.source??'row',key='field:'+source+':'+f.path,prior=await readSchema(key);
   await writeSchema('field-next:'+index,prior??null);await writeSchema(key,index);await writeSchema('column:'+index,{name:f.name,sourceField:f});if(source==='context')hasContext=true;
  };
+ try{
  for(const field of fields)await addField(field);
  const match=(d,at,direct=false)=>direct?at.path.length===d.pattern.length+1&&at.arrays.includes(d.pattern.length)&&(nested?matches(d.pattern,{path:at.path.slice(0,-1),arrays:at.arrays}):same(d.pattern,at.path.slice(0,-1))):nested?matches(d.pattern,at):same(d.pattern,at.path);
  const active=new Map(),arrays=new Map(),found=new Set(),captures=new Map();let count=0,arrayCount=0,valueId=0;
@@ -122,15 +137,15 @@ async function* json(work,chunks,mapping,{signal}={}){
   if(hasContext){const context=await lookupFields('context',contextPath(at));if(context!==null)result.push({kind:'context',field:context,path:at.path});}
   return result;
  };
- const save=async(c,value)=>{for(const target of c.targets){if(target.kind==='key'){if(['array','object'].includes(value.kind))fail('DATASET_JOIN_KEY');await work.put(rowKey(target.row)+':'+target.slot,value);}
-   else if(target.kind==='context')await work.put('context:'+pointer(target.path),value);
-   else{let index=target.field;while(index!==null){await work.put(rowKey(target.row)+':field:'+index,value);index=await readSchema('field-next:'+index);}}
+ const save=async(c,value)=>{for(const target of c.targets){if(target.kind==='key'){if(['array','object'].includes(value.kind))fail('DATASET_JOIN_KEY');await values.put(rowKey(target.row)+':'+target.slot,value);}
+   else if(target.kind==='context')await values.put('context:'+pointer(target.path),value);
+   else{let index=target.field;while(index!==null){await values.put(rowKey(target.row)+':field:'+index,value);index=await readSchema('field-next:'+index);}}
   }};
  const finish=async d=>{
   const row=active.get(d.name);if(!row)return;active.delete(d.name);if(arrays.has(d.name))arrays.get(d.name).length++;
-  if(d.name==='row')await work.put('row:'+count++,row);
-  else if(d.mode==='position')await work.put(posKey(d.name,scope(d.pattern,row.path),String(row.position??row.path[d.pattern.length])),row);
-  else{const key=await work.get(rowKey(row)+':key')??missing();if(['absent','null'].includes(key.kind))fail('DATASET_JOIN_KEY');if(!await work.add(joinKey(d,row.path,key),row))fail('DATASET_JOIN_DUPLICATE');}
+  if(d.name==='row')await values.put('row:'+count++,row);
+  else if(d.mode==='position')await values.put(posKey(d.name,scope(d.pattern,row.path),String(row.position??row.path[d.pattern.length])),row);
+  else{const key=await values.get(rowKey(row)+':key')??missing();if(['absent','null'].includes(key.kind))fail('DATASET_JOIN_KEY');if(!await work.add(joinKey(d,row.path,key),row))fail('DATASET_JOIN_DUPLICATE');}
  };
  const prefix=async(c,t)=>{const parent=c.stack.at(-1);if(!parent)return;if(parent.used)await c.writer.add(',');parent.used=true;if(parent.type==='object')await c.writer.add(JSON.stringify(t.path.at(-1))+':');};
  for await(const token of datasetJSONTokens(mapping.format==='jsonl'?framedLines(chunks):chunks,async at=>captures.size>0||(await targets(at)).length>0,DATASET_LIMITS,{signal,chunked:true,work})){
@@ -138,7 +153,7 @@ async function* json(work,chunks,mapping,{signal}={}){
   for(const d of definitions){
    if(match(d,token)){
     if(token.event==='begin'){if(token.type!=='array')fail();found.add(d.name);arrays.set(d.name,{name:d.name,scope:scope(d.pattern,token.path),pointer:pointer(token.path),length:0,sourceLength:0});}
-    else if(token.event==='end'){const a=arrays.get(d.name);if(!a)fail();arrays.delete(d.name);if(d.packed&&(a.sourceLength<d.packed.offset+d.packed.width*d.packed.count||a.length!==d.packed.count))fail('DATASET_PACKED_LENGTH');await work.put(countKey(d.name,a.scope),a);await work.put('alignment:'+arrayCount++,a);}
+    else if(token.event==='end'){const a=arrays.get(d.name);if(!a)fail();arrays.delete(d.name);if(d.packed&&(a.sourceLength<d.packed.offset+d.packed.width*d.packed.count||a.length!==d.packed.count))fail('DATASET_PACKED_LENGTH');await values.put(countKey(d.name,a.scope),a);await values.put('alignment:'+arrayCount++,a);}
     else if(start)fail();
    }
    const direct=match(d,token,true),packing=d.packed?packedPosition(d,token):null;
@@ -147,7 +162,7 @@ async function* json(work,chunks,mapping,{signal}={}){
   if(start&&discover){const row=active.get('row');if(row){const relative=token.path.slice(row.path.length);if(relative.length===1||relative.length===0&&token.event!=='begin'){
    const path=pointer(relative);if(await lookupFields('row',relative)===null){const base=(relative.at(-1)??'Value').slice(0,180)||'Value';let name=base,n=2;while(!await work.add('json-heading:'+name))name=base+' ('+n+++')';await addField({name,path,source:'row'});}
   }}}
-  if(start){const chosen=await targets(token);if(chosen.length){const location=pointer(token.path),kind=token.type??token.kind;if(location.length>2048)fail();captures.set(location,{targets:chosen,kind,path:token.path,stack:[],writer:textWriter(work,'text:'+valueId++,kind,location)});}}
+  if(start){const chosen=await targets(token);if(chosen.length){const location=pointer(token.path),kind=token.type??token.kind;if(location.length>2048)fail();captures.set(location,{targets:chosen,kind,path:token.path,stack:[],writer:textWriter(values,'text:'+valueId++,kind,location)});}}
   for(const [key,c] of captures){
    if(token.path.length<c.path.length||!same(token.path.slice(0,c.path.length),c.path))continue;
    if(token.event==='begin'){await prefix(c,token);await c.writer.add(token.type==='array'?'[':'{');c.stack.push({type:token.type,used:false});}
@@ -165,7 +180,8 @@ async function* json(work,chunks,mapping,{signal}={}){
   }
  }
  if(captures.size||active.size||!found.has('row')||!count)fail();
- for(let i=0;i<arrayCount;i++){const a=await work.get('alignment:'+i),r=a.name==='row'?a:await work.get(countKey('row',a.scope));for(const j of joins.filter(j=>j.mode==='position')){const b=a.name===j.name?a:await work.get(countKey(j.name,a.scope));if(!r||!b||r.length!==b.length)throw new AppError('DATASET_JOIN_LENGTH',[{acquisitions:r?.pointer??null,lookup:b?.pointer??null,expected:r?.length??null,actual:b?.length??null}]);}}
+ for(let i=0;i<arrayCount;i++){const a=await values.get('alignment:'+i),r=a.name==='row'?a:await values.get(countKey('row',a.scope));for(const j of joins.filter(j=>j.mode==='position')){const b=a.name===j.name?a:await values.get(countKey(j.name,a.scope));if(!r||!b||r.length!==b.length)throw new AppError('DATASET_JOIN_LENGTH',[{acquisitions:r?.pointer??null,lookup:b?.pointer??null,expected:r?.length??null,actual:b?.length??null}]);}}
+ await flush();
  yield {columnCount:fieldCount,sourceMapping:mapping,columns:async function*(){for(let i=0;i<fieldCount;i++)yield await readSchema('column:'+i);}};
  for(let order=0;order<count;order++){
   signal?.throwIfAborted();const row=await work.get('row:'+order),lookup=new Map();
@@ -173,9 +189,14 @@ async function* json(work,chunks,mapping,{signal}={}){
    if(j.mode==='position'){value=await work.get(posKey(j.name,scope(rowPattern,row.path),String(row.path[rowPattern.length])));if(!value)fail('DATASET_JOIN_LENGTH');}
    else{const key=await work.get(rowKey(row)+':left:'+j.name)??missing();value=['null','absent'].includes(key.kind)?null:await work.get(joinKey(d,row.path,key));if(!value&&j.unmatched==='error')fail('DATASET_JOIN_MISSING');}lookup.set(j.name,value);
   }
-  yield {order:order+1,locator:mapping.format==='jsonl'?{format:'jsonl',line:order+1}:{format:'json',pointer:pointer(row.path)},cells:async function*(){for(let index=0;index<fieldCount;index++){const f=(await readSchema('column:'+index)).sourceField,source=f.source??'row';let value;
-   if(source==='context')value=await work.get('context:'+pointer(parts(f.path).map((p,i)=>p==='*'?row.path[i]:p)));
-   else{const owner=source==='row'?row:lookup.get(source);if(owner)value=await work.get(rowKey(owner)+':field:'+index);}yield exposed(work,value??missing());
+  yield {order:order+1,locator:mapping.format==='jsonl'?{format:'jsonl',line:order+1}:{format:'json',pointer:pointer(row.path)},cells:async function*(){for(let start=0;start<fieldCount;start+=32){
+   const slots=[];for(let index=start;index<Math.min(start+32,fieldCount);index++){const f=(await readSchema('column:'+index)).sourceField,source=f.source??'row';let key=null;
+    if(source==='context')key='context:'+pointer(parts(f.path).map((p,i)=>p==='*'?row.path[i]:p));
+    else{const owner=source==='row'?row:lookup.get(source);if(owner)key=rowKey(owner)+':field:'+index;}slots.push(key);
+   }
+   signal?.throwIfAborted();const keys=[...new Set(slots.filter(key=>key!==null))],batch=keys.length?await work.getMany(keys):new Map();signal?.throwIfAborted();
+   for(const key of slots){signal?.throwIfAborted();yield exposed(work,batch.get(key)??missing());}
   }}};
  }
+ }finally{pending.clear();pendingBytes=0;schema.clear();schemaBytes=0;}
 }
