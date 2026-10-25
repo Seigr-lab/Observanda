@@ -81,13 +81,26 @@ async function* framedLines(chunks){
  if(!seen&&!content)fail();yield ']';
 }
 async function* json(work,chunks,mapping,{signal}={}){
- const nested=mapping.format==='json-nested',rowPattern=parts(mapping.rowsPath??''),joins=nested?mapping.joins:[],fields=Array.isArray(mapping.fields)?mapping.fields:[],discover=mapping.fields==='all';let fieldCount=0;
+ const nested=mapping.format==='json-nested',rowPattern=parts(mapping.rowsPath??''),joins=nested?mapping.joins:[],fields=Array.isArray(mapping.fields)?mapping.fields:[],discover=mapping.fields==='all';let fieldCount=0,hasContext=false;
  const definitions=[{name:'row',pattern:rowPattern},...joins.map(j=>({...j,pattern:parts(j.rowsPath)}))],byName=new Map(definitions.map(d=>[d.name,d]));
  // Request descriptors are bounded by the HTTP command budget. The retained
  // schema and lookup state are paged independently from this command envelope.
+ // Reuse only schema metadata, including misses; row, context and join payloads
+ // remain in encrypted scratch. Bound retained keys and values together.
+ const schema=new Map();let schemaBytes=0;
+ const remember=(key,value)=>{
+  const prior=schema.get(key);if(prior){schemaBytes-=prior.size;schema.delete(key);}
+  const size=Buffer.byteLength(key)+Buffer.byteLength(JSON.stringify(value)??'null');if(size>256*1024)return;
+  while(schema.size>=64||schemaBytes+size>256*1024){const oldest=schema.keys().next().value;schemaBytes-=schema.get(oldest).size;schema.delete(oldest);}
+  schema.set(key,{value:structuredClone(value),size});schemaBytes+=size;
+ };
+ const readSchema=async key=>{signal?.throwIfAborted();const entry=schema.get(key);if(entry){schema.delete(key);schema.set(key,entry);return structuredClone(entry.value);}
+  const value=await work.get(key);signal?.throwIfAborted();remember(key,value);return value;
+ };
+ const writeSchema=async(key,value)=>{signal?.throwIfAborted();await work.put(key,value);signal?.throwIfAborted();remember(key,value);};
  const addField=async f=>{const index=fieldCount++;if(!Number.isSafeInteger(fieldCount))fail('MATERIAL_DATASET_LIMIT');
-  const source=f.source??'row',key='field:'+source+':'+f.path,prior=await work.get(key);
-  await work.put('field-next:'+index,prior??null);await work.put(key,index);await work.put('column:'+index,{name:f.name,sourceField:f});
+  const source=f.source??'row',key='field:'+source+':'+f.path,prior=await readSchema(key);
+  await writeSchema('field-next:'+index,prior??null);await writeSchema(key,index);await writeSchema('column:'+index,{name:f.name,sourceField:f});if(source==='context')hasContext=true;
  };
  for(const field of fields)await addField(field);
  const match=(d,at,direct=false)=>direct?at.path.length===d.pattern.length+1&&at.arrays.includes(d.pattern.length)&&(nested?matches(d.pattern,{path:at.path.slice(0,-1),arrays:at.arrays}):same(d.pattern,at.path.slice(0,-1))):nested?matches(d.pattern,at):same(d.pattern,at.path);
@@ -97,7 +110,7 @@ async function* json(work,chunks,mapping,{signal}={}){
  const posKey=(name,s,index)=>JSON.stringify(['position',name,s,index]);
  const rowKey=r=>'value:'+r.name+':'+pointer(r.path);
  const joinKey=(d,path,key)=>JSON.stringify(['join',d.name,scope(d.pattern,path),key.kind,key.digest,key.length]);
- const lookupFields=async(source,path)=>{let current=await work.get('field:'+source+':'+pointer(path));return current===undefined?null:current;};
+ const lookupFields=async(source,path)=>{let current=await readSchema('field:'+source+':'+pointer(path));return current===undefined?null:current;};
  const contextPath=at=>at.path.map((p,i)=>rowPattern[i]==='*'&&at.arrays.includes(i)?'*':p);
  const targets=async at=>{
   const result=[];
@@ -106,12 +119,12 @@ async function* json(work,chunks,mapping,{signal}={}){
    if(d.name==='row')for(const j of joins)if(j.mode!=='position'&&same(relative,parts(j.leftPath)))result.push({kind:'key',row,slot:'left:'+j.name});
    if(d.name!=='row'&&d.mode!=='position'&&same(relative,parts(d.rightPath)))result.push({kind:'key',row,slot:'key'});
   }
-  const context=await lookupFields('context',contextPath(at));if(context!==null)result.push({kind:'context',field:context,path:at.path});
+  if(hasContext){const context=await lookupFields('context',contextPath(at));if(context!==null)result.push({kind:'context',field:context,path:at.path});}
   return result;
  };
  const save=async(c,value)=>{for(const target of c.targets){if(target.kind==='key'){if(['array','object'].includes(value.kind))fail('DATASET_JOIN_KEY');await work.put(rowKey(target.row)+':'+target.slot,value);}
    else if(target.kind==='context')await work.put('context:'+pointer(target.path),value);
-   else{let index=target.field;while(index!==null){await work.put(rowKey(target.row)+':field:'+index,value);index=await work.get('field-next:'+index);}}
+   else{let index=target.field;while(index!==null){await work.put(rowKey(target.row)+':field:'+index,value);index=await readSchema('field-next:'+index);}}
   }};
  const finish=async d=>{
   const row=active.get(d.name);if(!row)return;active.delete(d.name);if(arrays.has(d.name))arrays.get(d.name).length++;
@@ -153,14 +166,14 @@ async function* json(work,chunks,mapping,{signal}={}){
  }
  if(captures.size||active.size||!found.has('row')||!count)fail();
  for(let i=0;i<arrayCount;i++){const a=await work.get('alignment:'+i),r=a.name==='row'?a:await work.get(countKey('row',a.scope));for(const j of joins.filter(j=>j.mode==='position')){const b=a.name===j.name?a:await work.get(countKey(j.name,a.scope));if(!r||!b||r.length!==b.length)throw new AppError('DATASET_JOIN_LENGTH',[{acquisitions:r?.pointer??null,lookup:b?.pointer??null,expected:r?.length??null,actual:b?.length??null}]);}}
- yield {columnCount:fieldCount,sourceMapping:mapping,columns:async function*(){for(let i=0;i<fieldCount;i++)yield await work.get('column:'+i);}};
+ yield {columnCount:fieldCount,sourceMapping:mapping,columns:async function*(){for(let i=0;i<fieldCount;i++)yield await readSchema('column:'+i);}};
  for(let order=0;order<count;order++){
   signal?.throwIfAborted();const row=await work.get('row:'+order),lookup=new Map();
   for(const j of joins){const d=byName.get(j.name);let value;
    if(j.mode==='position'){value=await work.get(posKey(j.name,scope(rowPattern,row.path),String(row.path[rowPattern.length])));if(!value)fail('DATASET_JOIN_LENGTH');}
    else{const key=await work.get(rowKey(row)+':left:'+j.name)??missing();value=['null','absent'].includes(key.kind)?null:await work.get(joinKey(d,row.path,key));if(!value&&j.unmatched==='error')fail('DATASET_JOIN_MISSING');}lookup.set(j.name,value);
   }
-  yield {order:order+1,locator:mapping.format==='jsonl'?{format:'jsonl',line:order+1}:{format:'json',pointer:pointer(row.path)},cells:async function*(){for(let index=0;index<fieldCount;index++){const f=(await work.get('column:'+index)).sourceField,source=f.source??'row';let value;
+  yield {order:order+1,locator:mapping.format==='jsonl'?{format:'jsonl',line:order+1}:{format:'json',pointer:pointer(row.path)},cells:async function*(){for(let index=0;index<fieldCount;index++){const f=(await readSchema('column:'+index)).sourceField,source=f.source??'row';let value;
    if(source==='context')value=await work.get('context:'+pointer(parts(f.path).map((p,i)=>p==='*'?row.path[i]:p)));
    else{const owner=source==='row'?row:lookup.get(source);if(owner)value=await work.get(rowKey(owner)+':field:'+index);}yield exposed(work,value??missing());
   }}};

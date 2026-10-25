@@ -1,11 +1,13 @@
 import {inspectJSONValue} from '../src/structured-inspection.js';
-import {test} from 'node:test';
+import {test,after} from 'node:test';
 import assert from 'node:assert/strict';
+import {registerHooks} from 'node:module';
+import {randomUUID} from 'node:crypto';
 import {readPagedDataset} from '../src/dataset-paged-reader.js';
 const source=text=>[Buffer.from(text)];
-async function collect(text,mapping){
+async function collect(text,mapping,reader=readPagedDataset,options={}){
  const rows=[];let columns=[];
- for await(const item of readPagedDataset(source(text),mapping)){
+ for await(const item of reader(source(text),mapping,options)){
   if(item.columns)columns=await Array.fromAsync(item.columns());
   else{const cells=[];for await(const value of item.cells()){let text='';for await(const chunk of value.read())text+=chunk;cells.push({kind:value.kind,value:text,pointer:value.pointer});}rows.push({...item,cells});}
  }
@@ -57,4 +59,72 @@ test('original JSON inspection bounds long structured values and retains exact n
  assert.equal((await inspectJSONValue(source(json),'/value/number')).text,'18446744073709551615');assert.equal((await inspectJSONValue(source(json),'/value/negative')).text,'-0');await assert.rejects(inspectJSONValue(source('{"value":1,"value":2}'),'/value'),{code:'MATERIAL_TABLE'});
  let closed=false;const controller=new AbortController();async function* interrupted(){try{yield Buffer.from('"long');controller.abort();yield Buffer.from('value",other\n');}finally{closed=true;}}
  await assert.rejects(async()=>{for await(const value of readPagedDataset(interrupted(),{format:'delimited',delimiter:'auto',header:false},{signal:controller.signal}))void value;},{name:'AbortError'});assert.equal(closed,true);
+});
+
+// Exercise the real parser with only its encrypted scratch transport replaced.
+// These focused tests can run without opening a native PostgreSQL runtime.
+const schemaModule=new URL('../src/dataset-paged-reader.js?schema-cache-test',import.meta.url).href,schemaKey='schemaWork_'+randomUUID().replaceAll('-','');
+let currentSchemaWork;
+globalThis[schemaKey]=async function*(create,{signal}={}){const work=currentSchemaWork;try{signal?.throwIfAborted();yield* create(work);}finally{work.closed=true;}};
+const schemaHooks=registerHooks({resolve(specifier,context,next){return context.parentURL===schemaModule&&specifier==='./scratch-iterator.js'?{url:'schema-cache:scratch',shortCircuit:true}:next(specifier,context);},load(url,context,next){return url==='schema-cache:scratch'?{format:'module',shortCircuit:true,source:'export const scratchIterator=(create,options)=>globalThis['+JSON.stringify(schemaKey)+'](create,options);'}:next(url,context);}});
+let schemaReader;try{({readPagedDataset:schemaReader}=await import(schemaModule));}finally{schemaHooks.deregister();}
+after(()=>{delete globalThis[schemaKey];});
+function schemaFixture({onGet,onPut}={}){
+ const stored=new Map(),reads=new Map(),writes=[];
+ const work={closed:false,async get(key){reads.set(key,(reads.get(key)??0)+1);const value=structuredClone(stored.get(key));await onGet?.(key,value);return value;},async put(key,value){await onPut?.(key,value);writes.push(key);stored.set(key,structuredClone(value));},async add(key,value=true){if(stored.has(key))return false;stored.set(key,structuredClone(value));return true;}};
+ const reader=(bytes,mapping,options)=>{currentSchemaWork=work;return schemaReader(bytes,mapping,options);};
+ return {work,reads,writes,reader,collect:(text,mapping,options)=>collect(text,mapping,reader,options)};
+}
+
+test('schema cache reuses metadata and misses across rows without retaining cell payloads',async()=>{
+ const f=schemaFixture(),fields=Array.from({length:4},(_,i)=>({name:'c'+i,path:'/c'+i})),rows=Array.from({length:80},(_,row)=>Object.fromEntries(fields.map((field,col)=>[field.name,row*4+col]))),result=await f.collect(rows.map(row=>JSON.stringify(row)).join('\n'),{format:'jsonl',fields});
+ assert.equal(result.rows.length,rows.length);assert.deepEqual(result.columns.map(c=>c.sourceField),fields);
+ for(let row=0;row<rows.length;row++)for(let col=0;col<fields.length;col++){assert.deepEqual(result.rows[row].cells[col],{kind:'number',value:String(row*4+col),pointer:'/'+row+'/c'+col});assert.equal(f.reads.get('value:row:/'+row+':field:'+col),1);}
+ for(let col=0;col<fields.length;col++){assert.equal(f.reads.get('field:row:/c'+col),1);assert.equal(f.reads.get('field-next:'+col)??0,0);assert.equal(f.reads.get('column:'+col)??0,0);}
+ assert.equal(f.reads.get('field:row:'),1);assert.equal([...f.reads.keys()].some(key=>key.startsWith('field:context:')),false);assert.equal(f.work.closed,true);
+});
+
+test('schema cache updates aliases and discovered fields after cached misses',async()=>{
+ const aliases=schemaFixture(),result=await aliases.collect('{"rows":[{"v":1},{"v":null},{}]}',{format:'json-nested',rowsPath:'/rows',fields:[{name:'first',path:'/v'},{name:'second',path:'/v'},{name:'third',path:'/v'}]});
+ assert.deepEqual(result.rows.map(row=>row.cells.map(cell=>[cell.kind,cell.value])),[[['number','1'],['number','1'],['number','1']],[['null',''],['null',''],['null','']],[['absent',''],['absent',''],['absent','']]]);assert.equal(aliases.reads.get('field:row:/v'),1);
+ const discovery=schemaFixture(),found=await discovery.collect('{"rows":[{"a":1},{"late":2,"a":null},{"late":3}]}',{format:'json',rowsPath:'/rows',fields:'all'});
+ assert.deepEqual(found.columns.map(column=>column.name),['a','late']);assert.deepEqual(found.rows.map(row=>row.cells.map(cell=>[cell.kind,cell.value])),[[['number','1'],['absent','']],[['null',''],['number','2']],[['absent',''],['number','3']]]);
+ assert.equal(discovery.reads.get('field:row:/late'),1);
+});
+
+test('schema cache keeps row, context, keyed and packed join fields distinct',async()=>{
+ const f=schemaFixture(),mapping={format:'json-nested',rowsPath:'/visits/*/rows',fields:[{name:'row',path:'/value'},{name:'lookup',source:'lookup',path:'/value'},{name:'packed',source:'packed',path:'/1'},{name:'note',source:'context',path:'/visits/*/note'}],joins:[{name:'lookup',rowsPath:'/visits/*/lookup',leftPath:'/id',rightPath:'/id'},{name:'packed',mode:'position',rowsPath:'/visits/*/packed',packed:{offset:0,width:2,count:2}}]},visits=Array.from({length:2},(_,i)=>({note:'visit '+i,rows:[{id:1,value:'row '+i},{id:2,value:null}],lookup:[{id:2,value:'second '+i},{id:1,value:'first '+i}],packed:[0,i+10,1,i+20]})),result=await f.collect(JSON.stringify({visits}),mapping);
+ assert.deepEqual(result.rows.map(row=>row.cells.map(cell=>cell.value)),[['row 0','first 0','10','visit 0'],['','second 0','20','visit 0'],['row 1','first 1','11','visit 1'],['','second 1','21','visit 1']]);
+ assert.equal(result.rows[3].cells[2].pointer,'/visits/1/packed/3');assert.equal(result.rows[3].cells[3].pointer,'/visits/1/note');assert.equal(f.reads.get('context:/visits/1/note'),2);
+ assert.ok([...f.reads.keys()].some(key=>key.startsWith('field:context:')));
+});
+
+test('schema cache refreshes active fields during churn and rereads evicted wide schemas',async()=>{
+ const hot=schemaFixture(),fields=Array.from({length:20},(_,i)=>({name:'c'+i,path:'/c'+i})),rows=Array.from({length:100},(_,i)=>({c0:i,['extra'+i]:i})),result=await hot.collect(JSON.stringify({rows}),{format:'json',rowsPath:'/rows',fields});
+ assert.deepEqual(result.rows.map(row=>row.cells[0].value),rows.map(row=>String(row.c0)));assert.equal(hot.reads.get('field:row:/c0'),1);assert.equal(hot.reads.get('field-next:0')??0,0);
+ const wide=schemaFixture(),wideFields=Array.from({length:70},(_,i)=>({name:'f'+i,path:'/f'+i})),iterator=wide.reader(source('{"rows":[{}]}'),{format:'json',rowsPath:'/rows',fields:wideFields});
+ try{const {value:schema}=await iterator.next(),first=await Array.fromAsync(schema.columns()),second=await Array.fromAsync(schema.columns());assert.deepEqual(first,second);assert.equal(first.length,70);assert.equal(wide.reads.get('column:0'),2);}finally{await iterator.return();}
+ assert.equal(wide.work.closed,true);
+});
+
+test('schema cache includes UTF-8 keys in its byte bound and isolates returned columns',async()=>{
+ const bounded=schemaFixture(),fields=Array.from({length:21},(_,i)=>({name:'名'.repeat(196)+i,path:'/'+'観'.repeat(2040)+i})),iterator=bounded.reader(source('{"rows":[{}]}'),{format:'json',rowsPath:'/rows',fields});
+ try{const {value:schema}=await iterator.next(),columns=await Array.fromAsync(schema.columns());assert.equal(columns.length,21);assert.deepEqual(columns.map(column=>column.sourceField),fields);assert.equal(bounded.reads.get('column:0'),1,'key bytes must cause eviction before the 64-entry bound');}finally{await iterator.return();}
+ const isolated=schemaFixture(),reader=isolated.reader(source('{"rows":[{"v":42}]}'),{format:'json',rowsPath:'/rows',fields:[{name:'value',path:'/v'}]});
+ try{const {value:schema}=await reader.next(),first=await Array.fromAsync(schema.columns());first[0].name='changed';first[0].sourceField.path='/wrong';const second=await Array.fromAsync(schema.columns());assert.equal(second[0].name,'value');assert.equal(second[0].sourceField.path,'/v');const {value:row}=await reader.next(),cells=await Array.fromAsync(row.cells());assert.equal(cells[0].value,'42');assert.equal(cells[0].pointer,'/rows/0/v');}finally{await reader.return();}
+});
+
+test('schema cache cancellation covers hits and completed scratch reads',async()=>{
+ const controller=new AbortController(),reason=Error('cancel schema traversal'),f=schemaFixture(),iterator=f.reader(source('{"rows":[{"v":1}]}'),{format:'json',rowsPath:'/rows',fields:[{name:'v',path:'/v'}]},{signal:controller.signal});
+ try{const {value:schema}=await iterator.next();await Array.fromAsync(schema.columns());controller.abort(reason);await assert.rejects(Array.fromAsync(schema.columns()),error=>error===reason);assert.equal(f.reads.get('column:0')??0,0);}finally{await iterator.return();}
+ assert.equal(f.work.closed,true);
+ const stopped=new AbortController(),interrupted=schemaFixture({onGet:key=>{if(key==='field:row:/v')stopped.abort(reason);}});
+ await assert.rejects(interrupted.collect('{"v":1}',{format:'jsonl',fields:[{name:'v',path:'/v'}]},{signal:stopped.signal}),error=>error===reason);assert.equal(interrupted.writes.length,0);assert.equal(interrupted.work.closed,true);
+});
+
+test('schema cache write failures stop aliases before exposing a partial dataset',async()=>{
+ const reason=Error('schema write failed');let aliases=0;
+ const f=schemaFixture({onPut:key=>{if(key==='field:row:/v'&&++aliases===2)throw reason;}});
+ await assert.rejects(f.collect('{"rows":[{"v":1}]}',{format:'json-nested',rowsPath:'/rows',fields:[{name:'first',path:'/v'},{name:'second',path:'/v'}]}),error=>error===reason);
+ assert.equal(f.writes.includes('column:1'),false);assert.equal(f.writes.some(key=>key.startsWith('row:')),false);assert.equal(f.work.closed,true);
 });
