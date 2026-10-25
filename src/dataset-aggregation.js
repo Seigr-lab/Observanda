@@ -1,3 +1,6 @@
+import {createWeightedFitMoments,validateWeightedFitMoments,updateWeightedFitMoments,finishWeightedFit} from './dataset-weighted-fit.js';
+import {weightedFitColumn,weightedFitVariance} from './dataset-weighted-fit-units.js';
+import {isWeightedFitMetric} from './web/dataset-weighted-fit-model.js';
 import {createPearsonMoments,validatePearsonMoments,updatePearsonMoments,finishPearsonStatistic} from './dataset-pearson.js';
 import {createPairMoments,validatePairMoments,updatePairMoments,finishPairStatistic,pairStatisticColumn} from './dataset-pair-statistics.js';
 import {quantileSelection,interpolateQuantile} from './dataset-quantile.js';
@@ -21,7 +24,7 @@ import {scratchIterator} from './scratch-iterator.js';
 import {PagedMedian} from './paged-median.js';
 import {aggregationMemberContext,aggregationMemberRows,aggregationQuantileDetails} from './dataset-aggregation-members.js';
 import {defaultColumn} from './web/dataset-schema.js';
-import {validAggregation,aggregationKey,aggregationPresence,isPairStatisticMetric} from './web/dataset-aggregation-model.js';
+import {validAggregation,aggregationKey,aggregationPresence,isPairStatisticMetric,aggregationMetricColumns} from './web/dataset-aggregation-model.js';
 import {exactRational,isScalarRepresentation} from './web/measurement-model.js';
 import {resultContext} from './web/numeral-context.js';
 import {ExactFormatError,formatExactResult} from './web/measurement-format.js';
@@ -78,11 +81,11 @@ export class DatasetAggregation{
  async schema(a,{signal}={}){
   if(a.version>=4)a=await resolveScalarDefinitions(this.materials,a,{signal});
   const doc=await this.materials.read(a.source);if(!validAggregation(a,datasetColumnCount(doc)))fail();
-  const selection=await selectedDatasetColumns(this.materials,doc,[...new Set([...a.keys,...a.values.flatMap(v=>isPairStatisticMetric(v)?[v.column,v.pairedColumn]:[v.column])])]),source=selection.columns,column=i=>source[selection.indices.indexOf(i)];
+  const selection=await selectedDatasetColumns(this.materials,doc,[...new Set([...a.keys,...a.values.flatMap(aggregationMetricColumns)])]),source=selection.columns,column=i=>source[selection.indices.indexOf(i)];
   if(a.version<6&&source.some(perCellComputation))fail('DATASET_CELL_COMPUTATION');
-  if(a.version<3&&[...a.keys.filter((index,k)=>a.keySemantics?.[k]==='numeric'),...a.values.filter(value=>value.operation!=='count').flatMap(value=>isPairStatisticMetric(value)?[value.column,value.pairedColumn]:[value.column])].some(index=>measurementScalarPolicies(column(index))))fail('DATASET_SCALAR_POLICY_VERSION');
+  if(a.version<3&&[...a.keys.filter((index,k)=>a.keySemantics?.[k]==='numeric'),...a.values.filter(value=>value.operation!=='count').flatMap(aggregationMetricColumns)].some(index=>measurementScalarPolicies(column(index))))fail('DATASET_SCALAR_POLICY_VERSION');
   const resolvedColumns=new Map();
-  if(a.version>=3)for(const index of new Set([...a.keys.filter((index,k)=>a.keySemantics?.[k]==='numeric'),...a.values.filter(value=>value.operation!=='count').flatMap(value=>isPairStatisticMetric(value)?[value.column,value.pairedColumn]:[value.column])])){
+  if(a.version>=3)for(const index of new Set([...a.keys.filter((index,k)=>a.keySemantics?.[k]==='numeric'),...a.values.filter(value=>value.operation!=='count').flatMap(aggregationMetricColumns)])){
    const resolved=await resolveScalarDefinitions(this.materials,column(index),{signal,budget:new DatasetResourceBudget(a.resourcePolicy)});
    resolvedColumns.set(index,resolved);
    if(resolved.quantity?.unitDefinition?.kind==='absolute'&&a.values.some(value=>value.column===index&&value.operation==='sum'))fail();
@@ -93,11 +96,12 @@ export class DatasetAggregation{
   for(const [k,index]of a.keys.entries()){const c=column(index),semantics=a.keySemantics?.[k]??'lexical';if(c.representation==='domain'&&semantics!=='domain'||semantics==='domain'&&c.representation!=='domain'||semantics==='numeric'&&!isScalarRepresentation(c))fail();}
   for(const value of a.values){
    const c=column(value.column);if(names.has(value.name)||value.operation!=='count'&&!isScalarRepresentation(c))fail();names.add(value.name);
+   if(isWeightedFitMetric(value)){columns.push(weightedFitColumn(value,aggregationMetricColumns(value).map(index=>resolvedColumns.get(index)),{policy:a.resourcePolicy,keys:a.keys.map(index=>column(index)),perCell:true}));continue;}
    if(isPairStatisticMetric(value)){columns.push(pairStatisticColumn(value,[resolvedColumns.get(value.column),resolvedColumns.get(value.pairedColumn)],{policy:a.resourcePolicy,keys:a.keys.map(index=>column(index)),perCell:a.version>=6}));continue;}
    const {representation,radix}=resultContext(value.output,value.operation);
    columns.push({...defaultColumn({label:value.name}),...(a.version>=6?derivedColumnComputation(c,...a.keys.map(index=>column(index))):derivedComputation(c,...a.keys.map(index=>column(index)))),representation,radix,unit:value.operation==='count'?'':c.unit,quantity:{origin:'derived',conversion:null,calibration:c.quantity?.calibration??null,...(a.version>=3&&value.operation!=='count'&&c.quantity?.unitDefinition?{unitDefinition:c.quantity.unitDefinition}:{})},...(a.version>=3?{resourcePolicy:structuredClone(a.resourcePolicy)}:{}),...(a.version>=4&&value.operation==='quantile'&&c.time?{time:structuredClone(c.time)}:{})});
   }
-  return {columns,source,indices:selection.indices,...(a.version>=4?{aggregation:a}:{})};
+  return {columns,source,...(a.version>=7?{resolvedSource:source.map((column,at)=>resolvedColumns.get(selection.indices[at])??column)}:{}),indices:selection.indices,...(a.version>=4?{aggregation:a}:{})};
  }
  rows(command,schema,options={}){
   const m=this.materials,a=schema.aggregation??command.aggregation,operate=fn=>a.version>=3?numericalOperation(new DatasetResourceBudget(a.resourcePolicy),fn):fn(undefined),compareValues=(x,y)=>operate(b=>compare(x,y,b)),sumValues=(x,y,d=1n)=>operate(b=>sum(x,y,d,b));
@@ -131,8 +135,13 @@ export class DatasetAggregation{
     for(const [i,s]of a.values.entries()){
      const state=group.values[i];state.total++;
      if(row.excluded){state.excluded++;continue;}
-     if(aggregationPresence(row,schema.source[schema.indices.indexOf(s.column)],s.column)!=='value'||isPairStatisticMetric(s)&&aggregationPresence(row,schema.source[schema.indices.indexOf(s.pairedColumn)],s.pairedColumn)!=='value'){state.missing++;if(a.missing==='error')fail('DATASET_AGGREGATION_MISSING');continue;}
-     state.included++;if(a.version>=6)state.approximateInputs ||= [s.column,...(isPairStatisticMetric(s)?[s.pairedColumn]:[])].some(index=>hasApproximation(actualComputations[schema.indices.indexOf(index)]));if(s.operation==='count')continue;
+     if(aggregationMetricColumns(s).some(index=>aggregationPresence(row,schema.source[schema.indices.indexOf(index)],index)!=='value')){state.missing++;if(a.missing==='error')fail('DATASET_AGGREGATION_MISSING');continue;}
+     state.included++;if(a.version>=6)state.approximateInputs ||= aggregationMetricColumns(s).some(index=>hasApproximation(actualComputations[schema.indices.indexOf(index)]));if(s.operation==='count')continue;
+     if(isWeightedFitMetric(s)){
+      const indices=aggregationMetricColumns(s),key=indices.join(':'),updated='weighted:'+key;group.weightedFits??={};
+      if(!updatedPairs.has(updated)){const budget=new DatasetResourceBudget(a.resourcePolicy),prior=group.weightedFits[key]??createWeightedFitMoments();validateWeightedFitMoments(prior,{policy:a.resourcePolicy,budget,count:state.included-1});const values=[];for(const index of indices){const saved=schema.source[schema.indices.indexOf(index)],selected=sourceCell(row,index),column=effectiveCellColumn(saved,selected),cell=await resolveScalarOperand(m,selected,column,{signal:options.signal,budget,policy:a.resourcePolicy});values.push(numericalOperation(budget,b=>plotRationalText(exactRational(cell.value,column.representation,column.radix,b),b)));}values[2]=weightedFitVariance(values[2],indices.map(index=>schema.resolvedSource[schema.indices.indexOf(index)]),{policy:a.resourcePolicy,budget});group.weightedFits[key]=updateWeightedFitMoments(prior,...values,{policy:a.resourcePolicy,budget,signal:options.signal});updatedPairs.set(updated,true);}
+      validateWeightedFitMoments(group.weightedFits[key],{policy:a.resourcePolicy,count:state.included});continue;
+     }
      if(isPairStatisticMetric(s)){
       const pairKey=s.column+':'+s.pairedColumn;group.pairs??={};
       if(!updatedPairs.has(pairKey)){
@@ -173,15 +182,16 @@ export class DatasetAggregation{
     if(a.version>=6){if(!group||!Array.isArray(group.cellComputations)||group.cellComputations.length!==a.keys.length||typeof group.keyApproximateInputs!=='boolean'||!Array.isArray(group.values)||group.values.length!==a.values.length||group.values.some(state=>typeof state?.approximateInputs!=='boolean'))fail('MATERIAL_MISSING');for(let key=0;key<a.keys.length;key++)resolveCellComputation(schema.columns[key],sourceCell(group,key));}
     for(const [i,s]of a.values.entries()){
      const state=group.values[i];let value=state.value;
-     let pairedStatistic;
-     if(isPairStatisticMetric(s)){const moments=group.pairs?.[s.column+':'+s.pairedColumn]??newMoments(a);checkMoments(a,moments,{policy:a.resourcePolicy,count:state.included});const result=s.operation==='correlation'?finishPearsonStatistic(moments,s,{policy:a.resourcePolicy,signal:options.signal}):finishPairStatistic(a.version>=6?legacyMoments(moments):moments,s,{policy:a.resourcePolicy});value=result.value;pairedStatistic=result.receipt;}
+     let pairedStatistic,weightedFit;
+     if(isWeightedFitMetric(s)){const moments=group.weightedFits?.[aggregationMetricColumns(s).join(':')]??createWeightedFitMoments();validateWeightedFitMoments(moments,{policy:a.resourcePolicy,count:state.included});const result=finishWeightedFit(moments,s,{policy:a.resourcePolicy,signal:options.signal});value=result.value;weightedFit=result.receipt;}
+     else if(isPairStatisticMetric(s)){const moments=group.pairs?.[s.column+':'+s.pairedColumn]??newMoments(a);checkMoments(a,moments,{policy:a.resourcePolicy,count:state.included});const result=s.operation==='correlation'?finishPearsonStatistic(moments,s,{policy:a.resourcePolicy,signal:options.signal}):finishPairStatistic(a.version>=6?legacyMoments(moments):moments,s,{policy:a.resourcePolicy});value=result.value;pairedStatistic=result.receipt;}
      else if(s.operation==='count')value=String(state.included);
      else if(state.included&&['median','quantile'].includes(s.operation))value=await median.value(index*a.values.length+i);
      else if(state.included&&s.operation==='mean'){value=a.version>=3?operate(b=>divideRationalText(value,state.included,b)):(()=>{const r=rational(value);return rationalText({...r,denominator:r.denominator*BigInt(state.included)});})();}
      if(value!==null&&s.output)value=operate(b=>formatExactResult(exactRational(value,s.operation==='count'?'integer':'rational',10,b),s.output,b));
      if(a.version>=3&&value!==null&&value.length>a.resourcePolicy.resources.maxScalarCharacters)fail('DATASET_CALCULATION_RESOURCE');
      if(a.version>=6){if(typeof state.approximateInputs!=='boolean'||typeof group.keyApproximateInputs!=='boolean')fail('MATERIAL_MISSING');const evaluation=pairedStatistic?.evaluation,computation=value===null?null:evaluation?.approximate?{version:2,kind:'approximate',method:s.method,engine:4,policy:structuredClone(evaluation.policy)}:state.approximateInputs||group.keyApproximateInputs?{version:1,kind:'approximate-inputs'}:null;group.cellComputations.push(perCellComputation(schema.columns[a.keys.length+i])?computation:undefined);}
-     group.cells.push(value??'');group.valueKinds.push(value===null?'absent':'string');const {value:unused,approximateInputs:unusedApproximation,...count}=state;if(pairedStatistic)count.pairedStatistic=pairedStatistic;if(s.operation==='quantile')count.quantile=state.included?await median.detail(index*a.values.length+i):null;counts.push(count);
+     group.cells.push(value??'');group.valueKinds.push(value===null?'absent':'string');const {value:unused,approximateInputs:unusedApproximation,...count}=state;if(pairedStatistic)count.pairedStatistic=pairedStatistic;if(weightedFit)count.weightedFit=weightedFit;if(s.operation==='quantile')count.quantile=state.included?await median.detail(index*a.values.length+i):null;counts.push(count);
     }
     let aggregationMembers;
     if(options.retainMembers){aggregationMembers={offset:memberOffset,count:group.members.count};memberOffset+=group.members.count;}
@@ -215,7 +225,7 @@ export class DatasetAggregation{
   command=await prepareAggregationScalars(this.materials,command,{signal:options.signal});
   const schema=await this.validate(command,options),rows=[];
   try{for await(const row of this.rows(command,schema,options)){if(row.columns)continue;rows.push(command.aggregation.version>=3?{...row,cells:row.cells.map(value=>typeof value==='string'&&value.length>4096?{format:'scalar-preview',text:value.slice(0,4096),complete:false}:value)}:row);if(rows.length===5)break;}}
-  catch(e){if(options.signal?.aborted)throw options.signal.reason;if(e instanceof AppError||isScalarResourceFailure(e))throw e;if(e instanceof ExactFormatError)fail(e.code);fail();}return {columns:schema.columns.map(c=>c.name),...(command.aggregation.version>=6?{formats:schema.columns.map(({representation,radix,unit,computation})=>({representation,radix,unit,...(computation?{computation}:{})}))}:{}),rows};
+  catch(e){if(options.signal?.aborted)throw options.signal.reason;if(e instanceof AppError||isScalarResourceFailure(e))throw e;if(e instanceof ExactFormatError)fail(e.code);fail();}return {columns:schema.columns.map(c=>c.name),...(command.aggregation.version>=6?{formats:schema.columns.map(({representation,radix,unit,quantity,computation,weightedFit})=>({representation,radix,unit,...(computation?{computation}:{}),...(weightedFit?{weightedFit,...(quantity?.unitDefinition?{unitDefinition:quantity.unitDefinition}:{})}:{})}))}:{}),rows};
  }
 }
 export async function clearAggregationWork(workspace,id){
@@ -225,16 +235,16 @@ export async function clearAggregationWork(workspace,id){
 // Membership is reconstructed from the immutable source revision and retained
 // group keys, not today's data. Paging never truncates a group's provenance.
 function inspectedAggregationMember(a,metric,column,selection,item){
- const row=item.value,presence=aggregationPresence(row,selection.columns[selection.indices.indexOf(column)],column),paired=isPairStatisticMetric(metric),pairedPresence=paired?aggregationPresence(row,selection.columns[selection.indices.indexOf(metric.pairedColumn)],metric.pairedColumn):undefined;
+ const row=item.value,presence=aggregationPresence(row,selection.columns[selection.indices.indexOf(column)],column),weighted=isWeightedFitMetric(metric),paired=isPairStatisticMetric(metric)||weighted,pairedPresence=paired?aggregationPresence(row,selection.columns[selection.indices.indexOf(metric.pairedColumn)],metric.pairedColumn):undefined,variancePresence=weighted?aggregationPresence(row,selection.columns[selection.indices.indexOf(metric.varianceColumn)],metric.varianceColumn):undefined;
  const source=index=>({ref:a.source,selector:{kind:'cell',page:item.page,row:item.row,column:index}}),computation=index=>resolveCellComputation(selection.columns[selection.indices.indexOf(index)],sourceCell(row,index));
- return {source:source(column),value:datasetCell(row,column),presence,...(a.version>=6?{computation:computation(column)}:{}),...(paired?{pairedSource:source(metric.pairedColumn),pairedValue:datasetCell(row,metric.pairedColumn),pairedPresence,...(a.version>=6?{pairedComputation:computation(metric.pairedColumn)}:{})}:{}),status:row.excluded?'excluded':presence!=='value'||paired&&pairedPresence!=='value'?'missing':'included',reason:row.excluded??null};
+ return {source:source(column),value:datasetCell(row,column),presence,...(a.version>=6?{computation:computation(column)}:{}),...(paired?{pairedSource:source(metric.pairedColumn),pairedValue:datasetCell(row,metric.pairedColumn),pairedPresence,...(a.version>=6?{pairedComputation:computation(metric.pairedColumn)}:{})}:{}),...(weighted?{varianceSource:source(metric.varianceColumn),varianceValue:datasetCell(row,metric.varianceColumn),variancePresence,varianceComputation:computation(metric.varianceColumn)}:{}),status:row.excluded?'excluded':presence!=='value'||paired&&pairedPresence!=='value'||weighted&&variancePresence!=='value'?'missing':'included',reason:row.excluded??null};
 }
 export async function inspectAggregation(materials,cell,selector,{offset=0,signal}={}){
  const a=cell.doc.content.aggregation,doc=await materials.read(a.source);if(!validAggregation(a,datasetColumnCount(doc)))fail('MATERIAL_MISSING');
- const selection=await selectedDatasetColumns(materials,doc,[...new Set([...a.keys,...a.values.flatMap(v=>isPairStatisticMetric(v)?[v.column,v.pairedColumn]:[v.column])])]),source=selection.columns;
+ const selection=await selectedDatasetColumns(materials,doc,[...new Set([...a.keys,...a.values.flatMap(aggregationMetricColumns)])]),source=selection.columns;
  const key=cell.row.locator?.key,metric=selector.column-a.keys.length,column=metric<0?a.keys[selector.column]:a.values[metric]?.column;
  if(typeof key!=='string')fail('MATERIAL_MISSING');
- if(column===undefined)fail();validateAggregationReceipts(a,cell.row);const metricDefinition=a.values[metric],paired=isPairStatisticMetric(metricDefinition)?{pairedColumn:metricDefinition.pairedColumn,method:metricDefinition.method,pairing:metricDefinition.pairing,...(metricDefinition.operation==='covariance'?{normalization:metricDefinition.normalization}:metricDefinition.operation==='correlation'?{calculationPolicy:metricDefinition.calculationPolicy}:{coefficient:metricDefinition.coefficient}),pairedStatistic:cell.row.aggregation[metric].pairedStatistic}:{};const quantile=await aggregationQuantileDetails(materials,cell.doc,cell.row,metric,{signal});let matched=0;const members=[],limit=16;
+ if(column===undefined)fail();validateAggregationReceipts(a,cell.row);const metricDefinition=a.values[metric],paired=isWeightedFitMetric(metricDefinition)?{metricIndex:metric,pairedColumn:metricDefinition.pairedColumn,varianceColumn:metricDefinition.varianceColumn,method:metricDefinition.method,pairing:metricDefinition.pairing,result:metricDefinition.result,referenceX:metricDefinition.referenceX,...(metricDefinition.evaluationX?{evaluationX:metricDefinition.evaluationX}:{}),weightedFit:cell.row.aggregation[metric].weightedFit,weightedFitContext:cell.column.weightedFit}:isPairStatisticMetric(metricDefinition)?{pairedColumn:metricDefinition.pairedColumn,method:metricDefinition.method,pairing:metricDefinition.pairing,...(metricDefinition.operation==='covariance'?{normalization:metricDefinition.normalization}:metricDefinition.operation==='correlation'?{calculationPolicy:metricDefinition.calculationPolicy}:{coefficient:metricDefinition.coefficient}),pairedStatistic:cell.row.aggregation[metric].pairedStatistic}:{};const quantile=await aggregationQuantileDetails(materials,cell.doc,cell.row,metric,{signal});let matched=0;const members=[],limit=16;
  if(cell.row.aggregationMembers){
   const context=await aggregationMemberContext(materials,cell.doc);
   for await(const item of aggregationMemberRows(materials,context,cell.row,{offset,limit,signal})){
@@ -253,12 +263,12 @@ export async function inspectAggregation(materials,cell,selector,{offset=0,signa
 // Policy-bearing revisions replay from their pinned source with scratch-only state.
 // The comparison streams long cells; neither a preview nor today's source is proof.
 export async function verifyAggregationPolicy(materials,doc,{signal}={}){
- const aggregation=doc.content.aggregation;if(![3,4,5,6].includes(aggregation?.version))return;
- if(doc.content.algorithm!=='observanda-retained-aggregation'||doc.content.algorithmVersion!==(aggregation.version===6?4:aggregation.version===5?3:aggregation.version===4?2:1)||!doc.content.aggregationMembersIndex)fail('MATERIAL_MISSING');
+ const aggregation=doc.content.aggregation;if(![3,4,5,6,7].includes(aggregation?.version))return;
+ if(doc.content.algorithm!=='observanda-retained-aggregation'||doc.content.algorithmVersion!==(aggregation.version===7?5:aggregation.version===6?4:aggregation.version===5?3:aggregation.version===4?2:1)||!doc.content.aggregationMembersIndex)fail('MATERIAL_MISSING');
  const engine=new DatasetAggregation(materials),schema=await engine.schema(aggregation,{signal});let source=false;
  for await(const ref of materials.references(doc.content))if(revisionText(ref)===revisionText(aggregation.source))source=true;
  if(!source||datasetColumnCount(doc)!==schema.columns.length)fail('MATERIAL_MISSING');
- for(let index=0;index<schema.columns.length;index++){const actual=await materials.datasetColumn(doc,index);if(revisionText(actual.computation??null)!==revisionText(schema.columns[index].computation??null))fail('MATERIAL_MISSING');if(aggregation.version>=4&&(aggregation.values[index-aggregation.keys.length]?.operation==='quantile'||isPairStatisticMetric(aggregation.values[index-aggregation.keys.length]))){const resolvedActual=await resolveScalarDefinitions(materials,actual,{signal}),resolvedExpected=await resolveScalarDefinitions(materials,schema.columns[index],{signal});for(const key of ['representation','radix','unit','quantity','time','resourcePolicy'])if(revisionText(resolvedActual[key]??null)!==revisionText(resolvedExpected[key]??null))fail('MATERIAL_MISSING');}}
+ for(let index=0;index<schema.columns.length;index++){const actual=await materials.datasetColumn(doc,index);if(revisionText(actual.computation??null)!==revisionText(schema.columns[index].computation??null))fail('MATERIAL_MISSING');if(aggregation.version>=4&&(aggregation.values[index-aggregation.keys.length]?.operation==='quantile'||isPairStatisticMetric(aggregation.values[index-aggregation.keys.length])||isWeightedFitMetric(aggregation.values[index-aggregation.keys.length]))){const resolvedActual=await resolveScalarDefinitions(materials,actual,{signal}),resolvedExpected=await resolveScalarDefinitions(materials,schema.columns[index],{signal});for(const key of ['representation','radix','unit','quantity','time','resourcePolicy',...(aggregation.version>=7?['weightedFit']:[])])if(revisionText(resolvedActual[key]??null)!==revisionText(resolvedExpected[key]??null))fail('MATERIAL_MISSING');}}
  const iterator=engine.rows({aggregation},schema,{signal})[Symbol.asyncIterator]();
  try{
   const header=await iterator.next();if(header.done||header.value.columns.length!==schema.columns.length)fail('MATERIAL_MISSING');let count=0;

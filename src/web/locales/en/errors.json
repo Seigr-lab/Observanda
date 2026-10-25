@@ -434,5 +434,7 @@
   "DATASET_ALIGNMENT_INVALID": "Choose supported scalar coordinates, an exact nonnegative tolerance and complete direction, tie and missing-value settings. Inspect the pinned source values and their declared interpretations.",
   "DATASET_ALIGNMENT_CONTEXT": "Use scalar coordinates with matching declared time, clock, epoch and coordinate-frame axis context. Declare compatible units for both coordinates, or leave both unit labels and definitions empty. The tolerance requires matching dimensions, a positive scale and zero offset as a difference.",
   "DATASET_ALIGNMENT_ORDER": "Included right coordinates must be nondecreasing within each equality-key partition in original source order. Inspect the pinned source rows; no sorting is performed.",
-  "DATASET_ALIGNMENT_TIE": "More than one right row is a best candidate within tolerance. Inspect the tied coordinates; explicitly choose first or last in source order, or keep refusal and revise the matching rules."
+  "DATASET_ALIGNMENT_TIE": "More than one right row is a best candidate within tolerance. Inspect the tied coordinates; explicitly choose first or last in source order, or keep refusal and revise the matching rules.",
+  "DATASET_WEIGHTED_FIT_VARIANCE": "Every included observation variance must be greater than zero. Review the variance column; zero variance cannot be used as a finite weight.",
+  "DATASET_WEIGHTED_FIT_UNITS": "Use declared X and Y units and a difference variance unit with the dimensions of Y squared, or leave all three units undeclared and their labels empty. Reference and evaluation coordinates use the selected X unit and origin."
 }

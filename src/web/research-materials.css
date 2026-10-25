@@ -135,14 +135,14 @@ dialog:has(> .material-workbench) { position:fixed; inset:1rem; margin:auto; max
 /* Semantic table cells stack with visible labels for narrow Pearson receipts. */
 .correlation-member-label { display:none; }
 @media (max-width:600px) {
- [data-aggregation-correlation] .material-table table,[data-aggregation-correlation] .material-table tbody { display:block; width:100%; }
- [data-aggregation-correlation] .material-table thead { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
- [data-aggregation-correlation] .material-table tbody tr { display:grid; grid-template-columns:minmax(0,1fr); gap:.65rem; padding:.65rem; border-bottom:1px solid var(--border); }
- [data-aggregation-correlation] .material-table td { display:block; min-width:0; padding:0; white-space:normal; overflow-wrap:normal; }
- [data-aggregation-correlation] .material-table td:first-child { overflow-wrap:anywhere; }
- [data-aggregation-correlation] .correlation-member-label { display:block; font-weight:600; margin-bottom:.3rem; }
- [data-aggregation-correlation] [data-pair-source] { display:flex; flex-wrap:wrap; align-items:center; gap:.4rem; margin-top:.4rem; }
- [data-aggregation-correlation] [data-pair-source] .button { max-width:100%; white-space:normal; }
+ :is([data-aggregation-correlation],[data-aggregation-weighted-fit]) .material-table table,:is([data-aggregation-correlation],[data-aggregation-weighted-fit]) .material-table tbody { display:block; width:100%; }
+ :is([data-aggregation-correlation],[data-aggregation-weighted-fit]) .material-table thead { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+ :is([data-aggregation-correlation],[data-aggregation-weighted-fit]) .material-table tbody tr { display:grid; grid-template-columns:minmax(0,1fr); gap:.65rem; padding:.65rem; border-bottom:1px solid var(--border); }
+ :is([data-aggregation-correlation],[data-aggregation-weighted-fit]) .material-table td { display:block; min-width:0; padding:0; white-space:normal; overflow-wrap:normal; }
+ :is([data-aggregation-correlation],[data-aggregation-weighted-fit]) .material-table td:first-child { overflow-wrap:anywhere; }
+ :is([data-aggregation-correlation],[data-aggregation-weighted-fit]) .correlation-member-label { display:block; font-weight:600; margin-bottom:.3rem; }
+ :is([data-aggregation-correlation],[data-aggregation-weighted-fit]) [data-pair-source] { display:flex; flex-wrap:wrap; align-items:center; gap:.4rem; margin-top:.4rem; }
+ :is([data-aggregation-correlation],[data-aggregation-weighted-fit]) [data-pair-source] .button { max-width:100%; white-space:normal; }
 }
 
 [data-spectrum-controls] { border:0; padding:0; margin:0; min-width:0; }
@@ -172,3 +172,5 @@ dialog:has(> .material-workbench) { position:fixed; inset:1rem; margin:auto; max
 [data-cusum-input] { border-bottom:1px solid var(--border); padding-block:.5rem; overflow-wrap:anywhere; }
 [data-cusum-preview-table] th details { max-width:18rem; font-weight:400; white-space:normal; overflow-wrap:anywhere; }
 [data-cusum-preview-table] td { max-width:24rem; white-space:normal; overflow-wrap:anywhere; }
+
+[data-aggregation-preview-unit] { width:18rem; max-width:70vw; white-space:normal; overflow-wrap:anywhere; font-weight:400; }

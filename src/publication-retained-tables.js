@@ -5,7 +5,7 @@ import {spectrumContextParts,spectrumText} from './web/dataset-spectrum-context.
 import {coordinateFrameContextText,coordinateFrameAxisPageParts} from './web/coordinate-frame-context.js';
 import {statisticalUncertaintyContextText} from './web/statistical-uncertainty-context.js';
 import {measurementUnitContextParts} from './web/measurement-unit-context.js';
-import {aggregationQuantileContextParts,aggregationPairContextText} from './web/dataset-aggregation-context.js';
+import {aggregationQuantileContextParts,aggregationPairContextText,aggregationWeightedFitContextParts} from './web/dataset-aggregation-context.js';
 import {clockSynchronizationContextParts} from './web/measurement-clock-context.js';
 import {computationLabel,cellComputationLabel} from './web/measurement-computation.js';
 import {domainDescription} from './web/measurement-domain-ui.js';
@@ -38,6 +38,7 @@ export async function* retainedTableHTML(materials,statement,{signal}={}){
    if(format.quantile){yield ' [';for(const part of aggregationQuantileContextParts(format.quantile)){if(typeof part==='string')yield esc(part);else for await(const text of cellText(materials,part.spelling,{signal}))yield esc(text);}yield ']';}
    if(format.unitDefinition){yield ' [';for(const part of measurementUnitContextParts(format.unitDefinition)){if(typeof part==='string')yield esc(part);else for await(const text of cellText(materials,part.spelling,{signal}))yield esc(text);}yield ']';}
    if(format.coordinateFrame)yield esc(' ['+coordinateFrameContextText(format.coordinateFrame)+']');
+   if(format.weightedFit){yield ' [';for(const part of aggregationWeightedFitContextParts(format.weightedFit)){if(typeof part==='string')yield esc(part);else for await(const text of cellText(materials,part.spelling,{signal}))yield esc(text);}yield ']';}
    if(format.pairedStatistic)yield esc(' ['+aggregationPairContextText(format.pairedStatistic)+']');
    if(format.spectrum){yield '<details class="retained-spectrum-context"><summary>'+esc(spectrumText('methodDetails'))+'</summary><p>';for(const part of spectrumContextParts(format.spectrum)){if(typeof part==='string')yield esc(part);else for await(const text of cellText(materials,part.spelling,{signal}))yield esc(text);}yield '</p></details>';}
    if(format.cusum){yield '<details class="retained-cusum-context"><summary>'+esc(cusumText('methodDetails'))+'</summary><p>';for(const part of cusumContextParts(format.cusum)){if(typeof part==='string')yield esc(part);else for await(const text of cellText(materials,part.spelling,{signal}))yield esc(text);}yield '</p></details>';}
