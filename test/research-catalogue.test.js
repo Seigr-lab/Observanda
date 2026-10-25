@@ -66,7 +66,7 @@ test('save changes only the modified encrypted record; stale writes and failed b
 
 test('verified backups and fresh-key successors preserve catalogue revisions',async t=>{
  const {ws,root,vault}=await fixture(t),original=await ws.read();
- const backup=await copyWorkspace(await copyPlan(ws.root,path.join(root,'backup')));
+ const backup=await copyWorkspace(await copyPlan(ws.root,path.join(root,'backup'),{vault}),{vault});
  const backupVault=await verifyAccess(await readAccess(backup),'','synthetic catalogue password');
  const access=await createAccess('','new synthetic catalogue password'),nextVault=takeCreatedVault(access);
  try{

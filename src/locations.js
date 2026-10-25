@@ -257,11 +257,10 @@ export async function encryptedCopy(plan,access,vault,sourceVault=null,{onProgre
       operationTransfer({phase:'verifying'});
       const copied=JSON.parse(await target.readFile(await workspaceFile(plan.destination),'utf8'));
       if(catalogue){
-        // Rekey uses a detached creation transaction and atomically publishes
-        // its archive. A retry before this checkpoint can safely re-create it.
-        if(!recovery?.databaseReady)await rekeyCatalogue(source,target,copied);
-        if(recovery&&!recovery.databaseReady)await recovery.database();
-        await withRetiredRecordCopy(source,target,async()=>{const checked=await target.openCatalogue();await checked.close();});
+        // Rekey checkpoints the durable archive, then imports and fully verifies
+        // it before activation. A resumed copy uses that same retained archive.
+        if(!recovery?.databaseReady)await rekeyCatalogue(source,target,copied,{activate:true,...(recovery?{afterArchive:()=>recovery.database()}: {})});
+        else await withRetiredRecordCopy(source,target,async()=>{const checked=await target.openCatalogue();await checked.close();});
       }else if(isCatalogue(copied))await verifyCatalogueArchive(target,copied);
       else validateNotebook(copied);
       if(afterSnapshotVerified)await afterSnapshotVerified(plan.destination);

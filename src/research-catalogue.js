@@ -745,7 +745,10 @@ export class ResearchCatalogue{
 }
 
 // Rekey encrypted objects into a portable backup, preserving historical identities.
-export async function rekeyCatalogue(source,target,descriptor){
+export async function rekeyCatalogue(source,target,descriptor,options={}){
+ if(!options||typeof options!=='object'||Array.isArray(options)||Object.keys(options).some(key=>!['activate','afterArchive'].includes(key))||
+  options.activate!==undefined&&typeof options.activate!=='boolean'||options.afterArchive!==undefined&&(typeof options.afterArchive!=='function'||options.activate!==true))throw new AppError('INVALID');
+ const {activate=false,afterArchive}=options;
  return operationStage('rekey',{},async()=>{
  const {assertRecordOwnerReclamationSettled}=await import('./record-owner-transfer-state.js');await source.catalogue(store=>assertRecordOwnerReclamationSettled(store));
  // A storage handoff already owns and freezes this source catalogue. Reuse
@@ -795,12 +798,20 @@ export async function rekeyCatalogue(source,target,descriptor){
    targetDb.run('INSERT INTO module_events VALUES ($1,$2,$3)',row.command_id,row.ordinal,to.encode('module-event',row.command_id+'/'+row.ordinal,from.decode('module-event',row.command_id+'/'+row.ordinal,row.payload))));
   await operationStage('rekey-table',{unit:'rows',item:'objects'},()=>writeCatalogueRows(targetDb,'objects',rekeyRows('objects','id'),{create:true}));
   await rekeyProjectDomains(from,to);
-  // Verify the copied descriptor and all re-encrypted content in the same
-  // transaction that creates this exclusively owned, still-marked destination.
-  await targetDb.scope(()=>withRetiredRecordCopy(source,target,()=>to.verify(descriptor)));
+  // Standalone archives retain their pre-export validation contract. Connected
+  // activation instead verifies the actual exported archive before publication.
+  if(!activate)await targetDb.scope(()=>withRetiredRecordCopy(source,target,()=>to.verify(descriptor)));
   await targetDb.run('COMMIT');if(!borrowed)await sourceDb.run('COMMIT');
   await backupCatalogue(target.root,target.root,{connection:targetDb});
  }finally{if(!borrowed)await sourceDb.close();await targetDb?.close();}
+  if(activate){
+   // Checkpoint only the durable archive. A retry can then resume its journalled
+   // import; no binding is published before the imported content passes verify.
+   await afterArchive?.();
+   await withRetiredRecordCopy(source,target,async()=>{
+    const checked=await target.openCatalogue({onVerified:value=>{if(serialize(value)!==serialize(descriptor))fail();}});await checked.close();
+   });
+  }
  });
 }
 export async function verifyCatalogueArchive(workspace,descriptor){
