@@ -1,7 +1,8 @@
 import {DATASET_ROWS_PER_PAGE} from '../src/dataset-row-position.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,rm} from 'node:fs/promises';
+import filesystem,{mkdtemp,readFile,writeFile,rm} from 'node:fs/promises';
+import {syncBuiltinESMExports} from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import {randomUUID,createHash} from 'node:crypto';
@@ -11,7 +12,9 @@ import {ResearchMaterials,EVIDENCE_CHUNK} from '../src/research-materials.js';
 import {workspaceJobs} from '../src/workspace-jobs.js';
 import {enqueueDataset,datasetJobs} from '../src/dataset-jobs.js';
 import {AppError} from '../src/errors.js';
-import {clearVault} from '../src/encryption.js';
+import {clearVault,ENVELOPE,ENCRYPTION_OVERHEAD} from '../src/encryption.js';
+import {FileContent} from '../src/file-content.js';
+import {OwnedFileContent} from '../src/owned-file-content.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
 import {createAccess,takeCreatedVault} from '../src/access.js';
@@ -32,6 +35,51 @@ async function perform(f,id){
  const prepared=await f.queue.definition(job).prepare(job,{});
  return f.queue.complete(job.id,job.lease.token,prepared);
 }
+
+test('dataset preparation authenticates original streams once before parser output and retains owner leases',async t=>{
+ const f=await fixture(t),bytes=Buffer.from('{"measurements":['+Array.from({length:96},(_,i)=>'{"counter":'+i+',"native":"15","reading":1}').join(',')+']}'),artifact=await upload(f,bytes);
+ const command={recordId:f.recordId,title:'Authenticated preparation',artifact,sourceMapping:mapping},doc=await f.materials.read(artifact),original=await f.materials.originalContent(doc),stored=await readFile(original.file);
+ assert.ok(stored.subarray(0,ENVELOPE.length).equals(ENVELOPE));
+ let sourceBytes=0,sourceHandles=0,preliminaryVerifies=0,writes=0,activeOwners=0,ownerAdmissions=0,deferred=false,allowed=true,defect=null,cancel=null;
+ const open=filesystem.open,verify=FileContent.prototype.verify,originalContent=f.materials.originalContent;
+ const opened=t.mock.method(filesystem,'open',async function(file,...args){
+  const handle=await open.call(this,file,...args);if(file!==original.file||args[0]!=='r')return handle;
+  sourceHandles++;const read=handle.read,close=handle.close;
+  handle.read=async function(buffer,offset,length,position){const result=await read.call(this,buffer,offset,length,position);if(position>=ENCRYPTION_OVERHEAD){sourceBytes+=result.bytesRead;if(cancel&&result.bytesRead)cancel.abort();}return result;};
+  handle.close=async function(...values){try{return await close.apply(this,values);}finally{sourceHandles--;}};return handle;
+ });syncBuiltinESMExports();
+ const verified=t.mock.method(FileContent.prototype,'verify',function(...args){if(this.file===original.file)preliminaryVerifies++;return verify.apply(this,args);});
+ const owned=t.mock.method(f.materials,'originalContent',async function(...args){
+  const content=await originalContent.apply(this,args);
+  if(defect==='digest')content.sha256='0'.repeat(64);if(defect==='size')content.size++;
+  if(!deferred)return content;
+  return new OwnedFileContent(f.workspace,content.file,content.size,content.sha256,async consume=>{
+   if(!allowed)throw new AppError('ACCESS_LOCKED');ownerAdmissions++;activeOwners++;
+   try{return await consume(content);}finally{activeOwners--;}
+  });
+ });
+ const reset=()=>{sourceBytes=0;preliminaryVerifies=0;writes=0;ownerAdmissions=0;};
+ const prepare=signal=>f.materials.prepareDataset(command,{signal,writePage:fn=>{writes++;return f.workspace.withLock(fn);}});
+ try{
+  for(deferred of [false,true]){
+   reset();const prepared=await prepare();assert.equal(prepared.content.rowCount,96);assert.ok(writes>0);
+   assert.equal(preliminaryVerifies,0,'Preparation must not perform an extra artifact verification');
+   assert.equal(sourceBytes,2*bytes.length,'One complete authentication pass precedes the parser streaming pass');
+   assert.equal(ownerAdmissions,deferred?1:0);assert.equal(activeOwners,0);assert.equal(sourceHandles,0);
+  }
+  for(const failure of ['envelope','digest','size','cancel','owner']){
+   reset();defect=failure;cancel=failure==='cancel'?new AbortController():null;allowed=failure!=='owner';
+   if(failure==='envelope'){const corrupt=Buffer.from(stored);corrupt[corrupt.length-1]^=1;await writeFile(original.file,corrupt);}
+   try{
+    await assert.rejects(prepare(cancel?.signal),failure==='cancel'?{name:'AbortError'}:{code:failure==='envelope'?'ENCRYPTION_DAMAGED':failure==='owner'?'ACCESS_LOCKED':'MATERIAL_MISSING'});
+    assert.equal(writes,0,'Unauthenticated source data must never reach a page writer');assert.equal(preliminaryVerifies,0);
+    assert.equal(activeOwners,0);assert.equal(sourceHandles,0);assert.equal(ownerAdmissions,failure==='owner'?0:1);
+   }finally{if(failure==='envelope')await writeFile(original.file,stored);}
+  }
+  assert.equal((await f.materials.heads()).filter(head=>head.kind==='dataset').length,0);
+ }finally{owned.mock.restore();verified.mock.restore();opened.mock.restore();syncBuiltinESMExports();}
+});
+
 test('large JSON evidence becomes exact, bounded pages through a durable job and survives portable restore',async t=>{
  const f=await fixture(t);
  // 4,344 measurements, over 16 MiB, without materializing diagnostics in rows.

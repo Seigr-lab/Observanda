@@ -430,7 +430,15 @@ export class ResearchMaterials {
   if(command.calculation)return new DatasetCalculations(this).prepare(command,{signal,progress,writePage});
   await this.validateDataset(command);
   const base=command.baseDataset?await this.read(command.baseDataset):null;
-  const source=base?{doc:{id:command.artifact.id}}:await this.artifact(command.artifact,{signal});
+  let source={doc:{id:command.artifact.id}};
+  if(!base){
+   const doc=await this.read(command.artifact),content=await this.originalContent(doc);
+   // read() authenticates the entire original before releasing parser input,
+   // including deferred owner admission. Avoid a separate verification pass.
+   source={doc,content:{size:content.size,async *read(...args){
+    try{yield* content.read(...args);}catch(error){if(error.code==='MEDIA_INVALID')fail('MATERIAL_MISSING');throw error;}
+   }}};
+  }
   return this.prepareDatasetRows(command,{source,base,signal,progress,writePage});
  }
  // Shared bounded builder. Callers validate their ownership contract first:
