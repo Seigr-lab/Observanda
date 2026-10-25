@@ -1,5 +1,6 @@
 import {spawn} from 'node:child_process';
-import {requireDatabase} from '../src/postgres.js';
+import {requireDatabase,databaseCapacity} from '../src/postgres.js';
+import {registerRuntimeEnvironment} from '../src/database-runtime-environment.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,readFile,rm,writeFile,appendFile,chmod} from 'node:fs/promises';
@@ -56,10 +57,18 @@ test('actual PostgreSQL TLS validates both the authority and the requested host'
  await runtimeCommand('openssl',['req','-config',requestConfig,'-x509','-newkey','rsa:2048','-nodes','-keyout',key,'-out',cert,'-days','2','-subj','/CN=127.0.0.1','-addext','subjectAltName=IP:127.0.0.1']);await chmod(key,0o600);
  await appendFile(path.join(data,'postgresql.conf'),"\nssl=on\nssl_cert_file='server.crt'\nssl_key_file='server.key'\n");
  service=await startManagedPostgres({directory,env});
- const verified={...env,OBSERVANDA_DATABASE_TLS:'verify-full',OBSERVANDA_DATABASE_CA:cert};
- await requireDatabase(verified);
- await assert.rejects(requireDatabase({...verified,OBSERVANDA_DATABASE_CA:''}),{code:'DATABASE_UNAVAILABLE'});
- await assert.rejects(requireDatabase({...verified,OBSERVANDA_DATABASE_URL:env.OBSERVANDA_DATABASE_URL.replace('127.0.0.1','localhost')}),{code:'DATABASE_UNAVAILABLE'});
+ const verified={...env,OBSERVANDA_DATABASE_TLS:'verify-full',OBSERVANDA_DATABASE_CA:cert},baseline=databaseCapacity();let retained=0;
+ const attempt=async(configuration,rejected=false)=>{
+  let released=0;
+  // Observe the real connection's runtime lease without replacing TLS or pg.
+  registerRuntimeEnvironment(configuration,()=>{retained++;return()=>{retained--;released++;};});
+  if(rejected)await assert.rejects(requireDatabase(configuration),{code:'DATABASE_UNAVAILABLE'});else await requireDatabase(configuration);
+  assert.equal(released,1,'each actual connection attempt releases its runtime lease exactly once');
+  assert.equal(retained,0);assert.deepEqual(databaseCapacity(),baseline,'TLS completion must restore the original admission and connection counters');
+ };
+ await attempt(verified);
+ await attempt({...verified,OBSERVANDA_DATABASE_CA:''},true);await attempt(verified);
+ await attempt({...verified,OBSERVANDA_DATABASE_URL:env.OBSERVANDA_DATABASE_URL.replace('127.0.0.1','localhost')},true);await attempt(verified);
 });
 
 test('cancelled initialization resumes in the same managed installation',async t=>{
