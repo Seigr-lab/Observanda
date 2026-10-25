@@ -160,7 +160,7 @@ export class ObjectIndex{
   if(loaded&&(this.immutable||this.cacheReads||this.store?.readCache))this.cacheNode(ref,value);
   // Local hits are shared-cache uses too. Restore a useful authenticated path
   // after bounded prefetch evicts it, without admitting pending writer nodes.
-  else if(!this.pending.has(ref.hash))this.store.readCache?.keepNode(this.slot(ref),value,proof.bytes);
+  else if(!this.pending.has(ref.hash))this.store?.readCache?.keepNode(this.slot(ref),value,proof.bytes);
   return value;
  }
  make(id,revision,left=null,right=null){
