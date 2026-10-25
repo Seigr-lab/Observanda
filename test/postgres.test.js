@@ -1,3 +1,5 @@
+import {Client} from 'pg';
+import {withDatabaseRequest} from '../src/database-request-context.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,readFile,writeFile,rm,access,realpath} from 'node:fs/promises';
@@ -85,20 +87,20 @@ test('portable backup restores after the source database schema is gone and rest
  assert.deepEqual(await independent.read(),before);
 });
 test('a database edit after backup review invalidates the plan even when the binding file is unchanged',async t=>{
- const {root,source,ws}=await fixture(t),plan=await copyPlan(source,path.join(root,'stale'));
+ const {root,source,ws,vault}=await fixture(t),plan=await copyPlan(source,path.join(root,'stale'));
  const current=await ws.read();current.book.entries[0].title='Changed after review';await ws.save(current.book,current.etag);
- await assert.rejects(copyWorkspace(plan),{code:'CONFLICT'});
+ await assert.rejects(copyWorkspace(plan,{vault}),{code:'CONFLICT'});
  await assert.rejects(access(plan.destination),{code:'ENOENT'});
 });
 
 test('backup review detects a same-size retained state change even when the current head is unchanged',async t=>{
- const {root,source}=await fixture(t),plan=await copyPlan(source,path.join(root,'changed-state'));
+ const {root,source,vault}=await fixture(t),plan=await copyPlan(source,path.join(root,'changed-state'));
  const db=await openCatalogue(source);
  try{
   const row=await db.get("SELECT slot,payload FROM state WHERE slot<>'head' ORDER BY slot LIMIT 1"),changed=Buffer.from(row.payload);changed[changed.length-1]^=1;
   await db.run('UPDATE state SET payload=$1 WHERE slot=$2',changed,row.slot);
  }finally{await db.close();}
- await assert.rejects(copyWorkspace(plan),{code:'CONFLICT'});
+ await assert.rejects(copyWorkspace(plan,{vault}),{code:'CONFLICT'});
  await assert.rejects(access(plan.destination),{code:'ENOENT'});
 });
 test('truncated or forged archives fail without deleting the original or activating a database',async t=>{
@@ -116,16 +118,22 @@ test('interrupted archive import rolls back and can be retried from unchanged or
  const script=[
   "import {Client} from 'pg';",
   "import {openCatalogue} from './src/postgres.js';",
-  "const query=Client.prototype.query;let stopped=false;Client.prototype.query=async function(sql,...args){const result=await query.call(this,sql,...args);if(!stopped&&sql.startsWith('INSERT INTO records')){stopped=true;process.stdout.write('ready');await new Promise(()=>{});}return result;};",
+  "process.stdout.write('loaded\\n');",
+  "const query=Client.prototype.query;let stopped=false;Client.prototype.query=async function(sql,...args){const result=await query.call(this,sql,...args);if(!stopped&&sql.startsWith('INSERT INTO records')){stopped=true;process.stdout.write('paused\\n');await new Promise(()=>{});}return result;};",
   'await openCatalogue('+JSON.stringify(backup)+');'
  ].join('\n');
  const child=spawn(process.execPath,['--input-type=module','-'],{cwd:process.cwd(),windowsHide:true,stdio:['pipe','pipe','pipe']});
  let stderr='';child.stderr.on('data',chunk=>stderr+=chunk);const exited=new Promise(resolve=>child.once('exit',resolve));
  try{
   await new Promise((resolve,reject)=>{
-   const timer=setTimeout(()=>reject(Error('Import did not pause: '+stderr)),15000);
-   child.once('error',reject);child.once('exit',()=>{clearTimeout(timer);reject(Error('Import exited: '+stderr));});
-   child.stdout.once('data',()=>{clearTimeout(timer);resolve();});child.stdin.end(script);
+   // Module startup is separate from the import checkpoint. In particular,
+   // loading source through a mounted filesystem is not archive-import time.
+   let output='',loaded=false,timer;
+   const finish=error=>{clearTimeout(timer);child.stdout.removeListener('data',data);child.removeListener('error',failed);child.removeListener('exit',closed);if(error)reject(error);else resolve();};
+   const failed=error=>finish(error),closed=()=>finish(Error('Import exited: '+stderr));
+   const data=chunk=>{output+=chunk;if(!loaded&&output.includes('loaded\n')){loaded=true;clearTimeout(timer);timer=setTimeout(()=>finish(Error('Import did not pause: '+stderr)),15000);}if(loaded&&output.includes('paused\n'))finish();};
+   timer=setTimeout(()=>finish(Error('Import worker did not start: '+stderr)),60000);
+   child.once('error',failed);child.once('exit',closed);child.stdout.on('data',data);child.stdin.end(script);
   });child.kill('SIGKILL');await exited;
  }finally{if(child.exitCode===null&&child.signalCode===null){child.kill('SIGKILL');await exited;}}
  assert.deepEqual(await readFile(file),bytes);await assert.rejects(access(path.join(backup,CATALOGUE_FILE)),{code:'ENOENT'});
@@ -176,4 +184,49 @@ test('catalogue counts seek bounded byte-order pages and exclude unrelated state
    await assert.rejects(catalogueIndexedCount(db,'records'),TypeError);
   }finally{db.get=get;}
  }));
+});
+
+
+for(const active of [false,true])test('cancelled detached archive cleanup removes its temporary schema '+(active?'after an active query':'between queries'),async t=>{
+ const {root,source,ws,vault}=await fixture(t),before=await ws.read();
+ const backup=await copyWorkspace(await copyPlan(source,path.join(root,'detached-copy')),{vault});
+ const controller=new AbortController(),observer=await openCatalogue(source);let temporary;
+ t.after(async()=>{try{await temporary?.close();}finally{await observer.close();}});
+ temporary=await withDatabaseRequest(controller.signal,()=>new Workspace(backup,vault).openCatalogue({detached:true}));
+ assert.equal(temporary.temporary,true);const schema=temporary.schema;
+ assert.ok(await observer.get('SELECT 1 FROM pg_catalog.pg_namespace WHERE nspname=$1',schema));
+ if(active){
+  const pending=withDatabaseRequest(controller.signal,()=>temporary.run('SELECT pg_sleep(10)'));
+  const failed=assert.rejects(pending,error=>error===controller.signal.reason);controller.abort();await failed;
+ }else controller.abort();
+ await withDatabaseRequest(controller.signal,()=>temporary.close());temporary=null;
+ assert.equal(await observer.get('SELECT 1 FROM pg_catalog.pg_namespace WHERE nspname=$1',schema),undefined);
+ assert.deepEqual(await ws.read(),before);
+});
+
+
+test('a dead detached catalogue releases admission before reconnecting for schema cleanup',async t=>{
+ const {root,source,vault}=await fixture(t);
+ const backup=await copyWorkspace(await copyPlan(source,path.join(root,'detached-dead-copy')),{vault});
+ const observer=await openCatalogue(source);let temporary;
+ t.after(async()=>{try{await temporary?.close();}finally{await observer.close();}});
+ temporary=await new Workspace(backup,vault).openCatalogue({detached:true});
+ const schema=temporary.schema,pid=(await temporary.get('SELECT pg_backend_pid() AS pid')).pid;
+ const ended=new Promise(resolve=>temporary.client.once('end',resolve));
+ await observer.get('SELECT pg_terminate_backend($1)',pid);await ended;
+ let released=false,reconnections=0;const end=temporary.client.end.bind(temporary.client),connect=Client.prototype.connect;
+ t.mock.method(temporary.client,'end',async()=>{await end();released=true;});
+ const spy=t.mock.method(Client.prototype,'connect',function(...args){assert.equal(released,true,'cleanup requested another admission slot before releasing its dead client');reconnections++;return connect.apply(this,args);});
+ try{await temporary.close();temporary=null;}finally{spy.mock.restore();}
+ assert.equal(reconnections,1);assert.equal(await observer.get('SELECT 1 FROM pg_catalog.pg_namespace WHERE nspname=$1',schema),undefined);
+});
+
+test('cancelling detached catalogue admission preserves the cancellation and removes its unpublished schema',async t=>{
+ const {root,source,ws,vault}=await fixture(t),before=await ws.read();
+ const backup=await copyWorkspace(await copyPlan(source,path.join(root,'cancelled-admission')),{vault});
+ const controller=new AbortController(),reason=new Error('cancelled disposable admission');let schema;
+ await assert.rejects(withDatabaseRequest(controller.signal,()=>openCatalogue(backup,{detached:true,vault,validate:async db=>{schema=db.schema;controller.abort(reason);}})),error=>error===reason);
+ assert.equal(typeof schema,'string');const observer=await openCatalogue(source);
+ try{assert.equal(await observer.get('SELECT 1 FROM pg_catalog.pg_namespace WHERE nspname=$1',schema),undefined);}finally{await observer.close();}
+ assert.deepEqual(await ws.read(),before);
 });

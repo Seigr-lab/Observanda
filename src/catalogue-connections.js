@@ -46,7 +46,11 @@ export async function withCatalogueConnections(workspace,operation){
  const owner=connectionOwner(workspace,{lateIndependent:true});
  try{return await owner.run(operation);}finally{await owner.close();}
 }
-async function independent(workspace,options,operation){const db=await workspace.openCatalogue(options);try{return await operation(db);}finally{await db.close();}}
+async function independent(workspace,options,operation){
+ const db=await workspace.openCatalogue(options);let failed=false;
+ try{return await operation(db);}catch(error){failed=true;throw error;}
+ finally{try{await db.close();}catch(error){if(!failed)throw error;}}
+}
 export async function catalogueConnection(workspace,kind,options,operation){
  const scope=scopes.getStore()?.get(workspace);
  if(!scope||scope.closed&&scope.lateIndependent)return independent(workspace,options,operation);

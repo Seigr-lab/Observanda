@@ -1,7 +1,8 @@
+import {databaseQuery,databaseConnectionEnded,DATABASE_STATEMENT_TIMEOUT_MS} from './database-query.js';
 import {catalogueArchiveTables as tables} from './postgres-archive-tables.js';
 import {readCatalogueStamp} from './catalogue-stamp.js';
 import {dropProjectDomainSchemas} from './project-domain-schema.js';
-import {databaseRequestSignal} from './database-request-context.js';
+import {databaseRequestSignal,withDatabaseRequest} from './database-request-context.js';
 import {DatabaseAdmission} from './database-admission.js';
 import {checkServerIdentity} from 'node:tls';
 import {retainRuntimeEnvironment} from './database-runtime-environment.js';
@@ -41,7 +42,7 @@ export async function databaseConfiguration(env=process.env){
   if(env.OBSERVANDA_DATABASE_CA){try{ssl.ca=await readFile(env.OBSERVANDA_DATABASE_CA,'utf8');}catch{throw new AppError('DATABASE_TLS');}}
  }else if(!local||env.OBSERVANDA_DATABASE_TLS||env.OBSERVANDA_DATABASE_CA)throw new AppError('DATABASE_TLS');
  try{return {host,port:Number(url.port||5432),database:decodeURIComponent(url.pathname.slice(1)),user:decodeURIComponent(url.username),password:decodeURIComponent(url.password),ssl,
-  application_name:'Observanda',options:'-c search_path=pg_catalog',client_encoding:'UTF8',connectionTimeoutMillis:5000,statement_timeout:30000};}
+  application_name:'Observanda',options:'-c search_path=pg_catalog',client_encoding:'UTF8',connectionTimeoutMillis:5000,statement_timeout:DATABASE_STATEMENT_TIMEOUT_MS};}
  catch{throw new AppError('DATABASE_CONFIG');}
 }
 let connections=0;
@@ -68,7 +69,7 @@ async function connect(env=process.env,{signal=databaseRequestSignal(),reservati
 export async function requireDatabase(env){
  env??=databaseProvider()?await scratchDatabaseEnvironment():process.env;
  const client=await connect(env);
- try{if(!(await client.query("SELECT has_database_privilege(current_user,current_database(),'CREATE') AND has_database_privilege(current_user,current_database(),'TEMPORARY') AS allowed")).rows[0].allowed)throw new AppError('DATABASE_PERMISSION');}
+ try{if(!(await databaseQuery(client,"SELECT has_database_privilege(current_user,current_database(),'CREATE') AND has_database_privilege(current_user,current_database(),'TEMPORARY') AS allowed")).rows[0].allowed)throw new AppError('DATABASE_PERMISSION');}
  finally{await client.end();}
 }
 export async function databaseStatus(env){
@@ -82,7 +83,7 @@ export async function hasCatalogue(root){
 class CatalogueConnection{
  constructor(client,id,{temporary=false,env=process.env}={}){this.client=client;this.id=id;this.schema=schemaFor(id);this.temporary=temporary;this.env=env;}
  scope(operation){return databaseScope(this.env,operation,this);}
- async run(sql,...values){return this.client.query(sql,values);}
+ async run(sql,...values){return databaseQuery(this.client,sql,values);}
  async get(sql,...values){return (await this.run(sql,...values)).rows[0];}
  async all(sql,...values){return (await this.run(sql,...values)).rows;}
  // The caller owns the transaction. Cursors never outlive it or retain a whole
@@ -107,10 +108,22 @@ class CatalogueConnection{
   }
  }
  async close(){
-  try{
-   await this.run('ROLLBACK');
-   if(this.temporary){await dropProjectDomainSchemas(this);await this.run('DROP SCHEMA "'+this.schema+'" CASCADE');}
-  }finally{await this.client.end();}
+  // Cleanup owns its deadline; cancellation of the request must not prevent
+  // rollback or leave a successfully imported temporary catalogue behind.
+  return withDatabaseRequest(null,async()=>{
+   let cleanup=this,replacement;
+   try{
+    if(databaseConnectionEnded(this.client)){
+     // Release the dead connection's admission slot before borrowing another.
+     await this.client.end();
+     if(!this.temporary)return;
+     replacement=await connect(this.env,{signal:null});
+     cleanup=new CatalogueConnection(replacement,this.id,{env:this.env});
+    }
+    await cleanup.run('ROLLBACK');
+    if(this.temporary){await dropProjectDomainSchemas(cleanup);await cleanup.run('DROP SCHEMA IF EXISTS "'+this.schema+'" CASCADE');}
+   }finally{try{await replacement?.end();}finally{await this.client.end();}}
+  });
  }
  async lock(){
   if(!(await this.get('SELECT pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended($1,0)) AS locked',this.id)).locked)throw new AppError('LOCKED');
@@ -165,7 +178,7 @@ export async function openCatalogue(root,{create=false,detached=false,validate,r
    // A killed importing client may exit before PostgreSQL releases its session
    // lock. Wait briefly for cleanup; never steal an active importer's lock.
    const deadline=Date.now()+2000;
-   while(!(await client.query('SELECT pg_catalog.pg_try_advisory_lock(pg_catalog.hashtextextended($1,0)) AS locked',[restoreLock])).rows[0].locked){
+   while(!(await databaseQuery(client,'SELECT pg_catalog.pg_try_advisory_lock(pg_catalog.hashtextextended($1,0)) AS locked',[restoreLock])).rows[0].locked){
     if(Date.now()>=deadline)throw new AppError('LOCKED');
     await delay(50);
    }
@@ -201,13 +214,13 @@ export async function openCatalogue(root,{create=false,detached=false,validate,r
   }
   return db;
  }catch(error){
-  await client.query('ROLLBACK').catch(()=>{});
-  if(created&&!published){await dropProjectDomainSchemas(db).catch(()=>{});await client.query('DROP SCHEMA IF EXISTS "'+db.schema+'" CASCADE').catch(()=>{});}
-  await client.end().catch(()=>{});
-  if(error instanceof AppError)throw error;
+  if(db){if(created&&!published)db.temporary=true;await db.close().catch(()=>{});}
+  else await client.end().catch(()=>{});
+  const requestSignal=signal??databaseRequestSignal();
+  if(error instanceof AppError||requestSignal?.aborted&&error===requestSignal.reason)throw error;
   throw new AppError('CATALOGUE_DAMAGED');
  }finally{
-  if(restoreLock)await client.query('SELECT pg_catalog.pg_advisory_unlock(pg_catalog.hashtextextended($1,0))',[restoreLock]).catch(()=>{});
+  if(restoreLock)await databaseQuery(client,'SELECT pg_catalog.pg_advisory_unlock(pg_catalog.hashtextextended($1,0))',[restoreLock]).catch(()=>{});
  }
 }
 export async function catalogueStamp(root){
@@ -261,11 +274,11 @@ export async function resetCataloguePreparation(root,stagingRoot,id,env){
  if(!binding&&!activation||[binding,activation].some(value=>value&&value.id!==id))throw new AppError('CONFLICT');
  const schema=schemaFor(id),client=await connect(env);
  try{
-  await client.query('BEGIN');
-  if(!(await client.query('SELECT pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended($1,0)) AS locked',[id])).rows[0].locked)throw new AppError('LOCKED');
-  await client.query('DROP SCHEMA IF EXISTS "'+schema+'" CASCADE');await client.query('COMMIT');
+  await databaseQuery(client,'BEGIN');
+  if(!(await databaseQuery(client,'SELECT pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended($1,0)) AS locked',[id])).rows[0].locked)throw new AppError('LOCKED');
+  await databaseQuery(client,'DROP SCHEMA IF EXISTS "'+schema+'" CASCADE');await databaseQuery(client,'COMMIT');
   for(const relative of [CATALOGUE_FILE,CATALOGUE_ACTIVATION]){const file=path.join(stagingRoot,relative);if(await assertRegular(file,{missing:true}))await unlink(file);}
- }finally{await client.query('ROLLBACK').catch(()=>{});await client.end();}
+ }finally{await databaseQuery(client,'ROLLBACK').catch(()=>{});await client.end();}
 }
 
 export async function catalogueArchiveDigest(db,{transaction=false}={}){
