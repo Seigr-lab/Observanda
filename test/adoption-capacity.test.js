@@ -16,6 +16,7 @@ import {RecordQuery} from '../src/record-query.js';
 import {recordBrowse} from '../src/web/record-query.js';
 import {DashboardDiscovery} from '../src/dashboard-discovery.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
+import {catalogueBinding} from '../src/postgres-activation.js';
 import {recordFingerprint,reconcileResearch} from './fixtures/research-reconciliation.js';
 import {PublicationJobs} from '../src/publication-jobs.js';
 import {contentBuffer} from '../src/file-content.js';
@@ -26,14 +27,21 @@ import {sampleWorkloadCpu} from './workload-cpu-sample.js';
 test('A1-sized and tenfold authored work, physical evidence, datasets and recovery coexist within declared budgets',async t=>{
  t.diagnostic(JSON.stringify({platform:process.platform,arch:process.arch,node:process.version,cpu:os.cpus()[0].model,memoryGiB:Math.round(os.totalmem()/1024**3)}));
  for(const copies of [1,10])await t.test(copies+' combined corpus copies',{timeout:2400000},async t=>{
-  const cpu=sampleWorkloadCpu();t.after(()=>t.diagnostic(JSON.stringify({cpuObserved:cpu.stop()})));
+  const cpu=sampleWorkloadCpu();
   // A timing overrun must remain a failure without hiding independent byte,
   // privacy and recovery results later in this shared-machine workload.
   const budgetFailures=[];
   const observeTiming=(name,elapsedMs,budgetMs)=>{const measured={name,elapsedMs,budgetMs};process.stdout.write('A2 '+copies+'x '+JSON.stringify(measured)+'\n');if(elapsedMs>=budgetMs)budgetFailures.push(measured);};
-  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-adoption-capacity-'));let f,peak=0;
+  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-adoption-capacity-'));let f,freshVault,workload,peak=0;
   const sampler=setInterval(()=>{peak=Math.max(peak,process.memoryUsage().heapUsed);},25);sampler.unref();
-  t.after(async()=>{clearInterval(sampler);if(f)clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+  t.after(async()=>{
+   // A test timeout does not stop the async workload. Drain its owned work
+   // before clearing keys or removing files it may still be reading/writing.
+   try{await workload;}catch{}
+   clearInterval(sampler);t.diagnostic(JSON.stringify({cpuObserved:cpu.stop()}));
+   if(f)clearVault(f.vault);if(freshVault)clearVault(freshVault);await rm(directory,{recursive:true,force:true});
+  });
+  workload=(async()=>{
   f=await authoringGrowthFixture(directory,{copies});
   async function inspect(workspace,phase){
    const measured={},read=ResearchCatalogue.prototype.record;let bodies=0;
@@ -96,10 +104,14 @@ test('A1-sized and tenfold authored work, physical evidence, datasets and recove
   const recovery={};let at=performance.now();
   // Larger physical evidence has a separate, declared ten-minute copy budget;
   // record-only backup qualification retains its tighter three-minute budget.
+  // Match the application's ordinary copy: fully verify and activate its own
+  // database before completion. Cold portable-archive admission is measured
+  // separately by research-reconciliation.benchmark.js.
   process.stdout.write('A2 '+copies+'x ordinary copy starts\n');
-  const ordinary=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'ordinary'),{vault:f.vault}),{vault:f.vault});recovery.ordinaryMs=Math.round(performance.now()-at);observeTiming('ordinaryMs',recovery.ordinaryMs,600000);
+  const ordinary=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'ordinary'),{vault:f.vault}),{vault:f.vault,activateCatalogue:true});recovery.ordinaryMs=Math.round(performance.now()-at);observeTiming('ordinaryMs',recovery.ordinaryMs,600000);
+  const ordinaryBinding=await catalogueBinding(ordinary);assert.ok(ordinaryBinding);assert.notEqual(ordinaryBinding.id,(await catalogueBinding(f.workspace.root)).id);
   process.stdout.write('A2 '+copies+'x '+JSON.stringify(recovery)+'\n');
-  const access=await createWorkspaceAccess('','synthetic combined workload recovery',f.deviceStore),freshVault=takeCreatedVault(access);t.after(()=>clearVault(freshVault));at=performance.now();
+  const access=await createWorkspaceAccess('','synthetic combined workload recovery',f.deviceStore);freshVault=takeCreatedVault(access);at=performance.now();
   process.stdout.write('A2 '+copies+'x fresh-key copy starts\n');
   const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'fresh'),{vault:f.vault}),access,freshVault,f.vault);recovery.freshKeyMs=Math.round(performance.now()-at);observeTiming('freshKeyMs',recovery.freshKeyMs,600000);
   process.stdout.write('A2 '+copies+'x '+JSON.stringify(recovery)+'\n');
@@ -120,5 +132,7 @@ test('A1-sized and tenfold authored work, physical evidence, datasets and recove
   }
   t.diagnostic(JSON.stringify({copies,authoring:f.metrics,evidence:evidence.metrics,before,after,editMs,recovery,peakHeapMiB:Math.ceil(peak/1024/1024)}));assert.ok(peak<512*1024*1024);
   assert.deepEqual(budgetFailures,[],'Elapsed budgets exceeded under observed machine load; integrity and recovery checks completed.');
+  })();
+  await workload;
  });
 });
