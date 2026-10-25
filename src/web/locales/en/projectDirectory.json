@@ -10,6 +10,7 @@
   "choose": "Choose folder",
   "password": "Project password",
   "passwordHint": "Optional",
+  "passwordRequired": "At least 12 characters; device protection is unavailable on this computer.",
   "username": "Username",
   "create": "Create project",
   "legacyParent": "Move this project to dedicated storage before adding a subproject.",

@@ -19,5 +19,11 @@
   "moreCreations": "More unfinished creations",
   "creationFailed": "Could not finish creating the lab book.",
   "creationPassword": "Lab book password",
+  "creationAccess": "Lab book access",
+  "creationUsername": "Username (optional)",
+  "optionalPassword": "Set a password to open this lab book on another computer. Leave it blank to use this device.",
+  "requiredPassword": "Set a password of at least 12 characters to protect this lab book. Device protection is unavailable on this computer.",
+  "confirmPassword": "Confirm lab book password",
+  "passwordMismatch": "The passwords do not match.",
   "cancel": "Cancel"
 }

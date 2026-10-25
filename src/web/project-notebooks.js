@@ -21,7 +21,7 @@ export function projectNotebooksUI(services){
  const available=template=>native()?Boolean(template):templateAvailable(template,state.dashboardSettings);
  const configuration=configurationEditor({...services,draw:()=>{if(editing&&active())draw();},root:()=>active()?.querySelector('[data-configuration-editor]')});
  const sourceReader=configurationDocumentClient({state,api});
- let baseTemplate='blank';
+ let baseTemplate='blank',creationAccess=null;
  const attrs=route=>Object.entries(route).map(([key,value])=>'data-'+key.replace(/[A-Z]/g,c=>'-'+c.toLowerCase())+'="'+esc(value)+'"').join(' ');
  const directory=(id,options)=>notebookDirectory(state.book,id,{...options,types:profileLabels.types,counts:state.workspaceOutline?.notebookCounts??state.recordScope?.notebookCounts});
  const recordCount=id=>(state.workspaceOutline?.notebookCounts??state.recordScope?.notebookCounts)?.[id]??state.book.entries.filter(e=>e.notebookId===id).length;
@@ -39,6 +39,10 @@ export function projectNotebooksUI(services){
  function capture(){
   const form=active();if(!form)return;
   editing.title=form.elements.title.value;
+  if(creationAccess){
+   for(const name of ['username','password','confirmPassword'])creationAccess[name]=form.elements['book'+name[0].toUpperCase()+name.slice(1)].value;
+   form.elements.bookConfirmPassword.setCustomValidity(creationAccess.password===creationAccess.confirmPassword?'':t('labBookDirectory','passwordMismatch'));
+  }
   if(Object.hasOwn(editing,'share')||form.elements.publication.checked!==true)editing.share=form.elements.publication.checked;
   const owner=form.elements.projectId.value,changed=owner!==editing.projectId;editing.projectId=owner;
   if(creating&&changed&&followProjectDefault)useProjectDefault();
@@ -53,7 +57,7 @@ export function projectNotebooksUI(services){
    ${saved.length?'<optgroup label="Saved project templates">'+saved.map(p=>option('project:'+p.id,p.label,templateChoice)).join('')+'</optgroup>':''}
   </select>`)+`<p class="muted">${esc(t('templatePreferences','chooseMore',{preferences:t('preferences','title'),templates:t('preferences','templates')}))}</p>`;
  }
- const isDirty=()=>{if(deleteBusy)return false;capture();return !!editing&&(JSON.stringify(editing)!==JSON.stringify(base)||configuration.isDirty()||creating&&templateChoice!==baseTemplate);};
+ const isDirty=()=>{if(deleteBusy)return false;capture();return !!editing&&(JSON.stringify(editing)!==JSON.stringify(base)||configuration.isDirty()||creating&&templateChoice!==baseTemplate||creationAccess&&Object.values(creationAccess).some(Boolean));};
  function card(n){return `<article class="panel project-notebook"><p class="scope-kicker">Lab book</p><h2><button class="text-button" ${attrs(n.route)}>${esc(n.title)}</button></h2>
   <p class="muted">${n.count} ${n.count===1?'record':'records'}</p><div class="lab-profile-tags" data-configuration-profiles="${n.id}">${n.types.map(t=>'<span>'+esc(t)+'</span>').join('')}</div>
   <div class="inline-actions"><button class="button" ${attrs(n.route)}>Open lab book</button><button class="button" data-action="edit-notebook" data-id="${n.id}">Lab book settings</button></div></article>`;}
@@ -66,9 +70,10 @@ export function projectNotebooksUI(services){
   if(!choices.some(s=>s.id===selected))selected=choices[0]?.id;
   const section=choices.find(s=>s.id===selected),index=choices.indexOf(section),siblings=choices.filter(s=>s.enabled&&s.profileId===section?.profileId),position=siblings.indexOf(section);
   const profiles=enabledLabBookTypes(state.dashboardSettings),projectTemplate=state.book.projects.find(p=>p.id===editing.projectId)?.labBookTemplate;
-  showDialog(`<form id="notebook-config-form" class="notebook-config-form ${creating?'notebook-create-form':''}"><h2 id="dialog-title" tabindex="-1">${creating?'New lab book':'Lab book settings'}</h2>
+  showDialog(`<form id="notebook-config-form" ${creationAccess?'data-no-draft':''} class="notebook-config-form ${creating?'notebook-create-form':''}"><h2 id="dialog-title" tabindex="-1">${creating?'New lab book':'Lab book settings'}</h2>
    <div class="notebook-config-scroll"><div class="form-grid">${field('Lab book name',`<input name="title" required maxlength="160" value="${esc(editing.title)}">`)}
    ${field('Project',`<select name="projectId" data-notebook-owner required>${state.book.projects.map(p=>option(p.id,locationName(state.book,p.id),editing.projectId)).join('')}</select>`)}</div>
+   ${creationAccess?`<fieldset><legend>${esc(t('labBookDirectory','creationAccess'))}</legend><p>${esc(t('labBookDirectory',state.access?.deviceAvailable?'optionalPassword':'requiredPassword'))}</p>${field(t('labBookDirectory','creationUsername'),`<input name="bookUsername" autocomplete="username" maxlength="80" value="${esc(creationAccess.username)}">`)}${field(t('labBookDirectory','creationPassword'),`<input name="bookPassword" type="password" autocomplete="new-password" minlength="12" maxlength="1024" ${state.access?.deviceAvailable?'':'required'} value="${esc(creationAccess.password)}">`)}${field(t('labBookDirectory','confirmPassword'),`<input name="bookConfirmPassword" type="password" autocomplete="new-password" maxlength="1024" value="${esc(creationAccess.confirmPassword)}">`)}</fieldset>`:''}
    <label class="checkbox"><input name="publication" type="checkbox" ${editing.share!==false?'checked':''}>${esc(t('recordWriting','bookPublication'))}</label><p class="muted">${esc(t('recordWriting','bookPublicationHint'))}</p>
    ${creating&&projectTemplate&&!available(projectTemplate)?'<p class="muted">'+esc(t('templatePreferences','defaultUnavailable',{preferences:t('preferences','title'),templates:t('preferences','templates')}))+'</p>':''}${creating?templatePicker():native()?configuration.view():`<fieldset class="notebook-profile-choices"><legend>Lab-book types</legend>
     ${profiles.map(p=>`<label class="checkbox"><input type="checkbox" data-notebook-profile="${p.id}" ${c.profiles.some(ch=>ch.id===p.id&&ch.enabled)?'checked':''}>${esc(p.label)}</label>`).join('')||'<p>'+esc(t('templatePreferences','enableTypes',{preferences:t('preferences','title'),templates:t('preferences','templates')}))+'</p>'}
@@ -85,6 +90,7 @@ export function projectNotebooksUI(services){
  async function openNotebook(id,projectId){
   const current=state.book.notebooks.find(n=>n.id===id),owner=projectId??state.project??state.book.projects[0]?.id,template=state.book.projects.find(p=>p.id===owner)?.labBookTemplate;
   creating=!current;creationId=crypto.randomUUID();followProjectDefault=true;templateChoice=available(template)?'default':'blank';baseTemplate=templateChoice;
+  creationAccess=creating&&state.projectOwner?{username:'',password:'',confirmPassword:''}:null;
   configuration.stop();sourceReader.stop();
   if(native()){const {configuration:ignored,...header}=current??{id:crypto.randomUUID(),title:'',projectId:owner};void ignored;editing=structuredClone(header);}
   else {editing=structuredClone(current??{id:crypto.randomUUID(),title:'',projectId:owner,configuration:newLabBookConfiguration(template,state.dashboardSettings)});editing.configuration=structuredClone(configurationOf(editing));}
@@ -165,6 +171,7 @@ export function projectNotebooksUI(services){
   let value,kind,expected;
   if(form.id==='notebook-config-form'){
    capture();value=structuredClone(editing);kind='notebook';expected=etag;
+   if(creationAccess){form.elements.bookConfirmPassword.setCustomValidity(creationAccess.password===creationAccess.confirmPassword?'':t('labBookDirectory','passwordMismatch'));if(!form.reportValidity())return true;}
    if(!native()&&!validConfiguration(value.configuration)){const error=form.querySelector('[data-notebook-error]');error.textContent='Complete each type and field name; choice fields need distinct choices.';error.hidden=false;error.focus();return true;}
   }
   const errorNode=form.querySelector('[data-notebook-error]');errorNode.hidden=true;
@@ -180,10 +187,12 @@ export function projectNotebooksUI(services){
     }else selectedConfiguration=await configuration.checkpoint();
    }
    if(creating&&state.projectOwner){
-    const result=await api('/api/projects/'+value.projectId+'/lab-books/create',{id:creationId,book:value,username:'',password:'',...selectedConfiguration},{adopt:false});
+    const {username,password}=creationAccess;
+    const result=await api('/api/projects/'+value.projectId+'/lab-books/create',{id:creationId,book:value,username,password,...selectedConfiguration},{adopt:false});
+    if(password)await api('/api/projects/'+value.projectId+'/lab-books/'+result.book.labBookId+'/access/unlock',{username,password,recovery:''},{adopt:false});
     await services.labBookDirectory.refresh(value.projectId);await services.enterProject(value.projectId,result.book.labBookId);
     state.project=value.projectId;state.notebook=result.book.labBookId;state.page='entries';state.search='';state.filter='all';state.recordBrowse=null;
-    configuration.stop();sourceReader.stop();editing=base=null;document.querySelector('#dialog').close();render();notify('Lab book saved.');return true;
+    configuration.stop();sourceReader.stop();editing=base=creationAccess=null;document.querySelector('#dialog').close();render();notify('Lab book saved.');return true;
    }
    if(!creating&&state.projectOwner?.labBookId===value.id){
     result=await api('/api/projects/'+value.projectId+'/lab-books/'+value.id+'/settings/save',{id:creationId,etag:expected,book:value,...selectedConfiguration});
@@ -199,5 +208,5 @@ export function projectNotebooksUI(services){
  return {directory,card,action,input,submit,attrs,route:notebookRoute,types:profileLabels.types,bind:profileLabels.bind,
   generalRecords:id=>recordsIn(state.book,id),isDirty:()=>isDirty()||projects.isDirty(),
   async save(){await projects.save();if(editing&&!active()){deleting=null;draw(true);}const form=active();if(form)await submit(form,new FormData(form));},
-  async discard(){await projects.close();if(configuration.descriptor())await configuration.discard();configuration.stop();sourceReader.stop();editing=base=deleting=null;},async close(){await projects.close();if(configuration.descriptor())await configuration.discard();configuration.stop();sourceReader.stop();editing=base=deleting=null;}};
+  async discard(){await projects.close();if(configuration.descriptor())await configuration.discard();configuration.stop();sourceReader.stop();editing=base=deleting=creationAccess=null;},async close(){await projects.close();if(configuration.descriptor())await configuration.discard();configuration.stop();sourceReader.stop();editing=base=deleting=creationAccess=null;}};
 }
