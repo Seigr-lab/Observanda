@@ -1,3 +1,4 @@
+import {RetainedFigureDocuments} from '../../src/retained-figure-document.js';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {ResearchMaterials} from '../../src/research-materials.js';
@@ -28,12 +29,14 @@ export async function reconcileResearch(workspace,{records,originals,retained,ro
   }
   assert.deepEqual(seenFiles,new Set(originals.keys()));
   for await(const row of materials.iterateDataset(retained.dataset)){
-   assert.deepEqual(row.cells,[String(rowCount%4),'18446744073709551615','105','Synthetic acquired detail. '.repeat(165)]);
+   assert.equal(row.cells.length,4);assert.deepEqual(row.cells.slice(0,3),[String(rowCount%4),'18446744073709551615','105']);
+   let notes=row.cells[3];if(typeof notes!=='string'){let text='';for(let offset=0;offset!==null;){const part=await materials.readDatasetCell(notes,{offset,limit:4096});text+=part.text;offset=part.next;}notes=text;}
+   assert.equal(notes,'Synthetic acquired detail. '.repeat(165));
    rowCount++;
   }
   assert.equal(rowCount,rows);
   const calculation=await materials.read(retained.figure);
-  assert.equal(calculation.content.denominator.included,rows);assert.equal(calculation.content.figure.series[0].points[0].y,1.5);
+  assert.equal(calculation.content.denominator.included,rows);const figureReader=await new RetainedFigureDocuments(workspace,{readOnly:true}).open(calculation.content.figure),point=await figureReader.window({collection:'points',limit:1});assert.equal(point.total,1);assert.equal(point.items[0].value.y,1.5);
  });
  return {records:seenRecords.size,originals:seenFiles.size,originalBytes,rows:rowCount};
 }

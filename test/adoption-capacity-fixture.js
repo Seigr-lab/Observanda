@@ -1,3 +1,4 @@
+import {RetainedFigureDocuments} from '../src/retained-figure-document.js';
 // Synthetic physical evidence at the declared adoption sizes. The fixture uses
 // public intake, dataset and analysis commands in an existing authored workspace.
 import assert from 'node:assert/strict';
@@ -124,7 +125,7 @@ export async function adoptionEvidenceFixture(f,directory,{copies=1,onStage=()=>
    const id=randomUUID();await enqueuePlot(materials,jobs.queue,{recordId,title:'Observed values by native value',dataset:retained.dataset,
     mapping:{x:2,xKind:'category',values:[{column:0,error:null}],group:null,operation:'mean',kind:'bar',order:'source',mode:'replace',decimal:'.'}},id);return perform(id);
   });
-  const figure=await materials.read(retained.figure);assert.equal(figure.content.denominator.included,rows);assert.equal(figure.content.figure.series[0].points[0].y,1.5);
+  const figure=await materials.read(retained.figure);assert.equal(figure.content.denominator.included,rows);const figureReader=await new RetainedFigureDocuments(f.workspace,{readOnly:true}).open(figure.content.figure),point=await figureReader.window({collection:'points',limit:1});assert.equal(point.total,1);assert.equal(point.items[0].value.y,1.5);
   retained.collection=await materials.collection({recordId,title:'Declared acquisition',inputs:[retained.preparation,retained.returned,retained.dataset]});
   retained.analysis=await materials.analysis({recordId,title:'Retained comparison',inputs:[retained.collection,retained.figure],outputs:[retained.artifact],tool:'Synthetic external analysis',version:'fixture-1',parameters:'Exact original acquisition and independently checked mean.'});
   return {retained,originals,metrics:{...metrics,files:273*copies,physicalBytes:395*EVIDENCE_CHUNK*copies,rows,datasetBytes,recoveryFaults:exerciseRecovery},sourceHash};
