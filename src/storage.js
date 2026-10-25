@@ -24,6 +24,7 @@ import {waitForWriter,queuedWriter} from './writer-wait.js';
 import { validateNotebook, upgradeNotebook, MAX_BYTES } from './model.js';
 
 const catalogueReads=new AsyncLocalStorage();
+let requireMetadataFormat,metadataFormatLoading;
 function ownedCatalogue(context,workspace){
  if(context?.root!==workspace.root)return null;
  if((context.projectId??null)!==(workspace.projectId??null)||(context.labBookId??null)!==(workspace.labBookId??null))throw new AppError('DATABASE_LOCATION');
@@ -136,47 +137,8 @@ export class Workspace {
     if(activeCatalogue(this)||await hasCatalogue(this.root)){
       if(catalogueContext.getStore()?.root!==this.root)throw new AppError('LOCKED');
       return this.catalogue(async store=>{
-        if(relative.startsWith('.observanda/materials/')||relative.startsWith('.observanda/jobs/')){
-          const value=JSON.parse(text);if(value.content?.datasetFormat===3||relative.startsWith('.observanda/materials/sequences/chunks/')&&['cells','cell-text'].includes(value.kind)){const {requirePagedResearchTables}=await import('./catalogue-format.js');await requirePagedResearchTables(store.db);}
-          const {referencedCalculationMetadata}=await import('./calculation-graph-format.js');if(referencedCalculationMetadata(relative,value)){const {requireReferencedCalculations}=await import('./catalogue-format.js');await requireReferencedCalculations(store.db);}
-          const {nativeNumericalMetadata,nativeClockMetadata}=await import('./numerical-material-format.js');if(nativeNumericalMetadata(relative,value)){const {requireNativeNumericalModels}=await import('./catalogue-format.js');await requireNativeNumericalModels(store.db);}
-          if(nativeClockMetadata(relative,value)){const {requireNativeClockModels}=await import('./catalogue-format.js');await requireNativeClockModels(store.db);}
-          const {nativeDomainMetadata}=await import('./native-domain-format.js');if(nativeDomainMetadata(relative,value)){const {requireNativeDomainValues}=await import('./catalogue-format.js');await requireNativeDomainValues(store.db);}
-          const {clockDerivationMetadata}=await import('./clock-derivation-format.js');if(clockDerivationMetadata(relative,value)){const {requireClockDerivations}=await import('./catalogue-format.js');await requireClockDerivations(store.db);}
-          const {intervalUncertaintyMetadata}=await import('./interval-uncertainty-format.js');if(intervalUncertaintyMetadata(relative,value)){const {requireIntervalUncertainty}=await import('./catalogue-format.js');await requireIntervalUncertainty(store.db);}
-          const {windowCalculationMetadata}=await import('./dataset-window-format.js');if(windowCalculationMetadata(relative,value)){const {requireWindowCalculations}=await import('./catalogue-format.js');await requireWindowCalculations(store.db);}
-          const {plotResourceMetadata}=await import('./plot-resource-format.js');if(plotResourceMetadata(relative,value)){const {requireFigureProjectionPolicies}=await import('./catalogue-format.js');await requireFigureProjectionPolicies(store.db);}
-          const {axisPermutationMetadata}=await import('./axis-permutation-format.js');if(axisPermutationMetadata(relative,value)){const {requireAxisPermutation}=await import('./catalogue-format.js');await requireAxisPermutation(store.db);}
-          const {statisticalUncertaintyMetadata}=await import('./statistical-uncertainty-format.js');if(statisticalUncertaintyMetadata(relative,value)){const {requireStatisticalUncertainty,requireNativeNumericalModels,requireMeasurementScalarPolicies,requireDatasetResourcePolicies,requireStructuredCalculator,requireApproximateCalculator}=await import('./catalogue-format.js');await requireNativeNumericalModels(store.db);await requireMeasurementScalarPolicies(store.db);await requireDatasetResourcePolicies(store.db);await requireStructuredCalculator(store.db);await requireApproximateCalculator(store.db);await requireStatisticalUncertainty(store.db);}
-          const {pairedStatisticsMetadata}=await import('./paired-statistics-format.js');if(pairedStatisticsMetadata(relative,value)){const {requirePairedStatistics,requireQuantileAggregation,requireMeasurementScalarPolicies,requireDatasetResourcePolicies}=await import('./catalogue-format.js');await requireMeasurementScalarPolicies(store.db);await requireDatasetResourcePolicies(store.db);await requireQuantileAggregation(store.db);await requirePairedStatistics(store.db);}
-          const {quantileAggregationMetadata}=await import('./quantile-aggregation-format.js');if(quantileAggregationMetadata(relative,value)){const {requireQuantileAggregation,requireMeasurementScalarPolicies,requireDatasetResourcePolicies}=await import('./catalogue-format.js');await requireMeasurementScalarPolicies(store.db);await requireDatasetResourcePolicies(store.db);await requireQuantileAggregation(store.db);}
-          const {weightedFitMetadata}=await import('./weighted-fit-format.js');if(weightedFitMetadata(relative,value)){const {requireWeightedFit}=await import('./catalogue-format.js');await requireWeightedFit(store.db);}
-          const {coordinateAlignmentMetadata}=await import('./coordinate-alignment-format.js');if(coordinateAlignmentMetadata(relative,value)){const {requireCoordinateAlignment}=await import('./catalogue-format.js');await requireCoordinateAlignment(store.db);}
-          const {spectralMethodsMetadata}=await import('./spectral-methods-format.js');if(spectralMethodsMetadata(relative,value)){const {requireSpectralMethods}=await import('./catalogue-format.js');await requireSpectralMethods(store.db);}
-          const {topologyValuesMetadata}=await import('./topology-values-format.js');if(topologyValuesMetadata(relative,value)){const {requireTopologyValues}=await import('./catalogue-format.js');await requireTopologyValues(store.db);}
-          const {sequenceValuesMetadata}=await import('./sequence-values-format.js');if(sequenceValuesMetadata(relative,value)){const {requireSequenceValues}=await import('./catalogue-format.js');await requireSequenceValues(store.db);}
-          const {tensorValuesMetadata}=await import('./tensor-values-format.js');if(tensorValuesMetadata(relative,value)){const {requireTensorValues}=await import('./catalogue-format.js');await requireTensorValues(store.db);}
-          const {numericalExecutionMetadata}=await import('./numerical-execution-format.js');if(numericalExecutionMetadata(relative,value)){const {requireNumericalExecution}=await import('./catalogue-format.js');await requireNumericalExecution(store.db);}
-          const {cusumMetadata}=await import('./dataset-cusum-format.js');if(cusumMetadata(relative,value)){const {requireDatasetCusum}=await import('./catalogue-format.js');await requireDatasetCusum(store.db);}
-          const {spectrumMetadata}=await import('./dataset-spectrum-format.js');if(spectrumMetadata(relative,value)){const {requireDatasetSpectra}=await import('./catalogue-format.js');await requireDatasetSpectra(store.db);}
-          const {computedCellMetadata}=await import('./computed-cell-format.js');if(computedCellMetadata(relative,value)){const {requireComputedCells}=await import('./catalogue-format.js');await requireComputedCells(store.db);}
-          const {coordinateFrameMetadata}=await import('./coordinate-frame-format.js');if(coordinateFrameMetadata(relative,value)){const {requireCoordinateFrames}=await import('./catalogue-format.js');await requireCoordinateFrames(store.db);}
-          const {segmentedClockSynchronizationMetadata}=await import('./segmented-clock-synchronization-format.js');if(segmentedClockSynchronizationMetadata(relative,value)){const {requireSegmentedClockSynchronization,requireClockSynchronization,requireMeasurementScalarPolicies,requireDatasetResourcePolicies}=await import('./catalogue-format.js');await requireMeasurementScalarPolicies(store.db);await requireDatasetResourcePolicies(store.db);await requireClockSynchronization(store.db);await requireSegmentedClockSynchronization(store.db);}
-          const {clockSynchronizationMetadata}=await import('./clock-synchronization-format.js');if(clockSynchronizationMetadata(relative,value)){const {requireClockSynchronization}=await import('./catalogue-format.js');await requireClockSynchronization(store.db);}
-          const {domainAlgebraMetadata}=await import('./domain-algebra-format.js');if(domainAlgebraMetadata(relative,value)){const {requireDomainAlgebra}=await import('./catalogue-format.js');await requireDomainAlgebra(store.db);}
-          const {measurementScalarMetadata}=await import('./measurement-scalar-format.js');if(measurementScalarMetadata(relative,value)){const {requireMeasurementScalarPolicies}=await import('./catalogue-format.js');await requireMeasurementScalarPolicies(store.db);}
-          const {approximateCalculatorMetadata}=await import('./approximate-calculator-format.js');if(approximateCalculatorMetadata(relative,value)){const {requireApproximateCalculator}=await import('./catalogue-format.js');await requireApproximateCalculator(store.db);}
-          const {structuredCalculatorMetadata}=await import('./structured-calculator-format.js');if(structuredCalculatorMetadata(relative,value)){const {requireStructuredCalculator}=await import('./catalogue-format.js');await requireStructuredCalculator(store.db);}
-          const {calculatorResultMetadata}=await import('./web/calculator-result-model.js');if(calculatorResultMetadata(relative,value)){const {requireCalculatorDatasetResults}=await import('./catalogue-format.js');await requireCalculatorDatasetResults(store.db);}
-          const {datasetResourceMetadata}=await import('./dataset-resource-format.js');if(datasetResourceMetadata(relative,value)){const {requireDatasetResourcePolicies}=await import('./catalogue-format.js');await requireDatasetResourcePolicies(store.db);}
-        }
-        if(/^\.observanda\/module-drafts\/[a-f0-9-]{36}\.json$/.test(relative)){
-          const {checkpointHasStructuredCalculator}=await import('./structured-calculator-format.js');if(checkpointHasStructuredCalculator(JSON.parse(text))){const {requireStructuredCalculator}=await import('./catalogue-format.js');await requireStructuredCalculator(store.db);}
-          const {checkpointHasCalculationPolicy}=await import('./web/tools/calculation-policy.js');if(checkpointHasCalculationPolicy(JSON.parse(text))){const {requireCalculationPolicies}=await import('./catalogue-format.js');await requireCalculationPolicies(store.db);}
-        }
-        if(relative.startsWith('.observanda/reviews/parts/')||/^\.observanda\/reviews\/[a-f0-9-]{36}\.json$/.test(relative)&&JSON.parse(text)?.request?.value?.version===2){
-          const {requireReviewFigurePackages}=await import('./catalogue-format.js');await requireReviewFigurePackages(store.db);
-        }
+        requireMetadataFormat??=await (metadataFormatLoading??=import('./metadata-catalogue-format.js').then(module=>module.requireMetadataCatalogueFormat));
+        await requireMetadataFormat(store.db,relative,text);
         return store.putObject('metadata:'+relative,{text});
       });
     }
