@@ -3,14 +3,14 @@ import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 import {spawn} from 'node:child_process';
 import {desktopFixture} from './fixture.js';
+import {desktopAccess} from './access.js';
 import {navigate} from '../browser/preferences-helper.js';
 
 test('desktop opens setup, saves encrypted work, protects unsaved edits and reopens after a clean shutdown',async()=>{
- test.skip(!['win32','darwin'].includes(process.platform));
  test.setTimeout(240000);
  const fixture=await desktopFixture(),{directory,packaged,env,start}=fixture;
  const workspaceName='Desktop field and studio work',workspaceRoot=path.join(directory,workspaceName),projectRoot=path.join(workspaceRoot,'Unsaved desktop project');
- let app;
+ const access=desktopAccess(),{credentials}=access;let app;
  console.log(packaged?'Desktop acceptance: selected executable.':'Desktop acceptance: source Electron (not an installed build).');
  try{
   app=await start();let page=await app.firstWindow();const errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -23,7 +23,7 @@ test('desktop opens setup, saves encrypted work, protects unsaved edits and reop
   await page.getByLabel('Workspace name',{exact:true}).fill('Desktop field and studio work');
   await page.getByRole('button',{name:'Continue',exact:true}).click();await page.getByRole('button',{name:'Continue',exact:true}).click();
   await page.getByLabel('Create in',{exact:true}).fill(directory);
-  await page.getByLabel('Use this device',{exact:false}).check();await page.getByRole('button',{name:'Create workspace',exact:true}).click();
+  await access.setup(page);await page.getByRole('button',{name:'Create workspace',exact:true}).click();
   await expect(page.locator('.workspace-name')).toHaveText('Desktop field and studio work',{timeout:30000});
   console.log('Desktop setup: encrypted workspace created.');
   const logo=page.getByRole('link',{name:'Observanda — refresh saved workspace',exact:true});
@@ -41,9 +41,9 @@ test('desktop opens setup, saves encrypted work, protects unsaved edits and reop
   await page.evaluate(()=>location.hash='#/workspace');
   // Only one instance may own this profile/database; another icon activation
   // exits after focusing the first window, without starting another service.
-  const exe=packaged??(await import('electron')).default;
+  const exe=packaged??fixture.sourceExecutable??(await import('electron')).default;
   await new Promise((resolve,reject)=>{const other=spawn(exe,packaged?[]:[path.resolve('desktop')],{env,windowsHide:true,stdio:'ignore'});other.once('error',reject);other.once('exit',code=>code===0?resolve():reject(Error('Second desktop instance failed')));});
-  await page.locator('[data-action="new-project"]').first().click();await page.locator('#dialog').getByLabel('Name',{exact:true}).fill('Unsaved desktop project');
+  await page.locator('[data-action="new-project"]').first().click();await page.locator('#dialog').getByLabel('Name',{exact:true}).fill('Unsaved desktop project');if(credentials.password)await page.locator('#dialog [name=projectPassword]').fill(credentials.password);
   await app.evaluate(({dialog,BrowserWindow})=>{dialog.showMessageBoxSync=()=>0;BrowserWindow.getAllWindows()[0].close();});
   await expect(page.locator('#dialog').getByLabel('Name',{exact:true})).toHaveValue('Unsaved desktop project');
   await expect(page.locator('#dialog [name=projectPath]')).toHaveCount(0);
@@ -55,13 +55,13 @@ test('desktop opens setup, saves encrypted work, protects unsaved edits and reop
   const directoryNodes=await page.evaluateHandle(()=>({host:document.querySelector('[data-lab-book-directory]'),grid:document.querySelector('[data-lab-book-directory] .notebook-grid'),focused:document.activeElement}));
   // A write through the authenticated service must reach the desktop renderer
   // without passing through its in-memory form state or restarting Electron.
-  const externalBook=await page.evaluate(async projectId=>{
+  const externalBook=await page.evaluate(async({projectId,credentials})=>{
    const storage=await (await fetch('/api/storage')).json();
    const call=async(route,data)=>{const response=await fetch('/api/projects/'+projectId+route.slice(4),{method:'POST',headers:{'Content-Type':'application/json','X-Observanda-Workspace':storage.contextId,'X-Observanda-Wait':'1'},body:JSON.stringify(data)});if(!response.ok)throw Error('External desktop write failed: '+response.status);return response.json();};
    const snapshot=await call('/api/workspace/read/start',{});
    const notebook={id:crypto.randomUUID(),projectId:snapshot.metadata.projects[0].id,title:'Externally saved desktop book'};
-   const result=await call('/api/lab-books/create',{id:crypto.randomUUID(),book:notebook,username:'',password:''});if(result.book?.labBookId!==notebook.id)throw Error('External desktop book identity changed');return notebook;
-  },projectId);
+   const result=await call('/api/lab-books/create',{id:crypto.randomUUID(),book:notebook,...credentials});if(credentials.password)await call('/api/lab-books/'+notebook.id+'/access/unlock',{...credentials,recovery:''});if(result.book?.labBookId!==notebook.id)throw Error('External desktop book identity changed');return notebook;
+  },{projectId,credentials});
   await page.evaluate(id=>location.hash='#/owners/'+id+'/projects/'+id,externalBook.projectId);
   await expect(page.locator('.project-notebook').filter({hasText:externalBook.title})).toBeVisible({timeout:15000});
   expect(await page.evaluate(nodes=>({host:nodes.host===document.querySelector('[data-lab-book-directory]'),grid:nodes.grid===document.querySelector('[data-lab-book-directory] .notebook-grid'),focus:nodes.focused===document.activeElement}),directoryNodes)).toEqual({host:true,grid:true,focus:true});await directoryNodes.dispose();
@@ -102,12 +102,19 @@ test('desktop opens setup, saves encrypted work, protects unsaved edits and reop
   await titleEditor.getByRole('button',{name:'Save changes',exact:true}).click();const saved=await saving;expect(saved.ok()).toBe(true);await expect(titleEditor).not.toBeVisible();
   await expect(page.locator('.record-editing h1')).toHaveText('Amended packaged block record');
   console.log('Desktop authoring: selected title saved; restarting the application.');
-  await fixture.close(app);app=await start();page=await app.firstWindow();
+  await fixture.close(app);app=await start();page=await app.firstWindow();if(credentials.password)await access.unlock(page);
   await expect(page.locator('.workspace-name')).toHaveText('Desktop field and studio work',{timeout:60000});
   console.log('Desktop restart: workspace reopened; checking lock and unlock.');
   await page.locator('#main-navigation').getByRole('button',{name:'Lock workspace',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Unlock workspace',exact:true})).toBeVisible({timeout:60000});
-  await page.getByRole('button',{name:'Unlock workspace',exact:true}).click();await expect(page.locator('.workspace-name')).toHaveText('Desktop field and studio work',{timeout:30000});
+  await access.unlock(page);await expect(page.locator('.workspace-name')).toHaveText('Desktop field and studio work',{timeout:30000});
+  if(credentials.password)await page.evaluate(async({projectId,bookId,credentials})=>{
+   const storage=await(await fetch('/api/storage')).json();
+   for(const suffix of ['','/lab-books/'+bookId]){
+    const response=await fetch('/api/projects/'+projectId+suffix+'/access/unlock',{method:'POST',headers:{'Content-Type':'application/json','X-Observanda-Workspace':storage.contextId},body:JSON.stringify({...credentials,recovery:''})});
+    if(!response.ok)throw Error('Desktop owner unlock failed: '+response.status);
+   }
+  },{projectId,bookId:externalBook.id,credentials});
   await expect(page.locator('#main-navigation')).toContainText('Unsaved desktop project');
   await page.evaluate(()=>location.hash='#/preferences/user');await expect(page.getByLabel('Display name',{exact:true})).toHaveValue('Desktop observer');await expect(page.locator('[data-user-id]')).toHaveText(userId);
   const reopenedReading=readerReady();await page.evaluate(route=>location.hash=route,recordRoute);expect((await reopenedReading).ok()).toBe(true);await expect(page.getByRole('heading',{name:'Amended packaged block record',exact:true})).toBeVisible();

@@ -8,6 +8,7 @@ export async function desktopFixture(prefix='observanda-desktop-test-'){
  const directory=await mkdtemp(path.join(os.tmpdir(),prefix));
  for(const folder of ['roaming','local','Desktop','Downloads'])await mkdir(path.join(directory,folder));
  const packaged=process.env.OBSERVANDA_DESKTOP_EXECUTABLE;
+ const sourceExecutable=process.env.OBSERVANDA_DESKTOP_SOURCE_EXECUTABLE?path.resolve(process.env.OBSERVANDA_DESKTOP_SOURCE_EXECUTABLE):undefined;
  const screenshots=process.env.OBSERVANDA_DESKTOP_SCREENSHOTS==='1';
  const env={...process.env,OBSERVANDA_DESKTOP_TEST_HOME:directory,OBSERVANDA_DESKTOP_NODE:process.execPath,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN??path.resolve('.local/postgresql/runtime/pgsql/bin'),OBSERVANDA_DATABASE_URL:'',USERPROFILE:directory,HOME:directory,APPDATA:path.join(directory,'roaming'),LOCALAPPDATA:path.join(directory,'local')};
  delete env.ELECTRON_RUN_AS_NODE;
@@ -35,7 +36,7 @@ export async function desktopFixture(prefix='observanda-desktop-test-'){
    checkExit(first.kind==='exit'?first:await exited);
   }finally{child.removeListener('exit',onExit);}
  }
- return {directory,env,packaged,
+ return {directory,env,packaged,sourceExecutable,
   close,
   async start(executablePath=packaged){
    // A source-comparison checkout may omit generated desktop assets. Report
@@ -43,7 +44,8 @@ export async function desktopFixture(prefix='observanda-desktop-test-'){
    if(!executablePath)for(const name of ['icon.png','icon-black.png','icon-white.png','locales/en/close.json']){
     await access(path.resolve('desktop',name)).catch(()=>{throw Error('Desktop test asset is missing: '+name+'. Prepare desktop assets before launching the test.');});
    }
-   const app=await electron.launch({...(executablePath?{executablePath}:{}),args:executablePath?[]:[path.resolve('desktop')],env,timeout:30000});
+   const launchExecutable=executablePath||sourceExecutable;
+   const app=await electron.launch({...(launchExecutable?{executablePath:launchExecutable}:{}),args:executablePath?[]:[path.resolve('desktop')],env,timeout:30000});
    try{
     await app.firstWindow();await app.evaluate(({BrowserWindow},screenshots)=>BrowserWindow.getAllWindows().forEach(window=>{window.webContents.setBackgroundThrottling(false);if(screenshots)window.showInactive();else if(window.isVisible())throw Error('Desktop test launch unexpectedly showed a window');}),screenshots);return app;
    }catch(error){

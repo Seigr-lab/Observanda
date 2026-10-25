@@ -87,8 +87,12 @@ else{
   const preferencesFile=path.join(profile??path.join(os.homedir(),'.observanda'),'preferences.json');
   const env={...process.env};delete env.NODE_OPTIONS;delete env.ELECTRON_RUN_AS_NODE;
   if(!development){env.OBSERVANDA_POSTGRES_BIN=path.join(resources,'postgresql/bin');env.PATH=path.join(resources,'media/bin')+path.delimiter+(env.PATH??'');}
-  env.OBSERVANDA_GITHUB_HELPER=path.join(resources,'github/credential-manager/git-credential-manager'+(process.platform==='win32'?'.exe':''));
-  env.OBSERVANDA_GITHUB_GIT=path.join(resources,'github/git',process.platform==='win32'?'cmd/git.exe':'bin/git');
+  // Development may select an explicit runtime pair. Leave a partial pair
+  // incomplete so githubRuntime rejects it instead of mixing runtime sources.
+  if(!development||!env.OBSERVANDA_GITHUB_HELPER&&!env.OBSERVANDA_GITHUB_GIT){
+   env.OBSERVANDA_GITHUB_HELPER=path.join(resources,'github/credential-manager/git-credential-manager'+(process.platform==='win32'?'.exe':''));
+   env.OBSERVANDA_GITHUB_GIT=path.join(resources,'github/git',process.platform==='win32'?'cmd/git.exe':'bin/git');
+  }
   childExited=new Promise(resolve=>{resolveExit=resolve;});
   child=fork(service,[],{execPath:executable,windowsHide:true,silent:true,env,execArgv:[]});
   attachPdfService(child);child.stdout.resume();child.stderr.resume();
