@@ -21,6 +21,9 @@ export async function withDatasetPreparationWrites(materials,{writePage,signal},
   pending.set(key,{...entry,size});bytes+=size;cache(key,entry.value,size,true);if(bytes>=MAX_BYTES)await flush();
  };
  class PreparedSequences extends MaterialSequence{
+  // The original sequence writer authenticates prior bytes during commit.
+  // Avoid a separate read transaction for every newly generated node here.
+  tree(){return super.tree({authenticateOnWrite:true});}
   async read(kind,id,limit=1048576){
    signal?.throwIfAborted();const key=kind+':'+id,entry=pending.get(key)??touch(key);
    if(entry){if(entry.size>limit)throw new AppError('LIMIT');return structuredClone(entry.value);}

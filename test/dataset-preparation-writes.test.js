@@ -6,8 +6,8 @@ import {randomUUID} from 'node:crypto';
 import {MaterialSequence} from '../src/material-sequence.js';
 import {withDatasetPreparationWrites} from '../src/dataset-preparation-writes.js';
 import {serialize} from '../src/storage-format.js';
-function fixture(){const objects=new Map(),reads=new Map(),batches=[];let current=null,fail=null,commit=0;const workspace={root:path.join(os.tmpdir(),'absent-dataset-batch-'+randomUUID()),readMetadata:async(key,limit)=>{reads.set(key,(reads.get(key)??0)+1);const raw=objects.get(key)??null;if(raw!==null&&Buffer.byteLength(raw)>limit)throw Object.assign(Error('Metadata limit'),{code:'LIMIT'});return raw;},writeMetadata:async(key,text)=>{assert.ok(current,'Writes require supplied authority');current.push({key,text});objects.set(key,text);}};const materials={workspace,sequences:new MaterialSequence(workspace),put:async(file,value)=>workspace.writeMetadata(file,JSON.stringify(value))};
- const writePage=async fn=>{const before=new Map(objects);current=[];try{const result=await fn();commit++;batches.push(current);if(fail?.at===commit){if(!fail.durable){objects.clear();for(const row of before)objects.set(...row);}throw Error('Interrupted '+commit);}return result;}finally{current=null;}};return {materials,objects,reads,batches,writePage,setFail:value=>{fail=value;}};}
+function fixture(){const objects=new Map(),reads=new Map(),outsideReads=new Map(),batches=[];let current=null,fail=null,commit=0;const workspace={root:path.join(os.tmpdir(),'absent-dataset-batch-'+randomUUID()),readMetadata:async(key,limit)=>{reads.set(key,(reads.get(key)??0)+1);if(!current)outsideReads.set(key,(outsideReads.get(key)??0)+1);const raw=objects.get(key)??null;if(raw!==null&&Buffer.byteLength(raw)>limit)throw Object.assign(Error('Metadata limit'),{code:'LIMIT'});return raw;},writeMetadata:async(key,text)=>{assert.ok(current,'Writes require supplied authority');current.push({key,text});objects.set(key,text);}};const materials={workspace,sequences:new MaterialSequence(workspace),put:async(file,value)=>workspace.writeMetadata(file,JSON.stringify(value))};
+ const writePage=async fn=>{const before=new Map(objects);current=[];try{const result=await fn();commit++;batches.push(current);if(fail?.at===commit){if(!fail.durable){objects.clear();for(const row of before)objects.set(...row);}throw Error('Interrupted '+commit);}return result;}finally{current=null;}};return {materials,objects,reads,outsideReads,batches,writePage,setFail:value=>{fail=value;}};}
 async function prepare(f,count=400,options={}){return withDatasetPreparationWrites(f.materials,{writePage:f.writePage,...options},async m=>{const b=m.sequences.builder('cells',fn=>fn());for(let i=0;i<count;i++)await b.append({kind:'string',value:'v'+i});return b.finish();});}
 test('preparation batches bounded immutable children and commits the final root before returning',async()=>{const f=fixture(),ref=await prepare(f,2000);assert.equal(ref.count,2000);assert.ok(f.batches.length<100);for(const batch of f.batches){assert.ok(batch.length<=32);assert.ok(batch.reduce((n,r)=>n+Buffer.byteLength(r.text),0)<=256*1024);}assert.equal((await f.materials.sequences.item(ref,1999)).value,'v1999');const before=f.objects.size;assert.deepEqual(await prepare(f,2000),ref);assert.equal(f.objects.size,before);});
 test('lost commit acknowledgement and rollback never return an unpublished root and retry exact content',async()=>{for(const durable of [false,true]){const f=fixture();f.setFail({at:2,durable});await assert.rejects(prepare(f),/Interrupted 2/);f.setFail(null);const ref=await prepare(f);assert.equal((await f.materials.sequences.item(ref,399)).value,'v399');}const f=fixture();f.setFail({at:1,durable:true});await assert.rejects(prepare(f,1),/Interrupted 1/);f.setFail(null);assert.equal((await prepare(f,1)).count,1);});
@@ -85,4 +85,33 @@ test('cached fallback reads do not conceal a failed final flush or survive a ret
   const repeated=await withDatasetPreparationWrites(f.materials,{writePage:f.writePage},async m=>{assert.deepEqual(await m.sequences.read('chunks',id),value);return m.sequences.put('chunks',pending);});
   assert.equal(repeated,pendingId);assert.equal(f.reads.get(sequenceFile('chunks',id)),2);assert.deepEqual(await f.materials.sequences.read('chunks',pendingId),pending);
  }
+});
+
+test('new row cell nodes authenticate once inside bounded writer batches without preflight transactions',async()=>{
+ const f=fixture();let last;
+ await withDatasetPreparationWrites(f.materials,{writePage:f.writePage},async m=>{
+  for(let row=0;row<40;row++){const builder=m.sequences.builder('cells',fn=>fn());for(let column=0;column<4;column++)await builder.append({kind:'string',value:String(column),pointer:'/'+row+'/'+column});last=await builder.finish();}
+  return last;
+ });
+ const nodes=[...f.objects.keys()].filter(key=>key.includes('/nodes/'));assert.equal(nodes.length,40);assert.equal(f.outsideReads.size,0);
+ for(const key of nodes)assert.equal(f.reads.get(key),1,'Final writer still authenticates each generated node');assert.ok(f.batches.every(batch=>batch.length<=32));assert.equal((await f.materials.sequences.item(last,3)).pointer,'/39/3');
+ const normal=fixture(),builder=normal.materials.sequences.builder('cells',normal.writePage);await builder.append({kind:'string',value:'ordinary'});const ref=await builder.finish();assert.equal(normal.reads.get(sequenceFile('nodes',ref.root.hash)),2,'Ordinary sequence owners retain the default preflight');
+});
+
+test('deferred node checks reject corrupt existing chunks and nodes before returning any prepared root',async()=>{
+ for(const kind of ['chunks','nodes']){
+  const f=fixture(),ref=await prepare(f,1),nodeFile=sequenceFile('nodes',ref.root.hash),node=JSON.parse(f.objects.get(nodeFile)),file=kind==='nodes'?nodeFile:sequenceFile('chunks',node.revision),original=f.objects.get(file),corrupt=serialize({corrupted:true});
+  f.objects.set(file,corrupt);f.reads.clear();f.outsideReads.clear();let published=false;
+  await assert.rejects(prepare(f,1).then(value=>{published=true;return value;}),{code:'MATERIAL_MISSING'});
+  assert.equal(published,false);assert.equal(f.objects.get(file),corrupt,'Authentication must fail instead of replacing existing bytes');assert.equal(f.reads.get(file),1);assert.equal(f.outsideReads.size,0,'Existing bytes are checked by the supplied writer');
+  f.objects.set(file,original);assert.deepEqual(await prepare(f,1),ref);assert.equal((await f.materials.sequences.item(ref,0)).value,'v0');
+ }
+});
+
+test('deferred node authentication preserves the 8 KiB raw admission limit even when parsed hashes match',async()=>{
+ const f=fixture(),ref=await prepare(f,1),file=sequenceFile('nodes',ref.root.hash),original=f.objects.get(file),padded=original+' '.repeat(8193-Buffer.byteLength(original));
+ assert.deepEqual(JSON.parse(padded),JSON.parse(original));assert.equal(Buffer.byteLength(padded),8193);f.objects.set(file,padded);f.reads.clear();f.outsideReads.clear();let published=false;
+ await assert.rejects(prepare(f,1).then(value=>{published=true;return value;}),{code:'LIMIT'});
+ assert.equal(published,false);assert.equal(f.objects.get(file),padded);assert.equal(f.reads.get(file),1);assert.equal(f.outsideReads.size,0);
+ f.objects.set(file,original+' '.repeat(8192-Buffer.byteLength(original)));assert.deepEqual(await prepare(f,1),ref);assert.equal((await f.materials.sequences.item(ref,0)).value,'v0');
 });

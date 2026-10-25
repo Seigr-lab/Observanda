@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {MaterialSequence} from '../src/material-sequence.js';
+import {ObjectIndex} from '../src/object-index.js';
 import {digest,serialize} from '../src/storage-format.js';
 
 function fixture(){
@@ -12,6 +13,12 @@ function fixture(){
  return {sequence,objects,reads,get writes(){return writes;}};
 }
 const descriptor=i=>({hash:digest(String(i)),count:256});
+test('custom immutable node owners retain preflight authentication by default',async()=>{
+ let reads=0,writes=0;const storage={read:async()=>{reads++;return {corrupt:true};},write:async()=>{writes++;}},index=new ObjectIndex(null,{immutable:true,nodeStorage:storage}),root=await index.change(null,'node','a'.repeat(64));
+ await assert.rejects(index.flush(root),{code:'CATALOGUE_DAMAGED'});assert.equal(reads,1);assert.equal(writes,0);
+ assert.throws(()=>new ObjectIndex(null,{nodeStorage:storage,authenticateOnWrite:true}),{code:'INVALID'});assert.throws(()=>new ObjectIndex(null,{immutable:true,authenticateOnWrite:true}),{code:'INVALID'});
+ for(const options of [{immutable:1,nodeStorage:storage},{immutable:true,nodeStorage:{write:storage.write}},{immutable:true,nodeStorage:{read:storage.read}}])assert.throws(()=>new ObjectIndex(null,{...options,authenticateOnWrite:true}),{code:'INVALID'});
+});
 test('large page manifests keep constant-size roots and point inspection reads only one bounded chunk',async()=>{
  const f=fixture(),build=async count=>{const builder=f.sequence.builder('pages',fn=>fn());for(let i=0;i<count;i++)await builder.append(descriptor(i));return builder.finish();};
  const early=await build(65),large=await build(65537);

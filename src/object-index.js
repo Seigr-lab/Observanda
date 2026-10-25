@@ -26,10 +26,11 @@ const equal=(a,b)=>a?.hash===b?.hash;
 const authenticatedNodes=new WeakMap();
 const validNode=node=>node&&Object.keys(node).sort().join()==='id,left,revision,right'&&identifier(node.id)&&revision(node.revision)&&validRef(node.left)&&validRef(node.right)&&Math.abs(height(node.left)-height(node.right))<=1;
 export class ObjectIndex{
- constructor(store,{namespace='object-index:',immutable=false,nodeStorage=null,cacheReads=false,scanAhead=false,cacheSize=128,write=null}={}){
+ constructor(store,{namespace='object-index:',immutable=false,nodeStorage=null,authenticateOnWrite=false,cacheReads=false,scanAhead=false,cacheSize=128,write=null}={}){
   if(!Number.isSafeInteger(cacheSize)||cacheSize<1||cacheSize>16384)throw new AppError('INVALID');
   if(write!==null&&(typeof write!=='function'||!immutable||nodeStorage))throw new AppError('INVALID');
-  this.write=write;this.store=store;this.cacheReads=cacheReads;this.scanAhead=scanAhead;this.cacheSize=cacheSize;this.nodeStorage=nodeStorage;this.namespace=namespace;this.immutable=immutable;this.cache=new Map();this.cachedVersions=new Map();this.pending=new Map();this.writes=new Map();
+  if(typeof authenticateOnWrite!=='boolean'||authenticateOnWrite&&(immutable!==true||typeof nodeStorage?.read!=='function'||typeof nodeStorage?.write!=='function'))throw new AppError('INVALID');
+  this.write=write;this.store=store;this.cacheReads=cacheReads;this.scanAhead=scanAhead;this.cacheSize=cacheSize;this.nodeStorage=nodeStorage;this.authenticateOnWrite=authenticateOnWrite;this.namespace=namespace;this.immutable=immutable;this.cache=new Map();this.cachedVersions=new Map();this.pending=new Map();this.writes=new Map();
   this.cacheBytes=0;this.nodeBytes=new WeakMap();this.pendingBytes=0;
  }
  forgetCached(version){
@@ -112,7 +113,9 @@ export class ObjectIndex{
    if(!ref||visited.has(ref.hash))return;const node=this.pending.get(ref.hash);if(!node)return;visited.add(ref.hash);
    await visit(node.left);await visit(node.right);
    if(this.nodeStorage){
-    const prior=await this.nodeStorage.read(ref);
+    // Opted-in storage must authenticate existing bytes before publishing any
+    // root. A staged owner completes that check in its bounded writer batch.
+    const prior=this.authenticateOnWrite?null:await this.nodeStorage.read(ref);
     if(prior){if(hash(prior)!==ref.hash)fail();}else await this.nodeStorage.write(ref,node);
    }else{
     const size=this.nodeBytes.get(node)??Buffer.byteLength(serialize(node));
