@@ -10,7 +10,7 @@ export async function selectedDatasetColumns(materials,doc,indices){
  const columns=[];for(const index of indices)columns.push(await materials.datasetColumn(doc,index));
  return {indices:[...indices],columns};
 }
-export function assertDatasetScalars(row){
- if(row.cells.some(value=>typeof value!=='string'))throw new AppError('DATASET_CELL_SCALAR_REQUIRED');
+export function assertDatasetScalars(row,indices=null){
+ for(const index of indices??row.cells.keys())if(typeof row.cells[index]!=='string')throw new AppError('DATASET_CELL_SCALAR_REQUIRED');
  return row;
 }

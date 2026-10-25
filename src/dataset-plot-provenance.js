@@ -11,7 +11,7 @@ import {exactRational} from './web/measurement-model.js';
 import {projectTransformedValue,validMeasurementProjection} from './web/measurement-transform.js';
 import {INTERVAL_FIELDS} from './web/figure-intervals.js';
 import {sameUnitDefinition,sameUnitDimensions,validUnitDefinition,unitScalar} from './web/measurement-unit-model.js';
-import {datasetPlotSelection,createPlotComputation} from './dataset-plot-selection.js';
+import {datasetPlotSelection,createPlotComputation,plotComputationIndices} from './dataset-plot-selection.js';
 import {assertDatasetScalars} from './dataset-selected-columns.js';
 const fail=(code='MATERIAL_MISSING')=>{throw new AppError(code);};
 const natural=value=>Number.isSafeInteger(value)&&value>=0;
@@ -97,12 +97,12 @@ async function context(materials,doc){
  const points=retained?{count:content.figure.document.counts.points}:materials.sequences.validate(content.plotPointsIndex),count=retained?points.count:content.figure.series.reduce((n,s)=>n+s.points.length,0);
  if(!retained&&(points.kind!=='plot-points'||points.count!==count||count>10000))fail();
  const members=content.plotMembersIndex;if((content.mapping.operation??'raw')==='raw'){if(members!==undefined)fail();}else{materials.sequences.validate(members);if(members.kind!=='plot-members'||members.count>source.content.rowCount*Math.max(1,content.mapping.values.length))fail();}
- return {content,source,selection,points,members,reader,computationState,...(computation?{computation}:{}),cachedPage:null,cachedData:null};
+ return {content,source,selection,scalarIndices:plotComputationIndices(selection.mapping),points,members,reader,computationState,...(computation?{computation}:{}),cachedPage:null,cachedData:null};
 }
 async function rowAt(materials,ctx,position){
  if(!position||Object.keys(position).sort().join()!=='page,row'||!natural(position.page)||!natural(position.row)||position.page>=materials.datasetPageCount(ctx.source))fail();
  if(ctx.cachedPage!==position.page){ctx.cachedData=await materials.retainedDatasetPage(ctx.source,position.page,ctx.selection.indices?{columns:ctx.selection.indices}:undefined);ctx.cachedPage=position.page;}
- const row=ctx.cachedData.rows[position.row];if(!row||row.excluded)fail();return ctx.content.mapping.resourcePolicy?row:assertDatasetScalars(row);
+ const row=ctx.cachedData.rows[position.row];if(!row||row.excluded)fail();return ctx.content.mapping.resourcePolicy?row:assertDatasetScalars(row,ctx.scalarIndices);
 }
 async function checkSource(materials,ctx,receipt,row,point=selectedPoint(ctx.content,receipt),signal){
  const mapping=ctx.content.mapping,at=column=>ctx.selection.indices?ctx.selection.indices.indexOf(column):column;

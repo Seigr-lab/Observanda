@@ -1,4 +1,4 @@
-import {plotComputationHeader,createPlotComputation} from './dataset-plot-selection.js';
+import {plotComputationHeader,createPlotComputation,plotComputationIndices} from './dataset-plot-selection.js';
 import {plotOperation,plotScalarOperation,plotComputationFailure} from './plot-resource-policy.js';
 // Row/reduction processing selects one series at a time. Scratch point reads
 // stage at most 32 records: a count bound, not a byte bound on exact coordinates.
@@ -23,6 +23,7 @@ export function prepareRetainedPlot(materials,doc,command,selection,{write,signa
  return withScratch(async work=>{
   const computation=createPlotComputation(selection);if(computation.dynamic&&!selection.mapping.resourcePolicy)fail();
   const mapping=selection.mapping,operation=mapping.operation??'raw',columns=selection.columns,values=operation==='count'?[{column:null,error:null}]:mapping.values;
+  const scalarIndices=plotComputationIndices(mapping);
   const table={columns:columns.map((column,index)=>({index,label:column.name+(column.unit?' ('+column.unit+')':''),heading:column.name}))};
   const absolute=index=>index===null?null:selection.indices?.[index]??index;
   const denominator={format:selection.indices?3:2,dataset:command.dataset,...(selection.indices?{columnIndices:selection.indices}:{}),rows:0,included:0,excludedCount:0,missing:columns.map((column,index)=>({column:absolute(index),name:column.name,count:0}))};
@@ -47,7 +48,7 @@ export function prepareRetainedPlot(materials,doc,command,selection,{write,signa
   for(let page=0;page<materials.datasetPageCount(doc);page++){
    signal?.throwIfAborted();const retained=await materials.readSnapshot(()=>materials.retainedDatasetPage(doc,page,selection.indices?{columns:selection.indices}:undefined));
    for(const [rowIndex,row]of retained.rows.entries()){
-    signal?.throwIfAborted();denominator.rows++;if(row.excluded){denominator.excludedCount++;continue;}denominator.included++;if(!mapping.resourcePolicy)assertDatasetScalars(row);
+    signal?.throwIfAborted();denominator.rows++;if(row.excluded){denominator.excludedCount++;continue;}denominator.included++;if(!mapping.resourcePolicy)assertDatasetScalars(row,scalarIndices);
     const cells=row.cells.map((raw,index)=>{if(['null','absent'].includes(row.valueKinds?.[index])||columns[index].missing.some(value=>value.value===raw)){denominator.missing[index].count++;return '';}return raw;});
     const horizontal=mapping.xKind==='number'?await exact(cells[mapping.x],mapping.x,row):scalar(cells[mapping.x]).trim(),group=mapping.group===null?null:scalar(cells[mapping.group]).trim(),source={page,row:rowIndex};
     if(horizontal===null||mapping.xKind!=='number'&&xValue(horizontal,mapping.xKind)===null||group==='')fail();if(mapping.xKind!=='number')computation.contribute(row,mapping.x);if(mapping.group!==null)computation.contribute(row,mapping.group);
