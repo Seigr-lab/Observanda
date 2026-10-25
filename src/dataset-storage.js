@@ -83,8 +83,9 @@ export async function projectDatasetRows(materials,doc,rows,columns){
  const width=doc.content.schemaIndex?.count??doc.content.columns.length;
  if(columns===undefined){if(width>256)throw new AppError('MATERIAL_DATASET_LIMIT');columns=Array.from({length:width},(_,i)=>i);}
  if(!Array.isArray(columns)||columns.length>256||new Set(columns).size!==columns.length||columns.some(i=>!Number.isSafeInteger(i)||i<0||i>=width))throw new AppError('INVALID');
- const result=[];
- for(const row of rows){const cells=[],valueKinds=[],cellPointers=[],cellSources=[],cellLineages=[],cellComputations=[],cellCoordinateAlignments=[];let cachedOffset=-1,cached=[];
+ const project=async()=>{const result=[];
+ for(const [rowIndex,row] of rows.entries()){const cells=[],valueKinds=[],cellPointers=[],cellSources=[],cellLineages=[],cellComputations=[],cellCoordinateAlignments=[];let cachedOffset=-1,cached=[];
+  if(doc.content.datasetFormat===3&&columns.length&&rowIndex%16===0)await materials.sequences.prefetchCellPages(rows.slice(rowIndex,rowIndex+16).map(item=>item.cellIndex),columns[0]-columns[0]%16);
   if(doc.content.datasetFormat===3){materials.sequences.validate(row.cellIndex);if(row.cellIndex.kind!=='cells'||row.cellIndex.count!==width)fail('MATERIAL_MISSING');}
   for(const index of columns){let cell;if(doc.content.datasetFormat===3){const start=index-index%16;if(start!==cachedOffset){cached=(await materials.sequences.page(row.cellIndex,{offset:start,limit:16})).items;cachedOffset=start;}cell=validateDatasetCell(materials,cached[index-start]);}
    else cell={value:row.cells[index],kind:row.valueKinds?.[index]??'string',pointer:row.cellPointers?.[index],sources:row.cellSources?.[index]};
@@ -92,5 +93,6 @@ export async function projectDatasetRows(materials,doc,rows,columns){
   }
   const {cellIndex,...metadata}=row;result.push({...metadata,cells,valueKinds,cellPointers,cellSources,cellLineages,cellComputations,...(cellCoordinateAlignments.some(Boolean)?{cellCoordinateAlignments}:{}),columnIndices:columns});
  }
- return {rows:result,columnIndices:columns};
+ return {rows:result,columnIndices:columns};};
+ return materials.workspace?.catalogue&&await materials.workspace.storageKind()==='catalogue'?materials.workspace.catalogue(project):project();
 }

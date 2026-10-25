@@ -552,13 +552,25 @@ export class ResearchCatalogue{
   return {items,next};
  }
  async objectValue(id,expected){
-  const batch=metadataBatchIndex(this),row=batch?await batch.objectRow(id):await this.db.get('SELECT payload FROM objects WHERE id=$1',id);
+  const batch=metadataBatchIndex(this),load=()=>this.db.get('SELECT payload FROM objects WHERE id=$1',id),row=batch?await batch.objectRow(id):this.readCache?await this.readCache.row('object:'+id,load):await load();
   if(!!expected!==!!row)fail();if(!row)return null;
   const value=await resolveMetadataValue(this,id,expected.revision,this.decode('object',id,row.payload));if(hash(value)!==expected.revision)fail();return value;
  }
  async object(id){
   const index=this.objectIndex(),head=await index.head();
-  return this.objectValue(id,await index.find(head,id));
+  const find=()=>index.find(head,id);
+  const expected=this.readCache&&!metadataBatchIndex(this)?await this.readCache.proof('object:'+id,async()=>(await find())?.revision??''):null;
+  return this.objectValue(id,expected===null?await find():expected?{id,revision:expected}:null);
+ }
+ async prefetchObjects(ids){
+  if(!Array.isArray(ids)||ids.length>32||ids.some(id=>typeof id!=='string'||!id)||new Set(ids).size!==ids.length)throw new AppError('INVALID');
+  if(!this.readCache||metadataBatchIndex(this)||!ids.length)return;
+  // Receipts and encrypted rows belong only to this pinned read snapshot.
+  // Normal reads still authenticate the payload and resolve ownership redirects.
+  const index=new ObjectIndex(this,{cacheReads:true,cacheSize:2048}),head=await index.head();
+  await index.prefetchKeys(head,ids);
+  for(const id of ids)await this.readCache.proof('object:'+id,async()=>(await index.find(head,id))?.revision??'');
+  for(const row of await this.db.all('SELECT id,payload FROM objects WHERE id=ANY($1::text[]) AND octet_length(payload)<=8192',ids))this.readCache.replace('object:'+row.id,row.payload);
  }
  async putObject(id,value){
   if(id==='metadata:.observanda/dashboard.observanda'&&await workspaceSettingsRegistry(this))throw new AppError('ACCESS_UPGRADE');

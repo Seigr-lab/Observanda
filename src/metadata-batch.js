@@ -21,16 +21,31 @@ export function metadataBatchIndex(store){
 }
 class MetadataBatchIndex extends ObjectIndex{
  encryptionKey(key){return this.objectReads.encryptionKey(key);}
- constructor(store){super(store,{cacheReads:true,cacheSize:16384});this.current=null;this.edits=0;this.objects=new Map();this.newObjects=new Set();this.objectBytes=0;this.objectReads=new CatalogueReadCache();}
+ constructor(store){super(store,{cacheReads:true,cacheSize:16384});this.current=null;this.edits=0;this.objects=new Map();this.newObjects=new Set();this.objectBytes=0;this.objectReads=new CatalogueReadCache();this.missingObjects=new Set();}
+ async prefetchObjects(ids,{signal}={}){
+  signal?.throwIfAborted();
+  if(!Array.isArray(ids)||ids.length>32||ids.some(id=>typeof id!=='string'||!id))throw new AppError('INVALID');
+  const selected=[...new Set(ids)].filter(id=>!this.objects.has(id)&&!this.objectReads.rows.has(id)&&!this.missingObjects.has(id));if(!selected.length)return;
+  // Return every existing identity, even when its payload needs a point read.
+  // Only absence from this bounded query proves a transaction-local miss.
+  const found=new Map((await this.store.db.all('SELECT id,CASE WHEN octet_length(payload)<=8192 THEN payload ELSE NULL END AS payload FROM objects WHERE id=ANY($1::text[])',selected)).map(row=>[row.id,row.payload]));
+  signal?.throwIfAborted();
+  for(const id of selected){
+   signal?.throwIfAborted();if(this.objects.has(id))continue;
+   if(found.has(id)){this.missingObjects.delete(id);this.objectReads.replace(id,found.get(id));}
+   else{if(this.missingObjects.size===32)this.missingObjects.delete(this.missingObjects.values().next().value);this.missingObjects.add(id);}
+  }
+ }
  async objectRow(id){
   if(this.objects.has(id)){const payload=this.objects.get(id);return payload===null?undefined:{payload};}
+  if(this.missingObjects.has(id))return undefined;
   return this.objectReads.row(id,()=>this.store.db.get('SELECT payload FROM objects WHERE id=$1',id));
  }
  async stageObject(id,payload,{create=false}={}){
   // A creation must reach a plain INSERT before a later deletion can erase it.
   // This preserves detection of a stray row absent from the authenticated tree.
   if(payload===null&&this.newObjects.has(id)||create&&this.objects.get(id)===null)await this.flushObjects();
-  this.objectReads.replace(id,payload);
+  this.missingObjects.delete(id);this.objectReads.replace(id,payload);
   const size=payload?.length??0,previous=this.objects.get(id)?.length??0;
   if(this.objects.size>=32||this.objectBytes-previous+size>256*1024)await this.flushObjects();
   if(size>256*1024){await writeCatalogueRows(this.store.db,'objects',[[id,payload]],{create});return;}
@@ -53,10 +68,10 @@ class MetadataBatchIndex extends ObjectIndex{
  }
  async save(){await this.flushObjects();if(this.edits){await this.persist(this.current.root);this.edits=0;}}
  async checkCounts(head){await this.save();return super.checkCounts(head);}
- clear(){this.current=null;this.cache.clear();this.cacheBytes=0;this.cachedVersions.clear();this.pending.clear();this.pendingBytes=0;this.writes.clear();this.objects.clear();this.newObjects.clear();this.objectBytes=0;this.objectReads.clear();}
+ clear(){this.current=null;this.cache.clear();this.cacheBytes=0;this.cachedVersions.clear();this.pending.clear();this.pendingBytes=0;this.writes.clear();this.objects.clear();this.newObjects.clear();this.objectBytes=0;this.objectReads.clear();this.missingObjects.clear();}
 }
 export async function withMetadataBatch(store,operation,{prefetchIds=[],signal}={}){
- const invoke=async()=>{if(prefetchIds.length){const index=metadataBatchIndex(store);await index.prefetchKeys(await index.head(),prefetchIds,{signal});}return operation();};
+ const invoke=async()=>{if(prefetchIds.length){const index=metadataBatchIndex(store);await index.prefetchKeys(await index.head(),prefetchIds,{signal});await index.prefetchObjects(prefetchIds,{signal});}return operation();};
  const prior=metadataBatchIndex(store);if(prior)return invoke();
  const batch=new MetadataBatchIndex(store);
  try{

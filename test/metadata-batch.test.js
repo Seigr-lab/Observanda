@@ -13,34 +13,72 @@ async function fixture(t){
  t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});return f.workspace;
 }
 
+test('reader prefetch authenticates selected payloads within one snapshot and expires before the next read',async t=>{
+ const ws=await fixture(t),file=i=>'.observanda/read-prefetch/'+String(i).padStart(4,'0')+'.json',ids=Array.from({length:32},(_,i)=>'metadata:'+file(i*8));
+ await ws.withLock(()=>withWorkspaceMetadataBatch(ws,async()=>{for(let i=0;i<256;i++)await ws.writeMetadata(file(i),JSON.stringify({value:i}));}));
+ const inspect=prefetch=>ws.catalogue(async store=>{
+  const counts={points:0,batches:0,objects:0},get=store.db.get,all=store.db.all;
+  store.db.get=async function(sql,...args){if(sql==='SELECT payload FROM objects WHERE id=$1')counts.objects++;if(sql==='SELECT payload FROM state WHERE slot=$1'&&args[0].startsWith('object-index:'))counts.points++;return get.call(this,sql,...args);};
+  store.db.all=async function(sql,...args){if(sql.includes('ANY($1::text[])')){assert.ok(args[0].length<=32);counts.batches++;}return all.call(this,sql,...args);};
+  try{if(prefetch)await store.prefetchObjects(ids);for(let i=0;i<ids.length;i++)assert.deepEqual(await store.object(ids[i]),{text:JSON.stringify({value:i*8})});return counts;}
+  finally{store.db.get=get;store.db.all=all;}
+ });
+ const ordinary=await inspect(false),prefetched=await inspect(true);assert.equal(prefetched.objects,0);assert.ok(prefetched.points+prefetched.batches<ordinary.points/2,JSON.stringify({ordinary,prefetched}));
+ await ws.withLock(()=>ws.writeMetadata(file(0),'new revision'));await ws.catalogue(async store=>{await store.prefetchObjects([ids[0]]);assert.deepEqual(await store.object(ids[0]),{text:'new revision'});});
+ const db=await ws.openCatalogue();try{
+  const row=await db.get('SELECT payload FROM objects WHERE id=$1',ids[0]);await db.run('UPDATE objects SET payload=$2 WHERE id=$1',ids[0],Buffer.from('corrupt after prior snapshot'));
+  try{await assert.rejects(ws.catalogue(async store=>{await store.prefetchObjects([ids[0]]);return store.object(ids[0]);}),{code:'ENCRYPTION_DAMAGED'});}finally{await db.run('UPDATE objects SET payload=$2 WHERE id=$1',ids[0],row.payload);}
+  const stray='metadata:'+file(999);await ws.catalogue(async store=>db.run('INSERT INTO objects VALUES ($1,$2)',stray,store.encode('object',stray,{text:'unindexed'})));
+  try{await assert.rejects(ws.catalogue(async store=>{await store.prefetchObjects([stray]);return store.object(stray);}),{code:'CATALOGUE_DAMAGED'});}finally{await db.run('DELETE FROM objects WHERE id=$1',stray);}
+ }finally{await db.close();}
+ await ws.catalogue(async store=>{const absent='metadata:'+file(998);await store.prefetchObjects([absent]);assert.equal(await store.object(absent),null);await assert.rejects(store.prefetchObjects([...ids,absent]),{code:'INVALID'});});
+ t.diagnostic(JSON.stringify({ordinary,prefetched}));
+});
+
 test('pending metadata key prefetch retains native authentication, cancellation and transaction rollback',async t=>{
  const ws=await fixture(t),file=i=>'.observanda/prefetch-fixture/'+String(i).padStart(4,'0')+'.json',ids=Array.from({length:32},(_,i)=>'metadata:'+file(i*8));
  await ws.withLock(()=>withWorkspaceMetadataBatch(ws,async()=>{for(let i=0;i<256;i++)await ws.writeMetadata(file(i),JSON.stringify({value:i}));}));
  const snapshot=()=>ws.catalogue(async store=>({state:await store.db.all("SELECT slot,payload FROM state WHERE slot='objects' OR starts_with(slot,'object-index:') ORDER BY slot"),objects:await store.db.all('SELECT id,payload FROM objects ORDER BY id')}));
- const mutate=async(prefetch,value,{controller,failWrite=false}={})=>{
-  const counts={points:0,batches:0};await ws.withLock(()=>ws.catalogue(async store=>{
+ const mutate=async(prefetch,value,{controller,failWrite=false,selectedIds=ids}={})=>{
+  const counts={points:0,batches:0,objectPoints:0,objectBatches:0};await ws.withLock(()=>ws.catalogue(async store=>{
    const get=store.db.get,all=store.db.all,run=store.db.run;
-   store.db.get=async function(sql,...args){if(sql==='SELECT payload FROM state WHERE slot=$1'&&args[0].startsWith('object-index:'))counts.points++;return get.call(this,sql,...args);};
-   store.db.all=async function(sql,...args){const selected=sql==='SELECT slot,payload FROM state WHERE slot=ANY($1::text[]) AND octet_length(payload)<=8192';if(selected){counts.batches++;assert.ok(args[0].length<=32);}const result=await all.call(this,sql,...args);if(selected)controller?.abort();return result;};
+   store.db.get=async function(sql,...args){if(sql==='SELECT payload FROM state WHERE slot=$1'&&args[0].startsWith('object-index:'))counts.points++;if(sql==='SELECT payload FROM objects WHERE id=$1'&&selectedIds.includes(args[0]))counts.objectPoints++;return get.call(this,sql,...args);};
+   store.db.all=async function(sql,...args){const selected=sql==='SELECT slot,payload FROM state WHERE slot=ANY($1::text[]) AND octet_length(payload)<=8192',objects=sql==='SELECT id,CASE WHEN octet_length(payload)<=8192 THEN payload ELSE NULL END AS payload FROM objects WHERE id=ANY($1::text[])';if(selected||objects){if(objects)counts.objectBatches++;else counts.batches++;assert.ok(args[0].length<=32);}const result=await all.call(this,sql,...args);if(objects)controller?.abort();return result;};
    store.db.run=async function(sql,...args){if(failWrite&&sql.startsWith('INSERT INTO state'))throw Error('Interrupted prefetched index');return run.call(this,sql,...args);};
-   try{await withWorkspaceMetadataBatch(ws,async()=>{for(const id of ids)await ws.writeMetadata(id.slice(9),JSON.stringify({value}));},{prefetchIds:prefetch?ids:[],signal:controller?.signal});}
+   try{await withWorkspaceMetadataBatch(ws,async()=>{for(const id of selectedIds){await ws.readMetadata(id.slice(9),32768);await ws.writeMetadata(id.slice(9),JSON.stringify({value}));}},{prefetchIds:prefetch?selectedIds:[],signal:controller?.signal});}
    finally{store.db.get=get;store.db.all=all;store.db.run=run;}
   }));return counts;
  };
  const ordinary=await mutate(false,'ordinary'),prefetched=await mutate(true,'prefetched');
  assert.ok(prefetched.batches>0);assert.ok(prefetched.points+prefetched.batches<ordinary.points/2,JSON.stringify({ordinary,prefetched}));
+ assert.equal(ordinary.objectPoints,32);assert.equal(prefetched.objectPoints,0);assert.equal(prefetched.objectBatches,1);
  for(const id of ids)assert.deepEqual(JSON.parse(await ws.readMetadata(id.slice(9),1024)),{value:'prefetched'});
  const before=await snapshot();await assert.rejects(mutate(true,'cancelled',{controller:new AbortController()}),{name:'AbortError'});assert.deepEqual(await snapshot(),before);
  await assert.rejects(mutate(true,'rolled back',{failWrite:true}),/Interrupted prefetched index/);assert.deepEqual(await snapshot(),before);
+ const newIds=Array.from({length:32},(_,i)=>'metadata:'+file(300+i)),created=await mutate(true,'created',{selectedIds:newIds});assert.equal(created.objectPoints,0);assert.equal(created.objectBatches,1);
+ await ws.withLock(()=>ws.writeMetadata(file(0),JSON.stringify({large:'x'.repeat(9000)})));
+ const oversized=await mutate(true,'oversized fallback');assert.equal(oversized.objectPoints,1);
  const db=await ws.openCatalogue();
  try{
+  const original=await db.get('SELECT payload FROM objects WHERE id=$1',ids[0]);await db.run('UPDATE objects SET payload=$2 WHERE id=$1',ids[0],Buffer.from('corrupted prefetched object'));
+  try{await assert.rejects(mutate(true,'must not repair object'),error=>['CATALOGUE_DAMAGED','ENCRYPTION_DAMAGED'].includes(error.code));}
+  finally{await db.run('UPDATE objects SET payload=$2 WHERE id=$1',ids[0],original.payload);}
+  const stray='metadata:'+file(400);
+  for(const size of [20,9000]){
+   const payload=await ws.catalogue(store=>store.encode('object',stray,{text:'x'.repeat(size)}));await db.run('INSERT INTO objects VALUES ($1,$2)',stray,payload);
+   try{
+    await assert.rejects(mutate(true,'must not hide stray',{selectedIds:[stray]}),{code:'CATALOGUE_DAMAGED'});
+    await assert.rejects(ws.withLock(()=>withWorkspaceMetadataBatch(ws,()=>ws.writeMetadata(stray.slice(9),'replacement'),{prefetchIds:[stray]})),{code:'CATALOGUE_DAMAGED'});
+    assert.deepEqual((await db.get('SELECT payload FROM objects WHERE id=$1',stray)).payload,payload);
+   }finally{await db.run('DELETE FROM objects WHERE id=$1',stray);}
+  }
   const head=await ws.catalogue(async store=>store.objectIndex().head()),slot='object-index:'+head.root.key,row=await db.get('SELECT payload FROM state WHERE slot=$1',slot);
   await db.run('UPDATE state SET payload=$2 WHERE slot=$1',slot,Buffer.from('corrupted prefetched branch'));
   try{await assert.rejects(mutate(true,'must not repair'),error=>['CATALOGUE_DAMAGED','ENCRYPTION_DAMAGED'].includes(error.code));}
   finally{await db.run('UPDATE state SET payload=$2 WHERE slot=$1',slot,row.payload);}
  }finally{await db.close();}
  await mutate(true,'retry');for(const id of ids)assert.deepEqual(JSON.parse(await ws.readMetadata(id.slice(9),1024)),{value:'retry'});
- t.diagnostic(JSON.stringify({ordinary,prefetched}));
+ t.diagnostic(JSON.stringify({ordinary,prefetched,created,oversized}));
 });
 
 test('an explicit catalogue mutation invalidates shared metadata heads and decrypted branches',async t=>{
