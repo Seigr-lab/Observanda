@@ -7,12 +7,15 @@ import {Workspace,digest,serialize} from '../src/storage.js';
 import {sampleNotebook} from '../src/sample.js';
 import {upgradeNotebook} from '../src/model.js';
 import {clearVault} from '../src/encryption.js';
-import {createAccess,takeCreatedVault} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault} from '../src/access.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {TestDeviceStore} from './device-fixture.js';
 import {ObjectIndex} from '../src/object-index.js';
 const hash=v=>digest(serialize(v));
-const key=n=>'metadata:.observanda/materials/records/'+String(n).padStart(5,'0')+'/manifest.json';
+// Generic index payloads are not material manifests or record-owned drafts.
+const recordsPrefix='metadata:.observanda/object-index-fixture/records/',draftsPrefix='metadata:.observanda/object-index-fixture/drafts/';
+const key=n=>recordsPrefix+String(n).padStart(5,'0')+'/manifest.json';
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-object-index-'));
  const {workspace:ws,vault}=await encryptedFixture(directory,upgradeNotebook(sampleNotebook()));
@@ -53,7 +56,7 @@ test('point edits and small prefix listings stay bounded as evidence metadata gr
  const {ws}=await fixture(t),expected=new Map();
  await write(ws,async s=>{
   for(let n=0;n<512;n++){const v={label:'Private capture '+n,bytes:'67108864'};expected.set(key(n),v);await s.putObject(key(n),v);}
-  for(let n=0;n<3;n++){const id='metadata:.observanda/drafts/'+n+'.json';expected.set(id,{text:'Creative take '+n});await s.putObject(id,expected.get(id));}
+  for(let n=0;n<3;n++){const id=draftsPrefix+n+'.json';expected.set(id,{text:'Creative take '+n});await s.putObject(id,expected.get(id));}
  });
  assert.deepEqual(await values(ws),new Map([...expected].sort(([a],[b])=>a<b?-1:1)));
  const before=await snapshot(ws);let reads=0,writes=0,objectReads=0;
@@ -68,7 +71,7 @@ test('point edits and small prefix listings stay bounded as evidence metadata gr
  assert.equal(after.length,516);assert.ok(after.filter(r=>!r.payload.equals(prior.get(r.slot))).length<24);
  assert.ok(after.every(r=>r.payload.length<2048),'index rows remain small');
  reads=0;
- await ws.catalogue(async s=>{const decode=s.decode.bind(s);s.decode=(table,id,bytes)=>{if(table==='state')reads++;return decode(table,id,bytes);};assert.deepEqual(await s.objectIds('metadata:.observanda/drafts/'),[0,1,2].map(n=>'metadata:.observanda/drafts/'+n+'.json'));});
+ await ws.catalogue(async s=>{const decode=s.decode.bind(s);s.decode=(table,id,bytes)=>{if(table==='state')reads++;return decode(table,id,bytes);};assert.deepEqual(await s.objectIds(draftsPrefix),[0,1,2].map(n=>draftsPrefix+n+'.json'));});
  assert.ok(reads<24,'listing three drafts must not decrypt unrelated evidence metadata');
  await write(ws,s=>s.putObject(key(250),{label:'Revised capture',bytes:'67108864'}));assert.deepEqual(await snapshot(ws),after,'unchanged writes retain existing ciphertext');
 });
@@ -113,7 +116,7 @@ test('missing, replayed and swapped metadata cannot be hidden by reads, saves or
  try{
   await check();await assert.rejects(ws.catalogue(s=>s.objectIds('metadata:')),{code:'CATALOGUE_DAMAGED'});
   await assert.rejects(write(ws,s=>s.putObject(key(3),{private:'Must not repair missing index'})),{code:'CATALOGUE_DAMAGED'});
-  await assert.rejects(copyWorkspace(await copyPlan(ws.root,path.join(directory,'damaged-backup')),{vault}),{code:'CATALOGUE_DAMAGED'});
+  await assert.rejects(async()=>copyWorkspace(await copyPlan(ws.root,path.join(directory,'damaged-backup'),{vault}),{vault}),{code:'CATALOGUE_DAMAGED'});
  }finally{await db.run('INSERT INTO state VALUES ($1,$2)',rootSlot,root.payload);}
  await db.run('UPDATE state SET payload=$2 WHERE slot=$1',rootSlot,oldNodes.find(r=>r.slot===rootSlot).payload);
  try{await check();}finally{await db.run('UPDATE state SET payload=$2 WHERE slot=$1',rootSlot,root.payload);}
@@ -131,9 +134,9 @@ test('missing, replayed and swapped metadata cannot be hidden by reads, saves or
 test('ordinary and fresh-key backups retain objects and can edit their indexes independently',async t=>{
  const {ws,directory,vault}=await fixture(t),expected=new Map();
  await write(ws,async s=>{for(let i=0;i<40;i++){expected.set(key(i),{capture:i,exact:'18446744073709551617',base:6,digits:'555555'});await s.putObject(key(i),expected.get(key(i)));}});
- const before=await snapshot(ws),backup=await copyWorkspace(await copyPlan(ws.root,path.join(directory,'backup')),{vault});
- const access=await createAccess('','synthetic fresh key'),nextVault=takeCreatedVault(access);t.after(()=>clearVault(nextVault));
- const rekeyed=await encryptedCopy(await copyPlan(ws.root,path.join(directory,'rekeyed')),access,nextVault,vault);
+ const before=await snapshot(ws),backup=await copyWorkspace(await copyPlan(ws.root,path.join(directory,'backup'),{vault}),{vault});
+ const access=await createWorkspaceAccess('','synthetic fresh key',new TestDeviceStore({file:path.join(directory,'rekeyed-device.key')})),nextVault=takeCreatedVault(access);t.after(()=>clearVault(nextVault));
+ const rekeyed=await encryptedCopy(await copyPlan(ws.root,path.join(directory,'rekeyed'),{vault}),access,nextVault,vault);
  for(const target of [new Workspace(backup,vault),new Workspace(rekeyed,nextVault)]){
   assert.deepEqual(await values(target),expected);
   await write(target,async s=>{await s.deleteObject(key(8));await s.putObject(key(9),{capture:'New interpretation'});});
@@ -183,7 +186,7 @@ test('authenticated range pages read only their branch and selected values, incl
   const page=await ws.catalogue(async s=>{
    const decode=s.decode.bind(s);s.decode=(table,id,payload)=>{if(table==='state')nodes++;if(table==='object')objects++;return decode(table,id,payload);};
    s.db.all=()=>{throw Error('A bounded page must not scan all object IDs');};
-   return s.objectPage('metadata:.observanda/materials/records/',{after:cursor,limit:13});
+   return s.objectPage(recordsPrefix,{after:cursor,limit:13});
   });
   assert.ok(nodes<40,'late pages must seek through the tree');assert.equal(objects,page.items.length);seen.push(...page.items.map(r=>r.value.take));cursor=page.next;
  }while(cursor);
@@ -192,7 +195,7 @@ test('authenticated range pages read only their branch and selected values, incl
  await assert.rejects(ws.catalogue(s=>s.objectPage('metadata:',{after:'unrelated'})),{code:'INVALID'});
  const db=await ws.openCatalogue();try{
   const row=await db.get('SELECT payload FROM objects WHERE id=$1',key(250));await db.run('DELETE FROM objects WHERE id=$1',key(250));
-  await assert.rejects(ws.catalogue(s=>s.objectPage('metadata:.observanda/materials/records/',{after:key(249),limit:5})),{code:'CATALOGUE_DAMAGED'});
+  await assert.rejects(ws.catalogue(s=>s.objectPage(recordsPrefix,{after:key(249),limit:5})),{code:'CATALOGUE_DAMAGED'});
   await db.run('INSERT INTO objects VALUES ($1,$2)',key(250),row.payload);
  }finally{await db.close();}
 });
