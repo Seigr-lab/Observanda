@@ -158,6 +158,9 @@ export class ObjectIndex{
   // instance. Weak receipts retain no nodes after their bounded caches close.
   if(proof.hash!==ref.hash||proof.key!==ref.key||proof.height!==ref.height||proof.count!==ref.count||lower!==null&&value.id<=lower||upper!==null&&value.id>=upper)fail();
   if(loaded&&(this.immutable||this.cacheReads||this.store?.readCache))this.cacheNode(ref,value);
+  // Local hits are shared-cache uses too. Restore a useful authenticated path
+  // after bounded prefetch evicts it, without admitting pending writer nodes.
+  else if(!this.pending.has(ref.hash))this.store.readCache?.keepNode(this.slot(ref),value,proof.bytes);
   return value;
  }
  make(id,revision,left=null,right=null){

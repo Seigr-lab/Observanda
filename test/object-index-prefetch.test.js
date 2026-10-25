@@ -140,6 +140,23 @@ test('cancellation during snapshot reuse stops a mixed frontier before its cold 
  assert.deepEqual({points:f.reads.points.length,batches:f.reads.batches.length},before);
 });
 
+test('successive spread key windows retain useful shared paths within the same cache limits',async t=>{
+ const measure=async reset=>{
+  const f=fixture(2047),cache=f.store.readCache=new CatalogueReadCache(),decode=f.store.decode;let decoded=0;
+  f.store.decode=(table,id,payload)=>{if(id.startsWith('object-index:'))decoded++;return decode(table,id,payload);};
+  for(let window=0;window<6;window++){
+   if(reset)cache.clear();const reader=new ObjectIndex(f.store,{cacheReads:true,cacheSize:2048}),head=await reader.head(),indices=Array.from({length:32},(_,i)=>i*63+window),ids=indices.map(i=>key(i*2));
+   await reader.prefetchKeys(head,ids);
+   for(let i=0;i<ids.length;i++){const value=await reader.find(head,ids[i]);assert.equal(value.id,ids[i]);assert.equal(value.revision,revision({original:indices[i]}));}
+   assert.ok(cache.nodes.size<=128);assert.ok(cache.nodeBytes<=256*1024);
+  }
+  return {batches:f.reads.batches.length,decoded};
+ };
+ const cold=await measure(true),shared=await measure(false);t.diagnostic(JSON.stringify({cold,shared}));
+ assert.ok(shared.batches<cold.batches*.9,'Successive windows must reuse shared branches');
+ assert.ok(shared.decoded<cold.decoded*.9,'Reusing local nodes must preserve useful shared authentication');
+});
+
 test('object prefetch eliminates individual presence and absence reads without bypassing object authentication',async()=>{
  const f=fixture(63),ids=Array.from({length:32},(_,i)=>key(i));let owner;
  await withMetadataBatch(f.store,async()=>{
