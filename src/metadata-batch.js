@@ -11,9 +11,9 @@ import {withCatalogueCacheBoundary} from './catalogue-context.js';
 const batches=new AsyncLocalStorage();
 // Call inside the workspace's writer lock. Legacy file workspaces keep their
 // existing write path; only PostgreSQL has shared index branches to coalesce.
-export async function withWorkspaceMetadataBatch(workspace,operation){
+export async function withWorkspaceMetadataBatch(workspace,operation,{prefetchIds=[],signal}={}){
  if(!await hasCatalogue(workspace.root))return operation();
- return workspace.catalogue(store=>withMetadataBatch(store,operation));
+ return workspace.catalogue(store=>withMetadataBatch(store,operation,{prefetchIds,signal}));
 }
 export function metadataBatchIndex(store){
  const batch=batches.getStore();
@@ -55,11 +55,12 @@ class MetadataBatchIndex extends ObjectIndex{
  async checkCounts(head){await this.save();return super.checkCounts(head);}
  clear(){this.current=null;this.cache.clear();this.cacheBytes=0;this.cachedVersions.clear();this.pending.clear();this.pendingBytes=0;this.writes.clear();this.objects.clear();this.newObjects.clear();this.objectBytes=0;this.objectReads.clear();}
 }
-export async function withMetadataBatch(store,operation){
- const prior=metadataBatchIndex(store);if(prior)return operation();
+export async function withMetadataBatch(store,operation,{prefetchIds=[],signal}={}){
+ const invoke=async()=>{if(prefetchIds.length){const index=metadataBatchIndex(store);await index.prefetchKeys(await index.head(),prefetchIds,{signal});}return operation();};
+ const prior=metadataBatchIndex(store);if(prior)return invoke();
  const batch=new MetadataBatchIndex(store);
  try{
-  return await batches.run(batch,async()=>{const result=await operation();await batch.save();return result;});
+  return await batches.run(batch,async()=>{const result=await invoke();await batch.save();return result;});
  }finally{batch.clear();}
 }
 

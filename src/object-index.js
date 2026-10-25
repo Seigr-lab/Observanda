@@ -171,6 +171,38 @@ export class ObjectIndex{
   while(ref){const node=await this.node(ref,lower,upper);if(id===node.id)return node;if(id<node.id){upper=node.id;ref=node.left;}else{lower=node.id;ref=node.right;}}
   return null;
  }
+ async prefetchKeys(head,ids,{signal}={}){
+  signal?.throwIfAborted();
+  if(this.immutable||this.nodeStorage||!this.cacheReads||!Array.isArray(ids)||ids.length>32||ids.some(id=>!identifier(id)))throw new AppError('INVALID');
+  if(!head.legacy&&!validRef(head.root))fail();
+  if(head.legacy||!head.root||!ids.length)return;
+  // Only the selected search paths share a read. Each frontier has at most
+  // thirty-two nodes; oversized payloads retain the ordinary point-read path.
+  // Authentication and bounds remain identical to subsequent find/change calls.
+  let frontier=[{ref:head.root,lower:null,upper:null,ids}];
+  while(frontier.length){
+   signal?.throwIfAborted();
+   if(frontier.some(({ref})=>!validRef(ref)))fail();
+   const missing=frontier.filter(({ref})=>!this.pending.has(ref.hash)&&!this.cache.has(ref.hash));
+   if(missing.length){
+    const found=new Map((await this.store.db.all('SELECT slot,payload FROM state WHERE slot=ANY($1::text[]) AND octet_length(payload)<=8192',missing.map(({ref})=>this.slot(ref)))).map(row=>[row.slot,row.payload]));
+    signal?.throwIfAborted();
+    for(const {ref,lower,upper} of missing){
+     signal?.throwIfAborted();const payload=found.get(this.slot(ref));if(!payload)continue;
+     const node=this.store.decode('state',this.slot(ref),payload);if(!validNode(node)||hash(node)!==ref.hash)fail();
+     this.cacheNode(ref,this.authenticate(node,ref.hash));await this.node(ref,lower,upper);
+    }
+   }
+   const next=[];
+   for(const {ref,lower,upper,ids} of frontier){
+    signal?.throwIfAborted();const node=await this.node(ref,lower,upper),left=ids.filter(id=>id<node.id),right=ids.filter(id=>id>node.id);
+    if(node.left&&left.length)next.push({ref:node.left,lower,upper:node.id,ids:left});
+    if(node.right&&right.length)next.push({ref:node.right,lower:node.id,upper,ids:right});
+   }
+   frontier=next;
+  }
+  signal?.throwIfAborted();
+ }
  async rank(head,boundary){
   if(head.legacy)return head.legacy.reduce((n,e)=>n+Number(e.id<boundary),0);
   let ref=head.root,total=0,lower=null,upper=null;

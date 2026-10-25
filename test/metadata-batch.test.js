@@ -6,12 +6,42 @@ import path from 'node:path';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {sampleNotebook} from '../src/sample.js';
 import {clearVault} from '../src/encryption.js';
-import {withMetadataBatch,metadataBatchIndex} from '../src/metadata-batch.js';
+import {withMetadataBatch,withWorkspaceMetadataBatch,metadataBatchIndex} from '../src/metadata-batch.js';
 import {CatalogueReadCache} from '../src/catalogue-read-cache.js';
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-metadata-transaction-')),f=await encryptedFixture(directory,sampleNotebook());
  t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});return f.workspace;
 }
+
+test('pending metadata key prefetch retains native authentication, cancellation and transaction rollback',async t=>{
+ const ws=await fixture(t),file=i=>'.observanda/prefetch-fixture/'+String(i).padStart(4,'0')+'.json',ids=Array.from({length:32},(_,i)=>'metadata:'+file(i*8));
+ await ws.withLock(()=>withWorkspaceMetadataBatch(ws,async()=>{for(let i=0;i<256;i++)await ws.writeMetadata(file(i),JSON.stringify({value:i}));}));
+ const snapshot=()=>ws.catalogue(async store=>({state:await store.db.all("SELECT slot,payload FROM state WHERE slot='objects' OR starts_with(slot,'object-index:') ORDER BY slot"),objects:await store.db.all('SELECT id,payload FROM objects ORDER BY id')}));
+ const mutate=async(prefetch,value,{controller,failWrite=false}={})=>{
+  const counts={points:0,batches:0};await ws.withLock(()=>ws.catalogue(async store=>{
+   const get=store.db.get,all=store.db.all,run=store.db.run;
+   store.db.get=async function(sql,...args){if(sql==='SELECT payload FROM state WHERE slot=$1'&&args[0].startsWith('object-index:'))counts.points++;return get.call(this,sql,...args);};
+   store.db.all=async function(sql,...args){const selected=sql==='SELECT slot,payload FROM state WHERE slot=ANY($1::text[]) AND octet_length(payload)<=8192';if(selected){counts.batches++;assert.ok(args[0].length<=32);}const result=await all.call(this,sql,...args);if(selected)controller?.abort();return result;};
+   store.db.run=async function(sql,...args){if(failWrite&&sql.startsWith('INSERT INTO state'))throw Error('Interrupted prefetched index');return run.call(this,sql,...args);};
+   try{await withWorkspaceMetadataBatch(ws,async()=>{for(const id of ids)await ws.writeMetadata(id.slice(9),JSON.stringify({value}));},{prefetchIds:prefetch?ids:[],signal:controller?.signal});}
+   finally{store.db.get=get;store.db.all=all;store.db.run=run;}
+  }));return counts;
+ };
+ const ordinary=await mutate(false,'ordinary'),prefetched=await mutate(true,'prefetched');
+ assert.ok(prefetched.batches>0);assert.ok(prefetched.points+prefetched.batches<ordinary.points/2,JSON.stringify({ordinary,prefetched}));
+ for(const id of ids)assert.deepEqual(JSON.parse(await ws.readMetadata(id.slice(9),1024)),{value:'prefetched'});
+ const before=await snapshot();await assert.rejects(mutate(true,'cancelled',{controller:new AbortController()}),{name:'AbortError'});assert.deepEqual(await snapshot(),before);
+ await assert.rejects(mutate(true,'rolled back',{failWrite:true}),/Interrupted prefetched index/);assert.deepEqual(await snapshot(),before);
+ const db=await ws.openCatalogue();
+ try{
+  const head=await ws.catalogue(async store=>store.objectIndex().head()),slot='object-index:'+head.root.key,row=await db.get('SELECT payload FROM state WHERE slot=$1',slot);
+  await db.run('UPDATE state SET payload=$2 WHERE slot=$1',slot,Buffer.from('corrupted prefetched branch'));
+  try{await assert.rejects(mutate(true,'must not repair'),error=>['CATALOGUE_DAMAGED','ENCRYPTION_DAMAGED'].includes(error.code));}
+  finally{await db.run('UPDATE state SET payload=$2 WHERE slot=$1',slot,row.payload);}
+ }finally{await db.close();}
+ await mutate(true,'retry');for(const id of ids)assert.deepEqual(JSON.parse(await ws.readMetadata(id.slice(9),1024)),{value:'retry'});
+ t.diagnostic(JSON.stringify({ordinary,prefetched}));
+});
 
 test('an explicit catalogue mutation invalidates shared metadata heads and decrypted branches',async t=>{
  const ws=await fixture(t);

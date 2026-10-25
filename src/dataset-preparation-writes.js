@@ -11,9 +11,9 @@ export async function withDatasetPreparationWrites(materials,{writePage,signal},
  const write=writePage??(fn=>materials.workspace.withLock(fn));
  const touch=key=>{const entry=cached.get(key);if(entry){cached.delete(key);cached.set(key,entry);}return entry;};
  const cache=(key,value,size,staged=false)=>{if(size>MAX_BYTES)return;const prior=cached.get(key);if(prior){cacheBytes-=prior.size;cached.delete(key);}while(cached.size>=64||cacheBytes+size>MAX_BYTES){const old=cached.keys().next().value;cacheBytes-=cached.get(old).size;cached.delete(old);}cached.set(key,{value:structuredClone(value),size,staged});cacheBytes+=size;};
- const commit=entries=>write(()=>withWorkspaceMetadataBatch(materials.workspace,async()=>{
-  for(const entry of entries){signal?.throwIfAborted();if(entry.kind)await materials.sequences.put(entry.kind,entry.value);else await materials.put(entry.file,entry.value);}
- }));
+ const commit=entries=>{const batch=[...entries];return write(()=>withWorkspaceMetadataBatch(materials.workspace,async()=>{
+  for(const entry of batch){signal?.throwIfAborted();if(entry.kind)await materials.sequences.put(entry.kind,entry.value);else await materials.put(entry.file,entry.value);}
+ },{prefetchIds:batch.map(entry=>'metadata:'+(entry.kind?'.observanda/materials/sequences/'+entry.kind+'/'+entry.id+'.json':materials.relative(entry.file))),signal}));};
  const flush=async()=>{if(!pending.size)return;signal?.throwIfAborted();await commit(pending.values());pending.clear();bytes=0;};
  const stage=async(key,entry)=>{
   signal?.throwIfAborted();if(pending.has(key)||touch(key)?.staged)return;
@@ -32,7 +32,7 @@ export async function withDatasetPreparationWrites(materials,{writePage,signal},
    // this bounded cache. Keep returned objects separate from retained values.
    if(value!==null)cache(key,value,Buffer.byteLength(serialize(value)));return value;
   }
-  async put(kind,value){const id=digest(serialize(value));await stage(kind+':'+id,{kind,value});return id;}
+  async put(kind,value){const id=digest(serialize(value));await stage(kind+':'+id,{kind,id,value});return id;}
  }
  const staged=Object.create(materials);staged.sequences=new PreparedSequences(materials.workspace);
  staged.put=async(file,value)=>{if(!file.includes('tables'))throw new AppError('INVALID');await stage('page:'+file,{file,value});};
