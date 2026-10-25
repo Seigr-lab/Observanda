@@ -49,13 +49,15 @@ function writerRequest(operation){
 }
 function measureConnections(t,workspace,metrics){
  const open=workspace.openCatalogue;
- t.mock.method(workspace,'openCatalogue',async function(...args){
+ // Count connections without retaining every closed connection in mock history.
+ const measured=async function(...args){
   const opening=performance.now(),db=await open.apply(this,args),lock=db.lock,run=db.run,close=db.close;metrics.openMs+=performance.now()-opening;let held=null,closed=false;metrics.opens++;
   const finish=()=>{if(held===null)return;const elapsed=performance.now()-held;metrics.writerCount++;metrics.writerMs+=elapsed;metrics.maximumWriterMs=Math.max(metrics.maximumWriterMs,elapsed);held=null;};
   db.lock=async function(...args){const result=await lock.apply(this,args);held=performance.now();return result;};
   db.run=async function(sql,...args){const at=performance.now();try{return await run.call(this,sql,...args);}finally{metrics.queries++;metrics.sqlMs+=performance.now()-at;if(/^COMMIT|^ROLLBACK/.test(sql))finish();}};
   db.close=async function(){try{return await close.call(this);}finally{finish();if(!closed){closed=true;metrics.closes++;}}};return db;
- });
+ };
+ workspace.openCatalogue=measured;t.after(()=>{workspace.openCatalogue=open;});
 }
 for(const profile of profiles)for(const copies of [1,10])test(copies+'x physical intake: '+profile.name+' with concurrent record editing',{timeout:900000},async t=>{
  const count=profile.files*copies,total=profile.bytes*copies,directory=await mkdtemp(path.join(os.tmpdir(),'observanda-intake-growth-'));
