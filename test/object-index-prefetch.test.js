@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {ObjectIndex} from '../src/object-index.js';
 import {withMetadataBatch,withFlushedMetadataBatch,metadataBatchIndex} from '../src/metadata-batch.js';
 import {ResearchCatalogue} from '../src/research-catalogue.js';
+import {CatalogueReadCache} from '../src/catalogue-read-cache.js';
 import {digest,serialize} from '../src/storage-format.js';
 
 const key=n=>'metadata:.observanda/prefetch-fixture/'+String(n).padStart(5,'0')+'.json';
@@ -105,6 +106,38 @@ test('prefetch keeps read-cache bounds and rejects larger key groups without SQL
  const f=fixture(127),index=new ObjectIndex(f.store,{cacheReads:true,cacheSize:2}),head=await index.head(),ids=[key(0),key(64),key(126),key(252)];
  await index.prefetchKeys(head,ids);assert.ok(index.cache.size<=2);for(const id of ids)assert.equal((await index.find(head,id)).id,id);
  const before=f.reads.batches.length;await assert.rejects(index.prefetchKeys(head,Array.from({length:33},(_,i)=>key(i))),{code:'INVALID'});assert.equal(f.reads.batches.length,before);
+});
+
+test('fresh prefetch readers reuse snapshot nodes while rechecking references and bounds',async t=>{
+ const f=fixture(31),cache=f.store.readCache=new CatalogueReadCache(),ids=[key(0),key(16),key(32),key(60)];
+ const decode=f.store.decode;let decoded=0;
+ f.store.decode=(table,id,payload)=>{if(id.startsWith('object-index:'))decoded++;return decode(table,id,payload);};
+ const first=new ObjectIndex(f.store,{cacheReads:true}),head=await first.head();await first.prefetchKeys(head,ids);
+ const expected=await Promise.all(ids.map(id=>first.find(head,id))),before={points:f.reads.points.length,batches:f.reads.batches.length,decoded};
+ const next=new ObjectIndex(f.store,{cacheReads:true});await next.prefetchKeys(head,ids);
+ assert.deepEqual(await Promise.all(ids.map(id=>next.find(head,id))),expected);
+ assert.deepEqual({points:f.reads.points.length,batches:f.reads.batches.length,decoded},before,'A new reader must reuse authenticated nodes in its snapshot');
+ for(const changed of [{height:head.root.height+1},{count:head.root.count+1},{hash:'0'.repeat(64)}])await assert.rejects(new ObjectIndex(f.store,{cacheReads:true}).prefetchKeys({root:{...head.root,...changed}},ids),{code:'CATALOGUE_DAMAGED'});
+ const controller=new AbortController();controller.abort();await assert.rejects(new ObjectIndex(f.store,{cacheReads:true}).prefetchKeys(head,ids,{signal:controller.signal}),{name:'AbortError'});
+ assert.ok(cache.nodes.size<=cache.maxRows);assert.ok(cache.nodeBytes<=cache.maxBytes);
+ cache.clear();f.state.set(first.slot(head.root),Buffer.from(serialize({corrupt:true})));
+ await assert.rejects(new ObjectIndex(f.store,{cacheReads:true}).prefetchKeys(head,ids),{code:'CATALOGUE_DAMAGED'});
+ const unordered=fixture(0);unordered.store.readCache=new CatalogueReadCache();
+ const writer=new ObjectIndex(unordered.store),left=writer.make('z','1'.repeat(64)),root=writer.make('m','1'.repeat(64),left);
+ for(const [slot,node] of writer.writes)unordered.state.set(slot,Buffer.from(serialize(node)));
+ const warm=new ObjectIndex(unordered.store,{cacheReads:true});await warm.node(root);await warm.node(left);
+ await assert.rejects(new ObjectIndex(unordered.store,{cacheReads:true}).prefetchKeys({root},['a']),{code:'CATALOGUE_DAMAGED'});
+ t.diagnostic(JSON.stringify({firstRead:before,repeatedRead:{points:0,batches:0,decoded:0}}));
+});
+
+test('cancellation during snapshot reuse stops a mixed frontier before its cold batch read',async()=>{
+ const f=fixture(7);f.store.readCache=new CatalogueReadCache();
+ const warm=new ObjectIndex(f.store,{cacheReads:true}),head=await warm.head(),root=await warm.node(head.root);await warm.node(root.right);
+ const reader=new ObjectIndex(f.store,{cacheReads:true}),node=reader.node,controller=new AbortController();
+ reader.node=async function(ref,...bounds){const value=await node.call(this,ref,...bounds);if(ref.hash===root.right.hash)controller.abort();return value;};
+ const before={points:f.reads.points.length,batches:f.reads.batches.length};
+ await assert.rejects(reader.prefetchKeys(head,[key(0),key(12)],{signal:controller.signal}),{name:'AbortError'});
+ assert.deepEqual({points:f.reads.points.length,batches:f.reads.batches.length},before);
 });
 
 test('object prefetch eliminates individual presence and absence reads without bypassing object authentication',async()=>{

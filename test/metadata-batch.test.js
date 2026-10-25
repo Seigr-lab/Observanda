@@ -24,6 +24,15 @@ test('reader prefetch authenticates selected payloads within one snapshot and ex
   finally{store.db.get=get;store.db.all=all;}
  });
  const ordinary=await inspect(false),prefetched=await inspect(true);assert.equal(prefetched.objects,0);assert.ok(prefetched.points+prefetched.batches<ordinary.points/2,JSON.stringify({ordinary,prefetched}));
+ const repeated=await ws.catalogue(async store=>{
+  const selected=ids.slice(0,4);await store.prefetchObjects(selected);
+  let queries=0,decoded=0;const all=store.db.all,get=store.db.get,decode=store.decode;
+  store.db.all=function(sql,...args){if(sql.includes('FROM state WHERE slot=ANY'))queries++;return all.call(this,sql,...args);};
+  store.db.get=function(sql,...args){if(sql==='SELECT payload FROM state WHERE slot=$1'&&args[0].startsWith('object-index:'))queries++;return get.call(this,sql,...args);};
+  store.decode=function(table,id,payload){if(id.startsWith('object-index:'))decoded++;return decode.call(this,table,id,payload);};
+  try{await store.prefetchObjects(selected);for(let i=0;i<selected.length;i++)assert.deepEqual(await store.object(selected[i]),{text:JSON.stringify({value:i*8})});return {queries,decoded};}
+  finally{store.db.all=all;store.db.get=get;store.decode=decode;}
+ });assert.deepEqual(repeated,{queries:0,decoded:0});
  await ws.withLock(()=>ws.writeMetadata(file(0),'new revision'));await ws.catalogue(async store=>{await store.prefetchObjects([ids[0]]);assert.deepEqual(await store.object(ids[0]),{text:'new revision'});});
  const db=await ws.openCatalogue();try{
   const row=await db.get('SELECT payload FROM objects WHERE id=$1',ids[0]);await db.run('UPDATE objects SET payload=$2 WHERE id=$1',ids[0],Buffer.from('corrupt after prior snapshot'));
@@ -32,7 +41,7 @@ test('reader prefetch authenticates selected payloads within one snapshot and ex
   try{await assert.rejects(ws.catalogue(async store=>{await store.prefetchObjects([stray]);return store.object(stray);}),{code:'CATALOGUE_DAMAGED'});}finally{await db.run('DELETE FROM objects WHERE id=$1',stray);}
  }finally{await db.close();}
  await ws.catalogue(async store=>{const absent='metadata:'+file(998);await store.prefetchObjects([absent]);assert.equal(await store.object(absent),null);await assert.rejects(store.prefetchObjects([...ids,absent]),{code:'INVALID'});});
- t.diagnostic(JSON.stringify({ordinary,prefetched}));
+ t.diagnostic(JSON.stringify({ordinary,prefetched,repeated}));
 });
 
 test('pending metadata key prefetch retains native authentication, cancellation and transaction rollback',async t=>{

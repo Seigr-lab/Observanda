@@ -183,6 +183,14 @@ export class ObjectIndex{
   while(frontier.length){
    signal?.throwIfAborted();
    if(frontier.some(({ref})=>!validRef(ref)))fail();
+   // A fresh index can share authenticated nodes with another reader of this
+   // snapshot. Recheck each reference and its bounds before excluding that
+   // node from the SQL batch; retain the existing cache sizes and lifetime.
+   for(const {ref,lower,upper} of frontier){
+    signal?.throwIfAborted();
+    if(!this.pending.has(ref.hash)&&!this.cache.has(ref.hash)&&this.store.readCache?.node(this.slot(ref)))await this.node(ref,lower,upper);
+   }
+   signal?.throwIfAborted();
    const missing=frontier.filter(({ref})=>!this.pending.has(ref.hash)&&!this.cache.has(ref.hash));
    if(missing.length){
     const found=new Map((await this.store.db.all('SELECT slot,payload FROM state WHERE slot=ANY($1::text[]) AND octet_length(payload)<=8192',missing.map(({ref})=>this.slot(ref)))).map(row=>[row.slot,row.payload]));
