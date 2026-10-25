@@ -6,6 +6,7 @@ import {catalogueIndexedCount,cataloguePrefixExists} from './postgres-indexes.js
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
 import {writeCatalogueRows} from './catalogue-writes.js';
+import {catalogueContext} from './catalogue-context.js';
 // Owner tracking reaches the catalogue; load it only during asynchronous writes.
 async function retainRecordOwnerResource(...args){const owner=await import('./record-owner-resources.js');return owner.retainRecordOwnerResource(...args);}
 const fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
@@ -24,6 +25,7 @@ const validRef=ref=>{
 };
 const equal=(a,b)=>a?.hash===b?.hash;
 const authenticatedNodes=new WeakMap();
+const authenticatedHeads=new WeakMap();
 const validNode=node=>node&&Object.keys(node).sort().join()==='id,left,revision,right'&&identifier(node.id)&&revision(node.revision)&&validRef(node.left)&&validRef(node.right)&&Math.abs(height(node.left)-height(node.right))<=1;
 export class ObjectIndex{
  constructor(store,{namespace='object-index:',immutable=false,nodeStorage=null,authenticateOnWrite=false,cacheReads=false,scanAhead=false,cacheSize=128,write=null}={}){
@@ -137,6 +139,12 @@ export class ObjectIndex{
    await this.assertEmpty();
    return {formatVersion:2,root:null};
   }
+  // Only the fixed reader's ordinary object index shares a decoded head.
+  // Writer/batch heads remain live. Load the row first so a replacement or
+  // eviction reload invalidates its receipt through the existing cache slot.
+  const cache=this.constructor===ObjectIndex&&catalogueContext.getStore()?.db!==this.store.db&&Buffer.isBuffer(this.store.workspace?.vault?.key)&&typeof this.store.aad==='function'?this.store.readCache:null;
+  const key=cache?.encryptionKey(this.store.workspace.vault.key),aad=cache?this.store.aad('state','objects'):null,cached=cache?.node('objects'),proof=cached&&authenticatedHeads.get(cached);
+  if(proof?.key===key&&proof?.aad===aad)return {formatVersion:2,root:{...cached.root}};
   const value=this.store.decode('state','objects',row.payload);
   if(value?.formatVersion===undefined&&Array.isArray(value?.entries)){
    if(!value.entries.every(e=>e&&identifier(e.id)&&revision(e.revision))||new Set(value.entries.map(e=>e.id)).size!==value.entries.length)fail();
@@ -145,6 +153,10 @@ export class ObjectIndex{
   }
   if(value?.formatVersion!==2||!validRef(value.root))fail();
   if(value.root===null)await this.assertEmpty();
+  else if(cache){
+   const head=Object.freeze({formatVersion:2,root:Object.freeze({...value.root})});
+   authenticatedHeads.set(head,{key,aad});cache.keepNode('objects',head,row.payload.length+Buffer.byteLength(aad));
+  }
   return {formatVersion:2,root:value.root};
  }
  async node(ref,lower=null,upper=null){
