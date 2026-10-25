@@ -33,6 +33,8 @@ test('wide native datasets retain bounded schema and exact chunked cells through
 });
 test('tenfold wider native rows use selected column windows and preserve automatic long quoted separators',async t=>{
  const f=await fixture(t),{m,recordId}=f,width=3210,artifact=await f.upload('wide.csv',Array.from({length:width},(_,i)=>'C'+i).join(',')+'\n'+Array.from({length:width},(_,i)=>String(i)).join(',')),ref=await m.dataset({recordId,title:'Tenfold width',artifact}),doc=await m.read(ref);
- const page=await m.datasetPage(ref,0,{columnOffset:3194,columnLimit:16});assert.equal(page.columns.length,16);assert.equal(page.columnCount,width);assert.deepEqual(page.rows[0].cells,Array.from({length:16},(_,i)=>String(3194+i)));assert.ok(JSON.stringify(page).length<12000);assert.ok(JSON.stringify(doc).length<2500);
+ const open=f.workspace.openCatalogue;let opens=0,page;f.workspace.openCatalogue=function(...args){opens++;return open.apply(this,args);};
+ try{page=await m.datasetPage(ref,0,{columnOffset:3194,columnLimit:16});}finally{f.workspace.openCatalogue=open;}
+ assert.equal(opens,1,'One page, including visibility, schema and cells, uses one coherent read snapshot');assert.equal(page.columns.length,16);assert.equal(page.columnCount,width);assert.deepEqual(page.rows[0].cells,Array.from({length:16},(_,i)=>String(3194+i)));assert.ok(JSON.stringify(page).length<12000);assert.ok(JSON.stringify(doc).length<2500);
  const long='x'.repeat(40000),quoted=await f.upload('quoted.tsv','"'+long+'"\tsecond\n'),other=await m.dataset({recordId,title:'Long first value',artifact:quoted,sourceMapping:{format:'delimited',delimiter:'auto',header:false}}),data=await m.datasetPage(other);assert.equal(data.columns.length,2);assert.equal(data.rows[0].cells[1],'second');assert.equal(data.rows[0].cells[0].characters,long.length);
 });
