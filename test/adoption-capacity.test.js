@@ -68,7 +68,7 @@ test('A1-sized and tenfold authored work, physical evidence, datasets and recove
    for(const [name,budget] of [['openMs',5000],['searchMs',15000],['discoveryMs',15000],['selectedMs',5000]])observeTiming(phase+'.'+name,measured[name],budget);assert.ok(measured.responseBytes<256*1024);
    return measured;
   }
-  const before=await inspect(f.workspace,'before'),evidence=await adoptionEvidenceFixture(f,directory,{copies,exerciseRecovery:copies===1,onStage:stage=>process.stdout.write('A2 '+copies+'x '+stage+'\n'),observeTiming}),after=await inspect(f.workspace,'after');
+  const before=await inspect(f.workspace,'before'),evidence=await adoptionEvidenceFixture(f,directory,{copies,exerciseRecovery:true,onStage:stage=>process.stdout.write('A2 '+copies+'x '+stage+'\n'),observeTiming}),after=await inspect(f.workspace,'after');
   // Attached evidence must not add reads to plain discovery, navigation or the
   // selected authoring response. The actual artifact bytes live outside them.
   assert.equal(after.queries,before.queries);assert.equal(after.responseBytes,before.responseBytes);
@@ -115,7 +115,8 @@ test('A1-sized and tenfold authored work, physical evidence, datasets and recove
   process.stdout.write('A2 '+copies+'x fresh-key copy starts\n');
   const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'fresh'),{vault:f.vault}),access,freshVault,f.vault);recovery.freshKeyMs=Math.round(performance.now()-at);observeTiming('freshKeyMs',recovery.freshKeyMs,600000);
   process.stdout.write('A2 '+copies+'x '+JSON.stringify(recovery)+'\n');
-  for(const [name,root,vault] of [['ordinary',ordinary,f.vault],['fresh-key',fresh,freshVault]]){
+  const recoveredCopies=[['ordinary',ordinary,f.vault],['fresh-key',fresh,freshVault]],recoveredStates=new Map([[f.workspace.root,saved],...recoveredCopies.map(([,root])=>[root,saved])]);
+  for(const [name,root,vault] of recoveredCopies){
    process.stdout.write('A10 '+copies+'x '+name+' copy reconciliation starts\n');
    const ws=new Workspace(root,vault),m=new ResearchMaterials(ws),opened=await new WorkspaceReader(ws).selection({workspaceId:f.book.id,ids:[base.id]});
    assert.equal(opened.etag,saved.etag);assert.deepEqual(opened.book.entries,saved.book.entries);
@@ -129,6 +130,24 @@ test('A1-sized and tenfold authored work, physical evidence, datasets and recove
    const retainedEdition=await new PublicationJobs(ws).read(edition.reviewId);assert.deepEqual(new Set(await Array.fromAsync(retainedEdition.files.keys())),new Set(editionFiles.keys()));
    for(const [name,bytes] of editionFiles)assert.deepEqual(await contentBuffer(await retainedEdition.files.get(name)),bytes);
    process.stdout.write('A10 '+copies+'x '+name+' copy reconciled\n');
+   // Continue through the public writer, then open fresh readers for the saved
+   // revision, its searchable title and the unchanged historical snapshot.
+   const prior=opened.book.entries[0],title='Independent '+name+' recovery authoring '+copies,record={...prior,title};
+   const edited=await new ResearchRecords(ws,{}).save({workspaceId:f.book.id,baseEtag:opened.etag,changes:[{id:base.id,expectedRevision:recordRevision(prior),record}]},{recordIds:[base.id]});
+   assert.notEqual(edited.etag,opened.etag);
+   const reopened=await new WorkspaceReader(new Workspace(root,vault)).selection({workspaceId:f.book.id,ids:[base.id]});
+   assert.equal(reopened.etag,edited.etag);assert.deepEqual(reopened.book.entries,[{...record,updatedAt:edited.book.entries[0].updatedAt}]);
+   const query={projectId:null,notebookId:null,filter:'all',search:title,browse:recordBrowse()};
+   const found=await new RecordQuery(new Workspace(root,vault)).list({workspaceId:f.book.id,query,limit:25});
+   assert.equal(found.snapshotId,edited.etag);assert.equal(found.total,1);assert.deepEqual(found.records.map(({id,title})=>({id,title})),[{id:base.id,title}]);
+   const previous=await new WorkspaceReader(new Workspace(root,vault)).selection({workspaceId:f.book.id,ids:[base.id],snapshotId:opened.etag});
+   assert.equal(previous.etag,opened.etag);assert.deepEqual(previous.book.entries,opened.book.entries);
+   recoveredStates.set(root,edited);
+   for(const [,otherRoot,otherVault] of [['source',f.workspace.root,f.vault],...recoveredCopies])if(otherRoot!==root){
+    const unchanged=await new WorkspaceReader(new Workspace(otherRoot,otherVault)).selection({workspaceId:f.book.id,ids:[base.id]}),expectedState=recoveredStates.get(otherRoot);
+    assert.equal(unchanged.etag,expectedState.etag);assert.deepEqual(unchanged.book.entries,expectedState.book.entries);
+   }
+   process.stdout.write('A10 '+copies+'x '+name+' post-recovery authoring verified\n');
   }
   t.diagnostic(JSON.stringify({copies,authoring:f.metrics,evidence:evidence.metrics,before,after,editMs,recovery,peakHeapMiB:Math.ceil(peak/1024/1024)}));assert.ok(peak<512*1024*1024);
   assert.deepEqual(budgetFailures,[],'Elapsed budgets exceeded under observed machine load; integrity and recovery checks completed.');
