@@ -1,0 +1,10 @@
+import retainedMessages from './locales/en/retainedTables.json' with {type:'json'};
+import messages from './locales/en/datasetCalculations.json' with {type:'json'};
+import {measurementUnitContextParts} from './measurement-unit-context.js';
+export const publicCoordinateAlignmentContext=value=>({version:1,method:value.method,direction:value.direction,tolerance:value.tolerance,toleranceUnit:value.toleranceUnit,ties:value.ties,missing:value.missing,excluded:value.excluded,unmatched:value.unmatched,partitionKeys:value.partitionKeys});
+export const publicCoordinateAlignmentReceipt=value=>({version:1,status:value.status,delta:value.delta,tieCount:value.tieCount,decisionComputation:value.decisionComputation?{version:1,kind:'approximate-inputs'}:null});
+export const coordinateAlignmentHeading=messages.alignmentHeading;
+const scalar=value=>[value,' ('+value.representation+'; '+retainedMessages.base.replace('{radix}',value.radix)+')'];
+export function coordinateAlignmentContextParts(value){return [messages.alignmentMethod+' '+messages['alignmentMethod-'+value.method]+'; '+messages['alignmentDirection-'+value.direction]+'; '+messages.alignmentTolerance+': ',...scalar(value.tolerance),'; ',...measurementUnitContextParts(value.toleranceUnit),'; '+messages['alignmentTies-'+value.ties]+'; '+messages['alignmentMissing-'+value.missing]+'; '+messages.alignmentPartitionKeys.replace('{count}',value.partitionKeys)+'; '+messages.unmatched+': '+messages[value.unmatched]+'; '+messages.alignmentExcluded];}
+export function coordinateAlignmentReceiptParts(value,context){return [messages['alignmentStatus-'+value.status]+'; '+messages.alignmentTieCount.replace('{count}',value.tieCount)+'; '+messages[value.decisionComputation?'alignmentDecisionApproximate':'alignmentDecisionExact'],...(value.delta?['; '+messages.alignmentDelta+': ',...scalar(value.delta),'; ',...measurementUnitContextParts(context.toleranceUnit)]:[])];}
+export const coordinateAlignmentPartsText=parts=>parts.map(part=>typeof part==='string'?part:typeof part.spelling==='string'?part.spelling:'['+part.spelling.characters+' characters]').join('');

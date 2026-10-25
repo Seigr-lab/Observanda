@@ -60,9 +60,9 @@
   "DATASET_CELL_SCALAR_REQUIRED": "This operation needs a complete scalar cell. Long retained values cannot be converted implicitly. Select another column or inspect the original value.",
   "DATASET_CALCULATION": "Check the calculation columns, numeric representations, units and rules. Division by zero, incompatible units and results beyond the exact-value limit stop calculation. Earlier datasets remain unchanged.",
   "DATASET_TABLE": "Choose a valid nonempty dataset table selection within the displayed limits.",
-  "DATASET_JOIN_KEY": "A lookup row has a missing or null key. Choose a scalar key that identifies each control or configuration.",
+  "DATASET_JOIN_KEY": "A lookup row has a missing, null or unavailable matching key or coordinate. Inspect the selected source fields and their declared missing-value rules. Choose present matching values, or explicitly skip missing right coordinates when using coordinate matching.",
   "DATASET_JOIN_DUPLICATE": "More than one lookup row has the same key in its source group. Use a unique key; Observanda will not choose a match silently.",
-  "DATASET_JOIN_MISSING": "An acquisition row has no matching lookup key. Check the key paths and exact value types, or explicitly choose to keep unmatched rows with absent values.",
+  "DATASET_JOIN_MISSING": "An acquisition row has no eligible lookup match under the declared key or coordinate rules. Check key paths, exact value types, and any coordinate direction or tolerance. You can explicitly keep unmatched rows as absent values.",
   "GITHUB_ORGANIZATION_AUTH": "This organization requires authorization through GitHub. Open Manage authorization on GitHub, authorize the organization, then retry.",
   "GITHUB_RATE_LIMIT": "GitHub’s request limit has been reached. Wait for it to reset, then retry. Your saved connection remains available.",
   "GITHUB_PERMISSION": "GitHub denied this operation. Check the selected account’s repository access and the organization’s OAuth policy. Pages setup requires administration access.",
@@ -430,5 +430,9 @@
   "MEASUREMENT_TOPOLOGY_DUPLICATE": "Each vertex key and each edge key must be unique within its collection.",
   "MEASUREMENT_TOPOLOGY_ENDPOINT": "Every edge endpoint must name an existing vertex.",
   "MEASUREMENT_TOPOLOGY_RULE": "The topology contains a loop or parallel edge forbidden by its declared rules.",
-  "MEASUREMENT_TOPOLOGY_UNITS": "Topology operations use discrete connectivity and cannot interpret numerical units."
+  "MEASUREMENT_TOPOLOGY_UNITS": "Topology operations use discrete connectivity and cannot interpret numerical units.",
+  "DATASET_ALIGNMENT_INVALID": "Choose supported scalar coordinates, an exact nonnegative tolerance and complete direction, tie and missing-value settings. Inspect the pinned source values and their declared interpretations.",
+  "DATASET_ALIGNMENT_CONTEXT": "Use scalar coordinates with matching declared time, clock, epoch and coordinate-frame axis context. Declare compatible units for both coordinates, or leave both unit labels and definitions empty. The tolerance requires matching dimensions, a positive scale and zero offset as a difference.",
+  "DATASET_ALIGNMENT_ORDER": "Included right coordinates must be nondecreasing within each equality-key partition in original source order. Inspect the pinned source rows; no sorting is performed.",
+  "DATASET_ALIGNMENT_TIE": "More than one right row is a best candidate within tolerance. Inspect the tied coordinates; explicitly choose first or last in source order, or keep refusal and revise the matching rules."
 }

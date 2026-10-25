@@ -1,3 +1,4 @@
+import {isCoordinateAlignment,validCoordinateAlignment} from './coordinate-alignment-model.js';
 import {validTopologyGraphOperation} from './measurement-topology-model.js';
 import {validSequenceOperation} from './measurement-sequence-model.js';
 import {validDomainAlgebraOperation} from './measurement-domain-algebra-model.js';
@@ -17,9 +18,10 @@ export const CALCULATION_GRAPH_TOOL='Observanda calculation graph';
 export const CALCULATION_GRAPH_COLLECTIONS=['bindings','nodes','outputs'];
 export const graphPosition=value=>Number.isSafeInteger(value)&&value>=0;
 export const validGraphAddress=value=>keys(value,['id','position'])&&researchId(value.id)&&graphPosition(value.position);
-export const validGraphCalculation=value=>keys(value,['version','graph'])&&[4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19].includes(value.version)&&validMaterialReference(value.graph)&&value.graph.kind==='analysis';
-export function validGraphBinding(value,{keysIndex}={}){
- return keys(value,['id','source','view','match'])&&researchId(value.id)&&validMaterialReference(value.source)&&['dataset','analysis'].includes(value.source.kind)&&['observations','distribution','transitions'].includes(value.view)&&(value.match===null||keys(value.match,['keysIndex','unmatched'])&&value.source.kind==='dataset'&&['error','keep'].includes(value.match.unmatched)&&!!keysIndex?.(value.match.keysIndex));
+export const validGraphCalculation=value=>keys(value,['version','graph'])&&[4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20].includes(value.version)&&validMaterialReference(value.graph)&&value.graph.kind==='analysis';
+export function validGraphBinding(value,{keysIndex,graphVersion=1,policy}={}){
+ const match=value?.match,coordinate=isCoordinateAlignment(match);
+ return keys(value,['id','source','view','match'])&&researchId(value.id)&&validMaterialReference(value.source)&&['dataset','analysis'].includes(value.source.kind)&&['observations','distribution','transitions'].includes(value.view)&&(match===null||(coordinate?graphVersion>=17&&keys(match,['method','keysIndex','unmatched','coordinate'])&&validCoordinateAlignment(match.coordinate,policy):keys(match,['keysIndex','unmatched']))&&value.source.kind==='dataset'&&['error','keep'].includes(match.unmatched)&&!!keysIndex?.(match.keysIndex));
 }
 export const validGraphJoinKey=(value,version=1)=>keys(value,['left','right','semantics'])&&validGraphAddress(value.left)&&graphPosition(value.right)&&(version>=2?['lexical','numeric','domain']:['lexical','numeric']).includes(value.semantics);
 export function validGraphNode(value,position=Infinity,version=1,policy){

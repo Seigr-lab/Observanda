@@ -1,3 +1,4 @@
+import {validCoordinateAlignmentMeasurement,validCoordinateAlignmentAxis} from './coordinate-alignment-model.js';
 import {validCusumDescriptor} from './dataset-cusum-model.js';
 import {validSpectrumDescriptor} from './dataset-spectrum-model.js';
 import {validStatisticalUncertaintyDescriptor} from './measurement-statistical-uncertainty-model.js';
@@ -47,7 +48,7 @@ export function validTime(time){
  if(c.frequency){try{if(exactRational(c.frequency).numerator<=0n)return false;}catch{return false;}}
  return time.kind!=='external'||!!c.model&&!!c.referenceData;
 }
-export function schemaReferences(column){return [column.quantity?.conversion,column.quantity?.calibration,column.quantity?.uncertainty?.method?.reference,column.time?.clock?.model,column.time?.clock?.referenceData,column.computation?.recipe,column.spectrum?.analysis,column.cusum?.analysis,column.statisticalUncertainty?.definition,column.statisticalUncertainty?.analysis,column.coordinateFrame?.frame,column.coordinateFrame?.sourceFrame,column.coordinateFrame?.transform].filter(Boolean);}
+export function schemaReferences(column){return [column.quantity?.conversion,column.quantity?.calibration,column.quantity?.uncertainty?.method?.reference,column.time?.clock?.model,column.time?.clock?.referenceData,column.computation?.recipe,column.spectrum?.analysis,column.cusum?.analysis,column.statisticalUncertainty?.definition,column.statisticalUncertainty?.analysis,column.coordinateFrame?.frame,column.coordinateFrame?.sourceFrame,column.coordinateFrame?.transform,column.coordinateAxis?.frame].filter(Boolean);}
 export function validLocator(source){
  if(!keys(source,['ref','selector'])||!measurementRef(source.ref))return false;const s=source.selector;
  if(!s)return false;
@@ -59,10 +60,10 @@ export function validLocator(source){
  return keys(s,['kind','nativeId'])&&s.kind==='native-record'&&text(s.nativeId,500)&&!!s.nativeId.trim();
 }
 export function validMeasurement(m){
- if(!keys(m,['version','value','quantity','time','sources','references','decoderVersion','integrity','completion','note','resourcePolicy','computation','synchronization','statisticalUncertainty','spectrum','cusum'])||![1,2].includes(m.version)||(m.version===2?!validDatasetResourcePolicy(m.resourcePolicy):m.resourcePolicy!==undefined))return false;
+ if(!keys(m,['version','value','quantity','time','sources','references','decoderVersion','integrity','completion','note','resourcePolicy','computation','synchronization','statisticalUncertainty','spectrum','cusum','coordinateAlignment','coordinateAxis'])||![1,2].includes(m.version)||(m.version===2?!validDatasetResourcePolicy(m.resourcePolicy):m.resourcePolicy!==undefined))return false;
  const v=m.value;
  return keys(v,['spelling','representation','radix','unit','presence'])&&(m.version===2?validPolicyScalar({spelling:v.spelling,representation:v.representation,radix:v.radix},m.resourcePolicy):text(v.spelling,8192))&&REPRESENTATIONS.includes(v.representation)&&v.representation!=='domain'&&Number.isInteger(v.radix)&&v.radix>=2&&v.radix<=36&&text(v.unit,100)&&['value','missing','null','absent','unknown'].includes(v.presence)&&(v.presence!=='value'||m.version===2||supportedValue(v.spelling,v.representation,v.radix))&&
- (m.cusum===undefined||validCusumDescriptor(m.cusum))&&(m.spectrum===undefined||validSpectrumDescriptor(m.spectrum))&&(m.statisticalUncertainty===undefined||validStatisticalUncertaintyDescriptor(m.statisticalUncertainty))&&(m.synchronization===undefined||validClockSynchronizationDescriptor(m.synchronization))&&(m.computation===undefined||validComputation(m.computation)&&!perCellComputation(m.computation))&&validQuantity(m.quantity,v.unit)&&validTime(m.time)&&Array.isArray(m.sources)&&m.sources.length>0&&m.sources.length<=32&&m.sources.every(validLocator)&&keys(m.references,MEASUREMENT_ROLES)&&MEASUREMENT_ROLES.every(k=>optionalRef(m.references[k]))&&text(m.decoderVersion,300)&&(!m.references.decoder||!!m.decoderVersion.trim())&&['unknown','verified','failed','not-checked'].includes(m.integrity)&&['unknown','complete','partial'].includes(m.completion)&&text(m.note,10000);
+ (m.coordinateAlignment===undefined||validCoordinateAlignmentMeasurement(m.coordinateAlignment))&&(m.coordinateAxis===undefined||validCoordinateAlignmentAxis(m.coordinateAxis))&&(m.cusum===undefined||validCusumDescriptor(m.cusum))&&(m.spectrum===undefined||validSpectrumDescriptor(m.spectrum))&&(m.statisticalUncertainty===undefined||validStatisticalUncertaintyDescriptor(m.statisticalUncertainty))&&(m.synchronization===undefined||validClockSynchronizationDescriptor(m.synchronization))&&(m.computation===undefined||validComputation(m.computation)&&!perCellComputation(m.computation))&&validQuantity(m.quantity,v.unit)&&validTime(m.time)&&Array.isArray(m.sources)&&m.sources.length>0&&m.sources.length<=32&&m.sources.every(validLocator)&&keys(m.references,MEASUREMENT_ROLES)&&MEASUREMENT_ROLES.every(k=>optionalRef(m.references[k]))&&text(m.decoderVersion,300)&&(!m.references.decoder||!!m.decoderVersion.trim())&&['unknown','verified','failed','not-checked'].includes(m.integrity)&&['unknown','complete','partial'].includes(m.completion)&&text(m.note,10000);
 }
 export function measurementReferences(m){return [...m.sources.map(s=>s.ref),...Object.values(m.references),...schemaReferences(m)].filter(Boolean);}
 

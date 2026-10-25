@@ -1,3 +1,4 @@
+import {CoordinateAlignmentError} from './coordinate-alignment-kernel.js';
 import {CellComputationError} from './web/measurement-computation.js';
 import {CoordinateFrameError} from './web/coordinate-frame-model.js';
 import {DatasetResourceError} from './web/dataset-resource-policy.js';
@@ -15,6 +16,7 @@ const ownerId=value=>typeof value==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[
 export function safeError(error) {
   if(error instanceof CellComputationError)error=new AppError(error.code);
   if(error instanceof CoordinateFrameError)error=new AppError(error.code);
+  if(error instanceof CoordinateAlignmentError)error=new AppError(error.code);
   if(error instanceof DatasetResourceError)error=new AppError('DATASET_CALCULATION_RESOURCE');
   if(!(error instanceof AppError))return {code:'IO',message:messages.IO,details:[]};
   const result={code:error.code,message:error.message,details:error.details};

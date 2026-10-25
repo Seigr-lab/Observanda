@@ -1,3 +1,4 @@
+import {coordinateAlignmentSequences} from '../coordinate-alignment.js';
 import {scalarDefinitionSequences} from '../measurement-scalar-storage.js';
 import {scalarTextReference} from '../web/measurement-scalar-policy.js';
 import {configurationPartName} from './configuration-transfer.js';
@@ -78,12 +79,13 @@ export class ResearchTransfer{
  }
  async jsonContent(file){const {describeContent}=await import('../file-content.js');return describeContent(this.workspace,file);}
  relative(file){return path.relative(this.workspace.root,file).split(path.sep).join('/');}
- async declaration(value){for(const sequence of scalarDefinitionSequences(value))await this.sequence(sequence);if(value?.coordinateFrame?.axesIndex)await this.sequence(value.coordinateFrame.axesIndex);}
+ async declaration(value){for(const sequence of coordinateAlignmentSequences(value))await this.sequence(sequence);for(const sequence of scalarDefinitionSequences(value))await this.sequence(sequence);if(value?.coordinateFrame?.axesIndex)await this.sequence(value.coordinateFrame.axesIndex);}
  async sequence(value){
   if(!value)return;this.materials.sequences.validate(value);const tree=this.materials.sequences.tree(),owner=this;
   async function visit(ref){
    if(!ref||await owner.sequenceNodes.has(ref.hash))return;const node=await tree.node(ref);await owner.sequenceNodes.add(ref.hash);await visit(node.left);await visit(node.right);
    const chunk=await owner.materials.sequences.read('chunks',node.revision);if(!chunk)throw new AppError('MATERIAL_MISSING');
+   for(const item of chunk.items??[]){for(const sequence of coordinateAlignmentSequences(item))await owner.sequence(sequence);if(chunk.kind==='coordinate-alignment-contexts')await owner.declaration(item);if(chunk.kind==='calculation-bindings')await owner.declaration({quantity:{unitDefinition:item.match?.coordinate?.toleranceUnit}});}
    if(chunk.kind==='cells')for(const cell of chunk.items){if(cell.value?.parts)await owner.sequence(cell.value.parts);if(cell.value?.components)await owner.sequence(cell.value.components);if(cell.value?.original?.parts)await owner.sequence(cell.value.original.parts);if(cell.lineage?.leaves)await owner.sequence(cell.lineage.leaves);if(cell.sourcesIndex)await owner.sequence(cell.sourcesIndex);}
    if(['columns','columns-policy','calculation-nodes','uncertainty-inputs','uncertainty-covariance','clock-sync-segments','clock-sync-anchors'].includes(chunk.kind))for(const value of chunk.items)await owner.declaration(value);
    if(chunk.kind==='domain-components')for(const component of chunk.items)if(scalarTextReference(component.spelling))await owner.sequence(component.spelling.parts);

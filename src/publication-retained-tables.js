@@ -1,3 +1,5 @@
+import {coordinateAlignmentPublicPage,alignmentContextSet} from './coordinate-alignment.js';
+import {coordinateAlignmentHeading,coordinateAlignmentContextParts,coordinateAlignmentReceiptParts,publicCoordinateAlignmentContext} from './web/coordinate-alignment-context.js';
 import {cusumContextParts,cusumText} from './web/dataset-cusum-context.js';
 import {spectrumContextParts,spectrumText} from './web/dataset-spectrum-context.js';
 import {coordinateFrameContextText,coordinateFrameAxisPageParts} from './web/coordinate-frame-context.js';
@@ -32,6 +34,7 @@ export async function* retainedTableHTML(materials,statement,{signal}={}){
    if(uncertainty){yield esc(' [Interval method: '+uncertainty.method.name+'; version '+uncertainty.method.version+(uncertainty.method.reference?'; reference '+uncertainty.method.reference.revision:''));
     if(uncertainty.coverage){const level=uncertainty.coverage.level;yield esc('; '+uncertainty.coverage.kind+' ');for await(const text of cellText(materials,level.spelling,{signal}))yield esc(text);yield esc(' ('+level.representation+' base '+level.radix+')');}else yield esc('; no statistical coverage declared');yield ']';
    }
+   if(format.coordinateAlignment){for(let offset=0;offset<format.coordinateAlignment.contextsIndex.count;offset+=16){const page=await alignmentContextSet(materials).page(format.coordinateAlignment.contextsIndex,{offset,limit:16});for(const context of page.items){yield '<details><summary>'+esc(coordinateAlignmentHeading)+'</summary><p>';for(const part of coordinateAlignmentContextParts(publicCoordinateAlignmentContext(context))){if(typeof part==='string')yield esc(part);else for await(const text of cellText(materials,part.spelling,{signal}))yield esc(text);}yield '</p></details>';}}}
    if(format.quantile){yield ' [';for(const part of aggregationQuantileContextParts(format.quantile)){if(typeof part==='string')yield esc(part);else for await(const text of cellText(materials,part.spelling,{signal}))yield esc(text);}yield ']';}
    if(format.unitDefinition){yield ' [';for(const part of measurementUnitContextParts(format.unitDefinition)){if(typeof part==='string')yield esc(part);else for await(const text of cellText(materials,part.spelling,{signal}))yield esc(text);}yield ']';}
    if(format.coordinateFrame)yield esc(' ['+coordinateFrameContextText(format.coordinateFrame)+']');
@@ -45,7 +48,7 @@ export async function* retainedTableHTML(materials,statement,{signal}={}){
   if(table.selection.includeExcluded)yield '<th scope="col">'+esc(messages.exclusion)+'</th>';yield '</tr></thead><tbody>';
   for(const row of table.rows){
    signal?.throwIfAborted();yield '<tr>';
-   for(let i=0;i<row.cells.length;i++){yield '<td>';if(row.presence[i]!=='value')yield esc(messages[row.presence[i]]);else for await(const text of cellText(materials,row.cells[i],{signal}))yield esc(text);const computation=row.presence[i]==='value'?cellComputationLabel(table.formats[i],{computation:row.computations[i]}):'';if(row.presence[i]==='value'&&computation)yield '<small class="cell-computation">'+esc(computation)+'</small>';yield '</td>';}
+   for(let i=0;i<row.cells.length;i++){yield '<td>';if(row.presence[i]!=='value')yield esc(messages[row.presence[i]]);else for await(const text of cellText(materials,row.cells[i],{signal}))yield esc(text);const computation=row.presence[i]==='value'?cellComputationLabel(table.formats[i],{computation:row.computations[i]}):'';if(row.presence[i]==='value'&&computation)yield '<small class="cell-computation">'+esc(computation)+'</small>';if(table.formats[i].coordinateAlignment){const marker=row.alignments[i];for(let offset=0;offset<marker.decisionsIndex.count;offset+=16){const page=await coordinateAlignmentPublicPage(materials,marker,{column:table.formats[i].coordinateAlignment,offset,signal});for(const item of page.items){yield '<small class="coordinate-selection">';for(const part of coordinateAlignmentReceiptParts(item.receipt,item.context)){if(typeof part==='string')yield esc(part);else for await(const text of cellText(materials,part.spelling,{signal}))yield esc(text);}yield '</small>';}}}yield '</td>';}
    if(table.selection.includeExcluded)yield '<td>'+esc(row.exclusion??'')+'</td>';yield '</tr>';
   }
   yield '</tbody></table></div>';

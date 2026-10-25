@@ -2,8 +2,8 @@ import {AppError} from './errors.js';
 import {sequenceValuesCatalogueRequirements} from './sequence-values-format.js';
 export const topologyDeclaration=value=>value?.representation==='domain'&&value.domain?.version===4&&value.domain.codec==='observanda.topology';
 const topologyValue=value=>value?.format==='domain-value'&&value.version===5&&value.definition?.version===4&&value.definition.codec==='observanda.topology';
-export const topologyValuesMaterial=value=>value?.content?.topologyValues===1||value?.content?.tool==='Observanda calculation graph'&&value.content.graphVersion===16||value?.content?.calculation?.version===19||value?.content?.columns?.some(topologyDeclaration)===true||topologyDeclaration(value?.content?.measurement?.value);
-export const topologyValuesCommand=value=>value?.calculation?.version===19||value?.columns?.some(topologyDeclaration)===true||value?.columnChanges?.some(change=>topologyDeclaration(change.column))===true||topologyDeclaration(value?.measurement?.value);
+export const topologyValuesMaterial=value=>value?.content?.topologyValues===1||value?.content?.tool==='Observanda calculation graph'&&[16,17].includes(value.content.graphVersion)||[19,20].includes(value?.content?.calculation?.version)||value?.content?.columns?.some(topologyDeclaration)===true||topologyDeclaration(value?.content?.measurement?.value);
+export const topologyValuesCommand=value=>[19,20].includes(value?.calculation?.version)||value?.columns?.some(topologyDeclaration)===true||value?.columnChanges?.some(change=>topologyDeclaration(change.column))===true||topologyDeclaration(value?.measurement?.value);
 export function topologyValuesMetadata(relative,value){
  if(relative.startsWith('.observanda/jobs/'))return topologyValuesCommand(value?.input?.command);
  if(!relative.startsWith('.observanda/materials/'))return false;

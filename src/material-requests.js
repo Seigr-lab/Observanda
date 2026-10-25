@@ -100,7 +100,7 @@ export async function executeMaterialRequest(storage,request,data,{signal,jobs,d
  case 'clock-synchronization-create':case 'clock-synchronization-change':case 'clock-synchronization-page':case 'clock-synchronization-scalar':case 'clock-synchronization-save':case 'clock-synchronization-read':return clockSynchronizationRequest(materials,operation,data,{signal});
  case 'measurement-save':return {ref:await materials.measurements.save(data,{signal})};
  case 'measurement-seed':return materials.measurements.seed(data.source);
- case 'measurement-inspect':return materials.measurements.inspect(data.source,{offset:data.offset??0,lineageOffset:data.lineageOffset??0,lineageLimit:data.lineageLimit??16,sourceOffset:data.sourceOffset??0,componentOffset:data.componentOffset??0,topologyCollection:data.topologyCollection??'vertices',signal});
+ case 'measurement-inspect':return materials.measurements.inspect(data.source,{offset:data.offset??0,lineageOffset:data.lineageOffset??0,lineageLimit:data.lineageLimit??16,sourceOffset:data.sourceOffset??0,alignmentOffset:data.alignmentOffset??0,componentOffset:data.componentOffset??0,topologyCollection:data.topologyCollection??'vertices',signal});
  case 'current-record':try{const current=await materials.owner(data.id);return {record:current.entries.find(e=>e.id===data.id)};}catch(error){if(error.code!=='MATERIAL_INVALID')throw error;return {record:null};}
  case 'pin':return materials.pinRecord(data.id,data.expectedRevision);
  case 'record':return new RetainedRecordDocuments(storage).read(data,{signal});

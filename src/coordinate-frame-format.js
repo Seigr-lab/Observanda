@@ -1,7 +1,7 @@
 import {AppError} from './errors.js';
 const column=value=>value?.coordinateFrame!==undefined;
-export const coordinateFrameCommand=value=>[16,17,18,19].includes(value?.calculation?.version)||value?.columns?.some(column)===true||value?.columnChanges?.some(change=>column(change?.column))===true;
-export const coordinateFrameMaterial=value=>['Observanda coordinate frame','Observanda coordinate frame transform'].includes(value?.content?.tool)||value?.content?.tool==='Observanda calculation graph'&&[13,14,15,16].includes(value.content.graphVersion)||coordinateFrameCommand(value?.content)||value?.content?.coordinateFrames===1;
+export const coordinateFrameCommand=value=>[16,17,18,19,20].includes(value?.calculation?.version)||value?.columns?.some(column)===true||value?.columnChanges?.some(change=>column(change?.column))===true;
+export const coordinateFrameMaterial=value=>['Observanda coordinate frame','Observanda coordinate frame transform'].includes(value?.content?.tool)||value?.content?.tool==='Observanda calculation graph'&&[13,14,15,16,17].includes(value.content.graphVersion)||coordinateFrameCommand(value?.content)||value?.content?.coordinateFrames===1;
 export function coordinateFrameMetadata(relative,value){
  if(relative.startsWith('.observanda/jobs/'))return coordinateFrameCommand(value?.input?.command);
  if(!relative.startsWith('.observanda/materials/'))return false;
