@@ -4,21 +4,30 @@ import {mkdtemp,readFile,writeFile,mkdir,readdir} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {testServer as startServer} from './device-fixture.js';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {clearVault} from '../src/encryption.js';
 import {sampleNotebook} from '../src/sample.js';
 import {initializeLocation,readPreference,workspaceManifest} from '../src/locations.js';
 import {createAccess} from '../src/access.js';
 import {Workspace} from '../src/storage.js';
 
-async function setup(t,{protected:secure=false,create=true}={}){
+async function setup(t,{protected:secure=false,create=true,currentAccess=false}={}){
   const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-auth-service-')),root=path.join(parent,'workspace'),preferencesFile=path.join(parent,'settings','preferences.json');
-  if(create)await initializeLocation(root,sampleNotebook(),await createAccess(secure?'Researcher':'',secure?'synthetic password 123':''));
-  const app=await startServer({root,port:0,preferencesFile});t.after(()=>app.close());
+  const encrypted=create&&currentAccess?await encryptedFixture(parent,sampleNotebook()):null;
+  if(create&&!encrypted)await initializeLocation(root,sampleNotebook(),await createAccess(secure?'Researcher':'',secure?'synthetic password 123':''));
+  const app=await startServer({root,port:0,preferencesFile,deviceStore:encrypted?.deviceStore});t.after(async()=>{try{await app.close();}finally{clearVault(encrypted?.vault);}});
   async function client(){
     const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});
     const cookie=session.headers.get('set-cookie').split(';')[0];
-    const c={context:null,request:(route,data,options={})=>fetch(app.origin+route,{...(data===undefined?{}:{method:'POST',body:JSON.stringify(data)}),headers:{Origin:app.origin,Cookie:cookie,'Content-Type':'application/json',...(c.context?{'X-Observanda-Workspace':c.context}:{}),...options}})};return c;
+    const c={context:null,request:(route,data,options={})=>fetch(app.origin+route,{...(data===undefined?{}:{method:'POST',body:JSON.stringify(data)}),headers:{Origin:app.origin,Cookie:cookie,'Content-Type':'application/json',...(c.context?{'X-Observanda-Workspace':c.context}:{}),...options}})};if(encrypted)assert.equal((await c.request('/api/access/unlock',{})).status,200);return c;
   }
-  return {...app,parent,root,preferencesFile,client};
+  return {...app,parent,root,preferencesFile,client,vault:encrypted?.vault};
+}
+
+async function preview(client){
+  const currentResponse=await client.request('/api/notebook'),current=await currentResponse.json();assert.equal(currentResponse.status,200,JSON.stringify(current));
+  const editorResponse=await client.request('/api/websites/editor/open',{workspaceId:current.book.id,websiteId:null}),editor=await editorResponse.json();assert.equal(editorResponse.status,200,JSON.stringify(editor));
+  const response=await client.request('/api/preview',{etag:editor.websitePin.researchSnapshotId,websitePin:editor.websitePin}),candidate=await response.json();assert.equal(response.status,200,JSON.stringify(candidate));return candidate;
 }
 
 test('protected launch links require sign-in for every private route, previews and downloads',async t=>{
@@ -33,9 +42,9 @@ test('protected launch links require sign-in for every private route, previews a
   assert.equal((await client.request('/api/access/unlock',{username:'Researcher',password:'wrong'})).status,401);
   assert.equal((await client.request('/api/access/unlock',{username:'Researcher',password:'synthetic password 123'})).status,200);
   const saved=await (await client.request('/api/notebook')).json();assert.ok(saved.book);
-  const previewResponse=await client.request('/api/preview',{etag:saved.etag}),preview=await previewResponse.json();assert.equal(previewResponse.status,200,JSON.stringify(preview));assert.equal((await client.request(preview.url)).status,200);
+  const candidate=await preview(client);assert.equal((await client.request(candidate.url)).status,200);
   assert.equal((await client.request('/api/access/lock',{})).status,200);
-  assert.equal((await client.request(preview.url)).status,401);assert.equal((await client.request('/api/export',{id:preview.id})).status,401);
+  assert.equal((await client.request(candidate.url)).status,401);assert.equal((await client.request('/api/export',{id:candidate.id})).status,401);
   assert.equal((await (await app.client()).request('/api/notebook')).status,401);
 });
 
@@ -48,7 +57,7 @@ test('access changes require the existing password and invalidate other authenti
   response=await first.request('/api/access/change',{username:'Owner',password:'second synthetic password',currentPassword:'wrong'});assert.equal(response.status,401);
   response=await first.request('/api/access/change',{username:'Owner',password:'second synthetic password',currentPassword:'first synthetic password'});assert.equal(response.status,200);
   assert.equal((await (await first.request('/api/notebook')).json()).etag,original.etag);
-  const preview=await (await first.request('/api/preview',{etag:original.etag})).json();const zip=Buffer.from(await (await first.request('/api/export',{id:preview.id})).arrayBuffer()).toString();
+  const candidate=await preview(first),download=await first.request('/api/export',{id:candidate.id});assert.equal(download.status,200);assert.equal(download.headers.get('content-type'),'application/zip');const zip=Buffer.from(await download.arrayBuffer()).toString();
   for(const privateValue of ['Private account','first synthetic password','second synthetic password','access.json',app.root])assert.ok(!zip.includes(privateValue));
 });
 
@@ -61,17 +70,17 @@ test('password attempts are limited across new launch sessions and the Open work
 });
 
 test('copying switches only after review and verification and rejects old-tab writes',async t=>{
-  const app=await setup(t),client=await app.client(),other=await app.client(),before=await new Workspace(app.root).read();
+  const app=await setup(t,{currentAccess:true}),client=await app.client(),other=await app.client(),before=await new Workspace(app.root,app.vault).read();
   const initial=await (await client.request('/api/storage')).json();client.context=initial.contextId;other.context=initial.contextId;
-  const destination=path.join(app.parent,'new storage'),plan=await (await client.request('/api/storage/copy/preview',{path:destination})).json();
+  const destination=path.join(app.parent,'new storage'),planResponse=await client.request('/api/storage/copy/preview',{path:destination}),plan=await planResponse.json();assert.equal(planResponse.status,200,JSON.stringify(plan));
   assert.equal((await client.request('/api/storage/copy',{id:plan.id,reviewed:false})).status,409);
-  const copied=await (await client.request('/api/storage/copy',{id:plan.id,reviewed:true})).json();assert.equal(copied.root,destination);client.context=copied.contextId;
-  assert.equal((await new Workspace(app.root).read()).etag,before.etag);const transferred=await new Workspace(destination).read();assert.deepEqual(transferred.book.entries,before.book.entries);assert.equal(transferred.book.id,before.book.id);assert.equal(transferred.book.title,path.basename(destination));
+  const copyResponse=await client.request('/api/storage/copy',{id:plan.id,reviewed:true}),copied=await copyResponse.json();assert.equal(copyResponse.status,200,JSON.stringify(copied));assert.equal(copied.root,destination);client.context=copied.contextId;
+  assert.equal((await new Workspace(app.root,app.vault).read()).etag,before.etag);const transferred=await new Workspace(destination,app.vault).read();assert.deepEqual(transferred.book.entries,before.book.entries);assert.equal(transferred.book.id,before.book.id);assert.equal(transferred.book.title,path.basename(destination));
   assert.equal(await readPreference(app.preferencesFile),destination);
   assert.equal((await other.request('/api/notebook/save',before)).status,409);
   for(const route of ['/api/fonts/import','/api/fonts/update','/api/research/records/query','/api/research/records/open','/api/workspace/read/start','/api/workspace/read/page'])assert.equal((await other.request(route,{})).status,409,route);
   assert.equal((await client.request('/api/notebook')).status,200);
-  const preview=await (await client.request('/api/preview',{etag:transferred.etag})).json();assert.equal((await client.request(preview.url)).status,200);
+  const candidate=await preview(client);assert.equal((await client.request(candidate.url)).status,200);
 });
 
 test('new workspace creation honors the selected folder and keeps paths and access settings out of research',async t=>{
