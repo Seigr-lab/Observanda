@@ -15,6 +15,33 @@ import {watchIntake} from '../src/intake/watch.js';
 import {intakeFixture,hash} from './fixtures/local-intake.js';
 import {RecordValues} from '../src/record-values.js';
 import {RetainedRecordDocuments} from '../src/retained-record-documents.js';
+test('preview shares target admission after hashing and fresh checks reject later conflicts',async t=>{
+ const f=await intakeFixture(t),bytes=Buffer.alloc(4096,17);f.manifest.files=[];f.manifest.analyses=[];
+ for(let i=0;i<64;i++){const file={id:randomUUID(),path:'sample-'+i+'.bin',size:bytes.length,sha256:hash(bytes),provenance:'Synthetic target validation'};f.manifest.files.push(file);await writeFile(path.join(f.source,file.path),bytes);}
+ await f.write();const open=f.ws.openCatalogue.bind(f.ws),current=f.service.materials.current.bind(f.service.materials);let admissions=0,lookups=0,pulses=0;
+ const admission=t.mock.method(f.ws,'openCatalogue',(...args)=>{admissions++;return open(...args);}),lookup=t.mock.method(f.service.materials,'current',(...args)=>{lookups++;return current(...args);});
+ let preview;
+ try{
+  preview=await f.service.preview(f.command,{progress:async()=>{pulses++;assert.equal(admissions,0,'source streaming must not hold a metadata snapshot');}});
+  assert.equal(admissions,1,'file count must not multiply catalogue admission');assert.equal(lookups,64);assert.ok(pulses>=64);assert.deepEqual(preview.files.map(file=>file.id),f.manifest.files.map(file=>file.id));
+ }finally{admission.mock.restore();lookup.mock.restore();}
+ assert.equal(await f.service.read(f.manifest.id,{optional:true}),null);
+ const controller=new AbortController(),cancelled=Error('Preview target validation cancelled');let checked=0;
+ const interrupted=t.mock.method(f.service.materials,'current',async(...args)=>{const value=await current(...args);checked++;controller.abort(cancelled);return value;});
+ try{await assert.rejects(f.service.preview(f.command,{signal:controller.signal}),error=>error===cancelled);assert.equal(checked,1);}finally{interrupted.mock.restore();}
+ const materials=new ResearchMaterials(f.ws),last=f.manifest.files.at(-1);
+ await materials.collection({id:last.id,recordId:f.record.id,title:'Concurrent material identity',inputs:[]});
+ await assert.rejects(f.service.preview(f.command),{code:'MATERIAL_CHANGED'});
+ await assert.rejects(f.service.stage({...f.command,expectedPin:preview.pin}),{code:'MATERIAL_CHANGED'});
+ assert.equal(await f.service.read(f.manifest.id,{optional:true}),null,'preview cannot admit a conflicting later stage');
+ last.id=randomUUID();await f.write();let changed=false;
+ await assert.rejects(f.service.preview(f.command,{progress:async()=>{
+  if(changed)return;changed=true;
+  await new ResearchRecords(f.ws,{}).save({workspaceId:f.book.id,changes:[{id:f.record.id,expectedRevision:f.manifest.expectedRevision,record:{...f.record,title:'Changed while source bytes were read'}}]},{receipt:true});
+ }}),{code:'RECORD_CHANGED'});
+ assert.equal(changed,true);
+});
+
 test('versioned intake previews without writing, stages privately, applies atomically and replays lost acknowledgements',async t=>{
  const f=await intakeFixture(t),before=await f.ws.read(),materials=new ResearchMaterials(f.ws),read=ResearchCatalogue.prototype.read;
  t.mock.method(ResearchCatalogue.prototype,'record',()=>{throw Error('Intake reconstructed its owning record');});

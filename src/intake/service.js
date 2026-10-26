@@ -53,16 +53,19 @@ export class LocalIntake{
    return {book:{...snapshot.metadata,entries:[],replacementBases:new Map([[recordId,record]])},record,revision:record.revision};
   });
  }
- async validateTargets(manifest){
+ async validateTargets(manifest,{signal}={}){
+  signal?.throwIfAborted();
   manifest=await this.executionManifest(manifest);await this.materials.assertOwner(manifest.recordId,{write:true});
   const bound=await this.bind(manifest,{fullRecord:!!manifest.record});
-  for(const f of manifest.files)if(await this.materials.current(f.id))throw new AppError('MATERIAL_CHANGED');
+  for(const f of manifest.files){signal?.throwIfAborted();if(await this.materials.current(f.id))throw new AppError('MATERIAL_CHANGED');}
   const refs=[];
   for(const a of manifest.analyses){
+   signal?.throwIfAborted();
    const current=await this.materials.current(a.id);
    if((current?.revision??null)!==a.expectedRevision||current&&(current.recordId!==manifest.recordId||current.kind!=='analysis'))throw new AppError('MATERIAL_CHANGED');
-   refs.push(...a.inputs,...a.outputs,...(a.method?analysisMethodReferences(a.method):[]));for(const r of refs.splice(0))if(!r.file)await this.materials.checkReference(r);
+   refs.push(...a.inputs,...a.outputs,...(a.method?analysisMethodReferences(a.method):[]));for(const r of refs.splice(0)){signal?.throwIfAborted();if(!r.file)await this.materials.checkReference(r,{signal});}
   }
+  signal?.throwIfAborted();
   if(manifest.record){
    if(manifest.record.notebookId!==bound.record.notebookId)throw new AppError('INTAKE_INVALID');
    await this.records().prepare({...bound.book,partialRecords:true},{workspaceId:manifest.workspaceId,changes:[{id:manifest.recordId,expectedRevision:manifest.expectedRevision,record:manifest.record}]});
@@ -76,12 +79,14 @@ export class LocalIntake{
    if(manifest.record.results)await validateResultSources(this.workspace,manifest.record);
    await validateFigureSources(this.workspace,manifest.record);
   }
-  return bound;
+  signal?.throwIfAborted();return bound;
  }
  async preview({source,workspaceId,recordId,expectedPin},{signal,progress}={}){
   const report=await inspectIntake(source,{signal,expectedPin,progress});
   if(report.manifest.workspaceId!==workspaceId||report.manifest.recordId!==recordId)throw new AppError('INTAKE_TARGET');
-  await this.validateTargets(report.manifest);return intakePreview(report.manifest,report.pin);
+  // Source hashing is complete before this short metadata snapshot. Reuse its
+  // authenticated catalogue for every target; stage still rechecks under lock.
+  await this.workspace.catalogue(()=>this.validateTargets(report.manifest,{signal}));return intakePreview(report.manifest,report.pin);
  }
  async stage(command,options={}){
   const {source,workspaceId,recordId,id,expectedPin}=command;
