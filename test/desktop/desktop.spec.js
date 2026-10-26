@@ -9,13 +9,14 @@ import {navigate} from '../browser/preferences-helper.js';
 test('desktop opens setup, saves encrypted work, protects unsaved edits and reopens after a clean shutdown',async()=>{
  test.setTimeout(240000);
  const fixture=await desktopFixture(),{directory,packaged,env,start}=fixture;
- const previous=process.env.OBSERVANDA_DESKTOP_PREVIOUS_EXECUTABLE;
+ const previous=process.env.OBSERVANDA_DESKTOP_PREVIOUS_EXECUTABLE||undefined;
  if(previous&&!packaged)throw Error('Update acceptance requires the candidate packaged executable as well as its predecessor.');
  const workspaceName='Desktop field and studio work',workspaceRoot=path.join(directory,workspaceName),projectRoot=path.join(workspaceRoot,'Unsaved desktop project');
  const access=desktopAccess(),{credentials}=access;let app;
  console.log(packaged?'Desktop acceptance: selected executable.':'Desktop acceptance: source Electron (not an installed build).');
  try{
   app=await start(previous);let page=await app.firstWindow();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  if(packaged)expect(await app.evaluate(({app})=>app.isPackaged)).toBe(true);
   // Electron's native unsaved-work dialog owns beforeunload. Prevent the
   // browser automation's automatic dismissal from racing that decision.
   page.on('dialog',()=>{});
@@ -105,6 +106,7 @@ test('desktop opens setup, saves encrypted work, protects unsaved edits and reop
   await expect(page.locator('.record-editing h1')).toHaveText('Amended packaged block record');
   console.log('Desktop authoring: selected title saved; restarting the application.');
   await fixture.close(app);app=await start();page=await app.firstWindow();page.on('pageerror',e=>errors.push(e.message));if(credentials.password)await access.unlock(page);
+  if(packaged)expect(await app.evaluate(({app})=>app.isPackaged)).toBe(true);
   await expect(page.locator('.workspace-name')).toHaveText('Desktop field and studio work',{timeout:60000});
   console.log('Desktop restart: workspace reopened; checking lock and unlock.');
   await page.locator('#main-navigation').getByRole('button',{name:'Lock workspace',exact:true}).click();
