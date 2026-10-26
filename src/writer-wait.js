@@ -5,8 +5,14 @@ import {operationStage} from './operation-progress.js';
 const policy=new AsyncLocalStorage();
 const queues=new Map();
 export const withoutWriterWait=operation=>policy.run(null,operation);
+// A durable job owns its cancellation and lease checks independently of the
+// HTTP request that started it. Its queue already serializes job writes; poll
+// database acquisition here so a lease is checked even behind a long writer.
+export function backgroundWriterWait(operation,{signal,check}){
+ return policy.run({enabled:()=>true,queue:false,signal,check:async()=>{signal.throwIfAborted();await check();signal.throwIfAborted();},waiting:()=>{},acquired:()=>{}},operation);
+}
 export async function queuedWriter(root,operation){
- const owner=policy.getStore();if(!owner?.enabled())return operation();
+ const owner=policy.getStore();if(!owner?.enabled()||owner.queue===false)return operation();
  const queue=queues.get(root)??{active:false,waiting:[]};queues.set(root,queue);
  let ticket;
  const turn=new Promise((resolve,reject)=>{ticket={resolve,reject};if(!queue.active){queue.active=true;resolve();}else{queue.waiting.push(ticket);owner.waiting();}});

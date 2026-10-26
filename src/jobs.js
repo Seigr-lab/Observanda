@@ -8,7 +8,7 @@ import {researchId} from './web/research-reference.js';
 import {JobQueueIndex} from './job-queue-index.js';
 import {JobRelocations,jobFingerprint} from './job-relocations.js';
 import {withWorkspaceMetadataBatch} from './metadata-batch.js';
-import {withoutWriterWait} from './writer-wait.js';
+import {withoutWriterWait,backgroundWriterWait} from './writer-wait.js';
 const terminal=new Set(['completed','failed','cancelled']);
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const same=(a,b)=>digest(serialize(a))===digest(serialize(b));
@@ -38,12 +38,12 @@ export class DurableJobs{
   const observation=jobSummary(job);
   await this.workspace.afterCommit(()=>{try{this.observe(observation);}catch{/* Observation cannot revoke a committed job. */}});
  }
- async transaction(fn){
+ async transaction(fn,{retryLocked=true}={}){
   // Serialize this worker's heartbeat and command writes; the database still
   // fences competing processes. Observers are invoked after the commit.
   if(jobWrites.getStore()===this)throw new AppError('LOCKED');
   const pending=this.pendingWrite.then(()=>jobWrites.run(this,async()=>{
-   for(let i=0;;i++)try{return await this.workspace.withLock(()=>withWorkspaceMetadataBatch(this.workspace,fn));}catch(error){if(error.code!=='LOCKED'||i===4)throw error;await pause(20*(i+1));}
+   for(let i=0;;i++)try{return await this.workspace.withLock(()=>withWorkspaceMetadataBatch(this.workspace,fn));}catch(error){if(!retryLocked||error.code!=='LOCKED'||i===4)throw error;await pause(20*(i+1));}
   }));
   this.pendingWrite=pending.catch(()=>{});return pending;
  }
@@ -97,7 +97,7 @@ export class DurableJobs{
   });
   // Cleanup belongs to the completed result, not the serialized job writer.
   // Direct callers still await it; other controls and heartbeats may proceed.
-  try{await this.definition(job).afterComplete?.(job);}catch{/* Cleanup cannot revoke a committed job. */}
+  try{await withoutWriterWait(()=>this.definition(job).afterComplete?.(job));}catch{/* Cleanup cannot revoke a committed job. */}
   return job;
  }
  async release(id,token,{error=null,paused=false}={}){return this.transaction(async()=>{
@@ -127,12 +127,14 @@ export class JobWorker{
  }
  async runOnce(){
   const job=await this.queue.claim();if(!job)return;this.active=job;const controller=this.controller=new AbortController();let pulse=Promise.resolve(),lastProgress=0;
-  const refresh=progress=>{pulse=pulse.then(()=>this.queue.pulse(job.id,job.lease.token,progress));pulse.catch(error=>controller.abort(error));return pulse;};
+  const wait=operation=>backgroundWriterWait(operation,{signal:controller.signal,check:()=>this.queue.held(job.id,job.lease.token)});
+  const write=operation=>wait(()=>this.queue.transaction(async()=>{controller.signal.throwIfAborted();await this.queue.held(job.id,job.lease.token);return operation();},{retryLocked:false}));
+  const refresh=progress=>{pulse=pulse.then(()=>wait(()=>this.queue.pulse(job.id,job.lease.token,progress)));pulse.catch(error=>controller.abort(error));return pulse;};
   const heartbeat=setInterval(()=>{void refresh().catch(()=>{});},Math.max(100,this.queue.leaseMs/3));heartbeat.unref();
   try{
    if(!this.enabled)controller.abort();
-   const prepared=await this.queue.definition(job).prepare(job,{signal:controller.signal,progress:async progress=>{if(Date.now()-lastProgress<250&&progress.done!==progress.total)return;lastProgress=Date.now();await refresh(progress);}});
-   if(!this.queue.definition(job).beforeComplete)clearInterval(heartbeat);await pulse;controller.signal.throwIfAborted();await this.queue.complete(job.id,job.lease.token,prepared,{signal:controller.signal});
+   const prepared=await this.queue.definition(job).prepare(job,{signal:controller.signal,write,progress:async progress=>{if(Date.now()-lastProgress<250&&progress.done!==progress.total)return;lastProgress=Date.now();await refresh(progress);}});
+   if(!this.queue.definition(job).beforeComplete)clearInterval(heartbeat);await pulse;controller.signal.throwIfAborted();await wait(()=>this.queue.complete(job.id,job.lease.token,prepared,{signal:controller.signal}));
   }catch(error){clearInterval(heartbeat);await pulse.catch(()=>{});await this.queue.release(job.id,job.lease.token,{error,paused:!this.enabled}).catch(()=>{});}
   finally{clearInterval(heartbeat);await pulse.catch(()=>{});await this.queue.definition(job).discard?.(job).catch(()=>{});this.active=null;this.controller=null;}
  }

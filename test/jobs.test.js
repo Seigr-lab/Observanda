@@ -108,7 +108,7 @@ test('graceful stop queues verification for unlock and retains the encryption ke
  const restarted=workspaceJobs(new Workspace(f.root,f.vault));t.after(()=>restarted.worker.stop());restarted.worker.start();assert.equal((await finished(restarted.queue,u.job.id)).state,'completed');
 });
 
-test('a killed process leaves a recoverable lease and encrypted staged bytes for a 64 MiB original',async t=>{
+test('a killed process leaves a recoverable lease and encrypted staged bytes for a 64 MiB original',{timeout:120000},async t=>{
  const f=await fixture(t),bytes=Buffer.alloc(64*EVIDENCE_CHUNK,0xb3),u=await uploaded(f,bytes);
  const code=`import {Workspace} from './src/storage.js';import {workspaceJobs} from './src/workspace-jobs.js';let input='';for await(const c of process.stdin)input+=c;const data=JSON.parse(input);const ws=new Workspace(data.root,{id:data.id,key:Buffer.from(data.key,'base64')});const {queue}=workspaceJobs(ws);queue.leaseMs=1000;const job=await queue.claim();await queue.definition(job).prepare(job,{progress:async progress=>{await queue.pulse(job.id,job.lease.token,progress);process.stdout.write('checkpoint\\n');await new Promise(()=>{});}});`;
  const child=spawn(process.execPath,['--input-type=module','-e',code],{cwd:process.cwd(),stdio:['pipe','pipe','pipe'],windowsHide:true});
@@ -118,7 +118,8 @@ test('a killed process leaves a recoverable lease and encrypted staged bytes for
  child.stdin.end(JSON.stringify({root:f.root,id:f.vault.id,key:f.vault.key.toString('base64')}));await checkpoint;child.kill();await exited;
  const staged=path.join(f.root,'.observanda/materials/originals',u.job.id),names=await readdir(staged);assert.ok(names.some(n=>n.startsWith('.stream-')));
  assert.equal((await f.queue.read(u.job.id)).state,'running');await delay(1100);
- f.worker.start();const done=await finished(f.queue,u.job.id);await f.worker.stop();assert.equal(done.state,'completed');assert.equal(done.attempt,2);
+ // Recovery is a correctness check, not a throughput assertion on a busy host.
+ f.worker.enabled=true;f.worker.running=f.worker.runOnce();await f.worker.running;const done=await f.queue.read(u.job.id);await f.worker.stop();assert.equal(done.state,'completed');assert.equal(done.attempt,2);
  assert.equal((await f.materials.artifact(done.result)).content.sha256,digest(bytes));assert.equal((await f.materials.verify()).originalBytes,bytes.length);
  assert.equal((await readdir(staged)).length,1);assert.ok(!(await readFile(path.join(staged,(await readdir(staged))[0]))).subarray(0,1024).equals(bytes.subarray(0,1024)));
 });

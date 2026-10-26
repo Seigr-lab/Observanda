@@ -106,14 +106,14 @@ export class PublicationJobs{
  }
  async authorize(job){await this.workspace.requireStorageKey();const s=await this.source(job.id);if(job.scope!==s.workspaceId||job.input.revision!==digest(serialize(s)))throw new AppError('JOB_CHANGED');}
  async directory(id,attempt){if(!researchId(id)||attempt!==undefined&&!researchId(attempt))throw new AppError('INVALID');return privateDirectory(this.workspace.root,'.observanda/releases/'+id+(attempt?'/'+attempt:''));}
- async prepare(job,{signal,progress}){
+ async prepare(job,{signal,progress,write}){
   const source=await this.source(job.id);await assertPublicationSourcePermissions(this.workspace,source,{sourceReader:this.sourceReader,signal});
   const blockedValues=[...source.blockedValues,this.workspace.root,os.homedir(),os.hostname()].filter(Boolean);
   if(source.version===1){const {entries,...metadata}=source.book;void entries;source.metadata=metadata;source.records=selectedContent(source.book).entries.map(record=>publicationDescriptor(record,metadata));}
   const websitePin=await retainedWebsitePin(this.workspace,source);
   const directory=await this.directory(job.id,job.lease.token),files=[];
   if(source.version===6){
-   return withPublicationOutputWriter(this.workspace,source,job,{directory,signal,blockedValues},async writer=>{
+   return withPublicationOutputWriter(this.workspace,source,job,{directory,signal,write,blockedValues},async writer=>{
    const rendered=await buildPublicationEdition(this.workspace,source,{writer,blockedValues,signal,progress});
    const candidate=await writer.finish({defaultPage:rendered.defaultPage});
    return {sourcePermissionVersion:SOURCE_PUBLICATION_VERSION,version:3,workspaceId:source.workspaceId,jobId:job.id,attempt:job.lease.token,reviewId:source.reviewId,websiteId:websitePin.websiteId,websitePin,...candidate,etag:source.etag,createdAt:source.createdAt,
@@ -249,6 +249,6 @@ export class PublicationJobs{
 }
 export function publicationJobDefinitions(workspace,queue,{sourceAccess}={}){const releases=new PublicationJobs(workspace);return {'publication.prepare':{
  authorize:job=>releases.authorize(job),
- prepare:async(job,options)=>{const sourceReader=sourceAccess?.take(job.id),prepared=new PublicationJobs(workspace,{sourceReader});await releases.clean(job.id,{write:operation=>queue().transaction(async()=>{await queue().held(job.id,job.lease.token);return withWorkspaceMetadataBatch(workspace,operation);})});return prepared.prepare(job,options);},
+ prepare:async(job,options)=>{const sourceReader=sourceAccess?.take(job.id),prepared=new PublicationJobs(workspace,{sourceReader}),write=options.write??(operation=>queue().transaction(async()=>{await queue().held(job.id,job.lease.token);return withWorkspaceMetadataBatch(workspace,operation);}));await releases.clean(job.id,{write});return prepared.prepare(job,{...options,write});},
  commit:(job,candidate)=>releases.commit(job,candidate),discard:job=>releases.clean(job.id,{only:job.lease.token})
 }};}

@@ -66,16 +66,16 @@ export function withPublicationOutputWriter(workspace,source,job,options,operati
  },{signal:options?.signal}));
 }
 export class PublicationOutputWriter{
- constructor(workspace,source,job,{directory,signal,blockedValues=[],[freshBlocks]:blocks}={}){
+ constructor(workspace,source,job,{directory,signal,write=operation=>workspace.withLock(operation),blockedValues=[],[freshBlocks]:blocks}={}){
   this.workspace=workspace;this.source=source;this.job=job;this.directory=directory;this.signal=signal;this.blockedValues=blockedValues;this.owner=publicationOutputOwner(source,job);this.nextBlob=0;this.pendingNames=new Set();this.finalization=new PublicationOutputFinalization({signal});this.buffers=new PublicationOutputBuffer();
-  let admission;this.ready=()=>admission??=(blocks?workspace.withLock(async()=>{
+  let admission;this.ready=()=>admission??=(blocks?write(async()=>{
    await assertPublicationDocumentStorage(workspace,{signal});signal?.throwIfAborted();
    if((await workspace.metadataPage(publicationDocumentPrefix(this.owner),{limit:1})).items.length||(await readdir(directory)).length)throw new AppError('PUBLICATION_IDENTITY');
   }):assertPublicationDocumentStorage(workspace,{signal}));
   const pending=new Map();let bytes=0;
   this.flush=async()=>{
    if(!pending.size)return;await this.ready();signal?.throwIfAborted();
-   await workspace.withLock(()=>withWorkspaceMetadataBatch(workspace,async()=>{signal?.throwIfAborted();for(const [file,text] of pending)await workspace.writeMetadata(file,text);}));
+   await write(()=>withWorkspaceMetadataBatch(workspace,async()=>{signal?.throwIfAborted();for(const [file,text] of pending)await workspace.writeMetadata(file,text);}));
    pending.clear();bytes=0;
   };
   const scope=this,retained=new Proxy(workspace,{get(target,method){
