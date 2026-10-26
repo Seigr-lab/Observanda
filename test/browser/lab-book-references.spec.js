@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 import assert from 'node:assert/strict';
-import {mkdtemp,rm} from 'node:fs/promises';
+import {mkdtemp,rm,readFile} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {randomUUID} from 'node:crypto';
@@ -33,7 +33,10 @@ test('links open the owning book and its retained revisions after authentication
    await new ResearchRecords(storage,new MediaStore(storage)).save({workspaceId:created.book.namespaceId,changes:[{id:record.id,expectedRevision:null,record}]});
    return {...created.book,storage,record:(await storage.read()).book.entries[0]};
   }
-  const b=await make('Book B','Independent book password'),target={workspaceId:b.namespaceId,kind:'record',id:b.record.id};
+  const b=await make('Book B','Independent book password'),media=await new MediaStore(b.storage).import(await readFile(new URL('../../src/preview-assets/image.png',import.meta.url)),'image');
+  const withImage={...b.record,attachments:[{id:media.id,kind:'image',alt:'Book apparatus',caption:'Independent book apparatus',transcript:'',share:true}]};
+  await new ResearchRecords(b.storage,new MediaStore(b.storage)).save({workspaceId:b.namespaceId,changes:[{id:b.record.id,expectedRevision:recordRevision(b.record),record:withImage}]});b.record=(await b.storage.read()).book.entries[0];
+  const target={workspaceId:b.namespaceId,kind:'record',id:b.record.id};
   const a=await make('Book A','',[
    {id:randomUUID(),type:'Builds on',label:'Book B current',target},
    {id:randomUUID(),type:'Builds on',label:'Book B retained',target:{...target,revision:recordRevision(b.record)}}
@@ -42,10 +45,14 @@ test('links open the owning book and its retained revisions after authentication
   app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,headless:true,preferencesFile:path.join(directory,'preferences.json')});page.on('pageerror',error=>errors.push(error.message));await page.goto(app.url);await expect(page.getByRole('button',{name:'Preferences',exact:true})).toBeVisible();
   const url=book=>app.origin+'/#/owners/'+id+'/books/'+book.labBookId+'/records/'+book.record.id+'/read';
   await page.goto(url(a));await expect(page.locator('main h1')).toHaveText('Book A observation');await page.getByRole('button',{name:'Book B current',exact:true}).click();
-  const unlock=page.locator('#project-unlock-form');await expect(unlock.getByRole('heading',{name:'Unlock lab book'})).toBeVisible();await unlock.getByLabel('Lab book password',{exact:true}).fill('Independent book password');await unlock.getByRole('button',{name:'Unlock',exact:true}).click();
+  const unlock=page.locator('#project-unlock-form');await expect(unlock.getByRole('heading',{name:'Unlock lab book'})).toBeVisible();await unlock.getByLabel('Lab book password',{exact:true}).fill('Independent book password');
+  const reading=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/projects/'+id+'/lab-books/'+b.labBookId+'/workspace/read/record-content'&&response.status()===200&&response.request().postDataJSON()?.recordId===b.record.id);
+  await unlock.getByRole('button',{name:'Unlock',exact:true}).click();await reading;
   await expect(page.locator('main h1')).toHaveText('Book B observation');expect(new URL(page.url()).hash).toContain('/books/'+b.labBookId+'/');await expect(page.locator('main')).toContainText('A later observation');
   await page.reload();await expect(page.locator('main h1')).toHaveText('Book B observation');
   await page.goto(url(a));await page.getByRole('button',{name:'Book B retained',exact:true}).click();await expect(page.locator('.retained-record-reader')).toContainText('Book B original');
+  const image=page.locator('.retained-record-reader img[alt="Book apparatus"]');await expect(image).toHaveAttribute('src','/api/projects/'+id+'/lab-books/'+b.labBookId+'/media/'+media.id);await expect.poll(()=>image.evaluate(node=>node.complete&&node.naturalWidth>0)).toBe(true);
+  await page.locator('#dialog').getByRole('button',{name:'Close',exact:true}).click();await expect(page.locator('main h1')).toHaveText('Book A observation');expect(new URL(page.url()).hash).toContain('/books/'+a.labBookId+'/');
   expect(errors).toEqual([]);await page.screenshot({path:test.info().outputPath('book-reference.png'),fullPage:true});
  }finally{await page.close();await app?.close();await provider.close();detach();keys.forEach(clearVault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-book-links-ui-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

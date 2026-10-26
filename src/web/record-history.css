@@ -7,6 +7,10 @@ dialog:has(.record-history) { width:min(960px,calc(100% - 2rem)); max-height:90d
 .record-history { display:flex; flex-direction:column; box-sizing:border-box; max-height:calc(90dvh - 2px); min-width:0; padding:1.25rem; }
 .record-history-content { overflow:auto; min-height:0; padding-inline-end:.5rem; scrollbar-gutter:stable; overflow-wrap:anywhere; }
 .record-history > h2,.record-history > .dialog-actions { flex:none; }
+.retained-record-reader .record-section-navigation > label { flex:1 1 12rem; min-width:0; max-width:100%; }
+.retained-record-reader .record-section-navigation select,.retained-record-reader .record-section-navigation input { box-sizing:border-box; width:100%; min-width:0; max-width:100%; }
+.retained-record-reader .record-section-navigation .inline-actions { min-width:0; max-width:100%; flex-wrap:wrap; }
+.retained-record-reader .record-section-navigation button { max-width:100%; overflow-wrap:anywhere; }
 .record-history-list { list-style:none; padding:0; }
 .record-history-list li { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:1rem 0; border-bottom:1px solid var(--ui-border); }
 .record-history-list p { margin:.25rem 0; }

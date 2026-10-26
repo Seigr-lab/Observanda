@@ -45,6 +45,19 @@ test('comparison can navigate beyond the retained length and late header collect
  const result=await f.reader.read({ref,compare:true,offset:5});assert.equal(result.offset,5);assert.equal(result.current.sections.offset,5);assert.equal(result.current.sections.values[0].title,'New section 5');assert.equal(result.previous.sections.total,0);
 });
 
+test('comparison anchors search their own fixed revision after sections move',async t=>{
+ const f=await figureValueFixture();t.after(f.close);const ref=await f.materials.pinRecord(f.record.id,await revision(f.workspace,f.record.id)),reader=new RetainedRecordDocuments(f.workspace),anchor='record-section-'+f.record.sections[70].id;
+ const reordered={...f.record,sections:[...f.record.sections.slice(0,68),f.record.sections[70],...f.record.sections.slice(68).filter(section=>section.id!==f.record.sections[70].id)]};
+ await new ResearchRecords(f.workspace,{}).save({workspaceId:f.book.id,changes:[{id:f.record.id,expectedRevision:ref.revision,record:reordered}]},{receipt:true});noReconstruction(t);
+ const first=await reader.read({ref,compare:true,anchor,anchorCurrent:true});assert.ok(first.search.nextCursor);assert.ok(first.currentSnapshotId);
+ const values=new RecordValues(f.workspace),target={workspaceId:f.book.id,recordId:f.record.id,field:'title'},before=await values.read(target);await values.save({...target,expectedRevision:before.revision,value:{value:'Changed while searching'}});
+ const result=await reader.read({ref,compare:true,anchor,anchorCurrent:true,cursor:first.search.nextCursor,currentSnapshotId:first.currentSnapshotId});
+ assert.equal(result.currentSnapshotId,first.currentSnapshotId);assert.equal(result.current.header.title,f.record.title);assert.equal(result.current.sections.offset,68);assert.equal(result.current.sections.values[0].id,f.record.sections[70].id);assert.equal(result.found,68);
+ assert.equal(result.previous.sections.offset,0);assert.equal(result.previous.sections.values[0].id,f.record.sections[0].id);assert.equal(result.previous.record.id,ref.id);assert.ok(result.current.sections.values.length<=4);assert.ok(result.previous.sections.values.length<=4);
+ await assert.rejects(reader.read({ref,compare:false,anchor,anchorCurrent:true}),{code:'INVALID'});
+ await assert.rejects(reader.read({ref,compare:true,anchor,cursor:first.search.nextCursor}),{code:'WORKSPACE_READ_CURSOR'});
+});
+
 test('retained pointers roll back failed admission and survive fresh-key backup',async t=>{
  const f=await fixture(t),canonical=await revision(f.workspace,f.record.id),before=await f.workspace.catalogue(store=>catalogueFormat(store.db)),write=f.workspace.writeMetadata.bind(f.workspace);
  t.mock.method(f.workspace,'writeMetadata',async(...args)=>{await write(...args);throw Error('Injected pointer write failure');});await assert.rejects(f.materials.pinRecord(f.record.id,canonical),/Injected/);f.workspace.writeMetadata.mock.restore();assert.equal(await f.workspace.catalogue(store=>catalogueFormat(store.db)),before);assert.equal(await f.workspace.readMetadata(file({id:f.record.id,revision:canonical}),4096),null);

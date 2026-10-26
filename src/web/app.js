@@ -1077,8 +1077,11 @@ async function rawAction(button) {
 }
 
 document.addEventListener('click', event => {
-  const href=event.target.closest('.record-reader a[href], .lab-book-reading a[href], .records-table a[href]')?.getAttribute('href'),target=href&&parseResearchReference(href);
-  if(target){event.preventDefault();leave.run(()=>navigateResearch(target)).catch(report);return;}
+  const link=event.target.closest('.record-reader a[href], .lab-book-reading a[href], .records-table a[href], .retained-record-reader a[href]'),href=link?.getAttribute('href'),target=href&&parseResearchReference(href);
+  if(target){event.preventDefault();const retained=link.closest('.retained-record-reader');leave.run(async()=>{
+    if(retained){const dialog=retained.closest('dialog');if(dialog?.open)await new Promise(resolve=>{dialog.addEventListener('close',resolve,{once:true});dialog.close();});}
+    await navigateResearch(target);
+  }).catch(report);return;}
   if(href?.startsWith('#')&&!href.startsWith('#/')){
     event.preventDefault();
     (async()=>{

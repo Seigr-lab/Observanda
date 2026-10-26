@@ -43,10 +43,10 @@ export function retainedRecordUI({state,api,esc,showDialog}){
   anchor=resultStatementAnchor(anchor)??anchor;s.anchor=anchor;s.anchorCurrent=current;if(resultStatementAnchor(anchor))s.resultFigure=null;
   s.request?.abort();const request=new AbortController(),epoch=++serial;s.request=request;s.busy=true;render(s,{loading:true});
   try{
-   let result,cursor;const read=materialReferenceReader({api,local:(name,data,options)=>api('/api/research/materials/'+name,data,{...options,owner:s.owner}),onOwner:result=>{if(valid(s)&&epoch===serial){s.namespaceId=result.namespaceId;s.mediaOwner=result.projectId;}}});
+   let result,cursor;const read=materialReferenceReader({api,local:(name,data,options)=>api('/api/research/materials/'+name,data,{...options,owner:s.owner}),onOwner:result=>{if(valid(s)&&epoch===serial){s.namespaceId=result.namespaceId;s.mediaOwner=result.labBookId?{projectId:result.projectId,labBookId:result.labBookId}:result.projectId;}}});
    do{
-    result=await read('record',{ref:s.ref,offset:s.offset,windows:s.windows,compare:s.compare,...(s.resultFigure?{resultFigure:s.resultFigure}:{}),...(s.currentSnapshotId?{currentSnapshotId:s.currentSnapshotId}:{}),...(anchor?{anchor}:{}),...(cursor?{cursor}:{})},{adopt:false,signal:request.signal,owner:s.owner});
-    if(!valid(s)||epoch!==serial)return;cursor=result.search?.nextCursor;
+    result=await read('record',{ref:s.ref,offset:s.offset,windows:s.windows,compare:s.compare,...(s.resultFigure?{resultFigure:s.resultFigure}:{}),...(s.currentSnapshotId?{currentSnapshotId:s.currentSnapshotId}:{}),...(anchor?{anchor,...(current?{anchorCurrent:true}:{})}:{}),...(cursor?{cursor}:{})},{adopt:false,signal:request.signal,owner:s.owner});
+    if(!valid(s)||epoch!==serial)return;cursor=result.search?.nextCursor;if(cursor&&result.currentSnapshotId)s.currentSnapshotId=result.currentSnapshotId;
    }while(cursor);
    if(result.ref?.id!==s.ref.id||result.ref.revision!==s.ref.revision||!result.previous?.record||result.previous.record.id!==s.ref.id)throw Error(text('unavailable'));
    s.result=result;s.currentSnapshotId=result.currentSnapshotId;s.offset=result.offset;s.resultFigure=result.previous.resultWindow?.figureId??null;s.windows=Object.fromEntries(names.filter(name=>name!=='sections').map(name=>[name,Math.max(result.previous.collections[name]?.offset??0,result.current?.collections[name]?.offset??0)]));s.busy=false;render(s);
@@ -61,6 +61,16 @@ export function retainedRecordUI({state,api,esc,showDialog}){
    s.collection='results';s.windows={...s.windows,results:0};
    if(figure){s.resultFigure=figure.dataset.resultFigure;s.focus='[data-retained-previous] .result-statements>section';void load(s);}
    else{s.resultFigure=null;void load(s,{anchor,current:!!link.closest('[data-retained-current]')});}return;
+  }
+  if(link){
+   event.preventDefault();event.stopPropagation();if(s.busy)return;
+   const current=!!link.closest('[data-retained-current]'),local=href.replace(/^retained-current-/,''),pane=dialog.querySelector(current?'[data-retained-current]':'[data-retained-previous]'),selected=[...pane.querySelectorAll('[id]')].find(node=>node.id===(current?'retained-current-':'')+local);
+   if(selected){selected.tabIndex=-1;selected.focus();selected.scrollIntoView({block:'start'});return;}
+   if(/^record-(?:section|figure|table|equation|citation|block)-[a-f0-9-]{36}$/.test(local)){
+    if(local.startsWith('record-section-'))s.collection='sections';
+    else if(local.startsWith('record-figure-'))s.collection='figures';
+    void load(s,{anchor:local,current});
+   }return;
   }
   const control=event.target.closest('[data-retained-action]');if(!control)return;event.preventDefault();event.stopPropagation();const action=control.dataset.retainedAction;
   if(action==='close'){stop();dialog.close();return;}if(s.busy||control.disabled)return;
