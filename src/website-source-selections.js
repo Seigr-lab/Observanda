@@ -92,7 +92,7 @@ export function withWebsiteSourceSelections(document,operation,{signal}={}){
    };
    const editionKinds={records:readKind('editionRecords'),history:readKind('history'),availability:readKind('availability')};
    const edition={count:kind=>editionKinds[kind].count(),get:(kind,id)=>editionKinds[kind].get(id),items:(kind,options)=>editionKinds[kind].items(options),mapped(kind,keyOf){let ready=false;const scope=prefix+'mapped:'+kind+':';const prepare=async()=>{if(ready)return;for await(const value of editionKinds[kind].items())await proof.put(scope+keyOf(value),value);ready=true;};return {size:editionKinds[kind].count(),async get(id){await prepare();return proof.get(scope+id);},async has(id){await prepare();return !!await proof.get(scope+id);},async *entries(options){for await(const value of editionKinds[kind].items(options))yield [keyOf(value),value];},async *keys(options){for await(const value of editionKinds[kind].items(options))yield keyOf(value);}};}};
-   const reader={records,edition,revision:digest(serialize({root:document.root,workspaceId}))};sourceReaders.set(source,reader);selectionReaders.set(source.selection,records);return source;
+   const reader={records,edition,revision:digest(serialize({source:await document.reference(pathFor(row.position),{signal}),workspaceId}))};sourceReaders.set(source,reader);selectionReaders.set(source.selection,records);return source;
   };
   return operation({...summary,get:sourceAt,async *items(){for(let position=0;position<summary.count;position++){signal?.throwIfAborted();yield await sourceAt(await field(document,pathFor(position,'workspaceId')));}}});
  },{signal});

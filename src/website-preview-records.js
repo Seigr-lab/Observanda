@@ -39,14 +39,15 @@ export class WebsitePreviewRecords{
   if(!this.rows.has(id))this.rows.set(id,await this.store.member(this.snapshot,id));const row=this.rows.get(id);return row&&await this.visible(row)?row:null;
  }
  async visible(row){
-  const value=this.changed.get(row.id)??(await Array.fromAsync(this.store.queryDocuments([row],this.snapshot.metadata,{signal:this.signal,search:false})))[0];
+  this.signal?.throwIfAborted();
+  const value=this.changed.get(row.id)??this.documents.get(row.id)??(await Array.fromAsync(this.store.queryDocuments([row],this.snapshot.metadata,{signal:this.signal,search:false})))[0];
   const book=this.metadata.notebooks.find(book=>book.id===value.notebookId);
   return sourceRecordAllowed(value,this.metadata)&&websiteRecordShare(this.selection,value,book?.projectId);
  }
  async document(row,{cards=false}={}){
-  let value;
+  this.signal?.throwIfAborted();let value=this.documents.get(row.id);
   if(this.changed.has(row.id)){const record=this.changed.get(row.id);value={...recordQueryDocument(record),revision:recordRevision(record),publicationDescriptor:publicationDescriptor(record)};}
-  else [value]=await Array.fromAsync(this.store.queryDocuments([row],this.snapshot.metadata,{signal:this.signal,search:false,references:true,revisions:true,publicationDetails:true}));
+  else if(!value)[value]=await Array.fromAsync(this.store.queryDocuments([row],this.snapshot.metadata,{signal:this.signal,search:false,references:true,revisions:true,publicationDetails:true}));
   if(this.selection.records.find(choice=>choice.id===row.id)?.attachments.length)value.publicationDescriptor={...publicationDescriptor(await this.original(row.id)),revision:value.revision};
   await assertPublicationPreviewPermissions(this.store,this.command.baseEtag,this.metadata,value.publicationDescriptor,{signal:this.signal});
   return {...value,...(cards?{publicationCard:value.publicationDescriptor}:{})};
@@ -101,10 +102,14 @@ export class WebsitePreviewRecords{
   for(const notebook of this.metadata.notebooks){this.signal?.throwIfAborted();notebooks[notebook.id]=notebook.share!==false&&all(notebook)&&this.snapshot.publicationIndex?await index.sharedCount(this.snapshot,notebook.id):0;}
   if(!this.snapshot.publicationIndex){for await(const row of this.dateRows(new Set(Object.keys(notebooks))))notebooks[row.notebookId]++;}
   else for(const id of new Set([...this.deleted,...this.changed.keys(),...this.selection.records.map(row=>row.id)])){
+   this.signal?.throwIfAborted();
    const before=await this.store.member(this.snapshot,id),prior=before?await index.describe(before):null;
    const notebook=prior&&this.metadata.notebooks.find(book=>book.id===prior.notebookId);
    if(prior?.share&&notebook&&notebook.share!==false&&all(notebook))notebooks[prior.notebookId]--;
-   const row=await this.row(id);if(row&&await this.visible(row))notebooks[(this.changed.get(id)??row).notebookId]++;
+   // Counts need the authenticated member's consent and ownership fields,
+   // not a document read or a retained row for every selected record.
+   const after=this.deleted.has(id)?null:this.changed.get(id)??prior,owner=after&&this.metadata.notebooks.find(book=>book.id===after.notebookId);
+   if(after&&sourceRecordAllowed(after,this.metadata)&&websiteRecordShare(this.selection,after,owner?.projectId))notebooks[after.notebookId]++;
   }
   return {total:Object.values(notebooks).reduce((a,b)=>a+b,0),notebooks};
  }

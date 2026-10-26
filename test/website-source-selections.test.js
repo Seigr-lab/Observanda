@@ -13,16 +13,27 @@ import {readingKey} from '../src/record-reading-index.js';
 import {publicationReadingKey} from '../src/record-publication-index.js';
 import {publicationSourceIdentity} from '../src/publication-owner-identities.js';
 import {emptyPublicationSource} from '../src/web/publication-sources-model.js';
-import {withWebsiteSourceSelections,websiteSourceSummary,sourceSelectionReader,sourceEditionReader,preserveSourceSelection} from '../src/website-source-selections.js';
+import {withWebsiteSourceSelections,websiteSourceSummary,sourceSelectionReader,sourceEditionReader,sourceSelectionRevision,preserveSourceSelection} from '../src/website-source-selections.js';
 
-async function document(sources){
+async function document(sources,design={}){
  const values=new Map(),blocks={async put(kind,value){const revision=digest(serialize(value));values.set(kind+':'+revision,structuredClone(value));return revision;},async read(kind,revision){const value=values.get(kind+':'+revision);assert.ok(value);return structuredClone(value);}};
- blocks.tree=()=>new RecordValueTree(blocks);const tree=blocks.tree(),root=await tree.retain({document:{website:{researchSources:sources}}}),result=new RecordDocument(blocks,root),original=result.tree.read.bind(result.tree);let maximum=0;
+ blocks.tree=()=>new RecordValueTree(blocks);const tree=blocks.tree(),root=await tree.retain({document:{website:{...design,researchSources:sources}}}),result=new RecordDocument(blocks,root),original=result.tree.read.bind(result.tree);let maximum=0;
  result.tree.read=async revision=>{const value=await original(revision);maximum=Math.max(maximum,Buffer.byteLength(JSON.stringify(value)));assert.ok(!Array.isArray(value)||value.length<=100,'A read must not materialize a growing selection array');return value;};
  return {result,maximum:()=>maximum};
 }
 const choice=()=>({id:randomUUID(),share:true,attachments:[]});
 const edition=()=>({id:randomUUID(),revision:'a'.repeat(64),include:true,body:true,sections:[],fields:[],attachments:[],figures:[]});
+
+test('paged source identity survives presentation edits and changes with any selected research or retained edition',async()=>{
+ const source=emptyPublicationSource(randomUUID());source.selection.records=Array.from({length:137},choice);source.edition={version:1,records:[edition()]};
+ const revision=async sources=>withWebsiteSourceSelections(sources.result,async reader=>sourceSelectionRevision(await reader.get(source.workspaceId)));
+ const original=await document([source],{title:'Original design'}),restyled=await document([emptyPublicationSource(randomUUID()),source],{title:'Another design'});
+ assert.notEqual(original.result.root,restyled.result.root);const before=await revision(original);assert.equal(await revision(restyled),before);
+ const changed=structuredClone(source);changed.selection.records.at(-1).share=false;
+ assert.notEqual(await revision(await document([changed],{title:'Original design'})),before);
+ const changedEdition=structuredClone(source);changedEdition.edition.records[0].revision='b'.repeat(64);
+ assert.notEqual(await revision(await document([changedEdition],{title:'Original design'})),before);
+});
 
 test('native source traversal pages past aggregate owner and record limits without materializing arrays',async()=>{
  const sources=Array.from({length:101},()=>emptyPublicationSource(randomUUID()));

@@ -25,7 +25,9 @@ export function websiteCollectionRequests(values){
 export async function websiteCollectionPage(records,{key,target,notebooks,filter={},feed=null,request=null}){
  const {store,metadata,command,signal}=records,{tag='',limit=0}=filter;
  const settings=feed?{pageSize:feed.pageSize,order:feed.order,visitorFilters:feed.visitorFilters,visitorOrder:feed.visitorOrder}:null;
- const definition=digest(serialize({key,target,notebooks:[...notebooks].sort(),tag,limit,settings}));
+ // Draft revisions also change for presentation-only edits. Bind reading
+ // position to the selected research instead, and restart when it changes.
+ const definition=digest(serialize({key,target,notebooks:[...notebooks].sort(),tag,limit,settings,selection:records.selection??records.local?.selection??null,sources:records.binding??null}));
  if(request?.definition!==definition)request=null;
  const query=feed?{key,search:'',tag:'',type:'',order:feed.order}:null;
  if(request?.visitor&&feed){if(feed.visitorFilters)for(const name of ['search','tag','type'])query[name]=request.visitor[name];if(feed.visitorOrder&&request.visitor.order)query.order=request.visitor.order;}

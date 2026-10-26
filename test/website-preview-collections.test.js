@@ -9,7 +9,8 @@ import {upgradeNotebook} from '../src/model.js';
 import {newElement} from '../src/web/composition-tree.js';
 import {defaultFeed,orderFeed} from '../src/web/website-feed-model.js';
 import {createRegion,assignRegion} from '../src/web/website-regions.js';
-import {websitePreviewSource} from '../src/website-preview-source.js';
+import {websitePreviewSource as pinnedPreviewSource} from '../src/website-preview-source.js';
+import {websiteWorkspace} from '../src/website-workspace.js';
 import {workspaceSaveRequest} from '../src/web/workspace-edits.js';
 import {recordRevisions} from '../src/research.js';
 import {ResearchCatalogue} from '../src/research-catalogue.js';
@@ -19,13 +20,21 @@ import {clearVault} from '../src/encryption.js';
 import {copyPlan,encryptedCopy} from '../src/locations.js';
 import {createAccess,takeCreatedVault} from '../src/access.js';
 import {Workspace} from '../src/storage.js';
+import {WebsitePreviewRecords} from '../src/website-preview-records.js';
 
-async function fixture(t,count=601){
+async function websitePreviewSource(workspace,command,options){
+ const {websitePin}=await websiteWorkspace(workspace,workspace.websiteId??null).outline();
+ return pinnedPreviewSource(workspace,command,{websitePin,...options});
+}
+
+async function fixture(t,count=601,configure=()=>{}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-canvas-collections-')),book=upgradeNotebook(sampleNotebook()),seed=book.entries[0];
- book.entries=Array.from({length:count},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'Observation '+String(i).padStart(4,'0'),body:'Exact original '+i,occurredOn:'2026-10-'+String(1+i%9).padStart(2,'0'),sections:[],attachments:[],figures:[],relations:[],tags:i%2?['odd']:['even'],share:i%3===0}));
+ // Equal-date tag-filter work has a reproducible ID order, independent of UUID randomness.
+ book.entries=Array.from({length:count},(_,i)=>({...structuredClone(seed),id:'00000000-0000-4000-8000-'+String(i).padStart(12,'0'),title:'Observation '+String(i).padStart(4,'0'),body:'Exact original '+i,occurredOn:'2026-10-'+String(1+i%9).padStart(2,'0'),sections:[],attachments:[],figures:[],relations:[],tags:i%2?['odd']:['even'],share:true}));
  const feed=(size,tag='',limit=0)=>({...newElement('records',randomUUID),filter:{projectId:null,tag,limit},feed:{...defaultFeed('records'),pageSize:size,visitorFilters:true,visitorOrder:true,visitorView:true}});
  book.website.home.sections=[feed(10),feed(17,'odd',81)];
  const sidebar=createRegion(book.website,'sidebar','Independent view',{makeId:randomUUID});sidebar.sections=[feed(7,'even')];assignRegion(book.website,'home','sidebar',sidebar.id);
+ configure(book);
  const f=await encryptedFixture(directory,book),etag=(await f.workspace.outline()).etag;
  t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  return {...f,directory,book,command:draft=>({...workspaceSaveRequest(book,draft,recordRevisions(book)),baseEtag:etag})};
@@ -44,8 +53,11 @@ test('canvas feeds retain independent windows over growing saved and unsaved rec
  ResearchCatalogue.prototype.record=function(id,...args){assert.ok(allowed.has(id),'A feed loaded an original record');return original.call(this,id,...args);};
  ResearchCatalogue.prototype.queryDocuments=async function*(...args){for await(const value of documents.apply(this,args)){read++;yield value;}};
  try{
-  let {context}=await load([]);assert.ok(context.recordCards.length<=34);assert.equal(context.entries.length,0);assert.ok(read<140);const keys=draft.website.home.sections.map(s=>'section:'+s.id),first=context.collectionPages.find(p=>p.key===keys[0]),limited=context.collectionPages.find(p=>p.key===keys[1]);
-  const expected=orderFeed(draft.entries,'records','newest');assert.deepEqual(first.recordIds,ids(expected.slice(0,10)));assert.deepEqual(limited.recordIds,ids(expected.filter(r=>r.tags.includes('odd')).slice(0,17)));
+  let {context}=await load([]);assert.ok(context.recordCards.length<=34);assert.equal(context.entries.length,0);assert.ok(read<140,'Initial preview read '+read+' record summaries');const keys=draft.website.home.sections.map(s=>'section:'+s.id),first=context.collectionPages.find(p=>p.key===keys[0]),limited=context.collectionPages.find(p=>p.key===keys[1]);
+  const publicIds=new Set(f.book.entries.filter(record=>record.share).map(record=>record.id)),expected=orderFeed(draft.entries.filter(record=>publicIds.has(record.id)),'records','newest');
+  assert.deepEqual(context.previewCounts,{total:expected.length,notebooks:Object.fromEntries(draft.notebooks.map(book=>[book.id,expected.filter(record=>record.notebookId===book.id).length]))});
+  assert.ok(!context.recordCards.some(record=>record.id===draft.entries.at(-1).id),'A website draft cannot grant publication consent to a new research record');
+  assert.deepEqual(first.recordIds,ids(expected.slice(0,10)));assert.deepEqual(limited.recordIds,ids(expected.filter(r=>r.tags.includes('odd')).slice(0,17)));
   const second=navigation(first,first.nextCursor);({context}=await load([second]));assert.deepEqual(context.collectionPages.find(p=>p.key===keys[0]).recordIds,ids(expected.slice(10,20)));assert.deepEqual(context.collectionPages.find(p=>p.key===keys[1]).recordIds,limited.recordIds);
   const backwards=navigation(limited,null,{...limited.visitor,order:'oldest'}),selection=expected.filter(r=>r.tags.includes('odd')).slice(0,81).reverse(),seen=[];let current=backwards;
   for(;;){
@@ -58,10 +70,48 @@ test('canvas feeds retain independent windows over growing saved and unsaved rec
   draft.website.title='Edited design';let result=await websitePreviewSource(f.workspace,f.command(draft),{designTarget:'home',collections:[second,current]});assert.deepEqual(result.context.collectionPages.find(p=>p.key===keys[0]).recordIds,ids(expected.slice(10,20)));
   draft.website.home.sections[1].filter.tag='even';result=await websitePreviewSource(f.workspace,f.command(draft),{designTarget:'home',collections:[second,current]});assert.deepEqual(result.context.collectionPages.find(p=>p.key===keys[0]).recordIds,ids(expected.slice(10,20)));assert.deepEqual(result.context.collectionPages.find(p=>p.key===keys[1]).recordIds,ids(expected.filter(r=>r.tags.includes('even')).slice(0,17)));
   for(const collections of [null,[second,second],[{...second,query:second.query+'&unknown=x'}],[{...second,query:'collection='+encodeURIComponent(first.key)+'&cards=invalid'}]])await assert.rejects(load(collections),{code:'INVALID'});
-  const changedSite={...f.workspace,websiteId:randomUUID(),outline:f.workspace.outline.bind(f.workspace),storageKind:f.workspace.storageKind.bind(f.workspace),catalogue:f.workspace.catalogue.bind(f.workspace)};
-  await assert.rejects(websitePreviewSource(changedSite,command,{designTarget:'home',collections:[second]}),{code:'INVALID'});
+  const {websitePin}=await websiteWorkspace(f.workspace).outline();
+  await assert.rejects(pinnedPreviewSource(f.workspace,command,{websitePin:{...websitePin,websiteId:randomUUID()},designTarget:'home',collections:[second]}),{code:'INVALID'});
   assert.throws(()=>renderPublication(context),{code:'INVALID'});
  }finally{ResearchCatalogue.prototype.record=original;ResearchCatalogue.prototype.queryDocuments=documents;}
+});
+
+test('canvas continuation preserves presentation edits and restarts after source selection changes',async t=>{
+ const f=await fixture(t,61),command=f.command(f.book),load=(request,collections=[])=>websitePreviewSource(f.workspace,request,{designTarget:'home',collections}),key='section:'+f.book.website.home.sections[0].id;
+ const expected=orderFeed(f.book.entries.filter(record=>record.share),'records','newest');
+ const initial=(await load(command)).context.collectionPages.find(page=>page.key===key),next=navigation(initial,initial.nextCursor);
+ assert.deepEqual(initial.recordIds,ids(expected.slice(0,10)));assert.ok(initial.nextCursor);
+ const restyled=structuredClone(command);restyled.metadata.website={...structuredClone(f.book.website),title:'A different presentation'};
+ const continued=(await load(restyled,[next])).context.collectionPages.find(page=>page.key===key);
+ assert.deepEqual(continued.recordIds,ids(expected.slice(10,20)));assert.equal(continued.definition,initial.definition);
+ const selected={...restyled,selection:{includeProjects:[],records:[{id:expected[0].id,share:false,attachments:[]}]}};
+ const selectedContext=(await load(selected,[next])).context,restarted=selectedContext.collectionPages.find(page=>page.key===key);
+ assert.deepEqual(selectedContext.previewCounts,{total:expected.length-1,notebooks:Object.fromEntries(f.book.notebooks.map(book=>[book.id,expected.filter(record=>record.id!==expected[0].id&&record.notebookId===book.id).length]))});
+ assert.notEqual(restarted.definition,initial.definition);assert.deepEqual(restarted.recordIds,ids(expected.slice(1,11)));assert.equal(restarted.previousCursor,null);
+ const following=(await load(selected,[navigation(restarted,restarted.nextCursor)])).context.collectionPages.find(page=>page.key===key);
+ assert.deepEqual(following.recordIds,ids(expected.slice(11,21)));assert.ok(!following.recordIds.includes(expected[0].id));
+});
+
+test('preview counts respect source consent, notebook moves and exclusions without reading or retaining every selected document',async t=>{
+ const f=await fixture(t,6,book=>{
+  const privateBook={...structuredClone(book.notebooks[0]),id:randomUUID(),title:'Private book',share:false};book.notebooks.push(privateBook);
+  book.entries[0].share=false;for(const entry of book.entries.slice(3))entry.notebookId=privateBook.id;
+ }),draft=structuredClone(f.book),publicId=draft.notebooks[0].id,privateId=draft.notebooks.at(-1).id;
+ draft.entries[0].share=true; // A website edit cannot grant source consent.
+ draft.entries[2].notebookId=privateId;draft.entries[3].notebookId=publicId;draft.entries[5].share=false;draft.entries.splice(1,1);
+ const command=f.command(draft),controller=new AbortController();
+ await f.workspace.catalogue(async store=>{
+  const snapshot=await store.snapshot(),metadata={...snapshot.metadata,...command.metadata},records=new WebsitePreviewRecords(store,snapshot,metadata,command,{signal:controller.signal});await records.initialize();
+  const retained=records.rows.size,queries=store.queryDocuments;store.queryDocuments=()=>{throw Error('Counts loaded record summaries');};
+  try{
+   const empty=Object.fromEntries(metadata.notebooks.map(book=>[book.id,0]));
+   assert.deepEqual(await records.counts(),{total:1,notebooks:{...empty,[publicId]:1}});assert.equal(records.rows.size,retained);
+   records.selection={includeProjects:[metadata.projects[0].id],records:[{id:f.book.entries[3].id,share:false,attachments:[]}]};
+   assert.deepEqual(await records.counts(),{total:0,notebooks:empty});assert.equal(records.rows.size,retained);
+   const member=store.member;let lookups=0;store.member=async function(...args){lookups++;const row=await member.apply(this,args);controller.abort();return row;};
+   try{await assert.rejects(records.counts(),{name:'AbortError'});assert.equal(lookups,1);}finally{store.member=member;}
+  }finally{store.queryDocuments=queries;}
+ });
 });
 
 test('sparse feed filters and default record directories continue without retaining the corpus and restore under a fresh key',async t=>{
