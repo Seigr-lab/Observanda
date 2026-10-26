@@ -9,11 +9,13 @@ import {navigate} from '../browser/preferences-helper.js';
 test('desktop opens setup, saves encrypted work, protects unsaved edits and reopens after a clean shutdown',async()=>{
  test.setTimeout(240000);
  const fixture=await desktopFixture(),{directory,packaged,env,start}=fixture;
+ const previous=process.env.OBSERVANDA_DESKTOP_PREVIOUS_EXECUTABLE;
+ if(previous&&!packaged)throw Error('Update acceptance requires the candidate packaged executable as well as its predecessor.');
  const workspaceName='Desktop field and studio work',workspaceRoot=path.join(directory,workspaceName),projectRoot=path.join(workspaceRoot,'Unsaved desktop project');
  const access=desktopAccess(),{credentials}=access;let app;
  console.log(packaged?'Desktop acceptance: selected executable.':'Desktop acceptance: source Electron (not an installed build).');
  try{
-  app=await start();let page=await app.firstWindow();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  app=await start(previous);let page=await app.firstWindow();const errors=[];page.on('pageerror',e=>errors.push(e.message));
   // Electron's native unsaved-work dialog owns beforeunload. Prevent the
   // browser automation's automatic dismissal from racing that decision.
   page.on('dialog',()=>{});
@@ -41,7 +43,7 @@ test('desktop opens setup, saves encrypted work, protects unsaved edits and reop
   await page.evaluate(()=>location.hash='#/workspace');
   // Only one instance may own this profile/database; another icon activation
   // exits after focusing the first window, without starting another service.
-  const exe=packaged??fixture.sourceExecutable??(await import('electron')).default;
+  const exe=previous??packaged??fixture.sourceExecutable??(await import('electron')).default;
   await new Promise((resolve,reject)=>{const other=spawn(exe,packaged?[]:[path.resolve('desktop')],{env,windowsHide:true,stdio:'ignore'});other.once('error',reject);other.once('exit',code=>code===0?resolve():reject(Error('Second desktop instance failed')));});
   await page.locator('[data-action="new-project"]').first().click();await page.locator('#dialog').getByLabel('Name',{exact:true}).fill('Unsaved desktop project');if(credentials.password)await page.locator('#dialog [name=projectPassword]').fill(credentials.password);
   await app.evaluate(({dialog,BrowserWindow})=>{dialog.showMessageBoxSync=()=>0;BrowserWindow.getAllWindows()[0].close();});
@@ -102,7 +104,7 @@ test('desktop opens setup, saves encrypted work, protects unsaved edits and reop
   await titleEditor.getByRole('button',{name:'Save changes',exact:true}).click();const saved=await saving;expect(saved.ok()).toBe(true);await expect(titleEditor).not.toBeVisible();
   await expect(page.locator('.record-editing h1')).toHaveText('Amended packaged block record');
   console.log('Desktop authoring: selected title saved; restarting the application.');
-  await fixture.close(app);app=await start();page=await app.firstWindow();if(credentials.password)await access.unlock(page);
+  await fixture.close(app);app=await start();page=await app.firstWindow();page.on('pageerror',e=>errors.push(e.message));if(credentials.password)await access.unlock(page);
   await expect(page.locator('.workspace-name')).toHaveText('Desktop field and studio work',{timeout:60000});
   console.log('Desktop restart: workspace reopened; checking lock and unlock.');
   await page.locator('#main-navigation').getByRole('button',{name:'Lock workspace',exact:true}).click();
@@ -124,7 +126,20 @@ test('desktop opens setup, saves encrypted work, protects unsaved edits and reop
    if(!response.ok)throw Error('Packaged block reopen failed');return (await response.json()).book.entries[0];
   },{...retained,projectId});
   expect(reopened.sections).toEqual(retained.record.sections);
+  if(previous){
+   await page.getByRole('button',{name:'Edit record',exact:true}).click();await page.getByRole('button',{name:'Edit selected detail',exact:true}).click();
+   const editor=page.getByRole('dialog',{name:'Edit Record title',exact:true});await editor.getByLabel('Record title',{exact:true}).fill('Continued after application update');
+   const continued=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/projects/'+projectId+'/lab-books/'+externalBook.id+'/research/records/values/save'&&response.request().method()==='POST');
+   await editor.getByRole('button',{name:'Save changes',exact:true}).click();expect((await continued).ok()).toBe(true);await expect(editor).not.toBeVisible();
+   await page.reload();await expect(page.locator('.record-editing h1')).toHaveText('Continued after application update',{timeout:30000});
+   const updated=await page.evaluate(async({workspaceId,record,projectId})=>{
+    const storage=await(await fetch('/api/storage')).json(),response=await fetch('/api/projects/'+projectId+'/lab-books/'+record.notebookId+'/workspace/read/selection',{method:'POST',headers:{'Content-Type':'application/json','X-Observanda-Workspace':storage.contextId},body:JSON.stringify({workspaceId,ids:[record.id]})});
+    if(!response.ok)throw Error('Post-update record read failed');return (await response.json()).book.entries[0];
+   },{...retained,projectId});
+   expect(updated.title).toBe('Continued after application update');expect(updated.sections).toEqual(retained.record.sections);
+  }
   await page.evaluate(route=>location.hash=route,siteRoute);await expect(page.locator('.website-site-context')).toContainText('Desktop project website');
+  expect(errors).toEqual([]);
   await fixture.close(app);app=null;
   for(const root of [workspaceRoot,projectRoot,path.join(projectRoot,externalBook.title)]){
    const service=path.join(root,'.observanda','postgresql');await readFile(path.join(service,'data','PG_VERSION'));
