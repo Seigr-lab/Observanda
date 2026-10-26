@@ -39,6 +39,12 @@ export function createPublicationInput(workspace,id,metadata,{signal}={}){
  runtime.set(input,{workspace,builder,header:{metadata:compactPublicationMetadata(metadata),tableQueries:1},id,signal});return input;
 }
 export function publicationInputState(input){const state=runtime.get(input);if(!state)throw new AppError('INVALID');return state;}
+export function requirePublicationEditionDetails(input){
+ const state=publicationInputState(input);state.header.editionDetails=1;
+ // Older readers enforce the exact source collection schema. They must refuse
+ // this source instead of rendering its originals without the edition choices.
+ state.builder.ensureCollection('editionDetails',{indexes:[]});
+}
 export async function finishPublicationInput(input,fields,{signal}={}){
  const state=publicationInputState(input);Object.assign(state.header,fields);const document=await state.builder.finish({header:state.header,signal});
  return {...input,document,...fields};
@@ -61,7 +67,8 @@ export async function openPublicationInput(workspace,source,{signal}={}){
  const active=runtime.get(source);if(active)return new PublicationInput(workspace,source,active.builder,active.header,{signal});
  if(source?.version===6||source?.document){
   const document=await PublicationDocument.open(workspace,source.document,{owner:{kind:'source',workspaceId:source.metadata?.id??source.workspaceId,websiteId:source.websiteId??workspace.websiteId??null,jobId:source.id??source.document?.owner.jobId,attemptId:null},signal}),header=await document.header({signal});
-  const schemas={...PUBLICATION_INPUT_COLLECTIONS,...(header?.figureDocuments===1?PUBLICATION_FIGURE_COLLECTIONS:{})};
+  const schemas={...PUBLICATION_INPUT_COLLECTIONS,...(header?.figureDocuments===1?PUBLICATION_FIGURE_COLLECTIONS:{}),...(header?.editionDetails===1?{editionDetails:{indexes:[]}}:{})};
+  if(header?.editionDetails!==undefined&&header.editionDetails!==1||header?.editionDetails===1&&document.count('editionDetails')!==0)fail();
   if(!header?.metadata||header.figureDocuments!==undefined&&header.figureDocuments!==1||header.tableQueries!==undefined&&header.tableQueries!==1||header.metadata.id!==(source.metadata?.id??source.workspaceId)||document.collectionNames().sort().join()!==Object.keys(schemas).filter(name=>name!=='retainedTables'||header.tableQueries===1).sort().join())fail();
   for(const [name,schema] of Object.entries(schemas))if((name!=='retainedTables'||header.tableQueries===1)&&Object.keys(document.collection(name).indexes).sort().join()!==[...schema.indexes].sort().join())fail();
   if(header.tableQueries===1&&typeof workspace.catalogue==='function'&&!await workspace.catalogue(async store=>catalogueRequiresPagedResearchTables(await catalogueFormat(store.db))))fail();
@@ -142,7 +149,7 @@ class PublicationInput{
   const row=await this.get('records',id);if(!row)throw new AppError('NOT_FOUND');let record;
   if(this.source.version===1)record=this.source.book.entries.find(record=>record.id===(row.recordId??row.id));
   else{const raw=await this.workspace.readMetadata('.observanda/release-inputs/'+this.id+'/'+row.id+'.json',4*1024*1024);this.check();if(raw===null||digest(raw)!==row.sha256)fail();try{record=JSON.parse(raw);}catch{fail();}}
-  if(!record||record.id!==(row.recordId??row.id)||recordRevision(record)!==row.revision)fail();if(row.selection){try{validateEditionRecord(record,row.selection);}catch{fail();}}return publicationPageRecord(selectEditionRecord(record,row.selection),row);
+  if(!record||record.id!==(row.recordId??row.id)||recordRevision(record)!==row.revision)fail();if(row.selection){if(row.selection.details!==undefined&&this.header.editionDetails!==1)fail();try{validateEditionRecord(record,row.selection);}catch{fail();}}return publicationPageRecord(selectEditionRecord(record,row.selection),row);
  }
  async *records(options={}){
   this.check();if(!this.native){let rows=this.legacy('records').filter(row=>(!options.notebookId||row.notebookId===options.notebookId)&&(!options.projectId||this.legacy('notebooks').some(book=>book.id===row.notebookId&&book.projectId===options.projectId))&&(options.historical===undefined||!!row.historical===options.historical));if(options.order!=='original')rows=[...rows].sort((a,b)=>readingKey(a,'date').localeCompare(readingKey(b,'date'),'en'));if(options.reverse)rows=[...rows].reverse();if(options.after){const index=rows.findIndex(row=>row.id===options.after);if(index>=0)rows=rows.slice(index+1);}for(const row of rows){this.check();yield row;}return;}

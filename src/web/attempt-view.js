@@ -43,6 +43,11 @@ export function attemptView(value,esc,{message=attemptText,reference=null,correc
 
 export function projectAttempt(value,projectReference){
  if(!value)return undefined;const out=structuredClone(value),ref=r=>r?projectReference(r)??{withheld:true}:null;
- for(const p of out.preparations){p.basedOn=ref(p.basedOn);p.protocols=p.protocols.map(ref);for(const c of p.conditions)c.reference=ref(c.reference);for(const i of p.inputs)i.reference=ref(i.reference);}
+ for(const p of out.preparations){
+  p.basedOn=ref(p.basedOn);p.protocols=p.protocols.map(ref);for(const c of p.conditions)c.reference=ref(c.reference);
+  // Labels and hashes identify the same private evidence as its link. A
+  // withheld reference must not leave that identifying metadata in public HTML.
+  p.inputs=p.inputs.flatMap(input=>{const reference=ref(input.reference);return reference?.withheld?[]:[{...input,reference}];});
+ }
  for(const row of [...out.events,...out.assessments])row.references=row.references.map(ref);return out;
 }

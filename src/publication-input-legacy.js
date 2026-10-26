@@ -30,6 +30,7 @@ export async function retainPublicationInput(workspace,id,metadata,originals,{so
  const projects=new Set(metadata.projects.filter(p=>p.share).map(p=>p.id)),notebooks=new Set(metadata.notebooks.filter(n=>n.share!==false&&projects.has(n.projectId)).map(n=>n.id));
  const records=[],sourceRevisions={},sourceMaterials=[],warnings=[],linkedCards=new Set(),research=publicationResearchWorkspace(workspace),materials=new ResearchMaterials(research);
  async function pin(original,choice,pageId=original.id){
+  if(choice?.details!==undefined)throw new AppError('STORAGE_UPGRADE_REQUIRED');
   const saved=publicationOriginal(original),revision=recordRevision(saved),requested=choice??defaultEditionRecord(original,revision),record=selectEditionRecord(original,requested),selection={...requested,include:record.share,sections:record.sections.map(section=>section.id),attachments:record.attachments.map(item=>item.id)},raw=serialize(saved);
   if(record.results?.statements.some(statement=>statement.table?.version===3))throw new AppError('FORMAT');
   await workspace.writeMetadata(recordFile(id,pageId),raw);

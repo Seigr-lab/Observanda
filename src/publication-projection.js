@@ -18,6 +18,7 @@ import {selectorAnchor} from './web/book-selectors.js';
 import {readingJourney} from './web/book-journeys.js';
 import {publicationLinkResolver,publicationRecordText,publicationRecordDestination,publicationCollectionDestination,publicationTargetSelector} from './publication-prose.js';
 import {selectEditionRecord} from './web/publication-selection.js';
+import {editionReferences} from './web/publication-record-references.js';
 import {validateEditionSelection,validateEditionRecord} from './publication-selection.js';
 import {customFieldLabel} from './web/custom-field-presentation.js';
 
@@ -74,13 +75,17 @@ export function projectPublication(book,selection,{designPageId=null,designTarge
   const availability=(id,target)=>(edition?.availability??[]).find(r=>r.recordId===id&&researchReference(r.target)===researchReference(target))?.statement;
   const sectionsFor=(target,sections)=>paged&&target!==pageTarget?[]:sections;
   const projectLink=referenceResolver??publicationLinkResolver(book.id,links,{workspaceContent});
+  const availabilityNotes=record=>{
+    const references=new Set(editionReferences(record).map(researchReference));
+    return (edition?.availability??[]).filter(note=>note.recordId===record.id&&references.has(researchReference(note.target))&&!projectLink(researchReference(note.target))).map(note=>note.statement);
+  };
   const publicText=value=>projectProse(value,projectLink);
   const recordText=(value,record)=>publicationRecordText(value,record,projectLink,{workspaceContent});
   const cleanSections=sections=>sections.map(section=>section.richText?{...section,richText:publicText(section.richText),body:proseText(publicText(section.richText))}:section);
   const projects = selection.projects.map(p => ({ id: p.id, title: p.title, description: p.description, ...(p.recordCount===undefined?{}:{recordCount:p.recordCount}), logos: logosFor(book, 'project:' + p.id) }));
   const entries = selection.entries.map(e => ({
     ...(e.historical?{revisionEdition:{revision:e.revision,current:destination({kind:'record',workspaceId:e.sourceWorkspaceId??book.id,id:e.recordId})?.id??null}}:{}),
-    availability:(edition?.availability??[]).filter(r=>r.recordId===e.id&&!projectLink(researchReference(r.target))).map(r=>r.statement),
+    availability:availabilityNotes(e),
     id: e.id, notebookId: e.notebookId, type: e.template?.label??e.type, journey:readingJourney(e), title: e.title, body: recordText(e.body,e), contributors:e.contributors.map(person=>({name:person.name,role:person.role})),
     relations:e.relations.flatMap(link=>{
       const href=projectLink(researchReference(link.target));if(!href)return [];

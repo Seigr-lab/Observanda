@@ -8,18 +8,14 @@ import {recordRevision} from './research.js';
 import {ResearchMaterials} from './research-materials.js';
 import {publicationSource,publicationOriginal,publicationDerivative} from './publication-source.js';
 import {sourceRecordAllowed} from './web/source-publication-permissions.js';
-import {proseReferences,proseText} from './web/prose-model.js';
-import {attemptReferences} from './web/attempt-model.js';
+import {proseText} from './web/prose-model.js';
 import {researchId,researchReference} from './web/research-reference.js';
 import {editionRevisionKey,selectEditionRecord,validEditionRecord} from './web/publication-selection.js';
 import {validateEditionRecord} from './publication-selection.js';
 import {recordEditionInventory} from './web/publication-inventory.js';
 import {customFieldLabel} from './web/custom-field-presentation.js';
-
-export function editionReferences(record){
- const values=[...record.relations.map(r=>r.target),...[record.body,...record.sections.map(s=>s.body)].flatMap(proseReferences),...attemptReferences(record.attempt).filter(r=>r.kind==='record')];
- return [...new Map(values.map(r=>[researchReference(r),r])).values()];
-}
+import {editionReferences,omittedEditionReferences} from './web/publication-record-references.js';
+export {editionReferences} from './web/publication-record-references.js';
 // A publication page has its own stable identity. The encrypted original keeps
 // its research identity and hash; current and historical pages cannot overwrite
 // one another or share different chart bytes under the same output filename.
@@ -88,21 +84,43 @@ export async function retainSelectedRevisions(workspace,metadata,edition,records
 }
 // A forward cursor over the growing immutable record collection also visits
 // newly admitted history. Explicit consent bounds pending history choices.
-export async function retainSelectedRevisionRows(workspace,metadata,choices,at,count,pin,{signal,start=0}={}){
- if(!choices.count('history'))return;
+export async function retainSelectedRevisionRows(workspace,metadata,choices,at,count,pin,{signal,start=0,originalFor,complete}={}){
+ if(!choices.count('history'))return complete?.(async()=>undefined);
  return withScratch(async consumed=>{
  let completed=0;
+ const checked=async(target,choice)=>{
+  const original=await exactPublicationRecord(workspace,target);validateEditionRecord(original,choice);
+  if(!metadata.notebooks.some(notebook=>notebook.id===original.notebookId&&notebook.share!==false&&metadata.projects.some(project=>project.id===notebook.projectId&&project.share)))throw new AppError('INVALID');
+  signal?.throwIfAborted();return original;
+ };
  for(let position=start;position<count();position++){
   const row=await at(position);if(!row)throw new AppError('JOB_DAMAGED');
   for(const target of [...row.relations.map(relation=>relation.target),...row.references]){
    if(!target.revision||target.kind!=='record')continue;
-   const key=editionRevisionKey(target);if(await consumed.has(key))continue;
+   const key=editionRevisionKey(target);if(await consumed.has('history:'+key))continue;
    const choice=await choices.get('history',key);if(!choice||!await workspaceReferenceNamespaceMatches(publicationResearchWorkspace(workspace),target))continue;
-   const original=await exactPublicationRecord(workspace,target);validateEditionRecord(original,choice);
-   if(!metadata.notebooks.some(notebook=>notebook.id===original.notebookId&&notebook.share!==false&&metadata.projects.some(project=>project.id===notebook.projectId&&project.share)))throw new AppError('INVALID');
-   signal?.throwIfAborted();await consumed.add(key);completed++;await pin(original,choice,revisionPageId(metadata.id,original.id,choice.revision));
+   const original=await checked(target,choice);
+   await consumed.add('history:'+key);completed++;await pin(original,choice,revisionPageId(metadata.id,original.id,choice.revision));
   }
  }
+ // An existing historical selection can become unreachable when its referring
+ // detail is unchecked. Validate that exact omitted graph without retaining or
+ // publishing its records. Selected paths above always take precedence.
+ if(completed!==choices.count('history')&&originalFor)await withScratch(async pending=>{
+  const enqueue=async targets=>{for(const target of targets){signal?.throwIfAborted();if(target.kind!=='record'||!target.revision)continue;const key=editionRevisionKey(target);if(!await consumed.has('history:'+key)&&await choices.get('history',key)&&await workspaceReferenceNamespaceMatches(publicationResearchWorkspace(workspace),target))await pending.add(key,target);}};
+  for(let position=start;position<count();position++){
+   signal?.throwIfAborted();const row=await at(position);if(!row)throw new AppError('JOB_DAMAGED');
+   if(row.selection?.details!==undefined)await enqueue(omittedEditionReferences(await originalFor(row),row.selection));
+  }
+  for(let target=await pending.take();target!==undefined;target=await pending.take()){
+   const key=editionRevisionKey(target);if(await consumed.has('history:'+key))continue;
+   const choice=await choices.get('history',key),original=await checked(target,choice),references=editionReferences(selectEditionRecord(original,{...choice,details:undefined}));
+   await consumed.add('history:'+key);completed++;
+   await consumed.add('omitted:'+revisionPageId(metadata.id,original.id,choice.revision),references);
+   await enqueue(references);
+  }
+ },{signal});
  if(completed!==choices.count('history'))throw new AppError('INVALID');
+ return complete?.(id=>consumed.get('omitted:'+id));
  },{signal});
 }

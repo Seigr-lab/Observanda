@@ -18,8 +18,9 @@ import {emptyEditionSelection,defaultEditionRecord,selectEditionRecord} from './
 import {validateEditionRecord} from './publication-selection.js';
 import {publicationDescriptor} from './publication-record-descriptor.js';
 import {retainSelectedRevisionRows} from './publication-revisions.js';
+import {omittedEditionReferences} from './web/publication-record-references.js';
 import {publicationOriginal} from './publication-source.js';
-import {createPublicationInput,publicationInputState,openPublicationInput,publicationRecordIndexes} from './publication-input-reader.js';
+import {createPublicationInput,publicationInputState,openPublicationInput,publicationRecordIndexes,requirePublicationEditionDetails} from './publication-input-reader.js';
 import {PublicationCaptureIdentities} from './publication-owner-identities.js';
 import {appendPublicationOwnerCollections,projectPublicationRecord,retainPublicationAliases} from './publication-owner-projection.js';
 import {retainWebsitePublicationCollections,claimPublicationFile} from './publication-capture-website.js';
@@ -43,6 +44,7 @@ export async function retainPublicationInput(workspace,id,metadata,originals,{so
  const materials=new ResearchMaterials(research),review={retainedFigures:0,changedInputs:0,editedFigures:0};
  async function pin(original,choice,pageId=original.id){
   signal?.throwIfAborted();const saved=publicationOriginal(original),revision=recordRevision(saved),requested=choice??defaultEditionRecord(original,revision),record=selectEditionRecord(original,requested),selection={...requested,include:record.share,sections:record.sections.map(section=>section.id),attachments:record.attachments.map(item=>item.id)},raw=serialize(saved);
+  if(requested.details!==undefined)await requirePublicationEditionDetails(input);
   const cover=metadata.id===state.header.metadata.id?await builder.get('covers',original.id):null,cardMetadata=cover?{...metadata,website:{...metadata.website,presentation:{...metadata.website.presentation,covers:[cover]}}}:metadata;
   let descriptor={...publicationDescriptor(record,cardMetadata),id:pageId,revision,sha256:digest(raw),selection};
   if(pageId!==original.id){descriptor.recordId=original.id;descriptor.historical=true;}
@@ -67,13 +69,19 @@ export async function retainPublicationInput(workspace,id,metadata,originals,{so
   const choice=await choices.get('records',original.id);if(choice){found++;validateEditionRecord(original,choice);if(!choice.include)continue;}await pin(original,choice);
  }
  if(found!==choices.count('records'))throw new AppError('RECORD_CHANGED');
- await retainSelectedRevisionRows(workspace,metadata,choices,async position=>(await builder.window('records',{offset:position,limit:1})).items[0]?.value,()=>builder.count('records'),pin,{signal,start});
+ await retainSelectedRevisionRows(workspace,metadata,choices,async position=>(await builder.window('records',{offset:position,limit:1})).items[0]?.value,()=>builder.count('records'),pin,{signal,start,originalFor:row=>readPublicationRecord(destination,{version:2,id},row),complete:async omittedReferences=>{
  for await(const note of choices.items('availability')){
+  signal?.throwIfAborted();
   if((await choices.get('records',note.recordId))?.include===false)continue;
   const publicId=await identities.identity(metadata.id,'record',note.recordId),row=await builder.get('records',publicId),href=researchReference(note.target);
-  if(!row||![...row.relations.map(link=>link.target),...row.references].some(value=>researchReference(value)===href))throw new AppError('INVALID');
+  if(!row||![...row.relations.map(link=>link.target),...row.references].some(value=>researchReference(value)===href)){
+   const omitted=row?omittedEditionReferences(await readPublicationRecord(destination,{version:2,id},row),row.selection):await omittedReferences(note.recordId);
+   if(omitted?.some(target=>researchReference(target)===href))continue;
+   throw new AppError('INVALID');
+  }
   await builder.append('availability',publicId+'/'+digest(serialize(note.target)),{...note,recordId:publicId},{indexes:{record:publicId+'/'}});
  }
+ }});
  const reader=await openPublicationInput(destination,input,{signal});
  const analysis=await publicationDependencyState(materials,reader.sourceMaterials({workspaceId:metadata.id}),{workspaceId:metadata.id,sourceReader,recordHead,signal,onItem:async item=>{
   const value=!state.header.hasSources?item:{...item,id:digest(metadata.id+'/'+item.id),recordId:await identities.identity(metadata.id,'record',item.recordId),sourceWorkspaceId:metadata.id};
