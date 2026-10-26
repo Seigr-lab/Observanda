@@ -151,12 +151,16 @@ export class EvidenceIntake{
   return prepared;
  }
  async prepare(job,{signal,progress=async()=>{}}={},write){
+  return this.workspace.withCatalogueConnections(()=>this.prepareFiles(job,{signal,progress},write));
+ }
+ async prepareFiles(job,{signal,progress},write){
   const batch=await this.authorize(job);let done=0,bytes=0;const verified=new Set();
-  // Sessions are frozen by enqueue. Pin at most 64 per read snapshot and
-  // checkpoint at most 32 verified originals in each fenced transaction.
+  // Sessions are frozen by enqueue. Read each bounded manifest page, then
+  // release its snapshot before streaming bytes or publishing checkpoints.
+  // Retain large completed files immediately and group at most 32 small ones.
   // Uncheckpointed files can be rebuilt from their durable uploaded chunks.
-  for(let offset=0;offset<batch.files.count;offset+=64)await this.materials.readSnapshot(async()=>{
-   const page=await this.materials.sequences.page(batch.files,{offset,limit:64}),preparedHere=new Map(),pending=[];
+  for(let offset=0;offset<batch.files.count;offset+=64){
+   const page=await this.materials.readSnapshot(()=>this.materials.sequences.page(batch.files,{offset,limit:64})),preparedHere=new Map(),pending=[];
    await write(async()=>{
     signal?.throwIfAborted();
     for(const file of page.items){
@@ -177,8 +181,9 @@ export class EvidenceIntake{
    };
    for(const file of page.items){
     signal?.throwIfAborted();const receipt=this.file(batch.id,'prepared/'+file.id+'.json');
+    if(file.size>=8*1024*1024)await checkpoint();
     const result=await (async()=>{
-    const session=await this.session(batch,file);let prepared=await this.json(receipt);
+    const {session,saved}=await this.materials.readSnapshot(async()=>({session:await this.session(batch,file),saved:await this.json(receipt)}));let prepared=saved;
     if(prepared){await this.verifyPrepared(session,prepared,{signal,verified});return {prepared,persist:false};}
     if(session.reuse){
      let source;
@@ -200,12 +205,12 @@ export class EvidenceIntake{
     }
     return {prepared,persist:true};
     })();
-    if(result.persist){pending.push({receipt,prepared:result.prepared});if(pending.length===32)await checkpoint();}
+    if(result.persist){pending.push({receipt,prepared:result.prepared});if(pending.length===32||file.size>=8*1024*1024)await checkpoint();}
     preparedHere.set(file.id,result.prepared);bytes+=file.size;
     await progress({stage:'Verified files',done:++done,total:batch.command.count});
    }
    await checkpoint();
-  });
+  }
   return this.finalization.stage(job,{signal,progress},write);
  }
  async commit(job,prepared){

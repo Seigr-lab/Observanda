@@ -1,6 +1,8 @@
 import {test} from 'node:test';
 import fsPromises from 'node:fs/promises';
 import {syncBuiltinESMExports} from 'node:module';
+import {AsyncLocalStorage} from 'node:async_hooks';
+import {randomUUID} from 'node:crypto';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm,readFile,readdir,access} from 'node:fs/promises';
 import {spawn} from 'node:child_process';
@@ -34,6 +36,37 @@ async function uploaded(f,bytes=Buffer.from('Synthetic original'),name='original
 }
 async function waitFor(fn,predicate,timeout=20000){const end=Date.now()+timeout;let result;do{result=await fn();if(predicate(result))return result;await delay(25);}while(Date.now()<end);assert.fail('Timed out: '+JSON.stringify(result));}
 const finished=(q,id)=>waitFor(()=>q.read(id),j=>['completed','failed','cancelled'].includes(j.state));
+
+test('worker lease renewal observes current job state while verification holds an older read snapshot',async t=>{
+ const f=await fixture(t),outside=AsyncLocalStorage.snapshot();let clock=Date.now();
+ f.queue.leaseMs=10000;f.queue.now=async()=>clock;
+ f.queue.definitions['test.snapshot']={authorize:async()=>{},commit:async()=>({verified:true}),prepare:async(job,{progress,signal})=>f.workspace.catalogue(async()=>{
+  const original=await f.queue.read(job.id);clock+=6000;
+  await progress({stage:'first',done:1,total:2});
+  await outside(()=>waitFor(()=>f.queue.read(job.id),value=>value.progress.stage==='first'));
+  assert.equal((await f.queue.read(job.id)).lease.until,original.lease.until,'The verification snapshot intentionally remains pinned');
+  await delay(260);clock+=6000;
+  await progress({stage:'second',done:2,total:2});
+  await outside(()=>waitFor(()=>f.queue.read(job.id),value=>value.progress.stage==='second'||value.state==='failed'));
+  signal.throwIfAborted();return {};
+ })};
+ const job=await f.queue.enqueue({id:randomUUID(),type:'test.snapshot',scope:f.recordId,input:{}});
+ f.worker.enabled=true;await f.worker.runOnce();
+ const result=await f.queue.read(job.id);assert.equal(result.state,'completed',JSON.stringify(result));assert.deepEqual(result.result,{verified:true});
+});
+
+test('a checkpoint renews its admitted lease before releasing a slow writer but cannot enter with an expired lease',async t=>{
+ const f=await fixture(t),u=await uploaded(f);let clock=Date.now();f.queue.now=async()=>clock;
+ const job=await f.queue.claim();
+ await f.queue.checkpoint(job.id,job.lease.token,async()=>{
+  clock+=2*f.queue.leaseMs;
+  await f.workspace.writeMetadata('.observanda/checkpoint-proof.json',JSON.stringify({verified:true}));
+ });
+ const current=await f.queue.held(job.id,job.lease.token);assert.ok(current.job.lease.until>clock);
+ assert.deepEqual(JSON.parse(await f.workspace.readMetadata('.observanda/checkpoint-proof.json')),{verified:true});
+ clock+=2*f.queue.leaseMs;let entered=false;
+ await assert.rejects(f.queue.checkpoint(job.id,job.lease.token,()=>{entered=true;}),{code:'JOB_LEASE'});assert.equal(entered,false);
+});
 
 test('activity observes committed job states and never announces a rolled-back enqueue',async t=>{
  const f=await fixture(t),events=[];f.queue.observe=value=>events.push(value);
