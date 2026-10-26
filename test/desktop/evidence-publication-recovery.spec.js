@@ -5,6 +5,7 @@ import {createHash,randomUUID} from 'node:crypto';
 import {setTimeout as delay} from 'node:timers/promises';
 import {desktopFixture} from './fixture.js';
 import {desktopAccess} from './access.js';
+import {downloadFingerprint,withheldTextCheck} from './download-verification.js';
 
 const MiB=1024*1024;
 async function originals(parent){
@@ -56,9 +57,9 @@ test('desktop resumes a large evidence folder and retains publication requests a
   await page.route(pattern,handler);
   try{await expect(call(route,data,site)).rejects.toThrow();expect(intercepted).toBe(true);expect(receipt?.job?.id).toBe(data.commandId);return receipt.job;}finally{await page.unroute(pattern,handler);}
  };
- const downloadHash=async(route,site=null)=>{
+ const downloadHash=async(route,site=null,options)=>{
   const cookies=await app.evaluate(({BrowserWindow},url)=>BrowserWindow.getAllWindows()[0].webContents.session.cookies.get({url}),page.url()),response=await fetch(new URL(route,page.url()),{headers:{Cookie:cookies.map(cookie=>cookie.name+'='+cookie.value).join('; '),...(site?{'X-Observanda-Website':site}:{})},signal:AbortSignal.timeout(180000)});
-  expect(response.ok).toBe(true);const hash=createHash('sha256');let bytes=0;for await(const chunk of response.body){bytes+=chunk.length;hash.update(chunk);}return {size:bytes,sha256:hash.digest('hex')};
+  expect(response.ok).toBe(true);return downloadFingerprint(response.body,options);
  };
  try{
   if(process.env.OBSERVANDA_ACCEPTANCE_STORAGE_ROOT){expect(path.isAbsolute(process.env.OBSERVANDA_ACCEPTANCE_STORAGE_ROOT)).toBe(true);externalParent=await realpath(process.env.OBSERVANDA_ACCEPTANCE_STORAGE_ROOT);storageDirectory=await mkdtemp(path.join(externalParent,'observanda-evidence-acceptance-'));}
@@ -135,9 +136,15 @@ test('desktop resumes a large evidence folder and retains publication requests a
   const preview=new URL(await page.locator('#full-public-preview').getAttribute('href'),page.url()),previewPath='/preview/'+reviewId+'/publication.json'+preview.search,manifest=await page.evaluate(async route=>{const response=await fetch(route);if(!response.ok)throw Error('Publication manifest unavailable');return response.json();},previewPath);
   expect(manifest.files.filter(file=>/^pages\/[^/]+\.html$/.test(file.path))).toHaveLength(121);expect(manifest.entries).toHaveLength(1);
   console.log('Desktop recovery: checking downloaded publication file hashes and private-content exclusions.');
-  for(const file of manifest.files){const url='/preview/'+reviewId+'/'+file.path+preview.search;expect(await downloadHash(url)).toEqual({size:file.bytes,sha256:file.sha256});}
-  const publicText=await page.evaluate(async({files,base,search})=>{let output='';for(const file of files)if(/\.(?:html|json|txt|xml|csv)$/.test(file.path))output+=await(await fetch(base+file.path+search)).text();return output;},{files:manifest.files,base:'/preview/'+reviewId+'/',search:preview.search});
-  for(const withheld of ['PRIVATE_ORIGINAL_','WITHHELD_EVIDENCE_','Private synthetic originals','Concurrent private observation',...originalSet.files.map(file=>file.sha256)])expect(publicText).not.toContain(withheld);
+  const checkText=withheldTextCheck(['PRIVATE_ORIGINAL_','WITHHELD_EVIDENCE_','Private synthetic originals','Concurrent private observation',...originalSet.files.map(file=>file.sha256)]),downloadsStarted=Date.now();
+  metrics.publicationFilesTotal=manifest.files.length;metrics.publicationFilesChecked=0;metrics.publicationDownloadBytes=0;metrics.publicationMaximumDownloadMs=0;
+  for(const file of manifest.files){
+   const url='/preview/'+reviewId+'/'+file.path+preview.search,started=Date.now(),fingerprint=await downloadHash(url,null,/\.(?:html|json|txt|xml|csv)$/.test(file.path)?{checkText}:undefined);
+   expect(fingerprint).toEqual({size:file.bytes,sha256:file.sha256});const elapsedMs=Date.now()-started;
+   metrics.publicationFilesChecked++;metrics.publicationDownloadBytes+=fingerprint.size;metrics.publicationMaximumDownloadMs=Math.max(metrics.publicationMaximumDownloadMs,elapsedMs);
+   console.log('Desktop publication download: '+JSON.stringify({file:metrics.publicationFilesChecked,total:metrics.publicationFilesTotal,bytes:fingerprint.size,elapsedMs}));
+  }
+  metrics.publicationDownloadMs=Date.now()-downloadsStarted;
   const exported=await downloadHash('/api/export/'+reviewId+'?context='+encodeURIComponent((await call('/api/storage')).contextId),websiteId);expect(exported.size).toBeGreaterThan(0);
   expect(errors).toEqual([]);console.log('Desktop evidence/publication acceptance: '+JSON.stringify(metrics));
  }catch(error){
