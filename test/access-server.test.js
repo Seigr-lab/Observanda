@@ -10,6 +10,7 @@ import {sampleNotebook} from '../src/sample.js';
 import {initializeLocation,readPreference,workspaceManifest} from '../src/locations.js';
 import {createAccess} from '../src/access.js';
 import {Workspace} from '../src/storage.js';
+import {setTimeout as delay} from 'node:timers/promises';
 
 async function setup(t,{protected:secure=false,create=true,currentAccess=false}={}){
   const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-auth-service-')),root=path.join(parent,'workspace'),preferencesFile=path.join(parent,'settings','preferences.json');
@@ -91,6 +92,34 @@ test('new workspace creation honors the selected folder and keeps paths and acce
   const access=await readFile(path.join(destination,'.observanda','access.json'),'utf8');assert.ok(!access.includes('my synthetic passphrase'));
   assert.equal(await readPreference(app.preferencesFile),destination);
   await client.request('/api/access/lock',{});assert.equal((await client.request('/api/notebook')).status,401);
+});
+
+test('workspace creation keeps its admitted response alive through slow initialization and reopens the created workspace',async t=>{
+ const app=await setup(t,{create:false}),client=await app.client(),title='Slow workspace creation',destination=path.join(app.parent,title);
+ const original=Workspace.prototype.initializeResearch;let release,entered,requests=0,creationSocket;
+ const held=new Promise(resolve=>release=resolve),initializing=new Promise(resolve=>entered=resolve),socketTimeout=1000;
+ Workspace.prototype.initializeResearch=async function(...args){
+  if(this.root===destination){entered();await held;}
+  return original.apply(this,args);
+ };
+ const count=(req)=>{if(req.method==='POST'&&req.url==='/api/notebook/create'){requests++;creationSocket=req.socket;}};
+ app.server.prependListener('request',count);app.server.setTimeout(socketTimeout);
+ t.after(()=>{Workspace.prototype.initializeResearch=original;app.server.removeListener('request',count);app.server.setTimeout(60000);});
+ const pending=client.request('/api/notebook/create',{title,storageParent:app.parent});void pending.catch(()=>{});
+ try{
+  let guard;try{await Promise.race([initializing,pending.then(()=>{throw Error('Creation returned before initialization');}),new Promise((_,reject)=>{guard=setTimeout(()=>reject(Error('Initialization was not reached')),30000);})]);}finally{clearTimeout(guard);}
+  await delay(socketTimeout*2);
+  assert.equal(creationSocket.destroyed,false,'The admitted creation response must survive the ordinary idle timeout');
+  assert.equal(requests,1);release();
+  const response=await pending;assert.equal(response.status,201);const created=await response.json();
+  assert.equal(created.book.title,title);assert.equal(created.storage.root,destination);assert.equal(created.storage.available,true);assert.ok(created.storage.contextId);assert.equal(requests,1);
+  assert.equal(await readPreference(app.preferencesFile),destination);assert.ok((await readdir(destination)).includes('workspace.observanda'));
+  await app.close();
+  const reopened=await startServer({root:destination,port:0,preferencesFile:app.preferencesFile,expectedExisting:true});t.after(()=>reopened.close());
+  const session=await fetch(reopened.origin+'/api/session',{method:'POST',headers:{Origin:reopened.origin,'Content-Type':'application/json'},body:JSON.stringify({token:reopened.launchToken})});assert.equal(session.status,200);
+  const saved=await fetch(reopened.origin+'/api/notebook',{headers:{Cookie:session.headers.get('set-cookie').split(';')[0]}});assert.equal(saved.status,200);const current=await saved.json();
+  assert.equal(current.book.id,created.book.id);assert.equal(current.book.title,title);assert.deepEqual(current.book.entries,created.book.entries);
+ }finally{release();await pending.catch(()=>{});}
 });
 
 test('missing remembered locations never turn into a replacement workspace',async t=>{

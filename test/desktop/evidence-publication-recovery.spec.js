@@ -67,8 +67,13 @@ test('desktop resumes a large evidence folder and retains publication requests a
   app=await fixture.start();await watch();expect(await app.evaluate(({app})=>app.isPackaged)).toBe(!!fixture.packaged);
   console.log(fixture.packaged?'Evidence/publication acceptance: selected packaged executable.':'Evidence/publication acceptance: source Electron; installed executable not qualified.');
   await expect(page.getByRole('heading',{name:'Create a workspace',exact:true})).toBeVisible({timeout:60000});
-  await page.getByLabel('Workspace name',{exact:true}).fill('Evidence and publication acceptance');await page.getByRole('button',{name:'Continue',exact:true}).click();await page.getByRole('button',{name:'Continue',exact:true}).click();await page.getByLabel('Create in',{exact:true}).fill(storageDirectory);await access.setup(page);await page.getByRole('button',{name:'Create workspace',exact:true}).click();await expect(page.locator('.workspace-name')).toHaveText('Evidence and publication acceptance',{timeout:60000});
+  await page.getByLabel('Workspace name',{exact:true}).fill('Evidence and publication acceptance');await page.getByRole('button',{name:'Continue',exact:true}).click();await page.getByRole('button',{name:'Continue',exact:true}).click();await page.getByLabel('Create in',{exact:true}).fill(storageDirectory);await access.setup(page);
+  console.log('Desktop recovery: submitting workspace creation.');const setupStarted=Date.now(),setupResponse=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/notebook/create'&&response.request().method()==='POST',{timeout:300000});void setupResponse.catch(()=>{});
+  await page.getByRole('button',{name:'Create workspace',exact:true}).click();const setup=await setupResponse;expect(setup.status(),await setup.text()).toBe(201);const createdWorkspace=await setup.json();expect(createdWorkspace.book.id).toBeTruthy();expect(createdWorkspace.storage.contextId).toBeTruthy();metrics.workspaceCreateMs=Date.now()-setupStarted;
+  console.log('Desktop recovery: workspace creation receipt confirmed; waiting for its dashboard.');await expect(page.locator('.workspace-name')).toHaveText('Evidence and publication acceptance',{timeout:60000});
+  console.log('Desktop recovery: submitting dedicated project creation.');const projectStarted=Date.now();
   const {project}=await call('/api/projects/create',{id:randomUUID(),...access.credentials,project:{id:randomUUID(),title:'Acceptance project',parentId:null,description:'',share:false,logoId:null}}),projectRoute='/api/projects/'+project.projectId;
+  metrics.projectCreateMs=Date.now()-projectStarted;console.log('Desktop recovery: dedicated project receipt confirmed; creating its lab book.');
   await call(projectRoute+'/access/unlock',{...access.credentials,recovery:''});
   const {book}=await call(projectRoute+'/lab-books/create',{id:randomUUID(),...access.credentials,book:{id:randomUUID(),projectId:project.projectId,title:'Acceptance observations'}}),owner=projectRoute+'/lab-books/'+book.labBookId,materials=owner+'/research/materials/';
   const unlockOwners=async()=>{await call(projectRoute+'/access/unlock',{...access.credentials,recovery:''});await call(owner+'/access/unlock',{...access.credentials,recovery:''});};await unlockOwners();
@@ -137,6 +142,7 @@ test('desktop resumes a large evidence folder and retains publication requests a
   expect(errors).toEqual([]);console.log('Desktop evidence/publication acceptance: '+JSON.stringify(metrics));
  }catch(error){
   console.log('Desktop evidence/publication acceptance before failure: '+JSON.stringify(metrics));
+  console.error('Desktop acceptance original failure: '+(error.stack??error.message??String(error)));
   // This isolated profile contains only this test's synthetic content. Capture
   // the hidden renderer when available; do not show or activate its window.
   if(page&&!page.isClosed())await page.screenshot({path:info.outputPath('evidence-publication-failure.png'),timeout:10000}).catch(()=>{});

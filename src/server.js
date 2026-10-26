@@ -862,9 +862,11 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         const locationInput=await namedWorkspaceLocation({parent:data.storageParent,root:data.storagePath??workspace?.root,name:data.title});
         const book=createNotebook(data.title,data.description??'',data.startingTheme??'research');
         if(data.identity!==undefined)book.identity=data.identity;
+        return await operationResponse(req,res,async()=>{
         const access=await createWorkspaceAccess(data.username??'',data.password??'',deviceStore),vault=takeCreatedVault(access);
         await workspaceDirectory.using(locationInput,{},async()=>{const location=await initializeLocation(locationInput,book,access,vault,{dashboard});await activate(location,client,vault);});
-        return json({...responseBook(await context.workspace.read()),storage:await metadata(),access:{...await accessSummary(access,deviceStore),locked:false}},201);
+        return {...responseBook(await context.workspace.read()),storage:await metadata(),access:{...await accessSummary(access,deviceStore),locked:false}};
+        },value=>json(value,201));
         }finally{changing=false;startJobs(context);}
       }
       if(!workspace)throw new AppError('MISSING');
