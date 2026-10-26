@@ -7,13 +7,15 @@
 
 **A local authoring workspace for research, learning, and creative work.**
 
-Observanda combines writing, evidence, project tools and visual publishing. Use it for a field book, research notebook, studio journal, technical documentation or teaching material, and share your work as PDFs, printed documents or websites.
+Observanda combines writing, evidence, project tools and visual publishing. Use it for a field book, research notebook, studio journal, technical documentation or teaching material. Export PDFs for sharing or printing, and publish static websites.
 
 Organize your work locally, connect it to its sources, and choose what to share. Everyday authoring does not require a cloud account or an internet connection.
 
 ## Alpha release
 
 **Observanda is currently an Alpha release. It still needs more testing, and some features and workflows are not yet fully implemented.** Bugs and changes in behaviour should be expected; this is not a stable release.
+
+Testing remains incomplete across operating systems, network storage, larger workloads and publishing destinations. Shared authoring also has unfinished workflows.
 
 Use copies of important work when evaluating the Alpha, keep independent backups, and check exported or published material before sharing it.
 
@@ -25,7 +27,9 @@ Keep separate workspaces for personal work, a studio, a laboratory or an organiz
 
 Start with a blank book, choose a starter template or define your own record types and fields. Books in the same project can use different structures. Enable only the templates and tools you need.
 
-Projects and lab books can be moved or copied individually with their records, revision history and original evidence. You do not need to transport an entire workspace to take one project with you.
+Projects and lab books can be moved or copied individually with the records, revision history and original evidence they own. You do not need to transport an entire workspace to take one project with you.
+
+Links to work outside the copy remain references and may require access to their source. Active cross-project stock reservations and pending inventory operations involving the selected work must be settled before copying.
 
 ## Write, read and connect
 
@@ -57,10 +61,10 @@ Enable the tools you need alongside your books.
 
 | Tool | What it supports |
 | --- | --- |
-| Scientific calculator | Expressions, units, statistics and exact integer base conversion. |
+| Scientific calculator | Expressions, units, statistics and exact integer and fractional base conversion. |
 | Stoichiometry | Molar masses, solutions, limiting reagents and reaction yields. |
 | Spreadsheet | Tables, formulas and delimited-file imports with original values retained. |
-| Chemical structures | CDXML drawings and SMILES imports, with original files preserved. |
+| Chemical structures | SMILES structures and supported molecular fragments from CDXML drawings, with original files preserved. |
 | Sample analysis | Sample registers, analysis results and result sheets. |
 | Inventory | Materials, equipment, software, stock movements, reservations and bills of materials. |
 | Calendar and planning | Calendars, events, tasks, prerequisites and equipment bookings. |
@@ -76,6 +80,8 @@ Edit page dimensions, margins, columns, fonts, headers and footers. Arrange imag
 
 Choose a private or public edition and include or omit individual sections. Public output requires review of the exact included content; later content or document-setting changes require a new review. Retained PDF exports remain available to download after further edits.
 
+Commercial-print PDF/X export is not implemented. Physical printing and assistive-technology testing remain incomplete.
+
 ## Create independent websites
 
 Use the visual website editor for a personal site, portfolio, field guide, project journal, teaching resource or documentation website. Build entirely from custom pages, include selected material from several lab books and projects, or combine both.
@@ -89,11 +95,13 @@ Create multiple independent websites, each with its own pages, design, public co
 - Publish to GitHub Pages, deploy to an SSH host or export static files for another host.
 - Retain prepared editions for later review and republication.
 
+Publication permissions belong to the lab books, records and writing sections; each website's selection must respect them. An edition can omit preparation inputs, attempt details, linked-record information, contributor credits and result statements without changing the original record.
+
 Website design is separate from the app's appearance. Publishing selected work does not publish the whole workspace, and website visitors do not need Observanda installed.
 
 ## Share work and request reviews
 
-Exchange encrypted shared copies for offline collaboration. Collaborators can work with the ordinary lab-book tools and return their edits; the owner reviews changes and conflicts before accepting them.
+Exchange encrypted shared copies for offline collaboration. Collaborators with editing permission can edit the included records and return their changes; the owner reviews changes and conflicts before accepting them.
 
 Request digitally signed reviews of specific saved record revisions. A review identifies what was examined, and later changes remain distinguishable from the reviewed version.
 
@@ -103,15 +111,17 @@ Organizations and teams provide membership, invitations and administration. Memb
 
 Starter templates cover research and development, analytical and quality-control work, education, clinical and forensic documentation, biosafety, environmental and agricultural work, computing, physical prototyping, audio software, creative practice and beekeeping. Adapt them or create your own.
 
+A template provides record structure; it does not provide specialist analysis, clinical governance or regulatory validation.
+
 An ecology project could combine seasonal observations, hive inspections and a public nature journal. An instrument-building project could connect circuit trials, parts, recordings and a build guide. A studio could keep material studies and critiques beside a portfolio. A personal book could follow recipes, fermentation batches, repairs or night-sky observations.
 
 ## Keep control of your work
 
-Workspaces use encrypted storage with password and authorized-device access, recovery options, and encrypted backup and restore. Keep independent backups and recovery material separately from the working copy.
+Workspaces use encrypted storage, with password or authorized-device access and separately configured recovery options. Encrypted backup and restore are available. Keep independent backups and recovery material separately from the working copy.
 
 Local authoring, collaboration and public publishing are separate choices. You decide which work stays private and which material belongs in each shared copy or website.
 
-Adjust interface language, text size and spacing independently of your published designs.
+Adjust interface language, text size and spacing independently of your published designs. Translations are incomplete; untranslated interface and Help text falls back to English.
 
 ## Support Observanda's development
 
