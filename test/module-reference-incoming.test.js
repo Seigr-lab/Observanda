@@ -16,6 +16,8 @@ import {RecordCollectionPages} from '../src/record-collection-pages.js';
 import {ProjectDomains} from '../src/project-domains.js';
 import {ProjectModuleCommands} from '../src/project-module-commands.js';
 import {referenceOriginKey} from '../src/research-reference-namespace.js';
+import {retainRecordOrigin} from '../src/record-owner-provenance.js';
+import {requireRecordOwnerTransfers} from '../src/catalogue-format.js';
 import {workspaceFile} from '../src/storage.js';
 import {backupCatalogue} from '../src/postgres.js';
 import {verifyCatalogueArchive} from '../src/research-catalogue.js';
@@ -73,9 +75,10 @@ test('incoming links compose qualified summaries, preserve source independence a
 });
 
 test('incoming adopted research links require per-record witnesses and survive archive reopening',{timeout:180000},async t=>{
- const f=await fixture(t);await new ProjectModuleCommands(f.storage,f.book.id).initialize();const prior=randomUUID(),foreign=randomUUID(),recordId=f.book.entries[0].id,target={workspaceId:f.book.id,type:'record',id:recordId};
+ const f=await fixture(t);await new ProjectModuleCommands(f.storage,f.book.id).initialize();const prior=randomUUID(),former=[randomUUID(),randomUUID()],foreign=randomUUID(),recordId=f.book.entries[0].id,target={workspaceId:f.book.id,type:'record',id:recordId};
  const original={...target,workspaceId:prior},both=calculation(randomUUID(),[target,original]),retained=calculation(randomUUID(),[original],'Retained calculation'),unrelated=calculation(randomUUID(),[{...target,workspaceId:foreign}],'Unrelated calculation');
- await seedModuleCurrent(f.storage,f.book.id,[both,retained,unrelated]);
+ const transferred=former.map((workspaceId,index)=>calculation(randomUUID(),[{...target,workspaceId}],'Transferred calculation '+index));
+ await seedModuleCurrent(f.storage,f.book.id,[both,retained,...transferred,unrelated]);
  await f.storage.withLock(()=>f.storage.catalogue(async store=>{await store.putObject('project:research-migration',{version:1,projectId:f.projectId,namespaceId:f.book.id,sourceNamespace:prior});await store.putObject(referenceOriginKey({kind:'record',id:recordId}),{version:1,projectId:f.projectId,namespaceId:f.book.id,sourceNamespace:prior,kind:'record',id:recordId});}));
  const pages=new RecordCollectionPages(),client={};t.after(()=>pages.clear());
  const read=(storage=f.storage,values={},options={})=>moduleReferenceIncoming(pages,client,{workspaceId:f.book.id,target,types:['calculation'],limit:1,cursor:null,...values},{collectionWorkspaceId:f.book.id,visit:(consume)=>consume(storage,{workspaceId:f.book.id,projectId:f.projectId,labBookId:null}),resolveTarget:(_target,consume)=>storage.catalogue(store=>consume(storage,target,{store})),...options});
@@ -86,8 +89,21 @@ test('incoming adopted research links require per-record witnesses and survive a
  const copied=new ProjectStorage(root,f.projectId,f.vault);await verifyCatalogueArchive(copied,JSON.parse(descriptor));await copied.outline();
  t.mock.method(f.storage,'catalogue',()=>{throw Error('Portable query consulted original storage');});t.mock.method(ModuleCatalogue.prototype,'selected',()=>{throw Error('Incoming portable query read originals');});
  assert.equal((await read(copied)).total,2);t.mock.restoreAll();
+ // Exercise the identity-specific origin reader independently of transfer
+ // execution. The archive above retains its existing migration-witness scope.
+ await f.storage.withLock(()=>f.storage.catalogue(async store=>{
+  await requireRecordOwnerTransfers(store.db);
+  for(const workspaceId of former)await retainRecordOrigin(store,{kind:'record',id:recordId,transferId:randomUUID(),sourceOwner:{workspaceId,projectId:null,labBookId:null}});
+  // The same namespace on another identity is not authority for this record.
+  await retainRecordOrigin(store,{kind:'record',id:f.book.entries[1].id,transferId:randomUUID(),sourceOwner:{workspaceId:foreign,projectId:null,labBookId:null}});
+ }));
+ await assert.rejects(read(f.storage,{cursor:first.nextCursor}),{code:'RECORD_QUERY_CURSOR'});
+ const expanded=await read(),linked=[...expanded.items];let current=expanded;assert.equal(expanded.total,4);
+ while(current.nextCursor){current=await read(f.storage,{cursor:current.nextCursor});linked.push(...current.items);}
+ assert.deepEqual(new Set(linked.map(row=>row.reference.id)),new Set([both.id,retained.id,...transferred.map(row=>row.id)]));assert.equal(linked.length,4);
+ await assert.rejects(read(f.storage,{query:'Transferred',cursor:expanded.nextCursor}),{code:'RECORD_QUERY_CURSOR'});
  await f.storage.withLock(()=>f.storage.catalogue(store=>store.deleteObject(referenceOriginKey({kind:'record',id:recordId}))));
- await assert.rejects(read(f.storage,{cursor:first.nextCursor}),{code:'RECORD_QUERY_CURSOR'});assert.equal((await read()).total,1);
+ await assert.rejects(read(f.storage,{cursor:expanded.nextCursor}),{code:'RECORD_QUERY_CURSOR'});assert.equal((await read()).total,3);
  const abort=new AbortController(),references=ModuleCatalogue.prototype.references,count=pages.sessions.size;let observed=false;
  t.mock.method(ModuleCatalogue.prototype,'references',async function(...args){const result=await references.apply(this,args);observed=true;abort.abort();return result;});
  t.mock.method(ModuleCatalogue.prototype,'selected',()=>{throw Error('Cancelled lookup opened an original');});t.mock.method(ResearchCatalogue.prototype,'record',()=>{throw Error('Cancelled lookup opened a research body');});
@@ -101,4 +117,21 @@ test('foreign resource identities cannot acquire implicit local movement or BOM 
  assert.deepEqual(new Set((await reader.list({workspaceId,reference:{workspaceId,type:'resource',id:resourceId}})).items.map(row=>row.type)),new Set(['movement','bom']));
  assert.deepEqual((await reader.list({workspaceId,reference:{workspaceId:foreign,type:'resource',id:resourceId}})).items.map(row=>row.type),['calculation']);
  await assert.rejects(reader.list({workspaceId,reference:{workspaceId:'invalid',type:'resource',id:resourceId}}),{code:'INVALID'});
+});
+
+test('module reference pages admit all authenticated namespace aliases while binding cursors and rejecting invalid lists',async()=>{
+ const workspaceId=randomUUID(),historical=Array.from({length:3},()=>randomUUID()),foreign=randomUUID(),recordId=randomUUID(),reference={workspaceId,type:'record',id:recordId};
+ const namespaces=[workspaceId,...historical],entities=[...namespaces,foreign].map((namespace,index)=>calculation(randomUUID(),[{...reference,workspaceId:namespace}],'Calculation '+index));
+ const context={book:{id:workspaceId,projects:[],notebooks:[]},head:{revision:1},members:()=>entities,view:async member=>({id:member.id,type:member.type,title:member.data.name,createdAt:member.createdAt}),references:async member=>({links:member.data.links}),search:async member=>member.data.name.toLowerCase(),encode:value=>JSON.stringify(value),decode:value=>JSON.parse(value)};
+ const reader=new ModuleReader({root:'.'},{context:async(_id,consume)=>consume(context)}),command={workspaceId,reference,limit:2},options={referenceNamespaces:namespaces};
+ const first=await reader.list(command,options),second=await reader.list({...command,cursor:first.nextCursor},options);
+ assert.equal(first.total,4);assert.deepEqual([...first.items,...second.items].map(row=>row.id),entities.slice(0,4).map(row=>row.id));assert.equal(second.nextCursor,null);
+ assert.deepEqual((await reader.list({...command,cursor:second.previousCursor},options)).items,first.items);
+ assert.equal((await reader.list(command)).total,1,'A caller without authenticated aliases sees only the exact namespace');
+ assert.equal((await reader.list({...command,referenceNamespaces:[foreign]})).total,1,'Request fields cannot replace internally authenticated aliases');
+ for(const referenceNamespaces of [[],[workspaceId,workspaceId],[workspaceId,'not-a-uuid'],'invalid',[workspaceId,null]])await assert.rejects(reader.list(command,{referenceNamespaces}),{code:'INVALID'});
+ await assert.rejects(reader.list({...command,reference:null},options),{code:'INVALID'});
+ for(const changed of [{query:'Calculation 1'},{reference:{...reference,workspaceId:historical[0]}},{limit:1}])await assert.rejects(reader.list({...command,...changed,cursor:first.nextCursor},options),{code:'MODULE_QUERY_CURSOR'});
+ await assert.rejects(reader.list({...command,cursor:first.nextCursor},{referenceNamespaces:namespaces.slice(0,3)}),{code:'MODULE_QUERY_CURSOR'});
+ context.head.revision++;await assert.rejects(reader.list({...command,cursor:first.nextCursor},options),{code:'MODULE_QUERY_CURSOR'});
 });

@@ -42,8 +42,8 @@ export class ModuleReader{
   if(kind!==null&&(type!=='resource'||!['object','material','equipment','software'].includes(kind))||archived!==null&&(!['calendar','category'].includes(type)||typeof archived!=='boolean')||moduleId!==null&&!['planning','resources'].includes(moduleId)||projectId!==null&&!uuid(projectId)||typeof recursive!=='boolean')throw new AppError('INVALID');
   if(resourceId!==null&&!uuid(resourceId)||keys!==null&&(!Array.isArray(keys)||keys.length>4096||new Set(keys).size!==keys.length||!keys.every(uuid)))throw new AppError('INVALID');
   if(key!==null&&!uuid(key)||scopeIds!==null&&(!Array.isArray(scopeIds)||scopeIds.length>10000||new Set(scopeIds).size!==scopeIds.length||!scopeIds.every(id=>id===null||uuid(id))))throw new AppError('INVALID');
-  if(referenceNamespaces!==null&&(!reference||!Array.isArray(referenceNamespaces)||referenceNamespaces.length<1||referenceNamespaces.length>2||new Set(referenceNamespaces).size!==referenceNamespaces.length||!referenceNamespaces.every(uuid)))throw new AppError('INVALID');
-  const namespaces=referenceNamespaces??(reference?[reference.workspaceId]:[]);
+  if(referenceNamespaces!==null&&(!reference||!Array.isArray(referenceNamespaces)||referenceNamespaces.length<1||new Set(referenceNamespaces).size!==referenceNamespaces.length||!referenceNamespaces.every(uuid)))throw new AppError('INVALID');
+  const namespaces=new Set(referenceNamespaces??(reference?[reference.workspaceId]:[]));
   const queryHash=digest(JSON.stringify({workspaceId,type,types,reference,referenceNamespaces,query,status,tags,tagMode,kind,archived,moduleId,projectId,scopeIds,key,keys,resourceId,sort,recursive,limit}));
   return this.context(workspaceId,async c=>{
    let anchor;try{anchor=cursor?c.decode(cursor):{workspaceId,revision:c.head.revision,queryHash,limit,offset:0};}catch{invalid();}
@@ -77,7 +77,7 @@ export class ModuleReader{
      if(moduleId&&!projectUsesTool(c.book,owner,moduleId)||scope&&!scope.has(owner??null)||!inScope(c.book,owner,projectId,recursive))continue;
     }
     if(reference){
-     const facts=await c.references(member);let linked=facts.links.some(r=>namespaces.includes(r.workspaceId)&&r.type===reference.type&&r.id===reference.id);
+     const facts=await c.references(member);let linked=facts.links.some(r=>namespaces.has(r.workspaceId)&&r.type===reference.type&&r.id===reference.id);
      if(!linked&&reference.type==='resource'&&reference.workspaceId===workspaceId){const constraint=await c.constraint(member);linked=constraint.data.resourceId===reference.id||constraint.type==='bom'&&constraint.data.lines.some(line=>line.resourceId===reference.id);}
      if(!linked)continue;
      if(['task','booking','calendar','event','subscription','calendar-connection'].includes(member.type)){
