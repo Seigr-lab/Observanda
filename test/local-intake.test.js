@@ -15,15 +15,20 @@ import {watchIntake} from '../src/intake/watch.js';
 import {intakeFixture,hash} from './fixtures/local-intake.js';
 import {RecordValues} from '../src/record-values.js';
 import {RetainedRecordDocuments} from '../src/retained-record-documents.js';
-test('preview shares target admission after hashing and fresh checks reject later conflicts',async t=>{
+test('preview and worker target checks keep admission bounded and reject later conflicts',async t=>{
  const f=await intakeFixture(t),bytes=Buffer.alloc(4096,17);f.manifest.files=[];f.manifest.analyses=[];
  for(let i=0;i<64;i++){const file={id:randomUUID(),path:'sample-'+i+'.bin',size:bytes.length,sha256:hash(bytes),provenance:'Synthetic target validation'};f.manifest.files.push(file);await writeFile(path.join(f.source,file.path),bytes);}
  await f.write();const open=f.ws.openCatalogue.bind(f.ws),current=f.service.materials.current.bind(f.service.materials);let admissions=0,lookups=0,pulses=0;
  const admission=t.mock.method(f.ws,'openCatalogue',(...args)=>{admissions++;return open(...args);}),lookup=t.mock.method(f.service.materials,'current',(...args)=>{lookups++;return current(...args);});
  let preview;
  try{
+  const files=f.manifest.files;f.manifest.files=files.slice(0,1);await f.write();
+  await f.service.preview(f.command,{progress:async()=>assert.equal(admissions,0,'source streaming must not hold a metadata snapshot')});const smallAdmissions=admissions;assert.equal(lookups,1);
+  f.manifest.files=files;await f.write();admissions=0;lookups=0;
   preview=await f.service.preview(f.command,{progress:async()=>{pulses++;assert.equal(admissions,0,'source streaming must not hold a metadata snapshot');}});
-  assert.equal(admissions,1,'file count must not multiply catalogue admission');assert.equal(lookups,64);assert.ok(pulses>=64);assert.deepEqual(preview.files.map(file=>file.id),f.manifest.files.map(file=>file.id));
+  assert.equal(admissions,smallAdmissions,'file count must not multiply catalogue admission');assert.ok(admissions<=8);assert.equal(lookups,64);assert.ok(pulses>=64);assert.deepEqual(preview.files.map(file=>file.id),f.manifest.files.map(file=>file.id));
+  admissions=0;lookups=0;await f.service.validateTargets(f.manifest);
+  assert.equal(admissions,smallAdmissions,'worker target checks share the same bounded admission');assert.equal(lookups,64);
  }finally{admission.mock.restore();lookup.mock.restore();}
  assert.equal(await f.service.read(f.manifest.id,{optional:true}),null);
  const controller=new AbortController(),cancelled=Error('Preview target validation cancelled');let checked=0;
@@ -132,6 +137,10 @@ test('readiness receipts remain private and optional project policy is enforced 
  await assert.rejects(save({...f.record,status:'completed'}),{code:'INTAKE_COMPLETION'});
  const p=await f.service.preview(command),c={...command,expectedPin:p.pin};await f.service.stage(c);await f.worker.runOnce();await f.service.apply(c);await f.worker.runOnce();
  view=await ready.view(command);assert.equal(view.counts.artifacts,1);assert.equal(view.receipts.length,1);assert.deepEqual(view.missing,[]);
+ const amendment={...f.manifest,id:randomUUID(),purpose:'amendment',files:[],analyses:[],record:{...f.record,status:'completed'}};
+ await writeFile(path.join(f.source,'intake.observanda.json'),JSON.stringify(amendment));
+ const completionPreview=await f.service.preview({...command,id:amendment.id});assert.equal(completionPreview.changesRecord,true);
+ assert.equal(await f.service.read(amendment.id,{optional:true}),null);assert.equal((await f.ws.read()).book.entries.find(record=>record.id===f.record.id).status,f.record.status);await f.write();
  await save({...f.record,status:'completed'});view=await ready.view(command);assert.ok(view.receipts[0].current);assert.deepEqual(view.missing,[]);
  const current=(await f.ws.read()).book.entries.find(r=>r.id===f.record.id);
  await assert.rejects(records.save({workspaceId:f.book.id,changes:[{id:current.id,expectedRevision:recordRevision(current),record:{...current,body:'New work still marked complete'}}]},{receipt:true}),{code:'INTAKE_COMPLETION'});

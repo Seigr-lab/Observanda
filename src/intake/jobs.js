@@ -27,7 +27,7 @@ export function intakeJobDefinitions(workspace,queue){
    for(const file of verification.files)files.set(file.id,file);
    current.sourceVerification={...verification,files:[...files.values()]};await service.write(current);
   });
-  const report=await inspectIntake(p.source,{signal,expectedPin:p.pin,progress,verification:p.sourceVerification,checkpoint});await service.validateTargets(p.manifest);
+  const report=await inspectIntake(p.source,{signal,expectedPin:p.pin,progress,verification:p.sourceVerification,checkpoint});await service.validateTargets(p.manifest,{signal});
   let done=0;const total=job.input.size;
   for(const f of report.files){
    signal.throwIfAborted();const previous=p.prepared.find(v=>v.id===f.id);
@@ -47,7 +47,7 @@ export function intakeJobDefinitions(workspace,queue){
   const service=intake(),p=await service.read(job.input.id);if(p.pin!==result.pin||p.prepared.length!==p.manifest.files.length)throw new AppError('INTAKE_CHANGED');
   p.state='prepared';await service.write(p);return {id:p.id,pin:p.pin};
  }},'intake.apply':{authorize,prepare:async(job,{signal,progress,write})=>{
-  const service=intake(),p=await service.read(job.input.id);await service.validateTargets(p.manifest);
+  const service=intake(),p=await service.read(job.input.id);await service.validateTargets(p.manifest,{signal});
   const report=await inspectPreparedIntake(service,p,{signal,progress});return new LocalIntakeFinalization(service).stage(job,report,{signal,progress,write});
  },beforeComplete:(job,report,options)=>new LocalIntakeFinalization(intake()).beforeComplete(job,report,options),
  commit:(job,proof)=>withWorkspaceMetadataBatch(workspace,()=>new LocalIntakeFinalization(intake()).commit(job,proof))}};

@@ -57,6 +57,10 @@ export class LocalIntake{
   signal?.throwIfAborted();
   manifest=await this.executionManifest(manifest);await this.materials.assertOwner(manifest.recordId,{write:true});
   const bound=await this.bind(manifest,{fullRecord:!!manifest.record});
+  // Preview and worker preparation share this bounded target read. Existing
+  // writers reuse their transaction; source bytes and record preparation stay
+  // outside this snapshot.
+  await this.workspace.catalogue(async()=>{
   for(const f of manifest.files){signal?.throwIfAborted();if(await this.materials.current(f.id))throw new AppError('MATERIAL_CHANGED');}
   const refs=[];
   for(const a of manifest.analyses){
@@ -65,6 +69,7 @@ export class LocalIntake{
    if((current?.revision??null)!==a.expectedRevision||current&&(current.recordId!==manifest.recordId||current.kind!=='analysis'))throw new AppError('MATERIAL_CHANGED');
    refs.push(...a.inputs,...a.outputs,...(a.method?analysisMethodReferences(a.method):[]));for(const r of refs.splice(0)){signal?.throwIfAborted();if(!r.file)await this.materials.checkReference(r,{signal});}
   }
+  });
   signal?.throwIfAborted();
   if(manifest.record){
    if(manifest.record.notebookId!==bound.record.notebookId)throw new AppError('INTAKE_INVALID');
@@ -84,9 +89,7 @@ export class LocalIntake{
  async preview({source,workspaceId,recordId,expectedPin},{signal,progress}={}){
   const report=await inspectIntake(source,{signal,expectedPin,progress});
   if(report.manifest.workspaceId!==workspaceId||report.manifest.recordId!==recordId)throw new AppError('INTAKE_TARGET');
-  // Source hashing is complete before this short metadata snapshot. Reuse its
-  // authenticated catalogue for every target; stage still rechecks under lock.
-  await this.workspace.catalogue(()=>this.validateTargets(report.manifest,{signal}));return intakePreview(report.manifest,report.pin);
+  await this.validateTargets(report.manifest,{signal});return intakePreview(report.manifest,report.pin);
  }
  async stage(command,options={}){
   const {source,workspaceId,recordId,id,expectedPin}=command;
