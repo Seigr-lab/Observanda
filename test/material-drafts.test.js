@@ -40,7 +40,7 @@ test('collections exceed 500 exact inputs with bounded roots, recover after rest
  assert.equal((await m.read(ref)).content.inputsIndex.count,610);assert.equal((await m.read(revised)).previous,ref.revision);
  assert.equal((await m.referencePage(analysis)).items[0].revision,ref.revision);
  const open=ws.openCatalogue.bind(ws);let reads=0;ws.openCatalogue=async options=>{reads++;return open(options);};
- const status=(await m.overview(f.recordId)).items.find(i=>i.id===analysis.id);ws.openCatalogue=open;
+ const status=(await m.reviewDependencies(f.recordId,{refs:[analysis]})).items[0];ws.openCatalogue=open;
  assert.ok(reads<=32,'Dependency review must share read snapshots instead of opening one per input; got '+reads);
  assert.ok(status.changed.some(i=>i.id===ref.id));assert.equal(status.changed.length,20);assert.equal(status.changedCount,611);
  assert.equal((await m.drafts.list(f.recordId)).items.length,0);

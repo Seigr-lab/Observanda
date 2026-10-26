@@ -230,7 +230,7 @@ async function api(route, data, {adopt=true,signal,onProgress,metadataOnly=false
    const capacity=researchRequestCapacity(route,data);
    if(capacity)throw {...capacity,message:researchCapacityMessage(capacity)};
    const body=data===undefined?undefined:JSON.stringify(data);
-   const response=await fetch(projectApiRoute(route,owner),data===undefined?{headers,signal}:{signal,method:'POST',headers:{...headers,...(structureStream||operationStream?{Accept:'application/x-ndjson'}:{}),'Content-Type':'application/json'},body});
+   const response=await fetch(projectApiRoute(route,owner),data===undefined?{headers,signal}:{signal,method:'POST',headers:{...headers,...(onProgress||structureStream||operationStream?{Accept:'application/x-ndjson'}:{}),'Content-Type':'application/json'},body});
    if(!response.ok){const error=await response.json();const explicitProject=/^\/api\/projects\/([a-f0-9-]{36})\//.exec(route);if(explicitProject||projectApiRoute(route,owner)!==route)error.projectId??=explicitProject?.[1]??(typeof owner==='object'?owner?.projectId:owner);throw error;}
    if(response.headers.get('content-type')?.startsWith('font/')||['application/pdf','application/zip','application/vnd.observanda.template','application/vnd.observanda.website-theme','image/png'].some(type=>response.headers.get('content-type')?.includes(type))){const blob=await response.blob();if(requestContext!==state.storage?.contextId||requestResearch!==researchContext(state))throw {code:'WORKSPACE_CHANGED',message:t('recordDrafts','workspaceChanged')};return blob;}
    result=onProgress||response.headers.get('content-type')?.includes('application/x-ndjson')?await readProgressStream(response,onProgress??progress?.update??(()=>{})):await response.json();

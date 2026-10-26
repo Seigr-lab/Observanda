@@ -28,5 +28,21 @@
   "accessRequired": "Unlock the selected sources to retry this comparison.",
   "statusUnavailable": "Source status could not be checked: {message}",
   "checkSources": "Check source status",
-  "reviewUnavailable": "Source changes could not be checked. The retained result is available; open it to check source access."
+  "reviewUnavailable": "Source changes could not be checked. The retained result is available; open it to check source access.",
+  "reviewTitle": "Evidence source changes",
+  "reviewUnchecked": "Source changes have not been checked.",
+  "reviewChecking": "Checking source changes...",
+  "reviewChecked": "Sources checked. No newer or unavailable inputs found.",
+  "reviewChanged": "Newer or unavailable inputs: {count}. Review relevance; the retained result is unchanged.",
+  "reviewStale": "This evidence changed. Refresh the list to check its current revision.",
+  "reviewFailed": "Source changes could not be checked. Retry the check; the retained evidence is still available.",
+  "reviewCancelled": "Source checking stopped. Unfinished checks remain unchecked.",
+  "reviewItems": "Checking evidence sources: {completed} of {total} items reviewed.",
+  "reviewReferences": "Checking evidence references: {count} examined. The total is not yet known.",
+  "reviewFinished": "Source check results: {completed} of {total} items checked. See each item for its result.",
+  "reviewCancel": "Stop source check",
+  "reviewRetry": "Retry source check",
+  "reviewRefresh": "Refresh evidence",
+  "overviewExtrasLoading": "Loading unfinished work...",
+  "overviewExtrasFailed": "Unfinished work could not be loaded. The evidence list is still available."
 }

@@ -69,6 +69,7 @@ import {assertRegular,privateDirectory,digest} from './storage.js';
 import {FileContent,writeContent,describeContent} from './file-content.js';
 import {recordRevision} from './research.js';
 import {materialRecordSummary} from './material-record-summary.js';
+import {reviewMaterialDependencies} from './material-dependency-review.js';
 import {withRecordDocument} from './record-document.js';
 import {RecordMemberCollections} from './record-member-collections.js';
 import {revisionText,revisionId} from './web/revision-model.js';
@@ -639,36 +640,18 @@ export class ResearchMaterials {
   });
  }
  async list(options={}){return this.index.page(options);}
- async overview(recordId,{cursor=null,importCursor=null,limit=20,signal,dependencyReview}={}){
+ async reviewDependencies(recordId,options){return reviewMaterialDependencies(this,recordId,options);}
+ async overview(recordId,{cursor=null,importCursor=null,limit=20,signal}={}){
   await this.assertOwner(recordId);
   return this.readSnapshot(async store=>{
   const listing=await this.list({recordId,cursor,limit,signal}),heads=listing.items;
-  // Share one repeatable read for the dependency review. Opening a database
-  // snapshot for each edge makes even modest collections expensive to inspect.
-  const assess=()=>withMaterialTraversal(async traversal=>{
-  const book=store?null:await this.owner(recordId),snapshot=store?await store.snapshot():null,byId=new Map();
+  const book=store?null:await this.owner(recordId),snapshot=store?await store.snapshot():null;
   const owner=store?await store.member(snapshot,recordId):null;if(store&&!owner)fail();
-  const recordHeads=new Map(book?.entries.map(r=>[r.id,recordRevision(r)])??[]);
-  const current=async ref=>{
-   if(ref.kind!=='record'){if(!byId.has(ref.id)){if(byId.size===64)byId.delete(byId.keys().next().value);byId.set(ref.id,await this.current(ref.id));}return byId.get(ref.id)?.revision??null;}
-   if(!recordHeads.has(ref.id)){
-    if(recordHeads.size===64)recordHeads.delete(recordHeads.keys().next().value);
-    if(store){
-     const member=await store.member(snapshot,ref.id);recordHeads.set(ref.id,(await materialRecordSummary(store,member))?.revision??null);
-    }else{
-     try{recordHeads.set(ref.id,recordRevision((await this.owner(ref.id)).entries.find(r=>r.id===ref.id)));}catch(error){if(error.code!=='MATERIAL_INVALID')throw error;recordHeads.set(ref.id,null);}
-    }
-   }
-   return recordHeads.get(ref.id);
-  };
-  // Inspect only small dependency manifests, never evidence bytes/table rows.
+  // Dependency traversal has its own progress request. An unchecked item must
+  // not imply that its retained inputs still match their current revisions.
   const statuses=[];
   for(const head of heads.filter(h=>h.recordId===recordId)){
-   const reviewed=await dependencyReview?.(head),changed=reviewed?.changed??[];let changedCount=reviewed?.changedCount??0;await traversal.reset();
-   if(!reviewed)await traversal.walk(this.references(head),async(ref,enqueue)=>{
-    signal?.throwIfAborted();const external=await this.externalReference(ref);if(external){changedCount++;if(changed.length<20)changed.push({...external,current:null});return;}const now=await current(ref);if(now!==ref.revision){changedCount++;if(changed.length<20)changed.push({...ref,current:now});}
-    if(ref.kind!=='record')for await(const input of this.index.iterInputs(ref))await enqueue(input);
-   });
+   signal?.throwIfAborted();
    let figure=null;
    if(head.figureId){
     if(store){const position=await new RecordMemberCollections(store).position(owner,'figures',head.figureId);if(position>=0)figure=await withRecordDocument(store,owner.id,owner.revision,async document=>(await document.field(['figures',String(position)],{signal})).value);
@@ -676,11 +659,8 @@ export class ResearchMaterials {
     else figure=book.entries.find(r=>r.id===recordId)?.figures.find(f=>f.id===head.figureId);
    }
    const file=head.kind==='artifact'?(await this.read(head)).content:null;
-   statuses.push({...head,...(file?{file:{name:file.name,size:file.size,sha256:file.sha256,...(file.sourcePath?{sourcePath:file.sourcePath}:{}),...(file.sourcePurpose?{sourcePurpose:file.sourcePurpose}:{})}}:{}),changed,changedCount,...(reviewed??{}),figureState:head.figureHash?figure?figureFingerprint(figure)===head.figureHash?'matches':'edited':'not-attached':null});
+   statuses.push({...head,...(file?{file:{name:file.name,size:file.size,sha256:file.sha256,...(file.sourcePath?{sourcePath:file.sourcePath}:{}),...(file.sourcePurpose?{sourcePurpose:file.sourcePurpose}:{})}}:{}),changed:[],changedCount:null,dependencyStatus:'unchecked',figureState:head.figureHash?figure?figureFingerprint(figure)===head.figureHash?'matches':'edited':'not-attached':null});
   }
-  return statuses;
-  },{signal});
-  const statuses=await assess();
   const pending=await this.index.page({recordId,pending:true,cursor:importCursor,limit,signal});
    return {...listing,items:statuses,imports:await Promise.all(pending.items.map(item=>this.uploads.summary(item))),importsNext:pending.next};
   });

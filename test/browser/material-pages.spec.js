@@ -20,8 +20,10 @@ test('evidence sources page, search and cross records without losing exact selec
   await page.getByRole('button',{name:'Open evidence & analysis'}).click();
   const dialog=page.locator('#dialog');
   await expect(dialog.locator('.material-list > li')).toHaveCount(20);
+  await expect(dialog.locator('[data-dependency-status="checked"]')).toHaveCount(20);
   await dialog.getByRole('button',{name:'Older evidence',exact:true}).click();
   await expect(dialog.locator('.material-list > li')).toHaveCount(5);
+  await expect(dialog.locator('[data-dependency-status="checked"]')).toHaveCount(5);
   await dialog.getByText('Analysis, collections & verification',{exact:true}).click();
   await dialog.getByRole('button',{name:'Create collection',exact:true}).click();
   const picker=dialog.locator('#material-picker-inputs');

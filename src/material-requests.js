@@ -38,6 +38,7 @@ export function materialRequest(route){
  const original=/^original\/([a-f0-9-]{36})\/([a-f0-9]{64})$/.exec(operation);
  if(original&&researchId(original[1]))return {material:'download',method:'GET',write:false,download:true,ref:{kind:'artifact',id:original[1],revision:original[2]}};
  if(operation==='retained-figure-export')return {material:operation,method:'GET',write:false,download:true,querySelection:true};
+ if(operation==='dependency-review')return {material:operation,method:'POST',write:false,progress:true,limit:MAX_BYTES};
  if(operation==='chunks')return {material:'chunks',method:'POST',write:true,input:'stream'};
  const chunk=/^chunk\/([a-f0-9-]{36})\/(\d+)$/.exec(operation);
  if(chunk&&researchId(chunk[1])&&Number.isSafeInteger(Number(chunk[2])))return {material:'chunk',method:'POST',write:true,input:'stream',id:chunk[1],index:Number(chunk[2])};
@@ -57,7 +58,11 @@ export async function executeMaterialRequest(storage,request,data,{signal,jobs,d
  case 'chunks':return appendMaterialUploadBatch(storage,stream,{signal});
  case 'chunk':return materials.uploads.summary(await materials.appendImport(request.id,request.index,stream,{signal}));
  case 'download':{if(typeof download!=='function')throw new AppError('INVALID');return download(await materials.artifact(request.ref??data.ref));}
- case 'overview':{const result=await materials.overview(data.recordId,{cursor:data.cursor,importCursor:data.importCursor,limit:data.limit,signal,dependencyReview:sourceAccess?head=>comparisonDependencyReview(materials,head,{sourceAccess,signal}):undefined});if(result.imports.length){const {queue}=await jobService();for(const session of result.imports)session.job=jobSummary(await queue.read(session.id));}return result;}
+ case 'overview':{const result=await materials.overview(data.recordId,{cursor:data.cursor,importCursor:data.importCursor,limit:data.limit,signal});if(result.imports.length){const {queue}=await jobService();for(const session of result.imports)session.job=jobSummary(await queue.read(session.id));}return result;}
+ case 'dependency-review':{
+  if(!data||Object.keys(data).some(key=>!['recordId','refs'].includes(key)))throw new AppError('MATERIAL_INVALID');
+  return materials.reviewDependencies(data.recordId,{refs:data.refs,signal,dependencyReview:sourceAccess?head=>comparisonDependencyReview(materials,head,{sourceAccess,signal}):undefined});
+ }
  case 'list':{const page=await materials.list({...data,pending:false,signal});return {...page,items:page.items.map(({kind,id,revision,recordId,title,createdAt,figureId})=>({kind,id,revision,recordId,title,createdAt,hasFigure:!!figureId}))};}
  case 'reference-addresses':return materials.referenceAddresses(data.ref,data.items);
  case 'references':return materials.referencePage(data.ref,data);

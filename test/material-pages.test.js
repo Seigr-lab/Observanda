@@ -50,7 +50,8 @@ test('dependency review uses point heads and retained input summaries, not datas
   await m.commit({kind:'collection',id:source.id,recordId,expectedRevision:source.revision,title:'Changed source',content:{inputs:[]}});
  });
  const read=m.read.bind(m);m.heads=()=>{throw Error('Global scan');};m.read=()=>{throw Error('Large retained manifest loaded');};
- const data=await m.overview(recordId);
+ const listed=await m.overview(recordId);assert.ok(listed.items.every(item=>item.dependencyStatus==='unchecked'&&item.changedCount===null));
+ const data=await m.reviewDependencies(recordId,{refs:listed.items.map(({kind,id,revision})=>({kind,id,revision}))});
  const item=data.items.find(i=>i.id===result.id);assert.equal(item.changed.length,1);assert.equal(item.changed[0].revision,source.revision);assert.notEqual(item.changed[0].current,source.revision);
  m.read=read;
 });
@@ -109,7 +110,7 @@ test('dependency review resolves changed record revisions from authenticated sum
  const read=ResearchCatalogue.prototype.record;
  ResearchCatalogue.prototype.record=function(id,...args){assert.equal(id,recordId,'Related original body loaded for a revision check');return read.call(this,id,...args);};
  try{
-  const item=(await m.overview(recordId)).items.find(item=>item.id===result.id);
+  const item=(await m.reviewDependencies(recordId,{refs:[result]})).items[0];
   assert.equal(item.changedCount,1);assert.equal(item.changed[0].id,other.id);assert.equal(item.changed[0].revision,recordRevision(other));assert.notEqual(item.changed[0].current,recordRevision(other));
  }finally{ResearchCatalogue.prototype.record=read;}
 });

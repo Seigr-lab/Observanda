@@ -82,7 +82,8 @@ test('retained comparison sources are read-only, client-bound and survive the in
  const admitted=await result(await f.call(prefix+'comparison',command),202),first=await completed(f.call,prefix,admitted.job.id);assert.equal(first.state,'completed',JSON.stringify(first));
  const retained=await output.read(first.result);assert.equal(retained.content.comparison.version,2);assert.equal(retained.content.summary.rows,2);
  assert.deepEqual((await result(await f.call(prefix+'analysis-status',{ref:first.result}))).items,[]);
- const overview=await result(await f.call(prefix+'overview',{recordId}));assert.equal(overview.items.find(item=>item.id===first.result.id).dependencyStatus,'checked');
+ const overview=await result(await f.call(prefix+'overview',{recordId}));assert.equal(overview.items.find(item=>item.id===first.result.id).dependencyStatus,'unchecked');
+ assert.equal((await result(await f.call(prefix+'dependency-review',{recordId,refs:[first.result]}))).items[0].dependencyStatus,'checked');
  const page=await result(await f.call(prefix+'comparison-page',{ref:first.result,view:'all'}));assert.equal(page.items.length,2);
  // The actual publication factory resolves private dependencies through the
  // same registry and initiating client, independent of publication selection.
@@ -115,7 +116,8 @@ test('retained comparison sources are read-only, client-bound and survive the in
  await result(await f.call(prefix+'retry-job',{id:pending.job.id}),401);
  mark('retry revoked worker');await result(await f.call(f.own+'/access/unlock',{}));await result(await f.call(prefix+'retry-job',{id:pending.job.id}));const retried=await completed(f.call,prefix,pending.job.id);assert.equal(retried.id,pending.job.id);assert.equal(retried.state,'completed',JSON.stringify(retried));
  await result(await f.call(f.own+'/access/lock',{}));await result(await f.call(prefix+'analysis-status',{ref:first.result}),401);assert.equal((await result(await f.call(prefix+'comparison-page',{ref:first.result,view:'all'}))).items.length,2);
- const lockedOverview=await result(await f.call(prefix+'overview',{recordId})),lockedItem=lockedOverview.items.find(item=>item.id===first.result.id);assert.equal(lockedItem.dependencyStatus,'unavailable');assert.equal(lockedItem.changedCount,null);assert.equal(lockedItem.dependencyError.labBookId,f.a.labBookId);
+ const lockedOverview=await result(await f.call(prefix+'overview',{recordId}));assert.ok(lockedOverview.items.every(item=>item.dependencyStatus==='unchecked'&&item.changedCount===null));
+ const lockedReview=await result(await f.call(prefix+'dependency-review',{recordId,refs:[first.result]})),lockedItem=lockedReview.items[0];assert.equal(lockedItem.dependencyStatus,'unavailable');assert.equal(lockedItem.changedCount,null);assert.equal(lockedItem.dependencyError.labBookId,f.a.labBookId);
  // Persist a checkpoint, close the process while that attempt is preparing,
  // and restart with no in-memory source capability. Only explicit Retry may
  // bind the new caller to the original immutable command.

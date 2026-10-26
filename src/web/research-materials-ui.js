@@ -62,6 +62,7 @@ import {evidenceReuseUI} from './evidence-reuse-ui.js';
 import {evidenceCorrectionsUI} from './evidence-corrections-ui.js';
 import {allFigurePlots,withFigureSource} from './figure-provenance.js';
 import {retainedRecordUI} from './retained-record-ui.js';
+import {evidenceDependencyReview} from './evidence-dependency-review.js';
 
 export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty,render,revisions,create,getRecord=null,editRetainedFigure=null,refreshReader=null,showFigureResults=null,currentRecordRevision=()=>null,access=run=>run()}){
  const retainedRecords=retainedRecordUI({state,api,esc,showDialog});
@@ -73,6 +74,8 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
  const call=materialReferenceReader({api,local:(name,data,options)=>api(route(endpoint+name),data,{...options,owner:projectOwner}),onOwner:(result,name)=>{
   guard();if(['read','measurement-inspect'].includes(name)){readNamespace=result.namespaceId;referenceContext=referenceOrigin||!sameResearchOwner(result.labBookId?{projectId:result.projectId,labBookId:result.labBookId}:result.projectId,projectOwner);}
  }}),ref=materialReference;
+ const dependencies=evidenceDependencyReview({call,esc});
+ window.addEventListener('hashchange',()=>dependencies.stop());
  const originalRoute=r=>materialOriginalRoute(r)??route(endpoint+'original/'+r.id+'/'+r.revision);
  const button=(label,action,extra='')=>`<button type="button" class="button" data-action="material-${action}" ${extra}>${label}</button>`;
  const option=(v,label,selected)=>`<option value="${esc(v)}"${String(v)===String(selected)?' selected':''}>${esc(label)}</option>`;
@@ -82,8 +85,8 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
  let heatmapSettings=null,plotIntent=null,plotBase=null,plotDraft=null,datasetIntent=null,previewController=null,jobTimer=null,jobView=0,datasetJobCursor=null,datasetJobPage={items:[],next:null};
  let columnOffset=0,schemaOffset=0,schemaTotal=0,schemaOriginal=[],schemaDraft=new Map(),schemaExclusions=[],schemaInitialExclusions='[]';
  let referenceIntent=null,referenceDraft=null,draftCursor=null,draftPage={items:[],next:null};
- let sourcePickers={},materialCursor=null,materialPage={next:null},importCursor=null,importsNext=null,homeGeneration=0;
- const stopWatching=()=>{figureReader?.dispose();figureReader=null;schemaDispose?.();schemaDispose=null;intake.stop();reuse.stop();for(const picker of Object.values(sourcePickers))picker.dispose();sourcePickers={};sourceBusy.clear();homeGeneration++;previewController?.abort();previewController=null;clearTimeout(jobTimer);jobTimer=null;jobView++;};
+ let sourcePickers={},materialCursor=null,materialPage={next:null},importCursor=null,importsNext=null,homeGeneration=0,homeExtrasController=null;
+ const stopWatching=()=>{dependencies.stop();homeExtrasController?.abort();homeExtrasController=null;figureReader?.dispose();figureReader=null;schemaDispose?.();schemaDispose=null;intake.stop();reuse.stop();for(const picker of Object.values(sourcePickers))picker.dispose();sourcePickers={};sourceBusy.clear();homeGeneration++;previewController?.abort();previewController=null;clearTimeout(jobTimer);jobTimer=null;jobView++;};
  const saved=()=>!!record()&&(state.page==='record-reader'||!!revisions()[record().id])&&!state.dirty;
  const frame=(title,body,actions=null)=>{
   stopWatching();previews.release();
@@ -136,26 +139,46 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
  const uploader=evidenceUploadUI({route,call,frame,esc,field,button,guard,context:()=>workspaceContext,owner:()=>owner,sourceMount,sources:()=>sourcePickers.parent.values(),watchJob});
  const reuse=evidenceReuseUI({route,call,frame,esc,button,guard,owner:()=>owner,context:()=>workspaceContext,sourceMount,sources:()=>sourcePickers.reuse.snapshot(),home,notify});
  const corrections=evidenceCorrectionsUI({state,api,call,frame,esc,field,button,guard,owner:()=>owner,inspect,notify,readOnly:()=>referenceContext});
- function view(subject=record(),{readonly=false}={}){return `<section class="research-links"><header><h3>Evidence &amp; analysis</h3>${button('Open evidence & analysis','open',readonly?'data-readonly="true"':'')}</header><p class="muted">${readonly?'Read original files, datasets and retained analyses associated with this record.':'Original files, datasets and analysis revisions stay private. Figures added to the record follow its sharing setting.'}</p>${!readonly&&subject?.type==='run'?button('Create another run or take','repeat'):''}</section>`;}
+ function view(subject=record(),{readonly=false}={}){dependencies.check();return `<section class="research-links"><header><h3>Evidence &amp; analysis</h3>${button('Open evidence & analysis','open',readonly?'data-readonly="true"':'')}</header><p class="muted">${readonly?'Read original files, datasets and retained analyses associated with this record.':'Original files, datasets and analysis revisions stay private. Figures added to the record follow its sharing setting.'}</p>${!readonly&&subject?.type==='run'?button('Create another run or take','repeat'):''}</section>`;}
+ function reviewDependencies(){
+  const generation=jobView,shownPage=state.page,host=document.getElementById('material-form');
+  dependencies.start({host,items,recordId:owner,active:()=>generation===jobView&&shownPage===state.page&&document.getElementById('dialog')?.open&&!state.access?.locked&&!state.storageUnavailable&&workspaceContext===state.storage?.contextId&&sameResearchOwner(projectOwner,researchOwner(state))&&owner===record()?.id});
+ }
  async function readingHome(){
+  dependencies.action('dependencies-cancel');
   const generation=++homeGeneration,data=await call('overview',{recordId:owner,cursor:materialCursor});guard();if(generation!==homeGeneration)return;
   items=data.items;catalog=items;materialPage=data;
-  frame('Evidence & analysis',`<p>${esc(record()?.title??'')}</p>${items.length?'<ul class="material-list">'+items.map((item,index)=>'<li><div><strong>'+esc(item.title)+'</strong><p>'+esc(item.kind)+' &middot; '+esc(item.revision.slice(0,12))+'</p>'+materialFileSummary(item,{context:workspaceContext,esc,route})+'</div>'+button('Inspect','inspect','data-index="'+index+'"')+'</li>').join('')+'</ul>':'<p>No evidence is associated with this record.</p>'}<div class="inline-actions">${materialCursor?button('Latest evidence','heads-first'):''}${materialPage.next?button('Older evidence','heads-next'):''}</div>`,button('Close','close'));
+  frame('Evidence & analysis',`<p>${esc(record()?.title??'')}</p>${items.length?dependencies.controls()+'<ul class="material-list">'+items.map((item,index)=>'<li><div><strong>'+esc(item.title)+'</strong><p>'+esc(item.kind)+' &middot; '+esc(item.revision.slice(0,12))+'</p>'+materialFileSummary(item,{context:workspaceContext,esc,route})+dependencies.row(item,index)+(item.figureState==='edited'?'<p class="material-review">The record figure was edited after calculation. The retained result is unchanged.</p>':'')+'</div>'+button('Inspect','inspect','data-index="'+index+'"')+'</li>').join('')+'</ul>':'<p>No evidence is associated with this record.</p>'}<div class="inline-actions">${materialCursor?button('Latest evidence','heads-first'):''}${materialPage.next?button('Older evidence','heads-next'):''}</div>`,button('Close','close'));
+  reviewDependencies();
+ }
+ async function loadHomeExtras(){
+  homeExtrasController?.abort();const request=homeExtrasController=new AbortController(),generation=jobView,host=document.querySelector('[data-material-home-extras]');
+  if(!host){homeExtrasController=null;return;}
+  const active=()=>!request.signal.aborted&&generation===jobView&&host.isConnected;
+  try{
+   const [jobs,drafts,pending]=await Promise.all([call('dataset-jobs',{recordId:owner,cursor:datasetJobCursor},{adopt:false,signal:request.signal}),call('drafts',{recordId:owner,cursor:draftCursor},{adopt:false,signal:request.signal}),reuse.pending({signal:request.signal})]);
+   if(!active())return;guard();datasetJobPage=jobs;draftPage=drafts;
+   host.innerHTML=pending+
+    (draftPage.items.length?`<details class="material-more" open><summary>Unfinished collections &amp; analyses</summary><ul>${draftPage.items.map(d=>`<li>${esc(d.title)} · ${d.received.inputs} / ${d.totals.inputs} inputs ${button('Continue','draft-open',`data-id="${esc(d.id)}" aria-label="Continue ${esc(d.title)}"`)}</li>`).join('')}</ul></details>`:'')+`<div class="inline-actions">${draftCursor?button('Recent unfinished selections','drafts-first'):''}${draftPage.next?button('Older unfinished selections','drafts-next'):''}</div>`+
+    (datasetJobPage.items.length?`<details class="material-more"><summary>${esc(atext('jobs'))}</summary><ul>${datasetJobPage.items.map(j=>`<li>${esc(j.title)} &middot; ${esc(j.state)} ${button(j.type==='analysis.compare'?atext(j.state==='completed'?'open':'check'):j.state==='completed'?(j.type==='figure.calculate'?'Open figure':'Open dataset'):(j.type==='figure.calculate'?'Check calculation':'Check preparation'),'dataset-job',`data-job="${esc(j.id)}"`)}</li>`).join('')}</ul><div class="inline-actions">${datasetJobCursor?button('Latest preparations','dataset-jobs-first'):''}${datasetJobPage.next?button('Older preparations','dataset-jobs-next'):''}</div></details>`:'');
+  }catch(error){if(active())host.innerHTML='<p role="alert">'+esc(t('retainedSources','overviewExtrasFailed'))+'</p>'+button(esc(t('retainedSources','retry')),'home-extras-retry');}
+  finally{if(homeExtrasController===request)homeExtrasController=null;}
  }
  async function home({expectedView,fresh=false}={}){
+  dependencies.action('dependencies-cancel');homeExtrasController?.abort();homeExtrasController=null;
   if(readingOverview){if(fresh)materialCursor=null;return readingHome();}
   if(fresh){materialCursor=null;importCursor=null;draftCursor=null;}
-  const generation=++homeGeneration,data=await call('overview',{recordId:owner,cursor:materialCursor,importCursor}),jobs=await call('dataset-jobs',{recordId:owner,cursor:datasetJobCursor}),drafts=await call('drafts',{recordId:owner,cursor:draftCursor}),pendingAssociations=await reuse.pending();guard();if(generation!==homeGeneration||expectedView!==undefined&&expectedView!==jobView)return;
-  items=data.items;catalog=items;imports=data.imports;materialPage=data;importsNext=data.importsNext;datasetJobPage=jobs;draftPage=drafts;
-  continuing.stop();readiness.stop();frame('Evidence & analysis',`<p>${esc(record().title)} · Imports and revisions are saved when you confirm each action.</p>${button(esc(t('localIntake','open')),'continuing-home')}${button(esc(t('localIntake','readiness')),'readiness-home')}${pendingAssociations}
+  const generation=++homeGeneration,data=await call('overview',{recordId:owner,cursor:materialCursor,importCursor});guard();if(generation!==homeGeneration||expectedView!==undefined&&expectedView!==jobView)return;
+  items=data.items;catalog=items;imports=data.imports;materialPage=data;importsNext=data.importsNext;
+  continuing.stop();readiness.stop();frame('Evidence & analysis',`<p>${esc(record().title)} · Imports and revisions are saved when you confirm each action.</p>${button(esc(t('localIntake','open')),'continuing-home')}${button(esc(t('localIntake','readiness')),'readiness-home')}
    <div class="material-actions">${button(esc(uploadText('heading')),'upload-form')}${button(esc(t('materialFiles','reuse')),'reuse-original-form')}${button('Import file set','intake-new')}${button('Unfinished file sets','intake-list')}${button('Create dataset','dataset-form')}</div><details class="material-more"><summary>Analysis, collections &amp; verification</summary><div class="material-actions">${button('Record external analysis','analysis-form')}${button(esc(atext('create')),'comparison-new')}${button('Create collection','collection-form')}${button('Verify stored evidence','verify')}</div></details>
-   ${draftPage.items.length?`<details class="material-more" open><summary>Unfinished collections &amp; analyses</summary><ul>${draftPage.items.map(d=>`<li>${esc(d.title)} · ${d.received.inputs} / ${d.totals.inputs} inputs ${button('Continue','draft-open',`data-id="${esc(d.id)}" aria-label="Continue ${esc(d.title)}"`)}</li>`).join('')}</ul></details>`:''}<div class="inline-actions">${draftCursor?button('Recent unfinished selections','drafts-first'):''}${draftPage.next?button('Older unfinished selections','drafts-next'):''}</div>
+   <section data-material-home-extras><p role="status">${esc(t('retainedSources','overviewExtrasLoading'))}</p></section>
    ${imports.length?`<h3>Imports in progress</h3><ul>${imports.map((s,i)=>`<li>${esc(s.name)} &middot; ${s.receivedBytes.toLocaleString()} / ${s.size.toLocaleString()} bytes &middot; ${esc(s.job?.state??'Upload paused')} ${button(s.job?'Check verification':s.receivedBytes===s.size?'Verify original':uploadText('resumeUpload'),s.job?'job-open':s.receivedBytes===s.size?'job-start':'resume-form',`data-index="${i}"`)}</li>`).join('')}</ul>`:''}
    <div class="inline-actions">${importCursor?button('Recent imports','imports-first'):''}${importsNext?button('Older imports','imports-next'):''}</div>
-   ${datasetJobPage.items.length?`<details class="material-more"><summary>${esc(atext('jobs'))}</summary><ul>${datasetJobPage.items.map(j=>`<li>${esc(j.title)} &middot; ${esc(j.state)} ${button(j.type==='analysis.compare'?atext(j.state==='completed'?'open':'check'):j.state==='completed'?(j.type==='figure.calculate'?'Open figure':'Open dataset'):(j.type==='figure.calculate'?'Check calculation':'Check preparation'),'dataset-job',`data-job="${esc(j.id)}"`)}</li>`).join('')}</ul><div class="inline-actions">${datasetJobCursor?button('Latest preparations','dataset-jobs-first'):''}${datasetJobPage.next?button('Older preparations','dataset-jobs-next'):''}</div></details>`:''}
-   ${items.length?`<ul class="material-list">${items.map((m,i)=>`<li><div><strong>${esc(m.title)}</strong><p>${esc(m.kind)} · Revision ${m.revision.slice(0,12)}</p>${materialFileSummary(m,{context:workspaceContext,esc,route})}${m.dependencyStatus==='unavailable'?'<p class="material-review" role="status">'+esc(t('retainedSources','reviewUnavailable'))+'</p>':''}${m.changed.length?'<p class="material-review" role="status">Newer or unavailable inputs — review relevance. Retained results are unchanged.</p>':''}${m.figureState==='edited'?'<p class="material-review">The record figure was edited after calculation. The retained result is unchanged.</p>':''}</div>${button('Inspect','inspect',`data-index="${i}"`)}</li>`).join('')}</ul>`:'<p>No evidence yet. Import an original file, then retain a dataset or document an analysis.</p>'}
+   ${items.length?dependencies.controls()+`<ul class="material-list">${items.map((m,i)=>`<li><div><strong>${esc(m.title)}</strong><p>${esc(m.kind)} · Revision ${m.revision.slice(0,12)}</p>${materialFileSummary(m,{context:workspaceContext,esc,route})}${dependencies.row(m,i)}${m.figureState==='edited'?'<p class="material-review">The record figure was edited after calculation. The retained result is unchanged.</p>':''}</div>${button('Inspect','inspect',`data-index="${i}"`)}</li>`).join('')}</ul>`:'<p>No evidence yet. Import an original file, then retain a dataset or document an analysis.</p>'}
    <div class="inline-actions">${button(esc(t('evidenceCorrections','history')),'correction-history')}${materialCursor?button('Latest evidence','heads-first'):''}${materialPage.next?button('Older evidence','heads-next'):''}</div>${materialPage.changed?'<p role="status">Evidence changed since this list was opened. Return to latest evidence to refresh.</p>':''}
    <p class="muted">A hash identifies bytes; it does not establish accuracy or authorship. Use Storage &amp; access to create a verified backup, then verify evidence after restoration.</p>`,button('Close','close'));
+  reviewDependencies();void loadHomeExtras();
  }
  async function watchComparisonJob(job){
   guard();frame(atext('working'),`<p>${esc(atext('jobHelp'))}</p><p data-comparison-progress role="status"></p><div class="inline-actions">${button(esc(atext('cancel')),'job-cancel',`data-job="${job.id}"`)}${button(esc(atext('retry')),'job-retry',`data-job="${job.id}" hidden`)}</div>`);
@@ -470,6 +493,10 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
  }
  async function action(control){
   const name=control.dataset.action;if(!name?.startsWith('material-'))return false;const act=name.slice(9);
+  if(act==='home-extras-retry'){void loadHomeExtras();return true;}
+  if(act==='dependencies-cancel'||act==='dependencies-retry'){dependencies.action(act);return true;}
+  if(act==='dependencies-refresh'){guard();await home({fresh:true});return true;}
+  dependencies.action('dependencies-cancel');
   if(act.startsWith('correction-'))return corrections.action(act,control);
   if(corrections.isBusy())return true;
   if(act==='plot-points'){await plotPoints(Number(control.dataset.offset??0));return true;}

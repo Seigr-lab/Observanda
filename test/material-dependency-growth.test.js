@@ -30,12 +30,12 @@ test('dependency review qualifies 65 and 650 pinned records, overlapping graphs 
   }));
   const other=book.entries[1];
   await new ResearchRecords(f.workspace,{}).save({workspaceId:book.id,changes:[{id:other.id,expectedRevision:recordRevision(other),record:{...other,title:'An amended source observation'}}]},{compact:true});
-  const original=ResearchCatalogue.prototype.record,read=m.read.bind(m);let bodies=0,earlier=0,peakHeap=0;
+  const original=ResearchCatalogue.prototype.record,read=m.readStored.bind(m);let bodies=0,earlier=0,peakHeap=0;
   ResearchCatalogue.prototype.record=function(id,...args){assert.equal(id,recordId,'Unselected original loaded');bodies++;return original.call(this,id,...args);};
-  m.read=async ref=>{assert.equal(ref.id,source.id);assert.equal(ref.revision,source.revision);earlier++;return read(ref);};
+  m.readStored=async ref=>{assert.equal(ref.id,source.id);assert.equal(ref.revision,source.revision);earlier++;return read(ref);};
   const sampler=setInterval(()=>{peakHeap=Math.max(peakHeap,process.memoryUsage().heapUsed);},25);sampler.unref();
   const start=performance.now();let page;
-  try{page=await m.overview(recordId);}finally{clearInterval(sampler);ResearchCatalogue.prototype.record=original;m.read=read;}
+  try{page=await m.reviewDependencies(recordId,{refs:derived});}finally{clearInterval(sampler);ResearchCatalogue.prototype.record=original;m.readStored=read;}
   const elapsed=performance.now()-start;
   for(const ref of derived){
    const item=page.items.find(item=>item.id===ref.id);assert.equal(item.changedCount,2);

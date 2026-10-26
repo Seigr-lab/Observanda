@@ -29,7 +29,7 @@ export async function materialHttp(req,res,request,{contextId,body,json,execute}
  const run=options=>execute(data,{...options,signal:controller.signal,stream:req,download});
  try{
   if(request.download)return await run();
-  if(request.write&&request.input!=='stream')return await operationResponse(req,res,run,value=>json(value,request.status??200));
+  if(request.progress||request.write&&request.input!=='stream')return await operationResponse(req,res,run,value=>json(value,request.status??200));
   return json(await run(),request.status??200);
  }finally{res.off('close',abort);}
 }

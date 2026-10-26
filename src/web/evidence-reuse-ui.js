@@ -8,8 +8,8 @@ export function evidenceReuseUI({route=value=>value,call,frame,esc,button,guard,
  const active=view=>view===generation&&document.getElementById('dialog')?.open;
  const progressText=value=>text('progress',{count:value.count,attached:value.attached});
  const taskRow=value=>'<p>'+esc(progressText(value))+' '+button(esc(text('continue')),'reuse-original-resume','data-id="'+esc(value.id)+'"')+'</p>';
- async function pending(){
-  const page=await call('association-list',{recordId:owner(),limit:5},{adopt:false});
+ async function pending({signal}={}){
+  const page=await call('association-list',{recordId:owner(),limit:5},{adopt:false,signal});
   return page.items.length?'<section><h3>'+esc(text('unfinished'))+'</h3>'+page.items.map(taskRow).join('')+(page.next?button(esc(text('allUnfinished')),'reuse-original-list'):'')+'</section>':'';
  }
  async function list(cursor=null){

@@ -25,6 +25,12 @@ test('task readiness remains a snapshot read while task commands require write a
  assert.equal(workspaceSnapshotRequest('POST','/api/modules/command'),false);
 });
 
+test('evidence dependency review drains as a cancellable snapshot read',()=>{
+ assert.equal(workspaceSnapshotRequest('POST','/api/research/materials/dependency-review'),true);
+ assert.equal(workspaceSnapshotRequest('GET','/api/research/materials/dependency-review'),false);
+ assert.equal(workspaceSnapshotRequest('POST','/api/research/materials/analysis'),false);
+});
+
 test('authorized live and shared figure reads drain without writer or Activity admission',()=>{
  const id='11111111-1111-4111-8111-111111111111',live='/api/live/figures/'+[id,id,id].join('/'),shared='/api/sharing/figures/'+id+'/incoming/'+id+'/'+id;
  for(const route of ['/api/reviews/download','/api/reviews/figure-export']){assert.equal(workspaceSnapshotRequest('GET',route),true);assert.equal(workspaceSnapshotRequest('POST',route),false);}
