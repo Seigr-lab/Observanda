@@ -13,8 +13,12 @@ import {ResearchMaterials,EVIDENCE_CHUNK,exactInteger} from '../src/research-mat
 import {recordRevision} from '../src/research.js';
 import {createFigure} from '../src/web/figure-model.js';
 import {researchReference,parseResearchReference} from '../src/web/research-reference.js';
-import {buildPublication,verifyPublication,writePublication} from '../src/publication.js';
+import {verifyPublication,writePublication} from '../src/publication.js';
 import {contentBuffer} from '../src/file-content.js';
+import {RetainedFigureDocuments} from '../src/retained-figure-document.js';
+import {PublicationJobs} from '../src/publication-jobs.js';
+import {publicationDraftCommand} from './publication-fixture.js';
+import {DATASET_ROWS_PER_PAGE} from '../src/dataset-row-position.js';
 
 const column=(name,representation='text',extra={})=>({name,representation,radix:10,unit:'',missing:[{value:'',meaning:'Not acquired'}],time:{kind:'none',reference:'',resolution:'',uncertainty:''},...extra});
 const mapping={x:0,xKind:'category',values:[{column:2,error:null}],group:1,operation:'mean',kind:'bar',order:'source',mode:'replace',decimal:'.'};
@@ -54,7 +58,7 @@ test('retained methods, interrupted 64 MiB capture, precise dataset, revised ana
  await assert.rejects(store.finishImport(session.id),{code:'MATERIAL_INCOMPLETE'});
  const restarted=new ResearchMaterials(new Workspace(root,vault));assert.equal(restarted.uploads.count(await restarted.importState(session.id)),1);
  // A backup made while paused remains resumable on a different root.
- const paused=path.join(parent,'paused-copy');await copyWorkspace(await copyPlan(root,paused));
+ const paused=path.join(parent,'paused-copy');await copyWorkspace(await copyPlan(root,paused),{vault});
  const pausedStore=new ResearchMaterials(new Workspace(paused,vault));
  assert.equal((await pausedStore.verify()).receivedBytes,EVIDENCE_CHUNK);
  assert.equal((await pausedStore.sequences.item((await pausedStore.importState(session.id)).chunksIndex,0)).sha256,digest(chunk));
@@ -73,7 +77,7 @@ test('retained methods, interrupted 64 MiB capture, precise dataset, revised ana
  const tableArtifact=await upload(store,run1.id,'measurements.csv',csv,[capture]);
  const schema=[column('Group'),column('Run'),column('Measurement','decimal',{unit:'mV'}),column('Counter','integer',{time:{kind:'counter',reference:'Device start',resolution:'1 tick',uncertainty:'unknown'}}),column('Senary','radix',{radix:6}),column('Order','integer',{time:{kind:'acquisition-order',reference:'Acquisition order',resolution:'1 observation',uncertainty:''}})];
  const dataset=await store.dataset({recordId:run1.id,title:'Measurement source',artifact:tableArtifact,columns:schema});
- const doc=await store.read(dataset);assert.equal(doc.content.rowCount,4000);assert.equal(doc.content.pageIndex.count,16);assert.ok(!('rows' in doc.content));
+ const doc=await store.read(dataset);assert.equal(doc.content.rowCount,4000);assert.equal(doc.content.pageIndex.count,Math.ceil(4000/DATASET_ROWS_PER_PAGE));assert.ok(!('rows' in doc.content));
  const table=await store.datasetRows(dataset);assert.equal(table[0].cells[3],large);assert.equal(table[0].cells[4],senary);assert.equal(exactInteger(large),18446744073709551615n);assert.equal(exactInteger('10',6),6n);
  const baseFigure=createFigure();baseFigure.title='Comparison of the recovered observations';
  // These grouped means are repeating fractions. A checked projection must
@@ -81,13 +85,16 @@ test('retained methods, interrupted 64 MiB capture, precise dataset, revised ana
  // after the exact reduction and retained with that analysis revision.
  await assert.rejects(store.plot({recordId:conclusion.id,title:'Retained comparison',dataset,mapping,base:baseFigure}),{code:'MATERIAL_PRECISION'});
  const result=await store.plot({recordId:conclusion.id,title:'Retained comparison',dataset,mapping:{...mapping,numericPolicy:'approximate'},base:baseFigure});
- assert.equal(result.figure.series.length,2);
+ const figure=await new RetainedFigureDocuments(ws,{readOnly:true}).open(result.figure),series=await figure.window({collection:'series',limit:2});
+ assert.equal(series.total,2);assert.equal(series.items.length,2);
  const calc=await store.read(result.ref);assert.equal(calc.content.denominator.rows,4000);assert.equal(calc.content.denominator.missing[2].count,1);
  assert.equal(calc.content.numericTransform.reduction.projection,'after-reduction');assert.equal(calc.content.numericTransform.policy,'approximate');assert.ok(calc.content.warnings.some(message=>message.includes('rounded')));
- for(const [index,start,end]of [[0,0,2000],[1,2000,3999]])assert.equal(result.figure.series[index].points[0].y,Array.from({length:end-start},(_,i)=>(start+i)%17).reduce((a,b)=>a+b,0)/(end-start));
+ for(const [index,start,end]of [[0,0,2000],[1,2000,3999]]){const points=await figure.window({collection:'points',seriesId:series.items[index].id,limit:1});assert.equal(points.total,1);assert.equal(points.items[0].value.y,Array.from({length:end-start},(_,i)=>(start+i)%17).reduce((a,b)=>a+b,0)/(end-start));}
  await assert.rejects(store.plot({recordId:conclusion.id,title:'Do not coerce',dataset,mapping:{...mapping,values:[{column:3,error:null}]}}),{code:'MATERIAL_PRECISION'});
  const nativePlot=await store.plot({recordId:conclusion.id,title:'Exactly representable native counter',dataset,mapping:{...mapping,values:[{column:4,error:null}]}});
- assert.ok(nativePlot.figure.series.every(series=>series.points[0].y===7312316880125951));
+ const nativeFigure=await new RetainedFigureDocuments(ws,{readOnly:true}).open(nativePlot.figure);
+ assert.equal(nativeFigure.document.counts.series,2);assert.equal(nativeFigure.document.counts.points,2);
+ for await(const {value:point} of nativeFigure.pointEntries())assert.equal(point.y,7312316880125951);
  assert.equal((await store.datasetRows(dataset))[0].cells[4],senary);
  const external=await store.analysis({recordId:conclusion.id,title:'External decoder',inputs:[capture,dataset,pinned],tool:'Synthetic decoder',version:'fixture-1',parameters:'counter base: 6',outputs:[tableArtifact]});
  const revisedExternal=await store.analysis({recordId:conclusion.id,title:'External decoder',id:external.id,expectedRevision:external.revision,inputs:[capture,dataset,pinned],tool:'Synthetic decoder',version:'fixture-2',parameters:'revised interpretation',outputs:[tableArtifact]});
@@ -100,9 +107,9 @@ test('retained methods, interrupted 64 MiB capture, precise dataset, revised ana
  assert.equal((await store.overview(conclusion.id)).items.find(m=>m.id===result.ref.id).figureState,'matches');
  const newDataset=await store.dataset({recordId:run1.id,title:'Measurement source',artifact:tableArtifact,columns:schema,id:dataset.id,expectedRevision:dataset.revision,exclusions:{[table[0].id]:'Synthetic instrument artifact'}});
  assert.equal((await store.read(newDataset)).previous,dataset.revision);
- const status=(await store.overview(conclusion.id)).items.find(m=>m.id===result.ref.id);
- assert.ok((await store.overview(run2.id)).items.find(m=>m.id===reused.ref.id).changed.some(r=>r.id===dataset.id));
- assert.ok(status.changed.some(r=>r.id===dataset.id));assert.equal((await store.read(result.ref)).content.figure.series[0].points[0].y,result.figure.series[0].points[0].y);
+ const status=(await store.reviewDependencies(conclusion.id,{refs:[result.ref]})).items[0];
+ assert.ok((await store.reviewDependencies(run2.id,{refs:[reused.ref]})).items[0].changed.some(r=>r.id===dataset.id));
+ assert.ok(status.changed.some(r=>r.id===dataset.id));const retainedFigure=await new RetainedFigureDocuments(ws,{readOnly:true}).open((await store.read(result.ref)).content.figure);assert.equal((await retainedFigure.rawPoint({offset:0})).value.y,(await figure.rawPoint({offset:0})).value.y);
  assert.equal((await store.datasetRows(dataset))[0].excluded,null);
 
  // Public edition has only selected readable content and figure coordinates.
@@ -110,14 +117,18 @@ test('retained methods, interrupted 64 MiB capture, precise dataset, revised ana
  publicBook.entries.find(e=>e.id===method.id).share=true; // latest method is public, but old pinned reference must not redirect to it
  publicBook.entries.find(e=>e.id===conclusion.id).relations=[{id:randomUUID(),type:'Uses',target,label:'PRIVATE OLD METHOD LABEL'}];
  const sources=await store.releaseSources(publicBook,[conclusion.id]);assert.equal(sources.sources[0].analysis.revision,result.ref.revision);assert.equal(sources.warnings[0].reason,'inputs');
- const release=buildPublication(publicBook,{blockedValues:['E:\\private\\']});verifyPublication(release);
+ const command=await publicationDraftCommand(ws,publicBook),edition=await new PublicationJobs(ws).inline({...command,blockedValues:['E:\\private\\']}),files=new Map();
+ // The fixture has four records: inspect every emitted text file and retain the
+ // existing manifest/privacy/export assertions against the native preparation.
+ for await(const [name,content] of edition.files)files.set(name,/\.(html|css|csv|svg|json|js|txt)$/.test(name)?(await contentBuffer(content)).toString('utf8'):content);
+ const release={...edition,files};verifyPublication(release);
  const all=[...release.files.values()].filter(v=>typeof v==='string').join('\n');
  for(const privateValue of ['opaque-capture.bin','measurements.csv','E:\\private\\',captureDoc.content.sha256,large,senary,'PRIVATE OLD METHOD LABEL'])assert.ok(!all.includes(privateValue),privateValue);
  assert.ok(all.includes('Supporting captures are not publicly available.'));
  assert.ok([...release.files.keys()].some(p=>p.startsWith('figures/')));
  await writePublication(release,path.join(parent,'website-section'));
 
- const backup=path.join(parent,'restored');await copyWorkspace(await copyPlan(root,backup));
+ const backup=path.join(parent,'restored');await copyWorkspace(await copyPlan(root,backup),{vault});
  const restoredVault=await verifyAccess(await readAccess(backup),'','synthetic adoption password');
  const restored=new ResearchMaterials(new Workspace(backup,restoredVault)),verified=await restored.verify();assert.ok(verified.originalBytes>=64*EVIDENCE_CHUNK+csv.length);
  assert.equal((await restored.read(pinned)).body,method.body);assert.equal((await restored.datasetRows(dataset))[0].cells[3],large);

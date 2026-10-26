@@ -13,6 +13,7 @@ import {AppError} from '../src/errors.js';
 import {clearVault} from '../src/encryption.js';
 import {copyPlan,copyWorkspace} from '../src/locations.js';
 import {Workspace} from '../src/storage.js';
+import {RetainedFigureDocuments} from '../src/retained-figure-document.js';
 const column=(name,representation='text')=>({name,representation,radix:10,unit:'',missing:[{value:'',meaning:'Not acquired'}],time:{kind:'none',reference:'',resolution:'',uncertainty:''}});
 const mapping={x:0,xKind:'category',values:[{column:1,error:null}],group:null,operation:'median',kind:'bar',order:'source',mode:'replace',decimal:'.'};
 async function fixture(t,count=43440){
@@ -46,14 +47,17 @@ test('43,440 retained measurements calculate without loading a table; medians, c
  const doc=await f.materials.read(completed.result),d=doc.content.denominator;
  assert.equal(d.rows,f.count);assert.equal(d.included,f.count-1);assert.equal(d.excludedCount,1);assert.equal(d.missing[1].count,Math.ceil(f.count/101));assert.deepEqual(d.dataset,f.dataset);
  assert.ok(JSON.stringify(d).length<2000,'coverage references retained row identities instead of copying every id');
- for(const point of doc.content.figure.series[0].points){const values=f.expected.get(point.x).sort((a,b)=>a-b),m=Math.floor(values.length/2);assert.equal(point.y,values.length%2?values[m]:values[m-1]/2+values[m]/2);}
+ const figure=await new RetainedFigureDocuments(f.workspace,{readOnly:true}).open(doc.content.figure);
+ assert.equal(figure.document.counts.series,1);assert.equal(figure.document.counts.points,f.expected.size);
+ for await(const {value:point} of figure.pointEntries()){const values=f.expected.get(point.x).sort((a,b)=>a-b),m=Math.floor(values.length/2);assert.equal(point.y,values.length%2?values[m]:values[m-1]/2+values[m]/2);}
  assert.equal((await enqueuePlot(f.materials,f.queue,f.command,id)).result.revision,completed.result.revision);
  assert.equal((await datasetJobs(f.materials,f.queue,f.recordId)).items[0].type,'figure.calculate');
  assert.deepEqual((await f.workspace.metadataPage(f.materials.plotWork(id))).items,[]);
- await assert.rejects(f.materials.plot({...f.command,mapping:{...mapping,operation:'raw'}}),{code:'MATERIAL_ANALYSIS_LIMIT'});
+ // Raw plots use paged retained figures; their projection and recovery checks
+ // live in dataset-plot-projection-native.test.js rather than an old row cap.
  const original=await f.materials.read(f.dataset),columns=await f.materials.datasetColumns(original);columns[1].unit='relative level';
  const updated=await f.materials.dataset({id:f.dataset.id,expectedRevision:f.dataset.revision,baseDataset:f.dataset,recordId:f.recordId,title:original.title,artifact:f.artifact,columns,sourceMapping:original.content.sourceMapping});
- assert.ok((await f.materials.overview(f.recordId)).items.find(i=>i.id===completed.result.id).changed.some(i=>i.id===updated.id));
+ assert.ok((await f.materials.reviewDependencies(f.recordId,{refs:[completed.result]})).items[0].changed.some(i=>i.id===updated.id));
  assert.deepEqual((await f.materials.read(completed.result)).content,doc.content);
  const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'restored')),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(copy,f.vault));
  assert.deepEqual((await restored.read(completed.result)).content,doc.content);

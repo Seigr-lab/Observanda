@@ -140,6 +140,22 @@ test('desktop opens setup, saves encrypted work, protects unsaved edits and reop
    },{...retained,projectId});
    expect(updated.title).toBe('Continued after application update');expect(updated.sections).toEqual(retained.record.sections);
   }
+  await page.evaluate(async({recordId,projectId,labBookId})=>{
+   const storage=await(await fetch('/api/storage')).json();
+   for(let i=0;i<21;i++){
+    const response=await fetch('/api/projects/'+projectId+'/lab-books/'+labBookId+'/research/materials/collection',{method:'POST',headers:{'Content-Type':'application/json','X-Observanda-Workspace':storage.contextId},body:JSON.stringify({recordId,title:'Packaged evidence '+i,inputs:[]})});
+    if(!response.ok)throw Error('Packaged evidence creation failed: '+response.status);
+   }
+  },{recordId:retained.record.id,projectId,labBookId:externalBook.id});
+  await page.evaluate(route=>location.hash=route,recordRoute);
+  await page.getByRole('button',{name:'Open evidence & analysis',exact:true}).click();
+  const evidence=page.locator('#dialog');await expect(evidence.locator('.material-list > li')).toHaveCount(20);
+  await expect(evidence.locator('[data-dependency-status="checked"]')).toHaveCount(20,{timeout:60000});
+  await evidence.getByRole('button',{name:'Older evidence',exact:true}).click();await expect(evidence.locator('.material-list > li')).toHaveCount(1);
+  await expect(evidence.locator('[data-dependency-status="checked"]')).toHaveCount(1,{timeout:30000});
+  await evidence.getByRole('button',{name:'Inspect',exact:true}).click();await expect(evidence.getByRole('heading',{name:/^Packaged evidence /})).toBeVisible();
+  await evidence.getByRole('button',{name:'Back to evidence',exact:true}).click();await evidence.getByRole('button',{name:'Close',exact:true}).click();
+  console.log('Desktop evidence: paged browsing and separate source checks passed.');
   await page.evaluate(route=>location.hash=route,siteRoute);await expect(page.locator('.website-site-context')).toContainText('Desktop project website');
   expect(errors).toEqual([]);
   await fixture.close(app);app=null;
