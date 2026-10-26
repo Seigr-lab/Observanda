@@ -94,7 +94,8 @@ export class LocalIntake{
   await this.queue.transaction(()=>withWorkspaceMetadataBatch(this.workspace,async()=>{
    const existing=await this.read(id,{optional:true});if(existing){if(existing.pin!==expectedPin)throw new AppError('INTAKE_CHANGED');return;}
    await this.validateTargets(report.manifest);
-   const proposal={version:1,id,manifest:report.manifest,pin:report.pin,source:report.root,createdAt:new Date().toISOString(),state:'staging',stageJob:randomUUID(),applyJob:randomUUID(),prepared:[],receipt:null};
+   const sourceVerification={pin:report.pin,manifestStamp:report.manifestStamp,files:report.files.map(({id,path,size,sha256,stamp})=>({id,path,size,sha256,stamp}))};
+   const proposal={version:1,id,manifest:report.manifest,pin:report.pin,source:report.root,sourceVerification,createdAt:new Date().toISOString(),state:'staging',stageJob:randomUUID(),applyJob:randomUUID(),prepared:[],receipt:null};
    await this.write(proposal);const feed=this.feed(recordId);await feed.putLocked(proposal);await this.workspace.writeMetadata(feed.marker,JSON.stringify({version:1}));
    await this.queue.enqueueLocked({id:proposal.stageJob,type:'intake.stage',scope:recordId,input:{id,size:report.manifest.files.reduce((n,f)=>n+f.size,0)}});
   }));return this.status({workspaceId,recordId,id});

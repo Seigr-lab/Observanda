@@ -17,8 +17,17 @@ export function intakeJobDefinitions(workspace,queue){
   if(job.scope!==p.manifest.recordId||job.id!==(job.type==='intake.stage'?p.stageJob:p.applyJob))throw new AppError('JOB_CHANGED');
   await intake().bind(p.manifest,{checkRevision:false});
  };
- return {'intake.stage':{authorize,prepare:async(job,{signal,progress})=>{
-  const service=intake(),p=await service.read(job.input.id),report=await inspectIntake(p.source,{signal,expectedPin:p.pin,progress});await service.validateTargets(p.manifest);
+ return {'intake.stage':{authorize,prepare:async(job,{signal,progress,write})=>{
+  const service=intake(),p=await service.read(job.input.id);
+  write??=operation=>queue().checkpoint(job.id,job.lease.token,async()=>{signal?.throwIfAborted();const result=await operation();signal?.throwIfAborted();return result;});
+  const checkpoint=verification=>write(async()=>{
+   const current=await service.read(p.id);
+   if(current.pin!==verification.pin||current.state!=='staging')throw new AppError('INTAKE_CHANGED');
+   const prior=current.sourceVerification,declared=new Set(current.manifest.files.map(file=>file.id)),files=new Map((prior?.pin===verification.pin&&prior.manifestStamp===verification.manifestStamp&&Array.isArray(prior.files)&&prior.files.length<=current.manifest.files.length?prior.files:[]).filter(file=>file&&declared.has(file.id)).map(file=>[file.id,file]));
+   for(const file of verification.files)files.set(file.id,file);
+   current.sourceVerification={...verification,files:[...files.values()]};await service.write(current);
+  });
+  const report=await inspectIntake(p.source,{signal,expectedPin:p.pin,progress,verification:p.sourceVerification,checkpoint});await service.validateTargets(p.manifest);
   let done=0;const total=job.input.size;
   for(const f of report.files){
    signal.throwIfAborted();const previous=p.prepared.find(v=>v.id===f.id);
@@ -29,7 +38,7 @@ export function intakeJobDefinitions(workspace,queue){
     const result=await writeContent(workspace,file,chunks(),{maxBytes:f.size||1,signal});
     if(result.sha256!==f.sha256||result.size!==f.size)throw new AppError('INTAKE_CHANGED');
     const prepared={id:f.id,storageId,sha256:f.sha256,size:f.size};
-    await queue().transaction(async()=>{await queue().held(job.id,job.lease.token);const current=await service.read(p.id);if(current.prepared.some(v=>v.id===f.id))throw new AppError('JOB_CHANGED');current.prepared.push(prepared);await service.write(current);});
+    await write(async()=>{const current=await service.read(p.id);if(current.prepared.some(v=>v.id===f.id))throw new AppError('JOB_CHANGED');current.prepared.push(prepared);await service.write(current);});
     p.prepared.push(prepared);retained=true;
    }finally{if(!retained&&await assertRegular(file,{missing:true}))await unlink(file);}
   }
@@ -37,9 +46,9 @@ export function intakeJobDefinitions(workspace,queue){
  },commit:async(job,result)=>{
   const service=intake(),p=await service.read(job.input.id);if(p.pin!==result.pin||p.prepared.length!==p.manifest.files.length)throw new AppError('INTAKE_CHANGED');
   p.state='prepared';await service.write(p);return {id:p.id,pin:p.pin};
- }},'intake.apply':{authorize,prepare:async(job,{signal,progress})=>{
+ }},'intake.apply':{authorize,prepare:async(job,{signal,progress,write})=>{
   const service=intake(),p=await service.read(job.input.id);await service.validateTargets(p.manifest);
-  const report=await inspectPreparedIntake(service,p,{signal,progress});return new LocalIntakeFinalization(service).stage(job,report,{signal,progress});
+  const report=await inspectPreparedIntake(service,p,{signal,progress});return new LocalIntakeFinalization(service).stage(job,report,{signal,progress,write});
  },beforeComplete:(job,report,options)=>new LocalIntakeFinalization(intake()).beforeComplete(job,report,options),
  commit:(job,proof)=>withWorkspaceMetadataBatch(workspace,()=>new LocalIntakeFinalization(intake()).commit(job,proof))}};
 }

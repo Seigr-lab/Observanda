@@ -33,8 +33,9 @@ export class LocalIntakeFinalization{
   return batch;
  }
  async save(batch){await this.workspace.writeMetadata(this.file(batch.id),JSON.stringify(batch));}
- async stage(job,report,{signal,progress=async()=>{}}={}){
-  const service=this.service,queue=service.queue,write=fn=>queue.transaction(async()=>{await queue.held(job.id,job.lease.token);signal?.throwIfAborted();return fn();});
+ async stage(job,report,{signal,progress=async()=>{},write}={}){
+  const service=this.service,queue=service.queue;
+  write??=fn=>queue.checkpoint(job.id,job.lease.token,async()=>{signal?.throwIfAborted();const result=await fn();signal?.throwIfAborted();return result;});
   let proposal=await service.read(job.input.id),batch=await this.read(proposal,{optional:true});
   if(!batch)await write(async()=>{
    proposal=await service.read(job.input.id);batch=await this.read(proposal,{optional:true});if(batch)return;
@@ -71,7 +72,7 @@ export class LocalIntakeFinalization{
    if(local&&ref.kind===local.kind&&ref.revision===local.revision){const head=await this.materials.current(ref.id,{includeStaged:true});if(!head||head.revision!==ref.revision||head.stagedBatch!==batch.id)changed();await this.materials.readStored(ref);}
    else await this.materials.checkReference(ref,{signal});
   };
-  const write=fn=>service.queue.transaction(async()=>{await service.queue.held(job.id,job.lease.token);signal?.throwIfAborted();return fn();});
+  const write=fn=>service.queue.checkpoint(job.id,job.lease.token,async()=>{signal?.throwIfAborted();const result=await fn();signal?.throwIfAborted();return result;});
   for(const source of proposal.manifest.analyses){
    signal?.throwIfAborted();const resolve=ref=>ref.file?fileRefs.get(ref.file):ref;
    const command=await this.materials.prepareAnalysis({...source,recordId:batch.command.recordId,inputs:source.inputs.map(resolve),outputs:source.outputs.map(resolve)},{checkReference,write});
