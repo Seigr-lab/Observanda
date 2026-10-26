@@ -157,6 +157,23 @@ test('desktop opens setup, saves encrypted work, protects unsaved edits and reop
   await evidence.getByRole('button',{name:'Back to evidence',exact:true}).click();await evidence.getByRole('button',{name:'Close',exact:true}).click();
   console.log('Desktop evidence: paged browsing and separate source checks passed.');
   await page.evaluate(route=>location.hash=route,siteRoute);await expect(page.locator('.website-site-context')).toContainText('Desktop project website');
+  const introduction='Written in the installed desktop application for this named website.';
+  await page.evaluate(async({route,introduction})=>{
+   const storage=await(await fetch('/api/storage')).json(),headers={'Content-Type':'application/json','X-Observanda-Workspace':storage.contextId,'X-Observanda-Wait':'1'};
+   const call=async(path,body)=>{const response=await fetch(path,{method:'POST',headers,body:JSON.stringify(body)});if(!response.ok)throw Error('Packaged website authoring failed: '+response.status);return response.json();};
+   const snapshot=await call('/api/workspace/read/start',{}),website={workspaceId:snapshot.metadata.id,websiteId:route.match(/^#\/websites\/([a-f0-9-]{36})\//)[1]};
+   let editor=await call('/api/websites/editor/open',website);
+   editor=await call('/api/websites/editor/change',{...website,websitePin:editor.websitePin,draftId:editor.draft?.id??null,expectedRevision:editor.draft?.revision??null,commandId:crypto.randomUUID(),operations:[
+    {type:'settings',path:['document','website','home','enabled'],value:true},
+    {type:'settings',path:['document','website','home','introduction'],value:introduction}
+   ]});
+   await call('/api/websites/editor/save',{...website,websitePin:editor.websitePin,draftId:editor.draft.id,expectedRevision:editor.draft.revision,commandId:crypto.randomUUID()});
+  },{route:siteRoute,introduction});
+  await page.reload();await expect(page.locator('.website-site-context')).toContainText('Desktop project website');
+  await page.getByRole('button',{name:'Preview & export',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible({timeout:60000});
+  await expect(page.frameLocator('iframe[title="Publication preview"]').locator('body')).toContainText(introduction,{timeout:30000});
+  console.log('Desktop website: saved named homepage and prepared publication preview passed.');
   expect(errors).toEqual([]);
   await fixture.close(app);app=null;
   for(const root of [workspaceRoot,projectRoot,path.join(projectRoot,externalBook.title)]){
