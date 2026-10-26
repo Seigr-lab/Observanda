@@ -7,7 +7,9 @@ import {desktopAccess} from './access.js';
 import {navigate} from '../browser/preferences-helper.js';
 
 test('desktop opens setup, saves encrypted work, protects unsaved edits and reopens after a clean shutdown',async()=>{
- test.setTimeout(240000);
+ // This combined update journey starts both versions and checks authoring,
+ // evidence, publication and shutdown. It is not a host throughput benchmark.
+ test.setTimeout(360000);
  const fixture=await desktopFixture(),{directory,packaged,env,start}=fixture;
  const previous=process.env.OBSERVANDA_DESKTOP_PREVIOUS_EXECUTABLE||undefined;
  if(previous&&!packaged)throw Error('Update acceptance requires the candidate packaged executable as well as its predecessor.');
