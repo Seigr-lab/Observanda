@@ -31,7 +31,8 @@ export async function websiteCollectionPage(records,{key,target,notebooks,filter
  if(request?.definition!==definition)request=null;
  const query=feed?{key,search:'',tag:'',type:'',order:feed.order}:null;
  if(request?.visitor&&feed){if(feed.visitorFilters)for(const name of ['search','tag','type'])query[name]=request.visitor[name];if(feed.visitorOrder&&request.visitor.order)query.order=request.visitor.order;}
- const binding=digest(serialize({workspaceId:metadata.id,websiteId:records.websiteId,websitePin:records.websitePin,snapshot:command.baseEtag,...(records.binding?{sources:records.binding}:{}),changes:command.changes,removed:command.removed,definition,query}));
+ const pin=records.websitePin;
+ const binding=digest(serialize({workspaceId:metadata.id,websiteId:records.websiteId,websitePin:pin?[pin.researchSnapshotId,pin.websiteId,pin.websiteRevision]:null,snapshot:command.baseEtag,...(records.binding?{sources:records.binding}:{}),changes:command.changes,removed:command.removed,definition,query}));
  const cursor=request?.collection?.cursor;let state={after:null,backward:false,matched:0,boundary:null};
  if(cursor){
   try{state=store.decode('website-collection-page',metadata.id,Buffer.from(cursor,'base64url'));}catch{throw new AppError('INVALID');}

@@ -1,7 +1,11 @@
 // Self-contained controller shared by hosted exports and trusted preview hosts.
 // Source pages contain only the already admitted public selection. Filtering
 // keeps a bounded page cache and never constructs the complete feed DOM.
-export function enhancePublicFeeds(document,view,fetchPage,{baseURL=view.location.href,history=true}={}){
+export function disposePublicFeeds(document){
+ for(const root of document.querySelectorAll('[data-public-feed]'))root.__feedDispose?.();
+}
+
+export function enhancePublicFeeds(document,view,fetchPage,{baseURL=view.location.href,history=true,onPageApplied=()=>{}}={}){
  for(const root of document.querySelectorAll('[data-public-feed]')){
   const stamp=root.dataset.feedConfig+'|'+baseURL;if(root.__feedStamp===stamp)continue;
   root.__feedDispose?.();root.__feedStamp=stamp;
@@ -35,10 +39,21 @@ export function enhancePublicFeeds(document,view,fetchPage,{baseURL=view.locatio
     const url=new URL(path,baseURL);if(url.origin!==view.location.origin)throw Error();
     const response=await fetchPage(url.href,{signal:controller.signal});if(!response.ok||response.url&&new URL(response.url).origin!==url.origin)throw Error();
     const parsed=new view.DOMParser().parseFromString(await response.text(),'text/html'),source=parsed.querySelector('[data-public-feed="'+id+'"]');if(!source)throw Error();
-    const details=JSON.parse(source.dataset.feedConfig);if(!details.cursor||details.pageSize!==config.pageSize)throw Error();if(request!==generation)return;
-    items.replaceChildren(...[...source.querySelector('[data-feed-items]').children].map(node=>document.importNode(node,true)));
-    for(const [button,key] of [[previous,'previous'],[next,'next']])if(button){const other=source.querySelector('[data-feed-'+key+']');if(!other)throw Error();button.hidden=other.hidden;button.href=new URL(other.getAttribute('href'),baseURL).href;}
-    state=query;root.dataset.feedView=state.view;const empty=root.querySelector('[data-feed-empty]');empty.hidden=items.children.length>0;empty.textContent=source.querySelector('[data-feed-empty]').textContent;fillForm();status.textContent=messages.results+': '+items.children.length;pending=null;
+    const details=JSON.parse(source.dataset.feedConfig);
+    if(!details.cursor||details.pageSize!==config.pageSize||details.kind!==config.kind||details.source!==config.source||details.cursor.query?.key!==config.cursor.query?.key)throw Error();
+    const sourceItems=source.querySelector('[data-feed-items]'),sourceEmpty=source.querySelector('[data-feed-empty]'),navigation=[];
+    if(!sourceItems||!sourceEmpty||sourceItems.children.length>config.pageSize||[...sourceItems.children].some(node=>!node.hasAttribute('data-feed-item')))throw Error();
+    for(const [button,key] of [[previous,'previous'],[next,'next']])if(button){
+     const other=source.querySelector('[data-feed-'+key+']'),href=other?.getAttribute('href');if(!href)throw Error();
+     const destination=new URL(href,baseURL);if(destination.origin!==view.location.origin)throw Error();
+     navigation.push({button,hidden:other.hidden,href:destination.href});
+    }
+    // Prepare the complete replacement before changing any visible result or
+    // navigation state. A truncated response must leave the prior view intact.
+    const nodes=[...sourceItems.children].map(node=>document.importNode(node,true));
+    if(request!==generation)return;controller.signal.throwIfAborted();
+    items.replaceChildren(...nodes);for(const {button,hidden,href} of navigation){button.hidden=hidden;button.href=href;}
+    state=query;root.dataset.feedView=state.view;const empty=root.querySelector('[data-feed-empty]');empty.hidden=nodes.length>0;empty.textContent=sourceEmpty.textContent;fillForm();status.textContent=messages.results+': '+nodes.length;pending=null;onPageApplied(response);
    }catch(error){if(request===generation&&error.name!=='AbortError'){status.textContent=messages.failed;retry.hidden=false;}}
    finally{if(request===generation)busy(false);}
   };
@@ -88,7 +103,7 @@ export function enhancePublicFeeds(document,view,fetchPage,{baseURL=view.locatio
   on(cancel,'click',()=>{generation++;controller?.abort();pending=null;busy(false);status.hidden=true;retry.hidden=true;fillForm();});
   on(retry,'click',()=>{if(pending){if(pending.path)void showCursor(pending.path,pending.query);else void show(pending.start,pending.direction,pending.query,{remember:pending.remember});}});
   on(view,'pagehide',()=>controller?.abort());if(history)on(view,'popstate',restore);
-  root.__feedDispose=()=>{generation++;controller?.abort();listeners.forEach(dispose=>dispose());};
+  root.__feedDispose=()=>{generation++;controller?.abort();listeners.forEach(dispose=>dispose());delete root.__feedStamp;delete root.__feedDispose;};
   if(config.cursor){state={...defaults,...config.cursor.query};fillForm();}
   if(history&&new URL(view.location.href).searchParams.has('feed-'+id))restore();
  }

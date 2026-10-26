@@ -5,6 +5,9 @@ import {buildPublication} from '../../src/publication.js';
 import {sampleNotebook} from '../../src/sample.js';
 import {upgradeNotebook} from '../../src/model.js';
 import {defaultFeed} from '../../src/web/website-feed-model.js';
+import {PublicationFeeds,PUBLIC_FEEDS_SCRIPT} from '../../src/publication-feeds.js';
+import {disposePublicFeeds,enhancePublicFeeds} from '../../src/web/public-feeds.js';
+import {reconcileCanvas} from '../../src/web/canvas-document.js';
 
 async function fixture(count=73,{feeds=1}={}){
  const book=upgradeNotebook(sampleNotebook()),seed=book.entries[0];
@@ -17,6 +20,68 @@ async function fixture(count=73,{feeds=1}={}){
  });
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));return {book,candidate,requests,url:'http://127.0.0.1:'+server.address().port+'/nested/site/index.html',close:()=>new Promise(resolve=>server.close(resolve))};
 }
+
+async function cursorFixture(){
+ const esc=value=>String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');
+ let fault=null;
+ const server=createServer((req,res)=>{
+  const url=new URL(req.url,'http://localhost'),renderer=new PublicationFeeds(new Map(),esc),parts=[];
+  for(const id of ['first','second']){
+   const key='section:'+id,position=url.searchParams.get('feed')===key?Number(url.searchParams.get('cards')??0):0;
+   const section={id,kind:'records',feed:{...defaultFeed('records'),pageSize:2,visitorFilters:true}},visitor={key,search:url.searchParams.get('feedSearch')??'',tag:'',type:'',order:'newest'};
+   let html=renderer.render({target:'home',key,section,items:[0,1].map(n=>({id:id+'-'+(position+n),title:id+' observation '+(position+n)})),
+    card:item=>'<article class="publication-card"><h2>'+esc(item.title)+'</h2></article>',
+    continuation:{key,visitor,previousCursor:position?String(position-2):null,nextCursor:position<4?String(position+2):null}});
+   if(id==='first'&&position&&fault){
+    if(fault==='missing-next')html=html.replace(/<a data-feed-next\b[^>]*>[\s\S]*?<\/a>/,'');
+    else if(fault==='invalid-next')html=html.replace(/(<a data-feed-next href=")[^"]*/, '$1https://example.invalid/other');
+    else if(fault==='missing-empty')html=html.replace(/<p data-feed-empty\b[^>]*>[\s\S]*?<\/p>/,'');
+   }
+   parts.push(html);
+  }
+  res.writeHead(200,{'Content-Type':'text/html'});res.end('<!doctype html><html><body>'+parts.join('')+'<script>'+PUBLIC_FEEDS_SCRIPT+'</script></body></html>');
+ });
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ return {url:'http://127.0.0.1:'+server.address().port+'/index.html',fault:value=>{fault=value;},close:()=>new Promise(resolve=>server.close(resolve))};
+}
+
+test('cursor feeds preserve the complete visible state when a replacement response is incomplete',async({page})=>{
+ const f=await cursorFixture(),errors=[];page.on('pageerror',error=>errors.push(error.message));
+ try{
+  await page.goto(f.url);const feeds=page.locator('[data-public-feed]'),first=feeds.first(),second=feeds.nth(1);
+  const snapshot=feed=>feed.evaluate(root=>({items:root.querySelector('[data-feed-items]').innerHTML,empty:root.querySelector('[data-feed-empty]').outerHTML,
+   links:['previous','next'].map(key=>{const link=root.querySelector('[data-feed-'+key+']');return {href:link.href,hidden:link.hidden};})}));
+  const initial=await snapshot(first),other=await snapshot(second);
+  for(const fault of ['missing-next','invalid-next','missing-empty']){
+   f.fault(fault);await first.getByRole('link',{name:'Next entries',exact:true}).click();
+   await expect(first.getByRole('button',{name:'Retry',exact:true})).toBeVisible();await expect(first).toHaveAttribute('aria-busy','false');
+   expect(await snapshot(first)).toEqual(initial);expect(await snapshot(second)).toEqual(other);
+  }
+  f.fault(null);await first.getByRole('button',{name:'Retry',exact:true}).click();await expect(first.locator('[data-feed-item]').first()).toHaveAttribute('data-feed-id','first-2');
+  await expect(first).toHaveAttribute('aria-busy','false');await expect(first.getByRole('button',{name:'Retry',exact:true})).toBeHidden();expect(await snapshot(second)).toEqual(other);
+  await first.getByRole('link',{name:'Previous entries',exact:true}).click();await expect.poll(()=>snapshot(first)).toEqual(initial);expect(errors).toEqual([]);
+ }finally{await f.close();}
+});
+
+test('reconciling the same preview rebinds visible feed controls and cancels detached work',async({page})=>{
+ const f=await fixture(23,{feeds:2}),errors=[];page.on('pageerror',error=>errors.push(error.message));
+ try{
+  await page.goto(f.url);const feed=page.locator('[data-public-feed]').first(),items=feed.locator('[data-feed-item]');
+  await expect(feed.getByLabel('Search this feed',{exact:true})).toBeVisible();
+  const initial=await items.evaluateAll(nodes=>nodes.map(node=>node.dataset.feedId));
+  f.candidate.files.set('feed-reconcile-test.js','window.replaceFeedPreview=html=>{('+disposePublicFeeds.toString()+')(document);const incoming=new DOMParser().parseFromString(html,"text/html");('+reconcileCanvas.toString()+')(document.body,incoming.body);('+enhancePublicFeeds.toString()+')(document,window,window.fetch.bind(window));};');
+  await page.addScriptTag({url:new URL('feed-reconcile-test.js',f.url).href});
+  let release;const held=new Promise(resolve=>{release=resolve;});
+  await page.route('**/feed-*.html',async route=>{await held;await route.continue().catch(()=>{});});
+  await feed.getByRole('link',{name:'Next entries',exact:true}).click();await expect(feed).toHaveAttribute('aria-busy','true');
+  await page.evaluate(html=>window.replaceFeedPreview(html),f.candidate.files.get('index.html'));release();await page.unroute('**/feed-*.html');
+  await expect(feed.getByLabel('Search this feed',{exact:true})).toBeVisible();expect(await items.evaluateAll(nodes=>nodes.map(node=>node.dataset.feedId))).toEqual(initial);
+  await feed.getByRole('link',{name:'Next entries',exact:true}).click();await expect(items).toHaveCount(10);await expect.poll(()=>items.evaluateAll(nodes=>nodes.map(node=>node.dataset.feedId))).not.toEqual(initial);
+  await page.evaluate(html=>window.replaceFeedPreview(html),f.candidate.files.get('index.html'));
+  await feed.getByLabel('Search this feed',{exact:true}).fill('Observation 022');await feed.getByRole('button',{name:'Apply filters',exact:true}).click();await expect(items).toHaveCount(1);await expect(items).toContainText('Observation 022');
+  await expect(page.locator('[data-public-feed]').nth(1).locator('[data-feed-item]')).toHaveCount(11);expect(errors).toEqual([]);
+ }finally{await f.close();}
+});
 
 test('visitors page, reverse, filter and change a long feed without loading or hiding the complete feed DOM',async({page})=>{
  const f=await fixture(),errors=[];page.on('pageerror',error=>errors.push(error.message));

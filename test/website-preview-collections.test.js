@@ -21,6 +21,7 @@ import {copyPlan,encryptedCopy} from '../src/locations.js';
 import {createAccess,takeCreatedVault} from '../src/access.js';
 import {Workspace} from '../src/storage.js';
 import {WebsitePreviewRecords} from '../src/website-preview-records.js';
+import {websiteCollectionPage,websiteCollectionRequests} from '../src/website-preview-collections.js';
 
 async function websitePreviewSource(workspace,command,options){
  const {websitePin}=await websiteWorkspace(workspace,workspace.websiteId??null).outline();
@@ -90,6 +91,22 @@ test('canvas continuation preserves presentation edits and restarts after source
  assert.notEqual(restarted.definition,initial.definition);assert.deepEqual(restarted.recordIds,ids(expected.slice(1,11)));assert.equal(restarted.previousCursor,null);
  const following=(await load(selected,[navigation(restarted,restarted.nextCursor)])).context.collectionPages.find(page=>page.key===key);
  assert.deepEqual(following.recordIds,ids(expected.slice(11,21)));assert.ok(!following.recordIds.includes(expected[0].id));
+});
+
+test('feed cursors accept equivalent pin field order while rejecting changed research and website identities',async t=>{
+ const f=await fixture(t,9),command=f.command(f.book),{websitePin:pin}=await websiteWorkspace(f.workspace).outline();
+ await f.workspace.catalogue(async store=>{
+  const snapshot=await store.snapshot(),records=new WebsitePreviewRecords(store,snapshot,snapshot.metadata,command);await records.initialize();
+  const options={key:'section:pin-order',target:'home',notebooks:new Set(snapshot.metadata.notebooks.map(book=>book.id)),feed:{...defaultFeed('records'),pageSize:3}};
+  records.websitePin={researchSnapshotId:pin.researchSnapshotId,websiteId:pin.websiteId,websiteRevision:pin.websiteRevision};
+  const first=await websiteCollectionPage(records,options),request=websiteCollectionRequests([navigation(first,first.nextCursor)]).get(options.key);
+  assert.equal(first.records.length,3);assert.ok(first.nextCursor);
+  records.websitePin={websiteId:pin.websiteId,websiteRevision:pin.websiteRevision,researchSnapshotId:pin.researchSnapshotId};
+  const second=await websiteCollectionPage(records,{...options,request});assert.equal(second.records.length,3);assert.ok(second.records.every(record=>!first.records.some(previous=>previous.id===record.id)));
+  for(const [field,value] of [['researchSnapshotId','f'.repeat(64)],['websiteId',randomUUID()],['websiteRevision','e'.repeat(64)]]){
+   records.websitePin={...pin,[field]:value};await assert.rejects(websiteCollectionPage(records,{...options,request}),{code:'INVALID'});
+  }
+ });
 });
 
 test('preview counts respect source consent, notebook moves and exclusions without reading or retaining every selected document',async t=>{

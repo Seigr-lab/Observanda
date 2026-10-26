@@ -18,7 +18,7 @@ import {WebsiteReferenceNavigation} from './website-reference-navigation.js';
 import {WebsiteCollectionNavigation} from './website-collection-navigation.js';
 import {canvasResourceLinks} from './website-canvas-resources.js';
 import {websiteFeedFields,changeWebsiteFeed} from './website-feed-ui.js';
-import {enhancePublicFeeds} from './public-feeds.js';
+import {disposePublicFeeds,enhancePublicFeeds} from './public-feeds.js';
 import {FEED_KINDS,validFeed} from './website-feed-model.js';
 import {websiteMediaUI} from './website-media-ui.js';
 import {websiteContentUI} from './website-content-ui.js';
@@ -482,6 +482,9 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
     const parsed=new DOMParser().parseFromString(html,'text/html'),body=doc.importNode(parsed.body,true),base=new URL(url,location.href);
     canvasResourceLinks(body,base.href,collectionRequest.context);
     // Keep assets on the current candidate: older preview candidates are evicted.
+    // Reconciliation can replace controls or restore their unenhanced hidden
+    // attributes even when the feed configuration and preview URL are unchanged.
+    disposePublicFeeds(doc);
     reconcileCanvas(doc.body,body,{editor:richMount?.node??inlineHeading});
     canvasSources.set(doc,base.href);
     const style=doc.querySelector('link[href$="styles.css"]');if(style)style.href=new URL(result.baseUrl+'styles.css',location.href).href;
@@ -569,7 +572,7 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
   }
   function decorateCanvas(doc){
     disposeCanvas();markSelection(doc);doc.body.inert=documents?.structuralBusy()??false;doc.body.classList.add('canvas-edit-mode');
-    enhancePublicFeeds(doc,doc.defaultView,(url,options)=>collectionNavigation.fetch(doc,url,options,canvasSources.get(doc)??doc.baseURI),{baseURL:canvasSources.get(doc)??doc.baseURI,history:false});
+    enhancePublicFeeds(doc,doc.defaultView,(url,options)=>collectionNavigation.fetch(doc,url,options,canvasSources.get(doc)??doc.baseURI),{baseURL:canvasSources.get(doc)??doc.baseURI,history:false,onPageApplied:response=>collectionNavigation.accept(response)});
     for(const href of ['/website-canvas.css','/rich-text-editor.css'])if(!doc.querySelector('link[href="'+href+'"]')){const sheet=doc.createElement('link');sheet.rel='stylesheet';sheet.href=href;doc.head.append(sheet);}
     doc.querySelectorAll('.canvas-section-handle,.canvas-section-edit,.canvas-empty-media,[data-drop-parent]').forEach(n=>n.remove());
     for(const element of doc.querySelectorAll('[data-section-id],[data-media-id]')){
