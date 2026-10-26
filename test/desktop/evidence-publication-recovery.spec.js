@@ -26,7 +26,8 @@ test('desktop resumes a large evidence folder and retains publication requests a
  const fixture=await desktopFixture('observanda-desktop-evidence-publication-'),access=desktopAccess(),errors=[],metrics={files:62,customPages:121,decisions:7};
  let app,page,storageDirectory=null,externalParent=null,websiteId=null;
  const call=(route,data,site=null)=>page.evaluate(async({route,data,site})=>{
-  const context=await(await fetch('/api/storage')).json(),response=await fetch(route,{method:data===undefined?'GET':'POST',headers:{'Content-Type':'application/json','X-Observanda-Workspace':context.contextId,'X-Observanda-Wait':'1',...(site?{'X-Observanda-Website':site}:{})},...(data===undefined?{}:{body:JSON.stringify(data)})});
+  // First called after workspace creation; each restart creates a new renderer.
+  const context=globalThis.acceptanceWorkspaceContext??=(await(await fetch('/api/storage')).json()).contextId,response=await fetch(route,{method:data===undefined?'GET':'POST',headers:{'Content-Type':'application/json','X-Observanda-Workspace':context,'X-Observanda-Wait':'1',...(site?{'X-Observanda-Website':site}:{})},...(data===undefined?{}:{body:JSON.stringify(data)})});
   if(!response.ok)throw Error(route+' returned '+response.status+': '+await response.text());return response.json();
  },{route,data,site});
  const watch=async()=>{page=await app.firstWindow();page.setDefaultTimeout(30000);page.on('pageerror',error=>errors.push(error.message));await page.waitForFunction(()=>['setup','access','workspace'].includes(document.documentElement.dataset.appMode),null,{timeout:60000});};
