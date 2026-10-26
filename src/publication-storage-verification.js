@@ -2,6 +2,7 @@ import {verifyGithubPublishingPlans} from './github-plan-index.js';
 import {PublicationEditionSelections} from './publication-edition-selections.js';
 import {verifyRetainedPublicationRollback} from './publication-rollback.js';
 import {AnalysisPublicationReview} from './analysis-publication-review.js';
+import {verifyAnalysisPublicationOperations} from './analysis-publication-review-jobs.js';
 import {openPublicationInput} from './publication-input-reader.js';
 import {publicationPresentationReader} from './publication-input-presentation.js';
 import {readPublicationPage} from './publication-input-pages.js';
@@ -16,6 +17,7 @@ export async function verifyPublicationStorage(workspace){
  const check=async scoped=>{
   const releases=new PublicationJobs(scoped);
   await new PublicationEditionSelections(scoped).verify();
+  await verifyAnalysisPublicationOperations(scoped);
   for await(const file of scoped.metadataNames('.observanda/release-inputs')){
    if(researchId(file))continue;
    if(!file.endsWith('.json')||!researchId(file.slice(0,-5)))throw new AppError('JOB_DAMAGED');

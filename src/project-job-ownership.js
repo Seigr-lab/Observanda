@@ -7,7 +7,7 @@ import {researchId} from './web/research-reference.js';
 import {digest,serialize} from './storage-format.js';
 import {AppError} from './errors.js';
 export const projectCommandJobs=new Set(['analysis.compare','figure.calculate','dataset.prepare']);
-export const projectPublicationJobs=new Set(['publication.prepare','publication.deploy','publication.repository','publication.verify']);
+export const projectPublicationJobs=new Set(['publication.prepare','publication.analysis-review','publication.deploy','publication.repository','publication.verify']);
 const commands=projectCommandJobs,publications=projectPublicationJobs;
 const damaged=()=>{throw new AppError('JOB_DAMAGED');},ownership=()=>{throw new AppError('PROJECT_MIGRATION_OWNERSHIP');},fingerprint=value=>digest(serialize(value));
 export function projectJobOwner(workspace,inventory){

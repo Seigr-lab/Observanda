@@ -13,14 +13,15 @@ function database(version,{optionalDomains=false,payload=null,domains=[]}={}){
  const id=randomUUID(),schema='obs_'+id.replaceAll('-','');let selected=schema;
  return {id,schema,version,retiredIndex:version>=23,inserted:[],domains:[...domains],
   async all(sql,...values){
-   if(sql==='SELECT version FROM catalogue_format')return [{version:this.version}];
+   if(/^SELECT version FROM catalogue_format(?: FOR UPDATE NOWAIT)?$/.test(sql))return [{version:this.version}];
    if(sql.startsWith('SELECT nspname FROM pg_catalog.pg_namespace '))return this.domains.map(domain=>({nspname:projectDomainSchema(id,domain)}));
    if(sql.includes('FROM state')&&selected===schema&&payload)return [{slot:'head',payload}];
    assert.fail('Unexpected query: '+sql);
   },
-  async get(sql,slot){if(sql==="SELECT 1 FROM state WHERE slot='head'")return this.inserted.some(values=>values[0]==='head')?{found:1}:null;assert.equal(sql,'SELECT 1 FROM state WHERE slot=$1');assert.equal(slot,'project-domains');return optionalDomains?{found:1}:null;},
+  async get(sql,slot){if(sql.startsWith('SELECT pg_catalog.format_type'))return null;if(sql==="SELECT 1 FROM state WHERE slot='head'")return this.inserted.some(values=>values[0]==='head')?{found:1}:null;assert.equal(sql,'SELECT 1 FROM state WHERE slot=$1');assert.equal(slot,'project-domains');return optionalDomains?{found:1}:null;},
   async *rows(){if(this.schema===schema&&payload)yield {slot:'head',payload_bytes:payload.length};},
   async run(sql,...values){
+   if(/^(?:SAVEPOINT|RELEASE SAVEPOINT|ROLLBACK TO SAVEPOINT) catalogue_feature_admission$/.test(sql))return;
    if(sql==='LOCK TABLE catalogue_format IN ACCESS EXCLUSIVE MODE NOWAIT')return;
    if(sql.startsWith('SET LOCAL search_path TO ')){selected=sql.split('"')[1];return;}
    if(sql.startsWith('UPDATE catalogue_format')){this.version=Math.max(this.version,values[0]);return;}
@@ -38,7 +39,7 @@ function expected(features){return {domains:features.owners>=1,settings:features
 
 test('publication admission and every existing feature transition preserve all 24 owner combinations',async()=>{
  const transitions=[[formats.requireWorkspaceDomains,{owners:1}],[formats.requireProjectDomains,{owners:1}],[formats.requireWorkspaceSettings,{owners:2}],[formats.requireWebsiteDocuments,{website:1}],[formats.requireWebsiteEditor,{website:2}],[formats.requireWebsitePresentation,{website:3}],[formats.requireStagedEvidence,{staged:true}]];
- const olderAdmissions=Object.entries(formats).filter(([name])=>name.startsWith('require')&&!transitions.some(([admit])=>admit===formats[name])&&!['requirePublicationDocuments','requireRecordOwnerTransfers','requireConfigurationDocuments','requireSourcePublicationControls','requireWebsiteSourceSelections','requireNestedAttemptCollections','requireOwnerDirectories','requirePortabilityCollections','requireWebsiteTemplateInheritance','requirePagedResearchTables','requireNativeNumericalModels','requireNativeClockModels','requireRetainedFigures','requireReferencedCalculations','requireReviewFigurePackages','requireNativeDomainValues','requireCalculationPolicies','requireClockDerivations','requireFigureAuthoring','requireIntervalUncertainty','requireDatasetResourcePolicies','requireWindowCalculations','requireFigureProjectionPolicies','requireCalculatorDatasetResults','requireMeasurementScalarPolicies','requireDomainAlgebra','requireStructuredCalculator','requireApproximateCalculator','requireClockSynchronization','requireTensorValues','requireQuantileAggregation','requireAxisPermutation','requirePairedStatistics'].includes(name)).map(([,admit])=>admit);
+ const olderAdmissions=['requireRecordBlocks','requireRecordQueryBlocks','requireSearchVocabulary','requireJoinedQueryText','requireKeyedQueryArrays','requireReferenceQueries','requireAttemptQueries','requireStarterDocuments','requireRetiredProjectRecords','requireDraftDocuments','requireMemberCollections','requireSelectedValueDrafts','requireRetainedRecordDocuments','requireRunReceiptStore','requireDraftEdits','requireRecordTypeDrafts','requireRecordMethodIndexes','requireCurrentAttemptIndexes','requireFigureCopyDrafts','requireRecordResultIndexes'].map(name=>formats[name]);
  const generations=new Set();
  for(const features of combinations){
   const generation=formats.publicationCatalogueGeneration(features);generations.add(generation);

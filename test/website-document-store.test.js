@@ -21,9 +21,10 @@ function fixture({projectId=null,legacySite=false,populated=false}={}){
  const advance=(snapshot={metadata})=>{snapshot={records:[],...snapshot};head=digest(serialize(snapshot));snapshots.set(head,structuredClone(snapshot));return head;};advance();
  const range=args=>[...states.keys()].filter(key=>(!args[0]||key>=args[0])&&(!args[1]||key<args[1])&&(!args[2]||key>args[2])).sort();
  const db={id:randomUUID(),
-  async all(sql,...args){queries.push(sql);if(sql==='SELECT version FROM catalogue_format')return [{version}];if(sql.startsWith('SELECT slot,payload FROM state WHERE slot=ANY'))return args[0].filter(slot=>states.has(slot)).map(slot=>({slot,payload:states.get(slot)}));assert.fail(sql);},
+  async all(sql,...args){queries.push(sql);if(/^SELECT version FROM catalogue_format(?: FOR UPDATE NOWAIT)?$/.test(sql))return [{version}];if(sql.startsWith('SELECT slot,payload FROM state WHERE slot=ANY'))return args[0].filter(slot=>states.has(slot)).map(slot=>({slot,payload:states.get(slot)}));assert.fail(sql);},
   async get(sql,...args){
    queries.push(sql);
+   if(sql.startsWith('SELECT pg_catalog.format_type'))return null;
    if(sql.startsWith('SELECT pg_catalog.pg_try_advisory'))return {locked:true};
    if(sql.startsWith('SELECT count(*)')){const keys=range(args).slice(0,1024);return {count:String(keys.length),last:keys.at(-1)??null};}
    if(sql.includes('FROM state WHERE slot=$1'))return states.has(args[0])?{payload:states.get(args[0])}:undefined;
@@ -31,6 +32,7 @@ function fixture({projectId=null,legacySite=false,populated=false}={}){
    assert.fail(sql);
   },
   async run(sql,...args){
+   if(/^(?:SAVEPOINT|RELEASE SAVEPOINT|ROLLBACK TO SAVEPOINT) catalogue_feature_admission$/.test(sql))return;
    queries.push(sql);writes++;
    if(sql.startsWith('ALTER TABLE catalogue_format')||sql.startsWith('CREATE INDEX records_scope_revision'))return;
    if(sql.startsWith('UPDATE catalogue_format')){version=Math.max(version,args[0]);return;}

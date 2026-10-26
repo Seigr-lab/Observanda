@@ -1,5 +1,10 @@
 import {withWebsiteSourceSelections} from './website-source-selections.js';
 import {publicationEditionChoices} from './publication-edition-selections.js';
+import {publicationRevisionCurrent} from './publication-freshness.js';
+import {validWebsiteDraftPin} from './web/website-draft-pin.js';
+import {WebsiteDocumentStore} from './website-document-store.js';
+import {requirePublicationOperations} from './catalogue-format.js';
+import {assertPublicationOperationFormat} from './publication-operation-format.js';
 import {isPublicationDocumentBlockName} from './publication-document.js';
 import {withWorkspaceMetadataBatch} from './metadata-batch.js';
 import {withPublicationOutputWriter} from './publication-output.js';
@@ -36,10 +41,10 @@ const inputFile=id=>{if(!researchId(id))throw new AppError('INVALID');return '.o
 const candidateFile=id=>{if(!hash(id))throw new AppError('INVALID');return '.observanda/release-candidates/'+id+'.json';};
 export class PublicationJobs{
  constructor(workspace,{sources,sourceReader,sourceAccess}={}){workspace=publicationWorkspace(workspace);if(sources!==undefined&&!validPublicationSources(sources))throw new AppError('INVALID');this.workspace=workspace;this.sources=sources===undefined?undefined:structuredClone(sources);this.sourceReader=sourceReader;this.sourceAccess=sourceAccess;this.feed=new MetadataFeed(workspace,'.observanda/release-list');}
- async pin({etag,websitePin,websiteDraft,book,workspaceId,draft:command,edition,blockedValues=[]},{signal,workspace=this.workspace,id=randomUUID()}={}){
+ async pin({etag,websitePin,websiteDraft,book,workspaceId,draft:command,edition,blockedValues=[]},{signal,workspace=this.workspace,id=randomUUID(),requestRevision,admitted=false,createdAt=new Date().toISOString()}={}){
    const editionChoices=await publicationEditionChoices(workspace,edition,{source:{workspaceId,etag,websitePin,...(websiteDraft===undefined?{}:{websiteDraft})},signal});
    let capturedPin;
-   const input=await publicationSource(workspace,{etag,websitePin,websiteDraft,book,workspaceId,draft:command},{signal,consume:async(metadata,records,options)=>{
+   const input=await publicationSource(workspace,{etag,websitePin,websiteDraft,book,workspaceId,draft:command},{signal,admitted,consume:async(metadata,records,options)=>{
     capturedPin=options.websitePin;
     const capture=async sources=>{
      const count=Array.isArray(sources)?sources.length:sources.count;
@@ -51,13 +56,55 @@ export class PublicationJobs{
     return capture(this.sources??metadata.website.researchSources??[]);
    }});
    const destination=await new Publisher(workspace.root,{workspace},workspace.vault).read();
-   const source={sourcePermissionVersion:SOURCE_PUBLICATION_VERSION,version:input.document?6:input.layoutInputs?5:input.pageInputs?4:3,id,reviewId:digest(id),workspaceId:input.metadata.id,websiteId:capturedPin.websiteId,websitePin:capturedPin,createdAt:new Date().toISOString(),etag:capturedPin.researchSnapshotId,...input,blockedValues,
-    configEtag:destination.etag,destination:destination.configured?destination.config:null};
+   const source={sourcePermissionVersion:SOURCE_PUBLICATION_VERSION,version:input.document?6:input.layoutInputs?5:input.pageInputs?4:3,id,reviewId:digest(id),workspaceId:input.metadata.id,websiteId:capturedPin.websiteId,websitePin:capturedPin,createdAt,etag:capturedPin.researchSnapshotId,...input,blockedValues,
+    ...(requestRevision?{requestRevision}:{}),configEtag:destination.etag,destination:destination.configured?destination.config:null};
    signal?.throwIfAborted();
    await workspace.writeMetadata(inputFile(id),serialize(source));
    return source;
  }
  async start(command,queue){
+  // Persist immutable editor references before expensive capture. Requests do
+  // not retain credentials; the worker authenticates selected sources again.
+  if(command.websitePin?.websiteRevision)return this.enqueue(command,queue);
+  return this.captureStart(command,queue);
+ }
+ async startRequest(command,queue){
+  if(!command?.websitePin?.websiteRevision||command.book!==undefined||command.draft!==undefined)throw new AppError('PUBLICATION_EDITOR_REQUIRED');
+  if(!researchId(command.commandId))throw new AppError('INVALID');
+  return this.enqueue(command,queue);
+ }
+ request(job){
+  const request=job.input.request;
+  if(!request||request.version!==1||!hash(job.input.revision)||digest(serialize(request))!==job.input.revision||request.command?.workspaceId!==job.scope||!validWebsitePin(request.command.websitePin)||request.command.websitePin.websiteId!==(this.workspace.websiteId??null)||request.command.etag!==request.command.websitePin.researchSnapshotId||!request.command.websitePin.websiteRevision||request.command.websiteDraft!==undefined&&!validWebsiteDraftPin(request.command.websiteDraft)||request.sources!==undefined&&!validPublicationSources(request.sources))throw new AppError('JOB_DAMAGED');
+  return request;
+ }
+ async enqueue(command,queue){
+  const {commandId=randomUUID(),etag,websitePin,websiteDraft,workspaceId,edition,blockedValues=[]}=command;if(!researchId(commandId))throw new AppError('INVALID');
+  if(command.book!==undefined||command.draft!==undefined||!validWebsitePin(websitePin)||websitePin.websiteId!==(this.workspace.websiteId??null)||websitePin.researchSnapshotId!==etag||websiteDraft!==undefined&&!validWebsiteDraftPin(websiteDraft)||!Array.isArray(blockedValues)||blockedValues.some(value=>typeof value!=='string'))throw new AppError('INVALID');
+  const registry=await publicationResearchWorkspace(this.workspace).catalogue(store=>new WebsiteDocumentStore(store).registry());if(!registry)throw new AppError('PUBLICATION_EDITOR_REQUIRED');
+  const owned=structuredClone({etag,websitePin,...(websiteDraft===undefined?{}:{websiteDraft}),workspaceId:workspaceId??registry.workspaceId,...(edition===undefined?{}:{edition}),blockedValues}),request={version:1,command:owned,...(this.sources===undefined?{}:{sources:this.sources})},input={request,revision:digest(serialize(request))};
+  if(owned.workspaceId!==registry.workspaceId)throw new AppError('WORKSPACE_CHANGED');if(Buffer.byteLength(serialize(input))>900000)throw new AppError('LIMIT');
+  let revoke;
+  try{return await queue.transaction(async()=>{
+   const previous=await queue.read(commandId);
+   if(previous){if(previous.type!=='publication.prepare'||previous.scope!==owned.workspaceId||previous.input.revision!==input.revision)throw new AppError('JOB_CHANGED');await this.authorize(previous);if(this.sourceReader&&['queued','running'].includes(previous.state))revoke=this.sourceAccess?.bind(commandId,this.sourceReader);return previous;}
+   if(!await publicationRevisionCurrent(this.workspace,owned))throw new AppError('CONFLICT');
+   if(this.sourceReader)revoke=this.sourceAccess?.bind(commandId,this.sourceReader);
+   await this.workspace.catalogue(store=>requirePublicationOperations(store.db));
+   const job=await queue.enqueueLocked({id:commandId,type:'publication.prepare',scope:owned.workspaceId,input});
+   await this.feed.ensureLocked();const entry={id:job.id,reviewId:digest(job.id),createdAt:job.createdAt};await this.workspace.writeMetadata('.observanda/release-list/'+job.id+'.json',serialize(entry));await this.feed.putLocked(entry);return job;
+  });}catch(error){revoke?.();throw error;}
+ }
+ async capture(job,{signal,write,progress}){
+  const request=this.request(job),raw=await this.workspace.readMetadata(inputFile(job.id),16*1024*1024);
+  if(raw!==null&&await this.workspace.readMetadata('.observanda/release-captures/'+job.id+'.json',1024)===null){const source=await this.source(job.id);if(source.requestRevision!==job.input.revision)throw new AppError('JOB_CHANGED');return source;}
+  await progress({stage:'capturing-selected-edition',done:0,total:0});
+  return withPublicationCapture(this.workspace,async(workspace,id,finish)=>{
+   const owner=new PublicationJobs(workspace,{sources:request.sources,sourceReader:this.sourceReader}),source=await owner.pin(request.command,{workspace,id,signal,admitted:true,createdAt:job.createdAt,requestRevision:job.input.revision});
+   return finish(async()=>{const entry={id,reviewId:source.reviewId,createdAt:job.createdAt,summary:source.summary};await this.workspace.writeMetadata('.observanda/release-list/'+id+'.json',serialize(entry));return source;});
+  },{id:job.id,signal,write});
+ }
+ async captureStart(command,queue){
   let revoke;
   try{return await withPublicationCapture(this.workspace,async(workspace,id,finish)=>{
    const source=await this.pin(command,{workspace,id});
@@ -77,8 +124,12 @@ export class PublicationJobs{
   let revoke;this.sourceAccess?.forget(id);
   try{
    if(action==='retry'){
-    const source=await this.source(id);await assertPublicationSourcePermissions(this.workspace,source,{sourceReader:this.sourceReader});
-    if(source.hasSources||source.sourceGroups)revoke=this.sourceAccess?.bind(id,this.sourceReader);
+    if(job.input.request){
+     if(job.error==='ACCESS_LOCKED'&&!this.sourceReader)throw new AppError('ACCESS_LOCKED');
+     if(await this.workspace.readMetadata(inputFile(id),16*1024*1024)!==null&&await this.workspace.readMetadata('.observanda/release-captures/'+id+'.json',1024)===null)await assertPublicationSourcePermissions(this.workspace,await this.source(id),{sourceReader:this.sourceReader});
+     if(this.sourceReader)revoke=this.sourceAccess?.bind(id,this.sourceReader);
+    }
+    else{const source=await this.source(id);await assertPublicationSourcePermissions(this.workspace,source,{sourceReader:this.sourceReader});if(source.hasSources||source.sourceGroups)revoke=this.sourceAccess?.bind(id,this.sourceReader);}
    }
    return await queue.control(id,action);
   }catch(error){revoke?.();throw error;}
@@ -104,7 +155,7 @@ export class PublicationJobs{
   const read=async()=>{const raw=await this.workspace.readMetadata(inputFile(id),16*1024*1024);if(raw===null)throw new AppError('NOT_FOUND');const s=JSON.parse(raw);if(![1,2,3,4,5,6].includes(s.version)||s.id!==id||s.reviewId!==digest(id)||!researchId(s.workspaceId)||(s.websiteId??null)!==(this.workspace.websiteId??null)||(s.version===1?s.book?.id:s.metadata?.id)!==s.workspaceId||s.version>=2&&s.version<6&&(!Array.isArray(s.records)||s.records.some(r=>!researchId(r.id)||!hash(r.sha256)||!hash(r.revision)))||s.version>=3&&(!validWebsitePin(s.websitePin)||s.websitePin.websiteId!==s.websiteId||s.websitePin.researchSnapshotId!==s.etag))throw new AppError('JOB_DAMAGED');if(s.version===6)await openPublicationInput(this.workspace,s);else{validatePublicationPages(s);validatePublicationPresentation(s);}return s;};
   return await this.workspace.storageKind()==='catalogue'?this.workspace.catalogue(read):read();
  }
- async authorize(job){await this.workspace.requireStorageKey();const s=await this.source(job.id);if(job.scope!==s.workspaceId||job.input.revision!==digest(serialize(s)))throw new AppError('JOB_CHANGED');}
+ async authorize(job){await this.workspace.requireStorageKey();if(job.input.request){await assertPublicationOperationFormat(this.workspace);this.request(job);return;}const s=await this.source(job.id);if(job.scope!==s.workspaceId||job.input.revision!==digest(serialize(s)))throw new AppError('JOB_CHANGED');}
  async directory(id,attempt){if(!researchId(id)||attempt!==undefined&&!researchId(attempt))throw new AppError('INVALID');return privateDirectory(this.workspace.root,'.observanda/releases/'+id+(attempt?'/'+attempt:''));}
  async prepare(job,{signal,progress,write}){
   const source=await this.source(job.id);await assertPublicationSourcePermissions(this.workspace,source,{sourceReader:this.sourceReader,signal});
@@ -229,6 +280,7 @@ export class PublicationJobs{
  }
  async clean(id,{only,write=operation=>this.workspace.withLock(()=>withWorkspaceMetadataBatch(this.workspace,operation))}={}){
   if(!researchId(id)||only!==undefined&&!researchId(only))throw new AppError('INVALID');
+  if(await this.workspace.readMetadata(inputFile(id),16*1024*1024)===null||await this.workspace.readMetadata('.observanda/release-captures/'+id+'.json',1024)!==null)return;
   const source=await this.source(id),retained=async()=>{const raw=await this.workspace.readMetadata(candidateFile(source.reviewId),16*1024*1024);return raw?JSON.parse(raw).attempt:null;},directory=await this.directory(id),prefix='.observanda/release-outputs/'+id;
   for(const attempt of await readdir(directory)){
    if(!researchId(attempt)||only&&attempt!==only)continue;
@@ -249,6 +301,6 @@ export class PublicationJobs{
 }
 export function publicationJobDefinitions(workspace,queue,{sourceAccess}={}){const releases=new PublicationJobs(workspace);return {'publication.prepare':{
  authorize:job=>releases.authorize(job),
- prepare:async(job,options)=>{const sourceReader=sourceAccess?.take(job.id),prepared=new PublicationJobs(workspace,{sourceReader}),write=options.write??(operation=>queue().transaction(async()=>{await queue().held(job.id,job.lease.token);return withWorkspaceMetadataBatch(workspace,operation);}));await releases.clean(job.id,{write});return prepared.prepare(job,{...options,write});},
+ prepare:async(job,options)=>{const sourceReader=sourceAccess?.take(job.id),prepared=new PublicationJobs(workspace,{sourceReader}),write=options.write??(operation=>queue().transaction(async()=>{await queue().held(job.id,job.lease.token);return withWorkspaceMetadataBatch(workspace,operation);}));if(job.input.request)await prepared.capture(job,{...options,write});await releases.clean(job.id,{write});return prepared.prepare(job,{...options,write});},
  commit:(job,candidate)=>releases.commit(job,candidate),discard:job=>releases.clean(job.id,{only:job.lease.token})
 }};}

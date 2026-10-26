@@ -1,4 +1,5 @@
 import {weightedFitMetadata,assertWeightedFitFormat} from './weighted-fit-format.js';
+import {publicationOperationMetadataPath,publicationOperationMetadata,assertPublicationOperationFormat} from './publication-operation-format.js';
 import {coordinateAlignmentMetadata,assertCoordinateAlignmentFormat} from './coordinate-alignment-format.js';
 import {spectralMethodsMetadata,assertSpectralMethodsFormat} from './spectral-methods-format.js';
 import {topologyValuesMetadata,assertTopologyValuesFormat} from './topology-values-format.js';
@@ -43,13 +44,14 @@ const fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 export async function* verifiedCatalogueObjects(store){
  const index=new ObjectIndex(store,{cacheReads:true,scanAhead:true}),head=await index.head();await index.checkCounts(head);
  operationTotal(head.legacy?.length??head.root?.count??0);
- const batch=[];let weightedFitAdmission,coordinateAlignmentAdmission,spectralMethodsAdmission,topologyAdmission,sequenceAdmission,cusumAdmission,numericalExecutionAdmission,spectrumAdmission,computedCellAdmission,coordinateFrameAdmission,segmentedClockAdmission,statisticalUncertaintyAdmission,policyAdmission,resultAdmission,scalarAdmission,domainAlgebraAdmission,structuredAdmission,approximateAdmission,clockSynchronizationAdmission,tensorAdmission,quantileAdmission,axisPermutationAdmission,pairedStatisticsAdmission;
+ const batch=[];let publicationOperationAdmission,weightedFitAdmission,coordinateAlignmentAdmission,spectralMethodsAdmission,topologyAdmission,sequenceAdmission,cusumAdmission,numericalExecutionAdmission,spectrumAdmission,computedCellAdmission,coordinateFrameAdmission,segmentedClockAdmission,statisticalUncertaintyAdmission,policyAdmission,resultAdmission,scalarAdmission,domainAlgebraAdmission,structuredAdmission,approximateAdmission,clockSynchronizationAdmission,tensorAdmission,quantileAdmission,axisPermutationAdmission,pairedStatisticsAdmission;
  async function* values(){
   const rows=new Map((await store.db.all('SELECT id,payload FROM objects WHERE id=ANY($1::text[]) AND octet_length(payload)<=16384',batch.map(entry=>entry.id))).map(row=>[row.id,row.payload]));
   for(const entry of batch){
    let value;
    if(rows.has(entry.id)){value=await resolveMetadataValue(store,entry.id,entry.revision,store.decode('object',entry.id,rows.get(entry.id)));if(digest(serialize(value))!==entry.revision)fail();}
    else value=await store.objectValue(entry.id,entry);
+   if(entry.id.startsWith('metadata:')&&publicationOperationMetadataPath(entry.id.slice(9))){let metadata;try{metadata=JSON.parse(value.text);}catch{fail();}if(publicationOperationMetadata(entry.id.slice(9),metadata)){publicationOperationAdmission??=assertPublicationOperationFormat(store.workspace);await publicationOperationAdmission;}}
    if(/^metadata:\.observanda\/module-drafts\/[a-f0-9-]{36}\.json$/.test(entry.id)){
     let checkpoint;try{checkpoint=JSON.parse(value.text);}catch{fail();}
     if(checkpointHasStructuredCalculator(checkpoint)){structuredAdmission??=catalogueFormat(store.catalogueDb??store.db).then(catalogueRequiresStructuredCalculator);if(!await structuredAdmission)fail();}

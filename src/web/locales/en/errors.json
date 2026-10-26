@@ -181,6 +181,7 @@
   "RECORD_TRANSFER_EXISTS": "This record already exists in the destination. Choose another lab book.",
   "RECORD_CHANGED": "This record changed in another window. Your edits are still on screen; the stored version has not been replaced.",
   "PUBLICATION_EMPTY": "Select content or add a homepage introduction before reviewing the website.",
+  "PUBLICATION_EDITOR_REQUIRED": "Open and save this website in the website editor, then prepare its selected edition again.",
   "DASHBOARD_CHANGED": "Dashboard settings changed in another tab. Your draft is kept. Discard it to load the saved version, or keep it open for comparison.",
   "FOLDER_PICKER_UNAVAILABLE": "The system folder picker is unavailable on the computer running Observanda.",
   "FOLDER_PICKER_FAILED": "The system folder picker could not open. Retry or enter a folder path.",

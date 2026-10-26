@@ -4,15 +4,16 @@ import {publicationText} from './publication-review.js';
 export function publicationJobsUI({state,api,esc,showDialog,notify,showReview}){
  const call=(op,data={})=>api('/api/publication-jobs/'+op,data,{adopt:false});
  const text=(key,values)=>esc(publicationText(key,values));
- let generation=0,timer=null,context=null,route=null,cursor=null,next=null,previous=[];
+ let generation=0,timer=null,context=null,route=null,cursor=null,next=null,previous=[],pendingRequest=null;
  const stop=()=>{generation++;clearTimeout(timer);};
  const button=(key,action,id='')=>`<button type="button" class="button" data-action="publication-jobs-${action}" data-id="${esc(id)}">${text(key)}</button>`;
  const active=token=>token===generation&&context===websiteContext(state)&&route===location.hash&&document.querySelector('#dialog[open] #publication-jobs-status');
- const status=job=>job.message??(job.cancelRequested&&job.state==='running'?publicationText('stopping'):job.state==='running'?job.progress.stage:job.state);
+ const status=job=>job.error==='ACCESS_LOCKED'?publicationText('sourceAccessRequired'):job.message??(job.cancelRequested&&job.state==='running'?publicationText('stopping'):job.state==='running'?job.progress.stage==='capturing-selected-edition'?publicationText('capturingEdition'):job.progress.stage:job.state);
  const actions=job=>job.state==='relocated'?'':job.state==='completed'?button('openReview','open-review',job.result.id):['failed','cancelled'].includes(job.state)?button('retry','retry',job.id):job.cancelRequested?'':button('cancel','cancel',job.id);
  function dialog(title){showDialog(`<section class="job-library"><h2 id="dialog-title">${text(title)}</h2><p>${text('preparationGuidance')}</p><div id="publication-jobs-pages" class="inline-actions" aria-label="${text('preparationPages')}" hidden>${button('newer','previous')}<span role="status">${text('page',{number:1})}</span>${button('older','next')}</div><div id="publication-jobs-status" class="job-library-items" tabindex="0" aria-label="${text('editions')}" aria-live="polite">${text('loading')}</div><div class="dialog-actions">${button('refresh','list')}${button('continue','close')}</div></section>`);}
  function begin(title){stop();cursor=null;next=null;previous=[];context=websiteContext(state);route=location.hash;dialog(title);return generation;}
  async function poll(token,id=null){
+  if(!active(token))return;
   const response=await call(id?'status':'list',id?{id}:{cursor});if(!active(token))return;
   const jobs=id?[{job:response.job,createdAt:response.job.createdAt}]:response.items;
   const pager=document.getElementById('publication-jobs-pages');pager.hidden=!!id;
@@ -25,8 +26,19 @@ export function publicationJobsUI({state,api,esc,showDialog,notify,showReview}){
  }
  async function start(data){
   const token=begin('preparing');
-  try{const {job}=await call('start',data);if(active(token))await poll(token,job.id);}
-  catch(error){if(active(token)){stop();document.getElementById('dialog').close();throw error;}}
+  pendingRequest=structuredClone({...data,commandId:data.commandId??crypto.randomUUID()});
+  await submit(token);
+ }
+ async function submit(token){
+  if(!active(token)||!pendingRequest)return;
+  try{const {job}=await call('start',pendingRequest);if(active(token)){pendingRequest=null;await poll(token,job.id);}}
+  catch(error){if(active(token)){
+   // A disconnected acknowledgement does not mean admission failed. Retain
+   // this exact request ID until its durable receipt can be recovered.
+   const id=pendingRequest?.commandId;
+   if(id)try{const response=await call('status',{id});if(active(token)&&response.job){pendingRequest=null;await poll(token,id);return;}}catch{/* Keep the explicit retry available. */}
+   if(active(token))document.getElementById('publication-jobs-status').innerHTML='<p role="alert">'+esc(error.message)+'</p>'+(id?'<p>'+text('requestUncertain')+'</p>'+button('resumeRequest','resume-request'):button('refresh','list'));
+  }}
  }
  async function list(){await poll(begin('preparations'));}
  const read=id=>call('open',{id});
@@ -37,6 +49,7 @@ export function publicationJobsUI({state,api,esc,showDialog,notify,showReview}){
   if(op==='list'){await list();return true;}
   if(op==='close'){stop();document.getElementById('dialog').close();return true;}
   if(context!==websiteContext(state))throw Error(publicationText('workspaceChanged'));
+  if(op==='resume-request'){await submit(generation);return true;}
   if(op==='open-review'){stop();await openReview(id,generation);return true;}
   if(op==='next'&&next){previous.push(cursor);cursor=next;}
   if(op==='previous'&&previous.length)cursor=previous.pop();

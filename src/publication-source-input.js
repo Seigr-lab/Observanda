@@ -1,6 +1,7 @@
 import {preserveSourceSelection,sourceEditionReader} from './website-source-selections.js';
 import {retainPublicationSources as retainLegacyPublicationSources} from './publication-source-input-legacy.js';
 import {ResearchMaterials} from './research-materials.js';
+import {materialRecordSummary} from './material-record-summary.js';
 import {AppError} from './errors.js';
 import {validPublicationSources,publicationSourceContext} from './web/publication-sources-model.js';
 import {selectedPublicationRecords} from './publication-source.js';
@@ -27,7 +28,7 @@ export async function retainPublicationSources(workspace,jobId,local,sources,rea
     const storage=new Proxy(pinned.storage,{get(target,key){if(key==='catalogue')return operation=>operation(store);const value=target[key];return typeof value==='function'?value.bind(target):value;}});
     const media=new MediaStore(pinned.storage);
     await retainPublicationInput(storage,jobId,metadata,selectedPublicationRecords(store,snapshot,{metadata,selection:consent.selection,signal}),{
-     sourceEtag:pinned.snapshotId,snapshotId:pinned.snapshotId,recordHead:async id=>(await store.member(snapshot,id))?.revision??null,signal,sourceReader,
+     sourceEtag:pinned.snapshotId,snapshotId:pinned.snapshotId,recordHead:async id=>(await materialRecordSummary(store,await store.member(snapshot,id)))?.revision??null,signal,sourceReader,
      deferFinalization:true,edition:source.edition,editionChoices:sourceEditionReader(source),input:local,owner,destination:workspace,identities:state.identities,
      onRecord:async record=>{
       for(const [id,publicId] of Object.entries(record.mediaIdentities)){

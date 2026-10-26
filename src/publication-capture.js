@@ -68,15 +68,17 @@ export async function withPublicationCapture(workspace,operation,options={}){
    :await capture(workspace,operation,options);
  }finally{ticket.release();}
 }
-async function capture(workspace,operation,{signal,write=fn=>transaction(workspace,fn)}={}){
+async function capture(workspace,operation,{signal,id:requestedId,write=fn=>transaction(workspace,fn)}={}){
+ if(requestedId!==undefined&&!researchId(requestedId))throw new AppError('INVALID');
  if(await workspace.storageKind()!=='catalogue')return workspace.withLock(async()=>{
-  const id=randomUUID();try{return await operation(workspace,id,fn=>fn());}catch(error){await removePublicationInput(workspace,id);throw error;}
+  const id=requestedId??randomUUID();try{return await operation(workspace,id,fn=>fn());}catch(error){await removePublicationInput(workspace,id);throw error;}
  });
- await new ResearchMaterials(publicationResearchWorkspace(workspace)).index.ensure();
+ const index=new ResearchMaterials(publicationResearchWorkspace(workspace)).index;
+ if(!await index.state())await write(()=>index.ensureLocked());
  return withScratch(written=>workspace.catalogue(async store=>{
   await projectDomainHandoff(store.db,{shared:true});
   await recover(workspace,store.db,write);signal?.throwIfAborted();
-  const id=randomUUID(),prefix=input(id)+'/',pending=new Map();let bytes=0,finished=false;
+  const id=requestedId??randomUUID(),prefix=input(id)+'/',pending=new Map();let bytes=0,finished=false;
   if(!await lock(store.db,id))throw new AppError('LOCKED');
   await write(()=>workspace.catalogue(async writer=>{
    // Reserve an empty capture namespace before treating unseen blocks as absent.

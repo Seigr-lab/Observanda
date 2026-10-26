@@ -14,6 +14,7 @@ import {WebsiteResearch} from './website-research.js';
 import {WorkspaceEdits} from './workspace-edits.js';
 import {MediaStore} from './media.js';
 import {PublicationJobs} from './publication-jobs.js';
+import {AnalysisPublicationReviewJobs,analysisPublicationOperationSummary} from './analysis-publication-review-jobs.js';
 import {PublicationRollback} from './publication-rollback.js';
 import {AnalysisPublicationReview} from './analysis-publication-review.js';
 import {PublicationLinks} from './publication-links.js';
@@ -100,23 +101,27 @@ export class ProjectPublications{
   if(operation==='publication-selection'||operation==='publication-references')return (operation==='publication-selection'?publicationSelection:publicationReferences)(workspace,data,{signal});
   if(operation.startsWith('publication-jobs/')){
    const method=operation.slice(17);
-   if(method==='start'){const job=await releases.start({...data,blockedValues},queue);worker.wake();return {job:jobSummary(job)};}
+   if(method==='start'){const job=await releases.startRequest({...data,websitePin:data.websitePin??websitePin,blockedValues},queue);worker.wake();return {job:jobSummary(job)};}
    if(method==='list'){const page=await releases.page(queue,data);return {...page,items:page.items.map(item=>({...item,job:jobSummary(item.job)}))};}
    if(method==='open'){
-    const read=async()=>{const value=await retained(data.id);return {...await this.summary(releases,value),analysisReview:await new AnalysisPublicationReview(workspace,{sourceReader}).status(value),stale:!await publicationRevisionCurrent(workspace,value)};};
+    const read=async()=>{const value=await retained(data.id);return {...await this.summary(releases,value),analysisReview:await new AnalysisPublicationReview(workspace,{sourceReader}).status(value),analysisReviewOperation:analysisPublicationOperationSummary(await new AnalysisPublicationReviewJobs(workspace,publisher).current(data.id,undefined,queue)),stale:!await publicationRevisionCurrent(workspace,value)};};
     const review=await workspace.storageKind()==='catalogue'?await workspace.catalogue(read):await read();
     return {...review,stale:review.stale||review.configEtag!==(await publisher.read()).etag};
    }
    if(method==='rollback-review'){
     const read=()=>retained(data.id),value=await workspace.storageKind()==='catalogue'?await workspace.catalogue(read):await read();
     const owner=new PublicationRollback(workspace,publisher,{sourceReader}),approval=await owner.review(data),reviewed=owner.project(value,approval.review);
-    const summarize=async()=>({...await this.summary(releases,reviewed),destination:approval.destination,configEtag:approval.configEtag,rollback:approval.review,analysisReview:await new AnalysisPublicationReview(workspace,{sourceReader}).status(reviewed),stale:false});
+    const summarize=async()=>({...await this.summary(releases,reviewed),destination:approval.destination,configEtag:approval.configEtag,rollback:approval.review,analysisReview:await new AnalysisPublicationReview(workspace,{sourceReader}).status(reviewed),analysisReviewOperation:analysisPublicationOperationSummary(await new AnalysisPublicationReviewJobs(workspace,publisher).current(data.id,approval.review.id,queue)),stale:false});
     return await workspace.storageKind()==='catalogue'?workspace.catalogue(summarize):summarize();
    }
    if(method==='pages')return releases.pageChoices(await retained(data.id),{...data,signal});
    if(method==='references')return releases.referenceChoices(await retained(data.id),{...data,signal});
    if(method==='analysis-review-window')return new AnalysisPublicationReview(workspace,{sourceReader}).window(await rollback(await retained(data.id)),{...data,signal});
-   if(method==='analysis-review')return new AnalysisPublicationReview(workspace,{sourceReader}).save(await rollback(await retained(data.id)),data.decisions);
+   if(method==='analysis-review'){const job=await new AnalysisPublicationReviewJobs(workspace,publisher,{sourceReader,sourceAccess:this.entry.sourceAccess}).start(data,queue);worker.wake();return {job:jobSummary(job)};}
+   if(['analysis-review-status','analysis-review-retry','analysis-review-cancel'].includes(method)){
+    const reviews=new AnalysisPublicationReviewJobs(workspace,publisher,{sourceReader,sourceAccess:this.entry.sourceAccess}),job=await queue.read(data.id);if(!job||job.type!=='publication.analysis-review')throw new AppError('NOT_FOUND');await reviews.authorize(job);
+    if(method==='analysis-review-status')return {job:jobSummary(job)};const action=method.slice('analysis-review-'.length),next=await reviews.control(queue,data.id,action);if(action==='cancel')worker.cancel(data.id);else worker.wake();return {job:jobSummary(next)};
+   }
    return {job:await control('publication.prepare',method)};
   }
   if(operation.startsWith('deployment-jobs/')){

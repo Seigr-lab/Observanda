@@ -115,16 +115,16 @@ async function* selectedPublicationInventories(store,snapshot,options){
  }
 }
 
-export async function publicationSource(workspace,{etag,websitePin,websiteDraft,book,workspaceId,draft,selection},{signal,consume,page,inventory=false}={}){
+export async function publicationSource(workspace,{etag,websitePin,websiteDraft,book,workspaceId,draft,selection},{signal,consume,page,inventory=false,admitted=false}={}){
  signal?.throwIfAborted();
  workspace=publicationWorkspace(workspace);
  if(websiteDraft!==undefined&&!validWebsiteDraftPin(websiteDraft))throw new AppError('INVALID');
  if(await workspace.storageKind()!=='catalogue')throw new AppError('STORAGE_UPGRADE_REQUIRED');
- if(websitePin?.websiteRevision&&book===undefined&&draft===undefined)return websiteDocumentPublicationSource(workspace,{etag,websitePin,websiteDraft,workspaceId},{signal,consume,page,inventory});
+ if(websitePin?.websiteRevision&&book===undefined&&draft===undefined)return websiteDocumentPublicationSource(workspace,{etag,websitePin,websiteDraft,workspaceId},{signal,consume,page,inventory,admitted});
  if(websiteDraft!==undefined)throw new AppError('INVALID');
  const current=await workspace.currentOutline();
  if(workspaceId!==undefined&&workspaceId!==current.metadata.id)throw new AppError('WORKSPACE_CHANGED');
- if(!await publicationRevisionCurrent(workspace,{etag,websitePin},{current}))throw new AppError('CONFLICT');
+ if(!admitted&&!await publicationRevisionCurrent(workspace,{etag,websitePin},{current}))throw new AppError('CONFLICT');
  if(draft!==undefined){
   validateWorkspaceEditCommand(draft);
   if(book!==undefined||draft.baseEtag!==etag||draft.changes.length||draft.removed.length)throw new AppError('INVALID');
@@ -150,10 +150,10 @@ export async function publicationSource(workspace,{etag,websitePin,websiteDraft,
  });
 }
 
-async function websiteDocumentPublicationSource(workspace,{etag,websitePin,websiteDraft,workspaceId},{signal,consume,page,inventory}){
+async function websiteDocumentPublicationSource(workspace,{etag,websitePin,websiteDraft,workspaceId},{signal,consume,page,inventory,admitted}){
  const id=workspace.websiteId??null,base=workspace.baseWorkspace??workspace;
  if(!validWebsitePin(websitePin)||websitePin.websiteId!==id||websitePin.researchSnapshotId!==etag)throw new AppError('INVALID');
- if(!await publicationRevisionCurrent(workspace,{etag,websitePin}))throw new AppError('CONFLICT');
+ if(!admitted&&!await publicationRevisionCurrent(workspace,{etag,websitePin}))throw new AppError('CONFLICT');
  return base.catalogue(async store=>{
   const retained=!!consume&&!page&&!inventory,projected=await websiteEditorProjection(store,id,{websitePin,websiteDraft,pageLabels:false,signal});
   if(workspaceId!==undefined&&workspaceId!==projected.metadata.id)throw new AppError('WORKSPACE_CHANGED');

@@ -4,7 +4,7 @@ import {registerHooks} from 'node:module';
 import {randomUUID} from 'node:crypto';
 import {catalogueContext} from '../src/catalogue-context.js';
 
-const names=['PagedResearchTables','ReferencedCalculations','NativeNumericalModels','NativeClockModels','NativeDomainValues','ClockDerivations','IntervalUncertainty','WindowCalculations','FigureProjectionPolicies','AxisPermutation','StatisticalUncertainty','MeasurementScalarPolicies','DatasetResourcePolicies','StructuredCalculator','ApproximateCalculator','PairedStatistics','QuantileAggregation','WeightedFit','CoordinateAlignment','SpectralMethods','TopologyValues','SequenceValues','TensorValues','NumericalExecution','DatasetCusum','DatasetSpectra','ComputedCells','CoordinateFrames','SegmentedClockSynchronization','ClockSynchronization','DomainAlgebra','CalculatorDatasetResults','CalculationPolicies','ReviewFigurePackages'];
+const names=['PublicationOperations','PagedResearchTables','ReferencedCalculations','NativeNumericalModels','NativeClockModels','NativeDomainValues','ClockDerivations','IntervalUncertainty','WindowCalculations','FigureProjectionPolicies','AxisPermutation','StatisticalUncertainty','MeasurementScalarPolicies','DatasetResourcePolicies','StructuredCalculator','ApproximateCalculator','PairedStatistics','QuantileAggregation','WeightedFit','CoordinateAlignment','SpectralMethods','TopologyValues','SequenceValues','TensorValues','NumericalExecution','DatasetCusum','DatasetSpectra','ComputedCells','CoordinateFrames','SegmentedClockSynchronization','ClockSynchronization','DomainAlgebra','CalculatorDatasetResults','CalculationPolicies','ReviewFigurePackages'];
 const unique=randomUUID(),spy='metadataFormat_'+unique,dispatcherURL=new URL('../src/metadata-catalogue-format.js',import.meta.url).href+'?test='+unique,storageURL=new URL('../src/storage.js',import.meta.url).href+'?metadata-format-test='+unique,formatURL='metadata-format-spy:'+unique;
 let dispatcherResolutions=0;
 globalThis[spy]=(name,db)=>{db.calls.push(name);if(db.reject===name)throw db.failure;};
@@ -24,6 +24,9 @@ async function expect(relative,value,expected){const db={calls:[]};await dispatc
 
 test('real metadata predicates preserve every admission family and overlapping requirement order',async()=>{
  const cases=[
+  [job,{type:'publication.prepare',input:{request:{version:1}}},['PublicationOperations']],
+  [job,{type:'publication.analysis-review'},['PublicationOperations']],
+  ['.observanda/publication-analysis-operations/'+ 'a'.repeat(64)+'.json',{version:1},['PublicationOperations']],
   [object,{content:{datasetFormat:3}},['PagedResearchTables']],
   [chunk,{kind:'cells',items:[{value:'source text',kind:'string'}]},['PagedResearchTables']],
   [chunk,{kind:'cell-text',items:['source text']},['PagedResearchTables']],

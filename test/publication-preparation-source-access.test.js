@@ -37,6 +37,7 @@ test('queued named-site preparations retain only their initiating source access 
  const sourceReader=publicationSourceFactory(application,client,f.workspace),sites=new WebsiteSites(f.workspace),created=await sites.change({workspaceId:host.id,etag:(await f.workspace.outline()).etag,operation:'create',name:'Field journal'}),current=await sites.read(created.id);
  await sites.save(created.id,{workspaceId:host.id,baseEtag:current.etag,websitePin:current.websitePin,metadata:{website:{...current.book.website,researchSources:[{workspaceId:book.id,projectIds:[book.projects[0].id],selection:{defaultShare:false,includeProjects:[book.projects[0].id],records:[]}}]}},projects:[],changes:[],removed:[],selection:current.site.selection});
  const workspace=websiteWorkspace(f.workspace,created.id),grants=new PublicationSourceAccess();jobs=workspaceJobs(f.workspace,undefined,{sourceAccess:grants});
+ const release=jobs.queue.release.bind(jobs.queue);t.mock.method(jobs.queue,'release',async(id,token,options)=>{if(options?.error)t.diagnostic(options.error.stack);return release(id,token,options);});
  const queue=websiteJobQueue(jobs.queue,created.id),releases=new PublicationJobs(workspace,{sourceReader,sourceAccess:grants}),start=async()=>releases.start(await workspace.outline(),queue);
  const first=await start();assert.equal(first.input.websiteId,created.id);await assert.rejects(releases.control(queue,first.id,'retry'),{code:'JOB_CHANGED'});
  const completed=await run(jobs,first.id);assert.equal(completed.state,'completed',completed.error);assert.equal(grants.take(first.id),undefined);
@@ -44,7 +45,9 @@ test('queued named-site preparations retain only their initiating source access 
  const second=await start();grants.clear();const missing=await run(jobs,second.id);assert.equal(missing.error,'ACCESS_LOCKED');
  await assert.rejects(new PublicationJobs(workspace,{sourceAccess:grants}).control(queue,second.id,'retry'),{code:'ACCESS_LOCKED'});assert.equal(grants.take(second.id),undefined);
  await releases.control(queue,second.id,'retry');const resumed=await run(jobs,second.id);assert.equal(resumed.state,'completed',resumed.error);
- const cancelled=await start();assert.equal((await releases.control(queue,cancelled.id,'cancel')).state,'cancelled');assert.equal(grants.take(cancelled.id),undefined);
+ const cancelled=await start(),claimed=await queue.claim();assert.equal(claimed.id,cancelled.id);
+ await queue.definition(claimed).prepare(claimed,{signal:new AbortController().signal,progress:async()=>{}});
+ await releases.control(queue,cancelled.id,'cancel');await queue.release(cancelled.id,claimed.lease.token);assert.equal((await queue.read(cancelled.id)).state,'cancelled');assert.equal(grants.take(cancelled.id),undefined);
  const record=(await source.read()).book.entries[0];await new ResearchRecords(source,new MediaStore(source)).save({workspaceId:book.id,changes:[{id:record.id,expectedRevision:recordRevision(record),record:{...record,share:false}}]});
  await assert.rejects(releases.control(queue,cancelled.id,'retry'),{code:'PUBLICATION_PERMISSIONS_CHANGED'});assert.equal(grants.take(cancelled.id),undefined);assert.equal((await queue.read(cancelled.id)).state,'cancelled');
 });

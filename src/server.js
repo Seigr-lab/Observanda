@@ -75,6 +75,7 @@ import {executeReviewRequest,reviewRequest} from './review-requests.js';
 import {reviewHttp} from './review-http.js';
 import {DeploymentJobs} from './deployment-jobs.js';
 import {PublicationJobs} from './publication-jobs.js';
+import {AnalysisPublicationReviewJobs,analysisPublicationOperationSummary} from './analysis-publication-review-jobs.js';
 import {PublicationRollback} from './publication-rollback.js';
 import {PublicationLinks} from './publication-links.js';
 import {publicationReferences} from './publication-revisions.js';
@@ -1130,7 +1131,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       if(req.method==='POST'&&url.pathname.startsWith('/api/publication-jobs/')){
         if(!workspace.vault?.key)throw new AppError('ACCESS_LOCKED');
         startJobs(context);const releases=new PublicationJobs(workspace,{sourceReader,sourceAccess:context.publicationSourceAccess}),queue=publicationQueue(),data=await body(req),operation=url.pathname.slice('/api/publication-jobs/'.length);
-        if(operation==='start'){const job=await releases.start({...data,blockedValues},queue);context.jobs.worker.wake();return json({job:jobSummary(job)},202);}
+        if(operation==='start')return operationResponse(req,res,async()=>{const job=await releases.startRequest({...data,websitePin:data.websitePin??websiteRequestContext(req.headers).websitePin,blockedValues},queue);context.jobs.worker.wake();return {job:jobSummary(job)};},value=>json(value,202),{continueAfterDisconnect:true});
         if(operation==='list'){const page=await releases.page(queue,data);return json({...page,items:page.items.map(item=>({...item,job:jobSummary(item.job)}))});}
         if(['pages','references','analysis-review-window'].includes(operation)){
           let candidate=await retainedCandidate(data.id);if(!candidate)throw new AppError('NOT_FOUND');
@@ -1140,7 +1141,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         if(operation==='open'){
           // Only bounded retained metadata shares this snapshot. Cached lazy
           // file readers keep the live workspace, and no database lease escapes.
-          const read=async()=>{const candidate=await retainedCandidate(data.id);if(!candidate)throw new AppError('NOT_FOUND');return {...await releases.summary(candidate),analysisReview:await new AnalysisPublicationReview(workspace,{sourceReader}).status(candidate),stale:!await publicationRevisionCurrent(workspace,candidate)};};
+          const read=async()=>{const candidate=await retainedCandidate(data.id);if(!candidate)throw new AppError('NOT_FOUND');return {...await releases.summary(candidate),analysisReview:await new AnalysisPublicationReview(workspace,{sourceReader}).status(candidate),analysisReviewOperation:analysisPublicationOperationSummary(await new AnalysisPublicationReviewJobs(workspace,publisher).current(data.id,undefined,queue)),stale:!await publicationRevisionCurrent(workspace,candidate)};};
           const review=await workspace.storageKind()==='catalogue'?await workspace.catalogue(read):await read();
           return json({...review,stale:review.stale||review.configEtag!==(await publisher.read()).etag});
         }
@@ -1150,10 +1151,15 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
           // mutation admitted separately by its existing write transaction.
           const approval=await new PublicationRollback(workspace,publisher,{sourceReader}).review(data);
           const reviewed=new PublicationRollback(workspace,publisher,{sourceReader}).project(candidate,approval.review);
-          const summarize=async()=>({...await releases.summary(reviewed),destination:approval.destination,configEtag:approval.configEtag,rollback:approval.review,analysisReview:await new AnalysisPublicationReview(workspace,{sourceReader}).status(reviewed),stale:false});
+          const summarize=async()=>({...await releases.summary(reviewed),destination:approval.destination,configEtag:approval.configEtag,rollback:approval.review,analysisReview:await new AnalysisPublicationReview(workspace,{sourceReader}).status(reviewed),analysisReviewOperation:analysisPublicationOperationSummary(await new AnalysisPublicationReviewJobs(workspace,publisher).current(data.id,approval.review.id,queue)),stale:false});
           return json(await workspace.storageKind()==='catalogue'?await workspace.catalogue(summarize):await summarize());
         }
-        if(operation==='analysis-review'){let candidate=await retainedCandidate(data.id);if(!candidate)throw new AppError('NOT_FOUND');if(data.rollbackReview){const rollback=new PublicationRollback(workspace,publisher,{sourceReader});candidate=rollback.project(candidate,await rollback.authorize(candidate,data.rollbackReview));}return json(await new AnalysisPublicationReview(workspace,{sourceReader}).save(candidate,data.decisions));}
+        if(operation==='analysis-review')return operationResponse(req,res,async()=>{const job=await new AnalysisPublicationReviewJobs(workspace,publisher,{sourceReader,sourceAccess:context.publicationSourceAccess}).start(data,queue);context.jobs.worker.wake();return {job:jobSummary(job)};},value=>json(value,202),{continueAfterDisconnect:true});
+        if(['analysis-review-status','analysis-review-retry','analysis-review-cancel'].includes(operation)){
+          const reviews=new AnalysisPublicationReviewJobs(workspace,publisher,{sourceReader,sourceAccess:context.publicationSourceAccess}),job=await queue.read(data.id);if(!job||job.type!=='publication.analysis-review')throw new AppError('NOT_FOUND');await reviews.authorize(job);
+          if(operation==='analysis-review-status')return json({job:jobSummary(job)});
+          const action=operation.slice('analysis-review-'.length),next=await reviews.control(queue,job.id,action);if(action==='cancel')context.jobs.worker.cancel(job.id);else context.jobs.worker.wake();return json({job:jobSummary(next)});
+        }
         const job=await queue.read(data.id);if(!job||job.type!=='publication.prepare')throw new AppError('NOT_FOUND');await queue.authorize(job);
         if(operation==='status')return json({job:jobSummary(job)});
         if(['cancel','retry'].includes(operation)){const next=await releases.control(queue,job.id,operation);if(operation==='cancel')context.jobs.worker.cancel(job.id);else context.jobs.worker.wake();return json({job:jobSummary(next)});}

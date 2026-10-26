@@ -28,9 +28,10 @@ import {EvidenceCorrections} from '../src/evidence-corrections.js';
 
 function catalogue(version,{optionalDomains=false}={}){
  return {version,retiredIndex:version>=23,
-  async all(sql){assert.equal(sql,'SELECT version FROM catalogue_format');return [{version:this.version}];},
-  async get(sql,slot){assert.equal(sql,'SELECT 1 FROM state WHERE slot=$1');assert.equal(slot,'project-domains');return optionalDomains?{found:1}:null;},
+  async all(sql){assert.match(sql,/^SELECT version FROM catalogue_format(?: FOR UPDATE NOWAIT)?$/);return [{version:this.version}];},
+  async get(sql,slot){if(sql.startsWith('SELECT pg_catalog.format_type'))return null;assert.equal(sql,'SELECT 1 FROM state WHERE slot=$1');assert.equal(slot,'project-domains');return optionalDomains?{found:1}:null;},
   async run(sql,...values){
+   if(/^(?:SAVEPOINT|RELEASE SAVEPOINT|ROLLBACK TO SAVEPOINT) catalogue_feature_admission$/.test(sql))return;
    if(sql.startsWith('CREATE INDEX records_scope_revision')){assert.equal(this.retiredIndex,false,'The retained scope index must not be recreated');this.retiredIndex=true;}
    else if(sql.startsWith('UPDATE catalogue_format'))this.version=Math.max(this.version,values[0]);
    else assert.ok(sql.startsWith('ALTER TABLE catalogue_format'),sql);

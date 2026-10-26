@@ -6,6 +6,7 @@ import {nativePublicationCandidate,publicationAnalysisReader,publicationReviewOw
 import {analysisTextValue} from './web/analysis-model.js';
 const hash=v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v);
 const validDecision=d=>d&&Object.keys(d).sort().join()==='id,reason'&&hash(d.id)&&analysisTextValue(d.reason,4000,true);
+export const validAnalysisReviewDecisions=decisions=>Array.isArray(decisions)&&decisions.length<=32&&decisions.every(validDecision)&&new Set(decisions.map(decision=>decision.id)).size===decisions.length;
 const validDecisions=(decisions,expected)=>Array.isArray(decisions)&&decisions.length===expected.length&&new Set(decisions.map(d=>d?.id)).size===expected.length&&decisions.every(d=>d&&Object.keys(d).sort().join()==='id,reason'&&expected.some(e=>e.id===d.id)&&analysisTextValue(d.reason,4000,true));
 // A review decision belongs to a pinned edition and the dependency heads seen
 // at its preparation. A later input change requires a fresh edition/review.
@@ -15,8 +16,8 @@ export class AnalysisPublicationReview{
  async read(candidate){if(nativePublicationCandidate(candidate))return (await this.nativeState(candidate,await publicationAnalysisReader(this.workspace,candidate))).receipt;const raw=await this.workspace.readMetadata(this.file(candidate.analysisReviewId??candidate.reviewId),1024*1024);if(raw===null)return null;let value;try{value=JSON.parse(raw);}catch{throw new AppError('CATALOGUE_DAMAGED');}if(value?.version!==1||value.reviewId!==(candidate.analysisReviewId??candidate.reviewId)||value.fingerprint!==candidate.researchReview?.analysis?.fingerprint||!validDecisions(value.decisions,candidate.researchReview?.analysis?.items??[])||!Number.isFinite(Date.parse(value.recordedAt)))throw new AppError('CATALOGUE_DAMAGED');return value;}
  async status(candidate){if(nativePublicationCandidate(candidate)){const expected=await publicationAnalysisReader(this.workspace,candidate),state=await this.nativeState(candidate,expected);return {reviewed:state.count===expected.count,decided:state.count,total:expected.count,decisions:[],window:await this.window(candidate)};}const a=candidate.researchReview?.analysis;if(!a?.items.length)return {reviewed:true,decisions:[]};const saved=await this.read(candidate);return {reviewed:!!saved,decisions:saved?.decisions??[]};}
  async fresh(candidate,{signal}={}){const expected=candidate.researchReview?.analysis;if(!expected)return;const {analysis:current}=await publicationAnalysisState(this.workspace,candidate,{sourceReader:this.sourceReader,signal});if(current.fingerprint!==expected.fingerprint)throw new AppError('ANALYSIS_REVIEW');}
- async save(candidate,decisions,options={}){if(nativePublicationCandidate(candidate))return this.saveNative(candidate,decisions,options);return this.workspace.withLock(async()=>{
-  await this.fresh(candidate);const expected=candidate.researchReview?.analysis?.items??[];
+ async save(candidate,decisions,options={}){if(nativePublicationCandidate(candidate))return this.saveNative(candidate,decisions,options);return (options.write??(operation=>this.workspace.withLock(operation)))(async()=>{
+  if(!options.checked)await this.fresh(candidate,options);const expected=candidate.researchReview?.analysis?.items??[];
   if(!validDecisions(decisions,expected))throw new AppError('ANALYSIS_REVIEW');
   const value={version:1,reviewId:candidate.analysisReviewId??candidate.reviewId,fingerprint:candidate.researchReview.analysis.fingerprint,recordedAt:new Date().toISOString(),decisions},raw=JSON.stringify(value);
   if(Buffer.byteLength(raw)>1024*1024)throw new AppError('ANALYSIS_LIMIT');await this.workspace.writeMetadata(this.file(candidate.analysisReviewId??candidate.reviewId),raw);return {reviewed:true,decisions};
@@ -44,11 +45,11 @@ export class AnalysisPublicationReview{
   return {...page,items,reviewed:state.count===expected.count,decided:state.count};
  }
  references(candidate,options={}){return publicationReferenceReviewWindow(this.workspace,candidate,options);}
- async saveNative(candidate,decisions,{signal}={}){
+ async saveNative(candidate,decisions,{signal,checked=false,write=operation=>this.workspace.withLock(operation)}={}){
   signal?.throwIfAborted();
-  if(!Array.isArray(decisions)||decisions.length>32||decisions.some(decision=>!validDecision(decision))||new Set(decisions.map(decision=>decision.id)).size!==decisions.length)throw new AppError('ANALYSIS_REVIEW');
-  const owned=decisions.map(decision=>({...decision}));await this.fresh(candidate,{signal});signal?.throwIfAborted();
-  return this.workspace.withLock(async()=>{
+  if(!validAnalysisReviewDecisions(decisions))throw new AppError('ANALYSIS_REVIEW');
+  const owned=decisions.map(decision=>({...decision}));if(!checked)await this.fresh(candidate,{signal});signal?.throwIfAborted();
+  return write(async()=>{
    const expected=await publicationAnalysisReader(this.workspace,candidate,{signal}),state=await this.nativeState(candidate,expected,{signal}),reviewId=candidate.analysisReviewId??candidate.reviewId;
    if(!owned.length&&expected.count)throw new AppError('ANALYSIS_REVIEW');
    for(const decision of owned)if(!await expected.get(decision.id))throw new AppError('ANALYSIS_REVIEW');

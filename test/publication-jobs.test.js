@@ -1,6 +1,7 @@
 import {openPublicationInput} from '../src/publication-input-reader.js';
 import {publicationText,publicationDraftCommand} from './publication-fixture.js';
 import {test} from 'node:test';
+import {randomUUID} from 'node:crypto';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm,readFile,writeFile} from 'node:fs/promises';
 import os from 'node:os';
@@ -14,6 +15,9 @@ import {Workspace} from '../src/storage.js';
 import {recordRevision} from '../src/research.js';
 import {defaultEditionRecord} from '../src/web/publication-selection.js';
 import {MediaStore} from '../src/media.js';
+import {WebsiteDocumentStore} from '../src/website-document-store.js';
+import {catalogueFormat,catalogueRequiresPublicationOperations,configurationCatalogueFeatures,configurationCatalogueGeneration} from '../src/catalogue-format.js';
+import {verifiedCatalogueObjects} from '../src/catalogue-object-verification.js';
 import {contentBuffer,FileContent} from '../src/file-content.js';
 import {createAccess,takeCreatedVault} from '../src/access.js';
 import {clearVault} from '../src/encryption.js';
@@ -26,9 +30,24 @@ async function terminal(queue,id){for(let i=0;i<400;i++){const job=await queue.r
 test('retained publication pins drafts and media, excludes private sources, and restores under a new encryption key',async t=>{
  const f=await fixture(t),media=new MediaStore(f.workspace.root,f.vault),original=Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><!-- private source details --><rect width="20" height="20" fill="red"/></svg>');
  const asset=await media.import(original,'image'),current=await f.workspace.read(),draft=structuredClone(current.book);draft.entries[0].share=true;draft.entries[0].title='Pinned musical take';draft.entries[0].attachments=[{...asset,caption:'Selected image',alt:'Red square',transcript:'',share:true}];draft.entries[1].share=false;draft.entries[1].title='PRIVATE_SENTINEL';
- const command=await publicationDraftCommand(f.workspace,draft),job=await f.releases.start({...command,blockedValues:[f.workspace.root]},f.queue);
+ const command={...await publicationDraftCommand(f.workspace,draft),commandId:randomUUID(),blockedValues:[f.workspace.root]};
+ await assert.rejects(f.releases.startRequest({commandId:randomUUID(),etag:command.etag},f.queue),{code:'PUBLICATION_EDITOR_REQUIRED'});
+ await assert.rejects(f.releases.startRequest({...command,book:draft},f.queue),{code:'PUBLICATION_EDITOR_REQUIRED'});
+ const readSite=t.mock.method(WebsiteDocumentStore.prototype,'read',()=>assert.fail('Durable admission must not materialize website page bodies'));
+ const job=await f.releases.startRequest(command,f.queue);readSite.mock.restore();
+ assert.equal(job.id,command.commandId);assert.equal(job.state,'queued');assert.equal(await f.workspace.readMetadata('.observanda/release-inputs/'+job.id+'.json',16*1024*1024),null,'admission returns before any edition capture');
+ const generation=await f.workspace.catalogue(store=>catalogueFormat(store.db));assert.equal(catalogueRequiresPublicationOperations(generation),true);
+ try{
+  await f.workspace.withLock(()=>f.workspace.catalogue(store=>store.db.run('UPDATE catalogue_format SET version=$1',configurationCatalogueGeneration({...configurationCatalogueFeatures(generation),publicationOperations:false}))));
+  await assert.rejects(f.releases.authorize(job),{code:'CATALOGUE_DAMAGED'});
+  await assert.rejects(f.workspace.catalogue(async store=>{for await(const object of verifiedCatalogueObjects(store))void object;}),{code:'CATALOGUE_DAMAGED'});
+ }finally{await f.workspace.withLock(()=>f.workspace.catalogue(store=>store.db.run('UPDATE catalogue_format SET version=$1',generation)));}
  const changed=await f.workspace.read();changed.book.entries[0].title='Later changed record';await f.workspace.save(changed.book,changed.etag);
- f.worker.start();const done=await terminal(f.queue,job.id);await f.worker.stop();assert.equal(done.state,'completed');
+ assert.equal((await f.releases.start(command,f.queue)).id,job.id,'lost reply recovers its receipt despite newer authoring');
+ await assert.rejects(f.releases.start({...command,blockedValues:[]},f.queue),{code:'JOB_CHANGED'});
+ const prepare=f.queue.definitions['publication.prepare'].prepare;f.queue.definitions['publication.prepare'].prepare=async(...args)=>{try{return await prepare(...args);}catch(error){t.diagnostic(error.stack);throw error;}};
+ f.worker.start();const done=await terminal(f.queue,job.id);await f.worker.stop();assert.equal(done.state,'completed',done.error);
+ assert.deepEqual((await f.releases.page(f.queue,{})).items.map(item=>item.id),[job.id],'admission and completion retain one chronological edition entry');
  const candidate=await f.releases.read(done.result.id);assert.equal((await (await openPublicationInput(f.releases.workspace,await f.releases.source(job.id))).get('records',draft.entries[0].id)).revision,recordRevision(draft.entries[0]));
  const text=await publicationText(candidate);assert.match(text,/Pinned musical take/);for(const secret of ['Later changed record','PRIVATE_SENTINEL','private source details',f.workspace.root])assert.ok(!text.includes(secret));
  const output=await candidate.files.get('entries/'+draft.entries[0].id+'.html');assert.ok(output);assert.ok(!(await readFile(output.file)).includes(await contentBuffer(output)));
@@ -36,6 +55,7 @@ test('retained publication pins drafts and media, excludes private sources, and 
  const restored=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'restored')),access,vault,f.vault),again=await new PublicationJobs(new Workspace(restored,vault)).read(done.result.id);
  assert.equal(again.id,candidate.id);for await(const [name,content] of candidate.files)assert.deepEqual(await contentBuffer(await again.files.get(name)),await contentBuffer(content));
  assert.equal((await workspaceJobs(new Workspace(restored,vault)).queue.read(job.id)).state,'completed');
+ assert.equal(await new Workspace(restored,vault).catalogue(async store=>catalogueRequiresPublicationOperations(await catalogueFormat(store.db))),true,'fresh-key recovery preserves durable operation admission');
 });
 
 test('cancelled preparation survives restart and retry without silently using a newer draft',async t=>{
@@ -59,4 +79,14 @@ test('expired workers, rolled-back completion and corrupted retained output cann
 
 test('private prose fails preparation before a public candidate can be served',async t=>{
  const f=await fixture(t),current=await f.workspace.read();current.book.entries[0].share=true;current.book.entries[0].title='Private path C:/Users/secret/private-file';const command=await publicationDraftCommand(f.workspace,current.book),job=await f.releases.start(command,f.queue);f.worker.start();const done=await terminal(f.queue,job.id);await f.worker.stop();assert.equal(done.state,'failed');assert.equal(done.error,'PRIVACY');assert.equal(await f.releases.read((await f.releases.source(job.id)).reviewId),null);assert.equal(done.result,null);
+});
+
+test('queued capture coordinates initial material indexing with its existing worker writer',async t=>{
+ const f=await fixture(t),job=await f.releases.start(await f.releases.workspace.outline(),f.queue),claimed=await f.queue.claim();assert.equal(claimed.id,job.id);
+ await f.workspace.withLock(()=>f.workspace.removeMetadata('.observanda/materials/index/state.json'));
+ let entered,release,requested;const held=new Promise(resolve=>entered=resolve),finish=new Promise(resolve=>release=resolve),waiting=new Promise(resolve=>requested=resolve);
+ const blocking=f.queue.transaction(async()=>{entered();await finish;});await held;
+ const captured=f.releases.capture(claimed,{...options(),write:operation=>{requested();return f.queue.transaction(operation);}});
+ try{await Promise.race([waiting,captured.then(()=>assert.fail('Capture bypassed its coordinated writer'))]);}finally{release();await blocking;}
+ assert.equal((await captured).id,job.id);await f.queue.release(claimed.id,claimed.lease.token,{paused:true});
 });

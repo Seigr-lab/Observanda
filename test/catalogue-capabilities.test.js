@@ -6,8 +6,10 @@ import {readProjectDomainRegistry} from '../src/project-domain-registry.js';
 import {workspaceSettingsRegistry} from '../src/workspace-settings.js';
 function catalogue(version){
  return {version,retiredIndex:version>=23,
-  async all(sql){assert.equal(sql,'SELECT version FROM catalogue_format');return [{version:this.version}];},
+  async all(sql){assert.match(sql,/^SELECT version FROM catalogue_format(?: FOR UPDATE NOWAIT)?$/);return [{version:this.version}];},
+  async get(sql){assert.ok(sql.startsWith('SELECT pg_catalog.format_type'));return null;},
   async run(sql,...args){
+   if(/^(?:SAVEPOINT|RELEASE SAVEPOINT|ROLLBACK TO SAVEPOINT) catalogue_feature_admission$/.test(sql))return;
    if(sql.startsWith('CREATE INDEX records_scope_revision')){assert.equal(this.retiredIndex,false,'The existing index was recreated');this.retiredIndex=true;}
    else if(sql.startsWith('UPDATE catalogue_format'))this.version=Math.max(this.version,args[0]);
    else assert.ok(sql.startsWith('ALTER TABLE catalogue_format'));

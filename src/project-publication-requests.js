@@ -5,7 +5,7 @@ const commands={
  'websites/':['list','open','version','change','save',...['open','window','item','change','undo','redo','discard','save'].map(name=>'editor/'+name)],
  'website/research/':['summary','content','record','sections','media'],
  'publication-selections/':['open','checkpoint','read','window','discard'],
- 'publication-jobs/':['start','list','open','pages','references','rollback-review','analysis-review','analysis-review-window','status','cancel','retry'],
+ 'publication-jobs/':['start','list','open','pages','references','rollback-review','analysis-review','analysis-review-window','analysis-review-status','analysis-review-retry','analysis-review-cancel','status','cancel','retry'],
  'deployment-jobs/':['start','list','status','cancel','retry'],
  'repository-setup/':['start','review','initialize','current','status','cancel','retry'],
  'publishing/':['save','connect','disconnect','check','plan','plan-page','verify','verification','verification-cancel','verification-retry','deploy'],
@@ -20,6 +20,6 @@ export function projectPublicationRequest(route){
  if(operation==='publishing')return {publication:operation,write:false,method:'GET',limit:MAX_BYTES};
  const preview=/^publication-preview\/([a-f0-9]{64})\/(.+)$/.exec(operation),download=/^export\/([a-f0-9]{64})$/.exec(operation);
  if(preview||download)return {publication:preview?'file':'export',id:(preview??download)[1],file:preview?.[2],write:false,method:'GET',binary:true,limit:MAX_BYTES};
- if(['preview','design-preview','appearance-preview','export','workspace/save','publication-selection','publication-references'].includes(operation)||Object.entries(commands).some(([prefix,names])=>operation.startsWith(prefix)&&names.includes(operation.slice(prefix.length))))return {publication:operation,write:!reads.has(operation)&&!operation.startsWith('website/research/')&&!['design-preview','appearance-preview','export'].includes(operation),method:'POST',binary:operation==='export',limit:MAX_BYTES};
+ if(['preview','design-preview','appearance-preview','export','workspace/save','publication-selection','publication-references'].includes(operation)||Object.entries(commands).some(([prefix,names])=>operation.startsWith(prefix)&&names.includes(operation.slice(prefix.length))))return {publication:operation,write:operation!=='publication-jobs/analysis-review-status'&&!reads.has(operation)&&!operation.startsWith('website/research/')&&!['design-preview','appearance-preview','export'].includes(operation),method:'POST',binary:operation==='export',limit:MAX_BYTES};
  return null;
 }

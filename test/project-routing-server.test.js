@@ -454,15 +454,15 @@ test('previously stored scoped websites remain readable while new websites canno
   await sourceDb.run('BEGIN');await sourceDb.lock();
   await result(await f.project(f.a,'websites/change',{workspaceId:f.a.book.id,etag:(await f.a.storage.outline()).etag,operation:'create',name:'New website'}),422);
   const opened=await result(await f.project(f.a,'websites/open',{id:site}));
-  const edit={workspaceId:f.a.book.id,baseEtag:opened.etag,metadata:{website:{...opened.book.website,footer:'PROJECT_A_PUBLIC_FOOTER'}},projects:[],changes:[],removed:[],selection:{defaultShare:false,includeProjects:[],records:[{id:f.a.book.entries[0].id,share:true,attachments:[]}]}};
+  const edit={workspaceId:f.a.book.id,baseEtag:opened.etag,websitePin:opened.websitePin,metadata:{website:{...opened.book.website,footer:'PROJECT_A_PUBLIC_FOOTER'}},projects:[],changes:[],removed:[],selection:{defaultShare:false,includeProjects:[],records:[{id:f.a.book.entries[0].id,share:true,attachments:[]}]}};
   const saved=await result(await f.project(f.a,'websites/save',{id:site,command:edit})),headers={'X-Observanda-Website':site};
   const settings=await result(await f.raw('/api/projects/'+f.a.id+'/publishing',{headers}));
   await result(await f.project(f.a,'publishing/save',{config:{...settings.config,github:{...settings.config.github,owner:'Example',repository:'independent-project'}},etag:settings.etag},headers));
   assert.equal((await result(await f.raw('/api/projects/'+f.b.id+'/publishing'))).configured,false);
-  assert.deepEqual((await result(await f.project(f.a,'website/research/summary',{workspaceId:f.a.book.id,snapshotId:saved.etag,selection:edit.selection,search:''},headers))).entries,1);
+  assert.deepEqual((await result(await f.project(f.a,'website/research/summary',{workspaceId:f.a.book.id,snapshotId:saved.etag,websitePin:saved.websitePin,selection:edit.selection,search:''},headers))).entries,1);
   let entered;const ready=new Promise(resolve=>entered=resolve),gate=new Promise(resolve=>release=resolve),prepare=PublicationJobs.prototype.prepare;
   t.mock.method(PublicationJobs.prototype,'prepare',async function(...args){if(this.workspace.projectId===f.a.id){entered();await gate;}return prepare.apply(this,args);});
-  const started=await result(await f.project(f.a,'publication-jobs/start',{etag:saved.etag},headers));await ready;
+  const started=await result(await f.project(f.a,'publication-jobs/start',{etag:saved.etag,websitePin:saved.websitePin,commandId:randomUUID()},headers));await ready;
   const b=await result(await f.project(f.b,'research/records/writing/read',target(f.b)));await result(await f.project(f.b,'research/records/writing/save',{...target(f.b),expectedRevision:b.revision,value:{body:'B authoring continues during A publication'}}));
   assert.equal((await f.workspace.outline()).etag,sourceHead);release();
   let job=started.job;const deadline=Date.now()+60000;

@@ -1,5 +1,7 @@
 // Capability dispatch is loaded lazily by storage to avoid eager module cycles.
 // Reuse only these predicates and functions; every write checks its own database.
+import {requirePublicationOperations} from './catalogue-format.js';
+import {publicationOperationMetadataPath,publicationOperationMetadata} from './publication-operation-format.js';
 import {requirePagedResearchTables,requireReferencedCalculations,requireNativeNumericalModels,requireNativeClockModels,requireNativeDomainValues,requireClockDerivations,requireIntervalUncertainty,requireWindowCalculations,requireFigureProjectionPolicies,requireAxisPermutation,requireStatisticalUncertainty,requireMeasurementScalarPolicies,requireDatasetResourcePolicies,requireStructuredCalculator,requireApproximateCalculator,requirePairedStatistics,requireQuantileAggregation,requireWeightedFit,requireCoordinateAlignment,requireSpectralMethods,requireTopologyValues,requireSequenceValues,requireTensorValues,requireNumericalExecution,requireDatasetCusum,requireDatasetSpectra,requireComputedCells,requireCoordinateFrames,requireSegmentedClockSynchronization,requireClockSynchronization,requireDomainAlgebra,requireCalculatorDatasetResults,requireCalculationPolicies,requireReviewFigurePackages} from './catalogue-format.js';
 import {referencedCalculationMetadata} from './calculation-graph-format.js';
 import {nativeNumericalMetadata,nativeClockMetadata} from './numerical-material-format.js';
@@ -33,6 +35,7 @@ import {calculatorResultMetadata} from './web/calculator-result-model.js';
 import {datasetResourceMetadata} from './dataset-resource-format.js';
 import {checkpointHasCalculationPolicy} from './web/tools/calculation-policy.js';
 export async function requireMetadataCatalogueFormat(db,relative,text){
+ if(publicationOperationMetadataPath(relative)&&publicationOperationMetadata(relative,JSON.parse(text)))await requirePublicationOperations(db);
  if(relative.startsWith('.observanda/materials/')||relative.startsWith('.observanda/jobs/')){
    const value=JSON.parse(text);if(value.content?.datasetFormat===3||relative.startsWith('.observanda/materials/sequences/chunks/')&&['cells','cell-text'].includes(value.kind)){await requirePagedResearchTables(db);}
    if(referencedCalculationMetadata(relative,value)){await requireReferencedCalculations(db);}

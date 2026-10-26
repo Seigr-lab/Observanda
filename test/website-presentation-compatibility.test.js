@@ -12,9 +12,10 @@ import {workspaceSettingsRegistry} from '../src/workspace-settings.js';
 
 function catalogue(version){
  return {version,retiredIndex:version>=23,
-  async all(sql){assert.equal(sql,'SELECT version FROM catalogue_format');return [{version:this.version}];},
-  async get(sql,slot){assert.equal(sql,'SELECT 1 FROM state WHERE slot=$1');assert.equal(slot,'project-domains');return null;},
+  async all(sql){assert.match(sql,/^SELECT version FROM catalogue_format(?: FOR UPDATE NOWAIT)?$/);return [{version:this.version}];},
+  async get(sql,slot){if(sql.startsWith('SELECT pg_catalog.format_type'))return null;assert.equal(sql,'SELECT 1 FROM state WHERE slot=$1');assert.equal(slot,'project-domains');return null;},
   async run(sql,...values){
+   if(/^(?:SAVEPOINT|RELEASE SAVEPOINT|ROLLBACK TO SAVEPOINT) catalogue_feature_admission$/.test(sql))return;
    if(sql.startsWith('CREATE INDEX records_scope_revision')){assert.equal(this.retiredIndex,false,'The retained scope index must not be recreated');this.retiredIndex=true;}
    else if(sql.startsWith('UPDATE catalogue_format'))this.version=Math.max(this.version,values[0]);
    else assert.ok(sql.startsWith('ALTER TABLE catalogue_format'),sql);
@@ -30,7 +31,7 @@ test('selected website presentation admission preserves all independent owners i
   for(const admit of [requireWebsitePresentation,requireWebsiteEditor,requireWebsiteDocuments,requireRecordResultIndexes]){await admit(db);assert.equal(db.version,expected);}
  }
  for(const stagedFirst of [false,true]){
-  const legacy=catalogue(23);legacy.get=async(sql,slot)=>{assert.equal(sql,'SELECT 1 FROM state WHERE slot=$1');assert.equal(slot,'project-domains');return {found:1};};
+  const legacy=catalogue(23);legacy.get=async(sql,slot)=>{if(sql.startsWith('SELECT pg_catalog.format_type'))return null;assert.equal(sql,'SELECT 1 FROM state WHERE slot=$1');assert.equal(slot,'project-domains');return {found:1};};
   if(stagedFirst)await requireStagedEvidence(legacy);await requireWebsitePresentation(legacy);if(!stagedFirst)await requireStagedEvidence(legacy);
   assert.equal(legacy.version,48);assert.deepEqual(ownership(legacy.version),[true,false,true]);
  }
