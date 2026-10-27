@@ -21,7 +21,7 @@ export async function githubRuntime(){
 export class GithubCredentialHelper{
  constructor({directory,namespace,runtime=githubRuntime,spawnProcess=spawn,platform=process.platform}={}){this.directory=directory;this.namespace=namespace;this.runtime=runtime;this.spawnProcess=spawnProcess;this.platform=platform;}
  async available(){try{await this.runtime();return ['win32','darwin','linux'].includes(this.platform);}catch{return false;}}
- async run(args,{input='',signal,interactive=false,store=true}={}){
+ async run(args,{input='',signal,interactive=false,store=true,accountListing=false}={}){
   const {executable,gitPath}=await this.runtime();await mkdir(this.directory,{recursive:true,mode:0o700});
   const env={...process.env};for(const key of Object.keys(env))if(/^(GIT_|GCM_)/i.test(key))delete env[key];
   Object.assign(env,{GIT_EXEC_PATH:path.dirname(gitPath),GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:this.platform==='win32'?'NUL':'/dev/null',GIT_CONFIG_SYSTEM:this.platform==='win32'?'NUL':'/dev/null',GIT_CEILING_DIRECTORIES:path.dirname(this.directory),GIT_TERMINAL_PROMPT:'0',GCM_NAMESPACE:this.namespace,GCM_CREDENTIAL_STORE:store?({win32:'wincredman',darwin:'keychain',linux:'secretservice'}[this.platform]):'none',GCM_PROVIDER:'github',GCM_GITHUB_AUTHMODES:'browser',GCM_INTERACTIVE:interactive?'1':'0',GCM_GUI_PROMPT:'0',GCM_TRACE:'0',GCM_TRACE_SECRETS:'0',GCM_TRACE_MSAUTH:'0',GCM_ALLOW_UNSAFE_REMOTES:'false'});
@@ -29,11 +29,15 @@ export class GithubCredentialHelper{
   const stop=AbortSignal.any([...(signal?[signal]:[]),AbortSignal.timeout(interactive?180000:30000)]);
   return new Promise((resolve,reject)=>{
    const child=this.spawnProcess(executable,args,{cwd:this.directory,env,signal:stop,shell:false,windowsHide:true,stdio:['pipe','pipe','pipe']});let output='',failed=false;
-   child.stdout.on('data',bytes=>{output+=bytes.toString('utf8');if(Buffer.byteLength(output)>65536){failed=true;child.kill();}});child.stderr.resume();child.stdin.on('error',()=>{});
+   let outputBytes=0;const collect=bytes=>{if(failed)return;outputBytes+=bytes.length;if(outputBytes>65536){failed=true;child.kill();return;}output+=bytes.toString('utf8');};
+   child.stdout.on('data',collect);
+   // GCM 3 writes the account list to its console (stderr); credential protocol
+   // replies remain stdout-only. Never expose either stream in diagnostics.
+   if(accountListing)child.stderr.on('data',collect);else child.stderr.resume();child.stdin.on('error',()=>{});
    child.on('error',()=>{failed=true;});child.once('close',code=>{if(stop.aborted)return reject(new AppError(signal?.aborted?'GITHUB_SIGNIN_CANCELLED':'GITHUB_SIGNIN_TIMEOUT'));if(failed||code!==0)return reject(new AppError('GITHUB_CREDENTIALS'));resolve(output);});child.stdin.end(input);
   });
  }
- async accounts(){const output=await this.run(['github','list','--url','https://github.com','--no-ui']);return [...new Set(output.split(/\r?\n/).map(v=>v.trim()).filter(githubLogin))].sort((a,b)=>a.localeCompare(b,'en'));}
+ async accounts(){const output=await this.run(['github','list','--url','https://github.com','--no-ui'],{accountListing:true});return [...new Set(output.split(/\r?\n/).map(v=>v.trim()).filter(githubLogin))].sort((a,b)=>a.localeCompare(b,'en'));}
  async credential(login,{signal,interactive=false}={}){
   if(login!==undefined&&!githubLogin(login))throw new AppError('INVALID');
   const output=await this.run(['get'],{input:'protocol=https\nhost=github.com\n'+(login?'username='+login+'\n':'')+'\n',signal,interactive,store:!interactive});

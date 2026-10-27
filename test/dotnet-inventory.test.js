@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {inspectDotnetRuntime} from '../scripts/dotnet-inventory.js';
+import {credentialNativeAotSource} from '../scripts/github-runtime.js';
 
 const marker=Buffer.from('8b1202b96a612038727b930214d7a03213f5b9e6efae3318ee3b2dce24b36aae','hex');
 function bundle({runtime='10.0.9',dependency=runtime,duplicate=false,hugeConfig=false,badPointer=false,major=6}={}){
@@ -18,6 +19,16 @@ function bundle({runtime='10.0.9',dependency=runtime,duplicate=false,hugeConfig=
  return bytes;
 }
 async function fixture(t){const root=await mkdtemp(path.join(os.tmpdir(),'observanda-runtime-inventory-'));t.after(()=>rm(root,{recursive:true,force:true}));return path.join(root,'helper');}
+
+test('native AOT inventory binds upstream metadata to the complete approved binary on both platforms',async t=>{
+ const executable=await fixture(t),bytes=Buffer.alloc(1024*1024+21,37),sha256=createHash('sha256').update(bytes).digest('hex');await writeFile(executable,bytes);
+ for(const platform of ['win32','linux']){
+  const options={platform,expectedSha256:sha256,nativeAotReleases:{[platform]:{version:'10.0.14',sha256}}};
+  assert.deepEqual(await inspectDotnetRuntime(executable,options),{kind:'bundled',name:'.NET',version:'10.0.14',sha256,metadataFormat:'upstream-native-aot-digest',metadataSource:credentialNativeAotSource});
+  bytes[bytes.length-1]^=1;await writeFile(executable,bytes);await assert.rejects(inspectDotnetRuntime(executable,options),/Could not identify/);bytes[bytes.length-1]^=1;await writeFile(executable,bytes);
+  await assert.rejects(inspectDotnetRuntime(executable,{...options,expectedSha256:'a'.repeat(64)}),/Could not identify/);
+ }
+});
 
 test('single-file runtime inventory finds a boundary-spanning marker and verifies both version manifests',async t=>{
  const executable=await fixture(t),bytes=bundle(),hash=createHash('sha256').update(bytes).digest('hex');await writeFile(executable,bytes);

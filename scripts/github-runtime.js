@@ -8,14 +8,21 @@ const executeFile=promisify(execFile);
 // Official upstream releases, pinned by SHA-256. No global Git configuration
 // or credential-helper registration is changed by preparing this payload.
 export const githubRuntimeReleases=Object.freeze({
- gcmVersion:'2.9.1',gitVersion:'2.56.0.2',
- 'win32-x64':{file:'gcm-win-x64-2.9.1.zip',sha256:'7dea2afd3b9ea22109d25f95066025d70e57281d96062605304f89fcca41b535'},
- 'darwin-arm64':{file:'gcm-osx-arm64-2.9.1.tar.gz',sha256:'2ac8f99258d04acb45cf592eb5b06ec0e0760c329bce40a4d18dabb5e0e37f68'},
- 'darwin-x64':{file:'gcm-osx-x64-2.9.1.tar.gz',sha256:'326fc3e1c708ae792b010b2f9f701f3dc4dbaebdf40cafd036254ab0f148c034'},
- // GitHub's official v2.9.1 release asset digest (gcm-linux-x64 tarball).
- 'linux-x64':{file:'gcm-linux-x64-2.9.1.tar.gz',sha256:'31fc151c3b111ffe25616a4356bd9a50bdcdbd0922c5e11990fb220c6caf1ce1'},
+ gcmVersion:'3.0.2',gitVersion:'2.56.0.2',
+ 'win32-x64':{file:'gcm-win-x64-3.0.2.zip',sha256:'9d2bef6e42a37654ea7ef33172bbcf1b6a1df6191fcf6a57dfbf39e1cbc27a0f'},
+ 'darwin-arm64':{file:'gcm-osx-arm64-3.0.2.tar.gz',sha256:'2031e8f81683ff0bd835a762e6cfd0831e9d28cdd5a55b10135c73e9498750cc'},
+ 'darwin-x64':{file:'gcm-osx-x64-3.0.2.tar.gz',sha256:'a59672ed02fd5e785a4ff89a70890955a958015867995c1079023d3fbc6643b1'},
+ 'linux-x64':{file:'gcm-linux-x64-3.0.2.tar.gz',sha256:'b8e59e22a830006ca4d93e34513effbb2d9fc0c45d9ccf40395eaab7c4c1b97e'},
  minGit:{file:'MinGit-2.56.0.2-64-bit.zip',sha256:'da35e72aa21c005a5a0d298cfbae110bc1609a815730ea0dde84b01a1b3cd3be'}
 });
+// NativeAOT does not carry the single-file runtimeconfig/deps manifest. Bind
+// upstream build metadata to the exact executable extracted from the verified
+// official release archive; never infer a runtime from arbitrary binary text.
+export const credentialNativeAotReleases=Object.freeze({
+ win32:Object.freeze({version:'10.0.14',sha256:'a139dbb2db5238266b53d6596fa02880a25cdb27d709da547147c28159d40cf0'}),
+ linux:Object.freeze({version:'10.0.14',sha256:'a89acb85ba32a7a7c370408c316a5b9ce6442c78970aad8af4bfa6dbf05f3a94'})
+});
+export const credentialNativeAotSource='https://github.com/git-ecosystem/git-credential-manager/releases/tag/v3.0.2';
 export const githubRuntimeFiles=(platform=process.platform)=>[
  'github/credential-manager/git-credential-manager'+(platform==='win32'?'.exe':''),
  'github/git/'+(platform==='win32'?'cmd/git.exe':'bin/git'),
@@ -85,7 +92,7 @@ export async function prepareGithubRuntime({out,download,run,gitRuntime,platform
  const base=path.join(out,'github'),helper=path.join(base,'credential-manager');await mkdir(helper,{recursive:true});
  const archive=await download(release.file,'https://github.com/git-ecosystem/git-credential-manager/releases/download/v'+githubRuntimeReleases.gcmVersion+'/'+release.file,release.sha256);
  await run(platform==='win32'?'tar.exe':'/usr/bin/tar',['-xf',archive,'-C',helper]);
- const license=await download('gcm-2.9.1-LICENSE','https://raw.githubusercontent.com/git-ecosystem/git-credential-manager/v2.9.1/LICENSE','b47f1a8a744ecdc7a3da35804f88552805d33f51a726b87a2105acdfae406b07');await copyFile(license,path.join(helper,'LICENSE'));
+ const license=await download('gcm-'+githubRuntimeReleases.gcmVersion+'-LICENSE','https://raw.githubusercontent.com/git-ecosystem/git-credential-manager/v'+githubRuntimeReleases.gcmVersion+'/LICENSE','b47f1a8a744ecdc7a3da35804f88552805d33f51a726b87a2105acdfae406b07');await copyFile(license,path.join(helper,'LICENSE'));
  const git=path.join(base,'git');
  if(platform==='win32'){
   await mkdir(git,{recursive:true});const source=githubRuntimeReleases.minGit;

@@ -1,6 +1,7 @@
 import {open} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {SaxesParser} from 'saxes';
+import {credentialNativeAotReleases,credentialNativeAotSource} from './github-runtime.js';
 
 // Microsoft.NET.HostModel's version-six single-file manifest. Inspect metadata,
 // never execute the bundle, extract assemblies or infer a runtime from strings.
@@ -39,9 +40,17 @@ function frameworkRequirement(xml){
  if(!numericVersion(minimumVersion))invalid();return minimumVersion;
 }
 
-export async function inspectDotnetRuntime(executable,{platform,expectedSha256}={}){
+export async function inspectDotnetRuntime(executable,{platform,expectedSha256,nativeAotReleases=credentialNativeAotReleases}={}){
  let file;
  try{
+  const native=nativeAotReleases[platform];
+  if(native&&expectedSha256===native.sha256){
+   if(!numericVersion(native.version))invalid();
+   file=await open(executable,'r');const before=await file.stat();if(!before.isFile()||before.size<64||before.size>maxBinary)invalid();
+   const first=await scan(file,before.size),second=await scan(file,before.size),after=await file.stat();
+   if(first.sha256!==native.sha256||second.sha256!==first.sha256||after.size!==before.size||after.mtimeMs!==before.mtimeMs)invalid();
+   return {kind:'bundled',name:'.NET',version:native.version,sha256:first.sha256,metadataFormat:'upstream-native-aot-digest',metadataSource:credentialNativeAotSource};
+  }
   if(platform==='win32'){
    file=await open(executable+'.config','r');const {size}=await file.stat();if(size>maxConfig)invalid();
    const bytes=await readAt(file,size,0,size);

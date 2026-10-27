@@ -37,7 +37,7 @@ test('Ubuntu packaging admits only its declared host and preserves the Windows t
  assertDesktopBuildTarget({platform:'linux',arch:'x64',osRelease:'ID=ubuntu\nVERSION_ID="24.04"\n'});
  for(const target of [{platform:'linux',arch:'arm64',osRelease:'ID=ubuntu\nVERSION_ID=24.04\n'},{platform:'linux',arch:'x64',osRelease:'ID=ubuntu\nVERSION_ID="22.04"\n'},{platform:'linux',arch:'x64',osRelease:'ID=debian\nVERSION_ID="24.04"\n'}])assert.throws(()=>assertDesktopBuildTarget(target),/Supported build hosts/);
  assertDesktopBuildTarget({platform:'win32',arch:'x64'});assertDesktopBuildTarget({platform:'darwin',arch:'arm64'});
- assert.equal(desktopNodeHashes['linux-x64'],'855d581f8a4eb1a8117e3426de25fe02770592febcfb31369aee1ffbfee9e8ec');
+ assert.equal(desktopNodeHashes['linux-x64'],'eb6728e77c576a35162c122c45ccadf224d89ff00abc8dae46cc2897c6002d7c');
  assert.deepEqual(configuration.win.target,[{target:'nsis',arch:['x64']}]);assert.deepEqual(configuration.linux.target,[{target:'deb',arch:['x64']}]);
  assert.ok(configuration.extraMetadata.homepage);assert.ok(configuration.linux.maintainer);
  assert.ok(pdfJavaArtifacts['linux-x64']);assert.ok(pdfValidationRuntimeFiles('linux').includes('pdf-validation/java/bin/java'));
@@ -58,11 +58,11 @@ test('Git preparation requires a complete supplied Linux tree and verifies its c
  await assert.rejects(prepareGithubRuntime({out,platform:'linux',arch:'x64',download:()=>assert.fail('must reject before downloads'),run:()=>assert.fail('must reject before extraction')}),/--git-runtime/);
  const download=async(name,url,sha256)=>{downloads.push({name,url,sha256});return write(f.directory,'downloads/'+name,'Synthetic pinned download');};
  await prepareGithubRuntime({out,platform:'linux',arch:'x64',gitRuntime:f.git,download,run:async(command,args)=>{
-  assert.equal(command,'/usr/bin/tar');assert.equal(path.basename(args[1]),'gcm-linux-x64-2.9.1.tar.gz');await write(args[3],'git-credential-manager','Synthetic GCM');
+  assert.equal(command,'/usr/bin/tar');assert.equal(path.basename(args[1]),githubRuntimeReleases['linux-x64'].file);await write(args[3],'git-credential-manager','Synthetic GCM');
  },verifyGit:async directory=>{verified=directory;assert.notEqual(directory,f.git);assert.equal(await readFile(path.join(directory,'LICENSE'),'utf8'),'Synthetic redistributable license');}});
  assert.equal(verified,path.join(out,'github/git'));
- assert.equal(downloads[0].sha256,'31fc151c3b111ffe25616a4356bd9a50bdcdbd0922c5e11990fb220c6caf1ce1');
- assert.equal(downloads[0].url,'https://github.com/git-ecosystem/git-credential-manager/releases/download/v2.9.1/'+githubRuntimeReleases['linux-x64'].file);
+ assert.equal(downloads[0].sha256,'b8e59e22a830006ca4d93e34513effbb2d9fc0c45d9ccf40395eaab7c4c1b97e');
+ assert.equal(downloads[0].url,'https://github.com/git-ecosystem/git-credential-manager/releases/download/v3.0.2/'+githubRuntimeReleases['linux-x64'].file);
  for(const file of githubRuntimeFiles('linux'))await readFile(path.join(out,file));
 });
 

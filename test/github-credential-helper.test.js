@@ -7,6 +7,16 @@ import {randomUUID} from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import {GithubCredentialHelper} from '../src/github/credential-helper.js';
+test('account discovery accepts helper console output without mixing diagnostics into credentials',async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-credential-console-'));t.after(()=>rm(directory,{recursive:true,force:true}));
+ const spawnProcess=(executable,args)=>{const child=new EventEmitter();child.stdout=new PassThrough();child.stderr=new PassThrough();child.stdin=new Writable({write(chunk,encoding,done){done();},final(done){queueMicrotask(()=>{
+  if(args[0]==='github'){child.stdout.end('alice\n');child.stderr.end('bob\nwarning: synthetic diagnostic\n');}
+  else {child.stdout.end('username=alice\npassword=synthetic_token_1234567890\n');child.stderr.end('password=diagnostic_must_not_override\n');}
+  child.emit('close',0);
+ });done();}});return child;};
+ const helper=new GithubCredentialHelper({directory,namespace:'observanda-test',runtime:async()=>({executable:'/synthetic/helper',gitPath:'/synthetic/git'}),platform:'win32',spawnProcess});
+ assert.deepEqual(await helper.accounts(),['alice','bob']);assert.equal((await helper.credential('alice')).token,'synthetic_token_1234567890');
+});
 test('credential helper isolates configuration and keeps secrets off arguments and diagnostic output',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-credential-pipe-'));t.after(()=>rm(directory,{recursive:true,force:true}));const calls=[],token='synthetic_token_1234567890';
  const spawnProcess=(executable,args,options)=>{const child=new EventEmitter();child.stdout=new PassThrough();child.stderr=new PassThrough();let input='';child.stdin=new Writable({write(chunk,encoding,done){input+=chunk;done();},final(done){calls.push({executable,args,options,input});queueMicrotask(()=>{child.stdout.end('protocol=https\nhost=github.com\nusername=alice\npassword='+token+'\n');child.emit('close',0);});done();}});return child;};

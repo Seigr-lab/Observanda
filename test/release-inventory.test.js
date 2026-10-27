@@ -16,7 +16,7 @@ test('release SBOM separates build dependencies and excludes resolved credential
 
 function probes(overrides={}){
  const hash='a'.repeat(64),versions={node:'24.22.1',undici:'7.30.1',openssl:'3.5.4',uv:'1.51.0',v8:'13.6.233.17-node.37',zlib:'1.3.1'};
- const outputs={'node.exe':JSON.stringify(versions),'postgres.exe':'postgres (PostgreSQL) 17.11','ffmpeg.exe':'ffmpeg version 9.0.2-full_build','ffprobe.exe':'ffprobe version 9.0.2-full_build','git.exe':'git version 2.56.0.windows.2','git-credential-manager.exe':'2.9.1+build','java.exe':'openjdk version "21.0.12.1"'};
+ const outputs={'node.exe':JSON.stringify(versions),'postgres.exe':'postgres (PostgreSQL) 17.11','ffmpeg.exe':'ffmpeg version 9.0.2-full_build','ffprobe.exe':'ffprobe version 9.0.2-full_build','git.exe':'git version 2.56.0.windows.2','git-credential-manager.exe':'3.0.2+build','java.exe':'openjdk version "21.0.12.1"'};
  const calls=[];return {calls,options:{platform:'win32',nodeVersion:versions.node,digest:async()=>hash,inspectDotnet:async()=>({kind:'host-requirement',name:'.NET Framework',minimumVersion:'4.7.2',configurationSha256:hash}),read:async()=>JSON.stringify({validatorVersion:'1.30.3',validatorSha256:hash}),execute:async(file,args,options)=>{calls.push({file,args,options});return {stdout:outputs[path.basename(file)],stderr:''};},...overrides}};
 }
 test('shipping runtime inventory measures the bundled executables with bounded probes',async()=>{
@@ -35,6 +35,7 @@ test('bundled .NET inventory binds its metadata to the helper digest',async()=>{
  await assert.rejects(collectRuntimeInventory('synthetic',{...p.options,inspectDotnet:async()=>({kind:'bundled',sha256:'b'.repeat(64)})}),/inconsistent/);
 });
 test('runtime inventory refuses missing, unexpected and changed runtimes without disclosing probe output',async()=>{
+ await assert.rejects(collectRuntimeInventory('synthetic',probes({credentialVersion:'2.9.1'}).options),/credential helper differs/);
  await assert.rejects(collectRuntimeInventory('synthetic',probes({nodeVersion:'24.0.0'}).options),/differs/);
  await assert.rejects(collectRuntimeInventory('synthetic',probes({execute:async()=>{throw Error('private-file password=secret');}}).options),error=>error.message==='Runtime version probe failed: Node.js');
  await assert.rejects(collectRuntimeInventory('synthetic',probes({execute:async()=>({stdout:'private-file password=secret'})}).options),error=>error.message==='Runtime version is not identifiable: Node.js');
