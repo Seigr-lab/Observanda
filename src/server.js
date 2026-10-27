@@ -47,6 +47,7 @@ import {workspaceDeletion} from './workspace-delete-state.js';
 import {forgetWorkspace} from './preferences.js';
 import {operationStage} from './operation-progress.js';
 import {OperationalDiagnostics,withDiagnostics,diagnostic} from './operational-diagnostics.js';
+import {diskCapacity} from './disk-capacity.js';
 import {serviceHealth} from './service-health.js';
 import {UserProfile} from './user-profile.js';
 import {rememberWorkspaceLocation,rememberAuthenticatedLocation} from './workspace-reconnection.js';
@@ -391,7 +392,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       if(req.method==='GET'&&url.pathname==='/api/diagnostics'){
        if((await status(client)).locked)throw new AppError('ACCESS_LOCKED');
        const workers=[...(context.jobs?[context.jobs.worker]:[]),...[...(context.projects?.jobs.entries??[])].map(entry=>entry.worker)].map(worker=>worker.status());
-       return json({...await diagnostics.snapshot(),workers,requests:requestAdmission.stats(),writers:writerCapacity(),nativeMedia:nativeMediaAdmission.stats(),nativeResources:nativeResources.stats()});
+       return json({...await diagnostics.snapshot(),workers,requests:requestAdmission.stats(),writers:writerCapacity(),nativeMedia:nativeMediaAdmission.stats(),nativeResources:nativeResources.stats(),disk:diskCapacity.stats()});
       }
       const selectedContext=context;
       const snapshotRead=workspaceSnapshotRequest(req.method,url.pathname);

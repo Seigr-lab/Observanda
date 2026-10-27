@@ -5,7 +5,8 @@ import {readSegmentedFile,readSegmentedRange,segmentedFileHeader} from './segmen
 import {writeSegmentedContent} from './segmented-file-write.js';
 import {atomicReplace} from './atomic-replace.js';
 import {temporaryStreamName} from './storage-temporary.js';
-import {open,rename,unlink,statfs,lstat} from 'node:fs/promises';
+import {open,rename,unlink,lstat} from 'node:fs/promises';
+import {diskCapacity} from './disk-capacity.js';
 import path from 'node:path';
 import {createCipheriv,createDecipheriv,createHash,randomBytes} from 'node:crypto';
 import {Readable} from 'node:stream';
@@ -16,7 +17,7 @@ import {operationStage,operationAdvance,operationWork} from './operation-progres
 
 const BLOCK=1024*1024;
 async function writeAll(handle,bytes,position){let done=0;while(done<bytes.length){const r=await handle.write(bytes,done,bytes.length-done,position+done);if(!r.bytesWritten)throw new AppError('IO');done+=r.bytesWritten;}}
-export async function diskSpace(directory,bytes,reserve=0){const s=await statfs(directory,{bigint:true});if(s.bavail*s.bsize<BigInt(bytes)+BigInt(reserve))throw new AppError('STORAGE_FULL');}
+export async function diskSpace(directory,bytes,reserve=0){return diskCapacity.check(directory,bytes,reserve);}
 function sameFile(a,b){return a.size===b.size&&a.mtimeNs===b.mtimeNs&&a.ctimeNs===b.ctimeNs&&a.ino===b.ino&&a.dev===b.dev;}
 function contentReadGuard(content,handle,before,vault,key,signal){const identity=key?createHash('sha256').update(key).digest('hex'):null;return async()=>{
  signal?.throwIfAborted();const [opened,current]=await Promise.all([handle.stat({bigint:true}),lstat(content.file,{bigint:true})]);
@@ -37,19 +38,20 @@ async function* decoded(handle,workspace,file){
 }
 export async function writeContent(workspace,file,source,{maxBytes=0,reserveBytes=0,signal,beforeCommit,expected}={}){
  return operationStage('encrypt-file',{unit:'bytes',item:path.basename(file)},async()=>{
-  if(expected&&workspace.vault?.id)return writeSegmentedContent(workspace,file,source,{maxBytes,reserveBytes,signal,beforeCommit,expected,space:diskSpace});
+  if(expected&&workspace.vault?.id)return writeSegmentedContent(workspace,file,source,{maxBytes,reserveBytes,signal,beforeCommit,expected});
   // Same OBSENC01 envelope as Workspace.writeFile; no format migration.
   await workspace.requireStorageKey();const directory=path.dirname(file),temp=path.join(directory,temporaryStreamName());
   const key=workspace.vault?.key?Buffer.from(workspace.vault.key):null,nonce=randomBytes(12),cipher=key?createCipheriv('aes-256-gcm',key,nonce):null;
   if(cipher)cipher.setAAD(Buffer.from(workspace.fileAAD(file)));
-  let handle,moved=false,size=0,position=cipher?ENCRYPTION_OVERHEAD:0;const hash=createHash('sha256');
+  let handle,reservation,moved=false,size=0,position=cipher?ENCRYPTION_OVERHEAD:0;const hash=createHash('sha256');
   try{
-    handle=await open(temp,'wx',0o600);if(cipher)await writeAll(handle,Buffer.concat([ENVELOPE,nonce,Buffer.alloc(16)]),0);
-    for await(const value of source){const bytes=Buffer.isBuffer(value)?value:Buffer.from(value);for(let offset=0;offset<bytes.length;offset+=BLOCK){signal?.throwIfAborted();const chunk=bytes.subarray(offset,offset+BLOCK);size+=chunk.length;if(!Number.isSafeInteger(size)||maxBytes&&size>maxBytes)throw new AppError('MEDIA_LIMIT');await diskSpace(directory,chunk.length,reserveBytes);hash.update(chunk);const output=cipher?cipher.update(chunk):chunk;await writeAll(handle,output,position);position+=output.length;operationAdvance(chunk.length);operationWork({bytes:chunk.length});}}
+    reservation=await diskCapacity.reserve(directory,(expected?.size??0)+position,{reserveBytes,signal});
+    handle=await open(temp,'wx',0o600);if(cipher)await reservation.write(position,()=>writeAll(handle,Buffer.concat([ENVELOPE,nonce,Buffer.alloc(16)]),0));
+    for await(const value of source){const bytes=Buffer.isBuffer(value)?value:Buffer.from(value);for(let offset=0;offset<bytes.length;offset+=BLOCK){signal?.throwIfAborted();const chunk=bytes.subarray(offset,offset+BLOCK);size+=chunk.length;if(!Number.isSafeInteger(size)||maxBytes&&size>maxBytes)throw new AppError('MEDIA_LIMIT');hash.update(chunk);const output=cipher?cipher.update(chunk):chunk;await reservation.write(output.length,()=>writeAll(handle,output,position));position+=output.length;operationAdvance(chunk.length);operationWork({bytes:chunk.length});}}
     if(cipher){const last=cipher.final();if(last.length)await writeAll(handle,last,position);await writeAll(handle,cipher.getAuthTag(),20);}
     const saved={size,sha256:hash.digest('hex')};signal?.throwIfAborted();await beforeCommit?.(Object.freeze({...saved}));signal?.throwIfAborted();
     await handle.sync();await handle.close();handle=null;signal?.throwIfAborted();await atomicReplace(temp,file);moved=true;return saved;
-  }catch(error){if(['ENOSPC','EDQUOT'].includes(error.code))throw new AppError('STORAGE_FULL');throw error;}finally{key?.fill(0);await handle?.close();if(!moved)await unlink(temp).catch(e=>{if(e.code!=='ENOENT')throw e;});}
+  }catch(error){if(['ENOSPC','EDQUOT'].includes(error.code))throw new AppError('STORAGE_FULL');throw error;}finally{key?.fill(0);try{await handle?.close();if(!moved)await unlink(temp).catch(e=>{if(e.code!=='ENOENT')throw e;});}finally{reservation?.release();}}
  });
 }
 export class FileContent {
@@ -93,7 +95,7 @@ export class FileContent {
     signal?.throwIfAborted();await check();await this.workspace.requireStorageKey();await workspace.requireStorageKey();
     if(!workspace.vault?.key||!workspace.vault.id||!Number.isSafeInteger(this.size)||this.size<0||! /^[a-f0-9]{64}$/.test(this.sha256))throw new AppError('INVALID');
     if(await lstat(file).catch(error=>{if(error.code==='ENOENT')return null;throw error;}))throw new AppError('EXISTS');
-    if(resume)return checkpointedFileCopy(this,workspace,file,{decode:decoded,space:diskSpace,signal,onProgress,check,reserveBytes});
+    if(resume)return checkpointedFileCopy(this,workspace,file,{decode:decoded,signal,onProgress,check,reserveBytes});
     const handle=await open(this.file,'r'),owner=this;
     try{
       const before=await handle.stat({bigint:true});if(!before.isFile()||before.nlink>1n)throw new AppError('UNSAFE');
@@ -138,7 +140,11 @@ export async function contentBuffer(value){
  if(vault?.id&&(value.workspace.vault!==vault||!vault.key))throw new AppError('ACCESS_LOCKED');
  return result;
 }
-export async function writePublicFile(file,value,{mode=0o600}={}){const handle=await open(file,'wx',mode);try{let size=0;const hash=createHash('sha256');for await(const chunk of contentStream(value)){await diskSpace(path.dirname(file),chunk.length);await writeAll(handle,chunk,size);size+=chunk.length;hash.update(chunk);}if(size!==contentSize(value)||hash.digest('hex')!==contentHash(value))throw new AppError('STALE');await handle.sync();}finally{await handle.close();}}
+export async function writePublicFile(file,value,{mode=0o600}={}){
+ const reservation=await diskCapacity.reserve(path.dirname(file),contentSize(value));let handle;
+ try{handle=await open(file,'wx',mode);let size=0;const hash=createHash('sha256');for await(const chunk of contentStream(value)){await reservation.write(chunk.length,()=>writeAll(handle,chunk,size));size+=chunk.length;hash.update(chunk);}if(size!==contentSize(value)||hash.digest('hex')!==contentHash(value))throw new AppError('STALE');await handle.sync();}
+ finally{try{await handle?.close();}finally{reservation.release();}}
+}
 export async function serveContent(req,res,content,type,{signal}={}){
   const size=contentSize(content);let start=0,end=size-1,status=200;
   res.setHeader('Content-Type',type);res.setHeader('Accept-Ranges','bytes');

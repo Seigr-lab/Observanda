@@ -54,9 +54,10 @@ test('rejected or cancelled prepared writes preserve the original and remove the
  }
 });
 
-test('ZIP64 streaming is readable and CRC-checked by an independent ZIP implementation',async()=>{
+test('ZIP64 streaming is readable and CRC-checked by an independent ZIP implementation',async t=>{
  const {zipStream}=await import('../src/zip-stream.js');const {createWriteStream}=await import('node:fs');const {Readable}=await import('node:stream');const {pipeline}=await import('node:stream/promises');const {execFileSync}=await import('node:child_process');
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-zip-')),ws=new Workspace(root),media=path.join(root,'media'),bytes=randomBytes(2*1024*1024+19);const stored=await writeContent(ws,media,[bytes]);const asset=new FileContent(ws,media,stored.size,stored.sha256),zip=path.join(root,'test.zip');
+ t.after(async()=>{assert.equal(path.dirname(root),path.resolve(os.tmpdir()));assert.ok(path.basename(root).startsWith('observanda-zip-'));await rm(root,{recursive:true,force:true});});
  await pipeline(Readable.from(zipStream(new Map([['empty',''],['unicode-\u00e9.txt','text'],['media/recording.wav',asset]]))),createWriteStream(zip));
- const output=execFileSync('python',['-c',"import sys,zipfile,hashlib; z=zipfile.ZipFile(sys.argv[1]); assert z.testzip() is None; assert len(z.namelist())==3; print(hashlib.sha256(z.read('media/recording.wav')).hexdigest())",zip],{encoding:'utf8'});assert.equal(output.trim(),digest(bytes));
+ const output=execFileSync(process.platform==='win32'?'python':'python3',['-c',"import sys,zipfile,hashlib; z=zipfile.ZipFile(sys.argv[1]); assert z.testzip() is None; assert len(z.namelist())==3; print(hashlib.sha256(z.read('media/recording.wav')).hexdigest())",zip],{encoding:'utf8',windowsHide:true});assert.equal(output.trim(),digest(bytes));
 });
