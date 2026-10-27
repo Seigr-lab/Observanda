@@ -14,6 +14,8 @@ import {Publisher} from './publishing.js';
 import {cloneVault,clearVault} from './encryption.js';
 import {withDatabaseRequest} from './database-request-context.js';
 import {withoutWriterWait} from './writer-wait.js';
+import {withoutCatalogueConnections} from './catalogue-connections.js';
+import {independentDiagnostics} from './operational-diagnostics.js';
 import {AppError} from './errors.js';
 const releasing=new AsyncLocalStorage();
 class AuthorizedJobs extends DurableJobs{
@@ -23,7 +25,7 @@ class AuthorizedJobs extends DurableJobs{
  release(id,token,options){return options?.paused?releasing.run(this,()=>super.release(id,token,options)):super.release(id,token,options);}
 }
 class ProjectWorker extends JobWorker{
- wake(){return withoutWriterWait(()=>withDatabaseRequest(undefined,()=>super.wake()));}
+ wake(){return withoutCatalogueConnections(()=>independentDiagnostics(()=>withoutWriterWait(()=>withDatabaseRequest(undefined,()=>super.wake()))));}
 }
 export class ProjectJobs{
  constructor({publisherOptions=()=>({})}={}){this.publisherOptions=publisherOptions;this.comparisonAccess=new ComparisonJobAccess();this.sessions=new WeakMap();this.entries=new Set();this.stopping=new Set();this.closed=false;}

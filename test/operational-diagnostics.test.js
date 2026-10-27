@@ -3,7 +3,27 @@ import assert from 'node:assert/strict';
 import {mkdtemp,rm,readdir,stat,writeFile,symlink,mkdir} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import {OperationalDiagnostics,diagnosticEvent,withDiagnostics,diagnostic,diagnosticPhase} from '../src/operational-diagnostics.js';
+import {OperationalDiagnostics,diagnosticEvent,withDiagnostics,diagnostic,diagnosticPhase,diagnosticMeasurement,independentDiagnostics} from '../src/operational-diagnostics.js';
+
+test('database timings aggregate once per request without crossing concurrent or completed requests',async()=>{
+ const sink=new OperationalDiagnostics(),a=Promise.withResolvers(),b=Promise.withResolvers();
+ const first=withDiagnostics(sink,async()=>{const end=diagnosticMeasurement('database-query');a.resolve();await b.promise;end();end();diagnostic('request',{route:'records'});});
+ await a.promise;
+ await withDiagnostics(sink,async()=>{for(let i=0;i<3;i++)diagnosticMeasurement('database-connect')();const late=diagnosticMeasurement('database-query');diagnostic('request',{route:'websites'});late();});
+ b.resolve();await first;
+ const {entries}=await sink.snapshot(),web=entries.find(row=>row.route==='websites'),record=entries.find(row=>row.route==='records');
+ assert.equal(entries.length,2);assert.equal(web.databaseConnections,3);assert.equal(web.databaseQueries,undefined);assert.equal(record.databaseQueries,1);assert.equal(record.databaseConnections,undefined);assert.notEqual(web.correlation,record.correlation);assert.ok(record.databaseQueryMs>=0);
+});
+
+test('independent worker diagnostics retain the recorder without inheriting request measurements',async()=>{
+ const sink=new OperationalDiagnostics();
+ await withDiagnostics(sink,async()=>{
+  diagnosticMeasurement('database-connect')();
+  await independentDiagnostics(async()=>{diagnosticMeasurement('database-query')();diagnostic('request',{route:'publication-jobs'});});
+  diagnostic('request',{route:'websites'});
+ });
+ const {entries}=await sink.snapshot();assert.equal(entries.length,2);assert.notEqual(entries[0].correlation,entries[1].correlation);assert.equal(entries[0].databaseQueries,1);assert.equal(entries[0].databaseConnections,undefined);assert.equal(entries[1].databaseConnections,1);assert.equal(entries[1].databaseQueries,undefined);
+});
 
 test('operational diagnostics accept only categorized fields and correlated timings',async()=>{
  const sink=new OperationalDiagnostics(),secret='private-sentinel-password';

@@ -2,6 +2,7 @@
 // whole response as well, and close the connection before releasing its caller.
 import {databaseRequestSignal} from './database-request-context.js';
 import {AppError} from './errors.js';
+import {diagnosticMeasurement} from './operational-diagnostics.js';
 export const DATABASE_STATEMENT_TIMEOUT_MS=30000;
 export const DATABASE_RESPONSE_TIMEOUT_MS=DATABASE_STATEMENT_TIMEOUT_MS+5000;
 
@@ -9,18 +10,19 @@ export const databaseConnectionEnded=client=>client._ending===true||client._ende
 
 export async function databaseQuery(client,sql,values,{signal=databaseRequestSignal()}={}){
  signal?.throwIfAborted();
+ const measured=diagnosticMeasurement('database-query');
  return new Promise((resolve,reject)=>{
   let settled=false,timer;
   const cleanup=()=>{clearTimeout(timer);signal?.removeEventListener('abort',abort);};
-  const finish=(error,value)=>{if(settled)return;settled=true;cleanup();if(error)reject(error);else resolve(value);};
+  const finish=(error,value)=>{if(settled)return;settled=true;cleanup();measured();if(error)reject(error);else resolve(value);};
   const stop=reason=>{
    if(settled)return;settled=true;cleanup();
    // pg.end() alone can close gracefully if an ErrorResponse has cleared
    // activeQuery while ReadyForQuery is lost. Destroy the stream even in that
    // state; never enqueue cleanup behind a missing reply or retry COMMIT.
-   let closing;try{closing=client.end();}catch{reject(reason);return;}
+   let closing;try{closing=client.end();}catch{measured();reject(reason);return;}
    finally{client.connection?.stream?.destroy();}
-   Promise.resolve(closing).catch(()=>{}).then(()=>reject(reason));
+   Promise.resolve(closing).catch(()=>{}).then(()=>{measured();reject(reason);});
   };
   const abort=()=>stop(signal.reason);
   signal?.addEventListener('abort',abort,{once:true});

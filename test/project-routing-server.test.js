@@ -11,6 +11,7 @@ import {projectMaterialReferenceRequest,addressedMaterialReference} from '../src
 import {ResearchMaterials} from '../src/research-materials.js';
 import {ProjectDeletions} from '../src/project-deletion.js';
 import {databaseCapacity} from '../src/postgres.js';
+import {OperationalDiagnostics} from '../src/operational-diagnostics.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm,mkdir,writeFile,readFile} from 'node:fs/promises';
@@ -35,12 +36,12 @@ import {seedModuleCurrent} from './module-current-fixture.js';
 import {ResearchCatalogue} from '../src/research-catalogue.js';
 import {WorkspaceCopyRecovery} from '../src/workspace-copy-recovery.js';
 
-async function fixture(t,{publishingOptions,nested=false}={}){
+async function fixture(t,{publishingOptions,nested=false,diagnostics}={}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-project-http-')),vaults=[],owner=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(owner);let app;
  t.after(async()=>{await app?.close();await owner.close();detach();for(const vault of vaults)clearVault(vault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-project-http-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const book=sampleNotebook(),f=await encryptedFixture(path.join(directory,'workspace'),book);vaults.push(f.vault);const registry=new ProjectRegistry(f.workspace,(await f.workspace.outline()).metadata.id);
  const create=async(name,password='')=>{const book=sampleNotebook(),id=book.projects[0].id,access=await createWorkspaceAccess('',password,f.deviceStore),vault=takeCreatedVault(access);vaults.push(vault);book.title=book.projects[0].title=name;const storage=await initializeProjectLocation(path.join(nested?f.workspace.root:directory,name),id,book,access,vault);await registry.attach(storage,{expected:(await registry.read()).revision});return {id,book,storage,vault};};
- const a=await create('a'),b=await create('b'),locked=await create('locked','A separate project password');app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,publishingOptions});
+ const a=await create('a'),b=await create('b'),locked=await create('locked','A separate project password');app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,publishingOptions,diagnostics});
  const response=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=response.headers.get('set-cookie').split(';')[0];
  const context=(await(await fetch(app.origin+'/api/storage',{headers:{Cookie:cookie}})).json()).contextId;
  const call=(route,data={},headers={},options={})=>fetch(app.origin+route,{signal:options.signal??AbortSignal.timeout(30000),method:'POST',headers:{Origin:app.origin,Cookie:cookie,'Content-Type':'application/json','X-Observanda-Workspace':context,'X-Observanda-Wait':'1',...headers},body:JSON.stringify(data)});
@@ -51,6 +52,19 @@ async function fixture(t,{publishingOptions,nested=false}={}){
 }
 const target=p=>({workspaceId:p.book.id,recordId:p.book.entries[0].id,sectionId:null});
 async function result(response,status=200){assert.equal(response.status,status,await response.clone().text());return response.json();}
+
+test('selected project website reads expose bounded numeric connection measurements and recheck locking',{timeout:180000},async t=>{
+ const diagnostics=new OperationalDiagnostics(),f=await fixture(t,{diagnostics}),measurements=[];
+ for(let attempt=0;attempt<3;attempt++){
+  const response=await f.project(f.a,'websites/editor/open',{websiteId:null,initialView:true}),correlation=response.headers.get('x-observanda-request'),opened=await result(response);
+  assert.equal(opened.workspaceId,f.a.book.id);assert.ok(opened.initialView);const entry=(await diagnostics.snapshot()).entries.find(row=>row.event==='request'&&row.correlation===correlation);
+  assert.ok(entry);assert.ok(entry.databaseConnections>0);assert.ok(entry.databaseQueries>0);if(attempt>0)assert.ok(entry.databaseConnections<=4,'warm selected opening must not reopen every membership check');measurements.push({durationMs:entry.durationMs,connections:entry.databaseConnections,connectMs:entry.databaseConnectMs,admissionMs:entry.databaseAdmissionMs,queries:entry.databaseQueries,queryMs:entry.databaseQueryMs});
+ }
+ t.diagnostic(JSON.stringify({projectWebsiteOpening:measurements}));
+ await result(await f.project(f.a,'access/lock'));
+ await result(await f.project(f.a,'websites/editor/open',{websiteId:null,initialView:true}),401);
+ const sibling=await result(await f.project(f.b,'websites/editor/open',{websiteId:null,initialView:true}));assert.equal(sibling.workspaceId,f.b.book.id);
+});
 
 test('HTTP project authoring, search and history stay independent during a workspace copy',async t=>{
  const f=await fixture(t),beforeB=await f.b.storage.outline(),checkpoint=WorkspaceCopyRecovery.prototype.database;let release,entered;

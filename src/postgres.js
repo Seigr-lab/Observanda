@@ -7,6 +7,7 @@ import {DatabaseAdmission} from './database-admission.js';
 import {checkServerIdentity} from 'node:tls';
 import {retainRuntimeEnvironment} from './database-runtime-environment.js';
 import {operationStage,operationAdvance} from './operation-progress.js';
+import {diagnosticMeasurement} from './operational-diagnostics.js';
 import path from 'node:path';
 import {readFile,open,unlink,realpath} from 'node:fs/promises';
 import {writeCatalogueArchive,readCatalogueArchive,readCatalogueStream} from './postgres-archive.js';
@@ -55,15 +56,19 @@ async function connect(env=process.env,{signal=databaseRequestSignal(),reservati
   const configuration=await databaseConfiguration(env);signal?.throwIfAborted();
   const host=['localhost','127.0.0.1','::1'].includes(configuration.host)?'loopback':configuration.host.toLowerCase();
   const endpoint=createHash('sha256').update(host+'\0'+configuration.port).digest('hex');
-  if(reservation)releaseSlot=reservation.auxiliary();
-  else{ticket=await admission.acquire(endpoint,{signal});releaseSlot=()=>ticket.release();}
+  const admissionMeasured=diagnosticMeasurement('database-admission');
+  try{if(reservation)releaseSlot=reservation.auxiliary();
+  else{ticket=await admission.acquire(endpoint,{signal});releaseSlot=()=>ticket.release();}}
+  finally{admissionMeasured();}
   signal?.throwIfAborted();
   try{client=new Client(configuration);}catch{throw new AppError('DATABASE_CONFIG');}
   connections++;counted=true;client.reservation=ticket;
   const end=client.end.bind(client);client.end=async()=>{try{return await end();}finally{release();}};
   client.on('error',()=>{});
+  const connectionMeasured=diagnosticMeasurement('database-connect');
   try{await client.connect();signal?.throwIfAborted();return client;}
   catch(error){await client.end().catch(()=>{});if(signal?.aborted)throw signal.reason;throw new AppError('DATABASE_UNAVAILABLE');}
+  finally{connectionMeasured();}
  }catch(error){release();throw error;}
 }
 export async function requireDatabase(env){

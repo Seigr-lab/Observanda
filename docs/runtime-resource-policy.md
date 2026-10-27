@@ -4,6 +4,10 @@ Observanda applies admission limits inside each application service. Independent
 projects and lab books keep their own encrypted data and database lifecycles.
 Capacity limits do not combine their catalogues or keys.
 
+Project website reads reuse authenticated connections only within the current request. Every catalogue read starts a new transaction and rechecks membership, access and lifecycle fences. Connections close when accepted request work drains. Background job workers use independent connection and diagnostic contexts, so they cannot borrow a request's credentials or delay its connection cleanup.
+
+Private request diagnostics aggregate database admission, handshake and query counts/timings. They retain numeric totals in one request event, without SQL, parameters, endpoint addresses or owner identifiers. Durations for overlapping work are sums, not exclusive wall-clock phases. These observations distinguish connection setup from query work; they are not latency guarantees or a process-wide CPU attribution model.
+
 ## Foreground work
 
 Ordinary requests share eight active handlers, sixteen waiting slots and 128 MiB

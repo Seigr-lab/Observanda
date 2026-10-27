@@ -110,6 +110,7 @@ export function projectRequest(route,method){
  if(['access/unlock','access/lock','reference'].includes(match[2]))return {projectId:match[1],operation:match[2],write:false,limit:16384};
  return null;
 }
+const reuseRequestConnections=selected=>selected.bookOperation==='research'||!selected.write&&selected.publication?.startsWith('websites/');
 export class ProjectApplication{
  constructor(workspace,{deviceStore,authenticate,publisherOptions,workspaceLocations}={}){
   this.workspace=workspace;this.deviceStore=deviceStore;this.authenticate=authenticate??((root,access,username,password,recovery)=>verifyAccess(access,username,password,{deviceStore,recovery}));
@@ -154,9 +155,9 @@ export class ProjectApplication{
  async run(client,selected,data,options={}){
   try{return await withDatabaseRequest(options.signal,()=>{
    const execute=()=>this.execute(client,selected,data,options);
-   // A book request rechecks native parent membership throughout admission.
-   // Reuse connections for that request, with a new transaction for every read.
-   return selected.bookOperation==='research'&&Buffer.isBuffer(this.workspace.vault?.key)?this.workspace.withCatalogueConnections(execute):execute();
+   // Book and website reads repeatedly recheck native parent membership.
+   // Reuse request connections, never authorization results or transactions.
+   return reuseRequestConnections(selected)&&Buffer.isBuffer(this.workspace.vault?.key)?this.workspace.withCatalogueConnections(execute):execute();
   });}
   catch(error){if(selected.projectId&&['ACCESS_LOCKED','ACCESS_DENIED','ACCESS_WAIT','AUTH','DEVICE_UNKNOWN'].includes(error.code))error.projectId??=selected.projectId;throw error;}
  }
@@ -327,7 +328,7 @@ export class ProjectApplication{
      if(selected.route==='/api/modules/command'&&response.entities)this.calendars.reconcile(session,storage.projectId,response.entities);
      if(selected.route==='/api/workspace/structure'&&data.change?.kind==='project')await registry.refreshSummary(storage.projectId,(await storage.outline()).metadata);
      return response;
-     };return selected.bookOperation==='research'?storage.withCatalogueConnections(execute):execute();
+     };return reuseRequestConnections(selected)?storage.withCatalogueConnections(execute):execute();
     },{action:selected.write&&!['storage/move/resume','storage/move/cancel'].includes(selected.operation)?'write':'read',locationOnly:selected.bookOperation==='list'||['storage/details','storage/move/status','storage/move/resume','storage/move/cancel'].includes(selected.operation)});
     await assertCurrent();return result;
    }finally{setCheck(check);await owner.close();}

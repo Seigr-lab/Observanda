@@ -9,7 +9,8 @@ const current=new AsyncLocalStorage();
 const events=new Set(['service-start','service-ready','service-stop','service-failed','service-exit','service-output','request','worker-claim','worker-release','worker-idle','resource','phase','dropped']);
 const phases=new Set(['startup','shutdown','request','waiting-writer','database-inventory','activate','claim','release','idle','probe-media','convert-media']);
 const routes=new Set(['access','health','intake','media','projects','publication-jobs','records','research','storage','notebook','websites','website-editor']);
-const counters=new Set(['durationMs','queued','active','pendingRequests','activeRequests','queuedRequests','activeWrites','queuedWriters','requestBytes','rssBytes','heapBytes','externalBytes','cpuUserUs','cpuSystemUs','bytes','attempt','delayMs','dropped','exitCode','status']);
+const measures=Object.freeze({'database-admission':['databaseAdmissions','databaseAdmissionMs'],'database-connect':['databaseConnections','databaseConnectMs'],'database-query':['databaseQueries','databaseQueryMs']});
+const counters=new Set(['durationMs','queued','active','pendingRequests','activeRequests','queuedRequests','activeWrites','queuedWriters','requestBytes','rssBytes','heapBytes','externalBytes','cpuUserUs','cpuSystemUs','bytes','attempt','delayMs','dropped','exitCode','status',...Object.values(measures).flat()]);
 const systemCodes=new Set(['EACCES','EPERM','ENOSPC','ENOENT','EIO','EMFILE','ENFILE','ECONNRESET','ECONNREFUSED','ETIMEDOUT','ABORT_ERR']);
 const codeOf=error=>{let code;try{code=error?.code;}catch{}return typeof code==='string'&&(Object.hasOwn(errors,code)||systemCodes.has(code))?code:'IO';};
 const correlation=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
@@ -92,8 +93,18 @@ export class OperationalDiagnostics{
  async close(){this.closed=true;await this.flush();}
 }
 
-export function withDiagnostics(recorder,operation){const correlation=randomUUID();return current.run({recorder,correlation},()=>operation(correlation));}
-export function diagnostic(event,data={}){const scope=current.getStore();scope?.recorder?.record(event,{...data,correlation:scope.correlation});}
+export function withDiagnostics(recorder,operation){const correlation=randomUUID();return current.run({recorder,correlation,measurements:{},finished:false},()=>operation(correlation));}
+export function independentDiagnostics(operation){const recorder=current.getStore()?.recorder;return recorder?withDiagnostics(recorder,operation):current.exit(operation);}
+export function diagnostic(event,data={}){const scope=current.getStore();if(!scope?.recorder)return;scope.recorder.record(event,{...data,...(event==='request'?scope.measurements:{}),correlation:scope.correlation});if(event==='request')scope.finished=true;}
+const noMeasurement=()=>{};
+// Aggregate numeric timings in the current request, not one log row per SQL
+// statement. Never retain SQL, parameters, connection addresses or owner IDs.
+// Concurrent elapsed times are sums and are not exclusive wall-clock phases.
+export function diagnosticMeasurement(kind){
+ const scope=current.getStore(),keys=measures[kind];if(!scope?.recorder||scope.finished||!keys)return noMeasurement;
+ const start=performance.now();let ended=false;
+ return ()=>{if(ended)return;ended=true;if(scope.finished)return;const [count,duration]=keys;scope.measurements[count]=(scope.measurements[count]??0)+1;scope.measurements[duration]=(scope.measurements[duration]??0)+performance.now()-start;};
+}
 export async function diagnosticPhase(phase,operation){
  if(!current.getStore()?.recorder)return operation();
  const start=performance.now();let error;

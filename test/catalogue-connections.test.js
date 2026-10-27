@@ -4,12 +4,23 @@ import {randomUUID} from 'node:crypto';
 import path from 'node:path';
 import {writeFile,unlink} from 'node:fs/promises';
 import {intakeFixture} from './fixtures/local-intake.js';
-import {catalogueConnection,createCatalogueConnections} from '../src/catalogue-connections.js';
+import {catalogueConnection,createCatalogueConnections,withoutCatalogueConnections} from '../src/catalogue-connections.js';
 import {DELETE_MARKER} from '../src/workspace-delete-state.js';
 import {MOVE_SOURCE} from '../src/workspace-move-state.js';
 import {RENAME_MARKER} from '../src/workspace-rename-state.js';
 
 const gate=()=>Promise.withResolvers();
+test('background work cannot borrow a request catalogue connection',{timeout:60000},async t=>{
+ const {ws}=await intakeFixture(t),open=ws.openCatalogue.bind(ws);let opened=0,closed=0;
+ ws.openCatalogue=async options=>{const db=await open(options),close=db.close.bind(db);opened++;db.close=async()=>{try{return await close();}finally{closed++;}};return db;};
+ const read=()=>ws.catalogue(store=>store.snapshot());
+ await ws.withCatalogueConnections(async()=>{
+  const snapshot=await read();assert.equal(opened,1);assert.equal(closed,0);
+  assert.deepEqual((await withoutCatalogueConnections(read)).metadata,snapshot.metadata);assert.equal(opened,2);assert.equal(closed,1);
+  assert.deepEqual((await read()).metadata,snapshot.metadata);assert.equal(opened,2);assert.equal(closed,1);
+ });
+ assert.equal(opened,closed);
+});
 test('scoped catalogue connections retain transaction isolation, rollback and owner fences',{timeout:60000},async t=>{
  const {ws}=await intakeFixture(t),open=ws.openCatalogue.bind(ws);let opened=0,closed=0;
  ws.openCatalogue=async options=>{const db=await open(options),close=db.close.bind(db);opened++;db.close=async()=>{try{return await close();}finally{closed++;}};return db;};

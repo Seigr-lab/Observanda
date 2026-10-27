@@ -40,6 +40,7 @@ function connectionOwner(workspace,{lateIndependent=false}={}){
  };
 }
 export function createCatalogueConnections(workspace){return connectionOwner(workspace);}
+export function withoutCatalogueConnections(operation){return scopes.exit(operation);}
 export async function withCatalogueConnections(workspace,operation){
  const prior=scopes.getStore()?.get(workspace);
  if(prior&&!prior.closed){validate(prior,workspace);return operation();}
