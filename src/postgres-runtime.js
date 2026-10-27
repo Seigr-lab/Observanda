@@ -19,16 +19,22 @@ import {AppError} from './errors.js';
 import {compatibleManagedRuntime} from './postgres-runtime-compatibility.js';
 import {seal,unseal} from './encryption.js';
 import {workspaceDatabaseLease} from './workspace-database-lease.js';
+import {nativeResources,databaseMemoryReservation} from './native-resource-budget.js';
 
 const windows=process.platform==='win32',suffix=windows?'.exe':'';
 export const windowsRuntime=Object.freeze({version:'17.11',url:'https://sbp.enterprisedb.com/getfile.jsp?fileid=1260569',bytes:379726839,sha256:'b9424ee7bc60b52450ff910a3630225df32e633f3cb29c1d126d9299d59aea28'});
 const executable=(bin,name)=>path.join(bin,name+suffix);
-export function runtimeCommand(command,args,{signal,inherit=false,env=process.env}={}){
+export function runtimeCommand(command,args,{signal,inherit=false,env=process.env,waitForPipes=true}={}){
  return new Promise((resolve,reject)=>{
   const child=spawn(command,args,{windowsHide:true,shell:false,stdio:inherit?'inherit':['ignore','pipe','pipe'],signal,env});let output='',failed=false;
   child.stdout?.on('data',c=>{if(output.length<8192)output+=c.toString();});child.stderr?.resume();
-  child.once('error',()=>{failed=true;reject(new AppError(signal?.aborted?'DATABASE_CANCELLED':'DATABASE_INSTALL'));});
-  child.once('exit',code=>{child.stdout?.destroy();child.stderr?.destroy();code===0&&!failed?resolve(output.trim()):reject(new AppError(signal?.aborted?'DATABASE_CANCELLED':'DATABASE_INSTALL'));});
+  child.once('error',()=>{failed=true;});
+  // Abort emits an error before a child necessarily exits. Ordinary helpers
+  // also drain their pipes. pg_ctl start deliberately leaves a managed server
+  // running; inherited Windows pipe handles must not make startup await stop.
+  const finish=code=>{code===0&&!failed?resolve(output.trim()):reject(new AppError(signal?.aborted?'DATABASE_CANCELLED':'DATABASE_INSTALL'));};
+  if(!waitForPipes)child.once('exit',code=>{child.stdout?.destroy();child.stderr?.destroy();finish(code);});
+  child.once('close',finish);
  });
 }
 async function version(bin){
@@ -140,7 +146,7 @@ export function stopManagedPostgres(options){
  if(!options?.workspace||!/^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/.test(options.workspace.deleteId??options.workspace.renameId??options.workspace.moveId??''))throw new AppError('STORAGE_DELETE_STATE');
  return managePostgres({...options,stopOnly:true});
 }
-async function managePostgres({directory,env=process.env,signal,onProgress=()=>{},workspace=null,runtimeDirectory=null,stopOnly=false,existingOnly=false}){
+async function managePostgres({directory,env=process.env,signal,onProgress=()=>{},workspace=null,runtimeDirectory=null,stopOnly=false,existingOnly=false,budget=nativeResources}){
  if(env.OBSERVANDA_DATABASE_URL){if(stopOnly)throw new AppError('DATABASE_LOCATION');return {managed:false,close:async()=>{}};}
  if(process.getuid?.()===0)throw new AppError('DATABASE_TOOLS');
  const sharedBuffers=stopOnly?64:managedSharedBuffers(env);
@@ -157,10 +163,12 @@ async function managePostgres({directory,env=process.env,signal,onProgress=()=>{
  const stateFile=path.join(directory,'service.observanda'),data=path.join(directory,'data'),portableKey=workspace?Buffer.from(workspace.vault.key):null;
  const aad=workspace?'Observanda/workspace-postgresql/v1/'+workspace.vault.id:null;
  const protector=workspace?{protect:bytes=>seal(bytes,portableKey,aad),unprotect:bytes=>unseal(bytes,portableKey,aad)}:windows?new WindowsProtector():null;
- let config,verifiedCluster=false,freshCluster=false;
+ let config,verifiedCluster=false,freshCluster=false,reservation,mayBeRunning=false;
+ const releaseCapacity=()=>{if(mayBeRunning)reservation?.uncertainExit();else{reservation?.release();if(verifiedCluster)budget.stopped(directory);}};
  const save=async()=>{const bytes=Buffer.from(JSON.stringify(config));try{await atomicWrite(stateFile,protector?await protector.protect(bytes):bytes);}finally{bytes.fill(0);}};
  const ctl=(args,options={})=>runtimeCommand(executable(config.bin,'pg_ctl'),['-D',data,...args],options);
  try{
+  if(!stopOnly){reservation=budget.reserve('database',databaseMemoryReservation(sharedBuffers),{key:directory});mayBeRunning=reservation.uncertain;}
   if(workspace){
    const {assertNotDeleting,workspaceDeletion}=await import('./workspace-delete-state.js');await assertNotDeleting(workspace.root,stopOnly?workspace.deleteId:undefined);
    if(!stopOnly){const {assertNotMoving}=await import('./workspace-move-state.js');await assertNotMoving(workspace.root);}
@@ -204,10 +212,11 @@ async function managePostgres({directory,env=process.env,signal,onProgress=()=>{
   }
   if((await readFile(path.join(data,'PG_VERSION'),'utf8')).trim()!==String(config.major))throw new AppError('DATABASE_RUNTIME');
   verifiedCluster=true;
+  mayBeRunning=!!await assertRegular(path.join(data,'postmaster.pid'),{missing:true});
   let running=false;try{await ctl(['status']);running=true;}catch{}
-  if(running)await ctl(['-m','fast','-w','-t','60','stop']);
+  if(running){await ctl(['-m','fast','-w','-t','60','stop']);mayBeRunning=false;}
   if(stopOnly){
-   config.running=false;await save();let closing;
+   if(mayBeRunning)throw new AppError('DATABASE_RUNNING');budget.stopped(directory);config.running=false;await save();let closing;
    return {managed:true,stopped:true,major:config.major,bin:config.bin,close:()=>closing??=(async()=>{portableKey?.fill(0);await lease.close();})()};
   }
   config.port=await freePort();if(workspace){config.ownerId=workspace.ownerId;config.running=true;config.activeDirectory=directory;}await save();
@@ -215,7 +224,8 @@ async function managePostgres({directory,env=process.env,signal,onProgress=()=>{
   // Foreground app owns lifecycle; recovery after app termination stops only this cluster.
   // WAL recovery on network storage can exceed a minute. Wait for readiness
   // before treating a healthy recovering server as a failed startup.
-  await ctl(['-l',path.join(directory,'postgresql.log'),'-o','-h 127.0.0.1 -p '+config.port+' -c max_connections=32 -c shared_buffers='+sharedBuffers+'MB -c unix_socket_directories= -c password_encryption=scram-sha-256 -c log_statement=none','-w','-t','900','start'],{signal});
+  mayBeRunning=true;
+  await ctl(['-l',path.join(directory,'postgresql.log'),'-o','-h 127.0.0.1 -p '+config.port+' -c max_connections=32 -c shared_buffers='+sharedBuffers+'MB -c work_mem=4MB -c temp_buffers=8MB -c max_parallel_workers=2 -c max_parallel_workers_per_gather=1 -c unix_socket_directories= -c password_encryption=scram-sha-256 -c log_statement=none','-w','-t','900','start'],{signal,waitForPipes:false});
   const admin=new Client({host:'127.0.0.1',port:config.port,user:'observanda_admin',password:config.adminPassword,database:'template1',connectionTimeoutMillis:5000});admin.on('error',()=>{});
   try{
    await admin.connect();
@@ -224,12 +234,14 @@ async function managePostgres({directory,env=process.env,signal,onProgress=()=>{
   await verifyManagedApplication(config,{signal});
   if(config.phase==='initializing'){config.phase='ready';await save();}
   signal?.throwIfAborted();
+  reservation?.confirmed();
   env.OBSERVANDA_DATABASE_URL='postgresql://observanda:'+config.appPassword+'@127.0.0.1:'+config.port+'/observanda';
   let closing;
-  return {managed:true,major:config.major,bin:config.bin,close:()=>closing??=(async()=>{try{await ctl(['-m','fast','-w','-t','60','stop']);if(workspace){config.running=false;await save();}}finally{portableKey?.fill(0);delete env.OBSERVANDA_DATABASE_URL;await lease.close();}})()};
+  return {managed:true,major:config.major,bin:config.bin,close:()=>closing??=(async()=>{try{await ctl(['-m','fast','-w','-t','60','stop']);mayBeRunning=false;if(workspace){config.running=false;await save();}}finally{releaseCapacity();portableKey?.fill(0);delete env.OBSERVANDA_DATABASE_URL;await lease.close();}})()};
  }catch(error){
   // pg_ctl can finish starting just as cancellation arrives: stop the owned cluster too.
-  if(verifiedCluster)await ctl(['-m','fast','-w','-t','60','stop']).then(async()=>{if(workspace){config.running=false;await save();}}).catch(()=>{});
+  if(verifiedCluster)await ctl(['-m','fast','-w','-t','60','stop']).then(async()=>{mayBeRunning=false;if(workspace){config.running=false;await save();}}).catch(async()=>{try{if(!await assertRegular(path.join(data,'postmaster.pid'),{missing:true}))mayBeRunning=false;}catch{/* An unreachable volume cannot prove process exit. */}});
+  releaseCapacity();
   portableKey?.fill(0);
   await lease.close();
   if(error instanceof AppError)throw error;

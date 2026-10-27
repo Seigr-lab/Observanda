@@ -1,5 +1,6 @@
 import {registerRuntimeEnvironment} from './database-runtime-environment.js';
 import {AppError} from './errors.js';
+import {nativeResources} from './native-resource-budget.js';
 
 // References own running work. Only idle project services are cache entries;
 // eviction never borrows a workspace writer or stops a sibling's connection.
@@ -7,6 +8,7 @@ export class ProjectRuntimePool{
  constructor({close,idleMs=60000,maxIdle=2}){
   if(typeof close!=='function'||!Number.isSafeInteger(idleMs)||idleMs<0||!Number.isSafeInteger(maxIdle)||maxIdle<0)throw new AppError('INVALID');
   this.stop=close;this.idleMs=idleMs;this.maxIdle=maxIdle;this.entries=new Map();this.stopping=false;this.clock=0;
+  this.removePressure=nativeResources.onPressure(()=>{for(const entry of this.entries.values())if(!entry.users&&!entry.manual&&!entry.closing)void this.close(entry.root,{idle:true}).catch(()=>{});});
  }
  async acquire(root,open,{manual=false}={}){
   for(;;){
@@ -50,5 +52,5 @@ export class ProjectRuntimePool{
   })();return entry.closing;
  }
  stats(){const entries=[...this.entries.values()];return {open:entries.length,active:entries.filter(e=>e.users>0).length,references:entries.reduce((sum,e)=>sum+e.users,0),idle:entries.filter(e=>e.env&&!e.users&&!e.closing&&!e.manual).length,closing:entries.filter(e=>e.closing).length};}
- async closeAll(){this.stopping=true;const results=await Promise.allSettled([...this.entries.keys()].map(root=>this.close(root)));const failed=results.find(result=>result.status==='rejected');if(failed)throw failed.reason;}
+ async closeAll(){this.stopping=true;this.removePressure();const results=await Promise.allSettled([...this.entries.keys()].map(root=>this.close(root)));const failed=results.find(result=>result.status==='rejected');if(failed)throw failed.reason;}
 }

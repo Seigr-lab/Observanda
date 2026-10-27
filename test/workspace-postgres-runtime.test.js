@@ -9,6 +9,7 @@ import {startManagedPostgres,stopManagedPostgres} from '../src/postgres-runtime.
 import {WorkspacePostgres} from '../src/workspace-postgres.js';
 import {workspaceDatabaseLease} from '../src/workspace-database-lease.js';
 import {seal,unseal,clearVault} from '../src/encryption.js';
+import {NativeResourceBudget,databaseMemoryReservation,nativeResources} from '../src/native-resource-budget.js';
 
 const environment=()=>{const env={...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN??''};delete env.OBSERVANDA_DATABASE_URL;return env;};
 async function query(env,sql){const client=new Client({connectionString:env.OBSERVANDA_DATABASE_URL});await client.connect();try{return (await client.query(sql)).rows;}finally{await client.end();}}
@@ -16,9 +17,21 @@ async function fixture(t){
  const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-workspace-database-')),active=new Set(),vaults=[];
  t.after(async()=>{for(const service of active)await service.close();for(const vault of vaults)clearVault(vault);await rm(parent,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  async function create(name){const root=path.join(parent,name),vault={id:randomUUID(),key:randomBytes(32)},ownerId=randomUUID();vaults.push(vault);await mkdir(path.join(root,'.observanda'),{recursive:true});return {root,vault,ownerId};}
- async function start(workspace){const env=environment(),service=await startManagedPostgres({directory:path.join(workspace.root,'.observanda','postgresql'),env,workspace});active.add(service);return {env,close:async()=>{await service.close();active.delete(service);}};}
+ async function start(workspace,options={}){const env=environment(),service=await startManagedPostgres({directory:path.join(workspace.root,'.observanda','postgresql'),env,workspace,...options});active.add(service);return {env,close:async()=>{await service.close();active.delete(service);}};}
  return {parent,create,start};
 }
+
+test('real independent clusters respect shared admission and release capacity after confirmed shutdown',async t=>{
+ const f=await fixture(t),a=await f.create('first'),b=await f.create('second'),bytes=databaseMemoryReservation(64),budget=new NativeResourceBudget({runtimeLimit:1,memoryBytes:bytes*2,reserveBytes:1,available:()=>bytes*4});
+ const first=await f.start(a,{budget});assert.equal(budget.stats().managedRuntimes,1);
+ await query(first.env,'CREATE TABLE retained(value integer)');await query(first.env,'INSERT INTO retained VALUES (23)');
+ await assert.rejects(f.start(b,{budget}),{code:'WORKLOAD_BUSY'});
+ await assert.rejects(readFile(path.join(b.root,'.observanda/postgresql/data/PG_VERSION')),{code:'ENOENT'});
+ assert.deepEqual(await query(first.env,'SELECT value FROM retained'),[{value:23}]);
+ await first.close();assert.equal(budget.stats().reservedBytes,0);
+ const second=await f.start(b,{budget});await second.close();const reopened=await f.start(a,{budget});
+ assert.deepEqual(await query(reopened.env,'SELECT value FROM retained'),[{value:23}]);await reopened.close();assert.equal(budget.stats().managedRuntimes,0);
+});
 
 test('workspace databases own separate files, credentials and lifecycle',async t=>{
  const f=await fixture(t),a=await f.create('a'),b=await f.create('b'),first=await f.start(a),second=await f.start(b);
@@ -68,7 +81,9 @@ test('workspace ownership is a filesystem lease released after closing its owner
 
 test('cancelled workspace database initialization resumes with its workspace key',async t=>{
  const f=await fixture(t),workspace=await f.create('interrupted'),controller=new AbortController();
+ const before=nativeResources.stats().reservedBytes;
  await assert.rejects(startManagedPostgres({directory:path.join(workspace.root,'.observanda','postgresql'),env:environment(),workspace,signal:controller.signal,onProgress:p=>{if(p.stage==='initialize')controller.abort();}}),{code:'DATABASE_CANCELLED'});
+ assert.equal(nativeResources.stats().reservedBytes,before);
  const resumed=await f.start(workspace);assert.equal((await query(resumed.env,'SELECT 1 AS intact'))[0].intact,1);
 });
 

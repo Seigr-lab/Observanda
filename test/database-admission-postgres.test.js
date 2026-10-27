@@ -110,11 +110,12 @@ test('external process saturation refuses safely and recovers without leaked cat
  t.after(async()=>{await db?.close();if(child.exitCode===null&&child.signalCode===null){child.kill('SIGKILL');await exited;}});
  const ready=receive('full');child.send({action:'fill',url:process.env.OBSERVANDA_DATABASE_URL,maximum:settings.maximum});const full=await ready;
  assert.equal(full.code,'53300');assert.equal(full.count,settings.maximum-settings.reserved-(settings.extra??0));
- await assert.rejects(scratchDatabase(),{code:'DATABASE_UNAVAILABLE'});assert.deepEqual(databaseCapacity(),{active:0,limit:12,owners:0,admitted:0,queued:0});
+ const capacity={active:0,limit:12,globalLimit:24,queueLimit:128,connectionLimit:48,owners:0,admitted:0,queued:0};
+ await assert.rejects(scratchDatabase(),{code:'DATABASE_UNAVAILABLE'});assert.deepEqual(databaseCapacity(),capacity);
  const released=receive('released');child.send({action:'release'});assert.equal((await released).count,full.count-1);
  db=await scratchDatabase();assert.equal((await db.get('SELECT 37 AS value')).value,37);assert.equal(databaseCapacity().active,1);
  await db.close();db=null;
  const closed=receive('closed');child.send({action:'close'});await closed;assert.equal(await exited,0);
- assert.deepEqual(databaseCapacity(),{active:0,limit:12,owners:0,admitted:0,queued:0});
+ assert.deepEqual(databaseCapacity(),capacity);
  t.diagnostic(JSON.stringify({serverSlots:settings.maximum,ordinarySlots:full.count,refusal:'53300',recovered:true}));
 });

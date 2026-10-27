@@ -1,6 +1,7 @@
 import {RequestAdmission,requestLane} from './request-admission.js';
 import {jsonBody} from './request-body.js';
 import {nativeMediaAdmission} from './native-media-admission.js';
+import {nativeResources} from './native-resource-budget.js';
 import {websiteThemeRequest} from './website-theme-requests.js';
 import {PublicationEditionSelections} from './publication-edition-selections.js';
 import {workspaceEncryptedCopyAccess} from './workspace-encrypted-copy.js';
@@ -398,12 +399,12 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       const client=sessions.get(cookie);if(!client)throw new AppError('AUTH');
       if(req.method==='GET'&&url.pathname==='/api/health'){
        const health=await serviceHealth({root:context.root,locked:context.manualLock||client.expires<=Date.now()||context.protectedOnce&&(!client.access||!context.vault.key),closing:shuttingDown,provider:databaseProvider()});
-       return json({...health,capacity:databaseCapacity(),requests:requestAdmission.stats()},health.ready?200:503);
+       return json({...health,capacity:databaseCapacity(),requests:requestAdmission.stats(),nativeResources:nativeResources.stats()},health.ready?200:503);
       }
       if(req.method==='GET'&&url.pathname==='/api/diagnostics'){
        if((await status(client)).locked)throw new AppError('ACCESS_LOCKED');
        const workers=[...(context.jobs?[context.jobs.worker]:[]),...[...(context.projects?.jobs.entries??[])].map(entry=>entry.worker)].map(worker=>worker.status());
-       return json({...await diagnostics.snapshot(),workers,requests:requestAdmission.stats(),writers:writerCapacity(),nativeMedia:nativeMediaAdmission.stats()});
+       return json({...await diagnostics.snapshot(),workers,requests:requestAdmission.stats(),writers:writerCapacity(),nativeMedia:nativeMediaAdmission.stats(),nativeResources:nativeResources.stats()});
       }
       const selectedContext=context;
       const snapshotRead=workspaceSnapshotRequest(req.method,url.pathname);

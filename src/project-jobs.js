@@ -50,19 +50,19 @@ export class ProjectJobs{
    let grant;
    try{grant=retain?await retain():null;await (grant?.check??check)();}
    catch(error){grant?.close();clearVault(owned.vault);throw error;}
-   entry={storage:owned,projectId,grant,routePrefix:'/api/projects/'+projectId+(book?'/lab-books/'+storage.labBookId:''),etag,expires:Date.now()+8*60*60*1000,closed:false};
+   entry={storage:owned,projectId,grant,routePrefix:'/api/projects/'+projectId+(book?'/lab-books/'+storage.labBookId:''),etag,lastUsed:Date.now(),expires:Date.now()+8*60*60*1000,closed:false};
    try{
    const current=()=>entry.queue;entry.sourceAccess=new PublicationSourceAccess();entry.comparisonAccess=this.comparisonAccess;
    entry.publisher=new Publisher(owned.root,{...this.publisherOptions(owned),workspace:owned},owned.vault);
    entry.queue=new AuthorizedJobs(owned,workspaceJobDefinitions(owned,entry.publisher,current,{sourceAccess:entry.sourceAccess,comparisonAccess:this.comparisonAccess}),async()=>{
     try{if(entry.closed||entry.expires<=Date.now())throw new AppError('ACCESS_LOCKED');await (entry.grant?.check??check)();}catch(error){if(['ACCESS_LOCKED','WORKSPACE_CHANGED','NOT_FOUND','STORAGE_DELETING','STORAGE_MOVING'].includes(error.code))void this.stop(entry).catch(()=>{});throw error;}
    });
-   entry.pdfs=new PdfExportService(owned,{check:()=>entry.queue.check()});entry.worker=new ProjectWorker(entry.queue);entry.publications=new ProjectPublications(entry);owners.set(key,entry);this.entries.add(entry);
+   entry.pdfs=new PdfExportService(owned,{check:()=>entry.queue.check()});entry.worker=new ProjectWorker(entry.queue,{inactive:()=>Date.now()-entry.lastUsed>=60000});entry.publications=new ProjectPublications(entry);owners.set(key,entry);this.entries.add(entry);
    }catch(error){grant?.close();clearVault(owned.vault);throw error;}
   }
-  entry.expires=Date.now()+8*60*60*1000;
+  const wasInactive=Date.now()-entry.lastUsed>=60000;entry.lastUsed=Date.now();entry.expires=entry.lastUsed+8*60*60*1000;
   // A request's abort signal, writer queue and response activity do not belong
   // to a durable worker that outlives that request.
-  withoutWriterWait(()=>withDatabaseRequest(undefined,()=>entry.worker.start()));return entry;
+  withoutWriterWait(()=>withDatabaseRequest(undefined,()=>{entry.worker.start();if(wasInactive)entry.worker.wake();}));return entry;
  }
 }

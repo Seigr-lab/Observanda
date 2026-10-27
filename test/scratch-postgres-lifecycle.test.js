@@ -10,6 +10,7 @@ import {Client} from 'pg';
 import {WorkspaceDatabases} from '../src/workspace-databases.js';
 import {startScratchPostgres} from '../src/scratch-postgres.js';
 import {installDatabaseProvider,databaseProvider} from '../src/workspace-database-context.js';
+import {nativeResources} from '../src/native-resource-budget.js';
 
 const environment=()=>{const env={...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN};delete env.OBSERVANDA_DATABASE_URL;return env;};
 async function query(env,sql){const client=new Client({connectionString:env.OBSERVANDA_DATABASE_URL,connectionTimeoutMillis:1000});client.on('error',()=>{});await client.connect();try{return (await client.query(sql)).rows;}finally{await client.end();}}
@@ -18,13 +19,16 @@ const absent=async file=>{try{await access(file);return false;}catch(error){if(e
 async function directory(t){const parent=await realpath(os.tmpdir()),root=await mkdtemp(path.join(parent,'observanda-query-lifecycle-'));t.after(async()=>{assert.equal(path.dirname(root),parent);assert.ok(path.basename(root).startsWith('observanda-query-lifecycle-'));await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});return root;}
 
 test('temporary database closes with its guardian and isolates a concurrent owner',{timeout:120000},async t=>{
+ const before=nativeResources.stats().managedRuntimes;
  const runtimeDirectory=await directory(t),env=environment(),a=await startScratchPostgres({runtimeDirectory,env}),b=await startScratchPostgres({runtimeDirectory,env});
  t.after(()=>Promise.allSettled([a.service.close(),b.service.close()]));
  assert.notEqual(a.root,b.root);assert.notEqual(a.env.OBSERVANDA_DATABASE_URL,b.env.OBSERVANDA_DATABASE_URL);assert.equal(env.OBSERVANDA_DATABASE_URL,undefined);
+ assert.equal(nativeResources.stats().managedRuntimes,before+2);
  await query(a.env,'CREATE TABLE transient(value integer)');await query(a.env,'INSERT INTO transient VALUES (37)');
  assert.deepEqual(await query(b.env,"SELECT to_regclass('public.transient') AS found"),[{found:null}]);
  await Promise.all([a.service.close(),a.service.close()]);assert.equal(await absent(a.root),true);assert.equal(a.env.OBSERVANDA_DATABASE_URL,undefined);
  assert.deepEqual(await query(b.env,'SELECT 42 AS retained'),[{retained:42}]);await b.service.close();assert.equal(await absent(b.root),true);
+ assert.equal(nativeResources.stats().managedRuntimes,before);
 });
 
 test('force terminating the application stops its temporary PostgreSQL without another app launch',{timeout:120000},async t=>{

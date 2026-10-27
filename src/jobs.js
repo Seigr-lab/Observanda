@@ -141,17 +141,19 @@ export class DurableJobs{
  }
 }
 export class JobWorker{
- constructor(queue,{pollMs=1000,maxIdlePollMs=30000,maxErrorPollMs=60000,random=Math.random,observe=diagnostic}={}){
-  if(![pollMs,maxIdlePollMs,maxErrorPollMs].every(value=>Number.isSafeInteger(value)&&value>0)||maxIdlePollMs<pollMs||maxErrorPollMs<pollMs||typeof random!=='function'||typeof observe!=='function')throw new AppError('INVALID');
+ constructor(queue,{pollMs=1000,maxIdlePollMs=30000,maxErrorPollMs=60000,maxSuspendedPollMs=300000,inactive=()=>false,random=Math.random,observe=diagnostic}={}){
+  if(![pollMs,maxIdlePollMs,maxErrorPollMs,maxSuspendedPollMs].every(value=>Number.isSafeInteger(value)&&value>0)||maxIdlePollMs<pollMs||maxErrorPollMs<pollMs||maxSuspendedPollMs<maxIdlePollMs||typeof inactive!=='function'||typeof random!=='function'||typeof observe!=='function')throw new AppError('INVALID');
   this.queue=queue;this.pollMs=pollMs;this.maxIdlePollMs=maxIdlePollMs;this.maxErrorPollMs=maxErrorPollMs;this.random=random;this.observe=observe;this.enabled=false;this.active=null;this.running=null;this.timer=null;this.controller=null;this.emptyClaims=0;this.claimFailures=0;this.wakePending=false;this.nextPollMs=0;
+  this.maxSuspendedPollMs=maxSuspendedPollMs;this.inactive=inactive;
  }
  start(){if(this.enabled)return;this.enabled=true;this.wake();}
  wake(){if(!this.enabled)return;this.emptyClaims=0;if(this.running){this.wakePending=true;return;}if(this.claimFailures&&this.timer)return;clearTimeout(this.timer);this.timer=setTimeout(()=>this.tick(),0);this.timer.unref();}
  report(event,data){try{this.observe(event,data);}catch{/* Diagnostic observers cannot strand a durable job. */}}
- status(){return {enabled:this.enabled,active:!!this.active,failures:this.claimFailures,idleClaims:this.emptyClaims,nextPollMs:this.nextPollMs};}
+ status(){return {enabled:this.enabled,active:!!this.active,suspended:this.enabled&&!this.active&&!this.claimFailures&&this.emptyClaims>0&&this.inactive(),failures:this.claimFailures,idleClaims:this.emptyClaims,nextPollMs:this.nextPollMs};}
  pollDelay(){
   const failures=this.claimFailures,attempt=failures||this.emptyClaims;
   if(!attempt)return 0;
+  if(!failures&&this.inactive())return Math.max(this.maxIdlePollMs,Math.round(this.maxSuspendedPollMs*(0.8+0.2*Math.max(0,Math.min(1,this.random())))));
   const maximum=failures?this.maxErrorPollMs:this.maxIdlePollMs,base=Math.min(maximum,this.pollMs*2**Math.min(16,attempt-1));
   return Math.min(maximum,Math.max(this.pollMs,Math.round(base*(0.8+0.4*Math.max(0,Math.min(1,this.random()))))));
  }
