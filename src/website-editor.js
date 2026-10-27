@@ -8,8 +8,9 @@ import {WEBSITE_DOCUMENT_FIELDS,siteProjectIds} from './web/website-sites-model.
 import {SnapshotIndex} from './snapshot-index.js';
 import {ProjectSourceAuthority} from './project-source-authority.js';
 import {researchId} from './web/research-reference.js';
-const reads=new Set(['open','window','item','sources','template-review']);
-const mutations=new Set(['change','undo','redo','discard','save']);
+import {websiteEditorReads,websiteEditorMutations} from './website-editor-policy.js';
+const reads=new Set(websiteEditorReads);
+const mutations=new Set(websiteEditorMutations);
 export class WebsiteEditor{
  constructor(workspace,{sourceReader}={}){this.workspace=workspace;this.sourceReader=sourceReader;this.sites=new WebsiteSites(workspace);}
  async response(store,result,{signal}={}){
@@ -39,6 +40,12 @@ export class WebsiteEditor{
     const current=await editor.open(websiteId,{signal});await new ProjectSourceAuthority(store).writable(current.site.projectId);
    }
    const result=await editor[operation==='save'?'commit':operation==='template-review'?'templateReview':operation](websiteId,{...options,signal});
+   if(operation==='open'&&options.initialView===true){
+    const selected={websitePin:result.websitePin,...(result.draft?{draftId:result.draft.id,draftRevision:result.draft.revision}:{}),signal};
+    const pages=await editor.window(websiteId,{...selected,collection:'pages',limit:25}),context=await editor.context(websiteId,selected),overrides={};
+    for(const collection of ['branding','layouts'])overrides[collection]=await editor.sourceItem(context,collection,'home',{signal});
+    result.initialView={pages,overrides};
+   }
    signal?.throwIfAborted();return this.response(store,result,{signal});
   };
   if(operation==='change'&&Array.isArray(options.operations)&&options.operations.some(value=>value?.type==='theme-apply')){await this.sites.initialize();return this.workspace.withLock(()=>this.workspace.catalogue(async store=>{await websiteDocumentLocks(store,{websiteIds:[websiteId]});return run(store);}));}

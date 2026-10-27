@@ -32,7 +32,7 @@ test('a retained project website preserves editing preview and export through re
   const storage=await initializeProjectLocation(path.join(directory,'Independent project'),id,book,access,vault),registry=new ProjectRegistry(f.workspace,rootBook.id);await registry.attach(storage,{expected:(await registry.read()).revision});
   const font=await new WorkspaceFonts(storage).import(await readFile('src/fonts/dm-sans.ttf'));
   app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,headless:true,preferencesFile:path.join(directory,'preferences.json')});
-  page.on('pageerror',error=>errors.push(error.message));page.on('response',response=>{if(response.url().includes('/api/')){const route=new URL(response.url()).pathname;requests.push({status:response.status(),route,...(route.endsWith('/websites/editor/item')?{collection:response.request().postDataJSON()?.collection}:{})});}});
+  page.on('pageerror',error=>errors.push(error.message));page.on('response',response=>{if(response.url().includes('/api/')){const route=new URL(response.url()).pathname;requests.push({status:response.status(),timing:response.request().timing(),route,...(route.endsWith('/websites/editor/item')?{collection:response.request().postDataJSON()?.collection}:{})});}});
   await page.goto(app.url);await expect(page.getByRole('button',{name:'Preferences',exact:true})).toBeVisible();
   await page.goto(app.origin+'/#/owners/'+id+'/projects/'+id);await expect(page.locator('#main h1')).toHaveText('Independent project');expect(await page.evaluate(async id=>(await document.fonts.load('16px \"Observanda '+id+'\"')).some(font=>font.status==='loaded'),font.id)).toBe(true);
   db=await f.workspace.openCatalogue();await db.run('BEGIN');await db.lock();

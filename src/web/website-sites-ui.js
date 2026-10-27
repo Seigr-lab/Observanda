@@ -16,8 +16,7 @@ export function websiteSitesUI({state,api,esc,field,showDialog,render,rootSnapsh
  async function enter(id,{preferences=false}={}){
   sync();state.websiteDefaultRoute=id==null&&!preferences;const request=++generation;if(activeWebsite(state)&&(state.websiteId??null)===(id??null))return;
   const context=owner;
-  const original=await rootSnapshot();
-  const version=await api('/api/websites/version',{id:id??null},{adopt:false});
+  const [original,version]=await Promise.all([rootSnapshot(),api('/api/websites/version',{id:id??null},{adopt:false})]);
   const result=await documents.open({websiteId:id??null,websitePin:version.websitePin,base:original});
   if(context!==researchContext(state)||request!==generation)throw {name:'AbortError'};
   base=original;state.websiteId=id??null;state.website=result.site??null;state.preview=null;state.publishing=null;

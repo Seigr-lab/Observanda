@@ -1,0 +1,9 @@
+# Publication control and editor dispatch
+
+Workspace and independent-project publication job controls share one policy catalogue and executor. Each status, cancel, retry and private-diagnostic operation declares its HTTP method, 1 KiB JSON limit, exact input fields, owning website, expected job type, admission lane, snapshot requirement, cancellation boundary and response shape. Execution rechecks the current unlocked owner, authorizes the selected queue/job, and checks cancellation before mutation. Diagnostics remain private and are not included in public job summaries.
+
+The website editor likewise shares its read/mutation operation list between execution and independent-owner dispatch, including source choices and template-update review. These lists cover these route families only; they are not a complete contract for every application endpoint.
+
+Editor opening can request a bounded initial view in the same catalogue read: at most 25 page labels and the home layout/branding overrides at the selected saved or draft revision. It contains no page bodies. The browser reuses that window only for its exact revision and invalidates it after changes; other windows and page bodies remain explicit reads. Independent metadata/version requests and independent override reads may overlap. No saved website or research record is changed by opening the editor.
+
+Focused native checks cover malformed inputs, wrong job types, denied authority, cancellation, redacted results, bounded initial reads, changed-draft invalidation and superseded responses. A disposable browser journey covers independent website editing, preview, preparation, ZIP download, reload and navigation across website owners while the workspace database has a competing writer. These results do not establish installed-device or network-storage tail latency, all website features, or full production readiness.

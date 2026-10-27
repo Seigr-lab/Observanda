@@ -34,6 +34,18 @@ async function fixture(t){
 }
 const page=(title,body='Authored page')=>({id:randomUUID(),title,body,share:true,sections:[]});
 
+test('editor opening batches bounded page labels and home overrides without a second read',async t=>{
+ const f=await fixture(t),initial=await f.execute('open'),pages=Array.from({length:28},(_,i)=>page('Page '+i,'Private authored body '+i));
+ await f.execute('change',f.edit(initial,[{type:'append',collection:'pages',values:pages}]));
+ const state={storage:{contextId:randomUUID()},book:f.book},selection=websiteSelectionDraft(),calls=[];
+ const client=websiteDocumentClient({state,selection,api:async(route,data)=>{calls.push(route.split('/').at(-1));return f.execute(route.split('/').at(-1),data);}});t.after(()=>client.stop());
+ const opened=await client.open({websiteId:f.websiteId,base:{book:f.book}});Object.assign(state,opened);selection.load(opened.site.selection);client.installed();
+ const first=await client.window('pages');assert.equal(first.items.length,25);assert.equal(first.total,28);assert.doesNotMatch(JSON.stringify(first),/Private authored body/);
+ await Promise.all(['branding','layouts'].map(collection=>client.selectOverride(collection,'home')));assert.deepEqual(calls,['open']);
+ const next=await client.window('pages',{offset:25});assert.equal(next.items.length,3);assert.deepEqual(calls,['open','window']);
+ state.book.website.title='Changed after opening';client.changed();await client.flush();calls.length=0;await client.window('pages');assert.deepEqual(calls,['window'],'A changed draft must invalidate the initial page window');
+});
+
 test('homepage text and visibility saves reuse unchanged collection validation at the same research snapshot',{timeout:120000},async t=>{
  const f=await fixture(t),initial=await f.execute('open'),pages=Array.from({length:40},(_,i)=>page('Page '+i,'Authored observations. '.repeat(100)));
  const draft=await f.execute('change',f.edit(initial,[{type:'append',collection:'pages',values:pages.slice(0,32)},{type:'append',collection:'pages',values:pages.slice(32)},{type:'settings',path:['document','website','home','enabled'],value:true}]));
@@ -154,8 +166,8 @@ test('editor client rejects a superseded missing-override response', {timeout:12
  const f=await fixture(t),state={book:f.book,page:'website',storage:{contextId:'disposable'}},selection=websiteSelectionDraft();
  let reached,release,holdMissing=true;const missing=new Promise(resolve=>{reached=resolve;}),gate=new Promise(resolve=>{release=resolve;});t.after(()=>release());
  const client=websiteDocumentClient({state,selection,api:async(route,data)=>{
-  try{return structuredClone(await f.editor.execute(route.split('/').at(-1),data));}
-  catch(error){if(holdMissing&&route.endsWith('/item')&&data.collection==='branding'&&data.key==='home'&&error.code==='NOT_FOUND'){holdMissing=false;reached();await gate;}throw error;}
+  const result=structuredClone(await f.editor.execute(route.split('/').at(-1),data));
+  if(holdMissing&&route.endsWith('/open')&&result.initialView?.overrides.branding===null){holdMissing=false;reached();await gate;}return result;
  }});t.after(()=>client.stop());
  const first=client.open({websiteId:f.websiteId,base:{book:f.book}}),rejected=assert.rejects(first,{name:'AbortError'});await missing;
  const initial=await f.execute('open'),override={target:'home',logos:[]},changed=await f.execute('change',f.edit(initial,[{type:'replace',collection:'branding',key:'home',value:override}]));

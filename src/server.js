@@ -1,3 +1,5 @@
+import {executePublicationJobControl} from './publication-job-control.js';
+import {publicationJobControlRequest} from './publication-job-policy.js';
 import {RequestAdmission,requestLane} from './request-admission.js';
 import {jsonBody} from './request-body.js';
 import {nativeMediaAdmission} from './native-media-admission.js';
@@ -1135,7 +1137,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       }
       if(req.method==='POST'&&url.pathname.startsWith('/api/publication-jobs/')){
         if(!workspace.vault?.key)throw new AppError('ACCESS_LOCKED');
-        startJobs(context);const releases=new PublicationJobs(workspace,{sourceReader,sourceAccess:context.publicationSourceAccess}),queue=publicationQueue(),data=await body(req),operation=url.pathname.slice('/api/publication-jobs/'.length);
+        startJobs(context);const releases=new PublicationJobs(workspace,{sourceReader,sourceAccess:context.publicationSourceAccess}),queue=publicationQueue(),data=await body(req,publicationJobControlRequest(url.pathname)?.limit??MAX_BYTES),operation=url.pathname.slice('/api/publication-jobs/'.length);
         if(operation==='start')return operationResponse(req,res,async()=>{const job=await releases.startRequest({...data,websitePin:data.websitePin??websiteRequestContext(req.headers).websitePin,blockedValues},queue);context.jobs.worker.wake();return {job:jobSummary(job)};},value=>json(value,202),{continueAfterDisconnect:true});
         if(operation==='list'){const page=await releases.page(queue,data);return json({...page,items:page.items.map(item=>({...item,job:jobSummary(item.job)}))});}
         if(['pages','references','analysis-review-window'].includes(operation)){
@@ -1160,16 +1162,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
           return json(await workspace.storageKind()==='catalogue'?await workspace.catalogue(summarize):await summarize());
         }
         if(operation==='analysis-review')return operationResponse(req,res,async()=>{const job=await new AnalysisPublicationReviewJobs(workspace,publisher,{sourceReader,sourceAccess:context.publicationSourceAccess}).start(data,queue);context.jobs.worker.wake();return {job:jobSummary(job)};},value=>json(value,202),{continueAfterDisconnect:true});
-        if(['analysis-review-status','analysis-review-retry','analysis-review-cancel','analysis-review-diagnostics'].includes(operation)){
-          const reviews=new AnalysisPublicationReviewJobs(workspace,publisher,{sourceReader,sourceAccess:context.publicationSourceAccess}),job=await queue.read(data.id);if(!job||job.type!=='publication.analysis-review')throw new AppError('NOT_FOUND');await reviews.authorize(job);
-          if(operation==='analysis-review-status')return json({job:jobSummary(job)});
-          if(operation==='analysis-review-diagnostics')return json({diagnostic:await queue.diagnostic(job.id,{attempt:data.attempt})});
-          const action=operation.slice('analysis-review-'.length),next=await reviews.control(queue,job.id,action);if(action==='cancel')context.jobs.worker.cancel(job.id);else context.jobs.worker.wake();return json({job:jobSummary(next)});
-        }
-        const job=await queue.read(data.id);if(!job||job.type!=='publication.prepare')throw new AppError('NOT_FOUND');await queue.authorize(job);
-        if(operation==='status')return json({job:jobSummary(job)});
-        if(operation==='diagnostics')return json({diagnostic:await queue.diagnostic(job.id,{attempt:data.attempt})});
-        if(['cancel','retry'].includes(operation)){const next=await releases.control(queue,job.id,operation);if(operation==='cancel')context.jobs.worker.cancel(job.id);else context.jobs.worker.wake();return json({job:jobSummary(next)});}
+        if(publicationJobControlRequest(url.pathname))return json(await executePublicationJobControl(operation,data,{queue,releases,reviews:new AnalysisPublicationReviewJobs(workspace,publisher,{sourceReader,sourceAccess:context.publicationSourceAccess}),worker:context.jobs.worker,check:async()=>{if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');if((await status(client)).locked)throw new AppError('ACCESS_LOCKED');}}));
         throw new AppError('INVALID');
       }
       if(req.method==='POST'&&url.pathname.startsWith('/api/deployment-jobs/')){

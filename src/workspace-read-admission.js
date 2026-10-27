@@ -1,3 +1,4 @@
+import {publicationJobControlRequest} from './publication-job-policy.js';
 import {reviewRequest} from './review-requests.js';
 import {researchRequest} from './research-requests.js';
 import {recordStarterRequest} from './record-starter-requests.js';
@@ -22,6 +23,7 @@ const post=new Set([
  '/api/laboratory/read/query','/api/laboratory/read/selected','/api/research/drafts/list','/api/modules/drafts/list'
 ]);
 export const workspaceSnapshotRequest=(method,route)=>{
+ const publication=publicationJobControlRequest(route);if(publication)return method===publication.method&&publication.snapshot;
  if(method==='GET')return Boolean(reviewRequest(route,method)&&!reviewRequest(route,method).write)||/^\/api\/live\/figures\/(?:[a-f0-9-]{36}\/){2}[a-f0-9-]{36}$/.test(route)||/^\/api\/sharing\/figures\/[a-f0-9-]{36}\/(?:base|incoming|current)\/[a-f0-9-]{36}\/[a-f0-9-]{36}$/.test(route)||get.has(route)||/^\/api\/fonts\/custom-[a-f0-9]{64}$/.test(route)||/^\/(?:appearance-preview|preview)\/[a-f0-9]{64}\/.+/.test(route)||/^\/api\/appearance-preview\/[a-f0-9]{64}\/pages$/.test(route);
  if(method!=='POST')return false;const command=recordStarterRequest(route)??researchRequest(route)??reviewRequest(route);return post.has(route)||route==='/api/research/views/list'||Boolean(command&&!command.write);
 };

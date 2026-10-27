@@ -1,3 +1,5 @@
+import {executePublicationJobControl} from './publication-job-control.js';
+import {publicationJobControlRequest} from './publication-job-policy.js';
 import {PublicationEditionSelections} from './publication-edition-selections.js';
 import {AppearancePreviewSessions} from './appearance-preview-sessions.js';
 import {appearancePreviewSource} from './appearance-preview.js';
@@ -120,11 +122,8 @@ export class ProjectPublications{
    if(method==='references')return releases.referenceChoices(await retained(data.id),{...data,signal});
    if(method==='analysis-review-window')return new AnalysisPublicationReview(workspace,{sourceReader}).window(await rollback(await retained(data.id)),{...data,signal});
    if(method==='analysis-review'){const job=await new AnalysisPublicationReviewJobs(workspace,publisher,{sourceReader,sourceAccess:this.entry.sourceAccess}).start(data,queue);worker.wake();return {job:jobSummary(job)};}
-   if(['analysis-review-status','analysis-review-retry','analysis-review-cancel'].includes(method)){
-    const reviews=new AnalysisPublicationReviewJobs(workspace,publisher,{sourceReader,sourceAccess:this.entry.sourceAccess}),job=await queue.read(data.id);if(!job||job.type!=='publication.analysis-review')throw new AppError('NOT_FOUND');await reviews.authorize(job);
-    if(method==='analysis-review-status')return {job:jobSummary(job)};const action=method.slice('analysis-review-'.length),next=await reviews.control(queue,data.id,action);if(action==='cancel')worker.cancel(data.id);else worker.wake();return {job:jobSummary(next)};
-   }
-   return {job:await control('publication.prepare',method)};
+   if(publicationJobControlRequest('/api/'+operation))return executePublicationJobControl(method,data,{queue,releases,reviews:new AnalysisPublicationReviewJobs(workspace,publisher,{sourceReader,sourceAccess:this.entry.sourceAccess}),worker,signal,check});
+   throw new AppError('INVALID');
   }
   if(operation.startsWith('deployment-jobs/')){
    const method=operation.slice(16),deployments=new DeploymentJobs(workspace,publisher,queue,{sourceReader,sourceAccess:this.entry.sourceAccess});

@@ -1,9 +1,9 @@
 import {AppError} from './errors.js';
+import {publicationJobControlRequest} from './publication-job-policy.js';
 
 const controlGet=new Set(['/api/health','/api/access/status','/api/diagnostics','/api/writer-recovery','/api/activity']);
 const controlPost=new Set([
  '/api/access/lock','/api/writer-recovery',
- '/api/publication-jobs/status','/api/publication-jobs/cancel','/api/publication-jobs/analysis-review-status','/api/publication-jobs/analysis-review-cancel',
  '/api/deployment-jobs/status','/api/deployment-jobs/cancel','/api/repository-setup/status','/api/repository-setup/cancel',
  '/api/media-imports/job','/api/media-imports/cancel','/api/research/materials/job','/api/research/materials/cancel-job',
  '/api/publishing/verification','/api/publishing/verification-cancel','/api/github-connection/cancel',
@@ -14,6 +14,7 @@ export function requestLane(method,pathname){
  if(method==='POST'&&pathname==='/api/session')return 'bootstrap';
  // Owner prefixes select storage; they do not change the operation's budget.
  const route=pathname.replace(/^\/api\/projects\/[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\/(?:lab-books\/[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\/)?/,'/api/');
+ const publication=publicationJobControlRequest(route);if(publication&&publication.method===method)return publication.admission;
  return (method==='GET'?controlGet.has(route):method==='POST'&&controlPost.has(route))?'control':'work';
 }
 const busy=()=>new AppError('WORKLOAD_BUSY');

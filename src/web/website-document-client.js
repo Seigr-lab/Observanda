@@ -16,7 +16,7 @@ const structuralCommand=(operation,operations)=>['undo','redo'].includes(operati
 // selected values enter the rendering book; this owner alone submits changes.
 export function websiteDocumentClient({state,api,selection,onStatus=()=>{}}){
  let envelope=null,outline=null,context=null,generation=0,timer=null,queue=Promise.resolve(),pending=null,actionPending=null,lastActionResult=null,error='',local=false,editVersion=0,viewVersion=0;
- let settings=null,pageKey=null,pageSelection=0,discardRequests=0;const structuralTasks=new Set(),structuralWaiters=new Set();const activeOverrides=new Map();const selected=new Map(collections.map(name=>[name,new Map()]));
+ let settings=null,pageKey=null,pageSelection=0,discardRequests=0,initialPages=null;const structuralTasks=new Set(),structuralWaiters=new Set();const activeOverrides=new Map();const selected=new Map(collections.map(name=>[name,new Map()]));
  const owner=()=>JSON.stringify([researchContext(state),state.book?.id]);
  const enabled=()=>Boolean(envelope&&context===owner()&&state.websiteEditor);
  const snapshot=()=>enabled()?JSON.stringify([context,envelope.websitePin,envelope.draft?.id??null,envelope.draft?.revision??null,editVersion]):null;
@@ -32,7 +32,7 @@ export function websiteDocumentClient({state,api,selection,onStatus=()=>{}}){
  }
  const common=()=>({workspaceId:outline.book.id,websiteId:envelope.websitePin.websiteId,websitePin:envelope.websitePin});
  const readTarget=()=>({...common(),...(envelope.draft?{draftId:envelope.draft.id,draftRevision:envelope.draft.revision}:{})});
- function stop(){clearTimeout(timer);timer=null;generation++;pending=null;actionPending=null;queue=Promise.resolve();envelope=outline=settings=null;context=null;local=false;discardRequests=0;error='';pageKey=null;pageSelection++;activeOverrides.clear();for(const map of selected.values())map.clear();structuralTasks.clear();releaseStructuralWaiters();}
+ function stop(){clearTimeout(timer);timer=null;generation++;pending=null;actionPending=null;queue=Promise.resolve();envelope=outline=settings=initialPages=null;context=null;local=false;discardRequests=0;error='';pageKey=null;pageSelection++;activeOverrides.clear();for(const map of selected.values())map.clear();structuralTasks.clear();releaseStructuralWaiters();}
  function compact(book=state.book){
   const {assets,navigation,layouts,researchSources,...website}=book.website;void assets;void navigation;void layouts;void researchSources;
   return {document:{website,...Object.fromEntries(['appearance','themes','activeThemeId'].map(key=>[key,book[key]]))},projects:book.projects.map(({id,share,logoId})=>({id,share,logoId})),selection:selection.snapshot()};
@@ -44,6 +44,7 @@ export function websiteDocumentClient({state,api,selection,onStatus=()=>{}}){
  function receipt(){return {...outline,...envelope,outline:true,etag:envelope.websitePin.researchSnapshotId,websitePin:envelope.websitePin,site:{...envelope.site,id:envelope.websitePin.websiteId},websiteEditor:envelope,book:project(),recordRevisions:{}};}
  function status(){if(enabled())state.websiteEditor=envelope;releaseStructuralWaiters();onStatus({dirty:isDirty(),error,busy:Boolean(local||pending||actionPending||structuralBusy()),structuralBusy:structuralBusy()});}
  function adopt(result,{replace=false}={}){
+  initialPages=null;
   envelope=validate(result);state.websiteEditor=envelope;state.websitePin=envelope.websitePin;state.websiteId=envelope.websitePin.websiteId;state.website={...envelope.site,id:state.websiteId};state.etag=envelope.websitePin.researchSnapshotId;
   if(replace){viewVersion++;state.book=project();selection.load(envelope.site.selection,envelope.selectionProjects??outline.selectionProjects);settings=copy(compact());for(const map of selected.values())map.clear();}
   status();return result;
@@ -55,9 +56,16 @@ export function websiteDocumentClient({state,api,selection,onStatus=()=>{}}){
  }
  async function open({websiteId,websitePin,base,signal}){
   stop();viewVersion++;outline=base;context=owner();const stamp=context,epoch=generation;
-  const result=await api('/api/websites/editor/open',{workspaceId:base.book.id,websiteId,websitePin},{adopt:false,signal,websitePin});
+  initialPages=null;const result=await api('/api/websites/editor/open',{workspaceId:base.book.id,websiteId,websitePin,initialView:true},{adopt:false,signal,websitePin});
   if(!current(stamp,epoch))throw new DOMException('Website editor changed','AbortError');envelope=validate(result,websitePin);
-  const resultSnapshot=receipt();await readOverride('branding','home',{signal,book:resultSnapshot.book});if(!current(stamp,epoch))throw new DOMException('Website editor changed','AbortError');settings=copy({document:{...envelope.site.document,website:Object.fromEntries(Object.entries(envelope.site.document.website).filter(([key])=>key!=='researchSources'))},projects:envelope.site.projects,selection:envelope.site.selection});return resultSnapshot;
+  const resultSnapshot=receipt();
+  if(result.initialView){
+   const {pages,overrides:initial}=result.initialView;
+   if(!pages||!sameWebsitePin(pages.websitePin,envelope.websitePin)||!Array.isArray(pages.rows)||pages.rows.length>25||pages.offset!==0||!Number.isSafeInteger(pages.total)||pages.total<pages.rows.length||!initial)throw failure('documentInvalid');
+   for(const collection of ['branding','layouts']){const row=initial[collection];if(row===null)rememberMissing(collection,'home',resultSnapshot.book);else{if(row?.key!=='home')throw failure('documentInvalid');remember(collection,row,resultSnapshot.book);}}
+   initialPages={target:JSON.stringify(readTarget()),result:pages};delete envelope.initialView;delete resultSnapshot.initialView;
+  }else await readOverride('branding','home',{signal,book:resultSnapshot.book});
+  if(!current(stamp,epoch))throw new DOMException('Website editor changed','AbortError');settings=copy({document:{...envelope.site.document,website:Object.fromEntries(Object.entries(envelope.site.document.website).filter(([key])=>key!=='researchSources'))},projects:envelope.site.projects,selection:envelope.site.selection});return resultSnapshot;
  }
  function installed(){if(!envelope)return;state.websiteEditor=envelope;settings=copy(compact());status();}
  function remember(collection,item,book=state.book){
@@ -99,7 +107,8 @@ export function websiteDocumentClient({state,api,selection,onStatus=()=>{}}){
   if(!sameWebsitePin(result.websitePin,envelope.websitePin)||result.key!==key)throw failure('documentInvalid');if(retain)remember(collection,result);return result;
  }
  async function window(collection,{offset=0,limit=25,search='',kind='all',signal}={}){
-  await flush();const stamp=snapshot(),result=await request('window',{...readTarget(),collection,offset,limit,search,...(collection==='assets'?{kind}:{})},{signal});
+  await flush();const stamp=snapshot(),cached=collection==='pages'&&offset===0&&limit===25&&!search&&initialPages?.target===JSON.stringify(readTarget());
+  signal?.throwIfAborted();const result=cached?copy(initialPages.result):await request('window',{...readTarget(),collection,offset,limit,search,...(collection==='assets'?{kind}:{})},{signal});
   if(stamp!==snapshot())throw new DOMException('Website draft changed','AbortError');
   result.items=result.rows;
   if(!sameWebsitePin(result.websitePin,envelope.websitePin)||!Array.isArray(result.items)||result.items.length>limit||!Number.isSafeInteger(result.total)||!Number.isSafeInteger(result.offset))throw failure('documentInvalid');return result;

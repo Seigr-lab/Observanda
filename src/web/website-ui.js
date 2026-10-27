@@ -131,7 +131,7 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
   const toolActive=value=>tool===value||value==='page'&&['page-settings','library','selection','gallery','insert'].includes(tool)||value==='site'&&['typography','layout','menu','media','actions'].includes(tool);
   const taskButton=(label,value)=>`<button class="button ${toolActive(value)?'primary':''}" data-action="website-tool" data-tool="${value}" ${toolActive(value)?'aria-current="page"':''}>${label}</button>`;
   const overridesReady=()=>!native()||!previewTarget()||['layouts','branding'].every(collection=>documents.hasSelected(collection,previewTarget()));
-  async function ensureOverrides(target,{signal}={}){if(native()&&target){await documents.selectOverride('layouts',target,{signal});await documents.selectOverride('branding',target,{signal});}}
+  async function ensureOverrides(target,{signal}={}){if(native()&&target)await Promise.all(['layouts','branding'].map(collection=>documents.selectOverride(collection,target,{signal})));}
   async function loadOverrides(){
    if(!native()||overridesReady()||overrideController||switchingPage||state.page!=='website')return;
    const controller=overrideController=new AbortController(),target=previewTarget(),stamp=websiteContext(state);overrideError='';
