@@ -1,3 +1,4 @@
+import {materialRequest} from './material-route-policy.js';
 import {publicationJobControlRequest} from './publication-job-policy.js';
 import {reviewRequest} from './review-requests.js';
 import {researchRequest} from './research-requests.js';
@@ -13,7 +14,6 @@ const post=new Set([
  ...['version','start','page','changes','change-page','selection','labels','dashboard','dashboard-types','record-types','discovery','timeline','record-content','record-selectors'].map(name=>'/api/workspace/read/'+name),
  ...['items','item','labels','bom-source','inventory/dashboard','inventory/discovery','inventory/stock','inventory/ledger','planning/dashboard','planning/discovery','planning/readiness'].map(name=>'/api/modules/'+name),
  ...['query','open','history/list','history/read','runs','runs/comparison','writing/read','values/read','values/figures','values/figure-copy-choices','values/figure-copy-source','values/attempt-context','runs/prepare'].map(name=>'/api/research/records/'+name),
- ...['source-owners','source-items','source-resolve','overview','dependency-review','list','references','figure-sources','current','schema','current-record','record','read','rows','retained-table','comparison-page','analysis-status'].map(name=>'/api/research/materials/'+name),
  ...['summary','content','record','sections','media'].map(name=>'/api/website/research/'+name),
  ...['owners','query','labels','resolve','incoming'].map(name=>'/api/modules/references/'+name),
  '/api/calendars/page','/api/calendars/event','/api/sharing/configuration','/api/sharing/figure',
@@ -23,6 +23,7 @@ const post=new Set([
  '/api/laboratory/read/query','/api/laboratory/read/selected','/api/research/drafts/list','/api/modules/drafts/list'
 ]);
 export const workspaceSnapshotRequest=(method,route)=>{
+ const material=materialRequest(route);if(material)return method===material.method&&material.snapshot;
  const publication=publicationJobControlRequest(route);if(publication)return method===publication.method&&publication.snapshot;
  if(method==='GET')return Boolean(reviewRequest(route,method)&&!reviewRequest(route,method).write)||/^\/api\/live\/figures\/(?:[a-f0-9-]{36}\/){2}[a-f0-9-]{36}$/.test(route)||/^\/api\/sharing\/figures\/[a-f0-9-]{36}\/(?:base|incoming|current)\/[a-f0-9-]{36}\/[a-f0-9-]{36}$/.test(route)||get.has(route)||/^\/api\/fonts\/custom-[a-f0-9]{64}$/.test(route)||/^\/(?:appearance-preview|preview)\/[a-f0-9]{64}\/.+/.test(route)||/^\/api\/appearance-preview\/[a-f0-9]{64}\/pages$/.test(route);
  if(method!=='POST')return false;const command=recordStarterRequest(route)??researchRequest(route)??reviewRequest(route);return post.has(route)||route==='/api/research/views/list'||Boolean(command&&!command.write);

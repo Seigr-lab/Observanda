@@ -1,4 +1,5 @@
 import {once} from 'node:events';
+import {onResponseClose} from './response-close.js';
 import {serveContent} from './file-content.js';
 import {operationResponse} from './operation-response.js';
 import {AppError} from './errors.js';
@@ -11,11 +12,11 @@ export async function materialHttp(req,res,request,{contextId,body,json,execute}
  let data=request.input==='stream'||req.method==='GET'?{}:await body(req,request.limit);
  if(request.querySelection){
   const parameters=new URL(req.url,'http://localhost').searchParams,selection=parameters.get('selection');
-  if(req.method!=='GET'||parameters.getAll('selection').length!==1||!selection||selection.length>4096)throw new AppError('INVALID');
+  if(req.method!=='GET'||parameters.getAll('selection').length!==1||!selection||!Number.isSafeInteger(request.limit)||selection.length>request.limit)throw new AppError('INVALID');
   try{data=JSON.parse(selection);}catch{throw new AppError('INVALID');}
   if(!data||typeof data!=='object'||Array.isArray(data))throw new AppError('INVALID');
  }
- const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
+ const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();},releaseClose=onResponseClose(res,abort);
  const download=async({doc,content,name,contentType,chunks})=>{
   if(chunks){
    if(typeof chunks[Symbol.asyncIterator]!=='function'||typeof name!=='string'||!['image/svg+xml','text/csv; charset=utf-8','application/json; charset=utf-8'].includes(contentType))throw new AppError('INVALID');
@@ -31,5 +32,5 @@ export async function materialHttp(req,res,request,{contextId,body,json,execute}
   if(request.download)return await run();
   if(request.progress||request.write&&request.input!=='stream')return await operationResponse(req,res,run,value=>json(value,request.status??200));
   return json(await run(),request.status??200);
- }finally{res.off('close',abort);}
+ }finally{releaseClose();}
 }

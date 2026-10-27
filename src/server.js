@@ -1,6 +1,7 @@
 import {executePublicationJobControl} from './publication-job-control.js';
 import {publicationJobControlRequest} from './publication-job-policy.js';
 import {RequestAdmission,requestLane} from './request-admission.js';
+import {onResponseClose} from './response-close.js';
 import {jsonBody} from './request-body.js';
 import {nativeMediaAdmission} from './native-media-admission.js';
 import {nativeResources} from './native-resource-budget.js';
@@ -336,7 +337,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
     res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'self'");
     const json = (value, status = 200) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(value)); };
     let countedWrite=false,ownsGithubMutation=false,releaseRead;const request={};pending.add(request);
-    const admissionAbort=new AbortController(),abortAdmission=()=>admissionAbort.abort(new AppError('WRITE_CANCELLED'));res.once('close',abortAdmission);
+    const admissionAbort=new AbortController(),abortAdmission=()=>admissionAbort.abort(new AppError('WRITE_CANCELLED')),releaseAdmissionClose=onResponseClose(res,abortAdmission);
     try {
       if(shuttingDown)throw new AppError('SERVER_CLOSING');
       if (req.headers.host !== new URL(origin).host) throw new AppError('ORIGIN');
@@ -1395,7 +1396,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       }else res.destroy();
     } finally {
       if(req.url?.startsWith('/api/'))diagnostic('request',{method:req.method,route:req.url.split('/')[2]?.split('?')[0],durationMs:performance.now()-diagnosticStart,error:diagnosticError,status:res.statusCode,pendingRequests:pending.size,activeWrites});
-      releaseRead?.();req.activity?.finish();req.admission?.release();res.off('close',abortAdmission);if(ownsGithubMutation)githubMutation=false;if(countedWrite)activeWrites--;pending.delete(request);if(!pending.size)for(const resolve of drained.splice(0))resolve();
+      releaseRead?.();req.activity?.finish();req.admission?.release();releaseAdmissionClose();if(ownsGithubMutation)githubMutation=false;if(countedWrite)activeWrites--;pending.delete(request);if(!pending.size)for(const resolve of drained.splice(0))resolve();
     }
   })));
   const connections=httpDrain(server);

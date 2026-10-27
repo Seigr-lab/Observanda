@@ -1,4 +1,5 @@
 import {websiteRequestContext} from './website-request-context.js';
+import {onResponseClose} from './response-close.js';
 // HTTP transport for explicitly owned content, assets and template packages.
 import {serveContent} from './file-content.js';
 import {zipStream} from './zip-stream.js';
@@ -13,7 +14,7 @@ export async function projectContentHttp(req,res,request,{body,json,mime,execute
  const url=new URL(req.url,'http://localhost'),data=request.input==='stream'?{}:req.method==='GET'?{...(url.searchParams.has('rollbackReview')?{rollbackReview:url.searchParams.get('rollbackReview')}:{})}:await body(req,request.limit);
  if(req.method==='GET'&&!request.binary&&req.headers['x-observanda-workspace']!==contextId||['workspace','context'].some(key=>url.searchParams.has(key)&&url.searchParams.get(key)!==contextId))throw new AppError('WORKSPACE_CHANGED');
  if(request.publication==='export')return publicationExportHttp(req,res,options=>execute(data,{...options,query:Object.fromEntries(url.searchParams),...websiteRequestContext(req.headers),binary:({archive})=>archive}));
- const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
+ const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();},releaseClose=onResponseClose(res,abort);
  const binary=async({archive,name,content,stream,mime:contentType,download})=>{
   if(stream){
    try{
@@ -28,5 +29,5 @@ export async function projectContentHttp(req,res,request,{body,json,mime,execute
   res.writeHead(200,{'Content-Type':'application/zip','Content-Disposition':'attachment; filename="observanda-site.zip"'});await pipeline(Readable.from(zipStream(archive)),res,{signal:controller.signal});
  };
  const run=options=>execute(data,{...options,signal:controller.signal,stream:req,query:Object.fromEntries(url.searchParams),contentLength:req.headers['content-length'],headless,...websiteRequestContext(req.headers),binary});
- try{if(request.binary)return await run();if(request.write&&request.input!=='stream')return await operationResponse(req,res,run,json);return json(await run());}finally{res.off('close',abort);}
+ try{if(request.binary)return await run();if(request.write&&request.input!=='stream')return await operationResponse(req,res,run,json);return json(await run());}finally{releaseClose();}
 }

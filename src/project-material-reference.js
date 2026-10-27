@@ -1,6 +1,6 @@
 // Exact evidence addresses select registered owners. Edits retain their
 // explicitly selected project command and cannot use this read adapter.
-import {materialRequest} from './material-requests.js';
+import {materialRequest,materialRoutes} from './material-route-policy.js';
 import {materialReference,validMaterialReference} from './web/material-reference.js';
 import {addressedMaterialRead,materialReadReference,withMaterialReadReference} from './web/material-reference-requests.js';
 import {researchId} from './web/research-reference.js';
@@ -10,13 +10,13 @@ export function projectMaterialReferenceRequest(route){
  if(original){
   const ref={kind:'artifact',workspaceId:original[1],id:original[2],revision:original[3]};
   if(!validMaterialReference(ref))throw new AppError('INVALID');
-  return {material:'download',method:'GET',write:false,download:true,ref,referenceOwner:true};
+  return {...materialRoutes.original,material:'download',ref,referenceOwner:true,authority:'authorized-material-reference',owner:'addressed-evidence-owner'};
  }
  const match=/^\/api\/projects\/material-reference\/([a-z-]+)$/.exec(route);
  if(!match||!addressedMaterialRead(match[1]))return null;
  const request=materialRequest('/api/research/materials/'+match[1]);
  if(!request||request.write||request.method!=='POST'&&!(match[1]==='retained-figure-export'&&request.method==='GET'&&request.querySelection))throw new AppError('INVALID');
- return {...request,referenceOwner:true};
+ return {...request,referenceOwner:true,authority:'authorized-material-reference',owner:'addressed-evidence-owner'};
 }
 export function addressedMaterialReference(data,request={material:'read'}){
  const ref=request.ref??materialReadReference(request.material,data);

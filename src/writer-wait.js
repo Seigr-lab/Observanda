@@ -1,4 +1,5 @@
 import {AsyncLocalStorage} from 'node:async_hooks';
+import {onResponseClose} from './response-close.js';
 import {setTimeout as delay} from 'node:timers/promises';
 import {AppError} from './errors.js';
 import {operationStage} from './operation-progress.js';
@@ -42,7 +43,7 @@ export async function waitForWriter(acquire){
 }
 export async function requestWriterWait(req,res,operation,{admission=writers,waitMs=30000}={}){
  const timeout=req.socket.timeout;
- const controller=new AbortController(),closed=()=>{if(!res.writableEnded&&req.continueAfterDisconnect!==true)controller.abort();};res.once('close',closed);
+ const controller=new AbortController(),closed=()=>{if(!res.writableEnded&&req.continueAfterDisconnect!==true)controller.abort();},releaseClose=onResponseClose(res,closed);
  try{return await policy.run({admission,waitMs,enabled:()=>req.waitForWriter===true,signal:controller.signal,check:()=>req.checkWriter(),waiting:()=>{res.setTimeout(0);req.operationActivity?.().waiting();},acquired:()=>req.activity?.running()},operation);}
- finally{res.off('close',closed);if(!req.socket.destroyed)req.socket.setTimeout(timeout??60000);}
+ finally{releaseClose();if(!req.socket.destroyed)req.socket.setTimeout(timeout??60000);}
 }

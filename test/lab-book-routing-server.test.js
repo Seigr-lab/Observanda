@@ -38,9 +38,9 @@ test('HTTP creation and authoring select dedicated nested book databases during 
  const base='/api/projects/'+projectId+'/lab-books',make=title=>call(base+'/create',{id:randomUUID(),username:'',password:'',book:{id:randomUUID(),projectId,title}}).then(result);
  const a=(await make('Field Book 1')).book,b=(await make('Field Book 2')).book;
  assert.equal(a.root,path.join(project.root,'Field Book 1'));assert.equal(b.root,path.join(project.root,'Field Book 2'));assert.equal((await catalogueBinding(a.root)).placement,'lab-book');assert.equal((await catalogueBinding(b.root)).placement,'lab-book');
- const openProjectCatalogue=ProjectStorage.prototype.openCatalogue;
- ProjectStorage.prototype.openCatalogue=function(){throw Error('Directory listing must not open a project database');};
- try{assert.equal((await result(await call(base+'/list',{}))).total,2);}finally{ProjectStorage.prototype.openCatalogue=openProjectCatalogue;}
+ const openBookCatalogue=LabBookStorage.prototype.openCatalogue;
+ LabBookStorage.prototype.openCatalogue=function(){throw Error('Directory listing must not open a child book database');};
+ try{assert.equal((await result(await call(base+'/list',{}))).total,2);}finally{LabBookStorage.prototype.openCatalogue=openBookCatalogue;}
  async function owned(entry,Class,id){const key=await verifyAccess(await readAccess(entry.root),'','',{deviceStore:device});vaults.push(key);return new Class(entry.root,id,key);}
  const selected=await owned(a,LabBookStorage,a.labBookId),parent=await owned(project,ProjectStorage,projectId);
  const record={...sampleNotebook().entries[0],id:randomUUID(),notebookId:b.labBookId,title:'Saved in the second book'};
