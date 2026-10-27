@@ -51,7 +51,8 @@ export async function collectRuntimeInventory(root,{platform=process.platform,ex
  }
  await binary('PostgreSQL','postgresql/bin/postgres'+suffix,['--version'],output=>/PostgreSQL\)\s+(\S+)/.exec(output)?.[1]);
  for(const name of ['ffmpeg','ffprobe'])await binary(name,'media/bin/'+name+suffix,['-version'],output=>new RegExp('^'+name+' version ([0-9][0-9A-Za-z.+_-]*)','m').exec(output)?.[1]);
- await binary('Git','github/git/'+(platform==='win32'?'cmd/git.exe':'bin/git'),['--version'],output=>/^git version (\S+)/m.exec(output)?.[1]);
+ const git=await binary('Git','github/git/'+(platform==='win32'?'cmd/git.exe':'bin/git'),['--version'],output=>/^git version (\S+)/m.exec(output)?.[1]);
+ if(platform==='win32'&&git.version!==githubRuntimeReleases.gitVersion.replace(/\.(\d+)$/,'.windows.$1'))throw Error('Bundled Windows Git differs from the pinned release.');
  const credential=await binary('Git Credential Manager','github/credential-manager/git-credential-manager'+suffix,['--version'],output=>/^([0-9][0-9A-Za-z.+_-]*)/m.exec(output)?.[1]);
  if(credential.version.split('+')[0]!==credentialVersion)throw Error('Bundled credential helper differs from the pinned release.');
  const dotnet=await inspectDotnet(path.join(root,credential.path),{platform,expectedSha256:credential.sha256});

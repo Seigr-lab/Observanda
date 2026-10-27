@@ -8,12 +8,12 @@ const executeFile=promisify(execFile);
 // Official upstream releases, pinned by SHA-256. No global Git configuration
 // or credential-helper registration is changed by preparing this payload.
 export const githubRuntimeReleases=Object.freeze({
- gcmVersion:'3.0.2',gitVersion:'2.56.0.2',
+ gcmVersion:'3.0.2',gitVersion:'2.56.0.4',
  'win32-x64':{file:'gcm-win-x64-3.0.2.zip',sha256:'9d2bef6e42a37654ea7ef33172bbcf1b6a1df6191fcf6a57dfbf39e1cbc27a0f'},
  'darwin-arm64':{file:'gcm-osx-arm64-3.0.2.tar.gz',sha256:'2031e8f81683ff0bd835a762e6cfd0831e9d28cdd5a55b10135c73e9498750cc'},
  'darwin-x64':{file:'gcm-osx-x64-3.0.2.tar.gz',sha256:'a59672ed02fd5e785a4ff89a70890955a958015867995c1079023d3fbc6643b1'},
  'linux-x64':{file:'gcm-linux-x64-3.0.2.tar.gz',sha256:'b8e59e22a830006ca4d93e34513effbb2d9fc0c45d9ccf40395eaab7c4c1b97e'},
- minGit:{file:'MinGit-2.56.0.2-64-bit.zip',sha256:'da35e72aa21c005a5a0d298cfbae110bc1609a815730ea0dde84b01a1b3cd3be'}
+ minGit:{file:'MinGit-2.56.0.4-64-bit.zip',sha256:'e3bf78351fe777fba47ddee5950082f8a98bb0f02604fdc7ba3ee2cb68ffa877'}
 });
 // NativeAOT does not carry the single-file runtimeconfig/deps manifest. Bind
 // upstream build metadata to the exact executable extracted from the verified
@@ -96,7 +96,7 @@ export async function prepareGithubRuntime({out,download,run,gitRuntime,platform
  const git=path.join(base,'git');
  if(platform==='win32'){
   await mkdir(git,{recursive:true});const source=githubRuntimeReleases.minGit;
-  const zip=await download(source.file,'https://github.com/git-for-windows/git/releases/download/v2.56.0.windows.2/'+source.file,source.sha256);
+  const zip=await download(source.file,'https://github.com/git-for-windows/git/releases/download/v'+githubRuntimeReleases.gitVersion.replace(/\.(\d+)$/,'.windows.$1')+'/'+source.file,source.sha256);
   await run('tar.exe',['-xf',zip,'-C',git]);
  }else{
   if(!gitRuntime)throw Error('Supply --git-runtime with a redistributable macOS Git runtime containing bin/git and LICENSE. Browser sign-in cannot depend on developer tools on the user’s computer.');
