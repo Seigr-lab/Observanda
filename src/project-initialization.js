@@ -2,7 +2,8 @@ import {requireStorageName} from './storage-names.js';
 // Creation has one durable intent and one project-local transaction. A retry
 // resumes an uncommitted creation or acknowledges its already committed result.
 import path from 'node:path';
-import {mkdir,readdir,unlink} from 'node:fs/promises';
+import {readdir} from 'node:fs/promises';
+import {createPersistentDirectory as mkdir,unlinkPersistent as unlink} from './filesystem-persistence.js';
 import {ProjectStorage} from './project-storage.js';
 import {assertRegular,privateDirectory,atomicWrite,serialize,digest,workspaceFile} from './storage.js';
 import {resolveLocation,probeLocation} from './locations.js';

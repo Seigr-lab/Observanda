@@ -8,7 +8,9 @@ import {withRetiredRecordCopy} from './project-retired-records.js';
 // renamed to a receipt-owned sibling, so retries never delete a reused path.
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {readFile,readdir,opendir,rename,unlink,rmdir,realpath} from 'node:fs/promises';
+import {readFile,readdir,opendir,realpath} from 'node:fs/promises';
+import {atomicReplace as rename} from './atomic-replace.js';
+import {unlinkPersistent as unlink,removePersistentDirectory as rmdir,persistRename} from './filesystem-persistence.js';
 import {Workspace,workspaceFile,assertRegular,atomicWrite,serialize} from './storage.js';
 import {copyPlan,copyWorkspace,resolveLocation,transferDestination} from './locations.js';
 import {workspaceInventory,hashWorkspaceFile} from './workspace-inventory.js';
@@ -91,7 +93,7 @@ async function removeRetired(receipt,{verifyDestination=false}={}){
 }
 async function retireSource(receipt,moveDirectory){
  const target=retired(receipt);
- if(await assertRegular(target,{directory:true,missing:true}))return;
+ if(await assertRegular(target,{directory:true,missing:true})){await persistRename(receipt.source,target);return;}
  if(!await assertRegular(receipt.source,{directory:true,missing:true}))throw new AppError('STORAGE_MOVE_STATE');
  if(await realpath(receipt.source)!==receipt.source)throw new AppError('UNSAFE');
  await ownedFolder(receipt.source,receipt.projectRoots??[],moveDirectory);

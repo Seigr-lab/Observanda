@@ -7,7 +7,8 @@ import {verifyCatalogueArchive} from './research-catalogue.js';
 // The destination remains unavailable until its files and database are verified.
 import path from 'node:path';
 import {projectCopyBoundaries,retainedCopyRoots} from './project-copy-boundaries.js';
-import {mkdir,readdir,realpath,unlink} from 'node:fs/promises';
+import {readdir,realpath} from 'node:fs/promises';
+import {createPersistentDirectory as mkdir,unlinkPersistent as unlink} from './filesystem-persistence.js';
 import {resolveLocation,probeLocation} from './locations.js';
 import {workspaceFiles,hashWorkspaceFile} from './workspace-inventory.js';
 import {workspaceFile,assertRegular,privateDirectory,atomicWrite,serialize} from './storage.js';

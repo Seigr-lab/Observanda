@@ -1,7 +1,8 @@
 import {startManagedPostgres} from './postgres-runtime.js';
 import {startScratchPostgres} from './scratch-postgres.js';
 import path from 'node:path';
-import {mkdir,readFile,realpath} from 'node:fs/promises';
+import {readFile,realpath} from 'node:fs/promises';
+import {createPersistentDirectory as mkdir} from './filesystem-persistence.js';
 import {randomUUID} from 'node:crypto';
 import {WorkspacePostgres} from './workspace-postgres.js';
 import {ProjectPostgres} from './project-postgres.js';

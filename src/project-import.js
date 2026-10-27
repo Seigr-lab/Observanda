@@ -1,4 +1,5 @@
 import {NativeProjectImport} from './project-import-native.js';
+import {ProjectDeletions} from './project-deletion.js';
 import {assertInventoryObligationsSettled} from './inventory-obligation-lifecycle.js';
 import {incomingProjectMove,assertIncomingProjectMovesSettled,assertIncomingProjectAddresses} from './project-incoming-moves.js';
 import {acceptRelocatedProject} from './project-relocation-directory.js';
@@ -9,7 +10,8 @@ import {prepareImportDestination} from './import-destination.js';
 import {ImportDiscard} from './import-discard.js';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {mkdir,readdir,unlink,realpath} from 'node:fs/promises';
+import {readdir,realpath} from 'node:fs/promises';
+import {createPersistentDirectory as mkdir,unlinkPersistent as unlink} from './filesystem-persistence.js';
 import {ProjectImportInventory,importOwnerStorage} from './project-import-inventory.js';
 import {projectImportFile,readProjectImport,saveProjectImport,pendingProjectImports,reserveProjectImport,releaseProjectImport,projectImportOwners} from './project-import-state.js';
 import {ProjectStorage} from './project-storage.js';
@@ -58,9 +60,14 @@ export class ProjectImports{
    if(owner.kind==='project'&&await incomingProjectMove(this.registry,owner.projectId))throw new AppError('STORAGE_PROJECT_BUSY');
    if(owner.kind==='project')acceptRelocatedProject({relocated:selected?.state==='relocated'?[selected.entry]:[]},owner);
    if(owner.kind==='project'&&existing&&(fresh||existing.root!==root||existing.namespaceId!==owner.namespaceId||existing.vaultId!==owner.vaultId))throw new AppError('PROJECT_LOCATION_EXISTS');
-   if(selected?.state==='deleted')throw new AppError('DATABASE_LOCATION');
+   if(selected?.state==='deleted'){
+    const restored=owner.kind==='project'?owner:await owners.find('project',owner.projectId);
+    if(!restored||['projectId','namespaceId','vaultId'].some(key=>selected.entry[key]!==restored[key]))throw new AppError('DATABASE_LOCATION');
+    const deletion=await new ProjectDeletions(this.registry,owner.projectId).receipt();
+    if(deletion&&(deletion.phase!=='complete'||deletion.id!==selected.entry.operationId))throw new AppError('STORAGE_DELETE_BUSY');
+   }
    for(const [index,id] of [['namespace',owner.namespaceId],['vault',owner.vaultId],['location',this.registry.locationKey(root)]]){
-    const row=await view.get(id,{index});if(row&&(row.state==='deleted'&&index!=='location'||row.state==='active'&&row.entry.projectId!==owner.projectId))throw new AppError('DATABASE_LOCATION');
+    const row=await view.get(id,{index});if(row&&(row.state==='deleted'&&index!=='location'&&['projectId','namespaceId','vaultId'].some(key=>row.entry[key]!==owner[key])||row.state==='active'&&row.entry.projectId!==owner.projectId))throw new AppError('DATABASE_LOCATION');
    }
    const book=await new LabBookDirectory(this.registry).read(owner.namespaceId);if(book&&(owner.kind!=='lab-book'||book.projectId!==owner.projectId||book.labBookId!==owner.labBookId||book.vaultId!==owner.vaultId))throw new AppError('DATABASE_LOCATION');
   }});

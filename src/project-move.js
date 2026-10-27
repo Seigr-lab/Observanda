@@ -1,3 +1,4 @@
+import {persistRename} from './filesystem-persistence.js';
 import {NativeProjectMove,validateNativeProjectMove,projectMoveAccessOwners} from './native-project-move.js';
 import {projectRegistryDescendantPrefix} from './project-registry-locations.js';
 import {ProjectBookCopy} from './project-book-copy.js';
@@ -12,7 +13,8 @@ import {withProjectLifecycle} from './project-lifecycle.js';
 // A move has one selected project owner. Registry adoption and retirement are
 // journalled independently so a restart can finish either without recopying.
 import path from 'node:path';
-import {realpath,rename} from 'node:fs/promises';
+import {realpath} from 'node:fs/promises';
+import {atomicReplace as rename} from './atomic-replace.js';
 import {ProjectStorage} from './project-storage.js';
 import {copyProjectLocation} from './project-transfer.js';
 import {assertRegular,privateDirectory,atomicWrite,serialize} from './storage.js';
@@ -135,7 +137,7 @@ export class ProjectMoves{
       await provider.stopProjectForMove(source.root,projectId,vault,id);await assertProjectDatabaseStopped(source.root,projectId,vault);await checkpoint('stopped');
       if(!nested){await rename(source.root,retiredRoot);await checkpoint('renamed');}
      }
-     value.phase='retired';await this.save(value);await checkpoint('retired');
+     if(!nested)await persistRename(value.source,retiredRoot);value.phase='retired';await this.save(value);await checkpoint('retired');
     }
     await removeRetiredProject(value,{verify:!fresh,checkpoint});value.phase='complete';await this.save(value);await clearMoveBookKeys(target,value);await checkpoint('complete');
    });

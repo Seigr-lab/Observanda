@@ -3,7 +3,9 @@
 // retired using its own identity without retaining all keys or writer leases.
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {readFile,realpath,rename,unlink,opendir} from 'node:fs/promises';
+import {readFile,realpath,opendir} from 'node:fs/promises';
+import {atomicReplace as rename} from './atomic-replace.js';
+import {unlinkPersistent as unlink,persistRename} from './filesystem-persistence.js';
 import {NativeProjectMoveBooks} from './native-project-book-move.js';
 import {assertWorkspaceProjectMoveOwner} from './workspace-project-move-owner.js';
 import {NativePortabilityCollection,createPortabilityCollection,portabilityCollection,releasePortabilityCollection,validPortabilityCollection} from './portability-collection.js';
@@ -169,7 +171,7 @@ export class NativeProjectMove{
    if(value.phase==='adopted'){
     if(!nested&&await assertRegular(retired,{directory:true,missing:true})){await assertProjectMoveDirectory(retired,value.sourceDirectory);const marker=await moveSource(retired);if(marker?.id!==id||marker.destination!==value.destination)throw new AppError('STORAGE_MOVE_STATE');}
     else{const source=await this.source(value,vault);await this.currentBoundaries(value,boundaries);await ownedProjectFolderPaged(source.root,{boundaries,books:books.owners});await assertProjectMoveDatabases(source.root,boundaries,books.owners);await books.stop(checkpoint);const provider=databaseProvider();if(!provider?.stopProjectForMove)throw new AppError('DATABASE_RUNTIME');await provider.stopProjectForMove(source.root,projectId,vault,id);const lease=await workspaceDatabaseLease(path.join(source.root,'.observanda/postgresql'));try{await assertProjectDatabaseStopped(source.root,projectId,vault);}finally{await lease.close();}await checkpoint('stopped');if(!nested){await rename(source.root,retired);await checkpoint('renamed');}}
-    value.phase='retired';await this.command.save(value);await checkpoint('retired');
+    if(!nested)await persistRename(value.source,retired);value.phase='retired';await this.command.save(value);await checkpoint('retired');
    }
    if(value.phase!=='retired')throw new AppError('STORAGE_MOVE_STATE');let previousOwner=null,previousOwned=false;const ownerRelative=async relative=>{const slash=relative.indexOf('/');if(slash<0||relative.startsWith('.observanda/'))return relative;const name=relative.slice(0,slash);let owned;if(name===previousOwner)owned=previousOwned;else{owned=Boolean(await books.owners.get(name));previousOwner=name;previousOwned=owned;}return owned?relative.slice(slash+1):relative;};
    await this.workspace.withCatalogueConnections(()=>removeRetiredProject(value,{boundaryState:boundaries,ownerRelative,verify:!fresh,checkpoint}));value.phase='releasing';await this.command.save(value);await checkpoint('releasing');await books.clear(value.destination);await checkpoint('keys-erased');value.keysReleased=true;value.phase='complete';await this.command.save(value);await checkpoint('complete');return value;

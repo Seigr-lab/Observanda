@@ -2,7 +2,9 @@ import {projectSummaryForBook,reparentConfigurationMetadata} from './configurati
 // Change a book's containing project by relocating its existing directory.
 // Current parent metadata changes; retained record revisions keep their identity.
 import path from 'node:path';
-import {readFile,realpath,rename,unlink} from 'node:fs/promises';
+import {readFile,realpath} from 'node:fs/promises';
+import {atomicReplace as rename} from './atomic-replace.js';
+import {unlinkPersistent as unlink,persistRename} from './filesystem-persistence.js';
 import {LabBookRelocationTransfer,validBookRelocationTransfer} from './lab-book-reparent-transfer.js';
 import {withProjectMembership} from './project-membership.js';
 import {assertNotDeleting} from './workspace-delete-state.js';
@@ -103,6 +105,7 @@ export class LabBookReparents{
    if(value.phase==='copying')await transfer.copy();
    if(['retiring','retired'].includes(value.phase)){await transfer.retire();value.phase='complete';await this.save(value);await checkpoint('complete',value);return this.complete(source,target,vault,value);}
    let root=await this.locate(value);authenticateKeyring((await readAccess(root)).value,vault);
+   if(root===roots.destination&&value.version!==2&&['prepared','frozen'].includes(value.phase))await persistRename(roots.source,roots.destination);
    if(root===roots.source){
     const storage=new LabBookStorage(root,this.labBookId,vault),pending=await workspaceRename(root);
     if(pending&&pending.id!==value.id)throw new AppError('STORAGE_RENAME_STATE');

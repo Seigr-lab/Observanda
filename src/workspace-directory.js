@@ -1,7 +1,8 @@
 // The installation's complete workspace directory is independent of its
 // bounded recent-items list. A name reservation spans only a location change.
 import path from 'node:path';
-import {readFile,mkdir} from 'node:fs/promises';
+import {readFile} from 'node:fs/promises';
+import {createPersistentDirectory as mkdir} from './filesystem-persistence.js';
 import {assertRegular,atomicWrite,serialize} from './storage.js';
 import {withWriterLease} from './writer-lease.js';
 import {workspaceFolderName,validateWorkspaceName} from './workspace-names.js';

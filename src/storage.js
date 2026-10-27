@@ -1,5 +1,5 @@
 import {assertWorkspaceAvailable} from './workspace-lifecycle-admission.js';
-import {persistDirectoryCreation} from './filesystem-persistence.js';
+import {persistDirectoryCreation,createPersistentDirectory} from './filesystem-persistence.js';
 import {projectDomainHandoff} from './project-domain-lock.js';
 import {websiteMetadataShell} from './website-owned-metadata.js';
 import {withProjectSourceMetadataAuthority} from './project-source-metadata-authority.js';
@@ -331,7 +331,7 @@ export class Workspace {
   async withLock(operation,{detached=false,moveId,existing=false}={}) {
     assertCatalogueWritable(this);
     await assertWorkspaceAvailable(this.root,{moveId});
-    if(existing)await assertRegular(this.root,{directory:true});else await mkdir(this.root, { recursive: true, mode: 0o700 });
+    if(existing)await assertRegular(this.root,{directory:true});else await createPersistentDirectory(this.root, { recursive: true, mode: 0o700 });
     // Canonicalize the selected workspace before using its protected internal paths.
     this.root = await realpath(this.root);
     const internal = await privateDirectory(this.root, '.observanda');

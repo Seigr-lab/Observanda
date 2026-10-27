@@ -1,6 +1,7 @@
 import {defaultDashboard,validDashboard,upgradeDashboard} from './web/dashboard-model.js';
 import path from 'node:path';
-import {mkdir,readFile,open} from 'node:fs/promises';
+import {readFile,open} from 'node:fs/promises';
+import {createPersistentDirectory as mkdir} from './filesystem-persistence.js';
 import {withWriterLease} from './writer-lease.js';
 import {randomUUID} from 'node:crypto';
 import {DEFAULT_INTERFACE,validInterface} from './web/interface-ui.js';

@@ -7,7 +7,7 @@ import {validateRenameProjects} from './rename-owner-receipts.js';
 import {nestedRenameRoot} from './workspace-rename-paths.js';
 import {deletionScope} from './workspace-delete-state.js';
 import {researchId} from './web/research-reference.js';
-import {mkdir} from 'node:fs/promises';
+import {createPersistentDirectory as mkdir} from './filesystem-persistence.js';
 import {workspaceFolderName} from './workspace-names.js';
 import path from 'node:path';
 import {readFile} from 'node:fs/promises';

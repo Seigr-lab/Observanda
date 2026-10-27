@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,readFile,writeFile,readdir,rm,unlink,link,symlink} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import {setTimeout as delay} from 'node:timers/promises';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {sampleNotebook} from '../src/sample.js';
 import {PublicationJobs} from '../src/publication-jobs.js';
@@ -23,20 +24,21 @@ async function publicationCommand(releases){const {etag,websitePin,metadata}=awa
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-local-export-')),book=sampleNotebook();book.projects.forEach(p=>p.share=true);book.entries[2].share=true;book.entries[1].share=false;book.entries[1].title='PRIVATE_UNRELEASED_COMPONENT';
  const f=await encryptedFixture(directory,book),destination=path.join(directory,'website'),releases=new PublicationJobs(f.workspace),jobs=workspaceJobs(f.workspace);
+ t.after(async()=>{await jobs.worker.stop();clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  await mkdir(destination);await mkdir(path.join(destination,'.git'));await writeFile(path.join(destination,'.git','HEAD'),'Unrelated repository history');await writeFile(path.join(destination,'manual.html'),'An unrelated page');
  const prepare=async()=>{
-  const job=await releases.start(await publicationCommand(releases),jobs.queue),claimed=await jobs.queue.claim();
-  assert.equal(claimed.id,job.id);const candidate=await releases.prepare(claimed,{signal:new AbortController().signal,progress:async()=>{}});
-  await jobs.queue.complete(job.id,claimed.lease.token,candidate);return releases.read(candidate.reviewId);
+  const job=await releases.start(await publicationCommand(releases),jobs.queue);jobs.worker.start();
+  try{const deadline=Date.now()+120000;for(;;){const current=await jobs.queue.read(job.id);if(['completed','failed','cancelled'].includes(current.state)){assert.equal(current.state,'completed',current.error);return await releases.read(current.result.id);}assert.ok(Date.now()<deadline,'Publication preparation did not finish');await delay(50);}}
+  finally{await jobs.worker.stop();}
  };
- const first=await prepare();t.after(async()=>{await jobs.worker.stop();clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+ const first=await prepare();
  return {...f,directory,destination,prepare,first,service:new LocalExport(f.workspace)};
 }
 async function verifyOutput(candidate,directory){for await(const [name,content] of candidate.files)assert.deepEqual(await readFile(path.join(directory,name)),await contentBuffer(content),name);}
 const planFor=(f,c=f.first,directory=f.destination)=>f.service.plan({reviewId:c.reviewId,directory});
 const apply=(service,id)=>service.apply({id,reviewed:true});
 async function revised(f){
- const current=await f.workspace.read();current.book.entries[0].title='Revised oscillator trial';current.book.entries[2].share=false;await f.workspace.save(current.book,current.etag);
+ const current=await f.workspace.read();current.book.entries[0].title='Revised oscillator trial '+(f.revision=(f.revision??0)+1);current.book.entries[2].share=false;await f.workspace.save(current.book,current.etag);
  const sites=new WebsiteSites(f.workspace),site=await sites.read(null),selection=structuredClone(site.site.selection),recordId=current.book.entries[2].id,choice=selection.records.find(row=>row.id===recordId);
  if(choice)choice.share=false;else selection.records.push({id:recordId,share:false,attachments:[]});
  await sites.save(null,{workspaceId:current.book.id,baseEtag:site.etag,websitePin:site.websitePin,metadata:{},projects:[],changes:[],removed:[],selection});return f.prepare();
@@ -94,7 +96,7 @@ test('independent websites retain isolated export reviews and cannot adopt each 
  const f=await fixture(t),sites=new WebsiteSites(f.workspace),initial=await f.workspace.read(),record=initial.book.entries[0],projectId=initial.book.notebooks.find(n=>n.id===record.notebookId).projectId,ids=[];
  for(const name of ['Project journal','Project guide']){
   const created=await sites.change({workspaceId:initial.book.id,etag:(await f.workspace.outline()).etag,operation:'create',name}),current=await sites.read(created.id);ids.push(created.id);
-  await sites.save(created.id,{workspaceId:initial.book.id,baseEtag:current.etag,websitePin:current.websitePin,metadata:{},projects:[],changes:[],removed:[],selection:{defaultShare:false,includeProjects:[],records:[{id:record.id,share:true,attachments:[]}]}});
+  await sites.save(created.id,{workspaceId:initial.book.id,baseEtag:current.etag,websitePin:current.websitePin,metadata:{website:{...current.book.website,home:{...current.book.website.home,enabled:true,title:name,introduction:'Authored introduction for '+name}}},projects:[],changes:[],removed:[],selection:{defaultShare:false,includeProjects:[],records:[{id:record.id,share:true,attachments:[]}]}});
  }
  const [a,b]=ids.map(id=>websiteWorkspace(f.workspace,id)),firstReleases=new PublicationJobs(a),secondReleases=new PublicationJobs(b),first=await firstReleases.inline(await publicationCommand(firstReleases)),second=await secondReleases.inline(await publicationCommand(secondReleases)),sa=new LocalExport(a),sb=new LocalExport(b);
  const plan=await sa.plan({reviewId:first.reviewId,directory:f.destination});await assert.rejects(sb.get(plan.id),{code:'NOT_FOUND'});await apply(sa,plan.id);

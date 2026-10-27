@@ -1,7 +1,8 @@
 // Cross-filesystem book moves reuse the authenticated owner transfer. Only the
 // verified destination becomes current; retirement stays beside the old owner.
 import path from 'node:path';
-import {rename,unlink} from 'node:fs/promises';
+import {atomicReplace as rename} from './atomic-replace.js';
+import {unlinkPersistent as unlink,persistRename} from './filesystem-persistence.js';
 import {LabBookStorage} from './lab-book-storage.js';
 import {copyLabBookLocation,labBookTransferReceipt} from './lab-book-transfer.js';
 import {catalogueBinding} from './postgres-activation.js';
@@ -76,7 +77,7 @@ export class LabBookRelocationTransfer{
      }finally{await lease.close();}
      await rename(roots.source,retired);await this.checkpoint('source-retired',value);
     }
-    value.phase='retired';await this.command.save(value);await this.checkpoint('retired',value);
+    await persistRename(roots.source,retired);value.phase='retired';await this.command.save(value);await this.checkpoint('retired',value);
    }
    if(value.phase!=='retired')throw new AppError('STORAGE_MOVE_STATE');
    await removeRetiredLabBook({...value,...roots,sourceDirectory:value.identity},{verify:!this.fresh,checkpoint:async(stage,...args)=>{await this.check();await this.checkpoint('retire:'+stage,...args);}});

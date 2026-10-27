@@ -1,7 +1,9 @@
 // Copy fallback for the same owner identities. Progress is indexed separately
 // from the immutable recovery-key root carried by the selected project archive.
 import path from 'node:path';
-import {rename,unlink,opendir} from 'node:fs/promises';
+import {opendir} from 'node:fs/promises';
+import {atomicReplace as rename} from './atomic-replace.js';
+import {unlinkPersistent as unlink,persistRename} from './filesystem-persistence.js';
 import {copyProjectOwnerLocation,projectTransferReceipt} from './project-transfer.js';
 import {copyLabBookLocation,labBookTransferReceipt} from './lab-book-transfer.js';
 import {workspaceCopyTransferId} from './workspace-copy-directory.js';
@@ -56,7 +58,7 @@ export class NativeRelocationTransfer{
     },{keysRoot:scope.destination,identity:false});
     await atomicWrite(path.join(scope.source,MOVE_SOURCE),serialize({id:value.id,destination:scope.destination}));await this.checkpoint('retire-frozen',value);await this.check();await rename(scope.source,retired);await this.checkpoint('source-retired',value);
    }
-   value.phase='retired';await this.command.save(value);await this.checkpoint('retired',value);
+   await persistRename(scope.source,retired);value.phase='retired';await this.command.save(value);await this.checkpoint('retired',value);
   }
   if(value.phase!=='retired')throw new AppError('STORAGE_MOVE_STATE');
   const ownerRelative=async relative=>{for(let prefix=path.posix.dirname(relative);prefix!=='.';prefix=path.posix.dirname(prefix))if(await this.owners.get(prefix))return relative.slice(prefix.length+1);return relative;};

@@ -9,7 +9,9 @@ import {operationStage} from './operation-progress.js';
 // A project rename carries its existing nested owners. Only names, registry
 // locations and recovery receipts change; record and evidence bytes stay put.
 import path from 'node:path';
-import {readFile,realpath,rename,unlink} from 'node:fs/promises';
+import {readFile,realpath} from 'node:fs/promises';
+import {atomicReplace as rename} from './atomic-replace.js';
+import {unlinkPersistent as unlink,persistRename} from './filesystem-persistence.js';
 import {ProjectStorage} from './project-storage.js';
 import {WorkspaceProjectRename,clearRenamedProjects} from './workspace-project-rename.js';
 import {ProjectBookRename,clearRenamedBooks} from './project-book-rename.js';
@@ -112,6 +114,7 @@ export class ProjectRenames{
      await atomicWrite(path.join(root,RENAME_MARKER),serialize({version:1,...(value.placement?{placement:true}:{}),id:value.id,source:scope.source,destination:scope.destination}));
     },{existing:true});
    }
+   if(root===scope.destination&&value.version!==2&&['prepared','frozen'].includes(value.phase))await persistRename(scope.source,scope.destination);
    if(root===scope.source){
     const storage=new ProjectStorage(root,this.projectId,vault),{projects,books}=this.helpers(storage);
     try{await projects.load(scope);await books.load(value.id,value.rootBooks);await projects.freezeAndStop(scope,{checkpoint});await books.freezeAndStop(scope,{checkpoint});}finally{projects.close();books.close();}

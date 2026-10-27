@@ -3,7 +3,9 @@ import {assertInventoryObligationsSettled} from './inventory-obligation-lifecycl
 // and retired to a unique sibling. Retries never traverse a reused source path.
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {mkdir,readFile,readdir,opendir,realpath,rename,unlink,rmdir} from 'node:fs/promises';
+import {readFile,readdir,opendir,realpath,unlink,rmdir} from 'node:fs/promises';
+import {atomicReplace as rename} from './atomic-replace.js';
+import {createPersistentDirectory as mkdir,persistDirectories,persistRename,unlinkPersistent} from './filesystem-persistence.js';
 import {workspaceFile,assertRegular,atomicWrite,serialize,digest} from './storage.js';
 import {assertNotMoving} from './workspace-move-state.js';
 import {DELETE_MARKER,workspaceDeletion,assertNotDeleting} from './workspace-delete-state.js';
@@ -108,7 +110,7 @@ export class OwnedStorageDeletions{
    let atTarget=!!await assertRegular(target,{directory:true,missing:true});
    if(!atTarget&&value.phase==='retired'){
     // A crash after rmdir must not turn a new folder at the old path into a target.
-    value.phase='complete';await this.save(value);return {id,source:value.source,complete:true};
+    await persistDirectories([path.dirname(target)]);value.phase='complete';await this.save(value);return {id,source:value.source,complete:true};
    }
    const root=atTarget?target:value.source,marker=await workspaceDeletion(root);
    if(!marker&&value.phase==='prepared'){
@@ -118,7 +120,7 @@ export class OwnedStorageDeletions{
    if(!marker&&atTarget&&value.phase==='retired'){
     // Only empty directories can remain after removal of the final marker.
     await rmdir(path.join(target,'.observanda')).catch(e=>{if(e.code!=='ENOENT')throw e;});await rmdir(target);
-    value.phase='complete';await this.save(value);return {id,source:value.source,complete:true};
+    await persistDirectories([path.dirname(target)]);value.phase='complete';await this.save(value);return {id,source:value.source,complete:true};
    }
    if(!marker||marker.id!==id||marker.source!==value.source)throw new AppError('STORAGE_DELETE_STATE');
    if(!atTarget){
@@ -131,7 +133,7 @@ export class OwnedStorageDeletions{
     await checkpoint('database',value);
     await rename(root,target);atTarget=true;value.phase='retired';await this.save(value);await checkpoint('retired',value);
    }else if(!value.databaseRemoved)throw new AppError('STORAGE_DELETE_STATE');
-   else if(value.phase!=='retired'){value.phase='retired';await this.save(value);}
+   else if(value.phase!=='retired'){await persistRename(value.source,target);value.phase='retired';await this.save(value);}
    await this.frozen(value);
    await operationStage('delete-count',{unit:'files'},async()=>{
     let total=0;for await(const item of files(target)){operationItem(item.name);operationAdvance();total++;}
@@ -147,11 +149,11 @@ export class OwnedStorageDeletions{
       }
      }
      await remove(target);await checkpoint('files',value);
-     await unlink(path.join(target,DELETE_MARKER));await rmdir(path.join(target,'.observanda'));await rmdir(target);operationAdvance();
+     await unlink(path.join(target,DELETE_MARKER));await rmdir(path.join(target,'.observanda'));await rmdir(target);await persistDirectories([path.dirname(target)]);operationAdvance();
     });
    });
    await checkpoint('removed',value);value.phase='complete';await this.save(value);return {id,source:value.source,complete:true};
   });}finally{await lease?.close();if(!unlocked)this.busy=false;}
  }
- async acknowledge(id){const value=await this.read(id);if(value.phase!=='complete')throw new AppError('STORAGE_DELETE_STATE');await unlink(this.file(id));}
+ async acknowledge(id){const value=await this.read(id);if(value.phase!=='complete')throw new AppError('STORAGE_DELETE_STATE');await unlinkPersistent(this.file(id));}
 }

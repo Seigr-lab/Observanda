@@ -3,7 +3,9 @@ import {NativeRelocationOwners} from './native-relocation-owners.js';
 // Cross-workspace placement publishes verified destination ownership before
 // retiring the source. Each project's and book's access remains independent.
 import path from 'node:path';
-import {readFile,realpath,rename,unlink} from 'node:fs/promises';
+import {readFile,realpath} from 'node:fs/promises';
+import {atomicReplace as rename} from './atomic-replace.js';
+import {unlinkPersistent as unlink,persistRename} from './filesystem-persistence.js';
 import {ProjectStorage} from './project-storage.js';
 import {WorkspaceProjectRename,clearRenamedProjects} from './workspace-project-rename.js';
 import {ProjectBookRename,clearRenamedBooks} from './project-book-rename.js';
@@ -132,6 +134,7 @@ export class ProjectWorkspaceMoves{
     await reserveIncomingProjectMove(this.targetRegistry,value);
     if(value.phase==='copying')await transfer.copy();
     let root=await this.locate(value);authenticateKeyring((await readAccess(root)).value,vault);
+    if(root===scope.destination&&value.version!==2&&['prepared','frozen'].includes(value.phase))await persistRename(scope.source,scope.destination);
     if(root===scope.source){
      if((await workspaceRename(root))?.id!==value.id)throw new AppError('STORAGE_MOVE_STATE');
      const storage=new ProjectStorage(root,this.projectId,vault),{projects,books}=this.helpers(storage,value);

@@ -5,7 +5,9 @@ import {assertBookTransfersComplete} from './lab-book-transfer-state.js';
 // Rename the existing book directory and its current metadata as one recoverable
 // operation. The project retains a journal; records and evidence are not copied.
 import path from 'node:path';
-import {readFile,realpath,rename,unlink} from 'node:fs/promises';
+import {readFile,realpath} from 'node:fs/promises';
+import {atomicReplace as rename} from './atomic-replace.js';
+import {unlinkPersistent as unlink,persistRename} from './filesystem-persistence.js';
 import {LabBookStorage} from './lab-book-storage.js';
 import {LabBookRegistry} from './lab-book-registry.js';
 import {assertRegular,atomicWrite,privateDirectory,digest,serialize,workspaceFile} from './storage.js';
@@ -98,6 +100,7 @@ export class LabBookRenames{
      await atomicWrite(path.join(root,RENAME_MARKER),serialize({version:1,id:value.id,source,destination}));
     },{existing:true});
    }
+   if(root===destination&&['prepared','frozen'].includes(value.phase))await persistRename(source,destination);
    if(root===source){
     const provider=databaseProvider();if(!provider?.stopLabBookForRename)throw new AppError('DATABASE_LOCATION');
     await provider.stopLabBookForRename(root,value.labBookId,vault,value.id);

@@ -5,7 +5,7 @@ import path from 'node:path';
 import os from 'node:os';
 import {atomicReplace} from '../src/atomic-replace.js';
 import {atomicWrite,privateDirectory} from '../src/storage.js';
-import {filesystemPersistence,syncDirectory,persistRename,persistDirectoryCreation} from '../src/filesystem-persistence.js';
+import {filesystemPersistence,syncDirectory,persistRename,persistDirectoryCreation,createPersistentDirectory,unlinkPersistent,removePersistentDirectory} from '../src/filesystem-persistence.js';
 import {safeError} from '../src/errors.js';
 
 test('directory barriers close handles and preserve the first persistence failure',async()=>{
@@ -40,4 +40,11 @@ test('real native directories, replacements and cross-parent renames reopen with
  await atomicWrite(target,'old complete content');await atomicWrite(target,'new complete content');assert.equal(await readFile(target,'utf8'),'new complete content');
  const other=path.join(root,'other');await mkdir(other);const pending=path.join(other,'pending');await writeFile(pending,'cross parent content');await atomicReplace(pending,target);assert.equal(await readFile(target,'utf8'),'cross parent content');
  assert.equal(await syncDirectory(folder),process.platform!=='win32');
+});
+
+test('new owner ancestors and receipt removal persist without replacing existing directories',async t=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-owner-directory-'));t.after(()=>rm(root,{recursive:true,force:true}));
+ const parent=path.join(root,'owner'),child=path.join(parent,'books','book');assert.equal(path.toNamespacedPath(await createPersistentDirectory(child,{recursive:true,mode:0o700})),path.toNamespacedPath(parent));
+ const receipt=path.join(child,'receipt');await atomicWrite(receipt,'retained recovery authority');assert.equal(await createPersistentDirectory(child,{recursive:true,mode:0o700}),undefined);assert.equal(await readFile(receipt,'utf8'),'retained recovery authority');
+ await assert.rejects(createPersistentDirectory(child),{code:'EEXIST'});await unlinkPersistent(receipt);await removePersistentDirectory(child);await assert.rejects(readFile(receipt),{code:'ENOENT'});
 });

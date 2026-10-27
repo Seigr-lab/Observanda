@@ -11,7 +11,9 @@ import {operationStage} from './operation-progress.js';
 // filesystem rename. The workspace marker fences other writers until recovery.
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {mkdir,readFile,realpath,rename,unlink} from 'node:fs/promises';
+import {readFile,realpath} from 'node:fs/promises';
+import {atomicReplace as rename} from './atomic-replace.js';
+import {createPersistentDirectory as mkdir,unlinkPersistent as unlink,persistRename} from './filesystem-persistence.js';
 import {Workspace,assertRegular,atomicWrite,serialize,digest,workspaceFile} from './storage.js';
 import {withWriterLease} from './writer-lease.js';
 import {workspaceFolderName,workspaceCreationPath} from './workspace-names.js';
@@ -135,6 +137,7 @@ export class WorkspaceRenames{
   return renameScope(value.id,async()=>{
    let root=await this.locate(value);
    if(value.phase==='complete'){await this.clearCompleted(root,vault,{checkpoint});return {id:value.id,source:value.source,destination:root,complete:true};}
+   if(root===value.destination&&['prepared','frozen'].includes(value.phase))await persistRename(value.source,value.destination);
    if(root===value.source){
     if(value.version===2)await new NativeWorkspaceRename(this,new Workspace(root,vault),value).freeze({checkpoint,check});
     else{const projects=new WorkspaceProjectRename(new Workspace(root,vault));try{await projects.load(value);await projects.freezeAndStop(value,{checkpoint});}finally{projects.close();}}

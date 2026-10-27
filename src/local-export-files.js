@@ -1,6 +1,8 @@
 // Local publication owns named output files, never a directory or Git checkout.
 import path from 'node:path';
-import {open,lstat,realpath,mkdir,link,rename,unlink} from 'node:fs/promises';
+import {open,lstat,realpath,link} from 'node:fs/promises';
+import {atomicReplace as rename} from './atomic-replace.js';
+import {createPersistentDirectory as mkdir,unlinkPersistent as unlink,persistDirectories} from './filesystem-persistence.js';
 import {createHash} from 'node:crypto';
 import {AppError} from './errors.js';
 import {writePublicFile} from './file-content.js';
@@ -88,6 +90,7 @@ export async function applyFiles(plan,checkpoint,applied,changes=()=>plan.change
     if(change.before&&!backup)throw new AppError('LOCAL_EXPORT_CHANGED',[change.path]);
     if(change.after){const a=await regular(file,{links:true}),b=await regular(stage,{missing:true,links:true});if(!b||a.ino!==b.ino||a.dev!==b.dev)throw new AppError('LOCAL_EXPORT_CHANGED',[change.path]);}
    }
+   if(change.kind!=='unchanged')await persistDirectories([path.dirname(file)]);
    await applied(index+1);continue;
   }
   if(change.kind==='unchanged'||actual&&!sameFile(actual,change.before)||backup&&!sameFile(backup,change.before)||actual&&backup)throw new AppError('LOCAL_EXPORT_CHANGED',[change.path]);
@@ -102,7 +105,7 @@ export async function applyFiles(plan,checkpoint,applied,changes=()=>plan.change
   }else if(change.before&&!backup)throw new AppError('LOCAL_EXPORT_CHANGED',[change.path]);
   if(change.after){
    if(!sameFile(await fingerprint(stage,{links:true}),change.after))throw new AppError('LOCAL_EXPORT_CHANGED',[change.path]);
-   await link(stage,file);await checkpoint('installed',change.path);
+   await link(stage,file);await persistDirectories([path.dirname(file)]);await checkpoint('installed',change.path);
   }
   await applied(index+1);
  }

@@ -1,6 +1,7 @@
 import path from 'node:path';
 import os from 'node:os';
-import {readFile,mkdir} from 'node:fs/promises';
+import {readFile} from 'node:fs/promises';
+import {createPersistentDirectory as mkdir} from '../filesystem-persistence.js';
 import {withWriterLease} from '../writer-lease.js';
 import {spawn} from 'node:child_process';
 import {generateKeyPair,createPrivateKey,createPublicKey,createHash} from 'node:crypto';

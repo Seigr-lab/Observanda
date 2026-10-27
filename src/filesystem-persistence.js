@@ -1,4 +1,4 @@
-import {open} from 'node:fs/promises';
+import {open,mkdir,unlink,rmdir} from 'node:fs/promises';
 import {constants} from 'node:fs';
 import path from 'node:path';
 import {AppError} from './errors.js';
@@ -34,4 +34,21 @@ export async function persistRename(source,destination,options){
 
 export async function persistDirectoryCreation(directory,options){
  await persistDirectories([directory,path.dirname(directory)],options);
+}
+
+export async function createPersistentDirectory(directory,options={}){
+ const first=await mkdir(directory,options);if(options.recursive&&!first)return first;
+ // Recursive mkdir can return a Windows namespaced path even when its input
+ // used a normal drive path. Compare both in the same native representation.
+ const boundary=path.toNamespacedPath(path.resolve(options.recursive?first:directory)),directories=[];let current=path.toNamespacedPath(path.resolve(directory));
+ for(;;){directories.push(current);if(current===boundary)break;const parent=path.dirname(current);if(parent===current)throw new AppError('UNSAFE');current=parent;}
+ directories.push(path.dirname(boundary));await persistDirectories(directories);return first;
+}
+
+export async function unlinkPersistent(file){
+ await unlink(file);await persistDirectories([path.dirname(file)]);
+}
+
+export async function removePersistentDirectory(directory){
+ await rmdir(directory);await persistDirectories([path.dirname(directory)]);
 }

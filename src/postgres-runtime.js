@@ -4,7 +4,9 @@ import {assertNotRenaming,workspaceRename} from './workspace-rename-state.js';
 // PostgreSQL process lifecycle. Portable clusters belong to their workspace;
 // the installation-wide mode exists for older installations and explicit tools.
 import path from 'node:path';
-import {mkdir,readFile,readdir,rename,rm,chmod,realpath} from 'node:fs/promises';
+import {readFile,readdir,rm,chmod,realpath} from 'node:fs/promises';
+import {atomicReplace as rename} from './atomic-replace.js';
+import {createPersistentDirectory as mkdir,unlinkPersistent} from './filesystem-persistence.js';
 import {createReadStream,createWriteStream} from 'node:fs';
 import {spawn} from 'node:child_process';
 import {createServer} from 'node:net';
@@ -208,7 +210,7 @@ async function managePostgres({directory,env=process.env,signal,onProgress=()=>{
    if(await assertRegular(stage,{directory:true,missing:true}))await rm(stage,{recursive:true,force:true});
    const passwordFile=path.join(directory,'bootstrap-password');await atomicWrite(passwordFile,config.adminPassword);
    try{onProgress({stage:'initialize'});await runtimeCommand(executable(config.bin,'initdb'),['-D',stage,'-U','observanda_admin','--pwfile='+passwordFile,'--auth-host=scram-sha-256','--auth-local=scram-sha-256','--encoding=UTF8','--no-locale','--data-checksums'],{signal});await rename(stage,data);freshCluster=true;}
-   finally{await rm(passwordFile,{force:true});}
+   finally{await unlinkPersistent(passwordFile).catch(error=>{if(error.code!=='ENOENT')throw error;});}
   }
   if((await readFile(path.join(data,'PG_VERSION'),'utf8')).trim()!==String(config.major))throw new AppError('DATABASE_RUNTIME');
   verifiedCluster=true;

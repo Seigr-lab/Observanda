@@ -2,6 +2,7 @@
 // The workspace registry supplies membership independently of owner payloads.
 import path from 'node:path';
 import {assertRegular} from './storage.js';
+import {projectMoveDirectory} from './project-move-boundaries.js';
 import {storageCreationPath} from './storage-names.js';
 import {researchId} from './web/research-reference.js';
 import {AppError} from './errors.js';
@@ -26,5 +27,7 @@ export async function checkPlacementParent(registry,value){
  if(!value.placement)return;
  const selected=value.placement.parentId===null?null:await registry.state(value.placement.parentId),parent=value.placement.parentId===null?registry.workspace.root:selected?.state==='active'?selected.entry.root:null;
  if(!parent||path.relative(registry.workspace.root,parent).split(path.sep).join('/')!==value.placementParent.relative)throw new AppError('STORAGE_RENAME_STATE');
- const stat=await assertRegular(parent,{directory:true});if(String(stat.dev)!==value.placementParent.dev||String(stat.ino)!==value.placementParent.ino)throw new AppError('STORAGE_RENAME_STATE');
+ // Native receipts retain exact 64-bit file identities. Number-based stat
+ // values can round Windows file IDs; legacy receipts used that representation.
+ const stat=value.ownerDirectoryVersion===2?await projectMoveDirectory(parent):await assertRegular(parent,{directory:true});if(String(stat.dev)!==value.placementParent.dev||String(stat.ino)!==value.placementParent.ino)throw new AppError('STORAGE_RENAME_STATE');
 }

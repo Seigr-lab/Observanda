@@ -2,7 +2,8 @@
 // Destination registration precedes retirement of the frozen original tree.
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {rename,unlink} from 'node:fs/promises';
+import {atomicReplace as rename} from './atomic-replace.js';
+import {unlinkPersistent as unlink,persistRename} from './filesystem-persistence.js';
 import {ProjectStorage} from './project-storage.js';
 import {LabBookStorage} from './lab-book-storage.js';
 import {copyProjectOwnerLocation,projectTransferReceipt} from './project-transfer.js';
@@ -113,7 +114,7 @@ export class ProjectPlacementTransfer{
       }
       await atomicWrite(path.join(scope.source,MOVE_SOURCE),serialize({id:value.id,destination:scope.destination}));await this.checkpoint('retire-frozen',value);await this.check();await rename(scope.source,retired);await this.checkpoint('source-retired',value);
      }
-     value.phase='retired';await this.command.save(value);await this.checkpoint('retired',value);
+     await persistRename(scope.source,retired);value.phase='retired';await this.command.save(value);await this.checkpoint('retired',value);
     }
     if(value.phase!=='retired')throw new AppError('STORAGE_MOVE_STATE');
     await removeRetiredProject({...scope,sourceDirectory:rootOwner.sourceIdentity},{ownerDirectories:value.transfer.owners.map(item=>item.relative).filter(Boolean),verify:!this.fresh,checkpoint:async(stage,...args)=>{await this.check();await this.checkpoint('retire:'+stage,value,...args);}});await this.checkpoint('source-removed',value);

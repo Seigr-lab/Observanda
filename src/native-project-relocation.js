@@ -1,7 +1,9 @@
+import {persistRename} from './filesystem-persistence.js';
 // A selected native relocation uses the established rename/copy phases and
 // markers; only its owner inventory, keys and progress are paged.
 import path from 'node:path';
-import {readFile,realpath,rename} from 'node:fs/promises';
+import {readFile,realpath} from 'node:fs/promises';
+import {atomicReplace as rename} from './atomic-replace.js';
 import {NativeRelocationOwners,nativeRelocationOwners,verifyNativeRelocationOwners} from './native-relocation-owners.js';
 import {NativeRelocationTransfer} from './native-relocation-transfer.js';
 import {admitNativeWorkspaceTree,publishNativeWorkspaceTree,publishNativeProjectLocation,nativeMovedProjectEntry,nativeDepartureOwners} from './native-relocation-publication.js';
@@ -94,6 +96,7 @@ export class NativeProjectRelocation{
    if(!['departed','complete'].includes(value.phase)){
     if(this.cross)await reserveIncomingProjectMove(command.targetRegistry,value,{owners:selected.owners});
     if(value.phase==='copying')await transfer.copy();let root=await locateNativeRelocation(command,value);authenticateKeyring((await readAccess(root)).value,vault);
+    if(root===scope.destination&&!value.copied&&['prepared','frozen'].includes(value.phase))await persistRename(scope.source,scope.destination);
     if(root===scope.source){
      await selected.freeze({check,checkpoint});await check();await target();if(await assertRegular(scope.destination,{directory:true,missing:true})&&await realpath(scope.destination)!==scope.source)throw new AppError('EXISTS');
      try{await rename(root,scope.destination);}catch(error){if(error.code!=='EXDEV')throw error;if(!value.placement){value.phase='cancelling';value.cancelReason='volume';await command.save(value);await checkpoint('cancelling',value);await selected.current(scope.source);await selected.clear(scope.source,{atSource:true,checkpoint});await checkpoint('cancelled',value);throw new AppError('STORAGE_RENAME_VOLUME');}await transfer.begin();await transfer.copy();}

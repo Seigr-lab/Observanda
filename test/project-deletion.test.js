@@ -38,12 +38,14 @@ const interrupted=phase=>async stage=>{if(stage===phase)throw Error('Interrupted
 test('deleting a portable project preserves independent children and sibling data and retains deleted references',async t=>{
  const f=await fixture(t),a=await f.project('selected'),b=await f.project('sibling'),child=await f.project('child',a.id),sibling=await b.storage.read(),childBook=await child.storage.read(),id=randomUUID(),backup=path.join(f.root,'backup',path.basename(a.storage.root)),original=await a.storage.read();
  await mkdir(path.dirname(backup));await copyProjectLocation(a.storage,backup,{id:randomUUID()});const deletions=new ProjectDeletions(f.registry,a.id),source=a.storage.root;
+ await assert.rejects(deletions.run(a.vault,{id,expectedRoot:source,checkpoint:interrupted('frozen')}),/Interrupted frozen/);
+ await assert.rejects(new ProjectOpening(f.registry,f.device).open({id:randomUUID(),path:backup,username:'',password:'',recovery:''}),{code:'STORAGE_DELETE_BUSY'});
  assert.equal((await deletions.run(a.vault,{id,expectedRoot:source})).complete,true);await assert.rejects(stat(source),{code:'ENOENT'});
  assert.deepEqual(await b.storage.read(),sibling);assert.deepEqual(await child.storage.read(),childBook);assert.equal((await f.registry.locate(child.id)).parentId,null);
  await assert.rejects(f.registry.locate(a.id),{code:'PROJECT_DELETED'});await assert.rejects(f.registry.namespace(a.book.id),{code:'PROJECT_DELETED'});
  assert.equal((await deletions.run(null,{id})).complete,true);assert.deepEqual((await pendingProjectDeletions(f.registry)).items,[]);
- const opened=await new ProjectOpening(f.registry,f.device).open({id:randomUUID(),path:backup,username:'',password:'',recovery:''});assert.equal(opened.project.projectId,a.id);assert.equal((await f.registry.namespace(a.book.id)).root,backup);
- assert.equal((await deletions.run(null,{id})).complete,true);assert.deepEqual(await new ProjectStorage(backup,a.id,a.vault).read(),original);
+ const opened=await new ProjectOpening(f.registry,f.device).open({id:randomUUID(),path:backup,username:'',password:'',recovery:''});assert.equal(opened.project.projectId,a.id);const restored=path.join(f.registry.workspace.root,path.basename(backup));assert.equal((await f.registry.namespace(a.book.id)).root,restored);
+ assert.equal((await deletions.run(null,{id})).complete,true);assert.deepEqual(await new ProjectStorage(restored,a.id,a.vault).read(),original);
 });
 test('project deletion recovers each durable boundary and never traverses a reused original path',async t=>{
  const f=await fixture(t);

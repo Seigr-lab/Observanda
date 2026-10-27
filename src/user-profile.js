@@ -1,5 +1,6 @@
 import path from 'node:path';
-import {mkdir,readFile} from 'node:fs/promises';
+import {readFile} from 'node:fs/promises';
+import {createPersistentDirectory as mkdir} from './filesystem-persistence.js';
 import {randomBytes,createCipheriv,createDecipheriv} from 'node:crypto';
 import {assertRegular,atomicWrite,digest} from './storage.js';
 import {AppError} from './errors.js';
