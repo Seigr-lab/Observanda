@@ -18,6 +18,7 @@
     "test": "node scripts/test.js",
     "check": "node scripts/check.js",
     "check:dependencies": "node scripts/check-dependencies.js",
+    "qualify:release": "node scripts/release-contract.js",
     "test:browser": "node scripts/test.js --browser",
     "build:editor": "node scripts/build-editor.js",
     "qualify:server": "node scripts/test.js test/cli-security.test.js test/postgres.test.js test/postgres-modules.test.js test/postgres-runtime.test.js test/server-lifecycle.test.js test/jobs.test.js test/jobs-server.test.js test/access-server.test.js",
