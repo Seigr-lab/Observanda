@@ -12,6 +12,7 @@ import {payloadFiles,verifyDesktopPayload,assertDesktopBuildTarget,desktopNodeVe
 import {relocateMacLibraries} from './relocate-macos.js';
 import {prepareGithubRuntime,verifyLinuxRuntime} from './github-runtime.js';
 import {preparePdfValidationRuntime} from './pdf-validation-runtime.js';
+import {dependencyInventory,collectRuntimeInventory} from './release-inventory.js';
 const root=path.resolve(fileURLToPath(new URL('..',import.meta.url))),out=path.join(root,'dist/desktop-resources'),cache=path.join(root,'dist/runtime-cache');
 const {values}=parseArgs({options:{media:{type:'string'},'git-runtime':{type:'string'}}});
 if(!values.media)throw Error('Supply --media with a redistributable FFmpeg folder containing bin/ffmpeg, bin/ffprobe and LICENSE. No incomplete installer is produced.');
@@ -28,12 +29,14 @@ async function download(name,url,sha256){
  const partial=file+'.partial';await pipeline(response.body,createWriteStream(partial));if(await hash(partial)!==sha256){await rm(partial);throw Error('Runtime checksum mismatch');}await copyFile(partial,file);await rm(partial);return file;
 }
 await mkdir(cache,{recursive:true});
+if(!process.env.npm_execpath)throw Error('Run npm run prepare:desktop.');
+await run(process.execPath,[process.env.npm_execpath,'run','check:dependencies']);
 // Only generated payload state is replaced. Workspaces never live here.
 if(path.dirname(out)!==path.join(root,'dist'))throw Error('Invalid build path');await rm(out,{recursive:true,force:true});await mkdir(out,{recursive:true});
 const version=desktopNodeVersion;
 await mkdir(path.join(out,'runtime'),{recursive:true});
 if(process.platform==='win32'){
- const file=await download('node-'+version+'-win-x64.exe','https://nodejs.org/dist/v'+version+'/win-x64/node.exe','5c976096e04e5c2c1f091938926234cc9fbebfe9787ddd149351b3b0ecc707b5');await copyFile(file,path.join(out,'runtime/node.exe'));
+ const file=await download('node-'+version+'-win-x64.exe','https://nodejs.org/dist/v'+version+'/win-x64/node.exe',desktopNodeHashes['win32-x64']);await copyFile(file,path.join(out,'runtime/node.exe'));
  const license=await fetch('https://raw.githubusercontent.com/nodejs/node/v'+version+'/LICENSE');if(!license.ok)throw Error('Missing Node license');await writeFile(path.join(out,'runtime/LICENSE'),await license.text());
  const archive=path.join(cache,'postgresql-17.11.zip');try{if(await hash(archive)!==windowsRuntime.sha256)throw Error();}catch{await rm(archive,{force:true});await downloadRuntime(archive);}
  await run('tar.exe',['-xf',archive,'-C',out,'pgsql/bin','pgsql/lib','pgsql/share','pgsql/server_license.txt','pgsql/commandlinetools_3rd_party_licenses.txt']);
@@ -82,5 +85,9 @@ await rm(path.join(service,'node_modules/.bin'),{recursive:true,force:true});awa
 await updateDesktopIcons({png:true});
 
 
+const lock=JSON.parse(await readFile(path.join(service,'package-lock.json'),'utf8'));
+await writeFile(path.join(out,'dependencies.cdx.json'),JSON.stringify(dependencyInventory(lock,{productionOnly:true}),null,2)+'\n');
+await writeFile(path.join(out,'build-dependencies.cdx.json'),JSON.stringify(dependencyInventory(lock),null,2)+'\n');
+await writeFile(path.join(out,'runtimes.json'),JSON.stringify(await collectRuntimeInventory(out,{nodeVersion:version}),null,2)+'\n');
 const manifest={format:1,platform:process.platform,arch:process.arch,node:version,postgresql:'17.11',files:await payloadFiles(out)};await writeFile(path.join(out,'payload.json'),JSON.stringify(manifest,null,2));await verifyDesktopPayload(out);
 console.log('Verified desktop payload: '+manifest.files.length+' files. Application sources and dependencies only; workspace data and internal notes are excluded.');

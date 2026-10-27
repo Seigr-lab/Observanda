@@ -1,0 +1,34 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import {dependencyInventory,collectRuntimeInventory} from '../scripts/release-inventory.js';
+
+test('release SBOM separates build dependencies and excludes resolved credentials and private paths',()=>{
+ const pkg={version:'1.2.3',integrity:'sha512-'+Buffer.alloc(64,17).toString('base64'),resolved:'https://user:secret@example.invalid/private/sentinel',license:'MIT'};
+ const lock={lockfileVersion:3,packages:{'':{},'node_modules/library':pkg,'node_modules/@scope/builder':{...pkg,dev:true}}};
+ const all=dependencyInventory(lock),runtime=dependencyInventory(lock,{productionOnly:true});
+ assert.equal(all.components.length,2);assert.equal(runtime.components.length,1);assert.equal(runtime.components[0].name,'library');
+ assert.doesNotMatch(JSON.stringify(all),/secret|sentinel|example.invalid/);
+ assert.throws(()=>dependencyInventory({...lock,packages:{'node_modules/missing':{version:'1.0.0'}}}),/integrity/);
+ assert.throws(()=>dependencyInventory({...lock,packages:{'node_modules/../outside':pkg}}),/identity/);
+ assert.throws(()=>dependencyInventory({...lock,packages:{'node_modules/linked':{...pkg,link:true}}}),/identity/);
+});
+
+function probes(overrides={}){
+ const hash='a'.repeat(64),versions={node:'24.22.1',undici:'7.30.1',openssl:'3.5.4',uv:'1.51.0',v8:'13.6.233.17-node.37',zlib:'1.3.1'};
+ const outputs={'node.exe':JSON.stringify(versions),'postgres.exe':'postgres (PostgreSQL) 17.11','ffmpeg.exe':'ffmpeg version 9.0.2-full_build','ffprobe.exe':'ffprobe version 9.0.2-full_build','git.exe':'git version 2.56.0.windows.2','git-credential-manager.exe':'2.9.1+build','java.exe':'openjdk version "21.0.12.1"'};
+ const calls=[];return {calls,options:{platform:'win32',nodeVersion:versions.node,digest:async()=>hash,read:async()=>JSON.stringify({validatorVersion:'1.30.3',validatorSha256:hash}),execute:async(file,args,options)=>{calls.push({file,args,options});return {stdout:outputs[path.basename(file)],stderr:''};},...overrides}};
+}
+test('shipping runtime inventory measures the bundled executables with bounded probes',async()=>{
+ const p=probes(),result=await collectRuntimeInventory('synthetic-payload',p.options);
+ assert.equal(p.calls.length,7);assert.equal(result.components.length,13);
+ assert.equal(result.components.find(c=>c.name==='Node.js/undici').version,'7.30.1');
+ for(const call of p.calls){assert.equal(call.options.windowsHide,true);assert.equal(call.options.timeout,30000);assert.equal(call.options.maxBuffer,65536);assert.equal(call.options.env.NODE_OPTIONS,'');}
+ assert.doesNotMatch(JSON.stringify(result),/synthetic-payload/);
+});
+test('runtime inventory refuses missing, unexpected and changed runtimes without disclosing probe output',async()=>{
+ await assert.rejects(collectRuntimeInventory('synthetic',probes({nodeVersion:'24.0.0'}).options),/differs/);
+ await assert.rejects(collectRuntimeInventory('synthetic',probes({execute:async()=>{throw Error('private-file password=secret');}}).options),error=>error.message==='Runtime version probe failed: Node.js');
+ await assert.rejects(collectRuntimeInventory('synthetic',probes({execute:async()=>({stdout:'private-file password=secret'})}).options),error=>error.message==='Runtime version is not identifiable: Node.js');
+ await assert.rejects(collectRuntimeInventory('synthetic',probes({read:async()=>JSON.stringify({validatorVersion:'1.30.3',validatorSha256:'b'.repeat(64)})}).options),/digest differs/);
+});

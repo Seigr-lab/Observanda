@@ -3,7 +3,11 @@ export default {
  files:['pdf-renderer.js','pdf-service.js','main.js','policy.js','branding.js','close-guard.js','locales/**/*.json','icon.png','icon-black.png','icon-white.png','package.json'],asar:true,npmRebuild:false,
  extraResources:[{from:'dist/desktop-resources',to:'.',filter:['**/*','!**/.package-lock.json']}],
  beforePack:async()=>{
+  await import('./scripts/check-dependencies.js');
   const {verifyDesktopPayload}=await import('./scripts/desktop-payload.js');await verifyDesktopPayload('dist/desktop-resources',{sourceRoot:'.'});
+  const {readFile}=await import('node:fs/promises');
+  const manifest=JSON.parse(await readFile('dist/desktop-resources/payload.json','utf8'));
+  for(const name of ['dependencies.cdx.json','build-dependencies.cdx.json','runtimes.json'])if(!manifest.files.some(file=>file.path===name))throw Error('Recreate the desktop payload with dependency and runtime inventories.');
   const {updateDesktopIcons}=await import('./scripts/update-icons.js');await updateDesktopIcons({png:true});
  },
  win:{target:[{target:'nsis',arch:['x64']}],icon:'desktop/icon.ico',requestedExecutionLevel:'asInvoker'},

@@ -4,12 +4,13 @@ import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {githubRuntimeFiles} from './github-runtime.js';
 import {pdfValidationRuntimeFiles} from './pdf-validation-runtime.js';
-// Node's official v24.20.0/SHASUMS256.txt pins the complete target archive.
-export const desktopNodeVersion='24.20.0';
+// Node's official SHASUMS256.txt pins each complete target archive/executable.
+export const desktopNodeVersion='24.22.1';
 export const desktopNodeHashes=Object.freeze({
- 'darwin-x64':'9e5b2644cf107befb6aefca676b96d3296bc10138096f022ed378d6233ed81f4',
- 'darwin-arm64':'40e5607e5ecb3db9192723776da2d75d966260fc74a7a9e731c1bd67dda96bc8',
- 'linux-x64':'855d581f8a4eb1a8117e3426de25fe02770592febcfb31369aee1ffbfee9e8ec'
+ 'win32-x64':'d702daa815eabbff763c7d3808e235cf031cf2ca70211b56847bc72f51e240e5',
+ 'darwin-x64':'d132557e7ee2b85af08b0c8c34338e65c6430f2238d01f727728ef42dc83b035',
+ 'darwin-arm64':'89c682593d76cd44233fa53b1563264e7de9cbb189cad169135c5b4fadfbc0a7',
+ 'linux-x64':'eb6728e77c576a35162c122c45ccadf224d89ff00abc8dae46cc2897c6002d7c'
 });
 export function assertDesktopBuildTarget({platform=process.platform,arch=process.arch,osRelease=''}={}){
  if(platform==='win32'&&arch==='x64'||platform==='darwin'&&['x64','arm64'].includes(arch))return;

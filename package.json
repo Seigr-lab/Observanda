@@ -5,7 +5,7 @@
   "description": "An independent notebook for observation, experimentation, and sharing.",
   "type": "module",
   "engines": {
-    "node": ">=24.20 <25"
+    "node": ">=24.22.1 <25"
   },
   "scripts": {
     "start": "node src/cli.js open",
@@ -17,6 +17,7 @@
     "test:desktop": "playwright test --config playwright.desktop.config.js",
     "test": "node scripts/test.js",
     "check": "node scripts/check.js",
+    "check:dependencies": "node scripts/check-dependencies.js",
     "test:browser": "node scripts/test.js --browser",
     "build:editor": "node scripts/build-editor.js",
     "qualify:server": "node scripts/test.js test/cli-security.test.js test/postgres.test.js test/postgres-modules.test.js test/postgres-runtime.test.js test/server-lifecycle.test.js test/jobs.test.js test/jobs-server.test.js test/access-server.test.js",
@@ -26,7 +27,7 @@
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
-    "electron": "44.4.5",
+    "electron": "44.9.3",
     "electron-builder": "26.15.3",
     "esbuild": "0.28.2",
     "fflate": "0.8.3",
