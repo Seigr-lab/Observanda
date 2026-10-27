@@ -7,7 +7,7 @@ import errors from './web/locales/en/errors.json' with {type:'json'};
 
 const current=new AsyncLocalStorage();
 const events=new Set(['service-start','service-ready','service-stop','service-failed','service-exit','service-output','request','worker-claim','worker-release','worker-idle','resource','phase','dropped']);
-const phases=new Set(['startup','shutdown','request','waiting-writer','database-inventory','activate','claim','release','idle']);
+const phases=new Set(['startup','shutdown','request','waiting-writer','database-inventory','activate','claim','release','idle','probe-media','convert-media']);
 const routes=new Set(['access','health','intake','media','projects','publication-jobs','records','research','storage','notebook','websites','website-editor']);
 const counters=new Set(['durationMs','queued','active','pendingRequests','activeRequests','queuedRequests','activeWrites','queuedWriters','requestBytes','rssBytes','heapBytes','externalBytes','cpuUserUs','cpuSystemUs','bytes','attempt','delayMs','dropped','exitCode','status']);
 const systemCodes=new Set(['EACCES','EPERM','ENOSPC','ENOENT','EIO','EMFILE','ENFILE','ECONNRESET','ECONNREFUSED','ETIMEDOUT','ABORT_ERR']);

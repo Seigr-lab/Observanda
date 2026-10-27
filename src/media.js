@@ -2,7 +2,9 @@ import {adoptRecordOwnerMedia} from './record-owner-resources.js';
 import {retiredMediaContent} from './project-media-content.js';
 import {validDownloadName,validDownloadInfo,downloadInfo} from './web/website-file.js';
 import {FileContent,writeContent,serveContent,contentBuffer,describeContent} from './file-content.js';
-import {MediaPolicy,defaultMediaPolicy} from './media-policy.js';
+import {MediaPolicy,defaultMediaPolicy,effectiveMediaPolicy} from './media-policy.js';
+import {nativeMediaAdmission} from './native-media-admission.js';
+import {diagnosticPhase} from './operational-diagnostics.js';
 import http from 'node:http';
 import {fileURLToPath} from 'node:url';
 import {pipeline} from 'node:stream/promises';
@@ -30,8 +32,14 @@ const safeId = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-4
 
 export async function mediaCommand(binary, args, timeout = 30000, {signal}={}) {
   signal?.throwIfAborted();
-  try { return await run(binary, args, { windowsHide: true, timeout, signal, killSignal:'SIGKILL', maxBuffer: 2 * 1024 * 1024, encoding: 'utf8' }); }
-  catch (error) { signal?.throwIfAborted();throw new AppError(error.code === 'ENOENT' ? 'MEDIA_TOOL' : error.killed&&timeout ? 'MEDIA_LIMIT' : 'MEDIA_INVALID'); }
+  const release=await nativeMediaAdmission.acquire(64*1024*1024,{signal});let closed=Promise.resolve();
+  try{return await diagnosticPhase('probe-media',async()=>{
+   signal?.throwIfAborted();timeout=Number.isSafeInteger(timeout)&&timeout>0?Math.min(timeout,2147483647):30000;
+   try{
+    const running=run(binary,args,{windowsHide:true,timeout,signal,killSignal:'SIGKILL',maxBuffer:2*1024*1024,encoding:'utf8'});
+    closed=new Promise(resolve=>running.child.once('close',resolve));return await running;
+   }catch(error){signal?.throwIfAborted();throw new AppError(error.code==='ENOENT'?'MEDIA_TOOL':error.killed?'MEDIA_LIMIT':'MEDIA_INVALID');}
+  });}finally{await closed;release();}
 }
 
 export async function mediaCapabilities() {
@@ -49,19 +57,30 @@ async function memoryInput(bytes,operation){
   await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});host='127.0.0.1:'+server.address().port;
   try{return await operation('http://'+host+'/'+token);}finally{await new Promise(resolve=>{server.close(resolve);server.closeAllConnections();});}
 }
-export async function convertMedia(args,workspace,output,policy,signal,{binary='ffmpeg',input=null}={}){
+export async function convertMedia(args,workspace,output,policy,signal,{binary='ffmpeg',input=null,reservationBytes,admission=nativeMediaAdmission,stallMs=300000}={}){
+  policy=effectiveMediaPolicy(policy);
+  reservationBytes??=Math.max(128*1024*1024,Math.min(Number.MAX_SAFE_INTEGER,policy.maxImagePixels*8));
+  const release=await admission.acquire(reservationBytes,{signal});
+  try{return await diagnosticPhase('convert-media',()=>convertAdmitted(args,workspace,output,policy,signal,{binary,input,stallMs}));}finally{release();}
+}
+async function convertAdmitted(args,workspace,output,policy,signal,{binary,input,stallMs}){
   signal?.throwIfAborted();
-  const child=spawn(binary,args,{windowsHide:true,stdio:[input?'pipe':'ignore','pipe','pipe']});let timeout,errorBytes=0,timedOut=false;
+  const child=spawn(binary,args,{windowsHide:true,stdio:[input?'pipe':'ignore','pipe','pipe']});let timeout,idle,errorBytes=0,timedOut=false,lastActivity=performance.now();
   // Attach a consumer synchronously. Node drains unconsumed child stdio on exit;
   // opening the encrypted destination first can otherwise discard a short result.
   // PassThrough keeps bounded buffering and propagates disk backpressure.
   const captured=new PassThrough({highWaterMark:64*1024}),capturing=pipeline(child.stdout,captured);
   const stop=()=>child.kill('SIGKILL');signal?.addEventListener('abort',stop,{once:true});
-  if(policy.processingTimeoutSeconds)timeout=setTimeout(()=>{timedOut=true;stop();},policy.processingTimeoutSeconds*1000);
+  timeout=setTimeout(()=>{timedOut=true;stop();},Math.min(2147483647,policy.processingTimeoutSeconds*1000));
+  const activity=()=>{lastActivity=performance.now();};child.stdout.on('data',activity);child.stdin?.on('drain',activity);
+  idle=setInterval(()=>{if(child.stdout.isPaused()){activity();return;}if(performance.now()-lastActivity>=stallMs){timedOut=true;stop();}},Math.min(1000,stallMs));
+  const closed=new Promise(resolve=>child.once('close',()=>{clearTimeout(timeout);clearInterval(idle);resolve();}));
   child.stderr.on('data',chunk=>{errorBytes+=chunk.length;if(errorBytes>2*1024*1024)stop();});
   const completed=new Promise((resolve,reject)=>{child.once('error',e=>reject(new AppError(e.code==='ENOENT'?'MEDIA_TOOL':'MEDIA_INVALID')));child.once('close',code=>code!==0||timedOut?reject(new AppError(timedOut?'MEDIA_LIMIT':input?({21:'SVG_EXTERNAL',22:'SVG_LIMIT',23:'SVG_STATIC',24:'MEDIA_LIMIT'}[code]??'MEDIA_INVALID'):'MEDIA_INVALID')):resolve());});
-  const writing=writeContent(workspace,output,captured,{maxBytes:policy.maxPreparedBytes,reserveBytes:policy.reserveBytes,signal});
   const feeding=input?pipeline(input.stream(),child.stdin):Promise.resolve();
+  // A closed stdout is not proof of a successful conversion. Keep the output
+  // temporary until the process and both pipelines have completed successfully.
+  const writing=writeContent(workspace,output,captured,{maxBytes:policy.maxPreparedBytes,reserveBytes:policy.reserveBytes,signal,beforeCommit:async saved=>{await Promise.all([completed,feeding,capturing]);if(!saved.size)throw new AppError('MEDIA_INVALID');}});
   try{const [result]=await Promise.all([writing,completed,feeding,capturing]);if(!result.size)throw new AppError('MEDIA_INVALID');return result;}
   catch(error){
     stop();captured.destroy();
@@ -73,7 +92,7 @@ export async function convertMedia(args,workspace,output,policy,signal,{binary='
     if(results[1].status==='rejected')throw results[1].reason;
     throw error;
   }
-  finally{clearTimeout(timeout);signal?.removeEventListener('abort',stop);}
+  finally{clearTimeout(timeout);clearInterval(idle);signal?.removeEventListener('abort',stop);await closed;}
 }
 
 async function probe(file,policy=defaultMediaPolicy(),signal) {
@@ -85,11 +104,11 @@ function checkStreams(info, kind,policy=defaultMediaPolicy()) {
   const visual = info.streams?.find(stream => stream.codec_type === 'video' && !stream.disposition?.attached_pic);
   const sound = info.streams?.find(stream => stream.codec_type === 'audio');
   if ((kind === 'audio' && !sound) || (kind !== 'audio' && !visual)) throw new AppError('MEDIA_INVALID');
-  if (visual && (!visual.width || !visual.height || policy.maxImagePixels && visual.width * visual.height > policy.maxImagePixels)) throw new AppError('MEDIA_LIMIT');
+  if (visual && (!Number.isSafeInteger(visual.width)||visual.width<1||!Number.isSafeInteger(visual.height)||visual.height<1||!Number.isSafeInteger(visual.width*visual.height)||visual.width*visual.height>policy.maxImagePixels)) throw new AppError('MEDIA_LIMIT');
   // Animated formats belong in video records: do not silently turn them into a still.
   if (kind === 'image' && (!['png_pipe', 'jpeg_pipe', 'webp_pipe', 'bmp_pipe', 'tiff_pipe'].includes(info.format?.format_name) || Number(visual.nb_frames ?? 1) > 1)) throw new AppError('MEDIA_INVALID');
   if (kind !== 'image' && (!Number.isFinite(Number(info.format?.duration)) || policy.maxDurationSeconds && Number(info.format.duration) > policy.maxDurationSeconds)) throw new AppError('MEDIA_LIMIT');
-  if (sound && (policy.maxAudioChannels && sound.channels > policy.maxAudioChannels || policy.maxSampleRate && Number(sound.sample_rate) > policy.maxSampleRate)) throw new AppError('MEDIA_LIMIT');
+  if (sound && (!Number.isSafeInteger(sound.channels)||sound.channels<1||sound.channels>policy.maxAudioChannels||!Number.isFinite(Number(sound.sample_rate))||Number(sound.sample_rate)<=0||Number(sound.sample_rate)>policy.maxSampleRate)) throw new AppError('MEDIA_LIMIT');
 }
 
 function checkMetadata(info) {
@@ -127,7 +146,7 @@ export class MediaStore {
   // Shared conversion path for immediate imports and durable worker attempts.
   async prepare(inputFile,kind,id,output,{policy,signal,progress=async()=>{}}={}) {
     const profile=profiles[kind];if(!profile)throw new AppError('MEDIA_INVALID');
-    policy??=(await new MediaPolicy(this.workspace).read()).policy;
+    policy=effectiveMediaPolicy(policy??(await new MediaPolicy(this.workspace).read()).policy);
     const sourceInfo={size:inputFile.size,sha256:inputFile.sha256};
     await progress({stage:'Converting a display copy',done:0,total:1});
       const header=[];if(kind==='image')for await(const chunk of inputFile.stream(0,255))header.push(chunk);
@@ -144,7 +163,8 @@ export class MediaStore {
           const stream=source.streams.find(s=>s.codec_type==='audio'),bits=Number(stream.bits_per_raw_sample||stream.bits_per_sample||16);
           args[args.indexOf('pcm_s16le')]=stream.sample_fmt?.startsWith('flt')?'pcm_f32le':bits>24?'pcm_s32le':bits>16?'pcm_s24le':'pcm_s16le';args.push('-rf64','auto');
         }
-        const copy=await convertMedia(['-v','error','-nostdin','-protocol_whitelist','http,tcp','-format_whitelist',formats,'-i',url,'-map_metadata','-1','-map_metadata:s','-1','-map_chapters','-1','-fflags','+bitexact','-flags:v','+bitexact','-flags:a','+bitexact',...args,'pipe:1'],this.workspace,output,policy,signal);
+        const visual=source.streams.find(stream=>stream.codec_type==='video'&&!stream.disposition?.attached_pic),pixels=visual?visual.width*visual.height:0,reservationBytes=Math.max(128*1024*1024,pixels*8);
+        const copy=await convertMedia(['-v','error','-nostdin','-threads','1','-filter_threads','1','-protocol_whitelist','http,tcp','-format_whitelist',formats,'-i',url,'-map_metadata','-1','-map_metadata:s','-1','-map_chapters','-1','-fflags','+bitexact','-flags:v','+bitexact','-flags:a','+bitexact',...args,'-threads','1','pipe:1'],this.workspace,output,policy,signal,{reservationBytes});
         return {source,copy};
       });
       await progress({stage:'Verifying the display copy',done:0,total:1});

@@ -11,6 +11,7 @@ import {initializeLocation,copyPlan,copyWorkspace,encryptedCopy} from '../src/lo
 import {sampleNotebook} from '../src/sample.js';
 import {MediaImports} from '../src/media-imports.js';
 import {MediaStore} from '../src/media.js';
+import {MediaPolicy,defaultMediaPolicy} from '../src/media-policy.js';
 import {workspaceJobs} from '../src/workspace-jobs.js';
 import {contentBuffer} from '../src/file-content.js';
 import {AppError} from '../src/errors.js';
@@ -47,6 +48,14 @@ test('failed conversion, interrupted receiving and invalid filenames retain an e
  for(const name of ['../private.svg','E:\\private.svg','bad\nname.svg'])await assert.rejects(f.imports.start({name,size:1,kind:'image'}),{code:'MEDIA_INVALID'});
  const bad=Buffer.from('<svg>malformed'),u=await uploaded(f,bad);f.worker.start();const failed=await finished(f.queue,u.s.id);await f.worker.stop();assert.equal(failed.state,'failed');
  assert.deepEqual(await contentBuffer((await f.imports.original(u.s.id)).content),bad);await assert.rejects(new MediaStore(f.root,f.vault).get(u.s.id));
+});
+
+test('a display resource refusal preserves the staged original and retries after an explicit policy change',async t=>{
+ const f=await fixture(t),policy=new MediaPolicy(f.workspace),limited=await policy.save({...defaultMediaPolicy(),maxImagePixels:1},'new'),u=await uploaded(f),source=(await f.imports.read(u.s.id)).source;
+ f.worker.start();const failed=await finished(f.queue,u.s.id);await f.worker.stop();assert.equal(failed.state,'failed');assert.equal(failed.error,'MEDIA_LIMIT');
+ assert.deepEqual(await contentBuffer((await f.imports.original(u.s.id)).content),svg);await assert.rejects(new MediaStore(f.workspace).get(u.s.id));
+ await policy.save({...limited.policy,maxImagePixels:1024},limited.etag);await f.queue.control(u.s.id,'retry');f.worker.start();const completed=await finished(f.queue,u.s.id);await f.worker.stop();assert.equal(completed.state,'completed');assert.equal(completed.attempt,2);
+ assert.deepEqual((await f.imports.read(u.s.id)).source,source);assert.deepEqual(await contentBuffer((await f.imports.original(u.s.id)).content),svg);
 });
 
 test('cancel and retry, including after backup and rekey, reuse the retained original',async t=>{

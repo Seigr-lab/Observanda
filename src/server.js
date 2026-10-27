@@ -1,5 +1,6 @@
 import {RequestAdmission,requestLane} from './request-admission.js';
 import {jsonBody} from './request-body.js';
+import {nativeMediaAdmission} from './native-media-admission.js';
 import {websiteThemeRequest} from './website-theme-requests.js';
 import {PublicationEditionSelections} from './publication-edition-selections.js';
 import {workspaceEncryptedCopyAccess} from './workspace-encrypted-copy.js';
@@ -402,7 +403,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       if(req.method==='GET'&&url.pathname==='/api/diagnostics'){
        if((await status(client)).locked)throw new AppError('ACCESS_LOCKED');
        const workers=[...(context.jobs?[context.jobs.worker]:[]),...[...(context.projects?.jobs.entries??[])].map(entry=>entry.worker)].map(worker=>worker.status());
-       return json({...await diagnostics.snapshot(),workers,requests:requestAdmission.stats(),writers:writerCapacity()});
+       return json({...await diagnostics.snapshot(),workers,requests:requestAdmission.stats(),writers:writerCapacity(),nativeMedia:nativeMediaAdmission.stats()});
       }
       const selectedContext=context;
       const snapshotRead=workspaceSnapshotRequest(req.method,url.pathname);

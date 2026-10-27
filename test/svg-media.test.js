@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,readFile,readdir,writeFile} from 'node:fs/promises';
+import {mkdtemp,readFile,readdir,writeFile,rm} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import http from 'node:http';
@@ -11,10 +11,10 @@ import {MediaPolicy,defaultMediaPolicy} from '../src/media-policy.js';
 import {createNotebook} from '../src/model.js';
 import {buildPublication} from '../src/publication.js';
 const svg=body=>Buffer.from(`<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" width="120" height="80" viewBox="0 0 120 80">${body}</svg>`);
-async function fixture(vault=null){const root=await mkdtemp(path.join(os.tmpdir(),'observanda-svg-'));return {root,store:new MediaStore(root,vault)};}
+async function fixture(t,vault=null){const root=await mkdtemp(path.join(os.tmpdir(),'observanda-svg-'));t.after(async()=>{vault?.key?.fill(0);await rm(root,{recursive:true,force:true});});if(vault)await new Workspace(root,vault).create(createNotebook('Media study'));return {root,store:new MediaStore(root,vault)};}
 
-test('SVG originals remain exact and encrypted; only a static prepared image reaches publication',async()=>{
- const vault={id:randomUUID(),key:randomBytes(32)}, {root,store}=await fixture(vault);
+test('SVG originals remain exact and encrypted; only a static prepared image reaches publication',async t=>{
+ const vault={id:randomUUID(),key:randomBytes(32)}, {root,store}=await fixture(t,vault);
  const original=svg('<metadata>PRIVATE /home/private/source.svg</metadata><defs><linearGradient id="g"><stop stop-color="red"/><stop offset="1" stop-color="blue"/></linearGradient></defs><style>.mark{fill:url(#g)}</style><path class="mark" d="M5 5H115V75H5Z"/>');
  const asset=await store.import(original,'image'),dir=path.join(root,'.observanda/media',asset.id);
  const ws=new Workspace(root,vault);
@@ -32,7 +32,7 @@ test('SVG originals remain exact and encrypted; only a static prepared image rea
 });
 
 test('SVG imports reject external resources and active content without fetching or leaving partial assets',async t=>{
- const {root,store}=await fixture();let requests=0;
+ const {root,store}=await fixture(t);let requests=0;
  const server=http.createServer((req,res)=>{requests++;res.end('not an image');});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>new Promise(r=>server.close(r)));
  const local=path.join(root,'private.png');await writeFile(local,'PRIVATE');
@@ -44,8 +44,8 @@ test('SVG imports reject external resources and active content without fetching 
  assert.equal(requests,0);assert.deepEqual(await readdir(path.join(root,'.observanda/media')),[]);
 });
 
-test('SVG import rejects malformed files and oversized canvases, respects output limits and cancellation',async()=>{
- const {root,store}=await fixture();
+test('SVG import rejects malformed files and oversized canvases, respects output limits and cancellation',async t=>{
+ const {root,store}=await fixture(t);
  await assert.rejects(store.import(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><broken></svg>'),'image'),{code:'MEDIA_INVALID'});
  await assert.rejects(store.import(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="999999" height="999999"/>'),'image'),{code:'SVG_LIMIT'});
  const policy=new MediaPolicy(root);await policy.save({...defaultMediaPolicy(),maxPreparedBytes:10},'new');

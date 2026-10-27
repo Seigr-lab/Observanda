@@ -8,6 +8,7 @@ import {setTimeout as delay} from 'node:timers/promises';
 import {convertMedia,mediaCommand} from '../src/media.js';
 import {unseal} from '../src/encryption.js';
 import {defaultMediaPolicy} from '../src/media-policy.js';
+import {NativeMediaAdmission} from '../src/native-media-admission.js';
 
 test('a fast child cannot lose output while encrypted storage is still opening', {timeout:10000},async t=>{
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-fast-media-'));t.after(()=>rm(root,{recursive:true,force:true}));
@@ -45,4 +46,18 @@ test('probe commands honour cancellation and a configured timeout', {timeout:100
  for(let n=0;n<100;n++){try{process.kill(pid,0);await delay(10);}catch{break;}}
  assert.throws(()=>process.kill(pid,0),{code:'ESRCH'});
  await assert.rejects(mediaCommand(process.execPath,['-e','setInterval(()=>{},1000)'],100),{code:'MEDIA_LIMIT'});
+});
+
+test('stalled converters exit before releasing capacity and never finalize their partial output', {timeout:15000},async t=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-stalled-media-'));t.after(()=>rm(root,{recursive:true,force:true}));
+ const marker=path.join(root,'ready'),workspace={vault:{},requireStorageKey:async()=>{}},admission=new NativeMediaAdmission({active:1,memoryBytes:1024,reserveBytes:1,available:()=>10000});
+ const code="require('node:fs').writeFileSync(process.argv[1],String(process.pid));process.stdout.write(Buffer.alloc(1024));setInterval(()=>{},1000)";
+ await assert.rejects(convertMedia(['-e',code,marker],workspace,path.join(root,'prepared'),defaultMediaPolicy(),null,{binary:process.execPath,admission,reservationBytes:512,stallMs:2000}),{code:'MEDIA_LIMIT'});
+ const pid=Number(await readFile(marker,'utf8'));assert.throws(()=>process.kill(pid,0),{code:'ESRCH'});assert.deepEqual(await readdir(root),['ready']);assert.equal(admission.stats().active,0);
+});
+
+test('a converter that emits bytes but exits unsuccessfully cannot finalize a display copy',async t=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-failed-media-'));t.after(()=>rm(root,{recursive:true,force:true}));
+ const workspace={vault:{},requireStorageKey:async()=>{}};
+ await assert.rejects(convertMedia(['-e','process.stdout.write(Buffer.alloc(1024));process.exitCode=1'],workspace,path.join(root,'prepared'),defaultMediaPolicy(),null,{binary:process.execPath}),{code:'MEDIA_INVALID'});assert.deepEqual(await readdir(root),[]);
 });
