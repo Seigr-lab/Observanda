@@ -4,6 +4,7 @@ import {validDownloadName,validDownloadInfo,downloadInfo} from './web/website-fi
 import {FileContent,writeContent,serveContent,contentBuffer,describeContent} from './file-content.js';
 import {MediaPolicy,defaultMediaPolicy,effectiveMediaPolicy} from './media-policy.js';
 import {nativeMediaAdmission} from './native-media-admission.js';
+import {parserProcess} from './parser-process.js';
 import {diagnosticPhase} from './operational-diagnostics.js';
 import http from 'node:http';
 import {fileURLToPath} from 'node:url';
@@ -32,14 +33,15 @@ const safeId = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-4
 
 export async function mediaCommand(binary, args, timeout = 30000, {signal}={}) {
   signal?.throwIfAborted();
-  const release=await nativeMediaAdmission.acquire(64*1024*1024,{signal});let closed=Promise.resolve();
+  const release=await nativeMediaAdmission.acquire(64*1024*1024,{signal});let closed=Promise.resolve(),parser;
   try{return await diagnosticPhase('probe-media',async()=>{
    signal?.throwIfAborted();timeout=Number.isSafeInteger(timeout)&&timeout>0?Math.min(timeout,2147483647):30000;
    try{
-    const running=run(binary,args,{windowsHide:true,timeout,signal,killSignal:'SIGKILL',maxBuffer:2*1024*1024,encoding:'utf8'});
+    parser=await parserProcess(binary);signal?.throwIfAborted();
+    const running=run(parser.executable,args,{cwd:parser.cwd,env:parser.env,windowsHide:true,timeout,signal,killSignal:'SIGKILL',maxBuffer:2*1024*1024,encoding:'utf8'});
     closed=new Promise(resolve=>running.child.once('close',resolve));return await running;
-   }catch(error){signal?.throwIfAborted();throw new AppError(error.code==='ENOENT'?'MEDIA_TOOL':error.killed?'MEDIA_LIMIT':'MEDIA_INVALID');}
-  });}finally{await closed;release();}
+   }catch(error){signal?.throwIfAborted();if(error instanceof AppError)throw error;throw new AppError(error.code==='ENOENT'?'MEDIA_TOOL':error.killed?'MEDIA_LIMIT':'MEDIA_INVALID');}
+  });}finally{try{await closed;await parser?.close();}finally{release();}}
 }
 
 export async function mediaCapabilities() {
@@ -60,12 +62,12 @@ async function memoryInput(bytes,operation){
 export async function convertMedia(args,workspace,output,policy,signal,{binary='ffmpeg',input=null,reservationBytes,admission=nativeMediaAdmission,stallMs=300000}={}){
   policy=effectiveMediaPolicy(policy);
   reservationBytes??=Math.max(128*1024*1024,Math.min(Number.MAX_SAFE_INTEGER,policy.maxImagePixels*8));
-  const release=await admission.acquire(reservationBytes,{signal});
-  try{return await diagnosticPhase('convert-media',()=>convertAdmitted(args,workspace,output,policy,signal,{binary,input,stallMs}));}finally{release();}
+  const release=await admission.acquire(reservationBytes,{signal});let parser;
+  try{parser=await parserProcess(binary);return await diagnosticPhase('convert-media',()=>convertAdmitted(args,workspace,output,policy,signal,{parser,input,stallMs}));}finally{try{await parser?.close();}finally{release();}}
 }
-async function convertAdmitted(args,workspace,output,policy,signal,{binary,input,stallMs}){
+async function convertAdmitted(args,workspace,output,policy,signal,{parser,input,stallMs}){
   signal?.throwIfAborted();
-  const child=spawn(binary,args,{windowsHide:true,stdio:[input?'pipe':'ignore','pipe','pipe']});let timeout,idle,errorBytes=0,timedOut=false,lastActivity=performance.now();
+  const child=spawn(parser.executable,args,{cwd:parser.cwd,env:parser.env,windowsHide:true,stdio:[input?'pipe':'ignore','pipe','pipe']});let timeout,idle,errorBytes=0,timedOut=false,lastActivity=performance.now();
   // Attach a consumer synchronously. Node drains unconsumed child stdio on exit;
   // opening the encrypted destination first can otherwise discard a short result.
   // PassThrough keeps bounded buffering and propagates disk backpressure.

@@ -1,0 +1,7 @@
+# Media parser boundary
+
+FFmpeg, FFprobe and the static SVG helper receive a minimal environment. Database URLs, credentials, proxy settings, loader options and the application's home/current directory are not inherited. Each invocation has its own temporary working directory and home variables, removed after the process and its streams close. Executables are resolved to absolute regular files before launch. Bare media-tool names search only absolute PATH directories; shell command strings and relative command paths are rejected.
+
+Existing format/protocol restrictions, token-protected loopback input, finite media limits, bounded concurrency, timeout/cancellation and output verification still apply. Originals remain retained when a derivative fails. A successful process exit is required before derivative publication.
+
+These measures reduce inherited authority and accidental exposure. **They are not OS confinement.** The native helper retains the application's OS user identity and can access files or network endpoints available to that identity after a compromise. Temporary folders, protocol allowlists and separate processes do not prove resistance to a hostile executable. Windows and Ubuntu OS filesystem/network restrictions, process-tree resource limits and pinned malformed-input qualification remain required before claiming a confined parser profile. Do not advertise the current native parser as a security sandbox.
