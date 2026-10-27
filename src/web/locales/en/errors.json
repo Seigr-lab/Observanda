@@ -1,4 +1,5 @@
 {
+  "BROWSER_ASSETS_INVALID": "An application file could not be verified. Restart Observanda; if this continues, repair the installation.",
   "MEDIA_RESOURCE_LIMIT": "This media conversion exceeds the available processing budget. Reduce the display-copy dimensions or use a machine with more available memory. A staged original remains available for recovery.",
   "WORKLOAD_BUSY": "Observanda is handling its current capacity. Please retry shortly.",
   "REQUEST_TIMEOUT": "The request stopped sending data or took too long to arrive. No command was started from this request body.",

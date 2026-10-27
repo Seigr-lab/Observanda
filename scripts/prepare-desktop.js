@@ -8,6 +8,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {updateDesktopIcons} from './update-icons.js';
 import {downloadRuntime,windowsRuntime} from '../src/postgres-runtime.js';
+import {buildBrowser} from './browser-build.js';
 import {payloadFiles,verifyDesktopPayload,assertDesktopBuildTarget,desktopNodeVersion,desktopNodeHashes,linuxPostgresBuildLayout} from './desktop-payload.js';
 import {relocateMacLibraries} from './relocate-macos.js';
 import {prepareGithubRuntime,verifyLinuxRuntime} from './github-runtime.js';
@@ -75,6 +76,7 @@ await prepareGithubRuntime({out,download,run,gitRuntime:values['git-runtime']});
 await preparePdfValidationRuntime({out,cache,download,run});
 if(process.platform==='darwin'){await relocateMacLibraries(path.join(out,'postgresql'));await relocateMacLibraries(path.join(out,'media'));await relocateMacLibraries(path.join(out,'github/git'));}
 const service=path.join(out,'service');await mkdir(service);await cp(path.join(root,'src'),path.join(service,'src'),{recursive:true});
+await buildBrowser({root,out:path.join(service,'src/web-build')});
 await mkdir(path.join(service,'desktop'));
 for(const name of ['icon_black.svg','icon_white.svg'])await copyFile(path.join(root,'desktop',name),path.join(service,'desktop',name));
 await copyFile(path.join(root,'package.json'),path.join(service,'package.json'));await copyFile(path.join(root,'package-lock.json'),path.join(service,'package-lock.json'));

@@ -12,20 +12,29 @@ import {ResearchCatalogue} from '../../src/research-catalogue.js';
 import {ResearchDrafts} from '../../src/research-drafts.js';
 import {RecordContent} from '../../src/record-content.js';
 
-test('edit and recover a late section through the reader without loading an entire record',async({page},info)=>{
- test.setTimeout(180000);
+test('enter editing from the reader and recover a late section without loading an entire record',async({page},info)=>{
+ test.setTimeout(180000);page.setDefaultTimeout(20000);
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-writing-ui-')),book=sampleNotebook(),record=book.entries[0];
  record.sections=Array.from({length:129},(_,i)=>({id:randomUUID(),title:'Section '+(i+1),body:'Exact retained '+i+' '+('observation '.repeat(100))}));
  const f=await encryptedFixture(directory,book),app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')});
  const recordRead=ResearchCatalogue.prototype.record,errors=[],requests=[];
  ResearchCatalogue.prototype.record=()=>{throw Error('The selected-writing workflow loaded an entire record');};
- page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{if(request.url().includes('/api/'))requests.push(new URL(request.url()).pathname);});
+ let editorRequests=0;page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{if(request.url().includes('/api/'))requests.push(new URL(request.url()).pathname);if(request.url().endsWith('/vendor/rich-text-editor.js'))editorRequests++;});
  try{
   await page.goto(app.url);await page.goto(app.origin+'/#/records/'+record.id+'/read/'+record.sections[128].id);
   const section=page.locator('#record-section-'+record.sections[128].id),dialog=page.getByRole('dialog',{name:'Edit writing section',exact:true});
+  await expect(section).toContainText('Exact retained 128');await expect(section.getByRole('button',{name:'Edit section',exact:true})).toHaveCount(0);
+  expect(editorRequests).toBe(0);
+  await page.getByRole('button',{name:'Edit record',exact:true}).click();await page.getByRole('spinbutton',{name:'Go to section number',exact:true}).fill('129');await page.getByRole('button',{name:'Go',exact:true}).click();
+  let releaseEngine;const engineReady=new Promise(resolve=>{releaseEngine=resolve;});
+  await page.route('**/vendor/rich-text-editor.js',async route=>{await engineReady;await route.continue();},{times:1});
+  await section.getByRole('button',{name:'Edit section',exact:true}).click();await expect(dialog.locator('.document-field')).toHaveAttribute('aria-busy','true');
+  await dialog.getByRole('button',{name:'Close',exact:true}).click();await expect(dialog).not.toBeVisible();
+  releaseEngine();await expect.poll(()=>editorRequests).toBe(1);
   await section.getByRole('button',{name:'Edit section',exact:true}).click();await expect(dialog.getByLabel('Section heading',{exact:true})).toHaveValue('Section 129');
   await dialog.getByLabel('Section heading',{exact:true}).fill('Recovered late section');
   await dialog.locator('.ProseMirror').fill('Selected writing survives a reload.');
+  expect(editorRequests).toBe(1);
   await expect(dialog.locator('[data-writing-status]')).toHaveText('Recovery checkpoint saved.');
   await dialog.getByRole('button',{name:'Keep recovery checkpoint and close',exact:true}).click();await expect(dialog).not.toBeVisible();
   await page.reload();await expect(page.getByRole('button',{name:'Review drafts',exact:true})).toBeVisible();

@@ -490,7 +490,11 @@ async function recordLinkDestinations({query='',cursor=null,signal}={}){
 }
 function openEditorLink(href){const target=parseResearchReference(href);if(target)void leave.run(()=>navigateResearch(target));else if(/^(https?:|mailto:|tel:)/.test(href))window.open(href,'_blank','noopener,noreferrer');}
 const documents=documentEditors({book:()=>state.book,figures:()=>entry()?[...entry().figures,...entry().attachments.filter(a=>a.kind==='image')]:[],context:()=>state.access?.locked?null:state.book?.id,destinations:recordLinkDestinations,onError:message=>notify(message,true),onOpenLink:openEditorLink});
-const recordWriting=recordWritingUI({state,api,esc,field,destinations:recordLinkDestinations,figures:()=>displayedRecord()?[...displayedRecord().figures,...displayedRecord().attachments.filter(a=>a.kind==='image')]:[],notify,onOpenLink:openEditorLink,onSaved:(_result,_target,options)=>workspaceLive.check(options),onClosed:()=>recordDrafts.refresh()});
+const recordWriting=recordWritingUI({state,api,esc,field,destinations:recordLinkDestinations,figures:()=>displayedRecord()?[...displayedRecord().figures,...displayedRecord().attachments.filter(a=>a.kind==='image')]:[],notify,onOpenLink:openEditorLink,onSaved:async(_result,target,options)=>{
+ const selected=()=>state.page==='record-reader'&&state.book?.id===target.workspaceId&&state.selected===target.recordId;
+ if(selected()&&target.sectionId)state.recordSection=target.sectionId;
+ await workspaceLive.check(options);if(selected())render();
+},onClosed:()=>recordDrafts.refresh()});
 const recordValues=recordValuesUI({state,api,esc,field,notify,onSaved:async(result,target,options)=>{await workspaceLive.check(options);if(target?.field?.startsWith('figure:'))await recordContent.revealFigure(target,result.position);},onClosed:()=>recordDrafts.refresh()});
 const runCreation=recordRunCreationUI({state,api,esc,notify,onCreated:async result=>{await workspaceLive.check();await openRecordReading(result.recordId);}});
 const recordLocation=recordLocationUI({state,api,esc,notify,target:()=>recordContent.locationTarget(),refresh:()=>workspaceLive.check(),choose:options=>recordDestination.open(options),access:operation=>withProjectAccess(operation),moved:result=>{location.hash=ownedRoute('#/records/'+result.recordId+'/read',{projectId:result.projectId,labBookId:result.labBookId});}});

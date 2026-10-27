@@ -1,4 +1,6 @@
 {
+  "loadingEditor": "Loading writing editor…",
+  "editorUnavailable": "The writing editor could not load. Your text has not changed. Reload Observanda to try again.",
   "chooseBook": "Choose a lab book",
   "createBookFirst": "Create a lab book in a project first.",
   "cancel": "Cancel",

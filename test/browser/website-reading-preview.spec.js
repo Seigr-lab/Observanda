@@ -3,6 +3,9 @@ import {mkdtemp,rm,realpath} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
+import {pathToFileURL} from 'node:url';
+import {buildBrowser} from '../../scripts/browser-build.js';
+import {createApplicationAssets} from '../../src/application-assets.js';
 import {createNotebook} from '../../src/model.js';
 import {WebsiteSites} from '../../src/website-sites.js';
 import {clearVault} from '../../src/encryption.js';
@@ -10,20 +13,30 @@ import {startServer} from '../../src/server.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {openPageSettings} from './composer-helper.js';
 
-test('browse unsaved website changes without saving or preparing, with aligned menus and immediate heading feedback',async({page},info)=>{
+for(const bundled of [false,true])test('browse unsaved website changes without saving or preparing, with aligned menus and immediate heading feedback'+(bundled?' through packaged frontend assets':''),async({page},info)=>{
  test.setTimeout(120000);page.setDefaultTimeout(20000);
  const parent=await realpath(os.tmpdir()),directory=await mkdtemp(path.join(parent,'observanda-reading-preview-'));
- let fixture,app,release;const errors=[],requests=[];
+ let fixture,app,release,compiled,browserAssets;const errors=[],requests=[],cacheFailures=[];
  page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{if(request.method()==='POST')requests.push(new URL(request.url()).pathname);});
  try{
+  if(bundled){
+   const out=path.join(directory,'browser');compiled=await buildBrowser({out});browserAssets=await createApplicationAssets({builtDirectory:pathToFileURL(out+path.sep)});
+   page.on('response',response=>{const url=new URL(response.url());if(url.pathname.startsWith('/api/')&&response.headers()['cache-control']!=='no-store')cacheFailures.push(url.pathname);});
+   await page.addInitScript(()=>{globalThis.applicationLongTasks=[];new PerformanceObserver(list=>{for(const task of list.getEntries())if(globalThis.applicationLongTasks.length<1000)globalThis.applicationLongTasks.push(task.duration);}).observe({type:'longtask',buffered:true});});
+  }
   const book=createNotebook('Preview qualification');fixture=await encryptedFixture(directory,book);
   const sites=new WebsiteSites(fixture.workspace),websiteId=(await sites.change({workspaceId:book.id,etag:(await fixture.workspace.outline()).etag,operation:'create',name:'Field notes'})).id;
   const before=await sites.read(websiteId),pages=Array.from({length:45},(_,i)=>({id:randomUUID(),title:'Page '+String(i).padStart(2,'0'),body:'Public page '+i,share:true,sections:[]}));
   const privatePage={id:randomUUID(),title:'Withheld page',body:'PRIVATE_PREVIEW_SENTINEL',share:false,sections:[]};
   const navigation=[{target:'home',label:'Home',show:true,parent:null},{target:'page:'+pages[0].id,label:'Research',show:true,parent:null},{target:'page:'+pages[1].id,label:'Measurements',show:true,parent:'page:'+pages[0].id},{target:'page:'+pages[2].id,label:'About',show:true,parent:null},...pages.slice(3).map(page=>({target:'page:'+page.id,label:page.title,show:false,parent:null}))];
   await sites.save(websiteId,{workspaceId:book.id,baseEtag:before.etag,websitePin:before.websitePin,metadata:{pages:[...pages,privatePage],website:{...before.book.website,home:{...before.book.website.home,enabled:true,title:'Saved heading',showTitle:true,introduction:'Saved introduction'},navigation}},projects:[],changes:[],removed:[],selection:before.site.selection});
-  app=await startServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(directory,'preferences.json'),port:0});
+  app=await startServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(directory,'preferences.json'),port:0,browserAssets});
   await page.goto(app.url);await expect(page.getByRole('button',{name:'Menu',exact:true})).toBeVisible();
+  if(bundled){
+   const measurement=()=>page.evaluate(()=>{const files=performance.getEntriesByType('resource').filter(entry=>new URL(entry.name).pathname.startsWith('/assets/'));return {elapsedMs:Math.round(performance.now()),assetRequests:files.length,transferBytes:files.reduce((sum,file)=>sum+file.transferSize,0),longTasks:globalThis.applicationLongTasks.length,maximumLongTaskMs:Math.round(Math.max(0,...globalThis.applicationLongTasks))};});
+   const cold=await measurement();await page.reload();await expect(page.getByRole('button',{name:'Menu',exact:true})).toBeVisible();const warm=await measurement(),receipt=JSON.stringify({cold,warm,initialJavaScriptBytes:compiled.initialJavaScriptBytes,initialJavaScriptFiles:compiled.initialJavaScriptFiles});console.info('Frontend loading '+receipt);await info.attach('frontend-loading.json',{body:receipt,contentType:'application/json'});
+   const origin=new URL(app.url).origin;await page.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
+  }
   await page.goto(new URL('/#/websites/'+websiteId+'/editor',app.url).href);
   const canvas=page.frameLocator('#website-draft-preview');await expect(canvas.locator('.site-header h1')).toHaveText('Saved heading');
   const saved=await sites.read(websiteId);
@@ -64,5 +77,10 @@ test('browse unsaved website changes without saving or preparing, with aligned m
   await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
   await page.reload();await expect(canvas.locator('.site-header p')).toHaveText('Unsaved preview introduction');await expect(canvas.locator('.site-header h1')).toHaveCount(0);
   expect(errors).toEqual([]);
+  expect(cacheFailures).toEqual([]);
+  if(bundled){
+   const target='**/'+compiled.manifest.entry;await page.route(target,route=>route.abort());await page.reload();await expect(page.getByRole('heading',{name:'Observanda could not load',exact:true})).toBeVisible();
+   await page.unroute(target);await page.getByRole('button',{name:'Reload Observanda',exact:true}).click();await expect(canvas.locator('.site-header p')).toHaveText('Unsaved preview introduction');
+  }
  }finally{release?.();await app?.close();if(fixture)clearVault(fixture.vault);expect(path.dirname(directory)).toBe(parent);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

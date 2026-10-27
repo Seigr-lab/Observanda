@@ -5,7 +5,6 @@ import {nativeResources} from './native-resource-budget.js';
 import {websiteThemeRequest} from './website-theme-requests.js';
 import {PublicationEditionSelections} from './publication-edition-selections.js';
 import {workspaceEncryptedCopyAccess} from './workspace-encrypted-copy.js';
-import {pdfPreviewAssets} from './pdf-preview-assets.js';
 import {PdfExportService} from './pdf-export-service.js';
 import {pdfDocumentRequest,executePdfRequest} from './pdf-document-requests.js';
 import {configurationSourceAccess} from './configuration-source-access.js';
@@ -64,7 +63,7 @@ import {moveWorkspaceTo,workspaceMoveStatus,readMoveReceipt} from './workspace-m
 import {moveSource} from './workspace-move-state.js';
 import {operationTransfer} from './operation-progress.js';
 import {operationResponse} from './operation-response.js';
-import {startupAssets} from './startup-assets.js';
+import {createApplicationAssets} from './application-assets.js';
 import {PublicationVerificationJobs} from './publication-verification-jobs.js';
 import {readBOMSource} from './bom-import.js';
 import {DesignCandidates} from './design-candidates.js';
@@ -165,7 +164,6 @@ import { Publisher } from './publishing.js';
 import {githubSerializedRequest} from './github/request-policy.js';
 import http from 'node:http';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { readFile, readdir } from 'node:fs/promises';
 import os from 'node:os';
 import { Workspace, workspaceFile, assertRegular } from './storage.js';
 import { createNotebook, upgradeNotebook, MAX_BYTES } from './model.js';
@@ -175,28 +173,10 @@ import {MODULE_BYTES,MODULE_CHECKPOINT_BYTES} from './modules/capacity.js';
 import {verifyPublication} from './publication.js';
 import { AppError, safeError } from './errors.js';
 import { MediaStore, mediaCapabilities } from './media.js';
-import { bundledFonts,bundledFontCSS } from './fonts.js';
 import {WorkspaceFonts} from './workspace-fonts.js';
 import {MAX_FONT_BYTES} from './font-inspector.js';
 
-// Discover only packaged browser assets. New feature files need no server list edit.
-async function browserAssets(directory=new URL('./web/',import.meta.url),prefix=''){
- const entries=await readdir(directory,{withFileTypes:true});
- return (await Promise.all(entries.map(async entry=>{
-  const name=prefix+entry.name,url=new URL(entry.name+(entry.isDirectory()?'/':''),directory);
-  if(entry.isDirectory())return browserAssets(url,name+'/');
-  if(!entry.isFile()||!/[.](?:js|css|html|txt|json)$/.test(entry.name))return [];
-  return [[name,await readFile(url)]];
- }))).flat();
-}
-const assets=new Map(await browserAssets());
-startupAssets(assets);
-for(const [name,bytes] of await pdfPreviewAssets())assets.set(name,bytes);
-// The app and desktop package use the same source artwork.
-for(const variant of ['black','white'])assets.set('observanda-'+variant+'.svg',await readFile(new URL('../desktop/icon_'+variant+'.svg',import.meta.url)));
-assets.set('observanda.svg',assets.get('observanda-black.svg'));
-for (const [name, bytes] of bundledFonts) assets.set(name, bytes);
-assets.set('bundled-fonts.css',bundledFontCSS);
+const assets=await createApplicationAssets();
 const mime = name => name.endsWith('.bin') ? 'application/octet-stream' : name.endsWith('.csv') ? 'text/csv; charset=utf-8' : name.endsWith('.png') ? 'image/png' : name.endsWith('.mp4') ? 'video/mp4' : name.endsWith('.wav') ? 'audio/wav' : name.endsWith('.ttf') ? 'font/ttf' : name.endsWith('.otf') ? 'font/otf' : name.endsWith('.woff2') ? 'font/woff2' : name.endsWith('.woff') ? 'font/woff' : name.endsWith('.txt') ? 'text/plain; charset=utf-8' : name.endsWith('.css') ? 'text/css; charset=utf-8' : name.endsWith('.js') ? 'text/javascript; charset=utf-8' : name.endsWith('.svg') ? 'image/svg+xml' : name.endsWith('.json') ? 'application/json' : 'text/html; charset=utf-8';
 const equal = (a, b) => typeof a === 'string' && /^[a-f0-9]{64}$/.test(a) && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
@@ -204,7 +184,7 @@ async function body(req,limit=MAX_BYTES,capacityOwner=null) {
   return jsonBody(req,{limit,retain:bytes=>req.admission.retain(bytes),admit:bytes=>{if(capacityOwner)admitResearchBytes(capacityOwner,bytes);}});
 }
 
-export async function startServer({ root=null, port = 4173, publishingOptions, githubConnections, preferencesFile, expectedExisting=false, headless=false, folderPicker, folderBrowser=browseFolders, diagnostics:providedDiagnostics, requestAdmission=new RequestAdmission(), deviceStore=preferencesFile?new DeviceStore({file:preferencesFile+'.device-key'}):defaultDeviceStore } = {}) {
+export async function startServer({ root=null, port = 4173, publishingOptions, githubConnections, preferencesFile, expectedExisting=false, headless=false, folderPicker, folderBrowser=browseFolders, diagnostics:providedDiagnostics, requestAdmission=new RequestAdmission(), browserAssets=assets, deviceStore=preferencesFile?new DeviceStore({file:preferencesFile+'.device-key'}):defaultDeviceStore } = {}) {
   const diagnostics=providedDiagnostics??new OperationalDiagnostics({directory:preferencesFile?path.join(path.dirname(preferencesFile),'diagnostics'):null});
   diagnostics.record('service-start');
   const {GithubConnections}=await import('./github/connections.js');
@@ -362,7 +342,12 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       if (req.method === 'POST' && req.headers.origin !== origin) throw new AppError('ORIGIN');
       const url = new URL(req.url, origin);
       const asset = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
-      if (req.method === 'GET' && assets.has(asset)) { res.writeHead(200, { 'Content-Type': mime(asset) }); res.end(assets.get(asset)); return; }
+      if (req.method === 'GET' && browserAssets.has(asset)) {
+       const value=await browserAssets.response(asset);res.setHeader('Cache-Control',value.cacheControl);if(value.etag)res.setHeader('ETag',value.etag);
+       if(value.etag&&req.headers['if-none-match']===value.etag){res.writeHead(304);res.end();return;}
+       res.writeHead(200, { 'Content-Type': mime(asset) }); res.end(value.bytes); return;
+      }
+      if(req.method==='GET'&&asset.startsWith('assets/'))throw new AppError('NOT_FOUND');
       // Admission precedes session bootstrap, parsing and owner activation.
       // A reserved control slot does not grant access: normal authorization
       // still applies below. No request-supplied value changes these limits.
