@@ -28,8 +28,9 @@ for(const bundled of [false,true])test('browse unsaved website changes without s
   const sites=new WebsiteSites(fixture.workspace),websiteId=(await sites.change({workspaceId:book.id,etag:(await fixture.workspace.outline()).etag,operation:'create',name:'Field notes'})).id;
   const before=await sites.read(websiteId),pages=Array.from({length:45},(_,i)=>({id:randomUUID(),title:'Page '+String(i).padStart(2,'0'),body:'Public page '+i,share:true,sections:[]}));
   const privatePage={id:randomUUID(),title:'Withheld page',body:'PRIVATE_PREVIEW_SENTINEL',share:false,sections:[]};
+  const writing={id:randomUUID(),kind:'text',title:'',show:true,body:'Format the current draft',format:'rich',richText:{type:'doc',content:[{type:'paragraph',content:[{type:'text',text:'Format the current draft'}]}]}};
   const navigation=[{target:'home',label:'Home',show:true,parent:null},{target:'page:'+pages[0].id,label:'Research',show:true,parent:null},{target:'page:'+pages[1].id,label:'Measurements',show:true,parent:'page:'+pages[0].id},{target:'page:'+pages[2].id,label:'About',show:true,parent:null},...pages.slice(3).map(page=>({target:'page:'+page.id,label:page.title,show:false,parent:null}))];
-  await sites.save(websiteId,{workspaceId:book.id,baseEtag:before.etag,websitePin:before.websitePin,metadata:{pages:[...pages,privatePage],website:{...before.book.website,home:{...before.book.website.home,enabled:true,title:'Saved heading',showTitle:true,introduction:'Saved introduction'},navigation}},projects:[],changes:[],removed:[],selection:before.site.selection});
+  await sites.save(websiteId,{workspaceId:book.id,baseEtag:before.etag,websitePin:before.websitePin,metadata:{pages:[...pages,privatePage],website:{...before.book.website,home:{...before.book.website.home,enabled:true,title:'Saved heading',showTitle:true,introduction:'Saved introduction',sections:[writing]},navigation}},projects:[],changes:[],removed:[],selection:before.site.selection});
   app=await startServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(directory,'preferences.json'),port:0,browserAssets});
   await page.goto(app.url);await expect(page.getByRole('button',{name:'Menu',exact:true})).toBeVisible();
   if(bundled){
@@ -40,6 +41,11 @@ for(const bundled of [false,true])test('browse unsaved website changes without s
   await page.goto(new URL('/#/websites/'+websiteId+'/editor',app.url).href);
   const canvas=page.frameLocator('#website-draft-preview');await expect(canvas.locator('.site-header h1')).toHaveText('Saved heading');
   const saved=await sites.read(websiteId);
+  await canvas.locator('[data-section-id="'+writing.id+'"] .canvas-section-edit').click();
+  const editor=canvas.locator('.ProseMirror');await expect(editor).toBeVisible();await editor.press('ControlOrMeta+a');
+  await page.getByLabel('Selected text color',{exact:true}).fill('#315789');
+  await expect(editor.locator('.rt-color-315789')).toHaveCSS('color','rgb(49, 87, 137)');
+  await expect(canvas.locator('link[data-document-styles]')).toHaveCount(1);
   await openPageSettings(page);
   // Hold the real durable checkpoint response: presentation must update while
   // storage is still waiting, and the save indicator must remain unsaved.
@@ -53,6 +59,7 @@ for(const bundled of [false,true])test('browse unsaved website changes without s
   await page.getByRole('button',{name:'Preview website',exact:true}).click();
   const dialog=page.getByRole('dialog'),preview=page.frameLocator('.website-reading-preview iframe');
   await expect(preview.locator('.site-header p')).toHaveText('Unsaved preview introduction');
+  await expect(preview.locator('.rt-color-315789')).toHaveCSS('color','rgb(49, 87, 137)');
   await expect(preview.locator('.site-header h1')).toHaveCount(0);
   await expect(preview.locator('body')).not.toContainText('PRIVATE_PREVIEW_SENTINEL');
   await expect(dialog.getByRole('button',{name:'Prepare selected edition'})).toHaveCount(0);

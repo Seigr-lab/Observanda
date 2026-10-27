@@ -584,7 +584,11 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
   function decorateCanvas(doc){
     disposeCanvas();markSelection(doc);doc.body.inert=documents?.structuralBusy()??false;doc.body.classList.add('canvas-edit-mode');
     enhancePublicFeeds(doc,doc.defaultView,(url,options)=>collectionNavigation.fetch(doc,url,options,canvasSources.get(doc)??doc.baseURI),{baseURL:canvasSources.get(doc)??doc.baseURI,history:false,onPageApplied:response=>collectionNavigation.accept(response)});
-    for(const href of ['/website-canvas.css','/rich-text-editor.css'])if(!doc.querySelector('link[href="'+href+'"]')){const sheet=doc.createElement('link');sheet.rel='stylesheet';sheet.href=href;doc.head.append(sheet);}
+    for(const href of ['/website-canvas.css','/rich-text-editor.css'])if(!doc.querySelector('link[href="'+href+'"]')){
+      const sheet=doc.createElement('link');sheet.rel='stylesheet';sheet.href=href;
+      if(href==='/rich-text-editor.css'){sheet.setAttribute('data-document-styles','');sheet.addEventListener('load',()=>{if(richEditor&&richMount?.node.ownerDocument===doc)refreshRichStyles(doc,richEditor.doc);},{once:true});}
+      doc.head.append(sheet);
+    }
     doc.querySelectorAll('.canvas-section-handle,.canvas-section-edit,.canvas-empty-media,[data-drop-parent]').forEach(n=>n.remove());
     for(const element of doc.querySelectorAll('[data-section-id],[data-media-id]')){
       element.tabIndex=0;element.setAttribute('aria-label',element.hasAttribute('data-media-id')?'Select media':'Select element');
