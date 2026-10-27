@@ -35,7 +35,7 @@ export function intakeJobDefinitions(workspace,queue){
    const storageId=randomUUID(),file=path.join(await service.materials.directory('originals/'+f.id),storageId+'.original');let retained=false;
    async function* chunks(){for await(const bytes of sourceChunks(report.root,f.path,f,{signal})){done+=bytes.length;await progress({stage:'staging',done,total,unit:'bytes'});yield bytes;}}
    try{
-    const result=await writeContent(workspace,file,chunks(),{maxBytes:f.size||1,signal});
+    const result=await writeContent(workspace,file,chunks(),{maxBytes:f.size||1,signal,expected:{size:f.size,sha256:f.sha256}});
     if(result.sha256!==f.sha256||result.size!==f.size)throw new AppError('INTAKE_CHANGED');
     const prepared={id:f.id,storageId,sha256:f.sha256,size:f.size};
     await write(async()=>{const current=await service.read(p.id);if(current.prepared.some(v=>v.id===f.id))throw new AppError('JOB_CHANGED');current.prepared.push(prepared);await service.write(current);});

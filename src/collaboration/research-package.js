@@ -55,7 +55,7 @@ export async function admitParts(workspace,parts,{heads=true}={}){
    const file=workspace.metadataPath(item.name);
    if(await assertRegular(file,{missing:true})){const old=await describeContent(workspace,file);if(old.size!==item.size||old.sha256!==item.sha256)fail();continue;}
    await privateDirectory(workspace.root,path.posix.dirname(item.name));
-   await writeContent(workspace,file,contentStream(parts.content(item)),{maxBytes:item.size||1});
+   await writeContent(workspace,file,contentStream(parts.content(item)),{maxBytes:item.size||1,expected:{size:item.size,sha256:item.sha256}});
   }
  }
 }

@@ -12,7 +12,8 @@ import {workspaceDestinationFixture} from './workspace-destination-fixture.js';
 import {WorkspaceDatabases} from '../src/workspace-databases.js';
 import {installDatabaseProvider} from '../src/workspace-database-context.js';
 import {sampleNotebook} from '../src/sample.js';
-import {clearVault,ENCRYPTION_OVERHEAD} from '../src/encryption.js';
+import {clearVault} from '../src/encryption.js';
+import {SEGMENTED_HEADER_BYTES,SEGMENTED_CHUNK_OVERHEAD} from '../src/segmented-file-format.js';
 import {PublicationJobs} from '../src/publication-jobs.js';
 import {withPublicationCapture} from '../src/publication-capture.js';
 import {Workspace} from '../src/storage.js';
@@ -87,7 +88,7 @@ test('output inventory binds nested retained blobs, selected choices and the exa
    handle.close=async function(){try{return await close.call(this);}finally{privacyReads--;}};
   }
   if(name==='publication.json'&&args[0]==='wx'&&path.dirname(file)===directory){
-   const write=handle.write;handle.write=function(bytes,offset,length,position){if(position>=ENCRYPTION_OVERHEAD)manifestPayloads.add(bytes);return write.call(this,bytes,offset,length,position);};
+   const write=handle.write;handle.write=function(bytes,offset,length,position){if(position>=SEGMENTED_HEADER_BYTES)manifestPayloads.add(bytes);return write.call(this,bytes,offset,length,position);};
   }
   return handle;
  });syncBuiltinESMExports();
@@ -116,7 +117,7 @@ test('output inventory binds nested retained blobs, selected choices and the exa
  const output=await openPublicationOutput(workspace,stored),rows=[];for await(const row of publicationFileRows(workspace,stored))rows.push(row.file);assert.deepEqual(rows.map(row=>row.name),['.nojekyll','index.html','pages/'+late+'.html','pages/'+extra+'.html','publication.json']);assert.deepEqual(rows.slice(0,2).map(row=>row.index),[1,0]);
  assert.equal(await files.has('missing.html'),false);assert.equal(await files.get('missing.html'),undefined);assert.deepEqual(await contentBuffer(await files.get('index.html')),homeBytes);
  assert.equal(manifestPayloads.size,1,'The small streamed manifest must use one payload buffer, not one filesystem write per entry');
- assert.equal([...manifestPayloads][0].length,(await files.get('publication.json')).size);
+ assert.equal([...manifestPayloads][0].length,(await files.get('publication.json')).size+SEGMENTED_CHUNK_OVERHEAD,'The one retained payload includes its nonce and authentication tag');
  const manifest=JSON.parse((await contentBuffer(await files.get('publication.json'))).toString());assert.equal(manifest.releaseId,stored.id);assert.equal(manifest.files.length,4);assert.equal(manifest.files[0].path,'.nojekyll');assert.deepEqual(manifest.files.find(file=>file.path==='index.html'),{path:'index.html',bytes:homeBytes.length,sha256:digest(homeBytes)});
  const page=await releases.pageChoices(candidate,{path:'pages/'+late+'.html',limit:1});assert.equal(page.offset,1);assert.equal(page.items[0].title,'Late page');
  await assert.rejects(RetainedPublicationFiles.open(workspace,{...stored,attempt:randomUUID()}),{code:'JOB_DAMAGED'});
@@ -175,7 +176,7 @@ test('output inventory binds nested retained blobs, selected choices and the exa
    await assert.rejects(withPublicationOutputWriter(workspace,source,attempt,{directory:attemptDirectory,blockedValues:['private-observation-marker']},async writer=>{
     owned=writer;async function* content(){try{yield body;if(large)yield Buffer.alloc(256*1024,0x20);}finally{ended=true;}}return writer.retain(name,content());
    }),{code:problem==='private'?'PRIVACY':'UNSAFE'});
-   assert.equal(writes,large?1:0);assert.equal(reads,large?1:0);assert.equal(ended,true);assert.equal(owned.buffers.bytes,0);
+   assert.equal(writes,large?1:0);assert.equal(reads,large?(problem==='private'?2:1):0,'Private text requires URI validation followed by detection; invalid UTF-8 or names fail during the first pass');assert.equal(ended,true);assert.equal(owned.buffers.bytes,0);
   }finally{mock.mock.restore();syncBuiltinESMExports();}
   await releases.clean(job.id,{only:attempt.lease.token});assert.deepEqual(await readdir(path.dirname(attemptDirectory)),[job.lease.token]);
  }

@@ -13,5 +13,6 @@ export class OwnedFileContent extends FileContent{
   finally{output.destroy();await pending;}
  }
  async verify(options){await this.withSource(content=>content.verify(options),options);return this;}
+ verifyMetadata(options){return this.withSource(content=>content.verifyMetadata(options),options);}
  copyTo(workspace,file,options){return this.withSource(content=>content.copyTo(workspace,file,options),options);}
 }

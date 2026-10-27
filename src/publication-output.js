@@ -163,7 +163,7 @@ export class PublicationOutputWriter{
    try{saved=await this.finalization.write(async beforeCommit=>{
     started=true;try{
      if(prepared?.buffered)await beforeCommit(expected);
-     return await writeContent(workspace,file,chunks,{signal,beforeCommit:actual=>{
+     return await writeContent(workspace,file,chunks,{signal,expected,beforeCommit:actual=>{
       if(expected&&(actual.size!==expected.size||actual.sha256!==expected.sha256))stale();if(!prepared?.buffered)return beforeCommit(actual);
      }});
     }finally{await prepared?.dispose();}

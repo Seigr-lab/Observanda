@@ -177,7 +177,7 @@ export class PublicationJobs{
   const candidate=await buildPublicationEdition(this.workspace,source,{blockedValues,signal,progress,retain:async(name,content)=>{
    assertPublicFiles(new Map([[name,content]]),blockedValues);
    signal.throwIfAborted();const index=files.length,type=content instanceof FileContent?(isDownloadPath(name)?'binary':'media'):typeof content==='string'?'text':'binary';
-   const saved=await writeContent(this.workspace,path.join(directory,index+'.blob'),contentStream(content),{signal});
+   const saved=await writeContent(this.workspace,path.join(directory,index+'.blob'),contentStream(content),{signal,expected:{size:contentSize(content),sha256:contentHash(content)}});
    if(saved.size!==contentSize(content)||saved.sha256!==contentHash(content))throw new AppError('STALE');
    files.push({name,index,...saved,type,...(type==='media'?{header:content.header.toString('hex')}: {})});
   }});

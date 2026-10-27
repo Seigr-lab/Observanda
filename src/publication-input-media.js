@@ -26,7 +26,7 @@ export async function retainPublicationMedia(workspace,jobId,assets,{signal}={})
   if(await assertRegular(file,{missing:true}))throw new AppError('PUBLICATION_IDENTITY');
   let header=Buffer.alloc(0);
   async function* input(){for await(const value of contentStream(bytes)){signal?.throwIfAborted();const chunk=Buffer.from(value);if(header.length<12)header=Buffer.concat([header,chunk.subarray(0,12-header.length)]);yield chunk;}}
-  const saved=await writeContent(workspace,file,input(),{signal});
+  const saved=await writeContent(workspace,file,input(),{signal,expected:{size:contentSize(bytes),sha256:contentHash(bytes)}});
   if(saved.size!==contentSize(bytes)||saved.sha256!==contentHash(bytes))throw new AppError('MEDIA_INVALID');
   const row={id:asset.id,kind:asset.kind,extension:asset.extension,mime:asset.mime,...saved,header:header.toString('hex')};
   if(!valid(row))throw new AppError('MEDIA_INVALID');retained.push(row);

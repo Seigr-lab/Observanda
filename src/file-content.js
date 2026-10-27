@@ -1,7 +1,8 @@
 import {scopedFileVerification} from './file-verification-context.js';
 import {checkpointedFileCopy} from './checkpointed-file-copy.js';
 import {SEGMENTED_ENVELOPE} from './segmented-file-format.js';
-import {readSegmentedFile} from './segmented-file-io.js';
+import {readSegmentedFile,readSegmentedRange,segmentedFileHeader} from './segmented-file-io.js';
+import {writeSegmentedContent} from './segmented-file-write.js';
 import {atomicReplace} from './atomic-replace.js';
 import {temporaryStreamName} from './storage-temporary.js';
 import {open,rename,unlink,statfs,lstat} from 'node:fs/promises';
@@ -16,7 +17,12 @@ import {operationStage,operationAdvance,operationWork} from './operation-progres
 const BLOCK=1024*1024;
 async function writeAll(handle,bytes,position){let done=0;while(done<bytes.length){const r=await handle.write(bytes,done,bytes.length-done,position+done);if(!r.bytesWritten)throw new AppError('IO');done+=r.bytesWritten;}}
 export async function diskSpace(directory,bytes,reserve=0){const s=await statfs(directory,{bigint:true});if(s.bavail*s.bsize<BigInt(bytes)+BigInt(reserve))throw new AppError('STORAGE_FULL');}
-function sameFile(a,b){return a.size===b.size&&a.mtimeNs===b.mtimeNs&&a.ctimeNs===b.ctimeNs&&a.ino===b.ino;}
+function sameFile(a,b){return a.size===b.size&&a.mtimeNs===b.mtimeNs&&a.ctimeNs===b.ctimeNs&&a.ino===b.ino&&a.dev===b.dev;}
+function contentReadGuard(content,handle,before,vault,key,signal){const identity=key?createHash('sha256').update(key).digest('hex'):null;return async()=>{
+ signal?.throwIfAborted();const [opened,current]=await Promise.all([handle.stat({bigint:true}),lstat(content.file,{bigint:true})]);
+ if(!current.isFile()||current.nlink>1n||!sameFile(before,opened)||!sameFile(before,current))throw new AppError('MEDIA_INVALID');
+ if(vault?.id&&(content.workspace.vault!==vault||!key||content.workspace.vault.key!==key||createHash('sha256').update(key).digest('hex')!==identity))throw new AppError('ACCESS_LOCKED');signal?.throwIfAborted();
+};}
 async function* decoded(handle,workspace,file){
   let position=0,cipher;
   if(workspace.vault?.id){
@@ -29,8 +35,9 @@ async function* decoded(handle,workspace,file){
   for(;;){const bytes=Buffer.allocUnsafe(BLOCK),r=await handle.read(bytes,0,BLOCK,position);if(!r.bytesRead)break;position+=r.bytesRead;operationWork({bytes:r.bytesRead});yield cipher?cipher.update(bytes.subarray(0,r.bytesRead)):bytes.subarray(0,r.bytesRead);}
   if(cipher){try{const last=cipher.final();if(last.length)yield last;}catch{throw new AppError('ENCRYPTION_DAMAGED');}}
 }
-export async function writeContent(workspace,file,source,{maxBytes=0,reserveBytes=0,signal,beforeCommit}={}){
+export async function writeContent(workspace,file,source,{maxBytes=0,reserveBytes=0,signal,beforeCommit,expected}={}){
  return operationStage('encrypt-file',{unit:'bytes',item:path.basename(file)},async()=>{
+  if(expected&&workspace.vault?.id)return writeSegmentedContent(workspace,file,source,{maxBytes,reserveBytes,signal,beforeCommit,expected,space:diskSpace});
   // Same OBSENC01 envelope as Workspace.writeFile; no format migration.
   await workspace.requireStorageKey();const directory=path.dirname(file),temp=path.join(directory,temporaryStreamName());
   const key=workspace.vault?.key?Buffer.from(workspace.vault.key):null,nonce=randomBytes(12),cipher=key?createCipheriv('aes-256-gcm',key,nonce):null;
@@ -49,19 +56,35 @@ export class FileContent {
   constructor(workspace,file,size,sha256,header){this.workspace=workspace;this.file=file;this.size=size;this.sha256=sha256;this.header=header;}
   withSource(consume){return consume(this);}
   async *read(start=0,end=this.size-1,{signal}={}){
-    await this.workspace.requireStorageKey();const handle=await open(this.file,'r');
+    if(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start<0||end<start&&!(this.size===0&&start===0&&end===-1)||start>=this.size&&this.size!==0)throw new AppError('INVALID');
+    end=Math.min(end,this.size-1);
+    await this.workspace.requireStorageKey();const vault=this.workspace.vault,key=vault?.key,handle=await open(this.file,'r');
     try{
       const before=await handle.stat({bigint:true});if(!before.isFile()||before.nlink>1n)throw new AppError('UNSAFE');
+      const check=contentReadGuard(this,handle,before,vault,key,signal);await check();
+      if(vault?.id&&(start>0||end<this.size-1)){
+       const magic=Buffer.alloc(8);await handle.read(magic,0,8,0);operationWork({bytes:8});await check();
+       if(magic.equals(SEGMENTED_ENVELOPE)){yield* readSegmentedRange(handle,key,this.workspace.fileAAD(this.file),start,end,{size:this.size,sha256:this.sha256,signal,check,onRead:bytes=>operationWork({bytes})});return;}
+      }
       // Authenticate the complete original envelope before releasing any plaintext.
       let size=0;const hash=createHash('sha256');for await(const chunk of decoded(handle,this.workspace,this.file)){signal?.throwIfAborted();size+=chunk.length;hash.update(chunk);}
       if(size!==this.size||hash.digest('hex')!==this.sha256||!sameFile(before,await handle.stat({bigint:true})))throw new AppError('MEDIA_INVALID');
       let position=0;for await(const chunk of decoded(handle,this.workspace,this.file)){
         signal?.throwIfAborted();
-        if(!sameFile(before,await handle.stat({bigint:true})))throw new AppError('MEDIA_INVALID');
+        await check();
         const from=Math.max(0,start-position),to=Math.min(chunk.length,end-position+1);if(to>from)yield chunk.subarray(from,to);position+=chunk.length;
         if(position>end)break;
       }
     }finally{await handle.close();}
+  }
+  async verifyMetadata({signal}={}){
+   signal?.throwIfAborted();await this.workspace.requireStorageKey();const vault=this.workspace.vault,key=vault?.key,handle=await open(this.file,'r');let segmented=false;
+   try{
+    const before=await handle.stat({bigint:true});if(!before.isFile()||before.nlink>1n)throw new AppError('UNSAFE');const check=contentReadGuard(this,handle,before,vault,key,signal);await check();
+    if(vault?.id){const magic=Buffer.alloc(8);await handle.read(magic,0,8,0);operationWork({bytes:8});await check();segmented=magic.equals(SEGMENTED_ENVELOPE);}
+    if(segmented)await segmentedFileHeader(handle,key,this.workspace.fileAAD(this.file),{size:this.size,sha256:this.sha256,signal,check,onRead:bytes=>operationWork({bytes})});
+   }finally{await handle.close();}
+   if(!segmented)await this.verify({signal,reportProgress:false});
   }
   // Internal owner transfer: plaintext is consumed only by an encrypted
   // private temporary file. The destination becomes visible after the source
@@ -81,7 +104,7 @@ export class FileContent {
         }
         signal?.throwIfAborted();await check();if(size!==owner.size||hash.digest('hex')!==owner.sha256||!sameFile(before,await handle.stat({bigint:true})))throw new AppError('MEDIA_INVALID');
       }
-      return await writeContent(workspace,file,checked(),{signal,reserveBytes,maxBytes:this.size});
+      return await writeContent(workspace,file,checked(),{signal,reserveBytes,maxBytes:this.size,expected:{size:this.size,sha256:this.sha256}});
     }finally{await handle.close();}
   }
   stream(start=0,end=this.size-1){return Readable.from(this.read(start,end));}
@@ -125,12 +148,16 @@ export async function serveContent(req,res,content,type,{signal}={}){
   if(!(content instanceof FileContent)){res.writeHead(status,{'Content-Length':Math.max(0,end-start+1)});res.end(req.method==='HEAD'?undefined:Buffer.from(content).subarray(start,end+1));return;}
   const controller=signal?null:new AbortController(),closed=()=>{if(!res.writableEnded)controller?.abort();};
   if(controller){res.once('close',closed);signal=controller.signal;}
+  if(req.method==='HEAD'){
+   try{await content.verifyMetadata({signal});signal.throwIfAborted();res.writeHead(status,{'Content-Length':Math.max(0,end-start+1)});res.end();}
+   finally{if(controller)res.off('close',closed);}return;
+  }
   const iterator=content.read(start,end,{signal});
   try{
-    // read() authenticates the whole file before its first yield. Keep that
-    // same handle for streaming instead of verifying and reopening it again.
+    // Authenticate before the first response byte. A segmented seek checks the
+    // header and requested chunks; complete reads retain whole-file checking.
     const first=await iterator.next();signal.throwIfAborted();
-    res.writeHead(status,{'Content-Length':Math.max(0,end-start+1)});if(req.method==='HEAD'){res.end();return;}
+    res.writeHead(status,{'Content-Length':Math.max(0,end-start+1)});
     async function* chunks(){if(!first.done)yield first.value;yield* iterator;}
     await pipeline(Readable.from(chunks()),res);
   }finally{if(controller)res.off('close',closed);await iterator.return();}

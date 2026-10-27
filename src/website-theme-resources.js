@@ -28,7 +28,7 @@ export class WebsiteThemeResources{
  }
  content(stage,resource){return new FileContent(this.workspace,path.join(this.directory(stage.id),resource.id),resource.size,resource.sha256);}
  async add(stage,id,source,{size,sha256,signal,check,reserveBytes=0}={}){if(!researchId(id)||stage.resources.some(r=>r.id===id))invalid();
-  const result=await writeContent(this.workspace,path.join(this.directory(stage.id),id),source,{maxBytes:size,reserveBytes,signal,beforeCommit:saved=>{if(saved.size!==size||saved.sha256!==sha256)invalid();return check?.();}});
+  const result=await writeContent(this.workspace,path.join(this.directory(stage.id),id),source,{maxBytes:size,reserveBytes,signal,expected:{size,sha256},beforeCommit:saved=>{if(saved.size!==size||saved.sha256!==sha256)invalid();return check?.();}});
   const descriptor={id,...result};stage.resources.push(descriptor);await this.save(stage);return descriptor;
  }
  async remove(stage,{removeImported=false}={}){
