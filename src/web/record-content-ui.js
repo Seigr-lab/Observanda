@@ -9,15 +9,12 @@ import {renderProse} from './prose-model.js';
 import {applyRichTextStyles} from './rich-text-stylesheet.js';
 import {recordFigureRenderer} from './book-reading.js';
 import {recordSectionActions} from './record-section-actions.js';
-import {recordValueControls,recordContributorControls} from './record-values-ui.js';
+import {recordValueControls,recordContributorControls,recordFigureAction,recordAttemptControls,recordResultControls} from './record-value-controls.js';
 import {recordHeaderControls} from './record-header-controls.js';
 import {recordMediaControls} from './record-media-values-ui.js';
 import {recordMediaActions} from './record-media-actions.js';
-import {recordFigureAction} from './record-figure-values-ui.js';
 import {recordFigureActions} from './record-figure-actions.js';
-import {recordAttemptControls} from './record-attempt-values-ui.js';
 import {recordTagActions} from './record-tag-actions.js';
-import {recordResultControls} from './record-result-values-ui.js';
 import {recordEditingView} from './record-editing-view.js';
 import {figureResultLinks,resultStatementAnchor} from './figure-result-links.js';
 

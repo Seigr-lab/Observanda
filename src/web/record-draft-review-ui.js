@@ -1,6 +1,5 @@
 import {t} from './i18n/index.js';
 import {recordConflictLabel} from './record-recovery-messages.js';
-import {editRecordCheckpoint} from './record-draft-edit-ui.js';
 const text=(key,args)=>t('recordDraftReview',key,args);
 export function recordDraftReviewUI(options){
  const {api,esc,onSaved}=options;
@@ -42,7 +41,8 @@ export function recordDraftReviewUI(options){
     else if(action.startsWith('value-')){
      const [,version,direction]=action.split('-');offsets[version]=direction==='next'?values[version].next:Math.max(0,offsets[version]-4096);values[version]=await request('value',{position,version,offset:offsets[version]});
     }else if(action==='edit'){
-     editController=new AbortController();await editRecordCheckpoint(options,{plan,signal:editController.signal});editController=null;if(finished)return;
+     const editing=new AbortController();editController=editing;const {editRecordCheckpoint}=await import('./record-draft-edit-ui.js');if(finished||editing.signal.aborted)return;
+     try{await editRecordCheckpoint(options,{plan,signal:editing.signal});}finally{if(editController===editing)editController=null;}if(finished)return;
      plan=await api('/api/research/drafts/review/prepare',plan.source,{adopt:false,signal});await load(0);
     }else if(action==='save'){const saved=await request('apply');if(!finished){close(true);await onSaved(saved);}}
    });

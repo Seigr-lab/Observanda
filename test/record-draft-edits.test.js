@@ -21,6 +21,21 @@ const media={get:async()=>{throw Error('Unexpected media');}};
 const target=p=>({id:p.id,workspaceId:p.workspaceId,expectedRevision:p.revision});
 const prepare=(f,d)=>({workspaceId:f.book.id,id:d.draft.id,expectedRevision:d.revision});
 async function edit(review,plan,field,value){const selected=await review.editRead({...target(plan),field});const command={...target(plan),field,value,valueRevision:selected.revision,editRevision:selected.editRevision,operationId:randomUUID()};return {command,saved:await review.editWrite(command)};}
+test('checkpoint figure choices retain owner and draft identity through root and panel pages',async t=>{
+ const f=await figureValueFixture();t.after(f.close);const original=(await f.workspace.read()).book.entries[0],mine=structuredClone(original);mine.title='Recovered figure choices';
+ const draft=await retainedDraft(f.workspace,f.book.id,original,mine),review=new RecordDraftReview(f.workspace,media),plan=await review.prepare(prepare(f,draft));
+ t.mock.method(ResearchCatalogue.prototype,'record',()=>{throw Error('Figure selection reconstructed the entire record');});
+ const selected=await review.editRead({...target(plan),field:'title'}),command={...target(plan),editRevision:selected.editRevision};
+ const first=await review.editFigures({...command,offset:0}),next=await review.editFigures({...command,offset:4}),last=await review.editFigures({...command,offset:8}),compound=mine.figures[8];
+ const panels=await review.editFigures({...command,figureId:compound.id,offset:0});
+ for(const page of [first,next,last,panels]){assert.equal(page.workspaceId,f.book.id);assert.equal(page.recordId,original.id);assert.equal(page.editRevision,selected.editRevision);assert.equal(Object.hasOwn(page,'storageRevision'),false);assert.ok(page.items.length<=4);}
+ assert.equal(first.figureId,null);assert.equal(first.total,9);assert.equal(first.nextOffset,4);assert.equal(next.nextOffset,8);assert.equal(last.nextOffset,null);assert.equal(last.items[0].hasPanels,true);
+ assert.equal(panels.figureId,compound.id);assert.deepEqual(panels.items.map(item=>item.id),compound.panels.map(panel=>panel.figure.id));assert.ok(panels.items.every(item=>!item.hasPanels));
+ await assert.rejects(review.editFigures({...command,figureId:randomUUID(),offset:0}),{code:'MISSING'});
+ await edit(review,plan,'title',{value:'Changed checkpoint'});
+ await assert.rejects(review.editFigures({...command,offset:0}),{code:'DRAFT_CHANGED'});
+});
+
 test('unfinished checkpoint values survive edits, restart, source changes and exact retries without loading the record',async t=>{
  const f=await figureValueFixture();t.after(f.close);const original=(await f.workspace.read()).book.entries[0],mine=structuredClone(original);mine.title='';mine.sections=Array.from({length:82},(_,i)=>({id:randomUUID(),title:'Section '+i,body:'observation '.repeat(2600)}));
  const draft=await retainedDraft(f.workspace,f.book.id,original,mine),review=new RecordDraftReview(f.workspace,media);let plan=await review.prepare(prepare(f,draft));

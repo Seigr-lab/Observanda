@@ -1,7 +1,8 @@
+import {recordValueLabel as label} from './record-value-controls.js';
 import {recordPreparationUI} from './record-preparation-ui.js';
 import {customFieldChoices} from './custom-field-choices-ui.js';
 import {recordValueEditor} from './record-value-editor.js';
-import {recordValueFields,contributorValueId,relationValueId,mediaValueId,figureValueId} from './record-value-model.js';
+import {contributorValueId,relationValueId,mediaValueId,figureValueId} from './record-value-model.js';
 import {recordFigureView} from './record-figure-values-ui.js';
 import {recordAttemptView} from './record-attempt-values-ui.js';
 import {attemptValueField} from './record-attempt-value.js';
@@ -11,19 +12,11 @@ import {recordMediaView} from './record-media-values-ui.js';
 import {recordRelationView} from './record-relations-ui.js';
 import {recordDateFields,updateRecordDate} from './record-date-ui.js';
 import {recordDateIssue,recordDateLabel} from './record-date.js';
-import {templateFieldInput,templateFieldLabel,templateInputValue} from './custom-field-input.js';
+import {templateFieldInput,templateInputValue} from './custom-field-input.js';
 import {STATUSES,RECORD_TYPES,recordLabel} from './record-types.js';
 import {t} from './i18n/index.js';
 const text=(key,args)=>t('recordValues',key,args);
-const label=(name,definition)=>resultValueId(name)?text('result'):attemptValueField(name)?t('attempts','title'):contributorValueId(name)?text('contributor'):relationValueId(name)?text('relation'):mediaValueId(name)?text('media'):figureValueId(name)?text('figure'):definition?templateFieldLabel(definition):text(name);
-export function recordContributorControls(record,esc,busy=false){
- const button=(name,field)=>'<button type="button" class="button" data-action="record-value-edit" data-value-field="'+esc(field)+'" aria-label="'+esc(name)+'"'+(busy?' disabled':'')+'>'+esc(text('editContributorButton'))+'</button>';
- return '<div class="record-contributor-values">'+(record.contributors.length?'<ul>'+record.contributors.map(person=>'<li data-record-contributor="'+person.id+'"><p>'+esc(person.name)+(person.role?' &middot; '+esc(person.role):'')+'</p>'+button(text('editContributor',{name:person.name}),'contributor:'+person.id)+'</li>').join('')+'</ul>':'<p>'+esc(text('noContributors'))+'</p>')+'<button type="button" class="button" data-action="record-value-add-contributor"'+(busy?' disabled':'')+'>'+esc(text('addContributor'))+'</button></div>';
-}
-export function recordValueControls(record,esc,selected='title'){
- const option=(name,label)=>'<option value="'+esc(name)+'"'+(name===selected?' selected':'')+'>'+esc(label)+'</option>';
- return '<div class="inline-actions"><label class="field">'+esc(text('choose'))+'<select data-record-detail-field>'+recordValueFields.filter(name=>name!=='type'||!record.template).map(name=>option(name,label(name))).join('')+(record.template?.fields??[]).map(f=>option('template:'+f.key,templateFieldLabel(f))).join('')+'</select></label><button type="button" class="button" data-action="record-value-edit">'+esc(text('edit'))+'</button></div>';
-}
+
 export function recordValuesUI(options){
  const preparation=recordPreparationUI(options),ordinary=recordValueEditor({...options,adapter:{route:'values',baseName:'selection',messages:'recordValues',conflictCodes:['ATTEMPT_CONFLICT'],target:value=>({field:value.field}),view:lifecycle=>recordValuesView(options,lifecycle)}});
  return {open:input=>attemptValueField(input.field)?.kind==='preparation'?preparation.open(input):ordinary.open(input),recover:header=>attemptValueField(header.draft.selection?.field)?.kind==='preparation'?preparation.recover(header):ordinary.recover(header),locked(){preparation.locked();ordinary.locked();}};

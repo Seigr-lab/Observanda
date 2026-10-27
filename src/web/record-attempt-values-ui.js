@@ -2,18 +2,12 @@ import {attemptValueField} from './record-attempt-value.js';
 import {attemptDraft,attemptDraftRow} from './attempt-draft.js';
 import {attemptForm,readAttemptForm} from './attempt-form.js';
 import {attemptView} from './attempt-view.js';
-import {emptyAttempt,validAttemptFact} from './attempt-model.js';
+import {validAttemptFact} from './attempt-model.js';
 import {researchTargetPicker} from './research-target-picker.js';
 import {materialSourcePicker} from './material-source-picker.js';
 import {t} from './i18n/index.js';
 const text=(key,args)=>t('attempts',key,args);
 const message=(key,args)=>key==='draftHelp'?t('recordValues','attemptDraftHelp'):text(key,args);
-const action=(esc,kind,label,prior='')=>'<button type="button" class="button" data-action="record-value-add-attempt" data-kind="'+kind+'" data-prior="'+prior+'">'+esc(label)+'</button>';
-export function recordAttemptControls(record,esc,reference,{window=null,navigation}={}){
- const attempt=record.attempt??emptyAttempt();
- return '<section class="record-attempt-values"><div class="inline-actions">'+action(esc,'preparation',text(attempt.preparations.length?'amendPreparation':'addPreparation'))+action(esc,'event',text('addEvent'))+((window?window.hasCriteria:attempt.preparations.some(p=>p.criteria.length))?action(esc,'assessment',text('addAssessment')):'')+'</div>'+attemptView(record.attempt,esc,{reference,window,navigation,correct:(kind,item)=>action(esc,kind,text('correct'),item.id)})+'</section>';
-}
-
 // One immutable fact has its own recoverable draft. The existing scientific
 // form and source pickers are shared with full-record authoring.
 export function recordAttemptView({state,api,esc,field},lifecycle){

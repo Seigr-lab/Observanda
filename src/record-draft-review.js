@@ -118,17 +118,17 @@ export class RecordDraftReview{
   if(!validAttemptContext(command))invalid();return this.readEdit(command,mine=>attemptValueContext(mine,command.field,{...command,signal}),{signal});
  }
  async editFigures(command,{signal}={}){
-  const child=Object.hasOwn(command,'figureId');if(!natural(command.offset)||child&&!researchId(command.figureId))invalid();return this.readEdit(command,async(mine,editRevision)=>{
+  const child=Object.hasOwn(command,'figureId');if(!natural(command.offset)||child&&!researchId(command.figureId))invalid();return this.readEdit(command,async(mine,editRevision,plan)=>{
    if(command.editRevision!==undefined&&command.editRevision!==editRevision)throw new AppError('DRAFT_CHANGED');
    const total=await mine.tree.arrayLength(mine.root,['figures']);
    if(child){
     for(let position=0;position<total;position++){
      signal?.throwIfAborted();if((await mine.field(['figures',String(position),'id'],{signal})).value!==command.figureId)continue;
-     const page=await resultFigureTargetPage(mine,position,{offset:command.offset,limit:4,signal});return {figureId:command.figureId,editRevision,offset:page.offset,total:page.total,nextOffset:page.next,items:page.items};
+     const page=await resultFigureTargetPage(mine,position,{offset:command.offset,limit:4,signal});return {workspaceId:plan.workspaceId,recordId:plan.recordId,figureId:command.figureId,editRevision,offset:page.offset,total:page.total,nextOffset:page.next,items:page.items};
     }throw new AppError('MISSING');
    }
    const items=[],offset=Math.min(command.offset,Math.max(0,total-1));for(let i=offset;i<Math.min(offset+4,total);i++){const target=await resultFigureRootTarget(mine,i,{signal});if(!target)throw new AppError('CATALOGUE_DAMAGED');items.push(target);}
-   return {figureId:null,editRevision,offset,total,nextOffset:offset+4<total?offset+4:null,items};
+   return {workspaceId:plan.workspaceId,recordId:plan.recordId,figureId:null,editRevision,offset,total,nextOffset:offset+4<total?offset+4:null,items};
   },{signal});
  }
  async editWrite(command){return this.workspace.withLock(()=>this.editWriteLocked(command));}

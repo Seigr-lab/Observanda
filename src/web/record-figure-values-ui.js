@@ -10,7 +10,6 @@ import {createComposition,figurePlots} from './figure-composition.js';
 import {recordFigureCopyPicker} from './record-figure-copy-picker.js';
 import {t} from './i18n/index.js';
 const text=(key,args)=>t('recordValues',key,args);
-export const recordFigureAction=(figure,esc,busy=false)=>'<button type="button" class="button record-figure-edit" data-action="record-value-edit" data-value-field="figure:'+figure.id+'" aria-label="'+esc(text('editFigure',{title:typeof figure.title==='string'?figure.title:figure.title.preview}))+'"'+(busy?' disabled':'')+'>'+esc(text('editFigureButton'))+'</button>';
 
 // Reuse the scientific editor with a selected-value draft and DOM owner.
 export function recordFigureView({state,api,esc,notify},lifecycle){

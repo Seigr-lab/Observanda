@@ -1,4 +1,3 @@
-import {editRecordCheckpoint} from './record-draft-edit-ui.js';
 import {researchContext} from './project-context.js';
 import {revisionId} from './revision-model.js';
 import {t} from './i18n/index.js';
@@ -37,7 +36,7 @@ export function configurationRecordCreation({state,api,esc,field,render,onDirty,
   if(value.initializing)return value.initializing;
   value.initializing=(async()=>{
    try{
-    await prepare(value);if(!current(value)||value.editor)return;
+    await prepare(value);const {editRecordCheckpoint}=await import('./record-draft-edit-ui.js');if(!current(value)||value.editor||value.controller.signal.aborted)return;
     value.host??=document.createElement('section');value.error=null;bind();
     value.editor=await editRecordCheckpoint({...editorOptions,state,api,esc,field},{plan:value.plan,host:value.host,signal:value.controller.signal,onChange:changed,onSave:()=>save().catch(reason=>{value.error=reason;render();})});
     if(current(value))render();
