@@ -6,6 +6,7 @@ import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {inspectDotnetRuntime} from './dotnet-inventory.js';
 import {githubRuntimeReleases} from './github-runtime.js';
+import {pdfJavaArtifacts} from '../src/pdf-validation-dependencies.js';
 
 const executeFile=promisify(execFile);
 const version=value=>typeof value==='string'&&/^[0-9][0-9A-Za-z.+_-]{0,99}$/.test(value);
@@ -31,7 +32,7 @@ export function dependencyInventory(lock,{productionOnly=false}={}){
  return {bomFormat:'CycloneDX',specVersion:'1.6',version:1,components:components.sort((a,b)=>a['bom-ref'].localeCompare(b['bom-ref'],'en'))};
 }
 
-export async function collectRuntimeInventory(root,{platform=process.platform,execute=executeFile,nodeVersion,credentialVersion=githubRuntimeReleases.gcmVersion,read=readFile,digest=fileHash,inspectDotnet=inspectDotnetRuntime}={}){
+export async function collectRuntimeInventory(root,{platform=process.platform,arch=process.arch,execute=executeFile,nodeVersion,credentialVersion=githubRuntimeReleases.gcmVersion,read=readFile,digest=fileHash,inspectDotnet=inspectDotnetRuntime}={}){
  const suffix=platform==='win32'?'.exe':'',components=[],hostRequirements=[];
  const binary=async(name,relative,args,parse)=>{
   const file=path.join(root,relative);
@@ -59,7 +60,8 @@ export async function collectRuntimeInventory(root,{platform=process.platform,ex
  if(dotnet.kind==='host-requirement')hostRequirements.push({name:dotnet.name,minimumVersion:dotnet.minimumVersion,requiredBy:credential.path,configurationSha256:dotnet.configurationSha256});
  else if(dotnet.kind==='bundled'&&dotnet.sha256===credential.sha256)components.push({name:dotnet.name,version:dotnet.version,includedIn:credential.path,sha256:dotnet.sha256,metadataFormat:dotnet.metadataFormat,...(dotnet.metadataSource?{metadataSource:dotnet.metadataSource}:{})});
  else throw Error('Credential helper runtime inventory is inconsistent.');
- await binary('Java','pdf-validation/java/bin/java'+suffix,['-version'],output=>/version "([0-9][0-9A-Za-z.+_-]*)"/.exec(output)?.[1]);
+ const java=await binary('Java','pdf-validation/java/bin/java'+suffix,['-version'],output=>/Runtime Environment[^\r\n]*\(build ([0-9][0-9A-Za-z.+_-]*)\)/.exec(output)?.[1]);
+ if(java.version.replace(/-LTS$/,'')!==pdfJavaArtifacts[platform+'-'+arch]?.version)throw Error('Bundled Java differs from the pinned release.');
  const validator=JSON.parse(await read(path.join(root,'pdf-validation/runtime.json'),'utf8'));
  if(!version(validator.validatorVersion))throw Error('PDF validator version missing.');
  const jar='pdf-validation/verapdf-cli.jar',jarHash=await digest(path.join(root,jar));
