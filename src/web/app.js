@@ -61,7 +61,7 @@ import {recordDateLabel} from './record-date.js';
 import {recordDateFields,updateRecordDate} from './record-date-ui.js';
 import {recordBrowse,browseActive} from './record-query.js';
 import {recordBrowseFields} from './record-query-ui.js';
-import {researchMaterialsUI} from './research-materials-ui.js';
+import {researchMaterialsUI} from './research-materials-loader.js';
 import {recordHistoryUI} from './record-history-ui.js';
 import {configurationOf,templateFrom} from './notebook-schema.js';
 import {availableSections} from './laboratory/catalog.js';

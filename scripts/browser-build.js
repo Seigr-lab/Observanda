@@ -26,5 +26,5 @@ export async function buildBrowser({root=fileURLToPath(new URL('..',import.meta.
  let replaced=false;const index=html.replace(/<link rel="stylesheet" href="\/([^"]+)">/g,(match,name)=>{if(name==='bundled-fonts.css')return match;if(replaced)return '';replaced=true;return '<link rel="stylesheet" href="/'+style+'">';}).replace('src="/app.js"','src="/'+entry+'"').replace('</head>',preload+'\n</head>');
  const bytes=Buffer.from(index);await writeFile(path.join(out,'index.html'),bytes);files.push({path:'index.html',size:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')});
  const manifest={version:1,entry,files:files.sort((a,b)=>a.path.localeCompare(b.path))};await writeFile(path.join(out,'manifest.json'),JSON.stringify(manifest));
- return {manifest,initialJavaScriptBytes:initialBytes,initialJavaScriptFiles:visited.size,sourceStaticFiles:sourceVisited.size,javascriptFiles:javascript.outputFiles.length,stylesheetBytes:files.find(file=>file.path===style).size};
+ return {manifest,initialJavaScriptBytes:initialBytes,initialJavaScriptFiles:visited.size,sourceStaticFiles:sourceVisited.size,initialSources:[...sourceVisited].sort(),javascriptFiles:javascript.outputFiles.length,stylesheetBytes:files.find(file=>file.path===style).size};
 }

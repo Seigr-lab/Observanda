@@ -63,6 +63,7 @@ import {evidenceCorrectionsUI} from './evidence-corrections-ui.js';
 import {allFigurePlots,withFigureSource} from './figure-provenance.js';
 import {retainedRecordUI} from './retained-record-ui.js';
 import {evidenceDependencyReview} from './evidence-dependency-review.js';
+import {researchMaterialsLaunch} from './research-materials-launch.js';
 
 export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty,render,revisions,create,getRecord=null,editRetainedFigure=null,refreshReader=null,showFigureResults=null,currentRecordRevision=()=>null,access=run=>run()}){
  const retainedRecords=retainedRecordUI({state,api,esc,showDialog});
@@ -139,7 +140,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
  const uploader=evidenceUploadUI({route,call,frame,esc,field,button,guard,context:()=>workspaceContext,owner:()=>owner,sourceMount,sources:()=>sourcePickers.parent.values(),watchJob});
  const reuse=evidenceReuseUI({route,call,frame,esc,button,guard,owner:()=>owner,context:()=>workspaceContext,sourceMount,sources:()=>sourcePickers.reuse.snapshot(),home,notify});
  const corrections=evidenceCorrectionsUI({state,api,call,frame,esc,field,button,guard,owner:()=>owner,inspect,notify,readOnly:()=>referenceContext});
- function view(subject=record(),{readonly=false}={}){dependencies.check();return `<section class="research-links"><header><h3>Evidence &amp; analysis</h3>${button('Open evidence & analysis','open',readonly?'data-readonly="true"':'')}</header><p class="muted">${readonly?'Read original files, datasets and retained analyses associated with this record.':'Original files, datasets and analysis revisions stay private. Figures added to the record follow its sharing setting.'}</p>${!readonly&&subject?.type==='run'?button('Create another run or take','repeat'):''}</section>`;}
+ function view(subject=record(),options={}){dependencies.check();return researchMaterialsLaunch(subject,options);}
  function reviewDependencies(){
   const generation=jobView,shownPage=state.page,host=document.getElementById('material-form');
   dependencies.start({host,items,recordId:owner,active:()=>generation===jobView&&shownPage===state.page&&document.getElementById('dialog')?.open&&!state.access?.locked&&!state.storageUnavailable&&workspaceContext===state.storage?.contextId&&sameResearchOwner(projectOwner,researchOwner(state))&&owner===record()?.id});
