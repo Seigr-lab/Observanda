@@ -14,7 +14,9 @@ test('ordinary installations host shared books and simultaneously edit text with
   }
   const [owner,a,b]=pages,dialog=owner.locator('#dialog');
   await owner.getByRole('button',{name:'Start hosting',exact:true}).click();await dialog.getByLabel('This computer’s network address',{exact:true}).fill('127.0.0.1');
+  await expect(dialog).toContainText('trusted local network or VPN');await dialog.getByLabel('Listen on',{exact:true}).selectOption('127.0.0.1');
   await dialog.getByLabel('Listening port',{exact:true}).fill('0');await dialog.getByRole('button',{name:'Start hosting',exact:true}).click();await expect(dialog).not.toBeVisible();
+  await expect(owner.locator('.online-research')).toContainText('listening on 127.0.0.1');
   const [download]=await Promise.all([owner.waitForEvent('download'),owner.getByRole('button',{name:'Download connection card',exact:true}).click()]);const stream=await download.createReadStream(),chunks=[];for await(const chunk of stream)chunks.push(chunk);const card=Buffer.concat(chunks);
   for(const page of [a,b]){
    await page.getByRole('button',{name:'Connect to an installation',exact:true}).click();const d=page.locator('#dialog');await d.getByLabel('Connection card',{exact:true}).setInputFiles({name:'test.observanda-online',mimeType:'application/json',buffer:card});await expect(d.locator('[data-online-fingerprint]')).toContainText('Owner’s identity');await d.getByRole('checkbox').check();await d.getByRole('button',{name:'Connect to an installation',exact:true}).click();await expect(d).not.toBeVisible();

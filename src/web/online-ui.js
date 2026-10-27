@@ -35,7 +35,7 @@ export async function onlineUI({state,api,esc,field,showDialog,notify,render}){
    if(op==='connections'){showDrafts=false;drafts.clear();await refresh();render();return;}
    if(op==='draft-review'){const selected=drafts.selected();if(!selected)return;if(!snapshot.connections.some(c=>c.id===selected.connectionId))throw Error(tr('draftReconnect'));connectionId=selected.connectionId;await records();showDrafts=false;render();await openRecord(selected.recordId,selected.field);return;}
    if(op.startsWith('draft-')){await drafts.action(op,node);return;}
-   if(op==='start'){form('start','start','<p>'+esc(tr('hostHelp'))+'</p>'+field(tr('address'),'<input name="address" value="'+esc(snapshot.addresses[0]??'127.0.0.1')+'" required>')+field(tr('port'),'<input name="port" type="number" min="0" max="65535" value="4174" required>'),'start');return;}
+   if(op==='start'){form('start','start','<p>'+esc(tr('hostHelp'))+'</p>'+field(tr('bind'),'<select name="host"><option value="0.0.0.0">'+esc(tr('bindNetwork'))+'</option><option value="127.0.0.1">'+esc(tr('bindLocal'))+'</option><option value="::">'+esc(tr('bindNetwork6'))+'</option><option value="::1">'+esc(tr('bindLocal6'))+'</option></select>')+field(tr('address'),'<input name="address" value="'+esc(snapshot.addresses[0]??'127.0.0.1')+'" required>')+field(tr('port'),'<input name="port" type="number" min="0" max="65535" value="4174" required>'),'start');return;}
    if(op==='connect'){form('connect','connect','<p>'+esc(tr('connectHelp'))+'</p>'+field(tr('file'),'<input name="file" type="file" data-online-file accept=".observanda-online,.json" required>')+'<p data-online-fingerprint></p><label class="checkbox"><input name="verified" type="checkbox" required>'+esc(tr('verify'))+'</label>','connect');return;}
    if(op==='stop'){await call('stop');await refresh();render();notify(tr('stopped'));return;}
    if(op==='disconnect'){await call('disconnect',{connectionId:node.dataset.id});await refresh();render();return;}
@@ -62,7 +62,7 @@ export async function onlineUI({state,api,esc,field,showDialog,notify,render}){
     await records();if(!listing.records.some(r=>r.id===result.record.id))listing.records.unshift(result.record);
     render();await openRecord(result.record.id);notify(tr('creationSaved'));return;
    }
-   if(kind==='start'){await call('start',{endpoint:'https://'+data.get('address'),port:Number(data.get('port'))});}
+   if(kind==='start'){await call('start',{endpoint:'https://'+data.get('address'),host:data.get('host'),port:Number(data.get('port'))});}
    if(kind==='connect'){if(!card||!data.get('verified'))throw Error(tr('invalidFile'));await call('connect',{card,verifiedFingerprint:card.identity.id});}
    if(kind==='card'){download((await call('card',{grantId:data.get('grantId')})).card);dirty=false;return;}
    completed=true;await refresh();busy=false;closeDialog();render();if(kind==='connect')notify(tr('connected'));

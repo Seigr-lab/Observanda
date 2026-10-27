@@ -21,7 +21,7 @@ export class LiveConnections{
  async client(id){valid(uuid(id));valid(!this.closed,'ACCESS_LOCKED');if(!this.clients.has(id)){const raw=await this.workspace.readMetadata(prefix+id+'.json',32768);valid(!this.closed,'ACCESS_LOCKED');valid(raw,'NOT_FOUND');const saved=JSON.parse(raw);valid(saved.active!==false,'NOT_FOUND');if(!this.clients.has(id))this.clients.set(id,new LiveClient(this.device,saved.card));}return this.clients.get(id);}
  async state(){
   const connections=[];for await(const name of this.workspace.metadataNames(prefix.slice(0,-1))){if(!name.endsWith('.json')||!uuid(name.slice(0,-5)))continue;const raw=await this.workspace.readMetadata(prefix+name,32768),saved=JSON.parse(raw);if(saved.active===false)continue;const card=liveCard(saved.card,{allowExpired:true});connections.push({id:name.slice(0,-5),title:card.title,endpoint:card.endpoint});}
-  return {hosting:this.host?{endpoint:this.host.endpoint}:null,addresses:Object.values(networkInterfaces()).flat().filter(v=>!v.internal&&v.family==='IPv4').map(v=>v.address),connections};
+  return {hosting:this.host?{endpoint:this.host.endpoint,bind:this.host.bind}:null,addresses:Object.values(networkInterfaces()).flat().filter(v=>!v.internal&&v.family==='IPv4').map(v=>v.address),connections};
  }
  async command(operation,data){
   valid(!this.closed,'ACCESS_LOCKED');

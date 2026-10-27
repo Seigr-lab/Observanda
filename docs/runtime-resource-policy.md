@@ -84,3 +84,23 @@ suspended. Lock, revocation and shutdown still drain workers and credentials.
 The authenticated diagnostics view reports admission counters and waiting
 intervals. A capacity refusal is retryable after work finishes; it does not mean
 the requested owner or its saved data was removed.
+
+## Live collaboration
+
+Hosting is explicitly enabled. The hosting dialog exposes its listening
+interfaces and intended local-network/VPN trust boundary. Internet-facing
+hosting is not qualified. TLS, certificate pinning, enrolled identity, current
+membership and current sharing grants remain required for protected operations.
+
+Challenge issuance retains no nonce list. Challenges are authenticated, bound
+to the direct socket address and host instance, and expire after thirty seconds
+on a monotonic clock. Used challenges are retained only after authorization:
+at most 128 per principal and 64 principals, without evicting unexpired replay
+receipts. Peers sharing a NAT address retain independent principal quotas.
+Restarting or stopping the host invalidates every prior challenge.
+
+The listener caps connections at 64 and requests at 16. At most four challenge
+requests may be active, including connection drain. Challenge connections close
+after their response, with a one-second termination deadline, so incomplete
+unused bodies cannot reserve those slots indefinitely. These application bounds
+do not protect against network-bandwidth exhaustion or replace a firewall.
