@@ -150,12 +150,16 @@ test('direct copy and move inspect and transfer automatically without a separate
  await copyWorkspaceTo(f.source,copied,{vault:f.vault,activateCatalogue:true,onProgress:event=>events.push(event)});
  assert.deepEqual(await f.workspace.read(),before);assert.deepEqual(await new Workspace(copied,f.vault).read(),before);
  assert.equal(events.some(event=>event.stages.includes('review-workspace')),false);
- assert.equal(events.filter(event=>event.stage==='verify-file'&&event.item==='evidence.bin'&&event.completed===0).length,3,'Two source hash passes and one destination hash pass');
+ // Source inventory hashes report aggregate progress; only destination
+ // verification emits a per-file stage. Progress counts are not integrity proof.
+ assert.equal(events.filter(event=>event.stage==='verify-file'&&event.item==='evidence.bin'&&event.completed===0).length,1);
+ assert.deepEqual(await fs.readFile(path.join(copied,'.observanda','evidence.bin')),await fs.readFile(f.original));
  assert.equal(events.find(event=>event.transfer)?.transfer.totalFiles,undefined);
  const transferred=events.filter(event=>event.transfer).at(-1).transfer;assert.ok(transferred.files>0);assert.equal(transferred.files,transferred.totalFiles);assert.equal(transferred.bytes,transferred.totalBytes);
  events.length=0;
  assert.equal((await moveWorkspaceTo(copied,f.destination,{vault:f.vault,onProgress:event=>events.push(event),activate:async root=>{assert.deepEqual(await new Workspace(root,f.vault).read(),before);}})).phase,'complete');
  assert.equal(events.some(event=>event.stages.includes('review-workspace')),false);await assert.rejects(fs.access(copied),{code:'ENOENT'});assert.deepEqual(await f.workspace.read(),before);
+ assert.deepEqual(await fs.readFile(path.join(f.destination,'.observanda','evidence.bin')),await fs.readFile(f.original));
 });
 
 
