@@ -11,7 +11,8 @@ import {projectMaterialReferenceRequest,addressedMaterialReference} from '../src
 import {ResearchMaterials} from '../src/research-materials.js';
 import {ProjectDeletions} from '../src/project-deletion.js';
 import {databaseCapacity} from '../src/postgres.js';
-import {OperationalDiagnostics} from '../src/operational-diagnostics.js';
+import {OperationalDiagnostics,withDiagnostics,diagnostic} from '../src/operational-diagnostics.js';
+import {DeploymentJobs} from '../src/deployment-jobs.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm,mkdir,writeFile,readFile} from 'node:fs/promises';
@@ -52,6 +53,15 @@ async function fixture(t,{publishingOptions,nested=false,diagnostics}={}){
 }
 const target=p=>({workspaceId:p.book.id,recordId:p.book.entries[0].id,sectionId:null});
 async function result(response,status=200){assert.equal(response.status,status,await response.clone().text());return response.json();}
+
+test('project evidence integrity verification uses write admission and refuses locked or stale owners',async t=>{
+ const f=await fixture(t),before=(await f.b.storage.outline()).etag;
+ const denied=await f.project(f.locked,'research/materials/verify',{});assert.notEqual(denied.status,200);assert.equal((await denied.json()).projectId,f.locked.id);
+ await result(await f.project(f.a,'research/materials/verify',{}, {'X-Observanda-Workspace':randomUUID()}),409);
+ const verified=await result(await f.project(f.a,'research/materials/verify',{}));assert.ok(Number.isSafeInteger(verified.revisions));
+ assert.equal((await f.b.storage.outline()).etag,before);
+ await result(await f.project(f.a,'access/lock'));await result(await f.project(f.a,'research/materials/verify',{}),401);
+});
 
 test('selected project website reads expose bounded numeric connection measurements and recheck locking',{timeout:180000},async t=>{
  const diagnostics=new OperationalDiagnostics(),f=await fixture(t,{diagnostics}),measurements=[];
@@ -122,7 +132,7 @@ test('locking a project cancels its queued save without locking other owners or 
 });
 
 test('HTTP creation uses a durable project identity and opens it through the same authoring route',async t=>{
- const f=await fixture(t),project={id:randomUUID(),title:'Created through the application',description:'',parentId:f.a.id,share:false,logoId:null,kind:'Experiment',tools:[]},command={id:randomUUID(),path:path.join(f.directory,'http-created'),project,username:'',password:''};
+ const f=await fixture(t),project={id:randomUUID(),title:'Created through the application',description:'',parentId:f.a.id,share:false,logoId:null,kind:'Experiment',tools:[]},command={id:randomUUID(),path:path.join(f.a.storage.root,project.title),project,username:'',password:''};
  const before=await result(await f.call('/api/projects/list',{offset:0,limit:2,revision:null}));assert.equal(before.projects.length,2);assert.equal(before.total,3);
  const attach=ProjectRegistry.prototype.attach;let created,release,entered;const held=new Promise(resolve=>release=resolve),ready=new Promise(resolve=>entered=resolve),busy=f.workspace.withLock(async()=>{entered();await held;});await ready;
  try{
@@ -141,18 +151,20 @@ test('HTTP creation uses a durable project identity and opens it through the sam
  await result(await f.call('/api/projects/list',{offset:2,limit:2,revision:before.revision}),409);
  const listed=await result(await f.call('/api/projects/list',{offset:0,limit:100,revision:null}));assert.equal(listed.total,4);
  const opened=await result(await f.project({id:project.id},'workspace/read/start',{}));assert.equal(opened.metadata.projects[0].id,project.id);assert.equal(opened.metadata.projects[0].title,project.title);assert.equal(opened.metadata.projects[0].parentId,null);
- const sample=sampleNotebook(),notebook={...sample.notebooks[0],id:randomUUID(),projectId:project.id},createdOwner={id:project.id};
- await result(await f.project(createdOwner,'workspace/structure',{etag:opened.etag,change:{kind:'notebook',value:notebook},response:'outline',commandId:randomUUID()}));
+ const sample=sampleNotebook(),notebook={id:randomUUID(),projectId:project.id,title:'Observation Book 1'},createdOwner={id:project.id};
+ const child=(await result(await f.project(createdOwner,'lab-books/create',{id:randomUUID(),username:'',password:'',book:notebook}))).book;
+ const book=(route,data)=>f.project(createdOwner,'lab-books/'+child.labBookId+'/'+route,data);
  const record={...sample.entries[0],id:randomUUID(),notebookId:notebook.id,title:'First independently stored record',body:'Original writing',relations:[],figures:[],attachments:[]};
- await result(await f.project(createdOwner,'research/records/save',{workspaceId:opened.metadata.id,changes:[{id:record.id,expectedRevision:null,record}]}));
- const selected={workspaceId:opened.metadata.id,recordId:record.id,sectionId:null},writing=await result(await f.project(createdOwner,'research/records/writing/read',selected));
+ await result(await book('research/records/save',{workspaceId:child.namespaceId,changes:[{id:record.id,expectedRevision:null,record}]}));
+ const selected={workspaceId:child.namespaceId,recordId:record.id,sectionId:null},writing=await result(await book('research/records/writing/read',selected));
  const draft={id:randomUUID(),workspaceId:selected.workspaceId,recordId:record.id,expectedRevision:null,writing:{sectionId:null,revision:writing.revision,storageRevision:writing.storageRevision},value:{body:'Retained project draft'}};
- const retained=await result(await f.project(createdOwner,'research/drafts/writing/write',draft));
+ const retained=await result(await book('research/drafts/writing/write',draft));
  await f.owner.closeProject(created.project.root);
- const recovered=await result(await f.project(createdOwner,'research/drafts/writing/read',{id:draft.id,workspaceId:selected.workspaceId,expectedRevision:retained.revision}));assert.equal(recovered.value.body,'Retained project draft');
- assert.equal((await result(await f.project(createdOwner,'research/records/writing/read',selected))).value.body,'Original writing');
- await result(await f.project(createdOwner,'research/records/writing/save',{...selected,expectedRevision:writing.revision,value:recovered.value}));
- assert.equal((await result(await f.project(createdOwner,'research/records/writing/read',selected))).value.body,'Retained project draft');
+ const recovered=await result(await book('research/drafts/writing/read',{id:draft.id,workspaceId:selected.workspaceId,expectedRevision:retained.revision}));assert.equal(recovered.value.body,'Retained project draft');
+ assert.equal((await result(await book('research/records/writing/read',selected))).value.body,'Original writing');
+ await result(await book('research/records/writing/save',{...selected,expectedRevision:writing.revision,value:recovered.value}));
+ assert.equal((await result(await book('research/records/writing/read',selected))).value.body,'Retained project draft');
+ assert.equal((await result(await f.project(createdOwner,'workspace/read/start',{}))).metadata.notebooks.length,0);
  assert.ok(!(await f.workspace.outline()).metadata.projects.some(item=>item.id===project.id));
 });
 
@@ -516,7 +528,12 @@ test('project publication assets retain font bytes and original downloads under 
 
 
 test('project deployment jobs use their own publisher and preserve sibling configuration',{timeout:150000},async t=>{
+ const measurements=new OperationalDiagnostics(),prepare=DeploymentJobs.prototype.prepare,source=PublicationJobs.prototype.source;let preparing=false,sourceReads=0;
+ PublicationJobs.prototype.source=function(...args){if(preparing)sourceReads++;return source.apply(this,args);};
+ DeploymentJobs.prototype.prepare=function(...args){return withDiagnostics(measurements,async()=>{const start=performance.now();preparing=true;try{return await prepare.apply(this,args);}finally{preparing=false;diagnostic('request',{route:'publication-jobs',durationMs:performance.now()-start});}});};
+ t.after(()=>{DeploymentJobs.prototype.prepare=prepare;PublicationJobs.prototype.source=source;});
  const remote=githubFixture({branch:'main',repository:'project-site',initialFiles:{'README.md':'Existing independent destination'}}),f=await fixture(t,{publishingOptions:{request:remote.request}});
+ t.after(async()=>{t.diagnostic(JSON.stringify({sourceReads,deploymentPreparation:(await measurements.snapshot()).entries}));});
  const prefix='/api/projects/'+f.a.id,settings=await result(await f.raw(prefix+'/publishing'));
  const configured=await result(await f.project(f.a,'publishing/save',{config:{...settings.config,github:{...settings.config.github,owner:'example',repository:'project-site',branch:'main'}},etag:settings.etag}));
  await result(await f.project(f.a,'publishing/connect',{token:'fixture_project_token_1234567890'}));
@@ -524,8 +541,9 @@ test('project deployment jobs use their own publisher and preserve sibling confi
  const edition=await result(await f.project(f.a,'preview',{etag:(await f.a.storage.outline()).etag}));
  const plan=await result(await f.project(f.a,'publishing/plan',{id:edition.id,configEtag:configured.etag}));
  const started=await result(await f.project(f.a,'deployment-jobs/start',{id:edition.id,configEtag:configured.etag,reviewed:true,destinationReview:plan.id,destinationReviewed:true}));
- let job=started.job;const deadline=Date.now()+45000;while(['queued','running'].includes(job.state)){if(Date.now()>deadline)throw Error('Project deployment did not finish');await delay(100);job=(await result(await f.project(f.a,'deployment-jobs/status',{id:job.id}))).job;}
+ let job=started.job;const deadline=Date.now()+45000;while(['queued','running'].includes(job.state)){if(Date.now()>deadline){t.diagnostic(JSON.stringify({state:job.state,progress:job.progress,error:job.error}));throw Error('Project deployment did not finish');}await delay(100);job=(await result(await f.project(f.a,'deployment-jobs/status',{id:job.id}))).job;}
  assert.equal(job.state,'completed',JSON.stringify(job));const own=await result(await f.raw(prefix+'/publishing'));assert.equal(own.receipt.commit,remote.head);assert.equal((await result(await f.raw('/api/projects/'+f.b.id+'/publishing'))).receipt,null);
+ assert.ok(sourceReads<=3,'One deployment attempt must not readmit the immutable source for every uploaded file');
  await result(await f.project(f.b,'deployment-jobs/status',{id:job.id}),404);assert.ok(remote.calls.some(call=>call.route.includes('/repos/example/project-site/')));
 });
 

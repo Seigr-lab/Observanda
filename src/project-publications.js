@@ -42,7 +42,12 @@ export class ProjectPublications{
  previewUrl(id,file=''){return (this.entry.routePrefix??'/api/projects/'+this.entry.storage.projectId)+'/publication-preview/'+id+'/'+file;}
  appearanceUrl(id,file=''){return (this.entry.routePrefix??'/api/projects/'+this.entry.storage.projectId)+'/appearance-preview/'+id+'/'+file;}
  async summary(releases,candidate){return {...await releases.summary(candidate),url:this.previewUrl(candidate.reviewId,candidate.defaultPage)};}
- async run(request,data,{websiteId=null,websitePin,websiteContext=false,query={},signal,onProgress,headless=true,check=async()=>{},binary,sourceReader}={}){
+ run(request,data,options){
+  // Publication sessions retain their own authenticated owner, distinct from
+  // the short-lived router owner. Scope its connections to this request too.
+  return this.entry.storage.withCatalogueConnections(()=>this.runConnected(request,data,options));
+ }
+ async runConnected(request,data,{websiteId=null,websitePin,websiteContext=false,query={},signal,onProgress,headless=true,check=async()=>{},binary,sourceReader}={}){
   const {storage,publisher:basePublisher,queue:baseQueue,worker}=this.entry,operation=request.publication;
   await check();signal?.throwIfAborted();if(websiteId!==null&&!researchId(websiteId))throw new AppError('INVALID');
   // Iframe and download requests carry their edition identity in their own URL.

@@ -1,5 +1,5 @@
 import {githubRemovedPaths} from './github-plan-index.js';
-import {publicationWorkspace} from './publication-pin.js';
+import {publicationWorkspace,publicationResearchWorkspace} from './publication-pin.js';
 import {publicationRevisionCurrent} from './publication-freshness.js';
 import {recordDeploymentInventory,prepareDeploymentInventory,assertDeploymentInventory} from './publication-live.js';
 import {verifyPreparedInventory} from './publication-live-inventory.js';
@@ -15,6 +15,7 @@ import {deployGithub} from './github-deployment.js';
 import {writeGithubOwnership} from './github-publication-plan.js';
 import {PublicationRollback} from './publication-rollback.js';
 import {deploymentUncertain} from './publication-deployment-state.js';
+import {createPublicationPermissionCheck} from './publication-permission-admission.js';
 const file=id=>{if(!researchId(id))throw new AppError('INVALID');return '.observanda/deployments/'+id+'.json';};
 export class DeploymentJobs{
  constructor(workspace,publisher,queue,{sourceReader,sourceAccess}={}){workspace=publicationWorkspace(workspace);this.workspace=workspace;this.publisher=publisher;this.queue=queue;this.sourceReader=sourceReader;this.sourceAccess=sourceAccess;this.releases=new PublicationJobs(workspace,{sourceReader});this.feed=new MetadataFeed(workspace,'.observanda/deployment-list');}
@@ -59,15 +60,22 @@ export class DeploymentJobs{
   const d=await this.read(job.id),active=JSON.parse(await this.workspace.readMetadata('.observanda/deployment-active/'+d.intent.key+'.json',4096));
   if(active.id!==job.id)throw new AppError('PUBLISH_STALE');return d;
  }
- async prepare(job,{signal,progress}){
+ prepare(job,options){
+  // Reuse only this authenticated owner's connections for the attempt. Every
+  // guard still starts a fresh transaction; no transaction spans remote I/O.
+  return publicationResearchWorkspace(this.workspace).withCatalogueConnections(()=>this.prepareConnected(job,options));
+ }
+ async prepareConnected(job,{signal,progress}){
   const d=await this.read(job.id),sourceReader=this.sourceReader??this.sourceAccess?.take(job.id),releases=new PublicationJobs(this.workspace,{sourceReader});
   let candidate=await (d.journal.pushAttempted?releases.readForDeploymentRecovery(job.id):releases.read(d.intent.reviewId));if(!candidate||candidate.id!==d.intent.releaseId)throw new AppError('JOB_DAMAGED');
   if(d.intent.rollbackReview)candidate={...candidate,...(d.intent.sourceSnapshots?{sourceSnapshots:d.intent.sourceSnapshots}:{}),analysisReviewId:d.intent.analysisReviewId,...(d.intent.analysisDocument?{analysisDocument:d.intent.analysisDocument}:{}),researchReview:{...candidate.researchReview,analysis:d.intent.analysis}};
   if(!d.journal.pushAttempted)await new AnalysisPublicationReview(this.workspace,{sourceReader}).assert(candidate,{signal});
   await enforcePublishingLimits(candidate,d.intent.config);
+  let permissions;
+  const checkPermissions=async()=>{permissions??=releases.source(candidate.jobId).then(source=>createPublicationPermissionCheck(this.workspace,source,{sourceReader,signal}));await (await permissions)();};
   // Remote reads and receipts can reconcile an activation that already happened.
   // Every content write and activation still requires today's source consent.
-  const guard=async({phase}={})=>{signal.throwIfAborted();if(!['read','receipt','reconcile'].includes(phase))await releases.assertSourcePermissions(candidate,{signal});await this.workspace.catalogue(async()=>{await this.held(job);if((await this.publisher.read()).etag!==d.intent.configEtag)throw new AppError('PUBLISH_STALE');if(d.journal.liveInventory)await assertDeploymentInventory(this.workspace,d.intent.key,d.journal.liveInventory,d.journal.receipt);});};
+  const guard=async({phase}={})=>{signal.throwIfAborted();if(!['read','receipt','reconcile'].includes(phase))await checkPermissions();await this.workspace.catalogue(async()=>{await this.held(job);if((await this.publisher.read()).etag!==d.intent.configEtag)throw new AppError('PUBLISH_STALE');if(d.journal.liveInventory)await assertDeploymentInventory(this.workspace,d.intent.key,d.journal.liveInventory,d.journal.receipt);});};
   if(!d.journal.liveInventory){
    const removed=d.intent.config.kind==='github'?githubRemovedPaths(this.workspace,d.journal.document||d.journal.entries?d.journal:d.intent.plan,d.intent.config.github.directory):[];
    const prepared=await prepareDeploymentInventory(this.workspace,d.intent.key,candidate.files.keys(),{removed,guard,signal,write:operation=>this.queue.transaction(operation)});

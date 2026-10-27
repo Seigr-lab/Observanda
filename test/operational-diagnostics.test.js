@@ -3,7 +3,26 @@ import assert from 'node:assert/strict';
 import {mkdtemp,rm,readdir,stat,writeFile,symlink,mkdir} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import {OperationalDiagnostics,diagnosticEvent,withDiagnostics,diagnostic,diagnosticPhase,diagnosticMeasurement,independentDiagnostics} from '../src/operational-diagnostics.js';
+import {OperationalDiagnostics,diagnosticEvent,withDiagnostics,diagnostic,diagnosticPhase,diagnosticMeasurement,independentDiagnostics,measuredJobPhase} from '../src/operational-diagnostics.js';
+
+test('job phase timings survive request completion without recording private failure details',async()=>{
+ const sink=new OperationalDiagnostics(),secret='private-job-path-and-token';let late;
+ await withDiagnostics(sink,async()=>{
+  diagnosticMeasurement('database-connect')();diagnostic('request',{route:'publication-jobs'});
+  assert.equal(await measuredJobPhase('prepare-job',async()=>{
+   diagnosticMeasurement('database-connect')();diagnosticMeasurement('database-query')();
+   late=diagnosticMeasurement('database-query');return 'prepared';
+  }),'prepared');late();
+  await assert.rejects(measuredJobPhase('complete-job',async()=>{
+   diagnosticMeasurement('database-query')();throw Object.assign(new Error(secret),{code:'ENOSPC',path:secret});
+  }),{code:'ENOSPC'});
+ });
+ const {entries}=await sink.snapshot();assert.equal(entries.length,3);
+ assert.deepEqual(entries.map(row=>row.databaseConnections),[1,1,undefined]);
+ assert.deepEqual(entries.map(row=>row.databaseQueries),[undefined,1,1]);
+ assert.equal(entries[1].phase,'prepare-job');assert.equal(entries[2].phase,'complete-job');assert.equal(entries[2].code,'ENOSPC');
+ assert.equal(new Set(entries.map(row=>row.correlation)).size,3);assert.doesNotMatch(JSON.stringify(entries),new RegExp(secret));
+});
 
 test('database timings aggregate once per request without crossing concurrent or completed requests',async()=>{
  const sink=new OperationalDiagnostics(),a=Promise.withResolvers(),b=Promise.withResolvers();

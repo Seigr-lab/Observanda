@@ -10,7 +10,11 @@ Disk reservations are advisory within one service, not a filesystem quota or cro
 
 Project website reads reuse authenticated connections only within the current request. Every catalogue read starts a new transaction and rechecks membership, access and lifecycle fences. Connections close when accepted request work drains. Background job workers use independent connection and diagnostic contexts, so they cannot borrow a request's credentials or delay its connection cleanup.
 
+Project publication sessions scope their own authenticated connections to each request. A deployment attempt likewise reuses its selected owner's read/write connections, keeping remote I/O outside database transactions. Its immutable captured edition is admitted once per attempt; each remote content write still rechecks current source heads and consent, the job lease, active deployment, destination settings and inventory. Local read snapshots close before visiting foreign owners. Restart constructs a new reader, and uncertain-activation receipt recovery does not require renewed consent to publish more content.
+
 Private request diagnostics aggregate database admission, handshake and query counts/timings. They retain numeric totals in one request event, without SQL, parameters, endpoint addresses or owner identifiers. Durations for overlapping work are sums, not exclusive wall-clock phases. These observations distinguish connection setup from query work; they are not latency guarantees or a process-wide CPU attribution model.
+
+Background preparation and completion each record their own bounded timing summary, including database admission, connection and query totals and a categorized failure code. They use independent correlations and cannot inherit a finished request's measurements. Late measurements are ignored after the phase completes. Job IDs, original filenames, error messages and SQL are excluded from these ordinary diagnostics; encrypted job diagnostics retain their separate access boundary.
 
 ## Foreground work
 

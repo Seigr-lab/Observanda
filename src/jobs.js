@@ -2,7 +2,7 @@
 // handlers prepare bytes outside transactions and commit references inside one.
 import {randomUUID} from 'node:crypto';
 import {AsyncLocalStorage} from 'node:async_hooks';
-import {diagnostic} from './operational-diagnostics.js';
+import {diagnostic,measuredJobPhase} from './operational-diagnostics.js';
 import {AppError,safeError} from './errors.js';
 import {digest,serialize} from './storage.js';
 import {researchId} from './web/research-reference.js';
@@ -174,8 +174,8 @@ export class JobWorker{
   const updates=new JobProgress(progress=>wait(()=>this.queue.pulse(job.id,job.lease.token,progress)),{signal:controller.signal,heartbeatMs:Math.max(100,this.queue.leaseMs/3),onError:error=>controller.abort(error)});
   try{
    if(!this.enabled)controller.abort();
-   const prepared=await withJobDiagnosticContext({operation:'prepare-job',jobId:job.id},()=>this.queue.definition(job).prepare(job,{signal:controller.signal,write,progress:async progress=>updates.report(progress)}));
-   await updates.flush();controller.signal.throwIfAborted();await withJobDiagnosticContext({operation:'complete-job',jobId:job.id},()=>wait(()=>this.queue.complete(job.id,job.lease.token,prepared,{signal:controller.signal,progress:async value=>updates.report(value),beforeCommit:()=>updates.finish()})));
+   const prepared=await measuredJobPhase('prepare-job',()=>withJobDiagnosticContext({operation:'prepare-job',jobId:job.id},()=>this.queue.definition(job).prepare(job,{signal:controller.signal,write,progress:async progress=>updates.report(progress)})));
+   await updates.flush();controller.signal.throwIfAborted();await measuredJobPhase('complete-job',()=>withJobDiagnosticContext({operation:'complete-job',jobId:job.id},()=>wait(()=>this.queue.complete(job.id,job.lease.token,prepared,{signal:controller.signal,progress:async value=>updates.report(value),beforeCommit:()=>updates.finish()}))));
   }catch(error){controller.abort(error);await updates.stop();await this.queue.release(job.id,job.lease.token,{error,paused:!this.enabled}).catch(releaseError=>this.report('worker-release',{error:releaseError}));}
   finally{await updates.stop();await this.queue.definition(job).discard?.(job).catch(()=>{});this.active=null;this.controller=null;}
   return true;

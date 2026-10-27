@@ -7,7 +7,7 @@ import errors from './web/locales/en/errors.json' with {type:'json'};
 
 const current=new AsyncLocalStorage();
 const events=new Set(['service-start','service-ready','service-stop','service-failed','service-exit','service-output','request','worker-claim','worker-release','worker-idle','resource','phase','dropped']);
-const phases=new Set(['startup','shutdown','request','waiting-writer','database-inventory','activate','claim','release','idle','probe-media','convert-media']);
+const phases=new Set(['startup','shutdown','request','waiting-writer','database-inventory','activate','claim','release','idle','probe-media','convert-media','prepare-job','complete-job']);
 const routes=new Set(['access','health','intake','media','projects','publication-jobs','records','research','storage','notebook','websites','website-editor']);
 const measures=Object.freeze({'database-admission':['databaseAdmissions','databaseAdmissionMs'],'database-connect':['databaseConnections','databaseConnectMs'],'database-query':['databaseQueries','databaseQueryMs']});
 const counters=new Set(['durationMs','queued','active','pendingRequests','activeRequests','queuedRequests','activeWrites','queuedWriters','requestBytes','rssBytes','heapBytes','externalBytes','cpuUserUs','cpuSystemUs','bytes','attempt','delayMs','dropped','exitCode','status',...Object.values(measures).flat()]);
@@ -95,6 +95,21 @@ export class OperationalDiagnostics{
 
 export function withDiagnostics(recorder,operation){const correlation=randomUUID();return current.run({recorder,correlation,measurements:{},finished:false},()=>operation(correlation));}
 export function independentDiagnostics(operation){const recorder=current.getStore()?.recorder;return recorder?withDiagnostics(recorder,operation):current.exit(operation);}
+// Long worker phases need their own aggregate timings. They cannot inherit a
+// completed HTTP request or retain query text, job identities or file names.
+export async function measuredJobPhase(phase,operation){
+ const recorder=current.getStore()?.recorder;
+ if(!recorder)return operation();
+ if(!['prepare-job','complete-job'].includes(phase))throw new RangeError('Invalid job diagnostic phase');
+ return withDiagnostics(recorder,async correlation=>{
+  const scope=current.getStore(),start=performance.now();let error;
+  try{return await operation();}catch(value){error=value;throw value;}
+  finally{
+   scope.finished=true;
+   recorder.record('phase',{phase,correlation,durationMs:performance.now()-start,...scope.measurements,error});
+  }
+ });
+}
 export function diagnostic(event,data={}){const scope=current.getStore();if(!scope?.recorder)return;scope.recorder.record(event,{...data,...(event==='request'?scope.measurements:{}),correlation:scope.correlation});if(event==='request')scope.finished=true;}
 const noMeasurement=()=>{};
 // Aggregate numeric timings in the current request, not one log row per SQL

@@ -15,10 +15,21 @@ function assertAllowed(retained,current,metadata){
 // A retained edition may survive ordinary text edits. Withdrawal of source
 // consent is different: every public entry point rechecks the involved owners.
 // Unchanged snapshots avoid record reads; only changed owners visit descriptors.
-export async function assertPublicationSourcePermissions(workspace,source,{sourceReader,signal,checkedSnapshots=new Map()}={}){
+export function assertPublicationSourcePermissions(workspace,source,{sourceReader,signal,checkedSnapshots}={}){
+ return checkSourcePermissions(workspace,source,{sourceReader,signal,checkedSnapshots});
+}
+
+// A deployment attempt has one immutable, already captured edition. Admit its
+// input once, but recheck current owner heads, source grants and withdrawals
+// before every remote write. The reader is never shared across job attempts.
+export async function createPublicationPermissionCheck(workspace,source,{sourceReader,signal}={}){
+ const host=publicationResearchWorkspace(workspace),input=await host.catalogue(()=>openPublicationInput(workspace,source,{signal})),checkedSnapshots=new Map();
+ return ()=>checkSourcePermissions(workspace,source,{sourceReader,signal,checkedSnapshots,input});
+}
+
+async function checkSourcePermissions(workspace,source,{sourceReader,signal,checkedSnapshots=new Map(),input=null}={}){
  if(source.sourcePermissionVersion!==SOURCE_PUBLICATION_VERSION)revoked();
  const host=publicationResearchWorkspace(workspace);if(await host.storageKind()!=='catalogue')throw new AppError('STORAGE_UPGRADE_REQUIRED');
- const input=await openPublicationInput(workspace,source,{signal});
  const checkCatalogue=async(store,snapshot,namespace)=>{
   for await(const row of input.records()){
    signal?.throwIfAborted();if((row.sourceWorkspaceId??source.workspaceId)!==namespace)continue;
@@ -29,6 +40,10 @@ export async function assertPublicationSourcePermissions(workspace,source,{sourc
   }
  };
  await host.catalogue(async store=>{
+  // Header and collection admission perform many selected node reads. Keep
+  // those reads in this one fresh owner snapshot, rather than opening a read
+  // transaction for each node. Close it before visiting any foreign owner.
+  input??=await openPublicationInput(workspace,source,{signal});
   const head=await store.head();if(head===source.etag||checkedSnapshots.get(source.workspaceId)===head)return;
   await checkCatalogue(store,await store.snapshot(),source.workspaceId);checkedSnapshots.set(source.workspaceId,head);
  });
