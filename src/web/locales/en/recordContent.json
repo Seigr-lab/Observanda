@@ -1,4 +1,7 @@
 {
+ "figuresLoading":"Opening figure editor...",
+ "figuresLoadFailed":"The figure editor could not load. Retry before saving this record. Your draft is still here.",
+ "figuresRetry":"Retry figure editor",
  "locationTransferChoose":"Choose a lab book in a project",
  "locationTransferChecking":"Checking for an unfinished record move...",
  "locationTransferCheck":"Check this move again",

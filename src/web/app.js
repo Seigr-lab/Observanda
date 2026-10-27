@@ -67,7 +67,7 @@ import {recordFields,updateRecordField} from './record-fields-ui.js';
 import {wireCustomFieldClipboard} from './custom-field-clipboard-ui.js';
 import {documentEditors} from './document-editor.js';
 import {recordSectionsUI} from './record-sections-ui.js';
-import {figureEditor} from './figure-editor.js';
+import {figureEditor} from './figure-editor-loader.js';
 import {researchTargets,researchReference,parseResearchReference} from './record-model.js';
 import {applicationShell} from './application-shell.js';
 import {workspaceNavigation} from './workspace-navigation.js';
@@ -513,7 +513,7 @@ const recordViews=recordViewsUI({state,api,esc,field,showDialog,notify,snapshot:
   Object.assign(state,{page:'entries',selected:null,project:q.notebookId?state.book.notebooks.find(n=>n.id===q.notebookId).projectId:q.projectId,notebook:q.notebookId??'all',filter:q.filter,search:q.search,recordBrowse:q.browse});
   render();rememberFilters();$('#search')?.focus();
 }});
-const figures=figureEditor({getFigures:()=>entry()?.figures??[],getResults:()=>entry()?.results,setResults:value=>{entry().results=value;results.refresh();},prepareCopies:items=>materials.pinFigureSources(items),busyChanged:updateSaveStatus,changed:()=>dirtyRecord(),notify,context:()=>state.book?.id??null});
+const figures=figureEditor({getFigures:()=>entry()?.figures??[],getResults:()=>entry()?.results,setResults:value=>{entry().results=value;results.refresh();},prepareCopies:items=>materials.pinFigureSources(items),busyChanged:updateSaveStatus,changed:()=>dirtyRecord(),notify,context:()=>state.book?.id??null},{context:()=>JSON.stringify([researchContext(state),state.storage?.contextId,state.book?.id,state.selected,state.page,state.access?.locked])});
 
 const option = (value, label, selected) => `<option value="${esc(value)}"${value === selected ? ' selected' : ''}>${esc(label)}</option>`;
 const publicationReviewChoices=publicationReviewChoicesUI({state,api,esc,option});
