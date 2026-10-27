@@ -17,14 +17,22 @@ test('release SBOM separates build dependencies and excludes resolved credential
 function probes(overrides={}){
  const hash='a'.repeat(64),versions={node:'24.22.1',undici:'7.30.1',openssl:'3.5.4',uv:'1.51.0',v8:'13.6.233.17-node.37',zlib:'1.3.1'};
  const outputs={'node.exe':JSON.stringify(versions),'postgres.exe':'postgres (PostgreSQL) 17.11','ffmpeg.exe':'ffmpeg version 9.0.2-full_build','ffprobe.exe':'ffprobe version 9.0.2-full_build','git.exe':'git version 2.56.0.windows.2','git-credential-manager.exe':'2.9.1+build','java.exe':'openjdk version "21.0.12.1"'};
- const calls=[];return {calls,options:{platform:'win32',nodeVersion:versions.node,digest:async()=>hash,read:async()=>JSON.stringify({validatorVersion:'1.30.3',validatorSha256:hash}),execute:async(file,args,options)=>{calls.push({file,args,options});return {stdout:outputs[path.basename(file)],stderr:''};},...overrides}};
+ const calls=[];return {calls,options:{platform:'win32',nodeVersion:versions.node,digest:async()=>hash,inspectDotnet:async()=>({kind:'host-requirement',name:'.NET Framework',minimumVersion:'4.7.2',configurationSha256:hash}),read:async()=>JSON.stringify({validatorVersion:'1.30.3',validatorSha256:hash}),execute:async(file,args,options)=>{calls.push({file,args,options});return {stdout:outputs[path.basename(file)],stderr:''};},...overrides}};
 }
 test('shipping runtime inventory measures the bundled executables with bounded probes',async()=>{
  const p=probes(),result=await collectRuntimeInventory('synthetic-payload',p.options);
  assert.equal(p.calls.length,7);assert.equal(result.components.length,13);
  assert.equal(result.components.find(c=>c.name==='Node.js/undici').version,'7.30.1');
+ assert.equal(result.format,2);assert.equal(result.hostRequirements[0].minimumVersion,'4.7.2');
+ assert.equal(result.hostRequirements[0].requiredBy,'github/credential-manager/git-credential-manager.exe');
  for(const call of p.calls){assert.equal(call.options.windowsHide,true);assert.equal(call.options.timeout,30000);assert.equal(call.options.maxBuffer,65536);assert.equal(call.options.env.NODE_OPTIONS,'');}
  assert.doesNotMatch(JSON.stringify(result),/synthetic-payload/);
+});
+test('bundled .NET inventory binds its metadata to the helper digest',async()=>{
+ const p=probes({inspectDotnet:async()=>({kind:'bundled',name:'.NET',version:'10.0.9',sha256:'a'.repeat(64),metadataFormat:'dotnet-single-file-6.0'})});
+ const result=await collectRuntimeInventory('synthetic',p.options);
+ assert.deepEqual(result.hostRequirements,[]);assert.equal(result.components.find(c=>c.name==='.NET').version,'10.0.9');
+ await assert.rejects(collectRuntimeInventory('synthetic',{...p.options,inspectDotnet:async()=>({kind:'bundled',sha256:'b'.repeat(64)})}),/inconsistent/);
 });
 test('runtime inventory refuses missing, unexpected and changed runtimes without disclosing probe output',async()=>{
  await assert.rejects(collectRuntimeInventory('synthetic',probes({nodeVersion:'24.0.0'}).options),/differs/);

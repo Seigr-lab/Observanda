@@ -32,14 +32,14 @@ async function launch({packaged,disposable},check){
  }
  const isolated=new EventEmitter();Object.assign(isolated,{setPermissionRequestHandler(){},setPermissionCheckHandler(){}});
  const child=new EventEmitter();Object.assign(child,{connected:true,stdout:{resume(){}},stderr:{resume(){}},send(value){if(value.type==='start'){serviceStart=value;started();}}});
- const boundary={app,BrowserWindow,nativeTheme,Menu:{buildFromTemplate:items=>items,setApplicationMenu(){},getApplicationMenu:()=>null},dialog:{async showMessageBox(...args){dialogs.push(args);return {response:0};},showMessageBoxSync(...args){dialogs.push(args);return 0;}},shell:{},session:{fromPartition:()=>isolated},safeStorage:{isEncryptionAvailable:()=>false},fork:(...args)=>{forked=args;return child;},os:{homedir:()=>home}};
+ const boundary={app,BrowserWindow,nativeTheme,Menu:{buildFromTemplate:items=>items,setApplicationMenu(){},getApplicationMenu:()=>null},dialog:{async showMessageBox(...args){dialogs.push(args);return {response:0};},showMessageBoxSync(...args){dialogs.push(args);return 0;}},shell:{},session:{fromPartition:()=>isolated},safeStorage:{isEncryptionAvailable:()=>false},spawn:(...args)=>{forked=args;return child;},os:{homedir:()=>home}};
  const key='__observandaVisibilityBoundary',prior=globalThis[key],previousHome=process.env.OBSERVANDA_DESKTOP_TEST_HOME,resourceDescriptor=Object.getOwnPropertyDescriptor(process,'resourcesPath'),resources=path.join(home,'application','resources');
- const id=(packaged?'packaged':'source')+(disposable?'-test':'-normal'),exports={electron:['app','BrowserWindow','Menu','dialog','shell','session','safeStorage','nativeTheme'],'node:child_process':['fork'],'node:os':['default']};
+ const id=(packaged?'packaged':'source')+(disposable?'-test':'-normal'),exports={electron:['app','BrowserWindow','Menu','dialog','shell','session','safeStorage','nativeTheme'],'node:child_process':['spawn'],'node:os':['default']};
  globalThis[key]=boundary;if(disposable)process.env.OBSERVANDA_DESKTOP_TEST_HOME=home;else delete process.env.OBSERVANDA_DESKTOP_TEST_HOME;
  Object.defineProperty(process,'resourcesPath',{value:resources,configurable:true});
  const hooks=registerHooks({
   resolve(specifier,context,next){return Object.hasOwn(exports,specifier)?{url:'visibility:'+id+'/'+specifier,shortCircuit:true}:next(specifier,context);},
-  load(url,context,next){if(!url.startsWith('visibility:'+id+'/'))return next(url,context);const name=url.slice(('visibility:'+id+'/').length);return {format:'module',shortCircuit:true,source:exports[name].map(value=>value==='default'?'export default globalThis.'+key+'.os;':'export const '+value+'=globalThis.'+key+'.'+value+';').join('\n')};}
+  load(url,context,next){if(!url.startsWith('visibility:'+id+'/'))return next(url,context);const name=url.slice(('visibility:'+id+'/').length);return {format:'module',shortCircuit:true,source:exports[name].map(value=>value==='default'?'export default globalThis.'+key+'.os;':value==='spawn'?'export const spawn=(...args)=>globalThis.'+key+'.spawn(...args);':'export const '+value+'=globalThis.'+key+'.'+value+';').join('\n')};}
  });
  try{
   await import(new URL('../desktop/main.js?visibility='+id,import.meta.url));
@@ -59,7 +59,7 @@ test('real desktop startup keeps disposable source and packaged windows hidden b
   const profile=disposable&&!packaged?home:path.join(home,'.observanda'),main=windows[0];
   assert.equal(paths.get('userData'),path.join(profile,'window'));assert.equal(serviceStart.preferencesFile,path.join(profile,'preferences.json'));
   assert.deepEqual(calls[0],['create',false]);assert.equal(main.visible,!disposable);
-  if(packaged){assert.equal(forked[0],path.join(resources,'service/src/desktop-service.js'));assert.equal(forked[2].execPath,path.join(resources,'runtime',process.platform==='win32'?'node.exe':'bin/node'));}
+  if(packaged){assert.deepEqual(forked[1],[path.join(resources,'service/src/desktop-service.js')]);assert.equal(forked[0],path.join(resources,'runtime',process.platform==='win32'?'node.exe':'bin/node'));}
   assert.equal(forked[2].windowsHide,true);assert.equal(dialogs.length,0);
   main.minimized=true;app.emit('second-instance');
   assert.equal(main.visible,!disposable);assert.equal(main.minimized,disposable);

@@ -1,6 +1,6 @@
 export default {
  appId:'org.observanda.desktop',productName:'Observanda',directories:{app:'desktop',output:'dist/installers'},
- files:['pdf-renderer.js','pdf-service.js','main.js','policy.js','branding.js','close-guard.js','service-supervisor.js','service-process.js','locales/**/*.json','icon.png','icon-black.png','icon-white.png','package.json'],asar:true,npmRebuild:false,
+ files:['pdf-renderer.js','pdf-service.js','bootstrap.js','runtime-inventory.js','main.js','policy.js','branding.js','close-guard.js','service-supervisor.js','service-process.js','locales/**/*.json','icon.png','icon-black.png','icon-white.png','package.json'],asar:true,npmRebuild:false,
  forceCodeSigning:true,
  electronFuses:{runAsNode:false,enableCookieEncryption:true,enableNodeOptionsEnvironmentVariable:false,enableNodeCliInspectArguments:false,onlyLoadAppFromAsar:true,enableEmbeddedAsarIntegrityValidation:true,loadBrowserProcessSpecificV8Snapshot:false,grantFileProtocolExtraPrivileges:false},
  extraResources:[{from:'dist/desktop-resources',to:'.',filter:['**/*','!**/.package-lock.json']}],

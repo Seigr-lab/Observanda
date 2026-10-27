@@ -4,6 +4,7 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
+import {inspectDotnetRuntime} from './dotnet-inventory.js';
 
 const executeFile=promisify(execFile);
 const version=value=>typeof value==='string'&&/^[0-9][0-9A-Za-z.+_-]{0,99}$/.test(value);
@@ -29,8 +30,8 @@ export function dependencyInventory(lock,{productionOnly=false}={}){
  return {bomFormat:'CycloneDX',specVersion:'1.6',version:1,components:components.sort((a,b)=>a['bom-ref'].localeCompare(b['bom-ref'],'en'))};
 }
 
-export async function collectRuntimeInventory(root,{platform=process.platform,execute=executeFile,nodeVersion,read=readFile,digest=fileHash}={}){
- const suffix=platform==='win32'?'.exe':'',components=[];
+export async function collectRuntimeInventory(root,{platform=process.platform,execute=executeFile,nodeVersion,read=readFile,digest=fileHash,inspectDotnet=inspectDotnetRuntime}={}){
+ const suffix=platform==='win32'?'.exe':'',components=[],hostRequirements=[];
  const binary=async(name,relative,args,parse)=>{
   const file=path.join(root,relative);
   let result;
@@ -50,12 +51,16 @@ export async function collectRuntimeInventory(root,{platform=process.platform,ex
  await binary('PostgreSQL','postgresql/bin/postgres'+suffix,['--version'],output=>/PostgreSQL\)\s+(\S+)/.exec(output)?.[1]);
  for(const name of ['ffmpeg','ffprobe'])await binary(name,'media/bin/'+name+suffix,['-version'],output=>new RegExp('^'+name+' version ([0-9][0-9A-Za-z.+_-]*)','m').exec(output)?.[1]);
  await binary('Git','github/git/'+(platform==='win32'?'cmd/git.exe':'bin/git'),['--version'],output=>/^git version (\S+)/m.exec(output)?.[1]);
- await binary('Git Credential Manager','github/credential-manager/git-credential-manager'+suffix,['--version'],output=>/^([0-9][0-9A-Za-z.+_-]*)/m.exec(output)?.[1]);
+ const credential=await binary('Git Credential Manager','github/credential-manager/git-credential-manager'+suffix,['--version'],output=>/^([0-9][0-9A-Za-z.+_-]*)/m.exec(output)?.[1]);
+ const dotnet=await inspectDotnet(path.join(root,credential.path),{platform,expectedSha256:credential.sha256});
+ if(dotnet.kind==='host-requirement')hostRequirements.push({name:dotnet.name,minimumVersion:dotnet.minimumVersion,requiredBy:credential.path,configurationSha256:dotnet.configurationSha256});
+ else if(dotnet.kind==='bundled'&&dotnet.sha256===credential.sha256)components.push({name:dotnet.name,version:dotnet.version,includedIn:credential.path,sha256:dotnet.sha256,metadataFormat:dotnet.metadataFormat});
+ else throw Error('Credential helper runtime inventory is inconsistent.');
  await binary('Java','pdf-validation/java/bin/java'+suffix,['-version'],output=>/version "([0-9][0-9A-Za-z.+_-]*)"/.exec(output)?.[1]);
  const validator=JSON.parse(await read(path.join(root,'pdf-validation/runtime.json'),'utf8'));
  if(!version(validator.validatorVersion))throw Error('PDF validator version missing.');
  const jar='pdf-validation/verapdf-cli.jar',jarHash=await digest(path.join(root,jar));
  if(jarHash!==validator.validatorSha256)throw Error('PDF validator digest differs from its pinned release.');
  components.push({name:'veraPDF',version:validator.validatorVersion,path:jar,sha256:jarHash});
- return {format:1,platform,components};
+ return {format:2,platform,components,hostRequirements};
 }
