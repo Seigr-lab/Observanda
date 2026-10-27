@@ -27,6 +27,7 @@
     "build:json": "node scripts/build-json.js"
   },
   "devDependencies": {
+    "@electron/fuses": "1.8.0",
     "@playwright/test": "1.63.0",
     "electron": "44.9.3",
     "electron-builder": "26.15.3",

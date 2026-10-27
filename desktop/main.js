@@ -1,6 +1,6 @@
 import {attachPdfService} from './pdf-service.js';
 import {app,BrowserWindow,Menu,dialog,shell,session,safeStorage,nativeTheme} from 'electron';
-import {fork} from 'node:child_process';
+import {launchService} from './service-process.js';
 import {readFileSync} from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -101,7 +101,7 @@ else{
    env.OBSERVANDA_GITHUB_GIT=path.join(resources,'github/git',process.platform==='win32'?'cmd/git.exe':'bin/git');
   }
   childExited=new Promise(resolve=>{resolveExit=resolve;});
-  child=fork(service,[],{execPath:executable,windowsHide:true,silent:true,env,execArgv:[]});
+  child=launchService(executable,service,env);
   supervisor.monitor();
   attachPdfService(child);child.stdout.resume();child.stderr.resume();
   const failed=async message=>{if(stopping)return;await dialog.showMessageBox({type:'error',title:'Observanda could not start',message,detail:'Your saved work has not been removed. Close this window and try again.'});main?.close();};

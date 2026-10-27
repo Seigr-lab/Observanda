@@ -2,6 +2,10 @@
 
 Packages produced by the build are candidates. A successful build or source suite does not qualify an installed release. Windows x64 and Ubuntu x64 are the current qualification targets; macOS is deferred.
 
+The desktop builder requires code signing where the packager supports signing. Windows packaging without a signing identity fails; this is not proof of the identity or trust of a completed signature. Ubuntu package authenticity still requires an independently authenticated distribution signature. The Electron configuration disables Node mode, inherited Node options, inspector arguments and extra file-protocol privileges, enables cookie encryption and ASAR-only loading, and enables the embedded ASAR integrity fuse. The service starts through the separate Node executable and an IPC pipe. Electron does not implement embedded ASAR integrity on Linux; the enabled fuse is not a Linux integrity guarantee. See [Electron's fuse documentation](https://www.electronjs.org/docs/latest/tutorial/fuses).
+
+Inspect the actual unpacked candidate before qualification with `node scripts/desktop-hardening.js <executable> <win32|linux>`. It reads every reviewed fuse, rejects missing, changed or newly introduced fuse layouts, and binds the report to the executable hash without recording its local path. Retain that report with artifact-integrity evidence. This command does not sign, alter or launch the executable and does not verify ASAR contents or publisher signatures. Also perform tamper-rejection, permission, credential-store, PDF, service IPC and graceful-close checks on the exact signed candidate. Source IPC and synthetic fuse-wire tests are component evidence only.
+
 Before declaring a candidate qualified, run:
 
 ```sh
