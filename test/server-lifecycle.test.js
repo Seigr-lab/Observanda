@@ -19,13 +19,15 @@ test('authenticated readiness is redacted and shutdown drains an in-flight datab
  const request=(route,data)=>fetch(app.origin+route,{headers:{Cookie:cookie,Origin:app.origin,'Content-Type':'application/json'},...(data?{method:'POST',body:JSON.stringify(data)}:{})});
  const health=await request('/api/health'),healthText=await health.text();assert.equal(health.status,200);assert.equal(JSON.parse(healthText).ready,true);assert.equal(healthText.includes(process.env.OBSERVANDA_DATABASE_URL),false);assert.equal(healthText.includes(root),false);
  assert.equal((await request('/api/access/unlock',{username:'',password})).status,200);
- const current=await ws.read();current.book.title='Saved during shutdown';
+ const current=await ws.read();current.book.description='Saved during shutdown';
  let entered,release;const reached=new Promise(resolve=>entered=resolve),gate=new Promise(resolve=>release=resolve),query=Client.prototype.query;
  Client.prototype.query=async function(sql,...args){const result=await query.call(this,sql,...args);if(typeof sql==='string'&&sql.startsWith('INSERT INTO snapshots')){entered();await gate;}return result;};
  try{
-  const saving=request('/api/notebook/save',current);await reached;assert.equal(app.shutdownStatus().busy,true);let closed=false;const closing=app.close().then(()=>{closed=true;});
+  const saving=request('/api/notebook/save',current);let timer;
+  try{await Promise.race([reached,saving.then(async response=>{throw Error('Save finished before the held commit: '+response.status+' '+await response.text());}),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Save did not reach its commit checkpoint')),15000);})]);}finally{clearTimeout(timer);}
+  assert.equal(app.shutdownStatus().busy,true);let closed=false;const closing=app.close().then(()=>{closed=true;});
   await new Promise(resolve=>setTimeout(resolve,80));assert.equal(closed,false);release();
-  assert.equal((await saving).status,200);await closing;assert.equal((await ws.read()).book.title,'Saved during shutdown');
+  assert.equal((await saving).status,200);await closing;assert.equal((await ws.read()).book.description,'Saved during shutdown');
  }finally{release();Client.prototype.query=query;}
  const restarted=await startServer({root,port:0});await restarted.close();
 });

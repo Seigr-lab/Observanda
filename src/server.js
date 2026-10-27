@@ -42,6 +42,7 @@ import {workspaceDeletion} from './workspace-delete-state.js';
 import {forgetWorkspace} from './preferences.js';
 import {operationStage} from './operation-progress.js';
 import {OperationalDiagnostics,withDiagnostics,diagnostic} from './operational-diagnostics.js';
+import {serviceHealth} from './service-health.js';
 import {UserProfile} from './user-profile.js';
 import {rememberWorkspaceLocation,rememberAuthenticatedLocation} from './workspace-reconnection.js';
 import {verifyPortableAccess} from './workspace-portability.js';
@@ -396,7 +397,8 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       const cookie = req.headers.cookie?.split(';').map(part => part.trim()).find(part => part.startsWith('observanda='))?.slice(11);
       const client=sessions.get(cookie);if(!client)throw new AppError('AUTH');
       if(req.method==='GET'&&url.pathname==='/api/health'){
-       const database=await databaseStatus();return json({service:'local-authoring',ready:database.ready,database,capacity:databaseCapacity()},database.ready?200:503);
+       const health=await serviceHealth({root:context.root,locked:context.manualLock||client.expires<=Date.now()||context.protectedOnce&&(!client.access||!context.vault.key),closing:shuttingDown,provider:databaseProvider()});
+       return json({...health,capacity:databaseCapacity()},health.ready?200:503);
       }
       if(req.method==='GET'&&url.pathname==='/api/diagnostics'){
        if((await status(client)).locked)throw new AppError('ACCESS_LOCKED');

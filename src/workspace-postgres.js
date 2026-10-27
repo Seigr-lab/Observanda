@@ -36,7 +36,7 @@ export class WorkspacePostgres{
    try{
     if(!create&&!await assertRegular(path.join(directory,'service.observanda'),{missing:true}))throw new AppError('CATALOGUE_UNAVAILABLE');
     const service=await startManagedPostgres({directory,env,workspace:{root,vault:startupVault,ownerId:this.ownerId},runtimeDirectory:this.runtimeDirectory,onProgress:this.onProgress,signal:this.signal});
-    try{await assertNotDeleting(root);await assertNotMoving(root);await assertNotRenaming(root);}catch(error){await service.close();throw error;}return {service,env};
+    try{await assertNotDeleting(root);await assertNotMoving(root);await assertNotRenaming(root);}catch(error){await service.close();throw error;}entry.env=env;return {service,env};
    }catch(error){if(this.instances.get(root)===entry)this.instances.delete(root);throw error;}
    finally{startupVault.key.fill(0);}
   })();
@@ -73,6 +73,9 @@ export class WorkspacePostgres{
   const service=await stopManagedPostgres({directory:path.join(root,WORKSPACE_DATABASE_DIRECTORY),env:{...this.env},workspace:{root,vault,ownerId:this.ownerId,moveId}});await service.close();
  }
  async cached(root){const entry=this.instances.get(await realpath(root));if(!entry||entry.closing)throw new AppError('ACCESS_LOCKED');return (await entry.pending).env;}
+ // A readiness check observes only an already opened runtime. It must not
+ // start PostgreSQL, resolve a network path or await an unfinished startup.
+ healthEnvironment(root){const entry=this.instances.get(path.resolve(root));return !this.stopping&&entry&&!entry.closing?entry.env??null:null;}
  async closeWorkspace(root){
   root=await realpath(root).catch(error=>{if(error.code==='ENOENT')return path.resolve(root);throw error;});const entry=this.instances.get(root);if(!entry)return;
   // Retain ownership until shutdown has finished. Concurrent opens must not

@@ -62,10 +62,11 @@ export class WorkspaceDatabases{
  }
  async scratch(){
   if(this.closing)throw new AppError('DATABASE_CANCELLED');
-  this.scratchStart??=startScratchPostgres({runtimeDirectory:this.directory,env:this.env,signal:this.signal,onProgress:this.onProgress});
+  this.scratchStart??=startScratchPostgres({runtimeDirectory:this.directory,env:this.env,signal:this.signal,onProgress:this.onProgress}).then(owner=>{this.scratchEnv=owner.env;return owner;});
   return (await this.scratchStart).env;
  }
  async closeWorkspace(root){await this.instances.closeWorkspace(root);}
+ healthEnvironments(root){return {scratch:this.closing?null:this.scratchEnv??null,selected:this.closing||!root?null:this.instances.healthEnvironment(root)};}
  async closeProject(root){await this.projects.closeProject(root);}
  async closeLabBook(root){await this.labBooks.closeLabBook(root);}
  async details(workspace){

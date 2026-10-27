@@ -30,7 +30,7 @@ const schemaFor=id=>{if(!uuid(id))throw new AppError('CATALOGUE_DAMAGED');return
 const fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 
 
-export async function databaseConfiguration(env=process.env){
+export async function databaseConfiguration(env=process.env,{signal}={}){
  if(!env.OBSERVANDA_DATABASE_URL)throw new AppError('DATABASE_CONFIG');
  let url;
  try{url=new URL(env.OBSERVANDA_DATABASE_URL);}catch{throw new AppError('DATABASE_CONFIG');}
@@ -39,7 +39,7 @@ export async function databaseConfiguration(env=process.env){
  let ssl=false;
  if(env.OBSERVANDA_DATABASE_TLS==='verify-full'){
   ssl={rejectUnauthorized:true,checkServerIdentity:(_,certificate)=>checkServerIdentity(host,certificate)};
-  if(env.OBSERVANDA_DATABASE_CA){try{ssl.ca=await readFile(env.OBSERVANDA_DATABASE_CA,'utf8');}catch{throw new AppError('DATABASE_TLS');}}
+  if(env.OBSERVANDA_DATABASE_CA){try{ssl.ca=await readFile(env.OBSERVANDA_DATABASE_CA,{encoding:'utf8',signal});}catch{throw new AppError('DATABASE_TLS');}}
  }else if(!local||env.OBSERVANDA_DATABASE_TLS||env.OBSERVANDA_DATABASE_CA)throw new AppError('DATABASE_TLS');
  try{return {host,port:Number(url.port||5432),database:decodeURIComponent(url.pathname.slice(1)),user:decodeURIComponent(url.username),password:decodeURIComponent(url.password),ssl,
   application_name:'Observanda',options:'-c search_path=pg_catalog',client_encoding:'UTF8',connectionTimeoutMillis:5000,statement_timeout:DATABASE_STATEMENT_TIMEOUT_MS};}
