@@ -127,7 +127,8 @@ import {validDashboard,defaultDashboard} from './web/dashboard-model.js';
 import {validLabBookTypeSelection} from './web/feature-modules.js';
 import {MediaPolicy} from './media-policy.js';
 import {serveContent,diskSpace} from './file-content.js';
-import {zipStream} from './zip-stream.js';
+import {publicationExportHttp} from './publication-export-http.js';
+import {publicationText} from './web/publication-messages.js';
 import {Readable} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
 import {createFolderPicker} from './native-folder-picker.js';
@@ -477,7 +478,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       if(selectedProject&&(req.method==='POST'||(selectedProject.material||selectedProject.publication||selectedProject.asset||selectedProject.sampleAnalysis||selectedProject.review)&&req.method==='GET')){
         if(!workspace||req.method==='POST'&&req.headers['x-observanda-workspace']!==selectedContext.id)throw new AppError('WORKSPACE_CHANGED');
         if(selectedProject.pdf||selectedProject.publication||selectedProject.asset||selectedProject.starter||selectedProject.sampleAnalysis){
-          const check=req.checkWriter;await check();if(selectedProject.pdf)req.operationActivity=null;if(selectedProject.write){activeWrites++;countedWrite=true;}else req.operationActivity=null;
+          const check=req.checkWriter;await check();if(selectedProject.pdf)req.operationActivity=null;if(selectedProject.write){activeWrites++;countedWrite=true;}else if(selectedProject.publication==='export')req.operationActivity=()=>req.activity??=activities.begin(selectedContext.id,url.pathname,{view:req.headers['x-observanda-view']});else req.operationActivity=null;
           return await projectContentHttp(req,res,selectedProject,{body,json,mime,headless,contextId:context.id,execute:(data,options)=>historyProjects.run(client,selectedProject,data,{...options,check,setCheck:next=>{req.checkWriter=next;}})});
         }
         if(selectedProject.review){
@@ -1101,14 +1102,15 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       if (req.method === 'GET' && resultSheet) return sendBytes(req, res, await laboratory.report(resultSheet[1], url.searchParams.get('revision'), blockedValues), 'text/html; charset=utf-8');
       const issuedSheet=/^\/api\/laboratory\/issued\/([a-f0-9-]{36})$/.exec(url.pathname);
       if(req.method==='GET'&&issuedSheet)return sendBytes(req,res,await laboratory.report(issuedSheet[1],url.searchParams.get('revision'),blockedValues,{retained:true}),'text/html; charset=utf-8');
-      const retainedCandidate=async id=>{
+      const retainedCandidate=async(id,{signal}={})=>{
+        signal?.throwIfAborted();
         if(!/^[a-f0-9]{64}$/.test(id??''))return null;
         if(req.method==='GET'&&!req.headers['x-observanda-website']){
           const owner=await selectedContext.workspace.readMetadata('.observanda/website-editions/'+id+'.json',4096);
           if(owner){workspace=websiteWorkspace(selectedContext.workspace,JSON.parse(owner).websiteId);publisher=websitePublisher(selectedContext.publisher,workspace);}
         }
-        if(candidates.has(id)){const candidate=candidates.get(id);if((candidate.websiteId??null)!==(workspace.websiteId??null))return null;await new PublicationJobs(workspace,{sourceReader}).assertSourcePermissions(candidate);return candidate;}
-        const candidate=await new PublicationJobs(workspace,{sourceReader}).read(id);if(!candidate)return null;
+        if(candidates.has(id)){const candidate=candidates.get(id);if((candidate.websiteId??null)!==(workspace.websiteId??null))return null;await new PublicationJobs(workspace,{sourceReader}).assertSourcePermissions(candidate,{signal});return candidate;}
+        const candidate=await new PublicationJobs(workspace,{sourceReader}).read(id,{signal});if(!candidate)return null;
         // One verified immutable edition serves its page, stylesheet and assets.
         // This private cache is bounded and cleared with the workspace key.
         candidates.set(id,candidate);while(candidates.size>5)candidates.delete(candidates.keys().next().value);return candidate;
@@ -1349,15 +1351,18 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       }
       if (req.method === 'POST' && url.pathname === '/api/export' || req.method==='GET' && /^\/api\/export\/[a-f0-9]{64}$/.test(url.pathname)) {
         const data=req.method==='POST'?await body(req):{id:url.pathname.split('/').at(-1),rollbackReview:url.searchParams.get('rollbackReview')};
-        const candidate=await workspace.catalogue(async()=>{
-          let value=await retainedCandidate(data.id);if(!value)throw new AppError('STALE');
+        req.operationActivity=()=>req.activity??=activities.begin(selectedContext.id,url.pathname,{view:req.headers['x-observanda-view']});
+        return await publicationExportHttp(req,res,async({signal,onProgress})=>{
+         let analysesChecked=0,filesChecked=0;
+         const candidate=await workspace.catalogue(async()=>{
+          let value=await retainedCandidate(data.id,{signal});if(!value)throw new AppError('STALE');
           if(data.rollbackReview){const rollback=new PublicationRollback(workspace,publisher,{sourceReader});value=rollback.project(value,await rollback.authorize(value,data.rollbackReview));}
           else if(!await publicationRevisionCurrent(workspace,value))throw new AppError('STALE');
-          await new AnalysisPublicationReview(workspace,{sourceReader}).assert(value);
-          await verifyPublicationCandidate(value);return value;
+          await new AnalysisPublicationReview(workspace,{sourceReader}).assert(value,{signal,onCheck:()=>onProgress({stage:publicationText('exportChecking'),completed:++analysesChecked,unit:'items'})});
+          await verifyPublicationCandidate(value,{signal,onFile:()=>onProgress({stage:publicationText('exportVerifying'),completed:++filesChecked,unit:'files'})});return value;
+         });
+         signal.throwIfAborted();await req.checkWriter();return candidate.files;
         });
-        res.writeHead(200,{'Content-Type':'application/zip','Content-Disposition':'attachment; filename="observanda-site.zip"'});
-        await pipeline(Readable.from(zipStream(candidate.files)),res);return;
       }
       const appearanceChoices=/^\/api\/appearance-preview\/([a-f0-9]{64})\/pages$/.exec(url.pathname),appearanceFile=/^\/appearance-preview\/([a-f0-9]{64})\/(.+)$/.exec(url.pathname);
       if(req.method==='GET'&&(appearanceChoices||appearanceFile)){

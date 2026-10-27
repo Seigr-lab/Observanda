@@ -220,9 +220,10 @@ export class PublicationJobs{
   let checkedSnapshots=permissionHeads.get(candidate);if(!checkedSnapshots){checkedSnapshots=new Map();permissionHeads.set(candidate,checkedSnapshots);}
   await assertPublicationSourcePermissions(this.workspace,await this.source(candidate.jobId),{sourceReader:this.sourceReader,signal,checkedSnapshots});
  }
- async read(id){
+ async read(id,{signal}={}){
+  signal?.throwIfAborted();
   const stored=await this.stored(id);if(!stored)return null;
-  await this.assertSourcePermissions(stored);return this.#readCandidate(stored);
+  await this.assertSourcePermissions(stored,{signal});return this.#readCandidate(stored,{signal});
  }
  // Only a persisted, still-active deployment with an uncertain activation can
  // inspect its retained edition for remote reconciliation. No review ID is
@@ -243,10 +244,12 @@ export class PublicationJobs{
   if(scope!==deployment.scope)throw new AppError('JOB_DAMAGED');
   return this.#readCandidate(stored);
  }
- async #readCandidate(stored){
+ async #readCandidate(stored,{signal}={}){
+  signal?.throwIfAborted();
   const files=new Map(),blockedValues=[...stored.blockedValues,this.workspace.root,os.homedir(),os.hostname()];
-  if(stored.version===3)return {...stored,files:await RetainedPublicationFiles.open(this.workspace,stored,{blockedValues}),blockedValues};
-  for await(const {file:f,content} of this.contents(stored)){
+  if(stored.version===3)return {...stored,files:await RetainedPublicationFiles.open(this.workspace,stored,{blockedValues,signal}),blockedValues};
+  for await(const {file:f,content} of this.contents(stored,{signal})){
+   signal?.throwIfAborted();
    if(f.name==='publication.json')files.set(f.name,(await contentBuffer(content)).toString('utf8'));
    else if(f.type==='media'){await content.verify();files.set(f.name,content);}
    else files.set(f.name,await admitRetainedPublicFile(f.name,content,{type:f.type,blockedValues}));

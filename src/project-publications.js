@@ -33,13 +33,14 @@ import {verifyPublicationCandidate} from './retained-publication-files.js';
 import {jobSummary} from './jobs.js';
 import {researchId} from './web/research-reference.js';
 import {AppError} from './errors.js';
+import {publicationText} from './web/publication-messages.js';
 export class ProjectPublications{
  constructor(entry){this.entry=entry;this.candidates=new Map();this.designs=new DesignCandidates();this.appearancePreviews=new AppearancePreviewSessions();}
  clear(){this.candidates.clear();this.designs.clear();this.appearancePreviews.clear();}
  previewUrl(id,file=''){return (this.entry.routePrefix??'/api/projects/'+this.entry.storage.projectId)+'/publication-preview/'+id+'/'+file;}
  appearanceUrl(id,file=''){return (this.entry.routePrefix??'/api/projects/'+this.entry.storage.projectId)+'/appearance-preview/'+id+'/'+file;}
  async summary(releases,candidate){return {...await releases.summary(candidate),url:this.previewUrl(candidate.reviewId,candidate.defaultPage)};}
- async run(request,data,{websiteId=null,websitePin,websiteContext=false,query={},signal,headless=true,check=async()=>{},binary,sourceReader}={}){
+ async run(request,data,{websiteId=null,websitePin,websiteContext=false,query={},signal,onProgress,headless=true,check=async()=>{},binary,sourceReader}={}){
   const {storage,publisher:basePublisher,queue:baseQueue,worker}=this.entry,operation=request.publication;
   await check();signal?.throwIfAborted();if(websiteId!==null&&!researchId(websiteId))throw new AppError('INVALID');
   // Iframe and download requests carry their edition identity in their own URL.
@@ -51,7 +52,7 @@ export class ProjectPublications{
   const remember=value=>{this.candidates.set(cacheKey(value.reviewId),value);while(this.candidates.size>5)this.candidates.delete(this.candidates.keys().next().value);return value;};
   const candidate=async id=>{
    if(typeof id!=='string'||!/^[a-f0-9]{64}$/.test(id))throw new AppError('INVALID');
-   let value=this.candidates.get(cacheKey(id));if(!value){value=await releases.read(id);if(value)remember(value);}else await releases.assertSourcePermissions(value,{signal});return value;
+   let value=this.candidates.get(cacheKey(id));if(!value){value=await releases.read(id,{signal});if(value)remember(value);}else await releases.assertSourcePermissions(value,{signal});return value;
   };
   const retained=async id=>{const value=await candidate(id);if(!value)throw new AppError('NOT_FOUND');return value;};
   const rollback=async value=>data.rollbackReview?new PublicationRollback(workspace,publisher,{sourceReader}).project(value,await new PublicationRollback(workspace,publisher,{sourceReader}).authorize(value,data.rollbackReview)):value;
@@ -90,10 +91,11 @@ export class ProjectPublications{
    await check();return binary({name:request.file,content});
   }
   if(operation==='export'){
+   let analysesChecked=0,filesChecked=0;
    const value=await workspace.catalogue(async()=>{
-    const value=await rollback(await retained(request.id??data.id));if(!data.rollbackReview&&!await publicationRevisionCurrent(workspace,value))throw new AppError('STALE');await new AnalysisPublicationReview(workspace,{sourceReader}).assert(value);await verifyPublicationCandidate(value,{signal});return value;
+    const value=await rollback(await retained(request.id??data.id));if(!data.rollbackReview&&!await publicationRevisionCurrent(workspace,value))throw new AppError('STALE');await new AnalysisPublicationReview(workspace,{sourceReader}).assert(value,{signal,onCheck:()=>onProgress?.({stage:publicationText('exportChecking'),completed:++analysesChecked,unit:'items'})});await verifyPublicationCandidate(value,{signal,onFile:()=>onProgress?.({stage:publicationText('exportVerifying'),completed:++filesChecked,unit:'files'})});return value;
    });
-   await check();return binary({archive:value.files});
+   signal?.throwIfAborted();await check();return binary({archive:value.files});
   }
   if(operation.startsWith('local-export/')){const result=await new LocalExport(workspace,{sourceReader})[operation.slice(13)](data),project=value=>value?.previewUrl?{...value,previewUrl:this.previewUrl(value.reviewId,value.previewUrl.split('/').slice(3).join('/'))}:value;return result?.plan?{...result,plan:project(result.plan)}:project(result);}
   if(operation.startsWith('publication-links/')){const links=new PublicationLinks(workspace);return operation.endsWith('/save')?links.save(data):links.read();}

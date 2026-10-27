@@ -18,14 +18,14 @@ export class RetainedPublicationFiles{
  async *keys(){for await(const {key} of this.output.items('files'))yield key;}
  async *values(){for await(const [,content] of this)yield content;}
  async *[Symbol.asyncIterator](){for await(const {file,content} of this.contents())yield [file.name,await this.admit(file,content)];}
- async verify({signal,privacy=true}={}){
+ async verify({signal,privacy=true,onFile}={}){
   await this.output.verify({signal});await verifyOutputManifest(this.output,this.stored,{signal});
-  for await(const {file,content} of this.contents({signal})){signal?.throwIfAborted();await this.admit(file,content,{privacy});}
+  for await(const {file,content} of this.contents({signal})){signal?.throwIfAborted();await this.admit(file,content,{privacy});await onFile?.();}
  }
 }
-export async function verifyPublicationCandidate(candidate,{allowDesign=false,signal,privacy=true}={}){
+export async function verifyPublicationCandidate(candidate,{allowDesign=false,signal,privacy=true,onFile}={}){
  if(!(candidate.files instanceof RetainedPublicationFiles))return privacy?verifyPublication(candidate,{allowDesign}):verifyPublicationManifest(candidate);
  if(candidate.partial||candidate.designOnly)throw new AppError('INVALID');
  if(candidate.id!==candidate.files.stored.id||candidate.reviewId!==candidate.files.stored.reviewId)throw new AppError('STALE');
- await candidate.files.verify({signal,privacy});
+ await candidate.files.verify({signal,privacy,onFile});
 }

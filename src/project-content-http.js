@@ -6,11 +6,13 @@ import {Readable} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
 import {operationResponse} from './operation-response.js';
 import {AppError} from './errors.js';
+import {publicationExportHttp} from './publication-export-http.js';
 export async function projectContentHttp(req,res,request,{body,json,mime,execute,headless,contextId}){
  if(request.method!==req.method)throw new AppError('NOT_FOUND');
  if(request.input==='stream'&&req.headers['content-type']!=='application/octet-stream')throw new AppError('INVALID');
  const url=new URL(req.url,'http://localhost'),data=request.input==='stream'?{}:req.method==='GET'?{...(url.searchParams.has('rollbackReview')?{rollbackReview:url.searchParams.get('rollbackReview')}:{})}:await body(req,request.limit);
  if(req.method==='GET'&&!request.binary&&req.headers['x-observanda-workspace']!==contextId||['workspace','context'].some(key=>url.searchParams.has(key)&&url.searchParams.get(key)!==contextId))throw new AppError('WORKSPACE_CHANGED');
+ if(request.publication==='export')return publicationExportHttp(req,res,options=>execute(data,{...options,query:Object.fromEntries(url.searchParams),...websiteRequestContext(req.headers),binary:({archive})=>archive}));
  const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
  const binary=async({archive,name,content,stream,mime:contentType,download})=>{
   if(stream){
