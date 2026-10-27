@@ -11,6 +11,7 @@ import path from 'node:path';
 import {createCipheriv,createDecipheriv,createHash,randomBytes} from 'node:crypto';
 import {Readable} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
+import {setImmediate as yieldTurn} from 'node:timers/promises';
 import {ENVELOPE,ENCRYPTION_OVERHEAD} from './encryption.js';
 import {AppError} from './errors.js';
 import {operationStage,operationAdvance,operationWork} from './operation-progress.js';
@@ -38,7 +39,14 @@ async function* decoded(handle,workspace,file){
 }
 export async function writeContent(workspace,file,source,{maxBytes=0,reserveBytes=0,signal,beforeCommit,expected}={}){
  return operationStage('encrypt-file',{unit:'bytes',item:path.basename(file)},async()=>{
-  if(expected&&workspace.vault?.id)return writeSegmentedContent(workspace,file,source,{maxBytes,reserveBytes,signal,beforeCommit,expected});
+  // Already-buffered input can declare its digest without any additional disk
+  // pass. Yield between bounded hash batches so leases/cancellation still run.
+  if(!expected&&workspace.vault?.id&&Array.isArray(source)&&source.every(Buffer.isBuffer)){
+   let size=0,batch=0;const hash=createHash('sha256');
+   for(const bytes of source)for(let offset=0;offset<bytes.length;offset+=BLOCK){signal?.throwIfAborted();const chunk=bytes.subarray(offset,offset+BLOCK);size+=chunk.length;if(!Number.isSafeInteger(size)||maxBytes&&size>maxBytes)throw new AppError('MEDIA_LIMIT');hash.update(chunk);if(++batch===16){batch=0;await yieldTurn(undefined,{signal});}}
+   expected={size,sha256:hash.digest('hex')};
+  }
+  if(workspace.vault?.id)return writeSegmentedContent(workspace,file,source,{maxBytes,reserveBytes,signal,beforeCommit,expected});
   // Same OBSENC01 envelope as Workspace.writeFile; no format migration.
   await workspace.requireStorageKey();const directory=path.dirname(file),temp=path.join(directory,temporaryStreamName());
   const key=workspace.vault?.key?Buffer.from(workspace.vault.key):null,nonce=randomBytes(12),cipher=key?createCipheriv('aes-256-gcm',key,nonce):null;

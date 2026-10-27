@@ -1,6 +1,7 @@
 {
  "verify-file":"Checking media bytes",
  "encrypt-file":"Retaining encrypted media",
+ "finalize-encrypted-file":"Finalizing encrypted media for seeking",
  "title":"Saving records",
  "newerEdits":"Submitted changes saved. Newer edits remain unsaved; save again when ready.",
  "pending":"Changes are saved only when the complete save succeeds. You can keep editing; newer changes remain unsaved.",

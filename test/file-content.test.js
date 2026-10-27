@@ -33,7 +33,7 @@ test('prepared encrypted writes resolve only after durable replacement',{timeout
  let pending,settled=false;
  const mock=t.mock.method(filesystem,'open',async function(name,...args){
   const handle=await openFile.call(this,name,...args);
-  if(args[0]==='wx'&&path.dirname(name)===root){const sync=handle.sync;handle.sync=async function(...values){syncStarted.resolve();await continueSync.promise;return sync.apply(this,values);};}
+  if(typeof args[0]==='string'&&args[0].startsWith('wx')&&path.dirname(name)===root){const sync=handle.sync;handle.sync=async function(...values){syncStarted.resolve();await continueSync.promise;return sync.apply(this,values);};}
   return handle;
  });syncBuiltinESMExports();
  t.after(async()=>{continuePreparation.resolve();continueSync.resolve();await pending?.catch(()=>{});mock.mock.restore();syncBuiltinESMExports();clearVault(workspace.vault);assert.equal(path.dirname(root),parent);assert.ok(path.basename(root).startsWith('observanda-stream-finalization-'));await rm(root,{recursive:true,force:true});});

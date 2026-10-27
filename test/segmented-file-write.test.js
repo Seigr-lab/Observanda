@@ -22,10 +22,10 @@ test('concurrent known originals cannot promise the same remaining disk space',{
  }finally{gate.resolve();await writing.catch(()=>{});diskCapacity.probe=probe;}
 });
 async function fixture(t){const root=await mkdtemp(path.join(os.tmpdir(),'observanda-segmented-write-')),vault={id:randomUUID(),key:randomBytes(32)},workspace=new Workspace(root,vault),file=path.join(root,'original');t.after(async()=>{clearVault(vault);assert.equal(path.dirname(root),path.resolve(os.tmpdir()));assert.ok(path.basename(root).startsWith('observanda-segmented-write-'));await rm(root,{recursive:true,force:true});});return {root,vault,workspace,file};}
-for(const size of [0,1,BLOCK,BLOCK+1,3*BLOCK+27])test('declared immutable content writes the seekable format at boundary '+size,async t=>{
+for(const known of [true,false])for(const size of [0,1,BLOCK,BLOCK+1,3*BLOCK+27])test((known?'declared immutable content':'unknown input stream')+' writes the seekable format at boundary '+size,async t=>{
  const f=await fixture(t),bytes=randomBytes(size),expected={size,sha256:digest(bytes)};let checkpoints=0;
  async function* source(){for(let offset=0;offset<size;offset+=713)yield bytes.subarray(offset,offset+713);}
- const saved=await writeContent(f.workspace,f.file,source(),{expected,beforeCommit:value=>{assert.deepEqual(value,expected);checkpoints++;}});
+ const saved=await writeContent(f.workspace,f.file,source(),{...(known?{expected}:{}),beforeCommit:value=>{assert.deepEqual(value,expected);checkpoints++;}});
  assert.equal(checkpoints,1);assert.deepEqual(saved,expected);assert.equal((await readFile(f.file)).subarray(0,8).toString(),'OBSENC02');
  assert.deepEqual(await contentBuffer(new FileContent(f.workspace,f.file,size,saved.sha256)),bytes);assert.deepEqual(await f.workspace.readFile(f.file),bytes);assert.deepEqual(await readdir(f.root),['original']);
 });
