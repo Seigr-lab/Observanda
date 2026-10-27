@@ -4,6 +4,7 @@ import {serviceHealth,probeDatabaseHealth} from '../src/service-health.js';
 import {WorkspacePostgres} from '../src/workspace-postgres.js';
 import path from 'node:path';
 import {EventEmitter} from 'node:events';
+import {setTimeout as delay} from 'node:timers/promises';
 
 test('readiness reports the selected and scratch databases independently without starting owners',async()=>{
  const selected={identity:'selected'},scratch={identity:'scratch'},broken=new Set(['scratch']);let environments=0;
@@ -30,4 +31,22 @@ test('health reserves only two control connections and rejects excess probes pro
  const one=probeDatabaseHealth(env,{Client}),two=probeDatabaseHealth(env,{Client});
  await new Promise(resolve=>setImmediate(resolve));assert.equal(gates.length,2);assert.equal((await probeDatabaseHealth(env,{Client})).code,'DATABASE_BUSY');for(const resolve of gates)resolve();assert.equal((await one).ready,true);assert.equal((await two).ready,true);
  assert.equal((await probeDatabaseHealth({OBSERVANDA_DATABASE_URL:'private-secret'})).code,'DATABASE_CONFIG');
+});
+
+test('timed-out storage inspection keeps its admission until underlying work drains',async()=>{
+ const env={OBSERVANDA_DATABASE_URL:'postgresql://synthetic:password@127.0.0.1:5432/health'},gates=[];
+ class Client extends EventEmitter{async connect(){}async query(){}async end(){}}
+ const inspect=()=>new Promise(resolve=>gates.push(resolve));
+ const one=probeDatabaseHealth(env,{Client,inspect,timeoutMs:25}),two=probeDatabaseHealth(env,{Client,inspect,timeoutMs:25});
+ await delay(40);assert.equal((await one).code,'DATABASE_UNAVAILABLE');assert.equal((await two).code,'DATABASE_UNAVAILABLE');assert.equal(gates.length,2);
+ assert.equal((await probeDatabaseHealth(env,{Client,inspect})).code,'DATABASE_BUSY');for(const resolve of gates)resolve({});await delay(0);
+ assert.equal((await probeDatabaseHealth(env,{Client})).ready,true);
+});
+
+test('readiness rechecks access before connecting and after inspection without leaking inspected details',async()=>{
+ const env={OBSERVANDA_DATABASE_URL:'postgresql://synthetic:password@127.0.0.1:5432/health'};let connected=0,inspected=0,allowed=false;
+ class Client extends EventEmitter{async connect(){connected++;}async query(){}async end(){}}
+ const options={Client,authorize:async()=>allowed,inspect:async()=>{inspected++;allowed=false;return {privateDetail:'must-not-escape'};}};
+ assert.equal((await probeDatabaseHealth(env,options)).state,'locked');assert.equal(connected,0);assert.equal(inspected,0);
+ allowed=true;const report=await probeDatabaseHealth(env,options);assert.equal(report.state,'locked');assert.equal(connected,1);assert.equal(inspected,1);assert.doesNotMatch(JSON.stringify(report),/must-not-escape|privateDetail/);
 });

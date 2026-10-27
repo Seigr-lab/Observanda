@@ -1,4 +1,5 @@
 {
+  "READINESS_LIMIT": "The selected workspace metadata exceeds the bounded readiness check. Its full integrity has not been checked; this result does not report corruption.",
   "DURABILITY_UNCERTAIN": "A storage change may already be visible, but its persistence could not be confirmed. Keep recovery files and check the saved state before retrying. Do not assume the change was cancelled.",
   "BROWSER_ASSETS_INVALID": "An application file could not be verified. Restart Observanda; if this continues, repair the installation.",
   "MEDIA_RESOURCE_LIMIT": "This media conversion exceeds the available processing budget. Reduce the display-copy dimensions or use a machine with more available memory. A staged original remains available for recovery.",

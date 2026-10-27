@@ -383,7 +383,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       const cookie = req.headers.cookie?.split(';').map(part => part.trim()).find(part => part.startsWith('observanda='))?.slice(11);
       const client=sessions.get(cookie);if(!client)throw new AppError('AUTH');
       if(req.method==='GET'&&url.pathname==='/api/health'){
-       const health=await serviceHealth({root:context.root,locked:context.manualLock||client.expires<=Date.now()||context.protectedOnce&&(!client.access||!context.vault.key),closing:shuttingDown,provider:databaseProvider()});
+       const health=await serviceHealth({root:context.root,workspace:context.workspace,locked:context.manualLock||client.expires<=Date.now()||context.protectedOnce&&(!client.access||!context.vault.key),authorize:async()=>!(await status(client)).locked,closing:shuttingDown,provider:databaseProvider()});
        return json({...health,capacity:databaseCapacity(),requests:requestAdmission.stats(),nativeResources:nativeResources.stats()},health.ready?200:503);
       }
       if(req.method==='GET'&&url.pathname==='/api/diagnostics'){

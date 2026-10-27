@@ -19,6 +19,7 @@ test('authenticated readiness is redacted and shutdown drains an in-flight datab
  const request=(route,data)=>fetch(app.origin+route,{headers:{Cookie:cookie,Origin:app.origin,'Content-Type':'application/json'},...(data?{method:'POST',body:JSON.stringify(data)}:{})});
  const health=await request('/api/health'),healthText=await health.text();assert.equal(health.status,200);assert.equal(JSON.parse(healthText).ready,true);assert.equal(healthText.includes(process.env.OBSERVANDA_DATABASE_URL),false);assert.equal(healthText.includes(root),false);
  assert.equal((await request('/api/access/unlock',{username:'',password})).status,200);
+ const readiness=await (await request('/api/health')).json();assert.equal(readiness.selectedWorkspace.ready,true,JSON.stringify(readiness.selectedWorkspace));assert.equal(readiness.selectedWorkspace.catalogueIntegrity,'selected-metadata-verified');assert.equal(readiness.selectedWorkspace.retainedContent,'not-checked');
  const current=await ws.read();current.book.description='Saved during shutdown';
  let entered,release;const reached=new Promise(resolve=>entered=resolve),gate=new Promise(resolve=>release=resolve),query=Client.prototype.query;
  Client.prototype.query=async function(sql,...args){const result=await query.call(this,sql,...args);if(typeof sql==='string'&&sql.startsWith('INSERT INTO snapshots')){entered();await gate;}return result;};
