@@ -159,10 +159,15 @@ export function websiteDocumentClient({state,api,selection,onStatus=()=>{}}){
   try{let result;
   try{result=await request(command.operation,command.payload);}catch(reason){if(['INVALID','LIMIT','CONFLICT','PRIVACY','NOT_FOUND','WEBSITE_NAME_EXISTS'].includes(reason.code))actionPending=null;local=changes().length>0;error=reason.message??t('websiteEditor','documentCheckpointFailed');status();throw reason;}
   actionPending=null;error='';let page=null;const selectedKey=pageKey;
-  if(selectedKey)try{page=await request('item',{websitePin:result.websitePin,...(result.draft?{draftId:result.draft.id,draftRevision:result.draft.revision}:{}),collection:'pages',key:selectedKey});}catch(reason){if(reason.name==='AbortError')throw reason;if(reason.code==='NOT_FOUND')pageKey=null;else error=reason.message;}
+  // Save publishes this exact acknowledged checkpoint. Its selected authored
+  // values are already here; fetching them again delays completion on storage
+  // with high latency. Undo, discard and structural commands still reload.
+  const savedCheckpoint=command.operation==='save'&&envelope.draft?.id===command.payload.draftId&&envelope.draft?.revision===command.payload.expectedRevision;
+  const retained=(collection,key)=>{const item=selected.get(collection).get(key);return item?.base?{...item,value:copy(item.base)}:null;};
+  if(selectedKey)try{page=savedCheckpoint?retained('pages',selectedKey):await request('item',{websitePin:result.websitePin,...(result.draft?{draftId:result.draft.id,draftRevision:result.draft.revision}:{}),collection:'pages',key:selectedKey});}catch(reason){if(reason.name==='AbortError')throw reason;if(reason.code==='NOT_FOUND')pageKey=null;else error=reason.message;}
   const overrideRows=[];
   for(const collection of overrides)for(const key of new Set([...(collection==='branding'?['home']:[]),activeOverrides.get(collection)].filter(Boolean))){
-   try{const item=await request('item',{websitePin:result.websitePin,...(result.draft?{draftId:result.draft.id,draftRevision:result.draft.revision}:{}),collection,key});overrideRows.push({collection,key,item});}
+   try{const item=savedCheckpoint?retained(collection,key):await request('item',{websitePin:result.websitePin,...(result.draft?{draftId:result.draft.id,draftRevision:result.draft.revision}:{}),collection,key});overrideRows.push({collection,key,item});}
    catch(reason){if(reason.name==='AbortError')throw reason;if(reason.code==='NOT_FOUND')overrideRows.push({collection,key,item:null});else error=reason.message;}
   }
   // Typing during an acknowledged save belongs to the next checkpoint.

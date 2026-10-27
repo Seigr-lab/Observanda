@@ -20,6 +20,7 @@ import {publicationText} from './publication-fixture.js';
 import {serialize} from '../src/storage-format.js';
 import {websiteDocumentClient} from '../src/web/website-document-client.js';
 import {websiteSelectionDraft} from '../src/web/website-selection.js';
+import {RecordDocument} from '../src/record-document.js';
 
 async function fixture(t){
  const parent=await realpath(os.tmpdir()),directory=await mkdtemp(path.join(parent,'observanda-selected-website-')),book=createNotebook('Website authoring'),f=await encryptedFixture(directory,book);
@@ -32,6 +33,25 @@ async function fixture(t){
  return {...f,book,editor,sites,websiteId,execute,edit,transition,target};
 }
 const page=(title,body='Authored page')=>({id:randomUUID(),title,body,share:true,sections:[]});
+
+test('homepage text and visibility saves reuse unchanged collection validation at the same research snapshot',{timeout:120000},async t=>{
+ const f=await fixture(t),initial=await f.execute('open'),pages=Array.from({length:40},(_,i)=>page('Page '+i,'Authored observations. '.repeat(100)));
+ const draft=await f.execute('change',f.edit(initial,[{type:'append',collection:'pages',values:pages.slice(0,32)},{type:'append',collection:'pages',values:pages.slice(32)},{type:'settings',path:['document','website','home','enabled'],value:true}]));
+ let current=await f.execute('save',f.transition(draft));
+ const items=RecordDocument.prototype.items;let visits=0;
+ const observer=t.mock.method(RecordDocument.prototype,'items',async function*(path,...args){if(path.join('.')==='document.pages')visits++;yield* items.call(this,path,...args);});
+ for(const [key,value] of [['showTitle',false],['title','Revised heading'],['introduction','Revised introduction']]){
+  const changed=await f.execute('change',f.edit(current,[{type:'settings',path:['document','website','home',key],value}]));visits=0;
+  current=await f.execute('save',f.transition(changed));assert.equal(visits,0,'Unchanged pages were traversed while saving '+key);
+  assert.equal(current.site.document.website.home[key],value);
+ }
+ const changed=await f.execute('change',f.edit(current,[{type:'replace',collection:'pages',key:pages[0].id,value:{...pages[0],body:'A changed page'}}]));visits=0;
+ current=await f.execute('save',f.transition(changed));assert.ok(visits>0,'Changed collections must still be validated');
+ const research=await f.workspace.read();research.book.description='Updated research context';await f.workspace.save(research.book,research.etag);
+ const latest=await f.execute('change',f.edit(current,[{type:'settings',path:['document','website','home','title'],value:'After research changed'}]));visits=0;
+ await f.execute('save',f.transition(latest));assert.ok(visits>0,'A changed research snapshot must invalidate the reused proof');
+ observer.mock.restore();await f.workspace.catalogue(async store=>{await new WebsiteDocumentStore(store).verify();await verifyWebsiteEditor(store);});
+});
 
 async function readOnly(workspace,run){
  return workspace.catalogue(async store=>{
@@ -113,6 +133,22 @@ test('editor client retries lost acknowledgements and retains typing during a sa
  const discards=calls.filter(call=>call.operation==='discard');assert.deepEqual(discards.at(-1).data,discards.at(-2).data);assert.equal(state.book.website.title,'Typed during save');assert.equal(client.isDirty(),false);
 });
 
+
+test('saving reuses the acknowledged selected page and preserves typing during the save', {timeout:120000},async t=>{
+ const f=await fixture(t),state={book:f.book,page:'website',storage:{contextId:'disposable'}},selection=websiteSelectionDraft(),calls=[];let duringSave=null;
+ const client=websiteDocumentClient({state,selection,api:async(route,data)=>{
+  const operation=route.split('/').at(-1);calls.push(operation);const result=await f.editor.execute(operation,data);
+  if(operation==='save'&&duringSave){const hook=duringSave;duringSave=null;hook();}return structuredClone(result);
+ }});t.after(()=>client.stop());
+ const opened=await client.open({websiteId:f.websiteId,base:{book:f.book}});Object.assign(state,opened);selection.load(opened.site.selection);client.installed();
+ const authored=page('Selected page');await client.append('pages',authored);await client.selectOverride('layouts','page:'+authored.id);await client.selectOverride('branding','page:'+authored.id);
+ state.book.pages[0].body='Acknowledged body';client.changed();await client.flush();calls.length=0;
+ duringSave=()=>{state.book.pages[0].body='Typed while saving';client.changed();};
+ await client.save();assert.deepEqual(calls,['save'],'Save must not reread the page and absent overrides');
+ assert.equal(state.book.pages[0].body,'Typed while saving');assert.equal(client.isDirty(),true);assert.equal((await f.sites.read(f.websiteId)).book.pages[0].body,'Acknowledged body');
+ await client.flush();calls.length=0;await client.save();assert.deepEqual(calls,['save']);assert.equal(client.isDirty(),false);assert.equal((await f.sites.read(f.websiteId)).book.pages[0].body,'Typed while saving');
+ state.book.pages[0].body='Unwanted body';client.changed();await client.flush();await client.discard();assert.equal(state.book.pages[0].body,'Typed while saving');assert.ok(calls.includes('item'),'Discard must reload the saved selected values');
+});
 
 test('editor client rejects a superseded missing-override response', {timeout:120000},async t=>{
  const f=await fixture(t),state={book:f.book,page:'website',storage:{contextId:'disposable'}},selection=websiteSelectionDraft();
