@@ -1,4 +1,6 @@
 {
+  "WORKLOAD_BUSY": "Observanda is handling its current capacity. Please retry shortly.",
+  "REQUEST_TIMEOUT": "The request stopped sending data or took too long to arrive. No command was started from this request body.",
   "INVENTORY_SOURCE_WORKSPACE": "Connect the workspace containing this stock owner to continue.",
   "INVENTORY_SOURCE_AMBIGUOUS": "More than one connected workspace contains this stock owner. Keep only the original owner connected.",
   "INVENTORY_OPERATION_BUSY": "Finish the current stock operation before starting another for this bill of materials.",

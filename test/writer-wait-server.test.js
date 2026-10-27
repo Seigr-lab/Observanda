@@ -1,4 +1,5 @@
 import {workspaceSaveRequest} from '../src/web/workspace-edits.js';
+import {websiteWorkspace} from '../src/website-workspace.js';
 import {recordRevisions} from '../src/research.js';
 import {emptyWebsiteSelection} from '../src/web/website-selection.js';
 import {test} from 'node:test';
@@ -82,7 +83,7 @@ test('maintenance endpoints are unavailable without queuing activity or blocking
 });
 
 test('website discovery and preview remain reads during copying and create no queued writes',async t=>{
- const f=await fixture(t),destination=path.join(f.directory,'copy'),before=await f.workspace.read();
+ const f=await fixture(t),destination=path.join(f.directory,'copy'),before=await websiteWorkspace(f.workspace).read();
  const verify=ResearchCatalogue.prototype.verifyRecordHistory;let release,entered;
  const gate=new Promise(resolve=>release=resolve),ready=new Promise(resolve=>entered=resolve);
  ResearchCatalogue.prototype.verifyRecordHistory=async function(...args){entered();await gate;return verify.apply(this,args);};
@@ -90,10 +91,10 @@ test('website discovery and preview remain reads during copying and create no qu
  let copying;
  try{
   copying=f.call('/api/storage/copy',{path:destination,confirmed:true});await ready;
-  const summary=await f.call('/api/website/research/summary',{workspaceId:before.book.id,snapshotId:before.etag,selection:emptyWebsiteSelection(),search:''},controller.signal);
+  const summary=await f.call('/api/website/research/summary',{workspaceId:before.book.id,snapshotId:before.etag,websitePin:before.websitePin,selection:emptyWebsiteSelection(),search:''},controller.signal);
   assert.equal(summary.status,200,await summary.text());
   const draft={...workspaceSaveRequest(before.book,before.book,recordRevisions(before.book)),baseEtag:before.etag};
-  const response=await f.call('/api/design-preview',{draft,mode:'website',designTarget:'project:'+before.book.projects[0].id,workspaceContent:true},controller.signal),preview=await response.json();
+  const response=await f.call('/api/design-preview',{draft,websitePin:before.websitePin,mode:'website',designTarget:'project:'+before.book.projects[0].id,workspaceContent:true},controller.signal),preview=await response.json();
   assert.equal(response.status,200,JSON.stringify(preview));
   const asset=await f.call(preview.url,undefined,controller.signal);assert.equal(asset.status,200);assert.match(await asset.text(),/<html/);
   assert.equal((await f.workspace.outline()).etag,before.etag);

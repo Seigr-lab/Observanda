@@ -1,3 +1,5 @@
+import {RequestAdmission,requestLane} from './request-admission.js';
+import {jsonBody} from './request-body.js';
 import {websiteThemeRequest} from './website-theme-requests.js';
 import {PublicationEditionSelections} from './publication-edition-selections.js';
 import {workspaceEncryptedCopyAccess} from './workspace-encrypted-copy.js';
@@ -150,7 +152,7 @@ import {appearancePreviewSource} from './appearance-preview.js';
 import {OperationActivity} from './operation-activity.js';
 import {reviewWriterRecovery,recoverWriter} from './writer-recovery.js';
 import {DashboardEdits} from './dashboard-edits.js';
-import {requestWriterWait,waitForWriter,withoutWriterWait} from './writer-wait.js';
+import {requestWriterWait,waitForWriter,withoutWriterWait,writerCapacity} from './writer-wait.js';
 import {WorkspaceReadAdmission,workspaceSnapshotRequest} from './workspace-read-admission.js';
 import {StructureCommands,assertExistingNativeStructure} from './structure-commands.js';
 import {WorkspaceEdits} from './workspace-edits.js';
@@ -197,19 +199,10 @@ const mime = name => name.endsWith('.bin') ? 'application/octet-stream' : name.e
 const equal = (a, b) => typeof a === 'string' && /^[a-f0-9]{64}$/.test(a) && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
 async function body(req,limit=MAX_BYTES,capacityOwner=null) {
-  const chunks = []; let size = 0;
-  if (req.headers['content-type'] !== 'application/json') throw new AppError('INVALID');
-  const declared=Number(req.headers['content-length']);
-  if(capacityOwner&&Number.isSafeInteger(declared)&&declared>=0)admitResearchBytes(capacityOwner,declared);
-  for await (const chunk of req) { size += chunk.length; if (size > limit) {if(capacityOwner)admitResearchBytes(capacityOwner,size);throw new AppError('LIMIT');} chunks.push(chunk); }
-  try {
-    const data = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new AppError('INVALID');
-    return data;
-  } catch { throw new AppError('INVALID'); }
+  return jsonBody(req,{limit,retain:bytes=>req.admission.retain(bytes),admit:bytes=>{if(capacityOwner)admitResearchBytes(capacityOwner,bytes);}});
 }
 
-export async function startServer({ root=null, port = 4173, publishingOptions, githubConnections, preferencesFile, expectedExisting=false, headless=false, folderPicker, folderBrowser=browseFolders, diagnostics:providedDiagnostics, deviceStore=preferencesFile?new DeviceStore({file:preferencesFile+'.device-key'}):defaultDeviceStore } = {}) {
+export async function startServer({ root=null, port = 4173, publishingOptions, githubConnections, preferencesFile, expectedExisting=false, headless=false, folderPicker, folderBrowser=browseFolders, diagnostics:providedDiagnostics, requestAdmission=new RequestAdmission(), deviceStore=preferencesFile?new DeviceStore({file:preferencesFile+'.device-key'}):defaultDeviceStore } = {}) {
   const diagnostics=providedDiagnostics??new OperationalDiagnostics({directory:preferencesFile?path.join(path.dirname(preferencesFile),'diagnostics'):null});
   diagnostics.record('service-start');
   const {GithubConnections}=await import('./github/connections.js');
@@ -358,6 +351,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
     res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'self'");
     const json = (value, status = 200) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(value)); };
     let countedWrite=false,ownsGithubMutation=false,releaseRead;const request={};pending.add(request);
+    const admissionAbort=new AbortController(),abortAdmission=()=>admissionAbort.abort(new AppError('WRITE_CANCELLED'));res.once('close',abortAdmission);
     try {
       if(shuttingDown)throw new AppError('SERVER_CLOSING');
       if (req.headers.host !== new URL(origin).host) throw new AppError('ORIGIN');
@@ -365,6 +359,13 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       if (!['GET', 'POST'].includes(req.method)) throw new AppError('ORIGIN');
       if (req.method === 'POST' && req.headers.origin !== origin) throw new AppError('ORIGIN');
       const url = new URL(req.url, origin);
+      const asset = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
+      if (req.method === 'GET' && assets.has(asset)) { res.writeHead(200, { 'Content-Type': mime(asset) }); res.end(assets.get(asset)); return; }
+      // Admission precedes session bootstrap, parsing and owner activation.
+      // A reserved control slot does not grant access: normal authorization
+      // still applies below. No request-supplied value changes these limits.
+      req.admission=await requestAdmission.acquire(requestLane(req.method,url.pathname),{signal:admissionAbort.signal});
+      if(shuttingDown)throw new AppError('SERVER_CLOSING');
       if (req.method === 'POST' && url.pathname === '/api/session') {
         const data = await body(req);
         if (!equal(data?.token, launchToken)) throw new AppError('AUTH');
@@ -392,18 +393,16 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         if(context!==sessionContext)throw new AppError('WORKSPACE_CHANGED');sessions.set(session,local);setCookie(res,session);if(local.access)startJobs(context);
         return json({ ok: true });
       }
-      const asset = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
-      if (req.method === 'GET' && assets.has(asset)) { res.writeHead(200, { 'Content-Type': mime(asset) }); res.end(assets.get(asset)); return; }
       const cookie = req.headers.cookie?.split(';').map(part => part.trim()).find(part => part.startsWith('observanda='))?.slice(11);
       const client=sessions.get(cookie);if(!client)throw new AppError('AUTH');
       if(req.method==='GET'&&url.pathname==='/api/health'){
        const health=await serviceHealth({root:context.root,locked:context.manualLock||client.expires<=Date.now()||context.protectedOnce&&(!client.access||!context.vault.key),closing:shuttingDown,provider:databaseProvider()});
-       return json({...health,capacity:databaseCapacity()},health.ready?200:503);
+       return json({...health,capacity:databaseCapacity(),requests:requestAdmission.stats()},health.ready?200:503);
       }
       if(req.method==='GET'&&url.pathname==='/api/diagnostics'){
        if((await status(client)).locked)throw new AppError('ACCESS_LOCKED');
        const workers=[...(context.jobs?[context.jobs.worker]:[]),...[...(context.projects?.jobs.entries??[])].map(entry=>entry.worker)].map(worker=>worker.status());
-       return json({...await diagnostics.snapshot(),workers});
+       return json({...await diagnostics.snapshot(),workers,requests:requestAdmission.stats(),writers:writerCapacity()});
       }
       const selectedContext=context;
       const snapshotRead=workspaceSnapshotRequest(req.method,url.pathname);
@@ -1408,10 +1407,14 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       req.activity?.finish(error);
       const safe = safeError(error);
       const statuses = { TASK_DEPENDENCY_OWNER_LIMIT:422, TASK_DEPENDENCY_DATABASE_LIMIT:422, TASK_PREREQUISITE_ACCESS:403, TASK_PREREQUISITE_CHANGED:409, TASK_PREREQUISITE_UNSUPPORTED:422, RECORD_COMMAND_LIMIT:413, DRAFT_SIZE_LIMIT:413, STARTER_CHANGED:409, STARTER_ARCHIVED:409, RECORD_SELECTION_LIMIT:413, RECORD_SIZE_LIMIT:413, WORKSPACE_METADATA_LIMIT:413, WORKSPACE_READ_LIMIT:413, SERVER_CLOSING:503, DATABASE_BUSY:503, DATABASE_UNAVAILABLE:503, RECORD_VIEW_CHANGED:409, RECORD_VIEW_NAME:409, RECORD_VIEW_FORMAT:500, MODULE_CHANGED:409, MODULE_REPLAY:409, BOOKING_CONFLICT:409, STOCK_UNAVAILABLE:409, DRAFT_CHANGED:409, RECORD_CHANGED:409, DASHBOARD_CHANGED:409, FOLDER_PICKER_BUSY:409, PREFERENCES_CHANGED:409, ACCESS_LOCKED:401, ACCESS_DENIED:401, ACCESS_WAIT:429, WORKSPACE_CHANGED:409, AUTH: 401, ORIGIN: 403, CONFLICT: 409, EXISTS: 409, STALE: 409, LOCKED: 423, MISSING: 404, NOT_FOUND: 404, LIMIT: 413, IO: 500 };
-      if (!res.headersSent) json(safe, identityRecoveryStatus[safe.code] ?? organizationErrorStatus[safe.code] ?? statuses[safe.code] ?? 422); else res.destroy();
+      if (!res.headersSent){
+       if(!req.complete){req.pause();res.setHeader('Connection','close');}
+       if(safe.code==='WORKLOAD_BUSY')res.setHeader('Retry-After','1');
+       json(safe,safe.code==='WORKLOAD_BUSY'?503:safe.code==='REQUEST_TIMEOUT'?408:identityRecoveryStatus[safe.code] ?? organizationErrorStatus[safe.code] ?? statuses[safe.code] ?? 422);
+      }else res.destroy();
     } finally {
-      if(req.url?.startsWith('/api/'))diagnostic('request',{method:req.method,route:req.url.split('/')[2]?.split('?')[0],durationMs:performance.now()-diagnosticStart,error:diagnosticError,status:res.statusCode,queued:pending.size,active:activeWrites});
-      releaseRead?.();req.activity?.finish();if(ownsGithubMutation)githubMutation=false;if(countedWrite)activeWrites--;pending.delete(request);if(!pending.size)for(const resolve of drained.splice(0))resolve();
+      if(req.url?.startsWith('/api/'))diagnostic('request',{method:req.method,route:req.url.split('/')[2]?.split('?')[0],durationMs:performance.now()-diagnosticStart,error:diagnosticError,status:res.statusCode,pendingRequests:pending.size,activeWrites});
+      releaseRead?.();req.activity?.finish();req.admission?.release();res.off('close',abortAdmission);if(ownsGithubMutation)githubMutation=false;if(countedWrite)activeWrites--;pending.delete(request);if(!pending.size)for(const resolve of drained.splice(0))resolve();
     }
   })));
   const connections=httpDrain(server);
@@ -1423,7 +1426,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
   origin = `http://127.0.0.1:${server.address().port}`;
   diagnostics.record('service-ready');
   const expiry=setInterval(()=>{
-   const memory=process.memoryUsage(),cpu=process.cpuUsage();diagnostics.record('resource',{rssBytes:memory.rss,heapBytes:memory.heapUsed,externalBytes:memory.external,cpuUserUs:cpu.user,cpuSystemUs:cpu.system,queued:pending.size,active:activeWrites});
+   const memory=process.memoryUsage(),cpu=process.cpuUsage(),capacity=Object.values(requestAdmission.stats()),total=key=>capacity.reduce((sum,lane)=>sum+lane[key],0);diagnostics.record('resource',{rssBytes:memory.rss,heapBytes:memory.heapUsed,externalBytes:memory.external,cpuUserUs:cpu.user,cpuSystemUs:cpu.system,pendingRequests:pending.size,activeWrites,activeRequests:total('active'),queuedRequests:total('queued'),requestBytes:total('retainedBytes'),queuedWriters:writerCapacity().queued});
    context.projects?.expire();
    if(shuttingDown||loginBusy||pending.size||activeWrites||importing||publishing||changing||![context.vault.key,context.calendarSources.connections.size,context.calendarSources.cache.size].some(Boolean)||[...sessions.values()].some(s=>s.access&&s.expires>Date.now()))return;
    loginBusy=true;const expiring=context;
@@ -1434,7 +1437,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
    return {busy:!!(activeWrites||changing||importing||publishing||loginBusy||context.dashboardTask||context.jobs?.worker.active||operations.some(item=>['running','queued'].includes(item.state))),failure:activities.failureSequence};
   };
   return {server,origin,launchToken,url:origin+'/#'+launchToken,shutdownStatus,close:()=>closePromise??=(async()=>{
-   shuttingDown=true;clearInterval(expiry);cancelFolderRequests();for(const request of pending)request.abortPreview?.();const stoppedJobs=stopJobs(context);
+   shuttingDown=true;requestAdmission.close();clearInterval(expiry);cancelFolderRequests();for(const request of pending)request.abortPreview?.();const stoppedJobs=stopJobs(context);
    const disconnected=connections.close();
    const timeout=setTimeout(()=>server.closeAllConnections(),60000);timeout.unref();
    try{await Promise.all([stoppedJobs,...dashboardTasks,disconnected,pending.size?new Promise(resolve=>drained.push(resolve)):Promise.resolve()]);}

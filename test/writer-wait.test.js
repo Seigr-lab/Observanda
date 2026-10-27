@@ -30,3 +30,9 @@ test('background jobs own their retry lifetime independently of the initiating H
  await requestWriterWait(req,res,async()=>{worker.enabled=true;worker.tick();worker.enabled=false;await worker.running;});
  assert.equal(checks,0);assert.equal(attempts,1);
 });
+
+test('foreground lock waits expire before entering the mutation and do not time out admitted work',async()=>{
+ const {req,res}=connection();let mutated=false;
+ await assert.rejects(requestWriterWait(req,res,async()=>{await waitForWriter(async()=>{throw Object.assign(Error(),{code:'LOCKED'});});mutated=true;},{waitMs:20}),{code:'WORKLOAD_BUSY'});assert.equal(mutated,false);
+ await requestWriterWait(req,res,async()=>{await waitForWriter(async()=>{});await new Promise(resolve=>setTimeout(resolve,30));mutated=true;},{waitMs:20});assert.equal(mutated,true);
+});
