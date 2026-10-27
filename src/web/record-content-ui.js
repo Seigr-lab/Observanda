@@ -6,6 +6,7 @@ import {recordRevisionView,recordRevisionField} from './record-revision-view.js'
 import {attemptView} from './attempt-view.js';
 import {resultStatementsView} from './result-statements.js';
 import {renderProse} from './prose-model.js';
+import {applyRichTextStyles} from './rich-text-stylesheet.js';
 import {recordFigureRenderer} from './book-reading.js';
 import {recordSectionActions} from './record-section-actions.js';
 import {recordValueControls,recordContributorControls} from './record-values-ui.js';
@@ -100,6 +101,7 @@ export function recordContentUI({state,api,esc,field,render,report,refresh,editW
   }
   if(state.recordSection&&state.recordSection!==lastAnchor){lastAnchor=state.recordSection;void load({anchor:lastAnchor,...(resultStatementAnchor(lastAnchor)?{resultFigure:null}:{})});render();return;}
   if(busy)return;
+  if(reading)applyRichTextStyles(document,{...reading.header,sections:reading.sections.values});
   if(collectionFocus){
    const {name,action,first}=collectionFocus,nav=document.querySelector('[data-record-collection="'+name+'"]'),results=name==='results'?document.querySelector('.record-result-values,.record-reader .result-statements'):null;
    const target=first?results?.querySelector('.result-statements>section')??results:nav?.querySelector('[data-action="'+action+'"]:not([disabled])')??nav?.querySelector('input')??results;
