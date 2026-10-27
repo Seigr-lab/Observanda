@@ -71,8 +71,9 @@ export function analysisPublicationReviewDefinitions(workspace,publisher,queue,{
    const sourceReader=sourceAccess?.take(job.id),service=new AnalysisPublicationReviewJobs(workspace,publisher,{sourceReader});
    await progress({stage:'checking-analysis-edition',done:0,total:0});return {candidate:await service.candidate(job,{signal}),sourceReader};
   },
-  beforeComplete:async(job,prepared,{signal})=>{
-   const checkedHead=await publicationResearchWorkspace(workspace).catalogue(store=>store.head()),review=new AnalysisPublicationReview(workspace,{sourceReader:prepared.sourceReader});await review.fresh(prepared.candidate,{signal});signal?.throwIfAborted();return {...prepared,checkedHead};
+  beforeComplete:async(job,prepared,{signal,progress})=>{
+   let analysesChecked=0;
+   const checkedHead=await publicationResearchWorkspace(workspace).catalogue(store=>store.head()),review=new AnalysisPublicationReview(workspace,{sourceReader:prepared.sourceReader});await review.fresh(prepared.candidate,{signal,onCheck:async source=>progress?.({stage:'checking-analysis-edition',done:0,total:0,analysesChecked:++analysesChecked,recordId:source.recordId})});signal?.throwIfAborted();return {...prepared,checkedHead};
   },
   commit:async(job,prepared)=>{if(await publicationResearchWorkspace(workspace).catalogue(store=>store.head())!==prepared.checkedHead)throw new AppError('ANALYSIS_REVIEW');return new AnalysisPublicationReview(workspace,{sourceReader:prepared.sourceReader}).save(prepared.candidate,operations.request(job).decisions,{checked:true,write:operation=>operation()});}
  }};

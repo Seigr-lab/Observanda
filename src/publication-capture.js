@@ -1,4 +1,4 @@
-import {requirePublicationDocuments,requirePagedResearchTables} from './catalogue-format.js';
+import {catalogueFormat,catalogueRequiresRetainedFigures,catalogueRequiresFigureAuthoring,requirePublicationDocuments,requirePagedResearchTables,requireRetainedFigures,requireFigureAuthoring} from './catalogue-format.js';
 import {isPublicationDocumentBlockName} from './publication-document.js';
 import {withScratch} from './scratch-work.js';
 import {publicationResearchWorkspace} from './publication-pin.js';
@@ -75,6 +75,11 @@ async function capture(workspace,operation,{signal,id:requestedId,write=fn=>tran
  });
  const index=new ResearchMaterials(publicationResearchWorkspace(workspace)).index;
  if(!await index.state())await write(()=>index.ensureLocked());
+ // First-time figure admission can require an exclusive schema fence. Finish
+ // it before holding the host read snapshot, even when figures belong only to
+ // a selected external owner. Subsequent captures need no admission writer.
+ const figureStorage=await workspace.catalogue(async store=>{const format=await catalogueFormat(store.db);return catalogueRequiresRetainedFigures(format)&&catalogueRequiresFigureAuthoring(format);});
+ if(!figureStorage)await write(()=>workspace.catalogue(async store=>{signal?.throwIfAborted();await requireRetainedFigures(store.db);await requireFigureAuthoring(store.db);signal?.throwIfAborted();}));
  return withScratch(written=>workspace.catalogue(async store=>{
   await projectDomainHandoff(store.db,{shared:true});
   await recover(workspace,store.db,write);signal?.throwIfAborted();

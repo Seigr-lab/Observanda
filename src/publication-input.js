@@ -1,4 +1,5 @@
 import {hasRetainedFigure} from './record-retained-figures.js';
+import {withJobDiagnosticContext} from './job-diagnostics.js';
 import {hasAuthoredFigures} from './figure-authoring-format.js';
 import {retainPublicationFigures} from './publication-retained-figures.js';
 import {retainPublicationTables} from './publication-retained-tables.js';
@@ -32,7 +33,7 @@ export {finalizePublicationInput};
 
 // Each selected original is consumed once. Corpus membership, provenance and
 // collision evidence live in the immutable owner rather than capture arrays.
-export async function retainPublicationInput(workspace,id,metadata,originals,{sourceEtag,recordHead,signal,sourceReader,edition=emptyEditionSelection(),editionChoices=null,deferFinalization=false,hasSources=false,websitePages,websiteCollections,websitePresentation,input=null,owner={workspaceId:metadata.id},destination=workspace,identities=null,snapshotId=null,onRecord}={}){
+export async function retainPublicationInput(workspace,id,metadata,originals,{sourceEtag,recordHead,signal,sourceReader,edition=emptyEditionSelection(),editionChoices=null,deferFinalization=false,hasSources=false,websitePages,websiteCollections,websitePresentation,input=null,owner={workspaceId:metadata.id},destination=workspace,identities=null,snapshotId=null,onRecord,onCapture}={}){
  if(await destination.storageKind()!=='catalogue')return retainLegacyPublicationInput(workspace,id,metadata,originals,{sourceEtag,recordHead,signal,sourceReader,edition,deferFinalization,websitePages,websitePresentation});
  const research=publicationResearchWorkspace(workspace);
  const capture=async referenceNamespaces=>{
@@ -43,7 +44,14 @@ export async function retainPublicationInput(workspace,id,metadata,originals,{so
  if(fresh)await retainWebsitePublicationCollections(destination,builder,id,metadata,{websiteCollections,websitePages,websitePresentation,signal});
  const materials=new ResearchMaterials(research),review={retainedFigures:0,changedInputs:0,editedFigures:0};
  async function pin(original,choice,pageId=original.id){
+  const context={operation:'capture-record',workspaceId:metadata.id,recordId:original.id,revision:recordRevision(publicationOriginal(original))};
+  return withJobDiagnosticContext(context,async()=>{
+  await onCapture?.({...context,phase:'record-start'});
   signal?.throwIfAborted();const saved=publicationOriginal(original),revision=recordRevision(saved),requested=choice??defaultEditionRecord(original,revision),record=selectEditionRecord(original,requested),selection={...requested,include:record.share,sections:record.sections.map(section=>section.id),attachments:record.attachments.map(item=>item.id)},raw=serialize(saved);
+  if(record.figures.some(hasRetainedFigure))await withJobDiagnosticContext({operation:'admit-retained-figures'},async()=>{
+   const authored=hasAuthoredFigures(record)||record.figures.some(figure=>figure.kind==='panels'&&hasRetainedFigure(figure));
+   if(typeof destination.catalogue==='function')await destination.catalogue(async store=>{const {requireRetainedFigures,requireFigureAuthoring}=await import('./catalogue-format.js');await requireRetainedFigures(store.db);if(authored)await requireFigureAuthoring(store.db);});
+  });
   if(requested.details!==undefined)await requirePublicationEditionDetails(input);
   const cover=metadata.id===state.header.metadata.id?await builder.get('covers',original.id):null,cardMetadata=cover?{...metadata,website:{...metadata.website,presentation:{...metadata.website.presentation,covers:[cover]}}}:metadata;
   let descriptor={...publicationDescriptor(record,cardMetadata),id:pageId,revision,sha256:digest(raw),selection};
@@ -51,8 +59,8 @@ export async function retainPublicationInput(workspace,id,metadata,originals,{so
   if(referenceNamespaces)descriptor.referenceNamespaces=await referenceNamespaces({workspaceId:metadata.id,id:original.id});
   descriptor=await projectPublicationRecord(descriptor,owner,identities);
   await claimPublicationFile(builder,descriptor.id,'record',descriptor.id);await destination.writeMetadata(recordFile(id,descriptor.id),raw);
-  await retainPublicationTables(builder,materials,record,descriptor.id,{signal});
-  if(await retainPublicationFigures(builder,materials,record,descriptor.id,{signal})){state.header.figureDocuments=1;if(typeof destination.catalogue==='function')await destination.catalogue(async store=>{const {requireRetainedFigures,requireFigureAuthoring}=await import('./catalogue-format.js');await requireRetainedFigures(store.db);if(hasAuthoredFigures(record)||record.figures.some(figure=>figure.kind==='panels'&&hasRetainedFigure(figure)))await requireFigureAuthoring(store.db);});}
+  await withJobDiagnosticContext({operation:'capture-retained-tables'},()=>retainPublicationTables(builder,materials,record,descriptor.id,{signal}));
+  if(await withJobDiagnosticContext({operation:'capture-retained-figures'},()=>retainPublicationFigures(builder,materials,record,descriptor.id,{signal})))state.header.figureDocuments=1;
   const notebook=await builder.get('notebooks',descriptor.notebookId),position=builder.count('records');
   if(!notebook)throw new AppError('PUBLICATION_IDENTITY');
   await builder.append('records',descriptor.id,descriptor,{indexes:publicationRecordIndexes(descriptor,position,notebook.projectId)});
@@ -61,7 +69,8 @@ export async function retainPublicationInput(workspace,id,metadata,originals,{so
   const released=await materials.releaseSources({...metadata,entries:[record]},[record.id],{sourceEtag,recordHead,signal});
   for(const source of released.sources){const key=metadata.id+'/'+String(builder.count('sourceMaterials')).padStart(16,'0');await builder.append('sourceMaterials',key,{workspaceId:metadata.id,source},{indexes:{owner:metadata.id+'/'}});if(source.figureId)review.retainedFigures++;}
   for(const warning of released.warnings){if(warning.reason==='inputs')review.changedInputs++;if(warning.reason==='edited')review.editedFigures++;}
-  await onRecord?.(descriptor);return descriptor;
+  await onRecord?.(descriptor);await onCapture?.({...context,phase:'record-complete'});return descriptor;
+  });
  }
  const start=builder.count('records');
  for await(const original of originals){
@@ -83,7 +92,7 @@ export async function retainPublicationInput(workspace,id,metadata,originals,{so
  }
  }});
  const reader=await openPublicationInput(destination,input,{signal});
- const analysis=await publicationDependencyState(materials,reader.sourceMaterials({workspaceId:metadata.id}),{workspaceId:metadata.id,sourceReader,recordHead,signal,onItem:async item=>{
+ const analysis=await publicationDependencyState(materials,reader.sourceMaterials({workspaceId:metadata.id}),{workspaceId:metadata.id,sourceReader,recordHead,signal,onCheck:source=>onCapture?.({workspaceId:metadata.id,recordId:source.recordId,phase:'analysis-complete'}),onItem:async item=>{
   const value=!state.header.hasSources?item:{...item,id:digest(metadata.id+'/'+item.id),recordId:await identities.identity(metadata.id,'record',item.recordId),sourceWorkspaceId:metadata.id};
   await builder.append('analysisItems',value.id,value,{indexes:{owner:metadata.id+'/'}});
  }});

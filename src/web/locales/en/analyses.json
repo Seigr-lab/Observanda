@@ -159,6 +159,7 @@
   "reviewSave":"Save analysis review decisions",
   "reviewSaving":"Saving review decisions. This operation continues if the connection closes; reopen this edition to check its result.",
   "reviewSaveFailed":"The review decisions could not be saved. Check the operation result before retrying.",
+  "reviewChecked":"Analysis items checked: {count}.",
   "reviewSaveUncertain":"The save was not confirmed. Your entered decisions remain here. Save again to recover the same operation and its result.",
   "reviewSaved":"Analysis review decisions saved for this edition.",
   "reviewRequired":"Resolve the analysis review decisions before exporting or publishing this edition.",

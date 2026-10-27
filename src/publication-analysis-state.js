@@ -40,7 +40,7 @@ async function legacyAnalysisState(workspace,candidate,{sourceReader,signal,requ
 }
 
 
-async function retainedAnalysisState(workspace,candidate,{sourceReader,signal,requireCurrent=true,onItem=async()=>{}}={}){
+async function retainedAnalysisState(workspace,candidate,{sourceReader,signal,requireCurrent=true,onItem=async()=>{},onCheck}={}){
  const input=await publicationRetainedInput(workspace,candidate,{signal}),header=await input.fullHeader(),namespace=candidate.workspaceId,groups=[];
  if(typeof candidate.hasSources!=='boolean'||header.hasSources!==candidate.hasSources)throw new AppError('JOB_DAMAGED');
  for await(const group of input.sourceGroups()){
@@ -49,11 +49,11 @@ async function retainedAnalysisState(workspace,candidate,{sourceReader,signal,re
  if(!groups.length||candidate.hasSources!==(groups.length>1))throw new AppError('JOB_DAMAGED');
  const expected=candidate.sourceSnapshots??groups.slice(1).map(group=>({workspaceId:group.workspaceId,snapshotId:group.snapshotId}));
  if(!Array.isArray(expected)||expected.length!==groups.length-1||expected.some((row,i)=>!researchId(row?.workspaceId)||!revisionId(row?.snapshotId)||expected.slice(0,i).some(prior=>prior.workspaceId===row.workspaceId)||!groups.slice(1).some(group=>group.workspaceId===row.workspaceId)))throw new AppError('JOB_DAMAGED');
- if(!candidate.hasSources)return {analysis:await publicationDependencyState(new ResearchMaterials(publicationResearchWorkspace(workspace)),input.sourceMaterials({workspaceId:namespace}),{sourceReader,workspaceId:namespace,signal,onItem})};
+ if(!candidate.hasSources)return {analysis:await publicationDependencyState(new ResearchMaterials(publicationResearchWorkspace(workspace)),input.sourceMaterials({workspaceId:namespace}),{sourceReader,workspaceId:namespace,signal,onItem,onCheck})};
  if(typeof sourceReader!=='function')throw new AppError('ACCESS_LOCKED');
  const reader=await sourceReader({signal}),fingerprints=[],currentSnapshots=[];let count=0;
  const analyze=async(group,materials)=>{
-  const analysis=await publicationDependencyState(materials,input.sourceMaterials({workspaceId:group.workspaceId}),{sourceReader,workspaceId:group.workspaceId,signal,onItem:async item=>{
+  const analysis=await publicationDependencyState(materials,input.sourceMaterials({workspaceId:group.workspaceId}),{sourceReader,workspaceId:group.workspaceId,signal,onCheck,onItem:async item=>{
    count++;await onItem({...item,id:digest(group.workspaceId+'/'+item.id),sourceWorkspaceId:group.workspaceId,recordId:publicationOwnerId(namespace,group.workspaceId,'record',item.recordId)});
   }});fingerprints.push([group.workspaceId,analysis.fingerprint]);
  };

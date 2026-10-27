@@ -10,11 +10,12 @@ import {JobRelocations,jobFingerprint} from './job-relocations.js';
 import {withWorkspaceMetadataBatch} from './metadata-batch.js';
 import {withoutWriterWait,backgroundWriterWait} from './writer-wait.js';
 import {JobProgress,validateJobProgress} from './job-progress.js';
+import {jobFailureDiagnostic,jobDiagnosticFile,readJobDiagnostic,withJobDiagnosticContext} from './job-diagnostics.js';
 const terminal=new Set(['completed','failed','cancelled']);
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const same=(a,b)=>digest(serialize(a))===digest(serialize(b));
 const jobWrites=new AsyncLocalStorage();
-export const jobSummary=job=>job&&({...Object.fromEntries(['id','type','scope','state','attempt','progress','result','error','cancelRequested','createdAt','updatedAt'].map(key=>[key,job[key]])),message:job.state==='relocated'?safeError(new AppError('JOB_RELOCATED')).message:job.error?safeError(new AppError(job.error)).message:null});
+export const jobSummary=job=>job&&({...Object.fromEntries(['id','type','scope','state','attempt','progress','result','error','cancelRequested','createdAt','updatedAt'].map(key=>[key,job[key]])),diagnostic:job.diagnostic??null,message:job.state==='relocated'?safeError(new AppError('JOB_RELOCATED')).message:job.error?safeError(new AppError(job.error)).message:null});
 export class DurableJobs{
  constructor(workspace,definitions,{leaseMs=30000,observe=()=>{}}={}){this.workspace=workspace;this.definitions=definitions;this.leaseMs=leaseMs;this.observe=observe;this.pendingWrite=Promise.resolve();this.membership=new JobQueueIndex(workspace,id=>this.read(id));this.relocations=new JobRelocations(workspace);}
  file(id){if(!researchId(id))throw new AppError('INVALID');return '.observanda/jobs/'+id+'.json';}
@@ -23,6 +24,7 @@ export class DurableJobs{
  async readStored(id){
   const raw=await this.workspace.readMetadata(this.file(id),1048576);if(raw===null)return null;
   let job;try{job=JSON.parse(raw);}catch{throw new AppError('JOB_DAMAGED');}
+  if(job.diagnostic!==undefined&&(!job.diagnostic||Object.keys(job.diagnostic).sort().join()!=='at,attempt'||!Number.isSafeInteger(job.diagnostic.attempt)||job.diagnostic.attempt<0||job.diagnostic.attempt>job.attempt||!Number.isFinite(Date.parse(job.diagnostic.at))))throw new AppError('JOB_DAMAGED');
   if(job.format!==1||job.id!==id||!researchId(job.scope)||typeof job.type!=='string'||!job.type||job.type.length>100||!Number.isFinite(Date.parse(job.createdAt))||!Number.isFinite(Date.parse(job.updatedAt))||!['queued','running',...terminal].includes(job.state)||!Number.isSafeInteger(job.attempt)||job.attempt<0||typeof job.cancelRequested!=='boolean'||!job.progress||!Number.isSafeInteger(job.progress.done)||!Number.isSafeInteger(job.progress.total)||job.progress.done<0||job.progress.total<job.progress.done||!job.input||typeof job.input!=='object'||Array.isArray(job.input)||typeof job.progress.stage!=='string'||job.progress.stage.length>80||job.state==='running'&&(!researchId(job.lease?.token)||!Number.isFinite(job.lease?.until)))throw new AppError('JOB_DAMAGED');
   const relocation=await this.relocations.read(id);
   if(relocation){if(jobFingerprint(job)!==relocation.sourceRevision)throw new AppError('JOB_DAMAGED');return {...job,state:'relocated',lease:null,relocation};}
@@ -50,6 +52,11 @@ export class DurableJobs{
  }
  definition(job){const definition=Object.hasOwn(this.definitions,job.type)?this.definitions[job.type]:null;if(!definition)throw new AppError('JOB_UNSUPPORTED');return definition;}
  async authorize(job){await this.definition(job).authorize(job);}
+ async diagnostic(id,{attempt}={}){const job=await this.read(id);if(!job)throw new AppError('NOT_FOUND');await this.authorize(job);return readJobDiagnostic(this.workspace,job,attempt);}
+ async retainFailure(job,error){
+  await this.workspace.writeMetadata(jobDiagnosticFile(job.id,job.attempt),serialize(jobFailureDiagnostic(job,error)));
+  job.diagnostic={attempt:job.attempt,at:job.updatedAt};
+ }
  async enqueue(intent){return this.transaction(()=>this.enqueueLocked(intent));}
  // For domain commands that persist their input and enqueue in the same transaction.
  async enqueueLocked({id=randomUUID(),type,scope,input}){
@@ -70,7 +77,7 @@ export class DurableJobs{
     const job=await this.read(id);if(!job||terminal.has(job.state))throw new AppError('JOB_DAMAGED');
     if(job.state==='running'&&job.lease.until>now)throw new AppError('JOB_DAMAGED');
     if(job.cancelRequested){job.state='cancelled';job.lease=null;job.updatedAt=new Date(now).toISOString();await this.write(job);return null;}
-    try{await this.authorize(job);}catch(error){job.state='failed';job.error=safeError(error).code;job.lease=null;job.updatedAt=new Date(now).toISOString();await this.write(job);return null;}
+    try{await this.authorize(job);}catch(error){job.state='failed';job.error=safeError(error).code;job.lease=null;job.updatedAt=new Date(now).toISOString();await this.retainFailure(job,error);await this.write(job);return null;}
     job.state='running';job.attempt++;job.progress={...job.progress,stage:'preparing',done:0};job.lease={token:randomUUID(),until:now+this.leaseMs};job.updatedAt=new Date(now).toISOString();job.error=null;
     await this.write(job);return job;
    }
@@ -96,11 +103,11 @@ export class DurableJobs{
   if(current.cancelRequested)throw new AppError('JOB_CANCELLED');
   const now=await this.now();current.lease.until=now+this.leaseMs;current.updatedAt=new Date(now).toISOString();await this.write(current);return result;
  },{retryLocked:false});}
- async complete(id,token,prepared,{signal,beforeCommit}={}){
+ async complete(id,token,prepared,{signal,beforeCommit,progress}={}){
   // Opted-in domains may finish expensive immutable-source proofs without
   // occupying the serialized writer. The final transaction rechecks the lease.
   const initial=await this.read(id);if(!initial)throw new AppError('JOB_LEASE');const beforeComplete=this.definition(initial).beforeComplete;
-  if(beforeComplete){const {job}=await this.held(id,token);await this.authorize(job);prepared=await beforeComplete(job,prepared,{signal});}
+  if(beforeComplete){const {job}=await this.held(id,token);await this.authorize(job);prepared=await beforeComplete(job,prepared,{signal,progress});}
   await beforeCommit?.();
   signal?.throwIfAborted();
   const job=await this.transaction(async()=>{
@@ -116,6 +123,7 @@ export class DurableJobs{
  async release(id,token,{error=null,paused=false}={}){return this.transaction(async()=>{
   await this.relocations.writable(id);const job=await this.read(id);if(!job||job.state!=='running'||job.lease.token!==token)return job;
   job.state=job.cancelRequested?'cancelled':paused?'queued':'failed';job.lease=null;job.error=job.state==='failed'?safeError(error??new AppError('IO')).code:null;job.updatedAt=new Date(await this.now()).toISOString();
+  if(job.state==='failed')await this.retainFailure(job,error??new AppError('IO'));
   await this.write(job);return job;
  });}
  async control(id,action){return this.transaction(()=>this.controlLocked(id,action));}
@@ -145,8 +153,8 @@ export class JobWorker{
   const updates=new JobProgress(progress=>wait(()=>this.queue.pulse(job.id,job.lease.token,progress)),{signal:controller.signal,heartbeatMs:Math.max(100,this.queue.leaseMs/3),onError:error=>controller.abort(error)});
   try{
    if(!this.enabled)controller.abort();
-   const prepared=await this.queue.definition(job).prepare(job,{signal:controller.signal,write,progress:async progress=>updates.report(progress)});
-   await updates.flush();controller.signal.throwIfAborted();await wait(()=>this.queue.complete(job.id,job.lease.token,prepared,{signal:controller.signal,beforeCommit:()=>updates.finish()}));
+   const prepared=await withJobDiagnosticContext({operation:'prepare-job',jobId:job.id},()=>this.queue.definition(job).prepare(job,{signal:controller.signal,write,progress:async progress=>updates.report(progress)}));
+   await updates.flush();controller.signal.throwIfAborted();await withJobDiagnosticContext({operation:'complete-job',jobId:job.id},()=>wait(()=>this.queue.complete(job.id,job.lease.token,prepared,{signal:controller.signal,progress:async value=>updates.report(value),beforeCommit:()=>updates.finish()})));
   }catch(error){controller.abort(error);await updates.stop();await this.queue.release(job.id,job.lease.token,{error,paused:!this.enabled}).catch(()=>{});}
   finally{await updates.stop();await this.queue.definition(job).discard?.(job).catch(()=>{});this.active=null;this.controller=null;}
  }

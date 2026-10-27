@@ -12,7 +12,7 @@ import {MediaStore} from './media.js';
 
 // Foreign readers authenticate their own originals. Only explicitly selected
 // record filenames and public media identities are projected into the host.
-export async function retainPublicationSources(workspace,jobId,local,sources,reader,{signal,sourceReader}={}){
+export async function retainPublicationSources(workspace,jobId,local,sources,reader,{signal,sourceReader,onCapture}={}){
  if(await workspace.storageKind()!=='catalogue')return retainLegacyPublicationSources(workspace,jobId,local,sources,reader,{signal,sourceReader});
  const state=publicationInputState(local),namespace=state.header.metadata.id,builder=state.builder;
  const indexed=!Array.isArray(sources);
@@ -28,7 +28,7 @@ export async function retainPublicationSources(workspace,jobId,local,sources,rea
     const storage=new Proxy(pinned.storage,{get(target,key){if(key==='catalogue')return operation=>operation(store);const value=target[key];return typeof value==='function'?value.bind(target):value;}});
     const media=new MediaStore(pinned.storage);
     await retainPublicationInput(storage,jobId,metadata,selectedPublicationRecords(store,snapshot,{metadata,selection:consent.selection,signal}),{
-     sourceEtag:pinned.snapshotId,snapshotId:pinned.snapshotId,recordHead:async id=>(await materialRecordSummary(store,await store.member(snapshot,id)))?.revision??null,signal,sourceReader,
+     sourceEtag:pinned.snapshotId,snapshotId:pinned.snapshotId,recordHead:async id=>(await materialRecordSummary(store,await store.member(snapshot,id)))?.revision??null,signal,sourceReader,onCapture,
      deferFinalization:true,edition:source.edition,editionChoices:sourceEditionReader(source),input:local,owner,destination:workspace,identities:state.identities,
      onRecord:async record=>{
       for(const [id,publicId] of Object.entries(record.mediaIdentities)){

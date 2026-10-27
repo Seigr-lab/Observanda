@@ -7,6 +7,7 @@ dialog:has(> .job-library) { overflow:hidden; max-height:calc(100dvh - 2rem); }
 .job-library-items > .panel + .panel { margin-top:.75rem; }
 .job-library-items .inline-actions { flex-wrap:wrap; }
 .job-library-items progress { display:block; max-width:100%; margin-bottom:.5rem; }
+.job-diagnostics { white-space:pre-wrap; overflow-wrap:anywhere; max-width:100%; }
 .job-library #media-upload-status { margin:0; flex-shrink:0; }
 @media (max-width:480px) {
  dialog:has(> .job-library) { padding:1rem; }

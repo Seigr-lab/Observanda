@@ -52,6 +52,10 @@
     "other": "{count} media files"
   },
   "preparationGuidance": "Preparation keeps a private copy of the selected edition. Review it before downloading or uploading.",
+  "privateDiagnostics": "Private failure details",
+  "failureWithDiagnostics": "Preparation failed. Open Private failure details to see the failing operation and recorded cause.",
+  "diagnosticsPrivate": "These details are stored privately with your workspace and are excluded from website output. They may contain local paths or record identities; review them before sharing.",
+  "capturedRecords": "Records captured: {count}",
   "preparationPages": "Prepared edition pages",
   "newer": "Newer editions",
   "older": "Older editions",

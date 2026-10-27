@@ -1157,13 +1157,15 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
           return json(await workspace.storageKind()==='catalogue'?await workspace.catalogue(summarize):await summarize());
         }
         if(operation==='analysis-review')return operationResponse(req,res,async()=>{const job=await new AnalysisPublicationReviewJobs(workspace,publisher,{sourceReader,sourceAccess:context.publicationSourceAccess}).start(data,queue);context.jobs.worker.wake();return {job:jobSummary(job)};},value=>json(value,202),{continueAfterDisconnect:true});
-        if(['analysis-review-status','analysis-review-retry','analysis-review-cancel'].includes(operation)){
+        if(['analysis-review-status','analysis-review-retry','analysis-review-cancel','analysis-review-diagnostics'].includes(operation)){
           const reviews=new AnalysisPublicationReviewJobs(workspace,publisher,{sourceReader,sourceAccess:context.publicationSourceAccess}),job=await queue.read(data.id);if(!job||job.type!=='publication.analysis-review')throw new AppError('NOT_FOUND');await reviews.authorize(job);
           if(operation==='analysis-review-status')return json({job:jobSummary(job)});
+          if(operation==='analysis-review-diagnostics')return json({diagnostic:await queue.diagnostic(job.id,{attempt:data.attempt})});
           const action=operation.slice('analysis-review-'.length),next=await reviews.control(queue,job.id,action);if(action==='cancel')context.jobs.worker.cancel(job.id);else context.jobs.worker.wake();return json({job:jobSummary(next)});
         }
         const job=await queue.read(data.id);if(!job||job.type!=='publication.prepare')throw new AppError('NOT_FOUND');await queue.authorize(job);
         if(operation==='status')return json({job:jobSummary(job)});
+        if(operation==='diagnostics')return json({diagnostic:await queue.diagnostic(job.id,{attempt:data.attempt})});
         if(['cancel','retry'].includes(operation)){const next=await releases.control(queue,job.id,operation);if(operation==='cancel')context.jobs.worker.cancel(job.id);else context.jobs.worker.wake();return json({job:jobSummary(next)});}
         throw new AppError('INVALID');
       }

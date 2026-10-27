@@ -14,6 +14,7 @@ import {validatePublicationPresentation} from './publication-input-presentation.
 import {validatePublicationPages} from './publication-input-pages.js';
 import {publicationWorkspace,publicationResearchWorkspace,validWebsitePin,retainedWebsitePin} from './publication-pin.js';
 import {withPublicationCapture} from './publication-capture.js';
+import {withJobDiagnosticContext} from './job-diagnostics.js';
 import {retainPublicationSources} from './publication-source-input.js';
 import {validPublicationSources} from './web/publication-sources-model.js';
 import {isDownloadPath} from './web/website-file.js';
@@ -41,7 +42,7 @@ const inputFile=id=>{if(!researchId(id))throw new AppError('INVALID');return '.o
 const candidateFile=id=>{if(!hash(id))throw new AppError('INVALID');return '.observanda/release-candidates/'+id+'.json';};
 export class PublicationJobs{
  constructor(workspace,{sources,sourceReader,sourceAccess}={}){workspace=publicationWorkspace(workspace);if(sources!==undefined&&!validPublicationSources(sources))throw new AppError('INVALID');this.workspace=workspace;this.sources=sources===undefined?undefined:structuredClone(sources);this.sourceReader=sourceReader;this.sourceAccess=sourceAccess;this.feed=new MetadataFeed(workspace,'.observanda/release-list');}
- async pin({etag,websitePin,websiteDraft,book,workspaceId,draft:command,edition,blockedValues=[]},{signal,workspace=this.workspace,id=randomUUID(),requestRevision,admitted=false,createdAt=new Date().toISOString()}={}){
+ async pin({etag,websitePin,websiteDraft,book,workspaceId,draft:command,edition,blockedValues=[]},{signal,workspace=this.workspace,id=randomUUID(),requestRevision,admitted=false,createdAt=new Date().toISOString(),onCapture}={}){
    const editionChoices=await publicationEditionChoices(workspace,edition,{source:{workspaceId,etag,websitePin,...(websiteDraft===undefined?{}:{websiteDraft})},signal});
    let capturedPin;
    const input=await publicationSource(workspace,{etag,websitePin,websiteDraft,book,workspaceId,draft:command},{signal,admitted,consume:async(metadata,records,options)=>{
@@ -49,8 +50,8 @@ export class PublicationJobs{
     const capture=async sources=>{
      const count=Array.isArray(sources)?sources.length:sources.count;
      if(Array.isArray(sources)&&!validPublicationSources(sources))throw new AppError('INVALID');
-     const input=await retainPublicationInput(workspace,id,metadata,records,{...options,signal,sourceReader:this.sourceReader,edition,editionChoices,hasSources:count>0,deferFinalization:count>0});
-     return count?retainPublicationSources(workspace,id,input,sources,await this.sourceReader?.({signal}),{signal,sourceReader:this.sourceReader}):input;
+     const input=await retainPublicationInput(workspace,id,metadata,records,{...options,signal,sourceReader:this.sourceReader,edition,editionChoices,hasSources:count>0,deferFinalization:count>0,onCapture});
+     return count?retainPublicationSources(workspace,id,input,sources,await this.sourceReader?.({signal}),{signal,sourceReader:this.sourceReader,onCapture}):input;
     };
     if(this.sources===undefined&&options.websiteSourcesDocument)return withWebsiteSourceSelections(options.websiteSourcesDocument,capture,{signal});
     return capture(this.sources??metadata.website.researchSources??[]);
@@ -99,10 +100,12 @@ export class PublicationJobs{
   const request=this.request(job),raw=await this.workspace.readMetadata(inputFile(job.id),16*1024*1024);
   if(raw!==null&&await this.workspace.readMetadata('.observanda/release-captures/'+job.id+'.json',1024)===null){const source=await this.source(job.id);if(source.requestRevision!==job.input.revision)throw new AppError('JOB_CHANGED');return source;}
   await progress({stage:'capturing-selected-edition',done:0,total:0});
-  return withPublicationCapture(this.workspace,async(workspace,id,finish)=>{
-   const owner=new PublicationJobs(workspace,{sources:request.sources,sourceReader:this.sourceReader}),source=await owner.pin(request.command,{workspace,id,signal,admitted:true,createdAt:job.createdAt,requestRevision:job.input.revision});
+  let recordsCaptured=0,analysesChecked=0;
+  const onCapture=async item=>{if(item.phase==='record-complete')recordsCaptured++;if(item.phase==='analysis-complete')analysesChecked++;await progress({stage:'capturing-selected-edition',done:0,total:0,recordsCaptured,analysesChecked,recordId:item.recordId,workspaceId:item.workspaceId,phase:item.phase});};
+  return withJobDiagnosticContext({operation:'capture-selected-edition',jobId:job.id},()=>withPublicationCapture(this.workspace,async(workspace,id,finish)=>{
+   const owner=new PublicationJobs(workspace,{sources:request.sources,sourceReader:this.sourceReader}),source=await owner.pin(request.command,{workspace,id,signal,admitted:true,createdAt:job.createdAt,requestRevision:job.input.revision,onCapture});
    return finish(async()=>{const entry={id,reviewId:source.reviewId,createdAt:job.createdAt,summary:source.summary};await this.workspace.writeMetadata('.observanda/release-list/'+id+'.json',serialize(entry));return source;});
-  },{id:job.id,signal,write});
+  },{id:job.id,signal,write}));
  }
  async captureStart(command,queue){
   let revoke;

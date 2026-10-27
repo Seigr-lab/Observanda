@@ -21,7 +21,7 @@ export async function saveAnalysisEditionReview(state,api){
    preview.analysisReviewOperation={...job,decisions:job.decisions??preview.analysisReviewOperation?.decisions??preview.analysisReviewPending?.decisions};
    if(job.state==='completed')return job.result;
    if(['failed','cancelled','relocated'].includes(job.state))throw Error(job.message||a('reviewSaveFailed'));
-   operationStatus(a('reviewSaving'));await pause();if(!active())return null;
+   operationStatus(a('reviewSaving')+(Number.isSafeInteger(job.progress?.analysesChecked)?' '+a('reviewChecked',{count:job.progress.analysesChecked}):''));await pause();if(!active())return null;
    ({job}=await call('analysis-review-status',{id:job.id}));
   }
   return null;
