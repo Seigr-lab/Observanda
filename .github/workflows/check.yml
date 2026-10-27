@@ -70,12 +70,26 @@ jobs:
           }
       # Use one native worker per job to avoid competing test files. Capacity
       # diagnostics record observed load; the machine is not assumed idle.
+      - name: Prepare retained test reports
+        run: node -e "require('node:fs').mkdirSync('test-results/ci', {recursive:true})"
       - name: Native tests
         if: matrix.suite == 'native'
-        run: node scripts/test.js --test-concurrency=1 --test-shard=${{ matrix.shard }}/8 "test/*.test.js"
+        run: node scripts/test.js --test-concurrency=1 --test-shard=${{ matrix.shard }}/8 --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=test-results/ci/native.xml "test/*.test.js"
       - name: Install browser
         if: matrix.suite == 'browser'
         run: npx playwright install --with-deps chromium
       - name: Browser tests
         if: matrix.suite == 'browser'
-        run: node scripts/test.js --browser --shard=${{ matrix.shard }}/8 --forbid-only
+        env:
+          PLAYWRIGHT_JUNIT_OUTPUT_FILE: test-results/ci/browser.xml
+        run: node scripts/test.js --browser --shard=${{ matrix.shard }}/8 --forbid-only --reporter=list,junit --trace=retain-on-failure --output=test-results/ci/browser-artifacts
+      # These jobs use disposable synthetic fixtures. Never upload private
+      # workspace data or a local diagnostic directory as a CI artifact.
+      - name: Retain reports and failure traces
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: checks-${{ matrix.os }}-${{ matrix.suite }}-${{ matrix.shard }}
+          path: test-results/ci/
+          retention-days: 14
+          if-no-files-found: warn
