@@ -9,7 +9,7 @@ import {readPreference} from './locations.js';
 import {DeviceStore} from './security/device-store.js';
 import {AppError,safeError} from './errors.js';
 import {OperationalDiagnostics,withDiagnostics,diagnosticPhase} from './operational-diagnostics.js';
-let runtime,server,diagnostics,starting=false,stopping=false,closed;const startup=new AbortController(),pending=new Map();let sequence=0;
+let runtime,server,diagnostics,starting=false,stopping=false,closed,phase='startup';const startup=new AbortController(),pending=new Map();let sequence=0;
 const pdfBridge=pdfRenderBridge(process),removePdfRenderer=installPdfRenderer((input,options)=>pdfBridge.render(input,options),{capabilities:()=>pdfBridge.capabilities()});
 const send=message=>{if(process.connected)process.send(message);};
 const protector={available:()=>true,protect:bytes=>transform('encrypt',bytes.toString('base64')).then(value=>Buffer.from(value,'base64')),unprotect:bytes=>transform('decrypt',bytes.toString('base64')).then(value=>Buffer.from(value,'base64'))};
@@ -18,20 +18,21 @@ async function stop(){
  stopping=true;startup.abort();removePdfRenderer();pdfBridge.close();if(starting)return;
  return closed??=(async()=>{
   let failure;
+  phase='http-drain';send({type:'lifecycle',phase});
   try{await server?.close();}catch(error){failure=error;}
   // A failed HTTP shutdown must not strand any workspace, project or book
   // database. The manager drains every owner before the service disconnects.
-  try{await runtime?.close();}catch(error){failure??=error;}
+  phase='database-stop';send({type:'lifecycle',phase});try{await runtime?.close();}catch(error){failure??=error;}
   finally{
    if(failure){process.exitCode=1;diagnostics?.record('service-failed',{phase:'shutdown',error:failure});console.error(safeError(failure).message);}
    for(const item of pending.values()){clearTimeout(item.timer);item.reject(new AppError('DEVICE_UNAVAILABLE'));}
-   pending.clear();diagnostics?.record('service-stop');await diagnostics?.close();if(process.connected)process.disconnect();
+   pending.clear();phase='stopped';send({type:'lifecycle',phase});diagnostics?.record('service-stop');await diagnostics?.close();if(process.connected)process.disconnect();
   }
  })();
 }
 process.on('disconnect',()=>void stop());process.on('SIGTERM',()=>void stop());process.on('SIGINT',()=>void stop());
 process.on('message',async message=>{
-  if(message?.type==='shutdown-status'&&Number.isSafeInteger(message.id)){send({type:'shutdown-status',id:message.id,...(server?.shutdownStatus()??{busy:starting||stopping,failure:0})});return;}
+  if(message?.type==='shutdown-status'&&Number.isSafeInteger(message.id)){send({type:'shutdown-status',id:message.id,phase,...(server?.shutdownStatus()??{busy:starting||stopping,failure:0})});return;}
   if(message?.type==='protected'){const item=pending.get(message.id);if(item){clearTimeout(item.timer);pending.delete(message.id);message.error?item.reject(new AppError('DEVICE_UNAVAILABLE')):item.resolve(message.value);}return;}
   if(message?.type==='stop'){void stop();return;}
   if(message?.type!=='start'||starting||runtime||stopping)return;

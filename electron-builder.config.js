@@ -1,6 +1,6 @@
 export default {
  appId:'org.observanda.desktop',productName:'Observanda',directories:{app:'desktop',output:'dist/installers'},
- files:['pdf-renderer.js','pdf-service.js','main.js','policy.js','branding.js','close-guard.js','locales/**/*.json','icon.png','icon-black.png','icon-white.png','package.json'],asar:true,npmRebuild:false,
+ files:['pdf-renderer.js','pdf-service.js','main.js','policy.js','branding.js','close-guard.js','service-supervisor.js','locales/**/*.json','icon.png','icon-black.png','icon-white.png','package.json'],asar:true,npmRebuild:false,
  extraResources:[{from:'dist/desktop-resources',to:'.',filter:['**/*','!**/.package-lock.json']}],
  beforePack:async()=>{
   await import('./scripts/check-dependencies.js');

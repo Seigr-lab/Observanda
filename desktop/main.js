@@ -8,6 +8,7 @@ import {fileURLToPath} from 'node:url';
 import {windowPreferences,localUrl,externalUrl,launchUrl,deviceProtectionAvailable,protectDeviceValue} from './policy.js';
 import {windowIcon,followWindowTheme} from './branding.js';
 import {closeGuard} from './close-guard.js';
+import {ServiceSupervisor} from './service-supervisor.js';
 const closeText=JSON.parse(readFileSync(new URL('./locales/en/close.json',import.meta.url),'utf8'));
 
 app.setName('Observanda');app.setAppUserModelId('org.observanda.desktop');app.enableSandbox();
@@ -21,6 +22,13 @@ const profile=development&&testLaunch?path.resolve(process.env.OBSERVANDA_DESKTO
 app.setPath('userData',path.join(profile??path.join(os.homedir(),'.observanda'),'window'));
 let main=null,child=null,origin=null,quitting=false,stopping=null,childExited,resolveExit,progress='Starting Observanda…';
 const stateRequests=new Map();let stateSequence=0,closingGuard;
+let serviceDegraded=false;
+const supervisor=new ServiceSupervisor({query:()=>{if(!child?.connected)throw Error('Service is disconnected');return serviceState();},
+ onState:({state})=>{if(main&&!main.isDestroyed()){if(state==='degraded')main.setTitle(closeText.degradedTitle);else if(serviceDegraded&&state==='ready')main.setTitle('Observanda');}serviceDegraded=state==='degraded';},
+ onWaiting:async({phase,responding})=>{
+  const detail=(responding?(closeText[phase]??closeText.shutdownDetail):closeText.shutdownUnresponsive)+'\n\n'+closeText.shutdownRecovery;
+  await dialog.showMessageBox({type:'warning',title:closeText.shutdownTitle,message:closeText.shutdownMessage,detail,buttons:[closeText.keepWaiting],defaultId:0,cancelId:0});
+ }});
 function serviceState(){
   if(!child?.connected)return Promise.resolve({busy:false,failure:0});
   return new Promise((resolve,reject)=>{
@@ -48,8 +56,7 @@ function guardWindow(win){
 }
 function stopService(){
   return stopping??=(async()=>{
-    if(child?.connected)child.send({type:'stop'});
-    if(childExited)await childExited;
+    await supervisor.stop(()=>{if(child?.connected)child.send({type:'stop'});},childExited??Promise.resolve());
     quitting=true;app.quit();
   })();
 }
@@ -95,14 +102,16 @@ else{
   }
   childExited=new Promise(resolve=>{resolveExit=resolve;});
   child=fork(service,[],{execPath:executable,windowsHide:true,silent:true,env,execArgv:[]});
+  supervisor.monitor();
   attachPdfService(child);child.stdout.resume();child.stderr.resume();
   const failed=async message=>{if(stopping)return;await dialog.showMessageBox({type:'error',title:'Observanda could not start',message,detail:'Your saved work has not been removed. Close this window and try again.'});main?.close();};
   child.on('error',()=>{resolveExit();void failed('The bundled application service could not start. Reinstall or repair Observanda.');});
-  child.on('exit',code=>{resolveExit();for(const request of stateRequests.values())request.reject(Error('Service stopped'));stateRequests.clear();if(!stopping&&code!==0)void failed('The local service stopped unexpectedly. Saved changes remain in your workspace.');});
+  child.on('exit',()=>{const unexpected=supervisor.exited();resolveExit();for(const request of stateRequests.values())request.reject(Error('Service stopped'));stateRequests.clear();if(unexpected)void failed('The local service stopped unexpectedly. Saved changes remain in your workspace.');});
   child.on('message',async message=>{
     if(!message||typeof message!=='object')return;
-    if(message.type==='shutdown-status'&&Number.isSafeInteger(message.id)&&typeof message.busy==='boolean'&&Number.isFinite(message.failure)){const request=stateRequests.get(message.id);stateRequests.delete(message.id);request?.resolve({busy:message.busy,failure:message.failure});return;}
-    if(message.type==='ready'&&launchUrl(message.url)&&main&&!stopping){origin=new URL(message.url).origin;await main.loadURL(message.url);}
+    if(message.type==='shutdown-status'&&Number.isSafeInteger(message.id)&&typeof message.busy==='boolean'&&Number.isFinite(message.failure)){const request=stateRequests.get(message.id);stateRequests.delete(message.id);request?.resolve({busy:message.busy,failure:message.failure,phase:message.phase});return;}
+    if(message.type==='lifecycle')supervisor.progress(message.phase);
+    if(message.type==='ready'&&launchUrl(message.url)&&main&&!stopping){supervisor.ready();origin=new URL(message.url).origin;await main.loadURL(message.url);}
     if(message.type==='progress'&&typeof message.message==='string')showProgress(message.message.slice(0,500));
     if(message.type==='failed'&&typeof message.message==='string')void failed(message.message.slice(0,1000));
     if(message.type==='protect'&&(process.platform==='darwin'||process.platform==='linux')&&Number.isSafeInteger(message.id)){

@@ -11,5 +11,14 @@
  "failedDetail":"Observanda remains open. Open Activity to review the result.",
  "unavailableTitle":"Could not check running work",
  "unavailableMessage":"Observanda could not check whether its work has finished.",
- "unavailableDetail":"The window remains open. Try closing it again when the service responds."
+ "unavailableDetail":"The window remains open. Try closing it again when the service responds.",
+ "degradedTitle":"Observanda — service needs attention",
+ "shutdownTitle":"Waiting for Observanda to close",
+ "shutdownMessage":"The service has not yet confirmed shutdown.",
+ "shutdownDetail":"Observanda is waiting for its service to finish safely.",
+ "http-drain":"The service is finishing requests and background work.",
+ "database-stop":"The databases are finishing their shutdown.",
+ "shutdownUnresponsive":"The service is not responding to status requests. Its current outcome is uncertain.",
+ "shutdownRecovery":"Keep waiting while storage is active. If the service remains unresponsive and a system restart is necessary, reopen the same workspace afterwards and review unfinished operations before retrying. Do not delete database files or lock files to force it open.",
+ "keepWaiting":"Keep waiting"
 }
