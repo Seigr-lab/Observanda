@@ -1,4 +1,5 @@
 import {assertWorkspaceAvailable} from './workspace-lifecycle-admission.js';
+import {persistDirectoryCreation} from './filesystem-persistence.js';
 import {projectDomainHandoff} from './project-domain-lock.js';
 import {websiteMetadataShell} from './website-owned-metadata.js';
 import {withProjectSourceMetadataAuthority} from './project-source-metadata-authority.js';
@@ -70,6 +71,7 @@ export async function privateDirectory(root, relative) {
     if (await assertRegular(current, { missing: true, directory: true })) continue;
     await mkdir(current, { mode: 0o700 }).catch(error => { if (error.code !== 'EEXIST') throw error; });
     await assertRegular(current, { directory: true });
+    await persistDirectoryCreation(current);
   }
   return current;
 }

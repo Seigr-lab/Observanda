@@ -34,5 +34,6 @@ export function safeError(error) {
   if(ownerId(error.destinationWorkspaceId))result.destinationWorkspaceId=error.destinationWorkspaceId;
   if(error.code==='PROJECT_MOVED'&&ownerId(error.workspaceId))result.workspaceId=error.workspaceId;
   if(error.operationNotStarted===true)result.operationNotStarted=true;
+  if(error.commitUncertain===true)result.commitUncertain=true;
   return result;
 }
