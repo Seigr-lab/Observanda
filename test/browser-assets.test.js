@@ -6,6 +6,7 @@ import os from 'node:os';
 import {pathToFileURL} from 'node:url';
 import {BrowserAssets,createBrowserAssets} from '../src/browser-assets.js';
 import {buildBrowser} from '../scripts/browser-build.js';
+import {deferredCatalogues} from '../src/web/i18n/deferred.js';
 
 async function fixture(t){const root=await mkdtemp(path.join(os.tmpdir(),'observanda-browser-assets-'));t.after(async()=>{assert.equal(path.dirname(root),path.resolve(os.tmpdir()));assert.ok(path.basename(root).startsWith('observanda-browser-assets-'));await rm(root,{recursive:true,force:true});});return root;}
 const directoryURL=directory=>pathToFileURL(directory+path.sep);
@@ -28,6 +29,7 @@ test('production browser chunks are content addressed and reject corrupt or unsa
  t.diagnostic(JSON.stringify({initialJavaScriptBytes:result.initialJavaScriptBytes,initialJavaScriptFiles:result.initialJavaScriptFiles,sourceStaticFiles:result.sourceStaticFiles,javascriptFiles:result.javascriptFiles,stylesheetBytes:result.stylesheetBytes}));
  assert.ok(result.initialJavaScriptFiles<result.sourceStaticFiles,'Bundling must reduce the actual source-module request graph');assert.ok(result.javascriptFiles>result.initialJavaScriptFiles,'Feature entry chunks must stay deferred');
  for(const feature of ['research-materials-ui.js','website-ui.js','publishing-ui.js','laboratory-ui.js'])assert.ok(!result.initialSources.includes('src/web/'+feature),feature+' must remain outside the startup graph');
+ for(const namespace of Object.keys(deferredCatalogues))assert.ok(!result.initialSources.includes('src/web/locales/en/'+namespace+'.json'),namespace+' must load with its feature, not the shell');
  const styles=result.manifest.files.find(file=>file.path.endsWith('.css'));assert.ok(!(await assets.read(styles.path)).toString().includes('@import'),'The packaged stylesheet must not preserve a source CSS waterfall');
  const file=path.join(out,result.manifest.entry),original=await readFile(file);await writeFile(file,Buffer.alloc(original.length,32));
  const corrupted=await createBrowserAssets(options);await assert.rejects(corrupted.read(result.manifest.entry),{code:'BROWSER_ASSETS_INVALID'});await writeFile(file,original);

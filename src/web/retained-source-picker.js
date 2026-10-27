@@ -1,3 +1,4 @@
+import './i18n/catalogues/retainedSources.js';
 import {t} from './i18n/index.js';
 const tr=(key,values)=>t('retainedSources',key,values);
 const locked=error=>['ACCESS_LOCKED','ACCESS_DENIED','DEVICE_UNKNOWN'].includes(error?.code);

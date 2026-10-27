@@ -1,3 +1,4 @@
+import './i18n/catalogues/localIntake.js';
 import {researchId} from './research-reference.js';
 import {t} from './i18n/index.js';
 const tr=(key,args)=>t('localIntake',key,args);

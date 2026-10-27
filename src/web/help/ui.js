@@ -1,6 +1,6 @@
-import {language,t} from '../i18n/index.js';
+import {language,t,prepareNamespaces} from '../i18n/index.js';
 import {repositoryLink} from '../about-ui.js';
-import {guideLoader,searchGuide,helpRoute,guideWithMessages} from './model.js';
+import {guideLoader,searchGuide,helpRoute,guideWithMessages,guideMessageNamespaces} from './model.js';
 export function helpUI({state,esc,render}){
  const load=guideLoader(),message=(key,parameters)=>esc(t('help',key,parameters));
  let guide=null,locale=null,loading=false,failed=false,controller=null,query='',focusTarget=null;
@@ -8,7 +8,7 @@ export function helpUI({state,esc,render}){
  async function ensure(){
   const next=language();if(next===locale&&(guide||loading||failed))return;
   controller?.abort();const request=controller=new AbortController();locale=next;loading=true;failed=false;guide=null;
-  try{const result=await load(next,{signal:request.signal});if(controller===request)guide=guideWithMessages(result,t);}
+  try{const result=await load(next,{signal:request.signal});await prepareNamespaces(guideMessageNamespaces(result));if(controller===request)guide=guideWithMessages(result,t);}
   catch(error){if(controller===request&&error.name!=='AbortError')failed=true;}
   finally{if(controller===request){loading=false;if(state.page==='help')render();}}
  }

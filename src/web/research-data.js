@@ -1,3 +1,4 @@
+import './i18n/catalogues/labBookData.js';
 import {dashboardRecordIdentity,dashboardRecordAction,dashboardRecordData} from './dashboard-collection-client.js';
 import {ownedAssetURL} from './project-context.js';
 import {recentRecordOrder} from './query-order.js';

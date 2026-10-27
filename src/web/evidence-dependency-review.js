@@ -1,3 +1,4 @@
+import './i18n/catalogues/retainedSources.js';
 import {t} from './i18n/index.js';
 
 const text=(key,values)=>t('retainedSources',key,values);

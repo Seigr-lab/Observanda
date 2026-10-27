@@ -1,3 +1,5 @@
+import '../i18n/catalogues/moduleReferences.js';
+import '../i18n/catalogues/moduleRecovery.js';
 import {moduleReferencesUI} from './references-ui.js';
 import {moduleReferenceLinks} from './reference-links.js';
 import {t} from '../i18n/index.js';

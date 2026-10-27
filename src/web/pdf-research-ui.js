@@ -1,3 +1,4 @@
+import './i18n/catalogues/pdfEditor.js';
 import {t} from './i18n/index.js';
 import {proseText,renderProse} from './prose-model.js';
 import {renderFigure} from './figure-renderer.js';

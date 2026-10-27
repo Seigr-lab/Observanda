@@ -1,3 +1,4 @@
+import './i18n/catalogues/pdfEditor.js';
 import {applyPdfImageResolution} from './pdf-image-resolution.js';
 import {t} from './i18n/index.js';
 import {PDF_IMAGE_MAX_BYTES,pdfImagePlacement,validPdfImage} from './pdf-image-model.js';

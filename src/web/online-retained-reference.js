@@ -1,3 +1,4 @@
+import './i18n/catalogues/materialAnalysis.js';
 import {sharedFigureControls,mountSharedFigures} from './shared-figure-reader.js';
 import {isRetainedFigure} from './retained-figure-model.js';
 import {t} from './i18n/index.js';

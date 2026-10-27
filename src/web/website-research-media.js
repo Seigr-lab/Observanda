@@ -1,3 +1,4 @@
+import './i18n/catalogues/websiteContent.js';
 import {publicationSourceRevision} from './publication-source-context.js';
 import {websiteSnapshot} from './website-context.js';
 import {ownedAssetURL,projectApiRoute} from './project-context.js';

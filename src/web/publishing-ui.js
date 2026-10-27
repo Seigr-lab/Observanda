@@ -1,3 +1,4 @@
+import './i18n/catalogues/repositorySetup.js';
 import {websiteContext,explicitWebsite} from './website-context.js';
 import {githubConnectionUI} from './github-connection-ui.js';
 import {verificationStatus,verificationActions} from './publication-verification-view.js';

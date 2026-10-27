@@ -1,3 +1,4 @@
+import './i18n/catalogues/materialAnalysis.js';
 import {researchContext} from './project-context.js';
 import {materialReference} from './material-reference.js';
 import {researchTargetPicker} from './research-target-picker.js';

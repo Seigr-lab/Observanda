@@ -1,3 +1,4 @@
+import './i18n/catalogues/pdfEditor.js';
 import {pdfBleedArtworkDefaults} from './pdf-bleed-model.js';
 import {t} from './i18n/index.js';
 import {pdfPressDefaults,validPdfPress} from './pdf-press-model.js';

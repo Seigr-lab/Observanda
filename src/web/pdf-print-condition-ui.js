@@ -1,3 +1,4 @@
+import './i18n/catalogues/pdfEditor.js';
 import {revisionId} from './revision-model.js';
 import {PDF_ICC_MAX_BYTES,PDF_PRINT_INTENTS,validPdfPrintCondition} from './pdf-print-condition-model.js';
 import {t} from './i18n/index.js';

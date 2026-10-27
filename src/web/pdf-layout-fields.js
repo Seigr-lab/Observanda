@@ -1,3 +1,4 @@
+import './i18n/catalogues/pdfEditor.js';
 import {pdfPageMasterFields,changePdfPageMaster} from './pdf-page-master-fields.js';
 import {t} from './i18n/index.js';
 import {BUNDLED_FONTS} from './font-catalogue.js';

@@ -1,3 +1,5 @@
+import '../i18n/catalogues/moduleReferences.js';
+import '../i18n/catalogues/inventoryData.js';
 import {projectApiRoute,researchOwner} from '../project-context.js';
 import {t} from '../i18n/index.js';
 import {openBOMImport} from './bom-import-ui.js';

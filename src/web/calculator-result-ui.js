@@ -1,3 +1,4 @@
+import './i18n/catalogues/calculatorResults.js';
 import {calculatorResultClient,savedCalculator} from './calculator-result-client.js';
 import {moduleReferenceClient} from './modules/reference-client.js';
 import {moduleReferencePicker} from './modules/reference-picker.js';

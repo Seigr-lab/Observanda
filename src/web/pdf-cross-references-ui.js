@@ -1,3 +1,4 @@
+import './i18n/catalogues/pdfEditor.js';
 import {t} from './i18n/index.js';
 import {pdfCrossReferenceTargets,appendPdfCrossReference} from './pdf-cross-reference-model.js';
 const defaultText=(key,args)=>t('pdfEditor',key,args);

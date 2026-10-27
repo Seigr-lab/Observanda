@@ -1,11 +1,12 @@
 import {readFile} from 'node:fs/promises';
 import {LANGUAGES,validateCatalogue,placeholders} from '../src/web/i18n/runtime.js';
 import {validateGuide,guideWithMessages,mergeGuide} from '../src/web/help/model.js';
-import {MESSAGE_NAMESPACES,catalogueLanguages,t} from '../src/web/i18n/index.js';
+import {MESSAGE_NAMESPACES,catalogueLanguages,t,prepareNamespaces} from '../src/web/i18n/index.js';
 const resource=async(locale,name)=>JSON.parse(await readFile(new URL('../src/web/locales/'+locale+'/'+name+'.json',import.meta.url),'utf8'));
 // This is the package contract: adding a language is a manifest/resource change,
 // not another UI renderer. Record/template content is not part of this catalogue.
 export async function checkLocales(){
+ await prepareNamespaces(MESSAGE_NAMESPACES);
  const ids=new Set();
  for(const item of LANGUAGES){
   if(!/^[a-z]{2,3}(?:-[A-Z][a-z]{3})?$/.test(item.id)||ids.has(item.id)||!['ltr','rtl'].includes(item.direction)||typeof item.name!=='string'||!item.name.trim())throw new Error('Invalid language manifest');

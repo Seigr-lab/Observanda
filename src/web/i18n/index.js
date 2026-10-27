@@ -1,3 +1,7 @@
+import publishingData from '../locales/en/publishingData.json' with {type:'json'};
+import datasetCalculations from '../locales/en/datasetCalculations.json' with {type:'json'};
+import measurementTransform from '../locales/en/measurementTransform.json' with {type:'json'};
+import {deferredCatalogues} from './deferred.js';
 import measurementTopology from '../locales/en/measurementTopology.json' with {type:'json'};
 import measurementSequences from '../locales/en/measurementSequences.json' with {type:'json'};
 import datasetCusum from '../locales/en/datasetCusum.json' with {type:'json'};
@@ -5,25 +9,16 @@ import numericalExecution from '../locales/en/numericalExecution.json' with {typ
 import datasetSpectrum from '../locales/en/datasetSpectrum.json' with {type:'json'};
 import coordinateFrames from '../locales/en/coordinateFrames.json' with {type:'json'};
 import statisticalUncertainty from '../locales/en/statisticalUncertainty.json' with {type:'json'};
-import calculatorResults from '../locales/en/calculatorResults.json' with {type:'json'};
-import datasetWindows from '../locales/en/datasetWindows.json' with {type:'json'};
 import datasetResources from '../locales/en/datasetResources.json' with {type:'json'};
 import numeralClipboard from '../locales/en/numeralClipboard.json' with {type:'json'};
 import retainedFigureEditor from '../locales/en/retainedFigureEditor.json' with {type:'json'};
 import retainedFigureReader from '../locales/en/retainedFigureReader.json' with {type:'json'};
-import retainedFigureData from '../locales/en/retainedFigureData.json' with {type:'json'};
-import measurementTransform from '../locales/en/measurementTransform.json' with {type:'json'};
-import pdfEditor from '../locales/en/pdfEditor.json' with {type:'json'};
 import configurationEditor from '../locales/en/configurationEditor.json' with {type:'json'};
-import bomStock from '../locales/en/bomStock.json' with {type:'json'};
-import taskPrerequisites from '../locales/en/taskPrerequisites.json' with {type:'json'};
-import retainedSources from '../locales/en/retainedSources.json' with {type:'json'};
 import moduleReferenceTargets from '../locales/en/moduleReferenceTargets.json' with {type:'json'};
 import workspaceRename from '../locales/en/workspaceRename.json' with {type:'json'};
 import workspaceManagement from '../locales/en/workspaceManagement.json' with {type:'json'};
 import templatePreferences from '../locales/en/templatePreferences.json' with {type:'json'};
 import calculator from '../locales/en/calculator.json' with {type:'json'};
-import publicationSources from '../locales/en/publicationSources.json' with {type:'json'};
 import labBookAccess from '../locales/en/labBookAccess.json' with {type:'json'};
 import labBookDirectory from '../locales/en/labBookDirectory.json' with {type:'json'};
 import workspaceNaming from '../locales/en/workspaceNaming.json' with {type:'json'};
@@ -43,15 +38,11 @@ import workspaceDeletion from '../locales/en/workspaceDeletion.json' with {type:
 import operationProgress from '../locales/en/operationProgress.json' with {type:'json'};
 import recordSaveProgress from '../locales/en/recordSaveProgress.json' with {type:'json'};
 import customFields from '../locales/en/customFields.json' with {type:'json'};
-import measurementOutput from '../locales/en/measurementOutput.json' with {type:'json'};
 import datasetAggregation from '../locales/en/datasetAggregation.json' with {type:'json'};
 import recordHistory from '../locales/en/recordHistory.json' with {type:'json'};
-import websiteFeeds from '../locales/en/websiteFeeds.json' with {type:'json'};
 import userProfile from '../locales/en/userProfile.json' with {type:'json'};
-import evidenceCorrections from '../locales/en/evidenceCorrections.json' with {type:'json'};
 import importResearch from '../locales/en/importResearch.json' with {type:'json'};
 import online from '../locales/en/online.json' with {type:'json'};
-import onlineEvidence from '../locales/en/onlineEvidence.json' with {type:'json'};
 import collaborationIdentity from '../locales/en/collaborationIdentity.json' with {type:'json'};
 import organizations from '../locales/en/organizations.json' with {type:'json'};
 import sharing from '../locales/en/sharing.json' with {type:'json'};
@@ -60,9 +51,7 @@ import figureObservations from '../locales/en/figureObservations.json' with {typ
 import figureMarkerArea from '../locales/en/figureMarkerArea.json' with {type:'json'};
 import figureIntervals from '../locales/en/figureIntervals.json' with {type:'json'};
 import figureHeatmap from '../locales/en/figureHeatmap.json' with {type:'json'};
-import datasetCalculations from '../locales/en/datasetCalculations.json' with {type:'json'};
 import retainedTables from '../locales/en/retainedTables.json' with {type:'json'};
-import datasetPreparation from '../locales/en/datasetPreparation.json' with {type:'json'};
 import recordStarters from '../locales/en/recordStarters.json' with {type:'json'};
 import startup from '../locales/en/startup.json' with {type:'json'};
 import figureProvenance from '../locales/en/figureProvenance.json' with {type:'json'};
@@ -73,10 +62,7 @@ import recordContent from '../locales/en/recordContent.json' with {type:'json'};
 import recordWriting from '../locales/en/recordWriting.json' with {type:'json'};
 import recordValues from '../locales/en/recordValues.json' with {type:'json'};
 import recordDraftReview from '../locales/en/recordDraftReview.json' with {type:'json'};
-import recordReferences from '../locales/en/recordReferences.json' with {type:'json'};
-import repositorySetup from '../locales/en/repositorySetup.json' with {type:'json'};
 import measurements from '../locales/en/measurements.json' with {type:'json'};
-import sketch from '../locales/en/sketch.json' with {type:'json'};
 import book from '../locales/en/book.json' with {type:'json'};
 import analyses from '../locales/en/analyses.json' with {type:'json'};
 import preferences from '../locales/en/preferences.json' with {type:'json'};
@@ -97,8 +83,6 @@ import recordUpdates from '../locales/en/recordUpdates.json' with {type:'json'};
 import workspaceRead from '../locales/en/workspaceRead.json' with {type:'json'};
 import structureProgress from '../locales/en/structureProgress.json' with {type:'json'};
 import operationStream from '../locales/en/operationStream.json' with {type:'json'};
-import publishingData from '../locales/en/publishingData.json' with {type:'json'};
-import labBookData from '../locales/en/labBookData.json' with {type:'json'};
 import errors from '../locales/en/errors.json' with {type:'json'};
 import recordRecovery from '../locales/en/recordRecovery.json' with {type:'json'};
 import recordDrafts from '../locales/en/recordDrafts.json' with {type:'json'};
@@ -112,7 +96,6 @@ import fonts from '../locales/en/fonts.json' with {type:'json'};
 import interfaceMessages from '../locales/en/interface.json' with {type:'json'};
 import websitePages from '../locales/en/websitePages.json' with {type:'json'};
 import websiteMedia from '../locales/en/websiteMedia.json' with {type:'json'};
-import websiteContent from '../locales/en/websiteContent.json' with {type:'json'};
 import websiteEditor from '../locales/en/websiteEditor.json' with {type:'json'};
 import timeline from '../locales/en/timeline.json' with {type:'json'};
 import recordDates from '../locales/en/recordDates.json' with {type:'json'};
@@ -120,35 +103,20 @@ import migration from '../locales/en/migration.json' with {type:'json'};
 import migrationImport from '../locales/en/migrationImport.json' with {type:'json'};
 import localExport from '../locales/en/localExport.json' with {type:'json'};
 import publication from '../locales/en/publication.json' with {type:'json'};
-import evidenceUpload from '../locales/en/evidenceUpload.json' with {type:'json'};
-import evidenceIntake from '../locales/en/evidenceIntake.json' with {type:'json'};
 import materialSources from '../locales/en/materialSources.json' with {type:'json'};
-import materialAnalysis from '../locales/en/materialAnalysis.json' with {type:'json'};
-import moduleReferences from '../locales/en/moduleReferences.json' with {type:'json'};
-import moduleHistory from '../locales/en/moduleHistory.json' with {type:'json'};
 import moduleCurrent from '../locales/en/moduleCurrent.json' with {type:'json'};
 import moduleConnected from '../locales/en/moduleConnected.json' with {type:'json'};
-import calendarDetails from '../locales/en/calendarDetails.json' with {type:'json'};
-import planningData from '../locales/en/planningData.json' with {type:'json'};
-import inventoryData from '../locales/en/inventoryData.json' with {type:'json'};
 import locationTools from '../locales/en/locationTools.json' with {type:'json'};
 import calendar from '../locales/en/calendar.json' with {type:'json'};
 import moduleFields from '../locales/en/moduleFields.json' with {type:'json'};
-import moduleRecovery from '../locales/en/moduleRecovery.json' with {type:'json'};
-import sampleAnalysis from '../locales/en/sampleAnalysis.json' with {type:'json'};
 import reviews from '../locales/en/reviews.json' with {type:'json'};
 import catalogues from '../locales/catalogues.json' with {type:'json'};
-import localIntake from '../locales/en/localIntake.json' with {type:'json'};
 import websiteSites from '../locales/en/websiteSites.json' with {type:'json'};
-import githubConnection from '../locales/en/githubConnection.json' with {type:'json'};
-import githubTransfer from '../locales/en/githubTransfer.json' with {type:'json'};
 import researchCapacity from '../locales/en/researchCapacity.json' with {type:'json'};
 import about from '../locales/en/about.json' with {type:'json'};
-import materialFiles from '../locales/en/materialFiles.json' with {type:'json'};
 import {resolveLanguage,validLanguage,translator,validateCatalogue,LANGUAGES} from './runtime.js';
 export {LANGUAGES,validLanguage,resolveLanguage};
-const english={calculatorResults,datasetWindows,datasetResources,bomStock,taskPrerequisites,retainedSources,moduleReferenceTargets,workspaceRename,workspaceManagement,templatePreferences,calculator,repositorySetup,book,analyses,measurements,preferences,navigation,help,setup,access,labBookTypes,recordAuthoring,recordWorkflow,attempts,dashboardLibrary,recordLists,recordViews,recordDrafts,recordRecovery,recordSelection,recordUpdates,workspaceRead,structureProgress,operationStream,publishingData,labBookData,errors,recordTypes,dashboardChoices,dashboardPaging,researchPicker,branding,appearance,fonts,interface:interfaceMessages,reviews,websiteEditor,websitePages,websiteMedia,websiteContent,moduleReferences,moduleHistory,moduleCurrent,moduleConnected,calendarDetails,planningData,inventoryData,locationTools,calendar,moduleRecovery,moduleFields,sampleAnalysis,timeline,recordDates,materialAnalysis,evidenceUpload,evidenceIntake,materialSources,publication,localExport,migration,migrationImport},cache=new Map([['en',english]]);
-english.localIntake=localIntake;
+const english={datasetResources,moduleReferenceTargets,workspaceRename,workspaceManagement,templatePreferences,calculator,book,analyses,measurements,preferences,navigation,help,setup,access,labBookTypes,recordAuthoring,recordWorkflow,attempts,dashboardLibrary,recordLists,recordViews,recordDrafts,recordRecovery,recordSelection,recordUpdates,workspaceRead,structureProgress,operationStream,errors,recordTypes,dashboardChoices,dashboardPaging,researchPicker,branding,appearance,fonts,interface:interfaceMessages,reviews,websiteEditor,websitePages,websiteMedia,moduleCurrent,moduleConnected,locationTools,calendar,moduleFields,timeline,recordDates,materialSources,publication,localExport,migration,migrationImport},cache=new Map([['en',english]]);
 english.projectCreation=projectCreation;
 english.projectChoices=projectChoices;
 english.projectOpening=projectOpening;
@@ -166,23 +134,14 @@ english.workspaceNaming=workspaceNaming;
 english.operationProgress=operationProgress;
 english.recordSaveProgress=recordSaveProgress;
 english.recordSections=recordSections;
-english.measurementOutput=measurementOutput;
-english.measurementTransform=measurementTransform;
 english.customFields=customFields;
 english.recordHistory=recordHistory;
-english.websiteFeeds=websiteFeeds;
 english.userProfile=userProfile;
-english.evidenceCorrections=evidenceCorrections;
 english.websiteSites=websiteSites;
-english.githubConnection=githubConnection;
-english.githubTransfer=githubTransfer;
 english.researchCapacity=researchCapacity;
 english.about=about;
 english.startup=startup;
 english.recordStarters=recordStarters;
-english.sketch=sketch;
-english.datasetPreparation=datasetPreparation;
-english.datasetCalculations=datasetCalculations;
 english.numeralClipboard=numeralClipboard;
 english.datasetAggregation=datasetAggregation;
 english.statisticalUncertainty=statisticalUncertainty;
@@ -203,33 +162,45 @@ english.figureComposition=figureComposition;
 english.recordLinks=recordLinks;
 english.recordReading=recordReading;
 english.recordContent=recordContent;
-english.pdfEditor=pdfEditor;
 english.configurationEditor=configurationEditor;
 english.recordWriting=recordWriting;
 english.recordValues=recordValues;
 english.recordDraftReview=recordDraftReview;
-english.recordReferences=recordReferences;
-english.materialFiles=materialFiles;
 english.organizations=organizations;
 english.sharing=sharing;
 english.online=online;
-english.onlineEvidence=onlineEvidence;
 english.collaborationIdentity=collaborationIdentity;
 english.importResearch=importResearch;
 english.labBookAccess=labBookAccess;
 english.labBookDirectory=labBookDirectory;
-english.publicationSources=publicationSources;
-english.retainedFigureData=retainedFigureData;
 english.retainedFigureReader=retainedFigureReader;
 english.retainedFigureEditor=retainedFigureEditor;
-export const MESSAGE_NAMESPACES=Object.freeze(Object.keys(english));
+english.measurementTransform=measurementTransform;
+english.datasetCalculations=datasetCalculations;
+english.publishingData=publishingData;
+export const MESSAGE_NAMESPACES=Object.freeze([...Object.keys(english),...Object.keys(deferredCatalogues)]);
 export const catalogueLanguages=namespace=>catalogues[namespace]??[];
 export const messageLanguage=namespace=>catalogueLanguages(namespace).includes(current)?current:'en';
 let current='en',translations=Object.fromEntries(Object.entries(english).map(([key,value])=>[key,translator('en',value)]));
 const languageListeners=new Set();
 export const onLanguageChange=listener=>{languageListeners.add(listener);return ()=>languageListeners.delete(listener);};
 export const language=()=>current;
-export const t=(namespace,key,parameters)=>translations[namespace](key,parameters);
+export const t=(namespace,key,parameters)=>{
+ if(!Object.hasOwn(translations,namespace))throw new TypeError('Message namespace has not been loaded: '+namespace);
+ return translations[namespace](key,parameters);
+};
+// Feature modules register their fallback when imported. Changing language must
+// also cover modules loaded later, without loading every editor at startup.
+export function registerCatalogue(namespace,messages){
+ if(!Object.hasOwn(deferredCatalogues,namespace)||Object.hasOwn(english,namespace))throw new TypeError('Invalid catalogue registration');
+ validateCatalogue(messages);
+ const translated=translator(messageLanguage(namespace),cache.get(current)[namespace]??messages,messages);
+ english[namespace]=messages;translations[namespace]=translated;
+}
+export async function prepareNamespaces(names){
+ if(!Array.isArray(names)||names.some(name=>!MESSAGE_NAMESPACES.includes(name)))throw new TypeError('Unknown message namespace');
+ await Promise.all([...new Set(names)].map(name=>Object.hasOwn(english,name)?undefined:deferredCatalogues[name]()));
+}
 // Static labels belong to a language, not to every incoming progress sample.
 export function localizedText(namespace){
  let locale=current;const labels=new Map();
@@ -239,21 +210,28 @@ export function localizedText(namespace){
   if(!labels.has(key))labels.set(key,t(namespace,key));return labels.get(key);
  };
 }
+const pendingLanguages=new Map();
 export async function prepareLanguage(locale,{fetcher=fetch}={}){
  if(!validLanguage(locale))throw new TypeError('Unsupported language');
  if(cache.has(locale))return;
- const pairs=await Promise.all(Object.keys(english).map(async namespace=>{
-  if(!catalogueLanguages(namespace).includes(locale))return [namespace,english[namespace]];
-  const response=await fetcher(new URL('../locales/'+locale+'/'+namespace+'.json',import.meta.url));
-  if(!response.ok)throw new Error('Language resource unavailable');
-  return [namespace,validateCatalogue(await response.json(),english[namespace])];
- }));
- cache.set(locale,Object.fromEntries(pairs));
+ if(pendingLanguages.has(locale))return pendingLanguages.get(locale);
+ const load=(async()=>{
+  const names=MESSAGE_NAMESPACES.filter(namespace=>catalogueLanguages(namespace).includes(locale));
+  await prepareNamespaces(names);
+  const pairs=await Promise.all(names.map(async namespace=>{
+   const response=await fetcher(new URL('../locales/'+locale+'/'+namespace+'.json',import.meta.url));
+   if(!response.ok)throw new Error('Language resource unavailable');
+   return [namespace,validateCatalogue(await response.json(),english[namespace])];
+  }));
+  cache.set(locale,Object.fromEntries(pairs));
+ })();
+ pendingLanguages.set(locale,load);
+ try{await load;}finally{pendingLanguages.delete(locale);}
 }
 export function activateLanguage(locale){
  if(!cache.has(locale))throw new TypeError('Language has not been loaded');
  if(current===locale)return;
- current=locale;translations=Object.fromEntries(Object.entries(english).map(([key,fallback])=>[key,translator(messageLanguage(key),cache.get(locale)[key],fallback)]));
+ current=locale;translations=Object.fromEntries(Object.entries(english).map(([key,fallback])=>[key,translator(messageLanguage(key),cache.get(locale)[key]??fallback,fallback)]));
  for(const listener of languageListeners)listener(locale);
  // Unextracted screens remain English. Translated regions declare their own lang.
 }

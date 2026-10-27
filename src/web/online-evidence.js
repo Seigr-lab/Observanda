@@ -1,3 +1,5 @@
+import './i18n/catalogues/onlineEvidence.js';
+import './i18n/catalogues/evidenceIntake.js';
 import {t} from './i18n/index.js';
 import {FILE_CHUNK,fingerprintFile} from './evidence-fingerprint.js';
 import {evidencePurposes,validEvidencePath} from './evidence-files.js';

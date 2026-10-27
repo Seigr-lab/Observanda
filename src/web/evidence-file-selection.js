@@ -1,3 +1,4 @@
+import './i18n/catalogues/evidenceIntake.js';
 import {fingerprintFile} from './evidence-fingerprint.js';
 import {compareEvidenceFiles,evidenceFileMetadata} from './evidence-files.js';
 import {t} from './i18n/index.js';

@@ -1,3 +1,4 @@
+import './i18n/catalogues/pdfEditor.js';
 import {t} from './i18n/index.js';
 import {pdfPageMasterDefaults,PDF_PAGE_NUMBER_STYLES} from './pdf-page-master-model.js';
 const tr=(key,parameters)=>t('pdfEditor',key,parameters);

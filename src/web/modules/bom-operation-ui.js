@@ -1,3 +1,4 @@
+import '../i18n/catalogues/bomStock.js';
 import {bomConnectionsUI} from './bom-connections-ui.js';
 import {bomOperationClient} from './bom-operation-client.js';
 import {addressedBOM} from './bom-model.js';

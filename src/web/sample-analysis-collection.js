@@ -1,3 +1,4 @@
+import './i18n/catalogues/sampleAnalysis.js';
 import {t} from './i18n/index.js';
 import {dashboardCollectionRoute,validDashboardOwner} from './dashboard-collection-client.js';
 import {defaultPanelConfig} from './dashboard-model.js';

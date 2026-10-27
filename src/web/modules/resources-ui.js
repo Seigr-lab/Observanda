@@ -1,3 +1,4 @@
+import '../i18n/catalogues/inventoryData.js';
 import {bomSourcesUI} from './bom-sources-ui.js';
 import {bomOperationUI} from './bom-operation-ui.js';
 import {localBOMResource} from './bom-model.js';

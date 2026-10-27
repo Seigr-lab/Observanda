@@ -1,3 +1,4 @@
+import '../i18n/catalogues/moduleHistory.js';
 import {t,messageLanguage} from '../i18n/index.js';
 const tr=(key,values)=>t('moduleHistory',key,values);
 // Retain one summary page, one selected body and a bounded return trail.

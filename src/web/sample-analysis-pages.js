@@ -1,3 +1,4 @@
+import './i18n/catalogues/sampleAnalysis.js';
 import {researchId} from './research-reference.js';
 import {revisionId} from './revision-model.js';
 import {t} from './i18n/index.js';

@@ -1,3 +1,4 @@
+import './i18n/catalogues/websiteContent.js';
 import {publicationOwnerWindows} from './publication-owner-windows.js';
 import {researchId} from './research-reference.js';
 import {t} from './i18n/index.js';

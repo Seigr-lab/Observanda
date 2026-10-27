@@ -1,3 +1,4 @@
+import './i18n/catalogues/sampleAnalysis.js';
 import {researchContext,ownedAssetURL} from './project-context.js';
 import {t} from './i18n/index.js';
 import {sampleAnalysisPages} from './sample-analysis-pages.js';

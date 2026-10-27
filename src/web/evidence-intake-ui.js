@@ -1,3 +1,4 @@
+import './i18n/catalogues/evidenceIntake.js';
 import {uploadEvidenceChunks} from './evidence-upload-batch.js';
 import {evidenceIntakeProgress} from './evidence-intake-progress.js';
 import {updateText,updateProperty} from './progress-dom.js';

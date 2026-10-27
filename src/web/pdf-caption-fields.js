@@ -1,3 +1,4 @@
+import './i18n/catalogues/pdfEditor.js';
 import {t} from './i18n/index.js';
 import {pdfCaptionDefaults,pdfStructureDefaults} from './pdf-structure-model.js';
 const checks=['numberFigures','numberTables','listFigures','listTables'],texts=['figureLabel','tableLabel','figuresTitle','tablesTitle'];

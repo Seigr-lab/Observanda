@@ -1,3 +1,4 @@
+import '../i18n/catalogues/moduleRecovery.js';
 import {t} from '../i18n/index.js';
 const tr=(key,args)=>t('moduleRecovery',key,args);
 export function moduleRecoveryView(recovery,{esc,button}){

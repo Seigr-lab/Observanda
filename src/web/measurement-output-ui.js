@@ -1,3 +1,4 @@
+import './i18n/catalogues/measurementOutput.js';
 import {t} from './i18n/index.js';
 import {NUMBER_REPRESENTATIONS,numeralUsesRadix} from './numeral-context.js';
 

@@ -1,3 +1,4 @@
+import './i18n/catalogues/pdfEditor.js';
 import {pdfPrintConditionUI} from './pdf-print-condition-ui.js';
 import {pdfPressArtworkUI} from './pdf-press-artwork-ui.js';
 import {pdfEditorFonts} from './pdf-editor-fonts.js';

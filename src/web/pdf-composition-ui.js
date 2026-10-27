@@ -1,3 +1,4 @@
+import './i18n/catalogues/pdfEditor.js';
 import {t} from './i18n/index.js';
 import {pdfCompositionArea,pdfCompositionKey,pdfCompositionStatus,pdfCompositionDefaults,pdfAdjustComposition,pdfMoveCompositionBox,validPdfCompositionBox} from './pdf-composition-model.js';
 const tr=key=>t('pdfEditor',key),fields=['xMm','yMm','widthMm','heightMm'];

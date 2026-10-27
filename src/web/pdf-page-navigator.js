@@ -1,3 +1,4 @@
+import './i18n/catalogues/pdfEditor.js';
 import {t} from './i18n/index.js';
 let library;
 const pdfLibrary=()=>library??=(async()=>{

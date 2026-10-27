@@ -1,3 +1,4 @@
+import './i18n/catalogues/websiteFeeds.js';
 import {t} from './i18n/index.js';
 import {defaultFeed,feedOrders} from './website-feed-model.js';
 

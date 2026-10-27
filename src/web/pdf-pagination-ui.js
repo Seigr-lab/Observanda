@@ -1,3 +1,4 @@
+import './i18n/catalogues/pdfEditor.js';
 import {t} from './i18n/index.js';
 import {pdfPaginationStatus,pdfPaginationRuleDefaults,pdfSetPaginationRule,pdfRemovePaginationRule,pdfAdjustPagination} from './pdf-pagination-model.js';
 const tr=key=>t('pdfEditor',key);

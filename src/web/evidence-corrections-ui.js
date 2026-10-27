@@ -1,3 +1,5 @@
+import './i18n/catalogues/evidenceCorrections.js';
+import './i18n/catalogues/evidenceIntake.js';
 import {t} from './i18n/index.js';
 import {researchTargetPicker} from './research-target-picker.js';
 import {evidencePurposes} from './evidence-files.js';

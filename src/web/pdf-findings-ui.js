@@ -1,3 +1,4 @@
+import './i18n/catalogues/pdfEditor.js';
 import {t} from './i18n/index.js';
 import {proseDocument} from './prose-model.js';
 export function pdfFindingsFields(value,{esc,button}){

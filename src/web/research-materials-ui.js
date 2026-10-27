@@ -1,3 +1,8 @@
+import './i18n/catalogues/retainedSources.js';
+import './i18n/catalogues/measurementOutput.js';
+import './i18n/catalogues/evidenceCorrections.js';
+import './i18n/catalogues/localIntake.js';
+import './i18n/catalogues/materialFiles.js';
 import {datasetCusumUI} from './dataset-cusum-ui.js';
 import {cusumText} from './dataset-cusum-context.js';
 import {datasetSpectrumUI} from './dataset-spectrum-ui.js';

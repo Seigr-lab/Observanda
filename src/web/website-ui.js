@@ -1,3 +1,6 @@
+import './i18n/catalogues/websiteFeeds.js';
+import './i18n/catalogues/websiteContent.js';
+import './i18n/catalogues/publicationSources.js';
 import {websiteEditingGuard} from './website-editing-guard.js';
 import {websiteThemeUI} from './website-theme-ui.js';
 import {publicationSourceCount} from './publication-source-context.js';

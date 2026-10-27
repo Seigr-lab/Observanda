@@ -1,4 +1,7 @@
 import {createHash} from 'node:crypto';
+import {pathToFileURL} from 'node:url';
+import {buildBrowser} from '../../scripts/browser-build.js';
+import {createApplicationAssets} from '../../src/application-assets.js';
 import {measurePdfPreflight} from '../../src/pdf-preflight.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -16,7 +19,9 @@ test('PDF editor saves independent documents, lays out sections, restores histor
  test.setTimeout(120000);page.setDefaultTimeout(15000);
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-pdf-ui-')),f=await encryptedFixture(directory,{...sampleNotebook(),title:'workspace'}),errors=[];
  const removeRenderer=installPdfRenderer(async input=>{const render=await browser.newPage();try{await render.route('**/*',route=>route.abort());await render.setContent(input.html);await render.evaluate(()=>document.fonts.ready);const preflight=await render.evaluate(measurePdfPreflight),bytes=await render.pdf({preferCSSPageSize:true,printBackground:true});return {bytes,preflight,sha256:createHash('sha256').update(bytes).digest('hex'),renderer:{engine:'chromium',electron:'test',chromium:browser.version(),recipeVersion:1}};}finally{await render.close();}});
- const app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore}),documents=new PdfDocuments(f.workspace,(await f.workspace.outline()).metadata.id);
+ const out=path.join(directory,'frontend');await buildBrowser({out});
+ const browserAssets=await createApplicationAssets({builtDirectory:pathToFileURL(out+path.sep)});
+ const app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,browserAssets}),documents=new PdfDocuments(f.workspace,(await f.workspace.outline()).metadata.id);
  const initiallyAvailable=await documents.available();page.on('pageerror',e=>errors.push(e.message));
  try{
   await page.goto(app.url);await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();await navigate(page,'PDF editor');

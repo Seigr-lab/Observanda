@@ -1,3 +1,4 @@
+import './i18n/catalogues/publicationSources.js';
 import {publicationSourceClient} from './publication-source-client.js';
 import {emptyPublicationSource,validPublicationSources,resolvePublicationSource} from './publication-sources-model.js';
 import {websiteRecordShare} from './website-selection.js';

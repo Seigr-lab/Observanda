@@ -1,3 +1,4 @@
+import './i18n/catalogues/pdfEditor.js';
 import {t} from './i18n/index.js';
 const defaultText=(key,args)=>t('pdfEditor',key,args);
 // The parent flushes authoring before actions and owns the selected editor.

@@ -1,3 +1,4 @@
+import './i18n/catalogues/pdfEditor.js';
 import {customFontId} from './font-catalogue.js';
 import {t} from './i18n/index.js';
 import {pdfLayoutPreset} from './pdf-layout-model.js';

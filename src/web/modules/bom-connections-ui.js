@@ -1,3 +1,4 @@
+import '../i18n/catalogues/bomStock.js';
 import {bomConnectionsClient} from './bom-connections-client.js';
 import {t} from '../i18n/index.js';
 const tr=(key,args)=>t('bomStock',key,args);

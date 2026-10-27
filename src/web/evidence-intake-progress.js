@@ -1,3 +1,4 @@
+import './i18n/catalogues/evidenceIntake.js';
 import {t,language} from './i18n/index.js';
 const text=(key,parameters)=>t('evidenceIntake',key,parameters);
 // Backend stage names identify protocol events; only resource messages reach

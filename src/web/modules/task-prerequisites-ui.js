@@ -1,3 +1,4 @@
+import '../i18n/catalogues/taskPrerequisites.js';
 import {taskPrerequisiteClient} from './task-prerequisite-client.js';
 import {moduleReferenceClient} from './reference-client.js';
 import {moduleReferencePicker} from './reference-picker.js';

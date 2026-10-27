@@ -1,3 +1,4 @@
+import './i18n/catalogues/recordReferences.js';
 import {projectApiRoute,researchOwner} from './project-context.js';
 import {materialReferenceReader} from './material-reference-requests.js';
 import {materialReferenceElements} from './material-reference-elements.js';

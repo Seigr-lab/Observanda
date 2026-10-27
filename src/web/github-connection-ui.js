@@ -1,3 +1,4 @@
+import './i18n/catalogues/githubConnection.js';
 import {t} from './i18n/index.js';
 
 // Refresh only this panel: authorizing must never discard destination edits.

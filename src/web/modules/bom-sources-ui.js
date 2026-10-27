@@ -1,3 +1,5 @@
+import '../i18n/catalogues/inventoryData.js';
+import '../i18n/catalogues/bomStock.js';
 import {bomSourceClient} from './bom-source-client.js';
 import {moduleReferencePicker} from './reference-picker.js';
 import {addressedBOM,bomRequirements,bomResourceReference,bomResourceKey,localBOMResource} from './bom-model.js';

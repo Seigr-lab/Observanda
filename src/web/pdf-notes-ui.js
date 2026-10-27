@@ -1,3 +1,4 @@
+import './i18n/catalogues/pdfEditor.js';
 import {t} from './i18n/index.js';
 import {validPdfNoteContent} from './pdf-notes-model.js';
 import {proseText} from './prose-model.js';

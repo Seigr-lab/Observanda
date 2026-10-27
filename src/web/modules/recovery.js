@@ -1,3 +1,4 @@
+import '../i18n/catalogues/moduleRecovery.js';
 // Draft contents stay in encrypted workspace checkpoints, never browser storage.
 import {t} from '../i18n/index.js';
 import {researchId} from '../research-reference.js';

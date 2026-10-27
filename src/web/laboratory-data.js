@@ -1,3 +1,4 @@
+import './i18n/catalogues/sampleAnalysis.js';
 import {registerLabWorkspaceData} from './laboratory/workspace-data.js';
 import {validateSamplePage} from './sample-analysis-pages.js';
 import {dashboardCollection} from './dashboard-collection-client.js';

@@ -1,3 +1,4 @@
+import './i18n/catalogues/materialFiles.js';
 import {t} from './i18n/index.js';
 import {materialFileSummary} from './material-file-summary.js';
 const text=(key,args)=>t('materialFiles',key,args);

@@ -1,3 +1,5 @@
+import './i18n/catalogues/evidenceIntake.js';
+import './i18n/catalogues/materialFiles.js';
 import {t} from './i18n/index.js';
 
 // File metadata belongs to the authenticated evidence list, not a narrative

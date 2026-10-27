@@ -1,3 +1,4 @@
+import './i18n/catalogues/calculatorResults.js';
 import {validCalculatorRecipe,isCalculatorRecipe,validCalculatorResult} from './calculator-result-model.js';
 import {t} from './i18n/index.js';
 export const calculatorResultText=(key,values)=>t('calculatorResults',key,values);

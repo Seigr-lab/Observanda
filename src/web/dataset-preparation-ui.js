@@ -1,3 +1,4 @@
+import './i18n/catalogues/datasetPreparation.js';
 import {t} from './i18n/index.js';
 export const preparationText=(key,p)=>t('datasetPreparation',key,p);
 export function datasetPreparationUI({esc,field,button}){

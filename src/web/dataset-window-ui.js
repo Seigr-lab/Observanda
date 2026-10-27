@@ -1,3 +1,4 @@
+import './i18n/catalogues/datasetWindows.js';
 import {t} from './i18n/index.js';
 import {WINDOW_OPERATIONS,validWindow} from './dataset-window-model.js';
 export const windowText=key=>t('datasetWindows',key);

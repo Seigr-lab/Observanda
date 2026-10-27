@@ -1,3 +1,4 @@
+import './i18n/catalogues/pdfEditor.js';
 import {t} from './i18n/index.js';
 import {validPdfOutputProfile} from './pdf-output-validation-model.js';
 export function pdfOutputProfileFields(header,{esc,archival=false}){

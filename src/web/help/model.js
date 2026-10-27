@@ -25,6 +25,9 @@ export function guideWithMessages(guide,lookup){
  };
  return {topics:guide.topics.map(topic=>({...topic,title:text(topic.title),sections:topic.sections.map(section=>({...section,title:text(section.title),paragraphs:section.paragraphs.map(text)}))}))};
 }
+export function guideMessageNamespaces(guide){
+ const names=new Set();guideWithMessages(guide,namespace=>{names.add(namespace);return '';});return [...names];
+}
 export function searchGuide(guide,query){
  const terms=fold(query.trim()).split(/\s+/u).filter(Boolean);if(!terms.length)return [];
  return guide.topics.flatMap(topic=>topic.sections.filter(section=>terms.every(term=>fold([topic.title,section.title,...section.paragraphs].join(' ')).includes(term))).map(section=>{

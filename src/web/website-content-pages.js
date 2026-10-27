@@ -1,3 +1,4 @@
+import './i18n/catalogues/websiteContent.js';
 import {websiteSnapshot} from './website-context.js';
 import {t} from './i18n/index.js';
 import {recordLabel} from './record-types.js';

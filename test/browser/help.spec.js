@@ -1,5 +1,8 @@
 import {test,expect} from '@playwright/test';
 import guide from '../../src/web/locales/en/guide.json' with {type:'json'};
+import {pathToFileURL} from 'node:url';
+import {buildBrowser} from '../../scripts/browser-build.js';
+import {createApplicationAssets} from '../../src/application-assets.js';
 import {mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -8,13 +11,14 @@ import {upgradeNotebook} from '../../src/model.js';
 import {clearVault} from '../../src/encryption.js';
 import {testServer} from '../device-fixture.js';
 import {encryptedFixture} from './encrypted-fixture.js';
-async function fixture(){
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-help-ui-')),book=upgradeNotebook(sampleNotebook()),f=await encryptedFixture(directory,book),preferencesFile=path.join(directory,'preferences.json');
- const app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile});
- return {...f,book,app,close:async()=>{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}};
+async function fixture({compiled=false}={}){
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-help-ui-')),book=upgradeNotebook({...sampleNotebook(),title:'workspace'}),f=await encryptedFixture(directory,book),preferencesFile=path.join(directory,'preferences.json');
+ let browserAssets;if(compiled){const out=path.join(directory,'frontend');await buildBrowser({out});browserAssets=await createApplicationAssets({builtDirectory:pathToFileURL(out+path.sep)});}
+ const app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile,browserAssets});
+ return {...f,book:(await f.workspace.read()).book,app,close:async()=>{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}};
 }
 test('Help searches the bundled manual, follows stable anchors, changes language and retains it after reload',async({page},testInfo)=>{
- const f=await fixture(),errors=[],reads=[];
+ const f=await fixture({compiled:true}),errors=[],reads=[];
  page.on('pageerror',e=>errors.push(e.message));
  page.on('request',r=>{if(r.url().endsWith('/api/workspace/read/page')||r.url().endsWith('/api/notebook'))reads.push(r.url());});
  try{

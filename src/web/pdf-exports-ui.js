@@ -1,3 +1,4 @@
+import './i18n/catalogues/pdfEditor.js';
 ﻿import {validPdfOutputValidation} from './pdf-output-validation-model.js';
 import {t} from './i18n/index.js';
 const tr=(key,args)=>t('pdfEditor',key,args),hidden=value=>value?' hidden':'';

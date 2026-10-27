@@ -1,3 +1,4 @@
+import './i18n/catalogues/evidenceUpload.js';
 import {uploadEvidenceChunks} from './evidence-upload-batch.js';
 import {matchingUploadPrefix} from './evidence-fingerprint.js';
 import {t} from './i18n/index.js';

@@ -1,3 +1,4 @@
+import '../i18n/catalogues/inventoryData.js';
 import {localBOMResource} from './bom-model.js';
 import {validModuleRevision} from './revision.js';
 import {decimal} from './quantities.js';

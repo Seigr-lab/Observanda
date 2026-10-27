@@ -1,3 +1,4 @@
+import '../i18n/catalogues/calendarDetails.js';
 import {t} from '../i18n/index.js';
 const tr=key=>t('calendarDetails',key);
 // Read-only notes are fetched for the opened event, not with the month grid.

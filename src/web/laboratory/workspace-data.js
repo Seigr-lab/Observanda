@@ -1,3 +1,4 @@
+import '../i18n/catalogues/labBookData.js';
 import {dashboardRecordIdentity,dashboardRecordAction,dashboardRecordData} from '../dashboard-collection-client.js';
 import {recordDateLabel} from '../record-date.js';
 import {dashboardScopeSettings,dashboardBookSettings,dashboardBooks} from '../dashboard-scope.js';

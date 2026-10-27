@@ -1,3 +1,4 @@
+import './i18n/catalogues/retainedSources.js';
 import {computationLabel} from './measurement-computation.js';
 import {defaultDatasetResourcePolicy} from './dataset-resource-policy.js';
 import {datasetResourcePolicyControls,readDatasetResourcePolicy,datasetResourcePolicyDescription} from './dataset-resource-policy-ui.js';

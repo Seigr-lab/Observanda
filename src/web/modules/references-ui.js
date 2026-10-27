@@ -1,3 +1,4 @@
+import '../i18n/catalogues/moduleReferences.js';
 import {researchTargetPicker} from '../research-target-picker.js';
 import {researchId} from '../research-reference.js';
 import {t} from '../i18n/index.js';

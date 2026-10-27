@@ -1,3 +1,4 @@
+import './i18n/catalogues/localIntake.js';
 import {t} from './i18n/index.js';
 const tr=(key,parameters)=>t('localIntake',key,parameters);
 export function localIntakeUI({api,frame,esc,field,guard,owner,workspace,refreshRecord,readinessUI}){

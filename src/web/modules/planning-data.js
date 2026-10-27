@@ -1,3 +1,4 @@
+import '../i18n/catalogues/planningData.js';
 import {dashboardCollection,moduleCollectionQuery,moduleCollectionDiscovery,validModuleCollectionItem} from './dashboard-collection.js';
 import {dashboardScope,dashboardScopeSettings,dashboardBookSettings} from '../dashboard-scope.js';
 import {proseReferences} from '../prose-model.js';

@@ -4,7 +4,7 @@ import {readFile,mkdtemp,rm} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {LANGUAGES,translator,validateCatalogue,resolveLanguage} from '../src/web/i18n/runtime.js';
-import {t,language,prepareLanguage,activateLanguage,MESSAGE_NAMESPACES,catalogueLanguages,messageLanguage} from '../src/web/i18n/index.js';
+import {t,language,prepareLanguage,activateLanguage,prepareNamespaces,MESSAGE_NAMESPACES,catalogueLanguages,messageLanguage} from '../src/web/i18n/index.js';
 import {validateGuide,searchGuide,guideLoader,guideWithMessages,mergeGuide} from '../src/web/help/model.js';
 import {routeFor,resolveRoute} from '../src/web/navigation.js';
 import {defaultPreferences,rememberLanguage,rememberInterface,readPreferences} from '../src/preferences.js';
@@ -58,6 +58,7 @@ test('documentation search includes paragraphs, folds accents and keeps stable r
 });
 
 test('Help control references resolve through their owning English resources and reject stale keys',async()=>{
+ await prepareNamespaces(MESSAGE_NAMESPACES);
  activateLanguage('en');const source=validateGuide(await json('en','guide'));
  const resolved=guideWithMessages(source,t),unlock=resolved.topics.find(topic=>topic.id==='storage').sections.find(section=>section.id==='unlock');
  assert.ok(unlock.paragraphs[0].includes(t('access','unlock')));assert.ok(unlock.paragraphs[0].includes(t('access','useRecovery')));
