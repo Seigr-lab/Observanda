@@ -70,7 +70,7 @@
   "continue": "Continue working",
   "edition": "Website edition - {date}",
   "outputRetained": "Output retained",
-  "empty": "No prepared editions yet. Use Review website in Publishing or Preview & export in the website editor.",
+  "empty": "No prepared editions yet. Use Review website in Publishing or Prepare edition in the website editor.",
   "preparing": "Preparing website",
   "requestUncertain": "The connection ended before admission was confirmed. Check the same preparation request to recover its status; this will not create another edition.",
   "capturingEdition": "Retaining the selected website and source revisions. You can continue working.",

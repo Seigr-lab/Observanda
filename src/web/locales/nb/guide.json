@@ -97,7 +97,7 @@
           "title": "Bygg og gjennomgå sider",
           "paragraphs": [
             "Åpne Website editor for å velge sider og plassere seksjoner. Opprett en hjemmeside hvis du vil ha en. Bruk fanen Page til strukturen, og den egne redigeringskontrollen til å endre valgt seksjon. Lagre før du klargjør en publisering.",
-            "Velg offentlig innhold i Content. Arbeidsflaten kan vise upublisert innhold og er ikke den offentlige utgaven. Bruk Preview & export til å kontrollere utvalget, figurer, navigasjon og lenker."
+            "Velg offentlig innhold i Content. Arbeidsflaten kan vise upublisert innhold og er ikke den offentlige utgaven. Bruk {ui:websiteEditor.readingPreview} til å kontrollere endringer uten å lagre nettstedet. Når de er klare, bruk {ui:websiteEditor.prepareEdition} til å klargjøre utgaven du vil eksportere."
           ]
         },
         {

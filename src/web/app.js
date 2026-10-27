@@ -328,7 +328,7 @@ function sectionActions(){
   if(state.page==='editor'&&state.recordReading)return '';
   const label={editor:'Save record',website:'Save website',branding:t('branding','save'),appearance:t('appearance','saveAppearance')}[state.page];
   if(!label)return '';
-  return `<footer class="section-save" aria-label="${label}"><div><span id="save-status" role="status"></span>${state.page==='editor'?recordDrafts.statusView():''}</div><div class="inline-actions"><button class="button" data-action="discard-section">Discard changes</button><button class="button primary" data-action="save">${label}</button>${state.page==='website'?`<button class="button" data-action="preview">${icon('eye')}Preview &amp; export</button>${state.storage?.encrypted?'<button class="button" data-action="publication-jobs-list">Website preparations</button>':''}`:''}</div></footer>`;
+  return `<footer class="section-save" aria-label="${label}"><div><span id="save-status" role="status"></span>${state.page==='editor'?recordDrafts.statusView():''}</div><div class="inline-actions"><button class="button" data-action="discard-section">Discard changes</button><button class="button primary" data-action="save">${label}</button>${state.page==='website'?`<button class="button" data-action="website-preview">${icon('eye')}${esc(t('websiteEditor','readingPreview'))}</button><button class="button" data-action="preview">${esc(t('websiteEditor','prepareEdition'))}</button>${state.storage?.encrypted?'<button class="button" data-action="publication-jobs-list">Website preparations</button>':''}`:''}</div></footer>`;
 }
 function changed(dirtyState){
   changeVersion++;state.dirty=dirtyState;state.preview=null;updateSaveStatus();

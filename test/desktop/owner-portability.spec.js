@@ -157,7 +157,7 @@ test('desktop portable owners preserve originals and links and publish only sele
   await page.getByRole('button',{name:'Save website',exact:true}).click();const savedResponse=await saveResponse;
   console.log('Portable owners website: Save response completed in '+(Date.now()-saveStarted)+'ms.');expect(savedResponse.ok(),await savedResponse.text()).toBe(true);await expect(page.locator('#save-status')).toHaveText('Saved');
   console.log('Portable owners website: preparing selected edition.');
-  await page.getByRole('button',{name:'Preview & export',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible({timeout:60000});
+  await page.getByRole('button',{name:'Prepare edition',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible({timeout:60000});
   const reviewRoute=new URL(page.url()).hash;await page.getByLabel('Preview page',{exact:true}).selectOption(downloadPage);
   const preview=new URL(await page.locator('#full-public-preview').getAttribute('href'),page.url());
   // The download page may be nested under pages/. Retained edition roots are

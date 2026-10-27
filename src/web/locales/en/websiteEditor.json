@@ -216,5 +216,18 @@
   "themeImport": "Import website theme",
   "themePreparing": "Preparing theme…",
   "themeApplied": "Theme applied to this draft. Review it and save when ready.",
-  "themeImportFailed": "The theme could not be imported."
+  "themeImportFailed": "The theme could not be imported.",
+  "readingPreview": "Preview website",
+  "readingBack": "Back to editing",
+  "readingDraftNote": "Previewing your current draft. Your saved website is unchanged. Only content allowed for this website is shown.",
+  "readingPage": "Preview page",
+  "readingPrevious": "Previous pages",
+  "readingNext": "Next pages",
+  "readingViewport": "Preview width",
+  "readingDesktop": "Desktop",
+  "readingPhone": "Phone",
+  "readingLoading": "Loading preview…",
+  "readingRetry": "Retry preview",
+  "readingChanged": "The website changed while its preview was opening. Try again.",
+  "prepareEdition": "Prepare edition"
 }

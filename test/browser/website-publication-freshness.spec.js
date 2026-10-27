@@ -16,11 +16,11 @@ test('a prepared website remains downloadable after editing another website but 
  try{
   const book=createNotebook('Publishing workspace');fixture=await encryptedFixture(directory,book);const sites=new WebsiteSites(fixture.workspace),ids=[];
   for(const name of ['Field journal','Course website'])ids.push((await sites.change({workspaceId:book.id,etag:(await fixture.workspace.outline()).etag,operation:'create',name})).id);
-  const first=await sites.read(ids[0]);await sites.save(ids[0],{workspaceId:book.id,baseEtag:first.etag,metadata:{website:{...first.book.website,home:{...first.book.website.home,enabled:true,introduction:'Synthetic publication introduction'}}},projects:[],changes:[],removed:[],selection:first.site.selection});
+  const first=await sites.read(ids[0]);await sites.save(ids[0],{workspaceId:book.id,baseEtag:first.etag,websitePin:first.websitePin,metadata:{website:{...first.book.website,home:{...first.book.website.home,enabled:true,introduction:'Synthetic publication introduction'}}},projects:[],changes:[],removed:[],selection:first.site.selection});
   app=await startServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(directory,'preferences.json'),port:0});
   await page.goto(app.url);await navigate(page,'Website editor');await page.goto(new URL('/#/websites/'+ids[0]+'/editor',app.url).href);
   await expect(page.locator('.website-site-context')).toContainText('Field journal');
-  await page.getByRole('button',{name:'Preview & export',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
+  await page.getByRole('button',{name:'Prepare edition',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible({timeout:15000});
   other=await page.context().newPage();await other.goto(new URL('/#/websites/'+ids[1]+'/editor',app.url).href);
   await expect(other.locator('.website-site-context')).toContainText('Course website');await task(other,'Site');await other.getByLabel('Website title',{exact:true}).fill('Changed course title');

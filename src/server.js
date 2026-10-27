@@ -395,6 +395,9 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       }
       const selectedContext=context;
       const snapshotRead=workspaceSnapshotRequest(req.method,url.pathname);
+      // Ephemeral preview requests own no saved work. Drain their read leases,
+      // but cancel their connections immediately when the app is closing.
+      if(req.method==='POST'&&/\/(?:design-preview|appearance-preview)$/.test(url.pathname)||req.method==='GET'&&/\/appearance-preview\/[a-f0-9]{64}\//.test(url.pathname))request.abortPreview=()=>res.destroy();
       if(!snapshotRead)req.operationActivity=()=>req.activity??=activities.begin(selectedContext.id,url.pathname,{view:req.headers['x-observanda-view'],recoveryKey:req.activityRecoveryKey});
       req.waitForWriter=req.headers['x-observanda-wait']==='1'&&(snapshotRead||req.method==='POST'&&!['/api/storage/','/api/access/','/api/security/','/api/writer-recovery','/api/preferences/reset','/api/notebook/create'].some(prefix=>url.pathname.startsWith(prefix)));
       req.checkWriter=async()=>{if(shuttingDown)throw new AppError('SERVER_CLOSING');if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');if((await status(client)).locked)throw new AppError('ACCESS_LOCKED');};
@@ -1413,7 +1416,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
    return {busy:!!(activeWrites||changing||importing||publishing||loginBusy||context.dashboardTask||context.jobs?.worker.active||operations.some(item=>['running','queued'].includes(item.state))),failure:activities.failureSequence};
   };
   return {server,origin,launchToken,url:origin+'/#'+launchToken,shutdownStatus,close:()=>closePromise??=(async()=>{
-   shuttingDown=true;clearInterval(expiry);cancelFolderRequests();const stoppedJobs=stopJobs(context);
+   shuttingDown=true;clearInterval(expiry);cancelFolderRequests();for(const request of pending)request.abortPreview?.();const stoppedJobs=stopJobs(context);
    const disconnected=connections.close();
    const timeout=setTimeout(()=>server.closeAllConnections(),60000);timeout.unref();
    try{await Promise.all([stoppedJobs,...dashboardTasks,disconnected,pending.size?new Promise(resolve=>drained.push(resolve)):Promise.resolve()]);}

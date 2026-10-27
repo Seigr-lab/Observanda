@@ -86,7 +86,7 @@ test('canvas requests one page at a time and complete reviewed export still excl
  await openPageSettings(page);await page.getByText('Page header',{exact:true}).click();await page.getByLabel('Display heading',{exact:true}).fill('Inspection notes');
  await expect(page.frameLocator('#website-draft-preview').getByRole('heading',{name:'Inspection notes',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
- const prepared=page.waitForResponse(r=>r.url().endsWith('/api/preview')&&r.ok());await page.getByRole('button',{name:'Preview & export',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
+ const prepared=page.waitForResponse(r=>r.url().endsWith('/api/preview')&&r.ok());await page.getByRole('button',{name:'Prepare edition',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
  const edition=await (await prepared).json();expect(edition.pages.length).toBeGreaterThan(190);expect(edition.entries).toHaveLength(197);expect(edition.entries.some(e=>e.id===selected.id)).toBe(false);
  expect((await new Workspace(root).read()).book.entries).toEqual(book.entries);
 });

@@ -110,7 +110,7 @@ test('author site button defaults, plain links and independent popup close style
   await page.reload();await expect(close).toHaveText('close');await expect(close).toHaveCSS('background-color','rgb(81, 46, 74)');
   await expect(buttonLink).toHaveCSS('background-color','rgb(23, 63, 58)');
   await page.screenshot({path:info.outputPath('action-styling-editor.png')});
-  await page.getByRole('button',{name:'Preview & export',exact:true}).click();
+  await page.getByRole('button',{name:'Prepare edition',exact:true}).click();
   await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible();
   await page.getByLabel('Preview page',{exact:true}).selectOption(target);

@@ -107,7 +107,7 @@ test('create, edit, persist, customize, review, and download an independent note
   await page.getByLabel('Preview page',{exact:true}).selectOption({label:'First green leaves'});
   await expect(page.frameLocator('#design-preview').getByRole('heading', { name: 'First green leaves' })).toBeVisible();
   await saveChanges(page);
-  await navigate(page,'Website editor');await expect(page.getByRole('heading',{name:'Choose a research page',exact:true})).toBeVisible();await page.getByRole('button', { name: 'Preview & export' }).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
+  await navigate(page,'Website editor');await expect(page.getByRole('heading',{name:'Choose a research page',exact:true})).toBeVisible();await page.getByRole('button', { name: 'Prepare edition' }).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
   await page.getByLabel('Preview page',{exact:true}).selectOption({label:'First green leaves'});
   await expect(page.frameLocator('iframe[title="Publication preview"]').getByRole('heading', { name: 'First green leaves' })).toBeVisible();
   await page.getByLabel('I have reviewed').check();
@@ -129,7 +129,7 @@ test('private-path detection blocks review and keeps the original note editable'
   await page.getByRole('button',{name:'Edit record',exact:true}).click();
   await page.getByLabel('Summary / context').fill('/home/imaginary-person/private-log');
   await saveChanges(page);
-  await navigate(page,'Website editor');await page.getByRole('button', { name: 'Preview & export' }).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
+  await navigate(page,'Website editor');await page.getByRole('button', { name: 'Prepare edition' }).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
   await expect(page.getByRole('dialog')).toContainText('Export blocked');
   await expect(page.getByRole('dialog')).not.toContainText('imaginary-person');
   await page.getByRole('button', { name: 'Open record' }).click();
@@ -314,7 +314,7 @@ test('build two projects with structured research, playable media, custom pages,
   await chooseFont(page,'Body font','source-serif');
   await page.getByLabel('Background', { exact: true }).fill('#f0f4f8');
   await saveChanges(page);
-  await navigate(page,'Website editor');await page.getByRole('button', { name: 'Preview & export', exact: true }).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
+  await navigate(page,'Website editor');await page.getByRole('button', { name: 'Prepare edition', exact: true }).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
   const preview = page.frameLocator('iframe[title="Publication preview"]');
   await expect(preview.getByRole('navigation').getByRole('link', { name: 'Overview', exact: true })).toBeVisible();
   await expect(preview.getByRole('navigation').getByRole('link', { name: 'Acoustic studies', exact: true })).toBeVisible();
@@ -407,7 +407,7 @@ test('laboratory sample-to-review workflow prints a revision and requires amendm
   await page.getByLabel('Result value',{exact:true}).fill('0.35');
   await page.getByRole('button',{name:'Save result',exact:true}).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();await expect(page.getByRole('cell',{name:'0.35 AU',exact:true})).toBeVisible();
-  await navigate(page,'Website editor');await page.getByRole('button',{name:'Preview & export',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
+  await navigate(page,'Website editor');await page.getByRole('button',{name:'Prepare edition',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
   await expect(page.frameLocator('iframe[title="Publication preview"]').locator('body')).not.toContainText('SYNTHETIC_PRIVATE_REFERENCE');
   expect(errors).toEqual([]);
 });
@@ -436,7 +436,7 @@ test('logos at workspace, project, notebook, page and record scopes survive save
   await page.getByRole('button',{name:'Save branding',exact:true}).click();
   await expect(page.locator('#save-status')).toHaveText('Saved');
   await page.screenshot({path:test.info().outputPath('scoped-branding.png'),fullPage:true});
-  await navigate(page,'Website editor');await page.getByRole('button',{name:'Preview & export',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
+  await navigate(page,'Website editor');await page.getByRole('button',{name:'Prepare edition',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
   const frame=page.frameLocator('iframe[title="Publication preview"]');
   await expect(frame.getByRole('img',{name:'Workspace emblem',exact:true})).toBeVisible();
   await expect(frame.getByRole('img',{name:'Partner emblem',exact:true})).toBeVisible();

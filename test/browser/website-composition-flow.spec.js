@@ -76,7 +76,7 @@ test('independent collection alignment and the final footer survive save, reload
  expect(await zoomed.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
  await zoomed.getByRole('button',{name:'Save website',exact:true}).scrollIntoViewIfNeeded();await expect(zoomed.getByRole('button',{name:'Save website',exact:true})).toBeInViewport();
  await zoomed.screenshot({path:test.info().outputPath('editor-200-percent.png'),fullPage:true});
- await page.getByRole('button',{name:'Preview & export',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();const review=page.frameLocator('iframe[title="Publication preview"]');await check(review);
+ await page.getByRole('button',{name:'Prepare edition',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();const review=page.frameLocator('iframe[title="Publication preview"]');await check(review);
  await expect(review.locator('.canvas-section-edit,[contenteditable]')).toHaveCount(0);
  await page.screenshot({path:test.info().outputPath('review-mixed-alignment.png'),fullPage:true});
  const href=await page.locator('#full-public-preview').getAttribute('href'),visitor=await page.context().newPage();await visitor.goto(new URL(href,app.url).href);

@@ -97,7 +97,7 @@
           "title": "Bygg og gå gjennom sider",
           "paragraphs": [
             "Opne Website editor for å velje sider og plassere seksjonar. Opprett ei heimeside om du vil ha ei. Bruk fana Page til strukturen og den eigne redigeringskontrollen til å endre vald seksjon. Lagre før du klargjer ei publisering.",
-            "Vel offentleg innhald i Content. Arbeidsflata kan vise upublisert innhald og er ikkje den offentlege utgåva. Bruk Preview & export til å kontrollere utvalet, figurar, navigasjon og lenkjer."
+            "Vel offentleg innhald i Content. Arbeidsflata kan vise upublisert innhald og er ikkje den offentlege utgåva. Bruk {ui:websiteEditor.readingPreview} til å kontrollere endringar utan å lagre nettstaden. Når dei er klare, bruk {ui:websiteEditor.prepareEdition} til å klargjere utgåva du vil eksportere."
           ]
         },
         {

@@ -97,7 +97,7 @@
           "title": "Construye y revisa las páginas",
           "paragraphs": [
             "Abre Website editor para elegir páginas y ordenar secciones. Crea una página de inicio si la quieres. Usa la pestaña Page para construir la estructura y el control de edición dedicado para cambiar la sección seleccionada. Guarda antes de preparar una publicación.",
-            "Elige en Content qué puede ser público. El lienzo de trabajo puede mostrar contenido no publicado: no es la edición pública. Usa Preview & export para inspeccionar la selección, las figuras, la navegación y los enlaces."
+            "Elige en Content qué puede ser público. El lienzo de trabajo puede mostrar contenido no publicado: no es la edición pública. Usa {ui:websiteEditor.readingPreview} para comprobar los cambios sin guardar el sitio. Cuando estén listos, usa {ui:websiteEditor.prepareEdition} para preparar la edición que quieras exportar."
           ]
         },
         {

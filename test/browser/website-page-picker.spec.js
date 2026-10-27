@@ -98,7 +98,7 @@ test('website text links search pinned page summaries without building a full de
  await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');await page.reload();
  await expect(editor.locator('a')).toHaveAttribute('href','entry:'+book.entries[64].id);
  const saved=(await fixture.workspace.read()).book;expect(saved.entries).toEqual(book.entries);expect(JSON.stringify(saved.website.home.sections)).toContain('entry:'+book.entries[64].id);
- await page.getByRole('button',{name:'Preview & export',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
+ await page.getByRole('button',{name:'Prepare edition',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
  const href=await page.getByRole('link',{name:'Open full preview',exact:true}).getAttribute('href'),published=await page.context().newPage();
  try{await published.goto(new URL(href,app.origin).href);await expect(published.getByRole('link',{name:'Explore these notes',exact:true})).toHaveAttribute('href','entries/'+book.entries[64].id+'.html');}finally{await published.close();}
 });
@@ -155,7 +155,7 @@ test('image and button links choose indexed pages in place and retain manual add
  }finally{ResearchCatalogue.prototype.record=record;}
  await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');await page.reload();
  const saved=(await fixture.workspace.read()).book;expect(saved.website.presentation.media.some(m=>m.link==='entry:'+book.entries[64].id)).toBe(true);expect(saved.website.home.sections.some(s=>s.kind==='link'&&s.href==='entry:'+book.entries[75].id)).toBe(true);expect(saved.entries).toEqual(book.entries);
- await page.getByRole('button',{name:'Preview & export',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
+ await page.getByRole('button',{name:'Prepare edition',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
  const href=await page.getByRole('link',{name:'Open full preview',exact:true}).getAttribute('href'),published=await page.context().newPage();
  try{await published.goto(new URL(href,app.origin).href);await expect(published.locator('.section-asset a')).toHaveAttribute('href','entries/'+book.entries[64].id+'.html');await expect(published.getByRole('link',{name:'Read the notes',exact:true})).toHaveAttribute('href','entries/'+book.entries[75].id+'.html');}finally{await published.close();}
 });

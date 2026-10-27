@@ -2,6 +2,11 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {workspaceSnapshotRequest,WorkspaceReadAdmission} from '../src/workspace-read-admission.js';
 
+test('draft website previews are snapshot reads while publication and saving remain writes',()=>{
+ for(const route of ['/api/design-preview','/api/appearance-preview'])assert.equal(workspaceSnapshotRequest('POST',route),true);
+ for(const route of ['/api/websites/editor/save','/api/preview','/api/publication-jobs/start'])assert.equal(workspaceSnapshotRequest('POST',route),false);
+});
+
 test('custom font reads use snapshot admission and font mutations do not',()=>{
  const route='/api/fonts/custom-'+'a'.repeat(64);
  assert.equal(workspaceSnapshotRequest('GET',route),true);

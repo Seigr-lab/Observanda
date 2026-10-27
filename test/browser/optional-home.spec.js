@@ -52,7 +52,7 @@ test('create and remove Home explicitly, retain site identity, undo and review a
  await remove();await save(page);await page.reload();
  const saved=(await new Workspace(root).read()).book;
  expect(saved.title).toBe('Collective');expect(saved.website.title).toBe('Public collective');expect(saved.website.home.enabled).toBe(false);
- await page.getByRole('button',{name:'Preview & export',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
+ await page.getByRole('button',{name:'Prepare edition',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
  await expect(page.locator('#preview-page option')).toHaveText(['Listening notes']);
  await expect(page.frameLocator('iframe[title="Publication preview"]').getByRole('heading',{name:'Listening notes',exact:true})).toBeVisible();
  const url=await page.getByRole('link',{name:'Open full preview',exact:true}).getAttribute('href');

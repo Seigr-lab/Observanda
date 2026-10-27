@@ -97,7 +97,7 @@
           "title": "Construïu i reviseu les pàgines",
           "paragraphs": [
             "Obriu Website editor per triar pàgines i ordenar seccions. Creeu una pàgina inicial si la voleu. Feu servir la pestanya Page per construir l’estructura i el control d’edició dedicat per modificar la secció seleccionada. Deseu abans de preparar una publicació.",
-            "Trieu a Content què pot ser públic. El llenç de treball pot mostrar contingut no publicat: no és l’edició pública. Feu servir Preview & export per inspeccionar la selecció, les figures, la navegació i els enllaços."
+            "Trieu a Content què pot ser públic. El llenç de treball pot mostrar contingut no publicat: no és l’edició pública. Feu servir {ui:websiteEditor.readingPreview} per comprovar els canvis sense desar el web. Quan estiguin a punt, feu servir {ui:websiteEditor.prepareEdition} per preparar l’edició que voleu exportar."
           ]
         },
         {

@@ -172,7 +172,7 @@ test('desktop opens setup, saves encrypted work, protects unsaved edits and reop
    await call('/api/websites/editor/save',{...website,websitePin:editor.websitePin,draftId:editor.draft.id,expectedRevision:editor.draft.revision,commandId:crypto.randomUUID()});
   },{route:siteRoute,introduction});
   await page.reload();await expect(page.locator('.website-site-context')).toContainText('Desktop project website');
-  await page.getByRole('button',{name:'Preview & export',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
+  await page.getByRole('button',{name:'Prepare edition',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible({timeout:60000});
   await expect(page.frameLocator('iframe[title="Publication preview"]').locator('body')).toContainText(introduction,{timeout:30000});
   console.log('Desktop website: saved named homepage and prepared publication preview passed.');

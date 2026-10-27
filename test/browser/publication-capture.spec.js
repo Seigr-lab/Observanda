@@ -29,7 +29,7 @@ test('navigation and another website save finish while selected edition inputs a
   ResearchCatalogue.prototype.record=async function(...args){const value=await record.apply(this,args);if(scope.getStore()&&++count===40){paused=true;arrive();await held;}return value;};
   app=await startServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(directory,'preferences.json'),port:0});
   page.on('pageerror',error=>errors.push(error.message));await page.goto(app.url);await navigate(page,'Website editor');await page.goto(new URL('/#/websites/'+ids[0]+'/editor',app.url).href);
-  await expect(page.locator('.website-site-context')).toContainText('Observation journal');await page.getByRole('button',{name:'Preview & export',exact:true}).click();
+  await expect(page.locator('.website-site-context')).toContainText('Observation journal');await page.getByRole('button',{name:'Prepare edition',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Choose edition content',exact:true})).toBeVisible();
   const response=page.waitForResponse(value=>new URL(value.url()).pathname==='/api/publication-jobs/start');
   await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();await ready;

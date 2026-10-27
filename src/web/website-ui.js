@@ -42,6 +42,8 @@ import {acceptsChildren,childrenOf,descendantsOf,treeOrder,moveElement,insertEle
 import {composerDrag} from './composer-drag.js';
 import {mediaStyle,copySectionPresentation,clearSectionPresentation} from './media-presentation.js';
 import {previewSurface} from './preview-surface.js';
+import {websiteReadingPreview} from './website-reading-preview.js';
+import {updateCanvasHomeHeader} from './website-canvas-header.js';
 import {FONT_OPTIONS} from './themes.js';
 import {fontSelect,axisControls,checkFontInputs} from './font-picker.js';
 import {websiteTypography,TYPOGRAPHY_RANGES,validTypography,WEBSITE_COLORS} from './website-typography.js';
@@ -342,7 +344,7 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
     document.querySelectorAll('[data-action=website-undo]').forEach(b=>b.disabled=!(native()?documents.draft()?.canUndo:history.undoCount));
     document.querySelectorAll('[data-action=website-redo]').forEach(b=>b.disabled=!(native()?documents.draft()?.canRedo:history.redoCount));
   }
-  function changed(redraw=false){updateHistoryControls();previewKey=null;dirty();if(redraw)refreshTools();refreshSummary();schedulePreview();}
+  function changed(redraw=false){updateHistoryControls();previewKey=null;dirty();if(previewTarget()==='home'&&updateCanvasHomeHeader(document.querySelector('#website-draft-preview')?.contentDocument,state.book))surface?.measure();if(redraw)refreshTools();refreshSummary();schedulePreview();}
   function input(el,{discrete=false}={}){
     if(documents?.structuralBusy())return true;
     if(themeUI.input(el))return true;
@@ -393,6 +395,12 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
     const status=document.querySelector('#website-move-status');if(status)status.textContent=`Moved to position ${to+1}.`;
   }
   async function action(buttonEl){
+    if(buttonEl.dataset.action==='website-preview'){
+      buttonEl.disabled=true;
+      try{await websiteReadingPreview({state,api,documents,showDialog,esc,path:previewPage});}
+      finally{if(buttonEl.isConnected)buttonEl.disabled=false;}
+      return true;
+    }
     if(documents?.structuralBusy()&&buttonEl.dataset.action!=='website-draft-retry')return true;
     if(buttonEl.dataset.action==='website-target-retry'){await changePreviewPage(previewPage);return true;}
     if(buttonEl.dataset.action==='website-layout-default'){await documents.perform([{type:'remove',collection:'layouts',key:scopeTarget()}]);await load();changed(true);return true;}

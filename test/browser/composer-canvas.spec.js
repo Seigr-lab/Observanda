@@ -54,7 +54,7 @@ test('a new image element remains in the page before upload, and a dragged move 
  await canvas(page).locator('.section-asset>.canvas-section-edit').click();await page.getByLabel('Upload media for this element').setInputFiles('src/preview-assets/image.png');
  await expect(canvas(page).locator('.section-asset img')).toBeVisible();expect(await canvas(page).locator('.section-asset').getAttribute('data-section-id')).toBe(id);
  await task(page,'Add');const source=page.locator('[data-palette-kind=heading]'),target=canvas(page).locator('[data-drop-parent=""]');await source.scrollIntoViewIfNeeded();const a=await source.boundingBox(),b=await target.boundingBox();await page.mouse.move(a.x+a.width/2,a.y+a.height/2);await page.mouse.down();await page.mouse.move(b.x+b.width/2,b.y+b.height/2,{steps:10});await page.keyboard.press('Escape');await page.mouse.up();await expect(canvas(page).locator('.section-heading')).toHaveCount(0);
- await page.getByRole('button',{name:'Preview & export'}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();await expect(page.getByRole('heading',{name:'Review website'})).toBeVisible();await expect(page.getByRole('dialog')).not.toBeVisible();await expect(page.frameLocator('iframe[title="Publication preview"]').locator('.section-asset img')).toBeVisible();
+ await page.getByRole('button',{name:'Prepare edition'}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();await expect(page.getByRole('heading',{name:'Review website'})).toBeVisible();await expect(page.getByRole('dialog')).not.toBeVisible();await expect(page.frameLocator('iframe[title="Publication preview"]').locator('.section-asset img')).toBeVisible();
  await page.getByRole('button',{name:'Back to website editor'}).click();await expect(canvas(page).locator('.section-asset')).toHaveAttribute('data-section-id',id);expect(errors).toEqual([]);
 });
 
@@ -74,7 +74,7 @@ test('compose an editorial page with nested media and typography, review unsaved
  await expect(page.getByLabel('Image proportions')).toBeInViewport();
  if(await page.locator('#notice').isVisible())await page.locator('#notice button').click();await page.evaluate(()=>scrollTo(0,0));await mkdir('.local/ux-review/canvas',{recursive:true});await page.screenshot({path:'.local/ux-review/canvas/editor-desktop.png',fullPage:true});
  const before=await readFile(path.join(root,'observanda.json'),'utf8');
- await page.getByRole('button',{name:'Preview & export'}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();await expect(page.getByRole('heading',{name:'Review website'})).toBeVisible();
+ await page.getByRole('button',{name:'Prepare edition'}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();await expect(page.getByRole('heading',{name:'Review website'})).toBeVisible();
  expect(await readFile(path.join(root,'observanda.json'),'utf8')).toBe(before);
  await page.getByLabel('Preview page',{exact:true}).selectOption(first);
  const href=await page.locator('#full-public-preview').getAttribute('href'),visitor=await page.context().newPage();

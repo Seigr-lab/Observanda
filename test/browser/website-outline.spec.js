@@ -34,7 +34,7 @@ for(const count of [65,650])test('website authoring uses summaries and selected 
   await page.locator('[data-publish-entry]').check();await page.getByRole('button',{name:'Undo',exact:true}).click();await expect(page.locator('[data-publish-entry]')).not.toBeChecked();
   await page.getByRole('button',{name:'Redo',exact:true}).click();await expect(page.locator('[data-publish-entry]')).toBeChecked();expect(loaded).toEqual([]);
   // The prepared edition uses unsaved selection but cannot silently save it.
-  const before=await f.workspace.outline();await page.getByRole('button',{name:'Preview & export',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible();
+  const before=await f.workspace.outline();await page.getByRole('button',{name:'Prepare edition',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible();
   expect((await f.workspace.outline()).etag).toBe(before.etag);expect(loaded.every(id=>id===selected.id)).toBe(true);
   await navigate(page,'Website editor');await task(page,'Content');await search.fill(selected.title);await expect(page.locator('[data-publish-entry]')).toBeChecked();
   await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
