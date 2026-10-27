@@ -15,5 +15,13 @@
   "saved": "Språket er lagra.",
   "coverageTitle": "Omsetjingsdekning",
   "loadFailed": "Det lagra språket kunne ikkje lastast inn. Engelsk blir brukt i denne økta.",
-  "templates": "Malar"
+  "templates": "Malar",
+  "diagnostics": "Lokal diagnostikk",
+  "diagnosticsSummary": "Sjå tidsbruk for nylege operasjonar, ressursbruk og feilkodar. Diagnostikken utelèt innhald i oppføringar, filnamn, påloggingsinformasjon og adresser. Ingenting blir sendt automatisk.",
+  "diagnosticsReview": "Sjå diagnostikk",
+  "diagnosticsAvailable": "Lokal diagnostikk er tilgjengeleg.",
+  "diagnosticsUnavailable": "Noko diagnostikk kunne ikkje skrivast. Den tilgjengelege rapporten kan vere ufullstendig.",
+  "diagnosticsContents": "Sjå rapportinnhaldet",
+  "diagnosticsDownload": "Last ned denne rapporten",
+  "diagnosticsClose": "Lukk"
 }

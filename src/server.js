@@ -41,6 +41,7 @@ import {SavedWorkspaceDeletion} from './saved-workspace-deletion.js';
 import {workspaceDeletion} from './workspace-delete-state.js';
 import {forgetWorkspace} from './preferences.js';
 import {operationStage} from './operation-progress.js';
+import {OperationalDiagnostics,withDiagnostics,diagnostic} from './operational-diagnostics.js';
 import {UserProfile} from './user-profile.js';
 import {rememberWorkspaceLocation,rememberAuthenticatedLocation} from './workspace-reconnection.js';
 import {verifyPortableAccess} from './workspace-portability.js';
@@ -207,7 +208,9 @@ async function body(req,limit=MAX_BYTES,capacityOwner=null) {
   } catch { throw new AppError('INVALID'); }
 }
 
-export async function startServer({ root=null, port = 4173, publishingOptions, githubConnections, preferencesFile, expectedExisting=false, headless=false, folderPicker, folderBrowser=browseFolders, deviceStore=preferencesFile?new DeviceStore({file:preferencesFile+'.device-key'}):defaultDeviceStore } = {}) {
+export async function startServer({ root=null, port = 4173, publishingOptions, githubConnections, preferencesFile, expectedExisting=false, headless=false, folderPicker, folderBrowser=browseFolders, diagnostics:providedDiagnostics, deviceStore=preferencesFile?new DeviceStore({file:preferencesFile+'.device-key'}):defaultDeviceStore } = {}) {
+  const diagnostics=providedDiagnostics??new OperationalDiagnostics({directory:preferencesFile?path.join(path.dirname(preferencesFile),'diagnostics'):null});
+  diagnostics.record('service-start');
   const {GithubConnections}=await import('./github/connections.js');
   const github=githubConnections??(preferencesFile?new GithubConnections({file:preferencesFile+'.github.json',request:publishingOptions?.request}):null);
   const picker=folderPicker??createFolderPicker({headless}),folderRequests=new Set(),inventoryRequests=new Set();
@@ -345,7 +348,9 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
     return {database,nameConflict:(await workspaceDirectory.list()).find(item=>item.path===context.root)?.conflict??false,researchStorage,researchFormatVersion,workspaceParent:path.dirname(context.root),movedTo:moving?.destination??null,move:available?await workspaceMoveStatus(context.root):null,...storageMap(context.root,preferencesFile,path.basename(await workspaceFile(context.root)),{catalogue:researchStorage==='catalogue'}),applicationRoot:fileURLToPath(new URL('..',import.meta.url)),contextId:context.id,folderPicker:await picker.capabilities(),available,unavailableReason,encrypted:!!context.vault.id,expectedExisting:context.expectedExisting||!!moving};
   };
   let shuttingDown=false,closePromise,githubMutation=false,collaborationSession;const pending=new Set(),drained=[];
-  const server = http.createServer((req, res) => requestWriterWait(req,res,async()=>{
+  const server = http.createServer((req, res) => withDiagnostics(diagnostics,correlation=>requestWriterWait(req,res,async()=>{
+    const diagnosticStart=performance.now();let diagnosticError;
+    res.setHeader('X-Observanda-Request',correlation);
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('Cache-Control', 'no-store');
@@ -392,6 +397,11 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       const client=sessions.get(cookie);if(!client)throw new AppError('AUTH');
       if(req.method==='GET'&&url.pathname==='/api/health'){
        const database=await databaseStatus();return json({service:'local-authoring',ready:database.ready,database,capacity:databaseCapacity()},database.ready?200:503);
+      }
+      if(req.method==='GET'&&url.pathname==='/api/diagnostics'){
+       if((await status(client)).locked)throw new AppError('ACCESS_LOCKED');
+       const workers=[...(context.jobs?[context.jobs.worker]:[]),...[...(context.projects?.jobs.entries??[])].map(entry=>entry.worker)].map(worker=>worker.status());
+       return json({...await diagnostics.snapshot(),workers});
       }
       const selectedContext=context;
       const snapshotRead=workspaceSnapshotRequest(req.method,url.pathname);
@@ -1392,12 +1402,16 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       throw new AppError('NOT_FOUND');
       },{check:()=>req.checkWriter()});
     } catch (error) {
+      diagnosticError=error;
       req.activity?.finish(error);
       const safe = safeError(error);
       const statuses = { TASK_DEPENDENCY_OWNER_LIMIT:422, TASK_DEPENDENCY_DATABASE_LIMIT:422, TASK_PREREQUISITE_ACCESS:403, TASK_PREREQUISITE_CHANGED:409, TASK_PREREQUISITE_UNSUPPORTED:422, RECORD_COMMAND_LIMIT:413, DRAFT_SIZE_LIMIT:413, STARTER_CHANGED:409, STARTER_ARCHIVED:409, RECORD_SELECTION_LIMIT:413, RECORD_SIZE_LIMIT:413, WORKSPACE_METADATA_LIMIT:413, WORKSPACE_READ_LIMIT:413, SERVER_CLOSING:503, DATABASE_BUSY:503, DATABASE_UNAVAILABLE:503, RECORD_VIEW_CHANGED:409, RECORD_VIEW_NAME:409, RECORD_VIEW_FORMAT:500, MODULE_CHANGED:409, MODULE_REPLAY:409, BOOKING_CONFLICT:409, STOCK_UNAVAILABLE:409, DRAFT_CHANGED:409, RECORD_CHANGED:409, DASHBOARD_CHANGED:409, FOLDER_PICKER_BUSY:409, PREFERENCES_CHANGED:409, ACCESS_LOCKED:401, ACCESS_DENIED:401, ACCESS_WAIT:429, WORKSPACE_CHANGED:409, AUTH: 401, ORIGIN: 403, CONFLICT: 409, EXISTS: 409, STALE: 409, LOCKED: 423, MISSING: 404, NOT_FOUND: 404, LIMIT: 413, IO: 500 };
       if (!res.headersSent) json(safe, identityRecoveryStatus[safe.code] ?? organizationErrorStatus[safe.code] ?? statuses[safe.code] ?? 422); else res.destroy();
-    } finally {releaseRead?.();req.activity?.finish();if(ownsGithubMutation)githubMutation=false;if(countedWrite)activeWrites--;pending.delete(request);if(!pending.size)for(const resolve of drained.splice(0))resolve();}
-  }));
+    } finally {
+      if(req.url?.startsWith('/api/'))diagnostic('request',{method:req.method,route:req.url.split('/')[2]?.split('?')[0],durationMs:performance.now()-diagnosticStart,error:diagnosticError,status:res.statusCode,queued:pending.size,active:activeWrites});
+      releaseRead?.();req.activity?.finish();if(ownsGithubMutation)githubMutation=false;if(countedWrite)activeWrites--;pending.delete(request);if(!pending.size)for(const resolve of drained.splice(0))resolve();
+    }
+  })));
   const connections=httpDrain(server);
   server.maxConnections=128;server.maxRequestsPerSocket=256;
   server.requestTimeout = 0; server.headersTimeout = 10000; server.setTimeout(60000,socket=>socket.destroy());
@@ -1405,7 +1419,9 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
   try{await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', resolve); });}
   catch(error){await collaborationSession.close();throw error;}
   origin = `http://127.0.0.1:${server.address().port}`;
+  diagnostics.record('service-ready');
   const expiry=setInterval(()=>{
+   const memory=process.memoryUsage(),cpu=process.cpuUsage();diagnostics.record('resource',{rssBytes:memory.rss,heapBytes:memory.heapUsed,externalBytes:memory.external,cpuUserUs:cpu.user,cpuSystemUs:cpu.system,queued:pending.size,active:activeWrites});
    context.projects?.expire();
    if(shuttingDown||loginBusy||pending.size||activeWrites||importing||publishing||changing||![context.vault.key,context.calendarSources.connections.size,context.calendarSources.cache.size].some(Boolean)||[...sessions.values()].some(s=>s.access&&s.expires>Date.now()))return;
    loginBusy=true;const expiring=context;
@@ -1420,7 +1436,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
    const disconnected=connections.close();
    const timeout=setTimeout(()=>server.closeAllConnections(),60000);timeout.unref();
    try{await Promise.all([stoppedJobs,...dashboardTasks,disconnected,pending.size?new Promise(resolve=>drained.push(resolve)):Promise.resolve()]);}
-    finally{clearTimeout(timeout);await savedDeletion.close();if(context.root)await databaseProvider()?.closeWorkspace(context.root);context.calendarSources.clear();clearVault(context.vault);sessions.clear();if(context.publisher)context.publisher.token=null;await collaborationSession.close();}
+    finally{clearTimeout(timeout);await savedDeletion.close();if(context.root)await databaseProvider()?.closeWorkspace(context.root);context.calendarSources.clear();clearVault(context.vault);sessions.clear();if(context.publisher)context.publisher.token=null;await collaborationSession.close();diagnostics.record('service-stop');if(!providedDiagnostics)await diagnostics.close();}
   })()};
 }
 

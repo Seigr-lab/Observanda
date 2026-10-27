@@ -8,7 +8,8 @@ import {startServer} from './server.js';
 import {readPreference} from './locations.js';
 import {DeviceStore} from './security/device-store.js';
 import {AppError,safeError} from './errors.js';
-let runtime,server,starting=false,stopping=false,closed;const startup=new AbortController(),pending=new Map();let sequence=0;
+import {OperationalDiagnostics,withDiagnostics,diagnosticPhase} from './operational-diagnostics.js';
+let runtime,server,diagnostics,starting=false,stopping=false,closed;const startup=new AbortController(),pending=new Map();let sequence=0;
 const pdfBridge=pdfRenderBridge(process),removePdfRenderer=installPdfRenderer((input,options)=>pdfBridge.render(input,options),{capabilities:()=>pdfBridge.capabilities()});
 const send=message=>{if(process.connected)process.send(message);};
 const protector={available:()=>true,protect:bytes=>transform('encrypt',bytes.toString('base64')).then(value=>Buffer.from(value,'base64')),unprotect:bytes=>transform('decrypt',bytes.toString('base64')).then(value=>Buffer.from(value,'base64'))};
@@ -22,9 +23,9 @@ async function stop(){
   // database. The manager drains every owner before the service disconnects.
   try{await runtime?.close();}catch(error){failure??=error;}
   finally{
-   if(failure){process.exitCode=1;console.error(safeError(failure).message);}
+   if(failure){process.exitCode=1;diagnostics?.record('service-failed',{phase:'shutdown',error:failure});console.error(safeError(failure).message);}
    for(const item of pending.values()){clearTimeout(item.timer);item.reject(new AppError('DEVICE_UNAVAILABLE'));}
-   pending.clear();if(process.connected)process.disconnect();
+   pending.clear();diagnostics?.record('service-stop');await diagnostics?.close();if(process.connected)process.disconnect();
   }
  })();
 }
@@ -36,13 +37,14 @@ process.on('message',async message=>{
   if(message?.type!=='start'||starting||runtime||stopping)return;
   if(typeof message.preferencesFile!=='string'||!path.isAbsolute(message.preferencesFile))return;
   starting=true;
+  diagnostics=new OperationalDiagnostics({directory:path.join(path.dirname(message.preferencesFile),'diagnostics')});diagnostics.record('service-start',{phase:'startup'});
   try{
-    runtime=await startWorkspaceDatabases({directory:path.join(path.dirname(message.preferencesFile),'postgresql'),signal:startup.signal,onProgress:({stage,percent})=>send({type:'progress',message:stage==='download'?'Preparing database: '+percent+'%':({install:'Preparing the database…',extract:'Checking the database runtime…',initialize:'Preparing your private database…',start:'Starting your database…'})[stage]??'Starting Observanda…'})});
+    runtime=await withDiagnostics(diagnostics,()=>diagnosticPhase('startup',()=>startWorkspaceDatabases({directory:path.join(path.dirname(message.preferencesFile),'postgresql'),signal:startup.signal,onProgress:({stage,percent})=>send({type:'progress',message:stage==='download'?'Preparing database: '+percent+'%':({install:'Preparing the database…',extract:'Checking the database runtime…',initialize:'Preparing your private database…',start:'Starting your database…'})[stage]??'Starting Observanda…'})})));
     startup.signal.throwIfAborted();const root=await readPreference(message.preferencesFile);
     const deviceStore=new DeviceStore({file:message.preferencesFile+'.device-key',...((process.platform==='darwin'||process.platform==='linux')&&message.deviceProtection===true?{protector}:{})});
-    server=await startServer({root,port:0,preferencesFile:message.preferencesFile,expectedExisting:!!root,deviceStore});
+    server=await startServer({root,port:0,preferencesFile:message.preferencesFile,expectedExisting:!!root,deviceStore,diagnostics});
     startup.signal.throwIfAborted();send({type:'ready',url:server.url});
-  }catch(error){if(!stopping)send({type:'failed',message:safeError(error).message});stopping=true;process.exitCode=1;}
+  }catch(error){diagnostics.record('service-failed',{phase:'startup',error});if(!stopping)send({type:'failed',message:safeError(error).message});stopping=true;process.exitCode=1;}
   finally{starting=false;if(stopping)await stop();}
 });
 if(!process.connected){console.error('Start Observanda from its desktop application.');process.exitCode=1;}

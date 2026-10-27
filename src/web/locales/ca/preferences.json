@@ -15,5 +15,13 @@
   "saved": "S’ha desat la llengua.",
   "coverageTitle": "Cobertura de la traducció",
   "loadFailed": "No s’ha pogut carregar la llengua desada. Aquesta sessió utilitza l’anglès.",
-  "templates": "Plantilles"
+  "templates": "Plantilles",
+  "diagnostics": "Diagnòstic local",
+  "diagnosticsSummary": "Revisa els temps de les operacions recents, l’ús de recursos i els codis d’error. El diagnòstic exclou continguts dels registres, noms de fitxers, credencials i adreces. No s’envia res automàticament.",
+  "diagnosticsReview": "Revisa el diagnòstic",
+  "diagnosticsAvailable": "El diagnòstic local està disponible.",
+  "diagnosticsUnavailable": "No s’ha pogut escriure part del diagnòstic. L’informe disponible pot ser incomplet.",
+  "diagnosticsContents": "Revisa el contingut de l’informe",
+  "diagnosticsDownload": "Descarrega aquest informe",
+  "diagnosticsClose": "Tanca"
 }

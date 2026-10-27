@@ -1,6 +1,7 @@
 // Scoped observations of completed work. Concurrent operations never share
 // counters; unknown totals stay unknown. Heartbeats do not advance these values.
 import {AsyncLocalStorage} from 'node:async_hooks';
+import {diagnosticPhase} from './operational-diagnostics.js';
 const context=new AsyncLocalStorage();
 const empty=()=>({objects:0,bytes:0});
 function publish(scope,force=false){
@@ -18,7 +19,8 @@ export function withOperationProgress(onProgress,operation){
  const scope={root,stage:'preparing',completed:0,unit:'items',activity:empty()};
  return context.run(scope,()=>{publish(scope,true);return operation();});
 }
-export async function operationStage(stage,{total,unit='items',item}={},operation){
+export function operationStage(stage,options,operation){return diagnosticPhase(stage,()=>progressStage(stage,options,operation));}
+async function progressStage(stage,{total,unit='items',item}={},operation){
  const parent=context.getStore();if(!parent)return operation();
  const scope={root:parent.root,parent,stage,completed:0,total,unit,item,sequences:parent.sequences,activity:empty()};
  const steps=(parent.sequences??[]).flatMap(sequence=>sequence.steps).filter(step=>step.stage===stage&&step.state==='pending');

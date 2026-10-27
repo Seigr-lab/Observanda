@@ -15,5 +15,13 @@
   "saved": "Idioma guardado.",
   "coverageTitle": "Cobertura de la traducción",
   "loadFailed": "No se ha podido cargar el idioma guardado. Esta sesión utiliza el inglés.",
-  "templates": "Plantillas"
+  "templates": "Plantillas",
+  "diagnostics": "Diagnóstico local",
+  "diagnosticsSummary": "Revisa los tiempos de las operaciones recientes, el uso de recursos y los códigos de error. El diagnóstico excluye contenidos de registros, nombres de archivos, credenciales y direcciones. No se envía nada automáticamente.",
+  "diagnosticsReview": "Revisar diagnóstico",
+  "diagnosticsAvailable": "El diagnóstico local está disponible.",
+  "diagnosticsUnavailable": "No se ha podido escribir parte del diagnóstico. El informe disponible puede estar incompleto.",
+  "diagnosticsContents": "Revisar el contenido del informe",
+  "diagnosticsDownload": "Descargar este informe",
+  "diagnosticsClose": "Cerrar"
 }

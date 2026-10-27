@@ -907,6 +907,7 @@ async function rawAction(button) {
   if(navigationActions.has(button.dataset.action))ownerOperation.clear();
   if(help.action(button))return;
   const name = button.dataset.action;
+  if(name==='operational-diagnostics')return (await import('./diagnostics-ui.js')).openDiagnostics({api,esc,showDialog});
   if(name==='website'&&button.closest?.('#main-navigation')){await sites.manager();return;}
   if(state.page==='entries'&&state.bookReading&&name?.startsWith('material-')){await materials.action(button);return;}
   if(name==='laboratory-open-owned'){

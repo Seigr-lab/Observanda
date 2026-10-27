@@ -2,6 +2,7 @@
 // handlers prepare bytes outside transactions and commit references inside one.
 import {randomUUID} from 'node:crypto';
 import {AsyncLocalStorage} from 'node:async_hooks';
+import {diagnostic} from './operational-diagnostics.js';
 import {AppError,safeError} from './errors.js';
 import {digest,serialize} from './storage.js';
 import {researchId} from './web/research-reference.js';
@@ -140,14 +141,32 @@ export class DurableJobs{
  }
 }
 export class JobWorker{
- constructor(queue,{pollMs=1000}={}){this.queue=queue;this.pollMs=pollMs;this.enabled=false;this.active=null;this.running=null;this.timer=null;this.controller=null;}
+ constructor(queue,{pollMs=1000,maxIdlePollMs=30000,maxErrorPollMs=60000,random=Math.random,observe=diagnostic}={}){
+  if(![pollMs,maxIdlePollMs,maxErrorPollMs].every(value=>Number.isSafeInteger(value)&&value>0)||maxIdlePollMs<pollMs||maxErrorPollMs<pollMs||typeof random!=='function'||typeof observe!=='function')throw new AppError('INVALID');
+  this.queue=queue;this.pollMs=pollMs;this.maxIdlePollMs=maxIdlePollMs;this.maxErrorPollMs=maxErrorPollMs;this.random=random;this.observe=observe;this.enabled=false;this.active=null;this.running=null;this.timer=null;this.controller=null;this.emptyClaims=0;this.claimFailures=0;this.wakePending=false;this.nextPollMs=0;
+ }
  start(){if(this.enabled)return;this.enabled=true;this.wake();}
- wake(){if(!this.enabled||this.running)return;clearTimeout(this.timer);this.timer=setTimeout(()=>this.tick(),0);this.timer.unref();}
+ wake(){if(!this.enabled)return;this.emptyClaims=0;if(this.running){this.wakePending=true;return;}if(this.claimFailures&&this.timer)return;clearTimeout(this.timer);this.timer=setTimeout(()=>this.tick(),0);this.timer.unref();}
+ report(event,data){try{this.observe(event,data);}catch{/* Diagnostic observers cannot strand a durable job. */}}
+ status(){return {enabled:this.enabled,active:!!this.active,failures:this.claimFailures,idleClaims:this.emptyClaims,nextPollMs:this.nextPollMs};}
+ pollDelay(){
+  const failures=this.claimFailures,attempt=failures||this.emptyClaims;
+  if(!attempt)return 0;
+  const maximum=failures?this.maxErrorPollMs:this.maxIdlePollMs,base=Math.min(maximum,this.pollMs*2**Math.min(16,attempt-1));
+  return Math.min(maximum,Math.max(this.pollMs,Math.round(base*(0.8+0.4*Math.max(0,Math.min(1,this.random()))))));
+ }
  tick(){if(!this.enabled||this.running)return;
-  this.running=withoutWriterWait(()=>this.runOnce()).catch(()=>{/* The durable lease survives service/database interruption. */}).finally(()=>{this.running=null;if(this.enabled){this.timer=setTimeout(()=>this.tick(),this.pollMs);this.timer.unref();}});
+  this.wakePending=false;
+  this.running=withoutWriterWait(()=>this.runOnce()).then(worked=>{this.claimFailures=0;this.emptyClaims=worked?0:Math.min(17,this.emptyClaims+1);}).catch(error=>{this.claimFailures=Math.min(17,this.claimFailures+1);this.report('worker-claim',{error,attempt:this.claimFailures});}).finally(()=>{
+   this.running=null;
+   // A local enqueue during claim/cleanup must not disappear into the idle
+   // backoff. Database failures still back off even when callers keep waking.
+   this.nextPollMs=this.wakePending&&!this.claimFailures?0:this.pollDelay();
+   if(this.enabled){this.timer=setTimeout(()=>this.tick(),this.nextPollMs);this.timer.unref();}
+  });
  }
  async runOnce(){
-  const job=await this.queue.claim();if(!job)return;this.active=job;const controller=this.controller=new AbortController(),context=AsyncLocalStorage.snapshot();
+  const job=await this.queue.claim();if(!job)return false;this.active=job;const controller=this.controller=new AbortController(),context=AsyncLocalStorage.snapshot();
   const wait=operation=>context(()=>backgroundWriterWait(operation,{signal:controller.signal,check:()=>this.queue.held(job.id,job.lease.token)}));
   const write=operation=>wait(()=>this.queue.checkpoint(job.id,job.lease.token,async()=>{controller.signal.throwIfAborted();const result=await operation();controller.signal.throwIfAborted();return result;}));
   const updates=new JobProgress(progress=>wait(()=>this.queue.pulse(job.id,job.lease.token,progress)),{signal:controller.signal,heartbeatMs:Math.max(100,this.queue.leaseMs/3),onError:error=>controller.abort(error)});
@@ -155,8 +174,9 @@ export class JobWorker{
    if(!this.enabled)controller.abort();
    const prepared=await withJobDiagnosticContext({operation:'prepare-job',jobId:job.id},()=>this.queue.definition(job).prepare(job,{signal:controller.signal,write,progress:async progress=>updates.report(progress)}));
    await updates.flush();controller.signal.throwIfAborted();await withJobDiagnosticContext({operation:'complete-job',jobId:job.id},()=>wait(()=>this.queue.complete(job.id,job.lease.token,prepared,{signal:controller.signal,progress:async value=>updates.report(value),beforeCommit:()=>updates.finish()})));
-  }catch(error){controller.abort(error);await updates.stop();await this.queue.release(job.id,job.lease.token,{error,paused:!this.enabled}).catch(()=>{});}
+  }catch(error){controller.abort(error);await updates.stop();await this.queue.release(job.id,job.lease.token,{error,paused:!this.enabled}).catch(releaseError=>this.report('worker-release',{error:releaseError}));}
   finally{await updates.stop();await this.queue.definition(job).discard?.(job).catch(()=>{});this.active=null;this.controller=null;}
+  return true;
  }
  async stop(){this.enabled=false;clearTimeout(this.timer);this.controller?.abort();await this.running;}
  cancel(id){if(this.active?.id===id)this.controller?.abort(new AppError('JOB_CANCELLED'));}
