@@ -2,8 +2,10 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {readFileSync} from 'node:fs';
+import {mkdtemp,realpath,rm} from 'node:fs/promises';
 import {registerHooks} from 'node:module';
 import path from 'node:path';
+import os from 'node:os';
 import {deviceProtectionAvailable,protectDeviceValue} from '../desktop/policy.js';
 
 function storage(){
@@ -50,7 +52,9 @@ test('protection requests recheck backend and availability, preserve limits and 
  assert.equal(protectDeviceValue(api,{operation:'decrypt',value:sealed},'darwin'),value);
 });
 
-test('real desktop service uses the bridge only for exact startup admission on Linux and macOS',async()=>{
+test('real desktop service uses the bridge only for exact startup admission on Linux and macOS',async t=>{
+ const parent=await realpath(os.tmpdir()),directory=await mkdtemp(path.join(parent,'observanda-device-boundary-'));
+ t.after(async()=>{assert.equal(path.dirname(directory),parent);assert.ok(path.basename(directory).startsWith('observanda-device-boundary-'));await rm(directory,{recursive:true,force:true,maxRetries:5,retryDelay:100});});
  const service=new URL('../src/desktop-service.js',import.meta.url),source=readFileSync(service,'utf8'),key='__observandaDeviceServiceBoundary';
  let iteration=0;
  for(const [platform,admission] of [['linux',true],['darwin',true],['win32',true],['freebsd',true],...['linux','darwin'].flatMap(platform=>[false,undefined,'true',1,{}].map(value=>[platform,value]))]){
@@ -69,9 +73,10 @@ test('real desktop service uses the bridge only for exact startup admission on L
     return next(specifier,context);
    }
   });
+  let receive;
   try{
-   await import(url);const receive=process.listeners('message')[0];
-   await receive({type:'start',preferencesFile:path.resolve('synthetic-desktop-preferences.json'),deviceProtection:admission});
+   await import(url);receive=process.listeners('message')[0];
+   await receive({type:'start',preferencesFile:path.join(directory,'preferences.json'),deviceProtection:admission});
    assert.equal(sent.at(-1).type,'ready');
    const admitted=['linux','darwin'].includes(platform)&&admission===true;
    assert.equal(Object.hasOwn(options,'protector'),admitted,platform+': '+JSON.stringify(admission));
@@ -82,6 +87,6 @@ test('real desktop service uses the bridge only for exact startup admission on L
     replyError=true;await assert.rejects(options.protector.protect(bytes),{code:'DEVICE_UNAVAILABLE'});
    }
    await receive({type:'stop'});await stopped;
-  }finally{hooks.deregister();if(prior===undefined)delete globalThis[key];else globalThis[key]=prior;}
+  }finally{try{if(receive&&process.connected){await receive({type:'stop'});await stopped;}}finally{hooks.deregister();if(prior===undefined)delete globalThis[key];else globalThis[key]=prior;}}
  }
 });

@@ -1,7 +1,7 @@
-const names=['electron','chrome','node','v8','openssl','uv','zlib'];
+const names=['electron','chrome','node','v8','openssl','uv','zlib','undici'];
 export function desktopRuntimeVersions(versions){
  const result={};
- for(const name of [...names,...(versions.undici?['undici']:[])]){
+ for(const name of names){
   const value=versions[name];if(typeof value!=='string'||!/^\d[\dA-Za-z.+_-]{0,99}$/.test(value))throw Error('Desktop runtime version is not identifiable.');
   result[name]=value;
  }
