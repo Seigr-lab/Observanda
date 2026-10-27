@@ -2,6 +2,9 @@ import {ResearchMaterials} from '../../src/research-materials.js';
 import {RetainedFigureDocuments} from '../../src/retained-figure-document.js';
 import {RecordValues} from '../../src/record-values.js';
 import {createFigure} from '../../src/web/figure-model.js';
+import {pathToFileURL} from 'node:url';
+import {buildBrowser} from '../../scripts/browser-build.js';
+import {createApplicationAssets} from '../../src/application-assets.js';
 import {test,expect} from '@playwright/test';import {mkdtemp,rm} from 'node:fs/promises';import path from 'node:path';import os from 'node:os';
 import {encryptedFixture} from './encrypted-fixture.js';import {sampleNotebook} from '../../src/sample.js';import {startServer} from '../../src/server.js';import {clearVault} from '../../src/encryption.js';import {navigate,preferences} from './preferences-helper.js';import {Reviews} from '../../src/reviews.js';
 const downloadedBytes=async download=>{const stream=await download.createReadStream(),chunks=[];for await(const c of stream)chunks.push(c);return Buffer.concat(chunks);};
@@ -10,7 +13,8 @@ test('a record requests review, a verified collaborator reads and signs, and Wit
  try{
   const saved=(await a.workspace.read()).book,record=saved.entries[0],figure=createFigure();figure.title='Complete peer observations';figure.series[0].name='Retained Unicode ???';figure.series[0].points=Array.from({length:33},(_,x)=>({x,y:x%7,error:null}));
   const materials=new ResearchMaterials(a.workspace),descriptor=await a.workspace.withLock(()=>new RetainedFigureDocuments(a.workspace).retain(figure)),source=await a.workspace.withLock(()=>materials.commit({kind:'analysis',recordId:record.id,title:figure.title,content:{inputs:[],outputs:[],tool:'Synthetic peer figure',version:'1',parameters:'Complete observations',figure:descriptor}})),values=new RecordValues(a.workspace),target={workspaceId:saved.id,recordId:record.id,field:'figure:'+figure.id},base=await values.read(target);await values.save({...target,expectedRevision:base.revision,value:{value:{...descriptor,source}}});
-  for(const [i,f] of [a,b].entries()){apps.push(await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'prefs'+i)}));contexts.push(await browser.newContext());}
+  const out=path.join(directory,'frontend');await buildBrowser({out});const browserAssets=await createApplicationAssets({builtDirectory:pathToFileURL(out+path.sep)});
+  for(const [i,f] of [a,b].entries()){apps.push(await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'prefs'+i),browserAssets}));contexts.push(await browser.newContext());}
   const author=await contexts[0].newPage(),reviewer=await contexts[1].newPage();for(const p of [author,reviewer]){p.setDefaultTimeout(15000);p.on('pageerror',e=>errors.push(e.message));}
   const abook=(await a.workspace.read()).book,bbook=(await b.workspace.read()).book,ar=new Reviews(a.workspace,a.deviceStore),br=new Reviews(b.workspace,b.deviceStore),ac=(await ar.run('identity',{workspaceId:abook.id})).contact,bc=(await br.run('identity',{workspaceId:bbook.id})).contact;
   for(const [i,p] of [author,reviewer].entries()){

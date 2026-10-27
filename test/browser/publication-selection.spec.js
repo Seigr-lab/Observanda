@@ -7,9 +7,12 @@ import {encryptedFixture} from './encrypted-fixture.js';
 import {clearVault} from '../../src/encryption.js';
 import {startServer} from '../../src/server.js';
 import {navigate} from './preferences-helper.js';
+import {pathToFileURL} from 'node:url';
+import {buildBrowser} from '../../scripts/browser-build.js';
+import {createApplicationAssets} from '../../src/application-assets.js';
 
 test('choose edition content in the app, retain choices across pages and export without withheld writing or automatic CSV',async({page},testInfo)=>{
- test.setTimeout(90000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-select-edition-ui-')),data=selectionBook(23),f=await encryptedFixture(directory,{...data.book,title:'workspace'}),app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json')}),requests=[],errors=[];
+ test.setTimeout(90000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-select-edition-ui-')),data=selectionBook(23),f=await encryptedFixture(directory,{...data.book,title:'workspace'}),out=path.join(directory,'frontend');await buildBrowser({out});const browserAssets=await createApplicationAssets({builtDirectory:pathToFileURL(out+path.sep)}),app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json'),browserAssets}),requests=[],errors=[];
  const selections=[],preparations=[],checkpoints=[];
  page.on('pageerror',error=>errors.push(error.message));page.on('request',r=>{if(r.url().includes('/api/'))requests.push(r.url());if(r.url().endsWith('/api/publication-selections/checkpoint'))checkpoints.push(r.postDataJSON());if(r.url().endsWith('/api/publication-selection'))selections.push(r.postDataJSON());if(r.url().endsWith('/api/publication-jobs/start'))preparations.push(r.postDataJSON());});
  try{
