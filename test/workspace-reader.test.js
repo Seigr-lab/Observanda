@@ -17,6 +17,8 @@ import {workspaceReader} from '../src/web/workspace-reader.js';
 import {ResearchRecords,recordRevision,recordRevisions} from '../src/research.js';
 import {WorkspaceEdits} from '../src/workspace-edits.js';
 import {workspaceSaveRequest} from '../src/web/workspace-edits.js';
+import {WebsiteSites} from '../src/website-sites.js';
+import {readWebsiteDocumentRegistry} from '../src/website-document-registry.js';
 
 test('record entry requires an outline and never falls back to complete record pages',async()=>{
  const book=sampleNotebook(),etag='a'.repeat(64),start={metadata:{...book,entries:[]},etag,total:book.entries.length,totalBytes:1,cursor:'next-records',notebookCounts:Object.fromEntries(book.notebooks.map(n=>[n.id,book.entries.filter(r=>r.notebookId===n.id).length]))};
@@ -202,6 +204,10 @@ test('client rejects duplicated, partial or mismatched pages before exposing a w
 test('older encrypted catalogues and document workspaces keep the validated compatibility path',async t=>{
  const f=await fixture(t,2,{formatVersion:20}),old=await workspaceReader(requestFor(f.reader)).read();
  assert.deepEqual(old.book,upgradeNotebook(f.base.book));assert.deepEqual(old.recordRevisions,recordRevisions(old.book));
+ assert.equal(await f.workspace.catalogue(readWebsiteDocumentRegistry),null);
+ await assert.rejects(new WebsiteSites(f.workspace).initialize(),{code:'STORAGE_UPGRADE_REQUIRED'});
+ assert.equal(await f.workspace.catalogue(readWebsiteDocumentRegistry),null);
+ assert.deepEqual(await f.workspace.read(),f.base);
  await assert.rejects(f.reader.start({snapshotId:f.base.etag,workspaceId:f.base.book.id}),{code:'INVALID'});
  const root=path.join(f.directory,'document'),ws=new Workspace(root);await ws.create(sampleNotebook());
  const result=await workspaceReader(requestFor(new WorkspaceReader(ws))).read();

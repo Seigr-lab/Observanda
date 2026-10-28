@@ -276,7 +276,9 @@ export class ResearchCatalogue{
  async initializeWebsiteDocuments(){
   if(await readWebsiteDocumentRegistry(this))return;
   await websiteDocumentLocks(this,{registration:true,membership:'exclusive'});
-  const researchSnapshotId=await this.head(),snapshot=await this.snapshot(researchSnapshotId),defaultSelection=await defaultWebsiteSelection(this,snapshot);
+  const researchSnapshotId=await this.head(),snapshot=await this.snapshot(researchSnapshotId);
+  if(snapshot.metadata.formatVersion!==21)throw new AppError('STORAGE_UPGRADE_REQUIRED');
+  const defaultSelection=await defaultWebsiteSelection(this,snapshot);
   await new WebsiteDocumentStore(this).initialize(researchSnapshotId,snapshot,{defaultSelection});
   await this.commitChanges(researchSnapshotId,await this.indexed(snapshot),websiteMetadataShell(snapshot.metadata),[]);
  }

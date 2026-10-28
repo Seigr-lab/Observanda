@@ -314,7 +314,9 @@ export class Workspace {
       await store.put(book);
       for(const [relative,text] of Object.entries(metadata)){this.metadataPath(relative);await store.putObject('metadata:'+relative,{text});}
       if(populate)await catalogueContext.run({root:this.root,projectId:this.projectId,labBookId:this.labBookId,vault:this.vault,db,afterCommit},()=>populate(this));
-      if(!this.projectId&&!this.labBookId)await store.initializeWebsiteDocuments();
+      // Historical snapshots retain their original metadata until the explicit
+      // format upgrade. Current website documents require current metadata.
+      if(book.formatVersion===21&&!this.projectId&&!this.labBookId)await store.initializeWebsiteDocuments();
       await store.verify(descriptor);
       await db.run('COMMIT');
       await this.writeFile(file,serialize(descriptor));
