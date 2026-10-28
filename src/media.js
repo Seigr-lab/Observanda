@@ -59,15 +59,15 @@ async function memoryInput(bytes,operation){
   await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});host='127.0.0.1:'+server.address().port;
   try{return await operation('http://'+host+'/'+token);}finally{await new Promise(resolve=>{server.close(resolve);server.closeAllConnections();});}
 }
-export async function convertMedia(args,workspace,output,policy,signal,{binary='ffmpeg',input=null,reservationBytes,admission=nativeMediaAdmission,stallMs=300000}={}){
+export async function convertMedia(args,workspace,output,policy,signal,{binary='ffmpeg',input=null,reservationBytes,admission=nativeMediaAdmission,stallMs=300000,spawnProcess=spawn}={}){
   policy=effectiveMediaPolicy(policy);
   reservationBytes??=Math.max(128*1024*1024,Math.min(Number.MAX_SAFE_INTEGER,policy.maxImagePixels*8));
   const release=await admission.acquire(reservationBytes,{signal});let parser;
-  try{parser=await parserProcess(binary);return await diagnosticPhase('convert-media',()=>convertAdmitted(args,workspace,output,policy,signal,{parser,input,stallMs}));}finally{try{await parser?.close();}finally{release();}}
+  try{parser=await parserProcess(binary);return await diagnosticPhase('convert-media',()=>convertAdmitted(args,workspace,output,policy,signal,{parser,input,stallMs,spawnProcess}));}finally{try{await parser?.close();}finally{release();}}
 }
-async function convertAdmitted(args,workspace,output,policy,signal,{parser,input,stallMs}){
+async function convertAdmitted(args,workspace,output,policy,signal,{parser,input,stallMs,spawnProcess}){
   signal?.throwIfAborted();
-  const child=spawn(parser.executable,args,{cwd:parser.cwd,env:parser.env,windowsHide:true,stdio:[input?'pipe':'ignore','pipe','pipe']});let timeout,idle,errorBytes=0,timedOut=false,lastActivity=performance.now();
+  const child=spawnProcess(parser.executable,args,{cwd:parser.cwd,env:parser.env,windowsHide:true,stdio:[input?'pipe':'ignore','pipe','pipe']});let timeout,idle,errorBytes=0,timedOut=false,lastActivity=performance.now();
   // Attach a consumer synchronously. Node drains unconsumed child stdio on exit;
   // opening the encrypted destination first can otherwise discard a short result.
   // PassThrough keeps bounded buffering and propagates disk backpressure.
@@ -79,7 +79,10 @@ async function convertAdmitted(args,workspace,output,policy,signal,{parser,input
   const closed=new Promise(resolve=>child.once('close',()=>{clearTimeout(timeout);clearInterval(idle);resolve();}));
   child.stderr.on('data',chunk=>{errorBytes+=chunk.length;if(errorBytes>2*1024*1024)stop();});
   const completed=new Promise((resolve,reject)=>{child.once('error',e=>reject(new AppError(e.code==='ENOENT'?'MEDIA_TOOL':'MEDIA_INVALID')));child.once('close',code=>code!==0||timedOut?reject(new AppError(timedOut?'MEDIA_LIMIT':input?({21:'SVG_EXTERNAL',22:'SVG_LIMIT',23:'SVG_STATIC',24:'MEDIA_LIMIT'}[code]??'MEDIA_INVALID'):'MEDIA_INVALID')):resolve());});
-  const feeding=input?pipeline(input.stream(),child.stdin):Promise.resolve();
+  // Input construction can fail synchronously (for example after revocation).
+  // Keep that failure inside the same drain path as streaming and disk errors;
+  // the already-launched child must stop before its permit is released.
+  const feeding=input?Promise.resolve().then(()=>pipeline(input.stream(),child.stdin)):Promise.resolve();
   // A closed stdout is not proof of a successful conversion. Keep the output
   // temporary until the process and both pipelines have completed successfully.
   const writing=writeContent(workspace,output,captured,{maxBytes:policy.maxPreparedBytes,reserveBytes:policy.reserveBytes,signal,beforeCommit:async saved=>{await Promise.all([completed,feeding,capturing]);if(!saved.size)throw new AppError('MEDIA_INVALID');}});
@@ -91,6 +94,8 @@ async function convertAdmitted(args,workspace,output,policy,signal,{parser,input
     // before writeContent finishes cleanup. Report the cause, not that secondary abort.
     const writeError=results[0].status==='rejected'?results[0].reason:null;
     if(writeError&&!['ABORT_ERR','ERR_STREAM_PREMATURE_CLOSE','EPIPE'].includes(writeError.code))throw writeError;
+    const inputError=results[2].status==='rejected'?results[2].reason:null;
+    if(inputError&&!['ABORT_ERR','ERR_STREAM_PREMATURE_CLOSE','EPIPE'].includes(inputError.code))throw inputError;
     if(results[1].status==='rejected')throw results[1].reason;
     throw error;
   }

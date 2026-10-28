@@ -9,6 +9,22 @@ import {convertMedia,mediaCommand} from '../src/media.js';
 import {unseal} from '../src/encryption.js';
 import {defaultMediaPolicy} from '../src/media-policy.js';
 import {NativeMediaAdmission} from '../src/native-media-admission.js';
+import {spawn} from 'node:child_process';
+import {OperationalDiagnostics,withDiagnostics} from '../src/operational-diagnostics.js';
+
+test('an input construction failure drains the launched converter before returning capacity', {timeout:10000},async t=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-media-input-failure-'));let child,closed=false,parserDirectory;
+ t.after(async()=>{if(child&&!closed){child.kill('SIGKILL');await new Promise(resolve=>child.once('close',resolve));}await rm(root,{recursive:true,force:true});});
+ const sink=new OperationalDiagnostics(),admission=new NativeMediaAdmission({active:1,memoryBytes:1024,reserveBytes:1,available:()=>10000});
+ const failure=Object.assign(Error('synthetic private input location'),{code:'EIO'}),workspace={vault:{},requireStorageKey:async()=>{}};
+ const input={stream(){assert.ok(child?.pid);throw failure;}},spawnProcess=(...args)=>{
+  parserDirectory=args[2].cwd;child=spawn(...args);child.once('close',()=>{assert.equal(admission.stats().active,1,'capacity was released before child closure');closed=true;});return child;
+ };
+ await assert.rejects(withDiagnostics(sink,()=>convertMedia(['-e','setInterval(()=>{},1000)'],workspace,path.join(root,'prepared'),defaultMediaPolicy(),null,{binary:process.execPath,input,admission,reservationBytes:512,spawnProcess})),error=>error===failure);
+ assert.equal(closed,true);assert.throws(()=>process.kill(child.pid,0),{code:'ESRCH'});assert.equal(admission.stats().active,0);
+ assert.deepEqual(await readdir(root),[]);await assert.rejects(readdir(parserDirectory),{code:'ENOENT'});
+ const {entries}=await sink.snapshot(),phases=entries.filter(row=>row.phase==='convert-media');assert.equal(phases.length,1);assert.equal(phases[0].code,'EIO');assert.doesNotMatch(JSON.stringify(entries),/synthetic private input location/);
+});
 
 test('a fast child cannot lose output while encrypted storage is still opening', {timeout:10000},async t=>{
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-fast-media-'));t.after(()=>rm(root,{recursive:true,force:true}));
