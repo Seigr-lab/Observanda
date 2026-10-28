@@ -5,11 +5,25 @@
 [![Hippocratic License HL3-FULL](https://img.shields.io/static/v1?label=Hippocratic%20License&message=HL3-FULL&labelColor=5e2751&color=bc8c3d)](LICENSE.md)
 [![Sponsor Observanda](https://img.shields.io/badge/Sponsor-Observanda-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/Seigr-lab)
 
-**A local authoring workspace for research, learning, and creative work.**
+**A local authoring workspace for documenting projects, keeping evidence and publishing selected work.**
 
-Observanda combines writing, evidence, project tools and visual publishing. Use it for a field book, research notebook, studio journal, technical documentation or teaching material. Export PDFs for sharing or printing, and publish static websites.
+Observanda brings together structured writing, original files, measurements, project tools, PDFs and static websites. Use it to document an engineering project, keep a research or field notebook, develop teaching material, maintain a studio journal or record a personal undertaking. Start with a few notes and photographs, or connect methods, repeated trials, datasets, reviews and results as the work develops.
 
-Organize your work locally, connect it to its sources, and choose what to share. Everyday authoring does not require a cloud account or an internet connection.
+The same authoring tools can serve an individual hobby, a classroom, a workshop or work within a laboratory or industrial organization. The amount of structure is your choice; a formal experiment is not required to write a useful record.
+
+## Your machine, your data
+
+Observanda is designed to run on your own computer, with workspaces in storage locations you choose. **Everyday authoring requires no Observanda cloud account, subscription or externally hosted server.** Your working copy stays in your chosen storage; sharing and publishing are explicit actions.
+
+- **Work locally and offline.** Write, organize records, retain evidence and use the included tools after installation without an internet connection.
+- **Keep the application infrastructure local.** The packaged desktop app includes its application service and database runtime and manages them on your machine. You do not need to administer a separate database server or subscribe to another product for ordinary authoring.
+- **Control access.** Protect workspaces with encryption, password or authorized-device access, and separately configured recovery options.
+- **Keep portable copies.** Back up and restore workspaces, move or copy individual projects and lab books, and retrieve retained original files. PDF and static website exports can be read without Observanda.
+- **Choose what leaves your workspace.** Select material for a shared copy, document or website. Connecting a publishing destination is optional; private authoring does not require one.
+
+This is the practical basis of data sovereignty in Observanda: you control where the working data lives, access to it, its backups and the material you release. You also remain responsible for protecting your computer and keeping recoverable backups.
+
+Network features need only the connections you choose to use, such as a remote publishing destination, an external calendar source or collaboration with another installation. Building from source and obtaining application dependencies can require downloads. Local operation does not mean that every optional integration works offline.
 
 ## Alpha release
 
@@ -24,6 +38,8 @@ Use copies of important work when evaluating the Alpha, keep independent backups
 **Workspace → Projects → Lab books → Records**
 
 Keep separate workspaces for personal work, a studio, a laboratory or an organization. Projects can contain subprojects and several lab books, each following its own subject or activity.
+
+A lab book is a collection of related records. It can be a design notebook, field diary, course journal, maintenance log or collection of recipes; the name does not restrict it to laboratory work.
 
 Start with a blank book, choose a starter template or define your own record types and fields. Books in the same project can use different structures. Enable only the templates and tools you need.
 
@@ -55,6 +71,29 @@ Data tools let you:
 - Inspect a measurement's supporting data and, where a source mapping exists, follow it to the original bytes or fields.
 - Create figures with panels, annotations, intervals and boundaries, while retaining the data and interpretation behind them.
 
+### Work with measurements and derived data
+
+Keep the original file, the interpreted dataset and the conclusions as distinct, connected material. Supported numeric representations preserve large integers and explicit-base values without silently converting them to ordinary floating-point numbers. Units, missing values, exclusions, calibration references and time meanings can be declared alongside the data.
+
+Built-in dataset workflows include:
+
+- Derived columns, conditional calculations and joins between retained datasets.
+- Reusable calculation recipes and calculation graphs, with saved input revisions.
+- Grouped summaries, quantiles, covariance, Pearson correlation and linear or weighted affine fits.
+- Fourier spectra and cumulative-sum (CUSUM) analyses under explicit input and calculation policies.
+- Declared coordinate frames and affine transformations, clock synchronization models and first-order statistical uncertainty propagation.
+- Comparisons of retained results, including missing, excluded, unresolved and mismatched observations.
+
+Calculations retain their methods and applicable precision policies. Some operations are exact; others require explicit approximation. Plot coordinates can be approximate even when the underlying values are retained exactly. A calculation, matching file hash or signed review does not by itself establish scientific correctness.
+
+### Bring existing work into a project
+
+Attach source files directly, import supported tabular data, or use the reviewed external-logbook import workflow. That workflow inspects a declared source inventory, stages originals privately, lets you map content and relationships, and applies the reviewed result with its provenance. It requires a compatible source declaration; it is not a universal importer for arbitrary folders or websites.
+
+For recurring work, local intake proposals can attach preparation material, new evidence, external analysis results or record amendments to a specified saved record. Preview, staging and application are separate actions, with saved receipts and resumable jobs. An optional local command-line interface and authenticated local API support this workflow; a folder watcher reports proposals without applying them automatically.
+
+External analysis programs remain outside Observanda. Their inputs, outputs, tool versions and declared methods can be retained without executing imported scripts. Manual writing and ordinary file attachments require no integration or automation.
+
 ## Tools for everyday work
 
 Enable the tools you need alongside your books.
@@ -80,6 +119,13 @@ Edit page dimensions, margins, columns, fonts, headers and footers. Arrange imag
 
 Choose a private or public edition and include or omit individual sections. Public output requires review of the exact included content; later content or document-setting changes require a new review. Retained PDF exports remain available to download after further edits.
 
+The desktop PDF workflow also supports:
+
+- Layout checks for measured overflow, image resolution and link destinations.
+- PDF/A-2u archival output, checked with the bundled validator when that capability is available in the installation.
+- PDF/UA-1 automated accessibility checks, with human accessibility review still required.
+- Trim and bleed settings, crop marks, decorative backgrounds extending into bleed, and retained printer ICC colour profiles.
+
 Commercial-print PDF/X export is not implemented. Physical printing and assistive-technology testing remain incomplete.
 
 ## Create independent websites
@@ -91,7 +137,7 @@ Create multiple independent websites, each with its own pages, design, public co
 - Compose pages and arrange text, images, galleries and selected research content.
 - Choose fonts and colours, and customize shared or page-specific headers, sidebars and footers.
 - Select the records, sections, attachments, figures and supporting data that belong in each public edition.
-- Preview and review an edition before publishing.
+- Browse a draft at desktop or phone width, then prepare and review a separate edition before publishing.
 - Publish to GitHub Pages, deploy to an SSH host or export static files for another host.
 - Retain prepared editions for later review and republication.
 
@@ -107,19 +153,52 @@ Request digitally signed reviews of specific saved record revisions. A review id
 
 Organizations and teams provide membership, invitations and administration. Membership is separate from permission to open research: joining a team does not automatically grant access to its workspaces or lab books.
 
+The source also includes direct live-connection workflows between installations for authorized research access and editing operations. Shared authoring remains unfinished in this Alpha; do not assume complete simultaneous editing or automatic synchronization of independent workspace copies.
+
+Revoking access controls future permitted operations; it cannot erase files or plaintext that a recipient already holds.
+
 ## Make it fit your work
 
 Starter templates cover research and development, analytical and quality-control work, education, clinical and forensic documentation, biosafety, environmental and agricultural work, computing, physical prototyping, audio software, creative practice and beekeeping. Adapt them or create your own.
 
 A template provides record structure; it does not provide specialist analysis, clinical governance or regulatory validation.
 
-An ecology project could combine seasonal observations, hive inspections and a public nature journal. An instrument-building project could connect circuit trials, parts, recordings and a build guide. A studio could keep material studies and critiques beside a portfolio. A personal book could follow recipes, fermentation batches, repairs or night-sky observations.
+## Examples: from a first notebook to a larger project
 
-## Keep control of your work
+These examples combine the available tools into different working practices. Each can start with one project and one book, using only the features that help document the work.
 
-Workspaces use encrypted storage, with password or authorized-device access and separately configured recovery options. Encrypted backup and restore are available. Keep independent backups and recovery material separately from the working copy.
+| Project | What you could document | What you could make from it |
+| --- | --- | --- |
+| Engineering prototype | Design decisions, component inventory, bills of materials, assembly photographs, firmware sources, test conditions and repeated measurements. | A test report, an assembly guide or a website showing selected development stages. |
+| Laboratory method development | Sample identities, preparation steps, instrument exports, calibration references, unsuccessful attempts and comparisons between retained results. | A method document with traceable figures and a review of a specific saved revision. |
+| Industrial process investigation | Equipment and material records, observed deviations, supplied acceptance criteria, maintenance observations and evidence from repeated trials. | An internal investigation report that distinguishes observations, assessments and proposed changes. |
+| Field ecology or an apiary | Seasonal observations, site visits, hive inspections, photographs, recordings and environmental measurements. | A field notebook, a seasonal PDF summary or a public nature journal with a selected subset of evidence. |
+| Teaching or independent study | Reading notes, citations, worked examples, practical activities, datasets and reflections on what changed between attempts. | Course notes, a student project book or a static teaching resource. |
+| Art, design or music | Material studies, sketches, drafts, recording takes, critiques, equipment settings and references to earlier versions. | A process journal, an illustrated PDF or a portfolio website, with private working notes kept separate. |
+| Software or instrument development | Requirements, design alternatives, source snapshots, test logs, binary captures and externally generated analysis results. | Technical documentation connecting an observation to the retained source and test evidence behind it. |
+| Home workshop or personal hobby | Repair steps, parts, recipes, fermentation batches, garden observations or night-sky notes. | A searchable personal reference, a printable procedure or a small project website. |
 
-Local authoring, collaboration and public publishing are separate choices. You decide which work stays private and which material belongs in each shared copy or website.
+For example, a sensor-building project might use a design book for circuit choices, a construction book for assembly and parts, and a test book for recordings and measurements. A test record can reference the exact saved method and retain the original instrument export. Later, a PDF can explain the build while a website presents only the results and images chosen for publication.
+
+A smaller project can stay simple: record a repair, attach before-and-after photographs, note the replacement part and write what worked. Add fields, inventory links or a reusable template only when they become useful.
+
+## Start with one useful record
+
+1. **Create a workspace** in a folder you control, choose its access protection and configure recovery separately.
+2. **Create a project and a lab book.** Choose an available template or start with a blank book.
+3. **Write one record.** Describe what you are doing, what you observed and what remains uncertain. Attach original files when they help.
+4. **Connect the next piece of work.** Link a related record, a saved method, a dataset or a figure. Add more structure as the project needs it.
+5. **Back up and share deliberately.** Verify a separate backup. When useful, prepare a PDF, reviewed website edition or encrypted shared copy containing the intended material.
+
+The offline guide under **Preferences → Help** explains individual workflows, their source requirements and their limitations.
+
+## Back up and recover
+
+Encrypted backup and restore are available. Keep independent backups and recovery material separately from the working copy. Let backup verification finish, then test restoration into a separate location and retrieve representative records, earlier revisions and original evidence.
+
+Configure recovery before it is needed. Resetting application preferences cannot decrypt a workspace whose access credentials are lost. Encryption protects stored content; protecting an unlocked computer remains part of protecting the work.
+
+## Reading and interface preferences
 
 Adjust interface language, text size and spacing independently of your published designs. Translations are incomplete; untranslated interface and Help text falls back to English.
 
