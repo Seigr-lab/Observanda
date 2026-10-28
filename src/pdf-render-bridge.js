@@ -2,14 +2,19 @@ import {createHash} from 'node:crypto';
 import {AppError} from './errors.js';
 import {validPdfPreflight} from './pdf-preflight.js';
 import {validPdfOutputValidation} from './web/pdf-output-validation-model.js';
+import {nativeResources} from './native-resource-budget.js';
+const MiB=1024*1024;
+// Account for the remote renderer in the service that also admits databases
+// and converters. These are peak-memory estimates, not OS-enforced limits.
+const renderBytes=input=>512*MiB+(input?.outputProfile&&!input?.preflightOnly?128*MiB:0)+4*Buffer.byteLength(typeof input?.html==='string'?input.html:'')+2*Buffer.byteLength(typeof input?.iccProfile==='string'?input.iccProfile:'');
 // Only a completed render carries bytes. Capability checks do not reserve the
 // renderer or interfere with cancellation of a separate render request.
-export function pdfRenderBridge(channel){
+export function pdfRenderBridge(channel,{budget=nativeResources}={}){
  const pending=new Map();let next=0,closed=false;
  const send=value=>{if(!closed&&channel.connected)channel.send(value);};
  const receive=message=>{
   if(!['pdf-result','pdf-capabilities-result'].includes(message?.type))return;
-  const entry=pending.get(message.id);if(!entry||message.type!==(entry.kind==='capabilities'?'pdf-capabilities-result':'pdf-result'))return;entry.finish();
+  const entry=pending.get(message.id);if(!entry||message.type!==(entry.kind==='capabilities'?'pdf-capabilities-result':'pdf-result'))return;entry.finish({confirmed:true});
   if(entry.kind==='capabilities'){entry.resolve({archival:message.archival===true});return;}
   if(entry.cancelledError){entry.reject(entry.cancelledError);return;}
   if(message.error){entry.reject(new AppError(message.error));return;}
@@ -25,9 +30,17 @@ export function pdfRenderBridge(channel){
  function request(kind,input,{signal}={}){
   signal?.throwIfAborted();if(closed||!channel.connected)return Promise.reject(new AppError('PDF_DESKTOP'));
   if(kind==='render'&&[...pending.values()].some(entry=>entry.kind==='render'))return Promise.reject(new AppError('PDF_BUSY'));
+  let reservation;
+  try{if(kind==='render')reservation=budget.reserve('media',renderBytes(input));}
+  catch(error){return Promise.reject(error);}
   return new Promise((resolve,reject)=>{
    const id=++next;let timer;
-   const finish=()=>{clearTimeout(timer);signal?.removeEventListener('abort',abort);pending.delete(id);};
+   const finish=({confirmed=false}={})=>{
+    clearTimeout(timer);signal?.removeEventListener('abort',abort);pending.delete(id);
+    // Losing IPC does not prove that the renderer or its validator stopped.
+    // Retain unknown work in the service budget instead of admitting its place.
+    if(confirmed)reservation?.release();else reservation?.uncertainExit();
+   };
    const cancel=error=>{
     const entry=pending.get(id);if(!entry||entry.cancelledError)return;
     if(kind!=='render'){finish();reject(error);return;}

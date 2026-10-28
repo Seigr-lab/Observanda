@@ -4,9 +4,10 @@ import {EventEmitter} from 'node:events';
 import {createHash} from 'node:crypto';
 import {pdfRenderBridge} from '../src/pdf-render-bridge.js';
 import {PDF_ARCHIVAL_VALIDATOR_SHA256} from '../src/web/pdf-archival-model.js';
+import {NativeResourceBudget} from '../src/native-resource-budget.js';
 const bytes=Buffer.from('%PDF-test transport only'),sha256=createHash('sha256').update(bytes).digest('hex'),preflight={version:1,status:'ok',findings:[],truncated:false};
 const receipt={version:1,profile:'pdfa-2u',sha256,validator:'veraPDF',validatorVersion:'1.30.3',validatorSha256:PDF_ARCHIVAL_VALIDATOR_SHA256,passedRules:1,passedChecks:1};
-function fixture(){const channel=new EventEmitter();channel.connected=true;const sent=[];channel.send=value=>sent.push(value);const bridge=pdfRenderBridge(channel);return {bridge,sent,reply(value){channel.emit('message',{type:'pdf-result',id:sent.at(-1).id,bytes:bytes.toString('base64'),sha256,preflight,...value});}};}
+function fixture(){const channel=new EventEmitter();channel.connected=true;const sent=[],budget=new NativeResourceBudget({memoryBytes:1024*1024*1024,reserveBytes:1,available:()=>16*1024*1024*1024});channel.send=value=>sent.push(value);const bridge=pdfRenderBridge(channel,{budget});return {bridge,sent,budget,reply(value){channel.emit('message',{type:'pdf-result',id:sent.at(-1).id,bytes:bytes.toString('base64'),sha256,preflight,...value});}};}
 test('archival bridge binds validation to the requested final bytes and ordinary output accepts no receipt',async()=>{
  const f=fixture();try{
   const accepted=f.bridge.render({outputProfile:'pdfa-2u'});f.reply({validation:receipt});assert.deepEqual((await accepted).validation,receipt);
@@ -30,11 +31,28 @@ test('cancellation retains the render reservation until desktop cleanup is ackno
  const f=fixture(),controller=new AbortController(),reason=new Error('selected render cancelled');let settled=false;
  try{
   const first=f.bridge.render({},{signal:controller.signal}),check=assert.rejects(first,error=>error===reason);void first.then(()=>{settled=true;},()=>{settled=true;});const id=f.sent.at(-1).id;
-  controller.abort(reason);await new Promise(resolve=>setImmediate(resolve));assert.equal(settled,false);assert.deepEqual(f.sent.at(-1),{type:'pdf-cancel',id});await assert.rejects(f.bridge.render({}),{code:'PDF_BUSY'});
-  f.reply({id,error:'PDF_CANCELLED'});await check;assert.equal(settled,true);const next=f.bridge.render({});f.reply({});assert.equal((await next).sha256,sha256);
+  controller.abort(reason);await new Promise(resolve=>setImmediate(resolve));assert.equal(settled,false);assert.deepEqual(f.sent.at(-1),{type:'pdf-cancel',id});await assert.rejects(f.bridge.render({}),{code:'PDF_BUSY'});assert.equal(f.budget.stats().reservedBytes,512*1024*1024);
+  f.reply({id,error:'PDF_CANCELLED'});await check;assert.equal(settled,true);assert.equal(f.budget.stats().reservedBytes,0);const next=f.bridge.render({});f.reply({});assert.equal((await next).sha256,sha256);
  }finally{f.bridge.close();}
 });
 test('missing cancellation acknowledgment closes the bridge instead of admitting another render',async t=>{
  t.mock.timers.enable({apis:['setTimeout']});const f=fixture(),controller=new AbortController();
- try{const first=f.bridge.render({},{signal:controller.signal}),check=assert.rejects(first,error=>error===controller.signal.reason);controller.abort();t.mock.timers.tick(10000);await check;await assert.rejects(f.bridge.render({}),{code:'PDF_DESKTOP'});}finally{f.bridge.close();}
+ try{const first=f.bridge.render({},{signal:controller.signal}),check=assert.rejects(first,error=>error===controller.signal.reason);controller.abort();t.mock.timers.tick(10000);await check;await assert.rejects(f.bridge.render({}),{code:'PDF_DESKTOP'});assert.equal(f.budget.stats().reservedBytes,512*1024*1024);assert.equal(f.budget.stats().uncertainExits,1);}finally{f.bridge.close();}
+});
+
+test('service database reservations and current free memory govern desktop PDF admission',async()=>{
+ const f=fixture(),database=f.budget.reserve('database',512*1024*1024);
+ try{
+  await assert.rejects(f.bridge.render({outputProfile:'pdfa-2u'}),{code:'WORKLOAD_BUSY'});assert.equal(f.sent.length,0);
+  const capabilities=f.bridge.capabilities();f.reply({type:'pdf-capabilities-result',archival:true});assert.deepEqual(await capabilities,{archival:true});assert.equal(f.budget.stats().reservedBytes,512*1024*1024);
+  database.release();const rendered=f.bridge.render({outputProfile:'pdfa-2u',html:'Synthetic PDF'});assert.equal(f.budget.stats().reservedBytes,640*1024*1024+4*Buffer.byteLength('Synthetic PDF'));f.reply({validation:receipt});await rendered;assert.equal(f.budget.stats().reservedBytes,0);
+  const sent=f.sent.length;f.budget.available=()=>0;await assert.rejects(f.bridge.render({}),{code:'WORKLOAD_BUSY'});assert.equal(f.sent.length,sent);
+ }finally{database.release();f.bridge.close();}
+});
+
+test('an uncertain desktop send retains its reservation and invalid output releases acknowledged work',async()=>{
+ const f=fixture();try{
+  const first=f.bridge.render({});f.reply({bytes:'invalid'});await assert.rejects(first,{code:'PDF_OUTPUT'});assert.equal(f.budget.stats().reservedBytes,0);
+  const pending=f.bridge.render({}),rejected=assert.rejects(pending,{code:'PDF_CANCELLED'});f.bridge.close();await rejected;assert.equal(f.budget.stats().uncertainExits,1);assert.equal(f.budget.stats().reservedBytes,512*1024*1024);
+ }finally{f.bridge.close();}
 });
