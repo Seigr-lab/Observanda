@@ -2,7 +2,7 @@ import {githubPlanReader,requireGithubPlanCollections} from './github-plan-index
 import {contentHash} from './file-content.js';
 import {contentBuffer} from './file-content.js';
 import {buildGithubTree,verifyRemoteGithubTree} from './github-trees.js';
-import {admitGithubPlan} from './github-publication-plan.js';
+import {admitGithubPlan,githubPagesProtection} from './github-publication-plan.js';
 import messages from './web/locales/en/githubTransfer.json' with {type:'json'};
 import {digest} from './storage.js';
 import {AppError} from './errors.js';
@@ -12,6 +12,7 @@ const sha=value=>typeof value==='string'&&/^[a-f0-9]{40}$/.test(value);
 // Checkpoints precede the branch write. Retrying a lost response reconciles it;
 // content-addressed blobs, trees and explicitly dated commits are reusable.
 export async function deployGithub(publisher,candidate,config,{plan=null,journal,save,guard,progress=async()=>{},signal,pushed=async()=>{}}){
+ if(plan)admitGithubPlan(plan);
  const c=config.github,base=`/repos/${c.owner}/${c.repository}`;
  const call=async(route,method='GET',data,missing=false)=>{signal?.throwIfAborted();await guard(method==='GET'?{phase:'read'}:undefined);return publisher.github(base+route,method,data,missing,signal);};
  const checkpoint=async()=>{await guard(journal.receipt?{phase:'receipt'}:undefined);await save(journal);};
@@ -22,7 +23,7 @@ export async function deployGithub(publisher,candidate,config,{plan=null,journal
   if(!plan&&reviewed.requiresReview)throw new AppError('PUBLISH_OWNERSHIP');
   // Recheck after hashing and tree inspection, before the first network write.
   await publisher.check({plan:reviewed});
-  Object.assign(journal,{...(reviewed.document?{document:reviewed.document,uploadedCount:0}:{entries:reviewed.entries,preservedEntries:reviewed.preservedEntries,removed:reviewed.removed,uploaded:[]}),baseTree:reviewed.baseTree,repositoryId:reviewed.repositoryId,parent:reviewed.head,createdAt:journal.createdAt??new Date().toISOString()});await checkpoint();
+  Object.assign(journal,{...(reviewed.document?{document:reviewed.document,uploadedCount:0}:{entries:reviewed.entries,preservedEntries:reviewed.preservedEntries,removed:reviewed.removed,uploaded:[]}),baseTree:reviewed.replacement?null:reviewed.baseTree,...(reviewed.replacement?{treeMode:'replace'}:{}),repositoryId:reviewed.repositoryId,parent:reviewed.head,createdAt:journal.createdAt??new Date().toISOString()});await checkpoint();
  }
  if(!journal.document&&!journal.preservedEntries||!Number.isSafeInteger(journal.repositoryId))throw new AppError('PUBLISH_STALE');
  if(journal.document)requireGithubPlanCollections(journal.document);
@@ -33,6 +34,18 @@ export async function deployGithub(publisher,candidate,config,{plan=null,journal
  const repo=await call('');if(repo.id!==journal.repositoryId||!repo.permissions?.push)throw new AppError('PUBLISH_STALE');
  const head=await call(`/git/ref/heads/${c.branch}`,'GET',undefined,true),current=head?.object?.sha??null;
  if(current!==journal.parent&&(!journal.commit||current!==journal.commit))throw new AppError('PUBLISH_OWNERSHIP');
+ const archiveBranch=plan?.replacement?.archiveBranch;
+ if(archiveBranch){
+  if(archiveBranch===c.branch||!journal.parent)throw new AppError('PUBLISH_STALE');
+  const route='/git/ref/heads/'+archiveBranch,existing=await call(route,'GET',undefined,true);
+  if(existing){if(!journal.archiveAttempted||existing.object?.sha!==journal.parent)throw new AppError('PUBLISH_ARCHIVE_BRANCH');}
+  else{
+   journal.archiveAttempted=true;await checkpoint();
+   await call('/git/refs','POST',{ref:'refs/heads/'+archiveBranch,sha:journal.parent});
+  }
+  if((await call(route)).object?.sha!==journal.parent)throw new AppError('PUBLISH_ARCHIVE_BRANCH');
+  journal.archive={branch:archiveBranch,commit:journal.parent};await checkpoint();
+ }
  if(!journal.commit||current!==journal.commit){
   for await(const entry of reader.values('uploads',{offset:journal.document?journal.uploadedCount:0})){
    if(uploaded?.has(entry.sha))continue;
@@ -51,6 +64,8 @@ export async function deployGithub(publisher,candidate,config,{plan=null,journal
   }
   const latest=await call(`/git/ref/heads/${c.branch}`,'GET',undefined,true);
   if((await call('')).id!==journal.repositoryId)throw new AppError('PUBLISH_STALE');
+  if(archiveBranch&&(await call('/git/ref/heads/'+archiveBranch,'GET',undefined,true))?.object?.sha!==journal.parent)throw new AppError('PUBLISH_ARCHIVE_BRANCH');
+  if(plan?.version===3&&c.pages!==false){const latestPages=await call('/pages','GET',undefined,true);if(JSON.stringify(pagesSource(latestPages))!==JSON.stringify(plan.pages)||JSON.stringify(githubPagesProtection(latestPages))!==JSON.stringify(plan.pagesProtection))throw new AppError('PUBLISH_STALE');}
   if((latest?.object?.sha??null)!==journal.parent){if(latest?.object?.sha!==journal.commit)throw new AppError('PUBLISH_STALE');}
   else{
    // Never erase this marker on cancellation or error: the request can succeed
@@ -62,7 +77,7 @@ export async function deployGithub(publisher,candidate,config,{plan=null,journal
  }
  const verified=await call(`/git/ref/heads/${c.branch}`);
  if(verified.object?.sha!==journal.commit)throw new AppError('PUBLISH_STALE');
- journal.receipt??={releaseId:candidate.id,commit:journal.commit,at:new Date().toISOString(),status:'uploaded',manifestHash:contentHash(await candidate.files.get('publication.json'))};
+ journal.receipt??={releaseId:candidate.id,commit:journal.commit,at:new Date().toISOString(),status:'uploaded',...(journal.archive?{archive:journal.archive}:{}),manifestHash:contentHash(await candidate.files.get('publication.json'))};
  await checkpoint();await pushed(journal.receipt,journal);
  await report(messages.verifying);
  await verifyRemoteGithubTree(call,journal.tree,expected,{signal});
@@ -70,7 +85,10 @@ export async function deployGithub(publisher,candidate,config,{plan=null,journal
   journal.receipt.status='uploaded-repository-only';await checkpoint();await pushed(journal.receipt,journal);
   await report(messages.repositoryVerified);return journal.receipt;
  }
- const pages=await call('/pages','GET',undefined,true),matches=p=>p?.build_type==='legacy'&&p.source?.branch===c.branch&&p.source?.path==='/';
+ const pages=await call('/pages','GET',undefined,true);
+ const protection=plan?.pagesProtection,protectedSettings=p=>!protection||JSON.stringify(githubPagesProtection(p))===JSON.stringify(protection);
+ if(!protectedSettings(pages))throw new AppError('PUBLISH_PAGES');
+ const matches=p=>p?.build_type==='legacy'&&p.source?.branch===c.branch&&p.source?.path==='/';
  if(pages&&!matches(pages)&&(!plan||JSON.stringify(pagesSource(pages))!==JSON.stringify(plan.pages)))throw new AppError('PUBLISH_PAGES');
  journal.receipt.status='uploaded-awaiting-pages';
  if(!matches(pages)){
@@ -78,7 +96,8 @@ export async function deployGithub(publisher,candidate,config,{plan=null,journal
   await guard();signal?.throwIfAborted();
   try{
    await publisher.github(base+'/pages',pages?'PUT':'POST',{source:{branch:c.branch,path:'/'},build_type:'legacy'},false,signal);
-   if(!matches(await call('/pages')))throw new AppError('PUBLISH_PAGES');
+   const updated=await call('/pages');
+   if(!matches(updated)||!protectedSettings(updated))throw new AppError('PUBLISH_PAGES');
   }catch(error){signal?.throwIfAborted();if(['JOB_LEASE','JOB_CANCELLED','PUBLISH_STALE'].includes(error.code))throw error;journal.receipt.status='uploaded-pages-setup-required';}
  }
  await checkpoint();await pushed(journal.receipt,journal);await report(messages.livePending);return journal.receipt;

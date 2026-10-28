@@ -15,6 +15,39 @@ export function publishingUI({state,api,esc,field,option,render,notify,showDialo
   const setupText=(key,values)=>t('repositorySetup',key,values);
   let emptyReview=null;
   const planPageRequests=new WeakMap();
+  let planTimer=null;const planRequests=new WeakMap();
+  function renderPlan(){const approvals=['review-confirm','rollback-confirm'].map(id=>[id,!!document.getElementById(id)?.checked]);render();for(const [id,checked] of approvals){const el=document.getElementById(id);if(el)el.checked=checked;}}
+  function schedulePlan(preview){
+    clearTimeout(planTimer);const context=websiteContext(state),route=location.hash,operationId=preview.destinationOperation.id;
+    planTimer=setTimeout(async()=>{
+      if(state.preview!==preview||context!==websiteContext(state)||route!==location.hash||preview.destinationOperation?.id!==operationId)return;
+      try{
+        const result=await api('/api/publishing/plan-operation',{id:preview.destinationOperation.id},{adopt:false,websitePin:preview.websitePin});
+        if(state.preview!==preview||context!==websiteContext(state)||route!==location.hash||preview.destinationOperation?.id!==operationId)return;
+        preview.destinationOperation=result.job;
+        if(result.plan){preview.destinationPlan=result.plan;renderPlan();if(preview.publishAfterPlan&&!result.plan.requiresReview){preview.publishAfterPlan=false;await action({dataset:{action:'publish-release'}});}return;}
+        const status=document.getElementById('destination-operation-status');if(status)status.textContent=result.job.message??result.job.progress.stage;
+        if(['queued','running'].includes(result.job.state))schedulePlan(preview);else renderPlan();
+      }catch(error){if(state.preview===preview&&context===websiteContext(state)&&route===location.hash&&preview.destinationOperation?.id===operationId){notify(error.message,true);preview.destinationOperation=null;renderPlan();}}
+    },750);
+  }
+  async function restorePlan(preview){
+    if(!preview||preview.destination?.kind!=='github')return;const context=websiteContext(state),route=location.hash,request=planRequests.get(preview);
+    try{
+      const result=await api('/api/publishing/plan-operation',{action:'current',reviewId:preview.id,configEtag:preview.configEtag,rollbackReview:preview.rollback?.id??null},{adopt:false,websitePin:preview.websitePin});
+      if(state.preview!==preview||context!==websiteContext(state)||route!==location.hash||!result.job||planRequests.get(preview)!==request)return;
+      preview.destinationOperation=result.job;if(result.plan)preview.destinationPlan=result.plan;renderPlan();if(['queued','running'].includes(result.job.state))schedulePlan(preview);
+    }catch(error){if(state.preview===preview&&context===websiteContext(state)&&route===location.hash&&planRequests.get(preview)===request)notify(error.message,true);}
+  }
+  async function requestPlan(preview,options={},publishAfterPlan=false){
+    const context=websiteContext(state),route=location.hash;clearTimeout(planTimer);planRequests.set(preview,(planRequests.get(preview)??0)+1);
+    preview.destinationPlan=null;preview.publishAfterPlan=publishAfterPlan;preview.destinationOperation={state:'queued',progress:{stage:publicationText('repositoryReviewStarting')}};renderPlan();
+    try{
+      const result=await api('/api/publishing/plan',{id:preview.id,configEtag:preview.configEtag,commandId:crypto.randomUUID(),background:true,...options,...(preview.rollback?{rollbackReview:preview.rollback.id}:{})},{adopt:false,websitePin:preview.websitePin});
+      if(state.preview!==preview||context!==websiteContext(state)||route!==location.hash)return;
+      preview.destinationOperation=result.job;renderPlan();schedulePlan(preview);
+    }catch(error){if(state.preview===preview){preview.destinationOperation=null;renderPlan();}throw error;}
+  }
   function initializationReview(){
     if(!emptyReview||emptyReview.configEtag!==state.publishing?.etag||state.publishing.dirty||setupJob&&['queued','running'].includes(setupJob.state))return '';
     return `<section id="repository-initialize-review" class="panel"><h3>${esc(setupText('emptyTitle'))}</h3><p>${esc(setupText('emptyGuidance',{repository:emptyReview.name,branch:emptyReview.branch}))}</p><button class="button primary" data-action="publish-initialize-repository">${esc(setupText('initialize'))}</button></section>`;
@@ -140,16 +173,13 @@ export function publishingUI({state,api,esc,field,option,render,notify,showDialo
         if(requests.get(kind)===version&&preview===state.preview&&plan===preview.destinationPlan&&context===websiteContext(state)&&route===location.hash){plan[kind]=page.items;plan.windows[kind]={offset:page.offset,next:page.next};const host=document.querySelector(`[data-plan-rows="${kind}"]`);if(host)host.innerHTML=destinationPlanRows(plan,kind,{esc});}
         return true;
       }
-      if(name==='publish-refresh-plan'){
-        const preview=state.preview,context=websiteContext(state),route=location.hash;
-        const approvals=['review-confirm','rollback-confirm'].map(id=>[id,!!document.getElementById(id)?.checked]);
-        const plan=await api('/api/publishing/plan',{id:preview.id,configEtag:preview.configEtag,...(preview.rollback?{rollbackReview:preview.rollback.id}:{})},{websitePin:preview.websitePin});
-        if(state.preview===preview&&context===websiteContext(state)&&route===location.hash){
-          preview.destinationPlan=plan;render();
-          // Refreshing repository changes does not change the edition already
-          // reviewed. Repository approval itself must be given for the new plan.
-          for(const [id,checked] of approvals){const input=document.getElementById(id);if(input)input.checked=checked;}
-        }return true;
+      if(['publish-plan-cancel','publish-plan-retry'].includes(name)){
+        const preview=state.preview,action=name.endsWith('cancel')?'cancel':'retry',result=await api('/api/publishing/plan-operation',{id:preview.destinationOperation.id,action},{adopt:false,websitePin:preview.websitePin});
+        if(state.preview===preview){preview.destinationOperation=result.job;renderPlan();schedulePlan(preview);}return true;
+      }
+      if(['publish-refresh-plan','publish-replacement-plan','publish-owned-plan'].includes(name)){
+        const preview=state.preview,replaceExisting=name==='publish-replacement-plan'||name==='publish-refresh-plan'&&!!preview.destinationPlan?.replacement,archiveBranch=replaceExisting?(name==='publish-replacement-plan'?document.getElementById('replacement-archive-branch')?.value.trim()||null:preview.destinationPlan.replacement.archiveBranch):null;
+        await requestPlan(preview,{replaceExisting,archiveBranch});return true;
       }
       if(name==='publish-job-cancel'||name==='publish-job-retry'){await deploymentCall(name==='publish-job-cancel'?'cancel':'retry',{id:button.dataset.id});await refreshDeployments();return true;}
       if(name.startsWith('publish-jobs-')){if(name==='publish-jobs-next'&&deployments?.next){previous.push(cursor);cursor=deployments.next;}if(name==='publish-jobs-previous'&&previous.length)cursor=previous.pop();await refreshDeployments();return true;}
@@ -178,12 +208,7 @@ export function publishingUI({state,api,esc,field,option,render,notify,showDialo
         if(state.preview.rollback&&!document.querySelector('#rollback-confirm')?.checked){notify(publicationText('rollbackConfirm'),true);return true;}
         requireAnalysisEditionReview(state.preview);
         if(!document.querySelector('#review-confirm')?.checked){notify('Review the website and confirm it is ready to share.',true);return true;}
-        if(state.preview.destination?.kind==='github'&&!state.preview.destinationPlan){
-          const preview=state.preview,plan=await api('/api/publishing/plan',{id:preview.id,configEtag:preview.configEtag,...(preview.rollback?{rollbackReview:preview.rollback.id}:{})});
-          if(state.preview!==preview)return true;
-          preview.destinationPlan=plan;
-          if(plan.requiresReview){render();document.querySelector('#review-confirm').checked=true;if(preview.rollback)document.querySelector('#rollback-confirm').checked=true;document.querySelector('#destination-review')?.scrollIntoView({block:'center'});return true;}
-        }
+        if(state.preview.destination?.kind==='github'&&!state.preview.destinationPlan){await requestPlan(state.preview,{},true);return true;}
         if(destinationConflictCount(state.preview.destinationPlan)){notify(publicationText('conflictGuidance'),true);return true;}
         const plan=state.preview.destinationPlan,destinationReviewed=!!document.querySelector('#destination-confirm')?.checked;
         if(plan?.requiresReview&&!destinationReviewed){notify('Review and confirm the changes to this website repository.',true);return true;}
@@ -196,5 +221,5 @@ export function publishingUI({state,api,esc,field,option,render,notify,showDialo
     return true;
   }
   async function submit(form,data){if(form.id!=='publish-token-form')return false;const token=data.get('token'),context=websiteContext(state);form.querySelector('[name=token]').value='';if(pending)await pending;if(context!==websiteContext(state))return true;const result=await api('/api/publishing/connect',{token});if(context!==websiteContext(state))return true;state.publishing.connected=result.connected;state.publishing.temporaryToken=true;notify(publicationText('connectedNotice'));render();return true;}
-  return {view,load,input,action,submit,save,discard};
+  return {view,load,input,action,submit,save,discard,restorePlan};
 }

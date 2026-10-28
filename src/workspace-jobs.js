@@ -1,3 +1,4 @@
+import {githubPlanJobDefinitions} from './github-plan-jobs.js';
 import {ComparisonJobAccess} from './comparison-job-access.js';
 import {publicationVerificationDefinitions} from './publication-verification-jobs.js';
 import {deploymentJobDefinitions} from './deployment-jobs.js';
@@ -17,7 +18,7 @@ export function websitePublisher(publisher,workspace){
  Object.defineProperty(scoped,'token',{get:()=>publisher.token,set:value=>{publisher.token=value;}});return scoped;
 }
 function publicationDefinitions(workspace,publisher,current,services){
- const definitions=(w,p,q)=>({...publicationJobDefinitions(w,q,services),...analysisPublicationReviewDefinitions(w,p,q,services),...deploymentJobDefinitions(w,p,q,services),...repositoryJobDefinitions(w,p,q),...publicationVerificationDefinitions(w,p,q)});
+ const definitions=(w,p,q)=>({...publicationJobDefinitions(w,q,services),...analysisPublicationReviewDefinitions(w,p,q,services),...deploymentJobDefinitions(w,p,q,services),...repositoryJobDefinitions(w,p,q),...publicationVerificationDefinitions(w,p,q),...githubPlanJobDefinitions(w,p,q,services)});
  const defaultWorkspace=websiteWorkspace(workspace,null),normal=definitions(defaultWorkspace,websitePublisher(publisher,defaultWorkspace),()=>websiteJobQueue(current(),null)),result={};
  for(const [type,definition] of Object.entries(normal))result[type]=Object.fromEntries(Object.keys(definition).map(method=>[method,(job,...args)=>{
   if(!job.input.websiteId)return definition[method](job,...args);

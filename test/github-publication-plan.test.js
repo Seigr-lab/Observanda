@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {Workspace} from '../src/storage.js';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {clearVault} from '../src/encryption.js';
+import {githubPlanReader} from '../src/github-plan-index.js';
+import {publicationWorkspace} from '../src/publication-pin.js';
 import {Publisher,defaultPublishing,validatePublishing} from '../src/publishing.js';
 import {githubFilePlan,readGithubOwnership} from '../src/github-publication-plan.js';
 import {buildPublication} from '../src/publication.js';
@@ -15,10 +18,11 @@ const token='synthetic_github_token_1234567890';
 const tree=remote=>remote.trees.get(remote.commits.get(remote.head).tree);
 const writes=remote=>remote.calls.filter(c=>c.method!=='GET');
 async function fixture(t,{directory='',files={'index.html':'Existing site','README.md':'Keep this document','private.config':'Existing repository configuration'}}={}){
- const root=await mkdtemp(path.join(os.tmpdir(),'observanda-site-ownership-'));t.after(()=>rm(root,{recursive:true,force:true}));
- const book=sampleNotebook();book.entries[1].share=false;book.entries[1].title='PRIVATE_BODY_SENTINEL';
- const ws=new Workspace(root),saved=await ws.create(book),candidate=buildPublication(saved.book);candidate.etag=saved.etag;
- const remote=githubFixture({branch:'main',initialFiles:files}),publisher=new Publisher(root,{request:remote.request}),config=defaultPublishing();
+ const root=await mkdtemp(path.join(os.tmpdir(),'observanda-site-ownership-'));
+ const book=sampleNotebook();book.website.home.enabled=true;book.entries[1].share=false;book.entries[1].title='PRIVATE_BODY_SENTINEL';
+ const f=await encryptedFixture(root,book),ws=f.workspace,saved=await publicationWorkspace(ws).read(),candidate=buildPublication(saved.book);candidate.etag=saved.etag;candidate.websitePin=saved.websitePin;
+ t.after(async()=>{clearVault(f.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
+ const remote=githubFixture({branch:'main',initialFiles:files}),publisher=new Publisher(ws.root,{workspace:ws,request:remote.request},f.vault),config=defaultPublishing();
  Object.assign(config.github,{owner:'example',repository:'notebook',directory});const settings=await publisher.save(config,'new');await publisher.connect(token);
  return {ws,remote,publisher,config,candidate,etag:settings.etag,book:saved.book};
 }
@@ -37,12 +41,12 @@ test('nested publication preserves unrelated paths and modes, stages only select
  original.push({path:'assets/link',mode:'120000',type:'blob',sha:sha('blob',Buffer.from('../logo.svg'))},{path:'vendor/library',mode:'160000',type:'commit',sha:'f'.repeat(40)});
  const before=structuredClone(original),parent=f.remote.head,{plan,receipt}=await publish(f);
  assert.equal(plan.entries,undefined);assert.equal(plan.preservedEntries,undefined);
- assert.deepEqual(plan.removed,[]);assert.deepEqual(plan.conflicts,[]);assert.deepEqual(plan.preserved,before.map(e=>e.path));
+ assert.deepEqual(plan.removed,[]);assert.deepEqual(plan.conflicts,[]);assert.deepEqual([...plan.preserved].sort(),before.map(e=>e.path).sort());
  assert.deepEqual(tree(f.remote).filter(e=>!e.path.startsWith('lab/field-notes/')),before);assert.deepEqual(f.remote.commits.get(receipt.commit).parents,[parent]);
  const posted=f.remote.calls.find(c=>c.route.endsWith('/git/trees')&&c.method==='POST').data;
- assert.equal(posted.base_tree,f.remote.commits.get(parent).tree);assert.deepEqual(posted.tree.map(e=>e.path),[...f.candidate.files.keys()].map(name=>'lab/field-notes/'+name));
+ assert.equal(posted.base_tree,f.remote.commits.get(parent).tree);assert.deepEqual(posted.tree.map(e=>e.path).sort(),[...f.candidate.files.keys()].map(name=>'lab/field-notes/'+name).sort());
  for(const call of writes(f.remote).filter(c=>c.route.endsWith('/git/blobs'))){const bytes=Buffer.from(call.data.content,'base64');assert.ok([...f.candidate.files.values()].some(c=>Buffer.from(c).equals(bytes)));assert.ok(!bytes.includes(Buffer.from('PRIVATE_BODY_SENTINEL')));assert.ok(!bytes.includes(Buffer.from(f.ws.root)));}
- const ownership=await readGithubOwnership(f.publisher,f.config,receipt);assert.equal(ownership.files.length,f.candidate.files.size);
+ const ownership=await readGithubOwnership(f.publisher,f.config,receipt);assert.equal(githubPlanReader(f.ws,ownership).count('entries'),f.candidate.files.size);
  const requested=[];f.publisher.request=async url=>{requested.push(String(url));const name=decodeURIComponent(new URL(url).pathname.slice('/notebook/lab/field-notes/'.length)),content=f.candidate.files.get(name);return new Response(content??'',{status:content===undefined?404:200});};
  const verified=await f.publisher.verifyLive();assert.equal(verified.verification.files,f.candidate.files.size);assert.ok(requested.every(url=>url.startsWith('https://example.github.io/notebook/lab/field-notes/')));
 });
@@ -60,7 +64,7 @@ test('a later edition removes only previously owned files and preserves interven
  outsideEdit(f.remote,'research/handwritten.html','A separately maintained page');outsideEdit(f.remote,'news/latest.html','Unrelated news');
  const before=tree(f.remote).filter(e=>['research/handwritten.html','news/latest.html'].includes(e.path));
  const saved=await f.ws.read(),entry=saved.book.entries.find(e=>e.share);assert.ok(entry);entry.share=false;
- const next=await f.ws.save(saved.book,saved.etag),candidate=buildPublication(next.book);candidate.etag=next.etag;
+ await f.ws.save(saved.book,saved.etag);const next=await publicationWorkspace(f.ws).read(),candidate=buildPublication(next.book);candidate.etag=next.etag;candidate.websitePin=next.websitePin;
  const {plan}=await publish(f,candidate);
  assert.ok(plan.removed.includes('research/entries/'+entry.id+'.html'));assert.ok(plan.requiresReview);
  assert.deepEqual(tree(f.remote).filter(e=>before.some(b=>b.path===e.path)),before);
@@ -106,17 +110,17 @@ test('repository replacement, truncated trees and mismatched preserved files nev
 test('review and deployment traverse truncated remote trees beyond ten thousand files and retain unrelated content',async t=>{
  const files=Object.fromEntries(Array.from({length:10017},(_,i)=>['archive/'+i+'.txt','Existing '+i])),f=await fixture(t,{directory:'research',files}),before=structuredClone(tree(f.remote)),adapter=truncatedGithubTrees(f.remote,{threshold:8});
  f.publisher.request=adapter.request;
- const {plan,receipt}=await publish(f);assert.equal(plan.preserved.length,10017);assert.deepEqual(plan.conflicts,[]);
+ const {plan,receipt}=await publish(f);assert.equal(plan.counts.preserved,10017);assert.equal(plan.preserved.length,32);assert.deepEqual(plan.conflicts,[]);
  assert.equal(receipt.status,'uploaded-repository-only');assert.deepEqual(sorted(tree(f.remote).filter(e=>e.path.startsWith('archive/'))),sorted(before));
- assert.ok(adapter.reads.some(route=>!route.includes('?')));const next=await f.publisher.reviewDestination(f.candidate,f.etag);assert.deepEqual(next.conflicts,[]);assert.equal(next.unchanged.length,f.candidate.files.size);
+ assert.ok(adapter.reads.some(route=>!route.includes('?')));const next=await f.publisher.reviewDestination(f.candidate,f.etag);assert.deepEqual(next.conflicts,[]);assert.equal(next.counts.unchanged,f.candidate.files.size);
 });
 const sorted=files=>[...files].sort((a,b)=>a.path.localeCompare(b.path));
 
-test('review capacity refusal leaves the saved review and prepared edition available without remote writes',async t=>{
+test('an invalid remote tree leaves the saved review and prepared edition available without remote writes',async t=>{
  const f=await fixture(t,{directory:'research'}),prior=await f.publisher.reviewDestination(f.candidate,f.etag),parent=f.remote.head,root='d'.repeat(40),head='e'.repeat(40);
- f.remote.trees.set(root,Array.from({length:2600},(_,i)=>({path:'archive/'+i+'/'+'x'.repeat(3800),type:'blob',mode:'100644',sha:'f'.repeat(40)})));
+ f.remote.trees.set(root,[{path:'archive/file.txt',type:'blob',mode:'100644',sha:'invalid'}]);
  f.remote.commits.set(head,{tree:root,parents:[parent]});f.remote.setHead(head);
- await assert.rejects(f.publisher.reviewDestination(f.candidate,f.etag),{code:'PUBLISH_PLAN_CAPACITY'});
+ await assert.rejects(f.publisher.reviewDestination(f.candidate,f.etag),{code:'PUBLISH_REMOTE'});
  assert.equal(writes(f.remote).length,0);assert.equal(f.remote.head,head);
  const saved=await f.publisher.readDestinationPlan(f.candidate,f.etag,{destinationReview:prior.id,destinationReviewed:true});assert.equal(saved.id,prior.id);assert.equal(saved.releaseId,f.candidate.id);
 });

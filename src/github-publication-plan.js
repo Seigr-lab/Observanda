@@ -10,13 +10,23 @@ const ownershipPath=key=>`.observanda/publishing-ownership/${key}.json`;
 // Earlier retained inline reviews keep their original envelope admission.
 // New reviews and deployment cursors pin independently indexed collections.
 export function admitGithubPlan(plan){
+ if(plan?.version===3){
+  if(plan.replacement?.policy!==1||!(plan.replacement.archiveBranch===null||githubArchiveBranch(plan.replacement.archiveBranch))||plan.replacement.archiveBranch&&!plan.head||!githubDirectory(plan.replacement.directory)||plan.requiresReview!==true||!plan.pagesProtection||!Object.hasOwn(plan.pagesProtection,'cname')||typeof plan.pagesProtection.httpsEnforced!=='boolean')throw new AppError('PUBLISH_STALE');
+  requireGithubPlanCollections(plan.document);return plan;
+ }
  if(plan?.version===2){requireGithubPlanCollections(plan.document);return plan;}
+ if(plan?.version!==1)throw new AppError('PUBLISH_STALE');
  const journal={entries:plan.entries,preservedEntries:plan.preservedEntries,removed:plan.removed,uploaded:[...new Set(plan.entries.map(entry=>entry.sha))]};
  const requestedBytes=Buffer.byteLength(serialize({intent:{plan},journal}))+64*1024,maxBytes=16*1024*1024;
  if(requestedBytes>maxBytes)throw new AppError('PUBLISH_PLAN_CAPACITY',[{owner:'github-deployment-review',requestedBytes,maxBytes}]);
  return plan;
 }
 export const githubDirectory=value=>typeof value==='string'&&value.length<=240&&(value===''||value.split('/').every(part=>/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(part)&&!['.','..'].includes(part)));
+// Keep repository domain and legal files byte-for-byte, including license
+// directories. An exported file cannot silently replace one of these paths.
+export const protectedGithubPath=name=>name.split('/').some(part=>/^(?:cname|licen[cs]es?|copying|copyright|notice)(?:[._-].*)?$/i.test(part));
+export const githubArchiveBranch=value=>typeof value==='string'&&/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$/.test(value);
+export const githubPagesProtection=pages=>({cname:pages?.cname??null,httpsEnforced:pages?.https_enforced===true});
 export async function githubBlobHash(content,{signal}={}){
  signal?.throwIfAborted();
  const hash=createHash('sha1').update(`blob ${contentSize(content)}\0`);
@@ -81,25 +91,33 @@ export async function githubFilePlan(candidate,files,ownership,directory='',{sig
 // Intermediate rows remain private and no review header exists until all roots
 // are durable. Every provider write subsequently uses this immutable plan.
 export function indexedGithubFilePlan(workspace,candidate,files,ownership,directory='',options={}){return workspace.withCatalogueConnections(()=>buildIndexedGithubFilePlan(workspace,candidate,files,ownership,directory,options));}
-async function buildIndexedGithubFilePlan(workspace,candidate,files,ownership,directory='',{signal}={}){
- const index=GithubPlanIndex.builder(workspace,{signal}),prefix=directory?directory+'/':'';
+async function buildIndexedGithubFilePlan(workspace,candidate,files,ownership,directory='',{signal,replaceExisting=false,onProgress=async()=>{},write}={}){
+ const index=GithubPlanIndex.builder(workspace,{signal,write}),prefix=directory?directory+'/':'';
+ if(typeof replaceExisting!=='boolean'||!githubDirectory(directory))throw new AppError('INVALID');
+ const replaceable=name=>replaceExisting&&(!prefix||name.startsWith(prefix))&&!protectedGithubPath(name);
+ let visited=0;const report=async stage=>{if(++visited%32===0)await onProgress({stage:stage+' ('+visited+')',done:0,total:0});};
  const mark=(kind,path)=>index.add(kind,path,{path});
- for await(const entry of files){signal?.throwIfAborted();githubTreeFiles({tree:[entry]});if(await index.get('remote',entry.path))throw new AppError('PUBLISH_REMOTE');await index.add('remote',entry.path,entry);}
+ for await(const entry of files){signal?.throwIfAborted();githubTreeFiles({tree:[entry]});if(await index.get('remote',entry.path))throw new AppError('PUBLISH_REMOTE');await index.add('remote',entry.path,entry);await report('Reading repository files');}
  await index.flush();
  const owned=ownership?.version===2?githubPlanReader(workspace,ownership,{signal}):{get:async(kind,path)=>(ownership?.files??[]).find(row=>row.path===path)??null,async *values(){yield* ownership?.files??[];}};
- for await(const old of owned.values('entries'))if(!same(old,await index.get('remote',old.path)))await mark('conflicts',old.path);
+ for await(const old of owned.values('entries'))if(!replaceable(old.path)&&!same(old,await index.get('remote',old.path)))await mark('conflicts',old.path);
  for await(const [name,content] of candidate.files){
-  signal?.throwIfAborted();const entry={path:prefix+name,mode:'100644',type:'blob',sha:await githubBlobHash(content,{signal})};githubTreeFiles({tree:[entry]});
+  signal?.throwIfAborted();await report('Checking exported website files');const entry={path:prefix+name,mode:'100644',type:'blob',sha:await githubBlobHash(content,{signal})};githubTreeFiles({tree:[entry]});
   await index.add('entries',entry.path,entry);if(!await index.get('uploads',entry.sha))await index.add('uploads',entry.sha,entry);
   const lower=entry.path.toLowerCase(),target=await index.get('targets',lower);
   if(target&&target.path!==entry.path){await mark('conflicts',entry.path);await mark('conflicts',target.path);}else await index.add('targets',lower,{path:entry.path});
   const parts=lower.split('/');parts.pop();while(parts.length){await mark('ancestors',parts.join('/'));parts.pop();}
   const current=await index.get('remote',entry.path);
-  if(!current)await mark('added',entry.path);else if(same(entry,current))await mark('unchanged',entry.path);else if(await owned.get('entries',entry.path))await mark('replaced',entry.path);else await mark('conflicts',entry.path);
+  if(!current)await mark('added',entry.path);else if(same(entry,current))await mark('unchanged',entry.path);else if(!protectedGithubPath(entry.path)&&(replaceable(entry.path)||await owned.get('entries',entry.path)))await mark('replaced',entry.path);else await mark('conflicts',entry.path);
  }
  await index.flush();
  for await(const entry of index.values('remote')){
-  if(!await index.get('entries',entry.path)){if(await owned.get('entries',entry.path))await mark('removed',entry.path);else{await mark('preserved',entry.path);await index.add('preservedEntries',entry.path,entry);}}
+  await report('Comparing repository files');
+  let removed=false;
+  if(!await index.get('entries',entry.path)){if(!protectedGithubPath(entry.path)&&(replaceable(entry.path)||!replaceExisting&&await owned.get('entries',entry.path))){await mark('removed',entry.path);removed=true;}else{await mark('preserved',entry.path);await index.add('preservedEntries',entry.path,entry);}}
+  // A replacement builds a new tree, so explicitly removed files, submodules
+  // and case aliases cannot create implicit directory/file overwrites.
+  if(removed&&replaceExisting)continue;
   const lower=entry.path.toLowerCase(),target=await index.get('targets',lower);
   if(await index.get('ancestors',lower)||target&&target.path!==entry.path)await mark('conflicts',entry.path);
   const parts=lower.split('/');parts.pop();while(parts.length){if(await index.get('targets',parts.join('/')))await mark('conflicts',entry.path);parts.pop();}

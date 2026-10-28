@@ -63,7 +63,7 @@ test('provider write byte budgets remain bounded for long paths and cancellation
 });
 
 test('an oversized review is refused before creating an unreadable continuation journal',()=>{
- const plan={entries:[],preservedEntries:Array.from({length:2600},(_,i)=>file('long/'+String(i)+'/'+'x'.repeat(3800))),removed:[]};
+ const plan={version:1,entries:[],preservedEntries:Array.from({length:2600},(_,i)=>file('long/'+String(i)+'/'+'x'.repeat(3800))),removed:[]};
  assert.throws(()=>admitGithubPlan(plan),error=>error.code==='PUBLISH_PLAN_CAPACITY'&&error.details[0].owner==='github-deployment-review'&&error.details[0].requestedBytes>error.details[0].maxBytes);
- assert.equal(admitGithubPlan({entries:[],preservedEntries:plan.preservedEntries.slice(0,10),removed:[]}).preservedEntries.length,10);
+ assert.equal(admitGithubPlan({version:1,entries:[],preservedEntries:plan.preservedEntries.slice(0,10),removed:[]}).preservedEntries.length,10);
 });

@@ -139,6 +139,7 @@ Create multiple independent websites, each with its own pages, design, public co
 - Select the records, sections, attachments, figures and supporting data that belong in each public edition.
 - Browse a draft at desktop or phone width, then prepare and review a separate edition before publishing.
 - Publish to GitHub Pages, deploy to an SSH host or export static files for another host.
+- Review changes before updating a GitHub repository. To replace an existing website or application, review the complete replacement and optionally preserve the previous files in a separate branch. Existing `CNAME` and license files are kept; conflicting output is blocked.
 - Retain prepared editions for later review and republication.
 
 Publication permissions belong to the lab books, records and writing sections; each website's selection must respect them. An edition can omit preparation inputs, attempt details, linked-record information, contributor credits and result statements without changing the original record.

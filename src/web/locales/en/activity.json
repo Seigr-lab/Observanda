@@ -47,6 +47,7 @@
   "job:publication.prepare": "Preparing publication",
   "job:publication.deploy": "Deploying website",
   "job:publication.repository": "Creating website repository",
+  "job:publication.destination-review": "Reviewing repository changes",
   "job:publication.verify": "Verifying website",
   "staging": "Retaining source files",
   "validating": "Checking source files",

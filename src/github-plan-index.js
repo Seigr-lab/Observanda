@@ -63,8 +63,10 @@ export async function verifyGithubPublishingPlans(workspace){
    if(!/^(?:[a-f0-9]{64}|[a-f0-9-]{36})\.json$/.test(name))fail();
    const raw=await workspace.readMetadata('.observanda/'+folder+'/'+name,16*1024*1024);let value;try{value=JSON.parse(raw);}catch{fail();}
    if(!value)fail();
-   if(value.version===2&&folder!=='deployments')requireGithubPlanCollections(value.document,{ownership:folder==='publishing-ownership'});
-   if(value.intent?.plan?.version===2)requireGithubPlanCollections(value.intent.plan.document);
+   const replacement=folder==='publishing-plan'?value:value.intent?.plan;
+   if(replacement?.version===3)(await import('./github-publication-plan.js')).admitGithubPlan(replacement);
+   if([2,3].includes(value.version)&&folder!=='deployments')requireGithubPlanCollections(value.document,{ownership:folder==='publishing-ownership'});
+   if([2,3].includes(value.intent?.plan?.version))requireGithubPlanCollections(value.intent.plan.document);
    if(value.journal?.document)requireGithubPlanCollections(value.journal.document);
    for(const descriptor of [value.document,value.intent?.plan?.document,value.journal?.document])if(descriptor)await new GithubPlanIndex(workspace,descriptor).verify();
   }

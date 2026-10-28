@@ -1,7 +1,7 @@
 import {createHash} from 'node:crypto';
 export const sha=(type,bytes)=>createHash('sha1').update(`${type} ${bytes.length}\0`).update(bytes).digest('hex');
 export function githubFixture({branch='observanda-site',initialFiles=null,initialPages=null,repository='notebook'}={}){
- const calls=[],blobs=new Map(),trees=new Map(),commits=new Map(),served=new Map();let head=null,pages=initialPages,hook=null,manifest=null;
+ const calls=[],blobs=new Map(),trees=new Map(),commits=new Map(),served=new Map(),branches=new Map();let head=null,pages=initialPages,hook=null,manifest=null;
  const seed=(files,{message='',parents=[]}={})=>{const entries=Object.entries(files).map(([path,content])=>{const bytes=Buffer.from(content),hash=sha('blob',bytes);blobs.set(hash,bytes);return {path,type:'blob',mode:'100644',sha:hash};}),tree=sha('tree',Buffer.from(JSON.stringify(entries)));trees.set(tree,entries);head='a'.repeat(40);commits.set(head,{tree,parents,message});return head;};
  if(initialFiles)seed(initialFiles);
  const request=async(url,options={})=>{
@@ -19,19 +19,21 @@ export function githubFixture({branch='observanda-site',initialFiles=null,initia
   else if(route==='/repos/example/'+repository)response=ok({id:123,full_name:'example/'+repository,permissions:{push:true},default_branch:'main'});
   else if(route.endsWith('/git/ref/heads/'+branch))response=head?ok({object:{sha:head}}):new Response('',{status:404});
   else if(route.endsWith('/git/ref/heads/main'))response=ok({object:{sha:'b'.repeat(40)}});
-  else if(route.endsWith('/pages')){if(['POST','PUT'].includes(method))pages=data;response=pages?ok(pages):new Response('',{status:404});}
+  else if(route.includes('/git/ref/heads/')){const ref=branches.get(route.split('/git/ref/heads/')[1]);response=ref?ok({object:{sha:ref}}):new Response('',{status:404});}
+  else if(route.endsWith('/pages')){if(['POST','PUT'].includes(method))pages={...pages,...data};response=pages?ok(pages):new Response('',{status:404});}
   else if(route.endsWith('/git/blobs')){const bytes=Buffer.from(data.content,'base64'),hash=sha('blob',bytes);blobs.set(hash,bytes);response=ok({sha:hash});}
   else if(route.endsWith('/git/trees')){const entries=new Map((data.base_tree?trees.get(data.base_tree):[]).map(e=>[e.path,e]));for(const entry of data.tree){if(entry.sha===null)entries.delete(entry.path);else entries.set(entry.path,entry);}const result=[...entries.values()],hash=sha('tree',Buffer.from(JSON.stringify(result)));trees.set(hash,result);response=ok({sha:hash});}
   else if(/\/git\/trees\/[a-f0-9]+$/.test(route))response=ok({tree:trees.get(route.split('/').at(-1)),truncated:false});
   else if(route.endsWith('/git/commits')){const hash=sha('commit',Buffer.from(JSON.stringify(data)));commits.set(hash,data);response=ok({sha:hash});}
   else if(/\/git\/commits\/[a-f0-9]+$/.test(route)){const c=commits.get(route.split('/').at(-1));response=ok({...c,tree:{sha:c?.tree}});}
   else if(route.endsWith('/git/refs')||route.endsWith('/git/refs/heads/'+branch)){
-   if(method==='POST'&&head||method==='PATCH'&&(data.force!==false||!commits.get(data.sha)?.parents.includes(head)))response=new Response('',{status:422});
+   if(method==='POST'&&data.ref!=='refs/heads/'+branch){const name=data.ref.replace(/^refs\/heads\//,'');if(branches.has(name)||!commits.has(data.sha))response=new Response('',{status:422});else{branches.set(name,data.sha);response=ok({object:{sha:data.sha}});}}
+   else if(method==='POST'&&head||method==='PATCH'&&(data.force!==false||!commits.get(data.sha)?.parents.includes(head)))response=new Response('',{status:422});
    else{head=data.sha;response=ok({object:{sha:head}});}
   }else throw Error('Unexpected mock route: '+route);
   await hook?.(call,'after',options.signal);return response;
  };
- return {request,calls,blobs,trees,commits,seed,get head(){return head;},setHead(value){head=value;},setHook(value){hook=value;},setManifest(value){manifest=value;},setServed(path,value){served.set(path,value);}};
+ return {request,calls,blobs,trees,commits,seed,branches,get pages(){return pages;},setPages(value){pages=value;},get head(){return head;},setHead(value){head=value;},setHook(value){hook=value;},setManifest(value){manifest=value;},setServed(path,value){served.set(path,value);}};
 }
 
 export function repositoryFixture({exists=false,defaultBranch='main',ownerType='User',repositoryId=123}={}){

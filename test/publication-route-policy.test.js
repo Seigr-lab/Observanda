@@ -44,3 +44,11 @@ test('shared publication controls reject wrong-method transport before any domai
  }
  assert.equal(calls,0);
 });
+
+test('durable repository review controls retain bounded admission across owners',()=>{
+ for(const route of ['/api/publishing/plan-operation','/api/projects/'+id+'/publishing/plan-operation']){
+  const contract=route.startsWith('/api/projects/')?projectRequest(route,'POST'):projectPublicationRequest(route,'POST');
+  assert.equal(requestLane('POST',route),'control');assert.equal(contract.limit,1024);assert.equal(contract.write,true);assert.equal(contract.snapshot,false);
+ }
+ assert.equal(requestLane('POST','/api/publishing/plan'),'work');
+});

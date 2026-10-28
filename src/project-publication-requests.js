@@ -10,7 +10,7 @@ const commands={
  'publication-jobs/':['start','list','open','pages','references','rollback-review','analysis-review','analysis-review-window'],
  'deployment-jobs/':['start','list','status','cancel','retry'],
  'repository-setup/':['start','review','initialize','current','status','cancel','retry'],
- 'publishing/':['save','connect','disconnect','check','plan','plan-page','verify','verification','verification-cancel','verification-retry','deploy'],
+ 'publishing/':['save','connect','disconnect','check','plan','plan-operation','plan-page','verify','verification','verification-cancel','verification-retry','deploy'],
  'local-export/':['plan','current','page','apply','discard'],
  'publication-links/':['read','save']
 };
@@ -34,6 +34,9 @@ for(const operation of ['preview','design-preview','appearance-preview','export'
  routes[operation]=policy(operation,{write:!reads.has(operation)&&!operation.startsWith('website/research/')&&!['design-preview','appearance-preview','export'].includes(operation),binary:operation==='export',snapshot:snapshots.has(operation)});
 }
 for(const {operation,...control} of Object.values(publicationJobControlRoutes))routes['publication-jobs/'+operation]=policy('publication-jobs/'+operation,control);
+// Review controls only inspect or change an existing durable job. Keep them
+// available while ordinary requests wait for capacity; retries run in workers.
+routes['publishing/plan-operation']=policy('publishing/plan-operation',{write:true,admission:'control',limit:1024});
 routes.publishing=policy('publishing',{method:'GET',snapshot:true});
 export const publicationRoutes=Object.freeze(routes);
 export function projectPublicationRequest(route,method){

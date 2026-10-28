@@ -58,8 +58,10 @@ export async function verifyRemoteGithubTree(call,root,expected,{signal}={}){
 // cursor. A lost response replays the same batch on the same immutable base.
 const TREE_BATCH_ENTRIES=256,TREE_BATCH_BYTES=128*1024;
 export async function buildGithubTree(call,journal,{reader,checkpoint,signal,onProgress=async()=>{}}){
- const entries=reader?reader.count('entries'):journal.entries.length,removed=reader?reader.count('removed'):journal.removed.length,total=entries+removed;
- const at=async index=>index<entries?(reader?reader.at('entries',index):journal.entries[index]):{path:reader?(await reader.at('removed',index-entries)).path:journal.removed[index-entries],mode:'100644',type:'blob',sha:null};
+ const replacing=journal.treeMode==='replace';
+ if(replacing&&(!reader||journal.baseTree!==null))throw new AppError('PUBLISH_STALE');
+ const entries=reader?reader.count('entries'):journal.entries.length,removed=replacing?reader.count('preservedEntries'):reader?reader.count('removed'):journal.removed.length,total=entries+removed;
+ const at=async index=>index<entries?(reader?reader.at('entries',index):journal.entries[index]):replacing?reader.at('preservedEntries',index-entries):{path:reader?(await reader.at('removed',index-entries)).path:journal.removed[index-entries],mode:'100644',type:'blob',sha:null};
  let state=journal.treeBuild;
  if(state&&(state.version!==1||state.baseTree!==journal.baseTree||state.total!==total||!Number.isSafeInteger(state.applied)||state.applied<0||state.applied>total||!validSha(state.tree)))throw new AppError('PUBLISH_STALE');
  if(journal.tree){if(!validSha(journal.tree)||state&&(state.applied!==total||state.tree!==journal.tree))throw new AppError('PUBLISH_STALE');return journal.tree;}

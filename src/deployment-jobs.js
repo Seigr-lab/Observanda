@@ -12,14 +12,14 @@ import {AnalysisPublicationReview} from './analysis-publication-review.js';
 import {MetadataFeed} from './metadata-feed.js';
 import {enforcePublishingLimits} from './publishing.js';
 import {deployGithub} from './github-deployment.js';
-import {writeGithubOwnership} from './github-publication-plan.js';
+import {writeGithubOwnership,admitGithubPlan} from './github-publication-plan.js';
 import {PublicationRollback} from './publication-rollback.js';
 import {deploymentUncertain} from './publication-deployment-state.js';
 import {createPublicationPermissionCheck} from './publication-permission-admission.js';
 const file=id=>{if(!researchId(id))throw new AppError('INVALID');return '.observanda/deployments/'+id+'.json';};
 export class DeploymentJobs{
  constructor(workspace,publisher,queue,{sourceReader,sourceAccess}={}){workspace=publicationWorkspace(workspace);this.workspace=workspace;this.publisher=publisher;this.queue=queue;this.sourceReader=sourceReader;this.sourceAccess=sourceAccess;this.releases=new PublicationJobs(workspace,{sourceReader});this.feed=new MetadataFeed(workspace,'.observanda/deployment-list');}
- async read(id){const raw=await this.workspace.readMetadata(file(id),16*1024*1024);if(raw===null)throw new AppError('NOT_FOUND');const d=JSON.parse(raw);if(![1,2].includes(d.version)||d.id!==id||!researchId(d.scope)||!d.intent||!d.journal||!['github','ssh'].includes(d.intent.config.kind))throw new AppError('JOB_DAMAGED');return d;}
+ async read(id){const raw=await this.workspace.readMetadata(file(id),16*1024*1024);if(raw===null)throw new AppError('NOT_FOUND');const d=JSON.parse(raw);if(![1,2,3].includes(d.version)||d.id!==id||!researchId(d.scope)||!d.intent||!d.journal||!['github','ssh'].includes(d.intent.config.kind))throw new AppError('JOB_DAMAGED');if(d.version===3){if(d.intent.plan?.version!==3)throw new AppError('JOB_DAMAGED');admitGithubPlan(d.intent.plan);}return d;}
  async start({id:reviewId,configEtag,reviewed,destinationReview,destinationReviewed,rollbackReview,rollbackConfirmed}){
   return this.queue.transaction(async()=>{
    await this.workspace.lockWebsite();
@@ -39,7 +39,7 @@ export class DeploymentJobs{
    }
    const plan=await this.publisher.readDestinationPlan(candidate,configEtag,{destinationReview,destinationReviewed});
    const id=randomUUID(),createdAt=new Date().toISOString(),intent={reviewId,releaseId:candidate.id,configEtag,config:saved.config,key,...(rollbackReview?{rollbackReview,analysisReviewId:candidate.analysisReviewId,analysis:candidate.researchReview.analysis,...(candidate.analysisDocument?{analysisDocument:candidate.analysisDocument}:{}),...(candidate.sourceSnapshots?{sourceSnapshots:candidate.sourceSnapshots}:{})}:{}),...(plan?{plan}: {})};
-   const d={version:saved.config.kind==='github'?2:1,id,scope:current.metadata.id,createdAt,intent,journal:{createdAt}};
+   const d={version:plan?.version===3?3:saved.config.kind==='github'?2:1,id,scope:current.metadata.id,createdAt,intent,journal:{createdAt}};
    await this.feed.ensureLocked();await this.workspace.writeMetadata(file(id),serialize(d));
    await this.workspace.writeMetadata('.observanda/deployment-list/'+id+'.json',serialize({id,createdAt}));await this.feed.putLocked(d);
    await this.workspace.writeMetadata('.observanda/deployment-active/'+key+'.json',serialize({id}));
@@ -89,7 +89,7 @@ export class DeploymentJobs{
   return d.intent.config.kind==='ssh'?this.publisher.ssh.deploy(d.intent.config.ssh,candidate,this.workspace.websiteId??d.scope,options):deployGithub(this.publisher,candidate,d.intent.config,options);
  }
  async commit(job,receipt){const d=await this.held(job);if(receipt.commit!==d.journal.receipt?.commit)throw new AppError('JOB_CHANGED');return {id:job.id,status:receipt.status};}
- summary(d){const j=d.journal;return {id:d.id,createdAt:d.createdAt,reviewId:d.intent.reviewId,releaseId:d.intent.releaseId,kind:d.intent.config.kind,destinationKey:d.intent.key,destination:d.intent.config.kind==='ssh'?`${d.intent.config.ssh.host} / ${d.intent.config.ssh.directory}/current`:`${d.intent.config.github.owner}/${d.intent.config.github.repository} / ${d.intent.config.github.branch}${d.intent.config.github.directory?' / '+d.intent.config.github.directory:''}`,uploaded:j.uploadedCount??j.uploaded?.length??0,total:d.intent.config.kind==='ssh'?(j.total??0):(j.total??new Set((j.entries??[]).map(entry=>entry.sha)).size),commit:j.commit??null,pushAttempted:!!j.pushAttempted,receipt:j.receipt??null};}
+ summary(d){const j=d.journal;return {id:d.id,createdAt:d.createdAt,reviewId:d.intent.reviewId,releaseId:d.intent.releaseId,kind:d.intent.config.kind,destinationKey:d.intent.key,destination:d.intent.config.kind==='ssh'?`${d.intent.config.ssh.host} / ${d.intent.config.ssh.directory}/current`:`${d.intent.config.github.owner}/${d.intent.config.github.repository} / ${d.intent.config.github.branch}${d.intent.config.github.directory?' / '+d.intent.config.github.directory:''}`,uploaded:j.uploadedCount??j.uploaded?.length??0,total:d.intent.config.kind==='ssh'?(j.total??0):(j.total??new Set((j.entries??[]).map(entry=>entry.sha)).size),commit:j.commit??null,pushAttempted:!!j.pushAttempted,receipt:j.receipt??null,archive:j.archive??null};}
  async page(options){return this.workspace.catalogue(async()=>{const page=await this.feed.page(options),items=[];for(const row of page.items){const d=await this.read(row.id),job=await this.queue.read(row.id);if(!job)throw new AppError('JOB_DAMAGED');const verification=await this.workspace.readMetadata('.observanda/deployment-verifications/'+row.id+'.json',4096);items.push({...this.summary(d),verification:verification?JSON.parse(verification):null,job});}return {items,next:page.next};});}
 }
 export function deploymentJobDefinitions(workspace,publisher,queue,options={}){const service=()=>new DeploymentJobs(workspace,publisher,queue(),options);return {'publication.deploy':{authorize:job=>service().authorize(job),prepare:(job,options)=>service().prepare(job,options),commit:(job,receipt)=>service().commit(job,receipt)}};}

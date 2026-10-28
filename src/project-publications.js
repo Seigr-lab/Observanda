@@ -25,6 +25,7 @@ import {publicationSelection} from './publication-selection.js';
 import {LocalExport} from './local-export.js';
 import {DeploymentJobs} from './deployment-jobs.js';
 import {GithubRepositorySetup} from './github-repository.js';
+import {GithubPlanJobs} from './github-plan-jobs.js';
 import {PublicationVerificationJobs} from './publication-verification-jobs.js';
 import {websiteWorkspace,websiteJobQueue} from './website-workspace.js';
 import {websitePublisher} from './workspace-jobs.js';
@@ -141,7 +142,7 @@ export class ProjectPublications{
    if(['start','initialize'].includes(method)){const job=await setup[method](data);worker.wake();return {job:jobSummary(job)};}
    if(method==='review')return setup.review(data);if(method==='current')return {job:jobSummary(await setup.current())};return {job:await control('publication.repository',method)};
   }
-  const githubIdle=async()=>{if(await baseQueue.hasActive(['publication.deploy','publication.repository']))throw new AppError('GITHUB_PUBLICATION_BUSY');};
+  const githubIdle=async()=>{if(await baseQueue.hasActive(['publication.deploy','publication.repository','publication.destination-review']))throw new AppError('GITHUB_PUBLICATION_BUSY');};
   if(operation.startsWith('github-connection/')){
    const method=operation.slice(18),connection=publisher.connection;
    if(!connection){if(method==='status')return {available:false,accounts:[],selected:null,connected:false,signIn:null,error:null};throw new AppError('GITHUB_HELPER_MISSING');}
@@ -156,8 +157,13 @@ export class ProjectPublications{
   if(method==='connect'){await githubIdle();await publisher.connection?.cancel();return publisher.connect(data.token);}
   if(method==='disconnect'){await githubIdle();publisher.token=null;return publisher.read();}
   if(method==='check')return publisher.check({reviewExisting:true});
+  if(method==='plan-operation'||method==='plan'&&data.background===true){
+   const plans=new GithubPlanJobs(workspace,publisher,queue,{sourceReader,sourceAccess:this.entry.sourceAccess});
+   const result=method==='plan'?{job:jobSummary(await plans.start(data))}:await plans.operation(data);
+   if(data.action==='cancel')worker.cancel(data.id);else worker.wake();return result;
+  }
   if(method==='plan-page')return publisher.destinationPlanPage(data);
-  if(method==='plan'){const value=await retained(data.id);if(data.rollbackReview)await new PublicationRollback(workspace,publisher,{sourceReader}).authorize(value,data.rollbackReview);else if(value.configEtag!==data.configEtag||!await publicationRevisionCurrent(workspace,value))throw new AppError('PUBLISH_STALE');return publisher.reviewDestination(value,data.configEtag,{signal});}
+  if(method==='plan'){const value=await retained(data.id);if(data.rollbackReview)await new PublicationRollback(workspace,publisher,{sourceReader}).authorize(value,data.rollbackReview);else if(value.configEtag!==data.configEtag||!await publicationRevisionCurrent(workspace,value))throw new AppError('PUBLISH_STALE');return publisher.reviewDestination(value,data.configEtag,{signal,replaceExisting:data.replaceExisting,archiveBranch:data.archiveBranch});}
   if(['verify','verification','verification-cancel','verification-retry'].includes(method)){
    const checks=new PublicationVerificationJobs(workspace,publisher,queue);
    if(method==='verify'){const job=await checks.start(data);worker.wake();return {job:jobSummary(job)};}

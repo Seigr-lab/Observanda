@@ -873,7 +873,7 @@ function restoreEditorScroll(){
   frame?.addEventListener('load',restore,{once:true});restore();
 }
 function showReview(preview){
- const path=state.page==='website'?website.currentPath():null;preview.returnTo=state.page==='website'?'website':'publishing';preview.currentPage=preview.pages.some(p=>p.path===path)?path:preview.pages[0]?.path;preview.url=publicationPreviewUrl(state,preview.id,preview.currentPage);state.preview=preview;state.page='review';render();window.scrollTo(0,0);
+ const path=state.page==='website'?website.currentPath():null;preview.returnTo=state.page==='website'?'website':'publishing';preview.currentPage=preview.pages.some(p=>p.path===path)?path:preview.pages[0]?.path;preview.url=publicationPreviewUrl(state,preview.id,preview.currentPage);state.preview=preview;state.page='review';render();void publishUI.ready().then(ui=>ui.restorePlan(preview)).catch(report);window.scrollTo(0,0);
 }
 function renderReview() {
   return state.preview?publicationReviewView(state.preview,{esc,field,option,icon}):publishUI.view();
@@ -1354,7 +1354,7 @@ async function restoreRoute({websiteReady=false}={}){
        state.search=typeof saved.search==='string'?saved.search:'';state.filter=validViewFilter(saved.filter)?saved.filter:'all';state.recordBrowse=recordBrowse(saved.recordBrowse);}
       if(moduleForPage(state.page)&&!enabledModule(state.dashboardSettings,moduleForPage(state.page).id)){render();return;}
       if(state.page==='website')await website.load();
-      if(state.page==='review'&&state.reviewId)state.preview=await publicationJobs.read(state.reviewId);
+      if(state.page==='review'&&state.reviewId){const preview=await publicationJobs.read(state.reviewId);preview.currentPage=preview.pages[0]?.path;preview.url=publicationPreviewUrl(state,preview.id,preview.currentPage);state.preview=preview;await (await publishUI.ready()).restorePlan(preview);}
       if(state.page==='laboratory'){if(state.labSampleRoute){await labUI.action({dataset:{action:'laboratory-samples'}});return;}state.page=moduleDestination('laboratory');history.replaceState(history.state,'',routeFor(state));}
       if(state.page==='integrations')await publishUI.load();
       if(state.page==='publishing'){await publishUI.action({dataset:{action:'publishing'}});return;}

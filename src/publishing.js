@@ -6,7 +6,7 @@ import {publicationRevisionCurrent} from './publication-freshness.js';
 import {deploymentInventory,recordDeploymentInventory,prepareDeploymentInventory,assertDeploymentInventory,deploymentInventoryPaths,verifyLiveFiles,LiveVerificationError} from './publication-live.js';
 import {publicationText} from './web/publication-messages.js';
 import {deploymentUncertain} from './publication-deployment-state.js';
-import {indexedGithubFilePlan,githubPlanReview,admitGithubPlan,githubDirectory,readGithubOwnership,writeGithubOwnership} from './github-publication-plan.js';
+import {indexedGithubFilePlan,githubPlanReview,admitGithubPlan,githubDirectory,githubPagesProtection,githubArchiveBranch,readGithubOwnership,writeGithubOwnership} from './github-publication-plan.js';
 import {githubTreeRecords} from './github-trees.js';
 import {deployGithub} from './github-deployment.js';
 import {contentSize} from './file-content.js';
@@ -90,7 +90,8 @@ export class Publisher {
     try { const user = await this.github('/user'); return { connected: true, account: user.login }; }
     catch (e) { this.token = null; throw e; }
   }
-  async buildDestinationPlan(candidate, configEtag, {signal}={}) {
+  async buildDestinationPlan(candidate, configEtag, {signal,replaceExisting=false,archiveBranch=null,onProgress=async()=>{},write}={}) {
+    if(typeof replaceExisting!=='boolean'||archiveBranch!==null&&(!replaceExisting||!githubArchiveBranch(archiveBranch)))throw new AppError('INVALID');
     signal?.throwIfAborted();
     const remote=(route,missing=false)=>{signal?.throwIfAborted();return this.github(route,'GET',undefined,missing,signal);};
     await verifyPublicationCandidate(candidate);
@@ -107,7 +108,8 @@ export class Publisher {
       const initial=await remote(base+'/git/ref/heads/'+encodeURIComponent(repo.default_branch),true);
       if(!initial)throw new AppError('PUBLISH_EMPTY_REPO');
     }
-    const pages=c.pages===false?null:pagesSource(await remote(base+'/pages',true));
+    if(archiveBranch&&(!head||archiveBranch===c.branch||await remote(base+'/git/ref/heads/'+archiveBranch,true)))throw new AppError('PUBLISH_ARCHIVE_BRANCH');
+    const remotePages=c.pages===false?null:await remote(base+'/pages',true),pages=pagesSource(remotePages);
     const previous=(await this.readFile(this.receiptsFile,{}))[this.destinationKey(saved.config)];
     const setup=await this.readFile(path.join(this.workspace.root,'.observanda/repository-setup.json'),null);
     let initialized=false;
@@ -117,15 +119,16 @@ export class Publisher {
     }
     const ownership=await readGithubOwnership(this,saved.config,previous);
     if(ownership&&ownership.repositoryId!==repo.id)throw new AppError('PUBLISH_OWNERSHIP');
-    const changes=await indexedGithubFilePlan(this.workspace,candidate,files,ownership,c.directory??'',{signal});
-    return admitGithubPlan({version:2,id:randomUUID(),releaseId:candidate.id,configEtag,repositoryId:repo.id,baseTree,head,pages,requiresReview:!!head&&head!==previous?.commit&&!initialized||!!pages&&(pages.build_type!=='legacy'||pages.branch!==c.branch||pages.path!=='/')||changes.counts.conflicts>0||changes.counts.removed>0,...changes});
+    const changes=await indexedGithubFilePlan(this.workspace,candidate,files,ownership,c.directory??'',{signal,replaceExisting,onProgress,write});
+    return admitGithubPlan({version:replaceExisting?3:2,...(replaceExisting?{replacement:{policy:1,directory:c.directory??'',archiveBranch},pagesProtection:githubPagesProtection(remotePages)}:{}),id:randomUUID(),releaseId:candidate.id,configEtag,repositoryId:repo.id,baseTree,head,pages,requiresReview:replaceExisting||!!head&&head!==previous?.commit&&!initialized||!!pages&&(pages.build_type!=='legacy'||pages.branch!==c.branch||pages.path!=='/')||changes.counts.conflicts>0||changes.counts.removed>0,...changes});
   }
-  async reviewDestination(candidate,configEtag,{signal}={}){
-    const plan=await this.buildDestinationPlan(candidate,configEtag,{signal}),saved=await this.read();
-    await this.workspace.withLock(async()=>{
+  async reviewDestination(candidate,configEtag,{signal,replaceExisting=false,archiveBranch=null,onProgress=async()=>{},beforeCommit=async()=>{},write}={}){
+    const plan=await this.buildDestinationPlan(candidate,configEtag,{signal,replaceExisting,archiveBranch,onProgress,write}),saved=await this.read();
+    await (write??(operation=>this.workspace.withLock(operation)))(async()=>{
       signal?.throwIfAborted();
       if((await this.read()).etag!==configEtag)throw new AppError('PUBLISH_STALE');
       signal?.throwIfAborted();
+      await beforeCommit();
       await this.workspace.writeMetadata('.observanda/publishing-plan/'+this.destinationKey(saved.config)+'.json',serialize(plan));
     });
     return githubPlanReview(this.workspace,plan);
@@ -133,7 +136,8 @@ export class Publisher {
   async readDestinationPlan(candidate,configEtag,{destinationReview,destinationReviewed}={}) {
     if(destinationReview===undefined)return null;
     const saved=await this.read(),plan=await this.readFile(path.join(this.workspace.root,'.observanda/publishing-plan/'+this.destinationKey(saved.config)+'.json'),null,16*1024*1024);
-    if(!plan||![1,2].includes(plan.version)||plan.version===1&&(!Array.isArray(plan.entries)||!Array.isArray(plan.preservedEntries))||plan.id!==destinationReview||plan.configEtag!==configEtag||saved.etag!==configEtag||plan.releaseId!==candidate.id||plan.requiresReview&&destinationReviewed!==true)throw new AppError('PUBLISH_STALE');
+    if(!plan||![1,2,3].includes(plan.version)||plan.version===1&&(!Array.isArray(plan.entries)||!Array.isArray(plan.preservedEntries))||plan.id!==destinationReview||plan.configEtag!==configEtag||saved.etag!==configEtag||plan.releaseId!==candidate.id||plan.requiresReview&&destinationReviewed!==true)throw new AppError('PUBLISH_STALE');
+    if(plan.version===3&&(plan.replacement.directory!==(saved.config.github.directory??'')||destinationReviewed!==true))throw new AppError('PUBLISH_STALE');
     if(githubPlanReader(this.workspace,plan).count('conflicts'))throw new AppError('PUBLISH_CONFLICT');
     return admitGithubPlan(plan);
   }
@@ -157,6 +161,8 @@ export class Publisher {
     // Git's reference API cannot initialize a repository with no commits.
     if (!ref) { const initial = await this.github(`${base}/git/ref/heads/${encodeURIComponent(repo.default_branch)}`, 'GET', undefined, true); if (!initial) throw new AppError('PUBLISH_EMPTY_REPO'); }
     const pages = c.github.pages===false ? null : await this.github(`${base}/pages`, 'GET', undefined, true);
+    if(plan?.replacement?.archiveBranch&&(plan.replacement.archiveBranch===c.github.branch||await this.github(base+'/git/ref/heads/'+plan.replacement.archiveBranch,'GET',undefined,true)))throw new AppError('PUBLISH_ARCHIVE_BRANCH');
+    if(plan?.version===3&&JSON.stringify(githubPagesProtection(pages))!==JSON.stringify(plan.pagesProtection))throw new AppError('PUBLISH_STALE');
     if (plan && JSON.stringify(pagesSource(pages))!==JSON.stringify(plan.pages)) throw new AppError('PUBLISH_STALE');
     const pagesChange=pages&&(pages.build_type!=='legacy'||pages.source?.branch!==c.github.branch||pages.source?.path!=='/');
     if(pagesChange&&!plan&&!reviewExisting)throw new AppError('PUBLISH_PAGES');

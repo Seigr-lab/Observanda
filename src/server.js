@@ -69,6 +69,7 @@ import {moveSource} from './workspace-move-state.js';
 import {operationTransfer} from './operation-progress.js';
 import {operationResponse} from './operation-response.js';
 import {createApplicationAssets} from './application-assets.js';
+import {GithubPlanJobs} from './github-plan-jobs.js';
 import {PublicationVerificationJobs} from './publication-verification-jobs.js';
 import {readBOMSource} from './bom-import.js';
 import {DesignCandidates} from './design-candidates.js';
@@ -265,7 +266,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
   const deletions=new WorkspaceDeletions((preferencesFile??deviceStore.file)+'.workspace-deletions');
   if(root&&(await workspaceDeletion(root)||(await deletions.list()).some(item=>item.source===root&&item.phase!=='prepared')))root=null;
   let context=makeContext(root,expectedExisting), origin, publishing=false, importing=false, changing=false, activeWrites=0, loginBusy=false;
-  const assertGithubIdle=async()=>{if(publishing||await context.jobs?.queue.hasActive(['publication.deploy','publication.repository']))throw new AppError('GITHUB_PUBLICATION_BUSY');};
+  const assertGithubIdle=async()=>{if(publishing||await context.jobs?.queue.hasActive(['publication.deploy','publication.repository','publication.destination-review']))throw new AppError('GITHUB_PUBLICATION_BUSY');};
   const sessions=new Map(), plans=new Map(), failures=new Map();
   const launchToken=randomBytes(32).toString('hex');
   let contextRequired=false;
@@ -1210,6 +1211,11 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         if (url.pathname === '/api/publishing/connect') {await assertGithubIdle();await publisher.connection?.cancel();return json(await publisher.connect(data.token));}
         if (url.pathname === '/api/publishing/disconnect') {await assertGithubIdle();publisher.token = null;return json(await publisher.read());}
         if (url.pathname === '/api/publishing/check') return json(await publisher.check({reviewExisting:true}));
+        if(url.pathname==='/api/publishing/plan-operation'||url.pathname==='/api/publishing/plan'&&data.background===true){
+          startJobs(context);const plans=new GithubPlanJobs(workspace,publisher,publicationQueue(),{sourceReader,sourceAccess:context.publicationSourceAccess});
+          const result=url.pathname.endsWith('/plan')?{job:jobSummary(await plans.start(data))}:await plans.operation(data);
+          if(data.action==='cancel')context.jobs.worker.cancel(data.id);else context.jobs.worker.wake();return json(result,url.pathname.endsWith('/plan')?202:200);
+        }
         if (url.pathname === '/api/publishing/plan-page') return json(await publisher.destinationPlanPage(data));
         if (url.pathname === '/api/publishing/plan') {
           const candidate=await retainedCandidate(data.id);
@@ -1217,7 +1223,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
           if(data.rollbackReview)await new PublicationRollback(workspace,publisher,{sourceReader}).authorize(candidate,data.rollbackReview);
           else if(candidate.configEtag!==data.configEtag||!await publicationRevisionCurrent(workspace,candidate))throw new AppError('PUBLISH_STALE');
           const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
-          try{return json(await publisher.reviewDestination(candidate,data.configEtag,{signal:controller.signal}));}
+          try{return json(await publisher.reviewDestination(candidate,data.configEtag,{signal:controller.signal,replaceExisting:data.replaceExisting,archiveBranch:data.archiveBranch}));}
           finally{res.removeListener('close',abort);}
         }
         if(['/api/publishing/verify','/api/publishing/verification','/api/publishing/verification-cancel','/api/publishing/verification-retry'].includes(url.pathname)){
