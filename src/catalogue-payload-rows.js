@@ -14,8 +14,12 @@ export async function* cataloguePayloadRows(db,table,columns){
  }
  for await(const row of db.rows('SELECT '+keys.join(',')+',octet_length(payload) AS payload_bytes FROM '+table+' ORDER BY '+keys.join(','),[],{batchSize:32})){
   if(!Number.isSafeInteger(row.payload_bytes)||row.payload_bytes<1)damaged();
-  if(batch.length&&(batch.length===32||bytes+row.payload_bytes>256*1024)){yield* load();batch=[];bytes=0;}
-  batch.push(row);bytes+=row.payload_bytes;
+  // Include key bytes and reserve at least 1 KiB per row for bookkeeping and
+  // query parameters. Small payloads can use the byte budget without a fixed
+  // 32-row round trip; metadata cursors keep their existing bounded window.
+  const cost=Math.max(1024,row.payload_bytes+keys.reduce((sum,key)=>sum+Buffer.byteLength(String(row[key])),0));
+  if(batch.length&&bytes+cost>256*1024){yield* load();batch=[];bytes=0;}
+  batch.push(row);bytes+=cost;
  }
  if(batch.length)yield* load();
 }

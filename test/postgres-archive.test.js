@@ -67,6 +67,23 @@ test('archive transport batches small encrypted rows and isolates large original
 });
 
 
+test('small catalogue payloads use a bounded byte budget and stop fetching when the consumer leaves',async()=>{
+ const source=Array.from({length:1024},(_,i)=>({slot:'item-'+String(i).padStart(4,'0'),payload:Buffer.alloc(128,i%256)}));
+ let fetched=0,visited=0,closed=false;
+ const db={
+  async *rows(){try{for(const row of source){visited++;yield {slot:row.slot,payload_bytes:row.payload.length};}}finally{closed=true;}},
+  async all(sql,...ids){
+   fetched++;assert.ok(ids.length<=256);assert.ok(Buffer.byteLength(sql)<16*1024);
+   return source.filter(row=>ids.includes(row.slot)).toReversed();
+  }
+ };
+ assert.deepEqual(await Array.fromAsync(cataloguePayloadRows(db,'state',['slot','payload'])),source);
+ assert.ok(fetched<=8,'small payload transport must not require a query for every 32 rows');assert.equal(visited,source.length);assert.equal(closed,true);
+ fetched=0;visited=0;closed=false;
+ for await(const row of cataloguePayloadRows(db,'state',['slot','payload'])){assert.deepEqual(row,source[0]);break;}
+ assert.equal(fetched,1);assert.ok(visited<source.length);assert.equal(closed,true);
+});
+
 test('archive and comparison stream rows once without a preliminary count scan',async()=>{
  const rows=Array.from({length:70},(_,i)=>({slot:i?'item-'+i:'head',payload:seal(Buffer.from('row '+i),randomBytes(32),'test')}));
  let visited=0;
