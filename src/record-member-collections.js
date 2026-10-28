@@ -63,8 +63,15 @@ export class RecordMemberCollections extends ObjectIndex{
    // Membership values are small. Bound both row count and ciphertext bytes;
    // oversized or missing values still take the ordinary checked read path.
    const slots=batch.map(entry=>'record-member-item:'+entry.revision),found=new Map((await self.store.db.all('SELECT slot,payload FROM state WHERE slot=ANY($1::text[]) AND octet_length(payload)<=8192',slots)).map(row=>[row.slot,row.payload]));
+   const items=[];
    for(const entry of batch){
-    const payload=found.get('record-member-item:'+entry.revision),item=payload?self.decodeValue(entry,payload):await self.value(entry);
+    const payload=found.get('record-member-item:'+entry.revision);items.push(payload?self.decodeValue(entry,payload):await self.value(entry));
+   }
+   // Verify the reverse identities with the same authenticated search paths,
+   // sharing reads across this bounded window instead of one query per node.
+   await self.prefetchKeys({root},items.map(item=>'id:'+item.id));
+   for(let i=0;i<batch.length;i++){
+    const entry=batch[i],item=items[i];
     if(entry.id!==positionKey(position)||item.position!==position||position>=total)fail();
     const reverse=await self.find({root},'id:'+item.id);if(reverse?.revision!==entry.revision)fail();
     yield item.id;position++;

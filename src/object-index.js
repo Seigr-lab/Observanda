@@ -188,12 +188,14 @@ export class ObjectIndex{
  }
  async prefetchKeys(head,ids,{signal}={}){
   signal?.throwIfAborted();
-  if(this.immutable||this.nodeStorage||!this.cacheReads||!Array.isArray(ids)||ids.length>32||ids.some(id=>!identifier(id)))throw new AppError('INVALID');
+  if(this.nodeStorage||!this.immutable&&!this.cacheReads||!Array.isArray(ids)||ids.length>32||ids.some(id=>!identifier(id)))throw new AppError('INVALID');
   if(!head.legacy&&!validRef(head.root))fail();
   if(head.legacy||!head.root||!ids.length)return;
   // Only the selected search paths share a read. Each frontier has at most
   // thirty-two nodes; oversized payloads retain the ordinary point-read path.
   // Authentication and bounds remain identical to subsequent find/change calls.
+  // slot() selects retained hashes for immutable indexes and stable keys for
+  // mutable ones; pending writer nodes always take precedence over stored rows.
   let frontier=[{ref:head.root,lower:null,upper:null,ids}];
   while(frontier.length){
    signal?.throwIfAborted();

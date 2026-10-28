@@ -27,7 +27,7 @@ test('full-record title saves reuse unchanged derived data within a database que
  t.diagnostic('129-section title save: '+queries+' queries, '+Math.round(performance.now()-start)+' ms');
  // Count round trips, not wall time: this also catches regressions on fast
  // local drives which become much more expensive on slower storage.
- assert.ok(queries<2500,queries+' queries for a title-only full-record save');
+ assert.ok(queries<2000,queries+' queries for a title-only full-record save');
  const saved=(await f.workspace.read()).book.entries.find(row=>row.id===changed.id);
  assert.equal(saved.title,changed.title);assert.deepEqual(saved.sections,previous.sections);
  await f.workspace.catalogue(store=>store.verifySnapshot(undefined,book.id));
@@ -70,5 +70,13 @@ test('document windows batch authenticated reads without reading outside the req
   });
   try{await assert.rejects(Array.fromAsync(new RecordMemberCollections(store).ids(row,'sections')));assert.ok(swapped,'Exercised batched membership authentication');}
   finally{corrupt.mock.restore();}
+  let indexSwapped=false;
+  const corruptIndex=t.mock.method(store.db,'all',async(sql,...args)=>{
+   const rows=await all(sql,...args);
+   if(sql.includes('octet_length(payload)<=8192')&&args[0]?.[0]?.startsWith('record-member-collection:')&&rows.length>1){indexSwapped=true;rows[0]={...rows[0],payload:rows[1].payload};}
+   return rows;
+  });
+  try{await assert.rejects(Array.fromAsync(new RecordMemberCollections(store).ids(row,'sections')));assert.ok(indexSwapped,'Exercised encrypted reverse-identity path authentication');}
+  finally{corruptIndex.mock.restore();}
  });
 });

@@ -91,7 +91,16 @@ export class SnapshotIndex extends ObjectIndex{
   const source=changed(),memory=new Map();
   const apply=async entries=>{
    for(const row of before)for await(const key of this.keys(row))if(!await entries.has(key)){root=await this.change(root,key,null);if(this.pending.size>=256)await this.flush(root);}
-   for await(const {key,version} of entries.items()){root=await this.change(root,key,version);if(this.pending.size>=256)await this.flush(root);}
+   let batch=[];
+   const update=async()=>{
+    // Read only this window's paths before editing. Each change still checks
+    // its current root, including rotations and pending nodes from earlier keys.
+    await this.prefetchKeys({root},batch.map(item=>item.key));
+    for(const {key,version} of batch){root=await this.change(root,key,version);if(this.pending.size>=256)await this.flush(root);}
+    batch=[];
+   };
+   for await(const item of entries.items()){batch.push(item);if(batch.length===32)await update();}
+   if(batch.length)await update();
    await this.flush(root);return root;
   };
   try{

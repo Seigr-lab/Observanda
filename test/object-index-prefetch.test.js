@@ -8,7 +8,7 @@ import {digest,serialize} from '../src/storage-format.js';
 
 const key=n=>'metadata:.observanda/prefetch-fixture/'+String(n).padStart(5,'0')+'.json';
 const revision=value=>digest(serialize(value));
-function fixture(count=2047){
+function fixture(count=2047,{immutable=false}={}){
  const state=new Map(),objects=new Map(),reads={points:[],batches:[],objects:[],objectBatches:[]};let onBatch=null,onObjects=null,failWrite=false;
  const store={workspace:{root:'synthetic-index-prefetch'},encode:(_table,_id,value)=>Buffer.from(serialize(value)),decode:(_table,_id,payload)=>JSON.parse(payload.toString()),db:{
   async get(sql,id){
@@ -34,7 +34,7 @@ function fixture(count=2047){
   }
  }};
  for(const name of ['objectIndex','objectValue','object'])store[name]=ResearchCatalogue.prototype[name];
- const seed=new ObjectIndex(store),build=(start,end)=>{if(start===end)return null;const at=Math.floor((start+end)/2),id=key(at*2),value={original:at};objects.set(id,store.encode('object',id,value));return seed.make(id,revision(value),build(start,at),build(at+1,end));},root=build(0,count);
+ const seed=new ObjectIndex(store,{immutable}),build=(start,end)=>{if(start===end)return null;const at=Math.floor((start+end)/2),id=key(at*2),value={original:at};objects.set(id,store.encode('object',id,value));return seed.make(id,revision(value),build(start,at),build(at+1,end));},root=build(0,count);
  for(const [slot,node] of seed.writes)state.set(slot,store.encode('state',slot,node));state.set('objects',store.encode('state','objects',{formatVersion:2,root}));
  const snapshot=()=>({state:new Map(state),objects:new Map(objects)});
  const restore=before=>{state.clear();objects.clear();for(const item of before.state)state.set(...item);for(const item of before.objects)objects.set(...item);};
@@ -48,6 +48,48 @@ async function edit(f,ids,{prefetch=false,signal,after=()=>{}}={}){
   await after(index);
  },{prefetchIds:prefetch?ids:[],signal}));
 }
+
+test('immutable selected-path prefetch reduces reads without changing retained revisions or cache limits',async t=>{
+ const measure=async prefetch=>{
+  const f=fixture(511,{immutable:true}),index=new ObjectIndex(f.store,{immutable:true}),head={root:f.root},ids=Array.from({length:32},(_,i)=>key(i*30));
+  const before=f.snapshot();if(prefetch)await index.prefetchKeys(head,ids);
+  for(let i=0;i<ids.length;i++)assert.equal((await index.find(head,ids[i])).revision,revision({original:i*15}));
+  assert.deepEqual(f.snapshot(),before);assert.ok(index.cache.size<=128);assert.ok(index.cacheBytes<=16*1024*1024);
+  assert.ok(f.reads.batches.every(slots=>slots.length<=32));
+  return f.reads.points.length+f.reads.batches.length;
+ };
+ const ordinary=await measure(false),batched=await measure(true);t.diagnostic(JSON.stringify({ordinary,batched}));
+ assert.ok(batched<ordinary*.75,'Selected immutable branches must share database round trips');
+});
+
+test('immutable prefetch rejects corrupted content and references, including already cached branches',async()=>{
+ for(const corrupt of ['hash','missing','height','count','key','shape']){
+  const f=fixture(31,{immutable:true}),index=new ObjectIndex(f.store,{immutable:true}),head={root:f.root},slot=index.slot(head.root);
+  if(corrupt==='hash'){const node=JSON.parse(f.state.get(slot));node.revision='0'.repeat(64);f.state.set(slot,Buffer.from(serialize(node)));}
+  if(corrupt==='missing')f.state.delete(slot);
+  if(corrupt==='height'||corrupt==='count')head.root={...head.root,[corrupt]:head.root[corrupt]+1};
+  if(corrupt==='key')head.root={...head.root,key:'0'.repeat(64)};
+  if(corrupt==='shape')head.root={...head.root,extra:true};
+  await assert.rejects(index.prefetchKeys(head,[key(0)]));
+ }
+ const f=fixture(0),writer=new ObjectIndex(f.store,{immutable:true}),left=writer.make('z','1'.repeat(64)),root=writer.make('m','1'.repeat(64),left);
+ for(const [slot,node] of writer.writes)f.state.set(slot,Buffer.from(serialize(node)));
+ const reader=new ObjectIndex(f.store,{immutable:true});await reader.node(root);await reader.node(left);
+ await assert.rejects(reader.prefetchKeys({root},['a']),{code:'CATALOGUE_DAMAGED'});
+ await assert.rejects(reader.prefetchKeys({root:{...root,count:root.count+1}},['m']),{code:'CATALOGUE_DAMAGED'});
+});
+
+test('immutable prefetch respects cancellation and pending versions, and rechecks storage in a fresh reader',async()=>{
+ const f=fixture(31,{immutable:true}),reader=new ObjectIndex(f.store,{immutable:true}),head={root:f.root},controller=new AbortController();
+ f.onBatch(()=>controller.abort());await assert.rejects(reader.prefetchKeys(head,[key(0)],{signal:controller.signal}),{name:'AbortError'});
+ assert.equal(f.reads.batches.length,1);f.onBatch(null);
+ await reader.prefetchKeys(head,[key(0)]);
+ const slot=reader.slot(f.root);f.state.set(slot,Buffer.from(serialize({damaged:true})));
+ await assert.rejects(new ObjectIndex(f.store,{immutable:true}).prefetchKeys(head,[key(0)]));
+ const pending=new ObjectIndex(f.store,{immutable:true}),root=pending.make('pending','1'.repeat(64)),before=f.reads.batches.length;
+ await pending.prefetchKeys({root},['pending']);assert.equal((await pending.find({root},'pending')).revision,'1'.repeat(64));assert.equal(f.reads.batches.length,before);
+ await assert.rejects(pending.prefetchKeys({root},Array(33).fill('pending')),{code:'INVALID'});
+});
 
 test('pending-key prefetch reduces cold branch round trips and preserves exact sequential writes',async()=>{
  const ordinary=fixture(),prefetched=fixture(),ids=Array.from({length:32},(_,i)=>key(i*126+1));
