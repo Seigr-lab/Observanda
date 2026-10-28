@@ -1,7 +1,7 @@
 import {materialRequest} from './material-route-policy.js';
 import {pdfDocumentRequest} from './pdf-route-policy.js';
 import {publicationJobControlRequest} from './publication-job-policy.js';
-import {reviewRequest} from './review-requests.js';
+import {reviewRequest} from './review-route-policy.js';
 import {researchRequest} from './research-requests.js';
 import {recordStarterRequest} from './record-starter-requests.js';
 // Only routes owned by snapshot readers may continue during a storage copy or
@@ -26,8 +26,9 @@ export const workspaceSnapshotRequest=(method,route)=>{
  const material=materialRequest(route);if(material)return method===material.method&&material.snapshot;
  const pdf=pdfDocumentRequest(route,method);if(pdf)return pdf.snapshot;
  const publication=publicationJobControlRequest(route);if(publication)return method===publication.method&&publication.snapshot;
- if(method==='GET')return Boolean(reviewRequest(route,method)&&!reviewRequest(route,method).write)||/^\/api\/live\/figures\/(?:[a-f0-9-]{36}\/){2}[a-f0-9-]{36}$/.test(route)||/^\/api\/sharing\/figures\/[a-f0-9-]{36}\/(?:base|incoming|current)\/[a-f0-9-]{36}\/[a-f0-9-]{36}$/.test(route)||get.has(route)||/^\/api\/fonts\/custom-[a-f0-9]{64}$/.test(route)||/^\/(?:appearance-preview|preview)\/[a-f0-9]{64}\/.+/.test(route)||/^\/api\/appearance-preview\/[a-f0-9]{64}\/pages$/.test(route);
- if(method!=='POST')return false;const command=recordStarterRequest(route)??researchRequest(route)??reviewRequest(route);return post.has(route)||route==='/api/research/views/list'||Boolean(command&&!command.write);
+ const review=reviewRequest(route,method);if(review)return review.snapshot;
+ if(method==='GET')return /^\/api\/live\/figures\/(?:[a-f0-9-]{36}\/){2}[a-f0-9-]{36}$/.test(route)||/^\/api\/sharing\/figures\/[a-f0-9-]{36}\/(?:base|incoming|current)\/[a-f0-9-]{36}\/[a-f0-9-]{36}$/.test(route)||get.has(route)||/^\/api\/fonts\/custom-[a-f0-9]{64}$/.test(route)||/^\/(?:appearance-preview|preview)\/[a-f0-9]{64}\/.+/.test(route)||/^\/api\/appearance-preview\/[a-f0-9]{64}\/pages$/.test(route);
+ if(method!=='POST')return false;const command=recordStarterRequest(route)??researchRequest(route);return post.has(route)||route==='/api/research/views/list'||Boolean(command&&!command.write);
 };
 export class WorkspaceReadAdmission{
  constructor(){this.accepting=true;this.active=new Set();}

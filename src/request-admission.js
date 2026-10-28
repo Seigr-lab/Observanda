@@ -2,6 +2,7 @@ import {materialRequest} from './material-route-policy.js';
 import {AppError} from './errors.js';
 import {publicationJobControlRequest} from './publication-job-policy.js';
 import {pdfDocumentRequest} from './pdf-route-policy.js';
+import {reviewRequest} from './review-route-policy.js';
 
 const controlGet=new Set(['/api/health','/api/access/status','/api/diagnostics','/api/writer-recovery','/api/activity']);
 const controlPost=new Set([
@@ -19,6 +20,7 @@ export function requestLane(method,pathname){
  const material=materialRequest(route);if(material&&material.method===method)return material.admission;
  const publication=publicationJobControlRequest(route);if(publication&&publication.method===method)return publication.admission;
  const pdf=pdfDocumentRequest(route,method);if(pdf)return pdf.admission;
+ const review=reviewRequest(route,method);if(review)return review.admission;
  return (method==='GET'?controlGet.has(route):method==='POST'&&controlPost.has(route))?'control':'work';
 }
 const busy=()=>new AppError('WORKLOAD_BUSY');

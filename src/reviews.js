@@ -11,9 +11,9 @@ import {ReviewRecords,validReviewRecords} from './review-records.js';
 import {ReviewScopeIndex} from './review-scope-index.js';
 import {writeReviewSummary,readReviewSummary,reviewPage} from './review-summaries.js';
 import {exact,uuid,text,requireValue,unique} from './modules/validation.js';
+import {reviewOperations,reviewReadOperations} from './review-route-policy.js';
+export {reviewOperations,reviewReadOperations} from './review-route-policy.js';
 const root='.observanda/reviews/';
-export const reviewReadOperations=Object.freeze(['plan','identity','list','read','export','download','figure','figure-export']);
-export const reviewOperations=Object.freeze([...reviewReadOperations,'contact','untrust','create','import','receive','respond']);
 export {reviewDecisions} from './review-contract.js';
 export class Reviews{
  constructor(workspace,device){this.workspace=workspace;this.identity=device?new ReviewIdentity(device):null;this.records=new ReviewRecords(workspace);this.stages=new ReviewStaging(workspace);}
