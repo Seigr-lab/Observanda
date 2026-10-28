@@ -8,12 +8,18 @@ import {LabBookAccessSession} from './lab-book-access-session.js';
 import {readAccess} from './access.js';
 import {clearVault} from './encryption.js';
 import {AppError} from './errors.js';
+import {createCatalogueConnections} from './catalogue-connections.js';
 const accessCodes=new Set(['ACCESS_LOCKED','ACCESS_DENIED','ACCESS_WAIT','AUTH','DEVICE_UNKNOWN']);
 const unavailableCodes=new Set([...accessCodes,'STORAGE_PROJECT_BUSY','LAB_BOOK_IMPORT_PENDING','STORAGE_INCOMPLETE']);
 export function projectRecordCollection(application,client,check){
  return async(consume,{workspaceId,query,scope,signal,selection=null,namespaces=null,includeBooks=true,includeOwner=()=>true,onUnavailable=null})=>{
   const registry=await application.registry();
   return withProjectCollectionDirectory(registry,{workspaceId,query,scope,selection,namespaces,signal},async directory=>{
+  // The directory already owns its pinned read. Keep access rechecks on
+  // separate request-owned connections so nested project/book reads cannot
+  // queue behind that snapshot. Reuse never extends a check's transaction.
+  const connections=createCatalogueConnections(application.workspace);
+  try{return await connections.run(async()=>{
   const checks=[];
   await check();signal?.throwIfAborted();
   if(directory.includeRoot&&includeOwner({workspaceId:registry.workspaceId,projectId:null,labBookId:null})&&(!namespaces||namespaces.has(registry.workspaceId)))await consume(application.workspace,{workspaceId:registry.workspaceId,projectId:null,labBookId:null},await directory.ownerScope(null)??directory.chosen);
@@ -50,6 +56,7 @@ export function projectRecordCollection(application,client,check){
   }
   if(await registry.version()!==directory.revision)throw new AppError('RECORD_QUERY_CURSOR');
   for(const verify of checks){signal?.throwIfAborted();await verify();}await check();
+  });}finally{await connections.close();}
   });
  };
 }

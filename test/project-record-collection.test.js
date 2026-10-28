@@ -25,7 +25,8 @@ import {createWorkspaceAccess,takeCreatedVault,readAccess,verifyAccess} from '..
 import {clearVault} from '../src/encryption.js';
 import {viewQuery} from '../src/web/record-view-model.js';
 import {WebsiteSites} from '../src/website-sites.js';
-test('project collection reads nested owners, authenticates each book and keeps pinned pages across writes',async()=>{
+import {projectRecordCollection} from '../src/project-record-collection.js';
+test('project collection reads nested owners, authenticates each book and keeps pinned pages across writes',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-record-collection-')),runtime=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(runtime),keys=[];let application;const originalRecord=ResearchCatalogue.prototype.record;
  try{
   const root=sampleNotebook(),f=await encryptedFixture(directory,root);keys.push(f.vault);const registry=new ProjectRegistry(f.workspace,root.id);
@@ -46,7 +47,13 @@ test('project collection reads nested owners, authenticates each book and keeps 
   assert.equal(records.some(r=>r.owner.workspaceId===sibling.book.id),false);
   const cardCommand={workspaceId:root.id,etag:await f.workspace.catalogue(store=>store.head()),provider:'records',config:defaultPanelConfig(),options:{scopeMode:'selected',projectIds:[project.storage.projectId],includeWorkspace:false,includeDescendants:true},limit:3,key:null,cursor:null};
   const cards=data=>application.run(client,projectRequest('/api/projects/dashboard-collection/records','POST'),data??cardCommand);
-  const card=await cards();assert.equal(card.total,8);assert.equal(card.records.length,3);assert.ok(card.records.every(row=>row.collectionKey===row.owner.workspaceId+'/'+row.id));
+  const measured=async(label,operation,max=3)=>{
+   const open=f.workspace.openCatalogue;let opened=0,closed=0;const start=performance.now();
+   f.workspace.openCatalogue=async function(...args){const db=await open.apply(this,args);opened++;const close=db.close.bind(db);let done=false;db.close=async()=>{try{return await close();}finally{if(!done){done=true;closed++;}}};return db;};
+   try{return await operation();}finally{f.workspace.openCatalogue=open;t.diagnostic(JSON.stringify({label,opened,closed,durationMs:Math.round(performance.now()-start)}));assert.equal(closed,opened);assert.ok(opened<=max,'Workspace connections must be bounded across repeated owner checks');}
+  };
+  // A record card also opens its independent selected-record reader.
+  const card=await measured('record card',()=>cards(),4);assert.equal(card.total,8);assert.equal(card.records.length,3);assert.ok(card.records.every(row=>row.collectionKey===row.owner.workspaceId+'/'+row.id));
   const following=await cards({...cardCommand,cursor:card.nextCursor});assert.equal(following.offset,3);assert.deepEqual((await cards({...cardCommand,cursor:following.previousCursor})).records,card.records);
   const pinned=await cards({...cardCommand,key:metadata.id+'/'+record.id});assert.equal(pinned.total,1);assert.equal(pinned.records[0].owner.labBookId,storage.labBookId);
   const onlyBook=await cards({...cardCommand,options:{...cardCommand.options,notebookMode:'selected',notebookIds:[storage.labBookId]}});assert.equal(onlyBook.total,2);
@@ -57,7 +64,7 @@ test('project collection reads nested owners, authenticates each book and keeps 
   try{const sections=await cards({...cardCommand,provider:'sections',key:metadata.id+'/'+record.id+':'+record.sections[0].id});assert.equal(sections.total,1);assert.equal(sections.items[0].data.body,record.sections[0].body);assert.equal(sections.items[0].action.data.workspaceId,metadata.id);}finally{ResearchCatalogue.prototype.record=bodies;}
   ResearchCatalogue.prototype.record=()=>{throw Error('Collection read loaded an original record body');};
   const structural=data=>application.run(client,projectRequest('/api/projects/dashboard-collection/structure','POST'),{...cardCommand,...data});
-  const projectCards=await structural({provider:'projects'});assert.equal(projectCards.total,2);assert.ok(projectCards.items.find(item=>item.data.id===project.storage.projectId).data.notebooks.some(book=>book.id===storage.labBookId));
+  const projectCards=await measured('project card',()=>structural({provider:'projects'}));assert.equal(projectCards.total,2);assert.ok(projectCards.items.find(item=>item.data.id===project.storage.projectId).data.notebooks.some(book=>book.id===storage.labBookId));
   const bookCards=await structural({provider:'notebooks',limit:100});assert.equal(bookCards.total,project.book.notebooks.length+child.book.notebooks.length+1);assert.equal(bookCards.items.find(item=>item.owner.labBookId===storage.labBookId).data.count,2);
   const workspaceCard=await structural({provider:'workspace',options:{}});assert.equal(workspaceCard.items[0].data.entries,14);
   const choices=data=>application.run(client,projectRequest('/api/projects/dashboard-collection/choices','POST'),{workspaceId:root.id,etag:cardCommand.etag,config:cardCommand.config,options:cardCommand.options,kind:'projects',search:'',limit:2,cursor:null,...data});
@@ -97,5 +104,14 @@ test('project collection reads nested owners, authenticates each book and keeps 
   await assert.rejects(publicationSource(metadata.id),error=>error.code==='ACCESS_LOCKED'&&error.labBookId===storage.labBookId);assert.equal((await publicationSource(sibling.book.id)).owner.projectId,sibling.storage.projectId);
   const unrelated=await timeline({query:{...timelineCommand.query,projects:[sibling.book.id+'/'+sibling.storage.projectId]}});assert.equal(unrelated.total,3);
   await assert.rejects(application.run({},selected,command),error=>['ACCESS_LOCKED','DEVICE_UNKNOWN'].includes(error.code));
+  const visit=projectRecordCollection(application,client,async()=>{}),selection={workspaceId:sibling.book.id,scope:sibling.storage.projectId,query:viewQuery({project:sibling.storage.projectId})};
+  const entered=Promise.withResolvers(),changed=Promise.withResolvers();
+  // The writer starts outside the collection's pinned read context. Access
+  // checks must keep fresh transactions while the directory remains pinned.
+  const writer=(async()=>{await entered.promise;try{await registry.refreshSummary(sibling.storage.projectId,{...sibling.book,projects:sibling.book.projects.map(p=>({...p,title:'Changed project summary'}))});changed.resolve();}catch(error){changed.reject(error);throw error;}})();
+  try{await assert.rejects(visit(owner=>owner.catalogue(async store=>{await store.head();entered.resolve();await changed.promise;}),selection),{code:'RECORD_QUERY_CURSOR'});}
+  finally{entered.resolve();await writer;}
+  const controller=new AbortController(),reason=Error('Interrupted collection');
+  await measured('interrupted collection',()=>assert.rejects(visit(async()=>{controller.abort(reason);},{...selection,signal:controller.signal}),error=>error===reason));
  }finally{ResearchCatalogue.prototype.record=originalRecord;await application?.close();await runtime.close();detach();keys.forEach(clearVault);assert.equal(path.dirname(directory),path.resolve(os.tmpdir()));assert.ok(path.basename(directory).startsWith('observanda-record-collection-'));await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
