@@ -1,8 +1,10 @@
 import {test,expect as baseExpect} from '@playwright/test';
 const expect=baseExpect.configure({timeout:30000});
-import {mkdtemp,rm} from 'node:fs/promises';
+import {mkdtemp,rm,access} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import {pathToFileURL} from 'node:url';
+import {createApplicationAssets} from '../../src/application-assets.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {sampleNotebook} from '../../src/sample.js';
 import {startServer} from '../../src/server.js';
@@ -141,12 +143,16 @@ async function namedWebsite(f,name){
 
 test('a named website explicitly replaces an old app, archives its branch and preserves domain and license files',async({page})=>{
  test.setTimeout(180000);
+ const builtDirectory=process.env.OBSERVANDA_TEST_BROWSER_BUILD;
+ if(builtDirectory)await access(path.join(builtDirectory,'manifest.json'));
+ const browserAssets=builtDirectory?await createApplicationAssets({builtDirectory:pathToFileURL(path.resolve(builtDirectory)+path.sep)}):undefined;
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-replacement-ui-')),f=await encryptedFixture(directory,sampleNotebook()),site=await namedWebsite(f,'Replacement journal');
  const remote=githubFixture({branch:'main',initialFiles:{'index.html':'Old application','CNAME':'field.example\n','LICENSE.md':'Keep these terms',...Object.fromEntries(Array.from({length:70},(_,i)=>['old-app/file-'+i+'.js','Old application source']))},initialPages:{build_type:'workflow',source:{branch:'main',path:'/'},cname:'field.example',https_enforced:true}}),parent=remote.head,before=structuredClone(remote.trees.get(remote.commits.get(parent).tree));
  const publisher=new Publisher(f.workspace.root,{workspace:site.workspace,request:remote.request},f.vault),config=defaultPublishing();Object.assign(config.github,{owner:'example',repository:'notebook',branch:'main',pages:true});await publisher.save(config,'new');
- const app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json'),publishingOptions:{request:remote.request}}),errors=[];page.on('pageerror',error=>errors.push(error.message));
+ const app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json'),publishingOptions:{request:remote.request},browserAssets}),errors=[];page.on('pageerror',error=>errors.push(error.message));
  try{
   await page.goto(app.url);await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();await page.goto(new URL('/#/websites/'+site.id+'/publishing',app.url).href);
+  if(builtDirectory)await expect(page.locator('script[type="module"][src^="/assets/app-"]')).toHaveCount(1);
   await page.getByRole('button',{name:'Configure destination',exact:true}).click();await page.getByText('Advanced: temporary access token',{exact:true}).click();await page.getByLabel('GitHub token',{exact:true}).fill('synthetic_github_token_1234567890');await page.getByRole('button',{name:'Connect GitHub',exact:true}).click();await expect(page.locator('#notice')).toContainText('Connected to GitHub');await page.locator('.website-site-context').getByRole('button',{name:'Publishing',exact:true}).click();
   await page.getByRole('button',{name:'Review website',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible({timeout:30000});
   await page.getByRole('button',{name:'Review repository changes',exact:true}).click();const review=page.locator('#destination-review');await expect(review).toContainText('Conflicting files: 1',{timeout:30000});await expect(page.getByRole('button',{name:'Publish to GitHub Pages',exact:true})).toBeDisabled();
