@@ -40,3 +40,14 @@ test('checkpoint refreshes stay bounded by bytes while external space loss still
  await ticket.write(4,async()=>{free-=4n;});await ticket.write(4,async()=>{free-=4n;});assert.equal(probes,1);
  free=1n;await assert.rejects(ticket.write(1,async()=>assert.fail('low space')),{code:'STORAGE_FULL'});assert.equal(probes,2);ticket.release();
 });
+
+test('unknown stream windows reserve ahead, retain other writers and fall back to available tail space',async()=>{
+ let free=100n,probes=0;
+ const budget=new DiskCapacity({probe:async()=>{probes++;return {id:'volume',available:free};}}),other=await budget.reserve('other',20,{reserveBytes:10}),stream=await budget.reserve('archive',0,{growthBytes:40,refreshBytes:40});
+ const write=bytes=>stream.write(bytes,async()=>{free-=BigInt(bytes);});
+ await write(10);assert.equal(budget.stats().reservedBytes,'50');const afterFirst=probes;
+ await write(10);await write(20);assert.equal(probes,afterFirst);assert.equal(budget.stats().reservedBytes,'20');
+ await write(10);assert.equal(budget.stats().reservedBytes,'40','only thirty unclaimed bytes were available for the next window');
+ await write(20);assert.equal(budget.stats().reservedBytes,'20');
+ await assert.rejects(write(1),{code:'STORAGE_FULL'});other.release();await write(10);stream.release();assert.equal(budget.stats().active,0);
+});

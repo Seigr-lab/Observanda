@@ -23,8 +23,8 @@ export class DiskCapacity{
   const size=amount(bytes),floor=amount(reserve),found=await this.probe(directory),entry=this.volumes.get(found.id);
   if(found.available<size+(entry?.remaining??0n)+this.guard(entry,floor))throw new AppError('STORAGE_FULL');
  }
- async reserve(directory,bytes=0,{reserveBytes=0,refreshBytes=0,signal}={}){
-  const remaining=amount(bytes),floor=amount(reserveBytes),refresh=amount(refreshBytes);signal?.throwIfAborted();
+ async reserve(directory,bytes=0,{reserveBytes=0,refreshBytes=0,growthBytes=0,signal}={}){
+  const remaining=amount(bytes),floor=amount(reserveBytes),refresh=amount(refreshBytes),growth=amount(growthBytes);signal?.throwIfAborted();
   if(this.active+this.pending>=this.maxActive)throw new AppError('WORKLOAD_BUSY');
   this.pending++;
   try{
@@ -37,12 +37,18 @@ export class DiskCapacity{
     write:async(bytes,operation)=>{
      const size=amount(bytes);if(closed||writing||typeof operation!=='function')throw new AppError('INVALID');writing=true;
      try{
-      const extra=size>ticket.remaining?size-ticket.remaining:0n;
+      let extra=size>ticket.remaining?size-ticket.remaining:0n;
       signal?.throwIfAborted();
       if(extra||!refresh||unchecked+size>refresh){
        const current=await this.probe(directory);signal?.throwIfAborted();
        if(current.id!==found.id)throw new AppError('IO');
        if(current.available<entry.remaining+extra+this.guard(entry))throw new AppError('STORAGE_FULL');
+       // Unknown-length writers may reserve a bounded window ahead. Keep a
+       // small final write possible when less than that window remains free.
+       // Re-read aggregate claims after the asynchronous probe so concurrent
+       // writers cannot each spend the same observed free space.
+       const spare=current.available-entry.remaining-this.guard(entry),ahead=growth>ticket.remaining?growth-ticket.remaining:0n;
+       if(ahead>extra)extra=ahead<spare?ahead:spare;
        unchecked=0n;
       }
       ticket.remaining+=extra;entry.remaining+=extra;

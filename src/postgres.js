@@ -8,6 +8,7 @@ import {checkServerIdentity} from 'node:tls';
 import {retainRuntimeEnvironment} from './database-runtime-environment.js';
 import {operationStage,operationAdvance} from './operation-progress.js';
 import {diagnosticMeasurement} from './operational-diagnostics.js';
+import {diskCapacity} from './disk-capacity.js';
 import path from 'node:path';
 import {readFile,open,unlink,realpath} from 'node:fs/promises';
 import {writeCatalogueArchive,readCatalogueArchive,readCatalogueStream} from './postgres-archive.js';
@@ -238,20 +239,26 @@ export async function catalogueStamp(root){
  }finally{await db.close();}
  });
 }
-export async function backupCatalogue(root,destination,{connection}={}){
+export async function backupCatalogue(root,destination,{connection,capacity=diskCapacity}={}){
  const db=connection??await openCatalogue(root,{detached:true});
- const file=path.join(destination,CATALOGUE_ARCHIVE),temporary=file+'.'+randomUUID()+'.tmp',checksum=createHash('sha256');let handle;
+ const file=path.join(destination,CATALOGUE_ARCHIVE),temporary=file+'.'+randomUUID()+'.tmp',checksum=createHash('sha256');let handle,reservation,failed=false;
  try{
   await assertRegular(path.join(destination,'.observanda'),{directory:true});
   await assertRegular(file,{missing:true});
+  reservation=await capacity.reserve(path.dirname(file),0,{growthBytes:4*1024*1024,refreshBytes:4*1024*1024,signal:databaseRequestSignal()});
   await db.run('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
   handle=await open(temporary,'wx',0o600);
-  await writeCatalogueArchive(db,{writeFile:async value=>{await handle.writeFile(value);checksum.update(value);}},tables);
+  await writeCatalogueArchive(db,{writeFile:async value=>{await reservation.write(Buffer.byteLength(value),()=>handle.writeFile(value));checksum.update(value);}},tables);
   await handle.sync();await handle.close();handle=null;
   await db.run('COMMIT');await atomicReplace(temporary,file);return checksum.digest('hex');
- }finally{
-  await handle?.close();await unlink(temporary).catch(e=>{if(e.code!=='ENOENT')throw e;});
-  if(!connection)await db.close();
+ }catch(error){failed=true;await withDatabaseRequest(null,()=>db.run('ROLLBACK')).catch(()=>{});throw error;}
+ finally{
+  let cleanupError;
+  try{await handle?.close();}catch(error){cleanupError=error;}
+  try{await unlink(temporary);}catch(error){if(error.code!=='ENOENT')cleanupError??=error;}
+  try{if(!connection)await db.close();}catch(error){cleanupError??=error;}
+  finally{reservation?.release();}
+  if(!failed&&cleanupError)throw cleanupError;
  }
 }
 

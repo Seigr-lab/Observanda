@@ -2,12 +2,13 @@ import {Client} from 'pg';
 import {withDatabaseRequest} from '../src/database-request-context.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,readFile,writeFile,rm,access,realpath} from 'node:fs/promises';
+import {mkdtemp,readFile,writeFile,rm,access,realpath,readdir,mkdir} from 'node:fs/promises';
 import {setTimeout as delay} from 'node:timers/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {spawn} from 'node:child_process';
-import {databaseConfiguration,databaseStatus,CATALOGUE_FILE,CATALOGUE_ARCHIVE,openCatalogue} from '../src/postgres.js';
+import {databaseConfiguration,databaseStatus,CATALOGUE_FILE,CATALOGUE_ARCHIVE,openCatalogue,backupCatalogue} from '../src/postgres.js';
+import {DiskCapacity} from '../src/disk-capacity.js';
 import {Workspace} from '../src/storage.js';
 import {initializeLocation,copyPlan,copyWorkspace} from '../src/locations.js';
 import {createAccess,takeCreatedVault} from '../src/access.js';
@@ -24,6 +25,22 @@ async function fixture(t){
  const source=path.join(root,'source');await initializeLocation(source,sampleNotebook(),access,vault);
  return {root,source,vault,ws:new Workspace(source,vault)};
 }
+test('archive space loss preserves the previous archive and returns a borrowed connection outside its snapshot',async t=>{
+ const {root,source,ws}=await fixture(t),destination=path.join(root,'backup');await mkdir(path.join(destination,'.observanda'),{recursive:true});await backupCatalogue(source,destination);
+ const file=path.join(destination,CATALOGUE_ARCHIVE),previous=await readFile(file);
+ await ws.withLock(()=>ws.catalogue(store=>store.putObject('synthetic-capacity-value',{text:'x'.repeat(6*1024*1024)})));
+ let probes=0;const budget=new DiskCapacity({probe:async()=>({id:'synthetic-volume',available:++probes<3?16n*1024n*1024n:0n})}),db=await openCatalogue(source);
+ try{
+  await assert.rejects(backupCatalogue(source,destination,{connection:db,capacity:budget}),{code:'STORAGE_FULL'});
+  assert.equal(probes,3);assert.equal(budget.stats().active,0);assert.equal(budget.stats().reservedBytes,'0');
+  assert.deepEqual(await readFile(file),previous);assert.equal((await readdir(path.dirname(file))).some(name=>name.endsWith('.tmp')),false);
+  assert.equal((await db.get('SHOW transaction_isolation')).transaction_isolation,'read committed');
+  assert.equal((await db.get('SELECT 1 AS usable')).usable,1);
+ }finally{await db.close();}
+ assert.equal((await ws.catalogue(store=>store.object('synthetic-capacity-value'))).text.length,6*1024*1024);
+ const recovered=await backupCatalogue(source,destination);assert.match(recovered,/^[a-f0-9]{64}$/);assert.notDeepEqual(await readFile(file),previous);
+});
+
 test('database configuration refuses missing credentials and remote TLS downgrade without exposing secrets',async()=>{
  await assert.rejects(databaseConfiguration({}),{code:'DATABASE_CONFIG'});
  const base={OBSERVANDA_DATABASE_URL:'postgresql://worker:secret-sentinel@database.invalid/research'};
