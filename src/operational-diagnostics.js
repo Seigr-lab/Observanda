@@ -7,7 +7,7 @@ import errors from './web/locales/en/errors.json' with {type:'json'};
 
 const current=new AsyncLocalStorage();
 const events=new Set(['service-start','service-ready','service-stop','service-failed','service-exit','service-output','request','worker-claim','worker-release','worker-idle','resource','phase','dropped']);
-const phases=new Set(['startup','shutdown','request','waiting-writer','database-inventory','activate','claim','release','idle','probe-media','convert-media','prepare-job','complete-job']);
+const phases=new Set(['startup','shutdown','request','waiting-writer','database-inventory','activate','claim','release','idle','probe-media','convert-media','validate-pdf','prepare-job','complete-job']);
 const routes=new Set(['access','health','intake','media','projects','publication-jobs','records','research','storage','notebook','websites','website-editor']);
 const measures=Object.freeze({'database-admission':['databaseAdmissions','databaseAdmissionMs'],'database-connect':['databaseConnections','databaseConnectMs'],'database-query':['databaseQueries','databaseQueryMs']});
 const counters=new Set(['durationMs','queued','active','pendingRequests','activeRequests','queuedRequests','activeWrites','queuedWriters','requestBytes','rssBytes','heapBytes','externalBytes','cpuUserUs','cpuSystemUs','bytes','attempt','delayMs','dropped','exitCode','status',...Object.values(measures).flat()]);

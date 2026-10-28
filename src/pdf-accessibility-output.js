@@ -1,5 +1,5 @@
 import {Worker} from 'node:worker_threads';
-import {spawn} from 'node:child_process';
+import {runPdfValidator} from './pdf-validator-process.js';
 import {mkdtemp,writeFile,rm} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import os from 'node:os';
@@ -36,14 +36,9 @@ export function pdfAccessibilityReport(text,{sha256,bytes}){
   return {version:1,profile:'pdfua-1',sha256,validator:'veraPDF',validatorVersion:PDF_VALIDATOR_VERSION,validatorSha256:PDF_VALIDATOR_SHA256,automatedOnly:true,compliant:result.compliant,passedRules:details.passedRules,failedRules:details.failedRules,passedChecks:details.passedChecks,failedChecks:details.failedChecks,findings};
  }catch{throw fail('PDF_ACCESSIBILITY_FAILED');}
 }
-function validate(runtime,file,directory,signal){return new Promise((resolve,reject)=>{
- const env={...process.env};for(const key of Object.keys(env))if(['JAVA_TOOL_OPTIONS','_JAVA_OPTIONS','JDK_JAVA_OPTIONS','CLASSPATH','JAVA_OPTS'].includes(key.toUpperCase()))delete env[key];
- const child=spawn(runtime.java,['-Djava.awt.headless=true','-Xmx512m','-Duser.home='+directory,'-Djava.io.tmpdir='+directory,'-jar',runtime.jar,'--format','json','--flavour','ua1','--maxfailuresdisplayed','1','--loglevel','0',file],{cwd:directory,env,windowsHide:true,stdio:['ignore','pipe','pipe']});let chunks=[],size=0,diagnostics=0,error=null;
- const stop=reason=>{error??=reason;child.kill();},abort=()=>stop(signal.reason);signal.addEventListener('abort',abort,{once:true});if(signal.aborted)abort();child.stdout.on('data',chunk=>{if((size+=chunk.length)>2*1024*1024)stop(fail('PDF_ACCESSIBILITY_FAILED'));else chunks.push(chunk);});child.stderr.on('data',chunk=>{if((diagnostics+=chunk.length)>256*1024)stop(fail('PDF_ACCESSIBILITY_FAILED'));});child.once('error',()=>{error??=fail('PDF_ACCESSIBILITY_UNAVAILABLE');});child.once('close',code=>{signal.removeEventListener('abort',abort);if(error||![0,1].includes(code))reject(error??fail('PDF_ACCESSIBILITY_FAILED'));else resolve(Buffer.concat(chunks,size).toString('utf8'));});
-});}
 export async function validatePdfAccessibilityOutput(bytes,{runtime,signal:external,maxBytes=limit,timeoutMs=60000}={}){
  input(bytes,{signal:external,maxBytes,timeoutMs});const controller=new AbortController(),signal=external?AbortSignal.any([external,controller.signal]):controller.signal,timer=setTimeout(()=>controller.abort(fail('PDF_ACCESSIBILITY_FAILED')),timeoutMs);let directory;
  try{
-  let verified;try{verified=await resolvePdfValidationRuntime({directory:runtime?.directory,signal});}catch{signal.throwIfAborted();throw fail('PDF_ACCESSIBILITY_UNAVAILABLE');}directory=await mkdtemp(path.join(os.tmpdir(),'observanda-pdf-accessibility-'));const file=path.join(directory,'document.pdf');await writeFile(file,bytes,{mode:0o600});signal.throwIfAborted();const report=await validate(verified,file,directory,signal);signal.throwIfAborted();return pdfAccessibilityReport(report,{sha256:createHash('sha256').update(bytes).digest('hex'),bytes:bytes.length});
+  let verified;try{verified=await resolvePdfValidationRuntime({directory:runtime?.directory,signal});}catch{signal.throwIfAborted();throw fail('PDF_ACCESSIBILITY_UNAVAILABLE');}directory=await mkdtemp(path.join(os.tmpdir(),'observanda-pdf-accessibility-'));const file=path.join(directory,'document.pdf');await writeFile(file,bytes,{mode:0o600});signal.throwIfAborted();const report=await runPdfValidator(verified,file,directory,{profile:'ua1',signal});signal.throwIfAborted();return pdfAccessibilityReport(report,{sha256:createHash('sha256').update(bytes).digest('hex'),bytes:bytes.length});
  }finally{clearTimeout(timer);if(directory){if(path.dirname(directory)!==path.resolve(os.tmpdir())||!path.basename(directory).startsWith('observanda-pdf-accessibility-'))throw fail('PDF_ACCESSIBILITY_FAILED');await rm(directory,{recursive:true,force:true,maxRetries:5,retryDelay:100});}}
 }
