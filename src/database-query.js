@@ -2,7 +2,7 @@
 // whole response as well, and close the connection before releasing its caller.
 import {databaseRequestSignal} from './database-request-context.js';
 import {AppError} from './errors.js';
-import {diagnosticMeasurement} from './operational-diagnostics.js';
+import {diagnosticMeasurement,diagnosticDatabaseResult} from './operational-diagnostics.js';
 export const DATABASE_STATEMENT_TIMEOUT_MS=30000;
 export const DATABASE_RESPONSE_TIMEOUT_MS=DATABASE_STATEMENT_TIMEOUT_MS+5000;
 
@@ -14,7 +14,7 @@ export async function databaseQuery(client,sql,values,{signal=databaseRequestSig
  return new Promise((resolve,reject)=>{
   let settled=false,timer;
   const cleanup=()=>{clearTimeout(timer);signal?.removeEventListener('abort',abort);};
-  const finish=(error,value)=>{if(settled)return;settled=true;cleanup();measured();if(error)reject(error);else resolve(value);};
+  const finish=(error,value)=>{if(settled)return;settled=true;cleanup();measured();if(error)reject(error);else{diagnosticDatabaseResult(value);resolve(value);}};
   const stop=reason=>{
    if(settled)return;settled=true;cleanup();
    // pg.end() alone can close gracefully if an ErrorResponse has cleared

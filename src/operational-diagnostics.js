@@ -9,8 +9,8 @@ const current=new AsyncLocalStorage();
 const events=new Set(['service-start','service-ready','service-stop','service-failed','service-exit','service-output','request','worker-claim','worker-release','worker-idle','resource','phase','dropped']);
 const phases=new Set(['startup','shutdown','request','waiting-writer','database-inventory','activate','claim','release','idle','probe-media','convert-media','validate-pdf','prepare-job','complete-job']);
 const routes=new Set(['access','health','intake','media','projects','publication-jobs','records','research','storage','notebook','websites','website-editor']);
-const measures=Object.freeze({'database-admission':['databaseAdmissions','databaseAdmissionMs'],'database-connect':['databaseConnections','databaseConnectMs'],'database-query':['databaseQueries','databaseQueryMs']});
-const counters=new Set(['durationMs','queued','active','pendingRequests','activeRequests','queuedRequests','activeWrites','queuedWriters','requestBytes','rssBytes','heapBytes','externalBytes','cpuUserUs','cpuSystemUs','bytes','attempt','delayMs','dropped','exitCode','status',...Object.values(measures).flat()]);
+const measures=Object.freeze({'database-admission':['databaseAdmissions','databaseAdmissionMs'],'database-connect':['databaseConnections','databaseConnectMs'],'database-query':['databaseQueries','databaseQueryMs'],'database-queue':['databaseQueueEntries','databaseQueueMs'],'database-cursor':['databaseCursorBatches','databaseCursorMs']});
+const counters=new Set(['durationMs','queued','active','pendingRequests','activeRequests','activeWrites','queuedRequests','queuedWriters','requestBytes','rssBytes','heapBytes','externalBytes','cpuUserUs','cpuSystemUs','bytes','attempt','delayMs','dropped','exitCode','status','databaseReturnedRows','databaseBufferBytes','databaseTextBytes',...Object.values(measures).flat()]);
 const systemCodes=new Set(['EACCES','EPERM','ENOSPC','ENOENT','EIO','EMFILE','ENFILE','ECONNRESET','ECONNREFUSED','ETIMEDOUT','ABORT_ERR']);
 const codeOf=error=>{let code;try{code=error?.code;}catch{}return typeof code==='string'&&(Object.hasOwn(errors,code)||systemCodes.has(code))?code:'IO';};
 const correlation=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
@@ -112,6 +112,23 @@ export async function measuredJobPhase(phase,operation){
 }
 export function diagnostic(event,data={}){const scope=current.getStore();if(!scope?.recorder)return;scope.recorder.record(event,{...data,...(event==='request'?scope.measurements:{}),correlation:scope.correlation});if(event==='request')scope.finished=true;}
 const noMeasurement=()=>{};
+// Count already-decoded scalar payloads without serializing or retaining their
+// contents. These are Buffer/UTF-8 text bytes, not wire traffic, decoded object
+// memory or PostgreSQL storage. Other column types are deliberately not guessed.
+export function diagnosticDatabaseResult(result){
+ const scope=current.getStore();if(!scope?.recorder||scope.finished)return;
+ let rows=0,buffers=0,text=0;
+ const count=value=>{
+  if(!Array.isArray(value?.rows))return;
+  rows+=value.rows.length;
+  for(const row of value.rows)if(row&&typeof row==='object')for(const column of Object.values(row)){
+   if(Buffer.isBuffer(column))buffers+=column.length;
+   else if(typeof column==='string')text+=Buffer.byteLength(column);
+  }
+ };
+ if(Array.isArray(result))for(const value of result)count(value);else count(result);
+ for(const [key,value] of [['databaseReturnedRows',rows],['databaseBufferBytes',buffers],['databaseTextBytes',text]])scope.measurements[key]=(scope.measurements[key]??0)+value;
+}
 // Aggregate numeric timings in the current request, not one log row per SQL
 // statement. Never retain SQL, parameters, connection addresses or owner IDs.
 // Concurrent elapsed times are sums and are not exclusive wall-clock phases.

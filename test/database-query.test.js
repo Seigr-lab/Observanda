@@ -4,6 +4,22 @@ import {getEventListeners} from 'node:events';
 import {databaseQuery,DATABASE_RESPONSE_TIMEOUT_MS,DATABASE_STATEMENT_TIMEOUT_MS} from '../src/database-query.js';
 import {withDatabaseRequest} from '../src/database-request-context.js';
 import {AppError} from '../src/errors.js';
+import {OperationalDiagnostics,withDiagnostics,diagnostic} from '../src/operational-diagnostics.js';
+
+test('query diagnostics count returned scalar bytes without retaining values or serializing objects',async()=>{
+ const sink=new OperationalDiagnostics(),secret='private-query-value',f=fixture();
+ const nested={toJSON(){throw Error('Diagnostics must not serialize values');}},blob=Buffer.from(secret),label='\u03bb';
+ const value=[{rows:[{blob,label,amount:7,nested},{empty:null}]},{rows:[[Buffer.alloc(5),secret]]}];
+ await withDiagnostics(sink,async()=>{
+  const pending=databaseQuery(f.client,'SELECT $1',[secret]);f.result.resolve(value);
+  assert.equal(await pending,value);diagnostic('request',{route:'records'});
+  await databaseQuery(f.client,'SELECT $1',[secret]);
+ });
+ const {entries}=await sink.snapshot();assert.equal(entries.length,1);
+ assert.equal(entries[0].databaseQueries,1);assert.equal(entries[0].databaseReturnedRows,3);
+ assert.equal(entries[0].databaseBufferBytes,blob.length+5);assert.equal(entries[0].databaseTextBytes,Buffer.byteLength(label)+Buffer.byteLength(secret));
+ assert.doesNotMatch(JSON.stringify(entries),new RegExp(secret+'|SELECT|nested'));
+});
 
 function fixture(){const result=Promise.withResolvers(),closed=Promise.withResolvers();let calls=0,ends=0,destroyed=0;return {result,closed,get destroyed(){return destroyed;},get calls(){return calls;},get ends(){return ends;},client:{connection:{stream:{destroy(){destroyed++;}}},query:()=>{calls++;return result.promise;},end:()=>{ends++;return closed.promise;}}};}
 test('query completion removes request cancellation and preserves database results',async()=>{

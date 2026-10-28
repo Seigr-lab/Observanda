@@ -101,7 +101,8 @@ class CatalogueConnection{
   try{
    while(true){
     signal?.throwIfAborted();
-    const batch=await this.all('FETCH FORWARD '+batchSize+' FROM '+cursor);
+    const fetched=diagnosticMeasurement('database-cursor');let batch;
+    try{batch=await this.all('FETCH FORWARD '+batchSize+' FROM '+cursor);}finally{fetched();}
     if(!batch.length)break;
     for(const row of batch){signal?.throwIfAborted();yield row;}
    }

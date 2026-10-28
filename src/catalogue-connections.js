@@ -3,6 +3,7 @@
 import {AsyncLocalStorage} from 'node:async_hooks';
 import {AppError} from './errors.js';
 import {assertWorkspaceAvailable} from './workspace-lifecycle-admission.js';
+import {diagnosticMeasurement} from './operational-diagnostics.js';
 const scopes=new AsyncLocalStorage();
 function validate(scope,workspace){
  if(scope.root!==workspace.root||scope.projectId!==(workspace.projectId??null)||scope.labBookId!==(workspace.labBookId??null))throw new AppError('DATABASE_LOCATION');
@@ -61,7 +62,9 @@ export async function catalogueConnection(workspace,kind,options,operation){
  let entry=scope.entries.get(kind);
  if(entry&&entry.key!==key)return independent(workspace,options,operation);
  if(!entry){entry={key,tail:Promise.resolve(),db:null};scope.entries.set(kind,entry);}
+ const queued=diagnosticMeasurement('database-queue');
  const pending=entry.tail.then(async()=>{
+  queued();
   validate(scope,workspace);
   // Fresh opens perform their own lifecycle admission; reused connections
   // must recheck it before every transaction.
