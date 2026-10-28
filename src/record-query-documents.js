@@ -30,13 +30,13 @@ function retainedBrowseDocument(document){
 export class RecordQueryDocuments{
  constructor(store,{write=null}={}){if(write!==null&&typeof write!=='function')throw new AppError('INVALID');this.store=store;this.write=write;}
  async persistWith(operation){return this.write?this.write(operation):operation(this.store);}
- async retain(record,metadata){
+ async retain(record,metadata,{previous=null}={}){
   const prepared=recordWriteEncoding(this.store,record,metadata),display=recordWriteDisplay(this.store,record,metadata)??historicalRecordValue(metadata,record),revision=prepared?.contentRevision??recordRevision(display);
   if(!jsonFitsBytes(display,65535,{pretty:true})){
    const generation=1,key=await this.store.scopeKey(display.notebookId,generation,{create:true});
    try{
     const blocks=new RecordBlockStore(this.store,display.notebookId,generation,key),root=await blocks.tree().retain(display);
-    return await this.retainDocument(new RecordDocument(blocks,root),revision);
+    return await this.retainDocument(new RecordDocument(blocks,root),revision,{previous});
    }finally{key.fill(0);}
   }
   const document={...recordQueryDocument(display),publication:recordPublicationSummary(display),publicationCard:publicationCard(display),publicationDescriptor:{...publicationDescriptorDetails(display),revision},editionInventory:recordEditionInventory(display,revision),recordRevision:revision};

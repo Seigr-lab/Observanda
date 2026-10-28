@@ -42,10 +42,19 @@ export class RecordDocument{
    for(let i=offset;i<Math.min(node.value.length,offset+limit);i++){signal?.throwIfAborted();yield {index:i,value:await this.tree.retain(node.value[i])};}return;
   }
   if(node.type!=='array')invalid();
-  for(let i=offset;i<Math.min(node.root?.count??0,offset+limit);i++){
-   signal?.throwIfAborted();const entry=await this.tree.index.entryAt({root:node.root},i);
-   if(entry?.id!==String(i).padStart(16,'0'))throw new AppError('CATALOGUE_DAMAGED');
-   const child=await this.tree.node(entry.revision);if(child.type!=='item')throw new AppError('CATALOGUE_DAMAGED');yield {index:i,value:child.value};
+  const end=Math.min(node.root?.count??0,offset+limit);
+  // Read only the requested window, in bounded batches. Both wrapper and
+  // value blocks still pass the normal notebook-key and content-hash checks.
+  for(let start=offset;start<end;start+=32){
+   const entries=[],children=[];
+   for(let i=start;i<Math.min(end,start+32);i++){
+    signal?.throwIfAborted();const entry=await this.tree.index.entryAt({root:node.root},i);
+    if(entry?.id!==String(i).padStart(16,'0'))throw new AppError('CATALOGUE_DAMAGED');entries.push(entry);
+   }
+   await this.blocks.prefetch?.('value',entries.map(entry=>entry.revision));
+   for(const entry of entries){const child=await this.tree.node(entry.revision);if(child.type!=='item')throw new AppError('CATALOGUE_DAMAGED');children.push(child);}
+   await this.blocks.prefetch?.('value',children.map(child=>child.value));
+   for(const [i,child] of children.entries()){signal?.throwIfAborted();yield {index:start+i,value:child.value};}
   }
  }
  async replace(path,value,{signal}={}){if(!this.mutable)invalid();signal?.throwIfAborted();return this.#derived(await this.tree.replace(this.root,path,value),{attemptChanged:!path.length||path[0]==='attempt',signal});}

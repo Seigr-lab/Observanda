@@ -3,7 +3,27 @@ import assert from 'node:assert/strict';
 import {mkdtemp,rm,readdir,stat,writeFile,symlink,mkdir} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import {OperationalDiagnostics,diagnosticEvent,withDiagnostics,diagnostic,diagnosticPhase,diagnosticMeasurement,independentDiagnostics,measuredJobPhase} from '../src/operational-diagnostics.js';
+import {OperationalDiagnostics,diagnosticEvent,withDiagnostics,diagnostic,diagnosticPhase,diagnosticMeasurement,diagnosticDatabaseResult,independentDiagnostics,measuredJobPhase} from '../src/operational-diagnostics.js';
+
+test('save phases retain separate nested and concurrent query counts without duplicating request totals',async()=>{
+ const sink=new OperationalDiagnostics(),started=Promise.withResolvers(),resume=Promise.withResolvers();let late;
+ await withDiagnostics(sink,async()=>{
+  const writing=diagnosticPhase('write-records',async()=>{
+   diagnosticMeasurement('database-query')();
+   await diagnosticPhase('write-record-blocks',async()=>{
+    const end=diagnosticMeasurement('database-query');started.resolve();await resume.promise;end();end();
+    diagnosticDatabaseResult({rows:[{payload:Buffer.from('private'),text:'secret'}]});late=diagnosticMeasurement('database-query');
+   });
+  });
+  await started.promise;
+  await diagnosticPhase('index-records',async()=>{for(let i=0;i<3;i++)diagnosticMeasurement('database-query')();});
+  resume.resolve();await writing;late();diagnostic('request',{route:'records'});
+ });
+ const {entries}=await sink.snapshot(),by=phase=>entries.find(row=>row.phase===phase);
+ assert.equal(by('write-records').databaseQueries,2);assert.equal(by('write-record-blocks').databaseQueries,1);assert.equal(by('index-records').databaseQueries,3);
+ const request=entries.find(row=>row.event==='request');assert.equal(request.databaseQueries,5);assert.equal(request.databaseReturnedRows,1);assert.equal(request.databaseBufferBytes,7);assert.equal(request.databaseTextBytes,6);
+ assert.equal(new Set(entries.map(row=>row.correlation)).size,1);assert.doesNotMatch(JSON.stringify(entries),/private|secret/);
+});
 
 test('job phase timings survive request completion without recording private failure details',async()=>{
  const sink=new OperationalDiagnostics(),secret='private-job-path-and-token';let late;

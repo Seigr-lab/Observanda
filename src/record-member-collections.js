@@ -20,10 +20,13 @@ export function memberCollectionCount(row,field){
 export const memberStructureRevision=row=>row.collections?digest(serialize(row.collections.sections)):digest(serialize(row.sections));
 export class RecordMemberCollections extends ObjectIndex{
  constructor(store,{write=null}={}){super(store,{namespace:'record-member-collection:',immutable:true,write});}
+ decodeValue(entry,payload){
+  const slot='record-member-item:'+entry.revision,value=this.store.decode('state',slot,payload);
+  if(!value||Object.keys(value).sort().join()!=='id,position'||!id(value.id)||!natural(value.position)||digest(serialize(value))!==entry.revision)fail();return value;
+ }
  async value(entry){
   if(!entry)return null;const slot='record-member-item:'+entry.revision;
-  const row=await this.store.db.get('SELECT payload FROM state WHERE slot=$1',slot),value=this.store.decode('state',slot,row?.payload);
-  if(!value||Object.keys(value).sort().join()!=='id,position'||!id(value.id)||!natural(value.position)||digest(serialize(value))!==entry.revision)fail();return value;
+  const row=await this.store.db.get('SELECT payload FROM state WHERE slot=$1',slot);return this.decodeValue(entry,row?.payload);
  }
  async build(values){
   const self=this;let batch=[];
@@ -55,13 +58,24 @@ export class RecordMemberCollections extends ObjectIndex{
  async *ids(row,field,{offset=0,limit=Infinity}={}){
   if(!natural(offset)||limit!==Infinity&&!natural(limit)||!memberCollectionFields.includes(field))fail();
   if(!row.collections){const values=field==='sections'?row.sections:row.cardItems?.[field];if(!Array.isArray(values))fail();for(let i=offset;i<Math.min(values.length,offset+limit);i++)yield values[i];return;}
-  const root=row.collections[field],total=memberCollectionCount(row,field);let position=offset;
-  for await(const entry of this.entries({root},'position:',offset?positionKey(offset-1):null)){
-   if(position>=offset+limit)break;
-   const item=await this.value(entry);if(entry.id!==positionKey(position)||item.position!==position||position>=total)fail();
-   const reverse=await this.find({root},'id:'+item.id);if(reverse?.revision!==entry.revision)fail();
-   yield item.id;position++;
+  const root=row.collections[field],total=memberCollectionCount(row,field),self=this;let position=offset,batch=[];
+  async function* consume(){
+   // Membership values are small. Bound both row count and ciphertext bytes;
+   // oversized or missing values still take the ordinary checked read path.
+   const slots=batch.map(entry=>'record-member-item:'+entry.revision),found=new Map((await self.store.db.all('SELECT slot,payload FROM state WHERE slot=ANY($1::text[]) AND octet_length(payload)<=8192',slots)).map(row=>[row.slot,row.payload]));
+   for(const entry of batch){
+    const payload=found.get('record-member-item:'+entry.revision),item=payload?self.decodeValue(entry,payload):await self.value(entry);
+    if(entry.id!==positionKey(position)||item.position!==position||position>=total)fail();
+    const reverse=await self.find({root},'id:'+item.id);if(reverse?.revision!==entry.revision)fail();
+    yield item.id;position++;
+   }
+   batch=[];
   }
+  for await(const entry of this.entries({root},'position:',offset?positionKey(offset-1):null)){
+   if(position+batch.length>=offset+limit)break;
+   batch.push(entry);if(batch.length===32)yield* consume();
+  }
+  if(batch.length)yield* consume();
   if(position!==Math.min(total,offset+limit)&&offset<total)fail();
  }
  async retain(row){

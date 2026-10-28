@@ -170,7 +170,7 @@ export class ResearchCatalogue{
   if(!identifier(id)||!revision(version))throw new AppError('INVALID');
   return readStoredRecord(this,id,version);
  }
- putQuery(record,metadata){return new RecordQueryDocuments(this).retain(record,metadata);}
+ putQuery(record,metadata,options){return new RecordQueryDocuments(this).retain(record,metadata,options);}
  queryDocuments(rows,metadata,options){return new RecordQueryDocuments(this).read(rows,metadata,options);}
  async *searchMembers(snapshot,notebookIds,search,{signal,relatedTo=null}={}){
   const needle=search.trim().toLocaleLowerCase();
@@ -376,7 +376,9 @@ export class ResearchCatalogue{
      await validateReplacementAttempt(this,prior,record,metadata);
      if(record.results)await validateResultSources(this.workspace,record);
      await validateFigureSources(this.workspace,record);
-     const row=await new RecordMemberCollections(this).retain({...summary(record,prepared.encoding),...await this.putQuery(record,metadata),position:prior?.position??nextPosition++});
+     // Full-record saves have the same pinned predecessor as selected edits.
+     // Reuse only projections whose authenticated source dependencies match.
+     const row=await new RecordMemberCollections(this).retain({...summary(record,prepared.encoding),...await this.putQuery(record,metadata,{previous:prior}),position:prior?.position??nextPosition++});
      if(prior){before.push(prior);bytes-=prior.bytes;}else count++;
      after.push(row);bytes+=row.bytes;
      const initialize=!(await this.db.get('SELECT 1 FROM records WHERE id=$1 LIMIT 1',record.id));

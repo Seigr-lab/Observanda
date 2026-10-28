@@ -29,7 +29,12 @@ export function retainedTableUI({root,call,esc,field,guard,notify,onTable=()=>{}
   const request=++generation;source=ref;schemaOffset=0;root.replaceChildren();if(!ref||ref.kind!=='dataset')return;
   selection=structuredClone(draftSelection??table?.selection??{columns:'all',offset:0,count:null,includeExcluded:false});
   root.innerHTML='<p>'+esc(tableText('help'))+'</p><label><input type="checkbox" data-table-all'+(selection.columns==='all'?' checked':'')+'>'+esc(tableText('allColumns'))+'</label><fieldset><legend>'+esc(tableText('columns'))+'</legend><div data-table-schema></div></fieldset>'+field(esc(tableText('offset')),'<input data-table-offset type="number" min="0" step="1" value="'+selection.offset+'">')+field(esc(tableText('count')),'<input data-table-count type="number" min="1" step="1" value="'+(selection.count??'')+'">')+'<label><input data-table-excluded type="checkbox"'+(selection.includeExcluded?' checked':'')+'>'+esc(tableText('includeExcluded'))+'</label>'+button('load','data-table-load')+'<div data-table-preview></div>';
-  root.querySelector('[data-table-all]').onchange=event=>{selection.columns=event.target.checked?'all':[];void schema(schemaOffset).catch(error=>notify(error.message,true));};
+  // Update before the editor's bubbling input handler checkpoints the value.
+  // Switching selection does not change the schema or require another read.
+  root.querySelector('[data-table-all]').oninput=event=>{
+   const all=event.target.checked;selection.columns=all?'all':[];
+   for(const control of root.querySelectorAll('[data-table-column]')){control.checked=all;control.disabled=all;}
+  };
   root.querySelector('[data-table-load]').onclick=()=>{void read().then(async table=>{guard();if(root.isConnected){onTable(table);await paintRetainedTable(root.querySelector('[data-table-preview]'),{call,ref:source,table,esc,guard});}}).catch(error=>notify(error.message,true));};
   await schema(0);if(request!==generation||!root.isConnected)return;
   if(table){if(table.version===3)await paintRetainedTable(root.querySelector('[data-table-preview]'),{call,ref:source,table,esc,guard});else root.querySelector('[data-table-preview]').innerHTML=retainedTableView(table,esc,{message:tableText});}

@@ -13,6 +13,24 @@ function memory(){
   async read(kind,hash){reads.push(kind+':'+hash);const encoded=nodes.get(kind+':'+hash);assert.equal(digest(encoded),hash);return JSON.parse(encoded);}
  };
 }
+
+test('repeated property selection reuses checked references only for the same immutable tree',async()=>{
+ const storage=memory(),tree=new RecordValueTree(storage),value={title:'Before',body:'x'.repeat(9000),sections:[{title:'Section'}]},root=await tree.retain(value);
+ assert.deepEqual(await tree.selected(root,['title']),{found:true,value:'Before'});
+ assert.deepEqual(await tree.selected(root,['absent']),{found:false});
+ storage.reads.length=0;
+ for(let i=0;i<100;i++){
+  assert.deepEqual(await tree.selected(root,['title']),{found:true,value:'Before'});
+  assert.deepEqual(await tree.selected(root,['absent']),{found:false});
+ }
+ assert.ok(storage.reads.length<=300,'Repeated field lookup re-enumerated the property list');
+ const changed=await tree.replace(root,['title'],'After');
+ assert.deepEqual(await tree.selected(changed,['title']),{found:true,value:'After'});
+ assert.deepEqual(await tree.selected(root,['title']),{found:true,value:'Before'});
+ const node=await tree.node(root),entry=await tree.index.entryAt({root:node.root},0);
+ storage.nodes.delete('value:'+entry.revision);
+ await assert.rejects(new RecordValueTree(storage).selected(root,['title']));
+});
 test('joined query text streams retained fields without flattening them and preserves old text roots',async()=>{
  const storage=memory(),tree=new RecordValueTree(storage),values=['','a','','b\n','\ud800','\udfff','"quoted" \\','α🔬'.repeat(17000)];let root=null;
  for(let i=0;i<values.length;i++)root=await tree.index.change(root,'field:'+String(i).padStart(8,'0'),await storage.put('value',{type:'item',value:await tree.retain(values[i])}));await tree.index.flush(root);

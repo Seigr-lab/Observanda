@@ -8,6 +8,7 @@ import errors from './web/locales/en/errors.json' with {type:'json'};
 const current=new AsyncLocalStorage();
 const events=new Set(['service-start','service-ready','service-stop','service-failed','service-exit','service-output','request','worker-claim','worker-release','worker-idle','resource','phase','dropped']);
 const phases=new Set(['startup','shutdown','request','waiting-writer','database-inventory','activate','claim','release','idle','probe-media','convert-media','validate-pdf','prepare-job','complete-job','session-access','session-device','session-workers','workspace-identity','session-location']);
+for(const stage of ['read-record-bases','prepare-record-edits','validate-records','write-records','write-record-blocks','index-records','read-saved-records'])phases.add(stage);
 const routes=new Set(['session','access','health','intake','media','projects','publication-jobs','records','research','storage','notebook','websites','website-editor']);
 const measures=Object.freeze({'database-admission':['databaseAdmissions','databaseAdmissionMs'],'database-connect':['databaseConnections','databaseConnectMs'],'database-query':['databaseQueries','databaseQueryMs'],'database-queue':['databaseQueueEntries','databaseQueueMs'],'database-cursor':['databaseCursorBatches','databaseCursorMs']});
 const counters=new Set(['durationMs','queued','active','pendingRequests','activeRequests','activeWrites','queuedRequests','queuedWriters','requestBytes','rssBytes','heapBytes','externalBytes','cpuUserUs','cpuSystemUs','bytes','attempt','delayMs','dropped','exitCode','status','databaseReturnedRows','databaseBufferBytes','databaseTextBytes',...Object.values(measures).flat()]);
@@ -112,6 +113,7 @@ export async function measuredJobPhase(phase,operation){
 }
 export function diagnostic(event,data={}){const scope=current.getStore();if(!scope?.recorder)return;scope.recorder.record(event,{...data,...(event==='request'?scope.measurements:{}),correlation:scope.correlation});if(event==='request')scope.finished=true;}
 const noMeasurement=()=>{};
+function* measurementScopes(scope){for(let owner=scope;owner&&!owner.finished;owner=owner.parent)yield owner;}
 // Count already-decoded scalar payloads without serializing or retaining their
 // contents. These are Buffer/UTF-8 text bytes, not wire traffic, decoded object
 // memory or PostgreSQL storage. Other column types are deliberately not guessed.
@@ -127,7 +129,7 @@ export function diagnosticDatabaseResult(result){
   }
  };
  if(Array.isArray(result))for(const value of result)count(value);else count(result);
- for(const [key,value] of [['databaseReturnedRows',rows],['databaseBufferBytes',buffers],['databaseTextBytes',text]])scope.measurements[key]=(scope.measurements[key]??0)+value;
+ for(const owner of measurementScopes(scope))for(const [key,value] of [['databaseReturnedRows',rows],['databaseBufferBytes',buffers],['databaseTextBytes',text]])owner.measurements[key]=(owner.measurements[key]??0)+value;
 }
 // Aggregate numeric timings in the current request, not one log row per SQL
 // statement. Never retain SQL, parameters, connection addresses or owner IDs.
@@ -135,11 +137,15 @@ export function diagnosticDatabaseResult(result){
 export function diagnosticMeasurement(kind){
  const scope=current.getStore(),keys=measures[kind];if(!scope?.recorder||scope.finished||!keys)return noMeasurement;
  const start=performance.now();let ended=false;
- return ()=>{if(ended)return;ended=true;if(scope.finished)return;const [count,duration]=keys;scope.measurements[count]=(scope.measurements[count]??0)+1;scope.measurements[duration]=(scope.measurements[duration]??0)+performance.now()-start;};
+ return ()=>{if(ended)return;ended=true;const [count,duration]=keys,elapsed=performance.now()-start;for(const owner of measurementScopes(scope)){owner.measurements[count]=(owner.measurements[count]??0)+1;owner.measurements[duration]=(owner.measurements[duration]??0)+elapsed;}};
 }
 export async function diagnosticPhase(phase,operation){
- if(!current.getStore()?.recorder)return operation();
- const start=performance.now();let error;
- try{return await operation();}catch(value){error=value;throw value;}
- finally{diagnostic('phase',{phase,durationMs:performance.now()-start,error});}
+ const parent=current.getStore();if(!parent?.recorder)return operation();
+ // A phase owns its measurements, while each completed query contributes once
+ // to its ancestors. Sibling phases cannot borrow one another's counters.
+ const scope={recorder:parent.recorder,correlation:parent.correlation,parent,measurements:{},finished:false},start=performance.now();
+ return current.run(scope,async()=>{
+  let error;try{return await operation();}catch(value){error=value;throw value;}
+  finally{scope.finished=true;scope.recorder.record('phase',{phase,correlation:scope.correlation,durationMs:performance.now()-start,...scope.measurements,error});}
+ });
 }

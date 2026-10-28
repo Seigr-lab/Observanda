@@ -34,6 +34,8 @@ function jsonValue(value,ancestors=new Set()){
  }finally{ancestors.delete(value);}
 }
 export class RecordValueTree{
+ #selections=new Map();
+ #selectionBytes=0;
  constructor(storage){this.storage=storage;this.index=new RetainedTableIndex(storage,{namespace:'index',allowSparseBranches:true});}
  async retain(value){if(!jsonValue(value))throw new AppError('INVALID');return this.#retain(value);}
  async #retain(value){
@@ -127,7 +129,18 @@ export class RecordValueTree{
      const entry=await this.index.entryAt({root:node.root},Number(part));if(!entry)return null;if(node.type!=='keyed-array'&&entry.id!==ordinal(Number(part)))fail();
      const child=await this.node(entry.revision);if(child.type!=='item')fail();revision=child.value;continue;
     }else if(node.type==='object'){
-     let found=null;for await(const child of this.children(node)){if(child.type!=='property')fail();if(child.name===part){if(found)fail();found=child.value;}}
+     // A content hash pins the entire property list. Reuse the checked lookup
+     // within this tree owner, keeping references only, never decoded bodies.
+     const key=revision+':'+part,cached=this.#selections.get(key);let found;
+     if(cached){this.#selections.delete(key);this.#selections.set(key,cached);found=cached.value;}
+     else{
+      found=null;for await(const child of this.children(node)){if(child.type!=='property')fail();if(child.name===part){if(found)fail();found=child.value;}}
+      const bytes=Buffer.byteLength(key)+64;
+      if(bytes<=4096){
+       while(this.#selections.size>=128||this.#selectionBytes+bytes>65536){const first=this.#selections.keys().next().value;this.#selectionBytes-=this.#selections.get(first).bytes;this.#selections.delete(first);}
+       this.#selections.set(key,{value:found,bytes});this.#selectionBytes+=bytes;
+      }
+     }
      if(!found)return null;revision=found;continue;
     }else return null;
    }

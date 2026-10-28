@@ -9,7 +9,7 @@ export const RESULT_KINDS=['conclusion','number','table','comparison','figure'];
 export function validResultStatement(s,{draft=false}={}){
  if(!s)return false;const table=s.kind==='table'&&s.table!==undefined,selection=draft&&s.kind==='table'&&s.tableSelection!==undefined,keys=['basis','id','kind','limitations','source','text','title',...(s.kind==='figure'?['figureId']:[]),...(table?['table']:[]),...(selection?['tableSelection']:[])];
  if(Object.keys(s).sort().join()!==keys.sort().join()||!researchId(s.id)||(s.kind==='figure'&&!researchId(s.figureId)&&!(draft&&s.figureId===''))||!RESULT_KINDS.includes(s.kind)||!['authored','retained'].includes(s.basis)||!analysisTextValue(s.title,300,!draft)||!analysisTextValue(s.text,10000,!draft)||!analysisTextValue(s.limitations,10000,!draft))return false;
- if(selection&&!validTableSelection(s.tableSelection,{paged:true}))return false;
+ if(selection&&!validTableSelection(s.tableSelection,{paged:true,draft:true}))return false;
  if(table&&(!validRetainedTable(s.table)||s.basis!=='retained'))return false;
  if(s.basis==='authored')return s.source===null&&!table&&!selection;
  if(draft&&s.source===null)return !table;

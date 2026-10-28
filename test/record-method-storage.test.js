@@ -32,17 +32,22 @@ async function fixture(t){
 async function selected(workspace,id,consume,snapshotId){return workspace.catalogue(async store=>{const row=await store.member(await store.snapshot(snapshotId),id);return withRecordDocument(store,id,row.revision,doc=>consume(doc,row,store));});}
 
 test('first method indexing rolls back atomically, retains old comparisons and survives both copy modes',async t=>{
- const f=await fixture(t),before=await f.workspace.catalogue(store=>catalogueFormat(store.db)),head=(await f.workspace.outline()).etag;assert.ok(before<14);
- const finish=ResearchCatalogue.prototype.finishRecordChanges;t.mock.method(ResearchCatalogue.prototype,'finishRecordChanges',async function(...args){await finish.apply(this,args);assert.equal(await catalogueFormat(this.db),20);throw Error('Interrupted method index upgrade');});
+ const f=await fixture(t),before=await f.workspace.catalogue(store=>catalogueFormat(store.db)),head=(await f.workspace.outline()).etag;
+ // A modern workspace may already require a newer catalogue generation for
+ // unrelated features. This record still has no method index before its edit.
+ assert.equal(await selected(f.workspace,f.record.id,doc=>doc.methodIndex),null);
+ const expected=Math.max(before,20);
+ const finish=ResearchCatalogue.prototype.finishRecordChanges;t.mock.method(ResearchCatalogue.prototype,'finishRecordChanges',async function(...args){await finish.apply(this,args);assert.equal(await catalogueFormat(this.db),expected);throw Error('Interrupted method index upgrade');});
  await assert.rejects(f.values.save(f.command),/Interrupted method index upgrade/);ResearchCatalogue.prototype.finishRecordChanges.mock.restore();assert.equal((await f.workspace.outline()).etag,head);assert.equal(await f.workspace.catalogue(store=>catalogueFormat(store.db)),before);
- const first=await f.values.save(f.command);assert.deepEqual(await f.values.save(f.command),first);assert.equal(await f.workspace.catalogue(store=>catalogueFormat(store.db)),20);
+ assert.equal(await selected(f.workspace,f.record.id,doc=>doc.methodIndex),null);
+ const first=await f.values.save(f.command);assert.deepEqual(await f.values.save(f.command),first);assert.equal(await f.workspace.catalogue(store=>catalogueFormat(store.db)),expected);
  const index=await selected(f.workspace,f.record.id,doc=>doc.methodIndex);assert.ok(index);const pinned=await selected(f.workspace,f.record.id,doc=>recordRunComparison(doc));assert.deepEqual(pinned.methods,[{label:'Pinned method',revision:recordRevision(f.method)}]);
  await selected(f.workspace,f.record.id,async doc=>{doc.items=()=>{throw Error('Unchanged method owner scanned');};assert.deepEqual(await RecordMethodIndex.retain(doc),index);});
  const title={workspaceId:f.book.id,recordId:f.record.id,field:'title'},base=await f.values.read(title);await f.values.save({...title,expectedRevision:base.revision,value:{value:'Later explanation'}});assert.deepEqual(await selected(f.workspace,f.record.id,doc=>doc.methodIndex),index);
  const link=await f.values.read(f.target);await f.values.save({...f.target,expectedRevision:link.revision,value:{value:{...link.value.value,label:'Reviewed method label'}}});assert.equal((await selected(f.workspace,f.record.id,doc=>recordRunComparison(doc))).methods[0].label,'Reviewed method label');assert.deepEqual(await selected(f.workspace,f.record.id,doc=>recordRunComparison(doc),first.etag),pinned);
  const copied=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'copy')),{vault:f.vault}),access=await createAccess('','synthetic indexed methods recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh')),access,vault,f.vault);
  for(const workspace of [new Workspace(copied,f.vault),new Workspace(fresh,vault)]){
-  assert.equal(await workspace.catalogue(store=>catalogueFormat(store.db)),20);assert.deepEqual(await selected(workspace,f.record.id,doc=>recordRunComparison(doc),first.etag),pinned);await workspace.catalogue(store=>store.verifySnapshot(undefined,f.book.id));
+  assert.equal(await workspace.catalogue(store=>catalogueFormat(store.db)),expected);assert.deepEqual(await selected(workspace,f.record.id,doc=>recordRunComparison(doc),first.etag),pinned);await workspace.catalogue(store=>store.verifySnapshot(undefined,f.book.id));
  }
 });
 

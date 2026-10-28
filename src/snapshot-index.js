@@ -111,11 +111,25 @@ export class SnapshotIndex extends ObjectIndex{
  }
  async validationRows(root,records){
   const found=new Map(),changed=new Set(records.map(r=>r.id));
+  // Many section identities point to the same immutable record descriptor.
+  // Keep bounded reuse inside this validation only, never across transactions.
+  const descriptors=new Map(),collections=new RecordMemberCollections(this.store);let descriptorBytes=0;
+  const member=async entry=>{
+   if(!entry)return null;
+   if(descriptors.has(entry.revision))return descriptors.get(entry.revision).row;
+   const row=await this.member(entry);
+   const bytes=Buffer.byteLength(serialize(row));
+   if(bytes<=256*1024){
+    while(descriptors.size>=128||descriptorBytes+bytes>256*1024){const first=descriptors.keys().next().value;descriptorBytes-=descriptors.get(first).bytes;descriptors.delete(first);}
+    descriptors.set(entry.revision,{row,bytes});descriptorBytes+=bytes;
+   }
+   return row;
+  };
   const add=(row,section=null,reference=null)=>{if(row){const prior=found.get(row.id)??{...row,sections:[]};if(section&&!prior.sections.includes(section))prior.sections.push(section);if(reference){prior.referenceNamespaces??=[];if(!prior.referenceNamespaces.includes(reference.workspaceId))prior.referenceNamespaces.push(reference.workspaceId);}found.set(row.id,prior);}};
   for(const record of records){
    for(const key of [record.id,...(record.sections??[]).map(s=>s.id)]){
-    if(!id(key))continue;const row=await this.member(await this.find({root},'identity:'+key));
-    if(row&&row.id!==key&&await new RecordMemberCollections(this.store).position(row,'sections',key)<0)fail();add(row,row&&row.id!==key?key:null);
+    if(!id(key))continue;const row=await member(await this.find({root},'identity:'+key));
+    if(row&&row.id!==key&&await collections.position(row,'sections',key)<0)fail();add(row,row&&row.id!==key?key:null);
    }
    for(const link of record.relations??[])if(link.role==='run-of'&&id(link.target?.id)&&await referenceNamespaceMatches(this.store,link.target))add(await this.get(root,link.target.id),null,link.target);
    // Only turning an investigation into a run can invalidate unchanged children.
