@@ -15,6 +15,7 @@ import {truncatedGithubTrees} from '../github-tree-fixture.js';
 import {navigate} from './preferences-helper.js';
 import {WebsiteSites} from '../../src/website-sites.js';
 import {websiteWorkspace} from '../../src/website-workspace.js';
+import {GithubConnections} from '../../src/github/connections.js';
 async function connect(page){await page.getByRole('button',{name:'Configure destination',exact:true}).click();await page.getByText('Advanced: temporary access token',{exact:true}).click();await page.getByLabel('GitHub token',{exact:true}).fill('synthetic_github_token_1234567890');await page.getByRole('button',{name:'Connect GitHub',exact:true}).click();await expect(page.locator('#notice')).toContainText('Connected to GitHub');await navigate(page,'Publishing');}
 
 test('repository conflicts are visible and a chosen subfolder preserves the existing site through the app',async({page})=>{
@@ -148,12 +149,30 @@ test('a named website explicitly replaces an old app, archives its branch and pr
  const browserAssets=builtDirectory?await createApplicationAssets({builtDirectory:pathToFileURL(path.resolve(builtDirectory)+path.sep)}):undefined;
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-replacement-ui-')),f=await encryptedFixture(directory,sampleNotebook()),site=await namedWebsite(f,'Replacement journal');
  const remote=githubFixture({branch:'main',initialFiles:{'index.html':'Old application','CNAME':'field.example\n','LICENSE.md':'Keep these terms',...Object.fromEntries(Array.from({length:70},(_,i)=>['old-app/file-'+i+'.js','Old application source']))},initialPages:{build_type:'workflow',source:{branch:'main',path:'/'},cname:'field.example',https_enforced:true}}),parent=remote.head,before=structuredClone(remote.trees.get(remote.commits.get(parent).tree));
- const publisher=new Publisher(f.workspace.root,{workspace:site.workspace,request:remote.request},f.vault),config=defaultPublishing();Object.assign(config.github,{owner:'example',repository:'notebook',branch:'main',pages:true});await publisher.save(config,'new');
- const app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json'),publishingOptions:{request:remote.request},browserAssets}),errors=[];page.on('pageerror',error=>errors.push(error.message));
+ const token='synthetic_connected_github_token_1234567890',credentials=new Map(),authorization=Promise.withResolvers();
+ const helper={available:async()=>true,accounts:async()=>[...credentials.keys()],store:async({login,token})=>credentials.set(login,token),forget:async login=>credentials.delete(login),credential:async(login,{interactive,onVerification,signal}={})=>{
+  if(!interactive)return {login,token:credentials.get(login)};
+  onVerification({url:'https://github.com/login/device',code:'ABCD-5678'});
+  signal.addEventListener('abort',()=>authorization.reject(Error('Synthetic authorization cancelled')),{once:true});await authorization.promise;return {login:'fixture-account',token};
+ }};
+ const request=async(url,options={})=>{
+  expect(new Headers(options.headers).get('authorization')).toBe('Bearer '+token);
+  const route=new URL(url).pathname,ok=value=>new Response(JSON.stringify(value));
+  if(route==='/user')return ok({id:1,login:'fixture-account'});
+  if(route==='/user/memberships/orgs')return ok([{state:'active',organization:{id:2,login:'example'}}]);
+  if(route==='/orgs/example/repos')return ok([{id:123,name:'notebook',owner:{id:2,login:'example'},default_branch:'main',private:false,permissions:{push:true}}]);
+  return remote.request(url,options);
+ };
+ const githubConnections=new GithubConnections({file:path.join(directory,'github.json'),helper,request});
+ const app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json'),publishingOptions:{request},githubConnections,browserAssets}),errors=[];page.on('pageerror',error=>errors.push(error.message));
  try{
   await page.goto(app.url);await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();await page.goto(new URL('/#/websites/'+site.id+'/publishing',app.url).href);
   if(builtDirectory)await expect(page.locator('script[type="module"][src^="/assets/app-"]')).toHaveCount(1);
-  await page.getByRole('button',{name:'Configure destination',exact:true}).click();await page.getByText('Advanced: temporary access token',{exact:true}).click();await page.getByLabel('GitHub token',{exact:true}).fill('synthetic_github_token_1234567890');await page.getByRole('button',{name:'Connect GitHub',exact:true}).click();await expect(page.locator('#notice')).toContainText('Connected to GitHub');await page.locator('.website-site-context').getByRole('button',{name:'Publishing',exact:true}).click();
+  await page.getByRole('button',{name:'Configure destination',exact:true}).click();
+  const account=page.locator('#github-connection');await account.getByRole('button',{name:'Sign in with GitHub',exact:true}).click();await expect(account).toContainText('ABCD-5678');await expect(account.getByRole('link',{name:'Open GitHub to sign in'})).toHaveAttribute('href','https://github.com/login/device');authorization.resolve();await expect(account).toContainText('Connected as fixture-account');
+  const destination=page.locator('#github-destination-browser');await destination.getByRole('button',{name:'Browse accounts and organizations'}).click();await destination.getByLabel('GitHub account or organization').selectOption('example');await destination.getByRole('button',{name:'Show repositories'}).click();await destination.getByLabel('GitHub repository',{exact:true}).selectOption('123');await destination.getByRole('button',{name:'Use this repository'}).click();
+  await expect(page.getByLabel('GitHub owner / organization',{exact:true})).toHaveValue('example');await expect(page.getByLabel('Repository name',{exact:true})).toHaveValue('notebook');await page.getByLabel('After upload',{exact:true}).selectOption('pages');await page.getByRole('button',{name:'Save destination',exact:true}).click();await expect(page.locator('#destination-status')).toContainText('Destination saved');await page.reload();await expect(account).toContainText('Connected as fixture-account');await expect(page.getByLabel('GitHub owner / organization',{exact:true})).toHaveValue('example');
+  await page.locator('.website-site-context').getByRole('button',{name:'Publishing',exact:true}).click();
   await page.getByRole('button',{name:'Review website',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible({timeout:30000});
   await page.getByRole('button',{name:'Review repository changes',exact:true}).click();const review=page.locator('#destination-review');await expect(review).toContainText('Conflicting files: 1',{timeout:30000});await expect(page.getByRole('button',{name:'Publish to GitHub Pages',exact:true})).toBeDisabled();
   await review.getByText('Replace an existing website or application',{exact:true}).click();await page.getByLabel('Archive branch (optional)',{exact:true}).fill('previous-application');await page.getByRole('button',{name:'Review full replacement',exact:true}).click();await expect(review).toContainText('create branch previous-application',{timeout:30000});await expect(review).toContainText('Remove: 70 files');await expect(review).toContainText('Preserve: 2 files');
