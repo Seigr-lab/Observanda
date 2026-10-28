@@ -1,6 +1,6 @@
 import {researchId} from './research-reference.js';
 import {bookText} from './book-messages.js';
-import {renderEquation} from './vendor/equations.js';
+import {renderEquation} from './equation-runtime.js';
 import {validSketch,sketchTextContent} from './sketch-model.js';
 import {renderSketch} from './sketch-renderer.js';
 import {figureReadingView} from './figure-reading-view.js';

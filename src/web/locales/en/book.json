@@ -1,4 +1,5 @@
 {
+  "equationRetry": "Retry equation rendering",
  "selectorTitle":"Copy content reference",
  "selectorSearch":"Find a destination", "selectorFind":"Find", "selectorLoading":"Finding reference destinations…", "selectorRange":"Destinations {first}–{last}", "selectorEmpty":"No matching destinations in this saved record.", "selectorPrevious":"Previous destinations", "selectorNext":"Next destinations", "selectorRefresh":"Refresh destinations", "selectorStop":"Cancel loading", "selectorRetry":"Try again", "selectorStopped":"Loading stopped. The displayed destinations are unchanged. Retry to continue.",
  "linkedRuns":"Runs and takes", "comparedIn":"Compared in", "referencePages":"Record reference navigation", "previousReferences":"Previous references", "nextReferences":"Next references", "continueReferences":"No public references in this part. Continue to inspect the remaining references.",

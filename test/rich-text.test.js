@@ -38,6 +38,10 @@ test('format 9 migrates website typography without changing source records or th
  for(const attrs of [{color:'red'},{color:'#993344;display:none'},{color:'url(https://example.org)'},{color:'#ffffff',onclick:'x'}]){const d=plainRichText('Invalid');d.content[0].content[0].marks=[{type:'text_color',attrs}];assert.equal(validRichText(d),false);}
 });
 
-test('explicit design targets preview only the chosen private scope and never change publication flags',()=>{
- const book=sampleNotebook();for(const p of book.projects)p.share=false;for(const e of book.entries)e.share=false;const before=JSON.stringify(book),chosen=book.entries[0];const files=buildPublication(book,{designTarget:'entry:'+chosen.id}).files;assert.ok(files.has('entries/'+chosen.id+'.html'));for(const other of book.entries.slice(1))assert.ok(!files.has('entries/'+other.id+'.html'));assert.equal(JSON.stringify(book),before);assert.ok(!buildPublication(book).files.has('entries/'+chosen.id+'.html'));assert.throws(()=>buildPublication(book,{designTarget:'entry:'+randomUUID()}));
+test('explicit publication design targets preserve source consent and include only the chosen allowed scope',()=>{
+ const book=sampleNotebook();for(const p of book.projects)p.share=false;for(const e of book.entries)e.share=false;const chosen=book.entries[0];
+ assert.throws(()=>buildPublication(book,{designTarget:'entry:'+chosen.id}),{code:'INVALID'});
+ chosen.share=true;const before=JSON.stringify(book),files=buildPublication(book,{designTarget:'entry:'+chosen.id}).files;
+ assert.ok(files.has('entries/'+chosen.id+'.html'));for(const other of book.entries.slice(1))assert.ok(!files.has('entries/'+other.id+'.html'));assert.equal(JSON.stringify(book),before);assert.ok(!buildPublication(book).files.has('entries/'+chosen.id+'.html'));assert.throws(()=>buildPublication(book,{designTarget:'entry:'+randomUUID()}));
+ book.notebooks.find(item=>item.id===chosen.notebookId).share=false;assert.throws(()=>buildPublication(book,{designTarget:'entry:'+chosen.id}),{code:'INVALID'});
 });
