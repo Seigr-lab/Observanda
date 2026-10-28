@@ -44,7 +44,7 @@ async function includeLabBook(page,projectName,bookName){
   const sources=page.locator('[data-publication-sources]');
   await sources.locator('section.website-record').filter({has:page.getByText(projectName,{exact:true})}).getByRole('button',{name:'Lab books',exact:true}).click();
   await sources.locator('section.website-record').filter({hasText:bookName}).getByRole('button',{name:'Choose content',exact:true}).click();
-  await sources.getByLabel('Include all records in this lab book',{exact:true}).check();
+  await sources.getByLabel('Include available records in this lab book',{exact:true}).check();
   await expect(sources.locator('[data-source-record]')).toBeChecked();
 }
 async function saveChanges(page){const save=page.locator('.section-save [data-action=save]');if(await save.isEnabled())await save.click();await expect(page.locator('#save-status')).toHaveText('Saved');}
@@ -81,8 +81,20 @@ test('create, edit, persist, customize, review, and download an independent note
   await page.getByLabel('Coordinate 2',{exact:true}).fill('2');
   await page.getByLabel('Value 1', { exact: true }).fill('3');
   await page.getByLabel('Value 2', { exact: true }).fill('8');
-  await page.locator('.section-save [data-action=save]').click();
-  await expect(page.locator('#save-status')).toHaveText('Saved');
+  let releaseCommit;const commitGate=new Promise(resolve=>{releaseCommit=resolve;});
+  const applyRoute='**/api/**/research/drafts/review/apply';
+  await page.route(applyRoute,async route=>{await commitGate;await route.continue();},{times:1});
+  try{
+    const committing=page.waitForRequest(applyRoute);
+    await page.locator('.section-save [data-action=save]').click();
+    await committing;
+    await expect(page.locator('#save-status')).toHaveText('Saving…');
+    await expect(page.locator('.section-save [data-action=save]')).toBeDisabled();
+    await expect(page.locator('.section-save [data-action=discard-section]')).toBeDisabled();
+    await expect(page.getByLabel('Record title')).toHaveValue('First green leaves');
+  }finally{releaseCommit();}
+  await expect(page.locator('.record-editing')).toContainText('Two leaves opened today.',{timeout:15000});
+  await page.unroute(applyRoute);
   await page.reload();await expect(page.locator('.record-reader')).toContainText('Two leaves opened today.');
   await navigate(page,'Dashboard');await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();
   let releasePolicy,policyArrived;const policyGate=new Promise(resolve=>{releasePolicy=resolve;}),oldOwnerLoading=new Promise(resolve=>{policyArrived=resolve;});
@@ -95,9 +107,11 @@ test('create, edit, persist, customize, review, and download an independent note
   }finally{releasePolicy();await page.unroute(ownedPolicy);}
   await expect(page).toHaveURL(/#\/records$/);
   await expect(page.getByRole('heading',{name:'Observanda could not finish opening',exact:true})).toHaveCount(0);
+  const ownerReads=[];const trackOwnerRead=request=>{if(/\/lab-books\/[^/]+\/workspace\/read\/start$/.test(request.url()))ownerReads.push(request.url());};page.on('request',trackOwnerRead);
   await page.getByRole('link', { name: 'First green leaves',exact:true }).click();
   await expect(page.locator('.record-reader')).toContainText('Two leaves opened today.');
   await expect(page.locator('.record-reader')).toContainText('The soil was still damp.');
+  page.off('request',trackOwnerRead);expect(ownerReads).toHaveLength(1);
   await navigate(page,'Website editor');
   await editorTab(page,'Content');await includeLabBook(page,'Garden project','Garden observations');
   await saveChanges(page);

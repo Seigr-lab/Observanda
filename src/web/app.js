@@ -317,7 +317,7 @@ function report(error) {
 }
 function updateSaveStatus(){
   const changed=state.dirty||state.page==='appearance'&&textControls.isDirty();
-  const label=$('#save-status');if(label)label.textContent=changed?'Unsaved changes':'Saved';
+  const label=$('#save-status');if(label)label.textContent=savePromise?t('pendingSettings','saving'):changed?'Unsaved changes':'Saved';
   recordDrafts.update();
   for(const button of document.querySelectorAll('.section-save [data-action="save"],.section-save [data-action="discard-section"]'))button.disabled=!changed||uploading||Boolean(savePromise)||figures.isBusy()||recordDrafts.isRecovering();
 }
@@ -339,7 +339,8 @@ async function save() {
   if(!state.dirty)return;
   // Wait for a checkpoint already in flight before acquiring the workspace
   // write lock. Draft writes and record commits use the same durable adapter.
-  savePromise=saveRecords();
+  savePromise=Promise.resolve().then(saveRecords);
+  updateSaveStatus();
   try{return await savePromise;}finally{savePromise=null;updateSaveStatus();}
 }
 async function saveRecords(){
@@ -723,6 +724,10 @@ async function openRecordReading(id,anchor=null,reading=true,origin=null){
 }
 async function selectRecord(id,{metadataOnly=false}={}){
  const request=++recordOpenRequest,context=state.storage?.contextId,workspaceId=state.book?.id,route=location.hash,etag=state.etag;
+ // The selected reader requests an exact snapshot itself. Reuse the current
+ // owner's authenticated outline instead of serially loading it again after
+ // owner activation or each record link. Live updates still adopt new heads.
+ if(metadataOnly&&state.workspaceOutline&&!state.dirty&&savedBook?.id===workspaceId&&revisionId(etag))return true;
  const main=document.querySelector('#main'),status=document.createElement('p');
  status.setAttribute('role','status');status.textContent='Opening record...';
  if(main){main.inert=true;main.setAttribute('aria-busy','true');main.before(status);}

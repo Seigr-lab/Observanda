@@ -19,11 +19,13 @@ test('normal record reading pages stored sections without selection hydration an
  const f=await encryptedFixture(directory,book),app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')}),errors=[],requests=[];
  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.url().includes('/api/workspace/read/'))requests.push(r.url());});
  try{
-  await page.goto(app.url);await expect(page.locator('#main-navigation')).toBeVisible();
+  await page.goto(app.url);await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();
+  requests.length=0;
   await page.goto(app.origin+'/#/records/'+record.id+'/read/'+record.sections[250].id);
   await expect(page.locator('#record-section-'+record.sections[250].id)).toBeFocused();
   await expect(page.locator('.record-sections>section[id]')).toHaveCount(4);
   expect(requests.some(url=>url.endsWith('/record-content'))).toBe(true);
+  expect(requests.some(url=>url.endsWith('/start'))).toBe(false);
   expect(requests.some(url=>/\/(selection|page)$/.test(url))).toBe(false);
   let interrupt=true;const cursors=[];
   await page.route('**/api/workspace/read/record-content',async route=>{
