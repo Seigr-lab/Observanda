@@ -1,9 +1,11 @@
-import {readdir,lstat,readFile,readlink,realpath} from 'node:fs/promises';
+import {readdir,lstat,readFile,readlink,realpath,mkdtemp,rm} from 'node:fs/promises';
 import {createReadStream} from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import {createHash} from 'node:crypto';
 import {githubRuntimeFiles} from './github-runtime.js';
 import {pdfValidationRuntimeFiles} from './pdf-validation-runtime.js';
+import {buildBrowser} from './browser-build.js';
 // Node's official SHASUMS256.txt pins each complete target archive/executable.
 export const desktopNodeVersion='24.22.1';
 export const desktopNodeHashes=Object.freeze({
@@ -40,10 +42,23 @@ export async function verifyDesktopPayload(root,{sourceRoot}={}){
    const bytes=await readFile(path.join(sourceRoot,relative));sourceFiles.push({path:'service/'+relative,bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')});
   }
   const order=(a,b)=>a.path.localeCompare(b.path,'en'),same=(a,b)=>a.length===b.length&&a.every((f,i)=>f.path===b[i].path&&f.bytes===b[i].bytes&&f.sha256===b[i].sha256&&f.target===b[i].target);
-  const bundled=manifest.files.filter(f=>f.path.startsWith('service/src/')||applicationAssets.some(name=>f.path==='service/'+name));
+  const generated='service/src/web-build/';
+  if(sourceFiles.some(file=>file.path.startsWith(generated)))throw Error('Generated browser assets must remain outside the source tree.');
+  const bundled=manifest.files.filter(f=>f.path.startsWith('service/src/')&&!f.path.startsWith(generated)||applicationAssets.some(name=>f.path==='service/'+name));
   if(!same(sourceFiles.sort(order),bundled.sort(order)))throw Error('Desktop payload is stale. Run npm run prepare:desktop with the media bundle before packaging.');
   const application=JSON.parse(await readFile(path.join(sourceRoot,'package.json'),'utf8')),desktop=JSON.parse(await readFile(path.join(sourceRoot,'desktop/package.json'),'utf8'));
   if(application.version!==desktop.version)throw Error('Desktop and application versions must match before packaging.');
+  // Generated chunks are not source files. Rebuild them independently so a
+  // refreshed payload manifest cannot hide stale or substituted browser code.
+  const parent=await realpath(os.tmpdir()),temporary=await mkdtemp(path.join(parent,'observanda-browser-verify-'));
+  try{
+   await buildBrowser({root:path.resolve(sourceRoot),out:temporary});
+   const expected=(await payloadFiles(temporary)).map(file=>({...file,path:generated+file.path}));
+   if(!same(expected.sort(order),manifest.files.filter(file=>file.path.startsWith(generated)).sort(order)))throw Error('Desktop browser payload is stale. Recreate the compiled browser assets before packaging.');
+  }finally{
+   if(path.dirname(temporary)!==parent||await realpath(temporary)!==temporary)throw Error('Invalid browser verification cleanup path.');
+   await rm(temporary,{recursive:true,force:true});
+  }
  }
  return manifest;
 }
