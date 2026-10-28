@@ -36,6 +36,7 @@ import {verifyPublicationCandidate} from './retained-publication-files.js';
 import {jobSummary} from './jobs.js';
 import {researchId} from './web/research-reference.js';
 import {AppError} from './errors.js';
+import {githubDestinations} from './github/destinations.js';
 import {publicationText} from './web/publication-messages.js';
 export class ProjectPublications{
  constructor(entry){this.entry=entry;this.candidates=new Map();this.designs=new DesignCandidates();this.appearancePreviews=new AppearancePreviewSessions();}
@@ -157,6 +158,7 @@ export class ProjectPublications{
   if(method==='connect'){await githubIdle();await publisher.connection?.cancel();return publisher.connect(data.token);}
   if(method==='disconnect'){await githubIdle();publisher.token=null;return publisher.read();}
   if(method==='check')return publisher.check({reviewExisting:true});
+  if(method==='destinations')return githubDestinations(publisher,data);
   if(method==='plan-operation'||method==='plan'&&data.background===true){
    const plans=new GithubPlanJobs(workspace,publisher,queue,{sourceReader,sourceAccess:this.entry.sourceAccess});
    const result=method==='plan'?{job:jobSummary(await plans.start(data))}:await plans.operation(data);

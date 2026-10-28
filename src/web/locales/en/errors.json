@@ -237,7 +237,7 @@
   "GITHUB_CONNECTION_DAMAGED": "The local GitHub account settings could not be read. Your workspace and GitHub repositories have not been changed.",
   "GITHUB_RECONNECT": "GitHub authorization is unavailable or has been revoked. Sign in again in Preferences → Integrations; your destination and prepared website are retained.",
   "GITHUB_SIGNIN_CANCELLED": "GitHub sign-in was cancelled. You can close the authorization tab in your browser.",
-  "GITHUB_SIGNIN_TIMEOUT": "GitHub sign-in timed out. Try again and complete authorization in your browser within three minutes.",
+  "GITHUB_SIGNIN_TIMEOUT": "GitHub sign-in timed out. Start sign-in again to get a new code, then open GitHub and authorize it before it expires.",
   "GITHUB_SIGNIN_BUSY": "Finish or cancel the current GitHub sign-in before changing accounts or publishing.",
   "GITHUB_PUBLICATION_BUSY": "Finish or stop the current repository setup or upload before changing the GitHub connection.",
   "GITHUB_BROWSER_UNAVAILABLE": "Browser sign-in requires Observanda to run in your local desktop session.",

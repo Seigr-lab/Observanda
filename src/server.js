@@ -167,6 +167,7 @@ import {WebsiteResearch} from './website-research.js';
 import { Laboratory } from './laboratory.js';
 import {SampleAnalysisReader} from './sample-analysis-reader.js';
 import { Publisher } from './publishing.js';
+import {githubDestinations} from './github/destinations.js';
 import {githubSerializedRequest} from './github/request-policy.js';
 import http from 'node:http';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
@@ -1211,6 +1212,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         if (url.pathname === '/api/publishing/connect') {await assertGithubIdle();await publisher.connection?.cancel();return json(await publisher.connect(data.token));}
         if (url.pathname === '/api/publishing/disconnect') {await assertGithubIdle();publisher.token = null;return json(await publisher.read());}
         if (url.pathname === '/api/publishing/check') return json(await publisher.check({reviewExisting:true}));
+        if (url.pathname === '/api/publishing/destinations') return json(await githubDestinations(publisher,data));
         if(url.pathname==='/api/publishing/plan-operation'||url.pathname==='/api/publishing/plan'&&data.background===true){
           startJobs(context);const plans=new GithubPlanJobs(workspace,publisher,publicationQueue(),{sourceReader,sourceAccess:context.publicationSourceAccess});
           const result=url.pathname.endsWith('/plan')?{job:jobSummary(await plans.start(data))}:await plans.operation(data);

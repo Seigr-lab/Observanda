@@ -14,8 +14,10 @@ test('GitHub account changes require the local session and serialize with public
  const app=await startServer({root,port:0,githubConnections:connections});t.after(async()=>{release?.();await app.close();await rm(directory,{recursive:true,force:true});});
  const route='/api/github-connection/choose';const raw=(url,data,headers={})=>fetch(app.origin+url,{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json',...headers},body:JSON.stringify(data)});
  assert.equal((await raw(route,{login:'alice'})).status,401);
+ assert.equal((await raw('/api/publishing/destinations',{kind:'owners'})).status,401);
  const auth=await raw('/api/session',{token:app.launchToken}),Cookie=auth.headers.get('set-cookie').split(';')[0],request=(url,data)=>raw(url,data,{Cookie});
  assert.equal((await raw(route,{login:'alice'},{Cookie,Origin:'https://attacker.invalid'})).status,403);
+ assert.equal((await raw('/api/publishing/destinations',{kind:'owners'},{Cookie,Origin:'https://attacker.invalid'})).status,403);
  const selecting=request(route,{login:'alice'});await waiting;
  for(const url of ['/api/github-connection/start','/api/publishing/connect','/api/publishing/deploy','/api/deployment-jobs/start','/api/repository-setup/start'])assert.equal((await (await request(url,{})).json()).code,'GITHUB_PUBLICATION_BUSY',url);
  release();const result=await (await selecting).json();assert.equal(result.selected.login,'alice');assert.ok(!JSON.stringify(result).includes('synthetic_token'));

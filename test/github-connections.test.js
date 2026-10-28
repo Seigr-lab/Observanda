@@ -53,3 +53,13 @@ test('native helper failures never expose raw diagnostics or unknown UI error ke
  f.helper.accounts=async()=>{throw error;};f.helper.credential=async()=>{throw error;};await f.connections.start(f.root);await f.connections.pending.promise;
  const status=await f.connections.status(f.root);assert.equal(status.error,'GITHUB_CREDENTIALS');assert.equal(status.signIn.error,'GITHUB_CREDENTIALS');assert.equal(status.signIn.state,'failed');assert.ok(!JSON.stringify(status).includes(accounts.alice.token));
 });
+test('device challenge is session-only, disappears on completion, and ignores late cancelled callbacks',async t=>{
+ const f=await fixture(t);let finish,announce;
+ f.helper.credential=async(_login,{onVerification})=>{announce=onVerification;return new Promise(resolve=>{finish=()=>resolve(accounts.alice);});};
+ await f.connections.start(f.root);while(!announce)await new Promise(resolve=>setImmediate(resolve));
+ announce({url:'https://attacker.invalid',code:'ABCD-1234'});assert.equal((await f.connections.status(f.root)).signIn.verification,undefined);
+ announce({url:'https://github.com/login/device',code:'ABCD-5678'});assert.equal((await f.connections.status(f.root)).signIn.verification.code,'ABCD-5678');
+ finish();await f.connections.pending.promise;assert.equal((await f.connections.status(f.root)).signIn.verification,undefined);assert.ok(!(await readFile(f.file,'utf8')).includes('ABCD-5678'));
+ await f.connections.start(f.root);await new Promise(resolve=>setImmediate(resolve));const cancel=f.connections.cancel(f.root);announce({url:'https://github.com/login/device',code:'LATE-1234'});finish();await cancel;
+ assert.equal((await f.connections.status(f.root)).signIn.verification,undefined);assert.equal(f.connections.pending.verification,undefined);
+});
