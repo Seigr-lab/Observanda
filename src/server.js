@@ -48,7 +48,7 @@ import {SavedWorkspaceDeletion} from './saved-workspace-deletion.js';
 import {workspaceDeletion} from './workspace-delete-state.js';
 import {forgetWorkspace} from './preferences.js';
 import {operationStage} from './operation-progress.js';
-import {OperationalDiagnostics,withDiagnostics,diagnostic} from './operational-diagnostics.js';
+import {OperationalDiagnostics,withDiagnostics,diagnostic,diagnosticPhase} from './operational-diagnostics.js';
 import {diskCapacity} from './disk-capacity.js';
 import {serviceHealth} from './service-health.js';
 import {UserProfile} from './user-profile.js';
@@ -369,22 +369,22 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
           if(client&&!(await status(client)).locked)return json({ok:true});
           throw new AppError('LOCKED');
         }
-        const sessionContext=context,session=randomBytes(32).toString('hex'),access=await contextAccess();
+        const sessionContext=context,session=randomBytes(32).toString('hex'),access=await diagnosticPhase('session-access',contextAccess);
         if(sessions.size>=128)sessions.delete(sessions.keys().next().value);
         const local={access:requiresAccess(access.value)?null:access.etag,expires:Date.now()+8*60*60*1000};
         if(access.value.formatVersion===3&&!context.manualLock){
          try{
-          const vault=await verifyAccess(access,'','',{deviceStore});
-          const latest=await contextAccess();
+          const vault=await diagnosticPhase('session-device',()=>verifyAccess(access,'','',{deviceStore}));
+          const latest=await diagnosticPhase('session-access',contextAccess);
           if(context!==sessionContext){clearVault(vault);throw new AppError('WORKSPACE_CHANGED');}
           if(context.manualLock||latest.etag!==access.etag){clearVault(vault);}
           else if(context.vault.key&&context.vault.id===vault.id&&context.vault.key.equals(vault.key)){clearVault(vault);local.access=access.etag;}
-          else{await stopJobs(sessionContext);if(context!==sessionContext){clearVault(vault);throw new AppError('WORKSPACE_CHANGED');}if(context.manualLock||changing||loginBusy){clearVault(vault);throw new AppError('LOCKED');}context.calendarSources.clear();clearVault(context.vault);Object.assign(context.vault,vault);local.access=access.etag;}
+          else{await diagnosticPhase('session-workers',()=>stopJobs(sessionContext));if(context!==sessionContext){clearVault(vault);throw new AppError('WORKSPACE_CHANGED');}if(context.manualLock||changing||loginBusy){clearVault(vault);throw new AppError('LOCKED');}context.calendarSources.clear();clearVault(context.vault);Object.assign(context.vault,vault);local.access=access.etag;}
          }
          catch(error){if(!['DEVICE_UNKNOWN','DEVICE_UNAVAILABLE','DEVICE_INVALID','LEGACY_WRITE_LOCK'].includes(error.code))throw error;}
         }
-        if(local.access){await ensureWorkspaceIdentity(sessionContext);}
-        if(local.access)try{await rememberAuthenticatedLocation(preferencesFile,sessionContext.root);}catch(error){if(error.code!=='LEGACY_WRITE_LOCK')throw error;}
+        if(local.access){await diagnosticPhase('workspace-identity',()=>ensureWorkspaceIdentity(sessionContext));}
+        if(local.access)try{await diagnosticPhase('session-location',()=>rememberAuthenticatedLocation(preferencesFile,sessionContext.root));}catch(error){if(error.code!=='LEGACY_WRITE_LOCK')throw error;}
         if(context!==sessionContext)throw new AppError('WORKSPACE_CHANGED');sessions.set(session,local);setCookie(res,session);if(local.access)startJobs(context);
         return json({ ok: true });
       }
