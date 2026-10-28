@@ -19,11 +19,7 @@ import {pdfRendererAvailable,pdfRendererCapabilities} from './pdf-render-service
 import {PdfLayoutError} from './web/pdf-layout-model.js';
 import {revisionId} from './web/revision-model.js';
 import {AppError} from './errors.js';
-const methods=['print-profile-import','list','archive','openArchived','open','sections','outline','section','history','change','capabilities','export','layouts','layout-change','source','source-retain','source-images','source-image-retain','selection','preflight','fonts','font-read','font-retain','image-import','image-read','exports','export-start','export-status','export-cancel','export-resume','export-download'];
-export function pdfDocumentRequest(route,method='POST'){
- if(method!=='POST'||!route.startsWith('/api/pdf/'))return null;const pdf=route.slice(9);
- return methods.includes(pdf)?{pdf,method:'POST',write:['print-profile-import','change','layout-change','source-retain','source-image-retain','font-retain','image-import','export-start','export-cancel','export-resume'].includes(pdf),binary:['export','image-read','font-read','export-download'].includes(pdf),limit:pdf==='image-import'?24*1024*1024:pdf==='print-profile-import'?12*1024*1024:1024*1024}:null;
-}
+export {pdfDocumentRequest} from './pdf-route-policy.js';
 export async function executePdfRequest(storage,request,data,{signal,check=async()=>{},binary,sourceReader,exportService}={}){
  if(storage.labBookId)throw new AppError('INVALID');await check();signal?.throwIfAborted();
  const {workspaceId,...input}=data??{},documents=new PdfDocuments(storage,workspaceId);

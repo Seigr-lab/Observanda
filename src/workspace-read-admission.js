@@ -1,4 +1,5 @@
 import {materialRequest} from './material-route-policy.js';
+import {pdfDocumentRequest} from './pdf-route-policy.js';
 import {publicationJobControlRequest} from './publication-job-policy.js';
 import {reviewRequest} from './review-requests.js';
 import {researchRequest} from './research-requests.js';
@@ -9,7 +10,6 @@ import {recordStarterRequest} from './record-starter-requests.js';
 const get=new Set(['/api/dashboard','/api/notebook','/api/modules/data','/api/modules/version','/api/modules/history','/api/laboratory','/api/history','/api/media-policy','/api/fonts','/api/publishing']);
 const post=new Set([
  '/api/publishing/plan-page','/api/publication-selections/read','/api/publication-selections/window',
- ...['list','archive','openArchived','open','sections','outline','section','history','capabilities','export','layouts','source','source-images','selection','preflight','fonts','font-read','image-read','exports','export-status','export-download'].map(name=>'/api/pdf/'+name),
  ...['open','window','item'].map(name=>'/api/websites/editor/'+name),
  ...['version','start','page','changes','change-page','selection','labels','dashboard','dashboard-types','record-types','discovery','timeline','record-content','record-selectors'].map(name=>'/api/workspace/read/'+name),
  ...['items','item','labels','bom-source','inventory/dashboard','inventory/discovery','inventory/stock','inventory/ledger','planning/dashboard','planning/discovery','planning/readiness'].map(name=>'/api/modules/'+name),
@@ -24,6 +24,7 @@ const post=new Set([
 ]);
 export const workspaceSnapshotRequest=(method,route)=>{
  const material=materialRequest(route);if(material)return method===material.method&&material.snapshot;
+ const pdf=pdfDocumentRequest(route,method);if(pdf)return pdf.snapshot;
  const publication=publicationJobControlRequest(route);if(publication)return method===publication.method&&publication.snapshot;
  if(method==='GET')return Boolean(reviewRequest(route,method)&&!reviewRequest(route,method).write)||/^\/api\/live\/figures\/(?:[a-f0-9-]{36}\/){2}[a-f0-9-]{36}$/.test(route)||/^\/api\/sharing\/figures\/[a-f0-9-]{36}\/(?:base|incoming|current)\/[a-f0-9-]{36}\/[a-f0-9-]{36}$/.test(route)||get.has(route)||/^\/api\/fonts\/custom-[a-f0-9]{64}$/.test(route)||/^\/(?:appearance-preview|preview)\/[a-f0-9]{64}\/.+/.test(route)||/^\/api\/appearance-preview\/[a-f0-9]{64}\/pages$/.test(route);
  if(method!=='POST')return false;const command=recordStarterRequest(route)??researchRequest(route)??reviewRequest(route);return post.has(route)||route==='/api/research/views/list'||Boolean(command&&!command.write);
