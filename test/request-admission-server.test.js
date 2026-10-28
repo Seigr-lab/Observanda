@@ -49,6 +49,9 @@ test('slow HTTP bodies cannot exhaust controls, queued clients cancel, and rejec
   const cancelled=await send('/api/pdf/export-cancel',jobInput);assert.equal(cancelled.status,200);assert.equal((await cancelled.json()).state,'cancelled');assert.equal((await jobs.status(jobId)).state,'cancelled');
   const invalid=await send('/api/pdf/export-cancel',{workspaceId:before.book.id,id:'invalid'});assert.equal(invalid.status,422);assert.equal((await invalid.json()).code,'INVALID');
   const oversize=await send('/api/pdf/export-status',{...jobInput,note:'x'.repeat(1024)});assert.equal(oversize.status,413);assert.equal((await oversize.json()).code,'LIMIT');
+  const missingPublication=await send('/api/publication-jobs/status',{id:randomUUID()});assert.equal(missingPublication.status,404);assert.equal((await missingPublication.json()).code,'NOT_FOUND');
+  const invalidPublication=await send('/api/publication-jobs/cancel',{id:'invalid'});assert.equal(invalidPublication.status,422);assert.equal((await invalidPublication.json()).code,'INVALID');
+  const oversizedPublication=await send('/api/publication-jobs/status',{id:randomUUID(),note:'x'.repeat(1024)});assert.equal(oversizedPublication.status,413);assert.equal((await oversizedPublication.json()).code,'LIMIT');
   assert.equal(admission.stats().work.active,1);assert.equal((await send('/api/access/lock',{})).status,200);
  }finally{held.release();}
  assert.equal((await waiting).status,401);assert.equal(admission.stats().work.queued,0);

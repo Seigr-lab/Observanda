@@ -1,15 +1,13 @@
 import {materialRequest} from './material-route-policy.js';
 import {AppError} from './errors.js';
-import {publicationJobControlRequest} from './publication-job-policy.js';
+import {projectPublicationRequest} from './project-publication-requests.js';
 import {pdfDocumentRequest} from './pdf-route-policy.js';
 import {reviewRequest} from './review-route-policy.js';
 
 const controlGet=new Set(['/api/health','/api/access/status','/api/diagnostics','/api/writer-recovery','/api/activity']);
 const controlPost=new Set([
  '/api/access/lock','/api/writer-recovery',
- '/api/deployment-jobs/status','/api/deployment-jobs/cancel','/api/repository-setup/status','/api/repository-setup/cancel',
  '/api/media-imports/job','/api/media-imports/cancel',
- '/api/publishing/verification','/api/publishing/verification-cancel','/api/github-connection/cancel',
  '/api/v1/intake/status','/api/v1/intake/cancel','/api/storage/copy/cancel','/api/storage/export/cancel','/api/storage/move/cancel',
  '/api/storage/move/status','/api/storage/delete/status','/api/record-transfer/cancel'
 ]);
@@ -18,7 +16,7 @@ export function requestLane(method,pathname){
  // Owner prefixes select storage; they do not change the operation's budget.
  const route=pathname.replace(/^\/api\/projects\/[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\/(?:lab-books\/[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\/)?/,'/api/');
  const material=materialRequest(route);if(material&&material.method===method)return material.admission;
- const publication=publicationJobControlRequest(route);if(publication&&publication.method===method)return publication.admission;
+ const publication=projectPublicationRequest(route,method);if(publication)return publication.admission;
  const pdf=pdfDocumentRequest(route,method);if(pdf)return pdf.admission;
  const review=reviewRequest(route,method);if(review)return review.admission;
  return (method==='GET'?controlGet.has(route):method==='POST'&&controlPost.has(route))?'control':'work';

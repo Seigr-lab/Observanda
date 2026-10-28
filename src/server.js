@@ -1,6 +1,7 @@
 import {executePublicationJobControl} from './publication-job-control.js';
 import {publicationJobControlRequest} from './publication-job-policy.js';
 import {RequestAdmission,requestLane} from './request-admission.js';
+import {projectPublicationRequest} from './project-publication-requests.js';
 import {onResponseClose} from './response-close.js';
 import {jsonBody} from './request-body.js';
 import {nativeMediaAdmission} from './native-media-admission.js';
@@ -185,7 +186,7 @@ const mime = name => name.endsWith('.bin') ? 'application/octet-stream' : name.e
 const equal = (a, b) => typeof a === 'string' && /^[a-f0-9]{64}$/.test(a) && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
 async function body(req,limit=MAX_BYTES,capacityOwner=null) {
-  return jsonBody(req,{limit,retain:bytes=>req.admission.retain(bytes),admit:bytes=>{if(capacityOwner)admitResearchBytes(capacityOwner,bytes);}});
+  return jsonBody(req,{limit:Math.min(limit,req.routePolicy?.limit??limit),retain:bytes=>req.admission.retain(bytes),admit:bytes=>{if(capacityOwner)admitResearchBytes(capacityOwner,bytes);}});
 }
 
 export async function startServer({ root=null, port = 4173, publishingOptions, githubConnections, preferencesFile, expectedExisting=false, headless=false, folderPicker, folderBrowser=browseFolders, diagnostics:providedDiagnostics, requestAdmission=new RequestAdmission(), browserAssets=assets, deviceStore=preferencesFile?new DeviceStore({file:preferencesFile+'.device-key'}):defaultDeviceStore } = {}) {
@@ -345,6 +346,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       if (!['GET', 'POST'].includes(req.method)) throw new AppError('ORIGIN');
       if (req.method === 'POST' && req.headers.origin !== origin) throw new AppError('ORIGIN');
       const url = new URL(req.url, origin);
+      req.routePolicy=projectPublicationRequest(url.pathname,req.method);
       const asset = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
       if (req.method === 'GET' && browserAssets.has(asset)) {
        const value=await browserAssets.response(asset);res.setHeader('Cache-Control',value.cacheControl);if(value.etag)res.setHeader('ETag',value.etag);
