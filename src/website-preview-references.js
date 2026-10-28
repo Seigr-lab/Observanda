@@ -1,7 +1,7 @@
 import {AppError} from './errors.js';
-import {digest,serialize} from './storage-format.js';
+import {digest} from './storage-format.js';
+import {revisionText} from './web/revision-model.js';
 import {recordReferenceCandidates} from './record-reference-candidates.js';
-import {publicationDescriptor} from './publication-record-descriptor.js';
 import {publicationLinkResolver} from './publication-prose.js';
 import {researchReference} from './web/research-reference.js';
 import {recordQueryMatcher} from './web/record-query.js';
@@ -28,7 +28,7 @@ export async function websiteReferencePage(records,id,cursor=null){
  if(cursor!==null&&(typeof cursor!=='string'||!cursor||cursor.length>4096))throw new AppError('INVALID');
  const selected=await records.get(id),original=await records.original(id);if(!selected||!original)throw new AppError('NOT_FOUND');
  selected.revision=records.revision?records.revision(original):recordRevision(original);selected.selectors=bookSelectors(original);
- const binding=digest(serialize({workspaceId:metadata.id,websiteId:records.websiteId,websitePin:records.websitePin,snapshot:command.baseEtag,changes:command.changes,removed:command.removed,id}));
+ const binding=digest(revisionText({workspaceId:metadata.id,websiteId:records.websiteId,websitePin:records.websitePin,snapshot:command.baseEtag,changes:command.changes,removed:command.removed,id}));
  let anchor={after:null,backward:false};
  if(cursor){
   try{anchor=store.decode('website-reference-page',metadata.id,Buffer.from(cursor,'base64url'));}catch{throw new AppError('INVALID');}
@@ -41,7 +41,9 @@ export async function websiteReferencePage(records,id,cursor=null){
   signal?.throwIfAborted();first??=row.position;last=row.position;scanned++;
   if(!await records.visible(row))continue;
   const value=await records.document(row);if(!matches(value))continue;
-  const details=records.changed.has(row.id)?publicationDescriptor(records.changed.get(row.id)):(await Array.fromAsync(store.queryDocuments([row],metadata,{signal,search:false,publicationDetails:true})))[0].publicationDescriptor;
+  // document() already authenticates the publication descriptor and applies
+  // draft attachment choices. Do not fetch the same descriptor a second time.
+  const details=value.publicationDescriptor;
   if(!details.relations.some(link=>link.target.kind==='record'&&link.target.id===id&&resolve(researchReference(link.target))))continue;
   const descriptor=row.id===id?selected:records.remember(row,value);Object.assign(descriptor,{relations:details.relations,status:details.status,outcome:details.outcome});items.push(row.id);
  }

@@ -50,6 +50,10 @@ export class AppearancePreviewSessions{
   for(const name of candidate.files.keys())if(!name.endsWith('.html'))html=html.replaceAll('"'+prefix+name+'"','"'+prefix+'_assets/'+key+'/'+name+'"');
   const directory=request.path.slice(0,request.path.lastIndexOf('/')+1);
   html=html.replaceAll('&quot;source&quot;:&quot;feed-','&quot;source&quot;:&quot;'+prefix+'_assets/'+key+'/'+directory+'feed-');
+  // These sandboxed forms need the trusted host's handlers; native submission
+  // is deliberately unavailable. Prevent interaction until those handlers exist.
+  html=html.replace(/(<form\b[^>]*>)([\s\S]*?)(<\/form>)/g,'$1<fieldset hidden disabled data-preview-controls>$2</fieldset>$3');
+  html=html.replace('<body ','<body inert ');
   return {content:html,name:file};
  }
 }

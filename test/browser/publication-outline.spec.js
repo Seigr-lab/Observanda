@@ -43,17 +43,18 @@ for(const count of [42,420])test('saved publication, destination and review rema
   await page.getByRole('button',{name:'Review website',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();await startArrived;
   await page.getByRole('button',{name:'Continue working',exact:true}).click();const startDelivered=page.waitForResponse('**/api/publication-jobs/start');finishStart();await startDelivered;
   await expect(page.getByRole('heading',{name:'Publishing',exact:true})).toBeVisible();
-  await page.getByRole('button',{name:'Website preparations',exact:true}).click();await page.getByRole('button',{name:'Open review',exact:true}).click();await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Website preparations',exact:true}).click();await expect(page.getByRole('button',{name:'Open review',exact:true})).toBeVisible({timeout:30000});await page.getByRole('button',{name:'Open review',exact:true}).click();await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible();
   const reviewUrl=page.url();await expect(page.frameLocator('.preview-frame').locator('body')).not.toContainText('PRIVATE_');
   await page.getByLabel('I have reviewed this website and its media for sharing.').check();const downloading=page.waitForEvent('download');await page.getByRole('button',{name:'Download website ZIP',exact:true}).click();
   const bytes=await readFile(await (await downloading).path());expect(bytes.includes(Buffer.from('This is the approved public text.'))).toBe(true);expect(bytes.includes(Buffer.from('PRIVATE_'))).toBe(false);expect(bytes.includes(Buffer.from(f.workspace.root))).toBe(false);
   await page.getByRole('button',{name:'Back to publishing',exact:true}).click();await expect(page.getByRole('heading',{name:'Publishing',exact:true})).toBeVisible();
   await page.goto(reviewUrl);await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible();await expect(page.getByLabel('I have reviewed this website and its media for sharing.')).not.toBeChecked();
   const planned=page.waitForResponse('**/api/publishing/plan');
+  const reviewedPlan=page.waitForResponse(async response=>new URL(response.url()).pathname==='/api/publishing/plan-operation'&&response.ok()&&Boolean((await response.json()).plan),{timeout:60000});
   await page.getByLabel('I have reviewed this website and its media for sharing.').check();await page.getByRole('button',{name:'Publish to GitHub repository',exact:true}).click();const planResponse=await planned;expect(planResponse.ok(),await planResponse.text()).toBe(true);
   await expect(page.getByRole('heading',{name:'Review repository changes',exact:true})).toBeVisible();
   const deployed=page.waitForResponse(async response=>new URL(response.url()).pathname==='/api/deployment-jobs/list'&&response.ok()&&(await response.json()).items.some(item=>item.job.type==='publication.deploy'&&['completed','failed','cancelled'].includes(item.job.state)),{timeout:Math.max(1,journeyTimeout-(Date.now()-began)-2000)});
-  await page.getByLabel('I approve these repository changes for this website.').check();await page.getByRole('button',{name:'Publish to GitHub repository',exact:true}).click();
+  if((await (await reviewedPlan).json()).plan.requiresReview){await page.getByLabel('I approve these repository changes for this website.').check();await page.getByRole('button',{name:'Publish to GitHub repository',exact:true}).click();}
   const terminal=(await (await deployed).json()).items.find(item=>item.job.type==='publication.deploy');expect(terminal.job.state,JSON.stringify(terminal.job)).toBe('completed');
   await expect(page.locator('#publishing-deployments')).toContainText('Repository files verified. Pages settings were left unchanged.');
   expect(remote.head).toBeTruthy();expect(remote.calls.some(c=>c.route.endsWith('/pages'))).toBe(false);

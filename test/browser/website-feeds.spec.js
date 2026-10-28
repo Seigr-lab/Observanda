@@ -4,7 +4,7 @@ import {mkdtemp,rm} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {startServer} from '../../src/server.js';
-import {Workspace} from '../../src/storage.js';
+import {WebsiteSites} from '../../src/website-sites.js';
 import {sampleNotebook} from '../../src/sample.js';
 import {upgradeNotebook} from '../../src/model.js';
 import {navigate} from './preferences-helper.js';
@@ -20,7 +20,7 @@ test('authors set independent feed counts, try their controls on the canvas and 
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-feed-authoring-')),book=upgradeNotebook(sampleNotebook()),seed=book.entries[0];
  book.entries=Array.from({length:23},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'Reading '+i,share:true,sections:[],figures:[],attachments:[],relations:[]}));
  book.website.home.sections=['first-feed','second-feed'].map(id=>({id,kind:'records',title:id,show:true,layout:'grid'}));
- await new Workspace(root).create(book);const app=await startServer({root,preferencesFile:path.join(root,'preferences.json'),port:0});
+ const fixture=await encryptedFixture(root,book);const app=await startServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(root,'preferences.json'),port:0});
  try{
   await page.goto(app.url);await navigate(page,'Website editor');await editorTab(page,'Homepage');
   const canvas=page.frameLocator('#website-draft-preview'),first=canvas.locator('[data-section-id="first-feed"]'),second=canvas.locator('[data-section-id="second-feed"]');
@@ -36,12 +36,12 @@ test('authors set independent feed counts, try their controls on the canvas and 
   expect(await second.locator('[data-feed-item]').evaluateAll(nodes=>nodes.map(node=>node.dataset.feedId))).toEqual(other);
   await expect(page.getByLabel('Items per feed view',{exact:true})).toHaveValue('7');
   await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
-  const saved=(await new Workspace(root).read()).book;expect(saved.website.home.sections.map(s=>s.feed.pageSize)).toEqual([3,7]);
+  const saved=(await new WebsiteSites(fixture.workspace).read(null)).book;expect(saved.website.home.sections.map(s=>s.feed.pageSize)).toEqual([3,7]);
   await page.reload();await editorTab(page,'Homepage');await openBlock(page,0);await expect(page.getByLabel('Items per feed view',{exact:true})).toHaveValue('3');
   await page.getByLabel('Show previous and next controls',{exact:true}).uncheck();await expect(first.locator('[data-feed-next]')).toHaveCount(0);await expect(second.locator('[data-feed-next]')).toHaveCount(1);
   await page.getByRole('button',{name:'Undo',exact:true}).click();await expect(first.locator('[data-feed-next]')).toHaveCount(1);
   await page.getByLabel('Paginate this feed',{exact:true}).uncheck();await expect(first.locator('.publication-card')).toHaveCount(23);await expect(second.locator('[data-feed-item]')).toHaveCount(7);
- }finally{await app.close();}
+ }finally{await app.close();clearVault(fixture.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 
 test('indexed canvas feeds keep independent reading states through design changes, failures and directory navigation',async({page},info)=>{
@@ -95,5 +95,5 @@ test('indexed canvas feeds keep independent reading states through design change
    return document.documentElement.scrollWidth<=innerWidth+1?null:{width:innerWidth,scrollWidth:document.documentElement.scrollWidth,overflow};
   })).toBeNull();
   await page.screenshot({path:info.outputPath('continued-canvas-directory.png')});expect(errors).toEqual([]);
- }finally{await app.close();clearVault(f.vault);await rm(root,{recursive:true,force:true});}
+ }finally{if(test.info().status!==test.info().expectedStatus)console.log(JSON.stringify({errors,status:await page.locator('#website-preview-status').textContent().catch(()=>null),commands:commands.slice(-2),canvas:await page.locator('#website-draft-preview').evaluate(f=>({pointer:f.style.pointerEvents,inert:f.contentDocument?.body.inert,page:f.contentDocument?.body.dataset.page,navigation:f.contentDocument?.querySelector('[data-record-collection=body]')?.outerHTML})).catch(()=>null)}));await app.close();clearVault(f.vault);await rm(root,{recursive:true,force:true});}
 });

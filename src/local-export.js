@@ -58,8 +58,13 @@ export class LocalExport {
   finally{await db.close();}
  }
  async candidate(id,{fresh=false}={}){
-  const candidate=await new PublicationJobs(this.workspace,{sourceReader:this.sourceReader}).read(id);if(!candidate)throw new AppError('NOT_FOUND');
-  await verifyPublicationCandidate(candidate);await new AnalysisPublicationReview(this.workspace,{sourceReader:this.sourceReader}).assert(candidate);
+  // Authenticate the retained trees in one read snapshot. Opening a separate
+  // catalogue for each node repeats admission and shared branch reads.
+  const candidate=await this.workspace.catalogue(async()=>{
+   const value=await new PublicationJobs(this.workspace,{sourceReader:this.sourceReader}).read(id);if(!value)throw new AppError('NOT_FOUND');
+   await verifyPublicationCandidate(value);return value;
+  });
+  await new AnalysisPublicationReview(this.workspace,{sourceReader:this.sourceReader}).assert(candidate);
   if(fresh&&!await publicationRevisionCurrent(this.workspace,candidate))throw new AppError('PUBLISH_STALE');
   return candidate;
  }
@@ -76,7 +81,7 @@ export class LocalExport {
     const actual=await fingerprint(await memberPath(directory,name)),kind=!sameFile(actual,previous)?'conflict':sameFile(previous,next)?'unchanged':!previous?'added':!next?'removed':'replaced';
     await changes.append({path:name,kind,before:previous,after:next});counts[kind]++;
    };
-   for await(const [name,content] of candidate.files){
+   for await(const [name,content] of this.fileWindow(candidate.files)){
     outputName(name);const previous=await this.manifest.find(before,name);
     // A case-only replacement cannot be represented as two independent owned
     // paths on every supported filesystem. Do not adopt either spelling.
@@ -87,6 +92,13 @@ export class LocalExport {
    const plan={version:2,id:randomUUID(),reviewId,releaseId:candidate.id,defaultPage:candidate.defaultPage,directory,state:'planned',createdAt:new Date().toISOString(),changes:await changes.finish(),counts,cleaned:false,applied:0};
    await this.save(plan,{...owner,version:2,files:before,pending:plan.id});return this.summary(plan);
   });
+ }
+ async *fileWindow(files){
+  // Leave each read transaction before the journal writes its next batch.
+  // Retain at most 64 file handles; file bodies remain streamed and verified.
+  const iterator=files[Symbol.asyncIterator]?.()??files[Symbol.iterator]();let done=false;
+  try{while(!done){const window=await this.workspace.catalogue(async()=>{const items=[];while(items.length<64){const item=await iterator.next();if(item.done){done=true;break;}items.push(item.value);}return items;});yield* window;}}
+  finally{await iterator.return?.();}
  }
  async get(id){
   const plan=await this.read(planFile(id));if(!plan)throw new AppError('NOT_FOUND');
@@ -99,7 +111,7 @@ export class LocalExport {
   return plan;
  }
  total(plan){return plan.version===1?plan.changes.length:plan.changes.root?.count??0;}
- changes(plan){return plan.version===1?plan.changes:this.manifest.entries(plan.changes);}
+ changes(plan){return plan.version===1?plan.changes:this.fileWindow(this.manifest.entries(plan.changes));}
  counts(plan){if(plan.version===2)return plan.counts;const counts=emptyExportCounts();for(const item of plan.changes)counts[item.kind]++;return counts;}
  validateOwner(owner,directory){
   if(!owner||![1,2].includes(owner.version)||!storedDirectory(owner.directory)||owner.directory!==directory||owner.pending!==null&&!researchId(owner.pending)||owner.releaseId!==undefined&&!hash(owner.releaseId))throw new AppError('LOCAL_EXPORT_DAMAGED');

@@ -1,3 +1,4 @@
+import {websiteWorkspace} from '../src/website-workspace.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -19,9 +20,9 @@ async function fixture(t){
  for(const i of [3,100,319]){book.entries[i].share=true;book.entries[i].title='Public specimen '+i;book.entries[i].body='Selected original '+i;}
  const hidden={...structuredClone(book.projects[0]),id:randomUUID(),title:'Private project',share:false};book.projects.push(hidden);
  const notebook={...structuredClone(book.notebooks[0]),id:randomUUID(),projectId:hidden.id};book.notebooks.push(notebook);book.entries[100].notebookId=notebook.id;
- const f=await encryptedFixture(directory,book),etag=(await f.workspace.outline()).etag;
+ const f=await encryptedFixture(directory,book),{etag,websitePin}=await websiteWorkspace(f.workspace).outline();
  t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
- return {...f,book,command:{workspaceId:book.id,etag,mode:'auto',appearance:{...book.appearance,accent:'#123456'}}};
+ return {...f,book,command:{workspaceId:book.id,etag,websitePin,mode:'auto',appearance:{...book.appearance,accent:'#123456'}}};
 }
 
 test('appearance uses saved public revisions without loading private bodies or a whole-book manifest',async t=>{
@@ -39,11 +40,15 @@ test('appearance uses saved public revisions without loading private bodies or a
 
 test('appearance preview remains pinned after edits, rejects malformed commands and honours cancellation',async t=>{
  const f=await fixture(t),original=f.book.entries[3];
- await new ResearchRecords(f.workspace,{}).save({workspaceId:f.book.id,changes:[{id:original.id,expectedRevision:recordRevision(original),record:{...original,body:'Newer unsaved preview source',share:false}}]},{compact:true});
+ const records=new ResearchRecords(f.workspace,{}),edited={...original,body:'Newer saved source revision'};
+ await records.save({workspaceId:f.book.id,changes:[{id:original.id,expectedRevision:recordRevision(original),record:edited}]},{compact:true});
  const result=await appearancePreviewPage(f.workspace,f.command,'entries/'+original.id+'.html');assert.equal(result.entries.find(r=>r.id===original.id).body,original.body);
  for(const invalid of [{...f.command,book:f.book},{...f.command,workspaceContent:true},{...f.command,designTarget:'home'},{...f.command,mode:'anything'},{...f.command,appearance:{...f.command.appearance,accent:'url(https://invalid)'}}])await assert.rejects(appearancePreviewSource(f.workspace,invalid),{code:'INVALID'});
  await assert.rejects(appearancePreviewSource(f.workspace,{...f.command,workspaceId:randomUUID()}),{code:'WORKSPACE_CHANGED'});
  const controller=new AbortController();controller.abort();await assert.rejects(appearancePreviewSource(f.workspace,f.command,{signal:controller.signal}),{name:'AbortError'});
- const current=await appearancePreviewChoices(f.workspace,{...f.command,etag:(await f.workspace.outline()).etag});assert.equal(current.pages.filter(p=>p.path.startsWith('entries/')).length,1);
- await assert.rejects(appearancePreviewPage(f.workspace,{...f.command,etag:(await f.workspace.outline()).etag},'entries/'+original.id+'.html'),{code:'NOT_FOUND'});
+ const stored=await f.workspace.catalogue(async store=>{const row=await store.member(await store.snapshot(),original.id);return store.record(row.id,row.revision);});
+ await records.save({workspaceId:f.book.id,changes:[{id:original.id,expectedRevision:recordRevision(stored),record:{...stored,share:false}}]},{compact:true});
+ await assert.rejects(appearancePreviewPage(f.workspace,f.command,'entries/'+original.id+'.html'),{code:'PUBLICATION_PERMISSIONS_CHANGED'});
+ const latest=await websiteWorkspace(f.workspace).outline(),currentCommand={...f.command,etag:latest.etag,websitePin:latest.websitePin};const current=await appearancePreviewChoices(f.workspace,currentCommand);assert.equal(current.pages.filter(p=>p.path.startsWith('entries/')).length,1);
+ await assert.rejects(appearancePreviewPage(f.workspace,currentCommand,'entries/'+original.id+'.html'),{code:'NOT_FOUND'});
 });

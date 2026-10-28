@@ -31,6 +31,19 @@ async function transaction(workspace,operation){
  for(let attempt=0;;attempt++)try{return await workspace.withLock(()=>withWorkspaceMetadataBatch(workspace,operation));}
  catch(error){if(error.code!=='LOCKED'||attempt===4)throw error;await delay(20*(attempt+1));}
 }
+async function admit(write,operation,signal){
+ const deadline=performance.now()+30000;
+ for(;;){
+  signal?.throwIfAborted();
+  try{return await write(operation);}catch(error){
+   if(error.code!=='LOCKED')throw error;
+   signal?.throwIfAborted();if(performance.now()>=deadline)throw new AppError('WORKLOAD_BUSY');
+   // Only rollback-safe index/schema admission runs here. Release the failed
+   // transaction before waiting for readers; never replay the capture callback.
+   await delay(100,undefined,{signal});
+  }
+ }
+}
 async function discard(workspace,id,write){
  // A lost commit acknowledgement can leave the job published already. Its
  // journal was removed atomically with admission, so that input must survive.
@@ -74,12 +87,12 @@ async function capture(workspace,operation,{signal,id:requestedId,write=fn=>tran
   const id=requestedId??randomUUID();try{return await operation(workspace,id,fn=>fn());}catch(error){await removePublicationInput(workspace,id);throw error;}
  });
  const index=new ResearchMaterials(publicationResearchWorkspace(workspace)).index;
- if(!await index.state())await write(()=>index.ensureLocked());
+ if(!await index.state())await admit(write,()=>index.ensureLocked(),signal);
  // First-time figure admission can require an exclusive schema fence. Finish
  // it before holding the host read snapshot, even when figures belong only to
  // a selected external owner. Subsequent captures need no admission writer.
  const figureStorage=await workspace.catalogue(async store=>{const format=await catalogueFormat(store.db);return catalogueRequiresRetainedFigures(format)&&catalogueRequiresFigureAuthoring(format);});
- if(!figureStorage)await write(()=>workspace.catalogue(async store=>{signal?.throwIfAborted();await requireRetainedFigures(store.db);await requireFigureAuthoring(store.db);signal?.throwIfAborted();}));
+ if(!figureStorage)await admit(write,()=>workspace.catalogue(async store=>{signal?.throwIfAborted();await requireRetainedFigures(store.db);await requireFigureAuthoring(store.db);signal?.throwIfAborted();}),signal);
  return withScratch(written=>workspace.catalogue(async store=>{
   await projectDomainHandoff(store.db,{shared:true});
   await recover(workspace,store.db,write);signal?.throwIfAborted();

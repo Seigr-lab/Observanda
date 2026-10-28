@@ -11,6 +11,7 @@ import {MediaStore} from '../src/media.js';
 import {MediaImports} from '../src/media-imports.js';
 import {workspaceJobs} from '../src/workspace-jobs.js';
 import {PublicationJobs} from '../src/publication-jobs.js';
+import {WebsiteSites} from '../src/website-sites.js';
 import {FileContent,contentBuffer,writePublicFile} from '../src/file-content.js';
 import {encryptedFixture} from './browser/encrypted-fixture.js';
 import {clearVault} from '../src/encryption.js';
@@ -68,20 +69,21 @@ test('encrypted original downloads survive cancelled preparation, retry, retaine
  const mediaStore=new MediaStore(workspace.root,f.vault),stored=await mediaStore.get(session.id,{streamed:true});assert.ok(stored.bytes instanceof FileContent);assert.equal(stored.bytes.header,undefined);
  assert.ok(!(await readFile(stored.bytes.file)).includes(bytes.subarray(0,100)));
  const files=await readdir(path.join(workspace.root,'.observanda/media',session.id));assert.equal(files.filter(n=>n.endsWith('.original')).length,1);assert.equal(files.filter(n=>n.includes('.public.')).length,0);
- const current=await workspace.read();current.book.website.assets=[{...result,caption:'',alt:'',transcript:''}];current.book.website.home.sections=[element(result.id)];await workspace.save(current.book,current.etag);
- const releases=new PublicationJobs(workspace),publication=await releases.start(await workspace.read(),jobs.queue);job=await jobs.queue.claim();assert.equal(job.id,publication.id);
+ const sites=new WebsiteSites(workspace),current=await sites.read(null);current.book.website.assets=[{...result,caption:'',alt:'',transcript:''}];current.book.website.home.sections=[element(result.id)];
+ const saved=await sites.save(null,{workspaceId:current.book.id,baseEtag:current.etag,websitePin:current.websitePin,metadata:{website:current.book.website},projects:[],changes:[],removed:[],selection:current.site.selection});
+ const releases=new PublicationJobs(workspace),publication=await releases.start({workspaceId:current.book.id,etag:saved.etag,websitePin:saved.websitePin},jobs.queue);job=await jobs.queue.claim();assert.equal(job.id,publication.id);
  const built=await jobs.queue.definition(job).prepare(job,{signal:new AbortController().signal,progress:async()=>{}});await jobs.queue.complete(job.id,job.lease.token,built);
- const releaseId=(await jobs.queue.read(job.id)).result.id,candidate=await releases.read(releaseId),download=candidate.files.get(downloadPath(session.id));assert.ok(download instanceof FileContent);assert.deepEqual(await contentBuffer(download),bytes);
+ const releaseId=(await jobs.queue.read(job.id)).result.id,candidate=await releases.read(releaseId),download=await candidate.files.get(downloadPath(session.id));assert.ok(download instanceof FileContent);assert.deepEqual(await contentBuffer(download),bytes);
  const output=path.join(directory,'download.img');await writePublicFile(output,download);assert.equal(hash(await readFile(output)),hash(bytes));
  const empty=await imports.start({name:'empty.bin',size:0,kind:'file'});await imports.receive(empty.id,[]);const emptyPrepared=await imports.prepare(empty.id,randomUUID(),{});await workspace.withLock(()=>imports.commit(empty.id,emptyPrepared));assert.deepEqual((await mediaStore.get(empty.id)).bytes,Buffer.alloc(0));
  await assert.rejects(imports.start({name:'empty.png',size:0,kind:'image'}),{code:'MEDIA_INVALID'});
  const copied=await copyWorkspace(await copyPlan(workspace.root,path.join(directory,'restored')),{vault:f.vault}),restored=new Workspace(copied,f.vault);
  assert.deepEqual(await contentBuffer((await new MediaStore(copied,f.vault).get(session.id,{streamed:true})).bytes),bytes);
- const retained=await new PublicationJobs(restored).read(releaseId);assert.equal(retained.id,candidate.id);assert.deepEqual(await contentBuffer(retained.files.get(downloadPath(session.id))),bytes);
+ const retained=await new PublicationJobs(restored).read(releaseId);assert.equal(retained.id,candidate.id);assert.deepEqual(await contentBuffer(await retained.files.get(downloadPath(session.id))),bytes);
  const access=await createAccess('','fresh download recovery password'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const rekeyed=await encryptedCopy(await copyPlan(copied,path.join(directory,'new-key')),access,vault,f.vault),recovered=new Workspace(rekeyed,vault);
  assert.deepEqual(await contentBuffer((await new MediaStore(rekeyed,vault).get(session.id,{streamed:true})).bytes),bytes);
- assert.deepEqual(await contentBuffer((await new PublicationJobs(recovered).read(releaseId)).files.get(downloadPath(session.id))),bytes);
+ assert.deepEqual(await contentBuffer(await (await new PublicationJobs(recovered).read(releaseId)).files.get(downloadPath(session.id))),bytes);
 });
 
 test('immediate imports and empty originals remain exact downloads without conversion',async t=>{

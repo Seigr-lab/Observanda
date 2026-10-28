@@ -1,3 +1,4 @@
+import {bindReorder} from './reorder-ui.js';
 import {navigationItems,menuCanNest} from './website-model.js';
 import {t} from './i18n/index.js';
 const text=(key,args)=>t('websiteEditor',key,args);
@@ -14,7 +15,7 @@ export function websiteNavigationFields(book,selection,{esc,field,option}){
 
 // Effective menu discovery and selected edits share the durable document draft.
 export function websiteNavigationUI({state,documents,esc,field,option,showDialog,render,changed,notify}){
- let identity=null,page=null,offset=0,search='',loading=false,error='',controller=null,epoch=0,session=null,parents=new Map();
+ let identity=null,page=null,offset=0,search='',loading=false,error='',controller=null,epoch=0,session=null,parents=new Map(),disposeOrder=()=>{},moving=false;
  const active=()=>documents.enabled()&&state.page==='website';
  const key=()=>documents.viewKey();
  const label=(name,args)=>t('websitePages',name,args);
@@ -24,10 +25,10 @@ export function websiteNavigationUI({state,documents,esc,field,option,showDialog
   return '<div class="inline-actions">'+action('previous',label('previous'),'data-scope="'+scope+'" '+(!value?.offset?'disabled':''))+'<span role="status">'+esc(value?.total?text('documentMenuRange',{first:value.offset+1,last:value.offset+value.items.length,total:value.total}):text('documentMenuEmpty'))+'</span>'+action('next',label('next'),'data-scope="'+scope+'" '+(!value||value.offset+value.items.length>=value.total?'disabled':''))+'</div>';
  }
  function view(){sync();const design=state.book.website.design;
-  return '<section class="panel website-navigation-controls"><h2>'+esc(text('navigationTitle'))+'</h2>'+field(text('navigationPlacement'),'<select data-site-design="navigation">'+['top','side','none'].map(value=>option(value,text('navigation_'+value),design.navigation)).join('')+'</select>')+'<label class="checkbox"><input type="checkbox" data-site-design="browseLink"'+(design.browseLink!==false?' checked':'')+'><span>'+esc(text('browseLink'))+'</span></label><p>'+esc(text('navigationHelp'))+'</p>'+action('clear',text('clearMenu'))+'</section><section class="panel" data-navigation-window aria-busy="'+loading+'">'+field(text('documentMenuSearch'),'<input id="website-navigation-search" type="search" maxlength="200" value="'+esc(search)+'">')+(error?'<p role="alert">'+esc(error)+'</p>'+action('retry',text('documentLoadRetry')):'')+(loading?'<p role="status">'+esc(text('documentLoading'))+'</p>':'')+'<ol class="website-menu-order" start="'+((page?.offset??0)+1)+'">'+(page?.items??[]).map(row=>{
+  return '<section class="panel website-navigation-controls"><h2>'+esc(text('navigationTitle'))+'</h2>'+field(text('navigationPlacement'),'<select data-site-design="navigation">'+['top','side','none'].map(value=>option(value,text('navigation_'+value),design.navigation)).join('')+'</select>')+'<label class="checkbox"><input type="checkbox" data-site-design="browseLink"'+(design.browseLink!==false?' checked':'')+'><span>'+esc(text('browseLink'))+'</span></label><p>'+esc(text('navigationHelp'))+'</p>'+action('clear',text('clearMenu'))+'</section><section class="panel" data-navigation-window aria-busy="'+loading+'">'+field(text('documentMenuSearch'),'<input id="website-navigation-search" type="search" maxlength="200" value="'+esc(search)+'">')+(error?'<p role="alert">'+esc(error)+'</p>'+action('retry',text('documentLoadRetry')):'')+(loading?'<p role="status">'+esc(text('documentLoading'))+'</p>':'')+'<p id="website-order-help" class="website-visually-hidden">'+esc(text('menuKeyboard'))+'</p><ol id="website-menu-order" class="website-menu-order" start="'+((page?.offset??0)+1)+'">'+(page?.items??[]).map(row=>{
    const item=state.book.website.navigation.find(item=>item.target===row.key)??row.value,i=row.position;
-   return '<li><div class="website-menu-fields"><label class="checkbox"><input type="checkbox" data-native-menu="'+esc(row.key)+'" data-column="show"'+(item.show?' checked':'')+' aria-label="'+esc(text('menuShow',{name:item.label}))+'"></label><input data-native-menu="'+esc(row.key)+'" data-column="label" maxlength="160" value="'+esc(item.label)+'" aria-label="'+esc(text('menuLabel',{item:i+1}))+'">'+(row.available===false?'<small class="muted">'+esc(text('menuUnpublished'))+'</small>':'')+'</div><div class="inline-actions">'+action('up',text('up'),'data-key="'+esc(row.key)+'" '+(i===0?'disabled':''))+action('down',text('down'),'data-key="'+esc(row.key)+'" '+(i===documents.count('navigation')-1?'disabled':''))+'</div>'+action('parent',text('documentParent'),'data-key="'+esc(row.key)+'"')+'<span>'+esc(item.parent?(parents.get(item.parent)??text('menuUnder')):text('menuTop'))+'</span></li>';
-  }).join('')+'</ol>'+controls(page)+'</section>';
+   return '<li data-reorder-item="'+esc(row.key)+'"><button type="button" class="button drag-handle" aria-describedby="website-order-help" data-reorder-handle="'+esc(row.key)+'" aria-label="'+esc(text('menuHandle',{item:i+1}))+'"'+(search?' disabled':'')+'>&#10303;</button><div class="website-menu-fields"><label class="checkbox"><input type="checkbox" data-native-menu="'+esc(row.key)+'" data-column="show"'+(item.show?' checked':'')+' aria-label="'+esc(text('menuShow',{name:item.label}))+'"></label><input data-native-menu="'+esc(row.key)+'" data-column="label" maxlength="160" value="'+esc(item.label)+'" aria-label="'+esc(text('menuLabel',{item:i+1}))+'">'+(row.available===false?'<small class="muted">'+esc(text('menuUnpublished'))+'</small>':'')+'</div><div class="inline-actions">'+action('up',text('up'),'data-key="'+esc(row.key)+'" '+(i===0?'disabled':''))+action('down',text('down'),'data-key="'+esc(row.key)+'" '+(i===documents.count('navigation')-1?'disabled':''))+'</div>'+action('parent',text('documentParent'),'data-key="'+esc(row.key)+'"')+'<span>'+esc(item.parent?(parents.get(item.parent)??text('menuUnder')):text('menuTop'))+'</span></li>';
+  }).join('')+'</ol><p id="website-move-status" role="status"></p>'+controls(page)+'</section>';
  }
  function redraw(){const active=document.activeElement,searching=active?.id==='website-navigation-search',selection=searching?[active.selectionStart,active.selectionEnd]:null;render();if(searching){const next=document.querySelector('#website-navigation-search');next?.focus({preventScroll:true});if(selection)next?.setSelectionRange(...selection);}}
  async function load({focus=false}={}){controller?.abort();const request=++epoch,stamp=key(),control=controller=new AbortController();loading=true;error='';redraw();
@@ -39,7 +40,20 @@ export function websiteNavigationUI({state,documents,esc,field,option,showDialog
   }catch(reason){if(!control.signal.aborted&&current())error=reason.message;}
   finally{if(current()){loading=false;controller=null;redraw();if(focus)document.querySelector('[data-native-menu],#website-navigation-search')?.focus();}}
  }
- function bind(){sync();if(!document.querySelector('[data-navigation-window]')){if(controller){controller.abort();controller=null;epoch++;loading=false;}return;}if(active()&&!page&&!loading&&!error)void load();}
+ function guardMovement(){const root=document.querySelector('#website-menu-order');if(!root)return;root.setAttribute('aria-busy',String(moving));for(const button of root.querySelectorAll('button')){if(moving){if(!button.hasAttribute('data-navigation-disabled'))button.dataset.navigationDisabled=String(button.disabled);button.disabled=true;}else if(button.hasAttribute('data-navigation-disabled')){button.disabled=button.dataset.navigationDisabled==='true';delete button.dataset.navigationDisabled;}}}
+ function bind(){guardMovement();disposeOrder();sync();const root=document.querySelector('#website-menu-order');if(root&&!search)disposeOrder=bindReorder(root,{label:'Menu item',announce:message=>{const status=document.querySelector('#website-move-status');if(status)status.textContent=message;},commit:(from,to,target)=>void move(from,to,target).catch(reason=>notify(reason.message,true))});if(!document.querySelector('[data-navigation-window]')){if(controller){controller.abort();controller=null;epoch++;loading=false;}return;}if(active()&&!page&&!loading&&!error)void load();}
+ async function move(from,to,target){
+  if(moving||documents.structuralBusy()||!page||search)return;
+  const window=page,stamp=key(),rows=[...document.querySelectorAll('#website-menu-order>[data-reorder-item]')],row=rows.find(row=>row.dataset.reorderItem===target);
+  if(!window.items[from]||window.items[from].key!==target||!window.items[to])return;
+  row?.parentElement.insertBefore(row,rows[from<to?to+1:to]??null);row?.querySelector('[data-reorder-handle]')?.focus();moving=true;guardMovement();
+  try{if(stamp!==key()||!active())return;
+   let beforeKey=window.items[from<to?to+1:to]?.key??null;
+   if(beforeKey===null&&window.offset+window.items.length<window.total)beforeKey=(await documents.window('navigation',{offset:window.offset+window.items.length,limit:1})).items[0]?.key??null;
+   if(stamp!==key()||!active())return;
+   await documents.perform([{type:'navigation-move',key:target,beforeKey}]);sync();offset=window.offset;page=null;await load();changed();
+  }catch(reason){page=null;render();throw reason;}finally{moving=false;guardMovement();if(active())document.querySelector('[data-reorder-handle="'+target+'"]')?.focus();}
+ }
  function input(el){if(el.dataset.nativeMenu){const item=state.book.website.navigation.find(item=>item.target===el.dataset.nativeMenu);if(item){item[el.dataset.column]=el.type==='checkbox'?el.checked:el.value;changed();}return true;}if(el.id==='website-navigation-search'){search=el.value;offset=0;void load();return true;}return false;}
  function close(){const s=session;session=null;s?.controller?.abort();s?.unbind();if(s?.dialog.open)s.dialog.close();if(s)document.querySelector('[data-action="website-navigation-parent"][data-key="'+s.target+'"]')?.focus();}
  async function parent(target){close();await documents.flush();showDialog('<h2 id="dialog-title">'+esc(text('documentParent'))+'</h2><div data-navigation-parent><div data-parent-results></div>'+action('top',text('menuTop'))+action('cancel',label('cancel'))+'</div>');
@@ -55,6 +69,8 @@ export function websiteNavigationUI({state,documents,esc,field,option,showDialog
   if(name==='parent'){await parent(el.dataset.key);return true;}
   if(name==='clear'){await documents.perform([{type:'menu-clear'},{type:'settings',path:['document','website','design'],value:{...state.book.website.design,browseLink:false}}]);page=null;render();changed();return true;}
   if(name==='up'||name==='down'){
+   const from=page?.items.findIndex(row=>row.key===el.dataset.key)??-1,to=from+(name==='up'?-1:1);
+   if(!search&&from>=0&&to>=0&&to<page.items.length){await move(from,to,el.dataset.key);return true;}
    await documents.flush();const item=await documents.item('navigation',el.dataset.key),position=item.position;
    if(position===0&&name==='up'||position===documents.count('navigation')-1&&name==='down')return true;
    const near=await documents.window('navigation',{offset:Math.max(0,position-1),limit:4});const targetPosition=name==='up'?position-1:position+2,beforeKey=near.items.find(row=>row.position===targetPosition)?.key??null;

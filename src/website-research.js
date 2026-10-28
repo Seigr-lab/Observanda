@@ -4,7 +4,7 @@ import {websiteEditorProjection} from './website-editor-projection.js';
 import {websiteRecordSections} from './website-record-sections.js';
 import {AppError} from './errors.js';
 import {researchId} from './web/research-reference.js';
-import {revisionId} from './web/revision-model.js';
+import {revisionId,revisionText} from './web/revision-model.js';
 import {validWebsiteSelection,websiteRecordShare} from './web/website-selection.js';
 import {compareTitles,compareKey} from './web/query-order.js';
 import {summaryPage} from './summary-page.js';
@@ -45,7 +45,7 @@ export class WebsiteResearch{
    const response={workspaceId:command.workspaceId,snapshotId:command.snapshotId,websitePin:snapshot.websitePin},projectIds=new Map(metadata.notebooks.map(n=>[n.id,n.projectId])),needle=command.search?.trim().toLocaleLowerCase();
    const documents=(rows,options={})=>store.queryDocuments(rows,metadata,{signal,search:false,cardSources:true,publication:true,...options});
    const window=(limit,order,point)=>{
-    const {cursor,...query}=command,identity=digest(JSON.stringify({operation,...query,websitePin:snapshot.websitePin}));let anchor={identity,offset:0,after:null};
+    const {cursor,...query}=command,identity=digest(revisionText({operation,...query,websitePin:snapshot.websitePin}));let anchor={identity,offset:0,after:null};
     if(cursor){try{anchor=store.decode('website-research-page',command.workspaceId,Buffer.from(cursor,'base64url'));}catch{throw new AppError('RECORD_QUERY_CURSOR');}}
     if(anchor?.identity!==identity||!Number.isSafeInteger(anchor.offset)||anchor.offset<0||anchor.offset%limit||anchor.offset>0&&(!anchor.after||typeof anchor.after.title!=='string'||typeof anchor.after.id!=='string'))throw new AppError('RECORD_QUERY_CURSOR');
     const page=summaryPage({...anchor,limit,order,point}),encode=value=>store.encode('website-research-page',command.workspaceId,value).toString('base64url');

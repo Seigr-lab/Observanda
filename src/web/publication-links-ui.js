@@ -20,7 +20,18 @@ export function publicationLinksUI({state,api,esc,field,showDialog}){
   const op=el.dataset.action.slice('publication-links-'.length);if(op==='open'){await open();return true;}if(!active())return true;
   remember();const page=session.config.pages.find(p=>p.id===el.dataset.page);
   if(op==='close'){picker.stop();document.getElementById('dialog').close();session=null;return true;}
-  if(op==='save'){if(!validPublicationLinks(session.config))throw Error(publicationText('legacyInvalid'));el.disabled=true;try{await api('/api/publication-links/save',{config:session.config,etag:session.etag,workspaceId:state.book.id},{adopt:false});if(active()){picker.stop();document.getElementById('dialog').close();session=null;}}finally{el.disabled=false;}return true;}
+  if(op==='save'){
+   document.querySelector('[data-legacy-error]')?.remove();
+   let message=validPublicationLinks(session.config)?null:publicationText('legacyInvalid'),focus=null;const paths=new Set();
+   for(const page of session.config.pages){
+    if(message)break;
+    const box=document.querySelector('[data-legacy-page="'+page.id+'"]'),key=page.path.toLowerCase();
+    if(paths.has(key)){message=page.path+': '+publicationText('legacyAmbiguousPath');focus=box.querySelector('[data-legacy-path]');break;}paths.add(key);
+    const fragments=new Set();for(const anchor of page.anchors){if(fragments.has(anchor.fragment)){message=page.path+'#'+anchor.fragment+': '+publicationText('legacyAmbiguousFragment');focus=box.querySelector('[data-legacy-anchor="'+anchor.id+'"] [data-legacy-fragment]');break;}fragments.add(anchor.fragment);}
+   }
+   if(message){const error=document.createElement('p');error.dataset.legacyError='';error.setAttribute('role','alert');error.textContent=message;document.getElementById('publication-links').prepend(error);focus?.focus();return true;}
+   el.disabled=true;try{await api('/api/publication-links/save',{config:session.config,etag:session.etag,workspaceId:state.book.id},{adopt:false});if(active()){picker.stop();document.getElementById('dialog').close();session=null;}}finally{el.disabled=false;}return true;
+  }
   if(op==='add-page')session.config.pages.push({id:crypto.randomUUID(),path:'',title:'',anchors:[anchor()]});
   if(op==='remove-page')session.config.pages=session.config.pages.filter(p=>p!==page);
   if(op==='add-anchor')page.anchors.push(anchor());

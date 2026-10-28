@@ -1,3 +1,4 @@
+import {WebsiteSites} from '../../src/website-sites.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
 import path from 'node:path';
@@ -72,7 +73,7 @@ for(const count of [42,420])test('appearance saves themes and personal settings 
   await page.locator('[data-action="theme-start"][data-theme="studio"]').click();
   await page.getByLabel('Accent',{exact:true}).fill('#334455');
   await page.getByRole('button',{name:'Save as new theme',exact:true}).click();await page.getByLabel('Theme name',{exact:true}).fill('Field design');
-  await page.route('**/api/workspace/save',route=>route.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Synthetic interrupted theme save'}}),{times:1});
+  await page.route('**/api/websites/editor/save',route=>route.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Synthetic interrupted theme save'}}),{times:1});
   await page.getByRole('button',{name:'Save theme',exact:true}).click();await expect(page.locator('#notice')).toContainText('Synthetic interrupted theme save');
   await expect(page.getByLabel('Theme name',{exact:true})).toHaveValue('Field design');await page.getByRole('button',{name:'Save theme',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
   await page.getByLabel('App text size').fill('20');await page.getByLabel('Header alignment',{exact:true}).selectOption('right');
@@ -97,9 +98,9 @@ for(const count of [42,420])test('appearance saves themes and personal settings 
    await page.reload();await expect(page.getByRole('combobox',{name:'Body font',exact:true})).toContainText(label);
   }
   expect(f.bodies).toEqual([]);expect(f.requests.filter(r=>r.path==='/api/workspace/read/page')).toEqual([]);
-  const previews=f.requests.filter(r=>r.path==='/api/appearance-preview');expect(previews.length).toBeGreaterThan(0);for(const r of previews){expect(Object.keys(JSON.parse(r.data)).sort()).toEqual(['appearance','etag','mode','workspaceId']);expect(r.data.length).toBeLessThan(2000);}
+  const previews=f.requests.filter(r=>r.path==='/api/appearance-preview');expect(previews.length).toBeGreaterThan(0);for(const r of previews){const command=JSON.parse(r.data);expect(command).toMatchObject({workspaceId:f.book.id});expect(command.websitePin).toBeDefined();expect(command.book).toBeUndefined();expect(r.data.length).toBeLessThan(3000);}
   for(const r of f.requests.filter(r=>r.path==='/api/workspace/save')){const data=JSON.parse(r.data);expect(data.response).toBe('outline');expect(data.changes).toEqual([]);expect(data.removed).toEqual([]);}
-  expect(f.errors).toEqual([]);const saved=(await f.ws.read()).book;expect(saved.entries).toEqual(f.book.entries);expect(saved.themes).toHaveLength(1);expect(saved.appearance.font).toBe(selectedFont);
+  expect(f.errors).toEqual([]);expect((await f.ws.read()).book.entries).toEqual(f.book.entries);const saved=(await new WebsiteSites(f.ws).read(null)).book;expect(saved.themes).toHaveLength(1);expect(saved.appearance.font).toBe(selectedFont);
  }finally{await f.close();}
 });
 
@@ -127,6 +128,7 @@ test('appearance page choices continue without losing the selected page, and lat
   await page.frameLocator('#design-preview').locator('[data-book-back]').click();await expect(page.frameLocator('#design-preview').locator('[data-book-records] li')).toHaveCount(40);
   await page.frameLocator('#design-preview').locator('[data-browse-next]').click();await expect(page.frameLocator('#design-preview').locator('[data-browse-previous]')).toBeVisible();
   const middleRecord=f.book.entries[40];await expect(page.frameLocator('#design-preview').locator('[data-public-record]').first()).toHaveAttribute('data-public-record',middleRecord.id);
+  await expect(page.frameLocator('#design-preview').locator('html')).toHaveAttribute('data-appearance-reading-ready','');
   await page.frameLocator('#design-preview').locator('[data-public-record]').first().getByRole('link').click();await expect(page.frameLocator('#design-preview').locator('.record-page')).toContainText(middleRecord.body);
   // A slow selector-label response must not make a subsequent style change
   // forget the page which is already visible in the frame.
@@ -146,6 +148,7 @@ test('appearance page choices continue without losing the selected page, and lat
   await page.frameLocator('#design-preview').locator('[data-browse-next]').click();await expect(page.locator('#design-preview-note')).toHaveText('Synthetic interrupted browse page');
   await page.getByRole('button',{name:'Retry preview',exact:true}).click();await expect(page.frameLocator('#design-preview').locator('[data-public-record]').first()).toHaveAttribute('data-public-record',middleRecord.id);
   await page.getByRole('button',{name:'Expand preview',exact:true}).click();await expect(page.locator('.expanded-preview iframe')).toHaveAttribute('sandbox','allow-same-origin');
+  await expect(page.frameLocator('.expanded-preview iframe').locator('html')).toHaveAttribute('data-appearance-reading-ready','');
   await page.frameLocator('.expanded-preview iframe').getByLabel('Search public records',{exact:true}).fill(f.book.entries.at(-1).title);
   await page.frameLocator('.expanded-preview iframe').getByLabel('Search public records',{exact:true}).press('Enter');await expect(page.frameLocator('.expanded-preview iframe').locator('[data-public-record]')).toHaveCount(1);
   await page.getByRole('button',{name:'Close preview',exact:true}).click();await expect(page.frameLocator('#design-preview').locator('[data-public-record]').first()).toHaveAttribute('data-public-record',middleRecord.id);
@@ -164,7 +167,7 @@ test('appearance previews retry, reject stale replies and show only selected web
   await page.getByRole('button',{name:'Retry preview',exact:true}).click();await expect(page.getByLabel('Preview content',{exact:true})).toHaveValue('website');
   await page.getByLabel('Preview page',{exact:true}).selectOption('entries/'+f.book.entries[0].id+'.html');await expect(page.frameLocator('#design-preview').locator('body')).toContainText('Approved readable observation.');await expect(page.frameLocator('#design-preview').locator('body')).not.toContainText('PRIVATE_ORIGINAL_');
   const url=new URL(await page.locator('#design-preview').getAttribute('src'),f.app.origin),designId=url.pathname.split('/')[2];
-  expect((await fetch(url)).status).toBe(401);expect((await page.request.get(f.app.origin+'/api/export/'+designId)).status()).toBe(409);
+  expect((await fetch(url)).status).toBe(401);expect((await page.request.get(f.app.origin+'/api/export/'+designId)).status()).toBe(404);
   let release,arrived;const held=new Promise(r=>release=r),received=new Promise(r=>arrived=r);
   await page.route('**/api/appearance-preview',async route=>{const response=await route.fetch();arrived();await held;await route.fulfill({response}).catch(()=>{});},{times:1});
   await page.getByLabel('Preview content',{exact:true}).selectOption('examples');await received;

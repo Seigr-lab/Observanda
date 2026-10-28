@@ -142,6 +142,8 @@ Create multiple independent websites, each with its own pages, design, public co
 - Review changes before updating a GitHub repository. To replace an existing website or application, review the complete replacement and optionally preserve the previous files in a separate branch. Existing `CNAME` and license files are kept; conflicting output is blocked.
 - Retain prepared editions for later review and republication.
 
+For example, create a field-guide page, add a text section and a gallery, then select a section on the canvas to edit it. Move, duplicate or remove sections using their visible controls; use Undo and Redo to revise those choices. **Save website** saves the design, while **Preview website** opens a reading view of the draft. **Prepare edition** creates a separate edition for review in the background, so you can continue working. Exporting that edition to a local folder requires no publishing account or external server.
+
 Publication permissions belong to the lab books, records and writing sections; each website's selection must respect them. An edition can omit preparation inputs, attempt details, linked-record information, contributor credits and result statements without changing the original record.
 
 Website design is separate from the app's appearance. Publishing selected work does not publish the whole workspace, and website visitors do not need Observanda installed.

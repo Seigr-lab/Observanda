@@ -40,7 +40,9 @@ export function enhancePublicFeeds(document,view,fetchPage,{baseURL=view.locatio
     const response=await fetchPage(url.href,{signal:controller.signal});if(!response.ok||response.url&&new URL(response.url).origin!==url.origin)throw Error();
     const parsed=new view.DOMParser().parseFromString(await response.text(),'text/html'),source=parsed.querySelector('[data-public-feed="'+id+'"]');if(!source)throw Error();
     const details=JSON.parse(source.dataset.feedConfig);
-    if(!details.cursor||details.pageSize!==config.pageSize||details.kind!==config.kind||details.source!==config.source||details.cursor.query?.key!==config.cursor.query?.key)throw Error();
+    // Cursor previews scope asset paths to the displayed page, so their source
+    // path changes on continuation. The feed identity and query key stay fixed.
+    if(!details.cursor||details.pageSize!==config.pageSize||details.kind!==config.kind||details.cursor.query?.key!==config.cursor.query?.key)throw Error();
     const sourceItems=source.querySelector('[data-feed-items]'),sourceEmpty=source.querySelector('[data-feed-empty]'),navigation=[];
     if(!sourceItems||!sourceEmpty||sourceItems.children.length>config.pageSize||[...sourceItems.children].some(node=>!node.hasAttribute('data-feed-item')))throw Error();
     for(const [button,key] of [[previous,'previous'],[next,'next']])if(button){

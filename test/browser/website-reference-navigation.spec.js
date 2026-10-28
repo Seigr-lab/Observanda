@@ -22,7 +22,7 @@ test('canvas reference windows preserve design edits, recover failed requests an
   await expect(links).toHaveCount(24);const first=await links.allTextContents(),saved=await page.locator('#save-status').textContent();
   await next.focus();await next.press('Enter');await expect(links.first()).toHaveText(book.entries[25].title);await expect(next).toBeFocused();
   const middle=await links.allTextContents();await expect(page.locator('#save-status')).toHaveText(saved);
-  expect(requests.at(-1).referenceCursor).toEqual(expect.any(String));expect(requests.at(-1).draft.changes).toEqual([]);
+  expect(requests.at(-1).referenceCursor).toEqual(expect.any(String));expect(requests.at(-1).draft).toBeUndefined();expect(requests.at(-1).websitePin).toBeDefined();expect(requests.at(-1).websiteDraft).toBeUndefined();
   await task(page,'Site');await page.getByLabel('Website title',{exact:true}).fill('Reference review design');
   await expect(frame.locator('.site-name')).toHaveText('Reference review design');expect(await links.allTextContents()).toEqual(middle);
   const editing=page.getByRole('navigation',{name:'Editing tools',exact:true}).getByRole('button',{name:'Site',exact:true});await expect(editing).toHaveAttribute('aria-current','page');

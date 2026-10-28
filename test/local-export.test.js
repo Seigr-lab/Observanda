@@ -1,4 +1,5 @@
 import {test} from 'node:test';
+import {Client} from 'pg';
 import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,readFile,writeFile,readdir,rm,unlink,link,symlink} from 'node:fs/promises';
 import os from 'node:os';
@@ -45,7 +46,12 @@ async function revised(f){
 }
 
 test('legacy export plans and ownership receipts recover and continue into indexed editions',async t=>{
- const f=await fixture(t),review=await planFor(f),saved=await f.service.get(review.id),changes=await Array.fromAsync(f.service.changes(saved));
+ const f=await fixture(t);let queries=0;const query=Client.prototype.query;
+ const counter=t.mock.method(Client.prototype,'query',function(...args){queries++;return query.apply(this,args);});
+ const began=performance.now(),review=await planFor(f);counter.mock.restore();
+ t.diagnostic(JSON.stringify({operation:'review-local-export',files:review.total,queries,ms:performance.now()-began}));
+ assert.ok(queries<1500,'Export review must share authenticated catalogue reads instead of reopening for each tree node: '+queries);
+ const saved=await f.service.get(review.id),changes=await Array.fromAsync(f.service.changes(saved));
  const {counts,...legacy}=saved;void counts;legacy.version=1;legacy.changes=changes;
  const owner='.observanda/local-exports/owners/'+digest(process.platform==='win32'?f.destination.toLowerCase():f.destination)+'.json';
  await f.workspace.withLock(async()=>{await f.workspace.writeMetadata('.observanda/local-exports/'+review.id+'.json',serialize(legacy));await f.workspace.writeMetadata(owner,serialize({version:1,directory:f.destination,files:[],pending:review.id}));});

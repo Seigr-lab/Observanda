@@ -824,7 +824,8 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         if(operation.startsWith('editor/')){
           const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
           try{
-            const result=await new WebsiteEditor(workspace,{sourceReader}).execute(operation.slice(7),data,{signal:controller.signal});
+            const phase=operation==='editor/change'?'website-checkpoint':operation==='editor/save'?'website-save':operation==='editor/open'?'website-open':['editor/undo','editor/redo'].includes(operation)?'website-history':'website-read';
+            const result=await diagnosticPhase(phase,()=>new WebsiteEditor(workspace,{sourceReader}).execute(operation.slice(7),data,{signal:controller.signal}));
             if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');if((await status(client)).locked)throw new AppError('ACCESS_LOCKED');
             return json(result);
           }finally{res.off('close',abort);}
@@ -1344,7 +1345,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       }
       if(req.method==='POST'&&url.pathname==='/api/design-preview'){
         const data=await body(req),controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
-        try{const result=await publicationDesignPreview(workspace,data,{signal:controller.signal,blockedValues,sourceReader}),id=randomBytes(32).toString('hex');designCandidates.set(id,result.candidate);return json({url:`/preview/${id}/${result.defaultPage}`,baseUrl:`/preview/${id}/`,defaultPage:result.defaultPage,source:result.source,pages:result.candidate.pages,...(result.websitePin?{websitePin:result.websitePin}:{}),...(result.websiteDraft?{websiteDraft:result.websiteDraft}:{}),...(result.editor?{editor:result.editor}:{})});}finally{res.off('close',abort);}
+        try{const result=await diagnosticPhase('website-preview',()=>publicationDesignPreview(workspace,data,{signal:controller.signal,blockedValues,sourceReader})),id=randomBytes(32).toString('hex');designCandidates.set(id,result.candidate);return json({url:`/preview/${id}/${result.defaultPage}`,baseUrl:`/preview/${id}/`,defaultPage:result.defaultPage,source:result.source,pages:result.candidate.pages,...(result.websitePin?{websitePin:result.websitePin}:{}),...(result.websiteDraft?{websiteDraft:result.websiteDraft}:{}),...(result.editor?{editor:result.editor}:{})});}finally{res.off('close',abort);}
       }
       if(req.method==='POST'&&url.pathname==='/api/appearance-preview'){
         const data=await body(req),controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);

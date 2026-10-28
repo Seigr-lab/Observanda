@@ -22,7 +22,7 @@ export class AnalysisPublicationReview{
   const value={version:1,reviewId:candidate.analysisReviewId??candidate.reviewId,fingerprint:candidate.researchReview.analysis.fingerprint,recordedAt:new Date().toISOString(),decisions},raw=JSON.stringify(value);
   if(Buffer.byteLength(raw)>1024*1024)throw new AppError('ANALYSIS_LIMIT');await this.workspace.writeMetadata(this.file(candidate.analysisReviewId??candidate.reviewId),raw);return {reviewed:true,decisions};
  });}
- async assert(candidate,options){await this.fresh(candidate,options);const state=nativePublicationCandidate(candidate)?await this.verify(candidate,options):await this.status(candidate);if(!state.reviewed)throw new AppError('ANALYSIS_REVIEW');}
+ async assert(candidate,options){await this.fresh(candidate,options);const state=nativePublicationCandidate(candidate)?await this.workspace.catalogue(()=>this.verify(candidate,options)):await this.status(candidate);if(!state.reviewed)throw new AppError('ANALYSIS_REVIEW');}
  async nativeState(candidate,expected,{signal}={}){
   signal?.throwIfAborted();const reviewId=candidate.analysisReviewId??candidate.reviewId,raw=await this.workspace.readMetadata(this.file(reviewId),65536);
   if(raw===null)return {receipt:null,document:null,count:0};let receipt;try{receipt=JSON.parse(raw);}catch{throw new AppError('CATALOGUE_DAMAGED');}

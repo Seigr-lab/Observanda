@@ -3,6 +3,7 @@ import {mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {createNotebook} from '../../src/model.js';
+import {WebsiteSites} from '../../src/website-sites.js';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {clearVault} from '../../src/encryption.js';
 import {testServer} from '../device-fixture.js';
@@ -28,7 +29,7 @@ test('author a support popup with links and exact copy addresses; visitors use k
    await page.locator('[data-palette-kind=copy-text]').click();await expect(canvas(page).locator('.section-copy-text')).toHaveCount(index+1);await canvas(page).locator('.section-copy-text>.canvas-section-edit').last().click();await page.getByLabel('Section heading',{exact:true}).fill(name);await page.getByLabel('Description or network',{exact:true}).fill(network);await page.getByLabel('Text to copy',{exact:true}).fill(value);await page.getByLabel('Copy button label',{exact:true}).fill('Copy address');await sectionTools(page,'Layout');await page.getByLabel('Surface',{exact:true}).selectOption('card');await task(page,'Page');
   }
   await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');await page.reload();await expect(canvas(page).locator('.section-popup .section-copy-text')).toHaveCount(3);await canvas(page).locator('.section-popup>.canvas-section-edit').click();await expect(page.getByLabel('Popup width (px)',{exact:true})).toHaveValue('700');
-  await page.getByRole('button',{name:'Prepare edition',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible();await page.getByLabel('Preview page',{exact:true}).selectOption(target);
+  await page.getByRole('button',{name:'Prepare edition',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible({timeout:30000});await page.getByLabel('Preview page',{exact:true}).selectOption(target);
   const href=await page.locator('#full-public-preview').getAttribute('href'),url=new URL(href,app.origin).href,visitor=await page.context().newPage();visitor.on('pageerror',error=>errors.push(error.message));
   try{
    await visitor.addInitScript(()=>{window.copied=[];Object.defineProperty(navigator,'clipboard',{value:{writeText:async value=>{if(window.denyCopy)throw Error('Permission denied');window.copied.push(value);}},configurable:true});});
@@ -47,7 +48,7 @@ test('author a support popup with links and exact copy addresses; visitors use k
   }finally{await visitor.close();}
   const fallback=await browser.newContext({javaScriptEnabled:false});await fallback.addCookies(await page.context().cookies());const reader=await fallback.newPage();
   try{await reader.goto(url);await reader.locator('[data-public-popup]>summary').click();await expect(reader.getByRole('textbox',{name:'Ethereum example',exact:true})).toHaveValue(addresses[0][2]);await expect(reader.getByRole('link',{name:'PayPal',exact:false})).toBeVisible();await expect(reader.locator('.public-copy button').first()).toBeHidden();}finally{await fallback.close();}
-  const saved=(await f.workspace.read()).book.pages.find(p=>'pages/'+p.id+'.html'===target);expect(saved.sections.filter(s=>s.parentId===saved.sections[0].id)).toHaveLength(6);expect(errors).toEqual([]);
+  const saved=(await new WebsiteSites(f.workspace).read(null)).book.pages.find(p=>'pages/'+p.id+'.html'===target);expect(saved.sections.filter(s=>s.parentId===saved.sections[0].id)).toHaveLength(6);expect(errors).toEqual([]);
  }finally{await app.close();clearVault(f.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });
 

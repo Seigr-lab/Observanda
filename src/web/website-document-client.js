@@ -17,11 +17,12 @@ const structuralCommand=(operation,operations)=>['undo','redo'].includes(operati
 export function websiteDocumentClient({state,api,selection,onStatus=()=>{}}){
  let envelope=null,outline=null,context=null,generation=0,timer=null,queue=Promise.resolve(),pending=null,actionPending=null,lastActionResult=null,error='',local=false,editVersion=0,viewVersion=0;
  let settings=null,pageKey=null,pageSelection=0,discardRequests=0,initialPages=null;const structuralTasks=new Set(),structuralWaiters=new Set();const activeOverrides=new Map();const selected=new Map(collections.map(name=>[name,new Map()]));
+ let checkpointKey=null,checkpointBytes=0;const checkpoints=[];
  const owner=()=>JSON.stringify([researchContext(state),state.book?.id]);
  const enabled=()=>Boolean(envelope&&context===owner()&&state.websiteEditor);
  const snapshot=()=>enabled()?JSON.stringify([context,envelope.websitePin,envelope.draft?.id??null,envelope.draft?.revision??null,editVersion]):null;
  const count=name=>envelope?.collections[name]?.count??0;
- const structuralBusy=()=>structuralTasks.size>0||actionPending?.structural===true;
+ const structuralBusy=()=>structuralTasks.size>0||actionPending?.structural===true||checkpoints.length>=64||checkpointBytes>=8*1024*1024;
  const waitForStructure=()=>structuralBusy()?new Promise(resolve=>structuralWaiters.add(resolve)):Promise.resolve();
  function releaseStructuralWaiters(){if(!structuralBusy()){for(const resolve of structuralWaiters)resolve();structuralWaiters.clear();}}
  function holdStructure(){const token={};structuralTasks.add(token);status();return()=>{if(structuralTasks.delete(token))status();};}
@@ -32,7 +33,7 @@ export function websiteDocumentClient({state,api,selection,onStatus=()=>{}}){
  }
  const common=()=>({workspaceId:outline.book.id,websiteId:envelope.websitePin.websiteId,websitePin:envelope.websitePin});
  const readTarget=()=>({...common(),...(envelope.draft?{draftId:envelope.draft.id,draftRevision:envelope.draft.revision}:{})});
- function stop(){clearTimeout(timer);timer=null;generation++;pending=null;actionPending=null;queue=Promise.resolve();envelope=outline=settings=initialPages=null;context=null;local=false;discardRequests=0;error='';pageKey=null;pageSelection++;activeOverrides.clear();for(const map of selected.values())map.clear();structuralTasks.clear();releaseStructuralWaiters();}
+ function stop(){clearTimeout(timer);timer=null;generation++;pending=null;actionPending=null;clearCheckpoints();queue=Promise.resolve();envelope=outline=settings=initialPages=null;context=null;local=false;discardRequests=0;error='';pageKey=null;pageSelection++;activeOverrides.clear();for(const map of selected.values())map.clear();structuralTasks.clear();releaseStructuralWaiters();}
  function compact(book=state.book){
   const {assets,navigation,layouts,researchSources,...website}=book.website;void assets;void navigation;void layouts;void researchSources;
   return {document:{website,...Object.fromEntries(['appearance','themes','activeThemeId'].map(key=>[key,book[key]]))},projects:book.projects.map(({id,share,logoId})=>({id,share,logoId})),selection:selection.snapshot()};
@@ -122,17 +123,32 @@ export function websiteDocumentClient({state,api,selection,onStatus=()=>{}}){
   await flush();selected.get(collection).clear();values(state.book,collection).length=0;
   for(const item of items)remember(collection,item);
  }
- function changes(){
+ function changes(planned=false){
   if(!enabled())return [];
-  const next=compact(),operations=[];
-  for(const key of new Set([...Object.keys(settings.document.website),...Object.keys(next.document.website)]))if(!sameJSONData(settings.document.website[key],next.document.website[key]))operations.push({type:'settings',path:['document','website',key],...(next.document.website[key]===undefined?{remove:true}:{value:copy(next.document.website[key])})});
-  for(const key of ['appearance','themes','activeThemeId'])if(!sameJSONData(settings.document[key],next.document[key]))operations.push({type:'settings',path:['document',key],value:copy(next.document[key])});
-  for(const key of ['projects','selection'])if(!sameJSONData(settings[key],next[key]))operations.push({type:'settings',path:[key],value:copy(next[key])});
+  const next=compact(),operations=[],base={...settings,document:{...settings.document,website:{...settings.document.website}}},items=new Map();
+  // Compare a new edit boundary with the last queued values, not just the last
+  // network acknowledgement. This preserves reversions and avoids appending a
+  // newly selected item twice while an earlier checkpoint is still in flight.
+  if(planned)for(const operation of [...(pending?.operations??[]),...checkpoints.flatMap(checkpoint=>checkpoint.operations)]){
+   if(operation.type==='settings'){let object=base;for(const key of operation.path.slice(0,-1))object=object[key];object[operation.path.at(-1)]=operation.remove?undefined:operation.value;}
+   else for(const value of operation.type==='append'?operation.values:[operation.value])items.set(operation.collection+':'+keyOf(operation.collection,value),value);
+  }
+  for(const key of new Set([...Object.keys(base.document.website),...Object.keys(next.document.website)]))if(!sameJSONData(base.document.website[key],next.document.website[key]))operations.push({type:'settings',path:['document','website',key],...(next.document.website[key]===undefined?{remove:true}:{value:copy(next.document.website[key])})});
+  for(const key of ['appearance','themes','activeThemeId'])if(!sameJSONData(base.document[key],next.document[key]))operations.push({type:'settings',path:['document',key],value:copy(next.document[key])});
+  for(const key of ['projects','selection'])if(!sameJSONData(base[key],next[key]))operations.push({type:'settings',path:[key],value:copy(next[key])});
   for(const collection of collections)for(const [key,saved] of selected.get(collection)){
    const value=values(state.book,collection).find(value=>keyOf(collection,value)===key);
-   if(value&&!sameJSONData(value,saved.base))operations.push(saved.base===null&&!overrides.has(collection)?{type:'append',collection,values:[copy(value)]}:{type:'replace',collection,key,value:copy(value)});
+   const before=items.get(collection+':'+key)??saved.base;
+   if(value&&!sameJSONData(value,before))operations.push(before===null&&!overrides.has(collection)?{type:'append',collection,values:[copy(value)]}:{type:'replace',collection,key,value:copy(value)});
   }
   return operations;
+ }
+ function clearCheckpoints(){checkpoints.length=0;checkpointBytes=0;checkpointKey=null;}
+ function checkpoint(key=null){
+  if(!enabled()||structuralBusy()||key!==null&&key===checkpointKey)return;
+  checkpointKey=key;const operations=changes(true);
+  for(let offset=0;offset<operations.length;offset+=32){const batch=operations.slice(offset,offset+32),bytes=new TextEncoder().encode(JSON.stringify(batch)).length;checkpoints.push({operations:batch,bytes});checkpointBytes+=bytes;}
+  if(checkpoints.length){local=true;void flush().catch(()=>{});status();}
  }
  function acknowledge(operations){
   for(const operation of operations){
@@ -142,16 +158,16 @@ export function websiteDocumentClient({state,api,selection,onStatus=()=>{}}){
   }
  }
  function changed(){if(!enabled())return;editVersion++;local=true;error='';clearTimeout(timer);timer=setTimeout(()=>void flush().catch(()=>{}),600);status();}
- const isDirty=()=>Boolean(local||pending||actionPending||envelope?.draft?.dirty);
+ const isDirty=()=>Boolean(local||pending||checkpoints.length||actionPending||envelope?.draft?.dirty);
  function flush(){
   clearTimeout(timer);timer=null;const epoch=generation;
   const task=queue.then(async()=>{
    while(enabled()&&epoch===generation&&!discardRequests){
     if(actionPending)await finishAction();
-    const operations=pending?.operations??changes().slice(0,32);if(!operations.length){local=false;error='';status();return;}
+    const operations=pending?.operations??checkpoints[0]?.operations??changes().slice(0,32);if(!operations.length){local=false;error='';status();return;}
     pending??={draftId:envelope.draft?.id??null,expectedRevision:envelope.draft?.revision??null,commandId:crypto.randomUUID(),operations};status();
-    try{const result=await request('change',pending);acknowledge(pending.operations);pending=null;error='';adopt(result);local=changes().length>0;}
-    catch(reason){if(epoch===generation){if(['INVALID','LIMIT','CONFLICT','PRIVACY','NOT_FOUND','WEBSITE_NAME_EXISTS'].includes(reason.code))pending=null;error=reason.message??t('websiteEditor','documentCheckpointFailed');status();}throw reason;}
+    try{const result=await request('change',pending);acknowledge(pending.operations);if(checkpoints[0]?.operations===pending.operations)checkpointBytes-=checkpoints.shift().bytes;pending=null;error='';adopt(result);local=checkpoints.length>0||changes().length>0;}
+    catch(reason){if(epoch===generation){if(['INVALID','LIMIT','CONFLICT','PRIVACY','NOT_FOUND','WEBSITE_NAME_EXISTS'].includes(reason.code)){pending=null;clearCheckpoints();}error=reason.message??t('websiteEditor','documentCheckpointFailed');status();}throw reason;}
    }
   });queue=task.catch(()=>{});return task;
  }
@@ -207,7 +223,7 @@ export function websiteDocumentClient({state,api,selection,onStatus=()=>{}}){
    try{
    const uncertainSave=actionPending?.operation==='save'?actionPending.payload:null;
    if(actionPending&&!uncertainSave){const previous=actionPending.operation,result=await finishAction();if(previous==='discard')return result;}
-   pending=null;local=false;
+   pending=null;clearCheckpoints();local=false;
    actionPending={operation:'discard',discard:true,payload:{draftId:uncertainSave?.draftId??envelope.draft?.id??null,expectedRevision:uncertainSave?.expectedRevision??envelope.draft?.revision??null,commandId:crypto.randomUUID(),...(uncertainSave?{pendingSaveCommandId:uncertainSave.commandId}:{})}};status();return await finishAction();
    }finally{if(epoch===generation)discardRequests--;}
   });
@@ -220,7 +236,7 @@ export function websiteDocumentClient({state,api,selection,onStatus=()=>{}}){
  async function sources(query={},options={}){await flush();const stamp=snapshot(),result=await request('sources',{...readTarget(),...query},options);if(stamp!==snapshot())throw new DOMException('Website draft changed','AbortError');return result;}
  async function templateReview(target,{decisions={},...options}={}){await flush();const stamp=snapshot(),result=await request('template-review',{...readTarget(),target,decisions},options);if(stamp!==snapshot())throw new DOMException('Website draft changed','AbortError');return result;}
  async function preview(){await flush();return {websitePin:envelope.websitePin,...(envelope.draft?{websiteDraft:{id:envelope.draft.id,revision:envelope.draft.revision}}:{})};}
- return {open,installed,stop,enabled,snapshot,count,structuralBusy,waitForStructure,item,window,sources,templateReview,remember,replaceWindow,selectPage,selectOverride,hasSelected,editableOverride,stageAsset,changed,flush,perform,history,save,discard,preview,isDirty,
+ return {open,installed,stop,enabled,snapshot,count,structuralBusy,waitForStructure,item,window,sources,templateReview,remember,replaceWindow,selectPage,selectOverride,hasSelected,editableOverride,stageAsset,checkpoint,changed,flush,perform,history,save,discard,preview,isDirty,
   viewKey:()=>JSON.stringify([context,viewVersion]),descriptor:()=>envelope,draft:()=>envelope?.draft??null,error:()=>error,selectedPage:()=>pageKey,
   settingBook:()=>project(),async append(collection,value){await perform([{type:'append',collection,values:[value]}]);if(collection==='pages')await selectPage(value.id);else await item(collection,keyOf(collection,value));return value;}
  };

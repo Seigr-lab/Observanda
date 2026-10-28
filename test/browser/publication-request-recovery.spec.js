@@ -30,6 +30,27 @@ test('lost preparation acknowledgement recovers the same admission without creat
  expect(await page.evaluate(()=>jobs.size)).toBe(1);expect(await page.evaluate(()=>errors)).toEqual([]);
 });
 
+test('a slow admission lookup cannot hide the failure or replace a completed explicit retry',async({page})=>{
+ await pageModules(page);await page.evaluate(async()=>{
+  const {publicationJobsUI}=await import('/publication-jobs-ui.js');let starts=0,statuses=0;
+  window.reviews=[];window.errors=[];window.commandIds=[];
+  const held=new Promise(resolve=>window.releaseLookup=resolve),state={storage:{contextId:crypto.randomUUID()},websiteId:crypto.randomUUID()},createdAt=new Date().toISOString();
+  const job={id:crypto.randomUUID(),state:'completed',createdAt,progress:{stage:'completed',done:1,total:1},result:{id:'b'.repeat(64)}};
+  const api=async(path,data)=>{
+   if(path.endsWith('/start')){commandIds.push(data.commandId);if(++starts===1)throw Error('Admission reply interrupted');return {job};}
+   if(path.endsWith('/status')){if(++statuses===1){await held;return {job:{...job,state:'queued'}};}return {job};}
+   if(path.endsWith('/open'))return {id:data.id};throw Error('Unexpected request');
+  };
+  window.ui=publicationJobsUI({state,api,esc:String,showDialog:html=>{dialog.innerHTML=html;dialog.showModal();},notify:message=>errors.push(message),showReview:value=>reviews.push(value)});
+  document.addEventListener('click',event=>{const control=event.target.closest('[data-action]');if(control)void ui.action(control).catch(error=>errors.push(error.message));});
+  window.starting=ui.start({etag:'a'.repeat(64)});
+ });
+ await expect(page.getByRole('alert')).toHaveText('Admission reply interrupted');
+ await page.getByRole('button',{name:'Recover preparation status'}).click();await expect.poll(()=>page.evaluate(()=>reviews.length)).toBe(1);
+ await page.evaluate(async()=>{releaseLookup();await starting;});
+ expect(await page.evaluate(()=>reviews.length)).toBe(1);expect(await page.evaluate(()=>new Set(commandIds).size)).toBe(1);expect(await page.evaluate(()=>errors)).toEqual([]);
+});
+
 test('uncertain analysis decisions retain their text and recover one atomic seven-decision receipt',async({page})=>{
  await pageModules(page);await page.evaluate(async()=>{
   const {saveAnalysisEditionReview}=await import('/analysis-review-ui.js');

@@ -40,7 +40,7 @@ async function tracedSource(f,command,target,allowed){
  const record=ResearchCatalogue.prototype.record,read=ResearchCatalogue.prototype.read,loaded=[];
  ResearchCatalogue.prototype.record=async function(id,...args){assert.ok(allowed.includes(id),'Unexpected original read '+id);loaded.push(id);return record.call(this,id,...args);};
  ResearchCatalogue.prototype.read=()=>{throw Error('Canvas loaded the complete workspace');};
- try{return {loaded,...await websitePreviewSource(f.workspace,command,{websitePin:f.websitePin,designTarget:target})};}
+ try{return {loaded,...await websitePreviewSource(f.workspace,command,{websitePin:{...f.websitePin,researchSnapshotId:command.baseEtag},designTarget:target})};}
  finally{ResearchCatalogue.prototype.record=record;ResearchCatalogue.prototype.read=read;}
 }
 
@@ -64,12 +64,14 @@ test('concurrent saves do not substitute new originals into an older unsaved web
 
 test('preview validates changed, removed and new record identities and protects workspace metadata',async t=>{
  const f=await fixture(t),draft=structuredClone(f.book);draft.entries.splice(2,1);draft.entries.push({...structuredClone(draft.entries[0]),id:randomUUID(),title:'New draft only'});
- const target='entry:'+draft.entries.at(-1).id;
- const result=await tracedSource(f,f.request(draft),target,[f.book.entries[2].id]);comparePage(result.context,draft,target);
- const preview=command=>websitePreviewSource(f.workspace,command,{designTarget:target});
+ const unpublished='entry:'+draft.entries.at(-1).id,target='entry:'+draft.entries[0].id;
+ await assert.rejects(tracedSource(f,f.request(draft),unpublished,[f.book.entries[2].id]),{code:'INVALID'});
+ const expected=structuredClone(draft);expected.entries.at(-1).share=false;
+ const result=await tracedSource(f,f.request(draft),target,[f.book.entries[2].id,f.book.entries[0].id]);comparePage(result.context,expected,target);
+ const preview=command=>websitePreviewSource(f.workspace,command,{websitePin:f.websitePin,designTarget:target});
  for(const command of [{...f.request(draft),workspaceId:randomUUID()}, {...f.request(draft),removed:[{id:randomUUID(),expectedRevision:'0'.repeat(64)}]}, {...f.request(draft),changes:[{...f.request(draft).changes[0],expectedRevision:'0'.repeat(64)}]}])await assert.rejects(preview(command),error=>['WORKSPACE_CHANGED','RECORD_CHANGED'].includes(error.code));
  for(const command of [{...f.request(draft),response:'outline'},{...f.request(draft),metadata:{id:randomUUID()}},{...f.request(draft),projects:[{id:randomUUID(),share:true,logoId:null}]},{...f.request(draft),changes:[{...f.request(draft).changes[0],record:{...draft.entries.at(-1),body:34}}]}])await assert.rejects(preview(command),{code:'INVALID'});
- for(const designTarget of [null,42,{},'entry:'+randomUUID()])await assert.rejects(websitePreviewSource(f.workspace,f.request(draft),{designTarget}),{code:'INVALID'});
+ for(const designTarget of [null,42,{},'entry:'+randomUUID()])await assert.rejects(websitePreviewSource(f.workspace,f.request(draft),{websitePin:f.websitePin,designTarget}),{code:'INVALID'});
  assert.equal((await f.workspace.outline()).etag,f.etag);
 });
 
@@ -98,7 +100,7 @@ test('original project and lab-book pages use authenticated cards without readin
   const ids=draft.entries.filter(r=>r.notebookId===draft.notebooks[0].id).map(r=>r.id).sort(),result=await tracedSource(f,f.request(draft),target,[]);
   assert.equal(result.loaded.length,0);assert.deepEqual(result.context.recordCards.map(r=>r.id).sort(),ids.slice(0,24));
   const window=result.context.collectionPages.find(p=>p.key==='body'),query=new URLSearchParams({collection:'body',cards:window.nextCursor}).toString();
-  const next=await websitePreviewSource(f.workspace,f.request(draft),{designTarget:target,collections:[{key:'body',definition:window.definition,query}]});
+  const next=await websitePreviewSource(f.workspace,f.request(draft),{websitePin:f.websitePin,designTarget:target,collections:[{key:'body',definition:window.definition,query}]});
   assert.deepEqual(next.context.recordCards.map(r=>r.id).sort(),ids.slice(24));assert.equal(next.context.collectionPages.find(p=>p.key==='body').nextCursor,null);
   const output=renderPublication(result.context,options(target));assert.match([...output.files].find(([name])=>name.endsWith('.html'))[1],/data-collection-next/);
  }
@@ -106,7 +108,7 @@ test('original project and lab-book pages use authenticated cards without readin
 
 test('cancelled previews stop before loading originals',async t=>{
  const f=await fixture(t),command=f.request(f.book),controller=new AbortController();controller.abort();
- await assert.rejects(websitePreviewSource(f.workspace,command,{designTarget:'home',signal:controller.signal}),{name:'AbortError'});
+ await assert.rejects(websitePreviewSource(f.workspace,command,{websitePin:f.websitePin,designTarget:'home',signal:controller.signal}),{name:'AbortError'});
 });
 
 test('a page previews from an actual corpus beyond the legacy envelope without reading unrelated bodies',async t=>{
@@ -141,13 +143,13 @@ test('exact research links and reverse workflow journeys retain destinations wit
  ResearchCatalogue.prototype.queryDocuments=async function*(...args){for await(const value of queryDocuments.apply(this,args))yield {...value,revision:null};};
  try{
   result=await tracedSource(f,f.request(f.book),target,[current.id,method.id,run.id,comparison.id]);
-  comparePage(result.context,f.book,target);assert.equal(result.loaded.filter(id=>id===current.id).length,1);assert.equal(result.loaded.filter(id=>id===method.id).length,1);
+  comparePage(result.context,f.book,target);assert.equal(result.loaded.filter(id=>id===current.id).length,1);assert.equal(result.loaded.filter(id=>id===method.id).length,0);
  }finally{ResearchCatalogue.prototype.queryDocuments=queryDocuments;}
 });
 
 test('shared research media and hidden ancestors select only visible dependencies',async t=>{
  const f=await fixture(t),media=new MediaStore(f.workspace.root,f.vault),asset=await media.import(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" fill="teal"/></svg>'),'image'),mediaId=asset.id;
- const previous=f.book.entries[4],saved=await new ResearchRecords(f.workspace,media).save({workspaceId:f.book.id,changes:[{id:previous.id,expectedRevision:recordRevision(previous),record:{...previous,attachments:[{...asset,caption:'Selected media',alt:'Selected media',transcript:'',share:false}]}}]},{recordIds:[previous.id]});
+ const previous=f.book.entries[4],saved=await new ResearchRecords(f.workspace,media).save({workspaceId:f.book.id,changes:[{id:previous.id,expectedRevision:recordRevision(previous),record:{...previous,attachments:[{...asset,caption:'Selected media',alt:'Selected media',transcript:'',share:true}]}}]},{recordIds:[previous.id]});
  f.book.entries[4]=saved.book.entries[0];const request=draft=>({...f.request(draft),baseEtag:saved.etag});
  const draft=structuredClone(f.book),record=draft.entries[4],sidebar=createRegion(draft.website,'sidebar','Research media',{makeId:randomUUID});
  sidebar.sections=[{...newElement('media',randomUUID),entryId:record.id,attachmentId:mediaId}];assignRegion(draft.website,'home','sidebar',sidebar.id);
@@ -177,11 +179,12 @@ test('indexed previews inspect only selected summaries as the unrelated corpus g
   ResearchCatalogue.prototype.queryDocuments=async function*(...args){for await(const value of queries.apply(this,args)){inspected++;yield value;}};
   try{
    let start=performance.now(),result=await tracedSource(f,f.request(draft),target,[current.id]);
-   comparePage(result.context,draft,target);assert.equal(inspected,3);assert.equal(result.context.browseRecords.length,3);assert.equal(result.context.previewCounts.total,count);
+   comparePage(result.context,draft,target);assert.equal(inspected,6);assert.equal(result.context.browseRecords.length,3);assert.equal(result.context.previewCounts.total,count);
    t.diagnostic(JSON.stringify({records:count,target:'entry',summaries:inspected,previewMs:Math.round(performance.now()-start)}));
    inspected=0;draft.website.home.sections=[{...newElement('records',randomUUID),filter:{projectId:null,tag:'',limit:2}},newElement('projects',randomUUID)];
    start=performance.now();result=await tracedSource(f,f.request(draft),'home',[]);comparePage(result.context,draft,'home');
-   assert.equal(inspected,2);assert.equal(result.context.recordCards.length,2);assert.equal(result.context.entryDestinations.length,2);
+   assert.equal(inspected,5); // Two rendered descriptors plus three bounded visibility checks, including lookahead.
+  assert.equal(result.context.recordCards.length,2);assert.equal(result.context.entryDestinations.length,2);
    t.diagnostic(JSON.stringify({records:count,target:'home',summaries:inspected,previewMs:Math.round(performance.now()-start)}));
   }finally{ResearchCatalogue.prototype.members=members;ResearchCatalogue.prototype.queryDocuments=queries;}
  }
@@ -195,11 +198,14 @@ test('unsaved additions, moves, removals, dates and links retain exact page coun
  draft.entries[3].notebookId=draft.notebooks[1].id;
  draft.entries.splice(5,1);draft.entries.push({...structuredClone(selected),id:randomUUID(),title:'Unsaved later record',tags:['picked'],occurredOn:'2030-01-01'});
  const command=f.request(draft),allowed=[...command.changes.map(c=>c.id).filter(id=>f.book.entries.some(r=>r.id===id)),...command.removed.map(c=>c.id)];
- for(const target of ['home','entry:'+selected.id,'entry:'+draft.entries.at(-1).id,'notebook:'+draft.notebooks[1].id]){
-  const result=await tracedSource(f,command,target,[...allowed,selected.id]);comparePage(result.context,draft,target);
-  assert.equal(result.context.previewCounts.total,draft.entries.length);
+ const expected=structuredClone(draft);expected.entries.at(-1).share=false;
+ await assert.rejects(tracedSource(f,command,'entry:'+draft.entries.at(-1).id,allowed),{code:'INVALID'});
+ for(const target of ['home','entry:'+selected.id,'notebook:'+draft.notebooks[1].id]){
+  const result=await tracedSource(f,command,target,[...allowed,selected.id]);comparePage(result.context,expected,target);
+  assert.equal(result.context.previewCounts.total,draft.entries.length-1);
  }
  // Unknown-date placement and ties use the same order as actual publication.
  draft.entries[0].occurredOn={kind:'range',from:'2028-01-01',to:'2028-02-01',estimated:true};
- const result=await tracedSource(f,f.request(draft),'home',allowed);comparePage(result.context,draft,'home');
+ expected.entries[0].occurredOn=draft.entries[0].occurredOn;
+ const result=await tracedSource(f,f.request(draft),'home',allowed);comparePage(result.context,expected,'home');
 });

@@ -4,7 +4,7 @@ import {publicationText} from './publication-review.js';
 export function publicationJobsUI({state,api,esc,showDialog,notify,showReview}){
  const call=(op,data={})=>api('/api/publication-jobs/'+op,data,{adopt:false});
  const text=(key,values)=>esc(publicationText(key,values));
- let generation=0,timer=null,context=null,route=null,cursor=null,next=null,previous=[],pendingRequest=null;
+ let generation=0,submission=0,timer=null,context=null,route=null,cursor=null,next=null,previous=[],pendingRequest=null;
  const stop=()=>{generation++;clearTimeout(timer);};
  const button=(key,action,id='')=>`<button type="button" class="button" data-action="publication-jobs-${action}" data-id="${esc(id)}">${text(key)}</button>`;
  const active=token=>token===generation&&context===websiteContext(state)&&route===location.hash&&document.querySelector('#dialog[open] #publication-jobs-status');
@@ -31,13 +31,16 @@ export function publicationJobsUI({state,api,esc,showDialog,notify,showReview}){
  }
  async function submit(token){
   if(!active(token)||!pendingRequest)return;
-  try{const {job}=await call('start',pendingRequest);if(active(token)){pendingRequest=null;await poll(token,job.id);}}
-  catch(error){if(active(token)){
+  const attempt=++submission,current=()=>active(token)&&attempt===submission;
+  try{const {job}=await call('start',pendingRequest);if(current()){pendingRequest=null;await poll(token,job.id);}}
+  catch(error){if(current()){
    // A disconnected acknowledgement does not mean admission failed. Retain
    // this exact request ID until its durable receipt can be recovered.
    const id=pendingRequest?.commandId;
-   if(id)try{const response=await call('status',{id});if(active(token)&&response.job){pendingRequest=null;await poll(token,id);return;}}catch{/* Keep the explicit retry available. */}
-   if(active(token))document.getElementById('publication-jobs-status').innerHTML='<p role="alert">'+esc(error.message)+'</p>'+(id?'<p>'+text('requestUncertain')+'</p>'+button('resumeRequest','resume-request'):button('refresh','list'));
+   document.getElementById('publication-jobs-status').innerHTML='<p role="alert">'+esc(error.message)+'</p>'+(id?'<p>'+text('requestUncertain')+'</p>'+button('resumeRequest','resume-request'):button('refresh','list'));
+   // Recovery may wait on storage or the network. Show the failure and keep
+   // its exact retry available immediately; an older lookup cannot undo it.
+   if(id)try{const response=await call('status',{id});if(current()&&response.job){pendingRequest=null;await poll(token,id);return;}}catch{/* Keep the explicit retry available. */}
   }}
  }
  async function list(){await poll(begin('preparations'));}

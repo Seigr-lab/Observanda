@@ -41,11 +41,17 @@ async function legacyAnalysisState(workspace,candidate,{sourceReader,signal,requ
 
 
 async function retainedAnalysisState(workspace,candidate,{sourceReader,signal,requireCurrent=true,onItem=async()=>{},onCheck}={}){
- const input=await publicationRetainedInput(workspace,candidate,{signal}),header=await input.fullHeader(),namespace=candidate.workspaceId,groups=[];
- if(typeof candidate.hasSources!=='boolean'||header.hasSources!==candidate.hasSources)throw new AppError('JOB_DAMAGED');
- for await(const group of input.sourceGroups()){
-  if(groups.length>=101||!researchId(group?.workspaceId)||groups.some(prior=>prior.workspaceId===group.workspaceId)||!group.analysis||!revisionId(group.analysis.fingerprint)||!Number.isSafeInteger(group.analysis.count)||group.analysis.count<0||(!groups.length?group.workspaceId!==namespace||group.snapshotId!==null:!revisionId(group.snapshotId)))throw new AppError('JOB_DAMAGED');groups.push(group);
- }
+ const namespace=candidate.workspaceId;
+ // The owner directory is immutable and bounded. Admit it in one snapshot,
+ // then release that snapshot before checking each owner's current inputs.
+ const {input,groups}=await workspace.catalogue(async()=>{
+  const input=await publicationRetainedInput(workspace,candidate,{signal}),header=await input.fullHeader(),groups=[];
+  if(typeof candidate.hasSources!=='boolean'||header.hasSources!==candidate.hasSources)throw new AppError('JOB_DAMAGED');
+  for await(const group of input.sourceGroups()){
+   if(groups.length>=101||!researchId(group?.workspaceId)||groups.some(prior=>prior.workspaceId===group.workspaceId)||!group.analysis||!revisionId(group.analysis.fingerprint)||!Number.isSafeInteger(group.analysis.count)||group.analysis.count<0||(!groups.length?group.workspaceId!==namespace||group.snapshotId!==null:!revisionId(group.snapshotId)))throw new AppError('JOB_DAMAGED');groups.push(group);
+  }
+  return {input,groups};
+ });
  if(!groups.length||candidate.hasSources!==(groups.length>1))throw new AppError('JOB_DAMAGED');
  const expected=candidate.sourceSnapshots??groups.slice(1).map(group=>({workspaceId:group.workspaceId,snapshotId:group.snapshotId}));
  if(!Array.isArray(expected)||expected.length!==groups.length-1||expected.some((row,i)=>!researchId(row?.workspaceId)||!revisionId(row?.snapshotId)||expected.slice(0,i).some(prior=>prior.workspaceId===row.workspaceId)||!groups.slice(1).some(group=>group.workspaceId===row.workspaceId)))throw new AppError('JOB_DAMAGED');

@@ -9,13 +9,14 @@ import {selectedContent} from './web/website-model.js';
 import {buildDesignExamples} from './design-preview.js';
 import {publicProjection,buildPublication} from './publication.js';
 import {AppError} from './errors.js';
+import {diagnosticPhase} from './operational-diagnostics.js';
 export async function publicationDesignPreview(workspace,data,{signal,blockedValues=[],sourceReader}={}){
  const mode=data.mode??'auto';if(!['auto','examples','website'].includes(mode))throw new AppError('INVALID');
  let book,context,previewMedia,editor,websitePin,websiteDraft;
  if(Object.hasOwn(data,'websitePin')&&!Object.hasOwn(data,'draft')&&!Object.hasOwn(data,'book')){
   if(Object.keys(data).some(key=>!['websitePin','websiteDraft','mode','designTarget','designPageId','workspaceContent','referenceCursor','collections'].includes(key))||mode!=='website'||data.workspaceContent!==true||!data.designTarget)throw new AppError('INVALID');
   websiteDraft=data.websiteDraft===undefined?undefined:structuredClone(data.websiteDraft);
-  ({metadata:book,context,media:previewMedia,editor,websitePin}=await websiteDocumentPreviewSource(workspace,{...data,...(websiteDraft?{websiteDraft}:{})},{designTarget:data.designTarget,referenceCursor:data.referenceCursor,collections:data.collections,signal,sourceReader}));
+  ({metadata:book,context,media:previewMedia,editor,websitePin}=await diagnosticPhase('website-preview-source',()=>websiteDocumentPreviewSource(workspace,{...data,...(websiteDraft?{websiteDraft}:{})},{designTarget:data.designTarget,referenceCursor:data.referenceCursor,collections:data.collections,signal,sourceReader})));
  }else if(Object.hasOwn(data,'draft')){
   if(Object.keys(data).some(key=>!['draft','websitePin','mode','designTarget','designPageId','workspaceContent','referenceCursor','collections'].includes(key))||mode!=='website'||data.workspaceContent!==true||!data.designTarget)throw new AppError('INVALID');
   ({metadata:book,context,media:previewMedia,editor,websitePin}=await websitePreviewSource(workspace,data.draft,{websitePin:data.websitePin,designTarget:data.designTarget,referenceCursor:data.referenceCursor,collections:data.collections,signal,sourceReader}));
@@ -26,6 +27,6 @@ export async function publicationDesignPreview(workspace,data,{signal,blockedVal
  if(designTarget!==null&&(source!=='website'||typeof designTarget!=='string'||designTarget.length>100)||designPageId!==null&&(source!=='website'||typeof designPageId!=='string'||!book.pages.some(p=>p.id===designPageId))||workspaceContent&&(source!=='website'||!designTarget))throw new AppError('INVALID');
  const canvas=source==='website'&&workspaceContent&&designTarget,fonts=new WorkspaceFonts(workspace),media=previewMedia??new MediaStore(workspace),fontFiles=canvas?new Map():await fonts.files(source==='examples'?book.appearance:publicProjection(book,{designPageId,designTarget,workspaceContent}),{preview:true});
  signal?.throwIfAborted();
- const result=canvas?{candidate:await (context?renderWebsitePreview:websitePreview)(context??book,{designTarget,blockedValues,media,fonts,signal})}:source==='examples'?buildDesignExamples(book.appearance,{blockedValues,fontFiles}):{candidate:buildPublication(book,{blockedValues,fontFiles,designPageId,designTarget,workspaceContent,mediaFiles:await media.publicFiles(book,{streamed:true,designPageId,designTarget,workspaceContent})})};
+ const result=canvas?{candidate:await diagnosticPhase('website-preview-render',()=>(context?renderWebsitePreview:websitePreview)(context??book,{designTarget,blockedValues,media,fonts,signal}))}:source==='examples'?buildDesignExamples(book.appearance,{blockedValues,fontFiles}):{candidate:buildPublication(book,{blockedValues,fontFiles,designPageId,designTarget,workspaceContent,mediaFiles:await media.publicFiles(book,{streamed:true,designPageId,designTarget,workspaceContent})})};
  signal?.throwIfAborted();const defaultPage=result.defaultPage??result.candidate.defaultPage;if(!defaultPage)throw new AppError('PUBLICATION_EMPTY');return {...result,defaultPage,source,...(websitePin?{websitePin}:{}),...(websiteDraft?{websiteDraft}:{}),...(editor?{editor}:{})};
 }

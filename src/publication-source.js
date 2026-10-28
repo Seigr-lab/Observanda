@@ -1,7 +1,7 @@
 import {sourceSelectionReader,sourceRecordChoice,sourceRecordIncluded,projectSourceAttachmentChoices} from './website-source-selections.js';
 import {websitePublicationMetadata,websitePublicationPages,websitePublicationCollections} from './publication-website-input.js';
 import {websiteEditorProjection} from './website-editor-projection.js';
-import {validateWebsiteDocument,websiteDocumentHeader} from './website-document-validation.js';
+import {validateWebsiteDocument,validateWebsiteDocumentSelection,websiteDocumentHeader} from './website-document-validation.js';
 import {WebsiteDocumentStore} from './website-document-store.js';
 import {websiteBook,WEBSITE_DOCUMENT_FIELDS} from './web/website-sites-model.js';
 import {serialize} from './storage-format.js';
@@ -144,6 +144,7 @@ export async function publicationSource(workspace,{etag,websitePin,websiteDraft,
   if(snapshot.metadata.id!==current.metadata.id)throw new AppError('WORKSPACE_CHANGED');
   const metadata=draft?workspaceEditMetadata(snapshot.metadata,draft):snapshot.metadata;
   if(draft)await store.validateMetadata(snapshot,metadata);
+  if(draft?.selection)await validateWebsiteDocumentSelection(store,snapshot,{projectId:null,projects:metadata.projects,document:{},selection:draft.selection},{signal,previous:{selection:snapshot.websiteSelection}});
   const selection=draft?.selection??snapshot.websiteSelection,paging=publicationSelectionPage(store,{snapshotId:etag,websiteId:workspace.websiteId,websitePin:snapshot.websitePin,metadata,selection},page);
   const options={signal,metadata,selection,page:paging.page};
   return consume?consume(metadata,(inventory?selectedPublicationInventories:selectedPublicationRecords)(store,snapshot,options),{sourceEtag:etag,websitePin:snapshot.websitePin,nextCursor:paging.nextCursor}):selectedPublicationBook(store,snapshot,options);

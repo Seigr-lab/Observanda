@@ -1,3 +1,4 @@
+import {WebsiteSites} from '../src/website-sites.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -27,7 +28,7 @@ import {legacyPublicationQuery} from './fixtures/legacy-publication-query.js';
 async function fixture(t,book){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-appearance-pages-')),f=await encryptedFixture(directory,book);
  t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
- return {...f,directory,book,command:{workspaceId:book.id,etag:(await f.workspace.outline()).etag,appearance:book.appearance,mode:'website'}};
+ return {...f,directory,book,command:{workspaceId:book.id,etag:(await f.workspace.outline()).etag,websitePin:(await new WebsiteSites(f.workspace).read(null)).websitePin,appearance:book.appearance,mode:'website'}};
 }
 const dependencies=f=>({media:new MediaStore(f.workspace.root,f.vault),fonts:new WorkspaceFonts(f.workspace)});
 
@@ -48,7 +49,9 @@ test('preview page choices and original reads stay bounded as the published corp
    });
    await service.save({workspaceId:book.id,changes},{receipt:true});
   }
-  f.command.etag=(await f.workspace.outline()).etag;
+  const sites=new WebsiteSites(f.workspace),site=await sites.read(null),etag=(await f.workspace.outline()).etag;
+  await sites.save(null,{workspaceId:book.id,baseEtag:etag,websitePin:site.websitePin,metadata:{},projects:[],changes:[],removed:[],selection:{defaultShare:false,includeProjects:book.projects.map(p=>p.id),records:[]}});
+  f.command.etag=etag;f.command.websitePin=(await sites.read(null)).websitePin;
   let cursor=null;const seen=[];measuring=true;
   do{
    bodies=[];summaries=0;const page=await appearancePreviewChoices(f.workspace,f.command,{cursor});
@@ -125,7 +128,7 @@ test('page assets cannot expose other records and separately styled preview sess
  const f=await fixture(t,book),deps=dependencies(f),media=await deps.media.import(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="blue"/></svg>'),'image'),first=book.entries[0],second=book.entries[1];
  const updated={...first,attachments:[{...media,caption:'Shared image',alt:'Blue square',transcript:'',share:true}]};
  await new ResearchRecords(f.workspace,deps.media).save({workspaceId:book.id,changes:[{id:first.id,expectedRevision:recordRevision(first),record:updated}]},{receipt:true});
- f.command.etag=(await f.workspace.outline()).etag;
+ f.command.etag=(await f.workspace.outline()).etag;f.command.websitePin=(await new WebsiteSites(f.workspace).read(null)).websitePin;
  const sessions=new AppearancePreviewSessions(),firstSession=await sessions.create(f.workspace,f.command,deps),secondSession=await sessions.create(f.workspace,{...f.command,appearance:{...book.appearance,accent:'#771133'}},deps),a=firstSession.baseUrl.split('/')[2],b=secondSession.baseUrl.split('/')[2];
  const path='entries/'+first.id+'.html',key=Buffer.from(path).toString('base64url'),resource='_assets/'+key+'/media/'+media.id+'.png';
  assert.ok((await sessions.file(a,path)).content.includes(resource));assert.ok((await sessions.file(a,resource)).content);

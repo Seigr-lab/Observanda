@@ -1,3 +1,4 @@
+import {WebsiteSites} from '../src/website-sites.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -18,7 +19,7 @@ test('high-degree references have bounded previews, direct late continuation, pi
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-reference-pages-')),book=referenceBook(600),target=book.entries[0];
  book.entries[300].share=false;
  const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
- const command={workspaceId:book.id,etag:(await f.workspace.outline()).etag,appearance:book.appearance,mode:'website'},file='entries/'+target.id+'.html';
+ const command={workspaceId:book.id,etag:(await f.workspace.outline()).etag,websitePin:(await new WebsiteSites(f.workspace).read(null)).websitePin,appearance:book.appearance,mode:'website'},file='entries/'+target.id+'.html';
  const original=ResearchCatalogue.prototype.record,decode=ResearchCatalogue.prototype.decode;let measuring=false,bodies=0,summaries=0;
  ResearchCatalogue.prototype.record=function(...args){if(measuring)bodies++;return original.apply(this,args);};
  ResearchCatalogue.prototype.decode=function(table,id,...args){if(measuring&&table==='state'&&id.startsWith('record-summary:'))summaries++;return decode.call(this,table,id,...args);};
@@ -56,7 +57,7 @@ test('reference continuation makes progress through private and inapplicable lin
   else{delete entry.relations[0].role;entry.relations[0].target.revision='0'.repeat(64);}
  }
  const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
- const command={workspaceId:book.id,etag:(await f.workspace.outline()).etag,appearance:book.appearance,mode:'website'},file='entries/'+target.id+'.html';
+ const command={workspaceId:book.id,etag:(await f.workspace.outline()).etag,websitePin:(await new WebsiteSites(f.workspace).read(null)).websitePin,appearance:book.appearance,mode:'website'},file='entries/'+target.id+'.html';
  const first=await appearancePreviewPage(f.workspace,command,file);assert.deepEqual(first.referencePage.recordIds,[]);assert.equal(first.referencePage.scanned,256);assert.ok(first.referencePage.nextCursor);
  const next=await appearancePreviewPage(f.workspace,command,file+'?references='+first.referencePage.nextCursor);assert.deepEqual(next.referencePage.recordIds,book.entries.slice(285).map(r=>r.id));assert.equal(next.referencePage.nextCursor,null);
  const prior=await appearancePreviewPage(f.workspace,command,file+'?references='+next.referencePage.previousCursor);assert.deepEqual(prior.referencePage.recordIds,[]);assert.equal(prior.referencePage.previousCursor,null);

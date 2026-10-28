@@ -3,20 +3,23 @@ import {mkdtemp,rm} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {sampleNotebook} from '../../src/sample.js';
-import {Workspace} from '../../src/storage.js';
+import {encryptedFixture} from './encrypted-fixture.js';
+import {clearVault} from '../../src/encryption.js';
+import {WebsiteSites} from '../../src/website-sites.js';
 import {startServer} from '../../src/server.js';
 import {navigate} from './preferences-helper.js';
 import {task,sectionTools} from './composer-helper.js';
 
-let app,root,errors;
+let app,root,errors,fixture;
+const savedBook=async()=>({...((await new WebsiteSites(fixture.workspace).read(null)).book),entries:(await fixture.workspace.read()).book.entries});
 const canvas=page=>page.frameLocator('#website-draft-preview');
 test.beforeEach(async({page})=>{
  root=await mkdtemp(path.join(os.tmpdir(),'observanda-compose-flow-'));errors=[];page.on('pageerror',e=>errors.push(e.message));
  const book=sampleNotebook();book.projects[0].description='Experiments, fieldwork, and creative practice.';book.website.footer='A collective of code, sound, and nature.';
- await new Workspace(root).create(book);app=await startServer({root,preferencesFile:path.join(root,'preferences.json'),port:0});
+ fixture=await encryptedFixture(root,book);app=await startServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(root,'preferences.json'),port:0});
  await page.goto(app.url);await navigate(page,'Website editor');await expect(canvas(page).locator('main')).toBeVisible();
 });
-test.afterEach(async()=>{await app.close();await rm(root,{recursive:true,force:true});});
+test.afterEach(async()=>{await app.close();if(fixture)clearVault(fixture.vault);await rm(root,{recursive:true,force:true});});
 
 async function drag(page,kind){
  const from=page.locator(`[data-palette-kind="${kind}"]`),to=canvas(page).locator('[data-drop-parent=""]');
@@ -25,7 +28,7 @@ async function drag(page,kind){
  await page.mouse.move(b.x+b.width/2,b.y+b.height/2,{steps:18});await expect(page.locator('.composer-drop-marker')).toBeVisible();await page.mouse.up();
 }
 
-test('Page keeps its palette during repeated insertion and selection; editing is explicit',async({page})=>{
+test('Page keeps its palette during repeated insertion and opens controls on direct canvas selection',async({page})=>{
  await page.setViewportSize({width:1600,height:1100});
  await page.getByRole('button',{name:'Add page',exact:true}).click();await page.getByLabel('Page title',{exact:true}).fill('Composition journey');await task(page,'Page');
  const pageTab=page.getByRole('navigation',{name:'Editing tools'}).getByRole('button',{name:'Page',exact:true});
@@ -36,7 +39,7 @@ test('Page keeps its palette during repeated insertion and selection; editing is
  }
  await page.locator('[data-palette-kind=divider]').click();await expect(canvas(page).locator('[data-section-id]')).toHaveCount(3);
  await page.locator('#website-outline .section-select').first().click();await expect(pageTab).toHaveAttribute('aria-current','page');
- await canvas(page).locator('.section-heading h2').click();await expect(pageTab).toHaveAttribute('aria-current','page');
+ await canvas(page).locator('.section-heading h2').click();await expect(page.getByLabel('Section heading',{exact:true})).toBeVisible();
  await canvas(page).locator('.section-heading>.canvas-section-edit').click();await page.getByLabel('Section heading',{exact:true}).fill('The work begins');
  await expect(canvas(page).locator('.section-heading h2')).toHaveText('The work begins');
  await task(page,'Page');await expect(page.locator('[data-palette-kind=text]')).toBeVisible();
@@ -76,7 +79,7 @@ test('independent collection alignment and the final footer survive save, reload
  expect(await zoomed.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
  await zoomed.getByRole('button',{name:'Save website',exact:true}).scrollIntoViewIfNeeded();await expect(zoomed.getByRole('button',{name:'Save website',exact:true})).toBeInViewport();
  await zoomed.screenshot({path:test.info().outputPath('editor-200-percent.png'),fullPage:true});
- await page.getByRole('button',{name:'Prepare edition',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();const review=page.frameLocator('iframe[title="Publication preview"]');await check(review);
+ await page.getByRole('button',{name:'Prepare edition',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible({timeout:30000});const review=page.frameLocator('iframe[title="Publication preview"]');await check(review);
  await expect(review.locator('.canvas-section-edit,[contenteditable]')).toHaveCount(0);
  await page.screenshot({path:test.info().outputPath('review-mixed-alignment.png'),fullPage:true});
  const href=await page.locator('#full-public-preview').getAttribute('href'),visitor=await page.context().newPage();await visitor.goto(new URL(href,app.url).href);

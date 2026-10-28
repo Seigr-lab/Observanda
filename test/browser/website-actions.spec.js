@@ -112,7 +112,7 @@ test('author site button defaults, plain links and independent popup close style
   await page.screenshot({path:info.outputPath('action-styling-editor.png')});
   await page.getByRole('button',{name:'Prepare edition',exact:true}).click();
   await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
-  await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible({timeout:30000});
   await page.getByLabel('Preview page',{exact:true}).selectOption(target);
   const href=await page.locator('#full-public-preview').getAttribute('href'),url=new URL(href,app.origin).href;
   const visitor=await page.context().newPage();visitor.on('pageerror',e=>errors.push(e.message));

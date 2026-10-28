@@ -13,12 +13,13 @@ import {validateRecordChanges} from './model.js';
 import {recordRevision,historicalBook} from './research.js';
 import {recordQueryDocument} from './web/record-query.js';
 export class WebsitePreviewRecords{
- constructor(store,snapshot,metadata,command,{signal,websiteId=null,metadataAdmitted=false}={}){
-  Object.assign(this,{store,snapshot,metadata,command,signal,websiteId,metadataAdmitted,websitePin:snapshot.websitePin});
+ constructor(store,snapshot,metadata,command,{signal,websiteId=null,metadataAdmitted=false,designTarget=null}={}){
+  Object.assign(this,{store,snapshot,metadata,command,signal,websiteId,metadataAdmitted,designTarget,websitePin:snapshot.websitePin});
   this.index=new SnapshotIndex(store);this.reading=new RecordReadingIndex(store);
   this.deleted=new Set(command.removed.map(c=>c.id));this.changed=new Map(command.changes.map(c=>[c.id,structuredClone(c.record)]));
   this.sourceRevisions=new Map();this.selection=command.selection??snapshot.websiteSelection??emptyWebsiteSelection();
   this.originals=new Map(this.changed);this.rows=new Map();this.documents=new Map();this.descriptors=new Map();
+  this.visibility=new Map();
  }
  async initialize(){
   await assertPublicationPreviewPermissions(this.store,this.command.baseEtag,this.metadata,null,{signal:this.signal});
@@ -40,9 +41,17 @@ export class WebsitePreviewRecords{
  }
  async visible(row){
   this.signal?.throwIfAborted();
+  // A preview owns one immutable snapshot, metadata and selection. Navigation,
+  // original loading and link resolution can ask about the same row repeatedly.
+  // Reuse only its permission decision, with a bounded per-preview lifetime.
+  if(this.visibility.has(row.id))return this.visibility.get(row.id);
   const value=this.changed.get(row.id)??this.documents.get(row.id)??(await Array.fromAsync(this.store.queryDocuments([row],this.snapshot.metadata,{signal:this.signal,search:false})))[0];
   const book=this.metadata.notebooks.find(book=>book.id===value.notebookId);
-  return sourceRecordAllowed(value,this.metadata)&&websiteRecordShare(this.selection,value,book?.projectId);
+  // The selected local page may be styled before it is included in this site.
+  // Source consent still applies, and this page-only preview is never exportable.
+  const allowed=sourceRecordAllowed(value,this.metadata)&&(this.designTarget==='entry:'+row.id||websiteRecordShare(this.selection,value,book?.projectId));
+  if(this.visibility.size>=64)this.visibility.delete(this.visibility.keys().next().value);
+  this.visibility.set(row.id,allowed);return allowed;
  }
  async document(row,{cards=false}={}){
   this.signal?.throwIfAborted();let value=this.documents.get(row.id);

@@ -32,7 +32,7 @@ export async function websitePreviewSource(workspace,command,{websitePin,designT
    const project=metadata.projects.find(p=>p.id===change.id);if(!project)throw new AppError('INVALID');
    project.share=change.share;project.logoId=change.logoId;
   }
-  const records=new WebsitePreviewRecords(store,snapshot,metadata,command,{signal,websiteId:workspace.websiteId??null});await records.initialize();
+  const records=new WebsitePreviewRecords(store,snapshot,metadata,command,{signal,websiteId:workspace.websiteId??null,designTarget});await records.initialize();
   const sources=metadata.website.researchSources??[];
   if(!validPublicationSources(sources)||sources.some(source=>source.workspaceId===metadata.id))throw new AppError('INVALID');
   if(!sources.length)return {...await websitePreviewPage(records,metadata,{designTarget,referenceCursor,collections,signal}),websitePin:snapshot.websitePin};
@@ -54,7 +54,7 @@ export async function websiteDocumentPreviewSource(workspace,{websitePin,website
  return base.catalogue(async store=>{
   const projected=await websiteEditorProjection(store,websiteId,{websitePin,websiteDraft,designTarget,signal}),{metadata,snapshot}=projected;
   const command={workspaceId:metadata.id,baseEtag:websitePin.researchSnapshotId,metadata:{},projects:[],changes:[],removed:[]};
-  const records=new WebsitePreviewRecords(store,snapshot,metadata,command,{signal,websiteId,metadataAdmitted:true});await records.initialize();
+  const records=new WebsitePreviewRecords(store,snapshot,metadata,command,{signal,websiteId,metadataAdmitted:true,designTarget});await records.initialize();
   return withWebsiteSourceSelections(projected.document,async sources=>{
   if(!sources.count)return {...await websitePreviewPage(records,metadata,{designTarget,referenceCursor,collections,signal}),websitePin};
   const reader=await sourceReader?.({signal});if(!reader)throw new AppError('ACCESS_LOCKED');

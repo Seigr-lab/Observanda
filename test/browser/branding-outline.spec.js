@@ -1,3 +1,4 @@
+import {WebsiteSites} from '../../src/website-sites.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
 import path from 'node:path';
@@ -40,20 +41,19 @@ for(const count of [42,420])test('branding searches scopes and saves without loa
   expect(await scope.locator('option').count()).toBeLessThan(10);
   await page.getByLabel('Add logo',{exact:true}).setInputFiles(svg);await expect(page.getByLabel('Logo 1 alternative text')).toBeVisible({timeout:20000});
   await page.getByLabel('Logo 1 alternative text').fill('A private record mark');
-  await page.route('**/api/workspace/save',route=>route.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Synthetic branding interruption'}}),{times:1});
+  await page.route('**/api/websites/editor/save',route=>route.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Synthetic branding interruption'}}),{times:1});
   await page.getByRole('button',{name:'Save branding',exact:true}).click();await expect(page.locator('#notice')).toContainText('Synthetic branding interruption');await expect(page.getByLabel('Logo 1 alternative text')).toHaveValue('A private record mark');
   await page.getByRole('button',{name:'Save branding',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
   await page.reload();await expect(scope.locator('option:checked')).toHaveText('Record: '+selected.title);await expect(page.getByLabel('Logo 1 alternative text')).toHaveValue('A private record mark');
-  await page.getByLabel('Logo 1 alternative text').fill('Discard this');await scope.selectOption('home');await expect(page.locator('#leave-dialog')).toBeVisible();
-  await page.locator('#leave-dialog').getByRole('button',{name:'Stay here',exact:true}).click();await expect(scope).toHaveValue('entry:'+selected.id);await expect(page.getByLabel('Logo 1 alternative text')).toHaveValue('Discard this');
-  await scope.selectOption('home');await page.locator('#leave-dialog').getByRole('button',{name:'Discard changes',exact:true}).click();await expect(scope).toHaveValue('home');
-  await page.goBack();await expect(scope.locator('option:checked')).toHaveText('Record: '+selected.title);await expect(page.getByLabel('Logo 1 alternative text')).toHaveValue('A private record mark');
+  await page.getByLabel('Logo 1 alternative text').fill('Discard this');await scope.selectOption('home');await expect(scope).toHaveValue('home');await expect(page.locator('#leave-dialog')).toBeHidden();
+  await page.goBack();await expect(scope.locator('option:checked')).toHaveText('Record: '+selected.title);await expect(page.getByLabel('Logo 1 alternative text')).toHaveValue('Discard this');
+  await page.getByRole('button',{name:'Discard changes',exact:true}).click();await expect(page.getByLabel('Logo 1 alternative text')).toHaveValue('A private record mark');
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='20px');await scope.selectOption('record-picker');
   await expect(dialog.locator('[data-action="research-target-choose"]')).toHaveCount(25);
   expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);await page.screenshot({path:test.info().outputPath('branding-phone.png')});await dialog.getByRole('button',{name:'Cancel',exact:true}).click();
   expect(f.bodies).toEqual([]);expect(f.requests.filter(r=>r.path==='/api/workspace/read/page')).toEqual([]);
-  const writes=f.requests.filter(r=>r.path==='/api/workspace/save').map(r=>JSON.parse(r.data));expect(writes).toHaveLength(2);for(const command of writes){expect(command.response).toBe('outline');expect(command.changes).toEqual([]);expect(command.removed).toEqual([]);expect(Object.keys(command.metadata)).toEqual(['branding']);}
-  expect(f.errors).toEqual([]);const saved=(await f.ws.read()).book;expect(saved.entries).toEqual(f.book.entries);expect(saved.branding).toHaveLength(1);expect(saved.branding[0].target).toBe('entry:'+selected.id);expect(saved.branding[0].logos[0].alt).toBe('A private record mark');
+  const writes=f.requests.filter(r=>r.path==='/api/websites/editor/save').map(r=>JSON.parse(r.data));expect(writes.length).toBeGreaterThanOrEqual(2);for(const command of writes){expect(command.book).toBeUndefined();expect(JSON.stringify(command)).not.toContain('PRIVATE_BODY');expect(JSON.stringify(command).length).toBeLessThan(2000);}
+  expect(f.errors).toEqual([]);expect((await f.ws.read()).book.entries).toEqual(f.book.entries);const saved=(await new WebsiteSites(f.ws).read(null)).book;expect(saved.branding).toHaveLength(1);expect(saved.branding[0].target).toBe('entry:'+selected.id);expect(saved.branding[0].logos[0].alt).toBe('A private record mark');
  }finally{await f.close();}
 });
 

@@ -1,6 +1,8 @@
+import {appearanceCursorMetadata} from './appearance-preview-binding.js';
 import {AppError} from './errors.js';
 import {encodeAppearanceCursor,decodeAppearanceCursor} from './appearance-preview-cursor.js';
-import {digest,serialize} from './storage-format.js';
+import {digest} from './storage-format.js';
+import {revisionText} from './web/revision-model.js';
 import {calendarDate,dateBounds,recordDateLabel} from './web/record-date.js';
 import {BOOK_JOURNEYS,readingJourney} from './web/book-journeys.js';
 import {bookText} from './web/book-messages.js';
@@ -22,7 +24,7 @@ export function appearanceBrowseQuery(query=''){
 // are authenticated and tied to the saved website selection and filters.
 export async function appearanceBrowsePage(records,query){
  const {filters,cursor,query:filterQuery}=appearanceBrowseQuery(query),{store,metadata}=records;
- const identity=metadata.id,binding=digest(serialize({snapshot:records.snapshotId,websiteId:records.websiteId,websitePin:records.websitePin,metadata,selection:records.selection,filters}));
+ const identity=metadata.id,binding=digest(revisionText({snapshot:records.snapshotId,websiteId:records.websiteId,websitePin:records.websitePin,metadata:appearanceCursorMetadata(metadata),selection:records.selection,filters}));
  let anchor={after:null,backward:false};
  if(cursor){
   try{anchor=store.decode('appearance-browse-page',identity,decodeAppearanceCursor(cursor));}catch{throw new AppError('INVALID');}

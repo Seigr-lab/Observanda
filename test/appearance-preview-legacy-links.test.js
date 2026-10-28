@@ -1,3 +1,4 @@
+import {WebsiteSites} from '../src/website-sites.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -27,7 +28,9 @@ test('older preview backlink discovery retains only related public descriptors a
   related.relations=[link()];privateRecord.relations=[link()];privateRecord.share=false;privateRecord.title='PRIVATE BACKLINK';
   const service=new ResearchRecords(f.workspace,{});
   for(let offset=0;offset<count;offset+=40)await service.save({workspaceId:book.id,changes:records.slice(offset,offset+40).map(record=>({id:record.id,expectedRevision:null,record}))},{receipt:true});
-  const etag=(await f.workspace.outline()).etag;
+  const etag=(await f.workspace.outline()).etag,sites=new WebsiteSites(f.workspace),site=await sites.read(null);
+  await sites.save(null,{workspaceId:book.id,baseEtag:etag,websitePin:site.websitePin,metadata:{},projects:[],changes:[],removed:[],selection:{defaultShare:false,includeProjects:book.projects.map(p=>p.id),records:[]}});
+  const websitePin=(await sites.read(null)).websitePin;
   await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{
    const manifest=await store.manifest();
    for(const row of manifest.records)await legacyPublicationQuery(store,row,{missingReferences});
@@ -36,7 +39,7 @@ test('older preview backlink discovery retains only related public descriptors a
   const original=ResearchCatalogue.prototype.record,loaded=[];
   ResearchCatalogue.prototype.record=function(id,...args){loaded.push(id);return original.call(this,id,...args);};
   let context;
-  try{context=await appearancePreviewPage(f.workspace,{workspaceId:book.id,etag,appearance:book.appearance,mode:'website'},'entries/'+target.id+'.html');}
+  try{context=await appearancePreviewPage(f.workspace,{workspaceId:book.id,etag,websitePin,appearance:book.appearance,mode:'website'},'entries/'+target.id+'.html');}
   finally{ResearchCatalogue.prototype.record=original;}
   if(!missingReferences)assert.ok(loaded.length<=5,'Only the entry, its two neighbours and its actual public backlink require originals; loaded '+loaded.length);
   assert.ok(context.entryDestinations.length<=4);assert.ok(context.entryDestinations.some(r=>r.id===related.id));
@@ -47,10 +50,10 @@ test('older preview backlink discovery retains only related public descriptors a
   if(missingReferences){
    const access=await createAccess('','synthetic legacy preview recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
    const destination=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'recovered')),access,vault,f.vault);
-   const restored=await appearancePreviewPage(new Workspace(destination,vault),{workspaceId:book.id,etag,appearance:book.appearance,mode:'website'},'entries/'+target.id+'.html');
+   const restored=await appearancePreviewPage(new Workspace(destination,vault),{workspaceId:book.id,etag,websitePin,appearance:book.appearance,mode:'website'},'entries/'+target.id+'.html');
    assert.deepEqual(restored,context);
   }
-  await assert.rejects(appearancePreviewPage(f.workspace,{workspaceId:book.id,etag,appearance:book.appearance,mode:'website'},'entries/'+target.id+'.html',{signal:AbortSignal.abort()}),{name:'AbortError'});
+  await assert.rejects(appearancePreviewPage(f.workspace,{workspaceId:book.id,etag,websitePin,appearance:book.appearance,mode:'website'},'entries/'+target.id+'.html',{signal:AbortSignal.abort()}),{name:'AbortError'});
   t.diagnostic(JSON.stringify({records:count,missingReferences,originalReads:loaded.length,retainedDescriptors:context.entryDestinations.length}));
  }
 });

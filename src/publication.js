@@ -1,7 +1,8 @@
+import {websiteRootStyle} from './web/website-root-style.js';
 import {hasRetainedFigure} from './record-retained-figures.js';
 import {retainedTableView} from './web/retained-table-model.js';
 import {downloadPath,validDownloadInfo} from './web/website-file.js';
-import {actionClasses,actionArrow,actionFonts,actionStyleRules,sectionActionRules} from './web/website-action-style.js';
+import {actionClasses,actionArrow,actionFonts,sectionActionRules} from './web/website-action-style.js';
 import {PUBLIC_POPUPS_SCRIPT,popupMarkup,copyTextMarkup} from './publication-popups.js';
 import {PUBLIC_GALLERY_SCRIPT,galleryAttributes} from './publication-gallery.js';
 import {websiteLinkPath} from './web/website-links.js';
@@ -38,14 +39,15 @@ import {footerTextAlignment} from './web/website-footer.js';
 import {mediaStyle} from './web/media-presentation.js';
 import {renderRichText,richTextStyles} from './web/rich-text-model.js';
 import {formattedText} from './web/formatted-text.js';
-import {sectionItems,sectionStyle,linkAvailable} from './web/website-model.js';
+import {sectionItems,linkAvailable} from './web/website-model.js';
+import {staticSectionContent,sectionMarkup,sectionStyleDeclarations} from './web/website-section-markup.js';
 import {FileContent,contentSize,contentHash,writePublicFile} from './file-content.js';
 import { readFile, writeFile, lstat, unlink, rmdir, realpath } from 'node:fs/promises';
 import {atomicReplace as rename} from './atomic-replace.js';
 import {createPersistentDirectory as mkdir} from './filesystem-persistence.js';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { fontStack, fontCSS } from './fonts.js';
+import { fontCSS } from './fonts.js';
 import {variationCSS} from './web/font-catalogue.js';
 import { assertPublicFields, assertPublicFiles } from './privacy.js';
 import { AppError } from './errors.js';
@@ -114,7 +116,7 @@ export function renderPublication(context, { blockedValues = [], mediaFiles = ne
   const hasFeeds=editionParts?.hasFeeds||[...context.website.home.sections,...context.pages.flatMap(p=>p.sections),...context.website.layouts.flatMap(l=>l.sections),...context.website.regions.flatMap(r=>r.sections)].some(section=>section.feed)||context.projects.some(project=>wanted('project:'+project.id)&&original('project:'+project.id)&&pagedNotebookList(context.notebooks.filter(n=>n.projectId===project.id)));
   const richStyles=richTextStyles(plan?plan.fonts:[...context.website.regions.flatMap(r=>r.sections),...context.website.home.sections,...context.pages.flatMap(p=>p.sections),...context.website.layouts.flatMap(l=>l.sections)].map(s=>s.richText).concat(context.entries.flatMap(e=>[e.body,...e.sections.map(s=>s.body)]).filter(v=>typeof v==='object')));
   const fonts = fontCSS([a.font, a.headingFont,...richStyles.fonts,...actionFonts(context.website.design,plan?plan.sections:[...context.website.regions.flatMap(r=>r.sections),...context.website.home.sections,...context.pages.flatMap(p=>p.sections),...context.website.layouts.flatMap(l=>l.sections)])], files, fontFiles);
-  const commonStyles = `:root{${actionStyleRules(context.website.design.buttons,'button')};${actionStyleRules(context.website.design.links,'link')};--reading-axes:${variationCSS(a.fontAxes)};--heading-axes:${variationCSS(a.headingFontAxes)};--reading-weight:${a.fontAxes?.wght??400};--heading-weight:${a.headingFontAxes?.wght??600};--heading-scale:${a.headingScale};--letter-spacing:${a.letterSpacing}px;--paragraph-spacing:${a.paragraphSpacing}em;--site-width:${context.website.design.width}px;--accent:${a.accent};--reading-width:${a.width}px;--reading-font:${fontStack(a.font)};--heading-font:${fontStack(a.headingFont)};--page-background:${a.background};--page-surface:${a.surface};--page-text:${a.text};--page-muted:${a.muted};--page-border:${a.border};--body-size:${a.fontSize}px;--line-height:${a.lineHeight};--corner-radius:${a.radius}px;--section-space:${a.density === 'compact' ? '28px' : '44px'};--card-padding:${a.density === 'compact' ? '20px' : '28px'};--card-gap:${a.density === 'compact' ? '16px' : '24px'};--entry-space:${a.density === 'compact' ? '2.5rem' : '4rem'}}\n` + baseCSS+'\nbody{font-variation-settings:var(--reading-axes);font-weight:var(--reading-weight)}h1,h2,h3,h4,.site-name{font-variation-settings:var(--heading-axes);font-weight:var(--heading-weight)}\n';
+  const commonStyles = websiteRootStyle(a,context.website.design)+`\n` + baseCSS+'\nbody{font-variation-settings:var(--reading-axes);font-weight:var(--reading-weight)}h1,h2,h3,h4,.site-name{font-variation-settings:var(--heading-axes);font-weight:var(--heading-weight)}\n';
   files.set('styles.css',commonStyles+'\n'+fonts+'\n'+richStyles.css);
   const entries = [...context.entries].sort((a, b) => compareRecordDates(a,b,{descending:true}) || a.id.localeCompare(b.id, 'en'));
   const displayedCards=context.recordCards?[...context.recordCards].sort((a,b)=>compareRecordDates(a,b,{descending:true})||a.id.localeCompare(b.id,'en')):entries;
@@ -141,7 +143,7 @@ export function renderPublication(context, { blockedValues = [], mediaFiles = ne
     const regions=context.website.regions.filter(r=>r.target===target||((target==='browse'||target.startsWith('legacy:'))&&r.kind==='footer'&&r.target===(renderTarget??(context.homeEnabled?'home':'project:'+context.projects[0]?.id)))),footer=regions.find(r=>r.kind==='footer'),masthead=regions.find(r=>r.kind==='header');
     const pageSections=[...regions.flatMap(r=>r.sections),...(layout?.sections??[]),...(name==='index.html'?context.website.home.sections:context.pages.find(p=>'pages/'+p.id+'.html'===name)?.sections??[])];
     for(const section of pageSections)blockRules.push(...sectionActionRules(section,'[data-page="'+target+'"] [data-section-id="'+section.id+'"]'));
-    for(const section of pageSections){const style=section.style??{},rules=[];for(const [key,property] of [['fontSize','--body-size'],['padding','padding'],['radius','border-radius'],['background','background'],['color','color'],['fit','--media-fit']])if(style[key]!==undefined)rules.push(property+':'+style[key]+(['fontSize','padding','radius'].includes(key)?'px':''));for(const [key,variable] of [['headingAlign','heading'],['bodyAlign','body'],['itemHeadingAlign','item-heading'],['detailsAlign','details'],['captionAlign','caption'],['buttonAlign','button']])rules.push('--section-'+variable+'-align:'+(style[key]??style.align??'start'));if(section.kind==='popup'){rules.push('--popup-width:'+section.dialogWidth+'px');if(style.background)rules.push('--popup-background:'+style.background);if(style.padding!==undefined)rules.push('--popup-padding:'+style.padding+'px');if(style.radius!==undefined)rules.push('--popup-radius:'+style.radius+'px');}if(section.kind==='container')rules.push('--container-gap:'+section.gap+'px');if(style.color)rules.push('--page-text:'+style.color,'--page-muted:'+style.color);if(rules.length)blockRules.push('[data-page="'+target+'"] [data-section-id="'+section.id+'"]{'+rules.join(';')+'}');}
+    for(const section of pageSections)blockRules.push('[data-page="'+target+'"] [data-section-id="'+section.id+'"]{'+sectionStyleDeclarations(section)+'}');
     if(layout){title=layout.heading||title;description=layout.description||description;const additions='<div class="page-composition" data-composition="layout">'+childrenOf(layout.sections).map(s=>homeSection(s,prefix,target,layout.sections,'','layout',feedPage)).join('')+'</div>';content=layout.placement==='replace'?additions:layout.placement==='after'?content+additions:additions+content;}
     const showTitle=layout?layout.showHeading:name!=='index.html'||context.website.home.showTitle;
     const header=layout?.showHeading===false?'':showTitle||description||breadcrumb?`<header class="site-header">${breadcrumb}${showTitle?`<h1>${esc(title)}</h1>`:''}${description?`<p>${esc(description)}</p>`:''}</header>`:'';
@@ -192,16 +194,12 @@ export function renderPublication(context, { blockedValues = [], mediaFiles = ne
 
   }
   function homeSection(section,prefix='',target='home',source=context.website.home.sections,region='',collectionScope=region,feedPage=''){
-    const selected=sectionItems(section,context,{region:collectionScope});const style=sectionStyle(section);
+    const selected=sectionItems(section,context,{region:collectionScope});
     const body=section.format==='rich'?renderRichText(section.richText,{resolveLink:href=>{if(href.startsWith('#')||/^(https?:|mailto:|tel:)/.test(href))return href;const [destination,fragment]=href.split('#');if(!linkAvailable(destination,context))return null;if(destination==='home')return prefix+'index.html'+(fragment?'#'+fragment:'');const [kind,id]=destination.split(':');return prefix+({project:'projects',notebook:'notebooks',entry:'entries',page:'pages'}[kind])+'/'+id+'.html'+(fragment?'#'+fragment:'');}}):formattedText(section.body,section.format);
     const linkAttrs=` target="${section.linkTarget??'_self'}"${section.linkTitle?` title="${esc(section.linkTitle)}"`:''} rel="${[...(section.linkTarget==='_blank'?['noopener','noreferrer']:[]),...(section.linkNoFollow?['nofollow']:[])].join(' ')}"`;
-    let content='';
-    if(section.kind==='container')content='<div class="container-content container-'+section.layout+' container-columns-'+section.columns+'">'+childrenOf(source,section.id).map(s=>homeSection(s,prefix,target,source,region,collectionScope,feedPage)).join('')+'</div>';
+    let content=staticSectionContent(section,{esc,body,editing:workspaceContent&&singlePage,children:['container','disclosure'].includes(section.kind)?childrenOf(source,section.id).map(s=>homeSection(s,prefix,target,source,region,collectionScope,feedPage)).join(''):''})??'';
     if(section.kind==='popup')content=popupMarkup(section,{esc,id:(region?region+'-':'')+'section-'+section.id,editing:workspaceContent&&singlePage,children:childrenOf(source,section.id).map(s=>homeSection(s,prefix,target,source,region,collectionScope,feedPage)).join('')});
     if(section.kind==='copy-text')content=copyTextMarkup(section,esc,{editing:workspaceContent&&singlePage});
-    if(section.kind==='disclosure')content='<details class="section-disclosure-content"'+(section.open||workspaceContent&&singlePage?' open':'')+'><summary>'+esc(section.title||publicationText('disclosure'))+'</summary><div class="container-content container-column">'+childrenOf(source,section.id).map(s=>homeSection(s,prefix,target,source,region,collectionScope,feedPage)).join('')+'</div></details>';
-    if(section.kind==='heading')content='<h'+section.level+'>'+esc(section.title)+'</h'+section.level+'>';
-    if(['text','callout'].includes(section.kind))content=`<div class="prose">${body}</div>`;
     const projectCard=p=>{
       const ids=new Set(context.notebooks.filter(n=>n.projectId===p.id).map(n=>n.id)),count=p.recordCount??(recordCounts?[...ids].reduce((sum,id)=>sum+(recordCounts.notebooks[id]??0),0):(context.entryDestinations??entries).filter(e=>ids.has(e.notebookId)).length);
       return `<article class="publication-card">${logo(p.logos,prefix)}<h2><a href="${prefix}${projectPath(p)}">${esc(p.title)}</a></h2>${p.description?`<p class="prose">${esc(p.description)}</p>`:''}<span class="count">${count} ${count===1?'record':'records'}</span></article>`;
@@ -235,8 +233,7 @@ export function renderPublication(context, { blockedValues = [], mediaFiles = ne
       content=`${section.body?`<div class="prose">${esc(section.body)}</div>`:''}<a class="${actionClasses(section)}" href="${esc(href)}"${linkAttrs}>${esc(section.label||'Read more')}${actionArrow(section)?' <span aria-hidden="true">&rarr;</span>':''}</a>`;
     }
     if(section.kind==='contents'){const links=pageContents(context,target);content=links.length?'<nav class="section-index" aria-label="'+esc(section.title||'On this page')+'"><ol>'+links.map(link=>'<li class="index-depth-'+link.depth+'"><a href="#'+esc(link.id)+'">'+esc(link.title)+'</a></li>').join('')+'</ol></nav>':(designTarget===target?'<p class="muted">Add headings to the page to build its contents index.</p>':'');}
-    if(section.kind==='divider')content='<hr>';
-    return `<section id="${region?region+'-':''}section-${section.id}" class="home-section block-width-${style.width} block-surface-${style.surface} block-align-${style.align} block-space-${style.space} section-${section.kind} ${['markdown','rich'].includes(section.format)?'formatted':''} section-layout-${section.layout??'inherit'}" data-section-id="${section.id}" data-element-kind="${section.kind}"${section.style?.fontSize!==undefined?' data-custom-text-size="true"':''}>${section.title&&!['hero','heading','container','disclosure','popup'].includes(section.kind)?`<h2>${esc(section.title)}</h2>`:''}${content}</section>`;
+    return sectionMarkup(section,{esc,content,region});
   }
   if(context.homeEnabled&&wanted('home'))page('index.html', context.website.home.title||context.title, context.website.home.introduction,original('home')?`<div class="page-composition" data-composition="home">${childrenOf(context.website.home.sections).map(section=>homeSection(section)).join('')}</div>`:'');
   for (const p of context.projects.filter(p=>wanted('project:'+p.id))) {

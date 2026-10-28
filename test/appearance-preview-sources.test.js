@@ -1,3 +1,4 @@
+import {WebsiteSites} from '../src/website-sites.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -22,7 +23,7 @@ import {defaultEditionRecord} from '../src/web/publication-selection.js';
 async function fixture(t,{count=65,edition=false}={}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-appearance-owners-')),base=upgradeNotebook(sampleNotebook()),seed=base.entries[0],sources=[];
  t.after(async()=>{for(const source of sources)clearVault(source.vault);await rm(directory,{recursive:true,force:true});});
- base.entries=Array.from({length:count},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'First owner '+i,body:'Saved observation '+i,share:false,attachments:[],figures:[],sections:[],relations:[]}));
+ base.entries=Array.from({length:count},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:'First owner '+i,body:'Saved observation '+i,share:i>0,attachments:[],figures:[],sections:[],relations:[]}));
  for(const title of ['First owner','Second owner']){
   const book=structuredClone(base);book.id=randomUUID();book.title=title;book.entries.forEach((record,i)=>record.title=title+' '+i);
   if(sources.length){const target=sources[0].book.entries.at(-1);book.entries[2].relations=[{id:randomUUID(),label:target.title,type:'Related to',target:{workspaceId:sources[0].book.id,kind:'record',id:target.id}}];}
@@ -34,7 +35,7 @@ async function fixture(t,{count=65,edition=false}={}){
  if(edition)host.website.researchSources[0].edition={version:1,records:[{...defaultEditionRecord(sources[0].book.entries[3],recordRevision(sources[0].book.entries[3])),body:false}]};
  const f=await encryptedFixture(path.join(directory,'Host'),host);sources.push({...f,book:host});let allowed=true,opened=0,closed=0;
  const sourceReader=async()=>{opened++;return {async use(id,snapshotId,consume){if(!allowed)throw new AppError('ACCESS_LOCKED');const source=sources.find(source=>source.book.id===id);assert.ok(source);return source.workspace.catalogue(async store=>{const revision=snapshotId??await store.head(),snapshot=await store.snapshot(revision);return {value:await consume(store,snapshot,{snapshotId:revision,storage:source.workspace,owner:{workspaceId:id,projectId:null,labBookId:null}})};});},async verify(){if(!allowed)throw new AppError('ACCESS_LOCKED');},async close(){closed++;}};};
- return {...f,host,sources:sources.slice(0,2),sourceReader,revoke:()=>{allowed=false;},handles:()=>({opened,closed}),command:{workspaceId:host.id,etag:(await f.workspace.outline()).etag,appearance:host.appearance,mode:'website'},id:(source,record)=>publicationOwnerId(host.id,source.book.id,'record',record.id)};
+ return {...f,host,sources:sources.slice(0,2),sourceReader,revoke:()=>{allowed=false;},handles:()=>({opened,closed}),command:{workspaceId:host.id,etag:(await f.workspace.outline()).etag,websitePin:(await new WebsiteSites(f.workspace).read(null)).websitePin,appearance:host.appearance,mode:'website'},id:(source,record)=>publicationOwnerId(host.id,source.book.id,'record',record.id)};
 }
 
 test('appearance pages combine selected owners with stable identities, bounded choices and no private originals',async t=>{

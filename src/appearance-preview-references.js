@@ -1,6 +1,8 @@
+import {appearanceCursorMetadata} from './appearance-preview-binding.js';
 import {AppError} from './errors.js';
 import {encodeAppearanceCursor,decodeAppearanceCursor} from './appearance-preview-cursor.js';
-import {digest,serialize} from './storage-format.js';
+import {digest} from './storage-format.js';
+import {revisionText} from './web/revision-model.js';
 import {recordReferenceCandidates} from './record-reference-candidates.js';
 import {publicationLinkResolver} from './publication-prose.js';
 import {researchReference} from './web/research-reference.js';
@@ -23,7 +25,7 @@ async function* candidates(records,id,after,backward){
 export async function appearanceReferencePage(records,id,cursor=null){
  const {store,metadata,signal}=records,selected=await records.get(id);
  if(!selected)throw new AppError('NOT_FOUND');
- const binding=digest(serialize({snapshot:records.snapshotId,websiteId:records.websiteId,websitePin:records.websitePin,metadata,selection:records.selection,id}));
+ const binding=digest(revisionText({snapshot:records.snapshotId,websiteId:records.websiteId,websitePin:records.websitePin,metadata:appearanceCursorMetadata(metadata),selection:records.selection,id}));
  let anchor={after:null,backward:false};
  if(cursor){
   try{anchor=store.decode('appearance-reference-page',metadata.id,decodeAppearanceCursor(cursor));}catch{throw new AppError('INVALID');}

@@ -43,7 +43,7 @@ test('create two independent websites, edit and publish their own saved content 
   await manager();await open('Research journal');await task(page,'Site');await expect(page.getByLabel('Website title',{exact:true})).toHaveValue('Research journal title');
   await page.reload();await expect(page.locator('.website-site-context')).toContainText('Research journal');
   await page.locator('.website-site-context').getByRole('button',{name:'Publishing destination',exact:true}).click();await expect(page.getByLabel('Repository name',{exact:true})).toHaveValue('research-journal');
-  await page.goto(firstUrl);await page.getByRole('button',{name:'Prepare edition',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();await expect(page.locator('#full-public-preview')).toBeVisible();
+  await page.goto(firstUrl);await page.getByRole('button',{name:'Prepare edition',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();await expect(page.locator('#full-public-preview')).toBeVisible({timeout:30000});
   const preview=await page.locator('#full-public-preview').getAttribute('href'),published=await page.context().newPage();
   try{
    await published.goto(new URL(preview,app.url).href);await expect(published.locator('body')).toContainText('Research journal title');

@@ -16,10 +16,9 @@ test('save two legacy chapter fragments through the app and follow each individu
    await row.getByLabel('Old fragment',{exact:false}).fill('investigation-0');await row.getByLabel('Public link label',{exact:true}).fill('Investigation '+i);
    await row.getByRole('button',{name:'Choose destination record'}).click();await row.getByRole('searchbox').fill(record.title);await row.getByRole('button',{name:new RegExp(record.title)}).click();
   }
-  await dialog.getByRole('button',{name:'Save legacy links'}).click();await expect(dialog).not.toBeVisible();
-  await page.getByRole('button',{name:'Review website',exact:true}).click();await dialog.getByRole('button',{name:'Prepare selected edition'}).click();
+  await dialog.getByRole('button',{name:'Save legacy links'}).click();
   await expect(dialog.getByRole('alert')).toContainText('archive/old-chapter.html#investigation-0');await expect(dialog).toContainText('More than one mapping uses this fragment');
-  await dialog.getByRole('button',{name:'Back to editing',exact:true}).click();await page.getByRole('button',{name:'Legacy website links'}).click();
+  await expect(dialog.locator('[data-legacy-anchor]').nth(1).getByLabel('Old fragment',{exact:false})).toBeFocused();
   await dialog.locator('[data-legacy-anchor]').nth(1).getByLabel('Old fragment',{exact:false}).fill('investigation-1');await dialog.getByRole('button',{name:'Save legacy links'}).click();
   await page.getByRole('button',{name:'Review website',exact:true}).click();await dialog.getByRole('button',{name:'Prepare selected edition'}).click();await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible({timeout:20000});
   await page.getByLabel('Preview page',{exact:true}).selectOption('archive/old-chapter.html');const frame=page.frameLocator('iframe');await expect(frame.locator('#investigation-0 a')).toHaveAttribute('href','../entries/'+f.run.id+'.html');await expect(frame.locator('#investigation-1 a')).toHaveAttribute('href','../entries/'+f.method.id+'.html');await frame.locator('#investigation-1 a').click();await expect(frame.getByText('New procedure',{exact:true})).toBeVisible();expect(errors).toEqual([]);

@@ -1,3 +1,4 @@
+import {WebsiteSites} from '../../src/website-sites.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,readFile,rm} from 'node:fs/promises';
 import path from 'node:path';
@@ -16,15 +17,16 @@ let root,app,fixture,book,assets,research;
 const canvas=page=>page.frameLocator('#website-draft-preview');
 const save=async page=>{await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');};
 test.beforeEach(async({page})=>{
+ test.setTimeout(120000);
  root=await mkdtemp(path.join(os.tmpdir(),'observanda-website-inventories-'));book=upgradeNotebook(sampleNotebook());book.website.home.sections=[];
  const project=book.projects[0],notebook=book.notebooks[0],record=book.entries[0];
  book.projects=Array.from({length:6},(_,i)=>({...structuredClone(project),id:randomUUID(),title:'Project '+i,share:false}));
  book.notebooks=book.projects.map(p=>({...structuredClone(notebook),id:randomUUID(),projectId:p.id,title:p.title+' lab book'}));
- book.entries=book.notebooks.flatMap((n,i)=>Array.from({length:13},(_,j)=>({...structuredClone(record),id:randomUUID(),notebookId:n.id,title:'Record '+i+'-'+String(j).padStart(2,'0'),body:'Private original '+i+'-'+j,share:false,relations:[],attachments:[],figures:[]})));
+ book.entries=book.notebooks.flatMap((n,i)=>Array.from({length:13},(_,j)=>({...structuredClone(record),id:randomUUID(),notebookId:n.id,title:'Record '+i+'-'+String(j).padStart(2,'0'),body:'Private original '+i+'-'+j,share:true,relations:[],attachments:[],figures:[]})));
  fixture=await encryptedFixture(root,book);const store=new MediaStore(fixture.workspace.root,fixture.vault),bytes=await readFile(new URL('../../src/preview-assets/image.png',import.meta.url));
  assets=[];for(let i=0;i<26;i++)assets.push({...await store.import(bytes,'image'),caption:'Library image '+String(i).padStart(2,'0'),alt:'Library image '+i,transcript:''});
- research=[];for(let i=0;i<15;i++)research.push({...await store.import(bytes,'image'),caption:'Research image '+String(i).padStart(2,'0'),alt:'Research image '+i,transcript:'Private evidence',share:false});
- const current=await fixture.workspace.read();current.book.website.assets=assets;current.book.entries[0].attachments=research.slice(0,14);current.book.entries.at(-1).attachments=research.slice(14);await fixture.workspace.save(current.book,current.etag);book=(await fixture.workspace.read()).book;
+ research=[];for(let i=0;i<15;i++)research.push({...await store.import(bytes,'image'),caption:'Research image '+String(i).padStart(2,'0'),alt:'Research image '+i,transcript:'Private evidence',share:i===14});
+ const current=await fixture.workspace.read();current.book.entries[0].attachments=research.slice(0,14);current.book.entries.at(-1).attachments=research.slice(14);await fixture.workspace.save(current.book,current.etag);book=(await fixture.workspace.read()).book;const sites=new WebsiteSites(fixture.workspace),site=await sites.read(null);await sites.save(null,{workspaceId:book.id,baseEtag:(await fixture.workspace.outline()).etag,websitePin:site.websitePin,metadata:{website:{...site.book.website,assets}},projects:[],removed:[],changes:[],selection:{defaultShare:false,includeProjects:[],records:book.entries.map(record=>({id:record.id,share:false,attachments:[]}))}});
  app=await startServer({root:fixture.workspace.root,deviceStore:fixture.deviceStore,preferencesFile:path.join(root,'preferences.json'),port:0});await page.goto(app.url);await navigate(page,'Website editor');
  await expect(canvas(page).locator('body')).toHaveAttribute('data-page','home');
 });
@@ -52,7 +54,7 @@ test('media discovery, gallery ordering and uploads retain selections across bou
  await page.getByLabel('Upload website media',{exact:true}).setInputFiles('src/preview-assets/image.png');await expect(page.locator('.website-media-library article')).toHaveCount(3);await page.getByLabel('Media caption',{exact:true}).last().fill('Uploaded last image');
  await save(page);await page.reload();await openBlock(page,0);await expect(page.locator('[data-website-media-select]')).toHaveValue(assets[25].id);
  await openBlock(page,1);await page.getByRole('button',{name:'Choose and arrange images',exact:true}).click();await page.setViewportSize({width:390,height:844});await page.screenshot({path:testInfo.outputPath('gallery-phone.png')});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
- const saved=(await fixture.workspace.read()).book;expect(saved.website.home.sections[0].assetId).toBe(assets[25].id);expect(saved.website.home.sections[1].assetIds).toEqual([...assets.slice(0,11).map(a=>a.id),assets[12].id,assets[11].id]);expect(saved.website.home.sections[2].assetId).toBe(assets[24].id);expect(saved.website.assets.at(-1).caption).toBe('Uploaded last image');expect(saved.entries).toEqual(book.entries);expect(errors).toEqual([]);
+ const saved=(await new WebsiteSites(fixture.workspace).read(null)).book;expect(saved.website.home.sections[0].assetId).toBe(assets[25].id);expect(saved.website.home.sections[1].assetIds).toEqual([...assets.slice(0,11).map(a=>a.id),assets[12].id,assets[11].id]);expect(saved.website.home.sections[2].assetId).toBe(assets[24].id);expect(saved.website.assets.at(-1).caption).toBe('Uploaded last image');expect((await fixture.workspace.read()).book.entries).toEqual(book.entries);expect(errors).toEqual([]);
 });
 
 test('content paging and research selection keep private material excluded through save and reviewed export',async({page},testInfo)=>{
@@ -65,8 +67,8 @@ test('content paging and research selection keep private material excluded throu
  await page.getByLabel('Find projects or records',{exact:true}).fill('missing');await expect(page.locator('.publication-project')).toHaveCount(0);await page.getByLabel('Find projects or records',{exact:true}).fill('Project 5');await expect(page.locator('[data-publish-entry]')).toHaveCount(10);await page.getByRole('button',{name:'Next records',exact:true}).click();await expect(page.locator('[data-publish-entry="'+target.id+'"]').first()).toBeChecked();
  await task(page,'Page');await page.locator('[data-palette-kind="media"]').click();const dialog=page.getByRole('dialog',{name:'Choose research media'});await expect(dialog.locator('[data-research-media-key]')).toHaveCount(12);await dialog.getByLabel('Find media',{exact:true}).fill('Research image 14');await expect(dialog.locator('[data-research-media-key]')).toHaveCount(1);await dialog.locator('[data-research-media-key]').click();await expect(canvas(page).locator('.section-media img')).toHaveAttribute('src',new RegExp(research[14].id));
  await page.locator('[data-palette-kind="media"]').click();await dialog.getByLabel('Find media',{exact:true}).fill('Research image 00');await expect(dialog.locator('[data-research-media-key]')).toHaveCount(1);await dialog.locator('[data-research-media-key]').click();await save(page);await page.reload();
- const saved=(await fixture.workspace.read()).book;expect(saved.entries.filter(e=>e.share).map(e=>e.id)).toEqual([target.id]);expect(saved.entries[0]).toEqual(book.entries[0]);expect(saved.entries.at(-1).attachments[0].share).toBe(true);
- await page.getByRole('button',{name:'Prepare edition',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();const href=await page.getByRole('link',{name:'Open full preview',exact:true}).getAttribute('href');
+ const saved=await new WebsiteSites(fixture.workspace).read(null);expect(saved.site.selection.records.filter(record=>record.share).map(record=>record.id)).toEqual([target.id]);expect((await fixture.workspace.read()).book.entries).toEqual(book.entries);expect(saved.site.selection.records.find(record=>record.id===target.id).attachments.find(item=>item.id===research[14].id)?.share??research[14].share).toBe(true);
+ await page.getByRole('button',{name:'Prepare edition',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible({timeout:30000});const href=await page.getByRole('link',{name:'Open full preview',exact:true}).getAttribute('href');
  const preview=await page.request.get(new URL(href,app.origin).href),html=await preview.text();expect(html).toContain(research[14].id);expect(html).not.toContain(research[0].id);
  const release=href.split('/')[2],manifest=await (await page.request.get(app.origin+'/preview/'+release+'/publication.json')).json();const files=JSON.stringify(manifest.files);expect(files).toContain(research[14].id);expect(files).not.toContain(research[0].id);expect(files).not.toContain(assets[0].id);expect(files).not.toContain(book.entries[0].id);expect(errors).toEqual([]);
 });

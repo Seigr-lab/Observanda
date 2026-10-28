@@ -2,7 +2,7 @@
 .canvas-edit-mode [data-section-id]{position:relative;outline-offset:5px}
 .canvas-edit-mode [data-section-id]:hover,.canvas-edit-mode [data-section-id]:focus-within{outline:1px dashed var(--accent)}
 .canvas-section-handle{position:absolute;z-index:4;top:0;right:0;transform:translateY(-50%);border:1px solid var(--accent);border-radius:4px;background:var(--page-surface);color:var(--page-text);font:14px/1.2 system-ui,sans-serif;padding:6px 10px;cursor:grab;touch-action:none;opacity:0}
-[data-section-id]:hover>.canvas-section-handle,.canvas-section-handle:focus-visible{opacity:1}
+[data-section-id]:hover>.canvas-section-handle,.canvas-section-handle:focus-visible{opacity:1;pointer-events:auto}
 .canvas-edit-mode .reorder-origin{opacity:.55}.canvas-edit-mode .reorder-target{outline:3px solid var(--accent)}
 
 .canvas-edit-mode [data-media-id]{cursor:pointer}.canvas-edit-mode .canvas-selected{outline:2px solid #395ac6;outline-offset:4px}.canvas-edit-mode a{cursor:default}.canvas-edit-mode [data-section-id]:focus-visible,.canvas-edit-mode [data-media-id]:focus-visible{outline:3px solid #395ac6;outline-offset:4px}
@@ -16,12 +16,23 @@
 .canvas-edit-mode .canvas-empty-media{min-height:180px;background:repeating-linear-gradient(135deg,#eef1f7,#eef1f7 10px,#f6f8fc 10px,#f6f8fc 20px);border:1px dashed #97a3bf;display:grid;place-items:center;color:#46577b;font:15px system-ui;cursor:pointer}
 .canvas-edit-mode .section-container{min-height:100px}
 .canvas-edit-mode .section-container>.canvas-section-handle{left:auto;right:58px;background:#395ac6;color:white}
-.canvas-edit-mode .canvas-selected>.canvas-section-handle{opacity:1}
+.canvas-edit-mode .canvas-selected>.canvas-section-handle{opacity:1;pointer-events:auto}
 .canvas-section-edit{position:absolute;z-index:5;top:0;right:0;transform:translateY(-50%);border:1px solid var(--accent);border-radius:4px;background:var(--page-surface);color:var(--page-text);font:14px/1.2 system-ui,sans-serif;padding:6px 10px;cursor:pointer;opacity:0}
 .canvas-edit-mode [data-section-id]>.canvas-section-handle{right:58px;max-width:calc(100% - 68px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-[data-section-id]:hover>.canvas-section-edit,[data-section-id]:focus-within>.canvas-section-edit,.canvas-selected>.canvas-section-edit,.canvas-section-edit:focus-visible{opacity:1}
+[data-section-id]:hover>.canvas-section-edit,[data-section-id]:focus-within>.canvas-section-edit,.canvas-selected>.canvas-section-edit,.canvas-section-edit:focus-visible{opacity:1;pointer-events:auto}
 .canvas-edit-mode .home-section{min-height:36px}
 .canvas-edit-mode .canvas-hidden-element{opacity:.45}
-.canvas-edit-mode .section-text>.prose:empty::before{content:'Use Edit to write text';color:#687895}
+.canvas-edit-mode .section-text>.prose:empty::before{content:'Select to write text';color:#687895}
+.canvas-section-remove{position:absolute;z-index:5;top:0;right:0;transform:translateY(-50%);border:1px solid var(--accent);border-radius:4px;background:var(--page-surface);color:var(--page-text);font:14px/1.2 system-ui,sans-serif;padding:6px 10px;cursor:pointer;opacity:0}
+.canvas-edit-mode .canvas-section-edit{right:76px}
+.canvas-edit-mode [data-section-id]>.canvas-section-handle{right:134px;max-width:calc(100% - 144px)}
+.canvas-edit-mode :is(.canvas-section-handle,.canvas-section-edit,.canvas-section-remove){top:14px}
+[data-section-id]:hover>.canvas-section-remove,[data-section-id]:focus-within>.canvas-section-remove,.canvas-selected>.canvas-section-remove,.canvas-section-remove:focus-visible{opacity:1;pointer-events:auto}
+/* Nested parent controls must not intercept clicks on the child being edited. */
+.canvas-edit-mode [data-section-id]:has([data-section-id]:hover):not(:has(>:focus-visible))>:is(.canvas-section-handle,.canvas-section-edit,.canvas-section-remove){opacity:0;pointer-events:none}
+@media(hover:none){
+ .canvas-edit-mode [data-section-id]:not(.canvas-selected):not(:focus-within)>:is(.canvas-section-handle,.canvas-section-edit,.canvas-section-remove){opacity:0;pointer-events:none}
+ .canvas-section-edit,.canvas-section-remove{min-height:44px}
+}
 
 .canvas-edit-mode [contenteditable=plaintext-only]{cursor:text;min-width:1ch;outline:none}.canvas-edit-mode [contenteditable=plaintext-only]:focus{outline:1px dashed var(--accent);outline-offset:4px}

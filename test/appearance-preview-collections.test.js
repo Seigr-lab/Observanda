@@ -1,3 +1,4 @@
+import {WebsiteSites} from '../src/website-sites.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -31,7 +32,7 @@ async function fixture(t,count,{limit=0,tag='',regions=false,feed=null}={}){
   book.website.layouts.push({target:'home',showHeading:true,heading:'',description:'',placement:'after',sections:[{...structuredClone(section),filter:{projectId:null,tag:'common',limit:3}}]});
  }
  const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
- return {...f,book,directory,command:{workspaceId:book.id,etag:(await f.workspace.outline()).etag,appearance:book.appearance,mode:'website'}};
+ return {...f,book,directory,command:{workspaceId:book.id,etag:(await f.workspace.outline()).etag,websitePin:(await new WebsiteSites(f.workspace).read(null)).websitePin,appearance:book.appearance,mode:'website'}};
 }
 const get=(f,path='index.html')=>appearancePreviewPage(f.workspace,f.command,path);
 const next=(path,page,field='nextCursor')=>path+'?'+new URLSearchParams({collection:page.key,cards:page[field]});
@@ -44,6 +45,9 @@ test('authored feed counts and visitor queries preserve the selected set through
  };
  assert.equal(first.recordIds.length,29);const second=collection(await get(f,continued(first)));assert.equal(second.recordIds.length,8);assert.equal(second.nextCursor,null);
  assert.deepEqual(collection(await get(f,continued(second,'previousCursor'))).recordIds,first.recordIds);
+ const restyled={...f.command,appearance:{...f.command.appearance,accent:'#334455'},websitePin:Object.fromEntries(Object.entries(f.command.websitePin).reverse())};
+ assert.deepEqual(collection(await appearancePreviewPage(f.workspace,restyled,continued(first))).recordIds,second.recordIds);
+ await assert.rejects(appearancePreviewPage(f.workspace,{...restyled,websitePin:{...restyled.websitePin,websiteRevision:'0'.repeat(64)}},continued(first)));
  const reversed=collection(await get(f,'index.html?feed=section:records&feedOrder=oldest'));
  assert.deepEqual(reversed.recordIds,f.book.entries.slice(0,37).reverse().slice(0,29).map(r=>r.id));
  const tail=collection(await get(f,continued(reversed)));assert.deepEqual(tail.recordIds,f.book.entries.slice(0,8).reverse().map(r=>r.id));assert.equal(tail.nextCursor,null);

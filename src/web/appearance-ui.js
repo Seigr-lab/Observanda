@@ -67,8 +67,8 @@ export function appearanceUI({ fontLibrary, textControls, state, esc, field, opt
       const frame=document.querySelector('#design-preview');let url=frame?.src;
       try{const current=frame?.contentWindow.location.href;if(current&&new URL(current).origin===location.origin)url=current;}catch{/* A detached frame has no current page. */}
       if(url){
-        showDialog(`<div class="expanded-preview"><div class="preview-toolbar"><h2 id="dialog-title">${text('preview')}</h2><button class="button" data-action="close-dialog">${text('closePreview')}</button></div><iframe title="${text('expandedTitle')}" src="${esc(url)}" sandbox="allow-same-origin"></iframe></div>`);
-        const expanded=document.querySelector('.expanded-preview iframe');expanded.onload=()=>enhanceAppearanceReading(expanded);
+        showDialog(`<div class="expanded-preview"><div class="preview-toolbar"><h2 id="dialog-title">${text('preview')}</h2><button class="button" data-action="close-dialog">${text('closePreview')}</button></div><p role="status" data-preview-loading>${text('loadingPreview')}</p><iframe style="visibility:hidden" title="${text('expandedTitle')}" sandbox="allow-same-origin"></iframe></div>`);
+        const expanded=document.querySelector('.expanded-preview iframe');expanded.onload=()=>{if(!expanded.contentDocument?.body?.dataset.page)return;enhanceAppearanceReading(expanded);expanded.style.visibility='';document.querySelector('[data-preview-loading]')?.remove();};expanded.src=url;
       }
     }
     if (name === 'theme-start') replace(startingAppearance(button.dataset.theme), null);

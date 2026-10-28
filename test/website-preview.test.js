@@ -34,6 +34,10 @@ function services(files){
 test('each canvas page matches the complete renderer with reusable regions, covers and figures',async()=>{
  const {book,files}=fixture();
  for(const {target,path} of layoutTargets(book)){
+  if(target.startsWith('entry:')&&book.entries.find(record=>record.id===target.slice(6))?.share!==true){
+   assert.throws(()=>buildPublication(book,{mediaFiles:files,designTarget:target,workspaceContent:true}),{code:'INVALID'});
+   await assert.rejects(websitePreview(book,{designTarget:target,...services(files)}),{code:'INVALID'});continue;
+  }
   const all=buildPublication(book,{mediaFiles:files,designTarget:target,workspaceContent:true}),service=services(files);
   const one=await websitePreview(book,{designTarget:target,...service});
   assert.equal(one.files.get(path),all.files.get(path),target);

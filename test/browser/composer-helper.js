@@ -13,12 +13,12 @@ export async function openLayouts(page){await task(page,'Page');await page.getBy
 export async function sectionTools(page,name){await page.getByRole('navigation',{name:'Section tools',exact:true}).getByRole('button',{name,exact:true}).click();}
 export async function typeTools(page,name){await page.getByRole('navigation',{name:'Typography tools',exact:true}).getByRole('button',{name:{Add:'Page',Content:'Content'}[name]??name,exact:true}).click();}
 
-export async function chooseWebsitePage(page,path){
+export async function chooseWebsitePage(page,path,{search}={}){
  const select=page.getByLabel('Page',{exact:true});
  if(await select.locator('option[value="'+path+'"]').count()){await select.selectOption(path);return;}
  await select.selectOption('find');
  const kind=path==='index.html'||path.startsWith('pages/')?'site':path.startsWith('entries/')?'entry':path.startsWith('notebooks/')?'notebook':'project';
- const dialog=page.getByRole('dialog');await dialog.getByLabel('Page type',{exact:true}).selectOption(kind);
+ const dialog=page.getByRole('dialog');await dialog.getByLabel('Page type',{exact:true}).selectOption(kind);if(search!==undefined)await dialog.locator('#website-page-search').fill(search);
  for(let n=0;n<100;n++){
   const item=dialog.locator('[data-page-path="'+path+'"]');
   await dialog.locator('[data-page-results][aria-busy="false"]').waitFor();

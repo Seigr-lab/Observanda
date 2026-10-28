@@ -4,6 +4,7 @@ import {websiteDocumentLocks} from './website-document-registry.js';
 import {AppError} from './errors.js';
 import {WebsiteSites} from './website-sites.js';
 import {WebsiteEditorStore} from './website-editor-store.js';
+import {withWebsiteDocumentReads} from './website-document-block-store.js';
 import {WEBSITE_DOCUMENT_FIELDS,siteProjectIds} from './web/website-sites-model.js';
 import {SnapshotIndex} from './snapshot-index.js';
 import {ProjectSourceAuthority} from './project-source-authority.js';
@@ -34,10 +35,14 @@ export class WebsiteEditor{
   if(!reads.has(operation)&&!mutations.has(operation))throw new AppError('NOT_FOUND');
   if(!data||typeof data!=='object'||Array.isArray(data))throw new AppError('INVALID');
   const {websiteId,workspaceId,...options}=data;if(websiteId!==null&&!researchId(websiteId)||workspaceId!==undefined&&!researchId(workspaceId))throw new AppError('INVALID');
-  const run=async store=>{
+  const run=store=>withWebsiteDocumentReads(store,async()=>{
    signal?.throwIfAborted();if(workspaceId!==undefined&&(await store.snapshot()).metadata.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');const editor=new WebsiteEditorStore(store,{sourceReader:this.sourceReader});
    if(mutations.has(operation)){
-    const current=await editor.open(websiteId,{signal});await new ProjectSourceAuthority(store).writable(current.site.projectId);
+    // Authorization needs the retained owner, not an editor envelope with
+    // homepage content, navigation projections and every collection count.
+    const current=await editor.context(websiteId,{active:true,signal}),projectId=(await current.document.field(['projectId'],{signal})).value;
+    if(projectId!==null&&projectId!==undefined&&!researchId(projectId))throw new AppError('CATALOGUE_DAMAGED');
+    await new ProjectSourceAuthority(store).writable(projectId);
    }
    const result=await editor[operation==='save'?'commit':operation==='template-review'?'templateReview':operation](websiteId,{...options,signal});
    if(operation==='open'&&options.initialView===true){
@@ -47,7 +52,7 @@ export class WebsiteEditor{
     result.initialView={pages,overrides};
    }
    signal?.throwIfAborted();return this.response(store,result,{signal});
-  };
+  });
   if(operation==='change'&&Array.isArray(options.operations)&&options.operations.some(value=>value?.type==='theme-apply')){await this.sites.initialize();return this.workspace.withLock(()=>this.workspace.catalogue(async store=>{await websiteDocumentLocks(store,{websiteIds:[websiteId]});return run(store);}));}
   return reads.has(operation)?this.workspace.catalogue(run):this.sites.write(websiteId,{},run);
  }

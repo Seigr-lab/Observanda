@@ -1,3 +1,4 @@
+import {WebsiteSites} from '../src/website-sites.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -22,7 +23,7 @@ async function fixture(t,count){
  book.entries=Array.from({length:count},(_,i)=>({...structuredClone(seed),id:randomUUID(),title:i===count-1?'End only':'Observation '+i,body:'Original body '+i,share:true,type:i%2?'run':'protocol',tags:[i%3?'field':'control'],occurredOn:'2026-09-'+String(i%28+1).padStart(2,'0'),sections:[],attachments:[],figures:[],relations:[]}));
  book.entries.push({...structuredClone(book.entries.at(-1)),id:randomUUID(),title:'PRIVATE_TITLE',share:false});
  const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
- return {...f,directory,book,command:{workspaceId:book.id,etag:(await f.workspace.outline()).etag,appearance:book.appearance,mode:'website'}};
+ return {...f,directory,book,command:{workspaceId:book.id,etag:(await f.workspace.outline()).etag,websitePin:(await new WebsiteSites(f.workspace).read(null)).websitePin,appearance:book.appearance,mode:'website'}};
 }
 const browse=(f,query='')=>appearancePreviewPage(f.workspace,f.command,'browse.html'+(query?'?'+query:''));
 const request=(page,key='nextCursor')=>new URLSearchParams({...Object.fromEntries(new URLSearchParams(page.query)),cursor:page[key]}).toString();
@@ -61,7 +62,7 @@ test('filtered continuations bind source, website and query; saved pages remain 
  assert.equal((await appearancePreviewChoices(f.workspace,f.command,{path:'browse.html?'+next})).pages[0].path,'browse.html?'+next);
  for(const invalid of [next+'&q=other',next+'&tag=field','cursor=invalid','q=a&q=b','from=2026-02-30','unknown=x'])await assert.rejects(browse(f,invalid),{code:'INVALID'});
  const record=f.book.entries[40];await new ResearchRecords(f.workspace,{}).save({workspaceId:f.book.id,changes:[{id:record.id,expectedRevision:recordRevision(record),record:{...record,title:'Later title',share:false}}]},{receipt:true});
- await assert.rejects(browse({...f,command:{...f.command,etag:(await f.workspace.outline()).etag}},next),{code:'INVALID'});
+ await assert.rejects(browse({...f,command:{...f.command,etag:(await f.workspace.outline()).etag,websitePin:(await new WebsiteSites(f.workspace).read(null)).websitePin}},next),{code:'INVALID'});
  assert.equal((await browse(f,next)).browseRecords[0].title,record.title);
  const restored=new Workspace(await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'backup')),{vault:f.vault}),f.vault);
  assert.deepEqual((await browse({...f,workspace:restored},next)).browseRecords,(await browse(f,next)).browseRecords);

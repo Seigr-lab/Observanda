@@ -1,3 +1,4 @@
+import {WebsiteSites} from '../src/website-sites.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
@@ -19,7 +20,7 @@ test('page and project feeds have independently scoped continuation assets in pi
  const project=book.projects[0];book.projects.push(...Array.from({length:4},(_,i)=>({...structuredClone(project),id:randomUUID(),title:'Project '+i,share:true})));
  book.website.home.sections=['pages','projects'].map(kind=>({id:kind,kind,title:kind,show:true,layout:'list',feed:{...defaultFeed(kind),pageSize:2,visitorOrder:true}}));
  const f=await encryptedFixture(directory,book);t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
- const sessions=new AppearancePreviewSessions(),command={workspaceId:book.id,etag:(await f.workspace.outline()).etag,appearance:book.appearance,mode:'website'};
+ const sessions=new AppearancePreviewSessions(),command={workspaceId:book.id,etag:(await f.workspace.outline()).etag,websitePin:(await new WebsiteSites(f.workspace).read(null)).websitePin,appearance:book.appearance,mode:'website'};
  const session=await sessions.create(f.workspace,command,{media:new MediaStore(f.workspace.root,f.vault),fonts:new WorkspaceFonts(f.workspace)}),id=session.baseUrl.split('/')[2];
  const html=(await sessions.file(id,'index.html')).content;
  const configs=[...html.matchAll(/data-feed-config="([^"]+)"/g)].map(match=>JSON.parse(match[1].replaceAll('&quot;','"').replaceAll('&amp;','&')));

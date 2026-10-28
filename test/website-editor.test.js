@@ -34,6 +34,43 @@ async function fixture(t){
 }
 const page=(title,body='Authored page')=>({id:randomUUID(),title,body,share:true,sections:[]});
 
+test('rapid edit boundaries survive a delayed lost acknowledgement and retain exact reversions in undo history',async t=>{
+ const f=await fixture(t),state={storage:{contextId:randomUUID()},book:f.book},selection=websiteSelectionDraft();let release,arrive,lost=true;
+ const held=new Promise(resolve=>{release=resolve;}),arrived=new Promise(resolve=>{arrive=resolve;}),writes=[];
+ const client=websiteDocumentClient({state,selection,api:async(route,data)=>{
+  const operation=route.split('/').at(-1);if(operation==='change')writes.push(structuredClone(data));
+  const result=await f.execute(operation,data);
+  if(operation==='change'&&lost){lost=false;arrive();await held;throw Error('Lost acknowledgement');}return result;
+ }});t.after(()=>{release();client.stop();});
+ const opened=await client.open({websiteId:f.websiteId,base:{book:f.book}});Object.assign(state,opened);selection.load(opened.site.selection);client.installed();
+ const initial={title:state.book.website.title,footer:state.book.website.footer};
+ client.checkpoint('title');state.book.website.title='Separate heading';client.changed();
+ client.checkpoint('footer');state.book.website.footer='Separate footer';client.changed();await arrived;
+ client.checkpoint();state.book.website.title=initial.title;client.changed();
+ client.checkpoint();state.book.website.footer='Last footer';client.changed();release();
+ await client.flush().catch(()=>{});await client.flush();
+ assert.deepEqual(writes[1],writes[0],'Retry the uncertain command without changing its identity or payload');
+ for(const expected of [
+  {title:initial.title,footer:'Separate footer'},
+  {title:'Separate heading',footer:'Separate footer'},
+  {title:'Separate heading',footer:initial.footer},initial
+ ]){await client.history('undo');assert.deepEqual({title:state.book.website.title,footer:state.book.website.footer},expected);}
+ for(let i=0;i<4;i++)await client.history('redo');
+ assert.equal(state.book.website.title,initial.title);assert.equal(state.book.website.footer,'Last footer');
+ await client.save();assert.equal((await f.sites.read(f.websiteId)).book.website.footer,'Last footer');
+});
+
+test('a stalled checkpoint applies bounded editing backpressure and resumes without losing the last edit',async t=>{
+ const f=await fixture(t),state={storage:{contextId:randomUUID()},book:f.book},selection=websiteSelectionDraft();let release;
+ const held=new Promise(resolve=>{release=resolve;});let stalled=true;
+ const client=websiteDocumentClient({state,selection,api:async(route,data)=>{const operation=route.split('/').at(-1);if(operation==='change'&&stalled)await held;return f.execute(operation,data);}});t.after(()=>{release();client.stop();});
+ const opened=await client.open({websiteId:f.websiteId,base:{book:f.book}});Object.assign(state,opened);selection.load(opened.site.selection);client.installed();
+ let edits=0;while(!client.structuralBusy()&&edits<100){client.checkpoint();state.book.website.footer='Retained edit '+(++edits);client.changed();}
+ assert.ok(edits<=65);assert.equal(client.structuralBusy(),true);assert.equal(client.isDirty(),true);
+ const expected=state.book.website.footer;stalled=false;release();await client.flush();assert.equal(client.structuralBusy(),false);assert.equal(state.book.website.footer,expected);
+ await client.save();assert.equal((await f.sites.read(f.websiteId)).book.website.footer,expected);
+});
+
 test('editor opening batches bounded page labels and home overrides without a second read',async t=>{
  const f=await fixture(t),initial=await f.execute('open'),pages=Array.from({length:28},(_,i)=>page('Page '+i,'Private authored body '+i));
  await f.execute('change',f.edit(initial,[{type:'append',collection:'pages',values:pages}]));

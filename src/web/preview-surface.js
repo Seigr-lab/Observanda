@@ -1,6 +1,6 @@
 // Preview documents retain their sandbox and publication styles. The host owns
 // sizing and scrolling; no script is injected into the published document.
-export function previewSurface(iframe, {geometry = () => ({scale: 1}), resized = () => {}} = {}) {
+export function previewSurface(iframe, {geometry = () => ({scale: 1}), resized = () => {}, bottom = () => window.innerHeight} = {}) {
   let doc, resize, mutations, pending = 0, disposed = false;
   const schedule = () => { if (!disposed && !pending) pending = requestAnimationFrame(measure); };
   function measure() {
@@ -47,7 +47,7 @@ export function previewSurface(iframe, {geometry = () => ({scale: 1}), resized =
     const box=iframe.getBoundingClientRect(),scale=box.width/iframe.offsetWidth;
     const first=box.top+rect.top*scale,last=box.top+rect.bottom*scale;
     if(first<top+12)window.scrollBy(0,first-top-12);
-    else if(last>window.innerHeight-24)window.scrollBy(0,last-window.innerHeight+24);
+    else {const edge=Math.min(window.innerHeight,bottom());if(last>edge-24)window.scrollBy(0,last-edge+24);}
   }
   return {refresh: schedule, measure, reveal, destroy() {
     disposed = true; detach(); cancelAnimationFrame(pending); iframe.removeEventListener('load', attach);

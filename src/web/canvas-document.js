@@ -17,7 +17,7 @@ export function reconcileCanvas(live,incoming,{editor=null}={}){
   };
   // Transient canvas controls are not published siblings. Matching content
   // against those buttons by position used to detach live editing surfaces.
-  for(const node of live.querySelectorAll('.canvas-section-handle,.canvas-section-edit,.canvas-empty-media,[data-drop-parent]'))node.remove();
+  for(const node of live.querySelectorAll('.canvas-section-handle,.canvas-section-edit,.canvas-section-remove,.canvas-empty-media,[data-drop-parent]'))node.remove();
   const existing=new Map([...live.querySelectorAll('[data-section-id],[data-media-id],[data-composition],[id],.prose,.hero-copy,h1,h2,h3,h4,h5,h6')].map(n=>[key(n),n]).filter(([key])=>key!==null));
   function patch(target,source){
     if(target.nodeType===3){if(target.nodeValue!==source.nodeValue)target.nodeValue=source.nodeValue;return;}

@@ -1,6 +1,8 @@
+import {appearanceCursorMetadata} from './appearance-preview-binding.js';
 import {AppError} from './errors.js';
 import {encodeAppearanceCursor,decodeAppearanceCursor} from './appearance-preview-cursor.js';
-import {digest,serialize} from './storage-format.js';
+import {digest} from './storage-format.js';
+import {revisionText} from './web/revision-model.js';
 import {compareRecordDates} from './web/record-date.js';
 import {compareKey} from './web/query-order.js';
 
@@ -25,7 +27,7 @@ export function appearanceFeedParameters(query){
 export async function appearanceFeedPage(records,{key,target,notebooks,filter={},feed,visitor=null,cursor=null}){
  const query={key,search:'',tag:'',type:'',order:feed.order};
  if(visitor){if(feed.visitorFilters)for(const name of ['search','tag','type'])query[name]=visitor[name];if(feed.visitorOrder&&visitor.order)query.order=visitor.order;}
- const {store}=records,binding=digest(serialize({snapshot:records.snapshotId,metadata:records.metadata,websiteId:records.websiteId,websitePin:records.websitePin,selection:records.selection,target,key,notebooks:[...notebooks].sort(),filter,feed,query}));
+ const {store}=records,binding=digest(revisionText({snapshot:records.snapshotId,metadata:appearanceCursorMetadata(records.metadata),websiteId:records.websiteId,websitePin:records.websitePin,selection:records.selection,target,key,notebooks:[...notebooks].sort(),filter,feed,query}));
  let anchor=null,backward=false,boundary=null;
  if(cursor){
   let value;try{value=store.decode('appearance-feed-page',records.metadata.id,decodeAppearanceCursor(cursor));}catch{throw new AppError('INVALID');}

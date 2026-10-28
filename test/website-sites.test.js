@@ -100,7 +100,9 @@ test('independent websites isolate selections and review IDs and deploy to pinne
  assert.equal((await publicationSource(scoped[1],await source(scoped[1]))).entries.some(r=>r.id===other.id),false);
  await records.remove({workspaceId:book.id,recordId:other.id,expectedRevision:recordRevision(now)});
  assert.ok((await sites.read(ids[0])).site.selection.records.every(r=>r.id!==other.id));
- assert.ok(await new PublicationJobs(scoped[1]).read(prepared[1].result.id));
+ // Retention preserves the edition, but deleted source consent must prevent
+ // serving it again. A retained identifier is not continuing permission.
+ await assert.rejects(new PublicationJobs(scoped[1]).read(prepared[1].result.id),{code:'PUBLICATION_PERMISSIONS_CHANGED'});
 });
 
 

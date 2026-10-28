@@ -15,21 +15,38 @@ import {validWebsitePage,validWebsiteNavigationItem,validWebsiteAsset,validWebsi
 const invalid=field=>{throw new AppError('INVALID',[{field}]);};
 const paths={pages:['document','pages'],navigation:['document','website','navigation'],assets:['document','website','assets'],layouts:['document','website','layouts'],branding:['document','branding']};
 const define=(value,name,item)=>Object.defineProperty(value,name,{value:item,enumerable:true,writable:true,configurable:true});
+const headers=new WeakMap();
 async function headerObject(document,path,omitted,nested,{signal}={}){
- const value={},target=await document.tree.select(document.root,path);if(!target)invalid('website');
+ signal?.throwIfAborted();const value={},target=await document.tree.select(document.root,path);if(!target)invalid('website');
  const node=target.inline?{type:'inline',value:target.value}:await document.tree.node(target.revision);
  if(node.type==='inline'&&(!node.value||typeof node.value!=='object'||Array.isArray(node.value)))invalid('website');
- const names=node.type==='inline'?Object.keys(node.value):await document.tree.propertyNames(target.revision);
- for(const name of names){
-  signal?.throwIfAborted();const item=omitted.includes(name)?[]:Object.hasOwn(nested,name)?await nested[name]():(await document.field([...path,name],{signal})).value;
-  define(value,name,item);
+ if(node.type==='inline'){
+  for(const name of Object.keys(node.value)){
+   signal?.throwIfAborted();define(value,name,omitted.includes(name)?[]:Object.hasOwn(nested,name)?await nested[name]():structuredClone(node.value[name]));
+  }
+ }else{
+  if(node.type!=='object')throw new AppError('CATALOGUE_DAMAGED');const names=new Set();
+  // Each authenticated property already supplies its exact value reference.
+  // Follow it directly instead of walking from the document root for every
+  // field, while retaining duplicate-name and child-shape validation.
+  for await(const child of document.tree.children(node)){
+   signal?.throwIfAborted();if(child.type!=='property'||names.has(child.name))throw new AppError('CATALOGUE_DAMAGED');names.add(child.name);
+   define(value,child.name,omitted.includes(child.name)?[]:Object.hasOwn(nested,child.name)?await nested[child.name]():await document.tree.read(child.value));
+  }
  }
  return value;
 }
-export function websiteDocumentHeader(document,{signal}={}){
+export async function websiteDocumentHeader(document,{signal}={}){
+ signal?.throwIfAborted();const root=document.root,cached=headers.get(document);
+ if(cached?.root===root)return structuredClone(cached.value);
  const website=()=>headerObject(document,['document','website'],['navigation','assets','layouts','researchSources'],{},{signal});
  const content=()=>headerObject(document,['document'],['pages','branding'],{website},{signal});
- return headerObject(document,[],[],{document:content},{signal});
+ const value=await headerObject(document,[],[],{document:content},{signal});signal?.throwIfAborted();
+ // Repeated validation/navigation/envelope reads share this already checked
+ // immutable root only within its document owner. Large headers are not kept;
+ // callers receive independent values and a new reader authenticates afresh.
+ if(document.root===root&&Buffer.byteLength(JSON.stringify(value))<=256*1024)headers.set(document,{root,value:structuredClone(value)});
+ return value;
 }
 async function* collection(document,path,{signal,sectionsOnly=false}={}){
  signal?.throwIfAborted();const target=await document.tree.select(document.root,path);if(!target)invalid('website');

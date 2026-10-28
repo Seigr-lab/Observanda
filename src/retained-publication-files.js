@@ -14,7 +14,7 @@ export class RetainedPublicationFiles{
   return admitRetainedPublicFile(file.name,content,{type:file.type,blockedValues:this.blockedValues});
  }
  async *contents(options){const {projectPublicationContents}=await import('./project-publication-content.js');yield* projectPublicationContents(this.workspace,this.stored,options);}
- async get(name){for await(const {file,content} of this.contents({name}))return this.admit(file,content);return undefined;}
+ async get(name){return this.workspace.catalogue(async()=>{for await(const {file,content} of this.contents({name}))return this.admit(file,content);return undefined;});}
  async *keys(){for await(const {key} of this.output.items('files'))yield key;}
  async *values(){for await(const [,content] of this)yield content;}
  async *[Symbol.asyncIterator](){for await(const {file,content} of this.contents())yield [file.name,await this.admit(file,content)];}

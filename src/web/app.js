@@ -319,7 +319,7 @@ function updateSaveStatus(){
   const changed=state.dirty||state.page==='appearance'&&textControls.isDirty();
   const label=$('#save-status');if(label)label.textContent=savePromise?t('pendingSettings','saving'):changed?'Unsaved changes':'Saved';
   recordDrafts.update();
-  for(const button of document.querySelectorAll('.section-save [data-action="save"],.section-save [data-action="discard-section"]'))button.disabled=!changed||uploading||Boolean(savePromise)||figures.isBusy()||recordDrafts.isRecovering();
+  for(const button of document.querySelectorAll('.section-save [data-action="save"],.section-save [data-action="discard-section"]'))button.disabled=!changed||uploading||Boolean(savePromise)||websiteDocuments.structuralBusy()||figures.isBusy()||recordDrafts.isRecovering();
 }
 function sectionActions(){
   if(state.page==='editor'&&state.recordReading)return '';
@@ -552,7 +552,7 @@ const setupControls=setupUI({state,esc,field,option,mark,storageControls,notify}
 const textControls=interfaceUI({api,field,showDialog,notify,onChange:updateSaveStatus});
 const shellMenu=shellNavigation();
 const appShell=applicationShell({root:$('#app'),mark,navigation,applyLayout:textControls.applyLayout});
-const website=lazyFeatureUI({enabled:()=>enabledModule(state.dashboardSettings,'publishing'),handles:name=>name==='website'||name.startsWith('website-'),load:()=>import('./website-ui.js').then(m=>m.websiteUI({state,api,esc,field,option,icon,dirty,render,notify,showDialog,selection:websiteSelection,documents:websiteDocuments,access:operation=>withProjectAccess(operation),bindMedia:()=>mediaImports.bind(),refreshFonts:()=>fontLibrary.load(),previewDraft:async book=>{
+const website=lazyFeatureUI({enabled:()=>enabledModule(state.dashboardSettings,'publishing'),handles:name=>name==='website'||name.startsWith('website-'),load:()=>import('./website-ui.js').then(m=>m.websiteUI({state,api,esc,field,option,icon,dirty,render,notify,showDialog,selection:websiteSelection,documents:websiteDocuments,access:operation=>withProjectAccess(operation),onSave:()=>savePending().catch(report),bindMedia:()=>mediaImports.bind(),refreshFonts:()=>fontLibrary.load(),previewDraft:async book=>{
   if(websiteDocuments.enabled())return websiteDocuments.preview();
   const command=state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion===21?workspaceSaveRequest(savedBook,book,savedRecordRevisions):null;
   return {websitePin:state.websitePin,...(command?{draft:{...command,baseEtag:state.etag,...(websiteSelection.isDirty()?{selection:websiteSelection.snapshot()}: {})}}:{book})};
@@ -612,13 +612,14 @@ function pendingChanges(scope='all'){
   return {forms,labels:[...new Set(labels)],canSave:!attempts.isDirty()&&forms.every(form=>saveableForms.has(form.id))};
 }
 async function savePending(scope='all',forms=drafts.changed(scope),{requireClean=true}={}){
+ if(websiteDocuments.enabled())await websiteDocuments.waitForStructure();
  const guardScope=scope;if(scope==='navigation')scope='all';
  if(figures.isBusy())throw Error(t('figureProvenance','checking'));
   if(forms.some(form=>!saveableForms.has(form.id)))throw new Error('Complete this action using its own form, or discard the unfinished form.');
   for(const form of forms)if(!form.checkValidity())throw new Error('Complete the required fields before saving. Choose Stay here to return to the form.');
   for(const form of forms){
-    const previous=draftWorkspace(state.book),etag=state.etag;
-    try{await submitForm(form);}catch(error){if(state.etag===etag){state.book=previous;dirty();}throw error;}
+    const previous=draftWorkspace(state.book),etag=state.etag,websiteForm=websiteDocuments.enabled();
+    try{await submitForm(form);}catch(error){if(!websiteForm&&state.etag===etag){state.book=previous;dirty();}throw error;}
     if(form.isConnected&&(!form.closest('dialog')||form.closest('dialog').open)&&drafts.changed(scope).includes(form))throw new Error('The form has not been saved. Choose Stay here to check its fields.');
   }
   if(structureUI.notebooks.isDirty())await structureUI.notebooks.save();
@@ -672,7 +673,7 @@ const navigationActions=new Set(['module-reference-open','laboratory-open-owned'
 const websiteEditPages=new Set(['website','appearance','branding']);
 const brandingReturnRoute=()=>state.brandReturn??routeFor({...state,page:'appearance'});
 function sameWebsiteEditRoute(hash){
- if(!websiteDocuments.enabled()||!websiteEditPages.has(state.page))return false;
+ if(!websiteDocuments.enabled()||!websiteEditPages.has(state.page)&&!(state.page==='review'&&state.preview?.returnTo==='website'))return false;
  const owner=projectRoute(hash),destination=resolveRoute(hash,state.book);
  return owner.projectId===(state.projectOwner?.projectId??null)&&(owner.labBookId??null)===(state.projectOwner?.labBookId??null)&&websiteEditPages.has(destination.page)&&(destination.websiteId??null)===(state.websiteId??null);
 }
@@ -986,7 +987,7 @@ async function rawAction(button) {
   const outlineModuleAction=name==='laboratory-samples'||state.page==='laboratory'&&name?.startsWith('lab-')||name?.startsWith('review-')||name==='module-open'&&modules.supportsOutline(button.dataset.moduleId)||state.page==='module'&&modules.supportsOutline(state.moduleId)&&(name==='module-command'||['module-reference-','module-choice-','research-target-'].some(prefix=>name?.startsWith(prefix)));
   // Account controls operate on credentials and destination state, never on
   // research records. Keep them on the same bounded path as publishing.
-  const publicationAction=name?.startsWith('github-')||['publishing','integrations','preview','export','website','analysis-review-save'].includes(name)||state.page==='website'&&(['save','discard-section','include-project-entries','delete-page','branding'].includes(name)||name?.startsWith('website-')||name?.startsWith('media-import-')||name?.startsWith('menu-'))||name?.startsWith('publish-')||name?.startsWith('publication-jobs-')||name?.startsWith('publication-review-')||name?.startsWith('analysis-review-')||name?.startsWith('local-export-')||state.page==='review'&&name?.startsWith('storage-browse');
+  const publicationAction=name?.startsWith('github-')||['publishing','integrations','preview','export','website','analysis-review-save'].includes(name)||state.page==='website'&&(['save','discard-section','include-project-entries','delete-page','branding'].includes(name)||name?.startsWith('website-')||name?.startsWith('media-import-')||name?.startsWith('menu-'))||name?.startsWith('publish-')||name?.startsWith('publication-links-')||name?.startsWith('research-target-')&&Boolean(document.querySelector('#dialog[open] #publication-links'))||name?.startsWith('publication-jobs-')||name?.startsWith('publication-review-')||name?.startsWith('analysis-review-')||name?.startsWith('local-export-')||state.page==='review'&&name?.startsWith('storage-browse');
   const administrationAction=name==='templates'||name==='storage'||name==='activity-show'||['storage-','security-','migration-','inventory-'].some(prefix=>name?.startsWith(prefix));
   if((state.workspaceOutline||state.recordScope&&!scopedRecordAction(name))&&!readingAction&&!administrationAction&&!brandingAction&&!appearanceAction&&!publicationAction&&!name?.startsWith('edition-')&&!outlineModuleAction&&!recordCreationActions.has(name)&&!structureActions.has(name)&&!state.access?.locked&&!state.storageUnavailable&&!state.newWorkspace&&!['browse-record','edit-entry','open-issue','record-read-linked','storage-lock','workspace','entries','projects','open-project','project-records','project-recent-retry','project-recent-collection-retry','research-copy-context','filter-notebook','clear-record-filters','close-dialog','preferences','workspace-discard'].includes(name)&&!(state.page==='entries'&&name?.startsWith('record-type-'))&&!name?.startsWith('record-list-')&&!name?.startsWith('record-view')&&!name?.startsWith('starter-')&&!name?.startsWith('dashboard-')&&!name?.startsWith('module-settings-')){const route=location.hash;await ensureCompleteWorkspace();if(location.hash!==route){await restoreRoute();return;}}
   const module=moduleForPage(name);
@@ -1006,7 +1007,7 @@ async function rawAction(button) {
   if (await setupControls.action(button) || await textControls.action(button) || await storageControls.action(button) || await structureUI.action(button) || await designUI.action(button) || await labUI.action(button) || await publishUI.action(button) || await extendedAction(button)) return;
   if (name === 'close-dialog') { recordDestination.reset();await structureUI.notebooks.close();state.pendingResearchLink=null; $('#dialog').close(); return; }
   if (name === 'discard-section') { await discardPending(); return; }
-  if (name === 'save') { button.disabled = true; try { const complete=await savePending('all',undefined,{requireClean:state.page!=='editor'}); if(state.page==='website')website.saved(); notify(complete?'Changes saved.':t('recordSaveProgress','newerEdits')); } finally { updateSaveStatus(); } return; }
+  if (name === 'save') { button.disabled = true; try { const complete=await savePending('all',undefined,{requireClean:state.page!=='editor'}); if(state.page==='website')website.saved(); if(state.page!=='website'||!complete)notify(complete?'Changes saved.':t('recordSaveProgress','newerEdits')); } finally { updateSaveStatus(); } return; }
   if(name==='clear-record-filters'){state.search='';state.filter='all';state.recordBrowse=null;rememberFilters();render();$('#search')?.focus();return;}
   if (name === 'entries') { state.search='';state.filter='all';state.recordBrowse=null;state.page = 'entries'; state.project = null; state.notebook = 'all'; render(); }
   if (name === 'projects' || name === 'website') { $('#dialog').close(); const returning=state.page==='review'&&name==='website';state.page = name; state.project = null; state.notebook = 'all'; render();if(returning)restoreEditorScroll(); }
@@ -1159,7 +1160,7 @@ async function submitForm(form){
   if(['structure-project-form','project-template-form'].includes(form.id))return structureUI.notebooks.submit(form,new FormData(form));
   if(['record-view-form','record-view-remove-form'].includes(form.id)){form.dataset.busy='true';form.setAttribute('aria-busy','true');try{await recordViews.submit(form,new FormData(form));}finally{delete form.dataset.busy;form.removeAttribute('aria-busy');}return;}
   if(form.id==='create-form'&&!setupControls.prepare())return;
-  const data=new FormData(form),beforeBook=draftWorkspace(state.book),beforeEtag=state.etag,locationBefore={page:state.page,project:state.project,notebook:state.notebook,selected:state.selected};
+  const data=new FormData(form),beforeBook=draftWorkspace(state.book),beforeEtag=state.etag,websiteForm=websiteDocuments.enabled(),locationBefore={page:state.page,project:state.project,notebook:state.notebook,selected:state.selected};
   form.dataset.busy='true';form.setAttribute('aria-busy','true');
   try {
     if(await modules.submit(form,data)||await structureUI.notebooks.submit(form,data))return;
@@ -1175,11 +1176,11 @@ async function submitForm(form){
     }
 
 
-  }catch(error){if(beforeBook&&state.etag===beforeEtag){state.book=beforeBook;Object.assign(state,locationBefore);dirty();}throw error;}finally{delete form.dataset.busy;form.removeAttribute('aria-busy');if(form.id==='create-form')setupControls.busy(false);}
+  }catch(error){if(!websiteForm&&beforeBook&&state.etag===beforeEtag){state.book=beforeBook;Object.assign(state,locationBefore);dirty();}throw error;}finally{delete form.dataset.busy;form.removeAttribute('aria-busy');if(form.id==='create-form')setupControls.busy(false);}
 }
 document.addEventListener('submit',event=>{event.preventDefault();const form=event.target;submitForm(form).catch(error=>{if(form.id==='create-form'&&form.isConnected)setupControls.error(error.message??'Could not create this workspace. Your settings are still here.');else if(form.isConnected&&form.closest('dialog')?.open)notify(error.message??'Could not save. Your form is still here.',true);else report(error);});});
 window.addEventListener('beforeunload', event => { if (pendingChanges().labels.length || uploading || figures.isBusy() || materials.isBusy()) { event.preventDefault(); event.returnValue = ''; } });
-document.addEventListener('keydown', event => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's' && state.book) { event.preventDefault(); savePending().then(() => notify('Changes saved.')).catch(report); } });
+document.addEventListener('keydown', event => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's' && state.book) { event.preventDefault(); savePending().then(() => {if(state.page!=='website')notify('Changes saved.');}).catch(report); } });
 
 
 
@@ -1371,7 +1372,7 @@ window.addEventListener('popstate',event=>{
     if(!Number.isInteger(event.state?.observandaIndex))history.replaceState({...history.state,observandaIndex:targetIndex},'',location.href);
     const delta=targetIndex-routeIndex,targetHash=location.hash,sameWebsite=sameWebsiteEditRoute(targetHash);
     if(!delta)return;
-    if(state.page==='review'&&location.hash==='#/website'){routeIndex=targetIndex;await restoreRoute();restoreEditorScroll();return;}
+    if(state.page==='review'&&(location.hash==='#/website'||sameWebsite&&resolveRoute(targetHash,state.book).page==='website')){routeIndex=targetIndex;await restoreRoute();restoreEditorScroll();return;}
     if(!sameWebsite&&!historyBusy&&leave.canLeaveImmediately('navigation')){routeIndex=targetIndex;await restoreRoute();return;}
     // Return to the original URL only when an editing decision is needed.
     await travelHistory(-delta);

@@ -6,6 +6,7 @@ import {randomUUID} from 'node:crypto';
 import {sampleNotebook} from '../../src/sample.js';
 import {upgradeNotebook} from '../../src/model.js';
 import {ResearchCatalogue} from '../../src/research-catalogue.js';
+import {WebsiteSites} from '../../src/website-sites.js';
 import {startServer} from '../../src/server.js';
 import {clearVault} from '../../src/encryption.js';
 import {encryptedFixture} from './encrypted-fixture.js';
@@ -25,6 +26,9 @@ const canvas=page=>page.frameLocator('#website-draft-preview');
 const selector=page=>page.getByLabel('Page',{exact:true});
 const results=page=>page.getByRole('dialog').locator('[data-page-path]');
 const pathFor=record=>'entries/'+record.id+'.html';
+// Website values now have their own document owner. Research readback still
+// verifies that editing the website has not modified the original records.
+const savedBook=async()=>({...((await fixture.workspace.read()).book),...(await new WebsiteSites(fixture.workspace).read(null)).site.document});
 
 test('page discovery stays bounded, loads no originals, and preserves selected-page drafts through save and reload',async({page},testInfo)=>{
  test.setTimeout(90000);const errors=[];page.on('pageerror',error=>errors.push(error.message));
@@ -51,7 +55,7 @@ test('page discovery stays bounded, loads no originals, and preserves selected-p
  await expect(page.getByLabel('Display heading',{exact:true})).toHaveValue('Retained inspection design');await expect(selector(page)).toHaveValue(pathFor(book.entries[64]));
  await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');await page.reload();
  await expect(selector(page)).toHaveValue(pathFor(book.entries[64]));await expect(canvas(page).getByRole('heading',{name:'Retained inspection design',exact:true})).toBeVisible();
- const saved=(await fixture.workspace.read()).book;expect(saved.website.title).toBe('Private draft title');expect(saved.entries).toEqual(book.entries);expect(errors).toEqual([]);
+ const saved=await savedBook();expect(saved.website.title).toBe('Private draft title');expect(saved.entries).toEqual(book.entries);expect(errors).toEqual([]);
 });
 
 test('unsaved pages appear immediately and cancelled or failed searches keep their draft',async({page})=>{
@@ -70,7 +74,7 @@ test('unsaved pages appear immediately and cancelled or failed searches keep the
  await expect(canvas(page).getByRole('heading',{name:'Unsaved apiary page',exact:true})).toBeVisible();
  await chooseWebsitePage(page,pathFor(book.entries[64]));await chooseWebsitePage(page,path);
  await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
- expect((await fixture.workspace.read()).book.pages.at(-1).title).toBe('Unsaved apiary page');
+ expect((await savedBook()).pages.at(-1).title).toBe('Unsaved apiary page');
 });
 
 test('website text links search pinned page summaries without building a full destination list or loading originals',async({page})=>{
@@ -97,7 +101,7 @@ test('website text links search pinned page summaries without building a full de
  }finally{ResearchCatalogue.prototype.record=record;}
  await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');await page.reload();
  await expect(editor.locator('a')).toHaveAttribute('href','entry:'+book.entries[64].id);
- const saved=(await fixture.workspace.read()).book;expect(saved.entries).toEqual(book.entries);expect(JSON.stringify(saved.website.home.sections)).toContain('entry:'+book.entries[64].id);
+ const saved=await savedBook();expect(saved.entries).toEqual(book.entries);expect(JSON.stringify(saved.website.home.sections)).toContain('entry:'+book.entries[64].id);
  await page.getByRole('button',{name:'Prepare edition',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
  const href=await page.getByRole('link',{name:'Open full preview',exact:true}).getAttribute('href'),published=await page.context().newPage();
  try{await published.goto(new URL(href,app.origin).href);await expect(published.getByRole('link',{name:'Explore these notes',exact:true})).toHaveAttribute('href','entries/'+book.entries[64].id+'.html');}finally{await published.close();}
@@ -128,7 +132,7 @@ test('region assignments search only one page of labels and preserve exclusions,
  await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');await page.reload();
  await expect(page.getByLabel('Editing area',{exact:true})).toHaveValue('sidebar');await page.getByText('Reuse this design',{exact:true}).click();await choose.click();await dialog.getByLabel('Page type',{exact:true}).selectOption('entry');
  await dialog.getByLabel('Find a page',{exact:true}).fill('Page 64');await expect(dialog.getByRole('checkbox',{name:/^Page 64/})).not.toBeChecked();await page.keyboard.press('Escape');await expect(choose).toBeFocused();
- const saved=(await fixture.workspace.read()).book,regions=saved.website.design.regions,id=regions.definitions[0].id;
+ const saved=await savedBook(),regions=saved.website.design.regions,id=regions.definitions[0].id;
  expect(regions.assignments).toEqual(expect.arrayContaining([{target:'*',kind:'sidebar',regionId:id},{target:'entry:'+book.entries[64].id,kind:'sidebar',regionId:null},{target:'entry:'+book.entries[75].id,kind:'sidebar',regionId:id}]));
  expect(saved.entries).toEqual(book.entries);
  await chooseWebsitePage(page,pathFor(book.entries[64]));await expect(canvas(page).locator('.site-sidebar')).toHaveCount(0);
@@ -154,7 +158,7 @@ test('image and button links choose indexed pages in place and retain manual add
   await expect(page.getByLabel('Link destination',{exact:true})).toHaveValue('entry:'+book.entries[75].id);await expect(page.getByLabel('Link destination',{exact:true})).toBeFocused();expect(loaded).toEqual([]);
  }finally{ResearchCatalogue.prototype.record=record;}
  await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');await page.reload();
- const saved=(await fixture.workspace.read()).book;expect(saved.website.presentation.media.some(m=>m.link==='entry:'+book.entries[64].id)).toBe(true);expect(saved.website.home.sections.some(s=>s.kind==='link'&&s.href==='entry:'+book.entries[75].id)).toBe(true);expect(saved.entries).toEqual(book.entries);
+ const saved=await savedBook();expect(saved.website.presentation.media.some(m=>m.link==='entry:'+book.entries[64].id)).toBe(true);expect(saved.website.home.sections.some(s=>s.kind==='link'&&s.href==='entry:'+book.entries[75].id)).toBe(true);expect(saved.entries).toEqual(book.entries);
  await page.getByRole('button',{name:'Prepare edition',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
  const href=await page.getByRole('link',{name:'Open full preview',exact:true}).getAttribute('href'),published=await page.context().newPage();
  try{await published.goto(new URL(href,app.origin).href);await expect(published.locator('.section-asset a')).toHaveAttribute('href','entries/'+book.entries[64].id+'.html');await expect(published.getByRole('link',{name:'Read the notes',exact:true})).toHaveAttribute('href','entries/'+book.entries[75].id+'.html');}finally{await published.close();}

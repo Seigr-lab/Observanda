@@ -15,7 +15,7 @@ export function publicationReviewOwner(candidate){
 }
 export async function publicationRetainedInput(workspace,candidate,{signal}={}){
  if(!nativePublicationCandidate(candidate)||!candidate.source||candidate.source.jobId!==candidate.jobId||!researchId(candidate.workspaceId))fail();
- return openPublicationInput(workspace,{version:6,id:candidate.source.jobId,workspaceId:candidate.workspaceId,websiteId:candidate.websiteId??null,metadata:{id:candidate.workspaceId},document:candidate.source.document,summary:candidate.summary,hasSources:candidate.hasSources},{signal});
+ return workspace.catalogue(()=>openPublicationInput(workspace,{version:6,id:candidate.source.jobId,workspaceId:candidate.workspaceId,websiteId:candidate.websiteId??null,metadata:{id:candidate.workspaceId},document:candidate.source.document,summary:candidate.summary,hasSources:candidate.hasSources},{signal}));
 }
 export async function publicationAnalysisReader(workspace,candidate,{signal}={}){
  const expected=candidate.researchReview?.analysis;if(!expected||!hash(expected.fingerprint)||!natural(expected.count))fail();

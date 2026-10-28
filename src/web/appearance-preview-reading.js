@@ -11,4 +11,7 @@ export function enhanceAppearanceReading(frame){
  enhancePublicBook(view.document,view.location,view.history,view.sessionStorage,view,matchesPublicRecord);
  enhancePublicFeeds(view.document,view,(url,options)=>fetch(url,options),{history:false});
  enhancePublicPopups(view.document);enhancePublicGalleries(view.document);
+ for(const controls of view.document.querySelectorAll('fieldset[data-preview-controls]'))controls.replaceWith(...controls.childNodes);
+ view.document.documentElement.dataset.appearanceReadingReady='';
+ view.document.body.inert=false;
 }

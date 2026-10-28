@@ -44,7 +44,7 @@ process.once('message',async({root,vault,point,upload,record,websiteId,intake,fr
   }else if(point==='publication-capture'){
    let count=0;const read=ResearchCatalogue.prototype.record,storage=websiteWorkspace(workspace,websiteId);
    ResearchCatalogue.prototype.record=async function(...args){const value=await read.apply(this,args);if(++count===40)await pause();return value;};
-   const {etag,websitePin}=await storage.outline();await new PublicationJobs(storage).start({etag,websitePin},websiteJobQueue(workspaceJobs(workspace).queue,websiteId));
+   const {etag,websitePin}=await storage.outline();await new PublicationJobs(storage).captureStart({etag,websitePin},websiteJobQueue(workspaceJobs(workspace).queue,websiteId));
   }else if(point==='evidence-intake-checkpoint'){
    let receipts=0;const write=workspace.writeMetadata.bind(workspace),{worker}=workspaceJobs(workspace);
    workspace.writeMetadata=async(file,value)=>{
