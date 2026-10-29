@@ -9,7 +9,7 @@ import {clearVault} from '../../src/encryption.js';
 
 test('skip navigation and selected writing saves retain a useful keyboard destination',async({page})=>{
  test.setTimeout(120000);
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-focus-')),book=sampleNotebook();
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-focus-')),book=sampleNotebook();let releaseRecord=()=>{};
  const f=await encryptedFixture(directory,book),app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')});
  try{
   await page.goto(app.url);await expect(page.locator('main h1')).toHaveText('Dashboard');
@@ -17,7 +17,8 @@ test('skip navigation and selected writing saves retain a useful keyboard destin
   await expect(page.locator('main h1')).toHaveText('All records');await expect(page.locator('main h1')).toBeFocused();
   const route=page.url();await page.locator('.skip-link').focus();await page.keyboard.press('Enter');
   await expect(page).toHaveURL(route);await expect(page.locator('main h1')).toBeFocused();await expect(page).toHaveTitle('All records · Observanda');
-  await page.goto(app.origin+'/#/records/'+book.entries[0].id);
+  const held=new Promise(resolve=>releaseRecord=resolve);await page.route('**/api/workspace/read/record-content',async route=>{const response=await route.fetch();await held;await route.fulfill({response});},{times:1});
+  await page.goto(app.origin+'/#/records/'+book.entries[0].id);const actions=page.locator('details[data-disclosure=record-actions]');await actions.locator(':scope > summary').click();releaseRecord();await expect(page.locator('.record-editing h1')).toHaveText(book.entries[0].title);await expect(actions).toHaveAttribute('open','');await expect(actions.locator(':scope > summary')).toBeFocused();
   await page.getByRole('button',{name:'Evidence and results',exact:true}).click();
   await expect(page.locator('[data-disclosure="record-evidence"]')).toHaveAttribute('open','');
   const edit=page.getByRole('button',{name:'Edit summary / context',exact:true});
@@ -32,7 +33,7 @@ test('skip navigation and selected writing saves retain a useful keyboard destin
   await page.locator('#main-navigation [data-action="preferences"]').focus();await page.keyboard.press('Enter');
   await expect(page.locator('#main-navigation [data-action="preferences"]')).toBeFocused();
  }finally{
-  await app.close();clearVault(f.vault);
+  releaseRecord();await app.close();clearVault(f.vault);
   if(path.dirname(path.resolve(directory))!==path.resolve(os.tmpdir())||!path.basename(directory).startsWith('observanda-focus-'))throw Error('Unexpected cleanup directory');
   await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});
  }

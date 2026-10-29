@@ -562,7 +562,7 @@ const userProfile=userProfileUI({state,api,esc,field,render,notify});
 const setupControls=setupUI({state,esc,field,option,mark,storageControls,notify});
 const textControls=interfaceUI({api,field,showDialog,notify,onChange:()=>{designUI.applyToApp();updateSaveStatus();}});
 const shellMenu=shellNavigation();
-const appShell=applicationShell({root:$('#app'),mark,navigation,applyLayout:textControls.applyLayout,pageKey:()=>JSON.stringify([state.storage?.contextId,state.page,state.project,state.notebook,state.selected,state.recordReading,state.moduleId,state.modulePath,state.helpTopic])});
+const appShell=applicationShell({root:$('#app'),mark,navigation,applyLayout:textControls.applyLayout,pageKey:()=>JSON.stringify([state.storage?.contextId,state.book?.id,state.page,...(['editor','record-reader'].includes(state.page)?[state.selected,state.recordReading]:state.page==='module'?[state.moduleId,state.modulePath]:state.page==='help'?[state.helpTopic,state.helpSection]:[state.project,state.notebook,state.websiteId])])});
 const website=lazyFeatureUI({enabled:()=>enabledModule(state.dashboardSettings,'publishing'),handles:name=>name==='website'||name.startsWith('website-'),load:()=>import('./website-ui.js').then(m=>m.websiteUI({state,api,esc,field,option,icon,dirty,render,notify,showDialog,selection:websiteSelection,documents:websiteDocuments,access:operation=>withProjectAccess(operation),onSave:()=>savePending().catch(report),bindMedia:()=>mediaImports.bind(),refreshFonts:()=>fontLibrary.load(),previewDraft:async book=>{
   if(websiteDocuments.enabled())return websiteDocuments.preview();
   const command=state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion===21?workspaceSaveRequest(savedBook,book,savedRecordRevisions):null;
