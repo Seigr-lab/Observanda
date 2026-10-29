@@ -69,7 +69,11 @@ export function projectCollectionReader(application,client,check){
          selected.verify=async()=>{
           // The book check also revalidates this exact parent owner. A released
           // parent is opened only once for this complete membership check.
-          await access.check();return withParent(async parent=>{
+          // withParent validates the original parent/book grant after these
+          // reads (and before returning any result). Calling access.check here
+          // too repeated the same parent location and access-file admission on
+          // every verification. A closed parent is re-admitted by its owner.
+          return withParent(async parent=>{
            const registry=new LabBookRegistry(parent),[directory,savedAccess]=await Promise.allSettled([registry.version(),readAccess(root)]);
            if(directory.status==='rejected')throw directory.reason;
            const currentStamp=directory.value;let currentAccess;

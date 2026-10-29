@@ -63,7 +63,11 @@ export async function* selectedPublicationRows(store,snapshot,{signal,metadata=s
  async function* overrideRows(){
   for(const id of selected.keys()){
    signal?.throwIfAborted();const row=await store.member(snapshot,id);
-   if(!row){if(selected.get(id).share===false)continue;throw new AppError('RECORD_CHANGED');}overrides.set(id,{row,patch:selected.get(id)});yield row;
+   if(!row){if(selected.get(id).share===false)continue;throw new AppError('RECORD_CHANGED');}overrides.set(id,{row,patch:selected.get(id)});
+   // Membership proves a record-only override. Attachment choices additionally
+   // need the source's attachment consent; avoid decoding every selected
+   // record summary again just to validate an empty attachment list.
+   if(selected.get(id).attachments.length)yield row;
   }
  }
  for await(const summary of store.queryDocuments(overrideRows(),snapshot.metadata,{signal,search:false,publication:true})){
