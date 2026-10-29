@@ -51,9 +51,22 @@ export class ModuleReader{
    if(anchor.offset&&sort==='created-desc'&&!Number.isFinite(Date.parse(anchor.after.createdAt)))invalid();
    const page=summaryPage({...anchor,order:sort==='title'?order:(a,b)=>b.createdAt.localeCompare(a.createdAt)||(a.id<b.id?-1:a.id>b.id?1:0),point:v=>({id:v.id,title:v.title,createdAt:v.createdAt})}),needle=query.toLowerCase(),scope=scopeIds&&new Set(scopeIds);
    const stockScope=moduleId==='resources'?(scope??inventoryScope(c.book,projectId,recursive)):null;
-   const stockItems=moduleId==='resources'?await inventoryScopeItems(c,stockScope,{signal}):null;
-   if(keys)for(const id of keys){const member=await c.member(id);if(!member||(await c.view(member)).type!==type)throw new AppError('NOT_FOUND');}
-   for await(const member of c.members({signal})){
+   // Explicit selections are already bounded by the public query limit. Read
+   // their authenticated members directly, preserving strict keys validation
+   // even when another filter would hide a missing selected item.
+   let selected=null;
+   if(keys){
+    selected=[];
+    for(const id of keys){signal?.throwIfAborted();const member=await c.member(id);if(!member)throw new AppError('NOT_FOUND');const view=await c.view(member);if(view.type!==type)throw new AppError('NOT_FOUND');selected.push({member,view});}
+   }else if(key){
+    signal?.throwIfAborted();let member;
+    try{member=await c.member(key);}catch(error){if(error.code!=='MODULE_REFERENCE')throw error;}
+    // An ID outside the admitted domain was absent from the old traversal too.
+    selected=member?[{member}]:[];
+   }
+   const stockItems=moduleId==='resources'&&!keys&&(!type||type==='resource')&&(!types||types.includes('resource'))?await inventoryScopeItems(c,stockScope,{signal}):null;
+   async function* candidates(){if(selected)yield* selected;else for await(const member of c.members({signal,types:type?[type]:types}))yield {member};}
+   for await(const {member,view:selectedView} of candidates()){
     signal?.throwIfAborted();if(key&&member.id!==key||keys&&!keys.includes(member.id)||type&&member.type&&member.type!==type||types&&member.type&&!types.includes(member.type))continue;
     if(resourceId&&(await c.constraint(member)).data.resourceId!==resourceId)continue;
     if(kind!==null&&(await c.constraint(member)).data.kind!==kind||archived!==null&&(await (type==='category'?c.inventory(member):c.calendar(member)))?.data.archived!==archived)continue;
@@ -61,7 +74,7 @@ export class ModuleReader{
      if(stockScope){
       const facts=await c.constraint(member),d=facts.data;
       if(facts.type!=='category'&&!stockScope.size)continue;
-      if(facts.type==='resource'){if(!keys&&!stockItems.has(member.id))continue;}
+      if(facts.type==='resource'){if(!keys&&stockItems&&!stockItems.has(member.id))continue;}
       else if(facts.type!=='category'){
        if(['stock-transfer','asset-transfer'].includes(facts.type)){
         const value=facts.type==='asset-transfer'?(await c.inventory(member)).data:d;
@@ -85,7 +98,7 @@ export class ModuleReader{
       if(!projectUsesTool(c.book,owner,'planning'))continue;
      }
     }
-    const view=await c.view(member);if(type&&view.type!==type||types&&!types.includes(view.type)||status&&view.status!==status)continue;
+    const view=selectedView??await c.view(member);if(type&&view.type!==type||types&&!types.includes(view.type)||status&&view.status!==status)continue;
     if(tags.length&&!matchesResourceTags(view.tags,tags,tagMode))continue;
     if(needle&&!(await c.search(member)).includes(needle))continue;
     collect?.(view);page.add(view);
