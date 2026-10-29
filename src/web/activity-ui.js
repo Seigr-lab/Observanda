@@ -91,7 +91,7 @@ export function activityUI({onChange=()=>{}}={}){
    if([...main.querySelectorAll('.operation-progress[data-operation-kind]')].some(node=>!node.hidden&&!node.hasAttribute('data-owned-progress')&&node.dataset.operationKind===entry.kind))continue;
    let target;
    if(host){target=[...host.children].find(node=>node.hasAttribute('data-owner-container'));if(!target){target=document.createElement('div');target.dataset.ownedActivity='';target.dataset.ownerContainer='';host.append(target);}}
-   else{if(!fallback){fallback=document.createElement('div');fallback.dataset.ownedActivity='';const heading=main.querySelector('.page-heading')??main.querySelector('h1');if(heading)heading.after(fallback);else main.prepend(fallback);}target=fallback;}
+   else{if(!fallback){fallback=document.createElement('div');fallback.dataset.ownedActivity='';const title=main.querySelector('h1'),heading=title?.closest('.page-heading,.record-title-row,.pdf-toolbar')??title;if(heading)heading.after(fallback);else main.prepend(fallback);}target=fallback;}
    targets.set(entry.id,{entry,target});
   }
   for(const [id,card] of owned)if(!targets.has(id)||card.node.parentNode!==targets.get(id).target){card.progress?.close();card.node.remove();owned.delete(id);}

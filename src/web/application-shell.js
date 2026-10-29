@@ -3,7 +3,7 @@ import {captureFocus,restoreFocus,focusMain,restorePendingFocus} from './focus-m
 // Owns the application frame. Feature views render into the page outlet;
 // navigation and header lifetime never depend on which feature is displayed.
 export function applicationShell({root,mark,navigation,applyLayout,pageKey=()=>location.hash}) {
-  let frame=null,previousPage=null;
+  let frame=null,previousPage=null,disclosures=new Map();
   function mount() {
     root.innerHTML=`<div class="shell">
       <header class="topbar">
@@ -20,6 +20,8 @@ export function applicationShell({root,mark,navigation,applyLayout,pageKey=()=>l
   return {
     showWorkspace(renderContent) {
       const nextPage=pageKey(),changed=previousPage!==null&&previousPage!==nextPage;
+      if(changed)disclosures.clear();
+      else for(const node of frame?.main.querySelectorAll('details[data-disclosure]')??[])disclosures.set(node.dataset.disclosure,node.open);
       const focused=frame?.main.contains(document.activeElement)?captureFocus():null;
       const mounted=!frame;
       if(mounted)mount();
@@ -30,6 +32,7 @@ export function applicationShell({root,mark,navigation,applyLayout,pageKey=()=>l
       }
       const navigationChanged=navigation.update(frame.sidebar,frame.topbar);
       frame.main.innerHTML=renderContent();
+      for(const node of frame.main.querySelectorAll('details[data-disclosure]'))if(disclosures.has(node.dataset.disclosure))node.open=disclosures.get(node.dataset.disclosure);
       const heading=frame.main.querySelector('h1');
       document.title=heading?.textContent.trim()?heading.textContent.trim()+' · Observanda':'Observanda';
       previousPage=nextPage;

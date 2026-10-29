@@ -1,6 +1,7 @@
 import {expect} from '@playwright/test';
 
 export async function openRecordDetail(page,field='title'){
+ await page.getByRole('navigation',{name:'Record editing areas',exact:true}).getByRole('button',{name:'Record details',exact:true}).click();
  await page.locator('[data-record-detail-field]').selectOption(field);
  await page.getByRole('button',{name:'Edit selected detail',exact:true}).click();
  const dialog=page.locator('dialog.record-writing[open]');await expect(dialog.locator('[data-writing-fields] input,[data-writing-fields] select,[data-writing-fields] textarea').first()).toBeVisible();return dialog;

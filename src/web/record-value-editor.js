@@ -1,6 +1,7 @@
 import {t} from './i18n/index.js';
 import {revisionId} from './revision-model.js';
 import {captureFocus,requestFocusRestore} from './focus-management.js';
+import {ux} from './experience-ui.js';
 
 
 // Shared checkpoint, conflict and lifetime owner for selected-value editors.
@@ -71,7 +72,7 @@ export function recordValueEditor({state,api,esc,notify,onSaved,onClosed,adapter
   view.release?.();dialog.innerHTML='<h2 id="'+adapter.route+'-value-title" tabindex="-1">'+esc(view.heading(base))+'</h2>'+
    (base?'<p>'+esc(base.recordTitle)+'</p>':'')+'<div data-writing-fields>'+(value?view.fields(base,value,changed):'')+'</div>'+
    (conflict?'<section class="record-writing-conflict"><h3>'+esc(text('savedVersion'))+'</h3>'+view.preview(conflict)+'<div class="inline-actions">'+button('useSaved','use-saved')+button('keepMine','keep-mine')+'</div></section>':'')+
-   '<p role="alert" data-writing-error></p><p role="status" data-writing-status></p><div class="dialog-actions">'+button('close','close')+button('discard','discard')+button('retry','retry')+button('save','save',true)+'</div>';
+   '<p role="alert" data-writing-error></p><p role="status" data-writing-status></p><p class="save-explanation">'+esc(ux('draftHelp'))+'</p><div class="dialog-actions">'+button('close','close')+button('discard','discard')+button('retry','retry')+button('save','save',true)+'</div>';
   view.bind?.(dialog);paint();
  }
  function changed(){dirty=true;error='';status=text('checkpointing');clearTimeout(timer);timer=setTimeout(()=>void flush().catch(()=>{}),800);paint();}

@@ -47,5 +47,5 @@ export function recordRemovalUI({state,api,esc,target,onRemoved,refresh,notify})
    }
   }finally{progress.close();if(active(s)){s.busy=false;paint();}}
  });
- return {open,checkContext,view:()=>'<section class="panel danger-zone"><button type="button" class="button danger" data-action="record-removal-open">'+esc(text('remove'))+'</button></section>'};
+ return {open,checkContext,view:()=>'<button type="button" class="button danger" data-action="record-removal-open">'+esc(text('remove'))+'</button>'};
 }

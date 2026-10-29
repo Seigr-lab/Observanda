@@ -23,10 +23,10 @@ test('saved editing opens directly, browses areas and retains late writing acros
   const editor=page.locator('.record-editing'),nav=page.getByRole('navigation',{name:'Record editing areas',exact:true});
   await expect(editor.locator('h1')).toHaveText(record.title);await expect(nav).toBeVisible();await expect(editor.locator('[contenteditable=true]')).toHaveCount(0);
   await expect(editor.locator('.record-edit-details')).toContainText('Progress');await expect(editor.locator('.record-edit-details')).toContainText('Publication availability');await expect(editor.locator('.record-edit-details')).not.toContainText('undefined');
-  for(const name of ['Record details','Summary / context','Writing sections','Figures','Images, audio and video','Preparations, events and assessments','Results','Tags','Contributors','Original evidence and connected work','Research links','Methods and record activity']){
-   await nav.getByRole('button',{name,exact:true}).click();await expect(page.locator('.record-edit-area').and(page.getByRole('region',{name,exact:true}))).toBeFocused();
+  for(const [name,area] of [['Writing','summary'],['Evidence and results','attachments'],['Record details','details'],['Activity and history','activity']]){
+   await nav.getByRole('button',{name,exact:true}).click();await expect(page.locator('[data-record-edit-area="'+area+'"]')).toBeFocused();
   }
-  await nav.getByRole('button',{name:'Writing sections',exact:true}).click();
+  await nav.getByRole('button',{name:'Writing',exact:true}).click();
   await editor.getByLabel('Go to section number',{exact:true}).fill('129');await editor.getByRole('button',{name:'Go',exact:true}).click();
   const section=page.locator('#record-section-'+record.sections[128].id);await expect(section).toBeFocused();
   await page.getByRole('button',{name:'Read record',exact:true}).click();await expect(page).toHaveURL(new RegExp('/read$'));await expect(section).toBeVisible();
@@ -54,9 +54,9 @@ test('new drafts keep their authoring form and saved records reopen in editing a
  try{
   await page.goto(app.url);await page.goto(app.origin+'/#/notebooks/'+book.notebooks[0].id);
   await page.getByRole('button',{name:'New record',exact:true}).click();await page.getByRole('button',{name:'Create free-form note',exact:true}).click();
-  await page.getByLabel('Record title',{exact:true}).fill('A new observation');await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
+  await page.getByLabel('Record title',{exact:true}).fill('A new observation');await page.getByRole('button',{name:'Save record',exact:true}).click();await expect(page.locator('.record-editing h1')).toHaveText('A new observation');
   const id=await page.evaluate(()=>location.hash.split('/')[2]);await page.reload();await expect(page.locator('.record-editing h1')).toHaveText('A new observation');
-  await page.getByRole('navigation',{name:'Record editing areas',exact:true}).getByRole('button',{name:'Writing sections',exact:true}).click();
+  await page.getByRole('navigation',{name:'Record editing areas',exact:true}).getByRole('button',{name:'Writing',exact:true}).click();
   await page.getByRole('button',{name:'Add writing section',exact:true}).click();const dialog=page.getByRole('dialog',{name:'Edit writing section',exact:true});
   await dialog.getByLabel('Section heading',{exact:true}).fill('First field visit');await dialog.locator('.ProseMirror').fill('The first retained observation.');await dialog.getByRole('button',{name:'Save changes',exact:true}).click();await expect(dialog).not.toBeVisible();
   await expect(page.getByRole('heading',{name:'First field visit',exact:true})).toBeVisible();

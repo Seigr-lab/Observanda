@@ -16,6 +16,7 @@ import {recordMediaActions} from './record-media-actions.js';
 import {recordFigureActions} from './record-figure-actions.js';
 import {recordTagActions} from './record-tag-actions.js';
 import {recordEditingView} from './record-editing-view.js';
+import {focusElement} from './focus-management.js';
 import {figureResultLinks,resultStatementAnchor} from './figure-result-links.js';
 
 // Reading windows live outside editable workspace snapshots. Selected editing
@@ -111,7 +112,7 @@ export function recordContentUI({state,api,esc,field,render,report,refresh,editW
   if(await retainedTableAction(control,{api,esc}))return true;
   if(control.dataset.action==='content-edit-area'){
    const area=[...document.querySelectorAll('[data-record-edit-area]')].find(node=>node.dataset.recordEditArea===control.dataset.area);
-   if(area){state.recordSection=null;area.focus({preventScroll:true});area.scrollIntoView({block:'start'});}return true;
+   if(area){state.recordSection=null;focusElement(area);area.scrollIntoView({block:'start'});}return true;
   }
   if(await tags.action(control))return true;
   if(await figureCommands.action(control))return true;

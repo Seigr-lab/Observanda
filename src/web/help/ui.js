@@ -20,8 +20,9 @@ export function helpUI({state,esc,render}){
   return `<article class="help-article" lang="${topic.language??language()}"><h2 id="help-${topic.id}" tabindex="-1">${esc(topic.title)}</h2>${topic.sections.map(section=>`<section lang="${section.language??language()}"><h3 id="help-${topic.id}-${section.id}" tabindex="-1">${esc(section.title)}</h3>${section.paragraphs.map(p=>`<p>${esc(p)}</p>`).join('')}<p class="help-permalink">${link(t('help','link'),topic.id,section.id)}</p></section>`).join('')}</article>`;
  }
  function body(){
+  const first=['getting-started','records','writing','evidence','publishing','organizations'];const topics=[...guide.topics].sort((a,b)=>(first.includes(a.id)?first.indexOf(a.id):first.length)-(first.includes(b.id)?first.indexOf(b.id):first.length));
   if(query.trim())return results();
-  if(!state.helpTopic)return `<h2>${message('contents')}</h2><ul class="help-topics">${guide.topics.map(topic=>`<li>${link(topic.title,topic.id)}</li>`).join('')}</ul><p class="muted">${message('coverage')}</p>`;
+  if(!state.helpTopic)return `<h2>${message('contents')}</h2><ul class="help-topics">${topics.map(topic=>`<li>${link(topic.title,topic.id)}</li>`).join('')}</ul><p class="muted">${message('coverage')}</p>`;
   if(state.helpTopic==='all')return guide.topics.map(article).join('');
   const topic=guide.topics.find(topic=>topic.id===state.helpTopic);
   return topic&&(!state.helpSection||topic.sections.some(section=>section.id===state.helpSection))?article(topic):`<p role="status">${message('missing')}</p>`;
