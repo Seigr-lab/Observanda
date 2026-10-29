@@ -7,6 +7,7 @@ export async function projectModuleFederation(identities,domains){
  const head={workspaceId:identities.registry.namespaceId,currentVersion: [...owners.values()].every(o=>o.head.revision===0||o.head.currentVersion===1)?1:undefined};
  async function locate(id){const value=await identities.locate('entity',id);if(!value)return null;if(!selected.has(value.domain))throw new AppError('MODULE_REFERENCE');return owners.get(value.domain);}
  return {head,owners,
+  stockProjection(){const plans=[];for(const [domain,owner] of owners)if(['inventory','bom'].includes(domain)){const values=owner.catalogue.stockProjection(owner.head);if(!values)return null;plans.push(...values);}return plans;},
   async browse(_head,{types=null,...options}={}){
    const plans=[];
    for(const [domain,owner] of owners){

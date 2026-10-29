@@ -114,6 +114,7 @@ test('old unlocated stock keeps its original owner placement and gains explicit 
 
 test('1000 workspace posters stay entirely central when every project enables its inventory view',async()=>{
  const s=await setup();
+ s.book=(await s.ws.read()).book;
  s.book.projects.forEach(p=>{p.tools=[];});
  s.book=(await s.ws.save(s.book,(await s.ws.read()).etag)).book;
  const id=await s.create(details({name:'Posters',unit:'posters'}),'1000'),before=await s.store.read();

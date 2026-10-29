@@ -1,0 +1,33 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {mkdtemp,rm} from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {moduleDomainStore} from './module-domain-fixture.js';
+import {seedModuleCurrent} from './module-current-fixture.js';
+import {sampleNotebook} from '../src/sample.js';
+import {clearVault} from '../src/encryption.js';
+import {ModuleCatalogue} from '../src/modules/catalogue.js';
+import {InventoryProjection} from '../src/modules/inventory-projection.js';
+import {InventoryReader} from '../src/modules/inventory-reader.js';
+import {workspaceModules} from '../src/modules/index.js';
+
+test('stock projection upgrades and command effects publish atomically; old readers remain read-only',async t=>{
+ const temporaryRoot=path.resolve(os.tmpdir()),directory=await mkdtemp(path.join(temporaryRoot,'observanda-stock-projection-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),now=new Date().toISOString();
+ t.after(async()=>{clearVault(f.vault);assert.equal(path.dirname(directory),temporaryRoot);assert.ok(path.basename(directory).startsWith('observanda-stock-projection-'));await rm(directory,{recursive:true,force:true});});
+ const resource={id:randomUUID(),type:'resource',revision:1,createdAt:now,updatedAt:now,data:{projectId:null,placementId:null,name:'Synthetic stock',code:'',kind:'material',description:'',categoryId:null,schemaRevision:null,fieldSchema:[],values:{},location:'',unit:'items',capacity:1,status:'available',links:[]}},movement={id:randomUUID(),type:'movement',revision:1,createdAt:now,updatedAt:now,data:{resourceId:resource.id,projectId:null,delta:'10',unit:'items',reason:'Opening',links:[],reservationId:null}};
+ await seedModuleCurrent(f.workspace,book.id,[resource,movement]);
+ const run=(operation,write=false)=>moduleDomainStore(f.workspace,book.id,'inventory',operation,{write}),reader=new InventoryReader(f.workspace),stock=()=>reader.stock({workspaceId:book.id,ids:[resource.id]});
+ await run(async store=>{const head=await new ModuleCatalogue(store).head(book.id);delete head.stockIndex;await store.db.run("DELETE FROM state WHERE starts_with(slot,'module-stock-index:') OR starts_with(slot,'module-stock-value:')");await store.db.run("UPDATE state SET payload=$1 WHERE slot='modules'",store.encode('state','modules',head));},true);
+ assert.equal((await stock()).items[0].locations[0].physical,'10');await run(async store=>assert.equal((await new ModuleCatalogue(store).head(book.id)).stockIndex,undefined));
+ const command={workspaceId:book.id,commandId:randomUUID(),action:'stock.move',payload:{resourceId:resource.id,expectedRevision:1,projectId:null,delta:'2.5',reason:'Receipt',links:[]}},modules=workspaceModules(f.workspace),write=ModuleCatalogue.prototype.writeChanges;
+ t.mock.method(ModuleCatalogue.prototype,'writeChanges',async function(...args){await write.apply(this,args);throw Object.assign(Error('Synthetic interrupted commit'),{code:'ENOSPC'});});
+ await assert.rejects(modules.execute(command,{compact:true}),{code:'ENOSPC'});t.mock.restoreAll();
+ await run(async store=>{const head=await new ModuleCatalogue(store).head(book.id);assert.equal(head.stockIndex,undefined);assert.equal(await store.db.get("SELECT 1 FROM state WHERE starts_with(slot,'module-stock-index:') LIMIT 1"),undefined);});
+ assert.equal((await stock()).items[0].locations[0].physical,'10');
+ await modules.execute(command,{compact:true});await modules.execute(command,{compact:true});assert.equal((await stock()).items[0].locations[0].physical,'12.5');
+ await run(async store=>{const catalogue=new ModuleCatalogue(store),head=await catalogue.head(book.id);assert.ok(head.stockIndex);await new InventoryProjection(catalogue).verify(head);});
+ await f.workspace.catalogue(store=>modules.verifyCatalogue(store,book.id));
+});

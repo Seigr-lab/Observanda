@@ -3,6 +3,7 @@ import {localBOMResource} from '../web/modules/bom-model.js';
 import {AppError} from '../errors.js';
 import {add,negate} from '../web/modules/quantities.js';
 import {stockTracked,assetPlacement} from '../web/modules/inventory-model.js';
+import {mergeInventoryProjection,projectedInventoryScope} from './inventory-projection.js';
 
 // Quantities are accumulated from authenticated constraint facts. Never infer
 // a balance from the subset of ledger originals displayed on the current page.
@@ -23,7 +24,9 @@ export async function inventoryQuantities(context,ids,{signal,scope=null}={}){
   const value=row(item,stockTracked(item.data)?item.data.projectId??null:assetPlacement(item));
   if(!stockTracked(item.data))value.physical='1';
  }
- for await(const member of context.members({signal})){
+ const plans=await context.stockProjection?.();
+ if(plans)await mergeInventoryProjection(plans,resources,row,{work,scope,signal});
+ else for await(const member of context.members({signal})){
   signal?.throwIfAborted();if(member.type&&!['movement','reservation','stock-transfer','bom'].includes(member.type))continue;
   const entity=await context.constraint(member),d=entity.data,item=resources.get(d.resourceId);
   if(item&&stockTracked(item.data)){
@@ -62,6 +65,7 @@ export async function inventoryQuantities(context,ids,{signal,scope=null}={}){
 // is zero. Ownership alone must not hide stock allocated to another project.
 export async function inventoryScopeItems(context,scope,{signal}={}){
  if(!scope)return null;
+ const plans=await context.stockProjection?.();if(plans)return projectedInventoryScope(plans,scope,{signal});
  const visible=new Set();
  for await(const member of context.members({signal})){
   signal?.throwIfAborted();if(member.type&&!['resource','movement','reservation','stock-transfer'].includes(member.type))continue;

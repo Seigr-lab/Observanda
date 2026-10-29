@@ -28,7 +28,7 @@ export class ModuleReader{
    const {metadata:book}=await store.snapshot();if(book.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
    const owned=await moduleDomainContext(store,operation,{domains:this.readDomains});if(owned)return owned.value;
    const catalogue=new ModuleCatalogue(store),head=await catalogue.head(workspaceId);
-   return operation({book,head,browse:async options=>{const plan=await new ModuleBrowseIndex(catalogue).plan(head,options);return plan?[plan]:null;},members:options=>catalogue.members(head,options),member:id=>catalogue.member(head,id),view:member=>catalogue.view(head,member),search:member=>catalogue.search(head,member),references:member=>catalogue.references(head,member),constraint:member=>catalogue.constraint(head,member),calendar:member=>catalogue.calendar(head,member),inventory:member=>catalogue.inventory(head,member),selected:id=>catalogue.selected(head,id),
+   return operation({book,head,stockProjection:()=>catalogue.stockProjection(head),browse:async options=>{const plan=await new ModuleBrowseIndex(catalogue).plan(head,options);return plan?[plan]:null;},members:options=>catalogue.members(head,options),member:id=>catalogue.member(head,id),view:member=>catalogue.view(head,member),search:member=>catalogue.search(head,member),references:member=>catalogue.references(head,member),constraint:member=>catalogue.constraint(head,member),calendar:member=>catalogue.calendar(head,member),inventory:member=>catalogue.inventory(head,member),selected:id=>catalogue.selected(head,id),
     encode:value=>store.encode('module-page',workspaceId,value).toString('base64url'),decode:value=>store.decode('module-page',workspaceId,Buffer.from(value,'base64url'))});
   });
   const data=await this.modules.current();if(data.workspaceId!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
@@ -55,7 +55,7 @@ export class ModuleReader{
    const result=({records:items,total,after,previousAfter})=>{const next=anchor.offset+items.length;return {workspaceId,revision:c.head.revision,items,total,offset:anchor.offset,cursor:c.encode(anchor),
     nextCursor:next<total?c.encode({...anchor,offset:next,after}):null,
     previousCursor:anchor.offset?c.encode({...anchor,offset:Math.max(0,anchor.offset-limit),...(anchor.offset>limit?{after:previousAfter}:{after:null})}):null};};
-   if(c.browse&&!collect&&!reference&&!query&&!status&&!tags.length&&kind===null&&archived===null&&moduleId===null&&projectId===null&&scopeIds===null&&key===null&&keys===null&&resourceId===null){
+   if(c.browse&&!collect&&!reference&&!query&&!status&&!tags.length&&kind===null&&archived===null&&(moduleId===null||moduleId==='resources'&&recursive)&&projectId===null&&scopeIds===null&&key===null&&keys===null&&resourceId===null){
     const plans=await c.browse({types:type?(types&&!types.includes(type)?[]:[type]):types,sort,after:anchor.offset?anchor.after:null,signal});
     if(plans)return result(await moduleBrowsePage(plans,{...anchor,order:compare,signal}));
    }
@@ -75,7 +75,7 @@ export class ModuleReader{
     selected=member?[{member}]:[];
    }
    const stockItems=moduleId==='resources'&&!keys&&(!type||type==='resource')&&(!types||types.includes('resource'))?await inventoryScopeItems(c,stockScope,{signal}):null;
-   async function* candidates(){if(selected)yield* selected;else for await(const member of c.members({signal,types:type?[type]:types}))yield {member};}
+   async function* candidates(){if(selected)yield* selected;else if(stockItems&&type==='resource'){for(const id of stockItems){signal?.throwIfAborted();const member=await c.member(id);if(!member)throw new AppError('CATALOGUE_DAMAGED');yield {member};}}else for await(const member of c.members({signal,types:type?[type]:types}))yield {member};}
    for await(const {member,view:selectedView} of candidates()){
     signal?.throwIfAborted();if(key&&member.id!==key||keys&&!keys.includes(member.id)||type&&member.type&&member.type!==type||types&&member.type&&!types.includes(member.type))continue;
     if(resourceId&&(await c.constraint(member)).data.resourceId!==resourceId)continue;

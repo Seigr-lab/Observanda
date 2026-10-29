@@ -1,5 +1,6 @@
 import {moduleConstraint} from './constraints.js';
 import {add,negate} from '../web/modules/quantities.js';
+import {projectedStockBalance} from './inventory-projection.js';
 // One transaction-scoped source for domain invariants. Lookups keep a small
 // cache; scans release each fact. Authored bodies are owned by selected commands.
 export function moduleConstraintSource(catalogue,head,changed=new Map(),{work,originals=new Map()}={}){
@@ -34,7 +35,8 @@ export function moduleConstraintSource(catalogue,head,changed=new Map(),{work,or
   }
  }
  async function balance(resourceId,projects=null){
-  if(!balancesReady){
+  const plans=await catalogue.stockProjection?.(head);
+  if(!plans&&!balancesReady){
    for await(const fact of scan(['movement','reservation','stock-transfer'],false))await aggregate(fact,async(id,place,physical,reserved)=>{
     for(const location of [place,'total']){const key=balanceKey(id,location),value=await work.get(key)??{physical:'0',reserved:'0'};
      await work.put(key,{physical:add(value.physical,physical),reserved:add(value.reserved,reserved)});
@@ -42,7 +44,8 @@ export function moduleConstraintSource(catalogue,head,changed=new Map(),{work,or
    });balancesReady=true;
   }
   let physical='0',reserved='0';
-  for(const place of projects??['total']){const value=await work.get(balanceKey(resourceId,place));if(value){physical=add(physical,value.physical);reserved=add(reserved,value.reserved);}}
+  if(plans)({physical,reserved}=await projectedStockBalance(plans,resourceId,(await baseGet(resourceId))?.data.projectId??null,projects));
+  else for(const place of projects??['total']){const value=await work.get(balanceKey(resourceId,place));if(value){physical=add(physical,value.physical);reserved=add(reserved,value.reserved);}}
   async function adjust(value,reverse){await aggregate(value,async(id,place,p,r)=>{if(id===resourceId&&(!projects||projects.has(place))){physical=add(physical,reverse?negate(p):p);reserved=add(reserved,reverse?negate(r):r);}});}
   for(const entity of changed.values())if(['movement','reservation','stock-transfer'].includes(entity.type)){
    const previous=await baseGet(entity.id);if(previous)await adjust(previous,true);await adjust(moduleConstraint(entity),false);
