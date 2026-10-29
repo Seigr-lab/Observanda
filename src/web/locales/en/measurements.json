@@ -429,5 +429,10 @@
   "computationPerCell": "Computation is recorded separately for each value",
   "computationApproximateMethod": "Approximate Pearson correlation under the saved calculation policy",
   "computationExact": "Exact computational value",
-  "computationScalarContext": "{representation}, base {radix}; unit: {unit}"
+  "computationScalarContext": "{representation}, base {radix}; unit: {unit}",
+  "declaredDomainComponents": "Exact declared components; no magnitude or order is inferred.",
+  "preservedDomainCodec": "This codec version is preserved without semantic interpretation.",
+  "lineageInputColumn": "Input {input}, column {column}",
+  "unmatchedSourceRow": "Unmatched source row",
+  "moreInputSources": "More sources for this input"
 }

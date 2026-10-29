@@ -356,5 +356,7 @@
   "editorInsertHint": "Dra til sida, eller klikk for å setje inn",
   "editorMoveHint": "Dra for å flytte; piltastane fungerer òg",
   "editorEditHeadingHint": "Bruk Rediger for å endre denne overskrifta",
-  "editorIntegerRange": "Skriv inn eit heiltal frå {min} til {max}."
+  "editorIntegerRange": "Skriv inn eit heiltal frå {min} til {max}.",
+  "editorElements": "Element",
+  "editorPreparingPreview": "Klargjer førehandsvising av element…"
 }

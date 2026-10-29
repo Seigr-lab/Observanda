@@ -99,5 +99,12 @@
   "reviewDetailVerifyFigures": "Verifica el contacto de revisión antes de abrir las figuras",
   "reviewDetailVerifyReviewer": "Primero verifica el contacto del revisor",
   "reviewDetailVerifySenderImport": "Verifica el contacto del remitente antes de importar una revisión",
-  "reviewDetailWorkspaceChanged": "El espacio de trabajo ha cambiado"
+  "reviewDetailWorkspaceChanged": "El espacio de trabajo ha cambiado",
+  "moduleUnavailable": "Módulo no disponible",
+  "moduleEnable": "Activa este módulo en Preferencias. Sus datos y ajustes se conservan.",
+  "moduleManage": "Gestionar módulos",
+  "moduleProjectUnavailable": "Esta herramienta no está activada para este proyecto. Elige sus proyectos en Preferencias.",
+  "moduleNoScreen": "Este módulo no tiene ninguna pantalla disponible en el espacio de trabajo.",
+  "moduleEnableFirst": "Activa este módulo en Preferencias para utilizarlo.",
+  "moduleOpening": "Abriendo el módulo…"
 }

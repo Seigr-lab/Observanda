@@ -1,5 +1,5 @@
 import {recordBrowse} from './record-query.js';
-import {researchTargets} from './record-model.js';
+import {researchTargets} from './research-target-presentation.js';
 import {researchId} from './research-reference.js';
 import {revisionId} from './revision-model.js';
 import {t} from './i18n/index.js';

@@ -1,16 +1,21 @@
+import {t,language} from './i18n/index.js';
+import errors from './locales/en/errors.json' with {type:'json'};
+const message=(key,values)=>t('startup',key,values);
+const esc=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+const progressMessage=(key,value)=>message(key,{count:value.total,loaded:value.loaded.toLocaleString(language()),total:value.total.toLocaleString(language())});
 // Startup has its own lifecycle: cancellation never opens a partial workspace.
 export function loadWorkspaceView({reader,show,reload=()=>location.reload()}){
  return new Promise((resolve,reject)=>{
   let controller,progress=null;
-  show('<main id="main" class="loading workspace-loading"><h1 tabindex="-1">Opening workspace</h1><p id="workspace-load-progress" role="status">Reading workspace details...</p><progress aria-label="Loading records"></progress><div class="inline-actions"><button class="button" id="workspace-load-cancel">Cancel loading</button><button class="button primary" id="workspace-load-retry" hidden>Retry loading</button><button class="button" id="workspace-load-restart" hidden>Reload workspace</button></div><p id="workspace-load-error" role="alert"></p></main>');
+  show('<main id="main" class="loading workspace-loading"><h1 tabindex="-1">'+esc(message('workspaceOpening'))+'</h1><p id="workspace-load-progress" role="status">'+esc(message('workspaceDetails'))+'</p><progress aria-label="'+esc(message('workspaceRecords'))+'"></progress><div class="inline-actions"><button class="button" id="workspace-load-cancel">'+esc(message('workspaceCancel'))+'</button><button class="button primary" id="workspace-load-retry" hidden>'+esc(message('workspaceRetry'))+'</button><button class="button" id="workspace-load-restart" hidden>'+esc(message('workspaceReload'))+'</button></div><p id="workspace-load-error" role="alert"></p></main>');
   const main=document.querySelector('#main'),status=main.querySelector('#workspace-load-progress'),bar=main.querySelector('progress'),
    cancel=main.querySelector('#workspace-load-cancel'),retry=main.querySelector('#workspace-load-retry'),
    restart=main.querySelector('#workspace-load-restart'),errorText=main.querySelector('#workspace-load-error');
   main.querySelector('h1').focus();
-  const update=value=>{progress=value;status.textContent='Loading records '+value.loaded+' of '+value.total;bar.max=Math.max(1,value.total);bar.value=value.loaded;};
+  const update=value=>{progress=value;status.textContent=progressMessage('workspaceProgress',value);bar.max=Math.max(1,value.total);bar.value=value.loaded;};
   async function run(){
    controller=new AbortController();cancel.hidden=false;cancel.disabled=false;retry.hidden=true;restart.hidden=true;errorText.textContent='';
-   status.textContent=progress?'Loading records '+progress.loaded+' of '+progress.total:'Reading workspace details...';
+   status.textContent=progress?progressMessage('workspaceProgress',progress):message('workspaceDetails');
    try{
     const result=await reader.read({signal:controller.signal,onProgress:update});
     resolve(result);
@@ -19,10 +24,10 @@ export function loadWorkspaceView({reader,show,reload=()=>location.reload()}){
     if(error.code==='ACCESS_LOCKED'||error.code==='AUTH'){reader.reset();reject(error);return;}
     const fatal=['WORKSPACE_CHANGED','WORKSPACE_READ_CURSOR','WORKSPACE_READ_INVALID','CATALOGUE_DAMAGED'].includes(error.code);
     const cancelled=controller.signal.aborted;
-    status.textContent=cancelled?'Loading paused.':'Workspace could not be opened.';
-    if(!cancelled)errorText.textContent=error.message??'Connection interrupted. Received pages are kept for retry.';
-    if(progress)status.textContent+=' '+progress.loaded+' of '+progress.total+' records received.';
-    retry.hidden=fatal;retry.textContent=cancelled?'Resume loading':'Retry loading';restart.hidden=false;
+    status.textContent=message(cancelled?'workspacePaused':'workspaceFailed');
+    if(!cancelled)errorText.textContent=Object.hasOwn(errors,error.code)?t('errors',error.code):error.message??message('workspaceInterrupted');
+    if(progress)status.textContent+=' '+progressMessage('workspaceReceived',progress);
+    retry.hidden=fatal;retry.textContent=message(cancelled?'workspaceResume':'workspaceRetry');restart.hidden=false;
     (fatal?restart:retry).focus();
    }
   }

@@ -3,6 +3,10 @@ import {moduleOwnerApi} from './modules/owner-api.js';
 import {projectToolScope} from './project-tools.js';
 import {parseScope,normalizeScopePath} from './modules/scope.js';
 import {FEATURE_MODULES,enabledModule} from './feature-modules.js';
+import {moduleLabel,moduleLocationLabel} from './module-presentation.js';
+import './i18n/catalogues/supportEditors.js';
+import {t} from './i18n/index.js';
+const message=key=>t('supportEditors',key);
 
 // The shell dispatches generic module routes and editing commands. Feature UI
 // implementations own their screens; adding one does not add an app switch case.
@@ -63,9 +67,9 @@ export function moduleWorkbench(services){
   supportsOutline:id=>descriptor(id)?.metadataOnly===true,
   view(){
    const module=descriptor(state.moduleId);
-   if(!module||!enabledModule(state.dashboardSettings,state.moduleId))return '<section class="panel"><h1>'+esc(module?.label??'Module unavailable')+'</h1><p>Enable this module in Preferences. Its data and settings are retained.</p><button class="button" data-action="dashboard-settings">Manage modules</button></section>';
-   if(!available())return '<section class="panel"><h1>'+esc(module.locationTool.label)+'</h1><p>This tool is not enabled for this project. Choose its projects in Preferences.</p><button class="button" data-action="dashboard-settings">Manage modules</button></section>';
-   return active()?.view(state.modulePath??'')??'<p>This module has no available workspace screen.</p>';
+   if(!module||!enabledModule(state.dashboardSettings,state.moduleId))return '<section class="panel"><h1>'+esc(module?moduleLabel(module):message('moduleUnavailable'))+'</h1><p>'+esc(message('moduleEnable'))+'</p><button class="button" data-action="dashboard-settings">'+esc(message('moduleManage'))+'</button></section>';
+   if(!available())return '<section class="panel"><h1>'+esc(moduleLocationLabel(module))+'</h1><p>'+esc(message('moduleProjectUnavailable'))+'</p><button class="button" data-action="dashboard-settings">'+esc(message('moduleManage'))+'</button></section>';
+   return active()?.view(state.modulePath??'')??'<p>'+esc(message('moduleNoScreen'))+'</p>';
   },
   bind(){reconcile();for(const [id,instance] of instances)if(state.page!=='module'||state.moduleId!==id)instance.deactivate?.();if(state.page==='module'&&available())active()?.bind?.();},
   async action(button){

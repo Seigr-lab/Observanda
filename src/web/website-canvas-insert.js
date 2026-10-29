@@ -5,6 +5,8 @@ import {staticSectionContent,sectionMarkup} from './website-section-markup.js';
 import {updateCanvasOrder} from './website-canvas-order.js';
 import {popupMarkup,copyTextMarkup} from './website-popup-markup.js';
 import {updateCanvasElement} from './website-canvas-element.js';
+import './i18n/catalogues/websiteAuthoring.js';
+import {t} from './i18n/index.js';
 
 export function insertCanvasSections(root,sections,inserted,{esc,region=''}={}){
  if(!root)return false;
@@ -14,7 +16,7 @@ export function insertCanvasSections(root,sections,inserted,{esc,region=''}={}){
   const body=section.format==='rich'?renderRichText(section.richText,{resolveLink:href=>/^(https?:|mailto:|tel:|#)/.test(href)?href:null}):formattedText(section.body??'',section.format);
   const children=childrenOf(sections,section.id).filter(child=>ids.has(child.id)).map(markup).join('');
   const content=section.kind==='popup'?popupMarkup(section,{esc,id:(region?region+'-':'')+'section-'+section.id,children,editing:true}):section.kind==='copy-text'?copyTextMarkup(section,esc,{editing:true}):staticSectionContent(section,{esc,body,editing:true,children});
-  return sectionMarkup(section,{esc,region,content:content??'<p class="muted" role="status" data-local-preview>Preparing element preview…</p>'});
+  return sectionMarkup(section,{esc,region,content:content??'<p class="muted" role="status" data-local-preview>'+esc(t('websiteAuthoring','editorPreparingPreview'))+'</p>'});
  }
  let added=false;
  for(const section of inserted){

@@ -429,5 +429,10 @@
   "computationPerCell": "Beregning blir registrert separat for hver verdi",
   "computationApproximateMethod": "Tilnærma Pearson-korrelasjon etter den lagra beregningspolicyen",
   "computationExact": "Eksakt beregnet verdi",
-  "computationScalarContext": "{representation}, grunntall {radix}; enhet: {unit}"
+  "computationScalarContext": "{representation}, grunntall {radix}; enhet: {unit}",
+  "declaredDomainComponents": "Eksakte deklarerte komponenter; ingen størrelse eller rekkefølge utledes.",
+  "preservedDomainCodec": "Denne kodekversjonen bevares uten semantisk tolkning.",
+  "lineageInputColumn": "Inndata {input}, kolonne {column}",
+  "unmatchedSourceRow": "Kilderad uten samsvar",
+  "moreInputSources": "Flere kilder for disse inndataene"
 }

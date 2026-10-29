@@ -99,5 +99,12 @@
   "reviewDetailVerifyFigures": "Verifica el contacte de revisió abans d’obrir les figures",
   "reviewDetailVerifyReviewer": "Primer verifica el contacte del revisor",
   "reviewDetailVerifySenderImport": "Verifica el contacte del remitent abans d’importar una revisió",
-  "reviewDetailWorkspaceChanged": "L’espai de treball ha canviat"
+  "reviewDetailWorkspaceChanged": "L’espai de treball ha canviat",
+  "moduleUnavailable": "Mòdul no disponible",
+  "moduleEnable": "Activa aquest mòdul a Preferències. Les dades i la configuració es conserven.",
+  "moduleManage": "Gestiona els mòduls",
+  "moduleProjectUnavailable": "Aquesta eina no està activada per a aquest projecte. Tria els projectes on la vols activar a Preferències.",
+  "moduleNoScreen": "Aquest mòdul no té cap pantalla disponible a l’espai de treball.",
+  "moduleEnableFirst": "Activa aquest mòdul a Preferències per utilitzar-lo.",
+  "moduleOpening": "S’està obrint el mòdul…"
 }

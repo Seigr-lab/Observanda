@@ -28,5 +28,9 @@
   "choose": "Tria una tipografia",
   "custom": "Personalitzada · ",
   "variable": "Variable",
-  "static": "Estàtica"
+  "static": "Estàtica",
+  "systemSans": "Pal sec del sistema",
+  "systemSerif": "Serif del sistema",
+  "axisWeight": "Pes",
+  "axisOpticalSize": "Mida òptica"
 }

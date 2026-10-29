@@ -28,5 +28,9 @@
   "choose": "Velg skrifttype",
   "custom": "Tilpassa · ",
   "variable": "Variabel",
-  "static": "Statisk"
+  "static": "Statisk",
+  "systemSans": "Systemskrift uten seriffer",
+  "systemSerif": "Systemskrift med seriffer",
+  "axisWeight": "Vekt",
+  "axisOpticalSize": "Optisk størrelse"
 }

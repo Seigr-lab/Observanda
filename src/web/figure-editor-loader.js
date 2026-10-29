@@ -1,5 +1,6 @@
-import {figureIssues} from './scientific-validation.js';
+import {figureIssues} from './figure-model.js';
 import {t} from './i18n/index.js';
+import './i18n/catalogues/figureDiagnostics.js';
 import {retryModule} from './retry-module.js';
 
 const text=key=>t('recordContent',key);
@@ -42,7 +43,7 @@ export function figureEditor(options,{load=retryModule(()=>import('./figure-edit
    if(shown&&!instance)throw Error(text(active?'figuresLoading':'figuresLoadFailed'));
    if(instance)return instance.validate();
    // Saves outside the full form retain validation without downloading its UI.
-   for(const figure of options.getFigures()){const issues=figureIssues(figure);if(issues.length)throw Error(figure.title+': '+issues[0]);}
+   for(const figure of options.getFigures()){const issues=figureIssues(figure,{translate:t});if(issues.length)throw Error(figure.title+': '+issues[0]);}
   }
  };
 }

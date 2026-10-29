@@ -7,5 +7,23 @@
   "connectionMessage": "S'ha interromput la connexió o la inicialització de l'espai de treball. Torna a carregar per repetir-ho. No s'ha substituït l'espai de treball guardat.",
   "unauthorized": "Obre el teu llibre de laboratori",
   "authorizationMessage": "Obre Observanda des de la icona de l'aplicació o utilitza el seu enllaç d'inici actual per connectar aquest navegador.",
-  "reload": "Torna a carregar Observanda"
+  "reload": "Torna a carregar Observanda",
+  "workspaceOpening": "S’està obrint l’espai de treball",
+  "workspaceDetails": "S’estan llegint els detalls de l’espai de treball...",
+  "workspaceRecords": "S’estan carregant els registres",
+  "workspaceCancel": "Cancel·la la càrrega",
+  "workspaceRetry": "Torna a carregar",
+  "workspaceReload": "Torna a carregar l’espai de treball",
+  "workspacePaused": "S’ha posat la càrrega en pausa.",
+  "workspaceFailed": "No s’ha pogut obrir l’espai de treball.",
+  "workspaceInterrupted": "S’ha interromput la connexió. Les pàgines rebudes es conserven per tornar-ho a provar.",
+  "workspaceResume": "Reprèn la càrrega",
+  "workspaceProgress": {
+    "one": "S’està carregant el registre {loaded} d’{total}",
+    "other": "S’estan carregant els registres {loaded} de {total}"
+  },
+  "workspaceReceived": {
+    "one": "S’ha rebut {loaded} d’{total} registre.",
+    "other": "S’han rebut {loaded} de {total} registres."
+  }
 }

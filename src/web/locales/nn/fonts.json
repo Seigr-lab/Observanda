@@ -28,5 +28,9 @@
   "choose": "Vel skrifttype",
   "custom": "Tilpassa · ",
   "variable": "Variabel",
-  "static": "Statisk"
+  "static": "Statisk",
+  "systemSans": "Systemskrift utan seriffar",
+  "systemSerif": "Systemskrift med seriffar",
+  "axisWeight": "Vekt",
+  "axisOpticalSize": "Optisk storleik"
 }

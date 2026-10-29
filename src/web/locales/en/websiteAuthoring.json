@@ -356,5 +356,7 @@
   "editorInsertHint": "Drag onto the page, or click to insert",
   "editorMoveHint": "Drag to move; arrow keys also work",
   "editorEditHeadingHint": "Use Edit to change this heading",
-  "editorIntegerRange": "Enter a whole number from {min} to {max}."
+  "editorIntegerRange": "Enter a whole number from {min} to {max}.",
+  "editorElements": "Elements",
+  "editorPreparingPreview": "Preparing element preview…"
 }

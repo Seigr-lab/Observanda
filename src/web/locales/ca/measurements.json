@@ -429,5 +429,10 @@
   "computationPerCell": "El còmput es registra per separat per a cada valor",
   "computationApproximateMethod": "Correlació de Pearson aproximada segons la política de càlcul guardada",
   "computationExact": "Valor computacional exacte",
-  "computationScalarContext": "{representation}, base {radix}; unitat: {unit}"
+  "computationScalarContext": "{representation}, base {radix}; unitat: {unit}",
+  "declaredDomainComponents": "Components exactes declarats; no se n'infereix cap magnitud ni ordre.",
+  "preservedDomainCodec": "Aquesta versió del còdec es conserva sense interpretació semàntica.",
+  "lineageInputColumn": "Entrada {input}, columna {column}",
+  "unmatchedSourceRow": "Fila d'origen sense correspondència",
+  "moreInputSources": "Més fonts per a aquesta entrada"
 }

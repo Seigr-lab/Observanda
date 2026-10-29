@@ -356,5 +356,7 @@
   "editorInsertHint": "Dra til siden, eller klikk for å sette inn",
   "editorMoveHint": "Dra for å flytte; piltastene fungerer også",
   "editorEditHeadingHint": "Bruk Rediger for å endre denne overskriften",
-  "editorIntegerRange": "Angi et heltall fra {min} til {max}."
+  "editorIntegerRange": "Angi et heltall fra {min} til {max}.",
+  "editorElements": "Elementer",
+  "editorPreparingPreview": "Klargjør forhåndsvisning av element…"
 }

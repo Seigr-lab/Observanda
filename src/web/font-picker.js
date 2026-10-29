@@ -1,17 +1,19 @@
 import {t} from './i18n/index.js';
-import {FONT_OPTIONS,fontStack,fontInfo,fontAxes,validFont,customFontId} from './font-catalogue.js';
+import {FONT_OPTIONS,BUNDLED_FONTS,fontStack,fontInfo,fontAxes,validFont,customFontId} from './font-catalogue.js';
 const message=(key,parameters)=>t('fonts',key,parameters);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const text=key=>esc(message(key));
+export const fontDisplayName=(id,label)=>id==='modern'&&label==='System sans serif'?message('systemSans'):id==='editorial'&&label==='System serif'?message('systemSerif'):label;
+export const fontAxisName=(id,tag,axis)=>BUNDLED_FONTS.some(font=>font.id===id)&&['wght','opsz'].includes(tag)?message(tag==='wght'?'axisWeight':'axisOpticalSize'):axis.name;
 let serial=0;
 export function checkFontInputs(){const invalid=[...document.querySelectorAll('[data-font-axis]')].find(el=>!el.checkValidity());if(invalid){invalid.closest('details').open=true;invalid.reportValidity();throw new Error(message('rangeError'));}}
 export function fontSelect(attributes,value,{first=[],fonts=FONT_OPTIONS}={}){
  const choices=[...first,...fonts];if(value&&validFont(value)&&!choices.some(([id])=>id===value))choices.push([value,fontInfo(value)?.label??message('savedCustom')]);
- return `<font-picker><select ${attributes}>${choices.map(([id,label])=>`<option value="${esc(id)}" ${id===value?'selected':''} ${id==='mixed'?'disabled':''}>${esc(label)}</option>`).join('')}</select></font-picker>`;
+ return `<font-picker><select ${attributes}>${choices.map(([id,label])=>`<option value="${esc(id)}" ${id===value?'selected':''} ${id==='mixed'?'disabled':''}>${esc(fontDisplayName(id,label))}</option>`).join('')}</select></font-picker>`;
 }
 export function axisControls(id,values={},attributes=''){
  const axes=Object.entries(fontAxes(id));if(!axes.length)return '';
- return `<details class="font-axis-controls"><summary>${text('variableSettings')}</summary>${axes.map(([tag,a])=>`<label>${esc(a.name)} <small>${a.min}–${a.max}</small><input type="number" ${attributes} data-font-axis="${tag}" min="${a.min}" max="${a.max}" step="any" placeholder="${text('auto')}" value="${values[tag]??''}"></label>`).join('')}<p class="muted">${text('autoHelp')}</p></details>`;
+ return `<details class="font-axis-controls"><summary>${text('variableSettings')}</summary>${axes.map(([tag,a])=>`<label>${esc(fontAxisName(id,tag,a))} <small>${a.min}–${a.max}</small><input type="number" ${attributes} data-font-axis="${tag}" min="${a.min}" max="${a.max}" step="any" placeholder="${text('auto')}" value="${values[tag]??''}"></label>`).join('')}<p class="muted">${text('autoHelp')}</p></details>`;
 }
 export function installFontPickers(){
  if(customElements.get('font-picker'))return;

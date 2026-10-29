@@ -28,5 +28,9 @@
   "choose": "Elegir fuente",
   "custom": "Personalizada · ",
   "variable": "Variable",
-  "static": "Estática"
+  "static": "Estática",
+  "systemSans": "Sin serifa del sistema",
+  "systemSerif": "Con serifa del sistema",
+  "axisWeight": "Peso",
+  "axisOpticalSize": "Tamaño óptico"
 }

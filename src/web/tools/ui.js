@@ -6,7 +6,8 @@ import {ux} from '../experience-ui.js';
 import {t,language} from '../i18n/index.js';
 import {toolSpecs} from './manifests.js';
 import {reaction,formula} from './stoichiometry.js';
-import {readDelimitedTable} from '../scientific-validation.js';
+import {readDelimitedTable} from '../tabular-data.js';
+import '../i18n/catalogues/figureDiagnostics.js';
 const column=i=>String.fromCharCode(65+Math.floor(i/26)-1).replace('@','')+String.fromCharCode(65+i%26);
 const component=(role='reactant')=>({role,formula:'',coefficient:'1',molarMass:'',amount:'',unit:'g',volume:''});
 const initial={reaction:{components:[component(),component('product')]},sheet:{cells:Array.from({length:10},()=>Array(5).fill('')),original:null},chemical:{format:'smiles',source:'',original:null}};
@@ -42,7 +43,7 @@ export async function createToolUI(services,id){
   return '<div class="dedicated-tool" data-tool-id="'+id+'">'+c.input('name',m('name'))+(type==='sheet'?'<p>'+esc(ux('keyboardSheet'))+'</p>':'')+content+'<section class="tool-results" aria-label="'+esc(m('results'))+'" data-tool-output="'+id+'" aria-live="polite"></section>'+c.referenceFields(v.links)+'</div>';
  }
  async function importFile(el,c){const d=c.current,file=el.files?.[0];if(!file)return;try{const original=await originalFile(file),bytes=Uint8Array.from(atob(original.bytes),ch=>ch.charCodeAt(0)),source=new TextDecoder('utf-8',{fatal:true}).decode(bytes);if(disposed||c.current!==d)return;
-  if(type==='sheet'){const parsed=readDelimitedTable(source,{header:false,preserveEmptyRows:true,minColumns:1}),cells=parsed.rows.map(row=>row.cells.map(s=>s.startsWith('=')||s.startsWith("'")?"'"+s:s));if(cells.length>1000||cells[0].length>32||cells.length*cells[0].length>20000||cells.some(row=>row.some(s=>s.length>2000)))throw Error(m('sheetSizeLimit'));d.data.cells=cells;sheetPage=0;}
+  if(type==='sheet'){const parsed=readDelimitedTable(source,{header:false,preserveEmptyRows:true,minColumns:1,translate:t}),cells=parsed.rows.map(row=>row.cells.map(s=>s.startsWith('=')||s.startsWith("'")?"'"+s:s));if(cells.length>1000||cells[0].length>32||cells.length*cells[0].length>20000||cells.some(row=>row.some(s=>s.length>2000)))throw Error(m('sheetSizeLimit'));d.data.cells=cells;sheetPage=0;}
   else{d.data.format=/\.cdxml$/i.test(file.name)?'cdxml':'smiles';d.data.source=source;}
   d.data.original=original;if(!d.data.name)d.data.name=file.name;c.change();last='';c.draw();
  }catch(e){services.notify(e.message);el.value='';}}

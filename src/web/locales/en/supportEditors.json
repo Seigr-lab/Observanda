@@ -99,5 +99,12 @@
   "reviewDetailVerifyFigures": "Verify the review contact before opening figures",
   "reviewDetailVerifyReviewer": "Verify the reviewer contact first",
   "reviewDetailVerifySenderImport": "Verify the sender contact before importing a review",
-  "reviewDetailWorkspaceChanged": "Workspace changed"
+  "reviewDetailWorkspaceChanged": "Workspace changed",
+  "moduleUnavailable": "Module unavailable",
+  "moduleEnable": "Enable this module in Preferences. Its data and settings are retained.",
+  "moduleManage": "Manage modules",
+  "moduleProjectUnavailable": "This tool is not enabled for this project. Choose its projects in Preferences.",
+  "moduleNoScreen": "This module has no available workspace screen.",
+  "moduleEnableFirst": "Enable this module in Preferences to use it.",
+  "moduleOpening": "Opening module…"
 }

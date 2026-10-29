@@ -99,5 +99,12 @@
   "reviewDetailVerifyFigures": "Verifiser kontakten for gjennomgangen før du åpner figurer",
   "reviewDetailVerifyReviewer": "Verifiser fagfellekontakten først",
   "reviewDetailVerifySenderImport": "Verifiser avsenderkontakten før du importerer en gjennomgang",
-  "reviewDetailWorkspaceChanged": "Arbeidsområdet er endret"
+  "reviewDetailWorkspaceChanged": "Arbeidsområdet er endret",
+  "moduleUnavailable": "Modulen er utilgjengelig",
+  "moduleEnable": "Aktiver denne modulen i Innstillinger. Data og innstillinger beholdes.",
+  "moduleManage": "Administrer moduler",
+  "moduleProjectUnavailable": "Dette verktøyet er ikke aktivert for dette prosjektet. Velg prosjektene i Innstillinger.",
+  "moduleNoScreen": "Denne modulen har ingen tilgjengelig arbeidsområdeskjerm.",
+  "moduleEnableFirst": "Aktiver denne modulen i Innstillinger for å bruke den.",
+  "moduleOpening": "Åpner modulen…"
 }

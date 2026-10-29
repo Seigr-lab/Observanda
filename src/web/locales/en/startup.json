@@ -1,11 +1,29 @@
 {
- "opening":"Opening Observanda…",
- "skip":"Skip to main content",
- "moduleFailed":"Observanda could not load",
- "moduleMessage":"A required application file did not load. Reload to try again.",
- "connectionFailed":"Observanda could not finish opening",
- "connectionMessage":"The connection or workspace initialization was interrupted. Reload to try again. Your saved workspace has not been replaced.",
- "unauthorized":"Open your lab book",
- "authorizationMessage":"Open Observanda from its application icon, or use its current launch link to connect this browser.",
- "reload":"Reload Observanda"
+  "opening": "Opening Observanda…",
+  "skip": "Skip to main content",
+  "moduleFailed": "Observanda could not load",
+  "moduleMessage": "A required application file did not load. Reload to try again.",
+  "connectionFailed": "Observanda could not finish opening",
+  "connectionMessage": "The connection or workspace initialization was interrupted. Reload to try again. Your saved workspace has not been replaced.",
+  "unauthorized": "Open your lab book",
+  "authorizationMessage": "Open Observanda from its application icon, or use its current launch link to connect this browser.",
+  "reload": "Reload Observanda",
+  "workspaceOpening": "Opening workspace",
+  "workspaceDetails": "Reading workspace details...",
+  "workspaceRecords": "Loading records",
+  "workspaceCancel": "Cancel loading",
+  "workspaceRetry": "Retry loading",
+  "workspaceReload": "Reload workspace",
+  "workspacePaused": "Loading paused.",
+  "workspaceFailed": "Workspace could not be opened.",
+  "workspaceInterrupted": "Connection interrupted. Received pages are kept for retry.",
+  "workspaceResume": "Resume loading",
+  "workspaceProgress": {
+    "one": "Loading record {loaded} of {total}",
+    "other": "Loading records {loaded} of {total}"
+  },
+  "workspaceReceived": {
+    "one": "{loaded} of {total} record received.",
+    "other": "{loaded} of {total} records received."
+  }
 }

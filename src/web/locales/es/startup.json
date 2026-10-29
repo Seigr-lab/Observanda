@@ -7,5 +7,23 @@
   "connectionMessage": "Se ha interrumpido la conexión o la inicialización del espacio de trabajo. Recarga para volver a intentarlo. El espacio de trabajo guardado no se ha sustituido.",
   "unauthorized": "Abre tu cuaderno de laboratorio",
   "authorizationMessage": "Abre Observanda desde el icono de la aplicación o utiliza su enlace de inicio actual para conectar este navegador.",
-  "reload": "Recargar Observanda"
+  "reload": "Recargar Observanda",
+  "workspaceOpening": "Abriendo el espacio de trabajo",
+  "workspaceDetails": "Leyendo los detalles del espacio de trabajo...",
+  "workspaceRecords": "Cargando los registros",
+  "workspaceCancel": "Cancelar la carga",
+  "workspaceRetry": "Reintentar la carga",
+  "workspaceReload": "Recargar el espacio de trabajo",
+  "workspacePaused": "La carga está en pausa.",
+  "workspaceFailed": "No se ha podido abrir el espacio de trabajo.",
+  "workspaceInterrupted": "Se ha interrumpido la conexión. Las páginas recibidas se conservan para reintentarlo.",
+  "workspaceResume": "Reanudar la carga",
+  "workspaceProgress": {
+    "one": "Cargando el registro {loaded} de {total}",
+    "other": "Cargando los registros {loaded} de {total}"
+  },
+  "workspaceReceived": {
+    "one": "Se ha recibido {loaded} de {total} registro.",
+    "other": "Se han recibido {loaded} de {total} registros."
+  }
 }

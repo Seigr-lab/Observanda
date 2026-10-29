@@ -356,5 +356,7 @@
   "editorInsertHint": "Arrastra a la página o haz clic para insertar",
   "editorMoveHint": "Arrastra para mover; también puedes usar las teclas de flecha",
   "editorEditHeadingHint": "Utiliza Editar para cambiar este encabezado",
-  "editorIntegerRange": "Introduce un número entero entre {min} y {max}."
+  "editorIntegerRange": "Introduce un número entero entre {min} y {max}.",
+  "editorElements": "Elementos",
+  "editorPreparingPreview": "Preparando la vista previa del elemento…"
 }

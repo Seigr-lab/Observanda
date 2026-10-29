@@ -1,4 +1,6 @@
-import {figureDiagnosticText} from './figure-diagnostics.js';
+import {modelMessages} from './model-messages.js';
+import messages from './locales/en/figureDiagnostics.json' with {type:'json'};
+const figureDiagnosticText=translate=>modelMessages('figureDiagnostics',messages,translate);
 // Lossless delimited-table reading. Chart roles belong to consumers, not the parser.
 export const TABLE_DELIMITERS = [['auto', 'Detect automatically'], [',', 'Comma'], ['\t', 'Tab'], [';', 'Semicolon'], ['|', 'Pipe']];
 export const MAX_TABLE_TEXT = 16 * 1024 * 1024;

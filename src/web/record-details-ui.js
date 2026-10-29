@@ -4,7 +4,8 @@ import messages from './locales/en/recordEditors.json' with {type:'json'};
 import {editableRecord} from './workspace-snapshot.js';
 import {researchTargetPicker} from './research-target-picker.js';
 import {workflowRole,workflowIssues} from './record-workflow.js';
-import {RELATION_TYPES,researchTargets,researchReference,parseResearchReference} from './record-model.js';
+import {RELATION_TYPES,researchReference,parseResearchReference} from './record-model.js';
+import {researchTargets} from './research-target-presentation.js';
 import {recordRelationAddButton,recordRelationEditButton} from './record-relations-ui.js';
 
 export function recordDetailsUI({state,esc,field,dirty,render,showDialog,notify,navigate,api}){

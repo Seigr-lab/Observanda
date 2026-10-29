@@ -7,5 +7,23 @@
   "connectionMessage": "Tilkoplinga eller klargjeringa av arbeidsområdet vart avbroten. Last inn på nytt for å prøve igjen. Det lagra arbeidsområdet er ikkje erstatta.",
   "unauthorized": "Opne labboka di",
   "authorizationMessage": "Opne Observanda frå programikonet, eller bruk den gjeldande oppstartslenkja for å kople til denne nettlesaren.",
-  "reload": "Last inn Observanda på nytt"
+  "reload": "Last inn Observanda på nytt",
+  "workspaceOpening": "Opnar arbeidsområdet",
+  "workspaceDetails": "Les detaljane for arbeidsområdet...",
+  "workspaceRecords": "Lastar oppføringar",
+  "workspaceCancel": "Avbryt lasting",
+  "workspaceRetry": "Prøv lasting på nytt",
+  "workspaceReload": "Last arbeidsområdet på nytt",
+  "workspacePaused": "Lastinga er sett på pause.",
+  "workspaceFailed": "Arbeidsområdet kunne ikkje opnast.",
+  "workspaceInterrupted": "Sambandet vart brote. Mottekne sider vert tekne vare på til neste forsøk.",
+  "workspaceResume": "Hald fram med lastinga",
+  "workspaceProgress": {
+    "one": "Lastar oppføring {loaded} av {total}",
+    "other": "Lastar oppføringar {loaded} av {total}"
+  },
+  "workspaceReceived": {
+    "one": "{loaded} av {total} oppføring motteken.",
+    "other": "{loaded} av {total} oppføringar mottekne."
+  }
 }

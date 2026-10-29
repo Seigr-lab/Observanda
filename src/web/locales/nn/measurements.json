@@ -429,5 +429,10 @@
   "computationPerCell": "Utrekning blir registrert separat for kvar verdi",
   "computationApproximateMethod": "Tilnærma Pearson-korrelasjon etter den lagra utrekningspolicyen",
   "computationExact": "Eksakt utrekna verdi",
-  "computationScalarContext": "{representation}, grunntal {radix}; eining: {unit}"
+  "computationScalarContext": "{representation}, grunntal {radix}; eining: {unit}",
+  "declaredDomainComponents": "Eksakte deklarerte komponentar; ingen storleik eller rekkjefølgje vert utleidd.",
+  "preservedDomainCodec": "Denne kodekversjonen vert bevart utan semantisk tolking.",
+  "lineageInputColumn": "Inndata {input}, kolonne {column}",
+  "unmatchedSourceRow": "Kjelderad utan samsvar",
+  "moreInputSources": "Fleire kjelder for desse inndata"
 }

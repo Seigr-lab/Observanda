@@ -28,5 +28,9 @@
   "choose": "Choose font",
   "custom": "Custom · ",
   "variable": "Variable",
-  "static": "Static"
+  "static": "Static",
+  "systemSans": "System sans serif",
+  "systemSerif": "System serif",
+  "axisWeight": "Weight",
+  "axisOpticalSize": "Optical size"
 }
