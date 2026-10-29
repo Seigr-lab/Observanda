@@ -1,8 +1,8 @@
 {
-  "retaining": "S'està desant…",
-  "waiting": "Desat",
-  "saving": "S'està desant…",
-  "failed": "No s'ha pogut desar la configuració. Es conserven els canvis pendents.",
-  "conflict": "La configuració desada ha canviat en una altra sessió. Es conserven els canvis pendents perquè els revisis.",
+  "retaining": "S'està guardant…",
+  "waiting": "Guardat",
+  "saving": "S'està guardant…",
+  "failed": "No s'ha pogut guardar la configuració. Es conserven els canvis pendents.",
+  "conflict": "La configuració guardada ha canviat en una altra sessió. Es conserven els canvis pendents perquè els revisis.",
   "discard": "Descarta els canvis pendents"
 }

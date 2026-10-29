@@ -17,11 +17,11 @@
   "saving": "S'està protegint la connexió en aquest ordinador…",
   "cancel": "Cancel·la l'inici de sessió",
   "cancelled": "S'ha cancel·lat l'inici de sessió.",
-  "savedAccount": "Compte desat en aquest ordinador",
+  "savedAccount": "Compte guardat en aquest ordinador",
   "choose": "Utilitza aquest compte",
   "disconnect": "Desconnecta l'espai de treball",
   "forget": "Oblida el compte en aquest ordinador",
-  "forgetHint": "Oblidar elimina la credencial desada d'Observanda i desconnecta aquest compte de tots els espais de treball d'Observanda en aquest ordinador.",
+  "forgetHint": "Oblidar elimina la credencial guardada d'Observanda i desconnecta aquest compte de tots els espais de treball d'Observanda en aquest ordinador.",
   "manage": "Gestiona l'autorització a GitHub",
   "unavailable": "L'inici de sessió amb navegador necessita Git Credential Manager i l'entorn d'execució de Git inclosos. Utilitza una instal·lació actual d'Observanda.",
   "advanced": "Avançat: testimoni d'accés temporal",
@@ -51,7 +51,7 @@
   "privateRepository": "Privat",
   "noRepositories": "No hi ha repositoris amb permís d'escriptura en aquesta pàgina. Comprova la pàgina següent o els permisos de repositori del compte.",
   "useRepository": "Utilitza aquest repositori",
-  "manualDestination": "També pots introduir el propietari, el repositori i la branca a continuació. Triar una destinació actualitza aquests camps; desa quan estiguis a punt.",
+  "manualDestination": "També pots introduir el propietari, el repositori i la branca a continuació. Triar una destinació actualitza aquests camps; guarda quan estiguis a punt.",
   "requestingCode": "S'està sol·licitant un codi d'inici de sessió a GitHub…",
   "repositoryOwners": "Aquesta connexió mostra les organitzacions a través dels repositoris als quals pot accedir. Una organització pot aparèixer en més d'una pàgina. Pots introduir un propietari a continuació en crear un repositori nou."
 }

@@ -33,7 +33,7 @@
   "resourcePolicy": "Política de recursos exactes",
   "executionBounds": "Cada fragment numèric ha de respectar el màxim d'operacions i mil·lisegons de la política de recursos exactes.",
   "executionInvalid": "El fragment numèric supera la política de recursos exactes. Ajusta el fragment o revisa explícitament aquella política. Es conserven els valors introduïts.",
-  "invalid": "Tria un senyal escalar, un nombre positiu de files d'origen, un objectiu i un llindar explícits, una unitat de diferència i límits de recursos desats vàlids. Es conserven els valors introduïts.",
+  "invalid": "Tria un senyal escalar, un nombre positiu de files d'origen, un objectiu i un llindar explícits, una unitat de diferència i límits de recursos guardats vàlids. Es conserven els valors introduïts.",
   "preview": "Previsualitza les files CUSUM",
   "retain": "Calcula i conserva CUSUM",
   "back": "Torna a la font",

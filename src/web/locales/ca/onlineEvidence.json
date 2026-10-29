@@ -18,7 +18,7 @@
   "finish": "Verifica i adjunta {name}",
   "retry": "Torna a verificar {name}",
   "selectSame": "Selecciona el mateix fitxer original per reprendre {name}.",
-  "different": "El fitxer seleccionat és diferent de la pujada desada. Selecciona el fitxer original; es conserven els bytes rebuts.",
+  "different": "El fitxer seleccionat és diferent de la pujada guardada. Selecciona el fitxer original; es conserven els bytes rebuts.",
   "chooseFile": "Selecciona un fitxer original.",
   "invalidPath": "Introdueix un camí relatiu d'origen que acabi amb el nom del fitxer original.",
   "checking": "S'està comprovant el fitxer original…",

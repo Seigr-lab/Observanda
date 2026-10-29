@@ -11,7 +11,7 @@
   "typeName": "Nom del tipus de registre",
   "guidance": "Finalitat / orientacions",
   "fields": "Camps per als registres nous",
-  "savedFields": "Els registres existents conserven els camps i els valors desats.",
+  "savedFields": "Els registres existents conserven els camps i els valors guardats.",
   "addField": "Afegeix un camp",
   "label": "Etiqueta del camp",
   "type": "Tipus de valor",

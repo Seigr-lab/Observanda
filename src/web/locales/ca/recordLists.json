@@ -9,7 +9,7 @@
   "noMatches": "Cap registre coincideix amb aquests filtres",
   "adjust": "Ajusta els filtres o esborra'ls per veure els registres d'aquest àmbit.",
   "clear": "Esborra els filtres",
-  "changed": "Els registres desats han canviat. Actualitza els registres per veure els resultats més recents.",
+  "changed": "Els registres guardats han canviat. Actualitza els registres per veure els resultats més recents.",
   "invalidPage": "La resposta de la llista de registres era incompleta. Actualitza els registres per tornar-ho a provar.",
   "experiments": {
     "one": "{count} experiment",

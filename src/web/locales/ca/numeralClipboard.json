@@ -11,5 +11,5 @@
   "length": "El valor copiat complet supera la longitud admesa per aquest editor. No s'ha enganxat res.",
   "lines": "Aquest valor conté salts de línia que aquest camp no pot conservar. No s'ha enganxat res.",
   "unavailable": "L'accés al porta-retalls no està disponible. Utilitza els controls de còpia i enganxament del navegador.",
-  "contextMismatch": "Aquest valor copiat utilitza una interpretació numèrica diferent de la del camp desat. No s'ha enganxat res; canvia explícitament l'esquema del camp per utilitzar una altra interpretació."
+  "contextMismatch": "Aquest valor copiat utilitza una interpretació numèrica diferent de la del camp guardat. No s'ha enganxat res; canvia explícitament l'esquema del camp per utilitzar una altra interpretació."
 }

@@ -23,7 +23,7 @@
   "cancelled": "Cancel·lat",
   "observed": "La finalització ha utilitzat la revisió {revision}",
   "changed": "Revisat des de la finalització",
-  "completionPending": "Desar actualitzarà les revisions de finalització.",
+  "completionPending": "Guardar actualitzarà les revisions de finalització.",
   "notChecked": "Estat actual no comprovat",
   "checklist": "Completa tots els elements de la llista de comprovació abans de finalitzar aquesta tasca.",
   "checkShown": "Comprova els requisits previs mostrats"

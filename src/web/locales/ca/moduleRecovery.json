@@ -12,5 +12,5 @@
   "previous": "Punts anteriors",
   "next": "Punts següents",
   "refresh": "Actualitza els punts de recuperació",
-  "returnConflict": "Conserva o desa l'esborrany obert abans de tornar a aquest punt de recuperació."
+  "returnConflict": "Conserva o guarda l'esborrany obert abans de tornar a aquest punt de recuperació."
 }

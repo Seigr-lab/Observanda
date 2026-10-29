@@ -2,13 +2,13 @@
   "invalid": "La resposta del registre seleccionat era incompleta. Es conserva l'esborrany.",
   "limit": "Aquesta selecció és massa gran per editar-la conjuntament. Obre menys registres. Es conserva el punt de recuperació.",
   "title": "S'estan carregant els registres seleccionats",
-  "description": "S'estan carregant els registres desats necessaris per a aquesta vista. L'editor no canvia fins que s'acaba la càrrega.",
-  "committed": "S'han desat els registres. S'estan carregant les versions desades per actualitzar aquest editor.",
+  "description": "S'estan carregant els registres guardats necessaris per a aquesta vista. L'editor no canvia fins que s'acaba la càrrega.",
+  "committed": "S'han guardat els registres. S'estan carregant les versions guardades per actualitzar aquest editor.",
   "progress": "S'han carregat {loaded} de {total} registres",
   "cancel": "Cancel·la la càrrega",
   "retry": "Torna a carregar",
   "failed": "No s'han pogut carregar els registres seleccionats. Torna-ho a provar per continuar des de l'últim lot completat.",
   "cancelled": "S'ha cancel·lat la càrrega. Es conserven l'editor i el punt de recuperació.",
-  "savedCancelled": "S'han desat els registres, però se n'ha cancel·lat la càrrega. Torna a provar Desa per comparar l'editor amb els registres desats.",
+  "savedCancelled": "S'han guardat els registres, però se n'ha cancel·lat la càrrega. Torna a provar Guarda per comparar l'editor amb els registres guardats.",
   "busy": "Acaba de carregar la selecció actual abans de continuar."
 }

@@ -29,7 +29,7 @@
   "newTab": "Pestanya nova",
   "invalidLink": "Utilitza una adreça https://, una àncora #section o tria una pàgina o secció del lloc web.",
   "retry": "Torna-ho a provar",
-  "changed": "Es mostren les pàgines de la versió desada que estàs editant. Els canvis posteriors de l'espai de treball es comprovaran quan desis.",
+  "changed": "Es mostren les pàgines de la versió guardada que estàs editant. Els canvis posteriors de l'espai de treball es comprovaran quan guardis.",
   "invalid": "No s'ha pogut verificar la llista de pàgines. Torna-ho a provar.",
   "failed": "No s'han pogut carregar les pàgines. Torna-ho a provar.",
   "chooseSection": "Tria un enllaç de secció",

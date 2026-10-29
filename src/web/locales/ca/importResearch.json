@@ -5,7 +5,7 @@
   "root": "Objecte de metadades complet",
   "help": "Selecciona un conjunt declarat de fets del registre per assignar-ne el progrés, el resultat, els camps de plantilla, les preparacions, els esdeveniments d'execució, les avaluacions i els resultats. Revisa els valors proposats abans d'aplicar el lot. Les metadades originals continuen disponibles a Procedència de l'origen.",
   "absent": "Aquesta font no conté cap declaració compatible de fets del registre. El seu adaptador ha d'assignar explícitament la font al format observanda-record-facts versió 1; Observanda no dedueix condicions ni conclusions dels noms de les metadades.",
-  "methods": "Els mètodes d'una preparació han de tenir relacions exactes Utilitza el mètode a l'assignació anterior. Les correccions afegeixen fets i identifiquen què substitueixen; els fets ja desats no es poden reemplaçar.",
+  "methods": "Els mètodes d'una preparació han de tenir relacions exactes Utilitza el mètode a l'assignació anterior. Les correccions afegeixen fets i identifiquen què substitueixen; els fets ja guardats no es poden reemplaçar.",
   "preview": "Fets del registre proposats",
   "progress": "Progrés",
   "outcome": "Resultat",

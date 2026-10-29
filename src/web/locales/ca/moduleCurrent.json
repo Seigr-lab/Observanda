@@ -1,7 +1,7 @@
 {
-  "invalid": "No s'ha pogut verificar la resposta de l'element desat. Es conserva l'esborrany. Actualitza i compara la versió desada abans de tornar-ho a provar.",
+  "invalid": "No s'ha pogut verificar la resposta de l'element guardat. Es conserva l'esborrany. Actualitza i compara la versió guardada abans de tornar-ho a provar.",
   "loading": "S'estan carregant els elements…",
-  "loadingItem": "S'està obrint l'element desat…",
+  "loadingItem": "S'està obrint l'element guardat…",
   "retry": "Torna a carregar els elements",
   "refresh": "Actualitza els elements",
   "previous": "Elements anteriors",
@@ -16,8 +16,8 @@
   "select": "Selecciona {title}",
   "cancel": "Cancel·la",
   "unavailable": "Element no disponible",
-  "labelsUnavailable": "No s'han pogut carregar els títols dels elements. Es conserven els enllaços desats.",
+  "labelsUnavailable": "No s'han pogut carregar els títols dels elements. Es conserven els enllaços guardats.",
   "retryLabels": "Torna a carregar els títols dels elements",
   "open": "Obre {name}",
-  "checkpointFailed": "No s'ha pogut conservar un punt de recuperació: {reason} Les modificacions continuen obertes. Torna-ho a provar, desa-les o descarta-les abans d'obrir un altre element."
+  "checkpointFailed": "No s'ha pogut conservar un punt de recuperació: {reason} Les modificacions continuen obertes. Torna-ho a provar, guarda-les o descarta-les abans d'obrir un altre element."
 }

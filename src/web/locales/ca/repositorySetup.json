@@ -11,5 +11,5 @@
   "emptyStatus": "Aquest repositori és buit. Revisa'n la inicialització a la configuració de destinació.",
   "checking": "S'està comprovant el repositori",
   "initializing": "S'està inicialitzant la branca del lloc web",
-  "saving": "S'està desant la destinació de publicació"
+  "saving": "S'està guardant la destinació de publicació"
 }

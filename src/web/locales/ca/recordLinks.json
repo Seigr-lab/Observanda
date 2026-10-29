@@ -7,7 +7,7 @@
   "notebook": "Llibre de laboratori",
   "record": "Registre",
   "anotherWorkspace": "Un altre projecte o espai de treball",
-  "current": "Element desat actual",
+  "current": "Element guardat actual",
   "revision": "Revisió conservada {revision}",
   "section": "{kind}: {id}"
 }

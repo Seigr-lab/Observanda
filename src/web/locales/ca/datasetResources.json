@@ -1,10 +1,10 @@
 {
   "title": "Recursos de càlcul exacte",
   "action": "Política de recursos",
-  "save": "Desa la política de recursos",
+  "save": "Guarda la política de recursos",
   "cancel": "Cancel·la",
   "help": "Cada operació escalar comparteix aquests límits entre l'anàlisi sintàctica, la conversió d'unitats, l'aritmètica i el format. Les esperes de fonts i d'emmagatzematge no consumeixen temps aritmètic. Els resultats continuen sent exactes; un límit atura la preparació sense arrodonir.",
-  "legacy": "Desar una política crea una revisió nova del graf. Les revisions anteriors conserven el seu comportament de càlcul original.",
+  "legacy": "Guardar una política crea una revisió nova del graf. Les revisions anteriors conserven el seu comportament de càlcul original.",
   "codec": "Els còdecs de domini declarats conserven les seves pròpies capacitats de components.",
   "maxBits": "Mida dels enters i dels valors intermedis (bits)",
   "maxOperations": "Operacions aritmètiques",

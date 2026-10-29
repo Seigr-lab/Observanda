@@ -1,6 +1,6 @@
 {
   "title": "El teu perfil",
-  "intro": "El teu perfil t'acompanya als espais de treball que obres en aquesta instal·lació. Es desa localment i està protegit pel compte d'aquest ordinador.",
+  "intro": "El teu perfil t'acompanya als espais de treball que obres en aquesta instal·lació. Es guarda localment i està protegit pel compte d'aquest ordinador.",
   "identity": "ID d'usuari d'Observanda",
   "identityHelp": "Aquest ID identifica la teva clau de signatura local en projectes compartits, llibres de laboratori i intercanvis d'espais de treball. Canviar el perfil no el modifica. Recupera la còpia de seguretat de la teva identitat en una altra instal·lació per conservar el mateix ID.",
   "copy": "Copia l'ID d'usuari",
@@ -18,13 +18,13 @@
   "url": "Enllaç (opcional)",
   "add": "Afegeix un identificador",
   "remove": "Elimina l'identificador",
-  "save": "Desa el perfil",
-  "saved": "S'ha desat el perfil.",
+  "save": "Guarda el perfil",
+  "saved": "S'ha guardat el perfil.",
   "discard": "Descarta les modificacions del perfil",
   "loading": "S'està carregant el teu perfil…",
   "retry": "Torna a carregar el perfil",
   "invalid": "Comprova l'adreça electrònica, les etiquetes i els valors dels identificadors i els enllaços. Els enllaços han d'utilitzar HTTP o HTTPS sense credencials incrustades.",
   "unavailable": "El servei d'identitat local no està disponible. El perfil existent no s'ha modificat.",
   "recovery": "Còpia de seguretat i recuperació de la identitat",
-  "recoveryHelp": "Fes una còpia de seguretat de la teva identitat per compartir per conservar l'ID d'usuari en canviar d'ordinador. La recuperació de la identitat restaura les claus per compartir; les dades del perfil es desen per separat en cada instal·lació. L'accés a l'espai de treball es gestiona per separat a Emmagatzematge i accés."
+  "recoveryHelp": "Fes una còpia de seguretat de la teva identitat per compartir per conservar l'ID d'usuari en canviar d'ordinador. La recuperació de la identitat restaura les claus per compartir; les dades del perfil es guarden per separat en cada instal·lació. L'accés a l'espai de treball es gestiona per separat a Emmagatzematge i accés."
 }

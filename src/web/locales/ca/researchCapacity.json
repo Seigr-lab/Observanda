@@ -2,11 +2,11 @@
   "record": "Contingut del registre",
   "metadata": "Configuració de l'espai de treball",
   "recordSelection": "Contingut dels registres seleccionats",
-  "recordCommand": "Sol·licitud de desament del registre",
+  "recordCommand": "Sol·licitud per guardar el registre",
   "recordCheckpoint": "Punt de recuperació",
   "checkpointRequest": "Sol·licitud del punt de recuperació",
   "amount": "{owner} necessita {requested} bytes; aquesta versió admet {limit} bytes per a aquesta operació.",
-  "saveGuidance": "S'ha rebutjat el desament. Mantén aquest editor obert i comprova l'estat del punt de recuperació abans de sortir; les modificacions sense desar no són una revisió de recerca desada.",
+  "saveGuidance": "S’ha rebutjat la petició de guardar. Mantén aquest editor obert i comprova l'estat del punt de recuperació abans de sortir; les modificacions sense guardar no són una revisió de recerca guardada.",
   "checkpointGuidance": "Aquest punt de recuperació no s'ha escrit. Els punts anteriors no han canviat. Mantén aquest editor obert per conservar les modificacions més recents.",
-  "selectionGuidance": "Els registres sol·licitats no s'han carregat a l'editor. Els registres desats no han canviat. Pots obrir cada registre per separat."
+  "selectionGuidance": "Els registres sol·licitats no s'han carregat a l'editor. Els registres guardats no han canviat. Pots obrir cada registre per separat."
 }

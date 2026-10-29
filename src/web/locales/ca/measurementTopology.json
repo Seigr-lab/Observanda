@@ -27,7 +27,7 @@
   "graphTitle": "Edita l'operació de topologia",
   "graphLabel": "Topologia: {operation}",
   "graphUpgrade": "Activa les operacions de topologia",
-  "graphUpgradeHelp": "Crea una revisió nova del graf per a topologia declarada explícitament. Revisa els límits d'operació desats. Les revisions anteriors del graf i els resultats conservats mantenen la seva interpretació original.",
+  "graphUpgradeHelp": "Crea una revisió nova del graf per a topologia declarada explícitament. Revisa els límits d'operació guardats. Les revisions anteriors del graf i els resultats conservats mantenen la seva interpretació original.",
   "graphHelp": "Tria una topologia declarada anterior. Els recomptes, els graus i l'accessibilitat segueixen les seves regles explícites de direcció, bucles i arestes paral·leles. No se'n dedueix cap significat de circuit ni geomètric.",
   "operation": "Operació de topologia",
   "op-count": "Compta els vèrtexs o les arestes",

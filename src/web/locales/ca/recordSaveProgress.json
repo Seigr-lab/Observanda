@@ -2,15 +2,15 @@
   "verify-file": "S'estan comprovant els bytes multimèdia",
   "encrypt-file": "S'està conservant el contingut multimèdia xifrat",
   "finalize-encrypted-file": "S'està finalitzant el contingut multimèdia xifrat per permetre-hi el posicionament",
-  "title": "S'estan desant els registres",
-  "newerEdits": "S'han desat els canvis enviats. Les modificacions posteriors continuen sense desar; torna a desar quan estiguis a punt.",
-  "pending": "Els canvis només es desen quan es completa correctament tot el desament. Pots continuar editant; els canvis posteriors continuen sense desar.",
-  "selectedPending": "El punt de recuperació continua disponible fins que es confirmi aquest desament.",
-  "read-record-bases": "S'estan llegint els registres desats",
+  "title": "S'estan guardant els registres",
+  "newerEdits": "S'han guardat els canvis enviats. Les modificacions posteriors continuen sense guardar; torna a guardar quan estiguis a punt.",
+  "pending": "Els canvis només es guarden quan es completa correctament tota l’operació. Pots continuar editant; els canvis posteriors continuen sense guardar.",
+  "selectedPending": "El punt de recuperació continua disponible fins que es confirmi que s’han guardat els canvis.",
+  "read-record-bases": "S'estan llegint els registres guardats",
   "prepare-record-edits": "S'estan preparant els canvis dels registres",
   "validate-records": "S'estan comprovant els canvis i els enllaços dels registres",
   "write-records": "S'estan escrivint els registres i l'historial",
   "write-record-blocks": "S'està escrivint el contingut dels registres",
   "index-records": "S'estan actualitzant la cerca i la navegació",
-  "read-saved-records": "S'estan carregant els registres desats"
+  "read-saved-records": "S'estan carregant els registres guardats"
 }

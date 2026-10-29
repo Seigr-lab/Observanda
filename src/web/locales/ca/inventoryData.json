@@ -18,7 +18,7 @@
   "retry": "Torna a carregar l'inventari",
   "chooseCategory": "Tria una categoria",
   "clearCategory": "Elimina la categoria",
-  "categoryRevision": "Revisió desada de la categoria {revision}",
+  "categoryRevision": "Revisió guardada de la categoria {revision}",
   "chooseComponent": "Tria un element de l'inventari",
   "unlinkComponent": "Desvincula l'element de l'inventari",
   "tags": "Etiquetes dels recursos",

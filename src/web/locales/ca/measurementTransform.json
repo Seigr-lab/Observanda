@@ -31,9 +31,9 @@
   "back": "Torna a la figura conservada",
   "openPoint": "Inspecciona el punt",
   "resourcesTitle": "Recursos de càlcul de la figura",
-  "resourcesHelp": "Aquests límits desats s'apliquen a l'anàlisi exacta, les reduccions, les comparacions i la projecció de coordenades. Les esperes de fonts i d'emmagatzematge no consumeixen temps aritmètic. Assolir un límit atura la preparació; no canvia les mesures.",
+  "resourcesHelp": "Aquests límits guardats s'apliquen a l'anàlisi exacta, les reduccions, les comparacions i la projecció de coordenades. Les esperes de fonts i d'emmagatzematge no consumeixen temps aritmètic. Assolir un límit atura la preparació; no canvia les mesures.",
   "resourcesNotes": "L'aproximació continua sent una opció separada a continuació. Els valors d'origen conservats i les figures anteriors mantenen la seva interpretació original.",
-  "resourcesSaved": "Recursos de càlcul de la figura desats",
+  "resourcesSaved": "Recursos de càlcul de la figura guardats",
   "editSettings": "Canvia la configuració de la figura",
-  "revisedSettings": "Aquesta configuració prové del càlcul aturat. Desar crea un càlcul separat; la tasca aturada i els resultats anteriors no canvien."
+  "revisedSettings": "Aquesta configuració prové del càlcul aturat. Guardar crea un càlcul separat; la tasca aturada i els resultats anteriors no canvien."
 }

@@ -12,9 +12,9 @@
   "passwordHint": "Estableix una contrasenya per obrir aquest llibre de laboratori en un altre ordinador.",
   "newPassword": "Contrasenya nova del llibre de laboratori",
   "confirmPassword": "Confirma la contrasenya",
-  "savePassword": "Desa la contrasenya del llibre de laboratori",
+  "savePassword": "Guarda la contrasenya del llibre de laboratori",
   "lock": "Bloqueja el llibre de laboratori",
   "loading": "S'està carregant la configuració d'accés…",
-  "saved": "S'ha desat la contrasenya del llibre de laboratori.",
+  "saved": "S'ha guardat la contrasenya del llibre de laboratori.",
   "passwordMismatch": "Les contrasenyes no coincideixen."
 }

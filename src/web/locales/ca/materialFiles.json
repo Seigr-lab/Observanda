@@ -20,7 +20,7 @@
   "cancelled": "S'ha finalitzat la tasca d'adjunció. Els fitxers ja adjuntats continuen disponibles en aquest registre.",
   "progress": "{attached} de {count} fitxers adjuntats",
   "attachmentProgress": "Progrés de l'adjunció",
-  "resumeHelp": "El progrés es desa després de cada lot. Pots pausar i continuar des d'Adjunts pendents d'acabar a Evidències i anàlisi, també després de reiniciar Observanda. Finalitzar una tasca conserva els fitxers ja adjuntats.",
+  "resumeHelp": "El progrés es guarda després de cada lot. Pots pausar i continuar des d'Adjunts pendents d'acabar a Evidències i anàlisi, també després de reiniciar Observanda. Finalitzar una tasca conserva els fitxers ja adjuntats.",
   "loading": "S'estan carregant els detalls del fitxer original…",
   "acquisition": "Registre d'adquisició",
   "provenance": "Notes d'adquisició",

@@ -2,11 +2,11 @@
   "invalid": "La resposta de l'espai de treball era incompleta. Torna a carregar per repetir-ho.",
   "busy": "Ja hi ha una lectura de l'espai de treball en curs.",
   "changed": "L'espai de treball ha canviat durant la càrrega. Torna a carregar per obrir-lo.",
-  "refreshLabel": "Observanda — actualitza l'espai de treball desat",
-  "refreshing": "S'estan comprovant els canvis desats…",
-  "refreshPending": "Hi ha canvis desats nous disponibles. Actualitza amb el logotip d'Observanda quan estiguis a punt.",
-  "refreshDeferred": "L'esborrany continua aquí. Desa o descarta les modificacions i tanca qualsevol diàleg obert abans d'actualitzar.",
-  "refreshFailed": "No s'han pogut comprovar els canvis desats. La vista actual no ha canviat. Fes clic al logotip d'Observanda per tornar-ho a provar.",
+  "refreshLabel": "Observanda — actualitza l'espai de treball guardat",
+  "refreshing": "S'estan comprovant els canvis guardats…",
+  "refreshPending": "Hi ha canvis guardats nous disponibles. Actualitza amb el logotip d'Observanda quan estiguis a punt.",
+  "refreshDeferred": "L'esborrany continua aquí. Guarda o descarta les modificacions i tanca qualsevol diàleg obert abans d'actualitzar.",
+  "refreshFailed": "No s'han pogut comprovar els canvis guardats. La vista actual no ha canviat. Fes clic al logotip d'Observanda per tornar-ho a provar.",
   "refreshCurrent": "L'espai de treball està actualitzat.",
-  "refreshed": "S'han carregat els canvis desats de l'espai de treball."
+  "refreshed": "S'han carregat els canvis guardats de l'espai de treball."
 }

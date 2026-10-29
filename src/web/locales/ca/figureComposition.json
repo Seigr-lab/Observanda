@@ -15,7 +15,7 @@
   "up": "Mou el panell amunt",
   "down": "Mou el panell avall",
   "editing": "Panell que s'està editant",
-  "help": "Cada panell conserva les seves dades desades, la incertesa, les anotacions i el disseny. Copiar una figura en crea una instantània; les modificacions posteriors de l'original no canvien aquest panell. Els intervals compartits requereixen tipus d'eix, escales i etiquetes coincidents. En pantalles estretes, els panells s'apilen verticalment.",
+  "help": "Cada panell conserva les seves dades guardades, la incertesa, les anotacions i el disseny. Copiar una figura en crea una instantània; les modificacions posteriors de l'original no canvien aquest panell. Els intervals compartits requereixen tipus d'eix, escales i etiquetes coincidents. En pantalles estretes, els panells s'apilen verticalment.",
   "replace": "Vols substituir aquest panell per una còpia de la figura seleccionada?",
   "removeConfirm": "Vols eliminar aquest panell i les seves mesures d'aquesta figura?",
   "structure": "L'estructura de la figura de diversos panells no és vàlida.",

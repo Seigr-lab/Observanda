@@ -1,10 +1,10 @@
 {
-  "heading": "Revisions desades",
+  "heading": "Revisions guardades",
   "invalid": "La resposta de l'historial era incompleta. Torna-ho a provar per carregar aquesta pàgina.",
   "retry": "Torna a carregar l'historial",
   "loading": "S'està carregant l'historial…",
   "range": "Revisions {first}–{last} de {total}",
-  "empty": "Encara no hi ha revisions desades.",
+  "empty": "Encara no hi ha revisions guardades.",
   "changed": "Hi ha revisions noves disponibles. Actualitza l'historial per veure-les.",
   "pages": "Pàgines de l'historial",
   "first": "Primera pàgina de l'historial",
@@ -12,6 +12,6 @@
   "next": "Pàgina següent de l'historial",
   "refresh": "Actualitza l'historial",
   "open": "Obre la revisió {revision}",
-  "selected": "Revisió desada {revision}",
+  "selected": "Revisió guardada {revision}",
   "close": "Tanca la revisió"
 }

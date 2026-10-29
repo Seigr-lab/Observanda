@@ -1,6 +1,6 @@
 {
   "parents": "Cerca projectes",
-  "templates": "Cerca plantilles desades",
+  "templates": "Cerca plantilles guardades",
   "loading": "S'estan carregant les opcions…",
   "count": "{count} de {total}",
   "more": "Més opcions",

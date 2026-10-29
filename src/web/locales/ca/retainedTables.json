@@ -2,7 +2,7 @@
   "base": "base {radix}",
   "table": "Taula de resultats conservada",
   "linear": "Llegeix la taula fila per fila",
-  "help": "Tria la revisió exacta del conjunt de dades i les columnes que s'hi inclouran. Els valors seleccionats es converteixen en una taula de publicació; els altres valors del conjunt de dades i els fitxers d'origen privats queden exclosos. La taula es comprova amb el conjunt de dades fixat quan es desa el registre.",
+  "help": "Tria la revisió exacta del conjunt de dades i les columnes que s'hi inclouran. Els valors seleccionats es converteixen en una taula de publicació; els altres valors del conjunt de dades i els fitxers d'origen privats queden exclosos. La taula es comprova amb el conjunt de dades fixat quan es guarda el registre.",
   "columns": "Columnes de la taula",
   "offset": "Omet files coincidents",
   "count": "Nombre màxim de files que s'hi inclouran (deixa-ho buit per incloure totes les files restants)",

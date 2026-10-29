@@ -1,6 +1,6 @@
 {
   "fields": "Camps personalitzats",
-  "schemaHelp": "Cada recurs desat conserva les seves definicions de camps. Aplicar una versió posterior de la categoria és una modificació explícita.",
+  "schemaHelp": "Cada recurs guardat conserva les seves definicions de camps. Aplicar una versió posterior de la categoria és una modificació explícita.",
   "label": "Etiqueta del camp",
   "type": "Tipus de valor",
   "unit": "Unitat (opcional)",
@@ -21,7 +21,7 @@
   "fieldPages": "Pàgines de camps",
   "choicePages": "Pàgines d'opcions",
   "empty": "No hi ha camps coincidents.",
-  "invalid": "Revisa {field} abans de desar. La seva definició o el seu valor és incomplet o no vàlid.",
+  "invalid": "Revisa {field} abans de guardar. La seva definició o el seu valor és incomplet o no vàlid.",
   "types.text": "Text",
   "types.number": "Nombre",
   "types.boolean": "Sí / no",

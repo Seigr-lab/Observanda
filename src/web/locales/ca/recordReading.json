@@ -9,6 +9,6 @@
   "linkedRecord": "Registre enllaçat",
   "researchLinks": "Enllaços de recerca",
   "exactRevision": "Revisió conservada {revision}",
-  "changed": "Els registres desats han canviat. Actualitza aquesta vista de lectura.",
+  "changed": "Els registres guardats han canviat. Actualitza aquesta vista de lectura.",
   "incomplete": "No s'han pogut carregar alguns registres. Actualitza aquesta vista de lectura."
 }

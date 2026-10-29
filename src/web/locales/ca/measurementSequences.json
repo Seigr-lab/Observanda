@@ -15,7 +15,7 @@
   "graphTitle": "Edita l'operació de seqüència",
   "graphLabel": "Seqüència: {operation}",
   "graphUpgrade": "Activa les operacions de seqüència",
-  "graphUpgradeHelp": "Crea una revisió nova del graf per a seqüències declarades explícitament. Revisa els límits d'operació desats. Les revisions anteriors del graf i els resultats conservats mantenen la seva interpretació original.",
+  "graphUpgradeHelp": "Crea una revisió nova del graf per a seqüències declarades explícitament. Revisa els límits d'operació guardats. Les revisions anteriors del graf i els resultats conservats mantenen la seva interpretació original.",
   "graphHelp": "Tria una seqüència declarada anterior. Aquestes operacions conserven el seu espai de noms, la interpretació dels elements i les posicions fixades de l'origen. No ordenen ni dedueixen cap alineació.",
   "operation": "Operació de seqüència",
   "op-length": "Nombre d'elements",
