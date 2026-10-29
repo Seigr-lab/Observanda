@@ -19,6 +19,7 @@ import {contentBuffer} from '../src/file-content.js';
 import {copyPlan,copyWorkspace} from '../src/locations.js';
 import {writeExchange,exchangeDeclaration} from '../src/collaboration/exchange-stream.js';
 import {ExchangeParts} from '../src/collaboration/exchange-parts.js';
+import {diskCapacity} from '../src/disk-capacity.js';
 import {MediaStore} from '../src/media.js';
 import {MediaImports} from '../src/media-imports.js';
 import {workspaceJobs} from '../src/workspace-jobs.js';
@@ -40,6 +41,15 @@ async function fixture(t){
  const grant=await sa.access.saveLocal(await a.identity.public(),{workspaceId:book.id,expectedRevision:0,id:null,organizationId:org.id,scopes:[{kind:'notebook',id:book.notebooks[0].id}],recipient:{kind:'member',id:principalId},role:'editor',active:true});
  return {directory,vaults,book,author,member,a,b,sa,sb,org,contact,grant:grant.grant,principalId,state};
 }
+
+test('incoming research packages preserve free disk space and discard rejected staging',async t=>{
+ const f=await fixture(t),prepared=await f.sa.prepareOffer({grantId:f.grant.id,contact:f.contact}),bytes=await Array.fromAsync(await f.sa.outgoing(prepared.id));
+ const probe=t.mock.method(diskCapacity,'probe',async()=>({id:'synthetic-full-volume',available:BigInt(256*1024*1024-1)}));
+ try{await assert.rejects(f.sb.receive(bytes),{code:'STORAGE_FULL'});}finally{probe.mock.restore();}
+ assert.deepEqual(await f.member.workspace.listMetadata('.observanda/collaboration/staging'),[]);
+ assert.deepEqual(await readdir(path.join(f.member.workspace.root,'.observanda/collaboration/staging')),[]);
+ const accepted=await f.sb.receive(bytes);assert.equal(accepted.notebooks.length,1);
+});
 
 test('encrypted selected books open with independent keys and retain editable records without unrelated content',async t=>{
  const f=await fixture(t),prepared=await f.sa.prepareOffer({grantId:f.grant.id,contact:f.contact}),incoming=await f.sb.receive(await f.sa.outgoing(prepared.id));

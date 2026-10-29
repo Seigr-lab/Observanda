@@ -51,7 +51,7 @@ export class ResearchExchange{
  }
  async receive(source,{signal}={}){
   const parts=new ExchangeParts(this.workspace);return this.workspace.withLock(async()=>{
-   const result=await readExchange(this.identity,source,(info,content,options)=>parts.receive(info,content,options),{signal,requireDeclaration:true,authorizeDeclaration:async({id,sender,declaration})=>{
+   const result=await readExchange(this.identity,source,(info,content,options)=>parts.receive(info,content,{...options,reserveBytes:256*1024*1024}),{signal,requireDeclaration:true,authorizeDeclaration:async({id,sender,declaration})=>{
     const selection=validateSelection(declaration.selection);valid(selection.id===id,'COLLABORATION_PACKAGE');await this.authorizeIncoming(selection,sender);
    }}),selection=await packageSelection(parts);
    valid(selection.id===result.id,'COLLABORATION_PACKAGE');
