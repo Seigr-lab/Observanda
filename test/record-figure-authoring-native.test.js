@@ -45,6 +45,7 @@ test('manual figure checkpoints preserve incomplete data through recovery and sa
  assert.equal((await new RecordValueDrafts(workspace).read({id,workspaceId:book.id,expectedRevision:saved.revision})).value.value.document.format,'figure-authoring');
  const finishing={id,workspaceId:book.id,recordId:record.id,selection,expectedRevision:saved.revision,operationId:randomUUID()};saved=await drafts.finish(finishing);assert.deepEqual(await drafts.finish(finishing),saved);assert.equal(validRetainedFigure(saved.value.value),true);assert.equal(saved.value.value.source,undefined);
  const drawing=await preview();assert.match(drawing.svg,/<svg/);assert.equal(drawing.revision,saved.revision);assert.equal((await values.read(target)).value.value,null);
+ {const language='nn',localized=await drafts.read({id,workspaceId:book.id,expectedRevision:saved.revision,operation:'svg',selection:{},window:drawing.window,language});assert.equal(localized.language,language);assert.equal(localized.revision,drawing.revision);assert.deepEqual(localized.document,drawing.document);assert.match(localized.svg,/<svg/);}
  await assert.rejects(drafts.read({id,workspaceId:book.id,expectedRevision:incomplete.revision,operation:'svg',selection:{},window:{plotId,seriesLimit:1,pointLimit:32}}),{code:'DRAFT_CHANGED'});
  await values.save({...target,expectedRevision:base.revision,value:saved.value});
  const materials=new ResearchMaterials(workspace),selector={workspaceId:book.id,recordId:record.id,figureId};

@@ -30,5 +30,6 @@
   "xUpper": "Límite superior de la coordenada",
   "yLower": "Límite inferior del valor",
   "yUpper": "Límite superior del valor",
-  "encoding": "Detalles de la codificación"
+  "encoding": "Detalles de la codificación",
+  "observationCoordinates": "Observación {number}: ({x}, {y})"
 }

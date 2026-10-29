@@ -5,6 +5,7 @@ import {createFigure,createSeries} from '../../src/web/figure-model.js';
 import {retainedFigureSVG} from '../../src/web/retained-figure-svg.js';
 import {retainedFigureTable,retainedFigureCSV} from '../../src/web/retained-figure-data.js';
 import {exactUnitScalar} from '../../src/web/measurement-unit-model.js';
+import {retainedFigureTranslator} from '../../src/retained-figure-localization.js';
 const collect=async stream=>{const chunks=[];for await(const chunk of stream)chunks.push(Buffer.from(chunk,'utf8'));return Buffer.concat(chunks).toString('utf8');};
 async function figureReader(){
  const values=new Map(),documents=new RetainedFigureDocuments({readMetadata:async key=>values.get(key)??null,writeMetadata:async(key,value)=>values.set(key,value)}),f=createFigure();f.title='Retained acquisition with exact source coordinates and independent uncertainty';f.x.label='Counter offset from retained acquisition origin';f.y.label='Measured amplitude in the declared observation interval';f.style={legendPosition:'right',annotationLabels:'key',numberFormat:'radix',radix:6};
@@ -32,4 +33,23 @@ test('complete retained figure SVG, table and CSV keep the same observations at 
 test('generated date ticks preserve the entire timestamp within narrow intervals',async({page})=>{
  const values=new Map(),documents=new RetainedFigureDocuments({readMetadata:async key=>values.get(key)??null,writeMetadata:async(key,value)=>values.set(key,value)}),f=createFigure();f.x.kind='date';f.style={dateFormat:'datetime'};f.series[0].points=[{x:'2025-01-01T00:00:00.000Z',y:1,error:null},{x:'2025-01-03T00:00:00.000Z',y:2,error:null}];const reader=await documents.open(await documents.retain(f));await page.setViewportSize({width:390,height:900});await page.setContent('<style>body{margin:16px}</style><main>'+await collect(retainedFigureSVG(reader,{width:358}))+'</main>');
  const labels=await page.locator('.figure-generated-tick-label').evaluateAll(nodes=>nodes.filter(node=>node.querySelector('title').textContent.includes('T')).map(node=>({title:node.querySelector('title').textContent,visible:[...node.querySelectorAll('tspan')].map(n=>n.textContent),box:node.getBoundingClientRect().toJSON(),frame:node.ownerSVGElement.getBoundingClientRect().toJSON()})));expect(labels.length).toBeGreaterThanOrEqual(2);for(const label of labels){expect(label.visible).toEqual([label.title]);expect(label.title).toMatch(/^2025-01-\d{2}T\d{2}:\d{2}$/);expect(label.box.left).toBeGreaterThanOrEqual(label.frame.left);expect(label.box.right).toBeLessThanOrEqual(label.frame.right);}await contained(page);
+});
+
+test('retained translated labels stay complete and contained at desktop and phone widths',async({page})=>{
+ const {reader,figure}=await figureReader();
+ for(const language of ['en','ca','es','nb','nn']){
+  const translate=await retainedFigureTranslator(language);
+  for(const width of [1000,390]){
+   await page.setViewportSize({width,height:900});
+   await page.setContent('<style>body{margin:16px;font-family:system-ui}svg{display:block}</style><main lang="'+language+'">'+await collect(retainedFigureSVG(reader,{width:width-32,translate}))+'</main>');
+   await expect(page.locator('main svg > desc')).toHaveText(translate('figureDisplay','numeralHelp',{radix:6}));
+   await expect(page.locator('.figure-observation')).toHaveCount(6);
+   expect(await page.locator('.figure-title > title').textContent()).toBe(figure.title);
+   await contained(page);
+  }
+  await page.setContent('<main lang="'+language+'">'+await collect(retainedFigureTable(reader,{translate}))+'</main>');
+  await expect(page.locator('main')).toContainText(translate('retainedFigureData','figureSettings'));
+  await expect(page.locator('main')).toContainText(translate('retainedFigureData','observationCoordinates',{number:3,x:'6#4',y:'6#4'}));
+  await expect(page.locator('[data-point-id]')).toHaveCount(7);
+ }
 });

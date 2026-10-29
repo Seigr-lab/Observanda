@@ -1,5 +1,8 @@
 // Complete exports traverse authenticated retained collections to exhaustion.
 // Labels are streamed independently: a short preview is never exported as data.
+import {modelMessages} from './model-messages.js';
+import compositionMessages from './locales/en/figureComposition.json' with {type:'json'};
+import observationMessages from './locales/en/figureObservations.json' with {type:'json'};
 import {computationLabel} from './measurement-computation.js';
 import {figureTextChunks,retainedFigureText,composeFigureText,escapeFigureText as esc} from './retained-figure-text.js';
 import {retainedProjectionLines} from './retained-figure-projection.js';
@@ -33,55 +36,60 @@ async function* coordinate(reader,plot,value,selection,signal,{missing='',axis=n
  if(typeof value==='number'){yield esc(axis==='x'&&plot.x.kind!=='number'?String(value):figureDataNumber(value,figureStyle(plot)));return;}
  yield* htmlText(reader,value,selection,signal);
 }
-async function* axisLabel(reader,plot,axis,selection,signal){
+async function* axisLabel(reader,plot,axis,selection,signal,translate){
+ const label=modelMessages('retainedFigureData',messages,translate);
  const path=axis==='y'&&plot.kind==='heatmap'?'heatmap.valueLabel':axis+'.label',value=axis==='y'&&plot.kind==='heatmap'?plot.heatmap.valueLabel:plot[axis].label;
- const projected=plot.projection?.[axis],parts=projectionMessages.projectedAxis.split('{label}');if(projected)yield esc(parts[0]);
- yield* htmlText(reader,value||messages[axis==='x'?'coordinate':'value'],at(selection,path),signal);if(projected)yield esc(parts[1]);
+ const projected=plot.projection?.[axis],parts=modelMessages('measurementTransform',projectionMessages,translate)('projectedAxis',{label:'{label}'}).split('{label}');if(projected)yield esc(parts[0]);
+ yield* htmlText(reader,value||label(axis==='x'?'coordinate':'value'),at(selection,path),signal);if(projected)yield esc(parts[1]);
 }
-async function* projection(reader,plot,selection,signal){
- const label=computationLabel(plot);if(label)yield '<p class="figure-computation-description">'+esc(label)+'</p>';
+async function* projection(reader,plot,selection,signal,translate){
+ const message=modelMessages('measurementTransform',projectionMessages,translate),label=modelMessages('retainedFigureData',messages,translate);
+ const computation=computationLabel(plot,{translate});if(computation)yield '<p class="figure-computation-description">'+esc(computation)+'</p>';
  if(!plot.projection)return;
  const axisName=axis=>{
   const field=axis==='y'&&plot.kind==='heatmap'?'heatmap.valueLabel':axis+'.label',value=axis==='y'&&plot.kind==='heatmap'?plot.heatmap.valueLabel:plot[axis].label;
-  return composeFigureText(projectionMessages.projectedAxis.split(/(\{label\})/).map(part=>part==='{label}'?{value:value||messages[axis==='x'?'coordinate':'value'],selection:at(selection,field)}:{value:part}));
+  return composeFigureText(message('projectedAxis',{label:'{label}'}).split(/(\{label\})/).map(part=>part==='{label}'?{value:value||label(axis==='x'?'coordinate':'value'),selection:at(selection,field)}:{value:part}));
  };
- yield '<aside class="figure-projection-description"><h4>'+esc(projectionMessages.retained)+'</h4>';
- for(const line of retainedProjectionLines(plot,{axisName,selection:field=>at(selection,field)})){yield '<p>';yield* htmlText(reader,line,null,signal);yield '</p>';}
- yield '<p>'+esc(projectionMessages.coordinateValues)+'</p></aside>';
+ yield '<aside class="figure-projection-description"><h4>'+esc(message('retained'))+'</h4>';
+ for(const line of retainedProjectionLines(plot,{translate,axisName,selection:field=>at(selection,field)})){yield '<p>';yield* htmlText(reader,line,null,signal);yield '</p>';}
+ yield '<p>'+esc(message('coordinateValues'))+'</p></aside>';
 }
 function totals(){return {panels:0,series:0,points:0,annotations:0,ticks:0};}
 function complete(actual,expected){for(const key of Object.keys(actual))if(actual[key]!==expected[key])throw Error('Incomplete retained figure collection: '+key);}
-async function* annotationPosition(reader,plot,row,signal){
+async function* annotationPosition(reader,plot,row,signal,translate){
  const a=row.value,s=itemSelection('annotations',row),h=headerSelection(plot);
- const range=async function*(axis,lo,hi){yield* axisLabel(reader,plot,axis,h,signal);yield ': ';yield* coordinate(reader,plot,a[lo],at(s,lo),signal,{axis});if(hi){yield ' \u2013 ';yield* coordinate(reader,plot,a[hi],at(s,hi),signal,{axis});}};
+ const range=async function*(axis,lo,hi){yield* axisLabel(reader,plot,axis,h,signal,translate);yield ': ';yield* coordinate(reader,plot,a[lo],at(s,lo),signal,{axis});if(hi){yield ' \u2013 ';yield* coordinate(reader,plot,a[hi],at(s,hi),signal,{axis});}};
  if(a.kind==='boundary'||a.kind==='interval'){yield* range(a.axis,'start',a.kind==='interval'?'end':null);return;}
  if(a.kind==='region'){yield* range('x','xLower','xUpper');yield '; ';yield* range('y','yLower','yUpper');return;}
  if(a.kind!=='callout')throw Error('Invalid retained figure annotation');
  const series=await reader.item({collection:'series',plotId:row.plotId,id:a.seriesId}),page=await reader.window({collection:'points',plotId:row.plotId,seriesId:a.seriesId,offset:a.pointIndex,limit:1});check(signal);
  const point=page.items[0];if(!series||!point||point.position!==a.pointIndex)throw Error('Missing retained figure observation');
- yield* htmlText(reader,series.value.name,at(itemSelection('series',series),'name'),signal);yield ' \u00b7 '+esc(messages.observation)+' '+String(a.pointIndex+1)+': (';yield* coordinate(reader,plot,point.value.x,at(itemSelection('points',point),'x'),signal,{axis:'x'});yield ', ';yield* coordinate(reader,plot,point.value.y,at(itemSelection('points',point),'y'),signal);yield ')';
+ yield* htmlText(reader,series.value.name,at(itemSelection('series',series),'name'),signal);yield ' \u00b7 ';
+ const template=modelMessages('retainedFigureData',messages,translate)('observationCoordinates',{number:a.pointIndex+1,x:'{x}',y:'{y}'});
+ for(const token of template.split(/(\{x\}|\{y\})/)){if(token==='{x}'||token==='{y}'){const axis=token[1];yield* coordinate(reader,plot,point.value[axis],at(itemSelection('points',point),axis),signal,{axis});}else yield esc(token);}
 }
-export async function* retainedFigureTable(reader,{signal}={}){
- check(signal);const root=await reader.header();check(signal);const actual=totals();yield '<div class="figure-retained-data">';yield* metadata(reader,root.header,headerSelection(root.header),signal,messages.figureSettings);if(root.source!==undefined)yield* metadata(reader,root.source,{},signal,messages.source);
+export async function* retainedFigureTable(reader,{signal,translate}={}){
+ const labels=modelMessages('retainedFigureData',messages,translate),annotationKind=kind=>translate?modelMessages(['region','callout'].includes(kind)?'figureObservations':'figureComposition',['region','callout'].includes(kind)?observationMessages:compositionMessages,translate)(kind):kind;
+ check(signal);const root=await reader.header();check(signal);const actual=totals();yield '<div class="figure-retained-data">';yield* metadata(reader,root.header,headerSelection(root.header),signal,labels('figureSettings'));if(root.source!==undefined)yield* metadata(reader,root.source,{},signal,labels('source'));
  for await(const panel of reader.items({collection:'panels'})){
   check(signal);actual.panels++;const {header:plot}=await reader.header({plotId:panel.plotId}),h=headerSelection(plot);check(signal);
-  yield '<section class="figure-panel-data" data-plot-id="'+esc(panel.plotId)+'"><h4>';yield* htmlText(reader,panel.value.label,at(itemSelection('panels',panel),'label'),signal);yield ' \u00b7 ';yield* htmlText(reader,plot.title,at(h,'title'),signal);yield '</h4>';yield* projection(reader,plot,h,signal);yield* metadata(reader,plot,h,signal,messages.plotSettings);
-  const style=figureStyle(plot);if(style.numberFormat==='radix')yield '<p>'+esc(figureNumeralHelp(style))+'</p>';
+  yield '<section class="figure-panel-data" data-plot-id="'+esc(panel.plotId)+'"><h4>';yield* htmlText(reader,panel.value.label,at(itemSelection('panels',panel),'label'),signal);yield ' \u00b7 ';yield* htmlText(reader,plot.title,at(h,'title'),signal);yield '</h4>';yield* projection(reader,plot,h,signal,translate);yield* metadata(reader,plot,h,signal,labels('plotSettings'));
+  const style=figureStyle(plot);if(style.numberFormat==='radix')yield '<p>'+esc(figureNumeralHelp(style,{translate}))+'</p>';
   for await(const series of reader.items({collection:'series',plotId:panel.plotId})){
-   check(signal);actual.series++;const s=itemSelection('series',series);yield '<section class="figure-series-data" data-series-id="'+esc(series.id)+'"><h5>';yield* htmlText(reader,series.value.name,at(s,'name'),signal);yield '</h5>';yield* metadata(reader,series.value,s,signal,messages.seriesSettings);
-   yield '<table><thead><tr><th scope="col">'+esc(messages.observation)+'</th><th scope="col">';yield* axisLabel(reader,plot,'x',h,signal);yield '</th><th scope="col">';yield* axisLabel(reader,plot,'y',h,signal);yield '</th>'+['uncertainty',...INTERVAL_FIELDS,'count','source'].map(key=>'<th scope="col">'+esc(messages[key])+'</th>').join('')+'</tr></thead><tbody>';
+   check(signal);actual.series++;const s=itemSelection('series',series);yield '<section class="figure-series-data" data-series-id="'+esc(series.id)+'"><h5>';yield* htmlText(reader,series.value.name,at(s,'name'),signal);yield '</h5>';yield* metadata(reader,series.value,s,signal,labels('seriesSettings'));
+   yield '<table><thead><tr><th scope="col">'+esc(labels('observation'))+'</th><th scope="col">';yield* axisLabel(reader,plot,'x',h,signal,translate);yield '</th><th scope="col">';yield* axisLabel(reader,plot,'y',h,signal,translate);yield '</th>'+['uncertainty',...INTERVAL_FIELDS,'count','source'].map(key=>'<th scope="col">'+esc(labels(key))+'</th>').join('')+'</tr></thead><tbody>';
    let points=0;for await(const row of reader.items({collection:'points',plotId:panel.plotId,seriesId:series.id})){
     check(signal);actual.points++;points++;const p=row.value,selection=itemSelection('points',row);yield '<tr data-point-id="'+esc(row.id)+'"><th scope="row">'+String(row.position+1)+'</th>';
-    for(const key of ['x','y','error',...INTERVAL_FIELDS,'count']){yield '<td>';yield* coordinate(reader,plot,p[key],at(selection,key),signal,{missing:key==='y'?messages.gap:key==='x'?'':'\u2014',axis:key[0]==='x'?'x':'y'});yield '</td>';}
-    yield '<td>';if(p.source!==undefined){yield '<details><summary>'+esc(messages.source)+'</summary><pre>';yield* encoded(jsonValue(reader,p.source,selection,signal,'source'),esc);yield '</pre></details>';}yield '</td></tr>';
+    for(const key of ['x','y','error',...INTERVAL_FIELDS,'count']){yield '<td>';yield* coordinate(reader,plot,p[key],at(selection,key),signal,{missing:key==='y'?labels('gap'):key==='x'?'':'\u2014',axis:key[0]==='x'?'x':'y'});yield '</td>';}
+    yield '<td>';if(p.source!==undefined){yield '<details><summary>'+esc(labels('source'))+'</summary><pre>';yield* encoded(jsonValue(reader,p.source,selection,signal,'source'),esc);yield '</pre></details>';}yield '</td></tr>';
    }
    if(points!==series.points)throw Error('Incomplete retained figure series');yield '</tbody></table></section>';
   }
-  let annotations=false;const annotationsStart='<table class="figure-annotations-table"><caption>'+esc(messages.annotations)+'</caption><thead><tr>'+['label','kind','position','details'].map(key=>'<th scope="col">'+esc(messages[key])+'</th>').join('')+'</tr></thead><tbody>';
-  for await(const row of reader.items({collection:'annotations',plotId:panel.plotId})){check(signal);actual.annotations++;if(!annotations){yield annotationsStart;annotations=true;}const a=row.value,s=itemSelection('annotations',row);yield '<tr data-annotation-id="'+esc(row.id)+'"><th scope="row">';yield* htmlText(reader,a.label,at(s,'label'),signal);yield '</th><td>'+esc(a.kind)+'</td><td>';yield* annotationPosition(reader,plot,row,signal);yield '</td><td>';yield* metadata(reader,a,s,signal,messages.details);yield '</td></tr>';}if(annotations)yield '</tbody></table>';
-  let ticks=false;const ticksStart='<table class="figure-axis-settings-table"><caption>'+esc(messages.ticks)+'</caption><thead><tr>'+['axis','direction','value','label'].map(key=>'<th scope="col">'+esc(messages[key])+'</th>').join('')+'</tr></thead><tbody>';
-  for await(const row of reader.items({collection:'ticks',plotId:panel.plotId})){check(signal);actual.ticks++;if(!ticks){yield ticksStart;ticks=true;}const tick=row.value,s=itemSelection('ticks',row);yield '<tr data-tick-id="'+esc(row.id)+'"><th scope="row">';yield* axisLabel(reader,plot,tick.axis,h,signal);yield '</th><td>'+esc(messages[plot[tick.axis].reversed?'reversed':'normal'])+'</td><td>';yield* coordinate(reader,plot,tick.value,at(s,'value'),signal,{axis:tick.axis});yield '</td><td>';yield* htmlText(reader,tick.label,at(s,'label'),signal);yield '</td></tr>';}if(ticks)yield '</tbody></table>';
-  if(plot.kind==='heatmap'){yield '<table class="figure-thresholds"><caption>'+esc(messages.thresholds)+'</caption><thead><tr>'+['label','value','color'].map(key=>'<th scope="col">'+esc(messages[key])+'</th>').join('')+'</tr></thead><tbody>';for(const [i,threshold] of plot.heatmap.thresholds.entries()){yield '<tr><th scope="row">';yield* htmlText(reader,threshold.label,at(h,'heatmap.thresholds.'+i+'.label'),signal);yield '</th><td>'+esc(heatmapThresholdText(plot.heatmap,i,value=>figureDataNumber(value,style)))+'</td><td>'+esc(threshold.color)+'</td></tr>';}yield '</tbody></table>';}
+  let annotations=false;const annotationsStart='<table class="figure-annotations-table"><caption>'+esc(labels('annotations'))+'</caption><thead><tr>'+['label','kind','position','details'].map(key=>'<th scope="col">'+esc(labels(key))+'</th>').join('')+'</tr></thead><tbody>';
+  for await(const row of reader.items({collection:'annotations',plotId:panel.plotId})){check(signal);actual.annotations++;if(!annotations){yield annotationsStart;annotations=true;}const a=row.value,s=itemSelection('annotations',row);yield '<tr data-annotation-id="'+esc(row.id)+'"><th scope="row">';yield* htmlText(reader,a.label,at(s,'label'),signal);yield '</th><td>'+esc(annotationKind(a.kind))+'</td><td>';yield* annotationPosition(reader,plot,row,signal,translate);yield '</td><td>';yield* metadata(reader,a,s,signal,labels('details'));yield '</td></tr>';}if(annotations)yield '</tbody></table>';
+  let ticks=false;const ticksStart='<table class="figure-axis-settings-table"><caption>'+esc(labels('ticks'))+'</caption><thead><tr>'+['axis','direction','value','label'].map(key=>'<th scope="col">'+esc(labels(key))+'</th>').join('')+'</tr></thead><tbody>';
+  for await(const row of reader.items({collection:'ticks',plotId:panel.plotId})){check(signal);actual.ticks++;if(!ticks){yield ticksStart;ticks=true;}const tick=row.value,s=itemSelection('ticks',row);yield '<tr data-tick-id="'+esc(row.id)+'"><th scope="row">';yield* axisLabel(reader,plot,tick.axis,h,signal,translate);yield '</th><td>'+esc(labels(plot[tick.axis].reversed?'reversed':'normal'))+'</td><td>';yield* coordinate(reader,plot,tick.value,at(s,'value'),signal,{axis:tick.axis});yield '</td><td>';yield* htmlText(reader,tick.label,at(s,'label'),signal);yield '</td></tr>';}if(ticks)yield '</tbody></table>';
+  if(plot.kind==='heatmap'){yield '<table class="figure-thresholds"><caption>'+esc(labels('thresholds'))+'</caption><thead><tr>'+['label','value','color'].map(key=>'<th scope="col">'+esc(labels(key))+'</th>').join('')+'</tr></thead><tbody>';for(const [i,threshold] of plot.heatmap.thresholds.entries()){yield '<tr><th scope="row">';yield* htmlText(reader,threshold.label,at(h,'heatmap.thresholds.'+i+'.label'),signal);yield '</th><td>'+esc(heatmapThresholdText(plot.heatmap,i,value=>figureDataNumber(value,style),{translate}))+'</td><td>'+esc(threshold.color)+'</td></tr>';}yield '</tbody></table>';}
   yield '</section>';
  }
  complete(actual,root.counts);check(signal);yield '</div>';

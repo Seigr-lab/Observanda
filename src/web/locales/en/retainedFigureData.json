@@ -30,5 +30,6 @@
   "xUpper": "Coordinate upper bound",
   "yLower": "Value lower bound",
   "yUpper": "Value upper bound",
-  "encoding": "Encoding details"
+  "encoding": "Encoding details",
+  "observationCoordinates": "Observation {number}: ({x}, {y})"
 }

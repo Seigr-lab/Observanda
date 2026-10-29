@@ -30,5 +30,10 @@
   "hidden": "Esta serie está oculta en la presentación conservada. Sus observaciones siguen siendo legibles.",
   "offset": "Carácter del texto",
   "source": "Inspeccionar las mediciones de origen",
-  "results": "Resultados de {title}"
+  "results": "Resultados de {title}",
+  "invalidText": "La respuesta con el texto conservado no es válida.",
+  "invalidPreview": "La respuesta con la vista previa de la figura no corresponde al idioma solicitado.",
+  "figureTitle": "Título de la figura",
+  "coordinateLabel": "Etiqueta del eje de coordenadas",
+  "valueLabel": "Etiqueta del eje de valores"
 }

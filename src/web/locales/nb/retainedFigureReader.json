@@ -30,5 +30,10 @@
   "hidden": "Denne serien er skjult i den bevarte presentasjonen. Observasjonene kan fortsatt leses.",
   "offset": "Teksttegn",
   "source": "Se gjennom kildemålinger",
-  "results": "Resultater for {title}"
+  "results": "Resultater for {title}",
+  "invalidText": "Svaret med lagret tekst er ugyldig.",
+  "invalidPreview": "Svaret med figurforhåndsvisningen samsvarer ikke med språket som ble forespurt.",
+  "figureTitle": "Figurtittel",
+  "coordinateLabel": "Etikett for koordinataksen",
+  "valueLabel": "Etikett for verdiaksen"
 }

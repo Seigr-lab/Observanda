@@ -30,5 +30,10 @@
   "hidden": "This series is hidden in the retained presentation. Its observations remain readable.",
   "offset": "Text character",
   "source": "Inspect source measurements",
-  "results": "Results for {title}"
+  "results": "Results for {title}",
+  "invalidText": "The retained text response is invalid.",
+  "invalidPreview": "The figure preview response does not match the requested language.",
+  "figureTitle": "Figure title",
+  "coordinateLabel": "Coordinate axis label",
+  "valueLabel": "Value axis label"
 }

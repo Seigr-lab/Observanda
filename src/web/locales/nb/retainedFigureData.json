@@ -30,5 +30,6 @@
   "xUpper": "Øvre koordinatgrense",
   "yLower": "Nedre verdigrense",
   "yUpper": "Øvre verdigrense",
-  "encoding": "Kodingsdetaljer"
+  "encoding": "Kodingsdetaljer",
+  "observationCoordinates": "Observasjon {number}: ({x}, {y})"
 }

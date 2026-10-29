@@ -1,5 +1,6 @@
 import {AppError} from '../errors.js';
 import {packageSelection} from './research-package.js';
+import {validRetainedFigureLanguage} from '../retained-figure-localization.js';
 import {RetainedFigureDocuments} from '../retained-figure-document.js';
 import {dispatchRetainedFigure,validateRetainedFigureSource} from '../retained-figures.js';
 import {ResearchMaterials} from '../research-materials.js';
@@ -14,8 +15,8 @@ const valid=(condition,code='COLLABORATION_DENIED')=>{if(!condition)throw new Ap
 // Packet membership and current grant admission precede every read. The caller
 // supplies the selected record revision, never a figure descriptor or block root.
 export function sharedReviewFigure(review,data,{signal,download,exporting=false}={}){
- const allowed=['workspaceId','reviewId','recordId','version','revision','figureId','expectedRevision',...(exporting?['format']:['operation','selection','window'])];
- valid(data&&Object.keys(data).every(key=>allowed.includes(key))&&uuid(data.workspaceId)&&uuid(data.reviewId)&&uuid(data.recordId)&&uuid(data.figureId)&&['base','incoming','current'].includes(data.version)&&revisionId(data.revision),'INVALID');
+ const allowed=['workspaceId','reviewId','recordId','version','revision','figureId','expectedRevision',...(exporting?['format']:['operation','selection','window','language'])];
+ valid(data&&validRetainedFigureLanguage(data,{exporting})&&Object.keys(data).every(key=>allowed.includes(key))&&uuid(data.workspaceId)&&uuid(data.reviewId)&&uuid(data.recordId)&&uuid(data.figureId)&&['base','incoming','current'].includes(data.version)&&revisionId(data.revision),'INVALID');
  return review.workspace.withCatalogueConnections(async()=>{
   const reader=await review.workspace.catalogue(async store=>{
   signal?.throwIfAborted();valid((await store.snapshot()).metadata.id===data.workspaceId,'WORKSPACE_CHANGED');

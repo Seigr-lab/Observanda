@@ -40,6 +40,7 @@ test('live retained figures authorize exact records and reference chains for com
  const host=await startLiveHost(f.author.workspace,f.author.deviceStore,{host:'127.0.0.1',port:0,advertise:'https://127.0.0.1'});t.after(()=>host.close());const card=await host.card(f.grant.id),peer=new LiveClient(f.member.deviceStore,card);t.after(()=>peer.close());
  const read=await peer.call('read',{recordId}),selector={recordId,figureId:figure.id,revision:read.revision};
  const selectedHeader=await peer.call('figure',{...selector,operation:'header'});assert.equal(selectedHeader.header.title,figure.title);assert.equal(selectedHeader.header.x.label,'Edited shared coordinate');
+ {const language='nb',localized=await peer.call('figure',{...selector,operation:'svg',window:{plotId:figure.id,seriesOffset:0,seriesLimit:1,pointOffset:128,pointLimit:9},language});assert.equal(localized.language,language);assert.equal(localized.revision,selector.revision);assert.deepEqual(localized.document,selectedHeader.document);assert.equal((localized.svg.match(/class="figure-observation"/g)??[]).length,9);}
  const tail=await peer.call('figure',{...selector,operation:'window',selection:{collection:'points',plotId:figure.id,seriesId:figure.series[0].id,offset:128,limit:9}});assert.deepEqual(tail.items.map(row=>row.value),figure.series[0].points.slice(128));
  for(const format of ['svg','csv','json']){
   const response=await peer.call('figure-export',{...selector,format},{stream:true}),value=await text(response);assert.equal(response.headers['x-content-type-options'],'nosniff');
@@ -84,6 +85,7 @@ test('shared change reviews read exact base incoming and current figure closures
  for(const version of ['base','incoming','current']){
   const record=await reviewer.record(review.id,recordId,version),selector={workspaceId:f.book.id,reviewId:review.id,recordId,version,revision:recordRevision(record),figureId:figure.id};selectors[version]=selector;
   const header=await sharedReviewFigure(reviewer,{...selector,operation:'header'});assert.equal(header.header.title,figure.title);assert.equal(header.header.x.label,'Edited shared coordinate');
+  if(version==='incoming'){const language='nb',localized=await sharedReviewFigure(reviewer,{...selector,operation:'svg',window:{plotId:figure.id,seriesOffset:0,seriesLimit:1,pointOffset:128,pointLimit:9},language});assert.equal(localized.language,language);assert.equal(localized.revision,selector.revision);assert.deepEqual(localized.document,header.document);assert.equal((localized.svg.match(/class="figure-observation"/g)??[]).length,9);}
   const tail=await sharedReviewFigure(reviewer,{...selector,operation:'window',selection:{collection:'points',plotId:figure.id,seriesId:figure.series[0].id,offset:128,limit:9}});assert.deepEqual(tail.items.map(row=>row.value),figure.series[0].points.slice(128));
   const json=await sharedReviewFigure(reviewer,{...selector,format:'json'},{exporting:true,download:async({chunks})=>JSON.parse(await text(chunks))});assert.deepEqual(json.series,figure.series);
  }

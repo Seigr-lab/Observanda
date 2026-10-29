@@ -1,3 +1,5 @@
+import {modelMessages} from './model-messages.js';
+import dataMessages from './locales/en/retainedFigureData.json' with {type:'json'};
 import {computationLabel} from './measurement-computation.js';
 import {retainedFigureWindow} from './retained-figure-window.js';
 // Complete retained-figure SVG output. Iteration is bounded independently of
@@ -25,14 +27,14 @@ const summaryValue=(range,log)=>log?[range.positiveMin,range.positiveMax]:[range
 const scope=(collection,plotId,seriesId)=>({collection,plotId,...(seriesId?{seriesId}:{})});
 async function* items(reader,collection,plotId,signal,seriesId){for await(const row of reader.items(scope(collection,plotId,seriesId))){check(signal);yield row;}}
 const preview=value=>(retainedFigureText(value)?value.preview:String(value??'')).replace(/[\uD800-\uDBFF]$/,'');
-function axisName(f,axis){
+function axisName(f,axis,translate){
  const value=f.kind==='heatmap'&&axis==='y'?f.heatmap.valueLabel:f[axis].label,field=f.kind==='heatmap'&&axis==='y'?'heatmap.valueLabel':axis+'.label';
- if(!retainedFigureText(value))return projectionAxisLabel(f,axis);
+ if(!retainedFigureText(value))return projectionAxisLabel(f,axis,{translate});
  const parts=[{value,selection:headerText(f,field)}];
- if(f.projection?.[axis]){const marker='__RETAINED_AXIS__',example={...f,[axis]:{...f[axis],label:marker},...(f.kind==='heatmap'&&axis==='y'?{heatmap:{...f.heatmap,valueLabel:marker}}:{})},text=projectionAxisLabel(example,axis),at=text.indexOf(marker);parts.unshift({value:text.slice(0,at)});parts.push({value:text.slice(at+marker.length)});}
+ if(f.projection?.[axis]){const marker='__RETAINED_AXIS__',example={...f,[axis]:{...f[axis],label:marker},...(f.kind==='heatmap'&&axis==='y'?{heatmap:{...f.heatmap,valueLabel:marker}}:{})},text=projectionAxisLabel(example,axis,{translate}),at=text.indexOf(marker);parts.unshift({value:text.slice(0,at)});parts.push({value:text.slice(at+marker.length)});}
  return composeFigureText(parts);
 }
-function projectionLines(f){return retainedProjectionLines(f,{axisName:axis=>axisName(f,axis),selection:field=>headerText(f,field)});}
+function projectionLines(f,translate){return retainedProjectionLines(f,{translate,axisName:axis=>axisName(f,axis,translate),selection:field=>headerText(f,field)});}
 async function* legends(reader,g){
  const {f,plotId,width,style,domains}=g,position=g.legendPosition;
  if(!f.legend)return;
@@ -61,7 +63,8 @@ async function annotationDetails(reader,g,row){
  const a=row.value;
  if(a.kind==='callout'){
   const point=(await reader.window({collection:'points',plotId:g.plotId,seriesId:a.seriesId,offset:a.pointIndex,limit:1})).items[0],p=point.value,series=await reader.item({collection:'series',plotId:g.plotId,id:a.seriesId});
-  return [{value:series.value.name,selection:selection('series',series.id,'name',g.plotId)},{value:composeFigureText([{value:'Observation '+(a.pointIndex+1)+': ('},{value:g.f.x.kind==='category'?p.x:figureCoordinateNumber(g.f,'x',p.x),selection:selection('points',point.id,'x',g.plotId)},{value:', '+figureCoordinateNumber(g.f,'y',p.y)+')'}]),selection:null}];
+  const template=modelMessages('retainedFigureData',dataMessages,g.translate)('observationCoordinates',{number:a.pointIndex+1,x:'{x}',y:'{y}'}),parts=template.split(/(\{x\}|\{y\})/).map(token=>token==='{x}'?{value:g.f.x.kind==='category'?p.x:figureCoordinateNumber(g.f,'x',p.x),selection:selection('points',point.id,'x',g.plotId)}:token==='{y}'?{value:figureCoordinateNumber(g.f,'y',p.y)}:{value:token});
+  return [{value:series.value.name,selection:selection('series',series.id,'name',g.plotId)},{value:composeFigureText(parts),selection:null}];
  }
  const value=a.kind==='region'?'X: '+figureCoordinateNumber(g.f,'x',a.xLower)+' - '+figureCoordinateNumber(g.f,'x',a.xUpper)+'; Y: '+figureCoordinateNumber(g.f,'y',a.yLower)+' - '+figureCoordinateNumber(g.f,'y',a.yUpper):(a.axis==='x'?preview(g.f.x.label):preview(g.f.y.label))+': '+figureCoordinateNumber(g.f,a.axis,a.start)+(a.kind==='interval'?' - '+figureCoordinateNumber(g.f,a.axis,a.end):'');
  return [{value,selection:null}];
@@ -80,7 +83,7 @@ async function plotLayout(reader,options){
  check(options.signal);const opened=await reader.header({plotId:options.plotId}),f=opened.header,domains=opened.domains,style=figureStyle(f),plotId=f.plotId??f.id;
  if(!domains||!domains.x||!domains.y)throw new Error('Missing retained figure domains');
  const width=Math.max(320,options.width??style.width),height=options.height??Math.max(260,width*style.height/style.width),horizontal=f.kind==='bar-horizontal';
- const g={f,plotId,domains,counts:opened.counts,style,width,height,horizontal,signal:options.signal};
+ const g={f,plotId,domains,counts:opened.counts,style,width,height,horizontal,signal:options.signal,translate:options.translate};
  g.legendPosition=style.legendPosition==='right'&&width<650?'bottom':style.legendPosition;
  g.legendWidth=f.legend&&g.legendPosition==='right'?Math.min(width*.28,220):0;
  g.legendHeight=0;for await(const entry of legends(reader,g))g.legendHeight=Math.max(g.legendHeight,entry.y+entry.height);
@@ -89,8 +92,8 @@ async function plotLayout(reader,options){
  g.right=g.legendWidth?g.legendWidth+24:28;
  g.plotW=width-g.left-g.right;
  g.axisHorizontal=horizontal?'y':'x';g.axisVertical=horizontal?'x':'y';
- g.horizontalLabelHeight=await figureTextHeight(reader,axisName(f,g.axisHorizontal),headerText(f,g.axisHorizontal+'.label'),g.plotW,style.fontSize+2);
- g.verticalLabelHeight=await figureTextHeight(reader,axisName(f,g.axisVertical),headerText(f,g.axisVertical+'.label'),g.plotW,style.fontSize+2);
+ g.horizontalLabelHeight=await figureTextHeight(reader,axisName(f,g.axisHorizontal,g.translate),headerText(f,g.axisHorizontal+'.label'),g.plotW,style.fontSize+2);
+ g.verticalLabelHeight=await figureTextHeight(reader,axisName(f,g.axisVertical,g.translate),headerText(f,g.axisVertical+'.label'),g.plotW,style.fontSize+2);
  g.tickHeight=style.fontSize*1.3;
  const provisionalHeight=Math.max(110,height-160);
  g.categoryStep=style.labelStep||Math.max(1,Math.ceil(domains.categoryCount*style.fontSize*6/(horizontal?provisionalHeight:g.plotW)));
@@ -108,14 +111,14 @@ async function plotLayout(reader,options){
  g.y=options.shared?.y??figureDomain(summaryValue(domains.y,f.y.scale==='log'),f.y,bars);
  g.clip=(options.idPrefix??'retained')+'-'+plotId;
  g.keyHeight=await keyHeight(reader,g);
- g.footerLines=[...projectionLines(f),...([computationLabel(f)].filter(Boolean))];
+ g.footerLines=[...projectionLines(f,g.translate),...([computationLabel(f,{translate:g.translate})].filter(Boolean))];
  g.footerHeight=0;for(const line of g.footerLines)g.footerHeight+=await figureTextHeight(reader,line,null,width-40,style.fontSize)+8;
  if(f.markerArea){
   let minimum=Infinity,maximum=-Infinity;
   for await(const series of items(reader,'series',plotId,g.signal))if(seriesStyle(series.value).visible)for await(const point of items(reader,'points',plotId,g.signal,series.id))if(point.value.y!==null&&point.value.count>0){minimum=Math.min(minimum,point.value.count);maximum=Math.max(maximum,point.value.count);}
   g.markerSamples=Number.isFinite(minimum)?minimum===maximum?[minimum]:[minimum,maximum]:[];
-  g.markerRule=markerMessages.legendRule.replace('{area}',figureDataNumber(f.markerArea.unitArea,style));
-  g.footerHeight+=await figureTextHeight(reader,f.markerArea.label,headerText(f,'markerArea.label'),width-40,style.fontSize)+await figureTextHeight(reader,g.markerRule,null,width-40,style.fontSize)+await figureTextHeight(reader,markerMessages.zero,null,width-40,style.fontSize)+32;
+  g.markerRule=modelMessages('figureMarkerArea',markerMessages,g.translate)('legendRule',{area:figureDataNumber(f.markerArea.unitArea,style)});
+  g.footerHeight+=await figureTextHeight(reader,f.markerArea.label,headerText(f,'markerArea.label'),width-40,style.fontSize)+await figureTextHeight(reader,g.markerRule,null,width-40,style.fontSize)+await figureTextHeight(reader,modelMessages('figureMarkerArea',markerMessages,g.translate)('zero'),null,width-40,style.fontSize)+32;
   for(const count of g.markerSamples)g.footerHeight+=2*Math.sqrt(count*f.markerArea.unitArea/Math.PI)+style.fontSize*2+16;
  }
  g.total=g.height+g.keyHeight+g.footerHeight;n(g.total);
@@ -171,7 +174,7 @@ async function* axes(reader,g){
  yield '<path d="M'+left+','+top+' V'+(top+plotH)+' H'+(left+plotW)+'" fill="none" stroke="'+style.axisColor+'"/>';
  for(const axis of ['x','y']){
   const isHorizontal=axis===g.axisHorizontal;
-  yield* figureSVGText(reader,axisName(f,axis),headerText(f,axis+'.label'),isHorizontal?left+plotW/2:left,isHorizontal?g.horizontalLabelY:g.verticalLabelY,{anchor:isHorizontal?'middle':'start',width:plotW,size:style.fontSize+2,cls:'figure-axis-label'});
+  yield* figureSVGText(reader,axisName(f,axis,g.translate),headerText(f,axis+'.label'),isHorizontal?left+plotW/2:left,isHorizontal?g.horizontalLabelY:g.verticalLabelY,{anchor:isHorizontal?'middle':'start',width:plotW,size:style.fontSize+2,cls:'figure-axis-label'});
  }
 
 }
@@ -203,7 +206,7 @@ async function* seriesGraphic(reader,g,row,index){
  for await(const point of items(reader,'points',plotId,g.signal,row.id)){
   const p=point.value;if(!validPoint(p,f))continue;
   const t=await pointTransforms(reader,g,p,point.categoryPosition);let px=g.horizontal?t.vx(p.y):t.cx(p.x),py=g.horizontal?t.cy(p.x):t.vy(p.y);
-  const number=v=>figureDataNumber(v,style),hint=number(p.y)+(p.error!=null?' \u00b1 '+number(p.error):'')+' '+intervalHint(p,(value,key)=>key[0]==='x'&&f.x.kind!=='number'?value:number(value));
+  const number=v=>figureDataNumber(v,style),hint=number(p.y)+(p.error!=null?' \u00b1 '+number(p.error):'')+' '+intervalHint(p,(value,key)=>key[0]==='x'&&f.x.kind!=='number'?value:number(value),{translate:g.translate});
   yield '<g class="figure-observation" data-point-id="'+point.id+'"><title>';
   yield* escaped(reader,f.x.kind==='category'?p.x:figureCoordinateNumber(f,'x',p.x),selection('points',point.id,'x',plotId));yield ' \u2192 '+esc(hint)+'</title>';
   const title='';
@@ -254,13 +257,13 @@ async function* footer(reader,g){
   y+=await figureTextHeight(reader,g.f.markerArea.label,headerText(g.f,'markerArea.label'),g.width-40,g.style.fontSize);
   yield* figureSVGText(reader,g.markerRule,null,20,y,{width:g.width-40,size:g.style.fontSize});y+=await figureTextHeight(reader,g.markerRule,null,g.width-40,g.style.fontSize)+12;
   for(const count of g.markerSamples){const area=count*g.f.markerArea.unitArea,r=Math.sqrt(area/Math.PI);yield areaMarker({area,x:g.width/2,y:y+r,color:'#667085',hint:figureDataNumber(count,g.style),esc,cls:'figure-count-example'});y+=2*r+g.style.fontSize+8;yield* figureSVGText(reader,figureDataNumber(count,g.style),null,g.width/2,y,{width:g.width-40,size:g.style.fontSize,anchor:'middle'});y+=g.style.fontSize+8;}
-  yield* figureSVGText(reader,markerMessages.zero,null,20,y,{width:g.width-40,size:g.style.fontSize,cls:'figure-zero-count'});y+=await figureTextHeight(reader,markerMessages.zero,null,g.width-40,g.style.fontSize)+20;
+  yield* figureSVGText(reader,modelMessages('figureMarkerArea',markerMessages,g.translate)('zero'),null,20,y,{width:g.width-40,size:g.style.fontSize,cls:'figure-zero-count'});y+=await figureTextHeight(reader,modelMessages('figureMarkerArea',markerMessages,g.translate)('zero'),null,g.width-40,g.style.fontSize)+20;
  }
  for(const line of g.footerLines){yield* figureSVGText(reader,line,null,20,y,{width:g.width-40,size:g.style.fontSize,cls:'figure-projection-description'});y+=await figureTextHeight(reader,line,null,g.width-40,g.style.fontSize)+8;}
 }
 async function* renderPlot(reader,g){
  yield '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+n(g.width)+' '+n(g.total)+'" width="'+n(g.width)+'" height="'+n(g.total)+'" role="img"><title>';
- yield* escaped(reader,g.f.title,headerText(g.f,'title'));yield '</title><desc>'+esc(figureNumeralHelp(g.style))+'</desc><rect width="100%" height="100%" fill="'+g.style.background+'"/><g font-family="'+FONT_FAMILIES[g.style.font]+'" fill="'+g.style.textColor+'">';
+ yield* escaped(reader,g.f.title,headerText(g.f,'title'));yield '</title><desc>'+esc(figureNumeralHelp(g.style,{translate:g.translate}))+'</desc><rect width="100%" height="100%" fill="'+g.style.background+'"/><g font-family="'+FONT_FAMILIES[g.style.font]+'" fill="'+g.style.textColor+'">';
  if(g.style.showTitle)yield* figureSVGText(reader,g.f.title,headerText(g.f,'title'),g.width/2,g.style.titleSize+8,{width:g.width-40,size:g.style.titleSize,anchor:'middle',weight:'600',cls:'figure-title'});
  yield '<defs><clipPath id="'+g.clip+'"><rect x="'+g.left+'" y="'+g.top+'" width="'+g.plotW+'" height="'+g.plotH+'"/></clipPath></defs>';
  yield* axes(reader,g);yield* annotations(reader,g,'background');let visible=0;
@@ -292,7 +295,7 @@ async function heatmapLayout(reader,g){
 async function* heatmap(reader,g){
  const {style,f,plotId}=g,settings=f.heatmap;
  yield '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+n(g.width)+' '+n(g.total)+'" width="'+n(g.width)+'" height="'+n(g.total)+'" role="img"><title>';yield* escaped(reader,f.title,headerText(f,'title'));
- yield '</title><desc>'+esc(heatmapMessages.help+' '+figureNumeralHelp(style))+'</desc><rect width="100%" height="100%" fill="'+style.background+'"/><g font-family="'+FONT_FAMILIES[style.font]+'" fill="'+style.textColor+'">';
+ yield '</title><desc>'+esc(modelMessages('figureHeatmap',heatmapMessages,g.translate)('help')+' '+figureNumeralHelp(style,{translate:g.translate}))+'</desc><rect width="100%" height="100%" fill="'+style.background+'"/><g font-family="'+FONT_FAMILIES[style.font]+'" fill="'+style.textColor+'">';
  if(style.showTitle)yield* figureSVGText(reader,f.title,headerText(f,'title'),g.width/2,style.titleSize+8,{width:g.width-40,size:style.titleSize,anchor:'middle',weight:'600'});
  yield* figureSVGText(reader,f.x.label,headerText(f,'x.label'),g.left+g.cellW*g.domains.categoryCount/2,g.top-g.columnsHeight-style.fontSize*1.5,{width:g.width-g.left-24,size:style.fontSize,anchor:'middle'});
  yield* figureSVGText(reader,f.y.label,headerText(f,'y.label'),8,g.top-style.fontSize*.5,{width:g.left-16,size:style.fontSize});
@@ -311,15 +314,15 @@ async function* heatmap(reader,g){
   rowIndex++;
  }
  let y=g.height+style.fontSize*2.5;
- yield* figureSVGText(reader,retainedFigureText(settings.valueLabel)?settings.valueLabel:projectionAxisLabel(f,'y')||heatmapMessages.value,headerText(f,'heatmap.valueLabel'),g.left,y,{width:g.width-g.left-24,size:style.fontSize});y+=style.fontSize*2;
+ yield* figureSVGText(reader,retainedFigureText(settings.valueLabel)?settings.valueLabel:projectionAxisLabel(f,'y',{translate:g.translate})||modelMessages('figureHeatmap',heatmapMessages,g.translate)('value'),headerText(f,'heatmap.valueLabel'),g.left,y,{width:g.width-g.left-24,size:style.fontSize});y+=style.fontSize*2;
  for(let i=0;i<settings.thresholds.length;i++){
   const b=settings.thresholds[i];yield '<rect x="'+g.left+'" y="'+(y-style.fontSize)+'" width="18" height="'+style.fontSize+'" fill="'+b.color+'"/>';
   yield* figureSVGText(reader,b.label,headerText(f,'heatmap.thresholds.'+i+'.label'),g.left+28,y,{width:g.width-g.left-36,size:style.fontSize});
   y+=await figureTextHeight(reader,b.label,headerText(f,'heatmap.thresholds.'+i+'.label'),g.width-g.left-36,style.fontSize);
-  yield* figureSVGText(reader,heatmapThresholdText(settings,i,v=>figureDataNumber(v,style)),null,g.left+28,y,{width:g.width-g.left-36,size:style.fontSize});y+=style.fontSize*3;
+  yield* figureSVGText(reader,heatmapThresholdText(settings,i,v=>figureDataNumber(v,style),{translate:g.translate}),null,g.left+28,y,{width:g.width-g.left-36,size:style.fontSize});y+=style.fontSize*3;
  }
  yield '<rect x="'+g.left+'" y="'+(y-style.fontSize)+'" width="18" height="'+style.fontSize+'" fill="'+settings.missingColor+'"/>';
- yield* figureSVGText(reader,heatmapMessages.missing,null,g.left+28,y,{width:g.width-g.left-36,size:style.fontSize});
+ yield* figureSVGText(reader,modelMessages('figureHeatmap',heatmapMessages,g.translate)('missing'),null,g.left+28,y,{width:g.width-g.left-36,size:style.fontSize});
  yield* footer(reader,{...g,height:g.height+g.keysHeight,keyHeight:0});yield '</g></svg>';
 }
 async function layout(reader,options){const g=await plotLayout(reader,options);return g.f.kind==='heatmap'?heatmapLayout(reader,g):g;}

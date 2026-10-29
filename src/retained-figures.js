@@ -1,4 +1,5 @@
-﻿import {AppError} from './errors.js';
+﻿import {validRetainedFigureLanguage,retainedFigureTranslator} from './retained-figure-localization.js';
+import {AppError} from './errors.js';
 import {RetainedFigureDocuments} from './retained-figure-document.js';
 import {RetainedRecordDocuments} from './retained-record-documents.js';
 import {RecordValues,selectedRecordValue} from './record-values.js';
@@ -46,8 +47,8 @@ export async function withRetainedFigure(materials,command,consume,{signal}={}){
 }
 const selectorKeys=['ref','workspaceId','recordId','figureId','expectedRevision'];
 export function retainedFigureRequest(materials,command,{signal,download,exporting=false}={}){
- const allowed=[...selectorKeys,...(exporting?['format']:['operation','selection','window'])];
- if(!command||typeof command!=='object'||Object.keys(command).some(key=>!allowed.includes(key)))throw new AppError('INVALID');
+ const allowed=[...selectorKeys,...(exporting?['format']:['operation','selection','window','language'])];
+ if(!command||typeof command!=='object'||Object.keys(command).some(key=>!allowed.includes(key))||!validRetainedFigureLanguage(command,{exporting}))throw new AppError('INVALID');
  return withRetainedFigure(materials,command,async(reader,{revision})=>{
   return dispatchRetainedFigure(reader,revision,command,{signal,download,exporting});
  },{signal});
@@ -55,6 +56,7 @@ export function retainedFigureRequest(materials,command,{signal,download,exporti
 // Callers authorize and select an immutable figure before dispatching a bounded
 // read or complete export. This helper never accepts a client document root.
 export async function dispatchRetainedFigure(reader,revision,command,{signal,download,exporting=false}={}){
+ if(!validRetainedFigureLanguage(command,{exporting}))throw new AppError('INVALID');
  if(command.expectedRevision!==undefined&&command.expectedRevision!==revision)throw new AppError('RECORD_CHANGED');
   if(exporting){
    if(typeof download!=='function'||!['svg','csv','json'].includes(command.format))throw new AppError('INVALID');
@@ -77,7 +79,8 @@ export async function dispatchRetainedFigure(reader,revision,command,{signal,dow
    case 'text':if(!validRetainedFigureText(selection))throw new AppError('INVALID');return {...await reader.text(selection),revision};
    case 'svg':{
     const window=command.window;if(!window||Object.keys(window).some(key=>!['plotId','seriesOffset','seriesLimit','pointOffset','pointLimit'].includes(key))||!researchId(window.plotId)||!['seriesOffset','pointOffset'].every(key=>Number.isSafeInteger(window[key]??0)&&(window[key]??0)>=0)||!Number.isInteger(window.seriesLimit)||window.seriesLimit<1||window.seriesLimit>16||!Number.isInteger(window.pointLimit)||window.pointLimit<1||window.pointLimit>128)throw new AppError('INVALID');
-    let svg='',bytes=0;for await(const chunk of retainedFigureSVG(reader,{signal,window})){bytes+=Buffer.byteLength(chunk);if(bytes>4*1024*1024)throw new AppError('LIMIT');svg+=chunk;}return {svg,revision,...await reader.header({plotId:window.plotId}),window};
+    const translate=Object.hasOwn(command,'language')?await retainedFigureTranslator(command.language):undefined;
+    let svg='',bytes=0;for await(const chunk of retainedFigureSVG(reader,{signal,window,translate})){bytes+=Buffer.byteLength(chunk);if(bytes>4*1024*1024)throw new AppError('LIMIT');svg+=chunk;}return {svg,revision,...await reader.header({plotId:window.plotId}),window,...(translate?{language:command.language}:{})};
    }
    default:throw new AppError('INVALID');
   }

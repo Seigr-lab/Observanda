@@ -30,5 +30,10 @@
   "hidden": "Aquesta sèrie està oculta a la presentació conservada. Les seves observacions continuen sent llegibles.",
   "offset": "Caràcter del text",
   "source": "Inspecciona les mesures d'origen",
-  "results": "Resultats de {title}"
+  "results": "Resultats de {title}",
+  "invalidText": "La resposta amb el text conservat no és vàlida.",
+  "invalidPreview": "La resposta amb la previsualització de la figura no correspon a la llengua sol·licitada.",
+  "figureTitle": "Títol de la figura",
+  "coordinateLabel": "Etiqueta de l’eix de coordenades",
+  "valueLabel": "Etiqueta de l’eix de valors"
 }

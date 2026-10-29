@@ -3,6 +3,7 @@ import {LiveRelationships} from './live-relationships.js';
 import {LiveAttempts} from './live-attempts.js';
 import {LiveEvidence} from './live-evidence.js';
 import {LiveMaterialReading} from './live-material-reading.js';
+import {validRetainedFigureLanguage} from '../retained-figure-localization.js';
 import {RetainedFigureDocuments} from '../retained-figure-document.js';
 import {dispatchRetainedFigure} from '../retained-figures.js';
 import {validRetainedFigure} from '../web/retained-figure-model.js';
@@ -14,8 +15,8 @@ import {uuid,exact} from '../modules/validation.js';
 // Resolve only through the record, linked revision or retained reference chain
 // already admitted by the room. Figure/block roots are never request values.
 export function liveFigure(research,identity,scope,data,{signal,download,exporting=false}={}){
- const allowed=['recordId','figureId','revision','via','expectedRevision',...(exporting?['format']:['operation','selection','window'])];
- valid(data&&Object.keys(data).every(k=>allowed.includes(k))&&uuid(data.recordId)&&uuid(data.figureId)&&revisionId(data.revision));
+ const allowed=['recordId','figureId','revision','via','expectedRevision',...(exporting?['format']:['operation','selection','window','language'])];
+ valid(data&&validRetainedFigureLanguage(data,{exporting})&&Object.keys(data).every(k=>allowed.includes(k))&&uuid(data.recordId)&&uuid(data.figureId)&&revisionId(data.revision));
  return research.workspace.withCatalogueConnections(async()=>{
   const selectedReader=await research.workspace.catalogue(async store=>{
   signal?.throwIfAborted();const access=await research.authorized(identity,scope),readRecord=research.record.bind(research),source=await readRecord(store,access,data.recordId);let selected={record:source,revision:recordRevision(source)};

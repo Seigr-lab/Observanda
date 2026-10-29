@@ -30,5 +30,10 @@
   "hidden": "Denne serien er skjult i den bevarte presentasjonen. Observasjonane kan framleis lesast.",
   "offset": "Tekstteikn",
   "source": "Sjå gjennom kjeldemålingar",
-  "results": "Resultat for {title}"
+  "results": "Resultat for {title}",
+  "invalidText": "Svaret med lagra tekst er ugyldig.",
+  "invalidPreview": "Svaret med figurførehandsvisinga samsvarar ikkje med språket som vart førespurt.",
+  "figureTitle": "Figurtittel",
+  "coordinateLabel": "Etikett for koordinataksen",
+  "valueLabel": "Etikett for verdiaksen"
 }

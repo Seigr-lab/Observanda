@@ -1,5 +1,6 @@
 // Figure edits are owned by an authenticated selected-value checkpoint. Client
 // requests identify that checkpoint; they never authorize arbitrary block roots.
+import {validRetainedFigureLanguage} from './retained-figure-localization.js';
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
 import {researchId} from './web/research-reference.js';
@@ -35,8 +36,8 @@ export class RecordFigureDrafts{
  }
  async value(store,saved,consume){return withDraftDocument(store,saved.draft,async document=>consume({...((await selectedRecordValue(document,saved.draft.selection.field)).value),...(saved.draft.figureCopies?{copies:saved.draft.figureCopies}:{})},document));}
  async read(command,{signal}={}){
-  const keys=['id','workspaceId','expectedRevision','operation','selection',...(Object.hasOwn(command??{},'window')?['window']:[])];
-  if(!exact(command,keys)||![command.id,command.workspaceId].every(researchId)||!revisionId(command.expectedRevision)||!['open','header','window','item','text','cells','svg','source'].includes(command.operation)||Object.hasOwn(command,'window')&&command.operation!=='svg')invalid();
+  const keys=['id','workspaceId','expectedRevision','operation','selection',...(Object.hasOwn(command??{},'window')?['window']:[]),...(Object.hasOwn(command??{},'language')?['language']:[])];
+  if(!exact(command,keys)||!validRetainedFigureLanguage(command)||![command.id,command.workspaceId].every(researchId)||!revisionId(command.expectedRevision)||!['open','header','window','item','text','cells','svg','source'].includes(command.operation)||Object.hasOwn(command,'window')&&command.operation!=='svg')invalid();
   return this.workspace.catalogue(async store=>{
    const saved=await this.current(store,command);if(saved.revision!==command.expectedRevision)throw new AppError('DRAFT_CHANGED');
    return this.value(store,saved,async value=>{
