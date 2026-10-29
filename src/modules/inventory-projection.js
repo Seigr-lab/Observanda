@@ -6,6 +6,7 @@ import {AppError} from '../errors.js';
 import {add,negate} from '../web/modules/quantities.js';
 import {stockTracked,assetPlacement} from '../web/modules/inventory-model.js';
 import {localBOMResource} from '../web/modules/bom-model.js';
+import {moduleStateRow} from './read-state.js';
 const fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 const hash=value=>digest(serialize(value));
 const placeKey=place=>place===undefined?'~':place===null?'-':place;
@@ -59,7 +60,7 @@ export class InventoryProjection{
  check(head){if(head.stockIndex!==undefined&&!InventoryProjection.valid(head.stockIndex))fail();}
  available(head){this.check(head);return !!head.stockIndex||(head.memberVersion===1?head.root?.count??0:head.entities.length)===0;}
  async value(entry){
-  if(!entry)return null;const slot='module-stock-value:'+digest(entry.id),row=await this.store.db.get('SELECT payload FROM state WHERE slot=$1',slot);if(!row)fail();
+  if(!entry)return null;const slot='module-stock-value:'+digest(entry.id),row=await moduleStateRow(this.store,slot);if(!row)fail();
   const value=this.store.decode('state',slot,row.payload);if(value?.id!==entry.id||hash(value)!==entry.revision)fail();return value.value;
  }
  async get(head,id){this.check(head);return this.value(await this.tree.find(head.stockIndex??{root:null},id));}

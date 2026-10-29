@@ -8,16 +8,18 @@ import {verifiedCatalogueObjects} from './catalogue-object-verification.js';
 import {digest,serialize} from './storage-format.js';
 import {AppError} from './errors.js';
 import {validModuleDomain,moduleDomain} from './modules/domains.js';
+import {CatalogueReadCache} from './catalogue-read-cache.js';
 export class ProjectDomainCatalogue{
- constructor(workspace,db,domain,namespaceId,{writable=false,catalogueDb=null}={}){
-  if(!workspace.vault?.key||!validModuleDomain(domain))throw new AppError('INVALID');
+ constructor(workspace,db,domain,namespaceId,{writable=false,catalogueDb=null,readOnly=false}={}){
+  if(!workspace.vault?.key||!validModuleDomain(domain)||typeof readOnly!=='boolean'||readOnly&&writable)throw new AppError('INVALID');
   this.workspace=workspace;this.db=db;this.catalogueDb=catalogueDb;this.domain=domain;this.namespaceId=namespaceId;this.writable=writable;
+  this.readOnly=readOnly;this.readCache=readOnly?new CatalogueReadCache():null;
   this.scope=moduleDomainKeyScope(workspace,namespaceId);
   this.key=Buffer.from(hkdfSync('sha256',workspace.vault.key,this.scope.salt,this.scope.label+'/'+workspace.vault.id+'/'+domain,32));
  }
  assertModuleType(type){if(moduleDomain(type)!==this.domain)throw new AppError('MODULE_FORMAT');}
  assertModuleWrite(entities,event){if(!this.writable)throw new AppError('INVALID');for(const e of [...entities,...event.changes])this.assertModuleType(e.type);}
- close(){this.key.fill(0);this.closed=true;}
+ close(){this.readCache?.clear();this.key.fill(0);this.closed=true;}
  aad(table,id){return JSON.stringify([this.scope.label,this.workspace.vault.id,this.scope.identity,this.namespaceId,this.domain,table,id]);}
  encode(table,id,value){if(this.closed)throw new AppError('ACCESS_LOCKED');return seal(Buffer.from(serialize(value)),this.key,this.aad(table,id));}
  decode(table,id,bytes){
@@ -26,7 +28,7 @@ export class ProjectDomainCatalogue{
   catch(error){if(error instanceof AppError)throw error;throw new AppError('CATALOGUE_DAMAGED');}
  }
  async objectValue(id,expected){
-  const row=await this.db.get('SELECT payload FROM objects WHERE id=$1',id);
+  const load=()=>this.db.get('SELECT payload FROM objects WHERE id=$1',id),row=this.readCache?await this.readCache.row('object:'+id,load):await load();
   if(!!row!==!!expected)throw new AppError('CATALOGUE_DAMAGED');if(!row)return null;
   const value=this.decode('object',id,row.payload);if(digest(serialize(value))!==expected.revision)throw new AppError('CATALOGUE_DAMAGED');return value;
  }

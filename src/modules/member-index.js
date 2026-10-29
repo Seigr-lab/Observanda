@@ -7,6 +7,7 @@ import {writeCatalogueRows} from '../catalogue-writes.js';
 import {digest,serialize} from '../storage-format.js';
 import {AppError} from '../errors.js';
 import {uuid} from './validation.js';
+import {moduleStateRow} from './read-state.js';
 const hash=value=>digest(serialize(value)),revision=v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v);
 const damaged=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 export function validModuleMember(e,head){
@@ -26,7 +27,7 @@ export class ModuleMemberIndex{
  }
  async decode(head,entry){
   if(!entry)return null;
-  const slot='module-member:'+entry.id,row=await this.store.db.get('SELECT payload FROM state WHERE slot=$1',slot);
+  const slot='module-member:'+entry.id,row=await moduleStateRow(this.store,slot);
   if(!row)damaged();const member=this.store.decode('state',slot,row.payload);
   if(member.id!==entry.id||hash(member)!==entry.revision||!validModuleMember(member,head))damaged();return member;
  }

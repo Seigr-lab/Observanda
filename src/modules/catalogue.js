@@ -18,6 +18,7 @@ import {inventoryFacts} from './inventory-facts.js';
 import {ModuleMemberIndex,validModuleMember} from './member-index.js';
 import {ModuleBrowseIndex} from './browse-index.js';
 import {InventoryProjection} from './inventory-projection.js';
+import {moduleStateRow} from './read-state.js';
 const hash=value=>digest(serialize(value));
 const damaged=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 export const moduleEntityBytes=entity=>{
@@ -33,14 +34,14 @@ export class ModuleCatalogue{
  constructor(store){this.store=store;this.currentSizes=new WeakMap();this.membersIndex=new ModuleMemberIndex(store);}
  async checkPolicy(entity){if(hasStructuredCalculator(entity?.type,entity?.data)&&!catalogueRequiresStructuredCalculator(await catalogueFormat(this.store.catalogueDb??this.store.db)))damaged();if(hasCalculationPolicy(entity?.type,entity?.data)&&!catalogueRequiresCalculationPolicies(await catalogueFormat(this.store.catalogueDb??this.store.db)))damaged();}
  async head(workspaceId){
-  const s=this.store,row=await s.db.get("SELECT payload FROM state WHERE slot='modules'");
+  const s=this.store,row=await moduleStateRow(s,'modules'),head=row?s.decode('state','modules',row.payload):{workspaceId,revision:0,entities:[]};
+  const verify=async()=>{
   const counts=await s.db.get('SELECT (SELECT count(*) FROM module_entities)::text AS entities,count(*)::text AS events,COALESCE(max(ordinal),0)::text AS last FROM module_events');
   if(!row){
    if(counts.entities!=='0'||counts.events!=='0')damaged();
    await this.membersIndex.check({memberVersion:1,root:null},'0');
-   return {workspaceId,revision:0,entities:[]};
+   return;
   }
-  const head=s.decode('state','modules',row.payload);
   if(head.workspaceId!==workspaceId||!Number.isSafeInteger(head.revision)||head.revision<0||String(head.revision)!==counts.events||counts.last!==counts.events)damaged();
   if(head.historyVersion!==undefined&&head.historyVersion!==1)damaged();
   if(head.currentVersion!==undefined&&head.currentVersion!==1)damaged();
@@ -48,7 +49,10 @@ export class ModuleCatalogue{
   if(head.viewVersion!==undefined&&head.viewVersion!==1)damaged();
   if(head.memberVersion!==undefined){if(Object.hasOwn(head,'entities'))damaged();await this.membersIndex.check(head,counts.entities);}
   else if(!Array.isArray(head.entities)||String(head.entities.length)!==counts.entities||new Set(head.entities.map(e=>e.id)).size!==head.entities.length||!head.entities.every(e=>validModuleMember(e,head)))damaged();
-  new ModuleBrowseIndex(this).check(head);new InventoryProjection(this).check(head);return head;
+  new ModuleBrowseIndex(this).check(head);new InventoryProjection(this).check(head);
+  };
+  if(s.readOnly&&s.readCache)await s.readCache.proof('module-head:'+workspaceId+':'+(row?digest(row.payload):'empty'),verify);else await verify();
+  return head;
  }
  stockProjection(head){const index=new InventoryProjection(this);return index.available(head)?[{index,head}]:null;}
  member(head,id){return head.memberVersion===1?this.membersIndex.find(head,id):Promise.resolve(head.entities.find(e=>e.id===id)??null);}
@@ -77,38 +81,38 @@ export class ModuleCatalogue{
  async inventory(head,member){
   if(member.inventoryHash===null)return null;
   if(member.inventoryHash===undefined)return inventoryFacts(await this.selected(head,member.id));
-  const slot='module-inventory:'+member.inventoryHash,row=await this.store.db.get('SELECT payload FROM state WHERE slot=$1',slot);
+  const slot='module-inventory:'+member.inventoryHash,row=await moduleStateRow(this.store,slot);
   if(!row)damaged();const value=this.store.decode('state',slot,row.payload);
   if(hash(value)!==member.inventoryHash||value.id!==member.id||value.type!==member.type)damaged();return value;
  }
  async calendar(head,member){
   if(member.calendarHash===null)return null;
   if(member.calendarHash===undefined)return calendarFacts(await this.selected(head,member.id));
-  const slot='module-calendar:'+member.calendarHash,row=await this.store.db.get('SELECT payload FROM state WHERE slot=$1',slot);
+  const slot='module-calendar:'+member.calendarHash,row=await moduleStateRow(this.store,slot);
   if(!row)damaged();const value=this.store.decode('state',slot,row.payload);
   if(hash(value)!==member.calendarHash||value.id!==member.id||value.type!==member.type)damaged();return value;
  }
  async references(head,member){
   if(!member.referencesHash)return moduleReferences(await this.selected(head,member.id));
-  const slot='module-references:'+member.referencesHash,row=await this.store.db.get('SELECT payload FROM state WHERE slot=$1',slot);
+  const slot='module-references:'+member.referencesHash,row=await moduleStateRow(this.store,slot);
   if(!row)damaged();const value=this.store.decode('state',slot,row.payload);
   if(hash(value)!==member.referencesHash)damaged();return value;
  }
  async view(head,member){
   if(head.viewVersion!==1)return moduleView(await this.selected(head,member.id));
-  const slot='module-view:'+member.viewHash,row=await this.store.db.get('SELECT payload FROM state WHERE slot=$1',slot);
+  const slot='module-view:'+member.viewHash,row=await moduleStateRow(this.store,slot);
   if(!row)damaged();const value=this.store.decode('state',slot,row.payload);
   if(hash(value)!==member.viewHash||value.id!==member.id||value.revision!==member.revision)damaged();return value;
  }
  async search(head,member){
   if(head.viewVersion!==1)return moduleSearch(await this.selected(head,member.id));
-  const slot='module-search:'+member.searchHash,row=await this.store.db.get('SELECT payload FROM state WHERE slot=$1',slot);
+  const slot='module-search:'+member.searchHash,row=await moduleStateRow(this.store,slot);
   if(!row)damaged();const value=this.store.decode('state',slot,row.payload);
   if(typeof value!=='string'||hash(value)!==member.searchHash)damaged();return value;
  }
  async constraint(head,member){
   if(head.currentVersion!==1)return moduleConstraint(await this.selected(head,member.id));
-  const slot='module-constraint:'+member.constraintHash,row=await this.store.db.get('SELECT payload FROM state WHERE slot=$1',slot);
+  const slot='module-constraint:'+member.constraintHash,row=await moduleStateRow(this.store,slot);
   if(!row)damaged();const value=this.store.decode('state',slot,row.payload);
   if(hash(value)!==member.constraintHash||value.id!==member.id)damaged();return value;
  }
