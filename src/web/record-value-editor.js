@@ -1,5 +1,6 @@
 import {t} from './i18n/index.js';
 import {revisionId} from './revision-model.js';
+import {captureFocus,requestFocusRestore} from './focus-management.js';
 
 
 // Shared checkpoint, conflict and lifetime owner for selected-value editors.
@@ -115,7 +116,7 @@ export function recordValueEditor({state,api,esc,notify,onSaved,onClosed,adapter
  function finish(){
   clearTimeout(timer);timer=null;dialog.close();owner=null;view.release?.();dialog.innerHTML='';
   base=value=writer=pending=conflict=draftMutation=openingInput=lastDraftMutation=null;dirty=busy=loading=checkpointError=false;last=error=status='';
-  if(focusBefore?.isConnected)focusBefore.focus({preventScroll:true});resolveClose?.();resolveClose=null;void onClosed?.();
+  requestFocusRestore(focusBefore);resolveClose?.();resolveClose=null;void onClosed?.();
  }
  async function save(){
   if(view.busy?.())return;
@@ -173,7 +174,7 @@ export function recordValueEditor({state,api,esc,notify,onSaved,onClosed,adapter
   }catch(failure){if(owner===actionOwner){error=failure.message||text('failed');busy=false;paint();}}
  });
  async function open(input,retained=null){
-  if(dialog.open)return;openingInput=input;owner={context:context(),id:crypto.randomUUID()};const loadingOwner=owner;focusBefore=document.activeElement;loading=true;status=text('loading');draw();dialog.showModal();
+  if(dialog.open)return;openingInput=input;owner={context:context(),id:crypto.randomUUID()};const loadingOwner=owner;focusBefore=captureFocus(input.focusTarget instanceof Element?input.focusTarget:document.activeElement);loading=true;status=text('loading');draw();dialog.showModal();
   try{
    if(retained){
     const result=await api('/api/research/drafts/'+adapter.route+'/read',{workspaceId:retained.draft.workspaceId,id:retained.draft.id,expectedRevision:retained.revision},{adopt:false});

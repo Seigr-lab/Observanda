@@ -551,7 +551,7 @@ const userProfile=userProfileUI({state,api,esc,field,render,notify});
 const setupControls=setupUI({state,esc,field,option,mark,storageControls,notify});
 const textControls=interfaceUI({api,field,showDialog,notify,onChange:updateSaveStatus});
 const shellMenu=shellNavigation();
-const appShell=applicationShell({root:$('#app'),mark,navigation,applyLayout:textControls.applyLayout});
+const appShell=applicationShell({root:$('#app'),mark,navigation,applyLayout:textControls.applyLayout,pageKey:()=>JSON.stringify([state.storage?.contextId,state.page,state.project,state.notebook,state.selected,state.recordReading,state.moduleId,state.modulePath,state.helpTopic])});
 const website=lazyFeatureUI({enabled:()=>enabledModule(state.dashboardSettings,'publishing'),handles:name=>name==='website'||name.startsWith('website-'),load:()=>import('./website-ui.js').then(m=>m.websiteUI({state,api,esc,field,option,icon,dirty,render,notify,showDialog,selection:websiteSelection,documents:websiteDocuments,access:operation=>withProjectAccess(operation),onSave:()=>savePending().catch(report),bindMedia:()=>mediaImports.bind(),refreshFonts:()=>fontLibrary.load(),previewDraft:async book=>{
   if(websiteDocuments.enabled())return websiteDocuments.preview();
   const command=state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion===21?workspaceSaveRequest(savedBook,book,savedRecordRevisions):null;
@@ -947,13 +947,13 @@ async function rawAction(button) {
   if(name?.startsWith('project-storage-'))return structureUI.projectStorage.action(button);
   if(['workflow-new-run','material-repeat'].includes(name)&&state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion===21){await runCreation.open(state.selected);return;}
   if(await recordContent.action(button))return;
-  if(button.dataset.action==='record-value-edit')return recordValues.open({recordId:state.selected,field:button.dataset.valueField??document.querySelector('[data-record-detail-field]').value});
+  if(button.dataset.action==='record-value-edit')return recordValues.open({recordId:state.selected,field:button.dataset.valueField??document.querySelector('[data-record-detail-field]').value,focusTarget:button});
   if(button.dataset.action==='record-value-add-contributor')return recordValues.open({recordId:state.selected,field:'contributor:'+crypto.randomUUID()});
   if(button.dataset.action==='record-value-add-relation')return recordValues.open({recordId:state.selected,field:'relation:'+crypto.randomUUID()});
   if(button.dataset.action==='record-value-add-figure')return recordValues.open({recordId:state.selected,field:'figure:'+crypto.randomUUID(),create:button.dataset.kind==='panels'?'panels':'plot'});
   if(button.dataset.action==='record-value-add-attempt')return recordValues.open({recordId:state.selected,field:'attempt:'+button.dataset.kind+':'+crypto.randomUUID(),prior:button.dataset.prior});
   if(button.dataset.action==='record-value-add-result')return recordValues.open({recordId:state.selected,field:'result:'+crypto.randomUUID()});
-  if(button.dataset.action==='writing-edit')return recordWriting.open({recordId:state.selected,sectionId:button.dataset.section??null});
+  if(button.dataset.action==='writing-edit')return recordWriting.open({recordId:state.selected,sectionId:button.dataset.section??null,focusTarget:button});
   if(state.page==='record-reader'){
    if(name==='record-location-open'){recordLocation.open();return;}
    if(name?.startsWith('workflow-')){await workflow.action(button);return;}

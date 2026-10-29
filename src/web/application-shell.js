@@ -1,8 +1,9 @@
 import {t,language} from './i18n/index.js';
+import {captureFocus,restoreFocus,focusMain,restorePendingFocus} from './focus-management.js';
 // Owns the application frame. Feature views render into the page outlet;
 // navigation and header lifetime never depend on which feature is displayed.
-export function applicationShell({root,mark,navigation,applyLayout}) {
-  let frame=null;
+export function applicationShell({root,mark,navigation,applyLayout,pageKey=()=>location.hash}) {
+  let frame=null,previousPage=null;
   function mount() {
     root.innerHTML=`<div class="shell">
       <header class="topbar">
@@ -12,12 +13,14 @@ export function applicationShell({root,mark,navigation,applyLayout}) {
       <button class="shell-menu-backdrop" data-action="shell-menu-close" tabindex="-1" aria-label="" hidden></button>
       <aside class="sidebar" id="main-navigation"><a href="#" class="brand" data-action="workspace-refresh">${mark}Observanda</a></aside>
       <div class="navigation-resizer" role="separator" aria-label="" aria-orientation="vertical" aria-controls="main-navigation" tabindex="0"></div>
-      <div class="main-area"><main id="main" class="main"></main></div>
+      <div class="main-area"><main id="main" class="main" tabindex="-1"></main></div>
     </div>`;
     frame={shell:root.querySelector('.shell'),sidebar:root.querySelector('#main-navigation'),topbar:root.querySelector('.topbar'),main:root.querySelector('#main')};
   }
   return {
     showWorkspace(renderContent) {
+      const nextPage=pageKey(),changed=previousPage!==null&&previousPage!==nextPage;
+      const focused=frame?.main.contains(document.activeElement)?captureFocus():null;
       const mounted=!frame;
       if(mounted)mount();
       const resumed=!frame.shell.isConnected;
@@ -27,8 +30,14 @@ export function applicationShell({root,mark,navigation,applyLayout}) {
       }
       const navigationChanged=navigation.update(frame.sidebar,frame.topbar);
       frame.main.innerHTML=renderContent();
+      const heading=frame.main.querySelector('h1');
+      document.title=heading?.textContent.trim()?heading.textContent.trim()+' · Observanda':'Observanda';
+      previousPage=nextPage;
       if(mounted||resumed||navigationChanged)applyLayout();
       if(resumed)frame.sidebar.scrollTop=frame.sidebarScroll??0;
+      if(changed&&(focused||document.activeElement===document.body)&&!document.querySelector('dialog[open]'))focusMain();
+      else restoreFocus(focused,{fallback:false});
+      restorePendingFocus();
     },
     // Loading another view pauses this frame; project disclosures and navigation
     // nodes still belong to the same workspace when the read finishes.
@@ -38,7 +47,7 @@ export function applicationShell({root,mark,navigation,applyLayout}) {
     },
     // Workspace access and setup are separate application lifecycles.
     showStandalone(content) {
-      navigation.unmount();frame=null;root.innerHTML=content;
+      navigation.unmount();frame=null;previousPage=null;root.innerHTML=content;document.title='Observanda';
     }
   };
 }
