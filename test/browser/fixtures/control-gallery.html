@@ -1,0 +1,29 @@
+<section class="control-gallery" aria-labelledby="gallery-title">
+ <h1 id="gallery-title">Application controls</h1>
+ <p>Shared controls at normal and enlarged text sizes.</p>
+ <div class="inline-actions">
+  <button class="button primary" data-gallery-focus>Primary action</button>
+  <button class="button">Secondary action</button>
+  <button class="button subtle">Text action</button>
+  <button class="button" aria-current="page">Current section</button>
+  <button class="button" disabled>Unavailable action</button>
+  <button class="button" disabled aria-busy="true">Saving…</button>
+ </div>
+ <fieldset><legend>Inputs</legend>
+  <div class="form-grid">
+   <label class="field">Name<input value="Observation"></label>
+   <label class="field">Date<input type="date" value="2026-10-29"></label>
+   <label class="field">Progress<select><option>Draft</option><option>Completed</option></select></label>
+   <label class="field">Original file<input type="file"></label>
+  </div>
+  <label class="field">Notes<textarea rows="2">Retain the source and explain the result.</textarea></label>
+  <label class="checkbox"><input type="checkbox" checked><span>Include this selection</span></label>
+  <label class="field">Invalid value<input aria-invalid="true" aria-describedby="gallery-error" value=""><span id="gallery-error" role="alert">Enter a name before saving.</span></label>
+ </fieldset>
+ <section class="panel"><h2>Saved state</h2><p role="status">Changes saved.</p></section>
+ <section class="panel" aria-busy="true"><h2>Loading state</h2><p role="status">Loading records…</p></section>
+ <section class="panel"><h2>No records yet</h2><p>Create your first note in this book.</p><button class="button primary">New record</button></section>
+ <section class="panel"><h2>No matching records</h2><p>Try another search or clear the filters.</p><button class="button">Clear filters</button></section>
+ <section class="panel"><h2>Load failed</h2><p role="alert">The collection could not be loaded. Its saved contents have not changed.</p><button class="button">Retry</button></section>
+ <details><summary>More options</summary><p>Additional controls remain reachable by keyboard.</p></details>
+</section>

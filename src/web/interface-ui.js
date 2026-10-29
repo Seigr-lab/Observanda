@@ -1,16 +1,17 @@
 import {t} from './i18n/index.js';
 import {orderNavigationNodes} from './navigation-dom.js';
+import {ux} from './experience-ui.js';
 const message=(key,parameters)=>t('interface',key,parameters);
 const NAVIGATION_GROUPS = ['research','projects','website','workspace'];
-export const DEFAULT_INTERFACE = Object.freeze({fontSize:17,lineHeight:1.6,navigationPosition:'left',navigationWidth:272,navigationCollapsed:false,headerAlignment:'center',headerOrder:'logo-first',navigationOrder:['research','projects','website','workspace']});
+export const DEFAULT_INTERFACE = Object.freeze({appTheme:'research',pinnedTools:[],fontSize:17,lineHeight:1.6,navigationPosition:'left',navigationWidth:272,navigationCollapsed:false,headerAlignment:'center',headerOrder:'logo-first',navigationOrder:['research','projects','website','workspace']});
 export const normalizeInterface = value => ({...structuredClone(DEFAULT_INTERFACE),...structuredClone(value)});
 export function validInterface(value) {
   if(!value || typeof value !== 'object' || Array.isArray(value))return false;
   const keys=Object.keys(value),legacy=keys.length===2&&keys.every(key=>['fontSize','lineHeight'].includes(key));
-  const required=Object.keys(DEFAULT_INTERFACE).filter(key=>!['headerAlignment','headerOrder'].includes(key));
+  const required=Object.keys(DEFAULT_INTERFACE).filter(key=>!['appTheme','pinnedTools','headerAlignment','headerOrder'].includes(key));
   const shape=legacy||(required.every(key=>keys.includes(key))&&keys.every(key=>Object.hasOwn(DEFAULT_INTERFACE,key)));
   const v=normalizeInterface(value);
-  return shape && ['left','center','right'].includes(v.headerAlignment)&&['logo-first','title-first'].includes(v.headerOrder)&&Number.isInteger(v.fontSize) && v.fontSize>=16 && v.fontSize<=24 &&
+  return shape && Array.isArray(v.pinnedTools)&&v.pinnedTools.length<=80&&new Set(v.pinnedTools).size===v.pinnedTools.length&&v.pinnedTools.every(id=>typeof id==='string'&&/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/.test(id))&&['research','studio'].includes(v.appTheme)&&['left','center','right'].includes(v.headerAlignment)&&['logo-first','title-first'].includes(v.headerOrder)&&Number.isInteger(v.fontSize) && v.fontSize>=16 && v.fontSize<=24 &&
     Number.isFinite(v.lineHeight)&&v.lineHeight>=1.4&&v.lineHeight<=2&&
     ['left','right','top'].includes(v.navigationPosition)&&Number.isInteger(v.navigationWidth)&&v.navigationWidth>=220&&v.navigationWidth<=640&&
     typeof v.navigationCollapsed==='boolean'&&Array.isArray(v.navigationOrder)&&v.navigationOrder.length>0&&new Set(v.navigationOrder).size===v.navigationOrder.length&&v.navigationOrder.every(id=>typeof id==='string'&&/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/.test(id));
@@ -73,7 +74,7 @@ export function interfaceUI({api,field,showDialog,notify,onChange}) {
   function changed(){version++;apply();displayStatus(status());onChange();}
   const text=(key,parameters)=>escapeLabel(message(key,parameters));
   function controls() {
-    return `<p class="muted">${text('textHelp')}</p>` +
+    return `<p class="muted">${text('textHelp')}</p>` + field(escapeLabel(ux('appTheme')),`<select data-interface="appTheme">${['research','studio'].map(id=>`<option value="${id}" ${settings.appTheme===id?'selected':''}>${escapeLabel(t('appearance',id+'Name'))}</option>`).join('')}</select>`)+
       field(text('fontSize')+' <output>' + settings.fontSize + ' px</output>', `<input data-interface="fontSize" type="range" min="16" max="24" step="1" value="${settings.fontSize}">`) +
       field(text('lineHeight')+' <output>' + settings.lineHeight + '</output>', `<input data-interface="lineHeight" type="range" min="1.4" max="2" step="0.1" value="${settings.lineHeight}">`) +
       `<div class="interface-sample"><strong>${text('sampleTitle')}</strong><p>${text('sampleBody')}</p><label>${text('sampleField')}<input value="${text('sampleValue')}" readonly tabindex="-1"></label></div><p class="muted" data-interface-status role="status">${status()}</p><div class="inline-actions"><button class="button" type="button" data-action="interface-reset">${text('resetText')}</button><button class="button primary" type="button" data-action="interface-save">${text('save')}</button></div>`;
@@ -105,5 +106,9 @@ export function interfaceUI({api,field,showDialog,notify,onChange}) {
   }
   async function load() { const value=await api('/api/interface');if(validInterface(value))settings=normalizeInterface(value);saved=structuredClone(settings);apply(); }
   apply();
-  return {controls,headerControls,input,action,load,save,discard,isDirty,applyLayout};
+  async function togglePinnedTool(id){
+    if(!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/.test(id))return;
+    const operation=widthQueue.then(async()=>{if(pending)await pending;const pins=saved.pinnedTools.includes(id)?saved.pinnedTools.filter(value=>value!==id):[...saved.pinnedTools,id];const value={...structuredClone(saved),pinnedTools:pins};pending=api('/api/interface',value);try{await pending;saved.pinnedTools=pins;settings.pinnedTools=[...pins];onChange();}finally{pending=null;}});widthQueue=operation.catch(()=>{});return operation;
+  }
+  return {controls,headerControls,input,action,load,save,discard,isDirty,applyLayout,theme:()=>settings.appTheme,pinnedTools:()=>[...settings.pinnedTools],togglePinnedTool};
 }

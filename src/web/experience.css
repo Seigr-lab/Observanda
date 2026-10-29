@@ -1,6 +1,7 @@
 /* Shared application controls; publication documents retain their own design. */
 :root{--space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-6:24px;--space-8:32px}
 .field{min-width:0}
+:where(main,dialog) :is(h1,h2,h3,h4,summary){overflow-wrap:anywhere}
 .field :is(input:not([type=checkbox],[type=radio],[type=color],[type=range]),select,textarea){font:inherit;color:var(--ui-text);background:var(--ui-surface);border:1px solid var(--ui-border);border-radius:var(--ui-radius);padding:.55rem .7rem;min-height:44px;max-width:100%}
 .inline-actions{align-items:end;gap:var(--space-2)}
 .inline-actions>.field{margin:0}

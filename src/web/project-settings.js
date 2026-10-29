@@ -1,4 +1,5 @@
 import './i18n/catalogues/projectEditors.js';
+import {ux} from './experience-ui.js';
 import {labBookProfileLabel,projectToolLabel} from './project-type-presentation.js';
 import {configurationEditor} from './configuration-editor.js';
 import {configurationDocumentClient} from './configuration-document-client.js';
@@ -92,18 +93,18 @@ export function projectSettings(services){
   return field(msg('name'),'<input name="title" value="'+esc(draft.title)+'" required maxlength="160">')+
    '<div class="form-grid">'+field(msg('projectType'),'<select data-project-type>'+option('none',msg('noType'),type)+projectTypeChoices(state.dashboardSettings).map(c=>option(c.id,labBookProfileLabel(c.id.slice(8),c.label),type)).join('')+option('custom',msg('customType'),type)+'</select>')+
    (creation||state.projectOwner?field(projectText('inside'),'<select name="parentId" '+(state.projectOwner&&!creation?'data-project-parent':'')+'>'+parentOptions()+'</select>'+directoryChoices.view('parents')):field(msg('inside'),'<select name="parentId">'+option('',state.book.title,draft.parentId??'')+state.book.projects.filter(p=>!blocked.has(p.id)).map(p=>option(p.id,locationName(state.book,p.id),draft.parentId)).join('')+'</select>'))+'</div>'+
-   (creation?'<div class="form-grid">'+field(projectText('username'),'<input name="projectUsername" autocomplete="username" maxlength="80" value="'+esc(creation.username)+'">')+field(projectText('password')+' <small>'+esc(projectText(state.access?.deviceAvailable?'passwordHint':'passwordRequired'))+'</small>','<input name="projectPassword" type="password" autocomplete="new-password" minlength="12" maxlength="1024" '+(state.access?.deviceAvailable?'':'required')+' value="'+esc(creation.password)+'">')+'</div>':'')+
+   (creation?'<fieldset><legend>'+esc(ux('accessProject'))+'</legend><div class="form-grid">'+field(projectText('username'),'<input name="projectUsername" autocomplete="username" maxlength="80" value="'+esc(creation.username)+'">')+field(projectText('password')+' <small>'+esc(projectText(state.access?.deviceAvailable?'passwordHint':'passwordRequired'))+'</small>','<input name="projectPassword" type="password" autocomplete="new-password" minlength="12" maxlength="1024" '+(state.access?.deviceAvailable?'':'required')+' value="'+esc(creation.password)+'">')+'</div></fieldset>':'')+
    (type==='custom'?field(msg('customProjectType'),'<input name="customKind" required maxlength="80" value="'+esc(draft.kind)+'">'):'')+
-   field(msg('description'),'<textarea name="description" rows="2" maxlength="1500">'+esc(draft.description)+'</textarea>')+
+   '<details data-project-optional><summary>'+esc(ux('optionalProject'))+'</summary>'+field(msg('description'),'<textarea name="description" rows="2" maxlength="1500">'+esc(draft.description)+'</textarea>')+
    '<section class="project-template-panel" aria-label="'+text('templateSelection')+'">'+field(msg('defaultTemplate'),'<select data-project-template-source>'+sourceOptions()+'</select>'+directoryChoices.view('templates'))+summary()+'<p class="muted">'+esc(t('templatePreferences','manage',{preferences:t('preferences','title'),templates:t('preferences','templates')}))+'</p></section>'+
-   (tools.length?'<fieldset class="project-tool-choices"><legend>'+text('projectTools')+'</legend>'+tools.map(m=>'<label class="checkbox"><input type="checkbox" name="projectTool" value="'+m.id+'" '+(draft.tools?.includes(m.id)?'checked':'')+'>'+esc(projectToolLabel(m.id,m.locationTool.label))+'</label>').join('')+'</fieldset>':'');
+   (tools.length?'<fieldset class="project-tool-choices"><legend>'+text('projectTools')+'</legend>'+tools.map(m=>'<label class="checkbox"><input type="checkbox" name="projectTool" value="'+m.id+'" '+(draft.tools?.includes(m.id)?'checked':'')+'>'+esc(projectToolLabel(m.id,m.locationTool.label))+'</label>').join('')+'</fieldset>':'')+'</details>';
  }
  function draw(focus){
-  const scroll=form()?.querySelector('.project-config-scroll')?.scrollTop??0,current=state.book.projects.some(p=>p.id===draft.id),template=mode==='template';
+  const optionalOpen=!!form()?.querySelector('[data-project-optional]')?.open,scroll=form()?.querySelector('.project-config-scroll')?.scrollTop??0,current=state.book.projects.some(p=>p.id===draft.id),template=mode==='template';
   showDialog('<form id="'+(template?'project-template-form':'structure-project-form')+'" data-no-draft class="project-config-form '+(template?'project-template-form':'')+'" '+(busy?'data-busy="true" aria-busy="true"':'')+'><h2 id="dialog-title">'+(template?msg('labBookTemplate'):current?msg('editProject'):msg('newProject'))+'</h2>'+
    '<div class="project-config-scroll"><fieldset class="project-config-fields" '+(busy?'disabled':'')+'>'+(template?templateFields():projectFields())+'</fieldset></div>'+
    (busy&&creation?'<p role="status">'+esc(projectText('creating'))+'</p>':'')+'<p class="module-error" role="alert" tabindex="-1" data-project-error '+(error?'':'hidden')+'>'+esc(error)+'</p><div class="dialog-actions"><button type="button" class="button" data-action="close-dialog" '+(busy?'disabled':'')+'>'+text('cancel')+'</button><button class="button primary" '+(busy||native()&&template&&configuration.busy()?'disabled':'')+'>'+ (template?msg('saveTemplate'):creation?projectText('create'):msg('saveProject'))+'</button></div></form>');
-  form().querySelector('.project-config-scroll').scrollTop=scroll;directoryChoices.paint(form(),'parents');directoryChoices.paint(form(),'templates');
+  if(optionalOpen&&form().querySelector('[data-project-optional]'))form().querySelector('[data-project-optional]').open=true;form().querySelector('.project-config-scroll').scrollTop=scroll;directoryChoices.paint(form(),'parents');directoryChoices.paint(form(),'templates');
   if(focus)form().querySelector(focus)?.focus({preventScroll:true});
  }
  async function open(id,parentId,editingTemplate=false,details=null){

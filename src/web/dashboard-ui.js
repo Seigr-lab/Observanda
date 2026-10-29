@@ -5,7 +5,8 @@ import {dashboardSelection,dashboardScopeLabel} from './dashboard-scope.js';
 import {moduleSettings} from './module-settings.js';
 import {modulePreferences,templatePreferences} from './module-preferences.js';
 import {cardInspector,bindCardInspector} from './dashboard-inspector.js';
-import {enabledModule} from './feature-modules.js';
+import {ux} from './experience-ui.js';
+import {FEATURE_MODULES,enabledModule} from './feature-modules.js';
 import {validDashboard,createPanel,panelSpan} from './dashboard-model.js';
 import {dashboardDesktop} from './dashboard-desktop.js';
 import {cardIcon} from './dashboard-cards.js';
@@ -138,7 +139,7 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,a
    if(result.status==='foreign')return `<p class="desk-empty">${esc(dt("foreignWorkspace"))}</p>`;
    if(result.status==='loading')return `<p class="desk-empty" role="status">${esc(dt("loadingData"))}</p>`;
    if(result.status==='error')return '<p class="desk-empty">'+esc(result.error?.message||dt("loadDataFailed"))+'</p>'+button(esc(dt("retry")),'dashboard-retry-data',`data-provider="${reference(panel).provider}"`);
-   if(!result.items.length)return scope+'<p class="desk-empty">'+(reference(panel).key===null?esc(dt("noMatches")):esc(dt("itemUnavailable")))+'</p>'+footer;
+   if(!result.items.length)return scope+'<p class="desk-empty">'+(reference(panel).key===null?esc(ux(Boolean(panel.config?.tag||panel.config?.recordType&&panel.config.recordType!=='all'||panel.config?.status&&panel.config.status!=='all')?'noMatches':'noItems')):esc(dt("itemUnavailable")))+'</p>'+footer;
    return scope+result.items.slice(0,panel.count).map(item=>itemMarkup(item,panel)).join('')+(paging|| (result.items.length>panel.count?`<footer>${button(state.workspaceOutline&&result.data?.total!==undefined?esc(dt("showMore")):esc(dt('showMoreCount',{count:result.items.length-panel.count})),'dashboard-more',`data-id="${panel.id}"`)}</footer>`:''))+footer;
   }catch{return `<p class="desk-empty">${esc(dt("cardFailed"))}</p>`;}
  }
@@ -227,8 +228,9 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,a
   return `<section class="desk-workspace">
    <div class="desk-heading"><h1>${esc(dt("dashboard"))}</h1><div>${draft.views.length>1?`<label class="desk-view-label">${esc(dt("view"))}<select data-desk-view>${draft.views.map(item=>`<option value="${item.id}" ${item.id===v.id?'selected':''}>${esc(item.name)}</option>`).join('')}</select></label>`:''}${button(esc(dt("views")),'dashboard-views',`aria-expanded="${viewsOpen}"`)}</div></div>
    ${viewsOpen?`<section class="desk-view-options" aria-label="${esc(dt("dashboardViews"))}"><label>${esc(dt("viewName"))}<input data-desk-name value="${esc(v.name)}" maxlength="80"></label><label><input type="checkbox" data-desk-default ${draft.defaultId===v.id?'checked':''}> ${esc(dt("defaultView"))}</label>${button(esc(dt("newView")),'dashboard-new-view')}${button(esc(dt("duplicateView")),'dashboard-copy-view')}${draft.views.length>1?button(esc(dt("removeView")),'dashboard-remove-view'):''}</section>`:''}
-   <div class="desk-toolbar" aria-label="${esc(dt("addCardsRegion"))}">${button(esc(dt("addCards")),'dashboard-library',`aria-expanded="${library.isOpen()}" aria-controls="desk-library-slot"`,'desk-add-cards')}<div class="desk-shortcuts" aria-label="${esc(dt("quickAdd"))}">${draft.shortcuts.filter(moduleVisible).map(shortcutButton).join('')}</div>${active().panels.some(p=>p.hidden)?button(esc(dt("restoreCards")),'dashboard-closed'):''}</div>
-   <div id="desk-library-slot">${library.view()}</div>
+   ${!state.book.projects.length?'<section class="first-work"><h2>'+esc(ux('firstTitle'))+'</h2><p>'+esc(ux('firstHelp'))+'</p><div class="inline-actions">'+button(esc(ux('createProject')),'new-project','','button primary')+button(esc(ux('tools')),'tools')+button(esc(ux('help')),'help-open','data-topic="getting-started"')+'</div></section>':'<div class="inline-actions">'+button(esc(ux('writeRecord')),'new-entry','','button primary')+button(esc(ux('find')),'entries')+button(esc(ux('tools')),'tools')+'</div>'}
+   <details data-disclosure="dashboard-customization"><summary>${esc(ux('customize'))}</summary><div class="desk-toolbar" aria-label="${esc(dt("addCardsRegion"))}">${button(esc(dt("addCards")),'dashboard-library',`aria-expanded="${library.isOpen()}" aria-controls="desk-library-slot"`,'desk-add-cards')}<div class="desk-shortcuts" aria-label="${esc(dt("quickAdd"))}">${draft.shortcuts.filter(moduleVisible).map(shortcutButton).join('')}</div>${active().panels.some(p=>p.hidden)?button(esc(dt("restoreCards")),'dashboard-closed'):''}</div>
+   <div id="desk-library-slot">${library.view()}</div></details>
    <div class="desk-save-message"><span id="desk-save-state" role="status"></span><span id="desk-save-recovery" hidden>${button(esc(dt("retry")),'dashboard-save-retry')}${button(esc(dt("reloadLayout")),'dashboard-reload')}</span></div>
    <div class="desk-stage"><div class="desk-desktop" aria-label="${esc(dt("dashboardCards"))}">${v.panels.filter(p=>!p.hidden&&moduleVisible(p)).map(card).join('')}${v.panels.every(p=>p.hidden||!moduleVisible(p))?`<p class="desk-empty-desktop">${esc(dt("emptyDesktop"))}</p>`:''}</div>
    <div id="desk-inspector-slot">${inspector()}</div></div>
@@ -362,6 +364,11 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,a
   if(name==='dashboard-more')p.count+=6;
   changed();return true;
  }
+ async function enableModule(id){
+  if(!draft)throw Error(dt("openBeforeEnable"));
+  for(let module=FEATURE_MODULES.find(value=>value.id===id);module;module=FEATURE_MODULES.find(value=>value.id===module.parentId))if(!draft.enabledModules.includes(module.id))draft.enabledModules.push(module.id);
+  state.dashboardSettings=draft;await save();await workspaceFeatures.configure(draft.enabledModules);session?.invalidate();
+ }
  function supportsOutline(){
   if(!draft)return true;
   const supported=new Set(['records','projects','notebooks','workspace','sections','contributors','relations','figures','files','media','samples','analyses','lab-events','laboratory']);
@@ -369,5 +376,5 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,a
   return active().panels.filter(p=>!p.hidden&&moduleVisible(p)).every(p=>accepts(reference(p).provider))&&
    draft.shortcuts.every(s=>s.source.key===null||accepts(s.source.provider));
  }
- return {supportsOutline,releaseData:()=>{watchGeneration++;clearTimeout(watchTimer);choiceUI.close();library.close();session?.close();session=null;cardPages.clear();previews.release();},refreshData:()=>session?.invalidate(undefined,{retainData:true}),load,flushAutosave:save,save:async()=>{await save();await settings.save();},discard:async()=>{await settings.discard();await discard();},isDirty:()=>isDirty()||settings.isDirty(),needsNavigationGuard:()=>settings.isDirty(),saveNavigation:()=>settings.save(),discardNavigation:()=>settings.discard(),view,preferences:()=>modulesView()+settingsStatus(),templates:()=>modulesView(true)+settingsStatus(),action,input,bind};
+ return {supportsOutline,enableModule,releaseData:()=>{watchGeneration++;clearTimeout(watchTimer);choiceUI.close();library.close();session?.close();session=null;cardPages.clear();previews.release();},refreshData:()=>session?.invalidate(undefined,{retainData:true}),load,flushAutosave:save,save:async()=>{await save();await settings.save();},discard:async()=>{await settings.discard();await discard();},isDirty:()=>isDirty()||settings.isDirty(),needsNavigationGuard:()=>settings.isDirty(),saveNavigation:()=>settings.save(),discardNavigation:()=>settings.discard(),view,preferences:()=>modulesView()+settingsStatus(),templates:()=>modulesView(true)+settingsStatus(),action,input,bind};
 }

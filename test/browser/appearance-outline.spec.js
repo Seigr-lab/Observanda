@@ -76,9 +76,10 @@ for(const count of [42,420])test('appearance saves themes and personal settings 
   await page.route('**/api/websites/editor/save',route=>route.fulfill({status:503,json:{code:'DATABASE_UNAVAILABLE',message:'Synthetic interrupted theme save'}}),{times:1});
   await page.getByRole('button',{name:'Save theme',exact:true}).click();await expect(page.locator('#notice')).toContainText('Synthetic interrupted theme save');
   await expect(page.getByLabel('Theme name',{exact:true})).toHaveValue('Field design');await page.getByRole('button',{name:'Save theme',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
+  await page.locator('.preferences-tabs [data-action="interface"]').click();await page.locator('[data-disclosure="app-layout"] summary').click();
   await page.getByLabel('App text size').fill('20');await page.getByLabel('Header alignment',{exact:true}).selectOption('right');
-  await page.getByRole('button',{name:'Save appearance',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
-  await page.reload();await expect(page.getByLabel('Accent',{exact:true})).toHaveValue('#334455');await expect(page.getByLabel('Saved theme',{exact:true}).locator('option')).toHaveCount(1);await expect(page.getByLabel('Header alignment',{exact:true})).toHaveValue('right');
+  await page.getByRole('button',{name:'Save app settings',exact:true}).click();await page.reload();await page.locator('[data-disclosure="app-layout"] summary').click();await expect(page.getByLabel('Header alignment',{exact:true})).toHaveValue('right');await page.locator('.preferences-tabs [data-action="appearance"]').click();
+  await expect(page.getByLabel('Accent',{exact:true})).toHaveValue('#334455');await expect(page.getByLabel('Saved theme',{exact:true}).locator('option')).toHaveCount(1);
   await page.getByLabel('Accent',{exact:true}).fill('#556677');await page.getByRole('button',{name:'Undo edits',exact:true}).click();await expect(page.getByLabel('Accent',{exact:true})).toHaveValue('#334455');
   await page.getByLabel('Accent',{exact:true}).fill('#778899');await page.getByRole('button',{name:'Discard changes',exact:true}).click();await expect(page.getByLabel('Accent',{exact:true})).toHaveValue('#334455');
   await page.getByRole('button',{name:'Logos & branding',exact:true}).click();await expect(page.getByLabel('Branding scope',{exact:true})).toBeVisible();await page.goBack();await expect(page.getByLabel('Accent',{exact:true})).toHaveValue('#334455');

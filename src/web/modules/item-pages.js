@@ -1,6 +1,7 @@
 import {validModuleRevision} from './revision.js';
 import {t} from '../i18n/index.js';
 import {researchId} from '../research-reference.js';
+import {ux} from '../experience-ui.js';
 const tr=(key,values)=>t('moduleCurrent',key,values),token=value=>value===null||typeof value==='string'&&value.length>0&&value.length<=8192;
 export const validModuleSummary=value=>value&&researchId(value.id)&&researchId(value.openId)&&typeof value.openType==='string'&&typeof value.type==='string'&&Number.isSafeInteger(value.revision)&&value.revision>0&&typeof value.title==='string'&&typeof value.description==='string';
 export function moduleItemPages({api,workspaceId,esc,draw,prefix='items',action='module-command'}){
@@ -18,7 +19,7 @@ export function moduleItemPages({api,workspaceId,esc,draw,prefix='items',action=
   finally{if(ticket===generation){busy=false;draw();}}
  }
  const button=(key,command,disabled=false)=>`<button type="button" class="button" data-action="${action}" data-command="${prefix}-${command}" ${disabled?'disabled':''}>${esc(tr(key))}</button>`;
- function view(renderItem){return `<section data-module-item-pages aria-busy="${busy}">${error?`<div role="alert">${esc(error.message)}${button('retry','retry',busy)}${button('refresh','refresh',busy)}</div>`:''}<p role="status" tabindex="-1" data-module-items-status>${esc(busy?tr('loading'):page?.total?tr('range',{first:page.offset+1,last:page.offset+page.items.length,total:page.total}):tr('empty'))}</p><div class="module-collection">${(page?.items??[]).map(renderItem).join('')}</div><nav class="module-actions" aria-label="${esc(tr('pages'))}">${button('previous','previous',busy||!page?.previousCursor)}${button('next','next',busy||!page?.nextCursor)}</nav></section>`;}
+ function view(renderItem){const filtered=Boolean(query.query?.trim()||query.status&&query.status!=='all');return `<section data-module-item-pages aria-busy="${busy}">${error?`<div role="alert">${esc(error.message)}${button('retry','retry',busy)}${button('refresh','refresh',busy)}</div>`:''}<p role="status" tabindex="-1" data-module-items-status>${esc(busy?tr('loading'):error?ux('readFailed'):page?.total?tr('range',{first:page.offset+1,last:page.offset+page.items.length,total:page.total}):page?ux(filtered?'noMatches':'noItems'):tr('loading'))}</p><div class="module-collection">${(page?.items??[]).map(renderItem).join('')}</div>${page?.nextCursor||page?.previousCursor?`<nav class="module-actions" aria-label="${esc(tr('pages'))}">${button('previous','previous',busy||!page?.previousCursor)}${button('next','next',busy||!page?.nextCursor)}</nav>`:''}</section>`;}
  async function handle(name){
   if(!name.startsWith(prefix+'-'))return false;if(busy)return true;
   if(name===prefix+'-next'&&page?.nextCursor)await load(query,page.nextCursor);

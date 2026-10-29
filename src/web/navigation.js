@@ -1,7 +1,7 @@
 import {resolveHelpRoute} from './help/model.js';
 import {researchId} from './research-reference.js';
 import {bookSelectors,selectorAnchor} from './book-selectors.js';
-const preferenceRoutes={preferences:'general','user-profile':'user','dashboard-settings':'dashboard',templates:'templates',appearance:'appearance',integrations:'integrations',storage:'storage'};
+const preferenceRoutes={interface:'interface',preferences:'general','user-profile':'user','dashboard-settings':'dashboard',templates:'templates',appearance:'appearance',integrations:'integrations',storage:'storage'};
 // URLs identify locations by stable IDs, never by titles or filesystem paths.
 export function routeFor(state) {
   if(state.page==='websites')return '#/websites'+(state.project?'/'+state.project:'');
@@ -34,7 +34,7 @@ export function resolveRoute(hash,book,{contentReading=false}={}) {
   if(parts[0]==='modules'&&/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/.test(parts[1]??'')){try{return {...base,page:'module',moduleId:parts[1],modulePath:parts.slice(2).map(decodeURIComponent).join('/')};}catch{return base;}}
   const help=resolveHelpRoute(hash);if(help)return {...base,...help};
   if(parts[0]==='preferences'){const page=Object.keys(preferenceRoutes).find(key=>preferenceRoutes[key]===(parts[1]??'general'));if(page&&parts.length<=2)return {...base,page};}
-  if(['workspace','workspaces','projects','website','appearance','publishing','laboratory','storage','migration'].includes(parts[0])&&parts.length===1)return {...base,page:parts[0]};
+  if(['workspace','tools','workspaces','projects','website','appearance','publishing','laboratory','storage','migration'].includes(parts[0])&&parts.length===1)return {...base,page:parts[0]};
   if(parts[0]==='records'&&parts.length===1)return {...base,page:'entries'};
   if(contentReading&&parts[0]==='records'&&parts.length===2&&researchId(parts[1]))return {...base,page:'record-reader',selected:parts[1]};
   if(contentReading&&parts[0]==='records'&&parts[2]==='read'&&parts.length<=4&&researchId(parts[1])&&(!parts[3]||/^(?:record-(?:section|figure|table|equation|citation|block)-)?[a-f0-9-]{36}$/.test(parts[3])))return {...base,page:'record-reader',selected:parts[1],recordReading:true,recordSection:parts[3]??null};

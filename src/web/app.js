@@ -71,6 +71,8 @@ import {recordSectionsUI} from './record-sections-ui.js';
 import {figureEditor} from './figure-editor-loader.js';
 import {researchTargets,researchReference,parseResearchReference} from './record-model.js';
 import {applicationShell} from './application-shell.js';
+import {ux} from './experience-ui.js';
+import {toolDirectoryView,filterToolDirectory,discoverableTools} from './tool-directory-ui.js';
 import {workspaceNavigation} from './workspace-navigation.js';
 import {websiteSitesUI} from './website-sites-ui.js';
 import {activeWebsite,explicitWebsite,websiteContext,websiteRequest,websitePages} from './website-context.js';
@@ -104,6 +106,7 @@ import {lazyFeatureUI} from './lazy-feature-ui.js';
 import {enabledModule,moduleForPage,moduleDestination} from './feature-modules.js';
 import {dashboardUI} from './dashboard-ui.js';
 import {helpUI} from './help/ui.js';
+import {contextualHelp} from './help/context-ui.js';
 import {accessHelpUI} from './help/access-ui.js';
 import {languageUI} from './i18n/language-ui.js';
 import {preferencePage,preferencesFrame} from './preferences-ui.js';
@@ -170,7 +173,7 @@ const icons = {
 const icon = name => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name]}</svg>`;
 const mark = applicationMark;
 
-const navigation=workspaceNavigation({state:new Proxy(state,{get:(target,key)=>key==='book'?labBookDirectoryUI.navigation(projectDirectoryUI.navigation(state.projectOwner?projectOwners.navigation():sites.root())):target[key]}),icon,logosFor});
+const navigation=workspaceNavigation({state:new Proxy(state,{get:(target,key)=>key==='book'?labBookDirectoryUI.navigation(projectDirectoryUI.navigation(state.projectOwner?projectOwners.navigation():sites.root())):target[key]}),icon,logosFor,pinnedTools:()=>textControls.pinnedTools()});
 
 const websiteSelection=websiteSelectionDraft();
 const websiteDocuments=websiteDocumentClient({state,api,selection:websiteSelection,onStatus:({dirty,error,busy,structuralBusy=false})=>{websiteEditingGuard(document,structuralBusy);if(state.websiteEditor){state.dirty=dirty;updateSaveStatus();const status=document.querySelector('[data-website-draft-status]');if(status)status.textContent=error||t('websiteEditor',busy?'documentBusy':dirty?'documentDraftSaved':'documentSaved');const retry=document.querySelector('[data-action=website-draft-retry]');if(retry)retry.hidden=!error;}}});
@@ -321,7 +324,7 @@ function report(error) {
   } else notify(message, true);
 }
 function updateSaveStatus(){
-  const changed=state.dirty||state.page==='appearance'&&textControls.isDirty();
+  const changed=state.dirty||['interface','appearance'].includes(state.page)&&textControls.isDirty();
   const label=$('#save-status');if(label)label.textContent=savePromise?t('pendingSettings','saving'):changed?appText('unsaved'):appText('saved');
   recordDrafts.update();
   for(const button of document.querySelectorAll('.section-save [data-action="save"],.section-save [data-action="discard-section"]'))button.disabled=!changed||uploading||Boolean(savePromise)||websiteDocuments.structuralBusy()||figures.isBusy()||recordDrafts.isRecovering();
@@ -526,14 +529,16 @@ const publicationReviewChoices=publicationReviewChoicesUI({state,api,esc,option}
 const branding=brandingUI({state,api,documents:websiteDocuments,esc,field,option,showDialog,render,dirty,leave:{run:fn=>leave.run(fn)},report,uploading:()=>uploading});
 const labUI=lazyFeatureUI({enabled:()=>enabledModule(state.dashboardSettings,'laboratory'),handles:name=>name==='laboratory-samples'||name.startsWith('lab-'),load:()=>import('./laboratory-ui.js').then(m=>m.laboratoryUI({state,api,esc,field,option,showDialog,render,notify}))});
 const publishUI=lazyFeatureUI({enabled:()=>enabledModule(state.dashboardSettings,'publishing'),handles:name=>name==='publishing'||(name.startsWith('publish-')||name.startsWith('publication-links-')),load:()=>import('./publishing-ui.js').then(m=>m.publishingUI({state,api,esc,field,option,render,notify,showDialog,onChange:updateSaveStatus}))});
-const help=helpUI({state,esc,render});
+const help=helpUI({state,esc,render}),taskHelp=contextualHelp({esc});
+let toolOrigin=null;
+function rememberToolOrigin(){if(['tools','module'].includes(state.page))return;toolOrigin={route:location.hash,history:{...history.state},title:document.querySelector('main h1')?.textContent??state.book.title,scroll:window.scrollY,context:state.storage?.contextId};}
 const accessHelp=accessHelpUI({api,esc});
 const languageControls=languageUI({api,esc,render,beforeChange:task=>leave.run(task).catch(report)});
 const projectDirectoryUI=projectDirectory({state,api,esc,changed:()=>{const sidebar=$('#main-navigation'),topbar=$('.topbar');if(state.book&&!state.access?.locked&&sidebar&&topbar)navigation.update(sidebar,topbar);}});
 const labBookDirectoryUI=labBookDirectory({state,api,esc,changed:()=>render(),directoryChanged:()=>{const sidebar=$('#main-navigation'),topbar=$('.topbar');if(state.book&&!state.access?.locked&&sidebar&&topbar)navigation.update(sidebar,topbar);},access:operation=>withProjectAccess(operation)});
 const structureUI = workspaceUI({state,api,esc,field,option,icon,dirty,save,render,showDialog,notify,recordsTable:renderRecordTable,logosFor,isUploading:()=>uploading,projectDirectory:projectDirectoryUI,labBookDirectory:labBookDirectoryUI,accessProject:(operation,options)=>withProjectAccess(operation,options),enterProject:(id,bookId)=>projectOwners.enter(id,bookId),rootBook:()=>projectOwners.root(),renameWorkspace:name=>storageControls.rename(name)});
 let recordOpenRequest=0;
-const recordContent=recordContentUI({state,api,esc,field,render,report,refresh:()=>workspaceLive.check(),editWriting:target=>recordWriting.open(target),tools:({readonly})=>bookReferences.button()+recordHistory.button({saved:true})+reviews.button()+migrationProvenance.button()+(readonly?'':recordStarters.button()+recordLocation.button()),before:({readonly})=>recordActivity.view({readonly})+workflow.view({readonly}),after:({readonly})=>materials.view(displayedRecord(),{readonly})+connectedWork.view()+(readonly?'':recordRemoval.view()),links:(record,{readonly})=>recordDetails.relations(record,{readonly:true,selectedEdits:!readonly}),attemptReference:attempts.reference,resultReference:results.reference});
+const recordContent=recordContentUI({state,api,esc,field,render,report,refresh:()=>workspaceLive.check(),editWriting:target=>recordWriting.open(target),tools:({readonly})=>bookReferences.button()+recordHistory.button({saved:true})+reviews.button()+migrationProvenance.button()+(readonly?'':recordStarters.button()+recordLocation.button()+'<details class="record-actions" data-disclosure="record-actions"><summary>'+esc(ux('actions'))+'</summary>'+recordRemoval.view()+'</details>'),before:({readonly})=>recordActivity.view({readonly})+workflow.view({readonly}),after:({readonly})=>materials.view(displayedRecord(),{readonly})+connectedWork.view(),links:(record,{readonly})=>recordDetails.relations(record,{readonly:true,selectedEdits:!readonly}),attemptReference:attempts.reference,resultReference:results.reference});
 configurationRecord=configurationRecordCreation({state,api,esc,field,render,onDirty:()=>{state.dirty=true;changeVersion++;updateSaveStatus();},editorOptions:{notify,destinations:recordLinkDestinations,figures:()=>[]},onSaved:async(result,original)=>{
  const [outline,content]=await Promise.all([newWorkspaceReader({snapshotId:result.etag}).read({requireOutline:true}),api('/api/workspace/read/record-content',{workspaceId:state.book.id,recordId:result.recordId,snapshotId:result.etag,offset:0,pagedHeader:true},{adopt:false})]);
  if(outline.etag!==result.etag||content.etag!==result.etag||content.recordId!==original.id||content.header?.createdAt!==original.createdAt||!revisionId(content.storageRevision))throw Error(t('recordDrafts','invalidPage'));
@@ -554,7 +559,7 @@ const writerRecovery=writerRecoveryUI({api,esc});
 const storageControls=storageUI({state,api,accessOwners:(operation,options)=>withProjectAccess(operation,options),activity,writerRecovery,esc,field,save,render,showDialog,notify,reload:loadWorkspace,resetInterface:async()=>{savedBook=null;recordChanges.reset(null);await languageControls.load();await textControls.load();await dashboard.load();},isUploading:()=>uploading});
 const userProfile=userProfileUI({state,api,esc,field,render,notify});
 const setupControls=setupUI({state,esc,field,option,mark,storageControls,notify});
-const textControls=interfaceUI({api,field,showDialog,notify,onChange:updateSaveStatus});
+const textControls=interfaceUI({api,field,showDialog,notify,onChange:()=>{designUI.applyToApp();updateSaveStatus();}});
 const shellMenu=shellNavigation();
 const appShell=applicationShell({root:$('#app'),mark,navigation,applyLayout:textControls.applyLayout,pageKey:()=>JSON.stringify([state.storage?.contextId,state.page,state.project,state.notebook,state.selected,state.recordReading,state.moduleId,state.modulePath,state.helpTopic])});
 const website=lazyFeatureUI({enabled:()=>enabledModule(state.dashboardSettings,'publishing'),handles:name=>name==='website'||name.startsWith('website-'),load:()=>import('./website-ui.js').then(m=>m.websiteUI({state,api,esc,field,option,icon,dirty,render,notify,showDialog,selection:websiteSelection,documents:websiteDocuments,access:operation=>withProjectAccess(operation),onSave:()=>savePending().catch(report),bindMedia:()=>mediaImports.bind(),refreshFonts:()=>fontLibrary.load(),previewDraft:async book=>{
@@ -674,7 +679,7 @@ const workspaceLive=workspaceRefresh({state,api,notify,onAccessError:report,
  }
 });
 window.addEventListener('pagehide',()=>workspaceLive.stop(),{once:true});
-const navigationActions=new Set(['module-reference-open','laboratory-open-owned','module-open-owned','research-open-owned','help','help-open','record-activity-inspect','record-activity-create','migration-open','review-witnesses','publication-jobs-open-review','record-views','record-view-back','record-view-open','record-read','record-edit','record-read-linked','record-section-jump','workflow-new-run','configure-lab-notebook','specialize-notebook','attach-lab-notebook','module-open','laboratory-samples','preferences','dashboard-settings','templates','integrations','workspace','workspaces','projects','entries','appearance','website','laboratory','publishing','storage','storage-workspaces','branding','branding-back','open-project','project-records','filter-notebook','browse-record','edit-entry','open-issue','back-to-records','new-entry','new-project','new-notebook','edit-project','edit-project-template','edit-notebook','rename-notebook','workspace-reorganize','record-history-open','preview','storage-new','storage-open-dialog','storage-copy-dialog','storage-move-dialog','storage-portable-dialog','storage-encrypt-dialog','storage-open-recent','storage-cancel-new','storage-lock','storage-reset-dialog','publish-disconnect','record-link-open','record-backlink-open']);
+const navigationActions=new Set(['tool-return','tools','tool-launch','interface','module-reference-open','laboratory-open-owned','module-open-owned','research-open-owned','help','help-open','record-activity-inspect','record-activity-create','migration-open','review-witnesses','publication-jobs-open-review','record-views','record-view-back','record-view-open','record-read','record-edit','record-read-linked','record-section-jump','workflow-new-run','configure-lab-notebook','specialize-notebook','attach-lab-notebook','module-open','laboratory-samples','preferences','dashboard-settings','templates','integrations','workspace','workspaces','projects','entries','appearance','website','laboratory','publishing','storage','storage-workspaces','branding','branding-back','open-project','project-records','filter-notebook','browse-record','edit-entry','open-issue','back-to-records','new-entry','new-project','new-notebook','edit-project','edit-project-template','edit-notebook','rename-notebook','workspace-reorganize','record-history-open','preview','storage-new','storage-open-dialog','storage-copy-dialog','storage-move-dialog','storage-portable-dialog','storage-encrypt-dialog','storage-open-recent','storage-cancel-new','storage-lock','storage-reset-dialog','publish-disconnect','record-link-open','record-backlink-open']);
 const websiteEditPages=new Set(['website','appearance','branding']);
 const brandingReturnRoute=()=>state.brandReturn??routeFor({...state,page:'appearance'});
 function sameWebsiteEditRoute(hash){
@@ -720,7 +725,7 @@ function renderAccess(content){help.stop();appShell.showStandalone(content);acce
 function renderOnboarding() { renderAccess(setupControls.view()); }
 
 const supportsRecordSelection=()=>state.storage?.researchStorage==='catalogue'&&state.storage.researchFormatVersion===21;
-const outlineViewSupported=(page=state.page,moduleId=state.moduleId)=>page==='editor'&&configurationRecord?.active()||['record-reader','user-profile','websites','help','entries','projects','project','preferences','dashboard-settings','templates','workspaces','branding','appearance','laboratory','website','publishing','integrations','review','storage','migration'].includes(page)||page==='workspace'&&dashboard.supportsOutline()||page==='module'&&modules.supportsOutline(moduleId);
+const outlineViewSupported=(page=state.page,moduleId=state.moduleId)=>page==='editor'&&configurationRecord?.active()||['record-reader','user-profile','websites','help','entries','projects','project','preferences','interface','tools','dashboard-settings','templates','workspaces','branding','appearance','laboratory','website','publishing','integrations','review','storage','migration'].includes(page)||page==='workspace'&&dashboard.supportsOutline()||page==='module'&&modules.supportsOutline(moduleId);
 async function openRecordReading(id,anchor=null,reading=true,origin=null){
  const returnOrigin=origin??(!['editor','record-reader'].includes(state.page)?await captureResearchReturn():null);
  const sameRecord=state.page==='record-reader'&&state.selected===id;
@@ -786,7 +791,7 @@ function render() {
   const reviewFrame=document.querySelector('iframe.preview-frame');
   reviewFrame?.addEventListener('load',()=>publicationReviewChoices.follow(reviewFrame,publicationPreviewUrl(state,state.preview.id)).catch(error=>notify(error.message)));
   syncRoute();storageControls.workspaces.bind();activity.bind();recordContent.bind();help.bind();workflow.focusSection();recordSections.bind();workflow.bind();recordList.bind();recordActivity.bind();labUI.bind();decorateRecordLinks(document,state.book);
-  userProfile.bind();configurationRecord?.bind();
+  userProfile.bind();configurationRecord?.bind();if(state.page==='tools')filterToolDirectory(document.querySelector('[data-tool-search]'));
   if (state.page === 'appearance') void designPreview.update();
 }
 
@@ -801,7 +806,9 @@ function renderPage(){
  case 'migration':content=migration.view();break;
  case 'module':content=modules.view();break;
  case 'workspace':content=dashboard.view();break;
+ case 'tools':content=toolDirectoryView({state,esc,pinned:textControls.pinnedTools()});break;
  case 'preferences':content=languageControls.view()+renderGeneralPreferences();break;
+ case 'interface':content='<section class="panel interface-controls"><h2>'+esc(ux('appAppearance'))+'</h2>'+textControls.controls()+'<details data-disclosure="app-layout"><summary>'+esc(t('interface','layout'))+'</summary>'+textControls.headerControls()+'<button class="button" data-action="interface-layout">'+esc(t('interface','layout'))+'</button></details></section>';break;
  case 'user-profile':content=userProfile.view();break;
  case 'help':content=languageControls.view()+help.view();break;
  case 'dashboard-settings':content=dashboard.preferences();break;
@@ -825,12 +832,15 @@ function renderPage(){
  if(['entries','editor','record-reader'].includes(state.page))content=structureUI.recordContext()+content;
  if(state.page==='project'||state.page==='entries'&&state.notebook!=='all')content+='<button class="button" data-action="research-copy-context">'+esc(appText(state.page==='project'?'copyProject':'copyBook'))+'</button>';
  if(['workspace','entries','editor','record-reader'].includes(state.page))content=recordDrafts.banner()+content;
+ const helpTopic=({workspace:'getting-started',tools:'getting-started',entries:'records',editor:'records','record-reader':'records',website:'publishing',websites:'publishing',appearance:'publishing',publishing:'publishing',review:'publishing',storage:'storage',project:'getting-started',projects:'getting-started',module:({inventory:'inventory',timeline:'timeline',collaboration:'reviews',organizations:'reviews','pdf-editor':'publishing'})[state.moduleId]??'evidence'})[state.page];
+ if(helpTopic)content='<div class="task-guidance"><button class="button subtle" data-action="context-help" data-topic="'+helpTopic+'">'+esc(ux('contextHelp'))+'</button>'+(['editor','record-reader','project','entries'].includes(state.page)?'<button class="button subtle" data-action="tools">'+esc(ux('tools'))+'</button>':'')+'</div>'+content;
+ if(['tools','module'].includes(state.page)&&toolOrigin?.context===state.storage?.contextId)content='<button class="button task-return" data-action="tool-return">'+esc(ux('returnTask',{name:toolOrigin.title}))+'</button>'+content;
  content=sites.header()+content+sectionActions();if(explicitWebsite(state))return content;if(state.page==='branding'&&(!state.brandReturn||state.brandReturn.startsWith('#/preferences')))return preferencesFrame('appearance',content,state.dashboardSettings);return preferencePage(state.page)?preferencesFrame(state.page,content,state.dashboardSettings):content;
 }
 
 function renderEntries() {
   const notebook=state.book.notebooks.find(n=>n.id===state.notebook), project=state.book.projects.find(p=>p.id===state.project);
-  return `<div class="page-heading"><div><span class="scope-kicker">${esc(notebook?appText('labBook'):project?appText('projectRecords'):appText('workspaceRecords'))}</span><h1>${esc(notebook?.title??(project?appText('projectAllRecords',{project:project.title}):appText('allRecords')))}</h1><p class="subtitle">${notebook?`${esc(locationName(projectDirectoryUI.navigation(state.book),project.id))}`:esc(appText('searchScope'))}</p></div>${notebook?`<div class="inline-actions"><button class="button" data-action="edit-notebook" data-id="${notebook.id}">${esc(appText('labBookSettings'))}</button></div>`:''}</div><div class="section-bar record-list-bar"><h2>${esc(appText('records'))} <span id="record-count" class="badge">${recordList.count()}</span></h2><div class="filters"><button class="button" data-action="record-views">${esc(t('recordViews','title'))}</button><input id="search" maxlength="512" class="search-input" type="search" value="${esc(state.search)}" placeholder="${esc(appText('searchPlaceholder'))}" aria-label="${esc(appText('searchRecords'))}">${recordList.typeFilter()}<button class="button primary" data-action="new-entry">${icon('plus')}${esc(appText('newRecord'))}</button></div></div>${recordList.modes()}${recordBrowseFields(state,structureUI.notebooks.generalRecords(state.project),{esc,field,option,domains:recordList.domains()})}<div id="entry-results" aria-live="polite">${renderEntryResults()}</div>${bookStorage.view()}${bookAccessSettings.view()}`;
+  return `<div class="page-heading"><div><span class="scope-kicker">${esc(notebook?appText('labBook'):project?appText('projectRecords'):appText('workspaceRecords'))}</span><h1>${esc(notebook?.title??(project?appText('projectAllRecords',{project:project.title}):appText('allRecords')))}</h1><p class="subtitle">${notebook?`${esc(locationName(projectDirectoryUI.navigation(state.book),project.id))}`:esc(appText('searchScope'))}</p></div>${notebook?`<div class="inline-actions"><button class="button" data-action="edit-notebook" data-id="${notebook.id}">${esc(appText('labBookSettings'))}</button></div>`:''}</div><div class="section-bar record-list-bar"><h2>${esc(appText('records'))} <span id="record-count" class="badge">${recordList.count()}</span></h2><div class="filters"><button class="button" data-action="record-views">${esc(t('recordViews','title'))}</button><input id="search" maxlength="512" class="search-input" type="search" value="${esc(state.search)}" placeholder="${esc(appText('searchPlaceholder'))}" aria-label="${esc(appText('searchRecords'))}">${recordList.typeFilter()}<button class="button primary" data-action="new-entry">${icon('plus')}${esc(appText('newRecord'))}</button></div></div><p class="find-tools">${esc(ux('findTools'))} <button class="text-button" data-action="tools">${esc(ux('searchTools'))}</button></p>${recordList.modes()}${recordBrowseFields(state,structureUI.notebooks.generalRecords(state.project),{esc,field,option,domains:recordList.domains()})}<div id="entry-results" aria-live="polite">${renderEntryResults()}</div>${bookStorage.view()}${bookAccessSettings.view()}`;
 }
 function renderEntryResults() { return recordList.view(); }
 
@@ -851,14 +861,13 @@ function renderEditor() {
    <article class="record-reader"><h1>${esc(e.title)}</h1>${recordActivity.view({readonly:true})}${workflow.view({readonly:true})}${recordRevisionView(e,esc,{assetUrl:id=>ownedAssetURL(state,'/api/media/'+id),relations:false,anchors:true,sectionsHtml:figure=>recordSections.view(e,{readonly:true,figure}),attemptReference:attempts.reference,resultReference:results.reference})}${materials.view(e,{readonly:true})}${recordDetails.relations(e,{readonly:true})}</article>`;
   const notebook=state.book.notebooks.find(n=>n.id===e.notebookId);
   const notebookOptions=state.book.projects.map(project=>`<optgroup label="${esc(appText('projectLabel',{project:project.title}))}">${state.book.notebooks.filter(n=>n.projectId===project.id).map(n=>option(n.id,n.title,e.notebookId)).join('')}</optgroup>`).join('');
-  return `<div class="record-toolbar"><button class="button subtle back-button" data-action="back-to-records">${icon('arrow')}${esc(appText('backRecords'))}</button><button class="button" data-action="record-read">${esc(appText('readRecord'))}</button>${bookReferences.button()}${recordHistory.button()}${reviews.button()}${migrationProvenance.button()}${recordStarters.button()}</div>
-    <div class="editor-layout"><section class="editor-paper" aria-label="${esc(appText('entryEditor'))}">
+  return `<div class="record-toolbar"><button class="button subtle back-button" data-action="back-to-records">${icon('arrow')}${esc(appText('backRecords'))}</button><button class="button" data-action="record-read">${esc(appText('readRecord'))}</button>${bookReferences.button()}${recordHistory.button()}${reviews.button()}${migrationProvenance.button()}${recordStarters.button()}<details class="record-actions" data-disclosure="draft-actions"><summary>${esc(ux('actions'))}</summary><button class="button danger" data-action="delete-entry">${esc(t('recordAuthoring','remove'))}</button></details></div>
+    <article class="record-draft-editor"><h1>${esc(ux('writeRecord'))}</h1><section class="editor-paper" aria-label="${esc(appText('entryEditor'))}">
       ${field(esc(appText('recordTitle')),`<textarea rows="1" class="title-input" data-entry="title" maxlength="180" placeholder="${esc(appText('recordName'))}">${esc(e.title)}</textarea>`)}
       ${documents.field({key:e.id+':body',label:appText('summaryContext'),value:e.body,set:value=>{editableRecord(state.book,e.id).body=value;dirtyRecord(e.id);}})}
-      ${field(esc(appText('tags'))+' <small>'+esc(appText('commaSeparated'))+'</small>',`<input data-entry="tags" value="${esc(e.tags.join(', '))}" placeholder="${esc(appText('tagExample'))}">`)}
-      ${recordActivity.view()}${workflow.view()}${attempts.view()}<div data-result-statements>${results.view()}</div>${recordFields(e,{field,option,esc})}${renderSections(e)}${renderMedia(e)}${figures.view()}${materials.view()}
-      ${recordDetails.contributors(e)}${recordDetails.relations(e)}${connectedWork.view()}
-    </section><aside class="editor-side"><section class="panel"><h3>${esc(appText('aboutRecord'))}</h3>
+      ${renderSections(e)}
+    </section><details class="record-edit-group" data-disclosure="draft-evidence"><summary>${esc(ux('evidence'))}</summary>${renderMedia(e)}${figures.view()}${materials.view()}${attempts.view()}<div data-result-statements>${results.view()}</div>${recordDetails.relations(e)}${connectedWork.view()}</details>
+    <details class="record-edit-group" data-disclosure="draft-details"><summary>${esc(ux('details'))}</summary><section class="panel"><h3>${esc(appText('aboutRecord'))}</h3>
       ${e.template?'<p class="scope-kicker">'+esc(e.template.label)+'</p>':field(esc(appText('recordType')),`<select data-entry="type">${types.map(t=>option(t,recordLabel(t),e.type)).join('')}</select>`)}
       ${field(esc(appText('progress')),`<select data-entry="status">${[...LIFECYCLE_STATUSES,...(LIFECYCLE_STATUSES.includes(e.status)?[]:[e.status])].map(status=>option(status,LIFECYCLE_STATUSES.includes(status)?recordStatus(status):appText('legacyStatus',{status:recordStatus(status)}),e.status)).join('')}</select>`)}
       ${field(esc(appText('outcome'))+' <small>'+esc(appText('optional'))+'</small>',`<input data-entry="outcome" maxlength="500" value="${esc(e.outcome??'')}" list="record-outcomes" placeholder="${esc(appText('outcomePlaceholder'))}"><datalist id="record-outcomes">${OUTCOME_SUGGESTIONS.map(v=>`<option value="${esc(v)}"></option>`).join('')}</datalist>`)}
@@ -866,8 +875,9 @@ function renderEditor() {
       ${recordDateFields(e.occurredOn,{field,option,esc})}
       ${field(esc(appText('labBook')),`<select data-entry="notebookId">${notebook?'':option(e.notebookId,appText('chooseBook'),e.notebookId)}${notebookOptions}</select>`)}
       <p class="muted">${esc(appText('locationLabel',{location:locationName(projectDirectoryUI.navigation(state.book),notebook?.projectId)}))}</p>
-    </section><section class="panel"><h3>${esc(appText('sharing'))}</h3><label class="checkbox"><input type="checkbox" data-entry="share" ${e.share?'checked':''}><span>${esc(appText('includeWebsite'))}<small>${esc(t('attempts','sharing'))}</small></span></label></section>
-    <section class="panel danger-zone"><button class="button danger full-width" data-action="delete-entry">${icon('trash')}${esc(t('recordAuthoring','remove'))}</button></section></aside></div>`;
+      ${field(esc(appText('tags'))+' <small>'+esc(appText('commaSeparated'))+'</small>',`<input data-entry="tags" value="${esc(e.tags.join(', '))}" placeholder="${esc(appText('tagExample'))}">`)}${recordFields(e,{field,option,esc})}${recordDetails.contributors(e)}
+    </section><section class="panel"><h3>${esc(appText('sharing'))}</h3><label class="checkbox"><input type="checkbox" data-entry="share" ${e.share?'checked':''}><span>${esc(appText('includeWebsite'))}<small>${esc(t('attempts','sharing'))}</small></span></label></section></details>
+    <details class="record-edit-group" data-disclosure="draft-activity"><summary>${esc(ux('activity'))}</summary>${recordActivity.view()}${workflow.view()}</details></article>`;
 }
 
 
@@ -919,6 +929,15 @@ async function rawAction(button) {
   if(navigationActions.has(button.dataset.action))ownerOperation.clear();
   if(help.action(button))return;
   const name = button.dataset.action;
+  if(name==='context-help'){await taskHelp.open(button.dataset.topic,button);return;}
+  if(name==='tool-return'&&toolOrigin?.context===state.storage?.contextId){const origin=toolOrigin;toolOrigin=null;history.pushState({...origin.history,observandaIndex:++routeIndex},'',origin.route);await restoreRoute();requestAnimationFrame(()=>window.scrollTo(0,origin.scroll));return;}
+  if(name==='interface'||name==='tools'){if(name==='tools')rememberToolOrigin();state.page=name;render();return;}
+  if(name==='tool-pin'){await textControls.togglePinnedTool(button.dataset.moduleId);render();return;}
+  if(name==='tool-enable'){await dashboard.enableModule(button.dataset.moduleId);render();return;}
+  if(name==='tool-launch'){
+   const module=discoverableTools().find(value=>value.id===button.dataset.moduleId);if(!module)return;
+   rememberToolOrigin();button.disabled=true;try{if(!enabledModule(state.dashboardSettings,module.id)){state.page='tools';render();return;}const entry=module.navigation?.[0];return await rawAction({dataset:module.createUI?{action:'module-open',moduleId:module.id,modulePath:''}:{...entry},closest:()=>null});}finally{if(button.isConnected)button.disabled=false;}return;
+  }
   if(name==='operational-diagnostics')return (await import('./diagnostics-ui.js')).openDiagnostics({api,esc,showDialog});
   if(name==='website'&&button.closest?.('#main-navigation')){await sites.manager();return;}
   if(state.page==='entries'&&state.bookReading&&name?.startsWith('material-')){await materials.action(button);return;}
@@ -1109,6 +1128,7 @@ document.addEventListener('click', event => {
   if (button) { event.preventDefault(); const previous = `${state.page}/${state.project}/${state.notebook}`; action(button).then(() => { if (`${state.page}/${state.project}/${state.notebook}` !== previous) window.scrollTo(0,0); }).catch(report); }
 });
 document.addEventListener('input', event => {
+  if(event.target.matches('[data-tool-search]')){state.toolQuery=event.target.value;filterToolDirectory(event.target);return;}
   if(recordDestination.input(event.target)||recordCreation.input(event.target))return;
   if(bookStorage.input(event.target))return;
   if(editionSelection.input(event.target)||localExport.input(event.target)||languageControls.input(event.target)||help.input(event.target))return;

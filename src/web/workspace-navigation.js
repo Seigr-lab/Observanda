@@ -1,12 +1,14 @@
+import {moduleLabel} from './module-presentation.js';
 import {locationTools,locationToolLabel} from './modules/location-tools.js';
 import {scopePath,parseScope} from './modules/scope.js';
 import {childrenOf,ancestors} from './workspace-structure.js';
 import {notebookDirectory} from './laboratory/notebook-model.js';
-import {moduleChildren,enabledModule} from './feature-modules.js';
+import {moduleChildren,enabledModule,FEATURE_MODULES} from './feature-modules.js';
 import {preferencePage} from './preferences-ui.js';
 import {t,language} from './i18n/index.js';
 import {orderNavigationNodes} from './navigation-dom.js';
 import {explicitWebsite} from './website-context.js';
+import {ux} from './experience-ui.js';
 
 const text = (node, value) => { if(node.textContent !== String(value))node.textContent = value; };
 const attr = (node, name, value) => {
@@ -24,9 +26,9 @@ function active(node, selected) {
 
 // Routes select items; they never recreate the tree. Stable project/notebook IDs
 // also retain their nodes during renames and moves.
-export function workspaceNavigation({state,icon,logosFor}) {
+export function workspaceNavigation({state,icon,logosFor,pinnedTools=()=>[]}) {
   let host=null,context=null,root,heading,identity,name,dashboard,projectsSection,projectOverview,tree,settings,lock;
-  let projects=new Map(),notebooks=new Map(),modules=new Map(),logos=new Map(),selectedTrail=null;
+  let projects=new Map(),notebooks=new Map(),modules=new Map(),logos=new Map(),selectedTrail=null,pinnedGroup=null,pinnedNodes=new Map();
   function button(action,label,glyph) {
     const node=element('button','nav-button');node.type='button';node.dataset.action=action;
     node.innerHTML=icon(glyph);
@@ -48,7 +50,8 @@ export function workspaceNavigation({state,icon,logosFor}) {
     projects=new Map();notebooks=new Map();modules=new Map();logos=new Map();
     root=element('div','workspace-navigation');root.id='workspace-navigation';
     const home=element('nav');home.setAttribute('aria-label',t('navigation','dashboard'));
-    dashboard=button('workspace',t('navigation','dashboard'),'dashboard');home.append(dashboard);
+    dashboard=button('workspace',t('navigation','dashboard'),'dashboard');home.append(dashboard,button('entries',ux('find'),'records'),button('tools',ux('tools'),'folder'),button('help',ux('help'),'book'));
+    pinnedGroup=group(ux('pinned'));pinnedGroup.className='pinned-tools';pinnedNodes=new Map();root.append(pinnedGroup);
     projectsSection=element('section');projectsSection.dataset.navSection='projects';
     const label=element('div','workspace-label');
     projectOverview=element('button','project-overview');projectOverview.type='button';projectOverview.dataset.action='projects';projectOverview.textContent=t('navigation','projects');projectOverview.title=t('navigation','overview');label.append(projectOverview);
@@ -59,12 +62,15 @@ export function workspaceNavigation({state,icon,logosFor}) {
     settings.setAttribute('aria-label',t('navigation','workspaceSettings'));
     settings.append(button('storage-workspaces',t('navigation','workspaces'),'folder'),button('preferences',t('navigation','preferences'),'settings'));
     lock=button('storage-lock',t('navigation','lock'),'lock');
-    root.append(home,projectsSection,settings);sidebar.append(root);
+    root.prepend(home);root.append(projectsSection,settings);sidebar.append(root);
     heading=element('div','workspace-heading');identity=element('button','workspace-identity');
     identity.type='button';identity.dataset.action='workspace';
     name=element('span','workspace-name');identity.append(name);heading.append(identity);topbar.append(heading);
   }
   function updateModules() {
+    const pinned=pinnedTools().map(id=>FEATURE_MODULES.find(module=>module.id===id)).filter(module=>module&&enabledModule(state.dashboardSettings,module.id));
+    pinnedGroup.hidden=!pinned.length;attr(pinnedGroup,'lang',language());text(pinnedGroup.firstElementChild,ux('pinned'));pinnedGroup.setAttribute('aria-label',ux('pinned'));
+    const nodes=[pinnedGroup.firstElementChild],wantedPins=new Set();for(const module of pinned){wantedPins.add(module.id);let node=pinnedNodes.get(module.id);if(!node){node=button('tool-launch',moduleLabel(module),'folder');node.dataset.moduleId=module.id;pinnedNodes.set(module.id,node);}text(node.querySelector('.tree-title'),moduleLabel(module));nodes.push(node);}for(const [id,node] of pinnedNodes)if(!wantedPins.has(id)){node.remove();pinnedNodes.delete(id);}orderNavigationNodes(pinnedGroup,nodes);
     const wanted=new Set();let structureChanged=false;
     for(const manifest of moduleChildren()) {
       if(!enabledModule(state.dashboardSettings,manifest.id)||!manifest.navigation.length)continue;
@@ -100,6 +106,7 @@ export function workspaceNavigation({state,icon,logosFor}) {
         ordered.push(node);
       }
       for(const [key,node] of item.buttons)if(!keys.has(key)){node.remove();item.buttons.delete(key);}
+      item.node.classList.toggle('single-tool-navigation',ordered.length===2);
       orderNavigationNodes(item.node,ordered);
     }
     for(const [id,item] of modules)if(!wanted.has(id)){item.node.remove();modules.delete(id);structureChanged=true;}
@@ -167,6 +174,7 @@ export function workspaceNavigation({state,icon,logosFor}) {
       if(initial)mount(sidebar,topbar,key);
       root.querySelector('nav').setAttribute('aria-label',t('navigation','dashboard'));
       text(dashboard.querySelector('.tree-title'),t('navigation','dashboard'));
+      for(const [action,key] of [['entries','find'],['tools','tools'],['help','help']]){const node=root.querySelector('[data-action="'+action+'"]');text(node.querySelector('.tree-title'),ux(key));active(node,state.page===action);attr(node,'lang',language());}
       for(const [action,key] of [['storage-workspaces','workspaces'],['preferences','preferences']]){
         const node=settings.querySelector('[data-action="'+action+'"]');text(node.querySelector('.tree-title'),t('navigation',key));attr(node,'lang',language());
       }

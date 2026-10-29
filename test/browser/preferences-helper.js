@@ -1,5 +1,6 @@
 import {expect} from '@playwright/test';
 export async function preferences(page, tab) {
+ if(tab==='Appearance')tab='Website design';
  const select=page.getByLabel('Preferences section',{exact:true});if(await select.isVisible()){await select.selectOption({label:tab});return;}
  const target=page.locator('.preferences-tabs').getByRole('button',{name:tab,exact:true});
  if(!await target.isVisible())await navigate(page,'Preferences');
