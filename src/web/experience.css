@@ -12,7 +12,7 @@ legend{padding-inline:var(--space-2);font-weight:600}
 summary{cursor:pointer;min-height:44px;padding-block:.6rem;overflow-wrap:anywhere}
 :is(button,a,input,select,textarea,summary):focus-visible{outline:3px solid var(--ui-accent);outline-offset:3px}
 .record-title-row,.record-quick-details{display:flex;gap:var(--space-3);align-items:center;flex-wrap:wrap}
-.record-title-row h1{margin-block:.25rem;flex:1;overflow-wrap:anywhere}
+.record-title-row h1{margin-block:.25rem;flex:1 1 18ch;overflow-wrap:anywhere}
 .record-quick-details{color:var(--ui-muted);font-size:.9rem;margin-block:var(--space-3)}
 .record-edit-navigation{display:flex;flex-wrap:wrap;gap:var(--space-2);padding-block:var(--space-3);border-block:1px solid var(--ui-border)}
 .record-writing-surface{max-width:85ch;padding-block:var(--space-4)}
@@ -33,6 +33,7 @@ summary{cursor:pointer;min-height:44px;padding-block:.6rem;overflow-wrap:anywher
 .task-guidance{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:var(--space-2);margin-bottom:var(--space-3)}
 .task-return{margin-bottom:var(--space-3)}
 .record-actions{margin-inline-start:auto}.record-actions[open]{padding:var(--space-2);border:1px solid var(--ui-border);border-radius:var(--ui-radius)}
+.record-action-menu{display:flex;flex-wrap:wrap;gap:var(--space-2);padding-block:var(--space-2)}
 .context-help{width:min(760px,calc(100% - 2rem));max-height:85dvh;overflow:auto;padding:var(--space-6);color:var(--ui-text);background:var(--ui-surface);border:1px solid var(--ui-border);border-radius:var(--ui-radius)}
 .context-help-heading{display:flex;align-items:center;justify-content:space-between;gap:var(--space-4)}
 .context-help article{max-width:75ch}.context-help h4{margin-bottom:.5rem}.context-help p{overflow-wrap:anywhere}

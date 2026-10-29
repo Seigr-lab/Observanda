@@ -1,3 +1,4 @@
+import {openRecordActions} from './record-editing-helper.js';
 import {projectTemplateFixture} from './project-template-fixture.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -27,7 +28,7 @@ for(const dedicated of [false,true])test((dedicated?'project: ':'workspace: ')+'
   await click('Review instructions');await dialog.getByRole('button',{name:'Read section',exact:true}).nth(2).click();await expect(dialog).toContainText('Take three readings. Keep exact units.');await click('Back to sections');await click('Back to template');await expect(dialog.getByLabel('Released versions')).toHaveValue((await store.list({workspaceId:book.id,cursor:null})).items[0].latest);
   await click('Create record from this version');await expect(page.locator('.record-editing h1')).toHaveText('Next instrument trial');
   const created=(await ws.read()).book.entries.find(e=>e.title==='Next instrument trial');expect(created.share).toBe(false);expect(created.status).toBe('draft');expect(created.attachments).toEqual([]);
-  await page.getByRole('button',{name:'Read record',exact:true}).click();await page.getByRole('button',{name:'Record templates',exact:true}).click();await click('Template origin');await click('Starting instructions');await expect(dialog).toContainText('Check calibration before beginning.');await click('Back to sections');await click('Back to template');
+  await page.getByRole('button',{name:'Read record',exact:true}).click();await openRecordActions(page);await page.getByRole('button',{name:'Record templates',exact:true}).click();await click('Template origin');await click('Starting instructions');await expect(dialog).toContainText('Check calibration before beginning.');await click('Back to sections');await click('Back to template');
   await click('Edit draft');await click('Starting instructions');await dialog.getByRole('textbox',{name:'Starting instructions',exact:true}).fill('Changed calibration requirements.');
   await click('Back to sections');await page.locator('#leave-dialog').getByRole('button',{name:'Stay here'}).click();await expect(dialog.getByRole('textbox',{name:'Starting instructions',exact:true})).toContainText('Changed calibration');
   await click('Save draft');await click('Back to sections');await click('Back to template');await click('Release version');await dialog.getByLabel('What changed / review note').fill('Updated calibration.');await click('Release version');
@@ -63,7 +64,7 @@ test('capture is selective, structural edits remain guarded and conflicts preser
  const {workspace:ws,vault,deviceStore}=await encryptedFixture(dir,book),app=await testServer({root:ws.root,deviceStore,port:0,headless:true}),store=new RecordStarters(ws,{}),dialog=page.locator('#dialog'),click=name=>dialog.getByRole('button',{name,exact:true}).click();
  try{
   await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id+'/read',record.id);
-  await page.getByRole('button',{name:'Record templates',exact:true}).click();await click('Create from this record');
+  await openRecordActions(page);await page.getByRole('button',{name:'Record templates',exact:true}).click();await click('Create from this record');
   await dialog.getByRole('group',{name:'1. Method',exact:true}).getByLabel('Include section heading').check();await dialog.getByRole('group',{name:'2. Results',exact:true}).getByLabel('Include section heading').check();
   await dialog.getByRole('checkbox',{name:'Copy instructions: Method',exact:true}).check();await click('Prepare template draft');
   await click('Starting instructions');await expect(dialog.getByRole('textbox',{name:'Starting instructions',exact:true})).not.toContainText('Completed result');await click('Back to sections');

@@ -69,5 +69,6 @@
   "accessProject": "Prosjekttilgang og gjenoppretting",
   "findTools": "Leitar du etter eit verktøy?",
   "quickTry": "Prøv ei utrekning, og gje henne eit namn og lagre henne om du vil behalde henne.",
-  "toolExamples": "Døme: rekn ut 12 × 7; importer ein CSV-tabell; skriv CCO som ein SMILES-struktur. Importerte formlar og skript blir ikkje køyrde."
+  "toolExamples": "Døme: rekn ut 12 × 7; importer ein CSV-tabell; skriv CCO som ein SMILES-struktur. Importerte formlar og skript blir ikkje køyrde.",
+  "documentAutosave": "Endringar i dette dokumentet vert lagra automatisk. Førehandsvising og nedlasting brukar den lagra versjonen."
 }

@@ -1,3 +1,4 @@
+import {ux} from './experience-ui.js';
 import {sharedFigureControls,mountSharedFigures} from './shared-figure-reader.js';
 import {researchOwner,projectApiRoute,researchContext} from './project-context.js';
 import {recordRevisionView} from './record-revision-view.js';
@@ -45,7 +46,7 @@ export function reviewsUI({state,api,esc,showDialog,notify,render,getRecord}){
  const witnessFrame=()=>frame('witnesses',(listError?'<p role="alert">'+esc(listError)+'</p>':entriesHTML())+button('refresh','refresh')+(enabledModule(state.dashboardSettings,'collaboration')?button('request','request','data-record="'+owner+'"'):'<p>'+esc(tr('enable'))+'</p>'));
  function view(){
   if(context!==researchContext(state)){list=empty();listError='';}
-  return '<section class="module-workbench" lang="'+messageLanguage('reviews')+'"><h1>'+esc(tr('title'))+'</h1><p>'+esc(tr('intro'))+'</p><div class="module-actions">'+button('identity','identity')+button('contact','contact')+button('request','request')+button('importFile','import')+button('refresh','refresh')+'</div><details><summary>'+esc(tr('contacts'))+'</summary>'+list.contacts.map(c=>'<p>'+esc(c.name)+' / '+esc(tr(c.active?'active':'blocked'))+'</p><code class="tool-hash">'+c.fingerprint+'</code>'+(c.active?button('untrust','untrust','data-fingerprint="'+c.fingerprint+'"'):'')).join('')+'</details><h2>'+esc(tr('reviews'))+'</h2>'+(listError?'<p role="alert">'+esc(listError)+'</p>'+button('retry','refresh'):entriesHTML())+'</section>';
+  return '<section class="module-workbench" lang="'+messageLanguage('reviews')+'"><h1>'+esc(tr('title'))+'</h1><p class="workflow-guide">'+esc(ux('collaborationHelp'))+'</p><p>'+esc(tr('intro'))+'</p><div class="module-actions">'+button('request','request')+button('importFile','import')+button('identity','identity')+button('contact','contact')+button('refresh','refresh')+'</div><details><summary>'+esc(tr('contacts'))+'</summary>'+list.contacts.map(c=>'<p>'+esc(c.name)+' / '+esc(tr(c.active?'active':'blocked'))+'</p><code class="tool-hash">'+c.fingerprint+'</code>'+(c.active?button('untrust','untrust','data-fingerprint="'+c.fingerprint+'"'):'')).join('')+'</details><h2>'+esc(tr('reviews'))+'</h2>'+(listError?'<p role="alert">'+esc(listError)+'</p>'+button('retry','refresh'):entriesHTML())+'</section>';
  }
  function requestForm(record){
   const displayed=getRecord?.(),e=displayed?.id===record?displayed:state.book.entries.find(e=>e.id===record);plan=null;

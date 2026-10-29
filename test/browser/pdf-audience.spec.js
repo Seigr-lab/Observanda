@@ -1,3 +1,4 @@
+import {sourceAssets} from './built-assets-helper.js';
 import {test,expect} from '@playwright/test';
 import {createHash} from 'node:crypto';
 import {mkdtemp,readFile,rm} from 'node:fs/promises';
@@ -23,7 +24,7 @@ test('public PDF review omits unselected content, survives exact export, and inv
    return {bytes,preflight,sha256:createHash('sha256').update(bytes).digest('hex'),renderer:{engine:'chromium',electron:'test',chromium:browser.version(),recipeVersion:1}};
   }finally{await view.close();}
  });
- const app=await startServer({root:fixture.workspace.root,port:0,headless:true,deviceStore:fixture.deviceStore}),documents=new PdfDocuments(fixture.workspace,(await fixture.workspace.outline()).metadata.id);
+ const app=await startServer({root:fixture.workspace.root,port:0,headless:true,deviceStore:fixture.deviceStore,browserAssets:await sourceAssets()}),documents=new PdfDocuments(fixture.workspace,(await fixture.workspace.outline()).metadata.id);
  page.on('pageerror',error=>errors.push(error.message));
  try{
   await page.goto(app.url);await navigate(page,'PDF editor');const ui=page.locator('[data-pdf-editor]');await ui.getByRole('button',{name:'New document',exact:true}).click();await expect(page).toHaveURL(/#\/modules\/pdf-editor\/[a-f0-9-]{36}$/);const id=new URL(page.url()).hash.split('/').at(-1);

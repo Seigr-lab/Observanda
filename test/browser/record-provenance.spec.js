@@ -1,3 +1,4 @@
+import {openRecordActions} from './record-editing-helper.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
 import path from 'node:path';
@@ -33,7 +34,7 @@ test('reader provenance pages retry, cancel and ignore abandoned responses witho
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='200%');expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);await page.screenshot({path:test.info().outputPath('reader-provenance-mobile.png')});await previous();await expect(dialog.locator('[data-provenance-content] > section')).toHaveCount(20);
   const moved=await defer();await next();await moved.started;await page.evaluate(id=>location.hash='#/records/'+id+'/read',book.entries[0].id);await expect(dialog).not.toBeVisible();moved.release();await expect(page.locator('.record-reader')).toContainText(book.entries[0].title);
   await page.setViewportSize({width:1440,height:1000});await page.evaluate(()=>document.documentElement.style.fontSize='');const closed=await defer();await open();await closed.started;await dialog.getByRole('button',{name:'Close',exact:true}).click();closed.release();await expect(dialog).not.toBeVisible();await page.unrouteAll({behavior:'wait'});
-  await open();await expect(dialog).toContainText('This record has no external import provenance.');await dialog.getByRole('button',{name:'Close',exact:true}).click();await page.getByRole('button',{name:'Witnessed by',exact:true}).click();await expect(page.getByRole('dialog',{name:'Witnessed by',exact:true})).toContainText('No reviews yet.');await expect(page.locator('.record-reader')).toContainText(book.entries[0].title);
+  await open();await expect(dialog).toContainText('This record has no external import provenance.');await dialog.getByRole('button',{name:'Close',exact:true}).click();await openRecordActions(page);await page.getByRole('button',{name:'Witnessed by',exact:true}).click();await expect(page.getByRole('dialog',{name:'Witnessed by',exact:true})).toContainText('No reviews yet.');await expect(page.locator('.record-reader')).toContainText(book.entries[0].title);
   expect(requests.filter(route=>/^\/api\/workspace\/read\/(selection|page)$/.test(route))).toEqual([]);expect(errors).toEqual([]);
  }finally{release?.();await page.unrouteAll({behavior:'wait'});ResearchCatalogue.prototype.record=original;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
 });

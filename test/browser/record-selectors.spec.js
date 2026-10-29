@@ -1,3 +1,4 @@
+import {openRecordActions} from './record-editing-helper.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
 import path from 'node:path';
@@ -21,14 +22,14 @@ test('reference picker searches saved destinations, pins exact references and ne
  try{
   await page.goto(f.app.url);await expect(page.locator('#main-navigation')).toBeVisible();await page.goto(f.app.origin+'/#/records/'+f.record.id+'/read');await expect(page.locator('.record-reader h1')).toHaveText(f.record.title);
   await page.context().grantPermissions(['clipboard-read','clipboard-write']);await page.getByRole('button',{name:'Copy record reference',exact:true}).click();expect(parseResearchReference(await page.evaluate(()=>navigator.clipboard.readText()))).toEqual({workspaceId:f.book.id,kind:'record',id:f.record.id});
-  await page.getByRole('button',{name:'Copy section, figure or table reference',exact:true}).click();
+  await openRecordActions(page);await page.getByRole('button',{name:'Copy section, figure or table reference',exact:true}).click();
   await expect(dialog.getByLabel('Content destination')).toBeEnabled();await expect(dialog.getByLabel('Content destination').locator('option')).toHaveCount(20);
   await dialog.getByRole('button',{name:'Next destinations',exact:true}).click();await expect(dialog.getByLabel('Content destination').locator('option').first()).toHaveText('Observation 21');
   await dialog.getByRole('button',{name:'Previous destinations',exact:true}).click();await expect(dialog.getByLabel('Content destination').locator('option').first()).toHaveText('Observation 1');
   await dialog.getByLabel('Find a destination').fill('Exact measurements');await dialog.getByLabel('Find a destination').press('Enter');await expect(dialog.getByLabel('Content destination').locator('option')).toHaveText(['Exact measurements']);
   await dialog.getByLabel('Reference version').selectOption('exact');await page.context().grantPermissions(['clipboard-read','clipboard-write']);await dialog.getByRole('button',{name:'Copy reference',exact:true}).click();await expect(dialog).not.toBeVisible();
   const reference=parseResearchReference(await page.evaluate(()=>navigator.clipboard.readText()));expect(reference).toEqual({workspaceId:f.book.id,kind:'record',id:f.record.id,revision:recordRevision(f.record),selector:{version:1,kind:'table',id:f.table.attrs.id}});
-  await page.getByRole('button',{name:'Copy section, figure or table reference',exact:true}).click();await expect(dialog.getByLabel('Content destination')).toBeEnabled();
+  await openRecordActions(page);await page.getByRole('button',{name:'Copy section, figure or table reference',exact:true}).click();await expect(dialog.getByLabel('Content destination')).toBeEnabled();
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='200%');
   expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);await page.screenshot({path:info.outputPath('reference-picker-phone.png')});
   await page.setViewportSize({width:1440,height:1000});await page.evaluate(()=>document.documentElement.style.removeProperty('font-size'));
@@ -48,7 +49,7 @@ test('reference picker searches saved destinations, pins exact references and ne
 test('reference searches retry the exact failed window, cancel promptly and ignore responses after navigation',async({page})=>{
  test.setTimeout(90000);const f=await fixture(),dialog=page.locator('.record-reference-picker'),cursors=[];let failed=false;
  try{
-  await page.goto(f.app.url);await expect(page.locator('#main-navigation')).toBeVisible();await page.goto(f.app.origin+'/#/records/'+f.record.id+'/read');await expect(page.locator('.record-reader h1')).toHaveText(f.record.title);await page.getByRole('button',{name:'Copy section, figure or table reference',exact:true}).click();await expect(dialog.getByLabel('Content destination')).toBeEnabled();
+  await page.goto(f.app.url);await expect(page.locator('#main-navigation')).toBeVisible();await page.goto(f.app.origin+'/#/records/'+f.record.id+'/read');await expect(page.locator('.record-reader h1')).toHaveText(f.record.title);await openRecordActions(page);await page.getByRole('button',{name:'Copy section, figure or table reference',exact:true}).click();await expect(dialog.getByLabel('Content destination')).toBeEnabled();
   await page.route('**/api/workspace/read/record-selectors',async route=>{const body=route.request().postDataJSON();if(body.search&&body.cursor){cursors.push(body.cursor);if(!failed){failed=true;await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'IO',message:'Interrupted destination lookup'})});return;}}await route.continue();});
   await dialog.getByLabel('Find a destination').fill('Observation 81');await dialog.getByRole('button',{name:'Find',exact:true}).click();await expect(dialog.getByRole('alert')).toHaveText('Interrupted destination lookup');await dialog.getByRole('button',{name:'Try again',exact:true}).click();await expect(dialog.getByLabel('Content destination').locator('option')).toHaveText(['Observation 81']);expect(cursors[0]).toBe(cursors[1]);await page.unroute('**/api/workspace/read/record-selectors');
   let resume,reached;const held=new Promise(resolve=>resume=resolve),waiting=new Promise(resolve=>reached=resolve);let pause=true;

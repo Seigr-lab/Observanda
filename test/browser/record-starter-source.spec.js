@@ -1,3 +1,4 @@
+import {openRecordActions} from './record-editing-helper.js';
 import {projectTemplateFixture} from './project-template-fixture.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -19,7 +20,7 @@ async function setup(page,dedicated=false){
  ResearchCatalogue.prototype.record=()=>{throw Error('Template workflow reconstructed a complete record');};
  page.on('pageerror',error=>errors.push(error.message));page.on('request',r=>{if(r.url().includes('/api/workspace/read/'))requests.push(r.url());});
  const dialog=page.locator('#dialog'),click=name=>dialog.getByRole('button',{name,exact:true}).click();
- return {...f,book,record,dialog,app,click,async open(){await page.goto(app.url);await page.goto(app.origin+'/#/'+(dedicated?'owners/'+book.projects[0].id+'/':'')+'records/'+record.id+'/read');await page.getByRole('button',{name:'Record templates',exact:true}).click();await click('Create from this record');await expect(dialog.getByLabel('Go to section number')).toBeVisible();},async close(){ResearchCatalogue.prototype.record=original;await app.close();await f.close?.();clearVault(f.vault);await rm(directory,{recursive:true,force:true});expect(errors).toEqual([]);expect(requests.some(url=>/\/(selection|page)$/.test(url))).toBe(false);}};
+ return {...f,book,record,dialog,app,click,async open(){await page.goto(app.url);await page.goto(app.origin+'/#/'+(dedicated?'owners/'+book.projects[0].id+'/':'')+'records/'+record.id+'/read');await openRecordActions(page);await page.getByRole('button',{name:'Record templates',exact:true}).click();await click('Create from this record');await expect(dialog.getByLabel('Go to section number')).toBeVisible();},async close(){ResearchCatalogue.prototype.record=original;await app.close();await f.close?.();clearVault(f.vault);await rm(directory,{recursive:true,force:true});expect(errors).toEqual([]);expect(requests.some(url=>/\/(selection|page)$/.test(url))).toBe(false);}};
 }
 
 for(const dedicated of [false,true])test((dedicated?'project: ':'workspace: ')+'template selection pages headings and retains exact chosen instructions from the original saved version',async({page},info)=>{

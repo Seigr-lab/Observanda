@@ -1,3 +1,4 @@
+import {openRecordActions} from './record-editing-helper.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm,readFile,writeFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
@@ -59,7 +60,7 @@ test('app stages, maps, resumes, applies and reverses a private external logbook
   await row.getByRole('button',{name:'Open imported record',exact:true}).click();await page.getByRole('button',{name:'Open evidence & analysis',exact:true}).click();
   const materialDialog=page.getByRole('dialog'),evidenceFile=materialDialog.locator('.material-list > li').filter({hasText:'field/one.json'});await expect(evidenceFile).toHaveCount(1);await expect(evidenceFile).toContainText('SHA-256');
   const originalDownload=page.waitForEvent('download');await evidenceFile.getByRole('link',{name:'Download one.json',exact:true}).click();expect(await readFile(await (await originalDownload).path(),'utf8')).toContain('Two distant calls.');
-  await materialDialog.getByRole('button',{name:'Close',exact:true}).click();await page.getByRole('button',{name:'Source provenance',exact:true}).click();
+  await materialDialog.getByRole('button',{name:'Close',exact:true}).click();await openRecordActions(page);await page.getByRole('button',{name:'Source provenance',exact:true}).click();
   const dialog=page.getByRole('dialog');await expect(dialog).toContainText('synthetic:field / morning-one @ r1');await expect(dialog).toContainText('2026-04');
   const link=dialog.getByRole('link',{name:'field/one.json',exact:true}),downloaded=page.waitForEvent('download');await link.click();const download=await downloaded;
   expect(await download.failure()).toBeNull();expect(download.suggestedFilename()).toBe('one.json');expect(await readFile(await download.path(),'utf8')).toContain('Two distant calls.');

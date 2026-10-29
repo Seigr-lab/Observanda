@@ -69,5 +69,6 @@
   "accessProject": "Acceso y recuperación del proyecto",
   "findTools": "¿Buscas una herramienta?",
   "quickTry": "Prueba un cálculo y después dale un nombre y guárdalo si quieres conservarlo.",
-  "toolExamples": "Ejemplos: calcula 12 × 7; importa una tabla CSV; introduce CCO como estructura SMILES. Las fórmulas y los scripts importados no se ejecutan."
+  "toolExamples": "Ejemplos: calcula 12 × 7; importa una tabla CSV; introduce CCO como estructura SMILES. Las fórmulas y los scripts importados no se ejecutan.",
+  "documentAutosave": "Los cambios en este documento se guardan automáticamente. La vista previa y la descarga usan la versión guardada."
 }

@@ -11,7 +11,7 @@ export function contextualHelp({esc}){
  dialog.addEventListener('cancel',event=>{event.preventDefault();close();});
  dialog.addEventListener('click',event=>{if(event.target.closest('[data-context-help-close]'))close();});
  async function open(topic,source){
-  controller?.abort();const request=controller=new AbortController();origin=source;
+  controller?.abort();const request=controller=new AbortController();origin=source;dialog.setAttribute('aria-label',ux('contextHelp'));dialog.lang=language();
   const frame=content=>'<div class="context-help-heading"><h2>'+esc(ux('contextHelp'))+'</h2><button class="button" data-context-help-close>'+esc(t('recordWriting','close'))+'</button></div>'+content;
   dialog.innerHTML=frame('<p role="status">'+esc(t('help','loading'))+'</p>');dialog.showModal();
   try{

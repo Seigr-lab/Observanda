@@ -1,3 +1,4 @@
+import {openRecordActions} from './record-editing-helper.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
 import path from 'node:path';
@@ -16,7 +17,7 @@ test('reader moves recover conflicts and lost commit responses without reconstru
  book.notebooks.push(notebook);record.sections=Array.from({length:67},(_,i)=>({id:randomUUID(),title:'Observation '+i,body:'Original observation '.repeat(80)}));
  const f=await encryptedFixture(directory,book),app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')}),original=ResearchCatalogue.prototype.record,errors=[],reads=[],moves=[];
  ResearchCatalogue.prototype.record=()=>{throw Error('Reader move reconstructed an original');};page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{const route=new URL(r.url()).pathname;if(/^\/api\/workspace\/read\/(selection|page)$/.test(route))reads.push(route);if(route==='/api/research/records/location')moves.push(r.postDataJSON());});
- const dialog=page.getByRole('dialog',{name:'Move record',exact:true}),open=()=>page.locator('.record-toolbar').getByRole('button',{name:'Move record',exact:true}).click(),move=()=>dialog.getByRole('button',{name:'Move record',exact:true}).click();let release;
+ const dialog=page.getByRole('dialog',{name:'Move record',exact:true}),open=async()=>{await openRecordActions(page);await page.locator('.record-toolbar').getByRole('button',{name:'Move record',exact:true}).click();},move=()=>dialog.getByRole('button',{name:'Move record',exact:true}).click();let release;
  try{
   await page.goto(app.url);await page.goto(app.origin+'/#/records/'+record.id+'/read');await expect(page.locator('.record-reader h1')).toHaveText(record.title);
   await open();await dialog.getByRole('button',{name:'Close',exact:true}).click();expect(moves).toEqual([]);

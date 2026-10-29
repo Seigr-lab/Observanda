@@ -2,6 +2,7 @@ import {m} from '../modules/editor-presentation.js';
 import {defaultCalculationPolicy,calculationWorkerTimeout} from './calculation-policy.js';
 import {calculationPolicyControls,calculationPolicyInput,approximationTitle,calculationErrorText} from './calculation-policy-ui.js';
 import {moduleEditor} from '../modules/workbench.js';
+import {ux} from '../experience-ui.js';
 import {t,language} from '../i18n/index.js';
 import {toolSpecs} from './manifests.js';
 import {reaction,formula} from './stoichiometry.js';
@@ -38,7 +39,7 @@ export async function createToolUI(services,id){
   if(type==='reaction')content='<p>'+esc(m('reactionHelp'))+'</p><div class="tool-reaction">'+v.components.map((r,i)=>'<fieldset><legend>'+esc(m('componentNumber',{number:i+1}))+'</legend>'+[['role',m('role'),[['reactant',m('reactant')],['product',m('product')]]],['formula',m('formula')],['coefficient',m('coefficient')],['amount',m('amount')],['unit',m('unit'),[['g','g'],['mg','mg'],['mol','mol'],['mmol','mmol'],['M','mol/L']]],['volume',m('solutionVolume')],['molarMass',m('molarMassOverride')]].map(([k,title,opts])=>c.field(esc(title),opts?'<select data-component="'+i+'" data-key="'+k+'">'+opts.map(([key,name])=>c.option(key,name,r[k])).join('')+'</select>':'<input data-component="'+i+'" data-key="'+k+'" value="'+esc(r[k])+'" '+(k==='formula'?'placeholder="'+esc(m('formulaExample'))+'"':'inputmode="decimal"')+'>')).join('')+'<output data-component-mass="'+i+'"></output>'+c.button(m('removeComponent'),'remove-component','data-index="'+i+'" '+(v.components.length<=2?'disabled':''))+'</fieldset>').join('')+'</div>'+c.button(m('addReactant'),'add-component','data-role="reactant"')+c.button(m('addProduct'),'add-component','data-role="product"')+'<p class="muted">'+esc(m('molarMassHelp'))+'</p>';
   if(type==='sheet')content=(v.engine!==3?'<p>'+esc(t('calculator',v.engine===1?'legacyEngine':'fixedPolicyEngine'))+' '+c.button(t('calculator','upgradeEngine'),'upgrade-engine')+'</p>':calculationPolicyControls(v,c,esc))+'<div class="module-inline">'+c.field(esc(m('importCsv')),'<input type="file" data-tool-file accept=".csv,.tsv,text/csv,text/tab-separated-values">')+c.button(m('addRow'),'add-row')+c.button(m('addColumn'),'add-column')+'</div><p>'+esc(m('sheetHelp'))+'</p>'+original(v)+'<div class="tool-scroll"><table class="tool-sheet"><thead><tr><th scope="col">'+esc(m('row'))+'</th>'+v.cells[0].map((_,i)=>'<th scope="col">'+column(i)+'</th>').join('')+'</tr></thead><tbody>'+v.cells.slice(sheetPage*25,sheetPage*25+25).map((row,index)=>{const r=index+sheetPage*25;return '<tr><th scope="row">'+(r+1)+'</th>'+row.map((value,col)=>'<td><input aria-label="'+esc(m('cell',{cell:column(col)+(r+1)}))+'" data-cell="'+r+':'+col+'" value="'+esc(value)+'" spellcheck="false"><output data-cell-result="'+r+':'+col+'"></output></td>').join('')+'</tr>';}).join('')+'</tbody></table></div>'+c.button(m('previousRows'),'sheet-back',sheetPage?'':'disabled')+'<span> '+esc(m('rowRange',{start:sheetPage*25+1,end:Math.min(v.cells.length,sheetPage*25+25),total:v.cells.length}))+' </span>'+c.button(m('nextRows'),'sheet-next',(sheetPage+1)*25<v.cells.length?'':'disabled')+c.button(m('downloadCsv'),'export-sheet')+'<p class="muted">'+esc(m('csvHelp'))+'</p>';
   if(type==='chemical')content=c.field(esc(m('importChemical')),'<input type="file" data-tool-file accept=".cdxml,.smi,.smiles,.txt">')+c.select('format',m('format'),[['smiles','SMILES'],['cdxml','ChemDraw CDXML']])+area('source',m('chemicalSource'),8)+original(v)+'<p>'+esc(m('chemicalHelp'))+'</p>';
-  return '<div class="dedicated-tool" data-tool-id="'+id+'">'+c.input('name',m('name'))+content+'<section class="tool-results" aria-label="'+esc(m('results'))+'" data-tool-output="'+id+'" aria-live="polite"></section>'+c.referenceFields(v.links)+'</div>';
+  return '<div class="dedicated-tool" data-tool-id="'+id+'">'+c.input('name',m('name'))+(type==='sheet'?'<p>'+esc(ux('keyboardSheet'))+'</p>':'')+content+'<section class="tool-results" aria-label="'+esc(m('results'))+'" data-tool-output="'+id+'" aria-live="polite"></section>'+c.referenceFields(v.links)+'</div>';
  }
  async function importFile(el,c){const d=c.current,file=el.files?.[0];if(!file)return;try{const original=await originalFile(file),bytes=Uint8Array.from(atob(original.bytes),ch=>ch.charCodeAt(0)),source=new TextDecoder('utf-8',{fatal:true}).decode(bytes);if(disposed||c.current!==d)return;
   if(type==='sheet'){const parsed=readDelimitedTable(source,{header:false,preserveEmptyRows:true,minColumns:1}),cells=parsed.rows.map(row=>row.cells.map(s=>s.startsWith('=')||s.startsWith("'")?"'"+s:s));if(cells.length>1000||cells[0].length>32||cells.length*cells[0].length>20000||cells.some(row=>row.some(s=>s.length>2000)))throw Error(m('sheetSizeLimit'));d.data.cells=cells;sheetPage=0;}
@@ -63,5 +64,22 @@ export async function createToolUI(services,id){
    else return;c.change();last='';c.draw();
   }
  });
- return {...editor,bind(){editor.bind();if(type==='sheet')last='';calculate();},dispose(){disposed=true;stop();editor.dispose();}};
+ function bindGrid(){
+  const grid=document.querySelector('.dedicated-tool[data-tool-id="'+id+'"] .tool-sheet');if(!grid)return;
+  grid.onkeydown=event=>{
+   const cell=event.target.closest('[data-cell]');if(!cell||event.isComposing||event.ctrlKey||event.metaKey)return;
+   let [row,column]=cell.dataset.cell.split(':').map(Number);const cells=context?.current?.data.cells;if(!cells)return;
+   if(event.key==='Enter')row+=event.shiftKey?-1:1;
+   else if(event.altKey&&event.key==='ArrowUp')row--;
+   else if(event.altKey&&event.key==='ArrowDown')row++;
+   else if(event.altKey&&event.key==='ArrowLeft')column--;
+   else if(event.altKey&&event.key==='ArrowRight')column++;
+   else return;
+   event.preventDefault();event.stopPropagation();
+   if(row<0||row>=cells.length||column<0||column>=cells[row].length)return;
+   const nextPage=Math.floor(row/25);if(nextPage!==sheetPage){sheetPage=nextPage;context.draw();}
+   const next=document.querySelector('[data-cell="'+row+':'+column+'"]');next?.focus();next?.select();next?.scrollIntoView({block:'nearest',inline:'nearest'});
+  };
+ }
+ return {...editor,bind(){editor.bind();if(type==='sheet'){last='';bindGrid();}calculate();},dispose(){disposed=true;stop();editor.dispose();}};
 }

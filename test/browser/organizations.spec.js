@@ -1,3 +1,4 @@
+import {sourceAssets} from './built-assets-helper.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
 import path from 'node:path';
@@ -18,7 +19,7 @@ test('organization membership completes through two app installations with verif
   try{
     for(const name of ['administrator','recipient']){
       const fixture=await encryptedFixture(path.join(directory,name),sampleNotebook());fixtures.push(fixture);
-      const app=await startServer({root:fixture.workspace.root,port:0,headless:true,deviceStore:fixture.deviceStore,preferencesFile:path.join(directory,name+'.prefs')});apps.push(app);
+      const app=await startServer({root:fixture.workspace.root,port:0,headless:true,deviceStore:fixture.deviceStore,preferencesFile:path.join(directory,name+'.prefs'),browserAssets:await sourceAssets()});apps.push(app);
       const context=await browser.newContext(),page=await context.newPage();contexts.push(context);pages.push(page);page.setDefaultTimeout(15000);page.on('pageerror',e=>errors.push(e.message));
       await page.goto(app.url);await navigate(page,'Preferences');await preferences(page,'Modules');await page.getByRole('switch',{name:'Enable Organizations & teams',exact:true}).check();await navigate(page,'Organizations & teams');await expect(page.getByRole('heading',{name:'Organizations & teams',exact:true})).toBeVisible();
     }

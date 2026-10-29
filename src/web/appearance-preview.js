@@ -64,7 +64,7 @@ export function appearancePreview({state,api,option,documents}){
    choices(result,selected);
    document.querySelector('#design-source').value=result.source;
    note.textContent=t('appearance',result.source==='examples'?'examplesNote':'websiteNote');
-   frame.onload=async()=>{if(!current())return;try{
+   frame.onload=async()=>{if(!current()){if(version===generation&&active()&&frame.isConnected)schedule();return;}try{
     enhanceAppearanceReading(frame);
     const currentURL=new URL(frame.contentWindow.location.href),path=currentURL.pathname;if(!path.startsWith(result.baseUrl))return;
     const page=path.slice(result.baseUrl.length)+currentURL.search;

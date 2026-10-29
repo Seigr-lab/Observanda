@@ -1,3 +1,4 @@
+import {openRecordActions} from './record-editing-helper.js';
 import {test,expect} from '@playwright/test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -54,7 +55,7 @@ test('record transfer UI keeps its source through owner access, cancellation and
    if(loseCompletion){loseCompletion=false;return route.abort('failed');}return reply(receipt);
   });
   const sourceRoute=app.origin+'/#/records/'+source.id+'/read',dialog=page.getByRole('dialog',{name:'Move record',exact:true}),picker=page.locator('#dialog'),unlock=page.locator('#project-unlock-form');
-  const open=()=>page.locator('.record-toolbar').getByRole('button',{name:'Move record',exact:true}).click();
+  const open=async()=>{await openRecordActions(page);await page.locator('.record-toolbar').getByRole('button',{name:'Move record',exact:true}).click();};
   async function chooseBook(){
    await dialog.getByRole('button',{name:'Choose a lab book in a project',exact:true}).click();
    const choices=picker.getByLabel('Project',{exact:true});await expect(choices.locator('option[value="'+projectId+'"]')).toHaveCount(1);await choices.selectOption(projectId);

@@ -12,3 +12,9 @@ export async function setRecordTitle(page,title){
 export async function openRecordWriting(page){
  await page.getByRole('button',{name:'Edit summary / context',exact:true}).click();const dialog=page.getByRole('dialog',{name:'Edit summary / context',exact:true});await expect(dialog.locator('.ProseMirror')).toBeVisible();return dialog;
 }
+
+export async function openRecordActions(page){
+ await expect(page.locator('.record-toolbar')).toBeVisible();
+ const menu=page.locator('.record-toolbar details[data-disclosure="record-actions"]');
+ if(await menu.count()&&!await menu.evaluate(node=>node.open))await menu.locator(':scope > summary').click();
+}

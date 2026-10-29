@@ -69,5 +69,6 @@
   "accessProject": "Project access and recovery",
   "findTools": "Looking for a tool?",
   "quickTry": "Try a calculation, then name and save it if you want to keep it.",
-  "toolExamples": "Examples: calculate 12 × 7; import a table as CSV; enter CCO as a SMILES structure. Imported formulas and scripts are not executed."
+  "toolExamples": "Examples: calculate 12 × 7; import a table as CSV; enter CCO as a SMILES structure. Imported formulas and scripts are not executed.",
+  "documentAutosave": "Changes to this document are saved automatically. Preview and download use the saved version."
 }

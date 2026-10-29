@@ -10,7 +10,7 @@ const tr=(key,values)=>t('timeline',key,values),limit=50;
 export async function createTimelineUI(services){
  const {state,api,esc,access=operation=>operation()}=services;
  const aggregate=()=>!!state.workspaceOutline&&!state.projectOwner?.labBookId,sourceChoices=timelineSourcesUI(services);
- let context,stamp=null,page=null,loading=false,error='',attempt=null,controller=null,timer=null,resume=null;
+ let initialSource=null,context,stamp=null,page=null,loading=false,error='',attempt=null,controller=null,timer=null,resume=null;
  const root=()=>document.querySelector('[data-timeline-results]');
  const active=()=>state.page==='module'&&state.moduleId==='timeline'&&!state.access?.locked&&!state.storageUnavailable&&!!context?.current&&!!root();
  const key=()=>JSON.stringify([state.storage?.contextId,state.book?.id,context?.current?.id,context?.current?timelineQuery(context.current.data):null]);
@@ -58,7 +58,7 @@ export async function createTimelineUI(services){
   blank:()=>({name:'',links:[],engine:1,...timelineDefaults()}),card:(e,c)=>'<h2>'+c.esc(e.data.name)+'</h2>',
   section(section,c){context=c;return '<div class="dedicated-tool"><p>'+esc(tr('ordering'))+'</p>'+result()+'</div>';},
   form(d,c){
-   context=c;const value=d.data;
+   context=c;if(d.expectedRevision===null&&initialSource!==d.id){initialSource=d.id;c.openDisclosure('timeline-sources');}const value=d.data;
    return '<div class="dedicated-tool">'+c.input('name',tr('name'))+'<p>'+esc(tr('ordering'))+'</p><details '+c.disclosure('timeline-sources')+'><summary>'+esc(tr('sources'))+'</summary><p>'+esc(tr('sourceHint'))+'</p><div class="tool-fields">'+(aggregate()?sourceChoices.field('projects')+sourceChoices.field('books'):sources(value,'projects',state.book.projects)+sources(value,'books',state.book.notebooks))+'</div>'+
     c.check('descendants',tr('descendants'))+'<div class="tool-fields">'+c.select('groupBy',tr('branches'),[['book',tr('books')],['project',tr('projects')]])+
     c.select('density',tr('density'),[['comfortable',tr('comfortable')],['compact',tr('compact')]])+c.input('color',tr('color'),'color')+c.input('from',tr('from'),'date')+c.input('to',tr('to'),'date')+c.input('query',tr('query'),'search','maxlength="200"')+

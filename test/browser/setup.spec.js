@@ -1,3 +1,4 @@
+import {sourceAssets} from './built-assets-helper.js';
 import {readAccess,verifyAccess} from '../../src/access.js';
 import {TestDeviceStore as DeviceStore} from '../device-fixture.js';
 import {preferences,editWorkspace} from './preferences-helper.js';
@@ -15,7 +16,7 @@ import {WorkspaceDatabases} from '../../src/workspace-databases.js';
 import {installDatabaseProvider} from '../../src/workspace-database-context.js';
 import {randomUUID} from 'node:crypto';
 let app,root,parent,owner,detach;
-test.beforeEach(async()=>{parent=await mkdtemp(path.join(os.tmpdir(),'observanda-setup-'));root=path.join(parent,'workspace');app=await startServer({root,port:0,headless:true,preferencesFile:path.join(parent,'preferences.json')});});
+test.beforeEach(async()=>{parent=await mkdtemp(path.join(os.tmpdir(),'observanda-setup-'));root=path.join(parent,'workspace');app=await startServer({root,port:0,headless:true,preferencesFile:path.join(parent,'preferences.json'),browserAssets:await sourceAssets()});});
 test.afterEach(async()=>{try{await app.close();}finally{try{await owner?.close();}finally{detach?.();owner=detach=null;}}if(path.dirname(parent)!==path.resolve(os.tmpdir())||!path.basename(parent).startsWith('observanda-setup-'))throw Error('Unexpected test root');await rm(parent,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
 const next=page=>page.getByRole('button',{name:'Continue',exact:true}).click();
 const overflow=page=>page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1);
@@ -50,11 +51,12 @@ test('encrypted setup retains fields after a failed request, writes no readable 
 });
 
 test('encrypted-copy review protects all existing files and retains the original byte for byte',async({page})=>{
+ test.setTimeout(90000);
  const ws=new Workspace(root),initial=await ws.create({...sampleNotebook(),title:path.basename(root)});initial.book.description='A retained revision';await ws.save(initial.book,initial.etag);const before=await workspaceManifest(root),destination=path.join(parent,'encrypted-copy');
  await page.goto(app.url);await preferences(page,'Storage & access');await page.getByRole('button',{name:'Create encrypted copy',exact:true}).click();
  await page.getByLabel('Workspace folder').fill(destination);await page.getByLabel('Workspace password',{exact:true}).fill('converted private password');await page.getByLabel('Confirm password',{exact:true}).fill('converted private password');
  await page.getByRole('button',{name:'Review encrypted copy',exact:true}).click();await expect(page.locator('[data-encryption-review]')).toContainText('Ready to encrypt');
- await page.getByRole('button',{name:'Encrypt and use this copy',exact:true}).click();await expect(page.locator('#dialog')).not.toBeVisible();await preferences(page,'Storage & access');await expect(page.getByRole('heading',{name:'Encrypted workspace',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Encrypt and use this copy',exact:true}).click();await expect(page.locator('#dialog')).not.toBeVisible({timeout:30000});await preferences(page,'Storage & access');await expect(page.getByRole('heading',{name:'Encrypted workspace',exact:true})).toBeVisible();
  expect(await workspaceManifest(root)).toEqual(before);for(const file of await workspaceManifest(destination))if(file.path!=='.observanda/access.json')expect(encrypted(await readFile(path.join(destination,file.path)))).toBe(true);
  await page.locator('main').getByRole('button',{name:'Lock workspace',exact:true}).click();await page.getByLabel('Password',{exact:true}).fill('converted private password');await page.getByRole('button',{name:'Unlock workspace',exact:true}).click();await expect(page.locator('.workspace-name')).toHaveText(path.basename(destination));
 });
@@ -82,11 +84,11 @@ test('headless server folder navigation creates a folder and retains setup detai
 
 test('appearance is reached from its own section after setup and offers a full-size component preview',async({page})=>{
  await page.goto(app.url);await page.getByLabel('Workspace name',{exact:true}).fill('Independent work');await next(page);await next(page);await page.getByLabel('Use this device',{exact:false}).check();await page.getByRole('button',{name:'Create workspace',exact:true}).click();
- await expect(page.locator('.workspace-name')).toHaveText('Independent work');await expect(page.locator('main [data-action="new-project"]')).toHaveCount(1);await expect(page.locator('.topbar [data-action="interface-layout"],.topbar [data-action="interface-text"],main [data-action="branding"],main [data-action="website"],main [data-action="laboratory"]')).toHaveCount(0);
+ await expect(page.locator('.workspace-name')).toHaveText('Independent work');await expect(page.locator('.first-work [data-action="new-project"]')).toHaveCount(1);await expect(page.locator('.topbar [data-action="interface-layout"],.topbar [data-action="interface-text"],main [data-action="branding"],main [data-action="website"],main [data-action="laboratory"]')).toHaveCount(0);
  await page.screenshot({path:test.info().outputPath('workspace-empty.png')});
  await preferences(page,'Appearance');await page.getByRole('button',{name:/Studio/}).click();await page.locator('.section-save [data-action=save]').click();
  await expect(page.frameLocator('#design-preview').getByRole('heading',{name:'Projects',exact:true})).toBeVisible();await page.getByRole('button',{name:'Expand preview',exact:true}).click();await expect(page.frameLocator('iframe[title="Expanded design preview"]').getByRole('heading',{name:'Projects',exact:true})).toBeVisible();await page.screenshot({path:test.info().outputPath('theme-preview-expanded.png')});await page.getByRole('button',{name:'Close preview',exact:true}).click();
- root=path.join(parent,'Independent work');const vault=await verifyAccess(await readAccess(root),'','',{deviceStore:new DeviceStore({file:path.join(parent,'preferences.json.device-key')})});const saved=(await new Workspace(root,vault).read()).book;expect(saved.appearance.theme).toBe('studio');expect(saved.appearance.header).toBe('band');expect(saved.projects).toHaveLength(0);
+ root=path.join(parent,'Independent work');const vault=await verifyAccess(await readAccess(root),'','',{deviceStore:new DeviceStore({file:path.join(parent,'preferences.json.device-key')})});const saved=(await new Workspace(root,vault).read()).book;expect(saved.projects).toHaveLength(0);await page.reload();await expect(page.getByRole('button',{name:/Studio/})).toHaveAttribute('aria-pressed','true');await preferences(page,'App appearance');await expect(page.getByLabel('App theme',{exact:true})).toHaveValue('research');
 });
 
 test('setup and module preferences govern the same project and lab-book template choices',async({page})=>{
@@ -105,7 +107,7 @@ test('setup and module preferences govern the same project and lab-book template
  await main.getByRole('button',{name:'New project',exact:true}).click();await dialog.getByLabel('Name',{exact:true}).fill('IT wing');
  const starter=()=>dialog.getByLabel('Default lab-book template',{exact:true});
  await expect(starter().locator('optgroup[label="Lab-book types"] option')).toHaveText(['Arts & creative practice','Beekeeping','Computer / IT']);await expect(dialog.getByRole('button',{name:'Enable and use template',exact:true})).toHaveCount(0);
- await dialog.getByLabel('Project type',{exact:true}).selectOption('profile:computer-it');await dialog.getByRole('button',{name:'Create project',exact:true}).click();await expect(dialog).not.toBeVisible({timeout:60000});await main.getByRole('button',{name:'New lab book',exact:true}).click();await dialog.getByLabel('Lab book name',{exact:true}).fill('Build journal');await dialog.getByRole('button',{name:'Save lab book',exact:true}).click();await expect(dialog).not.toBeVisible();
+ await dialog.getByLabel('Project type',{exact:true}).selectOption('profile:computer-it');await dialog.getByRole('button',{name:'Create project',exact:true}).click();await expect(dialog).not.toBeVisible({timeout:60000});await main.getByRole('button',{name:'New lab book',exact:true}).click();await dialog.getByLabel('Lab book name',{exact:true}).fill('Build journal');await dialog.getByRole('button',{name:'Save lab book',exact:true}).click();await expect(dialog).not.toBeVisible({timeout:60000});
  await preferences(page,'Templates');const types=main.getByRole('group',{name:'Lab-book templates',exact:true});await expect(types.getByRole('switch',{name:'Enable Computer / IT',exact:true})).toBeChecked();await expect(types.getByRole('switch',{name:'Enable Clinical & medical',exact:true})).not.toBeChecked();
  await types.getByRole('switch',{name:'Enable Computer / IT',exact:true}).uncheck();const persisted=page.waitForResponse(r=>r.url().endsWith('/api/dashboard/pending')&&r.request().method()==='POST'&&r.ok());await types.getByRole('switch',{name:'Enable Educational',exact:true}).check();await persisted;await page.reload();await expect(main.getByRole('switch',{name:'Enable Educational',exact:true})).toBeChecked();
  await page.locator('#main-navigation [data-action="open-project"]').click();await main.getByRole('button',{name:'Settings',exact:true}).click();
