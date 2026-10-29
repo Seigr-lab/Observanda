@@ -15,6 +15,13 @@ test('combined editor labels remain outside the host save document and drop unkn
  assert.equal(Object.hasOwn(client.record(record),'body'),false);assert.equal(Object.hasOwn(client.record(record).attachments[0],'transcript'),false);
  display.entries[0].title='Website label';assert.equal(payload.records[0].title,'Record');
 });
+
+test('an unrequested source count stays unknown rather than displaying a false zero',()=>{
+ const {payload,client,record}=fixture();payload.recordCount=null;client.accept(payload);
+ assert.equal(client.recordCount(),null);assert.equal(client.record(record).title,'Record');
+ payload.recordCount=0;client.accept(payload);assert.equal(client.recordCount(),0);
+ delete payload.recordCount;assert.throws(()=>client.accept(payload),/PUBLICATION_EDITOR_RESPONSE/);
+});
 test('changing websites, consent or locking drops the foreign display cache',()=>{
  for(const change of [state=>state.websiteId=id(),state=>state.book.website.researchSources[0].selection.includeProjects=[],state=>state.access.locked=true,state=>state.page='dashboard']){
   const {state,payload,client,record}=fixture();client.accept(payload);change(state);assert.equal(client.record(record),null);assert.equal(client.pageBook(state.book).entries.length,0);

@@ -24,6 +24,20 @@ async function document(sources,design={}){
 const choice=()=>({id:randomUUID(),share:true,attachments:[]});
 const edition=()=>({id:randomUUID(),revision:'a'.repeat(64),include:true,body:true,sections:[],fields:[],attachments:[],figures:[]});
 
+test('preview source headers and first choice do not rebuild a thousand-choice lookup index',async()=>{
+ const source=emptyPublicationSource(randomUUID());source.selection.records=Array.from({length:1000},choice);
+ const {result}=await document([source]),items=result.items.bind(result);let scanned=0;
+ result.items=async function*(...args){for await(const value of items(...args)){scanned++;yield value;}};
+ await withWebsiteSourceSelections(result,async sources=>{
+  const selected=await sources.get(source.workspaceId),records=sourceSelectionReader(selected.selection);
+  assert.equal(records.count(),1000);assert.equal(scanned,0);
+  for await(const value of records.items()){assert.deepEqual(value,source.selection.records[0]);break;}
+  assert.equal(scanned,1,'One choice must not trigger the full lookup index');
+  assert.deepEqual(await records.get(source.selection.records.at(-1).id),source.selection.records.at(-1));
+  assert.equal(scanned,1001);await records.get(source.selection.records[0].id);assert.equal(scanned,1001);
+ },{lazy:true});
+});
+
 test('paged source identity survives presentation edits and changes with any selected research or retained edition',async()=>{
  const source=emptyPublicationSource(randomUUID());source.selection.records=Array.from({length:137},choice);source.edition={version:1,records:[edition()]};
  const revision=async sources=>withWebsiteSourceSelections(sources.result,async reader=>sourceSelectionRevision(await reader.get(source.workspaceId)));
@@ -173,6 +187,22 @@ test('excluded deleted records and attachments do not trap preview or preparatio
   const snapshot={metadata:f.metadata,records:[excluded,restored]},records=await Array.fromAsync(selectedPublicationRecords(f.store,snapshot,options));assert.deepEqual(records.map(row=>row.id),[f.record.id]);assert.equal(records[0].attachments[0].share,false);
  };
  await check(f.source);await withWebsiteSourceSelections(result,async reader=>check(await reader.get(f.source.workspaceId)));assert.equal(serialize(f.source),before);
+});
+
+test('a thousand explicit exclusions never open excluded research or attachment summaries',async()=>{
+ const f=removedChoiceFixture(),excluded=Array.from({length:1000},()=>({id:randomUUID(),share:false,attachments:[]}));
+ f.source.selection.records=[...excluded,f.source.selection.records[1]];
+ const member=f.store.member.bind(f.store);let selectedReads=0;
+ f.store.member=async(snapshot,id)=>{assert.equal(id,f.record.id,'Excluded research was opened');selectedReads++;return member(snapshot,id);};
+ const {result}=await document([f.source]);
+ for(const lazy of [false,true])await withWebsiteSourceSelections(result,async reader=>{
+  const source=await reader.get(f.source.workspaceId);
+  assert.deepEqual((await Array.fromAsync(selectedPublicationRows(f.store,f.snapshot,{metadata:f.metadata,selection:source.selection}))).map(value=>value.row.id),[f.record.id]);
+  const owner=new PublicationPreviewOwner(source,null,new PublicationOwnerIdentities(randomUUID()));owner.metadata=f.metadata;
+  const queried=f.store.queryDocuments;f.store.queryDocuments=()=>{throw Error('Excluded attachment summaries were read');};
+  try{assert.equal(await owner.admit(f.store,f.snapshot,{id:excluded[0].id}),null);}finally{f.store.queryDocuments=queried;}
+ },{lazy});
+ assert.ok(selectedReads>0);
 });
 
 test('missing positive, inherited and revision-pinned source choices continue to refuse publication',async()=>{

@@ -85,6 +85,7 @@ export function renderPublication(context, { blockedValues = [], mediaFiles = ne
   if(context.referencePage&&!editionTarget?.startsWith('entry:')&&!(context.designOnly&&workspaceContent&&singlePage&&designTarget?.startsWith('entry:')))throw new AppError('INVALID');
   const recordCounts=context.publicationCounts??context.previewCounts;
   if(context.previewCounts&&(!context.designOnly||!workspaceContent||!singlePage))throw new AppError('INVALID');
+  if(context.previewBrowseAvailable!==undefined&&(typeof context.previewBrowseAvailable!=='boolean'||!context.designOnly||!workspaceContent||!singlePage))throw new AppError('INVALID');
   if((context.designOnly||context.recordCards&&!editionTarget)&&(!workspaceContent||!singlePage))throw new AppError('INVALID');
   if(singlePage&&!designTarget)throw new AppError('INVALID');
   const renderTarget=editionTarget??designTarget;
@@ -136,7 +137,7 @@ export function renderPublication(context, { blockedValues = [], mediaFiles = ne
     const prefix = '../'.repeat(name.split('/').length-1);
     const target=targetOverride??(name==='browse.html'?'browse':name==='index.html'?'home':({projects:'project',notebooks:'notebook',entries:'entry',pages:'page'}[name.split('/')[0]]+':'+name.split('/')[1].slice(0,-5)));
     const menu=(parent=null)=>`<ul class="site-menu">${context.website.navigation.filter(item=>item.parent===parent).map(item=>`<li><a href="${prefix}${item.path}"${item.target===target?' aria-current="page"':''}>${esc(item.title)}</a>${context.website.navigation.some(child=>child.parent===item.target)?`<details class="site-submenu"><summary aria-label="Pages under ${esc(item.title)}">&#9662;</summary>${menu(item.target)}</details>`:''}</li>`).join('')}</ul>`;
-    const links=context.website.design.navigation==='none'?'':(editionParts?editionParts.navigation({target,prefix}):context.website.navigation.length?menu():'')+((context.website.design.browseLink!==false&&(recordCounts?.total??context.browseRecords?.length))?'<a data-book-index href="'+prefix+'browse.html">'+esc(bookText('browse'))+'</a>':'');
+    const links=context.website.design.navigation==='none'?'':(editionParts?editionParts.navigation({target,prefix}):context.website.navigation.length?menu():'')+((context.website.design.browseLink!==false&&(context.previewBrowseAvailable??recordCounts?.total??context.browseRecords?.length))?'<a data-book-index href="'+prefix+'browse.html">'+esc(bookText('browse'))+'</a>':'');
     crumbs=crumbs.filter(c=>context.homeEnabled||c.path!=='index.html');
     const breadcrumb = crumbs.length ? `<div class="breadcrumbs">${crumbs.map(c => `<a href="${prefix}${c.path}">${esc(c.title)}</a>`).join('<span aria-hidden="true"> / </span>')}</div>` : '';
     const layout=context.website.layouts.find(l=>l.target===target),feedPage=feedPageOverride??(target==='browse'||target.startsWith('project:')||target.startsWith('notebook:')?name:'');

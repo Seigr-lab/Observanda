@@ -1,4 +1,5 @@
 import {sourceSelectionRevision} from './website-source-selections.js';
+import {diagnosticPhase} from './operational-diagnostics.js';
 import {publicationReferenceWindow} from './publication-reference-window.js';
 import {AppError} from './errors.js';
 import {PublicationPreviewOwner} from './publication-preview-owner.js';
@@ -30,7 +31,7 @@ export class WebsitePreviewSources{
    item.sourceId=item.id;item.sourceWorkspaceId=namespace;item.referenceNamespaces=[...new Set([this.metadata.id,namespace])];
   }
   for await(const source of Array.isArray(sources)?sources:sources.items()){
-   const owner=await new PublicationPreviewOwner(source,this.reader,this.identities,{signal:this.signal}).initialize({counts:true,entryId});
+   const owner=await diagnosticPhase('website-source-owners',()=>new PublicationPreviewOwner(source,this.reader,this.identities,{signal:this.signal}).initialize({entryId}));
    appendPublicationCollections(this.metadata,owner.projected);this.owners.push(owner);
    if(owner.entryId){for(const [id,descriptor] of owner.descriptors)this.remember(owner.rows.get(id),{publicationCard:descriptor});entryId=null;}
   }
@@ -97,6 +98,11 @@ export class WebsitePreviewSources{
   if(this.owner(row).entryId===id)return;
   if(row.historical){await this.get(this.owner(row).id('record',row.recordId));return;}
   for(const value of await this.owner(row).neighbourDescriptors(row))this.remember(value.row,{publicationCard:value.descriptor});
+ }
+ async hasRecords(){
+  if(await this.local.hasRecords())return true;
+  for(const owner of this.owners)if(await owner.hasRecords())return true;
+  return false;
  }
  async counts(){
   const result=await this.local.counts();

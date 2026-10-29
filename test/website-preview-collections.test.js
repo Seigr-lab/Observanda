@@ -56,7 +56,7 @@ test('canvas feeds retain independent windows over growing saved and unsaved rec
  try{
   let {context}=await load([]);assert.ok(context.recordCards.length<=34);assert.equal(context.entries.length,0);assert.ok(read<140,'Initial preview read '+read+' record summaries');const keys=draft.website.home.sections.map(s=>'section:'+s.id),first=context.collectionPages.find(p=>p.key===keys[0]),limited=context.collectionPages.find(p=>p.key===keys[1]);
   const publicIds=new Set(f.book.entries.filter(record=>record.share).map(record=>record.id)),expected=orderFeed(draft.entries.filter(record=>publicIds.has(record.id)),'records','newest');
-  assert.deepEqual(context.previewCounts,{total:expected.length,notebooks:Object.fromEntries(draft.notebooks.map(book=>[book.id,expected.filter(record=>record.notebookId===book.id).length]))});
+  assert.equal(context.previewCounts,undefined,'Feed windows must not request unrelated exact corpus counts');
   assert.ok(!context.recordCards.some(record=>record.id===draft.entries.at(-1).id),'A website draft cannot grant publication consent to a new research record');
   assert.deepEqual(first.recordIds,ids(expected.slice(0,10)));assert.deepEqual(limited.recordIds,ids(expected.filter(r=>r.tags.includes('odd')).slice(0,17)));
   const second=navigation(first,first.nextCursor);({context}=await load([second]));assert.deepEqual(context.collectionPages.find(p=>p.key===keys[0]).recordIds,ids(expected.slice(10,20)));assert.deepEqual(context.collectionPages.find(p=>p.key===keys[1]).recordIds,limited.recordIds);
@@ -87,7 +87,7 @@ test('canvas continuation preserves presentation edits and restarts after source
  assert.deepEqual(continued.recordIds,ids(expected.slice(10,20)));assert.equal(continued.definition,initial.definition);
  const selected={...restyled,selection:{includeProjects:[],records:[{id:expected[0].id,share:false,attachments:[]}]}};
  const selectedContext=(await load(selected,[next])).context,restarted=selectedContext.collectionPages.find(page=>page.key===key);
- assert.deepEqual(selectedContext.previewCounts,{total:expected.length-1,notebooks:Object.fromEntries(f.book.notebooks.map(book=>[book.id,expected.filter(record=>record.id!==expected[0].id&&record.notebookId===book.id).length]))});
+ assert.equal(selectedContext.previewCounts,undefined,'Changed feed consent must not trigger unrelated exact counts');
  assert.notEqual(restarted.definition,initial.definition);assert.deepEqual(restarted.recordIds,ids(expected.slice(1,11)));assert.equal(restarted.previousCursor,null);
  const following=(await load(selected,[navigation(restarted,restarted.nextCursor)])).context.collectionPages.find(page=>page.key===key);
  assert.deepEqual(following.recordIds,ids(expected.slice(11,21)));assert.ok(!following.recordIds.includes(expected[0].id));

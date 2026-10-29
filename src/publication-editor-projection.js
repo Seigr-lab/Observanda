@@ -15,6 +15,6 @@ export function publicationEditorProjection(provider){
  }
  return {workspaceId:provider.metadata.id,
   sources:owners.map(owner=>({workspaceId:owner.source.workspaceId,snapshotId:owner.snapshotId,projectId:owner.owner.projectId??null,labBookId:owner.owner.labBookId??null})),
-  recordCount:owners.reduce((total,owner)=>total+Object.values(owner.notebookCounts??{}).reduce((sum,count)=>sum+count,0),0),
+  recordCount:owners.some(owner=>owner.notebookCounts===undefined)?null:owners.reduce((total,owner)=>total+Object.values(owner.notebookCounts).reduce((sum,count)=>sum+count,0),0),
   projects:[...projects.values()],notebooks:[...notebooks.values()],records};
 }

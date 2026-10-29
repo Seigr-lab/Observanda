@@ -179,12 +179,12 @@ test('indexed previews inspect only selected summaries as the unrelated corpus g
   ResearchCatalogue.prototype.queryDocuments=async function*(...args){for await(const value of queries.apply(this,args)){inspected++;yield value;}};
   try{
    let start=performance.now(),result=await tracedSource(f,f.request(draft),target,[current.id]);
-   comparePage(result.context,draft,target);assert.equal(inspected,6);assert.equal(result.context.browseRecords.length,3);assert.equal(result.context.previewCounts.total,count);
+   comparePage(result.context,draft,target);assert.equal(inspected,6);assert.equal(result.context.browseRecords.length,3);assert.equal(result.context.previewCounts,undefined);
    t.diagnostic(JSON.stringify({records:count,target:'entry',summaries:inspected,previewMs:Math.round(performance.now()-start)}));
    inspected=0;draft.website.home.sections=[{...newElement('records',randomUUID),filter:{projectId:null,tag:'',limit:2}},newElement('projects',randomUUID)];
    start=performance.now();result=await tracedSource(f,f.request(draft),'home',[]);comparePage(result.context,draft,'home');
    assert.equal(inspected,5); // Two rendered descriptors plus three bounded visibility checks, including lookahead.
-  assert.equal(result.context.recordCards.length,2);assert.equal(result.context.entryDestinations.length,2);
+  assert.equal(result.context.recordCards.length,2);assert.equal(result.context.entryDestinations.length,2);assert.equal(result.context.previewCounts.total,count);
    t.diagnostic(JSON.stringify({records:count,target:'home',summaries:inspected,previewMs:Math.round(performance.now()-start)}));
   }finally{ResearchCatalogue.prototype.members=members;ResearchCatalogue.prototype.queryDocuments=queries;}
  }
@@ -202,7 +202,8 @@ test('unsaved additions, moves, removals, dates and links retain exact page coun
  await assert.rejects(tracedSource(f,command,'entry:'+draft.entries.at(-1).id,allowed),{code:'INVALID'});
  for(const target of ['home','entry:'+selected.id,'notebook:'+draft.notebooks[1].id]){
   const result=await tracedSource(f,command,target,[...allowed,selected.id]);comparePage(result.context,expected,target);
-  assert.equal(result.context.previewCounts.total,draft.entries.length-1);
+  if(target==='home')assert.equal(result.context.previewCounts.total,draft.entries.length-1);
+  else assert.equal(result.context.previewCounts,undefined,'Only the visible projects section requires exact counts');
  }
  // Unknown-date placement and ties use the same order as actual publication.
  draft.entries[0].occurredOn={kind:'range',from:'2028-01-01',to:'2028-02-01',estimated:true};

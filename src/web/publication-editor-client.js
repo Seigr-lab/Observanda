@@ -15,7 +15,7 @@ export function publicationEditorClient({state}){
   sync();if(value===undefined){projection=null;return;}
   const sources=state.book.website.researchSources??[],ids=new Set(sources.map(source=>source.workspaceId)),count=publicationSourceCount(state);
   const invalid=()=>{throw Error('PUBLICATION_EDITOR_RESPONSE');};
-  if(value?.workspaceId!==state.book.id||!Number.isSafeInteger(value.recordCount)||value.recordCount<0||!['sources','projects','notebooks','records'].every(key=>Array.isArray(value[key])))invalid();
+  if(value?.workspaceId!==state.book.id||value.recordCount!==null&&(!Number.isSafeInteger(value.recordCount)||value.recordCount<0)||!['sources','projects','notebooks','records'].every(key=>Array.isArray(value[key])))invalid();
   if(value.sources.length!==count||new Set(value.sources.map(source=>source.workspaceId)).size!==count||value.sources.some(source=>(state.websiteEditor?!researchId(source.workspaceId):!ids.has(source.workspaceId))||!revisionId(source.snapshotId)||![source.projectId,source.labBookId].every(id=>id===null||researchId(id))))invalid();
   for(const key of ['projects','notebooks','records'])if(new Set(value[key].map(item=>item.id)).size!==value[key].length||value[key].some(item=>!researchId(item.id)||typeof item.title!=='string'||item.title.length>(key==='records'?180:160)))invalid();
   if(value.notebooks.some(book=>!value.projects.some(project=>project.id===book.projectId))||value.records.some(record=>!value.notebooks.some(book=>book.id===record.notebookId)||!Array.isArray(record.attachments)||record.attachments.some(item=>!researchId(item.id)||!['image','audio','video','file'].includes(item.kind)||item.share!==true||typeof item.caption!=='string'||typeof item.alt!=='string')))invalid();

@@ -6,6 +6,19 @@ import {scratchDatabase,databaseCapacity} from '../src/postgres.js';
 import {randomUUID} from 'node:crypto';
 import {scratchOrder} from '../src/scratch-order.js';
 
+test('batched scratch insertion reports exact new keys without overwriting existing or consumed values',async()=>{
+ await withScratch(async work=>{
+  assert.deepEqual(await work.addMany([]),new Set());
+  assert.deepEqual(await work.addMany([['a',{kept:true}],['b',null]]),new Set(['a','b']));
+  assert.deepEqual(await work.addMany([['a',{kept:false}],['c',3]]),new Set(['c']));
+  assert.deepEqual(await work.get('a'),{kept:true});assert.equal(work.size,3);
+  await work.take();assert.deepEqual(await work.addMany([['a',4]]),new Set());assert.equal(work.size,3);
+  await assert.rejects(work.addMany([['d',1],['d',2]]),{code:'INVALID'});
+  await assert.rejects(work.addMany(Array.from({length:33},(_,i)=>[String(i),null])),{code:'INVALID'});
+  assert.equal(work.size,3);
+ });
+});
+
 test('bounded scratch batches preserve overwritten identities, consumed entries and missing keys',async()=>{
  await withScratch(async work=>{
   const rows=Array.from({length:32},(_,i)=>['key '+i,{id:i,private:'source '+i}]);
@@ -134,7 +147,7 @@ test('deep, shared and cyclic material dependencies use constant in-process trav
 });
 
 
-test('untouched pooled scratch work reuses nested storage without resetting its sequence',async t=>{
+test('untouched pooled scratch work creates no database tables or sequences',async t=>{
  const observer=await scratchDatabase(),prototype=Object.getPrototypeOf(observer),run=prototype.run;let created=0,resets=0;
  const spy=t.mock.method(prototype,'run',function(sql,...values){if(sql.startsWith('CREATE TEMP TABLE obs_work_'))created++;if(sql.startsWith('TRUNCATE pg_temp.obs_work_'))resets++;return run.call(this,sql,...values);});
  try{
@@ -146,7 +159,7 @@ test('untouched pooled scratch work reuses nested storage without resetting its 
     await assert.rejects(work.putMany([['duplicate',{}],['duplicate',{}]]),{code:'INVALID'});
     await withScratchSession(()=>withScratch(async nested=>{assert.equal(await nested.take(),undefined);await nested.putMany([]);}));
    });
-   assert.equal(created,2);assert.equal(resets,0);
+   assert.equal(created,0);assert.equal(resets,0);
    await withScratch(work=>work.add('written',{value:1}));assert.equal(resets,1);
    await withScratch(async work=>{assert.equal(work.size,0);assert.equal(await work.has('written'),false);});assert.equal(resets,1);
   });

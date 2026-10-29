@@ -1,4 +1,5 @@
 import {projectWebsiteAttachmentChoices} from './website-selection-admission.js';
+import {diagnosticPhase} from './operational-diagnostics.js';
 import {RecordPublicationIndex,publicationReadingKey} from './record-publication-index.js';
 import {readingKey} from './record-reading-index.js';
 import {RetainedTableIndex} from './retained-table-index.js';
@@ -15,6 +16,7 @@ const invalid=()=>{throw new AppError('INVALID',[{field:'website sources'}]);};
 const pathFor=(position,...tail)=>[...WEBSITE_SOURCES_PATH,String(position),...tail];
 const kindPath={records:['selection','records'],editionRecords:['edition','records'],history:['edition','history'],availability:['edition','availability']};
 const identity=(kind,value)=>kind==='history'?editionRevisionKey(value):kind==='availability'?editionAvailabilityKey(value):value.id;
+const validChoice=(kind,value)=>kind==='records'?validWebsiteSelection({defaultShare:false,includeProjects:[],records:[value]}):validEditionSelection({version:1,records:kind==='editionRecords'?[value]:[],...(kind==='history'?{history:[value]}:kind==='availability'?{availability:[value]}:{})});
 export const sourceSelectionReader=selection=>selectionReaders.get(selection);
 export const sourceEditionReader=source=>sourceReaders.get(source)?.edition;
 export const sourceSelectionRevision=source=>sourceReaders.get(source)?.revision??digest(serialize(source));
@@ -43,33 +45,46 @@ export async function websiteSourcePosition(document,workspaceId,{signal}={}){
 // The website remains the sole durable owner. This temporary, encrypted index
 // is rebuilt from its authenticated value tree and dies with the awaited read.
 // Neither editor replies nor prepared-edition commands carry its growing arrays.
-export function withWebsiteSourceSelections(document,operation,{signal}={}){
+export function withWebsiteSourceSelections(document,operation,{signal,lazy=false}={}){
  return withScratch(async proof=>{
-  const summary=await websiteSourceSummary(document);let batch=[];
-  const flush=async()=>{if(batch.length){await proof.putMany(batch);batch=[];}};
+  const summary=await websiteSourceSummary(document),preparations=new Map();
   for(let position=0;position<summary.count;position++){
    const source=await websiteSourceHeader(document,position,{signal}),prefix=source.workspaceId+'/',counts={};
    if(!await proof.add('owner:'+source.workspaceId,position))invalid();
    for(const [kind,tail] of Object.entries(kindPath)){
     counts[kind]=0;const path=pathFor(position,...tail);if(!await document.tree.select(document.root,path))continue;
+    const prepare=()=>diagnosticPhase('website-source-selections',async()=>{
+    let count=0,unique=[],required=[],batch=[];
+    const flush=async()=>{if(batch.length){await proof.putMany(batch);batch=[];}};
+    const commit=async()=>{if(unique.length&&(await proof.addMany(unique)).size!==unique.length)invalid();unique=[];if(required.length)await proof.putMany([...new Map(required)]);required=[];await flush();};
     for await(const item of document.items(path,{signal})){
      signal?.throwIfAborted();const value=await document.tree.read(item.value);
-     const valid=kind==='records'?validWebsiteSelection({defaultShare:false,includeProjects:[],records:[value]}):validEditionSelection({version:1,records:kind==='editionRecords'?[value]:[],...(kind==='history'?{history:[value]}:kind==='availability'?{availability:[value]}:{})});
-     if(!valid)invalid();const key=identity(kind,value);if(!await proof.add('unique:'+prefix+kind+':'+key))invalid();
-     if(kind==='history'&&!value.include)continue;
-     if(kind==='editionRecords'||kind==='history')await proof.add(prefix+'required-record:'+value.id);
-     batch.push([prefix+kind+':'+key,value]);counts[kind]++;if(batch.length===32)await flush();
+     if(!validChoice(kind,value))invalid();const key=identity(kind,value);unique.push(['unique:'+prefix+kind+':'+key,null]);
+     if(kind!=='history'||value.include){
+      if(kind==='editionRecords'||kind==='history')required.push([prefix+'required-record:'+value.id,null]);
+      batch.push([prefix+kind+':'+key,value]);count++;
+     }
+     if(unique.length===32)await commit();
     }
+    await commit();return count;
+    });
+    // Preview headers do not consume record or edition choices. Keep those
+    // authenticated arrays on disk until a lookup actually needs their index.
+    if(lazy&&['records','editionRecords'].includes(kind)){
+     counts[kind]=await document.tree.arrayLength(document.root,path);let pending;
+     preparations.set(prefix+kind,()=>pending??=prepare());
+    }else counts[kind]=await prepare();
    }
-   await flush();await proof.put('header:'+source.workspaceId,{source,position,counts});
+   await proof.put('header:'+source.workspaceId,{source,position,counts});
   }
   const sourceAt=async workspaceId=>{
    const row=await proof.get('header:'+workspaceId);if(!row)return null;const source=row.source,prefix=workspaceId+'/';
-   const readKind=kind=>({count:()=>row.counts[kind],get:id=>proof.get(prefix+kind+':'+id),async *items({backward=false}={}){
+   const readKind=kind=>({count:()=>row.counts[kind],async get(id){await preparations.get(prefix+kind)?.();return proof.get(prefix+kind+':'+id);},async *items({backward=false}={}){
     const path=pathFor(row.position,...kindPath[kind]);if(!await document.tree.select(document.root,path))return;
-    const count=await document.tree.arrayLength(document.root,path);for(let at=backward?count-1:0;backward?at>=0:at<count;at+=backward?-1:1){signal?.throwIfAborted();const value=(await document.field([...path,String(at)],{signal})).value;if(kind!=='history'||value.include)yield value;}
+    if(!backward){for await(const item of document.items(path,{signal})){const value=await document.tree.read(item.value);if(!validChoice(kind,value))invalid();if(kind!=='history'||value.include)yield value;}return;}
+    const count=await document.tree.arrayLength(document.root,path);for(let at=count-1;at>=0;at--){signal?.throwIfAborted();const value=(await document.field([...path,String(at)],{signal})).value;if(!validChoice(kind,value))invalid();if(kind!=='history'||value.include)yield value;}
    }});
-   const records={...readKind('records'),required:id=>proof.has(prefix+'required-record:'+id)},orders=new WeakMap();
+   const records={...readKind('records'),async required(id){if(!row.counts.editionRecords&&!row.counts.history)return false;await preparations.get(prefix+'editionRecords')?.();return proof.has(prefix+'required-record:'+id);}},orders=new WeakMap();
    records.order=async(snapshot,rows,{order='position',keyOf=row=>String(row.position).padStart(16,'0')}={})=>{
     const blocks={async put(kind,value){const revision=digest(serialize(value));await proof.put(prefix+'order:'+kind+':'+revision,value);return revision;},async read(kind,revision){const value=await proof.get(prefix+'order:'+kind+':'+revision);if(!value||digest(serialize(value))!==revision)throw new AppError('CATALOGUE_DAMAGED');return value;}};
     const retained=orders.get(snapshot)??new Map();orders.set(snapshot,retained);let root=retained.get(order);
@@ -116,7 +131,12 @@ export function sourceRecordOrder(selection,store,snapshot,{order='position',sig
  const index=new RecordPublicationIndex(store),keyOf=row=>order==='publication'?publicationReadingKey(row,snapshot.metadata.id):readingKey(row,order);
  return reader.order(snapshot,async function*(){
   for await(const choice of reader.items()){
-   signal?.throwIfAborted();const row=await store.member(snapshot,choice.id);if(!row){if(choice.share===false&&!await reader.required(choice.id))continue;throw new AppError('RECORD_CHANGED');}
+   signal?.throwIfAborted();
+   // A wholly negative choice requests no source material. Keep the exclusion
+   // in the selection index, without reading its research or attachments.
+   // Positive attachment requests and retained revisions still need admission.
+   if(choice.share===false&&choice.attachments.every(item=>item.share===false)&&!await reader.required(choice.id))continue;
+   const row=await store.member(snapshot,choice.id);if(!row){if(choice.share===false&&!await reader.required(choice.id))continue;throw new AppError('RECORD_CHANGED');}
    const [summary]=await Array.fromAsync(store.queryDocuments([row],snapshot.metadata,{signal,search:false,publication:true}));
    projectSourceAttachmentChoices(choice.attachments,summary.publication.attachments);
    if(choice.share===true){

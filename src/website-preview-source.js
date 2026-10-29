@@ -35,11 +35,11 @@ export async function websitePreviewSource(workspace,command,{websitePin,designT
   const records=new WebsitePreviewRecords(store,snapshot,metadata,command,{signal,websiteId:workspace.websiteId??null,designTarget});await records.initialize();
   const sources=metadata.website.researchSources??[];
   if(!validPublicationSources(sources)||sources.some(source=>source.workspaceId===metadata.id))throw new AppError('INVALID');
-  if(!sources.length)return {...await websitePreviewPage(records,metadata,{designTarget,referenceCursor,collections,signal}),websitePin:snapshot.websitePin};
+  if(!sources.length)return {...await websitePreviewPage(records,metadata,{designTarget,referenceCursor,collections,signal,selectiveCounts:true}),websitePin:snapshot.websitePin};
   const reader=await sourceReader?.({signal});if(!reader)throw new AppError('ACCESS_LOCKED');
   try{
    const combined=await new WebsitePreviewSources(records,reader).initialize(sources,{entryId:designTarget.startsWith('entry:')?designTarget.slice(6):null});
-   const page=await websitePreviewPage(combined,combined.metadata,{designTarget,referenceCursor,collections,signal});
+   const page=await websitePreviewPage(combined,combined.metadata,{designTarget,referenceCursor,collections,signal,selectiveCounts:true});
    await reader.verify();return {...page,websitePin:snapshot.websitePin,editor:publicationEditorProjection(combined),media:publicationPreviewMedia(workspace,combined.mediaOrigins,sourceReader)};
   }finally{await reader.close();}
  });
@@ -56,12 +56,12 @@ export async function websiteDocumentPreviewSource(workspace,{websitePin,website
   const command={workspaceId:metadata.id,baseEtag:websitePin.researchSnapshotId,metadata:{},projects:[],changes:[],removed:[]};
   const records=new WebsitePreviewRecords(store,snapshot,metadata,command,{signal,websiteId,metadataAdmitted:true,designTarget});await records.initialize();
   return withWebsiteSourceSelections(projected.document,async sources=>{
-  if(!sources.count)return {...await websitePreviewPage(records,metadata,{designTarget,referenceCursor,collections,signal}),websitePin};
+  if(!sources.count)return {...await websitePreviewPage(records,metadata,{designTarget,referenceCursor,collections,signal,selectiveCounts:true}),websitePin};
   const reader=await sourceReader?.({signal});if(!reader)throw new AppError('ACCESS_LOCKED');
   try{
-   const combined=await new WebsitePreviewSources(records,reader).initialize(sources,{entryId:designTarget.startsWith('entry:')?designTarget.slice(6):null}),presentation=await websiteEditorPresentation(projected.document,projected.collectionIndexes,combined.metadata,designTarget,{signal}),page=await websitePreviewPage(combined,presentation,{designTarget,referenceCursor,collections,signal});
+   const combined=await new WebsitePreviewSources(records,reader).initialize(sources,{entryId:designTarget.startsWith('entry:')?designTarget.slice(6):null}),presentation=await websiteEditorPresentation(projected.document,projected.collectionIndexes,combined.metadata,designTarget,{signal}),page=await websitePreviewPage(combined,presentation,{designTarget,referenceCursor,collections,signal,selectiveCounts:true});
    await reader.verify();return {...page,websitePin,editor:publicationEditorProjection(combined),media:publicationPreviewMedia(workspace,combined.mediaOrigins,sourceReader)};
   }finally{await reader.close();}
-  },{signal});
+  },{signal,lazy:true});
  });
 }

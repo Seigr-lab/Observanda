@@ -1,5 +1,6 @@
-import {sourceSelectionReader,sourceEditionReader,preserveSourceSelection,sourceRecordIncluded,sourceRecordChoice,sourceRecordOrder,projectSourceAttachmentChoices} from './website-source-selections.js';
+import {sourceSelectionReader,sourceEditionReader,preserveSourceSelection,sourceRecordIncluded,sourceRecordChoice,sourceRecordChoices,sourceRecordOrder,projectSourceAttachmentChoices} from './website-source-selections.js';
 import {assertPublicationPreviewPermissions} from './publication-permission-admission.js';
+import {diagnosticPhase} from './operational-diagnostics.js';
 import {publicationReferenceWindow} from './publication-reference-window.js';
 import {publicationOwnerId} from './publication-owner-identities.js';
 import {AppError} from './errors.js';
@@ -33,7 +34,7 @@ export class PublicationPreviewOwner{
    await assertPublicationPreviewPermissions(store,pinned.snapshotId,context.metadata,null,{signal:this.signal});
    const value={...context,snapshotId:pinned.snapshotId,positionSpan:snapshot.nextPosition??snapshot.records.length,owner:{...pinned.owner,projectNamespaceId:pinned.projectNamespaceId},...(counts?{notebookCounts:await this.countValues(store,snapshot,context.metadata)}:{})};
    Object.assign(this,value);
-   if(entryId)await this.initializeEntry(store,snapshot,pinned,entryId);
+   if(entryId)await diagnosticPhase('website-source-entry',()=>this.initializeEntry(store,snapshot,pinned,entryId));
    return value;
   });
   Object.assign(this,value);
@@ -49,13 +50,13 @@ export class PublicationPreviewOwner{
    const current=await this.findCurrent(store,snapshot,this.id('record',row.recordId),{recordId:row.recordId});
    if(current)await this.describeCurrent(store,snapshot,current);
   }else{
-   row=await this.findCurrent(store,snapshot,id);if(!row)return;
-   await this.describeCurrent(store,snapshot,row);
-   for(const neighbour of await this.neighbourRows(store,snapshot,row))await this.describeCurrent(store,snapshot,neighbour);
+   row=await diagnosticPhase('website-source-find',()=>this.findCurrent(store,snapshot,id));if(!row)return;
+   await diagnosticPhase('website-source-describe',()=>this.describeCurrent(store,snapshot,row));
+   await diagnosticPhase('website-source-neighbours',async()=>{for(const neighbour of await this.neighbourRows(store,snapshot,row))await this.describeCurrent(store,snapshot,neighbour);});
   }
-  await this.originalCurrent(store,snapshot,row);
+  await diagnosticPhase('website-source-body',()=>this.originalCurrent(store,snapshot,row));
   const descriptor=this.descriptors.get(id),target={id:row.recordId,workspaceIds:descriptor.referenceNamespaces??[this.source.workspaceId]},anchor={after:null,backward:false};
-  this.initialReferences={key:this.referenceWindowKey(target,anchor),rows:await this.referenceWindowCurrent(store,snapshot,target,anchor)};
+  this.initialReferences={key:this.referenceWindowKey(target,anchor),rows:await diagnosticPhase('website-source-references',()=>this.referenceWindowCurrent(store,snapshot,target,anchor))};
   this.entryId=id;
  }
  async use(consume){
@@ -71,11 +72,13 @@ export class PublicationPreviewOwner{
  async included(id){return (await this.choices.get(id))?.include!==false;}
  async admit(store,snapshot,row){
   if(!row||!await this.included(row.id))return null;
+  const selected=await sourceRecordChoice(this.source.selection,row.id);
+  if(selected?.share===false)return null;
   const [summary]=await Array.fromAsync(store.queryDocuments([row],snapshot.metadata,{signal:this.signal,search:false,publication:true}));
   const notebook=this.metadata.notebooks.find(book=>book.id===summary.notebookId),project=notebook?.projectId;
   if(notebook?.share===false)return null;
   if(!this.metadata.projects.some(value=>value.id===project&&value.share)||!await sourceRecordIncluded(this.source.selection,summary,project))return null;
-  const selected=await sourceRecordChoice(this.source.selection,row.id),patch=selected?{...selected,attachments:projectSourceAttachmentChoices(selected.attachments,summary.publication.attachments)}:selected;
+  const patch=selected?{...selected,attachments:projectSourceAttachmentChoices(selected.attachments,summary.publication.attachments)}:selected;
   return {row,summary,patch};
  }
  async findCurrent(store,snapshot,publicId,{recordId}={}){
@@ -143,11 +146,41 @@ export class PublicationPreviewOwner{
   }
   this.selectedOverrides=values;return values;
  }
- // A canvas always displays counts. Capture them during its initial owner
- // admission, while selectors that do not need counts remain lazy.
+ // A navigation link needs existence, not an exact count of every source.
+ // Explicit positive choices can establish that from one authenticated row.
+ async hasRecords(){
+  return this.use(async(store,snapshot)=>{
+   const books=new Map(this.metadata.notebooks.filter(book=>book.share!==false&&this.metadata.projects.some(project=>project.id===book.projectId&&project.share)).map(book=>[book.id,book]));
+   if(!books.size)return false;
+   if(!snapshot.publicationIndex){for await(const {row} of selectedPublicationRows(store,snapshot,this.options()))if(await this.included(row.id))return true;return false;}
+   const index=new RecordPublicationIndex(store);
+   for await(const choice of sourceRecordChoices(this.source.selection)){
+    this.signal?.throwIfAborted();if(choice.share!==true||!await this.included(choice.id))continue;
+    const member=await store.member(snapshot,choice.id);if(!member)throw new AppError('RECORD_CHANGED');
+    const row=await index.describe(member);if(row.share===true&&books.has(row.notebookId))return true;
+   }
+   const defaults=new Map([...books.values()].filter(book=>this.source.selection.includeProjects.includes(book.projectId)||this.source.selection.defaultShare!==false).map(book=>[book.id,'shared']));
+   if(!defaults.size)return false;
+   for await(const row of index.rows(snapshot,defaults,{signal:this.signal}))if((await sourceRecordChoice(this.source.selection,row.id))?.share!==false&&await this.included(row.id))return true;
+   return false;
+  });
+ }
+ // Exact counts are requested only by pages that actually display them.
  async countValues(store,snapshot,metadata=this.metadata){
   const counts={},books=new Map(metadata.notebooks.filter(book=>book.share!==false&&metadata.projects.some(project=>project.id===book.projectId&&project.share)).map(book=>[book.id,book]));
-  if(sourceSelectionReader(this.source.selection)){
+  if(sourceSelectionReader(this.source.selection)&&snapshot.publicationIndex){
+   const index=new RecordPublicationIndex(store),all=book=>this.source.selection.includeProjects.includes(book.projectId)||this.source.selection.defaultShare!==false;
+   for(const book of books.values())counts[this.id('notebook',book.id)]=all(book)?await index.sharedCount(snapshot,book.id):0;
+   const adjust=async(id,choice)=>{
+    this.signal?.throwIfAborted();const member=await store.member(snapshot,id);
+    if(!member){if(choice?.share===false&&!await sourceSelectionReader(this.source.selection).required(id))return;throw new AppError('RECORD_CHANGED');}
+    const row=await index.describe(member),book=books.get(row.notebookId);if(!book||row.share!==true)return;
+    const before=all(book),after=(choice?.share??before)&&await this.included(id);
+    counts[this.id('notebook',book.id)]+=Number(after)-Number(before);
+   };
+   for await(const choice of sourceRecordChoices(this.source.selection))await adjust(choice.id,choice);
+   for await(const id of this.choices.keys())if(!await sourceRecordChoice(this.source.selection,id))await adjust(id,null);
+  }else if(sourceSelectionReader(this.source.selection)){
    for(const book of books.values())counts[this.id('notebook',book.id)]=0;
    for await(const {row,summary} of selectedPublicationRows(store,snapshot,this.options({metadata})))if(await this.included(row.id))counts[this.id('notebook',summary.notebookId)]++;
   }else if(snapshot.publicationIndex){
@@ -166,13 +199,13 @@ export class PublicationPreviewOwner{
   return counts;
  }
  async counts(){
-  this.notebookCounts??=await this.use((store,snapshot)=>this.countValues(store,snapshot));
+  this.notebookCounts??=await diagnosticPhase('website-source-counts',()=>this.use((store,snapshot)=>this.countValues(store,snapshot)));
   return Object.fromEntries(this.projected.notebooks.map(book=>[book.id,this.notebookCounts[book.id]??0]));
  }
  async neighbourRows(store,snapshot,row){
   const selected=await store.member(snapshot,row.recordId);if(!selected)return [];
-  const result=[],reading=new RecordReadingIndex(store),notebooks=new Set([selected.notebookId]);
-  for(const backward of [true,false])for await(const candidate of reading.rows(snapshot,notebooks,{order:'position',after:selected,backward,signal:this.signal})){
+  const result=[],notebooks=new Set([selected.notebookId]),overrides=await this.overrides(store,snapshot);
+  for(const backward of [true,false])for await(const candidate of publicationRecords(store,snapshot,{...this.options(),notebooks,overrides,order:'position',after:selected.position,backward})){
    if(await this.admit(store,snapshot,candidate)){result.push(this.projectedRow(candidate));break;}
   }
   return result;

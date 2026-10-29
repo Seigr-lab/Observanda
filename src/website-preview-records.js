@@ -106,6 +106,23 @@ export class WebsitePreviewRecords{
    if(found&&await this.visible(found))await this.get(found.id);
   }
  }
+ async hasRecords(){
+  const books=new Map(this.metadata.notebooks.filter(book=>book.share!==false&&this.metadata.projects.some(project=>project.id===book.projectId&&project.share)).map(book=>[book.id,book]));
+  if(!books.size)return false;
+  if(this.snapshot.publicationIndex&&!this.changed.size&&!this.deleted.size){
+   const index=new RecordPublicationIndex(this.store),choices=new Map(this.selection.records.map(choice=>[choice.id,choice]));
+   for(const choice of choices.values())if(choice.share===true){
+    this.signal?.throwIfAborted();const member=await this.store.member(this.snapshot,choice.id);if(!member)continue;
+    const row=await index.describe(member);if(row.share===true&&books.has(row.notebookId))return true;
+   }
+   const scopes=new Map([...books.values()].filter(book=>this.selection.includeProjects.includes(book.projectId)||this.selection.defaultShare!==false).map(book=>[book.id,'shared']));
+   if(!scopes.size)return false;
+   for await(const row of index.rows(this.snapshot,scopes,{signal:this.signal}))if(choices.get(row.id)?.share!==false)return true;
+   return false;
+  }
+  for await(const row of this.dateRows(new Set(books.keys())))if(row)return true;
+  return false;
+ }
  async counts(){
   const notebooks={},index=new RecordPublicationIndex(this.store),all=notebook=>this.selection.includeProjects.includes(notebook.projectId)||this.selection.defaultShare!==false;
   for(const notebook of this.metadata.notebooks){this.signal?.throwIfAborted();notebooks[notebook.id]=notebook.share!==false&&all(notebook)&&this.snapshot.publicationIndex?await index.sharedCount(this.snapshot,notebook.id):0;}

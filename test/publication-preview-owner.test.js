@@ -136,7 +136,11 @@ test('a combined canvas admits selected sources, follows cross-owner references 
  assert.equal(second.context.collectionPages[0].recordIds.some(id=>first.recordIds.includes(id)),false);
  const unselected=await websitePreviewSource(host.f.workspace,makeCommand(false),{websitePin:host.websitePin,designTarget:'entry:'+foreignId,sourceReader});assert.deepEqual(unselected.context.entries[0].relations,[]);
  draft.website.researchSources=structuredClone([source.source]);draft.website.researchSources[0].selection.records[0].share=false;
- await assert.rejects(websitePreviewSource(host.f.workspace,makeCommand(),{websitePin:host.websitePin,designTarget:'home',sourceReader,collections}),{code:'INVALID'});
+ const reset=await websitePreviewSource(host.f.workspace,makeCommand(),{websitePin:host.websitePin,designTarget:'home',sourceReader,collections}),fresh=await websitePreviewSource(host.f.workspace,makeCommand(),{websitePin:host.websitePin,designTarget:'home',sourceReader});
+ assert.notEqual(reset.context.collectionPages[0].definition,first.definition);
+ assert.equal(reset.context.collectionPages[0].previousCursor,null);
+ assert.deepEqual(reset.context.collectionPages[0].recordIds,fresh.context.collectionPages[0].recordIds);
+ assert.equal(reset.context.recordCards.some(record=>record.id===foreignId),false,'Changed consent restarts paging without the excluded foreign record');
  draft.website.researchSources=[];await assert.rejects(websitePreviewSource(host.f.workspace,makeCommand(),{websitePin:host.websitePin,designTarget:'entry:'+foreignId,sourceReader}),{code:'INVALID'});
  assert.equal((await host.f.workspace.outline()).etag,request.etag);assert.equal(readers,closed);
 });

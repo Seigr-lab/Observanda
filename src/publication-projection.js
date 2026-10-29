@@ -55,13 +55,14 @@ export function publicProjection(source, options={}) {
 
 // Internal projection boundary: the caller has validated metadata and originals.
 // Destination summaries resolve links/counts; they are never rendered as records.
-export function projectPublication(book,selection,{designPageId=null,designTarget=null,workspaceContent=false,singlePage=false,entryDestinations=null,publicationTarget=null,previewCounts=null,publicationCounts=null,browsePage=null,collectionPages=null,collectionQuery='',referencePage=null,referenceQuery='',referenceResolver=null,recordResolver=null,collectionResolver=null,edition}={}) {
+export function projectPublication(book,selection,{designPageId=null,designTarget=null,workspaceContent=false,singlePage=false,entryDestinations=null,publicationTarget=null,previewCounts=null,previewBrowseAvailable=null,publicationCounts=null,browsePage=null,collectionPages=null,collectionQuery='',referencePage=null,referenceQuery='',referenceResolver=null,recordResolver=null,collectionResolver=null,edition}={}) {
   if((referenceResolver||recordResolver||collectionResolver)&&!publicationTarget)throw new AppError('INVALID');
   if(browsePage&&publicationTarget!=='browse')throw new AppError('INVALID');
   if(publicationCounts&&!publicationTarget)throw new AppError('INVALID');
   if(collectionPages&&!publicationTarget&&!(workspaceContent&&singlePage&&designTarget&&entryDestinations))throw new AppError('INVALID');
   if(referencePage&&!(publicationTarget??designTarget)?.startsWith('entry:'))throw new AppError('INVALID');
   if(previewCounts&&(!workspaceContent||!singlePage||!designTarget||!entryDestinations))throw new AppError('INVALID');
+  if(previewBrowseAvailable!==null&&(typeof previewBrowseAvailable!=='boolean'||!workspaceContent||!singlePage||!designTarget||!entryDestinations))throw new AppError('INVALID');
   if(publicationTarget&&(workspaceContent||singlePage||designTarget||designPageId||!entryDestinations))throw new AppError('INVALID');
   if(entryDestinations&&!publicationTarget&&(!workspaceContent||!singlePage||!designTarget))throw new AppError('INVALID');
   if(selection.recordCards&&!publicationTarget&&(!entryDestinations||!workspaceContent||!singlePage))throw new AppError('INVALID');
@@ -126,6 +127,7 @@ export function projectPublication(book,selection,{designPageId=null,designTarge
   for(const item of navigation){if(!navigation.some(parent=>parent.target===item.parent))item.parent=null;}
   const context={ browseRecords:destinations.filter(r=>!r.historical).map(r=>({id:r.id,title:r.title,notebookId:r.notebookId,type:r.template?.label??r.type,journey:readingJourney(r),tags:[...r.tags],occurredOn:structuredClone(r.occurredOn)})),...(selection.recordCards?{recordCards:selection.recordCards}:{}), ...(entryDestinations?{designOnly:!publicationTarget,entryDestinations:destinations.map(({id,title,notebookId})=>({id,title,notebookId}))}:{}), ...siteIdentity(book), homeEnabled:selection.homeEnabled, appearance: { ...book.appearance, ...book.website.palette, ...websiteTypography(book) }, projects, notebooks, entries, pages, website: { presentation, assets, layouts, design:{...Object.fromEntries(['buttons','links'].filter(key=>book.website.design[key]!==undefined).map(key=>[key,structuredClone(book.website.design[key])])),width:book.website.design.width,navigation:book.website.design.navigation,heading:book.website.design.heading,contents:book.website.design.contents,...(workspaceContent&&!book.projects.some(p=>p.share)?{browseLink:false}:book.website.design.browseLink!==undefined?{browseLink:book.website.design.browseLink}:{})}, regions, home: selection.homeEnabled?{...book.website.home,introduction:homeIntroduction(book),sections:homeSections}:{enabled:false,sections:[]}, logos: pageTargets.some(target=>!regions.some(r=>r.target===target&&r.kind==='header'))?logosFor(book,'home'):[], footer: pageTargets.some(target=>!regions.some(r=>r.target===target&&r.kind==='footer'))?book.website.footer:'', navigation } };
   if(previewCounts)context.previewCounts=previewCounts;
+  if(previewBrowseAvailable!==null)context.previewBrowseAvailable=previewBrowseAvailable;
   if(publicationCounts)context.publicationCounts=publicationCounts;
   if(collectionPages){context.collectionPages=collectionPages;context.collectionQuery=collectionQuery;}
   if(browsePage){context.browsePage=browsePage;context.browseRecords=browsePage.records;}

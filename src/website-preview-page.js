@@ -14,7 +14,7 @@ import {publicationCollectionKey} from './web/publication-collections.js';
 
 // A page consumes the admitted record provider. Owner selection, credentials
 // and snapshot validation remain outside presentation and collection layout.
-export async function websitePreviewPage(records,metadata,{designTarget,referenceCursor=null,collections=[],signal}={}){
+export async function websitePreviewPage(records,metadata,{designTarget,referenceCursor=null,collections=[],signal,selectiveCounts=false}={}){
  const store=records.store,collectionRequests=websiteCollectionRequests(collections);
   const [kind,id]=designTarget.split(':'),collection={project:'projects',notebook:'notebooks',page:'pages'}[kind];
   const item=kind==='entry'?await records.get(id):collection?metadata[collection].find(v=>v.id===id):null;
@@ -73,6 +73,10 @@ export async function websitePreviewPage(records,metadata,{designTarget,referenc
   for(const display of metadata.website.presentation.media)if(scopes.has(display.scope))await directLink(display.link);
   const selection={...metadata,entries,recordCards:[...cards.values()],assets:metadata.website.assets,homeEnabled:hasHomepage(metadata)};
   signal?.throwIfAborted();
-  const context=projectPublication(metadata,selection,{designTarget,workspaceContent:true,singlePage:true,entryDestinations:ordered(),previewCounts:await records.counts(),referencePage,collectionPages});
+  const exactCounts=!selectiveCounts||sources.some(({sections})=>sections.some(section=>section.kind==='projects'&&visible(section,sections)));
+  const browseLink=metadata.website.design.navigation!=='none'&&metadata.website.design.browseLink!==false;
+  const previewCounts=exactCounts?await records.counts():null;
+  const previewBrowseAvailable=browseLink&&(previewCounts?previewCounts.total>0:await records.hasRecords());
+  const context=projectPublication(metadata,selection,{designTarget,workspaceContent:true,singlePage:true,entryDestinations:ordered(),previewCounts,previewBrowseAvailable,referencePage,collectionPages});
   signal?.throwIfAborted();return {metadata,context};
 }

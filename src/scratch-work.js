@@ -8,14 +8,27 @@ import {withScratchConnections,scratchConnectionOwner,scratchWorkConnection} fro
 import {seal,unseal} from './encryption.js';
 import {AppError} from './errors.js';
 const sessions=new AsyncLocalStorage();
-async function createStorage(signal){
- const db=await scratchWorkConnection(signal),name='obs_work_'+randomUUID().replaceAll('-','');let created=false;
+async function openStorage(signal,name){
+ const db=await scratchWorkConnection(signal);let created=false;
  try{
   try{await db.run('CREATE TEMP TABLE '+name+' (key TEXT PRIMARY KEY,ordinal BIGSERIAL,payload BYTEA,pending BOOLEAN NOT NULL DEFAULT true) ON COMMIT PRESERVE ROWS');}
   catch(error){if(error.code==='42501')throw new AppError('DATABASE_PERMISSION');throw error;}
   created=true;await db.run('CREATE INDEX ON pg_temp.'+name+' (ordinal) WHERE pending');
   let closed=false;return {db,name,async close(){if(closed)return;closed=true;try{await db.run('DROP TABLE pg_temp.'+name);}finally{await db.close();}}};
  }catch(error){if(created)await db.run('DROP TABLE pg_temp.'+name).catch(()=>{});await db.close().catch(()=>{});throw error;}
+}
+function createStorage(signal){
+ // Empty optional collections need neither a database connection nor DDL.
+ // The first insertion owns the table; reads after any attempted insertion
+ // still consult it, including queued, conflicting and failed writes.
+ const name='obs_work_'+randomUUID().replaceAll('-','');let opening;
+ const open=()=>opening??=openStorage(signal,name);
+ return {name,get initialized(){return !!opening;},db:{
+  async run(...args){return (await open()).db.run(...args);},
+  async get(...args){return (await open()).db.get(...args);},
+  async all(...args){return (await open()).db.all(...args);},
+  async *rows(...args){yield* (await open()).db.rows(...args);}
+ },async close(){if(opening)await (await opening).close();}};
 }
 // Reuse at most two emptied temporary tables inside one awaited audit. Each
 // checkout has a new encryption key; nested work always owns separate tables.
@@ -35,7 +48,7 @@ async function scratchSession(operation){
 export function withScratch(operation,options={}){return withScratchConnections(()=>scratchWork(operation,options));}
 async function scratchWork(operation,{signal,keySalt}={}){
  signal?.throwIfAborted();
- const stored=sessions.getStore(),session=stored?.owner===scratchConnectionOwner()?stored:null,storage=session?.active&&session.idle.pop()||await createStorage(signal),{db,name}=storage,secret=randomBytes(32),keys=new EncryptionKeyContext(),cipherKey=()=>keys.get(secret),table='pg_temp.'+name;
+ const stored=sessions.getStore(),session=stored?.owner===scratchConnectionOwner()?stored:null,storage=session?.active&&session.idle.pop()||createStorage(signal),{db,name}=storage,secret=randomBytes(32),keys=new EncryptionKeyContext(),cipherKey=()=>keys.get(secret),table='pg_temp.'+name;
  let size=0,active=true,completed=false,consumedThrough=0n,failure,insertAttempted=false;
  const check=()=>{if(!active)throw new AppError('INVALID');signal?.throwIfAborted();};
  const key=id=>createHash('sha256').update(keySalt??name).update('\0').update(id).digest('hex');
@@ -47,10 +60,11 @@ async function scratchWork(operation,{signal,keySalt}={}){
  try{
   const work={
    get size(){return size;},
-   async has(id){check();return !!await db.get('SELECT 1 FROM '+table+' WHERE key=$1',key(id));},
-   async get(id){check();const idKey=key(id),row=await db.get('SELECT payload FROM '+table+' WHERE key=$1',idKey);return row?.payload?JSON.parse(unseal(row.payload,cipherKey(),name+idKey).toString('utf8')):undefined;},
+   async has(id){check();return insertAttempted?!!await db.get('SELECT 1 FROM '+table+' WHERE key=$1',key(id)):false;},
+   async get(id){check();if(!insertAttempted)return undefined;const idKey=key(id),row=await db.get('SELECT payload FROM '+table+' WHERE key=$1',idKey);return row?.payload?JSON.parse(unseal(row.payload,cipherKey(),name+idKey).toString('utf8')):undefined;},
    async getMany(ids){
     check();if(!Array.isArray(ids)||ids.length>32||new Set(ids).size!==ids.length)throw new AppError('INVALID');
+    if(!insertAttempted||!ids.length)return new Map();
     const keys=new Map(ids.map(id=>[key(id),id])),result=new Map();
     for(const row of await db.all('SELECT key,payload FROM '+table+' WHERE key=ANY($1::text[])',[...keys.keys()]))if(row.payload)result.set(keys.get(row.key),JSON.parse(unseal(row.payload,cipherKey(),name+row.key).toString('utf8')));
     return result;
@@ -81,8 +95,17 @@ async function scratchWork(operation,{signal,keySalt}={}){
     insertAttempted=true;const row=await db.get('INSERT INTO '+table+' (key,payload) VALUES ($1,$2) ON CONFLICT(key) DO NOTHING RETURNING key',idKey,payload);
     if(row)size++;return !!row;
    },
+   async addMany(entries){
+    check();if(!Array.isArray(entries)||entries.length>32||new Set(entries.map(([id])=>id)).size!==entries.length)throw new AppError('INVALID');
+    if(!entries.length)return new Set();const values=[],ids=new Map();
+    for(const [id,value] of entries){const idKey=key(id);ids.set(idKey,id);values.push(idKey,seal(Buffer.from(JSON.stringify(value)),cipherKey(),name+idKey));}
+    const tuples=entries.map((_,i)=>'($'+(i*2+1)+',$'+(i*2+2)+')');
+    insertAttempted=true;const rows=await db.all('INSERT INTO '+table+' (key,payload) VALUES '+tuples.join(',')+' ON CONFLICT(key) DO NOTHING RETURNING key',...values);
+    size+=rows.length;return new Set(rows.map(row=>ids.get(row.key)));
+   },
    async take(){
     check();
+    if(!insertAttempted)return undefined;
     const row=await db.get('SELECT key,payload,ordinal FROM '+table+' WHERE pending AND ordinal>$1::bigint ORDER BY ordinal LIMIT 1',consumedThrough.toString());
     if(!row)return undefined;
     const value=JSON.parse(unseal(row.payload,cipherKey(),name+row.key).toString('utf8'));
@@ -91,23 +114,24 @@ async function scratchWork(operation,{signal,keySalt}={}){
    },
    async *items(){
     check();
+    if(!insertAttempted)return;
     for await(const row of db.rows('SELECT key,payload FROM '+table+' WHERE pending ORDER BY key',[],{signal})){
      check();
      yield JSON.parse(unseal(row.payload,cipherKey(),name+row.key).toString('utf8'));
     }
    },
-   async remove(id){check();const row=await db.get('DELETE FROM '+table+' WHERE key=$1 RETURNING key',key(id));if(row)size--;return !!row;},
+   async remove(id){check();if(!insertAttempted)return false;const row=await db.get('DELETE FROM '+table+' WHERE key=$1 RETURNING key',key(id));if(row)size--;return !!row;},
    async removeMany(ids){
     check();if(!Array.isArray(ids)||ids.length>32||new Set(ids).size!==ids.length)throw new AppError('INVALID');
-    if(!ids.length)return;const rows=await db.all('DELETE FROM '+table+' WHERE key=ANY($1::text[]) RETURNING key',ids.map(key));size-=rows.length;
+    if(!insertAttempted||!ids.length)return;const rows=await db.all('DELETE FROM '+table+' WHERE key=ANY($1::text[]) RETURNING key',ids.map(key));size-=rows.length;
    },
-   async clear(){check();await db.run('TRUNCATE '+table+' RESTART IDENTITY');size=0;consumedThrough=0n;}
+   async clear(){check();if(insertAttempted)await db.run('TRUNCATE '+table+' RESTART IDENTITY');size=0;consumedThrough=0n;}
   };
   const result=await operation(work);completed=true;return result;
  }catch(error){failure=error;throw error;}finally{
   active=false;secret.fill(0);keys.clear();
   try{
-  if(completed&&!signal?.aborted&&session?.active&&session.idle.length<2){
+  if(completed&&!signal?.aborted&&storage.initialized&&session?.active&&session.idle.length<2){
    try{
     // Even a failed or conflicting insert can advance BIGSERIAL; a queued
     // insertion may not have updated size yet. Only untouched storage is clean.
