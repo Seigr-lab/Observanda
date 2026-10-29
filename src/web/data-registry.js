@@ -1,5 +1,6 @@
 import {projectContextAPI} from './project-context.js';
 import {proseText} from './prose-model.js';
+import {createDataLoadPool} from './data-load-pool.js';
 // Feature-owned data adapters; no dashboard feature list or domain switches.
 // An item is {key,title,subtitle?,data,action?:{name,id?},render?:({esc})=>HTML}.
 // Providers expose authorized display data, never storage paths or credentials.
@@ -27,7 +28,7 @@ export const workspaceData=createDataRegistry();
 // One session per open workspace. Late responses from a closed session cannot
 // update the next workspace. Independent providers fail and retry independently.
 export function createDataSession(registry,{context,api,onChange,access=operation=>operation()}){
- const cache=new Map();let closed=false;
+ const cache=new Map(),sharedLoad=createDataLoadPool();let closed=false;
  const dynamic=p=>typeof p.loadKey==='function';
  const keyFor=(p,ctx)=>dynamic(p)?p.id+':'+(ctx.dataSlot??'default'):p.loadKey??p.id;
  const unsubscribe=registry.subscribe(()=>{
@@ -44,7 +45,7 @@ export function createDataSession(registry,{context,api,onChange,access=operatio
    if(closed||cache.get(key)!==state)return;
    const previousError=state.error;state.status='loading';state.error=null;
    try{
-    const run=()=>{state.controller.signal.throwIfAborted();return p.load({api:projectContextAPI(api,ctx),context:ctx,options,signal:state.controller.signal});};
+    const run=()=>{state.controller.signal.throwIfAborted();return sharedLoad(p,signature,signal=>p.load({api:projectContextAPI(api,ctx),context:ctx,options,signal}),state.controller.signal);};
     const data=await (authorize?access(run):run());
     if(closed||cache.get(key)!==state)return;state.status='ready';state.data=data;
    }catch(error){if(!closed&&cache.get(key)===state){state.status='error';state.retained=false;state.data=null;state.error=error.name==='AbortError'&&previousError?previousError:error;}}

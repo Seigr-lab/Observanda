@@ -30,7 +30,7 @@ test('card requests retain their own scope and discard late results after a filt
 });
 
 test('closed cards release their requests, retries recover independently, and static shared loads remain shared',async()=>{
- const f=fixture(),a={etag:'first',dataSlot:'a'},b={...a,dataSlot:'b'};
+ const f=fixture(),a={etag:'first',dataSlot:'a'},b={...a,etag:'second',dataSlot:'b'};
  f.session.read('records',a,{});f.session.read('records',b,{});await setImmediate();
  f.session.retainSlots(new Set(['b']));assert.equal(f.requests[0].signal.aborted,true);assert.equal(f.requests[1].signal.aborted,false);
  f.requests[1].reject(Error('Temporary failure'));await setImmediate();assert.equal(f.session.read('records',b,{}).status,'error');
