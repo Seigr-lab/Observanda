@@ -16,5 +16,20 @@
   "month9": "Septiembre",
   "month10": "Octubre",
   "month11": "Noviembre",
-  "month12": "Diciembre"
+  "month12": "Diciembre",
+  "fieldDate": "Fecha del registro",
+  "fieldPrecision": "Precisión de la fecha",
+  "precisionDay": "Día",
+  "precisionMonth": "Solo el mes",
+  "precisionYear": "Solo el año",
+  "precisionRange": "Intervalo de fechas",
+  "precisionUnknown": "Desconocida",
+  "fieldHelp": "Cuándo se realizó el trabajo o cuándo está previsto. Es independiente de cuándo se creó o editó el registro.",
+  "noDate": "Este registro no tiene ninguna fecha asignada.",
+  "fieldStart": "Fecha de inicio",
+  "fieldEnd": "Fecha de finalización",
+  "fieldMonth": "Mes",
+  "fieldYear": "Año",
+  "estimatedDate": "Fecha estimada",
+  "estimatedRange": "Intervalo de fechas estimado"
 }

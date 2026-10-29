@@ -1,4 +1,6 @@
 import {t} from './i18n/index.js';
+import messages from './locales/en/recordEditors.json' with {type:'json'};
+import {modelMessages} from './model-messages.js';
 const tr=(key,values)=>t('recordDates',key,values);
 // A declared record date is independent of creation, editing and acquisition clocks.
 // Exact saved days keep their original string representation and revision identity.
@@ -17,10 +19,11 @@ export function validRecordDate(value,{draft=false}={}){
   :calendarDate(value.from)&&calendarDate(value.to)&&value.from<=value.to);
  return keys(value,['kind','value','estimated'])&&['day','month','year'].includes(value.kind)&&(draft?draftText(value.value):{day:calendarDate,month,year}[value.kind](value.value));
 }
-export function recordDateIssue(value){
+export function recordDateIssue(value,{translate}={}){
  if(validRecordDate(value))return '';
- if(value?.kind==='range'&&calendarDate(value.from)&&calendarDate(value.to)&&value.from>value.to)return 'The start date must be on or before the end date.';
- return 'Enter a valid '+({month:'month',year:'four-digit year',range:'start and end date'}[value?.kind]??'date')+', or choose Unknown.';
+ const message=modelMessages('recordEditors',messages,translate);
+ if(value?.kind==='range'&&calendarDate(value.from)&&calendarDate(value.to)&&value.from>value.to)return message('dateOrder');
+ return message({month:'dateInvalidMonth',year:'dateInvalidYear',range:'dateInvalidRange'}[value?.kind]??'dateInvalidDay');
 }
 export function dateBounds(value){
  if(!validRecordDate(value))return null;

@@ -17,13 +17,13 @@ export function cloneFigure(figure,uuid=()=>crypto.randomUUID()){
 export function createComposition(plots){
  return {id:crypto.randomUUID(),title:messages.title,kind:'panels',layout:{columns:2,linkX:false,linkY:false},panels:plots.map((figure,i)=>({id:crypto.randomUUID(),label:String.fromCharCode(65+i),figure:cloneFigure(figure)}))};
 }
-export function compositionIssues(figure,validatePlot,{draft=false,retained=false,resourceErrors=false}={}){
+export function compositionIssues(figure,validatePlot,{draft=false,retained=false,resourceErrors=false,translate}={}){
  if(!figure||Object.keys(figure).sort().join()!==('source' in figure?'id,kind,layout,panels,source,title':'id,kind,layout,panels,title')||!uuid(figure.id)||!text(figure.title,retained)||!draft&&!figure.title.trim()||!figure.layout||Object.keys(figure.layout).sort().join()!=='columns,linkX,linkY'||!['linkX','linkY'].every(k=>typeof figure.layout[k]==='boolean'))return [messages.structure];
  if(!Number.isInteger(figure.layout.columns)||figure.layout.columns<1||figure.layout.columns>3||!Array.isArray(figure.panels)||figure.panels.length<2||!retained&&figure.panels.length>8)return [messages.limits];
  const ids=new Set([figure.id]),issues=[];
  for(const p of figure.panels){
   if(!p||Object.keys(p).sort().join()!=='figure,id,label'||!uuid(p.id)||ids.has(p.id)||!text(p.label,retained)||!draft&&!p.label.trim()||!p.figure||p.figure.kind==='panels'||!uuid(p.figure.id)||ids.has(p.figure.id)||p.id===p.figure.id)return [messages.invalidPanel];
-  ids.add(p.id);ids.add(p.figure.id);issues.push(...validatePlot(p.figure,{draft,retained,resourceErrors}));
+  ids.add(p.id);ids.add(p.figure.id);issues.push(...validatePlot(p.figure,{draft,retained,resourceErrors,translate}));
  }
  if(issues.length)return issues;
  const plots=figurePlots(figure),first=plots[0];

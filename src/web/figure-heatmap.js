@@ -1,3 +1,4 @@
+import {modelMessages} from './model-messages.js';
 import messages from './locales/en/figureHeatmap.json' with {type:'json'};
 const keys=(v,k)=>v&&Object.keys(v).sort().join()===k.sort().join();
 const color=v=>typeof v==='string'&&/^#[0-9a-f]{6}$/i.test(v);
@@ -13,4 +14,4 @@ export function heatmapIssues(figure,{draft=false,retained=false}={}){
  return !retained&&columns.size>100?[messages.matrixInvalid]:[];
 }
 export function heatmapBand(value,settings){return settings.thresholds.find(b=>b.max===null||value<=b.max);}
-export const heatmapThresholdText=(settings,i,format=value=>value)=>{const b=settings.thresholds[i],prior=settings.thresholds[i-1];return b.max===null?(prior?'> '+format(prior.max):messages.allValues):(prior?'> '+format(prior.max)+'; ':'')+'≤ '+format(b.max);};
+export const heatmapThresholdText=(settings,i,format=value=>value,{translate}={})=>{const b=settings.thresholds[i],prior=settings.thresholds[i-1];return b.max===null?(prior?'> '+format(prior.max):modelMessages('figureHeatmap',messages,translate)('allValues')):(prior?'> '+format(prior.max)+'; ':'')+'≤ '+format(b.max);};

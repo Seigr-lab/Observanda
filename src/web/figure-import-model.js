@@ -1,3 +1,4 @@
+import {figureDiagnosticText,figureResourceIssue} from './figure-diagnostics.js';
 import {validDatasetResourcePolicy} from './dataset-resource-policy.js';
 import {exactFigureValue,projectFigureValue} from './figure-mapping-values.js';
 import {defaultMarkerArea} from './figure-marker-area.js';
@@ -61,30 +62,31 @@ export function figureMappingPresentation(table,mapping,figure,{seriesCount,rows
 }
 
 // The same mapper serves small file previews and paged retained-dataset jobs.
-export function createFigureMapper(table, mapping, figure, {limits={}, median=null,parseNumber=null,provenance=null,resourceErrors=false}={}) {
+export function createFigureMapper(table, mapping, figure, {limits={}, median=null,parseNumber=null,provenance=null,resourceErrors=false,translate}={}) {
+  const fm=figureDiagnosticText(translate);
   let rowCount=0,pointCount=0,textSize=0,limited=false;
   const reserve=(size=0)=>{
     if(++pointCount>(limits.points??Infinity)||(textSize+=size)>(limits.characters??Infinity)){
-      limited=true;report(null,null,'The figure has too many points or labels. Summarize rows or choose fewer series.');return false;
+      limited=true;report(null,null,fm('pointLimit'));return false;
     }return true;
   };
   const operation=mapping.operation??'raw';
   const issues = [], warnings = [], series = [], groups = new Map();
   const validColumn = index => Number.isInteger(index) && index >= 0 && index < table.columns.length;
-  const report = (row, column, message) => {if(issues.length<20)issues.push({line: row?.line ?? null, column, message});};
-  if (!validColumn(mapping.x)) report(null, null, 'Choose the horizontal coordinate column.');
-  if (!['number', 'date', 'category'].includes(mapping.xKind)) report(null, mapping.x, 'Choose the horizontal coordinate type.');
-  if (!FIGURE_OPERATIONS.some(([id])=>id===operation)) report(null,null,'Choose how to summarize the rows.');
-  if (operation!=='count' && !mapping.values.length) report(null, null, 'Choose at least one numeric value column to plot.');
-  if (mapping.group !== null && !validColumn(mapping.group)) report(null, null, 'Choose a series grouping column.');
+  const report = (row, column, message) => {if(issues.length<20)issues.push({line: row?.line ?? null, column, message:figureResourceIssue(message,translate)});};
+  if (!validColumn(mapping.x)) report(null, null, fm('mappingCoordinate'));
+  if (!['number', 'date', 'category'].includes(mapping.xKind)) report(null, mapping.x, fm('mappingType'));
+  if (!FIGURE_OPERATIONS.some(([id])=>id===operation)) report(null,null,fm('mappingOperation'));
+  if (operation!=='count' && !mapping.values.length) report(null, null, fm('mappingValues'));
+  if (mapping.group !== null && !validColumn(mapping.group)) report(null, null, fm('mappingGroup'));
   for (const value of mapping.values) {
     if(value.count!=null&&(!validColumn(value.count)||operation!=='raw'))report(null,null,markerMessages.mapping);
     if(INTERVAL_FIELDS.some(k=>value[k]!=null&&(!validColumn(value[k])||operation!=='raw')))report(null,null,intervalMessages.mapping);
-    if (!validColumn(value.column) || value.error !== null && !validColumn(value.error)) report(null, null, 'Choose valid value and uncertainty columns.');
+    if (!validColumn(value.column) || value.error !== null && !validColumn(value.error)) report(null, null, fm('mappingUncertainty'));
   }
-  if(mapping.resourcePolicy!==undefined&&!validDatasetResourcePolicy(mapping.resourcePolicy))report(null,null,'Choose a valid exact resource policy.');
-  if(mapping.projection!==undefined&&(!validMeasurementProjection(mapping.projection,{resourceErrors})||mapping.projection.x&&mapping.xKind!=='number'))report(null,null,'Choose valid exact origin and positive scale settings; horizontal transforms require numeric coordinates.');
-  if(mapping.mode==='append'&&(mapping.projection||figure.projection))report(null,null,'A transformed import replaces the figure so every coordinate has the same meaning.');
+  if(mapping.resourcePolicy!==undefined&&!validDatasetResourcePolicy(mapping.resourcePolicy))report(null,null,fm('mappingPolicy'));
+  if(mapping.projection!==undefined&&(!validMeasurementProjection(mapping.projection,{resourceErrors})||mapping.projection.x&&mapping.xKind!=='number'))report(null,null,fm('mappingProjection'));
+  if(mapping.mode==='append'&&(mapping.projection||figure.projection))report(null,null,fm('transformedReplace'));
   if (issues.length) return {add(){},finish:()=>({figure:null,issues,warnings}),get invalid(){return true;}};
   const values=operation==='count'?[{column:null,error:null}]:mapping.values;
   const nameFor=value=>figureMappingValueName(table,operation,value);
@@ -95,7 +97,7 @@ export function createFigureMapper(table, mapping, figure, {limits={}, median=nu
   function exactValue(raw,row,column){
     const value=String(raw??'').trim();if(!value)return null;
     try{return exactFigureValue(value,column,{parseNumber,decimal:mapping.decimal});}
-    catch(error){if(error.code)throw error;if(error.message==='precision'){precision=true;report(row,column,measurementMessages.summaryPrecision);}else report(row,column,'Expected a number or an empty cell for a gap.');return null;}
+    catch(error){if(error.code)throw error;if(error.message==='precision'){precision=true;report(row,column,measurementMessages.summaryPrecision);}else report(row,column,fm('numberOrGap'));return null;}
   }
   function reduce(operation){
     try{return operation();}catch(error){if(error.message!=='precision')throw error;precision=true;report(null,null,measurementMessages.summaryPrecision);return null;}
@@ -116,7 +118,7 @@ export function createFigureMapper(table, mapping, figure, {limits={}, median=nu
   function seriesFor(value, group) {
     const key = JSON.stringify([value.column, group]);
     if (!groups.has(key)) {
-      if(series.length>=(limits.series??Infinity)){limited=true;report(null,null,'Choose fewer series for this figure.');return null;}
+      if(series.length>=(limits.series??Infinity)){limited=true;report(null,null,fm('fewerSeries'));return null;}
       const base = group === null ? nameFor(value) : values.length === 1 ? group : nameFor(value) + ' · ' + group;
       let name = base, suffix = 2;
       while (names.has(name)) name = base + ' (' + suffix++ + ')';
@@ -131,16 +133,16 @@ export function createFigureMapper(table, mapping, figure, {limits={}, median=nu
     rowCount++;
     const raw = row.cells[mapping.x].trim(), exactX = mapping.xKind === 'number' ? exactValue(raw,row,mapping.x) : raw;
     const xCoordinates={},x=operation==='raw'?horizontal(exactX,row,xCoordinates):exactX;
-    if (mapping.xKind==='number'?exactX===null:xValue(x,mapping.xKind)===null) report(row, mapping.x, 'Enter ' + (mapping.xKind === 'date' ? 'an ISO date (YYYY-MM-DD) or a timestamp with a time zone.' : mapping.xKind === 'number' ? 'a numeric coordinate.' : 'a category.'));
+    if (mapping.xKind==='number'?exactX===null:xValue(x,mapping.xKind)===null) report(row, mapping.x, fm(mapping.xKind==='date'?'coordinateDate':mapping.xKind==='number'?'coordinateNumber':'coordinateCategory'));
     const group = mapping.group === null ? null : row.cells[mapping.group].trim();
-    if (group === '') report(row, mapping.group, 'This row needs a series name, or choose no grouping.');
+    if (group === '') report(row, mapping.group, fm('groupName'));
     for (const value of values) {
       const coordinates={...xCoordinates};
       const y = operation==='count'?'1/1':operation==='raw'?coordinate(row.cells[value.column],row,value.column,false,{axis:'y',field:'y',coordinates}):exactValue(row.cells[value.column],row,value.column);
       const error = operation!=='raw'||value.error === null ? null : coordinate(row.cells[value.error],row,value.error,false,{axis:'y',field:'error',delta:true,coordinates});
-      if (operation==='raw' && y !== null && !Number.isFinite(y)) report(row, value.column, 'Expected a number or an empty cell for a gap.');
-      if (error !== null && (!Number.isFinite(error) || error < 0)) report(row, value.error, 'Uncertainty must be a non-negative number or an empty cell.');
-      if (y === null && error !== null) report(row, value.error, 'Uncertainty needs a measured value in the same row.');
+      if (operation==='raw' && y !== null && !Number.isFinite(y)) report(row, value.column, fm('numberOrGap'));
+      if (error !== null && (!Number.isFinite(error) || error < 0)) report(row, value.error, fm('uncertaintyNumber'));
+      if (y === null && error !== null) report(row, value.error, fm('uncertaintyValue'));
       const item=seriesFor(value, group);
       if(!item)return;
       const intervals={};if(operation==='raw')for(const k of INTERVAL_FIELDS)if(value[k]!=null){const raw=row.cells[value[k]].trim();intervals[k]=!raw?null:k[0]==='x'&&mapping.xKind==='date'?raw:coordinate(raw,row,value[k],false,{axis:k[0],field:k,coordinates});}
@@ -182,14 +184,14 @@ export function createFigureMapper(table, mapping, figure, {limits={}, median=nu
       const coordinates={},point={x:horizontal(x,null,coordinates),y:project(y,null,null,false,{axis:'y',field:'y',coordinates}),error:null};item.points.push(point);exactXValues.set(point,x);
       const {column,group}=seriesInputs.get(item);recordPoint(point,{bucket:b.key,valueColumn:column,group,coordinates});yield point;
     }
-    warnings.push(FIGURE_OPERATIONS.find(([id])=>id===operation)[1]+' calculated from '+rowCount+' rows.'+(missing?' '+missing+' empty values excluded; groups with no values stay empty.':''));
+    warnings.push(fm('calculatedRows',{operation:translate?(operation==='count'?translate('scientificEditors','countRows'):translate('datasetAggregation',operation)):FIGURE_OPERATIONS.find(([id])=>id===operation)[1],rows:rowCount})+(missing?' '+fm('missingExcluded',{count:missing}):''));
   }
   }
   function finish(){
   for(const point of finishPoints()){void point;}
   if (issues.length) return {figure:null,issues,warnings,limited,precision};
-  if(rounded)warnings.push(measurementMessages.plotRounded);
-  if(collapsed)warnings.push(measurementMessages.plotCollapsed);
+  if(rounded)warnings.push(figureResourceIssue(measurementMessages.plotRounded,translate));
+  if(collapsed)warnings.push(figureResourceIssue(measurementMessages.plotCollapsed,translate));
   if (mapping.order === 'ascending' && mapping.xKind !== 'category') {
     for (const item of series) item.points.sort((a, b) => mapping.xKind==='number'?compareRationalText(exactXValues.get(a),exactXValues.get(b)):xValue(a.x,mapping.xKind)-xValue(b.x,mapping.xKind));
   }
@@ -201,7 +203,7 @@ export function createFigureMapper(table, mapping, figure, {limits={}, median=nu
   if(mapping.values.some(v=>v.count!=null))next.markerArea??=defaultMarkerArea();else if(mapping.mode!=='append')delete next.markerArea;
   if(next.kind==='heatmap'){next.heatmap??=defaultHeatmap();next.x.scale='linear';next.y.scale='linear';}
   if (mapping.mode === 'append') {
-    if (figure.x.kind !== mapping.xKind) report(null, mapping.x, 'Adding series requires the same horizontal coordinate type as the figure.');
+    if (figure.x.kind !== mapping.xKind) report(null, mapping.x, fm('appendType'));
     next.series.push(...series);
   } else {
     next.series = series;
@@ -212,12 +214,12 @@ export function createFigureMapper(table, mapping, figure, {limits={}, median=nu
   if(mapping.mode!=='append'){
     if(operation==='raw')delete next.summary;
     else next.summary={operation,rows:rowCount,category:table.columns[mapping.x].label,group:mapping.group===null?'':table.columns[mapping.group].label,missing};
-  } else if(operation!=='raw'||next.summary)report(null,null,'Summary imports replace series so the calculation remains explicit. Use a separate figure to compare different calculations.');
+  } else if(operation!=='raw'||next.summary)report(null,null,fm('summaryReplace'));
   if (mapping.xKind !== 'number') next.x.scale = 'linear';
   if (['bar', 'bar-horizontal', 'area'].includes(next.kind)) next.y.scale = 'linear';
   next.legend = next.series.length > 1 || figure.legend;
   }else next={...figureMappingPresentation(table,mapping,figure,{seriesCount:series.length,rows:rowCount,missing}),series};
-  if (!issues.length) for (const message of figureIssues(next,{resourceErrors})) report(null, null, message);
+  if (!issues.length) for (const message of figureIssues(next,{resourceErrors,translate})) report(null, null, message);
   let repeats = 0, backwards = false, gaps = 0;
   for (const item of series) {
     const seen = new Set();
@@ -227,16 +229,16 @@ export function createFigureMapper(table, mapping, figure, {limits={}, median=nu
       if (mapping.xKind !== 'category' && i > 0 && xValue(point.x, mapping.xKind) < xValue(item.points[i - 1].x, mapping.xKind)) backwards = true;
     }
   }
-  if (repeats && operation==='raw') warnings.push(repeats + ' repeated coordinates are retained as separate measurements.' + (['bar','bar-horizontal'].includes(next.kind) ? ' Bars at the same coordinate will overlap; use scatter to see individual observations.' : ''));
-  if (backwards && ['line', 'area'].includes(next.kind)) warnings.push('Coordinates go backwards in file order. Choose Sort by coordinate to connect them in ascending order, or use scatter.');
-  if (gaps) warnings.push(gaps + ' empty values will remain gaps.');
+  if (repeats && operation==='raw') warnings.push(fm('repeatedCoordinates',{count:repeats}) + (['bar','bar-horizontal'].includes(next.kind) ? ' '+fm('overlappingBars') : ''));
+  if (backwards && ['line', 'area'].includes(next.kind)) warnings.push(fm('backwardsCoordinates'));
+  if (gaps) warnings.push(fm('emptyGaps',{count:gaps}));
   return {figure: issues.length ? null : next, issues, warnings,limited,precision, measurements: series.reduce((n, s) => n + s.points.filter(p => p.y !== null).length, 0), seriesCount: series.length,...(provenance?{pointOrder:series.map(s=>s.points.map(p=>pointIds.get(p)))}:{})};
   }
   return {add,finish,finishPoints,get invalid(){return !!issues.length;},get stats(){return {rows:rowCount,points:pointCount,series:series.length};}};
 }
 
-export function mapFigureTable(table,mapping,figure){
-  const mapper=createFigureMapper(table,mapping,figure);
+export function mapFigureTable(table,mapping,figure,options={}){
+  const mapper=createFigureMapper(table,mapping,figure,options);
   for(const row of table.rows)mapper.add(row);
   return mapper.finish();
 }

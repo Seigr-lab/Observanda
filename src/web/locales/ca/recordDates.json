@@ -16,5 +16,20 @@
   "month9": "setembre",
   "month10": "octubre",
   "month11": "novembre",
-  "month12": "desembre"
+  "month12": "desembre",
+  "fieldDate": "Data del registre",
+  "fieldPrecision": "Precisió de la data",
+  "precisionDay": "Dia",
+  "precisionMonth": "Només el mes",
+  "precisionYear": "Només l'any",
+  "precisionRange": "Interval de dates",
+  "precisionUnknown": "Desconeguda",
+  "fieldHelp": "Quan es va fer la feina o quan està prevista. És independent de quan es va crear o editar el registre.",
+  "noDate": "Aquest registre no té cap data assignada.",
+  "fieldStart": "Data d'inici",
+  "fieldEnd": "Data de finalització",
+  "fieldMonth": "Mes",
+  "fieldYear": "Any",
+  "estimatedDate": "Data estimada",
+  "estimatedRange": "Interval de dates estimat"
 }

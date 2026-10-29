@@ -8,8 +8,10 @@ import {intervalText,intervalHeaders,intervalCells} from './figure-intervals-ui.
 import {defaultHeatmap} from './figure-heatmap.js';
 import {heatmapControls,readHeatmap,heatmapAction,heatmapText} from './figure-heatmap-ui.js';
 
-import {FIGURE_TYPES,createFigure,createSeries,figureIssues,figureCSV} from './figure-model.js';
-import {figureSummary,renderFigure} from './figure-renderer.js';
+import {FIGURE_TYPES,createFigure,createSeries,figureCSV} from './figure-model.js';
+import {figureIssues} from './scientific-validation.js';
+import {figureSummary} from './figure-presentation.js';
+import {renderFigure} from './figure-renderer.js';
 import {figureImportUI} from './figure-import-ui.js';
 import {figurePreviews} from './figure-preview.js';
 import {figureNumericInputs} from './figure-numeric-input.js';

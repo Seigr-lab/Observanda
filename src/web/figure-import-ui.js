@@ -3,10 +3,11 @@ import {scientificText as st,figureTypeOptions,figureOperationOptions,tableDelim
 import {markerMapping} from './figure-marker-area-ui.js';
 import {INTERVAL_FIELDS} from './figure-intervals.js';
 import {intervalMappingControls} from './figure-intervals-ui.js';
-import {MAX_TABLE_TEXT, TABLE_DELIMITERS, readDelimitedTable} from './tabular-data.js';
-import {figureColumns, suggestFigureMapping, mapFigureTable, FIGURE_OPERATIONS} from './figure-import-model.js';
-import {FIGURE_TYPES,figureIssues} from './figure-model.js';
-import {figureSummary} from './figure-renderer.js';
+import {MAX_TABLE_TEXT, TABLE_DELIMITERS} from './tabular-data.js';
+import {figureColumns, suggestFigureMapping, FIGURE_OPERATIONS} from './figure-import-model.js';
+import {FIGURE_TYPES} from './figure-model.js';
+import {figureIssues,readDelimitedTable,mapFigureTable} from './scientific-validation.js';
+import {figureSummary} from './figure-presentation.js';
 import {figureDesignView, figureDesignInput} from './figure-design-ui.js';
 import {setFigureDesign} from './figure-style.js';
 

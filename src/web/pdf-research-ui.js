@@ -1,7 +1,7 @@
 import './i18n/catalogues/pdfEditor.js';
 import {t} from './i18n/index.js';
 import {proseText,renderProse} from './prose-model.js';
-import {renderFigure} from './figure-renderer.js';
+import {renderFigure} from './figure-presentation.js';
 import {pdfResearchChanges} from './pdf-research-model.js';
 import {pdfResearchTableChoices} from './pdf-research-table.js';
 const tr=key=>t('pdfEditor',key);

@@ -1,8 +1,10 @@
 import {_electron as electron} from '@playwright/test';
-import {access,mkdtemp,mkdir,rm} from 'node:fs/promises';
+import {access,mkdtemp,mkdir,rm,readFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
+import languages from '../../src/web/locales/languages.json' with {type:'json'};
+const nativeCatalogues=await Promise.all(languages.map(async({id})=>JSON.parse(await readFile(new URL('../../src/web/locales/'+id+'/desktopShell.json',import.meta.url),'utf8'))));
 
 export async function desktopFixture(prefix='observanda-desktop-test-'){
  const directory=await mkdtemp(path.join(os.tmpdir(),prefix));
@@ -19,11 +21,11 @@ export async function desktopFixture(prefix='observanda-desktop-test-'){
   // Preview preparation can still be finishing when a journey closes its
   // window. Make the native decision explicitly, keeping the real service
   // drain and window-close guard in use.
-  await app.evaluate(({dialog})=>{dialog.showMessageBox=async(...args)=>{
+  await app.evaluate(({dialog},busyTitles)=>{dialog.showMessageBox=async(...args)=>{
    const options=args.at(-1);
-   if(options.title!=='Work is still running')throw Error('Unexpected close dialog: '+options.title);
+   if(!busyTitles.includes(options.title))throw Error('Unexpected close dialog: '+options.title);
    return {response:1};
-  };});
+  };},nativeCatalogues.map(messages=>messages.busyTitle));
   let onExit;
   const exited=new Promise(resolve=>{onExit=(code,signal)=>resolve({kind:'exit',code,signal});child.once('exit',onExit);if(child.exitCode!==null||child.signalCode!==null)onExit(child.exitCode,child.signalCode);});
   try{
@@ -41,8 +43,8 @@ export async function desktopFixture(prefix='observanda-desktop-test-'){
   async start(executablePath=packaged){
    // A source-comparison checkout may omit generated desktop assets. Report
    // that in the test runner before launching a window or a native error box.
-   if(!executablePath)for(const name of ['icon.png','icon-black.png','icon-white.png','locales/en/close.json']){
-    await access(path.resolve('desktop',name)).catch(()=>{throw Error('Desktop test asset is missing: '+name+'. Prepare desktop assets before launching the test.');});
+   if(!executablePath)for(const name of ['desktop/icon.png','desktop/icon-black.png','desktop/icon-white.png','src/desktop-localization.js',...languages.map(({id})=>'src/web/locales/'+id+'/desktopShell.json')]){
+    await access(path.resolve(name)).catch(()=>{throw Error('Desktop test asset is missing: '+name+'. Prepare desktop assets before launching the test.');});
    }
    const launchExecutable=executablePath||sourceExecutable;
    const app=await electron.launch({...(launchExecutable?{executablePath:launchExecutable}:{}),args:executablePath?[]:[path.resolve('desktop')],env,timeout:30000});

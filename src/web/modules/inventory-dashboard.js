@@ -3,7 +3,7 @@ import '../i18n/catalogues/dashboardEditors.js';
 import {t} from '../i18n/index.js';
 import {dashboardCollection} from '../dashboard-collection-client.js';
 import {dashboardScopeSettings,dashboardBookSettings} from '../dashboard-scope.js';
-import {renderFigure} from '../figure-renderer.js';
+import {renderFigure} from '../figure-presentation.js';
 import {balance} from './quantities.js';
 import {stockTracked,assetPlacement,inventoryBOMUsage} from './inventory-model.js';
 import {inventoryPageProvider,inventoryItemChoices} from './inventory-data.js';

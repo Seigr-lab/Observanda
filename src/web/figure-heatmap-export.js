@@ -1,3 +1,4 @@
+import {modelMessages} from './model-messages.js';
 import {figureDataNumber} from './figure-number-labels.js';
 import {figureStyle} from './figure-style.js';
 import markerMessages from './locales/en/figureMarkerArea.json' with {type:'json'};
@@ -16,4 +17,4 @@ export function heatmapCSV(figure){
  });
  return rows.map(row=>Array.from({length:rows[0].length},(_,i)=>row[i]??'').map(v=>'"'+String(v??'').replaceAll('"','""')+'"').join(',')).join('\r\n')+'\r\n';
 }
-export function heatmapThresholdTable(figure,esc){if(figure.kind!=='heatmap')return '';return '<table><caption>'+esc(messages.thresholds)+'</caption><thead><tr><th>'+esc(messages.label)+'</th><th>'+esc(messages.max)+'</th><th>'+esc(messages.color)+'</th></tr></thead><tbody>'+figure.heatmap.thresholds.map((b,i)=>'<tr><th scope="row">'+esc(b.label)+'</th><td>'+esc(heatmapThresholdText(figure.heatmap,i,value=>figureDataNumber(value,figureStyle(figure))))+'</td><td>'+esc(b.color)+'</td></tr>').join('')+'</tbody></table>';}
+export function heatmapThresholdTable(figure,esc,{translate}={}){const text=modelMessages('figureHeatmap',messages,translate);if(figure.kind!=='heatmap')return '';return '<table><caption>'+esc(text('thresholds'))+'</caption><thead><tr><th>'+esc(text('label'))+'</th><th>'+esc(text('max'))+'</th><th>'+esc(text('color'))+'</th></tr></thead><tbody>'+figure.heatmap.thresholds.map((b,i)=>'<tr><th scope="row">'+esc(b.label)+'</th><td>'+esc(heatmapThresholdText(figure.heatmap,i,value=>figureDataNumber(value,figureStyle(figure)),{translate}))+'</td><td>'+esc(b.color)+'</td></tr>').join('')+'</tbody></table>';}

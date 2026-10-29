@@ -1,3 +1,4 @@
+import {t} from '../web/i18n/index.js';
 import {BOOK_BLOCKS,validBookBlock,renderBookBlock} from '../web/book-blocks.js';
 import {bookText} from '../web/book-messages.js';
 import {closeHistory} from 'prosemirror-history';
@@ -49,7 +50,7 @@ export function bookContentEditor({view,schema,toolbar,figures=()=>[],validate=(
 export function bookNodeView({edit,figures=()=>[]}){return (node,view,getPos)=>{
  const dom=view.dom.ownerDocument.createElement('div');dom.className='book-content-node';dom.contentEditable='false';dom.setAttribute('data-book-node',JSON.stringify(node.toJSON()));
  const available=figures()??[],record={figures:available.filter(f=>f.kind!=='image'),attachments:available.filter(f=>f.kind==='image')};
- dom.innerHTML=renderBookBlock(node.toJSON(),{esc,figure:id=>recordFigure(record,id,esc)})+'<button type="button" data-book-edit>'+esc(bookText('edit'))+'</button>';
+ dom.innerHTML=renderBookBlock(node.toJSON(),{esc,figure:id=>recordFigure(record,id,esc,{translate:t})})+'<button type="button" data-book-edit>'+esc(bookText('edit'))+'</button>';
  dom.querySelector('[data-book-edit]').addEventListener('click',()=>{view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc,getPos())));edit();});
  return {dom,stopEvent:e=>!!e.target.closest('button,details,summary'),ignoreMutation:()=>true};
 };}

@@ -16,5 +16,20 @@
   "month9": "September",
   "month10": "October",
   "month11": "November",
-  "month12": "December"
+  "month12": "December",
+  "fieldDate": "Record date",
+  "fieldPrecision": "Date precision",
+  "precisionDay": "Day",
+  "precisionMonth": "Month only",
+  "precisionYear": "Year only",
+  "precisionRange": "Date range",
+  "precisionUnknown": "Unknown",
+  "fieldHelp": "When the work occurred, or is planned. This is separate from when the record was created or edited.",
+  "noDate": "No date is assigned to this record.",
+  "fieldStart": "Start date",
+  "fieldEnd": "End date",
+  "fieldMonth": "Month",
+  "fieldYear": "Year",
+  "estimatedDate": "Estimated date",
+  "estimatedRange": "Estimated date range"
 }

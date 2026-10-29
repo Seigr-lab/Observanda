@@ -1,15 +1,13 @@
 import {attachPdfService} from './pdf-service.js';
 import {app,BrowserWindow,Menu,dialog,shell,session,safeStorage,nativeTheme} from 'electron';
 import {launchService} from './service-process.js';
-import {readFileSync} from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import {fileURLToPath} from 'node:url';
+import {fileURLToPath,pathToFileURL} from 'node:url';
 import {windowPreferences,localUrl,externalUrl,launchUrl,deviceProtectionAvailable,protectDeviceValue} from './policy.js';
 import {windowIcon,followWindowTheme} from './branding.js';
 import {closeGuard} from './close-guard.js';
 import {ServiceSupervisor} from './service-supervisor.js';
-const closeText=JSON.parse(readFileSync(new URL('./locales/en/close.json',import.meta.url),'utf8'));
 
 app.setName('Observanda');app.setAppUserModelId('org.observanda.desktop');app.enableSandbox();
 const development=!app.isPackaged,here=path.dirname(fileURLToPath(import.meta.url));
@@ -20,14 +18,20 @@ const profile=development&&testLaunch?path.resolve(process.env.OBSERVANDA_DESKTO
 // Keep the window profile beside the existing application preferences. This
 // also avoids depending on Windows shell-folder registration at startup.
 app.setPath('userData',path.join(profile??path.join(os.homedir(),'.observanda'),'window'));
-let main=null,child=null,origin=null,quitting=false,stopping=null,childExited,resolveExit,progress='Starting Observanda…';
+let main=null,child=null,origin=null,quitting=false,stopping=null,childExited,resolveExit,progress={stage:'startup'};
 const stateRequests=new Map();let stateSequence=0,closingGuard;
-let serviceDegraded=false;
+let serviceDegraded=false,closeScheduled=false;
+const resources=development?path.resolve(here,'../dist/desktop-resources'):process.resourcesPath;
+const preferencesFile=path.join(profile??path.join(os.homedir(),'.observanda'),'preferences.json');
+const localizationPath=development?path.resolve(here,'../src/desktop-localization.js'):path.join(resources,'service/src/desktop-localization.js');
+const {desktopLocalization,desktopStartupPage,desktopMenuTemplate}=await import(pathToFileURL(localizationPath).href);
+const localized=desktopLocalization({preferencesFile,onChange:refreshNativeLanguage}),dt=localized.text;
+app.on('browser-window-focus',()=>localized.refresh());app.on('will-quit',()=>localized.dispose());
 const supervisor=new ServiceSupervisor({query:()=>{if(!child?.connected)throw Error('Service is disconnected');return serviceState();},
- onState:({state})=>{if(main&&!main.isDestroyed()){if(state==='degraded')main.setTitle(closeText.degradedTitle);else if(serviceDegraded&&state==='ready')main.setTitle('Observanda');}serviceDegraded=state==='degraded';},
+ onState:({state})=>{if(main&&!main.isDestroyed()){if(state==='degraded')main.setTitle(dt('degradedTitle'));else if(serviceDegraded&&state==='ready')main.setTitle('Observanda');}serviceDegraded=state==='degraded';},
  onWaiting:async({phase,responding})=>{
-  const detail=(responding?(closeText[phase]??closeText.shutdownDetail):closeText.shutdownUnresponsive)+'\n\n'+closeText.shutdownRecovery;
-  await dialog.showMessageBox({type:'warning',title:closeText.shutdownTitle,message:closeText.shutdownMessage,detail,buttons:[closeText.keepWaiting],defaultId:0,cancelId:0});
+  const detail=(responding?(dt(['http-drain','database-stop'].includes(phase)?phase:'shutdownDetail')):dt('shutdownUnresponsive'))+'\n\n'+dt('shutdownRecovery');
+  await dialog.showMessageBox({type:'warning',title:dt('shutdownTitle'),message:dt('shutdownMessage'),detail,buttons:[dt('keepWaiting')],defaultId:0,cancelId:0});
  }});
 function serviceState(){
   if(!child?.connected)return Promise.resolve({busy:false,failure:0});
@@ -37,21 +41,22 @@ function serviceState(){
     child.send({type:'shutdown-status',id},error=>{if(error){stateRequests.delete(id);clearTimeout(timer);reject(error);}});
   });
 }
-const startupPage='data:text/html;charset=utf-8,'+encodeURIComponent('<!doctype html><html lang="en"><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'"><title>Observanda</title><style>body{font:18px system-ui;color:#263349;background:#f5f6fa;margin:12vh 10vw}h1{font-size:28px}p{line-height:1.6}</style><h1>Observanda</h1><p id="status" role="status">Starting your private workspace…</p></html>');
-function showProgress(text){progress=text;if(main&&!main.isDestroyed()&&!origin)void main.webContents.executeJavaScript('document.getElementById("status").textContent='+JSON.stringify(progress)).catch(()=>{});}
-async function openExternal(value){const url=externalUrl(value);if(!url)return;const result=await dialog.showMessageBox({type:'question',title:'Open external website',message:'Open this link in your browser?',detail:url,buttons:['Cancel','Open website'],defaultId:0,cancelId:0});if(result.response===1)await shell.openExternal(url);}
+function showProgress(value){progress=value;if(main&&!main.isDestroyed()&&!origin)void main.webContents.executeJavaScript('document.documentElement.lang='+JSON.stringify(localized.language)+';document.getElementById("status").textContent='+JSON.stringify(localized.progress(progress))).catch(()=>{});}
+function installMenu(){Menu.setApplicationMenu(Menu.buildFromTemplate(desktopMenuTemplate({text:dt,quit:()=>app.quit(),cancelClose:()=>closingGuard?.cancel(),scheduled:closeScheduled,about:()=>dialog.showMessageBox({title:'Observanda',message:'Observanda '+app.getVersion(),detail:dt('aboutDetail'),buttons:[dt('ok')]})})));}
+function refreshNativeLanguage(){if(!main||main.isDestroyed())return;installMenu();if(serviceDegraded)main.setTitle(dt('degradedTitle'));else if(closeScheduled)main.setTitle(dt('waitingTitle'));if(!origin)showProgress(progress);}
+async function openExternal(value){const url=externalUrl(value);if(!url)return;const result=await dialog.showMessageBox({type:'question',title:dt('externalTitle'),message:dt('externalMessage'),detail:url,buttons:[dt('cancelAction'),dt('externalOpen')],defaultId:0,cancelId:0});if(result.response===1)await shell.openExternal(url);}
 function guardWindow(win){
   followWindowTheme(win,nativeTheme,here);
   win.webContents.on('will-navigate',(event,url)=>{if(!localUrl(url,origin)){event.preventDefault();void openExternal(url);}});
   win.webContents.on('will-redirect',(event,url)=>{if(!localUrl(url,origin))event.preventDefault();});
   win.webContents.on('will-attach-webview',event=>event.preventDefault());
   win.webContents.setWindowOpenHandler(({url})=>{
-    if(localUrl(url,origin))return {action:'allow',overrideBrowserWindowOptions:{title:'Observanda preview',show:!testLaunch,webPreferences:{...windowPreferences,session:win.webContents.session}}};
+    if(localUrl(url,origin))return {action:'allow',overrideBrowserWindowOptions:{title:dt('previewTitle'),show:!testLaunch,webPreferences:{...windowPreferences,session:win.webContents.session}}};
     void openExternal(url);return {action:'deny'};
   });
   win.webContents.on('did-create-window',guardWindow);
   win.webContents.on('will-prevent-unload',event=>{
-    if(dialog.showMessageBoxSync(win,{type:'question',title:'Unsaved work',message:'Leave this window with unsaved work?',detail:'Return to Observanda to save your changes first.',buttons:['Keep working','Leave without saving'],defaultId:0,cancelId:0})===1)event.preventDefault();
+    if(dialog.showMessageBoxSync(win,{type:'question',title:dt('unsavedTitle'),message:dt('unsavedMessage'),detail:dt('unsavedDetail'),buttons:[dt('keepWorking'),dt('leaveUnsaved')],defaultId:0,cancelId:0})===1)event.preventDefault();
   });
 }
 function stopService(){
@@ -75,23 +80,16 @@ else{
   main.once('ready-to-show',()=>{if(main&&!testLaunch){main.maximize();main.show();}});
   guardWindow(main);main.on('closed',()=>{main=null;for(const win of BrowserWindow.getAllWindows())win.close();if(!BrowserWindow.getAllWindows().length)void stopService();});
   closingGuard=closeGuard({status:serviceState,close:()=>main?.close(),
-    ask:async()=>((await dialog.showMessageBox(main,{type:'question',title:closeText.busyTitle,message:closeText.busyMessage,detail:closeText.busyDetail,buttons:[closeText.keepOpen,closeText.whenFinished],defaultId:0,cancelId:0})).response===1),
-    waiting:value=>{if(main&&!main.isDestroyed())main.setTitle(value?closeText.waitingTitle:'Observanda');const item=Menu.getApplicationMenu()?.getMenuItemById('cancel-scheduled-close');if(item)item.enabled=value;},
-    failed:()=>dialog.showMessageBox(main,{type:'warning',title:closeText.failedTitle,message:closeText.failedMessage,detail:closeText.failedDetail}),
-    unavailable:()=>dialog.showMessageBox(main,{type:'warning',title:closeText.unavailableTitle,message:closeText.unavailableMessage,detail:closeText.unavailableDetail})});
+    ask:async()=>((await dialog.showMessageBox(main,{type:'question',title:dt('busyTitle'),message:dt('busyMessage'),detail:dt('busyDetail'),buttons:[dt('keepOpen'),dt('whenFinished')],defaultId:0,cancelId:0})).response===1),
+    waiting:value=>{closeScheduled=value;if(main&&!main.isDestroyed())main.setTitle(value?dt('waitingTitle'):'Observanda');const item=Menu.getApplicationMenu()?.getMenuItemById('cancel-scheduled-close');if(item)item.enabled=value;},
+    failed:()=>dialog.showMessageBox(main,{type:'warning',title:dt('failedTitle'),message:dt('failedMessage'),detail:dt('failedDetail'),buttons:[dt('ok')]}),
+    unavailable:()=>dialog.showMessageBox(main,{type:'warning',title:dt('unavailableTitle'),message:dt('unavailableMessage'),detail:dt('unavailableDetail'),buttons:[dt('ok')]})});
   main.on('close',event=>{if(quitting||stopping||closingGuard.allowed)return;event.preventDefault();void closingGuard.request();});
   main.on('closed',()=>closingGuard.dispose());
-  Menu.setApplicationMenu(Menu.buildFromTemplate([
-    ...(process.platform==='darwin'?[{role:'appMenu',label:'Observanda'}]:[]),
-    {label:'File',submenu:[{label:'Quit Observanda',accelerator:'CmdOrCtrl+Q',click:()=>app.quit()},{id:'cancel-scheduled-close',label:closeText.cancel,enabled:false,click:()=>closingGuard.cancel()}]},
-    {role:'editMenu'},{label:'View',submenu:[{role:'resetZoom'},{role:'zoomIn'},{role:'zoomOut'},{role:'togglefullscreen'}]},
-    {label:'Help',submenu:[{label:'About Observanda',click:()=>dialog.showMessageBox({title:'Observanda',message:'Observanda '+app.getVersion(),detail:'Your workspace is stored separately from the application. Closing Observanda stops its local service.'})}]}
-  ]));
-  await main.loadURL(startupPage);showProgress(progress);
-  const resources=development?path.resolve(here,'../dist/desktop-resources'):process.resourcesPath;
+  installMenu();
+  await main.loadURL(desktopStartupPage(localized.language,dt));showProgress(progress);
   const service=development?path.resolve(here,'../src/desktop-service.js'):path.join(resources,'service/src/desktop-service.js');
   const executable=development?(process.env.OBSERVANDA_DESKTOP_NODE??'node'):path.join(resources,'runtime',process.platform==='win32'?'node.exe':'bin/node');
-  const preferencesFile=path.join(profile??path.join(os.homedir(),'.observanda'),'preferences.json');
   const env={...process.env};delete env.NODE_OPTIONS;delete env.ELECTRON_RUN_AS_NODE;
   if(!development){env.OBSERVANDA_POSTGRES_BIN=path.join(resources,'postgresql/bin');env.PATH=path.join(resources,'media/bin')+path.delimiter+(env.PATH??'');}
   // Development may select an explicit runtime pair. Leave a partial pair
@@ -104,21 +102,21 @@ else{
   child=launchService(executable,service,env);
   supervisor.monitor();
   attachPdfService(child);child.stdout.resume();child.stderr.resume();
-  const failed=async message=>{if(stopping)return;await dialog.showMessageBox({type:'error',title:'Observanda could not start',message,detail:'Your saved work has not been removed. Close this window and try again.'});main?.close();};
-  child.on('error',()=>{resolveExit();void failed('The bundled application service could not start. Reinstall or repair Observanda.');});
-  child.on('exit',()=>{const unexpected=supervisor.exited();resolveExit();for(const request of stateRequests.values())request.reject(Error('Service stopped'));stateRequests.clear();if(unexpected)void failed('The local service stopped unexpectedly. Saved changes remain in your workspace.');});
+  const failed=async message=>{if(stopping)return;await dialog.showMessageBox({type:'error',title:dt('startFailedTitle'),message:localized.error(message),detail:dt('startFailedDetail'),buttons:[dt('ok')]});main?.close();};
+  child.on('error',()=>{resolveExit();void failed(dt('serviceStartFailed'));});
+  child.on('exit',()=>{const unexpected=supervisor.exited();resolveExit();for(const request of stateRequests.values())request.reject(Error('Service stopped'));stateRequests.clear();if(unexpected)void failed(dt('serviceStopped'));});
   child.on('message',async message=>{
     if(!message||typeof message!=='object')return;
     if(message.type==='shutdown-status'&&Number.isSafeInteger(message.id)&&typeof message.busy==='boolean'&&Number.isFinite(message.failure)){const request=stateRequests.get(message.id);stateRequests.delete(message.id);request?.resolve({busy:message.busy,failure:message.failure,phase:message.phase});return;}
     if(message.type==='lifecycle')supervisor.progress(message.phase);
     if(message.type==='ready'&&launchUrl(message.url)&&main&&!stopping){supervisor.ready();origin=new URL(message.url).origin;await main.loadURL(message.url);}
-    if(message.type==='progress'&&typeof message.message==='string')showProgress(message.message.slice(0,500));
-    if(message.type==='failed'&&typeof message.message==='string')void failed(message.message.slice(0,1000));
+    if(message.type==='progress'&&typeof message.message==='string')showProgress(message);
+    if(message.type==='failed'&&typeof message.message==='string')void failed(message);
     if(message.type==='protect'&&(process.platform==='darwin'||process.platform==='linux')&&Number.isSafeInteger(message.id)){
       const result=protectDeviceValue(safeStorage,message);
       if(child.connected)child.send({type:'protected',id:message.id,...(typeof result==='string'?{value:result}:{error:true})});
     }
   });
   child.send({type:'start',preferencesFile,deviceProtection:deviceProtectionAvailable(safeStorage)});
-  }).catch(async()=>{await dialog.showMessageBox({type:'error',title:'Observanda could not start',message:'The desktop window could not initialize. Your saved work has not been changed.'});main?.destroy();await stopService();});
+  }).catch(async()=>{await dialog.showMessageBox({type:'error',title:dt('startFailedTitle'),message:dt('windowFailed'),buttons:[dt('ok')]});main?.destroy();await stopService();});
 }

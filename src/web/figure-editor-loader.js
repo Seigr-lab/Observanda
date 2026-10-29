@@ -1,4 +1,4 @@
-import {figureIssues} from './figure-model.js';
+import {figureIssues} from './scientific-validation.js';
 import {t} from './i18n/index.js';
 import {retryModule} from './retry-module.js';
 

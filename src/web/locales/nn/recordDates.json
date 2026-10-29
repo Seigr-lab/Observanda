@@ -16,5 +16,20 @@
   "month9": "september",
   "month10": "oktober",
   "month11": "november",
-  "month12": "desember"
+  "month12": "desember",
+  "fieldDate": "Oppføringsdato",
+  "fieldPrecision": "Datopresisjon",
+  "precisionDay": "Dag",
+  "precisionMonth": "Berre månad",
+  "precisionYear": "Berre år",
+  "precisionRange": "Datointervall",
+  "precisionUnknown": "Ukjend",
+  "fieldHelp": "Når arbeidet fann stad eller er planlagt. Dette er uavhengig av når oppføringa vart oppretta eller redigert.",
+  "noDate": "Ingen dato er tilordna denne oppføringa.",
+  "fieldStart": "Startdato",
+  "fieldEnd": "Sluttdato",
+  "fieldMonth": "Månad",
+  "fieldYear": "År",
+  "estimatedDate": "Anslått dato",
+  "estimatedRange": "Anslått datointervall"
 }

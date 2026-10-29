@@ -7,7 +7,7 @@
   "waitingTitle": "Observanda — venter på å lukke",
   "cancel": "Avbryt automatisk lukking",
   "failedTitle": "En operasjon trenger oppfølging",
-  "failedMessage": "En operasjon ble ikke fullført.",
+  "failedMessage": "En operasjon ble ikke fullført som den skulle.",
   "failedDetail": "Observanda forblir åpent. Åpne Aktivitet for å se gjennom resultatet.",
   "unavailableTitle": "Kunne ikke kontrollere pågående arbeid",
   "unavailableMessage": "Observanda kunne ikke kontrollere om arbeidet er ferdig.",

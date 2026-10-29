@@ -38,7 +38,7 @@ async function launch({packaged,disposable},check){
  globalThis[key]=boundary;if(disposable)process.env.OBSERVANDA_DESKTOP_TEST_HOME=home;else delete process.env.OBSERVANDA_DESKTOP_TEST_HOME;
  Object.defineProperty(process,'resourcesPath',{value:resources,configurable:true});
  const hooks=registerHooks({
-  resolve(specifier,context,next){return Object.hasOwn(exports,specifier)?{url:'visibility:'+id+'/'+specifier,shortCircuit:true}:next(specifier,context);},
+  resolve(specifier,context,next){if(specifier.endsWith('/service/src/desktop-localization.js'))return next(new URL('../src/desktop-localization.js',import.meta.url).href,context);return Object.hasOwn(exports,specifier)?{url:'visibility:'+id+'/'+specifier,shortCircuit:true}:next(specifier,context);},
   load(url,context,next){if(!url.startsWith('visibility:'+id+'/'))return next(url,context);const name=url.slice(('visibility:'+id+'/').length);return {format:'module',shortCircuit:true,source:exports[name].map(value=>value==='default'?'export default globalThis.'+key+'.os;':value==='spawn'?'export const spawn=(...args)=>globalThis.'+key+'.spawn(...args);':'export const '+value+'=globalThis.'+key+'.'+value+';').join('\n')};}
  });
  try{
@@ -48,7 +48,7 @@ async function launch({packaged,disposable},check){
   ready();await Promise.race([serviceStarted,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Desktop initialization did not reach the simulated service')),5000);})]);clearTimeout(timer);
   await check({home,resources,paths,calls,windows,app,child,dialogs,forked,serviceStart,BrowserWindow});
  }finally{
-  clearTimeout(timer);hooks.deregister();if(prior===undefined)delete globalThis[key];else globalThis[key]=prior;
+  clearTimeout(timer);app.emit('will-quit');hooks.deregister();if(prior===undefined)delete globalThis[key];else globalThis[key]=prior;
   if(previousHome===undefined)delete process.env.OBSERVANDA_DESKTOP_TEST_HOME;else process.env.OBSERVANDA_DESKTOP_TEST_HOME=previousHome;
   if(resourceDescriptor)Object.defineProperty(process,'resourcesPath',resourceDescriptor);else delete process.resourcesPath;
  }

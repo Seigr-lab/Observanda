@@ -4,7 +4,7 @@ import {materialReferenceReader} from './material-reference-requests.js';
 import {isRetainedFigure} from './retained-figure-model.js';
 import {retainedFigureEditor} from './retained-figure-editor.js';
 import {figureEditor} from './figure-editor.js';
-import {renderFigureView} from './figure-renderer.js';
+import {renderFigureView} from './figure-presentation.js';
 import {createFigure} from './figure-model.js';
 import {createComposition,figurePlots} from './figure-composition.js';
 import {recordFigureCopyPicker} from './record-figure-copy-picker.js';

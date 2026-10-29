@@ -1,3 +1,5 @@
+import {modelMessages} from './model-messages.js';
+import displayMessages from './locales/en/figureDisplay.json' with {type:'json'};
 import {figureCoordinateNumber} from './figure-number-labels.js';
 import messages from './locales/en/figureObservations.json' with {type:'json'};
 import {figureStyle} from './figure-style.js';import {wrapAnnotationText} from './figure-annotation-layout.js';
@@ -14,15 +16,15 @@ export function observationAnnotationIssues(a,f,xValue,{draft=false,retained=fal
  }return [];
 }
 export function createObservationAnnotation(kind,f){return {id:crypto.randomUUID(),kind,label:'',color:'#92549f',opacity:.15,...(kind==='region'?{xLower:null,xUpper:null,yLower:null,yUpper:null}:{seriesId:f.series[0].id,pointIndex:0,dx:24,dy:-36})};}
-export function observationPosition(a,f){
+export function observationPosition(a,f,{translate}={}){
  if(a.kind==='region')return `${f.x.label||'X'}: ${figureCoordinateNumber(f,'x',a.xLower)} – ${figureCoordinateNumber(f,'x',a.xUpper)}; ${f.y.label||'Y'}: ${figureCoordinateNumber(f,'y',a.yLower)} – ${figureCoordinateNumber(f,'y',a.yUpper)}`;
- const s=f.series.find(s=>s.id===a.seriesId),p=s?.points[a.pointIndex];return `${s?.name??a.seriesId} · ${messages.observation} ${a.pointIndex+1}: (${figureCoordinateNumber(f,'x',p?.x)}, ${figureCoordinateNumber(f,'y',p?.y)})`;
+ const s=f.series.find(s=>s.id===a.seriesId),p=s?.points[a.pointIndex];return modelMessages('figureDisplay',displayMessages,translate)('observationPosition',{series:s?.name??a.seriesId,number:a.pointIndex+1,x:figureCoordinateNumber(f,'x',p?.x),y:figureCoordinateNumber(f,'y',p?.y)});
 }
-export function renderObservationAnnotations(f,{left,top,plotW,plotH,horizontal,cx,cy,vx,vy,clip,esc}){
+export function renderObservationAnnotations(f,{left,top,plotW,plotH,horizontal,cx,cy,vx,vy,clip,esc,translate}){
  let background='',foreground='';const key=[],style=figureStyle(f),size=style.fontSize,boxes=[];
  const px=x=>horizontal?cy(x):cx(x),py=y=>horizontal?vx(y):vy(y);
  for(const [index,a] of (f.annotations??[]).entries()){
-  if(!observationAnnotation(a))continue;const title='<title>'+esc(a.label+': '+observationPosition(a,f))+'</title>';
+  if(!observationAnnotation(a))continue;const title='<title>'+esc(a.label+': '+observationPosition(a,f,{translate}))+'</title>';
   if(a.kind==='region'){
    const coords=[px(a.xLower),px(a.xUpper)],values=[py(a.yLower),py(a.yUpper)],xs=horizontal?values:coords,ys=horizontal?coords:values,x=Math.min(...xs),y=Math.min(...ys),width=Math.abs(xs[1]-xs[0]),height=Math.abs(ys[1]-ys[0]);
    background+=`<g class="figure-xy-region" data-annotation-id="${a.id}" clip-path="url(#${clip})">${title}<rect x="${x}" y="${y}" width="${width}" height="${height}" stroke="${a.color}" stroke-width="1.5" fill="${a.color}" fill-opacity="${a.opacity}"/></g>`;
@@ -41,4 +43,4 @@ export function renderObservationAnnotations(f,{left,top,plotW,plotH,horizontal,
 }
 export function referencedObservation(f,seriesId,index){return (f.annotations??[]).some(a=>a.kind==='callout'&&a.seriesId===seriesId&&(index===undefined||a.pointIndex===index));}
 export function removedObservation(f,seriesId,index){for(const a of f.annotations??[])if(a.kind==='callout'&&a.seriesId===seriesId&&a.pointIndex>index)a.pointIndex--;}
-export const observationAnnotationName=kind=>messages[kind];
+export const observationAnnotationName=(kind,{translate}={})=>modelMessages('figureObservations',messages,translate)(kind);

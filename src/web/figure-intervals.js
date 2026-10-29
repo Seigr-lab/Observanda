@@ -1,3 +1,4 @@
+import {modelMessages} from './model-messages.js';
 import messages from './locales/en/figureIntervals.json' with {type:'json'};
 export const INTERVAL_FIELDS=['xLower','xUpper','yLower','yUpper'];
 export const pointIntervals=p=>({x:[p.xLower??p.x,p.xUpper??p.x],y:[p.yLower??(p.y===null?null:p.y-(p.error??0)),p.yUpper??(p.y===null?null:p.y+(p.error??0))]});
@@ -24,4 +25,4 @@ export function renderIntervals(p,{px,py,horizontal,cx,cy,vx,vy,numeric:n}){
   svg+=`<path class="figure-measurement-interval figure-interval-${axis}" d="${d}" fill="none" stroke-width="1.4"/>`;
  }return svg;
 }
-export const intervalHint=(p,format=value=>value)=>INTERVAL_FIELDS.filter(k=>p[k]!==undefined&&p[k]!==null).map(k=>messages[k]+': '+format(p[k],k)).join('; ');
+export const intervalHint=(p,format=value=>value,{translate}={})=>INTERVAL_FIELDS.filter(k=>p[k]!==undefined&&p[k]!==null).map(k=>modelMessages('figureIntervals',messages,translate)(k)+': '+format(p[k],k)).join('; ');

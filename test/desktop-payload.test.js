@@ -3,14 +3,14 @@ import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,readFile,writeFile,rm,symlink,cp} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import {payloadFiles,verifyDesktopPayload} from '../scripts/desktop-payload.js';
+import {payloadFiles,verifyDesktopPayload,desktopLocalizationFiles} from '../scripts/desktop-payload.js';
 import {githubRuntimeFiles} from '../scripts/github-runtime.js';
 import {pdfValidationRuntimeFiles} from '../scripts/pdf-validation-runtime.js';
 import {buildBrowser} from '../scripts/browser-build.js';
 test('desktop packaging rejects changed, extra or incomplete runtime payloads',async t=>{
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-payload-'));t.after(()=>rm(root,{recursive:true,force:true}));
  const suffix=process.platform==='win32'?'.exe':'';
- for(const file of [...githubRuntimeFiles(),...pdfValidationRuntimeFiles(),'service/src/desktop-service.js','service/node_modules/pg/package.json',process.platform==='win32'?'runtime/node.exe':'runtime/bin/node','postgresql/bin/postgres'+suffix,'media/bin/ffmpeg'+suffix,'media/bin/ffprobe'+suffix,'media/LICENSE']){
+ for(const file of [...githubRuntimeFiles(),...pdfValidationRuntimeFiles(),...desktopLocalizationFiles(),'service/src/desktop-service.js','service/node_modules/pg/package.json',process.platform==='win32'?'runtime/node.exe':'runtime/bin/node','postgresql/bin/postgres'+suffix,'media/bin/ffmpeg'+suffix,'media/bin/ffprobe'+suffix,'media/LICENSE']){
   await mkdir(path.dirname(path.join(root,file)),{recursive:true});await writeFile(path.join(root,file),'Synthetic payload bytes');
  }
  const manifest={format:1,platform:process.platform,arch:process.arch,files:await payloadFiles(root)};
@@ -31,6 +31,7 @@ test('packaging refuses a valid but stale payload and mismatched application ver
  const write=async(base,name,value)=>{await mkdir(path.dirname(path.join(base,name)),{recursive:true});await writeFile(path.join(base,name),value);};
  for(const [name,value] of Object.entries({'src/desktop-service.js':'Synthetic service','src/web/locales/en/test.json':'{"label":"Original"}','package.json':'{"version":"0.3.0"}','package-lock.json':'{}','desktop/icon_black.svg':'<svg/>','desktop/icon_white.svg':'<svg/>','desktop/package.json':'{"version":"0.3.0"}'}))await write(sourceRoot,name,value);
  for(const [name,value] of Object.entries({'src/web/index.html':'<head><link rel="stylesheet" href="/app.css"></head><script type="module" src="/app.js"></script>','src/web/app.js':'document.body.dataset.started="yes";','src/web/app.css':'body { color: #123456; }'}))await write(sourceRoot,name,value);
+ for(const name of desktopLocalizationFiles())await write(sourceRoot,name.slice('service/'.length),'Synthetic localization bytes');
  await cp(sourceRoot,path.join(root,'service'),{recursive:true});
  const browser=await buildBrowser({root:sourceRoot,out:path.join(root,'service/src/web-build')});
  const suffix=process.platform==='win32'?'.exe':'';

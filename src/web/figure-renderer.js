@@ -1,3 +1,5 @@
+import {modelMessages} from './model-messages.js';
+import displayMessages from './locales/en/figureDisplay.json' with {type:'json'};
 import {appendProjectionDescription,projectionTableDescription,projectionAxisLabel} from './figure-projection-display.js';
 import {figureNumeralHelp} from './figure-radix-labels.js';
 import {axisFraction,explicitAxisTicks,axisTickValues,customTickLayout,verticalTickHeight,renderCustomAxis,axisControlTable} from './figure-axis-controls.js';
@@ -72,10 +74,13 @@ function dateTicks(domain,count,format){
  }
  return result.length?result:[(domain.min+domain.max)/2];
 }
-export function figureSummary(figure){
- if(figure.kind==='panels')return figure.panels.map(p=>p.label+': '+p.figure.title+'. '+figureSummary(p.figure)).join(' ');
- const summary=figure.summary;
- return summary?`${summary.operation==='count'?'Row counts':summary.operation+' values'} by ${summary.category}${summary.group?' and '+summary.group:''}, calculated from ${summary.rows} source rows.${summary.missing?' '+summary.missing+' empty values excluded.':''}`:'';
+export function figureSummary(figure,{translate}={}){
+ const text=modelMessages('figureDisplay',displayMessages,translate);
+ if(figure.kind==='panels')return figure.panels.map(p=>text('summaryPanel',{label:p.label,title:p.figure.title,summary:figureSummary(p.figure,{translate})})).join(' ');
+ const summary=figure.summary;if(!summary)return '';
+ const operation=translate&&['mean','sum','min','max','median'].includes(summary.operation)?translate('datasetAggregation',summary.operation):summary.operation;
+ const key=(summary.operation==='count'?'summaryCount':'summaryValues')+(summary.group?'Grouped':'');
+ return text(key,{operation,category:summary.category,group:summary.group,rows:summary.rows})+(summary.missing?' '+text('emptyExcluded',{count:summary.missing}):'');
 }
 
 export function plotDomains(figure){
@@ -83,27 +88,28 @@ export function plotDomains(figure){
  return {x:domain([...series.flatMap(s=>s.points.flatMap(p=>pointIntervals(p).x.map(v=>xValue(v,figure.x.kind)))),...axisTickValues(figure.x)],figure.x),
   y:domain([...series.flatMap(s=>s.points.flatMap(p=>p.y===null?[]:pointIntervals(p).y)),...axisTickValues(figure.y)],figure.y,['bar','bar-horizontal','area'].includes(figure.kind))};
 }
-function renderPanels(figure,{width=1000,idPrefix='figure'}={}){
+function renderPanels(figure,{width=1000,idPrefix='figure',translate}={}){
  width=Math.max(280,width);const columns=Math.max(1,Math.min(figure.layout.columns,Math.floor(width/360))),gap=16,panelWidth=(width-gap*(columns-1))/columns,plots=linkedPanelPlots(figure,plotDomains);
  const titleLines=wrapFigureText(figure.title,width-40,22);
  let y=22*1.25*titleLines.length+24,graphic='';
  for(let start=0;start<plots.length;start+=columns){
   let rowHeight=0;
   for(let i=start;i<Math.min(start+columns,plots.length);i++){
-   const plot=plots[i],svg=renderFigure(plot,{width:panelWidth,idPrefix:idPrefix+'-panel-'+figure.panels[i].id}),box=svg.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/),scale=Math.min(1,panelWidth/Number(box[1])),height=Number(box[2])*scale,x=(i-start)*(panelWidth+gap);
+   const plot=plots[i],svg=renderFigure(plot,{width:panelWidth,idPrefix:idPrefix+'-panel-'+figure.panels[i].id,translate}),box=svg.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/),scale=Math.min(1,panelWidth/Number(box[1])),height=Number(box[2])*scale,x=(i-start)*(panelWidth+gap);
    rowHeight=Math.max(rowHeight,height+28);
    graphic+=`<g class="figure-panel" data-panel-label="${esc(figure.panels[i].label)}" transform="translate(${x} ${y})">${svgText(figure.panels[i].label,8,16,{anchor:'start',weight:'600',width:panelWidth-16,size:14})}<g transform="translate(0 28) scale(${scale})">${svg}</g></g>`;
   }
   y+=rowHeight+gap;
  }
- return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${y}" width="${width}" height="${y}" role="img" aria-label="${esc(figure.title)}"><title>${esc(figure.title)}</title><desc>${esc(figureSummary(figure))}</desc><g fill="${figureStyle(plots[0]).textColor}" font-family="${FONT_FAMILIES[figureStyle(plots[0]).font]}">${svgText(figure.title,width/2,26,{size:22,parts:titleLines,weight:'600',cls:'figure-composition-title'})}${graphic}</g></svg>`;
+ return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${y}" width="${width}" height="${y}" role="img" aria-label="${esc(figure.title)}"><title>${esc(figure.title)}</title><desc>${esc(figureSummary(figure,{translate}))}</desc><g fill="${figureStyle(plots[0]).textColor}" font-family="${FONT_FAMILIES[figureStyle(plots[0]).font]}">${svgText(figure.title,width/2,26,{size:22,parts:titleLines,weight:'600',cls:'figure-composition-title'})}${graphic}</g></svg>`;
 }
 export function renderFigure(figure,options={}){
- return appendProjectionDescription(renderPlotFigure(figure,options),figure);
+ return appendProjectionDescription(renderPlotFigure(figure,options),figure,options);
 }
-function renderPlotFigure(figure,{width,height,idPrefix='figure'}={}){
- if(figure.kind==='panels')return renderPanels(figure,{width,idPrefix});
- if(figure.kind==='heatmap')return renderHeatmap({...figure,heatmap:{...figure.heatmap,valueLabel:projectionAxisLabel(figure,'y')}},{width});
+function renderPlotFigure(figure,{width,height,idPrefix='figure',translate}={}){
+ const text=modelMessages('figureDisplay',displayMessages,translate),intervalText=modelMessages('figureIntervals',intervalMessages,translate);
+ if(figure.kind==='panels')return renderPanels(figure,{width,idPrefix,translate});
+ if(figure.kind==='heatmap')return renderHeatmap({...figure,heatmap:{...figure.heatmap,valueLabel:projectionAxisLabel(figure,'y',{translate})}},{width,translate});
  const style=figureStyle(figure),fontSize=style.fontSize;
  width=Math.max(figure.markerArea?352:280,width??style.width);
  height=height??Math.max(260,width*style.height/style.width);
@@ -173,7 +179,7 @@ function renderPlotFigure(figure,{width,height,idPrefix='figure'}={}){
  if(customX)graphic+=renderCustomAxis(customX,{position:v=>(horizontal?cy:cx)(figure.x.kind==='date'?new Date(v).toISOString():v),left,top,plotW,plotH,horizontal:!horizontal,style,grid:style.grid==='both',cls:'figure-coordinate-tick',esc,labelValue:value=>figureCoordinateNumber(figure,'x',value)});
  const clip=idPrefix+'-plot-'+figure.id;
  graphic+=`<defs><clipPath id="${clip}"><rect x="${left}" y="${top}" width="${plotW}" height="${plotH}"/></clipPath></defs>`;
- const annotations=renderAnnotations(figure,{left,top,plotW,plotH,horizontal,cx,cy,vx,vy,clip,esc});
+ const annotations=renderAnnotations(figure,{left,top,plotW,plotH,horizontal,cx,cy,vx,vy,clip,esc,translate});
  graphic+=annotations.background;
  const coordinates=[...new Set(series.flatMap(s=>s.points.filter(valid).map(p=>horizontal?cy(p.x):cx(p.x))))].sort((a,b)=>a-b);
  const slot=coordinates.length>1?coordinates.slice(1).reduce((gap,v,i)=>Math.min(gap,v-coordinates[i]),Infinity):(horizontal?plotH:plotW)/2;
@@ -193,7 +199,7 @@ function renderPlotFigure(figure,{width,height,idPrefix='figure'}={}){
   }
   for(const p of s.points.filter(valid)){
    let px=horizontal?vx(p.y):cx(p.x),py=horizontal?cy(p.x):vy(p.y);
-   const pointNumber=value=>figureDataNumber(value,style),hint=esc(s.name+': '+(figure.x.kind==='number'?pointNumber(p.x):p.x)+' → '+pointNumber(p.y)+(p.error!==null?' ± '+pointNumber(p.error):'')+' '+intervalHint(p,(value,key)=>key[0]==='x'&&figure.x.kind!=='number'?value:pointNumber(value))+(figure.markerArea?' '+figure.markerArea.label+': '+(p.count==null?'—':pointNumber(p.count)):''));
+   const pointNumber=value=>figureDataNumber(value,style),hint=esc(s.name+': '+(figure.x.kind==='number'?pointNumber(p.x):p.x)+' → '+pointNumber(p.y)+(p.error!==null?' ± '+pointNumber(p.error):'')+' '+intervalHint(p,(value,key)=>key[0]==='x'&&figure.x.kind!=='number'?value:pointNumber(value),{translate})+(figure.markerArea?' '+figure.markerArea.label+': '+(p.count==null?'—':pointNumber(p.count)):''));
    if(bars){
     const barW=Math.max(1,Math.min(80,slot*.75/Math.max(1,series.length))),offset=barW*(index-(series.length-1)/2);
     if(horizontal)py+=offset;else px+=offset;
@@ -219,17 +225,18 @@ function renderPlotFigure(figure,{width,height,idPrefix='figure'}={}){
  }
  graphic+=`<path d="M${left},${top} V${top+plotH} H${left+plotW}" fill="none" stroke="${style.axisColor}"/>`;
  const axisY=height-(figure.legend&&legendPosition==='bottom'?legendHeight+20:0)-12;
- graphic+=svgText(horizontal?projectionAxisLabel(figure,'y'):projectionAxisLabel(figure,'x'),left+plotW/2,axisY,{size:fontSize+2,width:plotW,cls:'figure-axis-label'});
- graphic+=`<text class="figure-axis-label" transform="translate(18 ${top+plotH/2}) rotate(-90)" text-anchor="middle" font-size="${fontSize+2}">${esc(horizontal?projectionAxisLabel(figure,'x'):projectionAxisLabel(figure,'y'))}</text>`;
- const key=renderAnnotationKey(figure,annotations.key,{width,y:height,esc}),sizes=markerAreaLegend(figure,{width,y:height+key.height,esc});
- return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${numeric(height+key.height+sizes.height)}" width="${width}" height="${numeric(height+key.height+sizes.height)}" role="img" aria-label="${esc(figure.title)}"><title>${esc(figure.title)}</title><desc>${esc(figure.kind+' plot. '+series.length+' visible series. '+figureSummary(figure)+' '+intervalMessages.description+' '+figureNumeralHelp(style))}</desc><rect width="100%" height="100%" fill="${style.background}"/><g font-family="${FONT_FAMILIES[style.font]}" font-size="${fontSize}" fill="${style.textColor}">${graphic}${key.svg}${sizes.svg}</g></svg>`;
+ graphic+=svgText(horizontal?projectionAxisLabel(figure,'y',{translate}):projectionAxisLabel(figure,'x',{translate}),left+plotW/2,axisY,{size:fontSize+2,width:plotW,cls:'figure-axis-label'});
+ graphic+=`<text class="figure-axis-label" transform="translate(18 ${top+plotH/2}) rotate(-90)" text-anchor="middle" font-size="${fontSize+2}">${esc(horizontal?projectionAxisLabel(figure,'x',{translate}):projectionAxisLabel(figure,'y',{translate}))}</text>`;
+ const key=renderAnnotationKey(figure,annotations.key,{width,y:height,esc,translate}),sizes=markerAreaLegend(figure,{width,y:height+key.height,esc,translate});
+ return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${numeric(height+key.height+sizes.height)}" width="${width}" height="${numeric(height+key.height+sizes.height)}" role="img" aria-label="${esc(figure.title)}"><title>${esc(figure.title)}</title><desc>${esc(text('plotDescription',{kind:translate?translate('retainedFigureEditor','option_'+figure.kind):figure.kind,count:series.length})+' '+figureSummary(figure,{translate})+' '+intervalText('description')+' '+figureNumeralHelp(style,{translate}))}</desc><rect width="100%" height="100%" fill="${style.background}"/><g font-family="${FONT_FAMILIES[style.font]}" font-size="${fontSize}" fill="${style.textColor}">${graphic}${key.svg}${sizes.svg}</g></svg>`;
 }
-export function figureTable(figure){
- if(figure.kind==='panels')return figure.panels.map(p=>'<section class="figure-panel-data"><h4>'+esc(p.label+' · '+p.figure.title)+'</h4>'+figureTable(p.figure)+'</section>').join('');
+export function figureTable(figure,{translate}={}){
+ const text=modelMessages('figureDisplay',displayMessages,translate),intervalText=modelMessages('figureIntervals',intervalMessages,translate),markerText=modelMessages('figureMarkerArea',markerMessages,translate);
+ if(figure.kind==='panels')return figure.panels.map(p=>'<section class="figure-panel-data"><h4>'+esc(p.label+' · '+p.figure.title)+'</h4>'+figureTable(p.figure,{translate})+'</section>').join('');
  const style=figureStyle(figure),value=v=>figureDataNumber(v,style),coordinate=v=>figure.x.kind==='number'?value(v):v;
  const counted=figure.series.some(s=>s.points.some(p=>p.count!=null));
  const extra=figure.series.some(s=>s.points.some(p=>INTERVAL_FIELDS.some(k=>p[k]!=null)))?INTERVAL_FIELDS:[];
- return `${projectionTableDescription(figure)}${style.numberFormat==='radix'?'<p>'+esc(figureNumeralHelp(style))+'</p>':''}${figure.markerArea?'<p>'+esc(figure.markerArea.label+' · '+markerMessages.legendRule.replace('{area}',value(figure.markerArea.unitArea)))+'</p>':''}<table>${figure.summary?'<caption>'+esc(figureSummary(figure))+'</caption>':''}<thead><tr><th>Series</th><th>${esc(projectionAxisLabel(figure,'x')||'X')}</th><th>${esc(projectionAxisLabel(figure,'y')||'Value')}</th><th>Uncertainty (±)</th>${extra.map(k=>'<th>'+esc(intervalMessages[k])+'</th>').join('')}${counted?'<th>'+esc(markerMessages.count)+'</th>':''}</tr></thead><tbody>${figure.series.flatMap(s=>s.points.map(p=>`<tr><th scope="row">${esc(s.name)}</th><td>${esc(coordinate(p.x))}</td><td>${p.y===null?'Gap':esc(value(p.y))}</td><td>${p.error===null?'—':esc(value(p.error))}</td>${extra.map(k=>'<td>'+esc(p[k]==null?'—':k[0]==='x'?coordinate(p[k]):value(p[k]))+'</td>').join('')}${counted?'<td>'+esc(p.count==null?'—':value(p.count))+'</td>':''}</tr>`)).join('')}</tbody></table>`+annotationTable(figure,esc)+heatmapThresholdTable(figure,esc)+axisControlTable(figure,esc);
+ return `${projectionTableDescription(figure,{translate})}${style.numberFormat==='radix'?'<p>'+esc(figureNumeralHelp(style,{translate}))+'</p>':''}${figure.markerArea?'<p>'+esc(figure.markerArea.label+' · '+markerText('legendRule',{area:value(figure.markerArea.unitArea)}))+'</p>':''}<table>${figure.summary?'<caption>'+esc(figureSummary(figure,{translate}))+'</caption>':''}<thead><tr><th>${esc(text('series'))}</th><th>${esc(projectionAxisLabel(figure,'x',{translate})||'X')}</th><th>${esc(projectionAxisLabel(figure,'y',{translate})||text('value'))}</th><th>${esc(text('uncertainty'))}</th>${extra.map(k=>'<th>'+esc(intervalText(k))+'</th>').join('')}${counted?'<th>'+esc(markerText('count'))+'</th>':''}</tr></thead><tbody>${figure.series.flatMap(s=>s.points.map(p=>`<tr><th scope="row">${esc(s.name)}</th><td>${esc(coordinate(p.x))}</td><td>${p.y===null?esc(text('gap')):esc(value(p.y))}</td><td>${p.error===null?'—':esc(value(p.error))}</td>${extra.map(k=>'<td>'+esc(p[k]==null?'—':k[0]==='x'?coordinate(p[k]):value(p[k]))+'</td>').join('')}${counted?'<td>'+esc(p.count==null?'—':value(p.count))+'</td>':''}</tr>`)).join('')}</tbody></table>`+annotationTable(figure,esc,{translate})+heatmapThresholdTable(figure,esc,{translate})+axisControlTable(figure,esc,{translate});
 }
 export function renderFigureView(figure,options={}){
  if(figure.kind!=='panels')return renderFigure(figure,options);

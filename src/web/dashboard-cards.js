@@ -1,4 +1,4 @@
-import {renderFigure} from './figure-renderer.js';
+import {renderFigure} from './figure-presentation.js';
 export const cardIcons={
  records:'<path d="M6 3h9l3 3v15H6zM9 10h6M9 14h6M9 18h4"/>',
  projects:'<path d="M3 6h7l2 2h9v12H3zM3 6V4h7l2 2"/>',

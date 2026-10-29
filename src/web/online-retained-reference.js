@@ -6,7 +6,7 @@ import {recordRevisionView} from './record-revision-view.js';
 import {applyRichTextStyles} from './rich-text-stylesheet.js';
 import {materialFileSummary} from './material-file-summary.js';
 import {figureReadingView} from './figure-reading-view.js';
-import {renderFigureView,figureTable} from './figure-renderer.js';
+import {renderFigureView,figureTable} from './figure-presentation.js';
 import {bookText} from './book-messages.js';
 const tr=(key,values)=>t('online',key,values);
 

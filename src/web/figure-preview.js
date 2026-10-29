@@ -1,7 +1,7 @@
 import {isRetainedFigure} from './retained-figure-model.js';
 import {escapeFigureText as esc} from './retained-figure-text.js';
 import {t} from './i18n/index.js';
-import {renderFigure} from './figure-renderer.js';
+import {renderFigure} from './figure-presentation.js';
 import {figureStyle} from './figure-style.js';
 
 // A single responsive mounting layer for both saved and proposed figures.

@@ -1,3 +1,4 @@
+import {figureDiagnosticText,figureResourceIssue} from './figure-diagnostics.js';
 import {validComputation} from './measurement-computation.js';
 import {isRetainedFigure,validRetainedFigure} from './retained-figure-model.js';
 import {validMeasurementProjection} from './measurement-transform.js';
@@ -40,81 +41,84 @@ export function xValue(value,kind){
  if(!Number.isFinite(day)||new Date(day).toISOString().slice(0,10)!==date)return null;
  const stamp=Date.parse(value);return Number.isFinite(stamp)?stamp:null;
 }
-export function figureIssues(figure,{draft=false,retained=false,resourceErrors=false}={}){
- if(isRetainedFigure(figure))return validRetainedFigure(figure,{draft})?[]:['Invalid retained figure.'];
+export function figureIssues(figure,options={}){return figureIssuesRaw(figure,options).map(message=>figureResourceIssue(message,options.translate));}
+function figureIssuesRaw(figure,{draft=false,retained=false,resourceErrors=false,translate}={}){
+ const fm=figureDiagnosticText(translate);
+ if(isRetainedFigure(figure))return validRetainedFigure(figure,{draft})?[]:[fm('retainedInvalid')];
  if(Object.hasOwn(figure??{},'source')&&!validFigureSource(figure.source))return [provenanceMessages.invalid];
- if(figure?.kind==='panels')return compositionIssues(figure,figureIssues,{draft,retained,resourceErrors});
+ if(figure?.kind==='panels')return compositionIssues(figure,figureIssues,{draft,retained,resourceErrors,translate});
  const errors=[];
  const fail=message=>errors.push(message);
- if(!keys(figure,['id','title','kind','x','y','legend','series',...['style','summary','annotations','source','heatmap','markerArea','projection','computation'].filter(k=>Object.hasOwn(figure??{},k))]))return ['Invalid figure structure.'];
- if(Object.hasOwn(figure,'computation')&&(!validComputation(figure.computation)||figure.computation.kind!=='approximate-inputs'))fail('Invalid figure structure.');
+ if(!keys(figure,['id','title','kind','x','y','legend','series',...['style','summary','annotations','source','heatmap','markerArea','projection','computation'].filter(k=>Object.hasOwn(figure??{},k))]))return [fm('structureInvalid')];
+ if(Object.hasOwn(figure,'computation')&&(!validComputation(figure.computation)||figure.computation.kind!=='approximate-inputs'))fail(fm('structureInvalid'));
  if(Object.hasOwn(figure,'projection')&&(!validMeasurementProjection(figure.projection,{resourceErrors})||figure.projection?.x&&figure.x?.kind!=='number'))fail(projectionMessages.invalid);
- if(Object.hasOwn(figure,'style')&&!validFigureStyle(figure.style))fail('Invalid figure presentation.');
- if(Object.hasOwn(figure,'summary')&&(!keys(figure.summary,['operation','rows','category','group','missing'])||!['count','sum','mean','median','min','max'].includes(figure.summary.operation)||!Number.isInteger(figure.summary.rows)||figure.summary.rows<1||!text(figure.summary.category)||!text(figure.summary.group)||!Number.isInteger(figure.summary.missing)||figure.summary.missing<0))fail('Invalid summary description.');
- if(!id(figure.id)||!text(figure.title)||!draft&&!figure.title.trim())fail('Give the figure a title.');
- if(!FIGURE_TYPES.some(([kind])=>kind===figure.kind))fail('Choose a supported figure type.');
+ if(Object.hasOwn(figure,'style')&&!validFigureStyle(figure.style))fail(fm('styleInvalid'));
+ if(Object.hasOwn(figure,'summary')&&(!keys(figure.summary,['operation','rows','category','group','missing'])||!['count','sum','mean','median','min','max'].includes(figure.summary.operation)||!Number.isInteger(figure.summary.rows)||figure.summary.rows<1||!text(figure.summary.category)||!text(figure.summary.group)||!Number.isInteger(figure.summary.missing)||figure.summary.missing<0))fail(fm('summaryInvalid'));
+ if(!id(figure.id)||!text(figure.title)||!draft&&!figure.title.trim())fail(fm('titleRequired'));
+ if(!FIGURE_TYPES.some(([kind])=>kind===figure.kind))fail(fm('kindRequired'));
  for(const [name,axis] of [['Horizontal',figure.x],['Vertical',figure.y]]){
-  if(!keys(axis,[...(name==='Horizontal'?['kind','label','scale','min','max']:['label','scale','min','max']),...['reversed','ticks'].filter(k=>Object.hasOwn(axis??{},k))])||!text(axis.label)||!['linear','log'].includes(axis.scale)||![axis.min,axis.max].every(v=>v===null||number(v)))return ['Invalid axis settings.'];
+  if(!keys(axis,[...(name==='Horizontal'?['kind','label','scale','min','max']:['label','scale','min','max']),...['reversed','ticks'].filter(k=>Object.hasOwn(axis??{},k))])||!text(axis.label)||!['linear','log'].includes(axis.scale)||![axis.min,axis.max].every(v=>v===null||number(v)))return [fm('axisInvalid')];
   errors.push(...axisControlIssues(axis,{draft,retained,kind:axis.kind??'number'}));
-  if(!draft&&axis.min!==null&&axis.max!==null&&axis.min>=axis.max)fail(name+' minimum must be less than its maximum.');
-  if(!draft&&axis.scale==='log'&&[axis.min,axis.max].some(v=>v!==null&&v<=0))fail(name+' logarithmic bounds must be positive.');
+  if(!draft&&axis.min!==null&&axis.max!==null&&axis.min>=axis.max)fail(fm('axisMinimum',{axis:fm(name==='Horizontal'?'horizontal':'vertical')}));
+  if(!draft&&axis.scale==='log'&&[axis.min,axis.max].some(v=>v!==null&&v<=0))fail(fm('axisPositive',{axis:fm(name==='Horizontal'?'horizontal':'vertical')}));
  }
- if(figure.x.kind==='date'&&[figure.x.min,figure.x.max].some(v=>v!==null&&Math.abs(v)>8.64e15))fail('Horizontal bounds are outside the supported calendar.');
- if(!['category','number','date'].includes(figure.x.kind))fail('Choose a horizontal data type.');
- if(!draft&&figure.x.kind!=='number'&&figure.x.scale!=='linear')fail('Logarithmic horizontal axes require numeric data.');
- if(!draft&&figure.kind==='scatter'&&figure.x.kind==='category')fail('Scatter plots need numeric or date coordinates.');
- if(!draft&&['bar','bar-horizontal','area'].includes(figure.kind)&&figure.y.scale==='log')fail('Bars and filled areas require a linear vertical axis.');
- if(typeof figure.legend!=='boolean'||!Array.isArray(figure.series)||!figure.series.length)return [...errors,'Add at least one series.'];
+ if(figure.x.kind==='date'&&[figure.x.min,figure.x.max].some(v=>v!==null&&Math.abs(v)>8.64e15))fail(fm('calendarBounds'));
+ if(!['category','number','date'].includes(figure.x.kind))fail(fm('horizontalType'));
+ if(!draft&&figure.x.kind!=='number'&&figure.x.scale!=='linear')fail(fm('numericLog'));
+ if(!draft&&figure.kind==='scatter'&&figure.x.kind==='category')fail(fm('scatterCoordinates'));
+ if(!draft&&['bar','bar-horizontal','area'].includes(figure.kind)&&figure.y.scale==='log')fail(fm('linearBars'));
+ if(typeof figure.legend!=='boolean'||!Array.isArray(figure.series)||!figure.series.length)return [...errors,fm('seriesRequired')];
  const ids=new Set(),names=new Set();
  for(const series of figure.series){
-  if(!keys(series,['id','name','color','points',...(Object.hasOwn(series??{},'style')?['style']:[])])||!id(series.id)||ids.has(series.id)||!text(series.name)||!/^#[0-9a-f]{6}$/i.test(series.color)||!Array.isArray(series.points))return [...errors,'Invalid series structure.'];
-  if(Object.hasOwn(series,'style')&&!validSeriesStyle(series.style))fail('Invalid series presentation.');
-  ids.add(series.id);if(!draft&&names.has(series.name))fail('Give each series a distinct name.');names.add(series.name);if(!draft&&!series.name.trim())fail('Name each series.');
+  if(!keys(series,['id','name','color','points',...(Object.hasOwn(series??{},'style')?['style']:[])])||!id(series.id)||ids.has(series.id)||!text(series.name)||!/^#[0-9a-f]{6}$/i.test(series.color)||!Array.isArray(series.points))return [...errors,fm('seriesInvalid')];
+  if(Object.hasOwn(series,'style')&&!validSeriesStyle(series.style))fail(fm('seriesStyle'));
+  ids.add(series.id);if(!draft&&names.has(series.name))fail(fm('seriesDistinct'));names.add(series.name);if(!draft&&!series.name.trim())fail(fm('seriesName'));
   let complete=0;
   for(const [i,p] of series.points.entries()){
-   if(!keys(p,['x','y','error',...[...INTERVAL_FIELDS,'count'].filter(k=>Object.hasOwn(p??{},k))])||!(p.x===null||text(p.x)||number(p.x))||!(p.y===null||number(p.y))||!(p.error===null||number(p.error)&&p.error>=0))return [...errors,'Invalid data in '+series.name+', row '+(i+1)+'.'];
+   if(!keys(p,['x','y','error',...[...INTERVAL_FIELDS,'count'].filter(k=>Object.hasOwn(p??{},k))])||!(p.x===null||text(p.x)||number(p.x))||!(p.y===null||number(p.y))||!(p.error===null||number(p.error)&&p.error>=0))return [...errors,fm('pointInvalid',{series:series.name,row:i+1})];
    errors.push(...intervalIssues(p,figure,xValue,{draft}));
    if(draft)continue;
    const x=xValue(p.x,figure.x.kind);
-   if(x===null)fail(series.name+', row '+(i+1)+': enter a valid horizontal coordinate.');
+   if(x===null)fail(fm('pointCoordinate',{series:series.name,row:i+1}));
    if(p.y!==null){
     complete++;
-    if(figure.y.scale==='log'&&p.y-(p.error??0)<=0)fail(series.name+', row '+(i+1)+': logarithmic values and uncertainty bounds must be positive.');
+    if(figure.y.scale==='log'&&p.y-(p.error??0)<=0)fail(fm('pointLogValue',{series:series.name,row:i+1}));
    }
-   if(figure.x.scale==='log'&&x<=0)fail(series.name+', row '+(i+1)+': logarithmic coordinates must be positive.');
+   if(figure.x.scale==='log'&&x<=0)fail(fm('pointLogCoordinate',{series:series.name,row:i+1}));
   }
-  if(!draft&&!complete&&figure.kind!=='heatmap')fail(series.name+': add at least one measured value.');
+  if(!draft&&!complete&&figure.kind!=='heatmap')fail(fm('seriesMeasured',{series:series.name}));
  }
  return [...new Set([...errors,...markerAreaIssues(figure,{draft,retained}),...heatmapIssues(figure,{draft,retained}),...annotationIssues(figure,xValue,{draft,retained})])];
 }
 export const validFigure=(figure,options)=>figureIssues(figure,options).length===0;
-export function parseFigureCSV(source,kind='number'){
+export function parseFigureCSV(source,kind='number',{translate}={}){
+ const fm=figureDiagnosticText(translate);
  const coordinate=value=>{
   const parsed=tableNumber(value);if(parsed===null||!Number.isFinite(parsed))return parsed;
   try{return decimalPlotProjection(value);}catch{return NaN;}
  };
- const table=readDelimitedTable(source);
+ const table=readDelimitedTable(source,{translate});
  const header=table.columns.map(column=>column.label),rows=table.rows.map(row=>row.cells);
  if(header.length===4&&header[0]==='Series'&&header[3]==='Uncertainty'){
   const series=[];
   for(const [i,row] of rows.entries()){
-   if(row.length!==4||!row[0].trim())throw new Error('Row '+(i+2)+': enter a series name and four columns.');
+   if(row.length!==4||!row[0].trim())throw new Error(fm('csvSeries',{row:i+2}));
    const x=kind==='number'?(row[1].trim()?coordinate(row[1]):null):row[1],y=row[2].trim()?coordinate(row[2]):null,error=row[3].trim()?coordinate(row[3]):null;
-   if(xValue(x,kind)===null||y!==null&&!number(y)||error!==null&&(!number(error)||error<0))throw new Error('Invalid measurement in row '+(i+2)+'.');
+   if(xValue(x,kind)===null||y!==null&&!number(y)||error!==null&&(!number(error)||error<0))throw new Error(fm('csvMeasurement',{row:i+2}));
    let item=series.find(s=>s.name===row[0]);if(!item){item=createSeries(row[0],series.length);series.push(item);}
    item.points.push({x,y,error});
   }
   return {xLabel:header[1],yLabel:header[2],series};
  }
- if(new Set(header.slice(1)).size!==header.length-1)throw new Error('Give each series a distinct name.');
+ if(new Set(header.slice(1)).size!==header.length-1)throw new Error(fm('seriesDistinct'));
  const series=header.slice(1).map((name,i)=>createSeries(name,i));
  for(const [i,row] of rows.entries()){
-  if(row.length!==header.length)throw new Error('Row '+(i+2)+' has a different number of columns.');
+  if(row.length!==header.length)throw new Error(fm('csvColumns',{row:i+2}));
   const raw=row[0].trim(),x=kind==='number'?(raw?coordinate(raw):null):raw;
-  if(xValue(x,kind)===null)throw new Error('Row '+(i+2)+' has an invalid horizontal coordinate.');
+  if(xValue(x,kind)===null)throw new Error(fm('csvCoordinate',{row:i+2}));
   for(let j=1;j<row.length;j++){
    const value=row[j].trim(),y=value?coordinate(value):null;
-   if(y!==null&&!number(y))throw new Error('Row '+(i+2)+', '+header[j]+': enter a number or leave a gap.');
+   if(y!==null&&!number(y))throw new Error(fm('csvGap',{row:i+2,column:header[j]}));
    series[j-1].points.push({x,y,error:null});
   }
  }

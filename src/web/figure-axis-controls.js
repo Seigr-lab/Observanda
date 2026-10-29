@@ -1,3 +1,4 @@
+import {modelMessages} from './model-messages.js';
 import {figureDataNumber,figureCoordinateNumber} from './figure-number-labels.js';
 import messages from './locales/en/figureAxes.json' with {type:'json'};
 import {wrapFigureText} from './figure-text-layout.js';
@@ -30,4 +31,4 @@ export function renderCustomAxis(ticks,{position,left,top,plotW,plotH,horizontal
   svg+=`<g class="figure-custom-tick" data-value="${item.value}"><path d="${path}" fill="none" stroke="${style.axisColor}"/><text class="${cls}" x="${x}" y="${y}" text-anchor="${horizontal?'middle':'end'}" font-size="${size}"><title>${esc(labelValue(item.value)+': '+item.label)}</title>${item.lines.map((line,i)=>`<tspan x="${x}" dy="${i?size*1.3:0}">${esc(line)}</tspan>`).join('')}</text></g>`;
  }return svg;
 }
-export function axisControlTable(f,esc){return ['x','y'].filter(k=>f[k].ticks?.length||f[k].reversed).map(k=>'<table class="figure-axis-settings-table"><caption>'+esc(f[k].label||messages[k])+' · '+esc(messages.direction)+': '+esc(messages[f[k].reversed?'reversed':'normal'])+'</caption><thead><tr><th>'+esc(messages.value)+'</th><th>'+esc(messages.label)+'</th></tr></thead><tbody>'+(f[k].ticks??[]).map(t=>'<tr><td>'+esc(figureCoordinateNumber(f,k,t.value))+'</td><td>'+esc(t.label)+'</td></tr>').join('')+'</tbody></table>').join('');}
+export function axisControlTable(f,esc,{translate}={}){const text=modelMessages('figureAxes',messages,translate);return ['x','y'].filter(k=>f[k].ticks?.length||f[k].reversed).map(k=>'<table class="figure-axis-settings-table"><caption>'+esc(f[k].label||text(k))+' · '+esc(text('direction'))+': '+esc(text(f[k].reversed?'reversed':'normal'))+'</caption><thead><tr><th>'+esc(text('value'))+'</th><th>'+esc(text('label'))+'</th></tr></thead><tbody>'+(f[k].ticks??[]).map(t=>'<tr><td>'+esc(figureCoordinateNumber(f,k,t.value))+'</td><td>'+esc(t.label)+'</td></tr>').join('')+'</tbody></table>').join('');}

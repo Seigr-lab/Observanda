@@ -1,3 +1,4 @@
+import {modelMessages} from './model-messages.js';
 import messages from './locales/en/measurements.json' with {type:'json'};
 import {validMaterialReference} from './material-reference.js';
 import {validCalculationPolicy} from './tools/calculation-policy.js';
@@ -24,6 +25,6 @@ export function effectiveCellColumn(column,cell){const actual=resolveCellComputa
 export function derivedComputation(...values){if(values.some(perCellComputation))throw new CellComputationError();return values.some(hasApproximateComputation)?{computation:{version:1,kind:'approximate-inputs'}}:{};}
 export const derivedColumnComputation=(...values)=>values.some(perCellComputation)?{computation:{version:2,kind:'per-cell'}}:derivedComputation(...values);
 export function derivedCellComputation(...cells){if(cells.some(cell=>Object.hasOwn(cell??{},'computation')&&!validCellComputation(cell.computation)))throw new CellComputationError();return {computation:cells.some(hasApproximateComputation)?{version:1,kind:'approximate-inputs'}:null};}
-export function computationLabel(value){const computation=descriptor(value);return validComputation(computation)?perCellComputation(computation)?messages.computationPerCell:computation.version===2?messages.computationApproximateMethod:computation.kind==='approximate'?messages.computationApproximate:messages.computationApproximateInputs:'';}
+export function computationLabel(value,{translate}={}){const text=modelMessages('measurements',messages,translate),computation=descriptor(value);return validComputation(computation)?perCellComputation(computation)?text('computationPerCell'):computation.version===2?text('computationApproximateMethod'):computation.kind==='approximate'?text('computationApproximate'):text('computationApproximateInputs'):'';}
 
 export function cellComputationLabel(column,cell){const actual=resolveCellComputation(column,cell);return actual===null?perCellComputation(column)?messages.computationExact:'':computationLabel(actual);}

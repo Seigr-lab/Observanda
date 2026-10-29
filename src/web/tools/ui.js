@@ -5,7 +5,7 @@ import {moduleEditor} from '../modules/workbench.js';
 import {t,language} from '../i18n/index.js';
 import {toolSpecs} from './manifests.js';
 import {reaction,formula} from './stoichiometry.js';
-import {readDelimitedTable} from '../tabular-data.js';
+import {readDelimitedTable} from '../scientific-validation.js';
 const column=i=>String.fromCharCode(65+Math.floor(i/26)-1).replace('@','')+String.fromCharCode(65+i%26);
 const component=(role='reactant')=>({role,formula:'',coefficient:'1',molarMass:'',amount:'',unit:'g',volume:''});
 const initial={reaction:{components:[component(),component('product')]},sheet:{cells:Array.from({length:10},()=>Array(5).fill('')),original:null},chemical:{format:'smiles',source:'',original:null}};

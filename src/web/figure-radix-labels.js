@@ -1,3 +1,5 @@
+import {modelMessages} from './model-messages.js';
+import displayMessages from './locales/en/figureDisplay.json' with {type:'json'};
 import {exactRational} from './measurement-model.js';
 
 // Convert the plot value's canonical decimal spelling, never a formatted tick.
@@ -23,7 +25,7 @@ export function figureRadixLabel(value,radix=10,precision=6){
  return (remainder?'≈ ':'')+prefix+(negative?'-':'')+label;
 }
 export const figureRadixPrecision=radix=>Math.ceil(17/Math.log10(radix))+2;
-export const figureNumeralHelp=style=>style.numberFormat==='radix'?'Numbers use base '+style.radix+'. The base# prefix identifies digits, including exponents and fractions. ≈ marks a rounded plot label; retained source measurements are unchanged.':'';
+export const figureNumeralHelp=(style,{translate}={})=>style.numberFormat==='radix'?modelMessages('figureDisplay',displayMessages,translate)('numeralHelp',{radix:style.radix}):'';
 
 // Exact decimal identity of a stored plot number, expressed in the chosen base.
 // Recurring fractions use an explicit ratio instead of silently rounding.
