@@ -38,14 +38,16 @@ test('authenticated revision review is bounded, returns exact text and rejects s
  const f=await historicalFixture(t),loaded=[],read=ResearchCatalogue.prototype.read,record=ResearchCatalogue.prototype.record;
  ResearchCatalogue.prototype.read=()=>{throw Error('Whole workspace read');};ResearchCatalogue.prototype.record=function(id,...args){loaded.push(id);return record.call(this,id,...args);};
  try{
-  const result=await publicationReferences(f.workspace,{source:f.source,recordId:f.run.id});assert.equal(result.items.length,1);assert.equal(result.items[0].preview.body,'Exact older procedure');assert.equal(result.items[0].record.choice.revision,f.target.revision);assert.deepEqual(loaded,[f.run.id]);
+  const result=await publicationReferences(f.workspace,{source:f.source,recordId:f.run.id});assert.equal(result.items.length,1);assert.equal(result.items[0].preview.body,'Exact older procedure');assert.equal(result.items[0].record.choice.revision,f.target.revision);
+  // The current target supplies present-day publication consent for its retained revision.
+  assert.deepEqual(loaded,[f.run.id,f.method.id]);
  }finally{ResearchCatalogue.prototype.read=read;ResearchCatalogue.prototype.record=record;}
  await assert.rejects(publicationReferences(f.workspace,{source:{...f.source,etag:'0'.repeat(64),websitePin:{...f.source.websitePin,researchSnapshotId:'0'.repeat(64)}},recordId:f.run.id}),{code:'CONFLICT'});
  await assert.rejects(publicationReferences(f.workspace,{source:f.source,recordId:f.run.id,choice:{include:true}}),{code:'INVALID'});
 });
 
 test('historical methods and chapter fragments survive interrupted publication, newer authoring and reviewed rollback',async t=>{
- const f=await historicalFixture(t),remote=githubFixture(),publisher=new Publisher(f.workspace.root,{request:remote.request},f.vault),config=defaultPublishing();
+ const f=await historicalFixture(t),remote=githubFixture(),publisher=new Publisher(f.workspace.root,{request:remote.request,liveRequest:remote.request},f.vault),config=defaultPublishing();
  Object.assign(config.github,{owner:'example',repository:'notebook',branch:'observanda-site',pages:false});config.publicUrl='https://public.example/research/';const saved=await publisher.save(config,'new');await publisher.connect('synthetic_github_token_1234567890');
  const jobs=workspaceJobs(f.workspace,publisher),deployments=new DeploymentJobs(f.workspace,publisher,jobs.queue);
  const work=async()=>{const job=await jobs.queue.claim();try{return await jobs.queue.complete(job.id,job.lease.token,await jobs.queue.definition(job).prepare(job,{signal:new AbortController().signal,progress:p=>jobs.queue.pulse(job.id,job.lease.token,p)}));}catch(error){return jobs.queue.release(job.id,job.lease.token,{error});}};

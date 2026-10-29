@@ -47,7 +47,7 @@ test('nested publication preserves unrelated paths and modes, stages only select
  assert.equal(posted.base_tree,f.remote.commits.get(parent).tree);assert.deepEqual(posted.tree.map(e=>e.path).sort(),[...f.candidate.files.keys()].map(name=>'lab/field-notes/'+name).sort());
  for(const call of writes(f.remote).filter(c=>c.route.endsWith('/git/blobs'))){const bytes=Buffer.from(call.data.content,'base64');assert.ok([...f.candidate.files.values()].some(c=>Buffer.from(c).equals(bytes)));assert.ok(!bytes.includes(Buffer.from('PRIVATE_BODY_SENTINEL')));assert.ok(!bytes.includes(Buffer.from(f.ws.root)));}
  const ownership=await readGithubOwnership(f.publisher,f.config,receipt);assert.equal(githubPlanReader(f.ws,ownership).count('entries'),f.candidate.files.size);
- const requested=[];f.publisher.request=async url=>{requested.push(String(url));const name=decodeURIComponent(new URL(url).pathname.slice('/notebook/lab/field-notes/'.length)),content=f.candidate.files.get(name);return new Response(content??'',{status:content===undefined?404:200});};
+ const requested=[];f.publisher.liveRequest=async url=>{requested.push(String(url));const name=decodeURIComponent(new URL(url).pathname.slice('/notebook/lab/field-notes/'.length)),content=f.candidate.files.get(name);return new Response(content??'',{status:content===undefined?404:200});};
  const verified=await f.publisher.verifyLive();assert.equal(verified.verification.files,f.candidate.files.size);assert.ok(requested.every(url=>url.startsWith('https://example.github.io/notebook/lab/field-notes/')));
 });
 

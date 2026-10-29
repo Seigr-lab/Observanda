@@ -14,7 +14,7 @@ import {PublicationVerificationJobs} from '../src/publication-verification-jobs.
 import {recordDeploymentInventory,prepareDeploymentInventory,deploymentInventory,deploymentInventoryPaths} from '../src/publication-live.js';
 import {workspaceJobs} from '../src/workspace-jobs.js';
 
-test('live verification resumes after cancellation, rejects stale caches and fences a changed deployment',async t=>{
+test('live verification resumes after cancellation, rejects stale caches and fences a changed deployment',{timeout:60000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-live-jobs-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),candidate=buildPublication(book),config=defaultPublishing();
  t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});Object.assign(config.github,{owner:'example',repository:'notebook'});config.publicUrl='https://example.test/';
  let mode='stall',entered,cancelled=false;const started=new Promise(resolve=>entered=resolve);
@@ -24,7 +24,7 @@ test('live verification resumes after cancellation, rejects stale caches and fen
   if(name==='old.html')return new Response(mode==='cached'?'stale page':null,{status:mode==='cached'?200:404});
   return new Response(candidate.files.get(name));
  };
- const publisher=new Publisher(f.workspace.root,{request},f.vault),saved=await publisher.save(config,'new'),key=publisher.destinationKey(config),receipt={commit:'a'.repeat(40),releaseId:candidate.id,manifestHash:digest(candidate.files.get('publication.json')),deploymentId:randomUUID()};
+ const publisher=new Publisher(f.workspace.root,{request,liveRequest:request},f.vault),saved=await publisher.save(config,'new'),key=publisher.destinationKey(config),receipt={commit:'a'.repeat(40),releaseId:candidate.id,manifestHash:digest(candidate.files.get('publication.json')),deploymentId:randomUUID()};
  const initialInventory=await prepareDeploymentInventory(f.workspace,key,candidate.files.keys(),{removed:['old.html']});
  await f.workspace.withLock(async()=>{await f.workspace.writeMetadata('.observanda/publishing-receipts.json',serialize({[key]:receipt}));await recordDeploymentInventory(f.workspace,key,receipt,initialInventory);});
  let jobs=workspaceJobs(f.workspace,publisher),checks=new PublicationVerificationJobs(f.workspace,publisher,jobs.queue);const initial=await checks.start();assert.equal((await checks.start()).id,initial.id);
