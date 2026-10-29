@@ -37,3 +37,12 @@ test('wrong declared size or digest cancellation and revoked keys cannot replace
  await assert.rejects(writeContent(f.workspace,f.file,[bytes],{expected,beforeCommit:()=>clearVault(f.vault)}),{code:'ACCESS_LOCKED'});
  assert.deepEqual(await readFile(f.file),original);assert.deepEqual(await readdir(f.root),['original']);
 });
+
+for(const known of [true,false])test((known?'known':'unknown')+' segmented writes bound capacity probes by byte windows',async t=>{
+ const f=await fixture(t),bytes=randomBytes(16*BLOCK),expected={size:bytes.length,sha256:digest(bytes)};let probes=0;
+ t.mock.method(diskCapacity,'probe',async()=>{probes++;return {id:'synthetic-window-volume',available:BigInt(1024*BLOCK)};});
+ async function* source(){for(let at=0;at<bytes.length;at+=BLOCK)yield bytes.subarray(at,at+BLOCK);}
+ await writeContent(f.workspace,f.file,source(),{...(known?{expected}:{}),reserveBytes:32*BLOCK});
+ assert.ok(probes<=(known?4:8));assert.equal(diskCapacity.stats().active,0);assert.deepEqual(await contentBuffer(new FileContent(f.workspace,f.file,expected.size,expected.sha256)),bytes);
+ t.diagnostic(JSON.stringify({known,bytes:bytes.length,capacityProbes:probes}));
+});

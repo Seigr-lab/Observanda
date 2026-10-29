@@ -34,12 +34,12 @@ export class DiskCapacity{
    const ticket={remaining,reserve:floor};entry.remaining+=remaining;entry.tickets.add(ticket);this.volumes.set(found.id,entry);this.active++;
    let closed=false,writing=false,unchecked=0n;
    return {
-    write:async(bytes,operation)=>{
-     const size=amount(bytes);if(closed||writing||typeof operation!=='function')throw new AppError('INVALID');writing=true;
+    write:async(bytes,operation,{refresh:checkpoint=false}={})=>{
+     const size=amount(bytes);if(closed||writing||typeof operation!=='function'||typeof checkpoint!=='boolean')throw new AppError('INVALID');writing=true;
      try{
       let extra=size>ticket.remaining?size-ticket.remaining:0n;
       signal?.throwIfAborted();
-      if(extra||!refresh||unchecked+size>refresh){
+      if(checkpoint||extra||!refresh||unchecked+size>refresh){
        const current=await this.probe(directory);signal?.throwIfAborted();
        if(current.id!==found.id)throw new AppError('IO');
        if(current.available<entry.remaining+extra+this.guard(entry))throw new AppError('STORAGE_FULL');

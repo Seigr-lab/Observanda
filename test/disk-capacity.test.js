@@ -51,3 +51,9 @@ test('unknown stream windows reserve ahead, retain other writers and fall back t
  await write(20);assert.equal(budget.stats().reservedBytes,'20');
  await assert.rejects(write(1),{code:'STORAGE_FULL'});other.release();await write(10);stream.release();assert.equal(budget.stats().active,0);
 });
+
+test('a new write phase can refresh capacity before its byte checkpoint',async()=>{
+ let free=100n,probes=0;const budget=new DiskCapacity({probe:async()=>{probes++;return {id:'volume',available:free};}}),ticket=await budget.reserve('folder',30,{reserveBytes:10,refreshBytes:20});
+ await ticket.write(5,async()=>{});assert.equal(probes,1);free=1n;
+ await assert.rejects(ticket.write(1,async()=>assert.fail('phase must observe lost capacity'),{refresh:true}),{code:'STORAGE_FULL'});assert.equal(probes,2);ticket.release();
+});

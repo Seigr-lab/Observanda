@@ -23,7 +23,7 @@ async function finalizeStream(handle,header,key,aad,saved,{reservation,signal,ch
    const clear=openSegment(stored,index,staged,key,aad);
    try{
     const bytes=clear.subarray(0,segmentedChunkSize(final,index));hash.update(bytes);const sealed=sealSegment(bytes,index,final,key,aad);
-    await reservation.write(sealed.length,()=>writeFilePart(handle,sealed,position));operationAdvance(bytes.length);operationWork({bytes:sealed.length});
+    await reservation.write(sealed.length,()=>writeFilePart(handle,sealed,position),{refresh:index===0});operationAdvance(bytes.length);operationWork({bytes:sealed.length});
    }finally{clear.fill(0);}
   }
   if(hash.digest('hex')!==saved.sha256)throw new AppError('MEDIA_INVALID');
@@ -39,7 +39,10 @@ export async function writeSegmentedContent(workspace,file,source,{expected,maxB
   const aad=workspace.fileAAD(file),raw=createSegmentedHeader(expected?expected.size:provisionalSize,expected?expected.sha256:'0'.repeat(64),key,aad),header=readSegmentedHeader(raw,key,aad);
   if(expected&&maxBytes&&header.size>maxBytes)throw new AppError('MEDIA_LIMIT');
   const checkKey=()=>{if(workspace.vault!==vault||workspace.vault.key!==ownerKey||!key.equals(ownerKey))throw new AppError('ACCESS_LOCKED');};
-  signal?.throwIfAborted();reservation=await diskCapacity.reserve(directory,expected?header.storedSize:raw.length,{reserveBytes,signal});handle=await open(temp,'wx+',0o600);await reservation.write(raw.length,()=>writeFilePart(handle,raw,0));
+  // Recheck capacity at bounded byte checkpoints, as resumable copies do.
+  // Unknown streams reserve only one window ahead; all concurrent claims and
+  // the caller's free-space floor still participate in each admission check.
+  signal?.throwIfAborted();reservation=await diskCapacity.reserve(directory,expected?header.storedSize:raw.length,{reserveBytes,signal,refreshBytes:8*SEGMENTED_BLOCK_BYTES,growthBytes:expected?0:8*SEGMENTED_BLOCK_BYTES});handle=await open(temp,'wx+',0o600);await reservation.write(raw.length,()=>writeFilePart(handle,raw,0));
   let position=raw.length,size=0,buffered=0,index=0;const hash=createHash('sha256');
   const flush=async()=>{signal?.throwIfAborted();checkKey();const staged=expected?header:{...header,size,count:index+1},output=sealSegment(buffer.subarray(0,buffered),index++,staged,key,aad);await reservation.write(output.length,()=>writeFilePart(handle,output,position));position+=output.length;buffered=0;};
   for await(const value of source){
