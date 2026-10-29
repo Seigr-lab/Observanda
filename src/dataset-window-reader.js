@@ -2,13 +2,15 @@ import {AppError} from './errors.js';
 import {DATASET_ROWS_PER_PAGE} from './dataset-row-position.js';
 import {revisionText} from './web/revision-model.js';
 import {validWindow,windowDisposition} from './web/dataset-window-model.js';
+import {EvaluationPageCache} from './evaluation-page-cache.js';
 const fail=()=>{throw new AppError('DATASET_WINDOW_INVALID');};
 // A bounded page cache is scoped to one evaluation; admission is rechecked for every operation.
 export class DatasetWindowReader{
- constructor(materials){this.materials=materials;this.pages=new Map();this.key=null;}
+ constructor(materials,options){this.materials=materials;this.pages=new EvaluationPageCache(options);}
  async open(node,binding,location,{signal}={}){
-  if(!validWindow(node.window,node.operation)||binding.source.kind!=='dataset')fail();const m=this.materials,doc=await m.read(binding.source);if(!Number.isSafeInteger(doc.content.rowCount)||doc.content.rowCount<0)fail();const key=revisionText([binding.source,node.column]);if(this.key!==key){this.key=key;this.pages.clear();}
-  const page=async index=>{signal?.throwIfAborted();let data=this.pages.get(index);if(!data){data=await m.retainedDatasetPage(doc,index,{columns:[node.column]});if(this.pages.size===3)this.pages.delete(this.pages.keys().next().value);this.pages.set(index,data);}return data;};
+  signal?.throwIfAborted();if(!validWindow(node.window,node.operation)||binding.source.kind!=='dataset')fail();const m=this.materials,doc=await m.read(binding.source);signal?.throwIfAborted();if(!Number.isSafeInteger(doc.content.rowCount)||doc.content.rowCount<0)fail();
+  const key=revisionText([binding.source,node.column]);
+  const page=async index=>{signal?.throwIfAborted();const address=key+':'+index;let data=this.pages.get(address);if(!data){data=await m.retainedDatasetPage(doc,index,{columns:[node.column]});signal?.throwIfAborted();this.pages.set(address,data,{signal});}return data;};
   if(!location)return {doc,anchor:null,total:0,async at(){return {boundary:true,unmatched:true,value:'',kind:'absent',excluded:null};}};
   if(location.kind!=='dataset')fail();const current=(await page(location.page)).rows[location.row];if(!current||current.id!==location.id||(current.excluded??null)!==(location.excluded??null))fail();
   let anchor=location.row;if(doc.content.datasetFormat===3)anchor+=location.page*DATASET_ROWS_PER_PAGE;else for(let p=0;p<location.page;p++)anchor+=(await page(p)).rows.length;

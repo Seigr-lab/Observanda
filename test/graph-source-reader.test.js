@@ -11,7 +11,7 @@ import {retainDatasetCell} from '../src/dataset-cell-storage.js';
 import {projectDatasetRows} from '../src/dataset-storage.js';
 const ref={kind:'dataset',id:randomUUID(),revision:'a'.repeat(64)},binding={source:ref},location=(row=0,page=0)=>({kind:'dataset',page,row,id:'row-'+page+'-'+row,excluded:null});
 
-test('graph source reader authenticates each operation and reuses only one metadata page while selected cells stay lazy',async()=>{
+test('graph source reader authenticates each operation and reuses metadata pages while selected cells stay lazy',async()=>{
  const stored=new Map(),sequences=new MaterialSequence({readMetadata:async name=>stored.get(name)??null,writeMetadata:async(name,text)=>stored.set(name,text)}),rows=[];
  const long=await retainDatasetCell({sequences},{kind:'string',value:'0'.repeat(9000)+'12'},fn=>fn());
  for(let row=0;row<18;row++){const cells=sequences.builder('cells',fn=>fn());for(let col=0;col<18;col++)await cells.append(row===9&&col===17?long:{kind:row===10?'null':'string',value:row===10?'':String(row*18+col),...(col===17?{computation:null}:{})});rows.push({id:'row-0-'+row,order:row+1,excluded:row===9?'Authored exclusion':null,cellIndex:await cells.finish()});}
@@ -21,10 +21,10 @@ test('graph source reader authenticates each operation and reuses only one metad
  assert.equal(authorizations,3);assert.equal(pages,1);assert.deepEqual(projected,[rows[9].cellIndex.root.hash,rows[10].cellIndex.root.hash,rows[9].cellIndex.root.hash]);
 });
 
-test('graph source metadata cache keys the complete pinned reference and page, retaining only the most recent page',async()=>{
+test('graph source metadata cache keys the complete pinned reference and page',async()=>{
  const calls=[],materials={read:async source=>({source}),retainedDatasetPage:async(doc,page)=>{calls.push([doc.source,page]);return {rows:[{id:'row-'+page+'-0',value:doc.source.revision}]};}},reader=new GraphSourceReader(materials),changed={...ref,revision:'b'.repeat(64)},addressed={...changed,workspaceId:randomUUID()};
  await reader.read(binding,location());await reader.read(binding,location());await reader.read({source:changed},location());await reader.read({source:addressed},location());await reader.read({source:addressed},location(0,1));await reader.read({source:addressed},location());
- assert.deepEqual(calls,[[ref,0],[changed,0],[addressed,0],[addressed,1],[addressed,0]]);
+ assert.deepEqual(calls,[[ref,0],[changed,0],[addressed,0],[addressed,1]]);
 });
 
 test('cached graph rows never bypass current authorization, exact row identity, malformed page refusal or cancellation',async()=>{
