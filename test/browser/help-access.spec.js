@@ -10,7 +10,7 @@ import {initializeLocation} from '../../src/locations.js';
 import {createNotebook} from '../../src/model.js';
 
 async function fixture(mode='setup'){
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-help-access-')),root=path.join(directory,'workspace');
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-help-access-')),root=path.join(directory,'Private workspace canary');
  const deviceStore=new TestDeviceStore({file:path.join(directory,'device.key')}),password='Synthetic access password',book=createNotebook('Private workspace canary');
  let vault,recovery;
  if(mode==='locked'||mode==='legacy'){
@@ -23,7 +23,7 @@ async function fixture(mode='setup'){
 }
 function watch(page){
  const errors=[],requests=[];page.on('pageerror',e=>errors.push(e.message));
- page.on('request',r=>{if(new URL(r.url()).pathname.startsWith('/api/'))requests.push({path:new URL(r.url()).pathname,body:r.postData()});});
+ page.on('request',r=>{if(new URL(r.url()).pathname.startsWith('/api/'))requests.push({path:new URL(r.url()).pathname,method:r.method(),body:r.postData()});});
  return {errors,requests};
 }
 const help=page=>page.locator('dialog.help-access');
@@ -40,7 +40,7 @@ test('setup Help keeps the current step, controls and credentials through search
   await help(page).getByRole('searchbox').fill('recovery');await expect(help(page).locator('.help-results li')).not.toHaveCount(0);
   await help(page).getByRole('link',{name:'Storage, backup and access — Unlock and recover access',exact:true}).click();await expect(help(page).locator('#help-storage-unlock')).toBeFocused();
   await help(page).locator('[data-language-choice]').selectOption('ca');await expect(help(page).getByRole('button',{name:'Torna al formulari'})).toBeVisible();
-  await expect(help(page).locator('#help-storage-unlock').locator('..')).toHaveAttribute('lang','en');
+  await expect(help(page).locator('#help-storage-unlock').locator('..')).toHaveAttribute('lang','ca');
   await help(page).locator('[data-language-choice]').selectOption('en');await expect(help(page).getByRole('button',{name:'Return to form'})).toBeVisible();
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='20px');
   expect(await help(page).evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);expect(await help(page).locator('.help-access-body').evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
@@ -48,7 +48,7 @@ test('setup Help keeps the current step, controls and credentials through search
   await page.keyboard.press('Escape');await expect(help(page)).toHaveCount(0);await expect(entry).toBeFocused();
   expect(await page.evaluate(()=>setupForm===document.querySelector('#create-form'))).toBe(true);
   await expect(page.getByRole('heading',{name:'Storage & protection',exact:true})).toBeVisible();await expect(page.getByLabel('Password',{exact:true})).toHaveValue(f.password);await expect(page.getByLabel('Confirm password',{exact:true})).toHaveValue(f.password);
-  expect(observed.requests.every(r=>r.path==='/api/language')).toBe(true);expect(JSON.stringify(observed.requests)).not.toContain(f.password);
+  expect(observed.requests.every(r=>r.path==='/api/language'||r.path==='/api/activity'&&r.method==='GET'&&r.body===null),JSON.stringify(observed.requests)).toBe(true);expect(JSON.stringify(observed.requests)).not.toContain(f.password);
   await entry.click();await expect(help(page).locator('#help-getting-started-setup')).toBeVisible();await expect(help(page).getByRole('searchbox')).toHaveValue('');await page.keyboard.press('Escape');
   await page.getByRole('button',{name:'Back',exact:true}).click();await expect(page.getByRole('checkbox',{name:/^Computer/})).toBeChecked();await page.getByRole('button',{name:'Back',exact:true}).click();await expect(page.getByLabel('Workspace name',{exact:true})).toHaveValue('Unsubmitted setup');
   expect(observed.errors).toEqual([]);
@@ -90,7 +90,7 @@ test('stable Help URLs work with legacy locked access and leave password entry a
   await page.goto(f.app.url);await expect(page.getByRole('heading',{name:'Unlock workspace',exact:true})).toBeVisible();observed.requests.length=0;
   await page.evaluate(()=>location.hash='#/preferences/help/storage/unlock');await expect(help(page).locator('#help-storage-unlock')).toBeVisible();
   expect(observed.requests).toEqual([]);await page.reload();await expect(help(page).locator('#help-storage-unlock')).toBeVisible();
-  expect(observed.requests.every(r=>['/api/access/status','/api/language','/api/interface'].includes(r.path))).toBe(true);
+  expect(observed.requests.every(r=>['/api/access/status','/api/language','/api/interface','/api/activity','/api/writer-recovery'].includes(r.path)&&r.method==='GET'&&r.body===null),JSON.stringify(observed.requests)).toBe(true);
   await help(page).getByRole('button',{name:'Return to form'}).click();await expect(page).not.toHaveURL(/preferences\/help/);
   await page.getByLabel('Password',{exact:true}).fill(f.password);await page.getByRole('button',{name:'Help',exact:true}).click();await page.keyboard.press('Escape');await expect(page.getByLabel('Password',{exact:true})).toHaveValue(f.password);
   expect(observed.errors).toEqual([]);

@@ -14,27 +14,26 @@ test('the shell leaves feature messages unloaded and rejects unknown namespace p
  await assert.rejects(prepareNamespaces('pdfEditor'),/Unknown message namespace/);
 });
 
-test('late feature loading retains the selected language and English fallback across subsequent language changes',async()=>{
- await prepareLanguage('nn',{fetcher:fetchResource});activateLanguage('nn');
- assert.throws(()=>t('pdfEditor','title'),/has not been loaded/);
- await Promise.all([prepareNamespaces(['pdfEditor']),prepareNamespaces(['pdfEditor','pdfEditor'])]);
- const reference=await resource('en/pdfEditor.json');
- const key=Object.keys(reference).find(key=>typeof reference[key]==='string'&&!reference[key].includes('{'));
- assert.equal(t('pdfEditor',key),reference[key]);assert.equal(language(),'nn');
- assert.throws(()=>registerCatalogue('pdfEditor',reference),/Invalid catalogue registration/);
- let reads=0;
- const fetcher=async url=>{reads++;return fetchResource(url);};
- await Promise.all([prepareLanguage('es',{fetcher}),prepareLanguage('es',{fetcher})]);
- assert.equal(reads,MESSAGE_NAMESPACES.filter(name=>catalogueLanguages(name).includes('es')).length);
- activateLanguage('es');assert.equal(t('pdfEditor',key),reference[key]);
- assert.equal(t('preferences','title'),(await resource('es/preferences.json')).title);
- activateLanguage('en');assert.equal(t('pdfEditor',key),reference[key]);
-});
-
 test('Help loads only its referenced control namespaces without opening their editors',async()=>{
  const guide=await resource('en/guide.json'),names=guideMessageNamespaces(guide);
  assert.ok(names.includes('localIntake'));assert.ok(!names.includes('sketch'));
  await prepareNamespaces(names);
  assert.ok(!JSON.stringify(guideWithMessages(guide,t)).includes('{ui:'));
  assert.throws(()=>t('sketch','title'),/has not been loaded/);
+});
+
+test('feature messages retain translated catalogues across language changes and restore English on request',async()=>{
+ await prepareLanguage('nn',{fetcher:fetchResource});activateLanguage('nn');
+ await Promise.all([prepareNamespaces(['pdfEditor']),prepareNamespaces(['pdfEditor','pdfEditor'])]);
+ const reference=await resource('en/pdfEditor.json');
+ const key=Object.keys(reference).find(key=>typeof reference[key]==='string'&&!reference[key].includes('{'));
+ assert.equal(t('pdfEditor',key),(await resource('nn/pdfEditor.json'))[key]);assert.equal(language(),'nn');
+ assert.throws(()=>registerCatalogue('pdfEditor',reference),/Invalid catalogue registration/);
+ let reads=0;
+ const fetcher=async url=>{reads++;return fetchResource(url);};
+ await Promise.all([prepareLanguage('es',{fetcher}),prepareLanguage('es',{fetcher})]);
+ assert.equal(reads,MESSAGE_NAMESPACES.filter(name=>catalogueLanguages(name).includes('es')).length);
+ activateLanguage('es');assert.equal(t('pdfEditor',key),(await resource('es/pdfEditor.json'))[key]);
+ assert.equal(t('preferences','title'),(await resource('es/preferences.json')).title);
+ activateLanguage('en');assert.equal(t('pdfEditor',key),reference[key]);
 });

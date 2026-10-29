@@ -1,3 +1,4 @@
+import experience from '../locales/en/experience.json' with {type:'json'};
 import publishingData from '../locales/en/publishingData.json' with {type:'json'};
 import datasetCalculations from '../locales/en/datasetCalculations.json' with {type:'json'};
 import measurementTransform from '../locales/en/measurementTransform.json' with {type:'json'};
@@ -116,7 +117,7 @@ import researchCapacity from '../locales/en/researchCapacity.json' with {type:'j
 import about from '../locales/en/about.json' with {type:'json'};
 import {resolveLanguage,validLanguage,translator,validateCatalogue,LANGUAGES} from './runtime.js';
 export {LANGUAGES,validLanguage,resolveLanguage};
-const english={datasetResources,moduleReferenceTargets,workspaceRename,workspaceManagement,templatePreferences,calculator,book,analyses,measurements,preferences,navigation,help,setup,access,labBookTypes,recordAuthoring,recordWorkflow,attempts,dashboardLibrary,recordLists,recordViews,recordDrafts,recordRecovery,recordSelection,recordUpdates,workspaceRead,structureProgress,operationStream,errors,recordTypes,dashboardChoices,dashboardPaging,researchPicker,branding,appearance,fonts,interface:interfaceMessages,reviews,websiteEditor,websitePages,websiteMedia,moduleCurrent,moduleConnected,locationTools,calendar,moduleFields,timeline,recordDates,materialSources,publication,localExport,migration,migrationImport},cache=new Map([['en',english]]);
+const english={experience,datasetResources,moduleReferenceTargets,workspaceRename,workspaceManagement,templatePreferences,calculator,book,analyses,measurements,preferences,navigation,help,setup,access,labBookTypes,recordAuthoring,recordWorkflow,attempts,dashboardLibrary,recordLists,recordViews,recordDrafts,recordRecovery,recordSelection,recordUpdates,workspaceRead,structureProgress,operationStream,errors,recordTypes,dashboardChoices,dashboardPaging,researchPicker,branding,appearance,fonts,interface:interfaceMessages,reviews,websiteEditor,websitePages,websiteMedia,moduleCurrent,moduleConnected,locationTools,calendar,moduleFields,timeline,recordDates,materialSources,publication,localExport,migration,migrationImport},cache=new Map([['en',english]]);
 english.projectCreation=projectCreation;
 english.projectChoices=projectChoices;
 english.projectOpening=projectOpening;

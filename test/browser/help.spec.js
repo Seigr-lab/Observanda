@@ -1,5 +1,8 @@
 import {test,expect} from '@playwright/test';
 import guide from '../../src/web/locales/en/guide.json' with {type:'json'};
+import caGuide from '../../src/web/locales/ca/guide.json' with {type:'json'};
+import nbGuide from '../../src/web/locales/nb/guide.json' with {type:'json'};
+import nnGuide from '../../src/web/locales/nn/guide.json' with {type:'json'};
 import {pathToFileURL} from 'node:url';
 import {buildBrowser} from '../../scripts/browser-build.js';
 import {createApplicationAssets} from '../../src/application-assets.js';
@@ -31,10 +34,10 @@ test('Help searches the bundled manual, follows stable anchors, changes language
   await expect(page).toHaveURL(/preferences\/help\/evidence\/analysis$/);await expect(page.locator('#help-evidence-analysis')).toBeFocused();
   await page.getByRole('link',{name:'Read the entire guide',exact:true}).click();await expect(page.locator('.help-article')).toHaveCount(guide.topics.length);expect(await page.locator('.help-article>h2').evaluateAll(items=>items.map(el=>el.id))).toEqual(guide.topics.map(topic=>'help-'+topic.id));
   await page.locator('[data-language-choice]').selectOption('ca');
-  await expect(page.getByRole('heading',{name:'Preferències',exact:true})).toBeVisible();await expect(page.locator('.help-article:has(#help-getting-started)')).toContainText('Projectes i llibres');
-  await page.locator('[data-language-choice]').selectOption('nn');await expect(page.locator('.help-article:has(#help-getting-started)')).toContainText('Prosjekt og labbøker');
+  await expect(page.getByRole('heading',{name:'Preferències',exact:true})).toBeVisible();await expect(page.locator('.help-article:has(#help-getting-started)')).toContainText(caGuide.topics.find(topic=>topic.id==='getting-started').title);
+  await page.locator('[data-language-choice]').selectOption('nn');await expect(page.locator('.help-article:has(#help-getting-started)')).toContainText(nnGuide.topics.find(topic=>topic.id==='getting-started').title);
   await page.reload();await expect(page.locator('[data-language-choice]')).toHaveValue('nn');await expect(page.getByRole('heading',{name:'Innstillingar',exact:true})).toBeVisible();
-  await page.locator('[data-language-choice]').selectOption('nb');await expect(page.locator('.help-article:has(#help-getting-started)')).toContainText('Prosjekter og labbøker');
+  await page.locator('[data-language-choice]').selectOption('nb');await expect(page.locator('.help-article:has(#help-getting-started)')).toContainText(nbGuide.topics.find(topic=>topic.id==='getting-started').title);
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='20px');
   expect(await page.locator('body').evaluate(el=>el.scrollWidth<=innerWidth+1)).toBe(true);
   await expect(page.locator('.help-navigation')).toHaveCSS('display','flex');

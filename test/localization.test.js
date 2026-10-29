@@ -9,8 +9,10 @@ import {validateGuide,searchGuide,guideLoader,guideWithMessages,mergeGuide} from
 import {routeFor,resolveRoute} from '../src/web/navigation.js';
 import {defaultPreferences,rememberLanguage,rememberInterface,readPreferences} from '../src/preferences.js';
 import {AppError,safeError} from '../src/errors.js';
+import {checkLocales,checkGuideCoverage} from '../scripts/check-locales.js';
 const json=async(locale,namespace)=>JSON.parse(await readFile(new URL('../src/web/locales/'+locale+'/'+namespace+'.json',import.meta.url),'utf8'));
 test('all shipped language catalogues match their owner keys, parameters and guide anchors',async()=>{
+ await checkLocales();
  const manifest=JSON.parse(await readFile(new URL('../src/web/locales/catalogues.json',import.meta.url),'utf8'));
  assert.deepEqual(Object.keys(manifest).sort(),[...MESSAGE_NAMESPACES].sort(),'Every declared owner must also be wired to the runtime loader');
  const guides=[];
@@ -24,6 +26,16 @@ test('all shipped language catalogues match their owner keys, parameters and gui
  }
  for(const guide of guides)assert.deepEqual(guide,guides[0]);
  assert.ok(LANGUAGES.some(l=>l.id==='nb'));assert.ok(LANGUAGES.some(l=>l.id==='nn'));
+});
+test('shipping checks reject incomplete Help translations and changed control references',async()=>{
+ const source=await json('en','guide'),translation=await json('es','guide');
+ assert.equal(checkGuideCoverage(source,translation,'es'),translation);
+ const missingTopic=structuredClone(translation);missingTopic.topics.pop();
+ assert.throws(()=>checkGuideCoverage(source,missingTopic,'es'),/Incomplete Help/);
+ const missingParagraph=structuredClone(translation);missingParagraph.topics[0].sections[0].paragraphs.pop();
+ assert.throws(()=>checkGuideCoverage(source,missingParagraph,'es'),/Incomplete Help/);
+ const staleReference=structuredClone(translation);staleReference.topics[0].sections[0].paragraphs[0]=staleReference.topics[0].sections[0].paragraphs[0].replace('{ui:figureComposition.add}','{ui:figureComposition.blank}');
+ assert.throws(()=>checkGuideCoverage(source,staleReference,'es'),/Help interface references differ/);
 });
 test('fallback, named parameters and plural messages do not reinterpret record values',()=>{
  const base={greeting:'Open {title}',count:{one:'{count} result',other:'{count} results'}};
@@ -41,7 +53,7 @@ test('language loading is atomic and an interrupted resource can be retried',asy
  await assert.rejects(prepareLanguage('ca',{fetcher}));assert.equal(language(),'en');assert.equal(t('preferences','title'),'Preferences');
  await prepareLanguage('ca',{fetcher:async url=>({ok:true,json:()=>json('ca',path.basename(url.pathname,'.json'))})});
  activateLanguage('ca');assert.equal(t('preferences','title'),'Preferències');assert.equal(count,MESSAGE_NAMESPACES.filter(n=>catalogueLanguages(n).includes('ca')).length);
- assert.equal(t('access','unlock'),'Unlock workspace');assert.equal(messageLanguage('access'),'en');assert.equal(messageLanguage('help'),'ca');
+ assert.equal(t('access','unlock'),(await json('ca','access')).unlock);assert.equal(messageLanguage('access'),'ca');assert.equal(messageLanguage('help'),'ca');
  activateLanguage('en');await assert.rejects(prepareLanguage('../private'),/Unsupported/);
 });
 test('documentation search includes paragraphs, folds accents and keeps stable routes across languages',async()=>{
@@ -70,7 +82,10 @@ test('Help control references resolve through their owning English resources and
 });
 
 test('new English Help sections remain readable without inventing translations or changing their anchors',async()=>{
- const source=await json('en','guide'),translation=await json('ca','guide'),before=structuredClone(translation);
+ const source=await json('en','guide'),translation=await json('ca','guide');
+ // Exercise a newly added source section even when the shipped guide is complete.
+ translation.topics.find(topic=>topic.id==='storage').sections=translation.topics.find(topic=>topic.id==='storage').sections.filter(section=>section.id!=='unlock');
+ const before=structuredClone(translation);
  const merged=mergeGuide(source,translation,'ca'),storage=merged.topics.find(t=>t.id==='storage');
  assert.equal(storage.language,'ca');assert.equal(storage.sections.find(s=>s.id==='unlock').language,'en');assert.equal(storage.sections.find(s=>s.id==='backup').language,'ca');
  assert.deepEqual(translation,before);assert.deepEqual(merged.topics.map(t=>[t.id,t.sections.map(s=>s.id)]),source.topics.map(t=>[t.id,t.sections.map(s=>s.id)]));
