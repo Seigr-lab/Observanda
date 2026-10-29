@@ -4,6 +4,8 @@ import {AppError} from '../errors.js';
 import {digest} from '../storage-format.js';
 import {summaryPage} from '../summary-page.js';
 import {ModuleCatalogue} from './catalogue.js';
+import {ModuleBrowseIndex} from './browse-index.js';
+import {moduleBrowsePage} from './browse-page.js';
 import {workspaceModules} from './index.js';
 import {moduleView,moduleSearch} from './view.js';
 import {uuid} from './validation.js';
@@ -26,7 +28,7 @@ export class ModuleReader{
    const {metadata:book}=await store.snapshot();if(book.id!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
    const owned=await moduleDomainContext(store,operation,{domains:this.readDomains});if(owned)return owned.value;
    const catalogue=new ModuleCatalogue(store),head=await catalogue.head(workspaceId);
-   return operation({book,head,members:options=>catalogue.members(head,options),member:id=>catalogue.member(head,id),view:member=>catalogue.view(head,member),search:member=>catalogue.search(head,member),references:member=>catalogue.references(head,member),constraint:member=>catalogue.constraint(head,member),calendar:member=>catalogue.calendar(head,member),inventory:member=>catalogue.inventory(head,member),selected:id=>catalogue.selected(head,id),
+   return operation({book,head,browse:async options=>{const plan=await new ModuleBrowseIndex(catalogue).plan(head,options);return plan?[plan]:null;},members:options=>catalogue.members(head,options),member:id=>catalogue.member(head,id),view:member=>catalogue.view(head,member),search:member=>catalogue.search(head,member),references:member=>catalogue.references(head,member),constraint:member=>catalogue.constraint(head,member),calendar:member=>catalogue.calendar(head,member),inventory:member=>catalogue.inventory(head,member),selected:id=>catalogue.selected(head,id),
     encode:value=>store.encode('module-page',workspaceId,value).toString('base64url'),decode:value=>store.decode('module-page',workspaceId,Buffer.from(value,'base64url'))});
   });
   const data=await this.modules.current();if(data.workspaceId!==workspaceId)throw new AppError('WORKSPACE_CHANGED');
@@ -49,7 +51,15 @@ export class ModuleReader{
    let anchor;try{anchor=cursor?c.decode(cursor):{workspaceId,revision:c.head.revision,queryHash,limit,offset:0};}catch{invalid();}
    if(!anchor||anchor.workspaceId!==workspaceId||anchor.revision!==c.head.revision||anchor.queryHash!==queryHash||anchor.limit!==limit||!Number.isSafeInteger(anchor.offset)||anchor.offset<0||anchor.offset>0&&(!uuid(anchor.after?.id)||typeof anchor.after.title!=='string'))invalid();
    if(anchor.offset&&sort==='created-desc'&&!Number.isFinite(Date.parse(anchor.after.createdAt)))invalid();
-   const page=summaryPage({...anchor,order:sort==='title'?order:(a,b)=>b.createdAt.localeCompare(a.createdAt)||(a.id<b.id?-1:a.id>b.id?1:0),point:v=>({id:v.id,title:v.title,createdAt:v.createdAt})}),needle=query.toLowerCase(),scope=scopeIds&&new Set(scopeIds);
+   const compare=sort==='title'?order:(a,b)=>b.createdAt.localeCompare(a.createdAt)||(a.id<b.id?-1:a.id>b.id?1:0);
+   const result=({records:items,total,after,previousAfter})=>{const next=anchor.offset+items.length;return {workspaceId,revision:c.head.revision,items,total,offset:anchor.offset,cursor:c.encode(anchor),
+    nextCursor:next<total?c.encode({...anchor,offset:next,after}):null,
+    previousCursor:anchor.offset?c.encode({...anchor,offset:Math.max(0,anchor.offset-limit),...(anchor.offset>limit?{after:previousAfter}:{after:null})}):null};};
+   if(c.browse&&!collect&&!reference&&!query&&!status&&!tags.length&&kind===null&&archived===null&&moduleId===null&&projectId===null&&scopeIds===null&&key===null&&keys===null&&resourceId===null){
+    const plans=await c.browse({types:type?(types&&!types.includes(type)?[]:[type]):types,sort,after:anchor.offset?anchor.after:null,signal});
+    if(plans)return result(await moduleBrowsePage(plans,{...anchor,order:compare,signal}));
+   }
+   const page=summaryPage({...anchor,order:compare,point:v=>({id:v.id,title:v.title,createdAt:v.createdAt})}),needle=query.toLowerCase(),scope=scopeIds&&new Set(scopeIds);
    const stockScope=moduleId==='resources'?(scope??inventoryScope(c.book,projectId,recursive)):null;
    // Explicit selections are already bounded by the public query limit. Read
    // their authenticated members directly, preserving strict keys validation
@@ -104,10 +114,7 @@ export class ModuleReader{
     collect?.(view);page.add(view);
    }
    let pageData;try{pageData=page.finish();}catch(error){if(error.code==='RECORD_QUERY_CURSOR')invalid();throw error;}
-   const {records:items,total,after,previousAfter}=pageData,next=anchor.offset+items.length;
-   return {workspaceId,revision:c.head.revision,items,total,offset:anchor.offset,cursor:c.encode(anchor),
-    nextCursor:next<total?c.encode({...anchor,offset:next,after}):null,
-    previousCursor:anchor.offset?c.encode({...anchor,offset:Math.max(0,anchor.offset-limit),...(anchor.offset>limit?{after:previousAfter}:{after:null})}):null};
+   return result(pageData);
   });
  }
  async selected({workspaceId,id},{signal}={}){

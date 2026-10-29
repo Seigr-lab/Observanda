@@ -16,6 +16,7 @@ import {moduleReferences} from './references.js';
 import {calendarFacts} from '../calendar/facts.js';
 import {inventoryFacts} from './inventory-facts.js';
 import {ModuleMemberIndex,validModuleMember} from './member-index.js';
+import {ModuleBrowseIndex} from './browse-index.js';
 const hash=value=>digest(serialize(value));
 const damaged=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 export const moduleEntityBytes=entity=>{
@@ -46,7 +47,7 @@ export class ModuleCatalogue{
   if(head.viewVersion!==undefined&&head.viewVersion!==1)damaged();
   if(head.memberVersion!==undefined){if(Object.hasOwn(head,'entities'))damaged();await this.membersIndex.check(head,counts.entities);}
   else if(!Array.isArray(head.entities)||String(head.entities.length)!==counts.entities||new Set(head.entities.map(e=>e.id)).size!==head.entities.length||!head.entities.every(e=>validModuleMember(e,head)))damaged();
-  return head;
+  new ModuleBrowseIndex(this).check(head);return head;
  }
  member(head,id){return head.memberVersion===1?this.membersIndex.find(head,id):Promise.resolve(head.entities.find(e=>e.id===id)??null);}
  async *members(head,options){if(head.memberVersion===1)yield* this.membersIndex.members(head,options);else for(const member of head.entities){options?.signal?.throwIfAborted();yield member;}}
@@ -141,6 +142,7 @@ export class ModuleCatalogue{
   // Validate each original against its authenticated derived facts, then drop
   // the body. Cross-entity checks consume only their explicit constraint data.
   await validate.constraints(moduleConstraintSource(this,head));
+  await new ModuleBrowseIndex(this).verify(head);
   await withScratch(async work=>{
   let count=0,bytes=0;
   for await(const member of this.members(head)){
@@ -179,9 +181,11 @@ export class ModuleCatalogue{
   if(entities.some(entity=>hasCalculationPolicy(entity.type,entity.data)))await requireCalculationPolicies(this.store.catalogueDb??this.store.db);
   const s=this.store,empty=(previous.memberVersion===1?previous.root?.count??0:previous.entities.length)===0;
   let root=previous.root??null,{bytes:totalBytes}=await this.currentSize(previous);
+  const browse=new ModuleBrowseIndex(this);let browseRoot=await browse.prepare(previous);
   if(previous.memberVersion!==1)for await(const member of this.members(previous))root=await this.membersIndex.put(root,{...member,historyFrom:previous.historyVersion===1?member.historyFrom:member.revision});
   for(const e of entities){
    const priorMember=await this.member({...previous,memberVersion:1,root},e.id);
+   const previousView=priorMember?await this.view(previous,priorMember):null;
    if(priorMember)totalBytes-=previous.currentVersion===1?priorMember.bytes:moduleEntityBytes(await this.selected(previous,e.id));totalBytes+=moduleEntityBytes(e);
    const constraint=moduleConstraint(e),constraintHash=hash(constraint),slot='module-constraint:'+constraintHash;
    const prior=await s.db.get('SELECT payload FROM state WHERE slot=$1',slot);
@@ -209,10 +213,11 @@ export class ModuleCatalogue{
     if(prior){if(hash(s.decode('state',slot,prior.payload))!==inventoryHash)damaged();}
     else await s.db.run('INSERT INTO state VALUES ($1,$2)',slot,s.encode('state',slot,inventory));
    }
-   root=await this.membersIndex.put(root,{id:e.id,type:e.type,revision:e.revision,hash:hash(e),historyFrom:priorMember?(previous.historyVersion===1?priorMember.historyFrom:priorMember.revision):0,bytes:moduleEntityBytes(e),constraintHash,viewHash,searchHash,referencesHash,calendarHash,inventoryHash});
+   const member={id:e.id,type:e.type,revision:e.revision,hash:hash(e),historyFrom:priorMember?(previous.historyVersion===1?priorMember.historyFrom:priorMember.revision):0,bytes:moduleEntityBytes(e),constraintHash,viewHash,searchHash,referencesHash,calendarHash,inventoryHash};
+   root=await this.membersIndex.put(root,member);browseRoot=await browse.replace(browseRoot,previousView,view,member);
    await s.db.run('INSERT INTO module_entities VALUES ($1,$2,$3) ON CONFLICT(id) DO UPDATE SET revision=excluded.revision,payload=excluded.payload',e.id,e.revision,s.encode('module-entity',e.id+'/'+e.revision,e));
   }
-  const data={workspaceId:previous.workspaceId,revision:previous.revision+1,historyVersion:1,memberVersion:1,root,totalBytes};
+  const data={workspaceId:previous.workspaceId,revision:previous.revision+1,historyVersion:1,memberVersion:1,root,totalBytes,browseIndex:{version:1,root:browseRoot}};
   if(previous.currentVersion===1||empty)data.currentVersion=1;
   if(previous.viewVersion===1||empty)data.viewVersion=1;
   await s.db.run('INSERT INTO module_events VALUES ($1,$2,$3)',event.commandId,data.revision,s.encode('module-event',event.commandId+'/'+data.revision,event));

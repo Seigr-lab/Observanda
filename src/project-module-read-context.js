@@ -8,7 +8,7 @@ export async function projectModuleReadContext(storage,namespaceId,identities,do
  const book=(await research.snapshot()).metadata,revisions=Object.fromEntries([...federation.owners].map(([domain,o])=>[domain,o.head.revision]));
  const scope=scoped?{projects:book.projects,notebooks:book.notebooks}:null,revision=digest(serialize({revisions,scope}));
  const context={book,head:{revision},revisions,
-  members:options=>federation.members(federation.head,options),member:id=>federation.member(federation.head,id),selected:id=>federation.selected(federation.head,id),
+  browse:options=>federation.browse(federation.head,options),members:options=>federation.members(federation.head,options),member:id=>federation.member(federation.head,id),selected:id=>federation.selected(federation.head,id),
   encode:value=>research.encode('project-module-page',storage.projectId+'/'+namespaceId,value).toString('base64url'),decode:value=>research.decode('project-module-page',storage.projectId+'/'+namespaceId,Buffer.from(value,'base64url'))};
  for(const method of ['view','search','references','constraint','calendar','inventory'])context[method]=member=>{
   const owner=federation.owners.get(moduleDomain(member.type));if(!owner)throw new AppError('CATALOGUE_DAMAGED');return owner.catalogue[method](owner.head,member);
