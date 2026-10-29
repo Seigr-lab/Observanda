@@ -260,7 +260,7 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
   }
 
   function emptyPageDetail(){return publicationSourceCount(state)?esc(t('publicationSources','choosePageDetail')):'Use Add page or Create homepage above the canvas. A homepage is optional.';}
-  function emptyPage(){return `<section class="panel"><h2>${publicationSourceCount(state)?esc(t('publicationSources','choosePage')):'Create a page'}</h2><p>${emptyPageDetail()}</p></section>`;}
+  function emptyPage(){return `<section class="panel"><h2>${publicationSourceCount(state)?esc(t('publicationSources','choosePage')):'Create a page'}</h2><p>${emptyPageDetail()}</p>${!publicationSourceCount(state)?button('Add a page','website-create-page'):''}</section>`;}
   function siteFields(){const b=state.book,identity=siteIdentity(b);return `${field('Website title',`<input data-site="title" value="${esc(identity.title)}" maxlength="160" aria-describedby="website-title-help">`)}<p id="website-title-help" class="muted">${esc(tr('titleHelp'))}</p>${field('Website description',`<textarea data-site="description" rows="3" maxlength="1500">${esc(identity.description)}</textarea>`)}`;}
   function home(){
     const b=state.book,h=b.website.home;
@@ -525,7 +525,11 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
   async function showPreview(result,iframe,revision,signal,command,collectionRequest){
     canvasRequests.set(iframe,{command,request:collectionRequest});
     const doc=iframe.contentDocument,url=result.baseUrl+previewPage;
-    if(!doc?.querySelector('main')||doc.body.dataset.page!==previewTarget()){
+    // Keep the initialized canvas document across page changes. Navigating the
+    // iframe again exposes its new body before load installs the interaction
+    // handlers (styles and images can still be pending), losing early clicks.
+    // Resource URLs below are rebased to the new candidate before reconciliation.
+    if(!doc?.querySelector('main')){
       iframe.inert=true;
       await new Promise((resolve,reject)=>{
         const cleanup=()=>{iframe.removeEventListener('load',loaded);signal.removeEventListener('abort',aborted);};
@@ -553,6 +557,7 @@ export function websiteUI({state,api,esc,field,option,icon,dirty,render,notify,s
     }
     if(!richEditor)mountCanvasEditor(doc);
     collectionNavigation.attach(doc,command,collectionRequest);decorateCanvas(doc);referenceNavigation.restoreFocus(doc);if(richEditor)refreshRichStyles(doc,richEditor.doc);surface?.measure();fitPreview();
+    document.querySelectorAll('[data-palette-kind]').forEach(button=>button.disabled=documents?.structuralBusy()??false);
     if(revealSection){revealSelected();revealSection=null;}
   }
 

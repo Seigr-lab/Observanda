@@ -32,7 +32,9 @@ test('unused website stays empty beside research, and explicit pages survive sav
   await expect(page.locator('#website-preview-empty')).toBeVisible();await expect(page.getByLabel('Page',{exact:true})).toHaveValue('');
   const site=(await sites.list()).sites.find(site=>site.name==='Own design'),fresh=await sites.read(site.id);
   expect(fresh.site.projects.every(project=>!project.share)).toBe(true);expect(fresh.site.selection).toEqual({defaultShare:false,includeProjects:[],records:[]});expect(fresh.book.pages).toEqual([]);
-  await page.getByRole('button',{name:'Add page',exact:true}).click();await page.getByLabel('Page title',{exact:true}).fill('Only my content');await page.getByLabel('Page introduction',{exact:true}).fill('Written by the author.');
+  await page.setViewportSize({width:390,height:844});
+  await page.getByRole('button',{name:'Add a page',exact:true}).click();
+  await page.setViewportSize({width:1440,height:1000});await page.getByLabel('Page title',{exact:true}).fill('Only my content');await page.getByLabel('Page introduction',{exact:true}).fill('Written by the author.');
   await expect(canvas.locator('main')).toContainText('Written by the author.');await expect(canvas.locator('#page-records,#page-notebooks,[data-book-index]')).toHaveCount(0);await expect(canvas.locator('.site-menu a')).toHaveText(['Only my content']);
   await expect(canvas.locator('body')).not.toContainText(book.projects[0].title);await expect(canvas.locator('body')).not.toContainText(book.entries[0].title);
   await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
