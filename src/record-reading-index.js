@@ -37,24 +37,24 @@ export class RecordReadingIndex extends ObjectIndex{
   for(const [id,revision] of next)root=await this.change(root,id,revision);
   await this.flush(root);return {version:1,root};
  }
- async *rows(snapshot,notebookIds,{order='date',after=null,backward=false,signal}={}){
+ async *rows(snapshot,notebookIds,{order='date',after=null,backward=false,inclusive=false,signal}={}){
   if(!['date','position'].includes(order))throw new AppError('INVALID');
   const boundary=after?readingKey(after,order):null,compare=(a,b)=>(readingKey(a,order)<readingKey(b,order)?-1:readingKey(a,order)>readingKey(b,order)?1:0)*(backward?-1:1);
   if(!snapshot.readingIndex){
    // Historical snapshots are not rewritten on a read. Their compatibility
    // path retains one window; the next write builds the maintained index.
-   let cursor=boundary;
+   let cursor=boundary,include=inclusive;
    for(;;){
     const window=[];
     for await(const source of this.store.members(snapshot,{notebookIds,signal})){
      signal?.throwIfAborted();const row=await this.describe(source),key=readingKey(row,order);
-     if(!notebookIds.has(row.notebookId)||cursor!==null&&(backward?key>=cursor:key<=cursor))continue;
+     if(!notebookIds.has(row.notebookId)||cursor!==null&&(backward?(include?key>cursor:key>=cursor):(include?key<cursor:key<=cursor)))continue;
      if(window.length===128&&compare(row,window.at(-1))>=0)continue;
      const at=window.findIndex(value=>compare(row,value)<0);window.splice(at<0?window.length:at,0,row);if(window.length>128)window.pop();
     }
     if(!window.length)return;
     for(const row of window){signal?.throwIfAborted();yield row;}
-    cursor=readingKey(window.at(-1),order);if(window.length<128)return;
+    cursor=readingKey(window.at(-1),order);include=false;if(window.length<128)return;
    }
   }
   if(!RecordReadingIndex.valid(snapshot.readingIndex))fail();
@@ -69,7 +69,7 @@ export class RecordReadingIndex extends ObjectIndex{
   };
   for(const id of notebookIds){
    signal?.throwIfAborted();const start=prefix(order,id),lower=await this.rank(head,start),upper=await this.rank(head,start+'\uffff');
-   const at=boundary!==null?await this.rank(head,start+boundary+(backward?'':'\0'))-(backward?1:0):backward?upper-1:lower;
+   const at=boundary!==null?await this.rank(head,start+boundary+((backward?inclusive:!inclusive)?'\0':''))-(backward?1:0):backward?upper-1:lower;
    if(at>=lower&&at<upper){const lane={id,start,lower,upper,at,row:null};await next(lane);lanes.push(lane);}
   }
   for(;;){

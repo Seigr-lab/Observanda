@@ -10,6 +10,8 @@ import {recordCounts} from './web/record-workflow.js';
 import {RecordRecentIndex} from './record-recent-index.js';
 import {researchId} from './web/research-reference.js';
 import {notebooksIn} from './web/workspace-structure.js';
+import {indexedRecordDateQuery} from './record-date-page.js';
+import {recordDateWindow} from './record-date-window.js';
 export async function recordCollectionQuery(pages,client,command,{scope,visit,signal}){
  if(!command||Object.keys(command).sort().join()!=='cursor,limit,mode,query,workspaceId')throw new AppError('INVALID');
  const {workspaceId,query,limit,cursor,mode}=command;
@@ -28,13 +30,17 @@ export async function recordCollectionQuery(pages,client,command,{scope,visit,si
    const snapshot=await store.snapshot(snapshotId),metadata=snapshot.metadata;if(metadata.id!==owner.workspaceId)throw new AppError('DATABASE_LOCATION');
    if(localProjectId&&!metadata.projects.some(p=>p.id===localProjectId))throw new AppError('RECORD_VIEW_SCOPE');
    const books=notebooksIn(metadata,localProjectId,{recursive:true}),ids=new Set(books.filter(n=>!query.notebookId||n.id===query.notebookId).map(n=>n.id));
+   const owned=(document,updatedAt)=>{const book=books.find(n=>n.id===document.notebookId),project=metadata.projects.find(p=>p.id===book?.projectId);return {...document,...(updatedAt?{updatedAt}:{}),owner:{...owner,projectTitle:owner.projectTitle??project?.title??'',notebookTitle:book?.title??''}};};
    const attach=(document,updatedAt)=>{
     if(document.template?.profileId)domains.add(document.template.profileId);
     if(!matches(document))return;
     const increment=recordCounts([document]);for(const key of Object.keys(counts))counts[key]+=increment[key];
-    const book=books.find(n=>n.id===document.notebookId),project=metadata.projects.find(p=>p.id===book?.projectId);
-    page.add({...document,...(updatedAt?{updatedAt}:{}),owner:{...owner,projectTitle:owner.projectTitle??project?.title??'',notebookTitle:book?.title??''}});
+    page.add(owned(document,updatedAt));
    };
+   if(mode==='browse'&&indexedRecordDateQuery(query)){
+    const indexed=await recordDateWindow(store,snapshot,ids,{offset:session.offset,after:session.after,limit,workspaceId:owner.workspaceId,signal});
+    if(indexed){for(const key of Object.keys(counts))counts[key]+=indexed.counts[key];for(const domain of indexed.domains)domains.add(domain);page.addIndexed({...indexed,records:indexed.records.map(document=>owned(document))});return;}
+   }
    // The overview needs only the first page. Ordered indexes avoid scanning a
    // whole book merely to show its ten most recently changed records.
    if(mode==='recent'&&snapshot.recentIndex){
