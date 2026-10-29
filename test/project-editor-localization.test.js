@@ -8,6 +8,7 @@ import {projectSettings} from '../src/web/project-settings.js';
 import {projectNotebooksUI} from '../src/web/project-notebooks.js';
 import {starterTemplate,projectTypeChoice} from '../src/web/project-templates.js';
 import {emptyConfiguration} from '../src/web/notebook-schema.js';
+import {recordTypeSettings} from '../src/web/laboratory/record-type-settings.js';
 
 const locales=['en','ca','es','nb','nn'];
 const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -16,6 +17,23 @@ const field=(label,control)=>'<label>'+esc(label)+control+'</label>';
 const option=(value,label,selected)=>'<option value="'+esc(value)+'"'+(value===selected?' selected':'')+'>'+esc(label)+'</option>';
 const settings={enabledModules:['laboratory-beekeeping']};
 const projectId='00000000-0000-4000-8000-000000000001',bookId='00000000-0000-4000-8000-000000000002';
+
+test('record type settings translate live controls and validation without changing stored templates',async context=>{
+ const originalDocument=globalThis.document;globalThis.document={querySelector:()=>null};
+ context.after(()=>{globalThis.document=originalDocument;activateLanguage('en');});
+ const section={id:'00000000-0000-4000-8000-000000000003',profileId:'beekeeping',key:'custom',label:'Authored <type>',description:'Keep this guidance',enabled:true,fields:[]};
+ const book={id:bookId,title:'Authored workspace',projects:[],notebooks:[{id:bookId,title:'Authored notebook',configuration:{profiles:[{id:'beekeeping',version:1,enabled:true}],sections:[section]}}]},before=structuredClone(book);
+ let writes=0;
+ const ui=await recordTypeSettings({state:{book,storage:{}},api:async(path,data)=>{if(data){writes++;throw Error('Unexpected write');}return {book,etag:'test'};},esc,field,option,draw(){}},{id:'beekeeping'});
+ for(const locale of locales){
+  await load(locale);activateLanguage(locale);
+  const html=ui.view();assert.ok(html.includes(esc(t('projectEditors','editTypesHelp'))));assert.ok(html.includes(esc(t('projectEditors','fields',{count:0}))));
+  assert.ok(html.includes('Authored &lt;type&gt;'));assert.ok(!html.includes('<type>'));
+  ui.input({dataset:{labSection:'0',labSectionProp:'label'},value:'',hasAttribute:()=>false});
+  await assert.rejects(ui.save(),{message:t('projectEditors','typeNameRequired')});
+  await ui.discard();assert.deepEqual(book,before);assert.equal(writes,0);
+ }
+});
 function fixture(context){
  const previousDocument=globalThis.document,previousFormData=globalThis.FormData;
  context.after(()=>{globalThis.document=previousDocument;globalThis.FormData=previousFormData;activateLanguage('en');});

@@ -1,5 +1,6 @@
 import {t} from './i18n/index.js';
 import {RECORD_TYPES} from './record-types.js';
+import {recordTypeLabel} from './record-type-presentation.js';
 import {REPRESENTATIONS} from './measurement-model.js';
 import {measurementText as mt} from './measurement-schema-ui.js';
 import {renderProse} from './prose-model.js';
@@ -69,7 +70,7 @@ export function migrationImportUI({state,api,esc,field,render,showDialog}){
    field(tr('reason'),'<textarea name="reason" maxlength="2000">'+esc(m.reason)+'</textarea>')+
    field(tr('destination'),'<select name="notebookId">'+notebookOptions(m.notebookId)+'</select>')+
    field(tr('recordTitle'),'<input name="title" required maxlength="180" value="'+esc(m.title)+'">')+
-   select('type','recordType',RECORD_TYPES.map(t=>[t.id,t.label]),m.type)+
+   select('type','recordType',RECORD_TYPES.map(t=>[t.id,recordTypeLabel(t.id)]),m.type)+
    '<label class="check"><input name="current" type="checkbox" '+(m.current?'checked':'')+'>'+text('current')+'</label><p class="muted">'+text('currentHelp')+'</p>'+
    select('contentFile','contentFile',o.files.map((f,i)=>[i,f.path]),m.contentFile)+
    select('contentMode','contentMode',[['text',tr('text')],['json',tr('json')],['html',tr('html')],['html-book',tr('htmlBook')],...(o.mapping?.kind==='artifact'?[['original',tr('original')]]:[]),...(o.mapping?.kind==='dataset'?[['dataset',tr('dataset')]]:[]),...(o.mapping?.kind==='figure'?[['figure',tr('figure')]]:[])],m.contentMode)+datasetForm(o,m)+

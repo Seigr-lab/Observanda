@@ -102,5 +102,17 @@
   "invalidBook": "Complete each type and field name; choice fields need distinct choices.",
   "bookSaved": "Lab book saved.",
   "bookConflict": "The workspace changed. Your choices are still here. Keep any edits you need, then cancel and reload the workspace before trying again.",
-  "bookSaveFailed": "Could not save this lab book. Your choices are still here."
+  "bookSaveFailed": "Could not save this lab book. Your choices are still here.",
+  "typeNameRequired": "Enter a name for each record type.",
+  "fieldLabelRequired": "Enter a label for each field.",
+  "choiceRequired": "Add at least one choice to {label}.",
+  "distinctChoices": "Use distinct choices for {label}.",
+  "unnamedType": "Unnamed type",
+  "reopenTypes": "Reopen this workspace before saving its record types.",
+  "editTypesHelp": "Edit your types and fields, then save or cancel.",
+  "edited": "Edited",
+  "removedTypesCount": "Removed types ({count})",
+  "typesCount": "Types ({count})",
+  "removedTypesHelp": "Removed types are unavailable for new records. Existing records are kept.",
+  "addTypeFieldsHelp": "Add a record type to define its name and fields."
 }

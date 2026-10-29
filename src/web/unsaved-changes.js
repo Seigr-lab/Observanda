@@ -1,11 +1,14 @@
+import './i18n/catalogues/editorControls.js';
+import {t} from './i18n/index.js';
 // One decision before leaving an editing context. The original screen/form stays mounted.
 export function unsavedChanges({esc,changes,save,discard,busy,notify,flush,prepare,defaultScope='all'}) {
+  const text=(key,args)=>esc(t('editorControls',key,args));
   const dialog=document.createElement('dialog');dialog.id='leave-dialog';dialog.setAttribute('aria-labelledby','leave-title');document.body.append(dialog);
   let active=false,work=null,generation=0,preparing=null;
   async function run(next,{scope=defaultScope}={}){
     if(active)return false;
     const request=++generation;
-    if(busy()){notify('Wait for the current operation to finish before leaving.',true);return false;}
+    if(busy()){notify(t('editorControls','waitBeforeLeaving'),true);return false;}
     // Automatic editors commit their pending input before evaluating manual
     // drafts. A failed save leaves the editor and its input in place.
     if(flush){
@@ -13,7 +16,7 @@ export function unsavedChanges({esc,changes,save,discard,busy,notify,flush,prepa
       try{await flush(scope);}catch(error){if(request!==generation)return false;throw error;}
       finally{if(preparing===request)preparing=null;}
       if(request!==generation)return false;
-      if(busy()){notify('Wait for the current operation to finish before leaving.',true);return false;}
+      if(busy()){notify(t('editorControls','waitBeforeLeaving'),true);return false;}
     }
     // A draft without a durable checkpoint needs an immediate decision. Its
     // queued write must not hide Stay or Discard behind preparation. Already
@@ -24,13 +27,13 @@ export function unsavedChanges({esc,changes,save,discard,busy,notify,flush,prepa
       try{await prepare(scope);}catch(error){if(request!==generation)return false;throw error;}
       finally{if(preparing===request)preparing=null;}
       if(request!==generation)return false;
-      if(busy()){notify('Wait for the current operation to finish before leaving.',true);return false;}
+      if(busy()){notify(t('editorControls','waitBeforeLeaving'),true);return false;}
     }
     pending=changes(scope);
     if(!pending.labels.length){await next();return true;}
     active=true;
     const decision=await new Promise(resolve=>{
-      dialog.innerHTML=`<h2 id="leave-title">Unsaved changes</h2><p>Before leaving, choose what to do with your changes.</p><ul>${pending.labels.map(label=>`<li>${esc(label)}</li>`).join('')}</ul>${pending.canSave?'':'<p>Complete this form to apply it, or discard the unfinished form.</p>'}<p class="guard-error" role="alert" hidden></p><div class="dialog-actions"><button class="button" data-choice="stay">Stay here</button><button class="button danger" data-choice="discard">Discard changes</button>${pending.canSave?'<button class="button primary" data-choice="save">Save and continue</button>':''}</div>`;
+      dialog.innerHTML=`<h2 id="leave-title">${text('unsaved')}</h2><p>${text('beforeLeaving')}</p><ul>${pending.labels.map(label=>`<li>${esc(label)}</li>`).join('')}</ul>${pending.canSave?'':`<p>${text('completeForm')}</p>`}<p class="guard-error" role="alert" hidden></p><div class="dialog-actions"><button class="button" data-choice="stay">${text('stay')}</button><button class="button danger" data-choice="discard">${text('discard')}</button>${pending.canSave?`<button class="button primary" data-choice="save">${text('saveContinue')}</button>`:''}</div>`;
       let settled=false;
       const refresh=()=>{for(const button of dialog.querySelectorAll('[data-choice]'))button.disabled=button.dataset.choice!=='stay'&&!!work;};
       const finish=value=>{if(settled)return;settled=true;dialog.close();dialog.onclick=null;dialog.oncancel=null;resolve(value);};
@@ -47,7 +50,7 @@ export function unsavedChanges({esc,changes,save,discard,busy,notify,flush,prepa
         try{
           await operation;
           finish(true);
-        }catch(error){if(!settled){const message=dialog.querySelector('[role="alert"]');message.hidden=false;message.textContent=error?.message??'Could not save. Your changes are still here.';}else notify(error?.message??'Could not save. Your changes are still here.',true);}
+        }catch(error){if(!settled){const message=dialog.querySelector('[role="alert"]');message.hidden=false;message.textContent=error?.message??t('editorControls','saveFailed');}else notify(error?.message??t('editorControls','saveFailed'),true);}
         finally{work=null;if(!settled)refresh();}
       };
       refresh();dialog.showModal();dialog.querySelector('[data-choice="stay"]').focus();

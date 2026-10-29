@@ -87,5 +87,13 @@
   "folderCount": {
     "one": "{count} carpeta",
     "other": "{count} carpetas"
-  }
+  },
+  "waitBeforeLeaving": "Espera a que termine la operación actual antes de salir.",
+  "unsaved": "Cambios sin guardar",
+  "beforeLeaving": "Antes de salir, elige qué hacer con los cambios.",
+  "completeForm": "Completa este formulario para aplicarlo o descarta el formulario sin terminar.",
+  "stay": "Quedarse aquí",
+  "discard": "Descartar cambios",
+  "saveContinue": "Guardar y continuar",
+  "saveFailed": "No se ha podido guardar. Tus cambios siguen aquí."
 }

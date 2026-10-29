@@ -1,3 +1,5 @@
+import '../i18n/catalogues/projectEditors.js';
+import {t} from '../i18n/index.js';
 import {configurationTypeSettings} from '../configuration-type-settings.js';
 import {configurationOf} from '../notebook-schema.js';
 import {locationName} from '../workspace-structure.js';
@@ -9,6 +11,7 @@ export async function recordTypeSettings(services,profile){
  if(services.state.storage?.researchStorage==='catalogue')return configurationTypeSettings(services,profile);
  const {state,api,esc,field,option,draw,changed}=services,workspaceId=state.book.id;
  let snapshot,entity,base,draft,pending=null,request=null,error=null,disposed=false,selectedId=null,showRemoved=false;
+ const text=(key,args)=>esc(t('projectEditors',key,args));
  const copy=v=>structuredClone(v),equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
  const labs=()=>snapshot.book.notebooks.filter(n=>configurationOf(n).profiles.some(p=>p.id===profile.id&&p.enabled)).map(n=>({...n,data:configurationOf(n)}));
  const isDirty=()=>!!pending||!!entity&&!equal(base,draft);
@@ -28,23 +31,23 @@ export async function recordTypeSettings(services,profile){
  const sectionChanged=s=>!equal(s,base.sections.find(b=>b.id===s.id));
  function validation(){
   for(const s of draft.sections){
-   if(!s.label.trim())return {id:s.id,message:'Enter a name for each record type.'};
+   if(!s.label.trim())return {id:s.id,message:t('projectEditors','typeNameRequired')};
    for(const f of s.fields){
-    if(!f.label.trim())return {id:s.id,message:'Enter a label for each field.'};
-    if(f.type==='select'&&!f.choices.length)return {id:s.id,message:'Add at least one choice to '+f.label+'.'};
-    if(new Set(f.choices).size!==f.choices.length)return {id:s.id,message:'Use distinct choices for '+f.label+'.'};
+    if(!f.label.trim())return {id:s.id,message:t('projectEditors','fieldLabelRequired')};
+    if(f.type==='select'&&!f.choices.length)return {id:s.id,message:t('projectEditors','choiceRequired',{label:f.label})};
+    if(new Set(f.choices).size!==f.choices.length)return {id:s.id,message:t('projectEditors','distinctChoices',{label:f.label})};
    }
   }
   return null;
  }
- function message(){return error?.message??(pending?'Saving changes…':isDirty()?'Unsaved changes':'No unsaved changes');}
+ function message(){return error?.message??(pending?t('configurationEditor','saving'):isDirty()?t('configurationEditor','unsaved'):t('configurationEditor','saved'));}
  function status(){
   const node=document.querySelector('[data-type-status="'+profile.id+'"]');
   if(node){node.textContent=message();node.classList.toggle('desk-error',Boolean(error));}
   for(const command of ['save','cancel']){const control=document.querySelector('[data-type-controls="'+profile.id+'"] [data-command="'+command+'"]');if(control)control.disabled=!!pending||!isDirty();}
   for(const s of scoped()){
    const item=document.querySelector('[data-type-choice="'+s.id+'"]');
-   if(item){item.querySelector('[data-type-title]').textContent=s.label||'Unnamed type';item.querySelector('[data-type-modified]').hidden=!sectionChanged(s);}
+   if(item){item.querySelector('[data-type-title]').textContent=s.label||t('projectEditors','unnamedType');item.querySelector('[data-type-modified]').hidden=!sectionChanged(s);}
   }
   changed?.();
  }
@@ -52,7 +55,7 @@ export async function recordTypeSettings(services,profile){
   if(pending){await pending;return;}
   if(!entity||equal(base,draft))return;
   const invalid=validation();if(invalid){selectedId=invalid.id;showRemoved=!chosen()?.enabled;error=new Error(invalid.message);draw();status();throw error;}
-  if(state.book?.id!==workspaceId)throw new Error('Reopen this workspace before saving its record types.');
+  if(state.book?.id!==workspaceId)throw new Error(t('projectEditors','reopenTypes'));
   const captured=copy(draft),notebook=snapshot.book.notebooks.find(n=>n.id===entity.id),payload={kind:'notebook',value:{...notebook,configuration:captured}};
   const signature=JSON.stringify(payload);if(request?.signature!==signature)request={signature,commandId:crypto.randomUUID()};
   error=null;
@@ -68,33 +71,33 @@ export async function recordTypeSettings(services,profile){
   draw();status();await pending;
  }
  function view(){
-  if(!entity)return '<div class="lab-type-settings"><p>No lab book uses these tools yet. Choose them in a lab book\'s settings, then configure its record types here.</p></div>';
+  if(!entity)return '<div class="lab-type-settings"><p>'+esc(t('configurationEditor','noProfileBooks'))+'</p></div>';
   selectAvailable();
   const types=scoped(),removed=types.filter(s=>!s.enabled),s=chosen(),index=draft.sections.indexOf(s);
   const active=types.filter(s=>s.enabled),position=active.indexOf(s);
-  const choice=item=>`<button type="button" class="lab-type-choice" data-action="module-settings-command" data-command="select-type" data-id="${item.id}" data-type-choice="${item.id}" aria-current="${item.id===selectedId?'true':'false'}"><span data-type-title>${esc(item.label||'Unnamed type')}</span><small>${item.fields.length} ${item.fields.length===1?'field':'fields'}</small><span class="lab-type-modified" data-type-modified ${sectionChanged(item)?'':'hidden'}>Edited</span></button>`;
+  const choice=item=>`<button type="button" class="lab-type-choice" data-action="module-settings-command" data-command="select-type" data-id="${item.id}" data-type-choice="${item.id}" aria-current="${item.id===selectedId?'true':'false'}"><span data-type-title>${esc(item.label||t('projectEditors','unnamedType'))}</span><small>${text('fields',{count:item.fields.length})}</small><span class="lab-type-modified" data-type-modified ${sectionChanged(item)?'':'hidden'}>${text('edited')}</span></button>`;
   return `<div class="lab-type-settings">
-   <header><div><h3>Record types</h3><p>${esc(entity.title)} · ${esc(state.book.title)}</p></div><p class="lab-type-hint">Edit your types and fields, then save or cancel.</p></header>
+   <header><div><h3>${text('recordTypes')}</h3><p>${esc(entity.title)} · ${esc(state.book.title)}</p></div><p class="lab-type-hint">${text('editTypesHelp')}</p></header>
    <fieldset class="lab-type-draft" ${pending?'disabled':''}>
-    ${labs().length>1?field('Lab book',`<select data-type-lab>${labs().map(l=>option(l.id,locationName(snapshot.book,l.projectId)+' / '+l.title,entity.id)).join('')}</select>`):''}
-    <div class="lab-type-layout"><aside class="lab-type-catalogue" aria-label="Record types">
-     <div class="lab-type-list-heading"><strong>Types (${active.length})</strong>${button('Add record type','section-add','','subtle')}</div>
-     <div class="lab-type-list">${active.map(choice).join('')||'<p>No active types.</p>'}</div>
-     ${removed.length?`<details class="lab-removed-types" data-removed-types ${showRemoved?'open':''}><summary>Removed types (${removed.length})</summary>${removed.map(choice).join('')}</details>`:''}
-    </aside><section class="lab-type-detail" aria-label="Selected record type">
-     ${s?`<div class="lab-type-detail-heading"><strong>${s.enabled?'Type details':'Removed type'}</strong><div>
-      ${s.enabled?button('Move up','section-move',`data-index="${index}" data-direction="-1" ${position<=0?'disabled':''}`,'subtle')+button('Move down','section-move',`data-index="${index}" data-direction="1" ${position===active.length-1?'disabled':''}`,'subtle')+button('Remove type','section-remove',`data-index="${index}"`,'subtle'):button('Restore type','section-restore',`data-index="${index}"`)}
-     </div></div>${!s.enabled?'<p class="lab-type-hint">Removed types are unavailable for new records. Existing records are kept.</p>':''}${sectionDetails(s,index,context)}`:'<p>Add a record type to define its name and fields.</p>'}
+    ${labs().length>1?field(t('projectEditors','labBook'),`<select data-type-lab>${labs().map(l=>option(l.id,locationName(snapshot.book,l.projectId)+' / '+l.title,entity.id)).join('')}</select>`):''}
+    <div class="lab-type-layout"><aside class="lab-type-catalogue" aria-label="${text('recordTypes')}">
+     <div class="lab-type-list-heading"><strong>${text('typesCount',{count:active.length})}</strong>${button(t('projectEditors','addType'),'section-add','','subtle')}</div>
+     <div class="lab-type-list">${active.map(choice).join('')||'<p>'+esc(t('configurationEditor','noTypes'))+'</p>'}</div>
+     ${removed.length?`<details class="lab-removed-types" data-removed-types ${showRemoved?'open':''}><summary>${text('removedTypesCount',{count:removed.length})}</summary>${removed.map(choice).join('')}</details>`:''}
+    </aside><section class="lab-type-detail" aria-label="${text('selectedType')}">
+     ${s?`<div class="lab-type-detail-heading"><strong>${s.enabled?t('projectEditors','typeDetails'):t('projectEditors','removedType')}</strong><div>
+      ${s.enabled?button(t('projectEditors','moveUp'),'section-move',`data-index="${index}" data-direction="-1" ${position<=0?'disabled':''}`,'subtle')+button(t('projectEditors','moveDown'),'section-move',`data-index="${index}" data-direction="1" ${position===active.length-1?'disabled':''}`,'subtle')+button(t('projectEditors','removeType'),'section-remove',`data-index="${index}"`,'subtle'):button(t('projectEditors','restoreType'),'section-restore',`data-index="${index}"`)}
+     </div></div>${!s.enabled?`<p class="lab-type-hint">${text('removedTypesHelp')}</p>`:''}${sectionDetails(s,index,context)}`:`<p>${text('addTypeFieldsHelp')}</p>`}
     </section></div>
    </fieldset>
-   <footer data-type-controls="${profile.id}"><span role="status" data-type-status="${profile.id}" class="${error?'desk-error':''}">${esc(message())}</span><div>${button('Cancel','cancel',pending||!isDirty()?'disabled':'')}${button('Save changes','save',pending||!isDirty()?'disabled':'','primary')}</div></footer>
+   <footer data-type-controls="${profile.id}"><span role="status" data-type-status="${profile.id}" class="${error?'desk-error':''}">${esc(message())}</span><div>${button(t('projectEditors','cancel'),'cancel',pending||!isDirty()?'disabled':'')}${button(t('configurationEditor','save'),'save',pending||!isDirty()?'disabled':'','primary')}</div></footer>
    </div>`;
  }
  function bind(root){const details=root.querySelector('[data-removed-types]');if(details)details.ontoggle=()=>{showRemoved=details.open;};}
  function input(el){
   if(pending)return true;
   if(el.hasAttribute('data-type-lab')){
-   if(isDirty()){el.value=entity.id;error=new Error('Save or cancel changes before choosing another lab.');status();}
+   if(isDirty()){el.value=entity.id;error=new Error(t('configurationEditor','saveBeforeBook'));status();}
    else {adopt(el.value);draw();}
    return true;
   }

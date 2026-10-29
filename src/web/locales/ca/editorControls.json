@@ -87,5 +87,13 @@
   "folderCount": {
     "one": "{count} carpeta",
     "other": "{count} carpetes"
-  }
+  },
+  "waitBeforeLeaving": "Espera que acabi l’operació actual abans de sortir.",
+  "unsaved": "Canvis sense desar",
+  "beforeLeaving": "Abans de sortir, tria què vols fer amb els canvis.",
+  "completeForm": "Completa aquest formulari per aplicar-lo, o descarta el formulari inacabat.",
+  "stay": "Queda’t aquí",
+  "discard": "Descarta els canvis",
+  "saveContinue": "Desa i continua",
+  "saveFailed": "No s’ha pogut desar. Els canvis continuen aquí."
 }

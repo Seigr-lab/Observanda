@@ -1,9 +1,25 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {unsavedChanges} from '../src/web/unsaved-changes.js';
+import {readFile} from 'node:fs/promises';
+import {prepareLanguage,activateLanguage,t as translate} from '../src/web/i18n/index.js';
 
 const deferred=()=>{let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};};
 const turn=()=>new Promise(resolve=>setImmediate(resolve));
+
+test('unsaved decisions follow the selected language and keep stay and discard commands stable',async context=>{
+ context.after(()=>activateLanguage('en'));
+ const f=fixture(context);f.state.labels=['Authored draft'];
+ for(const language of ['en','nb','nn','ca','es']){
+  await prepareLanguage(language,{fetcher:async url=>({ok:true,json:async()=>JSON.parse(await readFile(url,'utf8'))})});activateLanguage(language);
+  const decision=f.run();assert.equal(f.dialog.open,true);
+  assert.ok(f.dialog.markup.includes(translate('editorControls','beforeLeaving')));
+  assert.ok(f.dialog.markup.includes(translate('editorControls','saveContinue')));
+  assert.deepEqual([...f.buttons.keys()],['stay','discard','save']);
+  await f.choose('stay');assert.equal(await decision,false);assert.deepEqual(f.state.labels,['Authored draft']);
+ }
+ assert.deepEqual(f.state.writes,[]);assert.deepEqual(f.state.navigations,[]);
+});
 function fixture(t,options={}){
  const buttons=new Map(),alert={hidden:true,textContent:''};
  const dialog={open:false,setAttribute(){},showModal(){this.open=true;},close(){this.open=false;},

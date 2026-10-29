@@ -102,5 +102,17 @@
   "invalidBook": "Completa el nom de cada tipus i camp; els camps de selecció necessiten opcions diferents.",
   "bookSaved": "S'ha desat el llibre de laboratori.",
   "bookConflict": "L'espai de treball ha canviat. Les teves seleccions es conserven. Guarda les edicions que necessitis, cancel·la i torna a carregar l'espai de treball abans de tornar-ho a provar.",
-  "bookSaveFailed": "No s'ha pogut desar aquest llibre de laboratori. Les teves seleccions es conserven."
+  "bookSaveFailed": "No s'ha pogut desar aquest llibre de laboratori. Les teves seleccions es conserven.",
+  "typeNameRequired": "Introdueix un nom per a cada tipus de registre.",
+  "fieldLabelRequired": "Introdueix una etiqueta per a cada camp.",
+  "choiceRequired": "Afegeix almenys una opció a {label}.",
+  "distinctChoices": "Utilitza opcions diferents per a {label}.",
+  "unnamedType": "Tipus sense nom",
+  "reopenTypes": "Torna a obrir aquest espai de treball abans de desar-ne els tipus de registre.",
+  "editTypesHelp": "Edita els tipus i els camps; després desa o cancel·la els canvis.",
+  "edited": "Editat",
+  "removedTypesCount": "Tipus eliminats ({count})",
+  "typesCount": "Tipus ({count})",
+  "removedTypesHelp": "Els tipus eliminats no estan disponibles per als registres nous. Els registres existents es conserven.",
+  "addTypeFieldsHelp": "Afegeix un tipus de registre per definir-ne el nom i els camps."
 }

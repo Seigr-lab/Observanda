@@ -2,6 +2,7 @@ import {collectionRecords,recordCollectionRoute} from './record-collection-clien
 import {lookupRecordTypes} from './record-type-lookup.js';
 import {viewQuery} from './record-view-model.js';
 import {RECORD_TYPES} from './record-types.js';
+import {recordTypeLabel} from './record-type-presentation.js';
 import {t} from './i18n/index.js';
 const text=(key,args)=>t('recordTypes',key,args);
 // The list keeps one type page. Browsing additional types is a dedicated,
@@ -21,7 +22,7 @@ export function recordTypeFilter({state,api,esc,showDialog,snapshot,choose}){
   return [{value:'all',label:text('all')},...values,...(selected!=='all'&&!values.some(v=>v.value===selected)?[result?.selected??{value:selected,label:text(result?'unavailable':'saved')}]:[])];
  }
  function view(){sync();return `<span id="record-type-control" class="record-type-control">${control()}</span>`;}
- function control(){return `<select id="type-filter" class="filter-select" aria-label="${esc(text('filter'))}">${choices().map(v=>`<option value="${esc(v.value)}" ${v.value===state.filter?'selected':''}>${esc(v.label)}</option>`).join('')}</select>${button('find','open')}`;}
+ function control(){return `<select id="type-filter" class="filter-select" aria-label="${esc(text('filter'))}">${choices().map(v=>`<option value="${esc(v.value)}" ${v.value===state.filter?'selected':''}>${esc(recordTypeLabel(v.value,v.label))}</option>`).join('')}</select>${button('find','open')}`;}
  function paint(){
   const node=document.getElementById('record-type-control');if(!node)return;
   const focused=node.contains(document.activeElement),id=document.activeElement?.id;node.innerHTML=control();
@@ -48,7 +49,7 @@ export function recordTypeFilter({state,api,esc,showDialog,snapshot,choose}){
   const host=dialog().querySelector('[data-type-results]');if(!modal||!host)return;
   const page=modal.page;
   host.innerHTML=modal.loading?`<p role="status">${esc(text('loading'))}</p>`:modal.error?`<p role="alert">${esc(text('error'))}</p>${button('retry','retry')}`:page?`<p role="status">${esc(page.total?text('range',{first:page.offset+1,last:page.offset+page.items.length,total:page.total}):text('empty'))}</p>
-   <ul class="record-type-options">${page.items.map(v=>`<li><button type="button" class="button" data-action="record-type-choose" data-value="${esc(v.value)}" aria-pressed="${v.value===state.filter}">${esc(v.label)}</button></li>`).join('')}</ul>
+   <ul class="record-type-options">${page.items.map(v=>`<li><button type="button" class="button" data-action="record-type-choose" data-value="${esc(v.value)}" aria-pressed="${v.value===state.filter}">${esc(recordTypeLabel(v.value,v.label))}</button></li>`).join('')}</ul>
    <nav class="inline-actions" aria-label="${esc(text('pages'))}">${button('previous','previous',page.previousCursor?'':'disabled')}${button('next','next',page.nextCursor?'':'disabled')}</nav>`:'';
  }
  function open(){

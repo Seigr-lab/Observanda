@@ -102,5 +102,17 @@
   "invalidBook": "Fyll ut navnet på hver type og hvert felt; valgfelt trenger ulike alternativer.",
   "bookSaved": "Labboken er lagret.",
   "bookConflict": "Arbeidsområdet er endret. Valgene dine er fortsatt her. Ta vare på endringene du trenger, avbryt og last inn arbeidsområdet på nytt før du prøver igjen.",
-  "bookSaveFailed": "Kunne ikke lagre denne labboken. Valgene dine er fortsatt her."
+  "bookSaveFailed": "Kunne ikke lagre denne labboken. Valgene dine er fortsatt her.",
+  "typeNameRequired": "Skriv inn et navn for hver oppføringstype.",
+  "fieldLabelRequired": "Skriv inn en etikett for hvert felt.",
+  "choiceRequired": "Legg til minst ett valg i {label}.",
+  "distinctChoices": "Bruk ulike valg for {label}.",
+  "unnamedType": "Type uten navn",
+  "reopenTypes": "Åpne dette arbeidsområdet på nytt før du lagrer oppføringstypene.",
+  "editTypesHelp": "Rediger typene og feltene, og lagre eller avbryt.",
+  "edited": "Redigert",
+  "removedTypesCount": "Fjernede typer ({count})",
+  "typesCount": "Typer ({count})",
+  "removedTypesHelp": "Fjernede typer er ikke tilgjengelige for nye oppføringer. Eksisterende oppføringer beholdes.",
+  "addTypeFieldsHelp": "Legg til en oppføringstype for å angi navn og felter."
 }

@@ -1,8 +1,8 @@
 import {viewQuery,validViewQuery,viewScopeIssue,viewScopeLabel} from './record-view-model.js';
-import {RECORD_TYPES} from './record-types.js';
+import {recordTypeLabel} from './record-type-presentation.js';
 import {lookupRecordTypes} from './record-type-lookup.js';
 import {t} from './i18n/index.js';
-import {profileById} from './laboratory/catalog.js';
+import {labBookProfileLabel} from './project-type-presentation.js';
 const text=(key,args)=>t('recordViews',key,args);
 
 export function recordViewsUI({state,api,esc,field,showDialog,notify,apply,snapshot}){
@@ -19,14 +19,14 @@ export function recordViewsUI({state,api,esc,field,showDialog,notify,apply,snaps
   dialog().querySelector('h2').focus();
  }
  function summary(q){
-  const b=q.browse,type=RECORD_TYPES.find(t=>t.id===q.filter)?.label??t('recordTypes','saved');
+  const b=q.browse,type=recordTypeLabel(q.filter,t('recordTypes','saved'));
   const lines=[['scope',viewScopeLabel(state.book,q)],['recordType',q.filter==='all'?t('recordTypes','all'):type]];
   if(b.journey&&b.journey!=='all')lines.push(['journey',t('book',b.journey)]);
   if(q.search)lines.push(['search',q.search]);
   if(b.tags)lines.push([b.tagMode==='any'?'anyTags':'allTags',b.tags]);
   if(b.from||b.to)lines.push(['dates',text('dateRange',{from:b.from||text('anyStart'),to:b.to||text('anyEnd')})]);
   if(b.dateKnowledge!=='all')lines.push(['certainty',text('certaintyValues.'+b.dateKnowledge)]);
-  if(b.domain!=='all')lines.push(['labType',b.domain==='general'?text('general'):profileById(b.domain)?.label??text('unavailableLabType')]);
+  if(b.domain!=='all')lines.push(['labType',b.domain==='general'?text('general'):labBookProfileLabel(b.domain,text('unavailableLabType'))]);
   if(b.status!=='all')lines.push(['progress',text('statusValues.'+b.status.replaceAll(' ','-'))]);
   lines.push(['order',text({'date-desc':'dateDesc','date-asc':'dateAsc',title:'titleOrder'}[b.sort])]);
   return '<dl class="record-view-summary">'+lines.map(([label,value])=>`<div><dt>${esc(text(label))}</dt><dd>${label==='recordType'&&q.filter.startsWith('template:')?`<span data-view-record-type="${esc(JSON.stringify({projectId:q.projectId,notebookId:q.notebookId,selected:q.filter}))}">${esc(value)}</span>`:esc(value)}</dd></div>`).join('')+'</dl>';

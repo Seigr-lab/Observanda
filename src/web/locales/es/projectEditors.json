@@ -102,5 +102,17 @@
   "invalidBook": "Completa el nombre de cada tipo y campo; los campos de selección necesitan opciones diferentes.",
   "bookSaved": "Cuaderno de laboratorio guardado.",
   "bookConflict": "El espacio de trabajo ha cambiado. Tus selecciones se conservan. Guarda las ediciones que necesites, cancela y vuelve a cargar el espacio de trabajo antes de volver a intentarlo.",
-  "bookSaveFailed": "No se ha podido guardar este cuaderno de laboratorio. Tus selecciones se conservan."
+  "bookSaveFailed": "No se ha podido guardar este cuaderno de laboratorio. Tus selecciones se conservan.",
+  "typeNameRequired": "Introduce un nombre para cada tipo de registro.",
+  "fieldLabelRequired": "Introduce una etiqueta para cada campo.",
+  "choiceRequired": "Añade al menos una opción a {label}.",
+  "distinctChoices": "Utiliza opciones distintas para {label}.",
+  "unnamedType": "Tipo sin nombre",
+  "reopenTypes": "Vuelve a abrir este espacio de trabajo antes de guardar sus tipos de registro.",
+  "editTypesHelp": "Edita los tipos y los campos; después guarda o cancela los cambios.",
+  "edited": "Editado",
+  "removedTypesCount": "Tipos eliminados ({count})",
+  "typesCount": "Tipos ({count})",
+  "removedTypesHelp": "Los tipos eliminados no están disponibles para los registros nuevos. Los registros existentes se conservan.",
+  "addTypeFieldsHelp": "Añade un tipo de registro para definir su nombre y sus campos."
 }

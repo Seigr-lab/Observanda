@@ -13,9 +13,12 @@ import {recordRelationView} from './record-relations-ui.js';
 import {recordDateFields,updateRecordDate} from './record-date-ui.js';
 import {recordDateIssue,recordDateLabel} from './record-date.js';
 import {templateFieldInput,templateInputValue} from './custom-field-input.js';
-import {STATUSES,RECORD_TYPES,recordLabel} from './record-types.js';
+import {STATUSES,RECORD_TYPES} from './record-types.js';
+import {recordTypeLabel} from './record-type-presentation.js';
+import messages from './locales/en/recordEditors.json' with {type:'json'};
 import {t} from './i18n/index.js';
 const text=(key,args)=>t('recordValues',key,args);
+const dateIssueLabel=issue=>{const key=Object.keys(messages).find(key=>key.startsWith('date')&&messages[key]===issue);return key?t('recordEditors',key):issue;};
 
 export function recordValuesUI(options){
  const preparation=recordPreparationUI(options),ordinary=recordValueEditor({...options,adapter:{route:'values',baseName:'selection',messages:'recordValues',conflictCodes:['ATTEMPT_CONFLICT'],target:value=>({field:value.field}),view:lifecycle=>recordValuesView(options,lifecycle)}});
@@ -24,7 +27,7 @@ export function recordValuesUI(options){
 export function recordValuesView(options,lifecycle){
  const {esc,field}=options,option=(value,name,current)=>'<option value="'+esc(value)+'"'+(value===current?' selected':'')+'>'+esc(name)+'</option>',helpers={esc,field,option};
  let retainedContributor=null;const media=recordMediaView(options),choices=customFieldChoices({api:options.api,esc,lifecycle});
- const display=base=>base.field==='type'?recordLabel(base.value.value):base.field==='occurredOn'?recordDateLabel(base.value.value):base.field==='status'?text('status_'+base.value.value):base.value.value===null?text('empty'):typeof base.value.value==='boolean'?text(base.value.value?'yes':'no'):base.value.value;
+ const display=base=>base.field==='type'?recordTypeLabel(base.value.value):base.field==='occurredOn'?recordDateLabel(base.value.value):base.field==='status'?text('status_'+base.value.value):base.value.value===null?text('empty'):typeof base.value.value==='boolean'?text(base.value.value?'yes':'no'):base.value.value;
  const relations=recordRelationView(options,lifecycle),figures=recordFigureView(options,lifecycle),attempts=recordAttemptView(options,lifecycle),results=recordResultView(options,lifecycle);return {
   prepare:(base,value,input)=>attemptValueField(base.field)?attempts.prepare(base,value,input):figureValueId(base.field)?figures.prepare(base,value,input):undefined,
   initialize(base,value,input,changed){if(resultValueId(base.field))results.initialize(base,value,input,changed);else if(attemptValueField(base.field))attempts.initialize(base,value,input,changed);else if(figureValueId(base.field))figures.initialize(base,value,input,changed);},
@@ -48,7 +51,7 @@ export function recordValuesView(options,lifecycle){
    let control;
    if(choices.supported(base.definition))control=choices.fields(base,value,changed);
    else if(base.definition)control=templateFieldInput(base.definition,item,{esc,attrs:'data-record-value'});
-   else if(name==='type')control='<select data-record-value>'+RECORD_TYPES.map(type=>option(type.id,recordLabel(type.id),item)).join('')+'</select><p class="muted">'+esc(text('typeHelp'))+'</p>';
+   else if(name==='type')control='<select data-record-value>'+RECORD_TYPES.map(type=>option(type.id,recordTypeLabel(type.id),item)).join('')+'</select><p class="muted">'+esc(text('typeHelp'))+'</p>';
    else if(name==='status')control='<select data-record-value>'+STATUSES.map(id=>option(id,text('status_'+id),item)).join('')+'</select>';
    else if(name==='share')control='<select data-record-value>'+option('false',text('private'),String(item))+option('true',text('public'),String(item))+'</select>';
    else if(name==='outcome')control='<textarea data-record-value maxlength="500" rows="3">'+esc(item??'')+'</textarea>';
@@ -75,6 +78,6 @@ export function recordValuesView(options,lifecycle){
    if(!element.hasAttribute('data-record-value'))return false;
    value.value=base.definition?templateInputValue(base.definition,element.value):base.field==='share'?element.value==='true':base.field==='outcome'&&!element.value?null:element.value;return true;
   },
-  validate(dialog,base,value){if(resultValueId(base.field))return results.validate();if(attemptValueField(base.field))return attempts.validate();if(figureValueId(base.field))return figures.validate();if(relationValueId(base.field))return relations.validate(dialog,base,value);if(base.field!=='occurredOn')return true;const issue=recordDateIssue(value.value);if(issue){dialog.querySelector('[data-record-date-error]').textContent=issue;return false;}return true;}
+  validate(dialog,base,value){if(resultValueId(base.field))return results.validate();if(attemptValueField(base.field))return attempts.validate();if(figureValueId(base.field))return figures.validate();if(relationValueId(base.field))return relations.validate(dialog,base,value);if(base.field!=='occurredOn')return true;const issue=recordDateIssue(value.value);if(issue){dialog.querySelector('[data-record-date-error]').textContent=dateIssueLabel(issue);return false;}return true;}
  };
 }
