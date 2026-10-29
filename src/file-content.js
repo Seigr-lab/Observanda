@@ -10,6 +10,7 @@ import {diskCapacity} from './disk-capacity.js';
 import path from 'node:path';
 import {createCipheriv,createDecipheriv,createHash,randomBytes} from 'node:crypto';
 import {Readable} from 'node:stream';
+import {constants as bufferConstants} from 'node:buffer';
 import {pipeline} from 'node:stream/promises';
 import {setImmediate as yieldTurn} from 'node:timers/promises';
 import {ENVELOPE,ENCRYPTION_OVERHEAD} from './encryption.js';
@@ -117,7 +118,7 @@ export class FileContent {
       return await writeContent(workspace,file,checked(),{signal,reserveBytes,maxBytes:this.size,expected:{size:this.size,sha256:this.sha256}});
     }finally{await handle.close();}
   }
-  stream(start=0,end=this.size-1){return Readable.from(this.read(start,end));}
+  stream(start=0,end=this.size-1,options={}){return Readable.from(this.read(start,end,options));}
   async verify({signal,onProgress,reportProgress=true}={}){
    return scopedFileVerification(this,()=>{const run=async()=>{
     signal?.throwIfAborted();let size=0;const hash=createHash('sha256');await this.workspace.requireStorageKey();const handle=await open(this.file,'r');
@@ -128,25 +129,37 @@ export class FileContent {
 export const contentSize=value=>value instanceof FileContent?value.size:Buffer.byteLength(value);
 export const contentHash=value=>value instanceof FileContent?value.sha256:createHash('sha256').update(value).digest('hex');
 export const contentStream=value=>value instanceof FileContent?value.stream():Readable.from([Buffer.from(value)]);
-export async function contentBuffer(value){
+export async function contentBuffer(value,{signal,maxBytes=0}={}){
+ signal?.throwIfAborted();if(!Number.isSafeInteger(maxBytes)||maxBytes<0)throw new AppError('INVALID');
+ const size=contentSize(value);if(!Number.isSafeInteger(size)||size<0)throw new AppError('MEDIA_INVALID');
+ if(size>bufferConstants.MAX_LENGTH||maxBytes&&size>maxBytes)throw new AppError('MEDIA_LIMIT');
  if(!(value instanceof FileContent))return Buffer.from(value);
+ // Allocate the declared result once. Collecting chunks and concatenating
+ // them retained approximately twice the original's size at completion.
+ let result;
+ const consume=async source=>{
+  result=Buffer.allocUnsafe(size);let offset=0;
+  for await(const chunk of source){signal?.throwIfAborted();if(chunk.length>size-offset)throw new AppError('MEDIA_INVALID');result.set(chunk,offset);offset+=chunk.length;}
+  signal?.throwIfAborted();if(offset!==size)throw new AppError('MEDIA_INVALID');
+ };
+ try{
  // Deferred owners and specialized streams retain their own admission/lease.
- if(value.read!==FileContent.prototype.read||value.stream!==FileContent.prototype.stream){const chunks=[];for await(const chunk of value.stream())chunks.push(chunk);return Buffer.concat(chunks);}
+ if(value.read!==FileContent.prototype.read||value.stream!==FileContent.prototype.stream){await consume(value.stream(0,size-1,{signal}));return result;}
  // A whole-buffer consumer releases nothing until authentication completes;
  // it needs one decode, unlike the authenticated-before-first-yield stream.
- if(!Number.isSafeInteger(value.size)||value.size<0)throw new AppError('MEDIA_INVALID');
- await value.workspace.requireStorageKey();const vault=value.workspace.vault,handle=await open(value.file,'r'),chunks=[];let size=0,result;
+ await value.workspace.requireStorageKey();signal?.throwIfAborted();const vault=value.workspace.vault,key=vault?.key,handle=await open(value.file,'r');
  try{
   const before=await handle.stat({bigint:true});if(!before.isFile()||before.nlink>1n)throw new AppError('UNSAFE');
+  const check=contentReadGuard(value,handle,before,vault,key,signal);await check();
   const hash=createHash('sha256');
-  for await(const chunk of decoded(handle,value.workspace,value.file)){size+=chunk.length;if(size>value.size)throw new AppError('MEDIA_INVALID');hash.update(chunk);chunks.push(chunk);}
-  if(size!==value.size||hash.digest('hex')!==value.sha256||!sameFile(before,await handle.stat({bigint:true})))throw new AppError('MEDIA_INVALID');
-  result=Buffer.concat(chunks,size);
+  async function* chunks(){for await(const chunk of decoded(handle,value.workspace,value.file)){signal?.throwIfAborted();hash.update(chunk);yield chunk;}}
+  await consume(chunks());if(hash.digest('hex')!==value.sha256)throw new AppError('MEDIA_INVALID');await check();
  }finally{await handle.close();}
  // Decoding retains an internal cipher key. Closing or replacing its live
  // owner before completion must still refuse the buffered plaintext.
- if(vault?.id&&(value.workspace.vault!==vault||!vault.key))throw new AppError('ACCESS_LOCKED');
+ signal?.throwIfAborted();if(vault?.id&&(value.workspace.vault!==vault||!vault.key||vault.key!==key))throw new AppError('ACCESS_LOCKED');
  return result;
+ }catch(error){result?.fill(0);throw error;}
 }
 export async function writePublicFile(file,value,{mode=0o600}={}){
  const reservation=await diskCapacity.reserve(path.dirname(file),contentSize(value));let handle;
