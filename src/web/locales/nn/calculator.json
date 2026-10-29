@@ -160,7 +160,7 @@
   "upgradeEngine": "Bruk innstillbar presisjon",
   "exactInfo": "Eksakt resultat",
   "approximateInfo": "Tilnærma resultat: 64 gjeldande siffer under utrekning, opptil 32 viste.",
-  "exactPrecisionInfo": "Heiltals- og rasjonal aritmetikk er eksakt, også avhengige reknearkformlar. Periodiske brøkar blir verande forholdstal. Einingsomrekningar og ikkje-rasjonale funksjonar bruker 64-sifra desimalaritmetikk og blir merkte som tilnærma; opptil 32 siffer blir viste. Utrekningar som overskrid ressursbudsjettet, stoppar utan å avrunde ein eksakt verdi.",
+  "exactPrecisionInfo": "Heiltals- og rasjonal aritmetikk er eksakt, òg avhengige reknearkformlar. Periodiske brøkar blir verande forholdstal. Einingsomrekningar og ikkje-rasjonale funksjonar bruker 64-sifra desimalaritmetikk og blir merkte som tilnærma; opptil 32 siffer blir viste. Utrekningar som overskrid ressursbudsjettet, stoppar utan å avrunde ein eksakt verdi.",
   "fixedPolicyEngine": "Denne lagra revisjonen bruker motoren med fast eksakt/64-sifra presisjon.",
   "policy": "Presisjon og ressursgrenser",
   "workingDigits": "Gjeldande arbeidssiffer",

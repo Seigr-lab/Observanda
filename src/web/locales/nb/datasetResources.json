@@ -8,7 +8,7 @@
   "codec": "Erklærte domenekodeker bevarer sine egne komponentkapasiteter.",
   "maxBits": "Heltallsstørrelse og størrelse på mellomresultat (bit)",
   "maxOperations": "Aritmetiske operasjoner",
-  "maxMilliseconds": "Aritmetikktid (millisekund)",
+  "maxMilliseconds": "Aritmetikktid (millisekunder)",
   "maxScalarCharacters": "Skalartekst (tegn)",
   "maxExponent": "Størrelse på desimaleksponent",
   "bounds": "Tillatt: {min} til {max}",

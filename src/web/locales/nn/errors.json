@@ -13,7 +13,7 @@
   "ANALYSIS_SOURCE_ACCESS": "Godkjenn tilgang til samanlikningskjeldene og prøv denne jobben på nytt.",
   "STORAGE_PORTABLE_BOOK_ACCESS": "Set eit passord eller ein gjenopprettingsnøkkel for kvar labbok før du eksporterer tryggingskopien hennar.",
   "LAB_BOOK_FOLDER": "Vel ei mappe som inneheld ei Observanda-labbok.",
-  "STORAGE_NAME_MISMATCH": "Namnet må samsvare nøyaktig med mappenamnet, også mellomrom og skrivemåte.",
+  "STORAGE_NAME_MISMATCH": "Namnet må samsvare nøyaktig med mappenamnet, òg mellomrom og skrivemåte.",
   "PROJECT_RELOCATED": "Dette prosjektet bruker no si eiga lagring. Opne prosjektet att for å halde fram.",
   "WORKSPACE_NAME": "Skriv inn eit gyldig mappenamn for denne datamaskina, med høgst 160 teikn og utan innleiande eller avsluttande mellomrom.",
   "WORKSPACE_NAME_MISMATCH": "Arbeidsområdenamnet må samsvare nøyaktig med mappenamnet. Vel den overordna mappa og skriv inn namnet du vil opprette.",

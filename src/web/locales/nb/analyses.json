@@ -170,7 +170,7 @@
   "repeat": "Tidligere revisjon",
   "observationsHidden": "Ingen observasjoner samsvarer med denne visningen.",
   "resourcePolicy": "Ressursgrenser for sammenligning",
-  "resourceHelp": "Hver sammenligning av observasjoner og forventet verdier bruker disse lagra grensene for eksakt tolking, grensekontroller og marginer. Inndataerklæringer bevarer også sine egne grenser. Å overskride ei av grensene stopper klargjøringen uten å erstatte tidligere resultat.",
+  "resourceHelp": "Hver sammenligning av observasjoner og forventede verdier bruker disse lagrede grensene for eksakt tolkning, grensekontroller og marginer. Inndataerklæringer bevarer også sine egne grenser. Overskridelse av en av grensene stopper klargjøringen uten å erstatte tidligere resultater.",
   "resourceLegacy": "Denne sammenligningen bevarer den tidligere tolkningen si. Aktiver erklærte grenser for å bruke kilder med egne skalarpolicyer i en ny revisjon.",
   "resourceEnable": "Aktiver ressursgrenser for erklæringer",
   "valuePreview": "Verdiforhåndsvisning: {value}...",

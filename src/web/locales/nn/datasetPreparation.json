@@ -16,7 +16,7 @@
   "joinMode": "Samanstill innsamlings- og oppslagsrader",
   "keyMode": "Samsvarande nøklar",
   "positionMode": "Same matriseposisjon i kvart vindauge",
-  "positionHelp": "Den første innsamlinga bruker den første oppslagsposten, den andre bruker den andre, og så vidare, separat i kvart overordna vindauge. Begge matrisene må finnast og ha nøyaktig same lengd, også i tomme vindauge. Kvar vald verdi bevarer den eksakte kjeldeplasseringa si. Legg til eigne posisjonsoppslag for kontrollar, konfigurasjon og tidsplanar når kvar har éin post per innsamling.",
+  "positionHelp": "Den første innsamlinga bruker den første oppslagsposten, den andre bruker den andre, og så vidare, separat i kvart overordna vindauge. Begge matrisene må finnast og ha nøyaktig same lengd, òg i tomme vindauge. Kvar vald verdi bevarer den eksakte kjeldeplasseringa si. Legg til eigne posisjonsoppslag for kontrollar, konfigurasjon og tidsplanar når kvar har éin post per innsamling.",
   "lookupName": "Oppslagsnamn",
   "lookupRows": "Matrisesti for oppslagsrader",
   "leftKey": "Nøkkelsti for innsamling",

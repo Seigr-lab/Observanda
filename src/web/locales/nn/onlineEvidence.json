@@ -2,7 +2,7 @@
   "inspect": "Sjå gjennom {title}",
   "closeInspection": "Lukk inspeksjon av dokumentasjon",
   "heading": "Dokumentasjon og forskingsmateriale",
-  "introduction": "Legg ved ei originalfil i denne delte oppføringa. Byta i fila blir krypterte på verten og stadfesta før ho blir lagd ved.",
+  "introduction": "Legg ved ei originalfil i denne delte oppføringa. Byteinnhaldet i fila blir kryptert på verten og stadfesta før fila blir lagd ved.",
   "file": "Originalfil",
   "path": "Relativ kjeldebane (valfritt)",
   "pathHelp": "Til dømes run-37/current-return/capture.img. Ta med filnamnet. Dette registrerer den opphavlege plasseringa utan å opne banen på verten.",

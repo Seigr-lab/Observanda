@@ -1,6 +1,6 @@
 {
   "title": "Skrifttypane dine",
-  "uploadHelp": "Last opp TTF-, OTF-, WOFF- eller WOFF2-skrifttypar, også variable skrifttypar (opptil 8 MiB kvar). Skrifttypane følgjer arbeidsområdet og tryggingskopiane.",
+  "uploadHelp": "Last opp TTF-, OTF-, WOFF- eller WOFF2-skrifttypar, òg variable skrifttypar (opptil 8 MiB kvar). Skrifttypane følgjer arbeidsområdet og tryggingskopiane.",
   "allowExport": "Tillat denne skrifttypen på eksporterte nettstader",
   "licence": "Aktiver berre dersom skriftlisensen tillèt innebygging på nettstader. Ein eksportert skrifttype omfattar fila og dei innebygde metadataa.",
   "add": "Legg til ein skrifttype",

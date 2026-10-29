@@ -20,7 +20,7 @@
   "from": "Frå hjørnenøkkel",
   "to": "Til hjørnenøkkel",
   "pageRange": "{collection} {first}-{last} av {total}.",
-  "pageHelp": "Nøklar i hermeteikn bevarer eksakt tekst, også mellomrom. Hjørne og kantar blir verande i den forfatta rekkjefølgja.",
+  "pageHelp": "Nøklar i hermeteikn bevarer eksakt tekst, òg mellomrom. Hjørne og kantar blir verande i den forfatta rekkjefølgja.",
   "previous": "Førre {collection}",
   "next": "Neste {collection}",
   "graphAdd": "Legg til topologioperasjon",

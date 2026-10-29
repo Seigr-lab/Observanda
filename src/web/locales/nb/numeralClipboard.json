@@ -1,7 +1,7 @@
 {
   "copy": "Kopier skrivemåte og tolking",
   "paste": "Lim inn skrivemåte og tolking",
-  "scope": "Overfører bare skrivemåte og taltolking. Enheter og dokumentasjonsreferanser blir værende uendret.",
+  "scope": "Overfører bare skrivemåte og talltolkning. Enheter og dokumentasjonsreferanser forblir uendret.",
   "copied": "Skrivemåte og tolking er kopiert.",
   "pasted": "Skrivemåte og uttrykkelig tolking er limt inn.",
   "plain": "Ren tekst er limt inn; den valgte tolkningen er uendret.",
@@ -11,5 +11,5 @@
   "length": "Hele den kopierte verdien overskrider den støtta lengden i denne redigereren. Ingenting ble limt inn.",
   "lines": "Denne verdien inneholder linjeskift som dette feltet ikke kan bevare. Ingenting ble limt inn.",
   "unavailable": "Tilgang til utklippstavla er ikke tilgjengelig. Bruk kopierings- og innlimingskontrollene i nettleseren.",
-  "contextMismatch": "Denne kopierte verdien bruker ei annen taltolking enn det lagra feltet. Ingenting ble limt inn; endre feltskjemaet uttrykkelig for å bruke ei annen tolking."
+  "contextMismatch": "Denne kopierte verdien bruker en annen talltolkning enn det lagrede feltet. Ingenting ble limt inn; endre feltskjemaet uttrykkelig for å bruke en annen tolkning."
 }

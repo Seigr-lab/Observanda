@@ -185,7 +185,8 @@
     "en",
     "ca",
     "es",
-    "nb"
+    "nb",
+    "nn"
   ],
   "operationProgress": [
     "en",
@@ -310,7 +311,8 @@
     "en",
     "ca",
     "es",
-    "nb"
+    "nb",
+    "nn"
   ],
   "collaborationIdentity": [
     "en",
@@ -323,13 +325,15 @@
     "en",
     "ca",
     "es",
-    "nb"
+    "nb",
+    "nn"
   ],
   "sharing": [
     "en",
     "ca",
     "es",
-    "nb"
+    "nb",
+    "nn"
   ],
   "figureAxes": [
     "en",
@@ -419,7 +423,8 @@
     "en",
     "ca",
     "es",
-    "nb"
+    "nb",
+    "nn"
   ],
   "book": [
     "en",
@@ -796,7 +801,8 @@
     "en",
     "ca",
     "es",
-    "nb"
+    "nb",
+    "nn"
   ],
   "materialSources": [
     "en",
@@ -809,7 +815,8 @@
     "en",
     "ca",
     "es",
-    "nb"
+    "nb",
+    "nn"
   ],
   "repositorySetup": [
     "en",
@@ -822,19 +829,22 @@
     "en",
     "ca",
     "es",
-    "nb"
+    "nb",
+    "nn"
   ],
   "migration": [
     "en",
     "ca",
     "es",
-    "nb"
+    "nb",
+    "nn"
   ],
   "migrationImport": [
     "en",
     "ca",
     "es",
-    "nb"
+    "nb",
+    "nn"
   ],
   "attempts": [
     "en",
@@ -854,7 +864,8 @@
     "en",
     "ca",
     "es",
-    "nb"
+    "nb",
+    "nn"
   ],
   "about": [
     "en",
@@ -1004,6 +1015,13 @@
     "nn"
   ],
   "numericalExecution": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "experience": [
     "en",
     "ca",
     "es",

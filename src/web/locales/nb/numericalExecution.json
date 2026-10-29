@@ -4,7 +4,7 @@
   "total": "Hele den numeriske jobben",
   "slice": "Én numerisk del",
   "maxOperations": "Maksimalt antall numeriske operasjoner",
-  "maxActiveMilliseconds": "Maksimalt antall aktive millisekund",
+  "maxActiveMilliseconds": "Maksimalt antall aktive millisekunder",
   "bounds": "Tillatt område: {min} til {max}.",
   "sliceHelp": "En del kan ikke overskride grensene for hele jobben. Nye forsøk fortsetter fra lagra fremdrift; en avbrutt reservasjon blir fortsatt belasta fullt. Fullførte deler blir belasta for faktisk bruk.",
   "invalid": "Skriv inn grenser for hele jobben og for deler innenfor de viste områdene. En del kan ikke overskride hele jobben. Verdiene dine er bevarte.",

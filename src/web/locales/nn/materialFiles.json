@@ -20,7 +20,7 @@
   "cancelled": "Vedleggsoppgåva er avslutta. Filer som allereie er lagde ved, er framleis tilgjengelege i denne oppføringa.",
   "progress": "{attached} av {count} filer lagde ved",
   "attachmentProgress": "Vedleggsframdrift",
-  "resumeHelp": "Framdrifta blir lagra etter kvar gruppe. Set på pause og hald fram frå Uferdige vedlegg i Dokumentasjon og analyse, også etter omstart av Observanda. Å avslutte ei oppgåve bevarer filer som allereie er lagde ved.",
+  "resumeHelp": "Framdrifta blir lagra etter kvar gruppe. Set på pause og hald fram frå Uferdige vedlegg i Dokumentasjon og analyse, òg etter omstart av Observanda. Å avslutte ei oppgåve bevarer filer som allereie er lagde ved.",
   "loading": "Lastar inn originalfildetaljar…",
   "acquisition": "Innsamlingsoppføring",
   "provenance": "Innsamlingsnotat",

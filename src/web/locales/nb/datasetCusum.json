@@ -17,7 +17,7 @@
   "representation": "Skalartolking",
   "radix": "Grunntall",
   "unit": "Erklært differanseenhet for parametere",
-  "parameterHelp": "Oppgi målet og terskelen uttrykkelig. Målet, toleransen, terskelen og de omrekna kildemålingene deler dette erklærte koordinatsystemet med differanseenheter.",
+  "parameterHelp": "Oppgi målet og terskelen uttrykkelig. Målet, toleransen, terskelen og de omregnede kildemålingene deler dette erklærte koordinatsystemet med differanseenheter.",
   "methodDetails": "Metode og tolking",
   "method": "Tosidig tabellarisk CUSUM",
   "conventions": "Begge skårene begynner på null. Øvre: max(0, forrige øvre + måling - mål - k). Nedre: max(0, forrige nedre + mål - måling - k). Ei terskelpassering skjer når en skår blir strengt større enn h etter å ha vært på eller under h.",
