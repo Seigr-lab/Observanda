@@ -1,0 +1,15 @@
+{
+  "summaryCount": "Row counts by {category}, calculated from {rows} source rows.",
+  "summaryCountGrouped": "Row counts by {category} and {group}, calculated from {rows} source rows.",
+  "summaryValues": "{operation} values by {category}, calculated from {rows} source rows.",
+  "summaryValuesGrouped": "{operation} values by {category} and {group}, calculated from {rows} source rows.",
+  "emptyExcluded": "{count} empty values excluded.",
+  "summaryPanel": "{label}: {title}. {summary}",
+  "plotDescription": "{kind} plot. {count} visible series.",
+  "series": "Series",
+  "value": "Value",
+  "uncertainty": "Uncertainty (±)",
+  "gap": "Gap",
+  "numeralHelp": "Numbers use base {radix}. The base# prefix identifies digits, including exponents and fractions. ≈ marks a rounded plot label; retained source measurements are unchanged.",
+  "observationPosition": "{series} · Observation {number}: ({x}, {y})"
+}

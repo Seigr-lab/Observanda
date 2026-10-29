@@ -1,49 +1,53 @@
+import './i18n/catalogues/dashboardEditors.js';
+import {t} from './i18n/index.js';
 import {workspaceViewportTop} from './shell-navigation.js';
 import {providerFields} from './data-registry.js';
 import {panelSpan} from './dashboard-model.js';
 import {cardIcon} from './dashboard-cards.js';
+const dt=(key,parameters)=>t('dashboardEditors',key,parameters);
+
 
 // Provider-owned choices share one settings surface on every screen size.
 export function cardInspector({panel,provider,items,loadedData,selected,title,context,tab,fieldGroup,esc,button,iconButton,choiceUI}) {
- const input=(key,label,value,type='text',extra='')=>`<label>${label}<input data-desk-property="${key}" data-id="${panel.id}" type="${type}" value="${esc(value)}" ${extra}></label>`;
+ const input=(key,label,value,type='text',extra='')=>`<label>${esc(label)}<input data-desk-property="${key}" data-id="${panel.id}" type="${type}" value="${esc(value)}" ${extra}></label>`;
  const sourceOptions=typeof provider?.settings==='function'?provider.settings(context,panel.options,panel,loadedData):provider?.settings??[];
  const options=sourceOptions.filter(s=>(s.tab??'content')===tab);
- const views=[{id:'summary',label:'Summary'},...(provider?.views??[])];
+ const views=[{id:'summary',label:dt("summary")},...(provider?.views??[])];
  const fields=providerFields(provider??{},items);
- const presentation=views.length>1?`<label>Presentation<select aria-label="Presentation" data-desk-property="presentation" data-id="${panel.id}">${views.map(v=>`<option value="${v.id}" ${panel.presentation===v.id?'selected':''}>${esc(v.label)}</option>`).join('')}</select></label>`:'';
+ const presentation=views.length>1?`<label>${esc(dt("presentation"))}<select aria-label="${esc(dt("presentation"))}" data-desk-property="presentation" data-id="${panel.id}">${views.map(v=>`<option value="${v.id}" ${panel.presentation===v.id?'selected':''}>${esc(v.label)}</option>`).join('')}</select></label>`:'';
  const settingsHTML=options.map(s=>{
   if(s.type==='lookup')return choiceUI.view(s,panel,context);
   const value=panel.options[s.key]??panel.config[s.key]??s.default??'';
   const common=`data-desk-option="${esc(s.key)}" data-id="${panel.id}"`;
   if(s.type==='multi'){
-   const chosen=Array.isArray(value)?value:[],choices=[...s.choices,...chosen.filter(id=>!s.choices.some(c=>c.value===id)).map(id=>({value:id,label:'Unavailable selection: '+id}))];
-   return `<fieldset class="desk-multi-choice"><legend>${esc(s.label)}</legend><div>${choices.map(c=>`<label><input type="checkbox" ${common} data-desk-choice="${esc(c.value)}" value="${esc(c.value)}" ${chosen.includes(c.value)?'checked':''}><span>${esc(c.label)}</span></label>`).join('')||'<p>No choices available.</p>'}</div>${chosen.length?'':'<small>Nothing selected.</small>'}</fieldset>`;
+   const chosen=Array.isArray(value)?value:[],choices=[...s.choices,...chosen.filter(id=>!s.choices.some(c=>c.value===id)).map(id=>({value:id,label:dt('selectionWithId',{id})}))];
+   return `<fieldset class="desk-multi-choice"><legend>${esc(s.label)}</legend><div>${choices.map(c=>`<label><input type="checkbox" ${common} data-desk-choice="${esc(c.value)}" value="${esc(c.value)}" ${chosen.includes(c.value)?'checked':''}><span>${esc(c.label)}</span></label>`).join('')||`<p>${esc(dt("noChoices"))}</p>`}</div>${chosen.length?'':`<small>${esc(dt("nothingSelected"))}</small>`}</fieldset>`;
   }
-  return `<label class="${s.compact?'is-compact':''} ${s.type==='checkbox'?'desk-check-option':''}">${s.type==='checkbox'?`<input ${common} aria-label="${esc(s.label)}" type="checkbox" ${value?'checked':''}><span>${esc(s.label)}</span>`:esc(s.label)+(s.type==='select'?`<select ${common} aria-label="${esc(s.label)}">${value&&!s.choices.some(c=>String(c.value)===String(value))?`<option value="${esc(value)}" selected>Unavailable selection</option>`:''}${s.choices.map(c=>`<option value="${esc(c.value)}" ${String(c.value)===String(value)?'selected':''}>${esc(c.label)}</option>`).join('')}</select>`:`<input ${common} aria-label="${esc(s.label)}" type="${['number','color'].includes(s.type)?s.type:'text'}" value="${esc(value)}" ${s.min!==undefined?'min="'+s.min+'"':''} ${s.max!==undefined?'max="'+s.max+'"':''}>`)}${s.help?'<small>'+esc(s.help)+'</small>':''}</label>`;
+  return `<label class="${s.compact?'is-compact':''} ${s.type==='checkbox'?'desk-check-option':''}">${s.type==='checkbox'?`<input ${common} aria-label="${esc(s.label)}" type="checkbox" ${value?'checked':''}><span>${esc(s.label)}</span>`:esc(s.label)+(s.type==='select'?`<select ${common} aria-label="${esc(s.label)}">${value&&!s.choices.some(c=>String(c.value)===String(value))?`<option value="${esc(value)}" selected>${esc(dt("unavailableSelection"))}</option>`:''}${s.choices.map(c=>`<option value="${esc(c.value)}" ${String(c.value)===String(value)?'selected':''}>${esc(c.label)}</option>`).join('')}</select>`:`<input ${common} aria-label="${esc(s.label)}" type="${['number','color'].includes(s.type)?s.type:'text'}" value="${esc(value)}" ${s.placeholder?'placeholder="'+esc(s.placeholder)+'"':''} ${s.min!==undefined?'min="'+s.min+'"':''} ${s.max!==undefined?'max="'+s.max+'"':''}>`)}${s.help?'<small>'+esc(s.help)+'</small>':''}</label>`;
  }).join('');
  let body='';
  if(tab==='content'){
-  body=`${title!==provider?.label?`<p class="desk-inspector-source">${esc(provider?.label??'Unavailable source')}</p>`:''}${input('count',provider?.pageSize?'Items per page':'Items to show',Math.min(panel.count,provider?.pageSize??panel.count),'number','min="1" step="1"'+(provider?.pageSize?' max="'+provider.pageSize+'"':''))}
-   ${panel.source?.key!==null&&panel.source?.key!==undefined?'<p class="desk-inspector-note">This card is pinned to one item.</p>'+button('Choose from the collection','dashboard-unpin-item',`data-id="${panel.id}"`):''}
+  body=`${title!==provider?.label?`<p class="desk-inspector-source">${esc(provider?.label??dt("unavailableSource"))}</p>`:''}${input('count',provider?.pageSize?dt("itemsPerPage"):dt("itemsToShow"),Math.min(panel.count,provider?.pageSize??panel.count),'number','min="1" step="1"'+(provider?.pageSize?' max="'+provider.pageSize+'"':''))}
+   ${panel.source?.key!==null&&panel.source?.key!==undefined?`<p class="desk-inspector-note">${esc(dt("pinnedItem"))}</p>`+button(esc(dt("chooseCollection")),'dashboard-unpin-item',`data-id="${panel.id}"`):''}
    ${presentation}<div class="desk-scope-fields">${settingsHTML}</div>`;
  }
  if(tab==='display'){
   const choices=fields.filter(f=>fieldGroup==='references'?f.technical:!f.technical);
-  body=input('title','Card title',panel.config.title,'text',`maxlength="96" placeholder="${esc(title)}"`)+
+  body=input('title',dt("cardTitle"),panel.config.title,'text',`maxlength="96" placeholder="${esc(title)}"`)+
    presentation+`<div class="desk-scope-fields">${settingsHTML}</div>`+
-   `<fieldset class="desk-detail-fields"><legend>Visible details</legend>${fields.some(f=>f.technical)?`<label class="desk-field-group">Choose details<select aria-label="Choose details" data-desk-field-group><option value="details" ${fieldGroup==='details'?'selected':''}>Content</option><option value="references" ${fieldGroup==='references'?'selected':''}>Reference identifiers</option></select></label>`:''}
-   <div class="desk-field-choices">${choices.map(f=>`<label><input type="checkbox" data-desk-field="${esc(f.key)}" data-id="${panel.id}" ${selected.includes(f.key)?'checked':''}>${esc(f.label)}</label>`).join('')||'<p>No additional fields for this source.</p>'}</div></fieldset>
-   ${button('Reset visible details','dashboard-fields-reset',`data-id="${panel.id}"`)}`;
+   `<fieldset class="desk-detail-fields"><legend>${esc(dt("visibleDetails"))}</legend>${fields.some(f=>f.technical)?`<label class="desk-field-group">${esc(dt("chooseDetails"))}<select aria-label="${esc(dt("chooseDetails"))}" data-desk-field-group><option value="details" ${fieldGroup==='details'?'selected':''}>${esc(dt("content"))}</option><option value="references" ${fieldGroup==='references'?'selected':''}>${esc(dt("referenceIdentifiers"))}</option></select></label>`:''}
+   <div class="desk-field-choices">${choices.map(f=>`<label><input type="checkbox" data-desk-field="${esc(f.key)}" data-id="${panel.id}" ${selected.includes(f.key)?'checked':''}>${esc(f.label)}</label>`).join('')||`<p>${esc(dt("noFields"))}</p>`}</div></fieldset>
+   ${button(esc(dt("resetDetails")),'dashboard-fields-reset',`data-id="${panel.id}"`)}`;
  }
  if(tab==='layout'){
   const width=panelSpan(panel.width);
-  body=`<label>Card width <output data-desk-width-label>${Math.round(width/12*100)}%</output><input aria-label="Card width" data-desk-property="width" data-id="${panel.id}" type="range" min="3" max="12" step="1" value="${width}" aria-valuetext="${Math.round(width/12*100)} percent of dashboard width"></label>
-   <p class="desk-inspector-note">Width follows the available dashboard space. Content determines the minimum height.</p>
-   ${button('Fit height to content','dashboard-natural',`data-id="${panel.id}"`)}
-   <div class="desk-config-actions">${button('Duplicate card','dashboard-copy',`data-id="${panel.id}"`)}</div>`;
+  body=`<label>${esc(dt("cardWidth"))} <output data-desk-width-label>${Math.round(width/12*100)}%</output><input aria-label="${esc(dt("cardWidth"))}" data-desk-property="width" data-id="${panel.id}" type="range" min="3" max="12" step="1" value="${width}" aria-valuetext="${esc(dt("widthPercent",{percent:Math.round(width/12*100)}))}"></label>
+   <p class="desk-inspector-note">${esc(dt("widthHelp"))}</p>
+   ${button(esc(dt("fitHeight")),'dashboard-natural',`data-id="${panel.id}"`)}
+   <div class="desk-config-actions">${button(esc(dt("duplicateCard")),'dashboard-copy',`data-id="${panel.id}"`)}</div>`;
  }
- return `<aside class="desk-inspector" popover="manual" role="dialog" aria-labelledby="desk-inspector-title"><header><div><small>Card settings</small><h2 id="desk-inspector-title">${esc(title)}</h2></div><button type="button" class="desk-button desk-icon desk-inspector-move" aria-label="Move card settings" title="Drag to move settings. Arrow keys move this panel.">${cardIcon('grip')}</button>${iconButton('close','Close card settings','dashboard-inspector-close')}</header>
-  <nav class="desk-inspector-tabs" aria-label="Card settings sections">${[['content','Content'],['display','Display'],['layout','Layout']].map(([id,label])=>button(label,'dashboard-inspector-tab',`data-tab="${id}" aria-pressed="${tab===id}"`)).join('')}</nav>
+ return `<aside class="desk-inspector" popover="manual" role="dialog" aria-labelledby="desk-inspector-title"><header><div><small>${esc(dt("cardSettings"))}</small><h2 id="desk-inspector-title">${esc(title)}</h2></div><button type="button" class="desk-button desk-icon desk-inspector-move" aria-label="${esc(dt("moveSettings"))}" title="${esc(dt("moveSettingsHelp"))}">${cardIcon('grip')}</button>${iconButton('close',dt("closeSettings"),'dashboard-inspector-close')}</header>
+  <nav class="desk-inspector-tabs" aria-label="${esc(dt("settingsSections"))}">${[['content',dt("content")],['display',dt("display")],['layout',dt("layout")]].map(([id,label])=>button(esc(label),'dashboard-inspector-tab',`data-tab="${id}" aria-pressed="${tab===id}"`)).join('')}</nav>
   <div class="desk-inspector-body">${body}</div>
  </aside>`;
 }

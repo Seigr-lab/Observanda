@@ -1,10 +1,9 @@
 import {moduleChildren,enabledModule} from './feature-modules.js';
 import {t,language} from './i18n/index.js';
-import labBookMessages from './locales/en/labBookTypes.json' with {type:'json'};
+import {moduleSettingsHeading,moduleDescription} from './module-presentation.js';
 
-const translated=(module,field,fallback)=>{const key=module.labBookType?.id+'.'+field;return Object.hasOwn(labBookMessages,key)?t('labBookTypes',key):fallback;};
-const label=module=>translated(module,'label',module.settingsHeading??module.label);
-const description=module=>translated(module,'description',module.description);
+const label=moduleSettingsHeading;
+const description=moduleDescription;
 export const sortedPreferenceModules=modules=>[...modules].sort((a,b)=>label(a).localeCompare(label(b),language(),{sensitivity:'base'})||a.id.localeCompare(b.id));
 
 function branches({settings,esc,error,configuration},roots){

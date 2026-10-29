@@ -3,6 +3,7 @@ import {websiteEditingGuard} from './website-editing-guard.js';
 import {configurationRecordCreation} from './configuration-record-creation.js';
 import {publicationReviewChoicesUI} from './publication-review-choices.js';
 import {moduleReferenceNavigation,availableOwnedModule} from './module-reference-navigation.js';
+import {moduleLabel} from './module-presentation.js';
 import {researchReturn,researchReturnNavigation} from './research-return.js';
 import {validTarget,researchId} from './research-reference.js';
 import {revisionId} from './revision-model.js';
@@ -794,7 +795,7 @@ function renderGeneralPreferences(){return storageControls.recoveryPanel()||stru
 function renderPage(){
  if(state.ownerOperation)return ownerOperation.view();
  const module=moduleForPage(state.page);
- if(module&&!enabledModule(state.dashboardSettings,module.id))return '<section class="panel"><h1>'+esc(appText('moduleDisabled',{module:module.label}))+'</h1><p>'+esc(appText('dataRetained'))+'</p><button class="button" data-action="dashboard-settings">'+esc(appText('manageModules'))+'</button></section>';
+ if(module&&!enabledModule(state.dashboardSettings,module.id))return '<section class="panel"><h1>'+esc(appText('moduleDisabled',{module:moduleLabel(module)}))+'</h1><p>'+esc(appText('dataRetained'))+'</p><button class="button" data-action="dashboard-settings">'+esc(appText('manageModules'))+'</button></section>';
  let content;
  switch(state.page){
  case 'migration':content=migration.view();break;
@@ -995,7 +996,7 @@ async function rawAction(button) {
   const administrationAction=name==='templates'||name==='storage'||name==='activity-show'||['storage-','security-','migration-','inventory-'].some(prefix=>name?.startsWith(prefix));
   if((state.workspaceOutline||state.recordScope&&!scopedRecordAction(name))&&!readingAction&&!administrationAction&&!brandingAction&&!appearanceAction&&!publicationAction&&!name?.startsWith('edition-')&&!outlineModuleAction&&!recordCreationActions.has(name)&&!structureActions.has(name)&&!state.access?.locked&&!state.storageUnavailable&&!state.newWorkspace&&!['browse-record','edit-entry','open-issue','record-read-linked','storage-lock','workspace','entries','projects','open-project','project-records','project-recent-retry','project-recent-collection-retry','research-copy-context','filter-notebook','clear-record-filters','close-dialog','preferences','workspace-discard'].includes(name)&&!(state.page==='entries'&&name?.startsWith('record-type-'))&&!name?.startsWith('record-list-')&&!name?.startsWith('record-view')&&!name?.startsWith('starter-')&&!name?.startsWith('dashboard-')&&!name?.startsWith('module-settings-')){const route=location.hash;await ensureCompleteWorkspace();if(location.hash!==route){await restoreRoute();return;}}
   const module=moduleForPage(name);
-  if(module&&!enabledModule(state.dashboardSettings,module.id)){notify(appText('enableModule',{module:module.label}));return;}
+  if(module&&!enabledModule(state.dashboardSettings,module.id)){notify(appText('enableModule',{module:moduleLabel(module)}));return;}
   if((['website','publishing','integrations','appearance','branding','preview'].includes(name))&&!activeWebsite(state))await sites.enter(null,{preferences:['appearance','integrations'].includes(name)&&Boolean(button.closest?.('.preferences-tabs')||button.dataset.preferences==='true')});
   if(name==='website'||name==='preview'&&state.page==='website')await website.load();
 

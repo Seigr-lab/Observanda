@@ -1,3 +1,4 @@
+import './i18n/catalogues/dashboardEditors.js';
 import {dashboardPinnedItem} from './dashboard-collection-client.js';
 import {figurePreviews} from './figure-preview.js';
 import {dashboardSelection,dashboardScopeLabel} from './dashboard-scope.js';
@@ -13,6 +14,8 @@ import {createDataSession,providerFields,displayValue} from './data-registry.js'
 import {dashboardLibraryUI} from './dashboard-library-ui.js';
 import {dashboardChoiceUI} from './dashboard-choice-ui.js';
 import {t} from './i18n/index.js';
+const dt=(key,parameters)=>t('dashboardEditors',key,parameters);
+
 
 // The dashboard owns layout, not feature data. Providers own their data,
 // fields, filtering controls and optional specialised renderers.
@@ -88,7 +91,7 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,a
   clearTimeout(saveTimer);
   if(pending){await pending;return save();}if(!isDirty()&&!submission)return;
   const submitted=copy(submission?.settings??draft);
-  if(!validDashboard(submitted)){saveError=new Error('The dashboard settings are invalid.');status();throw saveError;}
+  if(!validDashboard(submitted)){saveError=new Error(dt("invalidDashboard"));status();throw saveError;}
   watchGeneration++;clearTimeout(watchTimer);
   pending=(async()=>{
    try{
@@ -114,7 +117,7 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,a
   const ref=reference(panel),result=session.read(ref.provider,{...context(),legacyConfig:panel.config,dataSlot:'card:'+panel.id,recordLimit:Math.min(100,panel.count),recordKey:ref.key,recordCursor:cardPage(panel).cursor},panel.options);
   return {...result,items:ref.key===null?result.items:result.items.filter(i=>dashboardPinnedItem(i,ref.key,state.book.id))};
  }
- function title(panel){return panel.config.title||(reference(panel).key!==null?read(panel).items[0]?.title:null)||provider(panel)?.label||'Unavailable data';}
+ function title(panel){return panel.config.title||(reference(panel).key!==null?read(panel).items[0]?.title:null)||provider(panel)?.label||dt("unavailableData");}
  function fieldKeys(panel,items){
   const p=provider(panel);
   return panel.fields??p?.views?.find(v=>v.id===panel.presentation)?.defaultFields??p?.defaultFields??providerFields(p??{},items).map(f=>f.key).filter(k=>!['id','title','name'].includes(k)).slice(0,4);
@@ -131,13 +134,13 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,a
    const paging=result.data?.cursor&&(result.data.nextCursor||result.data.previousCursor)?`<footer class="desk-card-pages"><span>${esc(t('dashboardPaging','range',{first:result.data.offset+1,last:result.data.offset+result.items.length,total:result.data.total}))}</span>${button(esc(t('dashboardPaging','previous')),'dashboard-page-previous',`data-id="${panel.id}" ${result.data.previousCursor?'':'disabled'}`)}${button(esc(t('dashboardPaging','next')),'dashboard-page-next',`data-id="${panel.id}" ${result.data.nextCursor?'':'disabled'}`)}</footer>`:'';
    const scope=provider(panel)?.scoped?'<p class="desk-data-scope">'+esc(dashboardScopeLabel(state.book,panel.options,panel.config,result.data?.scopeProjects))+'</p>':'';
    const footer=actions.length?'<footer class="desk-card-actions">'+actions.map(a=>button(esc(a.label),a.name,actionAttrs(a),'desk-link')).join('')+'</footer>':'';
-   if(result.status==='missing')return '<p class="desk-empty">This feature is currently unavailable. Its card settings are retained.</p>';
-   if(result.status==='foreign')return '<p class="desk-empty">Open the workspace this card belongs to to display its data.</p>';
-   if(result.status==='loading')return '<p class="desk-empty" role="status">Loading data…</p>';
-   if(result.status==='error')return '<p class="desk-empty">'+esc(result.error?.message||'This data could not be loaded.')+'</p>'+button('Retry','dashboard-retry-data',`data-provider="${reference(panel).provider}"`);
-   if(!result.items.length)return scope+'<p class="desk-empty">'+(reference(panel).key===null?'No items match this card.':'This item is unavailable. Its card settings are retained.')+'</p>'+footer;
-   return scope+result.items.slice(0,panel.count).map(item=>itemMarkup(item,panel)).join('')+(paging|| (result.items.length>panel.count?`<footer>${button(state.workspaceOutline&&result.data?.total!==undefined?'Show more':'Show more ('+(result.items.length-panel.count)+')','dashboard-more',`data-id="${panel.id}"`)}</footer>`:''))+footer;
-  }catch{return '<p class="desk-empty">This card could not be displayed. Its settings are retained.</p>';}
+   if(result.status==='missing')return `<p class="desk-empty">${esc(dt("featureUnavailable"))}</p>`;
+   if(result.status==='foreign')return `<p class="desk-empty">${esc(dt("foreignWorkspace"))}</p>`;
+   if(result.status==='loading')return `<p class="desk-empty" role="status">${esc(dt("loadingData"))}</p>`;
+   if(result.status==='error')return '<p class="desk-empty">'+esc(result.error?.message||dt("loadDataFailed"))+'</p>'+button(esc(dt("retry")),'dashboard-retry-data',`data-provider="${reference(panel).provider}"`);
+   if(!result.items.length)return scope+'<p class="desk-empty">'+(reference(panel).key===null?esc(dt("noMatches")):esc(dt("itemUnavailable")))+'</p>'+footer;
+   return scope+result.items.slice(0,panel.count).map(item=>itemMarkup(item,panel)).join('')+(paging|| (result.items.length>panel.count?`<footer>${button(state.workspaceOutline&&result.data?.total!==undefined?esc(dt("showMore")):esc(dt('showMoreCount',{count:result.items.length-panel.count})),'dashboard-more',`data-id="${panel.id}"`)}</footer>`:''))+footer;
+  }catch{return `<p class="desk-empty">${esc(dt("cardFailed"))}</p>`;}
  }
  function inspector(){
   const panel=active().panels.find(p=>p.id===selectedCard&&!p.hidden&&moduleVisible(p));if(!panel){choiceUI.close();return '';}
@@ -177,11 +180,11 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,a
  function card(panel){
   const label=title(panel);
   return `<section class="desk-card ${selectedCard===panel.id?'is-selected':''}" data-desk-card="${panel.id}" data-span="${panelSpan(panel.width)}" data-column="${panel.column??''}" data-height="${panel.height}" aria-label="${esc(label)}">
-   <header><button class="desk-move" data-desk-move="${panel.id}" aria-label="Move ${esc(label)}" aria-describedby="desk-drag-help">${cardIcon('grip')}<h2>${esc(label)}</h2></button>
-   ${iconButton('settings','Settings for '+label,'dashboard-inspector',`data-id="${panel.id}" aria-controls="desk-inspector-slot" aria-expanded="${selectedCard===panel.id}"`)}
-   ${iconButton('close','Close '+label,'dashboard-close',`data-id="${panel.id}"`)}</header>
+   <header><button class="desk-move" data-desk-move="${panel.id}" aria-label="${esc(dt('moveCard',{title:label}))}" aria-describedby="desk-drag-help">${cardIcon('grip')}<h2>${esc(label)}</h2></button>
+   ${iconButton('settings',dt('settingsForCard',{title:label}),'dashboard-inspector',`data-id="${panel.id}" aria-controls="desk-inspector-slot" aria-expanded="${selectedCard===panel.id}"`)}
+   ${iconButton('close',dt('closeCard',{title:label}),'dashboard-close',`data-id="${panel.id}"`)}</header>
    <div data-dashboard-body="${panel.id}">${content(panel)}</div>
-   <button class="desk-resize" data-desk-resize="${panel.id}" aria-label="Resize ${esc(label)}" title="Drag to resize. Arrow keys change size; Home restores natural height.">${cardIcon('resize')}</button>
+   <button class="desk-resize" data-desk-resize="${panel.id}" aria-label="${esc(dt('resizeCard',{title:label}))}" title="${esc(dt('resizeHelp'))}">${cardIcon('resize')}</button>
   </section>`;
  }
  function mountPlots(panel,node){
@@ -201,11 +204,11 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,a
    node.dataset.span=panelSpan(panel.width);node.dataset.column=panel.column??'';node.dataset.height=panel.height;
    node.querySelector('h2').textContent=title(panel);
    node.setAttribute('aria-label',title(panel));
-   for(const [action,prefix] of [['dashboard-inspector','Settings for '],['dashboard-close','Close ']]){
-    const control=node.querySelector('[data-action="'+action+'"]');control.setAttribute('aria-label',prefix+title(panel));control.title=prefix+title(panel);
+   for(const [action,key] of [['dashboard-inspector','settingsForCard'],['dashboard-close','closeCard']]){
+    const control=node.querySelector('[data-action="'+action+'"]');control.setAttribute('aria-label',dt(key,{title:title(panel)}));control.title=dt(key,{title:title(panel)});
    }
-   node.querySelector('[data-desk-move]').setAttribute('aria-label','Move '+title(panel));
-   node.querySelector('[data-desk-resize]').setAttribute('aria-label','Resize '+title(panel));
+   node.querySelector('[data-desk-move]').setAttribute('aria-label',dt('moveCard',{title:title(panel)}));
+   node.querySelector('[data-desk-resize]').setAttribute('aria-label',dt('resizeCard',{title:title(panel)}));
    const body=node.querySelector('[data-dashboard-body]'),html=content(panel);if(bodyMarkup.get(body)!==html){body.innerHTML=html;bodyMarkup.set(body,html);}
    mountPlots(panel,body);const page=cardPages.get(panel.id);if(page?.focusAction&&read(panel).status==='ready'){const next=body.querySelector('[data-action="'+page.focusAction+'"]');(next?.disabled?body.querySelector('.desk-card-pages button:not([disabled])'):next)?.focus({preventScroll:true});delete page.focusAction;}
   }previews.prune();status();
@@ -214,22 +217,22 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,a
  function shortcutButton(shortcut){
   const p=workspaceData.get(shortcut.source.provider);
   const result=shortcut.source.key===null||shortcut.workspaceId&&shortcut.workspaceId!==state.book.id?null:session.read(shortcut.source.provider,{...context(),dataSlot:'shortcut:'+shortcut.id,recordKey:shortcut.source.key,recordLimit:1});
-  const label=(shortcut.source.key!==null?result?.items.find(i=>i.key===shortcut.source.key)?.title:null)||p?.label||'Unavailable data';
-  return `<span class="desk-shortcut">${button(cardIcon(p?.icon)+'<span>'+esc(label)+'</span>','dashboard-add',`data-desk-tool="${attrs(shortcut.source)}" data-source="${attrs(shortcut.source)}" data-workspace="${shortcut.workspaceId??''}" data-label="${esc(label)}" title="Drag or click to add ${esc(label)}"`)}</span>`;
+  const label=(shortcut.source.key!==null?result?.items.find(i=>i.key===shortcut.source.key)?.title:null)||p?.label||dt("unavailableData");
+  return `<span class="desk-shortcut">${button(cardIcon(p?.icon)+'<span>'+esc(label)+'</span>','dashboard-add',`data-desk-tool="${attrs(shortcut.source)}" data-source="${attrs(shortcut.source)}" data-workspace="${shortcut.workspaceId??''}" data-label="${esc(label)}" title="${esc(dt('addCardHelp',{title:label}))}"`)}</span>`;
  }
  function view(){
-  if(!draft||!state.book)return '<p>Open a workspace to use the dashboard.</p>';
+  if(!draft||!state.book)return `<p>${esc(dt("openWorkspace"))}</p>`;
   const v=active();
   if(!v.panels.some(p=>p.id===selectedCard&&!p.hidden&&moduleVisible(p)))selectedCard=null;
   return `<section class="desk-workspace">
-   <div class="desk-heading"><h1>Dashboard</h1><div>${draft.views.length>1?`<label class="desk-view-label">View<select data-desk-view>${draft.views.map(item=>`<option value="${item.id}" ${item.id===v.id?'selected':''}>${esc(item.name)}</option>`).join('')}</select></label>`:''}${button('Views','dashboard-views',`aria-expanded="${viewsOpen}"`)}</div></div>
-   ${viewsOpen?`<section class="desk-view-options" aria-label="Dashboard views"><label>View name<input data-desk-name value="${esc(v.name)}" maxlength="80"></label><label><input type="checkbox" data-desk-default ${draft.defaultId===v.id?'checked':''}> Default view</label>${button('New view','dashboard-new-view')}${button('Duplicate view','dashboard-copy-view')}${draft.views.length>1?button('Remove view','dashboard-remove-view'):''}</section>`:''}
-   <div class="desk-toolbar" aria-label="Add dashboard cards">${button('+ Add cards','dashboard-library',`aria-expanded="${library.isOpen()}" aria-controls="desk-library-slot"`,'desk-add-cards')}<div class="desk-shortcuts" aria-label="Quick add cards">${draft.shortcuts.filter(moduleVisible).map(shortcutButton).join('')}</div>${active().panels.some(p=>p.hidden)?button('Restore cards','dashboard-closed'):''}</div>
+   <div class="desk-heading"><h1>${esc(dt("dashboard"))}</h1><div>${draft.views.length>1?`<label class="desk-view-label">${esc(dt("view"))}<select data-desk-view>${draft.views.map(item=>`<option value="${item.id}" ${item.id===v.id?'selected':''}>${esc(item.name)}</option>`).join('')}</select></label>`:''}${button(esc(dt("views")),'dashboard-views',`aria-expanded="${viewsOpen}"`)}</div></div>
+   ${viewsOpen?`<section class="desk-view-options" aria-label="${esc(dt("dashboardViews"))}"><label>${esc(dt("viewName"))}<input data-desk-name value="${esc(v.name)}" maxlength="80"></label><label><input type="checkbox" data-desk-default ${draft.defaultId===v.id?'checked':''}> ${esc(dt("defaultView"))}</label>${button(esc(dt("newView")),'dashboard-new-view')}${button(esc(dt("duplicateView")),'dashboard-copy-view')}${draft.views.length>1?button(esc(dt("removeView")),'dashboard-remove-view'):''}</section>`:''}
+   <div class="desk-toolbar" aria-label="${esc(dt("addCardsRegion"))}">${button(esc(dt("addCards")),'dashboard-library',`aria-expanded="${library.isOpen()}" aria-controls="desk-library-slot"`,'desk-add-cards')}<div class="desk-shortcuts" aria-label="${esc(dt("quickAdd"))}">${draft.shortcuts.filter(moduleVisible).map(shortcutButton).join('')}</div>${active().panels.some(p=>p.hidden)?button(esc(dt("restoreCards")),'dashboard-closed'):''}</div>
    <div id="desk-library-slot">${library.view()}</div>
-   <div class="desk-save-message"><span id="desk-save-state" role="status"></span><span id="desk-save-recovery" hidden>${button('Retry','dashboard-save-retry')}${button('Reload saved layout','dashboard-reload')}</span></div>
-   <div class="desk-stage"><div class="desk-desktop" aria-label="Dashboard cards">${v.panels.filter(p=>!p.hidden&&moduleVisible(p)).map(card).join('')}${v.panels.every(p=>p.hidden||!moduleVisible(p))?'<p class="desk-empty-desktop">Drag data here from the toolbar or library to build your dashboard.</p>':''}</div>
+   <div class="desk-save-message"><span id="desk-save-state" role="status"></span><span id="desk-save-recovery" hidden>${button(esc(dt("retry")),'dashboard-save-retry')}${button(esc(dt("reloadLayout")),'dashboard-reload')}</span></div>
+   <div class="desk-stage"><div class="desk-desktop" aria-label="${esc(dt("dashboardCards"))}">${v.panels.filter(p=>!p.hidden&&moduleVisible(p)).map(card).join('')}${v.panels.every(p=>p.hidden||!moduleVisible(p))?`<p class="desk-empty-desktop">${esc(dt("emptyDesktop"))}</p>`:''}</div>
    <div id="desk-inspector-slot">${inspector()}</div></div>
-   <p id="desk-drag-help" class="website-visually-hidden">Drag a card by its heading. With the heading focused, press Space to pick it up, arrows to move, Enter to place or Escape to cancel.</p><p id="desk-move-status" class="website-visually-hidden" role="status"></p>
+   <p id="desk-drag-help" class="website-visually-hidden">${esc(dt("dragHelp"))}</p><p id="desk-move-status" class="website-visually-hidden" role="status"></p>
   </section>`;
  }
  const announce=text=>{const node=document.querySelector('#desk-move-status');if(node)node.textContent=text;};
@@ -237,7 +240,7 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,a
   const v=active(),panel=v.panels.find(p=>p.id===id);if(!panel)return;
   v.panels=v.panels.filter(p=>p!==panel);const index=v.panels.findIndex(p=>p.id===before);
   panel.column=column;v.panels.splice(index<0?v.panels.length:index,0,panel);
-  changed(true,'[data-desk-move="'+id+'"]');announce('Card moved.');
+  changed(true,'[data-desk-move="'+id+'"]');announce(dt("cardMoved"));
  }
  function add(source,before=null,column=null,restore=null,workspaceId=null){
   const v=active();let panel=restore?v.panels.find(p=>p.id===restore):v.panels.find(p=>p.hidden&&equal(reference(p),source)&&(!p.config.workspaceId||p.config.workspaceId===state.book.id));
@@ -245,7 +248,7 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,a
   panel.hidden=false;if(column!==null)panel.column=column;
   library.close();
   if(before)reorder(panel.id,before,panel.column);else changed(true,'[data-desk-move="'+panel.id+'"]');
-  announce('Card added.');document.querySelector('[data-desk-card="'+panel.id+'"]')?.scrollIntoView({block:'nearest'});
+  announce(dt("cardAdded"));document.querySelector('[data-desk-card="'+panel.id+'"]')?.scrollIntoView({block:'nearest'});
  }
  function bind(){
   if(!visible()){library.close();choiceUI.close();}
@@ -269,14 +272,14 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,a
  }
 
  function modulesView(templates=false){return (templates?templatePreferences:modulePreferences)({settings:draft,esc,error:id=>workspaceFeatures.error(id),configuration:module=>settings.view(module)});}
- function settingsStatus(){return '<div class="desk-save-message" hidden><span id="desk-save-state" role="status"></span><span id="desk-save-recovery" hidden>'+button('Retry','dashboard-save-retry')+button('Reload saved layout','dashboard-reload')+'</span></div>';}
+ function settingsStatus(){return '<div class="desk-save-message" hidden><span id="desk-save-state" role="status"></span><span id="desk-save-recovery" hidden>'+button(esc(dt("retry")),'dashboard-save-retry')+button(esc(dt("reloadLayout")),'dashboard-reload')+'</span></div>';}
 
  function input(el){
   if(choiceUI.input(el))return true;
   if(settings.input(el))return true;
   if(el.hasAttribute('data-desk-module')){
    const id=el.dataset.deskModule,checked=el.checked;
-   if(!checked&&settings.hasDirtyWithin(id)){el.checked=true;notify('Save or cancel this module’s settings before turning it off.');return true;}
+   if(!checked&&settings.hasDirtyWithin(id)){el.checked=true;notify(dt("saveBeforeDisable"));return true;}
    el.disabled=true;
    (async()=>{
     draft.enabledModules=checked?[...new Set([...draft.enabledModules,id])]:draft.enabledModules.filter(value=>value!==id);
@@ -299,7 +302,7 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,a
    changed(false);
    const heading=document.querySelector('.desk-inspector h2');if(heading)heading.textContent=title(p);
    if(key==='presentation')refreshInspector();
-   if(key==='width'){const percent=Math.round(p.width/12*100);el.setAttribute('aria-valuetext',percent+' percent of dashboard width');const output=document.querySelector('[data-desk-width-label]');if(output)output.textContent=percent+'%';}
+   if(key==='width'){const percent=Math.round(p.width/12*100);el.setAttribute('aria-valuetext',dt('widthPercent',{percent}));const output=document.querySelector('[data-desk-width-label]');if(output)output.textContent=percent+'%';}
    return true;
   }
   if(el.hasAttribute('data-desk-option')){
@@ -350,7 +353,7 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,a
   if(name==='dashboard-new-view'||name==='dashboard-copy-view'){const next=name==='dashboard-new-view'?{id:crypto.randomUUID(),name:'New view',panels:[]}:copy(v);next.id=crypto.randomUUID();if(name==='dashboard-copy-view'){next.name=v.name.slice(0,74)+' copy';next.panels.forEach(p=>p.id=crypto.randomUUID());}draft.views.push(next);viewId=next.id;selectedCard=null;changed();return true;}
   if(name==='dashboard-remove-view'&&draft.views.length>1){draft.views=draft.views.filter(item=>item!==v);viewId=draft.views[0].id;selectedCard=null;if(draft.defaultId===v.id)draft.defaultId=viewId;changed();return true;}
   if(!p)return true;
-  if(name==='dashboard-close'){p.hidden=true;if(selectedCard===p.id)selectedCard=null;changed();announce('Card closed. Restore it from Closed cards.');return true;}
+  if(name==='dashboard-close'){p.hidden=true;if(selectedCard===p.id)selectedCard=null;changed();announce(dt("cardClosed"));return true;}
   if(name==='dashboard-unpin-item'){p.source={...reference(p),key:null};changed(false);refreshInspector();return true;}
   if(name==='dashboard-copy'){const next=copy(p);next.id=crypto.randomUUID();next.column=null;v.panels.splice(v.panels.indexOf(p)+1,0,next);}
   if(name==='dashboard-natural'){p.height=0;changed(false);return true;}

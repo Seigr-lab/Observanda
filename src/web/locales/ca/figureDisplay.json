@@ -1,0 +1,15 @@
+{
+  "summaryCount": "Recompte de files per {category}, calculat a partir de {rows} files d’origen.",
+  "summaryCountGrouped": "Recompte de files per {category} i {group}, calculat a partir de {rows} files d’origen.",
+  "summaryValues": "Valors ({operation}) per {category}, calculats a partir de {rows} files d’origen.",
+  "summaryValuesGrouped": "Valors ({operation}) per {category} i {group}, calculats a partir de {rows} files d’origen.",
+  "emptyExcluded": "S’han exclòs {count} valors buits.",
+  "summaryPanel": "{label}: {title}. {summary}",
+  "plotDescription": "Gràfic de tipus {kind}. {count} sèries visibles.",
+  "series": "Sèrie",
+  "value": "Valor",
+  "uncertainty": "Incertesa (±)",
+  "gap": "Buit",
+  "numeralHelp": "Els nombres utilitzen la base {radix}. El prefix base# identifica els dígits, inclosos els exponents i les fraccions. ≈ indica una etiqueta arrodonida del gràfic; les mesures d’origen conservades no es modifiquen.",
+  "observationPosition": "{series} · Observació {number}: ({x}, {y})"
+}

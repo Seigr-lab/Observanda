@@ -1,0 +1,15 @@
+{
+  "summaryCount": "Antall rader etter {category}, beregnet fra {rows} kilderader.",
+  "summaryCountGrouped": "Antall rader etter {category} og {group}, beregnet fra {rows} kilderader.",
+  "summaryValues": "Verdier ({operation}) etter {category}, beregnet fra {rows} kilderader.",
+  "summaryValuesGrouped": "Verdier ({operation}) etter {category} og {group}, beregnet fra {rows} kilderader.",
+  "emptyExcluded": "{count} tomme verdier utelatt.",
+  "summaryPanel": "{label}: {title}. {summary}",
+  "plotDescription": "Diagram av typen {kind}. {count} synlige serier.",
+  "series": "Serie",
+  "value": "Verdi",
+  "uncertainty": "Usikkerhet (±)",
+  "gap": "Manglende verdi",
+  "numeralHelp": "Tall bruker base {radix}. Prefikset base# angir sifrenes base, også i eksponenter og brøker. ≈ markerer en avrundet diagrametikett; bevarte kildemålinger er uendret.",
+  "observationPosition": "{series} · Observasjon {number}: ({x}, {y})"
+}

@@ -1111,5 +1111,33 @@
     "es",
     "nb",
     "nn"
+  ],
+  "compositionControls": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "figureDiagnostics": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "desktopShell": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "figureDisplay": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ]
 }

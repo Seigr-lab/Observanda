@@ -1,4 +1,4 @@
-import {acceptsChildren,childrenOf,descendantsOf,moveElement} from './composition-tree.js';
+import {acceptsChildren,childrenOf,descendantsOf,moveElement,compositionText as ct} from './composition-presentation.js';
 
 // Pointer capture remains on the source document while hit-testing the parent
 // and its sandboxed canvas. The model, not DOM order, owns the committed move.
@@ -70,8 +70,8 @@ export function composerDrag({host,frame,elements,insert,move,announce,activity=
     if(current.active){suppress=true;win.setTimeout(()=>{suppress=false;},0);}
     if(commit&&current.destination){
       const {parentId,beforeId}=current.destination;
-      try{if(current.kind)insert(current.kind,parentId,beforeId);else move(current.id,parentId,beforeId);announce('Element placed.');}catch(e){announce(e.message);}
-    }else if(current.active)announce('Move cancelled.');
+      try{if(current.kind)insert(current.kind,parentId,beforeId);else move(current.id,parentId,beforeId);announce(ct('placed'));}catch(e){announce(e.message);}
+    }else if(current.active)announce(ct('cancelled'));
     activity(false);
   }
   function bind(source){
@@ -87,7 +87,7 @@ export function composerDrag({host,frame,elements,insert,move,announce,activity=
     source.addEventListener('pointermove',e=>{
       if(!drag||e.pointerId!==drag.pointer)return;
       Object.assign(drag,coordinates(e,source));
-      if(!drag.active&&Math.hypot(drag.x-drag.start.x,drag.y-drag.start.y)>6){drag.active=true;doc.body.classList.add('composer-dragging');announce('Move to a highlighted position. Escape cancels.');tick();}
+      if(!drag.active&&Math.hypot(drag.x-drag.start.x,drag.y-drag.start.y)>6){drag.active=true;doc.body.classList.add('composer-dragging');announce(ct('highlighted'));tick();}
       if(drag.active)e.preventDefault();
     },options);
     source.addEventListener('pointerup',e=>{if(e.pointerId===drag?.pointer)end(drag.active);},options);
@@ -95,14 +95,14 @@ export function composerDrag({host,frame,elements,insert,move,announce,activity=
     source.addEventListener('lostpointercapture',()=>{if(drag)end(false);},options);
     source.addEventListener('click',e=>{if(suppress){e.preventDefault();e.stopImmediatePropagation();}}, {...options,capture:true});
     source.addEventListener('keydown',e=>{
-      if(e.key==='Escape'&&keyboard){e.preventDefault();keyboard=null;activity(false);announce('Move cancelled.');return;}
+      if(e.key==='Escape'&&keyboard){e.preventDefault();keyboard=null;activity(false);announce(ct('cancelled'));return;}
       if(e.key==='Escape'&&drag){e.preventDefault();end(false);return;}
       const handle=e.target.closest('[data-element-drag]');if(!handle)return;
       const id=handle.dataset.elementDrag,element=elements().find(s=>s.id===id);if(!element)return;
       if([' ','Enter'].includes(e.key)){
         e.preventDefault();
-        if(keyboard){const pending=keyboard;keyboard=null;activity(false);try{move(pending.id,pending.parentId,pending.beforeId);announce('Element placed.');}catch(error){announce(error.message);}host.querySelector('[data-element-drag="'+id+'"]')?.focus({preventScroll:true});}
-        else{const siblings=childrenOf(elements(),element.parentId??null);keyboard={id,parentId:element.parentId??null,beforeId:siblings[siblings.findIndex(s=>s.id===id)+1]?.id??null};activity(true);announce('Element picked up. Use arrow keys; Space places it, Escape cancels.');}
+        if(keyboard){const pending=keyboard;keyboard=null;activity(false);try{move(pending.id,pending.parentId,pending.beforeId);announce(ct('placed'));}catch(error){announce(error.message);}host.querySelector('[data-element-drag="'+id+'"]')?.focus({preventScroll:true});}
+        else{const siblings=childrenOf(elements(),element.parentId??null);keyboard={id,parentId:element.parentId??null,beforeId:siblings[siblings.findIndex(s=>s.id===id)+1]?.id??null};activity(true);announce(ct('elementPickedUp'));}
         return;
       }
       const arranged=keyboard?moveElement(elements(),id,keyboard.parentId,keyboard.beforeId):elements(),current=arranged.find(s=>s.id===id);
@@ -116,8 +116,8 @@ export function composerDrag({host,frame,elements,insert,move,announce,activity=
       else if(e.key==='ArrowUp'){if(!i)return;beforeId=siblings[i-1].id;}
       else if(e.key==='ArrowDown'){if(i===siblings.length-1)return;beforeId=siblings[i+2]?.id??null;}
       else return;
-      if(keyboard){keyboard={id,parentId,beforeId};announce('Placement selected. Space to place or Escape to cancel.');return;}
-      try{move(id,parentId,beforeId);announce('Element moved.');}catch(error){announce(error.message);}
+      if(keyboard){keyboard={id,parentId,beforeId};announce(ct('placementSelected'));return;}
+      try{move(id,parentId,beforeId);announce(ct('moved'));}catch(error){announce(error.message);}
       host.querySelector('[data-element-drag="'+id+'"]')?.focus({preventScroll:true});
     },options);
   }

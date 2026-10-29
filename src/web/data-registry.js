@@ -1,3 +1,5 @@
+import './i18n/catalogues/dashboardEditors.js';
+import {t} from './i18n/index.js';
 import {projectContextAPI} from './project-context.js';
 import {proseText} from './prose-model.js';
 import {createDataLoadPool} from './data-load-pool.js';
@@ -16,7 +18,13 @@ export function createDataRegistry(){
   register(provider){
    if(!provider||!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/.test(provider.id)||typeof provider.label!=='string'||typeof provider.items!=='function')throw new TypeError('A data provider needs a stable id, label and items(context, loadedData).');
    if(providers.has(provider.id))throw new Error('Duplicate data provider: '+provider.id);
-   const value=Object.freeze({...provider});providers.set(value.id,value);changed();
+   const value={...provider};
+   // Display metadata may follow the current interface language. Keep the
+   // registered object, query identity and data methods stable across renders.
+   if(typeof provider.presentation==='function')for(const key of ['label','group','fields','fieldMetadata','views']){
+    Object.defineProperty(value,key,{enumerable:true,get:()=>provider.presentation()[key]??provider[key]});
+   }
+   Object.freeze(value);providers.set(value.id,value);changed();
    return ()=>{if(providers.get(value.id)===value){providers.delete(value.id);changed();}};
   },
   get:id=>providers.get(id),all:()=>[...providers.values()],
@@ -99,7 +107,7 @@ export function providerFields(provider,items){
 export function displayValue(value,esc){
  if(value?.type==='doc')return '<span class="desk-value">'+esc(proseText(value))+'</span>';
  if(value===null||value===undefined||value==='')return '<span class="muted">—</span>';
- if(Array.isArray(value))return value.length?'<ul class="desk-values">'+value.map(v=>'<li>'+displayValue(v,esc)+'</li>').join('')+'</ul>':'<span class="muted">None</span>';
+ if(Array.isArray(value))return value.length?'<ul class="desk-values">'+value.map(v=>'<li>'+displayValue(v,esc)+'</li>').join('')+'</ul>':'<span class="muted">'+esc(t('dashboardEditors','none'))+'</span>';
  if(typeof value==='object')return '<dl class="desk-fields">'+Object.entries(value).map(([k,v])=>'<div><dt>'+esc(fieldLabel(k))+'</dt><dd>'+displayValue(v,esc)+'</dd></div>').join('')+'</dl>';
- return '<span class="desk-value">'+esc(typeof value==='boolean'?(value?'Yes':'No'):String(value))+'</span>';
+ return '<span class="desk-value">'+esc(typeof value==='boolean'?t('dashboardEditors',value?'yes':'no'):String(value))+'</span>';
 }

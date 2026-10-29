@@ -199,5 +199,12 @@
   "recordTypes": "Tipus de registre",
   "none": "Cap",
   "yes": "Sí",
-  "no": "No"
+  "no": "No",
+  "title": "Títol",
+  "description": "Descripció",
+  "kind": "Classe",
+  "caption": "Llegenda",
+  "role": "Rol",
+  "target": "Destinació",
+  "unit": "Unitat"
 }

@@ -1,20 +1,25 @@
+import {moduleLabel,moduleProjectSettings,moduleSettingsLabel} from './module-presentation.js';
+import './i18n/catalogues/dashboardEditors.js';
+import {t} from './i18n/index.js';
 
 import {projectToolSettings} from './project-tool-settings.js';
 import {FEATURE_MODULES,enabledModule} from './feature-modules.js';
+const dt=(key,parameters)=>t('dashboardEditors',key,parameters);
+
 // Feature owners supply inline settings; this host owns discovery and lifecycle.
 export function moduleSettings(services){
  const {esc,notify}=services,instances=new Map();let open=null,loading=null,generation=0;
  const slot=id=>document.querySelector('[data-module-settings-slot="'+id+'"]');
- function draw(id){const node=slot(id);if(node){node.innerHTML=instances.get(id)?.view()??'<p role="status">Loading settings…</p>';instances.get(id)?.bind?.(node);}}
+ function draw(id){const node=slot(id);if(node){node.innerHTML=instances.get(id)?.view()??`<p role="status">${esc(dt("loadingSettings"))}</p>`;instances.get(id)?.bind?.(node);}}
  const configurations=module=>[
-  ...(module.locationTool?[{module,id:module.createSettings?module.id+':projects':module.id,label:module.projectSettings?.action??'Choose projects',create:s=>projectToolSettings(s,module)}]:[]),
-  ...(module.createSettings?[{module,id:module.id,label:module.settingsLabel??'Settings',create:module.createSettings}]:[])
+  ...(module.locationTool?[{module,id:module.createSettings?module.id+':projects':module.id,label:moduleProjectSettings(module)?.action??dt("chooseProjects"),create:s=>projectToolSettings(s,module)}]:[]),
+  ...(module.createSettings?[{module,id:module.id,label:moduleSettingsLabel(module)??dt("settings"),create:module.createSettings}]:[])
  ];
  const configuration=id=>FEATURE_MODULES.flatMap(configurations).find(c=>c.id===id);
  function control({module,id,label}){
   const expanded=open===id;
-  return `<div class="module-inline-settings"><button type="button" class="button subtle" data-action="module-settings-toggle" data-module-settings-id="${id}" aria-expanded="${expanded}" aria-controls="settings-${id}">${esc(label)} <span class="module-settings-unsaved" data-settings-unsaved="${id}" ${instances.get(id)?.isDirty()?'':'hidden'}>Unsaved</span></button>
-  ${expanded?`<section id="settings-${id}" data-module-settings-slot="${id}" aria-label="${esc(module.label)} settings">${instances.get(id)?.view()??'<p role="status">Loading settings…</p>'}</section>`:''}</div>`;
+  return `<div class="module-inline-settings"><button type="button" class="button subtle" data-action="module-settings-toggle" data-module-settings-id="${id}" aria-expanded="${expanded}" aria-controls="settings-${id}">${esc(label)} <span class="module-settings-unsaved" data-settings-unsaved="${id}" ${instances.get(id)?.isDirty()?'':'hidden'}>${esc(dt("unsaved"))}</span></button>
+  ${expanded?`<section id="settings-${id}" data-module-settings-slot="${id}" aria-label="${esc(dt('moduleSettings',{name:moduleLabel(module)}))}">${instances.get(id)?.view()??`<p role="status">${esc(dt("loadingSettings"))}</p>`}</section>`:''}</div>`;
  }
  const view=module=>configurations(module).map(control).join('');
  async function save(){for(const instance of instances.values())if(instance.isDirty())await instance.save();}
@@ -26,7 +31,7 @@ export function moduleSettings(services){
    const previous=open;
    try{
     const other=[...instances].find(([key,value])=>key!==id&&value.isDirty());
-    if(other){open=other[0];services.render();notify('Save or cancel the open settings before editing another module.');return true;}
+    if(other){open=other[0];services.render();notify(dt("finishSettings"));return true;}
     if(open===id){open=null;services.render();return true;}
     const config=configuration(id);
     if(!config||!enabledModule(services.state.dashboardSettings,config.module.id))return true;

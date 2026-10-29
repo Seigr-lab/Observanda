@@ -1,5 +1,9 @@
+import './i18n/catalogues/dashboardEditors.js';
+import {t} from './i18n/index.js';
 import {workspaceViewportTop} from './shell-navigation.js';
 import {panelSpan} from './dashboard-model.js';
+const dt=(key,parameters)=>t('dashboardEditors',key,parameters);
+
 
 // The order and preferred column are durable; pixel positions are derived from
 // the current viewport and each card's actual content. No equal-height rows.
@@ -90,12 +94,12 @@ cards().forEach(card=>observer.observe(card));
    doc.addEventListener('click',suppress,{capture:true,once:true});
    win.setTimeout(()=>doc.removeEventListener('click',suppress,true),0);
   }
-  if(!apply||!g.started){if(g.kind==='resize'&&g.original){Object.assign(g.node.dataset,g.original);}schedule();if(g.started)announce('Move cancelled.');return;}
+  if(!apply||!g.started){if(g.kind==='resize'&&g.original){Object.assign(g.node.dataset,g.original);}schedule();if(g.started)announce(dt("moveCancelled"));return;}
   if(g.kind==='resize'){resize(g.id,g.span,g.height);return;}
   if(g.target){
    if(g.kind==='add')add(g.tool,g.target.before,g.target.column,g.restore,g.workspaceId);
    else move(g.id,g.target.before,g.target.column);
-  }else announce('Drop a card on the dashboard to place it.');
+  }else announce(dt("dropCardHelp"));
  }
  doc.addEventListener('pointerdown',event=>{
   const handle=event.target.closest('[data-desk-move],[data-desk-tool],[data-desk-resize]');
@@ -138,7 +142,7 @@ cards().forEach(card=>observer.observe(card));
    e.preventDefault();if(gesture){end(true);return;}
    const items=cards(),index=items.indexOf(node);
    gesture={kind:'move',keyboard:true,started:true,node,id,span:Number(node.dataset.span),index,target:{before:items[index+1]?.dataset.deskCard??null,column:Number(node.dataset.column||positions[index]?.column||0)}};
-   node.classList.add('desk-moving');announce('Card picked up. Arrow keys move it; Enter places it; Escape cancels.');return;
+   node.classList.add('desk-moving');announce(dt("cardPickedUp"));return;
   }
   if(gesture?.keyboard&&['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Home','End'].includes(e.key)){
    e.preventDefault();const g=gesture,items=cards().filter(n=>n.dataset.deskCard!==g.id);
@@ -146,7 +150,7 @@ cards().forEach(card=>observer.observe(card));
    else g.index=e.key==='Home'?0:e.key==='End'?items.length:Math.max(0,Math.min(items.length,g.index+(e.key==='ArrowUp'?-1:1)));
    g.target.before=items[g.index]?.dataset.deskCard??null;
    root.querySelectorAll('.desk-key-target').forEach(n=>n.classList.remove('desk-key-target'));items[g.index]?.classList.add('desk-key-target');
-   announce('Position '+(g.index+1)+', column '+(g.target.column+1)+'.');
+   announce(dt('cardPosition',{position:g.index+1,column:g.target.column+1}));
   }
  },options);
  return ()=>{end(false);controller.abort();observer.disconnect();toolbarObserver.disconnect();mutations.disconnect();if(frame!==null)win.cancelAnimationFrame(frame);};

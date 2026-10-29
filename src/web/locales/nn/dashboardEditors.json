@@ -199,5 +199,12 @@
   "recordTypes": "Oppføringstypar",
   "none": "Ingen",
   "yes": "Ja",
-  "no": "Nei"
+  "no": "Nei",
+  "title": "Tittel",
+  "description": "Skildring",
+  "kind": "Slag",
+  "caption": "Bilettekst",
+  "role": "Rolle",
+  "target": "Mål",
+  "unit": "Eining"
 }

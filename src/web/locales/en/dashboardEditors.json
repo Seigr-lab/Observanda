@@ -199,5 +199,12 @@
   "recordTypes": "Record types",
   "none": "None",
   "yes": "Yes",
-  "no": "No"
+  "no": "No",
+  "title": "Title",
+  "description": "Description",
+  "kind": "Kind",
+  "caption": "Caption",
+  "role": "Role",
+  "target": "Target",
+  "unit": "Unit"
 }

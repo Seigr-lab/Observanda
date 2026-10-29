@@ -1,4 +1,9 @@
+import {moduleLabel,moduleProjectSettings,moduleLocationLabel} from './module-presentation.js';
+import './i18n/catalogues/dashboardEditors.js';
+import {t} from './i18n/index.js';
 import {locationName} from './workspace-structure.js';
+const dt=(key,parameters)=>t('dashboardEditors',key,parameters);
+
 
 // Inline, workspace-specific adoption settings for any project-capable module.
 export async function projectToolSettings(services,module){
@@ -14,11 +19,11 @@ export async function projectToolSettings(services,module){
  }
  await activate();
  const button=(label,command)=>`<button type="button" class="button ${command==='save'?'primary':''}" data-action="module-settings-command" data-command="${command}" ${pending||!isDirty()?'disabled':''}>${label}</button>`;
- function view(){return `<div class="project-tool-settings"><h3>${esc(module.projectSettings?.heading??('Projects using '+module.locationTool.label))}</h3>${module.projectSettings?`<p><strong>${esc(snapshot.book.title)}</strong> · ${esc(module.projectSettings.intro)} <button type="button" class="text-button" data-action="module-open" data-module-id="${esc(module.id)}">${esc(module.projectSettings.openLabel)}</button></p>`:'<p>Choose each project separately. Changes take effect when you save; existing data is kept.</p>'}<fieldset ${pending?'disabled':''}><legend>Projects</legend>${snapshot.book.projects.map(p=>`<label class="checkbox"><input type="checkbox" data-tool-project="${p.id}" ${draft.includes(p.id)?'checked':''}><span>${esc(locationName(snapshot.book,p.id))}</span></label>`).join('')||'<p>Create a project to use this tool there.</p>'}</fieldset><div class="module-actions">${button('Save changes','save')}${button('Discard changes','discard')}<span role="status">${esc(error||(pending?'Saving…':isDirty()?'Unsaved changes':'Saved'))}</span></div></div>`;}
+ function view(){return `<div class="project-tool-settings"><h3>${esc(moduleProjectSettings(module)?.heading??(dt('projectsUsingTool',{name:moduleLocationLabel(module)})))}</h3>${moduleProjectSettings(module)?`<p><strong>${esc(snapshot.book.title)}</strong> · ${esc(moduleProjectSettings(module).intro)} <button type="button" class="text-button" data-action="module-open" data-module-id="${esc(module.id)}">${esc(moduleProjectSettings(module).openLabel)}</button></p>`:`<p>${esc(dt("projectToolHelp"))}</p>`}<fieldset ${pending?'disabled':''}><legend>${esc(dt("projects"))}</legend>${snapshot.book.projects.map(p=>`<label class="checkbox"><input type="checkbox" data-tool-project="${p.id}" ${draft.includes(p.id)?'checked':''}><span>${esc(locationName(snapshot.book,p.id))}</span></label>`).join('')||`<p>${esc(dt("createProjectForTool"))}</p>`}</fieldset><div class="module-actions">${button(esc(dt("saveChanges")),'save')}${button(esc(dt("discardChanges")),'discard')}<span role="status">${esc(error||(pending?dt("saving"):isDirty()?dt("unsavedChanges"):dt("saved")))}</span></div></div>`;}
  async function save(){
   if(pending)return pending;
   if(!isDirty())return;
-  if(state.book.id!==workspaceId)throw new Error('Reopen this workspace before saving its project tools.');
+  if(state.book.id!==workspaceId)throw new Error(dt("reopenProjectTools"));
   error='';
   pending=(async()=>{
    try{

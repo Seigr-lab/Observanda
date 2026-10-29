@@ -1,3 +1,4 @@
+import {publishingJobText,publishingMessage} from './publishing-presentation.js';
 import {publicationErrorView} from './publication-error-view.js';
 import {publicationText} from './publication-review.js';
 
@@ -5,7 +6,7 @@ export function verificationStatus(job){
  if(!job)return null;
  if(['queued','running'].includes(job.state))return job.progress.total?publicationText('liveProgress',{done:job.progress.done,total:job.progress.total}):publicationText('liveChecking');
  if(job.state==='cancelled')return publicationText('liveStopped');
- return ['failed','relocated'].includes(job.state)?job.message:job.state==='completed'?job.result?.message:null;
+ return ['failed','relocated'].includes(job.state)?publishingJobText(job):job.state==='completed'?publishingMessage(job.result?.message):null;
 }
 export function verificationActions(job,esc,verification){
  if(!job)return '';

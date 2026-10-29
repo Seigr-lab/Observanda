@@ -1,7 +1,8 @@
+import {compositionText as ct} from './composition-presentation.js';
 // Reorders presentation items only; callers own validation, drafts and persistence.
-export function bindReorder(root, {commit, announce, label='Panel'}) {
+export function bindReorder(root, {commit, announce, label=()=>ct('panel')}) {
   if (!root) return () => {};
-  const doc=root.ownerDocument,win=doc.defaultView;
+  const doc=root.ownerDocument,win=doc.defaultView,labelText=()=>typeof label==='function'?label():label;
   const hostFrame=win.frameElement,host=hostFrame?.ownerDocument.defaultView;
   const controller = new win.AbortController(), options = {signal: controller.signal};
   let drag = null, frame = null;
@@ -38,7 +39,7 @@ export function bindReorder(root, {commit, announce, label='Panel'}) {
     if (!drag) return;
     if(frame!==null)win.cancelAnimationFrame(frame);frame=null;
     const {from, to, key} = drag; drag = null; paint();
-    announce(apply ? `${label} moved to position ${to + 1}.` : 'Move cancelled.');
+    announce(apply ? ct('movedTo',{label:labelText(),position:to+1}) : ct('cancelled'));
     if (apply && from !== to) commit(from, to, key);
   }
   root.addEventListener('pointerdown', event => {
@@ -69,11 +70,11 @@ export function bindReorder(root, {commit, announce, label='Panel'}) {
       if(drag){end(true);return;}
       const from=rows().indexOf(handle.closest('[data-reorder-item]'));
       drag={from,to:from,key:handle.dataset.reorderHandle};paint();
-      announce(`${label} picked up. Use arrow keys, then Space to place or Escape to cancel.`);return;
+      announce(ct('pickedUp',{label:labelText()}));return;
     }
     if(drag&&['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Home','End'].includes(event.key)){
       event.preventDefault();drag.to=event.key==='Home'?0:event.key==='End'?rows().length-1:Math.max(0,Math.min(rows().length-1,drag.to+(['ArrowUp','ArrowLeft'].includes(event.key)?-1:1)));
-      paint();announce(`Position ${drag.to+1} of ${rows().length}.`);
+      paint();announce(ct('position',{position:drag.to+1,total:rows().length}));
     }
   },options);
   root.addEventListener('focusout', ()=>{if(drag&&drag.pointer===undefined)end(false);},options);

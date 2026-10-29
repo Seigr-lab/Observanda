@@ -199,5 +199,12 @@
   "recordTypes": "Oppføringstyper",
   "none": "Ingen",
   "yes": "Ja",
-  "no": "Nei"
+  "no": "Nei",
+  "title": "Tittel",
+  "description": "Beskrivelse",
+  "kind": "Slag",
+  "caption": "Bildetekst",
+  "role": "Rolle",
+  "target": "Mål",
+  "unit": "Enhet"
 }

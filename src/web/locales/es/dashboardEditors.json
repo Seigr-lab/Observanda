@@ -199,5 +199,12 @@
   "recordTypes": "Tipos de registro",
   "none": "Ninguno",
   "yes": "Sí",
-  "no": "No"
+  "no": "No",
+  "title": "Título",
+  "description": "Descripción",
+  "kind": "Clase",
+  "caption": "Pie",
+  "role": "Rol",
+  "target": "Destino",
+  "unit": "Unidad"
 }

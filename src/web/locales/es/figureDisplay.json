@@ -1,0 +1,15 @@
+{
+  "summaryCount": "Recuento de filas por {category}, calculado a partir de {rows} filas de origen.",
+  "summaryCountGrouped": "Recuento de filas por {category} y {group}, calculado a partir de {rows} filas de origen.",
+  "summaryValues": "Valores ({operation}) por {category}, calculados a partir de {rows} filas de origen.",
+  "summaryValuesGrouped": "Valores ({operation}) por {category} y {group}, calculados a partir de {rows} filas de origen.",
+  "emptyExcluded": "Se han excluido {count} valores vacíos.",
+  "summaryPanel": "{label}: {title}. {summary}",
+  "plotDescription": "Gráfico de tipo {kind}. {count} series visibles.",
+  "series": "Serie",
+  "value": "Valor",
+  "uncertainty": "Incertidumbre (±)",
+  "gap": "Hueco",
+  "numeralHelp": "Los números utilizan la base {radix}. El prefijo base# identifica los dígitos, incluidos los exponentes y las fracciones. ≈ indica una etiqueta redondeada del gráfico; las mediciones de origen conservadas no se modifican.",
+  "observationPosition": "{series} · Observación {number}: ({x}, {y})"
+}

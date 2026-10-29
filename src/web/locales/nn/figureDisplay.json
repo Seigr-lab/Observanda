@@ -1,0 +1,15 @@
+{
+  "summaryCount": "Tal på rader etter {category}, rekna ut frå {rows} kjelderader.",
+  "summaryCountGrouped": "Tal på rader etter {category} og {group}, rekna ut frå {rows} kjelderader.",
+  "summaryValues": "Verdiar ({operation}) etter {category}, rekna ut frå {rows} kjelderader.",
+  "summaryValuesGrouped": "Verdiar ({operation}) etter {category} og {group}, rekna ut frå {rows} kjelderader.",
+  "emptyExcluded": "{count} tomme verdiar utelatne.",
+  "summaryPanel": "{label}: {title}. {summary}",
+  "plotDescription": "Diagram av typen {kind}. {count} synlege seriar.",
+  "series": "Serie",
+  "value": "Verdi",
+  "uncertainty": "Uvisse (±)",
+  "gap": "Manglande verdi",
+  "numeralHelp": "Tal brukar base {radix}. Prefikset base# viser basen til siffera, òg i eksponentar og brøkar. ≈ markerer ein avrunda diagrametikett; bevarte kjeldemålingar er uendra.",
+  "observationPosition": "{series} · Observasjon {number}: ({x}, {y})"
+}
