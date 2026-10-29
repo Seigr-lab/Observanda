@@ -51,6 +51,7 @@ import {verifyMembershipChange,verifyDerivedRecordChange,changedVerificationMemb
 import {RecordTypeIndex} from './record-type-index.js';
 import {RecordRecentIndex} from './record-recent-index.js';
 import {RecordReadingIndex} from './record-reading-index.js';
+import {RecordFacetIndex} from './record-facet-index.js';
 import {RecordPublicationIndex} from './record-publication-index.js';
 import {recordUpdate,UPDATE_RECORDS,UPDATE_BYTES} from './record-updates.js';
 import {admitResearchBytes} from './research-capacity.js';
@@ -122,6 +123,7 @@ export class ResearchCatalogue{
   if(value.typeIndex!==undefined&&(!value.indexVersion||!RecordTypeIndex.valid(value.typeIndex)||(value.typeIndex.root?.count??0)>value.count))fail();
   if(value.recentIndex!==undefined&&(!value.indexVersion||!RecordRecentIndex.valid(value.recentIndex)||(value.recentIndex.root?.count??0)!==value.count))fail();
   if(value.readingIndex!==undefined&&(!value.indexVersion||!RecordReadingIndex.valid(value.readingIndex)||(value.readingIndex.root?.count??0)!==value.count*2))fail();
+  if(value.facetIndex!==undefined&&(!value.indexVersion||!RecordFacetIndex.valid(value.facetIndex)||(value.facetIndex.root?.count??0)!==value.count*2))fail();
   if(value.publicationIndex!==undefined&&(!value.indexVersion||!RecordPublicationIndex.valid(value.publicationIndex)||value.publicationIndex.version===3&&value.publicationIndex.workspaceId!==value.metadata.id||(value.publicationIndex.root?.count??0)!==value.count*RecordPublicationIndex.entriesPerRecord(value.publicationIndex.version)))fail();
   return value;
  }
@@ -261,6 +263,8 @@ export class ResearchCatalogue{
   snapshot.recentIndex=current?.recentIndex?await recent.replace(current.recentIndex,before,after):await recent.build(snapshot);
   const reading=new RecordReadingIndex(this);
   snapshot.readingIndex=current?.readingIndex?await reading.replace(current.readingIndex,before,after):await reading.build(snapshot);
+  const facets=new RecordFacetIndex(this,{metadata});
+  snapshot.facetIndex=current?.facetIndex?await facets.replace(current.facetIndex,before,after):await facets.build(snapshot);
   const publication=new RecordPublicationIndex(this);
   snapshot.publicationIndex=current?.publicationIndex?.version===3?await publication.replace(current.publicationIndex,before,after):await publication.build(snapshot);
   await admitConfigurationMetadata(this,metadata);if(metadata.notebooks.some(book=>Object.hasOwn(book,'share')))await requireSourcePublicationControls(this.db);
@@ -399,7 +403,7 @@ export class ResearchCatalogue{
    if(websiteDocuments)assertWebsiteMetadataShell(metadata);
    await assertProjectHierarchyChange(this,current.metadata,metadata);
    const authority=new ProjectSourceAuthority(this);if(await authority.active()){await authority.metadata(current.metadata,metadata);await authority.recordRows(current.metadata,before);await authority.recordRows(metadata,after);}
-   return operationStage('index-records',{total:5,unit:'indexes'},async()=>{
+   return operationStage('index-records',{total:6,unit:'indexes'},async()=>{
    if(!Number.isSafeInteger(count)||count<0||!Number.isSafeInteger(bytes)||bytes<0||!Number.isSafeInteger(nextPosition))throw new AppError('LIMIT');
    admitResearchBytes('metadata',Buffer.byteLength(serialize(metadata)));
    const membership=await index.replace(current.membership,before,after);
@@ -423,6 +427,9 @@ export class ResearchCatalogue{
    operationAdvance();
    const reading=new RecordReadingIndex(this);
    snapshot.readingIndex=current.readingIndex?await reading.replace(current.readingIndex,before,after):await reading.build(snapshot);
+   operationAdvance();
+   const facets=new RecordFacetIndex(this,{metadata});
+   snapshot.facetIndex=current.facetIndex?await facets.replace(current.facetIndex,before,after):await facets.build(snapshot);
    operationAdvance();
    const publication=new RecordPublicationIndex(this);
    snapshot.publicationIndex=current.publicationIndex?.version===3?await publication.replace(current.publicationIndex,before,after):await publication.build(snapshot);
@@ -707,8 +714,8 @@ export class ResearchCatalogue{
   if(snapshot.searchIndex)await verified.once(['search',context,snapshot.membership,snapshot.searchIndex,snapshot.count],async()=>{
    if(!previous||!await verifySearchChange(this,previous,snapshot))await new RecordSearchIndex(this,{cacheSize:4096}).verify(snapshot);
   });
-  for(const [field,Owner] of [['typeIndex',RecordTypeIndex],['recentIndex',RecordRecentIndex],['readingIndex',RecordReadingIndex],['publicationIndex',RecordPublicationIndex]])if(snapshot[field])await verified.once([field,snapshot.membership,snapshot[field]],async()=>{
-   const index=new Owner(this,{cacheSize:4096});if(!previous||!await verifyDerivedRecordChange(this,index,field,previous,snapshot))await index.verify(snapshot);
+  for(const [field,Owner] of [['typeIndex',RecordTypeIndex],['recentIndex',RecordRecentIndex],['readingIndex',RecordReadingIndex],['publicationIndex',RecordPublicationIndex],['facetIndex',RecordFacetIndex]])if(snapshot[field])await verified.once([field,snapshot.membership,snapshot[field]],async()=>{
+   const index=new Owner(this,{cacheSize:4096,metadata:snapshot.metadata});if(!previous||!await verifyDerivedRecordChange(this,index,field,previous,snapshot))await index.verify(snapshot);
   });
   return snapshot;
  }
