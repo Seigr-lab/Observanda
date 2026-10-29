@@ -1,6 +1,7 @@
 // Source rows are staged as encrypted, independently addressed cells. Neither a
 // wide row nor a long selected value becomes one JavaScript object.
 import {createHash} from 'node:crypto';
+import {setImmediate as yieldTurn} from 'node:timers/promises';
 import {AppError} from './errors.js';
 import {scratchIterator} from './scratch-iterator.js';
 import {datasetMapping,datasetTexts,DATASET_LIMITS} from './dataset-reader.js';
@@ -37,36 +38,49 @@ async function* csv(work,chunks,mapping,{signal}={}){
  async function* input(){try{for(let i=0;i<prefixCount;i++)yield await work.get('csv-prefix:'+i);for(;;){const n=await iterator.next();if(n.done)return;yield n.value;}}finally{await iterator.return?.();}}
  let row=0,column=0,width=null,line=1,start=1,byte=0,rowByte=0,quoted=false,closed=false,pending=false,skipLF=false,quotedCR=false,nonblank=false,touched=false,cellStarted=false;
  let writer=textWriter(work,'csv:0:0','string',null),buffer='';
- const append=async value=>{cellStarted=true;buffer+=value;if(value.trim())nonblank=true;if(buffer.length>=CHARS){await writer.add(buffer);buffer='';}};
- const cell=async()=>{await writer.add(buffer);buffer='';const value=await writer.finish();await work.put('csv-cell:'+column,value);column++;writer=textWriter(work,'csv:'+row+':'+column,'string',null);closed=false;cellStarted=false;};
- const finish=async()=>{await cell();const result={columns:column,line:start,byteOffset:rowByte,byteLength:byte-rowByte,nonblank};column=0;row++;writer=textWriter(work,'csv:'+row+':0','string',null);rowByte=byte;nonblank=false;touched=false;return result;};
+ // Small cells share bounded scratch writes; oversized text still spills through
+ // textWriter. No row-sized collection is retained, even for a wide schema.
+ let cells=[],cellBytes=0;
+ const flush=async()=>{signal?.throwIfAborted();if(!cells.length)return;await work.putMany(cells);signal?.throwIfAborted();cells=[];cellBytes=0;};
+ const stage=async(key,value)=>{const bytes=Buffer.byteLength(key)+Buffer.byteLength(JSON.stringify(value));if(cells.length===32||cellBytes+bytes>256*1024)await flush();cells.push([key,value]);cellBytes+=bytes;};
+ async function* storedCells(){
+  for(let start=0;start<width;start+=32){
+   signal?.throwIfAborted();const keys=Array.from({length:Math.min(32,width-start)},(_,i)=>'csv-cell:'+(start+i)),batch=await work.getMany(keys);signal?.throwIfAborted();
+   // Each descriptor contains either fewer than CHARS UTF-16 units or a chunk
+   // address. A batch is bounded independently of row width and text length.
+   for(const key of keys){signal?.throwIfAborted();const value=batch.get(key);if(!value)fail();yield value;}
+  }
+ }
+ const append=value=>{cellStarted=true;buffer+=value;if(value.trim())nonblank=true;if(buffer.length>=CHARS){const text=buffer;buffer='';return writer.add(text);}};
+ const cell=async()=>{await writer.add(buffer);buffer='';const value=await writer.finish();await stage('csv-cell:'+column,value);column++;writer=textWriter(work,'csv:'+row+':'+column,'string',null);closed=false;cellStarted=false;};
+ const finish=async()=>{await cell();await flush();const result={columns:column,line:start,byteOffset:rowByte,byteLength:byte-rowByte,nonblank};column=0;row++;writer=textWriter(work,'csv:'+row+':0','string',null);rowByte=byte;nonblank=false;touched=false;return result;};
  async function* output(info){
   if(!info.nonblank)return;
   if(width===null){width=info.columns;
-   for(let index=0;index<width;index++){
-    const original=await work.get('csv-cell:'+index);if(mapping.header&&(!Object.hasOwn(original,'value')||original.value.length>200))fail();
+   let index=0;for await(const original of storedCells()){
+    if(mapping.header&&(!Object.hasOwn(original,'value')||original.value.length>200))fail();
     const base=mapping.header?original.value.trim()||'Column '+(index+1):'Column '+(index+1);let name=base,n=2;while(!await work.add('heading:'+name))name=base+' ('+n+++')';
-    await work.put('column:'+index,{name});
+    await work.put('column:'+index++,{name});
    }
    yield {columnCount:width,sourceMapping:{...mapping,delimiter},columns:async function*(){for(let i=0;i<width;i++)yield await work.get('column:'+i);}};
    if(mapping.header)return;
   }
   if(info.columns!==width)fail();
-  yield {line:info.line,locator:{format:'delimited',line:info.line,byteOffset:info.byteOffset,byteLength:info.byteLength},cells:async function*(){for(let i=0;i<width;i++)yield exposed(work,await work.get('csv-cell:'+i));}};
+  yield {line:info.line,locator:{format:'delimited',line:info.line,byteOffset:info.byteOffset,byteLength:info.byteLength},cells:async function*(){for await(const value of storedCells())yield exposed(work,value);}};
  }
  let rows=0;
- for await(const chunk of input())for(const ch of chunk){
+ for await(const chunk of input()){for(const ch of chunk){
   signal?.throwIfAborted();const before=byte;byte+=Buffer.byteLength(ch);if(before===0&&ch==='\ufeff'){rowByte=byte;continue;}
-  if(skipLF){skipLF=false;if(ch==='\n'){if(quotedCR)await append('\n');else rowByte=byte;quotedCR=false;continue;}quotedCR=false;}
+  if(skipLF){skipLF=false;if(ch==='\n'){if(quotedCR){const writing=append('\n');if(writing)await writing;}else rowByte=byte;quotedCR=false;continue;}quotedCR=false;}
   touched=true;
-  if(pending){pending=false;if(ch==='"'){await append('"');continue;}quoted=false;closed=true;}
-  if(quoted){if(ch==='"')pending=true;else{await append(ch);if(ch==='\n')line++;else if(ch==='\r'){line++;skipLF=true;quotedCR=true;}}continue;}
+  if(pending){pending=false;if(ch==='"'){const writing=append('"');if(writing)await writing;continue;}quoted=false;closed=true;}
+  if(quoted){if(ch==='"')pending=true;else{const writing=append(ch);if(writing)await writing;if(ch==='\n')line++;else if(ch==='\r'){line++;skipLF=true;quotedCR=true;}}continue;}
   if(ch===delimiter)await cell();
   else if(ch==='\n'||ch==='\r'){const info=await finish();line++;start=line;skipLF=ch==='\r';for await(const item of output(info)){if(item.cells)item.order=++rows;yield item;}}
   else if(ch==='"'&&!cellStarted&&closed===false){quoted=true;}
   else if(closed&&(ch===' '||ch==='\t'))continue;
-  else if(closed||ch==='"')fail();else await append(ch);
- }
+  else if(closed||ch==='"')fail();else{const writing=append(ch);if(writing)await writing;}
+ }await yieldTurn();signal?.throwIfAborted();}
  if(quoted&&!pending)fail();
  if(touched||column||closed||pending){for await(const item of output(await finish())){if(item.cells)item.order=++rows;yield item;}}
  if(!rows)fail();

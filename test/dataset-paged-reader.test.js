@@ -171,3 +171,43 @@ test('scratch batching checks cancellation after a cell window read before yield
  const controller=new AbortController(),reason=Error('cancel cell window'),f=schemaFixture({onGetMany:()=>controller.abort(reason)}),iterator=f.reader(source('{"v":1}'),{format:'jsonl',fields:[{name:'v',path:'/v'}]},{signal:controller.signal});
  try{await iterator.next();const {value:row}=await iterator.next();await assert.rejects(row.cells().next(),error=>error===reason);assert.equal(f.readBatches.length,1);}finally{await iterator.return();}assert.equal(f.work.closed,true);
 });
+
+test('CSV scratch batches keep small-cell query work proportional to row windows',async t=>{
+ const columns=16,count=1000,header=Array.from({length:columns},(_,i)=>'c'+i).join(','),line=Array.from({length:columns},(_,i)=>'v'+i).join(','),f=schemaFixture();
+ const result=await f.collect(header+'\n'+(line+'\n').repeat(count),{format:'delimited',delimiter:',',header:true});
+ assert.equal(result.rows.length,count);for(const row of result.rows)assert.deepEqual(row.cells.map(cell=>cell.value),line.split(','));
+ const batchedReads=f.readBatches.reduce((n,keys)=>n+keys.length,0),individualReads=[...f.reads.values()].reduce((a,b)=>a+b,0)-batchedReads;
+ const calls=f.writes.length+f.writeBatches.length+individualReads+f.readBatches.length+columns;
+ assert.ok(calls<=2200,{calls});assert.equal(f.writes.some(key=>key.startsWith('csv-cell:')),false);assert.equal(f.writeBatches.length,count+1);assert.equal(f.readBatches.length,count+1);
+ t.diagnostic(JSON.stringify({rows:count,columns,scratchCalls:calls,writeBatches:f.writeBatches.length,readBatches:f.readBatches.length}));
+});
+
+test('CSV scratch batches preserve wide Unicode cells, empty rows and repeated headings',async()=>{
+ const width=70,head=Array(width).fill('same'),values=Array.from({length:width},(_,i)=>'\u754c'.repeat(i===32?12000:2)+i);values[69]='\u{1f41d},\r\n"'.repeat(5000);
+ const text=head.join(',')+'\r\n\r\n'+values.map(value=>'"'+value.replaceAll('"','""')+'"').join(',')+'\r\n',f=schemaFixture(),result=await f.collect(text,{format:'delimited',delimiter:'auto',header:true});
+ assert.equal(result.columns.length,width);assert.equal(new Set(result.columns.map(column=>column.name)).size,width);assert.equal(result.rows.length,1);assert.deepEqual(result.rows[0].cells.map(cell=>cell.value),values);
+ assert.equal(result.rows[0].locator.byteOffset,Buffer.byteLength(head.join(',')+'\r\n\r\n'));assert.ok(f.writeBatches.every(batch=>batch.bytes<=256*1024));assert.ok(f.readBatches.every(batch=>batch.length<=32));
+ const boundary=schemaFixture(),input=Buffer.from('\ufeffa,b\r\n"\u{1f41d}\r\n""x""",2\r\n'),rows=[];
+ for await(const item of boundary.reader(Array.from(input,byte=>Buffer.from([byte])),{format:'delimited',delimiter:',',header:true})){if(item.columns)await Array.fromAsync(item.columns());else{const values=[];for await(const cell of item.cells())values.push((await Array.fromAsync(cell.read())).join(''));rows.push(values);}}
+ assert.deepEqual(rows,[['\u{1f41d}\r\n"x"','2']]);
+ for(const invalid of ['a,b\n1','a,b\n"unfinished,2','a,b\n"closed"x,2'])await assert.rejects(schemaFixture().collect(invalid,{format:'delimited',delimiter:',',header:true}),{code:'MATERIAL_TABLE'});
+});
+
+test('CSV scratch failures and cancellation do not expose a partial row',async()=>{
+ const mapping={format:'delimited',delimiter:',',header:false},reason=Error('CSV interrupted');let attempts=0;
+ const failed=schemaFixture({onPutMany:()=>{if(++attempts===2)throw reason;}}),reader=failed.reader(source(Array(70).fill('value').join(',')),mapping);
+ await assert.rejects(reader.next(),error=>error===reason);assert.equal(attempts,2);assert.equal(failed.work.closed,true);
+ const controller=new AbortController(),cancelled=schemaFixture({onPutManyComplete:()=>controller.abort(reason)});
+ await assert.rejects(cancelled.collect('a,b\n1,2',mapping,{signal:controller.signal}),error=>error===reason);assert.equal(cancelled.work.closed,true);
+ const reading=new AbortController(),stopped=schemaFixture({onGetMany:()=>reading.abort(reason)});
+ await assert.rejects(stopped.collect('1,2',mapping,{signal:reading.signal}),error=>error===reason);assert.equal(stopped.work.closed,true);
+});
+
+test('CSV scratch parsing yields to scheduled cancellation inside a long quoted field',async()=>{
+ const controller=new AbortController(),f=schemaFixture();let closed=false;
+ async function* input(){try{yield Buffer.from('a\n"'+'x'.repeat(200000)+'"');}finally{closed=true;}}
+ const reader=f.reader(input(),{format:'delimited',delimiter:',',header:true},{signal:controller.signal});
+ const timer=setTimeout(()=>controller.abort(),0);
+ try{await assert.rejects(async()=>{for await(const item of reader){if(item.columns)await Array.fromAsync(item.columns());else for await(const cell of item.cells())await Array.fromAsync(cell.read());}},{name:'AbortError'});}finally{clearTimeout(timer);await reader.return();}
+ assert.equal(closed,true);assert.equal(f.work.closed,true);
+});
