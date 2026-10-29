@@ -1027,5 +1027,47 @@
     "es",
     "nb",
     "nn"
+  ],
+  "workspaceViews": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "recordEditors": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "scientificEditors": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "editorControls": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "projectEditors": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "moduleEditors": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ]
 }

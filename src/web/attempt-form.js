@@ -24,7 +24,7 @@ export function attemptForm({kind,draft,attempt,esc,message,actions=true,prepara
   repeat('observations',p=>field(p,'label','label',{required:true,area:true}),'addObservation')+
   repeat('criteria',p=>field(p,'label','label',{required:true,max:160})+field(p,'expected','expected',{area:true})+field(p,'comparator','comparator',{required:true,max:160})+field(p,'denominator','denominator',{max:500})+select(p,'scope',['prospective','exploratory'])+field(p,'reason','reason',{area:true}),'addCriterion');
  else{
-  const options=attempt.preparations.map((p,i)=>[p.id,message('preparation')+' '+(i+1)+' — '+p.applicability.slice(0,100)]).filter(([id])=>kind!=='assessment'||!draft.supersedes||id===draft.preparationId);
+  const options=attempt.preparations.map((p,i)=>[p.id,message('preparationChoice',{number:i+1,description:p.applicability.slice(0,100)})]).filter(([id])=>kind!=='assessment'||!draft.supersedes||id===draft.preparationId);
   if(kind==='event')options.unshift(['',message('noPreparation')]);
   body=(preparationControl??field('','preparationId','selectPreparation',{options}))+(kind==='event'?'<p>'+t('eventHelp')+'</p>'+select('','kind',EVENT_KINDS)+field('','label','label',{max:160})+select('','extent',EVENT_EXTENTS)+select('','context',EVENT_CONTEXTS)+field('','circumstances','circumstances',{area:true}):
    '<p>'+t('assessmentHelp')+'</p>'+criterionControl+field('','criterionId','criterion',{options:(attempt.preparations.find(p=>p.id===draft.preparationId)?.criteria??[]).filter(c=>!draft.supersedes||c.id===draft.criterionId).map(c=>[c.id,c.label])})+

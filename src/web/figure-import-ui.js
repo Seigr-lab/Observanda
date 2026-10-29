@@ -1,3 +1,5 @@
+import {t} from './i18n/index.js';
+import {scientificText as st,figureTypeOptions,figureOperationOptions,tableDelimiterOptions} from './scientific-editor-text.js';
 import {markerMapping} from './figure-marker-area-ui.js';
 import {INTERVAL_FIELDS} from './figure-intervals.js';
 import {intervalMappingControls} from './figure-intervals-ui.js';
@@ -10,9 +12,9 @@ import {setFigureDesign} from './figure-style.js';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
 const options = (items, value) => items.map(([id, label]) => `<option value="${esc(id)}" ${String(id) === String(value) ? 'selected' : ''}>${esc(label)}</option>`).join('');
-const button = (action, label, extra = '') => `<button type="button" class="button" data-action="figure-import-${action}" ${extra}>${label}</button>`;
-const select = (key, label, items, value) => `<label>${label}<select aria-label="${esc(label)}" data-import-map="${key}">${options(items, value)}</select></label>`;
-const kindLabel = {number:'Numeric', date:'Date / time', text:'Text', mixed:'Mixed values', empty:'Empty'};
+const button = (action, label, extra = '') => `<button type="button" class="button" data-action="figure-import-${action}" ${extra}>${esc(label)}</button>`;
+const select = (key, label, items, value) => `<label>${esc(label)}<select aria-label="${esc(label)}" data-import-map="${key}">${options(items, value)}</select></label>`;
+const kindLabel = kind => ({number:t("retainedFigureEditor","option_number"), date:st("dateTime"), text:st("text"), mixed:st("mixedValues"), empty:st("empty")})[kind];
 const pageSize = 8;
 
 // The import session is separate from research state. Only Apply commits its
@@ -48,32 +50,32 @@ export function figureImportUI({getFigure, apply, context = () => null, previews
     const selected=new Set([mapping.x,mapping.group,...(count?[]:mapping.values.flatMap(v=>[v.column,v.error,...INTERVAL_FIELDS.map(k=>v[k])]))]);
     const errors=new Set(candidate.issues.filter(e=>e.line!==null).map(e=>e.line+':'+e.column));
     const role=column=>[
-      column.index===mapping.x?'Coordinate':'',
-      column.index===mapping.group?'Series group':'',
-      !count&&mapping.values.some(v=>v.column===column.index)?'Measure':'',
-      !count&&mapping.operation==='raw'&&mapping.values.some(v=>v.error===column.index)?'Uncertainty':''
-    ].filter(Boolean).join(' · ')||'Context';
+      column.index===mapping.x?t("retainedFigureEditor","point.x"):'',
+      column.index===mapping.group?st("seriesGroup"):'',
+      !count&&mapping.values.some(v=>v.column===column.index)?st("measure"):'',
+      !count&&mapping.operation==='raw'&&mapping.values.some(v=>v.error===column.index)?t("figureComposition","uncertainty"):''
+    ].filter(Boolean).join(' · ')||st("context");
     const start=Math.min(state.page*pageSize,Math.max(0,table.rows.length-1));
     return `<details class="figure-source-table" ${state.tableOpen?'open':''}>
-      <summary class="figure-import-section-title"><strong>Explore source data</strong><span>${table.columns.length} columns · ${table.rows.length} rows</span></summary>
+      <summary class="figure-import-section-title"><strong>${esc(st("exploreData"))}</strong><span>${esc(st("sourceSize",{columns:table.columns.length,rows:table.rows.length}))}</span></summary>
       <div class="figure-table-tools">
-       <label>Find columns<input type="search" aria-label="Find columns" data-import-column-search value="${esc(state.columnSearch)}" placeholder="Column name"></label>
-       <label>Jump to column<select aria-label="Jump to column" data-import-column-jump><option value="">Choose a column</option>${options(table.columns.map(c=>[c.index,c.label]),'')}</select></label>
-       <span>${columns.length} of ${table.columns.length} columns · Rows ${start+1}–${Math.min(start+pageSize,table.rows.length)}</span>
+       <label>${esc(st("findColumns"))}<input type="search" aria-label="${esc(st("findColumns"))}" data-import-column-search value="${esc(state.columnSearch)}" placeholder="${esc(st("columnName"))}"></label>
+       <label>${esc(st("jumpColumn"))}<select aria-label="${esc(st("jumpColumn"))}" data-import-column-jump><option value="">${esc(t("measurements","sync-chooseColumn"))}</option>${options(table.columns.map(c=>[c.index,c.label]),'')}</select></label>
+       <span>${esc(st("sourcePage",{shown:columns.length,columns:table.columns.length,first:start+1,last:Math.min(start+pageSize,table.rows.length)}))}</span>
       </div>
-      <div class="table-scroll" tabindex="0" aria-label="Imported data preview">
-       <table><thead><tr><th scope="col">Line</th>${columns.map(c=>`<th scope="col" data-source-column="${c.index}" class="${selected.has(c.index)?'is-mapped':''}">${esc(c.label)}<small>${role(c)}</small></th>`).join('')}</tr></thead>
-       <tbody>${table.rows.slice(start,start+pageSize).map(row=>`<tr><th scope="row">${row.line}</th>${columns.map(c=>`<td class="${errors.has(row.line+':'+c.index)?'has-error':''}">${esc(row.cells[c.index])||'<span class="figure-cell-empty">Empty</span>'}</td>`).join('')}</tr>`).join('')}</tbody></table>
-       ${columns.length?'':'<p>No columns match this search.</p>'}
+      <div class="table-scroll" tabindex="0" aria-label="${esc(st("importPreview"))}">
+       <table><thead><tr><th scope="col">${esc(st("sourceLine"))}</th>${columns.map(c=>`<th scope="col" data-source-column="${c.index}" class="${selected.has(c.index)?'is-mapped':''}">${esc(c.label)}<small>${esc(role(c))}</small></th>`).join('')}</tr></thead>
+       <tbody>${table.rows.slice(start,start+pageSize).map(row=>`<tr><th scope="row">${row.line}</th>${columns.map(c=>`<td class="${errors.has(row.line+':'+c.index)?'has-error':''}">${esc(row.cells[c.index])||'<span class="figure-cell-empty">'+esc(st("empty"))+'</span>'}</td>`).join('')}</tr>`).join('')}</tbody></table>
+       ${columns.length?'':'<p>'+esc(st("noColumns"))+'</p>'}
       </div>
-      ${table.rows.length>pageSize?`<div class="figure-table-pages">${button('previous','Previous rows',state.page===0?'disabled':'')}${button('next','Next rows',start+pageSize>=table.rows.length?'disabled':'')}</div>`:''}
-      <p class="editor-hint">All source columns are available here. Only mapped measurements are copied into the figure.</p>
+      ${table.rows.length>pageSize?`<div class="figure-table-pages">${button('previous',t("measurements","sync-previousRows"),state.page===0?'disabled':'')}${button('next',t("measurements","sync-nextRows"),start+pageSize>=table.rows.length?'disabled':'')}</div>`:''}
+      <p class="editor-hint">${esc(st("mappedColumnsHelp"))}</p>
     </details>`;
   }
   function paint(host,state,figure){
     const candidate=state.candidate,plot=host.querySelector('.figure-import-plot');
     if(!plot)return;
-    if(!candidate?.figure){previews.release(plot);plot.innerHTML='<div class="figure-empty">Choose a numeric measure, or count rows by a category.</div>';return;}
+    if(!candidate?.figure){previews.release(plot);plot.innerHTML='<div class="figure-empty">'+esc(st("chooseNumericOrCount"))+'</div>';return;}
     let preview=candidate.figure;
     const count=preview.series.reduce((n,s)=>n+s.points.length,0);
     if(count>2000){
@@ -89,67 +91,67 @@ export function figureImportUI({getFigure, apply, context = () => null, previews
 
   function mappingView(state,figure){
     if(!state.table)return '';
-    if(state.stale)return '<p class="figure-import-status" role="status">Source changed. Select Review data to refresh the columns and preview.</p>';
+    if(state.stale)return '<p class="figure-import-status" role="status">'+esc(st("sourceChanged"))+'</p>';
     const mapping=state.mapping,columns=figureColumns(state.table,state.decimal),choices=columns.map(c=>[c.index,c.label]);
     const measures=columns.filter(c=>c.numeric>0),categories=columns.filter(c=>c.kind!=='number');
     const candidate=result(state,figure),count=mapping.operation==='count',ready=candidate.figure&&!candidate.issues.length;
-    const issueText=issue=>(issue.line!==null?'Line '+issue.line+', '+state.table.columns[issue.column].label+': ':'')+issue.message;
+    const issueText=issue=>issue.line!==null?st("importIssue",{line:issue.line,column:state.table.columns[issue.column].label,message:issue.message}):issue.message;
     return `
     ${mappedTable(state,candidate)}
-    <div class="figure-import-section-title"><strong>Build your graph</strong><span>${state.table.rows.length} rows · ${columns.length} columns</span></div>
+    <div class="figure-import-section-title"><strong>${esc(st("buildGraph"))}</strong><span>${esc(st("mappingSize",{rows:state.table.rows.length,columns:columns.length}))}</span></div>
     <div class="figure-map-layout">
      <div class="figure-mapping-controls">
-      ${select('operation','Show',FIGURE_OPERATIONS,mapping.operation??'raw')}
-      ${select('x','Coordinate column',choices,mapping.x)}
-      ${select('xKind','Coordinate type',[['number','Numeric'],['date','Date / time'],['category','Categories']],mapping.xKind)}
-      ${count?'<p class="editor-hint">Count rows for each coordinate, optionally split by another column.</p>':`
-      <fieldset class="figure-value-columns"><legend>Numeric measures</legend>${measures.map(column=>{
+      ${select('operation',st("show"),figureOperationOptions(FIGURE_OPERATIONS),mapping.operation??'raw')}
+      ${select('x',st("coordinateColumn"),choices,mapping.x)}
+      ${select('xKind',st("coordinateType"),[['number',t("retainedFigureEditor","option_number")],['date',st("dateTime")],['category',st("categories")]],mapping.xKind)}
+      ${count?'<p class="editor-hint">'+esc(st("countHelp"))+'</p>':`
+      <fieldset class="figure-value-columns"><legend>${esc(st("numericMeasures"))}</legend>${measures.map(column=>{
         const chosen=mapping.values.find(v=>v.column===column.index);
-        return `<div class="figure-value-choice"><label class="figure-column-check"><input type="checkbox" data-import-value="${column.index}" ${chosen?'checked':''}><span>${esc(column.label)}<small>${kindLabel[column.kind]}</small></span></label>
-         ${chosen&&(mapping.operation??'raw')==='raw'?`<label class="figure-error-column">Uncertainty for ${esc(column.label)}<select data-import-error="${column.index}">${options([['','None'],...measures.filter(c=>c.index!==column.index).map(c=>[c.index,c.label])],chosen.error??'')}</select></label><div data-import-interval-owner="${column.index}">${intervalMappingControls(columns,{esc,attribute:'data-import-interval',values:chosen}).replace(/<label>[^]*?<\/label>/,'')}${markerMapping(columns,esc,chosen.count)}</div>`:''}</div>`;
-      }).join('')||'<p>No numeric measures. Choose Count rows to summarize this table.</p>'}</fieldset>`}
-      ${select('group','Split series by',[['','No grouping'],...choices.filter(([index])=>index!==mapping.x)],mapping.group??'')}
-      ${select('kind','Imported plot type',FIGURE_TYPES,mapping.kind)}
-      ${['line','area'].includes(mapping.kind)&&mapping.xKind!=='category'?select('order','Connect measurements in',[['source','File order'],['ascending','Coordinate order (ascending)']],mapping.order):''}
-      <details class="figure-category-roles"><summary>Use categories &amp; dates</summary>
-       <p class="editor-hint">Text describes categories; dates position measurements in time. Use them as coordinates, groups or row counts.</p>
-       ${categories.map(column=>`<div class="figure-category-role"><strong>${esc(column.label)}</strong><small>${kindLabel[column.kind]}</small><div>
-        ${button('axis','Coordinate',`data-column="${column.index}" aria-label="Use ${esc(column.label)} as coordinate"`)}
-        ${button('group','Group',`data-column="${column.index}" aria-label="Group by ${esc(column.label)}" ${column.index===mapping.x?'disabled':''}`)}
-        ${button('count','Count',`data-column="${column.index}" aria-label="Count rows by ${esc(column.label)}"`)}
+        return `<div class="figure-value-choice"><label class="figure-column-check"><input type="checkbox" data-import-value="${column.index}" ${chosen?'checked':''}><span>${esc(column.label)}<small>${esc(kindLabel(column.kind))}</small></span></label>
+         ${chosen&&(mapping.operation??'raw')==='raw'?`<label class="figure-error-column">${esc(st("columnUncertainty",{column:column.label}))}<select data-import-error="${column.index}">${options([['',t("retainedFigureEditor","option_none")],...measures.filter(c=>c.index!==column.index).map(c=>[c.index,c.label])],chosen.error??'')}</select></label><div data-import-interval-owner="${column.index}">${intervalMappingControls(columns,{esc,attribute:'data-import-interval',values:chosen}).replace(/<label>[^]*?<\/label>/,'')}${markerMapping(columns,esc,chosen.count)}</div>`:''}</div>`;
+      }).join('')||'<p>'+esc(st("noMeasures"))+'</p>'}</fieldset>`}
+      ${select('group',st("splitSeries"),[['',st("noGrouping")],...choices.filter(([index])=>index!==mapping.x)],mapping.group??'')}
+      ${select('kind',st("importedPlotType"),figureTypeOptions(FIGURE_TYPES),mapping.kind)}
+      ${['line','area'].includes(mapping.kind)&&mapping.xKind!=='category'?select('order',st("connectMeasurements"),[['source',st("fileOrder")],['ascending',st("coordinateOrder")]],mapping.order):''}
+      <details class="figure-category-roles"><summary>${esc(st("categoriesDates"))}</summary>
+       <p class="editor-hint">${esc(st("categoryRolesHelp"))}</p>
+       ${categories.map(column=>`<div class="figure-category-role"><strong>${esc(column.label)}</strong><small>${esc(kindLabel(column.kind))}</small><div>
+        ${button('axis',t("retainedFigureEditor","point.x"),`data-column="${column.index}" aria-label="${esc(st("useCoordinate",{column:column.label}))}"`)}
+        ${button('group',st("group"),`data-column="${column.index}" aria-label="${esc(st("groupBy",{column:column.label}))}" ${column.index===mapping.x?'disabled':''}`)}
+        ${button('count',t("retainedFigureEditor","point.count"),`data-column="${column.index}" aria-label="${esc(st("countBy",{column:column.label}))}"`)}
        </div></div>`).join('')}
       </details>
-      <details class="figure-import-design"><summary>Customize graph &amp; text</summary><div data-import-design>${designPanel(state)}</div></details>
+      <details class="figure-import-design"><summary>${esc(st("customizeGraph"))}</summary><div data-import-design>${designPanel(state)}</div></details>
      </div>
      <div class="figure-import-review">
-      <div class="figure-import-section-title"><strong>Proposed figure</strong><span>Not applied yet</span></div>
+      <div class="figure-import-section-title"><strong>${esc(st("proposedFigure"))}</strong><span>${esc(st("notApplied"))}</span></div>
       <div class="figure-import-plot"></div>
-      ${candidate.measurements>2000?'<p class="editor-hint">Preview shows up to 2,000 measurements. All mapped rows will be imported.</p>':''}
-      ${candidate.issues.length?`<div class="figure-import-problems" role="alert"><strong>Check the selected columns</strong><ul>${candidate.issues.slice(0,6).map(issue=>'<li>'+esc(issueText(issue))+'</li>').join('')}</ul>${candidate.issues.length>6?'<p>'+(candidate.issues.length-6)+' more issues in the selected columns.</p>':''}</div>`:''}
+      ${candidate.measurements>2000?'<p class="editor-hint">'+esc(st("previewLimit"))+'</p>':''}
+      ${candidate.issues.length?`<div class="figure-import-problems" role="alert"><strong>${esc(st("checkColumns"))}</strong><ul>${candidate.issues.slice(0,6).map(issue=>'<li>'+esc(issueText(issue))+'</li>').join('')}</ul>${candidate.issues.length>6?'<p>'+esc(st("moreIssues",{count:candidate.issues.length-6}))+'</p>':''}</div>`:''}
       ${candidate.warnings.length?'<div class="figure-import-warnings">'+candidate.warnings.map(message=>'<p>'+esc(message)+'</p>').join('')+'</div>':''}
 
      </div>
     </div>
-    <p class="editor-hint figure-import-note">${candidate.figure?.summary?esc(figureSummary(candidate.figure)):'Individual measurements retain their original values. Choose a summary explicitly to combine rows.'}</p>
+    <p class="editor-hint figure-import-note">${candidate.figure?.summary?esc(figureSummary(candidate.figure)):esc(st("individualValuesHelp"))}</p>
     <footer class="figure-import-footer">
-     ${select('mode','Apply to this figure',[['replace','Replace series'],...((mapping.operation??'raw')==='raw'&&!figure.summary?[['append','Add as new series']]:[])],mapping.mode)}
-     <div><p role="status">${ready?candidate.measurements+' values in '+candidate.seriesCount+' series ready.':'Choose the data roles before importing.'}</p>
-     ${button('apply',mapping.mode==='append'?'Add mapped series':'Use mapped data',ready?'':'disabled')}</div>
+     ${select('mode',st("applyFigure"),[['replace',st("replaceSeries")],...((mapping.operation??'raw')==='raw'&&!figure.summary?[['append',st("appendSeries")]]:[])],mapping.mode)}
+     <div><p role="status">${esc(ready?st("readyValues",{values:candidate.measurements,series:candidate.seriesCount}):st("chooseRoles"))}</p>
+     ${button('apply',mapping.mode==='append'?st("addMappedSeries"):st("useMappedData"),ready?'':'disabled')}</div>
     </footer>`;
   }
   function view(figure) {
     const state = session(figure.id);
-    return `<details class="figure-import" ${state.open ? 'open' : ''}><summary>Import or paste data</summary>
-      <div class="figure-import-section-title"><p class="editor-hint">Choose columns and review the graph before applying.</p><button type="button" class="button" data-action="figure-expand">Expand editor</button></div>
-      <details class="figure-import-source" ${state.sourceOpen ? 'open' : ''}><summary data-import-source-label>${state.table ? esc(state.name || 'Pasted data') + ' · ' + state.table.rows.length + ' rows' : 'Choose a file or paste a table'}</summary>
-        <label class="figure-file-picker button"><span>Choose CSV / TSV file</span><input type="file" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values" data-figure-file aria-label="Open CSV / TSV"></label>
+    return `<details class="figure-import" ${state.open ? 'open' : ''}><summary>${esc(st("importData"))}</summary>
+      <div class="figure-import-section-title"><p class="editor-hint">${esc(st("reviewGraphHelp"))}</p><button type="button" class="button" data-action="figure-expand">${esc(st("expandEditor"))}</button></div>
+      <details class="figure-import-source" ${state.sourceOpen ? 'open' : ''}><summary data-import-source-label>${state.table ? esc(st("sourceLabel",{name:state.name || st("pastedData"),rows:state.table.rows.length})) : esc(st("chooseFileOrTable"))}</summary>
+        <label class="figure-file-picker button"><span>${esc(st("chooseCSV"))}</span><input type="file" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values" data-figure-file aria-label="${esc(st("openCSV"))}"></label>
         <span data-import-filename>${esc(state.name)}</span>
-        <label>Data to import<textarea rows="4" data-figure-paste placeholder="Paste a table from a spreadsheet or a CSV file">${esc(state.source)}</textarea></label>
+        <label>${esc(st("dataToImport"))}<textarea rows="4" data-figure-paste placeholder="${esc(st("pastePlaceholder"))}">${esc(state.source)}</textarea></label>
         <div class="figure-source-options">
-          <label>Column separator<select data-import-source="delimiter">${options(TABLE_DELIMITERS, state.delimiter)}</select></label>
-          <label>Decimal separator<select data-import-source="decimal">${options([['.','Dot (3.14)'], [',','Comma (3,14)']], state.decimal)}</select></label>
-          <label class="figure-column-check"><input type="checkbox" data-import-source="header" ${state.header ? 'checked' : ''}>First row contains column names</label>
-          ${button('review', 'Review data')}
+          <label>${esc(st("columnSeparator"))}<select data-import-source="delimiter">${options(tableDelimiterOptions(TABLE_DELIMITERS), state.delimiter)}</select></label>
+          <label>${esc(st("decimalSeparator"))}<select data-import-source="decimal">${options([['.',st("dotSeparator")], [',',st("commaSeparator")]], state.decimal)}</select></label>
+          <label class="figure-column-check"><input type="checkbox" data-import-source="header" ${state.header ? 'checked' : ''}>${esc(st("firstRowNames"))}</label>
+          ${button('review', st("reviewData"))}
         </div>
       </details>
       <p class="figure-import-problems" data-figure-import-error role="alert">${esc(state.error)}</p>
@@ -184,7 +186,7 @@ export function figureImportUI({getFigure, apply, context = () => null, previews
       state.table = table; state.error = ''; state.stale = false; state.page = 0;
       state.sourceOpen = !collapse; state.open = true;
       host.querySelector('.figure-import-source').open = !collapse;
-      host.querySelector('[data-import-source-label]').textContent = (state.name || 'Pasted data') + ' · ' + table.rows.length + ' rows';
+      host.querySelector('[data-import-source-label]').textContent = st("sourceLabel",{name:state.name || st("pastedData"),rows:table.rows.length});
     } catch (error) { state.error = error.message; state.stale = true; }
     mappingUpdate(host, state, figure);
   }
@@ -228,7 +230,7 @@ export function figureImportUI({getFigure, apply, context = () => null, previews
       const version = ++state.version; state.stale = true; state.error = '';
       mappingUpdate(host, state, figure);
       (async () => {
-        if (file.size > MAX_TABLE_TEXT) throw new Error('Choose a CSV or TSV file up to 16 MiB.');
+        if (file.size > MAX_TABLE_TEXT) throw new Error(st("fileSize"));
         const source = await file.text();
         if (state.version !== version || !host.isConnected || getFigure(figure.id) !== figure) return;
         state.source = source; state.name = file.name;

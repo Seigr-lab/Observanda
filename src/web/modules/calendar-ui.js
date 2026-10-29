@@ -1,5 +1,6 @@
 import {projectUsesTool} from '../project-tools.js';
-import {parseScope,scopePath,scopeControl,ownerLabel,inScope} from './scope.js';
+import {parseScope,scopePath,inScope} from './scope.js';
+import {scopeControl,ownerLabel} from './editor-presentation.js';
 import {localDate,nextDate} from './calendar-model.js';
 import {verifiedCalendarPage} from './calendar-page.js';
 import {t} from '../i18n/index.js';

@@ -1,5 +1,6 @@
 import {t} from './i18n/index.js';
 import {RECORD_TYPES} from './record-types.js';
+import {recordTypeLabel} from './record-type-presentation.js';
 import {renderProse} from './prose-model.js';
 import {documentEditors} from './document-editor.js';
 export function recordStarterPages({request,esc,frame:display,notify,onBack}){
@@ -14,7 +15,7 @@ export function recordStarterPages({request,esc,frame:display,notify,onBack}){
  async function query(operation,data){const current=session,result=await request(current.target.uploadId?'package'+operation[0].toUpperCase()+operation.slice(1):operation,{...current.target,...data});if(current!==session)throw Error(msg('reopen'));return result;}
  async function overview(offset=0){
   const result=await query('view',{offset});session.view=result;editors.release();const {blueprint:b,sections:p}=result,edit=session.editing;
-  frame(b.name,`<p>${text(edit?'pagedEditHelp':'pagedReadHelp')}</p>${edit?`<form id="starter-details-form">${input('name',`<input name="name" required maxlength="120" value="${esc(b.name)}">`)}${input('title',`<input name="title" required maxlength="180" value="${esc(b.title)}">`)}${input('type',`<select name="type">${RECORD_TYPES.map(type=>`<option value="${type.id}" ${b.type===type.id?'selected':''}>${esc(type.label)}</option>`).join('')}</select>`)}<button class="button primary" type="submit">${text('saveDetails')}</button></form>`:`<h3>${esc(b.title)}</h3>`}
+  frame(b.name,`<p>${text(edit?'pagedEditHelp':'pagedReadHelp')}</p>${edit?`<form id="starter-details-form">${input('name',`<input name="name" required maxlength="120" value="${esc(b.name)}">`)}${input('title',`<input name="title" required maxlength="180" value="${esc(b.title)}">`)}${input('type',`<select name="type">${RECORD_TYPES.map(type=>`<option value="${type.id}" ${b.type===type.id?'selected':''}>${esc(recordTypeLabel(type.id))}</option>`).join('')}</select>`)}<button class="button primary" type="submit">${text('saveDetails')}</button></form>`:`<h3>${esc(b.title)}</h3>`}
    <div class="inline-actions">${button('body','body')}${button('tagList','tags')}</div>
    <p>${text(p.total?'sourceRange':'sourceEmpty',{first:p.offset+1,last:p.offset+p.values.length,total:p.total})}</p><ol start="${p.offset+1}">${p.values.map(s=>`<li><span>${esc(s.title)}</span> ${button(edit?'editSection':'readSection','section',`data-position="${s.position}"`)}</li>`).join('')}</ol>
    <div class="inline-actions">${button('sourcePrevious','previous',p.offset?'':'disabled')}${button('sourceNext','next',p.offset+p.values.length<p.total?'':'disabled')}</div>

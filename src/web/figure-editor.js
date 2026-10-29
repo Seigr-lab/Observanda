@@ -1,3 +1,4 @@
+import {scientificText as st,figureTypeOptions} from './scientific-editor-text.js';
 import {axisControls,axisControlInput,axisControlAction} from './figure-axis-controls-ui.js';
 import {referencedObservation,removedObservation} from './figure-observation-annotations.js';
 import {observationText} from './figure-observation-ui.js';
@@ -22,9 +23,9 @@ import {figureHasResults,copyFigureResults} from './figure-result-links.js';
 import {figureSourceView} from './figure-provenance-ui.js';
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const options=(items,value)=>items.map(([id,label])=>`<option value="${id}" ${id===value?'selected':''}>${esc(label)}</option>`).join('');
-const fieldInput=(name,label,value,type='text')=>`<label>${label}<input aria-label="${esc(label)}" data-figure-field="${name}" type="${type}" ${type==='number'?'step="any"':''} value="${esc(value)}"></label>`;
-const select=(name,label,items,value)=>`<label>${label}<select aria-label="${esc(label)}" data-figure-field="${name}">${options(items,value)}</select></label>`;
-const button=(action,label,extra='')=>`<button type="button" class="button" data-action="figure-${action}" ${extra}>${label}</button>`;
+const fieldInput=(name,label,value,type='text')=>`<label>${esc(label)}<input aria-label="${esc(label)}" data-figure-field="${name}" type="${type}" ${type==='number'?'step="any"':''} value="${esc(value)}"></label>`;
+const select=(name,label,items,value)=>`<label>${esc(label)}<select aria-label="${esc(label)}" data-figure-field="${name}">${options(items,value)}</select></label>`;
+const button=(action,label,extra='')=>`<button type="button" class="button" data-action="figure-${action}" ${extra}>${esc(label)}</button>`;
 export function figureEditor({getFigures,getResults=()=>null,setResults=()=>{},prepareCopies=async()=>{},selectCopy=null,copyPairs=null,busyChanged=()=>{},changed,notify,context,root=()=>document,selectedOnly=false}){
  const selected=new Map(),designTabs=new Map(),previews=figurePreviews();
  let studio=null,copying=false;
@@ -47,7 +48,7 @@ export function figureEditor({getFigures,getResults=()=>null,setResults=()=>{},p
   Object.assign(figure,candidate);selected.delete(figure.id);changed();refresh(figure.id);
   const plot=root().querySelector('[data-figure-id="'+figure.id+'"] [data-figure-preview]');
   plot?.scrollIntoView({block:'nearest',behavior:'smooth'});
-  notify('Mapped data applied to the figure. Save the record to keep it.');
+  notify(st("mappedApplied"));
  }});
  const current=f=>f.series.find(s=>s.id===selected.get(f.id))??f.series[0];
  const numericInputs=figureNumericInputs({notify});
@@ -55,7 +56,7 @@ export function figureEditor({getFigures,getResults=()=>null,setResults=()=>{},p
  function paint(f,host){
   const plot=host.querySelector('[data-figure-preview]'),errors=[numericInputs.issue(f),...figureIssues(f)].filter(Boolean);
   host.querySelector('[data-figure-validation]').innerHTML=errors.slice(0,4).map(e=>'<p>'+esc(e)+'</p>').join('');
-  if(errors.length){previews.release(plot);plot.innerHTML='<div class="figure-empty">Add complete measurements to draw the figure.</div>';}
+  if(errors.length){previews.release(plot);plot.innerHTML='<div class="figure-empty">'+esc(st("completeMeasurements"))+'</div>';}
   else previews.mount(plot,f,'editor');
   const summary=[...host.querySelectorAll('[data-figure-summary]')].find(el=>el.closest('[data-figure-id]')===host);
   if(summary)summary.textContent=figureSummary(f);
@@ -83,8 +84,8 @@ export function figureEditor({getFigures,getResults=()=>null,setResults=()=>{},p
   placeholder.style.height=host.getBoundingClientRect().height+'px';
   host.replaceWith(placeholder);
   dialog.className='figure-studio';
-  dialog.setAttribute('aria-label','Expanded figure editor');
-  dialog.innerHTML='<div class="figure-studio-bar"><strong>Figure workspace</strong><span>Changes stay in this record’s draft</span><button type="button" class="button" data-action="figure-studio-close">Back to record</button></div>';
+  dialog.setAttribute('aria-label',st("expandedEditor"));
+  dialog.innerHTML='<div class="figure-studio-bar"><strong>'+esc(st("figureWorkspace"))+'</strong><span>'+esc(st("draftChanges"))+'</span><button type="button" class="button" data-action="figure-studio-close">'+esc(st("backToRecord"))+'</button></div>';
   dialog.append(host);document.body.append(dialog);studio={dialog,placeholder,trigger,scroll};
   dialog.addEventListener('cancel',event=>{event.preventDefault();closeStudio();});
   dialog.querySelector('[data-action="figure-studio-close"]').addEventListener('click',closeStudio);
@@ -93,27 +94,27 @@ export function figureEditor({getFigures,getResults=()=>null,setResults=()=>{},p
  }
  function bound(f,key,label){const date=key.startsWith('x.')&&f.x.kind==='date',value=f[key[0]][key.slice(2)];return fieldInput(key,label,date&&value!==null?new Date(value).toISOString().slice(0,10):value,date?'date':'number');}
  function card(f,panel=false){
-  if(f.kind==='panels')return `<article class="figure-workbench figure-composition" data-figure-id="${f.id}"><header><h4>${esc(f.title)}</h4><div class="inline-actions">${selectedOnly?'':button('expand','Expand editor')}${button('svg','Download SVG')}${button('csv','Download data')}${selectedOnly?'':button('duplicate','Duplicate')+button('remove','Remove')}</div></header><div data-figure-validation role="status"></div><div class="figure-preview" data-figure-preview></div>${composition.view(f,card)}</article>`;
+  if(f.kind==='panels')return `<article class="figure-workbench figure-composition" data-figure-id="${f.id}"><header><h4>${esc(f.title)}</h4><div class="inline-actions">${selectedOnly?'':button('expand',st("expandEditor"))}${button('svg',st("downloadSVG"))}${button('csv',st("downloadData"))}${selectedOnly?'':button('duplicate',st("duplicate"))+button('remove',t("retainedFigureEditor","remove"))}</div></header><div data-figure-validation role="status"></div><div class="figure-preview" data-figure-preview></div>${composition.view(f,card)}</article>`;
   const s=current(f);
   return `<article class="figure-workbench" data-figure-id="${f.id}">
-   <header><h4>${esc(f.title)}</h4><div class="inline-actions">${panel||selectedOnly?'':button('expand','Expand editor')}${button('svg','Download SVG')}${button('csv','Download data')}${panel||selectedOnly?'':button('duplicate','Duplicate')+button('remove','Remove')}</div></header>
+   <header><h4>${esc(f.title)}</h4><div class="inline-actions">${panel||selectedOnly?'':button('expand',st("expandEditor"))}${button('svg',st("downloadSVG"))}${button('csv',st("downloadData"))}${panel||selectedOnly?'':button('duplicate',st("duplicate"))+button('remove',t("retainedFigureEditor","remove"))}</div></header>
 
-   ${figureSourceView(f,esc)}<div class="figure-basics">${select('kind','Plot type',FIGURE_TYPES,f.kind)}${select('x.kind',f.kind==='bar-horizontal'?'Category coordinates':'Horizontal coordinates',f.kind==='heatmap'?[['category','Categories']]:[['number','Numeric'],['date','Date / time'],['category','Categories']],f.x.kind)}</div>
+   ${figureSourceView(f,esc)}<div class="figure-basics">${select('kind',t("retainedFigureEditor","kind"),figureTypeOptions(FIGURE_TYPES),f.kind)}${select('x.kind',f.kind==='bar-horizontal'?st("categoryCoordinates"):st("horizontalCoordinates"),f.kind==='heatmap'?[['category',st("categories")]]:[['number',t("retainedFigureEditor","option_number")],['date',st("dateTime")],['category',st("categories")]],f.x.kind)}</div>
    <div class="figure-presentation-workspace">
     <div class="figure-preview-column"><div class="figure-validation" data-figure-validation role="status"></div><div class="figure-preview" data-figure-preview></div><p class="editor-hint" data-figure-summary>${esc(figureSummary(f))}</p></div>
     <div data-figure-design-host>${figureDesignView(f,{tab:designTabs.get(f.id)??'text'})}</div>
    </div>
-   <details class="figure-axis"${f.kind==='heatmap'?' hidden':''}><summary>Axis ranges</summary><div class="figure-basics">${select('x.scale','Coordinate scale',[['linear','Linear'],['log','Logarithmic']],f.x.scale)}${select('y.scale','Value scale',[['linear','Linear'],['log','Logarithmic']],f.y.scale)}${bound(f,'x.min','Coordinate minimum')}${bound(f,'x.max','Coordinate maximum')}${bound(f,'y.min','Value minimum')}${bound(f,'y.max','Value maximum')}</div><p class="editor-hint">Empty bounds fit the data. Logarithmic values must be positive.</p></details>
+   <details class="figure-axis"${f.kind==='heatmap'?' hidden':''}><summary>${esc(st("axisRanges"))}</summary><div class="figure-basics">${select('x.scale',st("coordinateScale"),[['linear',t("retainedFigureEditor","option_linear")],['log',t("retainedFigureEditor","option_log")]],f.x.scale)}${select('y.scale',st("valueScale"),[['linear',t("retainedFigureEditor","option_linear")],['log',t("retainedFigureEditor","option_log")]],f.y.scale)}${bound(f,'x.min',st("coordinateMinimum"))}${bound(f,'x.max',st("coordinateMaximum"))}${bound(f,'y.min',st("valueMinimum"))}${bound(f,'y.max',st("valueMaximum"))}</div><p class="editor-hint">${esc(st("boundsHelp"))}</p></details>
    ${f.kind==='heatmap'?'':axisControls(f,esc)+markerControls(f,esc)}
-   <div class="figure-series"><label>Editing series<select data-figure-series>${options(f.series.map(s=>[s.id,s.name]),s.id)}</select></label>${button('series-add','Add series')}${button('series-remove','Remove series',f.series.length===1?'disabled':'')}</div>
-   <p class="editor-hint"${f.kind==='heatmap'?' hidden':''}>${f.x.kind==='category'?'Categories are evenly spaced.':'Positions follow the horizontal coordinates.'} Lines follow row order. ${esc(intervalText('help'))}</p>
-   <div class="table-scroll"><table class="figure-data"><thead><tr><th>${esc(f.x.label||'Horizontal coordinate')}</th><th>${esc(f.y.label||'Value')}</th><th${f.kind==='heatmap'?' hidden':''}>Uncertainty (±)</th>${f.kind==='heatmap'?'':intervalHeaders(esc)}${f.markerArea?'<th>'+esc(markerText('count'))+'</th>':''}<th></th></tr></thead><tbody>${s.points.map((p,i)=>`<tr>${['x','y','error'].map(key=>`<td${key==='error'&&f.kind==='heatmap'?' hidden':''}><input aria-label="${key==='x'?'Coordinate':key==='y'?'Value':'Uncertainty'} ${i+1}" data-figure-row="${i}" data-figure-column="${key}" type="${key==='x'&&f.x.kind!=='number'?'text':'number'}" step="any" value="${esc(p[key])}" ${key==='error'?'min="0"':''}></td>`).join('')}${f.kind==='heatmap'?'':intervalCells(p,i,f,esc)}${f.markerArea?`<td><input aria-label="${esc(markerText('count')+' '+(i+1))}" data-figure-row="${i}" data-figure-column="count" type="number" min="0" step="1" value="${esc(p.count??'')}"></td>`:''}<td>${button('row-remove','×',`data-index="${i}" aria-label="Remove measurement ${i+1}"`)}</td></tr>`).join('')}</tbody></table></div>
-   ${button('row-add','Add measurement')}
+   <div class="figure-series"><label>${esc(st("editingSeries"))}<select data-figure-series>${options(f.series.map(s=>[s.id,s.name]),s.id)}</select></label>${button('series-add',st("addSeries"))}${button('series-remove',st("removeSeries"),f.series.length===1?'disabled':'')}</div>
+   <p class="editor-hint"${f.kind==='heatmap'?' hidden':''}>${esc(f.x.kind==='category'?st("categorySpacing"):st("coordinatePositions"))} ${esc(st("lineOrder"))} ${esc(intervalText('help'))}</p>
+   <div class="table-scroll"><table class="figure-data"><thead><tr><th>${esc(f.x.label||st("horizontalCoordinate"))}</th><th>${esc(f.y.label||t("retainedFigureEditor","value"))}</th><th${f.kind==='heatmap'?' hidden':''}>${esc(st("uncertaintySymmetric"))}</th>${f.kind==='heatmap'?'':intervalHeaders(esc)}${f.markerArea?'<th>'+esc(markerText('count'))+'</th>':''}<th></th></tr></thead><tbody>${s.points.map((p,i)=>`<tr>${['x','y','error'].map(key=>`<td${key==='error'&&f.kind==='heatmap'?' hidden':''}><input aria-label="${esc(st("measurementCell",{label:key==='x'?t("retainedFigureEditor","point.x"):key==='y'?t("retainedFigureEditor","value"):t("figureComposition","uncertainty"),position:i+1}))}" data-figure-row="${i}" data-figure-column="${key}" type="${key==='x'&&f.x.kind!=='number'?'text':'number'}" step="any" value="${esc(p[key])}" ${key==='error'?'min="0"':''}></td>`).join('')}${f.kind==='heatmap'?'':intervalCells(p,i,f,esc)}${f.markerArea?`<td><input aria-label="${esc(st("measurementCell",{label:markerText('count'),position:i+1}))}" data-figure-row="${i}" data-figure-column="count" type="number" min="0" step="1" value="${esc(p.count??'')}"></td>`:''}<td>${button('row-remove','×',`data-index="${i}" aria-label="${esc(st("removeMeasurement",{position:i+1}))}"`)}</td></tr>`).join('')}</tbody></table></div>
+   ${button('row-add',st("addMeasurement"))}
    ${f.kind==='heatmap'?heatmapControls(f.heatmap,{esc}):composition.annotations(f)}
    ${importer.view(f)}
   </article>`;
  }
- function view(){return `<section class="record-figures">${selectedOnly?'':`<div class="section-bar"><h3>Figures</h3><div class="inline-actions">${button('add','Add figure')}${button('panels-add',esc(t('figureComposition','add')))}</div></div>`}<div data-figure-cards>${getFigures().map(f=>card(f)).join('')}</div></section>`;}
+ function view(){return `<section class="record-figures">${selectedOnly?'':`<div class="section-bar"><h3>${esc(st("figures"))}</h3><div class="inline-actions">${button('add',st("addFigure"))}${button('panels-add',t('figureComposition','add'))}</div></div>`}<div data-figure-cards>${getFigures().map(f=>card(f)).join('')}</div></section>`;}
  function refresh(id){
   const f=owner(id),host=f&&root().querySelector(`[data-figure-id="${f.id}"]`);if(!host)return;
   const open=[];
@@ -186,10 +187,10 @@ export function figureEditor({getFigures,getResults=()=>null,setResults=()=>{},p
   if(name==='figure-expand'){expand(host,el);return true;}
   if(name==='figure-design-tab'){designTabs.set(f.id,el.dataset.tab);host.querySelector('[data-figure-design-host]').innerHTML=figureDesignView(f,{tab:el.dataset.tab});return true;}
   if(name==='figure-svg'||name==='figure-csv'){const issues=figureIssues(f);if(issues.length){notify(issues[0],true);return true;}download(name==='figure-svg'?renderFigure(f):figureCSV(f),name==='figure-svg'?'image/svg+xml':'text/csv',f.title.replace(/[^\p{L}\p{N} _-]/gu,'_')+(name==='figure-svg'?'.svg':'.csv'));return true;}
-  if(name==='figure-remove'){if(!canRemove(f)||!confirm('Remove this figure from the record?'))return true;items.splice(items.indexOf(f),1);host.remove();closeStudio();selected.delete(f.id);importer.forget(f.id);}
+  if(name==='figure-remove'){if(!canRemove(f)||!confirm(st("removeFigureConfirm")))return true;items.splice(items.indexOf(f),1);host.remove();closeStudio();selected.delete(f.id);importer.forget(f.id);}
   else if(name==='figure-duplicate'){await prepare([f]);const copy=cloneFigure(f);copy.title+=' (copy)';copied([[f,copy]]);items.splice(items.indexOf(f)+1,0,copy);(studio?.dialog.contains(host)?studio.placeholder:host).insertAdjacentHTML('afterend',card(copy));}
   else if(name==='figure-series-add'){delete f.summary;const s=createSeries('Series '+(f.series.length+1),f.series.length);s.points=current(f).points.map(p=>({x:p.x,y:null,error:null}));f.series.push(s);if(f.series.length===2)f.legend=true;selected.set(f.id,s.id);refresh(f.id);}
-  else if(name==='figure-series-remove'){if(referencedObservation(f,current(f).id)){notify(observationText('referenced'),true);return true;}if(f.series.length<2||!confirm('Remove this series and its measurements?'))return true;delete f.summary;f.series.splice(f.series.indexOf(current(f)),1);refresh(f.id);}
+  else if(name==='figure-series-remove'){if(referencedObservation(f,current(f).id)){notify(observationText('referenced'),true);return true;}if(f.series.length<2||!confirm(st("removeSeriesConfirm")))return true;delete f.summary;f.series.splice(f.series.indexOf(current(f)),1);refresh(f.id);}
   else if(name==='figure-row-add'){delete f.summary;current(f).points.push({x:null,y:null,error:null});refresh(f.id);root().querySelector(`[data-figure-id="${f.id}"] .figure-data tbody tr:last-child input`)?.focus();}
   else if(name==='figure-row-remove'){if(referencedObservation(f,current(f).id,Number(el.dataset.index))){notify(observationText('referenced'),true);return true;}removedObservation(f,current(f).id,Number(el.dataset.index));delete f.summary;current(f).points.splice(Number(el.dataset.index),1);refresh(f.id);}
   else return true;

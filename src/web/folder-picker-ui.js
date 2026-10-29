@@ -1,8 +1,12 @@
+import './i18n/catalogues/editorControls.js';
+import {t} from './i18n/index.js';
 // Folder navigation is transient; choosing a folder changes only the calling field.
 export function folderPickerUI({api,esc,field,showDialog,capabilities}) {
+  const text=(key,args)=>esc(t('editorControls',key,args));
+  const placeName=place=>place.kind==='home'?t('editorControls','home'):place.kind==='drive'&&place.path==='/'?t('editorControls','computer'):place.name;
   let nativePending=false,target,returnDialog,current,history=[],position=-1,query='',showHidden=false,request=0,timer,pending;
   const folderIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 7V5h6l2 2h10v13H3z"/></svg>';
-  const button=(label,action,extra='')=>`<button type="button" class="button" data-action="${action}" ${extra}>${label}</button>`;
+  const button=(label,action,extra='')=>`<button type="button" class="button" data-action="${action}" ${extra}>${esc(label)}</button>`;
   function message(text){const el=document.querySelector('[data-folder-error]');if(el){el.textContent=text;el.hidden=!text;}}
   function restore(use=false){
     request++;clearTimeout(timer);pending?.abort();pending=null;
@@ -27,22 +31,22 @@ export function folderPickerUI({api,esc,field,showDialog,capabilities}) {
       if(travel!==null)position=travel;
       else if(current?.folder!==result.folder){history=history.slice(0,position+1);history.push(result.folder);position=history.length-1;}
       query=search;current=result;
-      showDialog(`<div class="folder-browser"><h2 id="dialog-title">${capabilities()?.mode==='server'?'Choose a folder on the server':'Choose a folder on this computer'}</h2>
-        <div class="folder-toolbar"><div class="folder-travel">${button('&larr;','storage-browse-back',`aria-label="Back" ${position<=0?'disabled':''}`)}${button('&rarr;','storage-browse-forward',`aria-label="Forward" ${position>=history.length-1?'disabled':''}`)}${button('&uarr;','storage-browse-up',`aria-label="Up one folder" ${result.folder===result.parent?'disabled':''}`)}</div>
-        <nav class="folder-breadcrumbs" aria-label="Folder location">${result.breadcrumbs.map((crumb,i)=>`<button type="button" data-action="storage-browse-at" data-path="${esc(crumb.path)}" ${i===result.breadcrumbs.length-1?'aria-current="location"':''}>${esc(crumb.name)}</button>`).join('<span aria-hidden="true">&rsaquo;</span>')}</nav>
-        ${button('New folder','storage-browse-new')}</div>
-        <div class="folder-explorer"><nav class="folder-places" aria-label="Places"><h3>Places</h3>${result.places.map(place=>`<button type="button" data-action="storage-browse-at" data-path="${esc(place.path)}" ${place.path===result.folder?'aria-current="location"':''}>${folderIcon}<span>${esc(place.name)}</span></button>`).join('')}</nav>
-        <section class="folder-content" aria-label="Folders"><div class="folder-search-bar"><input id="folder-search" type="search" aria-label="Search this folder" placeholder="Search folders" value="${esc(query)}"><label class="checkbox"><input id="folder-hidden" type="checkbox" ${hidden?'checked':''}>Hidden folders</label></div>
-        <form id="storage-folder-new" class="folder-new" hidden>${field('New folder name','<input name="name" required maxlength="160" autocomplete="off">')}<div class="inline-actions">${button('Cancel','storage-browse-new-cancel')}<button class="button primary" type="submit">Create folder</button></div></form>
-        ${result.placesIncomplete?'<p role="status">Some drives did not respond. Available folders are shown; you can enter another path below.</p>':''}
+      showDialog(`<div class="folder-browser"><h2 id="dialog-title">${capabilities()?.mode==='server'?t('editorControls','serverFolder'):t('editorControls','localFolder')}</h2>
+        <div class="folder-toolbar"><div class="folder-travel">${button('←','storage-browse-back',`aria-label="${text('back')}" ${position<=0?'disabled':''}`)}${button('→','storage-browse-forward',`aria-label="${text('forward')}" ${position>=history.length-1?'disabled':''}`)}${button('↑','storage-browse-up',`aria-label="${text('upFolder')}" ${result.folder===result.parent?'disabled':''}`)}</div>
+        <nav class="folder-breadcrumbs" aria-label="${text('folderLocation')}">${result.breadcrumbs.map((crumb,i)=>`<button type="button" data-action="storage-browse-at" data-path="${esc(crumb.path)}" ${i===result.breadcrumbs.length-1?'aria-current="location"':''}>${esc(crumb.name)}</button>`).join('<span aria-hidden="true">&rsaquo;</span>')}</nav>
+        ${button(t('editorControls','newFolder'),'storage-browse-new')}</div>
+        <div class="folder-explorer"><nav class="folder-places" aria-label="${text('places')}"><h3>${text('places')}</h3>${result.places.map(place=>`<button type="button" data-action="storage-browse-at" data-path="${esc(place.path)}" ${place.path===result.folder?'aria-current="location"':''}>${folderIcon}<span>${esc(placeName(place))}</span></button>`).join('')}</nav>
+        <section class="folder-content" aria-label="${text('folders')}"><div class="folder-search-bar"><input id="folder-search" type="search" aria-label="${text('searchFolder')}" placeholder="${text('searchFolders')}" value="${esc(query)}"><label class="checkbox"><input id="folder-hidden" type="checkbox" ${hidden?'checked':''}>${text('hiddenFolders')}</label></div>
+        <form id="storage-folder-new" class="folder-new" hidden>${field(text('folderName'),'<input name="name" required maxlength="160" autocomplete="off">')}<div class="inline-actions">${button(t('editorControls','cancel'),'storage-browse-new-cancel')}<button class="button primary" type="submit">${text('createFolder')}</button></div></form>
+        ${result.placesIncomplete?`<p role="status">${text('drivesUnavailable')}</p>`:''}
         <p data-folder-error class="folder-error" role="alert" hidden></p>
-        <div class="folder-list">${result.folders.map(f=>`<button type="button" class="folder-row" data-action="storage-browse-at" data-path="${esc(f.path)}">${folderIcon}<span>${esc(f.name)}</span><span aria-hidden="true">&rsaquo;</span></button>`).join('')||`<p class="folder-empty">${query?'No matching folders':'No folders here'}</p>`}</div>
-        <div class="folder-pagination"><span>${result.total} ${result.total===1?'folder':'folders'}</span>${result.offset?button('Previous','storage-browse-page',`data-offset="${Math.max(0,result.offset-200)}"`):''}${result.hasMore?button('Next','storage-browse-page',`data-offset="${result.offset+200}"`):''}</div></section></div>
-        <details class="folder-address"><summary>Go to a path or network share</summary><form id="storage-browse-form">${field('Folder or mounted share',`<input name="path" value="${esc(result.folder)}" required autocomplete="off" spellcheck="false">`)}<button class="button" type="submit">Go to folder</button></form></details>
-        <footer class="folder-footer"><span class="folder-selection">${folderIcon}<strong>${esc(result.breadcrumbs.at(-1).name)}</strong></span><div class="inline-actions">${button('Cancel','storage-browse-cancel')}<button class="button primary" type="button" data-action="storage-browse-use">Use this folder</button></div></footer></div>`);
+        <div class="folder-list">${result.folders.map(f=>`<button type="button" class="folder-row" data-action="storage-browse-at" data-path="${esc(f.path)}">${folderIcon}<span>${esc(f.name)}</span><span aria-hidden="true">&rsaquo;</span></button>`).join('')||`<p class="folder-empty">${query?t('editorControls','noMatchingFolders'):t('editorControls','noFolders')}</p>`}</div>
+        <div class="folder-pagination"><span>${text('folderCount',{count:result.total})}</span>${result.offset?button(t('editorControls','previous'),'storage-browse-page',`data-offset="${Math.max(0,result.offset-200)}"`):''}${result.hasMore?button(t('editorControls','next'),'storage-browse-page',`data-offset="${result.offset+200}"`):''}</div></section></div>
+        <details class="folder-address"><summary>${text('pathOrShare')}</summary><form id="storage-browse-form">${field(text('folderOrShare'),`<input name="path" value="${esc(result.folder)}" required autocomplete="off" spellcheck="false">`)}<button class="button" type="submit">${text('goFolder')}</button></form></details>
+        <footer class="folder-footer"><span class="folder-selection">${folderIcon}<strong>${esc(result.breadcrumbs.at(-1).name)}</strong></span><div class="inline-actions">${button(t('editorControls','cancel'),'storage-browse-cancel')}<button class="button primary" type="button" data-action="storage-browse-use">${text('useFolder')}</button></div></footer></div>`);
       if(filter&&searchFocused)document.querySelector('#folder-search').focus();
       else document.querySelector('.folder-breadcrumbs [aria-current]')?.focus();
-    } catch(error){if(ticket!==request)return;message(error.message??'This folder could not be opened.');throw error;}
+    } catch(error){if(ticket!==request)return;message(error.message??t('editorControls','folderFailed'));throw error;}
     finally{if(ticket===request){
       pending=null;
       document.querySelector('.folder-browser')?.removeAttribute('aria-busy');
@@ -55,7 +59,7 @@ export function folderPickerUI({api,esc,field,showDialog,capabilities}) {
     const controls=[...(form?.querySelectorAll('button,input,select,textarea')??[el])].map(control=>[control,control.disabled]);
     const label=el.textContent;nativePending=true;if(form)form.dataset.busy='true';
     for(const [control] of controls)control.disabled=true;
-    el.textContent='Selecting folder...';el.setAttribute('aria-busy','true');
+    el.textContent=t('editorControls','selectingFolder');el.setAttribute('aria-busy','true');
     try{
       const result=await api('/api/storage/pick',{path:original});
       if(!result.cancelled&&input.isConnected&&input.value===original){input.value=result.folder;input.dispatchEvent(new Event('input',{bubbles:true}));}
@@ -73,7 +77,7 @@ export function folderPickerUI({api,esc,field,showDialog,capabilities}) {
       returnDialog=dialog.open?document.createDocumentFragment():null;if(returnDialog)while(dialog.firstChild)returnDialog.append(dialog.firstChild);
       current=null;history=[];position=-1;query='';showHidden=false;
       const initialPath=target.value;
-      showDialog('<div class="folder-browser"><h2 id="dialog-title">Choose a folder on the server</h2><p role="status">Loading folders...</p><p data-folder-error class="folder-error" role="alert" hidden></p><div class="dialog-actions">'+button('Cancel','storage-browse-cancel')+'</div></div>');
+      showDialog(`<div class="folder-browser"><h2 id="dialog-title">${text('serverFolder')}</h2><p role="status">${text('loadingFolders')}</p><p data-folder-error class="folder-error" role="alert" hidden></p><div class="dialog-actions">`+button(t('editorControls','cancel'),'storage-browse-cancel')+'</div></div>');
       try{await browse(initialPath);}catch{if(!target)return true;try{await browse('');}catch(error){if(!target)return true;restore();throw error;}}return true;
     }
     if(!name.startsWith('storage-browse-'))return false;
@@ -100,7 +104,7 @@ export function folderPickerUI({api,esc,field,showDialog,capabilities}) {
     try{
       if(form.id==='storage-browse-form')await browse(data.get('path'));
       else {const result=await api('/api/storage/folder',{parent:current.folder,name:data.get('name')});await browse(result.folder);}
-    }catch(error){message(error.message??'The folder could not be opened.');}
+    }catch(error){message(error.message??t('editorControls','folderOpenFailed'));}
     return true;
   }
   return {action,input,submit};

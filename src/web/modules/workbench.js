@@ -5,7 +5,8 @@ import {moduleReferenceLinks} from './reference-links.js';
 import {t} from '../i18n/index.js';
 import {researchKindLabel} from '../research-reference.js';
 import {projectUsesTool} from '../project-tools.js';
-import {scopePath,parseScope,scopeControl,ownerOf,ownerLabel,scopedItems} from './scope.js';
+import {scopePath,parseScope,ownerOf,scopedItems} from './scope.js';
+import {m,scopeControl,ownerLabel} from './editor-presentation.js';
 import {moduleForEntity,enabledModule} from '../feature-modules.js';
 import {displayValue,fieldLabel} from '../data-registry.js';
 import {moduleRecovery} from './recovery.js';
@@ -64,7 +65,7 @@ export async function moduleEditor(services,definition){
    const latest=get(draft.id);if(latest){draft.expectedRevision=latest.revision;draft.base=structuredClone(latest.data);draft.data=structuredClone(latest.data);}
   }
  }
- const context={get itemsPage(){return itemPages?.page;},get scopeId(){return scopeId;},get creationScopeId(){return projectUsesTool(state.book,scopeId,definition.id)?scopeId:null;},get recursive(){return recursive;},ownerField:(label='Owner location')=>field(label,`<select data-module-field="projectId">${[['',state.book.title+' / Workspace'],...state.book.projects.filter(p=>projectUsesTool(state.book,p.id,definition.id)||p.id===context.current?.data.projectId).map(p=>[p.id,ownerLabel(state.book,p.id)])].map(([id,label])=>option(id,label,ownerOf(context.current,snapshot.entities)??'')).join('')}</select>`),disclosure,openDisclosure,services,all,get,esc,field,option,button,edit,refresh,command,openOperation,links,referenceFields,recordField:references.recordField,history,select,input,area,check,change,draw:()=>render(),get current(){return drafts.get(currentId);},get operation(){return operation;},get section(){return section;},list,get snapshot(){return snapshot;}};
+ const context={get itemsPage(){return itemPages?.page;},get scopeId(){return scopeId;},get creationScopeId(){return projectUsesTool(state.book,scopeId,definition.id)?scopeId:null;},get recursive(){return recursive;},ownerField:(label=m('ownerLocation'))=>field(esc(label),`<select data-module-field="projectId">${[['',m('workspaceName',{name:state.book.title})],...state.book.projects.filter(p=>projectUsesTool(state.book,p.id,definition.id)||p.id===context.current?.data.projectId).map(p=>[p.id,ownerLabel(state.book,p.id)])].map(([id,label])=>option(id,label,ownerOf(context.current,snapshot.entities)??'')).join('')}</select>`),disclosure,openDisclosure,services,all,get,esc,field,option,button,edit,refresh,command,openOperation,links,referenceFields,recordField:references.recordField,history,select,input,area,check,change,draw:()=>render(),get current(){return drafts.get(currentId);},get operation(){return operation;},get section(){return section;},list,get snapshot(){return snapshot;}};
  context.itemField=(key,label)=>itemChoices.field(key,label);context.itemLabel=id=>itemChoices.label(id);context.bindItemLabels=()=>itemChoices?.bind();
  context.edit=switchEdit;
  definition.setup?.(context);
@@ -75,13 +76,13 @@ export async function moduleEditor(services,definition){
  function openDisclosure(key){const id=currentId+':'+key;disclosures.set(id,true);for(const node of document.querySelectorAll('[data-module-disclosure]'))if(node.dataset.moduleDisclosure===id)node.open=true;}
  const navigation=()=>definition.showTabs?.(context)===false?'':`<nav class="module-tabs" aria-label="${esc(definition.label)}">${definition.types.map(t=>button(t.label,'list',`data-type="${t.id}" aria-current="${t.id===listType?'page':'false'}"`)).join('')}</nav>`;
  function button(label,command,attrs='',style=''){return `<button type="button" class="button ${style}" data-action="module-command" data-command="${command}" ${attrs}>${esc(label)}</button>`;}
- function input(key,label,type='text',extra=''){const d=context.current?.data??{};return field(label,`<input data-module-field="${esc(key)}" type="${type}" value="${esc(d[key]??'')}" ${extra}>`);}
+ function input(key,label,type='text',extra=''){const d=context.current?.data??{};return field(esc(label),`<input data-module-field="${esc(key)}" type="${type}" value="${esc(d[key]??'')}" ${extra}>`);}
  function area(key,label){const d=context.current;return services.documents.field({key:definition.id+':'+d.id+':'+key,label,value:d.data[key]??'',maxCharacters:d.type==='category'?10000:100000,set:value=>{d.data[key]=value;change();}});}
- function select(key,label,choices){return field(label,`<select data-module-field="${esc(key)}">${choices.map(([id,title])=>option(id,title,context.current?.data[key]??'')).join('')}</select>`);}
+ function select(key,label,choices){return field(esc(label),`<select data-module-field="${esc(key)}">${choices.map(([id,title])=>option(id,title,context.current?.data[key]??'')).join('')}</select>`);}
  function check(key,label){return `<label class="checkbox"><input type="checkbox" data-module-field="${esc(key)}" ${context.current?.data[key]?'checked':''}><span>${esc(label)}</span></label>`;}
  function dirty(d){return JSON.stringify(d.data)!==JSON.stringify(d.base);}
  function change(){error=null;checkpoint();status();}
- function status(){if(disposed||state.page!=='module'||state.moduleId!==definition.id)return;const workbench=document.querySelector('.module-workbench');if(workbench){workbench.inert=busy;workbench.setAttribute('aria-busy',String(busy));for(const form of workbench.querySelectorAll('form')){if(busy)form.dataset.busy='true';else delete form.dataset.busy;if(busy&&recovery.canPark())form.dataset.navigationReady='true';else delete form.dataset.navigationReady;}}const recoveryNode=document.querySelector('[data-recovery-status]');if(recoveryNode)recoveryNode.textContent=recovery.error?'Recovery checkpoint could not save. Keep this page open and retry.':'';const node=document.querySelector('[data-module-status]');if(node)node.textContent=busy?'Saving...':[...drafts.values()].some(dirty)||operationDirty()?'Unsaved changes':context.current?.expectedRevision===null?'':'Saved';}
+ function status(){if(disposed||state.page!=='module'||state.moduleId!==definition.id)return;const workbench=document.querySelector('.module-workbench');if(workbench){workbench.inert=busy;workbench.setAttribute('aria-busy',String(busy));for(const form of workbench.querySelectorAll('form')){if(busy)form.dataset.busy='true';else delete form.dataset.busy;if(busy&&recovery.canPark())form.dataset.navigationReady='true';else delete form.dataset.navigationReady;}}const recoveryNode=document.querySelector('[data-recovery-status]');if(recoveryNode)recoveryNode.textContent=recovery.error?m('checkpointFailed'):'';const node=document.querySelector('[data-module-status]');if(node)node.textContent=busy?m('saving'):[...drafts.values()].some(dirty)||operationDirty()?m('unsaved'):context.current?.expectedRevision===null?'':m('saved');}
  function releaseClean(keep=null){
   for(const [id,draft] of drafts)if(id!==keep&&!dirty(draft))drafts.delete(id);
   if(definition.paged)snapshot={...snapshot,entities:snapshot.entities.filter(e=>e.id===keep||drafts.has(e.id))};
@@ -136,7 +137,7 @@ export async function moduleEditor(services,definition){
  }
  async function create(type=listType,initial={}){
   try{
-   const descriptor=definition.types.find(t=>t.id===type);if(!descriptor)throw new Error('This item type is unavailable.');
+   const descriptor=definition.types.find(t=>t.id===type);if(!descriptor)throw new Error(m('typeUnavailable'));
    if(definition.canCreate?.(descriptor,context)===false)return;
    if(!await releaseDrafts())return;
    await definition.prepareCreate?.(type,context);edit(crypto.randomUUID(),type,initial);
@@ -152,7 +153,7 @@ export async function moduleEditor(services,definition){
  }
  async function command(action,payload,{savedDraft=null}={}){
   if(disposed)throw new DOMException('','AbortError');
-  if(busy)throw new Error('A save is already in progress.');
+  if(busy)throw new Error(m('saveBusy'));
   const signature=JSON.stringify({action,payload});
   if(!pending||pending.signature!==signature)pending={signature,commandId:crypto.randomUUID()};
   const commandId=pending.commandId,base=snapshot,workspaceId=base.workspaceId;
@@ -175,7 +176,7 @@ export async function moduleEditor(services,definition){
   finally{busy=false;status();}
  }
  async function saveDraft(d){
-  if(definition.scoped&&!(definition.entityAvailable?.(d,context)??projectUsesTool(state.book,ownerOf(d,snapshot.entities),definition.id)))throw new Error('Enable this tool for the owner project before saving.');
+  if(definition.scoped&&!(definition.entityAvailable?.(d,context)??projectUsesTool(state.book,ownerOf(d,snapshot.entities),definition.id)))throw new Error(m('enableBeforeSave'));
   await definition.beforeSave?.(d,context);
   const captured=structuredClone(d.data),creating=d.expectedRevision===null,request=definition.saveCommand?.({...d,data:captured},context)??{action:d.type+'.save',payload:{id:d.id,expectedRevision:d.expectedRevision,data:captured}},result=await command(request.action,request.payload,{savedDraft:{id:d.id,data:captured}});
   if(disposed)return;
@@ -222,24 +223,24 @@ export async function moduleEditor(services,definition){
    }
    const [type,id]=path.split('/');if(definition.types.some(t=>t.id===type)){listType=type;if(id&&id!==currentId){const entity=get(id);if(entity&&!drafts.has(id))drafts.set(id,{id,type:entity.type,expectedRevision:entity.revision,base:structuredClone(entity.data),data:structuredClone(entity.data)});currentId=entity||drafts.has(id)?id:null;if(currentId)section=definition.openSection?.(context.current)??'details';}else if(!id)currentId=null;}
   }
-  if(definition.scoped&&scopeId&&!state.book.projects.some(p=>p.id===scopeId))return '<section class="module-empty"><h1>Location unavailable</h1><p>Choose an existing location from Projects.</p></section>';
+  if(definition.scoped&&scopeId&&!state.book.projects.some(p=>p.id===scopeId))return '<section class="module-empty"><h1>'+esc(m('locationUnavailable'))+'</h1><p>'+esc(m('chooseExistingLocation'))+'</p></section>';
   const d=drafts.get(currentId),type=definition.types.find(t=>t.id===(d?.type??listType)),unsaved=[...drafts.values()].filter(dirty);
   if(itemPages&&!d&&listQueryKey!==JSON.stringify(listQuery())){listQueryKey=JSON.stringify(listQuery());queueMicrotask(()=>{if(!disposed&&state.page==='module'&&state.moduleId===definition.id)void loadItems();});}
-  if(d&&definition.scoped&&!(definition.entityAvailable?.(d,context)??projectUsesTool(state.book,ownerOf(d,snapshot.entities),definition.id)))return '<section class="panel"><h1>Project tool disabled</h1><p>Enable this tool for its owner project in Preferences to open the saved item.</p><button class="button" data-action="dashboard-settings">Manage modules</button></section>';
-  return `<div class="module-workbench" aria-busy="${busy}" ${busy?'inert':''}><header class="module-heading"><div><p class="eyebrow">${esc(definition.label)}</p><h1>${esc(d?(d.data.name||d.data.title||'New '+type.singular):(definition.listTitle?.(type,context)??type.label))}</h1></div><div class="module-actions">${d?button(definition.backLabel?.(d)??'Back to '+type.label.toLowerCase(),'list'):button('New '+type.singular,'new',definition.canCreate?.(type,context)===false?'disabled':'','primary')}${button('Refresh','refresh')}</div></header>
+  if(d&&definition.scoped&&!(definition.entityAvailable?.(d,context)??projectUsesTool(state.book,ownerOf(d,snapshot.entities),definition.id)))return '<section class="panel"><h1>'+esc(m('toolDisabled'))+'</h1><p>'+esc(m('enableTool'))+'</p><button class="button" data-action="dashboard-settings">'+esc(m('manageModules'))+'</button></section>';
+  return `<div class="module-workbench" aria-busy="${busy}" ${busy?'inert':''}><header class="module-heading"><div><p class="eyebrow">${esc(definition.label)}</p><h1>${esc(d?(d.data.name||d.data.title||m('newItem',{type:type.singular})):(definition.listTitle?.(type,context)??type.label))}</h1></div><div class="module-actions">${d?button(definition.backLabel?.(d)??m('backTo',{type:type.label}),'list'):button(m('newItem',{type:type.singular}),'new',definition.canCreate?.(type,context)===false?'disabled':'','primary')}${button(m('refresh'),'refresh')}</div></header>
    ${navigation()}
    ${definition.scoped?(definition.scopeControl?.(context)??scopeControl(state.book,scopeId,esc,{recursive,moduleId:definition.id})):''}${definition.tools?.(context)??''}
-   ${error?`<div class="module-error" role="alert"><strong>${esc(error.message??'Save interrupted. Your draft is retained.')}</strong>${(error.details??[]).map(e=>'<p>'+esc(e.field)+'</p>').join('')}${error.code==='MODULE_CHANGED'&&!operation?button('Compare saved version','compare'):''}</div>`:''}
+   ${error?`<div class="module-error" role="alert"><strong>${esc(error.message??m('saveInterrupted'))}</strong>${(error.details??[]).map(e=>'<p>'+esc(e.field)+'</p>').join('')}${error.code==='MODULE_CHANGED'&&!operation?button(m('compareSaved'),'compare'):''}</div>`:''}
    <p class="module-recovery-status" data-recovery-status role="status"></p>
    ${recoveryView()}
-   ${unsaved.length?`<div class="module-drafts">Drafts: ${unsaved.map(d=>button(d.data.name||d.data.title||'New '+d.type,'edit',`data-id="${d.id}" data-type="${d.type}"`,'subtle')).join('')}</div>`:''}
+   ${unsaved.length?`<div class="module-drafts">${esc(m('drafts'))} ${unsaved.map(d=>button(d.data.name||d.data.title||m('newItem',{type:definition.types.find(type=>type.id===d.type)?.singular??m('itemName')}),'edit',`data-id="${d.id}" data-type="${d.type}"`,'subtle')).join('')}</div>`:''}
    ${d?editor(d,type):listing(type)+(definition.extraList?.(type,context)??'')}
    </div>`;
  }
  function listing(type){
   if(itemPages)return `${definition.listTools?.(type,context)??''}${field(esc(currentText('search')),`<input type="search" data-module-search maxlength="256" value="${esc(query)}">`)}${type.statuses?field(esc(currentText('status')),`<select data-module-filter>${option('',currentText('allStatuses'),filter)}${type.statuses.map(([id,title])=>option(id,title,filter)).join('')}</select>`):''}${itemPages.view(e=>`<article class="module-item">${definition.summaryCard?.(e,context)??`<h2>${esc(e.title)}</h2>${e.status?`<p>${esc(type.statuses?.find(([id])=>id===e.status)?.[1]??e.status)}</p>`:''}`}${button(currentText('open',{name:type.singular}),'edit',`data-id="${e.id}" data-type="${e.type}"`)}</article>`)}`;
   const items=(definition.scoped&&type.id!=='category'?(definition.scopeItems??scopedItems)(state.book,all(),scopeId,recursive).filter(e=>e.type===type.id):all(type.id)).filter(e=>definition.filterItem?.(e,context)!==false).filter(e=>(!query||JSON.stringify(e.data).toLowerCase().includes(query.toLowerCase()))&&(!filter||e.data.status===filter));
-  return `${definition.listTools?.(type,context)??''}<div class="module-list-tools">${field('Search '+type.label.toLowerCase(),`<input type="search" data-module-search value="${esc(query)}" placeholder="Search...">`)}${type.statuses?field('Status',`<select data-module-filter>${[['','All'],...type.statuses].map(([id,label])=>option(id,label,filter)).join('')}</select>`):''}<span>${items.length} ${esc(items.length===1?type.singular:type.label.toLowerCase())}</span></div><div class="module-collection">${items.map(e=>`<article class="module-item">${definition.scoped&&e.type!=='category'?`<p class="operation-owner">${esc(definition.ownerLabel?.(e,context)??ownerLabel(state.book,ownerOf(e,snapshot.entities)))}</p>`:''}${definition.card(e,context)}<div class="module-item-actions">${button('Open '+type.singular,'edit',`data-id="${e.id}"`)}<small>Revision ${e.revision}</small></div></article>`).join('')||`<div class="module-empty"><h2>${query||filter?'No matching '+type.label.toLowerCase():'Create your first '+type.singular}</h2><p>${esc(type.empty)}</p></div>`}</div>`;
+  return `${definition.listTools?.(type,context)??''}<div class="module-list-tools">${field(esc(m('searchItems',{type:type.label})),`<input type="search" data-module-search value="${esc(query)}" placeholder="${esc(m('searchPlaceholder'))}">`)}${type.statuses?field(esc(m('status')),`<select data-module-filter>${[['',m('all')],...type.statuses].map(([id,label])=>option(id,label,filter)).join('')}</select>`):''}<span>${esc(m('itemCount',{count:items.length,type:items.length===1?type.singular:type.label}))}</span></div><div class="module-collection">${items.map(e=>`<article class="module-item">${definition.scoped&&e.type!=='category'?`<p class="operation-owner">${esc(definition.ownerLabel?.(e,context)??ownerLabel(state.book,ownerOf(e,snapshot.entities)))}</p>`:''}${definition.card(e,context)}<div class="module-item-actions">${button(m('openItem',{type:type.singular}),'edit',`data-id="${e.id}"`)}<small>${esc(m('revision',{revision:e.revision}))}</small></div></article>`).join('')||`<div class="module-empty"><h2>${esc(query||filter?m('noMatching',{type:type.label}):m('firstItem',{type:type.singular}))}</h2><p>${esc(type.empty)}</p></div>`}</div>`;
  }
  function compareFields(d){
   const latest=get(d.id)?.data??{},base=d.base??{};
@@ -250,13 +251,13 @@ export async function moduleEditor(services,definition){
  }
  function comparison(d){
   const fields=compareFields(d),overlap=fields.filter(f=>f.conflict),ready=overlap.every(f=>conflicts.has(f.key));
-  return `<section class="module-block"><h2>Review competing changes</h2><p>Changes to different fields are combined. Choose which version to keep for each conflicting field.</p>
-   <div class="module-compare">${fields.filter(f=>f.local||f.remote).map(f=>`<article><h3>${esc(fieldLabel(f.key))}</h3>${f.conflict?`<label class="module-conflict-choice"><input type="radio" name="conflict-${esc(f.key)}" data-conflict-field="${esc(f.key)}" value="mine" ${conflicts.get(f.key)==='mine'?'checked':''}>Use my edit</label>${displayValue(f.mine,esc)}<label class="module-conflict-choice"><input type="radio" name="conflict-${esc(f.key)}" data-conflict-field="${esc(f.key)}" value="saved" ${conflicts.get(f.key)==='saved'?'checked':''}>Use saved edit</label>${displayValue(f.saved,esc)}`:`<p class="muted">${f.local?'Your change':'Saved change'} will be retained.</p>${displayValue(f.local?f.mine:f.saved,esc)}`}</article>`).join('')}</div>
-   <div class="module-actions">${button('Apply selected changes','rebase',ready?'':'disabled')}${button('Use saved version','discard')}</div></section>`;
+  return `<section class="module-block"><h2>${esc(m('reviewChanges'))}</h2><p>${esc(m('reviewChangesHelp'))}</p>
+   <div class="module-compare">${fields.filter(f=>f.local||f.remote).map(f=>`<article><h3>${esc(fieldLabel(f.key))}</h3>${f.conflict?`<label class="module-conflict-choice"><input type="radio" name="conflict-${esc(f.key)}" data-conflict-field="${esc(f.key)}" value="mine" ${conflicts.get(f.key)==='mine'?'checked':''}>${esc(m('useMine'))}</label>${displayValue(f.mine,esc)}<label class="module-conflict-choice"><input type="radio" name="conflict-${esc(f.key)}" data-conflict-field="${esc(f.key)}" value="saved" ${conflicts.get(f.key)==='saved'?'checked':''}>${esc(m('useSavedEdit'))}</label>${displayValue(f.saved,esc)}`:`<p class="muted">${esc(m(f.local?'retainMine':'retainSaved'))}</p>${displayValue(f.local?f.mine:f.saved,esc)}`}</article>`).join('')}</div>
+   <div class="module-actions">${button(m('applyChanges'),'rebase',ready?'':'disabled')}${button(m('useSaved'),'discard')}</div></section>`;
  }
  function editor(d,type){
-  return `<nav class="module-subtabs" aria-label="Item tools">${[['details','Details'],...(definition.sections?.(d)??[]),['history','History']].map(([id,label])=>button(label,'section',`data-section="${id}" aria-current="${section===id?'page':'false'}"`)).join('')}</nav>
-  ${section==='compare'?comparison(d):section==='history'?history(d.id):section!=='details'?definition.section?.(section,context)??'':`<form data-module-form class="module-editor"><div class="module-form-content">${definition.form(d,context)}</div><footer class="module-save"><span data-module-status>${dirty(d)?'Unsaved changes':d.expectedRevision===null?'':'Saved'}</span><div>${button('Discard edits','discard')}<button class="button primary" type="submit" ${busy||definition.readOnly?.(d)?'disabled':''}>Save ${esc(type.singular)}</button></div></footer></form>`}`;
+  return `<nav class="module-subtabs" aria-label="${esc(m('itemTools'))}">${[['details',m('details')],...(definition.sections?.(d)??[]),['history',m('history')]].map(([id,label])=>button(label,'section',`data-section="${id}" aria-current="${section===id?'page':'false'}"`)).join('')}</nav>
+  ${section==='compare'?comparison(d):section==='history'?history(d.id):section!=='details'?definition.section?.(section,context)??'':`<form data-module-form class="module-editor"><div class="module-form-content">${definition.form(d,context)}</div><footer class="module-save"><span data-module-status>${esc(dirty(d)?m('unsaved'):d.expectedRevision===null?'':m('saved'))}</span><div>${button(m('discardEdits'),'discard')}<button class="button primary" type="submit" ${busy||definition.readOnly?.(d)?'disabled':''}>${esc(m('saveItem',{type:type.singular}))}</button></div></footer></form>`}`;
  }
  async function action(name,buttonNode){
   const a=buttonNode.dataset;
@@ -272,7 +273,7 @@ export async function moduleEditor(services,definition){
    return;
   }
   if(await historyPages.action(name,buttonNode))return;
-  if(operation&&JSON.stringify(operation.values)!==JSON.stringify(operation.base)&&['new','edit','list','section'].includes(name)){error={message:'Finish this stock operation, or use Cancel to discard it.'};render();return;}
+  if(operation&&JSON.stringify(operation.values)!==JSON.stringify(operation.base)&&['new','edit','list','section'].includes(name)){error={message:m('finishStock')};render();return;}
   if(name==='recover'){
    const selectedCheckpoint=recovery.available.find(value=>value.id===a.id);
    if(!selectedCheckpoint)throw new Error(t('moduleRecovery','unavailable'));
@@ -282,9 +283,9 @@ export async function moduleEditor(services,definition){
    await releaseDrafts({durable:true,current:currentRecovery});if(!currentRecovery())throw new DOMException('Module recovery changed','AbortError');
    state.modulePath=route(definition.listPath?.(listType,context)??listType);key=identity();
    const values=await recovery.readReturn(token);if(!currentRecovery())throw new DOMException('Module recovery changed','AbortError');
-   if(operationDirty()||values.some(d=>!definition.types.some(t=>t.id===d.type)||drafts.has(d.id)&&dirty(drafts.get(d.id))))throw new Error('Keep or save the open draft before restoring this checkpoint.');
+   if(operationDirty()||values.some(d=>!definition.types.some(t=>t.id===d.type)||drafts.has(d.id)&&dirty(drafts.get(d.id))))throw new Error(m('keepDraft'));
    const operations=values.filter(d=>d.operation);
-   if(operations.length>1||operations.some(d=>!definition.recoverOperation?.(d)))throw new Error('This recovery operation is unavailable. Its checkpoint has been kept.');
+   if(operations.length>1||operations.some(d=>!definition.recoverOperation?.(d)))throw new Error(m('recoveryUnavailable'));
    for(const draft of values){const {operation:op,...entity}=draft;drafts.set(entity.id,structuredClone(entity));}
    const selected=operations[0]??values[0];
    if(selected)edit(selected.id,selected.type);generation=returnGeneration;key=identity();
@@ -344,7 +345,7 @@ export async function moduleEditor(services,definition){
    }
    else await saveDraft(context.current);
    if(disposed)return;
-   checkpoint();await recovery.flush();if(!disposed){render();notify('Saved.');}
+   checkpoint();await recovery.flush();if(!disposed){render();notify(m('savedNotice'));}
   }catch(e){
    if(form.dataset.operation&&e.code==='MODULE_CHANGED'&&definition.operationConflictMessage){
     try{if(definition.paged){const latest=await api('/api/modules/item',{workspaceId:state.book.id,id:currentId});adopt({...snapshot,revision:latest.revision,entities:[latest.entity]});await definition.afterCommand?.(context);}else adopt((await api('/api/modules/data')).data);}catch{}
@@ -382,7 +383,7 @@ export async function moduleEditor(services,definition){
  }
  initialized=true;
  return {captureReturn,restoreReturn,navigation,view,action,create,input:inputEvent,submit,bind(){void linkedWork?.bind();references.bind();void itemChoices?.bind();definition.bind?.(context);},deactivate(){returnGeneration++;cancelReads();linkedWork?.stop();references.stop();itemChoices?.stop();definition.deactivate?.(context);},referenceAction:async node=>await linkedWork?.action(node)||await itemChoices?.action(node)||references.action(node),activate,needsNavigationGuard:()=>operationDirty()||[...drafts.values()].some(dirty)&&!recovery.canPark(),isDirty:()=>[...drafts.values()].some(dirty)||!!operation&&JSON.stringify(operation.values)!==JSON.stringify(operation.base),
-  async save(){if(operation)throw new Error('Finish or cancel the stock operation before leaving.');for(const d of drafts.values())if(dirty(d))await saveDraft(d);if(disposed)return;checkpoint();await recovery.flush();if(!disposed)render();},
+  async save(){if(operation)throw new Error(m('finishStockLeave'));for(const d of drafts.values())if(dirty(d))await saveDraft(d);if(disposed)return;checkpoint();await recovery.flush();if(!disposed)render();},
   async discard(){drafts.clear();currentId=null;operation=null;state.modulePath=route(listType);checkpoint();if(!disposed)render();await recovery.flush();},
   dispose(){returnGeneration++;definition.dispose?.(context);historyPages.clear();linkedWork?.stop();references.stop();itemChoices?.stop();itemPages?.clear();clearTimeout(searchTimer);openController?.abort();openGeneration++;disposed=true;recovery.stop();drafts.clear();snapshot=null;}
  };

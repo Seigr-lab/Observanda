@@ -3,6 +3,8 @@ import {configurationEditor} from './configuration-editor.js';
 import {configurationDocumentClient} from './configuration-document-client.js';
 import {t} from './i18n/index.js';
 
+import './i18n/catalogues/projectEditors.js';
+import {labBookProfileLabel} from './project-type-presentation.js';
 import {projectSettings} from './project-settings.js';
 import {newLabBookConfiguration,templateAvailable,templateChoices,starterTemplate} from './project-templates.js';
 import {enabledLabBookTypes} from './feature-modules.js';
@@ -14,6 +16,7 @@ import {sectionDetails,sectionInput,sectionAction} from './laboratory/section-ed
 
 export function projectNotebooksUI(services){
  const {state,api,esc,field,option,showDialog,render,notify}=services;
+ const msg=(key,args)=>t('projectEditors',key,args),text=(key,args)=>esc(msg(key,args));
  let editing=null,base=null,selected=null,etag=null,deleting=null,deleteBusy=false,creating=false,templateChoice='blank',followProjectDefault=true,creationId=null;
  const projects=projectSettings(services);
  const profileLabels=configurationProfileLabels({state,api,esc});
@@ -50,17 +53,17 @@ export function projectNotebooksUI(services){
  function templatePicker(){
   const settings=state.dashboardSettings,template=state.book.projects.find(p=>p.id===editing.projectId)?.labBookTemplate;
   const profiles=enabledLabBookTypes(settings),saved=(native()?state.book.projects.filter(p=>p.labBookTemplate).map(p=>({id:p.id,label:p.labBookTemplate.name+' / '+p.title,template:p.labBookTemplate})):templateChoices(state.book,settings)).filter(p=>p.id!==editing.projectId||templateChoice==='project:'+p.id);
-  return field('Lab-book template',`<select data-notebook-template>
-   ${available(template)?option('default',template.name+' (project default)',templateChoice):''}
-   ${option('blank','Blank lab book',templateChoice)}
-   ${profiles.length?'<optgroup label="Enabled lab-book types">'+profiles.map(p=>option('profile:'+p.id,p.label,templateChoice)).join('')+'</optgroup>':''}
-   ${saved.length?'<optgroup label="Saved project templates">'+saved.map(p=>option('project:'+p.id,p.label,templateChoice)).join('')+'</optgroup>':''}
+  return field(msg('labBookTemplate'),`<select data-notebook-template>
+   ${available(template)?option('default',msg('projectDefault',{name:template.name}),templateChoice):''}
+   ${option('blank',msg('blankBook'),templateChoice)}
+   ${profiles.length?'<optgroup label="'+text('enabledTypes')+'">'+profiles.map(p=>option('profile:'+p.id,labBookProfileLabel(p.id,p.label),templateChoice)).join('')+'</optgroup>':''}
+   ${saved.length?'<optgroup label="'+text('savedTemplates')+'">'+saved.map(p=>option('project:'+p.id,p.label,templateChoice)).join('')+'</optgroup>':''}
   </select>`)+`<p class="muted">${esc(t('templatePreferences','chooseMore',{preferences:t('preferences','title'),templates:t('preferences','templates')}))}</p>`;
  }
  const isDirty=()=>{if(deleteBusy)return false;capture();return !!editing&&(JSON.stringify(editing)!==JSON.stringify(base)||configuration.isDirty()||creating&&templateChoice!==baseTemplate||creationAccess&&Object.values(creationAccess).some(Boolean));};
- function card(n){return `<article class="panel project-notebook"><p class="scope-kicker">Lab book</p><h2><button class="text-button" ${attrs(n.route)}>${esc(n.title)}</button></h2>
-  <p class="muted">${n.count} ${n.count===1?'record':'records'}</p><div class="lab-profile-tags" data-configuration-profiles="${n.id}">${n.types.map(t=>'<span>'+esc(t)+'</span>').join('')}</div>
-  <div class="inline-actions"><button class="button" ${attrs(n.route)}>Open lab book</button><button class="button" data-action="edit-notebook" data-id="${n.id}">Lab book settings</button></div></article>`;}
+ function card(n){return `<article class="panel project-notebook"><p class="scope-kicker">${text('labBook')}</p><h2><button class="text-button" ${attrs(n.route)}>${esc(n.title)}</button></h2>
+  <p class="muted">${text('records',{count:n.count})}</p><div class="lab-profile-tags" data-configuration-profiles="${n.id}">${n.types.map(t=>'<span>'+esc(t)+'</span>').join('')}</div>
+  <div class="inline-actions"><button class="button" ${attrs(n.route)}>${text('openBook')}</button><button class="button" data-action="edit-notebook" data-id="${n.id}">${text('bookSettings')}</button></div></article>`;}
  const button=(label,command,attrs='',style='')=>`<button type="button" class="button ${style}" data-action="notebook-config-command" data-command="${command}" ${attrs}>${esc(label)}</button>`;
  function draw(initial=false){
   const dialog=document.querySelector('#dialog'),scroll=dialog.querySelector('.notebook-config-scroll')?.scrollTop??0,focused=document.activeElement;
@@ -70,20 +73,20 @@ export function projectNotebooksUI(services){
   if(!choices.some(s=>s.id===selected))selected=choices[0]?.id;
   const section=choices.find(s=>s.id===selected),index=choices.indexOf(section),siblings=choices.filter(s=>s.enabled&&s.profileId===section?.profileId),position=siblings.indexOf(section);
   const profiles=enabledLabBookTypes(state.dashboardSettings),projectTemplate=state.book.projects.find(p=>p.id===editing.projectId)?.labBookTemplate;
-  showDialog(`<form id="notebook-config-form" ${creationAccess?'data-no-draft':''} class="notebook-config-form ${creating?'notebook-create-form':''}"><h2 id="dialog-title" tabindex="-1">${creating?'New lab book':'Lab book settings'}</h2>
-   <div class="notebook-config-scroll"><div class="form-grid">${field('Lab book name',`<input name="title" required maxlength="160" value="${esc(editing.title)}">`)}
-   ${field('Project',`<select name="projectId" data-notebook-owner required>${state.book.projects.map(p=>option(p.id,locationName(state.book,p.id),editing.projectId)).join('')}</select>`)}</div>
+  showDialog(`<form id="notebook-config-form" ${creationAccess?'data-no-draft':''} class="notebook-config-form ${creating?'notebook-create-form':''}"><h2 id="dialog-title" tabindex="-1">${creating?msg('newBook'):msg('bookSettings')}</h2>
+   <div class="notebook-config-scroll"><div class="form-grid">${field(msg('bookName'),`<input name="title" required maxlength="160" value="${esc(editing.title)}">`)}
+   ${field(msg('project'),`<select name="projectId" data-notebook-owner required>${state.book.projects.map(p=>option(p.id,locationName(state.book,p.id),editing.projectId)).join('')}</select>`)}</div>
    ${creationAccess?`<fieldset><legend>${esc(t('labBookDirectory','creationAccess'))}</legend><p>${esc(t('labBookDirectory',state.access?.deviceAvailable?'optionalPassword':'requiredPassword'))}</p>${field(t('labBookDirectory','creationUsername'),`<input name="bookUsername" autocomplete="username" maxlength="80" value="${esc(creationAccess.username)}">`)}${field(t('labBookDirectory','creationPassword'),`<input name="bookPassword" type="password" autocomplete="new-password" minlength="12" maxlength="1024" ${state.access?.deviceAvailable?'':'required'} value="${esc(creationAccess.password)}">`)}${field(t('labBookDirectory','confirmPassword'),`<input name="bookConfirmPassword" type="password" autocomplete="new-password" maxlength="1024" value="${esc(creationAccess.confirmPassword)}">`)}</fieldset>`:''}
    <label class="checkbox"><input name="publication" type="checkbox" ${editing.share!==false?'checked':''}>${esc(t('recordWriting','bookPublication'))}</label><p class="muted">${esc(t('recordWriting','bookPublicationHint'))}</p>
-   ${creating&&projectTemplate&&!available(projectTemplate)?'<p class="muted">'+esc(t('templatePreferences','defaultUnavailable',{preferences:t('preferences','title'),templates:t('preferences','templates')}))+'</p>':''}${creating?templatePicker():native()?configuration.view():`<fieldset class="notebook-profile-choices"><legend>Lab-book types</legend>
-    ${profiles.map(p=>`<label class="checkbox"><input type="checkbox" data-notebook-profile="${p.id}" ${c.profiles.some(ch=>ch.id===p.id&&ch.enabled)?'checked':''}>${esc(p.label)}</label>`).join('')||'<p>'+esc(t('templatePreferences','enableTypes',{preferences:t('preferences','title'),templates:t('preferences','templates')}))+'</p>'}
+   ${creating&&projectTemplate&&!available(projectTemplate)?'<p class="muted">'+esc(t('templatePreferences','defaultUnavailable',{preferences:t('preferences','title'),templates:t('preferences','templates')}))+'</p>':''}${creating?templatePicker():native()?configuration.view():`<fieldset class="notebook-profile-choices"><legend>${text('labBookTypes')}</legend>
+    ${profiles.map(p=>`<label class="checkbox"><input type="checkbox" data-notebook-profile="${p.id}" ${c.profiles.some(ch=>ch.id===p.id&&ch.enabled)?'checked':''}>${esc(labBookProfileLabel(p.id,p.label))}</label>`).join('')||'<p>'+esc(t('templatePreferences','enableTypes',{preferences:t('preferences','title'),templates:t('preferences','templates')}))+'</p>'}
    </fieldset>
-   <div class="notebook-type-picker">${field('Record type',`<select data-notebook-type>${choices.map(s=>option(s.id,s.label+(s.enabled?'':' (removed)'),selected)).join('')}</select>`)}${button('Add record type','section-add','','subtle')}</div>
-   <div class="lab-type-layout"><aside class="lab-type-catalogue" aria-label="Record types"><div class="lab-type-list-heading"><strong>Record types</strong>${button('Add record type','section-add','','subtle')}</div>
-    ${choices.map(s=>`<button type="button" class="lab-type-choice" data-action="notebook-config-command" data-command="select-type" data-id="${s.id}" aria-current="${s.id===selected}"><span>${esc(s.label)}</span><small>${s.enabled?s.fields.length+' fields':'Removed'}</small></button>`).join('')||'<p class="muted">Choose a lab-book type or add your own record types. Every lab book also supports free-form records.</p>'}
-   </aside><section class="lab-type-detail" aria-label="Selected record type">${section?`<div class="lab-type-detail-heading"><strong>${section.enabled?'Type details':'Removed type'}</strong><div>${button('Move up','section-move',`data-index="${index}" data-direction="-1" ${position<=0?'disabled':''}`,'subtle')}${button('Move down','section-move',`data-index="${index}" data-direction="1" ${position<0||position>=siblings.length-1?'disabled':''}`,'subtle')}${button(section.enabled?'Remove type':'Restore type',section.enabled?'section-remove':'section-restore',`data-index="${index}"`,'subtle')}</div></div>${sectionDetails(section,index,{field,esc,option,button})}`:'<p>Choose a type to edit its name and fields.</p>'}</section></div>`}
+   <div class="notebook-type-picker">${field(msg('recordType'),`<select data-notebook-type>${choices.map(s=>option(s.id,s.enabled?s.label:msg('removedLabel',{label:s.label}),selected)).join('')}</select>`)}${button(msg('addType'),'section-add','','subtle')}</div>
+   <div class="lab-type-layout"><aside class="lab-type-catalogue" aria-label="${text('recordTypes')}"><div class="lab-type-list-heading"><strong>${text('recordTypes')}</strong>${button(msg('addType'),'section-add','','subtle')}</div>
+    ${choices.map(s=>`<button type="button" class="lab-type-choice" data-action="notebook-config-command" data-command="select-type" data-id="${s.id}" aria-current="${s.id===selected}"><span>${esc(s.label)}</span><small>${s.enabled?text('fields',{count:s.fields.length}):msg('removed')}</small></button>`).join('')||'<p class="muted">'+text('chooseTypesHelp')+'</p>'}
+   </aside><section class="lab-type-detail" aria-label="${text('selectedType')}">${section?`<div class="lab-type-detail-heading"><strong>${section.enabled?msg('typeDetails'):msg('removedType')}</strong><div>${button(msg('moveUp'),'section-move',`data-index="${index}" data-direction="-1" ${position<=0?'disabled':''}`,'subtle')}${button(msg('moveDown'),'section-move',`data-index="${index}" data-direction="1" ${position<0||position>=siblings.length-1?'disabled':''}`,'subtle')}${button(section.enabled?msg('removeType'):msg('restoreType'),section.enabled?'section-remove':'section-restore',`data-index="${index}"`,'subtle')}</div></div>${sectionDetails(section,index,{field,esc,option,button})}`:'<p>'+text('chooseTypeHelp')+'</p>'}</section></div>`}
    <p class="module-error" data-notebook-error role="alert" tabindex="-1" hidden></p></div>
-   <div class="dialog-actions lab-book-actions">${state.book.notebooks.some(n=>n.id===editing.id)?`<button type="button" class="button danger" data-action="lab-book-delete">Delete lab book</button>`:''}<button type="button" class="button" data-action="close-dialog">Cancel</button><button type="submit" class="button primary" ${native()&&!creating&&configuration.busy()?'disabled':''}>Save lab book</button></div></form>`);
+   <div class="dialog-actions lab-book-actions">${state.book.notebooks.some(n=>n.id===editing.id)?`<button type="button" class="button danger" data-action="lab-book-delete">${text('deleteBook')}</button>`:''}<button type="button" class="button" data-action="close-dialog">${text('cancel')}</button><button type="submit" class="button primary" ${native()&&!creating&&configuration.busy()?'disabled':''}>${text('saveBook')}</button></div></form>`);
   if(initial){dialog.querySelector('h2').focus({preventScroll:true});dialog.scrollTop=0;}
   else {if(focusSelector)dialog.querySelector(focusSelector)?.focus({preventScroll:true});dialog.querySelector('.notebook-config-scroll').scrollTop=scroll;}
  }
@@ -100,13 +103,13 @@ export function projectNotebooksUI(services){
  }
  function deletionDialog(){
   const source=state.book.notebooks.find(n=>n.id===deleting.id),count=recordCount(source.id),choices=state.book.notebooks.filter(n=>n.id!==source.id);
-  showDialog(`<form id="lab-book-delete-form" data-no-draft data-navigation-ready><h2 id="dialog-title">Delete lab book</h2><p>Delete <strong>${esc(source.title)}</strong> from ${esc(locationName(state.book,source.projectId))}?</p>
+  showDialog(`<form id="lab-book-delete-form" data-no-draft data-navigation-ready><h2 id="dialog-title">${text('deleteBook')}</h2><p>${text('deletePrompt',{title:source.title,project:locationName(state.book,source.projectId)})}</p>
    ${state.projectOwner?.labBookId===source.id?'<p>'+esc(t('labBookDirectory','deleteEffect'))+'</p>':''}
-   ${count?`<p>This lab book contains <strong>${count} ${count===1?'record':'records'}</strong>.</p>
-   ${field('What should happen to its records?',`<select name="records" required data-lab-book-delete-records>${option('','Choose what to do',deleting.records)}${choices.length?option('move','Move records to another lab book',deleting.records):''}${option('delete','Delete records with this lab book',deleting.records)}</select>`)}
-   ${deleting.records==='move'?field('Destination lab book',`<select name="destinationId" required>${option('','Choose a lab book',deleting.destinationId??'')}${choices.map(n=>option(n.id,locationName(state.book,n.projectId)+' / '+n.title,deleting.destinationId)).join('')}</select>`)+'<p class="muted">Records keep their contents and links. Moving them to another project makes them private until you choose to publish them again.</p>':deleting.records==='delete'?'<p class="lab-book-delete-warning">The lab book and all its records will be removed from the current workspace.</p>':''}`:'<p>This lab book is empty.</p>'}
+   ${count?`<p>${text('containsRecords',{count})}</p>
+   ${field(msg('recordAction'),`<select name="records" required data-lab-book-delete-records>${option('',msg('chooseAction'),deleting.records)}${choices.length?option('move',msg('moveRecords'),deleting.records):''}${option('delete',msg('deleteRecords'),deleting.records)}</select>`)}
+   ${deleting.records==='move'?field(msg('destinationBook'),`<select name="destinationId" required>${option('',msg('chooseBook'),deleting.destinationId??'')}${choices.map(n=>option(n.id,locationName(state.book,n.projectId)+' / '+n.title,deleting.destinationId)).join('')}</select>`)+'<p class="muted">'+text('moveHelp')+'</p>':deleting.records==='delete'?'<p class="lab-book-delete-warning">'+text('deleteWarning')+'</p>':''}`:'<p>'+text('emptyBook')+'</p>'}
    <p class="module-error" data-delete-error role="alert" tabindex="-1" hidden></p>
-   <div class="dialog-actions"><button type="button" class="button" data-action="lab-book-delete-cancel">Cancel</button><button type="submit" class="button danger">${deleting.records==='move'?'Move records and delete lab book':'Delete lab book'}</button></div></form>`);
+   <div class="dialog-actions"><button type="button" class="button" data-action="lab-book-delete-cancel">${text('cancel')}</button><button type="submit" class="button danger">${deleting.records==='move'?msg('moveAndDelete'):msg('deleteBook')}</button></div></form>`);
  }
  async function confirmDeletion(form,data){
   if(deleteBusy)return true;
@@ -122,9 +125,9 @@ export function projectNotebooksUI(services){
    const result=await api('/api/workspace/structure',{etag,change:{kind:'delete-notebook',value}});
    state.book=result.book;state.etag=result.etag;state.preview=null;
    state.project=source.projectId;state.notebook='all';state.selected=null;state.recordReturn=null;state.page='project';
-   editing=base=deleting=null;document.querySelector('#dialog').close();render();notify('Lab book deleted.');
+   editing=base=deleting=null;document.querySelector('#dialog').close();render();notify(msg('bookDeleted'));
   }catch(error){
-   const node=form.querySelector('[data-delete-error]');node.textContent=error.code==='CONFLICT'?'The workspace changed. Cancel and reload the workspace to review the latest contents before deleting.':error.message??t('labBookDirectory','deleteFailed');node.hidden=false;node.focus();
+   const node=form.querySelector('[data-delete-error]');node.textContent=error.code==='CONFLICT'?msg('deleteConflict'):error.message??t('labBookDirectory','deleteFailed');node.hidden=false;node.focus();
   }finally{deleteBusy=false;delete form.dataset.busy;form.querySelectorAll('button,select').forEach(n=>n.disabled=false);}
   return true;
  }
@@ -145,7 +148,7 @@ export function projectNotebooksUI(services){
   }
   if(['new-project','edit-project'].includes(a.action)){await projects.open(a.action==='edit-project'?a.id:null,a.action==='new-project'?a.id:null,false,a.action==='new-project'&&Object.hasOwn(a,'copyWorkspaceDetails')?{title:state.book.title,description:state.book.description}:null);return true;}
   if(['new-notebook','edit-notebook','rename-notebook','configure-lab-notebook','specialize-notebook'].includes(a.action)){
-   if(!state.book.projects.length){notify('Create a project for this lab book first.');return true;}
+   if(!state.book.projects.length){notify(msg('createProjectFirst'));return true;}
    await openNotebook(a.action==='new-notebook'?null:a.id,a.action==='new-notebook'?a.id:null);return true;
   }
   return false;
@@ -172,7 +175,7 @@ export function projectNotebooksUI(services){
   if(form.id==='notebook-config-form'){
    capture();value=structuredClone(editing);kind='notebook';expected=etag;
    if(creationAccess){form.elements.bookConfirmPassword.setCustomValidity(creationAccess.password===creationAccess.confirmPassword?'':t('labBookDirectory','passwordMismatch'));if(!form.reportValidity())return true;}
-   if(!native()&&!validConfiguration(value.configuration)){const error=form.querySelector('[data-notebook-error]');error.textContent='Complete each type and field name; choice fields need distinct choices.';error.hidden=false;error.focus();return true;}
+   if(!native()&&!validConfiguration(value.configuration)){const error=form.querySelector('[data-notebook-error]');error.textContent=msg('invalidBook');error.hidden=false;error.focus();return true;}
   }
   const errorNode=form.querySelector('[data-notebook-error]');errorNode.hidden=true;
   let result;
@@ -192,18 +195,18 @@ export function projectNotebooksUI(services){
     if(password)await api('/api/projects/'+value.projectId+'/lab-books/'+result.book.labBookId+'/access/unlock',{username,password,recovery:''},{adopt:false});
     await services.labBookDirectory.refresh(value.projectId);await services.enterProject(value.projectId,result.book.labBookId);
     state.project=value.projectId;state.notebook=result.book.labBookId;state.page='entries';state.search='';state.filter='all';state.recordBrowse=null;
-    configuration.stop();sourceReader.stop();editing=base=creationAccess=null;document.querySelector('#dialog').close();render();notify('Lab book saved.');return true;
+    configuration.stop();sourceReader.stop();editing=base=creationAccess=null;document.querySelector('#dialog').close();render();notify(msg('bookSaved'));return true;
    }
    if(!creating&&state.projectOwner?.labBookId===value.id){
     result=await api('/api/projects/'+value.projectId+'/lab-books/'+value.id+'/settings/save',{id:creationId,etag:expected,book:value,...selectedConfiguration});
     await services.labBookDirectory.refresh(value.projectId);
    }else result=await api('/api/workspace/structure',{etag:expected,change:{kind,value},...selectedConfiguration});
   }
-  catch(error){errorNode.textContent=error.code==='CONFLICT'?'The workspace changed. Your choices are still here. Keep any edits you need, then cancel and reload the workspace before trying again.':error.message??'Could not save this lab book. Your choices are still here.';errorNode.hidden=false;errorNode.focus();throw error;}
+  catch(error){errorNode.textContent=error.code==='CONFLICT'?msg('bookConflict'):error.message??msg('bookSaveFailed');errorNode.hidden=false;errorNode.focus();throw error;}
   state.book=result.book;state.etag=result.etag;
   configuration.stop();sourceReader.stop();editing=base=null;document.querySelector('#dialog').close();
   if(state.notebook===value.id)state.project=value.projectId;
-  render();notify('Lab book saved.');return true;
+  render();notify(msg('bookSaved'));return true;
  }
  return {directory,card,action,input,submit,attrs,route:notebookRoute,types:profileLabels.types,bind:profileLabels.bind,
   generalRecords:id=>recordsIn(state.book,id),isDirty:()=>isDirty()||projects.isDirty(),

@@ -1,8 +1,10 @@
+import './i18n/catalogues/projectEditors.js';
+import {labBookProfileLabel,projectToolLabel} from './project-type-presentation.js';
 import {configurationEditor} from './configuration-editor.js';
 import {configurationDocumentClient} from './configuration-document-client.js';
 import {projectDirectoryChoices} from './project-directory-choices.js';
 import {localizedText,t} from './i18n/index.js';
-const projectText=localizedText('projectDirectory');
+const projectText=localizedText('projectDirectory'),msg=(key,args)=>t('projectEditors',key,args);
 import {availableLocationTools} from './modules/location-tools.js';
 import {enabledLabBookTypes} from './feature-modules.js';
 import {emptyConfiguration} from './notebook-schema.js';
@@ -12,6 +14,7 @@ import {sectionDetails,sectionInput,sectionAction} from './laboratory/section-ed
 
 export function projectSettings(services){
  const {state,api,esc,field,option,showDialog,render,notify}=services;
+ const text=(key,args)=>esc(msg(key,args));
  let placementRequest=null,saveRequest=null,creation=null,creationBase=null,remoteTemplates=new Map(),placementParent=null;
  const native=()=>state.storage?.researchStorage==='catalogue';
  const available=value=>native()?Boolean(value):templateAvailable(value,state.dashboardSettings);
@@ -46,10 +49,10 @@ export function projectSettings(services){
    const localChoice=local.find(t=>t.id===selectedId),entry=directoryChoices.known(selectedId)??services.projectDirectory.entries().find(t=>t.projectId===selectedId);
    templates.unshift(localChoice??{id:selectedId,label:entry?.summary?.templateName?entry.summary.templateName+' / '+entry.summary.title:remoteTemplates.get(selectedId)?.name??selectedId});
   }
-  return (mode==='template'?option('choose','Choose a starting template',source):'')+option('blank',mode==='template'?'Blank custom template':'No default template',source)+
-   (mode==='project'&&base.labBookTemplate?option('current','Saved default: '+base.labBookTemplate.name,source):'')+
-   (profiles.length?'<optgroup label="Lab-book types">'+profiles.map(p=>option('profile:'+p.id,p.label,source)).join('')+'</optgroup>':'')+
-   (templates.length?'<optgroup label="Saved project templates">'+templates.map(t=>option('project:'+t.id,t.label,source)).join('')+'</optgroup>':'');
+  return (mode==='template'?option('choose',msg('chooseTemplate'),source):'')+option('blank',mode==='template'?msg('blankTemplate'):msg('noDefault'),source)+
+   (mode==='project'&&base.labBookTemplate?option('current',msg('savedDefault',{name:base.labBookTemplate.name}),source):'')+
+   (profiles.length?'<optgroup label="'+text('labBookTypes')+'">'+profiles.map(p=>option('profile:'+p.id,labBookProfileLabel(p.id,p.label),source)).join('')+'</optgroup>':'')+
+   (templates.length?'<optgroup label="'+text('savedTemplates')+'">'+templates.map(t=>option('project:'+t.id,t.label,source)).join('')+'</optgroup>':'');
  }
  function paintChoices(kind){
   const target=form();if(!target||!draft)return;capture();
@@ -59,47 +62,47 @@ export function projectSettings(services){
  }
  function summary(){
   const template=native()&&configurationSource?.profileId?starterTemplate(configurationSource.profileId):draft.labBookTemplate;
-  if(!template)return '<p>New lab books will start blank. You can create a custom template from the project after saving.</p>';
+  if(!template)return '<p>'+text('blankHelp')+'</p>';
   if(native()&&!template.configuration)return '<p>'+esc(template.name)+'</p><p>'+esc(t('configurationEditor','sourceHelp'))+'</p>';
   const sections=template.configuration.sections.filter(s=>s.enabled);
-  return '<p>Included record types</p><ul class="project-template-summary">'+sections.map(s=>'<li><strong>'+esc(s.label)+'</strong><span>'+s.fields.length+' fields</span></li>').join('')+'</ul>'+
-   (!sections.length?'<p>Free-form records; no additional record types.</p>':'')+
-   (!templateAvailable(template,state.dashboardSettings)?'<p>The saved default uses a type that is turned off. Enable it in Preferences to use it for new lab books.</p>':'')+
-   '<p>Each new lab book gets its own copy. To edit this template, open Lab-book template from the saved project.</p>';
+  return '<p>'+text('includedTypes')+'</p><ul class="project-template-summary">'+sections.map(s=>'<li><strong>'+esc(s.label)+'</strong><span>'+text('fields',{count:s.fields.length})+'</span></li>').join('')+'</ul>'+
+   (!sections.length?'<p>'+text('freeFormHelp')+'</p>':'')+
+   (!templateAvailable(template,state.dashboardSettings)?'<p>'+text('disabledDefault')+'</p>':'')+
+   '<p>'+text('copyHelp')+'</p>';
  }
  function templateFields(){
   if(native())return '<p>'+esc(t('configurationEditor','templateHelp'))+'</p><div class="project-template-source">'+field(t('configurationEditor','startingTemplate'),'<select data-project-template-source>'+sourceOptions()+'</select>'+directoryChoices.view('templates'))+button(t('configurationEditor','useTemplate'),'apply',source==='choose'?'disabled':'')+'</div>'+(replace?'<div class="project-template-confirm" role="alert"><p>'+esc(t('configurationEditor','replaceHelp'))+'</p>'+button(t('configurationEditor','replace'),'replace')+button(t('configurationEditor','keep'),'keep')+'</div>':'')+(draft.labBookTemplate?field(t('configurationEditor','templateName'),'<input name="templateName" required maxlength="160" value="'+esc(draft.labBookTemplate.name)+'">'):'')+(draft.labBookTemplate?configuration.view()+'<div class="inline-actions">'+button(t('configurationEditor','removeTemplate'),'remove','','subtle')+'</div>':'<p>'+esc(t('configurationEditor','noTemplate'))+'</p>');
   const template=draft.labBookTemplate,c=template?.configuration,choices=c?.sections??[];
   if(!choices.some(s=>s.id===selected))selected=choices.find(s=>s.enabled)?.id??choices[0]?.id;
   const section=choices.find(s=>s.id===selected),index=choices.indexOf(section),siblings=choices.filter(s=>s.enabled&&s.profileId===section?.profileId),position=siblings.indexOf(section);
-  return '<p>Default template for <strong>'+esc(draft.title)+'</strong>. Changes apply to new lab books. Existing lab books and records keep their own contents.</p>'+
-   '<div class="project-template-source">'+field('Starting template','<select data-project-template-source>'+sourceOptions()+'</select>'+directoryChoices.view('templates'))+button('Use template','apply',source==='choose'?'disabled':'')+'</div>'+
+  return '<p>'+text('defaultHelp',{title:draft.title})+'</p>'+
+   '<div class="project-template-source">'+field(msg('startingTemplate'),'<select data-project-template-source>'+sourceOptions()+'</select>'+directoryChoices.view('templates'))+button(msg('useTemplate'),'apply',source==='choose'?'disabled':'')+'</div>'+
    '<p class="muted">'+esc(t('templatePreferences','manage',{preferences:t('preferences','title'),templates:t('preferences','templates')}))+'</p>'+
-   (replace?'<div class="project-template-confirm" role="alert"><p>Replace this template draft?</p>'+button('Replace template','replace')+button('Keep template','keep')+'</div>':'')+
-   (!template?'<p>No default template. Choose a starting template to create one.</p>':
-    field('Template name','<input name="templateName" required maxlength="160" value="'+esc(template.name)+'">')+
-    '<div class="lab-type-layout"><aside class="lab-type-catalogue" aria-label="Record types"><div class="lab-type-list-heading"><strong>Record types ('+choices.length+')</strong>'+button('Add record type','section-add','','subtle')+'</div><div class="lab-type-list">'+
-    choices.map(s=>'<button type="button" class="lab-type-choice" data-action="project-template-command" data-command="select-type" data-id="'+s.id+'" aria-current="'+(s.id===selected)+'"><span data-type-title>'+esc(s.label)+'</span><small>'+(s.enabled?s.fields.length+' fields':'Removed')+'</small></button>').join('')+
-    '</div></aside><section class="lab-type-detail" aria-label="Selected record type">'+(section?
-     '<div class="lab-type-detail-heading"><strong>'+(section.enabled?'Type details':'Removed type')+'</strong><div>'+button('Move up','section-move','data-index="'+index+'" data-direction="-1" '+(position<=0?'disabled':''),'subtle')+button('Move down','section-move','data-index="'+index+'" data-direction="1" '+(position<0||position>=siblings.length-1?'disabled':''),'subtle')+button(section.enabled?'Remove type':'Restore type',section.enabled?'section-remove':'section-restore','data-index="'+index+'"','subtle')+'</div></div>'+sectionDetails(section,index,{field,esc,option,button}):'<p>Add a record type to define its fields and guidance.</p>')+
-    '</section></div><div class="inline-actions">'+button('Remove default template','remove','','subtle')+'</div>');
+   (replace?'<div class="project-template-confirm" role="alert"><p>'+text('replacePrompt')+'</p>'+button(msg('replaceTemplate'),'replace')+button(msg('keepTemplate'),'keep')+'</div>':'')+
+   (!template?'<p>'+text('noTemplateHelp')+'</p>':
+    field(msg('templateName'),'<input name="templateName" required maxlength="160" value="'+esc(template.name)+'">')+
+    '<div class="lab-type-layout"><aside class="lab-type-catalogue" aria-label="'+text('recordTypes')+'"><div class="lab-type-list-heading"><strong>'+text('recordTypesCount',{count:choices.length})+'</strong>'+button(msg('addType'),'section-add','','subtle')+'</div><div class="lab-type-list">'+
+    choices.map(s=>'<button type="button" class="lab-type-choice" data-action="project-template-command" data-command="select-type" data-id="'+s.id+'" aria-current="'+(s.id===selected)+'"><span data-type-title>'+esc(s.label)+'</span><small>'+(s.enabled?text('fields',{count:s.fields.length}):msg('removed'))+'</small></button>').join('')+
+    '</div></aside><section class="lab-type-detail" aria-label="'+text('selectedType')+'">'+(section?
+     '<div class="lab-type-detail-heading"><strong>'+(section.enabled?msg('typeDetails'):msg('removedType'))+'</strong><div>'+button(msg('moveUp'),'section-move','data-index="'+index+'" data-direction="-1" '+(position<=0?'disabled':''),'subtle')+button(msg('moveDown'),'section-move','data-index="'+index+'" data-direction="1" '+(position<0||position>=siblings.length-1?'disabled':''),'subtle')+button(section.enabled?msg('removeType'):msg('restoreType'),section.enabled?'section-remove':'section-restore','data-index="'+index+'"','subtle')+'</div></div>'+sectionDetails(section,index,{field,esc,option,button}):'<p>'+text('addTypeHelp')+'</p>')+
+    '</section></div><div class="inline-actions">'+button(msg('removeDefault'),'remove','','subtle')+'</div>');
  }
  function projectFields(){
   const blocked=descendants(services.projectDirectory.navigation(state.book),draft.id),tools=availableLocationTools(state.dashboardSettings);
-  return field('Name','<input name="title" value="'+esc(draft.title)+'" required maxlength="160">')+
-   '<div class="form-grid">'+field('Project type','<select data-project-type>'+option('none','No type selected',type)+projectTypeChoices(state.dashboardSettings).map(c=>option(c.id,c.label,type)).join('')+option('custom','Custom type',type)+'</select>')+
-   (creation||state.projectOwner?field(projectText('inside'),'<select name="parentId" '+(state.projectOwner&&!creation?'data-project-parent':'')+'>'+parentOptions()+'</select>'+directoryChoices.view('parents')):field('Inside','<select name="parentId">'+option('',state.book.title,draft.parentId??'')+state.book.projects.filter(p=>!blocked.has(p.id)).map(p=>option(p.id,locationName(state.book,p.id),draft.parentId)).join('')+'</select>'))+'</div>'+
+  return field(msg('name'),'<input name="title" value="'+esc(draft.title)+'" required maxlength="160">')+
+   '<div class="form-grid">'+field(msg('projectType'),'<select data-project-type>'+option('none',msg('noType'),type)+projectTypeChoices(state.dashboardSettings).map(c=>option(c.id,labBookProfileLabel(c.id.slice(8),c.label),type)).join('')+option('custom',msg('customType'),type)+'</select>')+
+   (creation||state.projectOwner?field(projectText('inside'),'<select name="parentId" '+(state.projectOwner&&!creation?'data-project-parent':'')+'>'+parentOptions()+'</select>'+directoryChoices.view('parents')):field(msg('inside'),'<select name="parentId">'+option('',state.book.title,draft.parentId??'')+state.book.projects.filter(p=>!blocked.has(p.id)).map(p=>option(p.id,locationName(state.book,p.id),draft.parentId)).join('')+'</select>'))+'</div>'+
    (creation?'<div class="form-grid">'+field(projectText('username'),'<input name="projectUsername" autocomplete="username" maxlength="80" value="'+esc(creation.username)+'">')+field(projectText('password')+' <small>'+esc(projectText(state.access?.deviceAvailable?'passwordHint':'passwordRequired'))+'</small>','<input name="projectPassword" type="password" autocomplete="new-password" minlength="12" maxlength="1024" '+(state.access?.deviceAvailable?'':'required')+' value="'+esc(creation.password)+'">')+'</div>':'')+
-   (type==='custom'?field('Custom project type','<input name="customKind" required maxlength="80" value="'+esc(draft.kind)+'">'):'')+
-   field('Description','<textarea name="description" rows="2" maxlength="1500">'+esc(draft.description)+'</textarea>')+
-   '<section class="project-template-panel" aria-label="Template selection">'+field('Default lab-book template','<select data-project-template-source>'+sourceOptions()+'</select>'+directoryChoices.view('templates'))+summary()+'<p class="muted">'+esc(t('templatePreferences','manage',{preferences:t('preferences','title'),templates:t('preferences','templates')}))+'</p></section>'+
-   (tools.length?'<fieldset class="project-tool-choices"><legend>Project tools</legend>'+tools.map(m=>'<label class="checkbox"><input type="checkbox" name="projectTool" value="'+m.id+'" '+(draft.tools?.includes(m.id)?'checked':'')+'>'+esc(m.locationTool.label)+'</label>').join('')+'</fieldset>':'');
+   (type==='custom'?field(msg('customProjectType'),'<input name="customKind" required maxlength="80" value="'+esc(draft.kind)+'">'):'')+
+   field(msg('description'),'<textarea name="description" rows="2" maxlength="1500">'+esc(draft.description)+'</textarea>')+
+   '<section class="project-template-panel" aria-label="'+text('templateSelection')+'">'+field(msg('defaultTemplate'),'<select data-project-template-source>'+sourceOptions()+'</select>'+directoryChoices.view('templates'))+summary()+'<p class="muted">'+esc(t('templatePreferences','manage',{preferences:t('preferences','title'),templates:t('preferences','templates')}))+'</p></section>'+
+   (tools.length?'<fieldset class="project-tool-choices"><legend>'+text('projectTools')+'</legend>'+tools.map(m=>'<label class="checkbox"><input type="checkbox" name="projectTool" value="'+m.id+'" '+(draft.tools?.includes(m.id)?'checked':'')+'>'+esc(projectToolLabel(m.id,m.locationTool.label))+'</label>').join('')+'</fieldset>':'');
  }
  function draw(focus){
   const scroll=form()?.querySelector('.project-config-scroll')?.scrollTop??0,current=state.book.projects.some(p=>p.id===draft.id),template=mode==='template';
-  showDialog('<form id="'+(template?'project-template-form':'structure-project-form')+'" data-no-draft class="project-config-form '+(template?'project-template-form':'')+'" '+(busy?'data-busy="true" aria-busy="true"':'')+'><h2 id="dialog-title">'+(template?'Lab-book template':current?'Edit project':'New project')+'</h2>'+
+  showDialog('<form id="'+(template?'project-template-form':'structure-project-form')+'" data-no-draft class="project-config-form '+(template?'project-template-form':'')+'" '+(busy?'data-busy="true" aria-busy="true"':'')+'><h2 id="dialog-title">'+(template?msg('labBookTemplate'):current?msg('editProject'):msg('newProject'))+'</h2>'+
    '<div class="project-config-scroll"><fieldset class="project-config-fields" '+(busy?'disabled':'')+'>'+(template?templateFields():projectFields())+'</fieldset></div>'+
-   (busy&&creation?'<p role="status">'+esc(projectText('creating'))+'</p>':'')+'<p class="module-error" role="alert" tabindex="-1" data-project-error '+(error?'':'hidden')+'>'+esc(error)+'</p><div class="dialog-actions"><button type="button" class="button" data-action="close-dialog" '+(busy?'disabled':'')+'>Cancel</button><button class="button primary" '+(busy||native()&&template&&configuration.busy()?'disabled':'')+'>'+ (template?'Save template':creation?projectText('create'):'Save project')+'</button></div></form>');
+   (busy&&creation?'<p role="status">'+esc(projectText('creating'))+'</p>':'')+'<p class="module-error" role="alert" tabindex="-1" data-project-error '+(error?'':'hidden')+'>'+esc(error)+'</p><div class="dialog-actions"><button type="button" class="button" data-action="close-dialog" '+(busy?'disabled':'')+'>'+text('cancel')+'</button><button class="button primary" '+(busy||native()&&template&&configuration.busy()?'disabled':'')+'>'+ (template?msg('saveTemplate'):creation?projectText('create'):msg('saveProject'))+'</button></div></form>');
   form().querySelector('.project-config-scroll').scrollTop=scroll;directoryChoices.paint(form(),'parents');directoryChoices.paint(form(),'templates');
   if(focus)form().querySelector(focus)?.focus({preventScroll:true});
  }
@@ -134,7 +137,7 @@ export function projectSettings(services){
   const profile=recommendedProfile(source,state.dashboardSettings);
   if(source.startsWith('profile:')&&!profile)throw new Error(t('templatePreferences','enableFirst',{preferences:t('preferences','title'),templates:t('preferences','templates')}));
   const existing=source.startsWith('project:')?(state.book.projects.find(p=>p.id===source.slice(8))?.labBookTemplate??remoteTemplates.get(source.slice(8))):null;
-  if(source.startsWith('project:')&&!templateAvailable(existing,state.dashboardSettings))throw new Error('This project template is no longer available.');
+  if(source.startsWith('project:')&&!templateAvailable(existing,state.dashboardSettings))throw new Error(msg('templateUnavailable'));
   if(source==='blank'&&mode==='project')delete draft.labBookTemplate;
   else draft.labBookTemplate=profile?starterTemplate(profile.id):existing?{name:existing.name,configuration:copyConfiguration(existing.configuration)}:{name:'',configuration:emptyConfiguration()};
   selected=null;replace=false;
@@ -147,7 +150,7 @@ export function projectSettings(services){
   if(busy)return true;capture();error='';const command=node.dataset.command;
   if(command==='apply'&&draft.labBookTemplate){replace=true;draw('[data-command="replace"]');return true;}
   if(command==='apply'||command==='replace'){
-   busy=true;draw();try{await apply();}catch(e){error=e?.message??'Could not load this template. Your edits are still here.';}finally{busy=false;draw('[name="templateName"]');}return true;
+   busy=true;draw();try{await apply();}catch(e){error=e?.message??msg('loadFailed');}finally{busy=false;draw('[name="templateName"]');}return true;
   }
   if(command==='keep')replace=false;
   else if(command==='remove'){if(native()){await configuration.discard();configurationSource=null;}delete draft.labBookTemplate;replace=false;}
@@ -199,7 +202,7 @@ export function projectSettings(services){
  }
  async function submit(target){
   if(!['structure-project-form','project-template-form'].includes(target.id))return false;if(busy)return true;capture();
-  if(!native()&&draft.labBookTemplate&&!validLabBookTemplate(draft.labBookTemplate)){error='Enter a template name and complete each record type and field. Choice fields need distinct choices.';draw('[data-project-error]');throw new Error(error);}
+  if(!native()&&draft.labBookTemplate&&!validLabBookTemplate(draft.labBookTemplate)){error=msg('invalidTemplate');draw('[data-project-error]');throw new Error(error);}
   busy=true;error='';const refreshDirectory=Boolean(creation||state.projectOwner),value=structuredClone(draft);value.title=value.title.trim();value.kind=value.kind.trim();draw();
   try{
    let selectedConfiguration={};
@@ -211,11 +214,11 @@ export function projectSettings(services){
    if(creation){await api('/api/projects/create',{...creation,project:value,...selectedConfiguration},{adopt:false});if(creation.password)await api('/api/projects/'+value.id+'/access/unlock',{username:creation.username,password:creation.password,recovery:''},{adopt:false});await services.enterProject(value.id);}
    else{const signature=JSON.stringify({etag,project:value,...selectedConfiguration});if(saveRequest?.signature!==signature)saveRequest={id:crypto.randomUUID(),signature};const result=state.projectOwner?await services.accessProject(()=>api('/api/projects/'+value.id+'/settings/save',{id:saveRequest.id,etag,project:value,...selectedConfiguration})):await api('/api/workspace/structure',{etag,change:{kind:'project',value},...selectedConfiguration});state.book=result.book;state.etag=result.etag;}
    state.preview=null;state.project=value.id;state.notebook='all';state.page='project';
-   form()?.removeAttribute('data-busy');form()?.removeAttribute('aria-busy');directoryChoices.reset();configuration.stop();sourceReader.stop();draft=base=creation=creationBase=null;document.querySelector('#dialog').close();render();notify(mode==='template'?'Template saved.':'Project saved.');
-   if(refreshDirectory)void services.projectDirectory.refresh().catch(error=>notify(error.message??'Could not refresh the project list.'));
-  }catch(e){error=e.code==='CONFLICT'?'The workspace changed. Your edits are still here. Keep any edits you need, then cancel and reload the workspace before trying again.':e?.message??'Could not save. Your edits are still here.';busy=false;draw('[data-project-error]');if(e.code==='ACCESS_LOCKED')throw e;throw new Error(error,{cause:e});}
+   form()?.removeAttribute('data-busy');form()?.removeAttribute('aria-busy');directoryChoices.reset();configuration.stop();sourceReader.stop();draft=base=creation=creationBase=null;document.querySelector('#dialog').close();render();notify(mode==='template'?msg('templateSaved'):msg('projectSaved'));
+   if(refreshDirectory)void services.projectDirectory.refresh().catch(error=>notify(error.message??msg('refreshFailed')));
+  }catch(e){error=e.code==='CONFLICT'?msg('projectConflict'):e?.message??msg('saveFailed');busy=false;draw('[data-project-error]');if(e.code==='ACCESS_LOCKED')throw e;throw new Error(error,{cause:e});}
   finally{busy=false;}
   return true;
  }
- return {open,action,input,submit,isDirty,save:async()=>{if(draft){if(!form())draw();if(!form().reportValidity())throw new Error('Complete the required project fields.');await submit(form());}},close:async()=>{if(!busy){if(configuration.descriptor())await configuration.discard();configuration.stop();sourceReader.stop();directoryChoices.reset();draft=base=creation=creationBase=null;}}};
+ return {open,action,input,submit,isDirty,save:async()=>{if(draft){if(!form())draw();if(!form().reportValidity())throw new Error(msg('requiredProject'));await submit(form());}},close:async()=>{if(!busy){if(configuration.descriptor())await configuration.discard();configuration.stop();sourceReader.stop();directoryChoices.reset();draft=base=creation=creationBase=null;}}};
 }
