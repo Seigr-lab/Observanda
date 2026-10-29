@@ -9,6 +9,7 @@ import {deploymentUncertain} from './publication-deployment-state.js';
 import {indexedGithubFilePlan,githubPlanReview,admitGithubPlan,githubDirectory,githubPagesProtection,githubArchiveBranch,readGithubOwnership,writeGithubOwnership} from './github-publication-plan.js';
 import {githubTreeRecords} from './github-trees.js';
 import {deployGithub} from './github-deployment.js';
+import {GithubBlobBody} from './github-blob-body.js';
 import {contentSize} from './file-content.js';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
@@ -72,8 +73,11 @@ export class Publisher {
   }
   async github(route, method = 'GET', data, allowMissing = false, signal) {
     const token=this.token??await this.connection?.token();if (!token) throw new AppError('PUBLISH_AUTH');
-    let response;
-    try { response = await this.request('https://api.github.com' + route, { method, headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${token}`, 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'Observanda', ...(data ? { 'Content-Type': 'application/json' } : {}) }, ...(data ? { body: JSON.stringify(data) } : {}), redirect: 'error', signal: signal ? AbortSignal.any([signal,AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000) }); } catch { signal?.throwIfAborted(); throw new AppError('PUBLISH_REMOTE'); }
+    let response,sourceError;const streaming=data instanceof GithubBlobBody,controller=streaming?new AbortController():null,requestSignal=AbortSignal.any([...(signal?[signal]:[]),AbortSignal.timeout(30000)]);
+    async function* stream(){try{yield* data.chunks({signal:AbortSignal.any([requestSignal,controller.signal])});}catch(error){sourceError=error;throw error;}}
+    const body=streaming?stream():data?JSON.stringify(data):undefined;
+    try { response = await this.request('https://api.github.com' + route, { method, headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${token}`, 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'Observanda', ...(data ? { 'Content-Type': 'application/json' } : {}),...(streaming?{'Content-Length':String(data.length)}:{}) }, ...(data ? { body } : {}),...(streaming?{duplex:'half'}:{}), redirect: 'error', signal:requestSignal }); } catch { signal?.throwIfAborted(); if(sourceError)throw sourceError;throw new AppError('PUBLISH_REMOTE'); }
+    finally{if(streaming){controller.abort();await body.return().catch(()=>{});}}
     if(response.status===401&&!this.token){await this.connection?.reject();throw new AppError('GITHUB_RECONNECT');}
     if(response.status===403)throw new AppError(response.headers.get('X-GitHub-SSO')?.includes('required')?'GITHUB_ORGANIZATION_AUTH':response.headers.get('X-RateLimit-Remaining')==='0'?'GITHUB_RATE_LIMIT':'GITHUB_PERMISSION');
     if (response.status === 404 && allowMissing) return null;

@@ -1,6 +1,6 @@
 import {githubPlanReader,requireGithubPlanCollections} from './github-plan-index.js';
 import {contentHash} from './file-content.js';
-import {contentBuffer} from './file-content.js';
+import {GithubBlobBody} from './github-blob-body.js';
 import {buildGithubTree,verifyRemoteGithubTree} from './github-trees.js';
 import {admitGithubPlan,githubPagesProtection} from './github-publication-plan.js';
 import messages from './web/locales/en/githubTransfer.json' with {type:'json'};
@@ -51,7 +51,7 @@ export async function deployGithub(publisher,candidate,config,{plan=null,journal
    if(uploaded?.has(entry.sha))continue;
    await report(messages.uploading);
    const source=c.directory?entry.path.slice(c.directory.length+1):entry.path;
-   const blob=await call('/git/blobs','POST',{content:(await contentBuffer(await candidate.files.get(source))).toString('base64'),encoding:'base64'});
+   const blob=await call('/git/blobs','POST',new GithubBlobBody(await candidate.files.get(source)));
    if(blob.sha!==entry.sha)throw new AppError('PUBLISH_REMOTE');if(journal.document)journal.uploadedCount++;else{journal.uploaded.push(entry.sha);uploaded.add(entry.sha);}await checkpoint();
   }
   await buildGithubTree(call,journal,{reader,checkpoint,signal,onProgress:(done,total)=>progress({stage:messages.buildingTree,done,total})});

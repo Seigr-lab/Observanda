@@ -1,11 +1,13 @@
 import {createHash} from 'node:crypto';
 export const sha=(type,bytes)=>createHash('sha1').update(`${type} ${bytes.length}\0`).update(bytes).digest('hex');
+const streamedBodies=new WeakMap();
+const requestData=async options=>{if(!options.body)return;if(typeof options.body==='string')return JSON.parse(options.body);if(!streamedBodies.has(options))streamedBodies.set(options,Array.fromAsync(options.body).then(chunks=>JSON.parse(chunks.join(''))));return streamedBodies.get(options);};
 export function githubFixture({branch='observanda-site',initialFiles=null,initialPages=null,repository='notebook'}={}){
  const calls=[],blobs=new Map(),trees=new Map(),commits=new Map(),served=new Map(),branches=new Map();let head=null,pages=initialPages,hook=null,manifest=null;
  const seed=(files,{message='',parents=[]}={})=>{const entries=Object.entries(files).map(([path,content])=>{const bytes=Buffer.from(content),hash=sha('blob',bytes);blobs.set(hash,bytes);return {path,type:'blob',mode:'100644',sha:hash};}),tree=sha('tree',Buffer.from(JSON.stringify(entries)));trees.set(tree,entries);head='a'.repeat(40);commits.set(head,{tree,parents,message});return head;};
  if(initialFiles)seed(initialFiles);
  const request=async(url,options={})=>{
-  const route=new URL(url).pathname,method=options.method??'GET',data=options.body?JSON.parse(options.body):undefined,call={route,method,data};calls.push(call);
+  const route=new URL(url).pathname,method=options.method??'GET',data=await requestData(options),call={route,method,data};calls.push(call);
   await hook?.(call,'before',options.signal);options.signal?.throwIfAborted();
   const ok=data=>new Response(JSON.stringify(data),{status:200});let response;
   if(new URL(url).hostname==='public.example'){
@@ -40,7 +42,7 @@ export function repositoryFixture({exists=false,defaultBranch='main',ownerType='
  const remote=githubFixture({branch:'main'}),base='/repos/example/notebook';let isPrivate=true,setupHook=null,beforeHook=null,tags=[];
  const repo=()=>({id:repositoryId,full_name:'example/notebook',private:isPrivate,default_branch:defaultBranch,permissions:{push:true,admin:true}});
  const request=async(url,options={})=>{
-  const route=new URL(url).pathname,method=options.method??'GET',data=options.body?JSON.parse(options.body):null,call={route,method,data};
+  const route=new URL(url).pathname,method=options.method??'GET',data=await requestData(options)??null,call={route,method,data};
   await beforeHook?.(call);let response;const ok=value=>new Response(JSON.stringify(value));
   if(route==='/user')response=ok({login:'example'});
   else if(route===base)response=exists?ok(repo()):new Response('',{status:404});
