@@ -1,0 +1,12 @@
+{
+  "invalid": "La respuesta del espacio de trabajo estaba incompleta. Recarga para volver a intentarlo.",
+  "busy": "Ya hay una lectura del espacio de trabajo en curso.",
+  "changed": "El espacio de trabajo ha cambiado durante la carga. Recarga para abrirlo.",
+  "refreshLabel": "Observanda — actualizar el espacio de trabajo guardado",
+  "refreshing": "Comprobando los cambios guardados…",
+  "refreshPending": "Hay nuevos cambios guardados disponibles. Actualiza con el logotipo de Observanda cuando quieras.",
+  "refreshDeferred": "Tu borrador sigue aquí. Guarda o descarta las modificaciones y cierra los diálogos abiertos antes de actualizar.",
+  "refreshFailed": "No se han podido comprobar los cambios guardados. La vista actual permanece intacta. Haz clic en el logotipo de Observanda para reintentarlo.",
+  "refreshCurrent": "Tu espacio de trabajo está actualizado.",
+  "refreshed": "Cambios guardados del espacio de trabajo cargados."
+}

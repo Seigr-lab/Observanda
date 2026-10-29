@@ -1,0 +1,8 @@
+{
+  "label": "Herramientas del proyecto",
+  "overview": "Vista general de {name}",
+  "oneItem": "1 elemento",
+  "items": "{count} elementos",
+  "failed": "No se han podido cargar los recuentos de elementos.",
+  "retry": "Reintentar los recuentos"
+}

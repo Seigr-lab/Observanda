@@ -1,0 +1,10 @@
+{
+  "title": "Terminar de crear {title}",
+  "running": "Creando el proyecto…",
+  "resume": "Reanudar la creación",
+  "password": "Contraseña del proyecto",
+  "cancel": "Cancelar",
+  "failed": "No se ha podido crear el proyecto.",
+  "retry": "Reintentar",
+  "more": "Más proyectos sin terminar"
+}

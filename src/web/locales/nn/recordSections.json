@@ -1,0 +1,22 @@
+{
+  "title": "Oppføringsdelar",
+  "contents": "I denne oppføringa",
+  "navigation": "Bla i tekstdelar",
+  "range": "Delar {first}–{last} av {total}",
+  "previous": "Førre delar",
+  "next": "Neste delar",
+  "goTo": "Gå til delnummer",
+  "go": "Gå",
+  "findHeading": "Finn deloverskrift",
+  "findNext": "Finn neste",
+  "noMatch": "Ingen deloverskrifter samsvarar.",
+  "enterHeading": "Skriv inn ei deloverskrift å finne.",
+  "heading": "Deloverskrift",
+  "content": "Innhald i {title}",
+  "up": "Flytt {title} opp",
+  "down": "Flytt {title} ned",
+  "remove": "Fjern {title}",
+  "confirmRemove": "Fjerne denne delen og teksten hans?",
+  "new": "Ny del",
+  "add": "Legg til del"
+}

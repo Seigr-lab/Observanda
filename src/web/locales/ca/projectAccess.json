@@ -1,0 +1,10 @@
+{
+  "title": "Desbloqueja el projecte",
+  "username": "Nom d'usuari",
+  "password": "Contrasenya del projecte",
+  "recovery": "Utilitza una clau de recuperació",
+  "recoveryKey": "Clau de recuperació",
+  "cancel": "Cancel·la",
+  "unlock": "Desbloqueja",
+  "failed": "No s'ha pogut desbloquejar aquest projecte."
+}

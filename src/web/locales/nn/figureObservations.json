@@ -1,0 +1,21 @@
+{
+  "region": "XY-akseptområde",
+  "callout": "Observasjonsmerknad",
+  "addRegion": "Legg til XY-område",
+  "addCallout": "Kommenter observasjon",
+  "series": "Observasjonsserie",
+  "observation": "Observasjon",
+  "pointIndex": "Observasjonsrad",
+  "dx": "Vassrett etikettforskyving (SVG-einingar)",
+  "dy": "Loddrett etikettforskyving (SVG-einingar)",
+  "xLower": "Minste koordinat i området",
+  "xUpper": "Største koordinat i området",
+  "yLower": "Minste verdi i området",
+  "yUpper": "Største verdi i området",
+  "position": "Grenser / tilknytt observasjon",
+  "encodingDetails": "Kodingsdetaljar",
+  "invalid": "Gje merknaden ein etikett, ein farge og gyldige innstillingar.",
+  "regionRange": "XY-område krev stigande tal- eller kalenderkoordinatgrenser og stigande verdigrenser. Logaritmiske grenser må vere positive.",
+  "calloutRange": "Vel ein eksisterande målt observasjon og endelege etikettforskyvingar mellom −2 000 og 2 000 SVG-einingar.",
+  "referenced": "Denne observasjonen eller serien har ein tilknytt merknad. Fjern merknaden eller endre målet hans før du slettar observasjonen."
+}

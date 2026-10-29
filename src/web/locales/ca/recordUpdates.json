@@ -1,0 +1,15 @@
+{
+  "invalid": "L'actualització del registre desat era incompleta. Es conserven l'editor i el punt de recuperació.",
+  "incomplete": "Actualització del registre incompleta. Torna a carregar l'espai de treball; es conserva l'esborrany.",
+  "reloadBase": "Torna a carregar l'espai de treball desat abans d'aplicar aquesta resposta. Es conserva l'esborrany.",
+  "busy": "Ja s'està carregant una actualització dels registres desats.",
+  "title": "S'estan actualitzant els registres desats",
+  "description": "S'estan carregant els canvis d'altres finestres. L'editor no canvia fins que s'acaba la càrrega.",
+  "committed": "S'han desat els canvis. S'està carregant la revisió desada resultant per actualitzar aquest editor.",
+  "progress": "S'han rebut {loaded} actualitzacions de registres, d'un màxim de {total}, en aquest pas",
+  "cancel": "Cancel·la la càrrega",
+  "retry": "Torna a carregar",
+  "failed": "No s'han pogut carregar els canvis desats. Torna-ho a provar per continuar des de l'última pàgina completada.",
+  "cancelled": "S'ha cancel·lat la càrrega. Es conserven l'editor i el punt de recuperació.",
+  "savedCancelled": "S'han desat els canvis, però s'ha cancel·lat la càrrega de la seva revisió desada. Es conserven l'editor i el punt de recuperació. Torna a carregar l'espai de treball desat abans de fer un altre canvi."
+}

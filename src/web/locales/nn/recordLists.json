@@ -1,0 +1,27 @@
+{
+  "refresh": "Oppdater oppføringar",
+  "loading": "Lastar inn oppføringar...",
+  "range": "Oppføringar {first}-{last} av {total}",
+  "emptyRange": "0 oppføringar",
+  "pages": "Oppføringssider",
+  "previous": "Førre oppføringar",
+  "next": "Neste oppføringar",
+  "noMatches": "Ingen oppføringar samsvarar med desse filtera",
+  "adjust": "Juster eller tøm filtera for å sjå oppføringane i dette omfanget.",
+  "clear": "Tøm filter",
+  "changed": "Lagra oppføringar er endra. Oppdater oppføringane for å sjå dei nyaste resultata.",
+  "invalidPage": "Svaret med oppføringslista var ufullstendig. Oppdater oppføringane for å prøve på nytt.",
+  "experiments": {
+    "one": "{count} forsøk",
+    "other": "{count} forsøk"
+  },
+  "runs": {
+    "one": "{count} køyring / opptak",
+    "other": "{count} køyringar / opptak"
+  },
+  "other": {
+    "one": "{count} anna oppføring",
+    "other": "{count} andre oppføringar"
+  },
+  "unlock": "Lås opp for å laste inn oppføringar"
+}

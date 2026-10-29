@@ -1,0 +1,6 @@
+{
+  "range": "Element {first}–{last} av {total}",
+  "previous": "Førre element",
+  "next": "Neste element",
+  "invalidPage": "Svaret for kortet var ufullstendig. Prøv å laste inn kortet på nytt."
+}

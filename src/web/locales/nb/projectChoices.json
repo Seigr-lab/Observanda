@@ -1,0 +1,11 @@
+{
+  "parents": "Søk i prosjekter",
+  "templates": "Søk i lagrede maler",
+  "loading": "Laster inn valg…",
+  "count": "{count} av {total}",
+  "more": "Flere valg",
+  "retry": "Prøv igjen",
+  "failed": "Prosjektvalgene kunne ikke lastes inn.",
+  "book-parents": "Søk etter målprosjekter",
+  "record-parents": "Søk i prosjekter"
+}

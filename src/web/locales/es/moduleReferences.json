@@ -1,0 +1,18 @@
+{
+  "heading": "Trabajo relacionado",
+  "empty": "Enlaza este elemento con la investigación o los recursos a los que pertenece.",
+  "remove": "Eliminar",
+  "chooseResearch": "Enlazar investigación",
+  "chooseRecord": "Elegir un registro guardado",
+  "prototype": "Registro de prototipo / ejecución",
+  "moduleItem": "Enlazar una herramienta o un elemento de inventario",
+  "chooseItem": "Elegir un elemento...",
+  "add": "Enlazar elemento",
+  "loading": "Cargando el título del registro...",
+  "unavailable": "Registro no disponible",
+  "unavailableLabel": "Título del registro no disponible",
+  "missingItem": "{type} no disponible",
+  "invalid": "Las etiquetas de los registros estaban incompletas. Reintenta cargarlas.",
+  "loadFailed": "No se han podido cargar los títulos de los registros. Se conservan los enlaces y las modificaciones.",
+  "retry": "Reintentar los títulos de los registros"
+}

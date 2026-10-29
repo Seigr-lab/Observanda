@@ -1,0 +1,17 @@
+{
+  "title": "Ressurser for eksakt beregning",
+  "action": "Ressurspolicy",
+  "save": "Lagre ressurspolicy",
+  "cancel": "Avbryt",
+  "help": "Hver skalaroperasjon deler disse grensene mellom tolking, enhetsomregning, aritmetikk og formatering. Venting på kilder og lagring bruker ikke aritmetikktid. Resultatene holder seg eksakte; ei grense stopper klargjøringen uten avrunding.",
+  "legacy": "Å lagre en policy oppretter en ny grafrevisjon. Tidligere revisjoner bevarer den opprinnelige beregningsatferden.",
+  "codec": "Erklærte domenekodeker bevarer sine egne komponentkapasiteter.",
+  "maxBits": "Heltallsstørrelse og størrelse på mellomresultat (bit)",
+  "maxOperations": "Aritmetiske operasjoner",
+  "maxMilliseconds": "Aritmetikktid (millisekund)",
+  "maxScalarCharacters": "Skalartekst (tegn)",
+  "maxExponent": "Størrelse på desimaleksponent",
+  "bounds": "Tillatt: {min} til {max}",
+  "invalid": "Velg et heltall innenfor hvert viste område.",
+  "incomplete": "Forhåndsvisningen viser de første tegnene. Åpne den bevarte verdien for å se gjennom eller eksportere hele verdien."
+}

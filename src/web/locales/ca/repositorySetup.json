@@ -1,0 +1,15 @@
+{
+  "title": "Configuració del repositori",
+  "guidance": "La configuració inicialitza la branca del lloc web. El contingut del lloc web només es puja després de la teva revisió.",
+  "stop": "Atura la configuració",
+  "resume": "Reprèn la configuració",
+  "created": "S'ha creat el repositori. Revisa el lloc web per publicar-lo.",
+  "initialized": "S'ha inicialitzat el repositori. Revisa el lloc web per publicar-lo.",
+  "emptyTitle": "Inicialitza el repositori buit",
+  "emptyGuidance": "{repository} és buit. Crea'n el primer commit amb un fitxer .nojekyll buit i utilitza {branch} com a branca del lloc web. Això conserva la visibilitat del repositori i no puja el lloc web ni configura Pages.",
+  "initialize": "Inicialitza el repositori",
+  "emptyStatus": "Aquest repositori és buit. Revisa'n la inicialització a la configuració de destinació.",
+  "checking": "S'està comprovant el repositori",
+  "initializing": "S'està inicialitzant la branca del lloc web",
+  "saving": "S'està desant la destinació de publicació"
+}

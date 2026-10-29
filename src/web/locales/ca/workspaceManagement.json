@@ -1,0 +1,16 @@
+{
+  "title": "Espais de treball",
+  "saved": "Espai de treball desat",
+  "workspace": "espai de treball",
+  "current": "Obert actualment",
+  "open": "Obre {title}",
+  "openExisting": "Obre un espai de treball existent",
+  "new": "Espai de treball nou",
+  "empty": "No hi ha espais de treball desats.",
+  "loading": "S'estan carregant els espais de treball...",
+  "failed": "No s'han pogut carregar els espais de treball.",
+  "retry": "Torna-ho a provar",
+  "external": "Quaderns externs",
+  "inspect": "Inspecciona un quadern extern",
+  "linked": "Obre l'espai de treball que conté la recerca enllaçada."
+}

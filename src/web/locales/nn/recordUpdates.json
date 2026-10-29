@@ -1,0 +1,15 @@
+{
+  "invalid": "Oppdateringa av den lagra oppføringa var ufullstendig. Redigeraren og gjenopprettingspunktet ditt er bevarte.",
+  "incomplete": "Ufullstendig oppføringsoppdatering. Last inn arbeidsområdet på nytt; utkastet ditt er bevart.",
+  "reloadBase": "Last inn det lagra arbeidsområdet på nytt før du tek i bruk dette svaret. Utkastet ditt er bevart.",
+  "busy": "Ei oppdatering av lagra oppføringar blir allereie lasta inn.",
+  "title": "Oppdaterer lagra oppføringar",
+  "description": "Lastar inn endringar frå andre vindauge. Redigeraren blir verande uendra til innlastinga er ferdig.",
+  "committed": "Endringane dine er lagra. Lastar inn den lagra revisjonen som vart oppretta, for å oppdatere denne redigeraren.",
+  "progress": "Motteke {loaded} av opptil {total} oppføringsoppdateringar i dette steget",
+  "cancel": "Avbryt innlasting",
+  "retry": "Prøv innlastinga på nytt",
+  "failed": "Lagra endringar kunne ikkje lastast inn. Prøv på nytt for å halde fram frå siste fullførte side.",
+  "cancelled": "Innlastinga er avbroten. Redigeraren og gjenopprettingspunktet ditt er bevarte.",
+  "savedCancelled": "Endringane dine er lagra, men innlastinga av den lagra revisjonen vart avbroten. Redigeraren og gjenopprettingspunktet ditt er bevarte. Last inn det lagra arbeidsområdet på nytt før du gjer ei ny endring."
+}

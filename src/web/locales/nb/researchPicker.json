@@ -1,0 +1,23 @@
+{
+  "title": "Knytt til forskning",
+  "refresh": "Oppdater resultater",
+  "loading": "Laster inn forskning...",
+  "changed": "Oppføringer er endret siden søket. Oppdater for gjeldende resultater.",
+  "range": "{first}–{last} av {total}",
+  "empty": "Ingen samsvarende forskning.",
+  "previous": "Forrige resultater",
+  "next": "Neste resultater",
+  "invalid": "Svaret på forskningssøket var ufullstendig. Oppdater for å prøve igjen.",
+  "record": "Oppføring",
+  "searchFailed": "Kunne ikke søke i dette arbeidsområdet.",
+  "find": "Finn i dette arbeidsområdet",
+  "placeholder": "Søk i forskning",
+  "kind": "Se etter",
+  "records": "Oppføringer",
+  "notebooks": "Labbøker",
+  "projects": "Prosjekter",
+  "workspace": "Arbeidsområde",
+  "cancel": "Avbryt",
+  "recordChanged": "Den oppføringen ble endret etter søket. Oppdater resultatene og velg revisjonen på nytt.",
+  "chooseFailed": "Denne forskningen kunne ikke velges."
+}

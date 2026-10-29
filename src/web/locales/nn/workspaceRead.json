@@ -1,0 +1,12 @@
+{
+  "invalid": "Svaret frå arbeidsområdet var ufullstendig. Last inn på nytt for å prøve igjen.",
+  "busy": "Ei lesing av arbeidsområdet køyrer allereie.",
+  "changed": "Arbeidsområdet endra seg under innlasting. Last inn på nytt for å opne det.",
+  "refreshLabel": "Observanda — oppdater lagra arbeidsområde",
+  "refreshing": "Ser etter lagra endringar…",
+  "refreshPending": "Nye lagra endringar er tilgjengelege. Oppdater med Observanda-logoen når du er klar.",
+  "refreshDeferred": "Utkastet ditt er framleis her. Lagre eller forkast endringane dine og lukk opne dialogar før du oppdaterer.",
+  "refreshFailed": "Kunne ikkje sjå etter lagra endringar. Den gjeldande visinga er uendra. Klikk på Observanda-logoen for å prøve på nytt.",
+  "refreshCurrent": "Arbeidsområdet ditt er oppdatert.",
+  "refreshed": "Lagra endringar i arbeidsområdet er lasta inn."
+}

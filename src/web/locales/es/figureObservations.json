@@ -1,0 +1,21 @@
+{
+  "region": "Región de aceptación XY",
+  "callout": "Llamada de observación",
+  "addRegion": "Añadir región XY",
+  "addCallout": "Anotar observación",
+  "series": "Serie de la observación",
+  "observation": "Observación",
+  "pointIndex": "Fila de la observación",
+  "dx": "Desplazamiento horizontal de la etiqueta (unidades SVG)",
+  "dy": "Desplazamiento vertical de la etiqueta (unidades SVG)",
+  "xLower": "Mínimo de coordenadas de la región",
+  "xUpper": "Máximo de coordenadas de la región",
+  "yLower": "Mínimo de valores de la región",
+  "yUpper": "Máximo de valores de la región",
+  "position": "Límites / observación asociada",
+  "encodingDetails": "Detalles de la codificación",
+  "invalid": "Asigna a la anotación una etiqueta, un color y una configuración válida.",
+  "regionRange": "Las regiones XY requieren límites crecientes de coordenadas numéricas o de calendario y límites de valores crecientes. Los límites logarítmicos deben ser positivos.",
+  "calloutRange": "Elige una observación medida existente y desplazamientos finitos de etiqueta entre −2.000 y 2.000 unidades SVG.",
+  "referenced": "Esta observación o serie tiene una anotación asociada. Elimina esa anotación o cambia su destino antes de eliminar la observación."
+}

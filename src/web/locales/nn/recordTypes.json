@@ -1,0 +1,19 @@
+{
+  "filter": "Filtrer etter oppføringstype",
+  "find": "Finn oppføringstype",
+  "title": "Vel eit oppføringstypefilter",
+  "search": "Søk etter oppføringstypar",
+  "saved": "Lagra oppføringstype",
+  "unavailable": "Utilgjengeleg oppføringstype",
+  "all": "Alle typar",
+  "loading": "Lastar inn oppføringstypar…",
+  "range": "{first}–{last} av {total}",
+  "empty": "Ingen samsvarande oppføringstypar.",
+  "error": "Oppføringstypane kunne ikkje lastast inn. Filteret ditt er uendra.",
+  "invalidPage": "Svaret med oppføringstypar er ugyldig.",
+  "retry": "Prøv oppføringstypane på nytt",
+  "next": "Neste typar",
+  "previous": "Førre typar",
+  "pages": "Sider med oppføringstypar",
+  "cancel": "Avbryt"
+}

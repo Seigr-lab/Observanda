@@ -1,0 +1,15 @@
+{
+  "invalid": "Oppdateringen av lagrede oppføringer var ufullstendig. Redigereren og gjenopprettingspunktet er beholdt.",
+  "incomplete": "Ufullstendig oppføringsoppdatering. Last inn arbeidsområdet på nytt; utkastet er beholdt.",
+  "reloadBase": "Last inn det lagrede arbeidsområdet på nytt før du bruker dette svaret. Utkastet er beholdt.",
+  "busy": "En oppdatering av lagrede oppføringer lastes allerede inn.",
+  "title": "Oppdaterer lagrede oppføringer",
+  "description": "Laster inn endringer fra andre vinduer. Redigereren forblir uendret til innlastingen er ferdig.",
+  "committed": "Endringene er lagret. Laster inn den resulterende lagrede revisjonen for å oppdatere redigereren.",
+  "progress": "Mottatt {loaded} av opptil {total} oppføringsoppdateringer i dette trinnet",
+  "cancel": "Avbryt innlasting",
+  "retry": "Prøv innlasting igjen",
+  "failed": "Lagrede endringer kunne ikke lastes inn. Prøv igjen for å fortsette fra siste fullførte side.",
+  "cancelled": "Innlastingen er avbrutt. Redigereren og gjenopprettingspunktet er beholdt.",
+  "savedCancelled": "Endringene er lagret, men innlastingen av den lagrede revisjonen ble avbrutt. Redigereren og gjenopprettingspunktet er beholdt. Last inn det lagrede arbeidsområdet på nytt før du gjør en ny endring."
+}

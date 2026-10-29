@@ -1,0 +1,20 @@
+{
+  "recordType": "Oppføringstype",
+  "allTypes": "Alle typar",
+  "searchRecordTypes": "Søk etter oppføringstypar",
+  "selected": "Lagra val",
+  "unavailable": "Ikkje tilgjengeleg i dette omfanget",
+  "loading": "Lastar inn val…",
+  "empty": "Ingen samsvarande val.",
+  "range": "{first}–{last} av {total}",
+  "error": "Vala kunne ikkje lastast inn. Det lagra valet er uendra.",
+  "retry": "Prøv å laste inn vala på nytt",
+  "previous": "Førre val",
+  "next": "Neste val",
+  "invalidPage": "Svaret med val er ugyldig.",
+  "projects": "Prosjekt som skal vere med",
+  "books": "Labbøker som skal vere med",
+  "searchProjects": "Søk etter prosjekt",
+  "searchBooks": "Søk i labbøker",
+  "allBooks": "Alle labbøker"
+}

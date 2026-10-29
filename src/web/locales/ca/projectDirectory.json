@@ -1,0 +1,23 @@
+{
+  "unnamed": "Projecte {id}",
+  "project": "Projecte",
+  "settings": "Configuració",
+  "failed": "No s'ha pogut carregar el directori de projectes.",
+  "retry": "Torna-ho a provar",
+  "loading": "S'estan carregant els projectes…",
+  "more": "Més projectes",
+  "folder": "Carpeta del projecte",
+  "choose": "Tria una carpeta",
+  "password": "Contrasenya del projecte",
+  "passwordHint": "Opcional",
+  "passwordRequired": "Com a mínim 12 caràcters; la protecció del dispositiu no està disponible en aquest ordinador.",
+  "username": "Nom d'usuari",
+  "create": "Crea un projecte",
+  "legacyParent": "Mou aquest projecte a un emmagatzematge propi abans d'afegir-hi un subprojecte.",
+  "inside": "Dins de",
+  "newSaved": "S'ha creat el projecte.",
+  "folderRequired": "Tria una carpeta per a aquest projecte.",
+  "templateUnavailable": "Aquesta plantilla de projecte no està disponible. Tria una altra plantilla o activa els seus tipus de llibre de laboratori a Preferències.",
+  "placementFailed": "No s'ha pogut col·locar el projecte aquí.",
+  "creating": "S'està creant el projecte…"
+}

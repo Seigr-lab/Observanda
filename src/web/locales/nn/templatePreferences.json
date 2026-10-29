@@ -1,0 +1,11 @@
+{
+  "title": "Labbokmalar",
+  "intro": "Vel malane som er tilgjengelege når du opprettar eller set opp ei labbok.",
+  "enable": "Aktiver {name}",
+  "loadFailed": "Kunne ikkje laste inn desse verktøya. Slå dei av og på for å prøve på nytt.",
+  "chooseMore": "Vel fleire malar i {preferences} / {templates}. Tilpass denne boka i Labbokinnstillingar.",
+  "manage": "Vel fleire malar i {preferences} / {templates}.",
+  "defaultUnavailable": "Prosjektstandarden bruker ein type som er slått av. Vel ein annan mal eller aktiver standarden i {preferences} / {templates}.",
+  "enableFirst": "Aktiver denne malen i {preferences} / {templates} først.",
+  "enableTypes": "Aktiver labboktypar i {preferences} / {templates}, eller legg til dine eigne oppføringstypar nedanfor."
+}

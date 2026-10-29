@@ -1,0 +1,11 @@
+{
+  "format": "Formato numérico del resultado",
+  "resultRadix": "Base de numeración del resultado (2–36)",
+  "default": "Predeterminado: fracción exacta; entero para los recuentos",
+  "decimal": "Decimal exacto",
+  "integer": "Entero (base 10)",
+  "radix": "Entero en una base explícita",
+  "radix-fraction": "Numeral fraccionario en una base explícita",
+  "rational": "Fracción exacta (numerador/denominador en base 10)",
+  "exact": "El formato del resultado se conserva con esta receta. No se aplica redondeo. Si un resultado no se puede escribir exactamente en el formato seleccionado, elige una fracción exacta o una base compatible."
+}

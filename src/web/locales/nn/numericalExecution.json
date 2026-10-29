@@ -1,0 +1,12 @@
+{
+  "title": "Grenser for numerisk jobb",
+  "help": "Desse grensene omfattar den numeriske jobben på tvers av delar og nye forsøk. Aktiv tid måler numerisk arbeid, ikkje medgått ventetid.",
+  "total": "Heile den numeriske jobben",
+  "slice": "Éin numerisk del",
+  "maxOperations": "Maksimalt tal på numeriske operasjonar",
+  "maxActiveMilliseconds": "Maksimalt tal på aktive millisekund",
+  "bounds": "Tillate område: {min} til {max}.",
+  "sliceHelp": "Ein del kan ikkje overskride grensene for heile jobben. Nye forsøk held fram frå lagra framdrift; ein avbroten reservasjon blir framleis belasta fullt. Fullførte delar blir belasta for faktisk bruk.",
+  "invalid": "Skriv inn grenser for heile jobben og for delar innanfor dei viste områda. Ein del kan ikkje overskride heile jobben. Verdiane dine er bevarte.",
+  "publicContext": "Grenser for numerisk jobb: {operations} operasjonar og {active} ms aktivt arbeid; kvar del: {sliceOperations} operasjonar og {sliceActive} ms aktivt arbeid. Nye forsøk bevarer belasta arbeid."
+}

@@ -1,0 +1,15 @@
+{
+  "copy": "Kopier skrivemåte og tolking",
+  "paste": "Lim inn skrivemåte og tolking",
+  "scope": "Overfører berre skrivemåte og taltolking. Einingar og dokumentasjonsreferansar blir verande uendra.",
+  "copied": "Skrivemåte og tolking er kopierte.",
+  "pasted": "Skrivemåte og uttrykkeleg tolking er limte inn.",
+  "plain": "Rein tekst er limt inn; den valde tolkinga er uendra.",
+  "invalid": "Denne kopierte verdien har ein ustøtta eller ugyldig skrivemåte eller tolking. Vel ei uttrykkeleg tolking før kopiering.",
+  "changed": "Verdien eller inndatapolicyen endra seg medan utklippstavla vart lesen. Endringa di vart bevart; lim inn på nytt for å erstatte henne.",
+  "resource": "Heile den kopierte verdien overskrid inndatapolicyen på målet. Ingenting vart limt inn eller endra.",
+  "length": "Heile den kopierte verdien overskrid den støtta lengda i denne redigeraren. Ingenting vart limt inn.",
+  "lines": "Denne verdien inneheld linjeskift som dette feltet ikkje kan bevare. Ingenting vart limt inn.",
+  "unavailable": "Tilgang til utklippstavla er ikkje tilgjengeleg. Bruk kopierings- og innlimingskontrollane i nettlesaren.",
+  "contextMismatch": "Denne kopierte verdien bruker ei anna taltolking enn det lagra feltet. Ingenting vart limt inn; endre feltskjemaet uttrykkeleg for å bruke ei anna tolking."
+}

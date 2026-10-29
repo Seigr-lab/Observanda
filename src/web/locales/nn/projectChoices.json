@@ -1,0 +1,11 @@
+{
+  "parents": "Søk etter prosjekt",
+  "templates": "Søk etter lagra malar",
+  "loading": "Lastar inn val…",
+  "count": "{count} av {total}",
+  "more": "Fleire val",
+  "retry": "Prøv på nytt",
+  "failed": "Prosjektvala kunne ikkje lastast inn.",
+  "book-parents": "Søk etter målprosjekt",
+  "record-parents": "Søk etter prosjekt"
+}

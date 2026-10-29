@@ -1,0 +1,8 @@
+{
+  "label": "Prosjektverktøy",
+  "overview": "Oversikt over {name}",
+  "oneItem": "1 element",
+  "items": "{count} elementer",
+  "failed": "Antall elementer kunne ikke lastes inn.",
+  "retry": "Prøv antallene igjen"
+}

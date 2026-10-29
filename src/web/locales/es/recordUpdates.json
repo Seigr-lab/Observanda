@@ -1,0 +1,15 @@
+{
+  "invalid": "La actualización del registro guardado estaba incompleta. Se conservan el editor y el punto de recuperación.",
+  "incomplete": "Actualización del registro incompleta. Recarga el espacio de trabajo; se conserva tu borrador.",
+  "reloadBase": "Recarga el espacio de trabajo guardado antes de aplicar esta respuesta. Se conserva tu borrador.",
+  "busy": "Ya se está cargando una actualización de registro guardado.",
+  "title": "Actualizando los registros guardados",
+  "description": "Cargando los cambios de otras ventanas. El editor permanece intacto hasta que termine la carga.",
+  "committed": "Tus cambios se han guardado. Cargando la revisión guardada resultante para actualizar este editor.",
+  "progress": "Se han recibido {loaded} de hasta {total} actualizaciones de registros en este paso",
+  "cancel": "Cancelar la carga",
+  "retry": "Reintentar la carga",
+  "failed": "No se han podido cargar los cambios guardados. Reintenta para continuar desde la última página completada.",
+  "cancelled": "Carga cancelada. Se conservan el editor y el punto de recuperación.",
+  "savedCancelled": "Tus cambios se han guardado, pero se ha cancelado la carga de su revisión guardada. Se conservan el editor y el punto de recuperación. Recarga el espacio de trabajo guardado antes de hacer otro cambio."
+}

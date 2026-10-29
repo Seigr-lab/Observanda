@@ -1,0 +1,11 @@
+{
+  "opening": "Opnar Observanda…",
+  "skip": "Hopp til hovudinnhaldet",
+  "moduleFailed": "Observanda kunne ikkje lastast inn",
+  "moduleMessage": "Ei nødvendig programfil vart ikkje lasta inn. Last inn på nytt for å prøve igjen.",
+  "connectionFailed": "Observanda kunne ikkje fullføre opninga",
+  "connectionMessage": "Tilkoplinga eller klargjeringa av arbeidsområdet vart avbroten. Last inn på nytt for å prøve igjen. Det lagra arbeidsområdet er ikkje erstatta.",
+  "unauthorized": "Opne labboka di",
+  "authorizationMessage": "Opne Observanda frå programikonet, eller bruk den gjeldande oppstartslenkja for å kople til denne nettlesaren.",
+  "reload": "Last inn Observanda på nytt"
+}

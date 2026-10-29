@@ -1,0 +1,22 @@
+{
+  "title": "Seccions del registre",
+  "contents": "En aquest registre",
+  "navigation": "Explora les seccions d'escriptura",
+  "range": "Seccions {first}–{last} de {total}",
+  "previous": "Seccions anteriors",
+  "next": "Seccions següents",
+  "goTo": "Ves al número de secció",
+  "go": "Ves-hi",
+  "findHeading": "Troba la capçalera de la secció",
+  "findNext": "Troba la següent",
+  "noMatch": "Cap capçalera de secció coincideix.",
+  "enterHeading": "Introdueix una capçalera de secció per cercar.",
+  "heading": "Capçalera de la secció",
+  "content": "Contingut de {title}",
+  "up": "Mou {title} amunt",
+  "down": "Mou {title} avall",
+  "remove": "Elimina {title}",
+  "confirmRemove": "Vols eliminar aquesta secció i el seu text?",
+  "new": "Secció nova",
+  "add": "Afegeix una secció"
+}

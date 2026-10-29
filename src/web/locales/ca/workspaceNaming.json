@@ -1,0 +1,5 @@
+{
+  "conflict": "Un altre espai de treball registrat utilitza aquest nom de carpeta. Tria un altre nom a Detalls de l'espai de treball.",
+  "copyToProject": "Copia els detalls de l'espai de treball a un projecte",
+  "copyToProjectDescription": "Utilitza {name} i la seva introducció com a detalls del projecte."
+}

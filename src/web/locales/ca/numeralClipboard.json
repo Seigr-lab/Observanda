@@ -1,0 +1,15 @@
+{
+  "copy": "Copia la representació i la interpretació",
+  "paste": "Enganxa la representació i la interpretació",
+  "scope": "Transfereix només la representació i la interpretació numèrica. Les unitats i les referències a evidències no canvien.",
+  "copied": "S'han copiat la representació i la interpretació.",
+  "pasted": "S'han enganxat la representació i la interpretació explícita.",
+  "plain": "S'ha enganxat text sense format; la interpretació seleccionada no ha canviat.",
+  "invalid": "Aquest valor copiat té una representació o una interpretació no admesa o no vàlida. Tria una interpretació explícita abans de copiar.",
+  "changed": "El valor o la política d'entrada ha canviat mentre es llegia el porta-retalls. S'ha conservat la modificació; torna a enganxar per substituir-la.",
+  "resource": "El valor copiat complet supera la política d'entrada de la destinació. No s'ha enganxat ni canviat res.",
+  "length": "El valor copiat complet supera la longitud admesa per aquest editor. No s'ha enganxat res.",
+  "lines": "Aquest valor conté salts de línia que aquest camp no pot conservar. No s'ha enganxat res.",
+  "unavailable": "L'accés al porta-retalls no està disponible. Utilitza els controls de còpia i enganxament del navegador.",
+  "contextMismatch": "Aquest valor copiat utilitza una interpretació numèrica diferent de la del camp desat. No s'ha enganxat res; canvia explícitament l'esquema del camp per utilitzar una altra interpretació."
+}

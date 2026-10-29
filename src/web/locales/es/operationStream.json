@@ -1,0 +1,6 @@
+{
+  "afterResult": "Han llegado datos inesperados después del resultado de la operación.",
+  "invalid": "La operación ha devuelto una respuesta no válida.",
+  "limit": "La respuesta de la operación supera la capacidad.",
+  "interrupted": "La conexión se ha interrumpido antes de recibir un resultado completo. Reintenta para comprobar el resultado de la operación."
+}

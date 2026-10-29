@@ -1,0 +1,22 @@
+{
+  "group": "Planlegging",
+  "task": "Oppgaver",
+  "calendar": "Kalendere",
+  "event": "Kalenderhendelser",
+  "booking": "Utstyrsreservasjoner",
+  "search": "Inneholder tekst",
+  "filterStatus": "Status (valgfritt)",
+  "owner": "Ansvarlig",
+  "status": "Status",
+  "priority": "Prioritet",
+  "dueOn": "Frist",
+  "assignees": "Personer",
+  "checklist": "Sjekkliste",
+  "color": "Farge",
+  "startsAt": "Starter",
+  "endsAt": "Slutter",
+  "location": "Sted",
+  "resource": "Utstyr",
+  "notes": "Notater",
+  "invalid": "Planleggingskortet kunne ikke verifiseres. Oppdater kortet og prøv igjen."
+}

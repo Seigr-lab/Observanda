@@ -1,0 +1,7 @@
+{
+  "loading": "Cargando las notas del evento…",
+  "retry": "Reintentar las notas del evento",
+  "invalid": "No se han podido verificar los detalles del evento. Cierra esta ventana y actualiza el calendario.",
+  "readOnly": "Evento de calendario de solo lectura.",
+  "close": "Cerrar"
+}

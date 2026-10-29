@@ -1,0 +1,6 @@
+{
+  "range": "Elements {first}–{last} de {total}",
+  "previous": "Elements anteriors",
+  "next": "Elements següents",
+  "invalidPage": "La resposta de la targeta era incompleta. Torna a carregar aquesta targeta."
+}

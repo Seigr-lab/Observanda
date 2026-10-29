@@ -1,0 +1,22 @@
+{
+  "region": "Biblioteca de dades",
+  "find": "Troba dades per mostrar",
+  "placeholder": "Cerca targetes i recerca…",
+  "show": "Mostra",
+  "all": "Totes les dades",
+  "collections": "Col·leccions",
+  "closed": "Targetes tancades",
+  "closedDescription": "Targeta tancada · configuració conservada",
+  "hint": "Arrossega al tauler o fes clic per afegir",
+  "close": "Tanca la biblioteca de dades",
+  "pin": "Fixa {name}",
+  "unpin": "Desfixa {name}",
+  "empty": "No hi ha dades coincidents. Prova una altra cerca o categoria.",
+  "range": "{first}–{last} de {total}",
+  "previous": "Anterior",
+  "next": "Següent",
+  "loading": "S'estan cercant les fonts de les targetes…",
+  "retry": "Repeteix la cerca de targetes",
+  "invalidPage": "La resposta de la cerca de targetes era incompleta. Repeteix aquesta cerca.",
+  "loadFailed": "No s'han pogut carregar les fonts de les targetes. Repeteix aquesta cerca."
+}

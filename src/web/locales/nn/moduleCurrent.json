@@ -1,0 +1,23 @@
+{
+  "invalid": "Svaret for det lagra elementet kunne ikkje stadfestast. Utkastet er bevart. Oppdater og samanlikn den lagra versjonen før du prøver på nytt.",
+  "loading": "Lastar inn element…",
+  "loadingItem": "Opnar lagra element…",
+  "retry": "Prøv elementa på nytt",
+  "refresh": "Oppdater element",
+  "previous": "Førre element",
+  "next": "Neste element",
+  "pages": "Elementsider",
+  "range": "Element {first}–{last} av {total}",
+  "empty": "Ingen samsvarande element.",
+  "search": "Søk etter element",
+  "status": "Status",
+  "allStatuses": "Alle statusar",
+  "choose": "Vel modulelement",
+  "select": "Vel {title}",
+  "cancel": "Avbryt",
+  "unavailable": "Elementet er ikkje tilgjengeleg",
+  "labelsUnavailable": "Elementtitlane kunne ikkje lastast inn. Lagra lenkjer blir bevarte.",
+  "retryLabels": "Prøv elementtitlane på nytt",
+  "open": "Opne {name}",
+  "checkpointFailed": "Kunne ikkje bevare eit gjenopprettingspunkt: {reason} Endringane dine er framleis opne. Prøv på nytt, lagre eller forkast dei før du opnar eit anna element."
+}

@@ -1,0 +1,9 @@
+{
+  "buildingTree": "Preparando los archivos revisados del repositorio",
+  "uploading": "Subiendo los archivos seleccionados",
+  "committing": "Creando el commit de publicación",
+  "pushing": "Enviando la rama de publicación",
+  "verifying": "Verificando los archivos remotos",
+  "repositoryVerified": "Archivos del repositorio verificados; configuración de Pages intacta",
+  "livePending": "Archivos remotos verificados; verificación del sitio publicado pendiente"
+}

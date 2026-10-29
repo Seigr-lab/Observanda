@@ -1,0 +1,15 @@
+{
+  "title": "Configuración del repositorio",
+  "guidance": "La configuración inicializa la rama del sitio web. El contenido del sitio web solo se sube después de tu revisión.",
+  "stop": "Detener la configuración",
+  "resume": "Reanudar la configuración",
+  "created": "Repositorio creado. Revisa el sitio web para publicarlo.",
+  "initialized": "Repositorio inicializado. Revisa el sitio web para publicarlo.",
+  "emptyTitle": "Inicializar un repositorio vacío",
+  "emptyGuidance": "{repository} está vacío. Crea su primer commit con un archivo .nojekyll vacío y utiliza {branch} como rama del sitio web. Esto conserva la visibilidad del repositorio y no sube el sitio web ni configura Pages.",
+  "initialize": "Inicializar repositorio",
+  "emptyStatus": "Este repositorio está vacío. Revisa la inicialización en la configuración del destino.",
+  "checking": "Comprobando el repositorio",
+  "initializing": "Inicializando la rama del sitio web",
+  "saving": "Guardando el destino de publicación"
+}

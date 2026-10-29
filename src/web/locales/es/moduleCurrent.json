@@ -1,0 +1,23 @@
+{
+  "invalid": "No se ha podido verificar la respuesta del elemento guardado. Se conserva el borrador. Actualiza y compara la versión guardada antes de reintentar.",
+  "loading": "Cargando elementos…",
+  "loadingItem": "Abriendo el elemento guardado…",
+  "retry": "Reintentar los elementos",
+  "refresh": "Actualizar los elementos",
+  "previous": "Elementos anteriores",
+  "next": "Elementos siguientes",
+  "pages": "Páginas de elementos",
+  "range": "Elementos {first}–{last} de {total}",
+  "empty": "No hay elementos coincidentes.",
+  "search": "Buscar elementos",
+  "status": "Estado",
+  "allStatuses": "Todos los estados",
+  "choose": "Elegir un elemento del módulo",
+  "select": "Seleccionar {title}",
+  "cancel": "Cancelar",
+  "unavailable": "Elemento no disponible",
+  "labelsUnavailable": "No se han podido cargar los títulos de los elementos. Se conservan los enlaces guardados.",
+  "retryLabels": "Reintentar los títulos de los elementos",
+  "open": "Abrir {name}",
+  "checkpointFailed": "No se ha podido conservar un punto de recuperación: {reason} Tus modificaciones siguen abiertas. Reintenta, guárdalas o descártalas antes de abrir otro elemento."
+}

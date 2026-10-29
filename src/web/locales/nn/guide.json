@@ -1,23 +1,305 @@
 {
   "topics": [
     {
+      "id": "compound-figures",
+      "title": "Figurar med fleire panel, intervall og grenser",
+      "sections": [
+        {
+          "id": "panels",
+          "title": "Samanlikn panel utan å miste dei individuelle dataa deira",
+          "paragraphs": [
+            "Vel {ui:figureComposition.add} i figurdelen i ei oppføring. Dei to første eksisterande plotta blir kopierte inn i figuren når dei finst. Bruk {ui:figureComposition.editing} til å velje eit panel, og rediger det med dei same kontrollane for data, aksar og utforming som eit enkelt plott. Vel ei kjelde og {ui:figureComposition.copy} for å erstatte eit panel med eit anna bilete av lagra data, eller bruk {ui:figureComposition.blank}. Figurar støttar to til åtte panel og éin til tre kolonnar; lese- og nettstadvisingar stablar panela på smale skjermar.",
+            "Kopiane bevarer eigne målingar, uvisse, merknader og presentasjon. Seinare endringar i kjeldeplottet endrar ikkje eit kopiert panel. Eksplisitte støtteresultat blir kopierte med dei nøyaktige analysereferansane og avgrensingane sine. Bruk Resultat til å erklære eller endre tolkinga for ein heil figur eller eit enkelt panel. Ein figur med støtteresultat kan ikkje fjernast eller erstattast før desse resultata har fått nye mål eller er fjerna.",
+            "{ui:figureComposition.linkX} og {ui:figureComposition.linkY} bruker det samla området til panela, medrekna uvisse og dei eksplisitte grensene til kvart panel. Felles aksar krev same koordinattype, skala, etikett og orientering. Kategorikoordinatar kan ikkje dele eit område. Når deling av område blir slått av, får kvart panel tilbake sine eigne lagra innstillingar."
+          ]
+        },
+        {
+          "id": "annotations",
+          "title": "Marker intervall og avgjerdsgrenser",
+          "paragraphs": [
+            "Opne {ui:figureComposition.annotations} i eit plott. Vel {ui:figureComposition.addBoundary} for ein enkelt koordinat eller {ui:figureComposition.addInterval} for eit skuggelagt område. Skriv inn ein etikett, akse, posisjon og, for eit intervall, endepunktet. Numeriske koordinatar bruker einingane til aksen; datokoordinatar godtek ISO-datoar eller tidsstempel med tidssone. Logaritmiske koordinatar må vere positive. Endre fargen og dekkevna til intervallet slik at dei passar figuren.",
+            "Merknader skildrar plottet og endrar ikkje målingane eller det tilpassa akseområdet. Merke utanfor det synlege området blir klipte, medan datatabellen bevarer dei fullstendige koordinatane og etikettane deira. Last ned SVG bevarer heile figuren. Last ned data tek med målingar, uvisse og ei eiga rad for kvar merknad; nedlastingar med fleire panel identifiserer panelet for kvar rad. Tryggingskopiar av arbeidsområdet bevarer heile den redigerbare modellen."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "evidence-association-repair",
+      "title": "Sjå gjennom og reparer manglande tilknytingar til importert dokumentasjon",
+      "sections": [
+        {
+          "id": "review",
+          "title": "Kontroller ein allereie brukt importbolk",
+          "paragraphs": [
+            "Opne Inspiser ekstern loggbok og Sjå gjennom eller fortset lagra importar frå Arbeidsområde. Opne ein brukt importbolk og vel {ui:migrationImport.evidenceCheck}. Sjå gjennom kvart filnamn, opphavleg filsti, byteantal, SHA-256 og oppføringa som eig fila. Delte byte blir framleis lagra éin gong, medan kvar oppføring og relative kjeldesti har si eiga tilknyting.",
+            "{ui:migrationImport.evidenceApply} verifiserer dei bevarte originalbyta og legg berre til dei manglande tilknytingane som er viste på den sida. Ein endra gjennomgang må kontrollerast på nytt. Gå gjennom alle sidene for å inspisere heile importbolken. Oppføringar som med vilje er fjerna frå arbeidsområdet, blir identifiserte og ikkje oppretta på nytt. Nedlastingslenkjer gjer det mogleg å inspisere før ein reparasjon blir brukt.",
+            "Reparasjonar bevarer skrivne oppføringar, kjeldemetadata, originalfiler og gyldige eksisterande tilknytingar. Kvar brukt side har ei bevart kvittering. Gjentekne identiske førespurnader returnerer kvitteringa utan å lage duplikat av vedlegg. Verifisering av krypterte tryggingskopiar kontrollerer òg dei reparerte tilknytingane. Denne handlinga køyrer ikkje ein import på nytt og utleier inga vitskapleg tyding frå filnamn."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "organizations",
+      "title": "Organisasjonar og teammedlemskap",
+      "sections": [
+        {
+          "id": "administration",
+          "title": "Opprett ein organisasjon og administrer team",
+          "paragraphs": [
+            "Slå på {ui:organizations.title} i Innstillingar → Modular, og opne det deretter frå navigasjonen. Vel {ui:organizations.create}, skriv inn organisasjonsnamnet og namnet ditt, og lagre. Den eigne signeringsidentiteten til denne installasjonen blir den første administratoren. Ein administrator styrer medlemskap og team; denne rolla gir ikkje krypteringsnøklar for arbeidsområde, forskingstilgang eller mynde til publisering eller gjenoppretting.",
+            "Bruk {ui:organizations.newTeam} til å namngi eit team og velje dei aktive organisasjonsmedlemmene som skal vere med. Rediger ein medlem for å endre organisasjonsrolla eller fjerne vedkomande. Fjerning tek òg bort teammedlemskapa deira. Ein annan administrator må vere att før den siste administratoren kan fjernast eller få ei lågare rolle. Ein fjerna medlem må godta ein ny invitasjon for å bli med att.",
+            "Opne {ui:organizations.activity} for å inspisere lagra invitasjonar, godkjenningar, rolleendringar, fjerningar og endringar i teammedlemskap, med administratoren som handla og tidspunktet. Historikken blir lagra ved kvar endring og er berre synleg for noverande administratorar. {ui:organizations.activityOlder} blar gjennom eldre endringar utan å blande organisasjonar; {ui:organizations.activityLatest} går tilbake til dei nyaste endringane. Denne lokale historikken er ikkje eit uavhengig tidsstempel eller eit vern mot å gjenopprette ein eldre fullstendig tryggingskopi."
+          ]
+        },
+        {
+          "id": "invitations",
+          "title": "Utveksle og verifiser innmeldingsfiler",
+          "paragraphs": [
+            "Mottakaren vel {ui:organizations.identity} på sin installasjon og sender den offentlege identitetsfila til administratoren. Ho inneheld ingen privat signeringsnøkkel. Administratoren vel {ui:organizations.invite}, opnar fila og verifiserer heile det viste fingeravtrykket med mottakaren gjennom ein annan kanal. Vel rolle, team og levetida til invitasjonen før du lagrar og sender den nedlasta invitasjonen.",
+            "Mottakaren vel {ui:organizations.openInvitation}, ser gjennom organisasjonen, rolla og utløpstida, og verifiserer uavhengig fingeravtrykket til installasjonen som inviterer. {ui:organizations.accept} lastar ned ei signert godkjenning som skal sendast tilbake. Administratoren bruker {ui:organizations.receive} til å melde inn medlemmen og sender stadfestinga tilbake. Mottakaren bruker {ui:organizations.receipt} til å bevare henne.",
+            "Å opne den same invitasjonen på nytt returnerer den same bevarte godkjenninga. Å importere denne godkjenninga på nytt opprettar ikkje ein ny medlem og bevarer det opphavlege godkjenningstidspunktet. Dersom den nedlasta invitasjonen går tapt, opprett ein ny invitasjon; dette trekkjer tilbake den tidlegare ventande invitasjonen til den mottakaren i organisasjonen. Signeringsnøkkelen til mottakaren krevst for å godta, så invitasjonsfila åleine melder ikkje inn ein annan person."
+          ]
+        },
+        {
+          "id": "boundaries",
+          "title": "Tilbaketrekking og bevarte stadfestingar",
+          "paragraphs": [
+            "Bruk {ui:organizations.revoke} til å avbryte ein ventande invitasjon. Utløpte og tilbaketrekte invitasjonar kan ikkje godtakast. Når ein administrator blir fjerna eller får ei lågare rolle, blir dei ventande invitasjonane deira avbrotne. Medlemsendringar blir kontrollerte på nytt når ein signert kommando kjem inn, òg ved gjentekne kommandoar.",
+            "Utvekslingsfilene registrerer innmelding i organisasjonen; dei inneheld ikkje labbokinnhald eller dekrypteringsnøklar for arbeidsområde. Stadfestingskvitteringar på ein annan installasjon viser når godkjenninga fann stad. Dei er ikkje direkte medlemskapskontrollar og blir ikkje oppdaterte automatisk når den administrerande installasjonen endrar medlemskap."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "continuing-intake",
+      "title": "Fortløpande inntak og klargjering av køyringar",
+      "sections": [
+        {
+          "id": "workflow",
+          "title": "Ta inn den neste førebuinga eller returnert dokumentasjon",
+          "paragraphs": [
+            "Opprett og lagre målkøyringa med dei vanlege oppføringsverktøya. Opne Dokumentasjon og analyse, og deretter {ui:localIntake.open}. Vel mappa som inneheld intake.observanda.json, og bruk {ui:localIntake.validate}. Førehandsvisinga identifiserer arbeidsområdet, oppføringa, venta revisjon, kjelderevisjon, filer og analysar. Valideringa importerer ingenting. {ui:localIntake.stage} bevarer krypterte private filer; {ui:localIntake.apply} legg ved dei gjennomgåtte originalane og analysane saman. Å bruke ei endring av ei oppføring gjer òg oppføringa privat.",
+            "Lagra framlegg er framleis tilgjengelege etter omstart. Avbryt stoppar arbeidaren; Fortset prøver det same framlegget og dei same identitetane på nytt. Dersom eit svar går tapt, bruk den same framleggs-ID-en og SHA-256 på nytt for å hente det eksisterande resultatet. Gjenbruk av den ID-en med anna innhald blir avvist. Endra kjeldebyte eller målrevisjonar krev eit nytt framlegg og ein ny gjennomgang. Import køyrer aldri skript, avgjer aldri vitskaplege utfall, og lagar aldri commit, push eller publisering."
+          ]
+        },
+        {
+          "id": "contract",
+          "title": "Kontrakt for lokalt inntak, versjon 1",
+          "paragraphs": [
+            "Framlegget er UTF-8-JSON med namnet intake.observanda.json. Påkravde eigenskapar: version (1), id (ny UUID v4-idempotensnøkkel), workspaceId, recordId, expectedRevision (SHA-256 for den lagra oppføringa), purpose (preparation, evidence, analysis eller amendment), title, files, analyses, source og verification. Kopier identifikatorane for arbeidsområde, oppføring og revisjon frå inntaksskjermen. Heile manifestet er avgrensa til 4 MiB. Ukjend versjon eller ukjende eigenskapar på toppnivå blir avviste.",
+            "files inneheld høgst 1 000 element: id (ny UUID v4), path (relativ sti inni framleggsmappa), size (nøyaktig byteantal), sha256 og provenance (tekst). Tomme lister er tillatne. Lenkjer, stigjennomgang, einingsfiler og tvitydige stiar blir avviste. Analyses inneheld høgst 32 element: id (ny UUID eller eksisterande analyseidentitet), expectedRevision (null for ein ny analyse, elles den nøyaktige SHA-256-verdien), title, tool, version, toolSha256, parameters (tekst), inputs og outputs. Ein filreferanse er {\"file\":\"UUID\"}; ein eksisterande bevart referanse er {\"kind\":\"artifact\",\"id\":\"UUID\",\"revision\":\"SHA-256\"}. Inndata kan òg referere til datasett, oppføringar, samlingar og analysar. Utdata må referere til artefaktar. Kvar liste har høgst 64 referansar. Ei valfri method bruker det eksisterande versjonerte skjemaet for analyseopphav; nøyaktige numeriske verdiar held fram som strenger.",
+            "source er {\"revision\":\"external revision label\",\"sha256\":\"source SHA-256\"}. verification er {\"tool\":\"validator name\",\"version\":\"validator version\",\"sha256\":\"validator source SHA-256\",\"statement\":\"what was checked and its limits\"}. Dette er bevarte erklæringar, ikkje bevis på at eit verktøy køyrde eller at ei måling er rett. Analysekøyring skjer utanfor Observanda. Ei valfri record er heile den føreslåtte oppføringa i det eksisterande forfattarskjemaet, med same ID og labbok, share:false og ingen medievedlegg; ho er underlagd vanleg validering av uforanderlege fakta og venta revisjon. Utelat record for å leggje ved materiale utan å endre forteljinga. Minst éi fil, éin analyse eller éi oppføringsendring krevst."
+          ]
+        },
+        {
+          "id": "automation",
+          "title": "Lokal CLI og autentisert lokalt API",
+          "paragraphs": [
+            "Bruk node src/cli.js intake --action preview --workspace <directory> --workspace-id <UUID> --record-id <UUID> --source <proposal-directory>. Oppgi --password-stdin når det krevst; skriv aldri eit passord på kommandolinja. Standardutdata er ein versjonert JSON-konvolutt med ok og result eller error. Oppstartsmeldingar frå køyremiljøet går til standardfeil. Avslutningskode 0 tyder ein vellukka kommando, 1 ein avvist kommando, og 2 ein stoppa eller mislukka jobb som det blei venta på.",
+            "Klargjering legg til --action stage --id <proposal UUID> --pin <reviewed SHA-256>. Bruking nyttar --action apply med same ID og pin. Bruk --wait til å vente på stage, apply eller resume; elles fortset den delte arbeidaren i appen den kølagde jobben når appen køyrer. Status, cancel, resume og list bruker dei same eksplisitte arbeidsområde- og oppføringsidentitetane; readiness returnerer klargjeringsvisinga for oppføringa. --action watch --source <parent-folder> rapporterer framlegg i direkte undermapper som JSON-linjer. Overvaking berre validerer og varslar: ho klargjer eller bruker aldri framlegg. Stopp overvakinga med Ctrl+C.",
+            "Det lokale API-et er POST /api/v1/intake/{preview|stage|apply|status|cancel|resume|list|readiness|link-receipt|policy}. Førespurnader inneheld version:1, workspaceId og recordId; preview og stage inneheld source, stage inneheld id og expectedPin, apply inneheld id og expectedPin, og status/styring inneheld id. List godtek den returnerte markøren. Svar bruker det same tenesteresultatet som CLI-result; feil bruker den stabile code/message/details-konvolutten i appen. API-et krev ei opplåst lokal appøkt, kontroll av tillaten Host og same opphav, og konteksthovudet for det aktive arbeidsområdet når det krevst. Det er ikkje eit offentleg fleirbrukar-API eller ei erstatning for framtidige integrasjonsnøklar med avgrensa omfang. Manuell skriving og filimport treng inga overvaking eller integrasjon."
+          ]
+        },
+        {
+          "id": "readiness",
+          "title": "Kvitteringar og reglar for fullføring",
+          "paragraphs": [
+            "{ui:localIntake.readiness} samanfattar originaldokumentasjon, utdaterte analysar, uavklarte erklærte kriterium, ventande gjennomgangar og private kvitteringar for denne oppføringa. Det utleier ikkje fysisk suksess. Eit oppfylt eller ikkje-oppfylt kriterium er vurdert; eit uavklart, utilgjengeleg eller ikkje-vurdert kriterium er framleis synleg. Negative resultat kan framleis fullførast. Hypotesar eller kriterium er ikkje obligatoriske for kreative oppføringar eller feltoppføringar.",
+            "Brukte framlegg knyter den private kjelderevisjonen og den erklærte valideringa til oppføringsrevisjonen som blei laga. Bruk {ui:localIntake.addReceipt} for ei manuell valideringserklæring, ei førebudd publiseringsutgåve som inneheld akkurat denne oppføringsrevisjonen, eller ei valfri Git-commit-erklæring. Git-erklæringar identifiserer ein ekstern commit og den oppgitte kjeldehashen; Observanda opprettar, sender eller autentiserer ikkje denne commit-en uavhengig. Tidlegare kvitteringar er framleis synlege etter endringar. Publiseringskvitteringar identifiserer ei førebudd utgåve og er ikkje bevis på direkte utrulling.",
+            "{ui:localIntake.policy} er valfri og gjeld alle labbøker direkte i det valde prosjektet. Ho kan krevje validerings-, publiserings- og/eller Git-kvitteringar før ei oppføring blir fullført. Lagre endra innhald som utkast, knyt dei påkravde kvitteringane til den lagra revisjonen, og merk henne deretter som fullført i ei eiga handling. Vanlege oppføringskommandoar frå grensesnitt, CLI og import deler denne regelkontrollen. Fullføringskvitteringa bevarer samanhengen gjennom statusendringa; seinare skrivne endringar krev nye gyldige kvitteringar. Gjennomgangssignaturar, målingar og utgjevingskvalifisering bevarer sine eigne tydingar."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "book-reading",
+      "title": "Skrive og lese ei samanhengande bok",
+      "sections": [
+        {
+          "id": "content",
+          "title": "Tabellar, likningar, diagram og sitattilvisingar",
+          "paragraphs": [
+            "Bruk {ui:book.content} i eit skrivefelt til å setje inn ein skriven tabell, ei likning, ei sitattilvising, ein figur i teksten eller ei bevart kjeldeblokk. Kvar eksisterande blokk har {ui:book.edit}; redigering og innsetjing er separate handlingar. Tabellar bevarer celleverdiar som tekst, òg innleiande nullar og svært store tal. Dei reknar ikkje ut formlar. Vel ei kodeblokk for å skrive inn hennar eigen språketikett; lagra mellomrom og siffer blir ikkje endra.",
+            "Likningar bevarer TeX-kjelda si og blir viste fråkopla som MathML. Eksterne ressursar og klarerte HTML-kommandoar er slått av. Inndata som ikkje er støtta, viser originalkjelda og ei eksplisitt melding om visinga. Sitattilvisingar bevarer forfattar, utgåve, stadtilvising og ei valfri nettadresse.",
+            "Last opp eit bilete eller opprett ein figur i oppføringa før du plasserer det i teksten. Oppgi eit ordna tekstalternativ, eitt steg per linje. SVG-originalar held fram som verifiserte private kjeldebyte; lesing og publisering bruker førebudde statiske bilete. Eit diagram bevarer datatabellen sin. Breie skrivne tabellar tilbyr {ui:book.tableReading}, og utskrift bruker dei lineære radene. Utsjånaden til appen og nettstaden er separate innstillingar."
+          ]
+        },
+        {
+          "id": "references",
+          "title": "Referer til nøyaktig innhald og følg forskinga",
+          "paragraphs": [
+            "Opne ei labbok og vel {ui:recordReading.read} for å lese heile oppføringar på sider utan å gå inn i eit redigeringsverktøy. Filter og sortering gjeld òg lesevisinga. {ui:recordReading.details} opnar ei oppføring med dokumentasjonen, historikken og sambanda hennar. Vel {ui:recordReading.edit} eksplisitt for å endre innhaldet. Tilbake til oppføringar går tilbake til den opphavlege lesevisinga eller lista.",
+            "Lenkjer i teksten er understreka og fargelagde. Vel ei lenkje i redigeringsverktøyet for å sjå {ui:recordLinks.destination}, og bruk {ui:recordLinks.open} i den eksisterande verktøylinja. Lesevisingar tilbyr {ui:recordLinks.list}, med fullstendige adresser og referansar til bevarte revisjonar.",
+            "Bruk {ui:book.copy} i oppføringa til å velje ei overskrift, ein tekstdel, ein tabell, ei likning, ei sitattilvising eller ein figur. Ein gjeldande referanse følgjer den lagra innhaldsidentiteten gjennom namnendringar og endra rekkjefølgje. {ui:book.exact} krev ei lagra oppføring og bevarer den revisjonen. Lim inn ein kopiert referanse i ei tekstlenkje eller Knyt til forsking. Fjerna innhald blir verande ein utilgjengeleg referanse i staden for å bli omdirigert til ein annan del.",
+            "Bruk {ui:book.journey} i oppføringsfiltra til å bla gjennom omgrep, avgjerder, metodar, eksperiment eller resultat. Lagre visinga til seinare. Desse kategoriane kopierer ikkje oppføringar eller endrar eksperimenttal. Følg tilknytte oppføringar, enkeltkøyringar og nøyaktige metodar frå lesevisinga; Tilbake til oppføringar bevarer dei opphavlege filtra. Tilknytte oppføringar viser innkomande referansar, òg samanlikningar som viser til ei køyring."
+          ]
+        },
+        {
+          "id": "publication",
+          "title": "Bla gjennom den gjennomgåtte offentlege boka",
+          "paragraphs": [
+            "Den eksporterte {ui:book.browse}-indeksen inneheld berre dei valde offentlege oppføringane i utgåva. Kombiner filter for tekst, emneknaggar, lesereise, type og dato. Adressa registrerer desse vala; {ui:book.reset} tømmer dei. Oppføringslenkjer bevarer ein veg tilbake til den filtrerte indeksen. Med JavaScript slått av er heile den statiske indeksen, oppføringssidene, figurane og likningane framleis lesbare.",
+            "Førre- og neste-lenkjer namngir dei enkelte oppføringane. Filtrert rekkjefølgje blir bevart i den same nettlesarøkta; ei oppføring som blir opna uavhengig, har framleis sine statiske nabosider i labboka. Nøyaktige referansar til eldre revisjonar blir ikkje erstatta med gjeldande tekst. Publisering av historiske revisjonar er ein eigen funksjon for utgåveval. Sjå gjennom det offentlege utvalet og plotta verdiar før deling."
+          ]
+        },
+        {
+          "id": "import",
+          "title": "Sjå gjennom importert bokinnhald mot kjelda",
+          "paragraphs": [
+            "Vel {ui:migrationImport.htmlBook} i tilordninga til ein klargjord import for å bevare støtta HTML-tekst, overskrifter, enkle tabellar og kode som redigerbart bokinnhald. Blokker som ikkje er støtta, blir bevarte ordrett med ei forklaring om bevaringa og krev uttrykkjeleg godkjenning av konverteringa. Dei blir viste som kjeldetekst og aldri køyrde eller henta.",
+            "Sjå gjennom førehandsvisinga av innhaldet og {ui:book.sourceMappings}. Forskyvingar og lengder identifiserer UTF-8-område i originalfila som er namngitt med SHA-256-hashen sin. Etter at importen er brukt, bevarer Kjeldeopphav tilordninga og autentiserte originalar for avstemming. Dersom ein kompleks tabell, eit diagram eller ein innebygd formel ikkje kan representerast trygt, bevar innhaldet og opprett ei eksplisitt skriven erstatning med eiga skildring. Originalen er framleis privat tilgjengeleg."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "analysis-comparisons",
+      "title": "Analyse, samanlikningar og resultatgjennomgang",
+      "sections": [
+        {
+          "id": "provenance",
+          "title": "Bevar ein ekstern analyse og metoden hans",
+          "paragraphs": [
+            "Opne Dokumentasjon og analyse i ei lagra oppføring. Registrer ekstern analyse bevarer dei nøyaktige inndata- og utdatarevisjonane, verktøyet og versjonen, framgangsmåten og ein valfri lagra metode eller køyring. Metodeopphav legg til fastlåst verktøykjelde, dekodar- og kalibreringsidentitetar, strukturerte parametrar med grunngivingar og kjelderevisjonar, uvissekonvensjon og avgrensingar. Identifiser utilgjengelege verktøyidentitetar eksplisitt. Eit verktøynamn eller ein samsvarande hash fastslår ikkje nøyaktigheit. Importert analysekode blir aldri køyrd i Observanda.",
+            "Bruk {ui:analyses.create} til å tolke eitt eller fleire bevarte resultatdatasett. Vel kolonnar for verdien, oppgitt kategori, opphavlege nedre/øvre grenser og valfri kontekst. Kategoriskrivemåtar blir tilordna korrekt, ikkje-samsvarande, uavklart, utilgjengeleg eller utelate. Ei utelaten rad krev ei grunngiving. Datasettutelatingar og utilgjengelege celler overstyrer ein påstand om ei vellukka observasjon. Valfrie kontekstkolonnar bruker dei dokumenterte tokena viste i tilordningsskjemaet; ukjende token stoppar førebuinga. Ei endra tilordning opprettar ein bevart revisjon og tek vare på føregjengaren."
+          ]
+        },
+        {
+          "id": "exceptions",
+          "title": "Samanlikn utan å skjule avvik",
+          "paragraphs": [
+            "Erklær undersøkinga, køyringa eller oppstarten, vilkåret, operasjonen/profilen, kalibreringa, medlemskapen og vindaugssamanhengen for kvar kjelde. Råobservasjonar og aggregat har separate tal. Tal for vellukka/vurderte tek berre med rå korrekte og ikkje-samsvarande observasjonar; manglande, uavklarte og utelatne observasjonar held fram som eksplisitte kategoriar. Nemnarar for aggregat blir bevarte som kjeldetekst og blir aldri slått saman automatisk. Ulike erklærte køyringsoppføringar blir talde uavhengig av talet på avlesingar. Åtskilde vindauge fastslår ikkje uavhengige køyringar, og kalibrerings-/treningsdata blir ikkje behandla som tilbakehalden dokumentasjon.",
+            "Analysevisingar omfattar avvik, verdifordelingar, nøyaktige grensemarginar, kategoriovergangar og ei diagnostisk tidslinje. Vel ein verdi for å inspisere den opphavlege kjeldecella og dei opphavlege byta, og gå deretter tilbake til samanlikninga. Grenser bevarer den opphavlege skrivemåten sin. Marginen med forteikn er den nøyaktige minsteavstanden til dei oppgitte grensene, med negative verdiar utanfor intervallet; inga einingskonvertering eller uvisseforplanting blir utleidd. Kategorital skildrar oppgitte vurderingar og overskriv dei ikkje ut frå grensesamanlikningar. Overgangar krev ei eksplisitt erklæring om kjelderekkjefølgje og held seg innanfor kjelde-/kontekstsekvensar. Felt for før/etter førespurnad og samtidige operasjonar er skildrande og aldri automatisk kausale.",
+            "Førebuing av samanlikningar er ein arbeidsområdejobb som kan avbrytast og prøvast på nytt. Han strøymer bevarte datasettsider og held på høgst 2 048 kontekstar, 4 096 ulike kontekst-/verdi-/kategorifordelingar og 4 096 overgangsgrupper. Overskriding av desse grensene feilar synleg og bevarer dei opphavlege inndataa; avgrens analysen. Observasjonsvisingar les høgst 50 rader per svar og tillèt høgst 1 MiB observasjonar per svar. Ein vald original blir framleis fullstendig autentisert før den avgrensa bytevisinga blir vist."
+          ]
+        },
+        {
+          "id": "verification",
+          "title": "Kontroller eit uavhengig sett med venta testverdiar",
+          "paragraphs": [
+            "Den valfrie tilordninga til venta testverdiar låser eit separat bevart datasett, radnøkkel- og verdikolonnane der og den tilsvarande faktiske kjelda/nøkkelen. Versjon 1 samanliknar rader i erklært filrekkjefølgje, verifiserer samsvarande nøklar og einingar, og samanliknar støtta numeriske verdiar som nøyaktige rasjonale tal. Tekst og representasjonar som ikkje er støtta, blir samanlikna som nøyaktige strenger. Manglande verdiar, utelatingar, nøklar som ikkje samsvarar, og upara rader på slutten blir talde separat. Endra nøkkelrekkjefølgje blir ikkje avstemd i det stille. Dokumenter opphavet og uavhengigheita til dei venta verdiane; Observanda kan ikkje fastslå uavhengigheit ut frå ei erklæring åleine. Dei innebygde algoritmane for avvikssamanlikning og testverdiar har namngitte, versjonerte definisjonar."
+          ]
+        },
+        {
+          "id": "results",
+          "title": "Knyt saman konklusjonar og sjå gjennom endra inndata",
+          "paragraphs": [
+            "Bruk {ui:analyses.addResult} på ei oppføring til å erklære ein konklusjon, eit tal, ein tabelltekst, ei samanlikning eller eit figurresultat. Eit figurresultat namngir ein eksisterande figur i oppføringa; den publiserte biletteksten lenkjer til utsegna og opphavet. Figurar utan eit erklært støtteresultat identifiserer dette manglande opphavet eksplisitt. Merk resultatet som eksplisitt skrive med kjelder og avgrensingar, eller vel ein fastlåst støtteanalyse. Lagre oppføringa for å bevare utsegna. Oppføringshistorikken bevarer tidlegare utsegner og dei nøyaktige analyseidentitetane deira. Fri prosa held fram som skriven prosa; Observanda utleier ikkje vitskaplege påstandar frå vilkårleg tekst.",
+            "Valde resultatutsegner blir viste på nettstaden med opphavsgrunnlaget og avgrensingane sine. Private støttande analysemanifest, kjeldenamn og originalfiler blir ikkje implisitt publiserte. Ei utsegn som er støtta av privat dokumentasjon, seier at dokumentasjonen ikkje er teken med. Offentleg utgåveval for originalartefaktar og eldre kjelderevisjonar held fram som ein eigen publiseringsarbeidsflyt.",
+            "Publiseringsgjennomgangen kontrollerer vurderingsanalysar, avhengige figurar og resultatutsegner, medrekna tabellar og samanlikningar. Dersom ein analyse eller dei transitive inndataa hans har endra seg eller blitt utilgjengelege, registrer ei avgjerd om bruksområde for kvart påverka resultat før ZIP-eksport, lokal eksport eller utrulling. Rediger oppføringa og førebu ei ny utgåve for å utelate eller erstatte eit resultat. Avgjerder høyrer til den utgåva og dei siste avhengnadsrevisjonane som blei observerte ved førebuinga; ei ny inndataendring krev ny førebuing og gjennomgang. Desse kontrollane fastslår sporbarheit, ikkje vitskapleg aksept."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "measurements",
+      "title": "Nøyaktige målingar og opphavleg dokumentasjon",
+      "sections": [
+        {
+          "id": "schema",
+          "title": "Erklær verdiar utan å skrive dei om",
+          "paragraphs": [
+            "Opne Dokumentasjon og analyse i ei lagra oppføring, opprett eller inspiser eit datasett, og bruk deretter Rediger skjema og utelatingar. Kolonnar bevarer kjeldeskrivemåten, eksplisitt grunntal, einingar og tydingar for manglande verdiar. Heiltal større enn det trygge området til JavaScript og endelege grunntalsbrøkar held fram som nøyaktige strenger. Notasjonar som ikkje er støtta, kan bruke {ui:measurements.unsupported}; dei er framleis lesbare og kan lastast ned, men kan ikkje gå inn i numeriske utrekningar i det stille. JSON null, eit fråverande felt, ein erklært manglande verdi og numerisk null er ulike ting.",
+            "Utvid {ui:measurements.quantity} for å skilje mellom førespurde, målte, avleidde og råkodeverdiar, og vel bevarte konverterings- eller kalibreringsrevisjonar. Rå instrumentkodar kan ikkje få fysiske einingar. Ei eiga avleidd måling kan erklære ei fysisk eining med konverteringskjelda si. Å endre eit skjema opprettar ein ny revisjon; tidlegare analysar bevarer det opphavlege skjemaet og verdiane sine.",
+            "{ui:measurements.time} skil mellom einingsteljarar, innsamlingsrekkjefølgje, klokkeslett/datoar, medgått tid, tid med straum og utleidd medgått tid. Erklær teljarbreidd, frekvens, rekkjefølgje, grenser for omslag/nullstilling, referanse, oppløysing og uvisse når dei er kjende. Observanda viklar ikkje ut teljarar eller utleier varigheit. Ein ekstern transformasjon må låse modellen og referansedataa sine; ei anna tidsframstilling aukar ikkje presisjonen til oscillatoren. Ukjende tidsstempel held fram som ukjende."
+          ]
+        },
+        {
+          "id": "locators",
+          "title": "Følg ein verdi til originalen",
+          "paragraphs": [
+            "Vel ein verdi i eit bevart datasett for å opne {ui:measurements.heading}. Inspektøren viser skrivemåten, skjemaet, nøyaktig rasjonal identitet der det er støtta, utelating og nærliggande observasjonar. Bruk {ui:measurements.original} til å følgje den bevarte kjelda. CSV-rader har opphavlege byteområde; JSON-felt har strukturerte peikarar. Andre originalar er framleis tilgjengelege som fullstendige nedlastingar.",
+            "Utvid {ui:measurements.nativeMapping} når du opprettar eit datasett eller tilordnar ein klargjord import. Vel den opphavlege originalen og dei dekoda kolonnane som inneheld byteforskyvingar og lengder, JSON Pointer-stiar eller identifikatorar for opphavlege postar. Kolonnenummer startar på 1; byteforskyvingar startar på 0. Ein identifikator utan ei byte- eller felttilordning er eksplisitt uavklart. Ingen importert dekodar, skript eller kjeldeprogram blir køyrde i Observanda.",
+            "Byteinspeksjon returnerer høgst 4 096 valde byte pluss 64 byte kontekst på kvar side. Bruk Førre byte og Neste byte for større område. Last ned vist byteutsnitt lagrar berre det valde området; Last ned original hentar den uendra fila. Krypterte originalar blir fullstendig autentiserte før klartekst blir returnert, så inspeksjon av ei stor kjelde kan ta tid sjølv for eit lite område. JSON-inspeksjon er avgrensa til 60 000 teikn og bevarer taltoken, men normaliserer mellomrom og escaping; større utval krev ein smalare peikar eller nedlasting av originalen."
+          ]
+        },
+        {
+          "id": "provenance",
+          "title": "Bevar ei tolking og knyt henne til eit kriterium",
+          "paragraphs": [
+            "Vel {ui:measurements.retain} frå verdi- eller originalinspektøren. Erklær den nøyaktige verdien, tilgjenge, storleiks- og tidstydingar, dekodarkjelde/-versjon, skjema, kalibrerings- og konverteringsreferansar, fullstende og avgrensingar. Legg til bidrag frå celler, byteområde, strukturerte felt eller bevarte analysar. Integritet og fullføring er skrivne erklæringar; lagringsautentisering fastslår ikkje suksess for apparatet eller vitskapleg nøyaktigheit.",
+            "Lagre bevarer ein uforanderleg analyserevisjon. Bruk Bevar revidert tolking for å endre henne; den førre revisjonen kan framleis inspiserast. Frå ei forsøksvurdering vel du den bevarte målinga som dokumentasjon for den valde førebuinga og kriteriet. Lesarar kan følgje den vurderinga gjennom bidraga til målinga og fram til opphavlege byte. Desse private kjeldene blir ikkje automatisk publiserte.",
+            "Plottkoordinatar er tilnærma. Den vanlege regelen avviser utrygg konvertering av heiltal og numeriske verdiar med eksplisitt grunntal. {ui:measurements.approximate} tillèt uttrykkjeleg avrunding av støtta heiltal og grunntalsbrøkar for vising; regelen og algoritmeversjonen blir verande med den bevarte figuranalysen. Nøyaktige datasettverdiar blir ikkje endra. Ikkje-endelege koordinatar og verdiar ulike null som ville underflyte til null, blir avviste."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "attempt-evidence",
+      "title": "Førebuingar, forsøkshendingar og vurderingar",
+      "sections": [
+        {
+          "id": "preparing",
+          "title": "Frys ei førebuing for eit forsøk",
+          "paragraphs": [
+            "Opne ei lagra oppføring og utvid {ui:attempts.title}. Desse valfrie kontrollane pålegg ikkje kreative notat eller feltnotat ein vitskapleg arbeidsflyt. Bruk {ui:attempts.addPreparation} til å erklære gjeldande forsøk eller steg, nøyaktige lagra metodar, kontrollerte variablar, inndatahashar, kalibreringsreferansar, planlagde observasjonar og kriterium. Kjeldesøk søkjer i lagra oppføringar eller bevart dokumentasjon utan å laste inn heile arbeidsområdet.",
+            "Eit vilkår registrerer verdien, den erklærte eininga og om det er oppgitt, arva eller målt. Arva vilkår krev ein nøyaktig kjeldereferanse. Gjentaking av ei køyring kopierer førebuing og vilkår som arva; ho tek ikkje med hendingar eller vurderingar. Endre dei tilsikta parametrane for neste forsøk eksplisitt. Ei arva måling blir ikkje talt som ein ny observasjon.",
+            "Bruk {ui:attempts.save}, og lagre deretter oppføringa for å fryse den nye førebuinga. {ui:attempts.amendPreparation} legg til ein revisjon med ei grunngiving og eit eksplisitt bruksområde. Eksisterande vurderingar og hendingar bevarer dei valde identitetane for førebuing og kriterium. Førehandsbestemte kriterium og utforskande nyanalyse har eigne omfangsfelt; forklar utforskande kriterium i staden for å endre ein tidlegare terskel i det stille."
+          ]
+        },
+        {
+          "id": "events",
+          "title": "Registrer det som hende utan å utleie køyring",
+          "paragraphs": [
+            "{ui:attempts.addEvent} registrerer førebuing, kontrollar, transport, installasjon, tilbakelesing, køyringsobservasjonar, returar, innsamlingar, gjennomgangar eller ei eigendefinert hending. Vel ein førebuingsrevisjon når det gjeld, og oppgi kjelde, aktør, tidstyding og nøyaktig bevart dokumentasjon. Fullføring kan vere fullstendig, delvis, mislukka, avbroten eller ukjend. Bruk omstendefeltet for utilsikta forsøk, gjenbrukte medium og andre atterhald.",
+            "Ei hending skil eksplisitt mellom verts-/førebuingssystemet og observasjonar av det fysiske målet. Å registrere ein fullført vertsjobb eller ei fullført innsamling fastslår ikkje fysisk køyring, vitskapleg suksess eller ein ny oppstart. Legg til fleire innsamlingar i det same forsøket når dei skildrar det same fysiske forsøket. Framdrifta og det samla utfallet til oppføringa blir ikkje endra automatisk.",
+            "Erklært klokketid, einingsteljarar, medgåtte varigheiter og anna kjeldeerklært tid blir haldne åtskilde frå tidsstempelet for registrering i Observanda. Ukjend tid held fram som ukjend. Verdiar held fram som tekst med den opphavlege skrivemåten; å skrive inn eit tal utleier ikkje eit grunntal, ei eining eller ei konvertering."
+          ]
+        },
+        {
+          "id": "assessments",
+          "title": "Vurder kriterium og inspiser endringar",
+          "paragraphs": [
+            "{ui:attempts.addAssessment} vel ein nøyaktig førebuingsrevisjon og eit kriterium. Registrer observert verdi, gjeldande nemnar, aktør, kjelde, vurdert tid, grunngiving og nøyaktige dokumentasjons- eller analyserevisjonar. Vel oppfylt, ikkje oppfylt, uavklart, utilgjengeleg eller ikkje vurdert, og legg eventuelt til eit fagspesifikt utfall. Ei fullstendig innsamling kan finnast saman med eit uavklart gjenkjenningskriterium.",
+            "Lagra fakta kan ikkje overskrivast. {ui:attempts.correct} legg til ei retting som identifiserer den tidlegare hendinga eller vurderinga; dei tidlegare fakta kan framleis inspiserast. Ei vurdering mot eit endra kriterium er ei ny vurdering av den førebuingsrevisjonen, ikkje ei erstatning for resultatet til det tidlegare kriteriet. Gjenoppretting av eldre forteljande tekst bevarer òg den registrerte historikken for førebuingar, hendingar og vurderingar. Uavhengige samtidige tillegg kan flettast. Motstridande endringar eller rettingar krev gjennomgang: bevar dei lagra fakta og legg til ei ny retting, eller avbryt for å behalde det uferdige kontrollpunktet ditt.",
+            "Opne den sideinndelte køyringssamanlikninga til undersøkinga for å inspisere strukturerte vilkår, hendingar og kriterieutfall saman med eksisterande forteljande vilkår og metoderevisjonar. Endra parameterverdiar blir framheva mot den første køyringa på den viste sida. Oppgitt, arva og målt opphav er framleis synleg. Samanlikning er ikkje ei automatisk vurdering av pålitelegheit eller uavhengigheit.",
+            "Ei publisert oppføring inneheld dei skrivne førebuingane, hendingane og vurderingane, med skilja og rettingane deira. Referansar til private oppføringar, utilgjengelege nøyaktige oppføringsrevisjonar og privat dokumentasjon blir haldne tilbake før vising. Publisering eksponerer ikkje originale dokumentasjonsfiler. Sjå gjennom den offentlege førehandsvisinga før deling; å velje ei oppføring vel òg dei skrivne verdiane, namna og forklaringane i forsøksdokumentasjonen hennar."
+          ]
+        }
+      ]
+    },
+    {
       "id": "getting-started",
       "title": "Prosjekt og labbøker",
       "sections": [
         {
-          "id": "structure",
-          "title": "Organiser arbeidsområdet",
+          "id": "refresh",
+          "title": "Sjå endringar som er lagra andre stader",
           "paragraphs": [
-            "Eit arbeidsområde inneheld prosjekt, og prosjekt inneheld labbøker. Bruk plussknappen ved Prosjekt for å opprette eit prosjekt. Gje det eit namn, vel overordna prosjekt og eventuelt ein standardmal. Du treng ikkje redigere ein mal for å opprette eit prosjekt.",
-            "Opne prosjektet og vel New lab book. Prosjektmalen er vald på førehand; nedtrekkslista lèt deg velje ein annan tilgjengeleg mal. Gje boka eit namn og lagre henne. Bøker i same prosjekt kan bruke ulike malar."
+            "Observanda ser etter lagra endringar i arbeidsområdet medan vindauget er synleg og når du går tilbake til det. Nye prosjekt, labbøker og oppføringar blir viste utan omstart. Klikk på Observanda-logoen for å oppdatere den gjeldande sida med ein gong; den tilgjengelege etiketten er {ui:workspaceRead.refreshLabel}.",
+            "Ulagra endringar og opne dialogar blir verande når nyare lagra innhald kjem inn. Fullfør og lagre arbeidet, eller forkast det med vilje, og lukk deretter dialogen og oppdater. Dersom ein annan skribent har endra den same oppføringa, bruker lagringa den vanlege arbeidsflyten for endringsgjennomgang. Ei mislukka oppdatering bevarer den gjeldande visinga og tilbyr eit nytt forsøk gjennom logoen. Denne oppdateringa les det gjeldande arbeidsområdet; ho synkroniserer ikkje separate datamaskiner eller publiserer innhald."
+          ]
+        },
+        {
+          "id": "setup",
+          "title": "Opprett eller opne eit arbeidsområde",
+          "paragraphs": [
+            "Bruk {ui:setup.createTitle} for eit nytt arbeidsområde, eller {ui:access.openExisting} for eit du allereie har. Skriv inn namnet på arbeidsområdet i oppsettet, vel labboktypane du vil ha tilgjengelege, og vel deretter ei lagringsmappe og ein vernemetode. {ui:setup.back} og {ui:setup.continue} bevarer vala dine medan du flyttar deg mellom stega.",
+            "{ui:setup.useDevice} låser opp gjennom ein autorisert operativsystemkonto der det er støtta. {ui:setup.usePassword} krev samsvarande passord på minst 12 teikn. Etter opprettinga set du opp ein eigen gjenopprettingsnøkkel i {ui:preferences.storage}. Hjelp kan opnast under oppsettet utan å sende inn skjemaet; {ui:help.returnToForm} bevarer det gjeldande steget og dei innskrivne verdiane."
+          ]
+        },
+        {
+          "id": "structure",
+          "title": "Organiser arbeidsområdet ditt",
+          "paragraphs": [
+            "Eit arbeidsområde inneheld prosjekt, og prosjekt inneheld labbøker. Bruk plussknappen ved sida av Prosjekt til å opprette eit prosjekt. Gi det eit namn, vel det overordna prosjektet og vel ein standard labbokmal om det er nyttig. Å opprette eit prosjekt krev ikkje at du redigerer ein mal.",
+            "Opne prosjektet og vel Ny labbok. Den valde malen til prosjektet er vald frå starten; nedtrekkslista lèt deg velje ein annan tilgjengeleg mal. Skriv inn namnet på boka og lagre henne. Ulike bøker i det same prosjektet kan bruke ulike malar."
           ]
         },
         {
           "id": "templates",
           "title": "Vel og tilpass malar",
           "paragraphs": [
-            "Aktiver fleire boktypar under Innstillingar → {ui:preferences.templates}. Desse valfrie typane gjev tilgang til malar; arbeidsområdet, prosjekta og labbøkene er alltid tilgjengelege. Deaktivering av ein type bevarer eksisterande bøker og oppføringar.",
-            "Bruk den eigne malredigeraren til å tilpasse oppføringstypar, rettleiing og felt. Malendringar skriv ikkje om verdiane i eksisterande oppføringar. Skil programvareprototypar og fysiske PCB-forsøk i eigne bøker når dei treng ulike strukturar."
+            "Slå på fleire labboktypar i Innstillingar → {ui:preferences.templates}. Desse valfrie typane gir malar; arbeidsområdet, prosjekta og labbøkene er alltid tilgjengelege. Å slå av ein type bevarer eksisterande bøker og oppføringar.",
+            "Bruk det eigne malverktøyet til å tilpasse oppføringstypar, rettleiing og felt. Endringar i ein mal skriv ikkje om verdiar i eksisterande oppføringar. Hald programvareprototypar og fysiske kretskorteksperiment i separate bøker når oppføringsstrukturane deira er ulike."
+          ]
+        },
+        {
+          "id": "dashboard-types",
+          "title": "Filtrer oversiktskort etter oppføringstype",
+          "paragraphs": [
+            "Opne innstillingane til eit kort og vel {ui:dashboardChoices.recordType}. Vala blir viste på alfabetiske sider; søk etter namn eller bruk {ui:dashboardChoices.next} og {ui:dashboardChoices.previous} til å bla. Lista inneheld typar som er bevarte på oppføringar i dei valde prosjekta og labbøkene, òg typar som ikkje lenger blir tilbydde for nye oppføringar.",
+            "Den valde typen din er framleis synleg medan du søkjer eller blar i andre val. Å endre prosjekt- eller labbokomfanget oppdaterer vala; eit utilgjengeleg val held fram som valt til du vel ein annan type eller {ui:dashboardChoices.allTypes}. Eit mislukka oppslag endrar ikkje det lagra filteret ditt. Lukk innstillingane for å gå tilbake til oversikta."
           ]
         }
       ]
@@ -30,38 +312,80 @@
           "id": "writing",
           "title": "Skriv og knyt saman oppføringar",
           "paragraphs": [
-            "Opne ei bok og vel New record. Vel type, gje oppføringa ein skildrande tittel og fyll ut relevante delar. Lagre før du går vidare. Titlane, teksten, tala og dokumentasjonen til brukarane blir aldri omsette når grensesnittspråket endrar seg.",
-            "Knyt saman relatert arbeid med forskingslenkjer. Ei lenkje til gjeldande oppføring følgjer den nyaste versjonen. Ein eksakt metodereferanse identifiserer revisjonen som vart følgd. Opprett eigne oppføringar for repetisjonar eller opptak, og dokumenter endra parametrar, avvik og ufullstendige resultat."
+            "Opne ei labbok og vel Ny oppføring. Vel ein oppføringstype, bruk ein skildrande tittel og fyll ut delane som er relevante for arbeidet ditt. Lagre oppføringa før du går vidare. Titlar, prosa, tal og dokumentasjon som brukaren har skrive, blir aldri omsette når du endrar grensesnittspråket.",
+            "Bruk forskingslenkjer til å knyte saman relatert arbeid. Ei vanleg gjeldande lenkje følgjer den gjeldande oppføringa. Ein nøyaktig metodereferanse identifiserer revisjonen som ei køyring følgde. Opprett eigne køyrings- eller opptaksoppføringar for gjentakingar, og dokumenter endra parametrar, avvik og ufullstendige utfall."
           ]
         },
         {
           "id": "history",
-          "title": "Les historikk og samanheng",
+          "title": "Les historikk og tilknytt arbeid",
           "paragraphs": [
-            "Opne historikken frå sjølve oppføringa for å sjå lagra versjonar. Gjenoppretting opprettar ein gjeldande versjon av denne oppføringa; andre oppføringar er uendra. Gå gjennom innhaldet før du deler det.",
-            "Følg lenkjer til metodar, dokumentasjon og relaterte oppføringar. Ein vellukka programvarekontroll beviser ikkje fysisk køyring, og éi vellukka køyring beviser ikkje repeterbarheit. Registrer hendingane og konklusjonane kvar for seg."
+            "Opne historikken frå sjølve oppføringa for å inspisere lagra versjonar. Gjenoppretting opprettar ein gjeldande versjon av den oppføringa; andre oppføringar held fram uendra. Sjå gjennom det gjenoppretta innhaldet før du deler det.",
+            "Følg tilknytte metodar, dokumentasjon og relaterte oppføringar for å lese konteksten. Ein vellukka programvarekontroll fastslår ikkje ei fysisk køyring, og éi vellukka køyring fastslår ikkje repeterbarheit. Registrer desse hendingane og konklusjonane separat."
+          ]
+        },
+        {
+          "id": "type-filters",
+          "title": "Finn oppføringar etter type",
+          "paragraphs": [
+            "Bruk {ui:recordTypes.filter} i ei oppføringsliste for den første sida med tilgjengelege typar. Vel {ui:recordTypes.find} for å søkje eller bla gjennom fleire val frå det gjeldande prosjektet eller labboka. Den valde typen din er framleis synleg sjølv om han er utanfor den første sida.",
+            "{ui:recordTypes.cancel} lèt det gjeldande filteret vere uendra. Dersom eit oppslag feilar, gjentek {ui:recordTypes.retry} oppslaget. {ui:recordViews.title} lèt deg lagre typen saman med dei gjeldande filtra og omfanget, og opne den visinga att seinare."
+          ]
+        },
+        {
+          "id": "draft-recovery",
+          "title": "Gjenopprett uferdig arbeid med oppføringar",
+          "paragraphs": [
+            "Vel {ui:recordDrafts.reviewDrafts} når Observanda finn ulagra kontrollpunkt for oppføringar. Lista viser ti utkast om gongen. Bruk {ui:recordDrafts.next} og {ui:recordDrafts.previous} til å bla, eller {ui:recordDrafts.refresh} til å sjå nylege endringar. Å lukke lista bevarer alle utkasta.",
+            "{ui:recordDrafts.review} opnar det valde kontrollpunktet for samanlikning med den lagra oppføringa. Vel {ui:recordRecovery.continueEditing} for å gjenopprette det samla arbeidet i redigeringsverktøyet, og sjå deretter gjennom det før lagring. Eit kontrollpunkt er ikkje ei lagra oppføring. Dersom det nye kontrollpunktet ikkje kan lagrast, hald vindauget ope og bruk {ui:recordDrafts.retryCheckpoint}; den opphavlege gjenopprettingskopien er framleis tilgjengeleg.",
+            "Større kontrollpunkt lastar inn dei valde oppføringane i bolkar. {ui:recordSelection.retry} fortset ei avbroten innlasting; {ui:recordSelection.cancel} bevarer redigeringsverktøyet og gjenopprettingskontrollpunktet. Etter ei vellukka lagring seier innlastingsdialogen at oppføringane blei lagra. Å prøve innlastinga på nytt sender ikkje inn ei ny lagring. Dersom du avbryt henne, bruk Lagre på nytt for å samanlikne redigeringsverktøyet med dei lagra versjonane før du held fram.",
+            "Eit utkast kan framleis vere ope i eit anna vindauge. {ui:recordDrafts.discard} ber om {ui:recordDrafts.confirm} før eit kontrollpunkt blir fjerna. Dersom det har endra seg sidan lista blei lasta inn, oppdater og sjå gjennom det på nytt. Ei mislukka opprydding etter lagring lèt den lagra oppføringa vere intakt og det attverande kontrollpunktet tilgjengeleg."
           ]
         }
       ]
     },
     {
       "id": "evidence",
-      "title": "Originalmateriale og analyse",
+      "title": "Originaldokumentasjon og analyse",
       "sections": [
         {
           "id": "originals",
-          "title": "Bevar originalfilene",
+          "title": "Bevar originalfiler",
           "paragraphs": [
-            "Legg til dokumentasjon med kontrollane i oppføringa. Oppgje ein skildrande tittel og opphav. Binære opptak, kjeldekode og instrumenteksportar er dokumentasjon sjølv utan førehandsvising. Bevar originalbytane separat frå konverterte medium og avleidde datasett.",
-            "Ein filhash identifiserer bytane, men beviser ikkje nøyaktigheit eller opphav. Ved avbroten import må du kontrollere status og bruke tilgjengeleg gjenoppretting før du startar ein ny kopi. Hent originalen for inspeksjon med eit eigna eksternt verktøy."
+            "Legg ved dokumentasjon gjennom dokumentasjonskontrollane til oppføringa. Gi henne ein skildrande tittel og opphav. Binære opptak, kjeldefiler og instrumenteksportar er dokumentasjon sjølv om dei ikkje har ei visuell førehandsvising. Bevar originalbyte åtskilt frå konverterte medium og avleidde datasett.",
+            "Ein filhash identifiserer byta i fila; han beviser ikkje nøyaktigheit eller forfattarskap. Dersom ei opplasting blir avbroten, opne dokumentasjonen til oppføringa på nytt, vel {ui:evidenceUpload.resumeUpload} og vel den same originalfila. Observanda kontrollerer byta som allereie er mottekne, før opplastinga held fram. Ei endra fil blir avvist utan å erstatte dei lagra delane. Når verifiseringa er ferdig, last ned den bevarte originalen for å inspisere henne i eit eigna eksternt verktøy.",
+            "Bruk {ui:evidenceIntake.heading} til å halde relaterte originalfiler samla. Last dei opp, og vel deretter {ui:evidenceIntake.finish}. Til verifisering og tilknyting er fullførte, blir filene verande i {ui:evidenceIntake.unfinished}. Etter eit avbrot fortset du det settet og vel originalfilene på nytt. Dersom manifestet er ufullstendig, vel heile settet på nytt; elles kan du velje berre filene som står att. Identiske filer bevarer likevel dei eigne innsamlingsidentitetane sine."
           ]
         },
         {
           "id": "analysis",
-          "title": "Skil datasett frå tolking",
+          "title": "Hald datasett og tolkingar åtskilde",
           "paragraphs": [
-            "Bevar datasettet uavhengig av figuren. Behald einingar, tydinga av manglande verdiar, utelatingar og radidentitetar. Oppgje ikkje-desimale representasjonar og eksakte store heiltal uttrykkeleg; ikkje gjer dei om til vanlege desimaltal utan å dokumentere det.",
-            "Knyt analysen til eksakte inndata, parametrar og metode- eller verktøyversjon. Behald reviderte resultat separat frå tidlegare resultat. Gå gjennom avhengige figurar og konklusjonar når inndata endrar seg. Utrekna samandrag og manuelt redigerte verdiar har ulikt opphav."
+            "Bevar eit datasett uavhengig av ein figur. Bevar einingar, tydingar for manglande verdiar, utelatingar og radidentitetar. Erklær ikkje-desimale framstillingar og nøyaktige store heiltal eksplisitt; ikkje gjer dei om til vanlege desimaltal i det stille.",
+            "Bruk {ui:materialAnalysis.analysisHeading} til å registrere verktøyet, versjonen, framgangsmåten og dei nøyaktige inndataa. {ui:materialAnalysis.choose} søkjer i samandrag av lagra oppføringar utan å forlate analyseskjemaet. Vel eit resultat for å bevare den nøyaktige revisjonen. Dersom han har endra seg sidan søket, oppdater og vel på nytt. Avbryt lukkar berre søket; analysefelta og dokumentasjonsvala dine blir verande. For dokumentasjonsval bruker du {ui:materialSources.more} til å bla i fleire resultat og {ui:materialSources.moreSelected} til å sjå gjennom valde kjelder. Vala bevarer dei nøyaktige revisjonane sine på tvers av søk. Lagring av ei samling eller ein analyse overfører utvalet i bolkar; ei avbroten lagring blir vist i uferdig arbeid og kan halde fram. Seinare endringar i den valde metoden endrar ikkje dei bevarte inndataa. Hald reviderte resultat åtskilde, og sjå gjennom avhengige figurar og konklusjonar når inndata endrar seg. Genererte samandrag og manuelt redigerte verdiar har ulikt opphav."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sample-analysis",
+      "title": "Prøver, resultat og lokal gjennomgang",
+      "sections": [
+        {
+          "id": "records",
+          "title": "Finn ei prøve eller eit resultat",
+          "paragraphs": [
+            "Opne {ui:sampleAnalysis.title} og bruk {ui:sampleAnalysis.register} til å registrere kode, materiale, kjelde og datoar for ei prøve. Vel {ui:sampleAnalysis.recordAnalysis} for å skrive inn eit resultat. {ui:sampleAnalysis.findSample} søkjer i tilgjengelege prøver; å bla i veljaren bevarer resultatfelta du har fylt ut.",
+            "Prøver, analysar, gjennomgangskøen og arkiverte resultat har separate lister. Bruk {ui:sampleAnalysis.search}, {ui:sampleAnalysis.next} og {ui:sampleAnalysis.previous} til å bla. Opne eit resultat for å redigere felta. Ein avbroten listeførespurnad bevarer den førre sida; {ui:sampleAnalysis.retry} prøver på nytt. {ui:sampleAnalysis.refresh} viser nyare oppføringar. Oversiktskort bruker dei same sideinndelte listene."
+          ]
+        },
+        {
+          "id": "review",
+          "title": "Sjå gjennom og endre eit resultat",
+          "paragraphs": [
+            "Vel {ui:sampleAnalysis.submit} for å lagre det gjeldande resultatet og leggje det i gjennomgangskøen. {ui:sampleAnalysis.reviewResult} registrerer namnet, avgjerda og kommentaren til den som går gjennom resultatet. Dette er lokale stadfestingar, ikkje autentiserte elektroniske signaturar.",
+            "Eit godkjent resultat tilbyr {ui:sampleAnalysis.print}. Det arket bevarer den godkjende revisjonen etter seinare endringar. Bruk {ui:sampleAnalysis.amend} og oppgi grunnen før du endrar eit innsendt eller godkjent resultat. Arkiverte resultat er framleis lesbare.",
+            "Utvid {ui:sampleAnalysis.history} på eit resultat og vel {ui:sampleAnalysis.loadHistory}. Historikken lastar inn tjue hendingar per side; å bla i han bevarer uferdige resultatfelt. Prøveanalysedata er private og blir ikkje tekne med på nettstaden."
           ]
         }
       ]
@@ -71,19 +395,37 @@
       "title": "Lager og prototypekomponentar",
       "sections": [
         {
+          "id": "drafts",
+          "title": "Gjenopprett uferdig verktøyarbeid",
+          "paragraphs": [
+            "Dersom eit verktøy har uferdige kontrollpunkt, viser {ui:moduleRecovery.heading} ti om gongen. Bruk {ui:moduleRecovery.next} og {ui:moduleRecovery.previous} til å bla, eller {ui:moduleRecovery.refresh} til å sjå nyare kontrollpunkt. {ui:moduleRecovery.retry} gjentek ein mislukka sideførespurnad; det bevarer det gjeldande skjemaet og den sist tilgjengelege lista.",
+            "{ui:moduleRecovery.restore} opnar det valde kontrollpunktet for redigering. Observanda lagrar ein ny gjenopprettingskopi før det kjeldekontrollpunktet blir fjerna. Lagre det gjenoppretta elementet når du er nøgd med det. Andre uferdige element er framleis tilgjengelege under Utkast. {ui:moduleRecovery.discard} fjernar berre den valde gjenopprettingskopien; ein kopi som er endra i eit anna vindauge, må oppdaterast før han kan forkastast."
+          ]
+        },
+        {
+          "id": "history",
+          "title": "Les dei lagra revisjonane til eit element",
+          "paragraphs": [
+            "Opne ei lagervare, ei oppgåve, ei utrekning eller eit anna verktøyelement, og vel Historikk. {ui:moduleHistory.heading} listar tjue revisjonssamandrag om gongen. Bruk {ui:moduleHistory.next} og {ui:moduleHistory.previous} til å bla, eller {ui:moduleHistory.first} til å gå tilbake til byrjinga. Opne ein revisjon for å inspisere dei lagra felta; {ui:moduleHistory.close} flyttar fokus tilbake til knappen for den revisjonen.",
+            "Å lese historikken bevarer det gjeldande utkastet ditt. Gå tilbake til Detaljar for å halde fram med redigeringa. Nye lagringar flyttar ikkje historikksida du les; bruk {ui:moduleHistory.refresh} for å sjå dei. Dersom ei side eller ein revisjon ikkje kan lastast inn, gjentek {ui:moduleHistory.retry} den førespurnaden utan å lagre eller forkaste utkastet ditt."
+          ]
+        },
+        {
           "id": "ownership",
           "title": "Eigarskap og tildeling",
           "paragraphs": [
-            "Lageret høyrer til arbeidsområdet. Ei vare kan vere utan prosjekttildeling. Tildeling av mengder viser kva prosjekt ressursane er sette av til; det opprettar ikkje ein ekstra kopi av behaldninga. Aktiver Inventory i Modular for å bruke lagervisninga.",
-            "Opprett varer med tydelege namn, einingar og mengder. Skil fysisk lagerplass frå prosjekttildeling. Til dømes er 100 komponentar fordelte på to prosjekt framleis 100 komponentar i arbeidsområdet."
+            "Lageret høyrer til arbeidsområdet. Ei vare kan vere utan tilknyting til eit prosjekt. Å tildele mengder til prosjekt registrerer kvar ressursar er tildelte; det opprettar ikkje ein ekstra kopi av lagerbehaldninga. Slå på Lager i Modular for å bruke den eigne visinga.",
+            "Opprett varer med meiningsfulle namn, einingar og mengder. Hald fysisk lagringsstad åtskild frå prosjekttildeling. Til dømes er 100 eigde komponentar fordelte mellom to prosjekt framleis 100 komponentar totalt i arbeidsområdet.",
+            "Kategoriar definerer gjenbrukbare varefelt. Store skjema viser ti felt per side; bruk {ui:moduleFields.findFields} til å finne eit felt. Valdefinisjonar og vareval viser tjue alternativ per side, med {ui:moduleFields.findChoices} for søk. Å flytte seg mellom sider bevarer endringane og dei valde verdiane dine. Dersom eit påkravd felt på ei anna side er ufullstendig, tek lagringa deg til det feltet. Eksisterande varer bevarer den lagra kategoriversjonen sin til du uttrykkjeleg bruker dei gjeldande kategorifelta."
           ]
         },
         {
           "id": "usage",
-          "title": "Følg bruk og tilgjenge",
+          "title": "Spor bruk og tilgjenge",
           "paragraphs": [
-            "Knyt stykklistene til prototypane til lagervarer. Registrer faktisk brukte mengder og skil dei frå planlagt behov og reservasjonar. Ein BOM er ein plan, ikkje dokumentasjon på at komponentane er brukte.",
-            "Kontroller tilgjengelege og brukte mengder før neste bygg. Registrer erstatningskomponentar og monteringsresultat i forsøksoppføringa, slik at komponentvalet kan forståast saman med resultata."
+            "Bruk {ui:moduleReferences.chooseResearch} i eit verktøy, ei oppgåve eller ei lagervare til å søkje i lagra oppføringar, labbøker eller prosjekt. Søkeresultata er sideinndelte; å velje ei lenkje bevarer elementutkastet. Utilgjengelege oppføringar bevarer referansane sine, og {ui:moduleReferences.retry} prøver eit avbrote titteloppslag på nytt utan å endre redigeringane dine.",
+            "I ei stykkliste opnar {ui:moduleReferences.prototype} det same oppføringssøket. Lagring låser den valde køyringsrevisjonen. Sjå gjennom ei endra køyring før du reserverer lager. Knyt prototypestykklister til lagervarer. Registrer faktisk brukte mengder og skil dei frå planlagt behov og reservasjonar. Ei stykkliste er ein plan; ho er ikkje bevis på at komponentane blei brukte.",
+            "Sjå gjennom tilgjengelege og brukte mengder før neste bygging. Bevar erstatningskomponentar og monteringsutfall i eksperimentoppføringa slik at komponentvalet kan forståast saman med resultata."
           ]
         }
       ]
@@ -93,41 +435,246 @@
       "title": "Utform og publiser ein nettstad",
       "sections": [
         {
-          "id": "design",
-          "title": "Bygg og gå gjennom sider",
+          "id": "project-websites",
+          "title": "Separate prosjektnettstader",
           "paragraphs": [
-            "Opne Website editor for å velje sider og plassere seksjonar. Opprett ei heimeside om du vil ha ei. Bruk fana Page til strukturen og den eigne redigeringskontrollen til å endre vald seksjon. Lagre før du klargjer ei publisering.",
-            "Vel offentleg innhald i Content. Arbeidsflata kan vise upublisert innhald og er ikkje den offentlege utgåva. Bruk {ui:websiteEditor.readingPreview} til å kontrollere endringar utan å lagre nettstaden. Når dei er klare, bruk {ui:websiteEditor.prepareEdition} til å klargjere utgåva du vil eksportere."
+            "Vel {ui:websiteSites.title} over nettstadredigeringa, og deretter {ui:websiteSites.new} for å namngi ein nettstad. Opprett separate nettstader for ulike målgrupper eller mål, til dømes ein forskingsjournal og ein hjelpenettstad. Vel innhald separat for kvar nettstad.",
+            "Kvar nettstad eig sidene, utforminga, dei offentlege innhaldsvala, publiseringsmålet og dei bevarte utgåvene sine. Nye nettstader startar utan oppføringar valde for publisering. Vel oppføringar i Offentleg innhald og lagre nettstaden. Desse vala endrar ikkje forskingsoriginalane dine eller utvalet til ein annan nettstad.",
+            "Nettstadnamnet er framleis synleg over redigeringsverktøyet og publiseringskontrollane. Opne {ui:websiteSites.destination} for å velje eit GitHub-kodelager og ei grein eller ei eiga SSH-vertsmappe for denne nettstaden. Bruk eit eige kodelager, ei eiga nettstadmappe eller vertsmappe for kvar uavhengig nettstad. Sjå gjennom og publiser kvar utgåve eksplisitt; å opprette eller byte nettstad rullar ikkje ut noko.",
+            "Den eksisterande nettstaden til arbeidsområdet er framleis tilgjengeleg i {ui:websiteSites.title}. Gå tilbake til den lista for å opprette ein annan prosjektnettstad. Nettstadendringar som er lagra andre stader, kan oppdaterast gjennom Observanda-logoen; ulagra endringar blir verna."
+          ]
+        },
+        {
+          "id": "appearance",
+          "title": "Vel skrifter, fargar og oppsett",
+          "paragraphs": [
+            "Opne {ui:appearance.title} i Innstillingar for å velje tema, fargar og skrifter. {ui:appearance.saveAs} bevarer ei namngitt utforming i dette arbeidsområdet; {ui:appearance.saveAppearance} lagrar dei gjeldande endringane. Tekststorleik, menyoppsett og topptekstjustering i appen er personlege innstillingar på denne datamaskina, uavhengige av teksten og oppsettet til nettstaden.",
+            "Bruk {ui:appearance.previewContent} til å byte mellom oppdikta døme og lagra innhald som er valt for nettstaden din. Førehandsvisinga bruker den gjeldande utsjånaden utan å lagre han eller opprette ei gjennomgått utgåve. {ui:appearance.previewPage} vel ei side; {ui:appearance.retryPreview} prøver ei avbroten førehandsvising på nytt utan å forkaste endringane dine. Sjå gjennom og publiser separat gjennom Publisering eller Nettstadredigering.",
+            "Last opp ei TTF-, OTF-, WOFF- eller WOFF2-fil i {ui:fonts.title}. Variable skrifter viser {ui:fonts.variableSettings}. Tillat innebygging på nettstaden berre når skriftlisensen tillèt det. Å skjule ei skrift frå veljarane bevarer eksisterande tekst og lagra utgåver."
+          ]
+        },
+        {
+          "id": "design",
+          "title": "Bygg og sjå gjennom sider",
+          "paragraphs": [
+            "Opne Nettstadredigering for å velje sider og ordne delar. Opprett ei heimeside om du vil ha ei. Bruk Side-fana til å byggje strukturen, og deretter den eigne redigeringskontrollen til å endre ein vald del. Lagre nettstadendringar før du førebur ei utgåve.",
+            "Vel kva innhald som kan vere offentleg i {ui:websiteEditor.content}. Redigeringsflata kan vise upublisert innhald. Bruk {ui:websiteEditor.readingPreview} til å bla gjennom det gjeldande utkastet utan å lagre nettstaden eller førebu ei utgåve. Bruk {ui:websiteEditor.prepareEdition} separat til å førebu innhald for eksport eller publisering.",
+            "Bruk {ui:websiteContent.search} i Offentleg innhald til å finne eit prosjekt eller ei oppføring. Prosjekt- og oppføringslister har separate sidekontrollar. Utvid medierada til ei oppføring for å velje vedlegg og kortframsida hennar. Ta med alle oppføringar gjeld heile prosjektet, òg oppføringar utanfor det gjeldande søket eller sida.",
+            "Bruk {ui:websiteMedia.search} og {ui:websiteMedia.kind} i mediebiblioteket til å finne opplasta filer. Bilet- og forskingsmedieveljarar tilbyr {ui:websiteMedia.find} for større bibliotek. Å velje medium tek deg tilbake til det same elementet. Gallerival held fram som valde på tvers av søk og sider; ordne visingsrekkjefølgja i lista over valde bilete. Å velje forskingsmedium gjer ikkje ei privat oppføring eller eit privat vedlegg offentleg.",
+            "På {ui:websiteEditor.page} vel du {ui:websiteEditor.area} for å arbeide med sideinnhald, eit sidefelt eller botnteksten. Opprett ei utforming eller bruk ei eksisterande om att. Elementa bruker dei same kontrollane for tekst, medium, oppsett og stil som sida. Bruk den eigne Rediger-kontrollen, og deretter Tilbake for å gå tilbake utan å byte side.",
+            "{ui:websiteEditor.default} bruker eit sidefelt eller ein botntekst på sider som bruker nettstadstandarden, òg framtidige sider. {ui:websiteEditor.choosePages} opnar ei søkbar sideliste. Vel ein sidetype, finn ein tittel og kryss av eller fjern avkryssinga for tildelinga. {ui:websitePages.done} går tilbake til utforminga; Lagre nettstad lagrar endringane. Delte endringar påverkar kvar side som bruker den utforminga; {ui:websiteEditor.copy} opprettar ein uavhengig komposisjon, medrekna innstillingar for biletvising. Å slette ei utforming fjernar henne frå alle tildelte sider og kan angrast før lagring.",
+            "Eit {ui:websiteEditor.contents}-element lenkjer til dei synlege deloverskriftene på den gjeldande sida med stabile anker. Det same sidefeltet tilpassar indeksen sin på kvar side. Skjulte eller utelatne delar kjem ikkje med i den publiserte indeksen. Still inn plassering, breidd og rulleåtferd for sidefeltet i {ui:websiteEditor.appearance}; smale skjermar plasserer sidefeltet før innhaldet.",
+            "Bilet- og knappelenkjer tilbyr {ui:websitePages.chooseLink}. Finn ei side utan å forlate den gjeldande utforminga, eller skriv inn ei ekstern adresse direkte. Å velje eit mål har sitt eige angresteg. Tekstlenkjer bruker søket i Lenkjeinnstillingar.",
+            "Opprett ei botntekstutforming for å ordne tekst, bilete, lenkjer og behaldarar. Eksisterande botntekst fyller det første tekstelementet. Driven av Observanda blir verande til slutt i den same botnteksten og bruker flata, tekstfargen og tekstjusteringa der. Dersom du med vilje blandar justeringar, følgjer krediteringa den siste synlege tekstblokka. Ho er berre midtstilt når det ikkje finst skriven botntekst. Lagre, opne på nytt og sjå gjennom den eksporterte nettstaden før publisering."
+          ]
+        },
+        {
+          "id": "local-export",
+          "title": "Eksporter til ein eksisterande lokal nettstad",
+          "paragraphs": [
+            "Førebu og sjå gjennom nettstaden i Publisering, og vel deretter {ui:publication.localExport}. Vel den eksisterande nettstadrota eller ei eiga undermappe. Relative lenkjer støttar begge plasseringane. Bruk {ui:localExport.review} til å inspisere kvar lagd til, oppdatert, fjerna og uendra utdatafil før du stadfestar {ui:localExport.apply}.",
+            "Den første eksporten overskriv aldri eksisterande filer. Seinare eksportar oppdaterer eller fjernar berre filer som dette arbeidsområdet tidlegare har skrive til akkurat den mappa. Ei manuelt endra eller sletta fil er ein konflikt: gjenopprett den venta fila, flytt henne sjølv, eller vel ei anna mappe og sjå gjennom på nytt. Andre sider og Git-historikken blir ikkje endra. Ingen commit, push eller opplasting skjer automatisk.",
+            "Eksporter til ein lokal kopi og last opp først etter fullføring. Filer blir verifiserte før bytet, men heile mappa kan ikkje byte atomisk saman med uvedkomande filer. Under eit avbrot kan ho innehalde ei delvis utgåve og mellombelse offentlege utdatafiler. Opne den same utgåva på nytt gjennom Nettstadførebuingar, vel Eksporter til lokal mappe, og bruk Fortset eksport. Den lagra gjennomgangen og gjenopprettingsjournalen held fram krypterte i arbeidsområdet. Forkast førebuing er tilgjengeleg før filbytet byrjar; etterpå må du fortsetje den fastlåste utgåva før du førebur ein annan eksport til den mappa.",
+            "Ta vare på arbeidsområdet og tryggingskopiane: dei bevarer eigarskaps- og gjenopprettingskvitteringar for målet. Å kopiere ein nettstad åleine overfører ikkje eigarskapet til eit anna arbeidsområde. Denne arbeidsflyten krev eit lokalt filsystem som støttar harde lenkjer; nettverksdelingar og mapper som blir tente direkte på nettet, er ikkje kvalifiserte mål. Ein fullført eksport verifiserer byta på disk, ikkje ei vertsutrulling eller motstand mot brått straumbrot på kvar plattform."
+          ]
+        },
+        {
+          "id": "repository-setup",
+          "title": "Set opp eit nettstadkodelager",
+          "paragraphs": [
+            "Opne Konfigurer mål i Publisering, skriv inn GitHub-eigaren og kodelagernamnet, lagre målet og vel {ui:githubConnection.signIn}. Fullfør autoriseringa i nettlesaren. GitHub identifiserer autoriseringshjelparen som Git Credential Manager. Observanda vernar påloggingsinformasjonen i legitimasjonslageret til denne datamaskina, åtskilt frå arbeidsområdefilene. Seigr tek ikkje imot eller administrerer han. Kontroller tilkopling verifiserer tilgangen. For eit tomt kodelager oppretta utanfor Observanda, sjå gjennom det viste kodelageret og greina, og vel deretter {ui:repositorySetup.initialize}. Dette opprettar berre ei tom .nojekyll-fil i den første commit-en, bevarer synlegheita til kodelageret og førebur den valde nettstadgreina. Det publiserer ikkje oppføringane dine eller konfigurerer Pages.",
+            "Den valde kontoen koplar til att etter omstart med legitimasjonslageret til denne datamaskina. Bruk {ui:githubConnection.choose} til å byte mellom lagra kontoar, {ui:githubConnection.disconnect} til å kople frå dette arbeidsområdet, eller {ui:githubConnection.forget} til å fjerne Observanda sin påloggingsinformasjon for kontoen frå denne datamaskina. Administrer autorisering på GitHub kan trekkje tilbake tilgang eller autorisere ein organisasjon. Tilbaketrekt påloggingsinformasjon krev ny innlogging. Mellombelse token er framleis tilgjengelege under Avansert for administrerte installasjonar og går ut av appminnet ved omstart. Dersom initialiseringa blir avbroten, kontroller tilkoplinga og vel {ui:repositorySetup.resume}. Observanda verifiserer identiteten til kodelageret og sin eigen første commit før det held fram. Endringar gjorde andre stader kan blokkere oppsettet og krevje ein ny målgjennomgang. {ui:repositorySetup.stop} stoppar vidare arbeid; det slettar ikkje ein commit som allereie er oppretta. Etter oppsettet ser du gjennom ei vald utgåve før du lastar henne opp."
           ]
         },
         {
           "id": "release",
           "title": "Publiser ei godkjend utgåve",
           "paragraphs": [
-            "Hald privat dokumentasjon og driftsdetaljar utanfor det offentlege utvalet. Kontroller filnamn, metadata, lenkjer og figurdata i tillegg til synleg tekst. Du kan forklare at støttemateriale ikkje er offentleg tilgjengeleg utan å røpe private metadata.",
-            "Lagring, generering, commit, push og kontroll av publisering er ulike tilstandar. Set opp målet i Publishing og følg gjennomgangsprosessen. Kontroller den publiserte utgåva; ein vellukka push beviser ikkje at nettstaden er oppdatert. Statisk eksport støttar òg publisering utan integrert vertsteneste."
+            "Hald privat dokumentasjon og driftsdetaljar utanfor offentlege utval. Kontroller filnamn, metadata, lenkjer og innebygde figurdata i tillegg til synleg prosa. Du kan skrive ei forklaring om at støttedokumentasjonen ikkje er offentleg tilgjengeleg utan å eksponere dei private metadataa hennar.",
+            "Bruk {ui:publication.selectionTitle} før du førebur ei utgåve. Utvid ei oppføring for å halde tilbake hovudteksten, valde delar, malfelt, vedlegg eller diagram. Vala gjeld berre denne utgåva. Oppføringar du ikkje endrar, bevarer det lagra offentlege utvalet sitt. Nøyaktige diagramtabellar og CSV-nedlastingar er slått av frå starten og krev eit uttrykkjeleg val for kvart diagram. Eit diagram i seg sjølv avslører framleis plotta verdiar gjennom SVG-en, merka og etikettane; å halde tilbake ein CSV gjer ikkje dei plotta verdiane hemmelege. Originaldatasett og kjeldeartefaktar blir aldri tekne med automatisk. Utilgjengelege forskingsreferansar blir lista i den private gjennomgangen, med etikettane og måla utelatne frå den offentlege utgåva.",
+            "Lagring, generering av utdata, commit, push og verifisering av utrulling er separate tilstandar. Konfigurer målet i Publisering og bruk {ui:publication.reviewTitle} til å førebu det lagra offentlege utvalet. {ui:publication.preparations} opnar bevarte utgåver på nytt; {ui:publication.continue} lèt førebuinga køyre vidare. Gjennomgang går tilbake til Publisering når han blei opna der. Ulagra nettstadutformingar kan inspiserast med {ui:websiteEditor.readingPreview}; {ui:websiteEditor.prepareEdition} startar den separate førebuingsarbeidsflyten. Verifiser den utrulla utgåva; ein vellukka push åleine fastslår ikkje at nettstaden er oppdatert. Statisk eksport støttar òg publisering utan ein integrert vert."
+          ]
+        },
+        {
+          "id": "repository-files",
+          "title": "Publiser ved sida av ein eksisterande nettstad",
+          "paragraphs": [
+            "Konfigurer mål inneheld {ui:publication.websiteFolder}. La feltet stå tomt for kodelagerrota, eller vel ei mappe som lab/field-notes. Dersom du oppgir ein offentleg nettstad-URL, lat han peike på den mappa; elles tek GitHub Pages-verifiseringa med mappa automatisk. Å endre mappa startar eit separat publiseringsmål og lèt den tidlegare nettstaden stå.",
+            "Vel {ui:publication.repositoryReview} frå den førebudde nettstaden for å inspisere nøyaktige tillegg, oppdateringar, fjerningar, uendra nettstadfiler og andre filer som blir bevarte. Gjennomgangen køyrer i bakgrunnen og kan opnast på nytt etter at du har forlate sida eller starta på nytt. Ei første opplasting til ei eksisterande grein og alle fjerningar krev stadfesting. Vanlege oppdateringar endrar berre filer som dette arbeidsområdet tidlegare har publisert til dette målet. Identiske eksisterande filer kan overtakast etter gjennomgang; ulike filer på same sti blokkerer vanleg publisering. Ta vare på tryggingskopiar av arbeidsområdet: fileigarskap er private arbeidsområdemetadata og blir ikkje skrivne til nettstaden.",
+            "For å erstatte ein eksisterande nettstad eller app, utvid {ui:publication.replacementOptions} og vel {ui:publication.replacementReview}. Dette føreslår å erstatte den valde greina eller mappa med den førebudde nettstaden og fjerne gamle appfiler og byggjearbeidsflytar innanfor omfanget. Inspiser listene over fjerningar og bevaring før du godkjenner. Eksisterande CNAME-, lisens-, copying-, copyright- og notice-filer blir bevarte nøyaktig, og det same gjeld filer utanfor den valde mappa. Ein eksportert sti med konflikt er framleis blokkert. Det eksisterande eigendefinerte Pages-domenet og HTTPS-innstillinga blir bevarte når Pages blir konfigurert.",
+            "Skriv eventuelt inn eit ubrukt arkivgreinnamn før du ser gjennom erstatninga. Observanda opprettar den greina ved den gjennomgåtte opphavlege commit-en før publiseringsgreina blir oppdatert. Eit nytt forsøk verifiserer eit arkiv som den same operasjonen allereie har oppretta. Eksisterande greiner blir aldri overskrivne. Å opprette ei arkivgrein kan utløyse arbeidsflytar i kodelageret. Med eller utan ei arkivgrein lagar erstatninga ein ny commit og bevarer den tidlegare Git-historikken.",
+            "Dersom ei tidlegare publisert fil har endra seg utanfor Observanda, stoppar ei vanleg oppdatering. Gjenopprett dei venta filene, vel ei anna publiseringsmappe, eller sjå uttrykkjeleg gjennom ei full erstatning. Ei endra grein gjer den tidlegare gjennomgangen ugyldig, og konfliktar med verna filer kan ikkje godkjennast bort. Å oppdatere gjennomgangen krev ny kodelagergodkjenning.",
+            "Opplastingar og nye forsøk bruker det gjennomgåtte kodelagertreet. Etter ein avbroten push koplar du til GitHub på nytt og held fram for å avstemme resultatet. Filer blir verifiserte før greina blir flytta fram; verifisering av nettstaden på nettet er eit eige steg. Eksisterande kodelagerarbeidsflytar kan køyre når greina deira endrar seg. Å fjerne ei publisert fil slettar ikkje tidlegare Git-historikk, mellomlager hos verten eller kopiar som vitjande har teke vare på."
+          ]
+        },
+        {
+          "id": "historical-editions",
+          "title": "Publiser ein nøyaktig historisk metode eller eit resultat",
+          "paragraphs": [
+            "Utvid ei refererande oppføring i {ui:publication.selectionTitle} og vel {ui:publication.reviewReferences}. Les den bevarte teksten og felta før du slår på {ui:publication.selectionInclude}. Du kan velje enkelte delar og halde tilbake diagramdata uavhengig. Sjå gjennom refererte revisjonar att inne i ei historisk oppføring for å følgje avhengnadene; {ui:publication.referenceBack} går tilbake til den refererande oppføringa med vala dine intakte. Ein referanse gir aldri automatisk løyve til publisering.",
+            "Historiske sider har ein revisjonsetikett og ein stabil URL avleidd frå akkurat den revisjonen. Dei erstattar ikkje den gjeldande oppføringssida eller legg til dupliserte kort i den offentlege blaindeksen. Gjeldande endringar endrar ikkje bevarte utgåver. Når du førebur ei ny utgåve, må du uttrykkjeleg ta med dei eldre revisjonane som skal bli verande på nettstaden på nettet.",
+            "For ein utelaten eller utilgjengeleg referanse skriv du inn {ui:publication.availabilityLabel} dersom du vil ha ei offentleg forklaring. Dette er skriven offentleg tekst: ikkje ta med private namn, stader eller driftsdetaljar. Den utelatne referansen sjølv bidreg ikkje med nokon offentleg identifikator, tittel eller mål."
+          ]
+        },
+        {
+          "id": "legacy-links",
+          "title": "Bevar gamle kapitteladresser og fragment",
+          "paragraphs": [
+            "Opne {ui:publication.legacyLinks} i Publisering. Legg til kvar gammal relativ HTML-sti, den offentlege sidetittelen og éi tilordning for kvart fragment. Vel den enkelte måloppføringa og om lenkja følgjer den gjeldande valde versjonen eller namngir den nøyaktige lagra revisjonen. Kvar etikett her er offentleg tekst. Å lagre tilordningar publiserer dei ikkje.",
+            "Førebuinga kontrollerer kvar tilordning mot den valde utgåva. Manglande mål, dupliserte stiar eller fragment og kollisjonar med genererte sider blokkerer førebuinga og identifiserer den påverka adressa. Rett tilordninga eller ta med den nøyaktige refererte revisjonen før du førebur på nytt. Eit kapittel med fleire eksperiment blir ei statisk innhaldsside med separate fragmentmål og lenkjer; det omdirigerer ikkje alle fragment til éi oppføring.",
+            "Eksisterande konfliktar med kodelagerfiler må framleis løysast. Ei eldre tilordning gir ikkje løyve til å erstatte uvedkomande eller eksternt redigerte filer på den adressa. Inspiser gjennomgangen av kodelagerfiler før du stadfestar ei opplasting."
+          ]
+        },
+        {
+          "id": "publication-recovery",
+          "title": "Gjenopprett ei opplasting eller ei eldre utgåve",
+          "paragraphs": [
+            "Førebudde utgåver bevarer dei gjennomgåtte byta. Opne ei eldre utgåve på nytt frå {ui:publication.preparations} og vel {ui:publication.rollbackReview}. Sjå gjennom det gjeldande målet og eventuelle endra analyseavhengnader, og stadfest deretter erstatninga uttrykkjeleg. GitHub-tilbakerulling lagar ein ny commit med den bevarte utgåva og bevarer nyare lokalt skrivearbeid. Ho tvangstilbakestiller ikkje greina eller overskriv samtidig eksternt arbeid.",
+            "SSH-publisering krev verifiserte OpenSSH-vertsnøklar, lokal ssh og sftp, og eit eksternt POSIX-skal med find, sha256sum og GNU coreutils. Ten berre current-undermappa i den konfigurerte vertsmappa. Observanda klargjer og hashar alle utdata før current-lenkja blir bytt atomisk. Fullførte utgåver blir verande under releases; konfigurer nettserveren slik at den overordna vertsmappa og klargjeringsmappene ikkje er offentleg tilgjengelege.",
+            "Dersom ei SSH-opplasting eller eit byte blir avbrote, ta vare på arbeidsområdet og vel {ui:publication.deploymentResume}. Den bevarte operasjonen kontrollerer sitt eige eksterne krav og den gjeldande utgåva før han held fram. Stoppførespurnader hindrar vidare arbeid, men kan ikkje angre eit byte som allereie er godteke eksternt; framhald avstemmer denne uvissa. Ikkje fjern kravet til ein annan operasjon eller erstatt current-lenkja manuelt for å omgå ein feil.",
+            "Verifiser nettstad på nettet samanliknar det tente manifestet og kvar fil med den gjennomgåtte utgåva, og kontrollerer deretter manifestet på nytt. Framdrifta er framleis tilgjengeleg i Publisering; bruk {ui:publication.liveCheckStop} eller {ui:publication.liveCheckResume} etter eit avbrot. Framhald kontrollerer dei noverande tente byta på nytt. Fjerna URL-ar må returnere HTTP 404 eller 410; ei forelda mellomlagra side eller ei feilside returnert med HTTP 200 består ikkje. Ein mislukka ny kontroll erstattar den tidlegare verifiserte statusen. Verifiseringa undersøkjer den konfigurerte URL-en frå denne installasjonen; ho kan ikkje slette nettlesarkopiar, gammal Git-historikk eller alle mellomlager verda over."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "reviews",
+      "title": "Sjå gjennom og stadfest lagra oppføringar",
+      "sections": [
+        {
+          "id": "contacts",
+          "title": "Verifiser ein samarbeidspartnar",
+          "paragraphs": [
+            "Slå på Samarbeid i Innstillingar → Modular, og opne deretter {ui:reviews.title}. Kvar installasjon har sin eigen gjennomgangsidentitet. Bruk {ui:reviews.identity} og {ui:reviews.downloadContact} til å utveksle offentlege kontaktfiler. Før du bruker {ui:reviews.contact}, samanlikn heile fingeravtrykket med samarbeidspartnaren gjennom ein annan påliteleg kanal.",
+            "{ui:reviews.untrust} blokkerer ny filutveksling med den kontakten. Det bevarer tidlegare signerte gjennomgangar. Det kan ikkje fjerne filer mottakaren allereie har. Nøklar for gjennomgangsidentiteten høyrer til denne installasjonen; eit gjenoppretta arbeidsområde bevarer gjennomgangane sine, men overfører ikkje i seg sjølv signeringsmyndet til ein annan installasjon."
+          ]
+        },
+        {
+          "id": "request",
+          "title": "Send nøyaktige lagra revisjonar",
+          "paragraphs": [
+            "Opne {ui:reviews.witnesses}-kontrollen til ei oppføring og vel {ui:reviews.request}, eller be om ein labbokgjennomgang frå Samarbeid. Vel den som skal gå gjennom og omfanget, legg til instruksjonar, og bruk deretter {ui:reviews.preview} til å inspisere dei valde titlane og revisjonsidentifikatorane. {ui:reviews.create} lastar ned ei kryptert fil for den personen; send henne gjennom den fildelingskanalen du vel.",
+            "Førespurnader inneheld privat lagra oppføringstekst og felt, men utelèt tilknytte medium, dokumentasjonsfiler og andre oppføringar. Kvar førespurnad godtek opptil 50 oppføringar og 750 KB. Større bøker krev separate oppføringsførespurnader. Dersom dei valde oppføringane eller labbokmedlemskapen endrar seg før opprettinga, førehandsvis utvalet på nytt. Ulagra endringar kan ikkje gjennomgåast."
+          ]
+        },
+        {
+          "id": "signatures",
+          "title": "Les og returner ein signert gjennomgang",
+          "paragraphs": [
+            "Bruk {ui:reviews.importFile} etter at du har verifisert avsendaren. {ui:reviews.open} viser dei nøyaktige mottekne revisjonane og dei lagra felta deira. Vel ei avgjerd og kommentarar for kvar oppføring, stadfest føremålet ditt, og bruk deretter {ui:reviews.sign}. Send det nedlasta krypterte svaret tilbake til forfattaren for import. {ui:reviews.witnesses} viser resultatet og om den lagra oppføringa har endra seg sidan gjennomgangen.",
+            "Bruk {ui:reviews.previous} og {ui:reviews.next} til å bla i gjennomgangar; {ui:reviews.refresh} startar blainga på nytt etter at nye førespurnader kjem inn. Ein signatur verifiserer signeringsnøkkelen og at det signerte innhaldet er uendra. Tida er oppgitt av datamaskina til den som signerer; ho er ikkje eit uavhengig bevis på tidspunkt, målenøyaktigheit eller fysisk køyring. Kryptert gjennomgangsutveksling gir ikkje nettinvitasjonar eller synkronisering."
           ]
         }
       ]
     },
     {
       "id": "storage",
-      "title": "Lagring, tryggleikskopiar og tilgang",
+      "title": "Lagring, tryggingskopiar og tilgang",
       "sections": [
         {
-          "id": "backup",
-          "title": "Kontroller tryggleikskopiar",
+          "id": "unlock",
+          "title": "Lås opp og gjenopprett tilgang",
           "paragraphs": [
-            "Bruk Lagring og tilgang til lagring og tryggleikskopiering. Oppbevar kopiar separat frå arbeidsdata. Vent til verifiseringa er ferdig og les resultatet; ei kopiert fil åleine beviser ikkje at alle originalar kan gjenopprettast.",
-            "Prøv gjenoppretting på ein eigen teststad, og hent representative oppføringar, historiske revisjonar og originalmateriale. Kontroller at identitetar og byteinnhald stemmer. Kopien må kunne brukast utan å vere avhengig av stiar på den opphavlege maskina."
+            "På {ui:access.unlock} bruker du ei autorisert eining eller skriv inn passordet til arbeidsområdet. Dersom ein gjenopprettingsnøkkel er konfigurert, utvid {ui:access.useRecovery} og skriv inn den nøkkelen i staden. Vel deretter {ui:access.unlock}. Å opne Hjelp sender ikkje inn eller kopierer passordet eller gjenopprettingsnøkkelen din.",
+            "Dersom denne eininga ikkje er autorisert, opprettar {ui:access.deviceRequest} ein førespurnad som ein autorisert arbeidsområdeeigar kan sjå gjennom. Han gir ikkje tilgang i seg sjølv. Eit manglande passord kan ikkje gjenopprettast frå Hjelp. Ha ei autorisert eining eller ein tidlegare konfigurert gjenopprettingsnøkkel tilgjengeleg; å nullstille appinnstillingane dekrypterer ikkje eit arbeidsområde."
+          ]
+        },
+        {
+          "id": "reconnect",
+          "title": "Kople til eit arbeidsområde att",
+          "paragraphs": [
+            "Når ei tidlegare arbeidsområdeplassering er utilgjengeleg, opne {ui:access.previousLocation} for å inspisere mappa og bruk {ui:access.retry} etter at du har kopla til stasjonen eller nettverksdelinga att. {ui:access.openWorkspace} lèt deg velje ei anna eksisterande arbeidsområdemappe og oppgi påloggingsinformasjonen hennar. {ui:access.newWorkspace} byrjar eit separat oppsett.",
+            "I mappeskjemaet bruker du {ui:access.chooseFolder} eller {ui:access.browseServer}, og deretter {ui:access.checkFolder} til å inspisere målet. Oppgi passordet til arbeidsområdet eller den konfigurerte gjenopprettingsnøkkelen når det trengst. Hjelp og {ui:help.returnToForm} bevarer mappa og påloggingsinformasjonen som allereie er skrivne inn. Ein verifisert tryggingskopi kan opnast som eit eksisterande arbeidsområde; stadfest oppføringane og originaldokumentasjonen før du stoler på han."
+          ]
+        },
+        {
+          "id": "backup",
+          "title": "Verifiser tryggingskopiar",
+          "paragraphs": [
+            "Bruk Lagring og tilgang til å administrere lagring og tryggingskopiering. Oppbevar tryggingskopiar åtskilt frå arbeidslagringa. Lat verifiseringa bli ferdig og inspiser det rapporterte resultatet; ei kopiert fil åleine beviser ikkje at alle bevarte originalar kan gjenopprettast.",
+            "Prøv gjenoppretting til ein separat teststad og hent representative oppføringar, historiske revisjonar og originaldokumentasjon. Kontroller at identitetane og byta deira samsvarar. Ein tryggingskopi må vere brukbar utan å vere avhengig av stiar på den opphavlege arbeidsstasjonen."
           ]
         },
         {
           "id": "access",
-          "title": "Beskytt tilgangen",
+          "title": "Vern tilgangen til arbeidsområdet",
           "paragraphs": [
-            "Oppbevar passord og gjenopprettingsmateriale trygt og uavhengig av arbeidsområdet. Lås arbeidsområdet når du er ferdig. Kryptering beskyttar lagra innhald, men erstattar ikkje kontroll over ei ulåst maskin.",
-            "Einingstilgang beviser ikkje at nettinvitasjonar, organisasjonsroller eller levering mellom samarbeidspartnarar er tilgjengelege. Bruk berre handlingane den installerte versjonen tilbyr, og kontroller identiteten til granskaren og eksakt revisjon for kvar bevitna oppføring."
+            "Oppbevar passord og gjenopprettingsmateriale på ein trygg stad uavhengig av arbeidsområdet. Lås arbeidsområdet når du er ferdig. Kryptering vernar lagra innhald; ho erstattar ikkje kontroll over ei opplåst datamaskin.",
+            "Ikkje sjå på einingstilgang som bevis på at nettinvitasjonar, organisasjonsroller eller levering mellom samarbeidspartnarar er tilgjengelege. Bruk berre samarbeidshandlingane den installerte versjonen tilbyr, og verifiser identiteten til den som går gjennom og den nøyaktige revisjonen på alle stadfesta oppføringar."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "timeline",
+      "title": "Tidslinjer på tvers av prosjekt og labbøker",
+      "sections": [
+        {
+          "id": "sources",
+          "title": "Vel kjelder og filter",
+          "paragraphs": [
+            "Slå på {ui:timeline.label} i Innstillingar → Modular, og opprett deretter ei tidslinje. Kombiner prosjekt og enkelte labbøker i {ui:timeline.sources}. {ui:timeline.descendants} styrer om underprosjekta til eit prosjekt er tekne med. Overlappande utval lagar ikkje duplikat av oppføringar. Utan valde kjelder inneheld visinga alle labbøker.",
+            "Filtrer etter tittel eller emneknagg, status og datoområde for oppføringar. Månads-, års- og områdedatoar overlappar den valde perioden; ukjende datoar blir viste sist og utelatne av eit datoområde. {ui:timeline.ordering} Lagre visinga for å opne innstillingane hennar på nytt; dette endrar ikkje oppføringane."
+          ]
+        },
+        {
+          "id": "browsing",
+          "title": "Bla i og oppdater lagra oppføringar",
+          "paragraphs": [
+            "{ui:timeline.previous} og {ui:timeline.next} viser éi side med samandrag om gongen. {ui:timeline.branches} grupperer den sida etter prosjekt eller labbok; greiner kan halde fram på ei anna side. Opne ei namngitt oppføring for å lese innhaldet. Å gå tilbake i same økt bevarer den gjeldande sida; ny innlasting startar på den første sida.",
+            "Sidene blir verande ved det lagra augneblinksbiletet der blainga starta. Etter at oppføringar har endra seg, startar {ui:timeline.refresh} frå det siste augneblinksbiletet. {ui:timeline.retry} gjentek ein avbroten førespurnad utan å miste visingsendringar. Utilgjengelege kjelder held fram som valde til du fjernar eller erstattar dei; å fjerne dei utvidar aldri visinga til alle oppføringar."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "migration",
+      "title": "Importere ei ekstern loggbok",
+      "sections": [
+        {
+          "id": "inspection",
+          "title": "Sjå gjennom ei erklært kjelde",
+          "paragraphs": [
+            "Opne Arbeidsområde og vel {ui:migration.title}. Vel kjeldeeksportmappa og {ui:migration.inspect}. Å opne denne skjermen startar ikkje inspeksjonen. Mappa må innehalde eit versjon-1-inventarmanifest for erklært Observanda-kjelde; ein vanleg nettstad eller ei vilkårleg mappe er enno ikkje ein redigerbar import.",
+            "Resultatet gjer greie for kvart erklærte objekt og kvar fil, med filter for utelatingar, manglande element og konfliktar. Bruk {ui:migration.search} til å finne titlar, kjeldeidentitetar, revisjonar eller opphavlege filstiar. Opne {ui:migration.targets} for å kontrollere kvar originalfil og kvart erklært mål. Kjeldedatoar, nøyaktige samband og opphavlege URL-ar er tilgjengelege separat. {ui:migration.declaration} viser heile kjeldeerklæringa.",
+            "JSON-peikarar vel nøyaktige medlemmer eller listeelement. HTML-anker vel det namngitte elementet, med innhaldet; dei tyder ikkje automatisk den etterfølgjande delen eller kapittelet. Manglande mål, dupliserte namn, nestande overlappande tilordningar, ugyldige format og inspeksjonsgrenser etterlèt synlege problem. Kjeldeskript blir ikkje køyrde, og URL-ar blir ikkje henta."
+          ]
+        },
+        {
+          "id": "review",
+          "title": "Løys problem og gjenta ein inspeksjon",
+          "paragraphs": [
+            "Rett kjeldeeksporterklæringa når eit element treng løysing, og inspiser henne deretter på nytt. Bruk {ui:migration.cancel} til å stoppe ein inspeksjon. Ingen oppføringar blir importerte eller publiserte av denne arbeidsflyten, heller ikkje etter ein avbroten inspeksjon.",
+            "Augneblinksbilethashen identifiserer manifestet og originalbyta uavhengig av mappeplasseringa. Ein uendra eksport som er flytta, har den same hashen. Ei fullstendig oversikt fastslår erklært kjeldedekning og målverifisering; ho fastslår ikkje vitskapleg nøyaktigheit, tolking av opphavleg format eller fullført migrering.",
+            "Inspeksjonsresultat er private for den gjeldande appøkta og blir fjerna når arbeidsområdet blir låst eller bytt. Klargjering av ein import er ei eiga, uttrykkjeleg handling."
+          ]
+        },
+        {
+          "id": "staging",
+          "title": "Klargjer og tilordne ein privat import",
+          "paragraphs": [
+            "Etter ein fullstendig inspeksjon vel du mållabboka og {ui:migrationImport.stage}. Originalfiler blir bevarte krypterte med hashane sine. Klargjering opprettar ikkje redigerbare oppføringar. Bruk {ui:migrationImport.pause} til å stoppe arbeidet; {ui:migrationImport.resume} opnar lagra importbolkar etter at appen er lukka eller starta på nytt.",
+            "Opne {ui:migrationImport.mapping} for kvart objekt som treng eit anna mål, tittel, oppføringstype, hendingsdato, kreditering eller sambandstyding. Vel nøyaktig éin gjeldande revisjon for kvar kjeldeidentitet; historiske revisjonar bevarer nøyaktige referansar. Utelatingar og utelatne lenkjer krev grunngivingar. Ulike forsøk må ha ulike erklærte kjeldeidentitetar og grenser.",
+            "Rein tekst, vald JSON og inaktiv HTML-tekst kan bli redigerbar tekst. JSON-tal bevarer dei opphavlege skrivemåtane sine. HTML-konvertering rapporterer utelatne element og formatering for uttrykkjeleg gjennomgang; ho køyrer aldri skript eller hentar URL-ar. Store tabellar kan bruke {ui:migrationImport.dataset}: vel den erklærte radlista og felta, eller skiljeteiknet og overskriftene til ein avgrensa tabell. Gjennomgangen viser ei avgrensa prøve med nøyaktige talskrivemåtar og skil mellom null, tomme og fråverande verdiar. Einingar og talrepresentasjonar er erklæringar, ikkje utleidd vitskapleg tyding.",
+            "Ein erklært figur kan bruke {ui:migrationImport.figure} når kjelda følgjer det portable figurskjemaet til Observanda. Plottkoordinatar bruker talrepresentasjonen til figurvisaren; alle potensielt tilnærma verdiar krev godkjenning. Opphavlege talskrivemåtar blir verande i den redigerbare kjeldeteksten og dei bevarte byta. Andre diagramformat treng ei eksplisitt kjeldekonvertering, framfor utleidde målingar."
+          ]
+        },
+        {
+          "id": "record-facts",
+          "title": "Sjå gjennom eksplisitt erklærte forskingsfakta",
+          "paragraphs": [
+            "Når ei førebudd kjelde inneheld ei støtta erklæring av oppføringsfakta, vel henne under {ui:importResearch.source}. Erklæringa tilordnar eksplisitt framdrift, utfall, malfelt, førebuingar, køyringshendingar, kriterievurderingar og resultatutsegner til dei eigne oppføringsstrukturane deira. Dette krev ein adapter førebudd for den kjelda; vilkårlege metadatanøklar blir ikkje tolka som vitskaplege funn.",
+            "Førebu importgjennomgangen, opne tilordninga på nytt og inspiser {ui:importResearch.preview}. Kontroller vilkår, inndata, forventningar, observerte resultat og avgrensingar. Metodereferansar må namngi nøyaktige Bruker metode-samband. Nøyaktige vitskaplege tal høyrer til i tekstverdiar med erklærte einingar og grunntal. Eksisterande bevarte datasett og analysar kan støtte resultat; bevarte resultattabellar må samsvare med dei fastlåste kjeldeverdiane sine før importen kan godkjennast.",
+            "Rettingar legg til fakta med eksplisitte identitetar som blir erstatta. Ein import kan ikkje skrive om ei tidlegare førebuing, hending eller vurdering i det stille, sjølv når kjeldeinnhald er valt for å løyse andre konfliktar. Tilbakeføring bevarer fakta som er lagde til i ei tidlegare eksisterande køyring. {ui:migrationImport.metadataMode} styrer om andre metadata berre blir verande i Kjeldeopphav eller òg blir viste i ein tekstdel. Eldre lagra tilordningar bevarer den tidlegare behandlinga si til ho blir endra uttrykkjeleg."
+          ]
+        },
+        {
+          "id": "applying",
+          "title": "Sjå gjennom endringar, bruk og før tilbake",
+          "paragraphs": [
+            "Vel {ui:migrationImport.review} og inspiser avstemmingstala og objekttilordningane. Gjentekne importar bruker kjeldeidentitetane om att. Motstridande skrivne felt eller redigerte datasett krev ei uttrykkjeleg løysing. Endra byte under ein eksisterande kjelderevisjon blir merkte. {ui:migrationImport.apply} lagrar dei gjennomgåtte oppføringane, sambanda og kvitteringane saman; endra mål gjer gjennomgangen ugyldig. Bruk {ui:migrationImport.openRecord} frå den brukte importbolken til å halde fram med ei oppføring og heile datasettet hennar.",
+            "Importerte oppføringar startar som private. Nye tilordningar bevarer som standard metadata utan tilordning i privat opphav; å ta dei med som ein tekstdel krev eit uttrykkjeleg tilordningsval. Delte originalbyte bevarer ei dokumentasjonstilknyting for kvar tilordna oppføring og relative kjeldesti. Dokumentasjonslister viser kvart opphavleg filnamn, relativ sti, storleik og SHA-256 med ei nedlasting av akkurat den revisjonen. Alle erklærte kjeldedatoar held fram åtskilde frå importtidsstempelet. Opne {ui:migrationImport.provenance} frå ei oppføring for å inspisere dei opphavlege identifikatorane, datoane, URL-ane, grensene og tilordningsavgjerdene, eller laste ned originalfiler. Kjeldehistorikk og vitskaplege utfall blir ikkje utleidde.",
+            "Bruk {ui:migrationImport.reverse} frå ein lagra importbolk til å fjerne oppføringar oppretta av importøren eller gjenopprette tidlegare revisjonar berre der det gjeldande innhaldet framleis samsvarar med den importen. Seinare endringar i oppføringar eller datasett, etterfølgjande importar, nye referansar, sidetilpassingar og delte originalbyte blir bevarte. Sjå gjennom tilbakeføringsrapporten for bevarte element. Å bruke kjelda på nytt bruker dei same målidentitetane. Tryggingskopiar inneheld klargjorde importar og opphav; verifiser ein gjenoppretta kopi før du stoler på han."
           ]
         }
       ]

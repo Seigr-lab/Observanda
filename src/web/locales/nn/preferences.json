@@ -9,7 +9,7 @@
   "storage": "Lagring og tilgang",
   "help": "Hjelp",
   "language": "Språk",
-  "coverage": "Språkvalet gjeld førebels navigasjon, overskrifter i Innstillingar og Hjelp. Andre skjermbilete bruker framleis engelsk. Oppføringane dine blir aldri omsette.",
+  "coverage": "Grensesnitt- og hjelpetekstar bruker det valde språket der ei omsetjing er tilgjengeleg. Dine eigne oppføringar blir aldri omsette.",
   "saving": "Lagrar språk…",
   "failed": "Språket kunne ikkje lastast inn eller lagrast. Det førre valet blir halde ved lag.",
   "saved": "Språket er lagra.",

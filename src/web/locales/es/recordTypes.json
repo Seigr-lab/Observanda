@@ -1,0 +1,19 @@
+{
+  "filter": "Filtrar por tipo de registro",
+  "find": "Buscar un tipo de registro",
+  "title": "Elegir un filtro de tipo de registro",
+  "search": "Buscar tipos de registro",
+  "saved": "Tipo de registro guardado",
+  "unavailable": "Tipo de registro no disponible",
+  "all": "Todos los tipos",
+  "loading": "Cargando los tipos de registro…",
+  "range": "{first}–{last} de {total}",
+  "empty": "No hay tipos de registro coincidentes.",
+  "error": "No se han podido cargar los tipos de registro. El filtro permanece intacto.",
+  "invalidPage": "La respuesta de tipos de registro no es válida.",
+  "retry": "Reintentar los tipos de registro",
+  "next": "Tipos siguientes",
+  "previous": "Tipos anteriores",
+  "pages": "Páginas de tipos de registro",
+  "cancel": "Cancelar"
+}

@@ -1,0 +1,7 @@
+{
+  "preparing": "Comprobando el cambio del espacio de trabajo…",
+  "records": "Procesando registros: {loaded} de {total}",
+  "indexing": "Guardando los índices y el historial actualizados…",
+  "stop": "Dejar de esperar",
+  "stopped": "Se ha dejado de esperar y se ha solicitado la cancelación. Si el guardado ya había terminado, el reintento recuperará su resultado sin repetir el cambio. Tus elecciones siguen aquí."
+}

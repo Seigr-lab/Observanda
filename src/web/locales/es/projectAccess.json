@@ -1,0 +1,10 @@
+{
+  "title": "Desbloquear el proyecto",
+  "username": "Nombre de usuario",
+  "password": "Contraseña del proyecto",
+  "recovery": "Utilizar una clave de recuperación",
+  "recoveryKey": "Clave de recuperación",
+  "cancel": "Cancelar",
+  "unlock": "Desbloquear",
+  "failed": "No se ha podido desbloquear este proyecto."
+}

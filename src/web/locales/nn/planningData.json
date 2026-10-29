@@ -1,0 +1,22 @@
+{
+  "group": "Planlegging",
+  "task": "Oppgåver",
+  "calendar": "Kalendrar",
+  "event": "Kalenderhendingar",
+  "booking": "Utstyrsreservasjonar",
+  "search": "Inneheld tekst",
+  "filterStatus": "Status (valfri)",
+  "owner": "Eigar",
+  "status": "Status",
+  "priority": "Prioritet",
+  "dueOn": "Frist",
+  "assignees": "Personar",
+  "checklist": "Sjekkliste",
+  "color": "Farge",
+  "startsAt": "Startar",
+  "endsAt": "Sluttar",
+  "location": "Stad",
+  "resource": "Utstyr",
+  "notes": "Notat",
+  "invalid": "Planleggingskortet kunne ikkje stadfestast. Oppdater kortet og prøv på nytt."
+}

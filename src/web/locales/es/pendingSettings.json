@@ -1,0 +1,8 @@
+{
+  "retaining": "Guardando…",
+  "waiting": "Guardado",
+  "saving": "Guardando…",
+  "failed": "No se ha podido guardar la configuración. Se conservan los cambios pendientes.",
+  "conflict": "La configuración guardada ha cambiado en otra sesión. Se conservan los cambios pendientes para revisarlos.",
+  "discard": "Descartar los cambios pendientes"
+}

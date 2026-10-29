@@ -1,0 +1,27 @@
+{
+  "refresh": "Actualitza els registres",
+  "loading": "S'estan carregant els registres...",
+  "range": "Registres {first}-{last} de {total}",
+  "emptyRange": "0 registres",
+  "pages": "Pàgines de registres",
+  "previous": "Registres anteriors",
+  "next": "Registres següents",
+  "noMatches": "Cap registre coincideix amb aquests filtres",
+  "adjust": "Ajusta els filtres o esborra'ls per veure els registres d'aquest àmbit.",
+  "clear": "Esborra els filtres",
+  "changed": "Els registres desats han canviat. Actualitza els registres per veure els resultats més recents.",
+  "invalidPage": "La resposta de la llista de registres era incompleta. Actualitza els registres per tornar-ho a provar.",
+  "experiments": {
+    "one": "{count} experiment",
+    "other": "{count} experiments"
+  },
+  "runs": {
+    "one": "{count} execució / presa",
+    "other": "{count} execucions / preses"
+  },
+  "other": {
+    "one": "{count} altre registre",
+    "other": "{count} altres registres"
+  },
+  "unlock": "Desbloqueja per carregar els registres"
+}

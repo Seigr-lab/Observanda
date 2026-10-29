@@ -1,0 +1,16 @@
+{
+  "heading": "Recupera el treball inacabat",
+  "loading": "S'estan carregant els punts de recuperació…",
+  "invalid": "La resposta de la llista de recuperació era incompleta. Torna-ho a provar per carregar aquesta pàgina.",
+  "failed": "No s'han pogut carregar els punts de recuperació. S'ha conservat el treball inacabat.",
+  "unavailable": "Aquest punt de recuperació ja no està disponible. Actualitza la llista per continuar.",
+  "retry": "Torna a carregar la llista de recuperació",
+  "restore": "Restaura l'esborrany",
+  "discard": "Descarta la recuperació",
+  "more": "i {count} més",
+  "pages": "Pàgines dels punts de recuperació",
+  "previous": "Punts anteriors",
+  "next": "Punts següents",
+  "refresh": "Actualitza els punts de recuperació",
+  "returnConflict": "Conserva o desa l'esborrany obert abans de tornar a aquest punt de recuperació."
+}

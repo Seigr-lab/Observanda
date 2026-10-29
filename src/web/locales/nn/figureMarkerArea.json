@@ -1,0 +1,17 @@
+{
+  "settings": "Markørareal frå teljingar",
+  "enable": "Skaler markørareal etter tal på observasjonar",
+  "label": "Tyding av teljinga / forklaringstittel",
+  "unitArea": "Areal per teljing (kvadratiske SVG-einingar)",
+  "count": "Tal på observasjonar",
+  "defaultLabel": "Observasjonar",
+  "none": "Inga tilordning av teljingar",
+  "help": "Arealet til kvar markør er lik teljinga multiplisert med denne skalaen. Formendringar bevarer arealet. Reduser skalaen for store teljingar. Teljingar må vere ikkje-negative heiltal; null har ingen markør.",
+  "legendRule": "Areal = teljing × {area} kvadratiske SVG-einingar",
+  "zero": "Teljing 0: ingen markør",
+  "countInvalid": "Observasjonsteljingar må vere ikkje-negative sikre heiltal.",
+  "needScale": "Erklær ein markørarealskala for dei tilordna observasjonsteljingane.",
+  "invalid": "Gje teljinga ein etikett og ein positiv arealskala som ikkje er større enn 65 536.",
+  "range": "Markørar med storleik etter teljing krev eit linje- eller spreiingsplott, ei teljing for kvar måling og eit areal på høgst 65 536 kvadratiske SVG-einingar. Reduser arealskalaen for store teljingar.",
+  "mapping": "Teljekolonnar gjeld einskildmålingar og må innehalde eksakte ikkje-negative heiltal."
+}

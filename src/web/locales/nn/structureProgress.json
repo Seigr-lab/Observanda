@@ -1,0 +1,7 @@
+{
+  "preparing": "Kontrollerer arbeidsområdeendringa…",
+  "records": "Handsamar oppføringar: {loaded} av {total}",
+  "indexing": "Lagrar oppdaterte indeksar og historikk…",
+  "stop": "Slutt å vente",
+  "stopped": "Slutta å vente og bad om avbryting. Dersom lagringa allereie var ferdig, vil eit nytt forsøk hente resultatet utan å gjenta endringa. Vala dine er framleis her."
+}

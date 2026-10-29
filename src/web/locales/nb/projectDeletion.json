@@ -1,0 +1,16 @@
+{
+  "delete": "Slett prosjekt",
+  "confirm": "Slette {title}?",
+  "effect": "Fjern dette prosjektet, labbøkene og tilhørende databaser, oppføringer, historikk og filer permanent. Underprosjekter beholdes på rotnivået i arbeidsområdet.",
+  "cancel": "Avbryt",
+  "resume": "Fullfør slettingen",
+  "pending": "Sletting av prosjekt",
+  "working": "Sletter prosjekt…",
+  "completed": "Prosjektet er slettet.",
+  "failed": "Prosjektet kunne ikke slettes.",
+  "retry": "Prøv igjen",
+  "more": "Flere ventende slettinger",
+  "username": "Brukernavn (valgfritt)",
+  "password": "Prosjektpassord",
+  "recovery": "Gjenopprettingsnøkkel (valgfritt)"
+}

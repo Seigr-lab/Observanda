@@ -1,0 +1,11 @@
+{
+  "opening": "S'està obrint Observanda…",
+  "skip": "Ves al contingut principal",
+  "moduleFailed": "No s'ha pogut carregar Observanda",
+  "moduleMessage": "No s'ha carregat un fitxer necessari de l'aplicació. Torna a carregar per repetir-ho.",
+  "connectionFailed": "Observanda no s'ha pogut acabar d'obrir",
+  "connectionMessage": "S'ha interromput la connexió o la inicialització de l'espai de treball. Torna a carregar per repetir-ho. No s'ha substituït l'espai de treball desat.",
+  "unauthorized": "Obre el teu llibre de laboratori",
+  "authorizationMessage": "Obre Observanda des de la icona de l'aplicació o utilitza el seu enllaç d'inici actual per connectar aquest navegador.",
+  "reload": "Torna a carregar Observanda"
+}

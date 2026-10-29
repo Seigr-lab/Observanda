@@ -1,0 +1,16 @@
+{
+  "heading": "Recuperar el trabajo sin terminar",
+  "loading": "Cargando los puntos de recuperación…",
+  "invalid": "La respuesta de la lista de recuperación estaba incompleta. Reintenta cargar esta página.",
+  "failed": "No se han podido cargar los puntos de recuperación. Se ha conservado el trabajo sin terminar.",
+  "unavailable": "Este punto de recuperación ya no está disponible. Actualiza la lista para continuar.",
+  "retry": "Reintentar la lista de recuperación",
+  "restore": "Restaurar el borrador",
+  "discard": "Descartar la recuperación",
+  "more": "y {count} más",
+  "pages": "Páginas de puntos de recuperación",
+  "previous": "Puntos de recuperación anteriores",
+  "next": "Puntos de recuperación siguientes",
+  "refresh": "Actualizar los puntos de recuperación",
+  "returnConflict": "Conserva o guarda el borrador abierto antes de volver a este punto de recuperación."
+}

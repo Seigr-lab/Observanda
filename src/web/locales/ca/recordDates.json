@@ -1,0 +1,20 @@
+{
+  "unset": "Data sense establir",
+  "unknown": "Data desconeguda",
+  "range": "De {from} a {to}",
+  "year": "{year} (només l'any)",
+  "month": "{month} de {year}",
+  "estimated": "Estimació: {date}",
+  "month1": "gener",
+  "month2": "febrer",
+  "month3": "març",
+  "month4": "abril",
+  "month5": "maig",
+  "month6": "juny",
+  "month7": "juliol",
+  "month8": "agost",
+  "month9": "setembre",
+  "month10": "octubre",
+  "month11": "novembre",
+  "month12": "desembre"
+}

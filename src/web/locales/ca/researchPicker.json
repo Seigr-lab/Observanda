@@ -1,0 +1,23 @@
+{
+  "title": "Enllaça recerca",
+  "refresh": "Actualitza els resultats",
+  "loading": "S'està carregant la recerca...",
+  "changed": "Els registres han canviat des d'aquesta cerca. Actualitza per obtenir els resultats actuals.",
+  "range": "{first}–{last} de {total}",
+  "empty": "No hi ha recerca coincident.",
+  "previous": "Resultats anteriors",
+  "next": "Resultats següents",
+  "invalid": "La resposta de la cerca de recerca era incompleta. Actualitza per tornar-ho a provar.",
+  "record": "Registre",
+  "searchFailed": "No s'ha pogut cercar en aquest espai de treball.",
+  "find": "Troba en aquest espai de treball",
+  "placeholder": "Cerca recerca",
+  "kind": "Cerca",
+  "records": "Registres",
+  "notebooks": "Llibres de laboratori",
+  "projects": "Projectes",
+  "workspace": "Espai de treball",
+  "cancel": "Cancel·la",
+  "recordChanged": "Aquell registre ha canviat després d'aquesta cerca. Actualitza els resultats i torna a triar-ne la revisió.",
+  "chooseFailed": "No s'ha pogut seleccionar aquesta recerca."
+}

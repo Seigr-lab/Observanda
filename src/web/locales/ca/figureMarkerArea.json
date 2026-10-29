@@ -1,0 +1,17 @@
+{
+  "settings": "Àrea dels marcadors a partir de recomptes",
+  "enable": "Ajusta l'àrea dels marcadors segons el nombre d'observacions",
+  "label": "Significat del recompte / títol de la llegenda",
+  "unitArea": "Àrea per recompte (unitats SVG quadrades)",
+  "count": "Nombre d'observacions",
+  "defaultLabel": "Observacions",
+  "none": "Sense assignació de recomptes",
+  "help": "L'àrea de cada marcador és igual al seu recompte multiplicat per aquesta escala. Els canvis de forma conserven l'àrea. Redueix l'escala per a recomptes grans. Els recomptes han de ser enters no negatius; el zero no té marcador.",
+  "legendRule": "Àrea = recompte × {area} unitats SVG quadrades",
+  "zero": "Recompte 0: sense marcador",
+  "countInvalid": "Els recomptes d'observacions han de ser enters segurs no negatius.",
+  "needScale": "Declara una escala d'àrea dels marcadors per als recomptes d'observacions assignats.",
+  "invalid": "Dona una etiqueta al recompte i una escala d'àrea positiva no superior a 65.536.",
+  "range": "Els marcadors dimensionats per recompte requereixen un gràfic de línies o de dispersió, un recompte per a cada mesura i una àrea no superior a 65.536 unitats SVG quadrades. Redueix l'escala d'àrea per a recomptes grans.",
+  "mapping": "Les columnes de recompte s'apliquen a mesures individuals i han de contenir enters exactes no negatius."
+}

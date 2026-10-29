@@ -1,0 +1,22 @@
+{
+  "title": "Secciones del registro",
+  "contents": "En este registro",
+  "navigation": "Explorar las secciones de texto",
+  "range": "Secciones {first}–{last} de {total}",
+  "previous": "Secciones anteriores",
+  "next": "Secciones siguientes",
+  "goTo": "Ir al número de sección",
+  "go": "Ir",
+  "findHeading": "Buscar encabezado de sección",
+  "findNext": "Buscar siguiente",
+  "noMatch": "No coincide ningún encabezado de sección.",
+  "enterHeading": "Introduce un encabezado de sección que buscar.",
+  "heading": "Encabezado de sección",
+  "content": "Contenido de {title}",
+  "up": "Subir {title}",
+  "down": "Bajar {title}",
+  "remove": "Eliminar {title}",
+  "confirmRemove": "¿Eliminar esta sección y su texto?",
+  "new": "Nueva sección",
+  "add": "Añadir sección"
+}

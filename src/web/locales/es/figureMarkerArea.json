@@ -1,0 +1,17 @@
+{
+  "settings": "Área de marcadores a partir de recuentos",
+  "enable": "Escalar el área del marcador según el recuento de observaciones",
+  "label": "Significado del recuento / título de la leyenda",
+  "unitArea": "Área por unidad de recuento (unidades SVG cuadradas)",
+  "count": "Recuento de observaciones",
+  "defaultLabel": "Observaciones",
+  "none": "Sin asignación de recuento",
+  "help": "El área de cada marcador es igual a su recuento multiplicado por esta escala. Los cambios de forma conservan el área. Reduce la escala para recuentos grandes. Los recuentos deben ser enteros no negativos; cero no tiene marcador.",
+  "legendRule": "Área = recuento × {area} unidades SVG cuadradas",
+  "zero": "Recuento 0: sin marcador",
+  "countInvalid": "Los recuentos de observaciones deben ser enteros seguros no negativos.",
+  "needScale": "Declara una escala de área de marcadores para los recuentos de observaciones asignados.",
+  "invalid": "Asigna una etiqueta al recuento y una escala de área positiva no superior a 65.536.",
+  "range": "Los marcadores dimensionados por recuento requieren un gráfico de líneas o dispersión, un recuento para cada medición y un área no superior a 65.536 unidades SVG cuadradas. Reduce la escala de área para recuentos grandes.",
+  "mapping": "Las columnas de recuento se aplican a mediciones individuales y deben contener enteros exactos no negativos."
+}

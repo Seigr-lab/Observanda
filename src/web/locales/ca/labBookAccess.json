@@ -1,0 +1,20 @@
+{
+  "title": "Desbloqueja el llibre de laboratori",
+  "username": "Nom d'usuari",
+  "password": "Contrasenya del llibre de laboratori",
+  "recovery": "Utilitza una clau de recuperació",
+  "recoveryKey": "Clau de recuperació",
+  "cancel": "Cancel·la",
+  "unlock": "Desbloqueja",
+  "failed": "No s'ha pogut desbloquejar aquest llibre de laboratori.",
+  "section": "Accés al llibre de laboratori",
+  "passwordReady": "Aquest llibre de laboratori té una contrasenya establerta.",
+  "passwordHint": "Estableix una contrasenya per obrir aquest llibre de laboratori en un altre ordinador.",
+  "newPassword": "Contrasenya nova del llibre de laboratori",
+  "confirmPassword": "Confirma la contrasenya",
+  "savePassword": "Desa la contrasenya del llibre de laboratori",
+  "lock": "Bloqueja el llibre de laboratori",
+  "loading": "S'està carregant la configuració d'accés…",
+  "saved": "S'ha desat la contrasenya del llibre de laboratori.",
+  "passwordMismatch": "Les contrasenyes no coincideixen."
+}

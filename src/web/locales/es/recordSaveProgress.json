@@ -1,0 +1,16 @@
+{
+  "verify-file": "Comprobando los bytes multimedia",
+  "encrypt-file": "Conservando los archivos multimedia cifrados",
+  "finalize-encrypted-file": "Finalizando los archivos multimedia cifrados para permitir el acceso por posición",
+  "title": "Guardando los registros",
+  "newerEdits": "Cambios enviados guardados. Las modificaciones posteriores siguen sin guardar; guarda de nuevo cuando quieras.",
+  "pending": "Los cambios solo se guardan cuando el guardado completo termina correctamente. Puedes seguir editando; los cambios posteriores permanecen sin guardar.",
+  "selectedPending": "Tu punto de recuperación sigue disponible hasta que se confirme este guardado.",
+  "read-record-bases": "Leyendo los registros guardados",
+  "prepare-record-edits": "Preparando los cambios de los registros",
+  "validate-records": "Comprobando los cambios y los enlaces de los registros",
+  "write-records": "Escribiendo los registros y el historial",
+  "write-record-blocks": "Escribiendo el contenido de los registros",
+  "index-records": "Actualizando la búsqueda y la navegación",
+  "read-saved-records": "Cargando los registros guardados"
+}

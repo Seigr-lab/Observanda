@@ -1,0 +1,23 @@
+{
+  "title": "Enlazar investigación",
+  "refresh": "Actualizar los resultados",
+  "loading": "Cargando la investigación...",
+  "changed": "Los registros han cambiado desde esta búsqueda. Actualiza para ver los resultados actuales.",
+  "range": "{first}–{last} de {total}",
+  "empty": "No hay investigación coincidente.",
+  "previous": "Resultados anteriores",
+  "next": "Resultados siguientes",
+  "invalid": "La respuesta de búsqueda de investigación estaba incompleta. Actualiza para volver a intentarlo.",
+  "record": "Registro",
+  "searchFailed": "No se ha podido buscar en este espacio de trabajo.",
+  "find": "Buscar en este espacio de trabajo",
+  "placeholder": "Buscar investigación",
+  "kind": "Buscar",
+  "records": "Registros",
+  "notebooks": "Cuadernos de laboratorio",
+  "projects": "Proyectos",
+  "workspace": "Espacio de trabajo",
+  "cancel": "Cancelar",
+  "recordChanged": "Ese registro ha cambiado desde esta búsqueda. Actualiza los resultados y vuelve a elegir su revisión.",
+  "chooseFailed": "No se ha podido seleccionar esta investigación."
+}

@@ -1,0 +1,16 @@
+{
+  "delete": "Eliminar el proyecto",
+  "confirm": "¿Eliminar {title}?",
+  "effect": "Elimina permanentemente este proyecto, sus cuadernos de laboratorio y sus bases de datos, registros, historial y archivos. Los subproyectos se conservan en la raíz del espacio de trabajo.",
+  "cancel": "Cancelar",
+  "resume": "Terminar la eliminación",
+  "pending": "Eliminación del proyecto",
+  "working": "Eliminando el proyecto…",
+  "completed": "Proyecto eliminado.",
+  "failed": "No se ha podido eliminar el proyecto.",
+  "retry": "Reintentar",
+  "more": "Más eliminaciones pendientes",
+  "username": "Nombre de usuario (opcional)",
+  "password": "Contraseña del proyecto",
+  "recovery": "Clave de recuperación (opcional)"
+}

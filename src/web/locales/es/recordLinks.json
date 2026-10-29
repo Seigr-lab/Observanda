@@ -1,0 +1,13 @@
+{
+  "destination": "Destino del enlace",
+  "open": "Abrir el enlace",
+  "list": "Enlaces de este registro",
+  "workspace": "Espacio de trabajo",
+  "project": "Proyecto",
+  "notebook": "Cuaderno de laboratorio",
+  "record": "Registro",
+  "anotherWorkspace": "Otro proyecto o espacio de trabajo",
+  "current": "Elemento guardado actual",
+  "revision": "Revisión conservada {revision}",
+  "section": "{kind}: {id}"
+}

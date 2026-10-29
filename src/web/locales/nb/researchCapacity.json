@@ -1,0 +1,12 @@
+{
+  "record": "Oppføringsinnhold",
+  "metadata": "Arbeidsområdeinnstillinger",
+  "recordSelection": "Valgt oppføringsinnhold",
+  "recordCommand": "Forespørsel om lagring av oppføring",
+  "recordCheckpoint": "Gjenopprettingspunkt",
+  "checkpointRequest": "Forespørsel om gjenopprettingspunkt",
+  "amount": "{owner} trenger {requested} byte; denne versjonen støtter {limit} byte for denne operasjonen.",
+  "saveGuidance": "Lagringen ble avvist. Hold denne redigereren åpen og kontroller status for gjenopprettingspunktet før du går videre; ulagrede redigeringer er ikke en lagret forskningsrevisjon.",
+  "checkpointGuidance": "Dette gjenopprettingspunktet ble ikke skrevet. Eventuelle tidligere gjenopprettingspunkter er uendret. Hold denne redigereren åpen for å beholde de nyere redigeringene.",
+  "selectionGuidance": "De forespurte oppføringene ble ikke lastet inn i redigereren. De lagrede oppføringene er uendret. Du kan åpne hver oppføring separat."
+}

@@ -1,0 +1,15 @@
+{
+  "title": "Kodelageroppsett",
+  "guidance": "Oppsettet klargjer nettstadgreina. Nettstadinnhald blir berre lasta opp etter gjennomgangen din.",
+  "stop": "Stopp oppsett",
+  "resume": "Hald fram med oppsettet",
+  "created": "Kodelageret er oppretta. Sjå gjennom nettstaden din for å publisere han.",
+  "initialized": "Kodelageret er klargjort. Sjå gjennom nettstaden din for å publisere han.",
+  "emptyTitle": "Klargjer tomt kodelager",
+  "emptyGuidance": "{repository} er tomt. Opprett den første innsjekkinga med ei tom .nojekyll-fil og bruk {branch} som nettstadgrein. Dette bevarer synlegheita til kodelageret og lastar ikkje opp nettstaden din eller set opp Pages.",
+  "initialize": "Klargjer kodelager",
+  "emptyStatus": "Dette kodelageret er tomt. Sjå gjennom klargjeringa i målinnstillingane.",
+  "checking": "Kontrollerer kodelager",
+  "initializing": "Klargjer nettstadgrein",
+  "saving": "Lagrar publiseringsmål"
+}

@@ -1,0 +1,7 @@
+{
+  "loading": "S'estan carregant les notes de l'esdeveniment…",
+  "retry": "Torna a carregar les notes de l'esdeveniment",
+  "invalid": "No s'han pogut verificar els detalls de l'esdeveniment. Tanca aquesta finestra i actualitza el calendari.",
+  "readOnly": "Esdeveniment de calendari de només lectura.",
+  "close": "Tanca"
+}

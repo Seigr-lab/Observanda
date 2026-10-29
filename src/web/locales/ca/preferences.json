@@ -9,7 +9,7 @@
   "storage": "Emmagatzematge i accés",
   "help": "Ajuda",
   "language": "Llengua",
-  "coverage": "La llengua s’aplica actualment a la navegació, als encapçalaments de Preferències i a l’Ajuda. Les altres pantalles encara són en anglès. Els vostres registres no es tradueixen mai.",
+  "coverage": "Els textos de la interfície i de l’Ajuda utilitzen la llengua seleccionada quan hi ha una traducció disponible. Els vostres registres no es tradueixen mai.",
   "saving": "S’està desant la llengua…",
   "failed": "No s’ha pogut carregar o desar la llengua. Es manté la selecció anterior.",
   "saved": "S’ha desat la llengua.",

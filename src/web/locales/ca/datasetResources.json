@@ -1,0 +1,17 @@
+{
+  "title": "Recursos de càlcul exacte",
+  "action": "Política de recursos",
+  "save": "Desa la política de recursos",
+  "cancel": "Cancel·la",
+  "help": "Cada operació escalar comparteix aquests límits entre l'anàlisi sintàctica, la conversió d'unitats, l'aritmètica i el format. Les esperes de fonts i d'emmagatzematge no consumeixen temps aritmètic. Els resultats continuen sent exactes; un límit atura la preparació sense arrodonir.",
+  "legacy": "Desar una política crea una revisió nova del graf. Les revisions anteriors conserven el seu comportament de càlcul original.",
+  "codec": "Els còdecs de domini declarats conserven les seves pròpies capacitats de components.",
+  "maxBits": "Mida dels enters i dels valors intermedis (bits)",
+  "maxOperations": "Operacions aritmètiques",
+  "maxMilliseconds": "Temps aritmètic (mil·lisegons)",
+  "maxScalarCharacters": "Text escalar (caràcters)",
+  "maxExponent": "Magnitud de l'exponent decimal",
+  "bounds": "Permès: de {min} a {max}",
+  "invalid": "Tria un nombre enter dins de cada interval indicat.",
+  "incomplete": "La previsualització mostra els primers caràcters. Obre el valor conservat per inspeccionar-lo o exportar-lo completament."
+}

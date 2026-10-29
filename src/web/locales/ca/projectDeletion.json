@@ -1,0 +1,16 @@
+{
+  "delete": "Elimina el projecte",
+  "confirm": "Vols eliminar {title}?",
+  "effect": "Elimina permanentment aquest projecte, els seus llibres de laboratori i les seves bases de dades, registres, historial i fitxers. Els subprojectes es conserven a l'arrel de l'espai de treball.",
+  "cancel": "Cancel·la",
+  "resume": "Acaba l'eliminació",
+  "pending": "Eliminació del projecte",
+  "working": "S'està eliminant el projecte…",
+  "completed": "S'ha eliminat el projecte.",
+  "failed": "No s'ha pogut eliminar el projecte.",
+  "retry": "Torna-ho a provar",
+  "more": "Més eliminacions pendents",
+  "username": "Nom d'usuari (opcional)",
+  "password": "Contrasenya del projecte",
+  "recovery": "Clau de recuperació (opcional)"
+}

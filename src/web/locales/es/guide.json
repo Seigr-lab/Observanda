@@ -1,23 +1,305 @@
 {
   "topics": [
     {
-      "id": "getting-started",
-      "title": "Proyectos y libros de laboratorio",
+      "id": "compound-figures",
+      "title": "Figuras de varios paneles, intervalos y límites",
       "sections": [
         {
-          "id": "structure",
-          "title": "Organiza tu espacio de trabajo",
+          "id": "panels",
+          "title": "Comparar paneles sin perder sus datos individuales",
           "paragraphs": [
-            "Un espacio de trabajo contiene proyectos, y los proyectos contienen libros de laboratorio. Usa el botón más junto a Proyectos para crear un proyecto. Dale un nombre, elige su padre y selecciona una plantilla predeterminada si te resulta útil. Crear un proyecto no requiere editar una plantilla.",
-            "Abre el proyecto y elige New lab book. La plantilla del proyecto se selecciona inicialmente; el desplegable permite elegir otra disponible. Pon nombre al libro y guárdalo. Los libros de un mismo proyecto pueden usar plantillas diferentes."
+            "En la sección Figuras de un registro, elige {ui:figureComposition.add}. Los dos primeros gráficos existentes se copian en la figura si están disponibles. Utiliza {ui:figureComposition.editing} para elegir un panel y edítalo después con los mismos controles de datos, ejes y diseño que un gráfico individual. Elige un origen y {ui:figureComposition.copy} para sustituir un panel por otra instantánea de datos guardados, o utiliza {ui:figureComposition.blank}. Las figuras admiten entre dos y ocho paneles y entre una y tres columnas; las vistas de lectura y del sitio web apilan los paneles en pantallas estrechas.",
+            "Las copias conservan sus propias mediciones, incertidumbre, anotaciones y presentación. Las modificaciones posteriores del gráfico de origen no alteran un panel copiado. Los resultados explícitos de apoyo se copian con sus referencias exactas de análisis y limitaciones. Utiliza Resultados para declarar o revisar la interpretación de una figura completa o un panel individual. Una figura con resultados de apoyo no se puede eliminar ni sustituir hasta que se haya cambiado el destino de esos resultados o se hayan eliminado.",
+            "{ui:figureComposition.linkX} y {ui:figureComposition.linkY} utilizan el intervalo combinado de los paneles, incluidas la incertidumbre y los límites explícitos de cada panel. Los ejes compartidos requieren el mismo tipo de coordenadas, escala, etiqueta y orientación. Las coordenadas de categorías no pueden compartir un intervalo. Desactivar el uso compartido de intervalos restaura la configuración guardada propia de cada panel."
+          ]
+        },
+        {
+          "id": "annotations",
+          "title": "Marcar intervalos y límites de decisión",
+          "paragraphs": [
+            "Abre {ui:figureComposition.annotations} dentro de un gráfico. Elige {ui:figureComposition.addBoundary} para una coordenada individual o {ui:figureComposition.addInterval} para una región sombreada. Introduce una etiqueta, eje, posición y, para un intervalo, su final. Las coordenadas numéricas utilizan las unidades del eje; las de fecha admiten fechas ISO o marcas de tiempo con zona horaria. Las coordenadas logarítmicas deben ser positivas. Cambia el color y la opacidad del intervalo para adaptarlos a la figura.",
+            "Las anotaciones describen el gráfico y no cambian sus mediciones ni el intervalo ajustado de los ejes. Las marcas fuera del intervalo visible se recortan, mientras que la tabla de datos conserva sus coordenadas y etiquetas completas. Descargar SVG conserva la figura completa. Descargar datos incluye mediciones, incertidumbre y una fila independiente para cada anotación; las descargas de varios paneles identifican el panel de cada fila. Las copias de seguridad del espacio de trabajo conservan el modelo editable completo."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "evidence-association-repair",
+      "title": "Revisar y reparar asociaciones ausentes de evidencias importadas",
+      "sections": [
+        {
+          "id": "review",
+          "title": "Comprobar un lote ya aplicado",
+          "paragraphs": [
+            "Desde Espacios de trabajo, abre Inspeccionar cuaderno externo y Revisar o reanudar importaciones guardadas. Abre un lote aplicado y elige {ui:migrationImport.evidenceCheck}. Revisa cada nombre de archivo, ruta original, número de bytes, SHA-256 y registro propietario. Los bytes compartidos siguen almacenándose una sola vez, mientras que cada registro y ruta relativa de origen tienen su propia asociación.",
+            "{ui:migrationImport.evidenceApply} verifica los bytes originales conservados y añade únicamente las asociaciones ausentes mostradas en esa página. Una revisión modificada debe comprobarse de nuevo. Continúa por todas las páginas para inspeccionar el lote completo. Se identifican los registros eliminados intencionadamente del espacio de trabajo y no se vuelven a crear. Los enlaces de descarga permiten inspeccionar antes de aplicar una reparación.",
+            "Las reparaciones conservan los registros de autoría, metadatos de origen, archivos originales y asociaciones existentes válidas. Cada página aplicada tiene un recibo conservado. Repetir la misma solicitud devuelve su recibo sin duplicar adjuntos. La verificación de copias de seguridad cifradas también comprueba las asociaciones reparadas. Esta acción no vuelve a ejecutar una importación ni infiere ningún significado científico a partir de los nombres de archivos."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "organizations",
+      "title": "Organizaciones y pertenencia a equipos",
+      "sections": [
+        {
+          "id": "administration",
+          "title": "Crear una organización y gestionar equipos",
+          "paragraphs": [
+            "Activa {ui:organizations.title} en Preferencias → Módulos y ábrelo después desde la navegación. Elige {ui:organizations.create}, introduce el nombre de la organización y tu nombre y guarda. La identidad dedicada de firma de esta instalación se convierte en el primer administrador. Un administrador gestiona la afiliación y los equipos; esta función no concede claves de cifrado de espacios de trabajo, acceso a investigación ni autoridad de publicación o recuperación.",
+            "Utiliza {ui:organizations.newTeam} para dar nombre a un equipo y seleccionar sus miembros activos de la organización. Edita un miembro para cambiar su función en la organización o eliminarlo. La eliminación también retira su pertenencia a equipos. Debe quedar otro administrador antes de eliminar o degradar al último. Un miembro eliminado debe aceptar una invitación nueva para volver a unirse.",
+            "Abre {ui:organizations.activity} para inspeccionar invitaciones, aceptaciones, cambios de función, eliminaciones y cambios de pertenencia a equipos guardados, incluidos el administrador que actuó y la hora. El historial se guarda con cada cambio y solo es visible para los administradores actuales. {ui:organizations.activityOlder} recorre cambios anteriores sin mezclar organizaciones; {ui:organizations.activityLatest} vuelve a los más recientes. Este historial local no es una marca de tiempo independiente ni una prueba contra la restauración de una copia de seguridad completa anterior."
+          ]
+        },
+        {
+          "id": "invitations",
+          "title": "Intercambiar y verificar archivos de inscripción",
+          "paragraphs": [
+            "El destinatario elige {ui:organizations.identity} en su instalación y envía el archivo de identidad pública al administrador. No contiene ninguna clave privada de firma. El administrador elige {ui:organizations.invite}, abre ese archivo y verifica con el destinatario la huella digital completa mostrada a través de otro canal. Elige la función, equipos y vigencia de la invitación antes de guardar y enviar la invitación descargada.",
+            "El destinatario elige {ui:organizations.openInvitation}, revisa la organización, función y caducidad y verifica de forma independiente la huella digital de la instalación que invita. {ui:organizations.accept} descarga una aceptación firmada para devolverla. El administrador utiliza {ui:organizations.receive} para inscribir al miembro y envía la confirmación resultante. El destinatario utiliza {ui:organizations.receipt} para conservarla.",
+            "Volver a abrir la misma invitación devuelve la misma aceptación conservada. Reimportar esa aceptación no crea otro miembro y conserva la hora original de aceptación. Si se pierde la descarga de la invitación, crea una invitación de sustitución; esto revoca la invitación pendiente anterior para ese destinatario en la organización. Se requiere la clave de firma del destinatario para aceptar, por lo que poseer solo el archivo de invitación no inscribe a otra persona."
+          ]
+        },
+        {
+          "id": "boundaries",
+          "title": "Revocación y confirmaciones conservadas",
+          "paragraphs": [
+            "Utiliza {ui:organizations.revoke} para cancelar una invitación pendiente. Las invitaciones caducadas y revocadas no se pueden aceptar. Eliminar o degradar a un administrador cancela sus invitaciones pendientes. Los cambios de afiliación se comprueban de nuevo al recibir una orden firmada, incluidas las órdenes repetidas.",
+            "Los archivos de intercambio registran la inscripción en la organización; no contienen contenido de cuadernos de laboratorio ni claves de descifrado de espacios de trabajo. Los recibos de confirmación en otra instalación indican cuándo se produjo la aceptación. No son comprobaciones de afiliación en directo ni se actualizan automáticamente cuando la instalación administradora cambia la afiliación."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "continuing-intake",
+      "title": "Recepción continua y preparación de ejecuciones",
+      "sections": [
+        {
+          "id": "workflow",
+          "title": "Incorporar la siguiente preparación o las evidencias recibidas",
+          "paragraphs": [
+            "Crea y guarda la ejecución de destino con las herramientas habituales de registros. Abre Evidencias y análisis y después {ui:localIntake.open}. Elige la carpeta que contiene intake.observanda.json y utiliza {ui:localIntake.validate}. La vista previa identifica el espacio de trabajo, registro, revisión esperada, revisión de origen, archivos y análisis. La validación no importa nada. {ui:localIntake.stage} conserva archivos privados cifrados; {ui:localIntake.apply} adjunta juntos los originales y análisis revisados. Aplicar una enmienda de registro también hace privado ese registro.",
+            "Las propuestas guardadas siguen disponibles después de reiniciar. Cancelar detiene el proceso de trabajo; Reanudar reintenta la misma propuesta e identidades. Si se pierde una respuesta, repite el mismo ID de propuesta y SHA-256 para recuperar el resultado existente. Se rechaza reutilizar ese ID para contenido distinto. Los cambios en bytes de origen o revisiones de destino requieren una propuesta y revisión nuevas. Importar nunca ejecuta scripts, decide resultados científicos, crea commits, envía cambios ni publica."
+          ]
+        },
+        {
+          "id": "contract",
+          "title": "Contrato local de recepción versión 1",
+          "paragraphs": [
+            "La propuesta es un JSON UTF-8 llamado intake.observanda.json. Propiedades obligatorias: version (1), id (clave de idempotencia UUID v4 nueva), workspaceId, recordId, expectedRevision (SHA-256 del registro guardado), purpose (preparation, evidence, analysis o amendment), title, files, analyses, source y verification. Copia los identificadores de espacio de trabajo, registro y revisión de la pantalla de recepción. El manifiesto completo está limitado a 4 MiB. Se rechazan las versiones o propiedades de nivel superior desconocidas.",
+            "files contiene como máximo 1000 elementos: id (UUID v4 nuevo), path (ruta relativa dentro de la carpeta de propuesta), size (número exacto de bytes), sha256 y provenance (texto). Se permiten matrices vacías. Se rechazan enlaces, recorridos fuera de la carpeta, archivos de dispositivo y rutas ambiguas. analyses contiene como máximo 32 elementos: id (UUID nuevo o identidad de análisis existente), expectedRevision (null para un análisis nuevo o su SHA-256 exacto si ya existe), title, tool, version, toolSha256, parameters (texto), inputs y outputs. Una referencia a archivo es {\"file\":\"UUID\"}; una referencia conservada existente es {\"kind\":\"artifact\",\"id\":\"UUID\",\"revision\":\"SHA-256\"}. Las entradas también pueden hacer referencia a conjuntos de datos, registros, colecciones y análisis. Las salidas deben referenciar artefactos. Cada lista tiene como máximo 64 referencias. Un método opcional utiliza el esquema versionado existente de procedencia de análisis; los valores numéricos exactos permanecen como cadenas.",
+            "source es {\"revision\":\"etiqueta de revisión externa\",\"sha256\":\"SHA-256 del origen\"}. verification es {\"tool\":\"nombre del validador\",\"version\":\"versión del validador\",\"sha256\":\"SHA-256 del código fuente del validador\",\"statement\":\"qué se comprobó y sus límites\"}. Son declaraciones conservadas, no pruebas de que una herramienta se ejecutó o una medición sea correcta. La ejecución del análisis permanece fuera de Observanda. Un record opcional es el registro propuesto completo en el esquema de autoría existente, con el mismo ID y cuaderno de laboratorio, share:false y sin archivos multimedia adjuntos; está sujeto a la validación habitual de hechos inmutables y revisión esperada. Omite record para adjuntar materiales sin alterar el texto. Se requiere al menos un archivo, análisis o enmienda de registro."
+          ]
+        },
+        {
+          "id": "automation",
+          "title": "CLI local y API local autenticada",
+          "paragraphs": [
+            "Utiliza node src/cli.js intake --action preview --workspace <directory> --workspace-id <UUID> --record-id <UUID> --source <proposal-directory>. Proporciona --password-stdin cuando se requiera; nunca pongas una contraseña en la línea de órdenes. La salida estándar es un sobre JSON versionado con ok y result o error. Los mensajes de inicio del entorno van a la salida de error estándar. La salida 0 indica una orden satisfactoria, 1 una orden rechazada y 2 una tarea esperada detenida o fallida.",
+            "Preparar añade --action stage --id <proposal UUID> --pin <reviewed SHA-256>. Aplicar utiliza --action apply con el mismo ID y huella. Utiliza --wait para esperar a preparar, aplicar o reanudar; de lo contrario, el proceso de trabajo compartido de la aplicación continúa la tarea en cola mientras esté en ejecución. Status, cancel, resume y list utilizan las mismas identidades explícitas de espacio de trabajo y registro; readiness devuelve la vista de preparación del registro. --action watch --source <parent-folder> informa de propuestas en subcarpetas inmediatas como líneas JSON. La vigilancia solo valida y notifica: nunca prepara ni aplica. Detén la vigilancia con Ctrl+C.",
+            "La API local es POST /api/v1/intake/{preview|stage|apply|status|cancel|resume|list|readiness|link-receipt|policy}. Las solicitudes incluyen version:1, workspaceId y recordId; preview y stage incluyen source, stage incluye id y expectedPin, apply incluye id y expectedPin, y estado/control incluyen id. List acepta el cursor devuelto. Las respuestas utilizan el mismo resultado del servicio que la CLI; los errores utilizan el sobre estable code/message/details de la aplicación. La API requiere la sesión desbloqueada de la aplicación local, comprobaciones de Host permitido y mismo origen, y la cabecera de contexto del espacio de trabajo activo cuando sea necesaria. No es una API pública multiusuario ni sustituye a futuras claves de integración con ámbito. La autoría manual y las importaciones de archivos no necesitan vigilancia ni integración."
+          ]
+        },
+        {
+          "id": "readiness",
+          "title": "Recibos y política de finalización",
+          "paragraphs": [
+            "{ui:localIntake.readiness} resume las evidencias originales, análisis desactualizados, criterios declarados sin resolver, revisiones pendientes y recibos privados de este registro. No infiere éxito físico. Un criterio cumplido o no cumplido está evaluado; uno sin resolver, no disponible o sin evaluar sigue visible. Los resultados negativos también pueden completarse. No son obligatorias hipótesis ni criterios para registros creativos o de campo.",
+            "Las propuestas aplicadas enlazan su revisión privada de origen y validación declarada con la revisión resultante del registro. Utiliza {ui:localIntake.addReceipt} para una declaración de validación manual, una edición de publicación preparada que contenga esta revisión exacta del registro o una declaración opcional de commit de Git. Las declaraciones de Git identifican un commit externo y el hash de origen declarado; Observanda no crea, envía ni autentica independientemente ese commit. Los recibos anteriores siguen visibles después de las enmiendas. Los recibos de publicación identifican una edición preparada, no prueban un despliegue en funcionamiento.",
+            "{ui:localIntake.policy} es opcional y se aplica a todos los cuadernos de laboratorio directamente dentro del proyecto seleccionado. Puede requerir recibos de validación, publicación y/o Git antes de completar un registro. Guarda el contenido modificado como borrador, enlaza los recibos requeridos con esa revisión guardada y márcalo después como completado en una acción independiente. Las órdenes habituales de registros de la interfaz, CLI e importación comparten esta comprobación de política. El recibo de finalización conserva la conexión durante ese cambio de estado; los cambios posteriores de autoría requieren recibos nuevos aplicables. Las firmas de revisión, mediciones y cualificación de versiones conservan sus significados independientes."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "book-reading",
+      "title": "Escribir y leer un cuaderno conectado",
+      "sections": [
+        {
+          "id": "content",
+          "title": "Tablas, ecuaciones, diagramas y citas",
+          "paragraphs": [
+            "Utiliza {ui:book.content} en un campo de texto para insertar una tabla de autoría, ecuación, cita, figura integrada o bloque de origen conservado. Cada bloque existente tiene {ui:book.edit}; editar e insertar son acciones independientes. Las tablas conservan los valores de celdas como texto, incluidos ceros iniciales y números muy grandes. No evalúan fórmulas. Selecciona un bloque de código para introducir su propia etiqueta de lenguaje; los espacios y cifras guardados permanecen intactos.",
+            "Las ecuaciones conservan su código fuente TeX y se representan sin conexión como MathML. Los recursos externos y las órdenes HTML de confianza están desactivados. Las entradas no compatibles muestran el código original y un mensaje explícito de representación. Las citas conservan autor, edición, localizador y dirección web opcional.",
+            "Sube una imagen o crea una figura en el registro antes de colocarla en el texto. Proporciona una alternativa textual ordenada, un paso por línea. Los originales SVG permanecen como bytes de origen privados verificados; la lectura y publicación utilizan imágenes estáticas preparadas. Un gráfico conserva su tabla de datos. Las tablas de autoría anchas ofrecen {ui:book.tableReading} y la impresión utiliza filas lineales. La apariencia de la aplicación y la del sitio web son configuraciones independientes."
+          ]
+        },
+        {
+          "id": "references",
+          "title": "Referenciar contenido exacto y seguir la investigación",
+          "paragraphs": [
+            "Abre un cuaderno de laboratorio y elige {ui:recordReading.read} para leer registros completos por páginas sin entrar en un editor. Los filtros y la ordenación también se aplican a la vista de lectura. {ui:recordReading.details} abre un registro con sus evidencias, historial y relaciones. Elige explícitamente {ui:recordReading.edit} para cambiar su contenido. Volver a los registros regresa a la vista de lectura o lista de origen.",
+            "Los enlaces del texto están subrayados y coloreados. Selecciona un enlace en el editor para ver {ui:recordLinks.destination} y utiliza {ui:recordLinks.open} en la barra de herramientas existente. Las vistas de lectura ofrecen {ui:recordLinks.list}, incluidas las direcciones completas y referencias a revisiones conservadas.",
+            "Utiliza {ui:book.copy} en el registro para elegir un encabezado, sección de texto, tabla, ecuación, cita o figura. Una referencia actual sigue la identidad del contenido guardado a través de cambios de nombre y orden. {ui:book.exact} requiere un registro guardado y conserva esa revisión. Pega una referencia copiada en un enlace de texto o en Enlazar investigación. El contenido eliminado permanece como referencia no disponible en lugar de redirigirse a otra sección.",
+            "Utiliza {ui:book.journey} en los filtros de registros para explorar conceptos, decisiones, métodos, experimentos o resultados. Guarda la vista para usarla más adelante. Estas categorías no copian registros ni cambian el número de experimentos. Sigue los registros enlazados, las ejecuciones individuales y los métodos exactos desde el lector; Volver a los registros conserva los filtros de origen. Registros enlazados muestra las referencias entrantes, incluidas las comparaciones que citan una ejecución."
+          ]
+        },
+        {
+          "id": "publication",
+          "title": "Explorar el cuaderno público revisado",
+          "paragraphs": [
+            "El índice exportado de {ui:book.browse} incluye únicamente los registros públicos seleccionados para la edición. Combina filtros de texto, etiquetas, recorrido de lectura, tipo y fecha. La dirección registra esas opciones; {ui:book.reset} las borra. Los enlaces a registros conservan la opción de volver al índice filtrado. Con JavaScript desactivado, el índice estático completo, las páginas de registros, las figuras y las ecuaciones siguen siendo legibles.",
+            "Los enlaces anterior y siguiente nombran registros individuales. El orden filtrado se conserva dentro de la misma sesión del navegador; un registro abierto de forma independiente sigue teniendo sus vecinos estáticos del cuaderno de laboratorio. Las referencias exactas a revisiones anteriores no se sustituyen por el texto actual. Publicar revisiones históricas es una capacidad independiente de selección de la edición. Revisa la selección pública y los valores representados antes de compartirla."
+          ]
+        },
+        {
+          "id": "import",
+          "title": "Revisar el contenido importado del cuaderno frente a su origen",
+          "paragraphs": [
+            "En la asignación de una importación preparada, elige {ui:migrationImport.htmlBook} para conservar la redacción HTML compatible, los encabezados, las tablas sencillas y el código como contenido editable del cuaderno. Los bloques no compatibles se conservan literalmente con una explicación de su conservación y requieren una confirmación explícita de la conversión. Se muestran como texto de origen; nunca se ejecutan ni se descargan.",
+            "Revisa la vista previa del contenido y {ui:book.sourceMappings}. Los desplazamientos y las longitudes identifican intervalos UTF-8 en el archivo original identificado por su hash SHA-256. Tras aplicar la importación, Procedencia del origen conserva la asignación y los originales autenticados para su conciliación. Si una tabla compleja, un diagrama o una fórmula incrustada no puede representarse de forma segura, consérvalo y crea un sustituto explícito de autoría propia con su descripción. El original sigue disponible de forma privada."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "analysis-comparisons",
+      "title": "Análisis, comparaciones y revisión de resultados",
+      "sections": [
+        {
+          "id": "provenance",
+          "title": "Conservar un análisis externo y su método",
+          "paragraphs": [
+            "En un registro guardado, abre Evidencias y análisis. Registrar análisis externo conserva sus revisiones exactas de entrada y salida, herramienta y versión, procedimiento y, opcionalmente, un método o una ejecución guardados. La procedencia del método añade identidades fijadas del código fuente de la herramienta, del descodificador y de la calibración, parámetros estructurados con sus motivos y revisiones de origen, convención de incertidumbre y limitaciones. Identifica explícitamente las identidades de herramientas no disponibles. El nombre de una herramienta o un hash coincidente no demuestran exactitud. El código de análisis importado nunca se ejecuta en Observanda.",
+            "Utiliza {ui:analyses.create} para interpretar uno o varios conjuntos de datos de resultados conservados. Selecciona las columnas del valor, la categoría proporcionada, los límites inferior y superior originales y el contexto opcional. Las grafías de las categorías se asignan a correcto, no coincidente, sin resolver, no disponible o excluido. Una fila excluida requiere un motivo. Las exclusiones del conjunto de datos y las celdas no disponibles prevalecen sobre una observación declarada correcta. Las columnas de contexto opcionales utilizan los identificadores documentados que aparecen en el formulario de asignación; los identificadores no reconocidos detienen la preparación. Cambiar una asignación crea una revisión conservada y mantiene su predecesora."
+          ]
+        },
+        {
+          "id": "exceptions",
+          "title": "Comparar sin ocultar excepciones",
+          "paragraphs": [
+            "Declara la investigación, la ejecución o el arranque, la condición, la operación o el perfil, la calibración, la pertenencia y la relación entre ventanas para cada origen. Las observaciones sin procesar y los agregados tienen recuentos separados. Los recuentos de correctas / evaluadas incluyen únicamente observaciones sin procesar correctas y no coincidentes; las observaciones faltantes, sin resolver y excluidas permanecen como categorías explícitas. Los denominadores agregados se conservan como texto de origen y nunca se agrupan automáticamente. Los distintos registros de ejecución declarados se cuentan independientemente del número de lecturas. Las ventanas disjuntas no establecen ejecuciones independientes y los datos de calibración o entrenamiento no se tratan como evidencias reservadas para la evaluación.",
+            "Las vistas de análisis incluyen excepciones, distribuciones de valores, márgenes exactos respecto a los límites, transiciones de categoría y una cronología de diagnóstico. Selecciona un valor para inspeccionar su celda de origen y sus bytes nativos y, después, vuelve a la comparación. Los límites conservan su grafía original. El margen con signo es la distancia mínima exacta a los límites proporcionados, con valores negativos fuera del intervalo; no se infiere ninguna conversión de unidades ni propagación de incertidumbre. Los recuentos de categorías describen las evaluaciones proporcionadas y no las sobrescriben a partir de comparaciones con los límites. Las transiciones requieren una declaración explícita del orden de origen y se mantienen dentro de las secuencias de origen y contexto. Los campos de antes y después de la solicitud y de operaciones simultáneas son descriptivos, nunca automáticamente causales.",
+            "La preparación de comparaciones es una tarea del espacio de trabajo que se puede cancelar y reintentar. Lee progresivamente las páginas de conjuntos de datos conservados y mantiene como máximo 2048 contextos, 4096 distribuciones distintas de contexto/valor/categoría y 4096 grupos de transiciones. Superar estos límites produce un fallo visible y conserva las entradas originales; reduce el alcance del análisis. Las vistas de observaciones leen como máximo 50 filas por respuesta y permiten un máximo de 1 MiB de observaciones por respuesta. El original seleccionado se autentica por completo antes de mostrar su vista acotada de bytes."
+          ]
+        },
+        {
+          "id": "verification",
+          "title": "Comprobar un conjunto esperado independiente",
+          "paragraphs": [
+            "La asignación opcional de datos esperados fija un conjunto de datos conservado por separado, sus columnas de clave de fila y de valor y el origen y la clave reales correspondientes. La versión 1 compara las filas en el orden de archivo declarado, verifica la coincidencia de claves y unidades y compara los valores numéricos compatibles como racionales exactos. El texto y las representaciones no compatibles se comparan como cadenas exactas. Los valores faltantes, las exclusiones, las claves no coincidentes y las filas finales sin correspondencia se cuentan por separado. La reordenación de claves no se concilia de forma silenciosa. Documenta el origen y la independencia de los valores esperados; Observanda no puede establecer esa independencia a partir de una mera declaración. Los algoritmos integrados de comparación de excepciones y de datos esperados tienen definiciones con nombre y versión."
+          ]
+        },
+        {
+          "id": "results",
+          "title": "Vincular conclusiones y revisar entradas modificadas",
+          "paragraphs": [
+            "Utiliza {ui:analyses.addResult} en un registro para declarar una conclusión, un número, el texto de una tabla, una comparación o un resultado de figura. Un resultado de figura nombra una figura existente en el registro; su pie publicado enlaza con la declaración y la procedencia. Las figuras sin un resultado de respaldo declarado identifican explícitamente la ausencia de esa procedencia. Márcalo explícitamente como de autoría propia con sus fuentes y limitaciones, o selecciona un análisis de respaldo fijado. Guarda el registro para conservar la declaración. El historial del registro conserva las declaraciones anteriores y las identidades exactas de sus análisis. La prosa libre sigue siendo prosa de autoría propia; Observanda no infiere afirmaciones científicas a partir de texto arbitrario.",
+            "Las declaraciones de resultados seleccionadas aparecen en el sitio web con la base de su procedencia y sus limitaciones. Los manifiestos privados de análisis de respaldo, los nombres de origen y los archivos originales no se publican implícitamente. Una declaración respaldada por evidencias privadas indica que dichas evidencias no se incluyen. La selección para publicar artefactos originales y revisiones anteriores del origen sigue siendo un flujo de publicación independiente.",
+            "La revisión de publicación comprueba los análisis de evaluación, las figuras dependientes y las declaraciones de resultados, incluidas las tablas y las comparaciones. Si un análisis o sus entradas transitivas cambiaron o dejaron de estar disponibles, registra una decisión de aplicabilidad para cada resultado afectado antes de exportar un ZIP, exportar localmente o desplegar. Para omitir o sustituir un resultado, edita el registro y prepara otra edición. Las decisiones pertenecen a esa edición y a las revisiones más recientes de las dependencias observadas durante la preparación; otro cambio de entrada requiere una nueva preparación y revisión. Estas comprobaciones establecen trazabilidad, no aceptación científica."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "measurements",
+      "title": "Mediciones exactas y evidencias nativas",
+      "sections": [
+        {
+          "id": "schema",
+          "title": "Declarar valores sin reescribirlos",
+          "paragraphs": [
+            "Abre Evidencias y análisis en un registro guardado, crea o inspecciona un conjunto de datos y, después, utiliza Editar esquema y exclusiones. Las columnas conservan su grafía de origen, base numérica explícita, unidades y significados de valores faltantes. Los enteros mayores que el intervalo seguro de JavaScript y las fracciones finitas de una base numérica siguen siendo cadenas exactas. Las notaciones no compatibles pueden utilizar {ui:measurements.unsupported}; siguen siendo legibles y descargables, pero no pueden entrar silenciosamente en cálculos numéricos. El valor null de JSON, un campo ausente, un valor declarado faltante y el cero numérico son distintos.",
+            "Despliega {ui:measurements.quantity} para distinguir valores solicitados, medidos, derivados y de código sin procesar, y seleccionar revisiones conservadas de conversión o calibración. A los códigos sin procesar de instrumentos no se les pueden asignar unidades físicas. Una medición derivada independiente puede declarar una unidad física junto con su origen de conversión. Cambiar un esquema crea otra revisión; los análisis anteriores conservan su esquema y sus valores originales.",
+            "{ui:measurements.time} distingue contadores de dispositivo, orden de adquisición, fechas de reloj, tiempo transcurrido, duración de alimentación y tiempo transcurrido inferido. Declara la anchura del contador, la frecuencia, el orden, los límites de desbordamiento o reinicio, la referencia, la resolución y la incertidumbre cuando se conozcan. Observanda no resuelve desbordamientos de contadores ni infiere duraciones. Una transformación externa debe fijar su modelo y sus datos de referencia; una representación temporal diferente no aumenta la precisión del oscilador. Las marcas de tiempo desconocidas siguen siendo desconocidas."
+          ]
+        },
+        {
+          "id": "locators",
+          "title": "Seguir un valor hasta su original",
+          "paragraphs": [
+            "Selecciona un valor de un conjunto de datos conservado para abrir {ui:measurements.heading}. El inspector muestra su grafía, esquema, identidad racional exacta cuando sea compatible, exclusión y observaciones cercanas. Utiliza {ui:measurements.original} para seguir el origen conservado. Las filas CSV tienen intervalos de bytes originales; los campos JSON tienen punteros estructurados. Los demás originales siguen disponibles como descargas completas.",
+            "Al crear un conjunto de datos o asignar una importación preparada, despliega {ui:measurements.nativeMapping}. Selecciona el original nativo y las columnas descodificadas que contienen desplazamientos y longitudes en bytes, rutas JSON Pointer o identificadores de registros nativos. Los números de columna empiezan en 1; los desplazamientos de bytes empiezan en 0. Un identificador sin asignación de bytes o de campo queda explícitamente sin resolver. Ningún descodificador, script ni programa fuente importado se ejecuta en Observanda.",
+            "La inspección de bytes devuelve como máximo 4096 bytes seleccionados y 64 bytes de contexto a cada lado. Utiliza Bytes anteriores y Bytes siguientes para intervalos mayores. Descargar fragmento de bytes mostrado guarda únicamente el intervalo seleccionado; Descargar original recupera el archivo sin cambios. Los originales cifrados se autentican por completo antes de devolver texto sin cifrar, por lo que inspeccionar un origen grande puede llevar tiempo incluso para un intervalo pequeño. La inspección JSON se limita a 60 000 caracteres y conserva los elementos numéricos, pero normaliza los espacios en blanco y los caracteres de escape; las selecciones mayores requieren un puntero más específico o descargar el original."
+          ]
+        },
+        {
+          "id": "provenance",
+          "title": "Conservar una interpretación y vincularla a un criterio",
+          "paragraphs": [
+            "Desde el inspector de valores o de originales, elige {ui:measurements.retain}. Declara el valor exacto, la disponibilidad, los significados de magnitud y tiempo, el origen y la versión del descodificador, el esquema, las referencias de calibración y conversión, el grado de completitud y las limitaciones. Añade celdas contribuyentes, intervalos de bytes, campos estructurados o análisis conservados. La integridad y la finalización son declaraciones de autoría propia; la autenticación del almacenamiento no demuestra el éxito del aparato ni la exactitud científica.",
+            "Guardar conserva una revisión inmutable del análisis. Utiliza Conservar interpretación revisada para modificarla; la revisión anterior sigue siendo inspeccionable. Desde la evaluación de un intento, elige la medición conservada como evidencia de la preparación y el criterio seleccionados. Los lectores pueden seguir esa evaluación a través de los elementos contribuyentes de la medición hasta los bytes nativos. Estos orígenes privados no se publican automáticamente.",
+            "Las coordenadas de las gráficas son aproximadas. La política normal rechaza la conversión numérica no segura de enteros y valores con base explícita. {ui:measurements.approximate} permite explícitamente redondear los enteros y las fracciones de base numérica compatibles para su visualización; su política y la versión del algoritmo se conservan con el análisis de la figura. Los valores exactos del conjunto de datos no cambian. Se rechazan las coordenadas no finitas y los valores distintos de cero que se reducirían a cero por desbordamiento inferior."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "attempt-evidence",
+      "title": "Preparaciones, eventos de intentos y evaluaciones",
+      "sections": [
+        {
+          "id": "preparing",
+          "title": "Fijar una preparación para un intento",
+          "paragraphs": [
+            "Abre un registro guardado y despliega {ui:attempts.title}. Estos controles opcionales no imponen un flujo científico a las notas creativas o de campo. Utiliza {ui:attempts.addPreparation} para declarar el intento o la etapa aplicables, los métodos guardados exactos, las variables controladas, los hashes de entrada, las referencias de calibración, las observaciones previstas y los criterios. La búsqueda de orígenes consulta los registros guardados o las evidencias conservadas sin cargar todo el espacio de trabajo.",
+            "Una condición registra su valor, su unidad declarada y si está expresada, heredada o medida. Las condiciones heredadas requieren una referencia exacta al origen. Repetir una ejecución copia la preparación y las condiciones como heredadas; no incorpora eventos ni evaluaciones. Cambia explícitamente los parámetros deliberados para el siguiente intento. Esto no cuenta una medición heredada como una observación nueva.",
+            "Utiliza {ui:attempts.save} y, después, guarda el registro para fijar la nueva preparación. {ui:attempts.amendPreparation} añade una revisión con un motivo y una aplicabilidad explícita. Las evaluaciones y los eventos existentes conservan las identidades de preparación y criterio que seleccionaron. Los criterios prospectivos y el reanálisis exploratorio tienen campos de alcance separados; explica los criterios exploratorios en lugar de cambiar silenciosamente un umbral anterior."
+          ]
+        },
+        {
+          "id": "events",
+          "title": "Registrar lo sucedido sin inferir una ejecución",
+          "paragraphs": [
+            "{ui:attempts.addEvent} registra preparación, comprobaciones, transporte, instalación, lectura de verificación, observaciones de ejecución, retornos, adquisiciones, revisiones o un evento personalizado. Selecciona una revisión de preparación cuando corresponda e indica el origen, el responsable, el significado del tiempo y las evidencias exactas conservadas. La finalización puede ser completa, parcial, fallida, cancelada o desconocida. Utiliza el campo de circunstancias para los intentos accidentales, los soportes reutilizados y otras salvedades.",
+            "Un evento distingue explícitamente el sistema anfitrión o de preparación de las observaciones del destino físico. Registrar una tarea o adquisición del anfitrión completada no demuestra una ejecución física, un éxito científico ni un nuevo arranque. Añade varias adquisiciones al mismo intento cuando describan el mismo intento físico. El progreso del registro y su resultado general no cambian automáticamente.",
+            "La hora de reloj declarada, los contadores de dispositivo, las duraciones transcurridas y otros tiempos declarados por el origen se mantienen separados de la marca de tiempo de entrada de Observanda. El tiempo desconocido sigue siendo desconocido. Los valores se conservan como texto con su grafía original; introducir un número no infiere una base numérica, una unidad ni una conversión."
+          ]
+        },
+        {
+          "id": "assessments",
+          "title": "Evaluar criterios e inspeccionar cambios",
+          "paragraphs": [
+            "{ui:attempts.addAssessment} selecciona una revisión exacta de preparación y un criterio. Registra el valor observado, el denominador aplicable, el responsable, el origen, el tiempo evaluado, el motivo y las revisiones exactas de evidencias o análisis. Elige cumplido, no cumplido, sin resolver, no disponible o no evaluado y, opcionalmente, añade un resultado específico del ámbito. Una adquisición completa puede coexistir con un criterio de reconocimiento sin resolver.",
+            "Los hechos guardados no se pueden sobrescribir. {ui:attempts.correct} añade una corrección que identifica el evento o la evaluación anterior; los hechos anteriores siguen siendo inspeccionables. Una evaluación respecto a un criterio modificado es una nueva evaluación de esa revisión de preparación, no un sustituto del resultado del criterio anterior. Restaurar un texto narrativo anterior también conserva el historial registrado de preparaciones, eventos y evaluaciones. Las adiciones simultáneas independientes pueden combinarse. Las modificaciones o correcciones en conflicto requieren revisión: conserva los hechos guardados y añade otra corrección, o cancela para mantener tu punto de recuperación inacabado.",
+            "Abre la comparación paginada de ejecuciones de la investigación para inspeccionar las condiciones estructuradas, los eventos y los resultados de los criterios junto con las condiciones narrativas y las revisiones de métodos existentes. Los valores de parámetros modificados se resaltan frente a la primera ejecución de la página mostrada. La procedencia expresada, heredada y medida sigue siendo visible. La comparación no es una evaluación automática de fiabilidad o independencia.",
+            "Un registro publicado incluye sus preparaciones, eventos y evaluaciones de autoría propia, con sus distinciones y correcciones. Las referencias a registros privados, revisiones exactas de registros no disponibles y evidencias privadas se ocultan antes de la representación. La publicación no expone los archivos de evidencias originales. Revisa la vista previa pública antes de compartir; seleccionar un registro también selecciona los valores, nombres y explicaciones de autoría propia de sus evidencias de intentos."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "getting-started",
+      "title": "Proyectos y cuadernos de laboratorio",
+      "sections": [
+        {
+          "id": "refresh",
+          "title": "Ver los cambios guardados en otro lugar",
+          "paragraphs": [
+            "Observanda comprueba si hay cambios guardados en el espacio de trabajo mientras la ventana está visible y cuando vuelves a ella. Los proyectos, cuadernos de laboratorio y registros nuevos aparecen sin reiniciar. Pulsa el logotipo de Observanda para actualizar inmediatamente la página actual; su etiqueta accesible es {ui:workspaceRead.refreshLabel}.",
+            "Las modificaciones sin guardar y los diálogos abiertos permanecen cuando llega contenido guardado más reciente. Termina y guarda tu trabajo, o descártalo deliberadamente; después, cierra el diálogo y actualiza. Si otra persona cambió el mismo registro, el guardado utiliza el flujo habitual de revisión de cambios. Si falla la actualización, se conserva la vista actual y se ofrece reintentar mediante el logotipo. Esta actualización lee el espacio de trabajo actual; no sincroniza ordenadores separados ni publica contenido."
+          ]
+        },
+        {
+          "id": "setup",
+          "title": "Crear o abrir un espacio de trabajo",
+          "paragraphs": [
+            "Utiliza {ui:setup.createTitle} para un espacio de trabajo nuevo o {ui:access.openExisting} para uno que ya tengas. Durante la configuración, introduce el nombre del espacio de trabajo, selecciona los tipos de cuadernos de laboratorio que quieras tener disponibles y, después, elige una carpeta de almacenamiento y un método de protección. {ui:setup.back} y {ui:setup.continue} conservan tus opciones al pasar de un paso a otro.",
+            "{ui:setup.useDevice} permite desbloquear mediante una cuenta autorizada del sistema operativo cuando se admite. {ui:setup.usePassword} requiere contraseñas coincidentes de al menos 12 caracteres. Tras la creación, configura una clave de recuperación independiente en {ui:preferences.storage}. Puedes abrir la Ayuda durante la configuración sin enviar el formulario; {ui:help.returnToForm} conserva el paso actual y los valores introducidos."
+          ]
+        },
+        {
+          "id": "structure",
+          "title": "Organizar tu espacio de trabajo",
+          "paragraphs": [
+            "Un espacio de trabajo contiene proyectos y los proyectos contienen cuadernos de laboratorio. Utiliza el botón de suma junto a Proyectos para crear un proyecto. Dale un nombre, elige su elemento superior y selecciona una plantilla predeterminada de cuaderno si resulta útil. Crear un proyecto no requiere editar una plantilla.",
+            "Abre el proyecto y elige Nuevo cuaderno de laboratorio. La plantilla elegida para el proyecto aparece seleccionada inicialmente; el desplegable permite elegir otra plantilla disponible. Introduce el nombre del cuaderno y guárdalo. Distintos cuadernos del mismo proyecto pueden utilizar plantillas diferentes."
           ]
         },
         {
           "id": "templates",
-          "title": "Elige y personaliza plantillas",
+          "title": "Elegir y personalizar plantillas",
           "paragraphs": [
-            "Activa más tipos de libros en Preferencias → {ui:preferences.templates}. Estos tipos opcionales proporcionan plantillas; el espacio de trabajo, los proyectos y los libros siempre están disponibles. Desactivar un tipo conserva los libros y registros existentes.",
-            "Usa el editor de plantillas dedicado para personalizar tipos de registro, instrucciones y campos. Los cambios de plantilla no reescriben los valores de registros existentes. Separa los prototipos de software y los experimentos físicos con PCB cuando necesiten estructuras diferentes."
+            "Activa tipos adicionales de cuadernos de laboratorio en Preferencias → {ui:preferences.templates}. Estos tipos opcionales proporcionan plantillas; el espacio de trabajo, los proyectos y los cuadernos están siempre disponibles. Desactivar un tipo conserva los cuadernos y registros existentes.",
+            "Utiliza el editor de plantillas específico para personalizar los tipos de registro, las orientaciones y los campos. Los cambios de una plantilla no reescriben los valores de los registros existentes. Mantén los prototipos de software y los experimentos físicos de PCB en cuadernos separados cuando sus estructuras de registro sean distintas."
+          ]
+        },
+        {
+          "id": "dashboard-types",
+          "title": "Filtrar las tarjetas del panel por tipo de registro",
+          "paragraphs": [
+            "Abre la configuración de una tarjeta y elige {ui:dashboardChoices.recordType}. Las opciones aparecen en páginas ordenadas alfabéticamente; busca por nombre o utiliza {ui:dashboardChoices.next} y {ui:dashboardChoices.previous} para explorarlas. La lista incluye los tipos conservados en los registros de los proyectos y cuadernos elegidos, incluidos los tipos que ya no se ofrecen para registros nuevos.",
+            "El tipo seleccionado sigue visible mientras buscas o exploras otras opciones. Cambiar el ámbito del proyecto o del cuaderno actualiza las opciones; una selección no disponible permanece seleccionada hasta que elijas otro tipo o {ui:dashboardChoices.allTypes}. Una búsqueda fallida no cambia el filtro guardado. Cierra la configuración para volver al panel."
           ]
         }
       ]
@@ -28,18 +310,36 @@
       "sections": [
         {
           "id": "writing",
-          "title": "Escribe y conecta registros",
+          "title": "Redactar y conectar registros",
           "paragraphs": [
-            "Abre un libro y elige New record. Selecciona un tipo, pon un título descriptivo y rellena las secciones pertinentes. Guarda antes de salir. Los títulos, textos, números y evidencias escritos por los usuarios nunca se traducen al cambiar el idioma de la interfaz.",
-            "Conecta trabajos relacionados con enlaces de investigación. Un enlace actual sigue el registro vigente. Una referencia exacta a un método identifica la revisión utilizada. Crea registros individuales para las repeticiones o tomas y documenta parámetros modificados, desviaciones y resultados incompletos."
+            "Abre un cuaderno de laboratorio y elige Nuevo registro. Selecciona un tipo de registro, utiliza un título descriptivo y rellena las secciones pertinentes para tu trabajo. Guarda el registro antes de salir. Los títulos, textos, números y evidencias escritos por el usuario nunca se traducen al cambiar el idioma de la interfaz.",
+            "Utiliza enlaces de investigación para conectar trabajos relacionados. Un enlace actual ordinario sigue el registro actual. Una referencia exacta a un método identifica la revisión seguida por una ejecución. Crea registros individuales de ejecución o toma para las repeticiones y documenta los parámetros modificados, las desviaciones y los resultados incompletos."
           ]
         },
         {
           "id": "history",
-          "title": "Consulta el historial y los enlaces",
+          "title": "Consultar el historial y el trabajo enlazado",
           "paragraphs": [
-            "Abre el historial desde el propio registro para inspeccionar versiones guardadas. Restaurar crea una versión actual de ese registro; los demás no cambian. Revisa el contenido restaurado antes de compartirlo.",
-            "Sigue los enlaces a métodos, evidencias y registros relacionados. Una comprobación de software satisfactoria no demuestra una ejecución física, y una única ejecución satisfactoria no demuestra repetibilidad. Registra esos eventos y conclusiones por separado."
+            "Abre el historial desde el propio registro para inspeccionar las versiones guardadas. Restaurar crea una versión actual de ese registro; los registros no relacionados no cambian. Revisa el contenido restaurado antes de compartirlo.",
+            "Sigue los métodos, evidencias y registros relacionados enlazados para leer el contexto. Una comprobación de software correcta no demuestra una ejecución física y una sola ejecución correcta no demuestra repetibilidad. Registra esos eventos y conclusiones por separado."
+          ]
+        },
+        {
+          "id": "type-filters",
+          "title": "Encontrar registros por tipo",
+          "paragraphs": [
+            "Utiliza {ui:recordTypes.filter} en una lista de registros para ver la primera página de tipos disponibles. Elige {ui:recordTypes.find} para buscar o recorrer más opciones del proyecto o cuaderno actual. El tipo seleccionado sigue visible aunque no esté en la primera página.",
+            "{ui:recordTypes.cancel} deja el filtro actual sin cambios. Si una búsqueda falla, {ui:recordTypes.retry} la repite. {ui:recordViews.title} permite guardar el tipo junto con los filtros y el ámbito actuales y volver a abrir esa vista más adelante."
+          ]
+        },
+        {
+          "id": "draft-recovery",
+          "title": "Recuperar trabajo de registro inacabado",
+          "paragraphs": [
+            "Elige {ui:recordDrafts.reviewDrafts} cuando Observanda encuentre puntos de recuperación de registros sin guardar. La lista muestra diez borradores cada vez. Utiliza {ui:recordDrafts.next} y {ui:recordDrafts.previous} para explorarlos, o {ui:recordDrafts.refresh} para ver los cambios recientes. Cerrar la lista conserva todos los borradores.",
+            "{ui:recordDrafts.review} abre el punto de recuperación seleccionado para compararlo con el registro guardado. Elige {ui:recordRecovery.continueEditing} para recuperar el trabajo combinado en el editor y revísalo antes de guardar. Un punto de recuperación no es un registro guardado. Si no se puede almacenar el nuevo punto de recuperación, mantén la ventana abierta y utiliza {ui:recordDrafts.retryCheckpoint}; la copia de recuperación original sigue disponible.",
+            "Los puntos de recuperación más grandes cargan sus registros seleccionados por lotes. {ui:recordSelection.retry} continúa una carga interrumpida; {ui:recordSelection.cancel} conserva el editor y el punto de recuperación. Una vez que el guardado termina correctamente, el diálogo de carga indica que se guardaron los registros. Reintentar esa carga no envía otro guardado. Si la cancelas, utiliza Guardar de nuevo para comparar el editor con las versiones guardadas antes de continuar.",
+            "Un borrador puede seguir abierto en otra ventana. {ui:recordDrafts.discard} solicita {ui:recordDrafts.confirm} antes de eliminar un punto de recuperación. Si ha cambiado desde que se cargó la lista, actualízala y revísalo de nuevo. Un fallo de limpieza tras guardar deja intacto el registro guardado y accesible el punto de recuperación restante."
           ]
         }
       ]
@@ -50,18 +350,42 @@
       "sections": [
         {
           "id": "originals",
-          "title": "Conserva los archivos originales",
+          "title": "Conservar archivos originales",
           "paragraphs": [
-            "Adjunta evidencias desde los controles del registro. Añade un título descriptivo y su procedencia. Las capturas binarias, el código fuente y las exportaciones de instrumentos son evidencias aunque no tengan vista previa. Conserva los bytes originales separados de los medios convertidos y los datos derivados.",
-            "Un hash identifica los bytes, pero no demuestra exactitud ni autoría. Si se interrumpe una importación, comprueba su estado y usa los controles de recuperación ofrecidos antes de crear otra copia. Recupera el original para examinarlo con una herramienta externa adecuada."
+            "Adjunta evidencias mediante los controles de evidencias del registro. Dales un título descriptivo y una procedencia. Las capturas binarias, los archivos fuente y las exportaciones de instrumentos son evidencias aunque no tengan vista previa visual. Conserva los bytes originales separados de los medios convertidos y los conjuntos de datos derivados.",
+            "El hash de un archivo identifica sus bytes; no demuestra exactitud ni autoría. Si se interrumpe una subida, vuelve a abrir las evidencias del registro, elige {ui:evidenceUpload.resumeUpload} y selecciona el mismo archivo original. Observanda comprueba los bytes ya recibidos antes de continuar. Un archivo modificado se rechaza sin sustituir los fragmentos guardados. Una vez terminada la verificación, descarga el original conservado para inspeccionarlo con una herramienta externa adecuada.",
+            "Utiliza {ui:evidenceIntake.heading} para mantener juntos los archivos originales relacionados. Súbelos y elige {ui:evidenceIntake.finish}. Hasta que se completen la verificación y la asociación, los archivos permanecen en {ui:evidenceIntake.unfinished}. Tras una interrupción, continúa ese conjunto y vuelve a seleccionar sus archivos originales. Si el manifiesto está incompleto, vuelve a seleccionar el conjunto completo; en caso contrario, puedes seleccionar solo los archivos restantes. Los archivos idénticos conservan sus identidades de adquisición separadas."
           ]
         },
         {
           "id": "analysis",
-          "title": "Distingue datos e interpretación",
+          "title": "Mantener separados los conjuntos de datos y las interpretaciones",
           "paragraphs": [
-            "Conserva el conjunto de datos independientemente de una figura. Mantén unidades, significado de valores ausentes, exclusiones e identidades de fila. Declara explícitamente representaciones no decimales y enteros grandes exactos; no los conviertas silenciosamente en números decimales ordinarios.",
-            "Vincula el análisis a entradas, parámetros y versiones exactas del método o herramienta. Conserva los resultados revisados separados de los anteriores. Revisa figuras y conclusiones dependientes si cambian las entradas. Los resúmenes calculados y los valores editados manualmente tienen procedencias distintas."
+            "Conserva los conjuntos de datos independientemente de las figuras. Preserva las unidades, los significados de valores faltantes, las exclusiones y las identidades de fila. Declara explícitamente las representaciones no decimales y los enteros grandes exactos; no los conviertas silenciosamente en números decimales ordinarios.",
+            "Utiliza {ui:materialAnalysis.analysisHeading} para registrar la herramienta, la versión, el procedimiento y las entradas exactas. {ui:materialAnalysis.choose} busca resúmenes de registros guardados sin salir del formulario de análisis. Elige un resultado para conservar su revisión exacta. Si ha cambiado desde la búsqueda, actualiza y vuelve a elegir. Cancelar cierra solo la búsqueda; los campos de análisis y las selecciones de evidencias permanecen. Para las selecciones de evidencias, utiliza {ui:materialSources.more} para explorar más resultados y {ui:materialSources.moreSelected} para revisar los orígenes elegidos. Las selecciones conservan sus revisiones exactas entre búsquedas. Al guardar una colección o un análisis, la selección se transfiere por lotes; un guardado interrumpido aparece en el trabajo inacabado y puede continuarse. Las modificaciones posteriores del método seleccionado no cambian la entrada conservada. Mantén separados los resultados revisados y revisa las figuras y conclusiones dependientes cuando cambien las entradas. Los resúmenes generados y los valores editados manualmente tienen distinta procedencia."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sample-analysis",
+      "title": "Muestras, resultados y revisión local",
+      "sections": [
+        {
+          "id": "records",
+          "title": "Encontrar una muestra o un resultado",
+          "paragraphs": [
+            "Abre {ui:sampleAnalysis.title} y utiliza {ui:sampleAnalysis.register} para registrar el código, material, origen y fechas de una muestra. Elige {ui:sampleAnalysis.recordAnalysis} para introducir un resultado. {ui:sampleAnalysis.findSample} busca muestras disponibles; recorrer las páginas de ese selector conserva los campos del resultado que hayas introducido.",
+            "Las muestras, los análisis, la cola de revisión y los resultados archivados tienen listas separadas. Utiliza {ui:sampleAnalysis.search}, {ui:sampleAnalysis.next} y {ui:sampleAnalysis.previous} para explorarlas. Abre un resultado para editar sus campos. Una solicitud de lista interrumpida conserva la página anterior; {ui:sampleAnalysis.retry} la reintenta. {ui:sampleAnalysis.refresh} muestra los registros más recientes. Las tarjetas del panel utilizan las mismas listas paginadas."
+          ]
+        },
+        {
+          "id": "review",
+          "title": "Revisar y modificar un resultado",
+          "paragraphs": [
+            "Elige {ui:sampleAnalysis.submit} para guardar el resultado actual y ponerlo en la cola de revisión. {ui:sampleAnalysis.reviewResult} registra el nombre, la decisión y el comentario del revisor. Son confirmaciones locales, no firmas electrónicas autenticadas.",
+            "Un resultado aprobado ofrece {ui:sampleAnalysis.print}. Esa hoja conserva la revisión aprobada tras las modificaciones posteriores. Utiliza {ui:sampleAnalysis.amend} e indica el motivo antes de cambiar un resultado enviado o aprobado. Los resultados archivados siguen siendo legibles.",
+            "Despliega {ui:sampleAnalysis.history} en un resultado y elige {ui:sampleAnalysis.loadHistory}. El historial carga veinte eventos por página; recorrerlo mantiene intactos los campos de resultado inacabados. Los datos de análisis de muestras permanecen privados y se excluyen del sitio web."
           ]
         }
       ]
@@ -71,63 +395,286 @@
       "title": "Inventario y componentes de prototipos",
       "sections": [
         {
+          "id": "drafts",
+          "title": "Recuperar trabajo inacabado de herramientas",
+          "paragraphs": [
+            "Si una herramienta tiene puntos de recuperación inacabados, {ui:moduleRecovery.heading} muestra diez cada vez. Utiliza {ui:moduleRecovery.next} y {ui:moduleRecovery.previous} para explorarlos, o {ui:moduleRecovery.refresh} para ver los más recientes. {ui:moduleRecovery.retry} repite una solicitud de página fallida; conserva el formulario actual y la última lista disponible.",
+            "{ui:moduleRecovery.restore} abre el punto de recuperación seleccionado para editarlo. Observanda guarda una copia de recuperación nueva antes de eliminar el punto de origen. Guarda el elemento recuperado cuando estés satisfecho con él. Los demás elementos inacabados siguen disponibles en Borradores. {ui:moduleRecovery.discard} elimina únicamente la copia de recuperación seleccionada; una copia modificada en otra ventana debe actualizarse antes de poder descartarse."
+          ]
+        },
+        {
+          "id": "history",
+          "title": "Leer las revisiones guardadas de un elemento",
+          "paragraphs": [
+            "Abre un elemento de inventario, una tarea, un cálculo u otro elemento de herramienta y elige Historial. {ui:moduleHistory.heading} muestra veinte resúmenes de revisiones cada vez. Utiliza {ui:moduleHistory.next} y {ui:moduleHistory.previous} para recorrerlos, o {ui:moduleHistory.first} para volver al principio. Abre una revisión para inspeccionar sus campos guardados; {ui:moduleHistory.close} devuelve el foco al botón de esa revisión.",
+            "Consultar el historial conserva el borrador actual. Vuelve a Detalles para continuar la edición. Los nuevos guardados no desplazan la página del historial que estás leyendo; utiliza {ui:moduleHistory.refresh} para verlos. Si no se puede cargar una página o revisión, {ui:moduleHistory.retry} repite esa solicitud sin guardar ni descartar el borrador."
+          ]
+        },
+        {
           "id": "ownership",
           "title": "Propiedad y asignación",
           "paragraphs": [
-            "El inventario pertenece al espacio de trabajo. Un artículo puede quedar sin asignar a ningún proyecto. Asignar cantidades indica a qué proyectos se destinan los recursos; no crea otra copia de las existencias. Activa Inventory en Módulos para usar su vista dedicada.",
-            "Crea artículos con nombres, unidades y cantidades significativos. Distingue ubicación física y asignación a un proyecto. Por ejemplo, 100 componentes repartidos entre dos proyectos siguen sumando 100 componentes en el espacio de trabajo."
+            "El inventario pertenece al espacio de trabajo. Un artículo puede permanecer sin asignar a ningún proyecto. Asignar cantidades a proyectos registra dónde se destinan los recursos; no crea una copia adicional de las existencias propias. Activa Inventario en Módulos para utilizar su vista específica.",
+            "Crea artículos con nombres, unidades y cantidades significativos. Mantén la ubicación física de almacenamiento separada de la asignación a proyectos. Por ejemplo, 100 componentes propios repartidos entre dos proyectos siguen sumando 100 componentes en el espacio de trabajo.",
+            "Las categorías definen campos reutilizables para los artículos. Los esquemas grandes muestran diez campos por página; utiliza {ui:moduleFields.findFields} para localizar uno. Las definiciones de opciones y las opciones de los artículos muestran veinte opciones por página, con {ui:moduleFields.findChoices} para buscar. Pasar de una página a otra conserva las modificaciones y los valores seleccionados. Si un campo obligatorio de otra página está incompleto, al guardar se te lleva a ese campo. Los artículos existentes mantienen su versión de categoría guardada hasta que apliques explícitamente los campos de la categoría actual."
           ]
         },
         {
           "id": "usage",
-          "title": "Sigue el uso y la disponibilidad",
+          "title": "Controlar el uso y la disponibilidad",
           "paragraphs": [
-            "Conecta las listas de materiales de prototipos con artículos del inventario. Registra las cantidades realmente usadas y distínguelas de la demanda prevista y las reservas. Una BOM es un plan, no una prueba de consumo.",
-            "Revisa las cantidades disponibles y usadas antes de otro montaje. Registra sustituciones y resultados del montaje en el experimento para entender la elección de componentes junto con los resultados."
+            "Utiliza {ui:moduleReferences.chooseResearch} en una herramienta, tarea o artículo de inventario para buscar registros, cuadernos de laboratorio o proyectos guardados. Los resultados de búsqueda están paginados; seleccionar un enlace conserva el borrador del elemento. Los registros no disponibles conservan sus referencias y {ui:moduleReferences.retry} reintenta una búsqueda de título interrumpida sin cambiar las modificaciones.",
+            "En una lista de materiales, {ui:moduleReferences.prototype} abre la misma búsqueda de registros. Guardar fija la revisión de ejecución seleccionada. Revisa una ejecución modificada antes de reservar existencias. Conecta las listas de materiales de prototipos con los artículos de inventario. Registra las cantidades realmente utilizadas y distínguelas de la demanda prevista y las reservas. Una lista de materiales es un plan; no demuestra que los componentes se hayan consumido.",
+            "Revisa las cantidades disponibles y utilizadas antes de otra construcción. Conserva las sustituciones y los resultados del montaje en el registro del experimento para que la elección de componentes pueda entenderse junto con los resultados."
           ]
         }
       ]
     },
     {
       "id": "publishing",
-      "title": "Diseña y publica una web",
+      "title": "Diseñar y publicar un sitio web",
       "sections": [
         {
-          "id": "design",
-          "title": "Construye y revisa las páginas",
+          "id": "project-websites",
+          "title": "Sitios web de proyectos separados",
           "paragraphs": [
-            "Abre Website editor para elegir páginas y ordenar secciones. Crea una página de inicio si la quieres. Usa la pestaña Page para construir la estructura y el control de edición dedicado para cambiar la sección seleccionada. Guarda antes de preparar una publicación.",
-            "Elige en Content qué puede ser público. El lienzo de trabajo puede mostrar contenido no publicado: no es la edición pública. Usa {ui:websiteEditor.readingPreview} para comprobar los cambios sin guardar el sitio. Cuando estén listos, usa {ui:websiteEditor.prepareEdition} para preparar la edición que quieras exportar."
+            "Elige {ui:websiteSites.title} encima del editor web y, después, {ui:websiteSites.new} para dar nombre a un sitio web. Crea sitios separados para públicos o destinos distintos, como un diario de investigación y un sitio de Ayuda. Elige el contenido por separado para cada sitio.",
+            "Cada sitio web tiene sus propias páginas, diseño, opciones de contenido público, destino de publicación y ediciones conservadas. Los sitios nuevos empiezan sin registros seleccionados para su publicación. Elige los registros en Contenido público y guarda el sitio. Estas opciones no cambian los originales de investigación ni la selección de otro sitio web.",
+            "El nombre del sitio permanece visible encima de su editor y de los controles de publicación. Abre {ui:websiteSites.destination} para elegir un repositorio y una rama de GitHub o un directorio de alojamiento SSH específico para este sitio. Utiliza un repositorio, una carpeta web o un directorio de alojamiento separado para cada sitio independiente. Revisa y publica explícitamente cada edición; crear sitios o cambiar entre ellos no despliega nada.",
+            "El sitio web existente del espacio de trabajo sigue disponible en {ui:websiteSites.title}. Para crear otro sitio de proyecto, vuelve a esa lista. Los cambios del sitio guardados en otro lugar se pueden actualizar mediante el logotipo de Observanda; las modificaciones sin guardar permanecen protegidas."
+          ]
+        },
+        {
+          "id": "appearance",
+          "title": "Elegir fuentes, colores y distribución",
+          "paragraphs": [
+            "En Preferencias, abre {ui:appearance.title} para elegir un tema, colores y fuentes. {ui:appearance.saveAs} conserva un diseño con nombre en este espacio de trabajo; {ui:appearance.saveAppearance} guarda los cambios actuales. El tamaño del texto de la aplicación, la distribución de los menús y la alineación del encabezado son ajustes personales de este ordenador, independientes del texto y la distribución del sitio web.",
+            "Utiliza {ui:appearance.previewContent} para alternar entre ejemplos ficticios y contenido guardado seleccionado para tu sitio. La vista previa aplica la apariencia actual sin guardarla ni crear una publicación revisada. {ui:appearance.previewPage} elige una página; {ui:appearance.retryPreview} reintenta una vista previa interrumpida sin descartar las modificaciones. Revisa y publica por separado mediante Publicación o Editor web.",
+            "En {ui:fonts.title}, sube un archivo TTF, OTF, WOFF o WOFF2. Las fuentes variables ofrecen {ui:fonts.variableSettings}. Permite la incrustación en el sitio web solo cuando la licencia de la fuente lo autorice. Ocultar una fuente de los selectores conserva intactos el texto existente y las ediciones guardadas."
+          ]
+        },
+        {
+          "id": "design",
+          "title": "Crear y revisar páginas",
+          "paragraphs": [
+            "Abre Editor web para elegir páginas y ordenar secciones. Crea una página de inicio si la quieres. Utiliza la pestaña Página para construir la estructura y, después, el control de edición específico para cambiar una sección seleccionada. Guarda los cambios del sitio antes de preparar una publicación.",
+            "Elige qué contenido puede ser público en {ui:websiteEditor.content}. El lienzo de edición puede mostrar contenido no publicado. Utiliza {ui:websiteEditor.readingPreview} para recorrer el borrador actual sin guardar el sitio ni preparar una edición. Utiliza {ui:websiteEditor.prepareEdition} por separado para preparar el contenido para exportarlo o publicarlo.",
+            "Utiliza {ui:websiteContent.search} en Contenido público para encontrar un proyecto o registro. Las listas de proyectos y registros tienen controles de paginación separados. Despliega la fila Medios de un registro para seleccionar sus adjuntos y la portada de su tarjeta. Incluir todas las entradas se aplica a todo el proyecto, incluidos los registros fuera de la búsqueda o página actual.",
+            "En la biblioteca multimedia, utiliza {ui:websiteMedia.search} y {ui:websiteMedia.kind} para encontrar los archivos subidos. Los selectores de imágenes y medios de investigación ofrecen {ui:websiteMedia.find} para bibliotecas más grandes. Elegir medios te devuelve al mismo elemento. Las opciones de galería permanecen seleccionadas entre búsquedas y páginas; organiza su orden de visualización en la lista de imágenes seleccionadas. Elegir medios de investigación no convierte en público un registro o adjunto privado.",
+            "En {ui:websiteEditor.page}, elige {ui:websiteEditor.area} para trabajar en el contenido de la página, una barra lateral o el pie. Crea un diseño o reutiliza uno existente. Sus elementos utilizan los mismos controles de texto, medios, distribución y estilo que la página. Utiliza el control específico Editar y, después, Volver para regresar sin cambiar de página.",
+            "{ui:websiteEditor.default} aplica una barra lateral o un pie a las páginas que utilizan el valor predeterminado del sitio, incluidas las páginas futuras. {ui:websiteEditor.choosePages} abre una lista de páginas con búsqueda. Elige un tipo de página, busca un título y marca o desmarca su asignación. {ui:websitePages.done} vuelve al diseño; Guardar sitio web guarda los cambios. Las modificaciones compartidas afectan a todas las páginas que utilizan ese diseño; {ui:websiteEditor.copy} crea una composición independiente, incluidos los ajustes de presentación de imágenes. Eliminar un diseño lo quita de todas las páginas asignadas y se puede deshacer antes de guardar.",
+            "Un elemento {ui:websiteEditor.contents} enlaza los encabezados de sección visibles de la página actual mediante anclas estables. La misma barra lateral adapta su índice a cada página. Las secciones ocultas o excluidas no aparecen en el índice publicado. Configura la posición, la anchura y el comportamiento de desplazamiento de la barra lateral en {ui:websiteEditor.appearance}; las pantallas estrechas sitúan la barra lateral antes del contenido.",
+            "Los enlaces de imágenes y botones ofrecen {ui:websitePages.chooseLink}. Encuentra una página sin salir del diseño actual o introduce directamente una dirección externa. Elegir un destino tiene su propio paso para deshacer. Los enlaces de texto utilizan la búsqueda de Ajustes del enlace.",
+            "Crea un diseño de pie para organizar texto, imágenes, enlaces y contenedores. El texto de pie existente se utiliza como base de su primer elemento de texto. Creado con Observanda permanece al final del mismo pie y utiliza su superficie, color de texto y alineación. Si mezclas alineaciones deliberadamente, el crédito sigue el último bloque de texto visible. Solo se centra cuando no hay un pie de autoría propia. Guarda, vuelve a abrir y revisa el sitio exportado antes de publicarlo."
+          ]
+        },
+        {
+          "id": "local-export",
+          "title": "Exportar a un sitio web local existente",
+          "paragraphs": [
+            "En Publicación, prepara y revisa el sitio web y elige {ui:publication.localExport}. Elige la raíz del sitio existente o una subcarpeta específica. Los enlaces relativos admiten ambas ubicaciones. Utiliza {ui:localExport.review} para inspeccionar cada archivo de salida añadido, actualizado, eliminado y sin cambios antes de confirmar {ui:localExport.apply}.",
+            "La primera exportación nunca sobrescribe archivos existentes. Las exportaciones posteriores solo actualizan o eliminan archivos escritos previamente en esa carpeta exacta por este espacio de trabajo. Un archivo modificado o eliminado manualmente genera un conflicto: restaura el archivo esperado, muévelo tú mismo o selecciona otra carpeta y vuelve a revisar. Las páginas no relacionadas y el historial de Git permanecen intactos. No se crea ningún commit ni se hace push o subida automáticamente.",
+            "Exporta a una copia local y súbela solo cuando haya terminado. Los archivos se verifican antes del cambio, pero la carpeta completa no puede cambiar de forma atómica junto con archivos ajenos. Durante una interrupción puede contener una edición parcial y archivos temporales de salida pública. Vuelve a abrir la misma edición desde Preparaciones del sitio web, elige Exportar a carpeta local y utiliza Reanudar exportación. La revisión guardada y el diario de recuperación permanecen cifrados en el espacio de trabajo. Descartar preparación está disponible antes de comenzar el cambio de archivos; después, reanuda la edición fijada antes de preparar otra exportación a esa carpeta.",
+            "Conserva el espacio de trabajo y sus copias de seguridad: retienen los comprobantes de propiedad y recuperación del destino. Copiar solo un sitio web no transfiere esa propiedad a otro espacio de trabajo. Este flujo requiere un sistema de archivos local que admita enlaces duros; los recursos compartidos de red y las carpetas activas servidas directamente no son destinos cualificados. Una exportación completada verifica sus bytes en disco, no un despliegue alojado ni la resistencia a cortes repentinos de energía en todas las plataformas."
+          ]
+        },
+        {
+          "id": "repository-setup",
+          "title": "Configurar un repositorio web",
+          "paragraphs": [
+            "En Publicación, abre Configurar destino, introduce el propietario y el nombre del repositorio de GitHub, guarda el destino y elige {ui:githubConnection.signIn}. Completa la autorización en el navegador. GitHub identifica el asistente de autorización como Git Credential Manager. Observanda protege la credencial en el almacén de credenciales de este ordenador, separado de los archivos del espacio de trabajo. Seigr no la recibe ni la gestiona. Comprobar conexión verifica el acceso. Para un repositorio vacío creado fuera de Observanda, revisa el repositorio y la rama mostrados y elige {ui:repositorySetup.initialize}. Esto crea únicamente un archivo .nojekyll vacío en el primer commit, conserva la visibilidad del repositorio y prepara la rama web elegida. No publica tus registros ni configura Pages.",
+            "La cuenta seleccionada vuelve a conectarse tras reiniciar mediante el almacén de credenciales de este ordenador. Utiliza {ui:githubConnection.choose} para cambiar entre cuentas guardadas, {ui:githubConnection.disconnect} para desconectar este espacio de trabajo o {ui:githubConnection.forget} para eliminar de este ordenador la credencial de Observanda para esa cuenta. Gestionar autorización en GitHub permite revocar el acceso o autorizar una organización. Una credencial revocada requiere iniciar sesión de nuevo. Los tokens temporales siguen disponibles en Avanzado para instalaciones gestionadas y caducan de la memoria de la aplicación al reiniciar. Si se interrumpe la inicialización, comprueba la conexión y elige {ui:repositorySetup.resume}. Observanda verifica la identidad del repositorio y su propio commit inicial antes de continuar. Los cambios realizados en otro lugar pueden bloquear la configuración y requerir otra revisión del destino. {ui:repositorySetup.stop} detiene el trabajo posterior; no borra un commit ya creado. Tras la configuración, revisa una edición seleccionada antes de subirla."
           ]
         },
         {
           "id": "release",
-          "title": "Publica una edición aprobada",
+          "title": "Publicar una edición aprobada",
           "paragraphs": [
-            "Mantén las evidencias privadas y los detalles operativos fuera de la selección pública. Comprueba nombres de archivo, metadatos, enlaces y datos de figuras, además del texto visible. Puedes explicar que las evidencias no están disponibles públicamente sin revelar sus metadatos privados.",
-            "Guardar, generar, crear un commit, enviar y verificar el despliegue son estados diferentes. Configura el destino en Publishing y sigue el proceso de revisión. Verifica la edición desplegada: un envío correcto no prueba que la web se haya actualizado. La exportación estática también permite publicar sin un servicio integrado."
+            "Mantén las evidencias privadas y los detalles operativos fuera de las selecciones públicas. Comprueba los nombres de archivo, los metadatos, los enlaces y los datos incrustados de las figuras, además del texto visible. Puedes redactar una explicación de que las evidencias de respaldo no están disponibles públicamente sin exponer sus metadatos privados.",
+            "Utiliza {ui:publication.selectionTitle} antes de preparar una edición. Despliega un registro para ocultar su texto principal, las secciones seleccionadas, los campos de plantilla, los adjuntos o las gráficas. Las opciones se aplican únicamente a esta edición. Los registros que no cambies conservan su selección pública guardada. Las tablas exactas de gráficas y las descargas CSV están desactivadas inicialmente y requieren una selección explícita para cada gráfica. La propia gráfica sigue revelando los valores representados mediante su SVG, marcas y etiquetas; ocultar un CSV no hace secretos esos valores. Los conjuntos de datos originales y los artefactos de origen nunca se incluyen automáticamente. Las referencias de investigación no disponibles se enumeran en la revisión privada, y sus etiquetas y destinos se excluyen de la edición pública.",
+            "Guardar, generar la salida, crear un commit, hacer push y verificar el despliegue son estados separados. En Publicación, configura el destino y utiliza {ui:publication.reviewTitle} para preparar la selección pública guardada. {ui:publication.preparations} vuelve a abrir las ediciones conservadas; {ui:publication.continue} deja la preparación en marcha. Revisión vuelve a Publicación cuando se abre desde allí. Los diseños web sin guardar se pueden inspeccionar con {ui:websiteEditor.readingPreview}; {ui:websiteEditor.prepareEdition} inicia el flujo independiente de preparación. Verifica la edición desplegada; un push correcto por sí solo no demuestra que el sitio se haya actualizado. La exportación estática también permite publicar sin un alojamiento integrado."
+          ]
+        },
+        {
+          "id": "repository-files",
+          "title": "Publicar junto a un sitio web existente",
+          "paragraphs": [
+            "Configurar destino incluye {ui:publication.websiteFolder}. Déjalo vacío para la raíz del repositorio o elige una carpeta como lab/field-notes. Si proporcionas una URL pública del sitio, dirígela a esa carpeta; en caso contrario, la verificación de GitHub Pages incluye la carpeta automáticamente. Cambiar la carpeta inicia un destino de publicación separado y mantiene el sitio anterior.",
+            "Desde el sitio preparado, elige {ui:publication.repositoryReview} para inspeccionar las adiciones, actualizaciones, eliminaciones, archivos web sin cambios y archivos ajenos que se conservarán. La revisión se ejecuta en segundo plano y se puede volver a abrir tras salir de la página o reiniciar. La primera subida a una rama existente y cualquier eliminación requieren confirmación. Las actualizaciones ordinarias solo cambian archivos publicados previamente en este destino por este espacio de trabajo. Se pueden adoptar archivos existentes idénticos tras revisarlos; los archivos diferentes en la misma ruta bloquean la publicación ordinaria. Conserva copias de seguridad del espacio de trabajo: la propiedad de los archivos es un metadato privado del espacio de trabajo y no se escribe en el sitio web.",
+            "Para sustituir un sitio web o una aplicación existentes, despliega {ui:publication.replacementOptions} y elige {ui:publication.replacementReview}. Esto propone sustituir la rama o carpeta seleccionada por el sitio preparado, eliminando archivos de la aplicación anterior y flujos de compilación de ese ámbito. Inspecciona las listas de eliminación y conservación antes de aprobar. Los archivos existentes de CNAME, licencia, copia, derechos de autor y avisos se conservan exactamente, al igual que los archivos fuera de la carpeta seleccionada. Una ruta exportada en conflicto sigue bloqueada. El dominio personalizado y el ajuste HTTPS existentes de Pages se conservan al configurar Pages.",
+            "Opcionalmente, introduce un nombre de rama de archivo sin utilizar antes de revisar la sustitución. Observanda crea esa rama en el commit original revisado antes de actualizar la rama de publicación. Un reintento verifica un archivo ya creado por la misma operación. Las ramas existentes nunca se sobrescriben. Crear una rama de archivo puede activar flujos del repositorio. Con o sin rama de archivo, la sustitución crea un commit nuevo y conserva el historial anterior de Git.",
+            "Si un archivo publicado previamente cambió fuera de Observanda, una actualización ordinaria se detiene. Restaura los archivos esperados, elige otra carpeta de publicación o revisa explícitamente una sustitución completa. Una rama modificada invalida la revisión anterior y los conflictos con archivos protegidos no se pueden obviar mediante aprobación. Actualizar la revisión requiere una nueva aprobación del repositorio.",
+            "Las subidas y los reintentos utilizan el árbol del repositorio revisado. Tras un push interrumpido, vuelve a conectar GitHub y reanuda para conciliar su resultado. Los archivos se verifican antes de avanzar la rama; la verificación del sitio activo es un paso independiente. Los flujos existentes del repositorio pueden ejecutarse cuando cambia su rama. Eliminar un archivo publicado no borra el historial anterior de Git, las cachés del alojamiento ni las copias que conserven los visitantes."
+          ]
+        },
+        {
+          "id": "historical-editions",
+          "title": "Publicar un método o resultado histórico exacto",
+          "paragraphs": [
+            "En {ui:publication.selectionTitle}, despliega un registro que contenga referencias y elige {ui:publication.reviewReferences}. Lee el texto y los campos conservados antes de activar {ui:publication.selectionInclude}. Puedes seleccionar partes individuales y ocultar los datos de las gráficas de forma independiente. Revisa de nuevo las revisiones referenciadas dentro de un registro histórico para seguir sus dependencias; {ui:publication.referenceBack} vuelve al registro que contiene la referencia con tus opciones intactas. Una referencia nunca concede permiso de publicación automáticamente.",
+            "Las páginas históricas llevan una etiqueta de revisión y una URL estable derivada de esa revisión exacta. No sustituyen la página del registro actual ni añaden tarjetas duplicadas al índice público. Las modificaciones actuales no alteran las ediciones conservadas. Al preparar otra edición, incluye explícitamente las revisiones anteriores que deban permanecer en el sitio activo.",
+            "Para una referencia excluida o no disponible, introduce {ui:publication.availabilityLabel} si quieres una explicación pública. Es texto público de autoría propia: no incluyas nombres, ubicaciones ni detalles operativos privados. La referencia excluida en sí no aporta ningún identificador, título ni destino público."
+          ]
+        },
+        {
+          "id": "legacy-links",
+          "title": "Conservar direcciones y fragmentos de capítulos antiguos",
+          "paragraphs": [
+            "Abre {ui:publication.legacyLinks} en Publicación. Añade cada ruta HTML relativa antigua, su título público de página y una asignación por cada fragmento. Elige el registro de destino individual y si el enlace sigue su versión actual seleccionada o nombra la revisión exacta guardada. Todas las etiquetas aquí son texto público. Guardar las asignaciones no las publica.",
+            "La preparación comprueba cada asignación frente a la edición seleccionada. Los destinos faltantes, las rutas o fragmentos duplicados y las colisiones con páginas generadas bloquean la preparación e identifican la dirección afectada. Corrige la asignación o incluye la revisión exacta referenciada antes de preparar de nuevo. Un capítulo con varios experimentos se convierte en una página estática de contenidos con destinos de fragmento y enlaces distintos; no redirige todos los fragmentos a un solo registro.",
+            "Los conflictos con archivos existentes del repositorio siguen requiriendo resolución. Una asignación antigua no autoriza a sustituir archivos ajenos o editados externamente en esa dirección. Inspecciona la revisión de archivos del repositorio antes de confirmar una subida."
+          ]
+        },
+        {
+          "id": "publication-recovery",
+          "title": "Recuperar una subida o restaurar una edición anterior",
+          "paragraphs": [
+            "Las ediciones preparadas conservan los bytes revisados. Vuelve a abrir una edición anterior desde {ui:publication.preparations} y elige {ui:publication.rollbackReview}. Revisa el destino actual y las dependencias de análisis modificadas y confirma explícitamente la sustitución. La restauración de GitHub crea un commit nuevo que contiene la edición conservada y preserva la autoría local más reciente. No restablece la rama por la fuerza ni sobrescribe el trabajo remoto simultáneo.",
+            "La publicación SSH requiere claves de anfitrión OpenSSH verificadas, ssh y sftp locales y un intérprete POSIX remoto con find, sha256sum y GNU coreutils. Sirve únicamente el subdirectorio current del directorio de alojamiento configurado. Observanda prepara cada archivo de salida y calcula su hash antes de cambiar atómicamente el enlace current. Las ediciones completadas permanecen en releases; configura el servidor web para que el directorio de alojamiento superior y los directorios de preparación no sean accesibles públicamente.",
+            "Si se interrumpe una subida o un cambio SSH, conserva el espacio de trabajo y elige {ui:publication.deploymentResume}. La operación conservada comprueba su propia reserva remota y la publicación actual antes de continuar. Las solicitudes de detención impiden el trabajo posterior, pero no pueden deshacer un cambio ya aceptado remotamente; reanudar concilia esa incertidumbre. No elimines la reserva de otra operación ni sustituyas manualmente el enlace current para eludir un fallo.",
+            "Verificar sitio web activo compara el manifiesto servido y todos los archivos con la edición revisada y vuelve a comprobar el manifiesto. El progreso sigue disponible en Publicación; utiliza {ui:publication.liveCheckStop} o {ui:publication.liveCheckResume} tras una interrupción. Reanudar vuelve a comprobar los bytes servidos actuales. Las URL eliminadas deben devolver HTTP 404 o 410; una página obsoleta en caché o una página de error devuelta con HTTP 200 no supera la comprobación. Una comprobación posterior fallida sustituye el estado verificado anterior. La verificación consulta la URL configurada desde esta instalación; no puede borrar las copias del navegador, el historial antiguo de Git ni todas las cachés del mundo."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "reviews",
+      "title": "Revisar y atestiguar registros guardados",
+      "sections": [
+        {
+          "id": "contacts",
+          "title": "Verificar a un colaborador",
+          "paragraphs": [
+            "Activa Colaboración en Preferencias → Módulos y abre {ui:reviews.title}. Cada instalación tiene su propia identidad de revisión. Utiliza {ui:reviews.identity} y {ui:reviews.downloadContact} para intercambiar archivos públicos de contacto. Antes de utilizar {ui:reviews.contact}, compara la huella completa con tu colaborador por otro canal de confianza.",
+            "{ui:reviews.untrust} bloquea los nuevos intercambios de archivos con ese contacto. Conserva las revisiones firmadas anteriores. No puede eliminar los archivos que el destinatario ya posee. Las claves de identidad de revisión pertenecen a esta instalación; un espacio de trabajo restaurado conserva sus revisiones, pero por sí solo no transfiere la autoridad de firma de otra instalación."
+          ]
+        },
+        {
+          "id": "request",
+          "title": "Enviar revisiones exactas guardadas",
+          "paragraphs": [
+            "Abre el control {ui:reviews.witnesses} de un registro y elige {ui:reviews.request}, o solicita una revisión del cuaderno desde Colaboración. Elige el revisor y el alcance, añade instrucciones y utiliza {ui:reviews.preview} para inspeccionar los títulos y los identificadores de revisión seleccionados. {ui:reviews.create} descarga un archivo cifrado para ese revisor; envíalo por el canal de intercambio de archivos que elijas.",
+            "Las solicitudes incluyen el texto y los campos privados guardados de los registros, pero excluyen los medios enlazados, los archivos de evidencias y otros registros. Cada solicitud admite hasta 50 registros y 750 KB. Los cuadernos más grandes requieren solicitudes de registros individuales. Si los registros seleccionados o la pertenencia al cuaderno cambian antes de la creación, vuelve a previsualizar la selección. Las modificaciones sin guardar no se pueden revisar."
+          ]
+        },
+        {
+          "id": "signatures",
+          "title": "Leer y devolver una revisión firmada",
+          "paragraphs": [
+            "Utiliza {ui:reviews.importFile} tras verificar al remitente. {ui:reviews.open} muestra las revisiones exactas recibidas y sus campos guardados. Elige una decisión y comentarios para cada registro, confirma tu intención y utiliza {ui:reviews.sign}. Devuelve la respuesta cifrada descargada al autor para que la importe. {ui:reviews.witnesses} muestra el resultado y si ese registro guardado ha cambiado desde la revisión.",
+            "Utiliza {ui:reviews.previous} y {ui:reviews.next} para explorar las revisiones; {ui:reviews.refresh} reinicia la exploración cuando llegan solicitudes nuevas. Una firma verifica la clave de firma y que el contenido firmado no haya cambiado. Su hora la declara el ordenador del firmante; no es una prueba independiente del tiempo, de la exactitud de las mediciones ni de la ejecución física. El intercambio cifrado de revisiones no proporciona invitaciones en línea ni sincronización."
           ]
         }
       ]
     },
     {
       "id": "storage",
-      "title": "Almacenamiento, copias y acceso",
+      "title": "Almacenamiento, copias de seguridad y acceso",
       "sections": [
         {
-          "id": "backup",
-          "title": "Verifica las copias de seguridad",
+          "id": "unlock",
+          "title": "Desbloquear y recuperar el acceso",
           "paragraphs": [
-            "Usa Almacenamiento y acceso para gestionar almacenamiento y copias. Guarda las copias separadas de los datos de trabajo. Espera a que termine la verificación e inspecciona el resultado; tener un archivo copiado no demuestra que todos los originales sean recuperables.",
-            "Prueba la restauración en una ubicación de prueba separada y recupera registros, revisiones históricas y evidencias representativas. Comprueba sus identidades y bytes. La copia debe ser utilizable sin depender de las rutas del ordenador original."
+            "En {ui:access.unlock}, utiliza un dispositivo autorizado o introduce la contraseña del espacio de trabajo. Si se ha configurado una clave de recuperación, despliega {ui:access.useRecovery} e introduce esa clave en su lugar. Después, elige {ui:access.unlock}. Abrir la Ayuda no envía ni copia tu contraseña o clave de recuperación.",
+            "Si este dispositivo no está autorizado, {ui:access.deviceRequest} crea una solicitud para que la revise un propietario autorizado del espacio de trabajo. Por sí sola no concede acceso. La Ayuda no puede recuperar una contraseña perdida. Mantén disponible un dispositivo autorizado o una clave de recuperación configurada previamente; restablecer las preferencias de la aplicación no descifra un espacio de trabajo."
+          ]
+        },
+        {
+          "id": "reconnect",
+          "title": "Volver a conectar con un espacio de trabajo",
+          "paragraphs": [
+            "Cuando una ubicación anterior del espacio de trabajo no esté disponible, abre {ui:access.previousLocation} para inspeccionar la carpeta y utiliza {ui:access.retry} tras volver a conectar su unidad o recurso compartido de red. {ui:access.openWorkspace} permite elegir otra carpeta de un espacio de trabajo existente y proporcionar sus credenciales de acceso. {ui:access.newWorkspace} inicia una configuración independiente.",
+            "En el formulario de carpeta, utiliza {ui:access.chooseFolder} o {ui:access.browseServer} y, después, {ui:access.checkFolder} para inspeccionar el destino. Proporciona la contraseña del espacio de trabajo o la clave de recuperación configurada cuando sea necesario. La Ayuda y {ui:help.returnToForm} conservan la carpeta y las credenciales ya introducidas. Una copia de seguridad verificada se puede abrir como un espacio de trabajo existente; confirma sus registros y evidencias originales antes de confiar en ella."
+          ]
+        },
+        {
+          "id": "backup",
+          "title": "Verificar las copias de seguridad",
+          "paragraphs": [
+            "Utiliza Almacenamiento y acceso para gestionar el almacenamiento y las operaciones de copia de seguridad. Guarda las copias separadas del almacenamiento de trabajo. Deja que termine la verificación e inspecciona el resultado informado; la mera presencia de un archivo copiado no demuestra que todos los originales conservados sean recuperables.",
+            "Prueba la restauración en una ubicación de prueba separada y recupera registros representativos, revisiones históricas y evidencias originales. Comprueba que sus identidades y bytes coincidan. Una copia de seguridad debe seguir siendo utilizable sin depender de rutas del puesto de trabajo original."
           ]
         },
         {
           "id": "access",
-          "title": "Protege el acceso",
+          "title": "Proteger el acceso al espacio de trabajo",
           "paragraphs": [
-            "Conserva contraseñas y material de recuperación en un lugar seguro independiente del espacio de trabajo. Bloquéalo al terminar. El cifrado protege el contenido guardado, pero no sustituye el control de un ordenador desbloqueado.",
-            "El acceso desde un dispositivo no demuestra que haya invitaciones en línea, roles de organización o entrega entre colaboradores. Usa solo las acciones disponibles en la versión instalada y comprueba la identidad del revisor y la revisión exacta de cada entrada atestiguada."
+            "Guarda las contraseñas y el material de recuperación en un lugar seguro independiente del espacio de trabajo. Bloquea el espacio de trabajo al terminar. El cifrado protege el contenido almacenado; no sustituye el control de un ordenador desbloqueado.",
+            "No interpretes el acceso del dispositivo como prueba de que estén disponibles las invitaciones en línea, los roles de organización o las entregas entre colaboradores. Utiliza únicamente las acciones de colaboración que ofrece la versión instalada y verifica la identidad del revisor y la revisión exacta de cualquier entrada atestiguada."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "timeline",
+      "title": "Cronologías entre proyectos y cuadernos de laboratorio",
+      "sections": [
+        {
+          "id": "sources",
+          "title": "Elegir orígenes y filtros",
+          "paragraphs": [
+            "Activa {ui:timeline.label} en Preferencias → Módulos y crea una cronología. En {ui:timeline.sources}, combina proyectos y cuadernos individuales. {ui:timeline.descendants} controla si se incluyen los proyectos anidados de un proyecto. Las selecciones solapadas no duplican registros. Sin orígenes seleccionados, la vista incluye todos los cuadernos de laboratorio.",
+            "Filtra por título o etiqueta, estado e intervalo de fechas del registro. Las fechas de mes, año e intervalo se solapan con el periodo seleccionado; las fechas desconocidas aparecen al final y quedan excluidas por un intervalo de fechas. {ui:timeline.ordering} Guarda la vista para volver a abrir su configuración; esto no altera los registros."
+          ]
+        },
+        {
+          "id": "browsing",
+          "title": "Explorar y actualizar registros guardados",
+          "paragraphs": [
+            "{ui:timeline.previous} y {ui:timeline.next} muestran una página de resúmenes cada vez. {ui:timeline.branches} agrupa esa página por proyecto o cuaderno; las ramas pueden continuar en otra página. Abre un registro por su nombre para leer el contenido. Volver durante la sesión conserva la página actual; recargar empieza en la primera página.",
+            "Las páginas permanecen en la instantánea guardada donde comenzó la exploración. Tras cambiar los registros, {ui:timeline.refresh} empieza desde la instantánea más reciente. {ui:timeline.retry} repite una solicitud interrumpida sin perder las modificaciones de la vista. Los orígenes no disponibles siguen seleccionados hasta que los elimines o sustituyas; eliminarlos nunca amplía la vista a todos los registros."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "migration",
+      "title": "Importar un cuaderno externo",
+      "sections": [
+        {
+          "id": "inspection",
+          "title": "Revisar un origen declarado",
+          "paragraphs": [
+            "Abre Espacios de trabajo y elige {ui:migration.title}. Elige la carpeta de exportación del origen y {ui:migration.inspect}. Abrir esta pantalla no inicia la inspección. La carpeta debe contener un manifiesto de inventario de origen declarado de Observanda de versión 1; un sitio web ordinario o una carpeta arbitraria todavía no constituyen una importación editable.",
+            "El resultado da cuenta de todos los objetos y archivos declarados, con filtros de exclusiones, elementos faltantes y conflictos. Utiliza {ui:migration.search} para encontrar títulos, identidades de origen, revisiones o rutas de archivos originales. Abre {ui:migration.targets} para comprobar cada archivo original y destino declarado. Las fechas de origen, las relaciones exactas y las URL originales están disponibles por separado. {ui:migration.declaration} muestra la declaración de origen completa.",
+            "Los punteros JSON seleccionan miembros exactos o elementos de un array. Las anclas HTML seleccionan el elemento nombrado, incluido su contenido; no significan automáticamente la sección o el capítulo siguientes. Los destinos faltantes, los nombres duplicados, las asignaciones anidadas solapadas, los formatos no válidos y los límites de inspección dejan problemas visibles. Los scripts de origen no se ejecutan y las URL no se descargan."
+          ]
+        },
+        {
+          "id": "review",
+          "title": "Resolver y repetir una inspección",
+          "paragraphs": [
+            "Corrige la declaración de exportación del origen cuando un elemento necesite resolución y vuelve a inspeccionarla. Utiliza {ui:migration.cancel} para detener una inspección. Este flujo no importa ni publica registros, tampoco tras una inspección interrumpida.",
+            "El hash de la instantánea identifica el manifiesto y los bytes originales independientemente de la ubicación de la carpeta. Una exportación sin cambios trasladada a otra ubicación tiene el mismo hash. Un inventario completo establece la cobertura del origen declarado y la verificación de destinos; no demuestra exactitud científica, interpretación del formato nativo ni migración completada.",
+            "Los resultados de inspección permanecen privados en la sesión actual de la aplicación y se borran al bloquear o cambiar el espacio de trabajo. Preparar una importación es una acción independiente y explícita."
+          ]
+        },
+        {
+          "id": "staging",
+          "title": "Preparar y asignar una importación privada",
+          "paragraphs": [
+            "Tras una inspección completa, elige el cuaderno de destino y {ui:migrationImport.stage}. Los archivos originales se conservan cifrados con sus hashes. La preparación no crea registros editables. Utiliza {ui:migrationImport.pause} para detener el trabajo; {ui:migrationImport.resume} abre los lotes guardados tras cerrar o reiniciar la aplicación.",
+            "Abre {ui:migrationImport.mapping} para cada objeto que necesite un destino, título, tipo de registro, fecha del suceso, atribución o significado de relación diferente. Elige exactamente una revisión actual para cada identidad de origen; las revisiones históricas conservan referencias exactas. Las exclusiones y los enlaces omitidos requieren motivos. Los intentos distintos deben tener identidades y límites de origen declarados distintos.",
+            "El texto sin formato, el JSON seleccionado y el texto HTML inerte pueden convertirse en contenido editable. Los números JSON conservan su grafía original. La conversión HTML informa de los elementos y el formato omitidos para su revisión explícita; nunca ejecuta scripts ni descarga URL. Las tablas grandes pueden utilizar {ui:migrationImport.dataset}: elige el array de filas y los campos declarados, o el separador y los encabezados de una tabla delimitada. La revisión muestra una muestra acotada con grafías numéricas exactas y valores null, vacíos y ausentes diferenciados. Las unidades y las representaciones numéricas son declaraciones, no significado científico inferido.",
+            "Una figura declarada puede utilizar {ui:migrationImport.figure} cuando su origen sigue el esquema portátil de figuras de Observanda. Las coordenadas de la gráfica utilizan la representación numérica del renderizador de figuras; los valores potencialmente aproximados requieren confirmación. Las grafías numéricas originales permanecen en el texto de origen editable y en los bytes conservados. Otros formatos de gráficas necesitan una conversión explícita del origen, en lugar de mediciones inferidas."
+          ]
+        },
+        {
+          "id": "record-facts",
+          "title": "Revisar hechos de investigación declarados explícitamente",
+          "paragraphs": [
+            "Cuando un origen preparado incluye una declaración de hechos de registro compatible, selecciónala en {ui:importResearch.source}. La declaración asigna explícitamente el progreso, el resultado, los campos de plantilla, las preparaciones, los eventos de ejecución, las evaluaciones de criterios y las declaraciones de resultados a sus estructuras nativas de registro. Esto requiere un adaptador preparado para ese origen; las claves arbitrarias de metadatos no se interpretan como hallazgos científicos.",
+            "Prepara la revisión de importación, vuelve a abrir la asignación e inspecciona {ui:importResearch.preview}. Comprueba condiciones, entradas, expectativas, resultados observados y limitaciones. Las referencias a métodos deben nombrar relaciones exactas Utiliza método. Los números científicos exactos pertenecen a valores de texto con sus unidades y base numérica declaradas. Los conjuntos de datos y análisis conservados existentes pueden respaldar resultados; las tablas de resultados conservadas deben coincidir con los valores de sus orígenes fijados antes de que se pueda aprobar la importación.",
+            "Las correcciones añaden hechos con identidades sustituidas explícitas. Una importación no puede reescribir silenciosamente una preparación, un evento o una evaluación anteriores, incluso cuando se elige contenido de origen para resolver otros conflictos. La reversión conserva los hechos añadidos a una ejecución previamente existente. {ui:migrationImport.metadataMode} controla si los demás metadatos permanecen solo en Procedencia del origen o también aparecen en una sección de texto. Las asignaciones guardadas más antiguas mantienen su tratamiento anterior hasta que se cambie explícitamente."
+          ]
+        },
+        {
+          "id": "applying",
+          "title": "Revisar cambios, aplicar y revertir",
+          "paragraphs": [
+            "Elige {ui:migrationImport.review} e inspecciona los recuentos de conciliación y las asignaciones de objetos. Las importaciones repetidas reutilizan las identidades de origen. Los campos de autoría en conflicto o los conjuntos de datos editados requieren una resolución explícita. Se señalan los bytes modificados bajo una revisión de origen existente. {ui:migrationImport.apply} confirma conjuntamente los registros, las relaciones y los comprobantes revisados; los destinos modificados invalidan la revisión. Utiliza {ui:migrationImport.openRecord} desde el lote aplicado para continuar trabajando con un registro y su conjunto de datos completo.",
+            "Los registros importados empiezan siendo privados. Las asignaciones nuevas mantienen por defecto los metadatos sin asignar en la procedencia privada; incluirlos como sección de texto requiere una elección explícita de asignación. Los bytes originales compartidos conservan una asociación de evidencias para cada registro asignado y cada ruta relativa de origen. Las listas de evidencias muestran el nombre de archivo original, la ruta relativa, el tamaño y el SHA-256, con una descarga de esa revisión exacta. Todas las fechas de origen declaradas permanecen diferenciadas de la marca de tiempo de importación. Abre {ui:migrationImport.provenance} desde un registro para inspeccionar sus identificadores, fechas, URL, límites y decisiones de asignación originales, o descargar los archivos originales. No se infieren el historial del origen ni los resultados científicos.",
+            "Utiliza {ui:migrationImport.reverse} desde un lote guardado para eliminar registros creados por el importador o restaurar revisiones anteriores solo donde el contenido actual siga coincidiendo con esa importación. Se conservan las modificaciones posteriores de registros o conjuntos de datos, las importaciones posteriores, las referencias nuevas, las personalizaciones de páginas y los bytes originales compartidos. Revisa el informe de reversión para ver los elementos conservados. Volver a aplicar el origen utiliza las mismas identidades de destino. Las copias de seguridad incluyen importaciones preparadas y procedencia; verifica una copia restaurada antes de confiar en ella."
           ]
         }
       ]

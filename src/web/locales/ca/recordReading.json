@@ -1,0 +1,14 @@
+{
+  "table": "Taula de dades",
+  "tableOverflow": "Desplaça't lateralment per veure totes les columnes. També pots enfocar la taula i utilitzar les tecles de fletxa.",
+  "read": "Llegeix el llibre de laboratori",
+  "list": "Llista de registres",
+  "view": "Vista del llibre de laboratori",
+  "details": "Evidències i detalls del registre",
+  "edit": "Edita el registre",
+  "linkedRecord": "Registre enllaçat",
+  "researchLinks": "Enllaços de recerca",
+  "exactRevision": "Revisió conservada {revision}",
+  "changed": "Els registres desats han canviat. Actualitza aquesta vista de lectura.",
+  "incomplete": "No s'han pogut carregar alguns registres. Actualitza aquesta vista de lectura."
+}

@@ -1,0 +1,17 @@
+{
+  "title": "Ressursar for eksakt utrekning",
+  "action": "Ressurspolicy",
+  "save": "Lagre ressurspolicy",
+  "cancel": "Avbryt",
+  "help": "Kvar skalaroperasjon deler desse grensene mellom tolking, einingsomrekning, aritmetikk og formatering. Venting på kjelder og lagring bruker ikkje aritmetikktid. Resultata held seg eksakte; ei grense stoppar klargjeringa utan avrunding.",
+  "legacy": "Å lagre ein policy opprettar ein ny grafrevisjon. Tidlegare revisjonar bevarer den opphavlege utrekningsåtferda.",
+  "codec": "Erklærte domenekodekar bevarer sine eigne komponentkapasitetar.",
+  "maxBits": "Heiltalsstorleik og storleik på mellomresultat (bit)",
+  "maxOperations": "Aritmetiske operasjonar",
+  "maxMilliseconds": "Aritmetikktid (millisekund)",
+  "maxScalarCharacters": "Skalartekst (teikn)",
+  "maxExponent": "Storleik på desimaleksponent",
+  "bounds": "Tillate: {min} til {max}",
+  "invalid": "Vel eit heiltal innanfor kvart viste område.",
+  "incomplete": "Førehandsvisinga viser dei første teikna. Opne den bevarte verdien for å sjå gjennom eller eksportere heile verdien."
+}

@@ -1,0 +1,20 @@
+{
+  "recordType": "Oppføringstype",
+  "allTypes": "Alle typer",
+  "searchRecordTypes": "Søk etter oppføringstyper",
+  "selected": "Lagret utvalg",
+  "unavailable": "Utilgjengelig i dette området",
+  "loading": "Laster inn valg…",
+  "empty": "Ingen samsvarende valg.",
+  "range": "{first}–{last} av {total}",
+  "error": "Valgene kunne ikke lastes inn. Det lagrede utvalget er uendret.",
+  "retry": "Prøv valgene igjen",
+  "previous": "Forrige valg",
+  "next": "Neste valg",
+  "invalidPage": "Svaret med valgene er ugyldig.",
+  "projects": "Prosjekter som skal inkluderes",
+  "books": "Labbøker som skal inkluderes",
+  "searchProjects": "Søk i prosjekter",
+  "searchBooks": "Søk i labbøker",
+  "allBooks": "Alle labbøker"
+}

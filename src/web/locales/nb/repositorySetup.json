@@ -1,0 +1,15 @@
+{
+  "title": "Kodelageroppsett",
+  "guidance": "Oppsettet klargjør nettstedsgrenen. Nettstedsinnhold blir bare lasta opp etter gjennomgangen din.",
+  "stop": "Stopp oppsett",
+  "resume": "Fortsett oppsettet",
+  "created": "Kodelageret er opprettet. Se gjennom nettstedet ditt for å publisere det.",
+  "initialized": "Kodelageret er klargjort. Se gjennom nettstedet ditt for å publisere det.",
+  "emptyTitle": "Klargjør tomt kodelager",
+  "emptyGuidance": "{repository} er tomt. Opprett den første innsjekkingen med en tom .nojekyll-fil og bruk {branch} som nettstedsgren. Dette bevarer synligheten til kodelageret og laster ikke opp nettstedet ditt eller setter opp Pages.",
+  "initialize": "Klargjør kodelager",
+  "emptyStatus": "Dette kodelageret er tomt. Se gjennom klargjøringen i målinnstillingene.",
+  "checking": "Kontrollerer kodelager",
+  "initializing": "Klargjør nettstedsgren",
+  "saving": "Lagrer publiseringsmål"
+}

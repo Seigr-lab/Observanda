@@ -1,0 +1,14 @@
+{
+  "invalid": "La respuesta del registro seleccionado estaba incompleta. Se conserva tu borrador.",
+  "limit": "Esta selección es demasiado grande para editarla conjuntamente. Abre menos registros. Se conserva tu punto de recuperación.",
+  "title": "Cargando los registros seleccionados",
+  "description": "Cargando los registros guardados necesarios para esta vista. El editor permanece intacto hasta que termine la carga.",
+  "committed": "Tus registros se han guardado. Cargando las versiones guardadas para actualizar este editor.",
+  "progress": "{loaded} de {total} registros cargados",
+  "cancel": "Cancelar la carga",
+  "retry": "Reintentar la carga",
+  "failed": "No se han podido cargar los registros seleccionados. Reintenta para continuar desde el último lote completado.",
+  "cancelled": "Carga cancelada. Se conservan el editor y el punto de recuperación.",
+  "savedCancelled": "Tus registros se han guardado, pero su carga se ha cancelado. Reintenta Guardar para comparar el editor con los registros guardados.",
+  "busy": "Termina primero de cargar la selección actual."
+}

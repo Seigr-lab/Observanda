@@ -1,0 +1,23 @@
+{
+  "unnamed": "Proyecto {id}",
+  "project": "Proyecto",
+  "settings": "Configuración",
+  "failed": "No se ha podido cargar el directorio de proyectos.",
+  "retry": "Reintentar",
+  "loading": "Cargando proyectos…",
+  "more": "Más proyectos",
+  "folder": "Carpeta del proyecto",
+  "choose": "Elegir carpeta",
+  "password": "Contraseña del proyecto",
+  "passwordHint": "Opcional",
+  "passwordRequired": "Al menos 12 caracteres; la protección por dispositivo no está disponible en este ordenador.",
+  "username": "Nombre de usuario",
+  "create": "Crear proyecto",
+  "legacyParent": "Mueve este proyecto a un almacenamiento dedicado antes de añadir un subproyecto.",
+  "inside": "Dentro de",
+  "newSaved": "Proyecto creado.",
+  "folderRequired": "Elige una carpeta para este proyecto.",
+  "templateUnavailable": "Esta plantilla de proyecto no está disponible. Elige otra plantilla o activa sus tipos de cuadernos de laboratorio en Preferencias.",
+  "placementFailed": "No se ha podido colocar el proyecto ahí.",
+  "creating": "Creando el proyecto…"
+}

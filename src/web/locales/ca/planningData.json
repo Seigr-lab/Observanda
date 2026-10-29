@@ -1,0 +1,22 @@
+{
+  "group": "Planificació",
+  "task": "Tasques",
+  "calendar": "Calendaris",
+  "event": "Esdeveniments de calendari",
+  "booking": "Reserves d'equipament",
+  "search": "Conté el text",
+  "filterStatus": "Estat (opcional)",
+  "owner": "Propietari",
+  "status": "Estat",
+  "priority": "Prioritat",
+  "dueOn": "Data límit",
+  "assignees": "Persones",
+  "checklist": "Llista de comprovació",
+  "color": "Color",
+  "startsAt": "Inici",
+  "endsAt": "Final",
+  "location": "Ubicació",
+  "resource": "Equipament",
+  "notes": "Notes",
+  "invalid": "No s'ha pogut verificar la targeta de planificació. Actualitza-la i torna-ho a provar."
+}

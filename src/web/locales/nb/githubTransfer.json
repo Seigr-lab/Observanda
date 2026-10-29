@@ -1,0 +1,9 @@
+{
+  "buildingTree": "Klargjør gjennomgåtte kodelagerfiler",
+  "uploading": "Laster opp valgte filer",
+  "committing": "Oppretter publiseringsinnsjekking",
+  "pushing": "Sender publiseringsgren",
+  "verifying": "Kontrollerer eksterne filer",
+  "repositoryVerified": "Kodelagerfilene er kontrollerte; Pages-innstillingene er uendret",
+  "livePending": "Eksterne filer er kontrollert; kontroll av det publiserte nettstedet venter"
+}

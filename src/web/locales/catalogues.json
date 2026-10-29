@@ -1,164 +1,439 @@
 {
-  "coordinateFrames": ["en"],
-  "statisticalUncertainty": ["en"],
-  "calculatorResults": [
-    "en"
+  "coordinateFrames": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
-  "datasetWindows": ["en"],
-  "datasetResources": ["en"],
-  "measurementTransform": ["en"],
-  "retainedFigureEditor": ["en"],
-  "retainedFigureReader": ["en"],
-  "retainedFigureData": ["en"],
-  "pdfEditor": ["en"],
-  "configurationEditor": ["en"],
-  "taskPrerequisites": ["en"],
-  "retainedSources": ["en"],
-  "moduleReferenceTargets": ["en"],
-  "workspaceRename": ["en"],
+  "statisticalUncertainty": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "calculatorResults": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "datasetWindows": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "datasetResources": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "measurementTransform": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "retainedFigureEditor": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "retainedFigureReader": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "retainedFigureData": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "pdfEditor": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "configurationEditor": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "taskPrerequisites": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "retainedSources": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "moduleReferenceTargets": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "workspaceRename": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
   "projectAccess": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "projectStorage": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "projectDirectory": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "projectDeletion": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "projectOpening": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "projectChoices": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "projectCreation": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "activity": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "writerRecovery": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "pendingSettings": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "workspaceDeletion": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "storageProgress": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb"
   ],
   "operationProgress": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "recordSaveProgress": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "recordContent": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "recordWriting": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "recordValues": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "recordDraftReview": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "recordReferences": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "measurementOutput": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "customFields": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "recordHistory": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "websiteFeeds": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "researchCapacity": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "githubTransfer": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "evidenceCorrections": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "userProfile": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "onlineEvidence": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "importResearch": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "online": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb"
   ],
   "collaborationIdentity": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "organizations": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb"
   ],
   "sharing": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb"
   ],
   "figureAxes": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "figureObservations": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "figureMarkerArea": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "figureIntervals": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "figureHeatmap": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "datasetCalculations": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "datasetAggregation": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "retainedTables": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "datasetPreparation": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "sketch": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "recordStarters": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "websiteSites": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "localIntake": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb"
   ],
   "book": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "analyses": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "preferences": [
     "en",
@@ -182,233 +457,557 @@
     "nn"
   ],
   "setup": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "access": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "labBookTypes": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "recordAuthoring": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "recordWorkflow": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "dashboardLibrary": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "recordLists": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "recordViews": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "recordDrafts": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "recordRecovery": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "recordSections": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "recordSelection": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "recordUpdates": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "workspaceRead": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "structureProgress": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "operationStream": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "publishingData": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "labBookData": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "errors": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "recordTypes": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "dashboardChoices": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "dashboardPaging": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "researchPicker": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "branding": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "appearance": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "fonts": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "interface": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "reviews": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "websiteEditor": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "websitePages": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "websiteMedia": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "websiteContent": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "moduleReferences": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "moduleHistory": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "moduleCurrent": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "moduleConnected": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "calendarDetails": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "planningData": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "inventoryData": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "locationTools": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "calendar": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "moduleRecovery": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "moduleFields": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "sampleAnalysis": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "timeline": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "recordDates": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "materialAnalysis": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "evidenceUpload": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "evidenceIntake": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb"
   ],
   "materialSources": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "publication": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb"
   ],
   "repositorySetup": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "localExport": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb"
   ],
   "migration": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb"
   ],
   "migrationImport": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb"
   ],
   "attempts": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "measurements": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "githubConnection": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb"
   ],
   "about": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "materialFiles": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "recordReading": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "recordLinks": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "figureComposition": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "figureProvenance": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "startup": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "workspaceNaming": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "labBookAccess": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "labBookDirectory": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "labBookStorage": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "publicationSources": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "workspaceManagement": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "templatePreferences": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "calculator": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "bomStock": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
   "numeralClipboard": [
-    "en"
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ],
-  "datasetSpectrum": ["en"],
-  "datasetCusum": ["en"],
-  "measurementSequences": ["en"],
-  "measurementTopology": ["en"],
-  "numericalExecution": ["en"]
+  "datasetSpectrum": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "datasetCusum": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "measurementSequences": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "measurementTopology": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "numericalExecution": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ]
 }

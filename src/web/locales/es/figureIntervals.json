@@ -1,0 +1,17 @@
+{
+  "settings": "Intervalos de medición",
+  "help": "Los límites son extremos absolutos en las unidades del eje correspondiente, no distancias desde la medición. Proporciona ambos extremos; pueden ser asimétricos. Deja los límites vacíos cuando no estén disponibles. Utiliza límites del valor o incertidumbre simétrica.",
+  "xLower": "Límite inferior de la coordenada",
+  "xUpper": "Límite superior de la coordenada",
+  "yLower": "Límite inferior del valor",
+  "yUpper": "Límite superior del valor",
+  "error": "Incertidumbre simétrica (±)",
+  "none": "Sin asignar",
+  "invalid": "Los límites de medición deben utilizar coordenadas válidas y valores numéricos finitos.",
+  "complete": "Proporciona ambos extremos del intervalo alrededor de una observación medida. Las coordenadas de categorías no pueden tener intervalos.",
+  "enclose": "Los extremos del intervalo deben encerrar su medición; los extremos de intervalos logarítmicos deben ser positivos.",
+  "conflict": "Elige límites del valor o incertidumbre simétrica para una observación, pero no ambos.",
+  "heatmap": "Utiliza un gráfico de mediciones para mostrar intervalos; una celda de mapa de calor representa un único valor.",
+  "mapping": "Los intervalos solo se pueden asignar a mediciones individuales. Selecciona columnas de límites válidas con unidades compatibles.",
+  "description": "Los intervalos de medición proporcionados se muestran en sus ejes de coordenadas y valores. Las mediciones ausentes permanecen como huecos."
+}

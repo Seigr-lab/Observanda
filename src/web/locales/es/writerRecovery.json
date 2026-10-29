@@ -1,0 +1,11 @@
+{
+  "title": "Recuperación del acceso de escritura",
+  "explanation": "Esta ubicación contiene un marcador de escritura vacío de una versión anterior de Observanda. Cierra las demás instalaciones de Observanda que utilicen esta ubicación antes de liberarlo.",
+  "workspace": "Espacio de trabajo",
+  "preferences": "Preferencias locales",
+  "device": "Configuración de la identidad del dispositivo",
+  "closed": "Todas las demás instalaciones de Observanda que utilizan esta ubicación están cerradas.",
+  "recover": "Liberar el marcador de escritura antiguo",
+  "ready": "No hay marcadores de escritura antiguos que recuperar.",
+  "continue": "Continuar"
+}

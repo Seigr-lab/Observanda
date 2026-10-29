@@ -1,0 +1,11 @@
+{
+  "parents": "Cerca projectes",
+  "templates": "Cerca plantilles desades",
+  "loading": "S'estan carregant les opcions…",
+  "count": "{count} de {total}",
+  "more": "Més opcions",
+  "retry": "Torna-ho a provar",
+  "failed": "No s'han pogut carregar les opcions del projecte.",
+  "book-parents": "Cerca projectes de destinació",
+  "record-parents": "Cerca projectes"
+}

@@ -1,0 +1,17 @@
+{
+  "heading": "Revisiones guardadas",
+  "invalid": "La respuesta del historial estaba incompleta. Reintenta cargar esta página.",
+  "retry": "Reintentar el historial",
+  "loading": "Cargando el historial…",
+  "range": "Revisiones {first}–{last} de {total}",
+  "empty": "Todavía no hay revisiones guardadas.",
+  "changed": "Hay nuevas revisiones disponibles. Actualiza el historial para verlas.",
+  "pages": "Páginas del historial",
+  "first": "Primera página del historial",
+  "previous": "Página anterior del historial",
+  "next": "Página siguiente del historial",
+  "refresh": "Actualizar el historial",
+  "open": "Abrir la revisión {revision}",
+  "selected": "Revisión guardada {revision}",
+  "close": "Cerrar la revisión"
+}

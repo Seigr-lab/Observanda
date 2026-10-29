@@ -1,0 +1,20 @@
+{
+  "recordType": "Tipus de registre",
+  "allTypes": "Tots els tipus",
+  "searchRecordTypes": "Cerca tipus de registre",
+  "selected": "Selecció desada",
+  "unavailable": "No disponible en aquest àmbit",
+  "loading": "S'estan carregant les opcions…",
+  "empty": "No hi ha opcions coincidents.",
+  "range": "{first}–{last} de {total}",
+  "error": "No s'han pogut carregar les opcions. La selecció desada no ha canviat.",
+  "retry": "Torna a carregar les opcions",
+  "previous": "Opcions anteriors",
+  "next": "Opcions següents",
+  "invalidPage": "La resposta de les opcions no és vàlida.",
+  "projects": "Projectes que s'hi inclouran",
+  "books": "Llibres de laboratori que s'hi inclouran",
+  "searchProjects": "Cerca projectes",
+  "searchBooks": "Cerca llibres de laboratori",
+  "allBooks": "Tots els llibres de laboratori"
+}

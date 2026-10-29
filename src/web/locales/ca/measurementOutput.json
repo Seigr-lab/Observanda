@@ -1,0 +1,11 @@
+{
+  "format": "Format numèric del resultat",
+  "resultRadix": "Base de numeració del resultat (2–36)",
+  "default": "Predeterminat: fracció exacta; enter per als recomptes",
+  "decimal": "Decimal exacte",
+  "integer": "Enter (base 10)",
+  "radix": "Enter en una base explícita",
+  "radix-fraction": "Numeral fraccionari en una base explícita",
+  "rational": "Fracció exacta (numerador/denominador en base 10)",
+  "exact": "El format del resultat es conserva amb aquesta recepta. No s'aplica cap arrodoniment. Si un resultat no es pot escriure exactament en el format seleccionat, tria una fracció exacta o una base compatible."
+}

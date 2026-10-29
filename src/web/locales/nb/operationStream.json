@@ -1,0 +1,6 @@
+{
+  "afterResult": "Uventede data ankom etter operasjonsresultatet.",
+  "invalid": "Operasjonen returnerte et ugyldig svar.",
+  "limit": "Operasjonssvaret overskrider kapasiteten.",
+  "interrupted": "Tilkoblingen ble avbrutt før et fullstendig resultat ankom. Prøv igjen for å kontrollere utfallet av operasjonen."
+}

@@ -1,0 +1,23 @@
+{
+  "retainedRecord": "Bevart oppføring",
+  "retainedInput": "Bevarte inndata",
+  "title": "Tittel",
+  "collectionName": "Dokumentasjonssamling",
+  "analysisName": "Analyse",
+  "collectionHeading": "Opprett dokumentasjonssamling",
+  "analysisHeading": "Registrer ekstern analyse",
+  "tool": "Verktøy / metode",
+  "version": "Verktøyversjon eller kilderevisjon",
+  "procedure": "Parametere og framgangsmåte",
+  "method": "Lagra metode / kjøring (valgfri)",
+  "none": "Ingen lagra metode eller kjøring er valgt.",
+  "choose": "Velg lagra metode / kjøring",
+  "remove": "Fjern valgt metode / kjøring",
+  "selected": "{title} · Bevart revisjon {revision}",
+  "finishChoosing": "Velg en lagra revisjon eller avbryt metodesøket før lagring.",
+  "saveCollection": "Lagre samling",
+  "saveAnalysis": "Lagre analyse",
+  "inputs": "Eksakte inndatarevisjoner",
+  "outputs": "Bevarte utdataartefakter",
+  "required": "Skriv inn en tittel, og velg inndata og identifiser verktøy og versjon for analyser."
+}

@@ -1,0 +1,21 @@
+{
+  "region": "Regió d'acceptació XY",
+  "callout": "Anotació d'observació",
+  "addRegion": "Afegeix una regió XY",
+  "addCallout": "Anota l'observació",
+  "series": "Sèrie d'observacions",
+  "observation": "Observació",
+  "pointIndex": "Fila de l'observació",
+  "dx": "Desplaçament horitzontal de l'etiqueta (unitats SVG)",
+  "dy": "Desplaçament vertical de l'etiqueta (unitats SVG)",
+  "xLower": "Coordenada mínima de la regió",
+  "xUpper": "Coordenada màxima de la regió",
+  "yLower": "Valor mínim de la regió",
+  "yUpper": "Valor màxim de la regió",
+  "position": "Límits / observació associada",
+  "encodingDetails": "Detalls de codificació",
+  "invalid": "Dona a l'anotació una etiqueta, un color i una configuració vàlida.",
+  "regionRange": "Les regions XY requereixen límits de coordenades numèriques o de calendari en ordre creixent i límits de valors creixents. Els límits logarítmics han de ser positius.",
+  "calloutRange": "Tria una observació mesurada existent i desplaçaments finits de l'etiqueta entre −2.000 i 2.000 unitats SVG.",
+  "referenced": "Aquesta observació o sèrie té una anotació associada. Elimina l'anotació o canvia'n la destinació abans d'eliminar-ne l'observació."
+}

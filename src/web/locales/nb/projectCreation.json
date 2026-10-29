@@ -1,0 +1,10 @@
+{
+  "title": "Fullfør opprettingen av {title}",
+  "running": "Oppretter prosjekt…",
+  "resume": "Fortsett opprettingen",
+  "password": "Prosjektpassord",
+  "cancel": "Avbryt",
+  "failed": "Prosjektet kunne ikke opprettes.",
+  "retry": "Prøv igjen",
+  "more": "Flere ufullførte prosjekter"
+}

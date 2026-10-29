@@ -1,0 +1,27 @@
+{
+  "refresh": "Actualizar los registros",
+  "loading": "Cargando los registros...",
+  "range": "Registros {first}-{last} de {total}",
+  "emptyRange": "0 registros",
+  "pages": "Páginas de registros",
+  "previous": "Registros anteriores",
+  "next": "Registros siguientes",
+  "noMatches": "Ningún registro coincide con estos filtros",
+  "adjust": "Ajusta los filtros o bórralos para ver los registros de este ámbito.",
+  "clear": "Borrar filtros",
+  "changed": "Los registros guardados han cambiado. Actualiza los registros para ver los resultados más recientes.",
+  "invalidPage": "La respuesta de la lista de registros estaba incompleta. Actualiza los registros para volver a intentarlo.",
+  "experiments": {
+    "one": "{count} experimento",
+    "other": "{count} experimentos"
+  },
+  "runs": {
+    "one": "{count} ejecución / toma",
+    "other": "{count} ejecuciones / tomas"
+  },
+  "other": {
+    "one": "{count} registro de otro tipo",
+    "other": "{count} registros de otro tipo"
+  },
+  "unlock": "Desbloquear para cargar los registros"
+}

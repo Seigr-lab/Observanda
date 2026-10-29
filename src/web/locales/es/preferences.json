@@ -9,7 +9,7 @@
   "storage": "Almacenamiento y acceso",
   "help": "Ayuda",
   "language": "Idioma",
-  "coverage": "El idioma se aplica actualmente a la navegación, a los encabezados de Preferencias y a la Ayuda. Las demás pantallas siguen en inglés. Tus registros nunca se traducen.",
+  "coverage": "Los textos de la interfaz y la Ayuda utilizan el idioma seleccionado cuando hay una traducción disponible. Tus propios registros nunca se traducen.",
   "saving": "Guardando el idioma…",
   "failed": "No se ha podido cargar o guardar el idioma. Se mantiene la selección anterior.",
   "saved": "Idioma guardado.",

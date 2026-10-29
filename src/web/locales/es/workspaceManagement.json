@@ -1,0 +1,16 @@
+{
+  "title": "Espacios de trabajo",
+  "saved": "Espacio de trabajo guardado",
+  "workspace": "espacio de trabajo",
+  "current": "Abierto actualmente",
+  "open": "Abrir {title}",
+  "openExisting": "Abrir un espacio de trabajo existente",
+  "new": "Nuevo espacio de trabajo",
+  "empty": "No hay espacios de trabajo guardados.",
+  "loading": "Cargando espacios de trabajo...",
+  "failed": "No se han podido cargar los espacios de trabajo.",
+  "retry": "Reintentar",
+  "external": "Cuadernos externos",
+  "inspect": "Inspeccionar un cuaderno externo",
+  "linked": "Abre el espacio de trabajo que contiene la investigación enlazada."
+}

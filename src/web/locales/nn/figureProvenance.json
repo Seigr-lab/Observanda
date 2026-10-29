@@ -1,0 +1,8 @@
+{
+  "invalid": "Figuren treng ein eksakt referanse til ein bevart analyse.",
+  "retained": "{title} · Utrekningsrevisjon {revision}",
+  "inspect": "Sjå gjennom utrekning",
+  "back": "Tilbake til førre dokumentasjon",
+  "changed": "Figuren eller oppføringa endra seg medan utrekningslenkja vart kontrollert. Prøv kopieringa på nytt.",
+  "checking": "Kontrollerer bevarte utrekningslenkjer…"
+}

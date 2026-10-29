@@ -1,0 +1,17 @@
+{
+  "settings": "Dirección de los ejes y etiquetas de las marcas",
+  "x": "Eje de coordenadas",
+  "y": "Eje de valores",
+  "reverse": "Invertir la dirección del eje",
+  "ticks": "Etiquetas en posiciones exactas",
+  "help": "Las listas de marcas vacías utilizan etiquetas automáticas. Las etiquetas personalizadas conservan sus posiciones numéricas exactas. Invertir un eje cambia su dirección, mientras que el mínimo y el máximo mantienen el orden creciente. Las etiquetas apiñadas utilizan líneas guía hasta sus marcas.",
+  "value": "Posición numérica de la marca",
+  "label": "Etiqueta de la marca",
+  "add": "Añadir etiqueta de marca",
+  "remove": "Eliminar etiqueta de marca",
+  "invalid": "Utiliza posiciones de marca finitas y distintas, con etiquetas dentro del intervalo declarado del eje. Las marcas logarítmicas deben ser positivas. Las marcas personalizadas requieren coordenadas numéricas o de calendario, con un máximo de 100 etiquetas por eje.",
+  "date": "Para coordenadas de calendario, las posiciones de las marcas son milisegundos desde 1970-01-01T00:00:00Z.",
+  "direction": "Dirección",
+  "normal": "Creciente",
+  "reversed": "Invertida"
+}

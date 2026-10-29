@@ -1,0 +1,15 @@
+{
+  "copy": "Copiar la representación y la interpretación",
+  "paste": "Pegar la representación y la interpretación",
+  "scope": "Transfiere únicamente la representación y la interpretación numérica. Las unidades y las referencias a evidencias permanecen intactas.",
+  "copied": "Representación e interpretación copiadas.",
+  "pasted": "Representación e interpretación explícita pegadas.",
+  "plain": "Texto sin formato pegado; la interpretación seleccionada permanece intacta.",
+  "invalid": "Este valor copiado tiene una representación o interpretación no compatible o no válida. Elige una interpretación explícita antes de copiar.",
+  "changed": "El valor o la política de entrada han cambiado mientras se leía el portapapeles. Se ha conservado tu modificación; vuelve a pegar para sustituirla.",
+  "resource": "El valor copiado completo supera la política de entrada del destino. No se ha pegado ni cambiado nada.",
+  "length": "El valor copiado completo supera la longitud admitida por este editor. No se ha pegado nada.",
+  "lines": "Este valor contiene saltos de línea que este campo no puede conservar. No se ha pegado nada.",
+  "unavailable": "El acceso al portapapeles no está disponible. Utiliza los controles de copiar y pegar del navegador.",
+  "contextMismatch": "Este valor copiado utiliza una interpretación numérica distinta de la del campo guardado. No se ha pegado nada; cambia explícitamente el esquema del campo para utilizar otra interpretación."
+}

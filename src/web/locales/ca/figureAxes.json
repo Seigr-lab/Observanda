@@ -1,0 +1,17 @@
+{
+  "settings": "Direcció dels eixos i etiquetes de les marques",
+  "x": "Eix de coordenades",
+  "y": "Eix de valors",
+  "reverse": "Inverteix la direcció de l'eix",
+  "ticks": "Etiquetes en posicions exactes",
+  "help": "Les llistes de marques buides utilitzen etiquetes automàtiques. Les etiquetes personalitzades conserven les seves posicions numèriques exactes. La inversió de l'eix canvia la direcció, mentre que el mínim i el màxim es mantenen en ordre creixent. Les etiquetes amuntegades utilitzen línies guia fins a les seves marques.",
+  "value": "Posició numèrica de la marca",
+  "label": "Etiqueta de la marca",
+  "add": "Afegeix una etiqueta de marca",
+  "remove": "Elimina l'etiqueta de marca",
+  "invalid": "Utilitza posicions de marca finites i diferents amb etiquetes dins de l'interval declarat de l'eix. Les marques logarítmiques han de ser positives. Les marques personalitzades requereixen coordenades numèriques o de calendari, amb un màxim de 100 etiquetes per eix.",
+  "date": "Per a les coordenades de calendari, les posicions de les marques són mil·lisegons des de 1970-01-01T00:00:00Z.",
+  "direction": "Direcció",
+  "normal": "Creixent",
+  "reversed": "Invertida"
+}

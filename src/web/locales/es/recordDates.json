@@ -1,0 +1,20 @@
+{
+  "unset": "Fecha sin establecer",
+  "unknown": "Fecha desconocida",
+  "range": "De {from} a {to}",
+  "year": "{year} (solo año)",
+  "month": "{month} de {year}",
+  "estimated": "Estimada: {date}",
+  "month1": "Enero",
+  "month2": "Febrero",
+  "month3": "Marzo",
+  "month4": "Abril",
+  "month5": "Mayo",
+  "month6": "Junio",
+  "month7": "Julio",
+  "month8": "Agosto",
+  "month9": "Septiembre",
+  "month10": "Octubre",
+  "month11": "Noviembre",
+  "month12": "Diciembre"
+}

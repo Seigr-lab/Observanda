@@ -1,0 +1,20 @@
+{
+  "title": "Desbloquear el cuaderno de laboratorio",
+  "username": "Nombre de usuario",
+  "password": "Contraseña del cuaderno de laboratorio",
+  "recovery": "Utilizar una clave de recuperación",
+  "recoveryKey": "Clave de recuperación",
+  "cancel": "Cancelar",
+  "unlock": "Desbloquear",
+  "failed": "No se ha podido desbloquear este cuaderno de laboratorio.",
+  "section": "Acceso al cuaderno de laboratorio",
+  "passwordReady": "Este cuaderno de laboratorio tiene una contraseña establecida.",
+  "passwordHint": "Establece una contraseña para abrir este cuaderno de laboratorio en otro ordenador.",
+  "newPassword": "Nueva contraseña del cuaderno de laboratorio",
+  "confirmPassword": "Confirmar contraseña",
+  "savePassword": "Guardar la contraseña del cuaderno de laboratorio",
+  "lock": "Bloquear el cuaderno de laboratorio",
+  "loading": "¿Cargando la configuración de acceso?",
+  "saved": "Contraseña del cuaderno de laboratorio guardada.",
+  "passwordMismatch": "Las contraseñas no coinciden."
+}

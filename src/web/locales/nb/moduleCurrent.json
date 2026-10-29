@@ -1,0 +1,23 @@
+{
+  "invalid": "Svaret for det lagrede elementet kunne ikke verifiseres. Utkastet er beholdt. Oppdater og sammenlign den lagrede versjonen før du prøver igjen.",
+  "loading": "Laster inn elementer…",
+  "loadingItem": "Åpner lagret element…",
+  "retry": "Prøv elementene igjen",
+  "refresh": "Oppdater elementer",
+  "previous": "Forrige elementer",
+  "next": "Neste elementer",
+  "pages": "Elementsider",
+  "range": "Elementer {first}–{last} av {total}",
+  "empty": "Ingen samsvarende elementer.",
+  "search": "Søk i elementer",
+  "status": "Status",
+  "allStatuses": "Alle statuser",
+  "choose": "Velg modulelement",
+  "select": "Velg {title}",
+  "cancel": "Avbryt",
+  "unavailable": "Elementet er utilgjengelig",
+  "labelsUnavailable": "Elementtitler kunne ikke lastes inn. Lagrede lenker beholdes.",
+  "retryLabels": "Prøv elementtitlene igjen",
+  "open": "Åpne {name}",
+  "checkpointFailed": "Kunne ikke beholde et gjenopprettingspunkt: {reason} Redigeringene er fortsatt åpne. Prøv igjen, lagre eller forkast dem før du åpner et annet element."
+}

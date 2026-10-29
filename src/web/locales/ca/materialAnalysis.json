@@ -1,0 +1,23 @@
+{
+  "retainedRecord": "Registre conservat",
+  "retainedInput": "Entrada conservada",
+  "title": "Títol",
+  "collectionName": "Col·lecció d'evidències",
+  "analysisName": "Anàlisi",
+  "collectionHeading": "Crea una col·lecció d'evidències",
+  "analysisHeading": "Registra una anàlisi externa",
+  "tool": "Eina / mètode",
+  "version": "Versió de l'eina o revisió del codi font",
+  "procedure": "Paràmetres i procediment",
+  "method": "Mètode / execució desats (opcional)",
+  "none": "No s'ha seleccionat cap mètode ni execució desats.",
+  "choose": "Tria un mètode / una execució desats",
+  "remove": "Elimina el mètode / l'execució seleccionats",
+  "selected": "{title} · Revisió conservada {revision}",
+  "finishChoosing": "Tria una revisió desada o cancel·la la cerca de mètodes abans de desar.",
+  "saveCollection": "Desa la col·lecció",
+  "saveAnalysis": "Desa l'anàlisi",
+  "inputs": "Revisions exactes de les entrades",
+  "outputs": "Artefactes de sortida conservats",
+  "required": "Introdueix un títol i, per a una anàlisi, tria les entrades i identifica'n l'eina i la versió."
+}

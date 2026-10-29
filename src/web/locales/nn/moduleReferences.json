@@ -1,0 +1,18 @@
+{
+  "heading": "Relatert arbeid",
+  "empty": "Knyt dette elementet til forskinga eller ressursane det høyrer til.",
+  "remove": "Fjern",
+  "chooseResearch": "Knyt til forsking",
+  "chooseRecord": "Vel ei lagra oppføring",
+  "prototype": "Prototype- / køyringsoppføring",
+  "moduleItem": "Knyt til eit verktøy eller ein lagerartikkel",
+  "chooseItem": "Vel eit element...",
+  "add": "Knyt til element",
+  "loading": "Lastar inn oppføringstittel...",
+  "unavailable": "Oppføringa er ikkje tilgjengeleg",
+  "unavailableLabel": "Oppføringstittelen er ikkje tilgjengeleg",
+  "missingItem": "{type} er ikkje tilgjengeleg",
+  "invalid": "Oppføringsnemningane var ufullstendige. Prøv å laste dei inn på nytt.",
+  "loadFailed": "Oppføringstitlane kunne ikkje lastast inn. Lenkjene og endringane dine er bevarte.",
+  "retry": "Prøv oppføringstitlane på nytt"
+}

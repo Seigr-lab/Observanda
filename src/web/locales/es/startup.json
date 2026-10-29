@@ -1,0 +1,11 @@
+{
+  "opening": "Abriendo Observanda…",
+  "skip": "Saltar al contenido principal",
+  "moduleFailed": "No se ha podido cargar Observanda",
+  "moduleMessage": "No se ha cargado un archivo necesario de la aplicación. Recarga para volver a intentarlo.",
+  "connectionFailed": "Observanda no ha podido terminar de abrirse",
+  "connectionMessage": "Se ha interrumpido la conexión o la inicialización del espacio de trabajo. Recarga para volver a intentarlo. El espacio de trabajo guardado no se ha sustituido.",
+  "unauthorized": "Abre tu cuaderno de laboratorio",
+  "authorizationMessage": "Abre Observanda desde el icono de la aplicación o utiliza su enlace de inicio actual para conectar este navegador.",
+  "reload": "Recargar Observanda"
+}

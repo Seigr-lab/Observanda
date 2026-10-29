@@ -1,0 +1,17 @@
+{
+  "settings": "Intervals de mesura",
+  "help": "Els límits són extrems absoluts en les unitats de l'eix corresponent, no distàncies respecte de la mesura. Proporciona tots dos extrems; poden ser asimètrics. Deixa els límits buits quan no estiguin disponibles. Utilitza límits del valor o incertesa simètrica.",
+  "xLower": "Límit inferior de la coordenada",
+  "xUpper": "Límit superior de la coordenada",
+  "yLower": "Límit inferior del valor",
+  "yUpper": "Límit superior del valor",
+  "error": "Incertesa simètrica (±)",
+  "none": "Sense assignar",
+  "invalid": "Els límits de mesura han d'utilitzar coordenades vàlides i valors numèrics finits.",
+  "complete": "Proporciona tots dos extrems de l'interval al voltant d'una observació mesurada. Les coordenades categòriques no poden tenir intervals.",
+  "enclose": "Els extrems de l'interval han de contenir la seva mesura; els extrems d'intervals logarítmics han de ser positius.",
+  "conflict": "Tria límits del valor o incertesa simètrica per a una observació, no tots dos.",
+  "heatmap": "Utilitza un gràfic de mesures per mostrar intervals; una cel·la d'un mapa de calor representa un sol valor.",
+  "mapping": "Només es poden assignar intervals a mesures individuals. Selecciona columnes de límits vàlides amb unitats compatibles.",
+  "description": "Els intervals de mesura proporcionats es mostren als seus eixos de coordenades i valors. Les mesures mancants continuen sent buits."
+}

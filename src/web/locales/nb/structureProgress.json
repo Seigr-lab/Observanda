@@ -1,0 +1,7 @@
+{
+  "preparing": "Kontrollerer arbeidsområdeendringen…",
+  "records": "Behandler oppføringer: {loaded} av {total}",
+  "indexing": "Lagrer oppdaterte indekser og historikk…",
+  "stop": "Slutt å vente",
+  "stopped": "Ventingen er avsluttet, og avbrytelse er forespurt. Hvis lagringen allerede var fullført, vil et nytt forsøk hente resultatet uten å gjenta endringen. Valgene dine er fortsatt her."
+}

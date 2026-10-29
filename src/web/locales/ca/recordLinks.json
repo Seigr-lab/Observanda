@@ -1,0 +1,13 @@
+{
+  "destination": "Destinació de l'enllaç",
+  "open": "Obre l'enllaç",
+  "list": "Enllaços d'aquest registre",
+  "workspace": "Espai de treball",
+  "project": "Projecte",
+  "notebook": "Llibre de laboratori",
+  "record": "Registre",
+  "anotherWorkspace": "Un altre projecte o espai de treball",
+  "current": "Element desat actual",
+  "revision": "Revisió conservada {revision}",
+  "section": "{kind}: {id}"
+}

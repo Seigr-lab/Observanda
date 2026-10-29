@@ -1,0 +1,17 @@
+{
+  "settings": "Måleintervall",
+  "help": "Grenser er absolutte endepunkt i de tilsvarende akseenhetene, ikke avstander fra målingen. Oppgi begge endepunktene; de kan være asymmetriske. La grensene stå tomme når de ikke er tilgjengelige. Bruk enten verdigrenser eller symmetrisk usikkerhet.",
+  "xLower": "Nedre koordinatgrense",
+  "xUpper": "Øvre koordinatgrense",
+  "yLower": "Nedre verdigrense",
+  "yUpper": "Øvre verdigrense",
+  "error": "Symmetrisk usikkerhet (±)",
+  "none": "Ikke tilordna",
+  "invalid": "Målegrenser må bruke gyldige koordinater og endelige tallverdier.",
+  "complete": "Oppgi begge intervallendepunktene rundt en målt observasjon. Kategorikoordinater kan ikke ha intervall.",
+  "enclose": "Intervallendepunktene må omslutte målingen sin; logaritmiske intervallendepunkter må være positive.",
+  "conflict": "Velg verdigrenser eller symmetrisk usikkerhet for en observasjon, ikke begge deler.",
+  "heatmap": "Bruk et måleplott til å vise intervall; ei varmekartcelle representerer én verdi.",
+  "mapping": "Intervall kan bare tilordnes enkeltmålinger. Velg gyldige grensekolonner med kompatible enheter.",
+  "description": "Oppgitte måleintervall vises på koordinat- og verdiaksene. Manglende målinger blir værende hull."
+}

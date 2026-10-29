@@ -9,7 +9,7 @@
   "storage": "Storage & access",
   "help": "Help",
   "language": "Language",
-  "coverage": "Language currently applies to navigation, Preferences headings and Help. Other screens still use English. Your records are never translated.",
+  "coverage": "Interface and Help texts use the selected language where a translation is available. Your own records are never translated.",
   "saving": "Saving language…",
   "failed": "The language could not be loaded or saved. Your previous choice is unchanged.",
   "saved": "Language saved.",

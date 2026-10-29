@@ -1,0 +1,8 @@
+{
+  "label": "Prosjektverktøy",
+  "overview": "Oversikt over {name}",
+  "oneItem": "1 element",
+  "items": "{count} element",
+  "failed": "Talet på element kunne ikkje lastast inn.",
+  "retry": "Prøv teljingane på nytt"
+}

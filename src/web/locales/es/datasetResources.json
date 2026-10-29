@@ -1,0 +1,17 @@
+{
+  "title": "Recursos de cálculo exacto",
+  "action": "Política de recursos",
+  "save": "Guardar la política de recursos",
+  "cancel": "Cancelar",
+  "help": "Cada operación escalar comparte estos límites entre el análisis sintáctico, la conversión de unidades, la aritmética y el formato. Las esperas de origen y almacenamiento no consumen tiempo aritmético. Los resultados siguen siendo exactos; alcanzar un límite detiene la preparación sin redondear.",
+  "legacy": "Guardar una política crea una nueva revisión del grafo. Las revisiones anteriores conservan su comportamiento de cálculo original.",
+  "codec": "Los códecs de dominio declarados conservan sus propias capacidades por componente.",
+  "maxBits": "Tamaño de enteros y valores intermedios (bits)",
+  "maxOperations": "Operaciones aritméticas",
+  "maxMilliseconds": "Tiempo aritmético (milisegundos)",
+  "maxScalarCharacters": "Texto escalar (caracteres)",
+  "maxExponent": "Magnitud del exponente decimal",
+  "bounds": "Permitido: de {min} a {max}",
+  "invalid": "Elige un número entero dentro de cada intervalo mostrado.",
+  "incomplete": "La vista previa muestra los primeros caracteres. Abre el valor conservado para inspeccionarlo o exportarlo por completo."
+}

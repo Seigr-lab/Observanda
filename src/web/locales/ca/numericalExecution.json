@@ -1,0 +1,12 @@
+{
+  "title": "Límits de la tasca numèrica",
+  "help": "Aquests límits cobreixen la tasca numèrica al llarg dels seus fragments i reintents. El temps actiu mesura el treball numèric, no el temps d'espera transcorregut.",
+  "total": "Tasca numèrica completa",
+  "slice": "Un fragment numèric",
+  "maxOperations": "Nombre màxim d'operacions numèriques",
+  "maxActiveMilliseconds": "Mil·lisegons actius màxims",
+  "bounds": "Interval permès: de {min} a {max}.",
+  "sliceHelp": "Un fragment no pot superar els límits de tota la tasca. Un reintent reprèn el progrés desat; una reserva interrompuda continua comptant íntegrament. Els fragments completats compten segons el seu ús real.",
+  "invalid": "Introdueix els límits de tota la tasca i dels fragments dins dels intervals indicats. Un fragment no pot superar tota la tasca. Es conserven els valors introduïts.",
+  "publicContext": "Límits de la tasca numèrica: {operations} operacions i {active} ms de treball actiu; cada fragment: {sliceOperations} operacions i {sliceActive} ms de treball actiu. Els reintents conserven el treball comptabilitzat."
+}

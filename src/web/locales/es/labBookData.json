@@ -1,0 +1,11 @@
+{
+  "records": "Registros",
+  "recordCount": "Número de registros",
+  "books": "Cuadernos de laboratorio",
+  "book": "Cuaderno de laboratorio",
+  "project": "Proyecto",
+  "recordType": "Tipo de registro",
+  "date": "Fecha del registro",
+  "types": "Tipos de cuadernos de laboratorio",
+  "search": "Contiene texto"
+}

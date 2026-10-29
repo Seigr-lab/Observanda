@@ -1,0 +1,22 @@
+{
+  "group": "Planificación",
+  "task": "Tareas",
+  "calendar": "Calendarios",
+  "event": "Eventos del calendario",
+  "booking": "Reservas de equipos",
+  "search": "Contiene texto",
+  "filterStatus": "Estado (opcional)",
+  "owner": "Responsable",
+  "status": "Estado",
+  "priority": "Prioridad",
+  "dueOn": "Fecha límite",
+  "assignees": "Personas",
+  "checklist": "Lista de comprobación",
+  "color": "Color",
+  "startsAt": "Inicio",
+  "endsAt": "Fin",
+  "location": "Ubicación",
+  "resource": "Equipo",
+  "notes": "Notas",
+  "invalid": "No se ha podido verificar la tarjeta de planificación. Actualízala y vuelve a intentarlo."
+}

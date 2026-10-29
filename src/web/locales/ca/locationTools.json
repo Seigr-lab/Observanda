@@ -1,0 +1,8 @@
+{
+  "label": "Eines del projecte",
+  "overview": "Visió general de {name}",
+  "oneItem": "1 element",
+  "items": "{count} elements",
+  "failed": "No s'han pogut carregar els recomptes d'elements.",
+  "retry": "Torna a carregar els recomptes"
+}

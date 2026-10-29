@@ -1,0 +1,20 @@
+{
+  "title": "Hechos estructurados del registro",
+  "source": "Declaración de hechos del registro",
+  "none": "Conservar los metadatos de origen solo como procedencia",
+  "root": "Objeto completo de metadatos",
+  "help": "Selecciona un conjunto declarado de hechos del registro para asignar su progreso, resultado, campos de plantilla, preparaciones, eventos de ejecución, evaluaciones y resultados. Revisa los valores propuestos antes de aplicar el lote. Los metadatos originales siguen disponibles en Procedencia del origen.",
+  "absent": "Esta fuente no contiene una declaración de hechos del registro compatible. Su adaptador debe convertir explícitamente el origen al formato observanda-record-facts versión 1; Observanda no infiere condiciones ni conclusiones a partir de nombres de metadatos.",
+  "methods": "Los métodos de una preparación deben tener relaciones exactas Utiliza método en la asignación anterior. Las correcciones añaden hechos e identifican lo que sustituyen; no se pueden reemplazar hechos ya guardados.",
+  "preview": "Hechos del registro propuestos",
+  "progress": "Progreso",
+  "outcome": "Resultado",
+  "status-draft": "Borrador",
+  "status-planned": "Planificado",
+  "status-in progress": "En curso",
+  "status-completed": "Completado",
+  "status-failed": "Fallido",
+  "status-incomplete": "Incompleto",
+  "status-inconclusive": "No concluyente",
+  "status-cancelled": "Cancelado"
+}

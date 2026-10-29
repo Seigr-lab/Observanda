@@ -1,0 +1,8 @@
+{
+  "retaining": "Lagrer…",
+  "waiting": "Lagret",
+  "saving": "Lagrer…",
+  "failed": "Innstillingene kunne ikke lagres. De ventende endringene er beholdt.",
+  "conflict": "De lagrede innstillingene ble endret i en annen økt. De ventende endringene er beholdt for gjennomgang.",
+  "discard": "Forkast ventende endringer"
+}

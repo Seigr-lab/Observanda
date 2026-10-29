@@ -1,0 +1,23 @@
+{
+  "invalid": "No s'ha pogut verificar la resposta de l'element desat. Es conserva l'esborrany. Actualitza i compara la versió desada abans de tornar-ho a provar.",
+  "loading": "S'estan carregant els elements…",
+  "loadingItem": "S'està obrint l'element desat…",
+  "retry": "Torna a carregar els elements",
+  "refresh": "Actualitza els elements",
+  "previous": "Elements anteriors",
+  "next": "Elements següents",
+  "pages": "Pàgines d'elements",
+  "range": "Elements {first}–{last} de {total}",
+  "empty": "No hi ha elements coincidents.",
+  "search": "Cerca elements",
+  "status": "Estat",
+  "allStatuses": "Tots els estats",
+  "choose": "Tria un element del mòdul",
+  "select": "Selecciona {title}",
+  "cancel": "Cancel·la",
+  "unavailable": "Element no disponible",
+  "labelsUnavailable": "No s'han pogut carregar els títols dels elements. Es conserven els enllaços desats.",
+  "retryLabels": "Torna a carregar els títols dels elements",
+  "open": "Obre {name}",
+  "checkpointFailed": "No s'ha pogut conservar un punt de recuperació: {reason} Les modificacions continuen obertes. Torna-ho a provar, desa-les o descarta-les abans d'obrir un altre element."
+}

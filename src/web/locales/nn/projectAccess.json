@@ -1,0 +1,10 @@
+{
+  "title": "Lås opp prosjekt",
+  "username": "Brukarnamn",
+  "password": "Prosjektpassord",
+  "recovery": "Bruk ein gjenopprettingsnøkkel",
+  "recoveryKey": "Gjenopprettingsnøkkel",
+  "cancel": "Avbryt",
+  "unlock": "Lås opp",
+  "failed": "Kunne ikkje låse opp dette prosjektet."
+}

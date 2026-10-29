@@ -1,0 +1,20 @@
+{
+  "recordType": "Tipo de registro",
+  "allTypes": "Todos los tipos",
+  "searchRecordTypes": "Buscar tipos de registro",
+  "selected": "Selección guardada",
+  "unavailable": "No disponible en este ámbito",
+  "loading": "Cargando opciones…",
+  "empty": "No hay opciones coincidentes.",
+  "range": "{first}–{last} de {total}",
+  "error": "No se han podido cargar las opciones. La selección guardada permanece intacta.",
+  "retry": "Reintentar las opciones",
+  "previous": "Opciones anteriores",
+  "next": "Opciones siguientes",
+  "invalidPage": "La respuesta de opciones no es válida.",
+  "projects": "Proyectos que incluir",
+  "books": "Cuadernos de laboratorio que incluir",
+  "searchProjects": "Buscar proyectos",
+  "searchBooks": "Buscar cuadernos de laboratorio",
+  "allBooks": "Todos los cuadernos de laboratorio"
+}

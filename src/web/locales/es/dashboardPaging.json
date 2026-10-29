@@ -1,0 +1,6 @@
+{
+  "range": "Elementos {first}–{last} de {total}",
+  "previous": "Elementos anteriores",
+  "next": "Elementos siguientes",
+  "invalidPage": "La respuesta de la tarjeta estaba incompleta. Reintenta cargar esta tarjeta."
+}

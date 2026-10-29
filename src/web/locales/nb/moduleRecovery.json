@@ -1,0 +1,16 @@
+{
+  "heading": "Gjenopprett ufullført arbeid",
+  "loading": "Laster inn gjenopprettingspunkter…",
+  "invalid": "Svaret med gjenopprettingslisten var ufullstendig. Prøv igjen for å laste inn denne siden.",
+  "failed": "Gjenopprettingspunktene kunne ikke lastes inn. Det ufullførte arbeidet er beholdt.",
+  "unavailable": "Dette gjenopprettingspunktet er ikke lenger tilgjengelig. Oppdater listen for å fortsette.",
+  "retry": "Prøv gjenopprettingslisten igjen",
+  "restore": "Gjenopprett utkast",
+  "discard": "Forkast gjenoppretting",
+  "more": "og {count} til",
+  "pages": "Sider med gjenopprettingspunkter",
+  "previous": "Forrige gjenopprettingspunkter",
+  "next": "Neste gjenopprettingspunkter",
+  "refresh": "Oppdater gjenopprettingspunkter",
+  "returnConflict": "Behold eller lagre det åpne utkastet før du går tilbake til dette gjenopprettingspunktet."
+}

@@ -9,7 +9,7 @@
   "storage": "Lagring og tilgang",
   "help": "Hjelp",
   "language": "Språk",
-  "coverage": "Språkvalget gjelder foreløpig navigasjon, overskrifter i Innstillinger og Hjelp. Andre skjermbilder bruker fortsatt engelsk. Oppføringene dine blir aldri oversatt.",
+  "coverage": "Tekster i grensesnittet og Hjelp bruker det valgte språket der en oversettelse er tilgjengelig. Dine egne oppføringer blir aldri oversatt.",
   "saving": "Lagrer språk…",
   "failed": "Språket kunne ikke lastes inn eller lagres. Det forrige valget beholdes.",
   "saved": "Språket er lagret.",

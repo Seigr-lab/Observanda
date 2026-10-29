@@ -1,0 +1,8 @@
+{
+  "invalid": "La figura necesita una referencia exacta a un análisis conservado.",
+  "retained": "{title} · Revisión de cálculo {revision}",
+  "inspect": "Inspeccionar el cálculo",
+  "back": "Volver a las evidencias anteriores",
+  "changed": "La figura o el registro han cambiado mientras se comprobaba su enlace de cálculo. Vuelve a intentar la copia.",
+  "checking": "Comprobando los enlaces de cálculo conservados…"
+}

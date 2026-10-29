@@ -1,0 +1,8 @@
+{
+  "invalid": "Figuren trenger en eksakt referanse til en bevart analyse.",
+  "retained": "{title} · Beregningsrevisjon {revision}",
+  "inspect": "Se gjennom beregning",
+  "back": "Tilbake til forrige dokumentasjon",
+  "changed": "Figuren eller oppføringen endra seg mens beregningslenken ble kontrollert. Prøv kopieringen på nytt.",
+  "checking": "Kontrollerer bevarte beregningslenker…"
+}

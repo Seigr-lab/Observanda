@@ -1,0 +1,22 @@
+{
+  "region": "Databibliotek",
+  "find": "Finn data å vise",
+  "placeholder": "Søk etter kort og forsking…",
+  "show": "Vis",
+  "all": "Alle data",
+  "collections": "Samlingar",
+  "closed": "Lukka kort",
+  "closedDescription": "Lukka kort · innstillingane er bevarte",
+  "hint": "Dra til oversikta eller klikk for å leggje til",
+  "close": "Lukk databiblioteket",
+  "pin": "Fest {name}",
+  "unpin": "Løys {name}",
+  "empty": "Ingen samsvarande data. Prøv eit anna søk eller ein annan kategori.",
+  "range": "{first}–{last} av {total}",
+  "previous": "Førre",
+  "next": "Neste",
+  "loading": "Finn kjelder til kort…",
+  "retry": "Prøv kortsøket på nytt",
+  "invalidPage": "Svaret på kortsøket var ufullstendig. Prøv søket på nytt.",
+  "loadFailed": "Kjeldene til korta kunne ikkje lastast inn. Prøv søket på nytt."
+}

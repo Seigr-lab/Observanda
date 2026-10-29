@@ -1,0 +1,14 @@
+{
+  "table": "Tabla de datos",
+  "tableOverflow": "Desplázate horizontalmente para ver todas las columnas. También puedes enfocar la tabla y utilizar las teclas de flecha.",
+  "read": "Leer el cuaderno de laboratorio",
+  "list": "Lista de registros",
+  "view": "Vista del cuaderno de laboratorio",
+  "details": "Evidencias y detalles del registro",
+  "edit": "Editar el registro",
+  "linkedRecord": "Registro enlazado",
+  "researchLinks": "Enlaces de investigación",
+  "exactRevision": "Revisión conservada {revision}",
+  "changed": "Los registros guardados han cambiado. Actualiza esta vista de lectura.",
+  "incomplete": "No se han podido cargar algunos registros. Actualiza esta vista de lectura."
+}

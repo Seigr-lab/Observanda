@@ -1,0 +1,20 @@
+{
+  "title": "Lås opp labbok",
+  "username": "Brukernavn",
+  "password": "Labbokpassord",
+  "recovery": "Bruk en gjenopprettingsnøkkel",
+  "recoveryKey": "Gjenopprettingsnøkkel",
+  "cancel": "Avbryt",
+  "unlock": "Lås opp",
+  "failed": "Denne labboken kunne ikke låses opp.",
+  "section": "Tilgang til labboken",
+  "passwordReady": "Det er angitt et passord for denne labboken.",
+  "passwordHint": "Angi et passord for å åpne denne labboken på en annen datamaskin.",
+  "newPassword": "Nytt labbokpassord",
+  "confirmPassword": "Bekreft passord",
+  "savePassword": "Lagre labbokpassord",
+  "lock": "Lås labbok",
+  "loading": "Laster inn tilgangsinnstillinger…",
+  "saved": "Labbokpassordet er lagret.",
+  "passwordMismatch": "Passordene er ikke like."
+}

@@ -1,0 +1,23 @@
+{
+  "unnamed": "Prosjekt {id}",
+  "project": "Prosjekt",
+  "settings": "Innstillingar",
+  "failed": "Prosjektoversikta kunne ikkje lastast inn.",
+  "retry": "Prøv på nytt",
+  "loading": "Lastar inn prosjekt…",
+  "more": "Fleire prosjekt",
+  "folder": "Prosjektmappe",
+  "choose": "Vel mappe",
+  "password": "Prosjektpassord",
+  "passwordHint": "Valfritt",
+  "passwordRequired": "Minst 12 teikn; einingsvern er ikkje tilgjengeleg på denne datamaskina.",
+  "username": "Brukarnamn",
+  "create": "Opprett prosjekt",
+  "legacyParent": "Flytt dette prosjektet til eiga lagring før du legg til eit underprosjekt.",
+  "inside": "Inni",
+  "newSaved": "Prosjektet er oppretta.",
+  "folderRequired": "Vel ei mappe for dette prosjektet.",
+  "templateUnavailable": "Denne prosjektmalen er ikkje tilgjengeleg. Vel ein annan mal eller aktiver labboktypane hans i Innstillingar.",
+  "placementFailed": "Prosjektet kunne ikkje plasserast der.",
+  "creating": "Opprettar prosjekt…"
+}

@@ -1,0 +1,5 @@
+{
+  "conflict": "Et annet registrert arbeidsområde bruker dette mappenavnet. Velg et annet navn under Arbeidsområdedetaljer.",
+  "copyToProject": "Kopier arbeidsområdedetaljer til et prosjekt",
+  "copyToProjectDescription": "Bruk {name} og innledningen som prosjektdetaljer."
+}

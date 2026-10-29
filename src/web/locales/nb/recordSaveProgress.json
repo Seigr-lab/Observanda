@@ -1,0 +1,16 @@
+{
+  "verify-file": "Kontrollerer mediebyte",
+  "encrypt-file": "Bevarer krypterte medier",
+  "finalize-encrypted-file": "Ferdigstiller krypterte medier for søking i innholdet",
+  "title": "Lagrer oppføringer",
+  "newerEdits": "Innsendte endringer er lagret. Nyere redigeringer er fortsatt ulagret; lagre igjen når du er klar.",
+  "pending": "Endringer lagres bare når hele lagringen lykkes. Du kan fortsette å redigere; nyere endringer forblir ulagret.",
+  "selectedPending": "Gjenopprettingspunktet forblir tilgjengelig til denne lagringen er bekreftet.",
+  "read-record-bases": "Leser lagrede oppføringer",
+  "prepare-record-edits": "Klargjør oppføringsendringer",
+  "validate-records": "Kontrollerer oppføringsendringer og lenker",
+  "write-records": "Skriver oppføringer og historikk",
+  "write-record-blocks": "Skriver oppføringsinnhold",
+  "index-records": "Oppdaterer søk og navigasjon",
+  "read-saved-records": "Laster inn lagrede oppføringer"
+}

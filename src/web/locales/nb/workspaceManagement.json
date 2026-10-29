@@ -1,0 +1,16 @@
+{
+  "title": "Arbeidsområder",
+  "saved": "Lagret arbeidsområde",
+  "workspace": "arbeidsområde",
+  "current": "Åpent nå",
+  "open": "Åpne {title}",
+  "openExisting": "Åpne eksisterende arbeidsområde",
+  "new": "Nytt arbeidsområde",
+  "empty": "Ingen lagrede arbeidsområder.",
+  "loading": "Laster inn arbeidsområder...",
+  "failed": "Arbeidsområdene kunne ikke lastes inn.",
+  "retry": "Prøv igjen",
+  "external": "Eksterne loggbøker",
+  "inspect": "Undersøk ekstern loggbok",
+  "linked": "Åpne arbeidsområdet som inneholder den tilknyttede forskningen."
+}

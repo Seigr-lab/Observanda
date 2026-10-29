@@ -1,0 +1,14 @@
+{
+  "invalid": "Svaret med valgte oppføringer var ufullstendig. Utkastet er beholdt.",
+  "limit": "Dette utvalget er for stort til å redigere samlet. Åpne færre oppføringer. Gjenopprettingspunktet er beholdt.",
+  "title": "Laster inn valgte oppføringer",
+  "description": "Laster inn de lagrede oppføringene som trengs for denne visningen. Redigereren forblir uendret til innlastingen er ferdig.",
+  "committed": "Oppføringene er lagret. Laster inn de lagrede versjonene for å oppdatere redigereren.",
+  "progress": "Lastet inn {loaded} av {total} oppføringer",
+  "cancel": "Avbryt innlasting",
+  "retry": "Prøv innlasting igjen",
+  "failed": "Valgte oppføringer kunne ikke lastes inn. Prøv igjen for å fortsette fra siste fullførte gruppe.",
+  "cancelled": "Innlastingen er avbrutt. Redigereren og gjenopprettingspunktet er beholdt.",
+  "savedCancelled": "Oppføringene er lagret, men innlastingen ble avbrutt. Prøv Lagre igjen for å sammenligne redigereren med de lagrede oppføringene.",
+  "busy": "Fullfør innlastingen av gjeldende utvalg først."
+}

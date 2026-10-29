@@ -1,0 +1,8 @@
+{
+  "invalid": "La figura necessita una referència exacta a una anàlisi conservada.",
+  "retained": "{title} · Revisió del càlcul {revision}",
+  "inspect": "Inspecciona el càlcul",
+  "back": "Torna a les evidències anteriors",
+  "changed": "La figura o el registre ha canviat mentre es comprovava l'enllaç al càlcul. Torna a provar la còpia.",
+  "checking": "S'estan comprovant els enllaços als càlculs conservats…"
+}

@@ -1,0 +1,11 @@
+{
+  "parents": "Buscar proyectos",
+  "templates": "Buscar plantillas guardadas",
+  "loading": "Cargando opciones…",
+  "count": "{count} de {total}",
+  "more": "Más opciones",
+  "retry": "Reintentar",
+  "failed": "No se han podido cargar las opciones de proyectos.",
+  "book-parents": "Buscar proyectos de destino",
+  "record-parents": "Buscar proyectos"
+}

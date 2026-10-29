@@ -1,0 +1,11 @@
+{
+  "title": "Plantilles de llibres de laboratori",
+  "intro": "Tria les plantilles disponibles en crear o configurar un llibre de laboratori.",
+  "enable": "Activa {name}",
+  "loadFailed": "No s'han pogut carregar aquestes eines. Desactiva-les i torna-les a activar per repetir-ho.",
+  "chooseMore": "Tria més plantilles a {preferences} / {templates}. Personalitza aquest llibre a Configuració del llibre de laboratori.",
+  "manage": "Tria més plantilles a {preferences} / {templates}.",
+  "defaultUnavailable": "La plantilla predeterminada del projecte utilitza un tipus desactivat. Tria una altra plantilla o activa la predeterminada a {preferences} / {templates}.",
+  "enableFirst": "Activa primer aquesta plantilla a {preferences} / {templates}.",
+  "enableTypes": "Activa tipus de llibre de laboratori a {preferences} / {templates}, o afegeix els teus propis tipus de registre a continuació."
+}

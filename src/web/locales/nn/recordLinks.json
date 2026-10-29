@@ -1,0 +1,13 @@
+{
+  "destination": "Lenkjemål",
+  "open": "Opne lenkje",
+  "list": "Lenkjer i denne oppføringa",
+  "workspace": "Arbeidsområde",
+  "project": "Prosjekt",
+  "notebook": "Labbok",
+  "record": "Oppføring",
+  "anotherWorkspace": "Eit anna prosjekt eller arbeidsområde",
+  "current": "Gjeldande lagra element",
+  "revision": "Bevart revisjon {revision}",
+  "section": "{kind}: {id}"
+}

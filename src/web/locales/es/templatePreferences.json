@@ -1,0 +1,11 @@
+{
+  "title": "Plantillas de cuadernos de laboratorio",
+  "intro": "Elige las plantillas disponibles al crear o configurar un cuaderno de laboratorio.",
+  "enable": "Activar {name}",
+  "loadFailed": "No se han podido cargar estas herramientas. Desactívalas y actívalas para reintentar.",
+  "chooseMore": "Elige más plantillas en {preferences} / {templates}. Personaliza este cuaderno en Configuración del cuaderno de laboratorio.",
+  "manage": "Elige más plantillas en {preferences} / {templates}.",
+  "defaultUnavailable": "La plantilla predeterminada del proyecto utiliza un tipo desactivado. Elige otra plantilla o activa la predeterminada en {preferences} / {templates}.",
+  "enableFirst": "Activa primero esta plantilla en {preferences} / {templates}.",
+  "enableTypes": "Activa tipos de cuadernos de laboratorio en {preferences} / {templates} o añade tus propios tipos de registro a continuación."
+}

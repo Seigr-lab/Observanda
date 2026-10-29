@@ -1,23 +1,305 @@
 {
   "topics": [
     {
+      "id": "compound-figures",
+      "title": "Figures amb diversos panells, intervals i límits",
+      "sections": [
+        {
+          "id": "panels",
+          "title": "Compara panells sense perdre'n les dades individuals",
+          "paragraphs": [
+            "A la secció Figures d'un registre, tria {ui:figureComposition.add}. Els dos primers gràfics existents es copien a la figura quan estan disponibles. Utilitza {ui:figureComposition.editing} per triar un panell i edita'l amb els mateixos controls de dades, eixos i disseny que un gràfic individual. Tria una font i {ui:figureComposition.copy} per substituir un panell per una altra instantània de dades desades, o utilitza {ui:figureComposition.blank}. Les figures admeten de dos a vuit panells i d'una a tres columnes; les vistes de lectura i del lloc web apilen els panells en pantalles estretes.",
+            "Les còpies mantenen les seves pròpies mesures, incerteses, anotacions i presentació. Les edicions posteriors del gràfic d'origen no alteren cap panell copiat. Els resultats explícits de suport es copien amb les seves referències d'anàlisi exactes i limitacions. Utilitza Resultats per declarar o revisar la interpretació de tota una figura o d'un panell individual. Una figura amb resultats de suport no es pot eliminar ni substituir fins que aquests resultats s'hagin redirigit o eliminat.",
+            "{ui:figureComposition.linkX} i {ui:figureComposition.linkY} utilitzen l'interval combinat dels panells, incloses la incertesa i els límits explícits de cada panell. Els eixos compartits requereixen el mateix tipus de coordenada, escala, etiqueta i orientació. Les coordenades de categoria no poden compartir interval. Desactivar la compartició d'intervals restaura la configuració pròpia desada de cada panell."
+          ]
+        },
+        {
+          "id": "annotations",
+          "title": "Marca intervals i límits de decisió",
+          "paragraphs": [
+            "Obre {ui:figureComposition.annotations} dins d'un gràfic. Tria {ui:figureComposition.addBoundary} per a una sola coordenada o {ui:figureComposition.addInterval} per a una regió ombrejada. Introdueix una etiqueta, un eix, una posició i, per a un interval, el seu final. Les coordenades numèriques utilitzen les unitats de l'eix; les coordenades de data admeten dates ISO o marques de temps amb zona horària. Les coordenades logarítmiques han de ser positives. Canvia el color i l'opacitat de l'interval perquè s'adaptin a la figura.",
+            "Les anotacions descriuen el gràfic i no canvien les mesures ni l'interval ajustat dels eixos. Les marques fora de l'interval visible es retallen, mentre que la taula de dades conserva les coordenades i les etiquetes completes. Descarrega l'SVG conserva la figura completa. Descarrega les dades inclou les mesures, la incertesa i una fila separada per a cada anotació; les descàrregues de diversos panells identifiquen el panell de cada fila. Les còpies de seguretat de l'espai de treball conserven el model editable complet."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "evidence-association-repair",
+      "title": "Revisa i repara les associacions absents d'evidències importades",
+      "sections": [
+        {
+          "id": "review",
+          "title": "Comprova un lot ja aplicat",
+          "paragraphs": [
+            "Des d'Espais de treball, obre Inspecciona un quadern extern i Revisa o reprèn importacions desades. Obre un lot aplicat i tria {ui:migrationImport.evidenceCheck}. Revisa cada nom de fitxer, camí original, nombre de bytes, SHA-256 i registre propietari. Els bytes compartits s'emmagatzemen una sola vegada, mentre que cada registre i camí relatiu d'origen tenen la seva pròpia associació.",
+            "{ui:migrationImport.evidenceApply} verifica els bytes originals conservats i afegeix només les associacions absents mostrades en aquella pàgina. Si la revisió canvia, cal tornar-la a comprovar. Continua per totes les pàgines per inspeccionar el lot complet. Els registres eliminats intencionadament de l'espai de treball s'identifiquen i no es tornen a crear. Els enllaços de descàrrega permeten inspeccionar abans d'aplicar una reparació.",
+            "Les reparacions conserven els registres d'autor, les metadades d'origen, els fitxers originals i les associacions existents vàlides. Cada pàgina aplicada té un justificant conservat. Repetir la mateixa petició retorna el justificant sense duplicar adjunts. La verificació de còpies de seguretat xifrades també comprova les associacions reparades. Aquesta acció no torna a executar una importació ni infereix cap significat científic dels noms de fitxer."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "organizations",
+      "title": "Organitzacions i pertinença a equips",
+      "sections": [
+        {
+          "id": "administration",
+          "title": "Crea una organització i gestiona equips",
+          "paragraphs": [
+            "Activa {ui:organizations.title} a Preferències → Mòduls i obre-ho des de la navegació. Tria {ui:organizations.create}, introdueix el nom de l'organització i el teu nom, i desa. La identitat de signatura dedicada d'aquesta instal·lació es converteix en el primer administrador. Un administrador gestiona els membres i els equips; aquest rol no concedeix claus de xifratge de l'espai de treball, accés a la recerca ni autoritat de publicació o recuperació.",
+            "Utilitza {ui:organizations.newTeam} per donar nom a un equip i seleccionar-ne els membres actius de l'organització. Edita un membre per canviar-ne el rol dins de l'organització o eliminar-lo. L'eliminació també en retira la pertinença als equips. Ha de quedar un altre administrador abans de poder eliminar o degradar l'últim administrador. Un membre eliminat ha d'acceptar una invitació nova per tornar-s'hi a unir.",
+            "Obre {ui:organizations.activity} per inspeccionar les invitacions, acceptacions, canvis de rol, eliminacions i canvis de pertinença als equips desats, inclosos l'administrador que ha actuat i l'hora. L'historial es desa amb cada canvi i només és visible per als administradors actuals. {ui:organizations.activityOlder} recorre els canvis anteriors per pàgines sense barrejar organitzacions; {ui:organizations.activityLatest} torna als canvis més recents. Aquest historial local no és una marca de temps independent ni una prova contra la restauració d'una còpia de seguretat completa anterior."
+          ]
+        },
+        {
+          "id": "invitations",
+          "title": "Intercanvia i verifica fitxers d'inscripció",
+          "paragraphs": [
+            "El destinatari tria {ui:organizations.identity} a la seva instal·lació i envia el fitxer d'identitat pública a l'administrador. No conté cap clau de signatura privada. L'administrador tria {ui:organizations.invite}, obre aquell fitxer i verifica l'empremta completa mostrada amb el destinatari per un altre canal. Tria el rol, els equips i la vigència de la invitació abans de desar i enviar la invitació descarregada.",
+            "El destinatari tria {ui:organizations.openInvitation}, revisa l'organització, el rol i la caducitat, i verifica de manera independent l'empremta de la instal·lació que el convida. {ui:organizations.accept} descarrega una acceptació signada per retornar-la. L'administrador utilitza {ui:organizations.receive} per inscriure el membre i retorna la confirmació resultant. El destinatari utilitza {ui:organizations.receipt} per conservar-la.",
+            "Tornar a obrir la mateixa invitació retorna la mateixa acceptació conservada. Tornar a importar aquella acceptació no crea cap altre membre i conserva l'hora d'acceptació original. Si es perd la descàrrega de la invitació, crea una invitació de substitució; això revoca la invitació anterior pendent per a aquell destinatari dins de l'organització. Per acceptar cal la clau de signatura del destinatari, de manera que la simple possessió del fitxer d'invitació no inscriu una altra persona."
+          ]
+        },
+        {
+          "id": "boundaries",
+          "title": "Revocació i confirmacions conservades",
+          "paragraphs": [
+            "Utilitza {ui:organizations.revoke} per cancel·lar una invitació pendent. Les invitacions caducades i revocades no es poden acceptar. Eliminar o degradar un administrador cancel·la les seves invitacions pendents. Els canvis de pertinença es tornen a comprovar quan es rep una ordre signada, incloses les ordres repetides.",
+            "Els fitxers d'intercanvi registren la inscripció a l'organització; no contenen contingut dels llibres de laboratori ni claus de desxifratge de l'espai de treball. Els justificants de confirmació d'una altra instal·lació informen de quan es va produir l'acceptació. No són comprovacions de pertinença en directe i no s'actualitzen automàticament quan la instal·lació administradora canvia els membres."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "continuing-intake",
+      "title": "Entrada continuada i preparació per a l'execució",
+      "sections": [
+        {
+          "id": "workflow",
+          "title": "Incorpora la preparació següent o les evidències retornades",
+          "paragraphs": [
+            "Crea i desa l'execució de destinació amb les eines habituals de registre. Obre Evidències i anàlisi i després {ui:localIntake.open}. Tria la carpeta que conté intake.observanda.json i utilitza {ui:localIntake.validate}. La previsualització identifica l'espai de treball, el registre, la revisió esperada, la revisió d'origen, els fitxers i les anàlisis. La validació no importa res. {ui:localIntake.stage} conserva fitxers privats xifrats; {ui:localIntake.apply} adjunta conjuntament els originals i les anàlisis revisats. Aplicar una esmena a un registre també fa que aquell registre esdevingui privat.",
+            "Les propostes desades continuen disponibles després de reiniciar. Cancel·la atura el procés de treball; Reprèn torna a provar la mateixa proposta i les mateixes identitats. Si es perd una resposta, repeteix el mateix ID de proposta i SHA-256 per recuperar el resultat existent. Es rebutja reutilitzar aquell ID per a contingut diferent. Els canvis als bytes d'origen o a les revisions de destinació requereixen una proposta i una revisió noves. Importar mai no executa scripts, decideix resultats científics, crea commits, envia canvis ni publica."
+          ]
+        },
+        {
+          "id": "contract",
+          "title": "Contracte d'entrada local de versió 1",
+          "paragraphs": [
+            "La proposta és JSON UTF-8 amb el nom intake.observanda.json. Propietats obligatòries: version (1), id (clau d'idempotència UUID v4 nova), workspaceId, recordId, expectedRevision (SHA-256 del registre desat), purpose (preparation, evidence, analysis o amendment), title, files, analyses, source i verification. Copia els identificadors d'espai de treball, registre i revisió de la pantalla d'entrada. El manifest complet està limitat a 4 MiB. Es rebutgen les versions o les propietats de primer nivell desconegudes.",
+            "files conté com a màxim 1.000 elements: id (UUID v4 nou), path (camí relatiu dins de la carpeta de la proposta), size (nombre exacte de bytes), sha256 i provenance (text). S'admeten matrius buides. Es rebutgen els enllaços, els recorreguts fora de la carpeta, els fitxers de dispositiu i els camins ambigus. analyses conté com a màxim 32 elements: id (UUID nou o identitat d'anàlisi existent), expectedRevision (null per a una anàlisi nova; altrament, el seu SHA-256 exacte), title, tool, version, toolSha256, parameters (text), inputs i outputs. Una referència de fitxer és {\"file\":\"UUID\"}; una referència conservada existent és {\"kind\":\"artifact\",\"id\":\"UUID\",\"revision\":\"SHA-256\"}. Les entrades també poden referenciar conjunts de dades, registres, col·leccions i anàlisis. Les sortides han de referenciar artefactes. Cada llista té com a màxim 64 referències. Un method opcional utilitza l'esquema versionat existent de procedència d'anàlisi; els valors numèrics exactes es mantenen com a cadenes.",
+            "source és {\"revision\":\"etiqueta de revisió externa\",\"sha256\":\"SHA-256 de la font\"}. verification és {\"tool\":\"nom del validador\",\"version\":\"versió del validador\",\"sha256\":\"SHA-256 del codi font del validador\",\"statement\":\"què s'ha comprovat i els seus límits\"}. Són declaracions conservades, no una prova que s'hagi executat una eina ni que una mesura sigui correcta. L'execució de l'anàlisi es manté fora d'Observanda. Un record opcional és el registre proposat complet en l'esquema de creació existent, amb el mateix ID i llibre de laboratori, share:false i sense adjunts multimèdia; està subjecte a la validació habitual de fets immutables i revisió esperada. Omet record per adjuntar materials sense alterar la narració. Cal almenys un fitxer, una anàlisi o una esmena de registre."
+          ]
+        },
+        {
+          "id": "automation",
+          "title": "CLI local i API local autenticada",
+          "paragraphs": [
+            "Utilitza node src/cli.js intake --action preview --workspace <directory> --workspace-id <UUID> --record-id <UUID> --source <proposal-directory>. Proporciona --password-stdin quan calgui; no posis mai una contrasenya a la línia d'ordres. La sortida estàndard és un embolcall JSON versionat amb ok i result o error. Els missatges d'inici de l'entorn d'execució van a la sortida d'error estàndard. El codi de sortida 0 indica una ordre correcta; l'1, una ordre rebutjada; i el 2, una tasca esperada aturada o fallida.",
+            "La preparació afegeix --action stage --id <proposal UUID> --pin <reviewed SHA-256>. L'aplicació utilitza --action apply amb el mateix ID i la mateixa empremta. Utilitza --wait per esperar stage, apply o resume; altrament, el procés de treball compartit de l'aplicació continua la tasca en cua quan està en execució. status, cancel, resume i list utilitzen les mateixes identitats explícites d'espai de treball i de registre; readiness retorna la vista de preparació del registre. --action watch --source <parent-folder> informa de propostes en carpetes filles immediates com a línies JSON. La vigilància només valida i notifica: mai no prepara ni aplica. Atura el vigilant amb Ctrl+C.",
+            "L'API local és POST /api/v1/intake/{preview|stage|apply|status|cancel|resume|list|readiness|link-receipt|policy}. Les peticions inclouen version:1, workspaceId i recordId; preview i stage inclouen source; stage inclou id i expectedPin; apply inclou id i expectedPin; i status i les accions de control inclouen id. list accepta el cursor retornat. Les respostes utilitzen el mateix resultat de servei que el result de la CLI; els errors utilitzen l'embolcall estable code/message/details de l'aplicació. L'API requereix la sessió local desbloquejada de l'aplicació, les comprovacions de Host permès i de mateix origen, i la capçalera de context de l'espai de treball actiu quan calgui. No és una API pública multiusuari ni un substitut de futures claus d'integració amb àmbit delimitat. La creació manual i les importacions de fitxers no necessiten cap vigilant ni integració."
+          ]
+        },
+        {
+          "id": "readiness",
+          "title": "Justificants i política de compleció",
+          "paragraphs": [
+            "{ui:localIntake.readiness} resumeix les evidències originals, les anàlisis obsoletes, els criteris declarats sense resoldre, les revisions pendents i els justificants privats d'aquest registre. No infereix cap èxit físic. Un criteri complert o no complert està avaluat; un criteri sense resoldre, no disponible o sense avaluar continua visible. Els resultats negatius també es poden completar. Les hipòtesis i els criteris no són obligatoris per als registres creatius o de camp.",
+            "Les propostes aplicades enllacen la seva revisió privada d'origen i la validació declarada amb la revisió resultant del registre. Utilitza {ui:localIntake.addReceipt} per a una declaració manual de validació, una edició de publicació preparada que contingui aquesta revisió exacta del registre o una declaració opcional de commit Git. Les declaracions Git identifiquen un commit extern i l'empremta d'origen indicada; Observanda no crea, envia ni autentica de manera independent aquell commit. Els justificants anteriors continuen visibles després de les esmenes. Els justificants de publicació identifiquen una edició preparada, no proven un desplegament en línia.",
+            "{ui:localIntake.policy} és opcional i s'aplica a tots els llibres de laboratori directament dins del projecte seleccionat. Pot requerir justificants de validació, publicació i/o Git abans de completar un registre. Desa el contingut modificat com a esborrany, enllaça els justificants requerits amb aquella revisió desada i marca'l com a completat en una acció separada. Les ordres de registre habituals de la interfície gràfica, la CLI i la importació comparteixen aquesta comprovació de política. El justificant de compleció conserva la connexió durant aquell canvi d'estat; els canvis posteriors d'autor requereixen justificants aplicables nous. Les signatures de revisió, les mesures i la qualificació de versions mantenen significats separats."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "book-reading",
+      "title": "Escriure i llegir un llibre connectat",
+      "sections": [
+        {
+          "id": "content",
+          "title": "Taules, equacions, diagrames i citacions",
+          "paragraphs": [
+            "Utilitza {ui:book.content} en un camp d'escriptura per inserir una taula d'autor, una equació, una citació, una figura en línia o un bloc d'origen conservat. Cada bloc existent té {ui:book.edit}; editar i inserir són accions separades. Les taules conserven els valors de les cel·les com a text, inclosos els zeros inicials i els nombres molt grans. No avaluen fórmules. Selecciona un bloc de codi per introduir-ne l'etiqueta de llenguatge; els espais i els dígits desats es mantenen sense canvis.",
+            "Les equacions conserven la font TeX i es renderitzen fora de línia com a MathML. Els recursos externs i les ordres HTML de confiança estan desactivats. Les entrades no admeses mostren la font original i un missatge explícit de renderització. Les citacions conserven l'autor, l'edició, el localitzador i una adreça web opcional.",
+            "Carrega una imatge o crea una figura al registre abans de col·locar-la al text. Proporciona una alternativa textual ordenada, amb un pas per línia. Els originals SVG continuen sent bytes d'origen privats verificats; la lectura i la publicació utilitzen imatges estàtiques preparades. Un gràfic conserva la seva taula de dades. Les taules d'autor amples ofereixen {ui:book.tableReading}, i la impressió utilitza les files lineals. L'aparença de l'aplicació i la del lloc web són configuracions separades."
+          ]
+        },
+        {
+          "id": "references",
+          "title": "Referencia contingut exacte i segueix la recerca",
+          "paragraphs": [
+            "Obre un llibre de laboratori i tria {ui:recordReading.read} per llegir registres complets per pàgines sense entrar en un editor. Els filtres i l'ordenació també s'apliquen a la vista de lectura. {ui:recordReading.details} obre un registre amb les seves evidències, historial i relacions. Tria explícitament {ui:recordReading.edit} per canviar-ne el contingut. Torna als registres retorna a la vista de lectura o llista d'origen.",
+            "Els enllaços del text estan subratllats i acolorits. Selecciona un enllaç a l'editor per veure {ui:recordLinks.destination} i utilitza {ui:recordLinks.open} a la barra d'eines existent. Les vistes de lectura ofereixen {ui:recordLinks.list}, incloses les adreces completes i les referències a revisions conservades.",
+            "Utilitza {ui:book.copy} al registre per triar un encapçalament, una secció d'escriptura, una taula, una equació, una citació o una figura. Una referència actual segueix la identitat del contingut desat encara que se'n canviï el nom o l'ordre. {ui:book.exact} requereix un registre desat i conserva aquella revisió. Enganxa una referència copiada en un enllaç del text o a Enllaça recerca. El contingut eliminat es manté com a referència no disponible en lloc de redirigir-se a una altra secció.",
+            "Utilitza {ui:book.journey} als filtres de registre per explorar conceptes, decisions, mètodes, experiments o resultats. Desa la vista per a més endavant. Aquestes categories no copien registres ni canvien els recomptes d'experiments. Segueix els registres enllaçats, les execucions individuals i els mètodes exactes des del lector; Torna als registres manté els filtres d'origen. Registres enllaçats mostra les referències entrants, incloses les comparacions que citen una execució."
+          ]
+        },
+        {
+          "id": "publication",
+          "title": "Explora el llibre públic revisat",
+          "paragraphs": [
+            "L'índex exportat {ui:book.browse} inclou només els registres públics seleccionats de l'edició. Combina filtres de text, etiqueta, recorregut de lectura, tipus i data. L'adreça registra aquestes opcions; {ui:book.reset} les esborra. Els enllaços dels registres conserven un retorn a l'índex filtrat. Amb JavaScript desactivat, l'índex estàtic complet, les pàgines de registre, les figures i les equacions continuen sent llegibles.",
+            "Els enllaços anterior i següent anomenen registres individuals. L'ordenació filtrada es conserva dins de la mateixa sessió del navegador; un registre obert de manera independent continua tenint els seus veïns estàtics del llibre de laboratori. Les referències exactes a revisions anteriors no se substitueixen pel text actual. Publicar revisions històriques és una capacitat separada de selecció d'edició. Revisa la selecció pública i els valors representats abans de compartir."
+          ]
+        },
+        {
+          "id": "import",
+          "title": "Revisa el contingut importat del llibre comparant-lo amb la font",
+          "paragraphs": [
+            "A les correspondències d'una importació preparada, tria {ui:migrationImport.htmlBook} per mantenir el text HTML, els encapçalaments, les taules simples i el codi admesos com a contingut editable del llibre. Els blocs no admesos es conserven literalment amb una explicació de conservació i requereixen un reconeixement explícit de la conversió. Es mostren com a text d'origen, mai no s'executen ni es descarreguen.",
+            "Revisa la previsualització del contingut i {ui:book.sourceMappings}. Els desplaçaments i les longituds identifiquen intervals UTF-8 del fitxer original identificat per la seva empremta SHA-256. Després d'aplicar la importació, Procedència d'origen conserva la correspondència i els originals autenticats per reconciliar-los. Si una taula complexa, un diagrama o una fórmula incrustada no es poden representar de manera segura, conserva'ls i crea una substitució explícita d'autor amb la seva pròpia descripció. L'original continua disponible de manera privada."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "analysis-comparisons",
+      "title": "Anàlisi, comparacions i revisió de resultats",
+      "sections": [
+        {
+          "id": "provenance",
+          "title": "Conserva una anàlisi externa i el seu mètode",
+          "paragraphs": [
+            "En un registre desat, obre Evidències i anàlisi. Registra una anàlisi externa conserva les revisions exactes d'entrada i de sortida, l'eina i la versió, el procediment i un mètode o execució desats opcionals. La procedència del mètode afegeix identitats fixades del codi font de l'eina, del descodificador i del calibratge, paràmetres estructurats amb motius i revisions d'origen, la convenció d'incertesa i les limitacions. Identifica explícitament les identitats d'eina no disponibles. Un nom d'eina o una empremta coincident no estableixen l'exactitud. El codi d'anàlisi importat mai no s'executa a Observanda.",
+            "Utilitza {ui:analyses.create} per interpretar un o més conjunts de dades de resultats conservats. Selecciona les columnes del valor, la categoria proporcionada, els límits inferior i superior originals i el context opcional. Les grafies de categoria es corresponen amb correcte, discrepant, sense resoldre, no disponible o exclòs. Una fila exclosa requereix un motiu. Les exclusions del conjunt de dades i les cel·les no disponibles prevalen sobre una observació declarada com a correcta. Les columnes de context opcionals utilitzen els tokens documentats que mostra el formulari de correspondències; els tokens no reconeguts aturen la preparació. Canviar una correspondència crea una revisió conservada i manté l'anterior."
+          ]
+        },
+        {
+          "id": "exceptions",
+          "title": "Compara sense amagar excepcions",
+          "paragraphs": [
+            "Declara la investigació, l'execució o arrencada, la condició, l'operació o perfil, el calibratge, la pertinença i la relació de finestra de cada font. Les observacions brutes i els agregats tenen recomptes separats. Els recomptes de correctes / avaluades inclouen només observacions brutes correctes i discrepants; les observacions absents, sense resoldre i excloses es mantenen com a categories explícites. Els denominadors agregats es conserven com a text d'origen i mai no es combinen automàticament. Els registres d'execució declarats diferents es compten independentment del nombre de lectures. Les finestres disjuntes no estableixen execucions independents, i les dades de calibratge o entrenament no es tracten com a evidències reservades per a l'avaluació.",
+            "Les vistes d'anàlisi inclouen excepcions, distribucions de valors, marges exactes respecte dels límits, transicions de categoria i una cronologia de diagnòstic. Selecciona un valor per inspeccionar-ne la cel·la d'origen original i els bytes natius i torna a la comparació. Els límits conserven la representació original. El marge amb signe és la distància mínima exacta als límits proporcionats, amb valors negatius fora de l'interval; no s'infereix cap conversió d'unitats ni propagació d'incertesa. Els recomptes de categories descriuen les avaluacions proporcionades i no les sobreescriuen a partir de comparacions amb els límits. Les transicions requereixen una declaració explícita d'ordre d'origen i es mantenen dins de les seqüències de font i context. Els camps d'abans/després de la petició i d'operació simultània són descriptius, mai no són automàticament causals.",
+            "La preparació de comparacions és una tasca de l'espai de treball que es pot cancel·lar i repetir. Processa en flux les pàgines conservades dels conjunts de dades i manté com a màxim 2.048 contextos, 4.096 distribucions diferents de context/valor/categoria i 4.096 grups de transició. Superar aquests límits produeix una fallada visible i conserva les entrades originals; redueix l'anàlisi. Les vistes d'observacions llegeixen com a màxim 50 files per resposta i admeten un màxim d'1 MiB d'observacions per resposta. Un original seleccionat continua autenticant-se completament abans de mostrar-ne la vista limitada de bytes."
+          ]
+        },
+        {
+          "id": "verification",
+          "title": "Comprova un joc independent de valors esperats",
+          "paragraphs": [
+            "La correspondència opcional de valors esperats fixa un conjunt de dades conservat per separat, les seves columnes de clau de fila i de valor, i la font i clau reals corresponents. La versió 1 compara files en l'ordre declarat del fitxer, verifica que les claus i les unitats coincideixin i compara els valors numèrics admesos com a racionals exactes. El text i les representacions no admeses es comparen com a cadenes exactes. Els valors absents, les exclusions, les claus discrepants i les files finals sense parella es compten per separat. La reordenació de claus no es reconcilia silenciosament. Documenta l'origen i la independència dels valors esperats; Observanda no pot establir independència només a partir d'una declaració. Els algorismes integrats de comparació d'excepcions i de valors esperats tenen definicions amb nom i versió."
+          ]
+        },
+        {
+          "id": "results",
+          "title": "Connecta conclusions i revisa les entrades modificades",
+          "paragraphs": [
+            "Utilitza {ui:analyses.addResult} en un registre per declarar una conclusió, un nombre, un text de taula, una comparació o un resultat de figura. Un resultat de figura anomena una figura existent al registre; el peu publicat enllaça amb l'enunciat i la procedència. Les figures sense un resultat de suport declarat identifiquen explícitament aquesta procedència absent. Marca'l explícitament com a d'autor amb les seves fonts i limitacions, o selecciona una anàlisi de suport fixada. Desa el registre per conservar l'enunciat. L'historial del registre conserva els enunciats anteriors i les seves identitats d'anàlisi exactes. La prosa lliure continua sent prosa d'autor; Observanda no infereix afirmacions científiques de text arbitrari.",
+            "Els enunciats de resultats seleccionats apareixen al lloc web amb la seva base de procedència i les limitacions. Els manifests d'anàlisi privats de suport, els noms de fonts i els fitxers originals no es publiquen implícitament. Un enunciat sustentat per evidències privades indica que les evidències no estan incloses. La selecció per a publicació pública d'artefactes originals i revisions d'origen anteriors continua sent un flux de publicació separat.",
+            "La revisió de publicació comprova les anàlisis d'avaluació, les figures dependents i els enunciats de resultats, incloses les taules i les comparacions. Si una anàlisi o les seves entrades transitives han canviat o han deixat d'estar disponibles, registra una decisió d'aplicabilitat per a cada resultat afectat abans de l'exportació ZIP, l'exportació local o el desplegament. Per ometre o substituir un resultat, edita el registre i prepara una altra edició. Les decisions pertanyen a aquella edició i a les revisions vigents de les dependències observades en preparar-la; un altre canvi d'entrada requereix una preparació i una revisió noves. Aquestes comprovacions estableixen traçabilitat, no acceptació científica."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "measurements",
+      "title": "Mesures exactes i evidències natives",
+      "sections": [
+        {
+          "id": "schema",
+          "title": "Declara valors sense reescriure'ls",
+          "paragraphs": [
+            "Obre Evidències i anàlisi en un registre desat, crea o inspecciona un conjunt de dades i utilitza Edita l'esquema i les exclusions. Les columnes conserven la representació d'origen, la base explícita, les unitats i els significats dels valors absents. Els enters més grans que l'interval segur de JavaScript i les fraccions finites en altres bases es mantenen com a cadenes exactes. Les notacions no admeses poden utilitzar {ui:measurements.unsupported}; continuen sent llegibles i descarregables, però no poden entrar silenciosament en càlculs numèrics. El null de JSON, un camp absent, un valor declarat com a mancant i el zero numèric són diferents.",
+            "Desplega {ui:measurements.quantity} per distingir valors sol·licitats, mesurats, derivats i de codi brut, i selecciona revisions conservades de conversió o calibratge. No es poden assignar unitats físiques als codis bruts d'instrument. Una mesura derivada separada pot declarar una unitat física amb la seva font de conversió. Canviar un esquema crea una altra revisió; les anàlisis anteriors conserven l'esquema i els valors originals.",
+            "{ui:measurements.time} distingeix comptadors de dispositiu, ordre d'adquisició, dates de rellotge civil, temps transcorregut, durada amb alimentació i temps transcorregut inferit. Declara l'amplada del comptador, la freqüència, l'ordenació, els límits de desbordament o reinicialització, la referència, la resolució i la incertesa quan es coneguin. Observanda no desplega comptadors ni infereix durades. Una transformació externa ha de fixar el model i les dades de referència; una representació temporal diferent no augmenta la precisió de l'oscil·lador. Les marques de temps desconegudes es mantenen desconegudes."
+          ]
+        },
+        {
+          "id": "locators",
+          "title": "Segueix un valor fins al seu original",
+          "paragraphs": [
+            "Selecciona un valor en un conjunt de dades conservat per obrir {ui:measurements.heading}. L'inspector mostra la representació, l'esquema, la identitat racional exacta quan s'admet, l'exclusió i les observacions properes. Utilitza {ui:measurements.original} per seguir la font conservada. Les files CSV tenen intervals de bytes originals; els camps JSON tenen punters estructurats. Els altres originals continuen disponibles com a descàrregues completes.",
+            "Quan creïs un conjunt de dades o defineixis correspondències d'una importació preparada, desplega {ui:measurements.nativeMapping}. Selecciona l'original natiu i les columnes descodificades que contenen desplaçaments i longituds de bytes, camins JSON Pointer o identificadors de registre natiu. Els números de columna comencen per 1; els desplaçaments de bytes, per 0. Un identificador sense correspondència amb bytes o camps queda explícitament sense resoldre. Cap descodificador, script ni programa d'origen importat s'executa a Observanda.",
+            "La inspecció de bytes retorna com a màxim 4.096 bytes seleccionats més 64 bytes de context a cada costat. Utilitza Bytes anteriors i Bytes següents per a intervals més grans. Descarrega el fragment de bytes mostrat desa només l'interval seleccionat; Descarrega l'original recupera el fitxer sense canvis. Els originals xifrats s'autentiquen completament abans de retornar text en clar, de manera que inspeccionar una font gran pot trigar fins i tot per a un interval petit. La inspecció JSON està limitada a 60.000 caràcters i conserva els tokens numèrics, però normalitza els espais i els escapaments; les seleccions més grans necessiten un punter més específic o descarregar l'original."
+          ]
+        },
+        {
+          "id": "provenance",
+          "title": "Conserva una interpretació i enllaça-la a un criteri",
+          "paragraphs": [
+            "Des de l'inspector del valor o de l'original, tria {ui:measurements.retain}. Declara el valor exacte, la disponibilitat, els significats de magnitud i de temps, la font i versió del descodificador, l'esquema, les referències de calibratge i conversió, la compleció i les limitacions. Afegeix cel·les, intervals de bytes, camps estructurats o anàlisis conservades contribuents. La integritat i la compleció són declaracions d'autor; l'autenticació de l'emmagatzematge no estableix l'èxit de l'aparell ni l'exactitud científica.",
+            "Desa conserva una revisió immutable d'anàlisi. Utilitza Conserva una interpretació revisada per esmenar-la; la revisió anterior continua sent consultable. Des d'una avaluació d'intent, tria la mesura conservada com a evidència per a la preparació i el criteri seleccionats. Els lectors poden seguir aquella avaluació a través dels contribuents de la mesura fins als bytes natius. Aquestes fonts privades no es publiquen automàticament.",
+            "Les coordenades del gràfic són aproximades. La política normal rebutja la conversió numèrica no segura d'enters i de bases explícites. {ui:measurements.approximate} permet explícitament arrodonir enters i fraccions en altres bases admesos per visualitzar-los; la política i la versió de l'algorisme es mantenen amb l'anàlisi conservada de la figura. Els valors exactes del conjunt de dades no canvien. Es rebutgen les coordenades no finites i els valors no nuls que es reduirien a zero per subdesbordament."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "attempt-evidence",
+      "title": "Preparacions, esdeveniments d'intents i avaluacions",
+      "sections": [
+        {
+          "id": "preparing",
+          "title": "Fixa una preparació per a un intent",
+          "paragraphs": [
+            "Obre un registre desat i desplega {ui:attempts.title}. Aquests controls opcionals no imposen un flux científic a les notes creatives o de camp. Utilitza {ui:attempts.addPreparation} per declarar l'intent o l'etapa aplicables, els mètodes exactes desats, les variables controlades, les empremtes d'entrada, les referències de calibratge, les observacions planificades i els criteris. La cerca de fonts explora registres desats o evidències conservades sense carregar tot l'espai de treball.",
+            "Una condició registra el seu valor, la unitat declarada i si és indicada, heretada o mesurada. Les condicions heretades requereixen una referència exacta d'origen. Repetir una execució copia la preparació i les condicions com a heretades; no arrossega ni esdeveniments ni avaluacions. Canvia explícitament els paràmetres deliberats per a l'intent següent. No es compta una mesura heretada com a observació nova.",
+            "Utilitza {ui:attempts.save} i desa el registre per fixar la preparació nova. {ui:attempts.amendPreparation} afegeix una revisió amb un motiu i una aplicabilitat explícita. Les avaluacions i els esdeveniments existents mantenen les identitats de preparació i de criteri seleccionades. Els criteris prospectius i la reanàlisi exploratòria tenen camps d'àmbit separats; explica els criteris exploratoris en lloc de canviar silenciosament un llindar anterior."
+          ]
+        },
+        {
+          "id": "events",
+          "title": "Registra què ha passat sense inferir cap execució",
+          "paragraphs": [
+            "{ui:attempts.addEvent} registra preparacions, comprovacions, transports, instal·lacions, relectures, observacions d'execució, retorns, adquisicions, revisions o un esdeveniment personalitzat. Selecciona una revisió de preparació quan sigui aplicable i indica la font, l'actor, el significat temporal i les evidències exactes conservades. La compleció pot ser completa, parcial, fallida, cancel·lada o desconeguda. Utilitza el camp de circumstàncies per a intents accidentals, suports reutilitzats i altres matisos.",
+            "Un esdeveniment distingeix explícitament el sistema amfitrió o de preparació de les observacions de l'objectiu físic. Registrar una tasca de l'amfitrió o una adquisició completades no estableix una execució física, èxit científic ni una arrencada nova. Afegeix diverses adquisicions al mateix intent quan descriguin el mateix intent físic. El progrés i el resultat global del registre no canvien automàticament.",
+            "L'hora declarada del rellotge civil, els comptadors de dispositiu, les durades transcorregudes i altres temps declarats per la font es mantenen separats de la marca de temps d'entrada d'Observanda. El temps desconegut es manté desconegut. Els valors es mantenen com a text amb la representació original; introduir un nombre no infereix cap base, unitat ni conversió."
+          ]
+        },
+        {
+          "id": "assessments",
+          "title": "Avalua criteris i inspecciona canvis",
+          "paragraphs": [
+            "{ui:attempts.addAssessment} selecciona una revisió exacta de preparació i un criteri. Registra el valor observat, el denominador aplicable, l'actor, la font, el temps avaluat, el motiu i les revisions exactes d'evidències o d'anàlisi. Tria complert, no complert, sense resoldre, no disponible o sense avaluar, i afegeix opcionalment un resultat específic del domini. Una adquisició completa pot coexistir amb un criteri de reconeixement sense resoldre.",
+            "Els fets desats no es poden sobreescriure. {ui:attempts.correct} afegeix una correcció que identifica l'esdeveniment o l'avaluació anteriors; els fets anteriors continuen sent consultables. Una avaluació d'un criteri esmenat és una avaluació nova d'aquella revisió de preparació, no una substitució del resultat del criteri anterior. Restaurar text narratiu anterior també manté l'historial de preparacions, esdeveniments i avaluacions registrats. Les addicions simultànies independents es poden fusionar. Les esmenes o correccions en conflicte requereixen revisió: conserva els fets desats i afegeix una altra correcció, o cancel·la per conservar el punt de recuperació inacabat.",
+            "Obre la comparació paginada d'execucions de la investigació per inspeccionar condicions estructurades, esdeveniments i resultats de criteris al costat de les condicions narratives i revisions de mètodes existents. Els valors de paràmetres modificats es ressalten respecte de la primera execució de la pàgina mostrada. La procedència indicada, heretada i mesurada continua visible. La comparació no és una avaluació automàtica de fiabilitat o independència.",
+            "Un registre publicat inclou les preparacions, els esdeveniments i les avaluacions d'autor, incloses les distincions i les correccions. Les referències a registres privats, revisions exactes de registre no disponibles i evidències privades es retenen abans de renderitzar. La publicació no exposa els fitxers originals d'evidències. Revisa la previsualització pública abans de compartir; seleccionar un registre també selecciona els valors, noms i explicacions d'autor de les evidències dels seus intents."
+          ]
+        }
+      ]
+    },
+    {
       "id": "getting-started",
       "title": "Projectes i llibres de laboratori",
       "sections": [
         {
-          "id": "structure",
-          "title": "Organitzeu l’espai de treball",
+          "id": "refresh",
+          "title": "Mostra els canvis desats en altres llocs",
           "paragraphs": [
-            "Un espai de treball conté projectes, i els projectes contenen llibres de laboratori. Feu servir el botó més al costat de Projectes per crear un projecte. Doneu-li un nom, trieu-ne el pare i seleccioneu una plantilla predeterminada si us és útil. Crear un projecte no requereix editar cap plantilla.",
-            "Obriu el projecte i trieu New lab book. La plantilla del projecte queda seleccionada inicialment; el desplegable permet triar-ne una altra de disponible. Poseu nom al llibre i deseu-lo. Els llibres d’un mateix projecte poden utilitzar plantilles diferents."
+            "Observanda comprova si hi ha canvis desats a l'espai de treball mentre la finestra és visible i quan hi tornes. Els projectes, llibres de laboratori i registres nous apareixen sense reiniciar. Fes clic al logotip d'Observanda per actualitzar immediatament la pàgina actual; la seva etiqueta accessible és {ui:workspaceRead.refreshLabel}.",
+            "Les edicions no desades i els diàlegs oberts es mantenen al seu lloc quan arriba contingut desat més recent. Acaba i desa el treball, o descarta'l deliberadament, i tanca el diàleg i actualitza. Si un altre autor ha canviat el mateix registre, el desament utilitza el flux habitual de revisió de canvis. Una actualització fallida manté la vista actual i permet tornar-ho a provar des del logotip. Aquesta actualització llegeix l'espai de treball actual; no sincronitza ordinadors separats ni publica contingut."
+          ]
+        },
+        {
+          "id": "setup",
+          "title": "Crea o obre un espai de treball",
+          "paragraphs": [
+            "Utilitza {ui:setup.createTitle} per a un espai de treball nou o {ui:access.openExisting} per a un que ja tinguis. Durant la configuració, introdueix el nom de l'espai de treball, selecciona els tipus de llibre de laboratori que vols tenir disponibles i tria una carpeta d'emmagatzematge i un mètode de protecció. {ui:setup.back} i {ui:setup.continue} mantenen les opcions mentre passes entre els passos.",
+            "{ui:setup.useDevice} desbloqueja mitjançant un compte autoritzat del sistema operatiu quan s'admet. {ui:setup.usePassword} requereix contrasenyes coincidents de com a mínim 12 caràcters. Després de crear-lo, configura una clau de recuperació separada a {ui:preferences.storage}. Es pot obrir l'Ajuda durant la configuració sense enviar el formulari; {ui:help.returnToForm} manté el pas actual i els valors introduïts."
+          ]
+        },
+        {
+          "id": "structure",
+          "title": "Organitza l'espai de treball",
+          "paragraphs": [
+            "Un espai de treball conté projectes, i els projectes contenen llibres de laboratori. Utilitza el botó de suma al costat de Projectes per crear un projecte. Dona-li un nom, tria'n el pare i selecciona una plantilla de llibre de laboratori per defecte si és útil. Crear un projecte no requereix editar cap plantilla.",
+            "Obre el projecte i tria Llibre de laboratori nou. Inicialment se selecciona la plantilla triada del projecte; el desplegable et permet triar una altra plantilla disponible. Introdueix el nom del llibre i desa'l. Els llibres d'un mateix projecte poden utilitzar plantilles diferents."
           ]
         },
         {
           "id": "templates",
-          "title": "Trieu i personalitzeu plantilles",
+          "title": "Tria i personalitza plantilles",
           "paragraphs": [
-            "Activeu més tipus de llibres a Preferències → {ui:preferences.templates}. Aquests tipus opcionals proporcionen plantilles; l’espai de treball, els projectes i els llibres sempre estan disponibles. Desactivar un tipus conserva els llibres i els registres existents.",
-            "Feu servir l’editor de plantilles dedicat per personalitzar tipus de registre, orientacions i camps. Els canvis de plantilla no reescriuen els valors dels registres existents. Separeu els prototips de programari dels experiments físics amb PCB quan necessitin estructures diferents."
+            "Activa tipus addicionals de llibre de laboratori a Preferències → {ui:preferences.templates}. Aquests tipus opcionals proporcionen plantilles; l'espai de treball, els projectes i els llibres de laboratori sempre estan disponibles. Desactivar un tipus conserva els llibres i els registres existents.",
+            "Utilitza l'editor dedicat de plantilles per personalitzar tipus de registre, orientacions i camps. Els canvis en una plantilla no reescriuen els valors dels registres existents. Mantén els prototips de programari i els experiments físics amb PCB en llibres separats quan les estructures de registre difereixin."
+          ]
+        },
+        {
+          "id": "dashboard-types",
+          "title": "Filtra les targetes del tauler per tipus de registre",
+          "paragraphs": [
+            "Obre la configuració d'una targeta i tria {ui:dashboardChoices.recordType}. Les opcions apareixen en pàgines alfabètiques; cerca pel nom o utilitza {ui:dashboardChoices.next} i {ui:dashboardChoices.previous} per explorar-les. La llista inclou els tipus conservats als registres dels projectes i llibres de laboratori triats, inclosos els tipus que ja no s'ofereixen per a registres nous.",
+            "El tipus seleccionat continua visible mentre cerques o explores altres opcions. Canviar l'àmbit de projecte o de llibre de laboratori actualitza les opcions; una selecció no disponible continua seleccionada fins que tries un altre tipus o {ui:dashboardChoices.allTypes}. Una cerca fallida no canvia el filtre desat. Tanca la configuració per tornar al tauler."
           ]
         }
       ]
@@ -28,18 +310,36 @@
       "sections": [
         {
           "id": "writing",
-          "title": "Escriviu i connecteu registres",
+          "title": "Escriu i connecta registres",
           "paragraphs": [
-            "Obriu un llibre i trieu New record. Seleccioneu un tipus, poseu un títol descriptiu i ompliu les seccions pertinents. Deseu abans de sortir. Els títols, textos, nombres i evidències escrits pels usuaris no es tradueixen en canviar la llengua de la interfície.",
-            "Connecteu treballs relacionats amb enllaços de recerca. Un enllaç actual segueix el registre vigent. Una referència exacta a un mètode identifica la revisió seguida. Creeu registres individuals per a les repeticions o preses i documenteu paràmetres modificats, desviacions i resultats incomplets."
+            "Obre un llibre de laboratori i tria Registre nou. Selecciona un tipus de registre, utilitza un títol descriptiu i emplena les seccions rellevants per al teu treball. Desa el registre abans de sortir. Els títols, la prosa, els nombres i les evidències escrits per l'usuari mai no es tradueixen quan canvies la llengua de la interfície.",
+            "Utilitza enllaços de recerca per connectar treballs relacionats. Un enllaç actual ordinari segueix el registre actual. Una referència exacta de mètode identifica la revisió seguida per una execució. Crea registres individuals d'execució o presa per a les repeticions i documenta els paràmetres modificats, les desviacions i els resultats incomplets."
           ]
         },
         {
           "id": "history",
-          "title": "Consulteu l’historial i els enllaços",
+          "title": "Llegeix l'historial i el treball enllaçat",
           "paragraphs": [
-            "Obriu l’historial des del mateix registre per inspeccionar versions desades. Restaurar crea una versió actual d’aquell registre; els altres registres no canvien. Reviseu el contingut restaurat abans de compartir-lo.",
-            "Seguiu els enllaços a mètodes, evidències i registres relacionats. Una comprovació de programari reeixida no demostra una execució física, ni una única execució reeixida demostra repetibilitat. Registreu aquests esdeveniments i conclusions per separat."
+            "Obre l'historial des del mateix registre per inspeccionar les versions desades. Restaurar crea una versió actual d'aquell registre; els registres no relacionats es mantenen sense canvis. Revisa el contingut restaurat abans de compartir-lo.",
+            "Segueix els mètodes, les evidències i els registres relacionats enllaçats per llegir el context. Una comprovació correcta de programari no estableix una execució física, i una execució correcta no estableix repetibilitat. Registra aquests esdeveniments i conclusions per separat."
+          ]
+        },
+        {
+          "id": "type-filters",
+          "title": "Cerca registres per tipus",
+          "paragraphs": [
+            "Utilitza {ui:recordTypes.filter} en una llista de registres per veure la primera pàgina dels tipus disponibles. Tria {ui:recordTypes.find} per cercar o recórrer més opcions del projecte o llibre de laboratori actual. El tipus seleccionat continua visible encara que sigui fora de la primera pàgina.",
+            "{ui:recordTypes.cancel} manté el filtre actual sense canvis. Si una cerca falla, {ui:recordTypes.retry} la repeteix. {ui:recordViews.title} et permet desar el tipus juntament amb els filtres i l'àmbit actuals, i tornar a obrir aquella vista més endavant."
+          ]
+        },
+        {
+          "id": "draft-recovery",
+          "title": "Recupera treball de registre inacabat",
+          "paragraphs": [
+            "Tria {ui:recordDrafts.reviewDrafts} quan Observanda trobi punts de recuperació de registres no desats. La llista mostra deu esborranys cada vegada. Utilitza {ui:recordDrafts.next} i {ui:recordDrafts.previous} per explorar-los, o {ui:recordDrafts.refresh} per veure els canvis recents. Tancar la llista conserva tots els esborranys.",
+            "{ui:recordDrafts.review} obre el punt de recuperació seleccionat per comparar-lo amb el registre desat. Tria {ui:recordRecovery.continueEditing} per recuperar el treball combinat a l'editor i revisa'l abans de desar. Un punt de recuperació no és un registre desat. Si no es pot emmagatzemar el punt nou, mantén la finestra oberta i utilitza {ui:recordDrafts.retryCheckpoint}; la còpia original de recuperació continua disponible.",
+            "Els punts de recuperació més grans carreguen els registres seleccionats per lots. {ui:recordSelection.retry} continua una càrrega interrompuda; {ui:recordSelection.cancel} manté l'editor i el punt de recuperació. Després d'un desament correcte, el diàleg de càrrega indica que els registres s'han desat. Repetir aquella càrrega no envia un altre desament. Si la cancel·les, torna a utilitzar Desa per comparar l'editor amb les versions desades abans de continuar.",
+            "Un esborrany encara pot estar obert en una altra finestra. {ui:recordDrafts.discard} demana {ui:recordDrafts.confirm} abans d'eliminar un punt de recuperació. Si ha canviat des que es va carregar la llista, actualitza i torna'l a revisar. Una neteja fallida després de desar deixa intacte el registre desat i accessible el punt de recuperació restant."
           ]
         }
       ]
@@ -50,18 +350,42 @@
       "sections": [
         {
           "id": "originals",
-          "title": "Conserveu els fitxers originals",
+          "title": "Conserva els fitxers originals",
           "paragraphs": [
-            "Adjunteu evidències des dels controls del registre. Poseu-hi un títol descriptiu i indiqueu-ne la procedència. Les captures binàries, el codi font i les exportacions d’instruments són evidències encara que no tinguin previsualització. Conserveu els bytes originals separats dels mitjans convertits i les dades derivades.",
-            "Un hash identifica els bytes, però no demostra exactitud ni autoria. Si una importació s’interromp, comproveu-ne l’estat i utilitzeu els controls de recuperació oferts abans de crear una altra còpia. Recupereu l’original per examinar-lo amb una eina externa adequada."
+            "Adjunta evidències mitjançant els controls d'evidències del registre. Dona'ls un títol descriptiu i procedència. Les captures binàries, els fitxers d'origen i les exportacions d'instruments són evidències encara que no tinguin previsualització visual. Conserva els bytes originals separadament dels fitxers multimèdia convertits i dels conjunts de dades derivats.",
+            "L'empremta d'un fitxer identifica els seus bytes; no demostra exactitud ni autoria. Si una càrrega s'interromp, torna a obrir les evidències del registre, tria {ui:evidenceUpload.resumeUpload} i selecciona el mateix fitxer original. Observanda comprova els bytes ja rebuts abans de continuar. Un fitxer modificat es rebutja sense substituir els fragments desats. Quan acabi la verificació, descarrega l'original conservat per inspeccionar-lo amb una eina externa adequada.",
+            "Utilitza {ui:evidenceIntake.heading} per mantenir junts els fitxers originals relacionats. Carrega'ls i tria {ui:evidenceIntake.finish}. Fins que no es completen la verificació i l'adjunció, els fitxers es mantenen a {ui:evidenceIntake.unfinished}. Després d'una interrupció, continua aquell conjunt i torna a seleccionar-ne els fitxers originals. Si el manifest és incomplet, torna a seleccionar el conjunt complet; altrament, pots seleccionar només els fitxers restants. Els fitxers idèntics continuen mantenint identitats d'adquisició separades."
           ]
         },
         {
           "id": "analysis",
-          "title": "Distingiu les dades de la interpretació",
+          "title": "Mantén separats els conjunts de dades i les interpretacions",
           "paragraphs": [
-            "Conserveu el conjunt de dades independentment de la figura. Manteniu unitats, significat dels valors absents, exclusions i identitats de fila. Declareu explícitament les representacions no decimals i els enters grans exactes; no els convertiu silenciosament en nombres decimals ordinaris.",
-            "Vinculeu l’anàlisi a entrades, paràmetres i versions exactes del mètode o eina. Conserveu els resultats revisats separats dels anteriors. Reviseu figures i conclusions dependents si canvien les entrades. Els resums calculats i els valors editats manualment tenen procedències diferents."
+            "Conserva un conjunt de dades independentment d'una figura. Mantén les unitats, els significats dels valors absents, les exclusions i les identitats de fila. Declara explícitament les representacions no decimals i els enters grans exactes; no els transformis silenciosament en nombres decimals ordinaris.",
+            "Utilitza {ui:materialAnalysis.analysisHeading} per registrar l'eina, la versió, el procediment i les entrades exactes. {ui:materialAnalysis.choose} cerca resums de registres desats sense sortir del formulari d'anàlisi. Tria un resultat per conservar-ne la revisió exacta. Si ha canviat des de la cerca, actualitza i torna'l a triar. Cancel·la tanca només la cerca; els camps d'anàlisi i les seleccions d'evidències es mantenen al seu lloc. Per a les seleccions d'evidències, utilitza {ui:materialSources.more} per explorar més resultats i {ui:materialSources.moreSelected} per revisar les fonts triades. Les seleccions mantenen les revisions exactes entre cerques. Desar una col·lecció o anàlisi transfereix la selecció per lots; un desament interromput apareix al treball inacabat i es pot continuar. Les edicions posteriors del mètode seleccionat no canvien l'entrada conservada. Mantén separats els resultats revisats i revisa les figures i conclusions dependents quan canviïn les entrades. Els resums generats i els valors editats manualment tenen procedències diferents."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sample-analysis",
+      "title": "Mostres, resultats i revisió local",
+      "sections": [
+        {
+          "id": "records",
+          "title": "Cerca una mostra o un resultat",
+          "paragraphs": [
+            "Obre {ui:sampleAnalysis.title} i utilitza {ui:sampleAnalysis.register} per registrar el codi, el material, la font i les dates d'una mostra. Tria {ui:sampleAnalysis.recordAnalysis} per introduir un resultat. {ui:sampleAnalysis.findSample} cerca les mostres disponibles; recórrer les pàgines del selector manté els camps de resultat que has introduït.",
+            "Les mostres, les anàlisis, la cua de revisió i els resultats arxivats tenen llistes separades. Utilitza {ui:sampleAnalysis.search}, {ui:sampleAnalysis.next} i {ui:sampleAnalysis.previous} per explorar-les. Obre un resultat per editar-ne els camps. Una petició de llista interrompuda manté la pàgina anterior; {ui:sampleAnalysis.retry} la repeteix. {ui:sampleAnalysis.refresh} mostra els registres més recents. Les targetes del tauler utilitzen les mateixes llistes paginades."
+          ]
+        },
+        {
+          "id": "review",
+          "title": "Revisa i esmena un resultat",
+          "paragraphs": [
+            "Tria {ui:sampleAnalysis.submit} per desar el resultat actual i posar-lo a la cua de revisió. {ui:sampleAnalysis.reviewResult} registra el nom, la decisió i el comentari del revisor. Són reconeixements locals, no signatures electròniques autenticades.",
+            "Un resultat aprovat proporciona {ui:sampleAnalysis.print}. Aquell full conserva la revisió aprovada després d'esmenes posteriors. Utilitza {ui:sampleAnalysis.amend} i indica el motiu abans de canviar un resultat enviat o aprovat. Els resultats arxivats continuen sent llegibles.",
+            "Desplega {ui:sampleAnalysis.history} en un resultat i tria {ui:sampleAnalysis.loadHistory}. L'historial carrega vint esdeveniments per pàgina; explorar-lo manté intactes els camps de resultat inacabats. Les dades d'anàlisi de mostres es mantenen privades i s'exclouen del lloc web."
           ]
         }
       ]
@@ -71,63 +395,286 @@
       "title": "Inventari i components de prototips",
       "sections": [
         {
+          "id": "drafts",
+          "title": "Recupera treball inacabat de les eines",
+          "paragraphs": [
+            "Si una eina té punts de recuperació inacabats, {ui:moduleRecovery.heading} en mostra deu cada vegada. Utilitza {ui:moduleRecovery.next} i {ui:moduleRecovery.previous} per explorar-los, o {ui:moduleRecovery.refresh} per veure punts més recents. {ui:moduleRecovery.retry} repeteix una petició de pàgina fallida; manté el formulari actual i l'última llista disponible.",
+            "{ui:moduleRecovery.restore} obre el punt de recuperació seleccionat per editar-lo. Observanda desa una còpia de recuperació nova abans d'eliminar aquell punt d'origen. Desa l'element recuperat quan n'estiguis satisfet. Els altres elements inacabats continuen disponibles a Esborranys. {ui:moduleRecovery.discard} elimina només la còpia de recuperació seleccionada; cal actualitzar una còpia modificada en una altra finestra abans de poder-la descartar."
+          ]
+        },
+        {
+          "id": "history",
+          "title": "Llegeix les revisions desades d'un element",
+          "paragraphs": [
+            "Obre un element d'inventari, una tasca, un càlcul o un altre element d'eina i tria Historial. {ui:moduleHistory.heading} mostra vint resums de revisió cada vegada. Utilitza {ui:moduleHistory.next} i {ui:moduleHistory.previous} per explorar-los, o {ui:moduleHistory.first} per tornar al principi. Obre una revisió per inspeccionar-ne els camps desats; {ui:moduleHistory.close} retorna el focus al botó d'aquella revisió.",
+            "Llegir l'historial manté l'esborrany actual. Torna a Detalls per continuar editant. Els desaments nous no mouen la pàgina d'historial que estàs llegint; utilitza {ui:moduleHistory.refresh} per veure'ls. Si no es pot carregar una pàgina o revisió, {ui:moduleHistory.retry} repeteix aquella petició sense desar ni descartar l'esborrany."
+          ]
+        },
+        {
           "id": "ownership",
           "title": "Propietat i assignació",
           "paragraphs": [
-            "L’inventari pertany a l’espai de treball. Un article pot quedar sense assignar a cap projecte. Assignar quantitats indica a quins projectes es destinen els recursos; no crea una còpia addicional de les existències. Activeu Inventory a Mòduls per utilitzar-ne la vista dedicada.",
-            "Creeu articles amb noms, unitats i quantitats significatius. Distingiu la ubicació física de l’assignació a un projecte. Per exemple, 100 components repartits entre dos projectes continuen sumant 100 components a l’espai de treball."
+            "L'inventari pertany a l'espai de treball. Un element pot romandre sense assignar a cap projecte. Assignar quantitats a projectes registra on s'assignen els recursos; no crea una còpia addicional de les existències en propietat. Activa Inventari a Mòduls per utilitzar-ne la vista dedicada.",
+            "Crea elements amb noms, unitats i quantitats significatius. Mantén la ubicació física d'emmagatzematge separada de l'assignació a projectes. Per exemple, 100 components en propietat repartits entre dos projectes continuen sumant 100 components a l'espai de treball.",
+            "Les categories defineixen camps reutilitzables d'elements. Els esquemes grans mostren deu camps per pàgina; utilitza {ui:moduleFields.findFields} per localitzar un camp. Les definicions d'opcions i les opcions dels elements mostren vint opcions per pàgina, amb {ui:moduleFields.findChoices} per cercar. Canviar de pàgina conserva les edicions i els valors seleccionats. Si un camp obligatori d'una altra pàgina és incomplet, el desament et porta a aquell camp. Els elements existents mantenen la versió de categoria desada fins que apliques explícitament els camps actuals de la categoria."
           ]
         },
         {
           "id": "usage",
-          "title": "Feu seguiment de l’ús i la disponibilitat",
+          "title": "Segueix l'ús i la disponibilitat",
           "paragraphs": [
-            "Connecteu les llistes de materials dels prototips amb articles d’inventari. Registreu les quantitats realment utilitzades i distingiu-les de la demanda prevista i les reserves. Una BOM és un pla, no una prova de consum.",
-            "Reviseu les quantitats disponibles i utilitzades abans d’un altre muntatge. Registreu substitucions i resultats de muntatge a l’experiment per poder entendre l’elecció dels components juntament amb els resultats."
+            "Utilitza {ui:moduleReferences.chooseResearch} en una eina, tasca o element d'inventari per cercar registres desats, llibres de laboratori o projectes. Els resultats de cerca estan paginats; seleccionar un enllaç manté l'esborrany de l'element al seu lloc. Els registres no disponibles conserven les referències, i {ui:moduleReferences.retry} repeteix una cerca de títol interrompuda sense canviar les edicions.",
+            "En una llista de materials, {ui:moduleReferences.prototype} obre la mateixa cerca de registres. Desar fixa la revisió de l'execució seleccionada. Revisa una execució modificada abans de reservar existències. Connecta les llistes de materials dels prototips amb elements d'inventari. Registra les quantitats realment utilitzades i distingeix-les de la demanda planificada i de les reserves. Una llista de materials és un pla; no demostra que s'hagin consumit els components.",
+            "Revisa les quantitats disponibles i utilitzades abans d'un altre muntatge. Mantén les substitucions i els resultats del muntatge al registre de l'experiment perquè es pugui entendre la tria de components juntament amb els resultats."
           ]
         }
       ]
     },
     {
       "id": "publishing",
-      "title": "Dissenyeu i publiqueu un web",
+      "title": "Dissenya i publica un lloc web",
       "sections": [
         {
-          "id": "design",
-          "title": "Construïu i reviseu les pàgines",
+          "id": "project-websites",
+          "title": "Llocs web de projecte separats",
           "paragraphs": [
-            "Obriu Website editor per triar pàgines i ordenar seccions. Creeu una pàgina inicial si la voleu. Feu servir la pestanya Page per construir l’estructura i el control d’edició dedicat per modificar la secció seleccionada. Deseu abans de preparar una publicació.",
-            "Trieu a Content què pot ser públic. El llenç de treball pot mostrar contingut no publicat: no és l’edició pública. Feu servir {ui:websiteEditor.readingPreview} per comprovar els canvis sense desar el web. Quan estiguin a punt, feu servir {ui:websiteEditor.prepareEdition} per preparar l’edició que voleu exportar."
+            "Tria {ui:websiteSites.title} damunt de l'editor del lloc web i després {ui:websiteSites.new} per donar nom a un lloc web. Crea llocs web separats per a públics o destinacions diferents, com ara un diari de recerca i un lloc d'ajuda. Tria el contingut de cada lloc web per separat.",
+            "Cada lloc web té les seves pròpies pàgines, disseny, opcions de contingut públic, destinació de publicació i edicions conservades. Els llocs web nous comencen sense cap registre seleccionat per publicar. Tria registres a Contingut públic i desa el lloc web. Aquestes opcions no canvien els originals de recerca ni la selecció d'un altre lloc web.",
+            "El nom del lloc web continua visible damunt de l'editor i dels controls de publicació. Obre {ui:websiteSites.destination} per triar un repositori i una branca de GitHub o un directori d'allotjament SSH dedicat per a aquest lloc web. Utilitza un repositori, una carpeta de lloc web o un directori d'allotjament separats per a cada lloc independent. Revisa i publica cada edició explícitament; crear llocs web o canviar entre ells no desplega res.",
+            "El lloc web existent de l'espai de treball continua disponible a {ui:websiteSites.title}. Per crear un altre lloc web de projecte, torna a aquella llista. Els canvis del lloc web desats en altres llocs es poden actualitzar des del logotip d'Observanda; les edicions no desades es mantenen protegides."
+          ]
+        },
+        {
+          "id": "appearance",
+          "title": "Tria tipografies, colors i disposició",
+          "paragraphs": [
+            "A Preferències, obre {ui:appearance.title} per triar un tema, colors i tipografies. {ui:appearance.saveAs} conserva un disseny amb nom en aquest espai de treball; {ui:appearance.saveAppearance} desa els canvis actuals. La mida del text de l'aplicació, la disposició dels menús i l'alineació de la capçalera són paràmetres personals d'aquest ordinador, independents del text i la disposició del lloc web.",
+            "Utilitza {ui:appearance.previewContent} per canviar entre exemples ficticis i contingut desat seleccionat per al lloc web. La previsualització aplica l'aparença actual sense desar-la ni crear una versió revisada. {ui:appearance.previewPage} tria una pàgina; {ui:appearance.retryPreview} repeteix una previsualització interrompuda sense descartar les edicions. Revisa i publica per separat des de Publicació o l'editor del lloc web.",
+            "A {ui:fonts.title}, carrega un fitxer TTF, OTF, WOFF o WOFF2. Les tipografies variables mostren {ui:fonts.variableSettings}. Permet la incrustació al lloc web només quan la llicència de la tipografia ho permeti. Amagar una tipografia dels selectors manté intactes el text existent i les edicions desades."
+          ]
+        },
+        {
+          "id": "design",
+          "title": "Construeix i revisa pàgines",
+          "paragraphs": [
+            "Obre l'editor del lloc web per triar pàgines i organitzar seccions. Crea una pàgina inicial si en vols una. Utilitza la pestanya Pàgina per construir l'estructura i després el control d'edició dedicat per canviar una secció seleccionada. Desa els canvis del lloc web abans de preparar una versió.",
+            "Tria quin contingut pot ser públic a {ui:websiteEditor.content}. El llenç d'edició pot mostrar contingut no publicat. Utilitza {ui:websiteEditor.readingPreview} per explorar l'esborrany actual sense desar el lloc web ni preparar una edició. Utilitza {ui:websiteEditor.prepareEdition} per separat per preparar contingut per exportar-lo o publicar-lo.",
+            "Utilitza {ui:websiteContent.search} a Contingut públic per cercar un projecte o registre. Les llistes de projectes i registres tenen controls de pàgina separats. Desplega la fila Multimèdia d'un registre per seleccionar adjunts i la portada de la targeta. Inclou totes les entrades s'aplica a tot el projecte, inclosos els registres fora de la cerca o pàgina actuals.",
+            "A la biblioteca multimèdia, utilitza {ui:websiteMedia.search} i {ui:websiteMedia.kind} per cercar fitxers carregats. Els selectors d'imatges i de contingut multimèdia de recerca ofereixen {ui:websiteMedia.find} per a biblioteques més grans. Triar contingut multimèdia et retorna al mateix element. Les opcions de galeria continuen seleccionades entre cerques i pàgines; organitza'n l'ordre de visualització a la llista d'imatges seleccionades. Triar contingut multimèdia de recerca no fa públic cap registre o adjunt privat.",
+            "A {ui:websiteEditor.page}, tria {ui:websiteEditor.area} per treballar en el contingut de la pàgina, una barra lateral o el peu de pàgina. Crea un disseny o reutilitza'n un d'existent. Els seus elements utilitzen els mateixos controls de text, multimèdia, disposició i estil que la pàgina. Utilitza el control Edita dedicat i després Enrere per tornar sense canviar de pàgina.",
+            "{ui:websiteEditor.default} aplica una barra lateral o un peu a les pàgines que utilitzen el valor per defecte del lloc, incloses les pàgines futures. {ui:websiteEditor.choosePages} obre una llista de pàgines amb cerca. Tria un tipus de pàgina, cerca un títol i marca o desmarca la seva assignació. {ui:websitePages.done} torna al disseny; Desa el lloc web desa els canvis. Les edicions compartides afecten totes les pàgines que utilitzen aquell disseny; {ui:websiteEditor.copy} crea una composició independent, inclosa la configuració de presentació de les imatges. Eliminar un disseny l'elimina de totes les pàgines assignades i es pot desfer abans de desar.",
+            "Un element {ui:websiteEditor.contents} enllaça els encapçalaments de secció visibles de la pàgina actual mitjançant ancoratges estables. La mateixa barra lateral adapta l'índex a cada pàgina. Les seccions ocultes o excloses no entren a l'índex publicat. Estableix la posició, l'amplada i el comportament de desplaçament de la barra lateral a {ui:websiteEditor.appearance}; les pantalles estretes col·loquen la barra lateral abans del contingut.",
+            "Els enllaços d'imatges i de botons ofereixen {ui:websitePages.chooseLink}. Cerca una pàgina sense sortir del disseny actual o introdueix directament una adreça externa. Triar una destinació té el seu propi pas de desfer. Els enllaços de text utilitzen la cerca de Configuració de l'enllaç.",
+            "Crea un disseny de peu de pàgina per organitzar text, imatges, enllaços i contenidors. El text existent del peu inicialitza el primer element de text. Fet amb Observanda es manté al final del mateix peu, utilitzant-ne la superfície, el color del text i l'alineació. Si barreges deliberadament alineacions, el crèdit segueix l'últim bloc de text visible. Només se centra quan no hi ha cap peu d'autor. Desa, torna a obrir i revisa el lloc web exportat abans de publicar."
+          ]
+        },
+        {
+          "id": "local-export",
+          "title": "Exporta a un lloc web local existent",
+          "paragraphs": [
+            "A Publicació, prepara i revisa el lloc web i tria {ui:publication.localExport}. Tria l'arrel del lloc web existent o una subcarpeta dedicada. Els enllaços relatius admeten totes dues ubicacions. Utilitza {ui:localExport.review} per inspeccionar cada fitxer de sortida afegit, actualitzat, eliminat i sense canvis abans de confirmar {ui:localExport.apply}.",
+            "La primera exportació mai no sobreescriu fitxers existents. Les exportacions posteriors actualitzen o eliminen només fitxers escrits anteriorment en aquella carpeta exacta per aquest espai de treball. Un fitxer canviat o eliminat manualment és un conflicte: restaura el fitxer esperat, mou-lo tu mateix o selecciona una altra carpeta i torna a revisar. Les pàgines no relacionades i l'historial Git es mantenen intactes. No es crea cap commit ni es fa cap enviament o càrrega automàticament.",
+            "Exporta a una còpia local i carrega-la només després de completar l'exportació. Els fitxers es verifiquen abans del canvi, però tota la carpeta no pot canviar atòmicament al costat de fitxers no relacionats. Durant una interrupció pot contenir una edició parcial i fitxers temporals de sortida pública. Torna a obrir la mateixa edició des de Preparacions del lloc web, tria Exporta a una carpeta local i utilitza Reprèn l'exportació. La revisió desada i el diari de recuperació es mantenen xifrats a l'espai de treball. Descarta la preparació està disponible abans que comenci el canvi de fitxers; després, reprèn l'edició fixada abans de preparar una altra exportació a aquella carpeta.",
+            "Conserva l'espai de treball i les còpies de seguretat: mantenen els justificants de titularitat i recuperació de la destinació. Copiar només un lloc web no transfereix aquella titularitat a un altre espai de treball. Aquest flux requereix un sistema de fitxers local que admeti enllaços durs; els recursos compartits de xarxa i les carpetes servides directament en línia no són destinacions qualificades. Una exportació completada verifica els bytes al disc, no un desplegament allotjat ni la resistència a una pèrdua sobtada d'alimentació en totes les plataformes."
+          ]
+        },
+        {
+          "id": "repository-setup",
+          "title": "Configura un repositori de lloc web",
+          "paragraphs": [
+            "A Publicació, obre Configura la destinació, introdueix el propietari i el nom del repositori de GitHub, desa la destinació i tria {ui:githubConnection.signIn}. Completa l'autorització al navegador web. GitHub identifica l'auxiliar d'autorització com a Git Credential Manager. Observanda protegeix la credencial al magatzem de credencials d'aquest ordinador, separadament dels fitxers de l'espai de treball. Seigr no la rep ni la gestiona. Comprova la connexió verifica l'accés. Per a un repositori buit creat fora d'Observanda, revisa el repositori i la branca mostrats i tria {ui:repositorySetup.initialize}. Això crea només un fitxer .nojekyll buit al primer commit, conserva la visibilitat del repositori i prepara la branca de lloc web triada. No publica els registres ni configura Pages.",
+            "El compte seleccionat es torna a connectar després de reiniciar mitjançant el magatzem de credencials d'aquest ordinador. Utilitza {ui:githubConnection.choose} per canviar entre comptes desats, {ui:githubConnection.disconnect} per desconnectar aquest espai de treball o {ui:githubConnection.forget} per eliminar d'aquest ordinador la credencial d'Observanda del compte. Gestiona l'autorització a GitHub pot revocar l'accés o autoritzar una organització. Una credencial revocada requereix tornar a iniciar sessió. Els tokens temporals continuen disponibles a Avançat per a instal·lacions gestionades i caduquen de la memòria de l'aplicació en reiniciar. Si la inicialització s'interromp, comprova la connexió i tria {ui:repositorySetup.resume}. Observanda verifica la identitat del repositori i el seu propi commit inicial abans de continuar. Els canvis fets en altres llocs poden bloquejar la configuració i requerir una altra revisió de destinació. {ui:repositorySetup.stop} atura el treball addicional; no esborra cap commit ja creat. Després de configurar, revisa una edició seleccionada abans de carregar-la."
           ]
         },
         {
           "id": "release",
-          "title": "Publiqueu una edició aprovada",
+          "title": "Publica una edició aprovada",
           "paragraphs": [
-            "Manteniu les evidències privades i els detalls operatius fora de la selecció pública. Comproveu noms de fitxer, metadades, enllaços i dades de les figures, a més del text visible. Podeu explicar que les evidències no estan disponibles públicament sense revelar-ne les metadades privades.",
-            "Desar, generar, crear un commit, enviar i verificar el desplegament són estats diferents. Configureu la destinació a Publishing i seguiu el procés de revisió. Verifiqueu l’edició desplegada: un enviament reeixit no prova que el web s’hagi actualitzat. L’exportació estàtica també permet publicar sense un servei integrat."
+            "Mantén les evidències privades i els detalls operatius fora de les seleccions públiques. Comprova els noms de fitxer, les metadades, els enllaços i les dades incrustades de les figures, a més de la prosa visible. Pots redactar una explicació que indiqui que les evidències de suport no estan disponibles públicament sense exposar-ne les metadades privades.",
+            "Utilitza {ui:publication.selectionTitle} abans de preparar una edició. Desplega un registre per excloure'n el text principal, seccions seleccionades, camps de plantilla, adjunts o gràfics. Les opcions s'apliquen només a aquesta edició. Els registres que no canvies mantenen la selecció pública desada. Les taules exactes dels gràfics i les descàrregues CSV estan desactivades inicialment i requereixen una selecció explícita per a cada gràfic. Un gràfic per si mateix continua revelant els valors representats a través de l'SVG, les marques i les etiquetes; excloure un CSV no fa secrets aquests valors. Els conjunts de dades originals i els artefactes d'origen mai no s'inclouen automàticament. Les referències de recerca no disponibles s'enumeren a la revisió privada, i se n'exclouen les etiquetes i les destinacions de l'edició pública.",
+            "Desar, generar la sortida, crear commits, enviar canvis i verificar el desplegament són estats separats. A Publicació, configura la destinació i utilitza {ui:publication.reviewTitle} per preparar la selecció pública desada. {ui:publication.preparations} torna a obrir les edicions conservades; {ui:publication.continue} deixa la preparació en execució. La revisió torna a Publicació quan s'ha obert des d'allà. Els dissenys de lloc web no desats es poden inspeccionar amb {ui:websiteEditor.readingPreview}; {ui:websiteEditor.prepareEdition} inicia el flux separat de preparació. Verifica l'edició desplegada; un enviament correcte per si sol no estableix que el lloc web s'hagi actualitzat. L'exportació estàtica també admet publicació sense un allotjament integrat."
+          ]
+        },
+        {
+          "id": "repository-files",
+          "title": "Publica al costat d'un lloc web existent",
+          "paragraphs": [
+            "Configura la destinació inclou {ui:publication.websiteFolder}. Deixa-ho buit per a l'arrel del repositori o tria una carpeta com lab/field-notes. Si proporciones un URL públic del lloc web, fes-lo apuntar a aquella carpeta; altrament, la verificació de GitHub Pages inclou la carpeta automàticament. Canviar la carpeta inicia una destinació de publicació separada i deixa el lloc anterior al seu lloc.",
+            "Des del lloc web preparat, tria {ui:publication.repositoryReview} per inspeccionar les addicions, actualitzacions, eliminacions, fitxers del lloc web sense canvis i fitxers no relacionats que es conservaran. La revisió s'executa en segon pla i es pot tornar a obrir després de sortir de la pàgina o reiniciar. Una primera càrrega a una branca existent i qualsevol eliminació requereixen confirmació. Les actualitzacions ordinàries només canvien els fitxers publicats anteriorment a aquesta destinació per aquest espai de treball. Els fitxers existents idèntics es poden adoptar després de revisar-los; els fitxers diferents al mateix camí bloquegen la publicació ordinària. Conserva les còpies de seguretat de l'espai de treball: la titularitat dels fitxers és una metadada privada de l'espai de treball i no s'escriu al lloc web.",
+            "Per substituir un lloc web o una aplicació existent, desplega {ui:publication.replacementOptions} i tria {ui:publication.replacementReview}. Això proposa substituir la branca o carpeta seleccionada pel lloc web preparat i eliminar els fitxers de l'aplicació antiga i els fluxos de compilació dins d'aquell àmbit. Inspecciona les llistes d'eliminació i conservació abans d'aprovar. Els fitxers CNAME, de llicència, de còpia, de drets d'autor i d'avisos existents es conserven exactament, igual que els fitxers fora de la carpeta seleccionada. Un camí exportat en conflicte continua bloquejat. El domini personalitzat i la configuració HTTPS existents de Pages es mantenen en configurar Pages.",
+            "Opcionalment, introdueix un nom de branca d'arxiu no utilitzat abans de revisar la substitució. Observanda crea aquella branca al commit original revisat abans d'actualitzar la branca de publicació. Un nou intent verifica un arxiu ja creat per la mateixa operació. Les branques existents mai no se sobreescriuen. Crear una branca d'arxiu pot activar fluxos de treball del repositori. Amb branca d'arxiu o sense, la substitució crea un commit nou i conserva l'historial Git anterior.",
+            "Si un fitxer publicat anteriorment ha canviat fora d'Observanda, una actualització ordinària s'atura. Restaura els fitxers esperats, tria una altra carpeta de publicació o revisa explícitament una substitució completa. Una branca modificada invalida la revisió anterior, i els conflictes de fitxers protegits no es poden superar amb una aprovació. Actualitzar la revisió requereix una aprovació nova del repositori.",
+            "Les càrregues i els nous intents utilitzen l'arbre de repositori revisat. Després d'un enviament interromput, torna a connectar GitHub i reprèn per reconciliar-ne el resultat. Els fitxers es verifiquen abans d'avançar la branca; la verificació del lloc web en línia és un pas separat. Els fluxos de treball existents del repositori es poden executar quan canvia la seva branca. Eliminar un fitxer publicat no esborra l'historial Git anterior, les memòries cau de l'allotjament ni les còpies conservades pels visitants."
+          ]
+        },
+        {
+          "id": "historical-editions",
+          "title": "Publica un mètode o resultat històric exacte",
+          "paragraphs": [
+            "A {ui:publication.selectionTitle}, desplega un registre que faci una referència i tria {ui:publication.reviewReferences}. Llegeix el text i els camps conservats abans d'activar {ui:publication.selectionInclude}. Pots seleccionar parts individuals i excloure les dades dels gràfics de manera independent. Torna a revisar les revisions referenciades dins d'un registre històric per seguir-ne les dependències; {ui:publication.referenceBack} retorna al registre que hi fa referència amb les opcions intactes. Una referència mai no concedeix permís de publicació automàticament.",
+            "Les pàgines històriques porten una etiqueta de revisió i un URL estable derivat d'aquella revisió exacta. No substitueixen la pàgina del registre actual ni afegeixen targetes duplicades a l'índex públic d'exploració. Les edicions actuals no alteren les edicions conservades. Quan preparis una altra edició, inclou explícitament les revisions anteriors que hagin de continuar al lloc web en línia.",
+            "Per a una referència exclosa o no disponible, introdueix {ui:publication.availabilityLabel} si vols una explicació pública. És text públic d'autor: no hi incloguis noms, ubicacions ni detalls operatius privats. La referència exclosa no aporta cap identificador, títol ni destinació públics."
+          ]
+        },
+        {
+          "id": "legacy-links",
+          "title": "Conserva adreces i fragments de capítols antics",
+          "paragraphs": [
+            "Obre {ui:publication.legacyLinks} a Publicació. Afegeix cada camí HTML relatiu antic, el títol públic de la pàgina i una correspondència per a cada fragment. Tria el registre de destinació individual i si l'enllaç segueix la seva versió actual seleccionada o anomena la revisió exacta desada. Totes les etiquetes d'aquí són text públic. Desar les correspondències no les publica.",
+            "La preparació comprova cada correspondència contra l'edició seleccionada. Les destinacions absents, els camins o fragments duplicats i els conflictes amb pàgines generades bloquegen la preparació i identifiquen l'adreça afectada. Corregeix la correspondència o inclou la revisió exacta referenciada abans de tornar a preparar. Un capítol amb diversos experiments es converteix en una pàgina de continguts estàtica amb destinacions de fragment i enllaços diferenciats; no redirigeix tots els fragments a un sol registre.",
+            "Els conflictes existents de fitxers del repositori continuen requerint resolució. Una correspondència antiga no autoritza a substituir fitxers no relacionats o editats externament en aquella adreça. Inspecciona la revisió de fitxers del repositori abans de confirmar una càrrega."
+          ]
+        },
+        {
+          "id": "publication-recovery",
+          "title": "Recupera una càrrega o restaura una edició anterior",
+          "paragraphs": [
+            "Les edicions preparades conserven els bytes revisats. Torna a obrir una edició anterior des de {ui:publication.preparations} i tria {ui:publication.rollbackReview}. Revisa la destinació actual i qualsevol dependència d'anàlisi modificada i confirma explícitament la substitució. La reversió a GitHub crea un commit nou que conté l'edició conservada i manté les modificacions locals d'autor més recents. No força el restabliment de la branca ni sobreescriu treball remot simultani.",
+            "La publicació SSH requereix claus d'amfitrió OpenSSH verificades, ssh i sftp locals i un intèrpret POSIX remot amb find, sha256sum i GNU coreutils. Serveix només el subdirectori current del directori d'allotjament configurat. Observanda prepara i calcula l'empremta de cada fitxer de sortida abans de canviar atòmicament l'enllaç current. Les edicions completades es mantenen a releases; configura el servidor web perquè el directori pare d'allotjament i els directoris de preparació no siguin accessibles públicament.",
+            "Si s'interromp una càrrega o un canvi SSH, conserva l'espai de treball i tria {ui:publication.deploymentResume}. L'operació conservada comprova la seva pròpia reclamació remota i la versió actual abans de continuar. Les peticions d'aturada impedeixen treball addicional, però no poden desfer un canvi ja acceptat remotament; reprendre reconcilia aquella incertesa. No eliminis la reclamació d'una altra operació ni substitueixis manualment l'enllaç current per eludir una fallada.",
+            "Verifica el lloc web en línia compara el manifest servit i cada fitxer amb l'edició revisada i després torna a comprovar el manifest. El progrés continua disponible a Publicació; utilitza {ui:publication.liveCheckStop} o {ui:publication.liveCheckResume} després d'una interrupció. Reprendre torna a comprovar els bytes servits actualment. Els URL eliminats han de retornar HTTP 404 o 410; una pàgina antiga en memòria cau o una pàgina d'error retornada amb HTTP 200 no supera la verificació. Una nova comprovació fallida substitueix l'estat verificat anterior. La verificació comprova l'URL configurat des d'aquesta instal·lació; no pot esborrar còpies dels navegadors, l'historial Git antic ni totes les memòries cau del món."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "reviews",
+      "title": "Revisa i dona testimoni de registres desats",
+      "sections": [
+        {
+          "id": "contacts",
+          "title": "Verifica un col·laborador",
+          "paragraphs": [
+            "Activa Col·laboració a Preferències → Mòduls i obre {ui:reviews.title}. Cada instal·lació té la seva pròpia identitat de revisió. Utilitza {ui:reviews.identity} i {ui:reviews.downloadContact} per intercanviar fitxers de contacte públics. Abans d'utilitzar {ui:reviews.contact}, compara l'empremta completa amb el col·laborador per un altre canal de confiança.",
+            "{ui:reviews.untrust} bloqueja nous intercanvis de fitxers amb aquell contacte. Manté les revisions signades anteriors. No pot eliminar els fitxers que el destinatari ja té. Les claus d'identitat de revisió pertanyen a aquesta instal·lació; un espai de treball restaurat conserva les revisions, però no transfereix per si mateix l'autoritat de signatura d'una altra instal·lació."
+          ]
+        },
+        {
+          "id": "request",
+          "title": "Envia revisions exactes desades",
+          "paragraphs": [
+            "Obre el control {ui:reviews.witnesses} d'un registre i tria {ui:reviews.request}, o demana una revisió de llibre de laboratori des de Col·laboració. Tria el revisor i l'àmbit, afegeix instruccions i utilitza {ui:reviews.preview} per inspeccionar els títols i identificadors de revisió seleccionats. {ui:reviews.create} descarrega un fitxer xifrat per a aquell revisor; envia'l pel canal de compartició de fitxers que triïs.",
+            "Les peticions inclouen text i camps privats de registres desats, però exclouen fitxers multimèdia enllaçats, fitxers d'evidències i altres registres. Cada petició admet fins a 50 registres i 750 KB. Els llibres més grans requereixen peticions de registres individuals. Si els registres seleccionats o la composició del llibre de laboratori canvien abans de crear-la, torna a previsualitzar la selecció. Les edicions no desades no es poden revisar."
+          ]
+        },
+        {
+          "id": "signatures",
+          "title": "Llegeix i retorna una revisió signada",
+          "paragraphs": [
+            "Utilitza {ui:reviews.importFile} després de verificar el remitent. {ui:reviews.open} mostra les revisions exactes rebudes i els seus camps desats. Tria una decisió i comentaris per a cada registre, confirma la teva intenció i utilitza {ui:reviews.sign}. Retorna la resposta xifrada descarregada a l'autor perquè la importi. {ui:reviews.witnesses} mostra el resultat i si aquell registre desat ha canviat des de la revisió.",
+            "Utilitza {ui:reviews.previous} i {ui:reviews.next} per explorar revisions; {ui:reviews.refresh} reinicia l'exploració quan arriben peticions noves. Una signatura verifica la clau de signatura i que el contingut signat no ha canviat. L'hora és la que declara l'ordinador del signant; no és una prova independent del temps, l'exactitud de la mesura ni l'execució física. L'intercanvi xifrat de revisions no proporciona invitacions en línia ni sincronització."
           ]
         }
       ]
     },
     {
       "id": "storage",
-      "title": "Emmagatzematge, còpies i accés",
+      "title": "Emmagatzematge, còpies de seguretat i accés",
       "sections": [
         {
-          "id": "backup",
-          "title": "Verifiqueu les còpies de seguretat",
+          "id": "unlock",
+          "title": "Desbloqueja i recupera l'accés",
           "paragraphs": [
-            "Feu servir Emmagatzematge i accés per gestionar l’emmagatzematge i les còpies. Deseu les còpies separades de les dades de treball. Espereu que acabi la verificació i inspeccioneu-ne el resultat; tenir un fitxer copiat no demostra que tots els originals es puguin recuperar.",
-            "Proveu la restauració en una ubicació de prova separada i recupereu registres, revisions històriques i evidències representatives. Comproveu-ne les identitats i els bytes. La còpia ha de ser utilitzable sense dependre de les rutes de l’ordinador original."
+            "A {ui:access.unlock}, utilitza un dispositiu autoritzat o introdueix la contrasenya de l'espai de treball. Si s'ha configurat una clau de recuperació, desplega {ui:access.useRecovery} i introdueix aquesta clau. Després tria {ui:access.unlock}. Obrir l'Ajuda no envia ni copia la contrasenya ni la clau de recuperació.",
+            "Si aquest dispositiu no està autoritzat, {ui:access.deviceRequest} crea una petició perquè la revisi un propietari autoritzat de l'espai de treball. No concedeix accés per si mateixa. Una contrasenya perduda no es pot recuperar des de l'Ajuda. Mantén disponible un dispositiu autoritzat o una clau de recuperació configurada prèviament; restablir les preferències de l'aplicació no desxifra cap espai de treball."
+          ]
+        },
+        {
+          "id": "reconnect",
+          "title": "Torna a connectar a un espai de treball",
+          "paragraphs": [
+            "Quan la ubicació anterior d'un espai de treball no està disponible, obre {ui:access.previousLocation} per inspeccionar la carpeta i utilitza {ui:access.retry} després de reconnectar-ne la unitat o el recurs compartit de xarxa. {ui:access.openWorkspace} et permet triar una altra carpeta d'espai de treball existent i proporcionar-ne les credencials d'accés. {ui:access.newWorkspace} inicia una configuració separada.",
+            "Al formulari de carpeta, utilitza {ui:access.chooseFolder} o {ui:access.browseServer}, i després {ui:access.checkFolder} per inspeccionar la destinació. Proporciona la contrasenya de l'espai de treball o la clau de recuperació configurada quan calgui. L'Ajuda i {ui:help.returnToForm} conserven la carpeta i les credencials ja introduïdes. Es pot obrir una còpia de seguretat verificada com a espai de treball existent; confirma'n els registres i les evidències originals abans de confiar-hi."
+          ]
+        },
+        {
+          "id": "backup",
+          "title": "Verifica les còpies de seguretat",
+          "paragraphs": [
+            "Utilitza Emmagatzematge i accés per gestionar les operacions d'emmagatzematge i còpia de seguretat. Mantén les còpies separades de l'emmagatzematge de treball. Deixa que acabi la verificació i inspecciona el resultat informat; la simple presència d'un fitxer copiat no demostra que tots els originals conservats siguin recuperables.",
+            "Prova la restauració en una ubicació de prova separada i recupera registres representatius, revisions històriques i evidències originals. Comprova que les identitats i els bytes coincideixin. Una còpia de seguretat ha de continuar sent utilitzable sense dependre dels camins de l'estació de treball original."
           ]
         },
         {
           "id": "access",
-          "title": "Protegiu l’accés",
+          "title": "Protegeix l'accés a l'espai de treball",
           "paragraphs": [
-            "Conserveu contrasenyes i material de recuperació en un lloc segur independent de l’espai de treball. Bloquegeu-lo en acabar. El xifratge protegeix el contingut desat, però no substitueix el control d’un ordinador desbloquejat.",
-            "L’accés des d’un dispositiu no demostra que hi hagi invitacions en línia, rols d’organització o lliurament entre col·laboradors. Utilitzeu només les accions disponibles a la versió instal·lada i comproveu la identitat del revisor i la revisió exacta de cada entrada testificada."
+            "Mantén les contrasenyes i el material de recuperació en un lloc segur independent de l'espai de treball. Bloqueja l'espai de treball quan acabis. El xifratge protegeix el contingut emmagatzemat; no substitueix el control d'un ordinador desbloquejat.",
+            "No tractis l'accés del dispositiu com una prova que estiguin disponibles les invitacions en línia, els rols d'organització o el lliurament entre col·laboradors. Utilitza només les accions de col·laboració que proporciona la versió instal·lada i verifica la identitat del revisor i la revisió exacta de qualsevol entrada amb testimoni."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "timeline",
+      "title": "Cronologies entre projectes i llibres de laboratori",
+      "sections": [
+        {
+          "id": "sources",
+          "title": "Tria fonts i filtres",
+          "paragraphs": [
+            "Activa {ui:timeline.label} a Preferències → Mòduls i crea una cronologia. A {ui:timeline.sources}, combina els projectes i llibres de laboratori individuals que vulguis. {ui:timeline.descendants} controla si s'inclouen els projectes imbricats d'un projecte. Les seleccions superposades no dupliquen registres. Sense fonts seleccionades, la vista inclou tots els llibres de laboratori.",
+            "Filtra per títol o etiqueta, estat i interval de dates del registre. Les dates de mes, any i interval se superposen amb el període seleccionat; les dates desconegudes apareixen al final i s'exclouen quan hi ha un interval de dates. {ui:timeline.ordering} Desa la vista per tornar a obrir-ne la configuració; això no altera els registres."
+          ]
+        },
+        {
+          "id": "browsing",
+          "title": "Explora i actualitza registres desats",
+          "paragraphs": [
+            "{ui:timeline.previous} i {ui:timeline.next} mostren una pàgina de resums cada vegada. {ui:timeline.branches} agrupa aquella pàgina per projecte o llibre de laboratori; les branques poden continuar en una altra pàgina. Obre un registre amb nom per llegir-ne el contingut. Tornar dins de la sessió conserva la pàgina actual; tornar a carregar comença per la primera pàgina.",
+            "Les pàgines es mantenen en la instantània desada on va començar l'exploració. Després que canviïn els registres, {ui:timeline.refresh} comença des de la instantània més recent. {ui:timeline.retry} repeteix una petició interrompuda sense perdre les edicions de la vista. Les fonts no disponibles continuen seleccionades fins que les elimines o substitueixes; eliminar-les mai no amplia la vista a tots els registres."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "migration",
+      "title": "Importació d'un quadern extern",
+      "sections": [
+        {
+          "id": "inspection",
+          "title": "Revisa una font declarada",
+          "paragraphs": [
+            "Obre Espais de treball i tria {ui:migration.title}. Tria la carpeta d'exportació d'origen i {ui:migration.inspect}. Obrir aquesta pantalla no inicia la inspecció. La carpeta ha de contenir un manifest d'inventari de font declarada d'Observanda de versió 1; un lloc web ordinari o una carpeta arbitrària encara no són una importació editable.",
+            "El resultat comptabilitza cada objecte i fitxer declarats, amb filtres d'exclusions, elements absents i conflictes. Utilitza {ui:migration.search} per cercar títols, identitats d'origen, revisions o camins originals de fitxer. Obre {ui:migration.targets} per comprovar cada fitxer original i destinació declarada. Les dates d'origen, les relacions exactes i els URL originals estan disponibles per separat. {ui:migration.declaration} mostra la declaració d'origen completa.",
+            "Els punters JSON seleccionen membres o elements de matriu exactes. Els ancoratges HTML seleccionen l'element amb nom, inclòs el seu contingut; no signifiquen automàticament la secció o el capítol següents. Les destinacions absents, els noms duplicats, les correspondències imbricades superposades, els formats no vàlids i els límits d'inspecció deixen incidències visibles. Els scripts d'origen no s'executen i no es descarreguen URL."
+          ]
+        },
+        {
+          "id": "review",
+          "title": "Resol i repeteix una inspecció",
+          "paragraphs": [
+            "Corregeix la declaració de l'exportació d'origen quan calgui resoldre un element i torna-la a inspeccionar. Utilitza {ui:migration.cancel} per aturar una inspecció. Aquest flux no importa ni publica cap registre, tampoc després d'una inspecció interrompuda.",
+            "L'empremta de la instantània identifica el manifest i els bytes originals independentment de la ubicació de la carpeta. Una exportació reubicada sense canvis té la mateixa empremta. Un inventari complet estableix la cobertura de la font declarada i la verificació de destinacions; no estableix exactitud científica, interpretació del format natiu ni una migració completada.",
+            "Els resultats de la inspecció es mantenen privats dins de la sessió actual de l'aplicació i s'esborren quan es bloqueja o es canvia l'espai de treball. Preparar una importació és una acció separada i explícita."
+          ]
+        },
+        {
+          "id": "staging",
+          "title": "Prepara una importació privada i defineix-ne les correspondències",
+          "paragraphs": [
+            "Després d'una inspecció completa, tria el llibre de laboratori de destinació i {ui:migrationImport.stage}. Els fitxers originals es conserven xifrats amb les seves empremtes. La preparació no crea registres editables. Utilitza {ui:migrationImport.pause} per aturar el treball; {ui:migrationImport.resume} obre els lots desats després de tancar o reiniciar l'aplicació.",
+            "Obre {ui:migrationImport.mapping} per a cada objecte que necessiti una destinació, un títol, un tipus de registre, una data d'ocurrència, una atribució o un significat de relació diferents. Tria exactament una revisió actual per a cada identitat d'origen; les revisions històriques conserven referències exactes. Les exclusions i els enllaços omesos requereixen motius. Els intents diferents han de tenir identitats d'origen i límits declarats diferents.",
+            "El text pla, el JSON seleccionat i el text HTML inert poden esdevenir text editable. Els nombres JSON conserven les representacions originals. La conversió HTML informa dels elements i del format omesos per revisar-los explícitament; mai no executa scripts ni descarrega URL. Les taules grans poden utilitzar {ui:migrationImport.dataset}: tria la matriu de files declarada i els camps, o el separador i els encapçalaments d'una taula delimitada. La revisió mostra una mostra limitada amb representacions numèriques exactes i valors nuls, buits i absents diferenciats. Les unitats i les representacions numèriques són declaracions, no significats científics inferits.",
+            "Una figura declarada pot utilitzar {ui:migrationImport.figure} quan la seva font segueix l'esquema de figura portable d'Observanda. Les coordenades del gràfic utilitzen la representació numèrica del renderitzador de figures; qualsevol valor potencialment aproximat requereix reconeixement. Les representacions numèriques originals es mantenen al text d'origen editable i als bytes conservats. Els altres formats de gràfic necessiten una conversió explícita d'origen, en lloc de mesures inferides."
+          ]
+        },
+        {
+          "id": "record-facts",
+          "title": "Revisa fets de recerca declarats explícitament",
+          "paragraphs": [
+            "Quan una font preparada inclou una declaració admesa de fets de registre, tria-la a {ui:importResearch.source}. La declaració assigna explícitament el progrés, el resultat, els camps de plantilla, les preparacions, els esdeveniments d'execució, les avaluacions de criteris i els enunciats de resultats a les seves estructures natives de registre. Això requereix un adaptador preparat per a aquella font; les claus arbitràries de metadades no s'interpreten com a troballes científiques.",
+            "Prepara la revisió d'importació, torna a obrir les correspondències i inspecciona {ui:importResearch.preview}. Comprova les condicions, les entrades, les expectatives, els resultats observats i les limitacions. Les referències de mètode han d'anomenar relacions exactes Utilitza el mètode. Els nombres científics exactes han d'anar en valors de text amb les unitats i la base numèrica declarades. Els conjunts de dades i les anàlisis conservats existents poden sustentar resultats; les taules de resultats conservades han de coincidir amb els valors d'origen fixats abans que es pugui aprovar la importació.",
+            "Les correccions afegeixen fets amb identitats substituïdes explícites. Una importació no pot reescriure silenciosament una preparació, un esdeveniment o una avaluació anteriors, fins i tot quan es tria contingut d'origen per resoldre altres conflictes. La reversió conserva els fets afegits a una execució que ja existia. {ui:migrationImport.metadataMode} controla si les altres metadades es mantenen només a Procedència d'origen o també apareixen en una secció d'escriptura. Les correspondències desades antigues mantenen el tractament anterior fins que es canvien explícitament."
+          ]
+        },
+        {
+          "id": "applying",
+          "title": "Revisa els canvis, aplica i reverteix",
+          "paragraphs": [
+            "Tria {ui:migrationImport.review} i inspecciona els recomptes de reconciliació i les correspondències d'objectes. Les importacions repetides reutilitzen les identitats d'origen. Els camps d'autor en conflicte o els conjunts de dades editats requereixen una resolució explícita. Es marquen els bytes modificats sota una revisió d'origen existent. {ui:migrationImport.apply} confirma conjuntament els registres, les relacions i els justificants revisats; els canvis de destinació invaliden la revisió. Utilitza {ui:migrationImport.openRecord} des del lot aplicat per continuar treballant amb un registre i el seu conjunt de dades complet.",
+            "Els registres importats comencen com a privats. Les correspondències noves mantenen per defecte les metadades sense correspondència a la procedència privada; incloure-les com a secció d'escriptura requereix una tria explícita de correspondència. Els bytes originals compartits conserven una associació d'evidències per a cada registre amb correspondència i camí relatiu d'origen. Les llistes d'evidències mostren cada nom de fitxer original, camí relatiu, mida i SHA-256 amb una descàrrega d'aquella revisió exacta. Totes les dates declarades d'origen es mantenen diferenciades de la marca de temps d'importació. Obre {ui:migrationImport.provenance} des d'un registre per inspeccionar-ne els identificadors, les dates, els URL, els límits i les decisions de correspondència originals, o descarregar fitxers originals. No s'infereixen l'historial d'origen ni els resultats científics.",
+            "Utilitza {ui:migrationImport.reverse} des d'un lot desat per eliminar registres creats per l'importador o restaurar revisions anteriors només quan el contingut actual encara coincideixi amb aquella importació. Es conserven les edicions posteriors de registres o conjunts de dades, les importacions posteriors, les referències noves, les personalitzacions de pàgina i els bytes originals compartits. Revisa l'informe de reversió per veure els elements conservats. Tornar a aplicar la font utilitza les mateixes identitats de destinació. Les còpies de seguretat inclouen les importacions preparades i la procedència; verifica una còpia restaurada abans de confiar-hi."
           ]
         }
       ]

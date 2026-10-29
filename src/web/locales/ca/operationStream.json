@@ -1,0 +1,6 @@
+{
+  "afterResult": "Han arribat dades inesperades després del resultat de l'operació.",
+  "invalid": "L'operació ha retornat una resposta no vàlida.",
+  "limit": "La resposta de l'operació supera la capacitat.",
+  "interrupted": "La connexió s'ha interromput abans d'arribar un resultat complet. Torna-ho a provar per comprovar el resultat de l'operació."
+}

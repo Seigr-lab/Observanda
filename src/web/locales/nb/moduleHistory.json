@@ -1,0 +1,17 @@
+{
+  "heading": "Lagrede revisjoner",
+  "invalid": "Historikksvaret var ufullstendig. Prøv igjen for å laste inn denne siden.",
+  "retry": "Prøv historikken igjen",
+  "loading": "Laster inn historikk…",
+  "range": "Revisjoner {first}–{last} av {total}",
+  "empty": "Ingen lagrede revisjoner ennå.",
+  "changed": "Nye revisjoner er tilgjengelige. Oppdater historikken for å se dem.",
+  "pages": "Historikksider",
+  "first": "Første historikkside",
+  "previous": "Forrige historikkside",
+  "next": "Neste historikkside",
+  "refresh": "Oppdater historikk",
+  "open": "Åpne revisjon {revision}",
+  "selected": "Lagret revisjon {revision}",
+  "close": "Lukk revisjon"
+}

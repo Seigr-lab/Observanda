@@ -1,0 +1,20 @@
+{
+  "title": "Strukturerte oppføringsfakta",
+  "source": "Erklæring av oppføringsfakta",
+  "none": "Behald kjeldemetadata berre som opphavsdata",
+  "root": "Heile metadataobjektet",
+  "help": "Vel eit erklært sett med oppføringsfakta for å tilordne framdrift, utfall, malfelt, førebuingar, gjennomføringshendingar, vurderingar og resultat. Sjå gjennom dei føreslegne verdiane før du tek gruppa i bruk. Opphavlege metadata er framleis tilgjengelege i Kjeldeopphav.",
+  "absent": "Denne kjelda inneheld inga støtta erklæring av oppføringsfakta. Adapteren må uttrykkeleg tilordne kjelda til observanda-record-facts versjon 1-formatet; Observanda utleier ikkje vilkår eller konklusjonar frå metadatanamn.",
+  "methods": "Metodane i ei førebuing må ha eksakte Bruker metode-relasjonar i tilordninga ovanfor. Rettingar legg til fakta og identifiserer kva dei erstattar; eksisterande lagra fakta kan ikkje bytast ut.",
+  "preview": "Føreslegne oppføringsfakta",
+  "progress": "Framdrift",
+  "outcome": "Utfall",
+  "status-draft": "Utkast",
+  "status-planned": "Planlagd",
+  "status-in progress": "I gang",
+  "status-completed": "Fullført",
+  "status-failed": "Mislukka",
+  "status-incomplete": "Ufullstendig",
+  "status-inconclusive": "Uavklart",
+  "status-cancelled": "Avbroten"
+}

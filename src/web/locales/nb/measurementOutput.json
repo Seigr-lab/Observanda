@@ -1,0 +1,11 @@
+{
+  "format": "Tallformat for resultat",
+  "resultRadix": "Tallbase for resultat (2–36)",
+  "default": "Standard: eksakt brøk; heltall for tellinger",
+  "decimal": "Eksakt desimal",
+  "integer": "Heltall (grunntall 10)",
+  "radix": "Heltall med et uttrykkelig grunntall",
+  "radix-fraction": "Brøktall med et uttrykkelig grunntall",
+  "rational": "Eksakt brøk (teller/nevner med grunntall 10)",
+  "exact": "Resultatformatet blir bevart med denne oppskrifta. Ingen avrunding blir brukt. Dersom et resultat ikke kan skrives eksakt i det valgte formatet, velg en eksakt brøk eller et kompatibelt grunntall."
+}

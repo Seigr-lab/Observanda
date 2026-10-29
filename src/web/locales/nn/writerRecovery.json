@@ -1,0 +1,11 @@
+{
+  "title": "Gjenoppretting av skrivetilgang",
+  "explanation": "Denne staden inneheld ein tom skrivemarkør frå ein eldre Observanda-versjon. Lukk andre Observanda-installasjonar som bruker staden, før du frigjer markøren.",
+  "workspace": "Arbeidsområde",
+  "preferences": "Lokale innstillingar",
+  "device": "Oppsett av einingsidentitet",
+  "closed": "Alle andre Observanda-installasjonar som bruker denne staden, er lukka.",
+  "recover": "Frigjer gammal skrivemarkør",
+  "ready": "Ingen gamle skrivemarkørar treng gjenoppretting.",
+  "continue": "Hald fram"
+}

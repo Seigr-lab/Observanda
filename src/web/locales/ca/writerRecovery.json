@@ -1,0 +1,11 @@
+{
+  "title": "Recuperació del procés d'escriptura",
+  "explanation": "Aquesta ubicació conté un marcador buit de procés d'escriptura d'una versió anterior d'Observanda. Tanca les altres instal·lacions d'Observanda que utilitzin la ubicació abans d'alliberar-lo.",
+  "workspace": "Espai de treball",
+  "preferences": "Preferències locals",
+  "device": "Configuració de la identitat del dispositiu",
+  "closed": "Totes les altres instal·lacions d'Observanda que utilitzen aquesta ubicació estan tancades.",
+  "recover": "Allibera el marcador antic d'escriptura",
+  "ready": "No hi ha marcadors antics d'escriptura que calgui recuperar.",
+  "continue": "Continua"
+}

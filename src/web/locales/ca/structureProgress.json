@@ -1,0 +1,7 @@
+{
+  "preparing": "S'està comprovant el canvi de l'espai de treball…",
+  "records": "S'estan processant els registres: {loaded} de {total}",
+  "indexing": "S'estan desant els índexs i l'historial actualitzats…",
+  "stop": "Deixa d'esperar",
+  "stopped": "S'ha deixat d'esperar i s'ha sol·licitat la cancel·lació. Si el desament ja s'havia acabat, tornar-ho a provar recuperarà el resultat sense repetir el canvi. Les teves opcions continuen aquí."
+}

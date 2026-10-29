@@ -1,0 +1,9 @@
+{
+  "buildingTree": "S'estan preparant els fitxers del repositori revisats",
+  "uploading": "S'estan pujant els fitxers seleccionats",
+  "committing": "S'està creant el commit de publicació",
+  "pushing": "S'està pujant la branca de publicació",
+  "verifying": "S'estan verificant els fitxers remots",
+  "repositoryVerified": "Fitxers del repositori verificats; configuració de Pages sense canvis",
+  "livePending": "Fitxers remots verificats; verificació del lloc publicat pendent"
+}

@@ -1,0 +1,12 @@
+{
+  "record": "Contenido del registro",
+  "metadata": "Configuración del espacio de trabajo",
+  "recordSelection": "Contenido del registro seleccionado",
+  "recordCommand": "Solicitud de guardado del registro",
+  "recordCheckpoint": "Punto de recuperación",
+  "checkpointRequest": "Solicitud de punto de recuperación",
+  "amount": "{owner} necesita {requested} bytes; esta versión admite {limit} bytes para esa operación.",
+  "saveGuidance": "Se ha rechazado el guardado. Mantén abierto este editor y comprueba el estado del punto de recuperación antes de salir; las modificaciones sin guardar no son una revisión de investigación guardada.",
+  "checkpointGuidance": "Este punto de recuperación no se ha escrito. Los puntos anteriores permanecen intactos. Mantén abierto este editor para conservar las modificaciones más recientes.",
+  "selectionGuidance": "Los registros solicitados no se han cargado en el editor. Los registros guardados permanecen intactos. Puedes abrir cada registro por separado."
+}

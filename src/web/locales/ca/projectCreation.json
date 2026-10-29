@@ -1,0 +1,10 @@
+{
+  "title": "Acaba de crear {title}",
+  "running": "S'està creant el projecte…",
+  "resume": "Reprèn la creació",
+  "password": "Contrasenya del projecte",
+  "cancel": "Cancel·la",
+  "failed": "No s'ha pogut crear el projecte.",
+  "retry": "Torna-ho a provar",
+  "more": "Més projectes pendents d'acabar"
+}

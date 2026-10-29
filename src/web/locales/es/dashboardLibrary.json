@@ -1,0 +1,22 @@
+{
+  "region": "Biblioteca de datos",
+  "find": "Buscar datos para mostrar",
+  "placeholder": "Buscar tarjetas e investigación…",
+  "show": "Mostrar",
+  "all": "Todos los datos",
+  "collections": "Colecciones",
+  "closed": "Tarjetas cerradas",
+  "closedDescription": "Tarjeta cerrada · configuración conservada",
+  "hint": "Arrastra al panel o haz clic para añadir",
+  "close": "Cerrar la biblioteca de datos",
+  "pin": "Fijar {name}",
+  "unpin": "Desfijar {name}",
+  "empty": "No hay datos coincidentes. Prueba otra búsqueda o categoría.",
+  "range": "{first}–{last} de {total}",
+  "previous": "Anterior",
+  "next": "Siguiente",
+  "loading": "Buscando fuentes de tarjetas…",
+  "retry": "Reintentar la búsqueda de tarjetas",
+  "invalidPage": "La respuesta de búsqueda de tarjetas estaba incompleta. Reintenta esta búsqueda.",
+  "loadFailed": "No se han podido cargar las fuentes de tarjetas. Reintenta esta búsqueda."
+}

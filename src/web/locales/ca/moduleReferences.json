@@ -1,0 +1,18 @@
+{
+  "heading": "Treball relacionat",
+  "empty": "Enllaça aquest element amb la recerca o els recursos als quals pertany.",
+  "remove": "Elimina",
+  "chooseResearch": "Enllaça recerca",
+  "chooseRecord": "Tria un registre desat",
+  "prototype": "Registre de prototip / execució",
+  "moduleItem": "Enllaça una eina o un element de l'inventari",
+  "chooseItem": "Tria un element...",
+  "add": "Enllaça l'element",
+  "loading": "S'està carregant el títol del registre...",
+  "unavailable": "Registre no disponible",
+  "unavailableLabel": "Títol del registre no disponible",
+  "missingItem": "{type} no disponible",
+  "invalid": "Les etiquetes dels registres eren incompletes. Torna-ho a provar per carregar-les de nou.",
+  "loadFailed": "No s'han pogut carregar els títols dels registres. Es conserven els enllaços i les modificacions.",
+  "retry": "Torna a carregar els títols dels registres"
+}

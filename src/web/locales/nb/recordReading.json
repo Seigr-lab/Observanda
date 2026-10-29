@@ -1,0 +1,14 @@
+{
+  "table": "Datatabell",
+  "tableOverflow": "Rull sidelengs for å se alle kolonnene. Du kan også fokusere tabellen og bruke piltastene.",
+  "read": "Les labbok",
+  "list": "Oppføringsliste",
+  "view": "Labbokvisning",
+  "details": "Dokumentasjon og oppføringsdetaljer",
+  "edit": "Rediger oppføring",
+  "linkedRecord": "Tilknyttet oppføring",
+  "researchLinks": "Forskningslenker",
+  "exactRevision": "Bevart revisjon {revision}",
+  "changed": "Lagrede oppføringer er endret. Oppdater denne lesevisningen.",
+  "incomplete": "Noen oppføringer kunne ikke lastes inn. Oppdater denne lesevisningen."
+}

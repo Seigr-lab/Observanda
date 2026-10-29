@@ -1,0 +1,12 @@
+{
+  "title": "Límites de la tarea numérica",
+  "help": "Estos límites abarcan la tarea numérica en todos sus segmentos y reintentos. El tiempo activo mide el trabajo numérico, no el tiempo de espera transcurrido.",
+  "total": "Tarea numérica completa",
+  "slice": "Un segmento numérico",
+  "maxOperations": "Máximo de operaciones numéricas",
+  "maxActiveMilliseconds": "Máximo de milisegundos activos",
+  "bounds": "Intervalo permitido: de {min} a {max}.",
+  "sliceHelp": "Un segmento no puede superar los límites de la tarea completa. El reintento reanuda el progreso guardado; una reserva interrumpida sigue contabilizándose íntegramente. Los segmentos completados contabilizan su uso real.",
+  "invalid": "Introduce límites de la tarea completa y de sus segmentos dentro de los intervalos mostrados. Un segmento no puede superar la tarea completa. Se conservan tus entradas.",
+  "publicContext": "Límites de la tarea numérica: {operations} operaciones y {active} ms de trabajo activo; cada segmento: {sliceOperations} operaciones y {sliceActive} ms de trabajo activo. Los reintentos conservan el trabajo contabilizado."
+}

@@ -1,0 +1,17 @@
+{
+  "settings": "Akseretning og delestreketikettar",
+  "x": "Koordinatakse",
+  "y": "Verdiakse",
+  "reverse": "Snu akseretninga",
+  "ticks": "Etikettar på eksakte posisjonar",
+  "help": "Tomme lister over delestrekar bruker automatiske etikettar. Tilpassa etikettar bevarer dei eksakte talposisjonane sine. Å snu aksen endrar retninga, medan minimum og maksimum framleis er stigande. Etikettar som står tett, bruker hjelpelinjer til delestrekposisjonane sine.",
+  "value": "Talposisjon for delestrek",
+  "label": "Delestreketikett",
+  "add": "Legg til delestreketikett",
+  "remove": "Fjern delestreketikett",
+  "invalid": "Bruk ulike endelege delestrekposisjonar med etikettar innanfor det erklærte akseområdet. Logaritmiske delestrekar må vere positive. Tilpassa delestrekar krev tal- eller kalenderkoordinatar, med høgst 100 etikettar per akse.",
+  "date": "For kalenderkoordinatar er delestrekposisjonane millisekund sidan 1970-01-01T00:00:00Z.",
+  "direction": "Retning",
+  "normal": "Stigande",
+  "reversed": "Omvend"
+}

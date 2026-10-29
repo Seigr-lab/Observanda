@@ -1,0 +1,23 @@
+{
+  "retainedRecord": "Registro conservado",
+  "retainedInput": "Entrada conservada",
+  "title": "Título",
+  "collectionName": "Colección de evidencias",
+  "analysisName": "Análisis",
+  "collectionHeading": "Crear colección de evidencias",
+  "analysisHeading": "Registrar análisis externo",
+  "tool": "Herramienta / método",
+  "version": "Versión de la herramienta o revisión del código fuente",
+  "procedure": "Parámetros y procedimiento",
+  "method": "Método / ejecución guardados (opcional)",
+  "none": "Ningún método o ejecución guardados seleccionados.",
+  "choose": "Elegir método / ejecución guardados",
+  "remove": "Eliminar el método / ejecución seleccionados",
+  "selected": "{title} · Revisión conservada {revision}",
+  "finishChoosing": "Elige una revisión guardada o cancela la búsqueda de métodos antes de guardar.",
+  "saveCollection": "Guardar colección",
+  "saveAnalysis": "Guardar análisis",
+  "inputs": "Revisiones exactas de entrada",
+  "outputs": "Artefactos de salida conservados",
+  "required": "Introduce un título y, para el análisis, elige entradas e identifica su herramienta y versión."
+}

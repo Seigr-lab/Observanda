@@ -1,0 +1,11 @@
+{
+  "title": "Labbokmaler",
+  "intro": "Velg malene som er tilgjengelige når du oppretter eller setter opp en labbok.",
+  "enable": "Aktiver {name}",
+  "loadFailed": "Kunne ikke laste inn disse verktøyene. Slå dem av og på for å prøve på nytt.",
+  "chooseMore": "Velg flere maler i {preferences} / {templates}. Tilpass denne boka i Labbokinnstillinger.",
+  "manage": "Velg flere maler i {preferences} / {templates}.",
+  "defaultUnavailable": "Prosjektstandarden bruker en type som er slått av. Velg en annen mal eller aktiver standarden i {preferences} / {templates}.",
+  "enableFirst": "Aktiver denne malen i {preferences} / {templates} først.",
+  "enableTypes": "Aktiver labboktyper i {preferences} / {templates}, eller legg til dine egne oppføringstyper nedenfor."
+}
