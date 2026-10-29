@@ -1,5 +1,11 @@
 // Literal imports keep every supported namespace in the offline asset graph.
 export const deferredCatalogues=Object.freeze({
+ dashboardEditors:()=>import('./catalogues/dashboardEditors.js'),
+ websiteAuthoring:()=>import('./catalogues/websiteAuthoring.js'),
+ applicationTexts:()=>import('./catalogues/applicationTexts.js'),
+ workspaceSecurity:()=>import('./catalogues/workspaceSecurity.js'),
+ supportEditors:()=>import('./catalogues/supportEditors.js'),
+ materialEditors:()=>import('./catalogues/materialEditors.js'),
  projectEditors:()=>import('./catalogues/projectEditors.js'),
  editorControls:()=>import('./catalogues/editorControls.js'),
  moduleEditors:()=>import('./catalogues/moduleEditors.js'),

@@ -4,7 +4,12 @@ import {recordRevisionView} from './record-revision-view.js';
 import {enabledModule} from './feature-modules.js';
 import {revisionText} from './revision-model.js';
 import {t,messageLanguage} from './i18n/index.js';
+import './i18n/catalogues/supportEditors.js';
+import supportMessages from './locales/en/supportEditors.json' with {type:'json'};
+import errorMessages from './locales/en/errors.json' with {type:'json'};
 const tr=(key,values)=>t('reviews',key,values);
+const detailKeys=new Map(Object.entries(supportMessages).filter(([key])=>key.startsWith('reviewDetail')).map(([key,value])=>[value,key]));
+const detailText=field=>detailKeys.has(field)?t('supportEditors',detailKeys.get(field)):field;
 const decisions=['reviewed','witnessed','changes-requested','inconclusive'];
 const digest=async v=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(revisionText(v))))].map(n=>n.toString(16).padStart(2,'0')).join('');
 function download(value,name){const url=URL.createObjectURL(new Blob([JSON.stringify(value)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
@@ -22,7 +27,7 @@ export function reviewsUI({state,api,esc,showDialog,notify,render,getRecord}){
  const button=(key,action,attrs='')=>'<button type="button" class="button" data-action="review-'+action+'" '+attrs+'>'+esc(tr(key))+'</button>';
  const close=()=>{abortUpload();disposeFigures();document.getElementById('dialog').close();};
  const frame=(key,html)=>{if(operationRoute!==location.hash)return;disposeFigures();showDialog('<section class="review-workflow" lang="'+messageLanguage('reviews')+'"><h2 id="dialog-title">'+esc(tr(key))+'</h2>'+html+'<div class="dialog-actions"><button type="button" class="button" data-action="close-dialog">'+esc(tr('close'))+'</button></div></section>');document.getElementById?.('dialog')?.addEventListener('close',()=>{abortUpload();disposeFigures();},{once:true});};
- const message=e=>e.code==='CONFLICT'?tr('pageChanged'):[e.message,...(e.details??[]).map(d=>d.field)].join(' ');
+ const message=e=>e.code==='CONFLICT'?tr('pageChanged'):[Object.hasOwn(errorMessages,e.code)?t('errors',e.code):e.message,...(e.details??[]).map(d=>detailText(d.field))].filter(Boolean).join(' ');
  const error=e=>{if(e.name==='AbortError'||operationRoute!==location.hash)return;const node=document.querySelector('[data-review-error]');if(node)node.textContent=message(e);else notify(message(e),true);};
  async function refresh(cursor=null){
   const request=++reading,recordId=owner,route=location.hash;context=researchContext(state);
@@ -82,7 +87,7 @@ export function reviewsUI({state,api,esc,showDialog,notify,render,getRecord}){
    }
   }catch(e){error(e);}finally{busy=false;}return true;
  }
- async function readFile(file,max=1100000){if(!file||!file.size||file.size>max)throw Error(tr('fileSize'));return JSON.parse(await file.text());}
+ async function readFile(file,max=1100000){if(!file||!file.size||file.size>max)throw Error(tr('fileSize'));const value=await file.text();try{return JSON.parse(value);}catch{throw Error(t('supportEditors','reviewInvalidJSON'));}}
  function input(el){
   if(el.hasAttribute('data-review-scope')){plan=null;el.form.querySelector('[type="submit"]').disabled=true;el.form.querySelector('[data-review-plan]').innerHTML='<p>'+esc(tr('selectionHelp'))+'</p>';return true;}
   if(!el.hasAttribute('data-review-contact'))return false;const file=el.files?.[0],form=el.form;contact=null;

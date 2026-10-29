@@ -1069,5 +1069,47 @@
     "es",
     "nb",
     "nn"
+  ],
+  "materialEditors": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "supportEditors": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "workspaceSecurity": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "applicationTexts": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "websiteAuthoring": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
+  ],
+  "dashboardEditors": [
+    "en",
+    "ca",
+    "es",
+    "nb",
+    "nn"
   ]
 }

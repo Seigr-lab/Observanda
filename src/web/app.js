@@ -125,7 +125,11 @@ import {appearancePreview} from './appearance-preview.js';
 import {logosFor} from './branding.js';
 import {applicationMark} from './app-brand.js';
 import {brandingUI} from './branding-ui.js';
-import { RECORD_TYPES, recordLabel } from './record-types.js';
+import { RECORD_TYPES, STATUSES } from './record-types.js';
+import {recordTypeLabel as recordLabel} from './record-type-presentation.js';
+import './i18n/catalogues/applicationTexts.js';
+const appText=(key,values)=>t('applicationTexts',key,values);
+const recordStatus=status=>STATUSES.includes(status)?t('recordValues','status_'+status):titleCase(status);
 const $ = selector => document.querySelector(selector);
 const notices=noticeLayout($('#notice'));
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -298,7 +302,7 @@ async function ensureCompleteWorkspace(){
 function notify(message, error = false) {
   clearTimeout(noticeTimer);
   const notice = notices.node, text = document.createElement('span'); text.className = 'notice-message'; text.textContent = message; notice.replaceChildren(text); notice.className = `notice${error ? ' error' : ''}`;
-  const close = document.createElement('button'); close.type = 'button'; close.textContent = 'Dismiss'; close.onclick = () => notices.hide(); notice.append(close); notices.show();
+  const close = document.createElement('button'); close.type = 'button'; close.textContent = appText('dismiss'); close.onclick = () => notices.hide(); notice.append(close); notices.show();
   if (!error) noticeTimer = setTimeout(() => notices.hide(), 5000);
 }
 function report(error) {
@@ -306,26 +310,26 @@ function report(error) {
   if(error?.code==='LEGACY_WRITE_LOCK'){void writerRecovery.check({force:true}).catch(error=>notify(error.message,true));return;}
   if(error?.code==='RECORD_REVIEW'){notify(error.message);return;}
   if(error?.code==='RECORD_REVIEW_CANCELLED')return;
-  if(error?.projectId&&['ACCESS_LOCKED','ACCESS_DENIED','AUTH'].includes(error.code)){notify(error.message??'Unlock this project to continue.',true);return;}
+  if(error?.projectId&&['ACCESS_LOCKED','ACCESS_DENIED','AUTH'].includes(error.code)){notify(error.message??appText('unlockProject'),true);return;}
   if(error?.code==='ACCESS_LOCKED'){state.access={...state.access,locked:true};render();return;}
-  const message = error?.message ?? 'Connection interrupted. Your unsaved draft is still on screen.';
+  const message = error?.message ?? appText('connectionInterrupted');
   const publicationIssue=publicationErrorView(error,esc);
   if(publicationIssue){showDialog(publicationIssue+'<div class="dialog-actions"><button class="button" data-action="close-dialog">'+esc(publicationText('closeIssues'))+'</button></div>');return;}
   if (error?.code === 'PRIVACY' || error?.code === 'INVALID') {
-    showDialog(`<h2 id="dialog-title">${error.code === 'PRIVACY' ? 'Publication checks' : 'Check these fields'}</h2><p>${esc(message)}</p><ul class="privacy-details">${(error.details ?? []).map(issue => `<li>${esc(issue.field)} ${issue.recordId ? `<button class="button subtle" data-action="open-issue" data-id="${esc(issue.recordId)}">Open record</button>` : ''}</li>`).join('')}</ul><div class="dialog-actions"><button class="button" data-action="close-dialog">Back to workspace</button></div>`);
+    showDialog(`<h2 id="dialog-title">${esc(error.code === 'PRIVACY' ? appText('publicationChecks') : appText('checkFields'))}</h2><p>${esc(message)}</p><ul class="privacy-details">${(error.details ?? []).map(issue => `<li>${esc(issue.field)} ${issue.recordId ? `<button class="button subtle" data-action="open-issue" data-id="${esc(issue.recordId)}">${esc(appText('openRecord'))}</button>` : ''}</li>`).join('')}</ul><div class="dialog-actions"><button class="button" data-action="close-dialog">${esc(appText('backWorkspace'))}</button></div>`);
   } else notify(message, true);
 }
 function updateSaveStatus(){
   const changed=state.dirty||state.page==='appearance'&&textControls.isDirty();
-  const label=$('#save-status');if(label)label.textContent=savePromise?t('pendingSettings','saving'):changed?'Unsaved changes':'Saved';
+  const label=$('#save-status');if(label)label.textContent=savePromise?t('pendingSettings','saving'):changed?appText('unsaved'):appText('saved');
   recordDrafts.update();
   for(const button of document.querySelectorAll('.section-save [data-action="save"],.section-save [data-action="discard-section"]'))button.disabled=!changed||uploading||Boolean(savePromise)||websiteDocuments.structuralBusy()||figures.isBusy()||recordDrafts.isRecovering();
 }
 function sectionActions(){
   if(state.page==='editor'&&state.recordReading)return '';
-  const label={editor:'Save record',website:'Save website',branding:t('branding','save'),appearance:t('appearance','saveAppearance')}[state.page];
+  const label={editor:appText('saveRecord'),website:appText('saveWebsite'),branding:t('branding','save'),appearance:t('appearance','saveAppearance')}[state.page];
   if(!label)return '';
-  return `<footer class="section-save" aria-label="${label}"><div><span id="save-status" role="status"></span>${state.page==='editor'?recordDrafts.statusView():''}</div><div class="inline-actions"><button class="button" data-action="discard-section">Discard changes</button><button class="button primary" data-action="save">${label}</button>${state.page==='website'?`<button class="button" data-action="website-preview">${icon('eye')}${esc(t('websiteEditor','readingPreview'))}</button><button class="button" data-action="preview">${esc(t('websiteEditor','prepareEdition'))}</button>${state.storage?.encrypted?'<button class="button" data-action="publication-jobs-list">Website preparations</button>':''}`:''}</div></footer>`;
+  return `<footer class="section-save" aria-label="${esc(label)}"><div><span id="save-status" role="status"></span>${state.page==='editor'?recordDrafts.statusView():''}</div><div class="inline-actions"><button class="button" data-action="discard-section">${esc(appText('discardChanges'))}</button><button class="button primary" data-action="save">${esc(label)}</button>${state.page==='website'?`<button class="button" data-action="website-preview">${icon('eye')}${esc(t('websiteEditor','readingPreview'))}</button><button class="button" data-action="preview">${esc(t('websiteEditor','prepareEdition'))}</button>${state.storage?.encrypted?'<button class="button" data-action="publication-jobs-list">'+esc(appText('websitePreparations'))+'</button>':''}`:''}</div></footer>`;
 }
 function changed(dirtyState){
   changeVersion++;state.dirty=dirtyState;state.preview=null;updateSaveStatus();
@@ -356,7 +360,7 @@ async function saveRecords(){
   const workspaceCommand=!command&&indexed?workspaceSaveRequest(savedBook,submitted,previousRevisions):null;
   if(workspaceCommand&&selection)workspaceCommand.selection=selection;
   try {
-    if(!command&&indexed&&!workspaceCommand)throw {code:'INVALID',message:'These changes need their dedicated project or lab-book settings. Your draft is retained.'};
+    if(!command&&indexed&&!workspaceCommand)throw {code:'INVALID',message:appText('dedicatedSettings')};
     const result=command?await api('/api/research/records/save',{...command,baseEtag:state.etag}):
       workspaceCommand?await api('/api/workspace/save',{...workspaceCommand,baseEtag:state.etag}):await api('/api/notebook/save',{book:submitted,etag:state.etag});
     if(selection)websiteSelection.acknowledge(selection);
@@ -381,12 +385,12 @@ async function saveRecords(){
     const changes=recordCheckpoint();
     if(!changes)throw error;
     const latest=await api('/api/notebook',undefined,{adopt:false});
-    if(latest.book?.id!==state.book.id)throw {code:'WORKSPACE_CHANGED',message:'The workspace changed. Keep this window open to recover your draft.'};
+    if(latest.book?.id!==state.book.id)throw {code:'WORKSPACE_CHANGED',message:appText('workspaceChanged')};
     const entries=await recordRecovery.review({changes,book:latest.book});
-    if(!entries)throw {code:'RECORD_REVIEW_CANCELLED',message:'Your unsaved record is still in the editor. Choose Stay here to return to it.'};
+    if(!entries)throw {code:'RECORD_REVIEW_CANCELLED',message:appText('recordRetained')};
     adoptSnapshot(latest);state.book={...latest.book,entries};state.etag=latest.etag;
     dirty();render();await recordDrafts.flush();
-    throw {code:'RECORD_REVIEW',message:state.dirty?'Combined changes are ready in the editor. Review them, then save the record.':'The saved record already contains these changes.'};
+    throw {code:'RECORD_REVIEW',message:state.dirty?appText('combinedChanges'):appText('alreadySaved')};
   }
 }
 // Initial authoring commits its streamed checkpoint through the same selected
@@ -465,7 +469,7 @@ async function navigateResearch(target,{origin:providedOrigin}={}){
   if(target.revision){await materials.openRevision(target);return;}
   if(target.kind==='record'&&supportsRecordSelection()){const opened=await openRecordReading(target.id,target.selector?selectorAnchor(target.selector):null,true,sourceReturn);if(opened&&sourceReturn)state.recordReturn=sourceReturn;return;}
   const route=targetRoute(target,state.book);
-  if(!route){notify('The linked item is unavailable. Its reference has been kept.',true);return;}
+  if(!route){notify(appText('linkedUnavailable'),true);return;}
   const reading=target.kind==='record';
   if(reading)state.recordReturn=sourceReturn;
   Object.assign(state,resolveRoute(route+(reading?'/read'+(target.selector?'/'+selectorAnchor(target.selector):''):''),state.book));render();
@@ -484,7 +488,7 @@ async function recordLinkDestinations({query='',cursor=null,signal}={}){
  const result=await api('/api/research/records/query',{workspaceId:book.id,query:{projectId:null,notebookId:null,filter:'all',search:query,browse:recordBrowse()},cursor,limit:25},{adopt:false,signal});
  if(book.id!==state.book?.id||context!==state.storage?.contextId)throw {name:'AbortError'};
  const structure=cursor?[]:researchTargets({...book,entries:[]}).filter(t=>(t.title+' '+t.context).toLocaleLowerCase().includes(query));
- return {items:[...structure.map(t=>({href:researchReference(t),label:t.title,context:t.context})),...result.records.map(r=>({href:researchReference({workspaceId:book.id,kind:'record',id:r.id}),label:r.title,context:book.notebooks.find(n=>n.id===r.notebookId)?.title??'Record'}))],nextCursor:result.nextCursor,previousCursor:result.previousCursor};
+ return {items:[...structure.map(t=>({href:researchReference(t),label:t.title,context:t.context})),...result.records.map(r=>({href:researchReference({workspaceId:book.id,kind:'record',id:r.id}),label:r.title,context:book.notebooks.find(n=>n.id===r.notebookId)?.title??appText('record')}))],nextCursor:result.nextCursor,previousCursor:result.previousCursor};
 }
 function openEditorLink(href){const target=parseResearchReference(href);if(target)void leave.run(()=>navigateResearch(target));else if(/^(https?:|mailto:|tel:)/.test(href))window.open(href,'_blank','noopener,noreferrer');}
 const documents=documentEditors({book:()=>state.book,figures:()=>entry()?[...entry().figures,...entry().attachments.filter(a=>a.kind==='image')]:[],context:()=>state.access?.locked?null:state.book?.id,destinations:recordLinkDestinations,onError:message=>notify(message,true),onOpenLink:openEditorLink});
@@ -600,14 +604,14 @@ const designUI = appearanceUI({fontLibrary,textControls,state,esc,field,option,d
 const saveableForms=new Set(['starter-edit-form','starter-details-form','starter-field-form','starter-tag-form','record-view-form','notebook-config-form','structure-project-form','project-template-form','workspace-name-form','theme-name-form','lab-sample-form','lab-analysis-form','lab-result-form','storage-access-form','media-policy-form']);
 function pendingChanges(scope='all'){
   const websiteEditing=scope==='website-editor',navigation=scope==='navigation'||websiteEditing;if(navigation)scope='all';
-  const forms=drafts.changed(scope),labels=forms.map(form=>form.closest('dialog')?.querySelector('h2')?.textContent??({'workspace-name-form':'Workspace details','storage-access-form':'Local access settings','create-form':'Workspace setup','publish-token-form':'Unsubmitted connection details'}[form.id]??'Unsubmitted form'));
-  if(structureUI.notebooks.isDirty())labels.push($('#dialog #project-template-form')?'Lab-book template':'Project or lab book settings');
-  if(scope==='all'&&state.dirty&&!websiteEditing)labels.push(state.page==='editor'?'Record: '+(entry()?.title??'New record'):(document.querySelector('main h1')?.textContent??'Workspace')+' edits');
-  if(scope==='all'&&state.publishing?.dirty)labels.push('Publishing destination');
-  if(scope==='all'&&modules.needsNavigationGuard())labels.push('Module edits');
-  if(scope==='all'&&(navigation?dashboard.needsNavigationGuard():dashboard.isDirty()))labels.push('Module and dashboard settings');
+  const forms=drafts.changed(scope),labels=forms.map(form=>form.closest('dialog')?.querySelector('h2')?.textContent??({'workspace-name-form':appText('workspaceDetails'),'storage-access-form':appText('localAccess'),'create-form':appText('workspaceSetup'),'publish-token-form':appText('unsubmittedConnection')}[form.id]??appText('unsubmittedForm')));
+  if(structureUI.notebooks.isDirty())labels.push($('#dialog #project-template-form')?appText('labBookTemplate'):appText('projectBookSettings'));
+  if(scope==='all'&&state.dirty&&!websiteEditing)labels.push(state.page==='editor'?appText('recordEdits',{title:entry()?.title??appText('newRecord')}):appText('namedEdits',{name:document.querySelector('main h1')?.textContent??appText('workspace')}));
+  if(scope==='all'&&state.publishing?.dirty)labels.push(appText('publishingDestination'));
+  if(scope==='all'&&modules.needsNavigationGuard())labels.push(appText('moduleEdits'));
+  if(scope==='all'&&(navigation?dashboard.needsNavigationGuard():dashboard.isDirty()))labels.push(appText('moduleSettings'));
   if(scope==='all'&&userProfile.isDirty())labels.push(t('userProfile','title'));
-  if(textControls.isDirty()&&(scope==='all'||$('#dialog[open] [data-interface]')))labels.push('App text and layout settings');
+  if(textControls.isDirty()&&(scope==='all'||$('#dialog[open] [data-interface]')))labels.push(appText('appSettings'));
   if(attempts.isDirty())labels.push(t('attempts','title'));
   return {forms,labels:[...new Set(labels)],canSave:!attempts.isDirty()&&forms.every(form=>saveableForms.has(form.id))};
 }
@@ -615,12 +619,12 @@ async function savePending(scope='all',forms=drafts.changed(scope),{requireClean
  if(websiteDocuments.enabled())await websiteDocuments.waitForStructure();
  const guardScope=scope;if(scope==='navigation')scope='all';
  if(figures.isBusy())throw Error(t('figureProvenance','checking'));
-  if(forms.some(form=>!saveableForms.has(form.id)))throw new Error('Complete this action using its own form, or discard the unfinished form.');
-  for(const form of forms)if(!form.checkValidity())throw new Error('Complete the required fields before saving. Choose Stay here to return to the form.');
+  if(forms.some(form=>!saveableForms.has(form.id)))throw new Error(appText('completeAction'));
+  for(const form of forms)if(!form.checkValidity())throw new Error(appText('requiredFields'));
   for(const form of forms){
     const previous=draftWorkspace(state.book),etag=state.etag,websiteForm=websiteDocuments.enabled();
     try{await submitForm(form);}catch(error){if(!websiteForm&&state.etag===etag){state.book=previous;dirty();}throw error;}
-    if(form.isConnected&&(!form.closest('dialog')||form.closest('dialog').open)&&drafts.changed(scope).includes(form))throw new Error('The form has not been saved. Choose Stay here to check its fields.');
+    if(form.isConnected&&(!form.closest('dialog')||form.closest('dialog').open)&&drafts.changed(scope).includes(form))throw new Error(appText('formUnsaved'));
   }
   if(structureUI.notebooks.isDirty())await structureUI.notebooks.save();
   if(textControls.isDirty()&&(scope==='all'||$('#dialog[open] [data-interface]')))await textControls.save();
@@ -628,11 +632,11 @@ async function savePending(scope='all',forms=drafts.changed(scope),{requireClean
   if(scope==='all'&&modules.isDirty())await modules.save();
   if(scope==='all'&&dashboard.isDirty())await (guardScope==='navigation'?dashboard.saveNavigation():dashboard.save());
   if(scope==='all'&&userProfile.isDirty())await userProfile.save();
-  if(state.page==='website'&&scope==='all'){website.validate();for(const el of document.querySelectorAll('.website-controls input,.website-controls textarea'))if(!el.reportValidity())throw new Error('Complete the required website fields before saving.');}
+  if(state.page==='website'&&scope==='all'){website.validate();for(const el of document.querySelectorAll('.website-controls input,.website-controls textarea'))if(!el.reportValidity())throw new Error(appText('requiredWebsite'));}
   if(scope==='all'&&state.page==='editor')recordDetails.validate();
   if(scope==='all'||forms.length)await save();
   const complete=pendingChanges(guardScope).labels.length===0;
-  if(!complete&&requireClean)throw new Error('Newer changes still need saving. Save again or stay on this screen.');
+  if(!complete&&requireClean)throw new Error(appText('newerChanges'));
   return complete;
 }
 async function discardPending(scope='all',forms=drafts.changed(scope)){
@@ -730,14 +734,14 @@ async function selectRecord(id,{metadataOnly=false}={}){
  // owner activation or each record link. Live updates still adopt new heads.
  if(metadataOnly&&state.workspaceOutline&&!state.dirty&&savedBook?.id===workspaceId&&revisionId(etag))return true;
  const main=document.querySelector('#main'),status=document.createElement('p');
- status.setAttribute('role','status');status.textContent='Opening record...';
+ status.setAttribute('role','status');status.textContent=appText('openingRecord');
  if(main){main.inert=true;main.setAttribute('aria-busy','true');main.before(status);}
  recordActivity.stop();
  try{
   const result=metadataOnly?await newWorkspaceReader().read({requireOutline:true}):await api('/api/workspace/read/selection',{workspaceId,ids:[id]},{adopt:false});
   if(request!==recordOpenRequest||state.storage?.contextId!==context||state.book?.id!==workspaceId||state.etag!==etag||location.hash!==route||state.dirty)return false;
-  if(metadataOnly&&!result.outline)throw Error('The workspace no longer supports record editing in sections. Reload the workspace.');
-  if(!metadataOnly&&result.recordScope.missing.includes(id)){notify('The record is no longer available. Its reference is retained.',true);return false;}
+  if(metadataOnly&&!result.outline)throw Error(appText('editingUnavailable'));
+  if(!metadataOnly&&result.recordScope.missing.includes(id)){notify(appText('recordUnavailable'),true);return false;}
   adoptSnapshot(result);state.book=result.book;state.etag=result.etag;return true;
  }finally{status.remove();if(main&&request===recordOpenRequest){main.inert=false;main.removeAttribute('aria-busy');}}
 }
@@ -777,8 +781,8 @@ function render() {
   accessHelp.close();appShell.showWorkspace(renderPage);structureUI.projectStorage.bind();projectDirectoryUI.bind();labBookDirectoryUI.bind();bookAccessSettings.bind();bookStorage.bind();structureUI.projectCreation.bind();structureUI.projectMoves.bind();structureUI.projectOpening.bind();structureUI.projectDeletion.bind();
   workspaceLive.bind();
   fontLibrary.decorate();drafts.track();shellMenu.apply(state.page);updateSaveStatus();dashboard.bind();operationsLive.bind();sites.bind();website.bind();modules.bind();connectedWork.bind();documents.bind();figures.bind();mediaImports.bind();branding.bind();
-  previewSurfaces=[...document.querySelectorAll('#design-preview,iframe[title="Publication preview"]')].map(frame=>previewSurface(frame));
-  const reviewFrame=document.querySelector('iframe[title="Publication preview"]');
+  previewSurfaces=[...document.querySelectorAll('#design-preview,iframe.preview-frame')].map(frame=>previewSurface(frame));
+  const reviewFrame=document.querySelector('iframe.preview-frame');
   reviewFrame?.addEventListener('load',()=>publicationReviewChoices.follow(reviewFrame,publicationPreviewUrl(state,state.preview.id)).catch(error=>notify(error.message)));
   syncRoute();storageControls.workspaces.bind();activity.bind();recordContent.bind();help.bind();workflow.focusSection();recordSections.bind();workflow.bind();recordList.bind();recordActivity.bind();labUI.bind();decorateRecordLinks(document,state.book);
   userProfile.bind();configurationRecord?.bind();
@@ -790,7 +794,7 @@ function renderGeneralPreferences(){return storageControls.recoveryPanel()||stru
 function renderPage(){
  if(state.ownerOperation)return ownerOperation.view();
  const module=moduleForPage(state.page);
- if(module&&!enabledModule(state.dashboardSettings,module.id))return '<section class="panel"><h1>'+esc(module.label)+' is turned off</h1><p>Your data and settings are retained.</p><button class="button" data-action="dashboard-settings">Manage modules</button></section>';
+ if(module&&!enabledModule(state.dashboardSettings,module.id))return '<section class="panel"><h1>'+esc(appText('moduleDisabled',{module:module.label}))+'</h1><p>'+esc(appText('dataRetained'))+'</p><button class="button" data-action="dashboard-settings">'+esc(appText('manageModules'))+'</button></section>';
  let content;
  switch(state.page){
  case 'migration':content=migration.view();break;
@@ -818,23 +822,23 @@ function renderPage(){
  default:content=renderEntries();
  }
  if(['entries','editor','record-reader'].includes(state.page))content=structureUI.recordContext()+content;
- if(state.page==='project'||state.page==='entries'&&state.notebook!=='all')content+='<button class="button" data-action="research-copy-context">Copy '+(state.page==='project'?'project':'lab book')+' reference</button>';
+ if(state.page==='project'||state.page==='entries'&&state.notebook!=='all')content+='<button class="button" data-action="research-copy-context">'+esc(appText(state.page==='project'?'copyProject':'copyBook'))+'</button>';
  if(['workspace','entries','editor','record-reader'].includes(state.page))content=recordDrafts.banner()+content;
  content=sites.header()+content+sectionActions();if(explicitWebsite(state))return content;if(state.page==='branding'&&(!state.brandReturn||state.brandReturn.startsWith('#/preferences')))return preferencesFrame('appearance',content,state.dashboardSettings);return preferencePage(state.page)?preferencesFrame(state.page,content,state.dashboardSettings):content;
 }
 
 function renderEntries() {
   const notebook=state.book.notebooks.find(n=>n.id===state.notebook), project=state.book.projects.find(p=>p.id===state.project);
-  return `<div class="page-heading"><div><span class="scope-kicker">${notebook?'Lab book':project?'Project records':'Workspace records'}</span><h1>${esc(notebook?.title??(project?project.title+' / All records':'All records'))}</h1><p class="subtitle">${notebook?`${esc(locationName(projectDirectoryUI.navigation(state.book),project.id))}`:'Search research records across the selected scope.'}</p></div>${notebook?`<div class="inline-actions"><button class="button" data-action="edit-notebook" data-id="${notebook.id}">Lab book settings</button></div>`:''}</div><div class="section-bar record-list-bar"><h2>Records <span id="record-count" class="badge">${recordList.count()}</span></h2><div class="filters"><button class="button" data-action="record-views">${esc(t('recordViews','title'))}</button><input id="search" maxlength="512" class="search-input" type="search" value="${esc(state.search)}" placeholder="Search records..." aria-label="Search records">${recordList.typeFilter()}<button class="button primary" data-action="new-entry">${icon('plus')}New record</button></div></div>${recordList.modes()}${recordBrowseFields(state,structureUI.notebooks.generalRecords(state.project),{esc,field,option,domains:recordList.domains()})}<div id="entry-results" aria-live="polite">${renderEntryResults()}</div>${bookStorage.view()}${bookAccessSettings.view()}`;
+  return `<div class="page-heading"><div><span class="scope-kicker">${esc(notebook?appText('labBook'):project?appText('projectRecords'):appText('workspaceRecords'))}</span><h1>${esc(notebook?.title??(project?appText('projectAllRecords',{project:project.title}):appText('allRecords')))}</h1><p class="subtitle">${notebook?`${esc(locationName(projectDirectoryUI.navigation(state.book),project.id))}`:esc(appText('searchScope'))}</p></div>${notebook?`<div class="inline-actions"><button class="button" data-action="edit-notebook" data-id="${notebook.id}">${esc(appText('labBookSettings'))}</button></div>`:''}</div><div class="section-bar record-list-bar"><h2>${esc(appText('records'))} <span id="record-count" class="badge">${recordList.count()}</span></h2><div class="filters"><button class="button" data-action="record-views">${esc(t('recordViews','title'))}</button><input id="search" maxlength="512" class="search-input" type="search" value="${esc(state.search)}" placeholder="${esc(appText('searchPlaceholder'))}" aria-label="${esc(appText('searchRecords'))}">${recordList.typeFilter()}<button class="button primary" data-action="new-entry">${icon('plus')}${esc(appText('newRecord'))}</button></div></div>${recordList.modes()}${recordBrowseFields(state,structureUI.notebooks.generalRecords(state.project),{esc,field,option,domains:recordList.domains()})}<div id="entry-results" aria-live="polite">${renderEntryResults()}</div>${bookStorage.view()}${bookAccessSettings.view()}`;
 }
 function renderEntryResults() { return recordList.view(); }
 
 function renderRecordTable(entries,{action='edit-entry'}={}) {
- if(!entries.length)return '<section class="workspace-empty"><h3>No records in this view</h3><p>Open a lab book to add records.</p></section>';
- return `<div class="table-scroll"><table class="records-table"><thead><tr><th>Record</th><th>Type</th><th>Location / lab book</th><th>Date</th><th>Progress / outcome</th><th>Website</th></tr></thead><tbody>${entries.map(e=>{
+ if(!entries.length)return '<section class="workspace-empty"><h3>'+esc(appText('noRecords'))+'</h3><p>'+esc(appText('openBook'))+'</p></section>';
+ return `<div class="table-scroll"><table class="records-table"><thead><tr><th>${esc(appText('record'))}</th><th>${esc(appText('type'))}</th><th>${esc(appText('locationBook'))}</th><th>${esc(appText('date'))}</th><th>${esc(appText('progressOutcome'))}</th><th>${esc(appText('website'))}</th></tr></thead><tbody>${entries.map(e=>{
   const n=state.book.notebooks.find(n=>n.id===e.notebookId);
-  if(e.owner){const owner=e.owner,recordLink=researchReference({workspaceId:owner.workspaceId,kind:'record',id:e.id}),bookLink=researchReference({workspaceId:owner.workspaceId,kind:'notebook',id:e.notebookId});return `<tr><td><a class="text-button" href="${esc(recordLink)}">${esc(e.title)}</a></td><td>${esc(e.template?.label??recordLabel(e.type))}</td><td class="record-location">${owner.projectId?`<button class="text-button" data-action="open-project" data-id="${owner.projectId}">${esc(owner.projectTitle)}</button>`:esc(owner.projectTitle)}<a class="text-button" href="${esc(bookLink)}">${esc(owner.notebookTitle)}</a></td><td>${esc(recordDateLabel(e.occurredOn))}</td><td>${esc(titleCase(e.status))}${e.outcome?'<small class="record-outcome">'+esc(e.outcome)+'</small>':''}</td><td>${e.share?'Included':'Private'}</td></tr>`;}
-  return `<tr><td><button class="text-button" data-action="${action}" data-id="${e.id}">${esc(e.title)}</button></td><td>${esc(e.template?.label??recordLabel(e.type))}</td><td class="record-location"><button class="text-button" data-action="open-project" data-id="${n?.projectId}">${esc(locationName(projectDirectoryUI.navigation(state.book),n?.projectId))}</button><button class="text-button" data-action="filter-notebook" data-id="${n?.id}">${esc(n?.title)}</button></td><td>${esc(recordDateLabel(e.occurredOn))}</td><td>${esc(titleCase(e.status))}${e.outcome?'<small class="record-outcome">'+esc(e.outcome)+'</small>':''}</td><td>${e.share?'Included':'Private'}</td></tr>`;
+  if(e.owner){const owner=e.owner,recordLink=researchReference({workspaceId:owner.workspaceId,kind:'record',id:e.id}),bookLink=researchReference({workspaceId:owner.workspaceId,kind:'notebook',id:e.notebookId});return `<tr><td><a class="text-button" href="${esc(recordLink)}">${esc(e.title)}</a></td><td>${esc(e.template?.label??recordLabel(e.type))}</td><td class="record-location">${owner.projectId?`<button class="text-button" data-action="open-project" data-id="${owner.projectId}">${esc(owner.projectTitle)}</button>`:esc(owner.projectTitle)}<a class="text-button" href="${esc(bookLink)}">${esc(owner.notebookTitle)}</a></td><td>${esc(recordDateLabel(e.occurredOn))}</td><td>${esc(recordStatus(e.status))}${e.outcome?'<small class="record-outcome">'+esc(e.outcome)+'</small>':''}</td><td>${esc(e.share?appText('included'):appText('private'))}</td></tr>`;}
+  return `<tr><td><button class="text-button" data-action="${action}" data-id="${e.id}">${esc(e.title)}</button></td><td>${esc(e.template?.label??recordLabel(e.type))}</td><td class="record-location"><button class="text-button" data-action="open-project" data-id="${n?.projectId}">${esc(locationName(projectDirectoryUI.navigation(state.book),n?.projectId))}</button><button class="text-button" data-action="filter-notebook" data-id="${n?.id}">${esc(n?.title)}</button></td><td>${esc(recordDateLabel(e.occurredOn))}</td><td>${esc(recordStatus(e.status))}${e.outcome?'<small class="record-outcome">'+esc(e.outcome)+'</small>':''}</td><td>${esc(e.share?appText('included'):appText('private'))}</td></tr>`;
  }).join('')}</tbody></table></div>`;
 }
 
@@ -842,26 +846,26 @@ function renderEditor() {
   if(configurationRecord?.active())return configurationRecord.view();
   const e=entry();
   if(!e){state.page='entries';return renderEntries();}
-  if(state.recordReading)return `<div class="record-toolbar"><button class="button" data-action="back-to-records">Back to records</button><button class="button" data-action="record-edit">Edit record</button>${bookReferences.button()}${recordHistory.button()}${reviews.button()}${migrationProvenance.button()}</div>
+  if(state.recordReading)return `<div class="record-toolbar"><button class="button" data-action="back-to-records">${esc(appText('backRecords'))}</button><button class="button" data-action="record-edit">${esc(appText('editRecord'))}</button>${bookReferences.button()}${recordHistory.button()}${reviews.button()}${migrationProvenance.button()}</div>
    <article class="record-reader"><h1>${esc(e.title)}</h1>${recordActivity.view({readonly:true})}${workflow.view({readonly:true})}${recordRevisionView(e,esc,{assetUrl:id=>ownedAssetURL(state,'/api/media/'+id),relations:false,anchors:true,sectionsHtml:figure=>recordSections.view(e,{readonly:true,figure}),attemptReference:attempts.reference,resultReference:results.reference})}${materials.view(e,{readonly:true})}${recordDetails.relations(e,{readonly:true})}</article>`;
   const notebook=state.book.notebooks.find(n=>n.id===e.notebookId);
-  const notebookOptions=state.book.projects.map(project=>`<optgroup label="Project: ${esc(project.title)}">${state.book.notebooks.filter(n=>n.projectId===project.id).map(n=>option(n.id,n.title,e.notebookId)).join('')}</optgroup>`).join('');
-  return `<div class="record-toolbar"><button class="button subtle back-button" data-action="back-to-records">${icon('arrow')}Back to records</button><button class="button" data-action="record-read">Read record</button>${bookReferences.button()}${recordHistory.button()}${reviews.button()}${migrationProvenance.button()}${recordStarters.button()}</div>
-    <div class="editor-layout"><section class="editor-paper" aria-label="Entry editor">
-      ${field('Record title',`<textarea rows="1" class="title-input" data-entry="title" maxlength="180" placeholder="Give this record a name">${esc(e.title)}</textarea>`)}
-      ${documents.field({key:e.id+':body',label:'Summary / context',value:e.body,set:value=>{editableRecord(state.book,e.id).body=value;dirtyRecord(e.id);}})}
-      ${field('Tags <small>Separated by commas</small>',`<input data-entry="tags" value="${esc(e.tags.join(', '))}" placeholder="e.g. garden, first attempt">`)}
+  const notebookOptions=state.book.projects.map(project=>`<optgroup label="${esc(appText('projectLabel',{project:project.title}))}">${state.book.notebooks.filter(n=>n.projectId===project.id).map(n=>option(n.id,n.title,e.notebookId)).join('')}</optgroup>`).join('');
+  return `<div class="record-toolbar"><button class="button subtle back-button" data-action="back-to-records">${icon('arrow')}${esc(appText('backRecords'))}</button><button class="button" data-action="record-read">${esc(appText('readRecord'))}</button>${bookReferences.button()}${recordHistory.button()}${reviews.button()}${migrationProvenance.button()}${recordStarters.button()}</div>
+    <div class="editor-layout"><section class="editor-paper" aria-label="${esc(appText('entryEditor'))}">
+      ${field(esc(appText('recordTitle')),`<textarea rows="1" class="title-input" data-entry="title" maxlength="180" placeholder="${esc(appText('recordName'))}">${esc(e.title)}</textarea>`)}
+      ${documents.field({key:e.id+':body',label:appText('summaryContext'),value:e.body,set:value=>{editableRecord(state.book,e.id).body=value;dirtyRecord(e.id);}})}
+      ${field(esc(appText('tags'))+' <small>'+esc(appText('commaSeparated'))+'</small>',`<input data-entry="tags" value="${esc(e.tags.join(', '))}" placeholder="${esc(appText('tagExample'))}">`)}
       ${recordActivity.view()}${workflow.view()}${attempts.view()}<div data-result-statements>${results.view()}</div>${recordFields(e,{field,option,esc})}${renderSections(e)}${renderMedia(e)}${figures.view()}${materials.view()}
       ${recordDetails.contributors(e)}${recordDetails.relations(e)}${connectedWork.view()}
-    </section><aside class="editor-side"><section class="panel"><h3>About this record</h3>
-      ${e.template?'<p class="scope-kicker">'+esc(e.template.label)+'</p>':field('Record type',`<select data-entry="type">${types.map(t=>option(t,recordLabel(t),e.type)).join('')}</select>`)}
-      ${field('Progress',`<select data-entry="status">${[...LIFECYCLE_STATUSES,...(LIFECYCLE_STATUSES.includes(e.status)?[]:[e.status])].map(status=>option(status,titleCase(status)+(LIFECYCLE_STATUSES.includes(status)?'':' (legacy status)'),e.status)).join('')}</select>`)}
-      ${field('Outcome <small>Optional</small>',`<input data-entry="outcome" maxlength="500" value="${esc(e.outcome??'')}" list="record-outcomes" placeholder="Describe the result in your own words"><datalist id="record-outcomes">${OUTCOME_SUGGESTIONS.map(v=>`<option value="${esc(v)}"></option>`).join('')}</datalist>`)}
-      <p class="muted">Progress and outcome are separate. A completed run can have negative or inconclusive results.</p>
+    </section><aside class="editor-side"><section class="panel"><h3>${esc(appText('aboutRecord'))}</h3>
+      ${e.template?'<p class="scope-kicker">'+esc(e.template.label)+'</p>':field(esc(appText('recordType')),`<select data-entry="type">${types.map(t=>option(t,recordLabel(t),e.type)).join('')}</select>`)}
+      ${field(esc(appText('progress')),`<select data-entry="status">${[...LIFECYCLE_STATUSES,...(LIFECYCLE_STATUSES.includes(e.status)?[]:[e.status])].map(status=>option(status,LIFECYCLE_STATUSES.includes(status)?recordStatus(status):appText('legacyStatus',{status:recordStatus(status)}),e.status)).join('')}</select>`)}
+      ${field(esc(appText('outcome'))+' <small>'+esc(appText('optional'))+'</small>',`<input data-entry="outcome" maxlength="500" value="${esc(e.outcome??'')}" list="record-outcomes" placeholder="${esc(appText('outcomePlaceholder'))}"><datalist id="record-outcomes">${OUTCOME_SUGGESTIONS.map(v=>`<option value="${esc(v)}"></option>`).join('')}</datalist>`)}
+      <p class="muted">${esc(appText('progressHelp'))}</p>
       ${recordDateFields(e.occurredOn,{field,option,esc})}
-      ${field('Lab book',`<select data-entry="notebookId">${notebook?'':option(e.notebookId,'Choose a lab book (previous lab book removed)',e.notebookId)}${notebookOptions}</select>`)}
-      <p class="muted">Location: ${esc(locationName(projectDirectoryUI.navigation(state.book),notebook?.projectId))}</p>
-    </section><section class="panel"><h3>Sharing</h3><label class="checkbox"><input type="checkbox" data-entry="share" ${e.share?'checked':''}><span>Include in website<small>${esc(t('attempts','sharing'))}</small></span></label></section>
+      ${field(esc(appText('labBook')),`<select data-entry="notebookId">${notebook?'':option(e.notebookId,appText('chooseBook'),e.notebookId)}${notebookOptions}</select>`)}
+      <p class="muted">${esc(appText('locationLabel',{location:locationName(projectDirectoryUI.navigation(state.book),notebook?.projectId)}))}</p>
+    </section><section class="panel"><h3>${esc(appText('sharing'))}</h3><label class="checkbox"><input type="checkbox" data-entry="share" ${e.share?'checked':''}><span>${esc(appText('includeWebsite'))}<small>${esc(t('attempts','sharing'))}</small></span></label></section>
     <section class="panel danger-zone"><button class="button danger full-width" data-action="delete-entry">${icon('trash')}${esc(t('recordAuthoring','remove'))}</button></section></aside></div>`;
 }
 
@@ -991,7 +995,7 @@ async function rawAction(button) {
   const administrationAction=name==='templates'||name==='storage'||name==='activity-show'||['storage-','security-','migration-','inventory-'].some(prefix=>name?.startsWith(prefix));
   if((state.workspaceOutline||state.recordScope&&!scopedRecordAction(name))&&!readingAction&&!administrationAction&&!brandingAction&&!appearanceAction&&!publicationAction&&!name?.startsWith('edition-')&&!outlineModuleAction&&!recordCreationActions.has(name)&&!structureActions.has(name)&&!state.access?.locked&&!state.storageUnavailable&&!state.newWorkspace&&!['browse-record','edit-entry','open-issue','record-read-linked','storage-lock','workspace','entries','projects','open-project','project-records','project-recent-retry','project-recent-collection-retry','research-copy-context','filter-notebook','clear-record-filters','close-dialog','preferences','workspace-discard'].includes(name)&&!(state.page==='entries'&&name?.startsWith('record-type-'))&&!name?.startsWith('record-list-')&&!name?.startsWith('record-view')&&!name?.startsWith('starter-')&&!name?.startsWith('dashboard-')&&!name?.startsWith('module-settings-')){const route=location.hash;await ensureCompleteWorkspace();if(location.hash!==route){await restoreRoute();return;}}
   const module=moduleForPage(name);
-  if(module&&!enabledModule(state.dashboardSettings,module.id)){notify('Enable '+module.label+' in Preferences > Modules & dashboard.');return;}
+  if(module&&!enabledModule(state.dashboardSettings,module.id)){notify(appText('enableModule',{module:module.label}));return;}
   if((['website','publishing','integrations','appearance','branding','preview'].includes(name))&&!activeWebsite(state))await sites.enter(null,{preferences:['appearance','integrations'].includes(name)&&Boolean(button.closest?.('.preferences-tabs')||button.dataset.preferences==='true')});
   if(name==='website'||name==='preview'&&state.page==='website')await website.load();
 
@@ -1007,7 +1011,7 @@ async function rawAction(button) {
   if (await setupControls.action(button) || await textControls.action(button) || await storageControls.action(button) || await structureUI.action(button) || await designUI.action(button) || await labUI.action(button) || await publishUI.action(button) || await extendedAction(button)) return;
   if (name === 'close-dialog') { recordDestination.reset();await structureUI.notebooks.close();state.pendingResearchLink=null; $('#dialog').close(); return; }
   if (name === 'discard-section') { await discardPending(); return; }
-  if (name === 'save') { button.disabled = true; try { const complete=await savePending('all',undefined,{requireClean:state.page!=='editor'}); if(state.page==='website')website.saved(); if(state.page!=='website'||!complete)notify(complete?'Changes saved.':t('recordSaveProgress','newerEdits')); } finally { updateSaveStatus(); } return; }
+  if (name === 'save') { button.disabled = true; try { const complete=await savePending('all',undefined,{requireClean:state.page!=='editor'}); if(state.page==='website')website.saved(); if(state.page!=='website'||!complete)notify(complete?appText('changesSaved'):t('recordSaveProgress','newerEdits')); } finally { updateSaveStatus(); } return; }
   if(name==='clear-record-filters'){state.search='';state.filter='all';state.recordBrowse=null;rememberFilters();render();$('#search')?.focus();return;}
   if (name === 'entries') { state.search='';state.filter='all';state.recordBrowse=null;state.page = 'entries'; state.project = null; state.notebook = 'all'; render(); }
   if (name === 'projects' || name === 'website') { $('#dialog').close(); const returning=state.page==='review'&&name==='website';state.page = name; state.project = null; state.notebook = 'all'; render();if(returning)restoreEditorScroll(); }
@@ -1119,7 +1123,7 @@ document.addEventListener('input', event => {
   if(el.closest('main #workspace-name-form')){
     const form=el.form,changed=drafts.changed('all').includes(form);
     for(const button of form.querySelectorAll('button'))button.disabled=!changed;
-    form.querySelector('[data-workspace-status]').textContent=changed?'Unsaved changes':'Saved';
+    form.querySelector('[data-workspace-status]').textContent=changed?appText('unsaved'):appText('saved');
   }
   if(branding.input(el)||recordList.input(el))return;
   if(['storagePath','storageParent'].includes(el.name)||el.name==='title'&&el.closest('#create-form')){const result=el.closest('form')?.querySelector('.storage-check-result');if(result)result.textContent='';}
@@ -1164,23 +1168,23 @@ async function submitForm(form){
   form.dataset.busy='true';form.setAttribute('aria-busy','true');
   try {
     if(await modules.submit(form,data)||await structureUI.notebooks.submit(form,data))return;
-    if(form.id==='media-policy-form'){const policy={};for(const [key,,unit] of mediaPolicyFields)policy[key]=Math.round(Number(data.get(key))*unit);state.mediaPolicy=await api('/api/media-policy',{policy,etag:state.mediaPolicy.etag});render();notify('Media limits saved.');return;}
+    if(form.id==='media-policy-form'){const policy={};for(const [key,,unit] of mediaPolicyFields)policy[key]=Math.round(Number(data.get(key))*unit);state.mediaPolicy=await api('/api/media-policy',{policy,etag:state.mediaPolicy.etag});render();notify(appText('mediaLimitsSaved'));return;}
     if(form.id.startsWith('storage-')||form.id.startsWith('security-')){form.dataset.busy='true';form.setAttribute('aria-busy','true');const submit=form.querySelector('button[type="submit"]'),label=submit?.textContent,busyLabel=t('access',form.id==='storage-copy-form'?'copyProgress':form.id==='storage-move-form'?'moveProgress':'workingProgress');if(submit){submit.disabled=true;submit.textContent=busyLabel;}try{await storageControls.submit(form,data);return;}finally{delete form.dataset.busy;form.removeAttribute('aria-busy');if(submit){submit.disabled=false;if(submit.textContent===busyLabel)submit.textContent=label;}}}
     if (['workspace-name-form','workspace-organize-form','workspace-organize-confirm'].includes(form.id)) { form.dataset.busy='true'; try { await structureUI.submit(form,data); return; } finally { delete form.dataset.busy; } }
     if (form.id === 'theme-name-form') { form.dataset.busy = 'true'; try { await designUI.submit(form,data); return; } finally { delete form.dataset.busy; } }
     if (form.id.startsWith('lab-') || form.id === 'publish-token-form') { form.dataset.busy = 'true'; try { if (await labUI.submit(form,data) || await publishUI.submit(form,data)) return; } finally { delete form.dataset.busy; } }
     if (form.id === 'create-form') {
-      if((data.get('password')??'')!==(data.get('confirmPassword')??'')){notify('The passwords do not match.',true);return;}
+      if((data.get('password')??'')!==(data.get('confirmPassword')??'')){notify(appText('passwordMismatch'),true);return;}
       form.dataset.busy = 'true';setupControls.busy(true);
-      const result = await api('/api/notebook/create', { createNew:state.newWorkspace===true, labBookTypes:data.getAll('labBookTypes'), identity:identityFromForm(data), title: data.get('title'), description: data.get('description'), storageParent:data.get('storageParent'),password:data.get('password')??'' }); state.book = result.book; state.etag = result.etag;state.storage=result.storage;state.access=result.access;state.newWorkspace=false;state.storageUnavailable=false;state.dirty=false;state.preview=null;state.laboratory=null;state.publishing=null;state.publishOutcome=null;state.selected=null;state.project=null;state.notebook='all';state.search='';state.filter='all';state.recordBrowse=null;state.designSource='auto';state.designPage=null;state.designResult=null;state.page='workspace';history.replaceState(null,'','#/workspace'); await dashboard.load(); await recordDrafts.start(state.book.id);render();notify('Workspace created in the selected folder.');
+      const result = await api('/api/notebook/create', { createNew:state.newWorkspace===true, labBookTypes:data.getAll('labBookTypes'), identity:identityFromForm(data), title: data.get('title'), description: data.get('description'), storageParent:data.get('storageParent'),password:data.get('password')??'' }); state.book = result.book; state.etag = result.etag;state.storage=result.storage;state.access=result.access;state.newWorkspace=false;state.storageUnavailable=false;state.dirty=false;state.preview=null;state.laboratory=null;state.publishing=null;state.publishOutcome=null;state.selected=null;state.project=null;state.notebook='all';state.search='';state.filter='all';state.recordBrowse=null;state.designSource='auto';state.designPage=null;state.designResult=null;state.page='workspace';history.replaceState(null,'','#/workspace'); await dashboard.load(); await recordDrafts.start(state.book.id);render();notify(appText('workspaceCreated'));
     }
 
 
   }catch(error){if(!websiteForm&&beforeBook&&state.etag===beforeEtag){state.book=beforeBook;Object.assign(state,locationBefore);dirty();}throw error;}finally{delete form.dataset.busy;form.removeAttribute('aria-busy');if(form.id==='create-form')setupControls.busy(false);}
 }
-document.addEventListener('submit',event=>{event.preventDefault();const form=event.target;submitForm(form).catch(error=>{if(form.id==='create-form'&&form.isConnected)setupControls.error(error.message??'Could not create this workspace. Your settings are still here.');else if(form.isConnected&&form.closest('dialog')?.open)notify(error.message??'Could not save. Your form is still here.',true);else report(error);});});
+document.addEventListener('submit',event=>{event.preventDefault();const form=event.target;submitForm(form).catch(error=>{if(form.id==='create-form'&&form.isConnected)setupControls.error(error.message??appText('workspaceCreateFailed'));else if(form.isConnected&&form.closest('dialog')?.open)notify(error.message??appText('formSaveFailed'),true);else report(error);});});
 window.addEventListener('beforeunload', event => { if (pendingChanges().labels.length || uploading || figures.isBusy() || materials.isBusy()) { event.preventDefault(); event.returnValue = ''; } });
-document.addEventListener('keydown', event => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's' && state.book) { event.preventDefault(); savePending().then(() => {if(state.page!=='website')notify('Changes saved.');}).catch(report); } });
+document.addEventListener('keydown', event => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's' && state.book) { event.preventDefault(); savePending().then(() => {if(state.page!=='website')notify(appText('changesSaved'));}).catch(report); } });
 
 
 
@@ -1209,21 +1213,21 @@ async function removeSelectedRecord(){
 
 function renderSections(e) { return recordSections.view(e); }
 function mediaPlayer(a) {
-  return a.kind === 'image' ? `<img src="${esc(ownedAssetURL(state,'/api/media/'+a.id))}" alt="${esc(a.alt || a.caption)}">` : `<${a.kind} src="${esc(ownedAssetURL(state,'/api/media/'+a.id))}" controls preload="metadata" aria-label="${esc(a.caption || a.kind)}"></${a.kind}>`;
+  return a.kind === 'image' ? `<img src="${esc(ownedAssetURL(state,'/api/media/'+a.id))}" alt="${esc(a.alt || a.caption)}">` : `<${a.kind} src="${esc(ownedAssetURL(state,'/api/media/'+a.id))}" controls preload="metadata" aria-label="${esc(a.caption || t('websiteMedia',a.kind))}"></${a.kind}>`;
 }
 function uploadField(label, purpose, projectId = '') {
   const accept = purpose === 'attachment' ? 'image/svg+xml,.svg,image/png,image/jpeg,image/webp,image/bmp,image/tiff,audio/*,video/*,image/gif' : 'image/svg+xml,.svg,image/png,image/jpeg,image/webp,image/bmp,image/tiff';
   return field(label, `<input type="file" data-upload="${purpose}" data-project-id="${projectId}" accept="${accept}" ${uploading ? 'disabled' : ''}>`);
 }
 function renderMedia(e) {
-  return `<section class="media-editor"><h3>Images, audio & video</h3><p class="muted">Original files are kept intact. Choose which prepared copies to publish.</p>${uploadField('Add media', 'attachment')}<p id="media-progress" class="muted" role="status">${uploading ? 'Preparing media...' : ''}</p>${e.attachments.map((a,index) => `<div class="media-item">${mediaPlayer(a)}${field('Caption', `<input data-attachment="${index}" data-column="caption" value="${esc(a.caption)}" maxlength="1500">`)}${field(a.kind === 'image' ? 'Alternative text' : 'Accessible description', `<textarea rows="2" data-attachment="${index}" data-column="alt" maxlength="1500">${esc(a.alt)}</textarea>`)}${a.kind !== 'image' ? field('Transcript / extended description', `<textarea rows="4" data-attachment="${index}" data-column="transcript" maxlength="60000">${esc(a.transcript)}</textarea>`) : ''}<label class="checkbox"><input type="checkbox" data-attachment="${index}" data-column="share" ${a.share ? 'checked' : ''}><span>Include this media in website<small>Check its visible and audible content before sharing.</small></span></label><button class="button subtle" data-action="remove-media" data-index="${index}">Remove from entry</button></div>`).join('')}</section>`;
+  return `<section class="media-editor"><h3>${esc(appText('media'))}</h3><p class="muted">${esc(appText('originalsRetained'))}</p>${uploadField(appText('addMedia'), 'attachment')}<p id="media-progress" class="muted" role="status">${esc(uploading ? appText('preparingMedia') : '')}</p>${e.attachments.map((a,index) => `<div class="media-item">${mediaPlayer(a)}${field(esc(appText('caption')), `<input data-attachment="${index}" data-column="caption" value="${esc(a.caption)}" maxlength="1500">`)}${field(esc(a.kind === 'image' ? appText('alternativeText') : appText('accessibleDescription')), `<textarea rows="2" data-attachment="${index}" data-column="alt" maxlength="1500">${esc(a.alt)}</textarea>`)}${a.kind !== 'image' ? field(esc(appText('transcript')), `<textarea rows="4" data-attachment="${index}" data-column="transcript" maxlength="60000">${esc(a.transcript)}</textarea>`) : ''}<label class="checkbox"><input type="checkbox" data-attachment="${index}" data-column="share" ${a.share ? 'checked' : ''}><span>${esc(appText('includeMedia'))}<small>${esc(appText('checkMedia'))}</small></span></label><button class="button subtle" data-action="remove-media" data-index="${index}">${esc(appText('removeFromEntry'))}</button></div>`).join('')}</section>`;
 }
 async function uploadMedia(input) { await mediaImports.upload(input); }
 async function applyMedia(intent,asset) {
   const {purpose,recordId,projectId,brandTarget}=intent;
   if(purpose==='record-attachment'){await recordContent.attachMedia(intent,asset);notify(t('recordContent','mediaAttached'));return;}
   if (purpose === 'attachment') {
-    const current=editableRecord(state.book,recordId);if(!current)throw Error('Open the destination record again.');
+    const current=editableRecord(state.book,recordId);if(!current)throw Error(appText('reopenRecord'));
     if(!current.attachments.some(a=>a.id===asset.id))current.attachments.push({...asset,caption:'',alt:'',transcript:'',share:false});
   } else if(['website','website-library','website-file','website-file-library'].includes(purpose)){await website.acceptAsset(asset,brandTarget);}
   else if(purpose==='branding'){
@@ -1231,8 +1235,8 @@ async function applyMedia(intent,asset) {
   } else if(purpose==='site-logo'){
     state.book.website.logoId=asset.id;const b=state.book.branding.find(item=>item.target==='home');
     if(b){if(b.logos.length)b.logos[0]={id:asset.id,alt:state.book.website.logoAlt};else b.logos.push({id:asset.id,alt:state.book.website.logoAlt});}
-  } else {const project=state.book.projects.find(p=>p.id===projectId);if(!project)throw Error('Open the destination project again.');project.logoId=asset.id;}
-  dirty();notify(purpose.startsWith('website-file')?t('websiteMedia','fileAdded'):'Media added. Save your changes when ready.');render();
+  } else {const project=state.book.projects.find(p=>p.id===projectId);if(!project)throw Error(appText('reopenProject'));project.logoId=asset.id;}
+  dirty();notify(purpose.startsWith('website-file')?t('websiteMedia','fileAdded'):appText('mediaAdded'));render();
 }
 function extendedInput(el) {
   if(recordContent.input(el))return true;
@@ -1247,8 +1251,8 @@ async function extendedAction(button) {
   if(name==='workspace-discard'){drafts.reset([document.querySelector('main #workspace-name-form')]);render();return true;}
   if (name === 'branding') { state.brandReturn=routeFor(state); state.brandTarget = button.dataset.target ?? 'home'; state.page = 'branding'; $('#dialog').close(); render(); return true; }
   if(recordSections.action(button))return true;
-  if (name === 'remove-media') { if (confirm('Remove this media from the entry? The stored original and saved revisions are kept.')) { entry().attachments.splice(index,1); dirtyRecord(); render(); } return true; }
-  if (name === 'delete-page') { if (confirm('Remove this page? Saved versions remain in history.')) { state.book.pages = state.book.pages.filter(p => p.id !== id); state.book.branding = state.book.branding.filter(b => b.target !== 'page:' + id); state.book.website.layouts=state.book.website.layouts.filter(l=>l.target!=='page:'+id); state.book.website.navigation = state.book.website.navigation.filter(item => item.target !== 'page:' + id).map(item=>item.parent==='page:'+id?{...item,parent:null}:item); dirty(); render(); } return true; }
+  if (name === 'remove-media') { if (confirm(appText('removeMedia'))) { entry().attachments.splice(index,1); dirtyRecord(); render(); } return true; }
+  if (name === 'delete-page') { if (confirm(appText('removePage'))) { state.book.pages = state.book.pages.filter(p => p.id !== id); state.book.branding = state.book.branding.filter(b => b.target !== 'page:' + id); state.book.website.layouts=state.book.website.layouts.filter(l=>l.target!=='page:'+id); state.book.website.navigation = state.book.website.navigation.filter(item => item.target !== 'page:' + id).map(item=>item.parent==='page:'+id?{...item,parent:null}:item); dirty(); render(); } return true; }
   if (name === 'remove-project-logo') { state.book.projects.find(p => p.id === id).logoId = null; dirty(); $('#dialog').close(); render(); return true; }
   if (name === 'remove-logo') { state.book.website.logoId = null; const b = state.book.branding.find(item => item.target === 'home'); if (b) b.logos.splice(0,1); dirty(); render(); return true; }
   return false;
@@ -1259,12 +1263,12 @@ document.addEventListener('change', event => {
   if (event.target.id === 'preview-page' && event.target.value && state.preview) {state.preview.currentPage=event.target.value;const url=publicationPreviewUrl(state,state.preview.id,event.target.value);$('iframe.preview-frame').src=url;$('#full-public-preview').href=url;}
 });
 
-const mediaPolicyFields=[['maxUploadBytes','Maximum original file (MiB)',1048576],['maxPreparedBytes','Maximum website copy (MiB)',1048576],['maxDurationSeconds','Maximum recording length (minutes)',60],['reserveBytes','Keep disk space free (GiB)',1073741824],['maxImagePixels','Maximum image size (megapixels)',1000000],['maxAudioChannels','Maximum audio channels',1],['maxSampleRate','Maximum audio sample rate (Hz)',1],['processingTimeoutSeconds','Processing time limit (minutes)',60]];
+const mediaPolicyFields=[['maxUploadBytes','maxUpload',1048576],['maxPreparedBytes','maxPrepared',1048576],['maxDurationSeconds','maxDuration',60],['reserveBytes','reserveSpace',1073741824],['maxImagePixels','maxPixels',1000000],['maxAudioChannels','maxChannels',1],['maxSampleRate','maxSampleRate',1],['processingTimeoutSeconds','processingTimeout',60]];
 function renderMediaPolicy(){
  if(!state.mediaPolicy)return '';
- return `<form id="media-policy-form" class="panel media-policy"><h2>Media limits</h2><p class="muted">Blank fields use the standard limits. Set a larger positive limit when needed. Available processing memory, free disk space and hosting limits still apply.</p><div class="form-grid">${mediaPolicyFields.slice(0,4).map(mediaPolicyField).join('')}</div><details><summary>Processing limits</summary><p class="muted">Conversion also stops after five minutes without input or output activity. Waiting for storage to accept output does not count as an idle converter.</p><div class="form-grid">${mediaPolicyFields.slice(4).map(mediaPolicyField).join('')}</div></details><div class="section-save"><button class="button primary" type="submit">Save media limits</button></div></form>`;
+ return `<form id="media-policy-form" class="panel media-policy"><h2>${esc(appText('mediaLimits'))}</h2><p class="muted">${esc(appText('mediaLimitsHelp'))}</p><div class="form-grid">${mediaPolicyFields.slice(0,4).map(mediaPolicyField).join('')}</div><details><summary>${esc(appText('processingLimits'))}</summary><p class="muted">${esc(appText('conversionIdle'))}</p><div class="form-grid">${mediaPolicyFields.slice(4).map(mediaPolicyField).join('')}</div></details><div class="section-save"><button class="button primary" type="submit">${esc(appText('saveMediaLimits'))}</button></div></form>`;
 }
-function mediaPolicyField([key,label,unit]){const value=state.mediaPolicy.policy[key];return field(label,`<input type="number" min="0" step="any" name="${key}" value="${value?value/unit:''}" placeholder="Standard limit">`);}
+function mediaPolicyField([key,label,unit]){const value=state.mediaPolicy.policy[key];return field(esc(appText(label)),`<input type="number" min="0" step="any" name="${key}" value="${value?value/unit:''}" placeholder="${esc(appText('standardLimit'))}">`);}
 
 let workspaceLoadTask=null;
 function loadWorkspace(){
@@ -1298,7 +1302,7 @@ async function loadWorkspaceOwned(){
   if(state.pendingResearchLink&&state.book&&state.pendingResearchLink.workspaceId===state.book.id){
     const target=state.pendingResearchLink,route=target.kind==='record'&&supportsRecordSelection()?'#/records/'+target.id+'/read'+(target.selector?'/'+selectorAnchor(target.selector):''):targetRoute(target,state.book);
     state.pendingResearchLink=null;
-    if(route)history.replaceState(null,'',route);else notify('The workspace opened, but the linked item is unavailable.',true);
+    if(route)history.replaceState(null,'',route);else notify(appText('openedUnavailable'),true);
   }
   await restoreRoute();
   return true;
@@ -1320,7 +1324,7 @@ function editableLogos(target) {
 function markHistory(){history.replaceState({...history.state,observandaIndex:routeIndex},'',location.href);}
 function refreshRecordResults(){
  rememberFilters();$('#entry-results').innerHTML=renderEntryResults();$('#record-count').textContent=recordList.count();recordList.bind({delay:150});
- const count=browseActive(recordBrowse(state.recordBrowse));$('#record-filter-summary').textContent='Filters'+(count?' ('+count+')':'');
+ const count=browseActive(recordBrowse(state.recordBrowse));$('#record-filter-summary').textContent=appText('filters')+(count?' ('+count+')':'');
 }
 function rememberFilters(){history.replaceState({...history.state,observandaIndex:routeIndex,search:state.search,filter:state.filter,recordBrowse:recordBrowse(state.recordBrowse),filterWorkspaceId:state.book.id},'',location.href);}
 function syncRoute(){
