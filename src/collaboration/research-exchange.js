@@ -6,10 +6,10 @@ import {clearVault} from '../encryption.js';
 import {initializeLocation} from '../locations.js';
 import {ExchangeIdentity,exchangeContact} from './exchange-identity.js';
 import {ExchangeParts} from './exchange-parts.js';
-import {readExchange,writeExchange} from './exchange-stream.js';
+import {readExchange,writeExchange,exchangeDeclaration} from './exchange-stream.js';
 import {ContentAccess} from './content-access.js';
 import {requireAdministrator} from './organization-policy.js';
-import {selectedMetadata} from './selection.js';
+import {selectedMetadata,validateSelection} from './selection.js';
 import {collectResearch,packageSelection,populateSharedWorkspace} from './research-package.js';
 import {identityHash} from './identity.js';
 import {workingFile,retainWorkingBase} from './working-copy.js';
@@ -46,34 +46,41 @@ export class ResearchExchange{
   if(selection.kind==='offer')await this.currentGrant(selection);
   else{const working=await this.working();valid(working&&working.selection.id===selection.baseId&&working.selection.grant.role==='editor');}
   const recipient=selection.kind==='offer'?selection.recipient:selection.owner;
-  return writeExchange(this.identity,recipient,parts.entries(),{id:selection.id});
+  const declaration=await exchangeDeclaration(parts.items(),selection);
+  return writeExchange(this.identity,recipient,parts.entries(),{id:selection.id,declaration});
  }
  async receive(source,{signal}={}){
   const parts=new ExchangeParts(this.workspace);return this.workspace.withLock(async()=>{
-   const result=await readExchange(this.identity,source,(info,content)=>parts.receive(info,content),{signal}),selection=await packageSelection(parts),local=(await this.identity.signer.public()).id;
+   const result=await readExchange(this.identity,source,(info,content,options)=>parts.receive(info,content,options),{signal,requireDeclaration:true,authorizeDeclaration:async({id,sender,declaration})=>{
+    const selection=validateSelection(declaration.selection);valid(selection.id===id,'COLLABORATION_PACKAGE');await this.authorizeIncoming(selection,sender);
+   }}),selection=await packageSelection(parts);
    valid(selection.id===result.id,'COLLABORATION_PACKAGE');
-   if(selection.kind==='offer'){
-    valid(selection.recipient.identity.id===local&&selection.owner.identity.id===result.sender.id);
-    let enrolled=false;
-    for await(const file of this.workspace.metadataNames('.observanda/organizations/enrollments')){
-     const e=JSON.parse(await this.workspace.readMetadata('.observanda/organizations/enrollments/'+file,20000));
-     if(e.acceptedAt&&e.authorityFingerprint===result.sender.id&&e.authorityId===selection.metadata.id&&e.organizationId===selection.grant.organizationId&&e.recipient===local&&e.principalId===selection.grant.principalId)enrolled=true;
-    }
-    // Subsequent editions can also arrive in an existing working copy.
-    const working=await this.working();if(working&&working.selection.owner.identity.id===result.sender.id&&working.selection.grant.principalId===selection.grant.principalId&&working.selection.metadata.id===selection.metadata.id)enrolled=true;
-    valid(enrolled);
-   }else{
-    valid(selection.owner.identity.id===local&&selection.recipient.identity.id===result.sender.id);
-    const base=new ExchangeParts(this.workspace,selection.baseId);await base.open();const offered=await packageSelection(base);
-    valid(offered.kind==='offer'&&offered.edition===selection.edition&&identityHash(offered.grant)===identityHash(selection.grant)&&identityHash(offered.recipient)===identityHash(selection.recipient)&&identityHash(offered.owner)===identityHash(selection.owner)&&identityHash(offered.metadata)===identityHash(selection.metadata));
-    await this.currentGrant(offered,{write:true});
-   }
+   await this.authorizeIncoming(selection,result.sender);
    // Authenticate the entire incoming stream and current authority first.
    // Re-encryption changes the transport signature, not its selected content.
    const receiptPath='.observanda/collaboration/received/'+selection.id+'.json',raw=await this.workspace.readMetadata(receiptPath,8192),receipt={id:parts.id,sender:result.sender.id,selectionHash:identityHash(selection),manifestHash:result.attestation.value.manifestHash};
    if(raw){const previous=JSON.parse(raw);valid(previous.sender===receipt.sender&&previous.selectionHash===receipt.selectionHash&&previous.manifestHash===receipt.manifestHash,'COLLABORATION_PACKAGE');const retained=new ExchangeParts(this.workspace,previous.id);await retained.open();throw new RepeatedExchange(this.summary(retained,selection));}
    await parts.finish({direction:'incoming',selectionHash:receipt.selectionHash,sender:result.sender.id,signatureHash:result.signatureHash,attestation:result.attestation});await this.workspace.writeMetadata(receiptPath,JSON.stringify(receipt));return this.summary(parts,selection);
   }).catch(async error=>{await parts.discardUncommitted();if(error instanceof RepeatedExchange)return {...error.summary,replayed:true};throw error;});
+ }
+ async authorizeIncoming(selection,sender){
+   const local=(await this.identity.signer.public()).id;
+   if(selection.kind==='offer'){
+    valid(selection.recipient.identity.id===local&&selection.owner.identity.id===sender.id);
+    let enrolled=false;
+    for await(const file of this.workspace.metadataNames('.observanda/organizations/enrollments')){
+     const e=JSON.parse(await this.workspace.readMetadata('.observanda/organizations/enrollments/'+file,20000));
+     if(e.acceptedAt&&e.authorityFingerprint===sender.id&&e.authorityId===selection.metadata.id&&e.organizationId===selection.grant.organizationId&&e.recipient===local&&e.principalId===selection.grant.principalId)enrolled=true;
+    }
+    // Subsequent editions can also arrive in an existing working copy.
+    const working=await this.working();if(working&&working.selection.owner.identity.id===sender.id&&working.selection.grant.principalId===selection.grant.principalId&&working.selection.metadata.id===selection.metadata.id)enrolled=true;
+    valid(enrolled);
+   }else{
+    valid(selection.owner.identity.id===local&&selection.recipient.identity.id===sender.id);
+    const base=new ExchangeParts(this.workspace,selection.baseId);await base.open();const offered=await packageSelection(base);
+    valid(offered.kind==='offer'&&offered.edition===selection.edition&&identityHash(offered.grant)===identityHash(selection.grant)&&identityHash(offered.recipient)===identityHash(selection.recipient)&&identityHash(offered.owner)===identityHash(selection.owner)&&identityHash(offered.metadata)===identityHash(selection.metadata));
+    await this.currentGrant(offered,{write:true});
+   }
  }
  async acceptCopy(id,destination){
   const parts=new ExchangeParts(this.workspace,id),head=await parts.open(),selection=await packageSelection(parts);valid(head.direction==='incoming'&&selection.kind==='offer');

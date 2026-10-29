@@ -24,12 +24,12 @@ export class ExchangeParts{
   if(old){if(old.size!==size||old.sha256!==sha256)throw new AppError('COLLABORATION_PACKAGE');return old;}
   return this.receive({kind,name,size,sha256},contentStream(content));
  }
- async receive(info,source){
+ async receive(info,source,{signal}={}){
   descriptor({...info,index:this.count},this.scope);if(this.bytes+info.size>2**41)throw new AppError('LIMIT');
   if(await this.descriptor(info.kind,info.name))throw new AppError('COLLABORATION_PACKAGE');
   if(['description','record','metadata'].includes(info.kind)&&info.size>(info.kind==='metadata'?16:2)*1024*1024)throw new AppError('LIMIT');
   const directory=await privateDirectory(this.workspace.root,this.prefix),index=this.count++,file=path.join(directory,index+'.blob');
-  const saved=await writeContent(this.workspace,file,source,{maxBytes:info.size||1,expected:{size:info.size,sha256:info.sha256}});
+  const saved=await writeContent(this.workspace,file,source,{signal,maxBytes:info.size||1,expected:{size:info.size,sha256:info.sha256}});
   if(saved.size!==info.size||saved.sha256!==info.sha256)throw new AppError('COLLABORATION_PACKAGE');
   const entry={...info,index};await this.write(async()=>{await this.workspace.writeMetadata(this.prefix+'/items/'+index+'.json',JSON.stringify(entry));await this.workspace.writeMetadata(this.prefix+'/names/'+digest(info.kind+'/'+info.name)+'.json',JSON.stringify(entry));});this.bytes+=saved.size;return entry;
  }

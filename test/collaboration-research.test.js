@@ -17,7 +17,7 @@ import {ChangeReview} from '../src/collaboration/change-review.js';
 import {ResearchMaterials} from '../src/research-materials.js';
 import {contentBuffer} from '../src/file-content.js';
 import {copyPlan,copyWorkspace} from '../src/locations.js';
-import {writeExchange} from '../src/collaboration/exchange-stream.js';
+import {writeExchange,exchangeDeclaration} from '../src/collaboration/exchange-stream.js';
 import {ExchangeParts} from '../src/collaboration/exchange-parts.js';
 import {MediaStore} from '../src/media.js';
 import {MediaImports} from '../src/media-imports.js';
@@ -63,7 +63,7 @@ test('encrypted selected books open with independent keys and retain editable re
 });
 
 test('scope projection is canonical and revoked grants reject both downloads and returned research',async t=>{
- const f=await fixture(t),metadata=selectedMetadata(f.book,[f.book.notebooks[0].id]),prepared=await f.sa.prepareOffer({grantId:f.grant.id,contact:f.contact});
+ const f=await fixture(t),metadata=selectedMetadata((await f.author.workspace.outline()).metadata,[f.book.notebooks[0].id]),prepared=await f.sa.prepareOffer({grantId:f.grant.id,contact:f.contact});
  const parts=(await import('../src/collaboration/exchange-parts.js')).ExchangeParts,p=new parts(f.author.workspace,prepared.id);await p.open();const selection=await p.value('description','selection');assert.deepEqual(validateSelection(selection).metadata,metadata);
  await f.sa.access.saveLocal(await f.a.identity.public(),{workspaceId:f.book.id,expectedRevision:1,active:false,scopes:f.grant.scopes,organizationId:f.org.id,id:f.grant.id,recipient:f.grant.recipient,role:'editor'});
  await assert.rejects(f.sa.outgoing(prepared.id),{code:'COLLABORATION_DENIED'});
@@ -104,7 +104,10 @@ test('team changes and removed members revoke outstanding returns; unrelated org
  await f.a.command('team.save',{organizationId:f.org.id,id:teamId,name:'Field team',members:[f.principalId]},(await f.state()).revision);
  const incoming=await f.sb.receive(await f.sa.outgoing(offer.id)),destination=path.join(f.directory,'revoked-copy');await f.sb.acceptCopy(incoming.id,destination);
  const access=await readAccess(destination),vault=await verifyAccess(access,'','',{deviceStore:f.member.deviceStore});f.vaults.push(vault);const sender=new ResearchExchange(new Workspace(destination,vault),f.member.deviceStore),prepared=await sender.prepareChanges(),bytes=await Array.fromAsync(await sender.outgoing(prepared.id));
- await f.a.command('member.change',{organizationId:f.org.id,principalId:f.principalId,role:'member',active:false},(await f.state()).revision);await assert.rejects(f.sa.receive(bytes),{code:'COLLABORATION_DENIED'});
+ await f.a.command('member.change',{organizationId:f.org.id,principalId:f.principalId,role:'member',active:false},(await f.state()).revision);
+ const receive=ExchangeParts.prototype.receive;let staged=0;
+ ExchangeParts.prototype.receive=function(...args){staged++;return receive.apply(this,args);};
+ try{await assert.rejects(f.sa.receive(bytes),{code:'COLLABORATION_DENIED'});assert.equal(staged,0,'Revoked senders must be rejected before staging any entry');}finally{ExchangeParts.prototype.receive=receive;}
  const outsider=await encryptedFixture(path.join(f.directory,'outsider'),sampleNotebook());f.vaults.push(outsider.vault);const other=new ResearchExchange(outsider.workspace,outsider.deviceStore),identity=await other.identity.signer.public();await f.a.organizations.create({workspaceId:f.book.id,name:'Other organization',administratorName:'Other owner',identity,expectedRevision:(await f.state()).revision});
  await assert.rejects(f.sa.prepareOffer({grantId:f.grant.id,contact:await other.contact()}),{code:'COLLABORATION_DENIED'});
 });
@@ -120,8 +123,9 @@ test('a signed collaborator file cannot replace access files or introduce record
  const f=await fixture(t),offer=await f.sa.prepareOffer({grantId:f.grant.id,contact:f.contact}),source=new ExchangeParts(f.author.workspace,offer.id);await source.open();
  const selection=await source.value('description','selection'),id=randomUUID(),changed={...selection,kind:'changes',id,baseId:selection.id};
  async function* entries(extra){for await(const item of source.entries())yield item.kind==='description'?{kind:'description',name:'selection',content:JSON.stringify(changed)}:item;yield extra;}
- await assert.rejects(f.sa.receive(writeExchange(f.sb.identity,selection.owner,entries({kind:'original',name:'.observanda/access.json',content:'not allowed'}),{id})),{code:'COLLABORATION_PACKAGE'});
- const foreign={...f.book.entries[2],id:randomUUID()},before=await f.author.workspace.read(),received=await f.sa.receive(writeExchange(f.sb.identity,selection.owner,entries({kind:'record',name:foreign.id,content:JSON.stringify(foreign)}),{id}));
+ const encoded=async extra=>writeExchange(f.sb.identity,selection.owner,entries(extra),{id,declaration:await exchangeDeclaration(entries(extra),changed)});
+ await assert.rejects(f.sa.receive(await encoded({kind:'original',name:'.observanda/access.json',content:'not allowed'})),{code:'COLLABORATION_PACKAGE'});
+ const foreign={...f.book.entries[2],id:randomUUID()},before=await f.author.workspace.read(),received=await f.sa.receive(await encoded({kind:'record',name:foreign.id,content:JSON.stringify(foreign)}));
  await assert.rejects(new ChangeReview(f.sa).review(received.id),{code:'COLLABORATION_PACKAGE'});assert.deepEqual(await f.author.workspace.read(),before);
 });
 
