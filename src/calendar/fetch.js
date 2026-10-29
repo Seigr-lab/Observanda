@@ -1,16 +1,9 @@
 import https from 'node:https';
 import {lookup} from 'node:dns/promises';
-import {BlockList,isIP} from 'node:net';
+import {isIP} from 'node:net';
+import {publicAddress} from '../public-network.js';
+export {publicAddress} from '../public-network.js';
 import {AppError} from '../errors.js';
-const blocked=new BlockList();
-for(const [address,prefix] of [['0.0.0.0',8],['10.0.0.0',8],['100.64.0.0',10],['127.0.0.0',8],['169.254.0.0',16],['172.16.0.0',12],['192.0.0.0',24],['192.0.2.0',24],['192.168.0.0',16],['198.18.0.0',15],['198.51.100.0',24],['203.0.113.0',24],['224.0.0.0',3]])blocked.addSubnet(address,prefix);
-export function publicAddress(address){
- const family=isIP(address);
- if(family===4)return !blocked.check(address,'ipv4');
- // Accept only globally routed IPv6; exclude documentation, Teredo and 6to4.
- if(family===6)return /^[23][0-9a-f]{3}:/i.test(address)&&!/^2001:(?:0:|db8:)/i.test(address)&&!/^2002:/i.test(address);
- return false;
-}
 export async function fetchCalendar(value,{resolve=lookup}={}){
  let url;try{url=new URL(value);}catch{throw new AppError('CALENDAR_FETCH');}
  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);

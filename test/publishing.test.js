@@ -1,25 +1,31 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile } from 'node:fs/promises';
-import { createHash } from 'node:crypto';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { createHash,randomUUID } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import { Publisher, defaultPublishing, validatePublishing } from '../src/publishing.js';
-import { Workspace, digest, serialize } from '../src/storage.js';
+import { digest, serialize } from '../src/storage.js';
 import { sampleNotebook } from '../src/sample.js';
 import { buildPublication } from '../src/publication.js';
 import {githubFixture as mainGithubFixture} from './github-fixture.js';
+import {encryptedFixture} from './browser/encrypted-fixture.js';
+import {clearVault} from '../src/encryption.js';
+import {WebsiteSites} from '../src/website-sites.js';
+import {newElement} from '../src/web/composition-tree.js';
 const sha = (type, bytes) => createHash('sha1').update(`${type} ${bytes.length}\0`).update(bytes).digest('hex');
 const token = 'synthetic_session_secret_1234567890';
-async function setup(options) {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'observanda-publisher-')), ws = new Workspace(root);
-  const saved = await ws.create(sampleNotebook()), candidate = buildPublication(saved.book); candidate.etag = saved.etag;
-  return { root, ws, candidate, owner: saved.book.id, publisher: new Publisher(root, options) };
+async function setup(t,options) {
+  const book=sampleNotebook();book.website.home.sections=[newElement('text',randomUUID)];
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'observanda-publisher-')), f=await encryptedFixture(directory,book),ws=f.workspace,root=ws.root;
+  t.after(async t=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
+  const saved = await new WebsiteSites(ws).read(null), candidate = buildPublication(saved.book); candidate.etag = saved.etag;candidate.websitePin=saved.websitePin;
+  return { root, ws, candidate, owner: saved.book.id, publisher: new Publisher(root, options,f.vault) };
 }
 const githubFixture=mainGithubFixture;
 
-test('publishing settings validate targets, reject unknown secret fields and remain outside publication', async () => {
-  const s = await setup(), config = defaultPublishing(); Object.assign(config.github, { owner: 'example', repository: 'notebook', branch: 'observanda-site', pages: true });
+test('publishing settings validate targets, reject unknown secret fields and remain outside publication', async t => {
+  const s = await setup(t), config = defaultPublishing(); Object.assign(config.github, { owner: 'example', repository: 'notebook', branch: 'observanda-site', pages: true });
   const saved = await s.publisher.save(config, 'new');
   assert.equal(saved.connected, false); assert.equal(saved.config.github.repository, 'notebook');
   await assert.rejects(s.publisher.save(config, 'new'), { code: 'PUBLISH_STALE' });
@@ -30,8 +36,8 @@ test('publishing settings validate targets, reject unknown secret fields and rem
   assert.ok(![...s.candidate.files.values()].join('').includes('publishing.json'));
 });
 
-test('GitHub upload sends only reviewed bytes, verifies hashes, and extends only the owned publication branch', async () => {
-  const fixture = githubFixture(), s = await setup({ request: fixture.request });
+test('GitHub upload sends only reviewed bytes, verifies hashes, and extends only the owned publication branch', async t => {
+  const fixture = githubFixture(), s = await setup(t,{ request:fixture.request,liveRequest:fixture.request });
   const config = defaultPublishing(); Object.assign(config.github, { owner: 'example', repository: 'notebook', branch: 'observanda-site', pages: true });
   const saved = await s.publisher.save(config, 'new'); await s.publisher.connect(token);
   const receipt = await s.publisher.deploy(s.candidate, saved.etag, s.owner);
@@ -39,30 +45,30 @@ test('GitHub upload sends only reviewed bytes, verifies hashes, and extends only
   const firstCommit = fixture.calls.find(c => c.route.endsWith('/git/commits')).data;
   assert.deepEqual(firstCommit.parents, []);
   for (const content of s.candidate.files.values()) assert.ok(fixture.blobs.has(sha('blob', Buffer.from(content))));
-  const disk = await readFile(path.join(s.root, '.observanda', 'publishing.json'), 'utf8'); assert.ok(!disk.includes(token));
+  const disk = await s.ws.readMetadata('.observanda/publishing.json',16384); assert.ok(!disk.includes(token));
   const again = await s.publisher.deploy(s.candidate, saved.etag, s.owner);
   const commits = fixture.calls.filter(c => c.route.endsWith('/git/commits'));
   assert.deepEqual(commits[1].data.parents, [receipt.commit]);
   assert.ok(fixture.calls.some(c => c.method === 'PATCH' && c.data.force === false));
-  fixture.setHead('b'.repeat(40));
+  fixture.commits.set('b'.repeat(40),{...fixture.commits.get(fixture.head),parents:[fixture.head]});fixture.setHead('b'.repeat(40));
   const writes = fixture.calls.filter(c => c.method !== 'GET').length;
   await assert.rejects(s.publisher.deploy(s.candidate, saved.etag, s.owner), { code: 'PUBLISH_OWNERSHIP' });
   assert.equal(fixture.calls.filter(c => c.method !== 'GET').length, writes);
   assert.notEqual(again.commit, receipt.commit);
 });
 
-test('changed content or destination blocks publishing before network writes', async () => {
-  const fixture = githubFixture(), s = await setup({ request: fixture.request });
+test('changed content or destination blocks publishing before network writes', async t => {
+  const fixture = githubFixture(), s = await setup(t,{ request:fixture.request,liveRequest:fixture.request });
   const config = defaultPublishing(); Object.assign(config.github, { owner: 'example', repository: 'notebook', branch: 'observanda-site', pages: true });
   const saved = await s.publisher.save(config, 'new'); await s.publisher.connect(token);
   await assert.rejects(s.publisher.deploy(s.candidate, 'old', s.owner), { code: 'PUBLISH_STALE' });
   const current = await s.ws.read(); current.book.title = 'New edit'; await s.ws.save(current.book, current.etag);
   await assert.rejects(s.publisher.deploy(s.candidate, saved.etag, s.owner), { code: 'STALE' });
-  assert.equal(fixture.calls.length, 1);
+  assert.equal(fixture.calls.filter(call=>call.method!=='GET').length, 0);
 });
 
-test('repository-only upload makes no Pages requests and changing Pages policy preserves branch ownership',async()=>{
- const remote=githubFixture(),s=await setup({request:remote.request}),config=defaultPublishing();
+test('repository-only upload makes no Pages requests and changing Pages policy preserves branch ownership',async t=>{
+ const remote=githubFixture(),s=await setup(t,{request:remote.request,liveRequest:remote.request}),config=defaultPublishing();
  Object.assign(config.github,{owner:'example',repository:'notebook',branch:'observanda-site'});
  assert.equal(config.github.pages,false);const saved=await s.publisher.save(config,'new');await s.publisher.connect(token);
  assert.match((await s.publisher.check()).message,/Upload only/);
@@ -80,8 +86,8 @@ test('repository-only upload makes no Pages requests and changing Pages policy p
  assert.deepEqual(remote.calls.filter(c=>c.route.endsWith('/git/commits')).at(-1).data.parents,[first.commit]);
 });
 
-test('an empty GitHub repository is reported before any remote writes',async()=>{
- const remote=githubFixture(),s=await setup({request:(url,options)=>new URL(url).pathname.includes('/git/ref/')?new Response(JSON.stringify({message:'Git Repository is empty.'}),{status:409}):remote.request(url,options)});
+test('an empty GitHub repository is reported before any remote writes',async t=>{
+ const remote=githubFixture(),s=await setup(t,{request:(url,options)=>new URL(url).pathname.includes('/git/ref/')?new Response(JSON.stringify({message:'Git Repository is empty.'}),{status:409}):remote.request(url,options)});
  const config=defaultPublishing();Object.assign(config.github,{owner:'example',repository:'notebook',branch:'observanda-site'});
  const saved=await s.publisher.save(config,'new');await s.publisher.connect(token);
  await assert.rejects(s.publisher.check(),{code:'PUBLISH_EMPTY_REPO'});
@@ -89,8 +95,8 @@ test('an empty GitHub repository is reported before any remote writes',async()=>
  assert.equal(remote.calls.filter(c=>c.method!=='GET').length,0);
 });
 
-test('reviewing existing main pins its parent and Pages source, then subsequent uploads keep both',async()=>{
- const remote=mainGithubFixture({branch:'main',initialFiles:{'.nojekyll':'','README.md':'Old website introduction'},initialPages:{build_type:'legacy',source:{branch:'old-site',path:'/docs'}}}),s=await setup({request:remote.request}),config=defaultPublishing();
+test('reviewing existing main pins its parent and Pages source, then subsequent uploads keep both',async t=>{
+ const remote=mainGithubFixture({branch:'main',initialFiles:{'.nojekyll':'','README.md':'Old website introduction'},initialPages:{build_type:'legacy',source:{branch:'old-site',path:'/docs'}}}),s=await setup(t,{request:remote.request,liveRequest:remote.request}),config=defaultPublishing();
  Object.assign(config.github,{owner:'example',repository:'notebook',pages:true});assert.equal(config.github.branch,'main');
  const saved=await s.publisher.save(config,'new');await s.publisher.connect(token);const initial=remote.head;
  await assert.rejects(s.publisher.deploy(s.candidate,saved.etag,s.owner),{code:'PUBLISH_OWNERSHIP'});
@@ -113,9 +119,9 @@ test('reviewing existing main pins its parent and Pages source, then subsequent 
  assert.equal((await s.publisher.read()).receipt.verification.failed,true);assert.equal((await s.publisher.read()).receipt.verification.files,undefined);
 });
 
-test('a changed main branch or Pages source invalidates approval before any upload',async()=>{
+test('a changed main branch or Pages source invalidates approval before any upload',async t=>{
  for(const change of ['head','pages']){
-  const remote=mainGithubFixture({branch:'main',initialFiles:{'.nojekyll':''}}),s=await setup({request:remote.request}),config=defaultPublishing();Object.assign(config.github,{owner:'example',repository:'notebook',pages:true});
+  const remote=mainGithubFixture({branch:'main',initialFiles:{'.nojekyll':''}}),s=await setup(t,{request:remote.request,liveRequest:remote.request}),config=defaultPublishing();Object.assign(config.github,{owner:'example',repository:'notebook',pages:true});
   const saved=await s.publisher.save(config,'new');await s.publisher.connect(token);const plan=await s.publisher.reviewDestination(s.candidate,saved.etag);
   if(change==='head')remote.setHead('c'.repeat(40));
   else{const request=s.publisher.request;s.publisher.request=(url,options)=>new URL(url).pathname.endsWith('/pages')?new Response(JSON.stringify({build_type:'workflow',source:null})):request(url,options);}

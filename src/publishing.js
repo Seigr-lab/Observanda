@@ -15,6 +15,7 @@ import {randomUUID} from 'node:crypto';
 import { Workspace, digest, serialize } from './storage.js';
 import { AppError } from './errors.js';
 import { SSHHost } from './ssh-host.js';
+import {publicHttpsRequest} from './public-https.js';
 
 export const defaultPublishing = () => ({ kind: 'github', github: { owner: '', repository: '', branch: 'main', pages: false, directory: '' }, ssh: { host: '', port: 22, user: '', directory: '', identityFile: '' }, publicUrl: '' });
 export const pagesSource = pages => pages ? {build_type:pages.build_type,branch:pages.source?.branch??null,path:pages.source?.path??null,cname:pages.cname??null} : null;
@@ -34,8 +35,8 @@ export function validatePublishing(c) {
 }
 
 export class Publisher {
-  constructor(root, { request = fetch, ssh = new SSHHost(), connection=null, workspace=null } = {}, vault = null) {
-    this.workspace = workspace??new Workspace(root,vault); this.request = request; this.ssh = ssh; this.token = null; this.connection=connection;
+  constructor(root, { request = fetch, liveRequest = publicHttpsRequest, ssh = new SSHHost(), connection=null, workspace=null } = {}, vault = null) {
+    this.workspace = workspace??new Workspace(root,vault); this.request = request; this.liveRequest = liveRequest; this.ssh = ssh; this.token = null; this.connection=connection;
     this.settingsFile = path.join(root, '.observanda', 'publishing.json');
     this.receiptsFile = path.join(root, '.observanda', 'publishing-receipts.json');
   }
@@ -185,7 +186,7 @@ export class Publisher {
       if(/^[a-f0-9-]{36}$/.test(receipt.deploymentId??''))await this.workspace.writeMetadata('.observanda/deployment-verifications/'+receipt.deploymentId+'.json',serialize(verification));
     });
     try{
-      const verification=await verifyLiveFiles(this.request,base,receipt,{removed:deploymentInventoryPaths(this.workspace,inventory,'removed'),signal,progress});
+      const verification=await verifyLiveFiles(this.liveRequest,base,receipt,{removed:deploymentInventoryPaths(this.workspace,inventory,'removed'),signal,progress});
       await store(verification);return {verification,message:publicationText('liveVerified',{count:verification.files,removed:verification.removed})};
     }catch(error){
       if(!(error instanceof LiveVerificationError))throw error;

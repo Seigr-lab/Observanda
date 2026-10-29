@@ -20,6 +20,7 @@ import {Publisher,defaultPublishing} from '../src/publishing.js';
 import {clearVault} from '../src/encryption.js';
 import {githubFixture} from './github-fixture.js';
 import {readGithubOwnership} from '../src/github-publication-plan.js';
+import {githubPlanReader} from '../src/github-plan-index.js';
 test('deployment summaries preserve indexed SSH progress and legacy uploaded arrays',()=>{
  const intent={reviewId:'a'.repeat(64),releaseId:'b'.repeat(64),key:'c'.repeat(64),config:{kind:'ssh',ssh:{host:'publish.example',directory:'/site'}}};
  const summary=journal=>DeploymentJobs.prototype.summary({id:randomUUID(),createdAt:'2026-10-17T00:00:00.000Z',intent,journal});
@@ -36,7 +37,7 @@ const token='synthetic_github_token_1234567890';
 async function fixture(t,{nested=false,extraRecords=0}={}){
  const book=sampleNotebook(),seed=book.entries[0];
  for(let i=0;i<extraRecords;i++)book.entries.push({...structuredClone(seed),id:randomUUID(),title:'Public observation '+i,body:'A retained observation.',share:true,figures:[],sections:[],attachments:[],relations:[]});
- const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-deploy-')),f=await encryptedFixture(directory,book),remote=githubFixture(nested?{branch:'main',initialFiles:{'index.html':'Existing home','lab/handwritten.html':'Existing notes'}}:{}),publisher=new Publisher(f.workspace.root,{request:remote.request},f.vault),jobs=workspaceJobs(f.workspace,publisher);
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-deploy-')),f=await encryptedFixture(directory,book),remote=githubFixture(nested?{branch:'main',initialFiles:{'index.html':'Existing home','lab/handwritten.html':'Existing notes'}}:{}),publisher=new Publisher(f.workspace.root,{request:remote.request,liveRequest:remote.request},f.vault),jobs=workspaceJobs(f.workspace,publisher);
  t.after(async()=>{await jobs.worker.stop();clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const config=defaultPublishing();Object.assign(config.github,{owner:'example',repository:'notebook',branch:nested?'main':'observanda-site',directory:nested?'lab/field-notes':'',pages:true});config.publicUrl='https://public.example/research/';const saved=await publisher.save(config,'new');await publisher.connect(token);
  const releases=new PublicationJobs(f.workspace);await releases.start(await releases.workspace.outline(),jobs.queue);const prepared=await run(jobs.queue);assert.equal(prepared.state,'completed',prepared.error);
@@ -68,21 +69,22 @@ test('a retained edition resumes a lost later tree batch after restart before mo
  f.remote.setHook((call,phase)=>{if(call.route.endsWith('/git/trees')&&phase==='after'&&++trees===2)throw Error('Lost second tree batch');});
  const interrupted=await run(f.queue);assert.equal(interrupted.state,'failed',interrupted.error);
  const journal=(await f.deployments.read(job.id)).journal;assert.equal(journal.treeBuild.applied,256);assert.equal(journal.tree,undefined);assert.equal(f.remote.head,parent);
- const restarted=new Publisher(f.workspace.root,{request:f.remote.request},f.vault),jobs=workspaceJobs(f.workspace,restarted);await restarted.connect(token);f.remote.setHook(null);
+ const restarted=new Publisher(f.workspace.root,{request:f.remote.request,liveRequest:f.remote.request},f.vault),jobs=workspaceJobs(f.workspace,restarted);await restarted.connect(token);f.remote.setHook(null);
  await jobs.queue.control(job.id,'retry');const completed=await run(jobs.queue);assert.equal(completed.state,'completed',completed.error);
  const posted=f.remote.calls.filter(c=>c.route.endsWith('/git/trees')&&c.method==='POST');assert.equal(posted.length,3);assert.deepEqual(posted[1].data,posted[2].data);
  assert.deepEqual(f.remote.commits.get(f.remote.head).parents,[parent]);assert.equal(f.remote.trees.get(f.remote.commits.get(f.remote.head).tree).filter(f=>f.path.startsWith('lab/field-notes/')).length,f.candidate.files.size);
- const retained=await readGithubOwnership(restarted,f.config??(await restarted.read()).config,(await restarted.read()).receipt);assert.equal(retained.files.length,f.candidate.files.size);
+ const retained=await readGithubOwnership(restarted,f.config??(await restarted.read()).config,(await restarted.read()).receipt);assert.equal(githubPlanReader(restarted.workspace,retained).count('entries'),f.candidate.files.size);
 });
 
 test('interrupted upload resumes acknowledged blobs after restart and retains separate push/live verification',async t=>{
  const f=await fixture(t),job=await f.deployments.start(f.intent);let uploads=0;
  f.remote.setHook((c,phase)=>{if(c.route.endsWith('/git/blobs')&&phase==='before'&&++uploads===3)throw Error('connection lost');});
- assert.equal((await run(f.queue)).state,'failed');assert.equal((await f.deployments.read(job.id)).journal.uploaded.length,2);assert.equal(f.remote.head,null);
- const restarted=new Publisher(f.workspace.root,{request:f.remote.request},f.vault),jobs=workspaceJobs(f.workspace,restarted);await jobs.queue.control(job.id,'retry');assert.equal((await run(jobs.queue)).error,'PUBLISH_AUTH');
+ assert.equal((await run(f.queue)).state,'failed');const interrupted=(await f.deployments.read(job.id)).journal;assert.equal(interrupted.uploadedCount,2);assert.equal(f.remote.head,null);
+ const acknowledged=await githubPlanReader(f.deployments.workspace,interrupted).page('uploads',{limit:2});
+ const restarted=new Publisher(f.workspace.root,{request:f.remote.request,liveRequest:f.remote.request},f.vault),jobs=workspaceJobs(f.workspace,restarted);await jobs.queue.control(job.id,'retry');assert.equal((await run(jobs.queue)).error,'PUBLISH_AUTH');
  await restarted.connect(token);f.remote.setHook(null);await jobs.queue.control(job.id,'retry');assert.equal((await run(jobs.queue)).state,'completed');
  const saved=await f.deployments.read(job.id);assert.ok(saved.journal.receipt);assert.equal(f.remote.commits.size,1);assert.equal(f.remote.head,saved.journal.commit);
- for(const hash of saved.journal.uploaded.slice(0,2))assert.equal(f.remote.calls.filter(c=>c.route.endsWith('/git/blobs')&&c.data&&Buffer.from(c.data.content,'base64').equals(f.remote.blobs.get(hash))).length,1);
+ for(const {sha} of acknowledged.items)assert.equal(f.remote.calls.filter(c=>c.route.endsWith('/git/blobs')&&c.data&&Buffer.from(c.data.content,'base64').equals(f.remote.blobs.get(sha))).length,1);
  assert.equal((await restarted.read()).receipt.verification,undefined);await assert.rejects(restarted.verifyLive(),{code:'PUBLISH_NOT_LIVE'});
  f.remote.setManifest((await contentBuffer(await f.candidate.files.get('publication.json'))).toString('utf8'));await restarted.verifyLive();assert.ok((await restarted.read()).receipt.verification);assert.ok((await f.deployments.page()).items[0].verification);
  assert.equal((await f.deployments.start(f.intent)).id,job.id);assert.equal((await f.deployments.page()).items.length,1);
@@ -94,7 +96,7 @@ test('a nested deployment reconciles a lost push and retains ownership alongside
  f.remote.setHook((c,phase)=>{if(c.route.endsWith('/git/refs/heads/main')&&phase==='after')throw Error('Lost nested push response');});
  assert.equal((await run(f.queue)).state,'failed');const journal=(await f.deployments.read(job.id)).journal;assert.ok(journal.pushAttempted);assert.equal(journal.receipt,undefined);
  assert.deepEqual(f.remote.trees.get(f.remote.commits.get(f.remote.head).tree).filter(e=>!e.path.startsWith('lab/field-notes/')),before);
- const restarted=new Publisher(f.workspace.root,{request:f.remote.request},f.vault),jobs=workspaceJobs(f.workspace,restarted);await restarted.connect(token);f.remote.setHook(null);
+ const restarted=new Publisher(f.workspace.root,{request:f.remote.request,liveRequest:f.remote.request},f.vault),jobs=workspaceJobs(f.workspace,restarted);await restarted.connect(token);f.remote.setHook(null);
  const prior=writes(f.remote).length;await jobs.queue.control(job.id,'retry');assert.equal((await run(jobs.queue)).state,'completed');
  assert.equal(writes(f.remote).length-prior,1);assert.deepEqual(f.remote.commits.get(f.remote.head).parents,[initial]);
  const plan=await restarted.reviewDestination(f.candidate,f.intent.configEtag);assert.equal(plan.requiresReview,false);assert.deepEqual(plan.conflicts,[]);assert.equal(plan.unchanged.length,f.candidate.files.size);assert.deepEqual(plan.preserved,before.map(e=>e.path));
@@ -136,7 +138,7 @@ test('failed local receipt commits retain recoverable push intent through a fres
  const journal=(await f.deployments.read(job.id)).journal;assert.equal(journal.receipt,undefined);assert.equal(journal.pushAttempted,true);assert.equal(f.remote.head,journal.commit);
  assert.equal(await readGithubOwnership(f.publisher,(await f.publisher.read()).config,null),null);
  const access=await createAccess('','restored fixture password'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const root=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'restored')),access,vault,f.vault),workspace=new Workspace(root,vault),publisher=new Publisher(root,{request:f.remote.request},vault),jobs=workspaceJobs(workspace,publisher);
+ const root=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'restored')),access,vault,f.vault),workspace=new Workspace(root,vault),publisher=new Publisher(root,{request:f.remote.request,liveRequest:f.remote.request},vault),jobs=workspaceJobs(workspace,publisher);
  await publisher.connect(token);await jobs.queue.control(job.id,'retry');const before=writes(f.remote).length;assert.equal((await run(jobs.queue)).state,'completed');assert.equal(writes(f.remote).length-before,1);assert.equal(f.remote.commits.size,1);
  assert.equal((await publisher.read()).receipt.commit,journal.commit);assert.equal((await f.publisher.read()).receipt,null);
  const restored=await publisher.read();assert.equal((await readGithubOwnership(publisher,restored.config,restored.receipt)).commit,journal.commit);

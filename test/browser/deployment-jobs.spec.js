@@ -22,7 +22,7 @@ test('repository conflicts are visible and a chosen subfolder preserves the exis
  test.setTimeout(90000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-nested-site-ui-')),f=await encryptedFixture(directory,sampleNotebook()),remote=githubFixture({branch:'main',initialFiles:{'index.html':'Existing home','news.html':'Existing news'}}),initial=remote.head,before=structuredClone(remote.trees.get(remote.commits.get(initial).tree));
  const errors=[];page.on('pageerror',error=>errors.push(error.message));
  const adapter=truncatedGithubTrees(remote,{threshold:1});
- const app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json'),publishingOptions:{request:adapter.request}});
+ const app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json'),publishingOptions:{request:adapter.request,liveRequest:adapter.request}});
  try{
   await page.goto(app.url);await navigate(page,'Publishing');await page.getByRole('button',{name:'Configure destination',exact:true}).click();
   await page.getByLabel('GitHub owner / organization',{exact:true}).fill('example');await page.getByLabel('Repository name',{exact:true}).fill('notebook');await page.getByRole('button',{name:'Save destination',exact:true}).click();
@@ -49,8 +49,8 @@ test('repository conflicts are visible and a chosen subfolder preserves the exis
 test('reviewed GitHub deployment resumes in the UI after restart and verifies the live manifest separately',async({page})=>{
  const errors=[];page.on('pageerror',error=>errors.push(error.message));
  test.setTimeout(90000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-deployment-ui-')),book=sampleNotebook();book.entries[1].share=false;book.entries[1].title='PRIVATE_CAPTURE_SENTINEL';
- const f=await encryptedFixture(directory,book),remote=githubFixture(),publisher=new Publisher(f.workspace.root,{request:remote.request},f.vault),config=defaultPublishing();Object.assign(config.github,{owner:'example',repository:'notebook',branch:'observanda-site',pages:true});config.publicUrl='https://public.example/research/';await publisher.save(config,'new');
- const options={root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json'),publishingOptions:{request:remote.request}};let app=await startServer(options),once=true;
+ const f=await encryptedFixture(directory,book),remote=githubFixture(),publisher=new Publisher(f.workspace.root,{request:remote.request,liveRequest:remote.request},f.vault),config=defaultPublishing();Object.assign(config.github,{owner:'example',repository:'notebook',branch:'observanda-site',pages:true});config.publicUrl='https://public.example/research/';await publisher.save(config,'new');
+ const options={root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json'),publishingOptions:{request:remote.request,liveRequest:remote.request}};let app=await startServer(options),once=true;
  remote.setHook((c,phase)=>{if(once&&c.route.endsWith('/git/refs')&&phase==='after'){once=false;throw Error('push response lost');}});
  try{
   await page.goto(app.url);await navigate(page,'Publishing');await connect(page);await page.getByRole('button',{name:'Review website',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible({timeout:60000});
@@ -70,7 +70,7 @@ test('reviewed GitHub deployment resumes in the UI after restart and verifies th
 
 test('upload-only selection persists, labels the review accurately and never calls Pages',async({page})=>{
  test.setTimeout(90000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-upload-only-ui-')),f=await encryptedFixture(directory,sampleNotebook()),remote=githubFixture();
- const app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json'),publishingOptions:{request:remote.request}});
+ const app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json'),publishingOptions:{request:remote.request,liveRequest:remote.request}});
  try{
   await page.goto(app.url);await navigate(page,'Publishing');await page.getByRole('button',{name:'Configure destination',exact:true}).click();
   await page.getByLabel('GitHub owner / organization',{exact:true}).fill('example');await page.getByLabel('Repository name',{exact:true}).fill('notebook');await page.getByLabel('Publication branch',{exact:true}).fill('observanda-site');
@@ -89,7 +89,7 @@ test('upload-only selection persists, labels the review accurately and never cal
 
 test('first upload to main reviews existing files and configures Pages from the app',async({page})=>{
  test.setTimeout(90000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-main-ui-')),f=await encryptedFixture(directory,sampleNotebook()),remote=githubFixture({branch:'main',initialFiles:{'.nojekyll':'','README.md':'Old content'}}),initial=remote.head;
- const app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json'),publishingOptions:{request:remote.request}});
+ const app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json'),publishingOptions:{request:remote.request,liveRequest:remote.request}});
  try{
   await page.goto(app.url);await navigate(page,'Publishing');await page.getByRole('button',{name:'Configure destination',exact:true}).click();
   await expect(page.getByLabel('Publication branch',{exact:true})).toHaveValue('main');
@@ -110,7 +110,7 @@ test('first upload to main reviews existing files and configures Pages from the 
 
 test('an existing empty repository is reviewed, initialized and resumed from the app before upload',async({page})=>{
  test.setTimeout(90000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-empty-repo-ui-')),f=await encryptedFixture(directory,sampleNotebook()),remote=repositoryFixture({exists:true,defaultBranch:'master'});
- const options={root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json'),publishingOptions:{request:remote.request}};let app=await startServer(options),once=true;
+ const options={root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json'),publishingOptions:{request:remote.request,liveRequest:remote.request}};let app=await startServer(options),once=true;
  remote.setSetupHook(call=>{if(once&&call.route.endsWith('/contents/.nojekyll')){once=false;throw Error('Lost first-commit response');}});
  try{
   await page.goto(app.url);await navigate(page,'Publishing');await page.getByRole('button',{name:'Configure destination',exact:true}).click();
@@ -164,7 +164,7 @@ test('a named website explicitly replaces an old app, archives its branch and pr
   return remote.request(url,options);
  };
  const githubConnections=new GithubConnections({file:path.join(directory,'github.json'),helper,request});
- const app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json'),publishingOptions:{request},githubConnections,browserAssets}),errors=[];page.on('pageerror',error=>errors.push(error.message));
+ const app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json'),publishingOptions:{request,liveRequest:request},githubConnections,browserAssets}),errors=[];page.on('pageerror',error=>errors.push(error.message));
  try{
   await page.goto(app.url);await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();await page.goto(new URL('/#/websites/'+site.id+'/publishing',app.url).href);
   if(builtDirectory)await expect(page.locator('script[type="module"][src^="/assets/app-"]')).toHaveCount(1);
@@ -190,7 +190,7 @@ test('a named website explicitly replaces an old app, archives its branch and pr
 
 test('users create a named website repository in the app, publish it and see automatic live verification',async({page})=>{
  test.setTimeout(300000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-create-repo-ui-')),f=await encryptedFixture(directory,sampleNotebook()),remote=repositoryFixture(),site=await namedWebsite(f,'Field journal');
- const app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json'),publishingOptions:{request:remote.request}});
+ const app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json'),publishingOptions:{request:remote.request,liveRequest:remote.request}});
  try{
   await page.goto(app.url);await page.goto(new URL('/#/websites/'+site.id+'/publishing',app.url).href);await expect(page.locator('.website-site-context')).toContainText('Field journal');await page.getByRole('button',{name:'Configure destination',exact:true}).click();
   await page.getByLabel('Repository',{exact:true}).selectOption('create');await page.getByLabel('GitHub owner / organization',{exact:true}).fill('example');await page.getByLabel('Repository name',{exact:true}).fill('notebook');
@@ -215,8 +215,8 @@ test('users create a named website repository in the app, publish it and see aut
 
 
 test('an older retained edition can be explicitly reviewed and republished from the app',async({page})=>{
- test.setTimeout(300000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-rollback-ui-')),f=await encryptedFixture(directory,sampleNotebook()),remote=githubFixture({branch:'observanda-site',initialFiles:Object.fromEntries(Array.from({length:70},(_,i)=>['unrelated-'+i+'.txt','Retain existing file']))}),site=await namedWebsite(f,'Retained journal'),publisher=new Publisher(f.workspace.root,{workspace:site.workspace,request:remote.request},f.vault),config=defaultPublishing();Object.assign(config.github,{owner:'example',repository:'notebook',branch:'observanda-site',pages:false,directory:'site'});await publisher.save(config,'new');
- const app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json'),publishingOptions:{request:remote.request}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ test.setTimeout(300000);const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-rollback-ui-')),f=await encryptedFixture(directory,sampleNotebook()),remote=githubFixture({branch:'observanda-site',initialFiles:Object.fromEntries(Array.from({length:70},(_,i)=>['unrelated-'+i+'.txt','Retain existing file']))}),site=await namedWebsite(f,'Retained journal'),publisher=new Publisher(f.workspace.root,{workspace:site.workspace,request:remote.request,liveRequest:remote.request},f.vault),config=defaultPublishing();Object.assign(config.github,{owner:'example',repository:'notebook',branch:'observanda-site',pages:false,directory:'site'});await publisher.save(config,'new');
+ const app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json'),publishingOptions:{request:remote.request,liveRequest:remote.request}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
  const publish=async()=>{
   const [response]=await Promise.all([page.waitForResponse(value=>new URL(value.url()).pathname==='/api/publishing/plan',{timeout:60000}),page.getByRole('button',{name:'Review repository changes',exact:true}).click()]);expect(response.status(),await response.text()).toBe(202);const review=page.locator('#destination-review');await expect(review).toContainText('Unrelated files preserved: 70',{timeout:30000});
   const preserved=review.locator('details').filter({has:page.locator('summary',{hasText:'Unrelated files preserved'})});await preserved.locator('summary').click();await expect(preserved.locator('li')).toHaveCount(32);const firstPage=await preserved.locator('li').allTextContents();
