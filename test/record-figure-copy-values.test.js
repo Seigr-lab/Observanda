@@ -40,7 +40,7 @@ test('panel copy drafts recover with fresh keys and commit retained results atom
  assert.deepEqual((await drafts.read({workspaceId:f.book.id,id:draft.id,expectedRevision:checkpoint.revision})).value,value);
  await assert.rejects(f.workspace.withLock(()=>f.workspace.catalogue(async store=>{await store.db.run('UPDATE catalogue_format SET version=14');await new ResearchDrafts(f.workspace).read(draft.id,{header:true});})),{code:'CATALOGUE_DAMAGED'});
  const access=await createAccess('','Synthetic copied panel recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const root=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'recovered')),access,vault,f.vault),recovered=new Workspace(root,vault),recovery=new RecordValueDrafts(recovered),header=await new ResearchDrafts(recovered).read(draft.id,{header:true});
+ const root=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'recovered'),{vault:f.vault}),access,vault,f.vault),recovered=new Workspace(root,vault),recovery=new RecordValueDrafts(recovered),header=await new ResearchDrafts(recovered).read(draft.id,{header:true});
  const restored=await recovery.read({workspaceId:f.book.id,id:draft.id,expectedRevision:header.revision});assert.deepEqual(restored.value,value);
  const command={...target,field:base.field,expectedRevision:base.revision,value},values=new RecordValues(recovered),write=recovered.writeMetadata.bind(recovered),before=(await recovered.outline()).etag;
  t.mock.method(recovered,'writeMetadata',async(name,...args)=>{if(name.startsWith('.observanda/figure-copy-values/'))throw Error('Interrupted copy receipt');return write(name,...args);});

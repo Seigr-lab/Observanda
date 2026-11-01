@@ -52,9 +52,9 @@ test('inventory filter facts survive ordinary and fresh-key restore, support old
  const query={workspaceId:book.id,type:'category',archived:false},scope={workspaceId:book.id,type:'asset-transfer',moduleId:'resources',projectId},reader=new ModuleReader(f.workspace);
  const selected=ModuleCatalogue.prototype.selected,loaded=[];t.mock.method(ModuleCatalogue.prototype,'selected',async function(head,id){loaded.push(id);return selected.call(this,head,id);});
  assert.deepEqual((await reader.list(query)).items.map(i=>i.id),[category.id]);assert.deepEqual((await reader.list(scope)).items.map(i=>i.id),[transfer.id]);assert.deepEqual(loaded,[]);
- const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'backup')),{vault:f.vault});
+ const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'backup'),{vault:f.vault}),{vault:f.vault});
  const access=await createAccess('','Synthetic inventory restore key'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'fresh')),access,vault,f.vault);
+ const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'fresh'),{vault:f.vault}),access,vault,f.vault);
  for(const [root,key] of [[backup,f.vault],[fresh,vault]]){
   const workspace=new Workspace(root,key);await workspace.outline();const restored=new ModuleReader(workspace);loaded.length=0;
   assert.deepEqual((await restored.list(query)).items,(await reader.list(query)).items);assert.deepEqual((await restored.list(scope)).items,(await reader.list(scope)).items);assert.deepEqual(loaded,[]);

@@ -73,7 +73,7 @@ test('result statements retain sources, stale editions require dispositions and 
  await assert.rejects(review.assert(candidate),{code:'CATALOGUE_DAMAGED'});
  await f.workspace.withLock(()=>f.workspace.writeMetadata(receiptFile,receipt));
  const current=await f.m.current(f.first.id);await f.m.dataset({recordId:f.recordId,title:firstDoc.title,id:current.id,expectedRevision:current.revision,artifact:f.one,baseDataset:current,columnChanges:[{index:1,column:{...columns[1],unit:'ticks'}}]});await assert.rejects(review.assert(candidate),{code:'ANALYSIS_REVIEW'});
- const copied=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'restored')),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(copied,f.vault));assert.deepEqual(await restored.read(analysis),await f.m.read(analysis));assert.deepEqual(await contentBuffer((await restored.artifact(f.one)).content),await contentBuffer((await f.m.artifact(f.one)).content));await restored.verify();
+ const copied=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'restored'),{vault:f.vault}),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(copied,f.vault));assert.deepEqual(await restored.read(analysis),await f.m.read(analysis));assert.deepEqual(await contentBuffer((await restored.artifact(f.one)).content),await contentBuffer((await f.m.artifact(f.one)).content));await restored.verify();
 });
 
 test('comparison jobs fence interrupted commits, cancellation, retries and stale workers',async t=>{

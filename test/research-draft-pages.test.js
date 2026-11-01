@@ -89,9 +89,9 @@ test('older checkpoints build summaries transactionally and remain recoverable a
  assert.equal(await f.workspace.readMetadata('.observanda/draft-list.json',1024),null);
  await f.drafts.write(commands[0]);assert.notEqual(await f.workspace.readMetadata('.observanda/draft-list.json',1024),null);
  for(const command of commands)assert.equal((await f.drafts.read(command.id)).revision,command.expectedRevision);
- const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'backup')),{vault:f.vault});
+ const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'backup'),{vault:f.vault}),{vault:f.vault});
  const access=await createAccess('','fresh recovery secret'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh')),access,vault,f.vault);
+ const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh'),{vault:f.vault}),access,vault,f.vault);
  for(const ws of [new Workspace(backup,f.vault),new Workspace(fresh,vault)]){
   const store=new ResearchDrafts(ws),page=await store.list();assert.deepEqual(page.drafts,before.drafts);
   assert.deepEqual((await store.read(commands[0].id)).draft,(await f.drafts.read(commands[0].id)).draft);

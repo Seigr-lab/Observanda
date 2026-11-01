@@ -49,7 +49,7 @@ test('structure receipts retry the exact committed result and cancellation rolls
  const newer=await f.service.execute('structure',{response:'outline',etag:moved.etag,change:{kind:'project',value:{...moved.book.projects[0],title:'A later edit'}}});
  assert.deepEqual(await f.service.execute('structure',data),moved);assert.equal((await f.ws.outline()).etag,newer.etag);
  await assert.rejects(f.service.execute('structure',{...data,change:{kind:'delete-notebook',value:{...data.change.value,records:'delete',destinationId:null}}}),{code:'CONFLICT'});
- const copy=await copyWorkspace(await copyPlan(f.ws.root,path.join(f.directory,'receipt-backup')),{vault:f.vault});
+ const copy=await copyWorkspace(await copyPlan(f.ws.root,path.join(f.directory,'receipt-backup'),{vault:f.vault}),{vault:f.vault});
  assert.deepEqual(await new StructureCommands(new Workspace(copy,f.vault)).execute('structure',data),moved);
 });
 
@@ -192,9 +192,9 @@ test('reorganization preview is read-only and counts only selected metadata bran
 test('ordinary and fresh-key restore preserve structure changes, deleted history and future edits',async t=>{
  const f=await fixture(t,8),source=f.base.book.notebooks[0];
  await command(f,f.base,'delete-notebook',{id:source.id,records:'delete',destinationId:null,confirmed:true});
- const saved=await f.ws.read(),copy=await copyWorkspace(await copyPlan(f.ws.root,path.join(f.directory,'backup')),{vault:f.vault});
+ const saved=await f.ws.read(),copy=await copyWorkspace(await copyPlan(f.ws.root,path.join(f.directory,'backup'),{vault:f.vault}),{vault:f.vault});
  const access=await createAccess('','synthetic structure restore secret'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const rekeyed=await encryptedCopy(await copyPlan(f.ws.root,path.join(f.directory,'fresh-key')),access,vault,f.vault);
+ const rekeyed=await encryptedCopy(await copyPlan(f.ws.root,path.join(f.directory,'fresh-key'),{vault:f.vault}),access,vault,f.vault);
  for(const [root,key] of [[copy,f.vault],[rekeyed,vault]]){
   const ws=new Workspace(root,key);assert.deepEqual(await ws.read(),saved);assert.deepEqual(await ws.catalogue(s=>s.read(f.base.etag)),f.base);
   const p=saved.book.projects[0],result=await new StructureCommands(ws).execute('structure',{etag:saved.etag,change:{kind:'project',value:{...p,title:'After restore'}}});
@@ -264,6 +264,6 @@ test('partially indexed old ownership is completed instead of omitting records f
  const latest=await f.ws.catalogue(s=>s.snapshot());
  assert.equal(await f.ws.catalogue(s=>new SnapshotIndex(s).scopedCount(latest.membership)),latest.count);
  await f.ws.catalogue(s=>s.verify(catalogueDescriptor(saved)));
- const copy=await copyWorkspace(await copyPlan(f.ws.root,path.join(f.directory,'legacy-backup')),{vault:f.vault});
+ const copy=await copyWorkspace(await copyPlan(f.ws.root,path.join(f.directory,'legacy-backup'),{vault:f.vault}),{vault:f.vault});
  assert.deepEqual(await new Workspace(copy,f.vault).read(),await f.ws.read());
 });

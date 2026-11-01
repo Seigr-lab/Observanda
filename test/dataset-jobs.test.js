@@ -102,7 +102,7 @@ test('large JSON evidence becomes exact, bounded pages through a durable job and
  assert.equal(count,4344);const last=await f.materials.datasetPage(completed.result,retained.content.pageIndex.count-1);assert.equal(last.rows.at(-1).valueKinds[2],'null');
  assert.equal((await datasetJobs(f.materials,f.queue,f.recordId)).items[0].id,id);
  assert.equal((await enqueueDataset(f.materials,f.queue,command,id)).result.revision,completed.result.revision);
- const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'restored')),{vault:f.vault});
+ const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'restored'),{vault:f.vault}),{vault:f.vault});
  const restored=new ResearchMaterials(new Workspace(copy,f.vault));assert.equal((await restored.datasetPage(completed.result,0)).rows[0].cells[0],'18446744073709551615');
  const original=await restored.artifact(artifact),hash=createHash('sha256');for await(const chunk of original.content.read())hash.update(chunk);
  assert.equal(hash.digest('hex'),createHash('sha256').update(bytes).digest('hex'));assert.equal((await restored.verify()).originalBytes,bytes.length);
@@ -173,12 +173,12 @@ test('wide schemas page independently, edits span pages, and unchanged retained 
  await assert.rejects(f.materials.validateDataset({...command,expectedRevision:next.revision,baseDataset:next,columnChanges:[changes[0],changes[0]]}),{code:'MATERIAL_INVALID'});
  await assert.rejects(f.materials.dataset({...command,expectedRevision:next.revision,baseDataset:next,columnChanges:[{index:36,column:first}]}),{code:'MATERIAL_INVALID'});
  assert.equal((await f.materials.current(next.id)).revision,next.revision);
- const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'wide-copy')),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(copy,f.vault));
+ const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'wide-copy'),{vault:f.vault}),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(copy,f.vault));
  assert.deepEqual(await restored.schemaPage(next,{offset:32}),await f.materials.schemaPage(next,{offset:32}));
  assert.deepEqual((await restored.datasetPage(original,2)).rows,(await f.materials.datasetPage(original,2)).rows);
  await restored.verify();
  const access=await createAccess('','fresh dataset test key'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const rekeyed=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'rekeyed')),access,vault,f.vault),fresh=new ResearchMaterials(new Workspace(rekeyed,vault));
+ const rekeyed=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'rekeyed'),{vault:f.vault}),access,vault,f.vault),fresh=new ResearchMaterials(new Workspace(rekeyed,vault));
  assert.deepEqual(await fresh.schemaPage(next,{offset:32}),await f.materials.schemaPage(next,{offset:32}));
  assert.deepEqual((await fresh.datasetPage(original,2)).rows,(await f.materials.datasetPage(original,2)).rows);await fresh.verify();
 });

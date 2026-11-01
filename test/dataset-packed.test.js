@@ -57,6 +57,6 @@ test('packed mapping and source references survive retained revisions, inspectio
  const revised=await materials.dataset({...command,id:dataset.id,expectedRevision:dataset.revision,baseDataset:dataset,exclusions:{[page.rows[0].id]:'Declared exclusion'}});
  const plot=await materials.plot({recordId,title:'Native packed timings',dataset:revised,base:createFigure(),mapping:{x:0,xKind:'number',values:[{column:2,error:null}],group:null,operation:'raw',order:'source',kind:'scatter',numericPolicy:'safe'}});
  assert.equal(plot.figure.series[0].points.length,7);assert.equal(plot.figure.series[0].points.at(-1).y,100019);assert.deepEqual((await materials.read(plot.ref)).content.inputs,[revised]);
- const restoredRoot=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'restored')),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(restoredRoot,f.vault));await restored.verify();
+ const restoredRoot=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'restored'),{vault:f.vault}),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(restoredRoot,f.vault));await restored.verify();
  assert.deepEqual((await restored.read(revised)).content.sourceMapping,packedMapping(4));assert.deepEqual((await restored.datasetPage(revised)).rows,(await materials.datasetPage(revised)).rows);
 });

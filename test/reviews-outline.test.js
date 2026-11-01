@@ -164,7 +164,7 @@ test('empty review browsing leaves no index and indexed reviews survive ordinary
  assert.equal((await f.run('list',{recordId})).total,0);
  assert.equal(await f.a.workspace.catalogue(s=>new ReviewScopeIndex(s).state()),null);
  await f.a.workspace.catalogue(s=>new ReviewScopeIndex(s).verify());
- const empty=await copyWorkspace(await copyPlan(f.a.workspace.root,path.join(path.dirname(f.a.workspace.root),'empty-backup')),{vault:f.a.vault});
+ const empty=await copyWorkspace(await copyPlan(f.a.workspace.root,path.join(path.dirname(f.a.workspace.root),'empty-backup'),{vault:f.a.vault}),{vault:f.a.vault});
  assert.equal((await new Reviews(new Workspace(empty,f.a.vault),f.a.deviceStore).run('list',{workspaceId:f.book.id,recordId})).total,0);
  await f.a.workspace.withLock(()=>f.a.workspace.writeMetadata('.observanda/reviews/index.json',contacts));
  const payload=f.payload([{id:recordId,revision:recordRevision(f.book.entries[0])}]);
@@ -172,8 +172,8 @@ test('empty review browsing leaves no index and indexed reviews survive ordinary
  const expected=await f.run('list',{recordId}),parent=path.dirname(f.a.workspace.root);
  const access=await createAccess('','synthetic restored review password'),vault=takeCreatedVault(access);
  t.after(()=>clearVault(vault));
- const ordinary=await copyWorkspace(await copyPlan(f.a.workspace.root,path.join(parent,'ordinary')),{vault:f.a.vault});
- const fresh=await encryptedCopy(await copyPlan(f.a.workspace.root,path.join(parent,'fresh')),access,vault,f.a.vault);
+ const ordinary=await copyWorkspace(await copyPlan(f.a.workspace.root,path.join(parent,'ordinary'),{vault:f.a.vault}),{vault:f.a.vault});
+ const fresh=await encryptedCopy(await copyPlan(f.a.workspace.root,path.join(parent,'fresh'),{vault:f.a.vault}),access,vault,f.a.vault);
  for(const [root,key] of [[ordinary,f.a.vault],[fresh,vault]]){
   const workspace=new Workspace(root,key),service=new Reviews(workspace,f.a.deviceStore);
   assert.deepEqual((await service.run('list',{workspaceId:f.book.id,recordId})).items,expected.items);

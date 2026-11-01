@@ -96,7 +96,7 @@ test('offline configuration references survive shared copies, changes, owner edi
  const extra={workspace:parts.workspace,descriptor:(...args)=>parts.descriptor(...args),value:(...args)=>parts.value(...args),async *items(){yield* parts.items();yield {kind:'metadata',name,size:JSON.stringify(unrelated).length,sha256:digest(JSON.stringify(unrelated)),index:parts.count};}};
  await assert.rejects(verifyPackageConfigurations(extra,selection.metadata),{code:'COLLABORATION_PACKAGE'});
  await assert.rejects(verifyPackageConfigurations(extra,oldSelection.metadata),{code:'COLLABORATION_PACKAGE'});
- const backup=await copyWorkspace(await copyPlan(destination,path.join(f.directory,'configuration-backup')),{vault:copy.vault}),restored=new Workspace(backup,copy.vault);
+ const backup=await copyWorkspace(await copyPlan(destination,path.join(f.directory,'configuration-backup'),{vault:copy.vault}),{vault:copy.vault}),restored=new Workspace(backup,copy.vault);
  assert.deepEqual((await restored.outline()).metadata.notebooks[0].configuration,next);assert.deepEqual(await choices(restored,original,value.sections[0].id,'option-096'),['option-096']);
  assert.equal((await new ResearchExchange(restored,f.member.deviceStore).working()).selection.id,second.id);
 });

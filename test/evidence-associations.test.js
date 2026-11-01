@@ -49,7 +49,7 @@ test('one original has independent record associations, exact provenance and rec
  const changed=await f.workspace.read();changed.book.entries=changed.book.entries.filter(r=>r.id!==first.id);await f.workspace.save(changed.book,changed.etag);
  assert.equal((await f.materials.read(attached.content.acquisition)).title,first.title);
  await f.materials.verify();
- const destination=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'restored')),{vault:f.vault});
+ const destination=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'restored'),{vault:f.vault}),{vault:f.vault});
  const restored=new ResearchMaterials(new Workspace(destination,f.vault));await restored.verify();
  for(const ref of [other,again])assert.deepEqual(await contentBuffer((await restored.artifact(ref)).content),bytes);
  assert.deepEqual((await restored.overview(second.id)).items[0].file,(await f.materials.overview(second.id)).items[0].file);

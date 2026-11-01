@@ -42,7 +42,7 @@ test('high-degree references have bounded previews, direct late continuation, pi
  assert.equal(comparable(await read(late.cursor)),pinned);
  await assert.rejects(appearancePreviewPage(f.workspace,{...command,etag:(await f.workspace.outline()).etag},file+'?references='+late.cursor),{code:'INVALID'});
  const access=await createAccess('','synthetic reference recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const destination=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'restored')),access,vault,f.vault),restored=new Workspace(destination,vault);
+ const destination=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'restored'),{vault:f.vault}),access,vault,f.vault),restored=new Workspace(destination,vault);
  // A different encryption key creates different cursor bytes; follow its own
  // continuation and reconcile content, never copy an old key-bound cursor.
  let context=await appearancePreviewPage(restored,command,file),recovered=[];

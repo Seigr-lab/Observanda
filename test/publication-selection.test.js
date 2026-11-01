@@ -80,7 +80,7 @@ test('older inventory summaries load only the selected page and remain verifiabl
   const last=await publicationSelection(f.workspace,{source:f.source,offset:40});assert.equal(last.items.length,3);assert.equal(loaded.length,3);
   assert.deepEqual(last.items.map(item=>item.id),f.book.entries.filter(r=>r.share).slice(40).map(r=>r.id));
  }finally{ResearchCatalogue.prototype.record=record;}
- const before=await f.workspace.outline(),backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(path.dirname(f.workspace.root),'backup')),{vault:f.vault});
+ const before=await f.workspace.outline(),backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(path.dirname(f.workspace.root),'backup'),{vault:f.vault}),{vault:f.vault});
  assert.equal((await f.workspace.outline()).etag,before.etag);
  const restored=new Workspace(backup,f.vault),items=await publicationSelection(restored,{source:f.source});
  assert.deepEqual(items.items[0].choice,defaultEditionRecord(f.record,recordRevision(f.record)));

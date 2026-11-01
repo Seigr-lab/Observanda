@@ -63,7 +63,7 @@ test('review decisions survive a fresh-key backup and verification rejects contr
  await assert.rejects(review.choose({...choose,version:'stored'}),{code:'DRAFT_CHANGED'});
  await f.workspace.catalogue(store=>verifyRecordDraftReviews(store));
  const access=await createAccess('','retained review backup'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const copied=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'backup')),access,vault,f.vault),workspace=new Workspace(copied,vault),restored=new RecordDraftReview(workspace,media);
+ const copied=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'backup'),{vault:f.vault}),access,vault,f.vault),workspace=new Workspace(copied,vault),restored=new RecordDraftReview(workspace,media);
  assert.deepEqual(await restored.prepare(prepare),plan);await restored.apply(target(plan));await workspace.catalogue(store=>verifyRecordDraftReviews(store));
  await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{
   const key='record-draft-review:'+plan.id,original=await store.object(key);await store.putObject(key,{...original,count:2});

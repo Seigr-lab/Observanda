@@ -47,8 +47,8 @@ test('typed schemas, exact source contexts and pinned methods survive revisions,
  assert.equal((await m.read(changed)).previous,current.revision);assert.deepEqual((await m.read(retained)).content.measurement.quantity.unitDefinition.scale,definition.scale);
  await assert.rejects(m.dataset({recordId,title:'Bad unit',artifact,columns:[{...columns[0],quantity:{...quantity,unitDefinition:{...definition,scale:exactUnitScalar('0')}}}]}),{code:'MATERIAL_INVALID'});
  await m.verify();
- const ordinary=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'ordinary')),{vault:f.vault});
- const access=await createWorkspaceAccess('','',f.deviceStore),freshVault=takeCreatedVault(access);keys.push(freshVault);const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'fresh')),access,freshVault,f.vault);
+ const ordinary=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'ordinary'),{vault:f.vault}),{vault:f.vault});
+ const access=await createWorkspaceAccess('','',f.deviceStore),freshVault=takeCreatedVault(access);keys.push(freshVault);const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'fresh'),{vault:f.vault}),access,freshVault,f.vault);
  for(const [root,vault] of [[ordinary,f.vault],[fresh,freshVault]]){
   const restored=new ResearchMaterials(new Workspace(root,vault));await restored.verify();assert.deepEqual((await restored.schemaPage(current,{offset:16})).items[1],typed);assert.deepEqual((await restored.read(retained)).content.measurement,measurement);assert.equal((await restored.retainedDatasetPage(await restored.read(current),0,{columns:[17]})).rows[0].cells[0],'15.3');assert.deepEqual(await contentBuffer((await restored.artifact(artifact)).content),original);assert.deepEqual((await restored.read(method)).content,(await m.read(method)).content);
  }

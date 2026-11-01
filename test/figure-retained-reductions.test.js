@@ -39,7 +39,7 @@ test('retained plotting reduces exact counter differences and native fractions b
  const before=(await m.heads()).filter(h=>h.kind==='analysis').length;
  await assert.rejects(m.plot({...command,dataset:wideDataset,mapping:{...command.mapping,operation:'median',values:[{column:1,error:null}]}}),{code:'MATERIAL_PRECISION'});
  assert.equal((await m.heads()).filter(h=>h.kind==='analysis').length,before);assert.deepEqual((await f.workspace.metadataPage('.observanda/analysis-work')).items,[]);
- const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'backup')),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(copy,f.vault));
+ const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'backup'),{vault:f.vault}),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(copy,f.vault));
  assert.deepEqual((await restored.read(recalculated.ref)).content,current.content);assert.deepEqual((await restored.read(old)).content,legacy);
  assert.deepEqual(await contentBuffer((await restored.artifact(artifact)).content),bytes);
  const repeated=await restored.plot(command);assert.deepEqual(repeated.figure.series.map(s=>s.points),saved[0].content.figure.series.map(s=>s.points));

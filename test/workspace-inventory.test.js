@@ -20,11 +20,11 @@ test('copy reviews retain constant-size receipts at 65 and 650 files and replay 
   t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true});});
   const folder=path.join(root,'.observanda','fixture');await mkdir(folder);
   for(let i=0;i<count;i++)await workspace.writeFile(path.join(folder,String(i).padStart(4,'0')+'.bin'),Buffer.from('Synthetic capture '+i));
-  const start=performance.now(),plan=await copyPlan(root,destination);
+  const start=performance.now(),plan=await copyPlan(root,destination,{vault});
   assert.equal(plan.files,undefined);assert.ok(Buffer.byteLength(JSON.stringify(plan))<1024);
-  assert.ok(plan.fileCount>=count);const second=await workspaceInventory(root,plan.inventorySalt);
+  assert.ok(plan.fileCount>=count);const second=await workspace.withStorageHandoff(()=>workspaceInventory(root,plan.inventorySalt));
   assert.equal(plan.fingerprint,second.fingerprint);assert.equal(plan.fileCount,second.fileCount);
-  const walked=[];for await(const file of workspaceFiles(root))walked.push(file.path);
+  const walked=[];await workspace.withStorageHandoff(async()=>{for await(const file of workspaceFiles(root))walked.push(file.path);});
   assert.equal(new Set(walked).size,plan.fileCount);
   t.diagnostic(count+' originals: '+Math.round(performance.now()-start)+' ms for review, repeat inventory and traversal; receipt '+Buffer.byteLength(JSON.stringify(plan))+' bytes; '+plan.fileCount+' total files.');
   await copyWorkspace(plan,{vault});
@@ -39,10 +39,10 @@ test('inventory cancellation closes scratch work; equal-size substitutions inval
  const initial=databaseCapacity().active,controller=new AbortController();
  await assert.rejects(workspaceInventory(root,randomUUID(),{signal:controller.signal,visit:()=>controller.abort()}),{name:'AbortError'});
  assert.equal(databaseCapacity().active,initial);
- const plan=await copyPlan(root,path.join(directory,'copy'));await writeFile(file,'Later');
+ const plan=await copyPlan(root,path.join(directory,'copy'),{vault});await writeFile(file,'Later');
  await assert.rejects(copyWorkspace(plan,{vault}),{code:'CONFLICT'});
  await assert.rejects(readFile(path.join(plan.destination,'workspace.observanda')),{code:'ENOENT'});
  const before=await workspaceManifest(root);
- await assert.rejects(copyWorkspace({...await copyPlan(root,path.join(directory,'other')),fileCount:0},{vault}),{code:'CONFLICT'});
+ await assert.rejects(copyWorkspace({...await copyPlan(root,path.join(directory,'other'),{vault}),fileCount:0},{vault}),{code:'CONFLICT'});
  assert.deepEqual(await workspaceManifest(root),before);
 });

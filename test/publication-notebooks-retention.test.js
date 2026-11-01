@@ -33,7 +33,7 @@ test('retained lab-book directories and preview preserve selection and survive e
   }
  }finally{ResearchCatalogue.prototype.record=read;}
  const access=await createAccess('','another installation password'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const restored=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'restored')),access,vault,f.vault),restoredWorkspace=new Workspace(restored,vault),restoredJobs=new PublicationJobs(restoredWorkspace);
+ const restored=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'restored'),{vault:f.vault}),access,vault,f.vault),restoredWorkspace=new Workspace(restored,vault),restoredJobs=new PublicationJobs(restoredWorkspace);
  await restoredJobs.verifyFiles(candidate.reviewId);const copy=await restoredJobs.read(candidate.reviewId);assert.equal(copy.id,candidate.id);
  for(const [index,name]of names.entries())assert.equal((await contentBuffer(await copy.files.get(name))).toString(),original[index]);
  assert.equal((await restoredWorkspace.outline()).etag,etag);

@@ -47,7 +47,7 @@ test('canvas reference windows reconcile saved and unsaved links without retaini
  await new ResearchRecords(f.workspace,{}).save({workspaceId:book.id,changes:[{id:target.id,expectedRevision:recordRevision(target),record:{...target,title:'Later saved definition'}}]},{receipt:true});
  assert.equal(render(await page(late.cursor)),pinned);
  const access=await createAccess('','Synthetic canvas reference recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const destination=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'restored')),access,vault,f.vault),restored=new Workspace(destination,vault);let recovered=[],context;
+ const destination=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'restored'),{vault:f.vault}),access,vault,f.vault),restored=new Workspace(destination,vault);let recovered=[],context;
  do{context=(await websitePreviewSource(restored,command,{websitePin,designTarget,referenceCursor:context?.referencePage.nextCursor??null})).context;recovered.push(...context.referencePage.recordIds);}while(context.referencePage.nextCursor);
  assert.deepEqual(recovered,seen);t.diagnostic(JSON.stringify({references:seen.length,windows:pages.length}));
 });

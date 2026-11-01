@@ -30,7 +30,7 @@ test('a killed evidence upload can be backed up and resumed without copying unfi
  const reopened=new ResearchMaterials(new Workspace(root,vault));
  assert.equal(reopened.uploads.count(await reopened.importState(session.id)),1);
  await assert.rejects(reopened.finishImport(session.id),{code:'MATERIAL_INCOMPLETE'});
- const backup=await copyWorkspace(await copyPlan(root,path.join(directory,'backup')),{vault});
+ const backup=await copyWorkspace(await copyPlan(root,path.join(directory,'backup'),{vault}),{vault});
  assert.ok(!(await readdir(path.join(backup,'.observanda/materials/imports',session.id))).some(name=>name.startsWith('.stream-')));
  const restored=new ResearchMaterials(new Workspace(backup,vault));
  assert.equal(restored.uploads.count(await restored.importState(session.id)),1);

@@ -64,7 +64,7 @@ test('filtered continuations bind source, website and query; saved pages remain 
  const record=f.book.entries[40];await new ResearchRecords(f.workspace,{}).save({workspaceId:f.book.id,changes:[{id:record.id,expectedRevision:recordRevision(record),record:{...record,title:'Later title',share:false}}]},{receipt:true});
  await assert.rejects(browse({...f,command:{...f.command,etag:(await f.workspace.outline()).etag,websitePin:(await new WebsiteSites(f.workspace).read(null)).websitePin}},next),{code:'INVALID'});
  assert.equal((await browse(f,next)).browseRecords[0].title,record.title);
- const restored=new Workspace(await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'backup')),{vault:f.vault}),f.vault);
+ const restored=new Workspace(await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'backup'),{vault:f.vault}),{vault:f.vault}),f.vault);
  assert.deepEqual((await browse({...f,workspace:restored},next)).browseRecords,(await browse(f,next)).browseRecords);
  const empty=await browse(f,'q=absent'),html=renderPublication(empty,{emitBrowse:false}).files.get('browse.html');assert.ok(html.includes('No matching records.'));assert.ok(html.includes('public-book.js'));assert.ok(html.includes('data-book-count>0<'));
  for(const query of ['tag=CONTROL','journey=methods','type=run','from=2026-09-20&to=2026-09-22']){

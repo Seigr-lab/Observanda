@@ -78,7 +78,7 @@ test('encrypted saved views survive verified copies and never enter publication 
   await initializeLocation(root,book,access,vault);const ws=new Workspace(root,vault),store=new RecordViews(ws),value=view('PRIVATE VIEW SENTINEL',{...baseQuery(),search:'PRIVATE SEARCH SENTINEL'});
   const etag=(await ws.read()).etag,saved=(await store.save(command(book,value))).view;
   await assertPrivateCatalogue(root,value.name,value.query.search);
-  const destination=path.join(parent,'restored');await copyWorkspace(await copyPlan(root,destination));
+  const destination=path.join(parent,'restored');await copyWorkspace(await copyPlan(root,destination,{vault}),{vault});
   restoredVault=await verifyAccess(await readAccess(destination),'','synthetic view password');
   const restored=new Workspace(destination,restoredVault);
   assert.deepEqual((await new RecordViews(restored).list({workspaceId:book.id})).views,[saved]);

@@ -26,7 +26,7 @@ async function fixture(t,{legacy=false}={}){
  const ws=new Workspace(source,vault);
  let saved=await ws.read();saved.book.entries[0].title='PRIVATE REVISED SENTINEL';await ws.save(saved.book,saved.etag);
  const before=await workspaceManifest(source),destination=path.join(root,'copy');
- await copyWorkspace(await copyPlan(source,destination),{vault});
+ await copyWorkspace(await copyPlan(source,destination,{vault}),{vault});
  t.after(async()=>{await clearVault(vault);await rm(root,{recursive:true,force:true});});
  return {root,source,ws:new Workspace(destination,vault),sourceWorkspace:ws,vault,before};
 }
@@ -71,7 +71,7 @@ test('verified backups and fresh-key successors preserve catalogue revisions',as
  const access=await createAccess('','new synthetic catalogue password'),nextVault=takeCreatedVault(access);
  try{
   assert.deepEqual(await new Workspace(backup,backupVault).read(),original);
-  const successor=await encryptedCopy(await copyPlan(ws.root,path.join(root,'successor')),access,nextVault,vault);
+  const successor=await encryptedCopy(await copyPlan(ws.root,path.join(root,'successor'),{vault}),access,nextVault,vault);
   const next=new Workspace(successor,nextVault);
   assert.deepEqual(await next.read(),original);
   assert.deepEqual(await next.history(),await ws.history());
@@ -210,12 +210,12 @@ test('catalogue backups and fresh-key copies retain a 64 MiB streamed original b
  const original=await writeContent(ws,file,Readable.from(input()));
  assert.equal(original.size,64*1024*1024);
  assert.equal(original.sha256,hash.digest('hex'));
- const backup=await copyWorkspace(await copyPlan(ws.root,path.join(root,'large-backup')));
+ const backup=await copyWorkspace(await copyPlan(ws.root,path.join(root,'large-backup'),{vault}),{vault});
  const copied=await describeContent(new Workspace(backup,vault),path.join(backup,'.observanda','synthetic-original.bin'));
  assert.equal(copied.sha256,original.sha256);assert.equal(copied.size,original.size);
  const access=await createAccess('','large successor password'),newVault=takeCreatedVault(access);
  try{
-  const plan=await copyPlan(ws.root,path.join(root,'large-successor')),open=Workspace.prototype.openCatalogue;let sourceOpens=0;
+  const plan=await copyPlan(ws.root,path.join(root,'large-successor'),{vault}),open=Workspace.prototype.openCatalogue;let sourceOpens=0;
   t.mock.method(Workspace.prototype,'openCatalogue',function(options){if(this.root===ws.root)sourceOpens++;return open.call(this,options);});
   const successor=await encryptedCopy(plan,access,newVault,vault);assert.equal(sourceOpens,1);
   const restored=await describeContent(new Workspace(successor,newVault),path.join(successor,'.observanda','synthetic-original.bin'));
@@ -240,7 +240,7 @@ test('failed verification leaves the destination incomplete and source available
  const access=await createAccess('','synthetic failed fresh-key copy'),freshVault=takeCreatedVault(access);t.after(()=>clearVault(freshVault));
  ResearchCatalogue.prototype.verify=function(...args){if(this.workspace.root===failedDestination){attempts.push(this.workspace.root);throw new AppError('STORAGE_COPY');}return original.apply(this,args);};
  try{for(const fresh of [false,true]){
-  const destination=path.join(root,fresh?'failed-fresh-key':'failed-backup'),plan=await copyPlan(source,destination);
+  const destination=path.join(root,fresh?'failed-fresh-key':'failed-backup'),plan=await copyPlan(source,destination,{vault});
   failedDestination=destination;
   await assert.rejects(fresh?encryptedCopy(plan,access,freshVault,vault):copyWorkspace(plan,{vault}),{code:'STORAGE_COPY'});
   assert.equal(attempts.filter(root=>root===destination).length,1);
@@ -257,7 +257,7 @@ test('fresh-key copying verifies the copied descriptor before activating its des
  await sourceWorkspace.writeFile(file,JSON.stringify(descriptor));
  const before=await workspaceManifest(source),destination=path.join(root,'wrong-descriptor');
  const access=await createAccess('','synthetic descriptor recovery'),freshVault=takeCreatedVault(access);t.after(()=>clearVault(freshVault));
- await assert.rejects(encryptedCopy(await copyPlan(source,destination),access,freshVault,vault),{code:'CATALOGUE_DAMAGED'});
+ await assert.rejects(encryptedCopy(await copyPlan(source,destination,{vault}),access,freshVault,vault),{code:'CATALOGUE_DAMAGED'});
  await assert.rejects(new Workspace(destination,freshVault).read(),{code:'STORAGE_INCOMPLETE'});
  assert.deepEqual(await workspaceManifest(source),before);
  await sourceWorkspace.writeFile(file,original);

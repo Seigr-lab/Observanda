@@ -40,7 +40,7 @@ test('policy comparisons retain exact full values and expected matches through i
  const original=structuredClone(doc),revised=await m.comparisons.save({...command,expectedRevision:result.revision,comparison:{...command.comparison,resourcePolicy:policy({maxBits:131072})}},{signal:t.signal,writePage});assert.notEqual(revised.revision,result.revision);assert.deepEqual(await m.read(result),original);
  await f.workspace.withCatalogueConnections(async()=>{await m.comparisons.verifyIntegrity(doc,{signal:t.signal});const {id,...replay}=command;await m.comparisons.verify(replay,doc.content.summary);});
  stage('Exact checkpoint resumed, original revision preserved and semantic replay verified.');
- const copied=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'copied')),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(copied,f.vault));
+ const copied=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'copied'),{vault:f.vault}),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(copied,f.vault));
  await restored.workspace.withCatalogueConnections(async()=>{assert.deepEqual(await restored.read(result),original);assert.equal((await restored.comparisons.page({ref:result,view:'distribution'})).items[0].value,spelling);assert.deepEqual(await contentBuffer((await restored.artifact(artifact)).content),bytes);await restored.verify({signal:t.signal});});
  stage('Copied catalogue verifies complete result values and unchanged source bytes.');
 });

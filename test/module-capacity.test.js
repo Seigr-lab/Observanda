@@ -45,8 +45,8 @@ for(const count of [1,10])test('maximum Unicode sheets checkpoint and recover am
  const tooLarge=structuredClone(data);tooLarge.cells[0][0]+='x';await assert.rejects(modules.execute(save(randomUUID(),null,tooLarge),{compact:true}),{code:'MODULE_INVALID'});
  // Both recovery modes must retain the exact revision referenced by the draft.
  if(count===10){
-  const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'backup')),{vault:f.vault}),access=await createAccess('','fresh maximum sheet recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
-  const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'fresh')),access,vault,f.vault);
+  const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'backup'),{vault:f.vault}),{vault:f.vault}),access=await createAccess('','fresh maximum sheet recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+  const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'fresh'),{vault:f.vault}),access,vault,f.vault);
   for(const ws of [new Workspace(backup,f.vault),new Workspace(fresh,vault)])assert.deepEqual((await moduleDraftOwners(ws,book.id,'spreadsheet').drafts.read(checkpoint.id)).draft,recovered.draft);
  }
  assert.ok(process.memoryUsage().heapUsed<512*1024*1024);

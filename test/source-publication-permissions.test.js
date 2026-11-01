@@ -61,7 +61,7 @@ test('section permission saves with its source revision and bounds inventory, pr
  assert.ok(!output.includes(target.sectionId));assert.ok(output.includes('Public steps for the method.'));
  const direct=await publicationText(buildPublication(saved.book));
  assert.ok(!direct.includes('WITHHELD_SECTION_TITLE'));assert.ok(!direct.includes(target.sectionId));
- const destination=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'Portable copy')),{vault:f.vault});
+ const destination=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'Portable copy'),{vault:f.vault}),{vault:f.vault});
  const restored=new Workspace(destination,f.vault),copied=await new RecordWriting(restored).read(target);
  assert.deepEqual(copied.value,{...before.value,share:false});
  assert.deepEqual(await f.workspace.read(),saved);
@@ -131,7 +131,7 @@ test('paged website source admission rolls back atomically and survives portable
   assert.deepEqual(await workspace.read(),expected);await verifyCatalogueArchive(workspace,descriptor);
  }
  await check(new Workspace(f.workspace.root,f.vault));
- const copied=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'Portable source choices')),{vault:f.vault});await check(new Workspace(copied,f.vault));
+ const copied=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'Portable source choices'),{vault:f.vault}),{vault:f.vault});await check(new Workspace(copied,f.vault));
  async function archive(name){
   const root=path.join(f.directory,name);await mkdir(path.join(root,'.observanda'),{recursive:true});
   for(const file of [path.basename(await workspaceFile(f.workspace.root)),'.observanda/access.json'])await copyFile(path.join(f.workspace.root,file),path.join(root,file));

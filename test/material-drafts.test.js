@@ -26,7 +26,7 @@ test('collections exceed 500 exact inputs with bounded roots, recover after rest
  assert.equal((await f.m.list({recordId:f.recordId,query:'Oversized direct'})).items.length,0);
  for(let offset=0;offset<128;offset+=64)await f.m.drafts.append({id:draft.id,offset,items:f.refs.slice(offset,offset+64)});
  await assert.rejects(f.m.drafts.finish(draft.id),{code:'MATERIAL_DRAFT_INCOMPLETE'});assert.equal(await f.m.current(draft.id),null);
- const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'resume')),{vault:f.vault}),ws=new Workspace(copy,f.vault),m=new ResearchMaterials(ws);
+ const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'resume'),{vault:f.vault}),{vault:f.vault}),ws=new Workspace(copy,f.vault),m=new ResearchMaterials(ws);
  assert.equal((await m.drafts.read(draft.id)).inputs.count,128);
  for(let offset=128;offset<f.refs.length;offset+=64)await m.drafts.append({id:draft.id,offset,items:f.refs.slice(offset,offset+64)});
  const ref=await m.drafts.finish(draft.id);assert.deepEqual(await m.drafts.finish(draft.id),ref);
@@ -46,7 +46,7 @@ test('collections exceed 500 exact inputs with bounded roots, recover after rest
  assert.equal((await m.drafts.list(f.recordId)).items.length,0);
  await m.verify();
  const access=await createAccess('','fresh pinned references key'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const backup=await encryptedCopy(await copyPlan(ws.root,path.join(f.directory,'fresh-key')),access,vault,f.vault),restored=new ResearchMaterials(new Workspace(backup,vault));
+ const backup=await encryptedCopy(await copyPlan(ws.root,path.join(f.directory,'fresh-key'),{vault:f.vault}),access,vault,f.vault),restored=new ResearchMaterials(new Workspace(backup,vault));
  assert.deepEqual(await restored.referencePage(ref,{offset:600}),page);await restored.verify();
  // A removed immutable branch cannot be silently treated as an empty collection.
  await restored.workspace.withLock(()=>restored.workspace.removeMetadata('.observanda/materials/sequences/nodes/'+doc.content.inputsIndex.root.hash+'.json'));

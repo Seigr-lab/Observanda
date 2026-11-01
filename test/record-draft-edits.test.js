@@ -92,7 +92,7 @@ test('checkpoint edit rollback, backup and new-record recovery retain the unfini
  assert.equal(await f.workspace.catalogue(s=>catalogueFormat(s.db)),before);assert.equal((await review.editRead({...target(plan),field:'title'})).value.value,'');
  await edit(review,plan,'title',{value:'Recovered new record'});plan=await review.prepare(prepare(f,draft));
  const access=await createAccess('','edited checkpoint recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const copied=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'backup')),access,vault,f.vault),workspace=new Workspace(copied,vault),restored=new RecordDraftReview(workspace,media);
+ const copied=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'backup'),{vault:f.vault}),access,vault,f.vault),workspace=new Workspace(copied,vault),restored=new RecordDraftReview(workspace,media);
  assert.equal(await workspace.catalogue(s=>catalogueFormat(s.db)),10);assert.deepEqual(await restored.prepare(prepare(f,draft)),plan);await restored.apply(target(plan));await workspace.catalogue(s=>verifyRecordDraftReviews(s));
  assert.equal((await review.editRead({...target(plan),field:'title'})).value.value,'Recovered new record');
 });

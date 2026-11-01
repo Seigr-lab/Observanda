@@ -87,9 +87,9 @@ test('large originals travel alone; malformed, cross-workspace, cancelled and da
 
 test('partial updates survive ordinary and fresh-key backup without mutable read sessions',async t=>{
  const f=await fixture(t),saved=await changeAll(f),first=await f.reader.changes({workspaceId:f.base.book.id,baseEtag:f.base.etag});
- const normal=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'copy')),{vault:f.vault});
+ const normal=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'copy'),{vault:f.vault}),{vault:f.vault});
  const access=await createAccess('','record update copy password'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh')),access,vault,f.vault);
+ const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh'),{vault:f.vault}),access,vault,f.vault);
  assert.deepEqual(applyRecordPatch(f.base.book,f.base.etag,recordRevisions(f.base.book),await consume(new WorkspaceReader(new Workspace(normal,f.vault)),first)).book,saved.book);
  // A fresh key rejects the old capability; restarting the same pinned delta
  // regenerates its pages under the new key without changing record identities.

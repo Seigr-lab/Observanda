@@ -86,7 +86,7 @@ test('retained-only revisions remain reviewable and copied history pages preserv
  const listing=await f.history.list({...f.command,limit:2}),tail=await f.history.list({...f.command,limit:2,cursor:listing.nextCursor});
  assert.equal(listing.total,null);assert.equal(tail.total,4);const version=tail.versions.find(v=>v.source.kind==='retained');
  assert.ok(version);assert.deepEqual((await f.history.read({...f.command,...version})).record,retained);
- const backup=await copyWorkspace(await copyPlan(f.ws.root,path.join(f.directory,'backup')),{vault:f.vault}),restored=new RecordHistory(new Workspace(backup,f.vault),{});
+ const backup=await copyWorkspace(await copyPlan(f.ws.root,path.join(f.directory,'backup'),{vault:f.vault}),{vault:f.vault}),restored=new RecordHistory(new Workspace(backup,f.vault),{});
  const after=await restored.list({...f.command,limit:2,cursor:listing.nextCursor});assert.deepEqual(after.versions,tail.versions);
  await f.ws.withLock(()=>materials.retainRecord({...retained,title:'Additional retained reference'}));
  await assert.rejects(f.history.list({...f.command,limit:2,cursor:listing.nextCursor}),{code:'RECORD_HISTORY_CURSOR'});
@@ -155,7 +155,7 @@ test('history index failure rolls back its record and missing entries cannot dis
  assert.equal((await f.history.list(f.command)).total,4);
  const key=prefix+'view:'+recordRevision(f.versions[0]),row=before.find(r=>r.slot===key),damaged=Buffer.from(row.payload);damaged[damaged.length-1]^=1;
  await f.ws.withLock(()=>f.ws.catalogue(store=>store.db.run('UPDATE state SET payload=$1 WHERE slot=$2',damaged,key)));
- await assert.rejects(copyWorkspace(await copyPlan(f.ws.root,path.join(f.directory,'damaged-copy')),{vault:f.vault}),{code:'ENCRYPTION_DAMAGED'});
+ await assert.rejects(copyWorkspace(await copyPlan(f.ws.root,path.join(f.directory,'damaged-copy'),{vault:f.vault}),{vault:f.vault}),{code:'ENCRYPTION_DAMAGED'});
  assert.deepEqual(await f.ws.read(),base);
 });
 
@@ -167,7 +167,7 @@ test('canonical duplicate revisions stay distinct in storage and appear once wit
  assert.equal(first.total,3);assert.deepEqual([...first.versions,...second.versions].map(v=>v.title),['Take 0','Take 2','Take 1']);
  assert.equal(first.versions[0].current,true);assert.deepEqual((await f.history.read({...f.command,...first.versions[0]})).record,earlier);
  await f.ws.catalogue(async store=>{const head=await store.historyIndex(earlier.id).head();assert.equal(head.count,3);assert.equal(head.revisions,4);await store.verifyRecordHistory(earlier.id);});
- const backup=await copyWorkspace(await copyPlan(f.ws.root,path.join(f.directory,'canonical-copy')),{vault:f.vault});
+ const backup=await copyWorkspace(await copyPlan(f.ws.root,path.join(f.directory,'canonical-copy'),{vault:f.vault}),{vault:f.vault});
  const copied=new RecordHistory(new Workspace(backup,f.vault),{});assert.deepEqual((await copied.list({...f.command,limit:2})).versions,first.versions);
  const record=ResearchCatalogue.prototype.record;ResearchCatalogue.prototype.record=()=>{throw Error('Removal must use the authenticated canonical revision alias');};
  try{await f.service.remove({...f.command,expectedRevision:recordRevision(earlier)});}finally{ResearchCatalogue.prototype.record=record;}

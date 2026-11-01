@@ -64,7 +64,7 @@ test('heavy notebook moves retain every block, scope key, history and portable r
  ResearchCatalogue.prototype.record.mock.restore();
  t.mock.method(ResearchCatalogue.prototype,'record',function(id,...args){if(id===record.id)throw Error('Recovery reconstructed the heavy record');return original.call(this,id,...args);});
  const access=await createAccess('','synthetic moved-record recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const copied=await encryptedCopy(await copyPlan(workspace.root,path.join(f.directory,'recovered')),access,vault,f.vault),recovered=new Workspace(copied,vault);
+ const copied=await encryptedCopy(await copyPlan(workspace.root,path.join(f.directory,'recovered'),{vault:f.vault}),access,vault,f.vault),recovered=new Workspace(copied,vault);
  await recovered.catalogue(store=>store.verify(catalogueDescriptor(book)));
  assert.equal((await new RecordValues(recovered).read(target)).value.value,'Authoring after the move');
  assert.deepEqual(await new StructureCommands(recovered).execute('structure',command),moved);

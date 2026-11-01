@@ -46,7 +46,7 @@ test('manual receipts pin record and evidence, reject stale forms, replay lost r
  assert.deepEqual((await ready.view(f.command)).missing,[]);
  assert.deepEqual(await ready.link(initial),receipt);await assert.rejects(ready.link({...initial,statement:'Changed request'}),{code:'INTAKE_CHANGED'});
  const read=ResearchCatalogue.prototype.read;ResearchCatalogue.prototype.read=()=>{throw Error('Readiness must not load the whole book');};try{await ready.view(f.command);}finally{ResearchCatalogue.prototype.read=read;}
- const backup=await copyWorkspace(await copyPlan(f.ws.root,path.join(f.directory,'backup')),{vault:f.vault}),restored=new RunReadiness(new Workspace(backup,f.vault));assert.deepEqual(await restored.view(f.command),await ready.view(f.command));
+ const backup=await copyWorkspace(await copyPlan(f.ws.root,path.join(f.directory,'backup'),{vault:f.vault}),{vault:f.vault}),restored=new RunReadiness(new Workspace(backup,f.vault));assert.deepEqual(await restored.view(f.command),await ready.view(f.command));
 });
 
 test('receipt edition selection respects each website, exact record revisions and completed preparations',async t=>{

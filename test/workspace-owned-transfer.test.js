@@ -51,7 +51,7 @@ test('owned databases support portable archives and separately keyed successor w
  await copyWorkspaceTo(f.workspace.root,portable,{vault:f.vault});
  assert.equal(await catalogueBinding(portable),null);await assert.rejects(fs.access(path.join(portable,'.observanda/postgresql')),{code:'ENOENT'});
  const access=await createWorkspaceAccess('','Synthetic successor password',f.deviceStore),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- await encryptedCopy(await copyPlan(f.workspace.root,successor),access,vault,f.vault);
+ await encryptedCopy(await copyPlan(f.workspace.root,successor,{vault:f.vault}),access,vault,f.vault);
  assert.deepEqual(await new Workspace(successor,vault).read(),before);assert.notEqual(vault.id,f.vault.id);await f.owner.closeWorkspace(successor);
  await assert.rejects(new Workspace(successor,f.vault).read());
  assert.deepEqual(await f.workspace.read(),before);await f.owner.closeWorkspace(f.workspace.root);

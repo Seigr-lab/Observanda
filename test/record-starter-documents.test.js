@@ -46,7 +46,7 @@ test('retained templates grow past old envelopes and edit one late field without
   const created=(await f.workspace.read()).book.entries.find(r=>r.id===recordId);assert.equal(created.sections.length,65);assert.equal(created.sections[64].body,'Corrected last instruction');assert.equal(created.status,'draft');assert.deepEqual(created.attachments,[]);
  }finally{RecordDocument.prototype.field=original;}
  await verifyRecordStarters(f.workspace);
- const dest=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.dir,'copy')),{vault:f.vault});await verifyRecordStarters(new Workspace(dest,f.vault));
+ const dest=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.dir,'copy'),{vault:f.vault}),{vault:f.vault});await verifyRecordStarters(new Workspace(dest,f.vault));
 });
 test('streamed portable packages retain exact releases, resume upload and reject damage before import becomes visible',async t=>{
  const f=await fixture(t),saved=await save(f),published=await publish(f,saved),bytes=await bytesOf(f.owner.download({workspaceId:f.workspaceId,id:saved.id,release:published.release.revision,password}));
@@ -72,7 +72,7 @@ test('legacy roots upgrade atomically, remain exact and survive fresh-key recove
  await f.owner.change(command);assert.equal(await f.workspace.catalogue(store=>catalogueFormat(store.db)),21);assert.deepEqual(await f.owner.release(target),release);
  const old=await f.owner.export({...target,password}),oldBytes=Buffer.from(old.encoded,'base64'),oldTarget=await upload(f,oldBytes);assert.equal((await f.owner.review({...oldTarget,password})).fingerprint,revision);assert.equal((await f.owner.packageView({...oldTarget,offset:0})).sections.total,2);
  const partial=Buffer.alloc(180000,73),partialId=randomUUID(),part={workspaceId:f.workspaceId,uploadId:partialId};await f.owner.upload({...part,bytes:partial.length,sha256:sha(partial)});await f.owner.uploadPart({...part,index:0,encoded:partial.subarray(0,128*1024).toString('base64')});
- const access=await createAccess('','fresh template recovery password'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));const root=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.dir,'fresh-key')),access,vault,f.vault),restored=new RecordStarterTransfer(new Workspace(root,vault));await verifyRecordStarters(restored.workspace);
+ const access=await createAccess('','fresh template recovery password'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));const root=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.dir,'fresh-key'),{vault:f.vault}),access,vault,f.vault),restored=new RecordStarterTransfer(new Workspace(root,vault));await verifyRecordStarters(restored.workspace);
  assert.equal((await restored.upload({...part,uploadId:randomUUID(),bytes:partial.length,sha256:sha(partial)})).received,1);assert.deepEqual(await restored.release(target),release);
  const pointer=JSON.parse(await restored.workspace.readMetadata('.observanda/record-starters/drafts/'+saved.id+'.json',4096));await restored.workspace.withLock(()=>restored.workspace.removeMetadata('.observanda/record-starter-values/value/'+pointer.root+'.json'));await assert.rejects(verifyRecordStarters(restored.workspace),{code:'CATALOGUE_DAMAGED'});
 });

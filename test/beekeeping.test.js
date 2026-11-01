@@ -52,7 +52,7 @@ test('linked history stays paged, private and revision-anchored across saves and
  const next=await queries.list({...command,cursor:first.nextCursor});assert.equal(next.changed,true);assert.equal(next.total,25);assert.equal((await queries.list(command)).total,24);
  await assert.rejects(queries.list({...command,query:query(),relatedTo:relatedTo(book,other.id),cursor:first.nextCursor}),{code:'RECORD_QUERY_CURSOR'});
  await assert.rejects(queries.list({...command,relatedTo:{workspaceId:randomUUID(),id:hive.id}}),{code:'INVALID'});
- const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'backup')),{vault:f.vault});
+ const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'backup'),{vault:f.vault}),{vault:f.vault});
  assert.deepEqual((await new RecordQuery(new Workspace(copy,f.vault)).list({...command,cursor:first.nextCursor})).records,next.records);
  const restored=(await new Workspace(copy,f.vault).read()).book;assert.equal(restored.entries.find(r=>r.id===inspection.id).template.values.queen,'Not seen');
  clearVault(f.vault);await assert.rejects(queries.list(command),{code:'ACCESS_LOCKED'});

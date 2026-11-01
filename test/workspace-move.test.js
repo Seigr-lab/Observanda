@@ -133,7 +133,7 @@ test('cleanup retry keeps remaining original bytes if their verified destination
 test('a moved workspace supports subsequent independent backups and moves without carrying old cleanup instructions',async t=>{
  const f=await fixture(t,true),plan=await planWorkspaceMove(f.source,f.destination);
  await moveWorkspace(plan,{vault:f.vault,activate:async()=>{}});
- const backup=path.join(f.directory,'backup');await copyWorkspace(await copyPlan(f.destination,backup),{vault:f.vault});
+ const backup=path.join(f.directory,'backup');await copyWorkspace(await copyPlan(f.destination,backup,{vault:f.vault}),{vault:f.vault});
  await assert.rejects(fs.access(path.join(backup,WORKSPACE_MOVE_AUTHORIZATION)),{code:'ENOENT'});
  assert.equal(await readMoveReceipt(backup),null);assert.equal((await new Workspace(backup,f.vault).read()).book.id,(await new Workspace(f.destination,f.vault).read()).book.id);
  const next=path.join(f.directory,'next');assert.equal((await moveWorkspace(await planWorkspaceMove(f.destination,next),{vault:f.vault,activate:async()=>{}})).phase,'complete');

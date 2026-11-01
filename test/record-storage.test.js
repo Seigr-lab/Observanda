@@ -98,26 +98,26 @@ test('process termination during the first block write leaves an ordinary genera
 for(const indexed of [false,true])test(`normal and fresh-key backups retain ${indexed?'run-indexed':'ordinary'} block roots, histories and format fences and reject damaged blocks`,async t=>{
  const f=await fixture(t);if(indexed)f.record.attempt=runFacts();const generation=indexed?12:6,first=await save(f),second=await save(f,{...first,title:'A later interpretation'},first),expected=await f.workspace.read(),history=await f.workspace.history(),retained=(await manifest(f.workspace,second)).value,root=retained.root;
  if(indexed){assert.equal(retained.version,2);assert.deepEqual(retained.attemptIndex,(await manifest(f.workspace,first)).value.attemptIndex);}
- const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'backup')),{vault:f.vault});
+ const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'backup'),{vault:f.vault}),{vault:f.vault});
  const header=JSON.parse((await readFile(path.join(backup,CATALOGUE_ARCHIVE),'utf8')).split('\n')[0]);assert.deepEqual(header,{format:'observanda-postgresql-archive',version:3,catalogueVersion:generation});
  const restored=new Workspace(backup,f.vault);assert.deepEqual(await restored.read(),expected);assert.deepEqual(await restored.history(),history);
  const access=await createAccess('','different synthetic recovery password'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const target=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh')),access,vault,f.vault),fresh=new Workspace(target,vault);
+ const target=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh'),{vault:f.vault}),access,vault,f.vault),fresh=new Workspace(target,vault);
  assert.deepEqual(await fresh.read(),expected);assert.deepEqual(await fresh.history(),history);assert.equal((await manifest(fresh,second)).value.root,root);
  await fresh.catalogue(async store=>{assert.equal(await catalogueFormat(store.db),generation);assert.deepEqual(await store.record(first.id,storageVersion(first)),first);await store.verify(catalogueDescriptor(expected.book));
   if(indexed)await withRecordDocument(store,second.id,storageVersion(second),async document=>{assert.deepEqual(document.attemptIndex,retained.attemptIndex);assert.equal(await attemptFactPosition(document,'events',second.attempt.events[0].id),0);const index=await RecordAttemptIndex.open(document);await index.verify();assert.equal((await index.currentWindow('events')).total,second.attempt.events.length);});
  });
  await assert.rejects(new Workspace(target,f.vault).read(),{code:'ENCRYPTION_DAMAGED'});
  // Mislabelled archives must fail before publishing a database binding.
- const downgraded=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'downgraded')),{vault:f.vault}),file=path.join(downgraded,CATALOGUE_ARCHIVE),raw=await readFile(file,'utf8');
+ const downgraded=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'downgraded'),{vault:f.vault}),{vault:f.vault}),file=path.join(downgraded,CATALOGUE_ARCHIVE),raw=await readFile(file,'utf8');
  await writeFile(file,JSON.stringify({format:'observanda-postgresql-archive',version:2})+raw.slice(raw.indexOf('\n')));
  await assert.rejects(new Workspace(downgraded,f.vault).read(),{code:'CATALOGUE_DAMAGED'});
  // Authenticated outer storage does not excuse a damaged notebook envelope.
  await f.workspace.withLock(()=>f.workspace.catalogue(async store=>{
   const slot='record-block:'+second.notebookId+':1:value:'+root,row=await store.db.get('SELECT payload FROM state WHERE slot=$1',slot),value=store.decode('state',slot,row.payload),bytes=Buffer.from(value.content,'base64');bytes[bytes.length-1]^=1;value.content=bytes.toString('base64');await store.db.run('UPDATE state SET payload=$1 WHERE slot=$2',store.encode('state',slot,value),slot);
  }));
- await assert.rejects(copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'damaged-copy')),{vault:f.vault}),{code:'ENCRYPTION_DAMAGED'});
- await assert.rejects(encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'damaged-fresh')),access,vault,f.vault),{code:'ENCRYPTION_DAMAGED'});
+ await assert.rejects(copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'damaged-copy'),{vault:f.vault}),{vault:f.vault}),{code:'ENCRYPTION_DAMAGED'});
+ await assert.rejects(encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'damaged-fresh'),{vault:f.vault}),access,vault,f.vault),{code:'ENCRYPTION_DAMAGED'});
  assert.deepEqual(await restored.read(),expected);
 });
 

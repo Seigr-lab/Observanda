@@ -25,8 +25,8 @@ test('selected rich-text corrections preserve grouped links in earlier revisions
  const before=await writing.save({...selection,expectedRevision:first.revision,value:{title:'Selected section',body:beforeBody}}),initial=structuredClone(record);initial.sections[1]={...initial.sections[1],title:'Selected section',body:beforeBody};
  const next=await writing.read(selection),body=rich([randomUUID()],target),command={...selection,expectedRevision:next.revision,value:{title:'Corrected section',body}},saved=await writing.save(command);assert.deepEqual(await writing.save(command),saved);
  const current=structuredClone(initial);current.sections[1]={...current.sections[1],title:'Corrected section',body};
- const copied=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'copy')),{vault:f.vault}),access=await createAccess('','Grouped link recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'fresh')),access,vault,f.vault);
+ const copied=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'copy'),{vault:f.vault}),{vault:f.vault}),access=await createAccess('','Grouped link recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'fresh'),{vault:f.vault}),access,vault,f.vault);
  for(const workspace of [f.workspace,new Workspace(copied,f.vault),new Workspace(fresh,vault)])await workspace.catalogue(async store=>{
   for(const [etag,original] of [[before.etag,initial],[saved.etag,current]]){
    const snapshot=await store.snapshot(etag),row=await store.member(snapshot,record.id),[query]=await Array.fromAsync(new RecordQueryDocuments(store).read([row],snapshot.metadata,{search:false,publicationDetails:true})),expected=publicationDescriptor(original);

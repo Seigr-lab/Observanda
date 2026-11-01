@@ -59,7 +59,7 @@ test('fresh encrypted successors change the data key and exclude earlier devices
  const access=await createWorkspaceAccess('','',a),vault=takeCreatedVault(access);await initializeLocation(root,createNotebook('Private'),access,vault);
  const value=grantDevice(access,vault,await b.identity());await atomicWrite(path.join(root,'.observanda/access.json'),serialize(value));
  const oldKey=await unlockKeyring(value,{deviceStore:b}),next=await createWorkspaceAccess('','',a),nextVault=takeCreatedVault(next),destination=path.join(parent,'successor');
- await encryptedCopy(await copyPlan(root,destination),next,nextVault,vault);
+ await encryptedCopy(await copyPlan(root,destination,{vault}),next,nextVault,vault);
  assert.notDeepEqual(nextVault.key,oldKey.key);await assert.rejects(new Workspace(destination,oldKey).read(),{code:'ENCRYPTION_DAMAGED'});
  await assert.rejects(unlockKeyring(next,{deviceStore:b}),{code:'DEVICE_UNKNOWN'});
  assert.equal((await new Workspace(destination,nextVault).read()).book.title,'Private');

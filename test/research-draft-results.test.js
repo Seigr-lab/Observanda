@@ -27,7 +27,7 @@ test('native result checkpoints survive restart, concurrent results, rejected wr
  await assert.rejects(drafts.write(invalid),{code:'INVALID'});assert.equal((await drafts.read(command.id)).revision,saved.revision);
  const remote=structuredClone(base);remote.results.statements[1].text='Concurrent conclusion';
  await new ResearchRecords(f.workspace,{}).save({workspaceId:book.id,changes:[{id:base.id,expectedRevision:recordRevision(base),record:remote}]},{receipt:true});
- const destination=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'backup')),{vault:f.vault});
+ const destination=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'backup'),{vault:f.vault}),{vault:f.vault});
  for(const workspace of [new Workspace(f.workspace.root,f.vault),new Workspace(destination,f.vault)]){
   const recovered=await new ResearchDrafts(workspace).read(command.id);assert.equal(recovered.revision,saved.revision);assert.deepEqual(recovered.draft.changes[0].record,mine);assert.deepEqual(recovered.draft.changes[0].base,base);
   const latest=await workspace.catalogue(async store=>{const snapshot=await store.snapshot(),row=await store.member(snapshot,base.id);return store.record(row.id,row.revision);});

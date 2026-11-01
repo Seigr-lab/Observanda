@@ -44,7 +44,7 @@ test('long records keep writing sections, edits and anchored reading in independ
   const history=new RecordHistory(f.workspace,{}),command={workspaceId:book.id,recordId:e.id},versions=await history.list(command),version=versions.versions.find(v=>v.revision===recordRevision(original));expect(version).toBeDefined();expect((await history.read({...command,...version})).record).toEqual(original);
   const current=(await f.workspace.read()).book,edition=buildPublication(current),html=edition.files.get('entries/'+e.id+'.html');expect(html).toContain('Final observations');for(const s of saved.sections)expect(html).toContain('id="record-section-'+s.id+'"');
   const access=await createAccess('','record section recovery test password'),restoredVault=takeCreatedVault(access),destination=path.join(directory,'restored');
-  try{await encryptedCopy(await copyPlan(f.workspace.root,destination),access,restoredVault,f.vault);const restored=new Workspace(destination,restoredVault);expect((await restored.read()).book.entries[0]).toEqual(saved);expect((await new RecordHistory(restored,{}).read({...command,...version})).record).toEqual(original);}finally{clearVault(restoredVault);}
+  try{await encryptedCopy(await copyPlan(f.workspace.root,destination,{vault:f.vault}),access,restoredVault,f.vault);const restored=new Workspace(destination,restoredVault);expect((await restored.read()).book.entries[0]).toEqual(saved);expect((await new RecordHistory(restored,{}).read({...command,...version})).record).toEqual(original);}finally{clearVault(restoredVault);}
   expect(errors).toEqual([]);
  }finally{await app.close();await clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

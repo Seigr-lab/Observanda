@@ -43,7 +43,7 @@ test('an indexed file set grows past 10000 acquisitions and retains every associ
   assert.equal(original.content.size,0);assert.equal(original.content.sha256,digest(Buffer.alloc(0)));assert.equal(original.recordId,owner);assert.equal(original.content.sourcePurpose,'current-return');verified++;
  }});assert.equal(verified,count);
  const reference=(await materials.referencePage(job.result,{offset:count-1,limit:1})).items[0];assert.equal((await contentBuffer((await materials.artifact(reference)).content)).length,0);
- const copied=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'backup')),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(copied,f.vault));
+ const copied=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'backup'),{vault:f.vault}),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(copied,f.vault));
  assert.equal((await restored.read(job.result)).content.inputsIndex.count,count);assert.equal((await restored.intakes.page({id:batch.id,offset:count-1})).items[0].sourcePath,descriptor(count-1).sourcePath);
  assert.equal((await contentBuffer((await restored.artifact(reference)).content)).length,0);
  t.diagnostic(JSON.stringify({files:count,selectionMs:Math.round(selected-started),registrationMs:Math.round(registered-selected),attachmentMs:Math.round(attached-registered),totalMs:Math.round(performance.now()-started)}));

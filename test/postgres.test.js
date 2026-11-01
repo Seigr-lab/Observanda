@@ -84,8 +84,8 @@ test('indexed object prefix counts preserve Unicode prefix membership',async t=>
 });
 test('portable backup restores after the source database schema is gone and restored copies stay independent',async t=>{
  const {root,source,vault,ws}=await fixture(t),before=await ws.read();
- const backup=await copyWorkspace(await copyPlan(source,path.join(root,'backup')),{vault});
- const second=await copyWorkspace(await copyPlan(source,path.join(root,'second')),{vault});
+ const backup=await copyWorkspace(await copyPlan(source,path.join(root,'backup'),{vault}),{vault});
+ const second=await copyWorkspace(await copyPlan(source,path.join(root,'second'),{vault}),{vault});
  await assert.rejects(access(path.join(backup,CATALOGUE_FILE)),{code:'ENOENT'});
  const archive=await readFile(path.join(backup,CATALOGUE_ARCHIVE));
  for(const secret of [before.book.title,source,process.env.OBSERVANDA_DATABASE_URL])assert.ok(!archive.includes(Buffer.from(secret)));
@@ -104,14 +104,14 @@ test('portable backup restores after the source database schema is gone and rest
  assert.deepEqual(await independent.read(),before);
 });
 test('a database edit after backup review invalidates the plan even when the binding file is unchanged',async t=>{
- const {root,source,ws,vault}=await fixture(t),plan=await copyPlan(source,path.join(root,'stale'));
+ const {root,source,ws,vault}=await fixture(t),plan=await copyPlan(source,path.join(root,'stale'),{vault});
  const current=await ws.read();current.book.entries[0].title='Changed after review';await ws.save(current.book,current.etag);
  await assert.rejects(copyWorkspace(plan,{vault}),{code:'CONFLICT'});
  await assert.rejects(access(plan.destination),{code:'ENOENT'});
 });
 
 test('backup review detects a same-size retained state change even when the current head is unchanged',async t=>{
- const {root,source,vault}=await fixture(t),plan=await copyPlan(source,path.join(root,'changed-state'));
+ const {root,source,vault}=await fixture(t),plan=await copyPlan(source,path.join(root,'changed-state'),{vault});
  const db=await openCatalogue(source);
  try{
   const row=await db.get("SELECT slot,payload FROM state WHERE slot<>'head' ORDER BY slot LIMIT 1"),changed=Buffer.from(row.payload);changed[changed.length-1]^=1;
@@ -123,7 +123,7 @@ test('backup review detects a same-size retained state change even when the curr
 test('truncated or forged archives fail without deleting the original or activating a database',async t=>{
  const {root,source,vault}=await fixture(t);
  for(const [name,change] of [['truncated',b=>b.subarray(0,b.length-30)],['forged',b=>Buffer.from(b.toString().replace('"table":"scope_keys"','"table":"__proto__"'))]]){
-  const backup=await copyWorkspace(await copyPlan(source,path.join(root,name)),{vault}),file=path.join(backup,CATALOGUE_ARCHIVE);
+  const backup=await copyWorkspace(await copyPlan(source,path.join(root,name),{vault}),{vault}),file=path.join(backup,CATALOGUE_ARCHIVE);
   const broken=change(await readFile(file));await writeFile(file,broken);
   await assert.rejects(new Workspace(backup,vault).read(),{code:'CATALOGUE_DAMAGED'});
   assert.deepEqual(await readFile(file),broken);await assert.rejects(access(path.join(backup,CATALOGUE_FILE)),{code:'ENOENT'});
@@ -131,7 +131,7 @@ test('truncated or forged archives fail without deleting the original or activat
 });
 test('interrupted archive import rolls back and can be retried from unchanged original bytes',async t=>{
  const {root,source,vault,ws}=await fixture(t),before=await ws.read();
- const backup=await copyWorkspace(await copyPlan(source,path.join(root,'interrupted')),{vault}),file=path.join(backup,CATALOGUE_ARCHIVE),bytes=await readFile(file);
+ const backup=await copyWorkspace(await copyPlan(source,path.join(root,'interrupted'),{vault}),{vault}),file=path.join(backup,CATALOGUE_ARCHIVE),bytes=await readFile(file);
  const script=[
   "import {Client} from 'pg';",
   "import {openCatalogue} from './src/postgres.js';",
@@ -159,7 +159,7 @@ test('interrupted archive import rolls back and can be retried from unchanged or
 
 test('activation waits for a releasing importer but leaves an actively locked archive unchanged',async t=>{
  const {root,source,vault,ws}=await fixture(t),before=await ws.read();
- const target=await copyWorkspace(await copyPlan(source,path.join(root,'contended')),{vault}),file=path.join(target,CATALOGUE_ARCHIVE),bytes=await readFile(file);
+ const target=await copyWorkspace(await copyPlan(source,path.join(root,'contended'),{vault}),{vault}),file=path.join(target,CATALOGUE_ARCHIVE),bytes=await readFile(file);
  const holder=await openCatalogue(source),lock='Observanda/activate/'+await realpath(target);
  const acquire=()=>holder.run('SELECT pg_catalog.pg_advisory_lock(pg_catalog.hashtextextended($1,0))',lock);
  const release=()=>holder.run('SELECT pg_catalog.pg_advisory_unlock(pg_catalog.hashtextextended($1,0))',lock);
@@ -206,7 +206,7 @@ test('catalogue counts seek bounded byte-order pages and exclude unrelated state
 
 for(const active of [false,true])test('cancelled detached archive cleanup removes its temporary schema '+(active?'after an active query':'between queries'),async t=>{
  const {root,source,ws,vault}=await fixture(t),before=await ws.read();
- const backup=await copyWorkspace(await copyPlan(source,path.join(root,'detached-copy')),{vault});
+ const backup=await copyWorkspace(await copyPlan(source,path.join(root,'detached-copy'),{vault}),{vault});
  const controller=new AbortController(),observer=await openCatalogue(source);let temporary;
  t.after(async()=>{try{await temporary?.close();}finally{await observer.close();}});
  temporary=await withDatabaseRequest(controller.signal,()=>new Workspace(backup,vault).openCatalogue({detached:true}));
@@ -224,7 +224,7 @@ for(const active of [false,true])test('cancelled detached archive cleanup remove
 
 test('a dead detached catalogue releases admission before reconnecting for schema cleanup',async t=>{
  const {root,source,vault}=await fixture(t);
- const backup=await copyWorkspace(await copyPlan(source,path.join(root,'detached-dead-copy')),{vault});
+ const backup=await copyWorkspace(await copyPlan(source,path.join(root,'detached-dead-copy'),{vault}),{vault});
  const observer=await openCatalogue(source);let temporary;
  t.after(async()=>{try{await temporary?.close();}finally{await observer.close();}});
  temporary=await new Workspace(backup,vault).openCatalogue({detached:true});
@@ -240,7 +240,7 @@ test('a dead detached catalogue releases admission before reconnecting for schem
 
 test('cancelling detached catalogue admission preserves the cancellation and removes its unpublished schema',async t=>{
  const {root,source,ws,vault}=await fixture(t),before=await ws.read();
- const backup=await copyWorkspace(await copyPlan(source,path.join(root,'cancelled-admission')),{vault});
+ const backup=await copyWorkspace(await copyPlan(source,path.join(root,'cancelled-admission'),{vault}),{vault});
  const controller=new AbortController(),reason=new Error('cancelled disposable admission');let schema;
  await assert.rejects(withDatabaseRequest(controller.signal,()=>openCatalogue(backup,{detached:true,vault,validate:async db=>{schema=db.schema;controller.abort(reason);}})),error=>error===reason);
  assert.equal(typeof schema,'string');const observer=await openCatalogue(source);

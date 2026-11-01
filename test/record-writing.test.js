@@ -66,9 +66,9 @@ test('a selected edit can cross the old record envelope budget and survive verif
  t.mock.method(ResearchCatalogue.prototype,'record',()=>{throw Error('Capacity or recovery assembled a whole original');});
  const checkpoint=await drafts.write(command),saved=await writing.save({...target,expectedRevision:base.revision,value:command.value});
  const size=await f.workspace.catalogue(async store=>(await store.member(await store.snapshot(),record.id)).bytes);assert.ok(size>2*1024*1024,size+' retained bytes');
- const copied=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'backup')),{vault:f.vault}),restored=new Workspace(copied,f.vault);
+ const copied=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'backup'),{vault:f.vault}),{vault:f.vault}),restored=new Workspace(copied,f.vault);
  const access=await createAccess('','synthetic selected-writing recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const portable=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'fresh')),access,vault,f.vault),fresh=new Workspace(portable,vault);
+ const portable=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'fresh'),{vault:f.vault}),access,vault,f.vault),fresh=new Workspace(portable,vault);
  for(const workspace of [restored,fresh]){
   const result=await new RecordWriting(workspace).read(target);assert.deepEqual(result.value,command.value);assert.equal(result.revision,saved.revision);
   const recovered=await new RecordWritingDrafts(workspace).read({id:command.id,workspaceId:book.id,expectedRevision:checkpoint.revision});assert.deepEqual(recovered.value,command.value);

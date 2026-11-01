@@ -95,9 +95,9 @@ test('older module checkpoints remain readable during a write and build their in
  await f.drafts.write(f.commands[0]);assert.notEqual(await f.draftContext(c=>c.workspace.readMetadata('.observanda/module-draft-list.json',1024)),null);
  assert.deepEqual((await f.drafts.list(moduleId)).drafts,before.drafts);
  const selected=await f.drafts.read(before.drafts[0].id);
- const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'backup')),{vault:f.vault});
+ const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'backup'),{vault:f.vault}),{vault:f.vault});
  const access=await createAccess('','fresh module recovery secret'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh')),access,vault,f.vault);
+ const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh'),{vault:f.vault}),access,vault,f.vault);
  for(const workspace of [new Workspace(backup,f.vault),new Workspace(fresh,vault)]){
   const drafts=moduleDraftOwners(workspace,f.book.id,moduleId).drafts,page=await drafts.list(moduleId);assert.deepEqual(page.drafts,before.drafts);assert.deepEqual((await drafts.read(selected.draft.id)).draft,selected.draft);
  }

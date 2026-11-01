@@ -49,7 +49,7 @@ test('older preview backlink discovery retains only related public descriptors a
   assert.equal((await f.workspace.outline()).etag,etag);
   if(missingReferences){
    const access=await createAccess('','synthetic legacy preview recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
-   const destination=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'recovered')),access,vault,f.vault);
+   const destination=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'recovered'),{vault:f.vault}),access,vault,f.vault);
    const restored=await appearancePreviewPage(new Workspace(destination,vault),{workspaceId:book.id,etag,websitePin,appearance:book.appearance,mode:'website'},'entries/'+target.id+'.html');
    assert.deepEqual(restored,context);
   }

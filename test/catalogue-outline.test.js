@@ -52,7 +52,7 @@ test('flat pages remain pinned, resume after interruption and preserve order acr
  await assert.rejects(client.read(),/Interrupted page/);const complete=await client.read();assert.equal(requests[2],failed);
  assert.deepEqual(complete.book.entries.map(r=>r.id),f.records.map(r=>r.id));assert.equal(complete.book.entries[0].title,original.title);
  assert.equal((await f.reader.selection({workspaceId:f.book.id,ids:[original.id]})).book.entries[0].title,'Edited after first page');
- const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'copy')),{vault:f.vault}),reader=new WorkspaceReader(new Workspace(copy,f.vault));
+ const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'copy'),{vault:f.vault}),{vault:f.vault}),reader=new WorkspaceReader(new Workspace(copy,f.vault));
  const restored=await reader.page(command);assert.deepEqual({...restored,nextCursor:null},{...first,nextCursor:null});
  assert.equal((await reader.start({workspaceId:f.book.id,snapshotId:f.etag})).total,46);
 });

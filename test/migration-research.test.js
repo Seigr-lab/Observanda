@@ -47,7 +47,7 @@ test('explicit structured facts are reviewable, private by default, pinned and r
  const provenance=await f.service.provenance({workspaceId:f.book.id,recordId:record.id});assert.match(provenance.items[0].source.attributes,/PRIVATE_UNMAPPED_METADATA/);assert.ok(!JSON.stringify(record).includes('PRIVATE_UNMAPPED_METADATA'));
  await new ResearchRecords(f.workspace,{}).save({workspaceId:f.book.id,changes:[{id:method.id,expectedRevision:recordRevision(method),record:{...method,body:'Later method; not the one used by the earlier run'}}]});
  assert.equal((await new ResearchMaterials(f.workspace).read(protocol)).body,method.body);
- const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'backup')),{vault:f.vault}),restored=new Workspace(backup,f.vault),restoredRecord=(await restored.read()).book.entries.find(r=>r.id===record.id);
+ const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'backup'),{vault:f.vault}),{vault:f.vault}),restored=new Workspace(backup,f.vault),restoredRecord=(await restored.read()).book.entries.find(r=>r.id===record.id);
  assert.deepEqual(restoredRecord,record);assert.equal((await new ResearchMaterials(restored).read(protocol)).body,method.body);
  assert.equal((await new MigrationImport(restored).detail({...command,index:1})).mapping.research.path,'/facts');
  const published=structuredClone(saved.book);published.entries=published.entries.filter(r=>r.id===record.id).map(r=>({...r,share:true}));published.projects.forEach(p=>p.share=true);

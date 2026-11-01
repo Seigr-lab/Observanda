@@ -18,7 +18,7 @@ test('retained reference continuation files restore byte for byte under a fresh 
  const candidate=await jobs.inline(await jobs.workspace.outline()),names=(await Array.fromAsync(candidate.files.keys())).filter(name=>name.startsWith('entries/references-'+book.entries[0].id+'-'));
  assert.equal(names.length,2);const original=await Promise.all(names.map(async name=>(await contentBuffer(await candidate.files.get(name))).toString()));
  const access=await createAccess('','reference edition restore'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const destination=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'restored')),access,vault,f.vault),restored=new PublicationJobs(new Workspace(destination,vault));
+ const destination=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'restored'),{vault:f.vault}),access,vault,f.vault),restored=new PublicationJobs(new Workspace(destination,vault));
  await restored.verifyFiles(candidate.reviewId);const copy=await restored.read(candidate.reviewId);assert.equal(copy.id,candidate.id);
  for(const [index,name]of names.entries())assert.equal((await contentBuffer(await copy.files.get(name))).toString(),original[index]);
 });

@@ -46,7 +46,7 @@ test('a valid dense record saves, indexes, retains, restores and survives a veri
  const changed=await service.save({workspaceId:book.id,changes:[{id:record.id,expectedRevision:recordRevision(record),record:{...record,title:'Revised interpretation'}}]},{recordIds:[record.id]});
  const restored=await history.restore({...command,...version,expectedRevision:changed.recordRevisions[record.id]},{recordIds:[record.id]});
  assert.deepEqual(restored.book.entries[0].figures,record.figures);
- const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'restored')),{vault:f.vault}),workspace=new Workspace(copy,f.vault);
+ const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'restored'),{vault:f.vault}),{vault:f.vault}),workspace=new Workspace(copy,f.vault);
  const opened=await new WorkspaceReader(workspace).selection({workspaceId:book.id,ids:[record.id]});assert.deepEqual(opened.book.entries,restored.book.entries);
  assert.deepEqual(await new ResearchMaterials(workspace).read(pin),record);
  await workspace.catalogue(store=>store.verifySnapshot(saved.etag,book.id));

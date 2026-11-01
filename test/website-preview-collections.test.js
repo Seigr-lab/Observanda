@@ -143,7 +143,7 @@ test('sparse feed filters and default record directories continue without retain
  const back=await websitePreviewSource(f.workspace,command,{designTarget:'home',collections:[navigation(forward,forward.previousCursor)]});assert.equal(back.context.collectionPages.find(p=>p.key===page.key).previousCursor,null);
  const controller=new AbortController();controller.abort();await assert.rejects(websitePreviewSource(f.workspace,command,{designTarget:target,signal:controller.signal}),{name:'AbortError'});
  const access=await createAccess('','canvas collection recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const location=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'restored')),access,vault,f.vault),restored=new Workspace(location,vault),recovered=await websitePreviewSource(restored,command,{designTarget:'home'});
+ const location=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'restored'),{vault:f.vault}),access,vault,f.vault),restored=new Workspace(location,vault),recovered=await websitePreviewSource(restored,command,{designTarget:'home'});
  assert.deepEqual(recovered.context.collectionPages.map(p=>p.recordIds),home.context.collectionPages.map(p=>p.recordIds));
  const next=home.context.collectionPages[0],restoredPage=recovered.context.collectionPages[0];
  const originalNext=await websitePreviewSource(f.workspace,command,{designTarget:'home',collections:[navigation(next,next.nextCursor)]}),restoredNext=await websitePreviewSource(restored,command,{designTarget:'home',collections:[navigation(restoredPage,restoredPage.nextCursor)]});

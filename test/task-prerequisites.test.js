@@ -109,7 +109,7 @@ test('portable owner verification survives deleting its source owner and rejects
  const item=entity({...draft,prerequisiteObservations:result.observations},itemId);await seedModuleCurrent(f.workspace,book.id,[item]);
  assert.deepEqual([...moduleMigrationDependencies(item,book.id)],[{kind:'external',...foreign}]);
  await f.workspace.catalogue(store=>workspaceModules(f.workspace).verifyCatalogue(store,book.id));
- const copied=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'copy')),{vault:f.vault});
+ const copied=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'copy'),{vault:f.vault}),{vault:f.vault});
  assert.equal(path.relative(directory,source.workspace.root),path.join('source','workspace'));clearVault(source.vault);await rm(source.workspace.root,{recursive:true,force:true});await assert.rejects(stat(source.workspace.root),{code:'ENOENT'});
  const restored=new Workspace(copied,f.vault),modules=workspaceModules(restored);
  assert.deepEqual((await modules.current()).entities.find(value=>value.id===item.id),item);await restored.catalogue(store=>modules.verifyCatalogue(store,book.id));assert.equal(sourceReads,1);

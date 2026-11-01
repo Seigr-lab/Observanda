@@ -110,7 +110,7 @@ test('two installations complete invitation, acceptance and retained confirmatio
   await assert.rejects(author.invitation(created.file.value.invitation.id),{code:'COLLABORATION_EXPIRED'});
   assert.deepEqual((await author.receive(acceptance.file)).file.value,confirmation.file.value);
   assert.ok((await recipient.enrollments())[0].acceptedAt);
-  const copy=await copyWorkspace(await copyPlan(f.devices[1].workspace.root,path.join(f.directory,'backup')),{vault:f.devices[1].vault}),restored=new OrganizationExchange(new Workspace(copy,f.devices[1].vault),f.devices[1].deviceStore);
+  const copy=await copyWorkspace(await copyPlan(f.devices[1].workspace.root,path.join(f.directory,'backup'),{vault:f.devices[1].vault}),{vault:f.devices[1].vault}),restored=new OrganizationExchange(new Workspace(copy,f.devices[1].vault),f.devices[1].deviceStore);
   assert.deepEqual(await restored.enrollments(),await recipient.enrollments());
   const wrong=await f.identities[2].sign(confirmation.file.value);await assert.rejects(recipient.receipt(wrong),{code:'COLLABORATION_DENIED'});
 });

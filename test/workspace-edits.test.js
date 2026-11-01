@@ -89,9 +89,9 @@ test('mixed publication selections and deletion commit together and restore with
  assert.deepEqual(await f.ws.catalogue(s=>s.read(f.base.etag)),f.base);
  const publication=JSON.stringify(publicProjection(saved.book));assert.ok(publication.includes(saved.book.entries[0].title));assert.ok(!publication.includes('A revised interpretation'));assert.ok(!publication.includes(removed.id));
  await f.ws.catalogue(s=>s.verify(catalogueDescriptor(saved.book)));
- const backup=await copyWorkspace(await copyPlan(f.ws.root,path.join(f.directory,'backup')),{vault:f.vault});
+ const backup=await copyWorkspace(await copyPlan(f.ws.root,path.join(f.directory,'backup'),{vault:f.vault}),{vault:f.vault});
  const access=await createAccess('','synthetic authoring restore secret'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const fresh=await encryptedCopy(await copyPlan(f.ws.root,path.join(f.directory,'fresh-key')),access,vault,f.vault);
+ const fresh=await encryptedCopy(await copyPlan(f.ws.root,path.join(f.directory,'fresh-key'),{vault:f.vault}),access,vault,f.vault);
  for(const [root,key] of [[backup,f.vault],[fresh,vault]]){
   const ws=new Workspace(root,key);assert.deepEqual(await ws.read(),saved);
   assert.deepEqual(await ws.catalogue(s=>s.read(f.base.etag)),f.base);

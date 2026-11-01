@@ -90,7 +90,7 @@ test('repeats retain preparation as inherited conditions, compare one changed pa
  assert.deepEqual(published.attempt.preparations[0].protocols,[{withheld:true}]);const output=buildPublication(book),html=output.files.get('entries/'+first.id+'.html');
  assert.match(html,/Recognition — Unresolved/);assert.match(html,/Native logging — Met/);assert.match(html,/Return copied — Complete/);
  const all=[...output.files.values()].filter(v=>typeof v==='string').join('\n');assert.ok(!all.includes(f.method.id));assert.ok(!all.includes(f.method.title));
- const backup=await copyWorkspace(await copyPlan(f.ws.root,path.join(f.root,'backup')),{vault:f.vault}),restored=new Workspace(backup,f.vault);
+ const backup=await copyWorkspace(await copyPlan(f.ws.root,path.join(f.root,'backup'),{vault:f.vault}),{vault:f.vault}),restored=new Workspace(backup,f.vault);
  assert.deepEqual((await restored.read()).book.entries.find(e=>e.id===first.id).attempt,first.attempt);
 });
 

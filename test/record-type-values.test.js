@@ -61,8 +61,8 @@ test('recoverable type changes atomically guard their format and survive ordinar
  const lookup={id:command.id,workspaceId:f.book.id,expectedRevision:receipt.revision};assert.deepEqual((await drafts.read(lookup)).value,command.value);
  await assert.rejects(f.workspace.withLock(()=>f.workspace.catalogue(async store=>{await store.db.run('UPDATE catalogue_format SET version=12');await new ResearchDrafts(f.workspace).read(command.id,{header:true});})),{code:'CATALOGUE_DAMAGED'});assert.equal(await f.workspace.catalogue(store=>catalogueFormat(store.db)),13);
  ResearchCatalogue.prototype.record.mock.restore();
- const copied=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'copy')),{vault:f.vault}),access=await createAccess('','synthetic type recovery password'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh')),access,vault,f.vault);
+ const copied=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'copy'),{vault:f.vault}),{vault:f.vault}),access=await createAccess('','synthetic type recovery password'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh'),{vault:f.vault}),access,vault,f.vault);
  for(const workspace of [new Workspace(copied,f.vault),new Workspace(fresh,vault)]){assert.equal(await workspace.catalogue(store=>catalogueFormat(store.db)),13);assert.deepEqual((await new RecordValueDrafts(workspace).read(lookup)).value,command.value);await workspace.catalogue(store=>store.verifySnapshot(undefined,f.book.id));}
 });
 
@@ -82,7 +82,7 @@ test('whole-record checkpoint type corrections are guarded, recoverable and reta
  plan=await review.prepare(prepare);assert.equal((await review.editRead({...target(plan),field:'type'})).value.value,'analysis');await f.workspace.catalogue(store=>verifyRecordDraftReviews(store));
  ResearchCatalogue.prototype.record.mock.restore();
  const access=await createAccess('','synthetic corrected type password'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const copied=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'corrected-copy')),access,vault,f.vault),workspace=new Workspace(copied,vault),restored=new RecordDraftReview(workspace,media);
+ const copied=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'corrected-copy'),{vault:f.vault}),access,vault,f.vault),workspace=new Workspace(copied,vault),restored=new RecordDraftReview(workspace,media);
  assert.deepEqual(await restored.prepare(prepare),plan);await restored.apply(target(plan));
  const result=(await workspace.read()).book.entries.find(r=>r.id===original.id);assert.equal(result.type,'analysis');assert.equal(result.title,mine.title);assert.deepEqual(result.sections,original.sections);await workspace.catalogue(store=>store.verifySnapshot(undefined,f.book.id));
  const templated=book.entries.find(r=>r.id===f.templated.id),templateDraft=await retainedDraft(f.workspace,f.book.id,templated,{...templated,title:'Template draft'}),templatePlan=await review.prepare({workspaceId:f.book.id,id:templateDraft.draft.id,expectedRevision:templateDraft.revision});

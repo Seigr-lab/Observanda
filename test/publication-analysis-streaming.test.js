@@ -82,10 +82,10 @@ test('native analysis decisions survive archive and fresh-key copies without cur
  assert.equal(candidate.version,3);assert.equal(candidate.researchReview.analysis.count,5);assert.equal(catalogueRequiresPublicationDocuments(await format(f.workspace)),true);
  for(let offset=0;offset<5;offset+=4){const page=await review.window(candidate,{offset});await review.save(candidate,page.items.map(item=>({id:item.id,reason:'This edition reports the retained original interpretation.'})));}
  const receipt=await review.read(candidate);assert.equal((await review.verify(candidate)).reviewed,true);
- const archived=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'archive')),{vault:f.vault}),archiveHeader=JSON.parse((await readFile(path.join(archived,CATALOGUE_ARCHIVE),'utf8')).split('\n')[0]);
+ const archived=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'archive'),{vault:f.vault}),{vault:f.vault}),archiveHeader=JSON.parse((await readFile(path.join(archived,CATALOGUE_ARCHIVE),'utf8')).split('\n')[0]);
  assert.equal(catalogueRequiresPublicationDocuments(archiveHeader.catalogueVersion),true);
  const access=await createWorkspaceAccess('','Synthetic retained analysis recovery',f.deviceStore),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const rekeyed=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh-key')),access,vault,f.vault),unavailable=()=>assert.fail('Retained analysis verification consulted a live source');
+ const rekeyed=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh-key'),{vault:f.vault}),access,vault,f.vault),unavailable=()=>assert.fail('Retained analysis verification consulted a live source');
  for(const [directory,key] of [[archived,f.vault],[rekeyed,vault]]){
   const restored=new Workspace(directory,key),offline=new Proxy(restored,{get(target,name){if(['outline','currentOutline','read'].includes(name))return unavailable;const value=target[name];return typeof value==='function'?value.bind(target):value;}}),jobs=new PublicationJobs(offline),retained=await jobs.stored(candidate.reviewId),decisions=new AnalysisPublicationReview(offline,{sourceReader:unavailable});
   assert.equal(await format(restored),await format(f.workspace));assert.deepEqual(await decisions.read(retained),receipt);assert.deepEqual(await decisions.verify(retained),{reviewed:true,decided:5,total:5,decisions:[]});

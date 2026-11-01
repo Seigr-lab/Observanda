@@ -61,7 +61,7 @@ test('interrupted ownership reconstruction and invalid identities roll back befo
  });
  await assert.rejects(f.service.execute('structure',{etag:f.etag,response:'outline',change:bad}),{code:'CONFLICT'});
  const access=await createAccess('','synthetic legacy recovery secret'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const location=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'recovered')),access,vault,f.vault),restored=new Workspace(location,vault);
+ const location=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'recovered'),{vault:f.vault}),access,vault,f.vault),restored=new Workspace(location,vault);
  const outline=await restored.outline();assert.equal(outline.etag,saved.etag);
  const renamed=await new StructureCommands(restored).execute('structure',{etag:outline.etag,response:'outline',change:{kind:'notebook',value:{...outline.metadata.notebooks[0],title:'Continued after recovery'}}});
  assert.equal(renamed.total,40);assert.equal(renamed.book.notebooks[0].title,'Continued after recovery');

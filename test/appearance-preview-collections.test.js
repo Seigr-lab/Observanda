@@ -109,6 +109,6 @@ test('author selection limits, snapshot and page bindings survive edits and veri
  const record=f.book.entries[24];await new ResearchRecords(f.workspace,{}).save({workspaceId:f.book.id,changes:[{id:record.id,expectedRevision:recordRevision(record),record:{...record,title:'Changed title'}}]},{receipt:true});
  assert.equal((await get(f,request)).recordCards[0].title,record.title);
  await assert.rejects(get({...f,command:{...f.command,etag:(await f.workspace.outline()).etag}},request),{code:'INVALID'});
- const restored=new Workspace(await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'backup')),{vault:f.vault}),f.vault);
+ const restored=new Workspace(await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'backup'),{vault:f.vault}),{vault:f.vault}),f.vault);
  assert.deepEqual(collection(await get({...f,workspace:restored},request)).recordIds,last.recordIds);
 });

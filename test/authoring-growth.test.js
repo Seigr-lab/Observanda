@@ -73,11 +73,11 @@ test('normal authoring, filtered browsing, structure and recovery exceed the old
   t.diagnostic(JSON.stringify({...f.metrics,openMs:Math.round(openMs),queryMs:Math.round(queryMs),editMs:Math.round(editMs),moveMs:Math.round(moveMs),moveQueries,moveSqlMs:Math.round(moveSqlMs),simultaneousMoveOriginals:maximumBodies,outlineBytes:Buffer.byteLength(JSON.stringify(outline)),peakHeapMiB:Math.ceil(peak/1024/1024)}));
   assert.ok(moveMs<120000,JSON.stringify({moveMs,peakHeapMiB:Math.ceil(peak/1024/1024)}));assert.ok(peak<512*1024*1024);
   const recovery={},copyAt=performance.now();process.stdout.write('A2 '+copies+'x ordinary copy starts\n');
-  const ordinary=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'ordinary')),{vault:f.vault});recovery.ordinaryCopyMs=Math.round(performance.now()-copyAt);
+  const ordinary=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'ordinary'),{vault:f.vault}),{vault:f.vault});recovery.ordinaryCopyMs=Math.round(performance.now()-copyAt);
   process.stdout.write(JSON.stringify({copies,...recovery})+'\n');
   assert.ok(recovery.ordinaryCopyMs<180000,JSON.stringify(recovery));
   const access=await createAccess('','synthetic authoring growth recovery'),freshVault=takeCreatedVault(access);t.after(()=>clearVault(freshVault));
-  const freshAt=performance.now(),fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'fresh-key')),access,freshVault,f.vault);recovery.freshKeyCopyMs=Math.round(performance.now()-freshAt);
+  const freshAt=performance.now(),fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'fresh-key'),{vault:f.vault}),access,freshVault,f.vault);recovery.freshKeyCopyMs=Math.round(performance.now()-freshAt);
   process.stdout.write(JSON.stringify({copies,...recovery})+'\n');
   assert.ok(recovery.freshKeyCopyMs<180000,JSON.stringify(recovery));
   for(const [root,vault,measurement] of [[ordinary,f.vault,'ordinaryOpenMs'],[fresh,freshVault,'freshKeyOpenMs']]){

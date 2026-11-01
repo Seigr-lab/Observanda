@@ -55,7 +55,7 @@ test('manual figure checkpoints preserve incomplete data through recovery and sa
  const changed=await drafts.change({id:secondId,workspaceId:book.id,recordId:record.id,selection:nextSelection,expectedRevision:pending.revision,operationId:randomUUID(),operation:{type:'patch',collection:'points',plotId,id:point.id,patch:{x:null}}});
  assert.notEqual(changed.revision,pending.revision);assert.notEqual(incomplete.revision,changed.revision);
  const access=await createAccess('','synthetic figure draft recovery');recoveredVault=takeCreatedVault(access);
- const root=await encryptedCopy(await copyPlan(workspace.root,path.join(directory,'recovered')),access,recoveredVault,vault),recovered=new Workspace(root,recoveredVault);
+ const root=await encryptedCopy(await copyPlan(workspace.root,path.join(directory,'recovered'),{vault}),access,recoveredVault,vault),recovered=new Workspace(root,recoveredVault);
  const restored=await new RecordValueDrafts(recovered).read({id:secondId,workspaceId:book.id,expectedRevision:changed.revision});assert.deepEqual(restored.value,changed.value);
  const pendingPoints=await new RecordFigureDrafts(recovered).read({id:secondId,workspaceId:book.id,expectedRevision:changed.revision,operation:'window',selection:{collection:'points',plotId,limit:1}});assert.equal(pendingPoints.items[0].value.x,null);
  const copied=await retainedFigureRequest(new ResearchMaterials(recovered),{...selector,format:'json'},{exporting:true,download:async({chunks})=>JSON.parse(await collect(chunks))});assert.deepEqual(copied,exported);

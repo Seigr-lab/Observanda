@@ -53,7 +53,7 @@ test('folder intake preserves distinct source paths through byte reuse, replay, 
   const {doc,content}=await f.m.artifact(refs[i]);assert.equal(doc.content.sourcePath,files[i].sourcePath);assert.equal(doc.content.sourcePurpose,'current-return');assert.deepEqual(await contentBuffer(content),bytes);
  }
  const shared=await associateOriginal(f.m,{recordId:f.otherId,ref:refs[1]});assert.equal((await f.m.read(shared)).content.sourcePath,files[1].sourcePath);
- const restoredRoot=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'folder-copy')),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(restoredRoot,f.vault));
+ const restoredRoot=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'folder-copy'),{vault:f.vault}),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(restoredRoot,f.vault));
  await restored.verify();assert.equal((await restored.read(shared)).content.sourcePurpose,'current-return');
  const book=(await f.workspace.read()).book;book.entries.forEach(r=>{r.attachments=[];r.share=true;});const release=buildPublication(book);verifyPublication(release);
  for(const file of files)assert.ok(!JSON.stringify([...release.files]).includes(file.sourcePath));
@@ -99,10 +99,10 @@ test('64 MiB originals, distinct identical acquisitions, empty files and same-re
  assert.equal((await f.m.intakes.page({id:next.batch.id})).items[0].reused,true);await finish(f,next.batch.id);
  const other=await start(f,[files[0]],f.otherId);await f.m.intakes.append({id:other.batch.id,offset:0,items:[files[0]]});
  assert.equal((await f.m.intakes.page({id:other.batch.id})).items[0].reused,false);
- const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'copy')),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(copy,f.vault));await restored.verify();
+ const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'copy'),{vault:f.vault}),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(copy,f.vault));await restored.verify();
  assert.equal((await restored.artifact(members[1])).content.sha256,digest(bytes));
  const access=await createAccess('','fresh evidence file set password'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh')),access,vault,f.vault),rekeyed=new ResearchMaterials(new Workspace(fresh,vault));
+ const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh'),{vault:f.vault}),access,vault,f.vault),rekeyed=new ResearchMaterials(new Workspace(fresh,vault));
  await rekeyed.verify();assert.deepEqual(await contentBuffer((await rekeyed.artifact(members[1])).content),bytes);
 });
 test('paged manifests replay exactly, reject changed sources and resume interrupted uploads after backup',async t=>{
@@ -117,7 +117,7 @@ test('paged manifests replay exactly, reject changed sources and resume interrup
  const firstId=(await f.m.intakes.page({id:batch.id})).items[0].id;
  await f.m.appendImport(firstId,0,[bytes.subarray(0,EVIDENCE_CHUNK)]);
  await assert.rejects(f.m.intakes.enqueue(batch.id,f.queue),{code:'MATERIAL_INCOMPLETE'});
- const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'resume')),{vault:f.vault}),ws=new Workspace(copy,f.vault),m=new ResearchMaterials(ws),jobs=workspaceJobs(ws);t.after(()=>jobs.worker.stop());
+ const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'resume'),{vault:f.vault}),{vault:f.vault}),ws=new Workspace(copy,f.vault),m=new ResearchMaterials(ws),jobs=workspaceJobs(ws);t.after(()=>jobs.worker.stop());
  const g={...f,workspace:ws,m,...jobs};await m.intakes.append({id:batch.id,offset:64,items:files.slice(64,128)});await m.intakes.append({id:batch.id,offset:128,items:files.slice(128)});
  assert.equal((await m.intakes.page({id:batch.id,offset:120})).items.length,10);
  await m.appendImport(firstId,1,[bytes.subarray(EVIDENCE_CHUNK,2*EVIDENCE_CHUNK)]);
@@ -193,7 +193,7 @@ test('cancel/retry and fresh-key recovery retain staged originals; altered manif
  await assert.rejects(f.queue.definition(job).prepare(job,{signal:controller.signal,progress:async p=>{if(p.stage==='Verified files')controller.abort();}}),{name:'AbortError'});
  await f.queue.release(job.id,job.lease.token,{paused:true});await f.m.verify();
  const access=await createAccess('','restored staged evidence key'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'resumed')),access,vault,f.vault),workspace=new Workspace(fresh,vault),m=new ResearchMaterials(workspace),jobs=workspaceJobs(workspace);t.after(()=>jobs.worker.stop());
+ const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'resumed'),{vault:f.vault}),access,vault,f.vault),workspace=new Workspace(fresh,vault),m=new ResearchMaterials(workspace),jobs=workspaceJobs(workspace);t.after(()=>jobs.worker.stop());
  const g={...f,workspace,m,...jobs};const done=await finish(g,batch.id);const members=(await m.referencePage(done.result)).items;
  assert.equal(members.length,2);for(const member of members)assert.deepEqual(await contentBuffer((await m.artifact(member)).content),bytes);
  assert.equal((await m.intakes.list(f.recordId)).items.length,0);await m.verify();

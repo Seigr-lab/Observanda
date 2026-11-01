@@ -65,7 +65,7 @@ test('a cancelled comparison resumes from an encrypted restored checkpoint and r
  await assert.rejects(f.m.comparisons.prepare(f.command,{jobId:id,signal:controller.signal,progress:p=>{if(p.done===32)controller.abort();}}),{name:'AbortError'});
  const checkpoint=JSON.parse(await f.workspace.readMetadata(file,1048576));assert.equal(checkpoint.summary.rows,32);
  const access=await createAccess('','comparison recovery qualification'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const destination=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'restored')),access,vault,f.vault),workspace=new Workspace(destination,vault),restored=new ResearchMaterials(workspace);
+ const destination=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'restored'),{vault:f.vault}),access,vault,f.vault),workspace=new Workspace(destination,vault),restored=new ResearchMaterials(workspace);
  const next=await restored.comparisons.prepare(f.command,{jobId:id}),ref=await workspace.withLock(()=>restored.comparisons.commit(f.command,next));
  assert.equal(next.content.summary.rows,45);assert.equal(next.content.summary.raw.mismatched,15);assert.equal(await workspace.readMetadata(file,1048576),null);
  const late=await restored.comparisons.page({ref,view:'distribution',offset:44});assert.equal(late.items[0].exact.numerator,String(9007199254740993n+44n));assert.equal(late.items[0].locator.ref.revision,f.dataset.revision);

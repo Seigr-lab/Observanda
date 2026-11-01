@@ -64,9 +64,9 @@ test('cancel and retry, including after backup and rekey, reuse the retained ori
  f.worker.start();await ready;await f.queue.control(u.s.id,'cancel');f.worker.cancel(u.s.id);assert.equal((await finished(f.queue,u.s.id)).state,'cancelled');await f.worker.stop();
  assert.deepEqual(await contentBuffer((await f.imports.original(u.s.id)).content),svg);
  const access=await createAccess('','new media password'),key=takeCreatedVault(access);t.after(()=>clearVault(key));
- const copy=await encryptedCopy(await copyPlan(f.root,path.join(f.directory,'restored')),access,key,f.vault),workspace=new Workspace(copy,key),other=workspaceJobs(workspace);
+ const copy=await encryptedCopy(await copyPlan(f.root,path.join(f.directory,'restored'),{vault:f.vault}),access,key,f.vault),workspace=new Workspace(copy,key),other=workspaceJobs(workspace);
  await other.queue.control(u.s.id,'retry');other.worker.start();let done;try{done=await finished(other.queue,u.s.id);}finally{await other.worker.stop();}assert.equal(done.state,'completed');assert.equal(done.attempt,2);
- const backup=await copyWorkspace(await copyPlan(copy,path.join(f.directory,'backup')),{vault:key});
+ const backup=await copyWorkspace(await copyPlan(copy,path.join(f.directory,'backup'),{vault:key}),{vault:key});
  assert.deepEqual(await contentBuffer((await new MediaImports(new Workspace(backup,key)).original(u.s.id)).content),svg);
  assert.deepEqual((await new MediaStore(copy,key).get(u.s.id)).bytes,(await new MediaStore(backup,key).get(u.s.id)).bytes);
 });
@@ -102,7 +102,7 @@ test('received bytes survive a failed receipt commit and a killed upload can be 
  const directory=await f.imports.directory(interrupted.id);assert.ok((await readdir(directory)).some(n=>n.startsWith('.stream-')));
  for(let i=0;;i++)try{await f.imports.receive(interrupted.id,[svg]);break;}catch(error){if(error.code!=='LOCKED'||i>=40)throw error;await delay(50);}
  assert.deepEqual(await contentBuffer((await f.imports.original(interrupted.id)).content),svg);assert.ok(!(await readdir(directory)).some(n=>n.startsWith('.stream-')));
- const restored=await copyWorkspace(await copyPlan(f.root,path.join(f.directory,'after-interruption')),{vault:f.vault});
+ const restored=await copyWorkspace(await copyPlan(f.root,path.join(f.directory,'after-interruption'),{vault:f.vault}),{vault:f.vault});
  assert.deepEqual(await contentBuffer((await new MediaImports(new Workspace(restored,f.vault)).original(interrupted.id)).content),svg);
 });
 

@@ -103,7 +103,7 @@ test('position-only publication indexes remain readable and an atomic write adds
  assert.equal((await f.workspace.outline()).etag,f.source.etag);await service.save(change,{receipt:true});
  const after=(await f.workspace.outline()).etag;assert.equal((await indexedRows(f,after,options))[0].id,record.id);assert.deepEqual(await indexedRows(f,f.source.etag,options),before);
  await f.workspace.catalogue(async store=>{assert.equal((await store.snapshot(f.source.etag)).publicationIndex.version,1);assert.equal((await store.snapshot()).publicationIndex.version,3);await store.verify(catalogueDescriptor(f.book));});
- const copied=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'copy')),{vault:f.vault});assert.deepEqual(await indexedRows({...f,workspace:new Workspace(copied,f.vault)},f.source.etag,options),before);
+ const copied=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'copy'),{vault:f.vault}),{vault:f.vault});assert.deepEqual(await indexedRows({...f,workspace:new Workspace(copied,f.vault)},f.source.etag,options),before);
 });
 
 test('missing or substituted date lanes fail direct reading and full and incremental verification',async t=>{
@@ -157,7 +157,7 @@ test('sharing, moves, removal and failed index writes preserve pinned choices an
  assert.equal((await f.workspace.outline()).etag,etag);assert.equal((await indexedRows(f,etag)).length,44);
  await service.remove({workspaceId:f.book.id,recordId:next.id,expectedRevision:recordRevision(next)});
  const current=(await f.workspace.outline()).etag;assert.equal((await indexedRows(f,current)).length,43);
- const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'copy')),{vault:f.vault}),restored=new Workspace(copy,f.vault);
+ const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'copy'),{vault:f.vault}),{vault:f.vault}),restored=new Workspace(copy,f.vault);
  assert.deepEqual(await restored.catalogue(async store=>Array.fromAsync(new RecordPublicationIndex(store).rows(await store.snapshot(f.source.etag),new Map(f.book.notebooks.map(n=>[n.id,'shared']))))),before);
  assert.deepEqual((await choices(restored,{...f.source,etag:current})).map(r=>r.id),oldChoices.map(r=>r.id));
  const controller=new AbortController();controller.abort();await assert.rejects(indexedRows(f,current,{signal:controller.signal}),{name:'AbortError'});

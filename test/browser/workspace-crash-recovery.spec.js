@@ -24,7 +24,7 @@ test('the app reopens an interrupted restore, backs up a killed upload and resum
  try{
   const session=await materials.startImport({recordId:book.entries[0].id,name:'returned-capture.bin',size:bytes.length});
   await materials.appendImport(session.id,0,[bytes.subarray(0,EVIDENCE_CHUNK)]);
-  const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'restore')),{vault:f.vault});
+  const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'restore'),{vault:f.vault}),{vault:f.vault});
   await interruptWorkspace(backup,f.vault,'retire');
   await access(path.join(backup,CATALOGUE_ARCHIVE));
   const preferencesFile=path.join(directory,'preferences.json');

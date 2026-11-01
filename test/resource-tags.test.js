@@ -32,7 +32,7 @@ test('tag edits retain stock, old revisions, conflict checks and encrypted recov
  await assert.rejects(command('resource.save',{id,expectedRevision:before.entity.revision,data:{...tagged,tags:['Conflict']}}),{code:'MODULE_CHANGED'});
  await assert.rejects(command('resource.save',{id,expectedRevision:current.entity.revision,data:{...tagged,tags:['Same','same']}}),{code:'RESOURCE_TAGS'});
  const stock=await new InventoryReader(f.workspace).stock({workspaceId,ids:[id]});assert.equal(stock.items[0].locations[0].physical,'40.000000000000000001');
- const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(dir,'backup')),{vault:f.vault}),restored=new Workspace(backup,f.vault);const selected=await new ModuleReader(restored).selected({workspaceId,id});assert.deepEqual(selected.entity,current.entity);assert.equal((await new ModuleReader(restored).list({workspaceId,type:'resource',tags:['pcb']})).total,1);
+ const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(dir,'backup'),{vault:f.vault}),{vault:f.vault}),restored=new Workspace(backup,f.vault);const selected=await new ModuleReader(restored).selected({workspaceId,id});assert.deepEqual(selected.entity,current.entity);assert.equal((await new ModuleReader(restored).list({workspaceId,type:'resource',tags:['pcb']})).total,1);
 });
 test('650-item tag queries use authenticated summaries, retain exact filters across pages and preserve legacy views',async t=>{
  const dir=await mkdtemp(path.join(os.tmpdir(),'observanda-resource-tag-page-')),book=sampleNotebook(),f=await encryptedFixture(dir,book),workspaceId=book.id,now=new Date().toISOString();t.after(async()=>{await clearVault(f.vault);await rm(dir,{recursive:true,force:true});});

@@ -147,7 +147,7 @@ test('failed local receipt commits retain recoverable push intent through a fres
  const journal=(await f.deployments.read(job.id)).journal;assert.equal(journal.receipt,undefined);assert.equal(journal.pushAttempted,true);assert.equal(f.remote.head,journal.commit);
  assert.equal(await readGithubOwnership(f.publisher,(await f.publisher.read()).config,null),null);
  const access=await createAccess('','restored fixture password'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const root=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'restored')),access,vault,f.vault),workspace=new Workspace(root,vault),publisher=new Publisher(root,{request:f.remote.request,liveRequest:f.remote.request},vault),jobs=workspaceJobs(workspace,publisher);
+ const root=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'restored'),{vault:f.vault}),access,vault,f.vault),workspace=new Workspace(root,vault),publisher=new Publisher(root,{request:f.remote.request,liveRequest:f.remote.request},vault),jobs=workspaceJobs(workspace,publisher);
  await publisher.connect(token);await jobs.queue.control(job.id,'retry');const before=writes(f.remote).length;assert.equal((await run(jobs.queue)).state,'completed');assert.equal(writes(f.remote).length-before,1);assert.equal(f.remote.commits.size,1);
  assert.equal((await publisher.read()).receipt.commit,journal.commit);assert.equal((await f.publisher.read()).receipt,null);
  const restored=await publisher.read();assert.equal((await readGithubOwnership(publisher,restored.config,restored.receipt)).commit,journal.commit);

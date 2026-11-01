@@ -25,7 +25,7 @@ test('retained static index continuation files survive a fresh-key backup and pr
   assert.ok(text.includes('data-page="'+target+'"'));
  }
  const access=await createAccess('','another index installation password'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const restored=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'restored')),access,vault,f.vault),jobs=new PublicationJobs(new Workspace(restored,vault));await jobs.verifyFiles(candidate.reviewId);const copy=await jobs.read(candidate.reviewId);assert.equal(copy.id,candidate.id);
+ const restored=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'restored'),{vault:f.vault}),access,vault,f.vault),jobs=new PublicationJobs(new Workspace(restored,vault));await jobs.verifyFiles(candidate.reviewId);const copy=await jobs.read(candidate.reviewId);assert.equal(copy.id,candidate.id);
  for(const [index,name]of names.entries())assert.equal((await contentBuffer(await copy.files.get(name))).toString(),original[index]);
  assert.equal((await contentBuffer(await copy.files.get('public-book.js'))).toString(),(await contentBuffer(await candidate.files.get('public-book.js'))).toString());
 });

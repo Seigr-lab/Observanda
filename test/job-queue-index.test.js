@@ -41,7 +41,7 @@ test('accepted work grows beyond 512 and lease lookup stays bounded after a thou
  f.workspace.writeMetadata=async(name,...args)=>{if(name==='.observanda/jobs/queue.json')throw new AppError('STORAGE_FULL');return write(name,...args);};
  await assert.rejects(f.queue.enqueue(failed),{code:'STORAGE_FULL'});f.workspace.writeMetadata=write;
  assert.equal(await f.queue.read(failed.id),null);assert.deepEqual(await f.queue.status(),{active:1025});
- const copied=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'backup')),{vault:f.vault}),restored=f.create(new Workspace(copied,f.vault));
+ const copied=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'backup'),{vault:f.vault}),{vault:f.vault}),restored=f.create(new Workspace(copied,f.vault));
  assert.deepEqual(await restored.status(),{active:1025});assert.equal(await restored.hasActive(['publication.deploy']),true);assert.equal(await restored.claim(),null);
  f.advance(30001);const reclaimed=await restored.claim();assert.equal(reclaimed.id,first.id);assert.equal(reclaimed.attempt,2);assert.notEqual(reclaimed.lease.token,first.lease.token);
  await assert.rejects(restored.complete(first.id,first.lease.token,{}),{code:'JOB_LEASE'});

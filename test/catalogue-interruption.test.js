@@ -18,7 +18,7 @@ async function fixture(t){
  t.after(async()=>{await clearVault(vault);await rm(directory,{recursive:true,force:true});});
  await initializeLocation(source,sampleNotebook(),access,vault);
  const workspace=new Workspace(source,vault),before=await workspace.read();
- const backup=await copyWorkspace(await copyPlan(source,path.join(directory,'backup')),{vault});
+ const backup=await copyWorkspace(await copyPlan(source,path.join(directory,'backup'),{vault}),{vault});
  return {directory,source,vault,workspace,before,backup};
 }
 
@@ -88,7 +88,7 @@ test('a killed archive retirement finishes before authoring and cannot resurrect
  await assert.rejects(access(path.join(f.backup,CATALOGUE_ARCHIVE)),{code:'ENOENT'});
  const next=structuredClone(f.before.book);next.entries[0].title='Authored after interrupted recovery';
  const saved=await recovered.save(next,f.before.etag);assert.equal(saved.book.entries[0].title,next.entries[0].title);
- const second=await copyWorkspace(await copyPlan(f.backup,path.join(f.directory,'second')),{vault:f.vault});
+ const second=await copyWorkspace(await copyPlan(f.backup,path.join(f.directory,'second'),{vault:f.vault}),{vault:f.vault});
  assert.deepEqual(await new Workspace(second,f.vault).read(),saved);
  await unlink(path.join(f.backup,CATALOGUE_FILE));
  await assert.rejects(recovered.read(),{code:'CATALOGUE_DAMAGED'});

@@ -59,7 +59,7 @@ test('43,440 retained measurements calculate without loading a table; medians, c
  const updated=await f.materials.dataset({id:f.dataset.id,expectedRevision:f.dataset.revision,baseDataset:f.dataset,recordId:f.recordId,title:original.title,artifact:f.artifact,columns,sourceMapping:original.content.sourceMapping});
  assert.ok((await f.materials.reviewDependencies(f.recordId,{refs:[completed.result]})).items[0].changed.some(i=>i.id===updated.id));
  assert.deepEqual((await f.materials.read(completed.result)).content,doc.content);
- const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'restored')),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(copy,f.vault));
+ const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'restored'),{vault:f.vault}),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(copy,f.vault));
  assert.deepEqual((await restored.read(completed.result)).content,doc.content);
  const source=await restored.datasetPage(d.dataset,0);assert.equal(source.rows[0].cells[3],'18446744073709551615');assert.equal(source.rows[0].cells[4],'105');assert.equal(source.rows[99].excluded,'Recorder interrupted');
  assert.equal((await restored.artifact(f.artifact)).doc.content.size,f.bytes);

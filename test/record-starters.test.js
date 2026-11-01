@@ -66,7 +66,7 @@ test('encrypted package review, independent import, metadata backup and public p
  await assert.rejects(dest.store.import({...command,digest:'a'.repeat(64)}),{code:'STARTER_CHANGED'});assert.equal((await dest.store.list({workspaceId:dest.workspaceId,cursor:null})).items.length,0);
  const imported=await dest.store.import(command);assert.equal(imported.header.latest,null);assert.equal(imported.header.origin.release,r.release.revision);assert.deepEqual((await dest.store.import(command)).header,imported.header);
  await f.store.create({...query,recordId:randomUUID(),notebookId:f.book.notebooks[0].id});
- const destination=await copyWorkspace(await copyPlan(f.ws.root,path.join(f.dir,'backup')),{vault:f.vault});
+ const destination=await copyWorkspace(await copyPlan(f.ws.root,path.join(f.dir,'backup'),{vault:f.vault}),{vault:f.vault});
  const vault=await verifyAccess(await readAccess(destination),'','synthetic starter password');
  try{const restored=new RecordStarters(new Workspace(destination,vault),{});assert.deepEqual(await restored.release(query),await f.store.release(query));assert.deepEqual(await restored.read({workspaceId,id:r.id}),await f.store.read({workspaceId,id:r.id}));}finally{clearVault(vault);}
  const publication=buildPublication((await f.ws.read()).book);const text=[...publication.files.values()].filter(v=>typeof v==='string').join('\n');assert.ok(!text.includes('private instructions'));assert.ok(!text.includes('Private controlled protocol'));assert.ok(![...publication.files.keys()].some(k=>k.includes('record-starters')));

@@ -50,8 +50,8 @@ test('sample creation retries use an atomic receipt and ordinary or fresh-key re
  assert.equal((await f.laboratory.read()).etag,current.etag);assert.equal(await f.laboratory.catalogue(s=>s.object('laboratory-command/'+options.commandId)),null);
  const saved=await f.laboratory.change(command,options);assert.deepEqual(await f.laboratory.change(command,options),saved);assert.equal((await f.laboratory.read()).lab.samples.length,4);
  await assert.rejects(f.laboratory.change({...command,sample:{...command.sample,code:'Changed retry'}},options),{code:'LAB_STALE'});
- const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'backup')),{vault:f.vault});assert.deepEqual(await new Laboratory(backup,f.vault).change(command,options),saved);
- const access=await createAccess('','sample paging fresh key'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh')),access,vault,f.vault);assert.deepEqual(await new Laboratory(fresh,vault).change(command,options),saved);
+ const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'backup'),{vault:f.vault}),{vault:f.vault});assert.deepEqual(await new Laboratory(backup,f.vault).change(command,options),saved);
+ const access=await createAccess('','sample paging fresh key'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh'),{vault:f.vault}),access,vault,f.vault);assert.deepEqual(await new Laboratory(fresh,vault).change(command,options),saved);
 });
 test('sample page owners retain the valid page after failure and ignore cancelled, invalid and old-workspace replies',async()=>{
  const workspaceId=randomUUID(),command={workspaceId,view:'samples',limit:25},value={workspaceId,view:'samples',etag:'new',items:[],total:0,offset:0,cursor:'first',previousCursor:null,nextCursor:null,counts:{samples:0,analyses:0,review:0,archive:0,approved:0,events:0}};let response=value,context='first',release,wait=false;const calls=[];

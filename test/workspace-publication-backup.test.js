@@ -24,7 +24,7 @@ test('verified backups require retained original media, its display copy and pre
  const asset=await media.import(original,'image'),before=await f.workspace.read();
  // A completed immediate import is accepted evidence even before placement.
  const originalFile=path.join(f.workspace.root,'.observanda/media',asset.id,'original'),ciphertext=await readFile(originalFile);await unlink(originalFile);
- try{await assert.rejects(copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'unplaced-immediate')),{vault:f.vault}),{code:'MATERIAL_MISSING'});}
+ try{await assert.rejects(copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'unplaced-immediate'),{vault:f.vault}),{vault:f.vault}),{code:'MATERIAL_MISSING'});}
  finally{await writeFile(originalFile,ciphertext);}
  before.book.entries[0].attachments=[{...asset,caption:'Synthetic retained figure',alt:'Green square',transcript:'',share:true}];await f.workspace.save(before.book,before.etag);
  const releases=new PublicationJobs(f.workspace),edition=await releases.inline(await releases.workspace.outline()),rendered=await media.get(asset.id,{streamed:true});
@@ -34,7 +34,7 @@ test('verified backups require retained original media, its display copy and pre
  const files=[['original',path.join(f.workspace.root,'.observanda/media',asset.id,'original')],['display',rendered.bytes.file],['edition',(await edition.files.get(edition.defaultPage)).file]];
  for(const [kind,file] of files)await t.test(kind+' missing from source',async()=>{
   const ciphertext=await readFile(file),destination=path.join(directory,'missing-'+kind);await unlink(file);
-  try{await assert.rejects(copyWorkspace(await copyPlan(f.workspace.root,destination),{vault:f.vault}),{code:kind==='edition'?'JOB_DAMAGED':'MATERIAL_MISSING'});await assert.rejects(inspectLocation(destination),{code:'STORAGE_INCOMPLETE'});}
+  try{await assert.rejects(copyWorkspace(await copyPlan(f.workspace.root,destination,{vault:f.vault}),{vault:f.vault}),{code:kind==='edition'?'JOB_DAMAGED':'MATERIAL_MISSING'});await assert.rejects(inspectLocation(destination),{code:'STORAGE_INCOMPLETE'});}
   finally{await writeFile(file,ciphertext);}
  });
  const candidatePath='.observanda/release-candidates/'+edition.reviewId+'.json',candidate=await f.workspace.readMetadata(candidatePath,16*1024*1024);
@@ -47,10 +47,10 @@ test('verified backups require retained original media, its display copy and pre
  });
  for(const [name,change,code] of [['missing-manifest',{output:missingManifest},'STALE'],['wrong-edition',{id:'0'.repeat(64)},'JOB_DAMAGED']]){
   await f.workspace.withLock(()=>f.workspace.writeMetadata(candidatePath,JSON.stringify({...JSON.parse(candidate),...change})));
-  try{await assert.rejects(copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,name)),{vault:f.vault}),{code});}
+  try{await assert.rejects(copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,name),{vault:f.vault}),{vault:f.vault}),{code});}
   finally{await f.workspace.withLock(()=>f.workspace.writeMetadata(candidatePath,candidate));}
  }
- const destination=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'valid')),{vault:f.vault});
+ const destination=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'valid'),{vault:f.vault}),{vault:f.vault});
  const restored=new Workspace(destination,f.vault),again=await new PublicationJobs(restored).read(edition.reviewId);
  for await(const [name,content] of edition.files)assert.deepEqual(await contentBuffer(await again.files.get(name)),await contentBuffer(content));
  assert.deepEqual(await restored.readFile(path.join(destination,'.observanda/media',asset.id,'original')),original);
@@ -63,7 +63,7 @@ test('pending media originals and independent project editions participate in th
  const pending=await imports.start({name:'pending.svg',size:bytes.length,kind:'image'});await imports.receive(pending.id,[bytes]);
  const rejectMissing=async(file,label)=>{
   const ciphertext=await readFile(file),destination=path.join(directory,label);await unlink(file);
-  try{await assert.rejects(copyWorkspace(await copyPlan(f.workspace.root,destination),{vault:f.vault}),{code:label==='scoped-edition'?'JOB_DAMAGED':'MATERIAL_MISSING'});await assert.rejects(inspectLocation(destination),{code:'STORAGE_INCOMPLETE'});}
+  try{await assert.rejects(copyWorkspace(await copyPlan(f.workspace.root,destination,{vault:f.vault}),{vault:f.vault}),{code:label==='scoped-edition'?'JOB_DAMAGED':'MATERIAL_MISSING'});await assert.rejects(inspectLocation(destination),{code:'STORAGE_INCOMPLETE'});}
   finally{await writeFile(file,ciphertext);}
  };
  await rejectMissing((await imports.original(pending.id)).content.file,'pending-original');
@@ -75,7 +75,7 @@ test('pending media originals and independent project editions participate in th
  await sites.save(site.id,{workspaceId:initial.metadata.id,baseEtag:selected.etag,websitePin:selected.websitePin,metadata:{},projects:[],changes:[],removed:[],selection:{defaultShare:false,includeProjects:[projectId],records:[]}});
  const scoped=websiteWorkspace(f.workspace,site.id),edition=await new PublicationJobs(scoped).inline(await scoped.outline());
  await rejectMissing((await edition.files.get(edition.defaultPage)).file,'scoped-edition');
- const destination=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'verified')),{vault:f.vault}),restored=new Workspace(destination,f.vault);
+ const destination=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'verified'),{vault:f.vault}),{vault:f.vault}),restored=new Workspace(destination,f.vault);
  assert.deepEqual(await contentBuffer((await new MediaImports(restored).original(pending.id)).content),bytes);
  const again=await new PublicationJobs(websiteWorkspace(restored,site.id)).read(edition.reviewId);
  for await(const [name,content] of edition.files)assert.deepEqual(await contentBuffer(await again.files.get(name)),await contentBuffer(content));

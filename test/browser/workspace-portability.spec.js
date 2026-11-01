@@ -53,7 +53,7 @@ test('the launcher reconnects a moved folder and persists its new location',asyn
 test('a folder without its database offers recovery guidance instead of a broken loading screen',async({page})=>{
  test.setTimeout(60000);
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-missing-database-ui-')),f=await encryptedFixture(directory,{...sampleNotebook(),title:'workspace'});
- const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'backup')),{vault:f.vault});
+ const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'backup'),{vault:f.vault}),{vault:f.vault});
  const db=await openCatalogue(f.workspace.root);try{await db.run('DROP SCHEMA "'+db.schema+'" CASCADE');}finally{await db.close();}
  const app=await startServer({root:f.workspace.root,port:0,expectedExisting:true,headless:true,deviceStore:f.deviceStore});
  try{

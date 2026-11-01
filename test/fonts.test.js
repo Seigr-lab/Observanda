@@ -45,7 +45,7 @@ test('custom variable fonts survive encrypted backup; only publicly used font by
  await fonts.update(added.id,{embed:true,hidden:false});const files=await fonts.files(publicProjection(book)),candidate=buildPublication(book,{fontFiles:files});verifyPublication(candidate);
  const name='fonts/'+added.faces[0].file;assert.deepEqual(candidate.files.get(name),original);assert.ok(candidate.files.get('styles.css').includes('--reading-weight:475'));assert.ok(candidate.files.get('styles.css').includes('"opsz" 18'));
  const before=await ws.read();await ws.save(book,before.etag);
- const backup=await copyWorkspace(await copyPlan(root,path.join(directory,'restored')),{vault}),restored=new WorkspaceFonts(new Workspace(backup,vault));assert.deepEqual((await restored.get(added.id)).bytes,original);assert.deepEqual((await new Workspace(backup,vault).read()).book.appearance.fontAxes,{wght:475,opsz:18});
+ const backup=await copyWorkspace(await copyPlan(root,path.join(directory,'restored'),{vault}),{vault}),restored=new WorkspaceFonts(new Workspace(backup,vault));assert.deepEqual((await restored.get(added.id)).bytes,original);assert.deepEqual((await new Workspace(backup,vault).read()).book.appearance.fontAxes,{wght:475,opsz:18});
  await fonts.update(added.id,{embed:true,hidden:true});assert.deepEqual((await fonts.get(added.id)).bytes,original);
  book.appearance.font='atkinson';book.appearance.fontAxes={};book.entries.find(e=>!e.share).body={type:'doc',content:[{type:'paragraph',content:[{type:'text',text:'Private font specimen',marks:[{type:'font_family',attrs:{font:added.id}}]}]}]};
  const publicFonts=await fonts.files(publicProjection(book));assert.equal(publicFonts.size,0);assert.ok(!buildPublication(book,{fontFiles:publicFonts}).files.has(name));

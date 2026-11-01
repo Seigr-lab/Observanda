@@ -76,7 +76,7 @@ test('one BOM reserves distinct stock sources, records partial use and scrap, re
  await assertPrivateBOMOwners(s.workspace,s.book.id,'PRIVATE resistor','PRIVATE BOM','PRIVATE drawer path');
  const edition=buildPublication((await s.workspace.read()).book);
  for(const [name,bytes] of edition.files)for(const privateText of ['PRIVATE BOM','PRIVATE resistor','PRIVATE drawer path','PRIVATE board build','PRIVATE source'])assert.ok(!String(name).includes(privateText)&&!String(bytes).includes(privateText));
- const copy=await copyWorkspace(await copyPlan(s.workspace.root,path.join(s.directory,'backup')),{vault:s.vault});
+ const copy=await copyWorkspace(await copyPlan(s.workspace.root,path.join(s.directory,'backup'),{vault:s.vault}),{vault:s.vault});
  assert.deepEqual(await workspaceModules(new Workspace(copy,s.vault)).current(),finished);
  const invalid=structuredClone(finished);invalid.entities.find(e=>e.type==='movement'&&e.data.reservationId).data.delta='-1.5';
  assert.throws(()=>s.store.validate({formatVersion:invalid.formatVersion,workspaceId:invalid.workspaceId,revision:0,entities:invalid.entities},{history:false}),{code:'MODULE_INVALID'});
@@ -155,7 +155,7 @@ test('BOM import verifies the pinned original, preserves it through backup and p
  assert.deepEqual(await s.store.current(),before);
  const original=await materials.artifact(artifact),parts=[];for await(const p of original.content.read())parts.push(p);
  assert.deepEqual(Buffer.concat(parts),bytes);
- const backup=await copyWorkspace(await copyPlan(s.workspace.root,path.join(s.directory,'import-backup')),{vault:s.vault}),restored=new Workspace(backup,s.vault);
+ const backup=await copyWorkspace(await copyPlan(s.workspace.root,path.join(s.directory,'import-backup'),{vault:s.vault}),{vault:s.vault}),restored=new Workspace(backup,s.vault);
  assert.deepEqual((await workspaceModules(restored).current()).entities.find(e=>e.id===id),entity);
  assert.deepEqual((await readBOMSource(restored,{artifact})).table,table);
  const edition=buildPublication((await s.workspace.read()).book);

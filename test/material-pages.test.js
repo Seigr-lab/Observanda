@@ -63,7 +63,7 @@ test('failed material commits and interrupted imports restore with their index a
  const put=ws.writeMetadata.bind(ws);ws.writeMetadata=async(name,value)=>{await put(name,value);if(name.endsWith('/index/state.json'))throw Object.assign(Error('Synthetic full disk'),{code:'ENOSPC'});};
  await assert.rejects(ws.withLock(()=>create(m,recordId,'Must roll back')),{code:'ENOSPC'});ws.writeMetadata=put;
  assert.equal((await m.list({recordId})).items.length,0);assert.equal((await m.overview(recordId)).imports.length,1);
- const backup=await copyWorkspace(await copyPlan(ws.root,path.join(f.directory,'backup')),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(backup,f.vault));
+ const backup=await copyWorkspace(await copyPlan(ws.root,path.join(f.directory,'backup'),{vault:f.vault}),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(backup,f.vault));
  const pending=(await restored.overview(recordId)).imports[0];assert.equal(pending.id,session.id);assert.equal(pending.receivedChunks,1);
  const original=await restored.finishImport(session.id);
  assert.equal((await restored.overview(recordId)).imports.length,0);assert.equal((await restored.list({recordId})).items[0].id,original.id);

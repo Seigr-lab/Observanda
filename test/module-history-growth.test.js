@@ -28,9 +28,9 @@ for(const count of [75,750])test('module history retains '+count+' full revision
   start=performance.now();await f.workspace.catalogue(store=>modules.verifyCatalogue(store,workspaceId));const auditMs=performance.now()-start;assert.ok(auditMs<60000);
   const retainedBytes=await moduleDomainStore(f.workspace,workspaceId,'tasks',async store=>Number((await store.db.get('SELECT sum(octet_length(payload))::text AS bytes FROM module_events')).bytes));
   if(count===750)assert.ok(retainedBytes>64*1024*1024);
-  start=performance.now();const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'backup')),{vault:f.vault});
+  start=performance.now();const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'backup'),{vault:f.vault}),{vault:f.vault});
   const access=await createAccess('','Synthetic rekeyed module history'),key=takeCreatedVault(access);t.after(()=>clearVault(key));
-  const rekeyed=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'rekeyed')),access,key,f.vault),restoreMs=performance.now()-start;assert.ok(restoreMs<120000);
+  const rekeyed=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'rekeyed'),{vault:f.vault}),access,key,f.vault),restoreMs=performance.now()-start;assert.ok(restoreMs<120000);
   for(const [root,vault] of [[backup,f.vault],[rekeyed,key]]){
    const ws=new Workspace(root,vault),h=new ModuleHistory(ws);assert.deepEqual((await h.page({id})).items.map(v=>v.revision),Array.from({length:20},(_,i)=>count+1-i));
    assert.equal((await h.read({id,revision:1})).entity.data.description,description);assert.equal((await workspaceModules(ws).execute(latest)).replayed,true);

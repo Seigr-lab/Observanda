@@ -55,6 +55,6 @@ test('nested cell sources survive revisions and backup and inspect their exact p
  }
  const revised=await m.dataset({...command,id:dataset.id,expectedRevision:dataset.revision,baseDataset:dataset,exclusions:{[data.rows[0].id]:'Declared exclusion'}});
  assert.deepEqual((await m.datasetPage(revised)).rows[0].cellPointers,data.rows[0].cellPointers);
- const restoredRoot=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'restored')),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(restoredRoot,f.vault));
+ const restoredRoot=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'restored'),{vault:f.vault}),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(restoredRoot,f.vault));
  await restored.verify();assert.deepEqual((await restored.datasetPage(revised)).rows,(await m.datasetPage(revised)).rows);
 });

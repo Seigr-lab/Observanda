@@ -31,7 +31,7 @@ test('content selectors survive rename, reorder, retained archive and encrypted 
  assert.ok(selectorExists(changed,selector));assert.ok(selectorExists(await materials.read(old),selector));assert.equal(bookSelectors(changed).find(s=>s.id===selector.id).label,'Changed table heading');
  const saved=(await storage.workspace.read()).book.entries.find(r=>r.id===changed.id);await records.remove({workspaceId:f.book.id,recordId:changed.id,expectedRevision:recordRevision(saved)});
  assert.ok(!(await storage.workspace.read()).book.entries.some(r=>r.id===changed.id));assert.deepEqual(await materials.read(old),f.concept);
- const copy=await copyWorkspace(await copyPlan(storage.workspace.root,path.join(directory,'archive')),{vault:storage.vault}),restored=new ResearchMaterials(new Workspace(copy,storage.vault));assert.deepEqual(await restored.read(old),f.concept);assert.ok(selectorExists(await restored.read(old),selector));
+ const copy=await copyWorkspace(await copyPlan(storage.workspace.root,path.join(directory,'archive'),{vault:storage.vault}),{vault:storage.vault}),restored=new ResearchMaterials(new Workspace(copy,storage.vault));assert.deepEqual(await restored.read(old),f.concept);assert.ok(selectorExists(await restored.read(old),selector));
  assert.doesNotThrow(()=>assertPublicFields([{field:'equation',value:f.concept.body}]));
  for(const privateText of [String.raw`\\server\private\capture`,String.raw`C:\private\source`, 'github_pat_'+ 'a'.repeat(30)])assert.throws(()=>assertPublicFields([{field:'source',value:{nested:[privateText]}}]),{code:'PRIVACY'});
 });

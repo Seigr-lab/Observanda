@@ -43,7 +43,7 @@ test('figures retain exact calculations independently of result statements, sour
  assert.deepEqual(await materials.read(original),retained);
  const projected=publicProjection(snapshot.book);assert.equal(JSON.stringify(projected).includes(original.revision),false);assert.equal(JSON.stringify(projected).includes(original.id),false);
  const exported=[...buildPublication(snapshot.book).files.values()].map(String).join('\n');for(const secret of [original.id,original.revision,'PRIVATE calculation','PRIVATE revised method'])assert.equal(exported.includes(secret),false);
- const destination=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'restored')),{vault:f.vault}),restored=new Workspace(destination,f.vault);
+ const destination=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'restored'),{vault:f.vault}),{vault:f.vault}),restored=new Workspace(destination,f.vault);
  assert.deepEqual(await restored.read(),snapshot);assert.deepEqual(await new ResearchMaterials(restored).read(original),retained);
  for(const source of [{...original,revision:'invalid'},{...original,kind:'artifact'},{...original,extra:true}])assert.ok(figureIssues({...plot,source}).length);
  const missing={...original,id:randomUUID()},invalid=structuredClone(saved);invalid.figures[0].panels[0].figure.source=missing;

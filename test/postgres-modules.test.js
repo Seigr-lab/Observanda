@@ -15,6 +15,8 @@ import {initializeLocation,copyPlan,copyWorkspace,encryptedCopy} from '../src/lo
 import {sampleNotebook} from '../src/sample.js';
 import {workspaceModules} from '../src/modules/index.js';
 import {Laboratory} from '../src/laboratory.js';
+import {ResearchDrafts} from '../src/research-drafts.js';
+import {recordRevision} from '../src/research.js';
 import {clearVault} from '../src/encryption.js';
 import {databaseCapacity,openCatalogue} from '../src/postgres.js';
 async function fixture(t){
@@ -37,12 +39,12 @@ test('module receipts, laboratory records and metadata retain identity through o
  const lab=new Laboratory(f.root,f.vault);await lab.change({etag:'new',action:'create-sample',sample:{code:'Synthetic sample',material:'Private material',source:'',collectedOn:'2026-09-01',receivedOn:'2026-09-02'}});
  const draftId=randomUUID(),checkpoint={workspaceId:f.book.id,moduleId:'planning',id:draftId,etag:null,drafts:[{id:command.payload.id,type:'task',expectedRevision:1,baseRevision:1,data:{...task(),title:'Prepared next observation'}}]};
  await moduleDraftOwners(f.ws,f.book.id,'planning').drafts.write(checkpoint);
- const before=await f.store.current(),labBefore=await lab.read(),plan=await copyPlan(f.root,path.join(f.parent,'stale'));
+ const before=await f.store.current(),labBefore=await lab.read(),plan=await copyPlan(f.root,path.join(f.parent,'stale'),{vault:f.vault});
  await f.ws.withLock(()=>f.ws.writeMetadata('.observanda/qualification.json','changed metadata'));
- await assert.rejects(copyWorkspace(plan),{code:'CONFLICT'});
- const backup=await copyWorkspace(await copyPlan(f.root,path.join(f.parent,'backup')),{vault:f.vault});
+ await assert.rejects(copyWorkspace(plan,{vault:f.vault}),{code:'CONFLICT'});
+ const backup=await copyWorkspace(await copyPlan(f.root,path.join(f.parent,'backup'),{vault:f.vault}),{vault:f.vault});
  const a=await createAccess('','different synthetic password'),key=takeCreatedVault(a);t.after(()=>clearVault(key));
- const rekeyed=await encryptedCopy(await copyPlan(f.root,path.join(f.parent,'rekeyed')),a,key,f.vault);
+ const rekeyed=await encryptedCopy(await copyPlan(f.root,path.join(f.parent,'rekeyed'),{vault:f.vault}),a,key,f.vault);
  for(const [root,vault] of [[backup,f.vault],[rekeyed,key]]){
   const ws=new Workspace(root,vault),store=workspaceModules(ws);assert.deepEqual(await store.current(),before);assert.deepEqual(await new Laboratory(root,vault).read(),labBefore);
   assert.equal((await store.execute(command)).replayed,true);assert.equal(await ws.readMetadata('.observanda/qualification.json',100),'changed metadata');assert.deepEqual((await moduleDraftOwners(ws,f.book.id,'planning').drafts.read(draftId)).draft.drafts[0].data,checkpoint.drafts[0].data);
@@ -52,7 +54,7 @@ test('deleted encrypted module entities are detected instead of restoring silent
  const f=await fixture(t);await f.store.execute(f.command('task.save',{id:randomUUID(),expectedRevision:null,data:task()}));
  await moduleDomainStore(f.ws,f.book.id,'tasks',store=>store.db.run('DELETE FROM module_entities'),{write:true});
  await assert.rejects(f.store.current(),{code:'CATALOGUE_DAMAGED'});
- await assert.rejects(copyWorkspace(await copyPlan(f.root,path.join(f.parent,'broken')),{vault:f.vault}),{code:'CATALOGUE_DAMAGED'});
+ await assert.rejects(copyWorkspace(await copyPlan(f.root,path.join(f.parent,'broken'),{vault:f.vault}),{vault:f.vault}),{code:'CATALOGUE_DAMAGED'});
 });
 test('PostgreSQL connection pressure waits and cancellation releases its admission',async t=>{
  const f=await fixture(t),connections=[];
@@ -78,8 +80,8 @@ test('failed evidence manifest commit retains staged chunks and retries from the
 
 
 test('metadata listings detect missing rows and a missing authenticated index before hiding drafts or writing replacements',async t=>{
- const f=await fixture(t),relative='.observanda/drafts/'+randomUUID()+'.json';
- await f.ws.withLock(()=>f.ws.writeMetadata(relative,'private draft'));
+ const f=await fixture(t),id=randomUUID(),relative='.observanda/drafts/'+id+'.json',base=f.book.entries[0];
+ await new ResearchDrafts(f.ws).write({id,workspaceId:f.book.id,expectedRevision:null,changes:[{base,expectedRevision:recordRevision(base),record:{...base,title:'Private draft'}}]});
  const db=await openCatalogue(f.root);
  try{
   const row=await db.get('SELECT payload FROM objects WHERE id=$1','metadata:'+relative);
@@ -100,9 +102,9 @@ test('calculation engine revisions remain reproducible after exact upgrade, copy
  const first=f.command('calculation.save',{id,expectedRevision:null,data:legacy});await f.store.execute(first);
  const second=f.command('calculation.save',{id,expectedRevision:1,data:{...legacy,engine:2}});await f.store.execute(second);
  const sheet=f.command('sheet.save',{id:randomUUID(),expectedRevision:null,data:{name:'Dependent exact values',links:[],engine:2,cells:[['=1/3','=A1*3'],['=1e100+1','=A2-1e100']],original:null}});await f.store.execute(sheet);
- const backup=await copyWorkspace(await copyPlan(f.root,path.join(f.parent,'copy')),{vault:f.vault});
+ const backup=await copyWorkspace(await copyPlan(f.root,path.join(f.parent,'copy'),{vault:f.vault}),{vault:f.vault});
  const access=await createAccess('','separate synthetic arithmetic password'),key=takeCreatedVault(access);t.after(()=>clearVault(key));
- const rekeyed=await encryptedCopy(await copyPlan(f.root,path.join(f.parent,'rekeyed')),access,key,f.vault);
+ const rekeyed=await encryptedCopy(await copyPlan(f.root,path.join(f.parent,'rekeyed'),{vault:f.vault}),access,key,f.vault);
  for(const [root,vault] of [[f.root,f.vault],[backup,f.vault],[rekeyed,key]]){
   const ws=new Workspace(root,vault),store=workspaceModules(ws),history=new ModuleHistory(ws);
   const previous=(await history.read({id,revision:1})).entity.data,current=(await history.read({id,revision:2})).entity.data;

@@ -60,7 +60,7 @@ test('retained reference history continues without scanning all references or lo
  await ws.withLock(()=>ws.writeMetadata('.observanda/unrelated-history-check.json','{}'));
  assert.deepEqual(contents(await history.list({...command,cursor:first.cursor})),contents(first));
  await ws.withLock(()=>ws.removeMetadata('.observanda/unrelated-history-check.json'));
- const backup=await copyWorkspace(await copyPlan(ws.root,path.join(directory,'backup')),{vault}),restored=new RecordHistory(new Workspace(backup,vault),{});
+ const backup=await copyWorkspace(await copyPlan(ws.root,path.join(directory,'backup'),{vault}),{vault}),restored=new RecordHistory(new Workspace(backup,vault),{});
  assert.deepEqual(contents(await restored.list({...command,cursor:first.cursor})),contents(first));
  // An exact retained retry is harmless; a replacement/removal must invalidate
  // continuation even if another insertion leaves the total count unchanged.
@@ -86,7 +86,7 @@ test('legacy retained history needs no read-time rewrite and changed-token failu
  const tail=await history.list({...command,cursor:first.nextCursor});assert.equal(tail.total,2);assert.equal(tail.versions[0].title,retained.title);
  await ws.withLock(()=>materials.retainRecord(candidate));await assert.rejects(history.list({...command,cursor:first.nextCursor}),{code:'RECORD_HISTORY_CURSOR'});
  const access=await createAccess('','new history recovery password'),nextVault=takeCreatedVault(access);t.after(()=>clearVault(nextVault));
- const copied=await encryptedCopy(await copyPlan(ws.root,path.join(directory,'fresh-key')),access,nextVault,vault),restored=new RecordHistory(new Workspace(copied,nextVault),{});
+ const copied=await encryptedCopy(await copyPlan(ws.root,path.join(directory,'fresh-key'),{vault}),access,nextVault,vault),restored=new RecordHistory(new Workspace(copied,nextVault),{});
  const before=await history.list({...command,limit:20}),after=await restored.list({...command,limit:20});assert.deepEqual(contents(after),contents(before));
  const row=await ws.catalogue(store=>store.db.get('SELECT payload FROM state WHERE slot=$1',slot)),damaged=Buffer.from(row.payload);damaged[damaged.length-1]^=1;
  await ws.withLock(()=>ws.catalogue(store=>store.db.run('UPDATE state SET payload=$1 WHERE slot=$2',damaged,slot)));

@@ -73,7 +73,7 @@ test('site-specific record layouts save, preview, publish and restore while fore
   await assert.rejects(websitePreviewSource(f.scoped,invalid,{websitePin:saved.websitePin,designTarget:'home'}),{code:'INVALID'});
   assert.equal((await f.workspace.outline()).etag,saved.etag);
  }
- const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'copy')),{vault:f.vault}),restored=new Workspace(copy,f.vault);
+ const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'copy'),{vault:f.vault}),{vault:f.vault}),restored=new Workspace(copy,f.vault);
  assert.deepEqual((await new WebsiteSites(restored).read(f.id)).book,saved.book);
  assert.match(await publicationText(await new PublicationJobs(websiteWorkspace(restored,f.id)).inline({etag:saved.etag,websitePin:saved.websitePin})),/Dedicated entry heading/);
 });

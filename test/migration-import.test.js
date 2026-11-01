@@ -143,7 +143,7 @@ test('shared original bytes retain each record association, filename, hash and d
   assert.equal(storageIds.size,1);assert.equal(associationIds.size,4);
  };
  await check(f.workspace);await f.service.commit({...f.command,review:batch.review});await check(f.workspace);assert.equal((await f.workspace.read()).etag,before.etag);
- const restored=await copyWorkspace(await copyPlan(f.workspace.root,path.join(path.dirname(f.workspace.root),'restored-associations')),{vault:f.vault});await check(new Workspace(restored,f.vault));
+ const restored=await copyWorkspace(await copyPlan(f.workspace.root,path.join(path.dirname(f.workspace.root),'restored-associations'),{vault:f.vault}),{vault:f.vault});await check(new Workspace(restored,f.vault));
 });
 
 test('older saved metadata mappings keep their narrative treatment until explicitly changed',async t=>{
@@ -191,7 +191,7 @@ test('reviewed evidence repair restores legacy shared-file associations in bound
  plan=await f.service.run('evidenceReview',{...f.command,...plan.next});assert.equal(plan.missing,16);assert.equal(plan.next,null);
  await f.service.run('evidenceRepair',{...f.command,...plan.start,review:plan.review});assert.equal((await f.workspace.read()).etag,before.etag);
  for(const record of records){const page=await materials.list({recordId:record.id,kind:'artifact'});assert.equal(page.items.length,3);for(const ref of page.items){const {doc,content}=await materials.artifact(ref);assert.equal(doc.content.sha256,files[0].sha256);assert.equal((await contentBuffer(content)).toString(),raw);}}
- const restored=await copyWorkspace(await copyPlan(f.workspace.root,path.join(path.dirname(f.workspace.root),'repair-backup')),{vault:f.vault}),service=new MigrationImport(new Workspace(restored,f.vault));assert.equal((await service.run('evidenceReview',repairCommand)).missing,0);assert.deepEqual(await service.run('evidenceRepair',{...repairCommand,file:0,review:first.review}),first);
+ const restored=await copyWorkspace(await copyPlan(f.workspace.root,path.join(path.dirname(f.workspace.root),'repair-backup'),{vault:f.vault}),{vault:f.vault}),service=new MigrationImport(new Workspace(restored,f.vault));assert.equal((await service.run('evidenceReview',repairCommand)).missing,0);assert.deepEqual(await service.run('evidenceRepair',{...repairCommand,file:0,review:first.review}),first);
 });
 
 test('declared native mapping imports exact fractional values and binds selectors to retained originals',async t=>{
@@ -254,14 +254,14 @@ test('an interrupted commit rolls back records and receipts; staged work survive
  const f=await fixture(t),review=await ready(f),before=await f.workspace.read();
  await assert.rejects(f.service.commit({...f.command,review:review.review},{onProgress:p=>{if(p.phase==='committing')throw Error('Synthetic interruption');}}),/Synthetic interruption/);
  assert.deepEqual(await f.workspace.read(),before);assert.equal((await f.service.page(f.command)).batch.state,'ready');
- const destination=path.join(path.dirname(f.workspace.root),'restored'),copy=await copyWorkspace(await copyPlan(f.workspace.root,destination),{vault:f.vault});
+ const destination=path.join(path.dirname(f.workspace.root),'restored'),copy=await copyWorkspace(await copyPlan(f.workspace.root,destination,{vault:f.vault}),{vault:f.vault});
  // A staged source is no longer needed for review, application or provenance.
  const sourcePath=path.resolve(f.source);assert.ok(sourcePath.startsWith(path.dirname(path.dirname(f.workspace.root))+path.sep));await rm(sourcePath,{recursive:true,force:true});
  const restored=new Workspace(copy,f.vault),service=new MigrationImport(restored);await service.commit({...f.command,review:review.review});
  assert.equal((await restored.read()).book.entries.length,before.book.entries.length+4);assert.equal((await f.workspace.read()).etag,before.etag);
  const imported=(await restored.read()).book.entries.find(r=>r.title==='morning-one'),provenance=await service.provenance({workspaceId:f.book.id,recordId:imported.id});assert.equal(provenance.items[0].source.dates[0].value,'2026-04');
  const access=await createAccess('','Synthetic import restore key'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const fresh=await encryptedCopy(await copyPlan(restored.root,path.join(path.dirname(f.workspace.root),'fresh')),access,vault,f.vault),freshWorkspace=new Workspace(fresh,vault);
+ const fresh=await encryptedCopy(await copyPlan(restored.root,path.join(path.dirname(f.workspace.root),'fresh'),{vault:f.vault}),access,vault,f.vault),freshWorkspace=new Workspace(fresh,vault);
  assert.deepEqual(await freshWorkspace.read(),await restored.read());assert.equal((await new MigrationImport(freshWorkspace).provenance({workspaceId:f.book.id,recordId:imported.id})).items.length,1);
 });
 test('complete adoption fixture preserves distinct attempts, exact methods, criteria, dataset values and exclusions',{timeout:600000},async t=>{

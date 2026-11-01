@@ -49,7 +49,7 @@ test('reader media intake exceeds thirty attachments on a heavy record, composes
  });
  await commands.run(command(f,shared.id));assert.equal((await f.values.read(f.target(shared.id))).value.value.share,false);
  const access=await createAccess('','synthetic media association recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const root=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'recovered')),access,vault,f.vault),recovered=new Workspace(root,vault),reopened=await new RecordContent(recovered).read({...target,windows:{attachments:30}});
+ const root=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'recovered'),{vault:f.vault}),access,vault,f.vault),recovered=new Workspace(root,vault),reopened=await new RecordContent(recovered).read({...target,windows:{attachments:30}});
  assert.equal(reopened.collections.attachments.total,32);assert.deepEqual(reopened.header.attachments.map(item=>item.id),[asset.id,shared.id]);
  assert.equal((await new RecordContent(recovered).read({...target,snapshotId:prior})).collections.attachments.total,31);
  assert.equal(digest(await recovered.readFile(path.join(root,'.observanda/media',asset.id,'original'))),digest(f.files.audio.bytes));await new MediaStore(root,vault).get(asset.id);

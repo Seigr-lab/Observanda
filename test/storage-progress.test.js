@@ -14,7 +14,7 @@ test('copy progress measures files, archive rows and verified revisions while pr
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-progress-')),f=await encryptedFixture(directory,sampleNotebook());
  t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const file=path.join(f.workspace.root,'.observanda','copy-progress-evidence');await f.workspace.writeFile(file,Buffer.alloc(3*1024*1024,19));const fileBytes=(await readFile(file)).length;
- const planEvents=[],events=[],plan=await copyPlan(f.workspace.root,path.join(directory,'copy'),{onProgress:e=>planEvents.push(e)});
+ const planEvents=[],events=[],plan=await copyPlan(f.workspace.root,path.join(directory,'copy'),{onProgress:e=>planEvents.push(e),vault:f.vault});
  assert.ok(planEvents.some(e=>e.stage==='database-inventory'&&e.completed>0));
  const before=await f.workspace.read(),copy=await copyWorkspace(plan,{vault:f.vault,onProgress:e=>events.push(e)});
  assert.deepEqual(await new Workspace(copy,f.vault).read(),before);assert.deepEqual(await readFile(path.join(copy,'.observanda','copy-progress-evidence')),await readFile(file));
@@ -25,6 +25,6 @@ test('copy progress measures files, archive rows and verified revisions while pr
  for(const stage of ['verify-evidence','verify-publication','verify-collaboration'])assert.ok(events.some(e=>e.stage===stage),stage);
  assert.ok(events.some(e=>e.stage==='verify-snapshots'&&e.activity.objects>0));
  const next=await createAccess('','fresh synthetic progress password'),vault=takeCreatedVault(next);t.after(()=>clearVault(vault));const rekey=[];
- const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'fresh')),next,vault,f.vault,{onProgress:e=>rekey.push(e)});
+ const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'fresh'),{vault:f.vault}),next,vault,f.vault,{onProgress:e=>rekey.push(e)});
  assert.deepEqual((await new Workspace(fresh,vault).read()).book,before.book);assert.ok(rekey.some(e=>e.stage==='rekey-table'&&e.completed>0));
 });

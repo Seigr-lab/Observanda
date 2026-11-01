@@ -43,7 +43,7 @@ test('immutable choices preserve order and older revisions across removal, retri
  await assert.rejects(f.m.choices.change({...source,ref:{...refs[0],workspaceId:randomUUID()},checked:false}),{code:'MATERIAL_INVALID'});
  const bytes=Buffer.from(source.selection,'base64url');bytes[20]^=1;
  await assert.rejects(f.m.choices.page({...source,selection:bytes.toString('base64url')}),{code:'MATERIAL_INVALID'});
- const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'backup')),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(copy,f.vault));
+ const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'backup'),{vault:f.vault}),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(copy,f.vault));
  assert.deepEqual(await restored.choices.page({...source,offset:60}),await f.m.choices.page({...source,offset:60}));
  const call=async(name,command)=>{assert.equal(name,'selection-page');return restored.choices.page(command);},method={kind:'record',id:randomUUID(),revision:'f'.repeat(64)};
  const extended={...source,extra:[method]};

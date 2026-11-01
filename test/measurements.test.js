@@ -83,7 +83,7 @@ test('retained exception follows exact cells, native bytes, decoder and calibrat
   const missing=await m.measurements.inspect({ref:dataset,selector:{...source.selector,row:2}});assert.equal(missing.value.presence,'missing');
   const zero=await m.measurements.inspect({ref:dataset,selector:{...source.selector,row:3}});assert.equal(zero.value.presence,'value');assert.equal(zero.value.spelling,'0');
  }finally{ResearchCatalogue.prototype.read=read;}
- const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'restored')),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(copy,f.vault));
+ const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'restored'),{vault:f.vault}),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(copy,f.vault));
  await restored.verify();assert.deepEqual(await contentBuffer((await restored.artifact(native)).content),bytes);
  assert.deepEqual((await restored.measurements.inspect(source)).value,(await m.measurements.inspect(source)).value);
  await assert.rejects(m.measurements.inspect({ref:native,selector:{kind:'bytes',offset:9000,length:1}}),{code:'MEASUREMENT_INVALID'});
@@ -115,7 +115,7 @@ test('decimal precision policy and single-step approximation retain the exact so
  assert.deepEqual(retained.content.numericTransform,{algorithm:'exact-rational-to-binary64',version:2,policy:'approximate',significantDigits:17});
  assert.deepEqual((await m.datasetRows(dataset)).map(r=>r.cells[1]),spellings);
  assert.deepEqual(await contentBuffer((await m.artifact(artifact)).content),bytes);
- const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'projection-restored')),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(copy,f.vault));
+ const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'projection-restored'),{vault:f.vault}),{vault:f.vault}),restored=new ResearchMaterials(new Workspace(copy,f.vault));
  assert.deepEqual((await restored.read(result.ref)).content,retained.content);
  assert.deepEqual((await restored.datasetRows(dataset)).map(r=>r.cells[1]),spellings);
 });

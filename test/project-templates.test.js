@@ -56,7 +56,7 @@ test('encrypted project templates survive restart, conflict rejection and portab
  const saved=await f.workspace.save(saveStructure(initial.book,{kind:'project',value:project}).book,initial.etag);
  await assert.rejects(f.workspace.save(initial.book,initial.etag),{code:'CONFLICT'});
  assert.deepEqual((await new Workspace(f.workspace.root,f.vault).read()).book.projects,saved.book.projects);
- const destination=path.join(directory,'backup');await copyWorkspace(await copyPlan(f.workspace.root,destination),{vault:f.vault});
+ const destination=path.join(directory,'backup');await copyWorkspace(await copyPlan(f.workspace.root,destination,{vault:f.vault}),{vault:f.vault});
  const restored=await new Workspace(destination,f.vault).read();assert.deepEqual(restored.book.projects,saved.book.projects);
  const other={...restored.book.projects[0],id:randomUUID(),title:'Other studio',labBookTemplate:{name:'Another template',configuration:copyConfiguration(project.labBookTemplate.configuration)}};
  const next=saveStructure(restored.book,{kind:'project',value:other}).book;next.projects.at(-1).labBookTemplate.configuration.sections[0].label='A different type';assert.notEqual(next.projects[0].labBookTemplate.configuration.sections[0].label,'A different type');
@@ -87,7 +87,7 @@ test('initial template selections survive backup; failed settings writes never e
  t.after(async()=>{await clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const access=(await readAccess(f.workspace.root)).value,dashboard=defaultDashboard(),destination=path.join(directory,'initialized');dashboard.enabledModules.push('laboratory-computer-it');
  await initializeLocation(destination,sampleNotebook(),access,f.vault,{dashboard});const workspace=new Workspace(destination,f.vault);assert.deepEqual((await readWorkspaceDashboard(workspace)).settings,dashboard);
- const backup=path.join(directory,'backup');await copyWorkspace(await copyPlan(destination,backup),{vault:f.vault});assert.deepEqual((await readWorkspaceDashboard(new Workspace(backup,f.vault))).settings,dashboard);
+ const backup=path.join(directory,'backup');await copyWorkspace(await copyPlan(destination,backup,{vault:f.vault}),{vault:f.vault});assert.deepEqual((await readWorkspaceDashboard(new Workspace(backup,f.vault))).settings,dashboard);
  const failed=path.join(directory,'failed'),original=ResearchCatalogue.prototype.encode;
  ResearchCatalogue.prototype.encode=function(table,id,value){if(this.workspace.root===failed&&table==='state'&&id==='workspace-settings:dashboard')throw Error('Synthetic settings failure');return original.call(this,table,id,value);};
  try{await assert.rejects(initializeLocation(failed,sampleNotebook(),access,f.vault,{dashboard}),/Synthetic settings failure/);}finally{ResearchCatalogue.prototype.encode=original;}

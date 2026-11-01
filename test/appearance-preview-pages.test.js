@@ -89,7 +89,7 @@ test('page rendering matches publication including exact links, backlinks, regio
  assert.deepEqual(await sessions.file(id,page),before);
  for(const invalid of ['entries/'+hidden.id+'.html','../index.html','_assets/invalid/styles.css'])await assert.rejects(sessions.file(id,invalid),{code:'NOT_FOUND'});
  const cancelled=new AbortController();cancelled.abort();await assert.rejects(appearancePreviewPage(f.workspace,f.command,page,{signal:cancelled.signal}),{name:'AbortError'});
- const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'backup')),{vault:f.vault}),restored=new Workspace(backup,f.vault);
+ const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'backup'),{vault:f.vault}),{vault:f.vault}),restored=new Workspace(backup,f.vault);
  assert.deepEqual(await appearancePreviewPage(restored,f.command,page),await appearancePreviewPage(f.workspace,f.command,page));
  const uncached=new AppearancePreviewSessions({cache:new DesignCandidates({maxBytes:1})}),tiny=await uncached.create(f.workspace,f.command,dependencies(f));
  assert.deepEqual((await uncached.file(tiny.baseUrl.split('/')[2],page)).content.replaceAll(tiny.baseUrl,result.baseUrl),before.content);assert.equal(uncached.cache.size,0);

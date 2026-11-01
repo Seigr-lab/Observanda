@@ -78,8 +78,8 @@ test('checkpoint and transfer receipt roll back together on disk full, abort and
 
 test('interrupted chunks resume from ordinary and fresh-key copies with pinned bases',async t=>{
  const f=await fixture(t),staged=await stage(f),access=await createAccess('','transfer recovery password'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const ordinary=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'ordinary')),{vault:f.vault});
- const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh')),access,vault,f.vault);
+ const ordinary=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'ordinary'),{vault:f.vault}),{vault:f.vault});
+ const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh'),{vault:f.vault}),access,vault,f.vault);
  for(const workspace of [new Workspace(ordinary,f.vault),new Workspace(fresh,vault)]){
   const owner=moduleDraftOwners(workspace,f.book.id,'resources');await owner.transfer.finish(staged.finish);
   const recovered=await owner.drafts.read(f.command.id);assert.deepEqual(recovered.draft.drafts[0].base,f.data);assert.deepEqual(recovered.draft.drafts[0].data,f.command.drafts[0].data);

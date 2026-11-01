@@ -143,8 +143,8 @@ test('fresh-key backup retains exact snapshot roots, histories and state without
  const access=await createAccess('','fresh backup synthetic password'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const restore=forbidAssembly();let target,ordinary;
  try{
-  target=await encryptedCopy(await copyPlan(f.ws.root,path.join(f.directory,'fresh-key')),access,vault,f.vault);
-  ordinary=await copyWorkspace(await copyPlan(f.ws.root,path.join(f.directory,'ordinary')),{vault:f.vault});
+  target=await encryptedCopy(await copyPlan(f.ws.root,path.join(f.directory,'fresh-key'),{vault:f.vault}),access,vault,f.vault);
+  ordinary=await copyWorkspace(await copyPlan(f.ws.root,path.join(f.directory,'ordinary'),{vault:f.vault}),{vault:f.vault});
  }finally{restore();}
  const next=new Workspace(target,vault),original=new Workspace(ordinary,f.vault);
  assert.deepEqual(await next.read(),current);assert.deepEqual(await original.read(),current);
@@ -169,11 +169,11 @@ test('failed rekey leaves source unchanged and an incomplete destination cannot 
  t.after(()=>clearVault(vault));const encode=ResearchCatalogue.prototype.encode;
  ResearchCatalogue.prototype.encode=function(table,id,value){if(this.workspace.vault.id===vault.id&&table==='state')throw Object.assign(Error('Synthetic disk full'),{code:'ENOSPC'});return encode.call(this,table,id,value);};
  const destination=path.join(f.directory,'interrupted');
- try{await assert.rejects(encryptedCopy(await copyPlan(f.ws.root,destination),access,vault,f.vault),{code:'ENOSPC'});}
+ try{await assert.rejects(encryptedCopy(await copyPlan(f.ws.root,destination,{vault:f.vault}),access,vault,f.vault),{code:'ENOSPC'});}
  finally{ResearchCatalogue.prototype.encode=encode;}
  assert.deepEqual(await catalogueStamp(f.ws.root),before);
  await assert.rejects(new Workspace(destination,vault).read(),{code:'STORAGE_INCOMPLETE'});
  for(const file of [CATALOGUE_FILE,CATALOGUE_ARCHIVE])await assert.rejects(readFile(path.join(destination,file)),{code:'ENOENT'});
- const recovered=await encryptedCopy(await copyPlan(f.ws.root,path.join(f.directory,'retried')),access,vault,f.vault);
+ const recovered=await encryptedCopy(await copyPlan(f.ws.root,path.join(f.directory,'retried'),{vault:f.vault}),access,vault,f.vault);
  assert.deepEqual(await new Workspace(recovered,vault).read(),f.base);
 });

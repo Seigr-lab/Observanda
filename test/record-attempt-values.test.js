@@ -76,7 +76,7 @@ test('unfinished run facts on heavy records recover with a new key and prove the
    const changed=await new RecordDocument(doc.blocks,doc.root,{mutable:true}).replace(path,value);await changed.blocks.flush();await assert.rejects(verifyRecordValueDraft(store,{...retained.draft,document:{...retained.draft.document,root:changed.root}}),{code:'CATALOGUE_DAMAGED'});
   }
  })));
- const access=await createAccess('','synthetic attempt recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));const root=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'recovered')),access,vault,f.vault),workspace=new Workspace(root,vault),recovered=await new RecordValueDrafts(workspace).read(lookup);
+ const access=await createAccess('','synthetic attempt recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));const root=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'recovered'),{vault:f.vault}),access,vault,f.vault),workspace=new Workspace(root,vault),recovered=await new RecordValueDrafts(workspace).read(lookup);
  assert.deepEqual(recovered.value,command.value);recovered.value.value.applicability='Later acquisition';for(const input of recovered.value.value.inputs)input.hash='a'.repeat(64);
  await new RecordValues(workspace).save({...target(f,'preparation',p.id),expectedRevision:base.revision,value:recovered.value});await workspace.catalogue(store=>store.verifySnapshot(undefined,f.book.id));assert.equal(await read(f,['attempt']),undefined);
 });

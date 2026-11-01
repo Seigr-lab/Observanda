@@ -88,12 +88,12 @@ test('indexed export ownership and an interrupted journal survive fresh-key work
  const access=await createAccess('','Export journal recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
  const journal=await f.service.get(plan.id),node='.observanda/materials/sequences/local-export-nodes/'+journal.changes.root.hash+'.json',original=await f.workspace.readMetadata(node,262144);
  await f.workspace.withLock(()=>f.workspace.writeMetadata(node,'{}'));
- try{await assert.rejects(encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'damaged-restore')),access,vault,f.vault),{code:'LOCAL_EXPORT_DAMAGED'});}
+ try{await assert.rejects(encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'damaged-restore'),{vault:f.vault}),access,vault,f.vault),{code:'LOCAL_EXPORT_DAMAGED'});}
  finally{await f.workspace.withLock(()=>f.workspace.writeMetadata(node,original));}
  // Historical destination paths remain readable in a portable backup even
  // when that external directory belongs to another platform and is absent.
  for(const directory of ['C:\\External archive\\Website','/Volumes/External archive/Website'])await f.workspace.withLock(()=>f.workspace.writeMetadata('.observanda/local-exports/owners/'+digest(directory)+'.json',serialize({version:2,directory,files:{version:1,type:'files',root:null},pending:null})));
- const root=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'restored')),access,vault,f.vault),restored=new LocalExport(new Workspace(root,vault));
+ const root=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'restored'),{vault:f.vault}),access,vault,f.vault),restored=new LocalExport(new Workspace(root,vault));
  assert.equal((await restored.current({reviewId:candidate.reviewId})).plan.id,plan.id);assert.equal((await apply(restored,plan.id)).cleaned,true);await verifyOutput(candidate,f.destination);
  const next=await restored.plan({reviewId:candidate.reviewId,directory:f.destination});assert.equal(next.counts.unchanged,candidate.files.size);assert.equal(next.counts.conflict,0);
 });

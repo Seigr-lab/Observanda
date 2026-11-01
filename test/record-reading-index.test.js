@@ -40,7 +40,7 @@ test('reading order preserves exact date ordering, reverse cursors and immutable
  await service.remove({workspaceId:f.book.id,recordId:record.id,expectedRevision:recordRevision(result.book.entries[0])});
  assert.equal((await rows(f.workspace)).length,first.length-1);
  await f.workspace.catalogue(async store=>new RecordReadingIndex(store).verify(await store.snapshot()));
- const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'copy')),{vault:f.vault}),restored=new Workspace(copy,f.vault);
+ const copy=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'copy'),{vault:f.vault}),{vault:f.vault}),restored=new Workspace(copy,f.vault);
  assert.deepEqual(await rows(restored,etag),first);assert.deepEqual(await rows(restored),await rows(f.workspace));
  assert.deepEqual((await rows(restored,etag,{order:'date-asc'})).map(r=>r.id),ascending.map(r=>r.id));
 });

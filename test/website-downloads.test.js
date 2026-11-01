@@ -77,11 +77,11 @@ test('encrypted original downloads survive cancelled preparation, retry, retaine
  const output=path.join(directory,'download.img');await writePublicFile(output,download);assert.equal(hash(await readFile(output)),hash(bytes));
  const empty=await imports.start({name:'empty.bin',size:0,kind:'file'});await imports.receive(empty.id,[]);const emptyPrepared=await imports.prepare(empty.id,randomUUID(),{});await workspace.withLock(()=>imports.commit(empty.id,emptyPrepared));assert.deepEqual((await mediaStore.get(empty.id)).bytes,Buffer.alloc(0));
  await assert.rejects(imports.start({name:'empty.png',size:0,kind:'image'}),{code:'MEDIA_INVALID'});
- const copied=await copyWorkspace(await copyPlan(workspace.root,path.join(directory,'restored')),{vault:f.vault}),restored=new Workspace(copied,f.vault);
+ const copied=await copyWorkspace(await copyPlan(workspace.root,path.join(directory,'restored'),{vault:f.vault}),{vault:f.vault}),restored=new Workspace(copied,f.vault);
  assert.deepEqual(await contentBuffer((await new MediaStore(copied,f.vault).get(session.id,{streamed:true})).bytes),bytes);
  const retained=await new PublicationJobs(restored).read(releaseId);assert.equal(retained.id,candidate.id);assert.deepEqual(await contentBuffer(await retained.files.get(downloadPath(session.id))),bytes);
  const access=await createAccess('','fresh download recovery password'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const rekeyed=await encryptedCopy(await copyPlan(copied,path.join(directory,'new-key')),access,vault,f.vault),recovered=new Workspace(rekeyed,vault);
+ const rekeyed=await encryptedCopy(await copyPlan(copied,path.join(directory,'new-key'),{vault:f.vault}),access,vault,f.vault),recovered=new Workspace(rekeyed,vault);
  assert.deepEqual(await contentBuffer((await new MediaStore(rekeyed,vault).get(session.id,{streamed:true})).bytes),bytes);
  assert.deepEqual(await contentBuffer(await (await new PublicationJobs(recovered).read(releaseId)).files.get(downloadPath(session.id))),bytes);
 });

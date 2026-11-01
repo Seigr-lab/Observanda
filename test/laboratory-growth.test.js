@@ -40,10 +40,10 @@ test('sample-analysis store qualifies 65 and 650 samples through save, review, r
   await f.service.change({action:'amend',etag:approved.etag,id,reason:'Test a subsequent correction'});
   assert.match(await f.service.report(id,approved.etag,[],{retained:true}),/<td>0\.125<\/td>/);
   await assert.rejects(f.service.change({action:'submit',etag:opened.etag,expectedRecordRevision:opened.recordRevisions[id],id}),{code:'LAB_STALE'});
-  const current=await f.service.read(),backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'backup')),{vault:f.vault});
+  const current=await f.service.read(),backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'backup'),{vault:f.vault}),{vault:f.vault});
   assert.deepEqual(await new Laboratory(backup,f.vault).read(),current);
   const access=await createAccess('','fresh sample-analysis key'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
-  const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh')),access,vault,f.vault);
+  const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh'),{vault:f.vault}),access,vault,f.vault);
   assert.deepEqual(await new Laboratory(fresh,vault).read(),current);assert.match(await new Laboratory(fresh,vault).report(id,approved.etag,[],{retained:true}),/<td>0\.125<\/td>/);
   t.diagnostic(JSON.stringify({samples:count,analyses:source.analyses.length,events:source.events.length,bytes:Buffer.byteLength(serialize(source)),readMs:Math.round(readMs),editMs:Math.round(editMs)}));
  }

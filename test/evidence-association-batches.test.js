@@ -34,7 +34,7 @@ test('file sets resume after lost replies and backup restore with every associat
  const m=new ResearchMaterials(new Workspace(f.workspace.root,f.vault));
  assert.equal((await m.associations.list({recordId:f.second.id})).items[0].attached,32);
  await m.verify();
- const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'restored')),{vault:f.vault});
+ const backup=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'restored'),{vault:f.vault}),{vault:f.vault});
  const restored=new ResearchMaterials(new Workspace(backup,f.vault));
  assert.equal((await restored.associations.step(initial.id)).attached,64);
  const completed=await restored.associations.step(initial.id);assert.equal(completed.state,'completed');assert.equal(completed.attached,67);
@@ -92,7 +92,7 @@ test('batch selections reject wrong owners, counts, kinds, tampering and partial
 test('a fresh-key successor retains unfinished selections without depending on the previous vault key',async t=>{
  const f=await fixture(t,2),batch=await f.m.associations.start(f.selection);
  const access=await createAccess('','synthetic new attachment key'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const copy=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh-key')),access,vault,f.vault),restored=new ResearchMaterials(new Workspace(copy,vault));
+ const copy=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'fresh-key'),{vault:f.vault}),access,vault,f.vault),restored=new ResearchMaterials(new Workspace(copy,vault));
  assert.equal((await restored.associations.list({recordId:f.second.id})).items[0].id,batch.id);
  assert.equal((await restored.associations.step(batch.id)).attached,2);await restored.verify();
  assert.equal((await f.m.associations.read(batch.id)).results.count,0);

@@ -32,7 +32,7 @@ test('tag changes page growing labels, preserve search/publication/history and g
 
 test('tag commands and retry receipts recover with a new key on a heavy record',async t=>{
  const f=await figureValueFixture({large:true,tags:Array.from({length:33},(_,i)=>'review-'+i)});t.after(f.close);forbid(t);const service=new RecordTagCommands(f.workspace),remove=await command(f,'remove',32,null),receipt=await service.run(remove);await service.run(await command(f,'add',null,'Later replacement'));
- const access=await createAccess('','synthetic tag recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));const root=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'recovered')),access,vault,f.vault),workspace=new Workspace(root,vault);
+ const access=await createAccess('','synthetic tag recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));const root=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'recovered'),{vault:f.vault}),access,vault,f.vault),workspace=new Workspace(root,vault);
  assert.deepEqual(await new RecordTagCommands(workspace).run(remove),receipt);const page=await new RecordContent(workspace).read({...target(f),windows:{tags:32}});assert.deepEqual(page.header.tags,['Later replacement']);
  await workspace.catalogue(async store=>{const row=await store.member(await store.snapshot(),f.record.id);await withRecordDocument(store,row.id,row.revision,async doc=>{assert.deepEqual((await doc.field(['body'])).value,f.record.body);assert.deepEqual((await doc.field(['sections','72'])).value,f.record.sections[72]);});await store.verifySnapshot(undefined,f.book.id);});
 });

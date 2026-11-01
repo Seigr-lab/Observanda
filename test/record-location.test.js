@@ -47,7 +47,7 @@ test('a selected record move preserves dense research, original scope history, e
  assert.deepEqual(await f.moves.move(command),moved);assert.equal((await values.read(target)).value.value,'Continued in the destination');
  await assert.rejects(f.moves.move({...command,notebookId:randomUUID()}),{code:'CONFLICT'});
  const access=await createAccess('','synthetic location recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const root=await encryptedCopy(await copyPlan(workspace.root,path.join(f.directory,'recovered')),access,vault,f.vault),recovered=new Workspace(root,vault);
+ const root=await encryptedCopy(await copyPlan(workspace.root,path.join(f.directory,'recovered'),{vault:f.vault}),access,vault,f.vault),recovered=new Workspace(root,vault);
  await recovered.catalogue(store=>store.verify(catalogueDescriptor(f.book)));assert.deepEqual(await new RecordLocation(recovered).move(command),moved);
  const page=await new RecordContent(recovered).read({workspaceId:f.book.id,recordId:record.id,pagedHeader:true,offset:72});assert.deepEqual(page.sections.values[0],record.sections[72]);assert.equal(page.header.notebookId,f.notebook.id);
 });

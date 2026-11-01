@@ -94,7 +94,7 @@ test('portable review detects subsequent research edits before making a destinat
 
 test('opening an independent portable copy does not inherit the original computer account binding',async t=>{
  const f=await fixture(t);await rememberWorkspaceLocation(f.file,f.root,{title:'',label:'Encrypted workspace'});
- const copy=await copyWorkspace(await copyPlan(f.root,path.join(f.directory,'independent')),{vault:f.vault});await new Workspace(copy,f.vault).read();
+ const copy=await copyWorkspace(await copyPlan(f.root,path.join(f.directory,'independent'),{vault:f.vault}),{vault:f.vault});await new Workspace(copy,f.vault).read();
  await rename(f.root,f.root+'-moved');let transfers=0;
  await rememberWorkspaceLocation(f.file,copy,{title:'',label:'Encrypted workspace'},{github:{relocate:async()=>transfers++}});
  assert.equal(transfers,0);assert.equal((await readPreferences(f.file)).recent.length,2);

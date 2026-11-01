@@ -35,7 +35,7 @@ test('a verified backup requires the recorded evidence bytes and received upload
    if(damage==='missing')await unlink(file);
    else if(damage==='corrupted'){const changed=Buffer.from(ciphertext);changed[changed.length-1]^=1;await writeFile(file,changed);}
    else await workspace.writeFile(file,Buffer.alloc(bytes.length,0x3f));
-   await assert.rejects(copyWorkspace(await copyPlan(root,destination),{vault}),error=>['MATERIAL_MISSING','ENCRYPTION_DAMAGED'].includes(error.code));
+   await assert.rejects(copyWorkspace(await copyPlan(root,destination,{vault}),{vault}),error=>['MATERIAL_MISSING','ENCRYPTION_DAMAGED'].includes(error.code));
    await assert.rejects(inspectLocation(destination),{code:'STORAGE_INCOMPLETE'});
    assert.deepEqual(await workspace.read(),before);
    await writeFile(file,ciphertext);
@@ -49,7 +49,7 @@ test('a verified backup requires the recorded evidence bytes and received upload
    await assert.rejects(lstat(folder),{code:'ENOENT'});
   }finally{await rename(held,folder);}
  }
- const destination=await copyWorkspace(await copyPlan(root,path.join(directory,'verified')),{vault});
+ const destination=await copyWorkspace(await copyPlan(root,path.join(directory,'verified'),{vault}),{vault});
  const restored=new ResearchMaterials(new Workspace(destination,vault));
  assert.deepEqual(await contentBuffer((await restored.artifact(artifact)).content),bytes);
  assert.equal(restored.uploads.count(await restored.importState(pending.id)),1);

@@ -36,8 +36,8 @@ test('schema near the 64 MiB single-command boundary can be edited and recovered
  const oversized={...data,fields:[{...data.fields[0],choices:[...data.fields[0].choices,...Array.from({length:100},(_,i)=>'over_'+String(i).padStart(5,'0')+'y'.repeat(150))]},...data.fields.slice(1)]};
  await assert.rejects(modules.execute(command(2,oversized),{compact:true}),{code:'LIMIT'});
  assert.equal((await new ModuleReader(f.workspace).selected({workspaceId:book.id,id})).entity.revision,2);
- const copyStarted=performance.now(),ordinary=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'ordinary')),{vault:f.vault}),access=await createAccess('','large schema copy password'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'fresh')),access,vault,f.vault);
+ const copyStarted=performance.now(),ordinary=await copyWorkspace(await copyPlan(f.workspace.root,path.join(directory,'ordinary'),{vault:f.vault}),{vault:f.vault}),access=await createAccess('','large schema copy password'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
+ const fresh=await encryptedCopy(await copyPlan(f.workspace.root,path.join(directory,'fresh'),{vault:f.vault}),access,vault,f.vault);
  for(const workspace of [new Workspace(ordinary,f.vault),new Workspace(fresh,vault)]){
   const checkpoint=await moduleDraftOwners(workspace,book.id,'resources').drafts.read(recovered.draft.id);assert.equal(checkpoint.etag,recovered.etag);assert.deepEqual(checkpoint.draft,recovered.draft);
   assert.equal((await new ModuleReader(workspace).selected({workspaceId:book.id,id})).entity.revision,2);

@@ -74,7 +74,7 @@ test('one native audit shares exact encodings across snapshots, history and reta
  });
  await t.test('fresh-key archive recovery preserves original and canonical identities and retained references',async()=>{
   const access=await createAccess('','Encoding audit recovery'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
-  const copied=await encryptedCopy(await copyPlan(workspace.root,path.join(directory,'backup')),access,vault,f.vault),restored=new Workspace(copied,vault);
+  const copied=await encryptedCopy(await copyPlan(workspace.root,path.join(directory,'backup'),{vault:f.vault}),access,vault,f.vault),restored=new Workspace(copied,vault);
   assert.deepEqual((await originals(restored,record.id)).sort((a,b)=>a.revision.localeCompare(b.revision)),sources.toSorted((a,b)=>a.revision.localeCompare(b.revision)));
   for(const ref of references)await new RetainedRecordDocuments(restored).check(ref);
   assert.deepEqual(await measured(t,sources,()=>restored.catalogue(store=>store.verify(catalogueDescriptor(book)))),sources.map(()=>({storage:1,content:1})));

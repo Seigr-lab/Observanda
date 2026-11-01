@@ -47,7 +47,7 @@ test('timeline pages remain pinned across edits and ordinary restore, and reject
  await new ResearchRecords(f.workspace,{}).save({workspaceId:f.book.id,changes:[{id:record.id,expectedRevision:recordRevision(record),record:{...record,title:'Changed title',occurredOn:'2027-01-01'}}]},{recordIds:[record.id]});
  const after=await summariesOnly(()=>f.service.list({...f.command,cursor:first.nextCursor}));assert.deepEqual(after.records,second.records);assert.equal(after.changed,true);
  const back=await f.service.list({...f.command,cursor:after.previousCursor});assert.deepEqual(back.records,first.records);
- const destination=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'copy')),{vault:f.vault});
+ const destination=await copyWorkspace(await copyPlan(f.workspace.root,path.join(f.directory,'copy'),{vault:f.vault}),{vault:f.vault});
  const restored=new Workspace(destination,f.vault);await restored.catalogue(()=>{}); // First reopening verifies restored originals.
  assert.deepEqual((await summariesOnly(()=>new TimelineQuery(restored).list({...f.command,cursor:first.nextCursor}))).records,second.records);
  for(const command of [{query:{...f.command.query,descending:true}},{limit:10},{cursor:first.nextCursor.slice(0,-5)+'xxxxx'}])await assert.rejects(f.service.list({...f.command,cursor:first.nextCursor,...command}),{code:'RECORD_QUERY_CURSOR'});

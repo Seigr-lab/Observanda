@@ -163,7 +163,7 @@ test('failed snapshot commits roll back every new index node; restored copies re
  finally{ResearchCatalogue.prototype.rememberHistory=original;}
  assert.deepEqual(await state(ws),before);assert.deepEqual(await ws.read(),base);
  const result=await save(f,base,[{...base.book.entries[0],title:'Recovered save'}]);
- const copy=await copyWorkspace(await copyPlan(ws.root,path.join(f.directory,'restored')),{vault:f.vault}),restored=new Workspace(copy,f.vault);
+ const copy=await copyWorkspace(await copyPlan(ws.root,path.join(f.directory,'restored'),{vault:f.vault}),{vault:f.vault}),restored=new Workspace(copy,f.vault);
  assert.deepEqual(await restored.read(),await ws.read());
  assert.deepEqual(await restored.catalogue(s=>s.read(base.etag)),base);
  const book=structuredClone((await ws.read()).book);book.entries=book.entries.slice(1).reverse();

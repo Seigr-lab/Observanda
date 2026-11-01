@@ -58,7 +58,7 @@ test('retained methods, interrupted 64 MiB capture, precise dataset, revised ana
  await assert.rejects(store.finishImport(session.id),{code:'MATERIAL_INCOMPLETE'});
  const restarted=new ResearchMaterials(new Workspace(root,vault));assert.equal(restarted.uploads.count(await restarted.importState(session.id)),1);
  // A backup made while paused remains resumable on a different root.
- const paused=path.join(parent,'paused-copy');await copyWorkspace(await copyPlan(root,paused),{vault});
+ const paused=path.join(parent,'paused-copy');await copyWorkspace(await copyPlan(root,paused,{vault}),{vault});
  const pausedStore=new ResearchMaterials(new Workspace(paused,vault));
  assert.equal((await pausedStore.verify()).receivedBytes,EVIDENCE_CHUNK);
  assert.equal((await pausedStore.sequences.item((await pausedStore.importState(session.id)).chunksIndex,0)).sha256,digest(chunk));
@@ -128,7 +128,7 @@ test('retained methods, interrupted 64 MiB capture, precise dataset, revised ana
  assert.ok([...release.files.keys()].some(p=>p.startsWith('figures/')));
  await writePublication(release,path.join(parent,'website-section'));
 
- const backup=path.join(parent,'restored');await copyWorkspace(await copyPlan(root,backup),{vault});
+ const backup=path.join(parent,'restored');await copyWorkspace(await copyPlan(root,backup,{vault}),{vault});
  const restoredVault=await verifyAccess(await readAccess(backup),'','synthetic adoption password');
  const restored=new ResearchMaterials(new Workspace(backup,restoredVault)),verified=await restored.verify();assert.ok(verified.originalBytes>=64*EVIDENCE_CHUNK+csv.length);
  assert.equal((await restored.read(pinned)).body,method.body);assert.equal((await restored.datasetRows(dataset))[0].cells[3],large);

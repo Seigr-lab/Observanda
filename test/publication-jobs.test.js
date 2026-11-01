@@ -52,7 +52,7 @@ test('retained publication pins drafts and media, excludes private sources, and 
  const text=await publicationText(candidate);assert.match(text,/Pinned musical take/);for(const secret of ['Later changed record','PRIVATE_SENTINEL','private source details',f.workspace.root])assert.ok(!text.includes(secret));
  const output=await candidate.files.get('entries/'+draft.entries[0].id+'.html');assert.ok(output);assert.ok(!(await readFile(output.file)).includes(await contentBuffer(output)));
  const access=await createAccess('','another installation password'),vault=takeCreatedVault(access);t.after(()=>clearVault(vault));
- const restored=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'restored')),access,vault,f.vault),again=await new PublicationJobs(new Workspace(restored,vault)).read(done.result.id);
+ const restored=await encryptedCopy(await copyPlan(f.workspace.root,path.join(f.directory,'restored'),{vault:f.vault}),access,vault,f.vault),again=await new PublicationJobs(new Workspace(restored,vault)).read(done.result.id);
  assert.equal(again.id,candidate.id);for await(const [name,content] of candidate.files)assert.deepEqual(await contentBuffer(await again.files.get(name)),await contentBuffer(content));
  assert.equal((await workspaceJobs(new Workspace(restored,vault)).queue.read(job.id)).state,'completed');
  assert.equal(await new Workspace(restored,vault).catalogue(async store=>catalogueRequiresPublicationOperations(await catalogueFormat(store.db))),true,'fresh-key recovery preserves durable operation admission');
