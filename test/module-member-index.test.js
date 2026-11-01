@@ -22,7 +22,7 @@ for(const count of [65,650])test('module membership reads and updates one authen
  const f=await fixture(t,count),target=f.entities.at(-1);let queries=0;
  await moduleDomainStore(f.workspace,f.book.id,'calculator',async store=>{
   const query=store.db.client.query.bind(store.db.client);store.db.client.query=(...args)=>{queries++;return query(...args);};
-  const catalogue=new ModuleCatalogue(store),head=await catalogue.head(f.book.id);assert.equal(head.entities,undefined);assert.equal(head.root.count,count);assert.ok(Buffer.byteLength(JSON.stringify(head))<600);
+  const catalogue=new ModuleCatalogue(store),head=await catalogue.head(f.book.id);assert.equal(head.entities,undefined);assert.equal(head.root.count,count);assert.equal(head.facetIndex.version,1);assert.deepEqual(head.facetIndex.types,['calculation']);assert.ok(Buffer.byteLength(JSON.stringify(head))<850,'Authenticated projection roots keep the head bounded independently of membership');
   assert.deepEqual(await catalogue.selected(head,target.id),target);assert.ok(queries>0&&queries<35,'Selected reads must follow a tree path, not enumerate membership');store.db.client.query=query;
  });
  t.diagnostic(JSON.stringify({items:count,selectedQueries:queries}));

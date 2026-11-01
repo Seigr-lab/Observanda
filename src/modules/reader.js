@@ -55,9 +55,14 @@ export class ModuleReader{
    const result=({records:items,total,after,previousAfter})=>{const next=anchor.offset+items.length;return {workspaceId,revision:c.head.revision,items,total,offset:anchor.offset,cursor:c.encode(anchor),
     nextCursor:next<total?c.encode({...anchor,offset:next,after}):null,
     previousCursor:anchor.offset?c.encode({...anchor,offset:Math.max(0,anchor.offset-limit),...(anchor.offset>limit?{after:previousAfter}:{after:null})}):null};};
-   if(c.browse&&!collect&&!reference&&!query&&!status&&!tags.length&&kind===null&&archived===null&&(moduleId===null||moduleId==='resources'&&recursive)&&projectId===null&&scopeIds===null&&key===null&&keys===null&&resourceId===null){
-    const plans=await c.browse({types:type?(types&&!types.includes(type)?[]:[type]):types,sort,after:anchor.offset?anchor.after:null,signal});
-    if(plans)return result(await moduleBrowsePage(plans,{...anchor,order:compare,signal}));
+   const filtered=!!status||kind!==null||tags.length>0,canSeek=!collect&&!reference&&!query&&archived===null&&(moduleId===null||moduleId==='resources'&&recursive)&&projectId===null&&scopeIds===null&&key===null&&keys===null&&resourceId===null;
+   const browseOptions={types:type?(types&&!types.includes(type)?[]:[type]):types,sort,status,kind,tags,tagMode,signal};let plans=null;
+   if(c.browse&&key===null&&keys===null&&(canSeek||filtered)){
+    plans=await c.browse({...browseOptions,after:canSeek&&anchor.offset?anchor.after:null});
+    if(canSeek&&plans&&plans.every(plan=>!filtered||plan.exact===true))return result(await moduleBrowsePage(plans,{...anchor,order:compare,signal}));
+    // Residual filters still compute exact totals. Start at the beginning of
+    // the smaller proved candidate range, including backward-page witnesses.
+    if(canSeek&&plans&&anchor.offset)plans=await c.browse({...browseOptions,after:null});
    }
    const page=summaryPage({...anchor,order:compare,point:v=>({id:v.id,title:v.title,createdAt:v.createdAt})}),needle=query.toLowerCase(),scope=scopeIds&&new Set(scopeIds);
    const stockScope=moduleId==='resources'?(scope??inventoryScope(c.book,projectId,recursive)):null;
@@ -75,36 +80,44 @@ export class ModuleReader{
     selected=member?[{member}]:[];
    }
    const stockItems=moduleId==='resources'&&!keys&&(!type||type==='resource')&&(!types||types.includes('resource'))?await inventoryScopeItems(c,stockScope,{signal}):null;
-   async function* candidates(){if(selected)yield* selected;else if(stockItems&&type==='resource'){for(const id of stockItems){signal?.throwIfAborted();const member=await c.member(id);if(!member)throw new AppError('CATALOGUE_DAMAGED');yield {member};}}else for await(const member of c.members({signal,types:type?[type]:types}))yield {member};}
-   for await(const {member,view:selectedView} of candidates()){
+   async function* candidates(){
+    if(selected)yield* selected;
+    else if(plans){for(const plan of plans){if(plan.candidates)yield* plan.candidates();else for await(const view of plan.rows()){const member=await c.member(view.id);if(!member)throw new AppError('CATALOGUE_DAMAGED');yield {member,view};}}}
+    else if(stockItems&&type==='resource'){for(const id of stockItems){signal?.throwIfAborted();const member=await c.member(id);if(!member)throw new AppError('CATALOGUE_DAMAGED');yield {member};}}
+    else for await(const member of c.members({signal,types:type?[type]:types}))yield {member};
+   }
+   for await(const {member,view:selectedView,constraint:selectedConstraint} of candidates()){
     signal?.throwIfAborted();if(key&&member.id!==key||keys&&!keys.includes(member.id)||type&&member.type&&member.type!==type||types&&member.type&&!types.includes(member.type))continue;
-    if(resourceId&&(await c.constraint(member)).data.resourceId!==resourceId)continue;
-    if(kind!==null&&(await c.constraint(member)).data.kind!==kind||archived!==null&&(await (type==='category'?c.inventory(member):c.calendar(member)))?.data.archived!==archived)continue;
+    // Facts are immutable within this read context. Reuse only this candidate's
+    // values, so compound filters never re-decode the same supporting object.
+    const facts=new Map(selectedConstraint?[['constraint',selectedConstraint]]:[]),fact=name=>{if(!facts.has(name))facts.set(name,c[name](member));return facts.get(name);};
+    if(resourceId&&(await fact('constraint')).data.resourceId!==resourceId)continue;
+    if(kind!==null&&(await fact('constraint')).data.kind!==kind||archived!==null&&(await fact(type==='category'?'inventory':'calendar'))?.data.archived!==archived)continue;
     if(moduleId==='resources'){
      if(stockScope){
-      const facts=await c.constraint(member),d=facts.data;
-      if(facts.type!=='category'&&!stockScope.size)continue;
-      if(facts.type==='resource'){if(!keys&&stockItems&&!stockItems.has(member.id))continue;}
-      else if(facts.type!=='category'){
-       if(['stock-transfer','asset-transfer'].includes(facts.type)){
-        const value=facts.type==='asset-transfer'?(await c.inventory(member)).data:d;
+      const constraint=await fact('constraint'),d=constraint.data;
+      if(constraint.type!=='category'&&!stockScope.size)continue;
+      if(constraint.type==='resource'){if(!keys&&stockItems&&!stockItems.has(member.id))continue;}
+      else if(constraint.type!=='category'){
+       if(['stock-transfer','asset-transfer'].includes(constraint.type)){
+        const value=constraint.type==='asset-transfer'?(await fact('inventory')).data:d;
         if(!stockScope.has(value.fromProjectId)&&!stockScope.has(value.toProjectId))continue;
        }else{
-        const refs=await c.references(member),parent=refs.ownerId&&await c.member(refs.ownerId),owner=parent?(await c.references(parent)).projectId:refs.projectId;
+        const refs=await fact('references'),parent=refs.ownerId&&await c.member(refs.ownerId),owner=parent?(await c.references(parent)).projectId:refs.projectId;
         if(!stockScope.has(owner??null))continue;
        }
       }
      }
     }else if(moduleId||projectId||scope){
-     const facts=await c.references(member),parent=facts.ownerId&&await c.member(facts.ownerId),owner=parent?(await c.references(parent)).projectId:facts.projectId;
+     const refs=await fact('references'),parent=refs.ownerId&&await c.member(refs.ownerId),owner=parent?(await c.references(parent)).projectId:refs.projectId;
      if(moduleId&&!projectUsesTool(c.book,owner,moduleId)||scope&&!scope.has(owner??null)||!inScope(c.book,owner,projectId,recursive))continue;
     }
     if(reference){
-     const facts=await c.references(member);let linked=facts.links.some(r=>namespaces.has(r.workspaceId)&&r.type===reference.type&&r.id===reference.id);
-     if(!linked&&reference.type==='resource'&&reference.workspaceId===workspaceId){const constraint=await c.constraint(member);linked=constraint.data.resourceId===reference.id||constraint.type==='bom'&&constraint.data.lines.some(line=>line.resourceId===reference.id);}
+     const refs=await fact('references');let linked=refs.links.some(r=>namespaces.has(r.workspaceId)&&r.type===reference.type&&r.id===reference.id);
+     if(!linked&&reference.type==='resource'&&reference.workspaceId===workspaceId){const constraint=await fact('constraint');linked=constraint.data.resourceId===reference.id||constraint.type==='bom'&&constraint.data.lines.some(line=>line.resourceId===reference.id);}
      if(!linked)continue;
      if(['task','booking','calendar','event','subscription','calendar-connection'].includes(member.type)){
-      const parent=facts.ownerId&&await c.member(facts.ownerId),owner=parent?(await c.references(parent)).projectId:facts.projectId;
+      const parent=refs.ownerId&&await c.member(refs.ownerId),owner=parent?(await c.references(parent)).projectId:refs.projectId;
       if(!projectUsesTool(c.book,owner,'planning'))continue;
      }
     }

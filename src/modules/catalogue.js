@@ -17,6 +17,7 @@ import {calendarFacts} from '../calendar/facts.js';
 import {inventoryFacts} from './inventory-facts.js';
 import {ModuleMemberIndex,validModuleMember} from './member-index.js';
 import {ModuleBrowseIndex} from './browse-index.js';
+import {ModuleFacetBrowseIndex} from './facet-browse-index.js';
 import {InventoryProjection} from './inventory-projection.js';
 import {moduleStateRow} from './read-state.js';
 import {diagnosticCount} from '../operational-diagnostics.js';
@@ -52,7 +53,7 @@ export class ModuleCatalogue{
   if(head.viewVersion!==undefined&&head.viewVersion!==1)damaged();
   if(head.memberVersion!==undefined){if(Object.hasOwn(head,'entities'))damaged();await this.membersIndex.check(head,counts.entities);}
   else if(!Array.isArray(head.entities)||String(head.entities.length)!==counts.entities||new Set(head.entities.map(e=>e.id)).size!==head.entities.length||!head.entities.every(e=>validModuleMember(e,head)))damaged();
-  new ModuleBrowseIndex(this).check(head);new InventoryProjection(this).check(head);
+  new ModuleBrowseIndex(this).check(head);new ModuleFacetBrowseIndex(this).check(head);new InventoryProjection(this).check(head);
   };
   if(s.readOnly&&s.readCache)await s.readCache.proof('module-head:'+workspaceId+':'+(row?digest(row.payload):'empty'),verify);else await verify();
   return head;
@@ -157,7 +158,7 @@ export class ModuleCatalogue{
   // Validate each original against its authenticated derived facts, then drop
   // the body. Cross-entity checks consume only their explicit constraint data.
   await validate.constraints(moduleConstraintSource(this,head));
-  await new ModuleBrowseIndex(this).verify(head);
+  await new ModuleBrowseIndex(this).verify(head);await new ModuleFacetBrowseIndex(this).verify(head);
   await new InventoryProjection(this).verify(head);
   await withScratch(async work=>{
   let bytes=0;
@@ -202,8 +203,9 @@ export class ModuleCatalogue{
   if(previous.memberVersion!==1)for await(const member of this.members(previous))root=await this.membersIndex.put(root,{...member,historyFrom:previous.historyVersion===1?member.historyFrom:member.revision});
   // Upgrading membership can add historyFrom to every member, including those
   // untouched by this command. Browse proofs must bind those final members.
-  const browseHead=previous.memberVersion===1?previous:{...previous,memberVersion:1,historyVersion:1,root,browseIndex:undefined};
+  const browseHead=previous.memberVersion===1?previous:{...previous,memberVersion:1,historyVersion:1,root,browseIndex:undefined,facetIndex:undefined};
   let browseRoot=await browse.prepare(browseHead);
+  const facets=new ModuleFacetBrowseIndex(this);let facetIndex=await facets.prepare(browseHead);
   for(const e of entities){
    const priorMember=await this.member({...previous,memberVersion:1,root},e.id);
    const previousView=priorMember?await this.view(previous,priorMember):null;
@@ -238,10 +240,11 @@ export class ModuleCatalogue{
    }
    const member={id:e.id,type:e.type,revision:e.revision,hash:hash(e),historyFrom:priorMember?(previous.historyVersion===1?priorMember.historyFrom:priorMember.revision):0,bytes:moduleEntityBytes(e),constraintHash,viewHash,searchHash,referencesHash,calendarHash,inventoryHash};
    root=await this.membersIndex.put(root,member);browseRoot=await browse.replace(browseRoot,previousView,view,member);
+   facetIndex=await facets.replace(facetIndex,previousView,view,previousConstraint,constraint,member);
    stockRoot=await stock.replace(stockRoot,previousConstraint,constraint,previous.workspaceId);
    await s.db.run('INSERT INTO module_entities VALUES ($1,$2,$3) ON CONFLICT(id) DO UPDATE SET revision=excluded.revision,payload=excluded.payload',e.id,e.revision,s.encode('module-entity',e.id+'/'+e.revision,e));
   }
-  const data={workspaceId:previous.workspaceId,revision:previous.revision+1,historyVersion:1,memberVersion:1,root,totalBytes,browseIndex:{version:1,root:browseRoot},stockIndex:{version:1,root:stockRoot}};
+  const data={workspaceId:previous.workspaceId,revision:previous.revision+1,historyVersion:1,memberVersion:1,root,totalBytes,browseIndex:{version:1,root:browseRoot},facetIndex,stockIndex:{version:1,root:stockRoot}};
   if(previous.currentVersion===1||empty)data.currentVersion=1;
   if(previous.viewVersion===1||empty)data.viewVersion=1;
   await s.db.run('INSERT INTO module_events VALUES ($1,$2,$3)',event.commandId,data.revision,s.encode('module-event',event.commandId+'/'+data.revision,event));

@@ -2,13 +2,11 @@ import {ObjectIndex,validIndexRef} from '../object-index.js';
 import {writeCatalogueRows} from '../catalogue-writes.js';
 import {digest,serialize} from '../storage-format.js';
 import {AppError} from '../errors.js';
+import {moduleBrowsePoint as point} from './browse-order.js';
+import {ModuleFacetBrowseIndex} from './facet-browse-index.js';
 const fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 const hash=value=>digest(serialize(value));
 const prefix=(type,sort)=>type+':'+sort+':';
-// Fixed-width UTF-16 keys preserve ModuleReader's explicit JS string order,
-// including prefixes, embedded separators, case folding and surrogate pairs.
-const textKey=(value,reverse=false)=>{let key='';for(let i=0;i<value.length;i++)key+=(reverse?65535-value.charCodeAt(i):value.charCodeAt(i)).toString(16).padStart(4,'0');return key;};
-const point=(view,sort)=>textKey(sort==='title'?view.title.toLowerCase():view.createdAt,sort==='created-desc')+'!'+view.id;
 const keys=view=>['*',view.type].flatMap(type=>['title','created-desc'].map(sort=>prefix(type,sort)+point(view,sort)));
 
 export class ModuleBrowseIndex{
@@ -34,7 +32,8 @@ export class ModuleBrowseIndex{
   // never mutates it, and an interrupted first update cannot publish a root.
   let root=null;for await(const member of this.catalogue.members(head))root=await this.replace(root,null,await this.catalogue.view(head,member),member);return root;
  }
- async plan(head,{types=null,sort='title',after=null,signal}={}){
+ async plan(head,{types=null,sort='title',after=null,status='',kind=null,tags=[],tagMode='all',signal}={}){
+  if(status||kind||tags.length)return new ModuleFacetBrowseIndex(this.catalogue).plan(head,{types,sort,after,status,kind,tags,tagMode,signal});
   this.check(head);if(!head.browseIndex)return (head.memberVersion===1?head.root?.count??0:head.entities.length)===0?{total:0,offset:0,async *rows(){}}:null;
   if(!['title','created-desc'].includes(sort))throw new AppError('INVALID');
   const index=head.browseIndex,lanes=[];let total=0,offset=0;
