@@ -22,7 +22,9 @@ export const performanceProfiles=Object.freeze({
   'content-buffer-admission','content-buffer-budget','native-resource-budget','native-media-admission',
   'request-admission','foreground-capacity','research-job-checkpoints','module-live-updates','website-preview-owner-demand','operational-diagnostics',
   'query-result-sort','pinned-query-result','record-pinned-collection','module-pinned-query','module-dashboard-pinned',
-  'project-directory-pinned','sample-analysis-pinned','sample-analysis-order','query-callback-source',
+  'project-directory-pinned','project-choice-ancestry','runtime-storage-authority','query-cache-owner-scope',
+  'sample-analysis-pinned','sample-analysis-order','query-callback-source','calendar-dashboard-pinned',
+  'catalogue-format-read','staging-reservation-model','dataset-preparation-writes',
   'dataset-window-count','numerical-scheduling','inventory-reconciliation','publication-job-checkpoints','optional-service-libraries','desktop-startup-cancellation'
  ]),
  native:Object.freeze([
@@ -31,10 +33,16 @@ export const performanceProfiles=Object.freeze({
   'workspace-postgres-runtime','workspace-copy-session','publication-input-media',
   'media','dataset-preview-read-work','website-theme-exchange','pdf-document-image-storage',
   'query-cache-files','record-pinned-query-native','record-pinned-session-native','project-directory-pinned-native',
-  'inventory-maintenance-native','sample-analysis-scale','sample-analysis-collection-capacity'
+  'inventory-maintenance-native','sample-analysis-scale','sample-analysis-collection-capacity',
+  'project-choice-ancestry-native','calendar-dashboard-collection','catalogue-format-read-native',
+  'job-checkpoint-connections','dataset-preparation-writes-native','staging-reservation-files','staging-reservations',
+  'runtime-proof-cursor','postgres-runtime-upgrade'
  ]),
  heavy:Object.freeze([
   'dataset-import-plot-capacity.benchmark.js','module-history-growth','record-history-continuation','desktop-service'
+ ]),
+ mixed:Object.freeze([
+  'combined-owner-workload','intake-growth','analysis-comparison-sustained'
  ])
 });
 
@@ -66,7 +74,7 @@ async function run(profile,log,{signal}={}){
 async function main(){
  const {values}=parseArgs({options:{profile:{type:'string',default:'work'},repetitions:{type:'string',default:'1'},'storage-class':{type:'string',default:'unspecified'}}});
  const profiles=values.profile==='all'?Object.keys(performanceProfiles):[values.profile],repetitions=Number(values.repetitions);
- if(profiles.some(name=>!Object.hasOwn(performanceProfiles,name))||!Number.isSafeInteger(repetitions)||repetitions<1||repetitions>100||!['unspecified','local','network'].includes(values['storage-class']))throw Error('Use --profile=work|native|heavy|all, --repetitions=1..100 and --storage-class=unspecified|local|network.');
+ if(profiles.some(name=>!Object.hasOwn(performanceProfiles,name))||!Number.isSafeInteger(repetitions)||repetitions<1||repetitions>100||!['unspecified','local','network'].includes(values['storage-class']))throw Error('Use --profile=work|native|heavy|mixed|all, --repetitions=1..100 and --storage-class=unspecified|local|network.');
  const relative='.local/performance-qualification/'+new Date().toISOString().replace(/[:.]/g,'-')+'-'+randomUUID();
  // Refuse to create audit material if the checkout does not keep it ignored.
  await git('git',['check-ignore','-q',relative+'/receipt.json'],{cwd:root});const directory=path.join(root,relative);await mkdir(directory,{recursive:true,mode:0o700});
