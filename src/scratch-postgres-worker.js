@@ -4,6 +4,7 @@ import os from 'node:os';
 import {mkdtemp,realpath} from 'node:fs/promises';
 import {startManagedPostgres} from './postgres-runtime.js';
 import {AppError} from './errors.js';
+import {runtimeStorageDirectory} from './database-runtime-environment.js';
 import {nativeMember,withNativeTree} from './native-storage-tree.js';
 import {removeNativeRuntimeTree} from './postgres-runtime-files.js';
 const controller=new AbortController();let root,container,parent,identity,service,starting=false,stopping=false,finished;
@@ -36,7 +37,7 @@ process.on('message',message=>{
    parent=await realpath(os.tmpdir());container=await mkdtemp(path.join(parent,'observanda-query-work-'));root=path.join(container,'database');await withNativeTree(container,async directory=>{identity=directory.identity;});send({type:'created',root});
    controller.signal.throwIfAborted();
    service=await startManagedPostgres({directory:root,runtimeDirectory:message.runtimeDirectory,env:process.env,signal:controller.signal,onProgress:progress=>send({type:'progress',progress})});
-   if(!stopping)send({type:'ready',url:process.env.OBSERVANDA_DATABASE_URL});
+   if(!stopping)send({type:'ready',url:process.env.OBSERVANDA_DATABASE_URL,directory:runtimeStorageDirectory(process.env)});
   }catch(error){stopping=true;await finish(error);}
   finally{starting=false;if(stopping)await finish();}
  })();

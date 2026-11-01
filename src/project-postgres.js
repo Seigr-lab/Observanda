@@ -7,6 +7,7 @@ import path from 'node:path';
 import {hkdfSync} from 'node:crypto';
 import {WorkspacePostgres} from './workspace-postgres.js';
 import {ProjectRuntimePool} from './project-runtime-pool.js';
+import {inheritRuntimeStorage} from './database-runtime-environment.js';
 import {clearVault,unseal} from './encryption.js';
 import {assertRegular} from './storage.js';
 import {AppError} from './errors.js';
@@ -36,7 +37,7 @@ export class ProjectPostgres{
     // is shared with workspace runtimes.
     let entry=this.#environments.get(root);
     if(entry?.source!==source){
-     const env={...source};delete env.OBSERVANDA_WORKSPACE_DATABASE_ROOT;
+     const env={...source};inheritRuntimeStorage(source,env);delete env.OBSERVANDA_WORKSPACE_DATABASE_ROOT;
      env.OBSERVANDA_PROJECT_DATABASE_ROOT=root;env.OBSERVANDA_PROJECT_ID=projectId;
      entry={source,env};this.#environments.set(root,entry);
     }

@@ -1,5 +1,6 @@
 import {startManagedPostgres} from './postgres-runtime.js';
 import {startScratchPostgres} from './scratch-postgres.js';
+import {inheritRuntimeStorage} from './database-runtime-environment.js';
 import path from 'node:path';
 import {readFile,realpath} from 'node:fs/promises';
 import {createPersistentDirectory as mkdir} from './filesystem-persistence.js';
@@ -56,7 +57,7 @@ export class WorkspaceDatabases{
  // An unpublished archive is checked in a temporary schema. It does not own
  // a destination database until the user opens that workspace or project.
  async archiveEnvironment(root,projectId,labBookId){
-  const env={...await this.scratch()};delete env.OBSERVANDA_WORKSPACE_DATABASE_ROOT;delete env.OBSERVANDA_PROJECT_DATABASE_ROOT;delete env.OBSERVANDA_PROJECT_ID;delete env.OBSERVANDA_LAB_BOOK_DATABASE_ROOT;delete env.OBSERVANDA_LAB_BOOK_ID;
+  const source=await this.scratch(),env={...source};inheritRuntimeStorage(source,env);delete env.OBSERVANDA_WORKSPACE_DATABASE_ROOT;delete env.OBSERVANDA_PROJECT_DATABASE_ROOT;delete env.OBSERVANDA_PROJECT_ID;delete env.OBSERVANDA_LAB_BOOK_DATABASE_ROOT;delete env.OBSERVANDA_LAB_BOOK_ID;
   if(labBookId!==undefined){env.OBSERVANDA_LAB_BOOK_ID=labBookId;env.OBSERVANDA_LAB_BOOK_DATABASE_ROOT=root;}
   if(projectId!==undefined){env.OBSERVANDA_PROJECT_ID=projectId;env.OBSERVANDA_PROJECT_DATABASE_ROOT=root;}
   return env;

@@ -5,6 +5,7 @@ import path from 'node:path';
 import {hkdfSync} from 'node:crypto';
 import {WorkspacePostgres} from './workspace-postgres.js';
 import {ProjectRuntimePool} from './project-runtime-pool.js';
+import {inheritRuntimeStorage} from './database-runtime-environment.js';
 import {clearVault,unseal} from './encryption.js';
 import {assertRegular} from './storage.js';
 import {AppError} from './errors.js';
@@ -31,7 +32,7 @@ export class LabBookPostgres{
     const source=await this.#runtime.open(root,key,{create});
     let entry=this.#environments.get(root);
     if(entry?.source!==source){
-     const env={...source};
+     const env={...source};inheritRuntimeStorage(source,env);
      delete env.OBSERVANDA_WORKSPACE_DATABASE_ROOT;
      delete env.OBSERVANDA_PROJECT_DATABASE_ROOT;delete env.OBSERVANDA_PROJECT_ID;
      env.OBSERVANDA_LAB_BOOK_DATABASE_ROOT=root;env.OBSERVANDA_LAB_BOOK_ID=labBookId;

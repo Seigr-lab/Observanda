@@ -7,6 +7,7 @@ import path from 'node:path';
 import {stat} from 'node:fs/promises';
 import {managedSharedBuffers} from './postgres-runtime.js';
 import {nativeResources,databaseMemoryReservation} from './native-resource-budget.js';
+import {registerRuntimeStorage} from './database-runtime-environment.js';
 
 export async function startScratchPostgres({runtimeDirectory,env=process.env,signal,onProgress=()=>{}}){
  signal?.throwIfAborted();
@@ -33,16 +34,16 @@ export async function startScratchPostgres({runtimeDirectory,env=process.env,sig
    if(message?.type==='created'){root=message.root;return;}
    if(message?.type==='progress'){onProgress(message.progress);return;}
    if(message?.type==='error'){failure=new AppError(message.code==='DATABASE_CANCELLED'?'DATABASE_CANCELLED':'DATABASE_RUNTIME');rejectReady(failure);return;}
-   if(message?.type!=='ready'||ready||typeof root!=='string'||typeof message.url!=='string')throw new AppError('DATABASE_RUNTIME');
-   ready=true;resolveReady(message.url);
+   if(message?.type!=='ready'||ready||typeof root!=='string'||typeof message.url!=='string'||typeof message.directory!=='string'||!path.isAbsolute(message.directory))throw new AppError('DATABASE_RUNTIME');
+   ready=true;resolveReady({url:message.url,directory:message.directory});
   }catch(error){failure=error;rejectReady(error);stop();}
  });
  child.send({type:'start',runtimeDirectory},error=>{if(error){failure=new AppError('DATABASE_RUNTIME');rejectReady(failure);stop();}});
  try{
-  if(signal?.aborted)stop();const url=await started;signal?.throwIfAborted();
-  const environment={...childEnv,OBSERVANDA_DATABASE_URL:url};let close;
+  if(signal?.aborted)stop();const {url,directory}=await started;signal?.throwIfAborted();
+  const environment={...childEnv,OBSERVANDA_DATABASE_URL:url},retireStorage=registerRuntimeStorage(environment,directory);let close;
   // A vanished guardian invalidates the reusable environment immediately.
-  void exited.then(()=>{delete environment.OBSERVANDA_DATABASE_URL;signal?.removeEventListener('abort',abort);});
-  return {root,env:environment,service:{close:()=>close??=(async()=>{stop();await exited;if(failure)throw failure;})()}};
+  void exited.then(()=>{retireStorage();delete environment.OBSERVANDA_DATABASE_URL;signal?.removeEventListener('abort',abort);});
+  return {root,env:environment,service:{close:()=>close??=(async()=>{retireStorage();stop();await exited;if(failure)throw failure;})()}};
  }catch(error){stop();await exited;signal?.removeEventListener('abort',abort);throw signal?.aborted?new AppError('DATABASE_CANCELLED'):error;}
 }

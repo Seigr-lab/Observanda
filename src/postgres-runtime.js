@@ -25,6 +25,7 @@ import {workspaceDatabaseLease} from './workspace-database-lease.js';
 import {nativeResources,databaseMemoryReservation} from './native-resource-budget.js';
 import {withUpgradeablePostgresRuntime} from './postgres-runtime-upgrade.js';
 import {postgresRuntimeFiles} from './postgres-runtime-files.js';
+import {registerRuntimeStorage} from './database-runtime-environment.js';
 
 const windows=process.platform==='win32',suffix=windows?'.exe':'';
 export const windowsRuntime=Object.freeze({version:'17.11',url:'https://sbp.enterprisedb.com/getfile.jsp?fileid=1260569',bytes:379726839,sha256:'b9424ee7bc60b52450ff910a3630225df32e633f3cb29c1d126d9299d59aea28'});
@@ -251,8 +252,8 @@ async function manageGuardedPostgres({directory,env,signal,onProgress,workspace,
   signal?.throwIfAborted();
   reservation?.confirmed();
   env.OBSERVANDA_DATABASE_URL='postgresql://observanda:'+config.appPassword+'@127.0.0.1:'+config.port+'/observanda';
-  let closing;
-  return {managed:true,major:config.major,bin:config.bin,close:()=>closing??=(async()=>{try{await ctl(['-m','fast','-w','-t','60','stop']);mayBeRunning=false;if(workspace){config.running=false;await save();}}finally{try{await lease.close();}finally{releaseCapacity();portableKey?.fill(0);delete env.OBSERVANDA_DATABASE_URL;}}})()};
+  const retireStorage=registerRuntimeStorage(env,directory);let closing;
+  return {managed:true,major:config.major,bin:config.bin,close:()=>closing??=(async()=>{retireStorage();try{await ctl(['-m','fast','-w','-t','60','stop']);mayBeRunning=false;if(workspace){config.running=false;await save();}}finally{try{await lease.close();}finally{releaseCapacity();portableKey?.fill(0);delete env.OBSERVANDA_DATABASE_URL;}}})()};
  }catch(error){
   // pg_ctl can finish starting just as cancellation arrives: stop the owned cluster too.
   if(verifiedCluster)await ctl(['-m','fast','-w','-t','60','stop']).then(async()=>{mayBeRunning=false;if(workspace){config.running=false;await save();}}).catch(async()=>{try{if(!await files.stat(path.join(data,'postmaster.pid'),{missing:true}))mayBeRunning=false;}catch{/* An unreachable volume cannot prove process exit. */}});
