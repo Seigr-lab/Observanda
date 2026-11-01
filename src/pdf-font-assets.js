@@ -1,5 +1,5 @@
 import {pdfEquationAssets} from './pdf-content-blocks.js';
-import {create} from 'fontkit';
+import {createFont} from './font-parser.js';
 import {readFile} from 'node:fs/promises';
 import {BUNDLED_FONTS,faceCSS,customFontId,validCustomFont} from './web/font-catalogue.js';
 import {validPdfFontPins} from './web/pdf-font-model.js';
@@ -22,7 +22,7 @@ export async function embedPdfFonts(compiled,{signal,maxFontBytes=32*1024*1024,c
   for(const face of font.faces){
    signal?.throwIfAborted();const bytes=custom?font.bytes:await readFile(new URL('./fonts/'+face.file,import.meta.url),{signal});total+=bytes.length;
    if(total>maxFontBytes)throw new PdfLayoutError('PDF_CAPACITY');
-   for(const point of create(bytes).characterSet)available.add(point);
+   for(const point of createFont(bytes).characterSet)available.add(point);
    const type={ttf:'font/ttf',otf:'font/otf',woff:'font/woff',woff2:'font/woff2'}[face.file.split('.').at(-1)];
    styles.push(faceCSS(id,face,'data:'+type+';base64,'+bytes.toString('base64')));
   }

@@ -76,6 +76,6 @@ test('multi-code generation yields to other work and observes cancellation befor
  const abort=new AbortController();let generated=0,otherWork=0;
  const codes=collector({signal:abort.signal,textGlyphs:()=>{generated++;if(generated===1)setImmediate(()=>{otherWork++;abort.abort();});}});
  for(const suffix of ['first','second','third'])codes.observe(text('https://example.org/'+suffix));
- const pending=codes.render();assert.equal(generated,1);
+ const pending=codes.render();
  await assert.rejects(pending,{name:'AbortError'});assert.equal(otherWork,1);assert.equal(generated,1);
 });

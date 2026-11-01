@@ -1,7 +1,8 @@
-import katex from 'katex';
+import {createRequire} from 'node:module';
 import {readFile} from 'node:fs/promises';
 import {renderSketch} from './web/sketch-renderer.js';
 import {PdfLayoutError} from './web/pdf-layout-model.js';
+const require=createRequire(import.meta.url);
 const esc=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export function pdfBlockRenderer(settings,{textGlyphs,sectionId}){
  let equations=false;
@@ -9,7 +10,7 @@ export function pdfBlockRenderer(settings,{textGlyphs,sectionId}){
   const a=node.attrs;
   if(node.type==='book_equation'){
    let html;
-   try{html=katex.renderToString(a.source,{output:'htmlAndMathml',displayMode:true,trust:()=>{throw new Error('External equation content');},strict:'error',throwOnError:true,maxExpand:100,maxSize:20,macros:{}});}catch{throw new PdfLayoutError('PDF_EQUATION',[sectionId,a.id]);}
+   try{html=require('katex').renderToString(a.source,{output:'htmlAndMathml',displayMode:true,trust:()=>{throw new Error('External equation content');},strict:'error',throwOnError:true,maxExpand:100,maxSize:20,macros:{}});}catch{throw new PdfLayoutError('PDF_EQUATION',[sectionId,a.id]);}
    equations=true;textGlyphs(settings.font,a.label);
    return '<figure class="book-equation" id="record-equation-'+a.id+'"><div role="math" aria-label="'+esc(a.label)+'">'+html+'</div><figcaption>'+esc(a.label)+'</figcaption></figure>';
   }

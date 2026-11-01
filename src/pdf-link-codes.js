@@ -1,5 +1,4 @@
 import {setImmediate} from 'node:timers/promises';
-import QRCode from 'qrcode';
 import {safeRichLink} from './web/rich-text-model.js';
 import {PdfLayoutError} from './web/pdf-layout-model.js';
 const esc=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -24,6 +23,8 @@ export function pdfLinkCodes({enabled=false,sectionId,columnWidthMm,heightMm,max
  }
  async function render(){
   signal?.throwIfAborted();if(!urls.size)return '';
+  const {default:QRCode}=await import('qrcode');
+  signal?.throwIfAborted();
   const pieces=['<div class="pdf-link-codes">'];let bytes=Buffer.byteLength(pieces[0])+6;
   for(const url of urls){
    if(pieces.length>1)await setImmediate(undefined,{signal});

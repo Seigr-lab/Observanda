@@ -1,4 +1,4 @@
-import {create} from 'fontkit';
+import {createFont} from './font-parser.js';
 import {createHash} from 'node:crypto';
 export const MAX_FONT_BYTES=8*1024*1024;
 const MAX_EXPANDED=32*1024*1024;
@@ -17,7 +17,7 @@ export function fontContainer(bytes){
  return format;
 }
 export function inspectFont(bytes){
- const extension=fontContainer(bytes),font=create(bytes);
+ const extension=fontContainer(bytes),font=createFont(bytes);
  const tables=Object.values(font.directory.tables);let expanded=0;
  for(const table of tables){if(!Number.isInteger(table.length)||table.length<0)throw Error('Invalid table');expanded+=Math.max(table.length,table.transformLength??0);if(expanded>MAX_EXPANDED)throw Error('Invalid expanded size');if(extension==='woff'&&(table.offset<44+tables.length*20||table.compLength>table.length||table.offset+table.compLength>bytes.length))throw Error('Invalid compressed table');}
  const flavor=(extension==='woff'||extension==='woff2')?bytes.toString('ascii',4,8):bytes.toString('ascii',0,4),tableNames=font.directory.tables;
