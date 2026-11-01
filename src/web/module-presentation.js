@@ -28,6 +28,11 @@ export function moduleDescription(module){
 }
 export const moduleSettingsHeading=module=>module.id==='research'?t('labBookData','types'):module.settingsHeading??moduleLabel(module);
 export const moduleLocationLabel=module=>module.id==='planning'?t('dashboardEditors','calendarPlanning'):labels[module.id]?moduleLabel(module):module.locationTool?.label??moduleLabel(module);
+export function moduleNavigationLabel(module,entry){
+ if(module.id==='publishing'&&['website','publishing'].includes(entry.action))return t('websiteSites',entry.action==='website'?'editor':'publishing');
+ if(entry.action==='module-open'&&entry.moduleId===module.id&&labels[module.id])return module.id==='planning'?moduleLocationLabel(module):moduleLabel(module);
+ return entry.label;
+}
 export const moduleSettingsLabel=module=>labKey(module,'label')?t('dashboardEditors','recordTypes'):module.settingsLabel;
 export const moduleProjectSettings=module=>module.id==='resources'?{
  ...module.projectSettings,

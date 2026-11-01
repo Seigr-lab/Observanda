@@ -100,6 +100,7 @@ import {recordStartersUI} from './record-starters-ui.js';
 import {recordCreationUI} from './record-creation-ui.js';
 import {recordDestinationUI} from './record-destination-ui.js';
 import {t} from './i18n/index.js';
+import {updateDocumentLanguage} from './document-language.js';
 import {workspaceSaveRequest} from './workspace-edits.js';
 import {previewSurface} from './preview-surface.js';
 import {shellNavigation} from './shell-navigation.js';
@@ -758,6 +759,7 @@ function releaseCompleteWorkspace(){
  const result={outline:true,book:{...savedBook,entries:[]},etag:state.etag,recordRevisions:{},notebookCounts,total:state.recordScope?.total??savedBook.entries.length};adoptSnapshot(result);state.book=result.book;
 }
 function render() {
+  updateDocumentLanguage(document);
   configurationRecord?.checkContext();
   runCreation.checkContext();
   recordLocation.checkContext();

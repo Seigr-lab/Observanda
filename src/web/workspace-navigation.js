@@ -1,4 +1,4 @@
-import {moduleLabel} from './module-presentation.js';
+import {moduleLabel,moduleNavigationLabel} from './module-presentation.js';
 import {locationTools,locationToolLabel} from './modules/location-tools.js';
 import {scopePath,parseScope} from './modules/scope.js';
 import {childrenOf,ancestors} from './workspace-structure.js';
@@ -78,16 +78,16 @@ export function workspaceNavigation({state,icon,logosFor,pinnedTools=()=>[]}) {
       let item=modules.get(manifest.id);
       if(!item) {
         structureChanged=true;
-        item={node:group(manifest.label),buttons:new Map()};
+        item={node:group(moduleLabel(manifest)),buttons:new Map()};
         item.node.dataset.moduleNav=manifest.id;modules.set(manifest.id,item);
         root.insertBefore(item.node,projectsSection);
       }
       if(item.node.dataset.navSection!==(manifest.navigationGroup??manifest.id))structureChanged=true;
       attr(item.node,'data-nav-section',manifest.navigationGroup??manifest.id);
-      attr(item.node,'aria-label',manifest.label);text(item.node.firstElementChild,manifest.label);
+      attr(item.node,'aria-label',moduleLabel(manifest));text(item.node.firstElementChild,moduleLabel(manifest));attr(item.node,'lang',language());
       const keys=new Set(),ordered=[item.node.firstElementChild];
       const entries=(module,depth=0)=>[
-        ...module.navigation.map(entry=>({...entry,depth})),
+        ...module.navigation.map(entry=>({...entry,label:moduleNavigationLabel(module,entry),depth})),
         ...moduleChildren(module.id).filter(child=>enabledModule(state.dashboardSettings,child.id)).flatMap(child=>entries(child,depth+1))
       ];
       for(const entry of entries(manifest)) {
