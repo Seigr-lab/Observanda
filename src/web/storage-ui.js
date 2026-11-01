@@ -19,10 +19,10 @@ import {workspacePortabilityUI} from './workspace-portability-ui.js';
 import {workspaceTransferUI} from './workspace-transfer-ui.js';
 import {workspaceDatabaseUI} from './workspace-database-ui.js';
 export function storageUI({state,api,activity,writerRecovery,esc,field,save,render,showDialog,notify,reload,resetInterface,isUploading,accessOwners=operation=>operation()}){
-  const security=securityUI({state,api,esc,field,showDialog,notify});
   const collaboration=collaborationIdentityUI({state,api,esc,field,showDialog,notify,lock:async()=>{if(!state.access?.locked&&!await ready())return false;await api('/api/access/lock',{});state.access.locked=true;render();return true;}});
   const folders=folderPickerUI({api,esc,field,showDialog,capabilities:()=>state.storage?.folderPicker});
   const {locationFields,preferencesPanel,lockView,unavailable,chooseDialog,resetDialog}=workspaceAccessViews({state,esc,field,showDialog});
+  const security=securityUI({state,api,esc,field,showDialog,notify,locationFields,reload});
   const portability=workspacePortabilityUI({state,api,esc,field,locationFields,showDialog});
   const transfers=workspaceTransferUI({state,api,esc,locationFields,showDialog,switched,notify});
   const deletion=workspaceDeletionUI({api,accessOwners,esc,field,showDialog,ready,switched,refreshWorkspaces:async({form})=>{const dialog=document.getElementById('dialog');if(dialog?.contains(form))dialog.close();await workspaces.refresh();},notify});
@@ -112,5 +112,5 @@ export function storageUI({state,api,activity,writerRecovery,esc,field,save,rend
   async function switched(){state.newWorkspace=false;state.book=null;state.etag=null;state.dirty=false;state.preview=null;state.laboratory=null;state.labTab='samples';state.labSearch='';state.publishing=null;state.publishOutcome=null;state.designSource='auto';state.designPage=null;state.designResult=null;state.selected=null;state.project=null;state.notebook='all';state.search='';state.filter='all';state.recordBrowse=null;state.page='workspace';history.replaceState(null,'','#/workspace');await reload();document.querySelector('#dialog').close();}
   async function refreshRename(){try{state.storage=await api('/api/storage');if(state.storage.rename){state.dirty=false;render();}}catch{ /* Retain the operation's original error when recovery metadata is unavailable. */ }}
   async function rename(name){if(!await ready())return false;try{state.storage=await accessOwners(()=>api('/api/storage/rename',{name,etag:state.etag}));await switched();state.page='preferences';history.replaceState(null,'','#/preferences');render();return true;}catch(error){await refreshRename();throw error;}}
-  return {rename,recoveryPanel:()=>workspaceRenamePanel(state.storage,esc),workspaces,locationFields,view,lockView,unavailable,action,submit,input:el=>{if(el.closest('#security-grant-form')){security.input(el).catch(e=>notify(e.message,true));return true;}return folders.input(el);}};
+  return {rename,recoveryPanel:()=>workspaceRenamePanel(state.storage,esc),workspaces,locationFields,view,lockView,unavailable,action,submit,input:el=>{if(el.closest('#security-grant-form')||el.matches('[data-access-checkpoint]')){security.input(el).catch(e=>notify(e.message,true));return true;}return folders.input(el);}};
 }

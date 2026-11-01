@@ -16,7 +16,7 @@ test('portable copy can be prepared and retried from the app without consuming t
  test.setTimeout(90000);page.setDefaultTimeout(15000);
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-portable-ui-')),f=await encryptedFixture(directory,{...sampleNotebook(),title:'workspace'}),preferencesFile=path.join(directory,'preferences.json'),destination=path.join(directory,'portable');
  await rememberLocation(preferencesFile,f.workspace.root);
- const accessInfo=await workspaceAccess(f.workspace.root,f.vault),kit=await updateWorkspaceAccess(f.workspace.root,f.vault,{action:'recovery',etag:accessInfo.etag,confirmed:true});
+ const accessInfo=await workspaceAccess(f.workspace.root,f.vault,{deviceStore:f.deviceStore}),kit=await updateWorkspaceAccess(f.workspace.root,f.vault,{action:'recovery',etag:accessInfo.etag,confirmed:true},{deviceStore:f.deviceStore});
  const app=await startServer({root:f.workspace.root,port:0,headless:true,preferencesFile,deviceStore:f.deviceStore}),before=await f.workspace.read();let requests=0;
  try{
   await page.goto(app.url);await expect(page.locator('.workspace-name')).toHaveText(path.basename(f.workspace.root));await preferences(page,'Storage & access');

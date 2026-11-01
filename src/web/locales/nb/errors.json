@@ -444,5 +444,7 @@
   "DATASET_ALIGNMENT_TIE": "Flere høyresiderader er beste kandidat innenfor toleransen. Inspiser de likestilte koordinatene; velg uttrykkelig første eller siste i kilderekkefølge, eller behold avvisning og revider samsvarsreglene.",
   "DATASET_WEIGHTED_FIT_VARIANCE": "Hver inkluderte observasjonsvarians må være større enn null. Gjennomgå varianskolonnen; null varians kan ikke brukes som en endelig vekt.",
   "DATASET_WEIGHTED_FIT_UNITS": "Bruk oppgitte X- og Y-enheter og en differansevariansenhet med dimensjonene til Y i annen, eller la alle tre enhetene være udeklarerte og etikettene tomme. Referanse- og evalueringskoordinater bruker den valgte X-enheten og origo.",
-  "PUBLISH_ARCHIVE_BRANCH": "Arkivgrenen er utilgjengelig eller endret. Velg et ubrukt grennavn og gjennomgå repositoriet på nytt. Ingen eksisterende gren blir overskrevet."
+  "PUBLISH_ARCHIVE_BRANCH": "Arkivgrenen er utilgjengelig eller endret. Velg et ubrukt grennavn og gjennomgå repositoriet på nytt. Ingen eksisterende gren blir overskrevet.",
+  "ACCESS_STATE_CHANGED": "Disse tilgangsinnstillingene finnes ikke i den betrodde historikken på denne enheten. Kontroller og importer gjeldende tilgangsinnstillinger fra en betrodd enhet før du åpner denne kopien.",
+  "ACCESS_SAVE_UNCERTAIN": "Lagringen av tilgangsinnstillingene ble avbrutt. De nye påloggingsopplysningene kan allerede være aktive. Åpne arbeidsområdet på nytt og prøv de nye opplysningene først."
 }

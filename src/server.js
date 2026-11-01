@@ -155,7 +155,11 @@ import { identityLabel } from './web/workspace-identity.js';
 import { validInterface } from './web/interface-ui.js';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
-import {readAccess,verifyAccess,changeAccess,takeCreatedVault} from './access.js';
+import {readAccess,resolveAccess,verifyAccess,changeAccess,takeCreatedVault} from './access.js';
+import {withAccessDevice} from './security/access-context.js';
+import {keyringFingerprint} from './security/access-trust.js';
+import {unlockKeyring} from './security/keyring.js';
+import {exportAccessCheckpoint,inspectAccessCheckpoint,importAccessCheckpoint} from './security/access-checkpoint.js';
 import {resolveLocation,inspectLocation,probeLocation,browseFolders,createFolder,storageMap,initializeLocation,namedWorkspaceLocation,readPreferences,rememberInterface} from './locations.js';
 import { buildDesignExamples } from './design-preview.js';
 import {appearancePreviewSource} from './appearance-preview.js';
@@ -289,12 +293,17 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
     client.access='none';client.expires=Date.now()+8*60*60*1000;
   };
   const sessionResponse=(res,id)=>{res.setHeader('X-Observanda-Session',id);res.setHeader('Set-Cookie','observanda=; Max-Age=0; HttpOnly; SameSite=Strict; Path=/');return {ok:true,session:id};};
-  const contextAccess=()=>workspaceRenameAccess(context,renames);
-  const status=async client=>{const access=await contextAccess();if(context.protectedOnce&&access.etag==='none')throw new AppError('ACCESS_FORMAT');context.protectedOnce ||= requiresAccess(access.value);return {access,locked:!!context.manualLock||requiresAccess(access.value)&&(client.access!==access.etag||client.expires<Date.now()||(isEncryptedAccess(access.value)&&!context.vault.key))};};
-  const authenticate=async(root,access,username,password,recovery='')=>{
-    const attempts=failures.get(root)??{count:0,until:0};if(attempts.count>=5&&Date.now()<attempts.until)throw new AppError('ACCESS_WAIT');
-    try{const vault=await verifyAccess(access,username,password,{deviceStore,recovery});failures.delete(root);return vault;}catch(e){if(e.code==='ACCESS_DENIED')failures.set(root,{count:Date.now()>attempts.until?1:attempts.count+1,until:Date.now()+60000});throw e;}
+  const contextAccess=async()=>{
+   const raw=await withAccessDevice(null,()=>workspaceRenameAccess(context,renames));
+   try{return await resolveAccess(raw,{deviceStore,root:context.root});}
+   catch(error){if(error.code!=='ACCESS_STATE_CHANGED')throw error;const trusted=await deviceStore.accessTrust.current(raw.value.vaultId);if(!trusted)throw error;return {value:trusted.keyring,etag:'untrusted:'+keyringFingerprint(raw.value),updateRequired:true};}
   };
+  const status=async client=>{const access=await contextAccess();if(context.protectedOnce&&access.etag==='none')throw new AppError('ACCESS_FORMAT');context.protectedOnce ||= requiresAccess(access.value);return {access,locked:!!access.updateRequired||!!context.manualLock||requiresAccess(access.value)&&(client.access!==access.etag||client.expires<Date.now()||(isEncryptedAccess(access.value)&&!context.vault.key))};};
+  const limitedAuthentication=async(root,operation)=>{
+    const attempts=failures.get(root)??{count:0,until:0};if(attempts.count>=5&&Date.now()<attempts.until)throw new AppError('ACCESS_WAIT');
+    try{const result=await operation();failures.delete(root);return result;}catch(e){if(e.code==='ACCESS_DENIED')failures.set(root,{count:Date.now()>attempts.until?1:attempts.count+1,until:Date.now()+60000});throw e;}
+  };
+  const authenticate=(root,access,username,password,recovery='')=>limitedAuthentication(root,()=>verifyAccess(access,username,password,{deviceStore,recovery}));
   const savedDeletion=new SavedWorkspaceDeletion({deletions,deviceStore,locations:()=>workspaceDirectory.list(),protectedPaths:[preferencesFile,deviceStore.file,fileURLToPath(new URL('..',import.meta.url))],authenticate,activeRoot:()=>context.root,forget:forgetDeleted});
   const activate=async(location,client,vault=null,{movingFrom,followSettings=false}={})=>operationStage('activate',{},async()=>{
     savedDeletion.assertAvailable(location);
@@ -333,7 +342,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
     return {database,nameConflict:(await workspaceDirectory.list()).find(item=>item.path===context.root)?.conflict??false,researchStorage,researchFormatVersion,workspaceParent:path.dirname(context.root),movedTo:moving?.destination??null,move:available?await workspaceMoveStatus(context.root):null,...storageMap(context.root,preferencesFile,path.basename(await workspaceFile(context.root)),{catalogue:researchStorage==='catalogue'}),applicationRoot:fileURLToPath(new URL('..',import.meta.url)),contextId:context.id,folderPicker:await picker.capabilities(),available,unavailableReason,encrypted:!!context.vault.id,expectedExisting:context.expectedExisting||!!moving};
   };
   let shuttingDown=false,closePromise,githubMutation=false,collaborationSession;const pending=new Set(),drained=[];
-  const server = http.createServer((req, res) => withDiagnostics(diagnostics,correlation=>requestWriterWait(req,res,async()=>{
+  const server = http.createServer((req, res) => withAccessDevice(deviceStore,()=>withDiagnostics(diagnostics,correlation=>requestWriterWait(req,res,async()=>{
     const diagnosticStart=performance.now();let diagnosticError;
     res.setHeader('X-Observanda-Request',correlation);
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -382,7 +391,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         const sessionContext=context,session=randomBytes(32).toString('hex'),access=await diagnosticPhase('session-access',contextAccess);
         if(sessions.size>=128)sessions.delete(sessions.keys().next().value);
         const local={access:requiresAccess(access.value)?null:access.etag,expires:Date.now()+8*60*60*1000};
-        if(access.value.formatVersion===3&&!context.manualLock){
+        if(access.value.formatVersion===3&&!context.manualLock&&!access.updateRequired){
          try{
           const vault=await diagnosticPhase('session-device',()=>verifyAccess(access,'','',{deviceStore}));
           const latest=await diagnosticPhase('session-access',contextAccess);
@@ -391,7 +400,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
           else if(context.vault.key&&context.vault.id===vault.id&&context.vault.key.equals(vault.key)){clearVault(vault);local.access=access.etag;}
           else{await diagnosticPhase('session-workers',()=>stopJobs(sessionContext));if(context!==sessionContext){clearVault(vault);throw new AppError('WORKSPACE_CHANGED');}if(context.manualLock||changing||loginBusy){clearVault(vault);throw new AppError('LOCKED');}context.calendarSources.clear();clearVault(context.vault);Object.assign(context.vault,vault);local.access=access.etag;}
          }
-         catch(error){if(!['DEVICE_UNKNOWN','DEVICE_UNAVAILABLE','DEVICE_INVALID','LEGACY_WRITE_LOCK'].includes(error.code))throw error;}
+         catch(error){if(!['DEVICE_UNKNOWN','DEVICE_UNAVAILABLE','DEVICE_INVALID','LEGACY_WRITE_LOCK','ACCESS_STATE_CHANGED'].includes(error.code))throw error;}
         }
         if(local.access){await diagnosticPhase('workspace-identity',()=>ensureWorkspaceIdentity(sessionContext));}
         if(local.access)try{await diagnosticPhase('session-location',()=>rememberAuthenticatedLocation(preferencesFile,sessionContext.root));}catch(error){if(error.code!=='LEGACY_WRITE_LOCK')throw error;}
@@ -480,7 +489,25 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         }finally{changing=false;}
       }
       if(req.method==='GET'&&url.pathname==='/api/access/status'){
-        const {access,locked}=await status(client);return json({...await accessSummary(access.value,deviceStore),locked,username:locked?'':access.value.username});
+        const {access,locked}=await status(client);return json({...await accessSummary(access.value,deviceStore),locked,updateRequired:!!access.updateRequired,username:locked?'':access.value.username});
+      }
+      if(req.method==='POST'&&url.pathname==='/api/access/checkpoint'){
+       const data=await body(req,600000);if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');
+       if(data.operation==='export'){if((await status(client)).locked)throw new AppError('ACCESS_LOCKED');return json(await exportAccessCheckpoint(context.root,context.vault,deviceStore));}
+       if(data.operation==='inspect')return json(await inspectAccessCheckpoint(data.checkpoint,deviceStore));
+       if(data.operation!=='import')throw new AppError('INVALID');
+       if(changing||loginBusy||activeWrites||importing||publishing)throw new AppError('LOCKED');
+       const target=await resolveLocation(data.root??context.root);loginBusy=true;
+       try{
+        await context.readers.close();await stopJobs(context);
+        const result=await importAccessCheckpoint(target,data.checkpoint,data,deviceStore,{authorize:value=>limitedAuthentication(target,()=>unlockKeyring(value,{username:data.username??'',password:data.password??'',recovery:data.recovery??'',deviceStore}))});
+        return json(result);
+       }finally{
+        // An interrupted file write may already have advanced trusted grants.
+        // Invalidate old sessions and jobs on both success and failure.
+        selectedContext.manualLock=true;for(const local of sessions.values())local.access=null;selectedContext.calendarSources.clear();clearVault(selectedContext.vault);
+        selectedContext.readers.open();loginBusy=false;
+       }
       }
       if(req.method==='POST'&&url.pathname==='/api/access/unlock'){
         if(changing||loginBusy)throw new AppError('LOCKED');
@@ -1425,7 +1452,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       if(req.url?.startsWith('/api/'))diagnostic('request',{method:req.method,route:req.url.split('/')[2]?.split('?')[0],durationMs:performance.now()-diagnosticStart,error:diagnosticError,status:res.statusCode,pendingRequests:pending.size,activeWrites});
       releaseRead?.();req.activity?.finish();req.admission?.release();releaseAdmissionClose();if(ownsGithubMutation)githubMutation=false;if(countedWrite)activeWrites--;pending.delete(request);if(!pending.size)for(const resolve of drained.splice(0))resolve();
     }
-  })));
+  }))));
   const connections=httpDrain(server);
   server.maxConnections=128;server.maxRequestsPerSocket=256;
   server.requestTimeout = 0; server.headersTimeout = 10000; server.setTimeout(60000,socket=>socket.destroy());

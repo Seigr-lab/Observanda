@@ -4,7 +4,9 @@ import {mkdtemp,rm,rename,readFile,access,cp} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {sampleNotebook} from '../src/sample.js';
-import {createWorkspaceAccess,takeCreatedVault,readAccess,verifyAccess} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault,readAccess,verifyAccess,changeAccess} from '../src/access.js';
+import {withAccessDevice} from '../src/security/access-context.js';
+import {writeFile} from 'node:fs/promises';
 import {clearVault} from '../src/encryption.js';
 import {initializeLocation,copyPlan,copyWorkspace} from '../src/locations.js';
 import {readPreferences,rememberLocation} from '../src/preferences.js';
@@ -34,7 +36,7 @@ async function client(app){
  const c={async request(route,data){const response=await fetch(app.origin+route,{method:data===undefined?'GET':'POST',headers:{Origin:app.origin,'X-Observanda-Session':cookie,'Content-Type':'application/json',...(context?{'X-Observanda-Workspace':context}:{})},...(data===undefined?{}:{body:JSON.stringify(data)})});return {status:response.status,value:await response.json()};},async call(route,data){const result=await c.request(route,data);assert.equal(result.status,200,JSON.stringify(result.value));if(route==='/api/storage'||route==='/api/storage/open')context=result.value.contextId;return result.value;}};
  return c;
 }
-async function recovery(f){const current=await workspaceAccess(f.root,f.vault);return (await updateWorkspaceAccess(f.root,f.vault,{action:'recovery',etag:current.etag,confirmed:true})).recovery;}
+async function recovery(f){const current=await workspaceAccess(f.root,f.vault,{deviceStore:f.deviceStore});return (await updateWorkspaceAccess(f.root,f.vault,{action:'recovery',etag:current.etag,confirmed:true},{deviceStore:f.deviceStore})).recovery;}
 
 async function assertNamedWorkspace(workspace,before){
  const current=await workspace.read();assert.equal(current.book.title,path.basename(workspace.root));assert.equal(current.book.revision,before.book.revision+1);assert.notEqual(current.etag,before.etag);
@@ -104,4 +106,16 @@ test('a raw duplicate folder cannot silently share one database with a separatel
  const before=await readFile(f.file);let transfers=0;
  await assert.rejects(rememberWorkspaceLocation(f.file,duplicate,{title:'',label:'Encrypted workspace'},{github:{relocate:async()=>transfers++}}),{code:'STORAGE_LINKED_COPY'});
  assert.equal(transfers,0);assert.deepEqual(await readFile(f.file),before);assert.deepEqual(await f.materials.read(f.ref),(await new ResearchMaterials(new Workspace(duplicate,f.vault)).read(f.ref)));
+});
+
+test('copying a recognized older backup carries current credentials to a new installation',async t=>{
+ const f=await fixture(t),file=path.join(f.root,'.observanda/access.json'),password='Synthetic current backup password';
+ const obsolete=await readFile(file);
+ await changeAccess(f.root,{username:'',password},(await readAccess(f.root)).etag,{deviceStore:f.deviceStore,vault:f.vault});
+ await writeFile(file,obsolete);
+ const destination=await withAccessDevice(f.deviceStore,async()=>copyWorkspace(await copyPlan(f.root,path.join(f.directory,'current-copy'),{vault:f.vault}),{vault:f.vault}));
+ const other=new TestDeviceStore({file:path.join(f.directory,'new-installation.key')}),access=await readAccess(destination);
+ assert.ok(access.value.password);await assert.rejects(verifyAccess(access,'','',{deviceStore:other}),{code:'DEVICE_UNKNOWN'});
+ const current=await verifyAccess(access,'',password,{deviceStore:other});
+ try{assert.equal((await new Workspace(destination,current).read()).book.id,(await f.ws.read()).book.id);assert.deepEqual(await new ResearchMaterials(new Workspace(destination,current)).read(f.ref),await f.materials.read(f.ref));}finally{clearVault(current);}
 });

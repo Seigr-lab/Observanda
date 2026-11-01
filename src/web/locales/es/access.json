@@ -82,5 +82,16 @@
   "databaseOwned": "Este espacio de trabajo es propietario de sus archivos de base de datos. Copiar y Mover incluyen la base de datos, el historial de investigación y los archivos adjuntos.",
   "databaseExternal": "Esta instalación utiliza un servidor PostgreSQL externo configurado explícitamente. Su administrador gestiona los archivos de la base de datos. Utiliza una copia portátil para transferir el espacio de trabajo a otra instalación.",
   "moveInterrupted": "Hay un destino de traslado verificado listo. Ábrelo para continuar y terminar de eliminar el original. El original está protegido contra nuevas modificaciones.",
-  "openMovedWorkspace": "Abrir el espacio de trabajo trasladado"
+  "openMovedWorkspace": "Abrir el espacio de trabajo trasladado",
+  "settingsImport": "Importar ajustes de acceso actuales",
+  "settingsExport": "Guardar ajustes de acceso actuales",
+  "settingsCode": "Código de verificación de los ajustes de acceso",
+  "settingsFile": "Archivo de ajustes de acceso",
+  "settingsHelp": "Guarda este archivo con tu material de recuperación. Contiene permisos de acceso cifrados, no tu contraseña ni tu clave de recuperación.",
+  "settingsReview": "Compara este código con el del dispositivo de confianza que cambió estos ajustes por última vez. Introduce el código verificado abajo.",
+  "settingsVerified": "He comparado el código con el dispositivo de confianza.",
+  "settingsCredentials": "Autoriza con las credenciales que este dispositivo reconoce actualmente. En un dispositivo nuevo, usa las credenciales de los ajustes importados.",
+  "settingsImported": "Ajustes de acceso actuales importados. Desbloquea con las credenciales actuales.",
+  "settingsChanged": "Los ajustes de acceso cambiaron fuera de este dispositivo. Importa un archivo verificado con los ajustes actuales para continuar.",
+  "settingsFileInvalid": "Elige un archivo de ajustes de acceso de Observanda de menos de 512 KiB."
 }

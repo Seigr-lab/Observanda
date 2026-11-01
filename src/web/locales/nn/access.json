@@ -82,5 +82,16 @@
   "databaseOwned": "Dette arbeidsområdet eig databasefilene sine. Kopiering og flytting inkluderer databasen, forskingshistorikken og vedlegga.",
   "databaseExternal": "Denne installasjonen bruker ein eksplisitt konfigurert ekstern PostgreSQL-tenar. Administratoren administrerer databasefilene. Bruk ein flyttbar kopi for å overføre arbeidsområdet til ein annan installasjon.",
   "moveInterrupted": "Ei verifisert målmappe for flyttinga er klar. Opne henne for å halde fram og fullføre fjerninga av originalen. Originalen er verna mot vidare redigering.",
-  "openMovedWorkspace": "Opne flytta arbeidsområde"
+  "openMovedWorkspace": "Opne flytta arbeidsområde",
+  "settingsImport": "Importer gjeldande tilgangsinnstillingar",
+  "settingsExport": "Lagre gjeldande tilgangsinnstillingar",
+  "settingsCode": "Stadfestingskode for tilgangsinnstillingar",
+  "settingsFile": "Fil med tilgangsinnstillingar",
+  "settingsHelp": "Oppbevar denne fila saman med gjenopprettingsmaterialet. Ho inneheld krypterte tilgangsløyve, ikkje passordet eller gjenopprettingsnøkkelen.",
+  "settingsReview": "Samanlikn denne koden med koden på den tiltrudde eininga som sist endra innstillingane. Skriv inn den stadfesta koden nedanfor.",
+  "settingsVerified": "Eg har samanlikna koden med den tiltrudde eininga.",
+  "settingsCredentials": "Godkjenn med påloggingsopplysningane som denne eininga stolar på no. På ei ny eining bruker du opplysningane for dei importerte innstillingane.",
+  "settingsImported": "Gjeldande tilgangsinnstillingar er importerte. Lås opp med gjeldande påloggingsopplysningar.",
+  "settingsChanged": "Tilgangsinnstillingane vart endra utanfor denne eininga. Importer ei stadfesta fil med gjeldande innstillingar for å halde fram.",
+  "settingsFileInvalid": "Vel ei Observanda-fil med tilgangsinnstillingar som er mindre enn 512 KiB."
 }

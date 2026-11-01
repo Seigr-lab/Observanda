@@ -13,7 +13,7 @@ import {preferences} from './preferences-helper.js';
 test('portable copy exposes measured verification progress inline and completes without changing the active workspace',async({page})=>{
  test.setTimeout(90000);
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-progress-ui-')),f=await encryptedFixture(directory,sampleNotebook()),destination=path.join(directory,'portable');
- const access=await workspaceAccess(f.workspace.root,f.vault),kit=await updateWorkspaceAccess(f.workspace.root,f.vault,{action:'recovery',etag:access.etag,confirmed:true});
+ const access=await workspaceAccess(f.workspace.root,f.vault,{deviceStore:f.deviceStore}),kit=await updateWorkspaceAccess(f.workspace.root,f.vault,{action:'recovery',etag:access.etag,confirmed:true},{deviceStore:f.deviceStore});
  const app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore});
  let release;const gate=new Promise(resolve=>{release=resolve;}),verify=ResearchCatalogue.prototype.verifyRecordHistory;
  ResearchCatalogue.prototype.verifyRecordHistory=async function(...args){await gate;return verify.apply(this,args);};

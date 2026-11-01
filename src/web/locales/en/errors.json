@@ -444,5 +444,7 @@
   "DATASET_ALIGNMENT_TIE": "More than one right row is a best candidate within tolerance. Inspect the tied coordinates; explicitly choose first or last in source order, or keep refusal and revise the matching rules.",
   "DATASET_WEIGHTED_FIT_VARIANCE": "Every included observation variance must be greater than zero. Review the variance column; zero variance cannot be used as a finite weight.",
   "DATASET_WEIGHTED_FIT_UNITS": "Use declared X and Y units and a difference variance unit with the dimensions of Y squared, or leave all three units undeclared and their labels empty. Reference and evaluation coordinates use the selected X unit and origin.",
-  "PUBLISH_ARCHIVE_BRANCH": "The archive branch is unavailable or has changed. Choose an unused branch name and review the repository again. No existing branch will be overwritten."
+  "PUBLISH_ARCHIVE_BRANCH": "The archive branch is unavailable or has changed. Choose an unused branch name and review the repository again. No existing branch will be overwritten.",
+  "ACCESS_STATE_CHANGED": "These access settings are not in this device's trusted history. Review and import the current access settings from a trusted device before opening this copy.",
+  "ACCESS_SAVE_UNCERTAIN": "Saving access settings was interrupted. The new credentials may already be active. Reopen the workspace and try the new credentials first."
 }

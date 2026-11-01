@@ -10,6 +10,7 @@ import {fileURLToPath} from 'node:url';
 import {assertRegular,atomicWrite,serialize} from '../storage.js';
 import {AppError} from '../errors.js';
 import {setTimeout as delay} from 'node:timers/promises';
+import {AccessTrustStore} from './access-trust.js';
 const generate=promisify(generateKeyPair);
 const creatingIdentities=new Map();
 export const deviceFingerprint=publicKey=>createHash('sha256').update(Buffer.from(publicKey,'base64')).digest('hex');
@@ -39,7 +40,7 @@ export class WindowsProtector{
  unprotect(bytes){return this.transform('unprotect',bytes);}
 }
 export class DeviceStore{
- constructor({file=path.join(os.homedir(),'.observanda','security','device.json'),protector=new WindowsProtector()}={}){this.file=file;this.protector=protector;}
+ constructor({file=path.join(os.homedir(),'.observanda','security','device.json'),protector=new WindowsProtector()}={}){this.file=file;this.protector=protector;this.accessTrust=new AccessTrustStore(file+'.access');}
  available(){return this.protector.available();}
  async read(){
   const stat=await assertRegular(this.file,{missing:true});if(!stat)return null;if(stat.size>32768)throw new AppError('DEVICE_INVALID');

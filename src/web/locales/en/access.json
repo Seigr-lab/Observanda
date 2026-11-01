@@ -82,5 +82,16 @@
   "databaseOwned": "This workspace owns its database files. Copy and Move include the database, research history and attachments.",
   "databaseExternal": "This installation uses an explicitly configured external PostgreSQL server. Its administrator manages database files. Use a portable copy to transfer the workspace to another installation.",
   "moveInterrupted": "A verified move destination is ready. Open it to continue and finish removing the original. The original is protected against further edits.",
-  "openMovedWorkspace": "Open moved workspace"
+  "openMovedWorkspace": "Open moved workspace",
+  "settingsImport": "Import current access settings",
+  "settingsExport": "Save current access settings",
+  "settingsCode": "Access settings verification code",
+  "settingsFile": "Access settings file",
+  "settingsHelp": "Keep this file with your recovery materials. It contains encrypted access grants, not your password or recovery secret.",
+  "settingsReview": "Compare this code with the code on the trusted device that last changed these settings. Enter the verified code below.",
+  "settingsVerified": "I compared the code with the trusted device.",
+  "settingsCredentials": "Authorize with the credentials currently trusted on this device. On a new device, use the credentials for the imported settings.",
+  "settingsImported": "Current access settings imported. Unlock with the current credentials.",
+  "settingsChanged": "Access settings changed outside this device. Import a verified current settings file to continue.",
+  "settingsFileInvalid": "Choose an Observanda access settings file smaller than 512 KiB."
 }

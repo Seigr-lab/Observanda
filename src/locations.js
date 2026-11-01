@@ -22,6 +22,8 @@ import {validateNotebook} from './model.js';
 import {validDashboard} from './web/dashboard-model.js';
 import {AppError} from './errors.js';
 import {readAccess,takeCreatedVault,isEncryptedAccess} from './access.js';
+import {authenticateKeyring} from './security/keyring.js';
+import {keyringFingerprint} from './security/access-trust.js';
 import {assertNotMoving} from './workspace-move-state.js';
 import {assertNotDeleting} from './workspace-delete-state.js';
 import {catalogueBinding,publishCatalogueBinding} from './postgres-activation.js';
@@ -204,6 +206,14 @@ export async function copyWorkspace(plan,{vault=null,onProgress,afterCopy,afterV
     }else if(catalogue){
       if(activateCatalogue||reuseCatalogue)throw new AppError('ACCESS_LOCKED');
       const checked=await openCatalogue(destination,{detached:true});await checked.close();
+    }
+    // A recognized older backup uses current grants on this installation. Its
+    // newly verified copy must carry those grants to a different installation,
+    // instead of exporting the obsolete file that was copied and hashed above.
+    const effectiveAccess=await readAccess(plan.source),copiedAccess=await readAccess(destination,{deviceStore:null});
+    if(effectiveAccess.value.formatVersion===3&&keyringFingerprint(effectiveAccess.value)!==keyringFingerprint(copiedAccess.value)){
+      authenticateKeyring(effectiveAccess.value,vault);authenticateKeyring(copiedAccess.value,vault);
+      await atomicWrite(path.join(destination,'.observanda','access.json'),serialize(effectiveAccess.value));
     }
     // Independent project owners copy after this workspace snapshot is closed.
     // Keep the destination incomplete until every required owner is ready.

@@ -1,4 +1,5 @@
 import {localizedText} from './i18n/index.js';
+import {accessCheckpointView,bindAccessCheckpoint} from './access-checkpoint-view.js';
 const text=localizedText('labBookAccess');
 // Password fields exist only in the opened book access section, never drafts.
 export function labBookAccessSettingsUI({state,api,esc,field,enterProject,render}){
@@ -11,6 +12,8 @@ export function labBookAccessSettingsUI({state,api,esc,field,enterProject,render
   const node=host(entry)?.querySelector('[data-access-fields]');if(!node)return;
   const signature=JSON.stringify([entry.data,entry.error,entry.saved]);if(node.dataset.signature===signature)return;node.dataset.signature=signature;
   node.innerHTML=(entry.data?'<form id="lab-book-access-form" data-no-draft><p>'+esc(text(entry.data.passwordAvailable?'passwordReady':'passwordHint'))+'</p>'+field(text('username'),'<input name="username" autocomplete="username" maxlength="80" value="'+esc(entry.data.username)+'">')+field(text('newPassword'),'<input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="1024" required>')+field(text('confirmPassword'),'<input name="confirmPassword" type="password" autocomplete="new-password" maxlength="1024" required>')+'<div class="inline-actions"><button class="button primary" type="submit">'+esc(text('savePassword'))+'</button><button class="button" type="button" data-action="lab-book-access-lock">'+esc(text('lock'))+'</button></div></form>':'<p role="status">'+esc(text('loading'))+'</p>')+'<p role="'+(entry.error?'alert':'status')+'">'+esc(entry.error||(entry.saved?text('saved'):''))+'</p>';
+  if(entry.data)node.insertAdjacentHTML('beforeend',accessCheckpointView(entry.data,esc));
+  bindAccessCheckpoint(node,()=>api(prefix(entry)+'/access/details',{}, {adopt:false}),error=>{entry.error=error.message;paint(entry);});
   const form=node.querySelector('form');form?.addEventListener('input',()=>form.elements.confirmPassword.setCustomValidity(''));
  }
  async function load(entry){if(entry.busy)return;entry.busy=true;try{entry.data=await api(prefix(entry)+'/access/details',{}, {adopt:false});entry.error='';}catch(error){entry.error=error.message;}finally{entry.busy=false;paint(entry);}}

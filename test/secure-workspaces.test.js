@@ -1,4 +1,4 @@
-import {assertPrivateCatalogue} from './postgres-fixture.js';
+import {openCatalogue} from '../src/postgres.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,readFile,writeFile,unlink} from 'node:fs/promises';
@@ -14,6 +14,7 @@ import {seal,unseal,encrypted} from '../src/encryption.js';
 import {createNotebook} from '../src/model.js';
 import {workspaceAccess,updateWorkspaceAccess} from '../src/security/workspace-access.js';
 import {startServer} from '../src/server.js';
+import {exportAccessCheckpoint,importAccessCheckpoint} from '../src/security/access-checkpoint.js';
 
 function syntheticProtector(){const secret=randomBytes(32);return {available:()=>true,protect:async b=>seal(b,secret,'test-only-os'),unprotect:async b=>unseal(b,secret,'test-only-os')};}
 async function devices(){const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-keys-'));return {parent,a:new DeviceStore({file:path.join(parent,'a.json'),protector:syntheticProtector()}),b:new DeviceStore({file:path.join(parent,'b.json'),protector:syntheticProtector()})};}
@@ -22,21 +23,23 @@ test('device encryption is unique, authenticated, recoverable and extensible wit
  const access=await createWorkspaceAccess('','',a),vault=takeCreatedVault(access);await initializeLocation(root,createNotebook('Private sentinel'),access,vault);
  const raw=await readFile(path.join(root,'workspace.observanda'));assert.ok(encrypted(raw));assert.ok(!raw.includes(Buffer.from('Private sentinel')));
  await assert.rejects(new Workspace(root).read(),{code:'ACCESS_LOCKED'});await assert.rejects(verifyAccess(await readAccess(root),'','',{deviceStore:b}),{code:'DEVICE_UNKNOWN'});
- const initial=await workspaceAccess(root,vault),identity=await b.identity();
- await assert.rejects(updateWorkspaceAccess(root,vault,{action:'grant',etag:initial.etag,identity,confirmed:true,verifiedFingerprint:'wrong'}),{code:'ACCESS_CONFIRM'});
- const shared=await updateWorkspaceAccess(root,vault,{action:'grant',etag:initial.etag,identity,confirmed:true,verifiedFingerprint:identity.id});
+ const initial=await workspaceAccess(root,vault,{deviceStore:a}),identity=await b.identity();
+ await assert.rejects(updateWorkspaceAccess(root,vault,{action:'grant',etag:initial.etag,identity,confirmed:true,verifiedFingerprint:'wrong'},{deviceStore:a}),{code:'ACCESS_CONFIRM'});
+ const shared=await updateWorkspaceAccess(root,vault,{action:'grant',etag:initial.etag,identity,confirmed:true,verifiedFingerprint:identity.id},{deviceStore:a});
  assert.deepEqual(await readFile(path.join(root,'workspace.observanda')),raw);
  const other=await verifyAccess(await readAccess(root),'','',{deviceStore:b});assert.equal((await new Workspace(root,other).read()).book.title,'Private sentinel');
- await assert.rejects(updateWorkspaceAccess(root,vault,{action:'recovery',etag:initial.etag,confirmed:true}),{code:'CONFLICT'});
- const kit=await updateWorkspaceAccess(root,vault,{action:'recovery',etag:shared.etag,confirmed:true});
+ await assert.rejects(updateWorkspaceAccess(root,vault,{action:'recovery',etag:initial.etag,confirmed:true},{deviceStore:a}),{code:'CONFLICT'});
+ const kit=await updateWorkspaceAccess(root,vault,{action:'recovery',etag:shared.etag,confirmed:true},{deviceStore:a});
+ const acceptCurrent=async()=>{const current=await exportAccessCheckpoint(root,vault,a);await importAccessCheckpoint(root,current.checkpoint,{confirmed:true,verifiedFingerprint:current.fingerprint},b);};
+ await assert.rejects(verifyAccess(await readAccess(root),'','',{recovery:kit.recovery,deviceStore:b}),{code:'ACCESS_STATE_CHANGED'});await acceptCurrent();
  const recovered=await verifyAccess(await readAccess(root),'','',{recovery:kit.recovery,deviceStore:b});assert.deepEqual(recovered.key,vault.key);
  assert.ok(!(await readFile(path.join(root,'.observanda/access.json'),'utf8')).includes(kit.recovery));
  const damaged=structuredClone((await readAccess(root)).value);damaged.devices.reverse();damaged.username='forged';
  await assert.rejects(unlockKeyring(damaged,{deviceStore:a}),{code:'ENCRYPTION_DAMAGED'});
- const rotated=await updateWorkspaceAccess(root,vault,{action:'recovery',etag:kit.etag,confirmed:true});
+ const rotated=await updateWorkspaceAccess(root,vault,{action:'recovery',etag:kit.etag,confirmed:true},{deviceStore:a});await acceptCurrent();
  await assert.rejects(verifyAccess(await readAccess(root),'','',{recovery:kit.recovery,deviceStore:b}),{code:'ACCESS_DENIED'});
  assert.ok(rotated.recovery!==kit.recovery);
- const copied=path.join(parent,'hosted');await copyWorkspace(await copyPlan(root,copied));assert.equal((await new Workspace(copied,other).read()).book.title,'Private sentinel');
+ const copied=path.join(parent,'hosted');await copyWorkspace(await copyPlan(root,copied,{vault}),{vault});assert.equal((await new Workspace(copied,other).read()).book.title,'Private sentinel');
  await unlink(path.join(root,'.observanda/access.json'));await assert.rejects(new Workspace(root).writeFile(path.join(root,'.observanda/leak'),'private'),{code:'ACCESS_LOCKED'});
 });
 test('password and device unlock remain encrypted; wrong passwords, foreign grants and unsupported OS fail closed',async()=>{
@@ -78,7 +81,7 @@ test('server creates encrypted workspaces by default, auto-unlocks only authoriz
  assert.equal(result.access.encrypted,true);assert.equal(result.access.deviceAuthorized,true);
  const dashboard=await (await one.request('/api/dashboard')).json();dashboard.settings.views[0].name='Private dashboard sentinel';
  assert.equal((await one.request('/api/dashboard',{settings:dashboard.settings,etag:dashboard.etag})).status,200);
- await assertPrivateCatalogue(root,'Private dashboard sentinel');
+ const db=await openCatalogue(root);try{const {payload}=await db.get('SELECT payload FROM state WHERE slot=$1','workspace-settings:dashboard');assert.ok(encrypted(payload));assert.equal(payload.includes(Buffer.from('Private dashboard sentinel')),false);}finally{await db.close();}
  const info=await (await one.request('/api/security/workspace')).json();
  const recovered=await (await one.request('/api/security/workspace',{action:'recovery',etag:info.etag,confirmed:true})).json();assert.ok(recovered.recovery);
  assert.equal((await one.request('/api/access/lock',{})).status,200);assert.equal((await one.request('/api/notebook')).status,401);
@@ -88,10 +91,6 @@ test('server creates encrypted workspaces by default, auto-unlocks only authoriz
  assert.equal((await two.request('/api/notebook')).status,401);assert.equal((await two.request('/api/security/device',{})).status,200);
  assert.equal((await two.request('/api/access/unlock',{recovery:recovered.recovery})).status,200);
  assert.equal((await two.request('/api/notebook')).status,200);
- const newPassword='recovered synthetic passphrase';
- assert.equal((await two.request('/api/access/change',{username:'',password:newPassword})).status,200);
- assert.equal((await two.request('/api/access/lock',{})).status,200);
- assert.equal((await two.request('/api/access/unlock',{password:newPassword})).status,200);
  // A device auto-unlock already in flight must not undo a later manual lock.
  let entered,release;
  const enteredPromise=new Promise(r=>entered=r),released=new Promise(r=>release=r),original=a.protector.unprotect;
@@ -100,4 +99,13 @@ test('server creates encrypted workspaces by default, auto-unlocks only authoriz
  assert.equal((await one.request('/api/access/lock',{})).status,200);
  release();const late=await pending;
  assert.equal((await late.request('/api/notebook')).status,401);
+ a.protector.unprotect=original;
+ const newPassword='recovered synthetic passphrase';
+ assert.equal((await two.request('/api/access/change',{username:'',password:newPassword})).status,200);
+ assert.equal((await two.request('/api/access/lock',{})).status,200);
+ assert.equal((await two.request('/api/access/unlock',{password:newPassword})).status,200);
+ const changed=await (await one.request('/api/access/status')).json();assert.equal(changed.updateRequired,true);
+ const checkpoint=await (await two.request('/api/access/checkpoint',{operation:'export'})).json();
+ assert.equal((await one.request('/api/access/checkpoint',{operation:'import',checkpoint:checkpoint.checkpoint,confirmed:true,verifiedFingerprint:checkpoint.fingerprint})).status,200);
+ assert.equal((await one.request('/api/access/unlock',{password:newPassword})).status,200);
 });

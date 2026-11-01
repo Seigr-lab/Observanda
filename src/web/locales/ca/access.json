@@ -82,5 +82,16 @@
   "databaseOwned": "Aquest espai de treball és propietari dels fitxers de la seva base de dades. Copia i Mou inclouen la base de dades, l'historial de recerca i els adjunts.",
   "databaseExternal": "Aquesta instal·lació utilitza un servidor PostgreSQL extern configurat explícitament. El seu administrador gestiona els fitxers de la base de dades. Utilitza una còpia portàtil per transferir l'espai de treball a una altra instal·lació.",
   "moveInterrupted": "Hi ha una destinació de trasllat verificada preparada. Obre-la per continuar i acabar d'eliminar l'original. L'original està protegit contra noves modificacions.",
-  "openMovedWorkspace": "Obre l'espai de treball traslladat"
+  "openMovedWorkspace": "Obre l'espai de treball traslladat",
+  "settingsImport": "Importa els ajustos d'accés actuals",
+  "settingsExport": "Desa els ajustos d'accés actuals",
+  "settingsCode": "Codi de verificació dels ajustos d'accés",
+  "settingsFile": "Fitxer d'ajustos d'accés",
+  "settingsHelp": "Desa aquest fitxer amb el material de recuperació. Conté permisos d'accés xifrats, no la contrasenya ni la clau de recuperació.",
+  "settingsReview": "Compara aquest codi amb el del dispositiu de confiança que va canviar aquests ajustos per última vegada. Introdueix el codi verificat a sota.",
+  "settingsVerified": "He comparat el codi amb el dispositiu de confiança.",
+  "settingsCredentials": "Autoritza amb les credencials que aquest dispositiu reconeix actualment. En un dispositiu nou, fes servir les credencials dels ajustos importats.",
+  "settingsImported": "S'han importat els ajustos d'accés actuals. Desbloqueja amb les credencials actuals.",
+  "settingsChanged": "Els ajustos d'accés han canviat fora d'aquest dispositiu. Importa un fitxer verificat amb els ajustos actuals per continuar.",
+  "settingsFileInvalid": "Tria un fitxer d'ajustos d'accés d'Observanda de menys de 512 KiB."
 }
