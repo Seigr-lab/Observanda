@@ -4,6 +4,8 @@ import {perCellComputation,resolveCellComputation,effectiveCellColumn,derivedCel
 import {resolveScalarOperand} from './measurement-scalar-storage.js';
 import {AppError} from './errors.js';
 import {DatasetWindowReader} from './dataset-window-reader.js';
+import {calculateCountWindow} from './dataset-window-count.js';
+import {cooperativeCheckpoint} from './cooperative-checkpoint.js';
 import {DatasetResourceBudget,numericalOperation} from './dataset-resource-budget.js';
 import {graphScalarCell} from './dataset-resource-values.js';
 import {ExactNumber,exactExpression} from './tools/exact-arithmetic.js';
@@ -17,7 +19,10 @@ export async function calculateWindow(node,column,reader,policy,{signal,cellComp
  const tracked=cellComputation||perCellComputation(column),exact=cell=>tracked?{...cell,computation:null}:cell;let computation={computation:null};const retain=cell=>tracked?{...cell,computation:computation.computation}:cell;const budget=new DatasetResourceBudget(policy);let aggregate=null,selected=null,count=0,propagated=null;
  const decisionOptions={write,signal},empty=aligned?await unionAlignmentDecisions(reader.materials,[],decisionOptions):null;let decisions=empty,propagatedDecisions=empty;const finish=(cell,marker=decisions)=>aligned?{...cell,coordinateAlignment:marker}:cell;
  if(reader.anchor===null)return finish(exact(absent()));
+ const checkpoint=reader.checkpoint??cooperativeCheckpoint({signal});
+ if(node.operation==='count'&&!aligned)return calculateCountWindow(node,column,reader,budget,{tracked,alignment,signal,checkpoint});
  for(let index=0;index<reader.total;index++){
+  await checkpoint();
   signal?.throwIfAborted();numericalOperation(budget,b=>b.step());const raw=await reader.at(index);if(raw.coordinateAlignment!==undefined&&!alignment)throw new AppError('DATASET_CALCULATION');if(raw.coordinateAlignment!==undefined&&(!aligned||raw.boundary)||aligned&&!raw.boundary&&!validCoordinateAlignmentCell(raw.coordinateAlignment))throw new AppError('MATERIAL_MISSING');
   const cell=tracked?{...raw,computation:raw.boundary?null:resolveCellComputation(column,raw)}:raw,disposition=windowDisposition(cell,column,node.window);
   if(disposition.policy==='error')fail();if(!disposition.used){if(disposition.policy==='propagate'&&!propagated){propagated=['lag','lead','min','max'].includes(node.operation)&&!cell.boundary&&!cell.excluded?{value:cell.value,kind:cell.kind,...(tracked?{computation:cell.computation}:{})}:exact(absent());propagatedDecisions=cell.coordinateAlignment??empty;}continue;}

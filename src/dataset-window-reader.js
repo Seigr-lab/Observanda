@@ -4,10 +4,12 @@ import {revisionText} from './web/revision-model.js';
 import {validWindow,windowDisposition} from './web/dataset-window-model.js';
 import {EvaluationPageCache} from './evaluation-page-cache.js';
 import {DatasetOrdinalCache} from './dataset-ordinal-cache.js';
+import {WindowCountSummaries} from './dataset-window-count.js';
+import {cooperativeCheckpoint} from './cooperative-checkpoint.js';
 const fail=()=>{throw new AppError('DATASET_WINDOW_INVALID');};
 // A bounded page cache is scoped to one evaluation; admission is rechecked for every operation.
 export class DatasetWindowReader{
- constructor(materials,options){this.materials=materials;this.pages=new EvaluationPageCache(options);this.ordinals=new DatasetOrdinalCache();}
+ constructor(materials,options){this.materials=materials;this.pages=new EvaluationPageCache(options);this.ordinals=new DatasetOrdinalCache();this.countSummaries=new WindowCountSummaries();this.yieldTurn=cooperativeCheckpoint();}
  async open(node,binding,location,{signal}={}){
   signal?.throwIfAborted();if(!validWindow(node.window,node.operation)||binding.source.kind!=='dataset')fail();const m=this.materials,doc=await m.read(binding.source);signal?.throwIfAborted();if(!Number.isSafeInteger(doc.content.rowCount)||doc.content.rowCount<0)fail();
   const key=revisionText([binding.source,node.column]),sourceKey=revisionText(binding.source),ordinals=this.ordinals;
@@ -16,7 +18,7 @@ export class DatasetWindowReader{
   if(location.kind!=='dataset')fail();const current=(await page(location.page)).rows[location.row];if(!current||current.id!==location.id||(current.excluded??null)!==(location.excluded??null))fail();
   let anchor=location.row;if(doc.content.datasetFormat===3)anchor+=location.page*DATASET_ROWS_PER_PAGE;else anchor+=await ordinals.pageStart(sourceKey,location.page,async p=>(await page(p)).rows.length,{signal});
   const start=anchor+node.window.start,end=anchor+node.window.end;if(!Number.isSafeInteger(anchor)||!Number.isSafeInteger(start)||!Number.isSafeInteger(end))fail();
-  return {doc,anchor,total:node.window.end-node.window.start+1,async at(index){
+  return {doc,anchor,start,countKey:key,countSummaries:this.countSummaries,checkpoint:async()=>{signal?.throwIfAborted();await this.yieldTurn();signal?.throwIfAborted();},total:node.window.end-node.window.start+1,async at(index){
    signal?.throwIfAborted();if(!Number.isSafeInteger(index)||index<0||index>node.window.end-node.window.start)fail();const ordinal=start+index;if(!Number.isSafeInteger(ordinal))fail();if(ordinal<0||ordinal>=doc.content.rowCount)return {boundary:true,ordinal,value:'',kind:'absent',excluded:null};
    const address=doc.content.datasetFormat===3?{page:Math.floor(ordinal/DATASET_ROWS_PER_PAGE),row:ordinal%DATASET_ROWS_PER_PAGE}:await ordinals.locate(sourceKey,ordinal,m.datasetPageCount(doc),async p=>(await page(p)).rows.length,{signal});
    if(!address)fail();const row=(await page(address.page)).rows[address.row];if(!row)fail();return {value:row.cells[0],kind:row.valueKinds?.[0]??'string',...(row.cellComputations?.[0]!==undefined?{computation:row.cellComputations[0]}:{}),...(row.cellCoordinateAlignments?.[0]!==undefined?{coordinateAlignment:row.cellCoordinateAlignments[0]}:{}),excluded:row.excluded,ordinal,id:row.id,source:{ref:binding.source,selector:{kind:'cell',page:address.page,row:address.row,column:node.column}}};

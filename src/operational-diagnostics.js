@@ -18,6 +18,7 @@ const measures=Object.freeze({'database-admission':['databaseAdmissions','databa
 // Logical work, including cache uses, is distinct from physical I/O and RSS.
 // Fixed names prevent caller data or identifiers from becoming metric labels.
 const workCounters=new Set(['catalogueRowCacheHits','catalogueRowCacheMisses','catalogueProofCacheHits','catalogueProofCacheMisses','evaluationPageCacheHits','evaluationPageCacheMisses','indexNodeVisits','moduleHeadChecks','moduleViewReads','recordQueryReads','nativeFilesystemStarts','nativeFilesystemRequests','nativeDirectoryRequests','logicalObjects','logicalBytes']);
+workCounters.add('windowCountSummaryMembers');
 const counters=new Set(['durationMs','queued','active','pendingRequests','activeRequests','activeWrites','queuedRequests','queuedWriters','requestBytes','rssBytes','heapBytes','externalBytes','cpuUserUs','cpuSystemUs','bytes','attempt','delayMs','dropped','exitCode','status','databaseReturnedRows','databaseBufferBytes','databaseTextBytes',...Object.values(measures).flat()]);
 for(const name of workCounters)counters.add(name);
 const systemCodes=new Set(['EACCES','EPERM','ENOSPC','ENOENT','EIO','EMFILE','ENFILE','ECONNRESET','ECONNREFUSED','ETIMEDOUT','ABORT_ERR']);
