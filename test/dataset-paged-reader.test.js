@@ -34,7 +34,8 @@ test('nested packed joins retain wide per-cell pointers and reject late duplicat
 test('paged JSONL validates physical records, deep selected locations and cancellation',async()=>{
  const mapping={format:'jsonl',fields:[{name:'value',path:'/v'}]};for(const text of ['{"v":1}\n\n{"v":2}','{"v":1} {}\n','{"v":\n1}\n'])await assert.rejects(collect(text,mapping),{code:'MATERIAL_TABLE'});
  const result=await collect('{"v":18446744073709551615}\r\n{"v":-0}\n',mapping);assert.equal(result.rows[0].cells[0].value,'18446744073709551615');assert.equal(result.rows[1].cells[0].value,'-0');assert.deepEqual(result.rows[1].locator,{format:'jsonl',line:2});
- const depth=80,deep=await collect('{"rows":['+'{"a":'.repeat(depth)+'42'+'}'.repeat(depth)+']}',{format:'json',rowsPath:'/rows',fields:[{name:'value',path:'/a'.repeat(depth)}]});assert.equal(deep.rows[0].cells[0].value,'42');
+ const depth=62,deep=await collect('{"rows":['+'{"a":'.repeat(depth)+'42'+'}'.repeat(depth)+']}',{format:'json',rowsPath:'/rows',fields:[{name:'value',path:'/a'.repeat(depth)}]});assert.equal(deep.rows[0].cells[0].value,'42');
+ await assert.rejects(collect('{"rows":['+'{"a":'.repeat(depth+1)+'42'+'}'.repeat(depth+1)+']}',{format:'json',rowsPath:'/rows',fields:[{name:'value',path:'/a'.repeat(depth+1)}]}),{code:'MATERIAL_TABLE'});
  const controller=new AbortController();controller.abort();await assert.rejects(async()=>{for await(const value of readPagedDataset(source('a\n1'),{}, {signal:controller.signal}))void value;},{name:'AbortError'});
 });
 
@@ -43,6 +44,14 @@ test('automatic JSON schema discovery pages source keys without a schema-sized c
  const result=await collect(JSON.stringify({rows:[first,{late:2,c619:null}]}),{format:'json',rowsPath:'/rows',fields:'all'});
  assert.equal(result.columns.length,622);assert.equal(result.rows[0].cells[621].kind,'absent');assert.equal(result.rows[1].cells[619].kind,'null');assert.equal(result.rows[1].cells[621].value,'2');assert.equal(result.rows[0].cells[620].kind,'object');
  const literal=await collect('{"*": [{"v":5}]}',{format:'json',rowsPath:'/*',fields:[{name:'v',path:'/v'}]});assert.equal(literal.rows[0].cells[0].value,'5');
+});
+
+test('paged preparation and pointer inspection reject deep unselected and trailing JSON',async()=>{
+ const nested='['.repeat(65)+'0'+']'.repeat(65),json='{ "rows":[{"v":1}],"unused":'+nested+'}';
+ await assert.rejects(collect(json,{format:'json',rowsPath:'/rows',fields:[{name:'v',path:'/v'}]}),{code:'MATERIAL_TABLE'});
+ await assert.rejects(collect('{"v":1,"unused":'+nested+'}\n',{format:'jsonl',fields:[{name:'v',path:'/v'}]}),{code:'MATERIAL_TABLE'});
+ await assert.rejects(inspectJSONValue(source(json),'/rows/0/v'),{code:'MATERIAL_TABLE'});
+ await assert.rejects(inspectJSONValue(source(nested),'/0'.repeat(65)),{code:'MATERIAL_TABLE'});
 });
 
 test('nested lookup identity is independent of UTF-16 surrogate token boundaries',async()=>{

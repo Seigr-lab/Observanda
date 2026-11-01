@@ -5,13 +5,17 @@ import {AppError} from './errors.js';
 // Emit locations and exact scalar spellings. Unselected strings/numbers never
 // accumulate in memory; even a very large visit remains a stream of leaves.
 export async function* datasetJSONTokens(chunks,selected,limits,{signal,chunked=false,work}={}){
+ const depth=limits?.depth??64;
+ if(!Number.isSafeInteger(depth)||depth<1)throw new AppError('MATERIAL_TABLE');
  const input=Readable.from(chunks),stream=parser.asStream({packValues:false});
  // Observe both stream ends. A rejected lookup can return from this generator
  // before parsing finishes; that cancellation must not become an uncaught error.
  const completion=pipeline(input,stream,{signal}).catch(()=>{});
  const fail=()=>{throw new AppError('MATERIAL_TABLE');},stack=[];
  let key='',keyChars=0,scalar=null,objectId=0;
- const location=()=>{const p=stack.at(-1);return {path:p?[...p.path,p.array?String(p.index):p.key]:[],arrays:stack.flatMap(s=>s.array?[s.path.length]:[])};};
+ // Frames retain only their own key/index. Copying every ancestor path into
+ // every frame would retain quadratic state even before selecting a value.
+ const location=()=>({path:stack.map(p=>p.array?String(p.index):p.key),arrays:stack.flatMap((p,i)=>p.array?[i]:[])});
  const finish=()=>{if(stack.at(-1)?.array)stack.at(-1).index++;};
  try{
   for await(const {name,value} of stream){
@@ -30,10 +34,11 @@ export async function* datasetJSONTokens(chunks,selected,limits,{signal,chunked=
     p.key=key;continue;
    }
    if(name==='startArray'||name==='startObject'){
+    if(stack.length>=depth)fail();
     const at=location(),type=name==='startArray'?'array':'object';if(!chunked&&await selected(at))fail();
-    yield {event:'begin',type,...at};if(!chunked&&stack.length>=limits.depth)fail();stack.push({...at,id:objectId++,array:type==='array',index:0,key:null,keys:new Set(),keyChars:0});continue;
+    yield {event:'begin',type,...at};stack.push({id:objectId++,array:type==='array',index:0,key:null,keys:new Set(),keyChars:0});continue;
    }
-   if(name==='endArray'||name==='endObject'){const p=stack.pop();keyChars-=p.keyChars;yield {event:'end',path:p.path,arrays:p.arrays};finish();continue;}
+   if(name==='endArray'||name==='endObject'){const p=stack.pop();keyChars-=p.keyChars;yield {event:'end',...location()};finish();continue;}
    if(name==='startString'||name==='startNumber'){const at=location();scalar={...at,keep:chunked||await selected(at),kind:name==='startString'?'string':'number',value:''};if(chunked&&scalar.keep)yield {event:'scalar-start',...scalar};continue;}
    if(name==='endString'||name==='endNumber'){yield {event:'value',...scalar,...(chunked?{chunked:true}:{})};scalar=null;finish();continue;}
    if(['trueValue','falseValue','nullValue'].includes(name)){yield {event:'value',...location(),kind:value===null?'null':'boolean',value:value===null?'':String(value)};finish();}
