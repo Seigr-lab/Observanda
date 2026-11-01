@@ -14,6 +14,7 @@ import {constants as bufferConstants} from 'node:buffer';
 import {requireDatabase} from './postgres.js';
 import {hasCatalogue,catalogueContext,openCatalogue,ResearchCatalogue,isCatalogue,catalogueDescriptor} from './research-catalogue.js';
 import {CatalogueReadCache} from './catalogue-read-cache.js';
+import {withCatalogueFormatRead} from './catalogue-format-read.js';
 import {withCatalogueConnections,catalogueConnection} from './catalogue-connections.js';
 import {atomicReplace} from './atomic-replace.js';
 import {temporaryWriteName} from './storage-temporary.js';
@@ -250,7 +251,7 @@ export class Workspace {
       const cache=new CatalogueReadCache();
       try{
         await db.run('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
-        const result=await db.scope(()=>catalogueReads.run({root:this.root,projectId:this.projectId,labBookId:this.labBookId,vault:this.vault,db,cache},()=>operation(this.catalogueStore(db,{readCache:cache}))));
+        const result=await withCatalogueFormatRead(db,()=>db.scope(()=>catalogueReads.run({root:this.root,projectId:this.projectId,labBookId:this.labBookId,vault:this.vault,db,cache},()=>operation(this.catalogueStore(db,{readCache:cache})))));
         await db.run('COMMIT');return result;
       }finally{cache.clear();}
     });

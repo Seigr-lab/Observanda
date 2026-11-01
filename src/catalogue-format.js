@@ -2,6 +2,7 @@
 // its first new representation. Older applications reject unknown generations.
 import {AppError} from './errors.js';
 import {waitForWriter} from './writer-wait.js';
+import {readCatalogueFormat} from './catalogue-format-read.js';
 export const CATALOGUE_MAX_GENERATION=844424930132089;
 // New representations can be introduced with independent domain, settings
 // and website owners. Preserve their requirements in either upgrade order.
@@ -22,11 +23,13 @@ function storedCatalogueGeneration(value){
  return value;
 }
 export async function catalogueFormat(db){
- const rows=await db.all('SELECT version FROM catalogue_format');
+ return readCatalogueFormat(db,async schema=>{
+ const rows=await db.all('SELECT version FROM '+(schema?'"'+schema+'".':'')+'catalogue_format');
  if(rows.length!==1)throw new AppError('CATALOGUE_DAMAGED');
  const format=storedCatalogueGeneration(rows[0].version);
  if(![3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49].includes(format)&&!catalogueRequiresPublicationDocuments(format)&&!catalogueRequiresRecordOwnerTransfers(format)&&!catalogueRequiresConfigurationDocuments(format))throw new AppError('CATALOGUE_DAMAGED');
  return format;
+ });
 }
 export async function requireRecordBlocks(db){
  return requireCatalogueFormat(db,4);
