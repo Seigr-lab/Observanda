@@ -6,7 +6,7 @@ import path from 'node:path';
 import os from 'node:os';
 import {stageFiles,checkOriginals,applyFiles,cleanFiles,fingerprint} from '../src/local-export-files.js';
 import {withMutationFilesSession} from '../src/mutation-files.js';
-import {discardNativeFiles} from '../src/local-export-native-files.js';
+import {discardNativeFiles,withNativeExport} from '../src/local-export-native-files.js';
 const windows={skip:!['win32','linux','darwin'].includes(process.platform)},digest=data=>({bytes:data.length,sha256:createHash('sha256').update(data).digest('hex')});
 test('native discard removes an incomplete stage, preserves originals and refuses a retained backup',windows,async()=>{
  const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-native-discard-')),plan={id:randomUUID(),directory:parent,changes:[{path:'index.html'}]},stage='.observanda-'+plan.id+'-new-index.html',backup='.observanda-'+plan.id+'-old-index.html';
@@ -30,8 +30,19 @@ test('native export stages, resumes no-clobber replacement, verifies and cleans 
 test('native export mutation remains in the admitted directory when its pathname becomes a junction',windows,async()=>{
  const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-native-export-race-')),directory=path.join(parent,'output'),outside=path.join(parent,'outside'),original=path.join(parent,'original');await mkdir(directory);await mkdir(outside);await writeFile(path.join(outside,'sentinel'),'keep');
  const data=Buffer.from('reviewed edition'),plan={id:randomUUID(),directory,applied:0,changes:[{path:'index.html',kind:'new',before:null,after:digest(data)}]};
- try{await stageFiles(plan,{files:{async get(){await rename(directory,original);await symlink(outside,directory,'junction');return data;}}},async()=>{});
+ try{await assert.rejects(stageFiles(plan,{files:{async get(){await rename(directory,original);await symlink(outside,directory,'junction');return data;}}},async()=>{}),{code:'UNSAFE'});
   assert.deepEqual(await readdir(outside),['sentinel']);assert.equal(await readFile(path.join(outside,'sentinel'),'utf8'),'keep');assert.equal((await readdir(original)).length,1);
   await assert.rejects(applyFiles(plan,async()=>{},async()=>{}),{code:'UNSAFE'});
  }finally{assert.equal(path.dirname(parent),path.resolve(os.tmpdir()));assert.ok(path.basename(parent).startsWith('observanda-native-export-race-'));await rm(parent,{recursive:true,force:true});}
+});
+
+test('native export identity rejects substituted ordinary directories before resumed writes or cleanup',windows,async()=>{
+ const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-native-export-identity-')),directory=path.join(parent,'output'),original=path.join(parent,'original');await mkdir(directory);
+ const data=Buffer.from('reviewed'),plan={id:randomUUID(),directory,applied:0,changes:[{path:'index.html',kind:'added',before:null,after:digest(data)}]};
+ try{
+  await withNativeExport(plan,async root=>{plan.directoryIdentity=root.identity;await stageFiles(plan,{files:new Map([['index.html',data]])},async()=>{});});
+  await rename(directory,original);await mkdir(directory);const name='.observanda-'+plan.id+'-new-index.html';await writeFile(path.join(directory,name),data);
+  for(const operation of [()=>applyFiles(plan,async()=>{},async()=>{}),()=>cleanFiles(plan),()=>discardNativeFiles(plan,()=>plan.changes)])await assert.rejects(operation(),{code:'LOCAL_EXPORT_CHANGED'});
+  assert.deepEqual(await readdir(directory),[name]);assert.deepEqual(await readFile(path.join(directory,name)),data);assert.deepEqual(await readFile(path.join(original,name)),data);
+ }finally{assert.equal(path.dirname(parent),path.resolve(os.tmpdir()));assert.ok(path.basename(parent).startsWith('observanda-native-export-identity-'));await rm(parent,{recursive:true,force:true});}
 });

@@ -1,5 +1,6 @@
 import path from 'node:path';
-import {withMutationFilesSession} from './mutation-files.js';
+import {AsyncLocalStorage} from 'node:async_hooks';
+import {withMutationFilesSession,nativeMutationSupported} from './mutation-files.js';
 import {outputName,sameFile} from './local-export-files.js';
 import {contentStream,contentSize,contentHash} from './file-content.js';
 import {diskCapacity} from './disk-capacity.js';
@@ -8,13 +9,31 @@ import {AppError} from './errors.js';
 // One worker per export operation, bounded handles per member and bounded I/O.
 // The original pathname is used only to admit a root and inspect disk capacity;
 // every content read and namespace mutation below uses opened directory handles.
-export const withNativeExport=(plan,operation)=>withMutationFilesSession(async service=>{const root=await service.open(plan.directory);try{return await operation(root);}finally{await root.close();}});
+const active=new AsyncLocalStorage();
+export const exportDirectoryIdentity=value=>typeof value==='string'&&/^\d+:\d+$/.test(value);
+async function namedRoot(service,plan,root){
+ if(plan.directoryIdentity!==undefined&&plan.directoryIdentity!==root.identity)throw new AppError('LOCAL_EXPORT_CHANGED');
+ const current=await service.open(plan.directory);try{if(current.identity!==root.identity)throw new AppError('LOCAL_EXPORT_CHANGED');}finally{await current.close();}
+}
+export function withNativeExport(plan,operation){
+ if(!nativeMutationSupported)throw new AppError('UNSAFE');
+ return withMutationFilesSession(async service=>{
+  const existing=active.getStore();
+  if(existing){if(existing.directory!==plan.directory)throw new AppError('UNSAFE');await namedRoot(service,plan,existing.root);const result=await operation(existing.root);await namedRoot(service,plan,existing.root);return result;}
+  const root=await service.open(plan.directory);
+  try{
+   if(plan.directoryIdentity!==undefined&&plan.directoryIdentity!==root.identity)throw new AppError('LOCAL_EXPORT_CHANGED');
+   const result=await active.run({directory:plan.directory,root},()=>operation(root));await namedRoot(service,plan,root);return result;
+  }finally{await root.close();}
+ });
+}
 async function member(root,relative,{create=false}={},operation){
  const parts=outputName(relative).split('/'),name=parts.pop(),opened=[];let directory=root;
  try{for(const part of parts){directory=await directory.directory(part,{create,missing:!create});if(!directory)return operation(null,name);opened.push(directory);}return await operation(directory,name);}
  finally{for(const directory of opened.reverse())await directory.close();}
 }
 const temporary=(name,id,kind)=>'.observanda-'+id+'-'+kind+'-'+name;
+export const nativeExportFingerprint=(root,name)=>member(root,name,{},async(directory,member)=>directory?directory.hash(member,{missing:true}):null);
 async function installed(directory,name,stage){
  const actual=await directory.hash(name,{links:true,missing:true});if(!actual)return null;
  if(actual.links!==1){const source=await directory.stat(stage,{links:true,missing:true});if(actual.links!==2||source?.identity!==actual.identity)throw new AppError('UNSAFE');}return actual;

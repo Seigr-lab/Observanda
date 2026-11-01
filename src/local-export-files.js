@@ -1,12 +1,8 @@
-import {nativeMutationSupported} from './mutation-files.js';
 // Local publication owns named output files, never a directory or Git checkout.
 import path from 'node:path';
-import {open,lstat,realpath,link} from 'node:fs/promises';
-import {atomicReplace as rename} from './atomic-replace.js';
-import {createPersistentDirectory as mkdir,unlinkPersistent as unlink,persistDirectories} from './filesystem-persistence.js';
+import {open,lstat,realpath} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {AppError} from './errors.js';
-import {writePublicFile} from './file-content.js';
 import {stageNativeFiles,checkNativeOriginals,applyNativeFiles,cleanNativeFiles} from './local-export-native-files.js';
 
 export const sameFile=(a,b)=>a===null||b===null?a===b:a.bytes===b.bytes&&a.sha256===b.sha256;
@@ -30,15 +26,6 @@ export async function destinationDirectory(value){
  }
  return realpath(resolved);
 }
-export async function memberPath(root,name,{create=false}={}){
- outputName(name);await regular(root,{directory:true});let current=root;
- for(const part of name.split('/').slice(0,-1)){
-  current=path.join(current,part);
-  if(create)await mkdir(current).catch(error=>{if(error.code!=='EEXIST')throw error;});
-  if(!await regular(current,{directory:true,missing:!create}))return null;
- }
- return path.join(root,name);
-}
 export async function fingerprint(file,{links=false}={}){
  const named=file&&await regular(file,{missing:true,links});if(!named)return null;
  const handle=await open(file,'r');
@@ -52,75 +39,9 @@ export async function fingerprint(file,{links=false}={}){
  }finally{await handle.close();}
 }
 export const temporary=(file,id,kind)=>path.join(path.dirname(file),'.observanda-'+id+'-'+kind+'-'+path.basename(file));
-async function installedFingerprint(file,stage){
- const stat=await regular(file,{missing:true,links:true});if(!stat)return null;
- if(stat.nlink!==1n){const source=await regular(stage,{missing:true,links:true});if(stat.nlink!==2n||source?.ino!==stat.ino||source.dev!==stat.dev)throw new AppError('UNSAFE');}
- return fingerprint(file,{links:true});
-}
-async function removeMatching(file,expected,{links=false}={}){
- const actual=await fingerprint(file,{links});if(actual===null)return;
- if(!sameFile(actual,expected))throw new AppError('LOCAL_EXPORT_CHANGED');await unlink(file);
-}
-// All new bytes are flushed and checked before any existing output is moved.
-export async function stageFiles(plan,candidate,checkpoint,changes=()=>plan.changes){
- if(nativeMutationSupported)return stageNativeFiles(plan,candidate,checkpoint,changes);
- for await(const change of changes()){
-  if(!change.after||change.kind==='unchanged')continue;
-  const file=await memberPath(plan.directory,change.path,{create:true}),stage=temporary(file,plan.id,'new');
-  const existing=await fingerprint(stage);
-  if(existing){if(sameFile(existing,change.after))continue;await unlink(stage);}
-  await writePublicFile(stage,await candidate.files.get(change.path));await checkpoint('staged',change.path);
- }
-}
-export async function checkOriginals(plan,changes=()=>plan.changes){
- if(nativeMutationSupported)return checkNativeOriginals(plan,changes);
- for await(const change of changes())if(!sameFile(await fingerprint(await memberPath(plan.directory,change.path)),change.before))throw new AppError('LOCAL_EXPORT_CHANGED',[change.path]);
-}
-// Recoverable per-file switch. A new file is installed with no-clobber link,
-// not rename-over-destination. Originals remain alongside it until the entire
-// edition is verified and its encrypted ownership receipt is committed.
-export async function applyFiles(plan,checkpoint,applied,changes=()=>plan.changes){
- if(nativeMutationSupported)return applyNativeFiles(plan,checkpoint,applied,changes);
- let ordinal=0;
- for await(const change of changes()){
-  const index=ordinal++;
-  const file=await memberPath(plan.directory,change.path,{create:!!change.after});
-  if(!file){if(change.after===null&&index<plan.applied){await applied(index+1);continue;}throw new AppError('LOCAL_EXPORT_CHANGED',[change.path]);}
-  const old=temporary(file,plan.id,'old'),stage=temporary(file,plan.id,'new');
-  let actual=await installedFingerprint(file,stage),backup=await fingerprint(old);
-  if(index<plan.applied&&!sameFile(actual,change.after))throw new AppError('LOCAL_EXPORT_CHANGED',[change.path]);
-  if(sameFile(actual,change.after)){
-   if(backup&&!sameFile(backup,change.before))throw new AppError('LOCAL_EXPORT_CHANGED',[change.path]);
-   if(change.kind!=='unchanged'&&index>=plan.applied){
-    if(change.before&&!backup)throw new AppError('LOCAL_EXPORT_CHANGED',[change.path]);
-    if(change.after){const a=await regular(file,{links:true}),b=await regular(stage,{missing:true,links:true});if(!b||a.ino!==b.ino||a.dev!==b.dev)throw new AppError('LOCAL_EXPORT_CHANGED',[change.path]);}
-   }
-   if(change.kind!=='unchanged')await persistDirectories([path.dirname(file)]);
-   await applied(index+1);continue;
-  }
-  if(change.kind==='unchanged'||actual&&!sameFile(actual,change.before)||backup&&!sameFile(backup,change.before)||actual&&backup)throw new AppError('LOCAL_EXPORT_CHANGED',[change.path]);
-  if(actual){
-   await regular(file);await rename(file,old);await checkpoint('moved',change.path);
-   backup=await fingerprint(old);
-   if(!sameFile(backup,change.before)){
-    // A writer raced the last hash. Put its bytes back only if still vacant.
-    await link(old,file).then(()=>unlink(old)).catch(()=>{});
-    throw new AppError('LOCAL_EXPORT_CHANGED',[change.path]);
-   }
-  }else if(change.before&&!backup)throw new AppError('LOCAL_EXPORT_CHANGED',[change.path]);
-  if(change.after){
-   if(!sameFile(await fingerprint(stage,{links:true}),change.after))throw new AppError('LOCAL_EXPORT_CHANGED',[change.path]);
-   await link(stage,file);await persistDirectories([path.dirname(file)]);await checkpoint('installed',change.path);
-  }
-  await applied(index+1);
- }
- for await(const change of changes()){const file=await memberPath(plan.directory,change.path);if(!sameFile(file?await installedFingerprint(file,temporary(file,plan.id,'new')):null,change.after))throw new AppError('LOCAL_EXPORT_CHANGED',[change.path]);}
-}
-export async function cleanFiles(plan,changes=()=>plan.changes){
- if(nativeMutationSupported)return cleanNativeFiles(plan,changes);
- for await(const change of changes()){
-  const file=await memberPath(plan.directory,change.path);if(!file)continue;
-  await removeMatching(temporary(file,plan.id,'new'),change.after,{links:true});
-  await removeMatching(temporary(file,plan.id,'old'),change.before);
- }
-}
+// Supported platforms use the same anchored implementation. Unsupported
+// platforms fail closed in withNativeExport instead of mutating pathnames.
+export const stageFiles=(plan,candidate,checkpoint,changes=()=>plan.changes)=>stageNativeFiles(plan,candidate,checkpoint,changes);
+export const checkOriginals=(plan,changes=()=>plan.changes)=>checkNativeOriginals(plan,changes);
+export const applyFiles=(plan,checkpoint,applied,changes=()=>plan.changes)=>applyNativeFiles(plan,checkpoint,applied,changes);
+export const cleanFiles=(plan,changes=()=>plan.changes)=>cleanNativeFiles(plan,changes);

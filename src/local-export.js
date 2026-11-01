@@ -1,12 +1,10 @@
 import {publicationWorkspace} from './publication-pin.js';
 import {publicationRevisionCurrent} from './publication-freshness.js';
 import path from 'node:path';
-import {withMutationFilesSession,nativeMutationSupported} from './mutation-files.js';
-import {discardNativeFiles} from './local-export-native-files.js';
+import {discardNativeFiles,withNativeExport,nativeExportFingerprint,exportDirectoryIdentity} from './local-export-native-files.js';
 import os from 'node:os';
 import {randomUUID} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
-import {unlink} from 'node:fs/promises';
 import {AppError} from './errors.js';
 import {digest,serialize} from './storage.js';
 import {PublicationJobs} from './publication-jobs.js';
@@ -14,7 +12,7 @@ import {AnalysisPublicationReview} from './analysis-publication-review.js';
 import {verifyPublicationCandidate} from './retained-publication-files.js';
 import {contentHash,contentSize} from './file-content.js';
 import {researchId} from './web/research-reference.js';
-import {destinationDirectory,within,outputName,memberPath,fingerprint,sameFile,stageFiles,checkOriginals,applyFiles,cleanFiles,temporary,regular} from './local-export-files.js';
+import {destinationDirectory,within,outputName,sameFile,stageFiles,checkOriginals,applyFiles,cleanFiles} from './local-export-files.js';
 import {LocalExportManifest,emptyExportCounts,validExportCounts,validateExportMember} from './local-export-manifest.js';
 import {withWorkspaceMetadataBatch} from './metadata-batch.js';
 
@@ -72,15 +70,16 @@ export class LocalExport {
  }
  async plan({reviewId,directory}){
   const candidate=await this.candidate(reviewId,{fresh:true});directory=await this.directory(directory);
-  return this.locked(directory,async()=>{
+  return this.locked(directory,()=>withNativeExport({directory},async root=>{
    const owner=await this.read(ownerFile(directory))??{version:2,directory,files:{version:1,type:'files',root:null},pending:null};
    this.validateOwner(owner,directory);
+   if(owner.directoryIdentity!==undefined&&owner.directoryIdentity!==root.identity)throw new AppError('LOCAL_EXPORT_CHANGED');
    if(owner.pending){const prior=await this.get(owner.pending);if(prior.state!=='planned')return this.summary(prior);}
    let before=owner.files;
    if(owner.version===1){const builder=this.manifest.builder('files');for(const item of owner.files)await builder.append(item);before=await builder.finish();}
    const changes=this.manifest.builder('changes'),counts=emptyExportCounts();
    const add=async(name,previous,next)=>{
-    const actual=await fingerprint(await memberPath(directory,name)),kind=!sameFile(actual,previous)?'conflict':sameFile(previous,next)?'unchanged':!previous?'added':!next?'removed':'replaced';
+    const actual=await nativeExportFingerprint(root,name),kind=!sameFile(actual,previous)?'conflict':sameFile(previous,next)?'unchanged':!previous?'added':!next?'removed':'replaced';
     await changes.append({path:name,kind,before:previous,after:next});counts[kind]++;
    };
    for await(const [name,content] of this.fileWindow(candidate.files)){
@@ -91,9 +90,9 @@ export class LocalExport {
     await add(name,previous?{bytes:previous.bytes,sha256:previous.sha256}:null,{bytes:contentSize(content),sha256:contentHash(content)});
    }
    for await(const previous of this.manifest.entries(before))if(!await candidate.files.has(previous.path))await add(previous.path,{bytes:previous.bytes,sha256:previous.sha256},null);
-   const plan={version:2,id:randomUUID(),reviewId,releaseId:candidate.id,defaultPage:candidate.defaultPage,directory,state:'planned',createdAt:new Date().toISOString(),changes:await changes.finish(),counts,cleaned:false,applied:0};
-   await this.save(plan,{...owner,version:2,files:before,pending:plan.id});return this.summary(plan);
-  });
+   const plan={version:2,id:randomUUID(),reviewId,releaseId:candidate.id,defaultPage:candidate.defaultPage,directory,directoryIdentity:root.identity,state:'planned',createdAt:new Date().toISOString(),changes:await changes.finish(),counts,cleaned:false,applied:0};
+   await this.save(plan,{...owner,version:2,directoryIdentity:root.identity,files:before,pending:plan.id});return this.summary(plan);
+  }));
  }
  async *fileWindow(files){
   // Leave each read transaction before the journal writes its next batch.
@@ -105,6 +104,7 @@ export class LocalExport {
  async get(id){
   const plan=await this.read(planFile(id));if(!plan)throw new AppError('NOT_FOUND');
   if(![1,2].includes(plan.version)||plan.id!==id||!states.includes(plan.state)||!hash(plan.reviewId)||!hash(plan.releaseId)||!storedDirectory(plan.directory)||typeof plan.cleaned!=='boolean'||!Number.isSafeInteger(plan.applied)||plan.applied<0)throw new AppError('LOCAL_EXPORT_DAMAGED');
+  if(plan.directoryIdentity!==undefined&&!exportDirectoryIdentity(plan.directoryIdentity))throw new AppError('LOCAL_EXPORT_DAMAGED');
   if(plan.version===1){if(!Array.isArray(plan.changes))throw new AppError('LOCAL_EXPORT_DAMAGED');checkMembers(plan.changes,true);}
   else{this.manifest.validate(plan.changes,'changes');if(!validExportCounts(plan.counts,this.total(plan)))throw new AppError('LOCAL_EXPORT_DAMAGED');}
   if(plan.applied>this.total(plan))throw new AppError('LOCAL_EXPORT_DAMAGED');outputName(plan.defaultPage);
@@ -117,6 +117,7 @@ export class LocalExport {
  counts(plan){if(plan.version===2)return plan.counts;const counts=emptyExportCounts();for(const item of plan.changes)counts[item.kind]++;return counts;}
  validateOwner(owner,directory){
   if(!owner||![1,2].includes(owner.version)||!storedDirectory(owner.directory)||owner.directory!==directory||owner.pending!==null&&!researchId(owner.pending)||owner.releaseId!==undefined&&!hash(owner.releaseId))throw new AppError('LOCAL_EXPORT_DAMAGED');
+  if(owner.directoryIdentity!==undefined&&!exportDirectoryIdentity(owner.directoryIdentity))throw new AppError('LOCAL_EXPORT_DAMAGED');
   if(owner.version===1){if(!Array.isArray(owner.files))throw new AppError('LOCAL_EXPORT_DAMAGED');checkMembers(owner.files);}
   else this.manifest.validate(owner.files,'files');
  }
@@ -135,10 +136,18 @@ export class LocalExport {
  }
  async apply({id,reviewed}){
   if(reviewed!==true)throw new AppError('LOCAL_EXPORT_REVIEW');
-  let plan=await this.get(id);const directory=await this.directory(plan.directory);
-  return withMutationFilesSession(()=>this.locked(directory,async()=>{
+  let plan=await this.get(id);if(plan.state==='completed'&&plan.cleaned)return this.summary(plan);const directory=await this.directory(plan.directory);
+  return this.locked(directory,()=>withNativeExport(plan,async root=>{
    plan=await this.get(id);const owner=await this.read(ownerFile(directory));
    this.validateOwner(owner,directory);const changes=()=>this.changes(plan);await this.verifyPlan(plan);
+   if(owner.directoryIdentity!==undefined&&owner.directoryIdentity!==root.identity)throw new AppError('LOCAL_EXPORT_CHANGED');
+   if(!plan.directoryIdentity){
+    // An old review has not mutated output yet and can bind the explicitly
+    // confirmed current directory after rechecking its reviewed originals.
+    // An interrupted old journal has no trustworthy previous root identity.
+    if(plan.state!=='planned')throw new AppError('LOCAL_EXPORT_RECOVER');
+    await checkOriginals(plan,changes);plan.directoryIdentity=root.identity;await this.save(plan,{...owner,directoryIdentity:root.identity});
+   }
    if(plan.state==='completed'){
     if(!plan.cleaned){await cleanFiles(plan,changes);plan.cleaned=true;await this.save(plan,owner?.pending===id?{...owner,pending:null}:null);}return this.summary(plan);
    }
@@ -159,23 +168,20 @@ export class LocalExport {
    await this.checkpoint('verified');
    plan.state='completed';plan.completedAt=new Date().toISOString();
    const files=this.manifest.builder('files');for await(const change of changes())if(change.after)await files.append({path:change.path,...change.after});
-   const receipt={version:2,directory,releaseId:plan.releaseId,files:await files.finish(),pending:id};
+   const receipt={version:2,directory,directoryIdentity:root.identity,releaseId:plan.releaseId,files:await files.finish(),pending:id};
    await this.save(plan,receipt);await this.checkpoint('committed');
    await cleanFiles(plan,changes);plan.cleaned=true;await this.save(plan,{...receipt,pending:null});return this.summary(plan);
   }));
  }
  async discard({id}){
   let plan=await this.get(id);const directory=await this.directory(plan.directory);
-  return withMutationFilesSession(()=>this.locked(directory,async()=>{
+  return this.locked(directory,()=>withNativeExport(plan,async root=>{
    plan=await this.get(id);const owner=await this.read(ownerFile(directory));
    this.validateOwner(owner,directory);await this.verifyPlan(plan);
+   if(owner.directoryIdentity!==undefined&&owner.directoryIdentity!==root.identity)throw new AppError('LOCAL_EXPORT_CHANGED');
    if(!['planned','staging','discarded'].includes(plan.state))throw new AppError('LOCAL_EXPORT_RECOVER');
-   if(nativeMutationSupported)await discardNativeFiles(plan,()=>this.changes(plan));
-   else for await(const change of this.changes(plan)){
-    const file=await memberPath(directory,change.path);if(!file)continue;
-    if(await regular(temporary(file,id,'old'),{missing:true}))throw new AppError('LOCAL_EXPORT_RECOVER');
-    const stage=temporary(file,id,'new');if(await regular(stage,{missing:true}))await unlink(stage);
-   }
+   if(!plan.directoryIdentity&&plan.state==='staging')throw new AppError('LOCAL_EXPORT_RECOVER');
+   if(plan.directoryIdentity)await discardNativeFiles(plan,()=>this.changes(plan));
    plan.state='discarded';plan.cleaned=true;await this.save(plan,owner?.pending===id?{...owner,pending:null}:null);return this.summary(plan);
   }));
  }
