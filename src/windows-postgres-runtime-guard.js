@@ -6,7 +6,7 @@ import {AppError} from './errors.js';
 export const acquireWindowsPostgresRuntimeGuard=options=>windowsRuntimeGuard(options);
 export const inspectWindowsPostgresRuntimeStorage=directory=>windowsRuntimeGuard({directory,inspectOnly:true});
 export const probeWindowsPostgresRuntimeCreation=(directory,{mapped=false}={})=>windowsRuntimeGuard({directory,probeCreate:true,mapped});
-async function windowsRuntimeGuard({directory,create=true,parentIdentity,expectedIdentity,signal,inspectOnly=false,probeCreate=false,mapped=false}={}){
+async function windowsRuntimeGuard({directory,create=true,parentIdentity,expectedIdentity,creationToken,admissionKey,signal,inspectOnly=false,probeCreate=false,mapped=false}={}){
  signal?.throwIfAborted();
  const child=spawn(path.join(process.env.SystemRoot??'C:\\Windows','System32/WindowsPowerShell/v1.0/powershell.exe'),['-NoLogo','-NoProfile','-NonInteractive','-File',fileURLToPath(new URL('./security/postgres-runtime-guard.ps1',import.meta.url))],{windowsHide:true,stdio:['pipe','pipe','pipe']});
  const pending=new Map();let next=0,header='',failed,closing,readyResolve,readyReject,stderr='';
@@ -27,7 +27,7 @@ async function windowsRuntimeGuard({directory,create=true,parentIdentity,expecte
  if(inspectOnly){try{return await request('inspect',{directory});}finally{child.stdin.end();await exited;}}
  if(probeCreate){try{return await request('probe-create',{directory,mapped});}finally{child.stdin.end();await exited;}}
  let receipt;
- try{receipt=await request('admit',{directory,create,parentIdentity,expectedIdentity});signal?.throwIfAborted();}
+ try{receipt=await request('admit',{directory,create,parentIdentity,expectedIdentity,creationToken,admissionKey:admissionKey?.toString('base64')});signal?.throwIfAborted();}
  catch(error){child.stdin.end();await exited;throw error;}
  const close=()=>closing??=(async()=>{let stopped=false;try{if(!failed)stopped=(await request('close')).stopped===true;}finally{child.stdin.end();await exited;}return {stopped};})();
  const relative=file=>{const value=path.relative(directory,path.resolve(file));if(!value||value==='..'||value.startsWith('..'+path.sep)||path.isAbsolute(value))throw new AppError('UNSAFE');return value.split(path.sep).join('/');};
@@ -39,7 +39,7 @@ async function windowsRuntimeGuard({directory,create=true,parentIdentity,expecte
   write:(target,bytes)=>file('write',target,{data:(Buffer.isBuffer(bytes)?bytes:Buffer.from(bytes,'utf8')).toString('base64')}),
   removeTree:target=>optional(()=>file('remove-tree',target)),rename:(source,target)=>file('rename',source,{folder:true,target:relative(target)}),unlink:target=>optional(()=>file('unlink',target))
  };
- return {directory,identity:receipt.identity,cached:receipt.cached,files,processId:child.pid,lease:{close:async()=>{}},
+ return {directory,identity:receipt.identity,cached:receipt.cached,files,processId:child.pid,inspectSource:(source,{parentIdentity,expectedIdentity})=>request('inspect-source',{source,parentIdentity,expectedIdentity}),sourceFence:(source,options)=>request('source-fence',{source,...options}),lease:{close:async()=>{}},
   async run(command,args,{signal:commandSignal,capture=false}={}){
    commandSignal?.throwIfAborted();let cancelled;
    const abort=()=>{cancelled??=request('cancel');void cancelled.catch(()=>{});};commandSignal?.addEventListener('abort',abort,{once:true});

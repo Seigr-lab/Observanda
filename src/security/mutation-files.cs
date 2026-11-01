@@ -161,6 +161,10 @@ namespace Observanda {
     var handle=Open(parent,Text(command,"name"),false,0xC0000000,3,0);
     try{Info info=Information(handle,false);int id=++next;leases.Add(id,handle);return new {id=id,identity=Identity(info)};}catch{handle.Dispose();throw;}
    }
+   if(operation=="pin"){
+    var handle=Open(parent,Text(command,"name"),false,0x80000000,1,0);
+    try{Info info=Information(handle,false);Expected(command,info);int id=++next;leases.Add(id,handle);return new {id=id,identity=Identity(info)};}catch{handle.Dispose();throw;}
+   }
    if(operation=="file-open"){
     string mode=Text(command,"mode");if(mode!="read"&&mode!="update"&&mode!="exclusive")throw new Failure("INVALID");
     var handle=Open(parent,Text(command,"name"),false,mode=="read"?0x80000000u:0xC0000000u,mode=="exclusive"?2u:1u);

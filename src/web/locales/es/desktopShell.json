@@ -66,5 +66,6 @@
   "databaseInstall": "Preparando la base de datos…",
   "databaseExtract": "Comprobando el entorno de ejecución de la base de datos…",
   "databaseInitialize": "Preparando tu base de datos privada…",
+  "databaseUpgrade": "Preparando el almacenamiento de la base de datos existente de forma segura…",
   "databaseStart": "Iniciando la base de datos…"
 }

@@ -3,7 +3,7 @@ import {translator,validLanguage} from './web/i18n/runtime.js';
 import messages from './web/locales/en/desktopShell.json' with {type:'json'};
 import errors from './web/locales/en/errors.json' with {type:'json'};
 
-const english=translator('en',messages),progressKeys={install:'databaseInstall',extract:'databaseExtract',initialize:'databaseInitialize',start:'databaseStart',startup:'starting'};
+const english=translator('en',messages),progressKeys={install:'databaseInstall',extract:'databaseExtract',initialize:'databaseInitialize',start:'databaseStart',upgrade:'databaseUpgrade',startup:'starting'};
 const html=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 
 // This reads only the existing, bounded display preference. It never repairs or

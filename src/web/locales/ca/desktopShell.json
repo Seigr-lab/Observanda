@@ -66,5 +66,6 @@
   "databaseInstall": "S’està preparant la base de dades…",
   "databaseExtract": "S’està comprovant l’entorn d’execució de la base de dades…",
   "databaseInitialize": "S’està preparant la teva base de dades privada…",
+  "databaseUpgrade": "S’està preparant l’emmagatzematge de la base de dades existent de manera segura…",
   "databaseStart": "S’està iniciant la base de dades…"
 }

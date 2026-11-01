@@ -66,5 +66,6 @@
   "databaseInstall": "Klargjør databasen…",
   "databaseExtract": "Kontrollerer databasens kjøremiljø…",
   "databaseInitialize": "Klargjør den private databasen din…",
+  "databaseUpgrade": "Klargjør eksisterende databaselagring på en trygg måte…",
   "databaseStart": "Starter databasen din…"
 }

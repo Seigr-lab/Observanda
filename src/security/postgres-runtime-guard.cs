@@ -40,9 +40,11 @@ namespace Observanda {
   [DllImport("kernel32.dll",SetLastError=true)] static extern bool GetExitCodeProcess(IntPtr process,out uint code);
   [DllImport("kernel32.dll",SetLastError=true)] static extern bool CloseHandle(IntPtr handle);
   [DllImport("kernel32.dll",CharSet=CharSet.Unicode)] static extern uint GetDriveType(string root);
+  [StructLayout(LayoutKind.Sequential)] struct GuardBasicInfo {public long Created,Accessed,Written,Changed;public uint Attributes;}
+  [DllImport("kernel32.dll",SetLastError=true)] static extern bool SetFileInformationByHandle(SafeFileHandle handle,int kind,ref GuardBasicInfo value,uint size);
   static readonly object guardOutput=new object(),guardState=new object();
   class GuardFailure:Failure {string reason;public GuardFailure(string value):base("DATABASE_GUARD_STORAGE"){reason=value;}public override string Message{get{return reason;}}}
-  static readonly string guardUser=WindowsIdentity.GetCurrent().User.Value;static string guardMappedUser;
+  static readonly string guardUser=WindowsIdentity.GetCurrent().User.Value;static string guardMappedUser,guardCreationToken;static byte[] guardAdmissionKey;static bool guardPortableStamp,guardPortablePresent,guardFenceQualified;
   static SafeFileHandle guardRoot,guardPin,guardNull;static FileStream guardPinStream;
   static IntPtr guardJob=IntPtr.Zero,guardChild=IntPtr.Zero;static Thread guardThread;static string guardPath;static bool guardClosing;
   static void GuardSend(object value){lock(guardOutput){Send(value);}}
@@ -88,12 +90,53 @@ namespace Observanda {
     finally{Delete(created);}
    }
   }
-  static void GuardInspectTree(SafeFileHandle folder){
+  static void GuardInspectTree(SafeFileHandle folder,SafeFileHandle treeRoot=null){
+   treeRoot=treeRoot??guardRoot;
    bool restart=true;for(;;){var page=json.Deserialize<Dictionary<string,object>>(json.Serialize(List(folder,restart)));restart=false;
-    foreach(Dictionary<string,object> entry in (ArrayList)page["entries"]){string name=(string)entry["name"];bool directory=(bool)entry["directory"];if(folder==guardRoot&&name=="owner.lock")continue;
-     using(var child=Open(folder,name,directory,0x80020000)){Information(child,directory);GuardAcl(child);if(directory)GuardInspectTree(child);}
+    foreach(Dictionary<string,object> entry in (ArrayList)page["entries"]){string name=(string)entry["name"];bool directory=(bool)entry["directory"];if(folder==treeRoot&&name=="owner.lock")continue;
+     using(var child=Open(folder,name,directory,0x80020000)){Information(child,directory);GuardAcl(child);if(directory)GuardInspectTree(child,treeRoot);}
     }if((bool)page["done"])break;
    }
+  }
+  static object GuardInspectSource(Dictionary<string,object> command){
+   if(guardRoot==null||guardClosing)throw new Failure("INVALID");string source=Path.GetFullPath(Text(command,"source"));Root(Path.GetDirectoryName(source));int parentId=next;var parent=directories[parentId];
+   try{if(Identity(Information(parent,true))!=Text(command,"parentIdentity"))throw new Failure("STORAGE_COPY");using(var folder=Open(parent,Path.GetFileName(source),true,0x80020000)){string identity=Identity(Information(folder,true));if(identity!=Text(command,"expectedIdentity"))throw new Failure("STORAGE_COPY");GuardAcl(folder);GuardInspectTree(folder,folder);return new {identity=identity,subtreeVerified=true};}}
+   finally{parent.Dispose();directories.Remove(parentId);}
+  }
+  static string GuardDescriptorProof(byte[] bytes){var sd=new RawSecurityDescriptor(bytes,0);if(sd.Owner==null||sd.DiscretionaryAcl==null)throw new Failure("UNSAFE");byte[] acl=new byte[sd.DiscretionaryAcl.BinaryLength];sd.DiscretionaryAcl.GetBinaryForm(acl,0);return sd.Owner.Value+"/"+((sd.ControlFlags&ControlFlags.DiscretionaryAclProtected)!=0)+"/"+Convert.ToBase64String(acl);}
+  static byte[] GuardFenceDescriptor(byte[] original){
+   var prior=new RawSecurityDescriptor(original,0);var sd=new RawSecurityDescriptor("D:P(D;;0x00000006;;;WD)(A;;0x00170189;;;"+(guardMappedUser??guardUser)+")(A;;FA;;;SY)");sd.Owner=prior.Owner;sd.Group=prior.Group;byte[] bytes=new byte[sd.BinaryLength];sd.GetBinaryForm(bytes,0);return bytes;
+  }
+  static void GuardReadOnly(SafeFileHandle file,bool enabled){uint attributes=Information(file,false).Attributes&~0x81u;if(enabled)attributes|=1;if(attributes==0)attributes=0x80;var basic=new GuardBasicInfo{Attributes=attributes};if(!SetFileInformationByHandle(file,0,ref basic,(uint)Marshal.SizeOf(typeof(GuardBasicInfo))))throw new Win32Exception();if(((Information(file,false).Attributes&1)!=0)!=enabled)throw new Failure("STORAGE_COPY");}
+  static void GuardQualifyFence(){
+   if(guardFenceQualified)return;string name=".runtime-fence-"+Guid.NewGuid().ToString("N");bool denied=false;
+   try{
+    using(var file=GuardOpen(guardRoot,name,false,2,7,GuardPrivateDescriptor(),0xC0170180)){byte[] descriptor=GuardFenceDescriptor(GuardAcl(file));GuardReadOnly(file,true);GuardSetPrivate(file,descriptor);}
+    try{using(var opened=Open(guardRoot,name,false,0xC0000000,1,0)){} }catch(Win32Exception error){if(error.NativeErrorCode==5)denied=true;else throw;}
+   }finally{using(var file=Open(guardRoot,name,false,0x00070100)){GuardReadOnly(file,false);Delete(file);}}
+   if(!denied)throw new GuardFailure("source-fence-unavailable");guardFenceQualified=true;
+  }
+  static void GuardRecoverFenceProbes(){
+   bool restart=true;for(;;){var page=json.Deserialize<Dictionary<string,object>>(json.Serialize(List(guardRoot,restart)));restart=false;
+    foreach(Dictionary<string,object> entry in (ArrayList)page["entries"]){string name=(string)entry["name"];Guid id;if(!name.StartsWith(".runtime-fence-")||!Guid.TryParseExact(name.Substring(15),"N",out id))continue;if((bool)entry["directory"])throw new Failure("STORAGE_COPY");using(var file=Open(guardRoot,name,false,0x00070100)){GuardAcl(file);GuardReadOnly(file,false);Delete(file);}}
+    if((bool)page["done"])break;
+   }
+  }
+  static object GuardSourceFence(Dictionary<string,object> command){
+   if(guardRoot==null||guardClosing)throw new Failure("INVALID");string source=Path.GetFullPath(Text(command,"source")),action=Text(command,"action");Root(Path.GetDirectoryName(source));int parentId=next;var parent=directories[parentId];
+   try{if(Identity(Information(parent,true))!=Text(command,"parentIdentity"))throw new Failure("STORAGE_COPY");using(var folder=Open(parent,Path.GetFileName(source),true,0x80020000)){
+    if(Identity(Information(folder,true))!=Text(command,"expectedIdentity"))throw new Failure("STORAGE_COPY");GuardAcl(folder);
+    using(var file=Open(folder,"owner.lock",false,action=="remove"?0x00070100u:0x00060100u)){
+     string identity=Identity(Information(file,false));if(identity!=Text(command,"lockIdentity"))throw new Failure("STORAGE_COPY");byte[] actual=GuardAcl(file);
+     if(action=="describe"){GuardQualifyFence();return new {identity=identity,original=Convert.ToBase64String(actual)};}
+     byte[] original=Convert.FromBase64String(Text(command,"original"));if(original.Length>16384)throw new Failure("INVALID");byte[] fence=GuardFenceDescriptor(original);bool fenced=GuardDescriptorProof(actual)==GuardDescriptorProof(fence);
+     if(!fenced&&GuardDescriptorProof(actual)!=GuardDescriptorProof(original))throw new Failure("STORAGE_COPY");
+     if(action=="inspect"){bool readOnly=(Information(file,false).Attributes&1)!=0;return new {fenced=fenced&&readOnly,restricted=fenced,readOnly=readOnly};}
+     if(action=="apply"){GuardQualifyFence();GuardReadOnly(file,true);if(!fenced)GuardSetPrivate(file,fence);if(GuardDescriptorProof(GuardAcl(file))!=GuardDescriptorProof(fence))throw new Failure("STORAGE_COPY");return new {fenced=true};}
+     if(action=="remove"){if(!fenced)throw new Failure("STORAGE_COPY");GuardReadOnly(file,false);Delete(file);return new {removed=true};}
+     throw new Failure("INVALID");
+    }
+   }}finally{parent.Dispose();directories.Remove(parentId);}
   }
   static string GuardStamp(byte[] acl){using(var hash=SHA256.Create())return "Observanda/runtime-admission/v1/"+Identity(Information(guardRoot,true))+"/"+Digest(hash.ComputeHash(acl));}
   static object GuardInspectStorage(Dictionary<string,object> command){
@@ -120,27 +163,46 @@ namespace Observanda {
     return new {identity=identity,rootPermissions=reason==null?"admissible":"requires-private-migration",reason=reason,ownerKind=GuardPrincipal(sd.Owner),ownerFingerprint=fingerprint,rules=rules,subtreeVerified=false,mutationProtectionQualified=false};
    }finally{LocalFree(descriptor);}
   }
-  static bool GuardStamped(string expected){try{if(guardPinStream.Length<1||guardPinStream.Length>8192)return false;byte[] bytes=new byte[(int)guardPinStream.Length];guardPinStream.Position=0;int offset=0;while(offset<bytes.Length){int read=guardPinStream.Read(bytes,offset,bytes.Length-offset);if(read==0)return false;offset+=read;}byte[] clear=ProtectedData.Unprotect(bytes,null,DataProtectionScope.CurrentUser);try{return Encoding.UTF8.GetString(clear)==expected;}finally{Array.Clear(clear,0,clear.Length);}}catch(CryptographicException){return false;}}
+  static readonly byte[] guardStampMagic=Encoding.ASCII.GetBytes("OBSGRD03");
+  static bool GuardStamped(string expected){
+   try{if(guardPinStream.Length<1||guardPinStream.Length>8192)return false;byte[] bytes=new byte[(int)guardPinStream.Length];guardPinStream.Position=0;int offset=0;while(offset<bytes.Length){int read=guardPinStream.Read(bytes,offset,bytes.Length-offset);if(read==0)return false;offset+=read;}
+    byte[] clear;bool portable=bytes.Length>40&&Encoding.ASCII.GetString(bytes,0,8)=="OBSGRD03";guardPortablePresent=portable;
+    if(portable){if(guardAdmissionKey==null)return false;clear=new byte[bytes.Length-40];Array.Copy(bytes,40,clear,0,clear.Length);using(var hmac=new HMACSHA256(guardAdmissionKey)){byte[] tag=hmac.ComputeHash(clear);int mismatch=0;for(int i=0;i<32;i++)mismatch|=tag[i]^bytes[8+i];if(mismatch!=0){Array.Clear(clear,0,clear.Length);return false;}}}
+    else clear=ProtectedData.Unprotect(bytes,null,DataProtectionScope.CurrentUser);
+    try{string value=Encoding.UTF8.GetString(clear);if(value==expected)return guardCreationToken==null;var receipt=json.Deserialize<Dictionary<string,object>>(value);bool valid=receipt!=null&&receipt.Count==3&&Number(receipt,"version")==2&&Text(receipt,"proof")==expected&&(guardCreationToken==null||Text(receipt,"creationToken")==guardCreationToken);guardPortableStamp=portable&&valid;return valid;}
+    finally{Array.Clear(clear,0,clear.Length);}
+   }catch(Exception error){if(error is CryptographicException||error is ArgumentException||error is Failure)return false;throw;}
+  }
+  static byte[] GuardNewStamp(string proof){
+   byte[] clear=Encoding.UTF8.GetBytes(json.Serialize(new {version=2,proof=proof,creationToken=guardCreationToken}));try{
+    if(guardAdmissionKey==null)return ProtectedData.Protect(clear,null,DataProtectionScope.CurrentUser);
+    using(var hmac=new HMACSHA256(guardAdmissionKey)){byte[] tag=hmac.ComputeHash(clear),result=new byte[40+clear.Length];Array.Copy(guardStampMagic,0,result,0,8);Array.Copy(tag,0,result,8,32);Array.Copy(clear,0,result,40,clear.Length);return result;}
+   }finally{Array.Clear(clear,0,clear.Length);}
+  }
   static object GuardAdmit(Dictionary<string,object> command){
-   if(guardRoot!=null)throw new Failure("INVALID");guardPath=Path.GetFullPath(Text(command,"directory"));string parentPath=Path.GetDirectoryName(guardPath);if(String.IsNullOrEmpty(parentPath))throw new Failure("UNSAFE");
+   if(guardRoot!=null)throw new Failure("INVALID");object supplied;Guid token;if(command.TryGetValue("creationToken",out supplied)&&supplied!=null){if(!(supplied is string)||!Guid.TryParse((string)supplied,out token)||token.ToString("D")!=(string)supplied)throw new Failure("INVALID");guardCreationToken=(string)supplied;}guardPath=Path.GetFullPath(Text(command,"directory"));string parentPath=Path.GetDirectoryName(guardPath);if(String.IsNullOrEmpty(parentPath))throw new Failure("UNSAFE");
+   if(command.TryGetValue("admissionKey",out supplied)&&supplied!=null){if(!(supplied is string))throw new Failure("INVALID");guardAdmissionKey=Convert.FromBase64String((string)supplied);if(guardAdmissionKey.Length!=32||Convert.ToBase64String(guardAdmissionKey)!=(string)supplied)throw new Failure("INVALID");command.Remove("admissionKey");}
    Root(parentPath);SafeFileHandle parent=directories[next];string expected;object value;if(command.TryGetValue("parentIdentity",out value)&&value is string&&Identity(Information(parent,true))!=(string)value)throw new Failure("STORAGE_COPY");
    string volumeRoot=Path.GetPathRoot(guardPath);if(!volumeRoot.EndsWith("\\"))volumeRoot+="\\";uint driveType=GetDriveType(volumeRoot);if(driveType==0||driveType==1)throw new GuardFailure("storage-volume-type-unavailable");if(driveType==4)guardMappedUser=GuardMappedCreator(parent);
    byte[] security=GuardPrivateDescriptor();bool created=false;
    try{guardRoot=GuardOpen(parent,Path.GetFileName(guardPath),true,1,7,null,0xC0170080);}catch(Win32Exception error){if(!Flag(command,"create")||(error.NativeErrorCode!=2&&error.NativeErrorCode!=3))throw;guardRoot=GuardOpen(parent,Path.GetFileName(guardPath),true,2,7,security,0xC0170080);created=true;}
    if(command.TryGetValue("expectedIdentity",out value)&&value is string&&Identity(Information(guardRoot,true))!=(string)value)throw new Failure("STORAGE_COPY");
-   try{GuardAcl(guardRoot);}catch(GuardFailure){if(!Flag(command,"create"))throw;guardRoot=GuardReplaceEmpty(parent,Path.GetFileName(guardPath),guardRoot,security);created=true;}
+   try{GuardAcl(guardRoot);}catch(GuardFailure){if(guardCreationToken!=null)throw new Failure("STORAGE_COPY");if(!Flag(command,"create"))throw;guardRoot=GuardReplaceEmpty(parent,Path.GetFileName(guardPath),guardRoot,security);created=true;}
    // Network roots must originate from this verified private creation. A
    // same-owner legacy tree needs an explicit preserving migration first.
-   if(guardMappedUser!=null&&!created&&GuardEmpty(guardRoot)){if(!Flag(command,"create"))throw new GuardFailure("nonprivate-runtime-requires-migration");guardRoot=GuardReplaceEmpty(parent,Path.GetFileName(guardPath),guardRoot,security);created=true;}
-   try{guardPin=GuardOpen(guardRoot,"owner.lock",false,guardMappedUser!=null&&!created?1u:3u,0,security);}catch(Win32Exception error){if(guardMappedUser!=null&&!created&&(error.NativeErrorCode==2||error.NativeErrorCode==3))throw new GuardFailure("nonprivate-runtime-requires-migration");throw;}GuardAcl(guardPin);guardPinStream=new FileStream(guardPin,FileAccess.ReadWrite,4096,false);
-   expected=GuardStamp(GuardAcl(guardRoot));bool cached=GuardStamped(expected);if(guardMappedUser!=null&&!created&&!cached)throw new GuardFailure("nonprivate-runtime-requires-migration");if(!created&&!cached)GuardInspectTree(guardRoot);
-   if(!cached){GuardSetPrivate(guardRoot,security);GuardAcl(guardRoot);byte[] stamp=ProtectedData.Protect(Encoding.UTF8.GetBytes(GuardStamp(GuardAcl(guardRoot))),null,DataProtectionScope.CurrentUser);guardPinStream.Position=0;guardPinStream.Write(stamp,0,stamp.Length);guardPinStream.SetLength(stamp.Length);guardPinStream.Flush(true);}
+   if(guardMappedUser!=null&&!created&&GuardEmpty(guardRoot)){if(guardCreationToken!=null)throw new Failure("STORAGE_COPY");if(!Flag(command,"create"))throw new GuardFailure("nonprivate-runtime-requires-migration");guardRoot=GuardReplaceEmpty(parent,Path.GetFileName(guardPath),guardRoot,security);created=true;}
+   try{guardPin=GuardOpen(guardRoot,"owner.lock",false,(guardMappedUser!=null||guardCreationToken!=null)&&!created?1u:3u,0,security);}catch(Win32Exception error){if(!created&&(error.NativeErrorCode==2||error.NativeErrorCode==3)){if(guardCreationToken!=null)throw new Failure("STORAGE_COPY");if(guardMappedUser!=null)throw new GuardFailure("nonprivate-runtime-requires-migration");}throw;}GuardAcl(guardPin);guardPinStream=new FileStream(guardPin,FileAccess.ReadWrite,4096,false);
+   expected=GuardStamp(GuardAcl(guardRoot));bool cached=GuardStamped(expected);if(guardPortablePresent&&!cached)throw new GuardFailure("runtime-admission-authentication-failed");if(guardCreationToken!=null&&!created&&!cached)throw new Failure("STORAGE_COPY");if((guardMappedUser!=null||guardPinStream.Length>0)&&!created&&!cached)throw new GuardFailure("nonprivate-runtime-requires-migration");if(!created&&!cached)GuardInspectTree(guardRoot);
+   if(!cached||guardAdmissionKey!=null&&!guardPortableStamp){if(!cached){GuardSetPrivate(guardRoot,security);GuardAcl(guardRoot);}byte[] stamp=GuardNewStamp(GuardStamp(GuardAcl(guardRoot)));guardPinStream.Position=0;guardPinStream.Write(stamp,0,stamp.Length);guardPinStream.SetLength(stamp.Length);guardPinStream.Flush(true);}
    if(!SetHandleInformation(guardPin.DangerousGetHandle(),1,1))throw new Win32Exception();
    Root(guardPath);var named=directories[next];if(Identity(Information(named,true))!=Identity(Information(guardRoot,true)))throw new Failure("STORAGE_COPY");
    // Admission needs WRITE_DAC/DELETE, but retaining a writable directory open
    // can prevent ordinary child renames on SMB. The live file pin protects the
    // namespace while the identity-checked read handle becomes the runtime root.
    guardRoot.Dispose();guardRoot=named;directories.Remove(next);
+   // Only a token-authenticated upgrade tree owns this transient namespace.
+   // Source inventories refuse it before copying any original file into it.
+   if(guardCreationToken!=null&&cached)GuardRecoverFenceProbes();
    guardJob=CreateJobObject(IntPtr.Zero,null);if(guardJob==IntPtr.Zero)throw new Win32Exception();var limits=new ExtendedLimits{Basic=new BasicLimits{Flags=0x2000}};if(!SetInformationJobObject(guardJob,9,ref limits,(uint)Marshal.SizeOf(typeof(ExtendedLimits))))throw new Win32Exception();
    guardNull=CreateFile("NUL",0xC0000000,3,IntPtr.Zero,3,0,IntPtr.Zero);if(guardNull.IsInvalid||!SetHandleInformation(guardNull.DangerousGetHandle(),1,1))throw new Win32Exception();
    foreach(int kind in new int[]{-10,-11,-12})if(!SetHandleInformation(GetStdHandle(kind),1,0))throw new Win32Exception();
@@ -199,9 +261,10 @@ namespace Observanda {
   }
   static void GuardStop(){if(guardJob==IntPtr.Zero)return;if(!TerminateJobObject(guardJob,1))throw new Win32Exception();for(;;){JobAccounting value;if(!QueryInformationJobObject(guardJob,1,out value,(uint)Marshal.SizeOf(typeof(JobAccounting)),IntPtr.Zero))throw new Win32Exception();if(value.Active==0)break;Thread.Sleep(10);}var thread=guardThread;if(thread!=null)thread.Join();}
   public static void RunPostgresGuard(){
+   Environment.SetEnvironmentVariable("LC_ALL","C");Environment.SetEnvironmentVariable("LANG","C");
    input=Console.OpenStandardInput();rawOutput=Console.OpenStandardOutput();output=new StreamWriter(rawOutput,new UTF8Encoding(false));GuardSend(new {ready=true});
-   try{using(var reader=new StreamReader(input,new UTF8Encoding(false,true))){string line;while((line=reader.ReadLine())!=null){if(line.Length>131072)throw new Failure("INVALID");int id=0;try{var command=json.Deserialize<Dictionary<string,object>>(line);id=Number(command,"id");string operation=Text(command,"operation");if(operation=="admit")GuardSend(new {id=id,result=GuardAdmit(command)});else if(operation=="inspect")GuardSend(new {id=id,result=GuardInspectStorage(command)});else if(operation=="probe-create")GuardSend(new {id=id,result=GuardProbeCreate(command)});else if(operation=="file")GuardSend(new {id=id,result=GuardFileOperation(command)});else if(operation=="run")GuardLaunch(command,id);else if(operation=="cancel"){GuardStop();GuardSend(new {id=id,result=new {stopped=true}});}else if(operation=="close"){guardClosing=true;GuardStop();GuardSend(new {id=id,result=new {stopped=true}});break;}else throw new Failure("INVALID");}catch(Exception error){var failure=error as Failure;GuardSend(new {id=id,error=failure==null?Error(error):failure.Code,reason=error is GuardFailure?error.Message:null,diagnostic=error.ToString()+" phase="+Convert.ToString(error.Data["runtimePhase"])});}}}}
-   finally{guardClosing=true;try{GuardStop();}finally{if(guardJob!=IntPtr.Zero)CloseHandle(guardJob);if(guardNull!=null)guardNull.Dispose();if(guardPinStream!=null)guardPinStream.Dispose();else if(guardPin!=null)guardPin.Dispose();if(guardRoot!=null)guardRoot.Dispose();foreach(var handle in directories.Values)handle.Dispose();directories.Clear();}}
+   try{using(var reader=new StreamReader(input,new UTF8Encoding(false,true))){string line;while((line=reader.ReadLine())!=null){if(line.Length>131072)throw new Failure("INVALID");int id=0;try{var command=json.Deserialize<Dictionary<string,object>>(line);id=Number(command,"id");string operation=Text(command,"operation");if(operation=="admit")GuardSend(new {id=id,result=GuardAdmit(command)});else if(operation=="inspect")GuardSend(new {id=id,result=GuardInspectStorage(command)});else if(operation=="probe-create")GuardSend(new {id=id,result=GuardProbeCreate(command)});else if(operation=="inspect-source")GuardSend(new {id=id,result=GuardInspectSource(command)});else if(operation=="source-fence")GuardSend(new {id=id,result=GuardSourceFence(command)});else if(operation=="file")GuardSend(new {id=id,result=GuardFileOperation(command)});else if(operation=="run")GuardLaunch(command,id);else if(operation=="cancel"){GuardStop();GuardSend(new {id=id,result=new {stopped=true}});}else if(operation=="close"){guardClosing=true;GuardStop();GuardSend(new {id=id,result=new {stopped=true}});break;}else throw new Failure("INVALID");}catch(Exception error){var failure=error as Failure;GuardSend(new {id=id,error=failure==null?Error(error):failure.Code,reason=error is GuardFailure?error.Message:null,diagnostic=error.ToString()+" phase="+Convert.ToString(error.Data["runtimePhase"])});}}}}
+   finally{guardClosing=true;try{GuardStop();}finally{if(guardAdmissionKey!=null)Array.Clear(guardAdmissionKey,0,guardAdmissionKey.Length);if(guardJob!=IntPtr.Zero)CloseHandle(guardJob);if(guardNull!=null)guardNull.Dispose();if(guardPinStream!=null)guardPinStream.Dispose();else if(guardPin!=null)guardPin.Dispose();if(guardRoot!=null)guardRoot.Dispose();foreach(var handle in directories.Values)handle.Dispose();directories.Clear();}}
   }
  }
 }

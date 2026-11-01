@@ -22,7 +22,7 @@ import {compatibleManagedRuntime} from './postgres-runtime-compatibility.js';
 import {seal,unseal} from './encryption.js';
 import {workspaceDatabaseLease} from './workspace-database-lease.js';
 import {nativeResources,databaseMemoryReservation} from './native-resource-budget.js';
-import {acquirePostgresRuntimeGuard} from './postgres-runtime-guard.js';
+import {withUpgradeablePostgresRuntime} from './postgres-runtime-upgrade.js';
 import {postgresRuntimeFiles} from './postgres-runtime-files.js';
 
 const windows=process.platform==='win32',suffix=windows?'.exe':'';
@@ -155,15 +155,19 @@ async function managePostgres({directory,env=process.env,signal,onProgress=()=>{
  if(process.getuid?.()===0)throw new AppError('DATABASE_TOOLS');
  const sharedBuffers=stopOnly?64:managedSharedBuffers(env);
  directory=path.resolve(directory);
- if(existingOnly){await assertRegular(directory,{directory:true});await assertRegular(path.join(directory,'service.observanda'));await assertRegular(path.join(directory,'data','PG_VERSION'));}
+ if(existingOnly&&!windows){await assertRegular(directory,{directory:true});await assertRegular(path.join(directory,'service.observanda'));await assertRegular(path.join(directory,'data','PG_VERSION'));}
  if(workspace){
   const root=await realpath(workspace.root);await assertRegular(path.join(root,'.observanda'),{directory:true});
   if(directory!==path.join(root,'.observanda','postgresql')||!Buffer.isBuffer(workspace.vault?.key)||workspace.vault.key.length!==32||!/^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/.test(workspace.vault.id??'')||!/^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/.test(workspace.ownerId??''))throw new AppError('DATABASE_LOCATION');
-  await assertRegular(directory,{directory:true,missing:!stopOnly});
+  if(!windows)await assertRegular(directory,{directory:true,missing:!stopOnly});
  }else await outsideWorkspace(directory);
- const guard=await acquirePostgresRuntimeGuard({directory,create:!stopOnly&&!existingOnly,workspaceRoot:workspace?.root,run:runtimeCommand,signal});
- try{return await manageGuardedPostgres({directory:guard.directory,env,signal,onProgress,workspace,runtimeDirectory,stopOnly,existingOnly,budget,sharedBuffers,guard});}
- catch(error){await guard.close();throw error;}
+ // Keep the installation-wide manager name while old stopped data is upgraded;
+ // the private runtime and its native owner lease remain the only data format.
+ const installationLease=windows&&!workspace?await managerLease(directory):null;
+ try{
+  const service=await withUpgradeablePostgresRuntime({directory,create:!stopOnly&&!existingOnly,workspaceRoot:workspace?.root,workspace,env,stopOnly,run:runtimeCommand,signal,onProgress},guard=>manageGuardedPostgres({directory:guard.directory,env,signal,onProgress,workspace,runtimeDirectory,stopOnly,existingOnly,budget,sharedBuffers,guard}));
+  if(!installationLease)return service;let closing;return {...service,close:()=>closing??=(async()=>{try{await service.close();}finally{await installationLease.close();}})()};
+ }catch(error){await installationLease?.close();throw error;}
 }
 async function manageGuardedPostgres({directory,env,signal,onProgress,workspace,runtimeDirectory,stopOnly,existingOnly,budget,sharedBuffers,guard}){
  const files=postgresRuntimeFiles(guard),checkVersion=bin=>version(bin,(command,args,options)=>guard.run(command,args,options));

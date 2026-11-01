@@ -24,6 +24,7 @@ export function mutationFilesClient(call,stop){
   async directory(member,{create=false,exclusive=false,missing:optional=false}={}){if(exclusive&&!create)throw new AppError('INVALID');try{return new Directory(await this.request('directory',{name:name(member),create,exclusive}));}catch(error){return missing(error,optional);}}
   async file(member,{mode='read',missing:optional=false}={}){if(!['read','update','exclusive'].includes(mode))throw new AppError('INVALID');try{return new File(await this.request('file-open',{name:name(member),mode}));}catch(error){return missing(error,optional);}}
   async lease(member){return new Handle(await this.request('lease',{name:name(member)}));}
+  async pin(member,{identity}={}){if(typeof identity!=='string')throw new AppError('INVALID');return new Handle(await this.request('pin',{name:name(member),identity}));}
   async stat(member,{folder=false,links=false,missing:optional=false}={}){try{return await this.request('stat',{name:name(member),folder,links});}catch(error){return missing(error,optional);}}
   async hash(member,{links=false,missing:optional=false}={}){try{return await this.request('hash',{name:name(member),links});}catch(error){return missing(error,optional);}}
   async read(member,{limit=16384,missing:optional=false}={}){try{const value=await this.request('read',{name:name(member),limit});return {bytes:binary(value.data),identity:value.identity};}catch(error){return missing(error,optional);}}
