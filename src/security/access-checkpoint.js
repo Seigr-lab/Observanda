@@ -6,10 +6,17 @@ import {clearVault} from '../encryption.js';
 import {validateKeyring,authenticateKeyring,unlockKeyring} from './keyring.js';
 import {keyringFingerprint} from './access-trust.js';
 import {AppError} from '../errors.js';
+import {catalogueBinding} from '../postgres-activation.js';
 
 function keyring(checkpoint){
  if(!checkpoint||Object.keys(checkpoint).sort().join()!=='format,keyring'||checkpoint.format!=='observanda-access-v1')throw new AppError('ACCESS_FORMAT');
  return validateKeyring(checkpoint.keyring);
+}
+async function checkpointStorage(root,vault){
+ const binding=await catalogueBinding(root);
+ if(binding?.placement==='project'){const {ProjectStorage}=await import('../project-storage.js');return new ProjectStorage(root,binding.projectId,vault);}
+ if(binding?.placement==='lab-book'){const {LabBookStorage}=await import('../lab-book-storage.js');return new LabBookStorage(root,binding.labBookId,vault);}
+ return new Workspace(root,vault);
 }
 export async function exportAccessCheckpoint(root,vault,deviceStore){
  const access=await readAccess(root,{deviceStore});authenticateKeyring(access.value,vault);
@@ -33,7 +40,8 @@ export async function importAccessCheckpoint(root,checkpoint,{verifiedFingerprin
   // Explicitly authenticated import may repair an unknown workspace keyring.
   // Take the normal workspace writer lock using the authenticated vault, then
   // compare both the workspace snapshot and external authority under their locks.
-  await withAccessDevice(null,()=>new Workspace(root,vault).withLock(async()=>{
+  const storage=await checkpointStorage(root,vault);
+  await withAccessDevice(null,()=>storage.withLock(async()=>{
    const latest=await readAccess(root,{deviceStore:null});if(latest.etag!==original.etag)throw new AppError('CONFLICT');
    await deviceStore.accessTrust.installCheckpoint(value,vault,{expected:trusted?.sha256??null,obsolete:original.value,write:()=>atomicWrite(path.join(root,'.observanda/access.json'),serialize(value))});
   },{existing:true}));

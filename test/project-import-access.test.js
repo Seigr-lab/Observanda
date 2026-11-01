@@ -15,9 +15,10 @@ import {readProjectImport,saveProjectImport,projectImportFile} from '../src/proj
 import {portabilityCollection} from '../src/portability-collection.js';
 import {WorkspaceDatabases} from '../src/workspace-databases.js';
 import {installDatabaseProvider} from '../src/workspace-database-context.js';
-import {createWorkspaceAccess,takeCreatedVault,readAccess} from '../src/access.js';
+import {createWorkspaceAccess,takeCreatedVault,readAccess,verifyAccess} from '../src/access.js';
 import {ProjectAccessSettings} from '../src/project-access-settings.js';
 import {clearVault} from '../src/encryption.js';
+import {exportAccessCheckpoint,importAccessCheckpoint} from '../src/security/access-checkpoint.js';
 
 test('import authorization pages independent owners and rejects stale, revoked and foreign-client grants',{timeout:360000},async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-import-access-')),provider=new WorkspaceDatabases({directory:path.join(directory,'runtime'),ownerId:randomUUID(),env:{...process.env,OBSERVANDA_POSTGRES_BIN:process.env.OBSERVANDA_TEST_POSTGRES_BIN}}),detach=installDatabaseProvider(provider),vaults=[];
@@ -56,6 +57,10 @@ test('import authorization pages independent owners and rejects stale, revoked a
  const renewed='Changed owner password';await new ProjectAccessSettings(source).password({etag:access.etag,username:'',password:renewed},{deviceStore:foreign});await assert.rejects(credentials.unlock(source.root,'',await readAccess(source.root)),{code:'PROJECT_IMPORT_ACCESS'});
  now+=61*60*1000;await manager.expire();assert.equal((await readProjectImport(registry,second.id)).phase,'cancelled');await assert.rejects(manager.page(client,{id:second.id,session:second.session}),{code:'ACCESS_LOCKED'});await manager.close();manager=new ProjectImportAccess(app,{now:()=>now});await assert.rejects(manager.page(client,{id:second.id,session:second.session}),{code:'ACCESS_LOCKED'});
  // A preparation can be cancelled only through its explicitly chosen intent.
+ // A remote credential rotation is an explicit trust update on this device.
+ await assert.rejects(begin(randomUUID(),renewed),{code:'ACCESS_STATE_CHANGED'});
+ const checkpoint=await exportAccessCheckpoint(source.root,source.vault,foreign);
+ await importAccessCheckpoint(source.root,checkpoint.checkpoint,{verifiedFingerprint:checkpoint.fingerprint,confirmed:true,password},f.deviceStore);
  const planned=await authorize(await begin(randomUUID(),renewed));
  await assert.rejects(manager.finish(client,{id:planned.id,session:planned.session,revision:planned.revision},{checkpoint:stage=>{if(stage==='prepared')throw Error('Interrupted before owner copy');}}),/Interrupted before owner copy/);
  assert.equal((await readProjectImport(registry,planned.id)).phase,'prepared');await manager.release(client,{id:planned.id,session:planned.session});assert.equal((await readProjectImport(registry,planned.id)).phase,'prepared');
@@ -77,4 +82,6 @@ test('import authorization pages independent owners and rejects stale, revoked a
  const restarted=await manager.start(client,{id:randomUUID(),path:source.root,parentId:null,intent:'import',...base,password:renewed}),ready=await authorize(restarted),before=await readProjectImport(registry,ready.id),grantRef=structuredClone(before.access.grants),opened=[];
  const result=await manager.finish(client,{id:ready.id,session:ready.session,revision:ready.revision},{checkpoint:async stage=>{if(stage==='prepared'){now+=61*60*1000;await manager.expire();assert.ok(manager.sessions.has(ready.id));}},opened:entry=>opened.push(entry)});assert.equal(result.complete,true);assert.equal(opened.length,3);assert.equal(await rows(grantRef),0);assert.equal((await readProjectImport(registry,ready.id)).access,undefined);assert.equal((await registry.locate(child.projectId)).parentId,source.projectId);assert.equal((await stat(source.root)).ino,pinned.ino);assert.ok(book.book.labBookId);
  await assert.rejects(manager.finish(client,{id:ready.id,session:ready.session,revision:ready.revision}),{code:'ACCESS_LOCKED'});
+ const bookRoot=path.join(source.root,'Independent Notes'),bookAccess=await readAccess(bookRoot,{deviceStore:foreign}),bookVault=await verifyAccess(bookAccess,'',password,{deviceStore:foreign});
+ try{const saved=await exportAccessCheckpoint(bookRoot,bookVault,foreign);assert.equal((await importAccessCheckpoint(bookRoot,saved.checkpoint,{verifiedFingerprint:saved.fingerprint,confirmed:true,password},f.deviceStore)).ok,true);}finally{clearVault(bookVault);}
 });
