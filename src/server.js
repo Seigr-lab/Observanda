@@ -304,7 +304,12 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
     try{const result=await operation();failures.delete(root);return result;}catch(e){if(e.code==='ACCESS_DENIED')failures.set(root,{count:Date.now()>attempts.until?1:attempts.count+1,until:Date.now()+60000});throw e;}
   };
   const authenticate=(root,access,username,password,recovery='')=>limitedAuthentication(root,()=>verifyAccess(access,username,password,{deviceStore,recovery}));
-  const savedDeletion=new SavedWorkspaceDeletion({deletions,deviceStore,locations:()=>workspaceDirectory.list(),protectedPaths:[preferencesFile,deviceStore.file,fileURLToPath(new URL('..',import.meta.url))],authenticate,activeRoot:()=>context.root,forget:forgetDeleted});
+  const savedDeletion=new SavedWorkspaceDeletion({deletions,deviceStore,locations:()=>workspaceDirectory.list(),protectedPaths:[preferencesFile,deviceStore.file,fileURLToPath(new URL('..',import.meta.url))],authenticate,activeRoot:()=>context.root,forget:forgetDeleted,checkClient:client=>{if(!Number.isFinite(client?.expires)||client.expires<=Date.now())throw new AppError('AUTH');}});
+  const forgetSession=id=>{const client=sessions.get(id);if(client){sessions.delete(id);client.access=null;client.expires=0;savedDeletion.revoke(client);}};
+  // Bearer lifetime is independent of the selected workspace's lock state.
+  // Every route, including download grants and launch retries, uses this gate.
+  const liveSession=id=>{const client=sessions.get(id);if(client&&Number.isFinite(client.expires)&&client.expires>Date.now())return client;if(client)forgetSession(id);return null;};
+  const requireSession=id=>{const client=liveSession(id);if(!client)throw new AppError('AUTH');return client;};
   const activate=async(location,client,vault=null,{movingFrom,followSettings=false}={})=>operationStage('activate',{},async()=>{
     savedDeletion.assertAvailable(location);
     if(context.workspace&&context.root!==location){
@@ -381,15 +386,15 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       if (req.method === 'POST' && url.pathname === '/api/session') {
         const data = await body(req);
         const claim=launches.claim(data?.token,data?.binding);
-        if(claim.replay){const session=await claim.replay;if(!sessions.has(session))throw new AppError('AUTH');return json(sessionResponse(res,session));}
+        if(claim.replay){const session=await claim.replay;requireSession(session);return json(sessionResponse(res,session));}
         try{
         if(changing||loginBusy){
-          const prior=req.headers['x-observanda-session'],client=sessions.get(prior);
+          const prior=req.headers['x-observanda-session'],client=liveSession(prior);
           if(client&&!(await status(client)).locked){claim.complete(prior);return json(sessionResponse(res,prior));}
           throw new AppError('LOCKED');
         }
         const sessionContext=context,session=randomBytes(32).toString('hex'),access=await diagnosticPhase('session-access',contextAccess);
-        if(sessions.size>=128)sessions.delete(sessions.keys().next().value);
+        if(sessions.size>=128)forgetSession(sessions.keys().next().value);
         const local={access:requiresAccess(access.value)?null:access.etag,expires:Date.now()+8*60*60*1000};
         if(access.value.formatVersion===3&&!context.manualLock&&!access.updateRequired){
          try{
@@ -408,7 +413,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         claim.complete(session);return json(sessionResponse(res,session));
         }catch(error){claim.fail(error);throw error;}
       }
-      const session=downloadSession??req.headers['x-observanda-session'],client=sessions.get(session);if(!client)throw new AppError('AUTH');
+      const session=downloadSession??req.headers['x-observanda-session'],client=requireSession(session);
       if(req.method==='POST'&&url.pathname==='/api/session/download'){
        if((await status(client)).locked)throw new AppError('ACCESS_LOCKED');
        const data=await body(req),target=new URL(data?.url,origin);
@@ -432,12 +437,12 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       if(req.method==='POST'&&/\/(?:design-preview|appearance-preview)$/.test(url.pathname)||req.method==='GET'&&/\/appearance-preview\/[a-f0-9]{64}\//.test(url.pathname))request.abortPreview=()=>res.destroy();
       if(!snapshotRead)req.operationActivity=()=>req.activity??=activities.begin(selectedContext.id,url.pathname,{view:req.headers['x-observanda-view'],recoveryKey:req.activityRecoveryKey});
       req.waitForWriter=req.headers['x-observanda-wait']==='1'&&(snapshotRead||req.method==='POST'&&!['/api/storage/','/api/access/','/api/security/','/api/writer-recovery','/api/preferences/reset','/api/notebook/create'].some(prefix=>url.pathname.startsWith(prefix)));
-      req.checkWriter=async()=>{if(shuttingDown)throw new AppError('SERVER_CLOSING');if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');if((await status(client)).locked)throw new AppError('ACCESS_LOCKED');};
+      req.checkWriter=async()=>{if(shuttingDown)throw new AppError('SERVER_CLOSING');requireSession(session);if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');if((await status(client)).locked)throw new AppError('ACCESS_LOCKED');};
       let {workspace,publisher}=selectedContext;
       const {media,laboratory,candidates,designCandidates,appearancePreviews}=selectedContext;
       if(req.method==='POST'&&url.pathname.startsWith('/api/workspaces/delete/')){
         const operation=url.pathname.slice('/api/workspaces/delete/'.length),data=await body(req,16384);
-        req.waitForWriter=false;req.checkWriter=async()=>{if(shuttingDown)throw new AppError('SERVER_CLOSING');};
+        req.waitForWriter=false;req.checkWriter=async()=>{if(shuttingDown)throw new AppError('SERVER_CLOSING');requireSession(session);};await req.checkWriter();
         if(operation==='preview')return json(await savedDeletion.review(client,data));
         if(operation==='unlock')return json(await savedDeletion.unlock(client,data));
         if(operation==='cancel')return json(await savedDeletion.cancel(client,data));
@@ -1464,6 +1469,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
   const expiry=setInterval(()=>{
    const memory=process.memoryUsage(),cpu=process.cpuUsage(),capacity=Object.values(requestAdmission.stats()),total=key=>capacity.reduce((sum,lane)=>sum+lane[key],0);diagnostics.record('resource',{rssBytes:memory.rss,heapBytes:memory.heapUsed,externalBytes:memory.external,cpuUserUs:cpu.user,cpuSystemUs:cpu.system,pendingRequests:pending.size,activeWrites,activeRequests:total('active'),queuedRequests:total('queued'),requestBytes:total('retainedBytes'),queuedWriters:writerCapacity().queued});
    context.projects?.expire();
+   for(const id of sessions.keys())liveSession(id);
    if(shuttingDown||loginBusy||pending.size||activeWrites||importing||publishing||changing||![context.vault.key,context.calendarSources.connections.size,context.calendarSources.cache.size].some(Boolean)||[...sessions.values()].some(s=>s.access&&s.expires>Date.now()))return;
    loginBusy=true;const expiring=context;
    void stopJobs(expiring).then(async()=>{if(expiring.root)await databaseProvider()?.closeWorkspace(expiring.root);expiring.calendarSources.clear();clearVault(expiring.vault);expiring.candidates.clear();expiring.designCandidates.clear();expiring.appearancePreviews.clear();if(expiring.publisher)expiring.publisher.token=null;}).catch(()=>{/* Retry on the next expiry tick; never abandon an active worker's key. */}).finally(()=>{loginBusy=false;});

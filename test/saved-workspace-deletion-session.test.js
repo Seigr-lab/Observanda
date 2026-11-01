@@ -18,3 +18,13 @@ test('a failed expired-owner shutdown clears keys and is retained for retry',asy
  deletion.plans.set('review',plan);deletion.expire();await Promise.allSettled([...deletion.disposals.values()]);
  assert.ok(bytes.every(value=>value===0));assert.equal(deletion.disposals.size,1);deletion.expire();await deletion.close();assert.equal(attempts,2);assert.equal(deletion.disposals.size,0);
 });
+
+test('revoking a browser session disposes only its reviews and defers active review keys',async()=>{
+ const deletion=new SavedWorkspaceDeletion({}),client={},other={},bytes=Buffer.alloc(32,11),activeBytes=Buffer.alloc(32,12),otherBytes=Buffer.alloc(32,13);
+ const plan=(owner,source,key)=>({client:owner,plan:{source},expires:Date.now()+600000,vault:{id:'owner',key}});
+ deletion.plans.set('idle',plan(client,'idle',bytes));deletion.plans.set('active',plan(client,'active',activeBytes));deletion.plans.set('other',plan(other,'other',otherBytes));deletion.running.add('active');
+ deletion.revoke(client);await Promise.allSettled([...deletion.disposals.values()]);
+ assert.equal(deletion.plans.has('idle'),false);assert.ok(bytes.every(value=>value===0));assert.ok(activeBytes.some(Boolean));assert.ok(otherBytes.some(Boolean));
+ await assert.rejects(deletion.confirm(client,{}),{code:'AUTH'});await assert.rejects(deletion.unlock(client,{}),{code:'AUTH'});await assert.rejects(deletion.cancel(client,{}),{code:'AUTH'});await assert.rejects(deletion.review(client,{}),{code:'AUTH'});
+ deletion.running.delete('active');deletion.expire();await Promise.allSettled([...deletion.disposals.values()]);assert.ok(activeBytes.every(value=>value===0));assert.equal(deletion.plans.has('other'),true);await deletion.close();assert.ok(otherBytes.every(value=>value===0));
+});

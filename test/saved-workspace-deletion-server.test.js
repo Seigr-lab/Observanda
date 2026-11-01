@@ -24,6 +24,7 @@ import {installDatabaseProvider} from '../src/workspace-database-context.js';
 import {WorkspaceDeletions} from '../src/workspace-deletion.js';
 import {workspaceDatabaseLease} from '../src/workspace-database-lease.js';
 import {workspaceDeletion} from '../src/workspace-delete-state.js';
+import {SavedWorkspaceDeletion} from '../src/saved-workspace-deletion.js';
 
 async function fixture(t,{owned=false}={}){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-saved-delete-')),prefs=path.join(directory,'settings.json'),deviceStore=new TestDeviceStore({file:path.join(directory,'device.key')}),vaults=[];
@@ -52,6 +53,22 @@ async function fixture(t,{owned=false}={}){
  return {directory,prefs,active,create,start,owner,deviceStore,detach};
 }
 const command=plan=>({id:plan.id,path:plan.source,title:plan.title,confirmed:true});
+
+test('session expiry revokes a recent deletion review and fresh sessions can delete while the active workspace is locked',async t=>{
+ const f=await fixture(t),target=await f.create('Closed target'),session=await f.start();let now=Date.now(),controller,review;
+ t.mock.method(Date,'now',()=>now);const original=SavedWorkspaceDeletion.prototype.review;
+ t.mock.method(SavedWorkspaceDeletion.prototype,'review',async function(...args){const result=await original.apply(this,args);controller=this;review=this.plans.get(result.id);return result;});
+ now+=8*60*60*1000-60000;
+ const plan=await session.call('/api/workspaces/delete/preview',{path:target.root});assert.equal(plan.status,200);const key=review.vault.key;assert.ok(key.some(Boolean));
+ now+=60001;
+ for(const operation of ['preview','unlock','confirm','cancel','finish']){
+  const response=await session.call('/api/workspaces/delete/'+operation,{...command(plan.value),path:target.root});assert.equal(response.status,401,operation);assert.equal(response.value.code,'AUTH');
+ }
+ await Promise.allSettled([...controller.disposals.values()]);assert.equal(controller.plans.has(plan.value.id),false);assert.ok(key.every(value=>value===0));await access(target.root);
+ const fresh=await session.client();assert.equal((await fresh.call('/api/access/lock',{})).status,200);
+ const current=await fresh.call('/api/workspaces/delete/preview',{path:target.root});assert.equal(current.status,200,JSON.stringify(current.value));
+ const deleted=await fresh.call('/api/workspaces/delete/confirm',command(current.value));assert.equal(deleted.status,200,JSON.stringify(deleted.value));assert.equal(deleted.value.result.complete,true);await assert.rejects(access(target.root),{code:'ENOENT'});await access(f.active.root);
+});
 
 for(const owned of [false,true])test('closed '+(owned?'dedicated':'shared-catalogue')+' workspace is deleted while the active writer is held',async t=>{
  const f=await fixture(t,{owned}),target=await f.create('Remove closed'),sibling=await f.create('Keep closed'),session=await f.start(),before=await f.active.read(),siblingBefore=await sibling.read();
