@@ -4,12 +4,12 @@ import {EncryptionKeyContext} from './encryption-key-context.js';
 // the random encryption key is destroyed and its temporary table is emptied or dropped.
 import {randomBytes,randomUUID,createHash} from 'node:crypto';
 import {AsyncLocalStorage} from 'node:async_hooks';
-import {withScratchConnections,scratchConnectionOwner,scratchWorkConnection} from './scratch-connection.js';
+import {withScratchConnections,scratchConnectionOwner} from './scratch-connection.js';
 import {seal,unseal} from './encryption.js';
 import {AppError} from './errors.js';
 const sessions=new AsyncLocalStorage();
-async function openStorage(signal,name){
- const db=await scratchWorkConnection(signal);let created=false;
+async function openStorage(signal,name,owner){
+ const db=await owner.acquire(signal);let created=false;
  try{
   try{await db.run('CREATE TEMP TABLE '+name+' (key TEXT PRIMARY KEY,ordinal BIGSERIAL,payload BYTEA,pending BOOLEAN NOT NULL DEFAULT true) ON COMMIT PRESERVE ROWS');}
   catch(error){if(error.code==='42501')throw new AppError('DATABASE_PERMISSION');throw error;}
@@ -21,8 +21,10 @@ function createStorage(signal){
  // Empty optional collections need neither a database connection nor DDL.
  // The first insertion owns the table; reads after any attempted insertion
  // still consult it, including queued, conflicting and failed writes.
- const name='obs_work_'+randomUUID().replaceAll('-','');let opening;
- const open=()=>opening??=openStorage(signal,name);
+ // The work set can be used from another async context while its lifetime is
+ // still open. Lazy allocation must retain the owner that created the set.
+ const name='obs_work_'+randomUUID().replaceAll('-',''),owner=scratchConnectionOwner();let opening;
+ const open=()=>opening??=openStorage(signal,name,owner);
  return {name,get initialized(){return !!opening;},db:{
   async run(...args){return (await open()).db.run(...args);},
   async get(...args){return (await open()).db.get(...args);},

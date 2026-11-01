@@ -6,6 +6,20 @@ import {scratchDatabase,databaseCapacity} from '../src/postgres.js';
 import {randomUUID} from 'node:crypto';
 import {scratchOrder} from '../src/scratch-order.js';
 
+test('lazy scratch storage retains its connection owner across callers until the lifetime ends',async()=>{
+ let ready,release;
+ const opened=new Promise(resolve=>ready=resolve),released=new Promise(resolve=>release=resolve),initial=databaseCapacity().active;
+ const lifetime=withScratch(async work=>{ready(work);await released;});
+ const work=await opened;
+ try{
+  assert.equal(databaseCapacity().active,initial);
+  await work.add('retained-source',{revision:'saved'});
+  assert.deepEqual(await work.get('retained-source'),{revision:'saved'});
+ }finally{release();await lifetime;}
+ assert.equal(databaseCapacity().active,initial);
+ await assert.rejects(work.get('retained-source'),{code:'INVALID'});
+});
+
 test('batched scratch insertion reports exact new keys without overwriting existing or consumed values',async()=>{
  await withScratch(async work=>{
   assert.deepEqual(await work.addMany([]),new Set());
