@@ -2,6 +2,12 @@ import {mkdtemp,rm} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 
+// GCM locates Git even for --version. Call only with the executable from an
+// admitted runtime; never restore the user's PATH or Git configuration.
+export function runtimeProbeWithGit(options,gitExecutable,{platform=process.platform}={}){
+ return {...options,env:{...options.env,PATH:path.dirname(gitExecutable)+(platform==='win32'?';':':')+options.env.PATH}};
+}
+
 export function runtimeProbeEnvironment(directory,{platform=process.platform,environment=process.env}={}){
  const system=environment.SystemRoot??environment.SYSTEMROOT??'C:\\Windows',nullFile=platform==='win32'?'NUL':'/dev/null';
  return {

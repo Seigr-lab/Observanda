@@ -35,8 +35,18 @@ test('shipping runtime inventory measures admitted executables with isolated bou
  assert.equal(result.format,2);assert.equal(result.hostRequirements[0].minimumVersion,'4.7.2');
  assert.equal(result.hostRequirements[0].requiredBy,'github/credential-manager/git-credential-manager.exe');
  for(const call of p.calls){assert.equal(call.options.windowsHide,true);assert.equal(call.options.timeout,30000);assert.equal(call.options.maxBuffer,65536);assert.equal(call.options.env.NODE_OPTIONS,'');assert.notEqual(call.options.cwd,p.root);assert.equal(call.options.env.HOME,call.options.cwd);}
+ const ordinary=p.calls[0].options.env.PATH,credential=p.calls.find(call=>path.basename(call.file)==='git-credential-manager.exe');
+ assert.equal(credential.options.env.PATH,path.join(p.root,'github/git/cmd')+';'+ordinary);
+ assert.equal(credential.options.env.GIT_CONFIG_GLOBAL,'NUL');
  await assert.rejects(stat(p.calls[0].options.cwd),{code:'ENOENT'});
  assert.ok(!JSON.stringify(result).includes(p.root));
+});
+
+test('credential probing refuses a Git dependency changed after its version check',async t=>{
+ const p=await probes(t),execute=p.options.execute;
+ p.options.execute=async(file,args,options)=>{const result=await execute(file,args,options);if(path.basename(file)==='git.exe')await writeFile(file,'Changed Git dependency');return result;};
+ await assert.rejects(collectRuntimeInventory(p.root,p.options),/changed before credential helper probe/);
+ assert.equal(p.calls.some(call=>path.basename(call.file)==='git-credential-manager.exe'),false);
 });
 test('bundled .NET inventory binds its metadata to the helper digest',async t=>{
  const p=await probes(t);p.options.inspectDotnet=async()=>({kind:'bundled',name:'.NET',version:'10.0.9',sha256:p.hash,metadataFormat:'dotnet-single-file-6.0'});

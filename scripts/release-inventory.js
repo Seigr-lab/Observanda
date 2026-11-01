@@ -8,7 +8,7 @@ import {inspectDotnetRuntime} from './dotnet-inventory.js';
 import {githubRuntimeReleases} from './github-runtime.js';
 import {pdfJavaArtifacts} from '../src/pdf-validation-dependencies.js';
 import {assertRuntimeAdmission,admittedFileDigest} from './runtime-input-trust.js';
-import {withRuntimeProbeEnvironment} from './runtime-probe-environment.js';
+import {withRuntimeProbeEnvironment,runtimeProbeWithGit} from './runtime-probe-environment.js';
 
 const executeFile=promisify(execFile);
 const version=value=>typeof value==='string'&&/^[0-9][0-9A-Za-z.+_-]{0,99}$/.test(value);
@@ -39,12 +39,12 @@ export async function collectRuntimeInventory(root,{platform=process.platform,ar
  root=path.resolve(root);
  return withRuntimeProbeEnvironment(async probeOptions=>{
  const suffix=platform==='win32'?'.exe':'',components=[],hostRequirements=[];
- const binary=async(name,relative,args,parse)=>{
+ const binary=async(name,relative,args,parse,options=probeOptions)=>{
   const file=path.join(root,relative);
   const sha256=admittedFileDigest(admission,relative);
   if(await digest(file)!==sha256)throw Error('Runtime changed before version probe: '+name);
   let result;
-  try{result=await execute(file,args,probeOptions);}
+  try{result=await execute(file,args,options);}
   catch{throw Error('Runtime version probe failed: '+name);}
   let detected;try{detected=parse(String(result.stdout??'')+'\n'+String(result.stderr??''));}catch{}
   if(!version(detected))throw Error('Runtime version is not identifiable: '+name);
@@ -61,7 +61,8 @@ export async function collectRuntimeInventory(root,{platform=process.platform,ar
  for(const name of ['ffmpeg','ffprobe'])await binary(name,'media/bin/'+name+suffix,['-version'],output=>new RegExp('^'+name+' version ([0-9][0-9A-Za-z.+_-]*)','m').exec(output)?.[1]);
  const git=await binary('Git','github/git/'+(platform==='win32'?'cmd/git.exe':'bin/git'),['--version'],output=>/^git version (\S+)/m.exec(output)?.[1]);
  if(platform==='win32'&&git.version!==githubRuntimeReleases.gitVersion.replace(/\.(\d+)$/,'.windows.$1'))throw Error('Bundled Windows Git differs from the pinned release.');
- const credential=await binary('Git Credential Manager','github/credential-manager/git-credential-manager'+suffix,['--version'],output=>/^([0-9][0-9A-Za-z.+_-]*)/m.exec(output)?.[1]);
+ const gitExecutable=path.join(root,git.path);if(await digest(gitExecutable)!==git.sha256)throw Error('Runtime changed before credential helper probe: Git');
+ const credential=await binary('Git Credential Manager','github/credential-manager/git-credential-manager'+suffix,['--version'],output=>/^([0-9][0-9A-Za-z.+_-]*)/m.exec(output)?.[1],runtimeProbeWithGit(probeOptions,gitExecutable,{platform}));
  if(credential.version.split('+')[0]!==credentialVersion)throw Error('Bundled credential helper differs from the pinned release.');
  const dotnet=await inspectDotnet(path.join(root,credential.path),{platform,expectedSha256:credential.sha256});
  if(dotnet.kind==='host-requirement')hostRequirements.push({name:dotnet.name,minimumVersion:dotnet.minimumVersion,requiredBy:credential.path,configurationSha256:dotnet.configurationSha256});
