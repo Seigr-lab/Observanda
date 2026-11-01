@@ -32,7 +32,7 @@ test('nested lab books have independent databases and writers and retain data af
  assert.equal(process.env.OBSERVANDA_DATABASE_URL,originalUrl);assert.notEqual(envA.OBSERVANDA_DATABASE_URL,envB.OBSERVANDA_DATABASE_URL);
  for(const [env,book] of [[envA,a],[envB,b]]){
   await assertLabBookCatalogueEnvironment(book.root,book.id,env);
-  const pid=(await readFile(path.join(book.root,'.observanda/postgresql/data/postmaster.pid'),'utf8')).split('\n');assert.equal(path.resolve(pid[1].trim()),path.join(book.root,'.observanda/postgresql/data'));
+  const pid=(await readFile(path.join(book.root,'.observanda/postgresql/data/postmaster.pid'),'utf8')).split('\n');assert.equal(path.resolve(pid[1].trim()),process.platform==='linux'?'/observanda/data':path.join(book.root,'.observanda/postgresql/data'));
   await query(env,'CREATE TABLE retained(id integer PRIMARY KEY,payload bytea NOT NULL)');
  }
  const content=Buffer.from('An independently retained observation'),aad='test/lab-book/'+a.id;

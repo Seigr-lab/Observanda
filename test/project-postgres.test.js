@@ -35,7 +35,7 @@ test('projects have separate physical databases and writers; a stopped project m
  assert.equal(new Set([envA.OBSERVANDA_DATABASE_URL,envB.OBSERVANDA_DATABASE_URL,workspaceEnv.OBSERVANDA_DATABASE_URL]).size,3);
  for(const [env,project] of [[envA,a],[envB,b]]){
   assert.equal(env.OBSERVANDA_WORKSPACE_DATABASE_ROOT,undefined);assert.equal(env.OBSERVANDA_PROJECT_ID,project.id);assert.equal(env.OBSERVANDA_PROJECT_DATABASE_ROOT,await realpath(project.root));
-  const pid=(await readFile(path.join(project.root,'.observanda/postgresql/data/postmaster.pid'),'utf8')).split('\n');assert.equal(path.resolve(pid[1].trim()),path.join(project.root,'.observanda/postgresql/data'));
+  const pid=(await readFile(path.join(project.root,'.observanda/postgresql/data/postmaster.pid'),'utf8')).split('\n');assert.equal(path.resolve(pid[1].trim()),process.platform==='linux'?'/observanda/data':path.join(project.root,'.observanda/postgresql/data'));
   await query(env,'CREATE TABLE retained(id integer PRIMARY KEY,payload bytea NOT NULL)');
  }
  const content=Buffer.from('A retained project revision with private content'),aad='test/project/'+a.id;

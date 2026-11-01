@@ -56,7 +56,7 @@ test('nonempty untrusted runtime is preserved and cannot be admitted by tighteni
  // assert rejection when read-only classification establishes the prerequisite.
  const {inspectWindowsPostgresRuntimeStorage}=await import('../src/windows-postgres-runtime-guard.js');const before=await inspectWindowsPostgresRuntimeStorage(directory);
  if(before.rootPermissions==='admissible'){t.skip('Host temporary directory already has private access controls');return;}
- await assert.rejects(f.acquire(directory),{code:'DATABASE_GUARD_STORAGE'});assert.equal(await readFile(path.join(directory,'retained'),'utf8'),'retained');
+ await assert.rejects(f.acquire(directory),{code:'DATABASE_GUARD_STORAGE',reason:'nonprivate-runtime-requires-migration'});assert.equal(await readFile(path.join(directory,'retained'),'utf8'),'retained');
 });
 
 test('native job ownership stops actual PostgreSQL descendants when the guard helper dies',{...options,skip:process.platform!=='win32'||!process.env.OBSERVANDA_TEST_POSTGRES_BIN},async t=>{

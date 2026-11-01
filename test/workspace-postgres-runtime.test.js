@@ -39,7 +39,7 @@ test('workspace databases own separate files, credentials and lifecycle',async t
  for(const item of [first,second])await query(item.env,'CREATE TABLE public.probe(value text)');
  await query(first.env,"INSERT INTO public.probe VALUES ('first workspace')");await query(second.env,"INSERT INTO public.probe VALUES ('second workspace')");
  for(const [item,workspace] of [[first,a],[second,b]]){
-  const data=path.join(workspace.root,'.observanda','postgresql','data'),pid=await readFile(path.join(data,'postmaster.pid'),'utf8');assert.equal(path.resolve(pid.split('\n')[1].trim()),data);
+  const data=path.join(workspace.root,'.observanda','postgresql','data'),pid=await readFile(path.join(data,'postmaster.pid'),'utf8');assert.equal(path.resolve(pid.split('\n')[1].trim()),process.platform==='linux'?'/observanda/data':data);
   const state=await readFile(path.join(workspace.root,'.observanda','postgresql','service.observanda'));assert.equal(state.includes(Buffer.from('appPassword')),false);
  }
  await first.close();assert.deepEqual(await query(second.env,'SELECT value FROM public.probe'),[{value:'second workspace'}]);
