@@ -26,7 +26,7 @@ for(const legacy of [false,true])test(`private staged consumption verifies in on
  await withOperationProgress(event=>events.push(event),()=>operationStage('one-pass',{},async()=>{for await(const chunk of contentStagedStream(content))collected+=chunk.length;}));
  assert.equal(collected,bytes.length);assert.equal(events.at(-1).activity.bytes,bytes.length);
  const raw=await readFile(f.file);raw[raw.length-1]^=1;await writeFile(f.file,raw);await f.workspace.writeFile(f.target,'previous');const previous=await readFile(f.target);
- await assert.rejects(writeContent(f.workspace,f.target,contentStagedStream(content),{expected:{size:content.size,sha256:content.sha256}}),error=>['MEDIA_INVALID','ENCRYPTION_DAMAGED'].includes(error.code));assert.deepEqual(await readFile(f.target),previous);assert.deepEqual((await readdir(f.root)).sort(),['source','target']);
+ await assert.rejects(writeContent(f.workspace,f.target,contentStagedStream(content),{expected:{size:content.size,sha256:content.sha256}}),error=>['MEDIA_INVALID','ENCRYPTION_DAMAGED'].includes(error.code));assert.deepEqual(await readFile(f.target),previous);assert.deepEqual((await readdir(f.root)).sort(),['.observanda','source','target']);
  let released=false;await assert.rejects(async()=>{for await(const _bytes of content.read())released=true;});assert.equal(released,false,'The complete-before-first-byte API remains unchanged');
 });
 test('segmented descriptors avoid a body pass while final copying still verifies corruption',async t=>{

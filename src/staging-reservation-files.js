@@ -6,11 +6,12 @@ import {writeFilePart} from './segmented-file-io.js';
 import {AppError} from './errors.js';
 
 const damaged=()=>{throw new AppError('COLLABORATION_DAMAGED');};
+export const STAGING_NAMESPACE_LEASE='.staging-reservations.lock';
 // These small encrypted controls use the same retained directory and exclusive
 // file primitives as scientific content. The caller owns their native lifetime.
 export class StagingReservationFiles{
  constructor(workspace,scope,{signal}={}){this.workspace=workspace;this.scope=scope;this.signal=signal;this.vault=workspace.vault;this.key=this.vault?.key;if(!Buffer.isBuffer(this.key))throw new AppError('ACCESS_LOCKED');this.keyHash=createHash('sha256').update(this.key).digest('hex');}
- check(){this.signal?.throwIfAborted();if(this.workspace.vault!==this.vault||this.vault.key!==this.key||createHash('sha256').update(this.key).digest('hex')!==this.keyHash)throw new AppError('ACCESS_LOCKED');}
+ check(){this.signal?.throwIfAborted();if(!this.scope.active)throw new AppError('CONFLICT');if(this.workspace.vault!==this.vault||this.vault.key!==this.key||createHash('sha256').update(this.key).digest('hex')!==this.keyHash)throw new AppError('ACCESS_LOCKED');}
  aad(kind){return JSON.stringify(['Observanda/staging-reservations/v1',this.vault.id,this.scope.identity,this.scope.internalIdentity,kind]);}
  async read(directory,name,kind,{missing=false,limit=65536}={}){
   this.check();const saved=await directory.read(name,{missing,limit});this.check();if(!saved)return null;
@@ -24,9 +25,14 @@ export class StagingReservationFiles{
   finally{await file?.close();if(identity)await directory.remove(temporary,{identity}).catch(error=>{if(error.code!=='ENOENT')throw error;});}
  }
  async lease(directory,name,{wait=true}={}){
-  const deadline=Date.now()+30000;for(;;){this.check();try{return await directory.lease(name);}catch(error){if(error.code!=='EBUSY')throw error;if(!wait||Date.now()>=deadline)throw new AppError('LOCKED');await delay(20,undefined,{signal:this.signal});}}
+  const deadline=Date.now()+30000;for(;;){this.check();try{const lease=await directory.lease(name);if(lease.bytes!==0){await lease.close();damaged();}return lease;}catch(error){if(error.code!=='EBUSY')throw error;if(!wait||Date.now()>=deadline)throw new AppError('LOCKED');await delay(20,undefined,{signal:this.signal});}}
  }
  async openNamespace({create=false}={}){
+  this.check();if(!create&&!await this.scope.internalDirectory.stat('staging-reservations',{folder:true,missing:true}))return null;
+  const initialization=await this.lease(this.scope.internalDirectory,STAGING_NAMESPACE_LEASE);
+  try{return await this.openAdmittedNamespace({create,initializationIdentity:initialization.identity});}finally{await initialization.close();}
+ }
+ async openAdmittedNamespace({create,initializationIdentity}){
   this.check();const internal=this.scope.internalDirectory;let directory=await internal.directory('staging-reservations',{missing:true}),intent;
   if(!directory){
    if(!create)return null;
@@ -43,10 +49,10 @@ export class StagingReservationFiles{
     // its empty admission control. No staged payload is admitted in this phase.
     for await(const entry of directory.entries()){if(entry.name!=='admission'||entry.directory||(await directory.stat(entry.name)).bytes!==0)damaged();}
     admission=await this.lease(directory,'admission');
-    try{const value={version:1,id:intent.id,rootIdentity:this.scope.identity,internalIdentity:this.scope.internalIdentity,directoryIdentity:directory.identity,admissionIdentity:admission.identity};await this.write(directory,'namespace','namespace',value);proof={value};}finally{await admission.close();}
+    try{const value={version:1,id:intent.id,rootIdentity:this.scope.identity,internalIdentity:this.scope.internalIdentity,directoryIdentity:directory.identity,admissionIdentity:admission.identity,initializationIdentity};await this.write(directory,'namespace','namespace',value);proof={value};}finally{await admission.close();}
    }
    const value=proof.value;
-   if(Object.keys(value).sort().join()!=='admissionIdentity,directoryIdentity,id,internalIdentity,rootIdentity,version'||value.version!==1||value.rootIdentity!==this.scope.identity||value.internalIdentity!==this.scope.internalIdentity||value.directoryIdentity!==directory.identity||typeof value.admissionIdentity!=='string'||typeof value.id!=='string'||! /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value.id))damaged();
+   if(Object.keys(value).sort().join()!=='admissionIdentity,directoryIdentity,id,initializationIdentity,internalIdentity,rootIdentity,version'||value.version!==1||value.rootIdentity!==this.scope.identity||value.internalIdentity!==this.scope.internalIdentity||value.directoryIdentity!==directory.identity||value.initializationIdentity!==initializationIdentity||typeof value.admissionIdentity!=='string'||typeof value.id!=='string'||! /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value.id))damaged();
    admission=await this.lease(directory,'admission');try{
     if(admission.identity!==value.admissionIdentity)damaged();
     const pending=await this.read(internal,'.staging-reservations.intent','namespace-intent',{missing:true});if(pending){if(pending.value.id!==value.id)damaged();if(create)await internal.remove('.staging-reservations.intent',{identity:pending.identity});}

@@ -57,3 +57,14 @@ test('a new write phase can refresh capacity before its byte checkpoint',async()
  await ticket.write(5,async()=>{});assert.equal(probes,1);free=1n;
  await assert.rejects(ticket.write(1,async()=>assert.fail('phase must observe lost capacity'),{refresh:true}),{code:'STORAGE_FULL'});assert.equal(probes,2);ticket.release();
 });
+
+test('explicit durable authority admission protects later ordinary writers on the same device',async()=>{
+ let durable=60,free=100n,held=false;const budget=new DiskCapacity({probe:async()=>{assert.equal(held,true);return {id:'volume',available:free};}}),admission=async operation=>{assert.equal(held,false);held=true;try{return await operation({volumeId:'volume',remainingBytes:durable,reserveBytes:10});}finally{held=false;}};
+ await assert.rejects(budget.reserve('later',31,{admission}),{code:'STORAGE_FULL'});const ticket=await budget.reserve('later',30,{admission});
+ await ticket.write(10,async()=>{assert.equal(held,false);free-=10n;});durable=61;await assert.rejects(ticket.write(1,async()=>assert.fail('durable claim must be observed')),{code:'STORAGE_FULL'});ticket.release();
+ budget.probe=async()=>({id:'other-device',available:100n});const other=await budget.reserve('other',100,{admission});other.release();assert.equal(budget.stats().active,0);
+});
+
+test('failed authority close releases local admission without losing pending accounting',async()=>{
+ const budget=new DiskCapacity({probe:async()=>({id:'volume',available:100n})});await assert.rejects(budget.reserve('folder',50,{admission:async operation=>{await operation({volumeId:null,remainingBytes:0,reserveBytes:0});throw new Error('lease closed unexpectedly');}}),/lease closed unexpectedly/);assert.equal(budget.stats().active,0);assert.equal(budget.stats().pending,0);assert.equal(budget.stats().reservedBytes,'0');
+});

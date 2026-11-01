@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,mkdir,rm,realpath,writeFile} from 'node:fs/promises';
+import {mkdtemp,mkdir,rm,realpath,writeFile,rename} from 'node:fs/promises';
 import {randomBytes,randomUUID} from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import {withNativeDestination} from '../src/native-destination.js';
 import {closeIdleMutationFiles} from '../src/mutation-files.js';
-import {StagingReservationFiles} from '../src/staging-reservation-files.js';
+import {StagingReservationFiles,STAGING_NAMESPACE_LEASE} from '../src/staging-reservation-files.js';
 
 async function fixture(t){const parent=await realpath(os.tmpdir()),root=await mkdtemp(path.join(parent,'observanda-staging-controls-'));await mkdir(path.join(root,'.observanda'));const workspace={root,vault:{id:randomUUID(),key:randomBytes(32)}};
  t.after(async()=>{await closeIdleMutationFiles();workspace.vault.key?.fill(0);assert.equal(path.dirname(root),parent);assert.ok(path.basename(root).startsWith('observanda-staging-controls-'));await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});});return workspace;}
@@ -29,4 +29,15 @@ test('namespace creation resumes only an authenticated empty intent and preserve
 });
 test('retired or mutated keys cannot continue reservation control access',async t=>{
  const workspace=await fixture(t);await withNativeDestination(workspace.root,async scope=>{await scope.admit();const files=new StagingReservationFiles(workspace,scope),opened=await files.openNamespace({create:true});try{workspace.vault.key[0]^=1;await assert.rejects(files.write(opened.directory,'state','ledger',{version:1}),{code:'ACCESS_LOCKED'});}finally{await opened.directory.close();}});
+});
+
+test('nonempty initialization leases are preserved and never adopted as internal controls',async t=>{
+ const workspace=await fixture(t);await writeFile(path.join(workspace.root,'.observanda',STAGING_NAMESPACE_LEASE),'unrelated');
+ await withNativeDestination(workspace.root,async scope=>{await scope.admit();const files=new StagingReservationFiles(workspace,scope);await assert.rejects(files.openNamespace({create:true}),{code:'COLLABORATION_DAMAGED'});assert.equal((await scope.internalDirectory.read(STAGING_NAMESPACE_LEASE,{limit:32})).bytes.toString(),'unrelated');assert.equal(await scope.internalDirectory.directory('staging-reservations',{missing:true}),null);});
+});
+
+test('a replaced initialization lease cannot authenticate an existing namespace',async t=>{
+ const workspace=await fixture(t);await withNativeDestination(workspace.root,async scope=>{await scope.admit();const files=new StagingReservationFiles(workspace,scope),opened=await files.openNamespace({create:true});await opened.directory.close();});
+ await rename(path.join(workspace.root,'.observanda',STAGING_NAMESPACE_LEASE),path.join(workspace.root,'original-lease'));await writeFile(path.join(workspace.root,'.observanda',STAGING_NAMESPACE_LEASE),'');
+ await assert.rejects(withNativeDestination(workspace.root,async scope=>{await scope.admit();return new StagingReservationFiles(workspace,scope).openNamespace({create:true});}),{code:'COLLABORATION_DAMAGED'});
 });

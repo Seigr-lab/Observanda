@@ -1,5 +1,6 @@
 import {assertWorkspaceAvailable} from './workspace-lifecycle-admission.js';
 import {withQueryCacheHandoff} from './query-cache-lifecycle.js';
+import {assertStagingHandoff,withStagingHandoff} from './staging-reservations.js';
 import {persistDirectoryCreation,createPersistentDirectory} from './filesystem-persistence.js';
 import {projectDomainHandoff} from './project-domain-lock.js';
 import {websiteMetadataShell} from './website-owned-metadata.js';
@@ -340,7 +341,7 @@ export class Workspace {
     if(held?.root===this.root){held.afterCommit.push(operation);return;}
     await operation();
   }
-  withStorageHandoff(operation,options){return withQueryCacheHandoff(this.root,()=>this.withLock(async internal=>{const held=catalogueContext.getStore();if(held?.root===this.root)await projectDomainHandoff(held.db);return operation(internal);},options));}
+  withStorageHandoff(operation,options){return withStagingHandoff(this,()=>withQueryCacheHandoff(this.root,()=>this.withLock(async internal=>{await assertStagingHandoff(this);const held=catalogueContext.getStore();if(held?.root===this.root)await projectDomainHandoff(held.db);return operation(internal);},options)));}
   async withLock(operation,{detached=false,moveId,existing=false}={}) {
     assertCatalogueWritable(this);
     await assertWorkspaceAvailable(this.root,{moveId});

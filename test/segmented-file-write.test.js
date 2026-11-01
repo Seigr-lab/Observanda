@@ -27,7 +27,7 @@ for(const known of [true,false])for(const size of [0,1,BLOCK,BLOCK+1,3*BLOCK+27]
  async function* source(){for(let offset=0;offset<size;offset+=713)yield bytes.subarray(offset,offset+713);}
  const saved=await writeContent(f.workspace,f.file,source(),{...(known?{expected}:{}),beforeCommit:value=>{assert.deepEqual(value,expected);checkpoints++;}});
  assert.equal(checkpoints,1);assert.deepEqual(saved,expected);assert.equal((await readFile(f.file)).subarray(0,8).toString(),'OBSENC02');
- assert.deepEqual(await contentBuffer(new FileContent(f.workspace,f.file,size,saved.sha256)),bytes);assert.deepEqual(await f.workspace.readFile(f.file),bytes);assert.deepEqual(await readdir(f.root),['original']);
+ assert.deepEqual(await contentBuffer(new FileContent(f.workspace,f.file,size,saved.sha256)),bytes);assert.deepEqual(await f.workspace.readFile(f.file),bytes);assert.deepEqual((await readdir(f.root)).sort(),['.observanda','original']);
 });
 test('wrong declared size or digest cancellation and revoked keys cannot replace an existing original',async t=>{
  const f=await fixture(t),prior=Buffer.from('retained original'),bytes=randomBytes(BLOCK+11),expected={size:bytes.length,sha256:digest(bytes)};
@@ -35,7 +35,7 @@ test('wrong declared size or digest cancellation and revoked keys cannot replace
  for(const declared of [{...expected,size:expected.size-1},{...expected,size:expected.size+1},{...expected,sha256:'0'.repeat(64)}]){await assert.rejects(writeContent(f.workspace,f.file,[bytes],{expected:declared}),{code:'MEDIA_INVALID'});assert.deepEqual(await readFile(f.file),original);}
  const controller=new AbortController();await assert.rejects(writeContent(f.workspace,f.file,[bytes],{expected,signal:controller.signal,beforeCommit:()=>controller.abort()}),{name:'AbortError'});
  await assert.rejects(writeContent(f.workspace,f.file,[bytes],{expected,beforeCommit:()=>clearVault(f.vault)}),{code:'ACCESS_LOCKED'});
- assert.deepEqual(await readFile(f.file),original);assert.deepEqual(await readdir(f.root),['original']);
+ assert.deepEqual(await readFile(f.file),original);assert.deepEqual((await readdir(f.root)).sort(),['.observanda','original']);
 });
 
 for(const known of [true,false])test((known?'known':'unknown')+' segmented writes bound capacity probes by byte windows',async t=>{

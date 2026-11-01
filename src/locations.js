@@ -138,7 +138,7 @@ export async function copyPlan(root,input,{onProgress,vault=null,projectRoots=[]
  return withOperationProgress(onProgress,async()=>{
   // A review must authenticate the same transient-file policy as its copy.
   // Unknown cache-shaped content remains ordinary data once access is proved.
-  if(!vault?.key&&await assertRegular(path.join(root,'.observanda','query-cache'),{missing:true,directory:true}))throw new AppError('ACCESS_LOCKED');
+  if(!vault?.key)for(const [name,directory] of [['query-cache',true],['staging-reservations',true],['.staging-reservations.lock',false]])if(await assertRegular(path.join(root,'.observanda',name),{missing:true,directory}))throw new AppError('ACCESS_LOCKED');
   const plan=await transferDestination(root,input),inventory=await operationStage('review-workspace',{},()=>new Workspace(plan.source,vault).withStorageHandoff(()=>workspaceInventory(plan.source,plan.inventorySalt,{projectRoots,excludeProject}),{detached:true,existing:true}));
   return {...plan,...inventory,...(projectRoots.length?{projectRoots}: {})};
  });

@@ -159,7 +159,7 @@ namespace Observanda {
    if(operation=="directory")return Saved(Open(parent,Text(command,"name"),true,0x80000000,Flag(command,"exclusive")?2u:Flag(command,"create")?3u:1u));
    if(operation=="lease"){
     var handle=Open(parent,Text(command,"name"),false,0xC0000000,3,0);
-    try{Info info=Information(handle,false);int id=++next;leases.Add(id,handle);return new {id=id,identity=Identity(info)};}catch{handle.Dispose();throw;}
+    try{Info info=Information(handle,false);int id=++next;leases.Add(id,handle);return new {id=id,identity=Identity(info),bytes=Bytes(info)};}catch{handle.Dispose();throw;}
    }
    if(operation=="pin"){
     var handle=Open(parent,Text(command,"name"),false,0x80000000,1,0);

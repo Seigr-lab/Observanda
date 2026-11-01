@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,readFile,readdir,writeFile,rm} from 'node:fs/promises';
 import {withMutationFilesSession} from '../src/mutation-files.js';
+import {observeNativeFiles} from './native-file-observer.js';
 import os from 'node:os';
 import path from 'node:path';
 import {randomBytes,randomUUID} from 'node:crypto';
@@ -32,11 +33,11 @@ test('prepared encrypted writes resolve only after durable replacement',{timeout
  const prepared=Promise.withResolvers(),continuePreparation=Promise.withResolvers(),syncStarted=Promise.withResolvers(),continueSync=Promise.withResolvers();
  let pending,settled=false;
  t.after(async()=>{continuePreparation.resolve();continueSync.resolve();await pending?.catch(()=>{});await clearVault(workspace.vault);assert.equal(path.dirname(root),parent);assert.ok(path.basename(root).startsWith('observanda-stream-finalization-'));await rm(root,{recursive:true,force:true});});
- pending=withMutationFilesSession(async service=>{const open=service.open;service.open=async location=>{const directory=await open.call(service,location);if(location===root){const file=directory.file;directory.file=async function(...args){const handle=await file.apply(this,args);if(args[1]?.mode==='exclusive'){const sync=handle.sync;handle.sync=async function(){syncStarted.resolve();await continueSync.promise;return sync.call(this);};}return handle;};}return directory;};try{return await writeContent(workspace,file,[bytes],{beforeCommit:async saved=>{prepared.resolve(saved);await continuePreparation.promise;}});}finally{service.open=open;}});
+ pending=withMutationFilesSession(async service=>{const observed=await observeNativeFiles(t,service,root,async(_name,mode,open)=>{const handle=await open();if(mode==='wx+'){const sync=handle.sync;handle.sync=async function(){syncStarted.resolve();await continueSync.promise;return sync.call(this);};}return handle;});try{return await writeContent(workspace,file,[bytes],{beforeCommit:async saved=>{prepared.resolve(saved);await continuePreparation.promise;}});}finally{observed.mock.restore();}});
  pending.then(()=>{settled=true;},()=>{settled=true;});
  assert.deepEqual(await prepared.promise,{size:bytes.length,sha256:digest(bytes)});assert.equal(settled,false);assert.deepEqual(await workspace.readFile(file),previous);
  continuePreparation.resolve();await syncStarted.promise;assert.equal(settled,false);assert.deepEqual(await workspace.readFile(file),previous);
- continueSync.resolve();const saved=await pending;assert.deepEqual(saved,{size:bytes.length,sha256:digest(bytes)});assert.deepEqual(await contentBuffer(new FileContent(workspace,file,saved.size,saved.sha256)),bytes);assert.deepEqual(await readdir(root),['asset']);
+ continueSync.resolve();const saved=await pending;assert.deepEqual(saved,{size:bytes.length,sha256:digest(bytes)});assert.deepEqual(await contentBuffer(new FileContent(workspace,file,saved.size,saved.sha256)),bytes);assert.deepEqual((await readdir(root)).sort(),['.observanda','asset']);
 });
 test('rejected or cancelled prepared writes preserve the original and remove their temporary',{timeout:10000},async t=>{
  const parent=path.resolve(os.tmpdir()),root=await mkdtemp(path.join(parent,'observanda-stream-finalization-')),workspace=new Workspace(root,{id:randomUUID(),key:randomBytes(32)}),file=path.join(root,'asset'),previous=Buffer.from('retained original'),bytes=Buffer.from('replacement');
@@ -45,7 +46,7 @@ test('rejected or cancelled prepared writes preserve the original and remove the
  for(const cancel of [false,true]){
   const reason=new Error(cancel?'Cancelled after preparation':'Preparation refused'),controller=new AbortController();
   await assert.rejects(writeContent(workspace,file,[bytes],{signal:controller.signal,beforeCommit:async saved=>{assert.deepEqual(saved,{size:bytes.length,sha256:digest(bytes)});if(cancel)controller.abort(reason);else throw reason;}}),error=>error===reason);
-  assert.deepEqual(await workspace.readFile(file),previous);assert.deepEqual(await readdir(root),['asset']);
+  assert.deepEqual(await workspace.readFile(file),previous);assert.deepEqual((await readdir(root)).sort(),['.observanda','asset']);
  }
 });
 

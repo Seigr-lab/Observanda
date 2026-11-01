@@ -43,6 +43,10 @@ export async function* workspaceFiles(root,{signal,includeDatabase=true,hashFile
      await assertRegular(path.join(absolute,item.name),{directory:true});const held=catalogueContext.getStore();
      if(held?.root===root){const {verifiedQueryCacheNamespace}=await import('./query-cache-files.js');if(await verifiedQueryCacheNamespace(root,held.vault))continue;}
     }
+    if(relative==='.observanda'&&['staging-reservations','.staging-reservations.lock'].includes(item.name)){
+     await assertRegular(path.join(absolute,item.name),{directory:item.name==='staging-reservations'});const held=catalogueContext.getStore();
+     if(held?.root===root){const {verifiedStagingReservationNamespace}=await import('./staging-reservations.js');if(await verifiedStagingReservationNamespace(root,held.vault))continue;}
+    }
     if(relative==='.observanda'&&['postgresql','database-transition','project-transfer-files','lab-book-transfer-files'].includes(item.name)){await assertRegular(path.join(absolute,item.name),{directory:true});continue;}
     if(relative==='.observanda'&&item.name==='database-conversion.observanda'){await assertRegular(path.join(absolute,item.name));continue;}
     if(workspaceTransferControl(path.posix.join(relative,item.name))){await assertRegular(path.join(absolute,item.name));continue;}

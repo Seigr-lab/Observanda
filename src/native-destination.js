@@ -21,7 +21,7 @@ export function withNativeDestination(root,operation){
   const scope={root,
    get active(){return active;},
    get identity(){return directory?.identity;},get internalIdentity(){return internal?.identity;},get directory(){return directory;},get internalDirectory(){return internal;},
-   async admit({prepare=false,identity,internalIdentity}={}){
+   async admit({prepare=false,createInternal=false,identity,internalIdentity}={}){
     if(!active)throw new AppError('IO');
     if(directory){if(prepare)throw new AppError('EXISTS');if(identity&&identity!==directory.identity||internalIdentity&&internalIdentity!==internal?.identity)throw new AppError('STORAGE_COPY');return;}
     const container=(scopes.getStore()??[]).findLast(value=>value.active&&value!==scope&&inside(value.root,root));
@@ -30,7 +30,7 @@ export function withNativeDestination(root,operation){
     else{parent=await service.open(path.dirname(root));await open(parent,path.basename(root));}
     if(identity&&directory.identity!==identity)throw new AppError('STORAGE_COPY');
     if(prepare){for await(const _entry of directory.entries())throw new AppError('EXISTS');}
-    internal=await directory.directory('.observanda',{create:prepare,exclusive:prepare});
+    internal=await directory.directory('.observanda',{create:prepare||createInternal,exclusive:prepare});
     if(internalIdentity&&internal.identity!==internalIdentity)throw new AppError('STORAGE_COPY');
     await scope.assertNamed();
    },

@@ -1,7 +1,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import filesystem,{mkdtemp,readFile,writeFile,readdir,rm} from 'node:fs/promises';
-import {syncBuiltinESMExports} from 'node:module';
+import {mkdtemp,readFile,writeFile,readdir,rm} from 'node:fs/promises';
+import {withMutationFilesSession} from '../src/mutation-files.js';
+import {observeNativeFiles} from './native-file-observer.js';
 import path from 'node:path';
 import os from 'node:os';
 import {randomUUID,randomBytes} from 'node:crypto';
@@ -21,14 +22,14 @@ test('existing whole-file envelopes still authenticate the entire file before a 
  let released=0;await assert.rejects(async()=>{for await(const part of content.read(0,65535))released+=part.length;},{code:'ENCRYPTION_DAMAGED'});assert.equal(released,0);
 });
 
-test('unknown stream finalization uses new header keys and bounds later playback reads',async t=>{
- const f=await fixture(t),bytes=randomBytes(16*BLOCK),openFile=filesystem.open;let provisional,seekReads=0,stagingReads=0;
- const mock=t.mock.method(filesystem,'open',async(name,...args)=>{
-  const handle=await openFile.call(this,name,...args);if(path.dirname(name)!==f.root)return handle;
+test('unknown stream finalization uses new header keys and bounds later playback reads',async t=>withMutationFilesSession(async service=>{
+ const f=await fixture(t),bytes=randomBytes(16*BLOCK);let provisional,seekReads=0,stagingReads=0;
+ const mock=await observeNativeFiles(t,service,f.root,async(name,_mode,open)=>{
+  const handle=await open();
   const read=handle.read.bind(handle),write=handle.write.bind(handle);
   handle.read=async(...input)=>{const result=await read(...input);if(name===f.file)seekReads+=result.bytesRead;else stagingReads+=result.bytesRead;return result;};
   handle.write=async(buffer,offset,length,position)=>{if(position===0&&buffer.length===HEADER&&!provisional)provisional=readSegmentedHeader(buffer,f.vault.key,f.workspace.fileAAD(f.file));return write(buffer,offset,length,position);};return handle;
- });syncBuiltinESMExports();t.after(()=>{mock.mock.restore();syncBuiltinESMExports();});
+ });t.after(()=>mock.mock.restore());
  async function* input(){for(let offset=0;offset<bytes.length;offset+=65536)yield bytes.subarray(offset,offset+65536);}
  const started=performance.now(),saved=await writeContent(f.workspace,f.file,input()),intakeMs=performance.now()-started,final=readSegmentedHeader((await readFile(f.file)).subarray(0,HEADER),f.vault.key,f.workspace.fileAAD(f.file));
  assert.notDeepEqual(provisional.salt,final.salt);assert.notDeepEqual(provisional.prefix,final.prefix);assert.equal(stagingReads,bytes.length+16*28);
@@ -36,18 +37,18 @@ test('unknown stream finalization uses new header keys and bounds later playback
  for(const start of [0,8*BLOCK,bytes.length-65536])assert.deepEqual(await collect(content.read(start,start+65535)),bytes.subarray(start,start+65536));
  assert.ok(seekReads<=3*(8+HEADER+BLOCK+28));assert.equal(saved.sha256,digest(bytes));
  t.diagnostic(JSON.stringify({inputBytes:bytes.length,intakeMs:Math.round(intakeMs),finalizationReadBytes:stagingReads,seekReturnedBytes:3*65536,seekReadBytes:seekReads}));
-});
+}));
 
-for(const fault of ['read','rewrite','header','truncate','sync','cancel','lock','capacity'])test('interrupted unknown-stream '+fault+' keeps the previous original and releases temporary capacity',async t=>{
- const f=await fixture(t),prior=Buffer.from('retained original');await f.workspace.writeFile(f.file,prior);const before=await readFile(f.file),controller=new AbortController(),openFile=filesystem.open,bytes=randomBytes(BLOCK+7),failure=Error('Injected finalization interruption');let fired=false,headerWrites=0;
- const mock=t.mock.method(filesystem,'open',async(name,...args)=>{
-  const handle=await openFile.call(this,name,...args);if(!String(args[0]).startsWith('wx')||path.dirname(name)!==f.root)return handle;
+for(const fault of ['read','rewrite','header','truncate','sync','cancel','lock','capacity'])test('interrupted unknown-stream '+fault+' keeps the previous original and releases temporary capacity',async t=>withMutationFilesSession(async service=>{
+ const f=await fixture(t),prior=Buffer.from('retained original');await f.workspace.writeFile(f.file,prior);const before=await readFile(f.file),controller=new AbortController(),bytes=randomBytes(BLOCK+7),failure=Error('Injected finalization interruption');let fired=false,headerWrites=0;
+ const mock=await observeNativeFiles(t,service,f.root,async(_name,mode,open)=>{
+  const handle=await open();if(!mode.startsWith('wx'))return handle;
   const fail=()=>{fired=true;throw failure;},read=handle.read.bind(handle),write=handle.write.bind(handle);
   handle.read=async(...values)=>{if(!fired){if(fault==='read')fail();if(fault==='cancel'){fired=true;controller.abort(failure);}if(fault==='lock'){fired=true;clearVault(f.vault);}if(fault==='capacity'){fired=true;diskCapacity.probe=async()=>({id:'full-finalization-volume',available:0n});}}return read(...values);};
   handle.write=async(buffer,offset,length,position)=>{if(position===0)headerWrites++;if(!fired&&(fault==='rewrite'&&headerWrites===1&&position===HEADER&&buffer.length===BLOCK+28&&await handle.stat().then(s=>s.size>BLOCK)||fault==='header'&&headerWrites===2))fail();return write(buffer,offset,length,position);};
   if(fault==='truncate')handle.truncate=async()=>fail();if(fault==='sync')handle.sync=async()=>fail();return handle;
- });const probe=diskCapacity.probe;syncBuiltinESMExports();
+ });const probe=diskCapacity.probe;
  async function* input(){yield bytes;}
- try{await assert.rejects(writeContent(f.workspace,f.file,input(),{signal:controller.signal}));assert.equal(fired,true);assert.deepEqual(await readFile(f.file),before);assert.deepEqual(await readdir(f.root),['original']);assert.equal(diskCapacity.stats().active,0);}
- finally{diskCapacity.probe=probe;mock.mock.restore();syncBuiltinESMExports();}
-});
+ try{await assert.rejects(writeContent(f.workspace,f.file,input(),{signal:controller.signal}));assert.equal(fired,true);assert.deepEqual(await readFile(f.file),before);assert.deepEqual((await readdir(f.root)).sort(),['.observanda','original']);assert.equal(diskCapacity.stats().active,0);}
+ finally{diskCapacity.probe=probe;mock.mock.restore();}
+}));

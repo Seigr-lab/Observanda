@@ -9,6 +9,7 @@ import {atomicReplace} from './atomic-replace.js';
 import {temporaryStreamName} from './storage-temporary.js';
 import {open,rename,unlink,lstat} from 'node:fs/promises';
 import {diskCapacity} from './disk-capacity.js';
+import {withStagingCapacity} from './staging-reservations.js';
 import path from 'node:path';
 import {createCipheriv,createDecipheriv,createHash,randomBytes} from 'node:crypto';
 import {Readable,PassThrough} from 'node:stream';
@@ -40,7 +41,7 @@ async function* decoded(handle,workspace,file){
   for(;;){const bytes=Buffer.allocUnsafe(BLOCK),r=await handle.read(bytes,0,BLOCK,position);if(!r.bytesRead)break;position+=r.bytesRead;operationWork({bytes:r.bytesRead});yield cipher?cipher.update(bytes.subarray(0,r.bytesRead)):bytes.subarray(0,r.bytesRead);}
   if(cipher){try{const last=cipher.final();if(last.length)yield last;}catch{throw new AppError('ENCRYPTION_DAMAGED');}}
 }
-export async function writeContent(workspace,file,source,{maxBytes=0,reserveBytes=0,signal,beforeCommit,expected,exclusive=false}={}){
+export async function writeContent(workspace,file,source,{maxBytes=0,reserveBytes=0,signal,beforeCommit,expected,exclusive=false,capacity}={}){
  return operationStage('encrypt-file',{unit:'bytes',item:path.basename(file)},async()=>{
   // Already-buffered input can declare its digest without any additional disk
   // pass. Yield between bounded hash batches so leases/cancellation still run.
@@ -49,7 +50,8 @@ export async function writeContent(workspace,file,source,{maxBytes=0,reserveByte
    for(const bytes of source)for(let offset=0;offset<bytes.length;offset+=BLOCK){signal?.throwIfAborted();const chunk=bytes.subarray(offset,offset+BLOCK);size+=chunk.length;if(!Number.isSafeInteger(size)||maxBytes&&size>maxBytes)throw new AppError('MEDIA_LIMIT');hash.update(chunk);if(++batch===16){batch=0;await yieldTurn(undefined,{signal});}}
    expected={size,sha256:hash.digest('hex')};
   }
-  if(workspace.vault?.id)return writeSegmentedContent(workspace,file,source,{maxBytes,reserveBytes,signal,beforeCommit,expected,exclusive});
+  if(workspace.vault?.id){const write=admission=>writeSegmentedContent(workspace,file,source,{maxBytes,reserveBytes,signal,beforeCommit,expected,exclusive,capacity,admission});return capacity?write():withStagingCapacity(workspace,write,{signal});}
+  if(capacity)throw new AppError('ACCESS_LOCKED');
   // Same OBSENC01 envelope as Workspace.writeFile; no format migration.
   await workspace.requireStorageKey();const directory=path.dirname(file),temp=path.join(directory,temporaryStreamName());
   const key=workspace.vault?.key?Buffer.from(workspace.vault.key):null,nonce=randomBytes(12),cipher=key?createCipheriv('aes-256-gcm',key,nonce):null;

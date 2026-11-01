@@ -71,3 +71,10 @@ test('nested owner file copies do not use the containing workspace as their outp
   assert.equal(await readFile(path.join(f.destination,'Project/value'),'utf8'),'nested owner');assert.deepEqual((await readdir(f.destination)).sort(),['.observanda','Project']);
  });
 });
+
+test('ordinary owner admission creates only its retained internal directory and rejects links',async t=>{
+ const f=await fixture(t);await mkdir(f.destination);await writeFile(path.join(f.destination,'original'),'retained');
+ await withNativeDestination(f.destination,async scope=>{await scope.admit({createInternal:true});assert.ok(scope.identity);assert.ok(scope.internalIdentity);await scope.assertNamed();});assert.equal(await readFile(path.join(f.destination,'original'),'utf8'),'retained');
+ await rename(path.join(f.destination,'.observanda'),path.join(f.root,'original-internal'));await symlink(f.outside,path.join(f.destination,'.observanda'),'junction');
+ await assert.rejects(withNativeDestination(f.destination,scope=>scope.admit({createInternal:true})),{code:'UNSAFE'});assert.deepEqual(await readdir(f.outside),['keep']);
+});
