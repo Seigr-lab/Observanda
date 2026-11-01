@@ -40,9 +40,9 @@ async function fixture(t,{owned=false}={}){
   app=await startServer({root:active.root,port:0,headless:true,preferencesFile:prefs,deviceStore});
   const client=async()=>{
    const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});
-   assert.equal(session.status,200);const cookie=session.headers.get('set-cookie').split(';')[0];let context;
+   assert.equal(session.status,200);const cookie=session.headers.get('x-observanda-session').split(';')[0];let context;
    const call=async(route,data)=>{
-    const r=await fetch(app.origin+route,{signal:AbortSignal.timeout(60000),...(data===undefined?{}:{method:'POST',body:JSON.stringify(data)}),headers:{Origin:app.origin,Cookie:cookie,'Content-Type':'application/json',...(context?{'X-Observanda-Workspace':context}:{})}});
+    const r=await fetch(app.origin+route,{signal:AbortSignal.timeout(60000),...(data===undefined?{}:{method:'POST',body:JSON.stringify(data)}),headers:{Origin:app.origin,'X-Observanda-Session':cookie,'Content-Type':'application/json',...(context?{'X-Observanda-Workspace':context}:{})}});
     return {status:r.status,value:await r.json()};
    };
    context=(await call('/api/storage')).value.contextId;return {call,context};

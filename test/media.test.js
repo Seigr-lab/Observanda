@@ -58,14 +58,14 @@ test('media endpoints require authentication, support byte ranges, and expose no
   const root = await mkdtemp(path.join(os.tmpdir(), 'observanda-media-http-')); await new Workspace(root).create(sampleNotebook());
   const app = await startServer({ root, port: 0 }); t.after(app.close);
   const auth = await fetch(app.origin + '/api/session', { method: 'POST', headers: { Origin: app.origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ token: app.launchToken }) });
-  const cookie = auth.headers.get('set-cookie').split(';')[0];
-  const response = await fetch(app.origin + '/api/media/audio', { method: 'POST', headers: { Cookie: cookie, Origin: app.origin, 'Content-Type': 'application/octet-stream' }, body: fixtures.audio.bytes });
+  const cookie = auth.headers.get('x-observanda-session').split(';')[0];
+  const response = await fetch(app.origin + '/api/media/audio', { method: 'POST', headers: { 'X-Observanda-Session': cookie, Origin: app.origin, 'Content-Type': 'application/octet-stream' }, body: fixtures.audio.bytes });
   assert.equal(response.status, 201); const asset = await response.json();
   assert.equal((await fetch(app.origin + '/api/media/' + asset.id)).status, 401);
-  const partial = await fetch(app.origin + '/api/media/' + asset.id, { headers: { Cookie: cookie, Range: 'bytes=0-11' } });
+  const partial = await fetch(app.origin + '/api/media/' + asset.id, { headers: { 'X-Observanda-Session': cookie, Range: 'bytes=0-11' } });
   assert.equal(partial.status, 206); assert.equal((await partial.arrayBuffer()).byteLength, 12);
-  assert.equal((await fetch(app.origin + '/api/media/' + asset.id + '/original', { headers: { Cookie: cookie } })).status, 404);
-  assert.equal((await fetch(app.origin + '/api/media/' + asset.id, { headers: { Cookie: cookie, Range: 'bytes=999999999-' } })).status, 416);
+  assert.equal((await fetch(app.origin + '/api/media/' + asset.id + '/original', { headers: { 'X-Observanda-Session': cookie } })).status, 404);
+  assert.equal((await fetch(app.origin + '/api/media/' + asset.id, { headers: { 'X-Observanda-Session': cookie, Range: 'bytes=999999999-' } })).status, 416);
 });
 
 test('logos and fonts are included offline; private project logos and media are excluded', async t => {

@@ -1,3 +1,4 @@
+import {downloadResource} from './session-download.js';
 import './i18n/catalogues/materialEditors.js';
 import {figureTypeOptions,figureOperationOptions} from './scientific-editor-text.js';
 import {ux} from './experience-ui.js';
@@ -126,7 +127,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
   if(state.storage?.researchStorage!=='catalogue'||!reference?.workspaceId)return;
   const generation=jobView;await sources.resolve(reference,{unlock:true});currentView(generation);
  }
- const measurements=measurementUI({call,frame,esc,field,guard,owner:()=>owner,readOnly:()=>referenceContext,inspect,notify,origin:()=>({ref:selectedRef,page,comparisonView:opened?.content?.comparison?comparisons.snapshot():null}),download:r=>{guard();const a=document.createElement('a');a.href=originalRoute(r)+'?context='+encodeURIComponent(workspaceContext);a.download='';a.click();}});
+ const measurements=measurementUI({call,frame,esc,field,guard,owner:()=>owner,readOnly:()=>referenceContext,inspect,notify,origin:()=>({ref:selectedRef,page,comparisonView:opened?.content?.comparison?comparisons.snapshot():null}),download:r=>{guard();return downloadResource(originalRoute(r)+'?context='+encodeURIComponent(workspaceContext));}});
  const coordinateFrames=coordinateFrameUI({call,frame,esc,field,guard,owner:()=>owner,readOnly:()=>referenceContext,inspect});
  document.getElementById('dialog')?.addEventListener('close',()=>coordinateFrames.clean());
  const uncertainty=statisticalUncertaintyUI({call,frame,esc,field,guard,owner:()=>owner,readOnly:()=>referenceContext,inspect,watchJob});
@@ -683,7 +684,7 @@ export function researchMaterialsUI({state,api,esc,field,showDialog,notify,dirty
    });
   }
   if(act==='download'){
-   guard();const a=document.createElement('a');a.href=originalRoute(selectedRef)+'?context='+encodeURIComponent(workspaceContext);a.download=opened.content.name;a.click();
+   guard();await downloadResource(originalRoute(selectedRef)+'?context='+encodeURIComponent(workspaceContext),opened.content.name);
   }
   if(act==='verify'){notify(mt("verifying"));const result=await call('verify');notify(mt("verifiedCounts",{revisions:result.revisions,bytes:result.originalBytes.toLocaleString()}));}
   return true;

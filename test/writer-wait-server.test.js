@@ -23,9 +23,9 @@ import {AppError} from '../src/errors.js';
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-writer-wait-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore});
  const cleanup=[];t.after(async()=>{await app.close();for(const close of cleanup)await close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
- const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=session.headers.get('set-cookie').split(';')[0];
- const storage=await(await fetch(app.origin+'/api/storage',{headers:{Cookie:cookie}})).json();
- const call=(route,data,signal)=>fetch(app.origin+route,{signal:signal??AbortSignal.timeout(30000),method:data===undefined?'GET':'POST',headers:{Origin:app.origin,Cookie:cookie,'Content-Type':'application/json','X-Observanda-Workspace':storage.contextId,'X-Observanda-Wait':'1'},...(data===undefined?{}:{body:JSON.stringify(data)})});
+ const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=session.headers.get('x-observanda-session').split(';')[0];
+ const storage=await(await fetch(app.origin+'/api/storage',{headers:{'X-Observanda-Session':cookie}})).json();
+ const call=(route,data,signal)=>fetch(app.origin+route,{signal:signal??AbortSignal.timeout(30000),method:data===undefined?'GET':'POST',headers:{Origin:app.origin,'X-Observanda-Session':cookie,'Content-Type':'application/json','X-Observanda-Workspace':storage.contextId,'X-Observanda-Wait':'1'},...(data===undefined?{}:{body:JSON.stringify(data)})});
  const writing=new RecordWriting(f.workspace),command=await writing.read({workspaceId:book.id,recordId:book.entries[0].id,sectionId:null});
  const save=body=>({workspaceId:book.id,recordId:book.entries[0].id,sectionId:null,expectedRevision:command.revision,value:{body}});
  return {...f,directory,book,app,call,writing,save,cleanup,storage,cookie};
@@ -104,7 +104,7 @@ test('website discovery and preview remain reads during copying and create no qu
 
 test('custom font bytes remain readable during a read-permitted workspace copy',async t=>{
  const f=await fixture(t),original=await readFile(new URL('../src/fonts/dm-sans.ttf',import.meta.url)),font=await new WorkspaceFonts(f.workspace).import(original),destination=path.join(f.directory,'copy');
- const asset=(context=f.storage.contextId,cookie=f.cookie)=>fetch(f.app.origin+'/api/fonts/'+font.id+'?workspace='+encodeURIComponent(context),{headers:{Cookie:cookie},signal:AbortSignal.timeout(10000)});
+ const asset=(context=f.storage.contextId,cookie=f.cookie)=>fetch(f.app.origin+'/api/fonts/'+font.id+'?workspace='+encodeURIComponent(context),{headers:{'X-Observanda-Session':cookie},signal:AbortSignal.timeout(10000)});
  const verify=ResearchCatalogue.prototype.verifyRecordHistory;let release,entered;
  const gate=new Promise(resolve=>release=resolve),ready=new Promise(resolve=>entered=resolve);
  ResearchCatalogue.prototype.verifyRecordHistory=async function(...args){entered();await gate;return verify.apply(this,args);};
@@ -123,7 +123,7 @@ test('custom font bytes remain readable during a read-permitted workspace copy',
 
 test('custom font reads remain fenced during an exclusive rename and after workspace lock',async t=>{
  const f=await fixture(t),original=await readFile(new URL('../src/fonts/dm-sans.ttf',import.meta.url)),font=await new WorkspaceFonts(f.workspace).import(original);
- const asset=()=>fetch(f.app.origin+'/api/fonts/'+font.id+'?workspace='+encodeURIComponent(f.storage.contextId),{headers:{Cookie:f.cookie},signal:AbortSignal.timeout(10000)});
+ const asset=()=>fetch(f.app.origin+'/api/fonts/'+font.id+'?workspace='+encodeURIComponent(f.storage.contextId),{headers:{'X-Observanda-Session':f.cookie},signal:AbortSignal.timeout(10000)});
  const begin=WorkspaceRenames.prototype.begin;let release,entered;
  const gate=new Promise(resolve=>release=resolve),ready=new Promise(resolve=>entered=resolve);
  // Hold after HTTP admission closes readers, before changing any folder.

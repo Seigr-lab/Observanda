@@ -15,7 +15,7 @@ test('organization operations require the launch session, correct origin and wor
   const book=(await f.workspace.outline()).metadata;
   const request=(operation,data,headers={})=>fetch(app.origin+'/api/organizations/'+operation,{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json',...headers},body:JSON.stringify({workspaceId:book.id,...data})});
   assert.equal((await request('state',{})).status,401);
-  const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=session.headers.get('set-cookie').split(';')[0],headers={Cookie:cookie};
+  const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=session.headers.get('x-observanda-session').split(';')[0],headers={'X-Observanda-Session':cookie};
   const initial=await request('state',{},headers);assert.equal(initial.status,200);assert.deepEqual((await initial.json()).organizations,[]);
   assert.equal((await request('create',{name:'Should not be created',administratorName:'Administrator',expectedRevision:0},{...headers,Origin:'https://invalid.example'})).status,403);
   assert.equal((await request('create',{workspaceId:randomUUID(),name:'Wrong workspace',administratorName:'Administrator',expectedRevision:0},headers)).status,409);

@@ -92,7 +92,7 @@ test('saved-view endpoints use authenticated workspace context, reject conflicts
  const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-view-service-')),root=path.join(parent,'source'),book=queryFixture(),password='synthetic service password',access=await createAccess('',password),vault=takeCreatedVault(access);
  await initializeLocation(root,book,access,vault);const app=await testServer({root,port:0,headless:true});t.after(async()=>{await app.close();clearVault(vault);await rm(parent,{recursive:true,force:true});});
  const auth=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});
- const headers={Origin:app.origin,Cookie:auth.headers.get('set-cookie').split(';')[0],'Content-Type':'application/json'};
+ const headers={Origin:app.origin,'X-Observanda-Session':auth.headers.get('x-observanda-session').split(';')[0],'Content-Type':'application/json'};
  const post=(route,data,extra={})=>fetch(app.origin+route,{method:'POST',headers:{...headers,...extra},body:JSON.stringify(data)});
  assert.equal((await fetch(app.origin+'/api/research/views/list',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({workspaceId:book.id})})).status,401);
  assert.equal((await post('/api/access/unlock',{password})).status,200);

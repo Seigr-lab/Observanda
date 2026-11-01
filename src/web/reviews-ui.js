@@ -1,3 +1,4 @@
+import {downloadResource} from './session-download.js';
 import {ux} from './experience-ui.js';
 import {sharedFigureControls,mountSharedFigures} from './shared-figure-reader.js';
 import {researchOwner,projectApiRoute,researchContext} from './project-context.js';
@@ -19,7 +20,7 @@ const empty=()=>({contacts:[],items:[],offset:0,total:0,previousCursor:null,next
 export function reviewsUI({state,api,esc,showDialog,notify,render,getRecord}){
  let upload=null,figureViews=[];const abortUpload=()=>{upload?.abort();upload=null;};const disposeFigures=()=>{for(const view of figureViews)view.dispose();figureViews=[];};
  const url=(op,selection)=>projectApiRoute('/api/reviews/'+op,researchOwner(state))+'?context='+encodeURIComponent(state.storage.contextId)+'&selection='+encodeURIComponent(JSON.stringify(selection));
- const downloadResult=(value,name)=>{if(value.download){const a=document.createElement('a');a.href=url('download',{workspaceId:state.book.id,id:value.download.id});a.download=name;a.click();}else download(value.file,name);};
+ const downloadResult=(value,name)=>value.download?downloadResource(url('download',{workspaceId:state.book.id,id:value.download.id}),name):download(value.file,name);
  let list=empty(),owner=null,packet=null,contact=null,context=null,busy=false,plan=null,listError='',operationRoute=null,reading=0;
  const call=async(op,values={},options={})=>{
   const workspaceId=state.book.id,ctx=researchContext(state),result=await api('/api/reviews/'+op,{workspaceId,...values},options);

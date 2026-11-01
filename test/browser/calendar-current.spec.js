@@ -1,3 +1,4 @@
+import {sessionRequest} from './session-fixture.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
@@ -23,7 +24,7 @@ for(const count of [65,650])test('dense calendars retain month totals and page t
  ModuleCatalogue.prototype.read=()=>{throw Error('Calendar read full module data');};ModuleCatalogue.prototype.selected=async function(head,id){opened.push(id);return selected.call(this,head,id);};
  page.on('request',r=>requests.push(new URL(r.url()).pathname));page.on('pageerror',e=>errors.push(e.message));const cdp=await page.context().newCDPSession(page);
  try{
-  const auth=await page.request.post(app.origin+'/api/session',{data:{token:app.launchToken},headers:{Origin:app.origin}});expect(auth.ok()).toBe(true);await page.goto(app.origin+'/#/workspace');
+  const auth=await sessionRequest(page,'post',app.origin+'/api/session',{data:{token:app.launchToken},headers:{Origin:app.origin}});expect(auth.ok()).toBe(true);await page.goto(app.origin+'/#/workspace');
   const panel=page.locator('[data-desk-card="schedule-growth"]');await expect(panel.locator('.desk-item')).toHaveCount(5);await panel.getByRole('button',{name:'Next items',exact:true}).click();await expect(panel).toContainText('Deadline 005');expect(opened).toEqual([]);
   await page.goto(app.origin+'/#/modules/planning/agenda');const main=page.locator('main'),cell=main.locator('[data-calendar-day="'+day+'"]');
   await expect(cell.locator('.calendar-event')).toHaveCount(3);await cell.getByRole('button',{name:(count-3)+' more',exact:true}).click();
@@ -51,7 +52,7 @@ for(const count of [65,650])test('calendar source pages search and filter '+coun
  ModuleCatalogue.prototype.read=()=>{throw Error('Whole module read');};ModuleCatalogue.prototype.selected=async function(head,id){opened.push(id);return selected.call(this,head,id);};page.on('pageerror',e=>errors.push(e.message));
  const cdp=await page.context().newCDPSession(page);
  try{
-  const auth=await page.request.post(app.origin+'/api/session',{data:{token:app.launchToken},headers:{Origin:app.origin}});expect(auth.ok()).toBe(true);await page.goto(app.origin+'/#/modules/planning/agenda');
+  const auth=await sessionRequest(page,'post',app.origin+'/api/session',{data:{token:app.launchToken},headers:{Origin:app.origin}});expect(auth.ok()).toBe(true);await page.goto(app.origin+'/#/modules/planning/agenda');
   const main=page.locator('main'),sources=main.locator('.calendar-sources');await expect(sources.locator('[data-calendar-source]')).toHaveCount(20);
   await main.locator('[data-calendar-mode]').selectOption('agenda');await expect(main.locator('.calendar-event')).toContainText(last.data.name);
   await sources.getByRole('button',{name:'Next calendars',exact:true}).click();await expect(sources).toContainText('Calendar 020');await expect(main.locator('.calendar-event')).toContainText(last.data.name);

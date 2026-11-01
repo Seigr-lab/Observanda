@@ -31,9 +31,9 @@ test('HTTP creation and authoring select dedicated nested book databases during 
  const device=new TestDeviceStore({file:path.join(directory,'device.key')}),access=await createWorkspaceAccess('','',device),vault=takeCreatedVault(access);vaults.push(vault);
  const root=path.join(directory,'Research Workspace 1');await initializeLocation(root,createNotebook('Research Workspace 1'),access,vault);const workspace=new Workspace(root,vault);
  app=await startServer({root,port:0,headless:true,deviceStore:device});
- const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});assert.equal(session.status,200);const cookie=session.headers.get('set-cookie').split(';')[0];
- const context=(await result(await fetch(app.origin+'/api/storage',{headers:{Cookie:cookie}}))).contextId;
- const call=(route,data={})=>fetch(app.origin+route,{signal:AbortSignal.timeout(45000),method:'POST',headers:{Origin:app.origin,Cookie:cookie,'Content-Type':'application/json','X-Observanda-Workspace':context,'X-Observanda-Wait':'1'},body:JSON.stringify(data)});
+ const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});assert.equal(session.status,200);const cookie=session.headers.get('x-observanda-session').split(';')[0];
+ const context=(await result(await fetch(app.origin+'/api/storage',{headers:{'X-Observanda-Session':cookie}}))).contextId;
+ const call=(route,data={})=>fetch(app.origin+route,{signal:AbortSignal.timeout(45000),method:'POST',headers:{Origin:app.origin,'X-Observanda-Session':cookie,'Content-Type':'application/json','X-Observanda-Workspace':context,'X-Observanda-Wait':'1'},body:JSON.stringify(data)});
  const projectId=randomUUID(),project=(await result(await call('/api/projects/create',{id:randomUUID(),path:path.join(root,'Field Project 1'),username:'',password:'',project:{id:projectId,title:'Field Project 1',description:'',share:false,logoId:null}}))).project;
  const base='/api/projects/'+projectId+'/lab-books',make=title=>call(base+'/create',{id:randomUUID(),username:'',password:'',book:{id:randomUUID(),projectId,title}}).then(result);
  const a=(await make('Field Book 1')).book,b=(await make('Field Book 2')).book;
@@ -59,7 +59,7 @@ test('HTTP creation and authoring select dedicated nested book databases during 
  assert.equal((await selected.read()).book.entries.length,0);assert.equal((await parent.read()).book.entries.length,0);assert.equal((await workspace.read()).book.entries.length,0);
 
  const prefix=base+'/'+b.labBookId,other=base+'/'+a.labBookId,bytes=Buffer.from('Observation readings\n1,2,3\n');
- const rawCall=(route,{method='GET',body,headers={}}={})=>fetch(app.origin+route,{signal:AbortSignal.timeout(45000),method,body,headers:{Origin:app.origin,Cookie:cookie,'X-Observanda-Workspace':context,...headers}});
+ const rawCall=(route,{method='GET',body,headers={}}={})=>fetch(app.origin+route,{signal:AbortSignal.timeout(45000),method,body,headers:{Origin:app.origin,'X-Observanda-Session':cookie,'X-Observanda-Workspace':context,...headers}});
  const originalPrepare=ResearchMaterials.prototype.prepareImport;let allow=false,started;const ready=new Promise(resolve=>started=resolve);
  ResearchMaterials.prototype.prepareImport=async function(id,options){if(this.workspace.labBookId===b.labBookId&&!allow){started();await delay(60000,null,{signal:options.signal});}return originalPrepare.call(this,id,options);};
  t.after(()=>{ResearchMaterials.prototype.prepareImport=originalPrepare;});

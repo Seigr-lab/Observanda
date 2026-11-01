@@ -22,8 +22,8 @@ async function fixture(t){
  t.after(async()=>{await provider.close();detach();clearVault(f.vault);assert.equal(path.dirname(path.resolve(parent)),path.resolve(os.tmpdir()));assert.ok(path.basename(parent).startsWith('observanda-rename-recovery-'));await fs.rm(parent,{recursive:true,force:true,maxRetries:10,retryDelay:100});});return {...f,parent};
 }
 async function client(app){
- const opened=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});assert.equal(opened.status,200,await opened.clone().text());const cookie=opened.headers.get('set-cookie').split(';')[0];let context;
- const call=async(route,data)=>{const response=await fetch(app.origin+route,{signal:AbortSignal.timeout(60000),method:data===undefined?'GET':'POST',headers:{Origin:app.origin,Cookie:cookie,'Content-Type':'application/json',...(context?{'X-Observanda-Workspace':context}:{})},...(data===undefined?{}:{body:JSON.stringify(data)})});return {status:response.status,value:await response.json()};};context=(await call('/api/storage')).value.contextId;return {call,adopt:value=>context=value.contextId};
+ const opened=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});assert.equal(opened.status,200,await opened.clone().text());const cookie=opened.headers.get('x-observanda-session').split(';')[0];let context;
+ const call=async(route,data)=>{const response=await fetch(app.origin+route,{signal:AbortSignal.timeout(60000),method:data===undefined?'GET':'POST',headers:{Origin:app.origin,'X-Observanda-Session':cookie,'Content-Type':'application/json',...(context?{'X-Observanda-Workspace':context}:{})},...(data===undefined?{}:{body:JSON.stringify(data)})});return {status:response.status,value:await response.json()};};context=(await call('/api/storage')).value.contextId;return {call,adopt:value=>context=value.contextId};
 }
 
 test('failed physical rename remains authenticated and resumes without confusing the access settings',{timeout:120000},async t=>{

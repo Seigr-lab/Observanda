@@ -1,3 +1,4 @@
+import {sessionRequest} from './session-fixture.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
@@ -36,7 +37,7 @@ for(const count of [42,420])test('sample review, amendment and dashboard cards d
   await page.getByRole('button',{name:/^Analyses /}).click();await page.getByRole('button',{name:'A-01',exact:true}).click();
   const popup=context.waitForEvent('page');await dialog.getByRole('link',{name:'Open printable result',exact:true}).click();const sheet=await popup;await sheet.waitForLoadState();await expect(sheet.getByRole('cell',{name:'0.34',exact:true})).toBeVisible();const oldSheet=sheet.url();await sheet.close();
   await dialog.getByRole('button',{name:'Amend result',exact:true}).click();await dialog.getByLabel('Reason for amendment').fill('Transcription correction');await dialog.getByRole('button',{name:'Start amendment',exact:true}).click();await dialog.getByLabel('Result value',{exact:true}).fill('0.35');await dialog.getByRole('button',{name:'Save result',exact:true}).click();await expect(dialog).not.toBeVisible();
-  await page.reload();await page.getByRole('button',{name:/^Analyses /}).click();await page.getByRole('button',{name:'A-01',exact:true}).click();await expect(dialog.getByLabel('Result value',{exact:true})).toHaveValue('0.35');await expect(dialog).not.toContainText('Reviewed by Synthetic reviewer');const retained=await page.request.get(oldSheet);expect(retained.status()).toBe(200);expect(await retained.text()).toContain('<td>0.34</td>');await dialog.getByRole('button',{name:'Close',exact:true}).click();
+  await page.reload();await page.getByRole('button',{name:/^Analyses /}).click();await page.getByRole('button',{name:'A-01',exact:true}).click();await expect(dialog.getByLabel('Result value',{exact:true})).toHaveValue('0.35');await expect(dialog).not.toContainText('Reviewed by Synthetic reviewer');const retained=await sessionRequest(page,'get',oldSheet);expect(retained.status()).toBe(200);expect(await retained.text()).toContain('<td>0.34</td>');await dialog.getByRole('button',{name:'Close',exact:true}).click();
   await navigate(page,'Dashboard');await expect(page.locator('main')).toContainText('S-01');await expect(page.locator('main')).toContainText('A-01');expect(requests.filter(p=>p==='/api/notebook'||p==='/api/workspace/read/page')).toEqual([]);expect(errors).toEqual([]);
  }finally{ResearchCatalogue.prototype.read=read;ResearchCatalogue.prototype.record=record;await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});}
 });

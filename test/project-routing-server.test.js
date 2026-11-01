@@ -43,12 +43,12 @@ async function fixture(t,{publishingOptions,nested=false,diagnostics}={}){
  const book=sampleNotebook(),f=await encryptedFixture(path.join(directory,'workspace'),book);vaults.push(f.vault);const registry=new ProjectRegistry(f.workspace,(await f.workspace.outline()).metadata.id);
  const create=async(name,password='')=>{const book=sampleNotebook(),id=book.projects[0].id,access=await createWorkspaceAccess('',password,f.deviceStore),vault=takeCreatedVault(access);vaults.push(vault);book.title=book.projects[0].title=name;const storage=await initializeProjectLocation(path.join(nested?f.workspace.root:directory,name),id,book,access,vault);await registry.attach(storage,{expected:(await registry.read()).revision});return {id,book,storage,vault};};
  const a=await create('a'),b=await create('b'),locked=await create('locked','A separate project password');app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,publishingOptions,diagnostics});
- const response=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=response.headers.get('set-cookie').split(';')[0];
- const context=(await(await fetch(app.origin+'/api/storage',{headers:{Cookie:cookie}})).json()).contextId;
- const call=(route,data={},headers={},options={})=>fetch(app.origin+route,{signal:options.signal??AbortSignal.timeout(30000),method:'POST',headers:{Origin:app.origin,Cookie:cookie,'Content-Type':'application/json','X-Observanda-Workspace':context,'X-Observanda-Wait':'1',...headers},body:JSON.stringify(data)});
+ const response=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=response.headers.get('x-observanda-session').split(';')[0];
+ const context=(await(await fetch(app.origin+'/api/storage',{headers:{'X-Observanda-Session':cookie}})).json()).contextId;
+ const call=(route,data={},headers={},options={})=>fetch(app.origin+route,{signal:options.signal??AbortSignal.timeout(30000),method:'POST',headers:{Origin:app.origin,'X-Observanda-Session':cookie,'Content-Type':'application/json','X-Observanda-Workspace':context,'X-Observanda-Wait':'1',...headers},body:JSON.stringify(data)});
  const project=(p,route,data,headers,options)=>call('/api/projects/'+p.id+'/'+route,data,headers,options);
- const activity=async()=>result(await fetch(app.origin+'/api/activity',{headers:{Cookie:cookie}}));
- const raw=(route,{method='GET',bytes,headers={}}={})=>fetch(app.origin+route,{method,headers:{Origin:app.origin,Cookie:cookie,'X-Observanda-Workspace':context,...headers},...(bytes?{body:bytes}:{})});
+ const activity=async()=>result(await fetch(app.origin+'/api/activity',{headers:{'X-Observanda-Session':cookie}}));
+ const raw=(route,{method='GET',bytes,headers={}}={})=>fetch(app.origin+route,{method,headers:{Origin:app.origin,'X-Observanda-Session':cookie,'X-Observanda-Workspace':context,...headers},...(bytes?{body:bytes}:{})});
  return {...f,book,directory,owner,registry,a,b,locked,app,call,project,activity,raw,context};
 }
 const target=p=>({workspaceId:p.book.id,recordId:p.book.entries[0].id,sectionId:null});

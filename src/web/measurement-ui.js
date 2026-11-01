@@ -125,7 +125,7 @@ export function measurementUI({call,frame,esc,field,guard,owner,inspect,notify,d
   }
   if(key==='revise'){const ref=JSON.parse(control.dataset.ref),doc=await call('read',{ref});guard();draft=structuredClone(doc.content.measurement);title=doc.title;editing={id:ref.id,expectedRevision:ref.revision};scalarReference={ref};scalarSource=null;back=()=>inspect(ref);renderForm();}
   if(key==='previous'||key==='next')await open(source,{offset:inspection[key],componentOffset:inspection?.domain?.offset??0,topologyCollection:inspection?.domain?.collection??null,alignmentOffset:inspection?.alignment?.offset??0,returning:true});
-  if(key==='download')download(source.ref);
+  if(key==='download')await download(source.ref);
   if(key==='download-slice'){
    const bytes=Uint8Array.from(atob(inspection.base64),c=>c.charCodeAt(0)),url=URL.createObjectURL(new Blob([bytes],{type:'application/octet-stream'})),a=document.createElement('a');a.href=url;a.download='bytes-'+inspection.offset+'-'+inspection.length+'.bin';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }

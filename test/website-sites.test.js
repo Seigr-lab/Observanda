@@ -80,8 +80,8 @@ test('independent websites isolate selections and review IDs and deploy to pinne
  for(let i=0;i<2;i++){assert.ok(remotes[i].head);assert.equal((await publishers[i].read()).receipt.commit,remotes[i].head);assert.equal((await new DeploymentJobs(scoped[i],publishers[i],websiteJobQueue(jobs.queue,ids[i])).page()).items.length,1);}
  assert.equal((await publisher.read()).configured,false);
  app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'prefs.json')});
- const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=session.headers.get('set-cookie').split(';')[0];
- const request=(route,data,id)=>fetch(app.origin+route,{headers:{Cookie:cookie,Origin:app.origin,'Content-Type':'application/json',...(id?{'X-Observanda-Website':id}:{})},...(data?{method:'POST',body:JSON.stringify(data)}:{})});
+ const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=session.headers.get('x-observanda-session').split(';')[0];
+ const request=(route,data,id)=>fetch(app.origin+route,{headers:{'X-Observanda-Session':cookie,Origin:app.origin,'Content-Type':'application/json',...(id?{'X-Observanda-Website':id}:{})},...(data?{method:'POST',body:JSON.stringify(data)}:{})});
  const review=prepared[0].result.id;
  assert.equal((await request('/api/publication-jobs/open',{id:review},ids[1])).status,404);
  assert.equal((await request('/api/publication-jobs/open',{id:review})).status,404);

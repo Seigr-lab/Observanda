@@ -1,4 +1,5 @@
 import {t} from './i18n/index.js';
+import {authorizeBrowser} from './browser-session.js';
 
 // A tab-bound nonce permits retry of a lost bootstrap response without minting
 // another session. The launch token alone is one-use; both expire on the server.
@@ -8,9 +9,9 @@ export async function startApplication({api,load,show,esc,location=window.locati
   if(/^[a-f0-9]{64}$/.test(token)){
    const slot='observanda.launch.'+token;let binding=sessionStorage.getItem(slot);
    if(!/^[a-f0-9]{64}$/.test(binding)){binding=Array.from(crypto.getRandomValues(new Uint8Array(32)),value=>value.toString(16).padStart(2,'0')).join('');sessionStorage.setItem(slot,binding);}
-   await api('/api/session',{token,binding});sessionStorage.removeItem(slot);
+   const result=await api('/api/session',{token,binding});await authorizeBrowser(result.session);sessionStorage.removeItem(slot);
    if(location.hash==='#'+token)history.replaceState(history.state,'',location.pathname+location.search);
-  }
+  }else await authorizeBrowser();
   await load();
  }catch(error){
   const authorization=error?.code==='AUTH',message=key=>esc(t('startup',key));

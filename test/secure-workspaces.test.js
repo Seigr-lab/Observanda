@@ -72,8 +72,8 @@ test('Windows device private key survives restart only through OS protection',{s
 test('server creates encrypted workspaces by default, auto-unlocks only authorized devices and keeps manual locks',async t=>{
  const {parent,a,b}=await devices(),root=path.join(parent,'Secure by default');
  const app=await startServer({port:0,deviceStore:a});t.after(()=>app.close());
- async function client(server){const session=await fetch(server.origin+'/api/session',{method:'POST',headers:{Origin:server.origin,'Content-Type':'application/json'},body:JSON.stringify({token:server.launchToken})});const cookie=session.headers.get('set-cookie')?.split(';')[0];let context;
- return {setContext:v=>context=v,request:(route,data)=>fetch(server.origin+route,{method:data===undefined?'GET':'POST',headers:{Origin:server.origin,Cookie:cookie,'Content-Type':'application/json',...(context?{'X-Observanda-Workspace':context}:{})},...(data===undefined?{}:{body:JSON.stringify(data)})})};}
+ async function client(server){const session=await fetch(server.origin+'/api/session',{method:'POST',headers:{Origin:server.origin,'Content-Type':'application/json'},body:JSON.stringify({token:server.launchToken})});const cookie=session.headers.get('x-observanda-session')?.split(';')[0];let context;
+ return {setContext:v=>context=v,request:(route,data)=>fetch(server.origin+route,{method:data===undefined?'GET':'POST',headers:{Origin:server.origin,'X-Observanda-Session':cookie,'Content-Type':'application/json',...(context?{'X-Observanda-Workspace':context}:{})},...(data===undefined?{}:{body:JSON.stringify(data)})})};}
  const one=await client(app),created=await one.request('/api/notebook/create',{title:'Secure by default',storagePath:root});assert.equal(created.status,201);const result=await created.json();one.setContext(result.storage.contextId);
  assert.equal(result.access.encrypted,true);assert.equal(result.access.deviceAuthorized,true);
  const dashboard=await (await one.request('/api/dashboard')).json();dashboard.settings.views[0].name='Private dashboard sentinel';

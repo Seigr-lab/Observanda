@@ -1,3 +1,4 @@
+import {sessionRequest} from './session-fixture.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
 import path from 'node:path';
@@ -45,7 +46,7 @@ test('module and template switches save independently, retain failed edits and k
   await main.locator('[data-module-settings-id="laboratory-research-development"]').click();await expect(main.getByLabel('Record type name',{exact:true})).toHaveValue('Custom research question');
   await main.locator('[data-module-settings-id="laboratory-research-development"]').click();
   await expect(main.locator('.desk-save-message')).toBeHidden();
-  expect((await page.request.get(app.origin+'/api/activity').then(r=>r.json())).operations.filter(item=>item.kind==='/api/dashboard')).toEqual([]);
+  expect((await sessionRequest(page,'get',app.origin+'/api/activity').then(r=>r.json())).operations.filter(item=>item.kind==='/api/dashboard')).toEqual([]);
   await writer.run('ROLLBACK');await writer.close();writer=null;
   await preferences(page,'Modules');
   const fail=async route=>route.request().method()==='POST'?route.fulfill({status:503,json:{code:'IO',message:'Synthetic settings save failure'}}):route.continue();

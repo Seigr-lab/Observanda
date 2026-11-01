@@ -15,8 +15,8 @@ import {contentBuffer} from '../src/file-content.js';
 test('HTTP import verification returns a durable job, survives lock/restart and protects status and original downloads',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-job-server-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),materials=new ResearchMaterials(f.workspace);
  let app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'prefs.json')}),cookie;
- const request=(route,data)=>fetch(app.origin+route,{headers:{Cookie:cookie,Origin:app.origin,'Content-Type':'application/json'},...(data?{method:'POST',body:JSON.stringify(data)}:{})});
- const login=async()=>{const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});cookie=session.headers.get('set-cookie').split(';')[0];};
+ const request=(route,data)=>fetch(app.origin+route,{headers:{'X-Observanda-Session':cookie,Origin:app.origin,'Content-Type':'application/json'},...(data?{method:'POST',body:JSON.stringify(data)}:{})});
+ const login=async()=>{const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});cookie=session.headers.get('x-observanda-session').split(';')[0];};
  const api=async(op,data)=>{const response=await request('/api/research/materials/'+op,data);return {status:response.status,data:await response.json()};};
  const originalPrepare=ResearchMaterials.prototype.prepareImport;let allow=false,entered;
  const ready=new Promise(resolve=>entered=resolve);

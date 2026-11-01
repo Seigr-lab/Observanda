@@ -1,3 +1,4 @@
+import {sessionRequest} from './session-fixture.js';
 import {test,expect} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -24,7 +25,7 @@ for(const nearLimit of [false,true])test((nearLimit?'Boundary':'Large')+' resour
  const original=ModuleCatalogue.prototype.read;ModuleCatalogue.prototype.read=()=>{throw Error('Full module state loaded');};
  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.url().includes('/api/modules/drafts/transfer/'))sizes.push(Buffer.byteLength(r.postData()??''));});
  try{
-  await page.request.post(app.origin+'/api/session',{data:{token:app.launchToken},headers:{Origin:app.origin}});
+  await sessionRequest(page,'post',app.origin+'/api/session',{data:{token:app.launchToken},headers:{Origin:app.origin}});
   await page.goto(app.origin+'/#/modules/resources/category/'+id);const main=page.locator('main');
   await expect(main.getByLabel('Category name',{exact:true})).toHaveValue(data.name);
   await expect(main.getByLabel('Field label',{exact:true})).toHaveCount(10);

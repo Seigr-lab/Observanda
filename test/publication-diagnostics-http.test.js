@@ -21,12 +21,12 @@ test('publication failure details require authentication and survive HTTP restar
   return pin.apply(this,args);
  });
  t.after(async()=>{mocked.mock.restore();await app?.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
- const request=(operation,data)=>fetch(app.origin+'/api/publication-jobs/'+operation,{method:'POST',headers:{Cookie:cookie,Origin:app.origin,'Content-Type':'application/json','X-Observanda-Workspace':context},body:JSON.stringify(data)});
+ const request=(operation,data)=>fetch(app.origin+'/api/publication-jobs/'+operation,{method:'POST',headers:{'X-Observanda-Session':cookie,Origin:app.origin,'Content-Type':'application/json','X-Observanda-Workspace':context},body:JSON.stringify(data)});
  const call=async(operation,data)=>{const response=await request(operation,data),result=await response.json();assert.equal(response.ok,true,JSON.stringify(result));return result;};
  async function open(){
   app=await startServer({root:f.workspace.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json')});
-  const response=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});cookie=response.headers.get('set-cookie').split(';')[0];
-  context=(await(await fetch(app.origin+'/api/storage',{headers:{Cookie:cookie}})).json()).contextId;
+  const response=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});cookie=response.headers.get('x-observanda-session').split(';')[0];
+  context=(await(await fetch(app.origin+'/api/storage',{headers:{'X-Observanda-Session':cookie}})).json()).contextId;
  }
  async function terminal(){for(let i=0;i<600;i++){const {job}=await call('status',{id:command.commandId});if(['completed','failed','cancelled'].includes(job.state))return job;await delay(100);}assert.fail('Publication did not reach a terminal receipt');}
  await open();command={...await publicationDraftCommand(f.workspace,book),commandId:randomUUID()};const admitted=await request('start',command),admission=await admitted.json();assert.equal(admitted.status,202,JSON.stringify(admission));assert.equal(admission.job.id,command.commandId);

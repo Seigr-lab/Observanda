@@ -19,8 +19,8 @@ async function setup(t,{protected:secure=false,create=true,currentAccess=false}=
   const app=await startServer({root,port:0,preferencesFile,deviceStore:encrypted?.deviceStore});t.after(async()=>{try{await app.close();}finally{clearVault(encrypted?.vault);}});
   async function client(){
     const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});
-    const cookie=session.headers.get('set-cookie').split(';')[0];
-    const c={context:null,request:(route,data,options={})=>fetch(app.origin+route,{...(data===undefined?{}:{method:'POST',body:JSON.stringify(data)}),headers:{Origin:app.origin,Cookie:cookie,'Content-Type':'application/json',...(c.context?{'X-Observanda-Workspace':c.context}:{}),...options}})};if(encrypted)assert.equal((await c.request('/api/access/unlock',{})).status,200);return c;
+    const cookie=session.headers.get('x-observanda-session').split(';')[0];
+    const c={context:null,request:(route,data,options={})=>fetch(app.origin+route,{...(data===undefined?{}:{method:'POST',body:JSON.stringify(data)}),headers:{Origin:app.origin,'X-Observanda-Session':cookie,'Content-Type':'application/json',...(c.context?{'X-Observanda-Workspace':c.context}:{}),...options}})};if(encrypted)assert.equal((await c.request('/api/access/unlock',{})).status,200);return c;
   }
   return {...app,parent,root,preferencesFile,client,vault:encrypted?.vault};
 }
@@ -44,7 +44,9 @@ test('protected launch links require sign-in for every private route, previews a
   assert.equal((await client.request('/api/access/unlock',{username:'Researcher',password:'synthetic password 123'})).status,200);
   const saved=await (await client.request('/api/notebook')).json();assert.ok(saved.book);
   const candidate=await preview(client);assert.equal((await client.request(candidate.url)).status,200);
+  const ticketResponse=await client.request('/api/session/download',{url:candidate.url});assert.equal(ticketResponse.status,200);const ticket=(await ticketResponse.json()).url;
   assert.equal((await client.request('/api/access/lock',{})).status,200);
+  assert.equal((await fetch(app.origin+ticket)).status,401);assert.equal((await client.request('/api/session/download',{url:candidate.url})).status,401);
   assert.equal((await client.request(candidate.url)).status,401);assert.equal((await client.request('/api/export',{id:candidate.id})).status,401);
   assert.equal((await (await app.client()).request('/api/notebook')).status,401);
 });
@@ -117,7 +119,7 @@ test('workspace creation keeps its admitted response alive through slow initiali
   await app.close();
   const reopened=await startServer({root:destination,port:0,preferencesFile:app.preferencesFile,expectedExisting:true});t.after(()=>reopened.close());
   const session=await fetch(reopened.origin+'/api/session',{method:'POST',headers:{Origin:reopened.origin,'Content-Type':'application/json'},body:JSON.stringify({token:reopened.launchToken})});assert.equal(session.status,200);
-  const saved=await fetch(reopened.origin+'/api/notebook',{headers:{Cookie:session.headers.get('set-cookie').split(';')[0]}});assert.equal(saved.status,200);const current=await saved.json();
+  const saved=await fetch(reopened.origin+'/api/notebook',{headers:{'X-Observanda-Session':session.headers.get('x-observanda-session').split(';')[0]}});assert.equal(saved.status,200);const current=await saved.json();
   assert.equal(current.book.id,created.book.id);assert.equal(current.book.title,title);assert.deepEqual(current.book.entries,created.book.entries);
  }finally{release();await pending.catch(()=>{});}
 });
@@ -126,7 +128,7 @@ test('missing remembered locations never turn into a replacement workspace',asyn
   const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-missing-')),root=path.join(parent,'disconnected');
   const app=await startServer({root,port:0,expectedExisting:true});t.after(()=>app.close());
   const auth=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});
-  const headers={Origin:app.origin,Cookie:auth.headers.get('set-cookie').split(';')[0],'Content-Type':'application/json'};
+  const headers={Origin:app.origin,'X-Observanda-Session':auth.headers.get('x-observanda-session').split(';')[0],'Content-Type':'application/json'};
   const response=await fetch(app.origin+'/api/notebook/create',{method:'POST',headers,body:JSON.stringify({title:'Replacement'})});assert.equal((await response.json()).code,'STORAGE_UNAVAILABLE');
   await assert.rejects(readFile(path.join(root,'observanda.json')),{code:'ENOENT'});
 });
@@ -141,9 +143,9 @@ test('personal display settings survive a service restart and are available on t
   assert.equal((await client.request('/api/interface',{...settings,secret:'ignored?'})).status,422);
   const next=await startServer({root:app.root,port:0,preferencesFile:app.preferencesFile});t.after(()=>next.close());
   const auth=await fetch(next.origin+'/api/session',{method:'POST',headers:{Origin:next.origin,'Content-Type':'application/json'},body:JSON.stringify({token:next.launchToken})});
-  const cookie=auth.headers.get('set-cookie').split(';')[0];
-  assert.deepEqual(await (await fetch(next.origin+'/api/interface',{headers:{Cookie:cookie}})).json(),settings);
-  assert.equal((await fetch(next.origin+'/api/workspaces',{headers:{Cookie:cookie}})).status,401);
+  const cookie=auth.headers.get('x-observanda-session').split(';')[0];
+  assert.deepEqual(await (await fetch(next.origin+'/api/interface',{headers:{'X-Observanda-Session':cookie}})).json(),settings);
+  assert.equal((await fetch(next.origin+'/api/workspaces',{headers:{'X-Observanda-Session':cookie}})).status,401);
   assert.deepEqual(await workspaceManifest(app.root),workspaceBefore);
 });
 
@@ -154,7 +156,7 @@ test('a missing previous workspace permits explicit creation elsewhere while blo
  const initial=await readFile(preferencesFile,'utf8');
  const app=await startServer({root:missing,port:0,expectedExisting:true,preferencesFile});t.after(()=>app.close());
  const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});
- const headers={Origin:app.origin,Cookie:session.headers.get('set-cookie').split(';')[0],'Content-Type':'application/json'};
+ const headers={Origin:app.origin,'X-Observanda-Session':session.headers.get('x-observanda-session').split(';')[0],'Content-Type':'application/json'};
  const create=data=>fetch(app.origin+'/api/notebook/create',{method:'POST',headers,body:JSON.stringify(data)});
  const metadata=await (await fetch(app.origin+'/api/storage',{headers})).json();assert.equal(metadata.available,false);assert.equal(metadata.unavailableReason,'folder-missing');
  assert.equal(await readFile(preferencesFile,'utf8'),initial);

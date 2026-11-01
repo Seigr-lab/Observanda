@@ -1,3 +1,4 @@
+import {sessionRequest} from './session-fixture.js';
 import {ResearchCatalogue} from '../../src/research-catalogue.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -97,7 +98,7 @@ test('locking during comparison load discards received pages and requires unlock
  try{
   await page.route('**/api/workspace/read/page',async route=>{
    if(++pages===2){
-    const locked=await page.request.post(f.app.origin+'/api/access/lock',{data:{},headers:{Origin:f.app.origin}});
+    const locked=await sessionRequest(page,'post',f.app.origin+'/api/access/lock',{data:{},headers:{Origin:f.app.origin}});
     expect(locked.ok()).toBe(true);
    }
    await route.continue();

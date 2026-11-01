@@ -1,3 +1,4 @@
+import {sessionRequest} from './session-fixture.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
@@ -25,7 +26,7 @@ for(const count of [65,650])test('inventory cards and selected-item choices stay
  ModuleCatalogue.prototype.read=()=>{throw Error('Inventory card loaded full module data');};ModuleCatalogue.prototype.selected=async function(head,id){const value=await selected.call(this,head,id);if(value)opened.push(id);return value;};
  page.on('request',r=>requests.push(new URL(r.url()).pathname));page.on('pageerror',e=>errors.push(e.message));const cdp=await page.context().newCDPSession(page);
  try{
-  const auth=await page.request.post(app.origin+'/api/session',{data:{token:app.launchToken},headers:{Origin:app.origin}});expect(auth.ok()).toBe(true);await page.goto(app.origin+'/#/workspace');
+  const auth=await sessionRequest(page,'post',app.origin+'/api/session',{data:{token:app.launchToken},headers:{Origin:app.origin}});expect(auth.ok()).toBe(true);await page.goto(app.origin+'/#/workspace');
   const panel=page.locator('[data-desk-card="inventory-growth"]'),inspector=page.locator('.desk-inspector');
   await expect(panel.locator('.desk-item')).toHaveCount(5);await expect(panel).toContainText('Item 000');await expect(panel).toContainText('100.000000000000000001');expect(new Set(opened).size).toBe(5);
   await panel.getByRole('button',{name:'Next items',exact:true}).click();await expect(panel).toContainText('Item 005');await expect(panel).not.toContainText('Item 000');expect(new Set(opened).size).toBe(10);

@@ -54,8 +54,8 @@ test('parent rename recovers nested dedicated books without replacing their data
  }
 });
 async function client(app){
- const opened=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});assert.equal(opened.status,200);const cookie=opened.headers.get('set-cookie').split(';')[0];let context;
- const call=async(route,data)=>{const response=await fetch(app.origin+route,{signal:AbortSignal.timeout(120000),method:data===undefined?'GET':'POST',headers:{Origin:app.origin,Cookie:cookie,'Content-Type':'application/json','X-Observanda-Wait':'1',...(context?{'X-Observanda-Workspace':context}:{})},...(data===undefined?{}:{body:JSON.stringify(data)})});return {status:response.status,value:await response.json()};};
+ const opened=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});assert.equal(opened.status,200);const cookie=opened.headers.get('x-observanda-session').split(';')[0];let context;
+ const call=async(route,data)=>{const response=await fetch(app.origin+route,{signal:AbortSignal.timeout(120000),method:data===undefined?'GET':'POST',headers:{Origin:app.origin,'X-Observanda-Session':cookie,'Content-Type':'application/json','X-Observanda-Wait':'1',...(context?{'X-Observanda-Workspace':context}:{})},...(data===undefined?{}:{body:JSON.stringify(data)})});return {status:response.status,value:await response.json()};};
  context=(await call('/api/storage')).value.contextId;return {call,adopt:value=>context=value.contextId};
 }
 test('HTTP parent rename authenticates protected books and retains only the requesting grants',{timeout:180000},async t=>{

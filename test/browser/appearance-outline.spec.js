@@ -1,3 +1,4 @@
+import {sessionRequest} from './session-fixture.js';
 import {WebsiteSites} from '../../src/website-sites.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -168,7 +169,7 @@ test('appearance previews retry, reject stale replies and show only selected web
   await page.getByRole('button',{name:'Retry preview',exact:true}).click();await expect(page.getByLabel('Preview content',{exact:true})).toHaveValue('website');
   await page.getByLabel('Preview page',{exact:true}).selectOption('entries/'+f.book.entries[0].id+'.html');await expect(page.frameLocator('#design-preview').locator('body')).toContainText('Approved readable observation.');await expect(page.frameLocator('#design-preview').locator('body')).not.toContainText('PRIVATE_ORIGINAL_');
   const url=new URL(await page.locator('#design-preview').getAttribute('src'),f.app.origin),designId=url.pathname.split('/')[2];
-  expect((await fetch(url)).status).toBe(401);expect((await page.request.get(f.app.origin+'/api/export/'+designId)).status()).toBe(404);
+  expect((await fetch(url)).status).toBe(401);expect((await sessionRequest(page,'get',f.app.origin+'/api/export/'+designId)).status()).toBe(404);
   let release,arrived;const held=new Promise(r=>release=r),received=new Promise(r=>arrived=r);
   await page.route('**/api/appearance-preview',async route=>{const response=await route.fetch();arrived();await held;await route.fulfill({response}).catch(()=>{});},{times:1});
   await page.getByLabel('Preview content',{exact:true}).selectOption('examples');await received;

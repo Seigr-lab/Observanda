@@ -10,7 +10,7 @@ test('source inspection is authenticated, context-bound, cancellable and leaves 
  const route=app.origin+'/api/migration/inventory',payload=JSON.stringify({source});
  assert.equal((await fetch(route,{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:payload})).status,401);
  const login=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});
- const cookie=login.headers.get('set-cookie').split(';')[0],base={Origin:app.origin,Cookie:cookie,'Content-Type':'application/json'};
+ const cookie=login.headers.get('x-observanda-session').split(';')[0],base={Origin:app.origin,'X-Observanda-Session':cookie,'Content-Type':'application/json'};
  const storage=await (await fetch(app.origin+'/api/storage',{headers:base})).json(),headers={...base,'X-Observanda-Workspace':storage.contextId};
  const before=await f.workspace.read();
  assert.equal((await fetch(route,{method:'POST',headers:{...headers,Origin:'https://example.invalid'},body:payload})).status,403);

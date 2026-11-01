@@ -53,13 +53,13 @@ test('retained ZIP exports survive slow review, preserve review and privacy admi
  await new ResearchRecords(f.workspace,{}).save({workspaceId:book.id,changes:[{id:record.id,expectedRevision:recordRevision(original),record:{...original,body:'A later observed value.',results:{version:1,statements:[{id:randomUUID(),kind:'conclusion',basis:'retained',title:'Historical interpretation',text:'A retained interpretation requiring review.',limitations:'Synthetic qualification.',source:analysis}]}}}]});
  app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'preferences.json')});
  const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});
- assert.equal(session.status,200);cookie=session.headers.get('set-cookie').split(';')[0];
- context=(await(await fetch(app.origin+'/api/storage',{headers:{Cookie:cookie}})).json()).contextId;
+ assert.equal(session.status,200);cookie=session.headers.get('x-observanda-session').split(';')[0];
+ context=(await(await fetch(app.origin+'/api/storage',{headers:{'X-Observanda-Session':cookie}})).json()).contextId;
  function request(route,{method='GET',body,authenticated=true}={}){
   let req;
   const response=new Promise((resolve,reject)=>{
    const bytes=body===undefined?null:Buffer.from(JSON.stringify(body));
-   req=http.request(app.origin+route,{method,agent:false,headers:{Origin:app.origin,'Content-Type':'application/json',...(authenticated?{Cookie:cookie,'X-Observanda-Workspace':context,'X-Observanda-Wait':'1'}:{}),...(bytes?{'Content-Length':bytes.length}:{})}},res=>{
+   req=http.request(app.origin+route,{method,agent:false,headers:{Origin:app.origin,'Content-Type':'application/json',...(authenticated?{'X-Observanda-Session':cookie,'X-Observanda-Workspace':context,'X-Observanda-Wait':'1'}:{}),...(bytes?{'Content-Length':bytes.length}:{})}},res=>{
     const chunks=[];res.on('data',chunk=>chunks.push(chunk));res.on('error',reject);res.on('end',()=>resolve({status:res.statusCode,headers:res.headers,body:Buffer.concat(chunks)}));
    });req.on('error',reject);req.end(bytes??undefined);
   });

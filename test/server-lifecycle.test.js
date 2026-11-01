@@ -15,8 +15,8 @@ test('authenticated readiness is redacted and shutdown drains an in-flight datab
  await initializeLocation(root,sampleNotebook(),a,vault);const ws=new Workspace(root,vault),app=await startServer({root,port:0});
  t.after(async()=>{await app.close();clearVault(vault);await rm(parent,{recursive:true,force:true});});
  assert.equal(app.server.address().address,'127.0.0.1');assert.equal((await fetch(app.origin+'/api/health')).status,401);
- const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=session.headers.get('set-cookie').split(';')[0];
- const request=(route,data)=>fetch(app.origin+route,{headers:{Cookie:cookie,Origin:app.origin,'Content-Type':'application/json'},...(data?{method:'POST',body:JSON.stringify(data)}:{})});
+ const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=session.headers.get('x-observanda-session').split(';')[0];
+ const request=(route,data)=>fetch(app.origin+route,{headers:{'X-Observanda-Session':cookie,Origin:app.origin,'Content-Type':'application/json'},...(data?{method:'POST',body:JSON.stringify(data)}:{})});
  const health=await request('/api/health'),healthText=await health.text();assert.equal(health.status,200);assert.equal(JSON.parse(healthText).ready,true);assert.equal(healthText.includes(process.env.OBSERVANDA_DATABASE_URL),false);assert.equal(healthText.includes(root),false);
  assert.equal((await request('/api/access/unlock',{username:'',password})).status,200);
  const readiness=await (await request('/api/health')).json();assert.equal(readiness.selectedWorkspace.ready,true,JSON.stringify(readiness.selectedWorkspace));assert.equal(readiness.selectedWorkspace.catalogueIntegrity,'selected-metadata-verified');assert.equal(readiness.selectedWorkspace.retainedContent,'not-checked');

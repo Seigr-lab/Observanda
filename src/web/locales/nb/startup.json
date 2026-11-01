@@ -1,4 +1,5 @@
 {
+  "downloadFailed": "Nedlastingen kunne ikke starte. Prøv igjen.",
   "opening": "Åpner Observanda…",
   "skip": "Hopp til hovedinnhold",
   "moduleFailed": "Observanda kunne ikke lastes inn",

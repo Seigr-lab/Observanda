@@ -1,3 +1,4 @@
+import {sessionRequest} from './session-fixture.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,mkdir} from 'node:fs/promises';
 import path from 'node:path';
@@ -56,7 +57,7 @@ test('create and remove Home explicitly, retain site identity, undo and review a
  await expect(page.locator('#preview-page option')).toHaveText(['Listening notes']);
  await expect(page.frameLocator('iframe[title="Publication preview"]').getByRole('heading',{name:'Listening notes',exact:true})).toBeVisible();
  const url=await page.getByRole('link',{name:'Open full preview',exact:true}).getAttribute('href');
- const manifest=await (await page.request.get(app.origin+'/preview/'+url.split('/')[2]+'/publication.json')).json();
+ const manifest=await (await sessionRequest(page,'get',app.origin+'/preview/'+url.split('/')[2]+'/publication.json')).json();
  expect(manifest.files.map(f=>f.path)).not.toContain('index.html');
  expect(errors).toEqual([]);
 });

@@ -64,8 +64,8 @@ test('dashboard API enforces session, origin and conflict checks, survives resta
  const root=await temp(),file=path.join(root,'preferences.json'),book=sampleNotebook();book.title=path.basename(root);await new Workspace(root).create(book);const original=await readFile(path.join(root,'observanda.json'),'utf8');let app=await startServer({root,preferencesFile:file,port:0});
  try{
   assert.equal((await fetch(app.origin+'/api/dashboard')).status,401);
-  const auth=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});const cookie=auth.headers.get('set-cookie').split(';')[0];
-  const request=(route,data,origin=app.origin)=>fetch(app.origin+route,{...(data?{method:'POST',body:JSON.stringify(data)}:{}),headers:{Cookie:cookie,Origin:origin,'Content-Type':'application/json'}});
+  const auth=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});const cookie=auth.headers.get('x-observanda-session').split(';')[0];
+  const request=(route,data,origin=app.origin)=>fetch(app.origin+route,{...(data?{method:'POST',body:JSON.stringify(data)}:{}),headers:{'X-Observanda-Session':cookie,Origin:origin,'Content-Type':'application/json'}});
   const initial=await (await request('/api/dashboard')).json();initial.settings.views[0].name='Private dashboard title';
   assert.equal((await request('/api/dashboard',initial,'https://untrusted.invalid')).status,403);
   assert.equal((await request('/api/dashboard',initial)).status,200);assert.equal((await request('/api/dashboard',initial)).status,409);

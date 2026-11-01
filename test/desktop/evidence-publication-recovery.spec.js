@@ -58,7 +58,7 @@ test('desktop resumes a large evidence folder and retains publication requests a
   try{await expect(call(route,data,site)).rejects.toThrow();expect(intercepted).toBe(true);expect(receipt?.job?.id).toBe(data.commandId);return receipt.job;}finally{await page.unroute(pattern,handler);}
  };
  const downloadHash=async(route,site=null,options)=>{
-  const cookies=await app.evaluate(({BrowserWindow},url)=>BrowserWindow.getAllWindows()[0].webContents.session.cookies.get({url}),page.url()),response=await fetch(new URL(route,page.url()),{headers:{Cookie:cookies.map(cookie=>cookie.name+'='+cookie.value).join('; '),...(site?{'X-Observanda-Website':site}:{})},signal:AbortSignal.timeout(180000)});
+  const session=await page.evaluate(async()=>{const {browserSession}=await import('/session-store.js');return browserSession();}),response=await fetch(new URL(route,page.url()),{headers:{'X-Observanda-Session':session,...(site?{'X-Observanda-Website':site}:{})},signal:AbortSignal.timeout(180000)});
   expect(response.ok).toBe(true);return downloadFingerprint(response.body,options);
  };
  try{

@@ -26,8 +26,8 @@ test('versioned HTTP intake retains local session, origin, workspace and revisio
  const f=await intakeFixture(t),app=await startServer({root:f.ws.root,port:0,deviceStore:f.deviceStore,preferencesFile:path.join(f.directory,'preferences.json')});t.after(()=>app.close());
  const endpoint=app.origin+'/api/v1/intake/preview',payload={version:1,...f.command};
  assert.equal((await fetch(endpoint,{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify(payload)})).status,401);
- const auth=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=auth.headers.get('set-cookie').split(';')[0];
- const headers={Origin:app.origin,'Content-Type':'application/json',Cookie:cookie},request=(data,origin=app.origin)=>fetch(endpoint,{method:'POST',headers:{...headers,Origin:origin},body:JSON.stringify(data)});
+ const auth=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=auth.headers.get('x-observanda-session').split(';')[0];
+ const headers={Origin:app.origin,'Content-Type':'application/json','X-Observanda-Session':cookie},request=(data,origin=app.origin)=>fetch(endpoint,{method:'POST',headers:{...headers,Origin:origin},body:JSON.stringify(data)});
  assert.equal((await request(payload,'https://hostile.invalid')).status,403);
  const metadata=await (await fetch(app.origin+'/api/storage',{headers})).json();if(metadata.contextId)headers['x-observanda-workspace']=metadata.contextId;
  const preview=await request(payload);assert.equal(preview.status,200,await preview.clone().text());assert.equal((await preview.json()).version,1);

@@ -66,9 +66,9 @@ test('owned PostgreSQL stops, moves without copying, reopens and remains writabl
 
 async function client(app){
  const response=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});assert.equal(response.status,200,await response.clone().text());
- const cookie=response.headers.get('set-cookie').split(';')[0];let context;
+ const cookie=response.headers.get('x-observanda-session').split(';')[0];let context;
  const call=async(route,data)=>{
-  const response=await fetch(app.origin+route,{method:data===undefined?'GET':'POST',headers:{Origin:app.origin,Cookie:cookie,'Content-Type':'application/json',...(context?{'X-Observanda-Workspace':context}:{})},...(data===undefined?{}:{body:JSON.stringify(data)})});
+  const response=await fetch(app.origin+route,{method:data===undefined?'GET':'POST',headers:{Origin:app.origin,'X-Observanda-Session':cookie,'Content-Type':'application/json',...(context?{'X-Observanda-Workspace':context}:{})},...(data===undefined?{}:{body:JSON.stringify(data)})});
   return {status:response.status,value:await response.json()};
  };
  context=(await call('/api/storage')).value.contextId;return {call,adopt:value=>{context=value.contextId;}};

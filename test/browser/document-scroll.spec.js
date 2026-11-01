@@ -1,3 +1,4 @@
+import {sessionRequest} from './session-fixture.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,mkdir} from 'node:fs/promises';
 import os from 'node:os';
@@ -56,7 +57,7 @@ test('live text and viewport changes resize the preview without losing the edito
 });
 
 test('dashboard cards show their selected page, and appearance and publication previews expand too',async({page})=>{
- await navigate(page,'Dashboard');await page.getByRole('button',{name:'Settings for Recent records',exact:true}).click();const panel=page.locator('.desk-inspector');await panel.getByLabel('Items per page',{exact:true}).fill('12');await expect(panel.getByLabel('Items per page',{exact:true})).toHaveValue('12');await expect.poll(async()=>{const result=await page.request.get(app.origin+'/api/dashboard');return (await result.json()).settings.views[0].panels[0].count;}).toBe(12);await panel.getByRole('button',{name:'Close card settings',exact:true}).click();
+ await navigate(page,'Dashboard');await page.getByRole('button',{name:'Settings for Recent records',exact:true}).click();const panel=page.locator('.desk-inspector');await panel.getByLabel('Items per page',{exact:true}).fill('12');await expect(panel.getByLabel('Items per page',{exact:true})).toHaveValue('12');await expect.poll(async()=>{const result=await sessionRequest(page,'get',app.origin+'/api/dashboard');return (await result.json()).settings.views[0].panels[0].count;}).toBe(12);await panel.getByRole('button',{name:'Close card settings',exact:true}).click();
  const recent=page.locator('.desk-card').filter({has:page.getByRole('heading',{name:'Recent records',exact:true})});await expect(recent.locator('.desk-item')).toHaveCount(12);await noPanels(page);await recent.getByRole('button',{name:/River observation 12/}).scrollIntoViewIfNeeded();await page.screenshot({path:'.local/screenshots/unified-dashboard.png'});
  await preferences(page,'Appearance');await noInnerScroll(page.locator('#design-preview'));await noPanels(page);
  await navigate(page,'Website editor');await tab(page,'Layout');await page.getByLabel('Site navigation',{exact:true}).selectOption('side');await noInnerScroll(iframe(page));

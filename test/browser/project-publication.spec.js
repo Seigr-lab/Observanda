@@ -1,3 +1,4 @@
+import {sessionRequest} from './session-fixture.js';
 import {websiteDocument} from '../../src/web/website-sites-model.js';
 import {WebsiteSites} from '../../src/website-sites.js';
 import {Workspace} from '../../src/storage.js';
@@ -51,7 +52,7 @@ test('a retained project website preserves editing preview and export through re
   const open=Workspace.prototype.openCatalogue,run=ProjectPublications.prototype.run,selectedRead=new AsyncLocalStorage();let opened=0;
   ProjectPublications.prototype.run=function(request,...args){return request.publication==='file'&&request.file===preview.split('/').slice(6).join('/')?selectedRead.run(true,()=>run.call(this,request,...args)):run.call(this,request,...args);};
   Workspace.prototype.openCatalogue=function(...args){if(selectedRead.getStore()&&this.root===storage.root)opened++;return open.apply(this,args);};
-  try{const viewed=await page.context().request.get(app.origin+preview);expect(viewed.status()).toBe(200);expect(await viewed.text()).toContain('Selected project observation');expect(opened).toBeGreaterThan(0);expect(opened).toBeLessThanOrEqual(4);}finally{Workspace.prototype.openCatalogue=open;ProjectPublications.prototype.run=run;}
+  try{const viewed=await sessionRequest(page,'get',app.origin+preview);expect(viewed.status()).toBe(200);expect(await viewed.text()).toContain('Selected project observation');expect(opened).toBeGreaterThan(0);expect(opened).toBeLessThanOrEqual(4);}finally{Workspace.prototype.openCatalogue=open;ProjectPublications.prototype.run=run;}
   const sites=new WebsiteSites(storage),course=await sites.read(courseId);await sites.save(courseId,{workspaceId:book.id,baseEtag:course.etag,websitePin:course.websitePin,metadata:{website:{...course.book.website,footer:'Updated course footer'}},projects:[],changes:[],removed:[],selection:course.site.selection});
   await page.reload();await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible({timeout:20000});
   await expect(page.getByText('The workspace or publishing destination has changed since this edition was prepared.',{exact:false})).not.toBeVisible();

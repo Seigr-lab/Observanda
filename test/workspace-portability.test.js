@@ -30,8 +30,8 @@ async function fixture(t){
 }
 async function client(app){
  const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});assert.equal(session.status,200);
- const cookie=session.headers.get('set-cookie').split(';')[0];let context;
- const c={async request(route,data){const response=await fetch(app.origin+route,{method:data===undefined?'GET':'POST',headers:{Origin:app.origin,Cookie:cookie,'Content-Type':'application/json',...(context?{'X-Observanda-Workspace':context}:{})},...(data===undefined?{}:{body:JSON.stringify(data)})});return {status:response.status,value:await response.json()};},async call(route,data){const result=await c.request(route,data);assert.equal(result.status,200,JSON.stringify(result.value));if(route==='/api/storage'||route==='/api/storage/open')context=result.value.contextId;return result.value;}};
+ const cookie=session.headers.get('x-observanda-session').split(';')[0];let context;
+ const c={async request(route,data){const response=await fetch(app.origin+route,{method:data===undefined?'GET':'POST',headers:{Origin:app.origin,'X-Observanda-Session':cookie,'Content-Type':'application/json',...(context?{'X-Observanda-Workspace':context}:{})},...(data===undefined?{}:{body:JSON.stringify(data)})});return {status:response.status,value:await response.json()};},async call(route,data){const result=await c.request(route,data);assert.equal(result.status,200,JSON.stringify(result.value));if(route==='/api/storage'||route==='/api/storage/open')context=result.value.contextId;return result.value;}};
  return c;
 }
 async function recovery(f){const current=await workspaceAccess(f.root,f.vault);return (await updateWorkspaceAccess(f.root,f.vault,{action:'recovery',etag:current.etag,confirmed:true})).recovery;}

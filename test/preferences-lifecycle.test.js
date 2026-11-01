@@ -15,8 +15,8 @@ import {clearVault} from '../src/encryption.js';
 async function fixture(){const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-reset-'));return {parent,root:path.join(parent,'research'),file:path.join(parent,'preferences.json')};}
 async function client(app){
  const auth=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});
- const cookie=auth.headers.get('set-cookie').split(';')[0];
- const c={context:null,request:(route,data,overrides={})=>fetch(app.origin+route,{...(data===undefined?{}:{method:'POST',body:JSON.stringify(data)}),headers:{Origin:app.origin,Cookie:cookie,'Content-Type':'application/json',...(c.context?{'X-Observanda-Workspace':c.context}:{}),...overrides}})};
+ const cookie=auth.headers.get('x-observanda-session').split(';')[0];
+ const c={context:null,request:(route,data,overrides={})=>fetch(app.origin+route,{...(data===undefined?{}:{method:'POST',body:JSON.stringify(data)}),headers:{Origin:app.origin,'X-Observanda-Session':cookie,'Content-Type':'application/json',...(c.context?{'X-Observanda-Workspace':c.context}:{}),...overrides}})};
  c.context=(await (await c.request('/api/storage')).json()).contextId;return c;
 }
 

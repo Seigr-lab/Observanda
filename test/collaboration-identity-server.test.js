@@ -12,7 +12,7 @@ test('identity recovery routes authenticate locally, stop hosting, exclude other
  const start=async suffix=>{const app=await startServer({root:f.author.workspace.root,port:0,headless:true,deviceStore:f.author.deviceStore,preferencesFile:path.join(f.directory,suffix+'.prefs')});apps.push(app);return app;};
  const app=await start('identity-server'),origin=app.origin,base=origin+'/api/security/collaboration-identity/';
  assert.equal((await fetch(base+'state',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:'{}'})).status,401);
- const session=await fetch(origin+'/api/session',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=session.headers.get('set-cookie').split(';')[0],headers={Origin:origin,'Content-Type':'application/json',Cookie:cookie};
+ const session=await fetch(origin+'/api/session',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=session.headers.get('x-observanda-session').split(';')[0],headers={Origin:origin,'Content-Type':'application/json','X-Observanda-Session':cookie};
  const storage=await (await fetch(origin+'/api/storage',{headers})).json(),contextId=storage.contextId;
  const post=(url,data={},extra={})=>fetch(origin+url,{method:'POST',headers:{...headers,...extra},body:JSON.stringify(data),signal:AbortSignal.timeout(15000)});
  const request=(op,data={},extra={})=>post('/api/security/collaboration-identity/'+op,{contextId,...data},extra);

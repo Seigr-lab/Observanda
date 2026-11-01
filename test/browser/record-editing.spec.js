@@ -1,3 +1,4 @@
+import {sessionRequest} from './session-fixture.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
@@ -82,7 +83,7 @@ test('discard removes only the selected checkpoint and a failed reader refresh r
 test('a locked workspace cannot return a selected value into the editing view',async({page})=>{
  test.setTimeout(120000);const f=await fixture(page);
  try{
-  await page.route('**/api/research/records/values/read',async route=>{const locked=await page.request.post(f.app.origin+'/api/access/lock',{data:{},headers:{Origin:f.app.origin}});expect(locked.ok()).toBe(true);await route.continue();});
+  await page.route('**/api/research/records/values/read',async route=>{const locked=await sessionRequest(page,'post',f.app.origin+'/api/access/lock',{data:{},headers:{Origin:f.app.origin}});expect(locked.ok()).toBe(true);await route.continue();});
   const response=page.waitForResponse(r=>r.url().endsWith('/api/research/records/values/read'));await openTitle(page);const result=await response;expect(result.ok()).toBe(false);expect((await result.json()).code).toBe('ACCESS_LOCKED');
   await expect(page.getByRole('heading',{name:'Unlock workspace',exact:true})).toBeVisible();await expect(page.locator('.record-writing[open]')).toHaveCount(0);await expect(page.locator('.record-editing')).toHaveCount(0);f.scoped();
  }finally{await f.close();}

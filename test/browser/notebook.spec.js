@@ -1,3 +1,4 @@
+import {sessionRequest} from './session-fixture.js';
 import {task,editorTab,openPageSettings} from './composer-helper.js';
 import {navigate,preferences,editWorkspace} from './preferences-helper.js';
 import {TestDeviceStore as DeviceStore} from '../device-fixture.js';
@@ -415,7 +416,7 @@ test('laboratory sample-to-review workflow prints a revision and requires amendm
   await page.getByLabel('Reason for amendment').fill('Correct a transcription.');
   await page.getByRole('button',{name:'Start amendment',exact:true}).click();
   await expect(page.getByLabel('Result value',{exact:true})).toHaveValue('0.34');
-  const retained=await page.request.get(oldSheet);
+  const retained=await sessionRequest(page,'get',oldSheet);
   expect(retained.status()).toBe(200);
   expect(await retained.text()).toContain('<td>0.34</td>');
   await page.getByLabel('Result value',{exact:true}).fill('0.35');
@@ -692,7 +693,7 @@ test('setup chooses a storage folder and optional credentials, then enforces loc
   const saved=await new Workspace(destination,await verifyAccess(await readAccess(destination),'',password)).read();expect(saved.book.projects).toHaveLength(0);expect(saved.book.notebooks).toHaveLength(0);
   expect(JSON.stringify(saved.book)).not.toContain(password);expect(JSON.stringify(saved.book)).not.toContain(destination);
   await page.locator('main').getByRole('button',{name:'Lock workspace',exact:true}).click();await expect(page.getByRole('heading',{name:'Unlock workspace',exact:true})).toBeVisible();
-  expect((await page.request.get(app.origin+'/api/notebook')).status()).toBe(401);
+  expect((await sessionRequest(page,'get',app.origin+'/api/notebook')).status()).toBe(401);
   await page.goto(app.url);await expect(page.getByRole('heading',{name:'Unlock workspace',exact:true})).toBeVisible();
   await page.getByLabel('Password',{exact:true}).fill('wrong');
   await page.getByRole('button',{name:'Unlock workspace',exact:true}).click();await expect(page.locator('#notice')).toContainText('incorrect');

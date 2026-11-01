@@ -1,3 +1,4 @@
+import {authorizePreviewContext} from './session-fixture.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
@@ -46,7 +47,7 @@ test('author a support popup with links and exact copy addresses; visitors use k
    const anchor=await visitor.locator('.section-copy-text').last().getAttribute('id');await visitor.goto(url+'#'+anchor);await expect(dialog).toBeVisible();await expect(dialog.getByRole('textbox',{name:'Bitcoin example',exact:true})).toBeVisible();await visitor.keyboard.press('Escape');
    expect(await visitor.locator('[id]').evaluateAll(nodes=>new Set(nodes.map(node=>node.id)).size===nodes.length)).toBe(true);
   }finally{await visitor.close();}
-  const fallback=await browser.newContext({javaScriptEnabled:false});await fallback.addCookies(await page.context().cookies());const reader=await fallback.newPage();
+  const fallback=await browser.newContext({javaScriptEnabled:false});await authorizePreviewContext(page,fallback);const reader=await fallback.newPage();
   try{await reader.goto(url);await reader.locator('[data-public-popup]>summary').click();await expect(reader.getByRole('textbox',{name:'Ethereum example',exact:true})).toHaveValue(addresses[0][2]);await expect(reader.getByRole('link',{name:'PayPal',exact:false})).toBeVisible();await expect(reader.locator('.public-copy button').first()).toBeHidden();}finally{await fallback.close();}
   const saved=(await new WebsiteSites(f.workspace).read(null)).book.pages.find(p=>'pages/'+p.id+'.html'===target);expect(saved.sections.filter(s=>s.parentId===saved.sections[0].id)).toHaveLength(6);expect(errors).toEqual([]);
  }finally{await app.close();clearVault(f.vault);await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});}

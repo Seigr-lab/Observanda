@@ -17,6 +17,7 @@ import {projectAccessUI} from './project-access-ui.js';
 import {projectContexts,projectApiRoute,projectRoute,ownedRoute,researchContext,researchOwner,ownedAssetURL} from './project-context.js';
 import {publicationErrorView} from './publication-error-view.js';
 import {startApplication} from './application-startup.js';
+import {downloadResource} from './session-download.js';
 import {writerRecoveryUI} from './writer-recovery-ui.js';
 import {activityUI} from './activity-ui.js';
 import {snapshotWorkspace,draftWorkspace,editableRecord,sameValue} from './workspace-snapshot.js';
@@ -1105,7 +1106,7 @@ async function rawAction(button) {
     requireAnalysisEditionReview(state.preview);
     if (!$('#review-confirm').checked) return notify(publicationText('confirmRequired'), true);
     button.disabled = true;
-    try { const a=document.createElement('a');a.href=projectApiRoute('/api/export/'+state.preview.id,researchOwner(state))+(state.preview.rollback?'?rollbackReview='+state.preview.rollback.id:'');a.download='observanda-site.zip';a.click(); } finally { button.disabled = false; }
+    try { await downloadResource(projectApiRoute('/api/export/'+state.preview.id,researchOwner(state))+(state.preview.rollback?'?rollbackReview='+state.preview.rollback.id:''),'observanda-site.zip'); } finally { button.disabled = false; }
   }
   if(name==='publication-review-pages'||name==='publication-review-references')await publicationReviewChoices.load(name.endsWith('pages')?'pages':'references',{offset:Number(button.dataset.offset)});
   if(name==='analysis-review-next'||name==='analysis-review-previous'){await loadAnalysisEditionReview(state,api,{offset:Number(button.dataset.offset)});render();}

@@ -1,3 +1,4 @@
+import {sessionRequest} from './session-fixture.js';
 import {ProjectModuleReader} from '../../src/project-module-reader.js';
 import {test,expect} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
@@ -25,7 +26,7 @@ for(const count of [65,650])test('spreadsheet pages and edits load selected orig
  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>requests.push(new URL(r.url()).pathname));page.on('response',async r=>{if(new URL(r.url()).pathname==='/api/modules/items'&&r.ok())sizes.push((await r.body()).length);});
  const cdp=await page.context().newCDPSession(page);let heap=0;const measure=async()=>{heap=Math.max(heap,(await cdp.send('Runtime.getHeapUsage')).usedSize);};
  try{
-  const session=await page.request.post(app.origin+'/api/session',{data:{token:app.launchToken},headers:{Origin:app.origin}});expect(session.ok()).toBe(true);
+  const session=await sessionRequest(page,'post',app.origin+'/api/session',{data:{token:app.launchToken},headers:{Origin:app.origin}});expect(session.ok()).toBe(true);
   await page.goto(app.origin+'/#/modules/spreadsheet/sheet');const main=page.locator('main'),dialog=page.locator('[data-module-reference-picker]');
   await expect(main.locator('.module-item')).toHaveCount(25);expect(loaded).toEqual([]);await measure();
   await main.getByRole('button',{name:'Next items',exact:true}).click();await expect(main.locator('[data-module-items-status]')).toContainText('26');expect(loaded).toEqual([]);

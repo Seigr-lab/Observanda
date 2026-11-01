@@ -73,14 +73,14 @@ async function service(t,{protected:secure=false,picker}={}){
  const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-picker-service-')),root=path.join(parent,'workspace');await initializeLocation(root,createNotebook('Picker test'),await createAccess(secure?'Owner':'',secure?'synthetic picker password':''));
  const app=await startServer({root,port:0,folderPicker:picker,preferencesFile:path.join(parent,'preferences.json')});t.after(()=>app.close());
  const auth=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});
- const headers={Origin:app.origin,Cookie:auth.headers.get('set-cookie').split(';')[0],'Content-Type':'application/json'};
+ const headers={Origin:app.origin,'X-Observanda-Session':auth.headers.get('x-observanda-session').split(';')[0],'Content-Type':'application/json'};
  return {...app,parent,root,headers,post:(route,data,extra={})=>fetch(app.origin+route,{method:'POST',headers:{...headers,...extra},body:JSON.stringify(data)})};
 }
 
 test('native selection is authenticated and same-origin, returns only a path, and never creates or changes workspace files',async t=>{
  let calls=0;const picker={capabilities:async()=>({mode:'native',backend:'windows'}),choose:async()=>{calls++;return {folder:os.tmpdir(),cancelled:false};}};
  const app=await service(t,{picker}),before=await workspaceManifest(app.root);
- assert.equal((await app.post('/api/storage/pick',{}, {Cookie:''})).status,401);assert.equal((await app.post('/api/storage/pick',{}, {Origin:'https://untrusted.invalid'})).status,403);assert.equal(calls,0);
+ assert.equal((await app.post('/api/storage/pick',{}, {'X-Observanda-Session':''})).status,401);assert.equal((await app.post('/api/storage/pick',{}, {Origin:'https://untrusted.invalid'})).status,403);assert.equal(calls,0);
  const selected=await app.post('/api/storage/pick',{path:app.root});assert.equal(selected.status,200);assert.equal((await selected.json()).folder,os.tmpdir());assert.equal(calls,1);assert.deepEqual(await workspaceManifest(app.root),before);
  const locked=await service(t,{picker,protected:true});assert.equal((await locked.post('/api/storage/pick',{})).status,401);assert.equal(calls,1);
 });

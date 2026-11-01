@@ -18,8 +18,8 @@ test('API requires unlock, matching confirmation, current review and exclusive w
  const app=await startServer({root:f.workspace.root,port:0,headless:true,preferencesFile:prefs,deviceStore:f.deviceStore,githubConnections:github});
  t.after(async()=>{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
  const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});
- const cookie=session.headers.get('set-cookie').split(';')[0];let context;
- const request=(route,data)=>fetch(app.origin+route,{...(data===undefined?{}:{method:'POST',body:JSON.stringify(data)}),headers:{Origin:app.origin,Cookie:cookie,'Content-Type':'application/json',...(context?{'X-Observanda-Workspace':context}:{})}});
+ const cookie=session.headers.get('x-observanda-session').split(';')[0];let context;
+ const request=(route,data)=>fetch(app.origin+route,{...(data===undefined?{}:{method:'POST',body:JSON.stringify(data)}),headers:{Origin:app.origin,'X-Observanda-Session':cookie,'Content-Type':'application/json',...(context?{'X-Observanda-Workspace':context}:{})}});
  context=(await (await request('/api/storage')).json()).contextId;
  const review=await (await request('/api/storage/delete/preview',{})).json(),command={id:review.id,path:review.source,title:review.title,confirmed:true};
  for(const invalid of [{...command,confirmed:false},{...command,path:other},{...command,title:'wrong'}]){assert.equal((await (await request('/api/storage/delete',invalid)).json()).code,'STORAGE_DELETE_CONFIRM');await access(f.workspace.root);}

@@ -25,7 +25,7 @@ const gate=()=>{let release;const promise=new Promise(resolve=>release=resolve);
 async function bounded(operation){let timer;try{return await Promise.race([operation,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('A stalled figure download blocked an authoring or access change')),8000);})]);}finally{clearTimeout(timer);}}
 const text=async chunks=>{let value='';for await(const chunk of chunks)value+=typeof chunk==='string'?chunk:chunk.toString('utf8');return value;};
 async function session(app){
- const headers={Origin:app.origin,'Content-Type':'application/json'},response=await fetch(app.origin+'/api/session',{method:'POST',headers,body:JSON.stringify({token:app.launchToken})});assert.equal(response.status,200);headers.Cookie=response.headers.get('set-cookie').split(';')[0];
+ const headers={Origin:app.origin,'Content-Type':'application/json'},response=await fetch(app.origin+'/api/session',{method:'POST',headers,body:JSON.stringify({token:app.launchToken})});assert.equal(response.status,200);headers['X-Observanda-Session']=response.headers.get('x-observanda-session').split(';')[0];
  const storage=await (await fetch(app.origin+'/api/storage',{headers})).json();return {headers,contextId:storage.contextId,post:(url,data)=>fetch(app.origin+url,{method:'POST',headers,body:JSON.stringify(data)})};
 }
 async function edit(workspace,workspaceId,id,title){

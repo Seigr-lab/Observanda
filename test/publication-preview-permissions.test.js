@@ -35,8 +35,8 @@ const withdrawals=[
 
 test('retained preview HTTP cache rechecks identical HTML and asset URLs after source withdrawal while preserving private authoring',async t=>{
  const f=await fixture(t),app=await f.start(),session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});
- assert.equal(session.status,200);const cookie=session.headers.get('set-cookie').split(';')[0],context=(await(await fetch(app.origin+'/api/storage',{headers:{Cookie:cookie}})).json()).contextId;
- const request=(route,data)=>fetch(app.origin+route,{method:data===undefined?'GET':'POST',headers:{Origin:app.origin,Cookie:cookie,'Content-Type':'application/json','X-Observanda-Workspace':context,'X-Observanda-Wait':'1'},...(data===undefined?{}:{body:JSON.stringify(data)})});
+ assert.equal(session.status,200);const cookie=session.headers.get('x-observanda-session').split(';')[0],context=(await(await fetch(app.origin+'/api/storage',{headers:{'X-Observanda-Session':cookie}})).json()).contextId;
+ const request=(route,data)=>fetch(app.origin+route,{method:data===undefined?'GET':'POST',headers:{Origin:app.origin,'X-Observanda-Session':cookie,'Content-Type':'application/json','X-Observanda-Workspace':context,'X-Observanda-Wait':'1'},...(data===undefined?{}:{body:JSON.stringify(data)})});
  const active=await f.jobs.workspace.outline(),prepared=await request('/api/preview',{workspaceId:f.book.id,etag:active.etag,websitePin:active.websitePin}),review=await prepared.json();assert.equal(prepared.status,200,JSON.stringify(review));
  const entry='/preview/'+review.id+'/entries/'+f.record.id+'.html',asset='/preview/'+review.id+'/media/'+f.asset.id+'.png';
  const open=Workspace.prototype.openCatalogue;let opened=0,html;

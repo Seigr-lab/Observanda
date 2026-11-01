@@ -19,8 +19,8 @@ test('record transfer HTTP commands recover across sessions without changing des
  async function open(){
   server=await startServer({root:f.root,port:0,headless:true,deviceStore:f.deviceStore});
   const session=await fetch(server.origin+'/api/session',{method:'POST',headers:{Origin:server.origin,'Content-Type':'application/json'},body:JSON.stringify({token:server.launchToken})});
-  assert.equal(session.status,200);const cookie=session.headers.get('set-cookie').split(';')[0];
-  const headers={Cookie:cookie,Origin:server.origin},storage=await fetch(server.origin+'/api/storage',{headers});assert.equal(storage.status,200);headers['X-Observanda-Workspace']=(await storage.json()).contextId;
+  assert.equal(session.status,200);const cookie=session.headers.get('x-observanda-session').split(';')[0];
+  const headers={'X-Observanda-Session':cookie,Origin:server.origin},storage=await fetch(server.origin+'/api/storage',{headers});assert.equal(storage.status,200);headers['X-Observanda-Workspace']=(await storage.json()).contextId;
   const raw=(route,data)=>fetch(server.origin+route,{signal:AbortSignal.timeout(120000),method:data===undefined?'GET':'POST',headers:{...headers,...(data===undefined?{}:{'Content-Type':'application/json','X-Observanda-Wait':'1'})},...(data===undefined?{}:{body:JSON.stringify(data)})});
   return {raw,call:async(route,data,status=200)=>{const response=await raw(route,data);assert.equal(response.status,status,route+': '+await response.clone().text());return response.json();}};
  }

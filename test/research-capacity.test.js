@@ -52,10 +52,10 @@ test('an oversized research save preserves its durable draft; a larger rejected 
 test('HTTP capacity admission returns operation details before a write and keeps saved data intact',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-capacity-http-')),f=await encryptedFixture(directory,largeRecordBook()),app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,headless:true,preferencesFile:path.join(directory,'preferences.json')});
  t.after(async()=>{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
- const response=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=response.headers.get('set-cookie').split(';')[0],before=await f.workspace.outline();
+ const response=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=response.headers.get('x-observanda-session').split(';')[0],before=await f.workspace.outline();
  for(const [route,code,owner] of [['/api/research/records/save','RECORD_COMMAND_LIMIT','recordCommand'],['/api/research/drafts/write','DRAFT_SIZE_LIMIT','checkpointRequest']]){
   const body=JSON.stringify({padding:'界'.repeat(Math.ceil(MAX_RECORD_COMMAND_BYTES/3))});
-  const result=await fetch(app.origin+route,{method:'POST',headers:{Cookie:cookie,Origin:app.origin,'Content-Type':'application/json'},body});
+  const result=await fetch(app.origin+route,{method:'POST',headers:{'X-Observanda-Session':cookie,Origin:app.origin,'Content-Type':'application/json'},body});
   assert.equal(result.status,413);const error=await result.json();assert.equal(error.code,code);assert.equal(error.details[0].owner,owner);assert.equal(error.details[0].requestedBytes,Buffer.byteLength(body));
  }
  assert.equal((await f.workspace.outline()).etag,before.etag);assert.equal((await new ResearchDrafts(f.workspace).list()).drafts.length,0);

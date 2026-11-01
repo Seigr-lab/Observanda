@@ -1,3 +1,4 @@
+import {sessionRequest} from './session-fixture.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
@@ -39,10 +40,10 @@ test('both subscription entry points persist feeds and calendar navigation suppo
  page.on('pageerror',error=>errors.push(error.message));
  try{
   app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,headless:true,preferencesFile:path.join(directory,'preferences')});
-  const auth=await page.request.post(app.origin+'/api/session',{data:{token:app.launchToken},headers:{Origin:app.origin}});
+  const auth=await sessionRequest(page,'post',app.origin+'/api/session',{data:{token:app.launchToken},headers:{Origin:app.origin}});
   expect(auth.ok()).toBe(true);
   const main=page.locator('main'),dialog=page.locator('#dialog');
-  const api=async(route,data)=>{const response=await page.request.post(app.origin+route,{data:{workspaceId:book.id,...data},headers:{Origin:app.origin}});expect(response.ok()).toBe(true);return response.json();};
+  const api=async(route,data)=>{const response=await sessionRequest(page,'post',app.origin+route,{data:{workspaceId:book.id,...data},headers:{Origin:app.origin}});expect(response.ok()).toBe(true);return response.json();};
   const subscriptions=()=>api('/api/modules/items',{type:'subscription',moduleId:'planning',projectId:null,recursive:true,limit:25});
   const nav=name=>main.getByRole('navigation',{name:'Planning',exact:true}).getByRole('button',{name,exact:true});
   const overview=async()=>{

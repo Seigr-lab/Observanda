@@ -67,8 +67,8 @@ test('new workspace modules have independent writers, history, drafts and lifecy
 
 test('workspace module API uses dedicated owners under a held research writer',{timeout:180000},async t=>{
  const f=await setup(t),app=await testServer({root:f.storage.root,port:0,headless:true,deviceStore:f.deviceStore});t.after(()=>app.close());
- const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=session.headers.get('set-cookie').split(';')[0];let context;
- const request=async(route,data)=>{const response=await fetch(app.origin+route,{...(data===undefined?{}:{method:'POST',body:JSON.stringify(data)}),headers:{Origin:app.origin,Cookie:cookie,'Content-Type':'application/json',...(context?{'X-Observanda-Workspace':context}:{})}}),value=await response.json();assert.equal(response.status,200,JSON.stringify(value));return value;};
+ const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=session.headers.get('x-observanda-session').split(';')[0];let context;
+ const request=async(route,data)=>{const response=await fetch(app.origin+route,{...(data===undefined?{}:{method:'POST',body:JSON.stringify(data)}),headers:{Origin:app.origin,'X-Observanda-Session':cookie,'Content-Type':'application/json',...(context?{'X-Observanda-Workspace':context}:{})}}),value=await response.json();assert.equal(response.status,200,JSON.stringify(value));return value;};
  context=(await request('/api/storage')).contextId;
  const g=gate(),held=detached(()=>f.storage.withLock(async()=>{g.enter();await g.hold;}));await g.started;
  try{

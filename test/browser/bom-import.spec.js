@@ -1,3 +1,4 @@
+import {sessionRequest} from './session-fixture.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
@@ -86,7 +87,7 @@ test('retained BOM table mapping is reviewed before draft changes; originals, ex
   expect(bom.data.lines[1].dnp).toBe(true);
   await main.getByText('Original BOM source',{exact:true}).click();
   const downloadURL=await main.getByRole('link',{name:'Download original BOM',exact:true}).getAttribute('href');
-  expect(await (await page.request.get(app.origin+downloadURL)).body()).toEqual(bytes);
+  expect(await (await sessionRequest(page,'get',app.origin+downloadURL)).body()).toEqual(bytes);
   await main.getByRole('button',{name:'Build & stock',exact:true}).click();
   await main.getByRole('button',{name:'Reserve components',exact:true}).click();
   await main.getByRole('button',{name:'Record actual use',exact:true}).click();

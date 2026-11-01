@@ -93,7 +93,7 @@ test('template endpoints require authentication, workspace binding and unlocked 
  for(const [operation,value] of sourceCommands)assert.equal((await fetch(app.origin+'/api/research/starters/'+operation,{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify(value)})).status,401);
  for(const operation of selectedOperations)assert.equal((await fetch(app.origin+'/api/research/starters/'+operation,{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:'{}'})).status,401);
  const auth=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});
- const headers={Origin:app.origin,Cookie:auth.headers.get('set-cookie').split(';')[0],'Content-Type':'application/json'};
+ const headers={Origin:app.origin,'X-Observanda-Session':auth.headers.get('x-observanda-session').split(';')[0],'Content-Type':'application/json'};
  const post=(route,value,extra={})=>fetch(app.origin+route,{method:'POST',headers:{...headers,...extra},body:JSON.stringify(value)});
  assert.equal((await post('/api/access/unlock',{password:'synthetic starter password'})).status,200);
  assert.equal((await post('/api/storage/open',{path:f.root,password:'synthetic starter password'})).status,200);

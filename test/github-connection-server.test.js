@@ -15,7 +15,7 @@ test('GitHub account changes require the local session and serialize with public
  const route='/api/github-connection/choose';const raw=(url,data,headers={})=>fetch(app.origin+url,{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json',...headers},body:JSON.stringify(data)});
  assert.equal((await raw(route,{login:'alice'})).status,401);
  assert.equal((await raw('/api/publishing/destinations',{kind:'owners'})).status,401);
- const auth=await raw('/api/session',{token:app.launchToken}),Cookie=auth.headers.get('set-cookie').split(';')[0],request=(url,data)=>raw(url,data,{Cookie});
+ const auth=await raw('/api/session',{token:app.launchToken}),Cookie=auth.headers.get('x-observanda-session').split(';')[0],request=(url,data)=>raw(url,data,{'X-Observanda-Session':Cookie});
  assert.equal((await raw(route,{login:'alice'},{Cookie,Origin:'https://attacker.invalid'})).status,403);
  assert.equal((await raw('/api/publishing/destinations',{kind:'owners'},{Cookie,Origin:'https://attacker.invalid'})).status,403);
  const selecting=request(route,{login:'alice'});await waiting;

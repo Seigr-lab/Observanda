@@ -38,8 +38,8 @@ test('project rename carries nested projects and books through interrupted nativ
 });
 
 async function client(app){
- const opened=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});assert.equal(opened.status,200);const cookie=opened.headers.get('set-cookie').split(';')[0];let context;
- const call=async(route,data)=>{const response=await fetch(app.origin+route,{signal:AbortSignal.timeout(120000),method:data===undefined?'GET':'POST',headers:{Origin:app.origin,Cookie:cookie,'Content-Type':'application/json','X-Observanda-Wait':'1',...(context?{'X-Observanda-Workspace':context}:{})},...(data===undefined?{}:{body:JSON.stringify(data)})});return {status:response.status,value:await response.json()};};
+ const opened=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});assert.equal(opened.status,200);const cookie=opened.headers.get('x-observanda-session').split(';')[0];let context;
+ const call=async(route,data)=>{const response=await fetch(app.origin+route,{signal:AbortSignal.timeout(120000),method:data===undefined?'GET':'POST',headers:{Origin:app.origin,'X-Observanda-Session':cookie,'Content-Type':'application/json','X-Observanda-Wait':'1',...(context?{'X-Observanda-Workspace':context}:{})},...(data===undefined?{}:{body:JSON.stringify(data)})});return {status:response.status,value:await response.json()};};
  context=(await call('/api/storage')).value.contextId;return call;
 }
 test('project settings rename authenticates nested books and HTTP reads recover interrupted relocation',{timeout:240000},async t=>{

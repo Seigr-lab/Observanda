@@ -1,3 +1,4 @@
+import {sessionRequest} from './session-fixture.js';
 import {WebsiteSites} from '../../src/website-sites.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,readFile,rm} from 'node:fs/promises';
@@ -69,6 +70,6 @@ test('content paging and research selection keep private material excluded throu
  await page.locator('[data-palette-kind="media"]').click();await dialog.getByLabel('Find media',{exact:true}).fill('Research image 00');await expect(dialog.locator('[data-research-media-key]')).toHaveCount(1);await dialog.locator('[data-research-media-key]').click();await save(page);await page.reload();
  const saved=await new WebsiteSites(fixture.workspace).read(null);expect(saved.site.selection.records.filter(record=>record.share).map(record=>record.id)).toEqual([target.id]);expect((await fixture.workspace.read()).book.entries).toEqual(book.entries);expect(saved.site.selection.records.find(record=>record.id===target.id).attachments.find(item=>item.id===research[14].id)?.share??research[14].share).toBe(true);
  await page.getByRole('button',{name:'Prepare edition',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible({timeout:30000});const href=await page.getByRole('link',{name:'Open full preview',exact:true}).getAttribute('href');
- const preview=await page.request.get(new URL(href,app.origin).href),html=await preview.text();expect(html).toContain(research[14].id);expect(html).not.toContain(research[0].id);
- const release=href.split('/')[2],manifest=await (await page.request.get(app.origin+'/preview/'+release+'/publication.json')).json();const files=JSON.stringify(manifest.files);expect(files).toContain(research[14].id);expect(files).not.toContain(research[0].id);expect(files).not.toContain(assets[0].id);expect(files).not.toContain(book.entries[0].id);expect(errors).toEqual([]);
+ const preview=await sessionRequest(page,'get',new URL(href,app.origin).href),html=await preview.text();expect(html).toContain(research[14].id);expect(html).not.toContain(research[0].id);
+ const release=href.split('/')[2],manifest=await (await sessionRequest(page,'get',app.origin+'/preview/'+release+'/publication.json')).json();const files=JSON.stringify(manifest.files);expect(files).toContain(research[14].id);expect(files).not.toContain(research[0].id);expect(files).not.toContain(assets[0].id);expect(files).not.toContain(book.entries[0].id);expect(errors).toEqual([]);
 });

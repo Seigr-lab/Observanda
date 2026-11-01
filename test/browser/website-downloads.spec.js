@@ -1,3 +1,4 @@
+import {sessionRequest} from './session-fixture.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm,readFile} from 'node:fs/promises';
 import os from 'node:os';
@@ -37,8 +38,8 @@ test('author original downloads, recover a library file, style each action, and 
   try{
    await visitor.goto(new URL(href,app.origin).href);await expect(visitor.getByRole('link',{name:'Get recording',exact:true})).toHaveClass(/site-action--link/);const button=visitor.getByRole('link',{name:'Recording as a button',exact:true});await expect(button).toHaveCSS('border-radius','12px');await expect(button).toHaveCSS('background-color','rgb(23, 63, 58)');
    const pending=visitor.waitForEvent('download');await visitor.getByRole('link',{name:'Get recording',exact:true}).click();const download=await pending;expect(download.suggestedFilename()).toBe(name);expect(hash(await readFile(await download.path()))).toBe(hash(bytes));
-   const link=await button.getAttribute('href'),response=await visitor.request.get(new URL(link,visitor.url()).href,{headers:{Range:'bytes=10-39'}});expect(response.status()).toBe(206);expect(response.headers()['content-type']).toBe('application/octet-stream');expect(await response.body()).toEqual(bytes.subarray(10,40));
-   const manifest=await visitor.request.get(new URL('../publication.json',visitor.url()).href);const entries=(await manifest.json()).files;expect(entries.filter(entry=>entry.path.startsWith('downloads/'))).toHaveLength(1);
+   const link=await button.getAttribute('href'),response=await sessionRequest(visitor,'get',new URL(link,visitor.url()).href,{headers:{Range:'bytes=10-39'}});expect(response.status()).toBe(206);expect(response.headers()['content-type']).toBe('application/octet-stream');expect(await response.body()).toEqual(bytes.subarray(10,40));
+   const manifest=await sessionRequest(visitor,'get',new URL('../publication.json',visitor.url()).href);const entries=(await manifest.json()).files;expect(entries.filter(entry=>entry.path.startsWith('downloads/'))).toHaveLength(1);
    await visitor.screenshot({path:info.outputPath('downloads-desktop.png')});await visitor.setViewportSize({width:390,height:844});await visitor.evaluate(()=>document.documentElement.style.fontSize='24px');expect(await visitor.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await visitor.screenshot({path:info.outputPath('downloads-mobile.png')});
   }finally{await visitor.close();}
   expect(errors).toEqual([]);

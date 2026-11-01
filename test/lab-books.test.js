@@ -65,8 +65,8 @@ test('HTTP deletion is atomic, refuses changes since review, and retains a resto
  const {book,source,destination}=fixture();await ws.create(book);
  const app=await startServer({root:ws.root,port:0,preferencesFile:path.join(dir,'preferences.json')});t.after(()=>app.close());
  const auth=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});
- const cookie=auth.headers.get('set-cookie').split(';')[0];
- const send=(etag,change)=>fetch(app.origin+'/api/workspace/structure',{method:'POST',headers:{Cookie:cookie,Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({etag,change})});
+ const cookie=auth.headers.get('x-observanda-session').split(';')[0];
+ const send=(etag,change)=>fetch(app.origin+'/api/workspace/structure',{method:'POST',headers:{'X-Observanda-Session':cookie,Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({etag,change})});
  const initial=await ws.read();
  assert.equal((await send(initial.etag,command(source.id))).status,422);
  assert.equal((await ws.read()).etag,initial.etag);

@@ -26,11 +26,11 @@ for(const failure of ['session-request','session-response','preferences','worksp
  const root=await mkdtemp(path.join(os.tmpdir(),'observanda-open-retry-')),f=await encryptedFixture(root,startupBook()),before=await f.workspace.read(),app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore,preferencesFile:path.join(root,'preferences.json')});
  const route=failure.startsWith('session')?'**/api/session':failure==='preferences'?'**/api/language':'**/api/access/status',launch=app.url;let attempts=0;
  try{
-  await page.route(route,async request=>{attempts++;if(failure==='session-response')await request.fetch();await request.abort('connectionreset');});
+  await page.context().route(route,async request=>{attempts++;if(failure==='session-response')await request.fetch();await request.abort('connectionreset');});
   await page.goto(launch);await expect(page.getByRole('heading',{name:'Observanda could not finish opening',exact:true})).toBeVisible();
   if(failure.startsWith('session'))expect(page.url()).toBe(launch);else expect(new URL(page.url()).hash).toBe('');
   expect(attempts).toBe(1);await page.getByRole('button',{name:'Reload Observanda',exact:true}).click();await expect(page.getByRole('heading',{name:'Observanda could not finish opening',exact:true})).toBeVisible();expect(attempts).toBe(2);
-  await page.unroute(route);await page.getByRole('button',{name:'Reload Observanda',exact:true}).click();await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();expect(page.url()).not.toContain(app.launchToken);expect(await page.locator('body').innerText()).not.toContain(app.launchToken);
+  await page.context().unroute(route);await page.getByRole('button',{name:'Reload Observanda',exact:true}).click();await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();expect(page.url()).not.toContain(app.launchToken);expect(await page.locator('body').innerText()).not.toContain(app.launchToken);
   expect(await f.workspace.read()).toEqual(before);
  }finally{await app.close();clearVault(f.vault);await rm(root,{recursive:true,force:true});}
 });

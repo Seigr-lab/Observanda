@@ -1,3 +1,4 @@
+import {sessionRequest} from './session-fixture.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm,readFile} from 'node:fs/promises';
 import os from 'node:os';
@@ -28,7 +29,7 @@ test('cancelled media survives restart, downloads intact, retries and attaches o
   await dialog.getByRole('button',{name:'Cancel processing',exact:true}).click();await expect(dialog).toContainText('cancelled',{timeout:15000});
   const downloadEvent=page.waitForEvent('download');await dialog.getByRole('link',{name:'Download original',exact:true}).click();const download=await downloadEvent;expect(await readFile(await download.path())).toEqual(bytes);
   const url=await dialog.getByRole('link',{name:'Download original'}).getAttribute('href');expect((await fetch(new URL(url,app.url))).ok).toBe(false);
-  const wrong=await page.request.get(new URL(url.replace(/context=[^&]+/,'context=wrong'),app.url).href);expect((await wrong.json()).code).toBe('WORKSPACE_CHANGED');
+  const wrong=await sessionRequest(page,'get',new URL(url.replace(/context=[^&]+/,'context=wrong'),app.url).href);expect((await wrong.json()).code).toBe('WORKSPACE_CHANGED');
   await app.close();app=await startServer(options);await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id+'/read',book.entries[0].id);
   await page.getByRole('button',{name:'Media imports',exact:true}).click();await expect(dialog).toContainText('cancelled');
   await dialog.getByRole('button',{name:'Retry processing',exact:true}).click();await expect(dialog.getByRole('button',{name:'Use media',exact:true})).toBeVisible({timeout:15000});

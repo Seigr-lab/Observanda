@@ -45,6 +45,7 @@ import {researchRequest,executeResearchRequest} from './research-requests.js';
 import {LiveConnections} from './collaboration/live-connections.js';
 import {liveFileHeaders} from './collaboration/live-response.js';
 import {LaunchCapabilities} from './launch-capabilities.js';
+import {DownloadCapabilities} from './download-capabilities.js';
 import {WorkspaceDeletions} from './workspace-deletion.js';
 import {SavedWorkspaceDeletion} from './saved-workspace-deletion.js';
 import {workspaceDeletion} from './workspace-delete-state.js';
@@ -270,7 +271,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
   let context=makeContext(root,expectedExisting), origin, publishing=false, importing=false, changing=false, activeWrites=0, loginBusy=false;
   const assertGithubIdle=async()=>{if(publishing||await context.jobs?.queue.hasActive(['publication.deploy','publication.repository','publication.destination-review']))throw new AppError('GITHUB_PUBLICATION_BUSY');};
   const sessions=new Map(), plans=new Map(), failures=new Map();
-  const launches=new LaunchCapabilities();
+  const launches=new LaunchCapabilities(),downloads=new DownloadCapabilities();
   let contextRequired=false;
   const localPreferences=await readPreferences(preferencesFile);
   const forgetDeleted=async source=>{
@@ -287,7 +288,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
     for(const session of sessions.values())session.access=null;
     client.access='none';client.expires=Date.now()+8*60*60*1000;
   };
-  const setCookie=(res,id)=>res.setHeader('Set-Cookie',`observanda=${id}; HttpOnly; SameSite=Strict; Path=/`);
+  const sessionResponse=(res,id)=>{res.setHeader('X-Observanda-Session',id);res.setHeader('Set-Cookie','observanda=; Max-Age=0; HttpOnly; SameSite=Strict; Path=/');return {ok:true,session:id};};
   const contextAccess=()=>workspaceRenameAccess(context,renames);
   const status=async client=>{const access=await contextAccess();if(context.protectedOnce&&access.etag==='none')throw new AppError('ACCESS_FORMAT');context.protectedOnce ||= requiresAccess(access.value);return {access,locked:!!context.manualLock||requiresAccess(access.value)&&(client.access!==access.etag||client.expires<Date.now()||(isEncryptedAccess(access.value)&&!context.vault.key))};};
   const authenticate=async(root,access,username,password,recovery='')=>{
@@ -349,6 +350,12 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       if (!['GET', 'POST'].includes(req.method)) throw new AppError('ORIGIN');
       if (req.method === 'POST' && req.headers.origin !== origin) throw new AppError('ORIGIN');
       const url = new URL(req.url, origin);
+      let downloadSession;
+      if(url.searchParams.has('__observanda_download')){
+       if(req.method!=='GET'||url.searchParams.getAll('__observanda_download').length!==1)throw new AppError('AUTH');
+       const token=url.searchParams.get('__observanda_download');url.searchParams.delete('__observanda_download');
+       downloadSession=downloads.consume(token,context.id,url.pathname+url.search);
+      }
       req.routePolicy=projectPublicationRequest(url.pathname,req.method);
       const asset = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
       if (req.method === 'GET' && browserAssets.has(asset)) {
@@ -365,11 +372,11 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       if (req.method === 'POST' && url.pathname === '/api/session') {
         const data = await body(req);
         const claim=launches.claim(data?.token,data?.binding);
-        if(claim.replay){const session=await claim.replay;if(!sessions.has(session))throw new AppError('AUTH');setCookie(res,session);return json({ok:true});}
+        if(claim.replay){const session=await claim.replay;if(!sessions.has(session))throw new AppError('AUTH');return json(sessionResponse(res,session));}
         try{
         if(changing||loginBusy){
-          const prior=req.headers.cookie?.split(';').map(value=>value.trim()).find(value=>value.startsWith('observanda='))?.slice(11),client=sessions.get(prior);
-          if(client&&!(await status(client)).locked){claim.complete(prior);return json({ok:true});}
+          const prior=req.headers['x-observanda-session'],client=sessions.get(prior);
+          if(client&&!(await status(client)).locked){claim.complete(prior);return json(sessionResponse(res,prior));}
           throw new AppError('LOCKED');
         }
         const sessionContext=context,session=randomBytes(32).toString('hex'),access=await diagnosticPhase('session-access',contextAccess);
@@ -388,12 +395,18 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         }
         if(local.access){await diagnosticPhase('workspace-identity',()=>ensureWorkspaceIdentity(sessionContext));}
         if(local.access)try{await diagnosticPhase('session-location',()=>rememberAuthenticatedLocation(preferencesFile,sessionContext.root));}catch(error){if(error.code!=='LEGACY_WRITE_LOCK')throw error;}
-        if(context!==sessionContext)throw new AppError('WORKSPACE_CHANGED');sessions.set(session,local);setCookie(res,session);if(local.access)startJobs(context);
-        claim.complete(session);return json({ ok: true });
+        if(context!==sessionContext)throw new AppError('WORKSPACE_CHANGED');sessions.set(session,local);if(local.access)startJobs(context);
+        claim.complete(session);return json(sessionResponse(res,session));
         }catch(error){claim.fail(error);throw error;}
       }
-      const cookie = req.headers.cookie?.split(';').map(part => part.trim()).find(part => part.startsWith('observanda='))?.slice(11);
-      const client=sessions.get(cookie);if(!client)throw new AppError('AUTH');
+      const session=downloadSession??req.headers['x-observanda-session'],client=sessions.get(session);if(!client)throw new AppError('AUTH');
+      if(req.method==='POST'&&url.pathname==='/api/session/download'){
+       if((await status(client)).locked)throw new AppError('ACCESS_LOCKED');
+       const data=await body(req),target=new URL(data?.url,origin);
+       if(typeof data?.url!=='string'||target.origin!==origin||target.hash||target.searchParams.has('__observanda_download'))throw new AppError('INVALID');
+       target.search=target.searchParams.toString();const token=downloads.issue(session,context.id,target.pathname+target.search);target.searchParams.set('__observanda_download',token);
+       return json({url:target.pathname+target.search});
+      }
       if(req.method==='GET'&&url.pathname==='/api/health'){
        const health=await serviceHealth({root:context.root,workspace:context.workspace,locked:context.manualLock||client.expires<=Date.now()||context.protectedOnce&&(!client.access||!context.vault.key),authorize:async()=>!(await status(client)).locked,closing:shuttingDown,provider:databaseProvider()});
        return json({...health,capacity:databaseCapacity(),requests:requestAdmission.stats(),nativeResources:nativeResources.stats()},health.ready?200:503);
@@ -1433,7 +1446,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
    return {busy:!!(activeWrites||changing||importing||publishing||loginBusy||context.dashboardTask||context.jobs?.worker.active||operations.some(item=>['running','queued'].includes(item.state))),failure:activities.failureSequence};
   };
   return {server,origin,get launchToken(){return launches.issue();},get url(){return origin+'/#'+launches.issue();},shutdownStatus,close:()=>closePromise??=(async()=>{
-   shuttingDown=true;launches.clear();requestAdmission.close();clearInterval(expiry);cancelFolderRequests();for(const request of pending)request.abortPreview?.();const stoppedJobs=stopJobs(context);
+   shuttingDown=true;launches.clear();downloads.clear();requestAdmission.close();clearInterval(expiry);cancelFolderRequests();for(const request of pending)request.abortPreview?.();const stoppedJobs=stopJobs(context);
    const disconnected=connections.close();
    const timeout=setTimeout(()=>server.closeAllConnections(),60000);timeout.unref();
    try{await Promise.all([stoppedJobs,...dashboardTasks,disconnected,pending.size?new Promise(resolve=>drained.push(resolve)):Promise.resolve()]);}

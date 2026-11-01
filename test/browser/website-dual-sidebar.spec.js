@@ -1,3 +1,4 @@
+import {authorizePreviewContext} from './session-fixture.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
@@ -27,7 +28,7 @@ test('author independent chapter and page indexes, reuse them and navigate the s
   await expect(canvas(page).locator('[data-region-kind=sidebar]')).toHaveCSS('background-color','rgb(232, 236, 224)');await expect(canvas(page).locator('[data-region-kind="secondary-sidebar"]')).not.toHaveCSS('background-color','rgb(232, 236, 224)');
   await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');await page.reload();await expect(page.getByLabel('Editing area',{exact:true})).toHaveValue('secondary-sidebar');await expect(canvas(page).locator('.site-sidebar')).toHaveCount(2);
   await page.getByRole('button',{name:'Prepare edition',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible({timeout:30000});await page.getByLabel('Preview page',{exact:true}).selectOption(target);
-  const href=await page.locator('#full-public-preview').getAttribute('href'),visitorContext=await browser.newContext({javaScriptEnabled:false,viewport:{width:1440,height:1000}});await visitorContext.addCookies(await page.context().cookies());const visitor=await visitorContext.newPage();
+  const href=await page.locator('#full-public-preview').getAttribute('href'),visitorContext=await browser.newContext({javaScriptEnabled:false,viewport:{width:1440,height:1000}});await authorizePreviewContext(page,visitorContext);const visitor=await visitorContext.newPage();
   try{
    await visitor.goto(new URL(href,app.origin).href);const left=visitor.locator('[data-region-kind=sidebar]'),right=visitor.locator('[data-region-kind="secondary-sidebar"]'),main=visitor.locator('main');
    await expect(left.getByRole('link',{name:'Concepts',exact:false})).toBeVisible();await expect(right.getByRole('link',{name:'How the pieces connect',exact:true})).toBeVisible();

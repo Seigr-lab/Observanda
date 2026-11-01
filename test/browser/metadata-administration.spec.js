@@ -1,3 +1,4 @@
+import {sessionRequest} from './session-fixture.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
 import path from 'node:path';
@@ -20,7 +21,7 @@ for(const count of [65,650])test('storage, access and source inspection retain n
  page.on('request',r=>requests.push(new URL(r.url()).pathname));page.on('pageerror',e=>errors.push(e.message));
  const cdp=await page.context().newCDPSession(page);let heap=0;const measure=async()=>{heap=Math.max(heap,(await cdp.send('Runtime.getHeapUsage')).usedSize);};
  try{
-  const session=await page.request.post(app.origin+'/api/session',{data:{token:app.launchToken},headers:{Origin:app.origin}});expect(session.ok()).toBe(true);
+  const session=await sessionRequest(page,'post',app.origin+'/api/session',{data:{token:app.launchToken},headers:{Origin:app.origin}});expect(session.ok()).toBe(true);
   await page.goto(app.origin+'/#/preferences/storage');await expect(page.getByRole('heading',{name:'Workspace storage',exact:true})).toBeVisible();await measure();
   await page.getByRole('button',{name:'Manage workspace access',exact:true}).click();await expect(page.getByRole('heading',{name:'Workspace access',exact:true})).toBeVisible();await page.getByRole('button',{name:'Close',exact:true}).click();
   await navigate(page,'Workspaces');await page.getByRole('button',{name:'Inspect external logbook',exact:true}).click();

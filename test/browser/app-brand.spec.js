@@ -1,3 +1,4 @@
+import {sessionRequest} from './session-fixture.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm,readFile} from 'node:fs/promises';
 import path from 'node:path';
@@ -19,7 +20,7 @@ test('application artwork follows the actual surface and browser icons follow br
   await page.goto(app.url);await expect(page.locator('#main-navigation .app-logo-black')).toBeVisible();
   await expect(page.locator('#main-navigation .app-logo-white')).toBeHidden();
   for(const variant of ['black','white']){
-   const response=await page.request.get(app.origin+'/observanda-'+variant+'.svg');
+   const response=await sessionRequest(page,'get',app.origin+'/observanda-'+variant+'.svg');
    expect(response.status()).toBe(200);expect(response.headers()['content-type']).toContain('image/svg+xml');
    expect(await response.body()).toEqual(await readFile('desktop/icon_'+variant+'.svg'));
   }

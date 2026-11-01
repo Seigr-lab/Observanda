@@ -23,8 +23,8 @@ export async function fixture(t){
  const root=path.join(directory,'Research Workspace'),initial=createNotebook('Research Workspace');await initializeLocation(root,initial,access,vault);const workspace=new Workspace(root,vault),registry=new ProjectRegistry(workspace,initial.id);
  app=await startServer({root,port:0,headless:true,deviceStore:device});
  async function client(){
-  const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});assert.equal(session.status,200);const cookie=session.headers.get('set-cookie').split(';')[0],context=(await result(await fetch(app.origin+'/api/storage',{headers:{Cookie:cookie}}))).contextId;
-  const headers={Origin:app.origin,Cookie:cookie,'X-Observanda-Workspace':context};
+  const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});assert.equal(session.status,200);const cookie=session.headers.get('x-observanda-session').split(';')[0],context=(await result(await fetch(app.origin+'/api/storage',{headers:{'X-Observanda-Session':cookie}}))).contextId;
+  const headers={Origin:app.origin,'X-Observanda-Session':cookie,'X-Observanda-Workspace':context};
   return (route,data)=>fetch(app.origin+route,{signal:AbortSignal.timeout(30000),method:data===undefined?'GET':'POST',headers:{...headers,'Content-Type':'application/json','X-Observanda-Wait':'1'},...(data===undefined?{}:{body:JSON.stringify(data)})});
  }
  const call=await client(),projectId=randomUUID(),base='/api/projects/'+projectId;

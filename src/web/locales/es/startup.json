@@ -1,4 +1,5 @@
 {
+  "downloadFailed": "No se ha podido iniciar la descarga. Inténtalo de nuevo.",
   "opening": "Abriendo Observanda…",
   "skip": "Saltar al contenido principal",
   "moduleFailed": "No se ha podido cargar Observanda",

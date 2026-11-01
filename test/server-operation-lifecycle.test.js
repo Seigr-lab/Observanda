@@ -22,8 +22,8 @@ const routes=[
 async function setup(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-operation-lifecycle-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),app=await testServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences.json')});
  t.after(async()=>{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
- const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=session.headers.get('set-cookie').split(';')[0];
- const request=(route,data={},accept='application/json')=>fetch(app.origin+route,{method:'POST',headers:{Cookie:cookie,Origin:app.origin,'Content-Type':'application/json',Accept:accept},body:JSON.stringify(data)});
+ const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=session.headers.get('x-observanda-session').split(';')[0];
+ const request=(route,data={},accept='application/json')=>fetch(app.origin+route,{method:'POST',headers:{'X-Observanda-Session':cookie,Origin:app.origin,'Content-Type':'application/json',Accept:accept},body:JSON.stringify(data)});
  return {app,request,book};
 }
 test('negotiated operations keep pending writes counted and return controlled errors for JSON and stream clients',async t=>{

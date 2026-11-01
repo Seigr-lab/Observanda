@@ -1,3 +1,4 @@
+import {sessionRequest} from './session-fixture.js';
 import {test,expect} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -84,8 +85,8 @@ test('indexed canvas feeds keep independent reading states through design change
   await second.getByRole('button',{name:'Clear filters',exact:true}).click();await expect(items(second)).toHaveCount(7);
   await second.getByLabel('Order',{exact:true}).selectOption('oldest');await expect(items(second).first()).toHaveAttribute('data-feed-id',book.entries.filter(record=>record.share).sort((a,b)=>a.id.localeCompare(b.id,'en')).at(-1).id);
   for(let i=0;i<6;i++){const before=await ids(first);await first.getByRole('link',{name:'Next entries',exact:true}).click();await expect.poll(()=>ids(first)).not.toEqual(before);}
-  expect((await page.request.get(initialFrame)).status()).toBe(404);expect((await page.request.get(cover)).ok()).toBe(true);
-  const wrongContext=new URL(cover);wrongContext.searchParams.set('context','other-workspace');expect((await page.request.get(wrongContext.href)).status()).toBe(409);
+  expect((await sessionRequest(page,'get',initialFrame)).status()).toBe(404);expect((await sessionRequest(page,'get',cover)).ok()).toBe(true);
+  const wrongContext=new URL(cover);wrongContext.searchParams.set('context','other-workspace');expect((await sessionRequest(page,'get',wrongContext.href)).status()).toBe(409);
   await expect.poll(()=>second.getByAltText('Retained cover').first().evaluate(image=>image.complete&&image.naturalWidth>0)).toBe(true);
   await chooseWebsitePage(page,'notebooks/'+book.notebooks[0].id+'.html');const cards=frame.locator('main > .publication-cards > .publication-card');await expect(cards).toHaveCount(24);const before=await cards.first().getAttribute('data-record-id');
   const next=frame.locator('[data-collection-next]');await next.focus();await next.press('Enter');await expect(cards.first()).not.toHaveAttribute('data-record-id',before);await expect(next).toBeFocused();

@@ -13,8 +13,8 @@ async function setup(t) {
   const ws = new Workspace(root); await ws.create(sampleNotebook());
   const app = await startServer({ root, port: 0 }); t.after(() => app.close());
   const auth = await fetch(app.origin + '/api/session', { method: 'POST', headers: { Origin: app.origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ token: app.launchToken }) });
-  const cookie = auth.headers.get('set-cookie').split(';')[0];
-  const request = (route, data) => fetch(app.origin + route, { headers: { Cookie: cookie, Origin: app.origin, 'Content-Type': 'application/json' }, ...(data === undefined ? {} : { method: 'POST', body: JSON.stringify(data) }) });
+  const cookie = auth.headers.get('x-observanda-session').split(';')[0];
+  const request = (route, data) => fetch(app.origin + route, { headers: { 'X-Observanda-Session': cookie, Origin: app.origin, 'Content-Type': 'application/json' }, ...(data === undefined ? {} : { method: 'POST', body: JSON.stringify(data) }) });
   return { ...app, ws, request, cookie };
 }
 
@@ -27,7 +27,7 @@ test('loopback service requires session, expected Host, and same-origin mutation
     req.on('error', reject);
   });
   assert.equal(hostileStatus, 403);
-  assert.equal((await fetch(app.origin + '/api/preview', { method: 'POST', headers: { Cookie: app.cookie, Origin: 'https://attacker.invalid', 'Content-Type': 'application/json' }, body: '{}' })).status, 403);
+  assert.equal((await fetch(app.origin + '/api/preview', { method: 'POST', headers: { 'X-Observanda-Session': app.cookie, Origin: 'https://attacker.invalid', 'Content-Type': 'application/json' }, body: '{}' })).status, 403);
   assert.equal((await fetch(app.origin + '/api/session', { method: 'POST', headers: { Origin: app.origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ token: 'é'.repeat(64) }) })).status, 401);
   assert.equal((await app.request('/api/notebook')).status, 200);
   const traversal = await fetch(app.origin + '/observanda.json'); assert.equal(traversal.status, 401);

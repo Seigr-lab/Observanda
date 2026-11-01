@@ -42,8 +42,8 @@ test('nested owners retain concurrent work, evidence and links through rename, p
  async function open(root){
   server=await startServer({root,port:0,headless:true,deviceStore:device,preferencesFile:path.join(directory,'preferences.json')});
   const session=await fetch(server.origin+'/api/session',{method:'POST',headers:{Origin:server.origin,'Content-Type':'application/json'},body:JSON.stringify({token:server.launchToken})});
-  assert.equal(session.status,200,await session.clone().text());const cookie=session.headers.get('set-cookie').split(';')[0];let context;
-  const raw=(route,{method='GET',body,headers={}}={})=>fetch(server.origin+route,{signal:AbortSignal.timeout(180000),method,body,headers:{Origin:server.origin,Cookie:cookie,...(context?{'X-Observanda-Workspace':context}:{}),...headers}});
+  assert.equal(session.status,200,await session.clone().text());const cookie=session.headers.get('x-observanda-session').split(';')[0];let context;
+  const raw=(route,{method='GET',body,headers={}}={})=>fetch(server.origin+route,{signal:AbortSignal.timeout(180000),method,body,headers:{Origin:server.origin,'X-Observanda-Session':cookie,...(context?{'X-Observanda-Workspace':context}:{}),...headers}});
   const call=async(route,data)=>{
    const response=await raw(route,data===undefined?{}:{method:'POST',body:JSON.stringify(data),headers:{'Content-Type':'application/json','X-Observanda-Wait':'1'}});
    assert.equal(response.status,200,route+': '+await response.clone().text());return response.json();

@@ -1,3 +1,4 @@
+import {sessionRequest} from './session-fixture.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
@@ -25,6 +26,6 @@ test('personal profile is editable, survives restart, guards unsaved navigation 
   await app.close();app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,preferencesFile:path.join(directory,'prefs'),headless:true,port:0});await page.goto(app.url);await page.goto(app.origin+'/#/preferences/user');await expect(form.getByLabel('Username',{exact:true})).toHaveValue('field-researcher');await expect(page.locator('[data-user-id]')).toHaveText(identity);
   await page.setViewportSize({width:390,height:844});await expect(form).toBeVisible();expect(await page.locator('main').evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);await page.screenshot({path:test.info().outputPath('user-profile-phone.png'),fullPage:true});
   const unauthenticated=await fetch(app.origin+'/api/user-profile',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({operation:'read'})});expect(unauthenticated.status).toBe(401);
-  await navigate(page,'Lock workspace');await expect(page.getByRole('heading',{name:'Unlock workspace',exact:true})).toBeVisible();expect((await page.request.post(app.origin+'/api/user-profile',{headers:{Origin:app.origin},data:{operation:'read'}})).status()).toBe(401);expect(errors).toEqual([]);
+  await navigate(page,'Lock workspace');await expect(page.getByRole('heading',{name:'Unlock workspace',exact:true})).toBeVisible();expect((await sessionRequest(page,'post',app.origin+'/api/user-profile',{headers:{Origin:app.origin},data:{operation:'read'}})).status()).toBe(401);expect(errors).toEqual([]);
  }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:5});}
 });

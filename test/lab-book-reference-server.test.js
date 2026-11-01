@@ -29,8 +29,8 @@ test('book namespace links resolve current and retained content with independent
  const device=new TestDeviceStore({file:path.join(directory,'device.key')}),access=await createWorkspaceAccess('','',device),vault=takeCreatedVault(access);vaults.push(vault);
  const root=path.join(directory,'Research Workspace 1'),initial=createNotebook('Research Workspace 1');await initializeLocation(root,initial,access,vault);const workspace=new Workspace(root,vault),registry=new ProjectRegistry(workspace,initial.id),addresses=new LabBookDirectory(registry);
  app=await startServer({root,port:0,headless:true,deviceStore:device});
- const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});assert.equal(session.status,200);const cookie=session.headers.get('set-cookie').split(';')[0],context=(await result(await fetch(app.origin+'/api/storage',{headers:{Cookie:cookie}}))).contextId;
- const headers={Origin:app.origin,Cookie:cookie,'X-Observanda-Workspace':context};
+ const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});assert.equal(session.status,200);const cookie=session.headers.get('x-observanda-session').split(';')[0],context=(await result(await fetch(app.origin+'/api/storage',{headers:{'X-Observanda-Session':cookie}}))).contextId;
+ const headers={Origin:app.origin,'X-Observanda-Session':cookie,'X-Observanda-Workspace':context};
  const call=(route,data={})=>fetch(app.origin+route,{signal:AbortSignal.timeout(30000),method:'POST',headers:{...headers,'Content-Type':'application/json','X-Observanda-Wait':'1'},body:JSON.stringify(data)});
  const projectId=randomUUID(),base='/api/projects/'+projectId;
  const project=(await result(await call('/api/projects/create',{id:randomUUID(),username:'',password:'',project:{id:projectId,title:'Field Project 1',description:'',share:false,logoId:null}}))).project;

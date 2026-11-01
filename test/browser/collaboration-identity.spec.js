@@ -1,3 +1,4 @@
+import {sessionRequest} from './session-fixture.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
 import path from 'node:path';
@@ -28,7 +29,7 @@ test('encrypted collaboration identity backup, verified recovery and return to a
   await bd.getByLabel('Identity backup password',{exact:true}).fill(password);await bd.getByRole('button',{name:'Review backup',exact:true}).click();await expect(bd.getByRole('heading',{name:'Review collaboration identity',exact:true})).toBeVisible();await expect(bd).toContainText(initial.current.signing.id);await expect(bd).toContainText(source.current.signing.id);
   await b.setViewportSize({width:390,height:844});expect(await bd.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);await b.screenshot({path:test.info().outputPath('identity-review-phone.png')});
   await bd.getByRole('checkbox').check();await bd.getByRole('button',{name:'Use this identity',exact:true}).click();await expect(bd).not.toBeVisible();await expect(b.getByRole('heading',{name:'Unlock workspace',exact:true})).toBeVisible();expect((await new CollaborationRecovery(fixtures[1].deviceStore).state()).current).toEqual(source.current);
-  expect((await b.request.get(apps[1].origin+'/api/notebook')).status()).toBe(401);
+  expect((await sessionRequest(b,'get',apps[1].origin+'/api/notebook')).status()).toBe(401);
   await b.getByRole('button',{name:'Recover collaboration identity',exact:true}).click();await bd.getByText('Previously used identities on this installation',{exact:true}).click();await bd.getByRole('button',{name:'Review saved identity',exact:true}).click();await expect(bd).toContainText(initial.current.signing.id);await bd.getByRole('checkbox').check();await bd.getByRole('button',{name:'Use this identity',exact:true}).click();await expect(bd).not.toBeVisible();expect((await new CollaborationRecovery(fixtures[1].deviceStore).state()).current).toEqual(initial.current);
   await b.getByRole('button',{name:'Unlock workspace',exact:true}).click();await expect(b.getByRole('heading',{name:'Unlock workspace',exact:true})).toHaveCount(0);expect(errors).toEqual([]);
  }finally{for(const context of contexts)await context.close();for(const app of apps)await app.close();for(const fixture of fixtures)clearVault(fixture.vault);await rm(directory,{recursive:true,force:true,maxRetries:5});}

@@ -33,7 +33,7 @@ test('locking a local installation drains pending peer requests and never sends 
  const workspaceId=(await f.member.workspace.outline()).metadata.id,headers={Origin:app.origin,'Content-Type':'application/json'};
  const request=(operation,data={})=>fetch(app.origin+'/api/live/'+operation,{method:'POST',headers,body:JSON.stringify({workspaceId,...data})});
  assert.equal((await request('state')).status,401);
- const session=await fetch(app.origin+'/api/session',{method:'POST',headers,body:JSON.stringify({token:app.launchToken})});headers.Cookie=session.headers.get('set-cookie').split(';')[0];
+ const session=await fetch(app.origin+'/api/session',{method:'POST',headers,body:JSON.stringify({token:app.launchToken})});headers['X-Observanda-Session']=session.headers.get('x-observanda-session').split(';')[0];
  assert.equal((await request('state',{workspaceId:randomUUID()})).status,409);
  const card=await host.card(f.grant.id),connected=await request('connect',{card,verifiedFingerprint:card.identity.id});assert.equal(connected.status,200);const {id}=await connected.json();
  const signing=gate(),resume=gate(),closing=gate(),sign=OrganizationIdentity.prototype.sign,close=LiveConnections.prototype.close;t.after(()=>resume.release());

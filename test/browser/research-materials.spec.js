@@ -1,3 +1,4 @@
+import {sessionRequest} from './session-fixture.js';
 import os from 'node:os';
 import {encryptedFixture} from './encrypted-fixture.js';
 import {clearVault} from '../../src/encryption.js';
@@ -40,7 +41,7 @@ test('creative run: pin method, retain source, declare columns, calculate, revis
   expect(await readFile(await download.path(),'utf8')).toContain('18446744073709551615,15');
   const storeForDownload=new ResearchMaterials(ws),asset=(await storeForDownload.heads()).find(m=>m.kind==='artifact');
   const originalURL=new URL('/api/research/materials/original/'+asset.id+'/'+asset.revision+'?context=wrong',app.url).href;
-  const wrongContext=await page.request.get(originalURL);expect((await wrongContext.json()).code).toBe('WORKSPACE_CHANGED');
+  const wrongContext=await sessionRequest(page,'get',originalURL);expect((await wrongContext.json()).code).toBe('WORKSPACE_CHANGED');
   const anonymous=await fetch(originalURL);expect(anonymous.ok).toBe(false);
   await dialog.getByRole('button',{name:'Back to evidence'}).click();
   await dialog.getByRole('button',{name:'Create dataset',exact:true}).click();
@@ -117,12 +118,13 @@ test('verification can be reopened after reload, cancelled and retried without s
  const errors=[];page.on('pageerror',e=>errors.push(e.message));const dialog=page.locator('#dialog');
  try{
   await page.goto(app.url);await page.evaluate(id=>location.hash='#/records/'+id,record.id);
+  await page.getByRole('navigation',{name:'Record editing areas',exact:true}).getByRole('button',{name:'Evidence and results',exact:true}).click();
   await page.getByRole('button',{name:'Open evidence & analysis'}).click();await dialog.getByRole('button',{name:'Import original file',exact:true}).click();
   const bytes=Buffer.from('Take,Sound\nOne,quiet\n');await dialog.getByLabel('Original file',{exact:true}).setInputFiles({name:'retained-take.csv',mimeType:'text/csv',buffer:bytes});
   await dialog.getByRole('button',{name:'Import original',exact:true}).click();await expect(dialog.getByRole('heading',{name:'Verify original file'})).toBeVisible();
   await expect(dialog.getByRole('progressbar',{name:'Verification progress'})).toBeVisible();
   await dialog.getByRole('button',{name:'Back to evidence'}).click();await expect(dialog.getByRole('button',{name:'Check verification'})).toBeVisible();
-  await page.reload();await page.getByRole('button',{name:'Open evidence & analysis'}).click();await dialog.getByRole('button',{name:'Check verification'}).click();
+  await page.reload();await page.getByRole('navigation',{name:'Record editing areas',exact:true}).getByRole('button',{name:'Evidence and results',exact:true}).click();await page.getByRole('button',{name:'Open evidence & analysis'}).click();await dialog.getByRole('button',{name:'Check verification'}).click();
   await page.setViewportSize({width:390,height:844});expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBeTruthy();
   await dialog.getByRole('button',{name:'Cancel verification'}).focus();await page.keyboard.press('Enter');await expect(dialog.getByText('Verification cancelled.',{exact:false})).toBeVisible();
   const store=new ResearchMaterials(workspace);expect((await store.verify()).receivedBytes).toBe(bytes.length);expect((await store.heads()).length).toBe(0);

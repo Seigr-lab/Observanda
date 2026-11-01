@@ -57,7 +57,7 @@ async function service(t,folderBrowser){
  const app=await startServer({root,port:0,headless:true,folderBrowser});
  t.after(async()=>{await app.close();await rm(root,{recursive:true,force:true});});
  const auth=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})});
- const headers={Origin:app.origin,Cookie:auth.headers.get('set-cookie').split(';')[0],'Content-Type':'application/json'};
+ const headers={Origin:app.origin,'X-Observanda-Session':auth.headers.get('x-observanda-session').split(';')[0],'Content-Type':'application/json'};
  return {...app,root,headers,post:(route,data,extra={})=>fetch(app.origin+route,{method:'POST',headers,body:JSON.stringify(data),...extra})};
 }
 test('browsing never holds the workspace write gate, and a disconnected client cancels the read', {timeout:15000},async t=>{

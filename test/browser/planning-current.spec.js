@@ -1,3 +1,4 @@
+import {sessionRequest} from './session-fixture.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
@@ -23,7 +24,7 @@ for(const count of [65,650])test('planning pages, prerequisites and bookings use
  page.on('request',r=>requests.push(new URL(r.url()).pathname));page.on('pageerror',e=>errors.push(e.message));
  const cdp=await page.context().newCDPSession(page);let heap=0;const measure=async()=>{heap=Math.max(heap,(await cdp.send('Runtime.getHeapUsage')).usedSize);};
  try{
-  const auth=await page.request.post(app.origin+'/api/session',{data:{token:app.launchToken},headers:{Origin:app.origin}});expect(auth.ok()).toBe(true);
+  const auth=await sessionRequest(page,'post',app.origin+'/api/session',{data:{token:app.launchToken},headers:{Origin:app.origin}});expect(auth.ok()).toBe(true);
   await page.goto(app.origin+'/#/modules/planning/task');const main=page.locator('main'),dialog=page.locator('#dialog');
   await expect(main.locator('.module-item')).toHaveCount(25);expect(opened).toEqual([]);await test.step('Measure initial page',measure);
   await main.getByRole('combobox',{name:'Show location',exact:true}).selectOption(book.projects[0].id);await expect(main.locator('[data-module-items-status]')).toContainText('of '+Math.floor(count/2));

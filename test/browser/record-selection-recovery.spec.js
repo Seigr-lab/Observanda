@@ -1,3 +1,4 @@
+import {sessionRequest} from './session-fixture.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
@@ -155,7 +156,7 @@ test('cancelling an in-flight recovery ignores its late response and a locked se
   expect(await f.drafts.read(f.draftId)).not.toBeNull();
   await page.route('**/api/workspace/read/selection',async route=>{
    if(route.request().postDataJSON().ids.length===5){
-    const locked=await page.request.post(f.app.origin+'/api/access/lock',{data:{},headers:{Origin:f.app.origin}});expect(locked.ok()).toBe(true);
+    const locked=await sessionRequest(page,'post',f.app.origin+'/api/access/lock',{data:{},headers:{Origin:f.app.origin}});expect(locked.ok()).toBe(true);
    }
    await route.continue();
   });

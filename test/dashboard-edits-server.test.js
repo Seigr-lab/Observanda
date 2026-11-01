@@ -17,9 +17,9 @@ import {DashboardEdits} from '../src/dashboard-edits.js';
 async function fixture(t){
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-pending-api-')),f=await encryptedFixture(directory,sampleNotebook()),app=await startServer({root:f.workspace.root,port:0,headless:true,deviceStore:f.deviceStore});
  t.after(async()=>{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});});
- const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=session.headers.get('set-cookie').split(';')[0];
- let context=(await(await fetch(app.origin+'/api/storage',{headers:{Cookie:cookie}})).json()).contextId;
- const call=async(route,data)=>{const response=await fetch(app.origin+route,{method:data===undefined?'GET':'POST',headers:{Origin:app.origin,Cookie:cookie,'Content-Type':'application/json','X-Observanda-Workspace':context},...(data===undefined?{}:{body:JSON.stringify(data)})});return response.json();};
+ const session=await fetch(app.origin+'/api/session',{method:'POST',headers:{Origin:app.origin,'Content-Type':'application/json'},body:JSON.stringify({token:app.launchToken})}),cookie=session.headers.get('x-observanda-session').split(';')[0];
+ let context=(await(await fetch(app.origin+'/api/storage',{headers:{'X-Observanda-Session':cookie}})).json()).contextId;
+ const call=async(route,data)=>{const response=await fetch(app.origin+route,{method:data===undefined?'GET':'POST',headers:{Origin:app.origin,'X-Observanda-Session':cookie,'Content-Type':'application/json','X-Observanda-Workspace':context},...(data===undefined?{}:{body:JSON.stringify(data)})});return response.json();};
  return {...f,directory,app,call,changeContext:value=>context=value};
 }
 async function until(check){const deadline=Date.now()+15000;while(!await check()){if(Date.now()>deadline)throw Error('Condition did not complete');await delay(75);}}

@@ -1,3 +1,4 @@
+import {sessionRequest} from './session-fixture.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
 import {RECORD_TYPES} from '../../src/web/record-types.js';
@@ -180,7 +181,7 @@ test('record cards load independent filters, recover errors in place, and keep c
   await expect(card(page,'field').getByRole('button',{name:'Take 43',exact:true})).toBeVisible();
   await expect(card(page,'field').getByRole('button',{name:'Take 44',exact:true})).toHaveCount(0);
   await page.locator('.desk-inspector').getByRole('button',{name:'Close card settings',exact:true}).click();
-  await expect.poll(async()=>{const r=await page.request.get(f.app.origin+'/api/dashboard');return (await r.json()).settings.views[0].panels[0].options.tag;}).toBe('studio');
+  await expect.poll(async()=>{const r=await sessionRequest(page,'get',f.app.origin+'/api/dashboard');return (await r.json()).settings.views[0].panels[0].options.tag;}).toBe('studio');
   await page.reload();await expect(card(page,'field').getByRole('button',{name:'Take 43',exact:true})).toBeVisible();
   await expect(card(page,'studio').getByRole('button',{name:'Take 43',exact:true})).toBeVisible();
   expect(f.requests.filter(r=>r.url.endsWith('/page'))).toEqual([]);expect(f.errors).toEqual([]);
@@ -203,7 +204,7 @@ test('arriving card data preserves a focused numeric field and its selected text
   expect(await focused.evaluate(el=>el.isConnected&&el===document.activeElement)).toBe(true);
   await count.press('9');await expect(count).toHaveValue('9');
   await expect(card(page,'takes').locator('.desk-item')).toHaveCount(9);
-  await expect.poll(async()=>{const response=await page.request.get(f.app.origin+'/api/dashboard');return (await response.json()).settings.views[0].panels[0].count;}).toBe(9);
+  await expect.poll(async()=>{const response=await sessionRequest(page,'get',f.app.origin+'/api/dashboard');return (await response.json()).settings.views[0].panels[0].count;}).toBe(9);
   await page.reload();await expect(card(page,'takes').locator('.desk-item')).toHaveCount(9);expect(f.errors).toEqual([]);
  }finally{release?.();await f.close();}
 });
@@ -312,7 +313,7 @@ test('record-type choices are on demand, bounded, searchable, scoped and retaine
   await expect(card(page,'types')).toContainText('No items match this card.');
   await inspector.getByLabel('Lab books',{exact:true}).selectOption('all');
   await expect(select.locator('option:checked')).toHaveText('Type 44');
-  await expect.poll(async()=>{const response=await page.request.get(f.app.origin+'/api/dashboard');return (await response.json()).settings.views[0].panels[0].options.recordType;}).toBe('template:'+f.book.entries[44].template.id);
+  await expect.poll(async()=>{const response=await sessionRequest(page,'get',f.app.origin+'/api/dashboard');return (await response.json()).settings.views[0].panels[0].options.recordType;}).toBe('template:'+f.book.entries[44].template.id);
   await page.reload();await expect(card(page,'types').getByRole('button',{name:'Take 44',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Settings for Recent records',exact:true}).click();await expect(select.locator('option:checked')).toHaveText('Type 44');
   await page.setViewportSize({width:390,height:844});

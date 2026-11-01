@@ -43,9 +43,9 @@ for(const [kind,ownerIndex] of [['workspace',0],['project',1],['book',2]])test('
   }),60000,'Desktop service did not become ready');
   const url=new URL(ready.url),origin=url.origin;
   const session=await fetch(origin+'/api/session',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({token:url.hash.slice(1)})});
-  assert.equal(session.status,200);const cookie=session.headers.get('set-cookie').split(';')[0];let context;
+  assert.equal(session.status,200);const cookie=session.headers.get('x-observanda-session').split(';')[0];let context;
   const call=async(route,data)=>{
-   const response=await fetch(origin+route,{signal:AbortSignal.timeout(60000),headers:{Origin:origin,Cookie:cookie,...(context?{'X-Observanda-Workspace':context}:{}),'Content-Type':'application/json','X-Observanda-Wait':'1'},...(data===undefined?{}:{method:'POST',body:JSON.stringify(data)})});
+   const response=await fetch(origin+route,{signal:AbortSignal.timeout(60000),headers:{Origin:origin,'X-Observanda-Session':cookie,...(context?{'X-Observanda-Workspace':context}:{}),'Content-Type':'application/json','X-Observanda-Wait':'1'},...(data===undefined?{}:{method:'POST',body:JSON.stringify(data)})});
    assert.ok(response.ok,route+': '+await response.clone().text());return response.json();
   };
   if(unlockPassword)await call('/api/access/unlock',{username:'',password:unlockPassword});

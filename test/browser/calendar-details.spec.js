@@ -1,3 +1,4 @@
+import {sessionRequest} from './session-fixture.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
@@ -30,7 +31,7 @@ test('connected calendar opens selected notes with retry and cancels a closed de
  const app=await startServer({root:f.workspace.root,deviceStore:f.deviceStore,port:0,preferencesFile:path.join(directory,'preferences')}),main=page.locator('main'),dialog=page.locator('#dialog');let release=()=>{};
  page.on('pageerror',e=>errors.push(e.message));
  try{
-  const auth=await page.request.post(app.origin+'/api/session',{data:{token:app.launchToken},headers:{Origin:app.origin}});expect(auth.ok()).toBe(true);
+  const auth=await sessionRequest(page,'post',app.origin+'/api/session',{data:{token:app.launchToken},headers:{Origin:app.origin}});expect(auth.ok()).toBe(true);
   await page.goto(app.origin+'/#/modules/planning');await main.getByLabel('Month',{exact:true}).fill('2026-10');
   await main.getByRole('button',{name:'Unlock workspace',exact:true}).click();await dialog.getByRole('button',{name:'Unlock',exact:true}).click();await expect(dialog).not.toBeVisible();
   const eventButton=main.locator('[data-calendar-day="2026-10-15"]').getByRole('button',{name:/Remote field session/});await expect(eventButton).toBeVisible();expect(opened).toEqual([]);await expect(main).not.toContainText('Private selected event notes');

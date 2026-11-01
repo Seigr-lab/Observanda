@@ -1,3 +1,4 @@
+import {sessionRequest} from './session-fixture.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,mkdir,rm} from 'node:fs/promises';
 import path from 'node:path';
@@ -64,7 +65,7 @@ test('General directly edits workspace details and protects unsaved form changes
  await form.getByRole('button',{name:'Discard changes',exact:true}).click();await expect(form.getByLabel('Workspace name',{exact:true})).toHaveValue(before.title);
  await form.getByLabel('Workspace name',{exact:true}).fill('Creative collective');await form.getByLabel('Workspace type').selectOption('custom');await form.getByLabel('Your own label').fill('Sound studio');
  await form.getByRole('button',{name:'Save workspace',exact:true}).click();
- await expect(form.getByRole('status')).toHaveText('Saved',{timeout:30000});fixture.workspace.root=(await (await page.request.get(app.origin+'/api/storage')).json()).root;expect((await fixture.workspace.read()).book.title).toBe('Creative collective');
+ await expect(form.getByRole('status')).toHaveText('Saved',{timeout:30000});fixture.workspace.root=(await (await sessionRequest(page,'get',app.origin+'/api/storage')).json()).root;expect((await fixture.workspace.read()).book.title).toBe('Creative collective');
  await page.reload();await expect(form.getByLabel('Your own label')).toHaveValue('Sound studio');
  const after=(await savedBook());expect(after.website).toEqual(before.website);expect(after.projects).toEqual(before.projects);
  await form.getByLabel('Workspace name',{exact:true}).fill('');
@@ -91,7 +92,7 @@ test('branding returns to the website draft and explicit discard removes its uns
 test('four logos and a long title reflow at narrow and enlarged layouts with keyboard controls',async({page})=>{
  test.setTimeout(60000);
  await preferences(page,'General');await page.getByLabel('Workspace name',{exact:true}).fill('A long title for the shared creative and field research workspace');
- await page.getByRole('button',{name:'Save workspace',exact:true}).click();await expect(page.locator('#workspace-name-form').getByRole('status')).toHaveText('Saved',{timeout:30000});fixture.workspace.root=(await (await page.request.get(app.origin+'/api/storage')).json()).root;
+ await page.getByRole('button',{name:'Save workspace',exact:true}).click();await expect(page.locator('#workspace-name-form').getByRole('status')).toHaveText('Saved',{timeout:30000});fixture.workspace.root=(await (await sessionRequest(page,'get',app.origin+'/api/storage')).json()).root;
  await preferences(page,'Appearance');await page.getByRole('button',{name:'Logos & branding',exact:true}).click();
  for(let index=0;index<4;index++){
   await page.getByLabel('Add logo',{exact:true}).setInputFiles({name:'logo.svg',mimeType:'image/svg+xml',buffer:Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="140" height="40"><rect width="140" height="40" fill="teal"/></svg>')});

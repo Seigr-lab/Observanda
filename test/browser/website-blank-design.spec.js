@@ -1,3 +1,4 @@
+import {authorizePreviewContext} from './session-fixture.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
@@ -31,7 +32,7 @@ test('blank identity, optional headers and authored navigation remain blank thro
   await page.screenshot({path:testInfo.outputPath('blank-authored-editor.png')});
   await editorTab(page,'Navigation');await page.setViewportSize({width:1000,height:900});const label=page.getByLabel('Menu label 1',{exact:true});expect((await label.boundingBox()).width).toBeGreaterThan(100);
   await page.getByRole('button',{name:'Prepare edition',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible({timeout:30000});
-  await page.getByLabel('Preview page',{exact:true}).selectOption(target);const href=await page.locator('#full-public-preview').getAttribute('href'),context=await browser.newContext({javaScriptEnabled:false});await context.addCookies(await page.context().cookies());const visitor=await context.newPage();
+  await page.getByLabel('Preview page',{exact:true}).selectOption(target);const href=await page.locator('#full-public-preview').getAttribute('href'),context=await browser.newContext({javaScriptEnabled:false});await authorizePreviewContext(page,context);const visitor=await context.newPage();
   try{await visitor.goto(new URL(href,app.origin).href);await expect(visitor.locator('.site-header,.site-name')).toHaveCount(0);await expect(visitor.locator('.site-menu a')).toHaveText(['Insect Reserve']);await expect(visitor.locator('.site-sidebar a')).toHaveText('Explore the reserve');await expect(visitor.locator('body')).not.toContainText(book.entries[0].title);await expect(visitor).toHaveTitle('Insect Reserve');await visitor.setViewportSize({width:390,height:844});expect(await visitor.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);}finally{await context.close();}
   expect(errors).toEqual([]);
  }finally{await app.close();clearVault(f.vault);await rm(directory,{recursive:true,force:true,maxRetries:10,retryDelay:100});}

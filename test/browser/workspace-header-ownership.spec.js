@@ -1,3 +1,4 @@
+import {sessionRequest} from './session-fixture.js';
 import {test,expect} from '@playwright/test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -34,7 +35,7 @@ test('copying workspace details creates a dedicated project at the selected pare
   const key=await verifyAccess(await readAccess(entry.root),'','',{deviceStore:f.deviceStore});vaults.push(key);const storage=new ProjectStorage(entry.root,entry.projectId,key),owned=await storage.outline();
   expect(owned.metadata.projects).toHaveLength(1);expect(owned.metadata.projects[0]).toMatchObject({id:entry.projectId,title:'Copied observations',description:'Source introduction, deliberately edited before creation.',parentId:null});expect(owned.metadata.notebooks).toEqual([]);expect(owned.metadata.id).not.toBe(before.metadata.id);expect(entry.vaultId).not.toBe(f.vault.id);
   expect(await f.workspace.outline()).toEqual(before);expect(requests.filter(route=>route==='/api/projects/create')).toHaveLength(1);expect(requests.filter(route=>route.startsWith('/api/workspace/reorganize'))).toEqual([]);expect(errors).toEqual([]);
-  const full=await f.workspace.read(),post=(route,data)=>page.request.post(app.origin+route,{headers:{Origin:app.origin},data}),inline={id:randomUUID(),title:'Inline bypass',description:'',share:false,logoId:null};
+  const full=await f.workspace.read(),post=(route,data)=>sessionRequest(page,'post',app.origin+route,{headers:{Origin:app.origin},data}),inline={id:randomUUID(),title:'Inline bypass',description:'',share:false,logoId:null};
   for(const route of ['/api/notebook/save','/api/workspace/structure','/api/workspace/reorganize/preview','/api/workspace/reorganize']){
    const data=route==='/api/notebook/save'?{etag:full.etag,book:{...full.book,projects:[inline]}}:route==='/api/workspace/structure'?{etag:full.etag,change:{kind:'project',value:inline}}:{etag:full.etag,reviewed:true,change:{workspaceTitle:full.book.title,workspaceDescription:'',projectId:'new',copyLogos:false}};
    const response=await post(route,data);expect(response.status()).toBe(422);expect((await response.json()).code).toBe('INVALID');

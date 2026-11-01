@@ -1,3 +1,4 @@
+import {sessionRequest} from './session-fixture.js';
 import {test,expect} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -23,9 +24,9 @@ test('maximum Unicode sheet saves and recovers through the actual app after a lo
  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(new URL(r.url()).pathname==='/api/modules/drafts/write')checkpointBodies.push(r.postDataJSON());});
  page.on('response',async r=>{if(new URL(r.url()).pathname==='/api/modules/drafts/write'&&r.ok())checkpointReplies.push((await r.body()).length);});
  try{
-  await page.request.post(app.origin+'/api/session',{data:{token:app.launchToken},headers:{Origin:app.origin}});
+  await sessionRequest(page,'post',app.origin+'/api/session',{data:{token:app.launchToken},headers:{Origin:app.origin}});
   const itemRequest=page.waitForRequest(r=>new URL(r.url()).pathname==='/api/modules/items');await page.goto(app.origin+'/#/modules/spreadsheet/sheet');
-  const headers=(await itemRequest).headers(),post=(route,body)=>page.request.post(app.origin+route,{data:body,headers:{Origin:app.origin,'x-observanda-workspace':headers['x-observanda-workspace']}});
+  const headers=(await itemRequest).headers(),post=(route,body)=>sessionRequest(page,'post',app.origin+route,{data:body,headers:{Origin:app.origin,'x-observanda-workspace':headers['x-observanda-workspace']}});
   // Creation also has to cross the real HTTP boundary at this accepted size.
   const create={workspaceId:book.id,commandId:randomUUID(),action:'sheet.save',payload:{id,expectedRevision:null,data}},response=await post('/api/modules/command?compact=1',create);
   expect(response.ok()).toBe(true);expect((await response.json()).modulePatch.entities[0].data).toEqual(data);

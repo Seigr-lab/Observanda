@@ -1,3 +1,4 @@
+import {sessionRequest} from './session-fixture.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
 import path from 'node:path';
@@ -83,18 +84,18 @@ test('canvas requests one page at a time and complete reviewed export still excl
  const response=page.waitForResponse(r=>r.url().endsWith('/api/design-preview')&&r.ok());
  await navigate(page,'Website editor');const home=await (await response).json();
  expect(home.pages).toEqual([{title:'Home',path:'index.html'}]);
- const absent=await page.request.get(app.origin+home.baseUrl+targetPath(book.entries[0].id));expect(absent.status()).toBe(404);
+ const absent=await sessionRequest(page,'get',app.origin+home.baseUrl+targetPath(book.entries[0].id));expect(absent.status()).toBe(404);
  const selected=book.entries[1],next=page.waitForResponse(r=>r.url().endsWith('/api/design-preview')&&r.ok());
  await chooseWebsitePage(page,targetPath(selected.id));
  const record=await (await next).json();expect(record.pages).toEqual([{title:selected.title,path:targetPath(selected.id)}]);
  await expect(page.frameLocator('#website-draft-preview').getByText(selected.body,{exact:true})).toBeVisible();
- expect(await (await page.request.get(app.origin+record.baseUrl+'publication.json')).json()).toMatchObject({entries:[selected.id]});
- const exportResponse=await page.request.post(app.origin+'/api/export',{headers:{Origin:app.origin},data:{id:record.baseUrl.split('/')[2]}});expect(exportResponse.ok()).toBe(false);
+ expect(await (await sessionRequest(page,'get',app.origin+record.baseUrl+'publication.json')).json()).toMatchObject({entries:[selected.id]});
+ const exportResponse=await sessionRequest(page,'post',app.origin+'/api/export',{headers:{Origin:app.origin},data:{id:record.baseUrl.split('/')[2]}});expect(exportResponse.ok()).toBe(false);
  await openPageSettings(page);await page.getByText('Page header',{exact:true}).click();await page.getByLabel('Display heading',{exact:true}).fill('Inspection notes');
  await expect(page.frameLocator('#website-draft-preview').getByRole('heading',{name:'Inspection notes',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Save website',exact:true}).click();await expect(page.locator('#save-status')).toHaveText('Saved');
  await page.getByRole('button',{name:'Prepare edition',exact:true}).click();await page.getByRole('button',{name:'Prepare selected edition',exact:true}).click();
-  const prepareBegan=performance.now();await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible({timeout:60000});console.log(JSON.stringify({selectedRecords:197,prepareMs:performance.now()-prepareBegan}));const href=await page.getByRole('link',{name:'Open full preview',exact:true}).getAttribute('href'),edition=await (await page.request.get(new URL('publication.json',new URL(href,app.origin)).href)).json();expect(edition.entries).toHaveLength(197);expect(edition.entries).not.toContain(selected.id);
+  const prepareBegan=performance.now();await expect(page.getByRole('heading',{name:'Review website',exact:true})).toBeVisible({timeout:60000});console.log(JSON.stringify({selectedRecords:197,prepareMs:performance.now()-prepareBegan}));const href=await page.getByRole('link',{name:'Open full preview',exact:true}).getAttribute('href'),edition=await (await sessionRequest(page,'get',new URL('publication.json',new URL(href,app.origin)).href)).json();expect(edition.entries).toHaveLength(197);expect(edition.entries).not.toContain(selected.id);
  expect((await fixture.workspace.read()).book.entries).toEqual(book.entries);
 });
 

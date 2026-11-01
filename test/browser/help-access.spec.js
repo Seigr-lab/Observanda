@@ -1,3 +1,4 @@
+import {sessionRequest} from './session-fixture.js';
 import {test,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';
 import path from 'node:path';
@@ -78,7 +79,7 @@ test('locked Help retries failed documentation without opening research and retu
   await page.unroute('**/locales/en/guide.json');await help(page).getByRole('button',{name:'Try again'}).click();await expect(help(page).locator('#help-storage-unlock')).toBeVisible();
   await expect(help(page)).not.toContainText('Private workspace canary');await page.keyboard.press('Control+s');
   await help(page).getByRole('button',{name:'Return to form'}).click();await expect(page.getByLabel('Recovery key',{exact:true})).toHaveValue(f.recovery);
-  expect(observed.requests).toEqual([]);expect((await page.request.get(new URL('/api/notebook',f.app.url).href)).status()).toBe(401);
+  expect(observed.requests).toEqual([]);expect((await sessionRequest(page,'get',new URL('/api/notebook',f.app.url).href)).status()).toBe(401);
   await page.getByRole('button',{name:'Unlock workspace',exact:true}).click();await expect(page.locator('.workspace-name')).toHaveText('Private workspace canary');
   expect(observed.errors).toEqual([]);
  }finally{await f.close();}
