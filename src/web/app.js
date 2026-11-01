@@ -536,7 +536,7 @@ let toolOrigin=null;
 function rememberToolOrigin(){if(['tools','module'].includes(state.page))return;toolOrigin={route:location.hash,history:{...history.state},title:document.querySelector('main h1')?.textContent??state.book.title,scroll:window.scrollY,context:state.storage?.contextId};}
 const accessHelp=accessHelpUI({api,esc});
 const languageControls=languageUI({api,esc,render,beforeChange:task=>leave.run(task).catch(report)});
-const projectDirectoryUI=projectDirectory({state,api,esc,changed:()=>{const sidebar=$('#main-navigation'),topbar=$('.topbar');if(state.book&&!state.access?.locked&&sidebar&&topbar)navigation.update(sidebar,topbar);}});
+const projectDirectoryUI=projectDirectory({state,api,esc,changed:()=>{const sidebar=$('#main-navigation'),topbar=$('.topbar');if(state.book&&!state.access?.locked&&sidebar&&topbar)navigation.update(sidebar,topbar);dashboard.refreshStart();}});
 const labBookDirectoryUI=labBookDirectory({state,api,esc,changed:()=>render(),directoryChanged:()=>{const sidebar=$('#main-navigation'),topbar=$('.topbar');if(state.book&&!state.access?.locked&&sidebar&&topbar)navigation.update(sidebar,topbar);},access:operation=>withProjectAccess(operation)});
 const structureUI = workspaceUI({state,api,esc,field,option,icon,dirty,save,render,showDialog,notify,recordsTable:renderRecordTable,logosFor,isUploading:()=>uploading,projectDirectory:projectDirectoryUI,labBookDirectory:labBookDirectoryUI,accessProject:(operation,options)=>withProjectAccess(operation,options),enterProject:(id,bookId)=>projectOwners.enter(id,bookId),rootBook:()=>projectOwners.root(),renameWorkspace:name=>storageControls.rename(name)});
 let recordOpenRequest=0;
@@ -603,7 +603,7 @@ const openModuleReference=moduleReferenceNavigation({state,api,access:operation=
 const returnNavigation=researchReturnNavigation({state,enterOwner:(projectId,labBookId)=>projectOwners.enter(projectId,labBookId),readyModule:id=>modules.ready(id),restoreModule:(token,options)=>modules.restoreReturn(token,options),render});
 
 const operationsLive=operationsUpdates({state,api,isEditing:()=>state.dirty||modules.isDirty()||Boolean(document.activeElement?.matches('input,textarea,select,[contenteditable="true"]')),onChange:()=>{if(state.page==='workspace')dashboard.refreshData();else if(state.page==='module'&&['planning','resources'].includes(state.moduleId))void modules.refreshVisible().catch(report);else if(['projects','project'].includes(state.page))render();}});
-const dashboard=dashboardUI({state,api,esc,field,option,render,notify,onChange:updateSaveStatus,access:operation=>withProjectAccess(operation)});
+const dashboard=dashboardUI({state,api,esc,field,option,render,notify,onChange:updateSaveStatus,firstProject:()=>projectDirectoryUI.confirmedEmpty(),access:operation=>withProjectAccess(operation)});
 const fontLibrary=fontLibraryUI({state,api,esc,render,notify});
 const designPreview=appearancePreview({state,api,option,documents:websiteDocuments});
 const designUI = appearanceUI({fontLibrary,textControls,state,esc,field,option,dirty,save,render,showDialog,notify,preview:designPreview.schedule,previewPages:designPreview.pages});

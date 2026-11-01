@@ -30,6 +30,7 @@ test('desktop opens setup, saves encrypted work, protects unsaved edits and reop
   await page.getByLabel('Create in',{exact:true}).fill(directory);
   await access.setup(page);await page.getByRole('button',{name:'Create workspace',exact:true}).click();
   await expect(page.locator('.workspace-name')).toHaveText('Desktop field and studio work',{timeout:30000});
+  await expect(page.locator('.first-work')).toBeVisible();
   console.log('Desktop setup: encrypted workspace created.');
   const logo=page.getByRole('link',{name:'Observanda — refresh saved workspace',exact:true});
   await expect(logo).toBeVisible();await logo.click();await expect(page.locator('#notice')).toContainText('up to date');
@@ -97,7 +98,7 @@ test('desktop opens setup, saves encrypted work, protects unsaved edits and reop
   const firstReading=readerReady();await page.evaluate(route=>location.hash=route,recordRoute);expect((await firstReading).ok()).toBe(true);
   await expect(page.locator('.record-sections')).toContainText('Retained observation 129');
   await page.getByRole('button',{name:'Edit record',exact:true}).click();
-  await page.getByRole('button',{name:'Edit selected detail',exact:true}).click();
+  await page.getByRole('button',{name:'Edit Record title',exact:true}).click();
   const titleEditor=page.getByRole('dialog',{name:'Edit Record title',exact:true});
   await titleEditor.getByLabel('Record title',{exact:true}).fill('Amended packaged block record');
   // This retained record save is streamed and may outlast a DOM assertion's
@@ -110,6 +111,9 @@ test('desktop opens setup, saves encrypted work, protects unsaved edits and reop
   await fixture.close(app);app=await start();page=await app.firstWindow();page.on('pageerror',e=>errors.push(e.message));if(credentials.password)await access.unlock(page);
   if(packaged)expect(await app.evaluate(({app})=>app.isPackaged)).toBe(true);
   await expect(page.locator('.workspace-name')).toHaveText('Desktop field and studio work',{timeout:60000});
+  await expect(page.locator('#main-navigation').getByRole('button',{name:'Open project Unsaved desktop project',exact:true})).toBeVisible();
+  await expect(page.locator('.first-work')).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Write a record',exact:true})).toBeVisible();
   console.log('Desktop restart: workspace reopened; checking lock and unlock.');
   await page.locator('#main-navigation').getByRole('button',{name:'Lock workspace',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Unlock workspace',exact:true})).toBeVisible({timeout:60000});
@@ -131,7 +135,7 @@ test('desktop opens setup, saves encrypted work, protects unsaved edits and reop
   },{...retained,projectId});
   expect(reopened.sections).toEqual(retained.record.sections);
   if(previous){
-   await page.getByRole('button',{name:'Edit record',exact:true}).click();await page.getByRole('button',{name:'Edit selected detail',exact:true}).click();
+   await page.getByRole('button',{name:'Edit record',exact:true}).click();await page.getByRole('button',{name:'Edit Record title',exact:true}).click();
    const editor=page.getByRole('dialog',{name:'Edit Record title',exact:true});await editor.getByLabel('Record title',{exact:true}).fill('Continued after application update');
    const continued=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/projects/'+projectId+'/lab-books/'+externalBook.id+'/research/records/values/save'&&response.request().method()==='POST');
    await editor.getByRole('button',{name:'Save changes',exact:true}).click();expect((await continued).ok()).toBe(true);await expect(editor).not.toBeVisible();

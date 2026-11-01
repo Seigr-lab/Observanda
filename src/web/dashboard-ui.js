@@ -20,7 +20,7 @@ const dt=(key,parameters)=>t('dashboardEditors',key,parameters);
 
 // The dashboard owns layout, not feature data. Providers own their data,
 // fields, filtering controls and optional specialised renderers.
-export function dashboardUI({state,api,esc,field,option,render,notify,onChange,access=operation=>operation()}){
+export function dashboardUI({state,api,esc,field,option,render,notify,onChange,firstProject=()=>!state.book?.projects.length,access=operation=>operation()}){
  const settings=moduleSettings({state,api,esc,field,option,render,notify,onChange});
  let saved=null,draft=null,etag=null,pending=null,saveTimer=null,saveError=null,viewId=null;
  let retained=null,submission=null,watchTimer=null,watchGeneration=0;
@@ -221,6 +221,13 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,a
   const label=(shortcut.source.key!==null?result?.items.find(i=>i.key===shortcut.source.key)?.title:null)||p?.label||dt("unavailableData");
   return `<span class="desk-shortcut">${button(cardIcon(p?.icon)+'<span>'+esc(label)+'</span>','dashboard-add',`data-desk-tool="${attrs(shortcut.source)}" data-source="${attrs(shortcut.source)}" data-workspace="${shortcut.workspaceId??''}" data-label="${esc(label)}" title="${esc(dt('addCardHelp',{title:label}))}"`)}</span>`;
  }
+ function startActions(){return firstProject()?'<section class="first-work"><h2>'+esc(ux('firstTitle'))+'</h2><p>'+esc(ux('firstHelp'))+'</p><div class="inline-actions">'+button(esc(ux('createProject')),'new-project','','button primary')+button(esc(ux('tools')),'tools')+button(esc(ux('help')),'help-open','data-topic="getting-started"')+'</div></section>':'<div class="inline-actions">'+button(esc(ux('writeRecord')),'new-entry','','button primary')+button(esc(ux('find')),'entries')+button(esc(ux('tools')),'tools')+'</div>';}
+ function refreshStart(){
+  const host=document.querySelector('[data-dashboard-start]');if(!host||host.dataset.firstProject===String(firstProject()))return;
+  const focused=host.contains(document.activeElement)?document.activeElement:null;
+  host.dataset.firstProject=String(firstProject());host.innerHTML=startActions();
+  if(focused)([...host.querySelectorAll('button')].find(button=>button.dataset.action===focused.dataset.action)??host.querySelector('button'))?.focus({preventScroll:true});
+ }
  function view(){
   if(!draft||!state.book)return `<p>${esc(dt("openWorkspace"))}</p>`;
   const v=active();
@@ -228,7 +235,7 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,a
   return `<section class="desk-workspace">
    <div class="desk-heading"><h1>${esc(dt("dashboard"))}</h1><div>${draft.views.length>1?`<label class="desk-view-label">${esc(dt("view"))}<select data-desk-view>${draft.views.map(item=>`<option value="${item.id}" ${item.id===v.id?'selected':''}>${esc(item.name)}</option>`).join('')}</select></label>`:''}${button(esc(dt("views")),'dashboard-views',`aria-expanded="${viewsOpen}"`)}</div></div>
    ${viewsOpen?`<section class="desk-view-options" aria-label="${esc(dt("dashboardViews"))}"><label>${esc(dt("viewName"))}<input data-desk-name value="${esc(v.name)}" maxlength="80"></label><label><input type="checkbox" data-desk-default ${draft.defaultId===v.id?'checked':''}> ${esc(dt("defaultView"))}</label>${button(esc(dt("newView")),'dashboard-new-view')}${button(esc(dt("duplicateView")),'dashboard-copy-view')}${draft.views.length>1?button(esc(dt("removeView")),'dashboard-remove-view'):''}</section>`:''}
-   ${!state.book.projects.length?'<section class="first-work"><h2>'+esc(ux('firstTitle'))+'</h2><p>'+esc(ux('firstHelp'))+'</p><div class="inline-actions">'+button(esc(ux('createProject')),'new-project','','button primary')+button(esc(ux('tools')),'tools')+button(esc(ux('help')),'help-open','data-topic="getting-started"')+'</div></section>':'<div class="inline-actions">'+button(esc(ux('writeRecord')),'new-entry','','button primary')+button(esc(ux('find')),'entries')+button(esc(ux('tools')),'tools')+'</div>'}
+   <div data-dashboard-start data-first-project="${firstProject()}">${startActions()}</div>
    <details data-disclosure="dashboard-customization"><summary>${esc(ux('customize'))}</summary><div class="desk-toolbar" aria-label="${esc(dt("addCardsRegion"))}">${button(esc(dt("addCards")),'dashboard-library',`aria-expanded="${library.isOpen()}" aria-controls="desk-library-slot"`,'desk-add-cards')}<div class="desk-shortcuts" aria-label="${esc(dt("quickAdd"))}">${draft.shortcuts.filter(moduleVisible).map(shortcutButton).join('')}</div>${active().panels.some(p=>p.hidden)?button(esc(dt("restoreCards")),'dashboard-closed'):''}</div>
    <div id="desk-library-slot">${library.view()}</div></details>
    <div class="desk-save-message"><span id="desk-save-state" role="status"></span><span id="desk-save-recovery" hidden>${button(esc(dt("retry")),'dashboard-save-retry')}${button(esc(dt("reloadLayout")),'dashboard-reload')}</span></div>
@@ -376,5 +383,5 @@ export function dashboardUI({state,api,esc,field,option,render,notify,onChange,a
   return active().panels.filter(p=>!p.hidden&&moduleVisible(p)).every(p=>accepts(reference(p).provider))&&
    draft.shortcuts.every(s=>s.source.key===null||accepts(s.source.provider));
  }
- return {supportsOutline,enableModule,releaseData:()=>{watchGeneration++;clearTimeout(watchTimer);choiceUI.close();library.close();session?.close();session=null;cardPages.clear();previews.release();},refreshData:()=>session?.invalidate(undefined,{retainData:true}),load,flushAutosave:save,save:async()=>{await save();await settings.save();},discard:async()=>{await settings.discard();await discard();},isDirty:()=>isDirty()||settings.isDirty(),needsNavigationGuard:()=>settings.isDirty(),saveNavigation:()=>settings.save(),discardNavigation:()=>settings.discard(),view,preferences:()=>modulesView()+settingsStatus(),templates:()=>modulesView(true)+settingsStatus(),action,input,bind};
+ return {supportsOutline,enableModule,refreshStart,releaseData:()=>{watchGeneration++;clearTimeout(watchTimer);choiceUI.close();library.close();session?.close();session=null;cardPages.clear();previews.release();},refreshData:()=>session?.invalidate(undefined,{retainData:true}),load,flushAutosave:save,save:async()=>{await save();await settings.save();},discard:async()=>{await settings.discard();await discard();},isDirty:()=>isDirty()||settings.isDirty(),needsNavigationGuard:()=>settings.isDirty(),saveNavigation:()=>settings.save(),discardNavigation:()=>settings.discard(),view,preferences:()=>modulesView()+settingsStatus(),templates:()=>modulesView(true)+settingsStatus(),action,input,bind};
 }

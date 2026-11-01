@@ -69,6 +69,7 @@ export function projectDirectory({state,api,esc,changed}){
  }
 
  return {entries,cards,trail,
+  confirmedEmpty(){sync();if(state.book?.projects.length)return false;if(!available())return true;const root=page(null);return root.loaded&&!root.error&&root.total===0;},
   // Completion invalidates display summaries; the registry remains their data
   // source. Progress ticks never reread directory metadata or project payloads.
   async activity(snapshot){
