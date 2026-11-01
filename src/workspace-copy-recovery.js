@@ -1,4 +1,5 @@
 import {validWorkspaceCopyDirectory,workspaceCopyTransferId} from './workspace-copy-directory.js';
+import {withNativeWorkspaceCopy} from './native-workspace-copy.js';
 import {validateKeyring} from './security/keyring.js';
 import {validProjectSourceAuthority} from './project-source-authority.js';
 import {WORKSPACE_COPY_RECEIPT,WORKSPACE_COPY_LEASE} from './workspace-transfer-controls.js';
@@ -86,7 +87,9 @@ export class WorkspaceCopyRecovery {
   if(this.state.plan.fingerprint&&this.state.plan.fingerprint!==plan.fingerprint)throw new AppError('CONFLICT');
   this.state.plan=savedPlan(plan);await this.save();return {destination:this.target.root,marker:this.marker};
  }
- async copyFile(file){
+ async copyFile(file,{nativeCopy}={}){
+  if(process.platform==='win32'&&!nativeCopy)return withNativeWorkspaceCopy(this.source.root,this.target.root,copy=>this.copyFile(file,{nativeCopy:copy}));
+  if(nativeCopy){await nativeCopy(file,{temporary:'.stream-workspace-copy-'+this.state.id});await this.checkpoint('workspace-file',file.path);return;}
   const output=path.resolve(this.target.root,file.path);if(output===this.target.root||!inside(this.target.root,output))throw new AppError('UNSAFE');
   const relative=path.posix.dirname(file.path);if(relative!=='.')await privateDirectory(this.target.root,relative);
   const prior=await assertRegular(output,{missing:true});

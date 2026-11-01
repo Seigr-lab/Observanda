@@ -1,4 +1,5 @@
 import {workspaceOwnerLeaseFile} from './owned-storage-control.js';
+import {withNativeWorkspaceCopy} from './native-workspace-copy.js';
 import {assertRecordOwnerReclamationSettled} from './record-owner-transfer-state.js';
 import {assertInventoryObligationsSettled} from './inventory-obligation-lifecycle.js';
 import {initializeWorkspaceSettings} from './workspace-settings.js';
@@ -170,10 +171,11 @@ export async function copyWorkspace(plan,{vault=null,onProgress,afterCopy,afterV
      Object.assign(plan,inventory);
      ({destination,marker}=recovery?await recovery.prepare(plan):await prepareCopyDestination(plan.destination));
      operationTransfer({phase:'copying',totalFiles:inventory.transferFiles,totalBytes:inventory.fileBytes});
-     await operationStage('copy-files',{total:inventory.transferFiles,unit:'files'},async()=>{for await(const file of items()){
+     await withNativeWorkspaceCopy(plan.source,destination,nativeCopy=>operationStage('copy-files',{total:inventory.transferFiles,unit:'files'},async()=>{for await(const file of items()){
       if([CATALOGUE_FILE,CATALOGUE_ARCHIVE].includes(file.path))continue;
       const target=path.join(destination,file.path);if(!within(destination,target))throw new AppError('UNSAFE');
-      if(recovery)await recovery.copyFile(file);
+      if(recovery)await recovery.copyFile(file,{nativeCopy});
+      else if(nativeCopy)await nativeCopy(file);
       else {
        await mkdir(path.dirname(target),{recursive:true,mode:0o700});
        await assertRegular(path.join(plan.source,file.path));
@@ -181,7 +183,7 @@ export async function copyWorkspace(plan,{vault=null,onProgress,afterCopy,afterV
        if(await fileHash(target)!==file.sha256)throw new AppError('STORAGE_COPY');
       }
       operationTransferred({files:1});operationAdvance();
-     }});
+     }}));
     }});
     operationTransfer({phase:'verifying'});
     await reviewedInventory(plan,{excludeProject});

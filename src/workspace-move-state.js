@@ -16,8 +16,8 @@ function admittedMove(root,marker){
 import {readFile} from 'node:fs/promises';
 import {assertRegular} from './storage.js';
 import {AppError} from './errors.js';
-export const MOVE_RECEIPT='.observanda/workspace-move.json';
-export const MOVE_SOURCE='.observanda/move-source.json';
+import {MOVE_RECEIPT,MOVE_SOURCE} from './storage-lifecycle-markers.js';
+export {MOVE_RECEIPT,MOVE_SOURCE};
 export async function moveSource(root){
  const file=path.join(root,MOVE_SOURCE),stat=await assertRegular(file,{missing:true});if(!stat)return null;
  if(stat.size>16*1024*1024)throw new AppError('STORAGE_MOVE_STATE');

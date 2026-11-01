@@ -1,4 +1,5 @@
 import {test} from 'node:test';
+import {nativeMutationFailure} from './fixtures/native-mutation-failure.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import {syncBuiltinESMExports} from 'node:module';
@@ -103,7 +104,7 @@ test('source changes stop cleanup; restoring reviewed bytes allows cleanup witho
 test('interrupted removal resumes its own retired folder and never deletes a newly reused source path',async t=>{
  const f=await fixture(t),plan=await planWorkspaceMove(f.source,f.destination),unlink=fs.unlink;let failed=false;
  fs.unlink=async file=>{if(String(file).includes('.observanda-move-')&&String(file).endsWith('evidence.bin')){failed=true;throw Object.assign(Error('Locked file'),{code:'EACCES'});}return unlink(file);};syncBuiltinESMExports();
- let result;try{result=await moveWorkspace(plan,{activate:async()=>{}});}finally{fs.unlink=unlink;syncBuiltinESMExports();}
+ let result;try{result=await nativeMutationFailure(async(operation,file)=>{if(operation==='remove'&&file.includes('.observanda-move-')&&file.endsWith('evidence.bin')){failed=true;throw Object.assign(Error('Locked file'),{code:'EACCES'});}},()=>moveWorkspace(plan,{activate:async()=>{}}));}finally{fs.unlink=unlink;syncBuiltinESMExports();}
  assert.equal(failed,true);assert.equal(result.phase,'cleanup');await assert.rejects(fs.access(f.source),{code:'ENOENT'});
  assert.equal((await inspectLocation(f.destination)).kind,'workspace');
  await fs.mkdir(f.source);await fs.writeFile(path.join(f.source,'keep'),'Unrelated new data');
@@ -112,7 +113,7 @@ test('interrupted removal resumes its own retired folder and never deletes a new
 test('failed source retirement blocks old writers and cleanup still works after authoring in the destination',async t=>{
  const f=await fixture(t,true),plan=await planWorkspaceMove(f.source,f.destination),rename=fs.rename;let failed=false;
  fs.rename=async(from,to)=>{if(from===f.source){failed=true;throw Object.assign(Error('Folder is in use'),{code:'EACCES'});}return rename(from,to);};syncBuiltinESMExports();
- let result;try{result=await moveWorkspace(plan,{vault:f.vault,activate:async()=>{}});}finally{fs.rename=rename;syncBuiltinESMExports();}
+ let result;try{result=await nativeMutationFailure(async(operation,file)=>{if(operation==='rename'&&file===f.source){failed=true;throw Object.assign(Error('Folder is in use'),{code:'EACCES'});}},()=>moveWorkspace(plan,{vault:f.vault,activate:async()=>{}}));}finally{fs.rename=rename;syncBuiltinESMExports();}
  assert.equal(failed,true);assert.equal(result.phase,'cleanup');await fs.access(f.original);
  await assert.rejects(f.workspace.read(),{code:'STORAGE_MOVED'});await assert.rejects(f.workspace.withLock(()=>{}),{code:'STORAGE_MOVED'});
  const destination=new Workspace(f.destination,f.vault),current=await destination.read();current.book.description='New destination work';await destination.save(current.book,current.etag);
@@ -122,7 +123,7 @@ test('failed source retirement blocks old writers and cleanup still works after 
 test('cleanup retry keeps remaining original bytes if their verified destination was subsequently damaged',async t=>{
  const f=await fixture(t),plan=await planWorkspaceMove(f.source,f.destination),unlink=fs.unlink;
  fs.unlink=async file=>{if(String(file).includes('.observanda-move-')&&String(file).endsWith('evidence.bin'))throw Object.assign(Error('Locked file'),{code:'EACCES'});return unlink(file);};syncBuiltinESMExports();
- try{assert.equal((await moveWorkspace(plan,{activate:async()=>{}})).phase,'cleanup');}finally{fs.unlink=unlink;syncBuiltinESMExports();}
+ try{assert.equal((await nativeMutationFailure(async(operation,file)=>{if(operation==='remove'&&file.includes('.observanda-move-')&&file.endsWith('evidence.bin'))throw Object.assign(Error('Locked file'),{code:'EACCES'});},()=>moveWorkspace(plan,{activate:async()=>{}}))).phase,'cleanup');}finally{fs.unlink=unlink;syncBuiltinESMExports();}
  const original=path.join(f.directory,'.observanda-move-'+plan.id,'.observanda','evidence.bin'),copied=path.join(f.destination,'.observanda','evidence.bin'),bytes=await fs.readFile(original);
  await fs.writeFile(copied,'Damaged after verification');
  assert.equal((await finishWorkspaceMove(f.destination)).error.code,'STORAGE_COPY');assert.deepEqual(await fs.readFile(original),bytes);

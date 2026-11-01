@@ -28,13 +28,16 @@ namespace Observanda {
   static Stream input;
   static StreamWriter output;
   static bool inputPayload=false;
-  static JavaScriptSerializer json=new JavaScriptSerializer {MaxJsonLength=65536,RecursionLimit=16};
+  // Commands are serialized. Reuse one bounded transfer buffer, clearing it
+  // after each file, instead of allocating a large object for every small file.
+  static readonly byte[] transferBuffer=new byte[1048576];
+  static JavaScriptSerializer json=new JavaScriptSerializer {MaxJsonLength=262144,RecursionLimit=16};
   class Failure:Exception {public string Code;public Failure(string code){Code=code;}}
   static void Native(int code){if(code<0)throw new Win32Exception((int)RtlNtStatusToDosError(code));}
   static string Error(Exception error){
    Failure failure=error as Failure;if(failure!=null)return failure.Code;
    Win32Exception native=error as Win32Exception;int code=native==null?error.HResult&65535:native.NativeErrorCode;
-   if(code==2||code==3)return "ENOENT";if(code==80||code==183)return "EEXIST";if(code==112||code==39)return "ENOSPC";if(code==145)return "ENOTEMPTY";if(code==32||code==33)return "EBUSY";
+   if(code==2||code==3)return "ENOENT";if(code==5)return "EACCES";if(code==80||code==183)return "EEXIST";if(code==112||code==39)return "ENOSPC";if(code==145)return "ENOTEMPTY";if(code==32||code==33)return "EBUSY";
    return "UNSAFE";
   }
   static string Text(Dictionary<string,object> command,string key){object value;if(!command.TryGetValue(key,out value)||!(value is string))throw new Failure("INVALID");return (string)value;}
@@ -69,8 +72,15 @@ namespace Observanda {
    }finally{if(current!=null)current.Dispose();}
   }
   static object Hash(SafeFileHandle parent,string name,bool links){using(var handle=Open(parent,name,false,0x80000000)){
-   Info before=Information(handle,false,links);using(var stream=new FileStream(handle,FileAccess.Read,65536,false))using(var sha=SHA256.Create()){
+   Info before=Information(handle,false,links);using(var stream=new FileStream(handle,FileAccess.Read,(int)Math.Min(65536,Math.Max(Bytes(before),4096)),false))using(var sha=SHA256.Create()){
     string digest=Digest(sha.ComputeHash(stream));Info after=Information(handle,false,links);if(!Same(before,after))throw new Failure("LOCAL_EXPORT_CHANGED");return new {bytes=Bytes(after),sha256=digest,identity=Identity(after),links=after.Links};
+   }
+  }}
+  static object Read(SafeFileHandle parent,Dictionary<string,object> command){using(var handle=Open(parent,Text(command,"name"),false,0x80000000)){
+   Info before=Information(handle,false);int limit=Number(command,"limit");if(limit<0||limit>65536||Bytes(before)>limit)throw new Failure("UNSAFE");
+   using(var stream=new FileStream(handle,FileAccess.Read,65536,false)){
+    byte[] bytes=new byte[(int)Bytes(before)];int position=0;while(position<bytes.Length){int count=stream.Read(bytes,position,bytes.Length-position);if(count==0)throw new Failure("CONFLICT");position+=count;}
+    if(stream.ReadByte()!=-1||!Same(before,Information(handle,false)))throw new Failure("CONFLICT");return new {data=Convert.ToBase64String(bytes),identity=Identity(before)};
    }
   }}
   static void Rename(SafeFileHandle file,SafeFileHandle parent,string name,int kind){
@@ -99,13 +109,13 @@ namespace Observanda {
     if(copy){source=Open(Directory(command,"sourceDirectory"),Text(command,"source"),false,0x80000000);before=Information(source,false);if(Bytes(before)!=expected)throw new Failure("STORAGE_COPY");}
     destination=Open(Directory(command),Text(command,"name"),false,0x40000000|0x10000,2);
     if(!copy){inputPayload=true;Send(new {ready=true});}
-    using(var target=new FileStream(destination,FileAccess.Write,65536,false))using(var sha=SHA256.Create()){
-     Stream origin=copy?new FileStream(source,FileAccess.Read,65536,false):input;byte[] buffer=new byte[1048576];long reported=0;
+    int buffering=(int)Math.Min(65536,Math.Max(expected,4096));using(var target=new FileStream(destination,FileAccess.Write,buffering,false))using(var sha=SHA256.Create()){
+     Stream origin=copy?new FileStream(source,FileAccess.Read,buffering,false):input;byte[] buffer=transferBuffer;long reported=0;
      try{while(received<expected){int count=origin.Read(buffer,0,(int)Math.Min(buffer.Length,expected-received));if(count==0)throw new EndOfStreamException();target.Write(buffer,0,count);sha.TransformBlock(buffer,0,count,null,0);received+=count;
        if(received-reported>=8388608){Send(new {progress=received});reported=received;}
       }
       inputPayload=false;sha.TransformFinalBlock(new byte[0],0,0);if(Digest(sha.Hash)!=expectedHash||copy&&(!Same(before,Information(source,false))||origin.ReadByte()!=-1))throw new Failure("STORAGE_COPY");target.Flush(true);complete=true;return new {bytes=received,sha256=expectedHash};
-     }finally{if(copy)origin.Dispose();if(!complete)try{Delete(destination);}catch{}}
+     }finally{Array.Clear(buffer,0,(int)Math.Min(expected,buffer.Length));if(copy)origin.Dispose();if(!complete)try{Delete(destination);}catch{}}
     }
    }finally{if(source!=null)source.Dispose();if(destination!=null)destination.Dispose();}
   }
@@ -116,6 +126,7 @@ namespace Observanda {
    if(operation=="directory")return Saved(Open(parent,Text(command,"name"),true,0x80000000,Flag(command,"create")?3u:1u));
    if(operation=="list")return List(parent,Flag(command,"restart"));
    if(operation=="hash")return Hash(parent,Text(command,"name"),Flag(command,"links"));
+   if(operation=="read")return Read(parent,command);
    if(operation=="write"||operation=="copy")return Transfer(command,operation=="copy");
    bool folder=Flag(command,"folder");using(var file=Open(parent,Text(command,"name"),folder,0x80000000|(operation=="stat"?0u:0x10000u))){
     Info info=Information(file,folder,Flag(command,"links"));Expected(command,info);

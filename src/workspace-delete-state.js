@@ -6,7 +6,8 @@ import {readFile} from 'node:fs/promises';
 import {assertRegular} from './storage.js';
 import {AppError} from './errors.js';
 
-export const DELETE_MARKER='.observanda/delete-workspace.json';
+import {DELETE_MARKER} from './storage-lifecycle-markers.js';
+export {DELETE_MARKER};
 export async function workspaceDeletion(root){
  if(!root)return null;
  const file=path.join(root,DELETE_MARKER),stat=await assertRegular(file,{missing:true});if(!stat)return null;

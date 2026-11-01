@@ -23,6 +23,9 @@ import {databaseProvider} from './workspace-database-context.js';
 import {catalogueBinding} from './postgres-activation.js';
 import {databaseRetention,validDatabaseRetention,verifyDatabaseRetention} from './workspace-database-retention.js';
 import {unseal,cloneVault,clearVault} from './encryption.js';
+import {retireNativeDirectory,nativeControl} from './native-storage-tree.js';
+import {removeNativeMove} from './native-storage-cleanup.js';
+import {withMutationFilesSession} from './windows-mutation-files.js';
 
 const uuid=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
 const retired=receipt=>path.join(path.dirname(receipt.source),'.observanda-move-'+receipt.id);
@@ -60,6 +63,7 @@ export async function moveWorkspaceTo(source,input,options={}){
  return withOperationProgress(options.onProgress,async()=>moveWorkspace(await planWorkspaceMove(source,input,{inspect:false}),options));
 }
 async function removeRetired(receipt,{verifyDestination=false}={}){
+ if(process.platform==='win32')return removeNativeMove(retired(receipt),receipt,{verifyDestination});
  const root=retired(receipt),stat=await assertRegular(root,{directory:true,missing:true});if(!stat)return;
  if(await realpath(path.dirname(root))!==path.dirname(root))throw new AppError('UNSAFE');
  const marker=await moveSource(root);
@@ -102,9 +106,15 @@ async function retireSource(receipt,moveDirectory){
  if(marker&&(marker.id!==receipt.id||marker.destination!==receipt.destination))throw new AppError('STORAGE_MOVE_STATE');
  await atomicWrite(path.join(receipt.source,MOVE_SOURCE),serialize({id:receipt.id,destination:receipt.destination}));
   await releaseWriterLease(path.join(receipt.source,'.observanda','write.lock'));
- await rename(receipt.source,target);
+ if(process.platform==='win32')await retireNativeDirectory(receipt.source,target,async root=>{
+  const marker=await nativeControl(root,MOVE_SOURCE,{limit:65536,code:'STORAGE_MOVE_STATE'});
+  if(marker?.value.id!==receipt.id||marker.value.destination!==receipt.destination)throw new AppError('STORAGE_MOVE_STATE');
+ });else await rename(receipt.source,target);
 }
 async function cleanup(receipt,{locked=false,vault,verified=false,moveDirectory}={}){
+ return withMutationFilesSession(()=>cleanupWithSession(receipt,{locked,vault,verified,moveDirectory}));
+}
+async function cleanupWithSession(receipt,{locked=false,vault,verified=false,moveDirectory}={}){
  if(receipt.directory&&!moveDirectory)return withWorkspaceMoveDirectory(new Workspace(receipt.destination,vault),receipt,directory=>cleanup(receipt,{locked,vault,verified,moveDirectory:directory}));
  operationTransfer({phase:'cleanup'});
  try{
