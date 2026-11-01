@@ -63,7 +63,7 @@ export class MaterialSequence{
  }
  async item(value,index){const page=await this.page(value,{offset:index,limit:1});if(!page.items.length)fail();return page.items[0];}
  async prefetchCellPages(values,offset){
-  if(!Array.isArray(values)||values.length>16||!Number.isSafeInteger(offset)||offset<0)throw new AppError('INVALID');
+  if(!Array.isArray(values)||values.length>32||!Number.isSafeInteger(offset)||offset<0)throw new AppError('INVALID');
   for(const value of values){this.validate(value);if(value.kind!=='cells'||offset>=value.count)fail();}
   if(typeof this.workspace.catalogue!=='function'||await this.workspace.storageKind()!=='catalogue'||!values.length)return;
   return this.workspace.catalogue(async store=>{

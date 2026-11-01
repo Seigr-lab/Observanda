@@ -85,7 +85,9 @@ export async function projectDatasetRows(materials,doc,rows,columns){
  if(!Array.isArray(columns)||columns.length>256||new Set(columns).size!==columns.length||columns.some(i=>!Number.isSafeInteger(i)||i<0||i>=width))throw new AppError('INVALID');
  const project=async()=>{const result=[];
  for(const [rowIndex,row] of rows.entries()){const cells=[],valueKinds=[],cellPointers=[],cellSources=[],cellLineages=[],cellComputations=[],cellCoordinateAlignments=[];let cachedOffset=-1,cached=[];
-  if(doc.content.datasetFormat===3&&columns.length&&rowIndex%16===0)await materials.sequences.prefetchCellPages(rows.slice(rowIndex,rowIndex+16).map(item=>item.cellIndex),columns[0]-columns[0]%16);
+  // Share the existing thirty-two-object authenticated read batch across rows.
+  // Cell chunks remain sixteen columns and oversized payloads use point reads.
+  if(doc.content.datasetFormat===3&&columns.length&&rowIndex%32===0)await materials.sequences.prefetchCellPages(rows.slice(rowIndex,rowIndex+32).map(item=>item.cellIndex),columns[0]-columns[0]%16);
   if(doc.content.datasetFormat===3){materials.sequences.validate(row.cellIndex);if(row.cellIndex.kind!=='cells'||row.cellIndex.count!==width)fail('MATERIAL_MISSING');}
   for(const index of columns){let cell;if(doc.content.datasetFormat===3){const start=index-index%16;if(start!==cachedOffset){cached=(await materials.sequences.page(row.cellIndex,{offset:start,limit:16})).items;cachedOffset=start;}cell=validateDatasetCell(materials,cached[index-start]);}
    else cell={value:row.cells[index],kind:row.valueKinds?.[index]??'string',pointer:row.cellPointers?.[index],sources:row.cellSources?.[index]};
