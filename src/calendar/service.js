@@ -5,16 +5,16 @@ import {clearVault} from '../encryption.js';
 import {readCalendar} from './reader.js';
 import {uuid,date} from '../modules/validation.js';
 import {ownerLabel,ownerDescriptor} from '../web/modules/scope.js';
-import messages from '../web/locales/en/calendar.json' with {type:'json'};
 import {calendarWindow} from './window.js';
 import {fetchCalendar} from './fetch.js';
 import {parseFeed} from './parse.js';
 import {AppError} from '../errors.js';
-import {digest} from '../storage-format.js';
-export const calendarScopeVersion=book=>digest(JSON.stringify([book.id,book.title,book.projects]));
+import {calendarSourcePlan,verifyCalendarSourcePlan,calendarSourceError} from './source-plan.js';
+import {retireQueryCacheScope} from '../query-cache-scope.js';
+export {calendarScopeVersion} from './source-plan.js';
 export class CalendarSources{
  constructor({fetch=fetchCalendar,parse=parseFeed,read=readCalendar}={}){this.read=read;this.fetch=fetch;this.parse=parse;this.connections=new Map();this.cache=new Map();this.generation=0;}
- clear(){this.generation++;for(const c of this.connections.values())clearVault(c.vault);this.connections.clear();this.cache.clear();}
+ clear(){this.generation++;const draining=[retireQueryCacheScope(this),...Array.from(this.connections.values(),c=>clearVault(c.vault))];this.connections.clear();this.cache.clear();const closed=Promise.all(draining);void closed.catch(()=>{});return closed;}
  async unlock(entity,credentials,authenticate){
   const generation=this.generation,root=path.resolve(entity.data.path),access=await readAccess(root);
   const vault=await authenticate(root,access,credentials.username??'',credentials.password??'',credentials.recovery??'');
@@ -36,61 +36,34 @@ export class CalendarSources{
   if(source?.locked)throw new AppError('CALENDAR_LOCKED');if(source?.error)throw new AppError('CALENDAR_FORMAT');
   if(!event)throw new AppError('NOT_FOUND');return {event};
  }
- async data(workspace,range,{refresh=false,detail=null,signal,emit=null,serial=false,emitSource=null,eventSources=false}={}){
-  const generation=this.generation,{metadata:book}=await workspace.outline(),snapshot=await this.read(workspace,book,range,{signal,emit,emitSource,eventSources,detailId:detail?.eventId??null}),result={sources:snapshot.sources,events:snapshot.events,scopeVersion:calendarScopeVersion(book)},versions=new Map([['scope',calendarScopeVersion(book)],['local',snapshot.revision]]),matches=calendarWindow(range);
-  const live=new Set(snapshot.connections.map(e=>e.id));
-  for(const [id,c] of this.connections)if(!live.has(id)){await clearVault(c.vault);this.connections.delete(id);}
-  for(const id of this.cache.keys())if(!live.has(id))this.cache.delete(id);
-  const queue=snapshot.connections.filter(e=>!detail||detail.sourceId===e.id);
-  const collect=async entity=>{
-   let emitted=false;
-   const d=entity.data,source={id:entity.id,name:d.name,color:d.color,projectId:d.projectId,owner:ownerLabel(book,d.projectId),ownerDisplay:ownerDescriptor(book,d.projectId),readOnly:true,kind:entity.type};
-   result.sources.push(source);
+ prepare(workspace,range,options){return calendarSourcePlan(this,workspace,range,options);}
+ verify(plan,options){return verifyCalendarSourcePlan(this,plan,options);}
+ async data(workspace,range,{refresh=false,detail=null,signal,emit=null,serial=false,emitSource=null,eventSources=false,prepared=null}={}){
+  const plan=prepared??await this.prepare(workspace,range,{refresh,detail,signal}),generation=this.generation;
+  if(plan.service!==this||plan.workspace!==workspace||JSON.stringify(plan.range)!==JSON.stringify(range))throw new AppError('INVALID');
+  const check=()=>{signal?.throwIfAborted();if(this.generation!==generation||plan.generation!==generation)throw new AppError('ACCESS_LOCKED');};check();
+  const project=emit?async event=>{check();await emit(event);check();}:null;
+  const snapshot=await this.read(workspace,plan.book,range,{signal,emit:project,emitSource,eventSources,detailId:detail?.eventId??null});
+  if(snapshot.revision!==plan.snapshot.revision)throw new AppError('CALENDAR_CURSOR');
+  const result={sources:snapshot.sources,events:snapshot.events,scopeVersion:plan.scopeVersion},matches=calendarWindow(range),queue=[...plan.sources];
+  const collect=async entry=>{
+   const {entity,connected,storage,book:other}=entry,d=entity.data,source={...entry.source};let emitted=false;result.sources.push(source);
+   if(source.error){if(emitSource)await emitSource(source);return;}
    try{
     let events=[];
-    if(entity.type==='subscription'){
-     let cached=this.cache.get(entity.id);
-     if(refresh||!cached||cached.url!==d.url||Date.now()-cached.at>(cached.error?60000:300000)){
-      try{const text=await this.fetch(d.url,{signal});cached={url:d.url,text,hash:digest(text),at:Date.now()};}
-      catch(error){if(signal?.aborted||this.generation!==generation)throw error;cached={url:d.url,error,at:Date.now()};}
-      signal?.throwIfAborted();if(this.generation!==generation)throw new AppError('ACCESS_LOCKED');
-      this.cache.set(entity.id,cached);
-     }
-     if(cached.error)throw cached.error;
-     events=(await this.parse(cached.text,range,{signal})).map(e=>{const {notes,...summary}=e;return e.id===detail?.eventId?e:summary;});source.checkedAt=new Date(cached.at).toISOString();versions.set(entity.id,cached.hash);
-    }else{
-     const connected=this.connections.get(entity.id);
-     if(!connected||connected.root!==path.resolve(d.path))throw new AppError('CALENDAR_LOCKED');
-     if((await readAccess(connected.root)).etag!==connected.etag){await clearVault(connected.vault);this.connections.delete(entity.id);throw new AppError('CALENDAR_LOCKED');}
-     const ws=new Workspace(connected.root,connected.vault),{metadata:other}=await ws.outline();
-     if(other.id!==connected.workspaceId||other.id===book.id)throw new AppError('CALENDAR_SELF');
+    if(entity.type==='subscription')events=(await this.parse(entry.cached.text,range,{signal})).map(event=>{const {notes,...summary}=event;return event.id===detail?.eventId?event:summary;});
+    else{
+     if(this.connections.get(entity.id)!==connected||(await readAccess(connected.root)).etag!==connected.etag)throw new AppError('CALENDAR_LOCKED');
      const detailId=detail?.eventId.startsWith(other.id+':')?detail.eventId.slice(other.id.length+1):null;
-     const projected=await readCalendar(ws,other,range,{signal,detailId,includeConnections:false,includeSources:false,emit:emit?e=>{emitted=true;emit({...e,id:other.id+':'+e.id,origin:ownerLabel(other,e.projectId),originDisplay:ownerDescriptor(other,e.projectId),sourceId:source.id,projectId:d.projectId,readOnly:true,...(eventSources?{source}: {})});}:null});
-     if((await readAccess(connected.root)).etag!==connected.etag){await clearVault(connected.vault);this.connections.delete(entity.id);throw new AppError('CALENDAR_LOCKED');}
-     if(emit&&calendarScopeVersion((await ws.outline()).metadata)!==calendarScopeVersion(other))throw new AppError('CALENDAR_CURSOR');
-     events=projected.events.map(e=>({...e,id:other.id+':'+e.id,origin:ownerLabel(other,e.projectId),originDisplay:ownerDescriptor(other,e.projectId)}));source.checkedAt=new Date().toISOString();versions.set(entity.id,[other.id,projected.revision,calendarScopeVersion(other),connected.etag]);
+     const projected=await readCalendar(storage,other,range,{signal,detailId,includeConnections:false,includeSources:false,emit:project?async event=>{emitted=true;await project({...event,id:other.id+':'+event.id,origin:ownerLabel(other,event.projectId),originDisplay:ownerDescriptor(other,event.projectId),sourceId:source.id,projectId:d.projectId,readOnly:true,...(eventSources?{source}: {})});}:null});
+     if(projected.revision!==entry.revision)throw new AppError('CALENDAR_CURSOR');
+     events=projected.events.map(event=>({...event,id:other.id+':'+event.id,origin:ownerLabel(other,event.projectId),originDisplay:ownerDescriptor(other,event.projectId)}));
     }
-    signal?.throwIfAborted();if(this.generation!==generation)throw new AppError('ACCESS_LOCKED');
-    for(const e of events){if(!matches(e))continue;const value={...e,sourceId:source.id,projectId:d.projectId,readOnly:true,...(eventSources?{source}: {})};if(emit)emit(value);else result.events.push(value);}
-   }catch(error){if(signal?.aborted||emitted)throw error;source.error=error instanceof AppError?error.message:messages.refreshFailed;if(error instanceof AppError)source.errorCode=error.code;else source.errorKey='refreshFailed';source.locked=error.code==='CALENDAR_LOCKED';versions.set(entity.id,['unavailable',source.error]);}
+    check();for(const event of events){if(!matches(event))continue;const value={...event,sourceId:source.id,projectId:d.projectId,readOnly:true,...(eventSources?{source}: {})};if(project){emitted=true;await project(value);}else result.events.push(value);}
+   }catch(error){check();if(emitted)throw error;calendarSourceError(source,error);}
+   if(emitSource)await emitSource(source);
   };
-  let failure;
-  await Promise.all(Array.from({length:Math.min(serial?1:4,queue.length)},async()=>{while(queue.length&&!failure){if(this.generation!==generation)return;try{await collect(queue.shift());}catch(error){failure=error;}}}));
-  if(failure)throw failure;
-  // Recheck access and source settings after asynchronous network reads.
-  const latest=await this.read(workspace,book,range,{signal,connectionsOnly:true}),allowed=new Map(latest.connections.filter(e=>live.has(e.id)).map(e=>[e.id,e]));
-  if(emit&&(latest.revision!==snapshot.revision||calendarScopeVersion((await workspace.outline()).metadata)!==result.scopeVersion))throw new AppError('CALENDAR_CURSOR');
-  for(const s of result.sources.filter(s=>s.readOnly)){
-   const before=snapshot.connections.find(e=>e.id===s.id),after=allowed.get(s.id);
-   if(!after||JSON.stringify(before.data)!==JSON.stringify(after.data)){
-    if(emit)throw new AppError('CALENDAR_CURSOR');
-    result.events=result.events.filter(e=>e.sourceId!==s.id);s.error=messages.sourceChanged;s.errorKey='sourceChanged';this.cache.delete(s.id);
-    const c=this.connections.get(s.id);if(c){await clearVault(c.vault);this.connections.delete(s.id);}
-   }
-   if(emitSource)await emitSource(s);
-  }
-  signal?.throwIfAborted();if(this.generation!==generation)throw new AppError('ACCESS_LOCKED');
-  result.events=result.events.filter(matches);result.version=digest(JSON.stringify([...versions].sort(([a],[b])=>a.localeCompare(b))));result.workspaceId=book.id;
-  return result;
+  let failure;await Promise.all(Array.from({length:Math.min(serial?1:4,queue.length)},async()=>{while(queue.length&&!failure){try{await collect(queue.shift());}catch(error){failure=error;}}}));if(failure)throw failure;
+  await this.verify(plan,{signal});check();result.events=result.events.filter(matches);result.version=plan.version;result.workspaceId=plan.book.id;return result;
  }
 }

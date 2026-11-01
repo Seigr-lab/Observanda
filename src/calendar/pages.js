@@ -9,12 +9,13 @@ import {nextDate} from '../web/modules/calendar-model.js';
 import {calendarWindow} from './window.js';
 import {calendarScopeVersion} from './service.js';
 import {calendarSourcePage} from './source-page.js';
+import {withQueryCacheOwner} from '../query-cache-scope.js';
 const order=(a,b)=>a.startsAt.localeCompare(b.startsAt)||a.title.localeCompare(b.title)||a.sourceId.localeCompare(b.sourceId)||a.id.localeCompare(b.id);
 const point=({id,sourceId,startsAt,title})=>({id,sourceId,startsAt,title});
 const changed=()=>{throw new AppError('CALENDAR_CURSOR');};
 // Streaming reducers retain one agenda page or three events per visible day.
 // Counts include every matching event, including those outside the visible page.
-export async function calendarPage(workspace,service,{workspaceId,from,to,timeZone='UTC',mode='agenda',projectId=null,recursive=true,scopeIds=null,hidden=[],cursor=null,limit=50,key=null,refresh=false,search='',offset=0,sourceCursor=null,sourceSearch=''},{signal,reader=new ModuleReader(workspace),collect}={}){
+export async function calendarPage(workspace,service,{workspaceId,from,to,timeZone='UTC',mode='agenda',projectId=null,recursive=true,scopeIds=null,hidden=[],cursor=null,limit=50,key=null,refresh=false,search='',offset=0,sourceCursor=null,sourceSearch=''},{signal,reader=new ModuleReader(workspace),collect,consume}={}){
  if(!uuid(workspaceId)||!date(from)||!date(to)||from>=to||Date.parse(to)-Date.parse(from)>93*86400000||!['agenda','month','discovery'].includes(mode)||!Number.isSafeInteger(limit)||limit<1||limit>50||projectId!==null&&!uuid(projectId)||typeof recursive!=='boolean'||typeof refresh!=='boolean'||!Array.isArray(hidden)||hidden.length>4096||hidden.some(id=>typeof id!=='string'||id.length>256)||scopeIds!==null&&(!Array.isArray(scopeIds)||scopeIds.length>10000||!scopeIds.every(id=>id===null||uuid(id)))||cursor!==null&&(typeof cursor!=='string'||cursor.length>8192)||key!==null&&(typeof key!=='string'||key.length>8192)||typeof search!=='string'||search.length>256||!Number.isSafeInteger(offset)||offset<0||mode!=='discovery'&&offset!==0)throw new AppError('INVALID');
  try{new Intl.DateTimeFormat('en',{timeZone});}catch{throw new AppError('INVALID');}
  const queryHash=digest(JSON.stringify({workspaceId,from,to,timeZone,mode,projectId,recursive,scopeIds,hidden,limit,key,search}));
@@ -24,10 +25,22 @@ export async function calendarPage(workspace,service,{workspaceId,from,to,timeZo
   return {book:c.book,anchor,sourcePage:calendarSourcePage(c,{workspaceId,from,to,timeZone,projectId,recursive,scopeIds},{cursor:sourceCursor,search:sourceSearch})};
  });
  const hiddenIds=new Set(hidden),scope=scopeIds&&new Set(scopeIds),allowed=e=>projectUsesTool(book,e.projectId,'planning')&&inScope(book,e.projectId,projectId,recursive)&&(!scope||scope.has(e.projectId??null));
+ const matches=e=>allowed(e)&&!hiddenIds.has(e.sourceId)&&(!key||e.sourceId+':'+e.id===key)&&(!search||e.title.toLowerCase().includes(search.toLowerCase()));
+ if(consume){
+  const range={from,to,timeZone},prepared=await service.prepare(workspace,range,{refresh,signal});if(calendarScopeVersion(book)!==prepared.scopeVersion)changed();
+  const decorateSource=source=>{const latest=prepared.sources.find(entry=>entry.source.id===source.id)?.source;return latest?.checkedAt?{...source,checkedAt:latest.checkedAt}:source;};
+  return withQueryCacheOwner(service,prepared.grants,async()=>{
+   const value=await consume({version:prepared.version,queryHash,decorate:event=>event.source?{...event,source:decorateSource(event.source)}:event,decorateSource,read:async(emit,sourceSignal=signal)=>{
+    const result=await service.data(workspace,range,{signal:sourceSignal,prepared,serial:true,eventSources:true,emit:async event=>{sourceSignal?.throwIfAborted();if(matches(event))await emit(event);}});
+    return {version:result.version,sourceErrors:result.sources.filter(source=>source.error&&allowed(source))};
+   }});
+   await service.verify(prepared,{signal});return value;
+  });
+ }
  const page=summaryPage({...anchor,limit,order,point}),days=[],found=[];let total=0;
  if(mode==='month')for(let day=from;day<to;day=nextDate(day))days.push({date:day,total:0,events:[],matches:calendarWindow({from:day,to:nextDate(day),timeZone})});
  const result=await service.data(workspace,{from,to,timeZone},{refresh,signal,serial:mode==='discovery',eventSources:true,emitSource:source=>{if(allowed(source))sourcePage.add(source);},emit:e=>{
-  signal?.throwIfAborted();if(!allowed(e)||hiddenIds.has(e.sourceId)||key&&e.sourceId+':'+e.id!==key||search&&!e.title.toLowerCase().includes(search.toLowerCase()))return;total++;collect?.(e);
+  signal?.throwIfAborted();if(!matches(e))return;total++;collect?.(e);
   if(mode==='discovery'){if(total>offset&&found.length<limit)found.push(e);return;}
   if(mode==='agenda')page.add(e);
   else for(const day of days)if(day.matches(e)){day.total++;if(day.events.length<3||order(e,day.events.at(-1))<0){day.events.push(e);day.events.sort(order);if(day.events.length>3)day.events.pop();}}

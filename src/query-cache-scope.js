@@ -10,6 +10,12 @@ export function withQueryCacheScope(application,client,grants,operation){
  const saved=[...new Set([...(inherited?.grants??[]),...grants].filter(value=>value?.vault))],expires=Math.min(Infinity,...saved.map(value=>value.expires));
  return context.run({tokens,vault,grants:saved,expires},operation);
 }
+// A source service can add its own retirement generation and stable external
+// grant witnesses while preserving the enclosing application's authorization.
+export function withQueryCacheOwner(owner,grants,operation){
+ const inherited=context.getStore(),saved=[...new Set([...(inherited?.grants??[]),...grants].filter(value=>value?.vault))];
+ return context.run({tokens:[...(inherited?.tokens??[]),generation(owner)],vault:inherited?.vault,grants:saved,expires:Math.min(inherited?.expires??Infinity,...saved.map(value=>value.expires??Infinity))},operation);
+}
 export const currentQueryCacheScope=()=>context.getStore();
 export function assertQueryCacheScope(scope){if(scope&&(scope.tokens.some(token=>token.retired)||scope.expires<=Date.now()||scope.grants.some(value=>!Buffer.isBuffer(value.vault?.key))))throw new AppError('ACCESS_LOCKED');}
 export function onQueryCacheScopeRetire(scope,retire){const releases=[...scope.tokens,...scope.grants.map(value=>value.vault)].map(owner=>onVaultRetire(owner,retire));return ()=>{for(const release of releases)release();};}

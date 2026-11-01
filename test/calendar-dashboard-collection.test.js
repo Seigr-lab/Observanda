@@ -38,10 +38,10 @@ test('combined agenda retains separate owners, stable pages and authenticated fe
  const subscriptionId=randomUUID(),fetches=[];
  const fake={fetch:async url=>{fetches.push(url);return url;},parse:async()=>[{id:'external-event',title:'Feed event',startsAt:'2026-10-03',endsAt:'2026-10-04',allDay:true,notes:'Private feed details'}]};app.calendars.options={...fake};
  // Existing owner caches keep their original provider; recreate them before admitting feeds.
- app.calendars.clear();const rootSources=new CalendarSources(fake);t.after(()=>rootSources.clear());
+ await app.calendars.clear();const rootSources=new CalendarSources(fake);t.after(()=>rootSources.clear());
  for(const [index,o] of [f.owners[0],owner].entries())await o.command('subscription.save',{id:subscriptionId,expectedRevision:null,data:{name:'Feed '+index,projectId:null,color:'#123456',url:'https://calendar.invalid/feed-'+index+'.ics',enabled:true}});
  const feed=await read({limit:25},route,{calendarSources:rootSources});assert.equal(feed.total,7);const external=feed.events.filter(e=>e.readOnly);assert.equal(external.length,2);assert.equal(new Set(external.map(e=>e.collectionKey)).size,2);assert.ok(external.every(e=>e.notes===undefined));assert.equal(fetches.length,2);
- await read({limit:25},route,{calendarSources:rootSources});assert.equal(fetches.length,2);rootSources.clear();await read({limit:25},route,{calendarSources:rootSources});assert.equal(fetches.length,3);
+ await read({limit:25},route,{calendarSources:rootSources});assert.equal(fetches.length,2);await rootSources.clear();await read({limit:25},route,{calendarSources:rootSources});assert.equal(fetches.length,3);
  await app.run(client,projectRequest('/api/projects/'+f.books[1].projectId+'/lab-books/'+f.books[1].labBookId+'/access/lock','POST'),{});
  assert.equal((await read({key:chosen.collectionKey})).total,1);await assert.rejects(read(),e=>e.code==='ACCESS_LOCKED'&&e.labBookId===f.books[1].labBookId);
 });

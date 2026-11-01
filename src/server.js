@@ -289,7 +289,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
   };
   const detachDeleted=async(source,client)=>{
     if(context.root!==source)return;
-    await stopJobs(context);cancelFolderRequests();context.calendarSources.clear();await clearVault(context.vault);context=makeContext(null);contextRequired=true;plans.clear();
+    await stopJobs(context);cancelFolderRequests();await context.calendarSources.clear();await clearVault(context.vault);context=makeContext(null);contextRequired=true;plans.clear();
     for(const session of sessions.values())session.access=null;
     client.access='none';client.expires=Date.now()+8*60*60*1000;
   };
@@ -328,7 +328,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
     if(followSettings&&context.workspace&&context.vault.key&&vault?.key)await dashboardEdits.relocate(context.workspace,new Workspace(location,vault));
     if(context.root&&context.root!==location)await databaseProvider()?.closeWorkspace(context.root);
     savedDeletion.assertAvailable(location);
-    localPreferences.recent=[detail,...localPreferences.recent.filter(item=>item.path!==location&&item.path!==movingFrom)].slice(0,30);if(context.publisher)context.publisher.token=null;context.calendarSources.clear();await clearVault(context.vault);context=makeContext(location,true,vault??{id:null,key:null});contextRequired=true;plans.clear();const access=await readAccess(location);context.protectedOnce=requiresAccess(access.value);client.access=access.etag;client.expires=Date.now()+8*60*60*1000;activities.relocate(priorContextId,context.id);startJobs(context);
+    localPreferences.recent=[detail,...localPreferences.recent.filter(item=>item.path!==location&&item.path!==movingFrom)].slice(0,30);if(context.publisher)context.publisher.token=null;await context.calendarSources.clear();await clearVault(context.vault);context=makeContext(location,true,vault??{id:null,key:null});contextRequired=true;plans.clear();const access=await readAccess(location);context.protectedOnce=requiresAccess(access.value);client.access=access.etag;client.expires=Date.now()+8*60*60*1000;activities.relocate(priorContextId,context.id);startJobs(context);
     }finally{priorContext.adopting=false;if(context===priorContext)priorContext.readers.open();}
   });
   const metadata=async()=>{
@@ -404,7 +404,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
           if(context!==sessionContext){await clearVault(vault);throw new AppError('WORKSPACE_CHANGED');}
           if(context.manualLock||latest.etag!==access.etag){await clearVault(vault);}
           else if(context.vault.key&&context.vault.id===vault.id&&context.vault.key.equals(vault.key)){await clearVault(vault);local.access=access.etag;}
-          else{await diagnosticPhase('session-workers',()=>stopJobs(sessionContext));if(context!==sessionContext){await clearVault(vault);throw new AppError('WORKSPACE_CHANGED');}if(context.manualLock||changing||loginBusy){await clearVault(vault);throw new AppError('LOCKED');}context.calendarSources.clear();await clearVault(context.vault);Object.assign(context.vault,vault);local.access=access.etag;}
+          else{await diagnosticPhase('session-workers',()=>stopJobs(sessionContext));if(context!==sessionContext){await clearVault(vault);throw new AppError('WORKSPACE_CHANGED');}if(context.manualLock||changing||loginBusy){await clearVault(vault);throw new AppError('LOCKED');}await context.calendarSources.clear();await clearVault(context.vault);Object.assign(context.vault,vault);local.access=access.etag;}
          }
          catch(error){if(!['DEVICE_UNKNOWN','DEVICE_UNAVAILABLE','DEVICE_INVALID','LEGACY_WRITE_LOCK','ACCESS_STATE_CHANGED'].includes(error.code))throw error;}
         }
@@ -511,17 +511,17 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
        }finally{
         // An interrupted file write may already have advanced trusted grants.
         // Invalidate old sessions and jobs on both success and failure.
-        selectedContext.manualLock=true;for(const local of sessions.values())local.access=null;selectedContext.calendarSources.clear();await clearVault(selectedContext.vault);
+        selectedContext.manualLock=true;for(const local of sessions.values())local.access=null;await selectedContext.calendarSources.clear();await clearVault(selectedContext.vault);
         selectedContext.readers.open();loginBusy=false;
        }
       }
       if(req.method==='POST'&&url.pathname==='/api/access/unlock'){
         if(changing||loginBusy)throw new AppError('LOCKED');
         const data=await body(req);if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');if(changing||loginBusy)throw new AppError('LOCKED');loginBusy=true;
-        try{const {access}=await status(client);const vault=await authenticate(context.root,access,data.username??'',data.password??'',data.recovery??'');if(vault){await context.readers.close();await stopJobs(context);context.calendarSources.clear();await clearVault(context.vault);Object.assign(context.vault,vault);}await ensureWorkspaceIdentity(context);await rememberAuthenticatedLocation(preferencesFile,context.root);context.manualLock=false;client.access=access.etag;client.expires=Date.now()+8*60*60*1000;startJobs(context);return json({ok:true});}
+        try{const {access}=await status(client);const vault=await authenticate(context.root,access,data.username??'',data.password??'',data.recovery??'');if(vault){await context.readers.close();await stopJobs(context);await context.calendarSources.clear();await clearVault(context.vault);Object.assign(context.vault,vault);}await ensureWorkspaceIdentity(context);await rememberAuthenticatedLocation(preferencesFile,context.root);context.manualLock=false;client.access=access.etag;client.expires=Date.now()+8*60*60*1000;startJobs(context);return json({ok:true});}
         finally{selectedContext.readers.open();loginBusy=false;}
       }
-      if(req.method==='POST'&&url.pathname==='/api/access/lock'){if(activeWrites||importing||publishing||changing||loginBusy)throw new AppError('LOCKED');cancelFolderRequests();context.manualLock=true;await context.readers.close();await stopJobs(context);if(context.root)await databaseProvider()?.closeWorkspace(context.root);for(const session of sessions.values())session.access=null;context.calendarSources.clear();await clearVault(context.vault);if(publisher)publisher.token=null;candidates.clear();designCandidates.clear();appearancePreviews.clear();return json({ok:true});}
+      if(req.method==='POST'&&url.pathname==='/api/access/lock'){if(activeWrites||importing||publishing||changing||loginBusy)throw new AppError('LOCKED');cancelFolderRequests();context.manualLock=true;await context.readers.close();await stopJobs(context);if(context.root)await databaseProvider()?.closeWorkspace(context.root);for(const session of sessions.values())session.access=null;await context.calendarSources.clear();await clearVault(context.vault);if(publisher)publisher.token=null;candidates.clear();designCandidates.clear();appearancePreviews.clear();return json({ok:true});}
       const accessState=await status(client);if(context!==selectedContext)throw new AppError('WORKSPACE_CHANGED');if(accessState.locked)throw new AppError('ACCESS_LOCKED');
       // Reading observations never opens the catalogue or competes for its lock.
       if(req.method==='GET'&&url.pathname==='/api/activity')return json({contextId:context.id,busy:changing||loginBusy||activeWrites>0,readable:context.readers.accepting&&!loginBusy&&(!changing||!!context.concurrentReads),operations:activities.list(context.id)});
@@ -643,7 +643,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
           const result=await resetPreferences(preferencesFile,data.etag);
           cancelFolderRequests();
           if(context.publisher)context.publisher.token=null;
-          await stopJobs(context);if(context.root)await databaseProvider()?.closeWorkspace(context.root);context.calendarSources.clear();await clearVault(context.vault);context.candidates.clear();context.designCandidates.clear();context.appearancePreviews.clear();plans.clear();
+          await stopJobs(context);if(context.root)await databaseProvider()?.closeWorkspace(context.root);await context.calendarSources.clear();await clearVault(context.vault);context.candidates.clear();context.designCandidates.clear();context.appearancePreviews.clear();plans.clear();
           context=makeContext(null);contextRequired=true;Object.assign(localPreferences,result.value);
           for(const session of sessions.values())session.access=null;
           client.access='none';client.expires=Date.now()+8*60*60*1000;
@@ -1478,7 +1478,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
    for(const id of sessions.keys())liveSession(id);
    if(shuttingDown||loginBusy||pending.size||activeWrites||importing||publishing||changing||![context.vault.key,context.calendarSources.connections.size,context.calendarSources.cache.size].some(Boolean)||[...sessions.values()].some(s=>s.access&&s.expires>Date.now()))return;
    loginBusy=true;const expiring=context;
-   void stopJobs(expiring).then(async()=>{if(expiring.root)await databaseProvider()?.closeWorkspace(expiring.root);expiring.calendarSources.clear();await clearVault(expiring.vault);expiring.candidates.clear();expiring.designCandidates.clear();expiring.appearancePreviews.clear();if(expiring.publisher)expiring.publisher.token=null;}).catch(()=>{/* Retry on the next expiry tick; never abandon an active worker's key. */}).finally(()=>{loginBusy=false;});
+   void stopJobs(expiring).then(async()=>{if(expiring.root)await databaseProvider()?.closeWorkspace(expiring.root);await expiring.calendarSources.clear();await clearVault(expiring.vault);expiring.candidates.clear();expiring.designCandidates.clear();expiring.appearancePreviews.clear();if(expiring.publisher)expiring.publisher.token=null;}).catch(()=>{/* Retry on the next expiry tick; never abandon an active worker's key. */}).finally(()=>{loginBusy=false;});
   },30000);expiry.unref();
   const shutdownStatus=()=>{
    const operations=activities.list(context.id);
@@ -1489,7 +1489,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
    const disconnected=connections.close();
    const timeout=setTimeout(()=>server.closeAllConnections(),60000);timeout.unref();
    try{await Promise.all([stoppedJobs,...dashboardTasks,disconnected,pending.size?new Promise(resolve=>drained.push(resolve)):Promise.resolve()]);}
-    finally{clearTimeout(timeout);await savedDeletion.close();if(context.root)await databaseProvider()?.closeWorkspace(context.root);context.calendarSources.clear();await clearVault(context.vault);sessions.clear();if(context.publisher)context.publisher.token=null;await collaborationSession.close();diagnostics.record('service-stop');if(!providedDiagnostics)await diagnostics.close();}
+    finally{clearTimeout(timeout);await savedDeletion.close();if(context.root)await databaseProvider()?.closeWorkspace(context.root);await context.calendarSources.clear();await clearVault(context.vault);sessions.clear();if(context.publisher)context.publisher.token=null;await collaborationSession.close();diagnostics.record('service-stop');if(!providedDiagnostics)await diagnostics.close();}
   })()};
 }
 

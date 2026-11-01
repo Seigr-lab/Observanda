@@ -28,7 +28,7 @@ export class ProjectCalendars{
  forget(session,id){const entries=this.sessions.get(session),entry=entries?.get(id);if(entry){entry.sources.clear();this.owners.delete(entry);entries.delete(id);}}
  invalidateProject(projectId){for(const entry of this.owners)if(entry.projectId===projectId){entry.sources.clear();this.owners.delete(entry);entry.closed=true;}}
  expire(now=Date.now()){for(const entry of this.owners)if(entry.expires<=now){entry.sources.clear();this.owners.delete(entry);entry.closed=true;}}
- clear(){for(const entry of this.owners)entry.sources.clear();this.owners.clear();this.sessions=new WeakMap();}
+ clear(){const closed=Promise.all(Array.from(this.owners,entry=>entry.sources.clear()));this.owners.clear();this.sessions=new WeakMap();void closed.catch(()=>{});return closed;}
  invalidateBook(projectId,labBookId){const id='book:'+projectId+':'+labBookId;for(const entry of this.owners)if(entry.id===id){entry.sources.clear();this.owners.delete(entry);entry.closed=true;}}
  owner(session,storage,etag,{ownerId=storage.projectId,projectId=storage.projectId}={}){
   let entries=this.sessions.get(session);if(!entries){entries=new Map();this.sessions.set(session,entries);}
@@ -38,10 +38,10 @@ export class ProjectCalendars{
   entry.expires=Date.now()+8*60*60*1000;return entry.sources;
  }
  reconcile(session,id,entities){this.sessions.get(session)?.get(id)?.sources.reconcile(entities,{partial:true});}
- async run(session,storage,etag,method,data,{signal,authenticate,ownerId=storage.projectId,projectId=storage.projectId,source:providedSource,collect}={}){
+ async run(session,storage,etag,method,data,{signal,authenticate,ownerId=storage.projectId,projectId=storage.projectId,source:providedSource,collect,consume}={}){
   const {metadata:book}=await storage.outline();if(data?.workspaceId!==book.id)throw new AppError('WORKSPACE_CHANGED');
   const source=providedSource??this.owner(session,storage,etag,{ownerId,projectId}),reader=await calendarReader(storage,book.id,signal);
-  if(method==='page')return calendarPage(storage,source,data,{signal,reader,collect});
+  if(method==='page')return calendarPage(storage,source,data,{signal,reader,collect,consume});
   if(method==='event')return source.detail(storage,data,{signal});
   if(method!=='unlock')throw new AppError('INVALID');
   const {entity}=await reader.selected({workspaceId:book.id,id:data.id},{signal});

@@ -6,7 +6,9 @@ import {researchId} from './web/research-reference.js';
 import {defaultDashboard,createPanel,validDashboard} from './web/dashboard-model.js';
 import {dashboardSelection} from './web/dashboard-scope.js';
 import {calendarCollectionIdentity} from './web/modules/calendar-collection.js';
-const point=event=>({key:event.collectionKey,startsAt:event.startsAt,title:event.title});
+import {queryResultWindow} from './query-result-window.js';
+import {queryCallbackSource} from './query-callback-source.js';
+const point=event=>({key:event.key??event.collectionKey,startsAt:event.startsAt,title:event.title});
 const order=(a,b)=>a.startsAt.localeCompare(b.startsAt)||a.title.localeCompare(b.title)||(a.key??a.collectionKey).localeCompare(b.key??b.collectionKey);
 // Calendar providers stream their own authenticated schedule facts and feeds.
 // This reducer retains only one combined page and owner version fingerprints.
@@ -22,13 +24,20 @@ export async function calendarDashboardCollection(pages,client,command,{scope=nu
  await visit(async(storage,address,selected)=>{
   const {metadata:book}=await storage.outline();if(book.id!==address.workspaceId)throw new AppError('DATABASE_LOCATION');for(const item of book.notebooks)seen.add(item.id);scopeProjects=selected.projectLabels;
   const owner={...address,projectTitle:address.projectTitle??'',notebookTitle:address.labBookId?book.notebooks.find(item=>item.id===address.labBookId)?.title??'':''};
-  const result=await read(storage,address,{workspaceId:address.workspaceId,from,to,timeZone,mode:'discovery',scopeIds:address.projectId?null:[...selected.projectIds],search,limit:1},{signal,collect:event=>{
+  const collect=event=>{
    const collectionKey=address.workspaceId+'/'+digest(JSON.stringify([event.sourceId,event.id]));
    if(pinned.key&&(pinned.legacy?event.sourceId+':'+event.id!==pinned.key:collectionKey!==key))return;
    const value={...event,collectionKey,owner};if(mode==='discovery'){if(total++>=offset&&found.length<limit)found.push(value);}else page.add(value);
+  };
+  await read(storage,address,{workspaceId:address.workspaceId,from,to,timeZone,mode:'discovery',scopeIds:address.projectId?null:[...selected.projectIds],search,limit:1},{signal,consume:async({version,queryHash,read:events,decorate,decorateSource})=>{
+   if(Object.hasOwn(snapshots,address.workspaceId)||session.snapshots&&session.snapshots[address.workspaceId]!==version)throw new AppError('RECORD_QUERY_CURSOR');snapshots[address.workspaceId]=version;
+   const discovery=mode==='discovery',cacheHash=digest(JSON.stringify(['calendar-dashboard',scope,{...command,cursor:undefined,offset:undefined},queryHash]));
+   const cached=await queryResultWindow({workspace:storage,ownerId:address.workspaceId,snapshotId:version,queryHash:cacheHash,order:discovery?(a,b)=>a.position-b.position:order,point,after:!discovery&&session.offset?session.after:null,offset:discovery?Math.max(0,offset-total):null,limit:discovery?Math.max(0,limit-found.length):limit,preceding:!discovery&&session.offset>limit,reuse:discovery?offset>0:!!cursor,signal},check=>queryCallbackSource(async(emit,sourceSignal)=>{
+    let position=0;const result=await events(event=>{const collectionKey=address.workspaceId+'/'+digest(JSON.stringify([event.sourceId,event.id]));if(pinned.key&&(pinned.legacy?event.sourceId+':'+event.id!==pinned.key:collectionKey!==key))return;return emit({...event,collectionKey,...(discovery?{position:position++}:{})});},sourceSignal);return {sourceErrors:result.sourceErrors};
+   },{signal,check}));
+   if(cached){const rows=cached.records.map(row=>{const {position,...event}=row;void position;return {...decorate(event),owner};});if(discovery){total+=cached.total;found.push(...rows);}else page.addIndexed({...cached,records:rows});for(const error of cached.sourceErrors)if(errors.length<30)errors.push(decorateSource(error));}
+   else{const result=await events(collect,signal);for(const error of result.sourceErrors)if(errors.length<30)errors.push(error);}
   }});
-  if(Object.hasOwn(snapshots,address.workspaceId)||session.snapshots&&session.snapshots[address.workspaceId]!==result.version)throw new AppError('RECORD_QUERY_CURSOR');snapshots[address.workspaceId]=result.version;
-  for(const error of result.sourceErrors)if(errors.length<30)errors.push(error);
  },{workspaceId,scope,selection,namespaces:pinned.key?new Set([pinned.workspaceId]):null,includeOwner:owner=>selection.notebookMode!=='selected'||Boolean(owner.labBookId),signal});
  if(session.snapshots&&Object.keys(session.snapshots).some(id=>!Object.hasOwn(snapshots,id)))throw new AppError('RECORD_QUERY_CURSOR');
  if(!pinned.key&&selection.notebookMode==='selected'&&selection.notebookIds.some(id=>!seen.has(id)))throw new AppError('RECORD_VIEW_SCOPE');
