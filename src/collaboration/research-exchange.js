@@ -13,7 +13,7 @@ import {selectedMetadata,validateSelection} from './selection.js';
 import {collectResearch,packageSelection,populateSharedWorkspace} from './research-package.js';
 import {identityHash} from './identity.js';
 import {workingFile,retainWorkingBase} from './working-copy.js';
-import {withStagingAuthority,recoverStaging} from '../staging-reservations.js';
+import {withStagingAuthority,withStagingCapacity,recoverStaging} from '../staging-reservations.js';
 import {declaredStagingBytes,STAGING_FREE_BYTES} from '../staging-reservation-model.js';
 import {onVaultRetire} from '../vault-lifecycle.js';
 
@@ -32,7 +32,7 @@ export class ResearchExchange{
    const editionFile='.observanda/collaboration/editions/'+grant.id+'.json',editionRaw=await this.workspace.readMetadata(editionFile,1024),edition=editionRaw?JSON.parse(editionRaw).edition+1:1;valid(Number.isSafeInteger(edition)&&edition>=1,'COLLABORATION_DAMAGED');
    const selection={version:1,kind:'offer',id:parts.id,baseId:null,edition,createdAt:new Date().toISOString(),grant:{id:grant.id,generation:grant.generation,organizationId:grant.organizationId,principalId,role:grant.role},owner:await this.contact(),recipient:contact,metadata:selectedMetadata(metadata,notebookIds)};
    if(hasSharedConfigurations(selection.metadata))selection.version=2;
-   await parts.add({kind:'description',name:'selection',content:JSON.stringify(selection)});await collectResearch(this.workspace,selection.metadata,parts);
+   await withStagingCapacity(this.workspace,async()=>{await parts.add({kind:'description',name:'selection',content:JSON.stringify(selection)});await collectResearch(this.workspace,selection.metadata,parts);});
    await parts.finish({direction:'outgoing',selectionHash:identityHash(selection)});
    await this.workspace.writeMetadata(editionFile,JSON.stringify({edition}));
    return this.summary(parts,selection);
@@ -115,7 +115,7 @@ export class ResearchExchange{
    // The owner controls structure and publishing. Changed research uses the
    // original shared structure, making unknown/moved books a review error.
    valid(await matchingSharedStructure(this.workspace,{...selectedMetadata(metadata,selection.metadata.notebooks.map(n=>n.id)),updatedAt:selection.metadata.updatedAt},selection.metadata),'COLLABORATION_STRUCTURE');
-   await parts.add({kind:'description',name:'selection',content:JSON.stringify(selection)});await collectResearch(this.workspace,selection.metadata,parts);await parts.finish({direction:'outgoing',selectionHash:identityHash(selection)});return this.summary(parts,selection);
+   await withStagingCapacity(this.workspace,async()=>{await parts.add({kind:'description',name:'selection',content:JSON.stringify(selection)});await collectResearch(this.workspace,selection.metadata,parts);});await parts.finish({direction:'outgoing',selectionHash:identityHash(selection)});return this.summary(parts,selection);
   }).catch(async error=>{await parts.discardUncommitted();throw error;});
  }
 }

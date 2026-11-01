@@ -7,13 +7,13 @@ import {setTimeout as delay} from 'node:timers/promises';
 import {randomUUID,randomBytes} from 'node:crypto';
 import path from 'node:path';
 import os from 'node:os';
-import {withStagingAuthority,recoverStaging,verifiedStagingReservationNamespace} from '../src/staging-reservations.js';
+import {withStagingAuthority,withStagingCapacity,recoverStaging,verifiedStagingReservationNamespace} from '../src/staging-reservations.js';
 import {diskCapacity} from '../src/disk-capacity.js';
 import {STAGING_FREE_BYTES} from '../src/staging-reservation-model.js';
 import {Workspace} from '../src/storage.js';
 import {writeContent,FileContent,contentBuffer} from '../src/file-content.js';
 import {copyPlan} from '../src/locations.js';
-import {closeIdleMutationFiles} from '../src/mutation-files.js';
+import {closeIdleMutationFiles,withMutationFilesSession} from '../src/mutation-files.js';
 import {temporaryStreamName} from '../src/storage-temporary.js';
 import {writeFilePart} from '../src/segmented-file-io.js';
 
@@ -61,6 +61,22 @@ test('later ordinary encrypted writes respect the owning authority reservation',
  await withStagingAuthority(f.workspace,async authority=>{const claim=await authority.reserve(input());await assert.rejects(writeContent(workspace,file,[bytes]),{code:'STORAGE_FULL'});assert.equal(diskCapacity.stats().active,0);assert.equal((await authority.status()).remainingBytes,1000);await claim.close();while(await authority.recover()){};});
  const saved=await writeContent(workspace,file,[bytes]);assert.deepEqual(await contentBuffer(new FileContent(workspace,file,saved.size,saved.sha256)),bytes);assert.equal(diskCapacity.stats().active,0);
  await assert.rejects(copyPlan(workspace.root,path.join(workspace.root,'not-used')),{code:'ACCESS_LOCKED'});
+});
+
+test('one awaited owner operation reuses native admission while escaped callbacks expire',async t=>{
+ const f=await fixture(t),workspace=new Workspace(f.workspace.root,f.workspace.vault),bytes=Buffer.alloc(4096,3);let outside,batched,escaped;
+ await withMutationFilesSession(async service=>{const open=service.open;let count=0;const mock=t.mock.method(service,'open',function(...args){count++;return open.apply(this,args);});
+  try{for(let index=0;index<4;index++)await writeContent(workspace,path.join(workspace.root,'ordinary-'+index),[bytes]);outside=count;count=0;
+   await withStagingCapacity(workspace,async admission=>{escaped=admission;for(let index=0;index<4;index++)await writeContent(workspace,path.join(workspace.root,'batched-'+index),[bytes]);const root=workspace.root;try{workspace.root=path.join(root,'retargeted');assert.throws(()=>admission(()=>assert.fail('retargeted authority')),{code:'CONFLICT'});}finally{workspace.root=root;}});batched=count;
+  }finally{mock.mock.restore();}
+ });assert.ok(batched<outside);assert.throws(()=>escaped(()=>{}),{code:'CONFLICT'});t.diagnostic(JSON.stringify({files:4,unbatchedRootOpens:outside,batchedRootOpens:batched}));
+});
+
+test('absent and authenticated empty reservations avoid opening a catalogue writer',async t=>{
+ const f=await fixture(t);f.workspace.withLock=()=>assert.fail('No cleanup requires a database writer');await recoverStaging(f.workspace);
+ await withStagingCapacity(f.workspace,admission=>admission(()=>{}));await recoverStaging(f.workspace);
+ await withStagingAuthority(f.workspace,authority=>authority.scope.write(path.join(f.workspace.root,'.observanda/staging-reservations','unknown'),'preserved'));
+ await assert.rejects(recoverStaging(f.workspace),{code:'COLLABORATION_DAMAGED'});assert.equal(await readFile(path.join(f.workspace.root,'.observanda/staging-reservations','unknown'),'utf8'),'preserved');
 });
 
 test('recovery releases the writer between bounded file and metadata slices',async t=>{

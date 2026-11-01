@@ -9,11 +9,13 @@ import {AppError} from './errors.js';
 import {isStorageTemporary} from './storage-temporary.js';
 import {unseal} from './encryption.js';
 import {setImmediate as nextTurn} from 'node:timers/promises';
+import {AsyncLocalStorage} from 'node:async_hooks';
 
 const damaged=()=>{throw new AppError('COLLABORATION_DAMAGED');};
 const stagePrefix=id=>'.observanda/collaboration/staging/'+id;
 const safe=value=>Number.isSafeInteger(value)&&value>=0;
 const identity=value=>typeof value==='string'&&value.length>0&&value.length<512;
+const capacityScopes=new AsyncLocalStorage();
 function validClaim(value){
  return exact(value,['version','id','generation','principalId','ownerId','grantGeneration','expectedBytes','writtenBytes','entries','files','createdAt','expiresAt','phase','preserve','directoryIdentity','stageIdentity','leaseIdentity','filesIdentity'])&&value.version===1&&uuid(value.id)&&uuid(value.generation)&&uuid(value.principalId)&&uuid(value.ownerId)&&Number.isSafeInteger(value.grantGeneration)&&value.grantGeneration>=1&&safe(value.expectedBytes)&&safe(value.writtenBytes)&&value.writtenBytes<=value.expectedBytes&&Number.isSafeInteger(value.entries)&&value.entries>=1&&safe(value.files)&&value.files<=value.entries&&safe(value.createdAt)&&safe(value.expiresAt)&&value.expiresAt>value.createdAt&&['initializing','active','preparing','retiring'].includes(value.phase)&&(value.phase==='retiring'?typeof value.preserve==='boolean':value.preserve===null)&&['directoryIdentity','stageIdentity','leaseIdentity','filesIdentity'].every(key=>value.phase==='initializing'?value[key]===null:identity(value[key]));
 }
@@ -54,6 +56,7 @@ export async function withStagingAuthority(workspace,operation,{signal,createInt
   const authority={
    workspace,scope,controls,
    async status(){return critical(async ledger=>({active:ledger?.claims.length??0,remainingBytes:ledger?await remaining(ledger):0,writtenBytes:ledger?.claims.reduce((sum,claim)=>sum+claim.writtenBytes,0)??0}));},
+   async recoveryNeeded(){if(await controls.read(scope.internalDirectory,'.staging-reservations.intent','namespace-intent',{missing:true}))return true;return critical(async ledger=>Boolean(ledger?.claims.length));},
    async capacityAdmission(operation){return critical(async ledger=>{const remainingBytes=await remaining(ledger),reserveBytes=ledger.claims.length?STAGING_FREE_BYTES:0,volumeId=ledger.claims.length?(await diskCapacity.probe(workspace.root)).id:null;return operation({remainingBytes,reserveBytes,volumeId});},{create:true});},
    async reserve({id,principalId,ownerId,grantGeneration,expectedBytes,entries,expiresAt}){
     const claim={version:1,id,generation:randomUUID(),principalId,ownerId,grantGeneration,expectedBytes,writtenBytes:0,entries,files:0,createdAt:Date.now(),expiresAt,phase:'initializing',preserve:null,directoryIdentity:null,stageIdentity:null,leaseIdentity:null,filesIdentity:null};if(!validClaim(claim))throw new AppError('INVALID');
@@ -141,13 +144,20 @@ export async function withStagingAuthority(workspace,operation,{signal,createInt
 export async function assertStagingHandoff(workspace){if(!workspace.vault?.id)return;await withStagingAuthority(workspace,authority=>authority.handoff());}
 export async function recoverStaging(workspace,{signal,id,rejectActive=false}={}){
  if(!workspace.vault?.id)return;
+ if(!await withStagingAuthority(workspace,authority=>authority.recoveryNeeded(),{signal}))return;
  while(await workspace.withLock(()=>withStagingAuthority(workspace,authority=>authority.recover({id,rejectActive}),{signal}))){signal?.throwIfAborted();await nextTurn(undefined,{signal});}
 }
 export async function withStagingHandoff(workspace,operation){await recoverStaging(workspace,{rejectActive:true});return operation();}
 // Native initialization/admission leases span the caller's volume probe and
 // local ticket admission, including callers inside a read-only DB snapshot.
 // Ordinary tickets remain service-local; only recovery-backed claims persist.
-export function withStagingCapacity(workspace,operation,{signal}={}){return withStagingAuthority(workspace,authority=>operation(callback=>authority.capacityAdmission(callback)),{createInternal:true,signal});}
+export async function withStagingCapacity(workspace,operation,{signal}={}){
+ const previous=capacityScopes.getStore()??[],held=previous.findLast(owner=>owner.active&&owner.workspace===workspace&&owner.root===workspace.root&&owner.vault===workspace.vault&&owner.signal===signal);if(held)return operation(held.admission);
+ return withStagingAuthority(workspace,async authority=>{
+  const owner={workspace,root:workspace.root,vault:workspace.vault,signal,active:true,admission:callback=>{if(!owner.active||owner.root!==workspace.root||owner.vault!==workspace.vault)throw new AppError('CONFLICT');return authority.capacityAdmission(callback);}};
+  try{return await capacityScopes.run([...previous,owner],()=>operation(owner.admission));}finally{owner.active=false;}
+ },{createInternal:true,signal});
+}
 export function stagingCapacityAdmission(workspace,options){return operation=>withStagingCapacity(workspace,admission=>admission(operation),options);}
 
 export async function verifiedStagingReservationNamespace(root,vault){

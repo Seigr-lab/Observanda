@@ -11,6 +11,7 @@ import {readFilePart,writeFilePart} from './segmented-file-io.js';
 import {withWriterLease,writerLeaseHeld} from './writer-lease.js';
 import {AppError} from './errors.js';
 import {diskCapacity} from './disk-capacity.js';
+import {withStagingCapacity} from './staging-reservations.js';
 const stable=(a,b)=>['dev','ino','size','mtimeNs','ctimeNs'].every(key=>a[key]===b[key]);
 const regular=stat=>{if(!stat.isFile()||stat.nlink!==1n)throw new AppError('UNSAFE');return stat;};
 export function checkpointedFileName(content,target,file){
@@ -18,8 +19,8 @@ export function checkpointedFileName(content,target,file){
  const hash=createHmac('sha256',target.vault.key).update(JSON.stringify([target.vault.id,target.fileAAD(file),content.size,content.sha256])).digest('hex');
  return path.join(path.dirname(file),'.stream-'+[hash.slice(0,8),hash.slice(8,12),hash.slice(12,16),hash.slice(16,20),hash.slice(20,32)].join('-'));
 }
-export function checkpointedFileCopy(content,target,file,options={}){return withNativeContentFile(content.workspace,content.file,(input,sourceName)=>withNativeContentFile(target,file,(output,name)=>copyAnchored(content,target,file,options,input,sourceName,output,name),{create:true}));}
-async function copyAnchored(content,target,file,{decode,signal,onProgress,check=async()=>{},reserveBytes=0},input,sourceName,output,name){
+export function checkpointedFileCopy(content,target,file,options={}){return withStagingCapacity(target,admission=>withNativeContentFile(content.workspace,content.file,(input,sourceName)=>withNativeContentFile(target,file,(output,name)=>copyAnchored(content,target,file,{...options,admission},input,sourceName,output,name),{create:true})),{signal:options.signal});}
+async function copyAnchored(content,target,file,{decode,signal,onProgress,check=async()=>{},reserveBytes=0,admission},input,sourceName,output,name){
  const temp=checkpointedFileName(content,target,file),leaseFile=target.projectId?path.join(target.root,'.observanda','project-transfer.lock'):temp+'.lock';
  // The migration already owns this selected destination. Reuse that live
  // lease instead of launching a filesystem-lock helper for every large file.
@@ -32,13 +33,13 @@ async function copyAnchored(content,target,file,{decode,signal,onProgress,check=
    checkKeys();source=await input.file(sourceName);const sourceStat=regular(await source.stat({bigint:true}));
    let header;handle=await output.file(temporary,{mode:'update',missing:true});
    if(handle){partialIdentity=handle.identity;header=readSegmentedHeader(await readFilePart(handle,SEGMENTED_HEADER_BYTES,0),key,aad);if(header.size!==content.size||header.sha256!==content.sha256)throw new AppError('MEDIA_INVALID');}
-   else{const bytes=createSegmentedHeader(content.size,content.sha256,key,aad);header=readSegmentedHeader(bytes,key,aad);reservation=await diskCapacity.reserve(path.dirname(file),header.storedSize,{reserveBytes,signal,refreshBytes:8*SEGMENTED_BLOCK_BYTES});handle=await output.file(temporary,{mode:'exclusive'});partialIdentity=handle.identity;await reservation.write(bytes.length,()=>writeFilePart(handle,bytes,0));await handle.sync();}
+   else{const bytes=createSegmentedHeader(content.size,content.sha256,key,aad);header=readSegmentedHeader(bytes,key,aad);reservation=await diskCapacity.reserve(path.dirname(file),header.storedSize,{reserveBytes,signal,refreshBytes:8*SEGMENTED_BLOCK_BYTES,admission});handle=await output.file(temporary,{mode:'exclusive'});partialIdentity=handle.identity;await reservation.write(bytes.length,()=>writeFilePart(handle,bytes,0));await handle.sync();}
    const stored=await handle.stat({bigint:true});if(stored.size>BigInt(header.storedSize))throw new AppError('ENCRYPTION_DAMAGED');
    let position=SEGMENTED_HEADER_BYTES,accepted=0,index=0;const retainedHash=createHash('sha256');
    while(index<header.count){signal?.throwIfAborted();await check();checkKeys();const length=segmentedChunkSize(header,index)+SEGMENTED_CHUNK_OVERHEAD;if(BigInt(position+length)>stored.size)break;const bytes=openSegment(await readFilePart(handle,length,position),index,header,key,aad);retainedHash.update(bytes);operationWork({bytes:bytes.length});accepted+=bytes.length;position+=length;index++;bytes.fill(0);}
    // Only a torn final chunk may be discarded. Complete chunks must authenticate.
    if(stored.size!==BigInt(position)){await handle.truncate(position);await handle.sync();}
-   reservation??=await diskCapacity.reserve(path.dirname(file),header.storedSize-position,{reserveBytes,signal,refreshBytes:8*SEGMENTED_BLOCK_BYTES});
+   reservation??=await diskCapacity.reserve(path.dirname(file),header.storedSize-position,{reserveBytes,signal,refreshBytes:8*SEGMENTED_BLOCK_BYTES,admission});
    const resumedBytes=accepted,retainedDigest=retainedHash.digest('hex');let prefixChecked=resumedBytes===0;operationAdvance(accepted);await onProgress?.(accepted,content.size);
    let read=0,pending=Buffer.alloc(0),unsynced=0;const sourceHash=createHash('sha256');
    async function append(bytes){signal?.throwIfAborted();checkKeys();const sealed=sealSegment(bytes,index,header,key,aad);await reservation.write(sealed.length,()=>writeFilePart(handle,sealed,position));operationAdvance(bytes.length);operationWork({bytes:bytes.length});position+=sealed.length;accepted+=bytes.length;index++;unsynced+=bytes.length;if(unsynced>=8*SEGMENTED_BLOCK_BYTES){await handle.sync();unsynced=0;}await onProgress?.(accepted,content.size);}
