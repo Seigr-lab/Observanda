@@ -24,7 +24,7 @@ export const performanceProfiles=Object.freeze({
   'query-result-sort','pinned-query-result','record-pinned-collection','module-pinned-query','module-dashboard-pinned',
   'project-directory-pinned','project-choice-ancestry','runtime-storage-authority','query-cache-owner-scope',
   'sample-analysis-pinned','sample-analysis-order','query-callback-source','calendar-dashboard-pinned',
-  'catalogue-format-read','staging-reservation-model','dataset-preparation-writes',
+  'catalogue-format-read','project-retired-read-proof','staging-reservation-model','dataset-preparation-writes','desktop-packager-dependencies',
   'dataset-window-count','numerical-scheduling','inventory-reconciliation','publication-job-checkpoints','optional-service-libraries','desktop-startup-cancellation'
  ]),
  native:Object.freeze([
@@ -36,7 +36,7 @@ export const performanceProfiles=Object.freeze({
   'inventory-maintenance-native','sample-analysis-scale','sample-analysis-collection-capacity',
   'project-choice-ancestry-native','calendar-dashboard-collection','catalogue-format-read-native',
   'job-checkpoint-connections','dataset-preparation-writes-native','staging-reservation-files','staging-reservations',
-  'runtime-proof-cursor','postgres-runtime-upgrade'
+  'runtime-proof-cursor','postgres-runtime-upgrade','project-retired-read-proof-native','dataset-cell-prefetch-native'
  ]),
  heavy:Object.freeze([
   'dataset-import-plot-capacity.benchmark.js','module-history-growth','record-history-continuation','desktop-service'
