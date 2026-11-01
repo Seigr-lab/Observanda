@@ -50,16 +50,16 @@ test('late query and record-open responses cannot replace newer filters or anoth
  try{
   await page.goto(f.app.url);await page.evaluate(()=>location.hash='#/records');await expect(page.locator('#record-count')).toHaveText('61');
   let queryStarted,queryDone;const started=new Promise(resolve=>queryStarted=resolve),done=new Promise(resolve=>queryDone=resolve),gate=new Promise(resolve=>releaseQuery=resolve);
-  await page.route('**/api/projects/record-collection/query',async route=>{
+  await page.context().route('**/api/projects/record-collection/query',async route=>{
    if(route.request().postDataJSON().query.search!=='Studio')return route.continue();
    const response=await route.fetch();queryStarted();await gate;try{await route.fulfill({response});}finally{queryDone();}
   });
   await page.getByLabel('Search records',{exact:true}).fill('Studio');await started;
   await page.getByLabel('Search records',{exact:true}).fill('Forest');await expect(page.locator('#record-count')).toHaveText('30');
   releaseQuery();await done;await expect(page.getByLabel('Search records',{exact:true})).toHaveValue('Forest');await expect(page.locator('#record-count')).toHaveText('30');
-  await page.unroute('**/api/projects/record-collection/query');
+  await page.context().unroute('**/api/projects/record-collection/query');
   let openStarted,openDone;const opened=new Promise(resolve=>openStarted=resolve),finished=new Promise(resolve=>openDone=resolve),openGate=new Promise(resolve=>releaseOpen=resolve);
-  let heldOpen=false;await page.route('**/api/workspace/read/start',async route=>{if(heldOpen)return route.continue();heldOpen=true;const response=await route.fetch();openStarted();await openGate;try{await route.fulfill({response});}finally{openDone();}});
+  let heldOpen=false;await page.context().route('**/api/workspace/read/record-content',async route=>{if(heldOpen)return route.continue();heldOpen=true;const response=await route.fetch();openStarted();await openGate;try{await route.fulfill({response});}finally{openDone();}});
   await page.locator('.records-table a[href*="/record/"]').first().click();await opened;
   await page.evaluate(id=>location.hash='#/records/'+id,f.book.entries[0].id);const edit=await openRecordDetail(page);await edit.getByLabel('Record title',{exact:true}).fill('Keep my independent draft');
   releaseOpen();await finished;await expect(edit.getByLabel('Record title',{exact:true})).toHaveValue('Keep my independent draft');
@@ -72,10 +72,10 @@ test('failed queries show a recovery action and never pretend the collection is 
  const f=await fixture();
  try{
   await page.goto(f.app.url);
-  await page.route('**/api/projects/record-collection/query',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'DATABASE_UNAVAILABLE',message:'PostgreSQL is temporarily unavailable.'})}));
+  await page.context().route('**/api/projects/record-collection/query',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'DATABASE_UNAVAILABLE',message:'PostgreSQL is temporarily unavailable.'})}));
   await page.evaluate(()=>location.hash='#/records');await expect(page.locator('#entry-results [role="alert"]')).toContainText('temporarily unavailable');
   await expect(page.getByRole('heading',{name:'No records in this view',exact:true})).toHaveCount(0);
-  await page.unroute('**/api/projects/record-collection/query');await page.getByRole('button',{name:'Refresh records',exact:true}).click();
+  await page.context().unroute('**/api/projects/record-collection/query');await page.getByRole('button',{name:'Refresh records',exact:true}).click();
   await expect(page.locator('[data-record-list-status]')).toHaveText('Records 1-25 of 61');
  }finally{await f.close();}
 });
