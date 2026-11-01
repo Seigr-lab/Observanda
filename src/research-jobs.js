@@ -7,6 +7,7 @@ import {authorizeLive,liveRecord} from './collaboration/live-access.js';
 import {auditLive} from './collaboration/live-audit.js';
 export function researchJobDefinitions(workspace,queue,{comparisonAccess}={}){
  const materials=new ResearchMaterials(workspace),attempts=new Map();
+ const checkpoint=(job,options)=>options.write??(fn=>queue().checkpoint(job.id,job.lease.token,fn));
  return {'analysis.compare':{
   authorize:async job=>{if(job.scope!==job.input.command?.recordId)throw new AppError('JOB_CHANGED');await materials.assertOwner(job.scope);},
   prepare:async(job,options)=>{
@@ -17,14 +18,14 @@ export function researchJobDefinitions(workspace,queue,{comparisonAccess}={}){
     const open=comparisonAccess.take(workspaceId,job),access=await open(workspace,options),inputs=createComparisonInputReader(materials,{workspaceId,access,signal:options.signal});
     comparisons=new AnalysisComparisons(materials,{inputs});attempts.set(job.lease.token,comparisons);
    }
-   return comparisons.prepare(command,{...options,jobId:job.id,writePage:fn=>queue().transaction(async()=>{await queue().held(job.id,job.lease.token);return fn();})});
+   return comparisons.prepare(command,{...options,jobId:job.id,writePage:checkpoint(job,options)});
   },
   discard:async job=>{const saved=attempts.get(job.lease.token);attempts.delete(job.lease.token);await saved?.inputs.close();},
   commit:(job,prepared)=>{const comparisons=attempts.get(job.lease.token);if(job.input.command.comparison.version>=2&&!comparisons)throw new AppError('ANALYSIS_SOURCE_ACCESS');return (comparisons??materials.comparisons).commit(job.input.command,prepared);}
  },'figure.calculate':{
   authorize:async job=>{if(job.scope!==job.input.command?.recordId)throw new AppError('JOB_CHANGED');await materials.assertOwner(job.scope);},
   prepare:async(job,options)=>{
-   const writePage=fn=>queue().transaction(async()=>{await queue().held(job.id,job.lease.token);return fn();});
+   const writePage=checkpoint(job,options);
    await materials.cleanPlotWork(job.id,undefined,writePage);
    return materials.preparePlot(job.input.command,{...options,writePage,jobId:job.id,attempt:job.lease.token});
   },
@@ -32,7 +33,7 @@ export function researchJobDefinitions(workspace,queue,{comparisonAccess}={}){
   commit:(job,prepared)=>materials.commitPlot(job.input.command,prepared)
  },'dataset.prepare':{
   authorize:async job=>{if(job.scope!==job.input.command?.recordId)throw new AppError('JOB_CHANGED');await materials.assertOwner(job.scope);},
-  prepare:(job,options)=>materials.prepareDataset(job.input.command,{...options,jobId:job.id,writePage:fn=>queue().transaction(async()=>{await queue().held(job.id,job.lease.token);return fn();})}),
+  prepare:(job,options)=>materials.prepareDataset(job.input.command,{...options,jobId:job.id,writePage:checkpoint(job,options)}),
   commit:(job,prepared)=>materials.commitDataset(job.input.command,prepared)
  },'evidence.finalize':{
   authorize:async job=>{
@@ -42,7 +43,7 @@ export function researchJobDefinitions(workspace,queue,{comparisonAccess}={}){
   prepare:async(job,options)=>{
    // Only the current lease may discard unpublished files left by a lost process.
    // A stale worker cannot commit after this fence, even if it finishes writing.
-   await queue().transaction(async()=>{await queue().held(job.id,job.lease.token);await materials.cleanAttempts(job.id);});
+   await checkpoint(job,options)(()=>materials.cleanAttempts(job.id));
    return materials.prepareImport(job.input.importId,{...options,storageId:job.lease.token});
   },
   discard:job=>materials.cleanAttempts(job.id,{only:job.lease.token}),
@@ -57,7 +58,7 @@ export function researchJobDefinitions(workspace,queue,{comparisonAccess}={}){
   }
  },'evidence.batch':{
   authorize:job=>materials.intakes.authorize(job),
-  prepare:(job,options)=>materials.intakes.prepare(job,options,options.write??(fn=>queue().checkpoint(job.id,job.lease.token,fn))),
+  prepare:(job,options)=>materials.intakes.prepare(job,options,checkpoint(job,options)),
   commit:(job,prepared)=>materials.intakes.commit(job,prepared),
   afterComplete:job=>materials.intakes.finalization.cleanup(job.id)
  }};

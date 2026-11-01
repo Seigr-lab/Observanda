@@ -12,7 +12,8 @@ import {ResearchMaterials,EVIDENCE_CHUNK} from '../src/research-materials.js';
 import {workspaceJobs} from '../src/workspace-jobs.js';
 import {enqueueDataset,datasetJobs} from '../src/dataset-jobs.js';
 import {AppError} from '../src/errors.js';
-import {clearVault,ENVELOPE,ENCRYPTION_OVERHEAD} from '../src/encryption.js';
+import {clearVault,seal,ENVELOPE,ENCRYPTION_OVERHEAD} from '../src/encryption.js';
+import {SEGMENTED_ENVELOPE,SEGMENTED_HEADER_BYTES} from '../src/segmented-file-format.js';
 import {FileContent} from '../src/file-content.js';
 import {OwnedFileContent} from '../src/owned-file-content.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
@@ -36,10 +37,12 @@ async function perform(f,id){
  return f.queue.complete(job.id,job.lease.token,prepared);
 }
 
-test('dataset preparation authenticates original streams once before parser output and retains owner leases',async t=>{
+for(const format of ['legacy','segmented'])test('dataset preparation authenticates original streams before parser output and retains owner leases: '+format,async t=>{
  const f=await fixture(t),bytes=Buffer.from('{"measurements":['+Array.from({length:96},(_,i)=>'{"counter":'+i+',"native":"15","reading":1}').join(',')+']}'),artifact=await upload(f,bytes);
- const command={recordId:f.recordId,title:'Authenticated preparation',artifact,sourceMapping:mapping},doc=await f.materials.read(artifact),original=await f.materials.originalContent(doc),stored=await readFile(original.file);
- assert.ok(stored.subarray(0,ENVELOPE.length).equals(ENVELOPE));
+ const command={recordId:f.recordId,title:'Authenticated preparation',artifact,sourceMapping:mapping},doc=await f.materials.read(artifact),original=await f.materials.originalContent(doc);
+ if(format==='legacy')await writeFile(original.file,seal(bytes,f.vault.key,f.workspace.fileAAD(original.file)));
+ const stored=await readFile(original.file),envelope=format==='legacy'?ENVELOPE:SEGMENTED_ENVELOPE,overhead=format==='legacy'?ENCRYPTION_OVERHEAD:SEGMENTED_HEADER_BYTES;
+ assert.ok(stored.subarray(0,envelope.length).equals(envelope));
  let sourceBytes=0,sourceHandles=0,preliminaryVerifies=0,writes=0,activeOwners=0,ownerAdmissions=0,deferred=false,allowed=true,defect=null,cancel=null;
  const open=filesystem.open,verify=FileContent.prototype.verify,originalContent=f.materials.originalContent;
  const opened=t.mock.method(filesystem,'open',async function(file,...args){
@@ -64,7 +67,7 @@ test('dataset preparation authenticates original streams once before parser outp
   for(deferred of [false,true]){
    reset();const prepared=await prepare();assert.equal(prepared.content.rowCount,96);assert.ok(writes>0);
    assert.equal(preliminaryVerifies,0,'Preparation must not perform an extra artifact verification');
-   assert.equal(sourceBytes,2*bytes.length,'One complete authentication pass precedes the parser streaming pass');
+   assert.equal(sourceBytes,2*(stored.length-overhead),'One complete authentication pass precedes the parser streaming pass, including segment tags');
    assert.equal(ownerAdmissions,deferred?1:0);assert.equal(activeOwners,0);assert.equal(sourceHandles,0);
   }
   for(const failure of ['envelope','digest','size','cancel','owner']){
