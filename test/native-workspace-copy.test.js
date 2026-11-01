@@ -6,7 +6,7 @@ import path from 'node:path';
 import os from 'node:os';
 import {withNativeWorkspaceCopy} from '../src/native-workspace-copy.js';
 import {OperationalDiagnostics,withDiagnostics,diagnostic} from '../src/operational-diagnostics.js';
-const windows={skip:process.platform!=='win32'},file=(name,data)=>({path:name,bytes:data.length,sha256:createHash('sha256').update(data).digest('hex')});
+const windows={skip:!['win32','linux','darwin'].includes(process.platform)},file=(name,data)=>({path:name,bytes:data.length,sha256:createHash('sha256').update(data).digest('hex')});
 async function fixture(t){
  const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-native-copy-')),source=path.join(parent,'source'),target=path.join(parent,'target'),outside=path.join(parent,'outside');for(const root of [source,target,outside])await mkdir(root);
  await writeFile(path.join(outside,'sentinel'),'keep');t.after(async()=>{assert.equal(path.dirname(parent),path.resolve(os.tmpdir()));assert.ok(path.basename(parent).startsWith('observanda-native-copy-'));await rm(parent,{recursive:true,force:true,maxRetries:10,retryDelay:100});});return {parent,source,target,outside};

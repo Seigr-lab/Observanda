@@ -1,5 +1,5 @@
 import path from 'node:path';
-import {withWindowsMutationFiles} from './windows-mutation-files.js';
+import {withMutationFilesSession} from './mutation-files.js';
 import {nativeMemberCursor} from './native-storage-tree.js';
 import {operationStage,operationAdvance,operationWork,operationTransferred} from './operation-progress.js';
 import {AppError} from './errors.js';
@@ -8,8 +8,7 @@ const matches=(actual,file)=>actual?.bytes===file.bytes&&actual.sha256===file.sh
 // Share roots and one worker across the inventory stream. Each file still has
 // an exclusive destination, source checksum, flush and destination verification.
 export async function withNativeWorkspaceCopy(sourcePath,destinationPath,operation){
- if(process.platform!=='win32')return operation(null);
- return withWindowsMutationFiles(async service=>{
+ return withMutationFilesSession(async service=>{
   const source=await service.open(sourcePath);let destination,inputCursor,outputCursor,sequence=Promise.resolve(),closed=false;
   try{destination=await service.open(destinationPath);
    inputCursor=nativeMemberCursor(source);outputCursor=nativeMemberCursor(destination,{create:true});

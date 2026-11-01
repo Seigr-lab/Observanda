@@ -1,5 +1,5 @@
 import path from 'node:path';
-import {withWindowsMutationFiles} from './windows-mutation-files.js';
+import {withMutationFilesSession} from './mutation-files.js';
 import {outputName,sameFile} from './local-export-files.js';
 import {contentStream,contentSize,contentHash} from './file-content.js';
 import {diskCapacity} from './disk-capacity.js';
@@ -8,7 +8,7 @@ import {AppError} from './errors.js';
 // One worker per export operation, bounded handles per member and bounded I/O.
 // The original pathname is used only to admit a root and inspect disk capacity;
 // every content read and namespace mutation below uses opened directory handles.
-export const withNativeExport=(plan,operation)=>withWindowsMutationFiles(async service=>{const root=await service.open(plan.directory);try{return await operation(root);}finally{await root.close();}});
+export const withNativeExport=(plan,operation)=>withMutationFilesSession(async service=>{const root=await service.open(plan.directory);try{return await operation(root);}finally{await root.close();}});
 async function member(root,relative,{create=false}={},operation){
  const parts=outputName(relative).split('/'),name=parts.pop(),opened=[];let directory=root;
  try{for(const part of parts){directory=await directory.directory(part,{create,missing:!create});if(!directory)return operation(null,name);opened.push(directory);}return await operation(directory,name);}

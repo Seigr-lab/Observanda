@@ -1,3 +1,4 @@
+import {nativeMutationSupported} from './mutation-files.js';
 import {validWorkspaceCopyDirectory} from './workspace-copy-directory.js';
 import {withWorkspaceMoveDirectory} from './workspace-move-directory.js';
 import {ownedStorageLeaseFile} from './owned-storage-control.js';
@@ -25,7 +26,7 @@ import {databaseRetention,validDatabaseRetention,verifyDatabaseRetention} from '
 import {unseal,cloneVault,clearVault} from './encryption.js';
 import {retireNativeDirectory,nativeControl} from './native-storage-tree.js';
 import {removeNativeMove} from './native-storage-cleanup.js';
-import {withMutationFilesSession} from './windows-mutation-files.js';
+import {withMutationFilesSession} from './mutation-files.js';
 
 const uuid=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
 const retired=receipt=>path.join(path.dirname(receipt.source),'.observanda-move-'+receipt.id);
@@ -63,7 +64,7 @@ export async function moveWorkspaceTo(source,input,options={}){
  return withOperationProgress(options.onProgress,async()=>moveWorkspace(await planWorkspaceMove(source,input,{inspect:false}),options));
 }
 async function removeRetired(receipt,{verifyDestination=false}={}){
- if(process.platform==='win32')return removeNativeMove(retired(receipt),receipt,{verifyDestination});
+ if(nativeMutationSupported)return removeNativeMove(retired(receipt),receipt,{verifyDestination});
  const root=retired(receipt),stat=await assertRegular(root,{directory:true,missing:true});if(!stat)return;
  if(await realpath(path.dirname(root))!==path.dirname(root))throw new AppError('UNSAFE');
  const marker=await moveSource(root);
@@ -106,7 +107,7 @@ async function retireSource(receipt,moveDirectory){
  if(marker&&(marker.id!==receipt.id||marker.destination!==receipt.destination))throw new AppError('STORAGE_MOVE_STATE');
  await atomicWrite(path.join(receipt.source,MOVE_SOURCE),serialize({id:receipt.id,destination:receipt.destination}));
   await releaseWriterLease(path.join(receipt.source,'.observanda','write.lock'));
- if(process.platform==='win32')await retireNativeDirectory(receipt.source,target,async root=>{
+ if(nativeMutationSupported)await retireNativeDirectory(receipt.source,target,async root=>{
   const marker=await nativeControl(root,MOVE_SOURCE,{limit:65536,code:'STORAGE_MOVE_STATE'});
   if(marker?.value.id!==receipt.id||marker.value.destination!==receipt.destination)throw new AppError('STORAGE_MOVE_STATE');
  });else await rename(receipt.source,target);

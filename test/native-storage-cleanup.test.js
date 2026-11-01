@@ -8,7 +8,7 @@ import {removeNativeDeletion,removeNativeMove} from '../src/native-storage-clean
 import {retireNativeDirectory,nativeControl} from '../src/native-storage-tree.js';
 import {DELETE_MARKER} from '../src/workspace-delete-state.js';
 import {MOVE_SOURCE} from '../src/workspace-move-state.js';
-const windows={skip:process.platform!=='win32'};
+const windows={skip:!['win32','linux','darwin'].includes(process.platform)};
 async function fixture(t){
  const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-native-cleanup-')),root=path.join(parent,'retired'),outside=path.join(parent,'outside');await mkdir(path.join(root,'.observanda','media'),{recursive:true});await mkdir(outside);await writeFile(path.join(outside,'sentinel'),'keep');
  const value={id:randomUUID(),source:path.join(parent,'source'),phase:'retired'};await writeFile(path.join(root,DELETE_MARKER),JSON.stringify({version:1,id:value.id,source:value.source}));

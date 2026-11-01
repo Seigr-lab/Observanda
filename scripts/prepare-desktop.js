@@ -16,6 +16,7 @@ import {preparePdfValidationRuntime} from './pdf-validation-runtime.js';
 import {dependencyInventory,collectRuntimeInventory} from './release-inventory.js';
 import {prepareMediaRuntime} from './media-runtime.js';
 import {admitReviewedRuntime,sealPreparedRuntime} from './runtime-input-trust.js';
+import {prepareFilesystem} from './prepare-filesystem.js';
 const root=path.resolve(fileURLToPath(new URL('..',import.meta.url))),out=path.join(root,'dist/desktop-resources'),cache=path.join(root,'dist/runtime-cache');
 const {values}=parseArgs({options:{media:{type:'string'},'git-runtime':{type:'string'}}});
 assertDesktopBuildTarget({osRelease:process.platform==='linux'?await readFile('/etc/os-release','utf8'):''});
@@ -80,6 +81,7 @@ await prepareGithubRuntime({out,download,run,gitRuntime:values['git-runtime']});
 await preparePdfValidationRuntime({out,cache,download,run});
 if(process.platform==='darwin'){await relocateMacLibraries(path.join(out,'postgresql'));await relocateMacLibraries(path.join(out,'media'));await relocateMacLibraries(path.join(out,'github/git'));}
 const service=path.join(out,'service');await mkdir(service);await cp(path.join(root,'src'),path.join(service,'src'),{recursive:true});
+await prepareFilesystem({out:path.join(service,'runtime/mutation-files.node'),run});
 await buildBrowser({root,out:path.join(service,'src/web-build')});
 await mkdir(path.join(service,'desktop'));
 for(const name of ['icon_black.svg','icon_white.svg'])await copyFile(path.join(root,'desktop',name),path.join(service,'desktop',name));

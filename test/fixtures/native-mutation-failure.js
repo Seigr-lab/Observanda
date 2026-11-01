@@ -1,8 +1,8 @@
 import path from 'node:path';
-import {withMutationFilesSession} from '../../src/windows-mutation-files.js';
+import {withMutationFilesSession} from '../../src/mutation-files.js';
 
 // Fault injection wraps the public native adapter for this asynchronous scope.
-// POSIX tests continue to exercise their existing fs fault injection.
+// The same fault boundary applies to all supported native filesystems.
 export function nativeMutationFailure(check,operation){
  return withMutationFilesSession(async service=>{
   if(!service)return operation();

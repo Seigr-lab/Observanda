@@ -1,5 +1,5 @@
 import path from 'node:path';
-import {withWindowsMutationFiles} from './windows-mutation-files.js';
+import {withMutationFilesSession} from './mutation-files.js';
 import {AppError} from './errors.js';
 
 // The worker holds at most one directory handle per depth. File bodies are
@@ -30,7 +30,7 @@ export async function nativeControl(root,relative,{limit=16384,code='UNSAFE'}={}
 }
 export async function withNativeTree(directory,operation,{missing=false}={}){
  if(path.resolve(directory)===path.parse(directory).root)throw new AppError('UNSAFE');
- return withWindowsMutationFiles(async service=>{
+ return withMutationFilesSession(async service=>{
   const parent=await service.open(path.dirname(directory));let root;
   try{root=await parent.directory(path.basename(directory),{missing});return await operation(root,{parent,name:path.basename(directory),service});}
   finally{await root?.close();await parent.close();}

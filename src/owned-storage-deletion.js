@@ -1,3 +1,4 @@
+import {nativeMutationSupported} from './mutation-files.js';
 import {assertInventoryObligationsSettled} from './inventory-obligation-lifecycle.js';
 // Permanent deletion is authorized against an unlocked workspace, then frozen
 // and retired to a unique sibling. Retries never traverse a reused source path.
@@ -14,7 +15,7 @@ import {operationStage,operationAdvance,operationItem,operationWork,withOperatio
 import {workspaceDatabaseLease} from './workspace-database-lease.js';
 import {retireNativeDirectory,nativeControl,nativeMember} from './native-storage-tree.js';
 import {removeNativeDeletion} from './native-storage-cleanup.js';
-import {withMutationFilesSession} from './windows-mutation-files.js';
+import {withMutationFilesSession} from './mutation-files.js';
 
 const uuid=id=>typeof id==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(id);
 const inside=(parent,child)=>{const r=path.relative(parent,child);return r===''||!r.startsWith('..'+path.sep)&&r!=='..'&&!path.isAbsolute(r);};
@@ -122,7 +123,7 @@ export class OwnedStorageDeletions{
    }
    if(!marker&&atTarget&&value.phase==='retired'){
     // Only empty directories can remain after removal of the final marker.
-    if(process.platform==='win32')await removeNativeDeletion(target,value,{checkpoint});
+    if(nativeMutationSupported)await removeNativeDeletion(target,value,{checkpoint});
     else {await rmdir(path.join(target,'.observanda')).catch(e=>{if(e.code!=='ENOENT')throw e;});await rmdir(target);}
     await persistDirectories([path.dirname(target)]);value.phase='complete';await this.save(value);return {id,source:value.source,complete:true};
    }
@@ -135,7 +136,7 @@ export class OwnedStorageDeletions{
      value.databaseRemoved=true;await this.save(value);
     });
     await checkpoint('database',value);
-    if(process.platform==='win32')await retireNativeDirectory(root,target,async directory=>{
+    if(nativeMutationSupported)await retireNativeDirectory(root,target,async directory=>{
      const marker=await nativeControl(directory,DELETE_MARKER,{code:'STORAGE_DELETE_STATE'});
      const descriptor=await directory.hash(value.descriptor,{missing:true}),access=await nativeMember(directory,'.observanda/access.json',(parent,name)=>parent.hash(name,{missing:true}));
      // An unpublished import can be cancelled before its descriptor exists.
@@ -146,7 +147,7 @@ export class OwnedStorageDeletions{
    }else if(!value.databaseRemoved)throw new AppError('STORAGE_DELETE_STATE');
    else if(value.phase!=='retired'){await persistRename(value.source,target);value.phase='retired';await this.save(value);}
    await this.frozen(value);
-   if(process.platform==='win32'){await removeNativeDeletion(target,value,{checkpoint});await persistDirectories([path.dirname(target)]);}
+   if(nativeMutationSupported){await removeNativeDeletion(target,value,{checkpoint});await persistDirectories([path.dirname(target)]);}
    else await operationStage('delete-count',{unit:'files'},async()=>{
     let total=0;for await(const item of files(target)){operationItem(item.name);operationAdvance();total++;}
     await operationStage('delete-files',{total,unit:'files'},async()=>{

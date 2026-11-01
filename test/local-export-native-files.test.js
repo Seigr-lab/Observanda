@@ -5,9 +5,9 @@ import {createHash,randomUUID} from 'node:crypto';
 import path from 'node:path';
 import os from 'node:os';
 import {stageFiles,checkOriginals,applyFiles,cleanFiles,fingerprint} from '../src/local-export-files.js';
-import {withMutationFilesSession} from '../src/windows-mutation-files.js';
+import {withMutationFilesSession} from '../src/mutation-files.js';
 import {discardNativeFiles} from '../src/local-export-native-files.js';
-const windows={skip:process.platform!=='win32'},digest=data=>({bytes:data.length,sha256:createHash('sha256').update(data).digest('hex')});
+const windows={skip:!['win32','linux','darwin'].includes(process.platform)},digest=data=>({bytes:data.length,sha256:createHash('sha256').update(data).digest('hex')});
 test('native discard removes an incomplete stage, preserves originals and refuses a retained backup',windows,async()=>{
  const parent=await mkdtemp(path.join(os.tmpdir(),'observanda-native-discard-')),plan={id:randomUUID(),directory:parent,changes:[{path:'index.html'}]},stage='.observanda-'+plan.id+'-new-index.html',backup='.observanda-'+plan.id+'-old-index.html';
  try{await writeFile(path.join(parent,'index.html'),'original');await writeFile(path.join(parent,stage),'partial');

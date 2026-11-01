@@ -3,17 +3,11 @@ import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {StringDecoder} from 'node:string_decoder';
 import {AppError} from './errors.js';
-import {AsyncLocalStorage} from 'node:async_hooks';
-import {atomicReplace} from './atomic-replace.js';
+import {mutationFilesClient} from './mutation-files-client.js';
 import {diagnosticCount} from './operational-diagnostics.js';
-const active=new AsyncLocalStorage();
-export async function withWindowsMutationFiles(operation){const existing=active.getStore();if(existing)return operation(existing);const service=await windowsMutationFiles();try{return await active.run(service,()=>operation(service));}finally{await service.close();}}
-export const withMutationFilesSession=operation=>process.platform==='win32'?withWindowsMutationFiles(operation):operation(null);
 
 const codes=new Set(['INVALID','UNSAFE','CONFLICT','ENOENT','EEXIST','ENOSPC','ENOTEMPTY','EBUSY','EACCES','LOCAL_EXPORT_CHANGED','STORAGE_COPY']);
 const wireError=value=>{const code=codes.has(value)?value:'UNSAFE',error=new AppError(code);error.code=code;return error;};
-const missing=(error,allowed)=>{if(allowed&&error.code==='ENOENT')return null;throw error;};
-function name(value){if(typeof value!=='string'||!value||value==='.'||value==='..'||/[\\/\0]/.test(value))throw new AppError('UNSAFE');return value;}
 
 export async function windowsMutationFiles(){
  const child=spawn(path.join(process.env.SystemRoot??'C:\\Windows','System32/WindowsPowerShell/v1.0/powershell.exe'),['-NoLogo','-NoProfile','-NonInteractive','-File',fileURLToPath(new URL('./security/mutation-files.ps1',import.meta.url))],{windowsHide:true,stdio:['pipe','pipe','ignore']});
@@ -52,22 +46,5 @@ export async function windowsMutationFiles(){
   }finally{signal?.removeEventListener('abort',abort);}
  }
  const call=async(command,options)=>{const task=serial.then(()=>execute(command,options));serial=task.catch(()=>{});try{return await task;}catch(cause){if(!(cause instanceof AppError))throw cause;const error=new AppError(cause.code);error.code=cause.code;error.cause=cause;throw error;}};
- const handles=new Set();
- class Directory{
-  constructor({id,identity}){this.id=id;this.identity=identity;this.closed=false;handles.add(this);}
-  request(operation,data={},options){if(this.closed)throw new AppError('IO');return call({operation,directory:this.id,...data},options);}
-  async directory(member,{create=false,missing:optional=false}={}){try{return new Directory(await this.request('directory',{name:name(member),create}));}catch(error){return missing(error,optional);}}
-  async stat(member,{folder=false,links=false,missing:optional=false}={}){try{return await this.request('stat',{name:name(member),folder,links});}catch(error){return missing(error,optional);}}
-  async hash(member,{links=false,missing:optional=false}={}){try{return await this.request('hash',{name:name(member),links});}catch(error){return missing(error,optional);}}
-  async read(member,{limit=16384,missing:optional=false}={}){try{const value=await this.request('read',{name:name(member),limit});return {bytes:Buffer.from(value.data,'base64'),identity:value.identity};}catch(error){return missing(error,optional);}}
-  async *entries(){let restart=true;for(;;){const page=await this.request('list',{restart});if(!page||!Array.isArray(page.entries)||typeof page.done!=='boolean')throw new AppError('UNSAFE');for(const entry of page.entries)yield entry;if(page.done)return;restart=false;}}
-  write(member,stream,{bytes,sha256,...options}){return this.request('write',{name:name(member),bytes,sha256},{...options,stream});}
-  copy(source,sourceName,member,{bytes,sha256,...options}){if(!handles.has(source)||source.closed)throw new AppError('UNSAFE');return this.request('copy',{sourceDirectory:source.id,source:name(sourceName),name:name(member),bytes,sha256},options);}
-  move(operation,member,target,targetName,{folder=false,links=false,identity}={}){if(!handles.has(target)||target.closed)throw new AppError('UNSAFE');return this.request(operation,{name:name(member),targetDirectory:target.id,target:name(targetName),folder,links,...(identity?{identity}:{})});}
-  rename(member,target,targetName,options){return atomicReplace(member,targetName,{replace:()=>this.move('rename',member,target,targetName,options),persist:async()=>{}});}
-  link(member,target,targetName,options){return this.move('link',member,target,targetName,options);}
-  remove(member,{folder=false,links=false,identity}={}){return this.request('delete',{name:name(member),folder,links,...(identity?{identity}:{})});}
-  async close(){if(this.closed)return;this.closed=true;handles.delete(this);if(!failed)await call({operation:'close',directory:this.id});}
- }
- return {async open(root){if(typeof root!=='string'||!path.isAbsolute(root))throw new AppError('UNSAFE');return new Directory(await call({operation:'root',path:root}));},close:()=>closing??=(async()=>{try{for(const handle of [...handles])await handle.close();}finally{await serial;child.stdin.end();await exited;}})()};
+ return mutationFilesClient((command,options)=>failed&&command.operation==='close'?Promise.resolve():call(command,options),()=>closing??=(async()=>{await serial;child.stdin.end();await exited;})());
 }

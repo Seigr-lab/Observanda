@@ -1,7 +1,7 @@
 import {publicationWorkspace} from './publication-pin.js';
 import {publicationRevisionCurrent} from './publication-freshness.js';
 import path from 'node:path';
-import {withMutationFilesSession} from './windows-mutation-files.js';
+import {withMutationFilesSession,nativeMutationSupported} from './mutation-files.js';
 import {discardNativeFiles} from './local-export-native-files.js';
 import os from 'node:os';
 import {randomUUID} from 'node:crypto';
@@ -170,7 +170,7 @@ export class LocalExport {
    plan=await this.get(id);const owner=await this.read(ownerFile(directory));
    this.validateOwner(owner,directory);await this.verifyPlan(plan);
    if(!['planned','staging','discarded'].includes(plan.state))throw new AppError('LOCAL_EXPORT_RECOVER');
-   if(process.platform==='win32')await discardNativeFiles(plan,()=>this.changes(plan));
+   if(nativeMutationSupported)await discardNativeFiles(plan,()=>this.changes(plan));
    else for await(const change of this.changes(plan)){
     const file=await memberPath(directory,change.path);if(!file)continue;
     if(await regular(temporary(file,id,'old'),{missing:true}))throw new AppError('LOCAL_EXPORT_RECOVER');
