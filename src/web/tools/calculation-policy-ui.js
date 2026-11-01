@@ -1,4 +1,5 @@
 import {t} from '../i18n/index.js';
+import {calculationErrorMessage} from './calculation-error-messages.js';
 import {policyLimits,structuredPolicyLimits,policyRounding,validCalculationPolicy} from './calculation-policy.js';
 const tr=(key,values)=>t('calculator',key,values);
 export function calculationPolicyControls(data,c,esc){
@@ -19,5 +20,9 @@ export function calculationPolicyInput(el,data){
 }
 export const approximationTitle=value=>[3,4].includes(value?.engine)?tr('policyApproximation',{working:value.workingDigits,display:value.displayDigits,rounding:tr('rounding-'+value.rounding)}):tr('approximateInfo');
 
-const policyErrorKeys={CALCULATION_POLICY_LEGACY:'policyLegacyError',CALCULATION_POLICY_INVALID:'invalidPolicy',CALCULATION_LIBRARY_UNAVAILABLE:'policyLibraryError',CALCULATION_REAL_RESULT:'policyRealError',CALCULATION_STRUCTURED_SHAPE:'structuredShapeError',CALCULATION_STRUCTURED_UNSUPPORTED:'structuredUnsupportedError',CALCULATION_STRUCTURED_RESOURCE:'structuredResourceError',CALCULATION_STRUCTURED_ZERO_DIVISOR:'structuredZeroDivisorError'};
-export const calculationErrorText=value=>Object.hasOwn(policyErrorKeys,value?.errorCode??'')?tr(policyErrorKeys[value.errorCode]):value?.error??'';
+export function calculationErrorText(value){
+ const message=calculationErrorMessage(value);if(!message)return value?.error??'';
+ const parameters=Object.fromEntries(Object.entries(message.parameters).map(([key,value])=>[key,Array.isArray(value)?value.join(tr('mathErrorTypeSeparator')):value]));
+ const translated=tr(message.key,parameters);
+ return message.character?tr('mathErrorAtCharacter',{message:translated,character:message.character}):translated;
+}
