@@ -23,7 +23,11 @@ test('paged browser and frozen table HTML distinguish approximations while expor
  const materials=fixture(),table=await retainedTable(materials,{ref,selection:{columns:'all',offset:0,count:null,includeExcluded:false},version:3}),statement={source:ref,table};let block;
  for await(const value of retainedTableBlocks(materials,{ref,table}))block=value.table;
  assert.deepEqual(block.formats[0].computation,materials.columns[0].computation);assert.match(retainedTableView(block,esc),/Approximate computation/);let html='';for await(const text of retainedTableHTML(materials,statement))html+=text;
- assert.match(html,/Approximate &lt;value&gt; \[Approximate computation\]/);assert.match(html,/Computed from approximate inputs/);for(const value of materials.cells)assert.ok(html.includes('<td>'+value+'</td>'));assert.ok(html.includes('<th scope="col">Exact</th>'));assert.doesNotMatch(html,new RegExp(recipe.id));
+ assert.match(html,/Approximate &lt;value&gt; \[Approximate computation\]/);assert.match(html,/Computed from approximate inputs/);
+ const cells=[...html.matchAll(/<td>([\s\S]*?)<\/td>/g)].map(match=>match[1]);
+ assert.equal(cells.length,materials.cells.length);
+ for(const [index,value] of materials.cells.entries())assert.equal(cells[index].replace(/<small class="cell-computation">[^<]*<\/small>/g,''),value);
+ assert.match(cells[0],/class="cell-computation"/);assert.ok(html.includes('<th scope="col">Exact</th>'));assert.doesNotMatch(html,new RegExp(recipe.id));
 });
 test('recipe3 visibly pins approximation precision and rounding without relabelling recipe2',()=>{
  const policy=defaultStructuredCalculationPolicy();policy.workingDigits=90;policy.displayDigits=5;policy.rounding='ceiling';const saved={version:3,scope:'selected-expression',source:{workspaceId:randomUUID(),type:'calculation',id:randomUUID(),revision:1,entityHash:'c'.repeat(64)},expressionIndex:0,expression:'sqrt(2)',engine:4,angle:'rad',policy,library:policy.library,structuredEngine:STRUCTURED_CALCULATION_ENGINE};

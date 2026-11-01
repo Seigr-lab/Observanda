@@ -8,7 +8,7 @@ import {plotRational,plotRationalText,addPlotRational,multiplyPlotRational,divid
 import {validCalculationPolicy} from './web/tools/calculation-policy.js';
 import {validApproximateResult} from './web/tools/approximate-calculation-model.js';
 import {ExactNumber} from './tools/exact-arithmetic.js';
-import {calculationRuntime,calculateDetailed} from './tools/math.js';
+import {calculationRuntime,calculateDetailed} from './tools/math-node.js';
 export const PEARSON_METHOD='pearson-centered-pairs-v1';
 export const PEARSON_PAIRING='complete-rows-v1';
 const fail=(code='DATASET_AGGREGATION')=>{throw new AppError(code);};
@@ -37,13 +37,17 @@ export function updatePearsonMoments(state,x,y,{policy,budget,signal}={}){
  });
 }
 export function finishPearsonStatistic(state,metric,{policy,budget,signal}={}){
- signal?.throwIfAborted();return operate(policy,budget,b=>{
-  if(metric?.operation!=='correlation'||metric.method!==PEARSON_METHOD||metric.pairing!==PEARSON_PAIRING||!validCalculationPolicy(metric.calculationPolicy)||metric.calculationPolicy.version!==2)fail();
+ signal?.throwIfAborted();
+ if(metric?.operation!=='correlation'||metric.method!==PEARSON_METHOD||metric.pairing!==PEARSON_PAIRING||!validCalculationPolicy(metric.calculationPolicy)||metric.calculationPolicy.version!==2)fail();
+ // Library initialization is not arithmetic charged to the retained policy.
+ // Match the spectrum and uncertainty engines: acquire it before entering run().
+ const calculationPolicy=metric.calculationPolicy,runtime=calculationRuntime({engine:4,policy:calculationPolicy});
+ return operate(policy,budget,b=>{
   const values=parsed(state,policy,b),receipt={version:2,method:PEARSON_METHOD,pairing:PEARSON_PAIRING,status:'ready',evaluation:null};
   const absent=status=>({value:null,receipt:{...receipt,status}});
   if(state.n===0)return absent('no-pairs');if(state.n<2)return absent('insufficient-pairs');
   if(values.Cxx.numerator===0n||values.Cyy.numerator===0n)return absent(values.Cxx.numerator===0n?(values.Cyy.numerator===0n?'zero-both-spread':'zero-x-spread'):'zero-y-spread');
-  const calculationPolicy=metric.calculationPolicy,runtime=calculationRuntime({engine:4,policy:calculationPolicy}),ratio=dividePlotRational(multiplyPlotRational(values.Cxy,values.Cxy,b),multiplyPlotRational(values.Cxx,values.Cyy,b),b);
+  const ratio=dividePlotRational(multiplyPlotRational(values.Cxy,values.Cxy,b),multiplyPlotRational(values.Cxx,values.Cyy,b),b);
   const sqrtPolicy={...policy,resources:{...policy.resources,maxBits:calculationPolicy.resources.maxBits,maxOperations:calculationPolicy.resources.maxOperations,maxMilliseconds:calculationPolicy.resources.maxMilliseconds,maxScalarCharacters:Math.min(65536,calculationPolicy.resources.maxResultCharacters),maxExponent:Math.min(65536,calculationPolicy.resources.maxBits)}};
   // Evaluate the signed expression through the saved engine, never divide by a
   // previously rounded square root or persist its display-only rendering.

@@ -16,7 +16,7 @@ import {validatePolicyScalar,isScalarResourceFailure} from './web/measurement-sc
 import {plotRational,addPlotRational,multiplyPlotRational,dividePlotRational,reducePlotRational} from './web/plot-resource-policy.js';
 import {revisionText} from './web/revision-model.js';
 import {SPECTRUM_METHOD,DIRECT_SPECTRUM_METHOD,SPECTRUM_WINDOWS,powerOfTwoCount} from './web/dataset-spectrum-model.js';
-import {calculationRuntime} from './tools/math.js';
+import {calculationRuntime} from './tools/math-node.js';
 export class DatasetSpectrumError extends Error{constructor(code='DATASET_SPECTRUM_INVALID'){super(code);this.code=code;}}
 const fail=(code,cause)=>{const error=new DatasetSpectrumError(code);if(cause)error.cause=cause;throw error;};
 const exact=(value,names)=>!!value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).length===names.length&&names.every(name=>Object.hasOwn(value,name));

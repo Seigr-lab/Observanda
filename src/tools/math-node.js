@@ -1,0 +1,12 @@
+import {createRequire} from 'node:module';
+import {createCalculationEngine} from './math-engine.js';
+const require=createRequire(import.meta.url);let instance;
+// Startup and text authoring must not initialize the scientific runtime.
+const engine=()=>instance??=createCalculationEngine(require('mathjs'));
+export const calculationRuntime=(...args)=>engine().calculationRuntime(...args);
+export const calculationPreview=(...args)=>engine().calculationPreview(...args);
+export const calculateDetailed=(...args)=>engine().calculateDetailed(...args);
+export const calculate=(...args)=>engine().calculate(...args);
+export const convertBase=(...args)=>engine().convertBase(...args);
+export const columnName=(...args)=>engine().columnName(...args);
+export const spreadsheet=(...args)=>engine().spreadsheet(...args);

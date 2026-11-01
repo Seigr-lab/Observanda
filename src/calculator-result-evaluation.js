@@ -2,7 +2,7 @@ import {calculatorResultScalarPolicy} from './calculator-result-values.js';
 import {validatePolicyScalar,isScalarResourceFailure} from './web/measurement-scalar-policy.js';
 import {validApproximateResult} from './web/tools/approximate-calculation-model.js';
 import {STRUCTURED_CALCULATION_ENGINE,validStructuredResult} from './web/tools/structured-calculation-model.js';
-import {calculateDetailed,calculationRuntime} from './tools/math.js';
+import {calculateDetailed,calculationRuntime} from './tools/math-node.js';
 import {calculationLibrary} from './web/tools/calculation-policy.js';
 import {validCalculatorRecipe,validCalculatorSource} from './web/calculator-result-model.js';
 import {validateTool} from './modules/tools.js';

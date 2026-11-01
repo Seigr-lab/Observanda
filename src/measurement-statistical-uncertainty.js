@@ -17,7 +17,7 @@ import {validCalculationPolicy} from './web/tools/calculation-policy.js';
 import {validApproximateResult} from './web/tools/approximate-calculation-model.js';
 import {plotRational,plotRationalText,addPlotRational,multiplyPlotRational,dividePlotRational} from './web/plot-resource-policy.js';
 import {ExactNumber} from './tools/exact-arithmetic.js';
-import {calculationRuntime,calculateDetailed} from './tools/math.js';
+import {calculationRuntime,calculateDetailed} from './tools/math-node.js';
 const fail=(code='STATISTICAL_UNCERTAINTY_INVALID')=>{throw new AppError(code);};
 const zero=()=>({numerator:0n,denominator:1n}),two={numerator:2n,denominator:1n};
 const scalar=spelling=>({spelling,representation:'rational',radix:10});
