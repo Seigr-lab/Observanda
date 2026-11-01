@@ -74,7 +74,7 @@
   "status_planned": "Planificat",
   "status_in progress": "En curs",
   "status_completed": "Completat",
-  "status_failed": "Fallat",
+  "status_failed": "Ha fallat",
   "status_incomplete": "Incomplet",
   "status_inconclusive": "No concloent",
   "status_cancelled": "Cancel·lat",

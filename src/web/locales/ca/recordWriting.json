@@ -1,7 +1,7 @@
 {
   "section": "Edita la secció d'escriptura",
   "summary": "Edita el resum / context",
-  "title": "Capçalera de la secció",
+  "title": "Encapçalament de la secció",
   "body": "Text",
   "invalidRead": "La resposta del contingut seleccionat era incompleta. Tanca aquesta finestra i torna a obrir l'editor.",
   "invalidCheckpoint": "La resposta del punt de recuperació era incompleta. Torna a provar el punt de recuperació per comprovar-ne el resultat.",
@@ -23,10 +23,10 @@
   "conflict": "Aquest text ha canviat en una altra sessió. Compara el text guardat que es mostra a continuació amb la teva modificació abans de triar quin conservar.",
   "savedVersion": "Text guardat actualment",
   "useSaved": "Utilitza el text guardat",
-  "keepMine": "Conserva la meva modificació després de revisar",
+  "keepMine": "Conserva la meva modificació després de revisar-la",
   "failed": "No s'ha pogut obrir aquest text. Torna-ho a provar.",
   "changedWorkspace": "L'espai de treball ha canviat. El punt de recuperació conservat continua disponible al seu espai de treball original.",
-  "publication": "Permet aquesta secció als llocs web",
+  "publication": "Permet publicar aquesta secció al web",
   "publicationHint": "Aquesta secció només pot aparèixer quan el seu llibre de laboratori i el registre també permeten la publicació web.",
   "bookPublication": "Permet publicar al web des d'aquest llibre de laboratori",
   "bookPublicationHint": "Els llocs web només poden utilitzar registres i seccions d'escriptura que també permetin la publicació. Desactivar-ho manté privat tot el llibre de laboratori."
