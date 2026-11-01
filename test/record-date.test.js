@@ -87,7 +87,7 @@ test('encrypted save, incomplete draft, exact pins, history and verified workspa
   assert.equal((await materials.read(pin)).occurredOn,original.occurredOn);
   const history=new RecordHistory(ws,media),command={workspaceId:saved.book.id,recordId:original.id},listing=await history.list(command),old=listing.versions.find(v=>v.revision===recordRevision(original));
   assert.equal((await history.read({...command,...old})).record.occurredOn,original.occurredOn);
-  const destination=path.join(parent,'restored');await copyWorkspace(await copyPlan(root,destination));
+  const destination=path.join(parent,'restored');await copyWorkspace(await copyPlan(root,destination,{vault}),{vault});
   restoredVault=await verifyAccess(await readAccess(destination),'','synthetic date password');
   const restored=new Workspace(destination,restoredVault);assert.deepEqual((await restored.read()).book.entries[0].occurredOn,approx);
   assert.deepEqual((await new ResearchDrafts(restored).read(id)).draft.changes[0].record.occurredOn,draft.occurredOn);
