@@ -19,6 +19,7 @@ import {ModuleMemberIndex,validModuleMember} from './member-index.js';
 import {ModuleBrowseIndex} from './browse-index.js';
 import {InventoryProjection} from './inventory-projection.js';
 import {moduleStateRow} from './read-state.js';
+import {diagnosticCount} from '../operational-diagnostics.js';
 const hash=value=>digest(serialize(value));
 const damaged=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 export const moduleEntityBytes=entity=>{
@@ -36,6 +37,7 @@ export class ModuleCatalogue{
  async head(workspaceId){
   const s=this.store,row=await moduleStateRow(s,'modules'),head=row?s.decode('state','modules',row.payload):{workspaceId,revision:0,entities:[]};
   const verify=async()=>{
+  diagnosticCount('moduleHeadChecks');
   const counts=await s.db.get('SELECT (SELECT count(*) FROM module_entities)::text AS entities,count(*)::text AS events,COALESCE(max(ordinal),0)::text AS last FROM module_events');
   if(!row){
    if(counts.entities!=='0'||counts.events!=='0')damaged();
@@ -99,6 +101,7 @@ export class ModuleCatalogue{
   if(hash(value)!==member.referencesHash)damaged();return value;
  }
  async view(head,member){
+  diagnosticCount('moduleViewReads');
   if(head.viewVersion!==1)return moduleView(await this.selected(head,member.id));
   const slot='module-view:'+member.viewHash,row=await moduleStateRow(this.store,slot);
   if(!row)damaged();const value=this.store.decode('state',slot,row.payload);

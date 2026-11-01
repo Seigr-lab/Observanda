@@ -3,7 +3,54 @@ import assert from 'node:assert/strict';
 import {mkdtemp,rm,readdir,stat,writeFile,symlink,mkdir} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import {OperationalDiagnostics,diagnosticEvent,withDiagnostics,diagnostic,diagnosticPhase,diagnosticMeasurement,diagnosticDatabaseResult,independentDiagnostics,measuredJobPhase} from '../src/operational-diagnostics.js';
+import {OperationalDiagnostics,diagnosticEvent,withDiagnostics,diagnostic,diagnosticPhase,diagnosticMeasurement,diagnosticDatabaseResult,diagnosticCount,independentDiagnostics,measuredJobPhase} from '../src/operational-diagnostics.js';
+import {CatalogueReadCache} from '../src/catalogue-read-cache.js';
+import {EvaluationPageCache} from '../src/evaluation-page-cache.js';
+import {operationWork} from '../src/operation-progress.js';
+import {ObjectIndex} from '../src/object-index.js';
+
+test('authenticated index visits count cached traversal as logical work',async()=>{
+ const sink=new OperationalDiagnostics(),index=new ObjectIndex({}),root=index.make('synthetic-key','a'.repeat(64));
+ await withDiagnostics(sink,async()=>{assert.equal((await index.node(root)).id,'synthetic-key');assert.equal((await index.find({root},'synthetic-key')).id,'synthetic-key');diagnostic('request');});
+ const {entries}=await sink.snapshot();assert.equal(entries[0].indexNodeVisits,2);assert.doesNotMatch(JSON.stringify(entries),/synthetic-key/);
+});
+
+test('work counters isolate concurrent scopes and never retain private metric labels or values',async()=>{
+ const sink=new OperationalDiagnostics(),started=Promise.withResolvers(),resume=Promise.withResolvers();
+ const first=withDiagnostics(sink,async()=>{
+  await diagnosticPhase('read-record-bases',async()=>{diagnosticCount('recordQueryReads',25);started.resolve();await resume.promise;diagnosticCount('recordQueryReads');});
+  diagnosticCount('private-record-name',4);diagnosticCount('recordQueryReads','private-content');
+  for(const value of [-1,NaN,Infinity,0.5,Number.MAX_SAFE_INTEGER+1])diagnosticCount('recordQueryReads',value);
+  diagnostic('request',{route:'records'});diagnosticCount('recordQueryReads',1000);
+ });
+ await started.promise;
+ await withDiagnostics(sink,async()=>{diagnosticCount('recordQueryReads',5);diagnosticCount('logicalBytes',Number.MAX_SAFE_INTEGER);diagnosticCount('logicalBytes',1);diagnostic('request',{route:'research'});});
+ resume.resolve();await first;
+ const {entries}=await sink.snapshot(),records=entries.find(row=>row.route==='records'),research=entries.find(row=>row.route==='research');
+ assert.equal(records.recordQueryReads,26);assert.equal(entries.find(row=>row.phase).recordQueryReads,26);assert.equal(research.recordQueryReads,5);assert.equal(research.logicalBytes,Number.MAX_SAFE_INTEGER);assert.equal(records.logicalBytes,undefined);assert.doesNotMatch(JSON.stringify(entries),/private-/);
+});
+
+test('real cache and operation work counters distinguish reuse from loads without progress listeners',async()=>{
+ const sink=new OperationalDiagnostics(),rows=new CatalogueReadCache(),pages=new EvaluationPageCache();
+ await withDiagnostics(sink,async()=>{
+  const load=()=>({payload:Buffer.from('private payload')});
+  await rows.row('private-row',load);await rows.row('private-row',()=>assert.fail('cached'));
+  await rows.proof('private-proof',()=>{});await rows.proof('private-proof',()=>assert.fail('cached'));
+  assert.equal(pages.get('private-page'),undefined);pages.set('private-page',[1,2]);assert.deepEqual(pages.get('private-page'),[1,2]);
+  operationWork({objects:2,bytes:123});diagnostic('request',{route:'research'});
+ });
+ rows.clear();pages.clear();const {entries}=await sink.snapshot();assert.equal(entries.length,1);const row=entries[0];
+ for(const name of ['catalogueRowCacheHits','catalogueRowCacheMisses','catalogueProofCacheHits','catalogueProofCacheMisses','evaluationPageCacheHits','evaluationPageCacheMisses'])assert.equal(row[name],1,name);
+ assert.equal(row.logicalObjects,2);assert.equal(row.logicalBytes,123);assert.doesNotMatch(JSON.stringify(entries),/private-/);
+});
+
+test('one aggregate event cannot exceed the configured diagnostic file budget',async t=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-diagnostics-wide-'));t.after(()=>rm(directory,{recursive:true,force:true}));
+ const sink=new OperationalDiagnostics({directory,maxBytes:1024,files:1});
+ const fields=['durationMs','queued','active','pendingRequests','activeRequests','activeWrites','queuedRequests','queuedWriters','requestBytes','rssBytes','heapBytes','externalBytes','cpuUserUs','cpuSystemUs','bytes','attempt','delayMs','dropped','exitCode','status','databaseReturnedRows','databaseBufferBytes','databaseTextBytes','databaseAdmissions','databaseAdmissionMs','databaseConnections','databaseConnectMs','databaseQueries','databaseQueryMs','databaseQueueEntries','databaseQueueMs','databaseCursorBatches','databaseCursorMs','catalogueRowCacheHits','catalogueRowCacheMisses','catalogueProofCacheHits','catalogueProofCacheMisses','evaluationPageCacheHits','evaluationPageCacheMisses','indexNodeVisits','moduleHeadChecks','moduleViewReads','recordQueryReads','logicalObjects','logicalBytes'];
+ sink.record('request',Object.fromEntries(fields.map(name=>[name,Number.MAX_SAFE_INTEGER])));await sink.flush();assert.equal(sink.status().dropped,1);
+ sink.record('resource',{rssBytes:123});await sink.flush();const report=await sink.snapshot();assert.equal(report.status.available,true);assert.ok(report.entries.some(row=>row.event==='dropped'&&row.dropped===1));assert.ok((await stat(path.join(directory,'operations-0.jsonl'))).size<=1024);await sink.close();
+});
 
 test('save phases retain separate nested and concurrent query counts without duplicating request totals',async()=>{
  const sink=new OperationalDiagnostics(),started=Promise.withResolvers(),resume=Promise.withResolvers();let late;

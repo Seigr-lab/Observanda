@@ -1,7 +1,7 @@
 // Scoped observations of completed work. Concurrent operations never share
 // counters; unknown totals stay unknown. Heartbeats do not advance these values.
 import {AsyncLocalStorage} from 'node:async_hooks';
-import {diagnosticPhase} from './operational-diagnostics.js';
+import {diagnosticPhase,diagnosticCount} from './operational-diagnostics.js';
 const context=new AsyncLocalStorage();
 const empty=()=>({objects:0,bytes:0});
 function publish(scope,force=false){
@@ -34,6 +34,7 @@ export function operationTotal(total){const scope=context.getStore();if(!scope)r
 export function operationAdvance(count=1,stage){const scope=context.getStore();if(!scope||stage&&scope.stage!==stage)return;scope.completed+=count;scope.root.advancedAt=Date.now();publish(scope);}
 export function operationItem(item){const scope=context.getStore();if(!scope)return;scope.item=item;publish(scope,true);}
 export function operationWork({objects=0,bytes=0}={}){
+ diagnosticCount('logicalObjects',objects);diagnosticCount('logicalBytes',bytes);
  const scope=context.getStore();if(!scope)return;
  for(let item=scope;item;item=item.parent){item.activity.objects+=objects;item.activity.bytes+=bytes;}
  if(objects||bytes)scope.root.advancedAt=Date.now();publish(scope);

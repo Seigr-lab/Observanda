@@ -1,4 +1,5 @@
 import {jsonFitsBytes,jsonByteLength} from './web/json-chunks.js';
+import {diagnosticCount} from './operational-diagnostics.js';
 
 // Owned by one calculation, never shared across owners or executions. Both
 // page count and encoded size are bounded; this is not an RSS measurement.
@@ -8,7 +9,7 @@ export class EvaluationPageCache{
   this.maxPages=maxPages;this.maxBytes=maxBytes;this.values=new Map();this.bytes=0;
  }
  get size(){return this.values.size;}
- get(key){const item=this.values.get(key);if(!item)return;this.values.delete(key);this.values.set(key,item);return item.value;}
+ get(key){const item=this.values.get(key);diagnosticCount(item?'evaluationPageCacheHits':'evaluationPageCacheMisses');if(!item)return;this.values.delete(key);this.values.set(key,item);return item.value;}
  set(key,value,{signal}={}){
   this.delete(key);const keyBytes=Buffer.byteLength(key);
   if(keyBytes>this.maxBytes||!jsonFitsBytes(value,this.maxBytes-keyBytes,{signal}))return;

@@ -18,6 +18,7 @@ import {retainRecordOwnerResource} from './record-owner-resources.js';
 import {RecordDocument,withRecordDocument} from './record-document.js';
 import {jsonFitsBytes} from './web/json-chunks.js';
 import {requireAttemptQueries} from './catalogue-format.js';
+import {diagnosticCount} from './operational-diagnostics.js';
 import {retainSearchVocabulary} from './record-search-vocabulary.js';
 import {retainReferenceIndex} from './record-reference-index.js';
 const hash=value=>digest(serialize(value));
@@ -90,6 +91,7 @@ export class RecordQueryDocuments{
    const slots=batch.map(descriptor).filter(Boolean).map(item=>item.slot);
    const found=new Map((await owner.store.db.all('SELECT slot,payload FROM state WHERE slot=ANY($1::text[])',slots)).map(row=>[row.slot,row.payload]));
    for(const row of batch){
+    diagnosticCount('recordQueryReads');
     signal?.throwIfAborted();const source=descriptor(row);let value;
     if(source){
      value=await readQueryValue(owner.store,owner.store.decode('state',source.slot,found.get(source.slot)),source,row,options);

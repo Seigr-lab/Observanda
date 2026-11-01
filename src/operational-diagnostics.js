@@ -15,7 +15,11 @@ for(const stage of ['website-open','website-checkpoint','website-save','website-
 const routes=new Set(['session','access','health','intake','media','projects','publication-jobs','records','research','storage','notebook','websites','website-editor']);
 for(const stage of ['edition-capture','edition-clean','edition-input','edition-permissions','edition-pin','edition-directory','edition-render','edition-finish'])phases.add(stage);
 const measures=Object.freeze({'database-admission':['databaseAdmissions','databaseAdmissionMs'],'database-connect':['databaseConnections','databaseConnectMs'],'database-query':['databaseQueries','databaseQueryMs'],'database-queue':['databaseQueueEntries','databaseQueueMs'],'database-cursor':['databaseCursorBatches','databaseCursorMs']});
+// Logical work, including cache uses, is distinct from physical I/O and RSS.
+// Fixed names prevent caller data or identifiers from becoming metric labels.
+const workCounters=new Set(['catalogueRowCacheHits','catalogueRowCacheMisses','catalogueProofCacheHits','catalogueProofCacheMisses','evaluationPageCacheHits','evaluationPageCacheMisses','indexNodeVisits','moduleHeadChecks','moduleViewReads','recordQueryReads','logicalObjects','logicalBytes']);
 const counters=new Set(['durationMs','queued','active','pendingRequests','activeRequests','activeWrites','queuedRequests','queuedWriters','requestBytes','rssBytes','heapBytes','externalBytes','cpuUserUs','cpuSystemUs','bytes','attempt','delayMs','dropped','exitCode','status','databaseReturnedRows','databaseBufferBytes','databaseTextBytes',...Object.values(measures).flat()]);
+for(const name of workCounters)counters.add(name);
 const systemCodes=new Set(['EACCES','EPERM','ENOSPC','ENOENT','EIO','EMFILE','ENFILE','ECONNRESET','ECONNREFUSED','ETIMEDOUT','ABORT_ERR']);
 const codeOf=error=>{let code;try{code=error?.code;}catch{}return typeof code==='string'&&(Object.hasOwn(errors,code)||systemCodes.has(code))?code:'IO';};
 const correlation=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
@@ -76,6 +80,7 @@ export class OperationalDiagnostics{
    const write=async()=>{if(!batch)return;const file=await open(this.file(),'a',0o600);try{await file.writeFile(batch);}finally{await file.close();}this.bytes+=batchBytes;batch='';batchBytes=0;};
    for(const row of rows){
     const line=JSON.stringify(row)+'\n',bytes=Buffer.byteLength(line);
+    if(bytes>this.maxBytes){this.dropped++;continue;}
     if(this.bytes+batchBytes+bytes>this.maxBytes){await write();await this.rotate();}
     batch+=line;batchBytes+=bytes;
    }
@@ -118,6 +123,11 @@ export async function measuredJobPhase(phase,operation){
 export function diagnostic(event,data={}){const scope=current.getStore();if(!scope?.recorder)return;scope.recorder.record(event,{...data,...(event==='request'?scope.measurements:{}),correlation:scope.correlation});if(event==='request')scope.finished=true;}
 const noMeasurement=()=>{};
 function* measurementScopes(scope){for(let owner=scope;owner&&!owner.finished;owner=owner.parent)yield owner;}
+export function diagnosticCount(name,value=1){
+ const scope=current.getStore();
+ if(!scope?.recorder||scope.finished||!workCounters.has(name)||!Number.isSafeInteger(value)||value<=0)return;
+ for(const owner of measurementScopes(scope))owner.measurements[name]=Math.min(Number.MAX_SAFE_INTEGER,(owner.measurements[name]??0)+value);
+}
 // Count already-decoded scalar payloads without serializing or retaining their
 // contents. These are Buffer/UTF-8 text bytes, not wire traffic, decoded object
 // memory or PostgreSQL storage. Other column types are deliberately not guessed.

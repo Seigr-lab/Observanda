@@ -7,6 +7,7 @@ import {AppError} from './errors.js';
 import {digest,serialize} from './storage-format.js';
 import {writeCatalogueRows} from './catalogue-writes.js';
 import {catalogueContext} from './catalogue-context.js';
+import {diagnosticCount} from './operational-diagnostics.js';
 // Owner tracking reaches the catalogue; load it only during asynchronous writes.
 async function retainRecordOwnerResource(...args){const owner=await import('./record-owner-resources.js');return owner.retainRecordOwnerResource(...args);}
 const fail=()=>{throw new AppError('CATALOGUE_DAMAGED');};
@@ -161,6 +162,7 @@ export class ObjectIndex{
  }
  async node(ref,lower=null,upper=null){
   if(!ref||!validRef(ref))fail();
+  diagnosticCount('indexNodeVisits');
   let value=this.pending.get(ref.hash)??this.cache.get(ref.hash);
   if(this.cache.has(ref.hash)){const cached=this.cache.get(ref.hash);this.cache.delete(ref.hash);this.cache.set(ref.hash,cached);}
   const loaded=!value;if(loaded)value=await this.readNode(ref);

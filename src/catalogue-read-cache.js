@@ -1,4 +1,5 @@
 import {EncryptionKeyContext} from './encryption-key-context.js';
+import {diagnosticCount} from './operational-diagnostics.js';
 // Encrypted rows belong to one transaction and are discarded on close. Read
 // snapshots are immutable; a metadata writer must replace its cached object
 // payload whenever it stages a change. Whole decoded records never enter this cache.
@@ -28,7 +29,8 @@ export class CatalogueReadCache{
   for(const row of await db.all('SELECT slot,payload FROM state WHERE slot=ANY($1::text[]) AND octet_length(payload)<='+maxPayloadBytes,missing))this.replace(row.slot,row.payload);
  }
  async row(slot,load){
-  if(this.rows.has(slot)){const bytes=this.rows.get(slot);this.rows.delete(slot);this.rows.set(slot,bytes);return {payload:Buffer.from(bytes)};}
+  if(this.rows.has(slot)){diagnosticCount('catalogueRowCacheHits');const bytes=this.rows.get(slot);this.rows.delete(slot);this.rows.set(slot,bytes);return {payload:Buffer.from(bytes)};}
+  diagnosticCount('catalogueRowCacheMisses');
   const row=await load();if(!row?.payload)return row;
   this.replace(slot,row.payload);
   return row;
@@ -42,7 +44,8 @@ export class CatalogueReadCache{
   this.rows.set(slot,bytes);this.bytes+=bytes.length;
  }
  async proof(identity,verify){
-  if(this.proofs.has(identity))return this.proofs.get(identity);
+  if(this.proofs.has(identity)){diagnosticCount('catalogueProofCacheHits');return this.proofs.get(identity);}
+  diagnosticCount('catalogueProofCacheMisses');
   // A proof can retain a bounded identity receipt, never an entire document.
   const receipt=await verify();if(receipt!==undefined&&(typeof receipt!=='string'||receipt.length>1024))throw new RangeError('Invalid catalogue proof receipt');
   if(this.proofs.size===128)this.proofs.delete(this.proofs.keys().next().value);this.proofs.set(identity,receipt);return receipt;
