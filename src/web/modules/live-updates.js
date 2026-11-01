@@ -3,7 +3,7 @@ import {researchContext} from '../project-context.js';
 import {enabledModule} from '../feature-modules.js';
 // One lightweight refresh owner for operational views. Drafts retain their own base revision.
 export function operationsUpdates({state,api,onChange,isEditing}){
- let context=null,inFlight=false,last=0,lastPage=null,revision=null,lastNotify=0,stopped=false,controller=null;
+ let context=null,inFlight=false,last=0,lastPage=null,revision=null,pendingNotification=false,stopped=false,controller=null;
  const relevant=()=>state.book&&!state.access?.locked&&(enabledModule(state.dashboardSettings,'resources')||enabledModule(state.dashboardSettings,'planning'))&&(['workspace','projects','project'].includes(state.page)||state.page==='module'&&['resources','planning'].includes(state.moduleId));
  async function refresh(){
   if(stopped||inFlight||document.hidden||!relevant())return;
@@ -14,9 +14,11 @@ export function operationsUpdates({state,api,onChange,isEditing}){
    if(version?.workspaceId!==owner||!validModuleRevision(version.revision))return;
    const known=state.moduleRevision?.workspaceId===owner?state.moduleRevision.revision:revision;
    const current=typeof version.revision==='number'?Math.max(version.revision,typeof known==='number'?known:0):version.revision;
-   const changed=revision!==current;revision=current;
+   if(revision!==current)pendingNotification=true;revision=current;
    state.moduleRevision={workspaceId:owner,revision:current};
-   if((changed||Date.now()-lastNotify>=60000)&&!isEditing()){lastNotify=Date.now();onChange();}
+   // A revision observed during an edit remains pending. Unchanged idle polls
+   // need no content reload, even after several minutes or a focus event.
+   if(pendingNotification&&!isEditing()){onChange();pendingNotification=false;}
   }catch{/* Existing views and drafts remain usable during a temporary disconnection. */}
   finally{inFlight=false;last=Date.now();}
  }
@@ -24,7 +26,7 @@ export function operationsUpdates({state,api,onChange,isEditing}){
  const focused=()=>refresh();window.addEventListener('focus',focused);
  return {bind(){
   const key=researchContext(state);
-  if(key!==context){controller?.abort();context=key;revision=null;last=0;}
+  if(key!==context){controller?.abort();context=key;revision=null;pendingNotification=false;last=0;}
   const page=state.page+':'+state.project;
   if(page!==lastPage){lastPage=page;if(relevant())refresh();}
  },refresh,stop(){stopped=true;controller?.abort();clearInterval(timer);window.removeEventListener('focus',focused);}};
