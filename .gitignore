@@ -18,6 +18,10 @@ desktop/icon-white.png
 Thumbs.db
 Desktop.ini
 /docs/
+/audit/
+OBSERVANDA_PRODUCTION_AUDIT_FILES.json
+OBSERVANDA_PRODUCTION_PROGRESS.md
+OBSERVANDA_PRODUCTION_AUDIT.md
 
 # Generated PowerShell cache
 /Microsoft/
