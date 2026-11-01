@@ -35,5 +35,6 @@
   "invalidPreview": "La respuesta con la vista previa de la figura no corresponde al idioma solicitado.",
   "figureTitle": "Título de la figura",
   "coordinateLabel": "Etiqueta del eje de coordenadas",
-  "valueLabel": "Etiqueta del eje de valores"
+  "valueLabel": "Etiqueta del eje de valores",
+  "previewWindowHelp": "Esta vista previa muestra un intervalo de una serie. Los ejes numéricos conservan el intervalo de la figura completa; se omiten las anotaciones y se muestran hasta 128 marcas personalizadas. La navegación permite ver todas las observaciones. Las mediciones guardadas y las exportaciones completas no cambian."
 }

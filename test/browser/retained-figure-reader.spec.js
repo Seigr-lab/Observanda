@@ -8,6 +8,7 @@ import {RetainedFigureDocuments} from '../../src/retained-figure-document.js';
 import {createFigure,createSeries} from '../../src/web/figure-model.js';
 import {defaultHeatmap} from '../../src/web/figure-heatmap.js';
 import {retainedFigureSVG} from '../../src/web/retained-figure-svg.js';
+import {retainedFigureTranslator} from '../../src/retained-figure-localization.js';
 const webRoot=fileURLToPath(new URL('../../src/web/',import.meta.url));
 for(const kind of ['bar','heatmap'])test(kind+' retained figure reader pages exact observations, full text and downloads without clearing a failed view',async({page})=>{
  const files=new Map(),documents=new RetainedFigureDocuments({readMetadata:async name=>files.get(name)??null,writeMetadata:async(name,value)=>files.set(name,value)}),figure=createFigure(),calls=[],revision='a'.repeat(64);figure.kind=kind;if(kind==='heatmap')figure.heatmap=defaultHeatmap();figure.x.kind='category';figure.series[0].name='First acquired series';const category='A'.repeat(4095)+'\ud83d\ude00'+' complete category';figure.series[0].points=Array.from({length:65},(_,i)=>({x:i===0?category:'Category '+i,y:i+1,error:null}));figure.series.push({...createSeries('Second acquired series'),points:[{x:'Independent',y:7,error:null}]});const reader=await documents.open(await documents.retain(figure));let stale=false;
@@ -18,7 +19,7 @@ for(const kind of ['bar','heatmap'])test(kind+' retained figure reader pages exa
   else if(command.operation==='cells')result=await reader.cells(command.selection);
   else if(command.operation==='item')result={item:await reader.item(command.selection)};
   else if(command.operation==='text')result=await reader.text(command.selection);
-  else if(command.operation==='svg'){let svg='';for await(const chunk of retainedFigureSVG(reader,{width:650,window:command.window}))svg+=chunk;result={svg};}
+  else if(command.operation==='svg'){let svg='';for await(const chunk of retainedFigureSVG(reader,{width:650,window:command.window,translate:await retainedFigureTranslator(command.language)}))svg+=chunk;result={svg,language:command.language};}
   else throw Error('Unexpected reader operation');return {...result,revision:stale?'b'.repeat(64):revision};
  });
  let downloadedRevision=null;
@@ -49,7 +50,7 @@ test('dense chronological and many-series interval reading stays paged on narrow
   if(command.operation==='header')result=await reader.header(command.selection);
   else if(command.operation==='window')result=await reader.window(command.selection);
   else if(command.operation==='item')result={item:await reader.item(command.selection)};
-  else if(command.operation==='svg'){let svg='';for await(const chunk of retainedFigureSVG(reader,{width:650,window:command.window}))svg+=chunk;result={svg};}
+  else if(command.operation==='svg'){let svg='';for await(const chunk of retainedFigureSVG(reader,{width:650,window:command.window,translate:await retainedFigureTranslator(command.language)}))svg+=chunk;result={svg,language:command.language};}
   else throw Error('Unexpected dense reader operation');return {...result,revision};
  });
  const server=createServer((request,response)=>{void(async()=>{

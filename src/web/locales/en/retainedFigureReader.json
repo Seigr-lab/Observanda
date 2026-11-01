@@ -35,5 +35,6 @@
   "invalidPreview": "The figure preview response does not match the requested language.",
   "figureTitle": "Figure title",
   "coordinateLabel": "Coordinate axis label",
-  "valueLabel": "Value axis label"
+  "valueLabel": "Value axis label",
+  "previewWindowHelp": "This preview shows a range from one series. Numeric axes keep the complete figure range; annotations are omitted and up to 128 custom ticks are shown. Navigation reveals every observation. Saved measurements and complete exports remain unchanged."
 }

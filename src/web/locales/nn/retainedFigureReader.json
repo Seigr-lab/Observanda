@@ -35,5 +35,6 @@
   "invalidPreview": "Svaret med figurførehandsvisinga samsvarar ikkje med språket som vart førespurt.",
   "figureTitle": "Figurtittel",
   "coordinateLabel": "Etikett for koordinataksen",
-  "valueLabel": "Etikett for verdiaksen"
+  "valueLabel": "Etikett for verdiaksen",
+  "previewWindowHelp": "Denne førehandsvisinga viser eit område frå éin serie. Numeriske aksar held på heile området til figuren; merknader vert utelatne og opptil 128 eigendefinerte aksemerke vert viste. Naviger for å sjå alle observasjonar. Lagra målingar og fullstendige eksportar er uendra."
 }

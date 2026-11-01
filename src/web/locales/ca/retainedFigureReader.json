@@ -35,5 +35,6 @@
   "invalidPreview": "La resposta amb la previsualització de la figura no correspon a la llengua sol·licitada.",
   "figureTitle": "Títol de la figura",
   "coordinateLabel": "Etiqueta de l’eix de coordenades",
-  "valueLabel": "Etiqueta de l’eix de valors"
+  "valueLabel": "Etiqueta de l’eix de valors",
+  "previewWindowHelp": "Aquesta previsualització mostra un interval d’una sèrie. Els eixos numèrics conserven l’interval de la figura completa; s’ometen les anotacions i es mostren fins a 128 marques personalitzades. La navegació permet veure totes les observacions. Les mesures desades i les exportacions completes no canvien."
 }
