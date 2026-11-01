@@ -23,7 +23,7 @@ export function recordEditingView({record,esc,status,busy,details,summary,sectio
   ['evidence',evidence],['relations',relations],['activity',activity]
  ].filter(([,html])=>html);
  const groups=[['writing',['summary','sections']],['evidence',['attachments','figures','evidence','results','attempt','relations']],['details',['details','tags','contributors']],['activity',['activity']]];
- const section=([key,html])=>'<section class="record-edit-area" data-record-edit-area="'+key+'" tabindex="-1" aria-labelledby="record-edit-heading-'+key+'"><h3 id="record-edit-heading-'+key+'">'+esc(text('area_'+key))+'</h3>'+html+'</section>';
+ const section=([key,html])=>'<section class="record-edit-area" data-record-edit-area="'+key+'" tabindex="-1" '+(key==='relations'?'aria-label="'+esc(text('area_'+key))+'">':'aria-labelledby="record-edit-heading-'+key+'"><h3 id="record-edit-heading-'+key+'">'+esc(text('area_'+key))+'</h3>')+html+'</section>';
  return '<article class="record-reader record-editing" aria-busy="'+busy+'"><div class="record-title-row"><h1>'+esc(record.title)+'</h1>'+edit('title')+'</div>'+status+
   '<div class="record-quick-details"><span>'+esc(recordDateLabel(record.occurredOn))+'</span>'+edit('occurredOn')+'<span>'+esc(detailText('status_'+record.status))+'</span>'+edit('status')+'</div>'+
   '<nav class="record-edit-navigation" aria-label="'+esc(text('editingNavigation'))+'">'+groups.map(([key,ids])=>'<button type="button" class="button subtle" data-action="content-edit-area" data-area="'+ids[0]+'">'+esc(ux(key))+'</button>').join('')+'</nav>'+

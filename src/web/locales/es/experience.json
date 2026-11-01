@@ -28,7 +28,7 @@
   "actions": "Acciones del registro",
   "editField": "Editar {name}",
   "draftHelp": "Un punto de recuperación conserva el borrador. Guardar cambios actualiza el registro; cerrar con un punto de recuperación conserva el borrador para más tarde.",
-  "noItems": "Todavía no hay elementos. Usa la acción de creación de arriba para empezar.",
+  "noItems": "Todavía no hay elementos. Crea un elemento para empezar.",
   "noMatches": "No hay resultados con estos filtros.",
   "readFailed": "No se pudo cargar la colección. Reinténtalo para consultar su contenido.",
   "advanced": "Más opciones",

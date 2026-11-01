@@ -28,7 +28,7 @@
   "actions": "Accions del registre",
   "editField": "Edita {name}",
   "draftHelp": "Un punt de recuperació conserva l’esborrany. Guarda els canvis actualitza el registre; tancar amb un punt de recuperació conserva l’esborrany per a més tard.",
-  "noItems": "Encara no hi ha elements. Fes servir l’acció de creació de dalt per començar.",
+  "noItems": "Encara no hi ha elements. Crea un element per començar.",
   "noMatches": "Cap resultat amb aquests filtres.",
   "readFailed": "No s’ha pogut carregar la col·lecció. Torna-ho a provar per consultar-ne el contingut.",
   "advanced": "Més opcions",

@@ -28,7 +28,7 @@
   "actions": "Oppføringshandlingar",
   "editField": "Rediger {name}",
   "draftHelp": "Eit gjenopprettingspunkt bevarer utkastet. Lagre endringar oppdaterer oppføringa; lukking med eit gjenopprettingspunkt bevarer utkastet til seinare.",
-  "noItems": "Ingen element enno. Bruk opprettingsknappen over for å kome i gang.",
+  "noItems": "Ingen element enno. Opprett eit element for å kome i gang.",
   "noMatches": "Ingen resultat med desse filtera.",
   "readFailed": "Samlinga kunne ikkje lastast. Prøv igjen for å sjå innhaldet.",
   "advanced": "Fleire val",

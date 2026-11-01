@@ -32,6 +32,26 @@ summary{cursor:pointer;min-height:44px;padding-block:.6rem;overflow-wrap:anywher
 .workflow-guide{padding:var(--space-4);border-inline-start:3px solid var(--ui-accent);background:var(--ui-surface);margin-block:var(--space-4);max-width:90ch}
 .task-guidance{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:var(--space-2);margin-bottom:var(--space-3)}
 .task-return{margin-bottom:var(--space-3)}
+.section-bar.record-list-bar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--space-3);align-items:center}
+.record-list-bar h2{margin:0;display:flex;align-items:center;gap:var(--space-2)}
+.section-bar.record-list-bar>.filters{grid-column:1/-1;width:100%;display:flex;align-items:center}
+.record-list-bar .record-type-control{flex:1 1 22rem;min-width:0;display:flex}
+.record-list-bar .record-type-control>.filter-select{width:0;flex:1 1 10rem;min-width:min(100%,10rem)}
+.record-list-bar .record-type-control>.button{flex:0 1 auto}
+.record-list-options{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--space-2)}
+.record-list-options :is(.record-reading-modes,.find-tools){margin-block:var(--space-2)}
+.record-search-scope{font-size:.85rem;margin-block:var(--space-2)}
+.record-sort-options{margin-block:var(--space-3)}
+.record-sort-options>.field{display:flex;align-items:center;flex-wrap:wrap;gap:var(--space-2);margin:0}
+.record-sort-options>.field>label{margin:0}
+.record-sort-options select{width:auto}
+.record-browse:not([open]){padding-block:0}
+.record-list-summary{display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--space-2) var(--space-4);margin-block:var(--space-3)}
+.record-list-summary p{margin:0}.record-list-summary .record-counts{color:var(--ui-muted);font-size:.85rem}
+.material-actions.evidence-readiness{margin-block:var(--space-3)}
+.evidence-journey>section{display:flex;flex-direction:column;align-items:stretch;gap:var(--space-3);min-width:0}
+.evidence-journey>section>:is(h3,p){margin:0}
+.evidence-journey .material-actions{margin-top:auto}
 .record-actions{margin-inline-start:auto}.record-actions[open]{padding:var(--space-2);border:1px solid var(--ui-border);border-radius:var(--ui-radius)}
 .record-action-menu{display:flex;flex-wrap:wrap;gap:var(--space-2);padding-block:var(--space-2)}
 .context-help{width:min(760px,calc(100% - 2rem));max-height:85dvh;overflow:auto;padding:var(--space-6);color:var(--ui-text);background:var(--ui-surface);border:1px solid var(--ui-border);border-radius:var(--ui-radius)}

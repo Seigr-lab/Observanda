@@ -28,7 +28,7 @@
   "actions": "Record actions",
   "editField": "Edit {name}",
   "draftHelp": "A recovery checkpoint keeps your draft. Save changes updates the record; closing with a checkpoint keeps the draft for later.",
-  "noItems": "No items yet. Use the create action above to get started.",
+  "noItems": "No items yet. Create an item to get started.",
   "noMatches": "No results for these filters.",
   "readFailed": "The collection could not be loaded. Retry to check its contents.",
   "advanced": "More options",
