@@ -28,7 +28,8 @@
   "validated": "L’espai de treball és vàlid. {entries} entrades; revisió {revision}.",
   "chooseOutput": "Tria una carpeta de sortida nova amb --out.",
   "exported": "Lloc web exportat: {entries} entrades, {files} fitxers. Versió {release}.",
-  "ready": "Observanda està a punt. Obre aquest enllaç d’inici local:\n{url}\nPrem Ctrl+C per aturar-lo.",
+  "ready": "Observanda està a punt. Adreça del servei local:\n{url}\nPrem Ctrl+C per aturar-lo.",
+  "browserAuthorization": "Per autoritzar un navegador, obre {file} a la carpeta browser-launch al costat del fitxer de preferències abans de dos minuts. L’autorització només es pot fer servir una vegada.",
   "checkField": "Revisa {field}.",
   "checkRecord": "Revisa {field} al registre {recordId}."
 }

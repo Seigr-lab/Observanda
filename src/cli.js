@@ -21,18 +21,18 @@ import {catalogueDescriptor} from './research-catalogue.js';
 import { AppError, safeError } from './errors.js';
 import {intakeCLI} from './intake/cli.js';
 import {commandLineLocalization} from './command-line-localization.js';
+import {browserHandoff,browserLaunchCommand} from './browser-handoff.js';
 
 function openBrowser(url) {
-  const command = process.platform === 'win32' ? 'rundll32.exe' : process.platform === 'darwin' ? 'open' : 'xdg-open';
-  const args = process.platform === 'win32' ? ['url.dll,FileProtocolHandler', url] : [url];
+  const {command,args}=browserLaunchCommand(url);
   const child = spawn(command, args, { detached: true, stdio: 'ignore', windowsHide: true });
   child.on('error', () => {}); child.unref();
 }
 
-let runtime,app,localization=commandLineLocalization(preferencesLocation());const startup=new AbortController();
+let runtime,app,handoff,localization=commandLineLocalization(preferencesLocation());const startup=new AbortController();
 const text=(key,parameters)=>localization.text(key,parameters);
 let stopping;
-const stop=()=>{startup.abort();if(!app)return Promise.resolve();return stopping??=(async()=>{await app.close();await runtime?.close();})().catch(error=>{console.error(localization.error(safeError(error)));process.exitCode=1;});};
+const stop=()=>{startup.abort();if(!app)return Promise.resolve();return stopping??=(async()=>{try{await handoff?.close();}finally{try{await app.close();}finally{await runtime?.close();}}})().catch(error=>{console.error(localization.error(safeError(error)));process.exitCode=1;});};
 process.on('SIGINT',stop);process.on('SIGTERM',stop);
 try {
   const { values, positionals } = parseArgs({ allowPositionals: true, options: {
@@ -101,12 +101,15 @@ try {
       if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('Invalid port');
       const { startServer } = await import('./server.js');
       app = await startServer({ root, port, preferencesFile, expectedExisting:!!remembered,headless:values.headless===true,deviceStore });
-      console.log(text('ready',{url:app.url}));
-      if (!values['no-browser']&&!values.headless) openBrowser(app.url);
+      handoff=await browserHandoff(app.url,preferencesFile);
+      console.log(text('ready',{url:app.origin}));
+      if (!values['no-browser']&&!values.headless) openBrowser(handoff.url);
+      else console.log(text('browserAuthorization',{file:handoff.name}));
       if(startup.signal.aborted)await stop();
     }
   }
 } catch (error) {
+  if(app)await stop();
   const safe = safeError(error);
   if(process.argv[2]==='intake')console.log(JSON.stringify({version:1,ok:false,error:safe}));
   else{console.error(`${safe.code}: ${localization.error(safe)}`);

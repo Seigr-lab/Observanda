@@ -28,7 +28,8 @@
   "validated": "Workspace valid. {entries} entries; revision {revision}.",
   "chooseOutput": "Choose a new output directory with --out.",
   "exported": "Website exported: {entries} entries, {files} files. Release {release}.",
-  "ready": "Observanda is ready. Open this local launch link:\n{url}\nPress Ctrl+C to stop.",
+  "ready": "Observanda is ready. Local service address:\n{url}\nPress Ctrl+C to stop.",
+  "browserAuthorization": "To authorize a browser, open {file} in the browser-launch folder beside your preferences file within two minutes. The authorization can be used once.",
   "checkField": "Check {field}.",
   "checkRecord": "Check {field} in record {recordId}."
 }

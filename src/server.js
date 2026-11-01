@@ -44,6 +44,7 @@ import {ProjectApplication,projectRequest} from './project-application.js';
 import {researchRequest,executeResearchRequest} from './research-requests.js';
 import {LiveConnections} from './collaboration/live-connections.js';
 import {liveFileHeaders} from './collaboration/live-response.js';
+import {LaunchCapabilities} from './launch-capabilities.js';
 import {WorkspaceDeletions} from './workspace-deletion.js';
 import {SavedWorkspaceDeletion} from './saved-workspace-deletion.js';
 import {workspaceDeletion} from './workspace-delete-state.js';
@@ -171,7 +172,7 @@ import { Publisher } from './publishing.js';
 import {githubDestinations} from './github/destinations.js';
 import {githubSerializedRequest} from './github/request-policy.js';
 import http from 'node:http';
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import os from 'node:os';
 import { Workspace, workspaceFile, assertRegular } from './storage.js';
 import { createNotebook, upgradeNotebook, MAX_BYTES } from './model.js';
@@ -186,7 +187,6 @@ import {MAX_FONT_BYTES} from './font-inspector.js';
 
 const assets=await createApplicationAssets();
 const mime = name => name.endsWith('.bin') ? 'application/octet-stream' : name.endsWith('.csv') ? 'text/csv; charset=utf-8' : name.endsWith('.png') ? 'image/png' : name.endsWith('.mp4') ? 'video/mp4' : name.endsWith('.wav') ? 'audio/wav' : name.endsWith('.ttf') ? 'font/ttf' : name.endsWith('.otf') ? 'font/otf' : name.endsWith('.woff2') ? 'font/woff2' : name.endsWith('.woff') ? 'font/woff' : name.endsWith('.txt') ? 'text/plain; charset=utf-8' : name.endsWith('.css') ? 'text/css; charset=utf-8' : name.endsWith('.js') ? 'text/javascript; charset=utf-8' : name.endsWith('.svg') ? 'image/svg+xml' : name.endsWith('.json') ? 'application/json' : 'text/html; charset=utf-8';
-const equal = (a, b) => typeof a === 'string' && /^[a-f0-9]{64}$/.test(a) && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
 async function body(req,limit=MAX_BYTES,capacityOwner=null) {
   return jsonBody(req,{limit:Math.min(limit,req.routePolicy?.limit??limit),retain:bytes=>req.admission.retain(bytes),admit:bytes=>{if(capacityOwner)admitResearchBytes(capacityOwner,bytes);}});
@@ -270,7 +270,7 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
   let context=makeContext(root,expectedExisting), origin, publishing=false, importing=false, changing=false, activeWrites=0, loginBusy=false;
   const assertGithubIdle=async()=>{if(publishing||await context.jobs?.queue.hasActive(['publication.deploy','publication.repository','publication.destination-review']))throw new AppError('GITHUB_PUBLICATION_BUSY');};
   const sessions=new Map(), plans=new Map(), failures=new Map();
-  const launchToken=randomBytes(32).toString('hex');
+  const launches=new LaunchCapabilities();
   let contextRequired=false;
   const localPreferences=await readPreferences(preferencesFile);
   const forgetDeleted=async source=>{
@@ -364,10 +364,12 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
       if(shuttingDown)throw new AppError('SERVER_CLOSING');
       if (req.method === 'POST' && url.pathname === '/api/session') {
         const data = await body(req);
-        if (!equal(data?.token, launchToken)) throw new AppError('AUTH');
+        const claim=launches.claim(data?.token,data?.binding);
+        if(claim.replay){const session=await claim.replay;if(!sessions.has(session))throw new AppError('AUTH');setCookie(res,session);return json({ok:true});}
+        try{
         if(changing||loginBusy){
           const prior=req.headers.cookie?.split(';').map(value=>value.trim()).find(value=>value.startsWith('observanda='))?.slice(11),client=sessions.get(prior);
-          if(client&&!(await status(client)).locked)return json({ok:true});
+          if(client&&!(await status(client)).locked){claim.complete(prior);return json({ok:true});}
           throw new AppError('LOCKED');
         }
         const sessionContext=context,session=randomBytes(32).toString('hex'),access=await diagnosticPhase('session-access',contextAccess);
@@ -387,7 +389,8 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         if(local.access){await diagnosticPhase('workspace-identity',()=>ensureWorkspaceIdentity(sessionContext));}
         if(local.access)try{await diagnosticPhase('session-location',()=>rememberAuthenticatedLocation(preferencesFile,sessionContext.root));}catch(error){if(error.code!=='LEGACY_WRITE_LOCK')throw error;}
         if(context!==sessionContext)throw new AppError('WORKSPACE_CHANGED');sessions.set(session,local);setCookie(res,session);if(local.access)startJobs(context);
-        return json({ ok: true });
+        claim.complete(session);return json({ ok: true });
+        }catch(error){claim.fail(error);throw error;}
       }
       const cookie = req.headers.cookie?.split(';').map(part => part.trim()).find(part => part.startsWith('observanda='))?.slice(11);
       const client=sessions.get(cookie);if(!client)throw new AppError('AUTH');
@@ -1429,8 +1432,8 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
    const operations=activities.list(context.id);
    return {busy:!!(activeWrites||changing||importing||publishing||loginBusy||context.dashboardTask||context.jobs?.worker.active||operations.some(item=>['running','queued'].includes(item.state))),failure:activities.failureSequence};
   };
-  return {server,origin,launchToken,url:origin+'/#'+launchToken,shutdownStatus,close:()=>closePromise??=(async()=>{
-   shuttingDown=true;requestAdmission.close();clearInterval(expiry);cancelFolderRequests();for(const request of pending)request.abortPreview?.();const stoppedJobs=stopJobs(context);
+  return {server,origin,get launchToken(){return launches.issue();},get url(){return origin+'/#'+launches.issue();},shutdownStatus,close:()=>closePromise??=(async()=>{
+   shuttingDown=true;launches.clear();requestAdmission.close();clearInterval(expiry);cancelFolderRequests();for(const request of pending)request.abortPreview?.();const stoppedJobs=stopJobs(context);
    const disconnected=connections.close();
    const timeout=setTimeout(()=>server.closeAllConnections(),60000);timeout.unref();
    try{await Promise.all([stoppedJobs,...dashboardTasks,disconnected,pending.size?new Promise(resolve=>drained.push(resolve)):Promise.resolve()]);}

@@ -28,7 +28,8 @@
   "validated": "El espacio de trabajo es válido. {entries} entradas; revisión {revision}.",
   "chooseOutput": "Elige una carpeta de salida nueva con --out.",
   "exported": "Sitio web exportado: {entries} entradas, {files} archivos. Versión {release}.",
-  "ready": "Observanda está listo. Abre este enlace de inicio local:\n{url}\nPulsa Ctrl+C para detenerlo.",
+  "ready": "Observanda está listo. Dirección del servicio local:\n{url}\nPulsa Ctrl+C para detenerlo.",
+  "browserAuthorization": "Para autorizar un navegador, abre {file} en la carpeta browser-launch junto al archivo de preferencias antes de dos minutos. La autorización solo se puede usar una vez.",
   "checkField": "Revisa {field}.",
   "checkRecord": "Revisa {field} en el registro {recordId}."
 }

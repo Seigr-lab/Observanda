@@ -28,7 +28,8 @@
   "validated": "Arbeidsområdet er gyldig. {entries} oppføringar; revisjon {revision}.",
   "chooseOutput": "Vel ei ny utdatamappe med --out.",
   "exported": "Nettstaden er eksportert: {entries} oppføringar, {files} filer. Utgåve {release}.",
-  "ready": "Observanda er klart. Opne denne lokale startlenkja:\n{url}\nTrykk Ctrl+C for å stoppe.",
+  "ready": "Observanda er klart. Lokal tenesteadresse:\n{url}\nTrykk Ctrl+C for å stoppe.",
+  "browserAuthorization": "For å godkjenne ein nettlesar opnar du {file} i mappa browser-launch ved sida av innstillingsfila innan to minutt. Godkjenninga kan berre brukast éin gong.",
   "checkField": "Kontroller {field}.",
   "checkRecord": "Kontroller {field} i post {recordId}."
 }

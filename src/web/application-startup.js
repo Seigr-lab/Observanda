@@ -1,13 +1,14 @@
 import {t} from './i18n/index.js';
 
-// Keep the launch capability until the server acknowledges the connection.
-// No capability is persisted in local storage or diagnostics. Retrying a lost
-// response can safely use the same launch link against the existing service.
+// A tab-bound nonce permits retry of a lost bootstrap response without minting
+// another session. The launch token alone is one-use; both expire on the server.
 export async function startApplication({api,load,show,esc,location=window.location,history=window.history}){
  try{
   const token=location.hash.slice(1);
   if(/^[a-f0-9]{64}$/.test(token)){
-   await api('/api/session',{token});
+   const slot='observanda.launch.'+token;let binding=sessionStorage.getItem(slot);
+   if(!/^[a-f0-9]{64}$/.test(binding)){binding=Array.from(crypto.getRandomValues(new Uint8Array(32)),value=>value.toString(16).padStart(2,'0')).join('');sessionStorage.setItem(slot,binding);}
+   await api('/api/session',{token,binding});sessionStorage.removeItem(slot);
    if(location.hash==='#'+token)history.replaceState(history.state,'',location.pathname+location.search);
   }
   await load();
