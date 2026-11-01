@@ -128,7 +128,7 @@ export class Workspace {
     }
     await this.requireStorageKey();
   }
-  async readFile(file,encoding){await this.requireStorageKey();const stored=await readStorageFile(file);let bytes=stored;if(encrypted(stored)||this.vault?.id){if(!this.vault?.key)throw new AppError('ACCESS_LOCKED');bytes=unseal(stored,this.vault.key,this.fileAAD(file));}return encoding?bytes.toString(encoding):bytes;}
+  async readFile(file,encoding,limit=bufferConstants.MAX_LENGTH){await this.requireStorageKey();const stored=await readStorageFile(file,undefined,limit);let bytes=stored;if(encrypted(stored)||this.vault?.id){if(!this.vault?.key)throw new AppError('ACCESS_LOCKED');bytes=unseal(stored,this.vault.key,this.fileAAD(file));}return encoding?bytes.toString(encoding):bytes;}
   async writeFile(file,content){await this.requireStorageKey();const bytes=Buffer.from(content);await atomicWrite(file,this.vault?.id?seal(bytes,this.vault.key,this.fileAAD(file)):bytes);}
   metadataPath(relative){
     if(typeof relative!=='string'||!/^\.observanda\/[a-zA-Z0-9./-]+$/.test(relative)||relative.split('/').some(part=>!part||part==='.'||part==='..'))throw new AppError('UNSAFE');

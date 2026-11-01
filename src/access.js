@@ -52,7 +52,7 @@ export async function readAccess(root,{deviceStore=accessDevice()}={}){
     await assertRegular(path.join(root,'.observanda'),{directory:true});
     const file=path.join(root,'.observanda','access.json'),stat=await assertRegular(file);
     if(stat.size>ACCESS_LIMIT)throw new AppError('ACCESS_FORMAT');
-    const raw=await readFile(file,'utf8');let value;try{value=JSON.parse(raw);}catch{throw new AppError('ACCESS_FORMAT');}
+    const raw=await readFile(file,'utf8',ACCESS_LIMIT);let value;try{value=JSON.parse(raw);}catch{throw new AppError('ACCESS_FORMAT');}
     const p=value.password;
     if(value.formatVersion===3){validateKeyring(value);}else if(value.formatVersion===2){
       if(Object.keys(value).sort().join()!=='formatVersion,password,username,vaultId'||!usernameOK(value.username)||!/^[-a-f0-9]{36}$/.test(value.vaultId)||!p||Object.keys(p).sort().join()!=='algorithm,salt,wrapped'||p.algorithm!=='scrypt-aes-256-gcm'||!/^[a-f0-9]{64}$/.test(p.salt)||!/^[a-f0-9]{136}$/.test(p.wrapped))throw new AppError('ACCESS_FORMAT');

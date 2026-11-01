@@ -33,7 +33,7 @@ export class WorkspaceCopyRecovery {
   if(!await assertRegular(this.target.root,{missing:true,directory:true}))return null;
   if(!await assertRegular(path.join(this.target.root,'.observanda'),{missing:true,directory:true}))return null;
   const stat=await assertRegular(this.file,{missing:true});if(!stat)return null;if(stat.size>MAX_RECEIPT)throw new AppError('STORAGE_COPY');
-  let value;try{if(!this.source.vault?.id)await this.source.requireStorageKey();value=JSON.parse(this.source.vault?.id?await this.target.readFile(this.file,'utf8'):await readFile(this.file,'utf8'));}catch{throw new AppError('STORAGE_COPY');}
+  let value;try{if(!this.source.vault?.id)await this.source.requireStorageKey();value=JSON.parse(this.source.vault?.id?await this.target.readFile(this.file,'utf8',MAX_RECEIPT):await readFile(this.file,'utf8',MAX_RECEIPT));}catch{throw new AppError('STORAGE_COPY');}
   if(![1,2,3,4].includes(value?.version)||!researchId(value.id)||value.vaultId!==(this.source.vault?.id??null)||!['files','database','snapshot','published'].includes(value.phase)||value.plan?.portable!==undefined&&value.plan.portable!==true||value.plan?.source!==this.source.root||value.plan?.destination!==this.target.root||value.plan?.inventorySalt!==value.id||!value.directory||(value.version===4?!validWorkspaceCopyDirectory(value.directory)||value.transfers!==undefined:!Array.isArray(value.directory.value?.projects)||!value.transfers||typeof value.transfers!=='object'))throw new AppError('STORAGE_COPY');
   if(value.plan.projectPlacement!==undefined&&value.plan.projectPlacement!==2)throw new AppError('STORAGE_COPY');
   if(value.version===1&&value.plan.projectPlacement!==undefined||value.version>=3&&value.plan.projectPlacement!==2)throw new AppError('STORAGE_COPY');
