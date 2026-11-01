@@ -1,4 +1,4 @@
-import {validImportAuthorization,eraseImportAuthorization} from './project-import-access.js';
+import {validImportAuthorization,eraseImportAuthorization} from './project-import-authorization.js';
 import {portabilityCollection,validPortabilityCollection} from './portability-collection.js';
 // Pending imports reserve only the selected identities and containing parent.
 import path from 'node:path';

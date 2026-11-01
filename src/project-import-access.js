@@ -3,9 +3,11 @@
 import path from 'node:path';
 import {opendir} from 'node:fs/promises';
 import {randomUUID,randomBytes} from 'node:crypto';
-import {NativePortabilityCollection,createPortabilityCollection,portabilityCollection,releasePortabilityCollection,validPortabilityCollection} from './portability-collection.js';
+import {NativePortabilityCollection,createPortabilityCollection,portabilityCollection} from './portability-collection.js';
 import {ProjectImportInventory,importOwnerStorage} from './project-import-inventory.js';
 import {ProjectImports} from './project-import.js';
+import {validImportAuthorization,eraseImportAuthorization} from './project-import-authorization.js';
+export {validImportAuthorization,eraseImportAuthorization};
 import {readProjectImport,saveProjectImport,projectImportOwners} from './project-import-state.js';
 import {ProjectOpening} from './project-opening.js';
 import {projectRegistryLocationKey} from './project-registry-locations.js';
@@ -26,17 +28,6 @@ const relativeOK=relative=>{if(typeof relative!=='string'||relative.length>16384
 const ownerMatches=(actual,expected)=>['kind','projectId','labBookId','namespaceId','vaultId','relative','archiveDigest'].every(key=>expected?.[key]===undefined||actual?.[key]===expected[key]);
 const accessFailure=relative=>new AppError('PROJECT_IMPORT_ACCESS',[relative,path.posix.basename(relative)]);
 const credential=value=>{if(!value||Object.keys(value).sort().join()!=='password,recovery,username'||Object.values(value).some(item=>typeof item!=='string'||item.length>1024))throw new AppError('INVALID');return value;};
-export function validImportAuthorization(value){
- const access=value?.access;
- return !!access&&access.version===1&&['import','cancel'].includes(access.intent)&&researchId(access.session)&&researchId(access.revision)&&Number.isSafeInteger(access.cursor)&&access.cursor>=0&&validPortabilityCollection(access.candidates)&&validPortabilityCollection(access.grants)&&access.candidates.id!==access.grants.id&&access.cursor<=access.candidates.count&&(access.initializing===undefined||access.initializing===true);
-}
-export async function eraseImportAuthorization(registry,value){
- if(!value.access)return;if(!validImportAuthorization(value))throw new AppError('STORAGE_COPY');
- // The receipt remains the cleanup authority until both namespaces, including
- // superseded roots, have been erased. Retrying either erase is harmless.
- await releasePortabilityCollection(registry.workspace,value.access.grants);
- await releasePortabilityCollection(registry.workspace,value.access.candidates);delete value.access;
-}
 export class ProjectImportAccess{
  constructor(application,{now=Date.now}={}){this.application=application;this.now=now;this.sessions=new Map();this.cleanups=new Set();this.cleanupQueue=new Map();this.closed=false;this.recovered=false;}
  scheduleCleanup(id,session){
