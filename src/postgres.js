@@ -167,6 +167,7 @@ async function importArchive(root,db){
  const file=path.join(root,CATALOGUE_ARCHIVE);await assertRegular(file);return readCatalogueArchive(file,db,tables);
 }
 export async function openCatalogue(root,{create=false,detached=false,validate,restore,vault,deleteId,projectId,labBookId,env:explicitEnv,signal}={}){
+ if(signal===undefined)signal=databaseRequestSignal();signal?.throwIfAborted();
  if(restore!==undefined&&(typeof restore!=='function'||create||detached))throw new AppError('INVALID');
  await (await import('./workspace-delete-state.js')).assertNotDeleting(root,deleteId);
  await assertRegular(path.join(root,'.observanda'),{directory:true});
@@ -176,7 +177,7 @@ export async function openCatalogue(root,{create=false,detached=false,validate,r
  if(create&&existing)throw new AppError('EXISTS');
  if(detached&&!existing&&!create&&!archived)fail();
  if(detached&&activation)throw new AppError('LOCKED');
- const lease=explicitEnv?{env:explicitEnv,release:()=>{}}:await acquireWorkspaceDatabaseEnvironment(root,{create,detached,vault,projectId,labBookId});
+ const lease=explicitEnv?{env:explicitEnv,release:()=>{}}:await acquireWorkspaceDatabaseEnvironment(root,{create,detached,vault,projectId,labBookId,signal});
  const env=lease.env;let client;
  try{await assertCatalogueEnvironment(root,projectId,env,labBookId);client=await connect(env,{signal});}finally{lease.release();}
  let db,created=false,published=false,restoreLock;

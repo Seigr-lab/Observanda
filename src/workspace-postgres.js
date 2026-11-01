@@ -8,6 +8,7 @@ import {createHash} from 'node:crypto';
 import {startManagedPostgres,stopManagedPostgres} from './postgres-runtime.js';
 import {assertRegular} from './storage.js';
 import {AppError} from './errors.js';
+import {waitRuntimeStartup} from './runtime-startup-wait.js';
 import {assertNotDeleting,workspaceDeletion} from './workspace-delete-state.js';
 
 export const WORKSPACE_DATABASE_DIRECTORY='.observanda/postgresql';
@@ -20,14 +21,16 @@ export class WorkspacePostgres{
   this.ownerId=ownerId;this.runtimeDirectory=runtimeDirectory;this.env={...env};delete this.env.OBSERVANDA_DATABASE_URL;
   this.onProgress=onProgress;this.signal=signal;this.instances=new Map();this.stopping=false;
  }
- async open(root,vault,{create=false}={}){
+ async open(root,vault,{create=false,signal}={}){
+  signal?.throwIfAborted();
   if(this.stopping)throw new AppError('DATABASE_CANCELLED');
   root=await realpath(root);await assertNotDeleting(root);await assertNotMoving(root);await assertNotRenaming(root);
   // Shutdown may drain the owner while those filesystem checks are pending.
   // No awaited work separates this second admission from registering startup.
   if(this.stopping)throw new AppError('DATABASE_CANCELLED');
   const identity=keyIdentity(vault),prior=this.instances.get(root);
-  if(prior){if(prior.identity!==identity)throw new AppError('ACCESS_DENIED');if(prior.closing)throw new AppError('DATABASE_RUNNING');return (await prior.pending).env;}
+  signal?.throwIfAborted();
+  if(prior){if(prior.identity!==identity)throw new AppError('ACCESS_DENIED');if(prior.closing)throw new AppError('DATABASE_RUNNING');return (await waitRuntimeStartup(prior.pending,signal)).env;}
   const directory=path.join(root,WORKSPACE_DATABASE_DIRECTORY);
   const env={...this.env},entry={identity};this.instances.set(root,entry);
   env.OBSERVANDA_WORKSPACE_DATABASE_ROOT=root;
@@ -40,7 +43,7 @@ export class WorkspacePostgres{
    }catch(error){if(this.instances.get(root)===entry)this.instances.delete(root);throw error;}
    finally{startupVault.key.fill(0);}
   })();
-  return (await entry.pending).env;
+  return (await waitRuntimeStartup(entry.pending,signal)).env;
  }
  async authorizeDeletion(root,vault,deleteId){
   root=await realpath(root);await assertNotDeleting(root,deleteId);
@@ -72,7 +75,7 @@ export class WorkspacePostgres{
   root=await this.authorizeMove(root,vault,moveId);await this.closeWorkspace(root);
   const service=await stopManagedPostgres({directory:path.join(root,WORKSPACE_DATABASE_DIRECTORY),env:{...this.env},workspace:{root,vault,ownerId:this.ownerId,moveId}});await service.close();
  }
- async cached(root){const entry=this.instances.get(await realpath(root));if(!entry||entry.closing)throw new AppError('ACCESS_LOCKED');return (await entry.pending).env;}
+ async cached(root,{signal}={}){signal?.throwIfAborted();const entry=this.instances.get(await realpath(root));if(!entry||entry.closing)throw new AppError('ACCESS_LOCKED');return (await waitRuntimeStartup(entry.pending,signal)).env;}
  // A readiness check observes only an already opened runtime. It must not
  // start PostgreSQL, resolve a network path or await an unfinished startup.
  healthEnvironment(root){const entry=this.instances.get(path.resolve(root));return !this.stopping&&entry&&!entry.closing?entry.env??null:null;}

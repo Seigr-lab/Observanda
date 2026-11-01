@@ -15,6 +15,7 @@ import {assertRegular,atomicWrite} from './storage.js';
 import {installDatabaseProvider} from './workspace-database-context.js';
 import {AppError} from './errors.js';
 import {workspaceDatabaseLease} from './workspace-database-lease.js';
+import {waitRuntimeStartup} from './runtime-startup-wait.js';
 
 export class WorkspaceDatabases{
  constructor({directory,ownerId,env=process.env,signal,onProgress=()=>{},projectRuntime={},labBookRuntime={}}){
@@ -23,16 +24,18 @@ export class WorkspaceDatabases{
   this.projects=new ProjectPostgres({ownerId,env:this.env,runtimeDirectory:this.directory,signal,onProgress,idleMs:projectRuntime.idleMs,maxIdle:projectRuntime.maxIdle});
   this.labBooks=new LabBookPostgres({ownerId,env:this.env,runtimeDirectory:this.directory,signal,onProgress,idleMs:labBookRuntime.idleMs,maxIdle:labBookRuntime.maxIdle});
  }
- async environment(root,{create=false,detached=false,vault,projectId,labBookId}={}){
+ async environment(root,{create=false,detached=false,vault,projectId,labBookId,signal}={}){
+  signal?.throwIfAborted();
   if(this.closing)throw new AppError('DATABASE_CANCELLED');
   root=await realpath(root);const binding=await catalogueBinding(root);
   assertCatalogueOwner(binding,projectId,labBookId);
-  if(detached&&!binding&&!create)return this.archiveEnvironment(root,projectId,labBookId);
-  if(labBookId!==undefined)return this.labBooks.open(root,labBookId,vault,{create:create||!binding});
-  if(projectId!==undefined)return this.projects.open(root,projectId,vault,{create:create||!binding});
+  signal?.throwIfAborted();
+  if(detached&&!binding&&!create)return this.archiveEnvironment(root,projectId,labBookId,{signal});
+  if(labBookId!==undefined)return waitRuntimeStartup(this.labBooks.open(root,labBookId,vault,{create:create||!binding}),signal);
+  if(projectId!==undefined)return waitRuntimeStartup(this.projects.open(root,projectId,vault,{create:create||!binding}),signal);
   if(binding&&binding.placement!=='workspace')throw new AppError('ACCESS_UPGRADE');
-  if(!vault?.key)return this.instances.cached(root);
-  return this.instances.open(root,vault,{create:create||!binding});
+  if(!vault?.key)return this.instances.cached(root,{signal});
+  return this.instances.open(root,vault,{create:create||!binding,signal});
  }
  // A deletion may address an installation-wide catalogue from an older
  // version. Reopen that existing cluster only; never create its replacement.
@@ -47,25 +50,32 @@ export class WorkspaceDatabases{
   return (await this.legacyStart).env;
  }
  async acquireEnvironment(root,options={}){
+  options.signal?.throwIfAborted();
   if(this.closing)throw new AppError('DATABASE_CANCELLED');
   if(options.projectId===undefined&&options.labBookId===undefined)return {env:await this.environment(root,options),release:()=>{}};
   root=await realpath(root);const binding=await catalogueBinding(root);assertCatalogueOwner(binding,options.projectId,options.labBookId);
-  if(options.detached&&!binding&&!options.create)return {env:await this.archiveEnvironment(root,options.projectId,options.labBookId),release:()=>{}};
-  if(options.labBookId!==undefined)return this.labBooks.acquire(root,options.labBookId,options.vault,{create:options.create||!binding});
-  return this.projects.acquire(root,options.projectId,options.vault,{create:options.create||!binding});
+  options.signal?.throwIfAborted();
+  if(options.detached&&!binding&&!options.create)return {env:await this.archiveEnvironment(root,options.projectId,options.labBookId,{signal:options.signal}),release:()=>{}};
+  // Each acquire synchronously derives its own runtime key before its first
+  // await. Keep that startup and pool lease owned after the request leaves;
+  // release the eventual lease without admitting a cancelled SQL connection.
+  const pending=options.labBookId!==undefined?this.labBooks.acquire(root,options.labBookId,options.vault,{create:options.create||!binding}):this.projects.acquire(root,options.projectId,options.vault,{create:options.create||!binding});
+  try{return await waitRuntimeStartup(pending,options.signal);}
+  catch(error){void pending.then(lease=>lease.release(),()=>{});throw error;}
  }
  // An unpublished archive is checked in a temporary schema. It does not own
  // a destination database until the user opens that workspace or project.
- async archiveEnvironment(root,projectId,labBookId){
-  const source=await this.scratch(),env={...source};inheritRuntimeStorage(source,env);delete env.OBSERVANDA_WORKSPACE_DATABASE_ROOT;delete env.OBSERVANDA_PROJECT_DATABASE_ROOT;delete env.OBSERVANDA_PROJECT_ID;delete env.OBSERVANDA_LAB_BOOK_DATABASE_ROOT;delete env.OBSERVANDA_LAB_BOOK_ID;
+ async archiveEnvironment(root,projectId,labBookId,{signal}={}){
+  const source=await this.scratch({signal}),env={...source};inheritRuntimeStorage(source,env);delete env.OBSERVANDA_WORKSPACE_DATABASE_ROOT;delete env.OBSERVANDA_PROJECT_DATABASE_ROOT;delete env.OBSERVANDA_PROJECT_ID;delete env.OBSERVANDA_LAB_BOOK_DATABASE_ROOT;delete env.OBSERVANDA_LAB_BOOK_ID;
   if(labBookId!==undefined){env.OBSERVANDA_LAB_BOOK_ID=labBookId;env.OBSERVANDA_LAB_BOOK_DATABASE_ROOT=root;}
   if(projectId!==undefined){env.OBSERVANDA_PROJECT_ID=projectId;env.OBSERVANDA_PROJECT_DATABASE_ROOT=root;}
   return env;
  }
- async scratch(){
+ async scratch({signal}={}){
+  signal?.throwIfAborted();
   if(this.closing)throw new AppError('DATABASE_CANCELLED');
   this.scratchStart??=startScratchPostgres({runtimeDirectory:this.directory,env:this.env,signal:this.signal,onProgress:this.onProgress}).then(owner=>{this.scratchEnv=owner.env;return owner;});
-  return (await this.scratchStart).env;
+  return (await waitRuntimeStartup(this.scratchStart,signal)).env;
  }
  async closeWorkspace(root){await this.instances.closeWorkspace(root);}
  healthEnvironments(root){return {scratch:this.closing?null:this.scratchEnv??null,selected:this.closing||!root?null:this.instances.healthEnvironment(root)};}
