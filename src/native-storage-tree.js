@@ -15,12 +15,12 @@ export async function nativeMember(root,relative,operation,{create=false,missing
 }
 // Ordered file inventories tend to share parents. Retain only the most recent
 // ancestry, bounded by directory depth, rather than reopening it per file.
-export function nativeMemberCursor(root,{create=false}={}){
+export function nativeMemberCursor(root,{create=false,missing=false}={}){
  const parts=[],handles=[];
  async function trim(length){while(handles.length>length){parts.pop();await handles.pop().close();}}
  return {async member(relative){
   const next=memberParts(relative),name=next.pop();let common=0;while(common<parts.length&&common<next.length&&parts[common]===next[common])common++;
-  await trim(common);for(let index=common;index<next.length;index++){const handle=await (handles.at(-1)??root).directory(next[index],{create});handles.push(handle);parts.push(next[index]);}
+  await trim(common);for(let index=common;index<next.length;index++){const handle=await (handles.at(-1)??root).directory(next[index],{create,missing});if(!handle)return {directory:null,name};handles.push(handle);parts.push(next[index]);}
   return {directory:handles.at(-1)??root,name};
  },close:()=>trim(0)};
 }

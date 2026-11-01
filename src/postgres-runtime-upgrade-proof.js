@@ -62,19 +62,22 @@ export async function *runtimeProofEntries(target,journal){
  finally{key.fill(0);await root.close();}
 }
 export async function verifyRuntimeProof(source,target,journal,{targetFiles=true,signal}={}){
- const actual=accumulator(),expected=accumulator();
- for await(const entry of walk(source)){signal?.throwIfAborted();actual.add(sourceProof(entry));}
- for await(const entry of runtimeProofEntries(target,journal)){
-  signal?.throwIfAborted();expected.add(sourceProof(entry));
-  if(targetFiles)await nativeMember(target,entry.path,async(parent,name)=>{if(entry.directory){const directory=await parent.directory(name);await directory.close();}else if(!same(await parent.hash(name),entry.target))fail();});
- }
- if(JSON.stringify(actual.value())!==JSON.stringify(journal.sourceProof)||JSON.stringify(expected.value())!==JSON.stringify(journal.sourceProof))fail();
+ const actual=accumulator(),expected=accumulator(),cursor=targetFiles?nativeMemberCursor(target):null;
+ try{
+  for await(const entry of walk(source)){signal?.throwIfAborted();actual.add(sourceProof(entry));}
+  for await(const entry of runtimeProofEntries(target,journal)){
+   signal?.throwIfAborted();expected.add(sourceProof(entry));
+   if(cursor){const {directory:parent,name}=await cursor.member(entry.path);if(entry.directory){const directory=await parent.directory(name);await directory.close();}else if(!same(await parent.hash(name),entry.target))fail();}
+  }
+  if(JSON.stringify(actual.value())!==JSON.stringify(journal.sourceProof)||JSON.stringify(expected.value())!==JSON.stringify(journal.sourceProof))fail();
+ }finally{await cursor?.close();}
 }
 export async function retireRuntimeFromProof(source,target,journal,signal){
- for await(const entry of runtimeProofEntries(target,journal)){
+ const cursor=nativeMemberCursor(source,{missing:true});
+ try{for await(const entry of runtimeProofEntries(target,journal)){
   signal?.throwIfAborted();if(entry.directory)continue;
-  await nativeMember(source,entry.path,async(parent,name)=>{const value=await parent?.hash(name,{missing:true});if(!value)return;if(value.identity!==entry.identity||!same(value,entry)){const error=runtimeUpgradeError('source-or-copy-changed');error.diagnostic=JSON.stringify({phase:'retire-file',relative:entry.path,identityChanged:value.identity!==entry.identity,bytesChanged:value.bytes!==entry.bytes,hashChanged:value.sha256!==entry.sha256});throw error;}await parent.remove(name,{identity:value.identity});},{missing:true});
- }
+  const {directory:parent,name}=await cursor.member(entry.path),value=await parent?.hash(name,{missing:true});if(!value)continue;if(value.identity!==entry.identity||!same(value,entry)){const error=runtimeUpgradeError('source-or-copy-changed');error.diagnostic=JSON.stringify({phase:'retire-file',relative:entry.path,identityChanged:value.identity!==entry.identity,bytesChanged:value.bytes!==entry.bytes,hashChanged:value.sha256!==entry.sha256});throw error;}await parent.remove(name,{identity:value.identity});
+ }}finally{await cursor.close();}
  async function empty(root,top=false){for await(const item of root.entries()){
   if(!item.directory){if(!top||item.name!=='owner.lock')fail();continue;}
   const child=await root.directory(item.name);try{await empty(child);}finally{await child.close();}await root.remove(item.name,{folder:true,identity:child.identity});

@@ -79,7 +79,7 @@ namespace Observanda {
    }finally{if(current!=null)current.Dispose();}
   }
   static object Hash(SafeFileHandle parent,string name,bool links){using(var handle=Open(parent,name,false,0x80000000)){
-   Info before=Information(handle,false,links);using(var stream=new FileStream(handle,FileAccess.Read,(int)Math.Min(65536,Math.Max(Bytes(before),4096)),false))using(var sha=SHA256.Create()){
+   Info before=Information(handle,false,links);using(var stream=new FileStream(handle,FileAccess.Read,(int)Math.Min(1048576,Math.Max(Bytes(before),4096)),false))using(var sha=SHA256.Create()){
     string digest=Digest(sha.ComputeHash(stream));Info after=Information(handle,false,links);if(!Same(before,after))throw new Failure("LOCAL_EXPORT_CHANGED");return new {bytes=Bytes(after),sha256=digest,identity=Identity(after),links=after.Links};
    }
   }}
