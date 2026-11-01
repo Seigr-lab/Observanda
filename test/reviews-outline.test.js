@@ -50,6 +50,20 @@ test('review planning and status use summaries; creation loads only selected rec
  assert.equal((await f.run('read',{id:payload.id})).packet.request.value.records[0].record.title,target.title);
  await assert.rejects(f.service.run('list',{workspaceId:randomUUID()}));assert.deepEqual(loaded,[]);
 });
+test('review creation rechecks revisions and scope membership after signing before committing',async t=>{
+ const f=await fixture(t,3),scope={kind:'notebook',id:f.first},plan=await f.run('plan',{scope}),records=plan.records.map(({id,revision})=>({id,revision}));
+ const sign=f.service.identity.sign.bind(f.service.identity);let change;
+ t.mock.method(f.service.identity,'sign',async value=>{const signed=await sign(value);await change();return signed;});
+ const target=f.book.entries[0];
+ change=()=>new ResearchRecords(f.a.workspace,{}).save({workspaceId:f.book.id,changes:[{id:target.id,expectedRevision:recordRevision(target),record:{...target,title:'Changed while signing'}}]},{recordIds:[target.id]});
+ await assert.rejects(f.run('create',f.payload(records)),{code:'MODULE_INVALID',details:[{field:'A selected record changed. Preview the selection again.'}]});
+ assert.equal((await f.run('list')).total,0);
+ const fresh=await f.run('plan',{scope}),extra={...structuredClone(target),id:randomUUID()};
+ change=()=>new ResearchRecords(f.a.workspace,{}).save({workspaceId:f.book.id,changes:[{id:extra.id,expectedRevision:null,record:extra}]},{recordIds:[extra.id]});
+ await assert.rejects(f.run('create',{...f.payload(fresh.records.map(({id,revision})=>({id,revision}))),scope}),{code:'MODULE_INVALID',details:[{field:'The selection changed. Preview the selection again.'}]});
+ assert.equal((await f.run('list')).total,0);
+});
+
 test('review pages retain bounded results, reject changed or forged cursors, and read legacy summaries without writing during browsing',async t=>{
  const f=await fixture(t,32),ref={id:f.book.entries[0].id,revision:recordRevision(f.book.entries[0])},ids=[];
  for(let i=0;i<12;i++){const p=f.payload([ref]);await f.run('create',p);ids.push(p.id);}

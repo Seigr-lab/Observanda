@@ -40,6 +40,15 @@ export class ReviewRecords{
    return selected;
   });
  }
+ async verify(workspaceId,records,{scope}={}){
+  requireValue(validReviewRecords(records),'Choose 1 to 50 saved record revisions');
+  if(scope){
+   const plan=await this.plan(workspaceId,scope);
+   requireValue(JSON.stringify(plan.records.map(({id,revision})=>({id,revision})))===JSON.stringify(records),'The selection changed. Preview the selection again.');return;
+  }
+  const current=await this.current(workspaceId,records.map(ref=>ref.id));
+  for(const ref of records)requireValue(current.get(ref.id)===ref.revision,'A selected record changed. Preview the selection again.');
+ }
  async current(workspaceId,ids){
   return this.workspace.catalogue(async store=>{
    const source=await store.snapshot();requireValue(source.metadata.id===workspaceId,'Workspace changed');const values=new Map();
