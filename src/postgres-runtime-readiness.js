@@ -1,8 +1,29 @@
 // A managed server is ready only when its application role can use the owned
 // database. Cold database startup has a separate, bounded readiness budget.
 import {Socket} from 'node:net';
+import {setTimeout as delay} from 'node:timers/promises';
 import {Client} from 'pg';
 import {AppError} from './errors.js';
+export async function connectManagedAdmin(config,{signal,deadline=performance.now()+30000}={}){
+ if(!Number.isFinite(deadline))throw new AppError('INVALID');
+ for(;;){
+  if(signal?.aborted)throw new AppError('DATABASE_CANCELLED');
+  const remaining=deadline-performance.now();if(remaining<=0)throw new AppError('DATABASE_RUNTIME');
+  const socket=new Socket(),client=new Client({stream:socket,host:'127.0.0.1',port:config.port,user:'observanda_admin',password:config.adminPassword,database:'template1',connectionTimeoutMillis:Math.max(1,Math.min(5000,Math.ceil(remaining)))});
+  client.on('error',()=>{});const abort=()=>socket.destroy(new AppError('DATABASE_CANCELLED'));
+  signal?.addEventListener('abort',abort,{once:true});let connected=false;
+  try{if(signal?.aborted)abort();await client.connect();if(signal?.aborted)throw new AppError('DATABASE_CANCELLED');connected=true;return client;}
+  catch(error){
+   if(signal?.aborted)throw new AppError('DATABASE_CANCELLED');
+   // Windows pg_ctl can accept a recently crashed server's stale ready PID
+   // before its replacement starts. Authenticate the newly selected endpoint;
+   // only connection refusal or recovery-in-progress permits another attempt.
+   if(!['ECONNREFUSED','57P03'].includes(error.code))throw error;
+  }finally{signal?.removeEventListener('abort',abort);if(!connected){try{await client.end();}finally{socket.destroy();}}}
+  if(performance.now()>=deadline)throw new AppError('DATABASE_RUNTIME');
+  try{await delay(Math.min(100,deadline-performance.now()),undefined,{signal});}catch(error){if(signal?.aborted)throw new AppError('DATABASE_CANCELLED');throw error;}
+ }
+}
 export async function verifyManagedApplication(config,{signal}={}){
  if(signal?.aborted)throw new AppError('DATABASE_CANCELLED');
  const socket=new Socket(),client=new Client({stream:socket,host:'127.0.0.1',port:config.port,user:'observanda',password:config.appPassword,database:'observanda',connectionTimeoutMillis:30000,statement_timeout:30000,application_name:'Observanda startup'});

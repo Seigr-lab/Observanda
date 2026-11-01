@@ -1,6 +1,6 @@
 import {initializeManagedApplication} from './postgres-runtime-bootstrap.js';
 import {diagnosticPhase} from './operational-diagnostics.js';
-import {verifyManagedApplication} from './postgres-runtime-readiness.js';
+import {connectManagedAdmin,verifyManagedApplication} from './postgres-runtime-readiness.js';
 import {assertNotRenaming,workspaceRename} from './workspace-rename-state.js';
 // PostgreSQL process lifecycle. Portable clusters belong to their workspace;
 // the installation-wide mode exists for older installations and explicit tools.
@@ -15,7 +15,6 @@ import {createHash,randomBytes} from 'node:crypto';
 import {pipeline} from 'node:stream/promises';
 import {Transform} from 'node:stream';
 import {fileURLToPath} from 'node:url';
-import {Client} from 'pg';
 import {assertRegular,WORKSPACE_FILE} from './storage.js';
 import {WindowsProtector} from './security/device-store.js';
 import {AppError} from './errors.js';
@@ -240,11 +239,11 @@ async function manageGuardedPostgres({directory,env,signal,onProgress,workspace,
   // Foreground app owns lifecycle; recovery after app termination stops only this cluster.
   // WAL recovery on network storage can exceed a minute. Wait for readiness
   // before treating a healthy recovering server as a failed startup.
+  const startupDeadline=performance.now()+900000;
   mayBeRunning=true;
   await ctl(['-l',path.join(directory,'postgresql.log'),'-o','-h 127.0.0.1 -p '+config.port+' -c max_connections=32 -c shared_buffers='+sharedBuffers+'MB -c work_mem=4MB -c temp_buffers=8MB -c max_parallel_workers=2 -c max_parallel_workers_per_gather=1 -c unix_socket_directories= -c password_encryption=scram-sha-256 -c log_statement=none','-w','-t','900','start'],{signal,waitForPipes:false});
-  const admin=new Client({host:'127.0.0.1',port:config.port,user:'observanda_admin',password:config.adminPassword,database:'template1',connectionTimeoutMillis:5000});admin.on('error',()=>{});
+  const admin=await diagnosticPhase('runtime-connect',()=>connectManagedAdmin(config,{signal,deadline:startupDeadline}));
   try{
-   await diagnosticPhase('runtime-connect',()=>admin.connect());
    if(config.phase==='initializing')await initializeManagedApplication(admin,config,{freshCluster});
   }finally{await admin.end();}
   await verifyManagedApplication(config,{signal});
