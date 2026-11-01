@@ -11,7 +11,7 @@ import {ENCRYPTION_OVERHEAD} from '../encryption.js';
 import {AppError} from '../errors.js';
 import {exact,uuid,instant,requireValue,object} from './validation.js';
 import {moduleResearchContext} from './research-context.js';
-import {ModuleCatalogue} from './catalogue.js';
+import {ModuleCatalogue,moduleEntityBytes} from './catalogue.js';
 import {executeModuleCommand} from './command.js';
 import {balance} from '../web/modules/quantities.js';
 import {MODULE_BYTES} from './capacity.js';
@@ -60,7 +60,15 @@ export class ModuleStore{
  async current(book){
   book??=(await this.workspace.outline()).metadata;
   if(await hasCatalogue(this.workspace.root))return this.workspace.catalogue(async store=>{
-   const owned=await moduleDomainContext(store,async c=>{const entities=[];for await(const member of c.members())entities.push(await c.selected(member.id));return {formatVersion:1,workspaceId:book.id,revision:c.head.revision,revisions:c.revisions,entities};},{scoped:false});
+   const owned=await moduleDomainContext(store,async c=>{
+    const entities=[];let bytes=Buffer.byteLength(serialize({formatVersion:1,workspaceId:book.id,revision:c.head.revision,revisions:c.revisions,entities:[]}));
+    for await(const member of c.members()){
+     const entity=await c.selected(member.id);bytes+=moduleEntityBytes(entity)+4;
+     if(bytes>MODULE_BYTES)throw new AppError('LIMIT');
+     entities.push(entity);
+    }
+    return {formatVersion:1,workspaceId:book.id,revision:c.head.revision,revisions:c.revisions,entities};
+   },{scoped:false});
    return owned?owned.value:this.validate(await store.moduleData(book.id,{history:false}),{history:false});
   });
   const {events,...data}=await this.read(book);void events;return data;

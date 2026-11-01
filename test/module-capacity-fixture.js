@@ -15,8 +15,8 @@ export function largeCategory({nearLimit=false}={}){
  const data={name:'Large category',description:'',archived:false,fields:[{key:'part',label:'Part',type:'select',unit:'',required:false,choices:[choice(0)]},...Array.from({length:24},(_,i)=>({key:'field_'+i,label:'Field '+i,type:'text',unit:'',required:false,choices:[]}))]};
  const entity={id:'00000000-0000-4000-8000-000000000000',type:'category',revision:1,createdAt:'2026-10-04T00:00:00.000Z',updatedAt:'2026-10-04T00:00:00.000Z',data},one=moduleEntityBytes(entity);
  data.fields[0].choices.push(choice(1));const step=moduleEntityBytes(entity)-one;
- // Retain 8 KiB for the existing storage envelope and later edits. The extra
- // choice test exercises the unchanged 64 MiB admission boundary.
+ // Retain 8 KiB for the command envelope and later edits. The extra choice
+ // test exercises the single-command budget, not a project-size ceiling.
  const count=nearLimit?1+Math.floor((MODULE_BYTES-8192-one)/step):30000;
  data.fields[0].choices=Array.from({length:count},(_,i)=>choice(i));return data;
 }

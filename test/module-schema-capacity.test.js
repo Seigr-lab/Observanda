@@ -20,7 +20,7 @@ import {Workspace} from '../src/storage.js';
 import {copyPlan,copyWorkspace,encryptedCopy} from '../src/locations.js';
 import {createAccess,takeCreatedVault} from '../src/access.js';
 
-test('schema near the unchanged 64 MiB storage boundary can be edited and recovered',async t=>{
+test('schema near the 64 MiB single-command boundary can be edited and recovered',async t=>{
  const directory=await mkdtemp(path.join(os.tmpdir(),'observanda-schema-capacity-')),book=sampleNotebook(),f=await encryptedFixture(directory,book),data=largeCategory({nearLimit:true}),id=randomUUID();
  t.after(async()=>{clearVault(f.vault);await rm(directory,{recursive:true,force:true});});
  const modules=workspaceModules(f.workspace),command=(expectedRevision,value)=>({workspaceId:book.id,commandId:randomUUID(),action:'category.save',payload:{id,expectedRevision,data:value}}),started=performance.now();

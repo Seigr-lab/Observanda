@@ -21,7 +21,7 @@ export async function executeModuleCommand(owner,store,research,command,fingerpr
   return result(entities,true);
  }
  const event=await prepareModuleCommand(owner,catalogue,head,research,command,fingerprint);
- await admitModuleChanges(catalogue,head,book.id,event.changes,event);
+ admitModuleChanges(event.changes,event);
  await catalogue.writeChanges(head,event.changes,event);
  return result(event.changes,false,head.revision+1);
 }

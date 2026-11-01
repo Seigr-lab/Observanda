@@ -20,6 +20,7 @@ import {ModuleBrowseIndex} from './browse-index.js';
 import {InventoryProjection} from './inventory-projection.js';
 import {moduleStateRow} from './read-state.js';
 import {diagnosticCount} from '../operational-diagnostics.js';
+import {MODULE_BYTES} from './capacity.js';
 const hash=value=>digest(serialize(value));
 const damaged=()=>{throw new AppError('CATALOGUE_DAMAGED');};
 export const moduleEntityBytes=entity=>{
@@ -121,6 +122,11 @@ export class ModuleCatalogue{
  }
  async read(workspaceId,{history=true}={}){
   const s=this.store,head=await this.head(workspaceId);
+  // This compatibility API materializes a response. Paged reads and compact
+  // commands continue to work when the complete collection exceeds its budget.
+  if(moduleCurrentBytes(workspaceId,head.revision,await this.currentSize(head))>MODULE_BYTES)throw new AppError('LIMIT');
+  let responseBytes=Buffer.byteLength(serialize({formatVersion:1,workspaceId,revision:head.revision,entities:[],...(history?{events:[]}: {})}));
+  const admit=value=>{responseBytes+=moduleEntityBytes(value)+4;if(responseBytes>MODULE_BYTES)throw new AppError('LIMIT');};
   const entities=[];
   for await(const row of s.db.rows('SELECT id,revision,payload FROM module_entities ORDER BY id',[],{batchSize:16})){
    const entity=await resolveModuleEntity(s,row,s.decode('module-entity',row.id+'/'+row.revision,row.payload)),member=await this.member(head,row.id);
@@ -130,13 +136,13 @@ export class ModuleCatalogue{
    if(member.referencesHash&&hash(moduleReferences(entity))!==member.referencesHash)damaged();
    if(member.calendarHash!==undefined&&(calendarFacts(entity)?hash(calendarFacts(entity)):null)!==member.calendarHash)damaged();
    if(member.inventoryHash!==undefined&&(inventoryFacts(entity)?hash(inventoryFacts(entity)):null)!==member.inventoryHash)damaged();
-   entities.push(entity);
+   admit(entity);entities.push(entity);
   }
   const data={formatVersion:1,workspaceId,revision:head.revision,entities};
   if(history){
    data.events=[];
    for await(const row of s.db.rows('SELECT command_id,ordinal,payload FROM module_events ORDER BY ordinal',[],{batchSize:8})){
-    if(row.ordinal!==data.events.length+1)damaged();data.events.push(await this.event(row));
+    if(row.ordinal!==data.events.length+1)damaged();const event=await this.event(row);admit(event);data.events.push(event);
    }
   }
   return data;
@@ -154,11 +160,11 @@ export class ModuleCatalogue{
   await new ModuleBrowseIndex(this).verify(head);
   await new InventoryProjection(this).verify(head);
   await withScratch(async work=>{
-  let count=0,bytes=0;
+  let bytes=0;
   for await(const member of this.members(head)){
    const entity=await this.selected(head,member.id);validate.entity(entity);
-   count++;bytes+=moduleEntityBytes(entity);
-   if(moduleCurrentBytes(workspaceId,head.revision,{count,bytes})>64*1024*1024)damaged();
+   const entityBytes=moduleEntityBytes(entity);bytes+=entityBytes;
+   if(entityBytes>MODULE_BYTES||!Number.isSafeInteger(bytes))damaged();
    await work.put('entity:'+entity.id,{revision:entity.revision,hash:member.hash,type:entity.type,createdAt:entity.createdAt,base:head.historyVersion===1?member.historyFrom:member.revision});
    await this.view(head,member);await this.search(head,member);await this.references(head,member);await this.calendar(head,member);await this.inventory(head,member);
   }
@@ -166,7 +172,7 @@ export class ModuleCatalogue{
    let ordinal=head.revision;
    // One event at a time: an audit does not assemble all past module bodies.
    for await(const row of this.store.db.rows('SELECT command_id,ordinal,payload FROM module_events ORDER BY ordinal DESC',[],{batchSize:1})){
-    if(row.ordinal!==ordinal--)damaged();const event=await this.event(row);validate.event(event);
+    if(row.ordinal!==ordinal--)damaged();const event=await this.event(row);validate.event(event);if(Buffer.byteLength(serialize(event))>MODULE_BYTES)damaged();
     if(!await work.add('event:'+event.id))damaged();const eventHash=hash(event);
     for(const entity of event.changes){
      const expected=await work.get('entity:'+entity.id);
@@ -191,14 +197,19 @@ export class ModuleCatalogue{
   if(entities.some(entity=>hasCalculationPolicy(entity.type,entity.data)))await requireCalculationPolicies(this.store.catalogueDb??this.store.db);
   const s=this.store,empty=(previous.memberVersion===1?previous.root?.count??0:previous.entities.length)===0;
   let root=previous.root??null,{bytes:totalBytes}=await this.currentSize(previous);
-  const browse=new ModuleBrowseIndex(this);let browseRoot=await browse.prepare(previous);
+  const browse=new ModuleBrowseIndex(this);
   const stock=new InventoryProjection(this);let stockRoot=await stock.prepare(previous);
   if(previous.memberVersion!==1)for await(const member of this.members(previous))root=await this.membersIndex.put(root,{...member,historyFrom:previous.historyVersion===1?member.historyFrom:member.revision});
+  // Upgrading membership can add historyFrom to every member, including those
+  // untouched by this command. Browse proofs must bind those final members.
+  const browseHead=previous.memberVersion===1?previous:{...previous,memberVersion:1,historyVersion:1,root,browseIndex:undefined};
+  let browseRoot=await browse.prepare(browseHead);
   for(const e of entities){
    const priorMember=await this.member({...previous,memberVersion:1,root},e.id);
    const previousView=priorMember?await this.view(previous,priorMember):null;
    const previousConstraint=priorMember?await this.constraint(previous,priorMember):null;
    if(priorMember)totalBytes-=previous.currentVersion===1?priorMember.bytes:moduleEntityBytes(await this.selected(previous,e.id));totalBytes+=moduleEntityBytes(e);
+   if(!Number.isSafeInteger(totalBytes)||totalBytes<0)throw new AppError('LIMIT');
    const constraint=moduleConstraint(e),constraintHash=hash(constraint),slot='module-constraint:'+constraintHash;
    const prior=await s.db.get('SELECT payload FROM state WHERE slot=$1',slot);
    if(prior){if(hash(s.decode('state',slot,prior.payload))!==constraintHash)damaged();}

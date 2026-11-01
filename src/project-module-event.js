@@ -15,7 +15,7 @@ export async function writeProjectModuleEvent({owner,identities,federation,plan,
  for(const entity of event.changes){const domain=moduleDomain(entity.type);if(!plan.write.includes(domain))throw new AppError('MODULE_FORMAT');if(!changes.has(domain))changes.set(domain,[]);changes.get(domain).push(entity);}
  if([...changes.keys()].sort().join()!==plan.write.join())throw new AppError('MODULE_FORMAT');const events=[],fragments=[],revisions={...baseRevisions};
  for(const domain of [...changes.keys()].sort()){
-  const entities=changes.get(domain),fragment={...event,changes:entities},current=federation.owners.get(domain);await admitModuleChanges(current.catalogue,current.head,command.workspaceId,entities,fragment);
+  const entities=changes.get(domain),fragment={...event,changes:entities},current=federation.owners.get(domain);admitModuleChanges(entities,fragment);
   for(const entity of entities){const existing=await identities.locate('entity',entity.id);if(existing&&existing.domain!==domain)throw new AppError('MODULE_CHANGED');await identities.claim('entity',entity.id,{domain});}
   events.push({domain,event:fragment});fragments.push({domain,ordinal:current.head.revision+1,hash:moduleEventHash(fragment)});
  }
