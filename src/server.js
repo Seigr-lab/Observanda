@@ -43,6 +43,7 @@ import {moduleDomainRoute} from './module-domain-context.js';
 import {ProjectApplication,projectRequest} from './project-application.js';
 import {researchRequest,executeResearchRequest} from './research-requests.js';
 import {LiveConnections} from './collaboration/live-connections.js';
+import {liveFileHeaders} from './collaboration/live-response.js';
 import {WorkspaceDeletions} from './workspace-deletion.js';
 import {SavedWorkspaceDeletion} from './saved-workspace-deletion.js';
 import {workspaceDeletion} from './workspace-delete-state.js';
@@ -986,15 +987,14 @@ export async function startServer({ root=null, port = 4173, publishingOptions, g
         try{
           const remote=await(await manager.client(liveFigure[1])).call('figure-export',data,{stream:true,signal:controller.signal});
           if(context!==selectedContext||(await status(client)).locked){remote.destroy();throw new AppError('ACCESS_LOCKED');}
-          res.writeHead(200,{'Content-Type':remote.headers['content-type'],'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Disposition':remote.headers['content-disposition']});
-          await pipeline(remote,res);
+          try{res.writeHead(200,liveFileHeaders(remote.headers,{format:data.format}));await pipeline(remote,res);}finally{remote.destroy();}
         }finally{res.off('close',abort);}return;
       }
       const liveFile=/^\/api\/live\/files\/([a-f0-9-]{36})\/([a-f0-9-]{36})\/(media|artifact)\/([a-f0-9-]{36})$/.exec(url.pathname);
       if(req.method==='GET'&&liveFile){
         if(url.searchParams.get('context')!==context.id)throw new AppError('WORKSPACE_CHANGED');activeWrites++;countedWrite=true;
         const manager=selectedContext.live??=new LiveConnections(workspace,deviceStore),controller=new AbortController(),abort=()=>controller.abort();res.once('close',abort);
-        try{const remote=await (await manager.client(liveFile[1])).call('file',{recordId:liveFile[2],kind:liveFile[3],id:liveFile[4],...(url.searchParams.has('link')?{linkId:url.searchParams.get('link'),revision:url.searchParams.get('revision')}:{}),...(url.searchParams.has('artifactRevision')?{artifactRevision:url.searchParams.get('artifactRevision')}:{}),...(url.searchParams.has('evidenceKind')?{evidenceRef:{kind:url.searchParams.get('evidenceKind'),id:url.searchParams.get('evidenceId'),revision:url.searchParams.get('evidenceRevision')},evidenceTrail:JSON.parse(url.searchParams.get('evidenceTrail')??'[]')}:{}),...(url.searchParams.has('attemptKind')?{attemptRef:{kind:url.searchParams.get('attemptKind'),id:url.searchParams.get('attemptId'),revision:url.searchParams.get('attemptRevision')},attemptTrail:JSON.parse(url.searchParams.get('attemptTrail')??'[]')}:{})},{stream:true,signal:controller.signal});res.writeHead(200,{'Content-Type':remote.headers['content-type'],'Content-Length':remote.headers['content-length'],...(liveFile[3]==='artifact'?{'Content-Disposition':remote.headers['content-disposition']}:{})});await pipeline(remote,res);}finally{res.off('close',abort);}
+        try{const remote=await (await manager.client(liveFile[1])).call('file',{recordId:liveFile[2],kind:liveFile[3],id:liveFile[4],...(url.searchParams.has('link')?{linkId:url.searchParams.get('link'),revision:url.searchParams.get('revision')}:{}),...(url.searchParams.has('artifactRevision')?{artifactRevision:url.searchParams.get('artifactRevision')}:{}),...(url.searchParams.has('evidenceKind')?{evidenceRef:{kind:url.searchParams.get('evidenceKind'),id:url.searchParams.get('evidenceId'),revision:url.searchParams.get('evidenceRevision')},evidenceTrail:JSON.parse(url.searchParams.get('evidenceTrail')??'[]')}:{}),...(url.searchParams.has('attemptKind')?{attemptRef:{kind:url.searchParams.get('attemptKind'),id:url.searchParams.get('attemptId'),revision:url.searchParams.get('attemptRevision')},attemptTrail:JSON.parse(url.searchParams.get('attemptTrail')??'[]')}:{})},{stream:true,signal:controller.signal});try{if(context!==selectedContext||(await status(client)).locked)throw new AppError('ACCESS_LOCKED');res.writeHead(200,liveFileHeaders(remote.headers,{media:liveFile[3]==='media'}));await pipeline(remote,res);}finally{remote.destroy();}}finally{res.off('close',abort);}
         return;
       }
       if(req.method==='POST'&&url.pathname.startsWith('/api/organizations/')){

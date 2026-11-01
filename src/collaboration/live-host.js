@@ -3,25 +3,27 @@ import {randomBytes} from 'node:crypto';
 import {Readable} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
 import {liveCertificate} from './live-certificate.js';
-import {liveJSON,liveValid as valid,liveEndpoint} from './live-protocol.js';
-import {OrganizationIdentity,verifyOrganizationCommand} from './identity.js';
+import {liveValid as valid,liveEndpoint} from './live-protocol.js';
+import {OrganizationIdentity,verifyOrganizationCommand,identityHash} from './identity.js';
 import {LiveResearch} from './live-research.js';
 import {requireAdministrator} from './organization-policy.js';
 import {AppError,safeError} from '../errors.js';
 import {contentStream,contentSize} from '../file-content.js';
 import {exact} from '../modules/validation.js';
 import {LiveAdmission,withLiveAdmission} from './live-admission.js';
+import {LiveIngress,readLiveBody} from './live-ingress.js';
+import {organizationTransaction} from './transaction.js';
 
 export async function startLiveHost(workspace,device,{host='0.0.0.0',port=0,advertise}){
  valid(['0.0.0.0','127.0.0.1','::','::1'].includes(host)&&Number.isInteger(port)&&port>=0&&port<=65535);
  const endpoint=liveEndpoint(advertise),identity=new OrganizationIdentity(device),research=new LiveResearch(workspace),authority=await research.access.organizations.load(),actor=research.access.organizations.principal(authority,await identity.public());
  valid(authority.memberships.some(m=>m.active&&m.role==='administrator'&&m.principalId===actor),'COLLABORATION_DENIED');
- const certificate=await liveCertificate(workspace),instance=randomBytes(24).toString('hex'),admission=new LiveAdmission(instance),pending=new Set(),sockets=new Set();let closing=false,inflight=0,issuing=0;
+ const certificate=await liveCertificate(workspace),instance=randomBytes(24).toString('hex'),admission=new LiveAdmission(instance),ingress=new LiveIngress(),pending=new Set(),sockets=new Set();let closing=false,checking=0,issuing=0;
  const server=https.createServer({...certificate,minVersion:'TLSv1.3'},async(req,res)=>{
   const json=(value,status=200)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(value));};
-  let finish,challenge=false;const done=new Promise(resolve=>finish=resolve);pending.add(done);inflight++;
+  let finish,release,challenge=false;const done=new Promise(resolve=>finish=resolve);pending.add(done);
   try{
-   valid(!closing,'SERVER_CLOSING');valid(inflight<=16,'DATABASE_BUSY');valid(req.method==='POST'&&!req.headers.origin&&!req.headers.cookie,'ORIGIN');valid(req.headers['content-type']==='application/json','INVALID');
+   valid(!closing,'SERVER_CLOSING');valid(req.method==='POST'&&!req.headers.origin&&!req.headers.cookie,'ORIGIN');valid(req.headers['content-type']==='application/json','INVALID');
    if(req.url==='/challenge'){
     valid(issuing<4,'ACCESS_WAIT');challenge=true;issuing++;
     // This endpoint uses no body values. Keep its four reserved slots until
@@ -34,9 +36,25 @@ export async function startLiveHost(workspace,device,{host='0.0.0.0',port=0,adve
      json({instance,nonce:admission.issue(socket.remoteAddress)});await closed;return;
     }finally{clearTimeout(deadline);}
    }
-   valid(req.url==='/request','NOT_FOUND');const signed=await liveJSON(req),command=verifyOrganizationCommand(signed);
+   valid(req.url==='/request','NOT_FOUND');const address=req.socket.remoteAddress,header=req.headers['x-observanda-admission'];let proof=null,principal=null;
+   if(header!==undefined){
+    valid(typeof header==='string'&&header.length<=8192&&/^[\w-]+$/.test(header),'COLLABORATION_SIGNATURE');valid(checking<8,'ACCESS_WAIT');checking++;
+    try{
+     try{proof=JSON.parse(Buffer.from(header,'base64url').toString('utf8'));}catch{valid(false,'COLLABORATION_SIGNATURE');}
+     const value=verifyOrganizationCommand(proof);
+     valid(exact(value,['kind','instance','nonce','scope','bodyHash'])&&value.kind==='observanda.live.admission.v1'&&value.instance===instance&&/^[a-f0-9]{64}$/.test(value.bodyHash),'COLLABORATION_SIGNATURE');
+     admission.validate(value.nonce,address);
+     // Admission releases its read transaction before waiting on any body.
+     // The protected operation still performs fresh authorization below.
+     principal=(await organizationTransaction(workspace,()=>workspace.catalogue(()=>research.authorized(proof.identity,value.scope)))).principalId;
+    }finally{checking--;}
+   }
+   release=ingress.acquire(principal,address);
+   const signed=await readLiveBody(req,{authenticated:principal!==null}),command=verifyOrganizationCommand(signed);
+   if(proof)valid(proof.identity.id===signed.identity.id&&proof.value.bodyHash===identityHash(signed),'COLLABORATION_SIGNATURE');
    valid(exact(command,['kind','instance','nonce','scope','operation','data'])&&command.kind==='observanda.live.request.v1'&&command.instance===instance,'COLLABORATION_SIGNATURE');
-   const address=req.socket.remoteAddress;admission.validate(command.nonce,address);
+   admission.validate(command.nonce,address);
+   if(principal===null){release();release=ingress.acquire(signed.identity.id,address);}
    return await withLiveAdmission(principal=>admission.consume(command.nonce,address,principal),async()=>{
    if(command.operation==='figure-export'){
     const controller=new AbortController(),abort=()=>{if(!res.writableEnded)controller.abort();};res.once('close',abort);
@@ -47,8 +65,8 @@ export async function startLiveHost(workspace,device,{host='0.0.0.0',port=0,adve
    }
    return json(await research.dispatch(signed.identity,command.scope,command.operation,command.data));
    });
-  }catch(error){if(!res.headersSent)json(safeError(error),({COLLABORATION_DENIED:403,COLLABORATION_SIGNATURE:401,COLLABORATION_EXPIRED:401,RECORD_CHANGED:409,CONFLICT:409,NOT_FOUND:404,LIMIT:413,ACCESS_WAIT:429,DATABASE_BUSY:503,SERVER_CLOSING:503})[error.code]??422);else res.destroy();}
-  finally{if(challenge)issuing--;inflight--;pending.delete(done);finish();}
+  }catch(error){if(!res.headersSent&&!res.destroyed){res.setHeader('Connection','close');json(safeError(error),({COLLABORATION_DENIED:403,COLLABORATION_SIGNATURE:401,COLLABORATION_EXPIRED:401,RECORD_CHANGED:409,CONFLICT:409,NOT_FOUND:404,LIMIT:413,ACCESS_WAIT:429,DATABASE_BUSY:503,SERVER_CLOSING:503})[error.code]??422);res.once('finish',()=>req.destroy());}else res.destroy();}
+  finally{release?.();if(challenge)issuing--;pending.delete(done);finish();}
  });
  server.maxConnections=64;server.requestTimeout=30000;server.headersTimeout=10000;server.setTimeout(30000,socket=>socket.destroy());server.on('connection',socket=>{sockets.add(socket);socket.once('close',()=>sockets.delete(socket));});
  await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,host,resolve);});

@@ -36,7 +36,7 @@ export function recordRevisionField(key,record,esc,{anchors=false,assetUrl=id=>'
  if(key==='tags')return list(v.map(t=>esc(t)));
  if(key==='contributors')return list(v.map(p=>esc(p.name)+(p.role?' &middot; '+esc(p.role):'')));
  if(key==='relations')return list(v.map(r=>esc(r.type)+' &middot; '+esc(msg(r.target.revision?'revisionExactLink':'revisionCurrentLink',{label:r.label||msg('linkedItem'),...(r.target.revision?{revision:r.target.revision.slice(0,12)}:{})}))));
- if(key==='attachments')return v.filter(a=>!placedFigures(record).has(a.id)).map(a=>a.kind==='image'?recordFigure(record,a.id,esc,{translate:t,assetUrl,figureSources}):'<figure><'+a.kind+' src="'+esc(assetUrl(a.id))+'" controls preload="metadata" aria-label="'+esc(a.alt||a.caption||(['audio','video'].includes(a.kind)?msg('media_'+a.kind):a.kind))+'"></'+a.kind+'><figcaption>'+esc(a.caption)+'</figcaption><div class="result-statement-text">'+esc(a.transcript)+'</div></figure>').join('');
+ if(key==='attachments')return v.filter(a=>['image','audio','video'].includes(a.kind)&&!placedFigures(record).has(a.id)).map(a=>a.kind==='image'?recordFigure(record,a.id,esc,{translate:t,assetUrl,figureSources}):'<figure><'+(a.kind==='audio'?'audio':'video')+' src="'+esc(assetUrl(a.id))+'" controls preload="metadata" aria-label="'+esc(a.alt||a.caption||msg('media_'+a.kind))+'"></'+(a.kind==='audio'?'audio':'video')+'><figcaption>'+esc(a.caption)+'</figcaption><div class="result-statement-text">'+esc(a.transcript)+'</div></figure>').join('');
  if(key==='template')return v?'<p>'+esc(v.label)+'</p><dl>'+v.fields.map(f=>'<dt>'+esc(customFieldLabel(f))+'</dt><dd>'+value(v.values[f.key],esc)+'</dd>').join('')+'</dl>':'<p>'+esc(msg('revisionNoFields'))+'</p>';
  return value(v,esc);
 }
